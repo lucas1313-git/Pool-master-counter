@@ -273,6 +273,7 @@
 
   var btnResetGame = document.getElementById("btn-reset-game");
   var btnShare = document.getElementById("btn-share");
+  var btnExportSession = document.getElementById("btn-export-session");
   var btnResetStats = document.getElementById("btn-reset-stats");
 
   var rotationEnabledCheckbox = document.getElementById("rotation-enabled");
@@ -970,6 +971,59 @@
   }
 
   // ---------------------------------------------------------------------
+  // Export session snapshot
+  // ---------------------------------------------------------------------
+
+  function exportSession() {
+    var playerWins = state.players
+      .map(function (p) {
+        return { name: p.name, wins: state.playerWins[p.id] || 0 };
+      })
+      .sort(function (a, b) {
+        return b.wins - a.wins;
+      });
+
+    var teamWins = Object.keys(state.teamWins)
+      .map(function (key) {
+        var members = key
+          .split("|")
+          .map(function (id) {
+            var p = getPlayer(id);
+            return p ? p.name : "?";
+          })
+          .join(" & ");
+        return { members: members, wins: state.teamWins[key] };
+      })
+      .sort(function (a, b) {
+        return b.wins - a.wins;
+      });
+
+    var snapshot = {
+      exportedAt: new Date().toISOString(),
+      raceToWinsTarget: state.raceToWinsTarget,
+      currentGame: state.currentGame,
+      players: state.players.map(function (p) {
+        return { id: p.id, name: p.name };
+      }),
+      playerWins: playerWins,
+      teamWins: teamWins,
+      gameHistory: state.gameHistory
+    };
+
+    var json = JSON.stringify(snapshot, null, 2);
+    var blob = new Blob([json], { type: "application/json" });
+    var url = URL.createObjectURL(blob);
+    var dateStr = snapshot.exportedAt.slice(0, 10);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "pool-session-" + dateStr + ".json";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  // ---------------------------------------------------------------------
   // Events
   // ---------------------------------------------------------------------
 
@@ -1019,6 +1073,7 @@
 
   btnResetGame.addEventListener("click", resetCurrentGame);
   btnShare.addEventListener("click", shareStandings);
+  btnExportSession.addEventListener("click", exportSession);
   btnResetStats.addEventListener("click", resetAllStats);
 
   rotationEnabledCheckbox.addEventListener("change", function () {
