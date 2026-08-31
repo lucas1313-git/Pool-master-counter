@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0b3d2e">
+<title>Pool Master Counter</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="app">
+
+  <!-- HOME VIEW: players + match list -->
+  <section id="view-home" class="view">
+    <header class="app-header">
+      <h1>🎱 Pool Master Counter</h1>
+    </header>
+
+    <section class="panel" id="players-panel">
+      <h2>Players</h2>
+      <form id="add-player-form" class="row">
+        <input type="text" id="new-player-name" placeholder="Player name" autocomplete="off" required>
+        <button type="submit" class="btn btn-primary">Add</button>
+      </form>
+      <ul id="player-list" class="chip-list"></ul>
+    </section>
+
+    <section class="panel" id="matches-panel">
+      <div class="panel-head">
+        <h2>Matches</h2>
+        <button id="btn-new-match" class="btn btn-primary">+ New Match</button>
+        <button id="btn-share-all" class="btn btn-ghost">Share All</button>
+      </div>
+
+      <form id="new-match-form" class="new-match-form hidden">
+        <div class="row">
+          <select id="match-player1" required></select>
+          <span class="vs">vs</span>
+          <select id="match-player2" required></select>
+        </div>
+        <div class="row">
+          <label for="match-race-to">Race to</label>
+          <input type="number" id="match-race-to" min="1" max="99" value="5" required>
+          <span>games</span>
+        </div>
+        <div class="row">
+          <button type="submit" class="btn btn-primary">Start Match</button>
+          <button type="button" id="btn-cancel-match" class="btn btn-ghost">Cancel</button>
+        </div>
+      </form>
+
+      <ul id="match-list" class="match-list"></ul>
+    </section>
+  </section>
+
+  <!-- MATCH VIEW: live scoring -->
+  <section id="view-match" class="view hidden">
+    <header class="match-header">
+      <button id="btn-back" class="btn btn-ghost">&larr; Back</button>
+      <div class="match-title">
+        <span id="match-race-label"></span>
+      </div>
+      <div class="match-actions">
+        <button id="btn-share-match" class="btn btn-ghost" title="Share by email">Share</button>
+        <button id="btn-delete-match" class="btn btn-danger" title="Delete match">Delete</button>
+      </div>
+    </header>
+
+    <div id="winner-banner" class="winner-banner hidden"></div>
+
+    <div class="scoreboard" id="scoreboard">
+      <!-- two .player-panel blocks injected here -->
+    </div>
+  </section>
+
+</div>
+
+<script src="js/app.js"></script>
+</body>
+</html>
