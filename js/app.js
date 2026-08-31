@@ -227,6 +227,19 @@
     tone(784 * mult, now + 0.2, 0.28, "triangle", 0.24);
   }
 
+  function playVictorySound() {
+    var ctx = getAudioCtx();
+    var now = ctx.currentTime;
+    var run = [523.25, 587.33, 659.25, 698.46, 783.99, 880.0];
+    run.forEach(function (freq, i) {
+      tone(freq, now + i * 0.09, 0.16, "triangle", 0.2);
+    });
+    var chordStart = now + run.length * 0.09 + 0.05;
+    [523.25, 659.25, 783.99, 1046.5].forEach(function (freq) {
+      tone(freq, chordStart, 0.7, "triangle", 0.18);
+    });
+  }
+
   // ---------------------------------------------------------------------
   // DOM refs
   // ---------------------------------------------------------------------
@@ -251,6 +264,10 @@
   var standingsTitle = document.getElementById("standings-title");
   var teamStandingsList = document.getElementById("team-standings-list");
   var playerStandingsList = document.getElementById("player-standings-list");
+
+  var milestoneOverlay = document.getElementById("milestone-overlay");
+  var milestoneMessage = document.getElementById("milestone-message");
+  var btnMilestoneClose = document.getElementById("btn-milestone-close");
 
   // ---------------------------------------------------------------------
   // Rendering
@@ -642,22 +659,48 @@
   function creditWin(isTeam, key) {
     var typeLabel = GAME_TYPES[state.currentGame.gameType].label;
     var summary;
+    var milestoneNames = null;
     if (isTeam) {
       var members = teamMembersLive(key);
       var comboKey = teamComboKey(key);
-      state.teamWins[comboKey] = (state.teamWins[comboKey] || 0) + 1;
+      var prevTeamWins = state.teamWins[comboKey] || 0;
+      state.teamWins[comboKey] = prevTeamWins + 1;
       members.forEach(function (p) {
         state.playerWins[p.id] = (state.playerWins[p.id] || 0) + 1;
       });
       summary = teamLabelLive(key) + " won " + typeLabel + " (target " + state.currentGame.target + ")";
+      if (prevTeamWins < state.raceToWinsTarget && state.teamWins[comboKey] >= state.raceToWinsTarget) {
+        milestoneNames = members
+          .map(function (p) {
+            return p.name;
+          })
+          .join(" & ");
+      }
     } else {
-      state.playerWins[key] = (state.playerWins[key] || 0) + 1;
+      var prevPlayerWins = state.playerWins[key] || 0;
+      state.playerWins[key] = prevPlayerWins + 1;
       summary = getPlayer(key).name + " won " + typeLabel + " (target " + state.currentGame.target + ")";
+      if (prevPlayerWins < state.raceToWinsTarget && state.playerWins[key] >= state.raceToWinsTarget) {
+        milestoneNames = getPlayer(key).name;
+      }
     }
     state.gameHistory.unshift(summary);
     if (state.gameHistory.length > 50) state.gameHistory.length = 50;
     showToast(summary);
+    if (milestoneNames) {
+      celebrateMilestone(milestoneNames);
+    }
     return summary;
+  }
+
+  function celebrateMilestone(names) {
+    milestoneMessage.textContent = names + " won the race to " + state.raceToWinsTarget + "!";
+    milestoneOverlay.classList.remove("hidden");
+    playVictorySound();
+  }
+
+  function closeMilestone() {
+    milestoneOverlay.classList.add("hidden");
   }
 
   function resetGameBalls() {
@@ -802,6 +845,11 @@
   btnResetGame.addEventListener("click", resetCurrentGame);
   btnShare.addEventListener("click", shareStandings);
   btnResetStats.addEventListener("click", resetAllStats);
+
+  btnMilestoneClose.addEventListener("click", closeMilestone);
+  milestoneOverlay.addEventListener("click", function (e) {
+    if (e.target === milestoneOverlay) closeMilestone();
+  });
 
   // ---------------------------------------------------------------------
   // Init
