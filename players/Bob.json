@@ -1,0 +1,12 @@
+{
+  "name": "Bob",
+  "sessions": [
+    {
+      "date": "2026-08-30",
+      "wins": 5,
+      "gamesWon": ["8-Ball", "9-Ball", "8-Ball", "Straight Pool", "One Pocket"],
+      "opponents": ["Luc", "Suresh"],
+      "wonTournament": true
+    }
+  ]
+}
