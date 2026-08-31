@@ -240,6 +240,14 @@
     });
   }
 
+  function playOnHillSound() {
+    var ctx = getAudioCtx();
+    var now = ctx.currentTime;
+    tone(880, now, 0.09, "square", 0.14);
+    tone(880, now + 0.14, 0.09, "square", 0.14);
+    tone(1108.73, now + 0.28, 0.2, "square", 0.16);
+  }
+
   // ---------------------------------------------------------------------
   // DOM refs
   // ---------------------------------------------------------------------
@@ -268,6 +276,10 @@
   var milestoneOverlay = document.getElementById("milestone-overlay");
   var milestoneMessage = document.getElementById("milestone-message");
   var btnMilestoneClose = document.getElementById("btn-milestone-close");
+
+  var onHillOverlay = document.getElementById("onhill-overlay");
+  var onHillMessage = document.getElementById("onhill-message");
+  var btnOnHillClose = document.getElementById("btn-onhill-close");
 
   // ---------------------------------------------------------------------
   // Rendering
@@ -661,6 +673,7 @@
     var summary;
     var milestoneNames = null;
     var milestoneCount = 0;
+    var onHillNames = null;
     var target = state.raceToWinsTarget;
     if (isTeam) {
       var members = teamMembersLive(key);
@@ -678,6 +691,8 @@
           })
           .join(" & ");
         milestoneCount = newTeamWins;
+      } else if (target > 1 && newTeamWins % target === target - 1) {
+        onHillNames = teamLabelLive(key);
       }
     } else {
       var newPlayerWins = (state.playerWins[key] || 0) + 1;
@@ -686,6 +701,8 @@
       if (target > 0 && newPlayerWins % target === 0) {
         milestoneNames = getPlayer(key).name;
         milestoneCount = newPlayerWins;
+      } else if (target > 1 && newPlayerWins % target === target - 1) {
+        onHillNames = getPlayer(key).name;
       }
     }
     state.gameHistory.unshift(summary);
@@ -693,8 +710,20 @@
     showToast(summary);
     if (milestoneNames) {
       celebrateMilestone(milestoneNames, milestoneCount);
+    } else if (onHillNames) {
+      announceOnHill(onHillNames);
     }
     return summary;
+  }
+
+  function announceOnHill(names) {
+    onHillMessage.textContent = names + " is ON THE HILL — one more win takes the race to " + state.raceToWinsTarget + "! Better step up. 👀";
+    onHillOverlay.classList.remove("hidden");
+    playOnHillSound();
+  }
+
+  function closeOnHill() {
+    onHillOverlay.classList.add("hidden");
   }
 
   function celebrateMilestone(names, count) {
@@ -853,6 +882,11 @@
   btnMilestoneClose.addEventListener("click", closeMilestone);
   milestoneOverlay.addEventListener("click", function (e) {
     if (e.target === milestoneOverlay) closeMilestone();
+  });
+
+  btnOnHillClose.addEventListener("click", closeOnHill);
+  onHillOverlay.addEventListener("click", function (e) {
+    if (e.target === onHillOverlay) closeOnHill();
   });
 
   // ---------------------------------------------------------------------
