@@ -61,6 +61,30 @@
     </div>
   </section>
 
+  <section class="panel" id="rotation-panel">
+    <h2>Game Order</h2>
+    <div class="row">
+      <label class="checkbox-row"><input type="checkbox" id="rotation-enabled"> Rotate game types automatically</label>
+    </div>
+    <div class="row">
+      <select id="rotation-add-type">
+        <option value="8ball">8-Ball</option>
+        <option value="9ball">9-Ball</option>
+        <option value="straight">Straight Pool</option>
+        <option value="onepocket">One Pocket</option>
+        <option value="custom">Custom</option>
+      </select>
+      <button type="button" id="btn-rotation-add" class="btn btn-ghost">+ Add to Order</button>
+    </div>
+    <ul id="rotation-list" class="rotation-list"></ul>
+    <div class="row">
+      <label for="rotation-every">Switch every</label>
+      <input type="number" id="rotation-every" min="1" max="99" value="1">
+      <span>games</span>
+    </div>
+    <p id="rotation-status" class="rotation-status"></p>
+  </section>
+
   <div id="win-toast" class="win-toast hidden"></div>
 
   <section class="panel" id="standings-panel">

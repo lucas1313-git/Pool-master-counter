@@ -31,7 +31,9 @@
       teamWins: {},
       raceToWinsTarget: 5,
       currentGame: { gameType: "8ball", target: 1, mode: "individual" },
-      gameHistory: []
+      gameHistory: [],
+      rotation: { enabled: false, order: [], every: 1 },
+      gamesPlayedCount: 0
     };
   }
 
@@ -99,6 +101,11 @@
           if (typeof parsed.raceToWinsTarget !== "number") parsed.raceToWinsTarget = 5;
           if (!parsed.currentGame) parsed.currentGame = { gameType: "8ball", target: 1, mode: "individual" };
           if (!Array.isArray(parsed.gameHistory)) parsed.gameHistory = [];
+          if (!parsed.rotation) parsed.rotation = { enabled: false, order: [], every: 1 };
+          if (!Array.isArray(parsed.rotation.order)) parsed.rotation.order = [];
+          if (typeof parsed.rotation.every !== "number") parsed.rotation.every = 1;
+          if (typeof parsed.rotation.enabled !== "boolean") parsed.rotation.enabled = false;
+          if (typeof parsed.gamesPlayedCount !== "number") parsed.gamesPlayedCount = 0;
           return parsed;
         }
       }
@@ -266,6 +273,13 @@
   var btnShare = document.getElementById("btn-share");
   var btnResetStats = document.getElementById("btn-reset-stats");
 
+  var rotationEnabledCheckbox = document.getElementById("rotation-enabled");
+  var rotationAddType = document.getElementById("rotation-add-type");
+  var btnRotationAdd = document.getElementById("btn-rotation-add");
+  var rotationList = document.getElementById("rotation-list");
+  var rotationEveryInput = document.getElementById("rotation-every");
+  var rotationStatus = document.getElementById("rotation-status");
+
   var winToast = document.getElementById("win-toast");
   var scoreboard = document.getElementById("scoreboard");
   var historyList = document.getElementById("history-list");
@@ -290,6 +304,130 @@
     renderScoreboard();
     renderHistory();
     renderStandings();
+    renderRotation();
+  }
+
+  function renderRotation() {
+    rotationEnabledCheckbox.checked = state.rotation.enabled;
+    rotationEveryInput.value = state.rotation.every;
+
+    rotationList.innerHTML = "";
+    if (state.rotation.order.length === 0) {
+      var hint = document.createElement("li");
+      hint.className = "empty-hint";
+      hint.textContent = "No game types added yet.";
+      rotationList.appendChild(hint);
+    } else {
+      state.rotation.order.forEach(function (typeId, i) {
+        var li = document.createElement("li");
+        li.className = "rotation-row";
+
+        var pos = document.createElement("span");
+        pos.className = "rotation-position";
+        pos.textContent = i + 1 + ".";
+
+        var name = document.createElement("span");
+        name.className = "rotation-name";
+        name.textContent = GAME_TYPES[typeId] ? GAME_TYPES[typeId].label : typeId;
+
+        var controls = document.createElement("div");
+        controls.className = "rotation-controls";
+
+        var upBtn = document.createElement("button");
+        upBtn.type = "button";
+        upBtn.textContent = "↑";
+        upBtn.disabled = i === 0;
+        upBtn.addEventListener("click", function () {
+          moveRotationItem(i, -1);
+        });
+
+        var downBtn = document.createElement("button");
+        downBtn.type = "button";
+        downBtn.textContent = "↓";
+        downBtn.disabled = i === state.rotation.order.length - 1;
+        downBtn.addEventListener("click", function () {
+          moveRotationItem(i, 1);
+        });
+
+        var removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.setAttribute("aria-label", "Remove from rotation");
+        removeBtn.textContent = "×";
+        removeBtn.addEventListener("click", function () {
+          removeRotationItem(i);
+        });
+
+        controls.appendChild(upBtn);
+        controls.appendChild(downBtn);
+        controls.appendChild(removeBtn);
+
+        li.appendChild(pos);
+        li.appendChild(name);
+        li.appendChild(controls);
+        rotationList.appendChild(li);
+      });
+    }
+
+    if (state.rotation.enabled && state.rotation.order.length > 0) {
+      var every = Math.max(1, state.rotation.every || 1);
+      var playedInLeg = state.gamesPlayedCount % every;
+      var untilSwitch = every - playedInLeg;
+      var currentIndex = Math.floor(state.gamesPlayedCount / every) % state.rotation.order.length;
+      var nextIndex = (currentIndex + 1) % state.rotation.order.length;
+      rotationStatus.innerHTML = "";
+      rotationStatus.appendChild(document.createTextNode("Now: "));
+      var nowStrong = document.createElement("strong");
+      nowStrong.textContent = GAME_TYPES[state.rotation.order[currentIndex]].label;
+      rotationStatus.appendChild(nowStrong);
+      rotationStatus.appendChild(
+        document.createTextNode(
+          " — switches to " + GAME_TYPES[state.rotation.order[nextIndex]].label + " in " + untilSwitch + " game" + (untilSwitch === 1 ? "" : "s") + "."
+        )
+      );
+    } else {
+      rotationStatus.textContent = "";
+    }
+  }
+
+  function addRotationItem(typeId) {
+    state.rotation.order.push(typeId);
+    saveState();
+    renderRotation();
+  }
+
+  function removeRotationItem(index) {
+    state.rotation.order.splice(index, 1);
+    saveState();
+    renderRotation();
+  }
+
+  function moveRotationItem(index, delta) {
+    var newIndex = index + delta;
+    if (newIndex < 0 || newIndex >= state.rotation.order.length) return;
+    var arr = state.rotation.order;
+    var tmp = arr[index];
+    arr[index] = arr[newIndex];
+    arr[newIndex] = tmp;
+    saveState();
+    renderRotation();
+  }
+
+  function syncGameTypeUI() {
+    gameTypeSelect.value = state.currentGame.gameType;
+    gameTargetInput.value = state.currentGame.target;
+    gameTargetUnit.textContent = GAME_TYPES[state.currentGame.gameType].unit;
+  }
+
+  function applyRotationIfDue() {
+    if (!state.rotation.enabled || state.rotation.order.length === 0) return;
+    var every = Math.max(1, state.rotation.every || 1);
+    var index = Math.floor(state.gamesPlayedCount / every) % state.rotation.order.length;
+    var newType = state.rotation.order[index];
+    if (GAME_TYPES[newType] && newType !== state.currentGame.gameType) {
+      state.currentGame.gameType = newType;
+      state.currentGame.target = GAME_TYPES[newType].defaultTarget;
+      syncGameTypeUI();
+    }
   }
 
   function buildStandingsRow(name, wins) {
@@ -707,6 +845,8 @@
     }
     state.gameHistory.unshift(summary);
     if (state.gameHistory.length > 50) state.gameHistory.length = 50;
+    state.gamesPlayedCount += 1;
+    applyRotationIfDue();
     showToast(summary);
     if (milestoneNames) {
       celebrateMilestone(milestoneNames, milestoneCount);
@@ -878,6 +1018,25 @@
   btnResetGame.addEventListener("click", resetCurrentGame);
   btnShare.addEventListener("click", shareStandings);
   btnResetStats.addEventListener("click", resetAllStats);
+
+  rotationEnabledCheckbox.addEventListener("change", function () {
+    state.rotation.enabled = rotationEnabledCheckbox.checked;
+    saveState();
+    applyRotationIfDue();
+    renderRotation();
+  });
+
+  btnRotationAdd.addEventListener("click", function () {
+    addRotationItem(rotationAddType.value);
+  });
+
+  rotationEveryInput.addEventListener("input", function () {
+    var v = parseInt(rotationEveryInput.value, 10);
+    if (!v || v < 1) return;
+    state.rotation.every = v;
+    saveState();
+    renderRotation();
+  });
 
   btnMilestoneClose.addEventListener("click", closeMilestone);
   milestoneOverlay.addEventListener("click", function (e) {
