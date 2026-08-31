@@ -5,15 +5,17 @@
   var OLD_STORAGE_KEY = "poolMasterCounter.state.v1";
   var VOICE_PITCHES = [1.0, 1.26, 1.5, 0.79, 1.89, 0.63];
 
-  var GAME_TYPES = {
-    "8ball": { label: "8-Ball", defaultTarget: 1, unit: "rack" },
-    "8ballrotation": { label: "8 Ball Rotation", defaultTarget: 1, unit: "rack" },
-    "8ballpunishment": { label: "8 Ball Punishment", defaultTarget: 1, unit: "rack" },
-    "9ball": { label: "9-Ball", defaultTarget: 1, unit: "rack" },
-    straight: { label: "Straight Pool", defaultTarget: 100, unit: "points" },
-    onepocket: { label: "One Pocket", defaultTarget: 8, unit: "balls" },
-    custom: { label: "Custom", defaultTarget: 1, unit: "points" }
-  };
+  var GAME_TYPES = {};
+  var GAME_TYPE_LIST = [];
+  var DEFAULT_GAME_TYPES = [
+    { id: "8ball", label: "8-Ball", defaultTarget: 1, unit: "rack" },
+    { id: "8ballrotation", label: "8 Ball Rotation", defaultTarget: 1, unit: "rack" },
+    { id: "8ballpunishment", label: "8 Ball Punishment", defaultTarget: 1, unit: "rack" },
+    { id: "9ball", label: "9-Ball", defaultTarget: 1, unit: "rack" },
+    { id: "straight", label: "Straight Pool", defaultTarget: 100, unit: "points" },
+    { id: "onepocket", label: "One Pocket", defaultTarget: 8, unit: "balls" },
+    { id: "custom", label: "Custom", defaultTarget: 1, unit: "points" }
+  ];
 
   // ---------------------------------------------------------------------
   // State
@@ -308,6 +310,18 @@
   var gameChangeMessage = document.getElementById("gamechange-message");
   var btnGameChangeClose = document.getElementById("btn-gamechange-close");
   var nowPlayingBanner = document.getElementById("now-playing-banner");
+
+  function populateGameTypeSelects() {
+    [gameTypeSelect, rotationAddType].forEach(function (select) {
+      select.innerHTML = "";
+      GAME_TYPE_LIST.forEach(function (t) {
+        var opt = document.createElement("option");
+        opt.value = t.id;
+        opt.textContent = t.label;
+        select.appendChild(opt);
+      });
+    });
+  }
 
   // ---------------------------------------------------------------------
   // Rendering
@@ -1075,9 +1089,10 @@
   }
 
   // ---------------------------------------------------------------------
-  // Events
+  // Events + Init (deferred until settings/game-types.json has loaded)
   // ---------------------------------------------------------------------
 
+  function boot() {
   addPlayerForm.addEventListener("submit", function (e) {
     e.preventDefault();
     var player = addPlayer(newPlayerName.value);
@@ -1177,4 +1192,27 @@
   });
 
   renderAll();
+  }
+
+  // ---------------------------------------------------------------------
+  // Load settings/game-types.json, then boot the app
+  // ---------------------------------------------------------------------
+
+  fetch("settings/game-types.json")
+    .then(function (res) {
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return res.json();
+    })
+    .catch(function (err) {
+      console.warn("Could not load settings/game-types.json, using built-in defaults.", err);
+      return DEFAULT_GAME_TYPES;
+    })
+    .then(function (list) {
+      GAME_TYPE_LIST = list;
+      GAME_TYPE_LIST.forEach(function (t) {
+        GAME_TYPES[t.id] = { label: t.label, defaultTarget: t.defaultTarget, unit: t.unit };
+      });
+      populateGameTypeSelects();
+      boot();
+    });
 })();
