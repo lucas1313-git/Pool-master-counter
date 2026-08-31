@@ -1128,10 +1128,16 @@
     var a = document.createElement("a");
     a.href = url;
     a.download = filename;
+    a.rel = "noopener";
     document.body.appendChild(a);
     a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    // Revoking the blob URL immediately can race with the browser's save
+    // step on some mobile browsers (notably iOS Safari), producing an empty
+    // or missing download. Give it a moment before cleaning up.
+    setTimeout(function () {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 1000);
   }
 
   function fetchFresh(url) {
