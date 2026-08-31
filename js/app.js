@@ -298,6 +298,11 @@
   var onHillMessage = document.getElementById("onhill-message");
   var btnOnHillClose = document.getElementById("btn-onhill-close");
 
+  var gameChangeOverlay = document.getElementById("gamechange-overlay");
+  var gameChangeMessage = document.getElementById("gamechange-message");
+  var btnGameChangeClose = document.getElementById("btn-gamechange-close");
+  var nowPlayingBanner = document.getElementById("now-playing-banner");
+
   // ---------------------------------------------------------------------
   // Rendering
   // ---------------------------------------------------------------------
@@ -371,7 +376,8 @@
       });
     }
 
-    if (state.rotation.enabled && state.rotation.order.length > 0) {
+    rotationStatus.classList.remove("is-warning");
+    if (state.rotation.enabled && state.rotation.order.length >= 2) {
       var every = Math.max(1, state.rotation.every || 1);
       var playedInLeg = state.gamesPlayedCount % every;
       var untilSwitch = every - playedInLeg;
@@ -387,6 +393,12 @@
           " — switches to " + GAME_TYPES[state.rotation.order[nextIndex]].label + " in " + untilSwitch + " game" + (untilSwitch === 1 ? "" : "s") + "."
         )
       );
+    } else if (state.rotation.enabled && state.rotation.order.length === 1) {
+      rotationStatus.classList.add("is-warning");
+      rotationStatus.textContent = "⚠️ Only one game type in the order — add at least one more or nothing will switch.";
+    } else if (state.rotation.enabled) {
+      rotationStatus.classList.add("is-warning");
+      rotationStatus.textContent = "⚠️ Rotation is on but empty — add game types above for it to take effect.";
     } else {
       rotationStatus.textContent = "";
     }
@@ -395,13 +407,17 @@
   function addRotationItem(typeId) {
     state.rotation.order.push(typeId);
     saveState();
+    applyRotationIfDue();
     renderRotation();
+    renderScoreboard();
   }
 
   function removeRotationItem(index) {
     state.rotation.order.splice(index, 1);
     saveState();
+    applyRotationIfDue();
     renderRotation();
+    renderScoreboard();
   }
 
   function moveRotationItem(index, delta) {
@@ -412,7 +428,9 @@
     arr[index] = arr[newIndex];
     arr[newIndex] = tmp;
     saveState();
+    applyRotationIfDue();
     renderRotation();
+    renderScoreboard();
   }
 
   function syncGameTypeUI() {
@@ -704,7 +722,18 @@
     return panel;
   }
 
+  function renderNowPlayingBanner() {
+    var type = GAME_TYPES[state.currentGame.gameType];
+    nowPlayingBanner.innerHTML = "";
+    nowPlayingBanner.appendChild(document.createTextNode("🎱 Now Playing: " + type.label));
+    var note = document.createElement("span");
+    note.className = "target-note";
+    note.textContent = "Target " + state.currentGame.target + " " + type.unit;
+    nowPlayingBanner.appendChild(note);
+  }
+
   function renderScoreboard() {
+    renderNowPlayingBanner();
     scoreboard.innerHTML = "";
     var active = activePlayers();
 
@@ -849,12 +878,16 @@
     state.gameHistory.unshift(summary);
     if (state.gameHistory.length > 50) state.gameHistory.length = 50;
     state.gamesPlayedCount += 1;
+    var previousGameType = state.currentGame.gameType;
     applyRotationIfDue();
+    var gameTypeChanged = state.currentGame.gameType !== previousGameType;
     showToast(summary);
     if (milestoneNames) {
       celebrateMilestone(milestoneNames, milestoneCount);
     } else if (onHillNames) {
       announceOnHill(onHillNames);
+    } else if (gameTypeChanged) {
+      announceGameChange(GAME_TYPES[state.currentGame.gameType].label);
     }
     return summary;
   }
@@ -867,6 +900,16 @@
 
   function closeOnHill() {
     onHillOverlay.classList.add("hidden");
+  }
+
+  function announceGameChange(label) {
+    gameChangeMessage.textContent = "Now playing: " + label + "!";
+    gameChangeOverlay.classList.remove("hidden");
+    playPositiveSound(null);
+  }
+
+  function closeGameChange() {
+    gameChangeOverlay.classList.add("hidden");
   }
 
   function celebrateMilestone(names, count) {
@@ -1081,6 +1124,7 @@
     saveState();
     applyRotationIfDue();
     renderRotation();
+    renderScoreboard();
   });
 
   btnRotationAdd.addEventListener("click", function () {
@@ -1092,7 +1136,9 @@
     if (!v || v < 1) return;
     state.rotation.every = v;
     saveState();
+    applyRotationIfDue();
     renderRotation();
+    renderScoreboard();
   });
 
   btnMilestoneClose.addEventListener("click", closeMilestone);
@@ -1103,6 +1149,11 @@
   btnOnHillClose.addEventListener("click", closeOnHill);
   onHillOverlay.addEventListener("click", function (e) {
     if (e.target === onHillOverlay) closeOnHill();
+  });
+
+  btnGameChangeClose.addEventListener("click", closeGameChange);
+  gameChangeOverlay.addEventListener("click", function (e) {
+    if (e.target === gameChangeOverlay) closeGameChange();
   });
 
   // ---------------------------------------------------------------------
