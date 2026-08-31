@@ -272,6 +272,14 @@
   var addPlayerForm = document.getElementById("add-player-form");
   var newPlayerName = document.getElementById("new-player-name");
   var rosterList = document.getElementById("roster-list");
+  var rosterLoadSelect = document.getElementById("roster-load-select");
+  var btnRosterLoad = document.getElementById("btn-roster-load");
+
+  var playerStatsOverlay = document.getElementById("player-stats-overlay");
+  var playerStatsName = document.getElementById("player-stats-name");
+  var playerStatsBody = document.getElementById("player-stats-body");
+  var btnPlayerStatsExport = document.getElementById("btn-player-stats-export");
+  var btnPlayerStatsClose = document.getElementById("btn-player-stats-close");
 
   var gameTypeSelect = document.getElementById("game-type");
   var gameTargetInput = document.getElementById("game-target");
@@ -597,6 +605,16 @@
         });
         row.appendChild(toggle);
       }
+
+      var statsBtn = document.createElement("button");
+      statsBtn.type = "button";
+      statsBtn.className = "roster-stats-btn";
+      statsBtn.setAttribute("aria-label", "View stats for " + p.name);
+      statsBtn.textContent = "📊";
+      statsBtn.addEventListener("click", function () {
+        openPlayerStats(p.id);
+      });
+      row.appendChild(statsBtn);
 
       var removeBtn = document.createElement("button");
       removeBtn.type = "button";
@@ -988,6 +1006,7 @@
 
   function resetAllStats() {
     if (!confirm("This starts a new session: clears session wins, team wins, game history, and restarts the game rotation from the top. This cannot be undone. Continue?")) return;
+    maybeSaveRosterOnNewSession();
     state.playerWins = {};
     state.teamWins = {};
     state.gameHistory = [];
@@ -1075,17 +1094,186 @@
       gameHistory: state.gameHistory
     };
 
-    var json = JSON.stringify(snapshot, null, 2);
+    downloadJSON("pool-session-" + snapshot.exportedAt.slice(0, 10) + ".json", snapshot);
+  }
+
+  function downloadJSON(filename, data) {
+    var json = JSON.stringify(data, null, 2);
     var blob = new Blob([json], { type: "application/json" });
     var url = URL.createObjectURL(blob);
-    var dateStr = snapshot.exportedAt.slice(0, 10);
     var a = document.createElement("a");
     a.href = url;
-    a.download = "pool-session-" + dateStr + ".json";
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  }
+
+  // ---------------------------------------------------------------------
+  // Player rosters (players/rosters.json)
+  // ---------------------------------------------------------------------
+
+  var SAVED_ROSTERS = [];
+
+  function populateRosterLoadSelect() {
+    rosterLoadSelect.innerHTML = "";
+    if (SAVED_ROSTERS.length === 0) {
+      var opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = "No saved lists yet";
+      rosterLoadSelect.appendChild(opt);
+      rosterLoadSelect.disabled = true;
+      btnRosterLoad.disabled = true;
+      return;
+    }
+    rosterLoadSelect.disabled = false;
+    btnRosterLoad.disabled = false;
+    SAVED_ROSTERS.forEach(function (r, i) {
+      var opt = document.createElement("option");
+      opt.value = String(i);
+      opt.textContent = r.label;
+      rosterLoadSelect.appendChild(opt);
+    });
+  }
+
+  function loadSelectedRoster() {
+    var idx = parseInt(rosterLoadSelect.value, 10);
+    var roster = SAVED_ROSTERS[idx];
+    if (!roster) return;
+    var existingNames = state.players.map(function (p) {
+      return p.name.toLowerCase();
+    });
+    var added = 0;
+    roster.players.forEach(function (name) {
+      if (existingNames.indexOf(name.toLowerCase()) === -1) {
+        addPlayer(name);
+        added += 1;
+      }
+    });
+    renderAll();
+    if (added === 0) {
+      showToast("Everyone from that saved list is already in your roster.");
+    } else {
+      showToast("Added " + added + " player" + (added === 1 ? "" : "s") + " from \"" + roster.label + "\".");
+    }
+  }
+
+  function currentRosterNames() {
+    return state.players
+      .map(function (p) {
+        return p.name;
+      })
+      .sort();
+  }
+
+  function maybeSaveRosterOnNewSession() {
+    var names = currentRosterNames();
+    if (names.length === 0) return;
+    var last = SAVED_ROSTERS[SAVED_ROSTERS.length - 1];
+    var lastNames = last ? last.players.slice().sort() : null;
+    var sameAsLast = lastNames && lastNames.length === names.length && lastNames.every(function (n, i) {
+      return n === names[i];
+    });
+    if (sameAsLast) {
+      showToast("Same player list as last session — no need to re-save.");
+      return;
+    }
+    var now = new Date().toISOString();
+    var entry = {
+      id: "roster-" + now.replace(/[:.]/g, "-"),
+      label: now.slice(0, 10) + " — " + names.join(", "),
+      players: names,
+      savedAt: now
+    };
+    var updated = SAVED_ROSTERS.concat([entry]);
+    downloadJSON("rosters.json", updated);
+    showToast("Downloaded rosters.json — commit it into players/ to save this roster.");
+  }
+
+  // ---------------------------------------------------------------------
+  // Per-player stats popup (players/<Name>.json)
+  // ---------------------------------------------------------------------
+
+  var currentStatsPlayerId = null;
+  var currentStatsHistorical = null;
+
+  function playerStatsFilename(name) {
+    return name.replace(/[^a-z0-9 _-]/gi, "").trim().replace(/\s+/g, "-") + ".json";
+  }
+
+  function openPlayerStats(playerId) {
+    var player = getPlayer(playerId);
+    if (!player) return;
+    currentStatsPlayerId = playerId;
+    currentStatsHistorical = null;
+    playerStatsName.textContent = player.name;
+    playerStatsBody.innerHTML = "";
+    playerStatsBody.appendChild(playerStatsRow("This session", state.playerWins[playerId] || 0));
+    var loadingNote = document.createElement("div");
+    loadingNote.className = "player-stats-note";
+    loadingNote.textContent = "Loading saved history…";
+    playerStatsBody.appendChild(loadingNote);
+    playerStatsOverlay.classList.remove("hidden");
+
+    fetch("players/" + playerStatsFilename(player.name))
+      .then(function (res) {
+        if (!res.ok) throw new Error("no file");
+        return res.json();
+      })
+      .then(function (data) {
+        currentStatsHistorical = data;
+        if (currentStatsPlayerId !== playerId) return;
+        loadingNote.remove();
+        playerStatsBody.appendChild(playerStatsRow("All-time wins", data.totalWins || 0));
+        playerStatsBody.appendChild(playerStatsRow("Sessions recorded", data.sessionsRecorded || 0));
+        if (data.updatedAt) {
+          var updatedNote = document.createElement("div");
+          updatedNote.className = "player-stats-note";
+          updatedNote.textContent = "Last saved " + data.updatedAt.slice(0, 10);
+          playerStatsBody.appendChild(updatedNote);
+        }
+      })
+      .catch(function () {
+        if (currentStatsPlayerId !== playerId) return;
+        loadingNote.textContent = "No saved history yet for this player — export to start tracking.";
+      });
+  }
+
+  function playerStatsRow(label, value) {
+    var row = document.createElement("div");
+    row.className = "player-stats-row";
+    var l = document.createElement("span");
+    l.className = "label";
+    l.textContent = label;
+    var v = document.createElement("span");
+    v.className = "value";
+    v.textContent = value;
+    row.appendChild(l);
+    row.appendChild(v);
+    return row;
+  }
+
+  function closePlayerStats() {
+    playerStatsOverlay.classList.add("hidden");
+    currentStatsPlayerId = null;
+    currentStatsHistorical = null;
+  }
+
+  function exportCurrentPlayerStats() {
+    var player = getPlayer(currentStatsPlayerId);
+    if (!player) return;
+    var sessionWins = state.playerWins[currentStatsPlayerId] || 0;
+    var prevTotal = currentStatsHistorical ? currentStatsHistorical.totalWins || 0 : 0;
+    var prevSessions = currentStatsHistorical ? currentStatsHistorical.sessionsRecorded || 0 : 0;
+    var updated = {
+      name: player.name,
+      updatedAt: new Date().toISOString(),
+      totalWins: prevTotal + sessionWins,
+      sessionsRecorded: prevSessions + 1
+    };
+    downloadJSON(playerStatsFilename(player.name), updated);
+    showToast("Downloaded " + playerStatsFilename(player.name) + " — commit it into players/ to save " + player.name + "'s history.");
   }
 
   // ---------------------------------------------------------------------
@@ -1179,6 +1367,14 @@
     if (e.target === gameChangeOverlay) closeGameChange();
   });
 
+  btnRosterLoad.addEventListener("click", loadSelectedRoster);
+
+  btnPlayerStatsExport.addEventListener("click", exportCurrentPlayerStats);
+  btnPlayerStatsClose.addEventListener("click", closePlayerStats);
+  playerStatsOverlay.addEventListener("click", function (e) {
+    if (e.target === playerStatsOverlay) closePlayerStats();
+  });
+
   // ---------------------------------------------------------------------
   // Init
   // ---------------------------------------------------------------------
@@ -1191,14 +1387,15 @@
     radio.checked = radio.value === state.currentGame.mode;
   });
 
+  populateRosterLoadSelect();
   renderAll();
   }
 
   // ---------------------------------------------------------------------
-  // Load settings/game-types.json, then boot the app
+  // Load settings/game-types.json and players/rosters.json, then boot
   // ---------------------------------------------------------------------
 
-  fetch("settings/game-types.json")
+  var gameTypesPromise = fetch("settings/game-types.json")
     .then(function (res) {
       if (!res.ok) throw new Error("HTTP " + res.status);
       return res.json();
@@ -1206,13 +1403,24 @@
     .catch(function (err) {
       console.warn("Could not load settings/game-types.json, using built-in defaults.", err);
       return DEFAULT_GAME_TYPES;
-    })
-    .then(function (list) {
-      GAME_TYPE_LIST = list;
-      GAME_TYPE_LIST.forEach(function (t) {
-        GAME_TYPES[t.id] = { label: t.label, defaultTarget: t.defaultTarget, unit: t.unit };
-      });
-      populateGameTypeSelects();
-      boot();
     });
+
+  var rostersPromise = fetch("players/rosters.json")
+    .then(function (res) {
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return res.json();
+    })
+    .catch(function () {
+      return [];
+    });
+
+  Promise.all([gameTypesPromise, rostersPromise]).then(function (results) {
+    GAME_TYPE_LIST = results[0];
+    GAME_TYPE_LIST.forEach(function (t) {
+      GAME_TYPES[t.id] = { label: t.label, defaultTarget: t.defaultTarget, unit: t.unit };
+    });
+    populateGameTypeSelects();
+    SAVED_ROSTERS = Array.isArray(results[1]) ? results[1] : [];
+    boot();
+  });
 })();

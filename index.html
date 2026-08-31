@@ -24,6 +24,10 @@
       <input type="text" id="new-player-name" placeholder="Player name" autocomplete="off" required>
       <button type="submit" class="btn btn-primary">Add</button>
     </form>
+    <div class="row">
+      <select id="roster-load-select"></select>
+      <button type="button" id="btn-roster-load" class="btn btn-ghost">Load Player List</button>
+    </div>
     <ul id="roster-list" class="roster-list"></ul>
   </section>
 
@@ -119,6 +123,17 @@
     <h2>Game Changed!</h2>
     <p id="gamechange-message"></p>
     <button type="button" id="btn-gamechange-close" class="btn btn-primary">Let's go!</button>
+  </div>
+</div>
+
+<div id="player-stats-overlay" class="player-stats-overlay hidden">
+  <div class="player-stats-card">
+    <h2 id="player-stats-name"></h2>
+    <div id="player-stats-body"></div>
+    <div class="row">
+      <button type="button" id="btn-player-stats-export" class="btn btn-ghost">Export Stats</button>
+      <button type="button" id="btn-player-stats-close" class="btn btn-primary">Close</button>
+    </div>
   </div>
 </div>
 
