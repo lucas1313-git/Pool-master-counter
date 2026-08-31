@@ -1134,6 +1134,11 @@
     URL.revokeObjectURL(url);
   }
 
+  function fetchFresh(url) {
+    var buster = (url.indexOf("?") === -1 ? "?" : "&") + "v=" + Date.now();
+    return fetch(url + buster, { cache: "no-store" });
+  }
+
   // ---------------------------------------------------------------------
   // Player rosters (players/rosters.json)
   // ---------------------------------------------------------------------
@@ -1351,7 +1356,7 @@
     playerPageView.classList.remove("hidden");
     window.scrollTo(0, 0);
 
-    fetch("players/" + playerStatsFilename(player.name))
+    fetchFresh("players/" + playerStatsFilename(player.name))
       .then(function (res) {
         if (!res.ok) throw new Error("no file");
         return res.json();
@@ -1529,7 +1534,7 @@
   // Load settings/game-types.json and players/rosters.json, then boot
   // ---------------------------------------------------------------------
 
-  var gameTypesPromise = fetch("settings/game-types.json")
+  var gameTypesPromise = fetchFresh("settings/game-types.json")
     .then(function (res) {
       if (!res.ok) throw new Error("HTTP " + res.status);
       return res.json();
@@ -1539,7 +1544,7 @@
       return DEFAULT_GAME_TYPES;
     });
 
-  var rostersPromise = fetch("players/rosters.json")
+  var rostersPromise = fetchFresh("players/rosters.json")
     .then(function (res) {
       if (!res.ok) throw new Error("HTTP " + res.status);
       return res.json();
