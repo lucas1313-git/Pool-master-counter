@@ -18,13 +18,23 @@ This folder holds saved player rosters and per-player stat history — like `sta
 
 ## Per-player stats (`<Name>.json`)
 
-Tap the 📊 button next to any player to open their stats popup — it shows this session's numbers plus whatever's in `players/<Name>.json`, if that file exists. Use **Export Stats** in that popup to download an updated file (e.g. `Bob.json`) and commit it here to build up that player's history over time.
+Tap the 📊 button next to any player to open their **stats page** — it shows today's live session (wins, which games they won, who they played) plus their full saved session history from `players/<Name>.json`, if that file exists.
 
 ```json
 {
   "name": "Bob",
-  "updatedAt": "2026-08-31T20:00:00.000Z",
-  "totalWins": 12,
-  "sessionsRecorded": 3
+  "sessions": [
+    {
+      "date": "2026-08-31",
+      "wins": 4,
+      "gamesWon": ["8-Ball", "9-Ball", "8-Ball", "Straight Pool"],
+      "opponents": ["Luc", "Suresh"],
+      "wonTournament": true
+    }
+  ]
 }
 ```
+
+- **wonTournament** is true if that day's win count reached the race-to milestone at least once.
+- **Export Stats** on the page adds/updates today's entry (keyed by date — exporting again the same day overwrites that day's row rather than duplicating it) and downloads the updated file for you to commit.
+- **Reset Stats** downloads an emptied `sessions: []` file — it only clears saved history, never today's live session.

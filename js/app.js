@@ -275,12 +275,14 @@
   var rosterLoadSelect = document.getElementById("roster-load-select");
   var btnRosterLoad = document.getElementById("btn-roster-load");
 
-  var playerStatsOverlay = document.getElementById("player-stats-overlay");
-  var playerStatsName = document.getElementById("player-stats-name");
-  var playerStatsBody = document.getElementById("player-stats-body");
-  var btnPlayerStatsExport = document.getElementById("btn-player-stats-export");
-  var btnPlayerStatsReset = document.getElementById("btn-player-stats-reset");
-  var btnPlayerStatsClose = document.getElementById("btn-player-stats-close");
+  var appRoot = document.getElementById("app");
+  var playerPageView = document.getElementById("view-player-page");
+  var playerPageName = document.getElementById("player-page-name");
+  var playerPageCurrentBody = document.getElementById("player-page-current-body");
+  var playerPageHistoryList = document.getElementById("player-page-history-list");
+  var btnPlayerPageBack = document.getElementById("btn-player-page-back");
+  var btnPlayerPageExport = document.getElementById("btn-player-page-export");
+  var btnPlayerPageReset = document.getElementById("btn-player-page-reset");
 
   var gameTypeSelect = document.getElementById("game-type");
   var gameTargetInput = document.getElementById("game-target");
@@ -613,7 +615,7 @@
       statsBtn.setAttribute("aria-label", "View stats for " + p.name);
       statsBtn.textContent = "📊";
       statsBtn.addEventListener("click", function () {
-        openPlayerStats(p.id);
+        openPlayerStatsPage(p.id);
       });
       row.appendChild(statsBtn);
 
@@ -811,7 +813,7 @@
     }
     state.gameHistory.forEach(function (entry) {
       var li = document.createElement("li");
-      li.textContent = entry;
+      li.textContent = typeof entry === "string" ? entry : entry.summary;
       historyList.appendChild(li);
     });
   }
@@ -880,12 +882,21 @@
   function creditWin(isTeam, key) {
     var typeLabel = GAME_TYPES[state.currentGame.gameType].label;
     var summary;
+    var winnerNames;
+    var opponentNames;
     var milestoneNames = null;
     var milestoneCount = 0;
     var onHillNames = null;
     var target = state.raceToWinsTarget;
     if (isTeam) {
       var members = teamMembersLive(key);
+      var otherTeamId = key === "A" ? "B" : "A";
+      opponentNames = teamMembersLive(otherTeamId).map(function (p) {
+        return p.name;
+      });
+      winnerNames = members.map(function (p) {
+        return p.name;
+      });
       var comboKey = teamComboKey(key);
       var newTeamWins = (state.teamWins[comboKey] || 0) + 1;
       state.teamWins[comboKey] = newTeamWins;
@@ -894,16 +905,20 @@
       });
       summary = teamLabelLive(key) + " won " + typeLabel + " (target " + state.currentGame.target + ")";
       if (target > 0 && newTeamWins % target === 0) {
-        milestoneNames = members
-          .map(function (p) {
-            return p.name;
-          })
-          .join(" & ");
+        milestoneNames = winnerNames.join(" & ");
         milestoneCount = newTeamWins;
       } else if (target > 1 && newTeamWins % target === target - 1) {
         onHillNames = teamLabelLive(key);
       }
     } else {
+      winnerNames = [getPlayer(key).name];
+      opponentNames = activePlayers()
+        .filter(function (p) {
+          return p.id !== key;
+        })
+        .map(function (p) {
+          return p.name;
+        });
       var newPlayerWins = (state.playerWins[key] || 0) + 1;
       state.playerWins[key] = newPlayerWins;
       summary = getPlayer(key).name + " won " + typeLabel + " (target " + state.currentGame.target + ")";
@@ -914,8 +929,16 @@
         onHillNames = getPlayer(key).name;
       }
     }
-    state.gameHistory.unshift(summary);
-    if (state.gameHistory.length > 50) state.gameHistory.length = 50;
+    state.gameHistory.unshift({
+      ts: new Date().toISOString(),
+      gameType: state.currentGame.gameType,
+      gameLabel: typeLabel,
+      target: state.currentGame.target,
+      winnerNames: winnerNames,
+      opponentNames: opponentNames,
+      summary: summary
+    });
+    if (state.gameHistory.length > 200) state.gameHistory.length = 200;
     state.gamesPlayedCount += 1;
     var previousGameType = state.currentGame.gameType;
     applyRotationIfDue();
@@ -1047,7 +1070,7 @@
       lines.push("");
       lines.push("Recent games:");
       state.gameHistory.slice(0, 15).forEach(function (entry) {
-        lines.push("  " + entry);
+        lines.push("  " + (typeof entry === "string" ? entry : entry.summary));
       });
     }
     var body = lines.join("\n");
@@ -1193,69 +1216,37 @@
   }
 
   // ---------------------------------------------------------------------
-  // Per-player stats popup (players/<Name>.json)
+  // Per-player stats page (players/<Name>.json)
   // ---------------------------------------------------------------------
 
   var currentStatsPlayerId = null;
-  var currentStatsHistorical = null;
+  var currentStatsSessions = null;
 
   function playerStatsFilename(name) {
     return name.replace(/[^a-z0-9 _-]/gi, "").trim().replace(/\s+/g, "-") + ".json";
   }
 
-  function openPlayerStats(playerId) {
+  function computeLiveSessionForPlayer(playerId) {
     var player = getPlayer(playerId);
-    if (!player) return;
-    currentStatsPlayerId = playerId;
-    currentStatsHistorical = null;
-    playerStatsName.textContent = player.name;
-    playerStatsBody.innerHTML = "";
-    playerStatsBody.appendChild(playerStatsRow("This session", state.playerWins[playerId] || 0));
-    var loadingNote = document.createElement("div");
-    loadingNote.className = "player-stats-note historical-section";
-    loadingNote.textContent = "Loading saved history…";
-    playerStatsBody.appendChild(loadingNote);
-    playerStatsOverlay.classList.remove("hidden");
-
-    fetch("players/" + playerStatsFilename(player.name))
-      .then(function (res) {
-        if (!res.ok) throw new Error("no file");
-        return res.json();
-      })
-      .then(function (data) {
-        if (currentStatsPlayerId !== playerId) return;
-        renderHistoricalSection(player, data);
-      })
-      .catch(function () {
-        if (currentStatsPlayerId !== playerId) return;
-        renderHistoricalSection(player, null);
+    if (!player) return null;
+    var gamesWon = [];
+    var opponentSet = {};
+    state.gameHistory.forEach(function (entry) {
+      if (typeof entry === "string" || !entry.winnerNames) return;
+      if (entry.winnerNames.indexOf(player.name) === -1) return;
+      gamesWon.push(entry.gameLabel);
+      (entry.opponentNames || []).forEach(function (n) {
+        opponentSet[n] = true;
       });
-  }
-
-  function renderHistoricalSection(player, data) {
-    currentStatsHistorical = data;
-    playerStatsBody.querySelectorAll(".historical-section").forEach(function (el) {
-      el.remove();
     });
-    if (!data) {
-      var note = document.createElement("div");
-      note.className = "player-stats-note historical-section";
-      note.textContent = "No saved history yet for this player — export to start tracking.";
-      playerStatsBody.appendChild(note);
-      return;
-    }
-    var winsRow = playerStatsRow("All-time wins", data.totalWins || 0);
-    winsRow.classList.add("historical-section");
-    playerStatsBody.appendChild(winsRow);
-    var sessionsRow = playerStatsRow("Sessions recorded", data.sessionsRecorded || 0);
-    sessionsRow.classList.add("historical-section");
-    playerStatsBody.appendChild(sessionsRow);
-    if (data.updatedAt) {
-      var updatedNote = document.createElement("div");
-      updatedNote.className = "player-stats-note historical-section";
-      updatedNote.textContent = "Last saved " + data.updatedAt.slice(0, 10);
-      playerStatsBody.appendChild(updatedNote);
-    }
+    var wins = state.playerWins[playerId] || 0;
+    return {
+      date: new Date().toISOString().slice(0, 10),
+      wins: wins,
+      gamesWon: gamesWon,
+      opponents: Object.keys(opponentSet),
+      wonTournament: wins > 0 && wins >= state.raceToWinsTarget
+    };
   }
 
   function playerStatsRow(label, value) {
@@ -1272,25 +1263,135 @@
     return row;
   }
 
-  function closePlayerStats() {
-    playerStatsOverlay.classList.add("hidden");
+  function playerStatsListRow(label, items) {
+    var row = document.createElement("div");
+    row.className = "player-stats-row player-stats-row-wrap";
+    var l = document.createElement("span");
+    l.className = "label";
+    l.textContent = label;
+    var v = document.createElement("span");
+    v.className = "value value-list";
+    v.textContent = items.length ? items.join(", ") : "—";
+    row.appendChild(l);
+    row.appendChild(v);
+    return row;
+  }
+
+  function renderLiveSessionForPlayer(playerId) {
+    var live = computeLiveSessionForPlayer(playerId);
+    playerPageCurrentBody.innerHTML = "";
+    playerPageCurrentBody.appendChild(playerStatsRow("Wins today", live.wins));
+    playerPageCurrentBody.appendChild(playerStatsListRow("Games won", live.gamesWon));
+    playerPageCurrentBody.appendChild(playerStatsListRow("Opponents", live.opponents));
+    if (live.wonTournament) {
+      var trophy = document.createElement("div");
+      trophy.className = "player-stats-note";
+      trophy.textContent = "🏆 Reached the race-to-" + state.raceToWinsTarget + " milestone today!";
+      playerPageCurrentBody.appendChild(trophy);
+    }
+  }
+
+  function renderPlayerHistoryList(sessions) {
+    playerPageHistoryList.innerHTML = "";
+    if (!sessions || sessions.length === 0) {
+      var hint = document.createElement("li");
+      hint.className = "empty-hint";
+      hint.textContent = "No saved sessions yet for this player — use Export Stats to start tracking.";
+      playerPageHistoryList.appendChild(hint);
+      return;
+    }
+    sessions
+      .slice()
+      .sort(function (a, b) {
+        return b.date.localeCompare(a.date);
+      })
+      .forEach(function (session) {
+        var li = document.createElement("li");
+        li.className = "player-history-row" + (session.wonTournament ? " won-tournament" : "");
+
+        var top = document.createElement("div");
+        top.className = "player-history-top";
+        var date = document.createElement("span");
+        date.className = "player-history-date";
+        date.textContent = session.date + (session.wonTournament ? " 🏆" : "");
+        var wins = document.createElement("span");
+        wins.className = "player-history-wins";
+        wins.textContent = session.wins + " win" + (session.wins === 1 ? "" : "s");
+        top.appendChild(date);
+        top.appendChild(wins);
+        li.appendChild(top);
+
+        var detail = document.createElement("div");
+        detail.className = "player-history-detail";
+        var gamesText = session.gamesWon && session.gamesWon.length ? session.gamesWon.join(", ") : "—";
+        var opponentsText = session.opponents && session.opponents.length ? session.opponents.join(", ") : "—";
+        detail.appendChild(document.createTextNode("Games: " + gamesText));
+        detail.appendChild(document.createElement("br"));
+        detail.appendChild(document.createTextNode("Opponents: " + opponentsText));
+        li.appendChild(detail);
+
+        playerPageHistoryList.appendChild(li);
+      });
+  }
+
+  function openPlayerStatsPage(playerId) {
+    var player = getPlayer(playerId);
+    if (!player) return;
+    currentStatsPlayerId = playerId;
+    currentStatsSessions = null;
+    playerPageName.textContent = player.name;
+    renderLiveSessionForPlayer(playerId);
+    playerPageHistoryList.innerHTML = "";
+    var loading = document.createElement("li");
+    loading.className = "empty-hint";
+    loading.textContent = "Loading saved history…";
+    playerPageHistoryList.appendChild(loading);
+
+    appRoot.classList.add("hidden");
+    playerPageView.classList.remove("hidden");
+    window.scrollTo(0, 0);
+
+    fetch("players/" + playerStatsFilename(player.name))
+      .then(function (res) {
+        if (!res.ok) throw new Error("no file");
+        return res.json();
+      })
+      .then(function (data) {
+        if (currentStatsPlayerId !== playerId) return;
+        currentStatsSessions = Array.isArray(data.sessions) ? data.sessions : [];
+        renderPlayerHistoryList(currentStatsSessions);
+      })
+      .catch(function () {
+        if (currentStatsPlayerId !== playerId) return;
+        currentStatsSessions = [];
+        renderPlayerHistoryList([]);
+      });
+  }
+
+  function closePlayerStatsPage() {
+    playerPageView.classList.add("hidden");
+    appRoot.classList.remove("hidden");
     currentStatsPlayerId = null;
-    currentStatsHistorical = null;
+    currentStatsSessions = null;
   }
 
   function exportCurrentPlayerStats() {
     var player = getPlayer(currentStatsPlayerId);
     if (!player) return;
-    var sessionWins = state.playerWins[currentStatsPlayerId] || 0;
-    var prevTotal = currentStatsHistorical ? currentStatsHistorical.totalWins || 0 : 0;
-    var prevSessions = currentStatsHistorical ? currentStatsHistorical.sessionsRecorded || 0 : 0;
-    var updated = {
-      name: player.name,
-      updatedAt: new Date().toISOString(),
-      totalWins: prevTotal + sessionWins,
-      sessionsRecorded: prevSessions + 1
-    };
-    downloadJSON(playerStatsFilename(player.name), updated);
+    var live = computeLiveSessionForPlayer(currentStatsPlayerId);
+    var sessions = (currentStatsSessions || []).slice();
+    var idx = -1;
+    sessions.forEach(function (s, i) {
+      if (s.date === live.date) idx = i;
+    });
+    if (idx !== -1) {
+      sessions[idx] = live;
+    } else {
+      sessions.push(live);
+    }
+    currentStatsSessions = sessions;
+    downloadJSON(playerStatsFilename(player.name), { name: player.name, sessions: sessions });
+    renderPlayerHistoryList(sessions);
     showToast("Downloaded " + playerStatsFilename(player.name) + " — commit it into players/ to save " + player.name + "'s history.");
   }
 
@@ -1299,21 +1400,16 @@
     if (!player) return;
     if (
       !confirm(
-        "This clears " + player.name + "'s saved all-time history (downloads a zeroed file for you to commit). " +
-        "This session's stats are not affected. Continue?"
+        "This clears " + player.name + "'s saved session history (downloads an empty file for you to commit). " +
+        "This session's live stats are not affected. Continue?"
       )
     ) {
       return;
     }
-    var zeroed = {
-      name: player.name,
-      updatedAt: new Date().toISOString(),
-      totalWins: 0,
-      sessionsRecorded: 0
-    };
-    downloadJSON(playerStatsFilename(player.name), zeroed);
-    renderHistoricalSection(player, zeroed);
-    showToast("Downloaded a zeroed " + playerStatsFilename(player.name) + " — commit it to clear " + player.name + "'s saved history.");
+    currentStatsSessions = [];
+    downloadJSON(playerStatsFilename(player.name), { name: player.name, sessions: [] });
+    renderPlayerHistoryList([]);
+    showToast("Downloaded a cleared " + playerStatsFilename(player.name) + " — commit it to clear " + player.name + "'s saved history.");
   }
 
   // ---------------------------------------------------------------------
@@ -1409,12 +1505,9 @@
 
   btnRosterLoad.addEventListener("click", loadSelectedRoster);
 
-  btnPlayerStatsExport.addEventListener("click", exportCurrentPlayerStats);
-  btnPlayerStatsReset.addEventListener("click", resetPlayerHistoricalStats);
-  btnPlayerStatsClose.addEventListener("click", closePlayerStats);
-  playerStatsOverlay.addEventListener("click", function (e) {
-    if (e.target === playerStatsOverlay) closePlayerStats();
-  });
+  btnPlayerPageExport.addEventListener("click", exportCurrentPlayerStats);
+  btnPlayerPageReset.addEventListener("click", resetPlayerHistoricalStats);
+  btnPlayerPageBack.addEventListener("click", closePlayerStatsPage);
 
   // ---------------------------------------------------------------------
   // Init
