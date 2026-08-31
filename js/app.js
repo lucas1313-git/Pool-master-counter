@@ -7,6 +7,8 @@
 
   var GAME_TYPES = {
     "8ball": { label: "8-Ball", defaultTarget: 1, unit: "rack" },
+    "8ballrotation": { label: "8 Ball Rotation", defaultTarget: 1, unit: "rack" },
+    "8ballpunishment": { label: "8 Ball Punishment", defaultTarget: 1, unit: "rack" },
     "9ball": { label: "9-Ball", defaultTarget: 1, unit: "rack" },
     straight: { label: "Straight Pool", defaultTarget: 100, unit: "points" },
     onepocket: { label: "One Pocket", defaultTarget: 8, unit: "balls" },
