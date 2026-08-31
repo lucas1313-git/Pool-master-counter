@@ -6,10 +6,10 @@
   var VOICE_PITCHES = [1.0, 1.26, 1.5, 0.79, 1.89, 0.63];
 
   var GAME_TYPES = {
-    "8ball": { label: "8-Ball", defaultTarget: 8, unit: "balls" },
-    "8ballrotation": { label: "8 Ball Rotation", defaultTarget: 8, unit: "balls" },
-    "8ballpunishment": { label: "8 Ball Punishment", defaultTarget: 8, unit: "balls" },
-    "9ball": { label: "9-Ball", defaultTarget: 9, unit: "balls" },
+    "8ball": { label: "8-Ball", defaultTarget: 1, unit: "rack" },
+    "8ballrotation": { label: "8 Ball Rotation", defaultTarget: 1, unit: "rack" },
+    "8ballpunishment": { label: "8 Ball Punishment", defaultTarget: 1, unit: "rack" },
+    "9ball": { label: "9-Ball", defaultTarget: 1, unit: "rack" },
     straight: { label: "Straight Pool", defaultTarget: 100, unit: "points" },
     onepocket: { label: "One Pocket", defaultTarget: 8, unit: "balls" },
     custom: { label: "Custom", defaultTarget: 1, unit: "points" }
@@ -32,7 +32,7 @@
       playerWins: {},
       teamWins: {},
       raceToWinsTarget: 5,
-      currentGame: { gameType: "8ball", target: 8, mode: "individual" },
+      currentGame: { gameType: "8ball", target: 1, mode: "individual" },
       gameHistory: [],
       rotation: { enabled: false, order: [], every: 1 },
       gamesPlayedCount: 0
@@ -103,10 +103,10 @@
           if (typeof parsed.raceToWinsTarget !== "number") parsed.raceToWinsTarget = 5;
           if (!parsed.currentGame) parsed.currentGame = { gameType: "8ball", target: 1, mode: "individual" };
           var EIGHTBALL_FAMILY = ["8ball", "8ballrotation", "8ballpunishment"];
-          if (parsed.currentGame.target === 1 && EIGHTBALL_FAMILY.indexOf(parsed.currentGame.gameType) !== -1) {
-            parsed.currentGame.target = 8;
-          } else if (parsed.currentGame.target === 1 && parsed.currentGame.gameType === "9ball") {
-            parsed.currentGame.target = 9;
+          if (parsed.currentGame.target === 8 && EIGHTBALL_FAMILY.indexOf(parsed.currentGame.gameType) !== -1) {
+            parsed.currentGame.target = 1;
+          } else if (parsed.currentGame.target === 9 && parsed.currentGame.gameType === "9ball") {
+            parsed.currentGame.target = 1;
           }
           if (!Array.isArray(parsed.gameHistory)) parsed.gameHistory = [];
           if (!parsed.rotation) parsed.rotation = { enabled: false, order: [], every: 1 };
