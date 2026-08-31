@@ -14,83 +14,62 @@
 
 <div id="app">
 
-  <!-- HOME VIEW: players + match list -->
-  <section id="view-home" class="view">
-    <header class="app-header">
-      <h1>🎱 Pool Master Counter</h1>
-    </header>
+  <header class="app-header">
+    <h1>🎱 Pool Master Counter</h1>
+  </header>
 
-    <section class="panel" id="players-panel">
-      <h2>Players</h2>
-      <form id="add-player-form" class="row">
-        <input type="text" id="new-player-name" placeholder="Player name" autocomplete="off" required>
-        <button type="submit" class="btn btn-primary">Add</button>
-      </form>
-      <ul id="player-list" class="chip-list"></ul>
-    </section>
-
-    <section class="panel" id="matches-panel">
-      <div class="panel-head">
-        <h2>Matches</h2>
-        <button id="btn-new-match" class="btn btn-primary">+ New Match</button>
-        <button id="btn-share-all" class="btn btn-ghost">Share All</button>
-      </div>
-
-      <form id="new-match-form" class="new-match-form hidden">
-        <div class="field-label">Players in this match</div>
-        <ul id="match-participant-list" class="participant-select-list"></ul>
-        <button type="button" id="btn-match-add-player" class="btn btn-ghost btn-block">+ Add New Player</button>
-
-        <div class="row">
-          <label class="checkbox-row"><input type="checkbox" id="match-use-teams"> Play as teams (2 sides) — pick A/B for each player above</label>
-        </div>
-
-        <div class="field-label">Game type</div>
-        <div class="row mode-row">
-          <label><input type="radio" name="match-mode" value="games" checked> Race to games</label>
-          <label><input type="radio" name="match-mode" value="points"> Point goal (straight pool / one pocket)</label>
-        </div>
-
-        <div class="row" id="games-mode-row">
-          <label for="match-race-to">Race to</label>
-          <input type="number" id="match-race-to" min="1" max="99" value="5">
-          <span>games</span>
-        </div>
-        <div class="row hidden" id="points-mode-row">
-          <label for="match-point-goal">Point goal</label>
-          <input type="number" id="match-point-goal" min="1" max="500" value="100">
-          <span>points</span>
-        </div>
-
-        <div class="row">
-          <button type="submit" class="btn btn-primary">Start Match</button>
-          <button type="button" id="btn-cancel-match" class="btn btn-ghost">Cancel</button>
-        </div>
-      </form>
-
-      <ul id="match-list" class="match-list"></ul>
-    </section>
+  <section class="panel" id="players-panel">
+    <h2>Players</h2>
+    <form id="add-player-form" class="row">
+      <input type="text" id="new-player-name" placeholder="Player name" autocomplete="off" required>
+      <button type="submit" class="btn btn-primary">Add</button>
+    </form>
+    <ul id="roster-list" class="roster-list"></ul>
   </section>
 
-  <!-- MATCH VIEW: live scoring -->
-  <section id="view-match" class="view hidden">
-    <header class="match-header">
-      <button id="btn-back" class="btn btn-ghost">&larr; Back</button>
-      <div class="match-title">
-        <span id="match-race-label"></span>
-      </div>
-      <div class="match-actions">
-        <button id="btn-share-match" class="btn btn-ghost" title="Share by email">Share</button>
-        <button id="btn-reset-match" class="btn btn-ghost" title="Reset score to 0-0">Reset</button>
-        <button id="btn-delete-match" class="btn btn-danger" title="Delete match">Delete</button>
-      </div>
-    </header>
-
-    <div id="winner-banner" class="winner-banner hidden"></div>
-
-    <div class="scoreboard" id="scoreboard">
-      <!-- player panels (free-for-all) or team panels (2 sides) injected here; class toggles between scoreboard/scoreboard-teams -->
+  <section class="panel" id="game-setup-panel">
+    <h2>Current Game</h2>
+    <div class="row">
+      <label for="game-type">Game</label>
+      <select id="game-type">
+        <option value="8ball">8-Ball</option>
+        <option value="9ball">9-Ball</option>
+        <option value="straight">Straight Pool</option>
+        <option value="onepocket">One Pocket</option>
+        <option value="custom">Custom</option>
+      </select>
+      <label for="game-target">Target</label>
+      <input type="number" id="game-target" min="1" max="500" value="1">
+      <span id="game-target-unit">rack</span>
     </div>
+
+    <div class="row mode-row">
+      <label><input type="radio" name="game-mode" value="individual" checked> Individual</label>
+      <label><input type="radio" name="game-mode" value="teams"> Teams</label>
+    </div>
+
+    <div class="row">
+      <label for="race-to-wins">Race-to milestone</label>
+      <input type="number" id="race-to-wins" min="1" max="99" value="5">
+      <span>wins</span>
+    </div>
+
+    <div class="row">
+      <button type="button" id="btn-reset-game" class="btn btn-ghost">Reset Current Game</button>
+      <button type="button" id="btn-share" class="btn btn-ghost">Share Standings</button>
+      <button type="button" id="btn-reset-stats" class="btn btn-danger">Reset All Stats</button>
+    </div>
+  </section>
+
+  <div id="win-toast" class="win-toast hidden"></div>
+
+  <section id="scoreboard-panel">
+    <div class="scoreboard" id="scoreboard"></div>
+  </section>
+
+  <section class="panel" id="history-panel">
+    <h2>Recent Games</h2>
+    <ul id="history-list" class="history-list"></ul>
   </section>
 
 </div>

@@ -1,39 +1,85 @@
 (function () {
   "use strict";
 
-  var STORAGE_KEY = "poolMasterCounter.state.v1";
+  var STORAGE_KEY = "poolMasterCounter.state.v2";
+  var OLD_STORAGE_KEY = "poolMasterCounter.state.v1";
   var VOICE_PITCHES = [1.0, 1.26, 1.5, 0.79, 1.89, 0.63];
+
+  var GAME_TYPES = {
+    "8ball": { label: "8-Ball", defaultTarget: 1, unit: "rack" },
+    "9ball": { label: "9-Ball", defaultTarget: 1, unit: "rack" },
+    straight: { label: "Straight Pool", defaultTarget: 100, unit: "points" },
+    onepocket: { label: "One Pocket", defaultTarget: 8, unit: "balls" },
+    custom: { label: "Custom", defaultTarget: 1, unit: "points" }
+  };
 
   // ---------------------------------------------------------------------
   // State
   // ---------------------------------------------------------------------
 
   var state = loadState();
-  var currentMatchId = null;
+  var toastTimer = null;
 
   function uid() {
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   }
 
-  function migrateMatch(m) {
-    if (!m.participants) {
-      var ids = [m.player1Id, m.player2Id].filter(Boolean);
-      m.participants = ids.map(function (id) {
-        return { playerId: id, standby: false, teamId: null };
-      });
-      delete m.player1Id;
-      delete m.player2Id;
-    }
-    m.participants.forEach(function (pt) {
-      if (typeof pt.teamId === "undefined") pt.teamId = null;
+  function defaultState() {
+    return {
+      players: [],
+      playerWins: {},
+      teamWins: {},
+      raceToWinsTarget: 5,
+      currentGame: { gameType: "8ball", target: 1, mode: "individual" },
+      gameHistory: []
+    };
+  }
+
+  function migrateFromOldMatches(oldState) {
+    var next = defaultState();
+    next.players = (oldState.players || []).map(function (p, i) {
+      return {
+        id: p.id,
+        name: p.name,
+        voice: typeof p.voice === "number" ? p.voice : i % VOICE_PITCHES.length,
+        playing: false,
+        teamId: null,
+        balls: 0
+      };
     });
-    if (!m.mode) m.mode = "games";
-    if (typeof m.pointGoal !== "number") m.pointGoal = 100;
-    if (typeof m.raceTo !== "number") m.raceTo = 5;
-    if (typeof m.teamsEnabled !== "boolean") m.teamsEnabled = false;
-    if (!m.games) m.games = {};
-    if (!m.balls) m.balls = {};
-    return m;
+
+    (oldState.matches || []).forEach(function (m) {
+      var participants = m.participants || [];
+      if (m.teamsEnabled) {
+        ["A", "B"].forEach(function (teamId) {
+          var members = participants.filter(function (pt) {
+            return pt.teamId === teamId;
+          });
+          if (!members.length) return;
+          var wins = m.mode === "games" ? m.games && m.games[teamId] : m.status === "completed" && m.winnerId === teamId ? 1 : 0;
+          wins = wins || 0;
+          if (!wins) return;
+          var key = members
+            .map(function (pt) {
+              return pt.playerId;
+            })
+            .sort()
+            .join("|");
+          next.teamWins[key] = (next.teamWins[key] || 0) + wins;
+          members.forEach(function (pt) {
+            next.playerWins[pt.playerId] = (next.playerWins[pt.playerId] || 0) + wins;
+          });
+        });
+      } else {
+        participants.forEach(function (pt) {
+          var wins = m.mode === "games" ? (m.games && m.games[pt.playerId]) || 0 : m.status === "completed" && m.winnerId === pt.playerId ? 1 : 0;
+          if (!wins) return;
+          next.playerWins[pt.playerId] = (next.playerWins[pt.playerId] || 0) + wins;
+        });
+      }
+    });
+
+    return next;
   }
 
   function loadState() {
@@ -41,18 +87,32 @@
       var raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         var parsed = JSON.parse(raw);
-        if (parsed && Array.isArray(parsed.players) && Array.isArray(parsed.matches)) {
+        if (parsed && Array.isArray(parsed.players)) {
           parsed.players.forEach(function (p, i) {
             if (typeof p.voice !== "number") p.voice = i % VOICE_PITCHES.length;
+            if (typeof p.playing !== "boolean") p.playing = false;
+            if (typeof p.teamId === "undefined") p.teamId = null;
+            if (typeof p.balls !== "number") p.balls = 0;
           });
-          parsed.matches = parsed.matches.map(migrateMatch);
+          if (!parsed.playerWins) parsed.playerWins = {};
+          if (!parsed.teamWins) parsed.teamWins = {};
+          if (typeof parsed.raceToWinsTarget !== "number") parsed.raceToWinsTarget = 5;
+          if (!parsed.currentGame) parsed.currentGame = { gameType: "8ball", target: 1, mode: "individual" };
+          if (!Array.isArray(parsed.gameHistory)) parsed.gameHistory = [];
           return parsed;
+        }
+      }
+      var oldRaw = localStorage.getItem(OLD_STORAGE_KEY);
+      if (oldRaw) {
+        var oldParsed = JSON.parse(oldRaw);
+        if (oldParsed && Array.isArray(oldParsed.players)) {
+          return migrateFromOldMatches(oldParsed);
         }
       }
     } catch (e) {
       console.warn("Could not read saved state, starting fresh.", e);
     }
-    return { players: [], matches: [] };
+    return defaultState();
   }
 
   function saveState() {
@@ -70,96 +130,40 @@
     return null;
   }
 
-  function getMatch(id) {
-    for (var i = 0; i < state.matches.length; i++) {
-      if (state.matches[i].id === id) return state.matches[i];
-    }
-    return null;
-  }
-
-  function matchValidParticipants(m) {
-    return m.participants.filter(function (pt) {
-      return !!getPlayer(pt.playerId);
+  function activePlayers() {
+    return state.players.filter(function (p) {
+      return p.playing;
     });
   }
 
-  function teamMembers(m, teamId) {
-    return matchValidParticipants(m).filter(function (pt) {
-      return pt.teamId === teamId;
+  function teamMembersLive(teamId) {
+    return activePlayers().filter(function (p) {
+      return p.teamId === teamId;
     });
   }
 
-  function teamLabel(m, teamId) {
-    var names = teamMembers(m, teamId)
-      .map(function (pt) {
-        return getPlayer(pt.playerId).name;
-      })
-      .join(" & ");
-    var base = teamId === "A" ? "Team A" : "Team B";
-    return names ? base + " (" + names + ")" : base;
-  }
-
-  function sumTeamBalls(m, teamId) {
-    return teamMembers(m, teamId).reduce(function (sum, pt) {
-      return sum + (m.balls[pt.playerId] || 0);
-    }, 0);
-  }
-
-  // ---------------------------------------------------------------------
-  // Lifetime stats — derived from match history, never stored separately
-  // ---------------------------------------------------------------------
-
-  function computeStats() {
-    var playerWins = {};
-    var teamWins = {};
-
-    state.matches.forEach(function (m) {
-      if (m.teamsEnabled) {
-        ["A", "B"].forEach(function (teamId) {
-          var members = teamMembers(m, teamId);
-          if (!members.length) return;
-          var wins =
-            m.mode === "games"
-              ? m.games[teamId] || 0
-              : m.status === "completed" && m.winnerId === teamId
-              ? 1
-              : 0;
-          if (!wins) return;
-          var key = members
-            .map(function (pt) {
-              return pt.playerId;
-            })
-            .sort()
-            .join("|");
-          teamWins[key] = (teamWins[key] || 0) + wins;
-          members.forEach(function (pt) {
-            playerWins[pt.playerId] = (playerWins[pt.playerId] || 0) + wins;
-          });
-        });
-      } else {
-        matchValidParticipants(m).forEach(function (pt) {
-          var wins =
-            m.mode === "games"
-              ? m.games[pt.playerId] || 0
-              : m.status === "completed" && m.winnerId === pt.playerId
-              ? 1
-              : 0;
-          if (!wins) return;
-          playerWins[pt.playerId] = (playerWins[pt.playerId] || 0) + wins;
-        });
-      }
-    });
-
-    return { playerWins: playerWins, teamWins: teamWins };
-  }
-
-  function teamKey(m, teamId) {
-    return teamMembers(m, teamId)
-      .map(function (pt) {
-        return pt.playerId;
+  function teamComboKey(teamId) {
+    return teamMembersLive(teamId)
+      .map(function (p) {
+        return p.id;
       })
       .sort()
       .join("|");
+  }
+
+  function teamLabelLive(teamId) {
+    var names = teamMembersLive(teamId)
+      .map(function (p) {
+        return p.name;
+      })
+      .join(" & ");
+    return (teamId === "A" ? "Team A" : "Team B") + (names ? " (" + names + ")" : "");
+  }
+
+  function sumTeamBalls(teamId) {
+    return teamMembersLive(teamId).reduce(function (sum, p) {
+      return sum + (p.balls || 0);
+    }, 0);
   }
 
   // ---------------------------------------------------------------------
@@ -227,507 +231,110 @@
   // DOM refs
   // ---------------------------------------------------------------------
 
-  var viewHome = document.getElementById("view-home");
-  var viewMatch = document.getElementById("view-match");
-
   var addPlayerForm = document.getElementById("add-player-form");
   var newPlayerName = document.getElementById("new-player-name");
-  var playerList = document.getElementById("player-list");
+  var rosterList = document.getElementById("roster-list");
 
-  var btnNewMatch = document.getElementById("btn-new-match");
-  var newMatchForm = document.getElementById("new-match-form");
-  var participantList = document.getElementById("match-participant-list");
-  var btnMatchAddPlayer = document.getElementById("btn-match-add-player");
-  var useTeamsCheckbox = document.getElementById("match-use-teams");
-  var modeRadios = document.getElementsByName("match-mode");
-  var gamesModeRow = document.getElementById("games-mode-row");
-  var pointsModeRow = document.getElementById("points-mode-row");
-  var matchRaceTo = document.getElementById("match-race-to");
-  var matchPointGoal = document.getElementById("match-point-goal");
-  var btnCancelMatch = document.getElementById("btn-cancel-match");
-  var matchList = document.getElementById("match-list");
-  var btnShareAll = document.getElementById("btn-share-all");
+  var gameTypeSelect = document.getElementById("game-type");
+  var gameTargetInput = document.getElementById("game-target");
+  var gameTargetUnit = document.getElementById("game-target-unit");
+  var modeRadios = document.getElementsByName("game-mode");
+  var raceToWinsInput = document.getElementById("race-to-wins");
 
-  var btnBack = document.getElementById("btn-back");
-  var matchRaceLabel = document.getElementById("match-race-label");
-  var btnShareMatch = document.getElementById("btn-share-match");
-  var btnResetMatch = document.getElementById("btn-reset-match");
-  var btnDeleteMatch = document.getElementById("btn-delete-match");
-  var winnerBanner = document.getElementById("winner-banner");
+  var btnResetGame = document.getElementById("btn-reset-game");
+  var btnShare = document.getElementById("btn-share");
+  var btnResetStats = document.getElementById("btn-reset-stats");
+
+  var winToast = document.getElementById("win-toast");
   var scoreboard = document.getElementById("scoreboard");
+  var historyList = document.getElementById("history-list");
 
   // ---------------------------------------------------------------------
-  // Rendering: Home view
+  // Rendering
   // ---------------------------------------------------------------------
 
-  function renderPlayers() {
-    playerList.innerHTML = "";
+  function renderAll() {
+    renderRoster();
+    renderScoreboard();
+    renderHistory();
+  }
+
+  function renderRoster() {
+    rosterList.innerHTML = "";
     if (state.players.length === 0) {
       var hint = document.createElement("li");
       hint.className = "empty-hint";
       hint.textContent = "Add players to get started.";
-      playerList.appendChild(hint);
+      rosterList.appendChild(hint);
+      return;
     }
+    var showTeamToggle = state.currentGame.mode === "teams";
+
     state.players.forEach(function (p) {
-      var li = document.createElement("li");
-      li.className = "chip";
-      var span = document.createElement("span");
-      span.textContent = p.name;
-      var btn = document.createElement("button");
-      btn.type = "button";
-      btn.setAttribute("aria-label", "Remove " + p.name);
-      btn.textContent = "×";
-      btn.addEventListener("click", function () {
+      var row = document.createElement("li");
+      row.className = "roster-row" + (p.playing ? " is-playing" : "");
+
+      var name = document.createElement("span");
+      name.className = "roster-name";
+      name.textContent = p.name;
+      row.appendChild(name);
+
+      var playBtn = document.createElement("button");
+      playBtn.type = "button";
+      playBtn.className = "btn-playing" + (p.playing ? " is-on" : "");
+      playBtn.textContent = p.playing ? "Playing" : "Standby";
+      playBtn.addEventListener("click", function () {
+        togglePlaying(p.id);
+      });
+      row.appendChild(playBtn);
+
+      if (showTeamToggle && p.playing) {
+        var toggle = document.createElement("div");
+        toggle.className = "team-toggle";
+        ["A", "B"].forEach(function (teamId) {
+          var btn = document.createElement("button");
+          btn.type = "button";
+          btn.textContent = teamId;
+          if (p.teamId === teamId) btn.classList.add("is-selected");
+          btn.addEventListener("click", function () {
+            setPlayerTeam(p.id, teamId);
+          });
+          toggle.appendChild(btn);
+        });
+        row.appendChild(toggle);
+      }
+
+      var removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "roster-remove";
+      removeBtn.setAttribute("aria-label", "Remove " + p.name);
+      removeBtn.textContent = "×";
+      removeBtn.addEventListener("click", function () {
         removePlayer(p.id);
       });
-      li.appendChild(span);
-      li.appendChild(btn);
-      playerList.appendChild(li);
+      row.appendChild(removeBtn);
+
+      rosterList.appendChild(row);
     });
   }
 
-  function populateParticipantList(checkedIds, teamAssignments) {
-    checkedIds = checkedIds || [];
-    teamAssignments = teamAssignments || {};
-    participantList.innerHTML = "";
-    var showTeamToggle = useTeamsCheckbox.checked;
-
-    state.players.forEach(function (p) {
-      var li = document.createElement("li");
-      var checkboxId = "participant-" + p.id;
-
-      var checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.id = checkboxId;
-      checkbox.value = p.id;
-      checkbox.checked = checkedIds.indexOf(p.id) !== -1;
-
-      var label = document.createElement("label");
-      label.setAttribute("for", checkboxId);
-      label.textContent = p.name;
-
-      var toggle = document.createElement("div");
-      toggle.className = "team-toggle" + (showTeamToggle ? "" : " hidden");
-      var selectedTeam = teamAssignments[p.id] || "A";
-      ["A", "B"].forEach(function (teamId) {
-        var btn = document.createElement("button");
-        btn.type = "button";
-        btn.textContent = teamId;
-        btn.setAttribute("data-team", teamId);
-        btn.setAttribute("data-player", p.id);
-        if (teamId === selectedTeam) btn.classList.add("is-selected");
-        btn.addEventListener("click", function () {
-          toggle.querySelectorAll("button").forEach(function (b) {
-            b.classList.toggle("is-selected", b === btn);
-          });
-        });
-        toggle.appendChild(btn);
-      });
-
-      li.appendChild(checkbox);
-      li.appendChild(label);
-      li.appendChild(toggle);
-      participantList.appendChild(li);
-    });
-  }
-
-  function getCheckedParticipantIds() {
-    var boxes = participantList.querySelectorAll("input[type=checkbox]:checked");
-    return Array.prototype.map.call(boxes, function (b) {
-      return b.value;
-    });
-  }
-
-  function getTeamAssignments() {
-    var assignments = {};
-    participantList.querySelectorAll(".team-toggle").forEach(function (toggle) {
-      var selected = toggle.querySelector("button.is-selected");
-      if (!selected) return;
-      assignments[selected.getAttribute("data-player")] = selected.getAttribute("data-team");
-    });
-    return assignments;
-  }
-
-  function addPlayer(name) {
-    name = (name || "").trim();
-    if (!name) return null;
-    var player = { id: uid(), name: name, voice: state.players.length % VOICE_PITCHES.length };
-    state.players.push(player);
-    saveState();
-    return player;
-  }
-
-  function removePlayer(id) {
-    var inUse = state.matches.some(function (m) {
-      return m.participants.some(function (pt) {
-        return pt.playerId === id;
-      });
-    });
-    if (inUse) {
-      if (!confirm("This player has matches. Remove player and their matches?")) {
-        return;
-      }
-      state.matches = state.matches.filter(function (m) {
-        return !m.participants.some(function (pt) {
-          return pt.playerId === id;
-        });
-      });
-    }
-    state.players = state.players.filter(function (p) {
-      return p.id !== id;
-    });
-    saveState();
-    renderPlayers();
-    renderMatches();
-  }
-
-  function renderMatches() {
-    matchList.innerHTML = "";
-    if (state.matches.length === 0) {
-      var hint = document.createElement("li");
-      hint.className = "empty-hint";
-      hint.textContent = "No matches yet. Start one above.";
-      matchList.appendChild(hint);
-      return;
-    }
-    var sorted = state.matches.slice().sort(function (a, b) {
-      return b.createdAt - a.createdAt;
-    });
-    sorted.forEach(function (m) {
-      var valid = matchValidParticipants(m);
-      if (valid.length < 2) return;
-
-      var li = document.createElement("li");
-      li.className = "match-card" + (m.status === "completed" ? " completed" : "");
-      li.addEventListener("click", function () {
-        openMatch(m.id);
-      });
-
-      var left = document.createElement("div");
-      var names = document.createElement("div");
-      names.className = "names";
-      var score = document.createElement("div");
-      score.className = "score";
-
-      if (m.teamsEnabled) {
-        names.textContent = teamLabel(m, "A") + " vs " + teamLabel(m, "B");
-        score.textContent =
-          (m.mode === "points" ? sumTeamBalls(m, "A") : m.games.A || 0) +
-          " – " +
-          (m.mode === "points" ? sumTeamBalls(m, "B") : m.games.B || 0);
-      } else {
-        names.textContent = valid
-          .map(function (pt) {
-            var pl = getPlayer(pt.playerId);
-            return pl.name + (pt.standby ? " (standby)" : "");
-          })
-          .join(" vs ");
-        score.textContent = valid
-          .map(function (pt) {
-            return m.mode === "points" ? m.balls[pt.playerId] || 0 : m.games[pt.playerId] || 0;
-          })
-          .join(" – ");
-      }
-
-      var sub = document.createElement("div");
-      sub.className = "sub";
-      sub.textContent = m.mode === "points" ? "Point goal " + m.pointGoal : "Race to " + m.raceTo;
-      if (m.status === "completed") {
-        var badge = document.createElement("span");
-        badge.className = "badge-done";
-        badge.textContent = (m.teamsEnabled ? teamLabel(m, m.winnerId) : getPlayer(m.winnerId) ? getPlayer(m.winnerId).name : "?") + " won";
-        sub.appendChild(badge);
-      }
-      left.appendChild(names);
-      left.appendChild(sub);
-
-      li.appendChild(left);
-      li.appendChild(score);
-      matchList.appendChild(li);
-    });
-  }
-
-  // ---------------------------------------------------------------------
-  // Match creation / deletion
-  // ---------------------------------------------------------------------
-
-  function createMatch(participantMeta, mode, target, teamsEnabled) {
-    var match = {
-      id: uid(),
-      participants: participantMeta.map(function (p) {
-        return { playerId: p.playerId, standby: false, teamId: teamsEnabled ? p.teamId : null };
-      }),
-      mode: mode,
-      teamsEnabled: teamsEnabled,
-      raceTo: mode === "games" ? target : 5,
-      pointGoal: mode === "points" ? target : 100,
-      status: "in_progress",
-      winnerId: null,
-      games: {},
-      balls: {},
-      createdAt: Date.now()
-    };
-    if (teamsEnabled && mode === "games") {
-      match.games = { A: 0, B: 0 };
-    } else {
-      participantMeta.forEach(function (p) {
-        match.games[p.playerId] = 0;
-      });
-    }
-    participantMeta.forEach(function (p) {
-      match.balls[p.playerId] = 0;
-    });
-    state.matches.push(match);
-    saveState();
-    renderMatches();
-    return match;
-  }
-
-  function resetMatch(id) {
-    var m = getMatch(id);
-    if (!m) return;
-    if (!confirm("Reset this match's score back to zero?")) return;
-    if (m.teamsEnabled && m.mode === "games") {
-      m.games.A = 0;
-      m.games.B = 0;
-    } else {
-      m.participants.forEach(function (pt) {
-        m.games[pt.playerId] = 0;
-      });
-    }
-    m.participants.forEach(function (pt) {
-      m.balls[pt.playerId] = 0;
-    });
-    m.status = "in_progress";
-    m.winnerId = null;
-    saveState();
-    renderMatchView();
-    renderMatches();
-  }
-
-  function deleteMatch(id) {
-    if (!confirm("Delete this match? This cannot be undone.")) return;
-    state.matches = state.matches.filter(function (m) {
-      return m.id !== id;
-    });
-    saveState();
-    goHome();
-    renderMatches();
-  }
-
-  function startNextMatch(id) {
-    var m = getMatch(id);
-    if (!m) return;
-    var participantMeta = matchValidParticipants(m).map(function (pt) {
-      return { playerId: pt.playerId, teamId: pt.teamId };
-    });
-    var target = m.mode === "points" ? m.pointGoal : m.raceTo;
-    var next = createMatch(participantMeta, m.mode, target, m.teamsEnabled);
-    openMatch(next.id);
-  }
-
-  // ---------------------------------------------------------------------
-  // Match view
-  // ---------------------------------------------------------------------
-
-  function openMatch(id) {
-    currentMatchId = id;
-    viewHome.classList.add("hidden");
-    viewMatch.classList.remove("hidden");
-    renderMatchView();
-  }
-
-  function goHome() {
-    currentMatchId = null;
-    viewMatch.classList.add("hidden");
-    viewHome.classList.remove("hidden");
-    renderMatches();
-  }
-
-  function renderMatchView() {
-    var m = getMatch(currentMatchId);
-    if (!m) {
-      goHome();
-      return;
-    }
-    var valid = matchValidParticipants(m);
-    if (valid.length < 2) {
-      goHome();
-      return;
-    }
-
-    var modeLabel = m.mode === "points" ? "Point goal " + m.pointGoal : "Race to " + m.raceTo;
-    if (m.teamsEnabled) {
-      matchRaceLabel.textContent = teamLabel(m, "A") + " vs " + teamLabel(m, "B") + " · " + modeLabel;
-    } else {
-      var names = valid
-        .map(function (pt) {
-          return getPlayer(pt.playerId).name;
-        })
-        .join(" vs ");
-      matchRaceLabel.textContent = names + " · " + modeLabel;
-    }
-
-    if (m.status === "completed") {
-      var winnerText = m.teamsEnabled ? teamLabel(m, m.winnerId) : getPlayer(m.winnerId) ? getPlayer(m.winnerId).name : "";
-      winnerBanner.innerHTML = "";
-      var winnerText2 = document.createElement("div");
-      winnerText2.textContent = "🏆 " + winnerText + " wins the match!";
-      winnerBanner.appendChild(winnerText2);
-      var rematchBtn = document.createElement("button");
-      rematchBtn.type = "button";
-      rematchBtn.className = "btn btn-primary";
-      rematchBtn.textContent = "Start Next Match";
-      rematchBtn.addEventListener("click", function () {
-        startNextMatch(m.id);
-      });
-      winnerBanner.appendChild(rematchBtn);
-      winnerBanner.classList.remove("hidden");
-    } else {
-      winnerBanner.classList.add("hidden");
-    }
-
-    var stats = computeStats();
-    scoreboard.innerHTML = "";
-
-    if (m.teamsEnabled) {
-      scoreboard.className = "scoreboard-teams";
-      ["A", "B"].forEach(function (teamId) {
-        var members = teamMembers(m, teamId);
-        if (!members.length) return;
-        scoreboard.appendChild(buildTeamPanel(m, teamId, members, stats));
-      });
-    } else {
-      scoreboard.className = "scoreboard";
-      valid.forEach(function (pt) {
-        scoreboard.appendChild(buildPlayerPanel(m, pt, stats));
-      });
-    }
-  }
-
-  function buildStatMini(label, value) {
+  function buildStatMini(label, value, milestoneReached) {
     var el = document.createElement("div");
     el.className = "stat-mini";
     var strong = document.createElement("strong");
     strong.textContent = value;
     el.appendChild(document.createTextNode(label + ": "));
     el.appendChild(strong);
+    if (milestoneReached) {
+      var flag = document.createElement("span");
+      flag.className = "flag";
+      flag.textContent = "🏁";
+      el.appendChild(flag);
+    }
     return el;
   }
 
-  function buildTeamPanel(match, teamId, members, stats) {
-    var isWinner = match.winnerId === teamId;
-    var matchOver = match.status === "completed";
-
-    var panel = document.createElement("div");
-    panel.className = "team-panel" + (isWinner ? " is-winner" : "");
-
-    var name = document.createElement("div");
-    name.className = "team-name";
-    name.textContent = teamId === "A" ? "Team A" : "Team B";
-    panel.appendChild(name);
-
-    panel.appendChild(buildStatMini("Paired career wins", stats.teamWins[teamKey(match, teamId)] || 0));
-
-    if (match.mode === "games") {
-      var gamesBlock = document.createElement("div");
-      gamesBlock.className = "stat-block";
-      var gamesLabel = document.createElement("div");
-      gamesLabel.className = "stat-label";
-      gamesLabel.textContent = "Games";
-      var gamesValue = document.createElement("div");
-      gamesValue.className = "stat-value";
-      gamesValue.textContent = match.games[teamId] || 0;
-      gamesBlock.appendChild(gamesLabel);
-      gamesBlock.appendChild(gamesValue);
-      panel.appendChild(gamesBlock);
-
-      var winBtn = document.createElement("button");
-      winBtn.type = "button";
-      winBtn.className = "btn-win";
-      winBtn.textContent = "Win Game";
-      winBtn.disabled = matchOver;
-      winBtn.addEventListener("click", function () {
-        winGame(match.id, teamId);
-      });
-      panel.appendChild(winBtn);
-    } else {
-      var pointsBlock = document.createElement("div");
-      pointsBlock.className = "stat-block";
-      var pointsLabel = document.createElement("div");
-      pointsLabel.className = "stat-label";
-      pointsLabel.textContent = "Points · Goal " + match.pointGoal;
-      var pointsValue = document.createElement("div");
-      pointsValue.className = "stat-value";
-      pointsValue.textContent = sumTeamBalls(match, teamId);
-      pointsBlock.appendChild(pointsLabel);
-      pointsBlock.appendChild(pointsValue);
-      panel.appendChild(pointsBlock);
-    }
-
-    var memberWrap = document.createElement("div");
-    memberWrap.className = "team-members";
-    members.forEach(function (pt) {
-      memberWrap.appendChild(buildMemberCard(match, pt, stats));
-    });
-    panel.appendChild(memberWrap);
-
-    return panel;
-  }
-
-  function buildMemberCard(match, participant, stats) {
-    var player = getPlayer(participant.playerId);
-    var matchOver = match.status === "completed";
-    var standby = participant.standby;
-    var disabled = matchOver || standby;
-
-    var card = document.createElement("div");
-    card.className = "member-card" + (standby ? " is-standby" : "");
-
-    var name = document.createElement("div");
-    name.className = "member-name";
-    name.textContent = player.name;
-    card.appendChild(name);
-
-    var actions = document.createElement("div");
-    actions.className = "member-actions";
-
-    var standbyBtn = document.createElement("button");
-    standbyBtn.type = "button";
-    standbyBtn.className = "btn-standby" + (standby ? " is-active-toggle" : "");
-    standbyBtn.textContent = standby ? "Resume" : "Standby";
-    standbyBtn.disabled = matchOver;
-    standbyBtn.addEventListener("click", function () {
-      toggleStandby(match.id, participant.playerId);
-    });
-    actions.appendChild(standbyBtn);
-
-    var otherTeam = participant.teamId === "A" ? "B" : "A";
-    var switchBtn = document.createElement("button");
-    switchBtn.type = "button";
-    switchBtn.className = "btn-standby";
-    switchBtn.textContent = "→ Team " + otherTeam;
-    switchBtn.disabled = matchOver;
-    switchBtn.addEventListener("click", function () {
-      switchPlayerTeam(match.id, participant.playerId);
-    });
-    actions.appendChild(switchBtn);
-
-    card.appendChild(actions);
-
-    card.appendChild(buildStatMini("Career wins", stats.playerWins[player.id] || 0));
-
-    var ballsValue = document.createElement("div");
-    ballsValue.className = "stat-value small balls";
-    ballsValue.textContent = match.balls[player.id] || 0;
-    card.appendChild(ballsValue);
-
-    card.appendChild(buildBallControls(match, player, disabled));
-
-    return card;
-  }
-
-  function buildBallControls(match, player, disabled) {
+  function buildBallControls(player, disabled) {
     var controls = document.createElement("div");
     controls.className = "ball-controls";
 
@@ -736,9 +343,9 @@
     minusBtn.className = "btn-ball minus";
     minusBtn.textContent = "−";
     minusBtn.setAttribute("aria-label", "Remove point for " + player.name);
-    minusBtn.disabled = disabled || (match.balls[player.id] || 0) <= 0;
+    minusBtn.disabled = disabled || (player.balls || 0) <= 0;
     minusBtn.addEventListener("click", function () {
-      adjustBalls(match.id, player.id, -1);
+      adjustScore(player.id, -1);
     });
 
     var plusBtn = document.createElement("button");
@@ -748,7 +355,7 @@
     plusBtn.setAttribute("aria-label", "Add point for " + player.name);
     plusBtn.disabled = disabled;
     plusBtn.addEventListener("click", function () {
-      adjustBalls(match.id, player.id, 1);
+      adjustScore(player.id, 1);
     });
 
     controls.appendChild(minusBtn);
@@ -756,242 +363,306 @@
     return controls;
   }
 
-  function buildPlayerPanel(match, participant, stats) {
-    var player = getPlayer(participant.playerId);
-    var isWinner = match.winnerId === participant.playerId;
-    var matchOver = match.status === "completed";
-    var standby = participant.standby;
-    var disabled = matchOver || standby;
-
+  function buildIndividualPanel(player) {
     var panel = document.createElement("div");
-    panel.className =
-      "player-panel" + (isWinner ? " is-winner" : "") + (standby ? " is-standby" : "");
+    panel.className = "player-panel";
 
     var name = document.createElement("div");
     name.className = "player-name";
     name.textContent = player.name;
     panel.appendChild(name);
 
-    var standbyBtn = document.createElement("button");
-    standbyBtn.type = "button";
-    standbyBtn.className = "btn-standby" + (standby ? " is-active-toggle" : "");
-    standbyBtn.textContent = standby ? "Resume" : "Standby";
-    standbyBtn.disabled = matchOver;
-    standbyBtn.addEventListener("click", function () {
-      toggleStandby(match.id, participant.playerId);
-    });
-    panel.appendChild(standbyBtn);
+    var wins = state.playerWins[player.id] || 0;
+    panel.appendChild(buildStatMini("Career wins", wins, wins >= state.raceToWinsTarget));
 
-    panel.appendChild(buildStatMini("Career wins", stats.playerWins[player.id] || 0));
+    var block = document.createElement("div");
+    block.className = "stat-block";
+    var label = document.createElement("div");
+    label.className = "stat-label";
+    label.textContent = GAME_TYPES[state.currentGame.gameType].label + " · Target " + state.currentGame.target;
+    var value = document.createElement("div");
+    value.className = "stat-value";
+    value.textContent = player.balls || 0;
+    block.appendChild(label);
+    block.appendChild(value);
+    panel.appendChild(block);
 
-    if (match.mode === "games") {
-      var gamesBlock = document.createElement("div");
-      gamesBlock.className = "stat-block";
-      var gamesLabel = document.createElement("div");
-      gamesLabel.className = "stat-label";
-      gamesLabel.textContent = "Games";
-      var gamesValue = document.createElement("div");
-      gamesValue.className = "stat-value";
-      gamesValue.textContent = match.games[player.id] || 0;
-      gamesBlock.appendChild(gamesLabel);
-      gamesBlock.appendChild(gamesValue);
-      panel.appendChild(gamesBlock);
-
-      var winBtn = document.createElement("button");
-      winBtn.type = "button";
-      winBtn.className = "btn-win";
-      winBtn.textContent = "Win Game";
-      winBtn.disabled = disabled;
-      winBtn.addEventListener("click", function () {
-        winGame(match.id, player.id);
-      });
-      panel.appendChild(winBtn);
-
-      var ballsBlock = document.createElement("div");
-      ballsBlock.className = "stat-block";
-      var ballsLabel = document.createElement("div");
-      ballsLabel.className = "stat-label";
-      ballsLabel.textContent = "Balls this game";
-      var ballsValue = document.createElement("div");
-      ballsValue.className = "stat-value balls";
-      ballsValue.textContent = match.balls[player.id] || 0;
-      ballsBlock.appendChild(ballsLabel);
-      ballsBlock.appendChild(ballsValue);
-      panel.appendChild(ballsBlock);
-    } else {
-      var pointsBlock = document.createElement("div");
-      pointsBlock.className = "stat-block";
-      var pointsLabel = document.createElement("div");
-      pointsLabel.className = "stat-label";
-      pointsLabel.textContent = "Points · Goal " + match.pointGoal;
-      var pointsValue = document.createElement("div");
-      pointsValue.className = "stat-value balls";
-      pointsValue.textContent = match.balls[player.id] || 0;
-      pointsBlock.appendChild(pointsLabel);
-      pointsBlock.appendChild(pointsValue);
-      panel.appendChild(pointsBlock);
-    }
-
-    panel.appendChild(buildBallControls(match, player, disabled));
+    panel.appendChild(buildBallControls(player, false));
 
     return panel;
   }
 
-  function toggleStandby(matchId, playerId) {
-    var m = getMatch(matchId);
-    if (!m) return;
-    var participant = m.participants.filter(function (pt) {
-      return pt.playerId === playerId;
-    })[0];
-    if (!participant) return;
-    participant.standby = !participant.standby;
-    saveState();
-    renderMatchView();
+  function buildMemberCard(player) {
+    var card = document.createElement("div");
+    card.className = "member-card";
+
+    var name = document.createElement("div");
+    name.className = "member-name";
+    name.textContent = player.name;
+    card.appendChild(name);
+
+    var wins = state.playerWins[player.id] || 0;
+    card.appendChild(buildStatMini("Career wins", wins, wins >= state.raceToWinsTarget));
+
+    var value = document.createElement("div");
+    value.className = "stat-value small";
+    value.textContent = player.balls || 0;
+    card.appendChild(value);
+
+    card.appendChild(buildBallControls(player, false));
+
+    return card;
   }
 
-  function switchPlayerTeam(matchId, playerId) {
-    var m = getMatch(matchId);
-    if (!m || !m.teamsEnabled || m.status === "completed") return;
-    var participant = m.participants.filter(function (pt) {
-      return pt.playerId === playerId;
-    })[0];
-    if (!participant) return;
-    var currentTeam = participant.teamId;
-    if (teamMembers(m, currentTeam).length <= 1) {
-      alert("Team " + currentTeam + " needs at least one player — add someone else to that team first.");
+  function buildTeamPanel(teamId, members) {
+    var panel = document.createElement("div");
+    panel.className = "team-panel";
+
+    var name = document.createElement("div");
+    name.className = "team-name";
+    name.textContent = teamLabelLive(teamId);
+    panel.appendChild(name);
+
+    var wins = state.teamWins[teamComboKey(teamId)] || 0;
+    panel.appendChild(buildStatMini("Paired wins", wins, wins >= state.raceToWinsTarget));
+
+    var block = document.createElement("div");
+    block.className = "stat-block";
+    var label = document.createElement("div");
+    label.className = "stat-label";
+    label.textContent = GAME_TYPES[state.currentGame.gameType].label + " · Target " + state.currentGame.target;
+    var value = document.createElement("div");
+    value.className = "stat-value";
+    value.textContent = sumTeamBalls(teamId);
+    block.appendChild(label);
+    block.appendChild(value);
+    panel.appendChild(block);
+
+    var memberWrap = document.createElement("div");
+    memberWrap.className = "team-members";
+    members.forEach(function (p) {
+      memberWrap.appendChild(buildMemberCard(p));
+    });
+    panel.appendChild(memberWrap);
+
+    return panel;
+  }
+
+  function renderScoreboard() {
+    scoreboard.innerHTML = "";
+    var active = activePlayers();
+
+    if (active.length === 0) {
+      scoreboard.className = "scoreboard";
+      var hint = document.createElement("div");
+      hint.className = "empty-hint";
+      hint.textContent = "Mark players as Playing above to start scoring.";
+      scoreboard.appendChild(hint);
       return;
     }
-    participant.teamId = currentTeam === "A" ? "B" : "A";
-    saveState();
-    renderMatchView();
+
+    if (state.currentGame.mode === "teams") {
+      scoreboard.className = "scoreboard scoreboard-teams";
+      ["A", "B"].forEach(function (teamId) {
+        var members = teamMembersLive(teamId);
+        if (!members.length) return;
+        scoreboard.appendChild(buildTeamPanel(teamId, members));
+      });
+    } else {
+      scoreboard.className = "scoreboard";
+      active.forEach(function (p) {
+        scoreboard.appendChild(buildIndividualPanel(p));
+      });
+    }
   }
 
-  function adjustBalls(matchId, playerId, delta) {
-    var m = getMatch(matchId);
-    if (!m || m.status === "completed") return;
-    var next = (m.balls[playerId] || 0) + delta;
-    if (next < 0) next = 0;
-    m.balls[playerId] = next;
+  function renderHistory() {
+    historyList.innerHTML = "";
+    if (state.gameHistory.length === 0) {
+      var hint = document.createElement("li");
+      hint.className = "empty-hint";
+      hint.textContent = "No games finished yet.";
+      historyList.appendChild(hint);
+      return;
+    }
+    state.gameHistory.forEach(function (entry) {
+      var li = document.createElement("li");
+      li.textContent = entry;
+      historyList.appendChild(li);
+    });
+  }
 
+  // ---------------------------------------------------------------------
+  // Player management
+  // ---------------------------------------------------------------------
+
+  function addPlayer(name) {
+    name = (name || "").trim();
+    if (!name) return null;
+    var player = {
+      id: uid(),
+      name: name,
+      voice: state.players.length % VOICE_PITCHES.length,
+      playing: false,
+      teamId: null,
+      balls: 0
+    };
+    state.players.push(player);
+    saveState();
+    return player;
+  }
+
+  function removePlayer(id) {
+    if (!confirm("Remove this player? Their career win totals will also be cleared.")) return;
+    state.players = state.players.filter(function (p) {
+      return p.id !== id;
+    });
+    delete state.playerWins[id];
+    saveState();
+    renderAll();
+  }
+
+  function togglePlaying(id) {
+    var p = getPlayer(id);
+    if (!p) return;
+    p.playing = !p.playing;
+    p.balls = 0;
+    if (p.playing && !p.teamId) p.teamId = "A";
+    saveState();
+    renderAll();
+  }
+
+  function setPlayerTeam(id, teamId) {
+    var p = getPlayer(id);
+    if (!p) return;
+    p.teamId = teamId;
+    saveState();
+    renderAll();
+  }
+
+  // ---------------------------------------------------------------------
+  // Scoring
+  // ---------------------------------------------------------------------
+
+  function showToast(message) {
+    winToast.textContent = "🏆 " + message;
+    winToast.classList.remove("hidden");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () {
+      winToast.classList.add("hidden");
+    }, 4500);
+  }
+
+  function creditWin(isTeam, key) {
+    var typeLabel = GAME_TYPES[state.currentGame.gameType].label;
+    var summary;
+    if (isTeam) {
+      var members = teamMembersLive(key);
+      var comboKey = teamComboKey(key);
+      state.teamWins[comboKey] = (state.teamWins[comboKey] || 0) + 1;
+      members.forEach(function (p) {
+        state.playerWins[p.id] = (state.playerWins[p.id] || 0) + 1;
+      });
+      summary = teamLabelLive(key) + " won " + typeLabel + " (target " + state.currentGame.target + ")";
+    } else {
+      state.playerWins[key] = (state.playerWins[key] || 0) + 1;
+      summary = getPlayer(key).name + " won " + typeLabel + " (target " + state.currentGame.target + ")";
+    }
+    state.gameHistory.unshift(summary);
+    if (state.gameHistory.length > 50) state.gameHistory.length = 50;
+    showToast(summary);
+    return summary;
+  }
+
+  function resetGameBalls() {
+    state.players.forEach(function (p) {
+      p.balls = 0;
+    });
+  }
+
+  function adjustScore(playerId, delta) {
     var player = getPlayer(playerId);
+    if (!player || !player.playing) return;
+    var next = (player.balls || 0) + delta;
+    if (next < 0) next = 0;
+    player.balls = next;
 
-    if (m.mode === "points" && delta > 0) {
-      var winnerKey = null;
-      if (m.teamsEnabled) {
-        var participant = m.participants.filter(function (pt) {
-          return pt.playerId === playerId;
-        })[0];
-        if (participant && sumTeamBalls(m, participant.teamId) >= m.pointGoal) {
-          winnerKey = participant.teamId;
-        }
-      } else if (next >= m.pointGoal) {
-        winnerKey = playerId;
-      }
-      if (winnerKey) {
-        m.status = "completed";
-        m.winnerId = winnerKey;
+    if (delta > 0) {
+      var target = state.currentGame.target;
+      var isTeamMode = state.currentGame.mode === "teams" && player.teamId;
+      var reached = isTeamMode ? sumTeamBalls(player.teamId) >= target : next >= target;
+
+      if (reached) {
+        var winnerVoice = isTeamMode ? null : player.voice;
+        creditWin(isTeamMode, isTeamMode ? player.teamId : playerId);
+        resetGameBalls();
         saveState();
-        playWinSound(m.teamsEnabled ? null : player.voice);
-        renderMatchView();
-        renderMatches();
+        playWinSound(winnerVoice);
+        renderAll();
         return;
       }
-    }
 
-    saveState();
-    if (delta > 0) {
+      saveState();
       playPositiveSound(player.voice);
     } else {
+      saveState();
       playNegativeSound(player.voice);
     }
-    renderMatchView();
+    renderAll();
   }
 
-  function winGame(matchId, teamOrPlayerId) {
-    var m = getMatch(matchId);
-    if (!m || m.status === "completed" || m.mode !== "games") return;
-    m.games[teamOrPlayerId] = (m.games[teamOrPlayerId] || 0) + 1;
-    m.participants.forEach(function (pt) {
-      m.balls[pt.playerId] = 0;
-    });
+  function resetCurrentGame() {
+    if (!confirm("Reset the current game's score to zero? (No win will be credited.)")) return;
+    resetGameBalls();
+    saveState();
+    renderAll();
+  }
 
-    var target = m.raceTo;
-    var voice = m.teamsEnabled ? null : getPlayer(teamOrPlayerId).voice;
-    if (m.games[teamOrPlayerId] >= target) {
-      m.status = "completed";
-      m.winnerId = teamOrPlayerId;
-      saveState();
-      playWinSound(voice);
-    } else {
-      saveState();
-      playPositiveSound(voice);
-    }
-    renderMatchView();
-    renderMatches();
+  function resetAllStats() {
+    if (!confirm("This clears ALL career wins, team wins, and game history for every player. This cannot be undone. Continue?")) return;
+    state.playerWins = {};
+    state.teamWins = {};
+    state.gameHistory = [];
+    resetGameBalls();
+    saveState();
+    renderAll();
   }
 
   // ---------------------------------------------------------------------
   // Sharing by email
   // ---------------------------------------------------------------------
 
-  function matchSummaryLine(m) {
-    var valid = matchValidParticipants(m);
-    if (valid.length < 2) return "";
-    var parts;
-    if (m.teamsEnabled) {
-      parts = ["A", "B"].map(function (teamId) {
-        var score = m.mode === "points" ? sumTeamBalls(m, teamId) : m.games[teamId] || 0;
-        return teamLabel(m, teamId) + " " + score;
-      });
-    } else {
-      parts = valid.map(function (pt) {
-        var pl = getPlayer(pt.playerId);
-        var score = m.mode === "points" ? m.balls[pt.playerId] || 0 : m.games[pt.playerId] || 0;
-        return pl.name + " " + score + (pt.standby ? " (standby)" : "");
+  function shareStandings() {
+    var lines = ["Pool Master Counter — Standings", ""];
+    lines.push("Player career wins:");
+    state.players.forEach(function (p) {
+      lines.push("  " + p.name + ": " + (state.playerWins[p.id] || 0));
+    });
+    var teamKeys = Object.keys(state.teamWins);
+    if (teamKeys.length) {
+      lines.push("");
+      lines.push("Team pairing wins:");
+      teamKeys.forEach(function (key) {
+        var names = key
+          .split("|")
+          .map(function (id) {
+            var p = getPlayer(id);
+            return p ? p.name : "?";
+          })
+          .join(" & ");
+        lines.push("  " + names + ": " + state.teamWins[key]);
       });
     }
-    var line = parts.join(" - ");
-    line += m.mode === "points" ? " (point goal " + m.pointGoal + ")" : " (race to " + m.raceTo + ")";
-    if (m.status === "completed") {
-      var winnerText = m.teamsEnabled ? teamLabel(m, m.winnerId) : getPlayer(m.winnerId) ? getPlayer(m.winnerId).name : "?";
-      line += " — winner: " + winnerText;
-    } else {
-      line += " — in progress";
+    if (state.gameHistory.length) {
+      lines.push("");
+      lines.push("Recent games:");
+      state.gameHistory.slice(0, 15).forEach(function (entry) {
+        lines.push("  " + entry);
+      });
     }
-    return line;
-  }
-
-  function shareByEmail(subject, bodyLines) {
-    var body = bodyLines.join("\n");
-    var href = "mailto:?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body);
+    var body = lines.join("\n");
+    var href = "mailto:?subject=" + encodeURIComponent("Pool Master Counter — Standings") + "&body=" + encodeURIComponent(body);
     window.location.href = href;
-  }
-
-  function shareMatch(matchId) {
-    var m = getMatch(matchId);
-    if (!m) return;
-    var valid = matchValidParticipants(m);
-    var subject = m.teamsEnabled
-      ? "Pool Match: " + teamLabel(m, "A") + " vs " + teamLabel(m, "B")
-      : "Pool Match: " + valid.map(function (pt) { return getPlayer(pt.playerId).name; }).join(" vs ");
-    var lines = ["Pool Master Counter", "", matchSummaryLine(m)];
-    shareByEmail(subject, lines);
-  }
-
-  function shareAllMatches() {
-    if (state.matches.length === 0) {
-      alert("No matches to share yet.");
-      return;
-    }
-    var sorted = state.matches.slice().sort(function (a, b) {
-      return a.createdAt - b.createdAt;
-    });
-    var lines = ["Pool Master Counter — Match Summary", ""];
-    sorted.forEach(function (m) {
-      var line = matchSummaryLine(m);
-      if (line) lines.push(line);
-    });
-    shareByEmail("Pool Master Counter — Match Summary", lines);
   }
 
   // ---------------------------------------------------------------------
@@ -1003,105 +674,59 @@
     var player = addPlayer(newPlayerName.value);
     if (!player) return;
     newPlayerName.value = "";
-    renderPlayers();
-    if (!newMatchForm.classList.contains("hidden")) {
-      populateParticipantList(getCheckedParticipantIds(), getTeamAssignments());
-    }
+    renderAll();
   });
 
-  btnMatchAddPlayer.addEventListener("click", function () {
-    var name = window.prompt("New player name:");
-    if (name === null) return;
-    var player = addPlayer(name);
-    if (!player) return;
-    renderPlayers();
-    var checked = getCheckedParticipantIds();
-    checked.push(player.id);
-    populateParticipantList(checked, getTeamAssignments());
+  gameTypeSelect.addEventListener("change", function () {
+    var type = GAME_TYPES[gameTypeSelect.value];
+    state.currentGame.gameType = gameTypeSelect.value;
+    state.currentGame.target = type.defaultTarget;
+    gameTargetInput.value = type.defaultTarget;
+    gameTargetUnit.textContent = type.unit;
+    saveState();
+    renderScoreboard();
   });
 
-  useTeamsCheckbox.addEventListener("change", function () {
-    populateParticipantList(getCheckedParticipantIds(), getTeamAssignments());
-  });
-
-  btnNewMatch.addEventListener("click", function () {
-    if (state.players.length < 2) {
-      alert("Add at least two players first.");
-      return;
-    }
-    useTeamsCheckbox.checked = false;
-    populateParticipantList([]);
-    newMatchForm.classList.remove("hidden");
-  });
-
-  btnCancelMatch.addEventListener("click", function () {
-    newMatchForm.classList.add("hidden");
+  gameTargetInput.addEventListener("input", function () {
+    var target = parseInt(gameTargetInput.value, 10);
+    if (!target || target < 1) return;
+    state.currentGame.target = target;
+    saveState();
+    renderScoreboard();
   });
 
   Array.prototype.forEach.call(modeRadios, function (radio) {
     radio.addEventListener("change", function () {
-      var isPoints = radio.value === "points" && radio.checked;
-      if (radio.checked) {
-        gamesModeRow.classList.toggle("hidden", isPoints);
-        pointsModeRow.classList.toggle("hidden", !isPoints);
-      }
+      if (!radio.checked) return;
+      state.currentGame.mode = radio.value;
+      saveState();
+      renderAll();
     });
   });
 
-  newMatchForm.addEventListener("submit", function (e) {
-    e.preventDefault();
-    var participantIds = getCheckedParticipantIds();
-    if (participantIds.length < 2) {
-      alert("Select at least two players for this match.");
-      return;
-    }
-    var teamsEnabled = useTeamsCheckbox.checked;
-    var teamAssignments = getTeamAssignments();
-    var participantMeta = participantIds.map(function (id) {
-      return { playerId: id, teamId: teamAssignments[id] || "A" };
-    });
-
-    if (teamsEnabled) {
-      var hasA = participantMeta.some(function (p) { return p.teamId === "A"; });
-      var hasB = participantMeta.some(function (p) { return p.teamId === "B"; });
-      if (!hasA || !hasB) {
-        alert("Assign at least one player to each team (A and B).");
-        return;
-      }
-    }
-
-    var mode = "games";
-    Array.prototype.forEach.call(modeRadios, function (radio) {
-      if (radio.checked) mode = radio.value;
-    });
-    var target =
-      mode === "points" ? parseInt(matchPointGoal.value, 10) || 100 : parseInt(matchRaceTo.value, 10) || 5;
-
-    var match = createMatch(participantMeta, mode, target, teamsEnabled);
-    newMatchForm.classList.add("hidden");
-    openMatch(match.id);
+  raceToWinsInput.addEventListener("input", function () {
+    var target = parseInt(raceToWinsInput.value, 10);
+    if (!target || target < 1) return;
+    state.raceToWinsTarget = target;
+    saveState();
+    renderScoreboard();
   });
 
-  btnShareAll.addEventListener("click", shareAllMatches);
-
-  btnBack.addEventListener("click", goHome);
-
-  btnShareMatch.addEventListener("click", function () {
-    if (currentMatchId) shareMatch(currentMatchId);
-  });
-
-  btnResetMatch.addEventListener("click", function () {
-    if (currentMatchId) resetMatch(currentMatchId);
-  });
-
-  btnDeleteMatch.addEventListener("click", function () {
-    if (currentMatchId) deleteMatch(currentMatchId);
-  });
+  btnResetGame.addEventListener("click", resetCurrentGame);
+  btnShare.addEventListener("click", shareStandings);
+  btnResetStats.addEventListener("click", resetAllStats);
 
   // ---------------------------------------------------------------------
   // Init
   // ---------------------------------------------------------------------
 
-  renderPlayers();
-  renderMatches();
+  gameTypeSelect.value = state.currentGame.gameType;
+  gameTargetInput.value = state.currentGame.target;
+  gameTargetUnit.textContent = GAME_TYPES[state.currentGame.gameType].unit;
+  raceToWinsInput.value = state.raceToWinsTarget;
+  Array.prototype.forEach.call(modeRadios, function (radio) {
+    radio.checked = radio.value === state.currentGame.mode;
+  });
+
+  renderAll();
 })();
