@@ -37,18 +37,27 @@
       </div>
 
       <form id="new-match-form" class="new-match-form hidden">
-        <div class="row">
-          <select id="match-player1" required></select>
-          <button type="button" class="btn-add-inline" data-target="match-player1" title="Add new player">+</button>
-          <span class="vs">vs</span>
-          <select id="match-player2" required></select>
-          <button type="button" class="btn-add-inline" data-target="match-player2" title="Add new player">+</button>
+        <div class="field-label">Players in this match</div>
+        <ul id="match-participant-list" class="participant-select-list"></ul>
+        <button type="button" id="btn-match-add-player" class="btn btn-ghost btn-block">+ Add New Player</button>
+
+        <div class="field-label">Game type</div>
+        <div class="row mode-row">
+          <label><input type="radio" name="match-mode" value="games" checked> Race to games</label>
+          <label><input type="radio" name="match-mode" value="points"> Point goal (straight pool / one pocket)</label>
         </div>
-        <div class="row">
+
+        <div class="row" id="games-mode-row">
           <label for="match-race-to">Race to</label>
-          <input type="number" id="match-race-to" min="1" max="99" value="5" required>
+          <input type="number" id="match-race-to" min="1" max="99" value="5">
           <span>games</span>
         </div>
+        <div class="row hidden" id="points-mode-row">
+          <label for="match-point-goal">Point goal</label>
+          <input type="number" id="match-point-goal" min="1" max="500" value="100">
+          <span>points</span>
+        </div>
+
         <div class="row">
           <button type="submit" class="btn btn-primary">Start Match</button>
           <button type="button" id="btn-cancel-match" class="btn btn-ghost">Cancel</button>

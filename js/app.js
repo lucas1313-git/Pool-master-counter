@@ -14,12 +14,30 @@
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   }
 
+  function migrateMatch(m) {
+    if (!m.participants) {
+      var ids = [m.player1Id, m.player2Id].filter(Boolean);
+      m.participants = ids.map(function (id) {
+        return { playerId: id, standby: false };
+      });
+      delete m.player1Id;
+      delete m.player2Id;
+    }
+    if (!m.mode) m.mode = "games";
+    if (typeof m.pointGoal !== "number") m.pointGoal = 100;
+    if (typeof m.raceTo !== "number") m.raceTo = 5;
+    if (!m.games) m.games = {};
+    if (!m.balls) m.balls = {};
+    return m;
+  }
+
   function loadState() {
     try {
       var raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         var parsed = JSON.parse(raw);
         if (parsed && Array.isArray(parsed.players) && Array.isArray(parsed.matches)) {
+          parsed.matches = parsed.matches.map(migrateMatch);
           return parsed;
         }
       }
@@ -49,6 +67,12 @@
       if (state.matches[i].id === id) return state.matches[i];
     }
     return null;
+  }
+
+  function matchValidParticipants(m) {
+    return m.participants.filter(function (pt) {
+      return !!getPlayer(pt.playerId);
+    });
   }
 
   // ---------------------------------------------------------------------
@@ -117,9 +141,13 @@
 
   var btnNewMatch = document.getElementById("btn-new-match");
   var newMatchForm = document.getElementById("new-match-form");
-  var matchPlayer1 = document.getElementById("match-player1");
-  var matchPlayer2 = document.getElementById("match-player2");
+  var participantList = document.getElementById("match-participant-list");
+  var btnMatchAddPlayer = document.getElementById("btn-match-add-player");
+  var modeRadios = document.getElementsByName("match-mode");
+  var gamesModeRow = document.getElementById("games-mode-row");
+  var pointsModeRow = document.getElementById("points-mode-row");
   var matchRaceTo = document.getElementById("match-race-to");
+  var matchPointGoal = document.getElementById("match-point-goal");
   var btnCancelMatch = document.getElementById("btn-cancel-match");
   var matchList = document.getElementById("match-list");
   var btnShareAll = document.getElementById("btn-share-all");
@@ -160,24 +188,36 @@
       li.appendChild(btn);
       playerList.appendChild(li);
     });
-    populatePlayerSelects();
   }
 
-  function populatePlayerSelects() {
-    [matchPlayer1, matchPlayer2].forEach(function (sel) {
-      var prev = sel.value;
-      sel.innerHTML = "";
-      state.players.forEach(function (p) {
-        var opt = document.createElement("option");
-        opt.value = p.id;
-        opt.textContent = p.name;
-        sel.appendChild(opt);
-      });
-      if (prev) sel.value = prev;
+  function populateParticipantList(checkedIds) {
+    checkedIds = checkedIds || [];
+    participantList.innerHTML = "";
+    state.players.forEach(function (p) {
+      var li = document.createElement("li");
+      var checkboxId = "participant-" + p.id;
+
+      var checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.id = checkboxId;
+      checkbox.value = p.id;
+      checkbox.checked = checkedIds.indexOf(p.id) !== -1;
+
+      var label = document.createElement("label");
+      label.setAttribute("for", checkboxId);
+      label.textContent = p.name;
+
+      li.appendChild(checkbox);
+      li.appendChild(label);
+      participantList.appendChild(li);
     });
-    if (state.players.length > 1 && matchPlayer1.value === matchPlayer2.value) {
-      matchPlayer2.selectedIndex = 1;
-    }
+  }
+
+  function getCheckedParticipantIds() {
+    var boxes = participantList.querySelectorAll("input[type=checkbox]:checked");
+    return Array.prototype.map.call(boxes, function (b) {
+      return b.value;
+    });
   }
 
   function addPlayer(name) {
@@ -189,25 +229,20 @@
     return player;
   }
 
-  function quickAddPlayer(targetSelectId) {
-    var name = window.prompt("New player name:");
-    if (name === null) return;
-    var player = addPlayer(name);
-    if (!player) return;
-    renderPlayers();
-    document.getElementById(targetSelectId).value = player.id;
-  }
-
   function removePlayer(id) {
     var inUse = state.matches.some(function (m) {
-      return m.player1Id === id || m.player2Id === id;
+      return m.participants.some(function (pt) {
+        return pt.playerId === id;
+      });
     });
     if (inUse) {
       if (!confirm("This player has matches. Remove player and their matches?")) {
         return;
       }
       state.matches = state.matches.filter(function (m) {
-        return m.player1Id !== id && m.player2Id !== id;
+        return !m.participants.some(function (pt) {
+          return pt.playerId === id;
+        });
       });
     }
     state.players = state.players.filter(function (p) {
@@ -231,9 +266,8 @@
       return b.createdAt - a.createdAt;
     });
     sorted.forEach(function (m) {
-      var p1 = getPlayer(m.player1Id);
-      var p2 = getPlayer(m.player2Id);
-      if (!p1 || !p2) return;
+      var valid = matchValidParticipants(m);
+      if (valid.length < 2) return;
 
       var li = document.createElement("li");
       li.className = "match-card" + (m.status === "completed" ? " completed" : "");
@@ -244,10 +278,16 @@
       var left = document.createElement("div");
       var names = document.createElement("div");
       names.className = "names";
-      names.textContent = p1.name + " vs " + p2.name;
+      names.textContent = valid
+        .map(function (pt) {
+          var pl = getPlayer(pt.playerId);
+          return pl.name + (pt.standby ? " (standby)" : "");
+        })
+        .join(" vs ");
+
       var sub = document.createElement("div");
       sub.className = "sub";
-      sub.textContent = "Race to " + m.raceTo;
+      sub.textContent = m.mode === "points" ? "Point goal " + m.pointGoal : "Race to " + m.raceTo;
       if (m.status === "completed") {
         var badge = document.createElement("span");
         badge.className = "badge-done";
@@ -260,7 +300,11 @@
 
       var score = document.createElement("div");
       score.className = "score";
-      score.textContent = m.games[m.player1Id] + " – " + m.games[m.player2Id];
+      score.textContent = valid
+        .map(function (pt) {
+          return m.mode === "points" ? m.balls[pt.playerId] || 0 : m.games[pt.playerId] || 0;
+        })
+        .join(" – ");
 
       li.appendChild(left);
       li.appendChild(score);
@@ -272,22 +316,25 @@
   // Match creation / deletion
   // ---------------------------------------------------------------------
 
-  function createMatch(player1Id, player2Id, raceTo) {
+  function createMatch(participantIds, mode, target) {
     var match = {
       id: uid(),
-      player1Id: player1Id,
-      player2Id: player2Id,
-      raceTo: raceTo,
+      participants: participantIds.map(function (id) {
+        return { playerId: id, standby: false };
+      }),
+      mode: mode,
+      raceTo: mode === "games" ? target : 5,
+      pointGoal: mode === "points" ? target : 100,
       status: "in_progress",
       winnerId: null,
       games: {},
       balls: {},
       createdAt: Date.now()
     };
-    match.games[player1Id] = 0;
-    match.games[player2Id] = 0;
-    match.balls[player1Id] = 0;
-    match.balls[player2Id] = 0;
+    participantIds.forEach(function (id) {
+      match.games[id] = 0;
+      match.balls[id] = 0;
+    });
     state.matches.push(match);
     saveState();
     renderMatches();
@@ -297,11 +344,11 @@
   function resetMatch(id) {
     var m = getMatch(id);
     if (!m) return;
-    if (!confirm("Reset this match's score back to 0-0?")) return;
-    m.games[m.player1Id] = 0;
-    m.games[m.player2Id] = 0;
-    m.balls[m.player1Id] = 0;
-    m.balls[m.player2Id] = 0;
+    if (!confirm("Reset this match's score back to zero?")) return;
+    m.participants.forEach(function (pt) {
+      m.games[pt.playerId] = 0;
+      m.balls[pt.playerId] = 0;
+    });
     m.status = "in_progress";
     m.winnerId = null;
     saveState();
@@ -343,10 +390,19 @@
       goHome();
       return;
     }
-    var p1 = getPlayer(m.player1Id);
-    var p2 = getPlayer(m.player2Id);
+    var valid = matchValidParticipants(m);
+    if (valid.length < 2) {
+      goHome();
+      return;
+    }
 
-    matchRaceLabel.textContent = p1.name + " vs " + p2.name + " · Race to " + m.raceTo;
+    var names = valid
+      .map(function (pt) {
+        return getPlayer(pt.playerId).name;
+      })
+      .join(" vs ");
+    var modeLabel = m.mode === "points" ? "Point goal " + m.pointGoal : "Race to " + m.raceTo;
+    matchRaceLabel.textContent = names + " · " + modeLabel;
 
     if (m.status === "completed") {
       var winner = getPlayer(m.winnerId);
@@ -357,55 +413,84 @@
     }
 
     scoreboard.innerHTML = "";
-    scoreboard.appendChild(buildPlayerPanel(m, p1));
-    scoreboard.appendChild(buildPlayerPanel(m, p2));
+    valid.forEach(function (pt) {
+      scoreboard.appendChild(buildPlayerPanel(m, pt));
+    });
   }
 
-  function buildPlayerPanel(match, player) {
-    var isWinner = match.winnerId === player.id;
+  function buildPlayerPanel(match, participant) {
+    var player = getPlayer(participant.playerId);
+    var isWinner = match.winnerId === participant.playerId;
     var matchOver = match.status === "completed";
+    var standby = participant.standby;
+    var disabled = matchOver || standby;
 
     var panel = document.createElement("div");
-    panel.className = "player-panel" + (isWinner ? " is-winner" : "");
+    panel.className =
+      "player-panel" + (isWinner ? " is-winner" : "") + (standby ? " is-standby" : "");
 
     var name = document.createElement("div");
     name.className = "player-name";
     name.textContent = player.name;
     panel.appendChild(name);
 
-    var gamesBlock = document.createElement("div");
-    gamesBlock.className = "stat-block";
-    var gamesLabel = document.createElement("div");
-    gamesLabel.className = "stat-label";
-    gamesLabel.textContent = "Games";
-    var gamesValue = document.createElement("div");
-    gamesValue.className = "stat-value";
-    gamesValue.textContent = match.games[player.id];
-    gamesBlock.appendChild(gamesLabel);
-    gamesBlock.appendChild(gamesValue);
-    panel.appendChild(gamesBlock);
-
-    var winBtn = document.createElement("button");
-    winBtn.type = "button";
-    winBtn.className = "btn-win";
-    winBtn.textContent = "Win Game";
-    winBtn.disabled = matchOver;
-    winBtn.addEventListener("click", function () {
-      winGame(match.id, player.id);
+    var standbyBtn = document.createElement("button");
+    standbyBtn.type = "button";
+    standbyBtn.className = "btn-standby" + (standby ? " is-active-toggle" : "");
+    standbyBtn.textContent = standby ? "Resume" : "Standby";
+    standbyBtn.disabled = matchOver;
+    standbyBtn.addEventListener("click", function () {
+      toggleStandby(match.id, participant.playerId);
     });
-    panel.appendChild(winBtn);
+    panel.appendChild(standbyBtn);
 
-    var ballsBlock = document.createElement("div");
-    ballsBlock.className = "stat-block";
-    var ballsLabel = document.createElement("div");
-    ballsLabel.className = "stat-label";
-    ballsLabel.textContent = "Balls this game";
-    var ballsValue = document.createElement("div");
-    ballsValue.className = "stat-value balls";
-    ballsValue.textContent = match.balls[player.id];
-    ballsBlock.appendChild(ballsLabel);
-    ballsBlock.appendChild(ballsValue);
-    panel.appendChild(ballsBlock);
+    if (match.mode === "games") {
+      var gamesBlock = document.createElement("div");
+      gamesBlock.className = "stat-block";
+      var gamesLabel = document.createElement("div");
+      gamesLabel.className = "stat-label";
+      gamesLabel.textContent = "Games";
+      var gamesValue = document.createElement("div");
+      gamesValue.className = "stat-value";
+      gamesValue.textContent = match.games[player.id] || 0;
+      gamesBlock.appendChild(gamesLabel);
+      gamesBlock.appendChild(gamesValue);
+      panel.appendChild(gamesBlock);
+
+      var winBtn = document.createElement("button");
+      winBtn.type = "button";
+      winBtn.className = "btn-win";
+      winBtn.textContent = "Win Game";
+      winBtn.disabled = disabled;
+      winBtn.addEventListener("click", function () {
+        winGame(match.id, player.id);
+      });
+      panel.appendChild(winBtn);
+
+      var ballsBlock = document.createElement("div");
+      ballsBlock.className = "stat-block";
+      var ballsLabel = document.createElement("div");
+      ballsLabel.className = "stat-label";
+      ballsLabel.textContent = "Balls this game";
+      var ballsValue = document.createElement("div");
+      ballsValue.className = "stat-value balls";
+      ballsValue.textContent = match.balls[player.id] || 0;
+      ballsBlock.appendChild(ballsLabel);
+      ballsBlock.appendChild(ballsValue);
+      panel.appendChild(ballsBlock);
+    } else {
+      var pointsBlock = document.createElement("div");
+      pointsBlock.className = "stat-block";
+      var pointsLabel = document.createElement("div");
+      pointsLabel.className = "stat-label";
+      pointsLabel.textContent = "Points · Goal " + match.pointGoal;
+      var pointsValue = document.createElement("div");
+      pointsValue.className = "stat-value balls";
+      pointsValue.textContent = match.balls[player.id] || 0;
+      pointsBlock.appendChild(pointsLabel);
+      pointsBlock.appendChild(pointsValue);
+      panel.appendChild(pointsBlock);
+    }
 
     var controls = document.createElement("div");
     controls.className = "ball-controls";
@@ -414,8 +499,8 @@
     minusBtn.type = "button";
     minusBtn.className = "btn-ball minus";
     minusBtn.textContent = "−";
-    minusBtn.setAttribute("aria-label", "Remove ball for " + player.name);
-    minusBtn.disabled = matchOver || match.balls[player.id] <= 0;
+    minusBtn.setAttribute("aria-label", "Remove point for " + player.name);
+    minusBtn.disabled = disabled || (match.balls[player.id] || 0) <= 0;
     minusBtn.addEventListener("click", function () {
       adjustBalls(match.id, player.id, -1);
     });
@@ -424,8 +509,8 @@
     plusBtn.type = "button";
     plusBtn.className = "btn-ball plus";
     plusBtn.textContent = "+";
-    plusBtn.setAttribute("aria-label", "Add ball for " + player.name);
-    plusBtn.disabled = matchOver;
+    plusBtn.setAttribute("aria-label", "Add point for " + player.name);
+    plusBtn.disabled = disabled;
     plusBtn.addEventListener("click", function () {
       adjustBalls(match.id, player.id, 1);
     });
@@ -437,12 +522,35 @@
     return panel;
   }
 
+  function toggleStandby(matchId, playerId) {
+    var m = getMatch(matchId);
+    if (!m) return;
+    var participant = m.participants.filter(function (pt) {
+      return pt.playerId === playerId;
+    })[0];
+    if (!participant) return;
+    participant.standby = !participant.standby;
+    saveState();
+    renderMatchView();
+  }
+
   function adjustBalls(matchId, playerId, delta) {
     var m = getMatch(matchId);
     if (!m || m.status === "completed") return;
     var next = (m.balls[playerId] || 0) + delta;
     if (next < 0) next = 0;
     m.balls[playerId] = next;
+
+    if (m.mode === "points" && delta > 0 && next >= m.pointGoal) {
+      m.status = "completed";
+      m.winnerId = playerId;
+      saveState();
+      playWinSound();
+      renderMatchView();
+      renderMatches();
+      return;
+    }
+
     saveState();
     if (delta > 0) {
       playPositiveSound();
@@ -454,12 +562,11 @@
 
   function winGame(matchId, playerId) {
     var m = getMatch(matchId);
-    if (!m || m.status === "completed") return;
+    if (!m || m.status === "completed" || m.mode !== "games") return;
     m.games[playerId] = (m.games[playerId] || 0) + 1;
-    // reset balls for the new game
-    var otherId = m.player1Id === playerId ? m.player2Id : m.player1Id;
-    m.balls[playerId] = 0;
-    m.balls[otherId] = 0;
+    m.participants.forEach(function (pt) {
+      m.balls[pt.playerId] = 0;
+    });
 
     if (m.games[playerId] >= m.raceTo) {
       m.status = "completed";
@@ -479,16 +586,20 @@
   // ---------------------------------------------------------------------
 
   function matchSummaryLine(m) {
-    var p1 = getPlayer(m.player1Id);
-    var p2 = getPlayer(m.player2Id);
-    if (!p1 || !p2) return "";
-    var line = p1.name + " " + m.games[p1.id] + " - " + m.games[p2.id] + " " + p2.name;
-    line += " (race to " + m.raceTo + ")";
+    var valid = matchValidParticipants(m);
+    if (valid.length < 2) return "";
+    var parts = valid.map(function (pt) {
+      var pl = getPlayer(pt.playerId);
+      var score = m.mode === "points" ? m.balls[pt.playerId] || 0 : m.games[pt.playerId] || 0;
+      return pl.name + " " + score + (pt.standby ? " (standby)" : "");
+    });
+    var line = parts.join(" - ");
+    line += m.mode === "points" ? " (point goal " + m.pointGoal + ")" : " (race to " + m.raceTo + ")";
     if (m.status === "completed") {
       var w = getPlayer(m.winnerId);
       line += " — winner: " + (w ? w.name : "?");
     } else {
-      line += " — in progress (balls this game: " + p1.name + " " + m.balls[p1.id] + ", " + p2.name + " " + m.balls[p2.id] + ")";
+      line += " — in progress";
     }
     return line;
   }
@@ -502,9 +613,8 @@
   function shareMatch(matchId) {
     var m = getMatch(matchId);
     if (!m) return;
-    var p1 = getPlayer(m.player1Id);
-    var p2 = getPlayer(m.player2Id);
-    var subject = "Pool Match: " + p1.name + " vs " + p2.name;
+    var valid = matchValidParticipants(m);
+    var subject = "Pool Match: " + valid.map(function (pt) { return getPlayer(pt.playerId).name; }).join(" vs ");
     var lines = ["Pool Master Counter", "", matchSummaryLine(m)];
     shareByEmail(subject, lines);
   }
@@ -519,7 +629,8 @@
     });
     var lines = ["Pool Master Counter — Match Summary", ""];
     sorted.forEach(function (m) {
-      lines.push(matchSummaryLine(m));
+      var line = matchSummaryLine(m);
+      if (line) lines.push(line);
     });
     shareByEmail("Pool Master Counter — Match Summary", lines);
   }
@@ -534,12 +645,20 @@
     if (!player) return;
     newPlayerName.value = "";
     renderPlayers();
+    if (!newMatchForm.classList.contains("hidden")) {
+      populateParticipantList(getCheckedParticipantIds());
+    }
   });
 
-  document.querySelectorAll(".btn-add-inline").forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      quickAddPlayer(btn.getAttribute("data-target"));
-    });
+  btnMatchAddPlayer.addEventListener("click", function () {
+    var name = window.prompt("New player name:");
+    if (name === null) return;
+    var player = addPlayer(name);
+    if (!player) return;
+    renderPlayers();
+    var checked = getCheckedParticipantIds();
+    checked.push(player.id);
+    populateParticipantList(checked);
   });
 
   btnNewMatch.addEventListener("click", function () {
@@ -547,7 +666,7 @@
       alert("Add at least two players first.");
       return;
     }
-    populatePlayerSelects();
+    populateParticipantList([]);
     newMatchForm.classList.remove("hidden");
   });
 
@@ -555,16 +674,31 @@
     newMatchForm.classList.add("hidden");
   });
 
+  Array.prototype.forEach.call(modeRadios, function (radio) {
+    radio.addEventListener("change", function () {
+      var isPoints = radio.value === "points" && radio.checked;
+      if (radio.checked) {
+        gamesModeRow.classList.toggle("hidden", isPoints);
+        pointsModeRow.classList.toggle("hidden", !isPoints);
+      }
+    });
+  });
+
   newMatchForm.addEventListener("submit", function (e) {
     e.preventDefault();
-    var p1 = matchPlayer1.value;
-    var p2 = matchPlayer2.value;
-    var raceTo = parseInt(matchRaceTo.value, 10) || 5;
-    if (!p1 || !p2 || p1 === p2) {
-      alert("Choose two different players.");
+    var participantIds = getCheckedParticipantIds();
+    if (participantIds.length < 2) {
+      alert("Select at least two players for this match.");
       return;
     }
-    var match = createMatch(p1, p2, raceTo);
+    var mode = "games";
+    Array.prototype.forEach.call(modeRadios, function (radio) {
+      if (radio.checked) mode = radio.value;
+    });
+    var target =
+      mode === "points" ? parseInt(matchPointGoal.value, 10) || 100 : parseInt(matchRaceTo.value, 10) || 5;
+
+    var match = createMatch(participantIds, mode, target);
     newMatchForm.classList.add("hidden");
     openMatch(match.id);
   });
