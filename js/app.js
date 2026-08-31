@@ -248,6 +248,9 @@
   var winToast = document.getElementById("win-toast");
   var scoreboard = document.getElementById("scoreboard");
   var historyList = document.getElementById("history-list");
+  var standingsTitle = document.getElementById("standings-title");
+  var teamStandingsList = document.getElementById("team-standings-list");
+  var playerStandingsList = document.getElementById("player-standings-list");
 
   // ---------------------------------------------------------------------
   // Rendering
@@ -257,6 +260,89 @@
     renderRoster();
     renderScoreboard();
     renderHistory();
+    renderStandings();
+  }
+
+  function buildStandingsRow(name, wins) {
+    var target = state.raceToWinsTarget;
+    var reached = wins >= target;
+    var li = document.createElement("li");
+    li.className = "standings-row" + (reached ? " is-reached" : "");
+
+    var top = document.createElement("div");
+    top.className = "standings-row-top";
+    var nameEl = document.createElement("span");
+    nameEl.className = "standings-name";
+    nameEl.textContent = name;
+    var countEl = document.createElement("span");
+    countEl.className = "standings-count";
+    countEl.textContent = wins + " / " + target + (reached ? " 🏁" : "");
+    top.appendChild(nameEl);
+    top.appendChild(countEl);
+    li.appendChild(top);
+
+    var track = document.createElement("div");
+    track.className = "standings-bar-track";
+    var fill = document.createElement("div");
+    fill.className = "standings-bar-fill";
+    fill.style.width = Math.min(100, (wins / target) * 100) + "%";
+    track.appendChild(fill);
+    li.appendChild(track);
+
+    return li;
+  }
+
+  function renderStandings() {
+    standingsTitle.textContent = "Race to " + state.raceToWinsTarget + " Wins — Teams";
+
+    var comboKeys = Object.keys(state.teamWins);
+    ["A", "B"].forEach(function (teamId) {
+      var key = teamComboKey(teamId);
+      if (key && comboKeys.indexOf(key) === -1) comboKeys.push(key);
+    });
+
+    teamStandingsList.innerHTML = "";
+    if (comboKeys.length === 0) {
+      var teamHint = document.createElement("li");
+      teamHint.className = "empty-hint";
+      teamHint.textContent = "No team pairings yet — switch to Teams mode and assign players.";
+      teamStandingsList.appendChild(teamHint);
+    } else {
+      comboKeys
+        .map(function (key) {
+          var names = key
+            .split("|")
+            .map(function (id) {
+              var p = getPlayer(id);
+              return p ? p.name : "?";
+            })
+            .join(" & ");
+          return { key: key, names: names, wins: state.teamWins[key] || 0 };
+        })
+        .sort(function (a, b) {
+          return b.wins - a.wins || a.names.localeCompare(b.names);
+        })
+        .forEach(function (row) {
+          teamStandingsList.appendChild(buildStandingsRow(row.names, row.wins));
+        });
+    }
+
+    playerStandingsList.innerHTML = "";
+    if (state.players.length === 0) {
+      var playerHint = document.createElement("li");
+      playerHint.className = "empty-hint";
+      playerHint.textContent = "No players yet.";
+      playerStandingsList.appendChild(playerHint);
+    } else {
+      state.players
+        .slice()
+        .sort(function (a, b) {
+          return (state.playerWins[b.id] || 0) - (state.playerWins[a.id] || 0) || a.name.localeCompare(b.name);
+        })
+        .forEach(function (p) {
+          playerStandingsList.appendChild(buildStandingsRow(p.name, state.playerWins[p.id] || 0));
+        });
+    }
   }
 
   function renderRoster() {
@@ -710,6 +796,7 @@
     state.raceToWinsTarget = target;
     saveState();
     renderScoreboard();
+    renderStandings();
   });
 
   btnResetGame.addEventListener("click", resetCurrentGame);
