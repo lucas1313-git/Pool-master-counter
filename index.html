@@ -41,6 +41,10 @@
         <ul id="match-participant-list" class="participant-select-list"></ul>
         <button type="button" id="btn-match-add-player" class="btn btn-ghost btn-block">+ Add New Player</button>
 
+        <div class="row">
+          <label class="checkbox-row"><input type="checkbox" id="match-use-teams"> Play as teams (2 sides) — pick A/B for each player above</label>
+        </div>
+
         <div class="field-label">Game type</div>
         <div class="row mode-row">
           <label><input type="radio" name="match-mode" value="games" checked> Race to games</label>
@@ -85,7 +89,7 @@
     <div id="winner-banner" class="winner-banner hidden"></div>
 
     <div class="scoreboard" id="scoreboard">
-      <!-- two .player-panel blocks injected here -->
+      <!-- player panels (free-for-all) or team panels (2 sides) injected here; class toggles between scoreboard/scoreboard-teams -->
     </div>
   </section>
 

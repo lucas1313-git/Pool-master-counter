@@ -289,6 +289,44 @@ input[type="number"] {
   accent-color: var(--accent);
 }
 
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: var(--text-dim);
+}
+
+.checkbox-row input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent);
+  flex: 0 0 auto;
+}
+
+.team-toggle {
+  display: flex;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.team-toggle button {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  font-weight: 700;
+  background: var(--bg-panel);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.team-toggle button.is-selected {
+  background: var(--accent);
+  color: #241a00;
+  border-color: var(--accent);
+}
+
 /* ---------- Match list ---------- */
 
 .match-list {
@@ -438,6 +476,17 @@ input[type="number"] {
   border-color: var(--accent);
 }
 
+.stat-mini {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+.stat-mini strong {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
 .stat-block {
   width: 100%;
   text-align: center;
@@ -460,6 +509,90 @@ input[type="number"] {
 .stat-value.balls {
   font-size: 2.2rem;
   color: var(--accent);
+}
+
+.stat-value.small {
+  font-size: 1.6rem;
+}
+
+/* ---------- Team scoreboard ---------- */
+
+.scoreboard-teams {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  padding: 0 10px 20px;
+  align-items: start;
+}
+
+@media (max-width: 620px) {
+  .scoreboard-teams {
+    grid-template-columns: 1fr;
+  }
+}
+
+.team-panel {
+  background: linear-gradient(180deg, var(--felt) 0%, #200606 100%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.team-panel.is-winner {
+  outline: 3px solid var(--accent);
+}
+
+.team-name {
+  font-size: 1rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+  text-align: center;
+}
+
+.team-members {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.member-card {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.member-card.is-standby {
+  opacity: 0.55;
+  filter: grayscale(0.5);
+}
+
+.member-name {
+  font-size: 0.92rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.member-card .ball-controls {
+  gap: 8px;
+}
+
+.member-card .btn-ball {
+  min-height: 48px;
+  font-size: 1.3rem;
 }
 
 .btn-win {
