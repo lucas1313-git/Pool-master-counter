@@ -279,6 +279,7 @@
   var playerStatsName = document.getElementById("player-stats-name");
   var playerStatsBody = document.getElementById("player-stats-body");
   var btnPlayerStatsExport = document.getElementById("btn-player-stats-export");
+  var btnPlayerStatsReset = document.getElementById("btn-player-stats-reset");
   var btnPlayerStatsClose = document.getElementById("btn-player-stats-close");
 
   var gameTypeSelect = document.getElementById("game-type");
@@ -1211,7 +1212,7 @@
     playerStatsBody.innerHTML = "";
     playerStatsBody.appendChild(playerStatsRow("This session", state.playerWins[playerId] || 0));
     var loadingNote = document.createElement("div");
-    loadingNote.className = "player-stats-note";
+    loadingNote.className = "player-stats-note historical-section";
     loadingNote.textContent = "Loading saved history…";
     playerStatsBody.appendChild(loadingNote);
     playerStatsOverlay.classList.remove("hidden");
@@ -1222,22 +1223,39 @@
         return res.json();
       })
       .then(function (data) {
-        currentStatsHistorical = data;
         if (currentStatsPlayerId !== playerId) return;
-        loadingNote.remove();
-        playerStatsBody.appendChild(playerStatsRow("All-time wins", data.totalWins || 0));
-        playerStatsBody.appendChild(playerStatsRow("Sessions recorded", data.sessionsRecorded || 0));
-        if (data.updatedAt) {
-          var updatedNote = document.createElement("div");
-          updatedNote.className = "player-stats-note";
-          updatedNote.textContent = "Last saved " + data.updatedAt.slice(0, 10);
-          playerStatsBody.appendChild(updatedNote);
-        }
+        renderHistoricalSection(player, data);
       })
       .catch(function () {
         if (currentStatsPlayerId !== playerId) return;
-        loadingNote.textContent = "No saved history yet for this player — export to start tracking.";
+        renderHistoricalSection(player, null);
       });
+  }
+
+  function renderHistoricalSection(player, data) {
+    currentStatsHistorical = data;
+    playerStatsBody.querySelectorAll(".historical-section").forEach(function (el) {
+      el.remove();
+    });
+    if (!data) {
+      var note = document.createElement("div");
+      note.className = "player-stats-note historical-section";
+      note.textContent = "No saved history yet for this player — export to start tracking.";
+      playerStatsBody.appendChild(note);
+      return;
+    }
+    var winsRow = playerStatsRow("All-time wins", data.totalWins || 0);
+    winsRow.classList.add("historical-section");
+    playerStatsBody.appendChild(winsRow);
+    var sessionsRow = playerStatsRow("Sessions recorded", data.sessionsRecorded || 0);
+    sessionsRow.classList.add("historical-section");
+    playerStatsBody.appendChild(sessionsRow);
+    if (data.updatedAt) {
+      var updatedNote = document.createElement("div");
+      updatedNote.className = "player-stats-note historical-section";
+      updatedNote.textContent = "Last saved " + data.updatedAt.slice(0, 10);
+      playerStatsBody.appendChild(updatedNote);
+    }
   }
 
   function playerStatsRow(label, value) {
@@ -1274,6 +1292,28 @@
     };
     downloadJSON(playerStatsFilename(player.name), updated);
     showToast("Downloaded " + playerStatsFilename(player.name) + " — commit it into players/ to save " + player.name + "'s history.");
+  }
+
+  function resetPlayerHistoricalStats() {
+    var player = getPlayer(currentStatsPlayerId);
+    if (!player) return;
+    if (
+      !confirm(
+        "This clears " + player.name + "'s saved all-time history (downloads a zeroed file for you to commit). " +
+        "This session's stats are not affected. Continue?"
+      )
+    ) {
+      return;
+    }
+    var zeroed = {
+      name: player.name,
+      updatedAt: new Date().toISOString(),
+      totalWins: 0,
+      sessionsRecorded: 0
+    };
+    downloadJSON(playerStatsFilename(player.name), zeroed);
+    renderHistoricalSection(player, zeroed);
+    showToast("Downloaded a zeroed " + playerStatsFilename(player.name) + " — commit it to clear " + player.name + "'s saved history.");
   }
 
   // ---------------------------------------------------------------------
@@ -1370,6 +1410,7 @@
   btnRosterLoad.addEventListener("click", loadSelectedRoster);
 
   btnPlayerStatsExport.addEventListener("click", exportCurrentPlayerStats);
+  btnPlayerStatsReset.addEventListener("click", resetPlayerHistoricalStats);
   btnPlayerStatsClose.addEventListener("click", closePlayerStats);
   playerStatsOverlay.addEventListener("click", function (e) {
     if (e.target === playerStatsOverlay) closePlayerStats();
