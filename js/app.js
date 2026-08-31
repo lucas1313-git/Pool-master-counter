@@ -660,41 +660,45 @@
     var typeLabel = GAME_TYPES[state.currentGame.gameType].label;
     var summary;
     var milestoneNames = null;
+    var milestoneCount = 0;
+    var target = state.raceToWinsTarget;
     if (isTeam) {
       var members = teamMembersLive(key);
       var comboKey = teamComboKey(key);
-      var prevTeamWins = state.teamWins[comboKey] || 0;
-      state.teamWins[comboKey] = prevTeamWins + 1;
+      var newTeamWins = (state.teamWins[comboKey] || 0) + 1;
+      state.teamWins[comboKey] = newTeamWins;
       members.forEach(function (p) {
         state.playerWins[p.id] = (state.playerWins[p.id] || 0) + 1;
       });
       summary = teamLabelLive(key) + " won " + typeLabel + " (target " + state.currentGame.target + ")";
-      if (prevTeamWins < state.raceToWinsTarget && state.teamWins[comboKey] >= state.raceToWinsTarget) {
+      if (target > 0 && newTeamWins % target === 0) {
         milestoneNames = members
           .map(function (p) {
             return p.name;
           })
           .join(" & ");
+        milestoneCount = newTeamWins;
       }
     } else {
-      var prevPlayerWins = state.playerWins[key] || 0;
-      state.playerWins[key] = prevPlayerWins + 1;
+      var newPlayerWins = (state.playerWins[key] || 0) + 1;
+      state.playerWins[key] = newPlayerWins;
       summary = getPlayer(key).name + " won " + typeLabel + " (target " + state.currentGame.target + ")";
-      if (prevPlayerWins < state.raceToWinsTarget && state.playerWins[key] >= state.raceToWinsTarget) {
+      if (target > 0 && newPlayerWins % target === 0) {
         milestoneNames = getPlayer(key).name;
+        milestoneCount = newPlayerWins;
       }
     }
     state.gameHistory.unshift(summary);
     if (state.gameHistory.length > 50) state.gameHistory.length = 50;
     showToast(summary);
     if (milestoneNames) {
-      celebrateMilestone(milestoneNames);
+      celebrateMilestone(milestoneNames, milestoneCount);
     }
     return summary;
   }
 
-  function celebrateMilestone(names) {
-    milestoneMessage.textContent = names + " won the race to " + state.raceToWinsTarget + "!";
+  function celebrateMilestone(names, count) {
+    milestoneMessage.textContent = names + " reached " + count + " wins! (race-to " + state.raceToWinsTarget + ")";
     milestoneOverlay.classList.remove("hidden");
     playVictorySound();
   }
