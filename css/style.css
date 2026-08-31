@@ -471,7 +471,7 @@ input[type="number"] {
 }
 
 .stat-mini {
-  font-size: 0.72rem;
+  font-size: 14px;
   color: var(--text-dim);
   text-align: center;
 }

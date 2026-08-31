@@ -647,7 +647,7 @@
     panel.appendChild(name);
 
     var wins = state.playerWins[player.id] || 0;
-    panel.appendChild(buildStatMini("Career wins", wins, wins >= state.raceToWinsTarget));
+    panel.appendChild(buildStatMini("Session win", wins, wins >= state.raceToWinsTarget));
 
     var block = document.createElement("div");
     block.className = "stat-block";
@@ -676,7 +676,7 @@
     card.appendChild(name);
 
     var wins = state.playerWins[player.id] || 0;
-    card.appendChild(buildStatMini("Career wins", wins, wins >= state.raceToWinsTarget));
+    card.appendChild(buildStatMini("Session win", wins, wins >= state.raceToWinsTarget));
 
     var value = document.createElement("div");
     value.className = "stat-value small";
@@ -698,7 +698,7 @@
     panel.appendChild(name);
 
     var wins = state.teamWins[teamComboKey(teamId)] || 0;
-    panel.appendChild(buildStatMini("Paired wins", wins, wins >= state.raceToWinsTarget));
+    panel.appendChild(buildStatMini("Paired session win", wins, wins >= state.raceToWinsTarget));
 
     var block = document.createElement("div");
     block.className = "stat-block";
@@ -967,12 +967,14 @@
   }
 
   function resetAllStats() {
-    if (!confirm("This clears ALL career wins, team wins, and game history for every player. This cannot be undone. Continue?")) return;
+    if (!confirm("This starts a new session: clears session wins, team wins, game history, and restarts the game rotation from the top. This cannot be undone. Continue?")) return;
     state.playerWins = {};
     state.teamWins = {};
     state.gameHistory = [];
+    state.gamesPlayedCount = 0;
     resetGameBalls();
     saveState();
+    applyRotationIfDue();
     renderAll();
   }
 
@@ -982,7 +984,7 @@
 
   function shareStandings() {
     var lines = ["Pool Master Counter — Standings", ""];
-    lines.push("Player career wins:");
+    lines.push("Player session wins:");
     state.players.forEach(function (p) {
       lines.push("  " + p.name + ": " + (state.playerWins[p.id] || 0));
     });
