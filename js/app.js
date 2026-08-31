@@ -515,6 +515,17 @@
     renderMatches();
   }
 
+  function startNextMatch(id) {
+    var m = getMatch(id);
+    if (!m) return;
+    var participantMeta = matchValidParticipants(m).map(function (pt) {
+      return { playerId: pt.playerId, teamId: pt.teamId };
+    });
+    var target = m.mode === "points" ? m.pointGoal : m.raceTo;
+    var next = createMatch(participantMeta, m.mode, target, m.teamsEnabled);
+    openMatch(next.id);
+  }
+
   // ---------------------------------------------------------------------
   // Match view
   // ---------------------------------------------------------------------
@@ -559,7 +570,18 @@
 
     if (m.status === "completed") {
       var winnerText = m.teamsEnabled ? teamLabel(m, m.winnerId) : getPlayer(m.winnerId) ? getPlayer(m.winnerId).name : "";
-      winnerBanner.textContent = "🏆 " + winnerText + " wins the match!";
+      winnerBanner.innerHTML = "";
+      var winnerText2 = document.createElement("div");
+      winnerText2.textContent = "🏆 " + winnerText + " wins the match!";
+      winnerBanner.appendChild(winnerText2);
+      var rematchBtn = document.createElement("button");
+      rematchBtn.type = "button";
+      rematchBtn.className = "btn btn-primary";
+      rematchBtn.textContent = "Start Next Match";
+      rematchBtn.addEventListener("click", function () {
+        startNextMatch(m.id);
+      });
+      winnerBanner.appendChild(rematchBtn);
       winnerBanner.classList.remove("hidden");
     } else {
       winnerBanner.classList.add("hidden");
@@ -667,6 +689,9 @@
     name.textContent = player.name;
     card.appendChild(name);
 
+    var actions = document.createElement("div");
+    actions.className = "member-actions";
+
     var standbyBtn = document.createElement("button");
     standbyBtn.type = "button";
     standbyBtn.className = "btn-standby" + (standby ? " is-active-toggle" : "");
@@ -675,7 +700,20 @@
     standbyBtn.addEventListener("click", function () {
       toggleStandby(match.id, participant.playerId);
     });
-    card.appendChild(standbyBtn);
+    actions.appendChild(standbyBtn);
+
+    var otherTeam = participant.teamId === "A" ? "B" : "A";
+    var switchBtn = document.createElement("button");
+    switchBtn.type = "button";
+    switchBtn.className = "btn-standby";
+    switchBtn.textContent = "→ Team " + otherTeam;
+    switchBtn.disabled = matchOver;
+    switchBtn.addEventListener("click", function () {
+      switchPlayerTeam(match.id, participant.playerId);
+    });
+    actions.appendChild(switchBtn);
+
+    card.appendChild(actions);
 
     card.appendChild(buildStatMini("Career wins", stats.playerWins[player.id] || 0));
 
@@ -807,6 +845,23 @@
     })[0];
     if (!participant) return;
     participant.standby = !participant.standby;
+    saveState();
+    renderMatchView();
+  }
+
+  function switchPlayerTeam(matchId, playerId) {
+    var m = getMatch(matchId);
+    if (!m || !m.teamsEnabled || m.status === "completed") return;
+    var participant = m.participants.filter(function (pt) {
+      return pt.playerId === playerId;
+    })[0];
+    if (!participant) return;
+    var currentTeam = participant.teamId;
+    if (teamMembers(m, currentTeam).length <= 1) {
+      alert("Team " + currentTeam + " needs at least one player — add someone else to that team first.");
+      return;
+    }
+    participant.teamId = currentTeam === "A" ? "B" : "A";
     saveState();
     renderMatchView();
   }

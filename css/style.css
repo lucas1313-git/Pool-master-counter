@@ -425,6 +425,10 @@ input[type="number"] {
   font-size: 1.1rem;
   padding: 12px;
   border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
 }
 
 .scoreboard {
@@ -584,6 +588,18 @@ input[type="number"] {
   font-size: 0.92rem;
   font-weight: 700;
   text-align: center;
+}
+
+.member-actions {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+}
+
+.member-actions .btn-standby {
+  flex: 1;
+  font-size: 0.7rem;
+  padding: 6px 8px;
 }
 
 .member-card .ball-controls {
