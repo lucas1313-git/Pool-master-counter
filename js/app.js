@@ -127,6 +127,7 @@
   var btnBack = document.getElementById("btn-back");
   var matchRaceLabel = document.getElementById("match-race-label");
   var btnShareMatch = document.getElementById("btn-share-match");
+  var btnResetMatch = document.getElementById("btn-reset-match");
   var btnDeleteMatch = document.getElementById("btn-delete-match");
   var winnerBanner = document.getElementById("winner-banner");
   var scoreboard = document.getElementById("scoreboard");
@@ -177,6 +178,24 @@
     if (state.players.length > 1 && matchPlayer1.value === matchPlayer2.value) {
       matchPlayer2.selectedIndex = 1;
     }
+  }
+
+  function addPlayer(name) {
+    name = (name || "").trim();
+    if (!name) return null;
+    var player = { id: uid(), name: name };
+    state.players.push(player);
+    saveState();
+    return player;
+  }
+
+  function quickAddPlayer(targetSelectId) {
+    var name = window.prompt("New player name:");
+    if (name === null) return;
+    var player = addPlayer(name);
+    if (!player) return;
+    renderPlayers();
+    document.getElementById(targetSelectId).value = player.id;
   }
 
   function removePlayer(id) {
@@ -273,6 +292,21 @@
     saveState();
     renderMatches();
     return match;
+  }
+
+  function resetMatch(id) {
+    var m = getMatch(id);
+    if (!m) return;
+    if (!confirm("Reset this match's score back to 0-0?")) return;
+    m.games[m.player1Id] = 0;
+    m.games[m.player2Id] = 0;
+    m.balls[m.player1Id] = 0;
+    m.balls[m.player2Id] = 0;
+    m.status = "in_progress";
+    m.winnerId = null;
+    saveState();
+    renderMatchView();
+    renderMatches();
   }
 
   function deleteMatch(id) {
@@ -496,12 +530,16 @@
 
   addPlayerForm.addEventListener("submit", function (e) {
     e.preventDefault();
-    var name = newPlayerName.value.trim();
-    if (!name) return;
-    state.players.push({ id: uid(), name: name });
-    saveState();
+    var player = addPlayer(newPlayerName.value);
+    if (!player) return;
     newPlayerName.value = "";
     renderPlayers();
+  });
+
+  document.querySelectorAll(".btn-add-inline").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      quickAddPlayer(btn.getAttribute("data-target"));
+    });
   });
 
   btnNewMatch.addEventListener("click", function () {
@@ -537,6 +575,10 @@
 
   btnShareMatch.addEventListener("click", function () {
     if (currentMatchId) shareMatch(currentMatchId);
+  });
+
+  btnResetMatch.addEventListener("click", function () {
+    if (currentMatchId) resetMatch(currentMatchId);
   });
 
   btnDeleteMatch.addEventListener("click", function () {

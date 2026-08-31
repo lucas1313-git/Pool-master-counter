@@ -1,16 +1,16 @@
 :root {
-  --bg: #0b1f18;
-  --bg-panel: #10281f;
-  --bg-card: #143529;
-  --felt: #0e5c3f;
-  --felt-light: #157a52;
+  --bg: #1a0a0a;
+  --bg-panel: #241010;
+  --bg-card: #2e1414;
+  --felt: #5c0f14;
+  --felt-light: #8a1a1f;
   --accent: #e8b923;
   --accent-dark: #b8890f;
-  --danger: #c94b4b;
-  --danger-dark: #9c3535;
-  --text: #f2f4f0;
-  --text-dim: #a9bdb2;
-  --border: #234a3a;
+  --danger: #ff5252;
+  --danger-dark: #c62828;
+  --text: #f6efe9;
+  --text-dim: #c9a2a2;
+  --border: #4a1e1e;
   --radius: 14px;
   color-scheme: dark;
 }
@@ -26,7 +26,7 @@ html, body {
 
 body {
   margin: 0;
-  background: radial-gradient(ellipse at top, #123a2a 0%, var(--bg) 60%);
+  background: radial-gradient(ellipse at top, #3a1212 0%, var(--bg) 60%);
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -224,6 +224,23 @@ input[type="number"] {
   font-weight: 700;
 }
 
+.btn-add-inline {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  font-size: 1.3rem;
+  font-weight: 700;
+  line-height: 1;
+  background: var(--bg-card);
+  color: var(--accent);
+  border: 1px solid var(--border);
+}
+
+.btn-add-inline:hover {
+  border-color: var(--accent);
+}
+
 /* ---------- Match list ---------- */
 
 .match-list {
@@ -341,7 +358,7 @@ input[type="number"] {
 }
 
 .player-panel {
-  background: linear-gradient(180deg, var(--felt) 0%, #0a3323 100%);
+  background: linear-gradient(180deg, var(--felt) 0%, #200606 100%);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
