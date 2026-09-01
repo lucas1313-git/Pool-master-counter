@@ -327,6 +327,12 @@
   var btnGameChangeClose = document.getElementById("btn-gamechange-close");
   var nowPlayingBanner = document.getElementById("now-playing-banner");
 
+  var saveSessionOverlay = document.getElementById("save-session-overlay");
+  var saveSessionMessage = document.getElementById("save-session-message");
+  var btnSaveSessionSave = document.getElementById("btn-save-session-save");
+  var btnSaveSessionSkip = document.getElementById("btn-save-session-skip");
+  var btnSaveSessionCancel = document.getElementById("btn-save-session-cancel");
+
   function populateGameTypeSelects() {
     [gameTypeSelect, rotationAddType].forEach(function (select) {
       select.innerHTML = "";
@@ -1056,7 +1062,23 @@
   }
 
   function resetAllStats() {
-    if (!confirm("This starts a new session: clears session wins, team wins, game history, and restarts the game rotation from the top. This cannot be undone. Continue?")) return;
+    if (state.gameHistory.length === 0) {
+      if (!confirm("Start a new session? This clears session wins, team wins, and restarts the game rotation from the top.")) return;
+      startNewSession();
+      return;
+    }
+    var count = state.gameHistory.length;
+    saveSessionMessage.textContent =
+      "You've recorded " + count + " game" + (count === 1 ? "" : "s") + " this session. " +
+      "Save it before starting a new one? This cannot be undone.";
+    saveSessionOverlay.classList.remove("hidden");
+  }
+
+  function closeSaveSessionPopup() {
+    saveSessionOverlay.classList.add("hidden");
+  }
+
+  function startNewSession() {
     maybeSaveRosterOnNewSession();
     state.playerWins = {};
     state.teamWins = {};
@@ -1731,6 +1753,20 @@
   btnGameChangeClose.addEventListener("click", closeGameChange);
   gameChangeOverlay.addEventListener("click", function (e) {
     if (e.target === gameChangeOverlay) closeGameChange();
+  });
+
+  btnSaveSessionSave.addEventListener("click", function () {
+    exportSession();
+    closeSaveSessionPopup();
+    startNewSession();
+  });
+  btnSaveSessionSkip.addEventListener("click", function () {
+    closeSaveSessionPopup();
+    startNewSession();
+  });
+  btnSaveSessionCancel.addEventListener("click", closeSaveSessionPopup);
+  saveSessionOverlay.addEventListener("click", function (e) {
+    if (e.target === saveSessionOverlay) closeSaveSessionPopup();
   });
 
   btnRosterLoad.addEventListener("click", loadSelectedRoster);
