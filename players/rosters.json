@@ -1,1 +1,13 @@
-[]
+[
+  {
+    "id": "roster-2026-09-01T00-37-22-909Z",
+    "label": "2026-09-01 — Bob, Jim, Suresh, luc",
+    "players": [
+      "Bob",
+      "Jim",
+      "Suresh",
+      "luc"
+    ],
+    "savedAt": "2026-09-01T00:37:22.909Z"
+  }
+]
