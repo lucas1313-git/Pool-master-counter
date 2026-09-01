@@ -273,6 +273,7 @@
   var btnExportAllData = document.getElementById("btn-export-all-data");
   var btnImportAllData = document.getElementById("btn-import-all-data");
   var importFileInput = document.getElementById("import-file-input");
+  var btnResetAllPlayerStats = document.getElementById("btn-reset-all-player-stats");
 
   var addPlayerForm = document.getElementById("add-player-form");
   var newPlayerName = document.getElementById("new-player-name");
@@ -1360,6 +1361,23 @@
     savePlayerStatsToStorage(PLAYER_STATS);
   }
 
+  function resetAllPlayerStats() {
+    if (
+      !confirm(
+        "This clears EVERY player's saved stat history on this device — all sessions, for all players, not just the current live session. This cannot be undone. Continue?"
+      )
+    ) {
+      return;
+    }
+    PLAYER_STATS = {};
+    savePlayerStatsToStorage(PLAYER_STATS);
+    if (currentStatsPlayerId) {
+      currentStatsSessions = [];
+      renderPlayerHistoryList([]);
+    }
+    showToast("Cleared all players' saved stat history.");
+  }
+
   // One-time migration: the app used to store rosters/player stats as JSON
   // files committed to this GitHub repo. The first time this version boots,
   // pull in whatever's still out there so history isn't lost, then never
@@ -1869,6 +1887,8 @@
     if (!file) return;
     importAllData(file);
   });
+
+  btnResetAllPlayerStats.addEventListener("click", resetAllPlayerStats);
 
   addPlayerForm.addEventListener("submit", function (e) {
     e.preventDefault();
