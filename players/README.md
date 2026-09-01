@@ -1,6 +1,8 @@
 # Players Archive
 
-This folder holds saved player rosters and per-player stat history — like `stats/`, these are downloaded by the app and committed manually (a static site can't write to the repo on its own).
+This folder holds saved player rosters and per-player stat history.
+
+**Saving to this folder:** if you connect a GitHub token in the app's **GitHub Sync** panel (top of the page), rosters and player stats are written straight here via the GitHub API — no manual step needed. Without a token (or if the API write fails), the app falls back to downloading the file for you to commit manually. See `stats/README.md` for full details on connecting a token.
 
 ## Saved rosters (`rosters.json`)
 

@@ -269,6 +269,11 @@
   // DOM refs
   // ---------------------------------------------------------------------
 
+  var githubTokenInput = document.getElementById("github-token-input");
+  var btnGithubTokenSave = document.getElementById("btn-github-token-save");
+  var btnGithubTokenClear = document.getElementById("btn-github-token-clear");
+  var githubSyncStatus = document.getElementById("github-sync-status");
+
   var addPlayerForm = document.getElementById("add-player-form");
   var newPlayerName = document.getElementById("new-player-name");
   var rosterList = document.getElementById("roster-list");
@@ -1118,7 +1123,8 @@
       gameHistory: state.gameHistory
     };
 
-    downloadJSON("pool-session-" + snapshot.exportedAt.slice(0, 10) + ".json", snapshot);
+    var filename = "pool-session-" + snapshot.exportedAt.slice(0, 10) + ".json";
+    saveOrDownloadJSON("stats/" + filename, filename, snapshot, "Export session " + snapshot.exportedAt.slice(0, 10));
   }
 
   function downloadJSON(filename, data) {
@@ -1143,6 +1149,111 @@
   function fetchFresh(url) {
     var buster = (url.indexOf("?") === -1 ? "?" : "&") + "v=" + Date.now();
     return fetch(url + buster, { cache: "no-store" });
+  }
+
+  // ---------------------------------------------------------------------
+  // GitHub direct-write sync (optional — falls back to download without a token)
+  // ---------------------------------------------------------------------
+
+  var GITHUB_OWNER = "lucas1313-git";
+  var GITHUB_REPO = "Pool-master-counter";
+  var GITHUB_TOKEN_KEY = "poolMasterCounter.githubToken";
+
+  function getGithubToken() {
+    try {
+      return localStorage.getItem(GITHUB_TOKEN_KEY) || "";
+    } catch (e) {
+      return "";
+    }
+  }
+
+  function setGithubToken(token) {
+    try {
+      localStorage.setItem(GITHUB_TOKEN_KEY, token);
+    } catch (e) {
+      console.warn("Could not save GitHub token.", e);
+    }
+  }
+
+  function clearGithubToken() {
+    try {
+      localStorage.removeItem(GITHUB_TOKEN_KEY);
+    } catch (e) {
+      console.warn("Could not clear GitHub token.", e);
+    }
+  }
+
+  function base64EncodeUtf8(str) {
+    return btoa(unescape(encodeURIComponent(str)));
+  }
+
+  function githubApiWriteFile(path, content, message) {
+    var token = getGithubToken();
+    if (!token) return Promise.reject(new Error("no token configured"));
+    var apiUrl = "https://api.github.com/repos/" + GITHUB_OWNER + "/" + GITHUB_REPO + "/contents/" + path;
+    var headers = {
+      Authorization: "Bearer " + token,
+      Accept: "application/vnd.github+json"
+    };
+    return fetch(apiUrl, { headers: headers })
+      .then(function (res) {
+        return res.ok ? res.json() : null;
+      })
+      .then(function (existing) {
+        var body = {
+          message: message,
+          content: base64EncodeUtf8(content),
+          branch: "main"
+        };
+        if (existing && existing.sha) body.sha = existing.sha;
+        var putHeaders = {
+          Authorization: headers.Authorization,
+          Accept: headers.Accept,
+          "Content-Type": "application/json"
+        };
+        return fetch(apiUrl, {
+          method: "PUT",
+          headers: putHeaders,
+          body: JSON.stringify(body)
+        });
+      })
+      .then(function (res) {
+        if (!res.ok) {
+          return res.json().then(function (err) {
+            throw new Error((err && err.message) || "GitHub API error " + res.status);
+          });
+        }
+        return res.json();
+      });
+  }
+
+  function renderGithubSyncStatus() {
+    var token = getGithubToken();
+    if (token) {
+      githubSyncStatus.textContent = "✅ Connected — exports save straight to GitHub.";
+      githubSyncStatus.classList.add("is-connected");
+    } else {
+      githubSyncStatus.textContent = "Not connected — exports will download instead.";
+      githubSyncStatus.classList.remove("is-connected");
+    }
+  }
+
+  function saveOrDownloadJSON(path, filename, data, message) {
+    var json = JSON.stringify(data, null, 2);
+    if (!getGithubToken()) {
+      downloadJSON(filename, data);
+      return;
+    }
+    showToast("Saving " + filename + " to GitHub…");
+    githubApiWriteFile(path, json, message)
+      .then(function () {
+        showToast("✅ Saved " + filename + " to GitHub.");
+      })
+      .catch(function (err) {
+        console.warn("GitHub save failed, falling back to download.", err);
+        showToast("⚠️ GitHub save failed (" + err.message + ") — downloaded instead.");
+        downloadJSON(filename, data);
+      });
   }
 
   // ---------------------------------------------------------------------
@@ -1222,8 +1333,8 @@
       savedAt: now
     };
     var updated = SAVED_ROSTERS.concat([entry]);
-    downloadJSON("rosters.json", updated);
-    showToast("Downloaded rosters.json — commit it into players/ to save this roster.");
+    SAVED_ROSTERS = updated;
+    saveOrDownloadJSON("players/rosters.json", "rosters.json", updated, "Save roster " + entry.label);
   }
 
   // ---------------------------------------------------------------------
@@ -1401,9 +1512,9 @@
       sessions.push(live);
     }
     currentStatsSessions = sessions;
-    downloadJSON(playerStatsFilename(player.name), { name: player.name, sessions: sessions });
+    var filename = playerStatsFilename(player.name);
+    saveOrDownloadJSON("players/" + filename, filename, { name: player.name, sessions: sessions }, "Update stats for " + player.name);
     renderPlayerHistoryList(sessions);
-    showToast("Downloaded " + playerStatsFilename(player.name) + " — commit it into players/ to save " + player.name + "'s history.");
   }
 
   function resetPlayerHistoricalStats() {
@@ -1418,9 +1529,9 @@
       return;
     }
     currentStatsSessions = [];
-    downloadJSON(playerStatsFilename(player.name), { name: player.name, sessions: [] });
+    var filename = playerStatsFilename(player.name);
+    saveOrDownloadJSON("players/" + filename, filename, { name: player.name, sessions: [] }, "Clear saved history for " + player.name);
     renderPlayerHistoryList([]);
-    showToast("Downloaded a cleared " + playerStatsFilename(player.name) + " — commit it to clear " + player.name + "'s saved history.");
   }
 
   // ---------------------------------------------------------------------
@@ -1428,6 +1539,24 @@
   // ---------------------------------------------------------------------
 
   function boot() {
+  renderGithubSyncStatus();
+
+  btnGithubTokenSave.addEventListener("click", function () {
+    var token = githubTokenInput.value.trim();
+    if (!token) return;
+    setGithubToken(token);
+    githubTokenInput.value = "";
+    renderGithubSyncStatus();
+    showToast("Connected to GitHub — exports will save straight to the repo.");
+  });
+
+  btnGithubTokenClear.addEventListener("click", function () {
+    clearGithubToken();
+    githubTokenInput.value = "";
+    renderGithubSyncStatus();
+    showToast("Disconnected — exports will download instead.");
+  });
+
   addPlayerForm.addEventListener("submit", function (e) {
     e.preventDefault();
     var player = addPlayer(newPlayerName.value);

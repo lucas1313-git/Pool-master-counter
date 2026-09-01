@@ -18,6 +18,16 @@
     <h1>🎱 Pool Master Counter</h1>
   </header>
 
+  <section class="panel" id="github-sync-panel">
+    <h2>GitHub Sync</h2>
+    <p class="player-stats-note" id="github-sync-status">Not connected — exports will download instead.</p>
+    <div class="row">
+      <input type="password" id="github-token-input" placeholder="GitHub token (repo scope)" autocomplete="off">
+      <button type="button" id="btn-github-token-save" class="btn btn-primary">Connect</button>
+      <button type="button" id="btn-github-token-clear" class="btn btn-ghost">Disconnect</button>
+    </div>
+  </section>
+
   <section class="panel" id="players-panel">
     <h2>Players</h2>
     <form id="add-player-form" class="row">
