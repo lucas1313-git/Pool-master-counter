@@ -1011,6 +1011,11 @@ input[type="number"] {
 
 #backup-panel .row {
   margin-top: 4px;
+  align-items: stretch;
+}
+
+#backup-panel .row .btn {
+  flex: 1 1 140px;
 }
 
 .player-stats-row-wrap {
