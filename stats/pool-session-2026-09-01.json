@@ -1,0 +1,47 @@
+{
+  "exportedAt": "2026-09-01T00:38:03.748Z",
+  "raceToWinsTarget": 5,
+  "currentGame": {
+    "gameType": "8ball",
+    "target": 1,
+    "mode": "individual"
+  },
+  "players": [
+    {
+      "id": "mthndkkey92gk8",
+      "name": "luc"
+    },
+    {
+      "id": "mthndscrj4ayx4",
+      "name": "Bob"
+    },
+    {
+      "id": "mthne0f2tq9260",
+      "name": "Suresh"
+    },
+    {
+      "id": "mtht2izlmyt50h",
+      "name": "Jim"
+    }
+  ],
+  "playerWins": [
+    {
+      "name": "luc",
+      "wins": 0
+    },
+    {
+      "name": "Bob",
+      "wins": 0
+    },
+    {
+      "name": "Suresh",
+      "wins": 0
+    },
+    {
+      "name": "Jim",
+      "wins": 0
+    }
+  ],
+  "teamWins": [],
+  "gameHistory": []
+}
