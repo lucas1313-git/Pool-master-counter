@@ -802,6 +802,19 @@
     note.className = "target-note";
     note.textContent = "Target " + state.currentGame.target + " " + type.unit;
     nowPlayingBanner.appendChild(note);
+    var duration = document.createElement("span");
+    duration.className = "game-duration-live";
+    duration.id = "game-duration-live";
+    nowPlayingBanner.appendChild(duration);
+    updateGameDurationDisplay();
+  }
+
+  function updateGameDurationDisplay() {
+    var el = document.getElementById("game-duration-live");
+    if (!el || !state.currentGame.startedAt) return;
+    var startedAt = new Date(state.currentGame.startedAt).getTime();
+    if (isNaN(startedAt)) return;
+    el.textContent = "⏱ " + formatDuration(Date.now() - startedAt);
   }
 
   function renderScoreboard() {
@@ -1990,6 +2003,8 @@
   btnToggleFocus.addEventListener("click", function () {
     setFocusMode(!appRoot.classList.contains("focus-mode"));
   });
+
+  setInterval(updateGameDurationDisplay, 1000);
   }
 
   // ---------------------------------------------------------------------
