@@ -1503,6 +1503,7 @@
   }
 
   function renderLiveSessionForPlayer(playerId) {
+    var player = getPlayer(playerId);
     var live = computeLiveSessionForPlayer(playerId);
     playerPageCurrentBody.innerHTML = "";
     playerPageCurrentBody.appendChild(playerStatsRow("Wins today", live.wins));
@@ -1510,10 +1511,25 @@
     playerPageCurrentBody.appendChild(playerStatsListRow("Opponents", live.opponents));
     if (live.wonTournament) {
       var trophy = document.createElement("div");
-      trophy.className = "player-stats-note";
-      trophy.textContent = "🏆 Reached the race-to-" + state.raceToWinsTarget + " milestone today!";
+      trophy.className = "tournament-winner-banner";
+      trophy.textContent = "🏆 " + (player ? player.name : "") + " Won the Tournament Today!";
       playerPageCurrentBody.appendChild(trophy);
     }
+  }
+
+  function formatSessionDateTime(session) {
+    var text = session.date;
+    if (session.games && session.games.length) {
+      var sorted = session.games.slice().sort(function (a, b) {
+        return a.ts.localeCompare(b.ts);
+      });
+      var first = formatTimestamp(sorted[0].ts, false);
+      var last = formatTimestamp(sorted[sorted.length - 1].ts, false);
+      if (first || last) {
+        text += " · " + (first === last ? first : first + " – " + last);
+      }
+    }
+    return text;
   }
 
   function renderPlayerHistoryList(sessions) {
@@ -1525,6 +1541,8 @@
       playerPageHistoryList.appendChild(hint);
       return;
     }
+    var player = getPlayer(currentStatsPlayerId);
+    var playerName = player ? player.name : "";
     sessions
       .slice()
       .sort(function (a, b) {
@@ -1538,13 +1556,20 @@
         top.className = "player-history-top";
         var date = document.createElement("span");
         date.className = "player-history-date";
-        date.textContent = session.date + (session.wonTournament ? " 🏆" : "");
+        date.textContent = formatSessionDateTime(session);
         var wins = document.createElement("span");
         wins.className = "player-history-wins";
         wins.textContent = session.wins + " win" + (session.wins === 1 ? "" : "s");
         top.appendChild(date);
         top.appendChild(wins);
         li.appendChild(top);
+
+        if (session.wonTournament) {
+          var banner = document.createElement("div");
+          banner.className = "tournament-winner-banner";
+          banner.textContent = "🏆 " + playerName + " Won the Tournament!";
+          li.appendChild(banner);
+        }
 
         var detail = document.createElement("div");
         detail.className = "player-history-detail";
