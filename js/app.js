@@ -1064,7 +1064,7 @@
   function resetAllStats() {
     if (state.gameHistory.length === 0) {
       if (!confirm("Start a new session? This clears session wins, team wins, and restarts the game rotation from the top.")) return;
-      startNewSession();
+      startNewSession(false);
       return;
     }
     var count = state.gameHistory.length;
@@ -1078,8 +1078,8 @@
     saveSessionOverlay.classList.add("hidden");
   }
 
-  function startNewSession() {
-    maybeSaveRosterOnNewSession();
+  function startNewSession(saveRoster) {
+    if (saveRoster) maybeSaveRosterOnNewSession();
     state.playerWins = {};
     state.teamWins = {};
     state.gameHistory = [];
@@ -1758,11 +1758,11 @@
   btnSaveSessionSave.addEventListener("click", function () {
     exportSession();
     closeSaveSessionPopup();
-    startNewSession();
+    startNewSession(true);
   });
   btnSaveSessionSkip.addEventListener("click", function () {
     closeSaveSessionPopup();
-    startNewSession();
+    startNewSession(false);
   });
   btnSaveSessionCancel.addEventListener("click", closeSaveSessionPopup);
   saveSessionOverlay.addEventListener("click", function (e) {
