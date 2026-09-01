@@ -814,7 +814,7 @@
     if (!el || !state.currentGame.startedAt) return;
     var startedAt = new Date(state.currentGame.startedAt).getTime();
     if (isNaN(startedAt)) return;
-    el.textContent = "⏱ " + formatDuration(Date.now() - startedAt);
+    el.textContent = "⏱ Duration: " + formatDuration(Date.now() - startedAt);
   }
 
   function renderScoreboard() {
@@ -881,13 +881,18 @@
       }
       var timeSpan = document.createElement("span");
       timeSpan.className = "history-date";
-      var timeText = formatTimestamp(entry.ts, true);
+      timeSpan.textContent = formatTimestamp(entry.ts, true);
+      li.appendChild(timeSpan);
       var durationText = formatDuration(entry.durationMs);
-      timeSpan.textContent = durationText ? timeText + " · " + durationText : timeText;
+      if (durationText) {
+        var durationSpan = document.createElement("span");
+        durationSpan.className = "history-duration";
+        durationSpan.textContent = "Duration: " + durationText;
+        li.appendChild(durationSpan);
+      }
       var winner = document.createElement("strong");
       winner.className = "history-winner";
       winner.textContent = "🏆 " + entry.winnerNames.join(" & ");
-      li.appendChild(timeSpan);
       li.appendChild(winner);
       li.appendChild(document.createTextNode(" won " + entry.gameLabel + " (target " + entry.target + ")"));
       if (entry.isTeam && entry.mvpName) {
@@ -1630,9 +1635,7 @@
     div.className = "player-game-log-row " + (g.result === "won" ? "is-win" : "is-loss");
     var time = document.createElement("span");
     time.className = "player-game-log-time";
-    var timeText = formatTimestamp(g.ts, false);
-    var durationText = formatDuration(g.durationMs);
-    time.textContent = durationText ? timeText + " (" + durationText + ")" : timeText;
+    time.textContent = formatTimestamp(g.ts, false);
     var label = document.createElement("span");
     label.className = "player-game-log-label";
     label.textContent = g.gameLabel;
@@ -1641,6 +1644,13 @@
     winner.textContent = "🏆 " + (g.winnerNames || []).join(" & ");
     div.appendChild(time);
     div.appendChild(label);
+    var durationText = formatDuration(g.durationMs);
+    if (durationText) {
+      var durationSpan = document.createElement("span");
+      durationSpan.className = "player-game-log-duration";
+      durationSpan.textContent = "Duration: " + durationText;
+      div.appendChild(durationSpan);
+    }
     div.appendChild(document.createTextNode(" — won by "));
     div.appendChild(winner);
     if (g.isTeam && g.mvpName) {

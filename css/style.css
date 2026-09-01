@@ -715,6 +715,15 @@ input[type="number"] {
   margin-bottom: 2px;
 }
 
+.history-duration {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
 .history-winner {
   color: var(--accent);
 }
@@ -1082,6 +1091,14 @@ input[type="number"] {
   min-width: 60px;
 }
 
+.player-game-log-duration {
+  flex-basis: 100%;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
 .player-game-log-label {
   color: var(--text);
 }
@@ -1116,10 +1133,10 @@ input[type="number"] {
 
 .now-playing-banner .game-duration-live {
   display: block;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--text-dim);
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--accent);
   letter-spacing: normal;
   font-variant-numeric: tabular-nums;
-  margin-top: 2px;
+  margin-top: 6px;
 }
