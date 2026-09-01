@@ -1,153 +1,230 @@
 {
-  "exportedAt": "2026-09-01T01:09:06.011Z",
-  "raceToWinsTarget": 5,
+  "exportedAt": "2026-09-01T01:50:31.741Z",
+  "raceToWinsTarget": 7,
   "currentGame": {
-    "gameType": "9ball",
+    "gameType": "8ballrotation",
     "target": 1,
-    "mode": "individual"
+    "mode": "teams"
   },
   "players": [
     {
-      "id": "mthndkkey92gk8",
-      "name": "luc"
+      "id": "mthoiujkpxgiqt",
+      "name": "Luc"
     },
     {
-      "id": "mthndscrj4ayx4",
+      "id": "mthoiy6ddjntm2",
       "name": "Bob"
     },
     {
-      "id": "mthne0f2tq9260",
+      "id": "mthoj21tb6rmrk",
       "name": "Suresh"
     },
     {
-      "id": "mtht2izlmyt50h",
-      "name": "Jim"
+      "id": "mthoj89gr9xj1i",
+      "name": "Luigi"
+    },
+    {
+      "id": "mthojayksdr2ua",
+      "name": "Chris"
     }
   ],
   "playerWins": [
     {
-      "name": "Bob",
-      "wins": 5
+      "name": "Luc",
+      "wins": 7
     },
     {
-      "name": "luc",
-      "wins": 2
+      "name": "Luigi",
+      "wins": 7
+    },
+    {
+      "name": "Bob",
+      "wins": 4
     },
     {
       "name": "Suresh",
-      "wins": 0
+      "wins": 4
     },
     {
-      "name": "Jim",
+      "name": "Chris",
       "wins": 0
     }
   ],
-  "teamWins": [],
+  "teamWins": [
+    {
+      "members": "Luc & Luigi",
+      "wins": 7
+    },
+    {
+      "members": "Bob & Suresh",
+      "wins": 4
+    }
+  ],
   "gameHistory": [
     {
-      "ts": "2026-09-01T01:08:57.423Z",
-      "gameType": "9ball",
-      "gameLabel": "9-Ball",
+      "ts": "2026-09-01T01:50:22.616Z",
+      "gameType": "8ballrotation",
+      "gameLabel": "8 Ball Rotation",
       "target": 1,
       "winnerNames": [
-        "Bob"
-      ],
-      "opponentNames": [
-        "luc",
-        "Suresh",
-        "Jim"
-      ],
-      "summary": "Bob won 9-Ball (target 1)"
-    },
-    {
-      "ts": "2026-09-01T01:08:54.085Z",
-      "gameType": "9ball",
-      "gameLabel": "9-Ball",
-      "target": 1,
-      "winnerNames": [
-        "Bob"
-      ],
-      "opponentNames": [
-        "luc",
-        "Suresh",
-        "Jim"
-      ],
-      "summary": "Bob won 9-Ball (target 1)"
-    },
-    {
-      "ts": "2026-09-01T01:08:53.446Z",
-      "gameType": "9ball",
-      "gameLabel": "9-Ball",
-      "target": 1,
-      "winnerNames": [
-        "Bob"
-      ],
-      "opponentNames": [
-        "luc",
-        "Suresh",
-        "Jim"
-      ],
-      "summary": "Bob won 9-Ball (target 1)"
-    },
-    {
-      "ts": "2026-09-01T01:08:52.341Z",
-      "gameType": "8ball",
-      "gameLabel": "8-Ball",
-      "target": 1,
-      "winnerNames": [
-        "Bob"
-      ],
-      "opponentNames": [
-        "luc",
-        "Suresh",
-        "Jim"
-      ],
-      "summary": "Bob won 8-Ball (target 1)"
-    },
-    {
-      "ts": "2026-09-01T01:08:52.133Z",
-      "gameType": "8ball",
-      "gameLabel": "8-Ball",
-      "target": 1,
-      "winnerNames": [
-        "Bob"
-      ],
-      "opponentNames": [
-        "luc",
-        "Suresh",
-        "Jim"
-      ],
-      "summary": "Bob won 8-Ball (target 1)"
-    },
-    {
-      "ts": "2026-09-01T01:08:51.033Z",
-      "gameType": "8ball",
-      "gameLabel": "8-Ball",
-      "target": 1,
-      "winnerNames": [
-        "luc"
+        "Luc",
+        "Luigi"
       ],
       "opponentNames": [
         "Bob",
-        "Suresh",
-        "Jim"
+        "Suresh"
       ],
-      "summary": "luc won 8-Ball (target 1)"
+      "summary": "Team A (Luc & Luigi) won 8 Ball Rotation (target 1)"
     },
     {
-      "ts": "2026-09-01T01:08:50.429Z",
+      "ts": "2026-09-01T01:50:20.314Z",
+      "gameType": "8ballrotation",
+      "gameLabel": "8 Ball Rotation",
+      "target": 1,
+      "winnerNames": [
+        "Luc",
+        "Luigi"
+      ],
+      "opponentNames": [
+        "Bob",
+        "Suresh"
+      ],
+      "summary": "Team A (Luc & Luigi) won 8 Ball Rotation (target 1)"
+    },
+    {
+      "ts": "2026-09-01T01:50:19.682Z",
+      "gameType": "8ballrotation",
+      "gameLabel": "8 Ball Rotation",
+      "target": 1,
+      "winnerNames": [
+        "Luc",
+        "Luigi"
+      ],
+      "opponentNames": [
+        "Bob",
+        "Suresh"
+      ],
+      "summary": "Team A (Luc & Luigi) won 8 Ball Rotation (target 1)"
+    },
+    {
+      "ts": "2026-09-01T01:50:17.021Z",
+      "gameType": "9ball",
+      "gameLabel": "9-Ball",
+      "target": 1,
+      "winnerNames": [
+        "Bob",
+        "Suresh"
+      ],
+      "opponentNames": [
+        "Luc",
+        "Luigi"
+      ],
+      "summary": "Team B (Bob & Suresh) won 9-Ball (target 1)"
+    },
+    {
+      "ts": "2026-09-01T01:50:16.576Z",
+      "gameType": "9ball",
+      "gameLabel": "9-Ball",
+      "target": 1,
+      "winnerNames": [
+        "Bob",
+        "Suresh"
+      ],
+      "opponentNames": [
+        "Luc",
+        "Luigi"
+      ],
+      "summary": "Team B (Bob & Suresh) won 9-Ball (target 1)"
+    },
+    {
+      "ts": "2026-09-01T01:50:16.192Z",
+      "gameType": "9ball",
+      "gameLabel": "9-Ball",
+      "target": 1,
+      "winnerNames": [
+        "Bob",
+        "Suresh"
+      ],
+      "opponentNames": [
+        "Luc",
+        "Luigi"
+      ],
+      "summary": "Team B (Bob & Suresh) won 9-Ball (target 1)"
+    },
+    {
+      "ts": "2026-09-01T01:50:15.805Z",
+      "gameType": "9ball",
+      "gameLabel": "9-Ball",
+      "target": 1,
+      "winnerNames": [
+        "Bob",
+        "Suresh"
+      ],
+      "opponentNames": [
+        "Luc",
+        "Luigi"
+      ],
+      "summary": "Team B (Bob & Suresh) won 9-Ball (target 1)"
+    },
+    {
+      "ts": "2026-09-01T01:50:12.582Z",
       "gameType": "8ball",
       "gameLabel": "8-Ball",
       "target": 1,
       "winnerNames": [
-        "luc"
+        "Luc",
+        "Luigi"
       ],
       "opponentNames": [
         "Bob",
-        "Suresh",
-        "Jim"
+        "Suresh"
       ],
-      "summary": "luc won 8-Ball (target 1)"
+      "summary": "Team A (Luc & Luigi) won 8-Ball (target 1)"
+    },
+    {
+      "ts": "2026-09-01T01:50:12.193Z",
+      "gameType": "8ball",
+      "gameLabel": "8-Ball",
+      "target": 1,
+      "winnerNames": [
+        "Luc",
+        "Luigi"
+      ],
+      "opponentNames": [
+        "Bob",
+        "Suresh"
+      ],
+      "summary": "Team A (Luc & Luigi) won 8-Ball (target 1)"
+    },
+    {
+      "ts": "2026-09-01T01:50:11.709Z",
+      "gameType": "8ball",
+      "gameLabel": "8-Ball",
+      "target": 1,
+      "winnerNames": [
+        "Luc",
+        "Luigi"
+      ],
+      "opponentNames": [
+        "Bob",
+        "Suresh"
+      ],
+      "summary": "Team A (Luc & Luigi) won 8-Ball (target 1)"
+    },
+    {
+      "ts": "2026-09-01T01:50:10.965Z",
+      "gameType": "8ball",
+      "gameLabel": "8-Ball",
+      "target": 1,
+      "winnerNames": [
+        "Luc",
+        "Luigi"
+      ],
+      "opponentNames": [
+        "Bob",
+        "Suresh"
+      ],
+      "summary": "Team A (Luc & Luigi) won 8-Ball (target 1)"
     }
   ]
 }
