@@ -279,6 +279,7 @@
   var rosterLoadSelect = document.getElementById("roster-load-select");
   var btnRosterLoad = document.getElementById("btn-roster-load");
 
+  var btnToggleFocus = document.getElementById("btn-toggle-focus");
   var appRoot = document.getElementById("app");
   var playerPageView = document.getElementById("view-player-page");
   var playerPageName = document.getElementById("player-page-name");
@@ -343,6 +344,22 @@
         select.appendChild(opt);
       });
     });
+  }
+
+  // ---------------------------------------------------------------------
+  // Focus mode (hide settings/statistics panels, show only the scoreboard)
+  // ---------------------------------------------------------------------
+
+  var FOCUS_MODE_KEY = "poolMasterCounter.focusMode";
+
+  function setFocusMode(on) {
+    appRoot.classList.toggle("focus-mode", on);
+    btnToggleFocus.textContent = on ? "Show All" : "Focus Mode";
+    try {
+      localStorage.setItem(FOCUS_MODE_KEY, on ? "1" : "0");
+    } catch (e) {
+      console.warn("Could not save focus mode preference.", e);
+    }
   }
 
   // ---------------------------------------------------------------------
@@ -1923,6 +1940,17 @@
 
   populateRosterLoadSelect();
   renderAll();
+
+  var storedFocusMode = "0";
+  try {
+    storedFocusMode = localStorage.getItem(FOCUS_MODE_KEY) || "0";
+  } catch (e) {
+    storedFocusMode = "0";
+  }
+  setFocusMode(storedFocusMode === "1");
+  btnToggleFocus.addEventListener("click", function () {
+    setFocusMode(!appRoot.classList.contains("focus-mode"));
+  });
   }
 
   // ---------------------------------------------------------------------

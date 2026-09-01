@@ -60,6 +60,21 @@ body {
   letter-spacing: 0.02em;
 }
 
+.focus-toggle-btn {
+  display: block;
+  margin: 12px auto 0;
+  font-size: 0.85rem;
+  padding: 8px 14px;
+}
+
+#app.focus-mode .panel {
+  display: none;
+}
+
+#app.focus-mode .app-header {
+  padding-bottom: 4px;
+}
+
 .brand {
   display: flex;
   align-items: center;
