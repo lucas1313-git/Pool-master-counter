@@ -18,13 +18,13 @@
     <h1>🎱 Pool Master Counter</h1>
   </header>
 
-  <section class="panel" id="github-sync-panel">
-    <h2>GitHub Sync</h2>
-    <p class="player-stats-note" id="github-sync-status">Not connected — exports will download instead.</p>
+  <section class="panel" id="backup-panel">
+    <h2>Backup &amp; Transfer</h2>
+    <p class="player-stats-note">All stats and session data live on this device only. Export a backup file to move everything to another iPhone, iPad, or computer.</p>
     <div class="row">
-      <input type="password" id="github-token-input" placeholder="GitHub token (repo scope)" autocomplete="off">
-      <button type="button" id="btn-github-token-save" class="btn btn-primary">Connect</button>
-      <button type="button" id="btn-github-token-clear" class="btn btn-ghost">Disconnect</button>
+      <button type="button" id="btn-export-all-data" class="btn btn-primary">Export All Data</button>
+      <button type="button" id="btn-import-all-data" class="btn btn-ghost">Import Data</button>
+      <input type="file" id="import-file-input" accept="application/json" class="hidden">
     </div>
   </section>
 

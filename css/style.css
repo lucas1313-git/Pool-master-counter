@@ -925,14 +925,8 @@ input[type="number"] {
   letter-spacing: 0.01em;
 }
 
-#github-sync-status {
-  text-align: left;
-  margin: 0 0 10px;
-}
-
-#github-sync-status.is-connected {
-  color: var(--felt-light);
-  font-weight: 700;
+#backup-panel .row {
+  margin-top: 4px;
 }
 
 .player-stats-row-wrap {

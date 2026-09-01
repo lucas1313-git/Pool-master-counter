@@ -1,24 +1,12 @@
-# Session Stats Archive
+# Session Stats Archive (legacy)
 
-This folder holds exported snapshots of past sessions — player names, career/team win counts, and the full game history — so they aren't lost when you reset the app for a new session.
+This folder used to hold exported session snapshots synced through GitHub. That workflow is retired — the app no longer reads or writes anything here. Everything (current session, rosters, per-player history) now lives in the browser's local storage on whichever device you're using; see `players/README.md` for how data moves between devices via the app's **Backup & Transfer** panel.
 
-## Workflow
+The `pool-session-*.json` files already in this folder are a historical record only, kept for reference.
 
-There are two ways files land in this folder:
+## File format (historical)
 
-**Option A — GitHub Sync (recommended, zero extra steps).** Paste a GitHub personal access token into the **GitHub Sync** panel at the top of the app (Connect). Once connected, tapping **Export Session** writes the file straight into `stats/` in this repo via the GitHub API — no download, no manual commit. The token is stored only in your browser's local storage; it's never sent anywhere except GitHub's API. Use a fine-grained token scoped to just this repo with **Contents: Read and write** permission (create one at github.com → Settings → Developer settings → Personal access tokens → Fine-grained tokens).
-
-**Option B — manual download.** If you haven't connected a token (or the API write fails for any reason, e.g. an expired token), the app falls back to downloading the file instead:
-
-1. Play a session in the app.
-2. When you're done, tap **Export Session** (next to Share Standings / Reset All Stats). This downloads a JSON file named like `pool-session-2026-08-31.json`.
-3. Add that file to this folder — either drag it into `stats/` on GitHub's website (Add file → Upload files) and commit, or hand it to Claude to commit for you.
-
-Either way, tap **Reset All Stats** in the app to start the next session with a clean slate.
-
-## File format
-
-Each exported file is a self-contained JSON snapshot:
+Each exported file was a self-contained JSON snapshot:
 
 ```json
 {
@@ -28,8 +16,8 @@ Each exported file is a self-contained JSON snapshot:
   "players": [{ "id": "...", "name": "Bob" }],
   "playerWins": [{ "name": "Bob", "wins": 4 }],
   "teamWins": [{ "members": "Bob & Suresh", "wins": 2 }],
-  "gameHistory": ["Bob won 8-Ball (target 1)", "..."]
+  "gameHistory": [{ "ts": "...", "gameLabel": "8-Ball", "winnerNames": ["Bob"], "summary": "Bob won 8-Ball (target 1)" }]
 }
 ```
 
-Player names are resolved inline (not just IDs), so each file reads standalone — no need to cross-reference against the live app.
+The app's **Export Session** button still downloads a snapshot like this for your own reference (e.g. to email standings) — it just no longer gets committed anywhere automatically.

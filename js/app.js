@@ -269,10 +269,9 @@
   // DOM refs
   // ---------------------------------------------------------------------
 
-  var githubTokenInput = document.getElementById("github-token-input");
-  var btnGithubTokenSave = document.getElementById("btn-github-token-save");
-  var btnGithubTokenClear = document.getElementById("btn-github-token-clear");
-  var githubSyncStatus = document.getElementById("github-sync-status");
+  var btnExportAllData = document.getElementById("btn-export-all-data");
+  var btnImportAllData = document.getElementById("btn-import-all-data");
+  var importFileInput = document.getElementById("import-file-input");
 
   var addPlayerForm = document.getElementById("add-player-form");
   var newPlayerName = document.getElementById("new-player-name");
@@ -1168,7 +1167,7 @@
     };
 
     var filename = "pool-session-" + snapshot.exportedAt.slice(0, 10) + ".json";
-    saveOrDownloadJSON("stats/" + filename, filename, snapshot, "Export session " + snapshot.exportedAt.slice(0, 10));
+    downloadJSON(filename, snapshot);
   }
 
   function downloadJSON(filename, data) {
@@ -1196,115 +1195,173 @@
   }
 
   // ---------------------------------------------------------------------
-  // GitHub direct-write sync (optional — falls back to download without a token)
+  // Local storage-backed persistence (rosters + player stats)
+  // Everything lives on this device only. Use Export All Data / Import
+  // Data (see below) to move it to another device.
   // ---------------------------------------------------------------------
 
-  var GITHUB_OWNER = "lucas1313-git";
-  var GITHUB_REPO = "Pool-master-counter";
-  var GITHUB_TOKEN_KEY = "poolMasterCounter.githubToken";
+  var ROSTERS_KEY = "poolMasterCounter.rosters.v1";
+  var PLAYER_STATS_KEY = "poolMasterCounter.playerStats.v1";
 
-  function getGithubToken() {
+  function loadRostersFromStorage() {
     try {
-      return localStorage.getItem(GITHUB_TOKEN_KEY) || "";
+      var raw = localStorage.getItem(ROSTERS_KEY);
+      var parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
     } catch (e) {
-      return "";
+      return [];
     }
   }
 
-  function setGithubToken(token) {
+  function saveRostersToStorage(rosters) {
     try {
-      localStorage.setItem(GITHUB_TOKEN_KEY, token);
+      localStorage.setItem(ROSTERS_KEY, JSON.stringify(rosters));
     } catch (e) {
-      console.warn("Could not save GitHub token.", e);
+      console.warn("Could not save rosters.", e);
     }
   }
 
-  function clearGithubToken() {
+  function loadPlayerStatsFromStorage() {
     try {
-      localStorage.removeItem(GITHUB_TOKEN_KEY);
+      var raw = localStorage.getItem(PLAYER_STATS_KEY);
+      var parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === "object" ? parsed : {};
     } catch (e) {
-      console.warn("Could not clear GitHub token.", e);
+      return {};
     }
   }
 
-  function base64EncodeUtf8(str) {
-    return btoa(unescape(encodeURIComponent(str)));
+  function savePlayerStatsToStorage(allStats) {
+    try {
+      localStorage.setItem(PLAYER_STATS_KEY, JSON.stringify(allStats));
+    } catch (e) {
+      console.warn("Could not save player stats.", e);
+    }
   }
 
-  function githubApiWriteFile(path, content, message) {
-    var token = getGithubToken();
-    if (!token) return Promise.reject(new Error("no token configured"));
-    var apiUrl = "https://api.github.com/repos/" + GITHUB_OWNER + "/" + GITHUB_REPO + "/contents/" + path;
-    var headers = {
-      Authorization: "Bearer " + token,
-      Accept: "application/vnd.github+json"
-    };
-    return fetch(apiUrl, { headers: headers })
+  var PLAYER_STATS = loadPlayerStatsFromStorage();
+
+  function getPlayerSessions(name) {
+    var entry = PLAYER_STATS[name];
+    return entry && Array.isArray(entry.sessions) ? entry.sessions.slice() : [];
+  }
+
+  function setPlayerSessions(name, sessions) {
+    PLAYER_STATS[name] = { name: name, sessions: sessions };
+    savePlayerStatsToStorage(PLAYER_STATS);
+  }
+
+  // One-time migration: the app used to store rosters/player stats as JSON
+  // files committed to this GitHub repo. The first time this version boots,
+  // pull in whatever's still out there so history isn't lost, then never
+  // touch the repo again.
+  function migrateFromRepoIfNeeded() {
+    var alreadyMigrated;
+    try {
+      alreadyMigrated = localStorage.getItem(ROSTERS_KEY) !== null || localStorage.getItem(PLAYER_STATS_KEY) !== null;
+    } catch (e) {
+      alreadyMigrated = false;
+    }
+    if (alreadyMigrated) return Promise.resolve();
+
+    return fetchFresh("players/rosters.json")
       .then(function (res) {
-        return res.ok ? res.json() : null;
+        return res.ok ? res.json() : [];
       })
-      .then(function (existing) {
-        var body = {
-          message: message,
-          content: base64EncodeUtf8(content),
-          branch: "main"
-        };
-        if (existing && existing.sha) body.sha = existing.sha;
-        var putHeaders = {
-          Authorization: headers.Authorization,
-          Accept: headers.Accept,
-          "Content-Type": "application/json"
-        };
-        return fetch(apiUrl, {
-          method: "PUT",
-          headers: putHeaders,
-          body: JSON.stringify(body)
-        });
+      .catch(function () {
+        return [];
       })
-      .then(function (res) {
-        if (!res.ok) {
-          return res.json().then(function (err) {
-            throw new Error((err && err.message) || "GitHub API error " + res.status);
+      .then(function (rosters) {
+        rosters = Array.isArray(rosters) ? rosters : [];
+        var nameSet = {};
+        rosters.forEach(function (r) {
+          (r.players || []).forEach(function (n) {
+            nameSet[n] = true;
           });
-        }
-        return res.json();
+        });
+        state.players.forEach(function (p) {
+          nameSet[p.name] = true;
+        });
+        var names = Object.keys(nameSet);
+        return Promise.all(
+          names.map(function (name) {
+            return fetchFresh("players/" + playerStatsFilename(name))
+              .then(function (res) {
+                return res.ok ? res.json() : null;
+              })
+              .catch(function () {
+                return null;
+              })
+              .then(function (data) {
+                if (data && Array.isArray(data.sessions) && data.sessions.length) {
+                  PLAYER_STATS[name] = { name: name, sessions: data.sessions };
+                }
+              });
+          })
+        ).then(function () {
+          SAVED_ROSTERS = rosters;
+          saveRostersToStorage(rosters);
+          savePlayerStatsToStorage(PLAYER_STATS);
+        });
       });
   }
 
-  function renderGithubSyncStatus() {
-    var token = getGithubToken();
-    if (token) {
-      githubSyncStatus.textContent = "✅ Connected — exports save straight to GitHub.";
-      githubSyncStatus.classList.add("is-connected");
-    } else {
-      githubSyncStatus.textContent = "Not connected — exports will download instead.";
-      githubSyncStatus.classList.remove("is-connected");
-    }
+  function exportAllData() {
+    var payload = {
+      exportedAt: new Date().toISOString(),
+      state: state,
+      rosters: SAVED_ROSTERS,
+      playerStats: PLAYER_STATS
+    };
+    downloadJSON("pool-master-counter-backup-" + payload.exportedAt.slice(0, 10) + ".json", payload);
   }
 
-  function saveOrDownloadJSON(path, filename, data, message) {
-    var json = JSON.stringify(data, null, 2);
-    if (!getGithubToken()) {
-      downloadJSON(filename, data);
-      return;
-    }
-    showToast("Saving " + filename + " to GitHub…");
-    githubApiWriteFile(path, json, message)
-      .then(function () {
-        showToast("✅ Saved " + filename + " to GitHub.");
-      })
-      .catch(function (err) {
-        console.warn("GitHub save failed, falling back to download.", err);
-        showToast("⚠️ GitHub save failed (" + err.message + ") — downloaded instead.");
-        downloadJSON(filename, data);
-      });
+  function importAllData(file) {
+    var reader = new FileReader();
+    reader.onload = function () {
+      var data;
+      try {
+        data = JSON.parse(reader.result);
+      } catch (e) {
+        alert("That file isn't valid JSON.");
+        return;
+      }
+      if (!data || typeof data !== "object" || !data.state) {
+        alert("That doesn't look like a Pool Master Counter backup file.");
+        return;
+      }
+      if (
+        !confirm(
+          "This replaces ALL data on this device (current session, rosters, and player stats) " +
+          "with the contents of this file. This cannot be undone. Continue?"
+        )
+      ) {
+        return;
+      }
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data.state));
+        localStorage.setItem(ROSTERS_KEY, JSON.stringify(Array.isArray(data.rosters) ? data.rosters : []));
+        localStorage.setItem(
+          PLAYER_STATS_KEY,
+          JSON.stringify(data.playerStats && typeof data.playerStats === "object" ? data.playerStats : {})
+        );
+      } catch (e) {
+        alert("Could not import: " + e.message);
+        return;
+      }
+      location.reload();
+    };
+    reader.onerror = function () {
+      alert("Could not read that file.");
+    };
+    reader.readAsText(file);
   }
 
   // ---------------------------------------------------------------------
-  // Player rosters (players/rosters.json)
+  // Player rosters
   // ---------------------------------------------------------------------
 
-  var SAVED_ROSTERS = [];
+  var SAVED_ROSTERS = loadRostersFromStorage();
 
   function populateRosterLoadSelect() {
     rosterLoadSelect.innerHTML = "";
@@ -1378,7 +1435,8 @@
     };
     var updated = SAVED_ROSTERS.concat([entry]);
     SAVED_ROSTERS = updated;
-    saveOrDownloadJSON("players/rosters.json", "rosters.json", updated, "Save roster " + entry.label);
+    saveRostersToStorage(updated);
+    showToast("Saved roster: " + entry.label);
   }
 
   // ---------------------------------------------------------------------
@@ -1610,21 +1668,8 @@
     playerPageView.classList.remove("hidden");
     window.scrollTo(0, 0);
 
-    fetchFresh("players/" + playerStatsFilename(player.name))
-      .then(function (res) {
-        if (!res.ok) throw new Error("no file");
-        return res.json();
-      })
-      .then(function (data) {
-        if (currentStatsPlayerId !== playerId) return;
-        currentStatsSessions = Array.isArray(data.sessions) ? data.sessions : [];
-        renderPlayerHistoryList(currentStatsSessions);
-      })
-      .catch(function () {
-        if (currentStatsPlayerId !== playerId) return;
-        currentStatsSessions = [];
-        renderPlayerHistoryList([]);
-      });
+    currentStatsSessions = getPlayerSessions(player.name);
+    renderPlayerHistoryList(currentStatsSessions);
   }
 
   function closePlayerStatsPage() {
@@ -1634,45 +1679,8 @@
     currentStatsSessions = null;
   }
 
-  function fetchPlayerSessions(name) {
-    return fetchFresh("players/" + playerStatsFilename(name))
-      .then(function (res) {
-        return res.ok ? res.json() : null;
-      })
-      .then(function (data) {
-        return data && Array.isArray(data.sessions) ? data.sessions : [];
-      })
-      .catch(function () {
-        return [];
-      });
-  }
-
-  function exportAllPlayerStats() {
-    state.players.forEach(function (p) {
-      var live = computeLiveSessionForPlayer(p.id);
-      if (!live || !live.games || live.games.length === 0) return;
-      var filename = playerStatsFilename(p.name);
-      fetchPlayerSessions(p.name).then(function (sessions) {
-        sessions = sessions.slice();
-        var idx = -1;
-        sessions.forEach(function (s, i) {
-          if (s.date === live.date) idx = i;
-        });
-        if (idx !== -1) {
-          sessions[idx] = live;
-        } else {
-          sessions.push(live);
-        }
-        saveOrDownloadJSON("players/" + filename, filename, { name: p.name, sessions: sessions }, "Update stats for " + p.name);
-      });
-    });
-  }
-
-  function exportCurrentPlayerStats() {
-    var player = getPlayer(currentStatsPlayerId);
-    if (!player) return;
-    var live = computeLiveSessionForPlayer(currentStatsPlayerId);
-    var sessions = (currentStatsSessions || []).slice();
+  function mergeSessionIntoList(sessions, live) {
+    sessions = sessions.slice();
     var idx = -1;
     sessions.forEach(function (s, i) {
       if (s.date === live.date) idx = i;
@@ -1682,10 +1690,28 @@
     } else {
       sessions.push(live);
     }
+    return sessions;
+  }
+
+  function exportAllPlayerStats() {
+    state.players.forEach(function (p) {
+      var live = computeLiveSessionForPlayer(p.id);
+      if (!live || !live.games || live.games.length === 0) return;
+      var sessions = mergeSessionIntoList(getPlayerSessions(p.name), live);
+      setPlayerSessions(p.name, sessions);
+      if (p.id === currentStatsPlayerId) currentStatsSessions = sessions;
+    });
+  }
+
+  function exportCurrentPlayerStats() {
+    var player = getPlayer(currentStatsPlayerId);
+    if (!player) return;
+    var live = computeLiveSessionForPlayer(currentStatsPlayerId);
+    var sessions = mergeSessionIntoList(currentStatsSessions || [], live);
     currentStatsSessions = sessions;
-    var filename = playerStatsFilename(player.name);
-    saveOrDownloadJSON("players/" + filename, filename, { name: player.name, sessions: sessions }, "Update stats for " + player.name);
+    setPlayerSessions(player.name, sessions);
     renderPlayerHistoryList(sessions);
+    showToast("Saved " + player.name + "'s stats.");
   }
 
   function resetPlayerHistoricalStats() {
@@ -1693,15 +1719,14 @@
     if (!player) return;
     if (
       !confirm(
-        "This clears " + player.name + "'s saved session history (downloads an empty file for you to commit). " +
+        "This clears " + player.name + "'s saved session history on this device. " +
         "This session's live stats are not affected. Continue?"
       )
     ) {
       return;
     }
     currentStatsSessions = [];
-    var filename = playerStatsFilename(player.name);
-    saveOrDownloadJSON("players/" + filename, filename, { name: player.name, sessions: [] }, "Clear saved history for " + player.name);
+    setPlayerSessions(player.name, []);
     renderPlayerHistoryList([]);
   }
 
@@ -1710,22 +1735,17 @@
   // ---------------------------------------------------------------------
 
   function boot() {
-  renderGithubSyncStatus();
+  btnExportAllData.addEventListener("click", exportAllData);
 
-  btnGithubTokenSave.addEventListener("click", function () {
-    var token = githubTokenInput.value.trim();
-    if (!token) return;
-    setGithubToken(token);
-    githubTokenInput.value = "";
-    renderGithubSyncStatus();
-    showToast("Connected to GitHub — exports will save straight to the repo.");
+  btnImportAllData.addEventListener("click", function () {
+    importFileInput.click();
   });
 
-  btnGithubTokenClear.addEventListener("click", function () {
-    clearGithubToken();
-    githubTokenInput.value = "";
-    renderGithubSyncStatus();
-    showToast("Disconnected — exports will download instead.");
+  importFileInput.addEventListener("change", function () {
+    var file = importFileInput.files && importFileInput.files[0];
+    importFileInput.value = "";
+    if (!file) return;
+    importAllData(file);
   });
 
   addPlayerForm.addEventListener("submit", function (e) {
@@ -1862,7 +1882,8 @@
   }
 
   // ---------------------------------------------------------------------
-  // Load settings/game-types.json and players/rosters.json, then boot
+  // Load settings/game-types.json (app config) and run the one-time
+  // repo-to-localStorage migration, then boot
   // ---------------------------------------------------------------------
 
   var gameTypesPromise = fetchFresh("settings/game-types.json")
@@ -1875,22 +1896,12 @@
       return DEFAULT_GAME_TYPES;
     });
 
-  var rostersPromise = fetchFresh("players/rosters.json")
-    .then(function (res) {
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      return res.json();
-    })
-    .catch(function () {
-      return [];
-    });
-
-  Promise.all([gameTypesPromise, rostersPromise]).then(function (results) {
+  Promise.all([gameTypesPromise, migrateFromRepoIfNeeded()]).then(function (results) {
     GAME_TYPE_LIST = results[0];
     GAME_TYPE_LIST.forEach(function (t) {
       GAME_TYPES[t.id] = { label: t.label, defaultTarget: t.defaultTarget, unit: t.unit };
     });
     populateGameTypeSelects();
-    SAVED_ROSTERS = Array.isArray(results[1]) ? results[1] : [];
     boot();
   });
 })();
