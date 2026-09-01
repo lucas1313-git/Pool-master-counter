@@ -63,11 +63,6 @@
       <span id="game-target-unit">rack</span>
     </div>
 
-    <div class="row mode-row">
-      <label><input type="radio" name="game-mode" value="individual" checked> Individual</label>
-      <label><input type="radio" name="game-mode" value="teams"> Teams</label>
-    </div>
-
     <div class="row">
       <label for="race-to-wins">Race-to milestone</label>
       <input type="number" id="race-to-wins" min="1" max="99" value="5">
@@ -100,7 +95,12 @@
     </div>
     <p id="rotation-status" class="rotation-status"></p>
   </section>
-  
+  <div class="row mode-row">
+      <label><input type="radio" name="game-mode" value="individual" checked> Individual</label>
+      <label><input type="radio" name="game-mode" value="teams"> Teams</label>
+    </div>
+
+    
   <section class="panel" id="players-panel">
     <h2>Players</h2>
     <form id="add-player-form" class="row">
