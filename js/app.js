@@ -295,6 +295,7 @@
   var raceToWinsInput = document.getElementById("race-to-wins");
 
   var btnResetGame = document.getElementById("btn-reset-game");
+  var btnUndoWin = document.getElementById("btn-undo-win");
   var btnShare = document.getElementById("btn-share");
   var btnExportSession = document.getElementById("btn-export-session");
   var btnResetStats = document.getElementById("btn-reset-stats");
@@ -668,7 +669,9 @@
     minusBtn.className = "btn-ball minus";
     minusBtn.textContent = "−";
     minusBtn.setAttribute("aria-label", "Remove point for " + player.name);
-    minusBtn.disabled = disabled || (player.balls || 0) <= 0;
+    var minusUnit = GAME_TYPES[state.currentGame.gameType].unit;
+    var minusAllowNegative = minusUnit !== "rack";
+    minusBtn.disabled = disabled || (!minusAllowNegative && (player.balls || 0) <= 0);
     minusBtn.addEventListener("click", function () {
       adjustScore(player.id, -1);
     });
@@ -915,7 +918,9 @@
     var typeLabel = GAME_TYPES[state.currentGame.gameType].label;
     var summary;
     var winnerNames;
+    var winnerIds;
     var opponentNames;
+    var teamComboKeyValue = null;
     var milestoneNames = null;
     var milestoneCount = 0;
     var onHillNames = null;
@@ -929,7 +934,11 @@
       winnerNames = members.map(function (p) {
         return p.name;
       });
+      winnerIds = members.map(function (p) {
+        return p.id;
+      });
       var comboKey = teamComboKey(key);
+      teamComboKeyValue = comboKey;
       var newTeamWins = (state.teamWins[comboKey] || 0) + 1;
       state.teamWins[comboKey] = newTeamWins;
       members.forEach(function (p) {
@@ -944,6 +953,7 @@
       }
     } else {
       winnerNames = [getPlayer(key).name];
+      winnerIds = [key];
       opponentNames = activePlayers()
         .filter(function (p) {
           return p.id !== key;
@@ -967,6 +977,9 @@
       gameLabel: typeLabel,
       target: state.currentGame.target,
       winnerNames: winnerNames,
+      winnerIds: winnerIds,
+      isTeam: isTeam,
+      teamComboKey: teamComboKeyValue,
       opponentNames: opponentNames,
       summary: summary
     });
@@ -984,6 +997,34 @@
       announceGameChange(GAME_TYPES[state.currentGame.gameType].label);
     }
     return summary;
+  }
+
+  function undoLastWin() {
+    var entry = state.gameHistory[0];
+    if (!entry || typeof entry === "string" || !entry.winnerIds) {
+      showToast("No recorded win to undo.");
+      return;
+    }
+    if (
+      !confirm(
+        "Undo the most recent win — " + entry.summary + "? " +
+        "This removes it from the history and reverses the win count. The current game's score isn't affected."
+      )
+    ) {
+      return;
+    }
+    entry.winnerIds.forEach(function (id) {
+      state.playerWins[id] = Math.max(0, (state.playerWins[id] || 0) - 1);
+    });
+    if (entry.isTeam && entry.teamComboKey) {
+      state.teamWins[entry.teamComboKey] = Math.max(0, (state.teamWins[entry.teamComboKey] || 0) - 1);
+    }
+    state.gameHistory.shift();
+    state.gamesPlayedCount = Math.max(0, state.gamesPlayedCount - 1);
+    applyRotationIfDue();
+    saveState();
+    showToast("Undid: " + entry.summary);
+    renderAll();
   }
 
   function announceOnHill(names) {
@@ -1025,8 +1066,10 @@
   function adjustScore(playerId, delta) {
     var player = getPlayer(playerId);
     if (!player || !player.playing) return;
+    var unit = GAME_TYPES[state.currentGame.gameType].unit;
+    var allowNegative = unit !== "rack";
     var next = (player.balls || 0) + delta;
-    if (next < 0) next = 0;
+    if (next < 0 && !allowNegative) next = 0;
     player.balls = next;
 
     if (delta > 0) {
@@ -1793,6 +1836,7 @@
   });
 
   btnResetGame.addEventListener("click", resetCurrentGame);
+  btnUndoWin.addEventListener("click", undoLastWin);
   btnShare.addEventListener("click", shareStandings);
   btnExportSession.addEventListener("click", function () {
     exportSession();

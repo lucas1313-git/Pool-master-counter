@@ -60,6 +60,62 @@ body {
   letter-spacing: 0.02em;
 }
 
+.brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.brand-logo {
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+}
+
+.logo-badge-ring {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 3;
+}
+
+.logo-tail-1 {
+  fill: var(--felt-light);
+}
+
+.logo-tail-2 {
+  fill: var(--accent-dark);
+}
+
+.logo-tail-3,
+.logo-body,
+.logo-head {
+  fill: var(--accent);
+}
+
+.logo-comb,
+.logo-wattle {
+  fill: var(--felt-light);
+}
+
+.logo-beak,
+.logo-eye {
+  fill: #200606;
+}
+
+.brand-text {
+  text-align: left;
+}
+
+.brand-slogan {
+  margin: 2px 0 0;
+  font-size: 0.8rem;
+  font-style: italic;
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: 0.02em;
+}
+
 /* ---------- Buttons ---------- */
 
 button {
