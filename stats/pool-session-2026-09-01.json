@@ -1,8 +1,8 @@
 {
-  "exportedAt": "2026-09-01T00:38:03.748Z",
+  "exportedAt": "2026-09-01T00:38:18.821Z",
   "raceToWinsTarget": 5,
   "currentGame": {
-    "gameType": "8ball",
+    "gameType": "9ball",
     "target": 1,
     "mode": "individual"
   },
@@ -26,11 +26,11 @@
   ],
   "playerWins": [
     {
-      "name": "luc",
-      "wins": 0
+      "name": "Bob",
+      "wins": 5
     },
     {
-      "name": "Bob",
+      "name": "luc",
       "wins": 0
     },
     {
@@ -43,5 +43,81 @@
     }
   ],
   "teamWins": [],
-  "gameHistory": []
+  "gameHistory": [
+    {
+      "ts": "2026-09-01T00:38:13.658Z",
+      "gameType": "9ball",
+      "gameLabel": "9-Ball",
+      "target": 1,
+      "winnerNames": [
+        "Bob"
+      ],
+      "opponentNames": [
+        "luc",
+        "Suresh",
+        "Jim"
+      ],
+      "summary": "Bob won 9-Ball (target 1)"
+    },
+    {
+      "ts": "2026-09-01T00:38:11.627Z",
+      "gameType": "8ball",
+      "gameLabel": "8-Ball",
+      "target": 1,
+      "winnerNames": [
+        "Bob"
+      ],
+      "opponentNames": [
+        "luc",
+        "Suresh",
+        "Jim"
+      ],
+      "summary": "Bob won 8-Ball (target 1)"
+    },
+    {
+      "ts": "2026-09-01T00:38:11.205Z",
+      "gameType": "8ball",
+      "gameLabel": "8-Ball",
+      "target": 1,
+      "winnerNames": [
+        "Bob"
+      ],
+      "opponentNames": [
+        "luc",
+        "Suresh",
+        "Jim"
+      ],
+      "summary": "Bob won 8-Ball (target 1)"
+    },
+    {
+      "ts": "2026-09-01T00:38:10.773Z",
+      "gameType": "8ball",
+      "gameLabel": "8-Ball",
+      "target": 1,
+      "winnerNames": [
+        "Bob"
+      ],
+      "opponentNames": [
+        "luc",
+        "Suresh",
+        "Jim"
+      ],
+      "summary": "Bob won 8-Ball (target 1)"
+    },
+    {
+      "ts": "2026-09-01T00:38:10.229Z",
+      "gameType": "8ball",
+      "gameLabel": "8-Ball",
+      "target": 1,
+      "winnerNames": [
+        "Bob"
+      ],
+      "opponentNames": [
+        "luc",
+        "Suresh",
+        "Jim"
+      ],
+      "summary": "Bob won 8-Ball (target 1)"
+    }
+  ]
 }
