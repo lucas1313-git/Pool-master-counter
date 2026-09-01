@@ -20,7 +20,7 @@ This folder holds saved player rosters and per-player stat history.
 
 ## Per-player stats (`<Name>.json`)
 
-Tap the 📊 button next to any player to open their **stats page** — it shows today's live session (wins, which games they won, who they played) plus their full saved session history from `players/<Name>.json`, if that file exists.
+Tap the 📊 button next to any player to open their **stats page** — it shows today's live session (wins, a full game-by-game log with the winner highlighted, who they played) plus their full saved session history from `players/<Name>.json`, if that file exists.
 
 ```json
 {
@@ -31,12 +31,29 @@ Tap the 📊 button next to any player to open their **stats page** — it shows
       "wins": 4,
       "gamesWon": ["8-Ball", "9-Ball", "8-Ball", "Straight Pool"],
       "opponents": ["Luc", "Suresh"],
+      "games": [
+        {
+          "ts": "2026-08-31T21:04:12.000Z",
+          "gameLabel": "8-Ball",
+          "target": 1,
+          "result": "won",
+          "winnerNames": ["Bob"]
+        },
+        {
+          "ts": "2026-08-31T20:58:41.000Z",
+          "gameLabel": "9-Ball",
+          "target": 1,
+          "result": "lost",
+          "winnerNames": ["Luc"]
+        }
+      ],
       "wonTournament": true
     }
   ]
 }
 ```
 
+- **games** is the full per-game log for that day, newest first — every game Bob played, whether he won or lost it, with a timestamp and the actual winner's name(s). This is what the stats page uses to show "who won which game and when," including games other players won against him. Older saved files without this field still work — the stats page falls back to the `gamesWon`/`opponents` summary.
 - **wonTournament** is true if that day's win count reached the race-to milestone at least once.
 - **Export Stats** on the page adds/updates today's entry (keyed by date — exporting again the same day overwrites that day's row rather than duplicating it) and downloads the updated file for you to commit.
 - **Reset Stats** downloads an emptied `sessions: []` file — it only clears saved history, never today's live session.

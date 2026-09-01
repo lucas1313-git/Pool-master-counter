@@ -807,6 +807,15 @@
     }
   }
 
+  function formatTimestamp(ts, includeDate) {
+    var d = new Date(ts);
+    if (!ts || isNaN(d.getTime())) return "";
+    var timePart = d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    if (!includeDate) return timePart;
+    var datePart = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    return datePart + " · " + timePart;
+  }
+
   function renderHistory() {
     historyList.innerHTML = "";
     if (state.gameHistory.length === 0) {
@@ -818,7 +827,20 @@
     }
     state.gameHistory.forEach(function (entry) {
       var li = document.createElement("li");
-      li.textContent = typeof entry === "string" ? entry : entry.summary;
+      if (typeof entry === "string" || !entry.winnerNames) {
+        li.textContent = typeof entry === "string" ? entry : entry.summary;
+        historyList.appendChild(li);
+        return;
+      }
+      var timeSpan = document.createElement("span");
+      timeSpan.className = "history-date";
+      timeSpan.textContent = formatTimestamp(entry.ts, true);
+      var winner = document.createElement("strong");
+      winner.className = "history-winner";
+      winner.textContent = entry.winnerNames.join(" & ");
+      li.appendChild(timeSpan);
+      li.appendChild(winner);
+      li.appendChild(document.createTextNode(" won " + entry.gameLabel + " (target " + entry.target + ")"));
       historyList.appendChild(li);
     });
   }
@@ -1353,12 +1375,28 @@
     if (!player) return null;
     var gamesWon = [];
     var opponentSet = {};
+    var games = [];
     state.gameHistory.forEach(function (entry) {
       if (typeof entry === "string" || !entry.winnerNames) return;
-      if (entry.winnerNames.indexOf(player.name) === -1) return;
-      gamesWon.push(entry.gameLabel);
-      (entry.opponentNames || []).forEach(function (n) {
-        opponentSet[n] = true;
+      var won = entry.winnerNames.indexOf(player.name) !== -1;
+      var lost = !won && (entry.opponentNames || []).indexOf(player.name) !== -1;
+      if (!won && !lost) return;
+      if (won) {
+        gamesWon.push(entry.gameLabel);
+        (entry.opponentNames || []).forEach(function (n) {
+          opponentSet[n] = true;
+        });
+      } else {
+        entry.winnerNames.forEach(function (n) {
+          opponentSet[n] = true;
+        });
+      }
+      games.push({
+        ts: entry.ts,
+        gameLabel: entry.gameLabel,
+        target: entry.target,
+        result: won ? "won" : "lost",
+        winnerNames: entry.winnerNames
       });
     });
     var wins = state.playerWins[playerId] || 0;
@@ -1367,6 +1405,7 @@
       wins: wins,
       gamesWon: gamesWon,
       opponents: Object.keys(opponentSet),
+      games: games,
       wonTournament: wins > 0 && wins >= state.raceToWinsTarget
     };
   }
@@ -1399,11 +1438,53 @@
     return row;
   }
 
+  function playerGameLogRow(g) {
+    var div = document.createElement("div");
+    div.className = "player-game-log-row " + (g.result === "won" ? "is-win" : "is-loss");
+    var time = document.createElement("span");
+    time.className = "player-game-log-time";
+    time.textContent = formatTimestamp(g.ts, false);
+    var label = document.createElement("span");
+    label.className = "player-game-log-label";
+    label.textContent = g.gameLabel;
+    var winner = document.createElement("strong");
+    winner.className = "player-game-log-winner";
+    winner.textContent = (g.winnerNames || []).join(" & ");
+    div.appendChild(time);
+    div.appendChild(label);
+    div.appendChild(document.createTextNode(" — won by "));
+    div.appendChild(winner);
+    return div;
+  }
+
+  function playerGamesLogRow(label, games) {
+    var row = document.createElement("div");
+    row.className = "player-stats-row player-stats-row-wrap";
+    var l = document.createElement("span");
+    l.className = "label";
+    l.textContent = label;
+    row.appendChild(l);
+    if (!games || games.length === 0) {
+      var v = document.createElement("span");
+      v.className = "value value-list";
+      v.textContent = "—";
+      row.appendChild(v);
+      return row;
+    }
+    var list = document.createElement("div");
+    list.className = "player-game-log";
+    games.forEach(function (g) {
+      list.appendChild(playerGameLogRow(g));
+    });
+    row.appendChild(list);
+    return row;
+  }
+
   function renderLiveSessionForPlayer(playerId) {
     var live = computeLiveSessionForPlayer(playerId);
     playerPageCurrentBody.innerHTML = "";
     playerPageCurrentBody.appendChild(playerStatsRow("Wins today", live.wins));
-    playerPageCurrentBody.appendChild(playerStatsListRow("Games won", live.gamesWon));
+    playerPageCurrentBody.appendChild(playerGamesLogRow("Games", live.games));
     playerPageCurrentBody.appendChild(playerStatsListRow("Opponents", live.opponents));
     if (live.wonTournament) {
       var trophy = document.createElement("div");
@@ -1445,10 +1526,19 @@
 
         var detail = document.createElement("div");
         detail.className = "player-history-detail";
-        var gamesText = session.gamesWon && session.gamesWon.length ? session.gamesWon.join(", ") : "—";
+        if (session.games && session.games.length) {
+          var log = document.createElement("div");
+          log.className = "player-game-log";
+          session.games.forEach(function (g) {
+            log.appendChild(playerGameLogRow(g));
+          });
+          detail.appendChild(log);
+        } else {
+          var gamesText = session.gamesWon && session.gamesWon.length ? session.gamesWon.join(", ") : "—";
+          detail.appendChild(document.createTextNode("Games: " + gamesText));
+          detail.appendChild(document.createElement("br"));
+        }
         var opponentsText = session.opponents && session.opponents.length ? session.opponents.join(", ") : "—";
-        detail.appendChild(document.createTextNode("Games: " + gamesText));
-        detail.appendChild(document.createElement("br"));
         detail.appendChild(document.createTextNode("Opponents: " + opponentsText));
         li.appendChild(detail);
 
