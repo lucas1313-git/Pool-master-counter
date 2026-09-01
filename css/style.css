@@ -62,7 +62,7 @@ body {
 
 .focus-toggle-btn {
   display: block;
-  margin: 12px auto 0;
+  margin: 4px auto 12px;
   font-size: 0.85rem;
   padding: 8px 14px;
 }
@@ -73,6 +73,10 @@ body {
 
 #app.focus-mode .app-header {
   padding-bottom: 4px;
+}
+
+#app.focus-mode #scoreboard-panel {
+  padding-top: 8px;
 }
 
 .brand {

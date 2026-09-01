@@ -34,7 +34,7 @@
       playerWins: {},
       teamWins: {},
       raceToWinsTarget: 5,
-      currentGame: { gameType: "8ball", target: 1, mode: "individual" },
+      currentGame: { gameType: "8ball", target: 1, mode: "individual", startedAt: new Date().toISOString() },
       gameHistory: [],
       rotation: { enabled: false, order: [], every: 1 },
       gamesPlayedCount: 0
@@ -104,6 +104,7 @@
           if (!parsed.teamWins) parsed.teamWins = {};
           if (typeof parsed.raceToWinsTarget !== "number") parsed.raceToWinsTarget = 5;
           if (!parsed.currentGame) parsed.currentGame = { gameType: "8ball", target: 1, mode: "individual" };
+          if (!parsed.currentGame.startedAt) parsed.currentGame.startedAt = new Date().toISOString();
           var EIGHTBALL_FAMILY = ["8ball", "8ballrotation", "8ballpunishment"];
           if (parsed.currentGame.target === 8 && EIGHTBALL_FAMILY.indexOf(parsed.currentGame.gameType) !== -1) {
             parsed.currentGame.target = 1;
@@ -841,6 +842,14 @@
     return datePart + " · " + timePart;
   }
 
+  function formatDuration(ms) {
+    if (typeof ms !== "number" || isNaN(ms)) return "";
+    var totalSec = Math.round(ms / 1000);
+    var m = Math.floor(totalSec / 60);
+    var s = totalSec % 60;
+    return m + ":" + (s < 10 ? "0" : "") + s;
+  }
+
   function renderHistory() {
     historyList.innerHTML = "";
     if (state.gameHistory.length === 0) {
@@ -859,13 +868,18 @@
       }
       var timeSpan = document.createElement("span");
       timeSpan.className = "history-date";
-      timeSpan.textContent = formatTimestamp(entry.ts, true);
+      var timeText = formatTimestamp(entry.ts, true);
+      var durationText = formatDuration(entry.durationMs);
+      timeSpan.textContent = durationText ? timeText + " · " + durationText : timeText;
       var winner = document.createElement("strong");
       winner.className = "history-winner";
-      winner.textContent = entry.winnerNames.join(" & ");
+      winner.textContent = "🏆 " + entry.winnerNames.join(" & ");
       li.appendChild(timeSpan);
       li.appendChild(winner);
       li.appendChild(document.createTextNode(" won " + entry.gameLabel + " (target " + entry.target + ")"));
+      if (entry.isTeam && entry.mvpName) {
+        li.appendChild(document.createTextNode(" · 🎯 " + entry.mvpName + " potted it"));
+      }
       historyList.appendChild(li);
     });
   }
@@ -942,6 +956,8 @@
     var milestoneCount = 0;
     var onHillNames = null;
     var target = state.raceToWinsTarget;
+    var mvpId = null;
+    var mvpName = null;
     if (isTeam) {
       var members = teamMembersLive(key);
       var otherTeamId = key === "A" ? "B" : "A";
@@ -961,6 +977,13 @@
       members.forEach(function (p) {
         state.playerWins[p.id] = (state.playerWins[p.id] || 0) + 1;
       });
+      var mvp = members.reduce(function (best, p) {
+        return !best || (p.balls || 0) > (best.balls || 0) ? p : best;
+      }, null);
+      if (mvp) {
+        mvpId = mvp.id;
+        mvpName = mvp.name;
+      }
       summary = teamLabelLive(key) + " won " + typeLabel + " (target " + state.currentGame.target + ")";
       if (target > 0 && newTeamWins % target === 0) {
         milestoneNames = winnerNames.join(" & ");
@@ -971,6 +994,8 @@
     } else {
       winnerNames = [getPlayer(key).name];
       winnerIds = [key];
+      mvpId = key;
+      mvpName = getPlayer(key).name;
       opponentNames = activePlayers()
         .filter(function (p) {
           return p.id !== key;
@@ -988,6 +1013,8 @@
         onHillNames = getPlayer(key).name;
       }
     }
+    var startedAt = state.currentGame.startedAt ? new Date(state.currentGame.startedAt).getTime() : null;
+    var durationMs = startedAt ? Math.max(0, Date.now() - startedAt) : null;
     state.gameHistory.unshift({
       ts: new Date().toISOString(),
       gameType: state.currentGame.gameType,
@@ -998,6 +1025,9 @@
       isTeam: isTeam,
       teamComboKey: teamComboKeyValue,
       opponentNames: opponentNames,
+      mvpId: mvpId,
+      mvpName: mvpName,
+      durationMs: durationMs,
       summary: summary
     });
     if (state.gameHistory.length > 200) state.gameHistory.length = 200;
@@ -1078,6 +1108,7 @@
     state.players.forEach(function (p) {
       p.balls = 0;
     });
+    state.currentGame.startedAt = new Date().toISOString();
   }
 
   function adjustScore(playerId, delta) {
@@ -1536,7 +1567,10 @@
         gameLabel: entry.gameLabel,
         target: entry.target,
         result: won ? "won" : "lost",
-        winnerNames: entry.winnerNames
+        winnerNames: entry.winnerNames,
+        isTeam: entry.isTeam,
+        mvpName: entry.mvpName,
+        durationMs: entry.durationMs
       });
     });
     var wins = state.playerWins[playerId] || 0;
@@ -1583,17 +1617,22 @@
     div.className = "player-game-log-row " + (g.result === "won" ? "is-win" : "is-loss");
     var time = document.createElement("span");
     time.className = "player-game-log-time";
-    time.textContent = formatTimestamp(g.ts, false);
+    var timeText = formatTimestamp(g.ts, false);
+    var durationText = formatDuration(g.durationMs);
+    time.textContent = durationText ? timeText + " (" + durationText + ")" : timeText;
     var label = document.createElement("span");
     label.className = "player-game-log-label";
     label.textContent = g.gameLabel;
     var winner = document.createElement("strong");
     winner.className = "player-game-log-winner";
-    winner.textContent = (g.winnerNames || []).join(" & ");
+    winner.textContent = "🏆 " + (g.winnerNames || []).join(" & ");
     div.appendChild(time);
     div.appendChild(label);
     div.appendChild(document.createTextNode(" — won by "));
     div.appendChild(winner);
+    if (g.isTeam && g.mvpName) {
+      div.appendChild(document.createTextNode(" · 🎯 " + g.mvpName + " potted it"));
+    }
     return div;
   }
 
