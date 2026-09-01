@@ -1609,6 +1609,40 @@
     currentStatsSessions = null;
   }
 
+  function fetchPlayerSessions(name) {
+    return fetchFresh("players/" + playerStatsFilename(name))
+      .then(function (res) {
+        return res.ok ? res.json() : null;
+      })
+      .then(function (data) {
+        return data && Array.isArray(data.sessions) ? data.sessions : [];
+      })
+      .catch(function () {
+        return [];
+      });
+  }
+
+  function exportAllPlayerStats() {
+    state.players.forEach(function (p) {
+      var live = computeLiveSessionForPlayer(p.id);
+      if (!live || !live.games || live.games.length === 0) return;
+      var filename = playerStatsFilename(p.name);
+      fetchPlayerSessions(p.name).then(function (sessions) {
+        sessions = sessions.slice();
+        var idx = -1;
+        sessions.forEach(function (s, i) {
+          if (s.date === live.date) idx = i;
+        });
+        if (idx !== -1) {
+          sessions[idx] = live;
+        } else {
+          sessions.push(live);
+        }
+        saveOrDownloadJSON("players/" + filename, filename, { name: p.name, sessions: sessions }, "Update stats for " + p.name);
+      });
+    });
+  }
+
   function exportCurrentPlayerStats() {
     var player = getPlayer(currentStatsPlayerId);
     if (!player) return;
@@ -1715,7 +1749,10 @@
 
   btnResetGame.addEventListener("click", resetCurrentGame);
   btnShare.addEventListener("click", shareStandings);
-  btnExportSession.addEventListener("click", exportSession);
+  btnExportSession.addEventListener("click", function () {
+    exportSession();
+    exportAllPlayerStats();
+  });
   btnResetStats.addEventListener("click", resetAllStats);
 
   rotationEnabledCheckbox.addEventListener("change", function () {
@@ -1757,6 +1794,7 @@
 
   btnSaveSessionSave.addEventListener("click", function () {
     exportSession();
+    exportAllPlayerStats();
     closeSaveSessionPopup();
     startNewSession(true);
   });

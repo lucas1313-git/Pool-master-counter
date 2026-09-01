@@ -1,19 +1,12 @@
 {
-  "name": "Bob",
+  "name": "Jim",
   "sessions": [
     {
       "date": "2026-09-01",
-      "wins": 5,
-      "gamesWon": [
-        "9-Ball",
-        "9-Ball",
-        "9-Ball",
-        "8-Ball",
-        "8-Ball"
-      ],
+      "wins": 0,
+      "gamesWon": [],
       "opponents": [
-        "Jim",
-        "Suresh",
+        "Bob",
         "luc"
       ],
       "games": [
@@ -21,7 +14,7 @@
           "ts": "2026-09-01T01:08:57.423Z",
           "gameLabel": "9-Ball",
           "target": 1,
-          "result": "won",
+          "result": "lost",
           "winnerNames": [
             "Bob"
           ]
@@ -30,7 +23,7 @@
           "ts": "2026-09-01T01:08:54.085Z",
           "gameLabel": "9-Ball",
           "target": 1,
-          "result": "won",
+          "result": "lost",
           "winnerNames": [
             "Bob"
           ]
@@ -39,7 +32,7 @@
           "ts": "2026-09-01T01:08:53.446Z",
           "gameLabel": "9-Ball",
           "target": 1,
-          "result": "won",
+          "result": "lost",
           "winnerNames": [
             "Bob"
           ]
@@ -48,7 +41,7 @@
           "ts": "2026-09-01T01:08:52.341Z",
           "gameLabel": "8-Ball",
           "target": 1,
-          "result": "won",
+          "result": "lost",
           "winnerNames": [
             "Bob"
           ]
@@ -57,7 +50,7 @@
           "ts": "2026-09-01T01:08:52.133Z",
           "gameLabel": "8-Ball",
           "target": 1,
-          "result": "won",
+          "result": "lost",
           "winnerNames": [
             "Bob"
           ]
@@ -81,7 +74,7 @@
           ]
         }
       ],
-      "wonTournament": true
+      "wonTournament": false
     }
   ]
 }
