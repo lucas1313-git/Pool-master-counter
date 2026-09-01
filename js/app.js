@@ -1850,6 +1850,13 @@
     radio.checked = radio.value === state.currentGame.mode;
   });
 
+  if (state.rotation.enabled && state.rotation.order.length > 0) {
+    state.gamesPlayedCount = 0;
+    applyRotationIfDue();
+    gameTargetInput.value = state.currentGame.target;
+    saveState();
+  }
+
   populateRosterLoadSelect();
   renderAll();
   }
