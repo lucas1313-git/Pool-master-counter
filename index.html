@@ -53,19 +53,6 @@
     </div>
   </section>
 
-  <section class="panel" id="players-panel">
-    <h2>Players</h2>
-    <form id="add-player-form" class="row">
-      <input type="text" id="new-player-name" placeholder="Player name" autocomplete="off" required>
-      <button type="submit" class="btn btn-primary">Add</button>
-    </form>
-    <div class="row">
-      <select id="roster-load-select"></select>
-      <button type="button" id="btn-roster-load" class="btn btn-ghost">Load Player List</button>
-    </div>
-    <ul id="roster-list" class="roster-list"></ul>
-  </section>
-
   <section class="panel" id="game-setup-panel">
     <h2>Current Game</h2>
     <div class="row">
@@ -113,7 +100,21 @@
     </div>
     <p id="rotation-status" class="rotation-status"></p>
   </section>
+  
+  <section class="panel" id="players-panel">
+    <h2>Players</h2>
+    <form id="add-player-form" class="row">
+      <input type="text" id="new-player-name" placeholder="Player name" autocomplete="off" required>
+      <button type="submit" class="btn btn-primary">Add</button>
+    </form>
+    <div class="row">
+      <select id="roster-load-select"></select>
+      <button type="button" id="btn-roster-load" class="btn btn-ghost">Load Player List</button>
+    </div>
+    <ul id="roster-list" class="roster-list"></ul>
+  </section>
 
+  
   <div id="win-toast" class="win-toast hidden"></div>
 
   <section class="panel" id="standings-panel">
