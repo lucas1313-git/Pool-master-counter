@@ -9,5 +9,16 @@
       "luc"
     ],
     "savedAt": "2026-09-01T00:37:22.909Z"
+  },
+  {
+    "id": "roster-2026-09-01T01-58-53-009Z",
+    "label": "2026-09-01 — Bob, Luc, Luigi, Suresh",
+    "players": [
+      "Bob",
+      "Luc",
+      "Luigi",
+      "Suresh"
+    ],
+    "savedAt": "2026-09-01T01:58:53.009Z"
   }
 ]
