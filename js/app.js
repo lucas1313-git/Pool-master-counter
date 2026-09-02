@@ -308,7 +308,9 @@
   var btnAllPlayersBack = document.getElementById("btn-all-players-back");
   var allPlayersSortSelect = document.getElementById("all-players-sort");
   var allPlayersPeriodSelect = document.getElementById("all-players-period");
+  var btnToggleAllPlayersView = document.getElementById("btn-toggle-all-players-view");
   var allPlayersList = document.getElementById("all-players-list");
+  var allPlayersViewMode = "bars";
 
   var gameTypeSelect = document.getElementById("game-type");
   var gameTargetInput = document.getElementById("game-target");
@@ -1790,6 +1792,11 @@
           opponentSet[n] = true;
         });
       }
+      // Raw entry.winnerNames/opponentNames always mean "winning side" /
+      // "losing side" (unlike the renamed opponentNames below, which is
+      // relative to playerName). My own team's roster for this game is
+      // whichever raw side I'm on — needed to tell team combos apart.
+      var myRawSide = won ? entry.winnerNames : entry.opponentNames || [];
       games.push({
         ts: entry.ts,
         gameLabel: entry.gameLabel,
@@ -1797,6 +1804,11 @@
         result: won ? "won" : "lost",
         winnerNames: entry.winnerNames,
         opponentNames: won ? (entry.opponentNames || []) : entry.winnerNames.slice(),
+        teammateNames: entry.isTeam
+          ? myRawSide.filter(function (n) {
+              return n !== playerName;
+            })
+          : [],
         isTeam: entry.isTeam,
         mvpName: entry.mvpName,
         durationMs: entry.durationMs
@@ -2367,6 +2379,227 @@
     return wrap;
   }
 
+  // ---------------------------------------------------------------------
+  // All Players page — graph view (cumulative played/lost over time,
+  // individual and per-team-combo lines)
+  // ---------------------------------------------------------------------
+
+  var SVG_NS = "http://www.w3.org/2000/svg";
+  var TEAM_COMBO_PALETTE = ["#c77dff", "#4fb0a5", "#e08e45", "#8ecae6", "#f2a6c9", "#9fd35c", "#d4a24c", "#6a8caf"];
+
+  function svgEl(tag, attrs) {
+    var el = document.createElementNS(SVG_NS, tag);
+    Object.keys(attrs || {}).forEach(function (key) {
+      el.setAttribute(key, attrs[key]);
+    });
+    return el;
+  }
+
+  function teamComboLabel(teammateNames) {
+    return (teammateNames || []).slice().sort().join(", ");
+  }
+
+  // Turns a chronological game list into cumulative played/lost counts over
+  // time — one line for individual games, and one played/lost pair per
+  // distinct team combination this player has been part of.
+  function buildCumulativeSeries(games) {
+    var sorted = games.slice().sort(function (a, b) {
+      return a.ts.localeCompare(b.ts);
+    });
+    var individualPlayed = [];
+    var individualLost = [];
+    var indPlayedCount = 0;
+    var indLostCount = 0;
+    var teamCombos = {};
+
+    sorted.forEach(function (g) {
+      if (!g.isTeam) {
+        indPlayedCount += 1;
+        individualPlayed.push({ ts: g.ts, count: indPlayedCount });
+        if (g.result === "lost") {
+          indLostCount += 1;
+          individualLost.push({ ts: g.ts, count: indLostCount });
+        }
+        return;
+      }
+      var key = teamComboLabel(g.teammateNames) || "(teammates unknown)";
+      if (!teamCombos[key]) {
+        teamCombos[key] = { label: key, played: [], lost: [], playedCount: 0, lostCount: 0 };
+      }
+      var combo = teamCombos[key];
+      combo.playedCount += 1;
+      combo.played.push({ ts: g.ts, count: combo.playedCount });
+      if (g.result === "lost") {
+        combo.lostCount += 1;
+        combo.lost.push({ ts: g.ts, count: combo.lostCount });
+      }
+    });
+
+    return { individualPlayed: individualPlayed, individualLost: individualLost, teamCombos: teamCombos };
+  }
+
+  // Builds an SVG step-line path: flat while the count holds, a vertical
+  // jump at each event's timestamp — a proper cumulative "staircase".
+  function stepLinePath(points, minMs, maxMs, width, height, axisMax) {
+    function xFor(ms) {
+      return maxMs > minMs ? ((ms - minMs) / (maxMs - minMs)) * width : 0;
+    }
+    function yFor(count) {
+      return axisMax > 0 ? height - (count / axisMax) * height : height;
+    }
+    var d = "M " + xFor(minMs) + " " + yFor(0);
+    var last = 0;
+    points.forEach(function (p) {
+      var x = xFor(new Date(p.ts).getTime());
+      d += " L " + x + " " + yFor(last);
+      d += " L " + x + " " + yFor(p.count);
+      last = p.count;
+    });
+    d += " L " + xFor(maxMs) + " " + yFor(last);
+    return d;
+  }
+
+  function buildGraphTimeAxis(minMs, maxMs) {
+    var axis = document.createElement("div");
+    axis.className = "player-graph-time-axis";
+    var sameDay = maxMs - minMs < 24 * 60 * 60 * 1000;
+    var tickCount = 4;
+    for (var i = 0; i <= tickCount; i++) {
+      var frac = i / tickCount;
+      var span = document.createElement("span");
+      span.style.left = frac * 100 + "%";
+      var d = new Date(minMs + frac * (maxMs - minMs));
+      span.textContent = sameDay
+        ? d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
+        : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+      axis.appendChild(span);
+    }
+    return axis;
+  }
+
+  function buildPlayerGraph(stats, minMs, maxMs) {
+    var wrap = document.createElement("div");
+    wrap.className = "player-graph-wrap";
+
+    var series = buildCumulativeSeries(stats.games);
+    var comboKeys = Object.keys(series.teamCombos).sort();
+
+    var maxCount = 0;
+    [series.individualPlayed, series.individualLost].forEach(function (arr) {
+      if (arr.length) maxCount = Math.max(maxCount, arr[arr.length - 1].count);
+    });
+    comboKeys.forEach(function (key) {
+      var c = series.teamCombos[key];
+      if (c.playedCount) maxCount = Math.max(maxCount, c.playedCount);
+    });
+
+    if (maxCount === 0) {
+      var emptyHint = document.createElement("p");
+      emptyHint.className = "player-graph-empty";
+      emptyHint.textContent = "No games in this period yet.";
+      wrap.appendChild(emptyHint);
+      return wrap;
+    }
+
+    var axisMax = axisMaxFor(maxCount);
+    var width = 600;
+    var height = 200;
+
+    var chart = document.createElement("div");
+    chart.className = "player-graph-chart";
+
+    var yAxis = document.createElement("div");
+    yAxis.className = "player-graph-yaxis";
+    for (var i = 4; i >= 0; i--) {
+      var label = document.createElement("span");
+      label.textContent = Math.round((axisMax * i) / 4);
+      yAxis.appendChild(label);
+    }
+    chart.appendChild(yAxis);
+
+    var svg = svgEl("svg", {
+      viewBox: "0 0 " + width + " " + height,
+      preserveAspectRatio: "none",
+      class: "player-graph-svg"
+    });
+    for (var g = 0; g <= 4; g++) {
+      var gy = height - (g / 4) * height;
+      svg.appendChild(svgEl("line", { x1: 0, x2: width, y1: gy, y2: gy, class: "player-graph-gridline" }));
+    }
+
+    var legendItems = [];
+
+    if (series.individualPlayed.length) {
+      svg.appendChild(
+        svgEl("path", {
+          d: stepLinePath(series.individualPlayed, minMs, maxMs, width, height, axisMax),
+          fill: "none",
+          class: "player-graph-line player-graph-line-ind-played"
+        })
+      );
+      legendItems.push({ color: "var(--info)", dashed: false, label: "Individual — Played" });
+    }
+    if (series.individualLost.length) {
+      svg.appendChild(
+        svgEl("path", {
+          d: stepLinePath(series.individualLost, minMs, maxMs, width, height, axisMax),
+          fill: "none",
+          class: "player-graph-line player-graph-line-dashed player-graph-line-ind-lost"
+        })
+      );
+      legendItems.push({ color: "var(--danger)", dashed: true, label: "Individual — Lost" });
+    }
+
+    comboKeys.forEach(function (key, idx) {
+      var combo = series.teamCombos[key];
+      var color = TEAM_COMBO_PALETTE[idx % TEAM_COMBO_PALETTE.length];
+      if (combo.played.length) {
+        svg.appendChild(
+          svgEl("path", {
+            d: stepLinePath(combo.played, minMs, maxMs, width, height, axisMax),
+            fill: "none",
+            stroke: color,
+            class: "player-graph-line"
+          })
+        );
+        legendItems.push({ color: color, dashed: false, label: "w/ " + key + " — Played" });
+      }
+      if (combo.lost.length) {
+        svg.appendChild(
+          svgEl("path", {
+            d: stepLinePath(combo.lost, minMs, maxMs, width, height, axisMax),
+            fill: "none",
+            stroke: color,
+            class: "player-graph-line player-graph-line-dashed"
+          })
+        );
+        legendItems.push({ color: color, dashed: true, label: "w/ " + key + " — Lost" });
+      }
+    });
+
+    chart.appendChild(svg);
+    wrap.appendChild(chart);
+    wrap.appendChild(buildGraphTimeAxis(minMs, maxMs));
+
+    var legend = document.createElement("div");
+    legend.className = "player-graph-legend";
+    legendItems.forEach(function (item) {
+      var row = document.createElement("div");
+      row.className = "player-graph-legend-row";
+      var swatch = document.createElement("span");
+      swatch.className = "player-graph-legend-swatch" + (item.dashed ? " is-dashed" : "");
+      swatch.style.setProperty("--swatch-color", item.color);
+      var text = document.createElement("span");
+      text.textContent = item.label;
+      row.appendChild(swatch);
+      row.appendChild(text);
+      legend.appendChild(row);
+    });
+    wrap.appendChild(legend);
+
+    return wrap;
+  }
+
   function buildAllPlayerCard(stats, maxPlayed, maxWins, maxLosses, minMs, maxMs) {
     var li = document.createElement("li");
     li.className = "all-player-card";
@@ -2388,12 +2621,16 @@
     top.appendChild(summary);
     li.appendChild(top);
 
-    li.appendChild(buildScaleRow("Games Played", stats.played, maxPlayed, "scale-fill-played"));
-    li.appendChild(buildScaleRow("Games Won", stats.wins, maxWins, "scale-fill-won"));
-    li.appendChild(buildScaleRow("Games Lost", stats.losses, maxLosses, "scale-fill-lost"));
+    if (allPlayersViewMode === "graph") {
+      li.appendChild(buildPlayerGraph(stats, minMs, maxMs));
+    } else {
+      li.appendChild(buildScaleRow("Games Played", stats.played, maxPlayed, "scale-fill-played"));
+      li.appendChild(buildScaleRow("Games Won", stats.wins, maxWins, "scale-fill-won"));
+      li.appendChild(buildScaleRow("Games Lost", stats.losses, maxLosses, "scale-fill-lost"));
 
-    if (stats.games.length) {
-      li.appendChild(buildTimelineRow(stats.games, minMs, maxMs));
+      if (stats.games.length) {
+        li.appendChild(buildTimelineRow(stats.games, minMs, maxMs));
+      }
     }
 
     return li;
@@ -2692,6 +2929,11 @@
   btnAllPlayersBack.addEventListener("click", closeAllPlayersPage);
   allPlayersSortSelect.addEventListener("change", renderAllPlayersPage);
   allPlayersPeriodSelect.addEventListener("change", renderAllPlayersPage);
+  btnToggleAllPlayersView.addEventListener("click", function () {
+    allPlayersViewMode = allPlayersViewMode === "bars" ? "graph" : "bars";
+    btnToggleAllPlayersView.textContent = allPlayersViewMode === "graph" ? "📊 See as Bars" : "📈 See as Graph";
+    renderAllPlayersPage();
+  });
 
   Array.prototype.forEach.call(playerPagePeriodButtons, function (btn) {
     btn.addEventListener("click", function () {
