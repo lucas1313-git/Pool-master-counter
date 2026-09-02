@@ -290,6 +290,10 @@
   var btnPlayerPageBack = document.getElementById("btn-player-page-back");
   var btnPlayerPageExport = document.getElementById("btn-player-page-export");
   var btnPlayerPageReset = document.getElementById("btn-player-page-reset");
+  var playerPagePeriodFilter = document.getElementById("player-page-period-filter");
+  var playerPagePeriodButtons = playerPagePeriodFilter.querySelectorAll(".period-btn");
+  var playerPageSynopsisBody = document.getElementById("player-page-synopsis-body");
+  var playerPageH2hList = document.getElementById("player-page-h2h-list");
 
   var gameTypeSelect = document.getElementById("game-type");
   var gameTargetInput = document.getElementById("game-target");
@@ -1604,6 +1608,7 @@
         target: entry.target,
         result: won ? "won" : "lost",
         winnerNames: entry.winnerNames,
+        opponentNames: won ? (entry.opponentNames || []) : entry.winnerNames.slice(),
         isTeam: entry.isTeam,
         mvpName: entry.mvpName,
         durationMs: entry.durationMs
@@ -1715,6 +1720,160 @@
     }
   }
 
+  // ---------------------------------------------------------------------
+  // Player stats synopsis (period filter + head-to-head)
+  // ---------------------------------------------------------------------
+
+  var currentStatsPeriod = "all";
+
+  function periodStartDate(period) {
+    var now = new Date();
+    if (period === "week") {
+      var day = now.getDay();
+      var diffToMonday = day === 0 ? 6 : day - 1;
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate() - diffToMonday);
+    }
+    if (period === "month") {
+      return new Date(now.getFullYear(), now.getMonth(), 1);
+    }
+    if (period === "year") {
+      return new Date(now.getFullYear(), 0, 1);
+    }
+    return null;
+  }
+
+  function collectAllGamesForPlayer(playerId) {
+    var live = computeLiveSessionForPlayer(playerId);
+    var sessions = mergeSessionIntoList(currentStatsSessions || [], live);
+    var games = [];
+    sessions.forEach(function (s) {
+      (s.games || []).forEach(function (g) {
+        games.push(g);
+      });
+    });
+    return games;
+  }
+
+  function filterGamesByPeriod(games, period) {
+    var start = periodStartDate(period);
+    if (!start) return games;
+    var startMs = start.getTime();
+    return games.filter(function (g) {
+      var t = g.ts ? new Date(g.ts).getTime() : NaN;
+      return !isNaN(t) && t >= startMs;
+    });
+  }
+
+  function computeWinLossSynopsis(games) {
+    var wins = 0;
+    var losses = 0;
+    games.forEach(function (g) {
+      if (g.result === "won") wins += 1;
+      else losses += 1;
+    });
+    var total = wins + losses;
+    return {
+      wins: wins,
+      losses: losses,
+      total: total,
+      pct: total ? Math.round((wins / total) * 100) : null
+    };
+  }
+
+  function computeHeadToHead(games) {
+    var map = {};
+    var order = [];
+    games.forEach(function (g) {
+      (g.opponentNames || []).forEach(function (name) {
+        if (!map[name]) {
+          map[name] = { name: name, wins: 0, losses: 0 };
+          order.push(name);
+        }
+        if (g.result === "won") map[name].wins += 1;
+        else map[name].losses += 1;
+      });
+    });
+    return order
+      .map(function (name) {
+        var rec = map[name];
+        var total = rec.wins + rec.losses;
+        return {
+          name: rec.name,
+          wins: rec.wins,
+          losses: rec.losses,
+          total: total,
+          pct: total ? Math.round((rec.wins / total) * 100) : null
+        };
+      })
+      .sort(function (a, b) {
+        return b.total - a.total || a.name.localeCompare(b.name);
+      });
+  }
+
+  function synopsisStatRow(label, value, variant) {
+    var row = document.createElement("div");
+    row.className = "player-stats-row";
+    var l = document.createElement("span");
+    l.className = "label";
+    l.textContent = label;
+    var v = document.createElement("span");
+    v.className = "value" + (variant ? " value-" + variant : "");
+    v.textContent = value;
+    row.appendChild(l);
+    row.appendChild(v);
+    return row;
+  }
+
+  function renderPlayerSynopsis() {
+    if (!currentStatsPlayerId) return;
+    var allGames = collectAllGamesForPlayer(currentStatsPlayerId);
+    var filtered = filterGamesByPeriod(allGames, currentStatsPeriod);
+    var synopsis = computeWinLossSynopsis(filtered);
+
+    playerPageSynopsisBody.innerHTML = "";
+    playerPageSynopsisBody.appendChild(synopsisStatRow("Wins", synopsis.wins, "win"));
+    playerPageSynopsisBody.appendChild(synopsisStatRow("Losses", synopsis.losses, "loss"));
+    playerPageSynopsisBody.appendChild(
+      synopsisStatRow("Win %", synopsis.pct === null ? "—" : synopsis.pct + "%")
+    );
+
+    var h2h = computeHeadToHead(filtered);
+    playerPageH2hList.innerHTML = "";
+    if (h2h.length === 0) {
+      var hint = document.createElement("li");
+      hint.className = "empty-hint";
+      hint.textContent = "No games against opponents in this period yet.";
+      playerPageH2hList.appendChild(hint);
+      return;
+    }
+    h2h.forEach(function (opp) {
+      var li = document.createElement("li");
+      li.className = "player-h2h-row";
+      var name = document.createElement("span");
+      name.className = "player-h2h-name";
+      name.textContent = opp.name;
+      var record = document.createElement("span");
+      record.className = "player-h2h-record";
+      record.textContent = opp.wins + "–" + opp.losses;
+      var pct = document.createElement("span");
+      pct.className = "player-h2h-pct";
+      pct.textContent = opp.pct === null ? "—" : opp.pct + "%";
+      li.appendChild(name);
+      li.appendChild(record);
+      li.appendChild(pct);
+      playerPageH2hList.appendChild(li);
+    });
+  }
+
+  function setStatsPeriod(period) {
+    currentStatsPeriod = period;
+    for (var i = 0; i < playerPagePeriodButtons.length; i++) {
+      var btn = playerPagePeriodButtons[i];
+      btn.classList.toggle("is-active", btn.getAttribute("data-period") === period);
+    }
+    renderPlayerSynopsis();
+  }
+
   function formatSessionDateTime(session) {
     var text = session.date;
     if (session.games && session.games.length) {
@@ -1810,6 +1969,7 @@
 
     currentStatsSessions = getPlayerSessions(player.name);
     renderPlayerHistoryList(currentStatsSessions);
+    setStatsPeriod("all");
   }
 
   function closePlayerStatsPage() {
@@ -1851,6 +2011,7 @@
     currentStatsSessions = sessions;
     setPlayerSessions(player.name, sessions);
     renderPlayerHistoryList(sessions);
+    renderPlayerSynopsis();
     showToast("Saved " + player.name + "'s stats.");
   }
 
@@ -1868,6 +2029,7 @@
     currentStatsSessions = [];
     setPlayerSessions(player.name, []);
     renderPlayerHistoryList([]);
+    renderPlayerSynopsis();
   }
 
   // ---------------------------------------------------------------------
@@ -2000,6 +2162,12 @@
   btnPlayerPageExport.addEventListener("click", exportCurrentPlayerStats);
   btnPlayerPageReset.addEventListener("click", resetPlayerHistoricalStats);
   btnPlayerPageBack.addEventListener("click", closePlayerStatsPage);
+
+  Array.prototype.forEach.call(playerPagePeriodButtons, function (btn) {
+    btn.addEventListener("click", function () {
+      setStatsPeriod(btn.getAttribute("data-period"));
+    });
+  });
 
   // ---------------------------------------------------------------------
   // Init

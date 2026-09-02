@@ -183,6 +183,19 @@
     <h1 id="player-page-name"></h1>
   </header>
 
+  <section class="panel" id="player-page-synopsis-panel">
+    <h2>Stats Synopsis</h2>
+    <div class="row period-filter-row" id="player-page-period-filter">
+      <button type="button" class="btn btn-ghost period-btn" data-period="week">This Week</button>
+      <button type="button" class="btn btn-ghost period-btn" data-period="month">This Month</button>
+      <button type="button" class="btn btn-ghost period-btn" data-period="year">This Year</button>
+      <button type="button" class="btn btn-ghost period-btn is-active" data-period="all">All Time</button>
+    </div>
+    <div id="player-page-synopsis-body"></div>
+    <h2 class="h2h-title">Head-to-Head</h2>
+    <ul id="player-page-h2h-list" class="player-h2h-list"></ul>
+  </section>
+
   <section class="panel" id="player-page-current-panel">
     <h2>This Session (Live)</h2>
     <div id="player-page-current-body"></div>
