@@ -1038,6 +1038,7 @@
     });
     delete state.playerWins[id];
     saveState();
+    saveRosterSnapshotIfNew(true);
     renderAll();
   }
 
@@ -1955,6 +1956,7 @@
         added += 1;
       }
     });
+    saveRosterSnapshotIfNew(true);
     renderAll();
     if (added === 0) {
       showToast("Everyone from that saved list is already in your roster.");
@@ -4189,6 +4191,7 @@
     var player = addPlayer(newPlayerName.value);
     if (!player) return;
     newPlayerName.value = "";
+    saveRosterSnapshotIfNew(true);
     renderAll();
   });
 
