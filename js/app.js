@@ -36,6 +36,26 @@
     return (name || "").trim().toLowerCase();
   }
 
+  // Generic chevron collapse/expand for any element carrying the
+  // .collapsible-panel class — a panel, or (for Focus Mode) a smaller
+  // in-scoreboard block. Reused by every collapsible section on the page.
+  function wireCollapsiblePanel(panelElId, buttonElId) {
+    var panel = document.getElementById(panelElId);
+    var btn = document.getElementById(buttonElId);
+    btn.addEventListener("click", function () {
+      var willExpand = panel.classList.contains("collapsed");
+      panel.classList.toggle("collapsed");
+      btn.setAttribute("aria-expanded", willExpand ? "true" : "false");
+    });
+  }
+
+  // Updates the one-line "what's inside" sentence shown only while a
+  // collapsible panel is collapsed (id="<panelElId>-summary").
+  function setPanelSummary(panelElId, text) {
+    var el = document.getElementById(panelElId + "-summary");
+    if (el) el.textContent = text;
+  }
+
   function defaultState() {
     return {
       players: [],
@@ -338,6 +358,10 @@
   var btnWizardStart = document.getElementById("wizard-btn-start");
 
   var btnToggleFocus = document.getElementById("btn-toggle-focus");
+  var focusPlayersWrap = document.getElementById("focus-players-wrap");
+  var btnToggleFocusPlayers = document.getElementById("btn-toggle-focus-players");
+  var focusPlayersSummary = document.getElementById("focus-players-summary");
+  var focusPlayersList = document.getElementById("focus-players-list");
   var appRoot = document.getElementById("app");
   var playerPageView = document.getElementById("view-player-page");
   var playerPageName = document.getElementById("player-page-name");
@@ -369,6 +393,9 @@
   var btnTournamentBack = document.getElementById("btn-tournament-back");
   var tournamentSetupPanel = document.getElementById("tournament-setup-panel");
   var tournamentActivePanel = document.getElementById("tournament-active-panel");
+  var tournamentFormatRadios = document.getElementsByName("tournament-format");
+  var tournamentLbSection = document.getElementById("tournament-lb-section");
+  var tournamentGfSection = document.getElementById("tournament-gf-section");
   var tournamentGameTypeSelect = document.getElementById("tournament-game-type");
   var tournamentTargetInput = document.getElementById("tournament-target");
   var tournamentTargetUnit = document.getElementById("tournament-target-unit");
@@ -566,6 +593,20 @@
     } else {
       rotationStatus.textContent = "";
     }
+
+    setPanelSummary("rotation-panel", computeRotationSummary());
+  }
+
+  function computeRotationSummary() {
+    if (!state.rotation.enabled) {
+      var currentType = GAME_TYPES[state.currentGame.gameType];
+      return "Rotation off — playing " + (currentType ? currentType.label : state.currentGame.gameType) + " only.";
+    }
+    if (state.rotation.order.length < 2) {
+      return "Rotation on, but not set up yet — add at least two game types.";
+    }
+    return "Rotating " + rotationLabelFor(state.rotation.order) +
+      ", switching every " + state.rotation.every + " game" + (state.rotation.every === 1 ? "" : "s") + ".";
   }
 
   function addRotationItem(typeId) {
@@ -607,6 +648,16 @@
     gameTypeSelect.value = state.currentGame.gameType;
     gameTargetInput.value = state.currentGame.target;
     gameTargetUnit.textContent = GAME_TYPES[state.currentGame.gameType].unit;
+    updateCurrentGameSummary();
+  }
+
+  function updateCurrentGameSummary() {
+    var type = GAME_TYPES[state.currentGame.gameType];
+    var modeLabel = state.currentGame.mode === "teams" ? "Teams" : "Individual";
+    setPanelSummary(
+      "game-setup-panel",
+      (type ? type.label : state.currentGame.gameType) + " · " + modeLabel + " · Race to " + state.raceToWinsTarget + " wins"
+    );
   }
 
   function rotationStatusInfo() {
@@ -715,6 +766,34 @@
           playerStandingsList.appendChild(buildStandingsRow(p.name, state.playerWins[p.id] || 0));
         });
     }
+
+    setPanelSummary("standings-panel", computeStandingsSummary());
+  }
+
+  function computeStandingsSummary() {
+    if (state.players.length === 0) return "No players yet.";
+    var sorted = state.players.slice().sort(function (a, b) {
+      return (state.playerWins[b.id] || 0) - (state.playerWins[a.id] || 0) || a.name.localeCompare(b.name);
+    });
+    var leader = sorted[0];
+    var leaderWins = state.playerWins[leader.id] || 0;
+    if (leaderWins === 0) return "No games won yet this session.";
+    return leader.name + " leads with " + leaderWins + " win" + (leaderWins === 1 ? "" : "s") +
+      " (race to " + state.raceToWinsTarget + ").";
+  }
+
+  function computePlayersSummary() {
+    if (state.players.length === 0) return "No players yet — add some below.";
+    var playingCount = state.players.filter(function (p) {
+      return p.playing;
+    }).length;
+    var names = state.players
+      .map(function (p) {
+        return p.name;
+      })
+      .join(", ");
+    return state.players.length + " player" + (state.players.length === 1 ? "" : "s") +
+      " (" + playingCount + " playing): " + names;
   }
 
   function renderRoster() {
@@ -724,6 +803,9 @@
       hint.className = "empty-hint";
       hint.textContent = "Add players to get started.";
       rosterList.appendChild(hint);
+      setPanelSummary("players-panel", computePlayersSummary());
+      renderPlayingToggleListInto(focusPlayersList, "No players yet — add some in the Players panel.");
+      focusPlayersSummary.textContent = "Players";
       return;
     }
     var showTeamToggle = state.currentGame.mode === "teams";
@@ -784,6 +866,13 @@
 
       rosterList.appendChild(row);
     });
+
+    setPanelSummary("players-panel", computePlayersSummary());
+    renderPlayingToggleListInto(focusPlayersList, "No players yet — add some in the Players panel.");
+    var playingCount = state.players.filter(function (p) {
+      return p.playing;
+    }).length;
+    focusPlayersSummary.textContent = playingCount + " of " + state.players.length + " playing";
   }
 
   function buildStatMini(label, value, milestoneReached) {
@@ -987,8 +1076,14 @@
     return m + ":" + (s < 10 ? "0" : "") + s;
   }
 
+  function computeHistorySummary() {
+    var n = state.gameHistory.length;
+    return n === 0 ? "No games played yet this session." : n + " game" + (n === 1 ? "" : "s") + " played this session.";
+  }
+
   function renderHistory() {
     historyList.innerHTML = "";
+    setPanelSummary("history-panel", computeHistorySummary());
     if (state.gameHistory.length === 0) {
       var hint = document.createElement("li");
       hint.className = "empty-hint";
@@ -2369,40 +2464,61 @@
     }
     state.players.forEach(function (p) {
       var li = document.createElement("li");
-      li.textContent = p.name;
+      var name = document.createElement("span");
+      name.textContent = p.name;
+      var removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "wizard-player-chip-remove";
+      removeBtn.textContent = "×";
+      removeBtn.setAttribute("aria-label", "Remove " + p.name);
+      removeBtn.addEventListener("click", function () {
+        removePlayer(p.id);
+      });
+      li.appendChild(name);
+      li.appendChild(removeBtn);
       wizardPlayerChips.appendChild(li);
     });
   }
 
-  function renderWizardPlayingList() {
-    wizardPlayingList.innerHTML = "";
+  // A single "name + Standby/Playing toggle" row — shared by the wizard's
+  // step 3 and the Focus Mode players list, so both stay identical.
+  function buildPlayingToggleRow(p) {
+    var row = document.createElement("li");
+    row.className = "roster-row" + (p.playing ? " is-playing" : "");
+
+    var name = document.createElement("span");
+    name.className = "roster-name";
+    name.textContent = p.name;
+    row.appendChild(name);
+
+    var playBtn = document.createElement("button");
+    playBtn.type = "button";
+    playBtn.className = "btn-playing" + (p.playing ? " is-on" : "");
+    playBtn.textContent = p.playing ? "Playing" : "Standby";
+    playBtn.addEventListener("click", function () {
+      togglePlaying(p.id);
+    });
+    row.appendChild(playBtn);
+
+    return row;
+  }
+
+  function renderPlayingToggleListInto(listEl, emptyText) {
+    listEl.innerHTML = "";
     if (state.players.length === 0) {
       var hint = document.createElement("li");
       hint.className = "empty-hint";
-      hint.textContent = "No players yet — go back and add some.";
-      wizardPlayingList.appendChild(hint);
-    } else {
-      state.players.forEach(function (p) {
-        var row = document.createElement("li");
-        row.className = "roster-row" + (p.playing ? " is-playing" : "");
-
-        var name = document.createElement("span");
-        name.className = "roster-name";
-        name.textContent = p.name;
-        row.appendChild(name);
-
-        var playBtn = document.createElement("button");
-        playBtn.type = "button";
-        playBtn.className = "btn-playing" + (p.playing ? " is-on" : "");
-        playBtn.textContent = p.playing ? "Playing" : "Standby";
-        playBtn.addEventListener("click", function () {
-          togglePlaying(p.id);
-        });
-        row.appendChild(playBtn);
-
-        wizardPlayingList.appendChild(row);
-      });
+      hint.textContent = emptyText;
+      listEl.appendChild(hint);
+      return;
     }
+    state.players.forEach(function (p) {
+      listEl.appendChild(buildPlayingToggleRow(p));
+    });
+  }
+
+  function renderWizardPlayingList() {
+    renderPlayingToggleListInto(wizardPlayingList, "No players yet — go back and add some.");
     var playingCount = state.players.filter(function (p) {
       return p.playing;
     }).length;
@@ -2604,6 +2720,7 @@
 
     applyRotationIfDue();
     renderAll();
+    updateCurrentGameSummary();
     closeWizard();
     setFocusMode(true);
     showToast("Let's play! 🎱");
@@ -4161,9 +4278,19 @@
         changed = true;
       }
     }
+
+    // Single elimination has no losers bracket or grand final — the
+    // winners-bracket champion is the tournament champion outright.
+    if (t.format === "single" && t.wbChampion && !t.champion) {
+      t.champion = t.wbChampion;
+    }
   }
 
-  function buildDoubleEliminationBracket(playerNames, gameType, target, raceTo) {
+  // Shuffles the field and builds the empty winners-bracket rounds shared
+  // by both tournament formats — round 1 seeded with the standard spread
+  // (1v4/2v3, etc.) so byes land spread across the draw, every later round
+  // starting empty until winners advance into it.
+  function buildWinnersBracketRounds(playerNames) {
     var shuffled = playerNames.slice();
     for (var i = shuffled.length - 1; i > 0; i--) {
       var j = Math.floor(Math.random() * (i + 1));
@@ -4194,24 +4321,6 @@
       wb.push(cur);
     }
 
-    var t = {
-      createdAt: new Date().toISOString(),
-      gameType: gameType,
-      target: target,
-      raceTo: raceTo,
-      players: shuffled,
-      size: size,
-      wb: wb,
-      lbRounds: [],
-      lbWaiting: [],
-      lbNextWbRoundToDrop: 0,
-      wbChampion: null,
-      lbChampion: null,
-      grandFinal: [],
-      champion: null,
-      active: null
-    };
-
     // Round-1 byes are structural (a slot was never filled because there
     // weren't enough real players) — resolve them once, explicitly, here.
     // Every other empty slot elsewhere in the bracket just means "not
@@ -4223,6 +4332,58 @@
       }
     });
 
+    return { shuffled: shuffled, size: size, wb: wb };
+  }
+
+  function buildDoubleEliminationBracket(playerNames, gameType, target, raceTo) {
+    var built = buildWinnersBracketRounds(playerNames);
+    var t = {
+      format: "double",
+      createdAt: new Date().toISOString(),
+      gameType: gameType,
+      target: target,
+      raceTo: raceTo,
+      players: built.shuffled,
+      size: built.size,
+      wb: built.wb,
+      lbRounds: [],
+      lbWaiting: [],
+      lbNextWbRoundToDrop: 0,
+      wbChampion: null,
+      lbChampion: null,
+      grandFinal: [],
+      champion: null,
+      active: null
+    };
+    advanceBracket(t);
+    return t;
+  }
+
+  // Single elimination: same winners-bracket shape as double elimination,
+  // but there's no losers bracket to drop into (lbNextWbRoundToDrop starts
+  // past the last round, so the losers-bracket logic in advanceBracket
+  // never fires) and no grand final — the winners-bracket champion is the
+  // tournament champion outright.
+  function buildSingleEliminationBracket(playerNames, gameType, target, raceTo) {
+    var built = buildWinnersBracketRounds(playerNames);
+    var t = {
+      format: "single",
+      createdAt: new Date().toISOString(),
+      gameType: gameType,
+      target: target,
+      raceTo: raceTo,
+      players: built.shuffled,
+      size: built.size,
+      wb: built.wb,
+      lbRounds: [],
+      lbWaiting: [],
+      lbNextWbRoundToDrop: built.wb.length,
+      wbChampion: null,
+      lbChampion: null,
+      grandFinal: [],
+      champion: null,
+      active: null
+    };
     advanceBracket(t);
     return t;
   }
@@ -4320,7 +4481,12 @@
     var gameType = tournamentGameTypeSelect.value;
     var target = parseInt(tournamentTargetInput.value, 10) || GAME_TYPES[gameType].defaultTarget;
     var raceTo = parseInt(tournamentRaceToInput.value, 10) || 1;
-    TOURNAMENT = buildDoubleEliminationBracket(names, gameType, target, raceTo);
+    var format = Array.prototype.filter.call(tournamentFormatRadios, function (r) {
+      return r.checked;
+    })[0].value;
+    TOURNAMENT = format === "single"
+      ? buildSingleEliminationBracket(names, gameType, target, raceTo)
+      : buildDoubleEliminationBracket(names, gameType, target, raceTo);
     saveTournamentToStorage(TOURNAMENT);
     renderTournamentPage();
   }
@@ -4571,9 +4737,14 @@
   function renderTournamentActive() {
     var t = TOURNAMENT;
     var activeMatchId = t.active ? t.active.matchId : null;
+    var isSingle = t.format === "single";
+    tournamentLbSection.classList.toggle("hidden", isSingle);
+    tournamentGfSection.classList.toggle("hidden", isSingle);
     renderWbTree(tournamentWbEl, t, activeMatchId);
-    renderBracketColumns(tournamentLbEl, t.lbRounds, activeMatchId);
-    renderBracketColumns(tournamentGfEl, t.grandFinal.length ? [t.grandFinal] : [], activeMatchId);
+    if (!isSingle) {
+      renderBracketColumns(tournamentLbEl, t.lbRounds, activeMatchId);
+      renderBracketColumns(tournamentGfEl, t.grandFinal.length ? [t.grandFinal] : [], activeMatchId);
+    }
 
     btnTournamentAbandon.textContent = t.champion ? "Start New Tournament" : "Abandon Tournament";
 
@@ -4808,6 +4979,7 @@
     gameTargetUnit.textContent = type.unit;
     saveState();
     renderScoreboard();
+    updateCurrentGameSummary();
   });
 
   gameTargetInput.addEventListener("input", function () {
@@ -4824,6 +4996,7 @@
       state.currentGame.mode = radio.value;
       saveState();
       renderAll();
+      updateCurrentGameSummary();
     });
   });
 
@@ -4834,6 +5007,7 @@
     saveState();
     renderScoreboard();
     renderStandings();
+    updateCurrentGameSummary();
   });
 
   btnResetGame.addEventListener("click", resetCurrentGame);
@@ -4966,11 +5140,13 @@
     renderWizardIfOpen();
   });
 
-  btnToggleBackupPanel.addEventListener("click", function () {
-    var willExpand = backupPanel.classList.contains("collapsed");
-    backupPanel.classList.toggle("collapsed");
-    btnToggleBackupPanel.setAttribute("aria-expanded", willExpand ? "true" : "false");
-  });
+  wireCollapsiblePanel("backup-panel", "btn-toggle-backup-panel");
+  wireCollapsiblePanel("rotation-panel", "btn-toggle-rotation-panel");
+  wireCollapsiblePanel("game-setup-panel", "btn-toggle-game-setup-panel");
+  wireCollapsiblePanel("players-panel", "btn-toggle-players-panel");
+  wireCollapsiblePanel("standings-panel", "btn-toggle-standings-panel");
+  wireCollapsiblePanel("history-panel", "btn-toggle-history-panel");
+  wireCollapsiblePanel("focus-players-wrap", "btn-toggle-focus-players");
 
   btnPlayerPageExport.addEventListener("click", exportCurrentPlayerStats);
   btnPlayerPageReset.addEventListener("click", resetPlayerHistoricalStats);
@@ -5020,6 +5196,7 @@
   Array.prototype.forEach.call(modeRadios, function (radio) {
     radio.checked = radio.value === state.currentGame.mode;
   });
+  updateCurrentGameSummary();
 
   if (state.rotation.enabled && state.rotation.order.length > 0) {
     state.gamesPlayedCount = 0;

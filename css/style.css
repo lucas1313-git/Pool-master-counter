@@ -90,6 +90,24 @@ body {
   padding-top: 8px;
 }
 
+.focus-players-wrap {
+  display: none;
+}
+
+#app.focus-mode .focus-players-wrap {
+  display: block;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  margin: 0 auto 10px;
+  max-width: 480px;
+}
+
+.focus-players-wrap .roster-list {
+  margin-top: 10px;
+}
+
 .brand {
   display: flex;
   align-items: center;
@@ -252,6 +270,20 @@ button:disabled {
 
 .collapsible-panel.collapsed .panel-body {
   display: none;
+}
+
+.panel-summary {
+  display: none;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collapsible-panel.collapsed .panel-summary {
+  display: block;
 }
 
 .row {
@@ -1134,11 +1166,28 @@ input[type="number"] {
 }
 
 .wizard-player-chips li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   background: rgba(0, 0, 0, 0.3);
   border: 1px solid var(--border);
   border-radius: 999px;
-  padding: 5px 12px;
+  padding: 5px 8px 5px 12px;
   font-size: 0.9rem;
+}
+
+.wizard-player-chip-remove {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+}
+
+.wizard-player-chip-remove:hover {
+  color: var(--danger);
 }
 
 .wizard-summary {

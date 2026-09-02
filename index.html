@@ -52,6 +52,7 @@
       <h2>Backup &amp; Transfer</h2>
       <span class="panel-chevron" aria-hidden="true">▾</span>
     </button>
+    <p class="panel-summary" id="backup-panel-summary">Export or import your data, or reset player stats and saved lists.</p>
     <div class="panel-body" id="backup-panel-body">
       <p class="player-stats-note">All stats and session data live on this device only. Export a backup file to move everything to another iPhone, iPad, or computer.</p>
       <div class="row">
@@ -64,95 +65,135 @@
     </div>
   </section>
 
-  <section class="panel" id="rotation-panel">
-    <h2>Game Order</h2>
-    <div class="row">
-      <label class="checkbox-row"><input type="checkbox" id="rotation-enabled"> Rotate game types automatically</label>
-    </div>
-    <div class="row">
-      <select id="rotation-load-select"></select>
-      <button type="button" id="btn-rotation-load" class="btn btn-ghost">Load Rotation</button>
-    </div>
-    <div class="row">
-      <select id="rotation-add-type"></select>
-      <button type="button" id="btn-rotation-add" class="btn btn-ghost">+ Add to Order</button>
-    </div>
-    <ul id="rotation-list" class="rotation-list"></ul>
-    <div class="row">
-      <label for="rotation-every">Switch every</label>
-      <input type="number" id="rotation-every" min="1" max="99" value="1">
-      <span>games</span>
-    </div>
-    <p id="rotation-status" class="rotation-status"></p>
-  </section>
-
-  <section class="panel" id="game-setup-panel">
-    <h2>Current Game</h2>
-    <div class="row">
-      <label for="game-type">Game</label>
-      <select id="game-type"></select>
-      <label for="game-target">Target</label>
-      <input type="number" id="game-target" min="1" max="500" value="1">
-      <span id="game-target-unit">rack</span>
-    </div>
-
-    <div class="row mode-row">
-      <label><input type="radio" name="game-mode" value="individual" checked> Individual</label>
-      <label><input type="radio" name="game-mode" value="teams"> Teams</label>
-    </div>
-
-    <div class="row">
-      <label for="race-to-wins">Race-to milestone</label>
-      <input type="number" id="race-to-wins" min="1" max="99" value="5">
-      <span>wins</span>
-    </div>
-
-    <div class="row">
-      <button type="button" id="btn-reset-game" class="btn btn-ghost">Reset Current Game</button>
-      <button type="button" id="btn-undo-win" class="btn btn-ghost">Undo Last Win</button>
-      <button type="button" id="btn-share" class="btn btn-ghost">Share Standings</button>
-      <button type="button" id="btn-export-session" class="btn btn-ghost">Export Session</button>
-      <button type="button" id="btn-reset-stats" class="btn btn-danger">New Game</button>
+  <section class="panel collapsible-panel collapsed" id="rotation-panel">
+    <button type="button" class="panel-toggle" id="btn-toggle-rotation-panel" aria-expanded="false" aria-controls="rotation-panel-body">
+      <h2>Game Order</h2>
+      <span class="panel-chevron" aria-hidden="true">▾</span>
+    </button>
+    <p class="panel-summary" id="rotation-panel-summary"></p>
+    <div class="panel-body" id="rotation-panel-body">
+      <div class="row">
+        <label class="checkbox-row"><input type="checkbox" id="rotation-enabled"> Rotate game types automatically</label>
+      </div>
+      <div class="row">
+        <select id="rotation-load-select"></select>
+        <button type="button" id="btn-rotation-load" class="btn btn-ghost">Load Rotation</button>
+      </div>
+      <div class="row">
+        <select id="rotation-add-type"></select>
+        <button type="button" id="btn-rotation-add" class="btn btn-ghost">+ Add to Order</button>
+      </div>
+      <ul id="rotation-list" class="rotation-list"></ul>
+      <div class="row">
+        <label for="rotation-every">Switch every</label>
+        <input type="number" id="rotation-every" min="1" max="99" value="1">
+        <span>games</span>
+      </div>
+      <p id="rotation-status" class="rotation-status"></p>
     </div>
   </section>
 
-  <section class="panel" id="players-panel">
-    <h2>Players</h2>
-    <p id="new-player-name-requirement" class="new-player-name-requirement hidden"></p>
-    <form id="add-player-form" class="row">
-      <input type="text" id="new-player-name" placeholder="Player name" autocomplete="off" required>
-      <button type="submit" id="btn-add-player" class="btn btn-primary" disabled>Add</button>
-    </form>
-    <div class="row">
-      <select id="roster-load-select"></select>
-      <button type="button" id="btn-roster-load" class="btn btn-ghost">Load Player List</button>
+  <section class="panel collapsible-panel collapsed" id="game-setup-panel">
+    <button type="button" class="panel-toggle" id="btn-toggle-game-setup-panel" aria-expanded="false" aria-controls="game-setup-panel-body">
+      <h2>Current Game</h2>
+      <span class="panel-chevron" aria-hidden="true">▾</span>
+    </button>
+    <p class="panel-summary" id="game-setup-panel-summary"></p>
+    <div class="panel-body" id="game-setup-panel-body">
+      <div class="row">
+        <label for="game-type">Game</label>
+        <select id="game-type"></select>
+        <label for="game-target">Target</label>
+        <input type="number" id="game-target" min="1" max="500" value="1">
+        <span id="game-target-unit">rack</span>
+      </div>
+
+      <div class="row mode-row">
+        <label><input type="radio" name="game-mode" value="individual" checked> Individual</label>
+        <label><input type="radio" name="game-mode" value="teams"> Teams</label>
+      </div>
+
+      <div class="row">
+        <label for="race-to-wins">Race-to milestone</label>
+        <input type="number" id="race-to-wins" min="1" max="99" value="5">
+        <span>wins</span>
+      </div>
+
+      <div class="row">
+        <button type="button" id="btn-reset-game" class="btn btn-ghost">Reset Current Game</button>
+        <button type="button" id="btn-undo-win" class="btn btn-ghost">Undo Last Win</button>
+        <button type="button" id="btn-share" class="btn btn-ghost">Share Standings</button>
+        <button type="button" id="btn-export-session" class="btn btn-ghost">Export Session</button>
+        <button type="button" id="btn-reset-stats" class="btn btn-danger">New Game</button>
+      </div>
     </div>
-    <div class="row">
-      <button type="button" id="btn-export-roster-lists" class="btn btn-ghost">Export Player Lists</button>
-      <button type="button" id="btn-import-roster-lists" class="btn btn-ghost">Import Player Lists</button>
-      <input type="file" id="import-roster-lists-file-input" accept="application/json" class="hidden">
+  </section>
+
+  <section class="panel collapsible-panel collapsed" id="players-panel">
+    <button type="button" class="panel-toggle" id="btn-toggle-players-panel" aria-expanded="false" aria-controls="players-panel-body">
+      <h2>Players</h2>
+      <span class="panel-chevron" aria-hidden="true">▾</span>
+    </button>
+    <p class="panel-summary" id="players-panel-summary"></p>
+    <div class="panel-body" id="players-panel-body">
+      <p id="new-player-name-requirement" class="new-player-name-requirement hidden"></p>
+      <form id="add-player-form" class="row">
+        <input type="text" id="new-player-name" placeholder="Player name" autocomplete="off" required>
+        <button type="submit" id="btn-add-player" class="btn btn-primary" disabled>Add</button>
+      </form>
+      <div class="row">
+        <select id="roster-load-select"></select>
+        <button type="button" id="btn-roster-load" class="btn btn-ghost">Load Player List</button>
+      </div>
+      <div class="row">
+        <button type="button" id="btn-export-roster-lists" class="btn btn-ghost">Export Player Lists</button>
+        <button type="button" id="btn-import-roster-lists" class="btn btn-ghost">Import Player Lists</button>
+        <input type="file" id="import-roster-lists-file-input" accept="application/json" class="hidden">
+      </div>
+      <ul id="roster-list" class="roster-list"></ul>
     </div>
-    <ul id="roster-list" class="roster-list"></ul>
   </section>
 
   <div id="win-toast" class="win-toast hidden"></div>
 
-  <section class="panel" id="standings-panel">
-    <h2 id="standings-title">Race to 5 Wins — Teams</h2>
-    <ul id="team-standings-list" class="standings-list"></ul>
-    <h2 id="standings-title-individual">Individual</h2>
-    <ul id="player-standings-list" class="standings-list"></ul>
+  <section class="panel collapsible-panel collapsed" id="standings-panel">
+    <button type="button" class="panel-toggle" id="btn-toggle-standings-panel" aria-expanded="false" aria-controls="standings-panel-body">
+      <h2>Standings</h2>
+      <span class="panel-chevron" aria-hidden="true">▾</span>
+    </button>
+    <p class="panel-summary" id="standings-panel-summary"></p>
+    <div class="panel-body" id="standings-panel-body">
+      <h2 id="standings-title">Race to 5 Wins — Teams</h2>
+      <ul id="team-standings-list" class="standings-list"></ul>
+      <h2 id="standings-title-individual">Individual</h2>
+      <ul id="player-standings-list" class="standings-list"></ul>
+    </div>
   </section>
 
   <section id="scoreboard-panel">
     <button type="button" id="btn-toggle-focus" class="btn btn-ghost focus-toggle-btn">Focus Mode</button>
+    <div class="focus-players-wrap collapsible-panel collapsed" id="focus-players-wrap">
+      <button type="button" class="panel-toggle" id="btn-toggle-focus-players" aria-expanded="false" aria-controls="focus-players-body">
+        <span id="focus-players-summary">Players</span>
+        <span class="panel-chevron" aria-hidden="true">▾</span>
+      </button>
+      <div class="panel-body" id="focus-players-body">
+        <ul id="focus-players-list" class="roster-list"></ul>
+      </div>
+    </div>
     <div id="now-playing-banner" class="now-playing-banner"></div>
     <div class="scoreboard" id="scoreboard"></div>
   </section>
 
-  <section class="panel" id="history-panel">
-    <h2>Recent Games</h2>
-    <ul id="history-list" class="history-list"></ul>
+  <section class="panel collapsible-panel collapsed" id="history-panel">
+    <button type="button" class="panel-toggle" id="btn-toggle-history-panel" aria-expanded="false" aria-controls="history-panel-body">
+      <h2>Recent Games</h2>
+      <span class="panel-chevron" aria-hidden="true">▾</span>
+    </button>
+    <p class="panel-summary" id="history-panel-summary"></p>
+    <div class="panel-body" id="history-panel-body">
+      <ul id="history-list" class="history-list"></ul>
+    </div>
   </section>
 
 </div>
@@ -424,7 +465,18 @@
 
   <section class="panel" id="tournament-setup-panel">
     <h2>New Elimination Tournament</h2>
-    <p class="player-stats-note">Double elimination — lose twice and you're out. Players are drawn into the bracket at random.</p>
+    <p class="player-stats-note">Players are drawn into the bracket at random. Pick a format below.</p>
+
+    <div class="wizard-format-options">
+      <label class="wizard-format-option">
+        <input type="radio" name="tournament-format" value="double" checked>
+        <span>🥈 Double Elimination — Winners &amp; Losers Brackets: lose once, drop to the losers bracket for a second chance; lose twice and you're out. Fairer, takes longer.</span>
+      </label>
+      <label class="wizard-format-option">
+        <input type="radio" name="tournament-format" value="single">
+        <span>🥇 Single Elimination — Only Winners Advance: lose once and you're out. Fastest format, best for a quick knockout.</span>
+      </label>
+    </div>
 
     <div class="row">
       <label for="tournament-game-type">Game</label>
@@ -461,11 +513,15 @@
     <h2 class="tournament-bracket-heading">Winners Bracket</h2>
     <div id="tournament-wb" class="tournament-bracket-scroll"></div>
 
-    <h2 class="tournament-bracket-heading">Losers Bracket</h2>
-    <div id="tournament-lb" class="tournament-bracket-scroll"></div>
+    <div id="tournament-lb-section">
+      <h2 class="tournament-bracket-heading">Losers Bracket</h2>
+      <div id="tournament-lb" class="tournament-bracket-scroll"></div>
+    </div>
 
-    <h2 class="tournament-bracket-heading">Grand Final</h2>
-    <div id="tournament-gf" class="tournament-bracket-scroll"></div>
+    <div id="tournament-gf-section">
+      <h2 class="tournament-bracket-heading">Grand Final</h2>
+      <div id="tournament-gf" class="tournament-bracket-scroll"></div>
+    </div>
   </section>
 
 </div>
