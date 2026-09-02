@@ -214,6 +214,46 @@ button:disabled {
   letter-spacing: 0.06em;
 }
 
+.collapsible-panel .panel-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0 0 12px;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+
+.collapsible-panel .panel-toggle h2 {
+  margin: 0;
+}
+
+.panel-chevron {
+  color: var(--text-dim);
+  font-size: 1.1rem;
+  line-height: 1;
+  flex-shrink: 0;
+  margin-left: 12px;
+  transition: transform 0.2s ease;
+}
+
+.collapsible-panel.collapsed .panel-toggle {
+  margin-bottom: 0;
+}
+
+.collapsible-panel.collapsed .panel-chevron {
+  transform: rotate(-90deg);
+}
+
+.collapsible-panel.collapsed .panel-body {
+  display: none;
+}
+
 .row {
   display: flex;
   align-items: center;

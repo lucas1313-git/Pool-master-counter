@@ -46,28 +46,38 @@
     </div>
   </header>
 
-  <section class="panel" id="backup-panel">
-    <h2>Backup &amp; Transfer</h2>
-    <p class="player-stats-note">All stats and session data live on this device only. Export a backup file to move everything to another iPhone, iPad, or computer.</p>
-    <div class="row">
-      <button type="button" id="btn-export-all-data" class="btn btn-primary">Export All Data</button>
-      <button type="button" id="btn-import-all-data" class="btn btn-ghost">Import Data</button>
-      <button type="button" id="btn-reset-all-player-stats" class="btn btn-danger">Reset All Player Stats</button>
-      <input type="file" id="import-file-input" accept="application/json" class="hidden">
+  <section class="panel collapsible-panel collapsed" id="backup-panel">
+    <button type="button" class="panel-toggle" id="btn-toggle-backup-panel" aria-expanded="false" aria-controls="backup-panel-body">
+      <h2>Backup &amp; Transfer</h2>
+      <span class="panel-chevron" aria-hidden="true">▾</span>
+    </button>
+    <div class="panel-body" id="backup-panel-body">
+      <p class="player-stats-note">All stats and session data live on this device only. Export a backup file to move everything to another iPhone, iPad, or computer.</p>
+      <div class="row">
+        <button type="button" id="btn-export-all-data" class="btn btn-primary">Export All Data</button>
+        <button type="button" id="btn-import-all-data" class="btn btn-ghost">Import Data</button>
+        <button type="button" id="btn-reset-all-player-stats" class="btn btn-danger">Reset All Player Stats</button>
+        <input type="file" id="import-file-input" accept="application/json" class="hidden">
+      </div>
     </div>
   </section>
 
-  <section class="panel" id="players-panel">
-    <h2>Players</h2>
-    <form id="add-player-form" class="row">
-      <input type="text" id="new-player-name" placeholder="Player name" autocomplete="off" required>
-      <button type="submit" class="btn btn-primary">Add</button>
-    </form>
+  <section class="panel" id="rotation-panel">
+    <h2>Game Order</h2>
     <div class="row">
-      <select id="roster-load-select"></select>
-      <button type="button" id="btn-roster-load" class="btn btn-ghost">Load Player List</button>
+      <label class="checkbox-row"><input type="checkbox" id="rotation-enabled"> Rotate game types automatically</label>
     </div>
-    <ul id="roster-list" class="roster-list"></ul>
+    <div class="row">
+      <select id="rotation-add-type"></select>
+      <button type="button" id="btn-rotation-add" class="btn btn-ghost">+ Add to Order</button>
+    </div>
+    <ul id="rotation-list" class="rotation-list"></ul>
+    <div class="row">
+      <label for="rotation-every">Switch every</label>
+      <input type="number" id="rotation-every" min="1" max="99" value="1">
+      <span>games</span>
+    </div>
+    <p id="rotation-status" class="rotation-status"></p>
   </section>
 
   <section class="panel" id="game-setup-panel">
@@ -100,22 +110,17 @@
     </div>
   </section>
 
-  <section class="panel" id="rotation-panel">
-    <h2>Game Order</h2>
+  <section class="panel" id="players-panel">
+    <h2>Players</h2>
+    <form id="add-player-form" class="row">
+      <input type="text" id="new-player-name" placeholder="Player name" autocomplete="off" required>
+      <button type="submit" class="btn btn-primary">Add</button>
+    </form>
     <div class="row">
-      <label class="checkbox-row"><input type="checkbox" id="rotation-enabled"> Rotate game types automatically</label>
+      <select id="roster-load-select"></select>
+      <button type="button" id="btn-roster-load" class="btn btn-ghost">Load Player List</button>
     </div>
-    <div class="row">
-      <select id="rotation-add-type"></select>
-      <button type="button" id="btn-rotation-add" class="btn btn-ghost">+ Add to Order</button>
-    </div>
-    <ul id="rotation-list" class="rotation-list"></ul>
-    <div class="row">
-      <label for="rotation-every">Switch every</label>
-      <input type="number" id="rotation-every" min="1" max="99" value="1">
-      <span>games</span>
-    </div>
-    <p id="rotation-status" class="rotation-status"></p>
+    <ul id="roster-list" class="roster-list"></ul>
   </section>
 
   <div id="win-toast" class="win-toast hidden"></div>

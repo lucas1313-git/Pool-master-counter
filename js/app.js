@@ -281,6 +281,8 @@
   var btnImportAllData = document.getElementById("btn-import-all-data");
   var importFileInput = document.getElementById("import-file-input");
   var btnResetAllPlayerStats = document.getElementById("btn-reset-all-player-stats");
+  var backupPanel = document.getElementById("backup-panel");
+  var btnToggleBackupPanel = document.getElementById("btn-toggle-backup-panel");
 
   var addPlayerForm = document.getElementById("add-player-form");
   var newPlayerName = document.getElementById("new-player-name");
@@ -1109,7 +1111,9 @@
       summary: summary
     });
     if (state.gameHistory.length > 200) state.gameHistory.length = 200;
+    var wasFirstGameOfSession = state.gamesPlayedCount === 0;
     state.gamesPlayedCount += 1;
+    if (wasFirstGameOfSession) saveRosterSnapshotIfNew(true);
     var previousGameType = state.currentGame.gameType;
     applyRotationIfDue();
     var gameTypeChanged = state.currentGame.gameType !== previousGameType;
@@ -1734,22 +1738,19 @@
     var idx = parseInt(rosterLoadSelect.value, 10);
     var roster = SAVED_ROSTERS[idx];
     if (!roster) return;
-    var existingNames = state.players.map(function (p) {
-      return p.name.toLowerCase();
+    if (!confirm("Load \"" + roster.label + "\"? This replaces the current player list.")) return;
+    state.players.forEach(function (p) {
+      delete state.playerWins[p.id];
     });
-    var added = 0;
+    state.players = [];
     roster.players.forEach(function (name) {
-      if (existingNames.indexOf(name.toLowerCase()) === -1) {
-        addPlayer(name);
-        added += 1;
-      }
+      addPlayer(name);
     });
     renderAll();
-    if (added === 0) {
-      showToast("Everyone from that saved list is already in your roster.");
-    } else {
-      showToast("Added " + added + " player" + (added === 1 ? "" : "s") + " from \"" + roster.label + "\".");
-    }
+    showToast(
+      "Loaded \"" + roster.label + "\" — " + roster.players.length +
+      " player" + (roster.players.length === 1 ? "" : "s") + "."
+    );
   }
 
   function currentRosterNames() {
@@ -1760,17 +1761,17 @@
       .sort();
   }
 
-  function maybeSaveRosterOnNewSession() {
+  function saveRosterSnapshotIfNew(silent) {
     var names = currentRosterNames();
-    if (names.length === 0) return;
+    if (names.length === 0) return false;
     var last = SAVED_ROSTERS[SAVED_ROSTERS.length - 1];
     var lastNames = last ? last.players.slice().sort() : null;
     var sameAsLast = lastNames && lastNames.length === names.length && lastNames.every(function (n, i) {
       return n === names[i];
     });
     if (sameAsLast) {
-      showToast("Same player list as last session — no need to re-save.");
-      return;
+      if (!silent) showToast("Same player list as last session — no need to re-save.");
+      return false;
     }
     var now = new Date().toISOString();
     var entry = {
@@ -1779,10 +1780,15 @@
       players: names,
       savedAt: now
     };
-    var updated = SAVED_ROSTERS.concat([entry]);
-    SAVED_ROSTERS = updated;
-    saveRostersToStorage(updated);
-    showToast("Saved roster: " + entry.label);
+    SAVED_ROSTERS = SAVED_ROSTERS.concat([entry]);
+    saveRostersToStorage(SAVED_ROSTERS);
+    populateRosterLoadSelect();
+    if (!silent) showToast("Saved roster: " + entry.label);
+    return true;
+  }
+
+  function maybeSaveRosterOnNewSession() {
+    saveRosterSnapshotIfNew(false);
   }
 
   // ---------------------------------------------------------------------
@@ -3991,6 +3997,12 @@
   });
 
   btnRosterLoad.addEventListener("click", loadSelectedRoster);
+
+  btnToggleBackupPanel.addEventListener("click", function () {
+    var willExpand = backupPanel.classList.contains("collapsed");
+    backupPanel.classList.toggle("collapsed");
+    btnToggleBackupPanel.setAttribute("aria-expanded", willExpand ? "true" : "false");
+  });
 
   btnPlayerPageExport.addEventListener("click", exportCurrentPlayerStats);
   btnPlayerPageReset.addEventListener("click", resetPlayerHistoricalStats);
