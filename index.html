@@ -40,6 +40,7 @@
         <p class="brand-slogan">Don't get cocky!</p>
       </div>
     </div>
+    <button type="button" id="btn-open-all-players" class="btn btn-ghost all-players-nav-btn">📊 All Players</button>
   </header>
 
   <section class="panel" id="backup-panel">
@@ -213,6 +214,28 @@
     <h2>Session History</h2>
     <ul id="player-page-history-list" class="player-history-list"></ul>
   </section>
+
+</div>
+
+<div id="view-all-players-page" class="hidden">
+
+  <header class="app-header player-page-header">
+    <button type="button" id="btn-all-players-back" class="btn btn-ghost">← Back</button>
+    <h1>All Players</h1>
+  </header>
+
+  <section class="panel" id="all-players-controls-panel">
+    <div class="row">
+      <label for="all-players-sort">Sort by</label>
+      <select id="all-players-sort">
+        <option value="winpct">Win % (highest first)</option>
+        <option value="wins">Most wins</option>
+        <option value="alpha">Name (A–Z)</option>
+      </select>
+    </div>
+  </section>
+
+  <ul id="all-players-list" class="all-players-list"></ul>
 
 </div>
 

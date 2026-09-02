@@ -295,6 +295,12 @@
   var playerPageSynopsisBody = document.getElementById("player-page-synopsis-body");
   var playerPageH2hList = document.getElementById("player-page-h2h-list");
 
+  var btnOpenAllPlayers = document.getElementById("btn-open-all-players");
+  var allPlayersPageView = document.getElementById("view-all-players-page");
+  var btnAllPlayersBack = document.getElementById("btn-all-players-back");
+  var allPlayersSortSelect = document.getElementById("all-players-sort");
+  var allPlayersList = document.getElementById("all-players-list");
+
   var gameTypeSelect = document.getElementById("game-type");
   var gameTargetInput = document.getElementById("game-target");
   var gameTargetUnit = document.getElementById("game-target-unit");
@@ -2171,6 +2177,247 @@
     currentStatsSessions = null;
   }
 
+  // ---------------------------------------------------------------------
+  // All Players page — every player who has ever played, with a career
+  // played/won/lost scale each and a timeline of when they played.
+  // ---------------------------------------------------------------------
+
+  // Every player name known to this device: anyone with saved stats, plus
+  // anyone currently on the roster (even before their first save).
+  function getAllKnownPlayerNames() {
+    var names = {};
+    Object.keys(PLAYER_STATS).forEach(function (n) {
+      names[n] = true;
+    });
+    state.players.forEach(function (p) {
+      names[p.name] = true;
+    });
+    return Object.keys(names);
+  }
+
+  // All of one player's games — saved history plus whatever's still live
+  // in the current in-progress session — deduped the same way the stats
+  // synopsis page does.
+  function allGamesForPlayerName(name) {
+    var sessions = getPlayerSessions(name);
+    var today = new Date().toISOString().slice(0, 10);
+    var live = computeSessionFromGameHistory(state.gameHistory, name, today);
+    var merged = live ? mergeSessionIntoList(sessions, live) : sessions;
+    var games = [];
+    merged.forEach(function (s) {
+      (s.games || []).forEach(function (g) {
+        games.push(g);
+      });
+    });
+    return games;
+  }
+
+  function computePlayerCareerStats(name) {
+    var games = allGamesForPlayerName(name);
+    var wins = 0;
+    var losses = 0;
+    games.forEach(function (g) {
+      if (g.result === "won") wins += 1;
+      else losses += 1;
+    });
+    return {
+      name: name,
+      games: games,
+      played: games.length,
+      wins: wins,
+      losses: losses,
+      winPct: games.length ? wins / games.length : null
+    };
+  }
+
+  function sortAllPlayerStats(list, mode) {
+    var sorted = list.slice();
+    if (mode === "alpha") {
+      sorted.sort(function (a, b) {
+        return a.name.localeCompare(b.name);
+      });
+    } else if (mode === "wins") {
+      sorted.sort(function (a, b) {
+        return b.wins - a.wins || a.name.localeCompare(b.name);
+      });
+    } else {
+      sorted.sort(function (a, b) {
+        var ap = a.winPct === null ? -1 : a.winPct;
+        var bp = b.winPct === null ? -1 : b.winPct;
+        return bp - ap || b.played - a.played || a.name.localeCompare(b.name);
+      });
+    }
+    return sorted;
+  }
+
+  // Rounds a raw max game-count up to the nearest multiple of 4 (minimum 4)
+  // so the 4 axis graduations below always land on whole numbers.
+  function axisMaxFor(rawMax) {
+    return Math.max(4, Math.ceil(rawMax / 4) * 4);
+  }
+
+  function buildScaleRow(label, value, axisMax, variantClass) {
+    var row = document.createElement("div");
+    row.className = "scale-row";
+
+    var top = document.createElement("div");
+    top.className = "scale-row-top";
+    var l = document.createElement("span");
+    l.className = "scale-row-label";
+    l.textContent = label;
+    var v = document.createElement("span");
+    v.className = "scale-row-value";
+    v.textContent = value;
+    top.appendChild(l);
+    top.appendChild(v);
+    row.appendChild(top);
+
+    var track = document.createElement("div");
+    track.className = "scale-track";
+    var pct = axisMax > 0 ? (value / axisMax) * 100 : 0;
+    var fill = document.createElement("div");
+    fill.className = "scale-fill " + variantClass;
+    fill.style.width = pct + "%";
+    track.appendChild(fill);
+
+    var ticks = document.createElement("div");
+    ticks.className = "scale-ticks";
+    var tickCount = 4;
+    for (var i = 0; i <= tickCount; i++) {
+      var tick = document.createElement("span");
+      tick.className = "scale-tick";
+      tick.style.left = (i * 100) / tickCount + "%";
+      tick.setAttribute("data-value", Math.round((axisMax * i) / tickCount));
+      ticks.appendChild(tick);
+    }
+    track.appendChild(ticks);
+    row.appendChild(track);
+    return row;
+  }
+
+  function buildTimelineRow(games, minMs, maxMs) {
+    var wrap = document.createElement("div");
+
+    var title = document.createElement("div");
+    title.className = "timeline-title";
+    title.textContent = "Timeline";
+    wrap.appendChild(title);
+
+    var track = document.createElement("div");
+    track.className = "timeline-track";
+
+    var sameDay = maxMs - minMs < 24 * 60 * 60 * 1000;
+    var tickCount = 4;
+    for (var i = 0; i <= tickCount; i++) {
+      var frac = i / tickCount;
+      var tick = document.createElement("span");
+      tick.className = "timeline-tick";
+      tick.style.left = frac * 100 + "%";
+      var tickDate = new Date(minMs + frac * (maxMs - minMs));
+      var label = sameDay
+        ? tickDate.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
+        : tickDate.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+      tick.setAttribute("data-label", label);
+      track.appendChild(tick);
+    }
+
+    games.forEach(function (g) {
+      if (!g.ts) return;
+      var t = new Date(g.ts).getTime();
+      if (isNaN(t)) return;
+      var frac = maxMs > minMs ? (t - minMs) / (maxMs - minMs) : 0.5;
+      var dot = document.createElement("span");
+      dot.className = "timeline-dot " + (g.result === "won" ? "timeline-dot-won" : "timeline-dot-lost");
+      dot.style.left = frac * 100 + "%";
+      dot.title = formatTimestamp(g.ts, true) + " — " + (g.result === "won" ? "Won" : "Lost") + " " + g.gameLabel;
+      track.appendChild(dot);
+    });
+
+    wrap.appendChild(track);
+    return wrap;
+  }
+
+  function buildAllPlayerCard(stats, maxPlayed, maxWins, maxLosses, minMs, maxMs) {
+    var li = document.createElement("li");
+    li.className = "all-player-card";
+
+    var top = document.createElement("div");
+    top.className = "all-player-card-top";
+    var name = document.createElement("span");
+    name.className = "all-player-name";
+    name.textContent = stats.name;
+    var summary = document.createElement("span");
+    summary.className = "all-player-summary";
+    summary.textContent = stats.winPct === null ? "No games yet" : Math.round(stats.winPct * 100) + "% win rate";
+    top.appendChild(name);
+    top.appendChild(summary);
+    li.appendChild(top);
+
+    li.appendChild(buildScaleRow("Games Played", stats.played, maxPlayed, "scale-fill-played"));
+    li.appendChild(buildScaleRow("Games Won", stats.wins, maxWins, "scale-fill-won"));
+    li.appendChild(buildScaleRow("Games Lost", stats.losses, maxLosses, "scale-fill-lost"));
+
+    if (stats.games.length) {
+      li.appendChild(buildTimelineRow(stats.games, minMs, maxMs));
+    }
+
+    return li;
+  }
+
+  function renderAllPlayersPage() {
+    var names = getAllKnownPlayerNames();
+    var stats = names.map(computePlayerCareerStats);
+
+    var maxPlayed = 0;
+    var maxWins = 0;
+    var maxLosses = 0;
+    var minTs = null;
+    var maxTs = null;
+    stats.forEach(function (s) {
+      maxPlayed = Math.max(maxPlayed, s.played);
+      maxWins = Math.max(maxWins, s.wins);
+      maxLosses = Math.max(maxLosses, s.losses);
+      s.games.forEach(function (g) {
+        if (!g.ts) return;
+        if (minTs === null || g.ts < minTs) minTs = g.ts;
+        if (maxTs === null || g.ts > maxTs) maxTs = g.ts;
+      });
+    });
+    var minMs = minTs === null ? Date.now() : new Date(minTs).getTime();
+    var maxMs = maxTs === null ? Date.now() : new Date(maxTs).getTime();
+    if (maxMs <= minMs) maxMs = minMs + 1;
+
+    var playedAxisMax = axisMaxFor(maxPlayed);
+    var winsAxisMax = axisMaxFor(maxWins);
+    var lossesAxisMax = axisMaxFor(maxLosses);
+
+    var sorted = sortAllPlayerStats(stats, allPlayersSortSelect.value);
+
+    allPlayersList.innerHTML = "";
+    if (sorted.length === 0) {
+      var hint = document.createElement("li");
+      hint.className = "empty-hint";
+      hint.textContent = "No players yet — add players and play a few games first.";
+      allPlayersList.appendChild(hint);
+      return;
+    }
+    sorted.forEach(function (s) {
+      allPlayersList.appendChild(buildAllPlayerCard(s, playedAxisMax, winsAxisMax, lossesAxisMax, minMs, maxMs));
+    });
+  }
+
+  function openAllPlayersPage() {
+    renderAllPlayersPage();
+    appRoot.classList.add("hidden");
+    allPlayersPageView.classList.remove("hidden");
+    window.scrollTo(0, 0);
+  }
+
+  function closeAllPlayersPage() {
+    allPlayersPageView.classList.add("hidden");
+    appRoot.classList.remove("hidden");
+  }
+
   // Combines two session records for the SAME calendar date. Games are
   // unioned by timestamp (so a game saved in both — e.g. by two separate
   // exports, or two devices' backups — counts once, not twice), and the
@@ -2401,6 +2648,10 @@
   btnPlayerPageExport.addEventListener("click", exportCurrentPlayerStats);
   btnPlayerPageReset.addEventListener("click", resetPlayerHistoricalStats);
   btnPlayerPageBack.addEventListener("click", closePlayerStatsPage);
+
+  btnOpenAllPlayers.addEventListener("click", openAllPlayersPage);
+  btnAllPlayersBack.addEventListener("click", closeAllPlayersPage);
+  allPlayersSortSelect.addEventListener("change", renderAllPlayersPage);
 
   Array.prototype.forEach.call(playerPagePeriodButtons, function (btn) {
     btn.addEventListener("click", function () {
