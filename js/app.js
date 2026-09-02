@@ -312,6 +312,25 @@
   var allPlayersList = document.getElementById("all-players-list");
   var allPlayersViewMode = "bars";
 
+  var btnOpenTournament = document.getElementById("btn-open-tournament");
+  var tournamentPageView = document.getElementById("view-tournament-page");
+  var btnTournamentBack = document.getElementById("btn-tournament-back");
+  var tournamentSetupPanel = document.getElementById("tournament-setup-panel");
+  var tournamentActivePanel = document.getElementById("tournament-active-panel");
+  var tournamentGameTypeSelect = document.getElementById("tournament-game-type");
+  var tournamentTargetInput = document.getElementById("tournament-target");
+  var tournamentTargetUnit = document.getElementById("tournament-target-unit");
+  var tournamentRaceToInput = document.getElementById("tournament-race-to");
+  var tournamentPlayerChecklist = document.getElementById("tournament-player-checklist");
+  var btnTournamentStart = document.getElementById("btn-tournament-start");
+  var btnTournamentAbandon = document.getElementById("btn-tournament-abandon");
+  var tournamentChampionBanner = document.getElementById("tournament-champion-banner");
+  var tournamentCurrentMatchPanel = document.getElementById("tournament-current-match-panel");
+  var tournamentReadyList = document.getElementById("tournament-ready-list");
+  var tournamentWbEl = document.getElementById("tournament-wb");
+  var tournamentLbEl = document.getElementById("tournament-lb");
+  var tournamentGfEl = document.getElementById("tournament-gf");
+
   var gameTypeSelect = document.getElementById("game-type");
   var gameTargetInput = document.getElementById("game-target");
   var gameTargetUnit = document.getElementById("game-target-unit");
@@ -359,7 +378,7 @@
   var btnSaveSessionCancel = document.getElementById("btn-save-session-cancel");
 
   function populateGameTypeSelects() {
-    [gameTypeSelect, rotationAddType].forEach(function (select) {
+    [gameTypeSelect, rotationAddType, tournamentGameTypeSelect].forEach(function (select) {
       select.innerHTML = "";
       GAME_TYPE_LIST.forEach(function (t) {
         var opt = document.createElement("option");
@@ -2205,6 +2224,7 @@
 
     appRoot.classList.add("hidden");
     allPlayersPageView.classList.add("hidden");
+    tournamentPageView.classList.add("hidden");
     playerPageView.classList.remove("hidden");
     window.scrollTo(0, 0);
 
@@ -2856,12 +2876,687 @@
   function openAllPlayersPage() {
     renderAllPlayersPage();
     appRoot.classList.add("hidden");
+    tournamentPageView.classList.add("hidden");
     allPlayersPageView.classList.remove("hidden");
     window.scrollTo(0, 0);
   }
 
   function closeAllPlayersPage() {
     allPlayersPageView.classList.add("hidden");
+    appRoot.classList.remove("hidden");
+  }
+
+  // ---------------------------------------------------------------------
+  // Elimination Tournament — double-elimination bracket.
+  //
+  // Reuses the same game type / target / "race to N wins" idea as the main
+  // scoreboard for each individual match, and records every rack win into
+  // the shared state.gameHistory (so it counts toward player stats and the
+  // All Players graphs) — but keeps its own bracket state completely
+  // separate from the main session. state.playerWins, rotation, teams and
+  // milestone overlays are all main-session-only and untouched here.
+  // ---------------------------------------------------------------------
+
+  var TOURNAMENT_KEY = "poolMasterCounter.tournament.v1";
+
+  function loadTournamentFromStorage() {
+    try {
+      var raw = localStorage.getItem(TOURNAMENT_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function saveTournamentToStorage(t) {
+    try {
+      if (t) localStorage.setItem(TOURNAMENT_KEY, JSON.stringify(t));
+      else localStorage.removeItem(TOURNAMENT_KEY);
+    } catch (e) {
+      console.warn("Could not save tournament.", e);
+    }
+  }
+
+  var TOURNAMENT = loadTournamentFromStorage();
+
+  function nextPow2(n) {
+    var p = 1;
+    while (p < n) p *= 2;
+    return p;
+  }
+
+  // Standard tournament seeding order (1v4/2v3 for a 4-bracket, 1v8/4v5/
+  // 2v7/3v6 for an 8-bracket, etc.) — used so byes land spread across the
+  // draw instead of clustered together.
+  function seedOrder(size) {
+    if (size === 1) return [1];
+    var prev = seedOrder(size / 2);
+    var result = [];
+    prev.forEach(function (s) {
+      result.push(s);
+      result.push(size + 1 - s);
+    });
+    return result;
+  }
+
+  function createBracketMatch(a, b, tag) {
+    return { id: uid(), a: a || null, b: b || null, winner: null, loser: null, tag: tag, collected: false };
+  }
+
+  function pairUpNames(names, tag) {
+    var matches = [];
+    var i = 0;
+    while (i + 1 < names.length) {
+      matches.push(createBracketMatch(names[i], names[i + 1], tag));
+      i += 2;
+    }
+    var leftover = i < names.length ? [names[i]] : [];
+    return { matches: matches, leftover: leftover };
+  }
+
+  function wbRoundComplete(t, ri) {
+    return t.wb[ri].every(function (m) {
+      return m.winner !== null;
+    });
+  }
+
+  function pendingWbMatches(t) {
+    var out = [];
+    t.wb.forEach(function (rnd) {
+      rnd.forEach(function (m) {
+        if (m.a !== null && m.b !== null && m.winner === null) out.push(m);
+      });
+    });
+    return out;
+  }
+
+  function pendingLbMatches(t) {
+    var out = [];
+    t.lbRounds.forEach(function (rnd) {
+      rnd.forEach(function (m) {
+        if (m.a !== null && m.b !== null && m.winner === null) out.push(m);
+      });
+    });
+    return out;
+  }
+
+  function pendingGfMatches(t) {
+    return t.grandFinal.filter(function (m) {
+      return m.a !== null && m.b !== null && m.winner === null;
+    });
+  }
+
+  function pendingBracketMatches(t) {
+    return pendingWbMatches(t).concat(pendingLbMatches(t), pendingGfMatches(t));
+  }
+
+  function findBracketMatchById(t, id) {
+    var all = [];
+    t.wb.forEach(function (r) {
+      all = all.concat(r);
+    });
+    t.lbRounds.forEach(function (r) {
+      all = all.concat(r);
+    });
+    all = all.concat(t.grandFinal);
+    for (var i = 0; i < all.length; i++) {
+      if (all[i].id === id) return all[i];
+    }
+    return null;
+  }
+
+  // Propagates every decided result through the bracket: winners advance to
+  // their next winners-bracket slot, losers drop into the losers bracket in
+  // the standard alternating pattern (a round pairing fresh drop-ins against
+  // losers-bracket survivors, then a round consolidating those survivors
+  // among themselves before the next winners-bracket round's losers arrive),
+  // and sets up the grand final once both bracket champions are known.
+  function advanceBracket(t) {
+    var changed = true;
+    while (changed) {
+      changed = false;
+
+      t.wb.forEach(function (rnd, ri) {
+        rnd.forEach(function (m, mi) {
+          if (m.winner !== null && !m.collected) {
+            m.collected = true;
+            changed = true;
+            if (ri + 1 < t.wb.length) {
+              var nxt = t.wb[ri + 1][Math.floor(mi / 2)];
+              if (mi % 2 === 0) nxt.a = m.winner;
+              else nxt.b = m.winner;
+            } else {
+              t.wbChampion = m.winner;
+            }
+          }
+        });
+      });
+
+      while (t.lbNextWbRoundToDrop < t.wb.length && wbRoundComplete(t, t.lbNextWbRoundToDrop)) {
+        var ri2 = t.lbNextWbRoundToDrop;
+        var losers = t.wb[ri2]
+          .map(function (m) {
+            return m.loser;
+          })
+          .filter(function (x) {
+            return x !== null;
+          });
+        t.lbNextWbRoundToDrop += 1;
+        changed = true;
+        if (ri2 === 0) {
+          var res = pairUpNames(losers, "Losers R1");
+          if (res.matches.length) t.lbRounds.push(res.matches);
+          t.lbWaiting = t.lbWaiting.concat(res.leftover);
+        } else {
+          var matches2 = [];
+          var newWaiting = [];
+          var li = 0;
+          var wi = 0;
+          var waiting = t.lbWaiting;
+          while (li < losers.length || wi < waiting.length) {
+            if (wi < waiting.length && li < losers.length) {
+              matches2.push(createBracketMatch(waiting[wi], losers[li], "Losers"));
+              wi += 1;
+              li += 1;
+            } else if (wi < waiting.length) {
+              newWaiting.push(waiting[wi]);
+              wi += 1;
+            } else {
+              newWaiting.push(losers[li]);
+              li += 1;
+            }
+          }
+          if (matches2.length) t.lbRounds.push(matches2);
+          t.lbWaiting = newWaiting;
+        }
+      }
+
+      t.lbRounds.forEach(function (rnd) {
+        rnd.forEach(function (m) {
+          if (m.winner !== null && !m.collected) {
+            m.collected = true;
+            t.lbWaiting.push(m.winner);
+            changed = true;
+          }
+        });
+      });
+
+      if (t.lbWaiting.length >= 2) {
+        var moreWbPending = t.lbNextWbRoundToDrop < t.wb.length;
+        if (!moreWbPending || !wbRoundComplete(t, t.lbNextWbRoundToDrop)) {
+          var res2 = pairUpNames(t.lbWaiting, "Losers");
+          if (res2.matches.length) {
+            t.lbRounds.push(res2.matches);
+            t.lbWaiting = res2.leftover;
+            changed = true;
+          }
+        }
+      }
+
+      if (
+        t.lbChampion === null &&
+        t.lbNextWbRoundToDrop >= t.wb.length &&
+        pendingLbMatches(t).length === 0 &&
+        t.lbWaiting.length === 1
+      ) {
+        t.lbChampion = t.lbWaiting[0];
+        changed = true;
+      }
+
+      if (t.wbChampion && t.lbChampion && t.grandFinal.length === 0) {
+        t.grandFinal.push(createBracketMatch(t.wbChampion, t.lbChampion, "Grand Final"));
+        changed = true;
+      }
+    }
+  }
+
+  function buildDoubleEliminationBracket(playerNames, gameType, target, raceTo) {
+    var shuffled = playerNames.slice();
+    for (var i = shuffled.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = shuffled[i];
+      shuffled[i] = shuffled[j];
+      shuffled[j] = tmp;
+    }
+    var n = shuffled.length;
+    var size = nextPow2(n);
+    var order = seedOrder(size);
+    var slots = order.map(function (s) {
+      return s <= n ? shuffled[s - 1] : null;
+    });
+
+    var wb = [];
+    var r1 = [];
+    for (var k = 0; k < size; k += 2) {
+      r1.push(createBracketMatch(slots[k], slots[k + 1], "Winners R1"));
+    }
+    wb.push(r1);
+    var nrounds = Math.round(Math.log(size) / Math.log(2));
+    for (var r = 1; r < nrounds; r++) {
+      var prev = wb[wb.length - 1];
+      var cur = [];
+      for (var m = 0; m < prev.length / 2; m++) {
+        cur.push(createBracketMatch(null, null, "Winners R" + (r + 1)));
+      }
+      wb.push(cur);
+    }
+
+    var t = {
+      createdAt: new Date().toISOString(),
+      gameType: gameType,
+      target: target,
+      raceTo: raceTo,
+      players: shuffled,
+      size: size,
+      wb: wb,
+      lbRounds: [],
+      lbWaiting: [],
+      lbNextWbRoundToDrop: 0,
+      wbChampion: null,
+      lbChampion: null,
+      grandFinal: [],
+      champion: null,
+      active: null
+    };
+
+    // Round-1 byes are structural (a slot was never filled because there
+    // weren't enough real players) — resolve them once, explicitly, here.
+    // Every other empty slot elsewhere in the bracket just means "not
+    // decided yet" and must never be treated as a bye.
+    wb[0].forEach(function (m) {
+      if ((m.a === null) !== (m.b === null)) {
+        m.winner = m.a !== null ? m.a : m.b;
+        m.loser = null;
+      }
+    });
+
+    advanceBracket(t);
+    return t;
+  }
+
+  function isGrandFinalMatch(t, match) {
+    return t.grandFinal.indexOf(match) !== -1;
+  }
+
+  function reportBracketResult(t, match, winnerName) {
+    if (match.a !== winnerName && match.b !== winnerName) return;
+    match.winner = winnerName;
+    match.loser = match.a === winnerName ? match.b : match.a;
+    if (isGrandFinalMatch(t, match)) {
+      if (winnerName === t.wbChampion) {
+        t.champion = winnerName;
+      } else if (t.grandFinal.length === 1) {
+        // The losers-bracket champion beat the winners-bracket champion,
+        // who has only lost once — double elimination means they get a
+        // second grand final to decide it.
+        t.grandFinal.push(createBracketMatch(t.grandFinal[0].a, t.grandFinal[0].b, "Grand Final (bracket reset)"));
+      } else {
+        t.champion = winnerName;
+      }
+      return;
+    }
+    advanceBracket(t);
+  }
+
+  function recordTournamentRackWin(winnerName, loserName, durationMs) {
+    var typeLabel = GAME_TYPES[TOURNAMENT.gameType] ? GAME_TYPES[TOURNAMENT.gameType].label : TOURNAMENT.gameType;
+    state.gameHistory.unshift({
+      ts: new Date().toISOString(),
+      gameType: TOURNAMENT.gameType,
+      gameLabel: typeLabel,
+      target: TOURNAMENT.target,
+      winnerNames: [winnerName],
+      opponentNames: [loserName],
+      isTeam: false,
+      mvpId: null,
+      mvpName: null,
+      durationMs: durationMs,
+      summary: winnerName + " won " + typeLabel + " (tournament vs " + loserName + ")"
+    });
+    if (state.gameHistory.length > 200) state.gameHistory.length = 200;
+    saveState();
+  }
+
+  function renderTournamentPlayerChecklist() {
+    var names = getAllKnownPlayerNames().sort(function (a, b) {
+      return a.localeCompare(b);
+    });
+    var activeNames = {};
+    activePlayers().forEach(function (p) {
+      activeNames[p.name] = true;
+    });
+    tournamentPlayerChecklist.innerHTML = "";
+    if (names.length === 0) {
+      var hint = document.createElement("li");
+      hint.className = "empty-hint";
+      hint.textContent = "Add players first.";
+      tournamentPlayerChecklist.appendChild(hint);
+      return;
+    }
+    names.forEach(function (name) {
+      var li = document.createElement("li");
+      li.className = "tournament-player-check-row";
+      var label = document.createElement("label");
+      var checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.value = name;
+      checkbox.checked = !!activeNames[name];
+      var span = document.createElement("span");
+      span.textContent = name;
+      label.appendChild(checkbox);
+      label.appendChild(span);
+      li.appendChild(label);
+      tournamentPlayerChecklist.appendChild(li);
+    });
+  }
+
+  function getCheckedTournamentPlayers() {
+    return Array.prototype.slice
+      .call(tournamentPlayerChecklist.querySelectorAll('input[type="checkbox"]:checked'))
+      .map(function (cb) {
+        return cb.value;
+      });
+  }
+
+  function startTournament() {
+    var names = getCheckedTournamentPlayers();
+    if (names.length < 2) {
+      alert("Pick at least 2 players to start a tournament.");
+      return;
+    }
+    var gameType = tournamentGameTypeSelect.value;
+    var target = parseInt(tournamentTargetInput.value, 10) || GAME_TYPES[gameType].defaultTarget;
+    var raceTo = parseInt(tournamentRaceToInput.value, 10) || 1;
+    TOURNAMENT = buildDoubleEliminationBracket(names, gameType, target, raceTo);
+    saveTournamentToStorage(TOURNAMENT);
+    renderTournamentPage();
+  }
+
+  function abandonTournament() {
+    var isDone = TOURNAMENT && TOURNAMENT.champion;
+    if (
+      !isDone &&
+      !confirm(
+        "Abandon this tournament? The bracket will be cleared, but every match already played stays saved in each player's stats."
+      )
+    ) {
+      return;
+    }
+    TOURNAMENT = null;
+    saveTournamentToStorage(null);
+    renderTournamentPage();
+  }
+
+  function tournamentMatchCard(match, activeMatchId) {
+    var div = document.createElement("div");
+    var isActive = activeMatchId === match.id;
+    var stateClass = match.winner ? "is-done" : isActive ? "is-active" : match.a && match.b ? "is-ready" : "is-pending";
+    div.className = "tournament-match-card " + stateClass;
+
+    [match.a, match.b].forEach(function (name) {
+      var row = document.createElement("div");
+      row.className = "tournament-match-side";
+      if (match.winner && name === match.winner) row.classList.add("is-winner");
+      if (match.winner && name === match.loser) row.classList.add("is-loser");
+      row.textContent = name || "—";
+      div.appendChild(row);
+    });
+
+    if (isActive) {
+      var playingNote = document.createElement("div");
+      playingNote.className = "tournament-playing-note";
+      playingNote.textContent = "▶ Playing now";
+      div.appendChild(playingNote);
+    } else if (match.a && match.b && !match.winner) {
+      var playBtn = document.createElement("button");
+      playBtn.type = "button";
+      playBtn.className = "btn btn-primary tournament-play-btn";
+      playBtn.textContent = "Play";
+      playBtn.addEventListener("click", function () {
+        startTournamentMatch(match.id);
+      });
+      div.appendChild(playBtn);
+    }
+
+    return div;
+  }
+
+  function renderBracketColumns(container, rounds, activeMatchId) {
+    container.innerHTML = "";
+    if (!rounds.length) {
+      var hint = document.createElement("p");
+      hint.className = "empty-hint";
+      hint.textContent = "—";
+      container.appendChild(hint);
+      return;
+    }
+    rounds.forEach(function (round, i) {
+      var col = document.createElement("div");
+      col.className = "tournament-round-col";
+      var heading = document.createElement("div");
+      heading.className = "tournament-round-heading";
+      heading.textContent = round.length ? round[0].tag : "Round " + (i + 1);
+      col.appendChild(heading);
+      round.forEach(function (m) {
+        col.appendChild(tournamentMatchCard(m, activeMatchId));
+      });
+      container.appendChild(col);
+    });
+  }
+
+  function startTournamentMatch(matchId) {
+    var match = findBracketMatchById(TOURNAMENT, matchId);
+    if (!match || match.winner) return;
+    TOURNAMENT.active = {
+      matchId: matchId,
+      aBalls: 0,
+      bBalls: 0,
+      aWins: 0,
+      bWins: 0,
+      startedAt: new Date().toISOString()
+    };
+    saveTournamentToStorage(TOURNAMENT);
+    renderTournamentActive();
+  }
+
+  function tournamentAdjustScore(side, delta) {
+    var t = TOURNAMENT;
+    if (!t || !t.active) return;
+    var match = findBracketMatchById(t, t.active.matchId);
+    if (!match) return;
+    var gameType = GAME_TYPES[t.gameType];
+    var allowNegative = gameType.unit !== "rack";
+    var ballsKey = side === "a" ? "aBalls" : "bBalls";
+    var winsKey = side === "a" ? "aWins" : "bWins";
+    var next = (t.active[ballsKey] || 0) + delta;
+    if (next < 0 && !allowNegative) next = 0;
+    t.active[ballsKey] = next;
+
+    var name = side === "a" ? match.a : match.b;
+    var otherName = side === "a" ? match.b : match.a;
+    var player = getPlayer(getPlayerIdByName(name));
+    var voice = player ? player.voice : undefined;
+
+    if (delta > 0 && next >= t.target) {
+      t.active[winsKey] += 1;
+      var startedMs = t.active.startedAt ? new Date(t.active.startedAt).getTime() : null;
+      var durationMs = startedMs ? Math.max(0, Date.now() - startedMs) : null;
+      recordTournamentRackWin(name, otherName, durationMs);
+      t.active.aBalls = 0;
+      t.active.bBalls = 0;
+      t.active.startedAt = new Date().toISOString();
+      playWinSound(voice);
+      if (t.active[winsKey] >= t.raceTo) {
+        reportBracketResult(t, match, name);
+        t.active = null;
+        saveTournamentToStorage(t);
+        renderTournamentPage();
+        return;
+      }
+    } else if (delta > 0) {
+      playPositiveSound(voice);
+    } else {
+      playNegativeSound(voice);
+    }
+    saveTournamentToStorage(t);
+    renderTournamentActiveMatch();
+  }
+
+  function buildTournamentSidePanel(name, side, balls, wins, t) {
+    var panel = document.createElement("div");
+    panel.className = "player-panel";
+
+    var nameEl = document.createElement("div");
+    nameEl.className = "player-name";
+    nameEl.textContent = name;
+    panel.appendChild(nameEl);
+
+    panel.appendChild(buildStatMini("Match wins", wins, wins >= t.raceTo));
+
+    var block = document.createElement("div");
+    block.className = "stat-block";
+    var label = document.createElement("div");
+    label.className = "stat-label";
+    label.textContent = GAME_TYPES[t.gameType].label + " · Target " + t.target;
+    var value = document.createElement("div");
+    value.className = "stat-value";
+    value.textContent = balls;
+    block.appendChild(label);
+    block.appendChild(value);
+    panel.appendChild(block);
+
+    var controls = document.createElement("div");
+    controls.className = "ball-controls";
+    var unit = GAME_TYPES[t.gameType].unit;
+    var allowNegative = unit !== "rack";
+
+    var minusBtn = document.createElement("button");
+    minusBtn.type = "button";
+    minusBtn.className = "btn-ball minus";
+    minusBtn.textContent = "−";
+    minusBtn.setAttribute("aria-label", "Remove point for " + name);
+    minusBtn.disabled = !allowNegative && balls <= 0;
+    minusBtn.addEventListener("click", function () {
+      tournamentAdjustScore(side, -1);
+    });
+
+    var plusBtn = document.createElement("button");
+    plusBtn.type = "button";
+    plusBtn.className = "btn-ball plus";
+    plusBtn.textContent = "+";
+    plusBtn.setAttribute("aria-label", "Add point for " + name);
+    plusBtn.addEventListener("click", function () {
+      tournamentAdjustScore(side, 1);
+    });
+
+    controls.appendChild(minusBtn);
+    controls.appendChild(plusBtn);
+    panel.appendChild(controls);
+
+    return panel;
+  }
+
+  function renderTournamentActiveMatch() {
+    var t = TOURNAMENT;
+    tournamentCurrentMatchPanel.innerHTML = "";
+    if (!t || !t.active) return;
+    var match = findBracketMatchById(t, t.active.matchId);
+    if (!match) {
+      t.active = null;
+      return;
+    }
+    var gameType = GAME_TYPES[t.gameType];
+
+    var banner = document.createElement("div");
+    banner.className = "now-playing-banner tournament-now-playing";
+    banner.textContent = gameType.label + " — " + match.tag;
+    tournamentCurrentMatchPanel.appendChild(banner);
+
+    var board = document.createElement("div");
+    board.className = "scoreboard";
+    board.appendChild(buildTournamentSidePanel(match.a, "a", t.active.aBalls, t.active.aWins, t));
+    board.appendChild(buildTournamentSidePanel(match.b, "b", t.active.bBalls, t.active.bWins, t));
+    tournamentCurrentMatchPanel.appendChild(board);
+  }
+
+  function renderTournamentActive() {
+    var t = TOURNAMENT;
+    var activeMatchId = t.active ? t.active.matchId : null;
+    renderBracketColumns(tournamentWbEl, t.wb, activeMatchId);
+    renderBracketColumns(tournamentLbEl, t.lbRounds, activeMatchId);
+    renderBracketColumns(tournamentGfEl, t.grandFinal.length ? [t.grandFinal] : [], activeMatchId);
+
+    btnTournamentAbandon.textContent = t.champion ? "Start New Tournament" : "Abandon Tournament";
+
+    if (t.champion) {
+      tournamentChampionBanner.classList.remove("hidden");
+      tournamentChampionBanner.textContent = "🏆 " + t.champion + " won the tournament!";
+    } else {
+      tournamentChampionBanner.classList.add("hidden");
+      tournamentChampionBanner.textContent = "";
+    }
+
+    tournamentReadyList.innerHTML = "";
+    tournamentCurrentMatchPanel.innerHTML = "";
+
+    if (t.active) {
+      renderTournamentActiveMatch();
+      return;
+    }
+    if (t.champion) return;
+
+    var ready = pendingBracketMatches(t);
+    if (ready.length === 0) return;
+    if (ready.length === 1) {
+      startTournamentMatch(ready[0].id);
+      return;
+    }
+    var heading = document.createElement("li");
+    heading.className = "tournament-ready-heading";
+    heading.textContent = "Ready to play (" + ready.length + ")";
+    tournamentReadyList.appendChild(heading);
+    ready.forEach(function (m) {
+      var li = document.createElement("li");
+      li.className = "tournament-ready-row";
+      var text = document.createElement("span");
+      text.textContent = m.a + " vs " + m.b + " (" + m.tag + ")";
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn btn-primary";
+      btn.textContent = "Play";
+      btn.addEventListener("click", function () {
+        startTournamentMatch(m.id);
+      });
+      li.appendChild(text);
+      li.appendChild(btn);
+      tournamentReadyList.appendChild(li);
+    });
+  }
+
+  function renderTournamentPage() {
+    if (TOURNAMENT) {
+      tournamentSetupPanel.classList.add("hidden");
+      tournamentActivePanel.classList.remove("hidden");
+      renderTournamentActive();
+    } else {
+      tournamentActivePanel.classList.add("hidden");
+      tournamentSetupPanel.classList.remove("hidden");
+      renderTournamentPlayerChecklist();
+      tournamentTargetUnit.textContent = GAME_TYPES[tournamentGameTypeSelect.value].unit;
+    }
+  }
+
+  function openTournamentPage() {
+    renderTournamentPage();
+    appRoot.classList.add("hidden");
+    allPlayersPageView.classList.add("hidden");
+    playerPageView.classList.add("hidden");
+    tournamentPageView.classList.remove("hidden");
+    window.scrollTo(0, 0);
+  }
+
+  function closeTournamentPage() {
+    tournamentPageView.classList.add("hidden");
     appRoot.classList.remove("hidden");
   }
 
@@ -3105,6 +3800,16 @@
     allPlayersViewMode = allPlayersViewMode === "bars" ? "graph" : "bars";
     btnToggleAllPlayersView.textContent = allPlayersViewMode === "graph" ? "📊 See as Bars" : "📈 See as Graph";
     renderAllPlayersPage();
+  });
+
+  btnOpenTournament.addEventListener("click", openTournamentPage);
+  btnTournamentBack.addEventListener("click", closeTournamentPage);
+  btnTournamentStart.addEventListener("click", startTournament);
+  btnTournamentAbandon.addEventListener("click", abandonTournament);
+  tournamentGameTypeSelect.addEventListener("change", function () {
+    var type = GAME_TYPES[tournamentGameTypeSelect.value];
+    tournamentTargetInput.value = type.defaultTarget;
+    tournamentTargetUnit.textContent = type.unit;
   });
 
   Array.prototype.forEach.call(playerPagePeriodButtons, function (btn) {

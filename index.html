@@ -40,7 +40,10 @@
         <p class="brand-slogan">Don't get cocky!</p>
       </div>
     </div>
-    <button type="button" id="btn-open-all-players" class="btn btn-ghost all-players-nav-btn">📊 All Players</button>
+    <div class="header-nav-row">
+      <button type="button" id="btn-open-all-players" class="btn btn-ghost all-players-nav-btn">📊 All Players</button>
+      <button type="button" id="btn-open-tournament" class="btn btn-ghost all-players-nav-btn">🏆 Tournament</button>
+    </div>
   </header>
 
   <section class="panel" id="backup-panel">
@@ -251,6 +254,61 @@
   </section>
 
   <ul id="all-players-list" class="all-players-list"></ul>
+
+</div>
+
+<div id="view-tournament-page" class="hidden">
+
+  <header class="app-header player-page-header">
+    <button type="button" id="btn-tournament-back" class="btn btn-ghost">← Back</button>
+    <h1>Tournament</h1>
+  </header>
+
+  <section class="panel" id="tournament-setup-panel">
+    <h2>New Elimination Tournament</h2>
+    <p class="player-stats-note">Double elimination — lose twice and you're out. Players are drawn into the bracket at random.</p>
+
+    <div class="row">
+      <label for="tournament-game-type">Game</label>
+      <select id="tournament-game-type"></select>
+      <label for="tournament-target">Target</label>
+      <input type="number" id="tournament-target" min="1" max="500" value="1">
+      <span id="tournament-target-unit">rack</span>
+    </div>
+    <div class="row">
+      <label for="tournament-race-to">Race-to per match</label>
+      <input type="number" id="tournament-race-to" min="1" max="21" value="2">
+      <span>wins</span>
+    </div>
+
+    <h3 class="tournament-players-heading">Players</h3>
+    <ul id="tournament-player-checklist" class="tournament-player-checklist"></ul>
+
+    <div class="row">
+      <button type="button" id="btn-tournament-start" class="btn btn-primary">Start Tournament</button>
+    </div>
+  </section>
+
+  <section class="panel hidden" id="tournament-active-panel">
+    <div class="row">
+      <button type="button" id="btn-tournament-abandon" class="btn btn-danger">Abandon Tournament</button>
+    </div>
+
+    <div id="tournament-champion-banner" class="tournament-winner-banner hidden"></div>
+
+    <div id="tournament-current-match-panel"></div>
+
+    <ul id="tournament-ready-list" class="tournament-ready-list"></ul>
+
+    <h2 class="tournament-bracket-heading">Winners Bracket</h2>
+    <div id="tournament-wb" class="tournament-bracket-scroll"></div>
+
+    <h2 class="tournament-bracket-heading">Losers Bracket</h2>
+    <div id="tournament-lb" class="tournament-bracket-scroll"></div>
+
+    <h2 class="tournament-bracket-heading">Grand Final</h2>
+    <div id="tournament-gf" class="tournament-bracket-scroll"></div>
+  </section>
 
 </div>
 
