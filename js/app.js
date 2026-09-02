@@ -1159,28 +1159,33 @@
     return m + ":" + (s < 10 ? "0" : "") + s;
   }
 
+  // Today's games, most-recent first — spans however many races/sessions
+  // have already been completed (and auto-saved) today, not just the
+  // still-open live one, so this list doesn't go back to empty every time
+  // someone reaches the race target and startNewSession() clears
+  // state.gameHistory for the next race.
+  function todaysHistoryGames() {
+    return computeDayReportData(todayDateStr()).games.slice().reverse();
+  }
+
   function computeHistorySummary() {
-    var n = state.gameHistory.length;
-    return n === 0 ? "No games played yet this session." : n + " game" + (n === 1 ? "" : "s") + " played this session.";
+    var n = todaysHistoryGames().length;
+    return n === 0 ? "No games played yet today." : n + " game" + (n === 1 ? "" : "s") + " played today.";
   }
 
   function renderHistory() {
     historyList.innerHTML = "";
+    var games = todaysHistoryGames();
     setPanelSummary("history-panel", computeHistorySummary());
-    if (state.gameHistory.length === 0) {
+    if (games.length === 0) {
       var hint = document.createElement("li");
       hint.className = "empty-hint";
-      hint.textContent = "No games finished yet.";
+      hint.textContent = "No games finished yet today.";
       historyList.appendChild(hint);
       return;
     }
-    state.gameHistory.forEach(function (entry) {
+    games.forEach(function (entry) {
       var li = document.createElement("li");
-      if (typeof entry === "string" || !entry.winnerNames) {
-        li.textContent = typeof entry === "string" ? entry : entry.summary;
-        historyList.appendChild(li);
-        return;
-      }
       var timeSpan = document.createElement("span");
       timeSpan.className = "history-date";
       timeSpan.textContent = formatTimestamp(entry.ts, true);
@@ -1786,13 +1791,41 @@
     }
   }
 
-  function formatReportGameLine(g) {
-    var time = formatReportGameTime(g.ts);
-    var winners = joinNamesForReport(g.winnerNames || []);
-    var losers = joinNamesForReport(g.opponentNames || []);
-    var text = winners + " won " + g.gameLabel;
-    if (losers) text += " against " + losers;
-    return (time ? time + " — " : "") + text;
+  // Collapses repeat matchups (same winning side, same losing side, same
+  // game type) into one grouped entry with a count, so a lopsided session
+  // where one pair plays the same game a dozen times doesn't repeat the
+  // same sentence a dozen times in the report. winnerNames/opponentNames
+  // are kept as full arrays (both members of a team on each side) so
+  // grouping and display both cover team games correctly.
+  function groupReportGames(games) {
+    var order = [];
+    var byKey = {};
+    (games || []).forEach(function (g) {
+      var key =
+        (g.winnerNames || []).slice().sort().join(",") + "|" + (g.opponentNames || []).slice().sort().join(",") + "|" + g.gameLabel;
+      if (!byKey[key]) {
+        byKey[key] = { winnerNames: g.winnerNames, opponentNames: g.opponentNames, gameLabel: g.gameLabel, ts: g.ts, count: 0 };
+        order.push(key);
+      }
+      byKey[key].count += 1;
+    });
+    return order.map(function (k) {
+      return byKey[k];
+    });
+  }
+
+  function formatReportGameGroupLine(group) {
+    var winners = joinNamesForReport(group.winnerNames || []);
+    var losers = joinNamesForReport(group.opponentNames || []);
+    if (group.count === 1) {
+      var time = formatReportGameTime(group.ts);
+      var text = winners + " won " + group.gameLabel;
+      if (losers) text += " against " + losers;
+      return (time ? time + " — " : "") + text;
+    }
+    var text2 = winners + " won " + group.count + " games of " + group.gameLabel;
+    if (losers) text2 += " against " + losers;
+    return text2;
   }
 
   function formatReportDateHeading(dateStr) {
@@ -1848,18 +1881,18 @@
         if (hasBothGroups) {
           lines.push("");
           lines.push("Earlier session:");
-          earlierGames.forEach(function (g) {
-            lines.push(formatReportGameLine(g));
+          groupReportGames(earlierGames).forEach(function (g) {
+            lines.push(formatReportGameGroupLine(g));
           });
           lines.push("");
           lines.push(divider);
           lines.push("Current session:");
-          liveGames.forEach(function (g) {
-            lines.push(formatReportGameLine(g));
+          groupReportGames(liveGames).forEach(function (g) {
+            lines.push(formatReportGameGroupLine(g));
           });
         } else {
-          data.games.forEach(function (g) {
-            lines.push(formatReportGameLine(g));
+          groupReportGames(data.games).forEach(function (g) {
+            lines.push(formatReportGameGroupLine(g));
           });
         }
       }
