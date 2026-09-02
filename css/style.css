@@ -456,6 +456,20 @@ input[type="number"] {
   font-weight: 600;
 }
 
+.rating-badge {
+  display: inline-block;
+  margin-left: 7px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border);
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 700;
+  vertical-align: middle;
+  font-variant-numeric: tabular-nums;
+}
+
 .btn-playing {
   background: var(--bg-panel);
   color: var(--text-dim);
@@ -1540,6 +1554,20 @@ input[type="number"] {
   text-align: right;
 }
 
+.all-player-rating-status {
+  color: var(--text-dim);
+  font-size: 0.82rem;
+  margin: -8px 0 14px;
+}
+
+.all-player-rating-status.is-up {
+  color: #6fcf6f;
+}
+
+.all-player-rating-status.is-down {
+  color: var(--danger);
+}
+
 .all-player-show-graph-btn {
   width: 100%;
 }
@@ -1737,6 +1765,33 @@ input[type="number"] {
 .player-graph-dot-ind-played { fill: var(--info); }
 .player-graph-dot-ind-won { fill: var(--accent); }
 .player-graph-dot-ind-lost { fill: var(--danger); }
+
+.player-rating-graph-line {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.player-rating-graph-dot {
+  fill: var(--accent);
+  stroke: var(--bg-panel);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.player-rating-graph-wrap {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.player-rating-graph-heading {
+  margin: 0 0 10px;
+  font-size: 0.9rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
 
 .player-graph-time-axis {
   position: relative;

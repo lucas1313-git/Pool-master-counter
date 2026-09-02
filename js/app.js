@@ -62,7 +62,7 @@
       playerWins: {},
       teamWins: {},
       raceToWinsTarget: 5,
-      currentGame: { gameType: "8ball", target: 1, mode: "individual", startedAt: new Date().toISOString() },
+      currentGame: { gameType: "8ball", target: 1, unit: "rack", mode: "individual", startedAt: new Date().toISOString() },
       gameHistory: [],
       rotation: { enabled: false, order: [], every: 1 },
       gamesPlayedCount: 0
@@ -133,6 +133,7 @@
           if (typeof parsed.raceToWinsTarget !== "number") parsed.raceToWinsTarget = 5;
           if (!parsed.currentGame) parsed.currentGame = { gameType: "8ball", target: 1, mode: "individual" };
           if (!parsed.currentGame.startedAt) parsed.currentGame.startedAt = new Date().toISOString();
+          if (typeof parsed.currentGame.unit !== "string" || !parsed.currentGame.unit) parsed.currentGame.unit = null;
           var EIGHTBALL_FAMILY = ["8ball", "8ballrotation", "8ballpunishment"];
           if (parsed.currentGame.target === 8 && EIGHTBALL_FAMILY.indexOf(parsed.currentGame.gameType) !== -1) {
             parsed.currentGame.target = 1;
@@ -348,6 +349,8 @@
   var wizardRotationLoadSelect = document.getElementById("wizard-rotation-load-select");
   var btnWizardRotationLoad = document.getElementById("wizard-btn-rotation-load");
   var wizardRotationAddType = document.getElementById("wizard-rotation-add-type");
+  var wizardRotationAddTarget = document.getElementById("wizard-rotation-add-target");
+  var wizardRotationAddUnit = document.getElementById("wizard-rotation-add-unit");
   var btnWizardRotationAdd = document.getElementById("wizard-btn-rotation-add");
   var wizardRotationList = document.getElementById("wizard-rotation-list");
   var wizardRotationEveryInput = document.getElementById("wizard-rotation-every");
@@ -412,7 +415,7 @@
 
   var gameTypeSelect = document.getElementById("game-type");
   var gameTargetInput = document.getElementById("game-target");
-  var gameTargetUnit = document.getElementById("game-target-unit");
+  var gameTargetUnitSelect = document.getElementById("game-target-unit-select");
   var modeRadios = document.getElementsByName("game-mode");
   var raceToWinsInput = document.getElementById("race-to-wins");
 
@@ -426,6 +429,8 @@
   var rotationLoadSelect = document.getElementById("rotation-load-select");
   var btnRotationLoad = document.getElementById("btn-rotation-load");
   var rotationAddType = document.getElementById("rotation-add-type");
+  var rotationAddTarget = document.getElementById("rotation-add-target");
+  var rotationAddUnit = document.getElementById("rotation-add-unit");
   var btnRotationAdd = document.getElementById("btn-rotation-add");
   var rotationList = document.getElementById("rotation-list");
   var rotationEveryInput = document.getElementById("rotation-every");
@@ -499,10 +504,61 @@
     renderWizardIfOpen();
   }
 
+  // A rotation entry is { gameType, target, unit } — its own rule, not
+  // just a game type — so the same game type can appear more than once in
+  // an order with different rules (e.g. "8-Ball — 1 rack" and "8-Ball — 3
+  // racks" as distinct steps).
+  function rotationEntryLabel(entry) {
+    var type = GAME_TYPES[entry.gameType];
+    var label = type ? type.label : entry.gameType;
+    var unit = entry.unit || (type ? type.unit : "rack");
+    if (unit === "rack" && entry.target !== 1) unit = "racks";
+    return label + " — " + entry.target + " " + unit;
+  }
+
+  // Normalizes one rotation-order entry to the { gameType, target, unit }
+  // shape, filling in a game type's defaults for anything missing —
+  // handles both brand-new entries and legacy ones saved as a bare game
+  // type string before per-entry rules existed. Requires GAME_TYPES to
+  // already be populated.
+  function normalizeRotationEntry(entry) {
+    var gameType = typeof entry === "string" ? entry : entry && entry.gameType;
+    if (!gameType) return null;
+    var type = GAME_TYPES[gameType];
+    var target = entry && typeof entry === "object" && typeof entry.target === "number" && entry.target > 0
+      ? entry.target
+      : type ? type.defaultTarget : 1;
+    var unit = entry && typeof entry === "object" && typeof entry.unit === "string" && entry.unit
+      ? entry.unit
+      : type ? type.unit : "rack";
+    return { gameType: gameType, target: target, unit: unit };
+  }
+
+  // Fills in state.currentGame.unit and normalizes every rotation entry
+  // (live and saved) into the { gameType, target, unit } shape. Runs once
+  // at boot, after GAME_TYPES is loaded — rotation entries can't be
+  // normalized any earlier since GAME_TYPES isn't populated yet when
+  // loadState() runs.
+  function normalizeGameTypeDependentData() {
+    if (!state.currentGame.unit) {
+      var currentType = GAME_TYPES[state.currentGame.gameType];
+      state.currentGame.unit = currentType ? currentType.unit : "rack";
+    }
+    state.rotation.order = state.rotation.order.map(normalizeRotationEntry).filter(Boolean);
+    saveState();
+
+    var rostersChanged = false;
+    SAVED_ROTATIONS.forEach(function (r) {
+      if ((r.order || []).some(function (e) { return typeof e === "string"; })) rostersChanged = true;
+      r.order = (r.order || []).map(normalizeRotationEntry).filter(Boolean);
+    });
+    if (rostersChanged) saveRotationsToStorage(SAVED_ROTATIONS);
+  }
+
   // Builds one rotation-order <li> (position, label, up/down/remove
   // controls). Shared by the main Game Order panel and the wizard's
   // rotation step so both stay visually and behaviorally identical.
-  function buildRotationRow(typeId, i, total) {
+  function buildRotationRow(entry, i, total) {
     var li = document.createElement("li");
     li.className = "rotation-row";
 
@@ -512,7 +568,7 @@
 
     var name = document.createElement("span");
     name.className = "rotation-name";
-    name.textContent = GAME_TYPES[typeId] ? GAME_TYPES[typeId].label : typeId;
+    name.textContent = rotationEntryLabel(entry);
 
     var controls = document.createElement("div");
     controls.className = "rotation-controls";
@@ -560,8 +616,8 @@
       listEl.appendChild(hint);
       return;
     }
-    state.rotation.order.forEach(function (typeId, i) {
-      listEl.appendChild(buildRotationRow(typeId, i, state.rotation.order.length));
+    state.rotation.order.forEach(function (entry, i) {
+      listEl.appendChild(buildRotationRow(entry, i, state.rotation.order.length));
     });
   }
 
@@ -609,8 +665,13 @@
       ", switching every " + state.rotation.every + " game" + (state.rotation.every === 1 ? "" : "s") + ".";
   }
 
-  function addRotationItem(typeId) {
-    state.rotation.order.push(typeId);
+  function addRotationItem(gameType, target, unit) {
+    var type = GAME_TYPES[gameType];
+    state.rotation.order.push({
+      gameType: gameType,
+      target: target > 0 ? target : (type ? type.defaultTarget : 1),
+      unit: unit || (type ? type.unit : "rack")
+    });
     saveState();
     saveRotationSnapshotIfNew(true);
     applyRotationIfDue();
@@ -647,7 +708,7 @@
   function syncGameTypeUI() {
     gameTypeSelect.value = state.currentGame.gameType;
     gameTargetInput.value = state.currentGame.target;
-    gameTargetUnit.textContent = GAME_TYPES[state.currentGame.gameType].unit;
+    gameTargetUnitSelect.value = state.currentGame.unit;
     updateCurrentGameSummary();
   }
 
@@ -656,7 +717,8 @@
     var modeLabel = state.currentGame.mode === "teams" ? "Teams" : "Individual";
     setPanelSummary(
       "game-setup-panel",
-      (type ? type.label : state.currentGame.gameType) + " · " + modeLabel + " · Race to " + state.raceToWinsTarget + " wins"
+      (type ? type.label : state.currentGame.gameType) + " (" + state.currentGame.target + " " + state.currentGame.unit + ") · " +
+        modeLabel + " · Race to " + state.raceToWinsTarget + " wins"
     );
   }
 
@@ -668,8 +730,8 @@
     var currentIndex = Math.floor(state.gamesPlayedCount / every) % state.rotation.order.length;
     var nextIndex = (currentIndex + 1) % state.rotation.order.length;
     return {
-      currentLabel: GAME_TYPES[state.rotation.order[currentIndex]].label,
-      nextLabel: GAME_TYPES[state.rotation.order[nextIndex]].label,
+      currentLabel: rotationEntryLabel(state.rotation.order[currentIndex]),
+      nextLabel: rotationEntryLabel(state.rotation.order[nextIndex]),
       untilSwitch: untilSwitch
     };
   }
@@ -678,10 +740,11 @@
     if (!state.rotation.enabled || state.rotation.order.length === 0) return;
     var every = Math.max(1, state.rotation.every || 1);
     var index = Math.floor(state.gamesPlayedCount / every) % state.rotation.order.length;
-    var newType = state.rotation.order[index];
-    if (GAME_TYPES[newType] && newType !== state.currentGame.gameType) {
-      state.currentGame.gameType = newType;
-      state.currentGame.target = GAME_TYPES[newType].defaultTarget;
+    var entry = state.rotation.order[index];
+    if (GAME_TYPES[entry.gameType] && (entry.gameType !== state.currentGame.gameType || entry.target !== state.currentGame.target || entry.unit !== state.currentGame.unit)) {
+      state.currentGame.gameType = entry.gameType;
+      state.currentGame.target = entry.target;
+      state.currentGame.unit = entry.unit;
       syncGameTypeUI();
     }
   }
@@ -818,6 +881,7 @@
       name.className = "roster-name";
       name.textContent = p.name;
       row.appendChild(name);
+      row.appendChild(buildRatingBadge(p.name));
 
       var playBtn = document.createElement("button");
       playBtn.type = "button";
@@ -900,8 +964,7 @@
     minusBtn.className = "btn-ball minus";
     minusBtn.textContent = "−";
     minusBtn.setAttribute("aria-label", "Remove point for " + player.name);
-    var minusUnit = GAME_TYPES[state.currentGame.gameType].unit;
-    var minusAllowNegative = minusUnit !== "rack";
+    var minusAllowNegative = state.currentGame.unit !== "rack";
     minusBtn.disabled = disabled || (!minusAllowNegative && (player.balls || 0) <= 0);
     minusBtn.addEventListener("click", function () {
       adjustScore(player.id, -1);
@@ -929,6 +992,7 @@
     var name = document.createElement("div");
     name.className = "player-name";
     name.textContent = player.name;
+    name.appendChild(buildRatingBadge(player.name));
     panel.appendChild(name);
 
     var wins = state.playerWins[player.id] || 0;
@@ -1013,7 +1077,7 @@
     nowPlayingBanner.appendChild(document.createTextNode("🎱 Now Playing: " + type.label));
     var note = document.createElement("span");
     note.className = "target-note";
-    note.textContent = "Target " + state.currentGame.target + " " + type.unit;
+    note.textContent = "Target " + state.currentGame.target + " " + state.currentGame.unit;
     nowPlayingBanner.appendChild(note);
     var duration = document.createElement("span");
     duration.className = "game-duration-live";
@@ -1329,8 +1393,9 @@
     }
     var startedAt = state.currentGame.startedAt ? new Date(state.currentGame.startedAt).getTime() : null;
     var durationMs = startedAt ? Math.max(0, Date.now() - startedAt) : null;
+    var ts = new Date().toISOString();
     state.gameHistory.unshift({
-      ts: new Date().toISOString(),
+      ts: ts,
       gameType: state.currentGame.gameType,
       gameLabel: typeLabel,
       target: state.currentGame.target,
@@ -1345,19 +1410,32 @@
       summary: summary
     });
     if (state.gameHistory.length > 200) state.gameHistory.length = 200;
+    if (isTeam) {
+      applyTeamRatingResult(winnerNames, opponentNames, ts);
+    } else {
+      opponentNames.forEach(function (opponentName) {
+        applyPairwiseRatingResult(winnerNames[0], opponentName, ts);
+      });
+    }
+    saveRatingsToStorage(PLAYER_RATINGS);
     state.gamesPlayedCount += 1;
     saveRosterSnapshotIfNew(true);
     saveRotationSnapshotIfNew(true);
     var previousGameType = state.currentGame.gameType;
+    var previousTarget = state.currentGame.target;
+    var previousUnit = state.currentGame.unit;
     applyRotationIfDue();
-    var gameTypeChanged = state.currentGame.gameType !== previousGameType;
+    var gameTypeChanged = state.currentGame.gameType !== previousGameType ||
+      state.currentGame.target !== previousTarget || state.currentGame.unit !== previousUnit;
     showToast(summary);
     if (milestoneNames) {
       celebrateTournamentWin(milestoneNames, milestoneCount);
     } else if (onHillNames) {
       announceOnHill(onHillNames);
     } else if (gameTypeChanged) {
-      announceGameChange(GAME_TYPES[state.currentGame.gameType].label);
+      announceGameChange(
+        GAME_TYPES[state.currentGame.gameType].label + " (" + state.currentGame.target + " " + state.currentGame.unit + ")"
+      );
     }
     return summary;
   }
@@ -1429,9 +1507,7 @@
     milestoneDetails.appendChild(playerStatsListRow("Players", playerNames));
     milestoneDetails.appendChild(playerStatsRow("Tournament goal", "Race to " + target + " wins"));
     if (state.rotation.enabled && state.rotation.order.length > 0) {
-      var rotationLabels = state.rotation.order.map(function (typeId) {
-        return GAME_TYPES[typeId] ? GAME_TYPES[typeId].label : typeId;
-      });
+      var rotationLabels = state.rotation.order.map(rotationEntryLabel);
       milestoneDetails.appendChild(playerStatsListRow("Game rotation", rotationLabels));
       if (info) {
         milestoneDetails.appendChild(
@@ -1461,8 +1537,7 @@
   function adjustScore(playerId, delta) {
     var player = getPlayer(playerId);
     if (!player || !player.playing) return;
-    var unit = GAME_TYPES[state.currentGame.gameType].unit;
-    var allowNegative = unit !== "rack";
+    var allowNegative = state.currentGame.unit !== "rack";
     var next = (player.balls || 0) + delta;
     if (next < 0 && !allowNegative) next = 0;
     player.balls = next;
@@ -1641,6 +1716,7 @@
   var ROSTERS_KEY = "poolMasterCounter.rosters.v1";
   var ROTATIONS_KEY = "poolMasterCounter.rotations.v1";
   var PLAYER_STATS_KEY = "poolMasterCounter.playerStats.v1";
+  var RATINGS_KEY = "poolMasterCounter.ratings.v1";
 
   function loadRostersFromStorage() {
     try {
@@ -1696,6 +1772,24 @@
     }
   }
 
+  function loadRatingsFromStorage() {
+    try {
+      var raw = localStorage.getItem(RATINGS_KEY);
+      var parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function saveRatingsToStorage(ratings) {
+    try {
+      localStorage.setItem(RATINGS_KEY, JSON.stringify(ratings));
+    } catch (e) {
+      console.warn("Could not save ratings.", e);
+    }
+  }
+
   // One-time-per-load cleanup: if PLAYER_STATS already has separate entries
   // for the same person under different casing (e.g. "Bob" and "bob" from
   // before names were treated as case-insensitive), merge their sessions
@@ -1741,6 +1835,167 @@
     PLAYER_STATS = result.stats;
     if (result.changed) savePlayerStatsToStorage(PLAYER_STATS);
   })();
+
+  // ---------------------------------------------------------------------
+  // Player ratings — an Elo-style rating inspired by the publicly
+  // documented behavior of FargoRate (the rating system behind USA Pool
+  // League and most competitive USA pool leagues): a roughly 0-900 scale
+  // where each 100-point gap between two players corresponds to about a
+  // 2:1 expected win ratio, doubling every 100 points. This is NOT a
+  // reverse-engineered clone of Fargo's proprietary global-optimization
+  // algorithm (which considers every player's games together and is
+  // recomputed from scratch daily) — that's neither public nor practical
+  // to replicate client-side. It's a standard, well-understood per-game
+  // update rule tuned to land on the same scale and odds Fargo publishes.
+  //
+  // Ratings are entirely automatic: every credited game updates both
+  // players' ratings immediately, and there is no UI to edit a rating by
+  // hand. New players start at DEFAULT_RATING, the middle of the range
+  // FargoRate describes as where most league/tournament players fall.
+  // Ratings live in their own name-keyed store (like PLAYER_STATS), so
+  // they persist for a player even after they're removed from the roster.
+  // ---------------------------------------------------------------------
+
+  var DEFAULT_RATING = 400;
+  var RATING_PROVISIONAL_GAMES = 20;
+  var RATING_K_PROVISIONAL = 24;
+  var RATING_K_ESTABLISHED = 8;
+  var RATING_HISTORY_CAP = 500;
+
+  var PLAYER_RATINGS = loadRatingsFromStorage();
+
+  // Finds an existing PLAYER_RATINGS key matching this name regardless of
+  // case, mirroring findPlayerStatsKey.
+  function findRatingKey(name) {
+    var key = normalizeNameKey(name);
+    var match = Object.keys(PLAYER_RATINGS).filter(function (k) {
+      return normalizeNameKey(k) === key;
+    });
+    return match.length ? match[0] : null;
+  }
+
+  // The rating to use for someone who hasn't played a rated game yet —
+  // shows DEFAULT_RATING without creating a stored entry for them.
+  function getPlayerRating(name) {
+    var key = findRatingKey(name);
+    return key ? PLAYER_RATINGS[key].rating : DEFAULT_RATING;
+  }
+
+  function getPlayerRatingEntry(name) {
+    var key = findRatingKey(name);
+    return key ? PLAYER_RATINGS[key] : null;
+  }
+
+  function ensureRatingEntry(name) {
+    var key = findRatingKey(name) || name;
+    if (!PLAYER_RATINGS[key]) {
+      PLAYER_RATINGS[key] = { name: key, rating: DEFAULT_RATING, gamesPlayed: 0, history: [] };
+    }
+    return PLAYER_RATINGS[key];
+  }
+
+  // Win probability for A over B given the two ratings — a 100-point gap
+  // is a 2:1 expected win ratio, matching FargoRate's published scale.
+  function eloExpectedScore(ratingA, ratingB) {
+    return 1 / (1 + Math.pow(2, (ratingB - ratingA) / 100));
+  }
+
+  // New/lightly-rated players move faster (a "provisional" period) so a
+  // handful of games can correct a bad starting estimate quickly; once
+  // established, ratings move more slowly and stay stable session to
+  // session — the same shape FargoRate describes (a starter estimate
+  // that's blended out as real games accumulate), simplified to a
+  // two-step K-factor instead of a continuous blend.
+  function ratingKFor(gamesPlayed) {
+    return gamesPlayed < RATING_PROVISIONAL_GAMES ? RATING_K_PROVISIONAL : RATING_K_ESTABLISHED;
+  }
+
+  function bumpPlayerRating(name, delta, ts) {
+    var entry = ensureRatingEntry(name);
+    entry.rating += delta;
+    entry.gamesPlayed += 1;
+    entry.history.push({ ts: ts, rating: entry.rating, delta: delta });
+    if (entry.history.length > RATING_HISTORY_CAP) entry.history.shift();
+    return entry;
+  }
+
+  // One pairwise result: winnerName beat loserName. Both ratings update
+  // from their pre-game values (the expected score is computed once,
+  // before either is touched).
+  function applyPairwiseRatingResult(winnerName, loserName, ts) {
+    var winnerEntry = ensureRatingEntry(winnerName);
+    var loserEntry = ensureRatingEntry(loserName);
+    var expectedWinner = eloExpectedScore(winnerEntry.rating, loserEntry.rating);
+    var winnerDelta = Math.round(ratingKFor(winnerEntry.gamesPlayed) * (1 - expectedWinner));
+    var loserDelta = Math.round(ratingKFor(loserEntry.gamesPlayed) * -(1 - expectedWinner));
+    bumpPlayerRating(winnerName, winnerDelta, ts);
+    bumpPlayerRating(loserName, loserDelta, ts);
+  }
+
+  function averageRating(names) {
+    if (!names.length) return DEFAULT_RATING;
+    var sum = names.reduce(function (total, n) {
+      return total + getPlayerRating(n);
+    }, 0);
+    return sum / names.length;
+  }
+
+  // Team result: treats each side's average rating as a single "player"
+  // for the win-probability calculation, then applies that same delta to
+  // every member of each side — a common, simple approximation for team
+  // Elo (not as rigorous as e.g. TrueSkill, but transparent and fair).
+  function applyTeamRatingResult(winnerNames, loserNames, ts) {
+    var winnerAvg = averageRating(winnerNames);
+    var loserAvg = averageRating(loserNames);
+    var expectedWinner = eloExpectedScore(winnerAvg, loserAvg);
+    var winnerDelta = Math.round(RATING_K_PROVISIONAL * (1 - expectedWinner));
+    var loserDelta = Math.round(RATING_K_PROVISIONAL * -(1 - expectedWinner));
+    winnerNames.forEach(function (n) {
+      bumpPlayerRating(n, winnerDelta, ts);
+    });
+    loserNames.forEach(function (n) {
+      bumpPlayerRating(n, loserDelta, ts);
+    });
+  }
+
+  // Net rating change within a period, e.g. for the All Players page. null
+  // means "no rating history at all" (never played a rated game).
+  function computeRatingPeriodDelta(name, period) {
+    var entry = getPlayerRatingEntry(name);
+    if (!entry || entry.history.length === 0) return null;
+    var periodStart = periodStartDate(period);
+    var startRating = DEFAULT_RATING;
+    if (periodStart) {
+      var startMs = periodStart.getTime();
+      for (var i = entry.history.length - 1; i >= 0; i--) {
+        if (new Date(entry.history[i].ts).getTime() < startMs) {
+          startRating = entry.history[i].rating;
+          break;
+        }
+      }
+    }
+    return entry.rating - startRating;
+  }
+
+  // A small "412" badge next to a player's name, used everywhere a name
+  // is shown (roster, scoreboard, All Players, player stats page).
+  function buildRatingBadge(name) {
+    var badge = document.createElement("span");
+    badge.className = "rating-badge";
+    badge.textContent = getPlayerRating(name);
+    badge.title = "Rating (Elo-style, FargoRate-inspired scale)";
+    return badge;
+  }
+
+  // Formats a period rating change as "▲ +18", "▼ −9", "— no change", or
+  // null (never rated) for the All Players page.
+  function formatRatingPeriodDelta(name, period) {
+    var delta = computeRatingPeriodDelta(name, period);
+    if (delta === null) return null;
+    if (delta > 0) return "▲ +" + delta;
+    if (delta < 0) return "▼ " + delta;
+    return "— no change";
+  }
 
   // Finds an existing PLAYER_STATS key matching this name regardless of
   // case, so a lookup for "bob" still finds stats saved under "Bob".
@@ -1862,7 +2117,8 @@
       exportedAt: new Date().toISOString(),
       state: state,
       rosters: SAVED_ROSTERS,
-      playerStats: PLAYER_STATS
+      playerStats: PLAYER_STATS,
+      ratings: PLAYER_RATINGS
     };
     downloadJSON("pool-master-counter-backup-" + payload.exportedAt.slice(0, 10) + ".json", payload);
   }
@@ -1912,6 +2168,44 @@
       foldIn(name, extraSessionsByPlayer[name]);
     });
     return merged;
+  }
+
+  // Unions two rating stores by combining each player's history (deduped
+  // by timestamp) and recomputing the current rating/games-played from
+  // the merged, time-sorted history — rather than picking one side's
+  // number — so importing a backup from another device never overwrites
+  // a rating with a stale one or double-counts a game both sides know.
+  function mergeRatingsData(localRatings, importedRatings) {
+    var merged = {};
+    Object.keys(localRatings || {}).forEach(function (name) {
+      merged[name] = (localRatings[name].history || []).slice();
+    });
+    Object.keys(importedRatings || {}).forEach(function (name) {
+      var history = importedRatings[name] && Array.isArray(importedRatings[name].history) ? importedRatings[name].history : [];
+      merged[name] = (merged[name] || []).concat(history);
+    });
+    var result = {};
+    Object.keys(merged).forEach(function (name) {
+      var seen = {};
+      var deduped = [];
+      merged[name]
+        .slice()
+        .sort(function (a, b) {
+          return a.ts.localeCompare(b.ts);
+        })
+        .forEach(function (h) {
+          if (seen[h.ts]) return;
+          seen[h.ts] = true;
+          deduped.push(h);
+        });
+      result[name] = {
+        name: name,
+        rating: deduped.length ? deduped[deduped.length - 1].rating : DEFAULT_RATING,
+        gamesPlayed: deduped.length,
+        history: deduped
+      };
+    });
+    return result;
   }
 
   // Unions two saved-roster-list arrays, skipping entries whose player set
@@ -2062,6 +2356,8 @@
         var extraSessions = summarizeGameHistoryByPlayer(importedState.gameHistory || []);
         var mergedPlayerStats = mergePlayerStatsData(PLAYER_STATS, importedPlayerStats, extraSessions);
         var rosterMerge = mergeRosterLists(SAVED_ROSTERS, importedRosters);
+        var importedRatings = data.ratings && typeof data.ratings === "object" ? data.ratings : {};
+        var mergedRatings = mergeRatingsData(PLAYER_RATINGS, importedRatings);
 
         var importedRosterPlayerNames = [];
         importedRosters.forEach(function (r) {
@@ -2121,6 +2417,7 @@
         localStorage.setItem(STORAGE_KEY, JSON.stringify(finalState));
         localStorage.setItem(ROSTERS_KEY, JSON.stringify(rosterMerge.rosters));
         localStorage.setItem(PLAYER_STATS_KEY, JSON.stringify(mergedPlayerStats));
+        localStorage.setItem(RATINGS_KEY, JSON.stringify(mergedRatings));
 
         if (!localIsFresh) {
           alert(
@@ -2288,7 +2585,9 @@
     if (!rotation) return;
     state.rotation = {
       enabled: !!rotation.enabled,
-      order: rotation.order.slice(),
+      order: rotation.order.map(function (e) {
+        return { gameType: e.gameType, target: e.target, unit: e.unit };
+      }),
       every: rotation.every || 1
     };
     saveState();
@@ -2306,23 +2605,23 @@
   }
 
   function rotationLabelFor(order) {
-    return order
-      .map(function (typeId) {
-        return GAME_TYPES[typeId] ? GAME_TYPES[typeId].label : typeId;
-      })
-      .join(" → ");
+    return order.map(rotationEntryLabel).join(" → ");
+  }
+
+  function rotationEntriesEqual(a, b) {
+    return a.gameType === b.gameType && a.target === b.target && a.unit === b.unit;
   }
 
   // Checks the current game order against every saved rotation (same
-  // sequence, not just same game types) and, if it's genuinely new, saves
-  // it as a loadable entry. Runs whenever the order changes and on every
-  // credited game, mirroring the player-list snapshot behavior.
+  // sequence of rules, not just same game types) and, if it's genuinely
+  // new, saves it as a loadable entry. Runs whenever the order changes and
+  // on every credited game, mirroring the player-list snapshot behavior.
   function saveRotationSnapshotIfNew(silent) {
     var order = state.rotation.order;
     if (!order || order.length === 0) return false;
     var alreadySaved = SAVED_ROTATIONS.some(function (r) {
-      return r.order.length === order.length && r.order.every(function (t, i) {
-        return t === order[i];
+      return r.order.length === order.length && r.order.every(function (e, i) {
+        return rotationEntriesEqual(e, order[i]);
       });
     });
     if (alreadySaved) {
@@ -2490,6 +2789,7 @@
     name.className = "roster-name";
     name.textContent = p.name;
     row.appendChild(name);
+    row.appendChild(buildRatingBadge(p.name));
 
     var playBtn = document.createElement("button");
     playBtn.type = "button";
@@ -2710,9 +3010,10 @@
     }
     saveState();
 
+    if (typeChanged) state.currentGame.unit = type.unit;
     gameTypeSelect.value = typeId;
     gameTargetInput.value = state.currentGame.target;
-    gameTargetUnit.textContent = type.unit;
+    gameTargetUnitSelect.value = state.currentGame.unit;
     raceToWinsInput.value = state.raceToWinsTarget;
     Array.prototype.forEach.call(modeRadios, function (r) {
       r.checked = r.value === "individual";
@@ -3031,6 +3332,17 @@
     var synopsis = computeWinLossSynopsis(filtered);
 
     playerPageSynopsisBody.innerHTML = "";
+    playerPageSynopsisBody.appendChild(synopsisStatRow("Rating", getPlayerRating(currentStatsPlayerName)));
+    var ratingDeltaText = formatRatingPeriodDelta(currentStatsPlayerName, currentStatsPeriod);
+    if (ratingDeltaText !== null) {
+      playerPageSynopsisBody.appendChild(
+        synopsisStatRow(
+          "Rating this period",
+          ratingDeltaText,
+          ratingDeltaText.charAt(0) === "▲" ? "win" : ratingDeltaText.charAt(0) === "▼" ? "loss" : null
+        )
+      );
+    }
     playerPageSynopsisBody.appendChild(synopsisStatRow("Wins", synopsis.wins, "win"));
     playerPageSynopsisBody.appendChild(synopsisStatRow("Losses", synopsis.losses, "loss"));
     playerPageSynopsisBody.appendChild(
@@ -3713,6 +4025,105 @@
     return axis;
   }
 
+  // Rating points use their own value scale (roughly 0-900, no natural
+  // zero baseline worth showing) instead of the games chart's 0-based
+  // count scale, so this pads the start/end of the line with the first/
+  // last known rating rather than 0.
+  function buildRatingSeriesGeometry(points, minMs, maxMs, width, height, axisMin, axisMax) {
+    var usableWidth = width * (1 - GRAPH_END_BUFFER);
+    function xFor(ms) {
+      return maxMs > minMs ? ((ms - minMs) / (maxMs - minMs)) * usableWidth : 0;
+    }
+    var range = axisMax - axisMin || 1;
+    function yFor(rating) {
+      return height - ((rating - axisMin) / range) * height;
+    }
+    var dots = points.map(function (p) {
+      return { x: xFor(new Date(p.ts).getTime()), y: yFor(p.rating) };
+    });
+    var firstRating = points.length ? points[0].rating : axisMin;
+    var lastRating = points.length ? points[points.length - 1].rating : axisMin;
+    var allPts = [{ x: xFor(minMs), y: yFor(firstRating) }].concat(dots, [{ x: xFor(maxMs), y: yFor(lastRating) }]);
+    return { path: monotoneLinePath(allPts), dots: dots };
+  }
+
+  function appendRatingGraphSeries(svg, points, minMs, maxMs, width, height, axisMin, axisMax) {
+    var geo = buildRatingSeriesGeometry(points, minMs, maxMs, width, height, axisMin, axisMax);
+    var group = svgEl("g", { class: "player-graph-series" });
+    group.appendChild(svgEl("path", { d: geo.path, fill: "none", class: "player-rating-graph-line" }));
+    geo.dots.forEach(function (pt) {
+      group.appendChild(svgEl("circle", { cx: pt.x, cy: pt.y, r: 3.2, class: "player-rating-graph-dot" }));
+    });
+    svg.appendChild(group);
+    return group;
+  }
+
+  // A small standalone "rating over time" chart, appended after the main
+  // played/won/lost graph — kept separate because ratings (roughly 0-900,
+  // no meaningful zero baseline) can't share a Y-axis with game counts.
+  function buildRatingGraphSection(name, minMs, maxMs, period) {
+    var section = document.createElement("div");
+    section.className = "player-rating-graph-wrap";
+
+    var heading = document.createElement("h3");
+    heading.className = "player-rating-graph-heading";
+    heading.textContent = "Rating";
+    section.appendChild(heading);
+
+    var entry = getPlayerRatingEntry(name);
+    var pointsInWindow = entry
+      ? entry.history.filter(function (h) {
+          var t = new Date(h.ts).getTime();
+          return t >= minMs && t <= maxMs;
+        })
+      : [];
+
+    if (pointsInWindow.length === 0) {
+      var hint = document.createElement("p");
+      hint.className = "player-graph-empty";
+      hint.textContent = "No rating changes in this period (currently " + getPlayerRating(name) + ").";
+      section.appendChild(hint);
+      return section;
+    }
+
+    var ratings = pointsInWindow.map(function (h) {
+      return h.rating;
+    });
+    var minRating = Math.min.apply(null, ratings);
+    var maxRating = Math.max.apply(null, ratings);
+    var pad = Math.max(10, Math.round((maxRating - minRating) * 0.15));
+    var axisMin = Math.max(0, Math.floor((minRating - pad) / 10) * 10);
+    var axisMax = Math.ceil((maxRating + pad) / 10) * 10;
+    if (axisMax <= axisMin) axisMax = axisMin + 20;
+
+    var width = 600;
+    var height = 140;
+
+    var chart = document.createElement("div");
+    chart.className = "player-graph-chart";
+
+    var yAxis = document.createElement("div");
+    yAxis.className = "player-graph-yaxis";
+    for (var i = 4; i >= 0; i--) {
+      var label = document.createElement("span");
+      label.textContent = Math.round(axisMin + ((axisMax - axisMin) * i) / 4);
+      yAxis.appendChild(label);
+    }
+    chart.appendChild(yAxis);
+
+    var svg = svgEl("svg", { viewBox: "0 0 " + width + " " + height, class: "player-graph-svg" });
+    for (var g = 0; g <= 4; g++) {
+      var gy = height - (g / 4) * height;
+      svg.appendChild(svgEl("line", { x1: 0, x2: width, y1: gy, y2: gy, class: "player-graph-gridline" }));
+    }
+    appendRatingGraphSeries(svg, pointsInWindow, minMs, maxMs, width, height, axisMin, axisMax);
+
+    chart.appendChild(svg);
+    section.appendChild(chart);
+    section.appendChild(buildGraphTimeAxis(minMs, maxMs, period));
+    return section;
+  }
+
   function buildPlayerGraph(stats, minMs, maxMs, period) {
     var wrap = document.createElement("div");
     wrap.className = "player-graph-wrap";
@@ -3734,6 +4145,7 @@
       emptyHint.className = "player-graph-empty";
       emptyHint.textContent = "No games in this period yet.";
       wrap.appendChild(emptyHint);
+      wrap.appendChild(buildRatingGraphSection(stats.name, minMs, maxMs, period));
       return wrap;
     }
 
@@ -3906,6 +4318,7 @@
       legend.appendChild(row);
     });
     wrap.appendChild(legend);
+    wrap.appendChild(buildRatingGraphSection(stats.name, minMs, maxMs, period));
 
     return wrap;
   }
@@ -3920,6 +4333,7 @@
     name.type = "button";
     name.className = "all-player-name";
     name.textContent = stats.name;
+    name.appendChild(buildRatingBadge(stats.name));
     name.setAttribute("aria-label", "View stats for " + stats.name);
     name.addEventListener("click", function () {
       openPlayerStatsPage(stats.name);
@@ -3930,6 +4344,16 @@
     top.appendChild(name);
     top.appendChild(summary);
     li.appendChild(top);
+
+    var ratingDeltaText = formatRatingPeriodDelta(stats.name, period);
+    if (ratingDeltaText !== null) {
+      var ratingStatus = document.createElement("div");
+      ratingStatus.className = "all-player-rating-status";
+      if (ratingDeltaText.charAt(0) === "▲") ratingStatus.classList.add("is-up");
+      else if (ratingDeltaText.charAt(0) === "▼") ratingStatus.classList.add("is-down");
+      ratingStatus.textContent = "Rating this period: " + ratingDeltaText;
+      li.appendChild(ratingStatus);
+    }
 
     if (allPlayersViewMode === "graph") {
       if (isInLiveRoster) {
@@ -4414,8 +4838,9 @@
 
   function recordTournamentRackWin(winnerName, loserName, durationMs) {
     var typeLabel = GAME_TYPES[TOURNAMENT.gameType] ? GAME_TYPES[TOURNAMENT.gameType].label : TOURNAMENT.gameType;
+    var ts = new Date().toISOString();
     state.gameHistory.unshift({
-      ts: new Date().toISOString(),
+      ts: ts,
       gameType: TOURNAMENT.gameType,
       gameLabel: typeLabel,
       target: TOURNAMENT.target,
@@ -4428,6 +4853,8 @@
       summary: winnerName + " won " + typeLabel + " (tournament vs " + loserName + ")"
     });
     if (state.gameHistory.length > 200) state.gameHistory.length = 200;
+    applyPairwiseRatingResult(winnerName, loserName, ts);
+    saveRatingsToStorage(PLAYER_RATINGS);
     saveState();
   }
 
@@ -4664,6 +5091,7 @@
     var nameEl = document.createElement("div");
     nameEl.className = "player-name";
     nameEl.textContent = name;
+    nameEl.appendChild(buildRatingBadge(name));
     panel.appendChild(nameEl);
 
     panel.appendChild(buildStatMini("Match wins", wins, wins >= t.raceTo));
@@ -4975,8 +5403,9 @@
     var type = GAME_TYPES[gameTypeSelect.value];
     state.currentGame.gameType = gameTypeSelect.value;
     state.currentGame.target = type.defaultTarget;
+    state.currentGame.unit = type.unit;
     gameTargetInput.value = type.defaultTarget;
-    gameTargetUnit.textContent = type.unit;
+    gameTargetUnitSelect.value = type.unit;
     saveState();
     renderScoreboard();
     updateCurrentGameSummary();
@@ -4988,6 +5417,14 @@
     state.currentGame.target = target;
     saveState();
     renderScoreboard();
+    updateCurrentGameSummary();
+  });
+
+  gameTargetUnitSelect.addEventListener("change", function () {
+    state.currentGame.unit = gameTargetUnitSelect.value;
+    saveState();
+    renderScoreboard();
+    updateCurrentGameSummary();
   });
 
   Array.prototype.forEach.call(modeRadios, function (radio) {
@@ -5027,8 +5464,16 @@
     renderScoreboard();
   });
 
+  rotationAddType.addEventListener("change", function () {
+    var type = GAME_TYPES[rotationAddType.value];
+    if (!type) return;
+    rotationAddTarget.value = type.defaultTarget;
+    rotationAddUnit.value = type.unit;
+  });
+
   btnRotationAdd.addEventListener("click", function () {
-    addRotationItem(rotationAddType.value);
+    var target = parseInt(rotationAddTarget.value, 10) || 1;
+    addRotationItem(rotationAddType.value, target, rotationAddUnit.value);
   });
 
   rotationEveryInput.addEventListener("input", function () {
@@ -5126,8 +5571,16 @@
 
   btnWizardRotationLoad.addEventListener("click", loadSelectedWizardRotation);
 
+  wizardRotationAddType.addEventListener("change", function () {
+    var type = GAME_TYPES[wizardRotationAddType.value];
+    if (!type) return;
+    wizardRotationAddTarget.value = type.defaultTarget;
+    wizardRotationAddUnit.value = type.unit;
+  });
+
   btnWizardRotationAdd.addEventListener("click", function () {
-    addRotationItem(wizardRotationAddType.value);
+    var target = parseInt(wizardRotationAddTarget.value, 10) || 1;
+    addRotationItem(wizardRotationAddType.value, target, wizardRotationAddUnit.value);
   });
 
   wizardRotationEveryInput.addEventListener("input", function () {
@@ -5191,7 +5644,7 @@
 
   gameTypeSelect.value = state.currentGame.gameType;
   gameTargetInput.value = state.currentGame.target;
-  gameTargetUnit.textContent = GAME_TYPES[state.currentGame.gameType].unit;
+  gameTargetUnitSelect.value = state.currentGame.unit;
   raceToWinsInput.value = state.raceToWinsTarget;
   Array.prototype.forEach.call(modeRadios, function (radio) {
     radio.checked = radio.value === state.currentGame.mode;
@@ -5248,6 +5701,16 @@
       GAME_TYPES[t.id] = { label: t.label, defaultTarget: t.defaultTarget, unit: t.unit };
     });
     populateGameTypeSelects();
+    normalizeGameTypeDependentData();
+    [
+      [rotationAddType, rotationAddTarget, rotationAddUnit],
+      [wizardRotationAddType, wizardRotationAddTarget, wizardRotationAddUnit]
+    ].forEach(function (trio) {
+      var type = GAME_TYPES[trio[0].value];
+      if (!type) return;
+      trio[1].value = type.defaultTarget;
+      trio[2].value = type.unit;
+    });
     boot();
   });
 })();

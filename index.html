@@ -81,6 +81,12 @@
       </div>
       <div class="row">
         <select id="rotation-add-type"></select>
+        <input type="number" id="rotation-add-target" min="1" max="500" value="1">
+        <select id="rotation-add-unit">
+          <option value="rack">rack</option>
+          <option value="balls">balls</option>
+          <option value="points">points</option>
+        </select>
         <button type="button" id="btn-rotation-add" class="btn btn-ghost">+ Add to Order</button>
       </div>
       <ul id="rotation-list" class="rotation-list"></ul>
@@ -105,7 +111,11 @@
         <select id="game-type"></select>
         <label for="game-target">Target</label>
         <input type="number" id="game-target" min="1" max="500" value="1">
-        <span id="game-target-unit">rack</span>
+        <select id="game-target-unit-select">
+          <option value="rack">rack</option>
+          <option value="balls">balls</option>
+          <option value="points">points</option>
+        </select>
       </div>
 
       <div class="row mode-row">
@@ -346,6 +356,12 @@
           </div>
           <div class="row">
             <select id="wizard-rotation-add-type"></select>
+            <input type="number" id="wizard-rotation-add-target" min="1" max="500" value="1">
+            <select id="wizard-rotation-add-unit">
+              <option value="rack">rack</option>
+              <option value="balls">balls</option>
+              <option value="points">points</option>
+            </select>
             <button type="button" id="wizard-btn-rotation-add" class="btn btn-ghost">+ Add to Order</button>
           </div>
           <ul id="wizard-rotation-list" class="rotation-list"></ul>
