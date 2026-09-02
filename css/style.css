@@ -1192,6 +1192,7 @@ input[type="number"] {
   flex: 1 1 auto;
 }
 
+.btn-ghost.is-active,
 .period-btn.is-active {
   background: var(--accent);
   color: #241a00;

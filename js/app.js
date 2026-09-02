@@ -300,6 +300,7 @@
   var btnPlayerPageExport = document.getElementById("btn-player-page-export");
   var btnPlayerPageReset = document.getElementById("btn-player-page-reset");
   var playerPagePeriodFilter = document.getElementById("player-page-period-filter");
+  var playerPageGraphBody = document.getElementById("player-page-graph-body");
   var playerPagePeriodButtons = playerPagePeriodFilter.querySelectorAll(".period-btn");
   var playerPageSynopsisBody = document.getElementById("player-page-synopsis-body");
   var playerPageH2hList = document.getElementById("player-page-h2h-list");
@@ -311,8 +312,10 @@
   var allPlayersSortSelect = document.getElementById("all-players-sort");
   var allPlayersPeriodSelect = document.getElementById("all-players-period");
   var btnToggleAllPlayersView = document.getElementById("btn-toggle-all-players-view");
+  var btnToggleRosterFilter = document.getElementById("btn-toggle-roster-filter");
   var allPlayersList = document.getElementById("all-players-list");
   var allPlayersViewMode = "bars";
+  var allPlayersRosterOnly = false;
 
   var btnOpenTournament = document.getElementById("btn-open-tournament");
   var tournamentPageView = document.getElementById("view-tournament-page");
@@ -2132,6 +2135,30 @@
     });
   }
 
+  function renderPlayerPageGraph() {
+    if (!currentStatsPlayerName) return;
+    var period = currentStatsPeriod;
+    var stats = computePlayerCareerStats(currentStatsPlayerName, period);
+
+    var periodStart = periodStartDate(period);
+    var minMs, maxMs;
+    if (periodStart) {
+      minMs = periodStart.getTime();
+    } else {
+      var minTs = null;
+      stats.games.forEach(function (g) {
+        if (!g.ts) return;
+        if (minTs === null || g.ts < minTs) minTs = g.ts;
+      });
+      minMs = minTs === null ? Date.now() : new Date(minTs).getTime();
+    }
+    maxMs = Date.now();
+    if (maxMs <= minMs) maxMs = minMs + 1;
+
+    playerPageGraphBody.innerHTML = "";
+    playerPageGraphBody.appendChild(buildPlayerGraph(stats, minMs, maxMs, period));
+  }
+
   function setStatsPeriod(period) {
     currentStatsPeriod = period;
     for (var i = 0; i < playerPagePeriodButtons.length; i++) {
@@ -2139,6 +2166,7 @@
       btn.classList.toggle("is-active", btn.getAttribute("data-period") === period);
     }
     renderPlayerSynopsis();
+    renderPlayerPageGraph();
   }
 
   function formatSessionDateTime(session) {
@@ -2990,6 +3018,15 @@
   function renderAllPlayersPage() {
     var period = allPlayersPeriodSelect.value;
     var names = getAllKnownPlayerNames();
+    if (allPlayersRosterOnly) {
+      var rosterNames = {};
+      state.players.forEach(function (p) {
+        rosterNames[p.name] = true;
+      });
+      names = names.filter(function (n) {
+        return rosterNames[n];
+      });
+    }
     var stats = names.map(function (name) {
       return computePlayerCareerStats(name, period);
     });
@@ -3039,7 +3076,9 @@
     if (sorted.length === 0) {
       var hint = document.createElement("li");
       hint.className = "empty-hint";
-      hint.textContent = "No players yet — add players and play a few games first.";
+      hint.textContent = allPlayersRosterOnly
+        ? "No players in the current roster. Turn off \"Current Roster Only\" to see everyone."
+        : "No players yet — add players and play a few games first.";
       allPlayersList.appendChild(hint);
       return;
     }
@@ -4018,6 +4057,12 @@
   btnToggleAllPlayersView.addEventListener("click", function () {
     allPlayersViewMode = allPlayersViewMode === "bars" ? "graph" : "bars";
     btnToggleAllPlayersView.textContent = allPlayersViewMode === "graph" ? "📊 See as Bars" : "📈 See as Graph";
+    renderAllPlayersPage();
+  });
+  btnToggleRosterFilter.addEventListener("click", function () {
+    allPlayersRosterOnly = !allPlayersRosterOnly;
+    btnToggleRosterFilter.classList.toggle("is-active", allPlayersRosterOnly);
+    btnToggleRosterFilter.textContent = allPlayersRosterOnly ? "👥 Showing Roster Only" : "👥 Current Roster Only";
     renderAllPlayersPage();
   });
 
