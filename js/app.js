@@ -148,6 +148,13 @@
     return null;
   }
 
+  function getPlayerIdByName(name) {
+    for (var i = 0; i < state.players.length; i++) {
+      if (state.players[i].name === name) return state.players[i].id;
+    }
+    return null;
+  }
+
   function activePlayers() {
     return state.players.filter(function (p) {
       return p.playing;
@@ -294,11 +301,13 @@
   var playerPagePeriodButtons = playerPagePeriodFilter.querySelectorAll(".period-btn");
   var playerPageSynopsisBody = document.getElementById("player-page-synopsis-body");
   var playerPageH2hList = document.getElementById("player-page-h2h-list");
+  var btnReturnToGlobalStats = document.getElementById("btn-return-to-global-stats");
 
   var btnOpenAllPlayers = document.getElementById("btn-open-all-players");
   var allPlayersPageView = document.getElementById("view-all-players-page");
   var btnAllPlayersBack = document.getElementById("btn-all-players-back");
   var allPlayersSortSelect = document.getElementById("all-players-sort");
+  var allPlayersPeriodSelect = document.getElementById("all-players-period");
   var allPlayersList = document.getElementById("all-players-list");
 
   var gameTypeSelect = document.getElementById("game-type");
@@ -666,7 +675,7 @@
       statsBtn.setAttribute("aria-label", "View stats for " + p.name);
       statsBtn.textContent = "📊";
       statsBtn.addEventListener("click", function () {
-        openPlayerStatsPage(p.id);
+        openPlayerStatsPage(p.name);
       });
       row.appendChild(statsBtn);
 
@@ -1423,7 +1432,7 @@
     }
     PLAYER_STATS = {};
     savePlayerStatsToStorage(PLAYER_STATS);
-    if (currentStatsPlayerId) {
+    if (currentStatsPlayerName) {
       currentStatsSessions = [];
       renderPlayerHistoryList([]);
     }
@@ -1751,7 +1760,7 @@
   // Per-player stats page (players/<Name>.json)
   // ---------------------------------------------------------------------
 
-  var currentStatsPlayerId = null;
+  var currentStatsPlayerName = null;
   var currentStatsSessions = null;
 
   function playerStatsFilename(name) {
@@ -1806,20 +1815,28 @@
     };
   }
 
-  function computeLiveSessionForPlayer(playerId) {
-    var player = getPlayer(playerId);
-    if (!player) return null;
+  // Accepts a player NAME (not id) so it works for players still on the
+  // roster and for historical players who aren't (e.g. removed since, or
+  // only known from an imported backup). When the name matches a current
+  // roster entry, wins/wonTournament come from the live id-based counters;
+  // otherwise they're derived from the games themselves.
+  function computeLiveSessionForPlayer(name) {
     var today = new Date().toISOString().slice(0, 10);
-    var session = computeSessionFromGameHistory(state.gameHistory, player.name, today) || {
+    var session = computeSessionFromGameHistory(state.gameHistory, name, today) || {
       date: today,
       wins: 0,
       gamesWon: [],
       opponents: [],
       games: []
     };
-    var wins = state.playerWins[playerId] || 0;
-    session.wins = wins;
-    session.wonTournament = wins > 0 && wins >= state.raceToWinsTarget;
+    var playerId = getPlayerIdByName(name);
+    if (playerId) {
+      var wins = state.playerWins[playerId] || 0;
+      session.wins = wins;
+      session.wonTournament = wins > 0 && wins >= state.raceToWinsTarget;
+    } else {
+      session.wonTournament = false;
+    }
     return session;
   }
 
@@ -1903,9 +1920,8 @@
     return row;
   }
 
-  function renderLiveSessionForPlayer(playerId) {
-    var player = getPlayer(playerId);
-    var live = computeLiveSessionForPlayer(playerId);
+  function renderLiveSessionForPlayer(name) {
+    var live = computeLiveSessionForPlayer(name);
     playerPageCurrentBody.innerHTML = "";
     playerPageCurrentBody.appendChild(playerStatsRow("Wins today", live.wins));
     playerPageCurrentBody.appendChild(playerGamesLogRow("Games", live.games));
@@ -1913,7 +1929,7 @@
     if (live.wonTournament) {
       var trophy = document.createElement("div");
       trophy.className = "tournament-winner-banner";
-      trophy.textContent = "🏆 " + (player ? player.name : "") + " Won the Tournament Today!";
+      trophy.textContent = "🏆 " + name + " Won the Tournament Today!";
       playerPageCurrentBody.appendChild(trophy);
     }
   }
@@ -1926,6 +1942,9 @@
 
   function periodStartDate(period) {
     var now = new Date();
+    if (period === "today") {
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    }
     if (period === "week") {
       var day = now.getDay();
       var diffToMonday = day === 0 ? 6 : day - 1;
@@ -1934,14 +1953,17 @@
     if (period === "month") {
       return new Date(now.getFullYear(), now.getMonth(), 1);
     }
+    if (period === "6month") {
+      return new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
+    }
     if (period === "year") {
       return new Date(now.getFullYear(), 0, 1);
     }
     return null;
   }
 
-  function collectAllGamesForPlayer(playerId) {
-    var live = computeLiveSessionForPlayer(playerId);
+  function collectAllGamesForPlayer(name) {
+    var live = computeLiveSessionForPlayer(name);
     var sessions = mergeSessionIntoList(currentStatsSessions || [], live);
     var games = [];
     sessions.forEach(function (s) {
@@ -2023,8 +2045,8 @@
   }
 
   function renderPlayerSynopsis() {
-    if (!currentStatsPlayerId) return;
-    var allGames = collectAllGamesForPlayer(currentStatsPlayerId);
+    if (!currentStatsPlayerName) return;
+    var allGames = collectAllGamesForPlayer(currentStatsPlayerName);
     var filtered = filterGamesByPeriod(allGames, currentStatsPeriod);
     var synopsis = computeWinLossSynopsis(filtered);
 
@@ -2096,8 +2118,7 @@
       playerPageHistoryList.appendChild(hint);
       return;
     }
-    var player = getPlayer(currentStatsPlayerId);
-    var playerName = player ? player.name : "";
+    var playerName = currentStatsPlayerName || "";
     sessions
       .slice()
       .sort(function (a, b) {
@@ -2148,13 +2169,14 @@
       });
   }
 
-  function openPlayerStatsPage(playerId) {
-    var player = getPlayer(playerId);
-    if (!player) return;
-    currentStatsPlayerId = playerId;
+  // name: the player's name — works whether or not they're currently on
+  // the roster, since saved stats are keyed by name, not id.
+  function openPlayerStatsPage(name) {
+    if (!name) return;
+    currentStatsPlayerName = name;
     currentStatsSessions = null;
-    playerPageName.textContent = player.name;
-    renderLiveSessionForPlayer(playerId);
+    playerPageName.textContent = name;
+    renderLiveSessionForPlayer(name);
     playerPageHistoryList.innerHTML = "";
     var loading = document.createElement("li");
     loading.className = "empty-hint";
@@ -2162,10 +2184,11 @@
     playerPageHistoryList.appendChild(loading);
 
     appRoot.classList.add("hidden");
+    allPlayersPageView.classList.add("hidden");
     playerPageView.classList.remove("hidden");
     window.scrollTo(0, 0);
 
-    currentStatsSessions = getPlayerSessions(player.name);
+    currentStatsSessions = getPlayerSessions(name);
     renderPlayerHistoryList(currentStatsSessions);
     setStatsPeriod("all");
   }
@@ -2173,8 +2196,15 @@
   function closePlayerStatsPage() {
     playerPageView.classList.add("hidden");
     appRoot.classList.remove("hidden");
-    currentStatsPlayerId = null;
+    currentStatsPlayerName = null;
     currentStatsSessions = null;
+  }
+
+  function returnToGlobalStats() {
+    playerPageView.classList.add("hidden");
+    currentStatsPlayerName = null;
+    currentStatsSessions = null;
+    openAllPlayersPage();
   }
 
   // ---------------------------------------------------------------------
@@ -2212,8 +2242,8 @@
     return games;
   }
 
-  function computePlayerCareerStats(name) {
-    var games = allGamesForPlayerName(name);
+  function computePlayerCareerStats(name, period) {
+    var games = filterGamesByPeriod(allGamesForPlayerName(name), period);
     var wins = 0;
     var losses = 0;
     games.forEach(function (g) {
@@ -2343,9 +2373,14 @@
 
     var top = document.createElement("div");
     top.className = "all-player-card-top";
-    var name = document.createElement("span");
+    var name = document.createElement("button");
+    name.type = "button";
     name.className = "all-player-name";
     name.textContent = stats.name;
+    name.setAttribute("aria-label", "View stats for " + stats.name);
+    name.addEventListener("click", function () {
+      openPlayerStatsPage(stats.name);
+    });
     var summary = document.createElement("span");
     summary.className = "all-player-summary";
     summary.textContent = stats.winPct === null ? "No games yet" : Math.round(stats.winPct * 100) + "% win rate";
@@ -2365,8 +2400,11 @@
   }
 
   function renderAllPlayersPage() {
+    var period = allPlayersPeriodSelect.value;
     var names = getAllKnownPlayerNames();
-    var stats = names.map(computePlayerCareerStats);
+    var stats = names.map(function (name) {
+      return computePlayerCareerStats(name, period);
+    });
 
     var maxPlayed = 0;
     var maxWins = 0;
@@ -2481,39 +2519,39 @@
 
   function exportAllPlayerStats() {
     state.players.forEach(function (p) {
-      var live = computeLiveSessionForPlayer(p.id);
+      var live = computeLiveSessionForPlayer(p.name);
       if (!live || !live.games || live.games.length === 0) return;
       var sessions = mergeSessionIntoList(getPlayerSessions(p.name), live);
       setPlayerSessions(p.name, sessions);
-      if (p.id === currentStatsPlayerId) currentStatsSessions = sessions;
+      if (p.name === currentStatsPlayerName) currentStatsSessions = sessions;
     });
   }
 
   function exportCurrentPlayerStats() {
-    var player = getPlayer(currentStatsPlayerId);
-    if (!player) return;
-    var live = computeLiveSessionForPlayer(currentStatsPlayerId);
+    var name = currentStatsPlayerName;
+    if (!name) return;
+    var live = computeLiveSessionForPlayer(name);
     var sessions = mergeSessionIntoList(currentStatsSessions || [], live);
     currentStatsSessions = sessions;
-    setPlayerSessions(player.name, sessions);
+    setPlayerSessions(name, sessions);
     renderPlayerHistoryList(sessions);
     renderPlayerSynopsis();
-    showToast("Saved " + player.name + "'s stats.");
+    showToast("Saved " + name + "'s stats.");
   }
 
   function resetPlayerHistoricalStats() {
-    var player = getPlayer(currentStatsPlayerId);
-    if (!player) return;
+    var name = currentStatsPlayerName;
+    if (!name) return;
     if (
       !confirm(
-        "This clears " + player.name + "'s saved session history on this device. " +
+        "This clears " + name + "'s saved session history on this device. " +
         "This session's live stats are not affected. Continue?"
       )
     ) {
       return;
     }
     currentStatsSessions = [];
-    setPlayerSessions(player.name, []);
+    setPlayerSessions(name, []);
     renderPlayerHistoryList([]);
     renderPlayerSynopsis();
   }
@@ -2648,10 +2686,12 @@
   btnPlayerPageExport.addEventListener("click", exportCurrentPlayerStats);
   btnPlayerPageReset.addEventListener("click", resetPlayerHistoricalStats);
   btnPlayerPageBack.addEventListener("click", closePlayerStatsPage);
+  btnReturnToGlobalStats.addEventListener("click", returnToGlobalStats);
 
   btnOpenAllPlayers.addEventListener("click", openAllPlayersPage);
   btnAllPlayersBack.addEventListener("click", closeAllPlayersPage);
   allPlayersSortSelect.addEventListener("change", renderAllPlayersPage);
+  allPlayersPeriodSelect.addEventListener("change", renderAllPlayersPage);
 
   Array.prototype.forEach.call(playerPagePeriodButtons, function (btn) {
     btn.addEventListener("click", function () {

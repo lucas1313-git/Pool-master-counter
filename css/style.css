@@ -964,6 +964,7 @@ input[type="number"] {
 .player-page-header {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
   text-align: left;
 }
@@ -973,6 +974,11 @@ input[type="number"] {
   font-size: 1.4rem;
   flex: 1;
   text-align: center;
+}
+
+.player-page-header #btn-return-to-global-stats {
+  font-size: 0.85rem;
+  padding: 8px 12px;
 }
 
 #player-page-actions-panel .row {
@@ -1235,8 +1241,23 @@ input[type="number"] {
 }
 
 .all-player-name {
+  background: none;
+  border: none;
+  padding: 0;
+  border-radius: 0;
+  color: var(--accent);
+  font: inherit;
   font-size: 1.15rem;
   font-weight: 800;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  transition: transform 0.06s ease, filter 0.15s ease, text-decoration-color 0.15s ease;
+}
+
+.all-player-name:hover,
+.all-player-name:focus-visible {
+  text-decoration-color: var(--accent);
 }
 
 .all-player-summary {
