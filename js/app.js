@@ -2947,7 +2947,6 @@
     var maxWins = 0;
     var maxLosses = 0;
     var minTs = null;
-    var maxTs = null;
     stats.forEach(function (s) {
       maxPlayed = Math.max(maxPlayed, s.played);
       maxWins = Math.max(maxWins, s.wins);
@@ -2955,7 +2954,6 @@
       s.games.forEach(function (g) {
         if (!g.ts) return;
         if (minTs === null || g.ts < minTs) minTs = g.ts;
-        if (maxTs === null || g.ts > maxTs) maxTs = g.ts;
       });
     });
 
@@ -2969,11 +2967,15 @@
     var minMs, maxMs;
     if (periodStart) {
       minMs = periodStart.getTime();
-      maxMs = Date.now();
     } else {
+      // "All Time" has no natural fixed start, so it keeps following the
+      // earliest actual game.
       minMs = minTs === null ? Date.now() : new Date(minTs).getTime();
-      maxMs = maxTs === null ? Date.now() : new Date(maxTs).getTime();
     }
+    // The end of the axis is always "right now" — the moment the graph was
+    // requested — for every period, All Time included, so the "Now" tick
+    // and label are never stale.
+    maxMs = Date.now();
     if (maxMs <= minMs) maxMs = minMs + 1;
 
     var playedAxisMax = axisMaxFor(maxPlayed);
