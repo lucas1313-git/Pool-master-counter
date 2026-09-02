@@ -28,6 +28,14 @@
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   }
 
+  // Player names are treated as case-insensitive everywhere: "Bob" and
+  // "bob" are the same person. This is the single normalization key used
+  // to compare/group names; the actual display casing is decided by
+  // resolvePlayerName / consolidateCaseVariantPlayerStats below.
+  function normalizeNameKey(name) {
+    return (name || "").trim().toLowerCase();
+  }
+
   function defaultState() {
     return {
       players: [],
@@ -149,8 +157,9 @@
   }
 
   function getPlayerIdByName(name) {
+    var key = normalizeNameKey(name);
     for (var i = 0; i < state.players.length; i++) {
-      if (state.players[i].name === name) return state.players[i].id;
+      if (normalizeNameKey(state.players[i].name) === key) return state.players[i].id;
     }
     return null;
   }
@@ -966,8 +975,40 @@
   // Player management
   // ---------------------------------------------------------------------
 
+  // Maps every name we've ever seen (any case) to one canonical display
+  // casing, so "Bob" and "bob" always resolve to the same person. The
+  // live roster's casing wins ties (checked last), since that's what's
+  // currently on screen; PLAYER_STATS and unsaved game history fill in
+  // anyone not currently on the roster.
+  function buildNameCasingMap() {
+    var map = {};
+    Object.keys(PLAYER_STATS).forEach(function (n) {
+      map[normalizeNameKey(n)] = n;
+    });
+    (state.gameHistory || []).forEach(function (entry) {
+      if (!entry || typeof entry === "string") return;
+      (entry.winnerNames || []).concat(entry.opponentNames || []).forEach(function (n) {
+        map[normalizeNameKey(n)] = n;
+      });
+    });
+    state.players.forEach(function (p) {
+      map[normalizeNameKey(p.name)] = p.name;
+    });
+    return map;
+  }
+
+  // Reuses an existing name's casing if this is the same person under a
+  // different case ("bob" typed when "Bob" is already known), otherwise
+  // keeps the typed casing as the new canonical form.
+  function resolvePlayerName(name) {
+    var trimmed = (name || "").trim();
+    if (!trimmed) return trimmed;
+    var known = buildNameCasingMap()[normalizeNameKey(trimmed)];
+    return known || trimmed;
+  }
+
   function addPlayer(name) {
-    name = (name || "").trim();
+    name = resolvePlayerName(name);
     if (!name) return null;
     var player = {
       id: uid(),
@@ -1449,15 +1490,70 @@
     }
   }
 
+  // One-time-per-load cleanup: if PLAYER_STATS already has separate entries
+  // for the same person under different casing (e.g. "Bob" and "bob" from
+  // before names were treated as case-insensitive), merge their sessions
+  // into a single canonical entry so career stats and the All Players page
+  // never split one person into two rows. Canonical casing is whichever
+  // variant has the most recorded wins; ties go alphabetically.
+  function consolidateCaseVariantPlayerStats(stats) {
+    var groups = {};
+    Object.keys(stats).forEach(function (name) {
+      var key = normalizeNameKey(name);
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(name);
+    });
+    var changed = false;
+    var result = {};
+    Object.keys(groups).forEach(function (key) {
+      var names = groups[key];
+      if (names.length === 1) {
+        result[names[0]] = stats[names[0]];
+        return;
+      }
+      changed = true;
+      var mergedSessions = [];
+      var totalWins = {};
+      names.forEach(function (n) {
+        var sessions = stats[n] && Array.isArray(stats[n].sessions) ? stats[n].sessions : [];
+        mergedSessions = mergeSessionLists(mergedSessions, sessions);
+        totalWins[n] = sessions.reduce(function (sum, s) {
+          return sum + (s.wins || 0);
+        }, 0);
+      });
+      var canonical = names.slice().sort(function (a, b) {
+        return totalWins[b] - totalWins[a] || a.localeCompare(b);
+      })[0];
+      result[canonical] = { name: canonical, sessions: mergedSessions };
+    });
+    return { stats: result, changed: changed };
+  }
+
   var PLAYER_STATS = loadPlayerStatsFromStorage();
+  (function consolidatePlayerStatsCasingOnBoot() {
+    var result = consolidateCaseVariantPlayerStats(PLAYER_STATS);
+    PLAYER_STATS = result.stats;
+    if (result.changed) savePlayerStatsToStorage(PLAYER_STATS);
+  })();
+
+  // Finds an existing PLAYER_STATS key matching this name regardless of
+  // case, so a lookup for "bob" still finds stats saved under "Bob".
+  function findPlayerStatsKey(name) {
+    var key = normalizeNameKey(name);
+    var match = Object.keys(PLAYER_STATS).filter(function (k) {
+      return normalizeNameKey(k) === key;
+    });
+    return match.length ? match[0] : null;
+  }
 
   function getPlayerSessions(name) {
-    var entry = PLAYER_STATS[name];
+    var entry = PLAYER_STATS[findPlayerStatsKey(name) || name];
     return entry && Array.isArray(entry.sessions) ? entry.sessions.slice() : [];
   }
 
   function setPlayerSessions(name, sessions) {
-    PLAYER_STATS[name] = { name: name, sessions: sessions };
+    var key = findPlayerStatsKey(name) || name;
+    PLAYER_STATS[key] = { name: key, sessions: sessions };
     savePlayerStatsToStorage(PLAYER_STATS);
   }
 
@@ -1600,7 +1696,7 @@
     var seen = {};
     var merged = [];
     function rosterKey(r) {
-      return (r.players || []).slice().sort().join(",");
+      return (r.players || []).map(normalizeNameKey).sort().join(",");
     }
     (localRosters || []).forEach(function (r) {
       var key = rosterKey(r);
@@ -1749,7 +1845,7 @@
           finalState = state;
           var knownNames = {};
           finalState.players.forEach(function (p) {
-            knownNames[p.name] = true;
+            knownNames[normalizeNameKey(p.name)] = true;
           });
           var candidateNames = (Array.isArray(importedState.players) ? importedState.players : [])
             .map(function (p) {
@@ -1758,8 +1854,8 @@
             .concat(Object.keys(importedPlayerStats))
             .concat(Object.keys(extraSessions));
           candidateNames.forEach(function (name) {
-            if (!name || knownNames[name]) return;
-            knownNames[name] = true;
+            if (!name || knownNames[normalizeNameKey(name)]) return;
+            knownNames[normalizeNameKey(name)] = true;
             finalState.players.push({
               id: uid(),
               name: name,
@@ -1827,11 +1923,11 @@
     var roster = SAVED_ROSTERS[idx];
     if (!roster) return;
     var existingNames = state.players.map(function (p) {
-      return p.name.toLowerCase();
+      return normalizeNameKey(p.name);
     });
     var added = 0;
     roster.players.forEach(function (name) {
-      if (existingNames.indexOf(name.toLowerCase()) === -1) {
+      if (existingNames.indexOf(normalizeNameKey(name)) === -1) {
         addPlayer(name);
         added += 1;
       }
@@ -1855,10 +1951,11 @@
   function saveRosterSnapshotIfNew(silent) {
     var names = currentRosterNames();
     if (names.length === 0) return false;
+    var normalizedNames = names.map(normalizeNameKey).sort();
     var alreadySaved = SAVED_ROSTERS.some(function (r) {
-      var rNames = (r.players || []).slice().sort();
-      return rNames.length === names.length && rNames.every(function (n, i) {
-        return n === names[i];
+      var rNames = (r.players || []).map(normalizeNameKey).sort();
+      return rNames.length === normalizedNames.length && rNames.every(function (n, i) {
+        return n === normalizedNames[i];
       });
     });
     if (alreadySaved) {
@@ -2380,24 +2477,13 @@
   // shows up in this session's still-unsaved game history (e.g. removed
   // from the roster mid-session, or before "New Game" folds it into
   // PLAYER_STATS) — so nobody who's actually played drops off the list.
+  // Case variants of the same name (built via buildNameCasingMap) collapse
+  // into one canonical entry.
   function getAllKnownPlayerNames() {
-    var names = {};
-    Object.keys(PLAYER_STATS).forEach(function (n) {
-      names[n] = true;
+    var map = buildNameCasingMap();
+    return Object.keys(map).map(function (k) {
+      return map[k];
     });
-    state.players.forEach(function (p) {
-      names[p.name] = true;
-    });
-    (state.gameHistory || []).forEach(function (entry) {
-      if (!entry || typeof entry === "string") return;
-      (entry.winnerNames || []).forEach(function (n) {
-        names[n] = true;
-      });
-      (entry.opponentNames || []).forEach(function (n) {
-        names[n] = true;
-      });
-    });
-    return Object.keys(names);
   }
 
   // All of one player's games — saved history plus whatever's still live
