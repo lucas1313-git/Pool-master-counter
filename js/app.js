@@ -364,6 +364,8 @@
   var btnResetStats = document.getElementById("btn-reset-stats");
 
   var rotationEnabledCheckbox = document.getElementById("rotation-enabled");
+  var rotationLoadSelect = document.getElementById("rotation-load-select");
+  var btnRotationLoad = document.getElementById("btn-rotation-load");
   var rotationAddType = document.getElementById("rotation-add-type");
   var btnRotationAdd = document.getElementById("btn-rotation-add");
   var rotationList = document.getElementById("rotation-list");
@@ -525,6 +527,7 @@
   function addRotationItem(typeId) {
     state.rotation.order.push(typeId);
     saveState();
+    saveRotationSnapshotIfNew(true);
     applyRotationIfDue();
     renderRotation();
     renderScoreboard();
@@ -533,6 +536,7 @@
   function removeRotationItem(index) {
     state.rotation.order.splice(index, 1);
     saveState();
+    saveRotationSnapshotIfNew(true);
     applyRotationIfDue();
     renderRotation();
     renderScoreboard();
@@ -546,6 +550,7 @@
     arr[index] = arr[newIndex];
     arr[newIndex] = tmp;
     saveState();
+    saveRotationSnapshotIfNew(true);
     applyRotationIfDue();
     renderRotation();
     renderScoreboard();
@@ -1198,6 +1203,7 @@
     if (state.gameHistory.length > 200) state.gameHistory.length = 200;
     state.gamesPlayedCount += 1;
     saveRosterSnapshotIfNew(true);
+    saveRotationSnapshotIfNew(true);
     var previousGameType = state.currentGame.gameType;
     applyRotationIfDue();
     var gameTypeChanged = state.currentGame.gameType !== previousGameType;
@@ -1489,6 +1495,7 @@
   // ---------------------------------------------------------------------
 
   var ROSTERS_KEY = "poolMasterCounter.rosters.v1";
+  var ROTATIONS_KEY = "poolMasterCounter.rotations.v1";
   var PLAYER_STATS_KEY = "poolMasterCounter.playerStats.v1";
 
   function loadRostersFromStorage() {
@@ -1506,6 +1513,24 @@
       localStorage.setItem(ROSTERS_KEY, JSON.stringify(rosters));
     } catch (e) {
       console.warn("Could not save rosters.", e);
+    }
+  }
+
+  function loadRotationsFromStorage() {
+    try {
+      var raw = localStorage.getItem(ROTATIONS_KEY);
+      var parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function saveRotationsToStorage(rotations) {
+    try {
+      localStorage.setItem(ROTATIONS_KEY, JSON.stringify(rotations));
+    } catch (e) {
+      console.warn("Could not save rotations.", e);
     }
   }
 
@@ -2069,6 +2094,90 @@
 
   function maybeSaveRosterOnNewSession() {
     saveRosterSnapshotIfNew(false);
+  }
+
+  // ---------------------------------------------------------------------
+  // Game order (rotation) setups — same save/load pattern as player
+  // rosters, but the *sequence* is what defines a setup (order matters),
+  // so loading one replaces the current order instead of merging it.
+  // ---------------------------------------------------------------------
+
+  var SAVED_ROTATIONS = loadRotationsFromStorage();
+
+  function populateRotationLoadSelect() {
+    rotationLoadSelect.innerHTML = "";
+    if (SAVED_ROTATIONS.length === 0) {
+      var opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = "No saved rotations yet";
+      rotationLoadSelect.appendChild(opt);
+      rotationLoadSelect.disabled = true;
+      btnRotationLoad.disabled = true;
+      return;
+    }
+    rotationLoadSelect.disabled = false;
+    btnRotationLoad.disabled = false;
+    SAVED_ROTATIONS.forEach(function (r, i) {
+      var opt = document.createElement("option");
+      opt.value = String(i);
+      opt.textContent = r.label;
+      rotationLoadSelect.appendChild(opt);
+    });
+  }
+
+  function loadSelectedRotation() {
+    var idx = parseInt(rotationLoadSelect.value, 10);
+    var rotation = SAVED_ROTATIONS[idx];
+    if (!rotation) return;
+    state.rotation = {
+      enabled: !!rotation.enabled,
+      order: rotation.order.slice(),
+      every: rotation.every || 1
+    };
+    saveState();
+    applyRotationIfDue();
+    renderRotation();
+    showToast("Loaded rotation: \"" + rotation.label + "\".");
+  }
+
+  function rotationLabelFor(order) {
+    return order
+      .map(function (typeId) {
+        return GAME_TYPES[typeId] ? GAME_TYPES[typeId].label : typeId;
+      })
+      .join(" → ");
+  }
+
+  // Checks the current game order against every saved rotation (same
+  // sequence, not just same game types) and, if it's genuinely new, saves
+  // it as a loadable entry. Runs whenever the order changes and on every
+  // credited game, mirroring the player-list snapshot behavior.
+  function saveRotationSnapshotIfNew(silent) {
+    var order = state.rotation.order;
+    if (!order || order.length === 0) return false;
+    var alreadySaved = SAVED_ROTATIONS.some(function (r) {
+      return r.order.length === order.length && r.order.every(function (t, i) {
+        return t === order[i];
+      });
+    });
+    if (alreadySaved) {
+      if (!silent) showToast("This exact rotation is already saved.");
+      return false;
+    }
+    var now = new Date().toISOString();
+    var entry = {
+      id: "rotation-" + now.replace(/[:.]/g, "-"),
+      label: rotationLabelFor(order),
+      order: order.slice(),
+      every: state.rotation.every,
+      enabled: state.rotation.enabled,
+      savedAt: now
+    };
+    SAVED_ROTATIONS = SAVED_ROTATIONS.concat([entry]);
+    saveRotationsToStorage(SAVED_ROTATIONS);
+    populateRotationLoadSelect();
+    if (!silent) showToast("Saved rotation: " + entry.label);
+    return true;
   }
 
   // ---------------------------------------------------------------------
@@ -4360,6 +4469,7 @@
   });
 
   btnRosterLoad.addEventListener("click", loadSelectedRoster);
+  btnRotationLoad.addEventListener("click", loadSelectedRotation);
 
   btnToggleBackupPanel.addEventListener("click", function () {
     var willExpand = backupPanel.classList.contains("collapsed");
@@ -4424,6 +4534,7 @@
   }
 
   populateRosterLoadSelect();
+  populateRotationLoadSelect();
   validateNewPlayerNameInput();
   renderAll();
 
