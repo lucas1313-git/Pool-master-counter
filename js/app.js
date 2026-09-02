@@ -317,6 +317,7 @@
 
   var addPlayerForm = document.getElementById("add-player-form");
   var newPlayerName = document.getElementById("new-player-name");
+  var newPlayerRatingInput = document.getElementById("new-player-rating");
   var newPlayerNameRequirement = document.getElementById("new-player-name-requirement");
   var btnAddPlayer = document.getElementById("btn-add-player");
   var rosterList = document.getElementById("roster-list");
@@ -351,6 +352,7 @@
   var wizardNewPlayerNameRequirement = document.getElementById("wizard-new-player-name-requirement");
   var wizardAddPlayerForm = document.getElementById("wizard-add-player-form");
   var wizardNewPlayerName = document.getElementById("wizard-new-player-name");
+  var wizardNewPlayerRatingInput = document.getElementById("wizard-new-player-rating");
   var btnWizardAddPlayer = document.getElementById("wizard-btn-add-player");
   var wizardPlayerChips = document.getElementById("wizard-player-chips");
   var wizardPlayingList = document.getElementById("wizard-playing-list");
@@ -766,7 +768,7 @@
     }
   }
 
-  function buildStandingsRow(name, wins) {
+  function buildStandingsRow(name, wins, memberNames) {
     var target = state.raceToWinsTarget;
     var reached = wins >= target;
     var li = document.createElement("li");
@@ -777,6 +779,9 @@
     var nameEl = document.createElement("span");
     nameEl.className = "standings-name";
     nameEl.textContent = name;
+    (memberNames || []).forEach(function (n) {
+      nameEl.appendChild(buildRatingBadge(n));
+    });
     var countEl = document.createElement("span");
     countEl.className = "standings-count";
     countEl.textContent = wins + " / " + target + (reached ? " 🏁" : "");
@@ -813,20 +818,17 @@
     } else {
       comboKeys
         .map(function (key) {
-          var names = key
-            .split("|")
-            .map(function (id) {
-              var p = getPlayer(id);
-              return p ? p.name : "?";
-            })
-            .join(" & ");
-          return { key: key, names: names, wins: state.teamWins[key] || 0 };
+          var namesList = key.split("|").map(function (id) {
+            var p = getPlayer(id);
+            return p ? p.name : "?";
+          });
+          return { key: key, names: namesList.join(" & "), namesList: namesList, wins: state.teamWins[key] || 0 };
         })
         .sort(function (a, b) {
           return b.wins - a.wins || a.names.localeCompare(b.names);
         })
         .forEach(function (row) {
-          teamStandingsList.appendChild(buildStandingsRow(row.names, row.wins));
+          teamStandingsList.appendChild(buildStandingsRow(row.names, row.wins, row.namesList));
         });
     }
 
@@ -843,7 +845,7 @@
           return (state.playerWins[b.id] || 0) - (state.playerWins[a.id] || 0) || a.name.localeCompare(b.name);
         })
         .forEach(function (p) {
-          playerStandingsList.appendChild(buildStandingsRow(p.name, state.playerWins[p.id] || 0));
+          playerStandingsList.appendChild(buildStandingsRow(p.name, state.playerWins[p.id] || 0, [p.name]));
         });
     }
 
@@ -1192,11 +1194,17 @@
       }
       var winner = document.createElement("strong");
       winner.className = "history-winner";
-      winner.textContent = "🏆 " + entry.winnerNames.join(" & ");
+      winner.appendChild(document.createTextNode("🏆 "));
+      entry.winnerNames.forEach(function (n, i) {
+        if (i > 0) winner.appendChild(document.createTextNode(" & "));
+        winner.appendChild(document.createTextNode(n));
+        winner.appendChild(buildRatingBadge(n));
+      });
       li.appendChild(winner);
       li.appendChild(document.createTextNode(" won " + entry.gameLabel + " (target " + entry.target + ")"));
       if (entry.isTeam && entry.mvpName) {
         li.appendChild(document.createTextNode(" · 🎯 " + entry.mvpName + " potted it"));
+        li.appendChild(buildRatingBadge(entry.mvpName));
       }
       historyList.appendChild(li);
     });
@@ -1273,7 +1281,11 @@
     }
   }
 
-  function addPlayer(name) {
+  // startingRating (optional): a known rating from outside this device
+  // (another league, another tournament) — applied only if this exact
+  // name has never been automatically rated here before, so it can never
+  // overwrite a rating this app has already been tracking.
+  function addPlayer(name, startingRating) {
     name = resolvePlayerName(name);
     if (!name) return null;
     var player = {
@@ -1286,6 +1298,11 @@
     };
     state.players.push(player);
     saveState();
+    if (typeof startingRating === "number" && !isNaN(startingRating) && !findRatingKey(name)) {
+      var entry = ensureRatingEntry(name);
+      entry.rating = startingRating;
+      saveRatingsToStorage(PLAYER_RATINGS);
+    }
     return player;
   }
 
@@ -1521,7 +1538,7 @@
     milestoneHeadline.textContent = names + " won the tournament with " + count + " wins! (race-to " + target + ")";
 
     milestoneDetails.innerHTML = "";
-    milestoneDetails.appendChild(playerStatsListRow("Players", playerNames));
+    milestoneDetails.appendChild(playerStatsListRow("Players", playerNames, true));
     milestoneDetails.appendChild(playerStatsRow("Tournament goal", "Race to " + target + " wins"));
     if (state.rotation.enabled && state.rotation.order.length > 0) {
       var rotationLabels = state.rotation.order.map(rotationEntryLabel);
@@ -2044,6 +2061,15 @@
       PLAYER_RATINGS[key] = { name: key, rating: DEFAULT_RATING, gamesPlayed: 0, history: [] };
     }
     return PLAYER_RATINGS[key];
+  }
+
+  // Reads the optional "starting rating" field on an add-player form —
+  // null if left blank or not a usable number.
+  function parseStartingRatingInput(inputEl) {
+    var raw = inputEl.value.trim();
+    if (!raw) return null;
+    var n = parseInt(raw, 10);
+    return isNaN(n) ? null : n;
   }
 
   // Win probability for A over B given the two ratings — a 100-point gap
@@ -2917,6 +2943,7 @@
       var li = document.createElement("li");
       var name = document.createElement("span");
       name.textContent = p.name;
+      name.appendChild(buildRatingBadge(p.name));
       var removeBtn = document.createElement("button");
       removeBtn.type = "button";
       removeBtn.className = "wizard-player-chip-remove";
@@ -3311,7 +3338,7 @@
     return row;
   }
 
-  function playerStatsListRow(label, items) {
+  function playerStatsListRow(label, items, isPlayerNames) {
     var row = document.createElement("div");
     row.className = "player-stats-row player-stats-row-wrap";
     var l = document.createElement("span");
@@ -3319,7 +3346,15 @@
     l.textContent = label;
     var v = document.createElement("span");
     v.className = "value value-list";
-    v.textContent = items.length ? items.join(", ") : "—";
+    if (isPlayerNames && items.length) {
+      items.forEach(function (n, i) {
+        if (i > 0) v.appendChild(document.createTextNode(", "));
+        v.appendChild(document.createTextNode(n));
+        v.appendChild(buildRatingBadge(n));
+      });
+    } else {
+      v.textContent = items.length ? items.join(", ") : "—";
+    }
     row.appendChild(l);
     row.appendChild(v);
     return row;
@@ -3336,7 +3371,12 @@
     label.textContent = g.gameLabel;
     var winner = document.createElement("strong");
     winner.className = "player-game-log-winner";
-    winner.textContent = "🏆 " + (g.winnerNames || []).join(" & ");
+    winner.appendChild(document.createTextNode("🏆 "));
+    (g.winnerNames || []).forEach(function (n, i) {
+      if (i > 0) winner.appendChild(document.createTextNode(" & "));
+      winner.appendChild(document.createTextNode(n));
+      winner.appendChild(buildRatingBadge(n));
+    });
     div.appendChild(time);
     div.appendChild(label);
     var durationText = formatDuration(g.durationMs);
@@ -3350,6 +3390,7 @@
     div.appendChild(winner);
     if (g.isTeam && g.mvpName) {
       div.appendChild(document.createTextNode(" · 🎯 " + g.mvpName + " potted it"));
+      div.appendChild(buildRatingBadge(g.mvpName));
     }
     return div;
   }
@@ -3382,11 +3423,12 @@
     playerPageCurrentBody.innerHTML = "";
     playerPageCurrentBody.appendChild(playerStatsRow("Wins today", live.wins));
     playerPageCurrentBody.appendChild(playerGamesLogRow("Games", live.games));
-    playerPageCurrentBody.appendChild(playerStatsListRow("Opponents", live.opponents));
+    playerPageCurrentBody.appendChild(playerStatsListRow("Opponents", live.opponents, true));
     if (live.wonTournament) {
       var trophy = document.createElement("div");
       trophy.className = "tournament-winner-banner";
       trophy.textContent = "🏆 " + name + " Won the Tournament Today!";
+      trophy.appendChild(buildRatingBadge(name));
       playerPageCurrentBody.appendChild(trophy);
     }
   }
@@ -3540,6 +3582,7 @@
       var name = document.createElement("span");
       name.className = "player-h2h-name";
       name.textContent = opp.name;
+      name.appendChild(buildRatingBadge(opp.name));
       var record = document.createElement("span");
       record.className = "player-h2h-record";
       record.textContent = opp.wins + "–" + opp.losses;
@@ -3637,6 +3680,7 @@
           var banner = document.createElement("div");
           banner.className = "tournament-winner-banner";
           banner.textContent = "🏆 " + playerName + " Won the Tournament!";
+          banner.appendChild(buildRatingBadge(playerName));
           li.appendChild(banner);
         }
 
@@ -3669,6 +3713,7 @@
     currentStatsPlayerName = name;
     currentStatsSessions = null;
     playerPageName.textContent = name;
+    playerPageName.appendChild(buildRatingBadge(name));
     renderLiveSessionForPlayer(name);
     playerPageHistoryList.innerHTML = "";
     var loading = document.createElement("li");
@@ -5060,6 +5105,7 @@
       checkbox.checked = !!activeNames[name];
       var span = document.createElement("span");
       span.textContent = name;
+      span.appendChild(buildRatingBadge(name));
       label.appendChild(checkbox);
       label.appendChild(span);
       li.appendChild(label);
@@ -5122,6 +5168,7 @@
       if (isWinner) row.classList.add("is-winner");
       if (match.winner && name === match.loser) row.classList.add("is-loser");
       row.textContent = (isWinner ? "👑 " : "") + (name || "—");
+      if (name) row.appendChild(buildRatingBadge(name));
       div.appendChild(row);
     });
 
@@ -5355,6 +5402,7 @@
     if (t.champion) {
       tournamentChampionBanner.classList.remove("hidden");
       tournamentChampionBanner.textContent = "🏆 " + t.champion + " won the tournament!";
+      tournamentChampionBanner.appendChild(buildRatingBadge(t.champion));
     } else {
       tournamentChampionBanner.classList.add("hidden");
       tournamentChampionBanner.textContent = "";
@@ -5383,7 +5431,11 @@
       var li = document.createElement("li");
       li.className = "tournament-ready-row";
       var text = document.createElement("span");
-      text.textContent = m.a + " vs " + m.b + " (" + m.tag + ")";
+      text.appendChild(document.createTextNode(m.a));
+      text.appendChild(buildRatingBadge(m.a));
+      text.appendChild(document.createTextNode(" vs " + m.b));
+      text.appendChild(buildRatingBadge(m.b));
+      text.appendChild(document.createTextNode(" (" + m.tag + ")"));
       var btn = document.createElement("button");
       btn.type = "button";
       btn.className = "btn btn-primary";
@@ -5567,12 +5619,16 @@
       validateNewPlayerNameInput();
       return;
     }
-    var player = addPlayer(newPlayerName.value);
+    var starting = parseStartingRatingInput(newPlayerRatingInput);
+    var alreadyRated = starting !== null && !!findRatingKey(resolvePlayerName(trimmed));
+    var player = addPlayer(newPlayerName.value, starting === null ? undefined : starting);
     if (!player) return;
     newPlayerName.value = "";
+    newPlayerRatingInput.value = "";
     validateNewPlayerNameInput();
     saveRosterSnapshotIfNew(true);
     renderAll();
+    if (alreadyRated) showToast(player.name + " already has a tracked rating — starting rating not applied.");
   });
 
   gameTypeSelect.addEventListener("change", function () {
@@ -5741,12 +5797,16 @@
       validateWizardNewPlayerNameInput();
       return;
     }
-    var player = addPlayer(wizardNewPlayerName.value);
+    var starting = parseStartingRatingInput(wizardNewPlayerRatingInput);
+    var alreadyRated = starting !== null && !!findRatingKey(resolvePlayerName(trimmed));
+    var player = addPlayer(wizardNewPlayerName.value, starting === null ? undefined : starting);
     if (!player) return;
     wizardNewPlayerName.value = "";
+    wizardNewPlayerRatingInput.value = "";
     validateWizardNewPlayerNameInput();
     saveRosterSnapshotIfNew(true);
     renderAll();
+    if (alreadyRated) showToast(player.name + " already has a tracked rating — starting rating not applied.");
   });
 
   btnWizardRosterLoad.addEventListener("click", loadSelectedWizardRoster);

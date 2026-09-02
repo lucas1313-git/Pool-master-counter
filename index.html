@@ -150,6 +150,7 @@
       <p id="new-player-name-requirement" class="new-player-name-requirement hidden"></p>
       <form id="add-player-form" class="row">
         <input type="text" id="new-player-name" placeholder="Player name" autocomplete="off" required>
+        <input type="number" id="new-player-rating" placeholder="Starting rating (optional)" min="0" max="900">
         <button type="submit" id="btn-add-player" class="btn btn-primary" disabled>Add</button>
       </form>
       <div class="row">
@@ -345,6 +346,7 @@
         <p id="wizard-new-player-name-requirement" class="new-player-name-requirement hidden"></p>
         <form id="wizard-add-player-form" class="row">
           <input type="text" id="wizard-new-player-name" placeholder="Player name" autocomplete="off" required>
+          <input type="number" id="wizard-new-player-rating" placeholder="Starting rating (optional)" min="0" max="900">
           <button type="submit" id="wizard-btn-add-player" class="btn btn-primary" disabled>Add</button>
         </form>
         <ul id="wizard-player-chips" class="wizard-player-chips"></ul>
@@ -432,7 +434,7 @@
         <li><strong>Backup &amp; Transfer</strong> — Export All Data downloads one JSON file with everything: the live session, saved player lists, saved rotations, career stats, and ratings. Import Data reads a backup back in — it merges into what's already here rather than overwriting, and adopts the backup as-is only if this device has no players yet. Reset All Player Stats and Reset Player Lists each back up first, warn you, then clear — career stats and saved lists respectively (never the ratings store).</li>
         <li><strong>Game Order</strong> — Turn on "Rotate game types automatically" to cycle through a sequence of game rules on their own. Each step in the order is its own rule — game type, target number, and unit (rack/balls/points) — so the same game type can appear twice with different rules (e.g. "8-Ball — 1 rack" then "8-Ball — 3 racks"). "Switch every" controls how many games play before advancing. Load Rotation swaps in a saved sequence outright; any new sequence you build is auto-saved as a loadable entry the moment it's set up or played.</li>
         <li><strong>Current Game</strong> — Pick the game type, the target number, and the unit (rack/balls/points — adjustable independently of the game type's usual default, e.g. One Pocket to "1 rack" instead of "8 balls"), Individual vs Teams mode, and the race-to-wins milestone for the whole session. Reset Current Game clears the live score without crediting a win; Undo Last Win reverses the most recent one; Share Standings emails a text summary; Export Session downloads the session as JSON; New Game starts a fresh session (offering to save first if there are unsaved games).</li>
-        <li><strong>Players</strong> — Add a player by name (auto-capitalized, checked live for a duplicate nickname — the Add button stays disabled until the name is unique). Tap a player's Standby/Playing badge to move them in or out of the current game. The ✕ removes someone from today's roster only — career stats and rating stay on the device. Load Player List swaps in players from a saved list (adds anyone missing, never resets what's already there); Export/Import Player Lists use a separate, hand-editable JSON format just for lists.</li>
+        <li><strong>Players</strong> — Add a player by name (auto-capitalized, checked live for a duplicate nickname — the Add button stays disabled until the name is unique). The optional "Starting rating" field lets you seed a brand-new player's rating from a number they've earned elsewhere (another league, another tournament) — it only takes effect for a name that's never been rated on this device before; it's ignored for anyone already tracked. Tap a player's Standby/Playing badge to move them in or out of the current game. The ✕ removes someone from today's roster only — career stats and rating stay on the device. Load Player List swaps in players from a saved list (adds anyone missing, never resets what's already there); Export/Import Player Lists use a separate, hand-editable JSON format just for lists.</li>
         <li><strong>Standings</strong> — Live race-to-N progress for teams and individuals this session.</li>
         <li><strong>Scoreboard</strong> — Tap + / − on a player's card to track balls/points/racks toward the target. Reaching the target banks a win and starts the next game. Focus Mode hides every other panel down to just the scoreboard — while in it, a small "Players" chevron above the board still lets you flip who's Playing vs Standby without leaving focus.</li>
         <li><strong>Recent Games</strong> — Every game finished this session, most recent first.</li>
@@ -488,7 +490,7 @@
         <li><strong>Session History</strong> — Every past saved session, expandable into the individual games played.</li>
         <li><strong>Export Stats</strong> saves the current live session into permanent history; <strong>Reset Stats</strong> clears just this player's saved history (their rating is untouched — it lives in its own store and is never reset from here).</li>
       </ul>
-      <p><strong>About ratings:</strong> every player has an automatic, Elo-style rating (roughly 0–900) inspired by the scale FargoRate publishes — the system behind USA Pool League and most competitive USA leagues. A 100-point gap between two ratings works out to about a 2:1 expected win ratio, doubling every 100 points. New players start at 400. It updates itself after every credited game (main scoreboard or tournament rack) — there's no way to edit a rating by hand. It's a from-scratch calculation matched to Fargo's published odds, not a copy of Fargo's own (proprietary, globally-recomputed) algorithm.</p>
+      <p><strong>About ratings:</strong> every player has an automatic, Elo-style rating (roughly 0–900) inspired by the scale FargoRate publishes — the system behind USA Pool League and most competitive USA leagues. A 100-point gap between two ratings works out to about a 2:1 expected win ratio, doubling every 100 points. New players start at 400, unless a starting rating was given when they were added (see Players, above) — that's a one-time seed for a brand-new name only, not an edit of a rating already being tracked. From there it updates itself after every credited game (main scoreboard or tournament rack) — there's no way to edit an established rating by hand. It's a from-scratch calculation matched to Fargo's published odds, not a copy of Fargo's own (proprietary, globally-recomputed) algorithm. The rating badge follows a player's name everywhere throughout the app.</p>
     </section>
     </div>
   </div>
