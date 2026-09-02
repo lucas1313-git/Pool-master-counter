@@ -781,6 +781,15 @@ input[type="number"] {
   font-weight: 600;
 }
 
+.milestone-details {
+  text-align: left;
+  margin-bottom: 20px;
+}
+
+.milestone-details .player-stats-row {
+  background: rgba(0, 0, 0, 0.3);
+}
+
 .milestone-card .btn-primary {
   width: 100%;
 }

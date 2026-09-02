@@ -322,7 +322,8 @@
   var playerStandingsList = document.getElementById("player-standings-list");
 
   var milestoneOverlay = document.getElementById("milestone-overlay");
-  var milestoneMessage = document.getElementById("milestone-message");
+  var milestoneHeadline = document.getElementById("milestone-headline");
+  var milestoneDetails = document.getElementById("milestone-details");
   var btnMilestoneClose = document.getElementById("btn-milestone-close");
 
   var onHillOverlay = document.getElementById("onhill-overlay");
@@ -442,20 +443,16 @@
     }
 
     rotationStatus.classList.remove("is-warning");
-    if (state.rotation.enabled && state.rotation.order.length >= 2) {
-      var every = Math.max(1, state.rotation.every || 1);
-      var playedInLeg = state.gamesPlayedCount % every;
-      var untilSwitch = every - playedInLeg;
-      var currentIndex = Math.floor(state.gamesPlayedCount / every) % state.rotation.order.length;
-      var nextIndex = (currentIndex + 1) % state.rotation.order.length;
+    var info = rotationStatusInfo();
+    if (info) {
       rotationStatus.innerHTML = "";
       rotationStatus.appendChild(document.createTextNode("Now: "));
       var nowStrong = document.createElement("strong");
-      nowStrong.textContent = GAME_TYPES[state.rotation.order[currentIndex]].label;
+      nowStrong.textContent = info.currentLabel;
       rotationStatus.appendChild(nowStrong);
       rotationStatus.appendChild(
         document.createTextNode(
-          " — switches to " + GAME_TYPES[state.rotation.order[nextIndex]].label + " in " + untilSwitch + " game" + (untilSwitch === 1 ? "" : "s") + "."
+          " — switches to " + info.nextLabel + " in " + info.untilSwitch + " game" + (info.untilSwitch === 1 ? "" : "s") + "."
         )
       );
     } else if (state.rotation.enabled && state.rotation.order.length === 1) {
@@ -502,6 +499,20 @@
     gameTypeSelect.value = state.currentGame.gameType;
     gameTargetInput.value = state.currentGame.target;
     gameTargetUnit.textContent = GAME_TYPES[state.currentGame.gameType].unit;
+  }
+
+  function rotationStatusInfo() {
+    if (!(state.rotation.enabled && state.rotation.order.length >= 2)) return null;
+    var every = Math.max(1, state.rotation.every || 1);
+    var playedInLeg = state.gamesPlayedCount % every;
+    var untilSwitch = every - playedInLeg;
+    var currentIndex = Math.floor(state.gamesPlayedCount / every) % state.rotation.order.length;
+    var nextIndex = (currentIndex + 1) % state.rotation.order.length;
+    return {
+      currentLabel: GAME_TYPES[state.rotation.order[currentIndex]].label,
+      nextLabel: GAME_TYPES[state.rotation.order[nextIndex]].label,
+      untilSwitch: untilSwitch
+    };
   }
 
   function applyRotationIfDue() {
@@ -1060,7 +1071,7 @@
     var gameTypeChanged = state.currentGame.gameType !== previousGameType;
     showToast(summary);
     if (milestoneNames) {
-      celebrateMilestone(milestoneNames, milestoneCount);
+      celebrateTournamentWin(milestoneNames, milestoneCount);
     } else if (onHillNames) {
       announceOnHill(onHillNames);
     } else if (gameTypeChanged) {
@@ -1117,8 +1128,39 @@
     gameChangeOverlay.classList.add("hidden");
   }
 
-  function celebrateMilestone(names, count) {
-    milestoneMessage.textContent = names + " reached " + count + " wins! (race-to " + state.raceToWinsTarget + ")";
+  function celebrateTournamentWin(names, count) {
+    var target = state.raceToWinsTarget;
+
+    // Save this tournament's game history to per-player stats before the
+    // reset below wipes state.gameHistory, then start the next one fresh.
+    exportAllPlayerStats();
+    startNewSession(true);
+
+    var playerNames = activePlayers().map(function (p) {
+      return p.name;
+    });
+    var info = rotationStatusInfo();
+
+    milestoneHeadline.textContent = names + " won the tournament with " + count + " wins! (race-to " + target + ")";
+
+    milestoneDetails.innerHTML = "";
+    milestoneDetails.appendChild(playerStatsListRow("Players", playerNames));
+    milestoneDetails.appendChild(playerStatsRow("Tournament goal", "Race to " + target + " wins"));
+    if (state.rotation.enabled && state.rotation.order.length > 0) {
+      var rotationLabels = state.rotation.order.map(function (typeId) {
+        return GAME_TYPES[typeId] ? GAME_TYPES[typeId].label : typeId;
+      });
+      milestoneDetails.appendChild(playerStatsListRow("Game rotation", rotationLabels));
+      if (info) {
+        milestoneDetails.appendChild(
+          playerStatsRow(
+            "Next switch",
+            info.currentLabel + " → " + info.nextLabel + " in " + info.untilSwitch + " game" + (info.untilSwitch === 1 ? "" : "s")
+          )
+        );
+      }
+    }
+
     milestoneOverlay.classList.remove("hidden");
     playVictorySound();
   }
@@ -1985,11 +2027,46 @@
     sessions.forEach(function (s, i) {
       if (s.date === live.date) idx = i;
     });
-    if (idx !== -1) {
-      sessions[idx] = live;
-    } else {
+    if (idx === -1) {
       sessions.push(live);
+      return sessions;
     }
+    // Same calendar date already has a saved session (e.g. an earlier
+    // tournament today that auto-reset and got saved). Union the games by
+    // timestamp rather than replacing, so a completed tournament's games
+    // aren't lost when a later one is saved on the same day, and rebuild
+    // the summary fields from that merged list so they stay consistent.
+    var existing = sessions[idx];
+    var seen = {};
+    var mergedGames = [];
+    (existing.games || []).concat(live.games || []).forEach(function (g) {
+      if (!g || !g.ts || seen[g.ts]) return;
+      seen[g.ts] = true;
+      mergedGames.push(g);
+    });
+    mergedGames.sort(function (a, b) {
+      return a.ts.localeCompare(b.ts);
+    });
+    var gamesWon = [];
+    var opponentSet = {};
+    var wins = 0;
+    mergedGames.forEach(function (g) {
+      if (g.result === "won") {
+        wins += 1;
+        gamesWon.push(g.gameLabel);
+      }
+      (g.opponentNames || []).forEach(function (n) {
+        opponentSet[n] = true;
+      });
+    });
+    sessions[idx] = {
+      date: live.date,
+      wins: wins,
+      gamesWon: gamesWon,
+      opponents: Object.keys(opponentSet),
+      games: mergedGames,
+      wonTournament: !!(existing.wonTournament || live.wonTournament)
+    };
     return sessions;
   }
 
