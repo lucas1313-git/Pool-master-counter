@@ -1034,18 +1034,20 @@
     });
   }
 
-  var DEFAULT_NEW_PLAYER_NAME_REQUIREMENT =
-    "Names must be unique. If this nickname is already taken, add a last name or initial (e.g. \"Bob S.\").";
-
   // Live-updates the Add button + the red requirement note as the name
   // field changes, so a duplicate (or empty) name can never be submitted.
+  // The note only shows when there's an actual conflict to report.
   function validateNewPlayerNameInput() {
     var trimmed = newPlayerName.value.trim();
     var duplicate = trimmed && isDuplicatePlayerName(trimmed);
     btnAddPlayer.disabled = !trimmed || duplicate;
-    newPlayerNameRequirement.textContent = duplicate
-      ? "\"" + capitalizeName(trimmed) + "\" is already in your roster — use a different name, or add a last name/initial."
-      : DEFAULT_NEW_PLAYER_NAME_REQUIREMENT;
+    if (duplicate) {
+      newPlayerNameRequirement.textContent =
+        "\"" + capitalizeName(trimmed) + "\" is already in your roster — use a different name, or add a last name/initial.";
+      newPlayerNameRequirement.classList.remove("hidden");
+    } else {
+      newPlayerNameRequirement.classList.add("hidden");
+    }
   }
 
   function addPlayer(name) {
