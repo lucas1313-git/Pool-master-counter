@@ -2438,25 +2438,103 @@
     return { individualPlayed: individualPlayed, individualLost: individualLost, teamCombos: teamCombos };
   }
 
-  // Builds an SVG step-line path: flat while the count holds, a vertical
-  // jump at each event's timestamp — a proper cumulative "staircase".
-  function stepLinePath(points, minMs, maxMs, width, height, axisMax) {
+  // Monotone cubic Hermite spline (Fritsch–Carlson) through a point list —
+  // smooth, no sharp corners, and — unlike a plain Catmull-Rom spline —
+  // never overshoots past a point's value, which matters here because the
+  // data is a cumulative count that only ever holds or rises.
+  function monotoneLinePath(rawPts) {
+    if (rawPts.length === 0) return "";
+    // A monotone spline needs strictly increasing x; merge any points that
+    // land on (almost) the same x — e.g. two events a fraction of a second
+    // apart — keeping the later one, since a vertical jump has no slope.
+    var pts = [rawPts[0]];
+    for (var i = 1; i < rawPts.length; i++) {
+      if (rawPts[i].x - pts[pts.length - 1].x < 0.01) {
+        pts[pts.length - 1] = rawPts[i];
+      } else {
+        pts.push(rawPts[i]);
+      }
+    }
+    var n = pts.length;
+    if (n === 1) return "M " + pts[0].x + " " + pts[0].y;
+
+    var dx = [];
+    var delta = [];
+    for (i = 0; i < n - 1; i++) {
+      dx[i] = pts[i + 1].x - pts[i].x;
+      delta[i] = (pts[i + 1].y - pts[i].y) / dx[i];
+    }
+
+    var m = [delta[0]];
+    for (i = 1; i < n - 1; i++) {
+      if (delta[i - 1] === 0 || delta[i] === 0 || delta[i - 1] < 0 !== delta[i] < 0) {
+        m[i] = 0;
+      } else {
+        m[i] = (delta[i - 1] + delta[i]) / 2;
+      }
+    }
+    m[n - 1] = delta[n - 2];
+
+    for (i = 0; i < n - 1; i++) {
+      if (delta[i] === 0) {
+        m[i] = 0;
+        m[i + 1] = 0;
+        continue;
+      }
+      var a = m[i] / delta[i];
+      var b = m[i + 1] / delta[i];
+      if (a < 0) m[i] = 0;
+      if (b < 0) m[i + 1] = 0;
+      var s = a * a + b * b;
+      if (s > 9) {
+        var tau = 3 / Math.sqrt(s);
+        m[i] = tau * a * delta[i];
+        m[i + 1] = tau * b * delta[i];
+      }
+    }
+
+    var d = "M " + pts[0].x + " " + pts[0].y;
+    for (i = 0; i < n - 1; i++) {
+      var cp1x = pts[i].x + dx[i] / 3;
+      var cp1y = pts[i].y + (m[i] * dx[i]) / 3;
+      var cp2x = pts[i + 1].x - dx[i] / 3;
+      var cp2y = pts[i + 1].y - (m[i + 1] * dx[i]) / 3;
+      d += " C " + cp1x + " " + cp1y + " " + cp2x + " " + cp2y + " " + pts[i + 1].x + " " + pts[i + 1].y;
+    }
+    return d;
+  }
+
+  // Maps a cumulative (ts, count) series onto chart coordinates and builds
+  // a smooth path through it (anchored flat at the chart's time edges), plus
+  // the screen position of every real data point for dot markers.
+  function buildSeriesGeometry(points, minMs, maxMs, width, height, axisMax) {
     function xFor(ms) {
       return maxMs > minMs ? ((ms - minMs) / (maxMs - minMs)) * width : 0;
     }
     function yFor(count) {
       return axisMax > 0 ? height - (count / axisMax) * height : height;
     }
-    var d = "M " + xFor(minMs) + " " + yFor(0);
-    var last = 0;
-    points.forEach(function (p) {
-      var x = xFor(new Date(p.ts).getTime());
-      d += " L " + x + " " + yFor(last);
-      d += " L " + x + " " + yFor(p.count);
-      last = p.count;
+    var dots = points.map(function (p) {
+      return { x: xFor(new Date(p.ts).getTime()), y: yFor(p.count) };
     });
-    d += " L " + xFor(maxMs) + " " + yFor(last);
-    return d;
+    var lastCount = points.length ? points[points.length - 1].count : 0;
+    var allPts = [{ x: xFor(minMs), y: yFor(0) }].concat(dots, [{ x: xFor(maxMs), y: yFor(lastCount) }]);
+    return { path: monotoneLinePath(allPts), dots: dots };
+  }
+
+  // Draws one series as a smooth path plus a dot at every real data point.
+  // color is only needed for team-combo lines, which use an inline stroke/
+  // fill instead of a CSS class (their color is picked at render time).
+  function appendGraphSeries(svg, points, minMs, maxMs, width, height, axisMax, lineClass, dotClass, color) {
+    var geo = buildSeriesGeometry(points, minMs, maxMs, width, height, axisMax);
+    var pathAttrs = { d: geo.path, fill: "none", class: lineClass };
+    if (color) pathAttrs.stroke = color;
+    svg.appendChild(svgEl("path", pathAttrs));
+    geo.dots.forEach(function (pt) {
+      var circleAttrs = { cx: pt.x, cy: pt.y, r: 3.2, class: dotClass };
+      if (color) circleAttrs.fill = color;
+      svg.appendChild(svgEl("circle", circleAttrs));
+    });
   }
 
   function buildGraphTimeAxis(minMs, maxMs) {
@@ -2519,7 +2597,6 @@
 
     var svg = svgEl("svg", {
       viewBox: "0 0 " + width + " " + height,
-      preserveAspectRatio: "none",
       class: "player-graph-svg"
     });
     for (var g = 0; g <= 4; g++) {
@@ -2530,22 +2607,32 @@
     var legendItems = [];
 
     if (series.individualPlayed.length) {
-      svg.appendChild(
-        svgEl("path", {
-          d: stepLinePath(series.individualPlayed, minMs, maxMs, width, height, axisMax),
-          fill: "none",
-          class: "player-graph-line player-graph-line-ind-played"
-        })
+      appendGraphSeries(
+        svg,
+        series.individualPlayed,
+        minMs,
+        maxMs,
+        width,
+        height,
+        axisMax,
+        "player-graph-line player-graph-line-ind-played",
+        "player-graph-dot player-graph-dot-ind-played",
+        null
       );
       legendItems.push({ color: "var(--info)", dashed: false, label: "Individual — Played" });
     }
     if (series.individualLost.length) {
-      svg.appendChild(
-        svgEl("path", {
-          d: stepLinePath(series.individualLost, minMs, maxMs, width, height, axisMax),
-          fill: "none",
-          class: "player-graph-line player-graph-line-dashed player-graph-line-ind-lost"
-        })
+      appendGraphSeries(
+        svg,
+        series.individualLost,
+        minMs,
+        maxMs,
+        width,
+        height,
+        axisMax,
+        "player-graph-line player-graph-line-dashed player-graph-line-ind-lost",
+        "player-graph-dot player-graph-dot-ind-lost",
+        null
       );
       legendItems.push({ color: "var(--danger)", dashed: true, label: "Individual — Lost" });
     }
@@ -2554,24 +2641,32 @@
       var combo = series.teamCombos[key];
       var color = TEAM_COMBO_PALETTE[idx % TEAM_COMBO_PALETTE.length];
       if (combo.played.length) {
-        svg.appendChild(
-          svgEl("path", {
-            d: stepLinePath(combo.played, minMs, maxMs, width, height, axisMax),
-            fill: "none",
-            stroke: color,
-            class: "player-graph-line"
-          })
+        appendGraphSeries(
+          svg,
+          combo.played,
+          minMs,
+          maxMs,
+          width,
+          height,
+          axisMax,
+          "player-graph-line",
+          "player-graph-dot",
+          color
         );
         legendItems.push({ color: color, dashed: false, label: "w/ " + key + " — Played" });
       }
       if (combo.lost.length) {
-        svg.appendChild(
-          svgEl("path", {
-            d: stepLinePath(combo.lost, minMs, maxMs, width, height, axisMax),
-            fill: "none",
-            stroke: color,
-            class: "player-graph-line player-graph-line-dashed"
-          })
+        appendGraphSeries(
+          svg,
+          combo.lost,
+          minMs,
+          maxMs,
+          width,
+          height,
+          axisMax,
+          "player-graph-line player-graph-line-dashed",
+          "player-graph-dot",
+          color
         );
         legendItems.push({ color: color, dashed: true, label: "w/ " + key + " — Lost" });
       }
