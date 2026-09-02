@@ -1494,6 +1494,34 @@ input[type="number"] {
   color: var(--text-dim);
 }
 
+.player-graph-legend-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.player-graph-legend-row.is-off {
+  opacity: 0.45;
+}
+
+.player-graph-legend-toggle {
+  flex-shrink: 0;
+  padding: 3px 10px;
+  font-size: 0.72rem;
+  border-radius: 20px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+
+.player-graph-legend-toggle:hover {
+  color: var(--text);
+  border-color: var(--text-dim);
+}
+
+.player-graph-series.is-hidden {
+  display: none;
+}
+
 .player-graph-legend-swatch {
   width: 22px;
   height: 3px;

@@ -2546,16 +2546,21 @@
   // Draws one series as a smooth path plus a dot at every real data point.
   // color is only needed for team-combo lines, which use an inline stroke/
   // fill instead of a CSS class (their color is picked at render time).
+  // Returns the <g> the series was drawn into, so the legend can toggle its
+  // visibility (show/hide) as one unit.
   function appendGraphSeries(svg, points, minMs, maxMs, width, height, axisMax, lineClass, dotClass, color) {
     var geo = buildSeriesGeometry(points, minMs, maxMs, width, height, axisMax);
+    var group = svgEl("g", { class: "player-graph-series" });
     var pathAttrs = { d: geo.path, fill: "none", class: lineClass };
     if (color) pathAttrs.stroke = color;
-    svg.appendChild(svgEl("path", pathAttrs));
+    group.appendChild(svgEl("path", pathAttrs));
     geo.dots.forEach(function (pt) {
       var circleAttrs = { cx: pt.x, cy: pt.y, r: 3.2, class: dotClass };
       if (color) circleAttrs.fill = color;
-      svg.appendChild(svgEl("circle", circleAttrs));
+      group.appendChild(svgEl("circle", circleAttrs));
     });
+    svg.appendChild(group);
+    return group;
   }
 
   function buildGraphTimeAxis(minMs, maxMs) {
@@ -2628,7 +2633,7 @@
     var legendItems = [];
 
     if (series.individualPlayed.length) {
-      appendGraphSeries(
+      var gIndPlayed = appendGraphSeries(
         svg,
         series.individualPlayed,
         minMs,
@@ -2640,10 +2645,10 @@
         "player-graph-dot player-graph-dot-ind-played",
         null
       );
-      legendItems.push({ color: "var(--info)", style: "solid", label: "Individual — Played" });
+      legendItems.push({ color: "var(--info)", style: "solid", label: "Individual — Played", group: gIndPlayed });
     }
     if (series.individualWon.length) {
-      appendGraphSeries(
+      var gIndWon = appendGraphSeries(
         svg,
         series.individualWon,
         minMs,
@@ -2655,10 +2660,10 @@
         "player-graph-dot player-graph-dot-ind-won",
         null
       );
-      legendItems.push({ color: "var(--accent)", style: "dotted", label: "Individual — Won" });
+      legendItems.push({ color: "var(--accent)", style: "dotted", label: "Individual — Won", group: gIndWon });
     }
     if (series.individualLost.length) {
-      appendGraphSeries(
+      var gIndLost = appendGraphSeries(
         svg,
         series.individualLost,
         minMs,
@@ -2670,14 +2675,14 @@
         "player-graph-dot player-graph-dot-ind-lost",
         null
       );
-      legendItems.push({ color: "var(--danger)", style: "dashed", label: "Individual — Lost" });
+      legendItems.push({ color: "var(--danger)", style: "dashed", label: "Individual — Lost", group: gIndLost });
     }
 
     comboKeys.forEach(function (key, idx) {
       var combo = series.teamCombos[key];
       var color = TEAM_COMBO_PALETTE[idx % TEAM_COMBO_PALETTE.length];
       if (combo.played.length) {
-        appendGraphSeries(
+        var gComboPlayed = appendGraphSeries(
           svg,
           combo.played,
           minMs,
@@ -2689,10 +2694,10 @@
           "player-graph-dot",
           color
         );
-        legendItems.push({ color: color, style: "solid", label: "w/ " + key + " — Played" });
+        legendItems.push({ color: color, style: "solid", label: "w/ " + key + " — Played", group: gComboPlayed });
       }
       if (combo.won.length) {
-        appendGraphSeries(
+        var gComboWon = appendGraphSeries(
           svg,
           combo.won,
           minMs,
@@ -2704,10 +2709,10 @@
           "player-graph-dot",
           color
         );
-        legendItems.push({ color: color, style: "dotted", label: "w/ " + key + " — Won" });
+        legendItems.push({ color: color, style: "dotted", label: "w/ " + key + " — Won", group: gComboWon });
       }
       if (combo.lost.length) {
-        appendGraphSeries(
+        var gComboLost = appendGraphSeries(
           svg,
           combo.lost,
           minMs,
@@ -2719,7 +2724,7 @@
           "player-graph-dot",
           color
         );
-        legendItems.push({ color: color, style: "dashed", label: "w/ " + key + " — Lost" });
+        legendItems.push({ color: color, style: "dashed", label: "w/ " + key + " — Lost", group: gComboLost });
       }
     });
 
@@ -2736,9 +2741,22 @@
       swatch.className = "player-graph-legend-swatch" + (item.style === "solid" ? "" : " is-" + item.style);
       swatch.style.setProperty("--swatch-color", item.color);
       var text = document.createElement("span");
+      text.className = "player-graph-legend-label";
       text.textContent = item.label;
+      var toggleBtn = document.createElement("button");
+      toggleBtn.type = "button";
+      toggleBtn.className = "player-graph-legend-toggle";
+      toggleBtn.textContent = "Hide";
+      toggleBtn.setAttribute("aria-pressed", "true");
+      toggleBtn.addEventListener("click", function () {
+        var nowHidden = item.group.classList.toggle("is-hidden");
+        row.classList.toggle("is-off", nowHidden);
+        toggleBtn.textContent = nowHidden ? "Show" : "Hide";
+        toggleBtn.setAttribute("aria-pressed", nowHidden ? "false" : "true");
+      });
       row.appendChild(swatch);
       row.appendChild(text);
+      row.appendChild(toggleBtn);
       legend.appendChild(row);
     });
     wrap.appendChild(legend);
