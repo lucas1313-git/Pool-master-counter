@@ -1489,6 +1489,82 @@
     downloadJSON("pool-master-counter-backup-" + payload.exportedAt.slice(0, 10) + ".json", payload);
   }
 
+  // Pulls every (player, calendar date) pair referenced in an imported
+  // backup's in-progress gameHistory into proper session records, so those
+  // not-yet-exported games aren't silently dropped when we merge instead of
+  // adopting that backup's live state wholesale.
+  function summarizeGameHistoryByPlayer(gameHistory) {
+    var byPlayerDates = {};
+    (gameHistory || []).forEach(function (entry) {
+      if (!entry || typeof entry === "string" || !entry.winnerNames || !entry.ts) return;
+      var date = entry.ts.slice(0, 10);
+      (entry.winnerNames || []).concat(entry.opponentNames || []).forEach(function (name) {
+        if (!byPlayerDates[name]) byPlayerDates[name] = {};
+        byPlayerDates[name][date] = true;
+      });
+    });
+    var sessionsByPlayer = {};
+    Object.keys(byPlayerDates).forEach(function (name) {
+      var sessions = Object.keys(byPlayerDates[name])
+        .map(function (date) {
+          return computeSessionFromGameHistory(gameHistory, name, date);
+        })
+        .filter(Boolean);
+      if (sessions.length) sessionsByPlayer[name] = sessions;
+    });
+    return sessionsByPlayer;
+  }
+
+  // Merges an imported PLAYER_STATS object, plus any extra sessions pulled
+  // from the imported backup's live gameHistory, into the local one.
+  function mergePlayerStatsData(localStats, importedStats, extraSessionsByPlayer) {
+    var merged = {};
+    Object.keys(localStats || {}).forEach(function (name) {
+      merged[name] = { name: name, sessions: (localStats[name].sessions || []).slice() };
+    });
+    function foldIn(name, sessions) {
+      if (!merged[name]) merged[name] = { name: name, sessions: [] };
+      merged[name].sessions = mergeSessionLists(merged[name].sessions, sessions);
+    }
+    Object.keys(importedStats || {}).forEach(function (name) {
+      var entry = importedStats[name];
+      foldIn(name, entry && Array.isArray(entry.sessions) ? entry.sessions : []);
+    });
+    Object.keys(extraSessionsByPlayer || {}).forEach(function (name) {
+      foldIn(name, extraSessionsByPlayer[name]);
+    });
+    return merged;
+  }
+
+  // Unions two saved-roster-list arrays, skipping entries already present
+  // locally (by id, falling back to a savedAt+players signature for very
+  // old entries that predate the id field).
+  function mergeRosterLists(localRosters, importedRosters) {
+    var seen = {};
+    var merged = [];
+    function rosterKey(r) {
+      return r.id || (r.savedAt + "|" + (r.players || []).join(","));
+    }
+    (localRosters || []).forEach(function (r) {
+      var key = rosterKey(r);
+      if (seen[key]) return;
+      seen[key] = true;
+      merged.push(r);
+    });
+    var added = 0;
+    (importedRosters || []).forEach(function (r) {
+      var key = rosterKey(r);
+      if (seen[key]) return;
+      seen[key] = true;
+      merged.push(r);
+      added += 1;
+    });
+    merged.sort(function (a, b) {
+      return (a.savedAt || "").localeCompare(b.savedAt || "");
+    });
+    return { rosters: merged, added: added };
+  }
+
   function importAllData(file) {
     var reader = new FileReader();
     reader.onload = function () {
@@ -1503,21 +1579,74 @@
         alert("That doesn't look like a Pool Master Counter backup file.");
         return;
       }
+
+      // A device with no players yet has nothing to lose — treat this like
+      // setting up a new device from a backup and adopt it as-is. Otherwise,
+      // merge: keep the in-progress game running here, and fold the
+      // backup's history in without double-counting anything already known.
+      var localIsFresh = state.players.length === 0;
+
       if (
         !confirm(
-          "This replaces ALL data on this device (current session, rosters, and player stats) " +
-          "with the contents of this file. This cannot be undone. Continue?"
+          localIsFresh
+            ? "Import this backup? This device has no players set up yet, so the backup's current game and roster will be loaded as-is."
+            : "Merge this backup into your existing data? Player stats and saved rosters will be combined — games already known on both sides (same player, same time) won't be counted twice. Your current in-progress game stays as-is; any new players from the backup are added to your roster."
         )
       ) {
         return;
       }
+
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data.state));
-        localStorage.setItem(ROSTERS_KEY, JSON.stringify(Array.isArray(data.rosters) ? data.rosters : []));
-        localStorage.setItem(
-          PLAYER_STATS_KEY,
-          JSON.stringify(data.playerStats && typeof data.playerStats === "object" ? data.playerStats : {})
-        );
+        var importedState = data.state && typeof data.state === "object" ? data.state : defaultState();
+        var importedRosters = Array.isArray(data.rosters) ? data.rosters : [];
+        var importedPlayerStats = data.playerStats && typeof data.playerStats === "object" ? data.playerStats : {};
+
+        var extraSessions = summarizeGameHistoryByPlayer(importedState.gameHistory || []);
+        var mergedPlayerStats = mergePlayerStatsData(PLAYER_STATS, importedPlayerStats, extraSessions);
+        var rosterMerge = mergeRosterLists(SAVED_ROSTERS, importedRosters);
+
+        var finalState;
+        var newPlayerCount = 0;
+        if (localIsFresh) {
+          finalState = importedState;
+        } else {
+          finalState = state;
+          var knownNames = {};
+          finalState.players.forEach(function (p) {
+            knownNames[p.name] = true;
+          });
+          var candidateNames = (Array.isArray(importedState.players) ? importedState.players : [])
+            .map(function (p) {
+              return p && p.name;
+            })
+            .concat(Object.keys(importedPlayerStats))
+            .concat(Object.keys(extraSessions));
+          candidateNames.forEach(function (name) {
+            if (!name || knownNames[name]) return;
+            knownNames[name] = true;
+            finalState.players.push({
+              id: uid(),
+              name: name,
+              voice: finalState.players.length % VOICE_PITCHES.length,
+              playing: false,
+              teamId: null,
+              balls: 0
+            });
+            newPlayerCount += 1;
+          });
+        }
+
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(finalState));
+        localStorage.setItem(ROSTERS_KEY, JSON.stringify(rosterMerge.rosters));
+        localStorage.setItem(PLAYER_STATS_KEY, JSON.stringify(mergedPlayerStats));
+
+        if (!localIsFresh) {
+          alert(
+            "Merged. Added " + newPlayerCount + " new player" + (newPlayerCount === 1 ? "" : "s") +
+            " and " + rosterMerge.added + " saved roster list" + (rosterMerge.added === 1 ? "" : "s") +
+            " from the backup. Your current game wasn't touched."
+          );
+        }
       } catch (e) {
         alert("Could not import: " + e.message);
         return;
@@ -1623,16 +1752,18 @@
     return name.replace(/[^a-z0-9 _-]/gi, "").trim().replace(/\s+/g, "-") + ".json";
   }
 
-  function computeLiveSessionForPlayer(playerId) {
-    var player = getPlayer(playerId);
-    if (!player) return null;
+  // Builds a session record (same shape as one saved to PLAYER_STATS) for
+  // one player on one calendar date, from any gameHistory array — the
+  // live in-progress one, or one pulled out of an imported backup file.
+  function computeSessionFromGameHistory(gameHistory, playerName, dateStr) {
     var gamesWon = [];
     var opponentSet = {};
     var games = [];
-    state.gameHistory.forEach(function (entry) {
-      if (typeof entry === "string" || !entry.winnerNames) return;
-      var won = entry.winnerNames.indexOf(player.name) !== -1;
-      var lost = !won && (entry.opponentNames || []).indexOf(player.name) !== -1;
+    (gameHistory || []).forEach(function (entry) {
+      if (!entry || typeof entry === "string" || !entry.winnerNames || !entry.ts) return;
+      if (entry.ts.slice(0, 10) !== dateStr) return;
+      var won = entry.winnerNames.indexOf(playerName) !== -1;
+      var lost = !won && (entry.opponentNames || []).indexOf(playerName) !== -1;
       if (!won && !lost) return;
       if (won) {
         gamesWon.push(entry.gameLabel);
@@ -1656,15 +1787,34 @@
         durationMs: entry.durationMs
       });
     });
-    var wins = state.playerWins[playerId] || 0;
+    if (games.length === 0) return null;
     return {
-      date: new Date().toISOString().slice(0, 10),
-      wins: wins,
+      date: dateStr,
+      wins: games.filter(function (g) {
+        return g.result === "won";
+      }).length,
       gamesWon: gamesWon,
       opponents: Object.keys(opponentSet),
       games: games,
-      wonTournament: wins > 0 && wins >= state.raceToWinsTarget
+      wonTournament: false
     };
+  }
+
+  function computeLiveSessionForPlayer(playerId) {
+    var player = getPlayer(playerId);
+    if (!player) return null;
+    var today = new Date().toISOString().slice(0, 10);
+    var session = computeSessionFromGameHistory(state.gameHistory, player.name, today) || {
+      date: today,
+      wins: 0,
+      gamesWon: [],
+      opponents: [],
+      games: []
+    };
+    var wins = state.playerWins[playerId] || 0;
+    session.wins = wins;
+    session.wonTournament = wins > 0 && wins >= state.raceToWinsTarget;
+    return session;
   }
 
   function playerStatsRow(label, value) {
@@ -2021,31 +2171,20 @@
     currentStatsSessions = null;
   }
 
-  function mergeSessionIntoList(sessions, live) {
-    sessions = sessions.slice();
-    var idx = -1;
-    sessions.forEach(function (s, i) {
-      if (s.date === live.date) idx = i;
-    });
-    if (idx === -1) {
-      sessions.push(live);
-      return sessions;
-    }
-    // Same calendar date already has a saved session (e.g. an earlier
-    // tournament today that auto-reset and got saved). Union the games by
-    // timestamp rather than replacing, so a completed tournament's games
-    // aren't lost when a later one is saved on the same day, and rebuild
-    // the summary fields from that merged list so they stay consistent.
-    var existing = sessions[idx];
+  // Combines two session records for the SAME calendar date. Games are
+  // unioned by timestamp (so a game saved in both — e.g. by two separate
+  // exports, or two devices' backups — counts once, not twice), and the
+  // summary fields are rebuilt from that merged list so they stay accurate.
+  function mergeTwoSessionsForSameDate(a, b) {
     var seen = {};
     var mergedGames = [];
-    (existing.games || []).concat(live.games || []).forEach(function (g) {
+    (a.games || []).concat(b.games || []).forEach(function (g) {
       if (!g || !g.ts || seen[g.ts]) return;
       seen[g.ts] = true;
       mergedGames.push(g);
     });
-    mergedGames.sort(function (a, b) {
-      return a.ts.localeCompare(b.ts);
+    mergedGames.sort(function (x, y) {
+      return x.ts.localeCompare(y.ts);
     });
     var gamesWon = [];
     var opponentSet = {};
@@ -2059,15 +2198,38 @@
         opponentSet[n] = true;
       });
     });
-    sessions[idx] = {
-      date: live.date,
+    return {
+      date: a.date,
       wins: wins,
       gamesWon: gamesWon,
       opponents: Object.keys(opponentSet),
       games: mergedGames,
-      wonTournament: !!(existing.wonTournament || live.wonTournament)
+      wonTournament: !!(a.wonTournament || b.wonTournament)
     };
-    return sessions;
+  }
+
+  // Merges two full session lists (e.g. one player's locally-saved history
+  // with the same player's history from an imported backup), combining any
+  // sessions that land on the same date instead of one replacing the other.
+  function mergeSessionLists(listA, listB) {
+    var byDate = {};
+    var order = [];
+    (listA || []).concat(listB || []).forEach(function (s) {
+      if (!s || !s.date) return;
+      if (byDate[s.date]) {
+        byDate[s.date] = mergeTwoSessionsForSameDate(byDate[s.date], s);
+      } else {
+        byDate[s.date] = s;
+        order.push(s.date);
+      }
+    });
+    return order.map(function (d) {
+      return byDate[d];
+    });
+  }
+
+  function mergeSessionIntoList(sessions, live) {
+    return mergeSessionLists(sessions, [live]);
   }
 
   function exportAllPlayerStats() {
