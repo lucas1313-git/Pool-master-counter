@@ -2610,9 +2610,9 @@
   // fill instead of a CSS class (their color is picked at render time).
   // Returns the <g> the series was drawn into, so the legend can toggle its
   // visibility (show/hide) as one unit.
-  function appendGraphSeries(svg, points, minMs, maxMs, width, height, axisMax, lineClass, dotClass, color) {
+  function appendGraphSeries(svg, points, minMs, maxMs, width, height, axisMax, lineClass, dotClass, color, startHidden) {
     var geo = buildSeriesGeometry(points, minMs, maxMs, width, height, axisMax);
-    var group = svgEl("g", { class: "player-graph-series" });
+    var group = svgEl("g", { class: "player-graph-series" + (startHidden ? " is-hidden" : "") });
     var pathAttrs = { d: geo.path, fill: "none", class: lineClass };
     if (color) pathAttrs.stroke = color;
     group.appendChild(svgEl("path", pathAttrs));
@@ -2838,9 +2838,16 @@
         axisMax,
         "player-graph-line player-graph-line-dashed player-graph-line-ind-lost",
         "player-graph-dot player-graph-dot-ind-lost",
-        null
+        null,
+        true
       );
-      legendItems.push({ color: "var(--danger)", style: "dashed", label: "Individual — Lost", group: gIndLost });
+      legendItems.push({
+        color: "var(--danger)",
+        style: "dashed",
+        label: "Individual — Lost",
+        group: gIndLost,
+        startHidden: true
+      });
     }
 
     comboKeys.forEach(function (key, idx) {
@@ -2887,9 +2894,16 @@
           axisMax,
           "player-graph-line player-graph-line-dashed",
           "player-graph-dot",
-          color
+          color,
+          true
         );
-        legendItems.push({ color: color, style: "dashed", label: "w/ " + key + " — Lost", group: gComboLost });
+        legendItems.push({
+          color: color,
+          style: "dashed",
+          label: "w/ " + key + " — Lost",
+          group: gComboLost,
+          startHidden: true
+        });
       }
     });
 
@@ -2901,7 +2915,7 @@
     legend.className = "player-graph-legend";
     legendItems.forEach(function (item) {
       var row = document.createElement("div");
-      row.className = "player-graph-legend-row";
+      row.className = "player-graph-legend-row" + (item.startHidden ? " is-off" : "");
       var swatch = document.createElement("span");
       swatch.className = "player-graph-legend-swatch" + (item.style === "solid" ? "" : " is-" + item.style);
       swatch.style.setProperty("--swatch-color", item.color);
@@ -2911,8 +2925,8 @@
       var toggleBtn = document.createElement("button");
       toggleBtn.type = "button";
       toggleBtn.className = "player-graph-legend-toggle";
-      toggleBtn.textContent = "Hide";
-      toggleBtn.setAttribute("aria-pressed", "true");
+      toggleBtn.textContent = item.startHidden ? "Show" : "Hide";
+      toggleBtn.setAttribute("aria-pressed", item.startHidden ? "false" : "true");
       toggleBtn.addEventListener("click", function () {
         var nowHidden = item.group.classList.toggle("is-hidden");
         row.classList.toggle("is-off", nowHidden);
@@ -2920,8 +2934,8 @@
         toggleBtn.setAttribute("aria-pressed", nowHidden ? "false" : "true");
       });
       row.appendChild(swatch);
-      row.appendChild(text);
       row.appendChild(toggleBtn);
+      row.appendChild(text);
       legend.appendChild(row);
     });
     wrap.appendChild(legend);
