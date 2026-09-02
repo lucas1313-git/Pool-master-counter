@@ -1458,18 +1458,20 @@
   function resetAllPlayerStats() {
     if (
       !confirm(
-        "This clears EVERY player's saved stat history on this device — all sessions, for all players, not just the current live session. This cannot be undone. Continue?"
+        "This clears EVERY player's saved stat history on this device — all sessions, for all players, not just the current live session. " +
+        "A backup file of all your data will be downloaded first, and can be restored later from Import Data. This cannot be undone. Continue?"
       )
     ) {
       return;
     }
+    exportAllData();
     PLAYER_STATS = {};
     savePlayerStatsToStorage(PLAYER_STATS);
     if (currentStatsPlayerName) {
       currentStatsSessions = [];
       renderPlayerHistoryList([]);
     }
-    showToast("Cleared all players' saved stat history.");
+    showToast("Backed up your data and cleared all players' saved stat history.");
   }
 
   // One-time migration: the app used to store rosters/player stats as JSON
