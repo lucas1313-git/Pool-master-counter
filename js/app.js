@@ -305,6 +305,38 @@
   var btnImportRosterLists = document.getElementById("btn-import-roster-lists");
   var importRosterListsFileInput = document.getElementById("import-roster-lists-file-input");
 
+  var btnOpenWizard = document.getElementById("btn-open-wizard");
+  var wizardOverlay = document.getElementById("wizard-overlay");
+  var btnWizardClose = document.getElementById("btn-wizard-close");
+  var wizardProgress = document.getElementById("wizard-progress");
+  var wizardProgressDots = document.getElementById("wizard-progress-dots");
+  var wizardGameTypeSelect = document.getElementById("wizard-game-type");
+  var wizardFormatRadios = document.getElementsByName("wizard-format");
+  var wizardRaceToRow = document.getElementById("wizard-raceto-row");
+  var wizardRaceToInput = document.getElementById("wizard-race-to");
+  var wizardRosterLoadSelect = document.getElementById("wizard-roster-load-select");
+  var btnWizardRosterLoad = document.getElementById("wizard-btn-roster-load");
+  var wizardNewPlayerNameRequirement = document.getElementById("wizard-new-player-name-requirement");
+  var wizardAddPlayerForm = document.getElementById("wizard-add-player-form");
+  var wizardNewPlayerName = document.getElementById("wizard-new-player-name");
+  var btnWizardAddPlayer = document.getElementById("wizard-btn-add-player");
+  var wizardPlayerChips = document.getElementById("wizard-player-chips");
+  var wizardPlayingList = document.getElementById("wizard-playing-list");
+  var wizardPlayingWarning = document.getElementById("wizard-playing-warning");
+  var wizardRotationEnabledRadios = document.getElementsByName("wizard-rotation-enabled");
+  var wizardRotationDetail = document.getElementById("wizard-rotation-detail");
+  var wizardRotationLoadSelect = document.getElementById("wizard-rotation-load-select");
+  var btnWizardRotationLoad = document.getElementById("wizard-btn-rotation-load");
+  var wizardRotationAddType = document.getElementById("wizard-rotation-add-type");
+  var btnWizardRotationAdd = document.getElementById("wizard-btn-rotation-add");
+  var wizardRotationList = document.getElementById("wizard-rotation-list");
+  var wizardRotationEveryInput = document.getElementById("wizard-rotation-every");
+  var wizardSummary = document.getElementById("wizard-summary");
+  var btnWizardBack = document.getElementById("wizard-btn-back");
+  var btnWizardCancel = document.getElementById("wizard-btn-cancel");
+  var btnWizardNext = document.getElementById("wizard-btn-next");
+  var btnWizardStart = document.getElementById("wizard-btn-start");
+
   var btnToggleFocus = document.getElementById("btn-toggle-focus");
   var appRoot = document.getElementById("app");
   var playerPageView = document.getElementById("view-player-page");
@@ -400,7 +432,7 @@
   var btnSaveSessionCancel = document.getElementById("btn-save-session-cancel");
 
   function populateGameTypeSelects() {
-    [gameTypeSelect, rotationAddType, tournamentGameTypeSelect].forEach(function (select) {
+    [gameTypeSelect, rotationAddType, tournamentGameTypeSelect, wizardGameTypeSelect, wizardRotationAddType].forEach(function (select) {
       select.innerHTML = "";
       GAME_TYPE_LIST.forEach(function (t) {
         var opt = document.createElement("option");
@@ -437,68 +469,80 @@
     renderHistory();
     renderStandings();
     renderRotation();
+    renderWizardIfOpen();
+  }
+
+  // Builds one rotation-order <li> (position, label, up/down/remove
+  // controls). Shared by the main Game Order panel and the wizard's
+  // rotation step so both stay visually and behaviorally identical.
+  function buildRotationRow(typeId, i, total) {
+    var li = document.createElement("li");
+    li.className = "rotation-row";
+
+    var pos = document.createElement("span");
+    pos.className = "rotation-position";
+    pos.textContent = i + 1 + ".";
+
+    var name = document.createElement("span");
+    name.className = "rotation-name";
+    name.textContent = GAME_TYPES[typeId] ? GAME_TYPES[typeId].label : typeId;
+
+    var controls = document.createElement("div");
+    controls.className = "rotation-controls";
+
+    var upBtn = document.createElement("button");
+    upBtn.type = "button";
+    upBtn.textContent = "↑";
+    upBtn.disabled = i === 0;
+    upBtn.addEventListener("click", function () {
+      moveRotationItem(i, -1);
+    });
+
+    var downBtn = document.createElement("button");
+    downBtn.type = "button";
+    downBtn.textContent = "↓";
+    downBtn.disabled = i === total - 1;
+    downBtn.addEventListener("click", function () {
+      moveRotationItem(i, 1);
+    });
+
+    var removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.setAttribute("aria-label", "Remove from rotation");
+    removeBtn.textContent = "×";
+    removeBtn.addEventListener("click", function () {
+      removeRotationItem(i);
+    });
+
+    controls.appendChild(upBtn);
+    controls.appendChild(downBtn);
+    controls.appendChild(removeBtn);
+
+    li.appendChild(pos);
+    li.appendChild(name);
+    li.appendChild(controls);
+    return li;
+  }
+
+  function renderRotationListInto(listEl) {
+    listEl.innerHTML = "";
+    if (state.rotation.order.length === 0) {
+      var hint = document.createElement("li");
+      hint.className = "empty-hint";
+      hint.textContent = "No game types added yet.";
+      listEl.appendChild(hint);
+      return;
+    }
+    state.rotation.order.forEach(function (typeId, i) {
+      listEl.appendChild(buildRotationRow(typeId, i, state.rotation.order.length));
+    });
   }
 
   function renderRotation() {
     rotationEnabledCheckbox.checked = state.rotation.enabled;
     rotationEveryInput.value = state.rotation.every;
 
-    rotationList.innerHTML = "";
-    if (state.rotation.order.length === 0) {
-      var hint = document.createElement("li");
-      hint.className = "empty-hint";
-      hint.textContent = "No game types added yet.";
-      rotationList.appendChild(hint);
-    } else {
-      state.rotation.order.forEach(function (typeId, i) {
-        var li = document.createElement("li");
-        li.className = "rotation-row";
-
-        var pos = document.createElement("span");
-        pos.className = "rotation-position";
-        pos.textContent = i + 1 + ".";
-
-        var name = document.createElement("span");
-        name.className = "rotation-name";
-        name.textContent = GAME_TYPES[typeId] ? GAME_TYPES[typeId].label : typeId;
-
-        var controls = document.createElement("div");
-        controls.className = "rotation-controls";
-
-        var upBtn = document.createElement("button");
-        upBtn.type = "button";
-        upBtn.textContent = "↑";
-        upBtn.disabled = i === 0;
-        upBtn.addEventListener("click", function () {
-          moveRotationItem(i, -1);
-        });
-
-        var downBtn = document.createElement("button");
-        downBtn.type = "button";
-        downBtn.textContent = "↓";
-        downBtn.disabled = i === state.rotation.order.length - 1;
-        downBtn.addEventListener("click", function () {
-          moveRotationItem(i, 1);
-        });
-
-        var removeBtn = document.createElement("button");
-        removeBtn.type = "button";
-        removeBtn.setAttribute("aria-label", "Remove from rotation");
-        removeBtn.textContent = "×";
-        removeBtn.addEventListener("click", function () {
-          removeRotationItem(i);
-        });
-
-        controls.appendChild(upBtn);
-        controls.appendChild(downBtn);
-        controls.appendChild(removeBtn);
-
-        li.appendChild(pos);
-        li.appendChild(name);
-        li.appendChild(controls);
-        rotationList.appendChild(li);
-      });
-    }
+    renderRotationListInto(rotationList);
 
     rotationStatus.classList.remove("is-warning");
     var info = rotationStatusInfo();
@@ -531,6 +575,7 @@
     applyRotationIfDue();
     renderRotation();
     renderScoreboard();
+    renderWizardIfOpen();
   }
 
   function removeRotationItem(index) {
@@ -540,6 +585,7 @@
     applyRotationIfDue();
     renderRotation();
     renderScoreboard();
+    renderWizardIfOpen();
   }
 
   function moveRotationItem(index, delta) {
@@ -554,6 +600,7 @@
     applyRotationIfDue();
     renderRotation();
     renderScoreboard();
+    renderWizardIfOpen();
   }
 
   function syncGameTypeUI() {
@@ -2026,21 +2073,32 @@
     });
   }
 
-  function loadSelectedRoster() {
-    var idx = parseInt(rosterLoadSelect.value, 10);
-    var roster = SAVED_ROSTERS[idx];
-    if (!roster) return;
+  // Adds every player from a saved roster entry who isn't already on the
+  // live roster (case-insensitive), leaving everything else untouched.
+  // Shared by the main "Load Player List" button and the wizard.
+  function loadRosterEntry(roster) {
+    if (!roster) return 0;
     var existingNames = state.players.map(function (p) {
       return normalizeNameKey(p.name);
     });
     var added = 0;
     roster.players.forEach(function (name) {
-      if (existingNames.indexOf(normalizeNameKey(name)) === -1) {
+      var key = normalizeNameKey(name);
+      if (existingNames.indexOf(key) === -1) {
         addPlayer(name);
+        existingNames.push(key);
         added += 1;
       }
     });
     saveRosterSnapshotIfNew(true);
+    return added;
+  }
+
+  function loadSelectedRoster() {
+    var idx = parseInt(rosterLoadSelect.value, 10);
+    var roster = SAVED_ROSTERS[idx];
+    if (!roster) return;
+    var added = loadRosterEntry(roster);
     validateNewPlayerNameInput();
     renderAll();
     if (added === 0) {
@@ -2089,6 +2147,7 @@
     SAVED_ROSTERS = SAVED_ROSTERS.concat([entry]);
     saveRostersToStorage(SAVED_ROSTERS);
     populateRosterLoadSelect();
+    populateWizardRosterLoadSelect();
     exportRosterLists();
     if (!silent) showToast("Saved roster: " + entry.label);
     return true;
@@ -2127,9 +2186,10 @@
     });
   }
 
-  function loadSelectedRotation() {
-    var idx = parseInt(rotationLoadSelect.value, 10);
-    var rotation = SAVED_ROTATIONS[idx];
+  // Replaces the current game order outright with a saved rotation's
+  // sequence — a sequence isn't something to merge like a player roster.
+  // Shared by the main "Load Rotation" button and the wizard.
+  function loadRotationEntry(rotation) {
     if (!rotation) return;
     state.rotation = {
       enabled: !!rotation.enabled,
@@ -2138,7 +2198,15 @@
     };
     saveState();
     applyRotationIfDue();
+  }
+
+  function loadSelectedRotation() {
+    var idx = parseInt(rotationLoadSelect.value, 10);
+    var rotation = SAVED_ROTATIONS[idx];
+    if (!rotation) return;
+    loadRotationEntry(rotation);
     renderRotation();
+    renderWizardIfOpen();
     showToast("Loaded rotation: \"" + rotation.label + "\".");
   }
 
@@ -2178,8 +2246,367 @@
     SAVED_ROTATIONS = SAVED_ROTATIONS.concat([entry]);
     saveRotationsToStorage(SAVED_ROTATIONS);
     populateRotationLoadSelect();
+    populateWizardRotationLoadSelect();
     if (!silent) showToast("Saved rotation: " + entry.label);
     return true;
+  }
+
+  // ---------------------------------------------------------------------
+  // Setup Wizard — a step-by-step flow that walks through the same
+  // controls already on the main page (game type/format, players, who's
+  // playing, rotation) and applies them all when "Start Game" is hit.
+  // Player and rotation changes made in the wizard are applied live via
+  // the same functions the main page uses, so canceling never needs to
+  // roll anything back; only the format choice from step 1 is a draft
+  // until Start is pressed.
+  // ---------------------------------------------------------------------
+
+  var WIZARD_STEP_SEQUENCE_DEFAULT = [1, 2, 3, 4, 5];
+  var WIZARD_STEP_SEQUENCE_TOURNAMENT = [1, 5];
+  var wizardStep = 1;
+  var wizardFormat = "individual";
+
+  function wizardStepSequence() {
+    return wizardFormat === "tournament" ? WIZARD_STEP_SEQUENCE_TOURNAMENT : WIZARD_STEP_SEQUENCE_DEFAULT;
+  }
+
+  function populateWizardRosterLoadSelect() {
+    wizardRosterLoadSelect.innerHTML = "";
+    if (SAVED_ROSTERS.length === 0) {
+      var opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = "No saved lists yet";
+      wizardRosterLoadSelect.appendChild(opt);
+      wizardRosterLoadSelect.disabled = true;
+      btnWizardRosterLoad.disabled = true;
+      return;
+    }
+    wizardRosterLoadSelect.disabled = false;
+    btnWizardRosterLoad.disabled = false;
+    SAVED_ROSTERS.forEach(function (r, i) {
+      var o = document.createElement("option");
+      o.value = String(i);
+      o.textContent = r.label;
+      wizardRosterLoadSelect.appendChild(o);
+    });
+  }
+
+  function populateWizardRotationLoadSelect() {
+    wizardRotationLoadSelect.innerHTML = "";
+    if (SAVED_ROTATIONS.length === 0) {
+      var opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = "No saved rotations yet";
+      wizardRotationLoadSelect.appendChild(opt);
+      wizardRotationLoadSelect.disabled = true;
+      btnWizardRotationLoad.disabled = true;
+      return;
+    }
+    wizardRotationLoadSelect.disabled = false;
+    btnWizardRotationLoad.disabled = false;
+    SAVED_ROTATIONS.forEach(function (r, i) {
+      var o = document.createElement("option");
+      o.value = String(i);
+      o.textContent = r.label;
+      wizardRotationLoadSelect.appendChild(o);
+    });
+  }
+
+  function loadSelectedWizardRoster() {
+    var idx = parseInt(wizardRosterLoadSelect.value, 10);
+    var roster = SAVED_ROSTERS[idx];
+    if (!roster) return;
+    var added = loadRosterEntry(roster);
+    validateWizardNewPlayerNameInput();
+    renderAll();
+    showToast(
+      added === 0
+        ? "Everyone from that saved list is already in your roster."
+        : "Added " + added + " player" + (added === 1 ? "" : "s") + " from \"" + roster.label + "\"."
+    );
+  }
+
+  function syncWizardRotationEnabledRadios() {
+    Array.prototype.forEach.call(wizardRotationEnabledRadios, function (r) {
+      r.checked = (r.value === "yes") === !!state.rotation.enabled;
+    });
+    wizardRotationDetail.classList.toggle("hidden", !state.rotation.enabled);
+  }
+
+  function loadSelectedWizardRotation() {
+    var idx = parseInt(wizardRotationLoadSelect.value, 10);
+    var rotation = SAVED_ROTATIONS[idx];
+    if (!rotation) return;
+    loadRotationEntry(rotation);
+    syncWizardRotationEnabledRadios();
+    wizardRotationEveryInput.value = state.rotation.every;
+    renderRotation();
+    renderWizardIfOpen();
+    showToast("Loaded rotation: \"" + rotation.label + "\".");
+  }
+
+  function validateWizardNewPlayerNameInput() {
+    var trimmed = wizardNewPlayerName.value.trim();
+    var duplicate = trimmed && isDuplicatePlayerName(trimmed);
+    btnWizardAddPlayer.disabled = !trimmed || duplicate;
+    if (duplicate) {
+      wizardNewPlayerNameRequirement.textContent =
+        "\"" + capitalizeName(trimmed) + "\" is already in your roster — use a different name, or add a last name/initial.";
+      wizardNewPlayerNameRequirement.classList.remove("hidden");
+    } else {
+      wizardNewPlayerNameRequirement.classList.add("hidden");
+    }
+  }
+
+  function renderWizardPlayerChips() {
+    wizardPlayerChips.innerHTML = "";
+    if (state.players.length === 0) {
+      var hint = document.createElement("li");
+      hint.className = "empty-hint";
+      hint.textContent = "No players yet — add some above.";
+      wizardPlayerChips.appendChild(hint);
+      return;
+    }
+    state.players.forEach(function (p) {
+      var li = document.createElement("li");
+      li.textContent = p.name;
+      wizardPlayerChips.appendChild(li);
+    });
+  }
+
+  function renderWizardPlayingList() {
+    wizardPlayingList.innerHTML = "";
+    if (state.players.length === 0) {
+      var hint = document.createElement("li");
+      hint.className = "empty-hint";
+      hint.textContent = "No players yet — go back and add some.";
+      wizardPlayingList.appendChild(hint);
+    } else {
+      state.players.forEach(function (p) {
+        var row = document.createElement("li");
+        row.className = "roster-row" + (p.playing ? " is-playing" : "");
+
+        var name = document.createElement("span");
+        name.className = "roster-name";
+        name.textContent = p.name;
+        row.appendChild(name);
+
+        var playBtn = document.createElement("button");
+        playBtn.type = "button";
+        playBtn.className = "btn-playing" + (p.playing ? " is-on" : "");
+        playBtn.textContent = p.playing ? "Playing" : "Standby";
+        playBtn.addEventListener("click", function () {
+          togglePlaying(p.id);
+        });
+        row.appendChild(playBtn);
+
+        wizardPlayingList.appendChild(row);
+      });
+    }
+    var playingCount = state.players.filter(function (p) {
+      return p.playing;
+    }).length;
+    wizardPlayingWarning.classList.toggle("hidden", playingCount >= 2);
+  }
+
+  // Silently keeps the wizard's own step-2/3/4 content in sync whenever
+  // players or the rotation change elsewhere (add/remove/toggle/load),
+  // regardless of which step is currently showing.
+  function renderWizardIfOpen() {
+    if (!wizardOverlay || wizardOverlay.classList.contains("hidden")) return;
+    renderWizardPlayerChips();
+    renderWizardPlayingList();
+    renderRotationListInto(wizardRotationList);
+  }
+
+  function validateWizardStepBeforeNext() {
+    if (wizardStep === 1) {
+      if (wizardFormat === "raceto") {
+        var raceTo = parseInt(wizardRaceToInput.value, 10);
+        if (!raceTo || raceTo < 1) {
+          showToast("Enter how many wins to race to.");
+          return false;
+        }
+      }
+      return true;
+    }
+    if (wizardStep === 2) {
+      if (state.players.length === 0) {
+        showToast("Add at least one player before continuing.");
+        return false;
+      }
+      return true;
+    }
+    if (wizardStep === 3) {
+      var playingCount = state.players.filter(function (p) {
+        return p.playing;
+      }).length;
+      if (playingCount < 2) {
+        wizardPlayingWarning.classList.remove("hidden");
+        return false;
+      }
+      return true;
+    }
+    if (wizardStep === 4) {
+      var rotationOn = Array.prototype.filter.call(wizardRotationEnabledRadios, function (r) {
+        return r.checked;
+      })[0].value === "yes";
+      if (rotationOn && state.rotation.order.length < 2) {
+        showToast("Add at least two game types to the rotation, or choose \"No\".");
+        return false;
+      }
+      return true;
+    }
+    return true;
+  }
+
+  function renderWizardStep() {
+    var seq = wizardStepSequence();
+    var idx = seq.indexOf(wizardStep);
+
+    [1, 2, 3, 4, 5].forEach(function (n) {
+      document.getElementById("wizard-step-" + n).classList.toggle("hidden", n !== wizardStep);
+    });
+
+    wizardProgress.textContent = "Step " + (idx + 1) + " of " + seq.length;
+
+    wizardProgressDots.innerHTML = "";
+    seq.forEach(function (stepNum, i) {
+      var dot = document.createElement("span");
+      dot.className = "wizard-dot" + (i < idx ? " is-done" : i === idx ? " is-active" : "");
+      wizardProgressDots.appendChild(dot);
+    });
+
+    btnWizardBack.classList.toggle("hidden", idx === 0);
+    var isLast = idx === seq.length - 1;
+    btnWizardNext.classList.toggle("hidden", isLast);
+    btnWizardStart.classList.toggle("hidden", !isLast);
+    if (isLast) {
+      btnWizardStart.textContent = wizardFormat === "tournament" ? "🏆 Go to Tournament Setup" : "🎱 Start Game";
+    }
+
+    if (wizardStep === 2) renderWizardPlayerChips();
+    if (wizardStep === 3) renderWizardPlayingList();
+    if (wizardStep === 4) renderRotationListInto(wizardRotationList);
+    if (wizardStep === 5) renderWizardSummary();
+  }
+
+  function renderWizardSummary() {
+    wizardSummary.innerHTML = "";
+    function summaryRow(label, value) {
+      var r = document.createElement("div");
+      r.className = "wizard-summary-row";
+      var l = document.createElement("span");
+      l.className = "label";
+      l.textContent = label;
+      var v = document.createElement("span");
+      v.className = "value";
+      v.textContent = value;
+      r.appendChild(l);
+      r.appendChild(v);
+      wizardSummary.appendChild(r);
+    }
+    var gameLabel = GAME_TYPES[wizardGameTypeSelect.value] ? GAME_TYPES[wizardGameTypeSelect.value].label : wizardGameTypeSelect.value;
+    if (wizardFormat === "tournament") {
+      summaryRow("Format", "Tournament Elimination");
+      summaryRow("Game", gameLabel);
+      summaryRow("Players on roster", String(state.players.length));
+      return;
+    }
+    summaryRow("Game", gameLabel);
+    summaryRow(
+      "Format",
+      wizardFormat === "raceto" ? "Race to " + (parseInt(wizardRaceToInput.value, 10) || 5) + " wins" : "Individual (casual)"
+    );
+    var playingCount = state.players.filter(function (p) {
+      return p.playing;
+    }).length;
+    summaryRow("Players playing", playingCount + " of " + state.players.length);
+    var rotationOn = Array.prototype.filter.call(wizardRotationEnabledRadios, function (r) {
+      return r.checked;
+    })[0].value === "yes";
+    var every = state.rotation.every || 1;
+    summaryRow(
+      "Rotation",
+      rotationOn && state.rotation.order.length
+        ? rotationLabelFor(state.rotation.order) + " (every " + every + " game" + (every === 1 ? "" : "s") + ")"
+        : "Off"
+    );
+  }
+
+  function wizardNext() {
+    if (!validateWizardStepBeforeNext()) return;
+    var seq = wizardStepSequence();
+    var idx = seq.indexOf(wizardStep);
+    if (idx < seq.length - 1) {
+      wizardStep = seq[idx + 1];
+      renderWizardStep();
+    }
+  }
+
+  function wizardBack() {
+    var seq = wizardStepSequence();
+    var idx = seq.indexOf(wizardStep);
+    if (idx > 0) {
+      wizardStep = seq[idx - 1];
+      renderWizardStep();
+    }
+  }
+
+  function openWizard() {
+    wizardStep = 1;
+    wizardFormat = "individual";
+    Array.prototype.forEach.call(wizardFormatRadios, function (r) {
+      r.checked = r.value === "individual";
+    });
+    wizardRaceToRow.classList.add("hidden");
+    wizardRaceToInput.value = state.raceToWinsTarget || 5;
+    wizardGameTypeSelect.value = state.currentGame.gameType;
+    syncWizardRotationEnabledRadios();
+    wizardRotationEveryInput.value = state.rotation.every || 1;
+    wizardNewPlayerName.value = "";
+    validateWizardNewPlayerNameInput();
+    populateWizardRosterLoadSelect();
+    populateWizardRotationLoadSelect();
+    renderWizardStep();
+    wizardOverlay.classList.remove("hidden");
+  }
+
+  function closeWizard() {
+    wizardOverlay.classList.add("hidden");
+  }
+
+  function finalizeWizardAndStart() {
+    if (wizardFormat === "tournament") {
+      closeWizard();
+      openTournamentPage();
+      return;
+    }
+    var typeId = wizardGameTypeSelect.value;
+    var type = GAME_TYPES[typeId];
+    var typeChanged = state.currentGame.gameType !== typeId;
+    state.currentGame.gameType = typeId;
+    if (typeChanged) state.currentGame.target = type.defaultTarget;
+    state.currentGame.mode = "individual";
+    if (wizardFormat === "raceto") {
+      var raceTo = parseInt(wizardRaceToInput.value, 10);
+      if (raceTo >= 1) state.raceToWinsTarget = raceTo;
+    }
+    saveState();
+
+    gameTypeSelect.value = typeId;
+    gameTargetInput.value = state.currentGame.target;
+    gameTargetUnit.textContent = type.unit;
+    raceToWinsInput.value = state.raceToWinsTarget;
+    Array.prototype.forEach.call(modeRadios, function (r) {
+      r.checked = r.value === "individual";
+    });
+
+    applyRotationIfDue();
+    renderAll();
+    closeWizard();
+    setFocusMode(true);
+    showToast("Let's play! 🎱");
   }
 
   // ---------------------------------------------------------------------
@@ -4473,6 +4900,72 @@
   btnRosterLoad.addEventListener("click", loadSelectedRoster);
   btnRotationLoad.addEventListener("click", loadSelectedRotation);
 
+  btnOpenWizard.addEventListener("click", openWizard);
+  btnWizardClose.addEventListener("click", closeWizard);
+  btnWizardCancel.addEventListener("click", closeWizard);
+  wizardOverlay.addEventListener("click", function (e) {
+    if (e.target === wizardOverlay) closeWizard();
+  });
+  btnWizardBack.addEventListener("click", wizardBack);
+  btnWizardNext.addEventListener("click", wizardNext);
+  btnWizardStart.addEventListener("click", finalizeWizardAndStart);
+
+  Array.prototype.forEach.call(wizardFormatRadios, function (radio) {
+    radio.addEventListener("change", function () {
+      if (!radio.checked) return;
+      wizardFormat = radio.value;
+      wizardRaceToRow.classList.toggle("hidden", wizardFormat !== "raceto");
+    });
+  });
+
+  wizardNewPlayerName.addEventListener("input", validateWizardNewPlayerNameInput);
+
+  wizardAddPlayerForm.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var trimmed = wizardNewPlayerName.value.trim();
+    if (!trimmed || isDuplicatePlayerName(trimmed)) {
+      validateWizardNewPlayerNameInput();
+      return;
+    }
+    var player = addPlayer(wizardNewPlayerName.value);
+    if (!player) return;
+    wizardNewPlayerName.value = "";
+    validateWizardNewPlayerNameInput();
+    saveRosterSnapshotIfNew(true);
+    renderAll();
+  });
+
+  btnWizardRosterLoad.addEventListener("click", loadSelectedWizardRoster);
+
+  Array.prototype.forEach.call(wizardRotationEnabledRadios, function (radio) {
+    radio.addEventListener("change", function () {
+      if (!radio.checked) return;
+      var on = radio.value === "yes";
+      state.rotation.enabled = on;
+      saveState();
+      wizardRotationDetail.classList.toggle("hidden", !on);
+      applyRotationIfDue();
+      renderRotation();
+      renderWizardIfOpen();
+    });
+  });
+
+  btnWizardRotationLoad.addEventListener("click", loadSelectedWizardRotation);
+
+  btnWizardRotationAdd.addEventListener("click", function () {
+    addRotationItem(wizardRotationAddType.value);
+  });
+
+  wizardRotationEveryInput.addEventListener("input", function () {
+    var v = parseInt(wizardRotationEveryInput.value, 10);
+    if (!v || v < 1) return;
+    state.rotation.every = v;
+    saveState();
+    applyRotationIfDue();
+    renderRotation();
+    renderWizardIfOpen();
+  });
+
   btnToggleBackupPanel.addEventListener("click", function () {
     var willExpand = backupPanel.classList.contains("collapsed");
     backupPanel.classList.toggle("collapsed");
@@ -4537,7 +5030,10 @@
 
   populateRosterLoadSelect();
   populateRotationLoadSelect();
+  populateWizardRosterLoadSelect();
+  populateWizardRotationLoadSelect();
   validateNewPlayerNameInput();
+  validateWizardNewPlayerNameInput();
   renderAll();
 
   var storedFocusMode = "0";

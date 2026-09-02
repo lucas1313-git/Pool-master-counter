@@ -999,6 +999,183 @@ input[type="number"] {
   width: 100%;
 }
 
+/* ---------- Setup wizard ---------- */
+
+.wizard-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 1000;
+}
+
+.wizard-card {
+  position: relative;
+  background: linear-gradient(180deg, var(--felt-light) 0%, var(--felt) 60%, #200606 100%);
+  border: 2px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 28px 24px 20px;
+  max-width: 520px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  animation: milestone-pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.wizard-close-btn {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 1.6rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.wizard-close-btn:hover {
+  color: var(--text);
+}
+
+.wizard-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 6px;
+}
+
+.wizard-mascot {
+  width: 64px;
+  height: 80px;
+  flex-shrink: 0;
+}
+
+.wizard-header-text h2 {
+  margin: 0 0 2px;
+  color: var(--accent);
+  font-size: 1.3rem;
+}
+
+.wizard-progress {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 0.9rem;
+}
+
+.wizard-progress-dots {
+  display: flex;
+  gap: 6px;
+  margin: 14px 0 18px;
+}
+
+.wizard-progress-dots .wizard-dot {
+  flex: 1 1 auto;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.wizard-progress-dots .wizard-dot.is-done,
+.wizard-progress-dots .wizard-dot.is-active {
+  background: var(--accent);
+}
+
+.wizard-body {
+  text-align: left;
+  min-height: 180px;
+}
+
+.wizard-step-explain {
+  color: var(--text-dim);
+  font-size: 0.9rem;
+  margin: 0 0 16px;
+}
+
+.wizard-format-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.wizard-format-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.wizard-format-option:has(input:checked) {
+  border-color: var(--accent);
+  background: rgba(232, 178, 60, 0.12);
+}
+
+.wizard-format-option input {
+  flex-shrink: 0;
+}
+
+.wizard-player-chips {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.wizard-player-chips li {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 0.9rem;
+}
+
+.wizard-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.wizard-summary-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+}
+
+.wizard-summary-row .label {
+  color: var(--text-dim);
+}
+
+.wizard-summary-row .value {
+  font-weight: 700;
+  text-align: right;
+}
+
+.wizard-footer {
+  display: flex;
+  gap: 8px;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+.wizard-footer .btn {
+  flex: 1 1 auto;
+}
+
 /* ---------- Player stats page ---------- */
 
 .player-page-header {

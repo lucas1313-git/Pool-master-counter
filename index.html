@@ -41,6 +41,7 @@
       </div>
     </div>
     <div class="header-nav-row">
+      <button type="button" id="btn-open-wizard" class="btn btn-primary all-players-nav-btn">🧙 Start Wizard</button>
       <button type="button" id="btn-open-all-players" class="btn btn-ghost all-players-nav-btn">📊 All Players</button>
       <button type="button" id="btn-open-tournament" class="btn btn-ghost all-players-nav-btn">🏆 Tournament</button>
     </div>
@@ -193,6 +194,140 @@
       <button type="button" id="btn-save-session-save" class="btn btn-primary">Save &amp; Start New Session</button>
       <button type="button" id="btn-save-session-skip" class="btn btn-ghost">Start Without Saving</button>
       <button type="button" id="btn-save-session-cancel" class="btn btn-ghost">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="wizard-overlay" class="wizard-overlay hidden">
+  <div class="wizard-card">
+    <button type="button" id="btn-wizard-close" class="wizard-close-btn" aria-label="Close wizard">×</button>
+
+    <div class="wizard-header">
+      <svg class="wizard-mascot" viewBox="0 0 120 150" role="img" aria-label="Cartoon wizard mascot">
+        <defs>
+          <radialGradient id="wizardOrbGlow" cx="50%" cy="50%" r="60%">
+            <stop offset="0%" stop-color="#fff3c4" />
+            <stop offset="100%" stop-color="#d9a441" />
+          </radialGradient>
+        </defs>
+        <line x1="97" y1="60" x2="108" y2="128" stroke="#7a5230" stroke-width="4" stroke-linecap="round" />
+        <circle cx="97" cy="55" r="9" fill="url(#wizardOrbGlow)" />
+        <path d="M60,18 L88,72 Q60,84 32,72 Z" fill="#3d2b6b" />
+        <path d="M60,18 L88,72 Q60,80 55,70 Z" fill="#4d3684" />
+        <ellipse cx="60" cy="73" rx="30" ry="7" fill="#3d2b6b" />
+        <path d="M50,26 l6,-14 l6,14 l-6,5 z" fill="#e8c25a" />
+        <path d="M60,74 Q60,110 40,138 L80,138 Q60,110 60,74 Z" fill="#4d3684" />
+        <path d="M60,74 Q60,110 40,138 L52,138 Q56,106 60,74 Z" fill="#5b41a0" />
+        <circle cx="46" cy="98" r="1.6" fill="#f4e6b8" />
+        <circle cx="66" cy="112" r="1.6" fill="#f4e6b8" />
+        <circle cx="54" cy="124" r="1.6" fill="#f4e6b8" />
+        <circle cx="72" cy="94" r="1.6" fill="#f4e6b8" />
+        <circle cx="60" cy="58" r="19" fill="#e7b98c" />
+        <path d="M41,58 Q40,84 60,90 Q80,84 79,58 Q79,74 60,80 Q41,74 41,58 Z" fill="#f2f2f2" />
+        <path d="M46,52 Q60,44 74,52 Q74,44 60,40 Q46,44 46,52 Z" fill="#f2f2f2" />
+        <circle cx="52" cy="56" r="2.2" fill="#2a2a2a" />
+        <circle cx="68" cy="56" r="2.2" fill="#2a2a2a" />
+        <path d="M56,64 Q60,67 64,64" stroke="#c98f5e" stroke-width="1.6" fill="none" stroke-linecap="round" />
+      </svg>
+      <div class="wizard-header-text">
+        <h2>Game Setup Wizard</h2>
+        <p class="wizard-progress" id="wizard-progress">Step 1 of 5</p>
+      </div>
+    </div>
+
+    <div class="wizard-progress-dots" id="wizard-progress-dots"></div>
+
+    <div class="wizard-body">
+
+      <div class="wizard-step" id="wizard-step-1">
+        <p class="wizard-step-explain">Pick how you want to play. "Race To" sets a target number of wins; "Tournament Elimination" opens the bracket setup instead of a regular session.</p>
+        <div class="row">
+          <label for="wizard-game-type">Game</label>
+          <select id="wizard-game-type"></select>
+        </div>
+        <div class="wizard-format-options">
+          <label class="wizard-format-option">
+            <input type="radio" name="wizard-format" value="individual" checked>
+            <span>🎯 Individual — casual play, no fixed target</span>
+          </label>
+          <label class="wizard-format-option">
+            <input type="radio" name="wizard-format" value="raceto">
+            <span>🏁 Race To — first to reach a set number of wins</span>
+          </label>
+          <label class="wizard-format-option">
+            <input type="radio" name="wizard-format" value="tournament">
+            <span>🏆 Tournament Elimination — bracket-style knockout</span>
+          </label>
+        </div>
+        <div class="row hidden" id="wizard-raceto-row">
+          <label for="wizard-race-to">Race to</label>
+          <input type="number" id="wizard-race-to" min="1" max="99" value="5">
+          <span>wins</span>
+        </div>
+      </div>
+
+      <div class="wizard-step hidden" id="wizard-step-2">
+        <p class="wizard-step-explain">Load a saved player list, or add players one at a time below — you can do both.</p>
+        <div class="row">
+          <select id="wizard-roster-load-select"></select>
+          <button type="button" id="wizard-btn-roster-load" class="btn btn-ghost">Load Player List</button>
+        </div>
+        <p id="wizard-new-player-name-requirement" class="new-player-name-requirement hidden"></p>
+        <form id="wizard-add-player-form" class="row">
+          <input type="text" id="wizard-new-player-name" placeholder="Player name" autocomplete="off" required>
+          <button type="submit" id="wizard-btn-add-player" class="btn btn-primary" disabled>Add</button>
+        </form>
+        <ul id="wizard-player-chips" class="wizard-player-chips"></ul>
+      </div>
+
+      <div class="wizard-step hidden" id="wizard-step-3">
+        <p class="wizard-step-explain">Turn on "Playing" for everyone in this game. Leave anyone sitting this one out on "Standby" — they stay on the roster for later.</p>
+        <ul id="wizard-playing-list" class="roster-list"></ul>
+        <p id="wizard-playing-warning" class="new-player-name-requirement hidden">Mark at least 2 players as Playing to continue.</p>
+      </div>
+
+      <div class="wizard-step hidden" id="wizard-step-4">
+        <p class="wizard-step-explain">A rotation automatically switches the game type after a set number of games — e.g. 8-Ball for 3 games, then 9-Ball. Just want one game type all session? Choose "No" and move on.</p>
+        <div class="wizard-format-options">
+          <label class="wizard-format-option">
+            <input type="radio" name="wizard-rotation-enabled" value="no" checked>
+            <span>No — just play the game type from Step 1</span>
+          </label>
+          <label class="wizard-format-option">
+            <input type="radio" name="wizard-rotation-enabled" value="yes">
+            <span>Yes — automatically switch between game types</span>
+          </label>
+        </div>
+        <div class="hidden" id="wizard-rotation-detail">
+          <div class="row">
+            <select id="wizard-rotation-load-select"></select>
+            <button type="button" id="wizard-btn-rotation-load" class="btn btn-ghost">Load Rotation</button>
+          </div>
+          <div class="row">
+            <select id="wizard-rotation-add-type"></select>
+            <button type="button" id="wizard-btn-rotation-add" class="btn btn-ghost">+ Add to Order</button>
+          </div>
+          <ul id="wizard-rotation-list" class="rotation-list"></ul>
+          <div class="row">
+            <label for="wizard-rotation-every">Switch every</label>
+            <input type="number" id="wizard-rotation-every" min="1" max="99" value="1">
+            <span>games</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="wizard-step hidden" id="wizard-step-5">
+        <p class="wizard-step-explain">Here's what's set up. Hit Start to jump into Focus Mode and begin playing.</p>
+        <div id="wizard-summary" class="wizard-summary"></div>
+      </div>
+
+    </div>
+
+    <div class="wizard-footer">
+      <button type="button" id="wizard-btn-back" class="btn btn-ghost">← Back</button>
+      <button type="button" id="wizard-btn-cancel" class="btn btn-ghost">Cancel</button>
+      <button type="button" id="wizard-btn-next" class="btn btn-primary">Next →</button>
+      <button type="button" id="wizard-btn-start" class="btn btn-primary hidden">🎱 Start Game</button>
     </div>
   </div>
 </div>
