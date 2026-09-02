@@ -1158,9 +1158,8 @@
       summary: summary
     });
     if (state.gameHistory.length > 200) state.gameHistory.length = 200;
-    var wasFirstGameOfSession = state.gamesPlayedCount === 0;
     state.gamesPlayedCount += 1;
-    if (wasFirstGameOfSession) saveRosterSnapshotIfNew(true);
+    saveRosterSnapshotIfNew(true);
     var previousGameType = state.currentGame.gameType;
     applyRotationIfDue();
     var gameTypeChanged = state.currentGame.gameType !== previousGameType;
@@ -1837,10 +1836,33 @@
         var mergedPlayerStats = mergePlayerStatsData(PLAYER_STATS, importedPlayerStats, extraSessions);
         var rosterMerge = mergeRosterLists(SAVED_ROSTERS, importedRosters);
 
+        var importedRosterPlayerNames = [];
+        importedRosters.forEach(function (r) {
+          (r.players || []).forEach(function (n) {
+            importedRosterPlayerNames.push(n);
+          });
+        });
+
         var finalState;
         var newPlayerCount = 0;
         if (localIsFresh) {
           finalState = importedState;
+          var freshKnownNames = {};
+          (finalState.players || []).forEach(function (p) {
+            freshKnownNames[normalizeNameKey(p.name)] = true;
+          });
+          importedRosterPlayerNames.forEach(function (name) {
+            if (!name || freshKnownNames[normalizeNameKey(name)]) return;
+            freshKnownNames[normalizeNameKey(name)] = true;
+            finalState.players.push({
+              id: uid(),
+              name: name,
+              voice: finalState.players.length % VOICE_PITCHES.length,
+              playing: false,
+              teamId: null,
+              balls: 0
+            });
+          });
         } else {
           finalState = state;
           var knownNames = {};
@@ -1852,7 +1874,8 @@
               return p && p.name;
             })
             .concat(Object.keys(importedPlayerStats))
-            .concat(Object.keys(extraSessions));
+            .concat(Object.keys(extraSessions))
+            .concat(importedRosterPlayerNames);
           candidateNames.forEach(function (name) {
             if (!name || knownNames[normalizeNameKey(name)]) return;
             knownNames[normalizeNameKey(name)] = true;
@@ -1948,6 +1971,13 @@
       .sort();
   }
 
+  // Checks the live roster against every saved list (exact same players,
+  // no more, no fewer) and, if it's genuinely new, saves it and downloads
+  // a fresh player-lists backup file. Runs on every game — not just the
+  // first of a session — so adding/removing a player mid-session gets
+  // captured as soon as the next game is credited, not just at session
+  // boundaries. Dedup against every existing list keeps this from ever
+  // firing twice for the same composition.
   function saveRosterSnapshotIfNew(silent) {
     var names = currentRosterNames();
     if (names.length === 0) return false;
@@ -1972,6 +2002,7 @@
     SAVED_ROSTERS = SAVED_ROSTERS.concat([entry]);
     saveRostersToStorage(SAVED_ROSTERS);
     populateRosterLoadSelect();
+    exportRosterLists();
     if (!silent) showToast("Saved roster: " + entry.label);
     return true;
   }
