@@ -1442,7 +1442,13 @@ input[type="number"] {
   stroke-dasharray: 8 6;
 }
 
+.player-graph-line-dotted {
+  stroke-dasharray: 1.5 5;
+  stroke-linecap: round;
+}
+
 .player-graph-line-ind-played { stroke: var(--info); }
+.player-graph-line-ind-won { stroke: var(--accent); }
 .player-graph-line-ind-lost { stroke: var(--danger); }
 
 .player-graph-dot {
@@ -1452,6 +1458,7 @@ input[type="number"] {
 }
 
 .player-graph-dot-ind-played { fill: var(--info); }
+.player-graph-dot-ind-won { fill: var(--accent); }
 .player-graph-dot-ind-lost { fill: var(--danger); }
 
 .player-graph-time-axis {
@@ -1502,6 +1509,16 @@ input[type="number"] {
     var(--swatch-color) 6px,
     transparent 6px,
     transparent 10px
+  );
+}
+
+.player-graph-legend-swatch.is-dotted {
+  background: repeating-linear-gradient(
+    to right,
+    var(--swatch-color) 0,
+    var(--swatch-color) 2px,
+    transparent 2px,
+    transparent 6px
   );
 }
 

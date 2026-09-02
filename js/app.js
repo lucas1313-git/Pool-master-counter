@@ -2407,8 +2407,10 @@
       return a.ts.localeCompare(b.ts);
     });
     var individualPlayed = [];
+    var individualWon = [];
     var individualLost = [];
     var indPlayedCount = 0;
+    var indWonCount = 0;
     var indLostCount = 0;
     var teamCombos = {};
 
@@ -2416,7 +2418,10 @@
       if (!g.isTeam) {
         indPlayedCount += 1;
         individualPlayed.push({ ts: g.ts, count: indPlayedCount });
-        if (g.result === "lost") {
+        if (g.result === "won") {
+          indWonCount += 1;
+          individualWon.push({ ts: g.ts, count: indWonCount });
+        } else {
           indLostCount += 1;
           individualLost.push({ ts: g.ts, count: indLostCount });
         }
@@ -2424,18 +2429,34 @@
       }
       var key = teamComboLabel(g.teammateNames) || "(teammates unknown)";
       if (!teamCombos[key]) {
-        teamCombos[key] = { label: key, played: [], lost: [], playedCount: 0, lostCount: 0 };
+        teamCombos[key] = {
+          label: key,
+          played: [],
+          won: [],
+          lost: [],
+          playedCount: 0,
+          wonCount: 0,
+          lostCount: 0
+        };
       }
       var combo = teamCombos[key];
       combo.playedCount += 1;
       combo.played.push({ ts: g.ts, count: combo.playedCount });
-      if (g.result === "lost") {
+      if (g.result === "won") {
+        combo.wonCount += 1;
+        combo.won.push({ ts: g.ts, count: combo.wonCount });
+      } else {
         combo.lostCount += 1;
         combo.lost.push({ ts: g.ts, count: combo.lostCount });
       }
     });
 
-    return { individualPlayed: individualPlayed, individualLost: individualLost, teamCombos: teamCombos };
+    return {
+      individualPlayed: individualPlayed,
+      individualWon: individualWon,
+      individualLost: individualLost,
+      teamCombos: teamCombos
+    };
   }
 
   // Monotone cubic Hermite spline (Fritsch–Carlson) through a point list —
@@ -2563,7 +2584,7 @@
     var comboKeys = Object.keys(series.teamCombos).sort();
 
     var maxCount = 0;
-    [series.individualPlayed, series.individualLost].forEach(function (arr) {
+    [series.individualPlayed, series.individualWon, series.individualLost].forEach(function (arr) {
       if (arr.length) maxCount = Math.max(maxCount, arr[arr.length - 1].count);
     });
     comboKeys.forEach(function (key) {
@@ -2619,7 +2640,22 @@
         "player-graph-dot player-graph-dot-ind-played",
         null
       );
-      legendItems.push({ color: "var(--info)", dashed: false, label: "Individual — Played" });
+      legendItems.push({ color: "var(--info)", style: "solid", label: "Individual — Played" });
+    }
+    if (series.individualWon.length) {
+      appendGraphSeries(
+        svg,
+        series.individualWon,
+        minMs,
+        maxMs,
+        width,
+        height,
+        axisMax,
+        "player-graph-line player-graph-line-dotted player-graph-line-ind-won",
+        "player-graph-dot player-graph-dot-ind-won",
+        null
+      );
+      legendItems.push({ color: "var(--accent)", style: "dotted", label: "Individual — Won" });
     }
     if (series.individualLost.length) {
       appendGraphSeries(
@@ -2634,7 +2670,7 @@
         "player-graph-dot player-graph-dot-ind-lost",
         null
       );
-      legendItems.push({ color: "var(--danger)", dashed: true, label: "Individual — Lost" });
+      legendItems.push({ color: "var(--danger)", style: "dashed", label: "Individual — Lost" });
     }
 
     comboKeys.forEach(function (key, idx) {
@@ -2653,7 +2689,22 @@
           "player-graph-dot",
           color
         );
-        legendItems.push({ color: color, dashed: false, label: "w/ " + key + " — Played" });
+        legendItems.push({ color: color, style: "solid", label: "w/ " + key + " — Played" });
+      }
+      if (combo.won.length) {
+        appendGraphSeries(
+          svg,
+          combo.won,
+          minMs,
+          maxMs,
+          width,
+          height,
+          axisMax,
+          "player-graph-line player-graph-line-dotted",
+          "player-graph-dot",
+          color
+        );
+        legendItems.push({ color: color, style: "dotted", label: "w/ " + key + " — Won" });
       }
       if (combo.lost.length) {
         appendGraphSeries(
@@ -2668,7 +2719,7 @@
           "player-graph-dot",
           color
         );
-        legendItems.push({ color: color, dashed: true, label: "w/ " + key + " — Lost" });
+        legendItems.push({ color: color, style: "dashed", label: "w/ " + key + " — Lost" });
       }
     });
 
@@ -2682,7 +2733,7 @@
       var row = document.createElement("div");
       row.className = "player-graph-legend-row";
       var swatch = document.createElement("span");
-      swatch.className = "player-graph-legend-swatch" + (item.dashed ? " is-dashed" : "");
+      swatch.className = "player-graph-legend-swatch" + (item.style === "solid" ? "" : " is-" + item.style);
       swatch.style.setProperty("--swatch-color", item.color);
       var text = document.createElement("span");
       text.textContent = item.label;
