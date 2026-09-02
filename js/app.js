@@ -2434,7 +2434,36 @@
   // Turns a chronological game list into cumulative played/lost counts over
   // time — one line for individual games, and one played/lost pair per
   // distinct team combination this player has been part of.
-  function buildCumulativeSeries(games) {
+  // Groups a timestamp into the bucket the graph should show one data point
+  // per, matching the selected period's natural resolution: minute-by-
+  // minute for a single day (otherwise several games in the same session
+  // would each get their own dot), day-by-day for everything from a week
+  // up to a year, since "which minute" stops being meaningful at that
+  // range.
+  function bucketKeyFor(ts, period) {
+    var d = new Date(ts);
+    if (period === "today") {
+      return d.getFullYear() + "-" + d.getMonth() + "-" + d.getDate() + "-" + d.getHours() + "-" + d.getMinutes();
+    }
+    return d.getFullYear() + "-" + d.getMonth() + "-" + d.getDate();
+  }
+
+  // Adds one game's result to a cumulative series, collapsing consecutive
+  // games that land in the same bucket into a single point (the bucket's
+  // last timestamp, with the running total as of that point) instead of
+  // plotting a dot per game.
+  function pushBucketedPoint(arr, ts, count, period) {
+    var key = bucketKeyFor(ts, period);
+    var last = arr.length ? arr[arr.length - 1] : null;
+    if (last && last.bucketKey === key) {
+      last.ts = ts;
+      last.count = count;
+    } else {
+      arr.push({ ts: ts, count: count, bucketKey: key });
+    }
+  }
+
+  function buildCumulativeSeries(games, period) {
     var sorted = games.slice().sort(function (a, b) {
       return a.ts.localeCompare(b.ts);
     });
@@ -2449,13 +2478,13 @@
     sorted.forEach(function (g) {
       if (!g.isTeam) {
         indPlayedCount += 1;
-        individualPlayed.push({ ts: g.ts, count: indPlayedCount });
+        pushBucketedPoint(individualPlayed, g.ts, indPlayedCount, period);
         if (g.result === "won") {
           indWonCount += 1;
-          individualWon.push({ ts: g.ts, count: indWonCount });
+          pushBucketedPoint(individualWon, g.ts, indWonCount, period);
         } else {
           indLostCount += 1;
-          individualLost.push({ ts: g.ts, count: indLostCount });
+          pushBucketedPoint(individualLost, g.ts, indLostCount, period);
         }
         return;
       }
@@ -2473,13 +2502,13 @@
       }
       var combo = teamCombos[key];
       combo.playedCount += 1;
-      combo.played.push({ ts: g.ts, count: combo.playedCount });
+      pushBucketedPoint(combo.played, g.ts, combo.playedCount, period);
       if (g.result === "won") {
         combo.wonCount += 1;
-        combo.won.push({ ts: g.ts, count: combo.wonCount });
+        pushBucketedPoint(combo.won, g.ts, combo.wonCount, period);
       } else {
         combo.lostCount += 1;
-        combo.lost.push({ ts: g.ts, count: combo.lostCount });
+        pushBucketedPoint(combo.lost, g.ts, combo.lostCount, period);
       }
     });
 
@@ -2721,7 +2750,7 @@
     var wrap = document.createElement("div");
     wrap.className = "player-graph-wrap";
 
-    var series = buildCumulativeSeries(stats.games);
+    var series = buildCumulativeSeries(stats.games, period);
     var comboKeys = Object.keys(series.teamCombos).sort();
 
     var maxCount = 0;
