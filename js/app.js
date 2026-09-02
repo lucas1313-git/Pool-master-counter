@@ -2414,6 +2414,10 @@
 
   var SVG_NS = "http://www.w3.org/2000/svg";
   var TEAM_COMBO_PALETTE = ["#c77dff", "#4fb0a5", "#e08e45", "#8ecae6", "#f2a6c9", "#9fd35c", "#d4a24c", "#6a8caf"];
+  // Leaves this fraction of the chart's width blank at the right edge, so
+  // the most recent line segment and "Now" tick aren't flush against the
+  // card border — otherwise the latest data reads as cut off.
+  var GRAPH_END_BUFFER = 0.05;
 
   function svgEl(tag, attrs) {
     var el = document.createElementNS(SVG_NS, tag);
@@ -2557,8 +2561,9 @@
   // a smooth path through it (anchored flat at the chart's time edges), plus
   // the screen position of every real data point for dot markers.
   function buildSeriesGeometry(points, minMs, maxMs, width, height, axisMax) {
+    var usableWidth = width * (1 - GRAPH_END_BUFFER);
     function xFor(ms) {
-      return maxMs > minMs ? ((ms - minMs) / (maxMs - minMs)) * width : 0;
+      return maxMs > minMs ? ((ms - minMs) / (maxMs - minMs)) * usableWidth : 0;
     }
     function yFor(count) {
       return axisMax > 0 ? height - (count / axisMax) * height : height;
@@ -2647,13 +2652,16 @@
 
     var allTicks = periodAxisTicks(period, minMs, maxMs);
     var span = maxMs - minMs || 1;
+    function pctFor(ms) {
+      return ((ms - minMs) / span) * 100 * (1 - GRAPH_END_BUFFER);
+    }
 
     // Dense, unlabeled graduation marks — one per hour/day/month depending
     // on the selected period, like a ruler.
     allTicks.forEach(function (ms) {
       var mark = document.createElement("span");
       mark.className = "player-graph-time-tick";
-      mark.style.left = ((ms - minMs) / span) * 100 + "%";
+      mark.style.left = pctFor(ms) + "%";
       axis.appendChild(mark);
     });
 
@@ -2696,7 +2704,7 @@
       label.className = "player-graph-time-label";
       if (pos === 0) label.classList.add("is-first");
       if (isNow) label.classList.add("is-last", "is-now");
-      label.style.left = ((ms - minMs) / span) * 100 + "%";
+      label.style.left = pctFor(ms) + "%";
       label.textContent = isNow
         ? "Now · " +
           d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) +
