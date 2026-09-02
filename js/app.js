@@ -326,6 +326,17 @@
   var btnImportRosterLists = document.getElementById("btn-import-roster-lists");
   var importRosterListsFileInput = document.getElementById("import-roster-lists-file-input");
 
+  var helpOverlay = document.getElementById("help-overlay");
+  var btnHelpClose = document.getElementById("btn-help-close");
+  var helpNavLinks = document.querySelectorAll(".help-nav-link");
+  var btnOpenHelpButtons = [
+    document.getElementById("btn-open-help"),
+    document.getElementById("btn-open-help-all-players"),
+    document.getElementById("btn-open-help-tournament"),
+    document.getElementById("btn-open-help-player-page"),
+    document.getElementById("btn-open-help-wizard")
+  ];
+
   var btnOpenWizard = document.getElementById("btn-open-wizard");
   var wizardOverlay = document.getElementById("wizard-overlay");
   var btnWizardClose = document.getElementById("btn-wizard-close");
@@ -443,6 +454,11 @@
   var teamStandingsList = document.getElementById("team-standings-list");
   var playerStandingsList = document.getElementById("player-standings-list");
 
+  var dayNotesTextarea = document.getElementById("day-notes-textarea");
+  var btnDayReportCopy = document.getElementById("btn-day-report-copy");
+  var btnDayReportEmail = document.getElementById("btn-day-report-email");
+  var btnDayReportSms = document.getElementById("btn-day-report-sms");
+
   var milestoneOverlay = document.getElementById("milestone-overlay");
   var milestoneHeadline = document.getElementById("milestone-headline");
   var milestoneDetails = document.getElementById("milestone-details");
@@ -502,6 +518,7 @@
     renderStandings();
     renderRotation();
     renderWizardIfOpen();
+    updateDayNotesSummary();
   }
 
   // A rotation entry is { gameType, target, unit } — its own rule, not
@@ -1637,6 +1654,141 @@
     var body = lines.join("\n");
     var href = "mailto:?subject=" + encodeURIComponent("Pool Master Counter — Standings") + "&body=" + encodeURIComponent(body);
     window.location.href = href;
+  }
+
+  // ---------------------------------------------------------------------
+  // Today's Notes & Day Report — free-text notes about today's live play,
+  // saved per calendar date, plus a plain-text end-of-day synopsis (who
+  // played, results, rating movement, and the notes) ready to copy, email,
+  // or text.
+  // ---------------------------------------------------------------------
+
+  var DAY_NOTES_KEY = "poolMasterCounter.dayNotes.v1";
+
+  function loadDayNotesFromStorage() {
+    try {
+      var raw = localStorage.getItem(DAY_NOTES_KEY);
+      var parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function saveDayNotesToStorage(notes) {
+    try {
+      localStorage.setItem(DAY_NOTES_KEY, JSON.stringify(notes));
+    } catch (e) {
+      console.warn("Could not save day notes.", e);
+    }
+  }
+
+  var DAY_NOTES = loadDayNotesFromStorage();
+
+  function todayDateStr() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  function getDayNotes(dateStr) {
+    return DAY_NOTES[dateStr] || "";
+  }
+
+  function setDayNotes(dateStr, text) {
+    if (text) DAY_NOTES[dateStr] = text;
+    else delete DAY_NOTES[dateStr];
+    saveDayNotesToStorage(DAY_NOTES);
+  }
+
+  // Every distinct game played on dateStr (deduped by timestamp across
+  // however many players' individual game lists it shows up in — live
+  // session plus any earlier session saved today) and each player's
+  // win/loss/rating tally for the day.
+  function computeDayReportData(dateStr) {
+    var names = getAllKnownPlayerNames();
+    var gamesByTs = {};
+    var players = [];
+    names.forEach(function (name) {
+      var games = allGamesForPlayerName(name).filter(function (g) {
+        return g.ts && g.ts.slice(0, 10) === dateStr;
+      });
+      if (!games.length) return;
+      var wins = 0;
+      games.forEach(function (g) {
+        if (g.result === "won") wins += 1;
+        gamesByTs[g.ts] = g;
+      });
+      players.push({
+        name: name,
+        played: games.length,
+        wins: wins,
+        losses: games.length - wins,
+        rating: getPlayerRating(name),
+        ratingDelta: computeRatingPeriodDelta(name, "today")
+      });
+    });
+    players.sort(function (a, b) {
+      return b.wins - a.wins || a.name.localeCompare(b.name);
+    });
+    var games = Object.keys(gamesByTs)
+      .sort()
+      .map(function (ts) {
+        return gamesByTs[ts];
+      });
+    return { date: dateStr, games: games, players: players };
+  }
+
+  function formatReportDateHeading(dateStr) {
+    var d = new Date(dateStr + "T00:00:00");
+    return d.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  }
+
+  function buildDayReportText(dateStr) {
+    var data = computeDayReportData(dateStr);
+    var lines = ["🎱 Pool Master Counter — Day Report", formatReportDateHeading(dateStr), ""];
+    if (data.players.length === 0) {
+      lines.push("No games recorded today.");
+    } else {
+      lines.push("Players today:");
+      data.players.forEach(function (p) {
+        var deltaText = p.ratingDelta === null
+          ? ""
+          : p.ratingDelta > 0
+          ? " (▲" + p.ratingDelta + ")"
+          : p.ratingDelta < 0
+          ? " (▼" + p.ratingDelta + ")"
+          : " (—)";
+        lines.push("• " + p.name + " — " + p.wins + "W–" + p.losses + "L, rating " + p.rating + deltaText);
+      });
+      lines.push("");
+      lines.push("Total games played: " + data.games.length);
+      var gameTypeCounts = {};
+      data.games.forEach(function (g) {
+        gameTypeCounts[g.gameLabel] = (gameTypeCounts[g.gameLabel] || 0) + 1;
+      });
+      var typesSummary = Object.keys(gameTypeCounts)
+        .map(function (label) {
+          return label + " (" + gameTypeCounts[label] + ")";
+        })
+        .join(", ");
+      if (typesSummary) lines.push("Games played: " + typesSummary);
+    }
+    var notes = getDayNotes(dateStr);
+    if (notes) {
+      lines.push("");
+      lines.push("Notes:");
+      lines.push(notes);
+    }
+    return lines.join("\n");
+  }
+
+  function updateDayNotesSummary() {
+    var data = computeDayReportData(todayDateStr());
+    var notes = getDayNotes(todayDateStr());
+    var parts = [];
+    parts.push(data.games.length + " game" + (data.games.length === 1 ? "" : "s") + " today");
+    parts.push(data.players.length + " player" + (data.players.length === 1 ? "" : "s"));
+    parts.push(notes ? notes.length + " character note" : "no notes yet");
+    setPanelSummary("day-notes-panel", parts.join(" · "));
   }
 
   // ---------------------------------------------------------------------
@@ -2990,6 +3142,30 @@
 
   function closeWizard() {
     wizardOverlay.classList.add("hidden");
+  }
+
+  // Picks which Help section to jump to based on whichever page/overlay is
+  // currently showing, so the same Help button is contextual everywhere.
+  function currentHelpSectionId() {
+    if (!wizardOverlay.classList.contains("hidden")) return "help-section-wizard";
+    if (!tournamentPageView.classList.contains("hidden")) return "help-section-tournament";
+    if (!allPlayersPageView.classList.contains("hidden")) return "help-section-all-players";
+    if (!playerPageView.classList.contains("hidden")) return "help-section-player-page";
+    return "help-section-main";
+  }
+
+  function openHelp() {
+    var targetId = currentHelpSectionId();
+    Array.prototype.forEach.call(helpNavLinks, function (a) {
+      a.classList.toggle("is-active", a.getAttribute("href") === "#" + targetId);
+    });
+    helpOverlay.classList.remove("hidden");
+    var target = document.getElementById(targetId);
+    if (target) target.scrollIntoView({ block: "start" });
+  }
+
+  function closeHelp() {
+    helpOverlay.classList.add("hidden");
   }
 
   function finalizeWizardAndStart() {
@@ -5519,6 +5695,25 @@
   btnRosterLoad.addEventListener("click", loadSelectedRoster);
   btnRotationLoad.addEventListener("click", loadSelectedRotation);
 
+  btnOpenHelpButtons.forEach(function (btn) {
+    if (btn) btn.addEventListener("click", openHelp);
+  });
+  btnHelpClose.addEventListener("click", closeHelp);
+  helpOverlay.addEventListener("click", function (e) {
+    if (e.target === helpOverlay) closeHelp();
+  });
+  Array.prototype.forEach.call(helpNavLinks, function (a) {
+    a.addEventListener("click", function (e) {
+      e.preventDefault();
+      var targetId = a.getAttribute("href").slice(1);
+      Array.prototype.forEach.call(helpNavLinks, function (link) {
+        link.classList.toggle("is-active", link === a);
+      });
+      var target = document.getElementById(targetId);
+      if (target) target.scrollIntoView({ block: "start" });
+    });
+  });
+
   btnOpenWizard.addEventListener("click", openWizard);
   btnWizardClose.addEventListener("click", closeWizard);
   btnWizardCancel.addEventListener("click", closeWizard);
@@ -5599,7 +5794,43 @@
   wireCollapsiblePanel("players-panel", "btn-toggle-players-panel");
   wireCollapsiblePanel("standings-panel", "btn-toggle-standings-panel");
   wireCollapsiblePanel("history-panel", "btn-toggle-history-panel");
+  wireCollapsiblePanel("day-notes-panel", "btn-toggle-day-notes-panel");
   wireCollapsiblePanel("focus-players-wrap", "btn-toggle-focus-players");
+
+  var dayNotesSaveTimer = null;
+  dayNotesTextarea.addEventListener("input", function () {
+    clearTimeout(dayNotesSaveTimer);
+    dayNotesSaveTimer = setTimeout(function () {
+      setDayNotes(todayDateStr(), dayNotesTextarea.value);
+      updateDayNotesSummary();
+    }, 500);
+  });
+
+  btnDayReportCopy.addEventListener("click", function () {
+    var text = buildDayReportText(todayDateStr());
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(
+        function () {
+          showToast("Day report copied.");
+        },
+        function () {
+          alert(text);
+        }
+      );
+    } else {
+      alert(text);
+    }
+  });
+
+  btnDayReportEmail.addEventListener("click", function () {
+    var text = buildDayReportText(todayDateStr());
+    window.location.href = "mailto:?subject=" + encodeURIComponent("Pool Master Counter — Day Report") + "&body=" + encodeURIComponent(text);
+  });
+
+  btnDayReportSms.addEventListener("click", function () {
+    var text = buildDayReportText(todayDateStr());
+    window.location.href = "sms:&body=" + encodeURIComponent(text);
+  });
 
   btnPlayerPageExport.addEventListener("click", exportCurrentPlayerStats);
   btnPlayerPageReset.addEventListener("click", resetPlayerHistoricalStats);
@@ -5650,6 +5881,9 @@
     radio.checked = radio.value === state.currentGame.mode;
   });
   updateCurrentGameSummary();
+
+  dayNotesTextarea.value = getDayNotes(todayDateStr());
+  updateDayNotesSummary();
 
   if (state.rotation.enabled && state.rotation.order.length > 0) {
     state.gamesPlayedCount = 0;

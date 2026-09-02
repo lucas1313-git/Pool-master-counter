@@ -44,6 +44,7 @@
       <button type="button" id="btn-open-wizard" class="btn btn-primary all-players-nav-btn">🧙 Start Wizard</button>
       <button type="button" id="btn-open-all-players" class="btn btn-ghost all-players-nav-btn">📊 All Players</button>
       <button type="button" id="btn-open-tournament" class="btn btn-ghost all-players-nav-btn">🏆 Tournament</button>
+      <button type="button" id="btn-open-help" class="btn btn-ghost all-players-nav-btn">❓ Help</button>
     </div>
   </header>
 
@@ -206,6 +207,23 @@
     </div>
   </section>
 
+  <section class="panel collapsible-panel collapsed" id="day-notes-panel">
+    <button type="button" class="panel-toggle" id="btn-toggle-day-notes-panel" aria-expanded="false" aria-controls="day-notes-panel-body">
+      <h2>Today's Notes</h2>
+      <span class="panel-chevron" aria-hidden="true">▾</span>
+    </button>
+    <p class="panel-summary" id="day-notes-panel-summary"></p>
+    <div class="panel-body" id="day-notes-panel-body">
+      <p class="player-stats-note">Jot down anything worth remembering about today's live play — who's on fire, funny moments, anything at all. It's saved automatically and folded into the day report below.</p>
+      <textarea id="day-notes-textarea" class="day-notes-textarea" placeholder="Notes about today's play..." rows="4"></textarea>
+      <div class="row">
+        <button type="button" id="btn-day-report-copy" class="btn btn-ghost">📋 Copy Report</button>
+        <button type="button" id="btn-day-report-email" class="btn btn-ghost">📧 Email Report</button>
+        <button type="button" id="btn-day-report-sms" class="btn btn-ghost">📱 Text Report</button>
+      </div>
+    </div>
+  </section>
+
 </div>
 
 <div id="milestone-overlay" class="milestone-overlay hidden">
@@ -251,6 +269,7 @@
 
 <div id="wizard-overlay" class="wizard-overlay hidden">
   <div class="wizard-card">
+    <button type="button" id="btn-open-help-wizard" class="wizard-close-btn wizard-help-btn" aria-label="Help">❓</button>
     <button type="button" id="btn-wizard-close" class="wizard-close-btn" aria-label="Close wizard">×</button>
 
     <div class="wizard-header">
@@ -389,12 +408,99 @@
   </div>
 </div>
 
+<div id="help-overlay" class="help-overlay hidden">
+  <div class="help-card">
+    <div class="help-header">
+      <button type="button" id="btn-help-close" class="wizard-close-btn" aria-label="Close help">×</button>
+      <h2 class="help-title">❓ Help &amp; Guide</h2>
+      <p class="help-intro">Everything the app can do, page by page. Opening Help jumps straight to the section for whatever page you're on — scroll up or down for the rest.</p>
+
+      <nav class="help-nav">
+        <a href="#help-section-main" class="help-nav-link">Main Page</a>
+        <a href="#help-section-wizard" class="help-nav-link">Setup Wizard</a>
+        <a href="#help-section-all-players" class="help-nav-link">All Players</a>
+        <a href="#help-section-tournament" class="help-nav-link">Tournament</a>
+        <a href="#help-section-player-page" class="help-nav-link">Player Stats</a>
+      </nav>
+    </div>
+
+    <div class="help-body">
+    <section class="help-section" id="help-section-main">
+      <h3>Main Page</h3>
+      <p>The main page is where every game gets played. Every panel here is collapsed by default with a one-line summary of what's inside — tap the chevron to expand it.</p>
+      <ul>
+        <li><strong>Backup &amp; Transfer</strong> — Export All Data downloads one JSON file with everything: the live session, saved player lists, saved rotations, career stats, and ratings. Import Data reads a backup back in — it merges into what's already here rather than overwriting, and adopts the backup as-is only if this device has no players yet. Reset All Player Stats and Reset Player Lists each back up first, warn you, then clear — career stats and saved lists respectively (never the ratings store).</li>
+        <li><strong>Game Order</strong> — Turn on "Rotate game types automatically" to cycle through a sequence of game rules on their own. Each step in the order is its own rule — game type, target number, and unit (rack/balls/points) — so the same game type can appear twice with different rules (e.g. "8-Ball — 1 rack" then "8-Ball — 3 racks"). "Switch every" controls how many games play before advancing. Load Rotation swaps in a saved sequence outright; any new sequence you build is auto-saved as a loadable entry the moment it's set up or played.</li>
+        <li><strong>Current Game</strong> — Pick the game type, the target number, and the unit (rack/balls/points — adjustable independently of the game type's usual default, e.g. One Pocket to "1 rack" instead of "8 balls"), Individual vs Teams mode, and the race-to-wins milestone for the whole session. Reset Current Game clears the live score without crediting a win; Undo Last Win reverses the most recent one; Share Standings emails a text summary; Export Session downloads the session as JSON; New Game starts a fresh session (offering to save first if there are unsaved games).</li>
+        <li><strong>Players</strong> — Add a player by name (auto-capitalized, checked live for a duplicate nickname — the Add button stays disabled until the name is unique). Tap a player's Standby/Playing badge to move them in or out of the current game. The ✕ removes someone from today's roster only — career stats and rating stay on the device. Load Player List swaps in players from a saved list (adds anyone missing, never resets what's already there); Export/Import Player Lists use a separate, hand-editable JSON format just for lists.</li>
+        <li><strong>Standings</strong> — Live race-to-N progress for teams and individuals this session.</li>
+        <li><strong>Scoreboard</strong> — Tap + / − on a player's card to track balls/points/racks toward the target. Reaching the target banks a win and starts the next game. Focus Mode hides every other panel down to just the scoreboard — while in it, a small "Players" chevron above the board still lets you flip who's Playing vs Standby without leaving focus.</li>
+        <li><strong>Recent Games</strong> — Every game finished this session, most recent first.</li>
+        <li><strong>Today's Notes</strong> — A free-text box for anything worth remembering about today's live play; it saves automatically as you type. Copy/Email/Text Report builds a plain-text day report — who played, win/loss and rating movement for each, total games, game types played, and your notes — ready to paste, email, or send as a text message.</li>
+      </ul>
+      <p>Ratings show as a small badge next to every player's name throughout the app — an Elo-style number (see the Player Stats section below for details). Every player's name is also a shortcut: tap it (the 📊 icon on the roster row) to open their individual stats page.</p>
+    </section>
+
+    <section class="help-section" id="help-section-wizard">
+      <h3>Setup Wizard</h3>
+      <p>The fastest way to start playing. Five steps, each with its own on-screen explanation:</p>
+      <ul>
+        <li><strong>1. Game type &amp; format</strong> — Individual (casual, no fixed target), Race To (asks for a win target), or Tournament Elimination (skips straight to the bracket setup below).</li>
+        <li><strong>2. Players</strong> — Load a saved list and/or add players; each chip has a ✕ to remove someone you don't want in this game.</li>
+        <li><strong>3. Playing vs Standby</strong> — Turn on Playing for everyone in this game (at least two required to continue).</li>
+        <li><strong>4. Rotation</strong> — Plain yes/no: automatically switch game types, or just play one type all session.</li>
+        <li><strong>5. Review &amp; Start</strong> — A summary of every choice; Start applies it all, switches to Focus Mode, and closes the wizard.</li>
+      </ul>
+      <p>Canceling is always safe — any players added or rotation changes made along the way are already saved, exactly as if you'd used the main page panels directly.</p>
+    </section>
+
+    <section class="help-section" id="help-section-all-players">
+      <h3>All Players</h3>
+      <p>Every player who's ever played on this device — including anyone no longer on the roster, and anyone only found in this session's still-unsaved history.</p>
+      <ul>
+        <li><strong>Sort by</strong> — win percentage, total wins, or name.</li>
+        <li><strong>Show</strong> — the time period the stats and graphs cover: Today, 1 Week, 1 Month, 6 Months, 1 Year, or All Time.</li>
+        <li><strong>📈 See as Graph / 📊 See as Bars</strong> — Bars show Games Played/Won/Lost as scaled bars plus a timeline. Graph shows a cumulative line chart instead (see below).</li>
+        <li><strong>👥 Current Roster Only</strong> — Hides everyone not on the live roster without deleting anything; turn it off to see everyone again.</li>
+      </ul>
+      <p>Each card shows the player's rating badge and, if they've played this period, how much it moved ("▲ +18" or "▼ −9"). In graph view, players on the live roster show their chart immediately; everyone else collapses to a name and a Show Graph button, so the page stays scannable. The graph itself plots cumulative games played/won/lost over time — smoothed curves, a dot at every real data point, a legend where any line can be shown or hidden (Lost starts hidden), and a separate Rating chart underneath tracking that player's rating over the same period (its own scale, since ratings and game counts aren't comparable numbers).</p>
+    </section>
+
+    <section class="help-section" id="help-section-tournament">
+      <h3>Tournament</h3>
+      <p>A knockout bracket instead of a regular session.</p>
+      <ul>
+        <li><strong>Format</strong> — <em>Double Elimination</em>: lose once, drop to the losers bracket for a second chance; lose twice and you're out. <em>Single Elimination</em>: lose once and you're out — the faster option, no losers bracket or grand final.</li>
+        <li><strong>Setup</strong> — game type, per-match target, race-to per match, and a checklist of who's competing. Seeding is a random draw.</li>
+        <li><strong>Reading the bracket</strong> — Winners Bracket, Losers Bracket (double elimination only), and Grand Final render as a horizontal tree with connector lines. The active match is highlighted; eliminated players are struck through; the champion gets a 👑.</li>
+      </ul>
+      <p>Every rack played in a tournament still counts toward career stats, ratings, and the All Players graphs — it isn't a separate pool of data.</p>
+    </section>
+
+    <section class="help-section" id="help-section-player-page">
+      <h3>Player Stats Page</h3>
+      <p>Opened by tapping a player's name anywhere in the app.</p>
+      <ul>
+        <li><strong>Stats Synopsis</strong> — Rating (current number) and "Rating this period" (how much it's moved), Wins, Losses, and Win % for Today, This Week, This Month, This Year, or All Time.</li>
+        <li><strong>Head-to-Head</strong> — Win/loss record against every opponent faced in the selected period.</li>
+        <li><strong>Graph</strong> — The same cumulative games chart as All Players, scoped to this one player, plus the standalone Rating chart underneath.</li>
+        <li><strong>This Session (Live)</strong> — What they've done in the game currently in progress.</li>
+        <li><strong>Session History</strong> — Every past saved session, expandable into the individual games played.</li>
+        <li><strong>Export Stats</strong> saves the current live session into permanent history; <strong>Reset Stats</strong> clears just this player's saved history (their rating is untouched — it lives in its own store and is never reset from here).</li>
+      </ul>
+      <p><strong>About ratings:</strong> every player has an automatic, Elo-style rating (roughly 0–900) inspired by the scale FargoRate publishes — the system behind USA Pool League and most competitive USA leagues. A 100-point gap between two ratings works out to about a 2:1 expected win ratio, doubling every 100 points. New players start at 400. It updates itself after every credited game (main scoreboard or tournament rack) — there's no way to edit a rating by hand. It's a from-scratch calculation matched to Fargo's published odds, not a copy of Fargo's own (proprietary, globally-recomputed) algorithm.</p>
+    </section>
+    </div>
+  </div>
+</div>
+
 <div id="view-player-page" class="hidden">
 
   <header class="app-header player-page-header">
     <button type="button" id="btn-player-page-back" class="btn btn-ghost">← Back</button>
     <h1 id="player-page-name"></h1>
     <button type="button" id="btn-return-to-global-stats" class="btn btn-ghost">🌐 Global Stats</button>
+    <button type="button" id="btn-open-help-player-page" class="btn btn-ghost">❓ Help</button>
   </header>
 
   <section class="panel" id="player-page-synopsis-panel">
@@ -440,6 +546,7 @@
   <header class="app-header player-page-header">
     <button type="button" id="btn-all-players-back" class="btn btn-ghost">← Back</button>
     <h1>All Players</h1>
+    <button type="button" id="btn-open-help-all-players" class="btn btn-ghost">❓ Help</button>
   </header>
 
   <section class="panel" id="all-players-controls-panel">
@@ -477,6 +584,7 @@
   <header class="app-header player-page-header">
     <button type="button" id="btn-tournament-back" class="btn btn-ghost">← Back</button>
     <h1>Tournament</h1>
+    <button type="button" id="btn-open-help-tournament" class="btn btn-ghost">❓ Help</button>
   </header>
 
   <section class="panel" id="tournament-setup-panel">
