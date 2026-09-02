@@ -24,6 +24,15 @@
   var state = loadState();
   var toastTimer = null;
 
+  // "No Statistic will be recorded" mode — a purely in-memory session with
+  // nothing written to localStorage: no state, no PLAYER_STATS, no
+  // PLAYER_RATINGS. Never persisted itself (always starts off on reload),
+  // toggled from the Current Game panel checkbox or preset by the wizard's
+  // "Only a temporary counter" button. The live scoreboard/session
+  // win-tracking/Recent Games still work normally in memory for the
+  // current tab — only the underlying save calls become no-ops.
+  var noStatsMode = false;
+
   function uid() {
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   }
@@ -163,6 +172,7 @@
   }
 
   function saveState() {
+    if (noStatsMode) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch (e) {
@@ -372,6 +382,7 @@
   var btnWizardCancel = document.getElementById("wizard-btn-cancel");
   var btnWizardNext = document.getElementById("wizard-btn-next");
   var btnWizardStart = document.getElementById("wizard-btn-start");
+  var btnWizardTempCounter = document.getElementById("btn-wizard-temp-counter");
 
   var btnToggleFocus = document.getElementById("btn-toggle-focus");
   var focusPlayersWrap = document.getElementById("focus-players-wrap");
@@ -431,6 +442,7 @@
   var gameTargetUnitSelect = document.getElementById("game-target-unit-select");
   var modeRadios = document.getElementsByName("game-mode");
   var raceToWinsInput = document.getElementById("race-to-wins");
+  var noStatsCheckbox = document.getElementById("no-stats-checkbox");
 
   var btnResetGame = document.getElementById("btn-reset-game");
   var btnUndoWin = document.getElementById("btn-undo-win");
@@ -1312,7 +1324,10 @@
   }
 
   function removePlayer(id) {
+    // No games recorded yet this session means nothing's at stake — skip
+    // the confirmation and just remove them.
     if (
+      state.gameHistory.length > 0 &&
       !confirm(
         "Remove this player from the current roster? This only takes them off today's active list — " +
         "their saved career stats and game history stay on this device and will still show up on the " +
@@ -1449,14 +1464,16 @@
       summary: summary
     });
     if (state.gameHistory.length > 200) state.gameHistory.length = 200;
-    if (isTeam) {
-      applyTeamRatingResult(winnerNames, opponentNames, ts);
-    } else {
-      opponentNames.forEach(function (opponentName) {
-        applyPairwiseRatingResult(winnerNames[0], opponentName, ts);
-      });
+    if (!noStatsMode) {
+      if (isTeam) {
+        applyTeamRatingResult(winnerNames, opponentNames, ts);
+      } else {
+        opponentNames.forEach(function (opponentName) {
+          applyPairwiseRatingResult(winnerNames[0], opponentName, ts);
+        });
+      }
+      saveRatingsToStorage(PLAYER_RATINGS);
     }
-    saveRatingsToStorage(PLAYER_RATINGS);
     state.gamesPlayedCount += 1;
     saveRosterSnapshotIfNew(true);
     saveRotationSnapshotIfNew(true);
@@ -2006,6 +2023,7 @@
   }
 
   function saveRostersToStorage(rosters) {
+    if (noStatsMode) return;
     try {
       localStorage.setItem(ROSTERS_KEY, JSON.stringify(rosters));
     } catch (e) {
@@ -2024,6 +2042,7 @@
   }
 
   function saveRotationsToStorage(rotations) {
+    if (noStatsMode) return;
     try {
       localStorage.setItem(ROTATIONS_KEY, JSON.stringify(rotations));
     } catch (e) {
@@ -2042,6 +2061,7 @@
   }
 
   function savePlayerStatsToStorage(allStats) {
+    if (noStatsMode) return;
     try {
       localStorage.setItem(PLAYER_STATS_KEY, JSON.stringify(allStats));
     } catch (e) {
@@ -2060,6 +2080,7 @@
   }
 
   function saveRatingsToStorage(ratings) {
+    if (noStatsMode) return;
     try {
       localStorage.setItem(RATINGS_KEY, JSON.stringify(ratings));
     } catch (e) {
@@ -2877,6 +2898,7 @@
   // boundaries. Dedup against every existing list keeps this from ever
   // firing twice for the same composition.
   function saveRosterSnapshotIfNew(silent) {
+    if (noStatsMode) return false;
     var names = currentRosterNames();
     if (names.length === 0) return false;
     var normalizedNames = names.map(normalizeNameKey).sort();
@@ -2978,6 +3000,7 @@
   // new, saves it as a loadable entry. Runs whenever the order changes and
   // on every credited game, mirroring the player-list snapshot behavior.
   function saveRotationSnapshotIfNew(silent) {
+    if (noStatsMode) return false;
     var order = state.rotation.order;
     if (!order || order.length === 0) return false;
     var alreadySaved = SAVED_ROTATIONS.some(function (r) {
@@ -3423,6 +3446,20 @@
     closeWizard();
     setFocusMode(true);
     showToast("Let's play! 🎱");
+  }
+
+  // Skips the rest of the wizard entirely — just an individual game with
+  // noStatsMode on, so nothing about it gets saved (see saveState /
+  // savePlayerStatsToStorage / saveRatingsToStorage / saveRostersToStorage
+  // / saveRotationsToStorage guards). Whoever's already on the roster can
+  // play immediately; more players can still be added from the main page
+  // like any other game.
+  function startTemporaryCounter() {
+    noStatsMode = true;
+    noStatsCheckbox.checked = true;
+    wizardFormat = "individual";
+    finalizeWizardAndStart();
+    showToast("Temporary counter — no stats or data will be saved. 🎱");
   }
 
   // ---------------------------------------------------------------------
@@ -5733,6 +5770,7 @@
   }
 
   function exportAllPlayerStats() {
+    if (noStatsMode) return;
     state.players.forEach(function (p) {
       var live = computeLiveSessionForPlayer(p.name);
       if (!live || !live.games || live.games.length === 0) return;
@@ -5745,6 +5783,10 @@
   function exportCurrentPlayerStats() {
     var name = currentStatsPlayerName;
     if (!name) return;
+    if (noStatsMode) {
+      showToast("No Statistic mode is on — nothing was saved.");
+      return;
+    }
     var live = computeLiveSessionForPlayer(name);
     var sessions = mergeSessionIntoList(currentStatsSessions || [], live);
     currentStatsSessions = sessions;
@@ -5864,6 +5906,15 @@
     });
   });
 
+  noStatsCheckbox.addEventListener("change", function () {
+    noStatsMode = noStatsCheckbox.checked;
+    showToast(
+      noStatsMode
+        ? "No Statistic mode is on — nothing from here on will be saved."
+        : "No Statistic mode is off — games will be tracked normally again."
+    );
+  });
+
   raceToWinsInput.addEventListener("input", function () {
     var target = parseInt(raceToWinsInput.value, 10);
     if (!target || target < 1) return;
@@ -5973,6 +6024,7 @@
   btnWizardBack.addEventListener("click", wizardBack);
   btnWizardNext.addEventListener("click", wizardNext);
   btnWizardStart.addEventListener("click", finalizeWizardAndStart);
+  btnWizardTempCounter.addEventListener("click", startTemporaryCounter);
 
   Array.prototype.forEach.call(wizardFormatRadios, function (radio) {
     radio.addEventListener("change", function () {

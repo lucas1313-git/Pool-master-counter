@@ -124,6 +124,10 @@
         <label><input type="radio" name="game-mode" value="teams"> Teams</label>
       </div>
 
+      <div class="row no-stats-row">
+        <label><input type="checkbox" id="no-stats-checkbox"> No Statistic will be recorded</label>
+      </div>
+
       <div class="row">
         <label for="race-to-wins">Race-to milestone</label>
         <input type="number" id="race-to-wins" min="1" max="99" value="5">
@@ -335,6 +339,12 @@
           <input type="number" id="wizard-race-to" min="1" max="99" value="5">
           <span>wins</span>
         </div>
+        <div class="wizard-temp-counter-row">
+          <span class="wizard-temp-counter-divider">or</span>
+          <button type="button" id="btn-wizard-temp-counter" class="btn btn-ghost wizard-temp-counter-btn">
+            ⏱️ Only a temporary counter — no stats or data saved
+          </button>
+        </div>
       </div>
 
       <div class="wizard-step hidden" id="wizard-step-2">
@@ -433,8 +443,8 @@
       <ul>
         <li><strong>Backup &amp; Transfer</strong> — Export All Data downloads one JSON file with everything: the live session, saved player lists, saved rotations, career stats, and ratings. Import Data reads a backup back in — it merges into what's already here rather than overwriting, and adopts the backup as-is only if this device has no players yet. Reset All Player Stats and Reset Player Lists each back up first, warn you, then clear — career stats and saved lists respectively (never the ratings store).</li>
         <li><strong>Game Order</strong> — Turn on "Rotate game types automatically" to cycle through a sequence of game rules on their own. Each step in the order is its own rule — game type, target number, and unit (rack/balls/points) — so the same game type can appear twice with different rules (e.g. "8-Ball — 1 rack" then "8-Ball — 3 racks"). "Switch every" controls how many games play before advancing. Load Rotation swaps in a saved sequence outright; any new sequence you build is auto-saved as a loadable entry the moment it's set up or played.</li>
-        <li><strong>Current Game</strong> — Pick the game type, the target number, and the unit (rack/balls/points — adjustable independently of the game type's usual default, e.g. One Pocket to "1 rack" instead of "8 balls"), Individual vs Teams mode, and the race-to-wins milestone for the whole session. Reset Current Game clears the live score without crediting a win; Undo Last Win reverses the most recent one; Share Standings emails a text summary; Export Session downloads the session as JSON; New Game starts a fresh session (offering to save first if there are unsaved games).</li>
-        <li><strong>Players</strong> — Add a player by name (auto-capitalized, checked live for a duplicate nickname — the Add button stays disabled until the name is unique). The optional "Starting rating" field lets you seed a brand-new player's rating from a number they've earned elsewhere (another league, another tournament) — it only takes effect for a name that's never been rated on this device before; it's ignored for anyone already tracked. Tap a player's Standby/Playing badge to move them in or out of the current game. The ✕ removes someone from today's roster only — career stats and rating stay on the device. Load Player List swaps in players from a saved list (adds anyone missing, never resets what's already there); Export/Import Player Lists use a separate, hand-editable JSON format just for lists.</li>
+        <li><strong>Current Game</strong> — Pick the game type, the target number, and the unit (rack/balls/points — adjustable independently of the game type's usual default, e.g. One Pocket to "1 rack" instead of "8 balls"), Individual vs Teams mode, and the race-to-wins milestone for the whole session. "No Statistic will be recorded" stops every save while it's checked — nothing goes into state, career stats, or ratings until you uncheck it; wins still count live on screen for the rest of this browser tab, but none of it survives a reload. Reset Current Game clears the live score without crediting a win; Undo Last Win reverses the most recent one; Share Standings emails a text summary; Export Session downloads the session as JSON; New Game starts a fresh session (offering to save first if there are unsaved games).</li>
+        <li><strong>Players</strong> — Add a player by name (auto-capitalized, checked live for a duplicate nickname — the Add button stays disabled until the name is unique). The optional "Starting rating" field lets you seed a brand-new player's rating from a number they've earned elsewhere (another league, another tournament) — it only takes effect for a name that's never been rated on this device before; it's ignored for anyone already tracked. Tap a player's Standby/Playing badge to move them in or out of the current game. The ✕ removes someone from today's roster only — career stats and rating stay on the device; no confirmation if no games have been played yet this session, since there's nothing to lose. Load Player List swaps in players from a saved list (adds anyone missing, never resets what's already there); Export/Import Player Lists use a separate, hand-editable JSON format just for lists.</li>
         <li><strong>Standings</strong> — Live race-to-N progress for teams and individuals this session.</li>
         <li><strong>Scoreboard</strong> — Tap + / − on a player's card to track balls/points/racks toward the target. Reaching the target banks a win and starts the next game. Focus Mode hides every other panel down to just the scoreboard — while in it, a small "Players" chevron above the board still lets you flip who's Playing vs Standby without leaving focus.</li>
         <li><strong>Recent Games</strong> — Every game finished today, most recent first — this keeps building across the whole day even after a race is won and the next one starts fresh.</li>
@@ -454,6 +464,7 @@
         <li><strong>5. Review &amp; Start</strong> — A summary of every choice; Start applies it all, switches to Focus Mode, and closes the wizard.</li>
       </ul>
       <p>Canceling is always safe — any players added or rotation changes made along the way are already saved, exactly as if you'd used the main page panels directly.</p>
+      <p><strong>⏱️ Only a temporary counter</strong> — on Step 1, skips the rest of the wizard and jumps straight to an Individual game with "No Statistic will be recorded" already on: nothing about this game — state, career stats, ratings, or saved lists — is written to storage, and it's gone the moment you reload. Add players from the main page as normal; the same toggle is there if you want to turn it on or off mid-session instead.</p>
     </section>
 
     <section class="help-section" id="help-section-all-players">
