@@ -1062,6 +1062,12 @@ input[type="number"] {
   text-align: center;
 }
 
+.new-player-name-requirement {
+  color: var(--danger);
+  font-size: 14px;
+  margin: 0 0 8px;
+}
+
 .tournament-winner-banner {
   margin: 10px 0 4px;
   padding: 12px 14px;

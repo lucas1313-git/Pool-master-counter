@@ -290,11 +290,14 @@
   var btnImportAllData = document.getElementById("btn-import-all-data");
   var importFileInput = document.getElementById("import-file-input");
   var btnResetAllPlayerStats = document.getElementById("btn-reset-all-player-stats");
+  var btnResetRosterLists = document.getElementById("btn-reset-roster-lists");
   var backupPanel = document.getElementById("backup-panel");
   var btnToggleBackupPanel = document.getElementById("btn-toggle-backup-panel");
 
   var addPlayerForm = document.getElementById("add-player-form");
   var newPlayerName = document.getElementById("new-player-name");
+  var newPlayerNameRequirement = document.getElementById("new-player-name-requirement");
+  var btnAddPlayer = document.getElementById("btn-add-player");
   var rosterList = document.getElementById("roster-list");
   var rosterLoadSelect = document.getElementById("roster-load-select");
   var btnRosterLoad = document.getElementById("btn-roster-load");
@@ -997,14 +1000,47 @@
     return map;
   }
 
+  // Capitalizes the first letter of every word without touching the rest
+  // ("bob smith" -> "Bob Smith"), so intentional casing elsewhere in a
+  // name (e.g. "McDonald") is left alone.
+  function capitalizeName(name) {
+    return (name || "").replace(/\S+/g, function (word) {
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    });
+  }
+
   // Reuses an existing name's casing if this is the same person under a
   // different case ("bob" typed when "Bob" is already known), otherwise
-  // keeps the typed casing as the new canonical form.
+  // capitalizes the typed name to become the new canonical form.
   function resolvePlayerName(name) {
-    var trimmed = (name || "").trim();
+    var trimmed = capitalizeName((name || "").trim());
     if (!trimmed) return trimmed;
     var known = buildNameCasingMap()[normalizeNameKey(trimmed)];
     return known || trimmed;
+  }
+
+  // True if this name (any case) already belongs to someone on the live
+  // roster — used to block adding a second player under the same nickname.
+  function isDuplicatePlayerName(name) {
+    var key = normalizeNameKey(name);
+    if (!key) return false;
+    return state.players.some(function (p) {
+      return normalizeNameKey(p.name) === key;
+    });
+  }
+
+  var DEFAULT_NEW_PLAYER_NAME_REQUIREMENT =
+    "Names must be unique. If this nickname is already taken, add a last name or initial (e.g. \"Bob S.\").";
+
+  // Live-updates the Add button + the red requirement note as the name
+  // field changes, so a duplicate (or empty) name can never be submitted.
+  function validateNewPlayerNameInput() {
+    var trimmed = newPlayerName.value.trim();
+    var duplicate = trimmed && isDuplicatePlayerName(trimmed);
+    btnAddPlayer.disabled = !trimmed || duplicate;
+    newPlayerNameRequirement.textContent = duplicate
+      ? "\"" + capitalizeName(trimmed) + "\" is already in your roster — use a different name, or add a last name/initial."
+      : DEFAULT_NEW_PLAYER_NAME_REQUIREMENT;
   }
 
   function addPlayer(name) {
@@ -1039,6 +1075,7 @@
     delete state.playerWins[id];
     saveState();
     saveRosterSnapshotIfNew(true);
+    validateNewPlayerNameInput();
     renderAll();
   }
 
@@ -1576,6 +1613,26 @@
     showToast("Backed up your data and cleared all players' saved stat history.");
   }
 
+  function resetAllRosterLists() {
+    if (SAVED_ROSTERS.length === 0) {
+      showToast("No saved player lists to reset.");
+      return;
+    }
+    if (
+      !confirm(
+        "This clears every saved player list on this device (everything in the \"Load Player List\" dropdown). " +
+        "A backup file of your player lists will be downloaded first, and can be restored later from Import Player Lists. This cannot be undone. Continue?"
+      )
+    ) {
+      return;
+    }
+    exportRosterLists();
+    SAVED_ROSTERS = [];
+    saveRostersToStorage(SAVED_ROSTERS);
+    populateRosterLoadSelect();
+    showToast("Backed up and cleared all saved player lists.");
+  }
+
   // One-time migration: the app used to store rosters/player stats as JSON
   // files committed to this GitHub repo. The first time this version boots,
   // pull in whatever's still out there so history isn't lost, then never
@@ -1957,6 +2014,7 @@
       }
     });
     saveRosterSnapshotIfNew(true);
+    validateNewPlayerNameInput();
     renderAll();
     if (added === 0) {
       showToast("Everyone from that saved list is already in your roster.");
@@ -4172,6 +4230,7 @@
   });
 
   btnResetAllPlayerStats.addEventListener("click", resetAllPlayerStats);
+  btnResetRosterLists.addEventListener("click", resetAllRosterLists);
 
   btnExportRosterLists.addEventListener("click", exportRosterLists);
 
@@ -4186,11 +4245,19 @@
     importRosterListsFile(file);
   });
 
+  newPlayerName.addEventListener("input", validateNewPlayerNameInput);
+
   addPlayerForm.addEventListener("submit", function (e) {
     e.preventDefault();
+    var trimmed = newPlayerName.value.trim();
+    if (!trimmed || isDuplicatePlayerName(trimmed)) {
+      validateNewPlayerNameInput();
+      return;
+    }
     var player = addPlayer(newPlayerName.value);
     if (!player) return;
     newPlayerName.value = "";
+    validateNewPlayerNameInput();
     saveRosterSnapshotIfNew(true);
     renderAll();
   });
@@ -4357,6 +4424,7 @@
   }
 
   populateRosterLoadSelect();
+  validateNewPlayerNameInput();
   renderAll();
 
   var storedFocusMode = "0";
