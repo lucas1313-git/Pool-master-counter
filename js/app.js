@@ -956,7 +956,15 @@
   }
 
   function removePlayer(id) {
-    if (!confirm("Remove this player? Their career win totals will also be cleared.")) return;
+    if (
+      !confirm(
+        "Remove this player from the current roster? This only takes them off today's active list — " +
+        "their saved career stats and game history stay on this device and will still show up on the " +
+        "All Players page."
+      )
+    ) {
+      return;
+    }
     state.players = state.players.filter(function (p) {
       return p.id !== id;
     });
