@@ -2591,25 +2591,125 @@
     return group;
   }
 
-  function buildGraphTimeAxis(minMs, maxMs) {
+  // Dense graduation points for the graph's time axis, matching the
+  // selected period's natural calendar unit: hours through a day, days
+  // through a week or month, months through 6 months or a year. Always
+  // ends with maxMs itself — "now", the moment the graph was requested —
+  // even though that rarely lands exactly on one of those boundaries.
+  function periodAxisTicks(period, minMs, maxMs) {
+    var start = new Date(minMs);
+    var ticks = [];
+    function add(d) {
+      var ms = d.getTime();
+      if (ms <= maxMs) ticks.push(ms);
+    }
+    if (period === "today") {
+      for (var h = 0; h <= 24; h++) {
+        add(new Date(start.getFullYear(), start.getMonth(), start.getDate(), h, 0, 0, 0));
+      }
+    } else if (period === "week") {
+      for (var d1 = 0; d1 <= 7; d1++) {
+        add(new Date(start.getFullYear(), start.getMonth(), start.getDate() + d1));
+      }
+    } else if (period === "month") {
+      var daysInMonth = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate();
+      for (var d2 = 0; d2 <= daysInMonth; d2++) {
+        add(new Date(start.getFullYear(), start.getMonth(), start.getDate() + d2));
+      }
+    } else if (period === "6month" || period === "year") {
+      var monthCount = period === "year" ? 12 : 6;
+      for (var m = 0; m <= monthCount; m++) {
+        add(new Date(start.getFullYear(), start.getMonth() + m, start.getDate()));
+      }
+    } else {
+      var evenCount = 4;
+      for (var i = 0; i <= evenCount; i++) {
+        ticks.push(minMs + (i / evenCount) * (maxMs - minMs));
+      }
+    }
+    if (ticks.length === 0 || ticks[ticks.length - 1] !== maxMs) {
+      ticks.push(maxMs);
+    }
+    return ticks;
+  }
+
+  function formatAxisTickLabel(d, period) {
+    if (period === "today") return d.toLocaleTimeString(undefined, { hour: "numeric" });
+    if (period === "week") return d.toLocaleDateString(undefined, { weekday: "short" });
+    if (period === "month") return String(d.getDate());
+    if (period === "6month" || period === "year") return d.toLocaleDateString(undefined, { month: "short" });
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }
+
+  function buildGraphTimeAxis(minMs, maxMs, period) {
     var axis = document.createElement("div");
     axis.className = "player-graph-time-axis";
-    var sameDay = maxMs - minMs < 24 * 60 * 60 * 1000;
-    var tickCount = 4;
-    for (var i = 0; i <= tickCount; i++) {
-      var frac = i / tickCount;
-      var span = document.createElement("span");
-      span.style.left = frac * 100 + "%";
-      var d = new Date(minMs + frac * (maxMs - minMs));
-      span.textContent = sameDay
-        ? d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
-        : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-      axis.appendChild(span);
+
+    var allTicks = periodAxisTicks(period, minMs, maxMs);
+    var span = maxMs - minMs || 1;
+
+    // Dense, unlabeled graduation marks — one per hour/day/month depending
+    // on the selected period, like a ruler.
+    allTicks.forEach(function (ms) {
+      var mark = document.createElement("span");
+      mark.className = "player-graph-time-tick";
+      mark.style.left = ((ms - minMs) / span) * 100 + "%";
+      axis.appendChild(mark);
+    });
+
+    // A sparser labeled subset so the text stays legible; the last label
+    // is always "Now" — exactly maxMs, the moment this graph was requested.
+    var maxLabels = 6;
+    var labelIdxs = [];
+    if (allTicks.length <= maxLabels) {
+      for (var i = 0; i < allTicks.length; i++) labelIdxs.push(i);
+    } else {
+      var step = (allTicks.length - 1) / (maxLabels - 1);
+      for (var j = 0; j < maxLabels; j++) labelIdxs.push(Math.round(j * step));
     }
+    var seen = {};
+    var finalIdxs = [];
+    labelIdxs.forEach(function (idx) {
+      if (!seen[idx]) {
+        seen[idx] = true;
+        finalIdxs.push(idx);
+      }
+    });
+    var lastIdx = allTicks.length - 1;
+    // Guarantee "Now" is the final label, then drop whichever regular tick
+    // landed right next to it — including one that happened to already be
+    // in the evenly-spaced selection — so the (usually much longer) "Now"
+    // text never overlaps its neighbor.
+    if (finalIdxs[finalIdxs.length - 1] !== lastIdx) finalIdxs.push(lastIdx);
+    while (
+      finalIdxs.length > 1 &&
+      (allTicks[lastIdx] - allTicks[finalIdxs[finalIdxs.length - 2]]) / span < 0.14
+    ) {
+      finalIdxs.splice(finalIdxs.length - 2, 1);
+    }
+
+    finalIdxs.forEach(function (idx, pos) {
+      var ms = allTicks[idx];
+      var isNow = idx === lastIdx;
+      var d = new Date(ms);
+      var label = document.createElement("span");
+      label.className = "player-graph-time-label";
+      if (pos === 0) label.classList.add("is-first");
+      if (isNow) label.classList.add("is-last", "is-now");
+      label.style.left = ((ms - minMs) / span) * 100 + "%";
+      label.textContent = isNow
+        ? "Now · " +
+          d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) +
+          " " +
+          d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
+        : formatAxisTickLabel(d, period);
+      axis.appendChild(label);
+    });
+
     return axis;
   }
 
-  function buildPlayerGraph(stats, minMs, maxMs) {
+  function buildPlayerGraph(stats, minMs, maxMs, period) {
     var wrap = document.createElement("div");
     wrap.className = "player-graph-wrap";
 
@@ -2758,7 +2858,7 @@
 
     chart.appendChild(svg);
     wrap.appendChild(chart);
-    wrap.appendChild(buildGraphTimeAxis(minMs, maxMs));
+    wrap.appendChild(buildGraphTimeAxis(minMs, maxMs, period));
 
     var legend = document.createElement("div");
     legend.className = "player-graph-legend";
@@ -2792,7 +2892,7 @@
     return wrap;
   }
 
-  function buildAllPlayerCard(stats, maxPlayed, maxWins, maxLosses, minMs, maxMs) {
+  function buildAllPlayerCard(stats, maxPlayed, maxWins, maxLosses, minMs, maxMs, period) {
     var li = document.createElement("li");
     li.className = "all-player-card";
 
@@ -2814,7 +2914,7 @@
     li.appendChild(top);
 
     if (allPlayersViewMode === "graph") {
-      li.appendChild(buildPlayerGraph(stats, minMs, maxMs));
+      li.appendChild(buildPlayerGraph(stats, minMs, maxMs, period));
     } else {
       li.appendChild(buildScaleRow("Games Played", stats.played, maxPlayed, "scale-fill-played"));
       li.appendChild(buildScaleRow("Games Won", stats.wins, maxWins, "scale-fill-won"));
@@ -2850,8 +2950,22 @@
         if (maxTs === null || g.ts > maxTs) maxTs = g.ts;
       });
     });
-    var minMs = minTs === null ? Date.now() : new Date(minTs).getTime();
-    var maxMs = maxTs === null ? Date.now() : new Date(maxTs).getTime();
+
+    // For a fixed period (today/week/month/6month/year), anchor the timeline
+    // to that period's actual calendar span — start of the period through
+    // right now — rather than just the span of games that happen to exist,
+    // so "This Month" always shows the whole month, not just wherever the
+    // first and last game happened to fall. "All Time" has no natural fixed
+    // span, so it keeps following the actual data.
+    var periodStart = periodStartDate(period);
+    var minMs, maxMs;
+    if (periodStart) {
+      minMs = periodStart.getTime();
+      maxMs = Date.now();
+    } else {
+      minMs = minTs === null ? Date.now() : new Date(minTs).getTime();
+      maxMs = maxTs === null ? Date.now() : new Date(maxTs).getTime();
+    }
     if (maxMs <= minMs) maxMs = minMs + 1;
 
     var playedAxisMax = axisMaxFor(maxPlayed);
@@ -2869,7 +2983,9 @@
       return;
     }
     sorted.forEach(function (s) {
-      allPlayersList.appendChild(buildAllPlayerCard(s, playedAxisMax, winsAxisMax, lossesAxisMax, minMs, maxMs));
+      allPlayersList.appendChild(
+        buildAllPlayerCard(s, playedAxisMax, winsAxisMax, lossesAxisMax, minMs, maxMs, period)
+      );
     });
   }
 
@@ -3296,9 +3412,10 @@
     [match.a, match.b].forEach(function (name) {
       var row = document.createElement("div");
       row.className = "tournament-match-side";
-      if (match.winner && name === match.winner) row.classList.add("is-winner");
+      var isWinner = match.winner && name === match.winner;
+      if (isWinner) row.classList.add("is-winner");
       if (match.winner && name === match.loser) row.classList.add("is-loser");
-      row.textContent = name || "—";
+      row.textContent = (isWinner ? "👑 " : "") + (name || "—");
       div.appendChild(row);
     });
 
@@ -3319,6 +3436,41 @@
     }
 
     return div;
+  }
+
+  // Renders the winners bracket as a real horizontal tree: round 1 on the
+  // left, each pair of matches converging into the match they feed, all the
+  // way to the final on the right. Built as nested "children + this round's
+  // match" wrappers rather than flat columns — the connector lines are then
+  // pure CSS (percentages against each pair's own wrapper), needing no
+  // pixel measurement, because a 2-item "space-around" column always places
+  // its items at exactly 25%/75% of the wrapper's height regardless of the
+  // wrapper's actual size.
+  function renderWbTreeNode(t, ri, mi, activeMatchId) {
+    var match = t.wb[ri][mi];
+    var card = tournamentMatchCard(match, activeMatchId);
+    if (ri === 0) {
+      card.classList.add("wb-tree-leaf");
+      return card;
+    }
+    var childrenWrap = document.createElement("div");
+    childrenWrap.className = "wb-tree-children";
+    childrenWrap.appendChild(renderWbTreeNode(t, ri - 1, mi * 2, activeMatchId));
+    childrenWrap.appendChild(renderWbTreeNode(t, ri - 1, mi * 2 + 1, activeMatchId));
+
+    var node = document.createElement("div");
+    node.className = "wb-tree-node";
+    node.appendChild(childrenWrap);
+    node.appendChild(card);
+    return node;
+  }
+
+  function renderWbTree(container, t, activeMatchId) {
+    container.innerHTML = "";
+    var lastRound = t.wb.length - 1;
+    var root = renderWbTreeNode(t, lastRound, 0, activeMatchId);
+    root.classList.add("wb-tree-root");
+    container.appendChild(root);
   }
 
   function renderBracketColumns(container, rounds, activeMatchId) {
@@ -3482,7 +3634,7 @@
   function renderTournamentActive() {
     var t = TOURNAMENT;
     var activeMatchId = t.active ? t.active.matchId : null;
-    renderBracketColumns(tournamentWbEl, t.wb, activeMatchId);
+    renderWbTree(tournamentWbEl, t, activeMatchId);
     renderBracketColumns(tournamentLbEl, t.lbRounds, activeMatchId);
     renderBracketColumns(tournamentGfEl, t.grandFinal.length ? [t.grandFinal] : [], activeMatchId);
 

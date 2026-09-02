@@ -1463,21 +1463,35 @@ input[type="number"] {
 
 .player-graph-time-axis {
   position: relative;
-  height: 14px;
+  height: 26px;
   margin: 6px 0 4px 34px;
   font-size: 0.65rem;
   color: var(--text-dim);
 }
 
-.player-graph-time-axis span {
+.player-graph-time-tick {
   position: absolute;
   top: 0;
+  width: 1px;
+  height: 5px;
+  background: var(--border);
+  transform: translateX(-50%);
+}
+
+.player-graph-time-label {
+  position: absolute;
+  top: 10px;
   transform: translateX(-50%);
   white-space: nowrap;
 }
 
-.player-graph-time-axis span:first-child { transform: translateX(0); }
-.player-graph-time-axis span:last-child { transform: translateX(-100%); }
+.player-graph-time-label.is-first { transform: translateX(0); }
+.player-graph-time-label.is-last { transform: translateX(-100%); }
+
+.player-graph-time-label.is-now {
+  color: var(--accent);
+  font-weight: 700;
+}
 
 .player-graph-legend {
   display: flex;
@@ -1662,7 +1676,55 @@ input[type="number"] {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  width: 190px;
+  flex-shrink: 0;
 }
+
+/* ---------- Winners bracket tree ----------
+   Built as nested "children + this round's match" wrappers instead of flat
+   columns. The connector lines are pure CSS percentages against each pair's
+   own wrapper: a 2-item space-around column always places its items at
+   exactly 25%/75% of the wrapper's height, so no pixel measurement is
+   needed regardless of how tall any given match card ends up. */
+
+.wb-tree-root {
+  display: flex;
+}
+
+.wb-tree-node {
+  display: flex;
+  align-items: center;
+}
+
+.wb-tree-children {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  gap: 14px;
+  position: relative;
+  padding-right: 28px;
+}
+
+.wb-tree-children::before {
+  content: "";
+  position: absolute;
+  top: 25%;
+  bottom: 25%;
+  right: 28px;
+  width: 1px;
+  background: var(--border);
+}
+
+.wb-tree-children::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 0;
+  width: 28px;
+  height: 1px;
+  background: var(--border);
+}
+
 
 .tournament-match-card.is-ready {
   border-color: var(--accent);
