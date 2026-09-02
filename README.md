@@ -1,6 +1,6 @@
 # Pool Master Counter
 
-A touch-friendly pool scoring app for phone, tablet, or desktop. It runs entirely in the browser — no server, no account, no build step — and remembers everything on the device it's used on: your roster, career stats, saved player lists, game-order rotations, and tournament brackets.
+A touch-friendly pool scoring app for phone, tablet, or desktop. It runs entirely in the browser — no server, no account, no build step — and remembers everything on the device it's used on: your roster, career stats, player ratings, saved player lists, game-order rotations, tournament brackets, and daily notes.
 
 ![Live scoreboard](docs/screenshots/live-scoreboard.jpg)
 
@@ -11,9 +11,12 @@ A touch-friendly pool scoring app for phone, tablet, or desktop. It runs entirel
 - [Players & saved player lists](#players--saved-player-lists)
 - [Live play & scoreboard](#live-play--scoreboard)
 - [Game Order (rotations)](#game-order-rotations)
-- [Tournaments (double elimination)](#tournaments-double-elimination)
+- [Tournaments (single & double elimination)](#tournaments-single--double-elimination)
 - [All Players & career stats](#all-players--career-stats)
 - [Individual player page](#individual-player-page)
+- [Player ratings](#player-ratings)
+- [Today's Notes & Day Report](#todays-notes--day-report)
+- [Help & Guide](#help--guide)
 - [Focus Mode](#focus-mode)
 - [Backup, import/export & data safety](#backup-importexport--data-safety)
 - [Names are case-insensitive](#names-are-case-insensitive)
@@ -44,7 +47,7 @@ Prefer to configure things yourself instead of the wizard? The main page has the
 
 ![Game Order and Current Game panels](docs/screenshots/setup-panels.jpg)
 
-- **Current Game** — pick the game type, the per-rack/point/ball target, Individual vs. Teams mode, and the race-to-wins milestone for the whole session.
+- **Current Game** — pick the game type, the target number, and its unit (rack/balls/points — adjustable independently of the game type's usual default, so e.g. One Pocket can target "1 rack" instead of its usual "8 balls"), Individual vs. Teams mode, and the race-to-wins milestone for the whole session.
 - **Game Order** — see [below](#game-order-rotations).
 - **Players** — see [below](#players--saved-player-lists).
 
@@ -73,23 +76,24 @@ Prefer to configure things yourself instead of the wizard? The main page has the
 
 ## Game Order (rotations)
 
-Turn on **Rotate game types automatically** to have the app cycle through a sequence of game types on its own — for example, three games of 8-Ball, then switch to 9-Ball.
+Turn on **Rotate game types automatically** to have the app cycle through a sequence of game *rules* on its own — for example, one rack of 8-Ball, then three racks of 8-Ball, then 9-Ball.
 
-- Build the order with the game-type dropdown and **+ Add to Order**; reorder or remove entries with the ↑ / ↓ / ✕ controls.
-- **Switch every N games** controls how often it advances, and the status line always shows the current game type, the next one, and how many games remain until the switch.
+- Each step in the order is its own rule — game type, target number, and unit — not just a game type, so the same game type can appear more than once with different rules ("8-Ball — 1 rack" and "8-Ball — 3 racks" as two distinct steps). Build the order with the game-type dropdown plus a target and unit field, and **+ Add to Order**; reorder or remove entries with the ↑ / ↓ / ✕ controls. The list always shows each step's full rule, not just its game type.
+- **Switch every N games** controls how often it advances, and the status line always shows the current rule, the next one, and how many games remain until the switch.
 - **Saved rotations** work exactly like saved player lists: pick one from the **Load Rotation** dropdown to replace the current order outright (a sequence isn't something to merge), and any genuinely new sequence you build is automatically saved as a new loadable entry the moment it's set up or a game is played with it.
 
-## Tournaments (double elimination)
+## Tournaments (single & double elimination)
 
 ![Tournament bracket with a crowned winner](docs/screenshots/tournament-bracket.jpg)
 
 Tap **🏆 Tournament** (or choose Tournament Elimination in the wizard) to run a knockout bracket instead of a regular session.
 
+- **Format** — choose **Double Elimination** (lose once, drop to a losers bracket for a second chance; lose twice and you're out — the default, fairer but longer) or **Single Elimination** (lose once and you're out — faster, no losers bracket or grand final). Both are explained inline before you pick.
 - **Setup** — pick the game type, per-match target, race-to for each match, and check off who's competing; seeding is a random draw.
-- **Winners bracket, losers bracket, and grand final** render as a horizontal tree with connector lines, so the whole bracket's shape is visible at a glance.
+- **Winners bracket** (and, in double elimination, the **losers bracket** and **grand final**) render as a horizontal tree with connector lines, so the whole bracket's shape is visible at a glance.
 - Each match plays out on the same familiar +/− scoreboard used everywhere else; the currently active match is highlighted and can't be re-triggered accidentally.
 - Eliminated players are struck through; the eventual champion gets a 👑.
-- Every rack played in a tournament still counts toward each player's career stats and the All Players graphs — it isn't a separate, disconnected pool of data.
+- Every rack played in a tournament still counts toward each player's career stats, rating, and the All Players graphs — it isn't a separate, disconnected pool of data.
 
 ## All Players & career stats
 
@@ -104,7 +108,9 @@ Tap **📊 All Players** to see everyone who has ever played on this device — 
 
 ![All Players, graph view, with legend toggles](docs/screenshots/all-players-graph.jpg)
 
-In graph view, players currently on the roster show their chart immediately; everyone else collapses to just their name and a **Show Graph** button, so the page stays scannable while every player stays one tap away. Each graph plots cumulative games played/won/lost over time (with a separate line per teammate combination in Teams mode), with smoothed, non-overshooting curves, a dot at each real data point, and a legend where every line can be shown or hidden individually — Lost lines start hidden by default to reduce clutter. The horizontal axis always runs to "now," with graduations matching the period selected (hours for Today, days for a week/month, dates for a year).
+In graph view, players currently on the roster show their chart immediately; everyone else collapses to just their name and a **Show Graph** button, so the page stays scannable while every player stays one tap away. Each graph plots cumulative games played/won/lost over time (with a separate line per teammate combination in Teams mode), with smoothed, non-overshooting curves, a dot at each real data point, and a legend where every line can be shown or hidden individually — Lost lines start hidden by default to reduce clutter. Underneath it, a standalone **Rating** chart tracks that player's rating over the same period. The horizontal axis always runs to "now," with graduations matching the period selected (hours for Today, days for a week/month, dates for a year).
+
+Every player's name shows their current [rating](#player-ratings) as a small badge, and each card shows how much that rating moved in the selected period (e.g. "▲ +18").
 
 ## Individual player page
 
@@ -112,12 +118,37 @@ In graph view, players currently on the roster show their chart immediately; eve
 
 Tap a player's name (from the roster, All Players, or their 📊 icon) to open their own page:
 
-- **Stats synopsis** — wins, losses, and win % for Today, This Week, This Month, This Year, or All Time.
+- **Stats synopsis** — current rating and how much it's moved this period, wins, losses, and win % for Today, This Week, This Month, This Year, or All Time.
 - **Head-to-head** — win/loss record against every opponent they've faced.
-- **Graph** — the same cumulative chart used on the All Players page, scoped to just this player.
+- **Graph** — the same cumulative chart used on the All Players page, scoped to just this player, plus their Rating chart.
 - **This Session (Live)** — what they've done in the game currently in progress.
 - **Session History** — every past saved session, expandable into the individual games played.
-- **Export Stats** saves the current live session into their permanent history; **Reset Stats** clears just this player's saved history (their name stays on the All Players list if they're still on the roster or have unsaved games).
+- **Export Stats** saves the current live session into their permanent history; **Reset Stats** clears just this player's saved history (their name stays on the All Players list if they're still on the roster or have unsaved games; their rating is unaffected — it lives in its own store).
+
+## Player ratings
+
+Every player has an automatic, Elo-style rating inspired by the scale [FargoRate](https://fargorate.com/) publishes — the rating system behind USA Pool League and most competitive USA leagues. It's a roughly 0–900 scale where a 100-point gap between two ratings works out to about a 2:1 expected win ratio, doubling every 100 points (so 200 points apart is ~4:1, 300 is ~8:1). New players start at **400**.
+
+- The rating shows as a small badge next to a player's name everywhere a name appears — the roster, the scoreboard, tournament match cards, All Players, and the player stats page.
+- It updates automatically after every credited game (main scoreboard or a tournament rack), including team games (each side's average rating is used for the win-probability calculation, and the resulting change applies equally to every member of that side). New/lightly-rated players move faster for their first 20 games, then more slowly once established.
+- **There's no way to edit a rating by hand.** It only ever moves as a result of recorded games.
+- Ratings live in their own name-keyed store, separate from career stats, so they survive a player being removed from the roster and are unaffected by Reset All Player Stats. They're included in the full data backup/import.
+
+This is a from-scratch implementation matched to FargoRate's *published* odds and scale — not a reverse-engineered clone of Fargo's own algorithm, which recomputes every player's rating together in a proprietary daily global optimization and isn't something that can run client-side in a static app.
+
+## Today's Notes & Day Report
+
+![Today's Notes panel, with a saved note and rating badges visible on the scoreboard](docs/screenshots/day-notes.jpg)
+
+A free-text box on the main page for jotting down anything about today's live play — who's on fire, funny moments, anything worth remembering. It saves automatically as you type, keyed to the calendar date.
+
+**Copy Report**, **Email Report**, and **Text Report** each build the same plain-text day synopsis — every player who played today with their win/loss record and rating movement, the total games played and which game types, and your notes — then copy it to the clipboard, open it in a pre-filled email, or open it in a pre-filled text message, ready to send as-is. The report is built from a merge of live and saved sessions for today's date, so it stays accurate even if "New Game" was used earlier the same day.
+
+## Help & Guide
+
+![The Help & Guide overlay, open on the Main Page section](docs/screenshots/help-guide.jpg)
+
+Tap **❓ Help** — it's on every page (the main page, the Setup Wizard, All Players, Tournament, and the player stats page) — to open a single guide covering every feature on every page. It's contextual: opening it jumps straight to the section for whatever page you're currently on, with a jump-nav to browse the rest. The title, intro, and nav stay pinned at the top while you scroll through a section.
 
 ## Focus Mode
 
@@ -129,8 +160,8 @@ Tap **Focus Mode** (or finish the Setup Wizard) to hide every setup/stats panel 
 
 Everything lives in the browser's local storage on that one device — there's no cloud sync — so the Backup & Transfer panel (top of the page, tap the chevron to expand) is how you move data around or protect it:
 
-- **Export All Data** downloads one JSON file containing the full picture: the live session, every saved player list, every saved rotation, and every player's career stats.
-- **Import Data** reads that file back in. If the device is brand new (no players yet) it adopts the backup as-is; otherwise it *merges*: career stats and saved lists are combined without double-counting games already known on both sides, new players (including anyone who only appears inside an imported saved list) are added to the roster, and the game currently in progress is left untouched.
+- **Export All Data** downloads one JSON file containing the full picture: the live session, every saved player list, every saved rotation, every player's career stats, and every player's rating (current number plus full history).
+- **Import Data** reads that file back in. If the device is brand new (no players yet) it adopts the backup as-is; otherwise it *merges*: career stats, saved lists, and ratings are combined without double-counting games already known on both sides (a rating's history is unioned and its current value recomputed from the merged, time-sorted history), new players (including anyone who only appears inside an imported saved list) are added to the roster, and the game currently in progress is left untouched.
 - **Reset All Player Stats** clears everyone's saved career history (not the live session). It always downloads a full backup first and asks for confirmation, since this can't be undone otherwise.
 - **Reset Player Lists** clears every saved player list from the "Load Player List" dropdown, the same way: backs up first, asks for confirmation, and the backup can be restored later with **Import Player Lists**.
 
