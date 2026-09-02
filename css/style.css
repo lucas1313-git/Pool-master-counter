@@ -1308,6 +1308,10 @@ input[type="number"] {
   text-align: right;
 }
 
+.all-player-show-graph-btn {
+  width: 100%;
+}
+
 .scale-row {
   margin-bottom: 22px;
 }

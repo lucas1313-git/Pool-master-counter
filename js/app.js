@@ -289,6 +289,9 @@
   var rosterList = document.getElementById("roster-list");
   var rosterLoadSelect = document.getElementById("roster-load-select");
   var btnRosterLoad = document.getElementById("btn-roster-load");
+  var btnExportRosterLists = document.getElementById("btn-export-roster-lists");
+  var btnImportRosterLists = document.getElementById("btn-import-roster-lists");
+  var importRosterListsFileInput = document.getElementById("import-roster-lists-file-input");
 
   var btnToggleFocus = document.getElementById("btn-toggle-focus");
   var appRoot = document.getElementById("app");
@@ -1589,14 +1592,15 @@
     return merged;
   }
 
-  // Unions two saved-roster-list arrays, skipping entries already present
-  // locally (by id, falling back to a savedAt+players signature for very
-  // old entries that predate the id field).
+  // Unions two saved-roster-list arrays, skipping entries whose player set
+  // already exists locally. Keyed purely by sorted players (not id/savedAt)
+  // so re-importing the same hand-edited file — or the same backup twice —
+  // never duplicates a list just because a fresh id/timestamp got assigned.
   function mergeRosterLists(localRosters, importedRosters) {
     var seen = {};
     var merged = [];
     function rosterKey(r) {
-      return r.id || (r.savedAt + "|" + (r.players || []).join(","));
+      return (r.players || []).slice().sort().join(",");
     }
     (localRosters || []).forEach(function (r) {
       var key = rosterKey(r);
@@ -1616,6 +1620,85 @@
       return (a.savedAt || "").localeCompare(b.savedAt || "");
     });
     return { rosters: merged, added: added };
+  }
+
+  // A friendly, hand-editable export: just label + players per list, no
+  // internal id/savedAt bookkeeping to get wrong when writing one by hand.
+  function exportRosterLists() {
+    var payload = {
+      exportedAt: new Date().toISOString(),
+      rosterLists: SAVED_ROSTERS.map(function (r) {
+        return { label: r.label, players: r.players };
+      })
+    };
+    downloadJSON("pool-master-counter-player-lists-" + payload.exportedAt.slice(0, 10) + ".json", payload);
+  }
+
+  // Accepts a bare array of names, a {label, players} object (the hand-
+  // editable export shape), or a full saved-roster entry with id/savedAt —
+  // whatever's easiest to write by hand or came from a previous export.
+  function normalizeImportedRosterEntry(entry, idx) {
+    var players;
+    if (Array.isArray(entry)) {
+      players = entry;
+    } else if (entry && typeof entry === "object") {
+      players = entry.players;
+    } else {
+      return null;
+    }
+    players = (Array.isArray(players) ? players : [])
+      .filter(function (n) {
+        return typeof n === "string" && n.trim();
+      })
+      .map(function (n) {
+        return n.trim();
+      });
+    if (!players.length) return null;
+    var savedAt = (entry && !Array.isArray(entry) && entry.savedAt) || new Date().toISOString();
+    var label = (entry && !Array.isArray(entry) && entry.label) || (savedAt.slice(0, 10) + " — " + players.join(", "));
+    var id = (entry && !Array.isArray(entry) && entry.id) || ("roster-import-" + savedAt.replace(/[:.]/g, "-") + "-" + idx);
+    return { id: id, label: label, players: players, savedAt: savedAt };
+  }
+
+  function importRosterListsFile(file) {
+    var reader = new FileReader();
+    reader.onload = function () {
+      var data;
+      try {
+        data = JSON.parse(reader.result);
+      } catch (e) {
+        alert("That file isn't valid JSON.");
+        return;
+      }
+      var rawList = Array.isArray(data)
+        ? data
+        : Array.isArray(data.rosterLists)
+        ? data.rosterLists
+        : Array.isArray(data.rosters)
+        ? data.rosters
+        : null;
+      if (!rawList) {
+        alert("That doesn't look like a player list file.");
+        return;
+      }
+      var normalized = rawList.map(normalizeImportedRosterEntry).filter(Boolean);
+      if (!normalized.length) {
+        alert("No valid player lists found in that file.");
+        return;
+      }
+      var merge = mergeRosterLists(SAVED_ROSTERS, normalized);
+      SAVED_ROSTERS = merge.rosters;
+      saveRostersToStorage(SAVED_ROSTERS);
+      populateRosterLoadSelect();
+      showToast(
+        "Imported " + merge.added + " player list" + (merge.added === 1 ? "" : "s") +
+        (merge.added < normalized.length ? " (some were already saved)." : ".")
+      );
+    };
+    reader.onerror = function () {
+      alert("Could not read that file.");
+    };
+    reader.readAsText(file);
   }
 
   function importAllData(file) {
@@ -1743,19 +1826,22 @@
     var idx = parseInt(rosterLoadSelect.value, 10);
     var roster = SAVED_ROSTERS[idx];
     if (!roster) return;
-    if (!confirm("Load \"" + roster.label + "\"? This replaces the current player list.")) return;
-    state.players.forEach(function (p) {
-      delete state.playerWins[p.id];
+    var existingNames = state.players.map(function (p) {
+      return p.name.toLowerCase();
     });
-    state.players = [];
+    var added = 0;
     roster.players.forEach(function (name) {
-      addPlayer(name);
+      if (existingNames.indexOf(name.toLowerCase()) === -1) {
+        addPlayer(name);
+        added += 1;
+      }
     });
     renderAll();
-    showToast(
-      "Loaded \"" + roster.label + "\" — " + roster.players.length +
-      " player" + (roster.players.length === 1 ? "" : "s") + "."
-    );
+    if (added === 0) {
+      showToast("Everyone from that saved list is already in your roster.");
+    } else {
+      showToast("Added " + added + " player" + (added === 1 ? "" : "s") + " from \"" + roster.label + "\".");
+    }
   }
 
   function currentRosterNames() {
@@ -1769,13 +1855,14 @@
   function saveRosterSnapshotIfNew(silent) {
     var names = currentRosterNames();
     if (names.length === 0) return false;
-    var last = SAVED_ROSTERS[SAVED_ROSTERS.length - 1];
-    var lastNames = last ? last.players.slice().sort() : null;
-    var sameAsLast = lastNames && lastNames.length === names.length && lastNames.every(function (n, i) {
-      return n === names[i];
+    var alreadySaved = SAVED_ROSTERS.some(function (r) {
+      var rNames = (r.players || []).slice().sort();
+      return rNames.length === names.length && rNames.every(function (n, i) {
+        return n === names[i];
+      });
     });
-    if (sameAsLast) {
-      if (!silent) showToast("Same player list as last session — no need to re-save.");
+    if (alreadySaved) {
+      if (!silent) showToast("This exact player list is already saved.");
       return false;
     }
     var now = new Date().toISOString();
@@ -2288,8 +2375,11 @@
   // played/won/lost scale each and a timeline of when they played.
   // ---------------------------------------------------------------------
 
-  // Every player name known to this device: anyone with saved stats, plus
-  // anyone currently on the roster (even before their first save).
+  // Every player name known to this device: anyone with saved stats, anyone
+  // currently on the roster (even before their first save), and anyone who
+  // shows up in this session's still-unsaved game history (e.g. removed
+  // from the roster mid-session, or before "New Game" folds it into
+  // PLAYER_STATS) — so nobody who's actually played drops off the list.
   function getAllKnownPlayerNames() {
     var names = {};
     Object.keys(PLAYER_STATS).forEach(function (n) {
@@ -2297,6 +2387,15 @@
     });
     state.players.forEach(function (p) {
       names[p.name] = true;
+    });
+    (state.gameHistory || []).forEach(function (entry) {
+      if (!entry || typeof entry === "string") return;
+      (entry.winnerNames || []).forEach(function (n) {
+        names[n] = true;
+      });
+      (entry.opponentNames || []).forEach(function (n) {
+        names[n] = true;
+      });
     });
     return Object.keys(names);
   }
@@ -2979,7 +3078,7 @@
     return wrap;
   }
 
-  function buildAllPlayerCard(stats, maxPlayed, maxWins, maxLosses, minMs, maxMs, period) {
+  function buildAllPlayerCard(stats, maxPlayed, maxWins, maxLosses, minMs, maxMs, period, isInLiveRoster) {
     var li = document.createElement("li");
     li.className = "all-player-card";
 
@@ -3001,7 +3100,25 @@
     li.appendChild(top);
 
     if (allPlayersViewMode === "graph") {
-      li.appendChild(buildPlayerGraph(stats, minMs, maxMs, period));
+      if (isInLiveRoster) {
+        li.appendChild(buildPlayerGraph(stats, minMs, maxMs, period));
+      } else {
+        var graphHolder = document.createElement("div");
+        graphHolder.className = "all-player-graph-holder hidden";
+        var showGraphBtn = document.createElement("button");
+        showGraphBtn.type = "button";
+        showGraphBtn.className = "btn btn-ghost all-player-show-graph-btn";
+        showGraphBtn.textContent = "Show Graph";
+        showGraphBtn.addEventListener("click", function () {
+          if (!graphHolder.hasChildNodes()) {
+            graphHolder.appendChild(buildPlayerGraph(stats, minMs, maxMs, period));
+          }
+          var nowHidden = graphHolder.classList.toggle("hidden");
+          showGraphBtn.textContent = nowHidden ? "Show Graph" : "Hide Graph";
+        });
+        li.appendChild(showGraphBtn);
+        li.appendChild(graphHolder);
+      }
     } else {
       li.appendChild(buildScaleRow("Games Played", stats.played, maxPlayed, "scale-fill-played"));
       li.appendChild(buildScaleRow("Games Won", stats.wins, maxWins, "scale-fill-won"));
@@ -3072,6 +3189,11 @@
 
     var sorted = sortAllPlayerStats(stats, allPlayersSortSelect.value);
 
+    var liveRosterNames = {};
+    state.players.forEach(function (p) {
+      liveRosterNames[p.name] = true;
+    });
+
     allPlayersList.innerHTML = "";
     if (sorted.length === 0) {
       var hint = document.createElement("li");
@@ -3084,7 +3206,7 @@
     }
     sorted.forEach(function (s) {
       allPlayersList.appendChild(
-        buildAllPlayerCard(s, playedAxisMax, winsAxisMax, lossesAxisMax, minMs, maxMs, period)
+        buildAllPlayerCard(s, playedAxisMax, winsAxisMax, lossesAxisMax, minMs, maxMs, period, !!liveRosterNames[s.name])
       );
     });
   }
@@ -3931,6 +4053,19 @@
   });
 
   btnResetAllPlayerStats.addEventListener("click", resetAllPlayerStats);
+
+  btnExportRosterLists.addEventListener("click", exportRosterLists);
+
+  btnImportRosterLists.addEventListener("click", function () {
+    importRosterListsFileInput.click();
+  });
+
+  importRosterListsFileInput.addEventListener("change", function () {
+    var file = importRosterListsFileInput.files && importRosterListsFileInput.files[0];
+    importRosterListsFileInput.value = "";
+    if (!file) return;
+    importRosterListsFile(file);
+  });
 
   addPlayerForm.addEventListener("submit", function (e) {
     e.preventDefault();
