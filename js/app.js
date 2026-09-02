@@ -1719,9 +1719,20 @@
   // Every distinct game played on dateStr (deduped by timestamp across
   // however many players' individual game lists it shows up in — live
   // session plus any earlier session saved today) and each player's
-  // win/loss/rating tally for the day.
+  // win/loss/rating tally for the day. Each game is kept from its
+  // *winning* side's perspective (result === "won") so winnerNames /
+  // opponentNames are neutral (winning side / losing side) rather than
+  // relative to whichever player happened to be iterated last. Also
+  // flagged with isLive: true when it's part of the still-open current
+  // session (state.gameHistory), false when it only exists in a session
+  // already saved earlier today — the closest the data model can get to
+  // distinguishing "earlier today" from "this session" as separate groups.
   function computeDayReportData(dateStr) {
     var names = getAllKnownPlayerNames();
+    var liveTsSet = {};
+    (state.gameHistory || []).forEach(function (entry) {
+      if (entry && entry.ts) liveTsSet[entry.ts] = true;
+    });
     var gamesByTs = {};
     var players = [];
     names.forEach(function (name) {
@@ -1732,7 +1743,10 @@
       var wins = 0;
       games.forEach(function (g) {
         if (g.result === "won") wins += 1;
-        gamesByTs[g.ts] = g;
+        var existing = gamesByTs[g.ts];
+        if (!existing || (existing.result !== "won" && g.result === "won")) {
+          gamesByTs[g.ts] = g;
+        }
       });
       players.push({
         name: name,
@@ -1749,9 +1763,36 @@
     var games = Object.keys(gamesByTs)
       .sort()
       .map(function (ts) {
-        return gamesByTs[ts];
+        var g = gamesByTs[ts];
+        g.isLive = !!liveTsSet[ts];
+        return g;
       });
     return { date: dateStr, games: games, players: players };
+  }
+
+  function joinNamesForReport(names) {
+    names = names || [];
+    if (names.length === 0) return "";
+    if (names.length === 1) return names[0];
+    if (names.length === 2) return names[0] + " and " + names[1];
+    return names.slice(0, -1).join(", ") + ", and " + names[names.length - 1];
+  }
+
+  function formatReportGameTime(ts) {
+    try {
+      return new Date(ts).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    } catch (e) {
+      return "";
+    }
+  }
+
+  function formatReportGameLine(g) {
+    var time = formatReportGameTime(g.ts);
+    var winners = joinNamesForReport(g.winnerNames || []);
+    var losers = joinNamesForReport(g.opponentNames || []);
+    var text = winners + " won " + g.gameLabel;
+    if (losers) text += " against " + losers;
+    return (time ? time + " — " : "") + text;
   }
 
   function formatReportDateHeading(dateStr) {
@@ -1774,7 +1815,9 @@
           : p.ratingDelta < 0
           ? " (▼" + p.ratingDelta + ")"
           : " (—)";
-        lines.push("• " + p.name + " — " + p.wins + "W–" + p.losses + "L, rating " + p.rating + deltaText);
+        var winWord = p.wins === 1 ? "win" : "wins";
+        var lossWord = p.losses === 1 ? "loss" : "losses";
+        lines.push("• " + p.name + " — " + p.wins + " " + winWord + ", " + p.losses + " " + lossWord + ", rating " + p.rating + deltaText);
       });
       lines.push("");
       lines.push("Total games played: " + data.games.length);
@@ -1788,6 +1831,38 @@
         })
         .join(", ");
       if (typesSummary) lines.push("Games played: " + typesSummary);
+
+      var earlierGames = data.games.filter(function (g) {
+        return !g.isLive;
+      });
+      var liveGames = data.games.filter(function (g) {
+        return g.isLive;
+      });
+      var hasBothGroups = earlierGames.length > 0 && liveGames.length > 0;
+      var divider = "──────────";
+
+      if (data.games.length > 0) {
+        lines.push("");
+        lines.push(divider);
+        lines.push("Game details:");
+        if (hasBothGroups) {
+          lines.push("");
+          lines.push("Earlier session:");
+          earlierGames.forEach(function (g) {
+            lines.push(formatReportGameLine(g));
+          });
+          lines.push("");
+          lines.push(divider);
+          lines.push("Current session:");
+          liveGames.forEach(function (g) {
+            lines.push(formatReportGameLine(g));
+          });
+        } else {
+          data.games.forEach(function (g) {
+            lines.push(formatReportGameLine(g));
+          });
+        }
+      }
     }
     var notes = getDayNotes(dateStr);
     if (notes) {
@@ -1977,7 +2052,13 @@
     Object.keys(groups).forEach(function (key) {
       var names = groups[key];
       if (names.length === 1) {
-        result[names[0]] = stats[names[0]];
+        var soloName = capitalizeName(names[0]);
+        if (soloName !== names[0]) {
+          changed = true;
+          result[soloName] = { name: soloName, sessions: stats[names[0]].sessions };
+        } else {
+          result[soloName] = stats[names[0]];
+        }
         return;
       }
       changed = true;
@@ -1990,9 +2071,14 @@
           return sum + (s.wins || 0);
         }, 0);
       });
-      var canonical = names.slice().sort(function (a, b) {
-        return totalWins[b] - totalWins[a] || a.localeCompare(b);
-      })[0];
+      // Whichever variant wins the vote, run it through capitalizeName so
+      // an all-lowercase import (e.g. "bob") never becomes the stored
+      // canonical casing just by having more recorded wins.
+      var canonical = capitalizeName(
+        names.slice().sort(function (a, b) {
+          return totalWins[b] - totalWins[a] || a.localeCompare(b);
+        })[0]
+      );
       result[canonical] = { name: canonical, sessions: mergedSessions };
     });
     return { stats: result, changed: changed };
@@ -2031,7 +2117,63 @@
   var RATING_K_ESTABLISHED = 8;
   var RATING_HISTORY_CAP = 500;
 
+  // Same case-variant cleanup as consolidateCaseVariantPlayerStats, applied
+  // to the ratings store — merges any "bob"/"Bob" split, dedupes their
+  // history by timestamp, and recomputes the current rating from the
+  // merged, time-sorted history so an old lowercase import never leaves a
+  // player with two separate rating tracks or an un-capitalized name.
+  function consolidateCaseVariantRatings(ratings) {
+    var groups = {};
+    Object.keys(ratings).forEach(function (name) {
+      var key = normalizeNameKey(name);
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(name);
+    });
+    var changed = false;
+    var result = {};
+    Object.keys(groups).forEach(function (key) {
+      var names = groups[key];
+      if (names.length === 1) {
+        var soloName = capitalizeName(names[0]);
+        if (soloName !== names[0]) {
+          changed = true;
+          var solo = ratings[names[0]];
+          result[soloName] = { name: soloName, rating: solo.rating, gamesPlayed: solo.gamesPlayed, history: solo.history };
+        } else {
+          result[soloName] = ratings[names[0]];
+        }
+        return;
+      }
+      changed = true;
+      var seen = {};
+      var mergedHistory = [];
+      names.forEach(function (n) {
+        (ratings[n].history || []).forEach(function (h) {
+          if (seen[h.ts]) return;
+          seen[h.ts] = true;
+          mergedHistory.push(h);
+        });
+      });
+      mergedHistory.sort(function (a, b) {
+        return a.ts.localeCompare(b.ts);
+      });
+      var canonical = capitalizeName(names[0]);
+      result[canonical] = {
+        name: canonical,
+        rating: mergedHistory.length ? mergedHistory[mergedHistory.length - 1].rating : DEFAULT_RATING,
+        gamesPlayed: mergedHistory.length,
+        history: mergedHistory
+      };
+    });
+    return { ratings: result, changed: changed };
+  }
+
   var PLAYER_RATINGS = loadRatingsFromStorage();
+  (function consolidateRatingsCasingOnBoot() {
+    var result = consolidateCaseVariantRatings(PLAYER_RATINGS);
+    PLAYER_RATINGS = result.ratings;
+    if (result.changed) saveRatingsToStorage(PLAYER_RATINGS);
+  })();
 
   // Finds an existing PLAYER_RATINGS key matching this name regardless of
   // case, mirroring findPlayerStatsKey.
@@ -2445,7 +2587,7 @@
         return typeof n === "string" && n.trim();
       })
       .map(function (n) {
-        return n.trim();
+        return capitalizeName(n.trim());
       });
     if (!players.length) return null;
     var savedAt = (entry && !Array.isArray(entry) && entry.savedAt) || new Date().toISOString();
@@ -2591,6 +2733,14 @@
             newPlayerCount += 1;
           });
         }
+
+        // Capitalizes every roster name at once, covering both freshly-
+        // adopted importedState.players (never passed through addPlayer)
+        // and any newly-pushed candidates above, so an imported backup
+        // with lowercase names can't leave the roster inconsistently cased.
+        finalState.players.forEach(function (p) {
+          if (p && p.name) p.name = capitalizeName(p.name);
+        });
 
         localStorage.setItem(STORAGE_KEY, JSON.stringify(finalState));
         localStorage.setItem(ROSTERS_KEY, JSON.stringify(rosterMerge.rosters));
@@ -3181,14 +3331,26 @@
     return "help-section-main";
   }
 
+  // .help-header is position:sticky and floats on top of whatever
+  // scrolled to the top of .help-card, so scrollIntoView({block:"start"})
+  // lands a section's title right underneath it (hidden until you scroll
+  // up). Scroll the card manually instead, offset by the header's actual
+  // rendered height so the target lands just below it.
+  function scrollHelpToSection(targetId) {
+    var target = document.getElementById(targetId);
+    var card = helpOverlay.querySelector(".help-card");
+    var header = helpOverlay.querySelector(".help-header");
+    if (!target || !card || !header) return;
+    card.scrollTop = target.offsetTop - header.offsetHeight - 8;
+  }
+
   function openHelp() {
     var targetId = currentHelpSectionId();
     Array.prototype.forEach.call(helpNavLinks, function (a) {
       a.classList.toggle("is-active", a.getAttribute("href") === "#" + targetId);
     });
     helpOverlay.classList.remove("hidden");
-    var target = document.getElementById(targetId);
-    if (target) target.scrollIntoView({ block: "start" });
+    scrollHelpToSection(targetId);
   }
 
   function closeHelp() {
@@ -5765,8 +5927,7 @@
       Array.prototype.forEach.call(helpNavLinks, function (link) {
         link.classList.toggle("is-active", link === a);
       });
-      var target = document.getElementById(targetId);
-      if (target) target.scrollIntoView({ block: "start" });
+      scrollHelpToSection(targetId);
     });
   });
 
