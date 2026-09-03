@@ -1280,9 +1280,9 @@
     focusPlayersSummary.textContent = playingCount + " of " + state.players.length + " playing";
   }
 
-  function buildStatMini(label, value, milestoneReached) {
+  function buildStatMini(label, value, milestoneReached, extraClass) {
     var el = document.createElement("div");
-    el.className = "stat-mini";
+    el.className = "stat-mini" + (extraClass ? " " + extraClass : "");
     var strong = document.createElement("strong");
     strong.textContent = value;
     el.appendChild(document.createTextNode(label + ": "));
@@ -1522,7 +1522,7 @@
     panel.appendChild(name);
 
     var wins = state.playerWins[player.id] || 0;
-    panel.appendChild(buildStatMini("Session win", wins, wins >= state.raceToWinsTarget));
+    panel.appendChild(buildStatMini("Tourney win", wins, wins >= state.raceToWinsTarget, "stat-mini-tourney"));
 
     var block = document.createElement("div");
     block.className = "stat-block";
@@ -1551,7 +1551,7 @@
     card.appendChild(name);
 
     var wins = state.playerWins[player.id] || 0;
-    card.appendChild(buildStatMini("Session win", wins, wins >= state.raceToWinsTarget));
+    card.appendChild(buildStatMini("Tourney win", wins, wins >= state.raceToWinsTarget, "stat-mini-tourney"));
 
     var value = document.createElement("div");
     value.className = "stat-value small";
