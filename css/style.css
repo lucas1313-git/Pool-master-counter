@@ -2865,3 +2865,59 @@ input[type="number"] {
 #tournament-current-match-panel .scoreboard {
   margin: 0 16px 16px;
 }
+
+/* ---------- Round Robin: standings list + a wrapping grid of every
+   match (no bracket tree — every match is visible from the start). ---------- */
+
+.tournament-rr-standings {
+  list-style: none;
+  margin: 0 16px 16px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  counter-reset: rr-rank;
+}
+
+.tournament-rr-standings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  counter-increment: rr-rank;
+}
+
+.tournament-rr-standings-row::before {
+  content: counter(rr-rank) ".";
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  margin-right: 4px;
+}
+
+.tournament-rr-standings-row.is-champion {
+  border-color: var(--accent);
+}
+
+.tournament-rr-standings-name {
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+}
+
+.tournament-rr-standings-record {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+  white-space: nowrap;
+  font-size: 0.85rem;
+}
+
+.tournament-rr-matches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 0 16px 16px;
+}
