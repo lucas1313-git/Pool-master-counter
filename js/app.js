@@ -916,13 +916,18 @@
   var milestoneDetails = document.getElementById("milestone-details");
   var btnMilestoneClose = document.getElementById("btn-milestone-close");
 
-  // Optional "balls left on the table" marker for the game that just won
-  // the race — unset (null) unless the +/- counter in the milestone
-  // dialog is used. Tracks which archived game record to patch once the
-  // dialog closes (see celebrateTournamentWin/closeMilestone below).
-  var milestoneBallsLeftGameTs = null;
-  var milestoneBallsLeftParticipants = null;
-  var milestoneBallsLeftValue = null;
+  var gamewinOverlay = document.getElementById("gamewin-overlay");
+  var gamewinMessage = document.getElementById("gamewin-message");
+  var gamewinDetails = document.getElementById("gamewin-details");
+  var btnGamewinClose = document.getElementById("btn-gamewin-close");
+
+  // Optional "balls left on the table" marker for whichever game the
+  // gamewin overlay is currently showing — unset (null) unless the +/-
+  // counter is used. Tracks which game record to patch once the dialog
+  // closes (see showGameWinOverlay/closeGameWinOverlay below).
+  var gamewinBallsLeftValue = null;
+  var gamewinPendingTs = null;
+  var gamewinPendingOnClose = null;
 
   var onHillOverlay = document.getElementById("onhill-overlay");
   var onHillMessage = document.getElementById("onhill-message");
@@ -2102,7 +2107,7 @@
     }, 4500);
   }
 
-  function creditWin(isTeam, key) {
+  function creditWin(isTeam, key, winnerVoice) {
     var typeLabel = GAME_TYPES[state.currentGame.gameType].label;
     var summary;
     var winnerNames;
@@ -2212,16 +2217,27 @@
     applyRotationIfDue();
     var gameTypeChanged = state.currentGame.gameType !== previousGameType ||
       state.currentGame.target !== previousTarget || state.currentGame.unit !== previousUnit;
+
+    resetGameBalls();
+    saveState();
+    playWinSound(winnerVoice);
+    renderAll();
+
     showToast(summary);
-    if (milestoneNames) {
-      celebrateTournamentWin(milestoneNames, milestoneCount, ts, winnerNames.concat(opponentNames));
-    } else if (onHillNames) {
-      announceOnHill(onHillNames);
-    } else if (gameTypeChanged) {
-      announceGameChange(
-        GAME_TYPES[state.currentGame.gameType].label + " (" + state.currentGame.target + " " + unitLabel(state.currentGame.unit) + ")"
-      );
-    }
+    // The balls-left counter needs to be set (or skipped) before any of
+    // these run, since celebrateTournamentWin archives this exact game
+    // and resets the session — deferred to showGameWinOverlay's onClose.
+    showGameWinOverlay(summary, ts, function () {
+      if (milestoneNames) {
+        celebrateTournamentWin(milestoneNames, milestoneCount);
+      } else if (onHillNames) {
+        announceOnHill(onHillNames);
+      } else if (gameTypeChanged) {
+        announceGameChange(
+          GAME_TYPES[state.currentGame.gameType].label + " (" + state.currentGame.target + " " + unitLabel(state.currentGame.unit) + ")"
+        );
+      }
+    });
     return summary;
   }
 
@@ -2270,22 +2286,23 @@
 
   // Reflects the current counter value into the dialog and disables "-"
   // once it can't go any lower than unset.
-  function renderMilestoneBallsLeftValue(valueEl, minusBtn) {
-    valueEl.textContent = milestoneBallsLeftValue === null ? T("milestone.ballsLeftUnset") : String(milestoneBallsLeftValue);
-    minusBtn.disabled = milestoneBallsLeftValue === null;
+  function renderBallsLeftValue(valueEl, minusBtn) {
+    valueEl.textContent = gamewinBallsLeftValue === null ? T("ballsLeft.unset") : String(gamewinBallsLeftValue);
+    minusBtn.disabled = gamewinBallsLeftValue === null;
   }
 
   // Optional +/- counter for how many balls were left on the table when
-  // this race-winning game ended. Starts unset (null) - "+" from unset
-  // goes to 0, "-" from 0 goes back to unset, so leaving it alone never
-  // records a value. Applied to the just-archived game record on close
-  // (see applyBallsLeftToGame/closeMilestone).
+  // this game ended. Starts unset (null) - "+" from unset goes to 0, "-"
+  // from 0 goes back to unset, so leaving it alone never records a value.
+  // Lives in the per-game win overlay (showGameWinOverlay), not the
+  // tournament/milestone one - it's a property of the specific game just
+  // played, not the race as a whole.
   function buildBallsLeftRow() {
     var row = document.createElement("div");
     row.className = "player-stats-row balls-left-row";
     var label = document.createElement("span");
     label.className = "label";
-    label.textContent = T("milestone.ballsLeftOnTable");
+    label.textContent = T("ballsLeft.label");
 
     var stepper = document.createElement("div");
     stepper.className = "balls-left-stepper";
@@ -2293,23 +2310,23 @@
     minusBtn.type = "button";
     minusBtn.className = "balls-left-btn minus";
     minusBtn.textContent = "−";
-    minusBtn.setAttribute("aria-label", T("milestone.ballsLeftDecrease"));
+    minusBtn.setAttribute("aria-label", T("ballsLeft.decrease"));
     var valueEl = document.createElement("span");
     valueEl.className = "balls-left-value";
     var plusBtn = document.createElement("button");
     plusBtn.type = "button";
     plusBtn.className = "balls-left-btn plus";
     plusBtn.textContent = "+";
-    plusBtn.setAttribute("aria-label", T("milestone.ballsLeftIncrease"));
+    plusBtn.setAttribute("aria-label", T("ballsLeft.increase"));
 
     minusBtn.addEventListener("click", function () {
-      if (milestoneBallsLeftValue === null) return;
-      milestoneBallsLeftValue = milestoneBallsLeftValue === 0 ? null : milestoneBallsLeftValue - 1;
-      renderMilestoneBallsLeftValue(valueEl, minusBtn);
+      if (gamewinBallsLeftValue === null) return;
+      gamewinBallsLeftValue = gamewinBallsLeftValue === 0 ? null : gamewinBallsLeftValue - 1;
+      renderBallsLeftValue(valueEl, minusBtn);
     });
     plusBtn.addEventListener("click", function () {
-      milestoneBallsLeftValue = milestoneBallsLeftValue === null ? 0 : milestoneBallsLeftValue + 1;
-      renderMilestoneBallsLeftValue(valueEl, minusBtn);
+      gamewinBallsLeftValue = gamewinBallsLeftValue === null ? 0 : gamewinBallsLeftValue + 1;
+      renderBallsLeftValue(valueEl, minusBtn);
     });
 
     stepper.appendChild(minusBtn);
@@ -2317,37 +2334,45 @@
     stepper.appendChild(plusBtn);
     row.appendChild(label);
     row.appendChild(stepper);
-    renderMilestoneBallsLeftValue(valueEl, minusBtn);
+    renderBallsLeftValue(valueEl, minusBtn);
     return row;
   }
 
-  // Patches the balls-left marker onto every participant's already-archived
-  // copy of this game record, found by its shared ts, then persists.
-  function applyBallsLeftToGame(ts, participantNames, value) {
-    if (!ts || !participantNames || !participantNames.length) return;
-    var changed = false;
-    participantNames.forEach(function (name) {
-      var key = findPlayerStatsKey(name) || name;
-      var entry = PLAYER_STATS[key];
-      if (!entry || !Array.isArray(entry.sessions)) return;
-      entry.sessions.forEach(function (session) {
-        (session.games || []).forEach(function (g) {
-          if (g.ts === ts) {
-            g.ballsLeftOnTable = value;
-            changed = true;
-          }
-        });
-      });
-    });
-    if (changed) savePlayerStatsToStorage(PLAYER_STATS);
+  // Shown for every credited win (not just a race-ending one) so the
+  // balls-left marker can be set for that specific game before anything
+  // else happens - in particular, before a race-ending win archives the
+  // game and resets the session in celebrateTournamentWin. onClose runs
+  // whatever should happen next (milestone/on-hill/game-change), deferred
+  // until this dialog is dismissed.
+  function showGameWinOverlay(summary, ts, onClose) {
+    gamewinBallsLeftValue = null;
+    gamewinPendingTs = ts;
+    gamewinPendingOnClose = onClose;
+    gamewinMessage.textContent = summary;
+    gamewinDetails.innerHTML = "";
+    gamewinDetails.appendChild(buildBallsLeftRow());
+    gamewinOverlay.classList.remove("hidden");
   }
 
-  function celebrateTournamentWin(names, count, ts, participantNames) {
-    var target = state.raceToWinsTarget;
+  function closeGameWinOverlay() {
+    // The just-credited game is still the front of gameHistory at this
+    // point (nothing else can run while this dialog is up) - patch the
+    // marker directly onto it so it's already there by the time any
+    // archiving (celebrateTournamentWin's exportAllPlayerStats) reads it.
+    if (gamewinBallsLeftValue !== null && state.gameHistory[0] && state.gameHistory[0].ts === gamewinPendingTs) {
+      state.gameHistory[0].ballsLeftOnTable = gamewinBallsLeftValue;
+      saveState();
+    }
+    gamewinOverlay.classList.add("hidden");
+    var onClose = gamewinPendingOnClose;
+    gamewinBallsLeftValue = null;
+    gamewinPendingTs = null;
+    gamewinPendingOnClose = null;
+    if (onClose) onClose();
+  }
 
-    milestoneBallsLeftGameTs = ts || null;
-    milestoneBallsLeftParticipants = participantNames || null;
-    milestoneBallsLeftValue = null;
+  function celebrateTournamentWin(names, count) {
+    var target = state.raceToWinsTarget;
 
     // A win one game earlier can leave the on-hill overlay open (it has no
     // reason to auto-close on its own) — without this it stacks visually
@@ -2385,23 +2410,12 @@
         );
       }
     }
-    milestoneDetails.appendChild(buildBallsLeftRow());
 
     milestoneOverlay.classList.remove("hidden");
     playTournamentChampionSound();
   }
 
   function closeMilestone() {
-    if (milestoneBallsLeftValue !== null && milestoneBallsLeftGameTs) {
-      applyBallsLeftToGame(milestoneBallsLeftGameTs, milestoneBallsLeftParticipants, milestoneBallsLeftValue);
-      if (currentStatsPlayerName && milestoneBallsLeftParticipants && milestoneBallsLeftParticipants.indexOf(currentStatsPlayerName) !== -1) {
-        currentStatsSessions = getPlayerSessions(currentStatsPlayerName);
-        renderPlayerHistoryList(currentStatsSessions);
-      }
-    }
-    milestoneBallsLeftGameTs = null;
-    milestoneBallsLeftParticipants = null;
-    milestoneBallsLeftValue = null;
     milestoneOverlay.classList.add("hidden");
   }
 
@@ -2440,11 +2454,7 @@
 
       if (reached) {
         var winnerVoice = isTeamMode ? null : player.voice;
-        creditWin(isTeamMode, isTeamMode ? player.teamId : playerId);
-        resetGameBalls();
-        saveState();
-        playWinSound(winnerVoice);
-        renderAll();
+        creditWin(isTeamMode, isTeamMode ? player.teamId : playerId, winnerVoice);
         return;
       }
 
@@ -7876,6 +7886,11 @@
   btnMilestoneClose.addEventListener("click", closeMilestone);
   milestoneOverlay.addEventListener("click", function (e) {
     if (e.target === milestoneOverlay) closeMilestone();
+  });
+
+  btnGamewinClose.addEventListener("click", closeGameWinOverlay);
+  gamewinOverlay.addEventListener("click", function (e) {
+    if (e.target === gamewinOverlay) closeGameWinOverlay();
   });
 
   btnOnHillClose.addEventListener("click", closeOnHill);
