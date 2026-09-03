@@ -946,6 +946,14 @@
   var btnSaveSessionSkip = document.getElementById("btn-save-session-skip");
   var btnSaveSessionCancel = document.getElementById("btn-save-session-cancel");
 
+  var ratingEditOverlay = document.getElementById("rating-edit-overlay");
+  var ratingEditPlayerName = document.getElementById("rating-edit-player-name");
+  var ratingEditInput = document.getElementById("rating-edit-input");
+  var btnRatingEditSave = document.getElementById("btn-rating-edit-save");
+  var btnRatingEditCancel = document.getElementById("btn-rating-edit-cancel");
+  var btnResetAllRatings = document.getElementById("btn-reset-all-ratings");
+  var ratingEditTargetName = null;
+
   function populateGameTypeSelects() {
     [gameTypeSelect, rotationAddType, tournamentGameTypeSelect, wizardGameTypeSelect, wizardRotationAddType].forEach(function (select) {
       select.innerHTML = "";
@@ -1431,6 +1439,16 @@
       buildPlayerNameLabel(name, p.name, false);
       row.appendChild(name);
       row.appendChild(buildRatingBadge(p.name));
+
+      var editRatingBtn = document.createElement("button");
+      editRatingBtn.type = "button";
+      editRatingBtn.className = "roster-edit-rating-btn";
+      editRatingBtn.setAttribute("aria-label", T("common.editRatingFor", { name: p.name }));
+      editRatingBtn.textContent = "✏️";
+      editRatingBtn.addEventListener("click", function () {
+        openRatingEditPopup(p.name);
+      });
+      row.appendChild(editRatingBtn);
 
       var playBtn = document.createElement("button");
       playBtn.type = "button";
@@ -3290,6 +3308,63 @@
       PLAYER_RATINGS[key] = { name: key, rating: DEFAULT_RATING, gamesPlayed: 0, history: [] };
     }
     return PLAYER_RATINGS[key];
+  }
+
+  // A hand-entered override, not a game result - recorded as its own
+  // history point (so the rating graph reflects it) but doesn't count
+  // toward gamesPlayed, since no game was actually played.
+  function setPlayerRatingManually(name, newRating) {
+    var entry = ensureRatingEntry(name);
+    var ts = new Date().toISOString();
+    var delta = newRating - entry.rating;
+    entry.rating = newRating;
+    entry.history.push({ ts: ts, rating: newRating, delta: delta });
+    if (entry.history.length > RATING_HISTORY_CAP) entry.history.shift();
+    saveRatingsToStorage(PLAYER_RATINGS);
+  }
+
+  // Resets every player currently on the roster back to the default
+  // starting rating (see the "Player ratings" comment above DEFAULT_RATING
+  // for why 400 on this 0-900 scale) - as if they were freshly added,
+  // with no rating history at all.
+  function resetAllPlayersOfficialRating() {
+    if (!confirm(T("confirm.resetAllRatingsExplain", { rating: DEFAULT_RATING }))) {
+      return;
+    }
+    if (!confirm(T("confirm.areYouSure"))) {
+      return;
+    }
+    state.players.forEach(function (p) {
+      var key = findRatingKey(p.name) || p.name;
+      PLAYER_RATINGS[key] = { name: key, rating: DEFAULT_RATING, gamesPlayed: 0, history: [] };
+    });
+    saveRatingsToStorage(PLAYER_RATINGS);
+    renderAll();
+    showToast(T("toast.allRatingsReset"));
+  }
+
+  function openRatingEditPopup(name) {
+    ratingEditTargetName = name;
+    ratingEditPlayerName.textContent = name;
+    ratingEditInput.value = getPlayerRating(name);
+    ratingEditOverlay.classList.remove("hidden");
+  }
+
+  function closeRatingEditPopup() {
+    ratingEditTargetName = null;
+    ratingEditOverlay.classList.add("hidden");
+  }
+
+  function saveRatingEditPopup() {
+    if (!ratingEditTargetName) return;
+    var value = parseInt(ratingEditInput.value, 10);
+    if (isNaN(value)) {
+      closeRatingEditPopup();
+      return;
+    }
+    setPlayerRatingManually(ratingEditTargetName, value);
+    closeRatingEditPopup();
+    renderAll();
   }
 
   // Reads the optional "starting rating" field on an add-player form —
@@ -6010,6 +6085,14 @@
       }
     });
     var lastIdx = allTicks.length - 1;
+    // A narrow (phone-portrait) viewport gives the same-length "Now" text
+    // a much bigger share of the available width than on a wide screen, so
+    // a threshold tuned for desktop isn't enough clearance there — and
+    // since a slightly sparser axis costs nothing on a wide screen either,
+    // just use the wide clearance unconditionally rather than guess a
+    // width breakpoint that has to match every real device.
+    var nowCollisionThreshold = 0.32;
+
     // Guarantee "Now" is the final label, then drop whichever regular tick
     // landed right next to it — including one that happened to already be
     // in the evenly-spaced selection — so the (usually much longer) "Now"
@@ -6017,7 +6100,7 @@
     if (finalIdxs[finalIdxs.length - 1] !== lastIdx) finalIdxs.push(lastIdx);
     while (
       finalIdxs.length > 1 &&
-      (allTicks[lastIdx] - allTicks[finalIdxs[finalIdxs.length - 2]]) / span < 0.14
+      (allTicks[lastIdx] - allTicks[finalIdxs[finalIdxs.length - 2]]) / span < nowCollisionThreshold
     ) {
       finalIdxs.splice(finalIdxs.length - 2, 1);
     }
@@ -6031,11 +6114,11 @@
       if (pos === 0) label.classList.add("is-first");
       if (isNow) label.classList.add("is-last", "is-now");
       label.style.left = pctFor(ms) + "%";
+      // No time-of-day - "Now · Sep 3", not "Now · Sep 3 1:21 PM" - the
+      // extra precision isn't worth how much wider it makes the one label
+      // that always has to fit without overlapping its neighbor.
       label.textContent = isNow
-        ? T("graph.nowPrefix") +
-          d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) +
-          " " +
-          d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
+        ? T("graph.nowPrefix") + d.toLocaleDateString(undefined, { month: "short", day: "numeric" })
         : formatAxisTickLabel(d, period);
       axis.appendChild(label);
     });
@@ -7766,6 +7849,13 @@
 
   btnResetAllPlayerStats.addEventListener("click", resetAllPlayerStats);
   btnResetRosterLists.addEventListener("click", resetAllRosterLists);
+  btnResetAllRatings.addEventListener("click", resetAllPlayersOfficialRating);
+
+  btnRatingEditSave.addEventListener("click", saveRatingEditPopup);
+  btnRatingEditCancel.addEventListener("click", closeRatingEditPopup);
+  ratingEditOverlay.addEventListener("click", function (e) {
+    if (e.target === ratingEditOverlay) closeRatingEditPopup();
+  });
 
   btnExportRosterLists.addEventListener("click", exportRosterLists);
 

@@ -52,7 +52,6 @@
     </div>
     <div class="header-nav-row">
       <button type="button" id="btn-open-wizard" class="btn btn-primary all-players-nav-btn" data-i18n="header.startWizard">🧙 Start Wizard</button>
-      <button type="button" id="btn-open-all-players" class="btn btn-ghost all-players-nav-btn" data-i18n="header.allStats">📊 All Stats</button>
       <button type="button" id="btn-open-tournament" class="btn btn-ghost all-players-nav-btn" data-i18n="header.tournament">🏆 Tournament</button>
       <button type="button" id="btn-open-help" class="btn btn-ghost all-players-nav-btn" data-i18n="header.help">❓ Help</button>
       <div class="theme-select-row">
@@ -177,6 +176,9 @@
     </button>
     <p class="panel-summary" id="players-panel-summary"></p>
     <div class="panel-body" id="players-panel-body">
+      <div class="row">
+        <button type="button" id="btn-open-all-players" class="btn btn-ghost" data-i18n="header.allStats">📊 All Players Stats</button>
+      </div>
       <p id="new-player-name-requirement" class="new-player-name-requirement hidden"></p>
       <form id="add-player-form" class="row">
         <input type="text" id="new-player-name" data-i18n-placeholder="players.namePlaceholder" placeholder="Player name" autocomplete="off" required>
@@ -195,6 +197,9 @@
       <div class="row mode-row">
         <label><input type="radio" name="game-mode" value="individual" checked> <span data-i18n="gameSetup.individual">Individual</span></label>
         <label><input type="radio" name="game-mode" value="teams"> <span data-i18n="gameSetup.teams">Teams</span></label>
+      </div>
+      <div class="row">
+        <button type="button" id="btn-reset-all-ratings" class="btn btn-danger" data-i18n="players.resetAllRatings">Reset All Players' Official Rating</button>
       </div>
       <ul id="roster-list" class="roster-list"></ul>
     </div>
@@ -312,6 +317,23 @@
       <button type="button" id="btn-save-session-save" class="btn btn-primary" data-i18n="saveSession.saveAndStart">Save &amp; Start New Session</button>
       <button type="button" id="btn-save-session-skip" class="btn btn-ghost" data-i18n="saveSession.startWithoutSaving">Start Without Saving</button>
       <button type="button" id="btn-save-session-cancel" class="btn btn-ghost" data-i18n="common.cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="rating-edit-overlay" class="rating-edit-overlay hidden">
+  <div class="rating-edit-card">
+    <div class="rating-edit-emoji">🎯</div>
+    <h2 data-i18n="ratingEdit.title">Adjust Rating</h2>
+    <p id="rating-edit-player-name" class="rating-edit-player-name"></p>
+    <p class="rating-edit-warning" data-i18n="ratingEdit.warning">⚠️ This rating is the result of an ongoing calculation based on match results. Changing it by hand overrides that calculation and won't reflect actual skill level going forward.</p>
+    <div class="row rating-edit-row">
+      <label for="rating-edit-input" data-i18n="ratingEdit.newRating">New rating</label>
+      <input type="number" id="rating-edit-input" min="0" max="900">
+    </div>
+    <div class="rating-edit-actions">
+      <button type="button" id="btn-rating-edit-save" class="btn btn-primary" data-i18n="common.save">Save</button>
+      <button type="button" id="btn-rating-edit-cancel" class="btn btn-ghost" data-i18n="common.cancel">Cancel</button>
     </div>
   </div>
 </div>
