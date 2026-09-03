@@ -2211,6 +2211,15 @@ input[type="number"] {
   flex: 1 1 140px;
 }
 
+#resets-panel .row {
+  margin-top: 4px;
+  align-items: stretch;
+}
+
+#resets-panel .row .btn {
+  flex: 1 1 140px;
+}
+
 .player-stats-row-wrap {
   flex-direction: column;
   align-items: flex-start;
