@@ -1033,7 +1033,7 @@
     minusBtn.className = "btn-ball minus";
     minusBtn.textContent = "−";
     minusBtn.setAttribute("aria-label", "Remove point for " + player.name);
-    var minusAllowNegative = state.currentGame.unit !== "rack";
+    var minusAllowNegative = quickCounterMode || state.currentGame.unit !== "rack";
     minusBtn.disabled = disabled || (!minusAllowNegative && (player.balls || 0) <= 0);
     minusBtn.addEventListener("click", function () {
       adjustScore(player.id, -1);
@@ -1789,8 +1789,10 @@
     if (!player || !player.playing) return;
 
     // Quick Counter: just tally, never check a target or credit a win.
+    // Free-form point counter — negative scores are allowed (e.g. golf-
+    // style games, point penalties), so no clamping to 0 here.
     if (quickCounterMode) {
-      player.balls = Math.max(0, (player.balls || 0) + delta);
+      player.balls = (player.balls || 0) + delta;
       saveState();
       renderAll();
       return;
