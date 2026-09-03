@@ -6421,6 +6421,23 @@
 
   noStatsCheckbox.addEventListener("change", function () {
     noStatsMode = noStatsCheckbox.checked;
+
+    // Unchecking it is the only way out of Quick Counter once you're in
+    // Focus Mode (every other control is hidden there) — without this,
+    // the scoreboard kept the bare point tally while the rest of the app
+    // (Game Order, Current Game) still showed the real rotation/target as
+    // if it were in effect, which is exactly the mismatch this fixes.
+    if (!noStatsCheckbox.checked && quickCounterMode) {
+      quickCounterMode = false;
+      resetGameBalls();
+      applyRotationIfDue();
+      saveState();
+      renderAll();
+      updateCurrentGameSummary();
+      showToast("Back to the normal game — following your rotation and target settings.");
+      return;
+    }
+
     showToast(
       noStatsMode
         ? "No Statistic mode is on — nothing from here on will be saved."
