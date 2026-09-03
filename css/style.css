@@ -1372,6 +1372,49 @@ input[type="number"] {
   width: 100%;
 }
 
+.balls-left-row {
+  align-items: center;
+}
+
+.balls-left-stepper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.balls-left-btn {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  padding: 0;
+  font-size: 1.1rem;
+  font-weight: 800;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.balls-left-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.balls-left-value {
+  min-width: 3ch;
+  text-align: center;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.player-game-log-balls-left {
+  color: var(--text-dim);
+}
+
 /* ---------- On-the-hill warning popup ---------- */
 
 .onhill-overlay {
