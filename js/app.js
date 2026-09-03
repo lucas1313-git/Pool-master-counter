@@ -273,10 +273,39 @@
   // ---------------------------------------------------------------------
 
   var audioCtx = null;
+  var echoSend = null;
+
+  // A short slapback-style delay with damped feedback, shared by every
+  // sound in the app — gives each tone a natural little tail instead of
+  // cutting off flat. echoSend is the node every tone's gain also patches
+  // into; the wet path loops back through a lowpass so repeats get
+  // progressively warmer/duller rather than just quieter copies.
+  function setupEchoBus(ctx) {
+    echoSend = ctx.createGain();
+    echoSend.gain.value = 1;
+    var delay = ctx.createDelay(1.0);
+    delay.delayTime.value = 0.15;
+    var feedback = ctx.createGain();
+    feedback.gain.value = 0.3;
+    var damping = ctx.createBiquadFilter();
+    damping.type = "lowpass";
+    damping.frequency.value = 2200;
+    var wet = ctx.createGain();
+    wet.gain.value = 0.32;
+
+    echoSend.connect(delay);
+    delay.connect(damping);
+    damping.connect(feedback);
+    feedback.connect(delay);
+    damping.connect(wet);
+    wet.connect(ctx.destination);
+  }
+
   function getAudioCtx() {
     if (!audioCtx) {
       var Ctx = window.AudioContext || window.webkitAudioContext;
       audioCtx = new Ctx();
+      setupEchoBus(audioCtx);
     }
     if (audioCtx.state === "suspended") {
       audioCtx.resume();
@@ -284,8 +313,16 @@
     return audioCtx;
   }
 
+  // Every tone is two voices: the requested pitch/waveform, plus a quiet
+  // octave-up triangle partner that decays faster — that second voice is
+  // what turns a flat single-frequency beep into something with a bit of
+  // body/shimmer, and it's always a soft waveform even when the main tone
+  // uses a harsher one (sawtooth/square), which rounds off the edge
+  // without losing that tone's identity. Both voices feed the shared echo
+  // bus alongside the dry signal.
   function tone(freq, startTime, duration, type, peakGain) {
     var ctx = getAudioCtx();
+
     var osc = ctx.createOscillator();
     var gain = ctx.createGain();
     osc.type = type || "sine";
@@ -295,8 +332,24 @@
     gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
     osc.connect(gain);
     gain.connect(ctx.destination);
+    if (echoSend) gain.connect(echoSend);
     osc.start(startTime);
     osc.stop(startTime + duration + 0.02);
+
+    var overtoneDuration = duration * 0.7;
+    var osc2 = ctx.createOscillator();
+    var gain2 = ctx.createGain();
+    osc2.type = "triangle";
+    osc2.frequency.value = freq * 2;
+    osc2.detune.value = 6;
+    gain2.gain.setValueAtTime(0, startTime);
+    gain2.gain.linearRampToValueAtTime(peakGain * 0.18, startTime + 0.015);
+    gain2.gain.exponentialRampToValueAtTime(0.0008, startTime + overtoneDuration);
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    if (echoSend) gain2.connect(echoSend);
+    osc2.start(startTime);
+    osc2.stop(startTime + overtoneDuration + 0.02);
   }
 
   function voicePitch(voice) {
@@ -1148,8 +1201,22 @@
     function submit() {
       var name = input.value.trim();
       if (!name) return;
-      if (isDuplicatePlayerName(name)) {
-        showToast("\"" + capitalizeName(name) + "\" is already in your roster.");
+      // A name that matches someone already on standby (e.g. dropped by a
+      // list load) reactivates them instead of being rejected as a
+      // duplicate — otherwise there'd be no way to bring them back from
+      // this minimal view.
+      var key = normalizeNameKey(resolvePlayerName(name));
+      var existing = state.players.filter(function (p) {
+        return normalizeNameKey(p.name) === key;
+      })[0];
+      if (existing) {
+        if (existing.playing) {
+          showToast("\"" + existing.name + "\" is already in your roster.");
+          return;
+        }
+        existing.playing = true;
+        saveState();
+        renderAll();
         return;
       }
       var player = addPlayer(name);
@@ -1168,6 +1235,37 @@
     });
 
     row.appendChild(input);
+    row.appendChild(btn);
+    return row;
+  }
+
+  // Quick Counter's "Load Player List": picks a saved list and makes the
+  // active set match it exactly (see loadPlayerListForQuickCounter) — the
+  // fast way to swap in a known group instead of adding everyone by hand.
+  // Renders nothing if there's nothing saved to load.
+  function buildQuickCounterLoadRow() {
+    if (SAVED_ROSTERS.length === 0) return null;
+    var row = document.createElement("div");
+    row.className = "quick-counter-load-row";
+
+    var select = document.createElement("select");
+    select.className = "quick-counter-load-select";
+    SAVED_ROSTERS.forEach(function (r, i) {
+      var opt = document.createElement("option");
+      opt.value = String(i);
+      opt.textContent = r.label;
+      select.appendChild(opt);
+    });
+
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn btn-ghost quick-counter-load-btn";
+    btn.textContent = "📋 Load Player List";
+    btn.addEventListener("click", function () {
+      loadPlayerListForQuickCounter(select.value);
+    });
+
+    row.appendChild(select);
     row.appendChild(btn);
     return row;
   }
@@ -1288,6 +1386,8 @@
       nowPlayingBanner.innerHTML = "";
       scoreboard.innerHTML = "";
       scoreboard.className = "scoreboard scoreboard-quick";
+      var loadRow = buildQuickCounterLoadRow();
+      if (loadRow) scoreboard.appendChild(loadRow);
       active.forEach(function (p) {
         scoreboard.appendChild(buildQuickCounterPanel(p));
       });
@@ -1794,6 +1894,8 @@
     if (quickCounterMode) {
       player.balls = (player.balls || 0) + delta;
       saveState();
+      if (delta > 0) playPositiveSound(player.voice);
+      else playNegativeSound(player.voice);
       renderAll();
       return;
     }
@@ -3098,6 +3200,41 @@
     });
     saveRosterSnapshotIfNew(true);
     return added;
+  }
+
+  // Quick Counter's own "Load Player List": unlike loadRosterEntry (which
+  // only ever adds), this makes the active set match the loaded list
+  // exactly — anyone active but not on the list drops to standby (not
+  // deleted, so their data stays put and typing their name back in just
+  // reactivates them — see buildQuickCounterAddRow), and everyone on the
+  // list is added/reactivated and marked playing.
+  function loadPlayerListForQuickCounter(idx) {
+    var roster = SAVED_ROSTERS[parseInt(idx, 10)];
+    if (!roster || !roster.players || !roster.players.length) return;
+    var listKeys = {};
+    roster.players.forEach(function (name) {
+      listKeys[normalizeNameKey(name)] = true;
+    });
+    state.players.forEach(function (p) {
+      if (p.playing && !listKeys[normalizeNameKey(p.name)]) p.playing = false;
+    });
+    roster.players.forEach(function (name) {
+      var key = normalizeNameKey(name);
+      var existing = state.players.filter(function (p) {
+        return normalizeNameKey(p.name) === key;
+      })[0];
+      if (existing) {
+        existing.playing = true;
+      } else {
+        var player = addPlayer(name);
+        if (player) player.playing = true;
+      }
+    });
+    saveState();
+    renderAll();
+    showToast(
+      "Loaded \"" + roster.label + "\" — " + roster.players.length + " player" + (roster.players.length === 1 ? "" : "s") + "."
+    );
   }
 
   function loadSelectedRoster() {

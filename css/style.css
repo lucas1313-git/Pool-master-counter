@@ -818,6 +818,21 @@ input[type="number"] {
   flex-shrink: 0;
 }
 
+.quick-counter-load-row {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 10px;
+}
+
+.quick-counter-load-select {
+  flex: 1;
+  min-width: 0;
+}
+
+.quick-counter-load-btn {
+  flex-shrink: 0;
+}
+
 /* ---------- Team scoreboard ---------- */
 
 .team-panel {
