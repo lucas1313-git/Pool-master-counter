@@ -3796,7 +3796,12 @@
   }
 
   function finalizeWizardAndStart() {
+    // Quick Counter's tally is free-form (can be negative, has no
+    // relation to any target) — never carry it into a real game or a
+    // tournament, regardless of which format is picked next.
+    var leavingQuickCounter = quickCounterMode;
     quickCounterMode = false;
+    if (leavingQuickCounter) resetGameBalls();
     if (wizardFormat === "tournament") {
       closeWizard();
       openTournamentPage();
@@ -3842,6 +3847,7 @@
     noStatsMode = true;
     noStatsCheckbox.checked = true;
     quickCounterMode = true;
+    resetGameBalls();
     closeWizard();
     setFocusMode(true);
     renderAll();
