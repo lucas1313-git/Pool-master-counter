@@ -4356,11 +4356,16 @@
         )
       );
     }
-    playerPageSynopsisBody.appendChild(synopsisStatRow("Wins", synopsis.wins, "win"));
-    playerPageSynopsisBody.appendChild(synopsisStatRow("Losses", synopsis.losses, "loss"));
+    playerPageSynopsisBody.appendChild(synopsisStatRow("Games won", synopsis.wins, "win"));
+    playerPageSynopsisBody.appendChild(synopsisStatRow("Games lost", synopsis.losses, "loss"));
     playerPageSynopsisBody.appendChild(
       synopsisStatRow("Win %", synopsis.pct === null ? "—" : synopsis.pct + "%")
     );
+
+    var tournamentFiltered = filterGamesByPeriod(tournamentGamesForPlayerName(currentStatsPlayerName), currentStatsPeriod);
+    var tournamentSynopsis = computeWinLossSynopsis(tournamentFiltered);
+    playerPageSynopsisBody.appendChild(synopsisStatRow("Tournaments won", tournamentSynopsis.wins, "win"));
+    playerPageSynopsisBody.appendChild(synopsisStatRow("Tournaments lost", tournamentSynopsis.losses, "loss"));
 
     var h2h = computeHeadToHead(filtered);
     setPanelSummary(
@@ -4638,18 +4643,28 @@
 
   function computePlayerCareerStats(name, period) {
     var games = filterGamesByPeriod(allGamesForPlayerName(name), period);
+    var tournamentGames = filterGamesByPeriod(tournamentGamesForPlayerName(name), period);
     var wins = 0;
     var losses = 0;
     games.forEach(function (g) {
       if (g.result === "won") wins += 1;
       else losses += 1;
     });
+    var tournamentWins = 0;
+    var tournamentLosses = 0;
+    tournamentGames.forEach(function (g) {
+      if (g.result === "won") tournamentWins += 1;
+      else tournamentLosses += 1;
+    });
     return {
       name: name,
       games: games,
+      tournamentGames: tournamentGames,
       played: games.length,
       wins: wins,
       losses: losses,
+      tournamentWins: tournamentWins,
+      tournamentLosses: tournamentLosses,
       winPct: games.length ? wins / games.length : null
     };
   }
@@ -4768,6 +4783,11 @@
 
   var SVG_NS = "http://www.w3.org/2000/svg";
   var TEAM_COMBO_PALETTE = ["#c77dff", "#4fb0a5", "#e08e45", "#8ecae6", "#f2a6c9", "#9fd35c", "#d4a24c", "#6a8caf"];
+  // Fixed (theme-independent) colors for the whole-tournament won/lost
+  // series — distinct from the single-games palette above, which follows
+  // the active theme's --accent/--danger instead.
+  var TOURNAMENT_WON_COLOR = "#ffb703";
+  var TOURNAMENT_LOST_COLOR = "#6d597a";
   // Leaves this fraction of the chart's width blank at the right edge, so
   // the most recent line segment and "Now" tick aren't flush against the
   // card border — otherwise the latest data reads as cut off.
@@ -4805,15 +4825,19 @@
   // Adds one game's result to a cumulative series, collapsing consecutive
   // games that land in the same bucket into a single point (the bucket's
   // last timestamp, with the running total as of that point) instead of
-  // plotting a dot per game.
-  function pushBucketedPoint(arr, ts, count, period) {
+  // plotting a dot per game. gameInfo ({gameLabel, opponentNames, result})
+  // is kept per point (not just the count) so a dot can show exactly
+  // which opponents were played and the win/loss against each — see
+  // summarizeGraphDotGames / the graph's click-to-reveal tooltip.
+  function pushBucketedPoint(arr, ts, count, period, gameInfo) {
     var key = bucketKeyFor(ts, period);
     var last = arr.length ? arr[arr.length - 1] : null;
     if (last && last.bucketKey === key) {
       last.ts = ts;
       last.count = count;
+      if (gameInfo) last.games.push(gameInfo);
     } else {
-      arr.push({ ts: ts, count: count, bucketKey: key });
+      arr.push({ ts: ts, count: count, bucketKey: key, games: gameInfo ? [gameInfo] : [] });
     }
   }
 
@@ -4830,15 +4854,16 @@
     var teamCombos = {};
 
     sorted.forEach(function (g) {
+      var gameInfo = { gameLabel: g.gameLabel, opponentNames: g.opponentNames || [], result: g.result };
       if (!g.isTeam) {
         indPlayedCount += 1;
-        pushBucketedPoint(individualPlayed, g.ts, indPlayedCount, period);
+        pushBucketedPoint(individualPlayed, g.ts, indPlayedCount, period, gameInfo);
         if (g.result === "won") {
           indWonCount += 1;
-          pushBucketedPoint(individualWon, g.ts, indWonCount, period);
+          pushBucketedPoint(individualWon, g.ts, indWonCount, period, gameInfo);
         } else {
           indLostCount += 1;
-          pushBucketedPoint(individualLost, g.ts, indLostCount, period);
+          pushBucketedPoint(individualLost, g.ts, indLostCount, period, gameInfo);
         }
         return;
       }
@@ -4856,13 +4881,13 @@
       }
       var combo = teamCombos[key];
       combo.playedCount += 1;
-      pushBucketedPoint(combo.played, g.ts, combo.playedCount, period);
+      pushBucketedPoint(combo.played, g.ts, combo.playedCount, period, gameInfo);
       if (g.result === "won") {
         combo.wonCount += 1;
-        pushBucketedPoint(combo.won, g.ts, combo.wonCount, period);
+        pushBucketedPoint(combo.won, g.ts, combo.wonCount, period, gameInfo);
       } else {
         combo.lostCount += 1;
-        pushBucketedPoint(combo.lost, g.ts, combo.lostCount, period);
+        pushBucketedPoint(combo.lost, g.ts, combo.lostCount, period, gameInfo);
       }
     });
 
@@ -4872,6 +4897,32 @@
       individualLost: individualLost,
       teamCombos: teamCombos
     };
+  }
+
+  // Same bucketing idea as buildCumulativeSeries, but for whole completed
+  // bracket Tournaments (won = became champion, lost = eliminated at any
+  // point) rather than individual rack results — see
+  // tournamentGamesForPlayerName. Kept as its own (much simpler) function
+  // since there's no "played"/team-combo split to track here.
+  function buildTournamentCumulativeSeries(games, period) {
+    var sorted = games.slice().sort(function (a, b) {
+      return a.ts.localeCompare(b.ts);
+    });
+    var won = [];
+    var lost = [];
+    var wonCount = 0;
+    var lostCount = 0;
+    sorted.forEach(function (g) {
+      var gameInfo = { gameLabel: g.gameLabel, opponentNames: g.opponentNames || [], result: g.result };
+      if (g.result === "won") {
+        wonCount += 1;
+        pushBucketedPoint(won, g.ts, wonCount, period, gameInfo);
+      } else {
+        lostCount += 1;
+        pushBucketedPoint(lost, g.ts, lostCount, period, gameInfo);
+      }
+    });
+    return { won: won, lost: lost };
   }
 
   // Monotone cubic Hermite spline (Fritsch–Carlson) through a point list —
@@ -4952,18 +5003,97 @@
       return axisMax > 0 ? height - (count / axisMax) * height : height;
     }
     var dots = points.map(function (p) {
-      return { x: xFor(new Date(p.ts).getTime()), y: yFor(p.count) };
+      return { x: xFor(new Date(p.ts).getTime()), y: yFor(p.count), games: p.games || [] };
     });
     var lastCount = points.length ? points[points.length - 1].count : 0;
     var allPts = [{ x: xFor(minMs), y: yFor(0) }].concat(dots, [{ x: xFor(maxMs), y: yFor(lastCount) }]);
     return { path: monotoneLinePath(allPts), dots: dots };
   }
 
+  // Collapses a graph dot's underlying games into one win/loss tally per
+  // opponent (a bucketed dot can represent several games against several
+  // people), in first-seen order.
+  function summarizeGraphDotGames(games) {
+    var byOpponent = {};
+    var order = [];
+    games.forEach(function (g) {
+      (g.opponentNames || []).forEach(function (name) {
+        if (!byOpponent[name]) {
+          byOpponent[name] = { name: name, wins: 0, losses: 0 };
+          order.push(name);
+        }
+        if (g.result === "won") byOpponent[name].wins += 1;
+        else byOpponent[name].losses += 1;
+      });
+    });
+    return order.map(function (name) {
+      return byOpponent[name];
+    });
+  }
+
+  var graphTooltipEl = null;
+
+  function getGraphTooltipEl() {
+    if (!graphTooltipEl) {
+      graphTooltipEl = document.createElement("div");
+      graphTooltipEl.className = "player-graph-tooltip hidden";
+      document.body.appendChild(graphTooltipEl);
+    }
+    return graphTooltipEl;
+  }
+
+  // Shows (or moves, if already open) a small fixed-position tooltip near
+  // wherever a graph dot was clicked, listing every opponent behind that
+  // point and the win/loss record against each. One shared tooltip node
+  // for the whole app — only one is ever open at a time.
+  function showGraphDotTooltip(clientX, clientY, games) {
+    var el = getGraphTooltipEl();
+    var perOpponent = summarizeGraphDotGames(games);
+    el.innerHTML = "";
+    var title = document.createElement("div");
+    title.className = "player-graph-tooltip-title";
+    title.textContent = games.length + " game" + (games.length === 1 ? "" : "s") + " here";
+    el.appendChild(title);
+    perOpponent.forEach(function (opp) {
+      var row = document.createElement("div");
+      row.className = "player-graph-tooltip-row";
+      var name = document.createElement("span");
+      name.className = "player-graph-tooltip-name";
+      name.textContent = opp.name;
+      var record = document.createElement("span");
+      record.className = "player-graph-tooltip-record";
+      var winWord = opp.wins === 1 ? "win" : "wins";
+      var lossWord = opp.losses === 1 ? "loss" : "losses";
+      record.textContent = opp.wins + " " + winWord + ", " + opp.losses + " " + lossWord;
+      row.appendChild(name);
+      row.appendChild(record);
+      el.appendChild(row);
+    });
+    el.classList.remove("hidden");
+    // Position after unhiding so offsetWidth/offsetHeight are real, then
+    // clamp inside the viewport (with a small margin) so it can't run off
+    // either edge near the sides or bottom of the screen.
+    var margin = 8;
+    var left = Math.min(Math.max(clientX - el.offsetWidth / 2, margin), window.innerWidth - el.offsetWidth - margin);
+    var top = clientY - el.offsetHeight - 14;
+    if (top < margin) top = clientY + 14;
+    el.style.left = left + "px";
+    el.style.top = top + "px";
+  }
+
+  function hideGraphTooltip() {
+    if (graphTooltipEl) graphTooltipEl.classList.add("hidden");
+  }
+
   // Draws one series as a smooth path plus a dot at every real data point.
   // color is only needed for team-combo lines, which use an inline stroke/
   // fill instead of a CSS class (their color is picked at render time).
   // Returns the <g> the series was drawn into, so the legend can toggle its
-  // visibility (show/hide) as one unit.
+  // visibility (show/hide) as one unit. Every dot that has games behind it
+  // gets an invisible, larger "hit" circle on top (small dots are hard to
+  // tap precisely) that reveals a tooltip with the opponent(s) and win/
+  // loss for every game bucketed into that point — see
+  // showGraphDotTooltip/summarizeGraphDotGames.
   function appendGraphSeries(svg, points, minMs, maxMs, width, height, axisMax, lineClass, dotClass, color, startHidden) {
     var geo = buildSeriesGeometry(points, minMs, maxMs, width, height, axisMax);
     var group = svgEl("g", { class: "player-graph-series" + (startHidden ? " is-hidden" : "") });
@@ -4974,6 +5104,14 @@
       var circleAttrs = { cx: pt.x, cy: pt.y, r: 3.2, class: dotClass };
       if (color) circleAttrs.fill = color;
       group.appendChild(svgEl("circle", circleAttrs));
+      if (pt.games && pt.games.length) {
+        var hit = svgEl("circle", { cx: pt.x, cy: pt.y, r: 9, class: "player-graph-dot-hit" });
+        hit.addEventListener("click", function (e) {
+          e.stopPropagation();
+          showGraphDotTooltip(e.clientX, e.clientY, pt.games);
+        });
+        group.appendChild(hit);
+      }
     });
     svg.appendChild(group);
     return group;
@@ -5204,10 +5342,11 @@
     wrap.className = "player-graph-wrap";
 
     var series = buildCumulativeSeries(stats.games, period);
+    var tournamentSeries = buildTournamentCumulativeSeries(stats.tournamentGames || [], period);
     var comboKeys = Object.keys(series.teamCombos).sort();
 
     var maxCount = 0;
-    [series.individualPlayed, series.individualWon, series.individualLost].forEach(function (arr) {
+    [series.individualPlayed, series.individualWon, series.individualLost, tournamentSeries.won, tournamentSeries.lost].forEach(function (arr) {
       if (arr.length) maxCount = Math.max(maxCount, arr[arr.length - 1].count);
     });
     comboKeys.forEach(function (key) {
@@ -5264,7 +5403,7 @@
         "player-graph-dot player-graph-dot-ind-played",
         null
       );
-      legendItems.push({ color: "var(--info)", style: "solid", label: "Individual — Played", group: gIndPlayed });
+      legendItems.push({ color: "var(--info)", style: "solid", label: "Single games played", group: gIndPlayed });
     }
     if (series.individualWon.length) {
       var gIndWon = appendGraphSeries(
@@ -5279,7 +5418,7 @@
         "player-graph-dot player-graph-dot-ind-won",
         null
       );
-      legendItems.push({ color: "var(--accent)", style: "dotted", label: "Individual — Won", group: gIndWon });
+      legendItems.push({ color: "var(--accent)", style: "dotted", label: "Single games won", group: gIndWon });
     }
     if (series.individualLost.length) {
       var gIndLost = appendGraphSeries(
@@ -5298,7 +5437,7 @@
       legendItems.push({
         color: "var(--danger)",
         style: "dashed",
-        label: "Individual — Lost",
+        label: "Single games lost",
         group: gIndLost,
         startHidden: true
       });
@@ -5361,6 +5500,37 @@
       }
     });
 
+    if (tournamentSeries.won.length) {
+      var gTournWon = appendGraphSeries(
+        svg,
+        tournamentSeries.won,
+        minMs,
+        maxMs,
+        width,
+        height,
+        axisMax,
+        "player-graph-line player-graph-line-dotted",
+        "player-graph-dot",
+        TOURNAMENT_WON_COLOR
+      );
+      legendItems.push({ color: TOURNAMENT_WON_COLOR, style: "dotted", label: "Tournament wins", group: gTournWon });
+    }
+    if (tournamentSeries.lost.length) {
+      var gTournLost = appendGraphSeries(
+        svg,
+        tournamentSeries.lost,
+        minMs,
+        maxMs,
+        width,
+        height,
+        axisMax,
+        "player-graph-line player-graph-line-dashed",
+        "player-graph-dot",
+        TOURNAMENT_LOST_COLOR
+      );
+      legendItems.push({ color: TOURNAMENT_LOST_COLOR, style: "dashed", label: "Tournament losses", group: gTournLost });
+    }
+
     chart.appendChild(svg);
     wrap.appendChild(chart);
     wrap.appendChild(buildGraphTimeAxis(minMs, maxMs, period));
@@ -5398,7 +5568,7 @@
     return wrap;
   }
 
-  function buildAllPlayerCard(stats, maxPlayed, maxWins, maxLosses, minMs, maxMs, period, isInLiveRoster) {
+  function buildAllPlayerCard(stats, maxPlayed, maxWins, maxLosses, maxTournWins, maxTournLosses, minMs, maxMs, period, isInLiveRoster) {
     var li = document.createElement("li");
     li.className = "all-player-card";
 
@@ -5454,6 +5624,10 @@
       li.appendChild(buildScaleRow("Games Played", stats.played, maxPlayed, "scale-fill-played"));
       li.appendChild(buildScaleRow("Games Won", stats.wins, maxWins, "scale-fill-won"));
       li.appendChild(buildScaleRow("Games Lost", stats.losses, maxLosses, "scale-fill-lost"));
+      if (stats.tournamentWins > 0 || stats.tournamentLosses > 0) {
+        li.appendChild(buildScaleRow("Tournaments Won", stats.tournamentWins, maxTournWins, "scale-fill-tourn-won"));
+        li.appendChild(buildScaleRow("Tournaments Lost", stats.tournamentLosses, maxTournLosses, "scale-fill-tourn-lost"));
+      }
 
       if (stats.games.length) {
         li.appendChild(buildTimelineRow(stats.games, minMs, maxMs));
@@ -5482,11 +5656,15 @@
     var maxPlayed = 0;
     var maxWins = 0;
     var maxLosses = 0;
+    var maxTournWins = 0;
+    var maxTournLosses = 0;
     var minTs = null;
     stats.forEach(function (s) {
       maxPlayed = Math.max(maxPlayed, s.played);
       maxWins = Math.max(maxWins, s.wins);
       maxLosses = Math.max(maxLosses, s.losses);
+      maxTournWins = Math.max(maxTournWins, s.tournamentWins);
+      maxTournLosses = Math.max(maxTournLosses, s.tournamentLosses);
       s.games.forEach(function (g) {
         if (!g.ts) return;
         if (minTs === null || g.ts < minTs) minTs = g.ts;
@@ -5517,6 +5695,8 @@
     var playedAxisMax = axisMaxFor(maxPlayed);
     var winsAxisMax = axisMaxFor(maxWins);
     var lossesAxisMax = axisMaxFor(maxLosses);
+    var tournWinsAxisMax = axisMaxFor(maxTournWins);
+    var tournLossesAxisMax = axisMaxFor(maxTournLosses);
 
     var sorted = sortAllPlayerStats(stats, allPlayersSortSelect.value);
 
@@ -5537,7 +5717,18 @@
     }
     sorted.forEach(function (s) {
       allPlayersList.appendChild(
-        buildAllPlayerCard(s, playedAxisMax, winsAxisMax, lossesAxisMax, minMs, maxMs, period, !!liveRosterNames[s.name])
+        buildAllPlayerCard(
+          s,
+          playedAxisMax,
+          winsAxisMax,
+          lossesAxisMax,
+          tournWinsAxisMax,
+          tournLossesAxisMax,
+          minMs,
+          maxMs,
+          period,
+          !!liveRosterNames[s.name]
+        )
       );
     });
   }
@@ -5593,6 +5784,63 @@
   }
 
   var TOURNAMENT = loadTournamentFromStorage();
+
+  // History of finished brackets — separate from TOURNAMENT (the single
+  // live/in-progress bracket, overwritten on every "Start New Tournament")
+  // so a player's graph can show whole-tournament wins/losses over time,
+  // distinct from the individual rack wins/losses already recorded via
+  // recordTournamentRackWin into state.gameHistory.
+  var TOURNAMENT_RESULTS_KEY = "poolMasterCounter.tournamentResults.v1";
+
+  function loadTournamentResultsFromStorage() {
+    try {
+      var raw = localStorage.getItem(TOURNAMENT_RESULTS_KEY);
+      var parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function saveTournamentResultsToStorage(list) {
+    try {
+      localStorage.setItem(TOURNAMENT_RESULTS_KEY, JSON.stringify(list));
+    } catch (e) {
+      console.warn("Could not save tournament results.", e);
+    }
+  }
+
+  var TOURNAMENT_RESULTS = loadTournamentResultsFromStorage();
+
+  // Called once, right when a bracket's champion is first decided — records
+  // a win for the champion and a loss for every other entrant.
+  function recordTournamentCompletion(t) {
+    var ts = new Date().toISOString();
+    TOURNAMENT_RESULTS.unshift({ ts: ts, champion: t.champion, format: t.format, players: t.players.slice() });
+    if (TOURNAMENT_RESULTS.length > 200) TOURNAMENT_RESULTS.length = 200;
+    saveTournamentResultsToStorage(TOURNAMENT_RESULTS);
+  }
+
+  // One pseudo-"game" per completed tournament this player entered, shaped
+  // enough like a real game (ts/result/opponentNames/gameLabel) to reuse
+  // filterGamesByPeriod and the graph's bucketing helpers, but plotted as
+  // its own series in buildPlayerGraph rather than mixed into single-game
+  // counts.
+  function tournamentGamesForPlayerName(name) {
+    var games = [];
+    TOURNAMENT_RESULTS.forEach(function (r) {
+      if ((r.players || []).indexOf(name) === -1) return;
+      games.push({
+        ts: r.ts,
+        result: r.champion === name ? "won" : "lost",
+        opponentNames: r.players.filter(function (n) {
+          return n !== name;
+        }),
+        gameLabel: "Tournament"
+      });
+    });
+    return games;
+  }
 
   function nextPow2(n) {
     var p = 1;
@@ -6152,7 +6400,9 @@
       t.active.startedAt = new Date().toISOString();
       playWinSound(voice);
       if (t.active[winsKey] >= t.raceTo) {
+        var championAlreadyDecided = !!t.champion;
         reportBracketResult(t, match, name);
+        if (!championAlreadyDecided && t.champion) recordTournamentCompletion(t);
         t.active = null;
         saveTournamentToStorage(t);
         renderTournamentPage();
@@ -6651,6 +6901,8 @@
     if (btn) btn.addEventListener("click", openHelp);
   });
   btnHelpClose.addEventListener("click", closeHelp);
+  document.addEventListener("click", hideGraphTooltip);
+  document.addEventListener("scroll", hideGraphTooltip, true);
   helpOverlay.addEventListener("click", function (e) {
     if (e.target === helpOverlay) closeHelp();
   });

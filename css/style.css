@@ -25,6 +25,12 @@
   --bg-glow: #3a1212;
   --radius: 14px;
   --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  /* Text color for content sitting directly on an --accent or
+     --felt-light background (buttons, toggles, badges) — dark by
+     default, flipped to light per-theme below wherever that specific
+     background color is too dark for dark text to read. */
+  --on-accent: #241a00;
+  --on-felt-light: #06170f;
   color-scheme: dark;
 }
 
@@ -63,6 +69,7 @@
   --text-dim: #8fa3c9;
   --border: #2a2a5a;
   --bg-glow: #22224a;
+  --on-felt-light: #eafcff;
   --font-family: "SF Mono", "Consolas", "Menlo", "Courier New", monospace;
 }
 
@@ -82,6 +89,7 @@
   --text-dim: #a8a296;
   --border: #2c3644;
   --bg-glow: #263547;
+  --on-felt-light: #f2ede3;
   --font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
 }
 
@@ -101,6 +109,7 @@
   --text-dim: #d9b391;
   --border: #4a2c14;
   --bg-glow: #4a2810;
+  --on-felt-light: #fff3e0;
   --font-family: "Century Gothic", Futura, "Trebuchet MS", sans-serif;
 }
 
@@ -120,6 +129,7 @@
   --text-dim: #9aa3ad;
   --border: #2a2e33;
   --bg-glow: #1c1f23;
+  --on-felt-light: #eef1f4;
   --font-family: "Helvetica Neue", Arial, "Segoe UI", sans-serif;
   color-scheme: dark;
 }
@@ -140,6 +150,7 @@
   --text-dim: #7a6f5c;
   --border: #d8cba8;
   --bg-glow: #efe3c4;
+  --on-accent: #fff8ef;
   --font-family: "Avenir Next", "Century Gothic", "Trebuchet MS", sans-serif;
   color-scheme: light;
 }
@@ -160,6 +171,7 @@
   --text-dim: #7d7284;
   --border: #d9d0e0;
   --bg-glow: #ece5f0;
+  --on-accent: #fbf8fc;
   --font-family: "Palatino Linotype", "Book Antiqua", Georgia, serif;
   color-scheme: light;
 }
@@ -180,6 +192,7 @@
   --text-dim: #cccccc;
   --border: #595959;
   --bg-glow: #000000;
+  --on-felt-light: #ffffff;
   --font-family: "Arial Black", Arial, "Helvetica Neue", sans-serif;
   color-scheme: dark;
 }
@@ -200,6 +213,7 @@
   --text-dim: #4d4d4d;
   --border: #000000;
   --bg-glow: #f0f0f0;
+  --on-accent: #ffffff;
   --font-family: "Arial Black", Arial, "Helvetica Neue", sans-serif;
   color-scheme: light;
 }
@@ -422,7 +436,7 @@ button:active {
 
 .btn-primary {
   background: var(--accent);
-  color: #241a00;
+  color: var(--on-accent);
   font-weight: 700;
 }
 
@@ -744,7 +758,7 @@ input[type="number"] {
 
 .btn-playing.is-on {
   background: var(--felt-light);
-  color: #06170f;
+  color: var(--on-felt-light);
   border-color: var(--felt-light);
   font-weight: 700;
 }
@@ -767,7 +781,7 @@ input[type="number"] {
 
 .team-toggle button.is-selected {
   background: var(--accent);
-  color: #241a00;
+  color: var(--on-accent);
   border-color: var(--accent);
 }
 
@@ -813,7 +827,7 @@ input[type="number"] {
   margin: 8px 16px;
   text-align: center;
   background: var(--accent);
-  color: #241a00;
+  color: var(--on-accent);
   font-weight: 800;
   font-size: 1rem;
   padding: 12px;
@@ -1021,7 +1035,7 @@ input[type="number"] {
 
 .btn-ball.plus {
   background: var(--felt-light);
-  color: #06170f;
+  color: var(--on-felt-light);
 }
 
 .btn-ball.minus {
@@ -2053,7 +2067,7 @@ input[type="number"] {
 .btn-ghost.is-active,
 .period-btn.is-active {
   background: var(--accent);
-  color: #241a00;
+  color: var(--on-accent);
   border-color: var(--accent);
   font-weight: 700;
 }
@@ -2219,6 +2233,8 @@ input[type="number"] {
 .scale-fill-played { background: var(--info); }
 .scale-fill-won { background: var(--accent); }
 .scale-fill-lost { background: var(--danger); }
+.scale-fill-tourn-won { background: #ffb703; }
+.scale-fill-tourn-lost { background: #6d597a; }
 
 .scale-ticks {
   position: absolute;
@@ -2373,6 +2389,53 @@ input[type="number"] {
 .player-graph-dot-ind-played { fill: var(--info); }
 .player-graph-dot-ind-won { fill: var(--accent); }
 .player-graph-dot-ind-lost { fill: var(--danger); }
+
+/* Invisible, larger tap target layered over each visible dot — the dots
+   themselves (r=3.2) are too small to reliably tap on a phone. */
+.player-graph-dot-hit {
+  fill: transparent;
+  cursor: pointer;
+}
+
+.player-graph-tooltip {
+  position: fixed;
+  z-index: 200;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  min-width: 160px;
+  max-width: 260px;
+  pointer-events: none;
+}
+
+.player-graph-tooltip-title {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+
+.player-graph-tooltip-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.85rem;
+  padding: 3px 0;
+}
+
+.player-graph-tooltip-name {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.player-graph-tooltip-record {
+  color: var(--text-dim);
+  white-space: nowrap;
+}
 
 .player-rating-graph-line {
   stroke: var(--accent);
