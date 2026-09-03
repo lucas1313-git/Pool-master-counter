@@ -470,12 +470,12 @@
 
   // Winning a whole Tournament — a bracket Tournament's champion, or a
   // main-scoreboard "race to N wins" session — gets its own fanfare: the
-  // famous opening phrase of Beethoven's 9th Symphony ("Ode to Joy"),
-  // played low and drenched in reverb for a deep, triumphant, slightly
-  // ominous feel — deliberately different from playWinSound's bright
-  // single-rack fanfare. Every note is scheduled a full second after this
-  // is called (ctx.currentTime + 1) so it lands just after the champion
-  // banner/milestone overlay appears, not on top of it.
+  // full main theme of Beethoven's 9th Symphony ("Ode to Joy"), played
+  // low and drenched in reverb for a deep, triumphant, slightly ominous
+  // feel — deliberately different from playWinSound's bright single-rack
+  // fanfare. Every note is scheduled a full second after this is called
+  // (ctx.currentTime + 1) so it lands just after the champion banner/
+  // milestone overlay appears, not on top of it.
   function playTournamentChampionSound() {
     var ctx = getAudioCtx();
     var now = ctx.currentTime;
@@ -518,11 +518,15 @@
       sub.stop(t + duration + 0.1);
     }
 
-    // C3-rooted "Ode to Joy" opening phrase, 15 notes (its full first
-    // 4-bar line): mi mi fa sol / sol fa mi re / do do re mi / mi re re —
-    // instantly recognizable regardless of register or tempo.
+    // C3-rooted "Ode to Joy" main theme, all 30 notes of its full 8-bar
+    // form (the complete "Freude, schöner Götterfunken..." melody, both
+    // 4-bar halves): mi mi fa sol / sol fa mi re / do do re mi / mi re re
+    // // mi mi fa sol / sol fa mi re / do do re mi / re do do.
     var freqs = { C: 130.81, D: 146.83, E: 164.81, F: 174.61, G: 196.0 };
-    var melody = ["E", "E", "F", "G", "G", "F", "E", "D", "C", "C", "D", "E", "E", "D", "D"];
+    var melody = [
+      "E", "E", "F", "G", "G", "F", "E", "D", "C", "C", "D", "E", "E", "D", "D",
+      "E", "E", "F", "G", "G", "F", "E", "D", "C", "C", "D", "E", "D", "C", "C"
+    ];
     var step = 0.24;
     melody.forEach(function (deg, i) {
       var isLast = i === melody.length - 1;
@@ -5204,9 +5208,15 @@
       el.appendChild(row);
     });
     el.classList.remove("hidden");
-    // Position after unhiding so offsetWidth/offsetHeight are real, then
-    // clamp inside the viewport (with a small margin) so it can't run off
-    // either edge near the sides or bottom of the screen.
+    positionGraphTooltip(el, clientX, clientY);
+  }
+
+  // Places an already-populated, already-unhidden tooltip just beside
+  // wherever it was triggered from — above the click point by default,
+  // flipping below if that would run off the top, and clamped left/right
+  // so it never runs off either edge. Shared by every graph tooltip
+  // (win/loss dots, rating dots) so they all behave identically.
+  function positionGraphTooltip(el, clientX, clientY) {
     var margin = 8;
     var left = Math.min(Math.max(clientX - el.offsetWidth / 2, margin), window.innerWidth - el.offsetWidth - margin);
     var top = clientY - el.offsetHeight - 14;
@@ -5217,6 +5227,77 @@
 
   function hideGraphTooltip() {
     if (graphTooltipEl) graphTooltipEl.classList.add("hidden");
+  }
+
+  // Finds this player's own game record with a given ts (exact match —
+  // every rating-history point is stamped with the same ts as the game
+  // that caused it) so a rating dot's tooltip can show who it was against.
+  function findGameByTs(games, ts) {
+    for (var i = 0; i < games.length; i++) {
+      if (games[i].ts === ts) return games[i];
+    }
+    return null;
+  }
+
+  function formatSignedDelta(delta) {
+    if (delta > 0) return "▲ +" + delta;
+    if (delta < 0) return "▼ " + delta;
+    return "— no change";
+  }
+
+  // Click-to-reveal tooltip for one rating-history dot: this player's own
+  // change from that game, plus — by cross-referencing the matching game
+  // record's opponentNames and each opponent's own rating history at the
+  // same ts (getPlayerRatingDeltaForGame) — exactly who it was against and
+  // what happened to their rating too, so it's clear who gained and lost.
+  function showRatingDotTooltip(clientX, clientY, point, game) {
+    var el = getGraphTooltipEl();
+    el.innerHTML = "";
+    var title = document.createElement("div");
+    title.className = "player-graph-tooltip-title";
+    title.textContent = formatTimestamp(point.ts, true);
+    el.appendChild(title);
+
+    var youRow = document.createElement("div");
+    youRow.className = "player-graph-tooltip-row";
+    var youName = document.createElement("span");
+    youName.className = "player-graph-tooltip-name";
+    youName.textContent = "You";
+    var youRecord = document.createElement("span");
+    youRecord.className = "player-graph-tooltip-record";
+    youRecord.textContent = formatSignedDelta(point.delta);
+    youRow.appendChild(youName);
+    youRow.appendChild(youRecord);
+    el.appendChild(youRow);
+
+    var opponentNames = game ? game.opponentNames || [] : [];
+    if (opponentNames.length === 0) {
+      var noGame = document.createElement("div");
+      noGame.className = "player-graph-tooltip-row";
+      var hint = document.createElement("span");
+      hint.className = "player-graph-tooltip-record";
+      hint.textContent = "Opponent details unavailable";
+      noGame.appendChild(hint);
+      el.appendChild(noGame);
+    } else {
+      opponentNames.forEach(function (oppName) {
+        var oppDelta = getPlayerRatingDeltaForGame(oppName, point.ts);
+        var row = document.createElement("div");
+        row.className = "player-graph-tooltip-row";
+        var name = document.createElement("span");
+        name.className = "player-graph-tooltip-name";
+        name.textContent = "vs " + oppName;
+        var record = document.createElement("span");
+        record.className = "player-graph-tooltip-record";
+        record.textContent = oppDelta === null ? "—" : formatSignedDelta(oppDelta);
+        row.appendChild(name);
+        row.appendChild(record);
+        el.appendChild(row);
+      });
+    }
+
+    el.classList.remove("hidden");
+    positionGraphTooltip(el, clientX, clientY);
   }
 
   // Draws one series as a smooth path plus a dot at every real data point.
@@ -5386,7 +5467,7 @@
       return height - ((rating - axisMin) / range) * height;
     }
     var dots = points.map(function (p) {
-      return { x: xFor(new Date(p.ts).getTime()), y: yFor(p.rating) };
+      return { x: xFor(new Date(p.ts).getTime()), y: yFor(p.rating), ts: p.ts, delta: p.delta };
     });
     var firstRating = points.length ? points[0].rating : axisMin;
     var lastRating = points.length ? points[points.length - 1].rating : axisMin;
@@ -5394,12 +5475,18 @@
     return { path: monotoneLinePath(allPts), dots: dots };
   }
 
-  function appendRatingGraphSeries(svg, points, minMs, maxMs, width, height, axisMin, axisMax) {
+  function appendRatingGraphSeries(svg, points, minMs, maxMs, width, height, axisMin, axisMax, games) {
     var geo = buildRatingSeriesGeometry(points, minMs, maxMs, width, height, axisMin, axisMax);
     var group = svgEl("g", { class: "player-graph-series" });
     group.appendChild(svgEl("path", { d: geo.path, fill: "none", class: "player-rating-graph-line" }));
     geo.dots.forEach(function (pt) {
       group.appendChild(svgEl("circle", { cx: pt.x, cy: pt.y, r: 3.2, class: "player-rating-graph-dot" }));
+      var hit = svgEl("circle", { cx: pt.x, cy: pt.y, r: 9, class: "player-graph-dot-hit" });
+      hit.addEventListener("click", function (e) {
+        e.stopPropagation();
+        showRatingDotTooltip(e.clientX, e.clientY, pt, findGameByTs(games, pt.ts));
+      });
+      group.appendChild(hit);
     });
     svg.appendChild(group);
     return group;
@@ -5408,7 +5495,7 @@
   // A small standalone "rating over time" chart, appended after the main
   // played/won/lost graph — kept separate because ratings (roughly 0-900,
   // no meaningful zero baseline) can't share a Y-axis with game counts.
-  function buildRatingGraphSection(name, minMs, maxMs, period) {
+  function buildRatingGraphSection(name, games, minMs, maxMs, period) {
     var section = document.createElement("div");
     section.className = "player-rating-graph-wrap";
 
@@ -5463,7 +5550,7 @@
       var gy = height - (g / 4) * height;
       svg.appendChild(svgEl("line", { x1: 0, x2: width, y1: gy, y2: gy, class: "player-graph-gridline" }));
     }
-    appendRatingGraphSeries(svg, pointsInWindow, minMs, maxMs, width, height, axisMin, axisMax);
+    appendRatingGraphSeries(svg, pointsInWindow, minMs, maxMs, width, height, axisMin, axisMax, games);
 
     chart.appendChild(svg);
     section.appendChild(chart);
@@ -5500,7 +5587,7 @@
       emptyHint.className = "player-graph-empty";
       emptyHint.textContent = "No games in this period yet.";
       wrap.appendChild(emptyHint);
-      wrap.appendChild(buildRatingGraphSection(stats.name, minMs, maxMs, period));
+      wrap.appendChild(buildRatingGraphSection(stats.name, stats.games, minMs, maxMs, period));
       return wrap;
     }
 
@@ -5719,7 +5806,7 @@
       legend.appendChild(row);
     });
     wrap.appendChild(legend);
-    wrap.appendChild(buildRatingGraphSection(stats.name, minMs, maxMs, period));
+    wrap.appendChild(buildRatingGraphSection(stats.name, stats.games, minMs, maxMs, period));
 
     return wrap;
   }
