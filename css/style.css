@@ -1871,6 +1871,13 @@ input[type="number"] {
   padding: 8px 12px;
 }
 
+.player-page-switcher {
+  flex: 0 1 auto;
+  max-width: 40vw;
+  font-size: 0.85rem;
+  padding: 8px 10px;
+}
+
 /* Pinned to the upper-left corner of the screen, and stays there as the
    page scrolls — the browser's own back button (see popstate handling in
    app.js) does exactly what tapping this does. */
@@ -2174,6 +2181,27 @@ input[type="number"] {
 .all-player-name:hover,
 .all-player-name:focus-visible {
   text-decoration-color: var(--accent);
+}
+
+.all-player-name-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.all-player-view-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.all-player-view-btn svg {
+  display: block;
 }
 
 .all-player-summary {

@@ -441,19 +441,6 @@
     });
   }
 
-  function playVictorySound() {
-    var ctx = getAudioCtx();
-    var now = ctx.currentTime;
-    var run = [523.25, 587.33, 659.25, 698.46, 783.99, 880.0];
-    run.forEach(function (freq, i) {
-      tone(freq, now + i * 0.09, 0.16, "triangle", 0.2);
-    });
-    var chordStart = now + run.length * 0.09 + 0.05;
-    [523.25, 659.25, 783.99, 1046.5].forEach(function (freq) {
-      tone(freq, chordStart, 0.7, "triangle", 0.18);
-    });
-  }
-
   function playOnHillSound() {
     var ctx = getAudioCtx();
     var now = ctx.currentTime;
@@ -481,13 +468,14 @@
     return impulse;
   }
 
-  // Winning a whole bracket Tournament (becoming champion, not just
-  // winning one rack) gets its own fanfare: the famous opening phrase of
-  // Beethoven's 9th Symphony ("Ode to Joy"), played low and drenched in
-  // reverb for a deep, triumphant, slightly ominous feel — deliberately
-  // different from playWinSound's bright single-rack fanfare. Every note
-  // is scheduled a full second after this is called (ctx.currentTime + 1)
-  // so it lands just after the champion banner appears, not on top of it.
+  // Winning a whole Tournament — a bracket Tournament's champion, or a
+  // main-scoreboard "race to N wins" session — gets its own fanfare: the
+  // famous opening phrase of Beethoven's 9th Symphony ("Ode to Joy"),
+  // played low and drenched in reverb for a deep, triumphant, slightly
+  // ominous feel — deliberately different from playWinSound's bright
+  // single-rack fanfare. Every note is scheduled a full second after this
+  // is called (ctx.currentTime + 1) so it lands just after the champion
+  // banner/milestone overlay appears, not on top of it.
   function playTournamentChampionSound() {
     var ctx = getAudioCtx();
     var now = ctx.currentTime;
@@ -530,14 +518,15 @@
       sub.stop(t + duration + 0.1);
     }
 
-    // C3-rooted "Ode to Joy" opening phrase: mi mi fa sol / sol fa mi re
-    // / do do re mi — the twelve notes everyone recognizes instantly.
+    // C3-rooted "Ode to Joy" opening phrase, 15 notes (its full first
+    // 4-bar line): mi mi fa sol / sol fa mi re / do do re mi / mi re re —
+    // instantly recognizable regardless of register or tempo.
     var freqs = { C: 130.81, D: 146.83, E: 164.81, F: 174.61, G: 196.0 };
-    var melody = ["E", "E", "F", "G", "G", "F", "E", "D", "C", "C", "D", "E"];
-    var step = 0.3;
+    var melody = ["E", "E", "F", "G", "G", "F", "E", "D", "C", "C", "D", "E", "E", "D", "D"];
+    var step = 0.24;
     melody.forEach(function (deg, i) {
       var isLast = i === melody.length - 1;
-      lowReverbTone(freqs[deg], start + i * step, isLast ? 1.1 : 0.26, isLast ? 0.24 : 0.2);
+      lowReverbTone(freqs[deg], start + i * step, isLast ? 1.0 : 0.21, isLast ? 0.24 : 0.2);
     });
   }
 
@@ -675,6 +664,7 @@
   var playerPageSynopsisBody = document.getElementById("player-page-synopsis-body");
   var playerPageH2hList = document.getElementById("player-page-h2h-list");
   var btnReturnToGlobalStats = document.getElementById("btn-return-to-global-stats");
+  var playerPageSwitcher = document.getElementById("player-page-switcher");
 
   var btnOpenAllPlayers = document.getElementById("btn-open-all-players");
   var allPlayersPageView = document.getElementById("view-all-players-page");
@@ -2025,7 +2015,7 @@
       state.currentGame.target !== previousTarget || state.currentGame.unit !== previousUnit;
     showToast(summary);
     if (milestoneNames) {
-      celebrateTournamentWin(milestoneNames, milestoneCount);
+      celebrateTournamentWin(milestoneNames, milestoneCount, winnerNames);
     } else if (onHillNames) {
       announceOnHill(onHillNames);
     } else if (gameTypeChanged) {
@@ -2084,7 +2074,7 @@
     gameChangeOverlay.classList.add("hidden");
   }
 
-  function celebrateTournamentWin(names, count) {
+  function celebrateTournamentWin(names, count, winnerNames) {
     var target = state.raceToWinsTarget;
 
     // A win one game earlier can leave the on-hill overlay open (it has no
@@ -2121,7 +2111,8 @@
     }
 
     milestoneOverlay.classList.remove("hidden");
-    playVictorySound();
+    recordSessionRaceCompletion(winnerNames, playerNames);
+    playTournamentChampionSound();
   }
 
   function closeMilestone() {
@@ -4636,6 +4627,25 @@
 
   history.replaceState({ screen: "main" }, "", location.pathname + location.search);
 
+  // Fills the Player Stats page's player-switcher dropdown with every
+  // known player name (alphabetical) and selects the one currently being
+  // viewed, so switching players is a single dropdown pick instead of a
+  // trip back to All Stats. Re-run on every openPlayerStatsPage call so a
+  // player added since the page last opened shows up too.
+  function populatePlayerPageSwitcher(currentName) {
+    var names = getAllKnownPlayerNames().sort(function (a, b) {
+      return a.localeCompare(b);
+    });
+    playerPageSwitcher.innerHTML = "";
+    names.forEach(function (n) {
+      var opt = document.createElement("option");
+      opt.value = n;
+      opt.textContent = n;
+      playerPageSwitcher.appendChild(opt);
+    });
+    playerPageSwitcher.value = currentName;
+  }
+
   // name: the player's name — works whether or not they're currently on
   // the roster, since saved stats are keyed by name, not id. skipHistory
   // is true only when called from the popstate handler above (restoring
@@ -4648,6 +4658,7 @@
     currentStatsSessions = null;
     playerPageName.textContent = name;
     playerPageName.appendChild(buildRatingBadge(name));
+    populatePlayerPageSwitcher(name);
     renderLiveSessionForPlayer(name);
     playerPageHistoryList.innerHTML = "";
     var loading = document.createElement("li");
@@ -5662,10 +5673,24 @@
     name.addEventListener("click", function () {
       openPlayerStatsPage(stats.name);
     });
+    var viewBtn = document.createElement("button");
+    viewBtn.type = "button";
+    viewBtn.className = "btn btn-ghost all-player-view-btn";
+    viewBtn.setAttribute("aria-label", "View " + stats.name + "'s single-player stats");
+    viewBtn.innerHTML =
+      '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" ' +
+      'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
+    viewBtn.addEventListener("click", function () {
+      openPlayerStatsPage(stats.name);
+    });
+    var nameGroup = document.createElement("div");
+    nameGroup.className = "all-player-name-group";
+    nameGroup.appendChild(name);
+    nameGroup.appendChild(viewBtn);
     var summary = document.createElement("span");
     summary.className = "all-player-summary";
     summary.textContent = stats.winPct === null ? "No games yet" : Math.round(stats.winPct * 100) + "% win rate";
-    top.appendChild(name);
+    top.appendChild(nameGroup);
     top.appendChild(summary);
     li.appendChild(top);
 
@@ -5892,30 +5917,55 @@
   var TOURNAMENT_RESULTS = loadTournamentResultsFromStorage();
 
   // Called once, right when a bracket's champion is first decided — records
-  // a win for the champion and a loss for every other entrant.
+  // a win for the champion and a loss for every other entrant. Skipped
+  // under noStatsMode, same as every other persistence path.
   function recordTournamentCompletion(t) {
+    if (noStatsMode) return;
     var ts = new Date().toISOString();
-    TOURNAMENT_RESULTS.unshift({ ts: ts, champion: t.champion, format: t.format, players: t.players.slice() });
+    TOURNAMENT_RESULTS.unshift({
+      ts: ts,
+      championNames: [t.champion],
+      format: t.format,
+      players: t.players.slice()
+    });
     if (TOURNAMENT_RESULTS.length > 200) TOURNAMENT_RESULTS.length = 200;
     saveTournamentResultsToStorage(TOURNAMENT_RESULTS);
   }
 
-  // One pseudo-"game" per completed tournament this player entered, shaped
-  // enough like a real game (ts/result/opponentNames/gameLabel) to reuse
-  // filterGamesByPeriod and the graph's bucketing helpers, but plotted as
-  // its own series in buildPlayerGraph rather than mixed into single-game
-  // counts.
+  // A "race to N wins" main-scoreboard session counts as a Tournament too
+  // (per how this app's players use the term) — called once, right when
+  // that milestone is reached, alongside recordTournamentCompletion's
+  // bracket-Tournament case. winnerNames can hold more than one name for
+  // a team win; everyone else in participantNames counts as a loss.
+  function recordSessionRaceCompletion(winnerNames, participantNames) {
+    if (noStatsMode) return;
+    var ts = new Date().toISOString();
+    TOURNAMENT_RESULTS.unshift({
+      ts: ts,
+      championNames: winnerNames.slice(),
+      format: "session-race",
+      players: participantNames.slice()
+    });
+    if (TOURNAMENT_RESULTS.length > 200) TOURNAMENT_RESULTS.length = 200;
+    saveTournamentResultsToStorage(TOURNAMENT_RESULTS);
+  }
+
+  // One pseudo-"game" per completed Tournament (bracket or race-to-N
+  // session) this player entered, shaped enough like a real game (ts/
+  // result/opponentNames/gameLabel) to reuse filterGamesByPeriod and the
+  // graph's bucketing helpers, but plotted as its own series in
+  // buildPlayerGraph rather than mixed into single-game counts.
   function tournamentGamesForPlayerName(name) {
     var games = [];
     TOURNAMENT_RESULTS.forEach(function (r) {
       if ((r.players || []).indexOf(name) === -1) return;
       games.push({
         ts: r.ts,
-        result: r.champion === name ? "won" : "lost",
+        result: (r.championNames || []).indexOf(name) !== -1 ? "won" : "lost",
         opponentNames: r.players.filter(function (n) {
           return n !== name;
         }),
-        gameLabel: "Tournament"
+        gameLabel: r.format === "session-race" ? "Race-to Session" : "Tournament"
       });
     });
     return games;
@@ -7132,6 +7182,11 @@
     closePlayerStatsPage();
   });
   btnReturnToGlobalStats.addEventListener("click", returnToGlobalStats);
+  playerPageSwitcher.addEventListener("change", function () {
+    if (playerPageSwitcher.value && playerPageSwitcher.value !== currentStatsPlayerName) {
+      openPlayerStatsPage(playerPageSwitcher.value);
+    }
+  });
 
   btnOpenAllPlayers.addEventListener("click", function () {
     openAllPlayersPage();
