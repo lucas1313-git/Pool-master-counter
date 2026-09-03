@@ -952,6 +952,7 @@
   var btnRatingEditSave = document.getElementById("btn-rating-edit-save");
   var btnRatingEditCancel = document.getElementById("btn-rating-edit-cancel");
   var btnResetAllRatings = document.getElementById("btn-reset-all-ratings");
+  var btnResetSessionTournament = document.getElementById("btn-reset-session-tournament");
   var ratingEditTargetName = null;
 
   function populateGameTypeSelects() {
@@ -2515,19 +2516,52 @@
     renderAll();
   }
 
+  // True while the in-flight reset (either the instant confirm() below or
+  // the save-session overlay's Save/Skip buttons) should also end the
+  // active tournament once it goes through - set by
+  // resetSessionAndTournament(), left false for the plain "New Game" button
+  // so that one never touches an in-progress tournament (see request: only
+  // an explicit reset or winning the tourney should end it).
+  var pendingResetEndsTournament = false;
+
   function resetAllStats() {
+    performSessionReset(false);
+  }
+
+  function resetSessionAndTournament() {
+    performSessionReset(true);
+  }
+
+  function performSessionReset(alsoEndTournament) {
+    pendingResetEndsTournament = alsoEndTournament;
+    var warnsAboutTournament = alsoEndTournament && !!TOURNAMENT;
     if (state.gameHistory.length === 0) {
-      if (!confirm(T("confirm.startNewSession"))) return;
+      var msg = warnsAboutTournament ? T("confirm.resetSessionAndTournament") : T("confirm.startNewSession");
+      if (!confirm(msg)) {
+        pendingResetEndsTournament = false;
+        return;
+      }
       startNewSession(false);
+      if (pendingResetEndsTournament) endTournamentSilently();
+      pendingResetEndsTournament = false;
       return;
     }
     var count = state.gameHistory.length;
-    saveSessionMessage.textContent = T(count === 1 ? "saveSession.messageOne" : "saveSession.messageMany", { count: count });
+    var message = T(count === 1 ? "saveSession.messageOne" : "saveSession.messageMany", { count: count });
+    if (warnsAboutTournament) message += " " + T("confirm.alsoEndsTournamentNote");
+    saveSessionMessage.textContent = message;
     saveSessionOverlay.classList.remove("hidden");
+  }
+
+  function endTournamentSilently() {
+    TOURNAMENT = null;
+    saveTournamentToStorage(null);
+    renderTournamentPage();
   }
 
   function closeSaveSessionPopup() {
     saveSessionOverlay.classList.add("hidden");
+    pendingResetEndsTournament = false;
   }
 
   function startNewSession(saveRoster) {
@@ -7849,6 +7883,7 @@
   btnResetAllPlayerStats.addEventListener("click", resetAllPlayerStats);
   btnResetRosterLists.addEventListener("click", resetAllRosterLists);
   btnResetAllRatings.addEventListener("click", resetAllPlayersOfficialRating);
+  btnResetSessionTournament.addEventListener("click", resetSessionAndTournament);
 
   btnRatingEditSave.addEventListener("click", saveRatingEditPopup);
   btnRatingEditCancel.addEventListener("click", closeRatingEditPopup);
@@ -8023,14 +8058,18 @@
   });
 
   btnSaveSessionSave.addEventListener("click", function () {
+    var endTournament = pendingResetEndsTournament;
     exportSession();
     exportAllPlayerStats();
     closeSaveSessionPopup();
     startNewSession(true);
+    if (endTournament) endTournamentSilently();
   });
   btnSaveSessionSkip.addEventListener("click", function () {
+    var endTournament = pendingResetEndsTournament;
     closeSaveSessionPopup();
     startNewSession(false);
+    if (endTournament) endTournamentSilently();
   });
   btnSaveSessionCancel.addEventListener("click", closeSaveSessionPopup);
   saveSessionOverlay.addEventListener("click", function (e) {
