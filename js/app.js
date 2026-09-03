@@ -27,11 +27,20 @@
   // "No Statistic will be recorded" mode — a purely in-memory session with
   // nothing written to localStorage: no state, no PLAYER_STATS, no
   // PLAYER_RATINGS. Never persisted itself (always starts off on reload),
-  // toggled from the Current Game panel checkbox or preset by the wizard's
-  // "Only a temporary counter" button. The live scoreboard/session
-  // win-tracking/Recent Games still work normally in memory for the
-  // current tab — only the underlying save calls become no-ops.
+  // toggled from the scoreboard checkbox or preset by the wizard's "Only a
+  // temporary counter" checkbox. The live scoreboard/session win-tracking/
+  // Recent Games still work normally in memory for the current tab — only
+  // the underlying save calls become no-ops.
   var noStatsMode = false;
+
+  // Quick Counter mode — the scoreboard becomes a bare point tally: no
+  // game type, no target, no rotation, no win/loss detection. Entered via
+  // the wizard's "Start Game Now" button (Step 1, only shown once No
+  // Statistic is checked). Player names are edited inline and players can
+  // be added/removed right from the scoreboard cards. Always implies
+  // noStatsMode, since there's nothing meaningful to save in this mode
+  // anyway (no completed games, ever).
+  var quickCounterMode = false;
 
   // Self-healing pass for names saved before capitalization was enforced
   // everywhere (or from a device/import that predates it): fixes casing in
@@ -411,6 +420,7 @@
   var btnWizardNext = document.getElementById("wizard-btn-next");
   var btnWizardStart = document.getElementById("wizard-btn-start");
   var wizardTempCounterCheckbox = document.getElementById("wizard-temp-counter-checkbox");
+  var btnWizardStartQuickCounter = document.getElementById("btn-wizard-start-quick-counter");
 
   var btnToggleFocus = document.getElementById("btn-toggle-focus");
   var focusPlayersWrap = document.getElementById("focus-players-wrap");
@@ -1044,6 +1054,124 @@
     return controls;
   }
 
+  // Commits an inline rename from a Quick Counter name field. Routes
+  // through the same resolvePlayerName/duplicate-check path as adding a
+  // player normally, so casing and uniqueness rules stay identical.
+  function renamePlayerInline(id, newName) {
+    var player = getPlayer(id);
+    if (!player) return;
+    var resolved = resolvePlayerName(newName);
+    if (!resolved || resolved === player.name) {
+      renderAll();
+      return;
+    }
+    if (normalizeNameKey(resolved) !== normalizeNameKey(player.name) && isDuplicatePlayerName(resolved)) {
+      showToast("\"" + resolved + "\" is already in your roster.");
+      renderAll();
+      return;
+    }
+    player.name = resolved;
+    saveState();
+    renderAll();
+  }
+
+  // Quick Counter's version of a player card: editable name, a plain
+  // running tally (no target, no win detection — see adjustScore), and a
+  // dedicated remove-this-player control distinct from the −/+ tally
+  // buttons. Reuses buildBallControls since adjustScore already branches
+  // on quickCounterMode.
+  function buildQuickCounterPanel(player) {
+    var panel = document.createElement("div");
+    panel.className = "player-panel quick-counter-panel";
+
+    var nameRow = document.createElement("div");
+    nameRow.className = "quick-counter-name-row";
+
+    var nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.className = "quick-counter-name-input";
+    nameInput.value = player.name;
+    nameInput.autocomplete = "off";
+    nameInput.setAttribute("aria-label", "Rename " + player.name);
+    nameInput.addEventListener("change", function () {
+      renamePlayerInline(player.id, nameInput.value);
+    });
+    nameInput.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        nameInput.blur();
+      }
+    });
+    nameRow.appendChild(nameInput);
+
+    var removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "quick-counter-remove-player";
+    removeBtn.textContent = "−";
+    removeBtn.setAttribute("aria-label", "Remove " + player.name);
+    removeBtn.addEventListener("click", function () {
+      removePlayer(player.id);
+    });
+    nameRow.appendChild(removeBtn);
+
+    panel.appendChild(nameRow);
+
+    var value = document.createElement("div");
+    value.className = "stat-value";
+    value.textContent = player.balls || 0;
+    panel.appendChild(value);
+
+    panel.appendChild(buildBallControls(player, false));
+
+    return panel;
+  }
+
+  // The "+" side of Quick Counter: a name field plus an Add button, always
+  // rendered at the end of the scoreboard grid so a new player can be
+  // dropped in without leaving the focus view. Added players start
+  // "Playing" immediately — there's no separate roster panel in this mode.
+  function buildQuickCounterAddRow() {
+    var row = document.createElement("div");
+    row.className = "quick-counter-add-row";
+
+    var input = document.createElement("input");
+    input.type = "text";
+    input.className = "quick-counter-add-input";
+    input.placeholder = "Add player name";
+    input.autocomplete = "off";
+
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn btn-primary quick-counter-add-btn";
+    btn.textContent = "+ Add Player";
+
+    function submit() {
+      var name = input.value.trim();
+      if (!name) return;
+      if (isDuplicatePlayerName(name)) {
+        showToast("\"" + capitalizeName(name) + "\" is already in your roster.");
+        return;
+      }
+      var player = addPlayer(name);
+      if (!player) return;
+      player.playing = true;
+      saveState();
+      renderAll();
+    }
+
+    btn.addEventListener("click", submit);
+    input.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        submit();
+      }
+    });
+
+    row.appendChild(input);
+    row.appendChild(btn);
+    return row;
+  }
+
   function buildIndividualPanel(player) {
     var panel = document.createElement("div");
     panel.className = "player-panel";
@@ -1154,9 +1282,21 @@
   }
 
   function renderScoreboard() {
+    var active = activePlayers();
+
+    if (quickCounterMode) {
+      nowPlayingBanner.innerHTML = "";
+      scoreboard.innerHTML = "";
+      scoreboard.className = "scoreboard scoreboard-quick";
+      active.forEach(function (p) {
+        scoreboard.appendChild(buildQuickCounterPanel(p));
+      });
+      scoreboard.appendChild(buildQuickCounterAddRow());
+      return;
+    }
+
     renderNowPlayingBanner();
     scoreboard.innerHTML = "";
-    var active = activePlayers();
 
     if (active.length === 0) {
       scoreboard.className = "scoreboard";
@@ -1647,6 +1787,15 @@
   function adjustScore(playerId, delta) {
     var player = getPlayer(playerId);
     if (!player || !player.playing) return;
+
+    // Quick Counter: just tally, never check a target or credit a win.
+    if (quickCounterMode) {
+      player.balls = Math.max(0, (player.balls || 0) + delta);
+      saveState();
+      renderAll();
+      return;
+    }
+
     var allowNegative = state.currentGame.unit !== "rack";
     var next = (player.balls || 0) + delta;
     if (next < 0 && !allowNegative) next = 0;
@@ -3444,6 +3593,7 @@
     wizardRaceToRow.classList.add("hidden");
     wizardRaceToInput.value = state.raceToWinsTarget || 5;
     wizardTempCounterCheckbox.checked = false;
+    btnWizardStartQuickCounter.classList.add("hidden");
     wizardGameTypeSelect.value = state.currentGame.gameType;
     syncWizardRotationEnabledRadios();
     wizardRotationEveryInput.value = state.rotation.every || 1;
@@ -3496,6 +3646,7 @@
   }
 
   function finalizeWizardAndStart() {
+    quickCounterMode = false;
     if (wizardFormat === "tournament") {
       closeWizard();
       openTournamentPage();
@@ -3530,18 +3681,21 @@
     showToast("Let's play! 🎱");
   }
 
-  // Skips the rest of the wizard entirely — just an individual game with
-  // noStatsMode on, so nothing about it gets saved (see saveState /
-  // savePlayerStatsToStorage / saveRatingsToStorage / saveRostersToStorage
-  // / saveRotationsToStorage guards). Whoever's already on the roster can
-  // play immediately; more players can still be added from the main page
-  // like any other game.
-  function startTemporaryCounter() {
+  // Skips the rest of the wizard entirely and drops straight into the
+  // bare-bones Quick Counter scoreboard — no game type, no target, no
+  // rotation, no win/loss detection, just a per-player tally that can be
+  // renamed/added/removed right from the cards. Implies noStatsMode, since
+  // saveState/savePlayerStatsToStorage/saveRatingsToStorage/
+  // saveRostersToStorage/saveRotationsToStorage guards make that a no-op
+  // anyway and there's never a "completed game" to record here.
+  function startQuickCounter() {
     noStatsMode = true;
     noStatsCheckbox.checked = true;
-    wizardFormat = "individual";
-    finalizeWizardAndStart();
-    showToast("Temporary counter — no stats or data will be saved. 🎱");
+    quickCounterMode = true;
+    closeWizard();
+    setFocusMode(true);
+    renderAll();
+    showToast("Quick counter — add players and tap +/−. Nothing is saved. 🎱");
   }
 
   // ---------------------------------------------------------------------
@@ -6110,8 +6264,9 @@
   btnWizardNext.addEventListener("click", wizardNext);
   btnWizardStart.addEventListener("click", finalizeWizardAndStart);
   wizardTempCounterCheckbox.addEventListener("change", function () {
-    if (wizardTempCounterCheckbox.checked) startTemporaryCounter();
+    btnWizardStartQuickCounter.classList.toggle("hidden", !wizardTempCounterCheckbox.checked);
   });
+  btnWizardStartQuickCounter.addEventListener("click", startQuickCounter);
 
   Array.prototype.forEach.call(wizardFormatRadios, function (radio) {
     radio.addEventListener("change", function () {

@@ -754,6 +754,70 @@ input[type="number"] {
   border: 1px solid var(--border);
 }
 
+/* ---------- Quick Counter mode ---------- */
+
+.quick-counter-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.quick-counter-name-input {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  font-size: 1.05rem;
+  font-weight: 700;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 8px;
+  color: var(--text);
+}
+
+.quick-counter-name-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.quick-counter-remove-player {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--danger);
+  background: rgba(200, 60, 60, 0.15);
+  color: var(--danger);
+  font-size: 1.1rem;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.quick-counter-add-row {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 10px;
+  background: var(--bg-card);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+
+.quick-counter-add-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.quick-counter-add-btn {
+  flex-shrink: 0;
+}
+
 /* ---------- Team scoreboard ---------- */
 
 .team-panel {
@@ -1391,6 +1455,10 @@ input[type="number"] {
 
 .wizard-temp-counter-checkbox-label input {
   flex-shrink: 0;
+}
+
+.wizard-quick-counter-start-btn {
+  width: 100%;
 }
 
 .wizard-player-chips {
