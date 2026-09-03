@@ -2092,22 +2092,19 @@
     return player;
   }
 
+  // Just takes them off today's active list — their saved career stats
+  // and game history stay on this device and still show up on the All
+  // Players page, so there's nothing here worth confirming. Doesn't touch
+  // the saved player lists (see saveRosterSnapshotIfNew) - that only
+  // happens when a new game/session actually starts, not on every roster
+  // edit.
   function removePlayer(id) {
-    // No games recorded yet this session means nothing's at stake — skip
-    // the confirmation and just remove them.
-    if (
-      state.gameHistory.length > 0 &&
-      !confirm(T("confirm.removePlayer"))
-    ) {
-      return;
-    }
     state.players = state.players.filter(function (p) {
       return p.id !== id;
     });
     delete state.playerWins[id];
     delete state.teamMvpWins[id];
     saveState();
-    saveRosterSnapshotIfNew(true);
     validateNewPlayerNameInput();
     renderAll();
   }
@@ -2246,7 +2243,6 @@
       saveRatingsToStorage(PLAYER_RATINGS);
     }
     state.gamesPlayedCount += 1;
-    saveRosterSnapshotIfNew(true);
     saveRotationSnapshotIfNew(true);
     var previousGameType = state.currentGame.gameType;
     var previousTarget = state.currentGame.target;
@@ -4057,7 +4053,6 @@
         added += 1;
       }
     });
-    saveRosterSnapshotIfNew(true);
     return added;
   }
 
@@ -7886,7 +7881,6 @@
     newPlayerName.value = "";
     newPlayerRatingInput.value = "";
     validateNewPlayerNameInput();
-    saveRosterSnapshotIfNew(true);
     renderAll();
     if (alreadyRated) showToast(player.name + " already has a tracked rating — starting rating not applied.");
   });
@@ -8100,7 +8094,6 @@
     wizardNewPlayerName.value = "";
     wizardNewPlayerRatingInput.value = "";
     validateWizardNewPlayerNameInput();
-    saveRosterSnapshotIfNew(true);
     renderAll();
     if (alreadyRated) showToast(player.name + " already has a tracked rating — starting rating not applied.");
   });

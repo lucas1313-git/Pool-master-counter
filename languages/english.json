@@ -64,7 +64,6 @@
   "confirm.areYouSure": "Are you sure? This cannot be undone.",
   "confirm.importBackupFresh": "Import this backup? This device has no players set up yet, so the backup's current game and roster will be loaded as-is.",
   "confirm.importBackupMerge": "Merge this backup into your existing data? Player stats and saved rosters will be combined — games already known on both sides (same player, same time) won't be counted twice. Your current in-progress game stays as-is; any new players from the backup are added to your roster.",
-  "confirm.removePlayer": "Remove this player from the current roster? This only takes them off today's active list — their saved career stats and game history stay on this device and will still show up on the All Players page.",
   "confirm.resetAllPlayerStats": "This clears EVERY player's saved stat history on this device — all sessions, for all players, not just the current live session. A backup file of all your data will be downloaded first, and can be restored later from Import Data. This cannot be undone. Continue?",
   "confirm.resetAllRatingsExplain": "This will reset every player currently in your roster to the default starting rating ({{rating}}) on this app's FargoRate-inspired Elo scale — the same neutral starting point used by USA Pool League handicap systems. Continue?",
   "confirm.resetGame": "Reset the current game's score to zero? (No win will be credited.)",
