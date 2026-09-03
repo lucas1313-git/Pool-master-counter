@@ -1,11 +1,11 @@
 """Players panel: adjusting one player's rating by hand (with its
-warning popup) and resetting every roster player's rating back to the
-default starting value."""
+warning popup), resetting every roster player's rating back to the
+default starting value, and removing a player from the roster."""
 
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 
-from helpers import add_player, assert_no_console_errors, wait
+from helpers import add_player, assert_no_console_errors, click_plus, dismiss_gamewin_overlay, wait
 
 
 def _roster_row(driver, name):
@@ -80,4 +80,49 @@ def test_reset_all_players_official_rating_resets_roster_to_default(app):
 
     wait(app).until(lambda d: _rating_badge_value(d, "Alice") == "400")
     assert _rating_badge_value(app, "Bob") == "400"
+    assert_no_console_errors(app)
+
+
+def test_removing_a_player_does_not_prompt_for_confirmation(app):
+    """Removing a player used to ask for confirmation once a game had
+    been played this session - it's a low-stakes action (their saved
+    stats/history aren't touched), so it's a plain, silent removal now.
+    The app fixture already stubs window.confirm to always return true,
+    which would hide a lingering confirm() call rather than catch it, so
+    this wraps that stub with a call counter instead."""
+    add_player(app, "Alice")
+    add_player(app, "Bob")
+    click_plus(app, "Alice")
+    dismiss_gamewin_overlay(app)
+
+    app.execute_script(
+        "window.__confirmCalls = 0;"
+        "var stub = window.confirm;"
+        "window.confirm = function () { window.__confirmCalls++; return stub(); };"
+    )
+
+    _roster_row(app, "Bob").find_element(By.CSS_SELECTOR, ".roster-remove").click()
+
+    names = [el.text for el in app.find_elements(By.CSS_SELECTOR, "#roster-list .roster-name")]
+    assert "Bob" not in names
+    assert app.execute_script("return window.__confirmCalls;") == 0
+    assert_no_console_errors(app)
+
+
+def test_adding_and_removing_players_does_not_save_a_new_roster_list(app):
+    """Saved player lists (and the file download that comes with saving a
+    new one) are only meant to happen when a new game/session actually
+    starts, not on every roster edit."""
+
+    def saved_roster_count():
+        return app.execute_script(
+            "return JSON.parse(localStorage.getItem('poolMasterCounter.rosters.v1') || '[]').length;"
+        )
+
+    before = saved_roster_count()
+    add_player(app, "Alice")
+    add_player(app, "Bob")
+    _roster_row(app, "Bob").find_element(By.CSS_SELECTOR, ".roster-remove").click()
+
+    assert saved_roster_count() == before
     assert_no_console_errors(app)
