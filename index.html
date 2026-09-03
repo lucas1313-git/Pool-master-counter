@@ -177,7 +177,8 @@
     <p class="panel-summary" id="players-panel-summary"></p>
     <div class="panel-body" id="players-panel-body">
       <div class="row">
-        <button type="button" id="btn-open-all-players" class="btn btn-ghost" data-i18n="header.allStats">📊 All Players Stats</button>
+        <button type="button" id="btn-reset-all-ratings" class="btn btn-danger" data-i18n="players.resetAllRatings">⚠️ Reset All Players' Official Rating</button>
+        <button type="button" id="btn-open-all-players" class="btn btn-ghost" data-i18n="header.allStats">📊 View All Players Stats</button>
       </div>
       <p id="new-player-name-requirement" class="new-player-name-requirement hidden"></p>
       <form id="add-player-form" class="row">
@@ -197,9 +198,6 @@
       <div class="row mode-row">
         <label><input type="radio" name="game-mode" value="individual" checked> <span data-i18n="gameSetup.individual">Individual</span></label>
         <label><input type="radio" name="game-mode" value="teams"> <span data-i18n="gameSetup.teams">Teams</span></label>
-      </div>
-      <div class="row">
-        <button type="button" id="btn-reset-all-ratings" class="btn btn-danger" data-i18n="players.resetAllRatings">Reset All Players' Official Rating</button>
       </div>
       <ul id="roster-list" class="roster-list"></ul>
     </div>
