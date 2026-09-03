@@ -1276,8 +1276,19 @@
       });
     }
 
+    var resetBtn = document.createElement("button");
+    resetBtn.type = "button";
+    resetBtn.className = "btn btn-ghost quick-counter-reset-btn";
+    resetBtn.textContent = "↺ Reset All to 0";
+    resetBtn.addEventListener("click", function () {
+      resetGameBalls();
+      saveState();
+      renderAll();
+    });
+
     row.appendChild(select);
     row.appendChild(btn);
+    row.appendChild(resetBtn);
     return row;
   }
 

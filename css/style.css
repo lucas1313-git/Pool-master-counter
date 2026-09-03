@@ -821,16 +821,23 @@ input[type="number"] {
 .quick-counter-load-row {
   grid-column: 1 / -1;
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
 .quick-counter-load-select {
   flex: 1;
-  min-width: 0;
+  min-width: 140px;
 }
 
 .quick-counter-load-btn {
   flex-shrink: 0;
+}
+
+.quick-counter-reset-btn {
+  flex-shrink: 0;
+  border-color: var(--danger);
+  color: var(--danger);
 }
 
 /* ---------- Team scoreboard ---------- */
