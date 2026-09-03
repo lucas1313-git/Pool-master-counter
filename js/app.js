@@ -107,6 +107,7 @@
       players: [],
       playerWins: {},
       teamWins: {},
+      teamMvpWins: {},
       raceToWinsTarget: 5,
       currentGame: { gameType: "8ball", target: 1, unit: "rack", mode: "individual", startedAt: new Date().toISOString() },
       gameHistory: [],
@@ -176,6 +177,7 @@
           });
           if (!parsed.playerWins) parsed.playerWins = {};
           if (!parsed.teamWins) parsed.teamWins = {};
+          if (!parsed.teamMvpWins) parsed.teamMvpWins = {};
           if (typeof parsed.raceToWinsTarget !== "number") parsed.raceToWinsTarget = 5;
           if (!parsed.currentGame) parsed.currentGame = { gameType: "8ball", target: 1, mode: "individual" };
           if (!parsed.currentGame.startedAt) parsed.currentGame.startedAt = new Date().toISOString();
@@ -1758,8 +1760,11 @@
     name.appendChild(buildPlayerLinkIcon(player.name));
     card.appendChild(name);
 
-    var wins = state.playerWins[player.id] || 0;
-    card.appendChild(buildStatMini(T("scoreboard.tourneyWin"), wins, wins >= state.raceToWinsTarget, "stat-mini-tourney"));
+    // Not the team's win count (that's the team panel's own badge) - this
+    // tracks how many times THIS member specifically potted the winning
+    // ball for the team (see the mvp selection in creditWin).
+    var mvpWins = state.teamMvpWins[player.id] || 0;
+    card.appendChild(buildStatMini(T("scoreboard.tourneyWin"), mvpWins, mvpWins >= state.raceToWinsTarget, "stat-mini-tourney"));
 
     var value = document.createElement("div");
     value.className = "stat-value small";
@@ -1781,19 +1786,31 @@
     panel.appendChild(name);
 
     var wins = state.teamWins[teamComboKey(teamId)] || 0;
-    panel.appendChild(buildStatMini(T("scoreboard.pairedSessionWin"), wins, wins >= state.raceToWinsTarget));
 
-    var block = document.createElement("div");
-    block.className = "stat-block";
-    var label = document.createElement("div");
-    label.className = "stat-label";
-    label.textContent = T("scoreboard.gameTargetLabel", { game: GAME_TYPES[state.currentGame.gameType].label, target: state.currentGame.target });
-    var value = document.createElement("div");
-    value.className = "stat-value";
-    value.textContent = sumTeamBalls(teamId);
-    block.appendChild(label);
-    block.appendChild(value);
-    panel.appendChild(block);
+    // A single-rack game (the common case - standard 8-Ball etc.) has no
+    // meaningful "current rack progress" number to show (it's just 0 until
+    // the rack is won, then resets) - show the session win count big and
+    // prominent instead. Anything else (multiple racks to win one game, or
+    // a balls/points game) still shows the team's current-game total.
+    var isSingleRackGame = state.currentGame.unit === "rack" && state.currentGame.target === 1;
+
+    if (isSingleRackGame) {
+      panel.appendChild(buildStatMini(T("scoreboard.pairedSessionWinScore"), wins, wins >= state.raceToWinsTarget, "stat-mini-team-big"));
+    } else {
+      panel.appendChild(buildStatMini(T("scoreboard.pairedSessionWin"), wins, wins >= state.raceToWinsTarget));
+
+      var block = document.createElement("div");
+      block.className = "stat-block";
+      var label = document.createElement("div");
+      label.className = "stat-label";
+      label.textContent = T("scoreboard.gameTargetLabel", { game: GAME_TYPES[state.currentGame.gameType].label, target: state.currentGame.target });
+      var value = document.createElement("div");
+      value.className = "stat-value";
+      value.textContent = sumTeamBalls(teamId);
+      block.appendChild(label);
+      block.appendChild(value);
+      panel.appendChild(block);
+    }
 
     var memberWrap = document.createElement("div");
     memberWrap.className = "team-members";
@@ -2070,6 +2087,7 @@
       return p.id !== id;
     });
     delete state.playerWins[id];
+    delete state.teamMvpWins[id];
     saveState();
     saveRosterSnapshotIfNew(true);
     validateNewPlayerNameInput();
@@ -2145,6 +2163,7 @@
       if (mvp) {
         mvpId = mvp.id;
         mvpName = mvp.name;
+        state.teamMvpWins[mvp.id] = (state.teamMvpWins[mvp.id] || 0) + 1;
       }
       summary = teamLabelLive(key) + " won " + typeLabel + " (target " + state.currentGame.target + ")";
       if (target > 0 && newTeamWins % target === 0) {
@@ -2255,6 +2274,9 @@
     });
     if (entry.isTeam && entry.teamComboKey) {
       state.teamWins[entry.teamComboKey] = Math.max(0, (state.teamWins[entry.teamComboKey] || 0) - 1);
+      if (entry.mvpId) {
+        state.teamMvpWins[entry.mvpId] = Math.max(0, (state.teamMvpWins[entry.mvpId] || 0) - 1);
+      }
     }
     state.gameHistory.shift();
     state.gamesPlayedCount = Math.max(0, state.gamesPlayedCount - 1);
@@ -2493,6 +2515,7 @@
     if (saveRoster) maybeSaveRosterOnNewSession();
     state.playerWins = {};
     state.teamWins = {};
+    state.teamMvpWins = {};
     state.gameHistory = [];
     state.gamesPlayedCount = 0;
     resetGameBalls();
@@ -4963,6 +4986,14 @@
     playerPageSynopsisBody.appendChild(
       synopsisStatRow(T("playerPage.winPct"), synopsis.pct === null ? "—" : synopsis.pct + "%")
     );
+
+    // How many of this player's TEAM wins they personally potted the
+    // winning ball for (see the mvp selection in creditWin) - their
+    // individual contribution within the team's overall win count.
+    var teamMvpWinCount = filtered.filter(function (g) {
+      return g.result === "won" && g.mvpName === currentStatsPlayerName;
+    }).length;
+    playerPageSynopsisBody.appendChild(synopsisStatRow(T("playerPage.teamMvpWins"), teamMvpWinCount, "win"));
 
     var tournamentFiltered = filterGamesByPeriod(
       tournamentGamesForPlayerName(currentStatsPlayerName).concat(sessionRaceTournamentGames(allGames)),

@@ -1031,6 +1031,12 @@ input[type="number"] {
   font-weight: 700;
 }
 
+.stat-mini.stat-mini-team-big {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 4px 0;
+}
+
 .stat-mini strong {
   color: var(--accent);
   font-variant-numeric: tabular-nums;
