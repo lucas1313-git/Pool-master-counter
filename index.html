@@ -530,7 +530,7 @@
       <p>Opened by tapping a player's name anywhere in the app.</p>
       <ul>
         <li><strong>Stats Synopsis</strong> — Rating (current number) and "Rating this period" (how much it's moved), Wins, Losses, and Win % for Today, This Week, This Month, This Year, or All Time.</li>
-        <li><strong>Head-to-Head</strong> — Win/loss record against every opponent faced in the selected period.</li>
+        <li><strong>Head-to-Head</strong> — Its own collapsed panel (tap to expand) with a win/loss record against every opponent faced in the selected period; the collapsed summary line lists who they've played without needing to open it.</li>
         <li><strong>Graph</strong> — The same cumulative games chart as All Players, scoped to this one player, plus the standalone Rating chart underneath.</li>
         <li><strong>This Session (Live)</strong> — What they've done in the game currently in progress.</li>
         <li><strong>Session History</strong> — Every past saved session, expandable into the individual games played.</li>
@@ -561,8 +561,17 @@
       <button type="button" class="btn btn-ghost period-btn is-active" data-period="all">All Time</button>
     </div>
     <div id="player-page-synopsis-body"></div>
-    <h2 class="h2h-title">Head-to-Head</h2>
-    <ul id="player-page-h2h-list" class="player-h2h-list"></ul>
+  </section>
+
+  <section class="panel collapsible-panel collapsed" id="player-page-h2h-panel">
+    <button type="button" class="panel-toggle" id="btn-toggle-player-page-h2h-panel" aria-expanded="false" aria-controls="player-page-h2h-panel-body">
+      <h2>Head-to-Head</h2>
+      <span class="panel-chevron" aria-hidden="true">▾</span>
+    </button>
+    <p class="panel-summary" id="player-page-h2h-panel-summary"></p>
+    <div class="panel-body" id="player-page-h2h-panel-body">
+      <ul id="player-page-h2h-list" class="player-h2h-list"></ul>
+    </div>
   </section>
 
   <section class="panel" id="player-page-graph-panel">
