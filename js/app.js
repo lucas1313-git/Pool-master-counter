@@ -1103,6 +1103,7 @@
     nameEl.textContent = name;
     (memberNames || []).forEach(function (n) {
       nameEl.appendChild(buildRatingBadge(n));
+      nameEl.appendChild(buildPlayerLinkIcon(n));
     });
     var countEl = document.createElement("span");
     countEl.className = "standings-count";
@@ -1519,6 +1520,7 @@
     name.className = "player-name";
     name.textContent = player.name;
     name.appendChild(buildRatingBadge(player.name));
+    name.appendChild(buildPlayerLinkIcon(player.name));
     panel.appendChild(name);
 
     var wins = state.playerWins[player.id] || 0;
@@ -1548,6 +1550,7 @@
     var name = document.createElement("div");
     name.className = "member-name";
     name.textContent = player.name;
+    name.appendChild(buildPlayerLinkIcon(player.name));
     card.appendChild(name);
 
     var wins = state.playerWins[player.id] || 0;
@@ -2015,7 +2018,7 @@
       state.currentGame.target !== previousTarget || state.currentGame.unit !== previousUnit;
     showToast(summary);
     if (milestoneNames) {
-      celebrateTournamentWin(milestoneNames, milestoneCount, winnerNames);
+      celebrateTournamentWin(milestoneNames, milestoneCount);
     } else if (onHillNames) {
       announceOnHill(onHillNames);
     } else if (gameTypeChanged) {
@@ -2074,7 +2077,7 @@
     gameChangeOverlay.classList.add("hidden");
   }
 
-  function celebrateTournamentWin(names, count, winnerNames) {
+  function celebrateTournamentWin(names, count) {
     var target = state.raceToWinsTarget;
 
     // A win one game earlier can leave the on-hill overlay open (it has no
@@ -2111,7 +2114,6 @@
     }
 
     milestoneOverlay.classList.remove("hidden");
-    recordSessionRaceCompletion(winnerNames, playerNames);
     playTournamentChampionSound();
   }
 
@@ -2923,6 +2925,25 @@
     badge.textContent = getPlayerRating(name);
     badge.title = "Rating (Elo-style, FargoRate-inspired scale)";
     return badge;
+  }
+
+  // A small icon-only button that jumps straight to a player's single-
+  // stat page — dropped in next to a player's name wherever one appears
+  // (scoreboard cards, standings, tournament bracket cards, All Players),
+  // alongside (not instead of) whatever else that name already does.
+  function buildPlayerLinkIcon(name) {
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn btn-ghost player-link-icon";
+    btn.setAttribute("aria-label", "View " + name + "'s single-player stats");
+    btn.innerHTML =
+      '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" ' +
+      'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      openPlayerStatsPage(name);
+    });
+    return btn;
   }
 
   // Formats a period rating change as "▲ +18", "▼ −9", "— no change", or
@@ -4432,7 +4453,10 @@
       synopsisStatRow("Win %", synopsis.pct === null ? "—" : synopsis.pct + "%")
     );
 
-    var tournamentFiltered = filterGamesByPeriod(tournamentGamesForPlayerName(currentStatsPlayerName), currentStatsPeriod);
+    var tournamentFiltered = filterGamesByPeriod(
+      tournamentGamesForPlayerName(currentStatsPlayerName).concat(sessionRaceTournamentGames(allGames)),
+      currentStatsPeriod
+    );
     var tournamentSynopsis = computeWinLossSynopsis(tournamentFiltered);
     playerPageSynopsisBody.appendChild(synopsisStatRow("Tournaments won", tournamentSynopsis.wins, "win"));
     playerPageSynopsisBody.appendChild(synopsisStatRow("Tournaments lost", tournamentSynopsis.losses, "loss"));
@@ -4633,7 +4657,13 @@
   // trip back to All Stats. Re-run on every openPlayerStatsPage call so a
   // player added since the page last opened shows up too.
   function populatePlayerPageSwitcher(currentName) {
-    var names = getAllKnownPlayerNames().sort(function (a, b) {
+    var names = getAllKnownPlayerNames();
+    // Belt-and-suspenders: whatever page we're viewing should always be
+    // selectable, even in an edge case where this name isn't found by
+    // getAllKnownPlayerNames (e.g. reached via a stale link after that
+    // player's data was reset).
+    if (names.indexOf(currentName) === -1) names.push(currentName);
+    names.sort(function (a, b) {
       return a.localeCompare(b);
     });
     playerPageSwitcher.innerHTML = "";
@@ -4732,8 +4762,12 @@
   }
 
   function computePlayerCareerStats(name, period) {
-    var games = filterGamesByPeriod(allGamesForPlayerName(name), period);
-    var tournamentGames = filterGamesByPeriod(tournamentGamesForPlayerName(name), period);
+    var allGames = allGamesForPlayerName(name);
+    var games = filterGamesByPeriod(allGames, period);
+    var tournamentGames = filterGamesByPeriod(
+      tournamentGamesForPlayerName(name).concat(sessionRaceTournamentGames(allGames)),
+      period
+    );
     var wins = 0;
     var losses = 0;
     games.forEach(function (g) {
@@ -5673,20 +5707,10 @@
     name.addEventListener("click", function () {
       openPlayerStatsPage(stats.name);
     });
-    var viewBtn = document.createElement("button");
-    viewBtn.type = "button";
-    viewBtn.className = "btn btn-ghost all-player-view-btn";
-    viewBtn.setAttribute("aria-label", "View " + stats.name + "'s single-player stats");
-    viewBtn.innerHTML =
-      '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" ' +
-      'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
-    viewBtn.addEventListener("click", function () {
-      openPlayerStatsPage(stats.name);
-    });
     var nameGroup = document.createElement("div");
     nameGroup.className = "all-player-name-group";
     nameGroup.appendChild(name);
-    nameGroup.appendChild(viewBtn);
+    nameGroup.appendChild(buildPlayerLinkIcon(stats.name));
     var summary = document.createElement("span");
     summary.className = "all-player-summary";
     summary.textContent = stats.winPct === null ? "No games yet" : Math.round(stats.winPct * 100) + "% win rate";
@@ -5933,31 +5957,44 @@
   }
 
   // A "race to N wins" main-scoreboard session counts as a Tournament too
-  // (per how this app's players use the term) — called once, right when
-  // that milestone is reached, alongside recordTournamentCompletion's
-  // bracket-Tournament case. winnerNames can hold more than one name for
-  // a team win; everyone else in participantNames counts as a loss.
-  function recordSessionRaceCompletion(winnerNames, participantNames) {
-    if (noStatsMode) return;
-    var ts = new Date().toISOString();
-    TOURNAMENT_RESULTS.unshift({
-      ts: ts,
-      championNames: winnerNames.slice(),
-      format: "session-race",
-      players: participantNames.slice()
+  // (per how this app's players use the term). Rather than a separate
+  // store (which would only start counting from whenever this shipped),
+  // this derives it straight from the player's own game log: every game
+  // already carries wonRace (true on exactly the rack that pushed
+  // someone's count over the race target) plus winnerNames/opponentNames/
+  // teammateNames, which together already tell us who else was in that
+  // race — so this surfaces every race ever completed, including ones
+  // from long before this feature existed. `games` is one player's own
+  // games (as produced by allGamesForPlayerName/computeSessionFromGameHistory),
+  // already relative to that player: g.result is "won" only when this
+  // player's own side reached the target on this exact rack.
+  function sessionRaceTournamentGames(games) {
+    var results = [];
+    games.forEach(function (g) {
+      if (!g.wonRace) return;
+      results.push({
+        ts: g.ts,
+        result: g.result,
+        opponentNames: (g.teammateNames || []).concat(g.opponentNames || []),
+        gameLabel: "Race-to Session"
+      });
     });
-    if (TOURNAMENT_RESULTS.length > 200) TOURNAMENT_RESULTS.length = 200;
-    saveTournamentResultsToStorage(TOURNAMENT_RESULTS);
+    return results;
   }
 
-  // One pseudo-"game" per completed Tournament (bracket or race-to-N
-  // session) this player entered, shaped enough like a real game (ts/
-  // result/opponentNames/gameLabel) to reuse filterGamesByPeriod and the
-  // graph's bucketing helpers, but plotted as its own series in
-  // buildPlayerGraph rather than mixed into single-game counts.
+  // One pseudo-"game" per completed bracket Tournament this player
+  // entered, shaped enough like a real game (ts/result/opponentNames/
+  // gameLabel) to reuse filterGamesByPeriod and the graph's bucketing
+  // helpers, but plotted as its own series in buildPlayerGraph rather
+  // than mixed into single-game counts. Race-to-N session results are
+  // handled separately by sessionRaceTournamentGames above — a stray
+  // "session-race" entry can exist here from an earlier version of this
+  // feature that wrote both to the same store; skipped to avoid double-
+  // counting anyone who already triggered that code path.
   function tournamentGamesForPlayerName(name) {
     var games = [];
     TOURNAMENT_RESULTS.forEach(function (r) {
+      if (r.format === "session-race") return;
       if ((r.players || []).indexOf(name) === -1) return;
       games.push({
         ts: r.ts,
@@ -5965,7 +6002,7 @@
         opponentNames: r.players.filter(function (n) {
           return n !== name;
         }),
-        gameLabel: r.format === "session-race" ? "Race-to Session" : "Tournament"
+        gameLabel: "Tournament"
       });
     });
     return games;
@@ -6405,7 +6442,10 @@
       if (isWinner) row.classList.add("is-winner");
       if (match.winner && name === match.loser) row.classList.add("is-loser");
       row.textContent = (isWinner ? "👑 " : "") + (name || "—");
-      if (name) row.appendChild(buildRatingBadge(name));
+      if (name) {
+        row.appendChild(buildRatingBadge(name));
+        row.appendChild(buildPlayerLinkIcon(name));
+      }
       div.appendChild(row);
     });
 
@@ -6557,6 +6597,7 @@
     nameEl.className = "player-name";
     nameEl.textContent = name;
     nameEl.appendChild(buildRatingBadge(name));
+    nameEl.appendChild(buildPlayerLinkIcon(name));
     panel.appendChild(nameEl);
 
     panel.appendChild(buildStatMini("Match wins", wins, wins >= t.raceTo));
