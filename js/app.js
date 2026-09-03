@@ -1242,28 +1242,39 @@
   // Quick Counter's "Load Player List": picks a saved list and makes the
   // active set match it exactly (see loadPlayerListForQuickCounter) — the
   // fast way to swap in a known group instead of adding everyone by hand.
-  // Renders nothing if there's nothing saved to load.
+  // Always renders (disabled with an explanatory option when there's
+  // nothing saved yet) rather than disappearing outright, so the control
+  // doesn't look missing — mirrors the main page's roster-load row.
   function buildQuickCounterLoadRow() {
-    if (SAVED_ROSTERS.length === 0) return null;
     var row = document.createElement("div");
     row.className = "quick-counter-load-row";
 
     var select = document.createElement("select");
     select.className = "quick-counter-load-select";
-    SAVED_ROSTERS.forEach(function (r, i) {
-      var opt = document.createElement("option");
-      opt.value = String(i);
-      opt.textContent = r.label;
-      select.appendChild(opt);
-    });
 
     var btn = document.createElement("button");
     btn.type = "button";
     btn.className = "btn btn-ghost quick-counter-load-btn";
     btn.textContent = "📋 Load Player List";
-    btn.addEventListener("click", function () {
-      loadPlayerListForQuickCounter(select.value);
-    });
+
+    if (SAVED_ROSTERS.length === 0) {
+      var opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = "No saved lists yet";
+      select.appendChild(opt);
+      select.disabled = true;
+      btn.disabled = true;
+    } else {
+      SAVED_ROSTERS.forEach(function (r, i) {
+        var o = document.createElement("option");
+        o.value = String(i);
+        o.textContent = r.label;
+        select.appendChild(o);
+      });
+      btn.addEventListener("click", function () {
+        loadPlayerListForQuickCounter(select.value);
+      });
+    }
 
     row.appendChild(select);
     row.appendChild(btn);
