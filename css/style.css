@@ -239,7 +239,7 @@ body {
 /* ---------- Header ---------- */
 
 .app-header {
-  padding: 20px 16px 8px;
+  padding: 56px 16px 8px;
   text-align: center;
   display: flex;
   flex-direction: column;
@@ -248,21 +248,35 @@ body {
 }
 
 .theme-select-row {
-  align-self: flex-end;
+  position: fixed;
+  top: max(10px, env(safe-area-inset-top));
+  right: max(10px, env(safe-area-inset-right));
+  z-index: 30;
   display: flex;
   align-items: center;
   gap: 6px;
   font-size: 0.78rem;
   color: var(--text-dim);
+  background: var(--bg-panel);
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
 }
 
 .theme-select-row select {
   font-size: 0.78rem;
   padding: 4px 8px;
+  max-width: 34vw;
   background: var(--bg-panel);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 8px;
+}
+
+@media (max-width: 480px) {
+  .theme-select-row label {
+    display: none;
+  }
 }
 
 .all-players-nav-btn {
