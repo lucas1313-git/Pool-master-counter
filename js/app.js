@@ -687,8 +687,10 @@
   var tournamentSetupPanel = document.getElementById("tournament-setup-panel");
   var tournamentActivePanel = document.getElementById("tournament-active-panel");
   var tournamentFormatRadios = document.getElementsByName("tournament-format");
+  var tournamentWbSection = document.getElementById("tournament-wb-section");
   var tournamentLbSection = document.getElementById("tournament-lb-section");
   var tournamentGfSection = document.getElementById("tournament-gf-section");
+  var tournamentRrSection = document.getElementById("tournament-rr-section");
   var tournamentGameTypeSelect = document.getElementById("tournament-game-type");
   var tournamentTargetInput = document.getElementById("tournament-target");
   var tournamentTargetUnit = document.getElementById("tournament-target-unit");
@@ -702,6 +704,8 @@
   var tournamentWbEl = document.getElementById("tournament-wb");
   var tournamentLbEl = document.getElementById("tournament-lb");
   var tournamentGfEl = document.getElementById("tournament-gf");
+  var tournamentRrStandingsEl = document.getElementById("tournament-rr-standings");
+  var tournamentRrMatchesEl = document.getElementById("tournament-rr-matches");
 
   var gameTypeSelect = document.getElementById("game-type");
   var gameTargetInput = document.getElementById("game-target");
@@ -5249,11 +5253,12 @@
     return "— no change";
   }
 
-  // Click-to-reveal tooltip for one rating-history dot: this player's own
-  // change from that game, plus — by cross-referencing the matching game
-  // record's opponentNames and each opponent's own rating history at the
-  // same ts (getPlayerRatingDeltaForGame) — exactly who it was against and
-  // what happened to their rating too, so it's clear who gained and lost.
+  // Click-to-reveal tooltip for one rating-history dot: the resulting
+  // rating at that exact point, this player's own change from that
+  // game, plus — by cross-referencing the matching game record's
+  // opponentNames and each opponent's own rating history at the same ts
+  // (getPlayerRatingDeltaForGame) — exactly who it was against and what
+  // happened to their rating too, so it's clear who gained and lost.
   function showRatingDotTooltip(clientX, clientY, point, game) {
     var el = getGraphTooltipEl();
     el.innerHTML = "";
@@ -5261,6 +5266,18 @@
     title.className = "player-graph-tooltip-title";
     title.textContent = formatTimestamp(point.ts, true);
     el.appendChild(title);
+
+    var ratingRow = document.createElement("div");
+    ratingRow.className = "player-graph-tooltip-row";
+    var ratingLabel = document.createElement("span");
+    ratingLabel.className = "player-graph-tooltip-name";
+    ratingLabel.textContent = "Rating";
+    var ratingValue = document.createElement("span");
+    ratingValue.className = "player-graph-tooltip-record";
+    ratingValue.textContent = point.rating;
+    ratingRow.appendChild(ratingLabel);
+    ratingRow.appendChild(ratingValue);
+    el.appendChild(ratingRow);
 
     var youRow = document.createElement("div");
     youRow.className = "player-graph-tooltip-row";
@@ -5471,7 +5488,7 @@
       return height - ((rating - axisMin) / range) * height;
     }
     var dots = points.map(function (p) {
-      return { x: xFor(new Date(p.ts).getTime()), y: yFor(p.rating), ts: p.ts, delta: p.delta };
+      return { x: xFor(new Date(p.ts).getTime()), y: yFor(p.rating), ts: p.ts, delta: p.delta, rating: p.rating };
     });
     var firstRating = points.length ? points[0].rating : axisMin;
     var lastRating = points.length ? points[points.length - 1].rating : axisMin;
@@ -6088,7 +6105,10 @@
     var ts = new Date().toISOString();
     TOURNAMENT_RESULTS.unshift({
       ts: ts,
-      championNames: [t.champion],
+      // Round Robin can end in a tie shared by more than one champion;
+      // t.championNames already holds all of them there. Bracket formats
+      // only ever have a single winner.
+      championNames: t.championNames || [t.champion],
       format: t.format,
       players: t.players.slice()
     });
@@ -6215,19 +6235,30 @@
     });
   }
 
+  function pendingRrMatches(t) {
+    return t.matches.filter(function (m) {
+      return m.a !== null && m.b !== null && m.winner === null;
+    });
+  }
+
   function pendingBracketMatches(t) {
+    if (t.format === "roundrobin") return pendingRrMatches(t);
     return pendingWbMatches(t).concat(pendingLbMatches(t), pendingGfMatches(t));
   }
 
   function findBracketMatchById(t, id) {
     var all = [];
-    t.wb.forEach(function (r) {
-      all = all.concat(r);
-    });
-    t.lbRounds.forEach(function (r) {
-      all = all.concat(r);
-    });
-    all = all.concat(t.grandFinal);
+    if (t.format === "roundrobin") {
+      all = t.matches;
+    } else {
+      t.wb.forEach(function (r) {
+        all = all.concat(r);
+      });
+      t.lbRounds.forEach(function (r) {
+        all = all.concat(r);
+      });
+      all = all.concat(t.grandFinal);
+    }
     for (var i = 0; i < all.length; i++) {
       if (all[i].id === id) return all[i];
     }
@@ -6447,6 +6478,87 @@
     return t;
   }
 
+  // Round Robin: no bracket tree at all — every player plays every other
+  // player exactly once (shuffled match order only, since there's no
+  // seeding to speak of), and the champion is decided once every match
+  // has a result — see finalizeRoundRobinIfComplete.
+  function buildRoundRobinTournament(playerNames, gameType, target, raceTo) {
+    var shuffled = playerNames.slice();
+    for (var i = shuffled.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = shuffled[i];
+      shuffled[i] = shuffled[j];
+      shuffled[j] = tmp;
+    }
+    var matches = [];
+    for (var a = 0; a < shuffled.length; a++) {
+      for (var b = a + 1; b < shuffled.length; b++) {
+        matches.push(createBracketMatch(shuffled[a], shuffled[b], "Round Robin"));
+      }
+    }
+    return {
+      format: "roundrobin",
+      createdAt: new Date().toISOString(),
+      gameType: gameType,
+      target: target,
+      raceTo: raceTo,
+      players: shuffled,
+      matches: matches,
+      champion: null,
+      championNames: null,
+      active: null
+    };
+  }
+
+  // Ranks every entrant by match wins (most first, name as a stable
+  // tiebreaker for display order only — a true tie in wins is reflected
+  // by championNames holding more than one name, not by this ordering).
+  function roundRobinStandings(t) {
+    var wins = {};
+    var played = {};
+    t.players.forEach(function (name) {
+      wins[name] = 0;
+      played[name] = 0;
+    });
+    t.matches.forEach(function (m) {
+      if (m.winner === null) return;
+      wins[m.winner] = (wins[m.winner] || 0) + 1;
+      played[m.a] = (played[m.a] || 0) + 1;
+      played[m.b] = (played[m.b] || 0) + 1;
+    });
+    return t.players
+      .slice()
+      .sort(function (x, y) {
+        return (wins[y] || 0) - (wins[x] || 0) || x.localeCompare(y);
+      })
+      .map(function (name) {
+        return { name: name, wins: wins[name] || 0, played: played[name] || 0 };
+      });
+  }
+
+  // Once every round-robin match has a result, the champion is whoever
+  // has the most match wins — a tie at the top makes every tied player a
+  // champion (championNames holds all of them; TOURNAMENT_RESULTS
+  // already supports multiple simultaneous winners for team wins, so
+  // this reuses that instead of picking an arbitrary tiebreaker).
+  function finalizeRoundRobinIfComplete(t) {
+    var allDecided = t.matches.every(function (m) {
+      return m.winner !== null;
+    });
+    if (!allDecided) return;
+    var standings = roundRobinStandings(t);
+    var topWins = standings[0].wins;
+    var champions = standings
+      .filter(function (s) {
+        return s.wins === topWins;
+      })
+      .map(function (s) {
+        return s.name;
+      });
+    t.championNames = champions;
+    t.champion = champions.join(" & ");
+  }
+
   function isGrandFinalMatch(t, match) {
     return t.grandFinal.indexOf(match) !== -1;
   }
@@ -6455,6 +6567,10 @@
     if (match.a !== winnerName && match.b !== winnerName) return;
     match.winner = winnerName;
     match.loser = match.a === winnerName ? match.b : match.a;
+    if (t.format === "roundrobin") {
+      finalizeRoundRobinIfComplete(t);
+      return;
+    }
     if (isGrandFinalMatch(t, match)) {
       if (winnerName === t.wbChampion) {
         t.champion = winnerName;
@@ -6547,9 +6663,13 @@
     var format = Array.prototype.filter.call(tournamentFormatRadios, function (r) {
       return r.checked;
     })[0].value;
-    TOURNAMENT = format === "single"
-      ? buildSingleEliminationBracket(names, gameType, target, raceTo)
-      : buildDoubleEliminationBracket(names, gameType, target, raceTo);
+    if (format === "roundrobin") {
+      TOURNAMENT = buildRoundRobinTournament(names, gameType, target, raceTo);
+    } else if (format === "single") {
+      TOURNAMENT = buildSingleEliminationBracket(names, gameType, target, raceTo);
+    } else {
+      TOURNAMENT = buildDoubleEliminationBracket(names, gameType, target, raceTo);
+    }
     saveTournamentToStorage(TOURNAMENT);
     renderTournamentPage();
   }
@@ -6808,24 +6928,76 @@
     tournamentCurrentMatchPanel.appendChild(board);
   }
 
+  // Standings ranked by match wins (most first); the name is only a
+  // stable sort key for display order — a genuine tie in wins is
+  // reflected by t.championNames holding more than one name once the
+  // round robin is complete, not by anything in this ordering.
+  function roundRobinStandingsRow(s, t) {
+    var li = document.createElement("li");
+    var isChampion = t.championNames && t.championNames.indexOf(s.name) !== -1;
+    li.className = "tournament-rr-standings-row" + (isChampion ? " is-champion" : "");
+    var name = document.createElement("span");
+    name.className = "tournament-rr-standings-name";
+    name.textContent = (isChampion ? "👑 " : "") + s.name;
+    name.appendChild(buildRatingBadge(s.name));
+    name.appendChild(buildPlayerLinkIcon(s.name));
+    var record = document.createElement("span");
+    record.className = "tournament-rr-standings-record";
+    record.textContent = s.wins + " win" + (s.wins === 1 ? "" : "s") + " / " + s.played + " played";
+    li.appendChild(name);
+    li.appendChild(record);
+    return li;
+  }
+
+  // Round Robin has no bracket tree to render, so it gets its own board:
+  // a live standings list (ranked by match wins) plus every match as a
+  // card (reusing tournamentMatchCard, which already renders pending/
+  // active/done states generically) — unlike the bracket formats, this
+  // shows every match at once since round robin has no round-by-round
+  // progression gating which ones are "ready."
+  function renderRoundRobinBoard(t, activeMatchId) {
+    tournamentRrStandingsEl.innerHTML = "";
+    roundRobinStandings(t).forEach(function (s) {
+      tournamentRrStandingsEl.appendChild(roundRobinStandingsRow(s, t));
+    });
+
+    tournamentRrMatchesEl.innerHTML = "";
+    t.matches.forEach(function (m) {
+      tournamentRrMatchesEl.appendChild(tournamentMatchCard(m, activeMatchId));
+    });
+  }
+
   function renderTournamentActive() {
     var t = TOURNAMENT;
     var activeMatchId = t.active ? t.active.matchId : null;
     var isSingle = t.format === "single";
-    tournamentLbSection.classList.toggle("hidden", isSingle);
-    tournamentGfSection.classList.toggle("hidden", isSingle);
-    renderWbTree(tournamentWbEl, t, activeMatchId);
-    if (!isSingle) {
-      renderBracketColumns(tournamentLbEl, t.lbRounds, activeMatchId);
-      renderBracketColumns(tournamentGfEl, t.grandFinal.length ? [t.grandFinal] : [], activeMatchId);
+    var isRoundRobin = t.format === "roundrobin";
+
+    tournamentWbSection.classList.toggle("hidden", isRoundRobin);
+    tournamentLbSection.classList.toggle("hidden", isRoundRobin || isSingle);
+    tournamentGfSection.classList.toggle("hidden", isRoundRobin || isSingle);
+    tournamentRrSection.classList.toggle("hidden", !isRoundRobin);
+
+    if (isRoundRobin) {
+      renderRoundRobinBoard(t, activeMatchId);
+    } else {
+      renderWbTree(tournamentWbEl, t, activeMatchId);
+      if (!isSingle) {
+        renderBracketColumns(tournamentLbEl, t.lbRounds, activeMatchId);
+        renderBracketColumns(tournamentGfEl, t.grandFinal.length ? [t.grandFinal] : [], activeMatchId);
+      }
     }
 
     btnTournamentAbandon.textContent = t.champion ? "Start New Tournament" : "Abandon Tournament";
 
     if (t.champion) {
       tournamentChampionBanner.classList.remove("hidden");
-      tournamentChampionBanner.textContent = "🏆 " + t.champion + " won the tournament!";
-      tournamentChampionBanner.appendChild(buildRatingBadge(t.champion));
+      var multipleChampions = !!(t.championNames && t.championNames.length > 1);
+      tournamentChampionBanner.textContent =
+        "🏆 " + t.champion + (multipleChampions ? " tied for the win!" : " won the tournament!");
+      (t.championNames || [t.champion]).forEach(function (name) {
+        tournamentChampionBanner.appendChild(buildRatingBadge(name));
+      });
     } else {
       tournamentChampionBanner.classList.add("hidden");
       tournamentChampionBanner.textContent = "";
@@ -6846,6 +7018,9 @@
       startTournamentMatch(ready[0].id);
       return;
     }
+    // Round Robin's Matches grid above already shows every pending match
+    // with its own Play button — no need for a second "ready" list too.
+    if (isRoundRobin) return;
     var heading = document.createElement("li");
     heading.className = "tournament-ready-heading";
     heading.textContent = "Ready to play (" + ready.length + ")";
