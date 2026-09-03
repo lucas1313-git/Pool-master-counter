@@ -1,5 +1,7 @@
 # Pool Master Counter
 
+**🇬🇧 English** · [🇫🇷 Français](README.fr.md) · [🇪🇸 Español](README.es.md) · [🇭🇰 廣東話](README.zh-yue.md)
+
 A touch-friendly pool scoring app for phone, tablet, or desktop. It runs entirely in the browser — no server, no account, no build step — and remembers everything on the device it's used on: your roster, career stats, player ratings, saved player lists, game-order rotations, tournament brackets, and daily notes.
 
 ![Live scoreboard](docs/screenshots/live-scoreboard.jpg)
