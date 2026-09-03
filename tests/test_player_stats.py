@@ -94,8 +94,21 @@ def test_rating_dot_click_shows_opponent_tooltip(app):
     tooltip = wait(app).until(
         EC.visibility_of_element_located((By.CSS_SELECTOR, ".player-graph-tooltip"))
     )
+    assert "Rating" in tooltip.text
     assert "You" in tooltip.text
     assert "Bob" in tooltip.text
+
+    # The "Rating" row's value should be a plain number - the rating at
+    # that point in time, not a +/- delta.
+    rating_row = tooltip.find_element(
+        By.XPATH,
+        ".//*[contains(@class,'player-graph-tooltip-row')]"
+        "[.//*[contains(@class,'player-graph-tooltip-name')][text()='Rating']]",
+    )
+    rating_value = rating_row.find_element(
+        By.CSS_SELECTOR, ".player-graph-tooltip-record"
+    ).text
+    assert rating_value.lstrip("-").isdigit()
     assert_no_console_errors(app)
 
 
