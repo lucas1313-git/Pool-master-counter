@@ -736,9 +736,11 @@
     if (rostersChanged) saveRotationsToStorage(SAVED_ROTATIONS);
   }
 
-  // Builds one rotation-order <li> (position, label, up/down/remove
-  // controls). Shared by the main Game Order panel and the wizard's
-  // rotation step so both stay visually and behaviorally identical.
+  // Builds one rotation-order <li> (position, game type, editable target +
+  // unit, up/down/remove controls). Shared by the main Game Order panel
+  // and the wizard's rotation step so both stay visually and behaviorally
+  // identical. The target/unit are edited in place instead of needing to
+  // remove and re-add the entry to change its goal.
   function buildRotationRow(entry, i, total) {
     var li = document.createElement("li");
     li.className = "rotation-row";
@@ -747,9 +749,37 @@
     pos.className = "rotation-position";
     pos.textContent = i + 1 + ".";
 
+    var type = GAME_TYPES[entry.gameType];
     var name = document.createElement("span");
     name.className = "rotation-name";
-    name.textContent = rotationEntryLabel(entry);
+    name.textContent = type ? type.label : entry.gameType;
+
+    var targetInput = document.createElement("input");
+    targetInput.type = "number";
+    targetInput.className = "rotation-target-input";
+    targetInput.min = "1";
+    targetInput.max = "500";
+    targetInput.value = entry.target;
+    targetInput.setAttribute("aria-label", "Target for " + name.textContent);
+    targetInput.addEventListener("change", function () {
+      var val = parseInt(targetInput.value, 10);
+      if (val > 0) updateRotationItem(i, { target: val });
+      else targetInput.value = entry.target;
+    });
+
+    var unitSelect = document.createElement("select");
+    unitSelect.className = "rotation-unit-select";
+    unitSelect.setAttribute("aria-label", "Unit for " + name.textContent);
+    ["rack", "balls", "points"].forEach(function (u) {
+      var opt = document.createElement("option");
+      opt.value = u;
+      opt.textContent = u;
+      unitSelect.appendChild(opt);
+    });
+    unitSelect.value = entry.unit;
+    unitSelect.addEventListener("change", function () {
+      updateRotationItem(i, { unit: unitSelect.value });
+    });
 
     var controls = document.createElement("div");
     controls.className = "rotation-controls";
@@ -784,6 +814,8 @@
 
     li.appendChild(pos);
     li.appendChild(name);
+    li.appendChild(targetInput);
+    li.appendChild(unitSelect);
     li.appendChild(controls);
     return li;
   }
@@ -878,6 +910,22 @@
     var tmp = arr[index];
     arr[index] = arr[newIndex];
     arr[newIndex] = tmp;
+    saveState();
+    saveRotationSnapshotIfNew(true);
+    applyRotationIfDue();
+    renderRotation();
+    renderScoreboard();
+    renderWizardIfOpen();
+  }
+
+  // Edits an existing rotation entry's target and/or unit in place — the
+  // list-row equivalent of addRotationItem, so changing a game's goal
+  // doesn't require removing and re-adding it.
+  function updateRotationItem(index, changes) {
+    var entry = state.rotation.order[index];
+    if (!entry) return;
+    if (typeof changes.target === "number") entry.target = changes.target;
+    if (typeof changes.unit === "string") entry.unit = changes.unit;
     saveState();
     saveRotationSnapshotIfNew(true);
     applyRotationIfDue();

@@ -404,6 +404,7 @@ input[type="number"] {
 
 .rotation-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   background: var(--bg-card);
@@ -421,8 +422,20 @@ input[type="number"] {
 }
 
 .rotation-name {
-  flex: 1;
+  flex: 1 1 auto;
+  min-width: 70px;
   font-weight: 600;
+}
+
+.rotation-target-input {
+  flex: 0 0 auto;
+  width: 60px;
+  text-align: center;
+}
+
+.rotation-unit-select {
+  flex: 0 0 auto;
+  width: 80px;
 }
 
 .rotation-controls {
