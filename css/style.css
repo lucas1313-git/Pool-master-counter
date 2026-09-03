@@ -744,12 +744,12 @@ input[type="number"] {
 .rating-badge {
   display: inline-block;
   margin-left: 7px;
-  padding: 1px 7px;
+  padding: 2px 8px;
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.3);
   border: 1px solid var(--border);
   color: var(--accent);
-  font-size: 0.72rem;
+  font-size: 0.95rem;
   font-weight: 700;
   vertical-align: middle;
   font-variant-numeric: tabular-nums;
@@ -2272,8 +2272,9 @@ input[type="number"] {
 .scale-fill-played { background: var(--info); }
 .scale-fill-won { background: var(--accent); }
 .scale-fill-lost { background: var(--danger); }
-.scale-fill-tourn-won { background: #ffb703; }
-.scale-fill-tourn-lost { background: #6d597a; }
+.scale-fill-tourn-played { background: #00b4d8; }
+.scale-fill-tourn-won { background: #3a86ff; }
+.scale-fill-tourn-lost { background: #8338ec; }
 
 .scale-ticks {
   position: absolute;

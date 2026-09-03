@@ -4458,6 +4458,7 @@
       currentStatsPeriod
     );
     var tournamentSynopsis = computeWinLossSynopsis(tournamentFiltered);
+    playerPageSynopsisBody.appendChild(synopsisStatRow("Tournaments played", tournamentSynopsis.total));
     playerPageSynopsisBody.appendChild(synopsisStatRow("Tournaments won", tournamentSynopsis.wins, "win"));
     playerPageSynopsisBody.appendChild(synopsisStatRow("Tournaments lost", tournamentSynopsis.losses, "loss"));
 
@@ -4787,6 +4788,7 @@
       played: games.length,
       wins: wins,
       losses: losses,
+      tournamentPlayed: tournamentGames.length,
       tournamentWins: tournamentWins,
       tournamentLosses: tournamentLosses,
       winPct: games.length ? wins / games.length : null
@@ -4907,11 +4909,15 @@
 
   var SVG_NS = "http://www.w3.org/2000/svg";
   var TEAM_COMBO_PALETTE = ["#c77dff", "#4fb0a5", "#e08e45", "#8ecae6", "#f2a6c9", "#9fd35c", "#d4a24c", "#6a8caf"];
-  // Fixed (theme-independent) colors for the whole-tournament won/lost
-  // series — distinct from the single-games palette above, which follows
-  // the active theme's --accent/--danger instead.
-  var TOURNAMENT_WON_COLOR = "#ffb703";
-  var TOURNAMENT_LOST_COLOR = "#6d597a";
+  // Fixed (theme-independent) colors for the whole-Tournament played/won/
+  // lost series — deliberately blue/violet, nowhere near the gold/amber
+  // family several themes use for --accent (which Single games won/lost
+  // follows instead) or the red family every theme uses for --danger, so
+  // the two "won" lines (and the two "lost" lines) stay visually distinct
+  // no matter the active theme.
+  var TOURNAMENT_PLAYED_COLOR = "#00b4d8";
+  var TOURNAMENT_WON_COLOR = "#3a86ff";
+  var TOURNAMENT_LOST_COLOR = "#8338ec";
   // Leaves this fraction of the chart's width blank at the right edge, so
   // the most recent line segment and "Now" tick aren't flush against the
   // card border — otherwise the latest data reads as cut off.
@@ -5032,12 +5038,16 @@
     var sorted = games.slice().sort(function (a, b) {
       return a.ts.localeCompare(b.ts);
     });
+    var played = [];
     var won = [];
     var lost = [];
+    var playedCount = 0;
     var wonCount = 0;
     var lostCount = 0;
     sorted.forEach(function (g) {
       var gameInfo = { gameLabel: g.gameLabel, opponentNames: g.opponentNames || [], result: g.result };
+      playedCount += 1;
+      pushBucketedPoint(played, g.ts, playedCount, period, gameInfo);
       if (g.result === "won") {
         wonCount += 1;
         pushBucketedPoint(won, g.ts, wonCount, period, gameInfo);
@@ -5046,7 +5056,7 @@
         pushBucketedPoint(lost, g.ts, lostCount, period, gameInfo);
       }
     });
-    return { won: won, lost: lost };
+    return { played: played, won: won, lost: lost };
   }
 
   // Monotone cubic Hermite spline (Fritsch–Carlson) through a point list —
@@ -5470,7 +5480,14 @@
     var comboKeys = Object.keys(series.teamCombos).sort();
 
     var maxCount = 0;
-    [series.individualPlayed, series.individualWon, series.individualLost, tournamentSeries.won, tournamentSeries.lost].forEach(function (arr) {
+    [
+      series.individualPlayed,
+      series.individualWon,
+      series.individualLost,
+      tournamentSeries.played,
+      tournamentSeries.won,
+      tournamentSeries.lost
+    ].forEach(function (arr) {
       if (arr.length) maxCount = Math.max(maxCount, arr[arr.length - 1].count);
     });
     comboKeys.forEach(function (key) {
@@ -5624,6 +5641,21 @@
       }
     });
 
+    if (tournamentSeries.played.length) {
+      var gTournPlayed = appendGraphSeries(
+        svg,
+        tournamentSeries.played,
+        minMs,
+        maxMs,
+        width,
+        height,
+        axisMax,
+        "player-graph-line",
+        "player-graph-dot",
+        TOURNAMENT_PLAYED_COLOR
+      );
+      legendItems.push({ color: TOURNAMENT_PLAYED_COLOR, style: "solid", label: "Tournaments played", group: gTournPlayed });
+    }
     if (tournamentSeries.won.length) {
       var gTournWon = appendGraphSeries(
         svg,
@@ -5692,7 +5724,19 @@
     return wrap;
   }
 
-  function buildAllPlayerCard(stats, maxPlayed, maxWins, maxLosses, maxTournWins, maxTournLosses, minMs, maxMs, period, isInLiveRoster) {
+  function buildAllPlayerCard(
+    stats,
+    maxPlayed,
+    maxWins,
+    maxLosses,
+    maxTournPlayed,
+    maxTournWins,
+    maxTournLosses,
+    minMs,
+    maxMs,
+    period,
+    isInLiveRoster
+  ) {
     var li = document.createElement("li");
     li.className = "all-player-card";
 
@@ -5752,7 +5796,8 @@
       li.appendChild(buildScaleRow("Games Played", stats.played, maxPlayed, "scale-fill-played"));
       li.appendChild(buildScaleRow("Games Won", stats.wins, maxWins, "scale-fill-won"));
       li.appendChild(buildScaleRow("Games Lost", stats.losses, maxLosses, "scale-fill-lost"));
-      if (stats.tournamentWins > 0 || stats.tournamentLosses > 0) {
+      if (stats.tournamentPlayed > 0) {
+        li.appendChild(buildScaleRow("Tournaments Played", stats.tournamentPlayed, maxTournPlayed, "scale-fill-tourn-played"));
         li.appendChild(buildScaleRow("Tournaments Won", stats.tournamentWins, maxTournWins, "scale-fill-tourn-won"));
         li.appendChild(buildScaleRow("Tournaments Lost", stats.tournamentLosses, maxTournLosses, "scale-fill-tourn-lost"));
       }
@@ -5784,6 +5829,7 @@
     var maxPlayed = 0;
     var maxWins = 0;
     var maxLosses = 0;
+    var maxTournPlayed = 0;
     var maxTournWins = 0;
     var maxTournLosses = 0;
     var minTs = null;
@@ -5791,6 +5837,7 @@
       maxPlayed = Math.max(maxPlayed, s.played);
       maxWins = Math.max(maxWins, s.wins);
       maxLosses = Math.max(maxLosses, s.losses);
+      maxTournPlayed = Math.max(maxTournPlayed, s.tournamentPlayed);
       maxTournWins = Math.max(maxTournWins, s.tournamentWins);
       maxTournLosses = Math.max(maxTournLosses, s.tournamentLosses);
       s.games.forEach(function (g) {
@@ -5823,6 +5870,7 @@
     var playedAxisMax = axisMaxFor(maxPlayed);
     var winsAxisMax = axisMaxFor(maxWins);
     var lossesAxisMax = axisMaxFor(maxLosses);
+    var tournPlayedAxisMax = axisMaxFor(maxTournPlayed);
     var tournWinsAxisMax = axisMaxFor(maxTournWins);
     var tournLossesAxisMax = axisMaxFor(maxTournLosses);
 
@@ -5850,6 +5898,7 @@
           playedAxisMax,
           winsAxisMax,
           lossesAxisMax,
+          tournPlayedAxisMax,
           tournWinsAxisMax,
           tournLossesAxisMax,
           minMs,
