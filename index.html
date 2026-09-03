@@ -516,11 +516,11 @@
 
     <section class="help-section" id="help-section-tournament">
       <h3>Tournament</h3>
-      <p>A knockout bracket instead of a regular session.</p>
+      <p>A knockout bracket — or a round robin — instead of a regular session.</p>
       <ul>
-        <li><strong>Format</strong> — <em>Double Elimination</em>: lose once, drop to the losers bracket for a second chance; lose twice and you're out. <em>Single Elimination</em>: lose once and you're out — the faster option, no losers bracket or grand final.</li>
-        <li><strong>Setup</strong> — game type, per-match target, race-to per match, and a checklist of who's competing. Seeding is a random draw.</li>
-        <li><strong>Reading the bracket</strong> — Winners Bracket, Losers Bracket (double elimination only), and Grand Final render as a horizontal tree with connector lines. The active match is highlighted; eliminated players are struck through; the champion gets a 👑.</li>
+        <li><strong>Format</strong> — <em>Double Elimination</em>: lose once, drop to the losers bracket for a second chance; lose twice and you're out. <em>Single Elimination</em>: lose once and you're out — the faster option, no losers bracket or grand final. <em>Round Robin</em>: no elimination at all — everyone plays everyone else once, and whoever has the most match wins once every match is done is champion (a tie is shared by every player at the top).</li>
+        <li><strong>Setup</strong> — game type, per-match target, race-to per match, and a checklist of who's competing. Seeding (and round robin's match order) is a random draw.</li>
+        <li><strong>Reading the bracket</strong> — Winners Bracket, Losers Bracket (double elimination only), and Grand Final render as a horizontal tree with connector lines. The active match is highlighted; eliminated players are struck through; the champion gets a 👑. Round Robin instead shows a live Standings list (ranked by match wins) above the full list of Matches.</li>
       </ul>
       <p>Every rack played in a tournament still counts toward career stats, ratings, and the All Players graphs — it isn't a separate pool of data.</p>
     </section>
@@ -658,6 +658,10 @@
         <input type="radio" name="tournament-format" value="single">
         <span>🥇 Single Elimination — Only Winners Advance: lose once and you're out. Fastest format, best for a quick knockout.</span>
       </label>
+      <label class="wizard-format-option">
+        <input type="radio" name="tournament-format" value="roundrobin">
+        <span>🔄 Round Robin — Everyone Plays Everyone: no elimination, every player faces every other player once, and whoever has the most match wins when it's all done is champion (ties share the win). Best for a casual group where everyone should get equal games in.</span>
+      </label>
     </div>
 
     <div class="row">
@@ -692,8 +696,10 @@
 
     <ul id="tournament-ready-list" class="tournament-ready-list"></ul>
 
-    <h2 class="tournament-bracket-heading">Winners Bracket</h2>
-    <div id="tournament-wb" class="tournament-bracket-scroll"></div>
+    <div id="tournament-wb-section">
+      <h2 class="tournament-bracket-heading">Winners Bracket</h2>
+      <div id="tournament-wb" class="tournament-bracket-scroll"></div>
+    </div>
 
     <div id="tournament-lb-section">
       <h2 class="tournament-bracket-heading">Losers Bracket</h2>
@@ -703,6 +709,13 @@
     <div id="tournament-gf-section">
       <h2 class="tournament-bracket-heading">Grand Final</h2>
       <div id="tournament-gf" class="tournament-bracket-scroll"></div>
+    </div>
+
+    <div id="tournament-rr-section" class="hidden">
+      <h2 class="tournament-bracket-heading">Standings</h2>
+      <ol id="tournament-rr-standings" class="tournament-rr-standings"></ol>
+      <h2 class="tournament-bracket-heading">Matches</h2>
+      <div id="tournament-rr-matches" class="tournament-rr-matches"></div>
     </div>
   </section>
 
