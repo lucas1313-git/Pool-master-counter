@@ -33,6 +33,34 @@
   // current tab — only the underlying save calls become no-ops.
   var noStatsMode = false;
 
+  // Self-healing pass for names saved before capitalization was enforced
+  // everywhere (or from a device/import that predates it): fixes casing in
+  // place on state.players and every gameHistory entry's winner/opponent/
+  // MVP names, so a bad casing saved once doesn't keep resurfacing forever
+  // (buildNameCasingMap would otherwise treat it as the "known" casing and
+  // keep reusing it — see resolvePlayerName). Runs before any rendering.
+  (function migrateNameCapitalizationOnBoot() {
+    var changed = false;
+    function fixName(n) {
+      var fixed = capitalizeName(n);
+      if (fixed !== n) changed = true;
+      return fixed;
+    }
+    function fixList(list) {
+      return (list || []).map(fixName);
+    }
+    (state.players || []).forEach(function (p) {
+      if (p && p.name) p.name = fixName(p.name);
+    });
+    (state.gameHistory || []).forEach(function (entry) {
+      if (!entry || typeof entry === "string") return;
+      if (entry.winnerNames) entry.winnerNames = fixList(entry.winnerNames);
+      if (entry.opponentNames) entry.opponentNames = fixList(entry.opponentNames);
+      if (entry.mvpName) entry.mvpName = fixName(entry.mvpName);
+    });
+    if (changed) saveState();
+  })();
+
   function uid() {
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   }
@@ -382,7 +410,7 @@
   var btnWizardCancel = document.getElementById("wizard-btn-cancel");
   var btnWizardNext = document.getElementById("wizard-btn-next");
   var btnWizardStart = document.getElementById("wizard-btn-start");
-  var btnWizardTempCounter = document.getElementById("btn-wizard-temp-counter");
+  var wizardTempCounterCheckbox = document.getElementById("wizard-temp-counter-checkbox");
 
   var btnToggleFocus = document.getElementById("btn-toggle-focus");
   var focusPlayersWrap = document.getElementById("focus-players-wrap");
@@ -1198,6 +1226,7 @@
     }
     games.forEach(function (entry) {
       var li = document.createElement("li");
+      if (entry.wonRace) li.classList.add("history-race-win-item");
       var timeSpan = document.createElement("span");
       timeSpan.className = "history-date";
       timeSpan.textContent = formatTimestamp(entry.ts, true);
@@ -1216,12 +1245,26 @@
         if (i > 0) winner.appendChild(document.createTextNode(" & "));
         winner.appendChild(document.createTextNode(n));
         winner.appendChild(buildRatingBadge(n));
+        var delta = getPlayerRatingDeltaForGame(n, entry.ts);
+        if (delta !== null) {
+          var deltaSpan = document.createElement("span");
+          deltaSpan.className = "history-rating-delta " + (delta > 0 ? "is-up" : delta < 0 ? "is-down" : "");
+          deltaSpan.textContent = delta > 0 ? " (▲" + delta + ")" : delta < 0 ? " (▼" + delta + ")" : " (—)";
+          winner.appendChild(deltaSpan);
+        }
       });
       li.appendChild(winner);
       li.appendChild(document.createTextNode(" won " + entry.gameLabel + " (target " + entry.target + ")"));
       if (entry.isTeam && entry.mvpName) {
         li.appendChild(document.createTextNode(" · 🎯 " + entry.mvpName + " potted it"));
         li.appendChild(buildRatingBadge(entry.mvpName));
+      }
+      if (entry.wonRace) {
+        var raceBanner = document.createElement("div");
+        raceBanner.className = "history-race-banner";
+        raceBanner.textContent =
+          "🏆 " + entry.winnerNames.join(" & ") + " won the Race to " + entry.raceTarget + " session!";
+        li.appendChild(raceBanner);
       }
       historyList.appendChild(li);
     });
@@ -1264,12 +1307,15 @@
 
   // Reuses an existing name's casing if this is the same person under a
   // different case ("bob" typed when "Bob" is already known), otherwise
-  // capitalizes the typed name to become the new canonical form.
+  // capitalizes the typed name to become the new canonical form. The known
+  // casing is still run through capitalizeName — old data saved before
+  // capitalization was enforced everywhere could have a lowercase "known"
+  // entry, and matching on identity should never resurrect that casing.
   function resolvePlayerName(name) {
     var trimmed = capitalizeName((name || "").trim());
     if (!trimmed) return trimmed;
     var known = buildNameCasingMap()[normalizeNameKey(trimmed)];
-    return known || trimmed;
+    return known ? capitalizeName(known) : trimmed;
   }
 
   // True if this name (any case) already belongs to someone on the live
@@ -1461,7 +1507,10 @@
       mvpId: mvpId,
       mvpName: mvpName,
       durationMs: durationMs,
-      summary: summary
+      summary: summary,
+      wonRace: !!milestoneNames,
+      raceTarget: target,
+      raceCount: milestoneCount
     });
     if (state.gameHistory.length > 200) state.gameHistory.length = 200;
     if (!noStatsMode) {
@@ -1546,6 +1595,11 @@
 
   function celebrateTournamentWin(names, count) {
     var target = state.raceToWinsTarget;
+
+    // A win one game earlier can leave the on-hill overlay open (it has no
+    // reason to auto-close on its own) — without this it stacks visually
+    // behind the milestone overlay that's about to show.
+    closeOnHill();
 
     // Save this tournament's game history to per-player stats before the
     // reset below wipes state.gameHistory, then start the next one fresh.
@@ -2251,6 +2305,21 @@
     return key ? PLAYER_RATINGS[key] : null;
   }
 
+  // The exact rating change this one player got from one specific game —
+  // bumpPlayerRating stamps every history entry with the same ts as the
+  // gameHistory entry that caused it, so this is just a lookup. Returns
+  // null if there's no matching entry (e.g. the game was played with No
+  // Statistic mode on, so no rating history was ever recorded for it).
+  function getPlayerRatingDeltaForGame(name, ts) {
+    var key = findRatingKey(name);
+    if (!key || !ts) return null;
+    var history = PLAYER_RATINGS[key].history || [];
+    for (var i = history.length - 1; i >= 0; i--) {
+      if (history[i].ts === ts) return history[i].delta;
+    }
+    return null;
+  }
+
   function ensureRatingEntry(name) {
     var key = findRatingKey(name) || name;
     if (!PLAYER_RATINGS[key]) {
@@ -2825,6 +2894,18 @@
   // ---------------------------------------------------------------------
 
   var SAVED_ROSTERS = loadRostersFromStorage();
+  (function migrateRosterCapitalizationOnBoot() {
+    var changed = false;
+    SAVED_ROSTERS.forEach(function (r) {
+      if (!r || !Array.isArray(r.players)) return;
+      r.players = r.players.map(function (n) {
+        var fixed = capitalizeName(n);
+        if (fixed !== n) changed = true;
+        return fixed;
+      });
+    });
+    if (changed) saveRostersToStorage(SAVED_ROSTERS);
+  })();
 
   function populateRosterLoadSelect() {
     rosterLoadSelect.innerHTML = "";
@@ -3362,6 +3443,7 @@
     });
     wizardRaceToRow.classList.add("hidden");
     wizardRaceToInput.value = state.raceToWinsTarget || 5;
+    wizardTempCounterCheckbox.checked = false;
     wizardGameTypeSelect.value = state.currentGame.gameType;
     syncWizardRotationEnabledRadios();
     wizardRotationEveryInput.value = state.rotation.every || 1;
@@ -3515,7 +3597,10 @@
           : [],
         isTeam: entry.isTeam,
         mvpName: entry.mvpName,
-        durationMs: entry.durationMs
+        durationMs: entry.durationMs,
+        wonRace: entry.wonRace,
+        raceTarget: entry.raceTarget,
+        raceCount: entry.raceCount
       });
     });
     if (games.length === 0) return null;
@@ -6024,7 +6109,9 @@
   btnWizardBack.addEventListener("click", wizardBack);
   btnWizardNext.addEventListener("click", wizardNext);
   btnWizardStart.addEventListener("click", finalizeWizardAndStart);
-  btnWizardTempCounter.addEventListener("click", startTemporaryCounter);
+  wizardTempCounterCheckbox.addEventListener("change", function () {
+    if (wizardTempCounterCheckbox.checked) startTemporaryCounter();
+  });
 
   Array.prototype.forEach.call(wizardFormatRadios, function (radio) {
     radio.addEventListener("change", function () {

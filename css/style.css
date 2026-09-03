@@ -90,6 +90,26 @@ body {
   padding-top: 8px;
 }
 
+.no-stats-row-inline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0 auto 12px;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.no-stats-row-inline input {
+  cursor: pointer;
+}
+
+.no-stats-row-inline:has(input:checked) {
+  color: var(--accent);
+  font-weight: 600;
+}
+
 .focus-players-wrap {
   display: none;
 }
@@ -837,6 +857,33 @@ input[type="number"] {
   color: var(--accent);
 }
 
+.history-rating-delta {
+  font-weight: 700;
+  margin-left: 2px;
+}
+
+.history-rating-delta.is-up {
+  color: #6fcf6f;
+}
+
+.history-rating-delta.is-down {
+  color: var(--danger);
+}
+
+.history-race-win-item {
+  border-color: var(--accent) !important;
+  background: linear-gradient(180deg, rgba(232, 178, 60, 0.16) 0%, var(--bg-card) 70%) !important;
+}
+
+.history-race-banner {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed rgba(232, 178, 60, 0.4);
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+
 /* ---------- Milestone celebration popup ---------- */
 
 .milestone-overlay {
@@ -1324,9 +1371,26 @@ input[type="number"] {
   letter-spacing: 0.05em;
 }
 
-.wizard-temp-counter-btn {
+.wizard-temp-counter-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   width: 100%;
-  border-style: dashed;
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.wizard-temp-counter-checkbox-label:has(input:checked) {
+  border-color: var(--accent);
+  border-style: solid;
+  background: rgba(232, 178, 60, 0.12);
+}
+
+.wizard-temp-counter-checkbox-label input {
+  flex-shrink: 0;
 }
 
 .wizard-player-chips {
