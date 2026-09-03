@@ -462,6 +462,85 @@
     tone(1108.73, now + 0.28, 0.2, "square", 0.16);
   }
 
+  // Builds a synthetic reverb impulse response — exponentially decaying
+  // stereo noise, no external audio file needed — used only by
+  // playTournamentChampionSound for a big, cathedral-like tail. Much
+  // wetter/longer than the shared slapback echo bus (setupEchoBus)
+  // every other sound uses, on purpose: this fanfare should feel like
+  // it's ringing out in a huge hall.
+  function buildReverbImpulse(ctx, duration, decay) {
+    var rate = ctx.sampleRate;
+    var length = Math.max(1, Math.floor(rate * duration));
+    var impulse = ctx.createBuffer(2, length, rate);
+    for (var ch = 0; ch < 2; ch++) {
+      var data = impulse.getChannelData(ch);
+      for (var i = 0; i < length; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+      }
+    }
+    return impulse;
+  }
+
+  // Winning a whole bracket Tournament (becoming champion, not just
+  // winning one rack) gets its own fanfare: the famous opening phrase of
+  // Beethoven's 9th Symphony ("Ode to Joy"), played low and drenched in
+  // reverb for a deep, triumphant, slightly ominous feel — deliberately
+  // different from playWinSound's bright single-rack fanfare. Every note
+  // is scheduled a full second after this is called (ctx.currentTime + 1)
+  // so it lands just after the champion banner appears, not on top of it.
+  function playTournamentChampionSound() {
+    var ctx = getAudioCtx();
+    var now = ctx.currentTime;
+    var start = now + 1;
+
+    var convolver = ctx.createConvolver();
+    convolver.buffer = buildReverbImpulse(ctx, 3.2, 2.4);
+    var reverbSend = ctx.createGain();
+    reverbSend.gain.value = 0.9;
+    reverbSend.connect(convolver);
+    convolver.connect(ctx.destination);
+
+    // A low sawtooth note plus a sub-octave sine underneath for weight —
+    // both fed into the big reverb send above (not the shared echo bus).
+    function lowReverbTone(freq, t, duration, peakGain) {
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.type = "sawtooth";
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(peakGain, t + 0.025);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      gain.connect(reverbSend);
+      osc.start(t);
+      osc.stop(t + duration + 0.1);
+
+      var sub = ctx.createOscillator();
+      var subGain = ctx.createGain();
+      sub.type = "sine";
+      sub.frequency.value = freq / 2;
+      subGain.gain.setValueAtTime(0, t);
+      subGain.gain.linearRampToValueAtTime(peakGain * 0.65, t + 0.025);
+      subGain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+      sub.connect(subGain);
+      subGain.connect(ctx.destination);
+      subGain.connect(reverbSend);
+      sub.start(t);
+      sub.stop(t + duration + 0.1);
+    }
+
+    // C3-rooted "Ode to Joy" opening phrase: mi mi fa sol / sol fa mi re
+    // / do do re mi — the twelve notes everyone recognizes instantly.
+    var freqs = { C: 130.81, D: 146.83, E: 164.81, F: 174.61, G: 196.0 };
+    var melody = ["E", "E", "F", "G", "G", "F", "E", "D", "C", "C", "D", "E"];
+    var step = 0.3;
+    melody.forEach(function (deg, i) {
+      var isLast = i === melody.length - 1;
+      lowReverbTone(freqs[deg], start + i * step, isLast ? 1.1 : 0.26, isLast ? 0.24 : 0.2);
+    });
+  }
+
   // ---------------------------------------------------------------------
   // Theme — five color/font palettes, applied as a data-theme attribute
   // on <html> so every CSS custom property cascades from there. The
@@ -6402,7 +6481,10 @@
       if (t.active[winsKey] >= t.raceTo) {
         var championAlreadyDecided = !!t.champion;
         reportBracketResult(t, match, name);
-        if (!championAlreadyDecided && t.champion) recordTournamentCompletion(t);
+        if (!championAlreadyDecided && t.champion) {
+          recordTournamentCompletion(t);
+          playTournamentChampionSound();
+        }
         t.active = null;
         saveTournamentToStorage(t);
         renderTournamentPage();

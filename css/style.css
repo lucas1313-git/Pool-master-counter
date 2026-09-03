@@ -505,20 +505,27 @@ button:disabled {
 }
 
 .panel-chevron {
+  display: inline-flex;
   color: var(--text-dim);
-  font-size: 1.1rem;
   line-height: 1;
   flex-shrink: 0;
   margin-left: 12px;
   transition: transform 0.2s ease;
 }
 
+.panel-chevron svg {
+  display: block;
+}
+
 .collapsible-panel.collapsed .panel-toggle {
   margin-bottom: 0;
 }
 
+/* Bigger and visually bolder while a panel is closed — a collapsed
+   panel's chevron is the only hint that there's more inside, so it
+   needs to read clearly at a glance, not just rotate. */
 .collapsible-panel.collapsed .panel-chevron {
-  transform: rotate(-90deg);
+  transform: rotate(-90deg) scale(1.45);
 }
 
 .collapsible-panel.collapsed .panel-body {
