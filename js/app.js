@@ -578,6 +578,162 @@
   });
 
   // ---------------------------------------------------------------------
+  // Language / i18n
+  //
+  // Every user-facing string lives in languages/<name>.json, keyed by a
+  // dotted name (e.g. "backup.exportAll"). languages/manifest.json is the
+  // list the selector reads - a plain static site can't ask the server
+  // "what files exist in this folder" over HTTP, so the manifest IS the
+  // directory listing; adding a language means adding both its JSON file
+  // and a manifest entry (see languages/README.md). English is always
+  // loaded as a fallback dictionary, so a key missing from a
+  // partially-translated language falls back to English instead of
+  // showing a raw key. Switching languages persists the choice and
+  // reloads the page - simplest way to guarantee every screen (including
+  // ones not currently visible) re-renders in the new language, and since
+  // all real app state already lives in localStorage, nothing is lost.
+  // ---------------------------------------------------------------------
+
+  var LANGUAGE_KEY = "poolMasterCounter.language.v1";
+  var DEFAULT_LANGUAGE_CODE = "english";
+  var activeLanguageCode = DEFAULT_LANGUAGE_CODE;
+  var LANG_MANIFEST = [{ code: "english", file: "english.json", label: "English", flag: "🇬🇧" }];
+  var LANG_DICT_EN = {};
+  var LANG_DICT_ACTIVE = {};
+  var missingTranslationKeysWarned = {};
+
+  var languageSelect = document.getElementById("language-select");
+
+  function loadLanguageCodeFromStorage() {
+    try {
+      return localStorage.getItem(LANGUAGE_KEY) || DEFAULT_LANGUAGE_CODE;
+    } catch (e) {
+      return DEFAULT_LANGUAGE_CODE;
+    }
+  }
+
+  function saveLanguageCodeToStorage(code) {
+    try {
+      localStorage.setItem(LANGUAGE_KEY, code);
+    } catch (e) {
+      console.warn("Could not save language.", e);
+    }
+  }
+
+  // Looks up key in the active language, falling back to English, then to
+  // the key itself (warning once, not on every call, so a genuinely
+  // missing key can't spam the console or look like a real JS error).
+  // vars supports {{name}} interpolation, e.g. T("wonGame", {name: "Bob"}).
+  function T(key, vars) {
+    var str = LANG_DICT_ACTIVE[key];
+    if (str === undefined) str = LANG_DICT_EN[key];
+    if (str === undefined) {
+      if (!missingTranslationKeysWarned[key]) {
+        missingTranslationKeysWarned[key] = true;
+        console.warn("Missing translation key:", key);
+      }
+      return key;
+    }
+    if (vars) {
+      Object.keys(vars).forEach(function (name) {
+        str = str.split("{{" + name + "}}").join(vars[name]);
+      });
+    }
+    return str;
+  }
+
+  // Applies the active dictionary to every static data-i18n[-*] element
+  // under root - called once after boot, and whenever DOM is rebuilt by a
+  // template that predates a language switch (rare, since switching
+  // reloads the page; kept general so it also works for content injected
+  // before boot() runs, e.g. nothing today, but safe for future use).
+  function applyDomTranslations(root) {
+    root.querySelectorAll("[data-i18n]").forEach(function (el) {
+      el.textContent = T(el.getAttribute("data-i18n"));
+    });
+    root.querySelectorAll("[data-i18n-html]").forEach(function (el) {
+      el.innerHTML = T(el.getAttribute("data-i18n-html"));
+    });
+    root.querySelectorAll("[data-i18n-placeholder]").forEach(function (el) {
+      el.setAttribute("placeholder", T(el.getAttribute("data-i18n-placeholder")));
+    });
+    root.querySelectorAll("[data-i18n-aria-label]").forEach(function (el) {
+      el.setAttribute("aria-label", T(el.getAttribute("data-i18n-aria-label")));
+    });
+    root.querySelectorAll("[data-i18n-label]").forEach(function (el) {
+      el.setAttribute("label", T(el.getAttribute("data-i18n-label")));
+    });
+  }
+
+  function fetchLanguageJSON(file) {
+    return fetchFresh("languages/" + file)
+      .then(function (res) {
+        return res.ok ? res.json() : {};
+      })
+      .catch(function () {
+        return {};
+      });
+  }
+
+  function loadLanguageManifest() {
+    return fetchFresh("languages/manifest.json")
+      .then(function (res) {
+        return res.ok ? res.json() : [];
+      })
+      .catch(function () {
+        return [];
+      });
+  }
+
+  function populateLanguageSelect() {
+    languageSelect.innerHTML = "";
+    LANG_MANIFEST.forEach(function (entry) {
+      var opt = document.createElement("option");
+      opt.value = entry.code;
+      opt.textContent = entry.flag + " " + entry.label;
+      languageSelect.appendChild(opt);
+    });
+    languageSelect.value = activeLanguageCode;
+  }
+
+  // Loads the manifest, then English (always, as the fallback dict) and
+  // the active language (if different) in parallel. Resolves once both
+  // dictionaries and the selector are ready - awaited alongside
+  // gameTypesPromise/migrateFromRepoIfNeeded() below, before boot().
+  var languagePromise = loadLanguageManifest().then(function (manifest) {
+    if (Array.isArray(manifest) && manifest.length) LANG_MANIFEST = manifest;
+    activeLanguageCode = loadLanguageCodeFromStorage();
+    if (
+      !LANG_MANIFEST.some(function (e) {
+        return e.code === activeLanguageCode;
+      })
+    ) {
+      activeLanguageCode = DEFAULT_LANGUAGE_CODE;
+    }
+    var englishEntry =
+      LANG_MANIFEST.filter(function (e) {
+        return e.code === DEFAULT_LANGUAGE_CODE;
+      })[0] || { file: "english.json" };
+    var activeEntry =
+      LANG_MANIFEST.filter(function (e) {
+        return e.code === activeLanguageCode;
+      })[0] || englishEntry;
+    return Promise.all([
+      fetchLanguageJSON(englishEntry.file),
+      activeLanguageCode === DEFAULT_LANGUAGE_CODE ? Promise.resolve(null) : fetchLanguageJSON(activeEntry.file)
+    ]).then(function (dicts) {
+      LANG_DICT_EN = dicts[0] || {};
+      LANG_DICT_ACTIVE = dicts[1] || LANG_DICT_EN;
+      populateLanguageSelect();
+    });
+  });
+
+  languageSelect.addEventListener("change", function () {
+    saveLanguageCodeToStorage(languageSelect.value);
+    location.reload();
+  });
+
+  // ---------------------------------------------------------------------
   // DOM refs
   // ---------------------------------------------------------------------
 
@@ -784,7 +940,7 @@
 
   function setFocusMode(on) {
     appRoot.classList.toggle("focus-mode", on);
-    btnToggleFocus.textContent = on ? "Show All" : "Focus Mode";
+    btnToggleFocus.textContent = T(on ? "scoreboard.showAll" : "scoreboard.focusMode");
     try {
       localStorage.setItem(FOCUS_MODE_KEY, on ? "1" : "0");
     } catch (e) {
@@ -946,7 +1102,7 @@
     if (state.rotation.order.length === 0) {
       var hint = document.createElement("li");
       hint.className = "empty-hint";
-      hint.textContent = "No game types added yet.";
+      hint.textContent = T("rotation.noGameTypesYet");
       listEl.appendChild(hint);
       return;
     }
@@ -1133,7 +1289,7 @@
   }
 
   function renderStandings() {
-    standingsTitle.textContent = "Race to " + state.raceToWinsTarget + " Wins — Teams";
+    standingsTitle.textContent = T("standings.raceToTeams", { target: state.raceToWinsTarget });
 
     var comboKeys = Object.keys(state.teamWins);
     ["A", "B"].forEach(function (teamId) {
@@ -1145,7 +1301,7 @@
     if (comboKeys.length === 0) {
       var teamHint = document.createElement("li");
       teamHint.className = "empty-hint";
-      teamHint.textContent = "No team pairings yet — switch to Teams mode and assign players.";
+      teamHint.textContent = T("standings.noTeamPairings");
       teamStandingsList.appendChild(teamHint);
     } else {
       comboKeys
@@ -1168,7 +1324,7 @@
     if (state.players.length === 0) {
       var playerHint = document.createElement("li");
       playerHint.className = "empty-hint";
-      playerHint.textContent = "No players yet.";
+      playerHint.textContent = T("standings.noPlayersYet");
       playerStandingsList.appendChild(playerHint);
     } else {
       state.players
@@ -1215,11 +1371,11 @@
     if (state.players.length === 0) {
       var hint = document.createElement("li");
       hint.className = "empty-hint";
-      hint.textContent = "Add players to get started.";
+      hint.textContent = T("players.addToGetStarted");
       rosterList.appendChild(hint);
       setPanelSummary("players-panel", computePlayersSummary());
       renderPlayingToggleListInto(focusPlayersList, "No players yet — add some in the Players panel.");
-      focusPlayersSummary.textContent = "Players";
+      focusPlayersSummary.textContent = T("players.heading");
       return;
     }
     var showTeamToggle = state.currentGame.mode === "teams";
@@ -1230,14 +1386,14 @@
 
       var name = document.createElement("span");
       name.className = "roster-name";
-      name.textContent = p.name;
+      buildPlayerNameLabel(name, p.name, false);
       row.appendChild(name);
       row.appendChild(buildRatingBadge(p.name));
 
       var playBtn = document.createElement("button");
       playBtn.type = "button";
       playBtn.className = "btn-playing" + (p.playing ? " is-on" : "");
-      playBtn.textContent = p.playing ? "Playing" : "Standby";
+      playBtn.textContent = T(p.playing ? "players.playing" : "players.standby");
       playBtn.addEventListener("click", function () {
         togglePlaying(p.id);
       });
@@ -1489,7 +1645,7 @@
     if (SAVED_ROSTERS.length === 0) {
       var opt = document.createElement("option");
       opt.value = "";
-      opt.textContent = "No saved lists yet";
+      opt.textContent = T("players.noSavedListsYet");
       select.appendChild(opt);
       select.disabled = true;
       btn.disabled = true;
@@ -1527,19 +1683,19 @@
 
     var name = document.createElement("div");
     name.className = "player-name";
-    name.textContent = player.name;
+    buildPlayerNameLabel(name, player.name, false);
     name.appendChild(buildRatingBadge(player.name));
     name.appendChild(buildPlayerLinkIcon(player.name));
     panel.appendChild(name);
 
     var wins = state.playerWins[player.id] || 0;
-    panel.appendChild(buildStatMini("Tourney win", wins, wins >= state.raceToWinsTarget, "stat-mini-tourney"));
+    panel.appendChild(buildStatMini(T("scoreboard.tourneyWin"), wins, wins >= state.raceToWinsTarget, "stat-mini-tourney"));
 
     var block = document.createElement("div");
     block.className = "stat-block";
     var label = document.createElement("div");
     label.className = "stat-label";
-    label.textContent = GAME_TYPES[state.currentGame.gameType].label + " · Target " + state.currentGame.target;
+    label.textContent = T("scoreboard.gameTargetLabel", { game: GAME_TYPES[state.currentGame.gameType].label, target: state.currentGame.target });
     var value = document.createElement("div");
     value.className = "stat-value";
     value.textContent = player.balls || 0;
@@ -1558,12 +1714,12 @@
 
     var name = document.createElement("div");
     name.className = "member-name";
-    name.textContent = player.name;
+    buildPlayerNameLabel(name, player.name, false);
     name.appendChild(buildPlayerLinkIcon(player.name));
     card.appendChild(name);
 
     var wins = state.playerWins[player.id] || 0;
-    card.appendChild(buildStatMini("Tourney win", wins, wins >= state.raceToWinsTarget, "stat-mini-tourney"));
+    card.appendChild(buildStatMini(T("scoreboard.tourneyWin"), wins, wins >= state.raceToWinsTarget, "stat-mini-tourney"));
 
     var value = document.createElement("div");
     value.className = "stat-value small";
@@ -1591,7 +1747,7 @@
     block.className = "stat-block";
     var label = document.createElement("div");
     label.className = "stat-label";
-    label.textContent = GAME_TYPES[state.currentGame.gameType].label + " · Target " + state.currentGame.target;
+    label.textContent = T("scoreboard.gameTargetLabel", { game: GAME_TYPES[state.currentGame.gameType].label, target: state.currentGame.target });
     var value = document.createElement("div");
     value.className = "stat-value";
     value.textContent = sumTeamBalls(teamId);
@@ -1615,7 +1771,7 @@
     nowPlayingBanner.appendChild(document.createTextNode("🎱 Now Playing: " + type.label));
     var note = document.createElement("span");
     note.className = "target-note";
-    note.textContent = "Target " + state.currentGame.target + " " + state.currentGame.unit;
+    note.textContent = T("gameSetup.targetNote", { target: state.currentGame.target, unit: state.currentGame.unit });
     nowPlayingBanner.appendChild(note);
     var duration = document.createElement("span");
     duration.className = "game-duration-live";
@@ -1655,7 +1811,7 @@
       scoreboard.className = "scoreboard";
       var hint = document.createElement("div");
       hint.className = "empty-hint";
-      hint.textContent = "Mark players as Playing above to start scoring.";
+      hint.textContent = T("scoreboard.markPlayingHint");
       scoreboard.appendChild(hint);
       return;
     }
@@ -1680,8 +1836,7 @@
     if (!ts || isNaN(d.getTime())) return "";
     var timePart = d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
     if (!includeDate) return timePart;
-    var datePart = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-    return datePart + " · " + timePart;
+    return formatDateISO(d) + " · " + timePart;
   }
 
   function formatDuration(ms) {
@@ -1713,7 +1868,7 @@
     if (games.length === 0) {
       var hint = document.createElement("li");
       hint.className = "empty-hint";
-      hint.textContent = "No games finished yet today.";
+      hint.textContent = T("history.noGamesToday");
       historyList.appendChild(hint);
       return;
     }
@@ -1728,7 +1883,7 @@
       if (durationText) {
         var durationSpan = document.createElement("span");
         durationSpan.className = "history-duration";
-        durationSpan.textContent = "Duration: " + durationText;
+        durationSpan.textContent = T("common.duration", { time: durationText });
         li.appendChild(durationSpan);
       }
       var winner = document.createElement("strong");
@@ -1747,16 +1902,15 @@
         }
       });
       li.appendChild(winner);
-      li.appendChild(document.createTextNode(" won " + entry.gameLabel + " (target " + entry.target + ")"));
+      li.appendChild(document.createTextNode(" " + T("history.wonGameTarget", { game: entry.gameLabel, target: entry.target })));
       if (entry.isTeam && entry.mvpName) {
-        li.appendChild(document.createTextNode(" · 🎯 " + entry.mvpName + " potted it"));
+        li.appendChild(document.createTextNode(" · " + T("history.pottedIt", { name: entry.mvpName })));
         li.appendChild(buildRatingBadge(entry.mvpName));
       }
       if (entry.wonRace) {
         var raceBanner = document.createElement("div");
         raceBanner.className = "history-race-banner";
-        raceBanner.textContent =
-          "🏆 " + entry.winnerNames.join(" & ") + " won the Race to " + entry.raceTarget + " session!";
+        raceBanner.textContent = T("history.wonRaceSession", { names: entry.winnerNames.join(" & "), target: entry.raceTarget });
         li.appendChild(raceBanner);
       }
       historyList.appendChild(li);
@@ -1868,11 +2022,7 @@
     // the confirmation and just remove them.
     if (
       state.gameHistory.length > 0 &&
-      !confirm(
-        "Remove this player from the current roster? This only takes them off today's active list — " +
-        "their saved career stats and game history stay on this device and will still show up on the " +
-        "All Players page."
-      )
+      !confirm(T("confirm.removePlayer"))
     ) {
       return;
     }
@@ -2042,15 +2192,10 @@
   function undoLastWin() {
     var entry = state.gameHistory[0];
     if (!entry || typeof entry === "string" || !entry.winnerIds) {
-      showToast("No recorded win to undo.");
+      showToast(T("toast.noWinToUndo"));
       return;
     }
-    if (
-      !confirm(
-        "Undo the most recent win — " + entry.summary + "? " +
-        "This removes it from the history and reverses the win count. The current game's score isn't affected."
-      )
-    ) {
+    if (!confirm(T("confirm.undoWin", { summary: entry.summary }))) {
       return;
     }
     entry.winnerIds.forEach(function (id) {
@@ -2078,7 +2223,7 @@
   }
 
   function announceGameChange(label) {
-    gameChangeMessage.textContent = "Now playing: " + label + "!";
+    gameChangeMessage.textContent = T("gamechange.nowPlaying", { label: label });
     gameChangeOverlay.classList.remove("hidden");
     playPositiveSound(null);
   }
@@ -2105,19 +2250,23 @@
     });
     var info = rotationStatusInfo();
 
-    milestoneHeadline.textContent = names + " won the tournament with " + count + " wins! (race-to " + target + ")";
+    milestoneHeadline.textContent = T("milestone.headline", { names: names, count: count, target: target });
 
     milestoneDetails.innerHTML = "";
-    milestoneDetails.appendChild(playerStatsListRow("Players", playerNames, true));
-    milestoneDetails.appendChild(playerStatsRow("Tournament goal", "Race to " + target + " wins"));
+    milestoneDetails.appendChild(playerStatsListRow(T("milestone.players"), playerNames, true));
+    milestoneDetails.appendChild(playerStatsRow(T("milestone.tournamentGoal"), T("milestone.raceToWins", { target: target })));
     if (state.rotation.enabled && state.rotation.order.length > 0) {
       var rotationLabels = state.rotation.order.map(rotationEntryLabel);
-      milestoneDetails.appendChild(playerStatsListRow("Game rotation", rotationLabels));
+      milestoneDetails.appendChild(playerStatsListRow(T("milestone.gameRotation"), rotationLabels));
       if (info) {
         milestoneDetails.appendChild(
           playerStatsRow(
-            "Next switch",
-            info.currentLabel + " → " + info.nextLabel + " in " + info.untilSwitch + " game" + (info.untilSwitch === 1 ? "" : "s")
+            T("milestone.nextSwitch"),
+            T(info.untilSwitch === 1 ? "milestone.nextSwitchDetailOne" : "milestone.nextSwitchDetailMany", {
+              current: info.currentLabel,
+              next: info.nextLabel,
+              count: info.untilSwitch
+            })
           )
         );
       }
@@ -2184,7 +2333,7 @@
   }
 
   function resetCurrentGame() {
-    if (!confirm("Reset the current game's score to zero? (No win will be credited.)")) return;
+    if (!confirm(T("confirm.resetGame"))) return;
     resetGameBalls();
     saveState();
     renderAll();
@@ -2192,14 +2341,12 @@
 
   function resetAllStats() {
     if (state.gameHistory.length === 0) {
-      if (!confirm("Start a new session? This clears session wins, team wins, and restarts the game rotation from the top.")) return;
+      if (!confirm(T("confirm.startNewSession"))) return;
       startNewSession(false);
       return;
     }
     var count = state.gameHistory.length;
-    saveSessionMessage.textContent =
-      "You've recorded " + count + " game" + (count === 1 ? "" : "s") + " this session. " +
-      "Save it before starting a new one? This cannot be undone.";
+    saveSessionMessage.textContent = T(count === 1 ? "saveSession.messageOne" : "saveSession.messageMany", { count: count });
     saveSessionOverlay.classList.remove("hidden");
   }
 
@@ -2223,6 +2370,11 @@
   // Sharing by email
   // ---------------------------------------------------------------------
 
+  // Deliberately NOT run through T() - this is shared out of the app as a
+  // message to other people (email/SMS), same as the day report and every
+  // export, so it stays in a consistent language (English) regardless of
+  // the sender's UI language. See buildDayReportText below for the same
+  // rule applied to the day report.
   function shareStandings() {
     var lines = ["Pool Master Counter — Standings", ""];
     lines.push("Player session wins:");
@@ -2406,22 +2558,20 @@
     return text2;
   }
 
-  function formatReportDateHeading(dateStr) {
-    var d = new Date(dateStr + "T00:00:00");
-    return d.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  // Always YYYY-MM-DD, regardless of the active language - dates are a
+  // global format standardization, not a per-language style. Accepts a
+  // Date, an ISO timestamp string, or a bare YYYY-MM-DD date string.
+  function formatDateISO(input) {
+    var d = input instanceof Date ? input : new Date(input);
+    if (isNaN(d.getTime())) return "";
+    var y = d.getFullYear();
+    var m = d.getMonth() + 1;
+    var day = d.getDate();
+    return y + "-" + (m < 10 ? "0" + m : m) + "-" + (day < 10 ? "0" + day : day);
   }
 
-  var MONTH_NAMES = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"
-  ];
-
-  // "September/03/2026" - used for the player page's "Added" line.
-  function formatAddedDate(iso) {
-    var d = new Date(iso);
-    if (isNaN(d.getTime())) return "";
-    var day = d.getDate();
-    return MONTH_NAMES[d.getMonth()] + "/" + (day < 10 ? "0" + day : day) + "/" + d.getFullYear();
+  function formatReportDateHeading(dateStr) {
+    return formatDateISO(dateStr + "T00:00:00");
   }
 
   function buildDayReportText(dateStr) {
@@ -2684,6 +2834,31 @@
     }
   }
 
+  // Name -> { languageCode: "translated name" }. Names don't machine-
+  // translate (they're not phrases with a canonical target-language
+  // equivalent), so this is a manually-entered per-player, per-language
+  // nickname rather than anything automatic - see buildPlayerNameLabel.
+  var PLAYER_NAME_TRANSLATIONS_KEY = "poolMasterCounter.playerNameTranslations.v1";
+
+  function loadPlayerNameTranslationsFromStorage() {
+    try {
+      var raw = localStorage.getItem(PLAYER_NAME_TRANSLATIONS_KEY);
+      var parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function savePlayerNameTranslationsToStorage(translations) {
+    if (noStatsMode) return;
+    try {
+      localStorage.setItem(PLAYER_NAME_TRANSLATIONS_KEY, JSON.stringify(translations));
+    } catch (e) {
+      console.warn("Could not save player name translations.", e);
+    }
+  }
+
   // One-time-per-load cleanup: if PLAYER_STATS already has separate entries
   // for the same person under different casing (e.g. "Bob" and "bob" from
   // before names were treated as case-insensitive), merge their sessions
@@ -2871,6 +3046,69 @@
     if (findPlayerAddedKey(name)) return;
     PLAYER_ADDED[name] = new Date().toISOString();
     savePlayerAddedToStorage(PLAYER_ADDED);
+  }
+
+  var PLAYER_NAME_TRANSLATIONS = loadPlayerNameTranslationsFromStorage();
+
+  function findPlayerNameTranslationKey(name) {
+    var key = normalizeNameKey(name);
+    var match = Object.keys(PLAYER_NAME_TRANSLATIONS).filter(function (k) {
+      return normalizeNameKey(k) === key;
+    });
+    return match.length ? match[0] : null;
+  }
+
+  function getPlayerNameTranslation(name, languageCode) {
+    var key = findPlayerNameTranslationKey(name);
+    if (!key) return null;
+    return PLAYER_NAME_TRANSLATIONS[key][languageCode] || null;
+  }
+
+  function setPlayerNameTranslation(name, languageCode, translatedName) {
+    var key = findPlayerNameTranslationKey(name) || name;
+    if (!PLAYER_NAME_TRANSLATIONS[key]) PLAYER_NAME_TRANSLATIONS[key] = {};
+    if (translatedName) PLAYER_NAME_TRANSLATIONS[key][languageCode] = translatedName;
+    else delete PLAYER_NAME_TRANSLATIONS[key][languageCode];
+    savePlayerNameTranslationsToStorage(PLAYER_NAME_TRANSLATIONS);
+  }
+
+  // Builds "Bob (Bobby)" - the plain name, plus a smaller/dimmer
+  // parenthesized translation if one exists for the active language (never
+  // fabricated; English shows just the plain name). Appends directly to
+  // container so call sites can keep using it like a plain name element.
+  // When editable is true (only meaningful on the Player Stats page, where
+  // there's room), also appends a small ✏️ button to set/change the
+  // translation for the active language - names don't machine-translate,
+  // so this is the "if possible" path: a manually-entered nickname per
+  // language rather than anything automatic.
+  function buildPlayerNameLabel(container, name, editable) {
+    container.appendChild(document.createTextNode(name));
+    if (activeLanguageCode === DEFAULT_LANGUAGE_CODE) return;
+    var translated = getPlayerNameTranslation(name, activeLanguageCode);
+    if (translated) {
+      var span = document.createElement("span");
+      span.className = "player-name-translated";
+      span.textContent = "(" + translated + ")";
+      container.appendChild(span);
+    }
+    if (editable) {
+      var editBtn = document.createElement("button");
+      editBtn.type = "button";
+      editBtn.className = "player-name-edit-btn";
+      editBtn.textContent = "✏️";
+      editBtn.title = T("playerPage.editTranslatedName");
+      editBtn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        var entered = prompt(T("playerPage.editTranslatedNamePrompt", { name: name }), translated || "");
+        if (entered === null) return;
+        setPlayerNameTranslation(name, activeLanguageCode, entered.trim());
+        renderAll();
+        if (typeof renderPlayerSynopsis === "function" && currentStatsPlayerName === name) {
+          openPlayerStatsPage(name, true);
+        }
+      });
+      container.appendChild(editBtn);
+    }
   }
 
   // The exact rating change this one player got from one specific game —
@@ -3119,12 +3357,7 @@
   }
 
   function resetAllPlayerStats() {
-    if (
-      !confirm(
-        "This clears EVERY player's saved stat history on this device — all sessions, for all players, not just the current live session. " +
-        "A backup file of all your data will be downloaded first, and can be restored later from Import Data. This cannot be undone. Continue?"
-      )
-    ) {
+    if (!confirm(T("confirm.resetAllPlayerStats"))) {
       return;
     }
     exportAllData();
@@ -3134,27 +3367,22 @@
       currentStatsSessions = [];
       renderPlayerHistoryList([]);
     }
-    showToast("Backed up your data and cleared all players' saved stat history.");
+    showToast(T("toast.playerStatsCleared"));
   }
 
   function resetAllRosterLists() {
     if (SAVED_ROSTERS.length === 0) {
-      showToast("No saved player lists to reset.");
+      showToast(T("toast.noSavedListsToReset"));
       return;
     }
-    if (
-      !confirm(
-        "This clears every saved player list on this device (everything in the \"Load Player List\" dropdown). " +
-        "A backup file of your player lists will be downloaded first, and can be restored later from Import Player Lists. This cannot be undone. Continue?"
-      )
-    ) {
+    if (!confirm(T("confirm.resetRosterLists"))) {
       return;
     }
     exportRosterLists();
     SAVED_ROSTERS = [];
     saveRostersToStorage(SAVED_ROSTERS);
     populateRosterLoadSelect();
-    showToast("Backed up and cleared all saved player lists.");
+    showToast(T("toast.rosterListsCleared"));
   }
 
   // One-time migration: the app used to store rosters/player stats as JSON
@@ -3383,7 +3611,7 @@
       try {
         data = JSON.parse(reader.result);
       } catch (e) {
-        alert("That file isn't valid JSON.");
+        alert(T("alert.notValidJson"));
         return;
       }
       var rawList = Array.isArray(data)
@@ -3394,12 +3622,12 @@
         ? data.rosters
         : null;
       if (!rawList) {
-        alert("That doesn't look like a player list file.");
+        alert(T("alert.notAPlayerListFile"));
         return;
       }
       var normalized = rawList.map(normalizeImportedRosterEntry).filter(Boolean);
       if (!normalized.length) {
-        alert("No valid player lists found in that file.");
+        alert(T("alert.noValidPlayerLists"));
         return;
       }
       var merge = mergeRosterLists(SAVED_ROSTERS, normalized);
@@ -3412,7 +3640,7 @@
       );
     };
     reader.onerror = function () {
-      alert("Could not read that file.");
+      alert(T("alert.couldNotReadFile"));
     };
     reader.readAsText(file);
   }
@@ -3424,11 +3652,11 @@
       try {
         data = JSON.parse(reader.result);
       } catch (e) {
-        alert("That file isn't valid JSON.");
+        alert(T("alert.notValidJson"));
         return;
       }
       if (!data || typeof data !== "object" || !data.state) {
-        alert("That doesn't look like a Pool Master Counter backup file.");
+        alert(T("alert.notABackupFile"));
         return;
       }
 
@@ -3438,13 +3666,7 @@
       // backup's history in without double-counting anything already known.
       var localIsFresh = state.players.length === 0;
 
-      if (
-        !confirm(
-          localIsFresh
-            ? "Import this backup? This device has no players set up yet, so the backup's current game and roster will be loaded as-is."
-            : "Merge this backup into your existing data? Player stats and saved rosters will be combined — games already known on both sides (same player, same time) won't be counted twice. Your current in-progress game stays as-is; any new players from the backup are added to your roster."
-        )
-      ) {
+      if (!confirm(T(localIsFresh ? "confirm.importBackupFresh" : "confirm.importBackupMerge"))) {
         return;
       }
 
@@ -3528,20 +3750,16 @@
         localStorage.setItem(RATINGS_KEY, JSON.stringify(mergedRatings));
 
         if (!localIsFresh) {
-          alert(
-            "Merged. Added " + newPlayerCount + " new player" + (newPlayerCount === 1 ? "" : "s") +
-            " and " + rosterMerge.added + " saved roster list" + (rosterMerge.added === 1 ? "" : "s") +
-            " from the backup. Your current game wasn't touched."
-          );
+          alert(T("alert.mergedImport", { players: newPlayerCount, lists: rosterMerge.added }));
         }
       } catch (e) {
-        alert("Could not import: " + e.message);
+        alert(T("alert.couldNotImport", { message: e.message }));
         return;
       }
       location.reload();
     };
     reader.onerror = function () {
-      alert("Could not read that file.");
+      alert(T("alert.couldNotReadFile"));
     };
     reader.readAsText(file);
   }
@@ -3569,7 +3787,7 @@
     if (SAVED_ROSTERS.length === 0) {
       var opt = document.createElement("option");
       opt.value = "";
-      opt.textContent = "No saved lists yet";
+      opt.textContent = T("players.noSavedListsYet");
       rosterLoadSelect.appendChild(opt);
       rosterLoadSelect.disabled = true;
       btnRosterLoad.disabled = true;
@@ -3718,7 +3936,7 @@
     if (SAVED_ROTATIONS.length === 0) {
       var opt = document.createElement("option");
       opt.value = "";
-      opt.textContent = "No saved rotations yet";
+      opt.textContent = T("rotation.noSavedRotationsYet");
       rotationLoadSelect.appendChild(opt);
       rotationLoadSelect.disabled = true;
       btnRotationLoad.disabled = true;
@@ -3826,7 +4044,7 @@
     if (SAVED_ROSTERS.length === 0) {
       var opt = document.createElement("option");
       opt.value = "";
-      opt.textContent = "No saved lists yet";
+      opt.textContent = T("players.noSavedListsYet");
       wizardRosterLoadSelect.appendChild(opt);
       wizardRosterLoadSelect.disabled = true;
       btnWizardRosterLoad.disabled = true;
@@ -3847,7 +4065,7 @@
     if (SAVED_ROTATIONS.length === 0) {
       var opt = document.createElement("option");
       opt.value = "";
-      opt.textContent = "No saved rotations yet";
+      opt.textContent = T("rotation.noSavedRotationsYet");
       wizardRotationLoadSelect.appendChild(opt);
       wizardRotationLoadSelect.disabled = true;
       btnWizardRotationLoad.disabled = true;
@@ -3914,20 +4132,20 @@
     if (state.players.length === 0) {
       var hint = document.createElement("li");
       hint.className = "empty-hint";
-      hint.textContent = "No players yet — add some above.";
+      hint.textContent = T("wizard.noPlayersYetAddAbove");
       wizardPlayerChips.appendChild(hint);
       return;
     }
     state.players.forEach(function (p) {
       var li = document.createElement("li");
       var name = document.createElement("span");
-      name.textContent = p.name;
+      buildPlayerNameLabel(name, p.name, false);
       name.appendChild(buildRatingBadge(p.name));
       var removeBtn = document.createElement("button");
       removeBtn.type = "button";
       removeBtn.className = "wizard-player-chip-remove";
       removeBtn.textContent = "×";
-      removeBtn.setAttribute("aria-label", "Remove " + p.name);
+      removeBtn.setAttribute("aria-label", T("common.removeName", { name: p.name }));
       removeBtn.addEventListener("click", function () {
         removePlayer(p.id);
       });
@@ -3945,14 +4163,14 @@
 
     var name = document.createElement("span");
     name.className = "roster-name";
-    name.textContent = p.name;
+    buildPlayerNameLabel(name, p.name, false);
     row.appendChild(name);
     row.appendChild(buildRatingBadge(p.name));
 
     var playBtn = document.createElement("button");
     playBtn.type = "button";
     playBtn.className = "btn-playing" + (p.playing ? " is-on" : "");
-    playBtn.textContent = p.playing ? "Playing" : "Standby";
+    playBtn.textContent = T(p.playing ? "players.playing" : "players.standby");
     playBtn.addEventListener("click", function () {
       togglePlaying(p.id);
     });
@@ -4042,7 +4260,7 @@
       document.getElementById("wizard-step-" + n).classList.toggle("hidden", n !== wizardStep);
     });
 
-    wizardProgress.textContent = "Step " + (idx + 1) + " of " + seq.length;
+    wizardProgress.textContent = T("wizard.stepOf", { step: idx + 1, total: seq.length });
 
     wizardProgressDots.innerHTML = "";
     seq.forEach(function (stepNum, i) {
@@ -4056,7 +4274,7 @@
     btnWizardNext.classList.toggle("hidden", isLast);
     btnWizardStart.classList.toggle("hidden", !isLast);
     if (isLast) {
-      btnWizardStart.textContent = wizardFormat === "tournament" ? "🏆 Go to Tournament Setup" : "🎱 Start Game";
+      btnWizardStart.textContent = T(wizardFormat === "tournament" ? "wizard.goToTournamentSetup" : "wizard.startGame");
     }
 
     if (wizardStep === 2) renderWizardPlayerChips();
@@ -4410,7 +4628,7 @@
     if (durationText) {
       var durationSpan = document.createElement("span");
       durationSpan.className = "player-game-log-duration";
-      durationSpan.textContent = "Duration: " + durationText;
+      durationSpan.textContent = T("common.duration", { time: durationText });
       div.appendChild(durationSpan);
     }
     div.appendChild(document.createTextNode(" — won by "));
@@ -4448,13 +4666,13 @@
   function renderLiveSessionForPlayer(name) {
     var live = computeLiveSessionForPlayer(name);
     playerPageCurrentBody.innerHTML = "";
-    playerPageCurrentBody.appendChild(playerStatsRow("Wins today", live.wins));
+    playerPageCurrentBody.appendChild(playerStatsRow(T("playerPage.winsToday"), live.wins));
     playerPageCurrentBody.appendChild(playerGamesLogRow("Games", live.games));
-    playerPageCurrentBody.appendChild(playerStatsListRow("Opponents", live.opponents, true));
+    playerPageCurrentBody.appendChild(playerStatsListRow(T("playerPage.opponents"), live.opponents, true));
     if (live.wonTournament) {
       var trophy = document.createElement("div");
       trophy.className = "tournament-winner-banner";
-      trophy.textContent = "🏆 " + name + " Won the Tournament Today!";
+      trophy.textContent = T("history.wonTournamentToday", { name: name });
       trophy.appendChild(buildRatingBadge(name));
       playerPageCurrentBody.appendChild(trophy);
     }
@@ -4577,21 +4795,21 @@
     var synopsis = computeWinLossSynopsis(filtered);
 
     playerPageSynopsisBody.innerHTML = "";
-    playerPageSynopsisBody.appendChild(synopsisStatRow("Rating", getPlayerRating(currentStatsPlayerName)));
+    playerPageSynopsisBody.appendChild(synopsisStatRow(T("common.rating"), getPlayerRating(currentStatsPlayerName)));
     var ratingDeltaText = formatRatingPeriodDelta(currentStatsPlayerName, currentStatsPeriod);
     if (ratingDeltaText !== null) {
       playerPageSynopsisBody.appendChild(
         synopsisStatRow(
-          "Rating this period",
+          T("playerPage.ratingThisPeriod"),
           ratingDeltaText,
           ratingDeltaText.charAt(0) === "▲" ? "win" : ratingDeltaText.charAt(0) === "▼" ? "loss" : null
         )
       );
     }
-    playerPageSynopsisBody.appendChild(synopsisStatRow("Games won", synopsis.wins, "win"));
-    playerPageSynopsisBody.appendChild(synopsisStatRow("Games lost", synopsis.losses, "loss"));
+    playerPageSynopsisBody.appendChild(synopsisStatRow(T("playerPage.gamesWon"), synopsis.wins, "win"));
+    playerPageSynopsisBody.appendChild(synopsisStatRow(T("playerPage.gamesLost"), synopsis.losses, "loss"));
     playerPageSynopsisBody.appendChild(
-      synopsisStatRow("Win %", synopsis.pct === null ? "—" : synopsis.pct + "%")
+      synopsisStatRow(T("playerPage.winPct"), synopsis.pct === null ? "—" : synopsis.pct + "%")
     );
 
     var tournamentFiltered = filterGamesByPeriod(
@@ -4599,9 +4817,9 @@
       currentStatsPeriod
     );
     var tournamentSynopsis = computeWinLossSynopsis(tournamentFiltered);
-    playerPageSynopsisBody.appendChild(synopsisStatRow("Tournaments played", tournamentSynopsis.total));
-    playerPageSynopsisBody.appendChild(synopsisStatRow("Tournaments won", tournamentSynopsis.wins, "win"));
-    playerPageSynopsisBody.appendChild(synopsisStatRow("Tournaments lost", tournamentSynopsis.losses, "loss"));
+    playerPageSynopsisBody.appendChild(synopsisStatRow(T("playerPage.tournamentsPlayed"), tournamentSynopsis.total));
+    playerPageSynopsisBody.appendChild(synopsisStatRow(T("playerPage.tournamentsWon"), tournamentSynopsis.wins, "win"));
+    playerPageSynopsisBody.appendChild(synopsisStatRow(T("playerPage.tournamentsLost"), tournamentSynopsis.losses, "loss"));
 
     var h2h = computeHeadToHead(filtered);
     setPanelSummary(
@@ -4614,7 +4832,7 @@
     if (h2h.length === 0) {
       var hint = document.createElement("li");
       hint.className = "empty-hint";
-      hint.textContent = "No games against opponents in this period yet.";
+      hint.textContent = T("playerPage.noOpponentGamesThisPeriod");
       playerPageH2hList.appendChild(hint);
       return;
     }
@@ -4692,7 +4910,7 @@
     if (!sessions || sessions.length === 0) {
       var hint = document.createElement("li");
       hint.className = "empty-hint";
-      hint.textContent = "No saved sessions yet for this player — use Export Stats to start tracking.";
+      hint.textContent = T("playerPage.noSavedSessionsYet");
       playerPageHistoryList.appendChild(hint);
       return;
     }
@@ -4721,7 +4939,7 @@
         if (session.wonTournament) {
           var banner = document.createElement("div");
           banner.className = "tournament-winner-banner";
-          banner.textContent = "🏆 " + playerName + " Won the Tournament!";
+          banner.textContent = T("playerPage.wonTournamentBanner", { name: playerName });
           banner.appendChild(buildRatingBadge(playerName));
           li.appendChild(banner);
         }
@@ -4828,11 +5046,12 @@
     if (!skipHistory) pushScreenHistory("player", { name: name });
     currentStatsPlayerName = name;
     currentStatsSessions = null;
-    playerPageName.textContent = name;
+    playerPageName.innerHTML = "";
+    buildPlayerNameLabel(playerPageName, name, true);
     playerPageName.appendChild(buildRatingBadge(name));
     var addedAt = getPlayerAddedAt(name);
     if (addedAt) {
-      playerPageAdded.textContent = "Added " + formatAddedDate(addedAt);
+      playerPageAdded.textContent = T("playerPage.added", { date: formatDateISO(addedAt) });
       playerPageAdded.classList.remove("hidden");
     } else {
       playerPageAdded.textContent = "";
@@ -4843,7 +5062,7 @@
     playerPageHistoryList.innerHTML = "";
     var loading = document.createElement("li");
     loading.className = "empty-hint";
-    loading.textContent = "Loading saved history…";
+    loading.textContent = T("playerPage.loadingSavedHistory");
     playerPageHistoryList.appendChild(loading);
 
     appRoot.classList.add("hidden");
@@ -5040,7 +5259,7 @@
 
     var title = document.createElement("div");
     title.className = "timeline-title";
-    title.textContent = "Timeline";
+    title.textContent = T("common.timeline");
     wrap.appendChild(title);
 
     var track = document.createElement("div");
@@ -5372,7 +5591,7 @@
       // instead of the bare opponent name — otherwise "Suresh 2 wins,
       // 0 losses" reads as Suresh's own record, when it's actually
       // this player's record against Suresh.
-      name.textContent = "vs " + opp.name;
+      name.textContent = T("common.vsName", { name: opp.name });
       var record = document.createElement("span");
       record.className = "player-graph-tooltip-record";
       var winWord = opp.wins === 1 ? "win" : "wins";
@@ -5438,7 +5657,7 @@
     ratingRow.className = "player-graph-tooltip-row";
     var ratingLabel = document.createElement("span");
     ratingLabel.className = "player-graph-tooltip-name";
-    ratingLabel.textContent = "Rating";
+    ratingLabel.textContent = T("common.rating");
     var ratingValue = document.createElement("span");
     ratingValue.className = "player-graph-tooltip-record";
     ratingValue.textContent = point.rating;
@@ -5450,7 +5669,7 @@
     youRow.className = "player-graph-tooltip-row";
     var youName = document.createElement("span");
     youName.className = "player-graph-tooltip-name";
-    youName.textContent = "You";
+    youName.textContent = T("common.you");
     var youRecord = document.createElement("span");
     youRecord.className = "player-graph-tooltip-record";
     youRecord.textContent = formatSignedDelta(point.delta);
@@ -5464,7 +5683,7 @@
       noGame.className = "player-graph-tooltip-row";
       var hint = document.createElement("span");
       hint.className = "player-graph-tooltip-record";
-      hint.textContent = "Opponent details unavailable";
+      hint.textContent = T("playerPage.opponentDetailsUnavailable");
       noGame.appendChild(hint);
       el.appendChild(noGame);
     } else {
@@ -5474,7 +5693,7 @@
         row.className = "player-graph-tooltip-row";
         var name = document.createElement("span");
         name.className = "player-graph-tooltip-name";
-        name.textContent = "vs " + oppName;
+        name.textContent = T("common.vsName", { name: oppName });
         var record = document.createElement("span");
         record.className = "player-graph-tooltip-record";
         record.textContent = oppDelta === null ? "—" : formatSignedDelta(oppDelta);
@@ -5689,7 +5908,7 @@
 
     var heading = document.createElement("h3");
     heading.className = "player-rating-graph-heading";
-    heading.textContent = "Rating";
+    heading.textContent = T("common.rating");
     section.appendChild(heading);
 
     var entry = getPlayerRatingEntry(name);
@@ -5703,7 +5922,7 @@
     if (pointsInWindow.length === 0) {
       var hint = document.createElement("p");
       hint.className = "player-graph-empty";
-      hint.textContent = "No rating changes in this period (currently " + getPlayerRating(name) + ").";
+      hint.textContent = T("playerPage.noRatingChangesThisPeriod", { rating: getPlayerRating(name) });
       section.appendChild(hint);
       return section;
     }
@@ -5773,7 +5992,7 @@
     if (maxCount === 0) {
       var emptyHint = document.createElement("p");
       emptyHint.className = "player-graph-empty";
-      emptyHint.textContent = "No games in this period yet.";
+      emptyHint.textContent = T("playerPage.noGamesThisPeriod");
       wrap.appendChild(emptyHint);
       wrap.appendChild(buildRatingGraphSection(stats.name, stats.games, minMs, maxMs, period));
       return wrap;
@@ -5980,12 +6199,12 @@
       var toggleBtn = document.createElement("button");
       toggleBtn.type = "button";
       toggleBtn.className = "player-graph-legend-toggle";
-      toggleBtn.textContent = item.startHidden ? "Show" : "Hide";
+      toggleBtn.textContent = T(item.startHidden ? "common.show" : "common.hide");
       toggleBtn.setAttribute("aria-pressed", item.startHidden ? "false" : "true");
       toggleBtn.addEventListener("click", function () {
         var nowHidden = item.group.classList.toggle("is-hidden");
         row.classList.toggle("is-off", nowHidden);
-        toggleBtn.textContent = nowHidden ? "Show" : "Hide";
+        toggleBtn.textContent = T(nowHidden ? "common.show" : "common.hide");
         toggleBtn.setAttribute("aria-pressed", nowHidden ? "false" : "true");
       });
       row.appendChild(swatch);
@@ -6020,7 +6239,7 @@
     var name = document.createElement("button");
     name.type = "button";
     name.className = "all-player-name";
-    name.textContent = stats.name;
+    buildPlayerNameLabel(name, stats.name, false);
     name.appendChild(buildRatingBadge(stats.name));
     name.setAttribute("aria-label", "View stats for " + stats.name);
     name.addEventListener("click", function () {
@@ -6043,7 +6262,7 @@
       ratingStatus.className = "all-player-rating-status";
       if (ratingDeltaText.charAt(0) === "▲") ratingStatus.classList.add("is-up");
       else if (ratingDeltaText.charAt(0) === "▼") ratingStatus.classList.add("is-down");
-      ratingStatus.textContent = "Rating this period: " + ratingDeltaText;
+      ratingStatus.textContent = T("allPlayers.ratingThisPeriod", { delta: ratingDeltaText });
       li.appendChild(ratingStatus);
     }
 
@@ -6056,13 +6275,13 @@
         var showGraphBtn = document.createElement("button");
         showGraphBtn.type = "button";
         showGraphBtn.className = "btn btn-ghost all-player-show-graph-btn";
-        showGraphBtn.textContent = "Show Graph";
+        showGraphBtn.textContent = T("allPlayers.showGraph");
         showGraphBtn.addEventListener("click", function () {
           if (!graphHolder.hasChildNodes()) {
             graphHolder.appendChild(buildPlayerGraph(stats, minMs, maxMs, period));
           }
           var nowHidden = graphHolder.classList.toggle("hidden");
-          showGraphBtn.textContent = nowHidden ? "Show Graph" : "Hide Graph";
+          showGraphBtn.textContent = T(nowHidden ? "allPlayers.showGraph" : "allPlayers.hideGraph");
         });
         li.appendChild(showGraphBtn);
         li.appendChild(graphHolder);
@@ -6788,7 +7007,7 @@
     if (names.length === 0) {
       var hint = document.createElement("li");
       hint.className = "empty-hint";
-      hint.textContent = "Add players first.";
+      hint.textContent = T("tournament.addPlayersFirst");
       tournamentPlayerChecklist.appendChild(hint);
       return;
     }
@@ -6821,7 +7040,7 @@
   function startTournament() {
     var names = getCheckedTournamentPlayers();
     if (names.length < 2) {
-      alert("Pick at least 2 players to start a tournament.");
+      alert(T("alert.pickAtLeast2Players"));
       return;
     }
     var gameType = tournamentGameTypeSelect.value;
@@ -6843,12 +7062,7 @@
 
   function abandonTournament() {
     var isDone = TOURNAMENT && TOURNAMENT.champion;
-    if (
-      !isDone &&
-      !confirm(
-        "Abandon this tournament? The bracket will be cleared, but every match already played stays saved in each player's stats."
-      )
-    ) {
+    if (!isDone && !confirm(T("confirm.abandonTournament"))) {
       return;
     }
     TOURNAMENT = null;
@@ -6885,7 +7099,7 @@
       var playBtn = document.createElement("button");
       playBtn.type = "button";
       playBtn.className = "btn btn-primary tournament-play-btn";
-      playBtn.textContent = "Play";
+      playBtn.textContent = T("tournament.play");
       playBtn.addEventListener("click", function () {
         startTournamentMatch(match.id);
       });
@@ -7033,7 +7247,7 @@
     block.className = "stat-block";
     var label = document.createElement("div");
     label.className = "stat-label";
-    label.textContent = GAME_TYPES[t.gameType].label + " · Target " + t.target;
+    label.textContent = T("scoreboard.gameTargetLabel", { game: GAME_TYPES[t.gameType].label, target: t.target });
     var value = document.createElement("div");
     value.className = "stat-value";
     value.textContent = balls;
@@ -7155,13 +7369,13 @@
       }
     }
 
-    btnTournamentAbandon.textContent = t.champion ? "Start New Tournament" : "Abandon Tournament";
+    btnTournamentAbandon.textContent = T(t.champion ? "tournament.startNew" : "tournament.abandon");
 
     if (t.champion) {
       tournamentChampionBanner.classList.remove("hidden");
       var multipleChampions = !!(t.championNames && t.championNames.length > 1);
       tournamentChampionBanner.textContent =
-        "🏆 " + t.champion + (multipleChampions ? " tied for the win!" : " won the tournament!");
+        T(multipleChampions ? "tournament.tiedForTheWin" : "tournament.wonTheTournament", { champion: t.champion });
       (t.championNames || [t.champion]).forEach(function (name) {
         tournamentChampionBanner.appendChild(buildRatingBadge(name));
       });
@@ -7190,7 +7404,7 @@
     if (isRoundRobin) return;
     var heading = document.createElement("li");
     heading.className = "tournament-ready-heading";
-    heading.textContent = "Ready to play (" + ready.length + ")";
+    heading.textContent = T("tournament.readyToPlay", { count: ready.length });
     tournamentReadyList.appendChild(heading);
     ready.forEach(function (m) {
       var li = document.createElement("li");
@@ -7204,7 +7418,7 @@
       var btn = document.createElement("button");
       btn.type = "button";
       btn.className = "btn btn-primary";
-      btn.textContent = "Play";
+      btn.textContent = T("tournament.play");
       btn.addEventListener("click", function () {
         startTournamentMatch(m.id);
       });
@@ -7331,18 +7545,13 @@
     setPlayerSessions(name, sessions);
     renderPlayerHistoryList(sessions);
     renderPlayerSynopsis();
-    showToast("Saved " + name + "'s stats.");
+    showToast(T("toast.statsSaved", { name: name }));
   }
 
   function resetPlayerHistoricalStats() {
     var name = currentStatsPlayerName;
     if (!name) return;
-    if (
-      !confirm(
-        "This clears " + name + "'s saved session history on this device. " +
-        "This session's live stats are not affected. Continue?"
-      )
-    ) {
+    if (!confirm(T("confirm.resetPlayerStats", { name: name }))) {
       return;
     }
     currentStatsSessions = [];
@@ -7681,7 +7890,7 @@
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(
         function () {
-          showToast("Day report copied.");
+          showToast(T("toast.dayReportCopied"));
         },
         function () {
           alert(text);
@@ -7724,13 +7933,13 @@
   allPlayersPeriodSelect.addEventListener("change", renderAllPlayersPage);
   btnToggleAllPlayersView.addEventListener("click", function () {
     allPlayersViewMode = allPlayersViewMode === "bars" ? "graph" : "bars";
-    btnToggleAllPlayersView.textContent = allPlayersViewMode === "graph" ? "📊 See as Bars" : "📈 See as Graph";
+    btnToggleAllPlayersView.textContent = T(allPlayersViewMode === "graph" ? "allPlayers.seeAsBars" : "allPlayers.seeAsGraph");
     renderAllPlayersPage();
   });
   btnToggleRosterFilter.addEventListener("click", function () {
     allPlayersRosterOnly = !allPlayersRosterOnly;
     btnToggleRosterFilter.classList.toggle("is-active", allPlayersRosterOnly);
-    btnToggleRosterFilter.textContent = allPlayersRosterOnly ? "👥 Showing Roster Only" : "👥 Current Roster Only";
+    btnToggleRosterFilter.textContent = T(allPlayersRosterOnly ? "allPlayers.showingRosterOnly" : "allPlayers.rosterOnly");
     renderAllPlayersPage();
   });
 
@@ -7814,7 +8023,7 @@
       return DEFAULT_GAME_TYPES;
     });
 
-  Promise.all([gameTypesPromise, migrateFromRepoIfNeeded()]).then(function (results) {
+  Promise.all([gameTypesPromise, migrateFromRepoIfNeeded(), languagePromise]).then(function (results) {
     GAME_TYPE_LIST = results[0];
     GAME_TYPE_LIST.forEach(function (t) {
       GAME_TYPES[t.id] = { label: t.label, defaultTarget: t.defaultTarget, unit: t.unit };
@@ -7830,6 +8039,7 @@
       trio[1].value = type.defaultTarget;
       trio[2].value = type.unit;
     });
+    applyDomTranslations(document);
     boot();
   });
 })();
