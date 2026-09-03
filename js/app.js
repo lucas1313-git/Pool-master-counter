@@ -4356,6 +4356,12 @@
     );
 
     var h2h = computeHeadToHead(filtered);
+    setPanelSummary(
+      "player-page-h2h-panel",
+      h2h.length === 0
+        ? "No opponents yet this period."
+        : h2h.length + " opponent" + (h2h.length === 1 ? "" : "s") + " faced: " + h2h.map(function (o) { return o.name; }).join(", ")
+    );
     playerPageH2hList.innerHTML = "";
     if (h2h.length === 0) {
       var hint = document.createElement("li");
@@ -6742,6 +6748,7 @@
   wireCollapsiblePanel("history-panel", "btn-toggle-history-panel");
   wireCollapsiblePanel("day-notes-panel", "btn-toggle-day-notes-panel");
   wireCollapsiblePanel("focus-players-wrap", "btn-toggle-focus-players");
+  wireCollapsiblePanel("player-page-h2h-panel", "btn-toggle-player-page-h2h-panel");
 
   var dayNotesSaveTimer = null;
   dayNotesTextarea.addEventListener("input", function () {

@@ -2065,10 +2065,6 @@ input[type="number"] {
   color: var(--danger);
 }
 
-.h2h-title {
-  margin-top: 16px;
-}
-
 .player-h2h-list {
   list-style: none;
   margin: 0;
