@@ -1884,6 +1884,13 @@ input[type="number"] {
   padding: 8px 12px;
 }
 
+.player-page-added {
+  margin: -8px 0 16px;
+  text-align: center;
+  font-size: 0.82rem;
+  color: var(--text-dim);
+}
+
 .player-page-switcher {
   flex: 0 1 auto;
   max-width: 40vw;

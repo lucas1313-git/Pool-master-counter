@@ -657,6 +657,7 @@
   var appRoot = document.getElementById("app");
   var playerPageView = document.getElementById("view-player-page");
   var playerPageName = document.getElementById("player-page-name");
+  var playerPageAdded = document.getElementById("player-page-added");
   var playerPageCurrentBody = document.getElementById("player-page-current-body");
   var playerPageHistoryList = document.getElementById("player-page-history-list");
   var btnPlayerPageBack = document.getElementById("btn-player-page-back");
@@ -1853,6 +1854,7 @@
     };
     state.players.push(player);
     saveState();
+    recordPlayerAddedIfNew(name);
     if (typeof startingRating === "number" && !isNaN(startingRating) && !findRatingKey(name)) {
       var entry = ensureRatingEntry(name);
       entry.rating = startingRating;
@@ -2409,6 +2411,19 @@
     return d.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
   }
 
+  var MONTH_NAMES = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+
+  // "September/03/2026" - used for the player page's "Added" line.
+  function formatAddedDate(iso) {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    var day = d.getDate();
+    return MONTH_NAMES[d.getMonth()] + "/" + (day < 10 ? "0" + day : day) + "/" + d.getFullYear();
+  }
+
   function buildDayReportText(dateStr) {
     var data = computeDayReportData(dateStr);
     var lines = ["🎱 Pool Master Counter — Day Report", formatReportDateHeading(dateStr), ""];
@@ -2570,6 +2585,7 @@
   var ROTATIONS_KEY = "poolMasterCounter.rotations.v1";
   var PLAYER_STATS_KEY = "poolMasterCounter.playerStats.v1";
   var RATINGS_KEY = "poolMasterCounter.ratings.v1";
+  var PLAYER_ADDED_KEY = "poolMasterCounter.playerAdded.v1";
 
   function loadRostersFromStorage() {
     try {
@@ -2644,6 +2660,27 @@
       localStorage.setItem(RATINGS_KEY, JSON.stringify(ratings));
     } catch (e) {
       console.warn("Could not save ratings.", e);
+    }
+  }
+
+  // Name -> ISO timestamp of the first time that name was ever added to
+  // this device (see addPlayer / backfillMissingAddedDates below).
+  function loadPlayerAddedFromStorage() {
+    try {
+      var raw = localStorage.getItem(PLAYER_ADDED_KEY);
+      var parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function savePlayerAddedToStorage(added) {
+    if (noStatsMode) return;
+    try {
+      localStorage.setItem(PLAYER_ADDED_KEY, JSON.stringify(added));
+    } catch (e) {
+      console.warn("Could not save player added dates.", e);
     }
   }
 
@@ -2810,6 +2847,32 @@
     return key ? PLAYER_RATINGS[key] : null;
   }
 
+  var PLAYER_ADDED = loadPlayerAddedFromStorage();
+
+  function findPlayerAddedKey(name) {
+    var key = normalizeNameKey(name);
+    var match = Object.keys(PLAYER_ADDED).filter(function (k) {
+      return normalizeNameKey(k) === key;
+    });
+    return match.length ? match[0] : null;
+  }
+
+  // The ISO timestamp this name was first added to the app, or null if
+  // unknown (never recorded and no game history to infer it from).
+  function getPlayerAddedAt(name) {
+    var key = findPlayerAddedKey(name);
+    return key ? PLAYER_ADDED[key] : null;
+  }
+
+  // Records "now" as name's added date, but only the first time this
+  // exact name is ever seen — re-adding an existing player (e.g. after
+  // removing them from today's roster) must not reset it.
+  function recordPlayerAddedIfNew(name) {
+    if (findPlayerAddedKey(name)) return;
+    PLAYER_ADDED[name] = new Date().toISOString();
+    savePlayerAddedToStorage(PLAYER_ADDED);
+  }
+
   // The exact rating change this one player got from one specific game —
   // bumpPlayerRating stamps every history entry with the same ts as the
   // gameHistory entry that caused it, so this is just a lookup. Returns
@@ -2904,6 +2967,76 @@
     loserNames.forEach(function (n) {
       bumpPlayerRating(n, loserDelta, ts);
     });
+  }
+
+  // Ratings only ever update live, at the moment a game is credited — a
+  // player restored from the bundled players/*.json backup (or an
+  // imported backup) arrives with full game history but no rating
+  // history, so their badge shows the flat DEFAULT_RATING no matter their
+  // actual record. This replays every game that's missing from the
+  // ratings' timestamp record (found via each winning side's own game
+  // entry, which always carries the complete winnerNames/opponentNames
+  // for that game) in chronological order, so the rating ends up exactly
+  // where it would have if the game had been rated live. Already-rated
+  // games are skipped by ts, so this is safe to run on every boot.
+  function backfillMissingRatingsFromHistory() {
+    var alreadyRated = {};
+    Object.keys(PLAYER_RATINGS).forEach(function (key) {
+      (PLAYER_RATINGS[key].history || []).forEach(function (h) {
+        alreadyRated[h.ts] = true;
+      });
+    });
+
+    var byTs = {};
+    getAllKnownPlayerNames().forEach(function (name) {
+      allGamesForPlayerName(name).forEach(function (g) {
+        if (g.result !== "won" || !g.ts || alreadyRated[g.ts] || byTs[g.ts]) return;
+        byTs[g.ts] = { ts: g.ts, isTeam: !!g.isTeam, winnerNames: g.winnerNames || [], loserNames: g.opponentNames || [] };
+      });
+    });
+
+    var toApply = Object.keys(byTs)
+      .map(function (ts) {
+        return byTs[ts];
+      })
+      .sort(function (a, b) {
+        return a.ts.localeCompare(b.ts);
+      });
+    if (!toApply.length) return;
+
+    toApply.forEach(function (g) {
+      if (!g.winnerNames.length || !g.loserNames.length) return;
+      if (g.isTeam) {
+        applyTeamRatingResult(g.winnerNames, g.loserNames, g.ts);
+      } else {
+        g.loserNames.forEach(function (loserName) {
+          applyPairwiseRatingResult(g.winnerNames[0], loserName, g.ts);
+        });
+      }
+    });
+    saveRatingsToStorage(PLAYER_RATINGS);
+  }
+
+  // Fills in an "added" date for any known player who doesn't have one —
+  // players restored from the bundled backup or an imported one were never
+  // routed through addPlayer, so there's no true "first added" moment on
+  // record. The earliest game on file is the closest honest estimate;
+  // players with neither an added date nor any games are left alone (no
+  // date is shown for them until they actually play or get re-added).
+  function backfillMissingAddedDates() {
+    var changed = false;
+    getAllKnownPlayerNames().forEach(function (name) {
+      if (findPlayerAddedKey(name)) return;
+      var earliest = null;
+      allGamesForPlayerName(name).forEach(function (g) {
+        if (g.ts && (earliest === null || g.ts < earliest)) earliest = g.ts;
+      });
+      if (earliest) {
+        PLAYER_ADDED[name] = earliest;
+        changed = true;
+      }
+    });
+    if (changed) savePlayerAddedToStorage(PLAYER_ADDED);
   }
 
   // Net rating change within a period, e.g. for the All Players page. null
@@ -4697,6 +4830,14 @@
     currentStatsSessions = null;
     playerPageName.textContent = name;
     playerPageName.appendChild(buildRatingBadge(name));
+    var addedAt = getPlayerAddedAt(name);
+    if (addedAt) {
+      playerPageAdded.textContent = "Added " + formatAddedDate(addedAt);
+      playerPageAdded.classList.remove("hidden");
+    } else {
+      playerPageAdded.textContent = "";
+      playerPageAdded.classList.add("hidden");
+    }
     populatePlayerPageSwitcher(name);
     renderLiveSessionForPlayer(name);
     playerPageHistoryList.innerHTML = "";
@@ -4764,10 +4905,36 @@
     var games = [];
     merged.forEach(function (s) {
       (s.games || []).forEach(function (g) {
-        games.push(g);
+        games.push(fillLegacyGameOpponents(g, s));
       });
     });
     return games;
+  }
+
+  // Sessions saved before per-game opponentNames/teammateNames/isTeam
+  // existed (e.g. the bundled players/*.json backups) only have those
+  // fields at the session level ("opponents"). Backfilling them from
+  // there keeps head-to-head, tooltips, and rating backfill all working
+  // for that older data instead of silently treating it as opponent-less.
+  function fillLegacyGameOpponents(g, session) {
+    if (g.opponentNames) return g;
+    var opponentNames = (session && session.opponents) || [];
+    var isTeam = (g.winnerNames || []).length > 1 || opponentNames.length > 1;
+    return {
+      ts: g.ts,
+      gameLabel: g.gameLabel,
+      target: g.target,
+      result: g.result,
+      winnerNames: g.winnerNames,
+      opponentNames: opponentNames,
+      teammateNames: g.teammateNames || [],
+      isTeam: isTeam,
+      mvpName: g.mvpName,
+      durationMs: g.durationMs,
+      wonRace: g.wonRace,
+      raceTarget: g.raceTarget,
+      raceCount: g.raceCount
+    };
   }
 
   function computePlayerCareerStats(name, period) {
@@ -7189,6 +7356,9 @@
   // ---------------------------------------------------------------------
 
   function boot() {
+  backfillMissingRatingsFromHistory();
+  backfillMissingAddedDates();
+
   btnExportAllData.addEventListener("click", exportAllData);
 
   btnImportAllData.addEventListener("click", function () {
