@@ -25,33 +25,6 @@
 <div id="app">
 
   <header class="app-header">
-    <div class="header-select-row">
-      <div class="theme-select-row">
-        <label for="theme-select" data-i18n="header.theme">🎨 Theme</label>
-        <select id="theme-select">
-          <optgroup label="Dark" data-i18n-label="header.themeGroupDark">
-            <option value="crimson-felt" data-i18n="theme.crimsonFelt">Crimson Felt</option>
-            <option value="emerald-rail" data-i18n="theme.emeraldRail">Emerald Rail</option>
-            <option value="neon-arcade" data-i18n="theme.neonArcade">Neon Arcade</option>
-            <option value="midnight-ivory" data-i18n="theme.midnightIvory">Midnight Ivory</option>
-            <option value="sunset-chalk" data-i18n="theme.sunsetChalk">Sunset Chalk</option>
-            <option value="obsidian-break" data-i18n="theme.obsidianBreak">Obsidian Break</option>
-          </optgroup>
-          <optgroup label="Bright" data-i18n-label="header.themeGroupBright">
-            <option value="daybreak-chalk" data-i18n="theme.daybreakChalk">Daybreak Chalk</option>
-            <option value="pearl-lounge" data-i18n="theme.pearlLounge">Pearl Lounge</option>
-          </optgroup>
-          <optgroup label="High Contrast" data-i18n-label="header.themeGroupHighContrast">
-            <option value="blackout-contrast" data-i18n="theme.blackoutContrast">Blackout Contrast</option>
-            <option value="paper-contrast" data-i18n="theme.paperContrast">Paper Contrast</option>
-          </optgroup>
-        </select>
-      </div>
-      <div class="language-select-row">
-        <label for="language-select" data-i18n="header.language">🌐 Language</label>
-        <select id="language-select"></select>
-      </div>
-    </div>
     <div class="brand">
       <svg class="brand-logo" viewBox="0 0 120 120" role="img" aria-label="Pool Master Counter logo">
         <defs>
@@ -82,6 +55,31 @@
       <button type="button" id="btn-open-all-players" class="btn btn-ghost all-players-nav-btn" data-i18n="header.allStats">📊 All Stats</button>
       <button type="button" id="btn-open-tournament" class="btn btn-ghost all-players-nav-btn" data-i18n="header.tournament">🏆 Tournament</button>
       <button type="button" id="btn-open-help" class="btn btn-ghost all-players-nav-btn" data-i18n="header.help">❓ Help</button>
+      <div class="theme-select-row">
+        <label for="theme-select" data-i18n="header.theme">🎨 Theme</label>
+        <select id="theme-select">
+          <optgroup label="Dark" data-i18n-label="header.themeGroupDark">
+            <option value="crimson-felt" data-i18n="theme.crimsonFelt">Crimson Felt</option>
+            <option value="emerald-rail" data-i18n="theme.emeraldRail">Emerald Rail</option>
+            <option value="neon-arcade" data-i18n="theme.neonArcade">Neon Arcade</option>
+            <option value="midnight-ivory" data-i18n="theme.midnightIvory">Midnight Ivory</option>
+            <option value="sunset-chalk" data-i18n="theme.sunsetChalk">Sunset Chalk</option>
+            <option value="obsidian-break" data-i18n="theme.obsidianBreak">Obsidian Break</option>
+          </optgroup>
+          <optgroup label="Bright" data-i18n-label="header.themeGroupBright">
+            <option value="daybreak-chalk" data-i18n="theme.daybreakChalk">Daybreak Chalk</option>
+            <option value="pearl-lounge" data-i18n="theme.pearlLounge">Pearl Lounge</option>
+          </optgroup>
+          <optgroup label="High Contrast" data-i18n-label="header.themeGroupHighContrast">
+            <option value="blackout-contrast" data-i18n="theme.blackoutContrast">Blackout Contrast</option>
+            <option value="paper-contrast" data-i18n="theme.paperContrast">Paper Contrast</option>
+          </optgroup>
+        </select>
+      </div>
+      <div class="language-select-row">
+        <label for="language-select" data-i18n="header.language">🌐 Language</label>
+        <select id="language-select"></select>
+      </div>
     </div>
   </header>
 
