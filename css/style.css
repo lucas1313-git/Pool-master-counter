@@ -31,6 +31,11 @@
      background color is too dark for dark text to read. */
   --on-accent: #241a00;
   --on-felt-light: #06170f;
+  /* Graph card background — a faint dark wash by default. Overridden
+     per light theme below with a very light tint of that theme's own
+     accent color instead, so it never reads as flat neutral gray the
+     way a black-alpha wash over a white panel would. */
+  --graph-bg: rgba(0, 0, 0, 0.25);
   color-scheme: dark;
 }
 
@@ -151,6 +156,7 @@
   --border: #d8cba8;
   --bg-glow: #efe3c4;
   --on-accent: #fff8ef;
+  --graph-bg: rgba(193, 68, 14, 0.08);
   --font-family: "Avenir Next", "Century Gothic", "Trebuchet MS", sans-serif;
   color-scheme: light;
 }
@@ -172,6 +178,7 @@
   --border: #d9d0e0;
   --bg-glow: #ece5f0;
   --on-accent: #fbf8fc;
+  --graph-bg: rgba(107, 45, 92, 0.08);
   --font-family: "Palatino Linotype", "Book Antiqua", Georgia, serif;
   color-scheme: light;
 }
@@ -214,6 +221,7 @@
   --border: #000000;
   --bg-glow: #f0f0f0;
   --on-accent: #ffffff;
+  --graph-bg: rgba(0, 71, 171, 0.08);
   --font-family: "Arial Black", Arial, "Helvetica Neue", sans-serif;
   color-scheme: light;
 }
@@ -2372,6 +2380,10 @@ input[type="number"] {
   display: flex;
   align-items: stretch;
   gap: 8px;
+  /* Without this, the SVG's intrinsic aspect-ratio can act as a flex
+     min-width floor and push the whole chart past the card's edge
+     instead of shrinking to fit — that's what was spilling out. */
+  min-width: 0;
 }
 
 .player-graph-yaxis {
@@ -2388,13 +2400,16 @@ input[type="number"] {
 
 .player-graph-svg {
   flex: 1;
+  min-width: 0;
   width: 100%;
   height: auto;
   aspect-ratio: 3 / 1;
   display: block;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--graph-bg);
   border-radius: 8px;
-  overflow: visible;
+  padding: 10px;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .player-graph-gridline {
