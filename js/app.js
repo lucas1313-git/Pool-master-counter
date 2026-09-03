@@ -1335,29 +1335,30 @@
   function renderStandings() {
     standingsTitle.textContent = T("standings.raceToTeams", { target: state.raceToWinsTarget });
 
-    var comboKeys = Object.keys(state.teamWins);
-    ["A", "B"].forEach(function (teamId) {
-      var key = teamComboKey(teamId);
-      if (key && comboKeys.indexOf(key) === -1) comboKeys.push(key);
+    // Teams are tracked per slot ("A"/"B"), not per exact roster combo, so
+    // this always shows exactly the two live team slots - a sub joining or
+    // leaving mid-race just relabels the row, it doesn't spawn a new one.
+    var teamRows = ["A", "B"].filter(function (teamId) {
+      return (state.teamWins[teamId] || 0) > 0 || teamMembersLive(teamId).length > 0;
     });
 
     teamStandingsList.innerHTML = "";
-    if (comboKeys.length === 0) {
+    if (teamRows.length === 0) {
       var teamHint = document.createElement("li");
       teamHint.className = "empty-hint";
       teamHint.textContent = T("standings.noTeamPairings");
       teamStandingsList.appendChild(teamHint);
     } else {
-      comboKeys
-        .map(function (key) {
-          var namesList = key.split("|").map(function (id) {
-            var p = getPlayer(id);
-            return p ? p.name : "?";
+      teamRows
+        .map(function (teamId) {
+          var namesList = teamMembersLive(teamId).map(function (p) {
+            return p.name;
           });
-          return { key: key, names: namesList.join(" & "), namesList: namesList, wins: state.teamWins[key] || 0 };
+          var names = namesList.length ? namesList.join(" & ") : T(teamId === "A" ? "gameSetup.teamA" : "gameSetup.teamB");
+          return { teamId: teamId, names: names, namesList: namesList, wins: state.teamWins[teamId] || 0 };
         })
         .sort(function (a, b) {
-          return b.wins - a.wins || a.names.localeCompare(b.names);
+          return b.wins - a.wins || a.teamId.localeCompare(b.teamId);
         })
         .forEach(function (row) {
           teamStandingsList.appendChild(buildStandingsRow(row.names, row.wins, row.namesList));
@@ -1803,7 +1804,7 @@
     name.textContent = teamLabelLive(teamId);
     panel.appendChild(name);
 
-    var wins = state.teamWins[teamComboKey(teamId)] || 0;
+    var wins = state.teamWins[teamId] || 0;
 
     // A single-rack game (the common case - standard 8-Ball etc.) has no
     // meaningful "current rack progress" number to show (it's just 0 until
@@ -2165,10 +2166,13 @@
       winnerIds = members.map(function (p) {
         return p.id;
       });
-      var comboKey = teamComboKey(key);
-      teamComboKeyValue = comboKey;
-      var newTeamWins = (state.teamWins[comboKey] || 0) + 1;
-      state.teamWins[comboKey] = newTeamWins;
+      // Tallied by team slot ("A"/"B"), not by the exact roster combo, so a
+      // sub joining/leaving mid-race (add player, standby toggle, team
+      // reassignment) doesn't fragment the running win count into a "new"
+      // pairing starting at 0 - see the session-reset bug this fixed.
+      teamComboKeyValue = teamComboKey(key);
+      var newTeamWins = (state.teamWins[key] || 0) + 1;
+      state.teamWins[key] = newTeamWins;
       members.forEach(function (p) {
         state.playerWins[p.id] = (state.playerWins[p.id] || 0) + 1;
       });
@@ -2220,6 +2224,7 @@
       winnerNames: winnerNames,
       winnerIds: winnerIds,
       isTeam: isTeam,
+      teamId: isTeam ? key : null,
       teamComboKey: teamComboKeyValue,
       opponentNames: opponentNames,
       mvpId: mvpId,
@@ -2286,8 +2291,8 @@
     entry.winnerIds.forEach(function (id) {
       state.playerWins[id] = Math.max(0, (state.playerWins[id] || 0) - 1);
     });
-    if (entry.isTeam && entry.teamComboKey) {
-      state.teamWins[entry.teamComboKey] = Math.max(0, (state.teamWins[entry.teamComboKey] || 0) - 1);
+    if (entry.isTeam && entry.teamId) {
+      state.teamWins[entry.teamId] = Math.max(0, (state.teamWins[entry.teamId] || 0) - 1);
       if (entry.mvpId) {
         state.teamMvpWins[entry.mvpId] = Math.max(0, (state.teamMvpWins[entry.mvpId] || 0) - 1);
       }
@@ -2553,18 +2558,17 @@
     state.players.forEach(function (p) {
       lines.push("  " + p.name + ": " + (state.playerWins[p.id] || 0));
     });
-    var teamKeys = Object.keys(state.teamWins);
+    var teamKeys = ["A", "B"].filter(function (teamId) {
+      return (state.teamWins[teamId] || 0) > 0;
+    });
     if (teamKeys.length) {
       lines.push("");
       lines.push("Team pairing wins:");
       teamKeys.forEach(function (key) {
-        var names = key
-          .split("|")
-          .map(function (id) {
-            var p = getPlayer(id);
-            return p ? p.name : "?";
-          })
-          .join(" & ");
+        var namesList = teamMembersLive(key).map(function (p) {
+          return p.name;
+        });
+        var names = namesList.length ? namesList.join(" & ") : "Team " + key;
         lines.push("  " + names + ": " + state.teamWins[key]);
       });
     }
@@ -2842,15 +2846,15 @@
         return b.wins - a.wins;
       });
 
-    var teamWins = Object.keys(state.teamWins)
+    var teamWins = ["A", "B"]
+      .filter(function (teamId) {
+        return (state.teamWins[teamId] || 0) > 0;
+      })
       .map(function (key) {
-        var members = key
-          .split("|")
-          .map(function (id) {
-            var p = getPlayer(id);
-            return p ? p.name : "?";
-          })
-          .join(" & ");
+        var namesList = teamMembersLive(key).map(function (p) {
+          return p.name;
+        });
+        var members = namesList.length ? namesList.join(" & ") : "Team " + key;
         return { members: members, wins: state.teamWins[key] };
       })
       .sort(function (a, b) {
