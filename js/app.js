@@ -5197,7 +5197,11 @@
       row.className = "player-graph-tooltip-row";
       var name = document.createElement("span");
       name.className = "player-graph-tooltip-name";
-      name.textContent = opp.name;
+      // "vs " prefix (matching the rating-dot tooltip's convention)
+      // instead of the bare opponent name — otherwise "Suresh 2 wins,
+      // 0 losses" reads as Suresh's own record, when it's actually
+      // this player's record against Suresh.
+      name.textContent = "vs " + opp.name;
       var record = document.createElement("span");
       record.className = "player-graph-tooltip-record";
       var winWord = opp.wins === 1 ? "win" : "wins";
