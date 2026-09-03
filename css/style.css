@@ -993,7 +993,8 @@ input[type="number"] {
 }
 
 .stat-mini.stat-mini-tourney {
-  font-size: 18px;
+  font-size: 24px;
+  font-weight: 700;
 }
 
 .stat-mini strong {
