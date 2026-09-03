@@ -365,21 +365,80 @@
     tone(990 * mult, now + 0.07, 0.14, "triangle", 0.2);
   }
 
-  function playNegativeSound(voice) {
-    var mult = voicePitch(voice);
+  // A single droopy "sad trombone" note: pitch bends downward over its
+  // whole duration (osc.frequency.exponentialRampToValueAtTime) instead of
+  // holding steady, plus a quiet sub-octave sine underneath for a low,
+  // mournful groan. Shares the echo bus with everything else.
+  function sadTone(freq, startTime, duration, bendTo) {
     var ctx = getAudioCtx();
-    var now = ctx.currentTime;
-    tone(220 * mult, now, 0.18, "sawtooth", 0.18);
-    tone(160 * mult, now + 0.05, 0.22, "sawtooth", 0.16);
+
+    var osc = ctx.createOscillator();
+    var gain = ctx.createGain();
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(freq, startTime);
+    osc.frequency.exponentialRampToValueAtTime(freq * bendTo, startTime + duration);
+    gain.gain.setValueAtTime(0, startTime);
+    gain.gain.linearRampToValueAtTime(0.2, startTime + 0.03);
+    gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    if (echoSend) gain.connect(echoSend);
+    osc.start(startTime);
+    osc.stop(startTime + duration + 0.05);
+
+    var subOsc = ctx.createOscillator();
+    var subGain = ctx.createGain();
+    subOsc.type = "sine";
+    subOsc.frequency.setValueAtTime(freq / 2, startTime);
+    subOsc.frequency.exponentialRampToValueAtTime((freq * bendTo) / 2, startTime + duration);
+    subGain.gain.setValueAtTime(0, startTime);
+    subGain.gain.linearRampToValueAtTime(0.12, startTime + 0.03);
+    subGain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+    subOsc.connect(subGain);
+    subGain.connect(ctx.destination);
+    if (echoSend) subGain.connect(echoSend);
+    subOsc.start(startTime);
+    subOsc.stop(startTime + duration + 0.05);
   }
 
+  // "Sad trombone": a slow descending minor motif, each note drooping
+  // downward, ending on a long, low, fading groan — very sad on purpose.
+  function playNegativeSound(voice) {
+    var mult = voicePitch(voice);
+    var now = getAudioCtx().currentTime;
+    var notes = [
+      { f: 392.0, t: 0.0, d: 0.32, bend: 0.94 },
+      { f: 369.99, t: 0.28, d: 0.32, bend: 0.94 },
+      { f: 349.23, t: 0.56, d: 0.32, bend: 0.92 },
+      { f: 293.66, t: 0.84, d: 1.2, bend: 0.72 }
+    ];
+    notes.forEach(function (n) {
+      sadTone(n.f * mult, now + n.t, n.d, n.bend);
+    });
+  }
+
+  // A little triumphant fanfare — rising arpeggio into a flourish, held
+  // out to about 3 seconds by a closing chord. Plays on every game win.
   function playWinSound(voice) {
     var mult = voicePitch(voice);
-    var ctx = getAudioCtx();
-    var now = ctx.currentTime;
-    tone(523 * mult, now, 0.12, "triangle", 0.22);
-    tone(659 * mult, now + 0.1, 0.12, "triangle", 0.22);
-    tone(784 * mult, now + 0.2, 0.28, "triangle", 0.24);
+    var now = getAudioCtx().currentTime;
+    var run = [
+      { f: 523.25, t: 0.0, d: 0.16 },
+      { f: 659.25, t: 0.14, d: 0.16 },
+      { f: 783.99, t: 0.28, d: 0.16 },
+      { f: 1046.5, t: 0.42, d: 0.22 },
+      { f: 987.77, t: 0.68, d: 0.14 },
+      { f: 1046.5, t: 0.8, d: 0.14 },
+      { f: 1174.66, t: 0.92, d: 0.28 }
+    ];
+    run.forEach(function (n) {
+      tone(n.f * mult, now + n.t, n.d, "triangle", 0.22);
+    });
+    var chordStart = now + 1.25;
+    var chordDuration = 1.7;
+    [523.25, 659.25, 783.99, 1046.5].forEach(function (f) {
+      tone(f * mult, chordStart, chordDuration, "triangle", 0.16);
+    });
   }
 
   function playVictorySound() {
