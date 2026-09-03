@@ -1,3 +1,12 @@
+/* ---------- Themes ----------
+   Ten self-contained palettes (colors + font family only — no network
+   fonts, everything falls back through system font stacks so the app
+   stays fully offline-capable). Bare :root is "Crimson Felt", the
+   original look and the default; the rest override via
+   :root[data-theme="..."], which JS sets on <html> and persists to
+   localStorage. Each sets its own color-scheme (dark or light) so native
+   form controls/scrollbars render correctly either way. */
+
 :root {
   --bg: #1a0a0a;
   --bg-panel: #241010;
@@ -13,8 +22,186 @@
   --text: #f6efe9;
   --text-dim: #c9a2a2;
   --border: #4a1e1e;
+  --bg-glow: #3a1212;
   --radius: 14px;
+  --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   color-scheme: dark;
+}
+
+:root[data-theme="emerald-rail"] {
+  --bg: #071a10;
+  --bg-panel: #0d2618;
+  --bg-card: #113420;
+  --felt: #0f5c33;
+  --felt-light: #1a8a4f;
+  --accent: #d4af37;
+  --accent-dark: #a8862a;
+  --danger: #ff6b5e;
+  --danger-dark: #c94f3f;
+  --info: #5aa9e6;
+  --info-dark: #3d7cb0;
+  --text: #f2f0e6;
+  --text-dim: #a8c9b5;
+  --border: #1e4a30;
+  --bg-glow: #123a22;
+  --font-family: "Trebuchet MS", "Verdana", "Segoe UI", sans-serif;
+}
+
+:root[data-theme="neon-arcade"] {
+  --bg: #0a0a12;
+  --bg-panel: #12121e;
+  --bg-card: #181828;
+  --felt: #1a1a3a;
+  --felt-light: #2f2f6b;
+  --accent: #00e5ff;
+  --accent-dark: #00a8bf;
+  --danger: #ff2f92;
+  --danger-dark: #c4206e;
+  --info: #7c4dff;
+  --info-dark: #5a35c4;
+  --text: #eafcff;
+  --text-dim: #8fa3c9;
+  --border: #2a2a5a;
+  --bg-glow: #22224a;
+  --font-family: "SF Mono", "Consolas", "Menlo", "Courier New", monospace;
+}
+
+:root[data-theme="midnight-ivory"] {
+  --bg: #0e1218;
+  --bg-panel: #161c26;
+  --bg-card: #1c2430;
+  --felt: #1f2d3d;
+  --felt-light: #2f4258;
+  --accent: #c9a768;
+  --accent-dark: #9c8149;
+  --danger: #d9534f;
+  --danger-dark: #a83f3c;
+  --info: #6fa8dc;
+  --info-dark: #4f80b0;
+  --text: #f2ede3;
+  --text-dim: #a8a296;
+  --border: #2c3644;
+  --bg-glow: #263547;
+  --font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+}
+
+:root[data-theme="sunset-chalk"] {
+  --bg: #1a0f08;
+  --bg-panel: #26160c;
+  --bg-card: #301c10;
+  --felt: #7a3b12;
+  --felt-light: #b0591a;
+  --accent: #ffb703;
+  --accent-dark: #cc9202;
+  --danger: #ef476f;
+  --danger-dark: #c23557;
+  --info: #06a77d;
+  --info-dark: #04805f;
+  --text: #fff3e0;
+  --text-dim: #d9b391;
+  --border: #4a2c14;
+  --bg-glow: #4a2810;
+  --font-family: "Century Gothic", Futura, "Trebuchet MS", sans-serif;
+}
+
+:root[data-theme="obsidian-break"] {
+  --bg: #08090a;
+  --bg-panel: #101214;
+  --bg-card: #16181b;
+  --felt: #1c1f23;
+  --felt-light: #2a2e33;
+  --accent: #7fd4ff;
+  --accent-dark: #4fa8cc;
+  --danger: #ff5c5c;
+  --danger-dark: #c73e3e;
+  --info: #8f9bab;
+  --info-dark: #6b7684;
+  --text: #eef1f4;
+  --text-dim: #9aa3ad;
+  --border: #2a2e33;
+  --bg-glow: #1c1f23;
+  --font-family: "Helvetica Neue", Arial, "Segoe UI", sans-serif;
+  color-scheme: dark;
+}
+
+:root[data-theme="daybreak-chalk"] {
+  --bg: #f5f1e8;
+  --bg-panel: #ffffff;
+  --bg-card: #ffffff;
+  --felt: #e8dcc0;
+  --felt-light: #f3ead2;
+  --accent: #c1440e;
+  --accent-dark: #963309;
+  --danger: #d33a3a;
+  --danger-dark: #a52c2c;
+  --info: #2a6f97;
+  --info-dark: #1d4f6d;
+  --text: #2b241a;
+  --text-dim: #7a6f5c;
+  --border: #d8cba8;
+  --bg-glow: #efe3c4;
+  --font-family: "Avenir Next", "Century Gothic", "Trebuchet MS", sans-serif;
+  color-scheme: light;
+}
+
+:root[data-theme="pearl-lounge"] {
+  --bg: #f4f2f6;
+  --bg-panel: #ffffff;
+  --bg-card: #ffffff;
+  --felt: #e4dde8;
+  --felt-light: #eee8f2;
+  --accent: #6b2d5c;
+  --accent-dark: #4d1f42;
+  --danger: #b3364f;
+  --danger-dark: #8a2740;
+  --info: #4a5a8f;
+  --info-dark: #34406b;
+  --text: #2a2430;
+  --text-dim: #7d7284;
+  --border: #d9d0e0;
+  --bg-glow: #ece5f0;
+  --font-family: "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  color-scheme: light;
+}
+
+:root[data-theme="blackout-contrast"] {
+  --bg: #000000;
+  --bg-panel: #0a0a0a;
+  --bg-card: #000000;
+  --felt: #000000;
+  --felt-light: #1a1a1a;
+  --accent: #ffee00;
+  --accent-dark: #ccbe00;
+  --danger: #ff1744;
+  --danger-dark: #c4001d;
+  --info: #00e5ff;
+  --info-dark: #00acc1;
+  --text: #ffffff;
+  --text-dim: #cccccc;
+  --border: #595959;
+  --bg-glow: #000000;
+  --font-family: "Arial Black", Arial, "Helvetica Neue", sans-serif;
+  color-scheme: dark;
+}
+
+:root[data-theme="paper-contrast"] {
+  --bg: #ffffff;
+  --bg-panel: #ffffff;
+  --bg-card: #ffffff;
+  --felt: #ffffff;
+  --felt-light: #f0f0f0;
+  --accent: #0047ab;
+  --accent-dark: #002d6b;
+  --danger: #d90000;
+  --danger-dark: #a30000;
+  --info: #005f99;
+  --info-dark: #003f66;
+  --text: #000000;
+  --text-dim: #4d4d4d;
+  --border: #000000;
+  --bg-glow: #f0f0f0;
+  --font-family: "Arial Black", Arial, "Helvetica Neue", sans-serif;
+  color-scheme: light;
 }
 
 * {
@@ -28,9 +215,9 @@ html, body {
 
 body {
   margin: 0;
-  background: radial-gradient(ellipse at top, #3a1212 0%, var(--bg) 60%);
+  background: radial-gradient(ellipse at top, var(--bg-glow) 0%, var(--bg) 60%);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--font-family);
   -webkit-font-smoothing: antialiased;
   touch-action: manipulation;
   overscroll-behavior-y: contain;
@@ -58,6 +245,24 @@ body {
   flex-direction: column;
   align-items: center;
   gap: 10px;
+}
+
+.theme-select-row {
+  align-self: flex-end;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+
+.theme-select-row select {
+  font-size: 0.78rem;
+  padding: 4px 8px;
+  background: var(--bg-panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
 }
 
 .all-players-nav-btn {
@@ -686,7 +891,7 @@ input[type="number"] {
 }
 
 .player-panel {
-  background: linear-gradient(180deg, var(--felt) 0%, #200606 100%);
+  background: linear-gradient(180deg, var(--felt) 0%, var(--bg-glow) 100%);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
@@ -736,6 +941,7 @@ input[type="number"] {
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
   color: var(--accent);
+  text-shadow: 0 2px 5px rgba(0, 0, 0, 0.6);
 }
 
 .stat-value.small {
@@ -856,7 +1062,7 @@ input[type="number"] {
 /* ---------- Team scoreboard ---------- */
 
 .team-panel {
-  background: linear-gradient(180deg, var(--felt) 0%, #200606 100%);
+  background: linear-gradient(180deg, var(--felt) 0%, var(--bg-glow) 100%);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
@@ -997,7 +1203,7 @@ input[type="number"] {
 }
 
 .milestone-card {
-  background: linear-gradient(180deg, var(--felt-light) 0%, var(--felt) 60%, #200606 100%);
+  background: linear-gradient(180deg, var(--felt-light) 0%, var(--felt) 60%, var(--bg-glow) 100%);
   border: 2px solid var(--accent);
   border-radius: var(--radius);
   padding: 32px 28px;
@@ -1063,7 +1269,7 @@ input[type="number"] {
 }
 
 .onhill-card {
-  background: linear-gradient(180deg, #4a1010 0%, #200606 100%);
+  background: linear-gradient(180deg, var(--felt) 0%, var(--bg-glow) 100%);
   border: 2px solid var(--danger);
   border-radius: var(--radius);
   padding: 32px 28px;
@@ -1118,7 +1324,7 @@ input[type="number"] {
 }
 
 .gamechange-card {
-  background: linear-gradient(180deg, var(--felt-light) 0%, var(--felt) 60%, #200606 100%);
+  background: linear-gradient(180deg, var(--felt-light) 0%, var(--felt) 60%, var(--bg-glow) 100%);
   border: 2px solid var(--accent);
   border-radius: var(--radius);
   padding: 32px 28px;
@@ -1164,7 +1370,7 @@ input[type="number"] {
 }
 
 .save-session-card {
-  background: linear-gradient(180deg, var(--felt-light) 0%, var(--felt) 60%, #200606 100%);
+  background: linear-gradient(180deg, var(--felt-light) 0%, var(--felt) 60%, var(--bg-glow) 100%);
   border: 2px solid var(--accent);
   border-radius: var(--radius);
   padding: 32px 28px;
@@ -1218,7 +1424,7 @@ input[type="number"] {
 
 .wizard-card {
   position: relative;
-  background: linear-gradient(180deg, var(--felt-light) 0%, var(--felt) 60%, #200606 100%);
+  background: linear-gradient(180deg, var(--felt-light) 0%, var(--felt) 60%, var(--bg-glow) 100%);
   border: 2px solid var(--accent);
   border-radius: var(--radius);
   padding: 28px 24px 20px;
@@ -1585,6 +1791,28 @@ input[type="number"] {
 .player-page-header #btn-return-to-global-stats {
   font-size: 0.85rem;
   padding: 8px 12px;
+}
+
+/* Pinned to the upper-left corner of the screen, and stays there as the
+   page scrolls — the browser's own back button (see popstate handling in
+   app.js) does exactly what tapping this does. */
+.screen-back-btn {
+  position: sticky;
+  top: max(10px, env(safe-area-inset-top));
+  left: max(10px, env(safe-area-inset-left));
+  z-index: 20;
+  align-self: flex-start;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  font-weight: 800;
+  line-height: 1;
 }
 
 #player-page-actions-panel .row {

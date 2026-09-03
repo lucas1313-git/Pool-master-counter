@@ -463,6 +463,49 @@
   }
 
   // ---------------------------------------------------------------------
+  // Theme — five color/font palettes, applied as a data-theme attribute
+  // on <html> so every CSS custom property cascades from there. The
+  // choice persists to localStorage; a tiny inline script in <head>
+  // applies it synchronously on load (before the stylesheet paints) so
+  // there's no flash of the default theme first.
+  // ---------------------------------------------------------------------
+
+  var THEME_KEY = "poolMasterCounter.theme.v1";
+  var THEME_STATUS_COLORS = {
+    "crimson-felt": "#1a0a0a",
+    "emerald-rail": "#071a10",
+    "neon-arcade": "#0a0a12",
+    "midnight-ivory": "#0e1218",
+    "sunset-chalk": "#1a0f08",
+    "obsidian-break": "#08090a",
+    "daybreak-chalk": "#f5f1e8",
+    "pearl-lounge": "#f4f2f6",
+    "blackout-contrast": "#000000",
+    "paper-contrast": "#ffffff"
+  };
+
+  var themeSelect = document.getElementById("theme-select");
+
+  function applyTheme(id, persist) {
+    document.documentElement.setAttribute("data-theme", id);
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta && THEME_STATUS_COLORS[id]) meta.setAttribute("content", THEME_STATUS_COLORS[id]);
+    if (persist) {
+      try {
+        localStorage.setItem(THEME_KEY, id);
+      } catch (e) {
+        console.warn("Could not save theme.", e);
+      }
+    }
+  }
+
+  applyTheme(document.documentElement.getAttribute("data-theme") || "crimson-felt", false);
+  themeSelect.value = document.documentElement.getAttribute("data-theme") || "crimson-felt";
+  themeSelect.addEventListener("change", function () {
+    applyTheme(themeSelect.value, true);
+  });
+
+  // ---------------------------------------------------------------------
   // DOM refs
   // ---------------------------------------------------------------------
 
@@ -4451,10 +4494,59 @@
       });
   }
 
+  // ---------------------------------------------------------------------
+  // Screen navigation / browser history — makes the physical browser back
+  // button do exactly what the in-app "← Back" buttons do: no reload, no
+  // leaving the app, just the same screen transition. main -> subscreen
+  // pushes a new entry (so one physical Back returns to main); moving
+  // sideways between two subscreens (e.g. Player Stats -> All Players via
+  // "Global Stats") replaces the current entry instead, so depth never
+  // exceeds one level — Back always means "back to main," matching how
+  // the in-app Back buttons already behaved before this existed.
+  // ---------------------------------------------------------------------
+
+  function pushScreenHistory(screen, extra) {
+    var onMain = !appRoot.classList.contains("hidden");
+    var state = { screen: screen };
+    var hash = "#" + screen;
+    if (extra && extra.name) {
+      state.name = extra.name;
+      hash += "/" + encodeURIComponent(extra.name);
+    }
+    if (onMain) {
+      history.pushState(state, "", hash);
+    } else {
+      history.replaceState(state, "", hash);
+    }
+  }
+
+  function navigateBack() {
+    history.back();
+  }
+
+  window.addEventListener("popstate", function (e) {
+    var state = e.state;
+    if (!state || !state.screen || state.screen === "main") {
+      if (!playerPageView.classList.contains("hidden")) closePlayerStatsPage(true);
+      else if (!allPlayersPageView.classList.contains("hidden")) closeAllPlayersPage(true);
+      else if (!tournamentPageView.classList.contains("hidden")) closeTournamentPage(true);
+      return;
+    }
+    if (state.screen === "all-players") openAllPlayersPage(true);
+    else if (state.screen === "tournament") openTournamentPage(true);
+    else if (state.screen === "player") openPlayerStatsPage(state.name, true);
+  });
+
+  history.replaceState({ screen: "main" }, "", location.pathname + location.search);
+
   // name: the player's name — works whether or not they're currently on
-  // the roster, since saved stats are keyed by name, not id.
-  function openPlayerStatsPage(name) {
+  // the roster, since saved stats are keyed by name, not id. skipHistory
+  // is true only when called from the popstate handler above (restoring
+  // a screen the browser already navigated to) — it must never push or
+  // replace history again in that case.
+  function openPlayerStatsPage(name, skipHistory) {
     if (!name) return;
+    if (!skipHistory) pushScreenHistory("player", { name: name });
     currentStatsPlayerName = name;
     currentStatsSessions = null;
     playerPageName.textContent = name;
@@ -4477,7 +4569,11 @@
     setStatsPeriod("all");
   }
 
-  function closePlayerStatsPage() {
+  function closePlayerStatsPage(skipHistory) {
+    if (!skipHistory) {
+      navigateBack();
+      return;
+    }
     playerPageView.classList.add("hidden");
     appRoot.classList.remove("hidden");
     currentStatsPlayerName = null;
@@ -5433,15 +5529,21 @@
     });
   }
 
-  function openAllPlayersPage() {
+  function openAllPlayersPage(skipHistory) {
+    if (!skipHistory) pushScreenHistory("all-players");
     renderAllPlayersPage();
     appRoot.classList.add("hidden");
     tournamentPageView.classList.add("hidden");
+    playerPageView.classList.add("hidden");
     allPlayersPageView.classList.remove("hidden");
     window.scrollTo(0, 0);
   }
 
-  function closeAllPlayersPage() {
+  function closeAllPlayersPage(skipHistory) {
+    if (!skipHistory) {
+      navigateBack();
+      return;
+    }
     allPlayersPageView.classList.add("hidden");
     appRoot.classList.remove("hidden");
   }
@@ -6207,7 +6309,8 @@
     }
   }
 
-  function openTournamentPage() {
+  function openTournamentPage(skipHistory) {
+    if (!skipHistory) pushScreenHistory("tournament");
     renderTournamentPage();
     appRoot.classList.add("hidden");
     allPlayersPageView.classList.add("hidden");
@@ -6216,7 +6319,11 @@
     window.scrollTo(0, 0);
   }
 
-  function closeTournamentPage() {
+  function closeTournamentPage(skipHistory) {
+    if (!skipHistory) {
+      navigateBack();
+      return;
+    }
     tournamentPageView.classList.add("hidden");
     appRoot.classList.remove("hidden");
   }
@@ -6673,11 +6780,17 @@
 
   btnPlayerPageExport.addEventListener("click", exportCurrentPlayerStats);
   btnPlayerPageReset.addEventListener("click", resetPlayerHistoricalStats);
-  btnPlayerPageBack.addEventListener("click", closePlayerStatsPage);
+  btnPlayerPageBack.addEventListener("click", function () {
+    closePlayerStatsPage();
+  });
   btnReturnToGlobalStats.addEventListener("click", returnToGlobalStats);
 
-  btnOpenAllPlayers.addEventListener("click", openAllPlayersPage);
-  btnAllPlayersBack.addEventListener("click", closeAllPlayersPage);
+  btnOpenAllPlayers.addEventListener("click", function () {
+    openAllPlayersPage();
+  });
+  btnAllPlayersBack.addEventListener("click", function () {
+    closeAllPlayersPage();
+  });
   allPlayersSortSelect.addEventListener("change", renderAllPlayersPage);
   allPlayersPeriodSelect.addEventListener("change", renderAllPlayersPage);
   btnToggleAllPlayersView.addEventListener("click", function () {
@@ -6692,8 +6805,12 @@
     renderAllPlayersPage();
   });
 
-  btnOpenTournament.addEventListener("click", openTournamentPage);
-  btnTournamentBack.addEventListener("click", closeTournamentPage);
+  btnOpenTournament.addEventListener("click", function () {
+    openTournamentPage();
+  });
+  btnTournamentBack.addEventListener("click", function () {
+    closeTournamentPage();
+  });
   btnTournamentStart.addEventListener("click", startTournament);
   btnTournamentAbandon.addEventListener("click", abandonTournament);
   tournamentGameTypeSelect.addEventListener("change", function () {

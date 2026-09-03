@@ -9,18 +9,49 @@
 <meta name="theme-color" content="#1a0a0a">
 <title>Pool Master Counter</title>
 <link rel="stylesheet" href="css/style.css">
+<script>
+  // Applied synchronously, before the stylesheet paints, so a saved theme
+  // never flashes the default look first.
+  (function () {
+    try {
+      var saved = localStorage.getItem("poolMasterCounter.theme.v1");
+      if (saved) document.documentElement.setAttribute("data-theme", saved);
+    } catch (e) {}
+  })();
+</script>
 </head>
 <body>
 
 <div id="app">
 
   <header class="app-header">
+    <div class="theme-select-row">
+      <label for="theme-select">🎨 Theme</label>
+      <select id="theme-select">
+        <optgroup label="Dark">
+          <option value="crimson-felt">Crimson Felt</option>
+          <option value="emerald-rail">Emerald Rail</option>
+          <option value="neon-arcade">Neon Arcade</option>
+          <option value="midnight-ivory">Midnight Ivory</option>
+          <option value="sunset-chalk">Sunset Chalk</option>
+          <option value="obsidian-break">Obsidian Break</option>
+        </optgroup>
+        <optgroup label="Bright">
+          <option value="daybreak-chalk">Daybreak Chalk</option>
+          <option value="pearl-lounge">Pearl Lounge</option>
+        </optgroup>
+        <optgroup label="High Contrast">
+          <option value="blackout-contrast">Blackout Contrast</option>
+          <option value="paper-contrast">Paper Contrast</option>
+        </optgroup>
+      </select>
+    </div>
     <div class="brand">
       <svg class="brand-logo" viewBox="0 0 120 120" role="img" aria-label="Pool Master Counter logo">
         <defs>
           <radialGradient id="logoBg" cx="35%" cy="30%" r="75%">
-            <stop offset="0%" stop-color="#8a1a1f" />
-            <stop offset="100%" stop-color="#200606" />
+            <stop offset="0%" style="stop-color: var(--felt-light)" />
+            <stop offset="100%" style="stop-color: var(--bg)" />
           </radialGradient>
         </defs>
         <circle class="logo-badge-bg" cx="60" cy="60" r="57" fill="url(#logoBg)" />
@@ -443,7 +474,7 @@
     <div class="help-body">
     <section class="help-section" id="help-section-main">
       <h3>Main Page</h3>
-      <p>The main page is where every game gets played. Every panel here is collapsed by default with a one-line summary of what's inside — tap the chevron to expand it.</p>
+      <p>The main page is where every game gets played. Every panel here is collapsed by default with a one-line summary of what's inside — tap the chevron to expand it. The "🎨 Theme" dropdown at the very top switches the whole app's colors and font in one tap and remembers your choice — six dark palettes, two bright/light ones, and two high-contrast pairs (one dark, one light) for maximum legibility.</p>
       <ul>
         <li><strong>Backup &amp; Transfer</strong> — Export All Data downloads one JSON file with everything: the live session, saved player lists, saved rotations, career stats, and ratings. Import Data reads a backup back in — it merges into what's already here rather than overwriting, and adopts the backup as-is only if this device has no players yet. Reset All Player Stats and Reset Player Lists each back up first, warn you, then clear — career stats and saved lists respectively (never the ratings store).</li>
         <li><strong>Game Order</strong> — Turn on "Rotate game types automatically" to cycle through a sequence of game rules on their own. Each step in the order is its own rule — game type, target number, and unit (rack/balls/points) — so the same game type can appear twice with different rules (e.g. "8-Ball — 1 rack" then "8-Ball — 3 racks"). The target number and unit are editable right in the list — change either any time without removing and re-adding the step. "Switch every" controls how many games play before advancing. Load Rotation swaps in a saved sequence outright; any new sequence you build is auto-saved as a loadable entry the moment it's set up or played.</li>
@@ -514,7 +545,7 @@
 <div id="view-player-page" class="hidden">
 
   <header class="app-header player-page-header">
-    <button type="button" id="btn-player-page-back" class="btn btn-ghost">← Back</button>
+    <button type="button" id="btn-player-page-back" class="btn btn-ghost screen-back-btn" aria-label="Back">←</button>
     <h1 id="player-page-name"></h1>
     <button type="button" id="btn-return-to-global-stats" class="btn btn-ghost">🌐 Global Stats</button>
     <button type="button" id="btn-open-help-player-page" class="btn btn-ghost">❓ Help</button>
@@ -561,7 +592,7 @@
 <div id="view-all-players-page" class="hidden">
 
   <header class="app-header player-page-header">
-    <button type="button" id="btn-all-players-back" class="btn btn-ghost">← Back</button>
+    <button type="button" id="btn-all-players-back" class="btn btn-ghost screen-back-btn" aria-label="Back">←</button>
     <h1>All Players</h1>
     <button type="button" id="btn-open-help-all-players" class="btn btn-ghost">❓ Help</button>
   </header>
@@ -599,7 +630,7 @@
 <div id="view-tournament-page" class="hidden">
 
   <header class="app-header player-page-header">
-    <button type="button" id="btn-tournament-back" class="btn btn-ghost">← Back</button>
+    <button type="button" id="btn-tournament-back" class="btn btn-ghost screen-back-btn" aria-label="Back">←</button>
     <h1>Tournament</h1>
     <button type="button" id="btn-open-help-tournament" class="btn btn-ghost">❓ Help</button>
   </header>
