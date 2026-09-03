@@ -8,6 +8,7 @@ from helpers import (
     add_player,
     assert_no_console_errors,
     click_plus,
+    dismiss_gamewin_overlay,
     expand_panel,
     set_number_input,
     stat_value_for,
@@ -42,6 +43,7 @@ def test_undo_last_win_reverses_the_credited_win(app):
     add_player(app, "Bob")
     click_plus(app, "Alice")
     wait(app).until(EC.visibility_of_element_located((By.ID, "win-toast")))
+    dismiss_gamewin_overlay(app)
 
     expand_panel(app, "btn-toggle-game-setup-panel")
     app.find_element(By.ID, "btn-undo-win").click()
@@ -59,6 +61,7 @@ def test_race_to_n_completion_shows_milestone_overlay(app):
     set_number_input(app, "race-to-wins", 1)
 
     click_plus(app, "Alice")
+    dismiss_gamewin_overlay(app)
 
     overlay = wait(app).until(EC.visibility_of_element_located((By.ID, "milestone-overlay")))
     assert overlay.is_displayed()

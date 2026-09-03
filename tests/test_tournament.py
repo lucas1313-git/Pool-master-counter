@@ -4,7 +4,7 @@ completion, and the champion banner / 30-note fanfare trigger path."""
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 
-from helpers import add_player, assert_no_console_errors, set_number_input, wait
+from helpers import add_player, assert_no_console_errors, expand_panel, set_number_input, wait
 
 
 def _open_tournament_page(driver):
@@ -164,9 +164,11 @@ def test_champion_is_recorded_as_a_tournament_win_in_player_stats(app):
     _click_plus_in_active_match(app, "Alice")
     wait(app).until(EC.visibility_of_element_located((By.ID, "tournament-champion-banner")))
 
-    # btn-open-all-players lives in the main screen's header, not on the
-    # Tournament page - go back to main first.
+    # btn-open-all-players ("All Players Stats") lives inside the Players
+    # panel on the main screen, not on the Tournament page - go back to
+    # main first, then make sure that panel is expanded.
     app.find_element(By.ID, "btn-tournament-back").click()
+    expand_panel(app, "btn-toggle-players-panel")
     wait(app).until(EC.visibility_of_element_located((By.ID, "btn-open-all-players")))
     app.find_element(By.ID, "btn-open-all-players").click()
     wait(app).until(EC.visibility_of_element_located((By.ID, "view-all-players-page")))

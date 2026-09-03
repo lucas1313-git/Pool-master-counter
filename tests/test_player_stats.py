@@ -9,6 +9,7 @@ from helpers import (
     add_player,
     assert_no_console_errors,
     click_plus,
+    dismiss_gamewin_overlay,
     expand_panel,
     set_number_input,
     wait,
@@ -16,6 +17,9 @@ from helpers import (
 
 
 def _open_player_page(driver, name):
+    # btn-open-all-players ("All Players Stats") lives inside the Players
+    # panel, not the always-visible header row.
+    expand_panel(driver, "btn-toggle-players-panel")
     driver.find_element(By.ID, "btn-open-all-players").click()
     wait(driver).until(EC.visibility_of_element_located((By.ID, "view-all-players-page")))
     driver.find_element(
@@ -31,6 +35,7 @@ def _win_one_race(driver, winner, loser):
     expand_panel(driver, "btn-toggle-game-setup-panel")
     set_number_input(driver, "race-to-wins", 1)
     click_plus(driver, winner)
+    dismiss_gamewin_overlay(driver)
     wait(driver).until(EC.visibility_of_element_located((By.ID, "milestone-overlay")))
     driver.find_element(By.ID, "btn-milestone-close").click()
     wait(driver).until(EC.invisibility_of_element_located((By.ID, "milestone-overlay")))

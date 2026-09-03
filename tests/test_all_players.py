@@ -9,6 +9,7 @@ from helpers import (
     add_player,
     assert_no_console_errors,
     click_plus,
+    dismiss_gamewin_overlay,
     expand_panel,
     set_number_input,
     wait,
@@ -16,6 +17,9 @@ from helpers import (
 
 
 def _open_all_players(driver):
+    # btn-open-all-players ("All Players Stats") lives inside the Players
+    # panel, not the always-visible header row.
+    expand_panel(driver, "btn-toggle-players-panel")
     driver.find_element(By.ID, "btn-open-all-players").click()
     wait(driver).until(EC.visibility_of_element_located((By.ID, "view-all-players-page")))
 
@@ -28,6 +32,7 @@ def _win_one_race(driver, winner, loser):
     expand_panel(driver, "btn-toggle-game-setup-panel")
     set_number_input(driver, "race-to-wins", 1)
     click_plus(driver, winner)
+    dismiss_gamewin_overlay(driver)
     wait(driver).until(EC.visibility_of_element_located((By.ID, "milestone-overlay")))
     driver.find_element(By.ID, "btn-milestone-close").click()
     wait(driver).until(EC.invisibility_of_element_located((By.ID, "milestone-overlay")))
@@ -100,6 +105,24 @@ def test_tournament_scale_rows_appear_after_a_completed_race(app):
     assert "tournaments played" in labels
     assert "tournaments won" in labels
     assert "tournaments lost" in labels
+    assert_no_console_errors(app)
+
+
+def test_graph_time_axis_now_label_has_no_time_of_day(app):
+    """Regression test: the "Now" axis label used to include a
+    time-of-day ("Now · Sep 3 1:21 PM"), which made it wide enough to
+    spill into and overlap the tick label before it, especially on
+    narrow/portrait viewports where the same-width text takes up a much
+    bigger share of the axis. It's date-only now ("Now · Sep 3")."""
+    _win_one_race(app, "Alice", "Bob")
+    _open_all_players(app)
+    app.find_element(By.ID, "btn-toggle-all-players-view").click()
+
+    now_label = wait(app).until(
+        EC.presence_of_element_located((By.CSS_SELECTOR, ".player-graph-time-label.is-now"))
+    )
+    assert "Now" in now_label.text
+    assert ":" not in now_label.text, now_label.text
     assert_no_console_errors(app)
 
 

@@ -91,6 +91,16 @@ def assert_no_console_errors(driver):
     assert not errors, "Unexpected console errors: {}".format(errors)
 
 
+def dismiss_gamewin_overlay(driver):
+    """Closes the "Nice shot!" popup shown after every credited win (not
+    just a race-ending one) - whatever else that win also triggers
+    (milestone/on-hill/game-change) is deferred until this one closes, so
+    tests waiting on those need to dismiss this first."""
+    wait(driver).until(EC.visibility_of_element_located((By.ID, "gamewin-overlay")))
+    driver.find_element(By.ID, "btn-gamewin-close").click()
+    wait(driver).until(EC.invisibility_of_element_located((By.ID, "gamewin-overlay")))
+
+
 def click_plus(driver, player_name):
     """Clicks the '+' ball button on a given player's scoreboard card."""
     card = driver.find_element(
