@@ -25,27 +25,6 @@
 <div id="app">
 
   <header class="app-header">
-    <div class="theme-select-row">
-      <label for="theme-select">🎨 Theme</label>
-      <select id="theme-select">
-        <optgroup label="Dark">
-          <option value="crimson-felt">Crimson Felt</option>
-          <option value="emerald-rail">Emerald Rail</option>
-          <option value="neon-arcade">Neon Arcade</option>
-          <option value="midnight-ivory">Midnight Ivory</option>
-          <option value="sunset-chalk">Sunset Chalk</option>
-          <option value="obsidian-break">Obsidian Break</option>
-        </optgroup>
-        <optgroup label="Bright">
-          <option value="daybreak-chalk">Daybreak Chalk</option>
-          <option value="pearl-lounge">Pearl Lounge</option>
-        </optgroup>
-        <optgroup label="High Contrast">
-          <option value="blackout-contrast">Blackout Contrast</option>
-          <option value="paper-contrast">Paper Contrast</option>
-        </optgroup>
-      </select>
-    </div>
     <div class="brand">
       <svg class="brand-logo" viewBox="0 0 120 120" role="img" aria-label="Pool Master Counter logo">
         <defs>
@@ -67,31 +46,56 @@
         <circle class="logo-badge-ring" cx="60" cy="60" r="57" />
       </svg>
       <div class="brand-text">
-        <h1>Pool Master Counter</h1>
-        <p class="brand-slogan">Don't get cocky!</p>
+        <h1 data-i18n="brand.name">Pool Master Counter</h1>
+        <p class="brand-slogan" data-i18n="brand.slogan">Don't get cocky!</p>
       </div>
     </div>
     <div class="header-nav-row">
-      <button type="button" id="btn-open-wizard" class="btn btn-primary all-players-nav-btn">🧙 Start Wizard</button>
-      <button type="button" id="btn-open-all-players" class="btn btn-ghost all-players-nav-btn">📊 All Stats</button>
-      <button type="button" id="btn-open-tournament" class="btn btn-ghost all-players-nav-btn">🏆 Tournament</button>
-      <button type="button" id="btn-open-help" class="btn btn-ghost all-players-nav-btn">❓ Help</button>
+      <button type="button" id="btn-open-wizard" class="btn btn-primary all-players-nav-btn" data-i18n="header.startWizard">🧙 Start Wizard</button>
+      <button type="button" id="btn-open-all-players" class="btn btn-ghost all-players-nav-btn" data-i18n="header.allStats">📊 All Stats</button>
+      <button type="button" id="btn-open-tournament" class="btn btn-ghost all-players-nav-btn" data-i18n="header.tournament">🏆 Tournament</button>
+      <button type="button" id="btn-open-help" class="btn btn-ghost all-players-nav-btn" data-i18n="header.help">❓ Help</button>
+      <div class="theme-select-row">
+        <label for="theme-select" data-i18n="header.theme">🎨 Theme</label>
+        <select id="theme-select">
+          <optgroup label="Dark" data-i18n-label="header.themeGroupDark">
+            <option value="crimson-felt" data-i18n="theme.crimsonFelt">Crimson Felt</option>
+            <option value="emerald-rail" data-i18n="theme.emeraldRail">Emerald Rail</option>
+            <option value="neon-arcade" data-i18n="theme.neonArcade">Neon Arcade</option>
+            <option value="midnight-ivory" data-i18n="theme.midnightIvory">Midnight Ivory</option>
+            <option value="sunset-chalk" data-i18n="theme.sunsetChalk">Sunset Chalk</option>
+            <option value="obsidian-break" data-i18n="theme.obsidianBreak">Obsidian Break</option>
+          </optgroup>
+          <optgroup label="Bright" data-i18n-label="header.themeGroupBright">
+            <option value="daybreak-chalk" data-i18n="theme.daybreakChalk">Daybreak Chalk</option>
+            <option value="pearl-lounge" data-i18n="theme.pearlLounge">Pearl Lounge</option>
+          </optgroup>
+          <optgroup label="High Contrast" data-i18n-label="header.themeGroupHighContrast">
+            <option value="blackout-contrast" data-i18n="theme.blackoutContrast">Blackout Contrast</option>
+            <option value="paper-contrast" data-i18n="theme.paperContrast">Paper Contrast</option>
+          </optgroup>
+        </select>
+      </div>
+      <div class="language-select-row">
+        <label for="language-select" data-i18n="header.language">🌐 Language</label>
+        <select id="language-select"></select>
+      </div>
     </div>
   </header>
 
   <section class="panel collapsible-panel collapsed" id="backup-panel">
     <button type="button" class="panel-toggle" id="btn-toggle-backup-panel" aria-expanded="false" aria-controls="backup-panel-body">
-      <h2>Backup &amp; Transfer</h2>
+      <h2 data-i18n="backup.heading">Backup &amp; Transfer</h2>
       <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
     </button>
-    <p class="panel-summary" id="backup-panel-summary">Export or import your data, or reset player stats and saved lists.</p>
+    <p class="panel-summary" id="backup-panel-summary" data-i18n="backup.summary">Export or import your data, or reset player stats and saved lists.</p>
     <div class="panel-body" id="backup-panel-body">
-      <p class="player-stats-note">All stats and session data live on this device only. Export a backup file to move everything to another iPhone, iPad, or computer.</p>
+      <p class="player-stats-note" data-i18n="backup.note">All stats and session data live on this device only. Export a backup file to move everything to another iPhone, iPad, or computer.</p>
       <div class="row">
-        <button type="button" id="btn-export-all-data" class="btn btn-primary">Export All Data</button>
-        <button type="button" id="btn-import-all-data" class="btn btn-ghost">Import Data</button>
-        <button type="button" id="btn-reset-all-player-stats" class="btn btn-danger">Reset All Player Stats</button>
-        <button type="button" id="btn-reset-roster-lists" class="btn btn-danger">Reset Player Lists</button>
+        <button type="button" id="btn-export-all-data" class="btn btn-primary" data-i18n="backup.exportAll">Export All Data</button>
+        <button type="button" id="btn-import-all-data" class="btn btn-ghost" data-i18n="backup.importData">Import Data</button>
+        <button type="button" id="btn-reset-all-player-stats" class="btn btn-danger" data-i18n="backup.resetStats">Reset All Player Stats</button>
+        <button type="button" id="btn-reset-roster-lists" class="btn btn-danger" data-i18n="backup.resetLists">Reset Player Lists</button>
         <input type="file" id="import-file-input" accept="application/json" class="hidden">
       </div>
     </div>
@@ -99,33 +103,33 @@
 
   <section class="panel collapsible-panel collapsed" id="rotation-panel">
     <button type="button" class="panel-toggle" id="btn-toggle-rotation-panel" aria-expanded="false" aria-controls="rotation-panel-body">
-      <h2>Game Order</h2>
+      <h2 data-i18n="rotation.heading">Game Order</h2>
       <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
     </button>
     <p class="panel-summary" id="rotation-panel-summary"></p>
     <div class="panel-body" id="rotation-panel-body">
       <div class="row">
-        <label class="checkbox-row"><input type="checkbox" id="rotation-enabled"> Rotate game types automatically</label>
+        <label class="checkbox-row"><input type="checkbox" id="rotation-enabled"> <span data-i18n="rotation.autoRotate">Rotate game types automatically</span></label>
       </div>
       <div class="row">
         <select id="rotation-load-select"></select>
-        <button type="button" id="btn-rotation-load" class="btn btn-ghost">Load Rotation</button>
+        <button type="button" id="btn-rotation-load" class="btn btn-ghost" data-i18n="rotation.loadRotation">Load Rotation</button>
       </div>
       <div class="row">
         <select id="rotation-add-type"></select>
         <input type="number" id="rotation-add-target" min="1" max="500" value="1">
         <select id="rotation-add-unit">
-          <option value="rack">rack</option>
-          <option value="balls">balls</option>
-          <option value="points">points</option>
+          <option value="rack" data-i18n="units.rack">rack</option>
+          <option value="balls" data-i18n="units.balls">balls</option>
+          <option value="points" data-i18n="units.points">points</option>
         </select>
-        <button type="button" id="btn-rotation-add" class="btn btn-ghost">+ Add to Order</button>
+        <button type="button" id="btn-rotation-add" class="btn btn-ghost" data-i18n="rotation.addToOrder">+ Add to Order</button>
       </div>
       <ul id="rotation-list" class="rotation-list"></ul>
       <div class="row">
-        <label for="rotation-every">Switch every</label>
+        <label for="rotation-every" data-i18n="rotation.switchEvery">Switch every</label>
         <input type="number" id="rotation-every" min="1" max="99" value="1">
-        <span>games</span>
+        <span data-i18n="common.games">games</span>
       </div>
       <p id="rotation-status" class="rotation-status"></p>
     </div>
@@ -133,64 +137,64 @@
 
   <section class="panel collapsible-panel collapsed" id="game-setup-panel">
     <button type="button" class="panel-toggle" id="btn-toggle-game-setup-panel" aria-expanded="false" aria-controls="game-setup-panel-body">
-      <h2>Current Game</h2>
+      <h2 data-i18n="gameSetup.heading">Current Game</h2>
       <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
     </button>
     <p class="panel-summary" id="game-setup-panel-summary"></p>
     <div class="panel-body" id="game-setup-panel-body">
       <div class="row">
-        <label for="game-type">Game</label>
+        <label for="game-type" data-i18n="gameSetup.game">Game</label>
         <select id="game-type"></select>
-        <label for="game-target">Target</label>
+        <label for="game-target" data-i18n="gameSetup.target">Target</label>
         <input type="number" id="game-target" min="1" max="500" value="1">
         <select id="game-target-unit-select">
-          <option value="rack">rack</option>
-          <option value="balls">balls</option>
-          <option value="points">points</option>
+          <option value="rack" data-i18n="units.rack">rack</option>
+          <option value="balls" data-i18n="units.balls">balls</option>
+          <option value="points" data-i18n="units.points">points</option>
         </select>
       </div>
 
       <div class="row mode-row">
-        <label><input type="radio" name="game-mode" value="individual" checked> Individual</label>
-        <label><input type="radio" name="game-mode" value="teams"> Teams</label>
+        <label><input type="radio" name="game-mode" value="individual" checked> <span data-i18n="gameSetup.individual">Individual</span></label>
+        <label><input type="radio" name="game-mode" value="teams"> <span data-i18n="gameSetup.teams">Teams</span></label>
       </div>
 
       <div class="row">
-        <label for="race-to-wins">Race-to milestone</label>
+        <label for="race-to-wins" data-i18n="gameSetup.raceToMilestone">Race-to milestone</label>
         <input type="number" id="race-to-wins" min="1" max="99" value="5">
-        <span>wins</span>
+        <span data-i18n="common.wins">wins</span>
       </div>
 
       <div class="row">
-        <button type="button" id="btn-reset-game" class="btn btn-ghost">Reset Current Game</button>
-        <button type="button" id="btn-undo-win" class="btn btn-ghost">Undo Last Win</button>
-        <button type="button" id="btn-share" class="btn btn-ghost">Share Standings</button>
-        <button type="button" id="btn-export-session" class="btn btn-ghost">Export Session</button>
-        <button type="button" id="btn-reset-stats" class="btn btn-danger">New Game</button>
+        <button type="button" id="btn-reset-game" class="btn btn-ghost" data-i18n="gameSetup.resetGame">Reset Current Game</button>
+        <button type="button" id="btn-undo-win" class="btn btn-ghost" data-i18n="gameSetup.undoWin">Undo Last Win</button>
+        <button type="button" id="btn-share" class="btn btn-ghost" data-i18n="gameSetup.shareStandings">Share Standings</button>
+        <button type="button" id="btn-export-session" class="btn btn-ghost" data-i18n="gameSetup.exportSession">Export Session</button>
+        <button type="button" id="btn-reset-stats" class="btn btn-danger" data-i18n="gameSetup.newGame">New Game</button>
       </div>
     </div>
   </section>
 
   <section class="panel collapsible-panel collapsed" id="players-panel">
     <button type="button" class="panel-toggle" id="btn-toggle-players-panel" aria-expanded="false" aria-controls="players-panel-body">
-      <h2>Players</h2>
+      <h2 data-i18n="players.heading">Players</h2>
       <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
     </button>
     <p class="panel-summary" id="players-panel-summary"></p>
     <div class="panel-body" id="players-panel-body">
       <p id="new-player-name-requirement" class="new-player-name-requirement hidden"></p>
       <form id="add-player-form" class="row">
-        <input type="text" id="new-player-name" placeholder="Player name" autocomplete="off" required>
-        <input type="number" id="new-player-rating" placeholder="Starting rating (optional)" min="0" max="900">
-        <button type="submit" id="btn-add-player" class="btn btn-primary" disabled>Add</button>
+        <input type="text" id="new-player-name" data-i18n-placeholder="players.namePlaceholder" placeholder="Player name" autocomplete="off" required>
+        <input type="number" id="new-player-rating" data-i18n-placeholder="players.ratingPlaceholder" placeholder="Starting rating (optional)" min="0" max="900">
+        <button type="submit" id="btn-add-player" class="btn btn-primary" disabled data-i18n="common.add">Add</button>
       </form>
       <div class="row">
         <select id="roster-load-select"></select>
-        <button type="button" id="btn-roster-load" class="btn btn-ghost">Load Player List</button>
+        <button type="button" id="btn-roster-load" class="btn btn-ghost" data-i18n="players.loadPlayerList">Load Player List</button>
       </div>
       <div class="row">
-        <button type="button" id="btn-export-roster-lists" class="btn btn-ghost">Export Player Lists</button>
-        <button type="button" id="btn-import-roster-lists" class="btn btn-ghost">Import Player Lists</button>
+        <button type="button" id="btn-export-roster-lists" class="btn btn-ghost" data-i18n="players.exportLists">Export Player Lists</button>
+        <button type="button" id="btn-import-roster-lists" class="btn btn-ghost" data-i18n="players.importLists">Import Player Lists</button>
         <input type="file" id="import-roster-lists-file-input" accept="application/json" class="hidden">
       </div>
       <ul id="roster-list" class="roster-list"></ul>
@@ -201,27 +205,27 @@
 
   <section class="panel collapsible-panel collapsed" id="standings-panel">
     <button type="button" class="panel-toggle" id="btn-toggle-standings-panel" aria-expanded="false" aria-controls="standings-panel-body">
-      <h2>Standings</h2>
+      <h2 data-i18n="standings.heading">Standings</h2>
       <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
     </button>
     <p class="panel-summary" id="standings-panel-summary"></p>
     <div class="panel-body" id="standings-panel-body">
       <h2 id="standings-title">Race to 5 Wins — Teams</h2>
       <ul id="team-standings-list" class="standings-list"></ul>
-      <h2 id="standings-title-individual">Individual</h2>
+      <h2 id="standings-title-individual" data-i18n="standings.individual">Individual</h2>
       <ul id="player-standings-list" class="standings-list"></ul>
     </div>
   </section>
 
   <section id="scoreboard-panel">
-    <button type="button" id="btn-toggle-focus" class="btn btn-ghost focus-toggle-btn">Focus Mode</button>
+    <button type="button" id="btn-toggle-focus" class="btn btn-ghost focus-toggle-btn" data-i18n="scoreboard.focusMode">Focus Mode</button>
     <label class="no-stats-row-inline">
       <input type="checkbox" id="no-stats-checkbox">
-      Do not record games statistics and players data
+      <span data-i18n="scoreboard.noStatsMode">Do not record games statistics and players data</span>
     </label>
     <div class="focus-players-wrap collapsible-panel collapsed" id="focus-players-wrap">
       <button type="button" class="panel-toggle" id="btn-toggle-focus-players" aria-expanded="false" aria-controls="focus-players-body">
-        <span id="focus-players-summary">Players</span>
+        <span id="focus-players-summary" data-i18n="players.heading">Players</span>
         <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
       </button>
       <div class="panel-body" id="focus-players-body">
@@ -234,7 +238,7 @@
 
   <section class="panel collapsible-panel collapsed" id="history-panel">
     <button type="button" class="panel-toggle" id="btn-toggle-history-panel" aria-expanded="false" aria-controls="history-panel-body">
-      <h2>Recent Games</h2>
+      <h2 data-i18n="history.heading">Recent Games</h2>
       <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
     </button>
     <p class="panel-summary" id="history-panel-summary"></p>
@@ -245,17 +249,17 @@
 
   <section class="panel collapsible-panel collapsed" id="day-notes-panel">
     <button type="button" class="panel-toggle" id="btn-toggle-day-notes-panel" aria-expanded="false" aria-controls="day-notes-panel-body">
-      <h2>Today's Notes</h2>
+      <h2 data-i18n="dayNotes.heading">Today's Notes</h2>
       <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
     </button>
     <p class="panel-summary" id="day-notes-panel-summary"></p>
     <div class="panel-body" id="day-notes-panel-body">
-      <p class="player-stats-note">Jot down anything worth remembering about today's live play — who's on fire, funny moments, anything at all. It's saved automatically and folded into the day report below.</p>
-      <textarea id="day-notes-textarea" class="day-notes-textarea" placeholder="Notes about today's play..." rows="4"></textarea>
+      <p class="player-stats-note" data-i18n="dayNotes.note">Jot down anything worth remembering about today's live play — who's on fire, funny moments, anything at all. It's saved automatically and folded into the day report below.</p>
+      <textarea id="day-notes-textarea" class="day-notes-textarea" data-i18n-placeholder="dayNotes.placeholder" placeholder="Notes about today's play..." rows="4"></textarea>
       <div class="row">
-        <button type="button" id="btn-day-report-copy" class="btn btn-ghost">📋 Copy Report</button>
-        <button type="button" id="btn-day-report-email" class="btn btn-ghost">📧 Email Report</button>
-        <button type="button" id="btn-day-report-sms" class="btn btn-ghost">📱 Text Report</button>
+        <button type="button" id="btn-day-report-copy" class="btn btn-ghost" data-i18n="dayNotes.copyReport">📋 Copy Report</button>
+        <button type="button" id="btn-day-report-email" class="btn btn-ghost" data-i18n="dayNotes.emailReport">📧 Email Report</button>
+        <button type="button" id="btn-day-report-sms" class="btn btn-ghost" data-i18n="dayNotes.textReport">📱 Text Report</button>
       </div>
     </div>
   </section>
@@ -265,48 +269,48 @@
 <div id="milestone-overlay" class="milestone-overlay hidden">
   <div class="milestone-card">
     <div class="milestone-emoji">🎉🏆🎉</div>
-    <h2>Congratulations!</h2>
+    <h2 data-i18n="milestone.congrats">Congratulations!</h2>
     <p id="milestone-headline"></p>
     <div id="milestone-details" class="milestone-details"></div>
-    <button type="button" id="btn-milestone-close" class="btn btn-primary">Nice!</button>
+    <button type="button" id="btn-milestone-close" class="btn btn-primary" data-i18n="milestone.nice">Nice!</button>
   </div>
 </div>
 
 <div id="onhill-overlay" class="onhill-overlay hidden">
   <div class="onhill-card">
     <div class="onhill-emoji">⛰️🔥</div>
-    <h2>On the Hill!</h2>
+    <h2 data-i18n="onhill.title">On the Hill!</h2>
     <p id="onhill-message"></p>
-    <button type="button" id="btn-onhill-close" class="btn btn-primary">Watch out!</button>
+    <button type="button" id="btn-onhill-close" class="btn btn-primary" data-i18n="onhill.watchOut">Watch out!</button>
   </div>
 </div>
 
 <div id="gamechange-overlay" class="gamechange-overlay hidden">
   <div class="gamechange-card">
     <div class="gamechange-emoji">🎱🔄</div>
-    <h2>Game Changed!</h2>
+    <h2 data-i18n="gamechange.title">Game Changed!</h2>
     <p id="gamechange-message"></p>
-    <button type="button" id="btn-gamechange-close" class="btn btn-primary">Let's go!</button>
+    <button type="button" id="btn-gamechange-close" class="btn btn-primary" data-i18n="gamechange.letsGo">Let's go!</button>
   </div>
 </div>
 
 <div id="save-session-overlay" class="save-session-overlay hidden">
   <div class="save-session-card">
     <div class="save-session-emoji">💾</div>
-    <h2>Start a New Session?</h2>
+    <h2 data-i18n="saveSession.title">Start a New Session?</h2>
     <p id="save-session-message"></p>
     <div class="save-session-actions">
-      <button type="button" id="btn-save-session-save" class="btn btn-primary">Save &amp; Start New Session</button>
-      <button type="button" id="btn-save-session-skip" class="btn btn-ghost">Start Without Saving</button>
-      <button type="button" id="btn-save-session-cancel" class="btn btn-ghost">Cancel</button>
+      <button type="button" id="btn-save-session-save" class="btn btn-primary" data-i18n="saveSession.saveAndStart">Save &amp; Start New Session</button>
+      <button type="button" id="btn-save-session-skip" class="btn btn-ghost" data-i18n="saveSession.startWithoutSaving">Start Without Saving</button>
+      <button type="button" id="btn-save-session-cancel" class="btn btn-ghost" data-i18n="common.cancel">Cancel</button>
     </div>
   </div>
 </div>
 
 <div id="wizard-overlay" class="wizard-overlay hidden">
   <div class="wizard-card">
-    <button type="button" id="btn-open-help-wizard" class="wizard-close-btn wizard-help-btn" aria-label="Help">❓</button>
-    <button type="button" id="btn-wizard-close" class="wizard-close-btn" aria-label="Close wizard">×</button>
+    <button type="button" id="btn-open-help-wizard" class="wizard-close-btn wizard-help-btn" aria-label="Help" data-i18n-aria-label="common.help">❓</button>
+    <button type="button" id="btn-wizard-close" class="wizard-close-btn" aria-label="Close wizard" data-i18n-aria-label="wizard.closeAriaLabel">×</button>
 
     <div class="wizard-header">
       <svg class="wizard-mascot" viewBox="0 0 120 150" role="img" aria-label="Cartoon wizard mascot">
@@ -336,7 +340,7 @@
         <path d="M56,64 Q60,67 64,64" stroke="#c98f5e" stroke-width="1.6" fill="none" stroke-linecap="round" />
       </svg>
       <div class="wizard-header-text">
-        <h2>Game Setup Wizard</h2>
+        <h2 data-i18n="wizard.title">Game Setup Wizard</h2>
         <p class="wizard-progress" id="wizard-progress">Step 1 of 5</p>
       </div>
     </div>
@@ -346,111 +350,111 @@
     <div class="wizard-body">
 
       <div class="wizard-step" id="wizard-step-1">
-        <p class="wizard-step-explain">Pick how you want to play. "Race To" sets a target number of wins; "Tournament Elimination" opens the bracket setup instead of a regular session.</p>
+        <p class="wizard-step-explain" data-i18n="wizard.step1Explain">Pick how you want to play. "Race To" sets a target number of wins; "Tournament Elimination" opens the bracket setup instead of a regular session.</p>
         <div class="row">
-          <label for="wizard-game-type">Game</label>
+          <label for="wizard-game-type" data-i18n="gameSetup.game">Game</label>
           <select id="wizard-game-type"></select>
         </div>
         <div class="wizard-format-options">
           <label class="wizard-format-option">
             <input type="radio" name="wizard-format" value="individual" checked>
-            <span>🎯 Individual — casual play, no fixed target</span>
+            <span data-i18n="wizard.formatIndividual">🎯 Individual — casual play, no fixed target</span>
           </label>
           <label class="wizard-format-option">
             <input type="radio" name="wizard-format" value="raceto">
-            <span>🏁 Race To — first to reach a set number of wins</span>
+            <span data-i18n="wizard.formatRaceTo">🏁 Race To — first to reach a set number of wins</span>
           </label>
           <label class="wizard-format-option">
             <input type="radio" name="wizard-format" value="tournament">
-            <span>🏆 Tournament Elimination — bracket-style knockout</span>
+            <span data-i18n="wizard.formatTournament">🏆 Tournament Elimination — bracket-style knockout</span>
           </label>
         </div>
         <div class="row hidden" id="wizard-raceto-row">
-          <label for="wizard-race-to">Race to</label>
+          <label for="wizard-race-to" data-i18n="wizard.raceToLabel">Race to</label>
           <input type="number" id="wizard-race-to" min="1" max="99" value="5">
-          <span>wins</span>
+          <span data-i18n="common.wins">wins</span>
         </div>
         <div class="wizard-temp-counter-row">
-          <span class="wizard-temp-counter-divider">or</span>
+          <span class="wizard-temp-counter-divider" data-i18n="common.or">or</span>
           <label class="wizard-temp-counter-checkbox-label">
             <input type="checkbox" id="wizard-temp-counter-checkbox">
-            ⏱️ Only a temporary counter — no stats or data saved
+            <span data-i18n="wizard.tempCounterLabel">⏱️ Only a temporary counter — no stats or data saved</span>
           </label>
-          <button type="button" id="btn-wizard-start-quick-counter" class="btn btn-primary wizard-quick-counter-start-btn hidden">
+          <button type="button" id="btn-wizard-start-quick-counter" class="btn btn-primary wizard-quick-counter-start-btn hidden" data-i18n="wizard.startQuickCounter">
             ▶️ Start Game Now
           </button>
         </div>
       </div>
 
       <div class="wizard-step hidden" id="wizard-step-2">
-        <p class="wizard-step-explain">Load a saved player list, or add players one at a time below — you can do both.</p>
+        <p class="wizard-step-explain" data-i18n="wizard.step2Explain">Load a saved player list, or add players one at a time below — you can do both.</p>
         <div class="row">
           <select id="wizard-roster-load-select"></select>
-          <button type="button" id="wizard-btn-roster-load" class="btn btn-ghost">Load Player List</button>
+          <button type="button" id="wizard-btn-roster-load" class="btn btn-ghost" data-i18n="players.loadPlayerList">Load Player List</button>
         </div>
         <p id="wizard-new-player-name-requirement" class="new-player-name-requirement hidden"></p>
         <form id="wizard-add-player-form" class="row">
-          <input type="text" id="wizard-new-player-name" placeholder="Player name" autocomplete="off" required>
-          <input type="number" id="wizard-new-player-rating" placeholder="Starting rating (optional)" min="0" max="900">
-          <button type="submit" id="wizard-btn-add-player" class="btn btn-primary" disabled>Add</button>
+          <input type="text" id="wizard-new-player-name" data-i18n-placeholder="players.namePlaceholder" placeholder="Player name" autocomplete="off" required>
+          <input type="number" id="wizard-new-player-rating" data-i18n-placeholder="players.ratingPlaceholder" placeholder="Starting rating (optional)" min="0" max="900">
+          <button type="submit" id="wizard-btn-add-player" class="btn btn-primary" disabled data-i18n="common.add">Add</button>
         </form>
         <ul id="wizard-player-chips" class="wizard-player-chips"></ul>
       </div>
 
       <div class="wizard-step hidden" id="wizard-step-3">
-        <p class="wizard-step-explain">Turn on "Playing" for everyone in this game. Leave anyone sitting this one out on "Standby" — they stay on the roster for later.</p>
+        <p class="wizard-step-explain" data-i18n="wizard.step3Explain">Turn on "Playing" for everyone in this game. Leave anyone sitting this one out on "Standby" — they stay on the roster for later.</p>
         <ul id="wizard-playing-list" class="roster-list"></ul>
-        <p id="wizard-playing-warning" class="new-player-name-requirement hidden">Mark at least 2 players as Playing to continue.</p>
+        <p id="wizard-playing-warning" class="new-player-name-requirement hidden" data-i18n="wizard.playingWarning">Mark at least 2 players as Playing to continue.</p>
       </div>
 
       <div class="wizard-step hidden" id="wizard-step-4">
-        <p class="wizard-step-explain">A rotation automatically switches the game type after a set number of games — e.g. 8-Ball for 3 games, then 9-Ball. Just want one game type all session? Choose "No" and move on.</p>
+        <p class="wizard-step-explain" data-i18n="wizard.step4Explain">A rotation automatically switches the game type after a set number of games — e.g. 8-Ball for 3 games, then 9-Ball. Just want one game type all session? Choose "No" and move on.</p>
         <div class="wizard-format-options">
           <label class="wizard-format-option">
             <input type="radio" name="wizard-rotation-enabled" value="no" checked>
-            <span>No — just play the game type from Step 1</span>
+            <span data-i18n="wizard.rotationNo">No — just play the game type from Step 1</span>
           </label>
           <label class="wizard-format-option">
             <input type="radio" name="wizard-rotation-enabled" value="yes">
-            <span>Yes — automatically switch between game types</span>
+            <span data-i18n="wizard.rotationYes">Yes — automatically switch between game types</span>
           </label>
         </div>
         <div class="hidden" id="wizard-rotation-detail">
           <div class="row">
             <select id="wizard-rotation-load-select"></select>
-            <button type="button" id="wizard-btn-rotation-load" class="btn btn-ghost">Load Rotation</button>
+            <button type="button" id="wizard-btn-rotation-load" class="btn btn-ghost" data-i18n="rotation.loadRotation">Load Rotation</button>
           </div>
           <div class="row">
             <select id="wizard-rotation-add-type"></select>
             <input type="number" id="wizard-rotation-add-target" min="1" max="500" value="1">
             <select id="wizard-rotation-add-unit">
-              <option value="rack">rack</option>
-              <option value="balls">balls</option>
-              <option value="points">points</option>
+              <option value="rack" data-i18n="units.rack">rack</option>
+              <option value="balls" data-i18n="units.balls">balls</option>
+              <option value="points" data-i18n="units.points">points</option>
             </select>
-            <button type="button" id="wizard-btn-rotation-add" class="btn btn-ghost">+ Add to Order</button>
+            <button type="button" id="wizard-btn-rotation-add" class="btn btn-ghost" data-i18n="rotation.addToOrder">+ Add to Order</button>
           </div>
           <ul id="wizard-rotation-list" class="rotation-list"></ul>
           <div class="row">
-            <label for="wizard-rotation-every">Switch every</label>
+            <label for="wizard-rotation-every" data-i18n="rotation.switchEvery">Switch every</label>
             <input type="number" id="wizard-rotation-every" min="1" max="99" value="1">
-            <span>games</span>
+            <span data-i18n="common.games">games</span>
           </div>
         </div>
       </div>
 
       <div class="wizard-step hidden" id="wizard-step-5">
-        <p class="wizard-step-explain">Here's what's set up. Hit Start to jump into Focus Mode and begin playing.</p>
+        <p class="wizard-step-explain" data-i18n="wizard.step5Explain">Here's what's set up. Hit Start to jump into Focus Mode and begin playing.</p>
         <div id="wizard-summary" class="wizard-summary"></div>
       </div>
 
     </div>
 
     <div class="wizard-footer">
-      <button type="button" id="wizard-btn-back" class="btn btn-ghost">← Back</button>
-      <button type="button" id="wizard-btn-cancel" class="btn btn-ghost">Cancel</button>
-      <button type="button" id="wizard-btn-next" class="btn btn-primary">Next →</button>
-      <button type="button" id="wizard-btn-start" class="btn btn-primary hidden">🎱 Start Game</button>
+      <button type="button" id="wizard-btn-back" class="btn btn-ghost" data-i18n="wizard.back">← Back</button>
+      <button type="button" id="wizard-btn-cancel" class="btn btn-ghost" data-i18n="common.cancel">Cancel</button>
+      <button type="button" id="wizard-btn-next" class="btn btn-primary" data-i18n="wizard.next">Next →</button>
+      <button type="button" id="wizard-btn-start" class="btn btn-primary hidden" data-i18n="wizard.startGame">🎱 Start Game</button>
     </div>
   </div>
 </div>
@@ -458,85 +462,85 @@
 <div id="help-overlay" class="help-overlay hidden">
   <div class="help-card">
     <div class="help-header">
-      <button type="button" id="btn-help-close" class="wizard-close-btn" aria-label="Close help">×</button>
-      <h2 class="help-title">❓ Help &amp; Guide</h2>
-      <p class="help-intro">Everything the app can do, page by page. Opening Help jumps straight to the section for whatever page you're on — scroll up or down for the rest.</p>
+      <button type="button" id="btn-help-close" class="wizard-close-btn" aria-label="Close help" data-i18n-aria-label="help.closeAriaLabel">×</button>
+      <h2 class="help-title" data-i18n="help.title">❓ Help &amp; Guide</h2>
+      <p class="help-intro" data-i18n="help.intro">Everything the app can do, page by page. Opening Help jumps straight to the section for whatever page you're on — scroll up or down for the rest.</p>
 
       <nav class="help-nav">
-        <a href="#help-section-main" class="help-nav-link">Main Page</a>
-        <a href="#help-section-wizard" class="help-nav-link">Setup Wizard</a>
-        <a href="#help-section-all-players" class="help-nav-link">All Players</a>
-        <a href="#help-section-tournament" class="help-nav-link">Tournament</a>
-        <a href="#help-section-player-page" class="help-nav-link">Player Stats</a>
+        <a href="#help-section-main" class="help-nav-link" data-i18n="help.nav.main">Main Page</a>
+        <a href="#help-section-wizard" class="help-nav-link" data-i18n="help.nav.wizard">Setup Wizard</a>
+        <a href="#help-section-all-players" class="help-nav-link" data-i18n="help.nav.allPlayers">All Players</a>
+        <a href="#help-section-tournament" class="help-nav-link" data-i18n="help.nav.tournament">Tournament</a>
+        <a href="#help-section-player-page" class="help-nav-link" data-i18n="help.nav.playerPage">Player Stats</a>
       </nav>
     </div>
 
     <div class="help-body">
     <section class="help-section" id="help-section-main">
-      <h3>Main Page</h3>
-      <p>The main page is where every game gets played. Every panel here is collapsed by default with a one-line summary of what's inside — tap the chevron to expand it. The "🎨 Theme" dropdown at the very top switches the whole app's colors and font in one tap and remembers your choice — six dark palettes, two bright/light ones, and two high-contrast pairs (one dark, one light) for maximum legibility.</p>
+      <h3 data-i18n="help.nav.main">Main Page</h3>
+      <p data-i18n="help.main.intro">The main page is where every game gets played. Every panel here is collapsed by default with a one-line summary of what's inside — tap the chevron to expand it. The "🎨 Theme" dropdown at the very top switches the whole app's colors and font in one tap and remembers your choice — six dark palettes, two bright/light ones, and two high-contrast pairs (one dark, one light) for maximum legibility.</p>
       <ul>
-        <li><strong>Backup &amp; Transfer</strong> — Export All Data downloads one JSON file with everything: the live session, saved player lists, saved rotations, career stats, and ratings. Import Data reads a backup back in — it merges into what's already here rather than overwriting, and adopts the backup as-is only if this device has no players yet. Reset All Player Stats and Reset Player Lists each back up first, warn you, then clear — career stats and saved lists respectively (never the ratings store).</li>
-        <li><strong>Game Order</strong> — Turn on "Rotate game types automatically" to cycle through a sequence of game rules on their own. Each step in the order is its own rule — game type, target number, and unit (rack/balls/points) — so the same game type can appear twice with different rules (e.g. "8-Ball — 1 rack" then "8-Ball — 3 racks"). The target number and unit are editable right in the list — change either any time without removing and re-adding the step. "Switch every" controls how many games play before advancing. Load Rotation swaps in a saved sequence outright; any new sequence you build is auto-saved as a loadable entry the moment it's set up or played.</li>
-        <li><strong>Current Game</strong> — Pick the game type, the target number, and the unit (rack/balls/points — adjustable independently of the game type's usual default, e.g. One Pocket to "1 rack" instead of "8 balls"), Individual vs Teams mode, and the race-to-wins milestone for the whole session. Reset Current Game clears the live score without crediting a win; Undo Last Win reverses the most recent one; Share Standings emails a text summary; Export Session downloads the session as JSON; New Game starts a fresh session (offering to save first if there are unsaved games).</li>
-        <li><strong>Players</strong> — Add a player by name (auto-capitalized, checked live for a duplicate nickname — the Add button stays disabled until the name is unique). The optional "Starting rating" field lets you seed a brand-new player's rating from a number they've earned elsewhere (another league, another tournament) — it only takes effect for a name that's never been rated on this device before; it's ignored for anyone already tracked. Tap a player's Standby/Playing badge to move them in or out of the current game. The ✕ removes someone from today's roster only — career stats and rating stay on the device; no confirmation if no games have been played yet this session, since there's nothing to lose. Load Player List swaps in players from a saved list (adds anyone missing, never resets what's already there); Export/Import Player Lists use a separate, hand-editable JSON format just for lists.</li>
-        <li><strong>Standings</strong> — Live race-to-N progress for teams and individuals this session.</li>
-        <li><strong>Scoreboard</strong> — Sits right above the player cards, visible whether Focus Mode is on or off. "Do not record games statistics and players data" stops every save while it's checked — nothing goes into state, career stats, or ratings until you uncheck it; wins still count live on screen for the rest of this browser tab, but none of it survives a reload. Tap + / − on a player's card to track balls/points/racks toward the target. Reaching the target banks a win and starts the next game. Focus Mode hides every other panel down to just the scoreboard — while in it, a small "Players" chevron above the board still lets you flip who's Playing vs Standby without leaving focus.</li>
-        <li><strong>Recent Games</strong> — Every game finished today, most recent first — this keeps building across the whole day even after a race is won and the next one starts fresh. Each winner's rating change from that exact game shows beside their badge; the game that completes a race-to-N gets a gold highlight and its own banner line ("🏆 Alice won the Race to 5 session!").</li>
-        <li><strong>Today's Notes</strong> — A free-text box for anything worth remembering about today's live play; it saves automatically as you type. Copy/Email/Text Report builds a plain-text day report — who played, win/loss and rating movement for each, total games, game types played, a game-by-game breakdown (grouped by matchup — "Luc won 3 games of 8-Ball against Suresh" rather than one line per game) split into earlier-session/current-session, and your notes — ready to paste, email, or send as a text message.</li>
+        <li data-i18n-html="help.main.backup"><strong>Backup &amp; Transfer</strong> — Export All Data downloads one JSON file with everything: the live session, saved player lists, saved rotations, career stats, and ratings. Import Data reads a backup back in — it merges into what's already here rather than overwriting, and adopts the backup as-is only if this device has no players yet. Reset All Player Stats and Reset Player Lists each back up first, warn you, then clear — career stats and saved lists respectively (never the ratings store).</li>
+        <li data-i18n-html="help.main.gameOrder"><strong>Game Order</strong> — Turn on "Rotate game types automatically" to cycle through a sequence of game rules on their own. Each step in the order is its own rule — game type, target number, and unit (rack/balls/points) — so the same game type can appear twice with different rules (e.g. "8-Ball — 1 rack" then "8-Ball — 3 racks"). The target number and unit are editable right in the list — change either any time without removing and re-adding the step. "Switch every" controls how many games play before advancing. Load Rotation swaps in a saved sequence outright; any new sequence you build is auto-saved as a loadable entry the moment it's set up or played.</li>
+        <li data-i18n-html="help.main.currentGame"><strong>Current Game</strong> — Pick the game type, the target number, and the unit (rack/balls/points — adjustable independently of the game type's usual default, e.g. One Pocket to "1 rack" instead of "8 balls"), Individual vs Teams mode, and the race-to-wins milestone for the whole session. Reset Current Game clears the live score without crediting a win; Undo Last Win reverses the most recent one; Share Standings emails a text summary; Export Session downloads the session as JSON; New Game starts a fresh session (offering to save first if there are unsaved games).</li>
+        <li data-i18n-html="help.main.players"><strong>Players</strong> — Add a player by name (auto-capitalized, checked live for a duplicate nickname — the Add button stays disabled until the name is unique). The optional "Starting rating" field lets you seed a brand-new player's rating from a number they've earned elsewhere (another league, another tournament) — it only takes effect for a name that's never been rated on this device before; it's ignored for anyone already tracked. Tap a player's Standby/Playing badge to move them in or out of the current game. The ✕ removes someone from today's roster only — career stats and rating stay on the device; no confirmation if no games have been played yet this session, since there's nothing to lose. Load Player List swaps in players from a saved list (adds anyone missing, never resets what's already there); Export/Import Player Lists use a separate, hand-editable JSON format just for lists.</li>
+        <li data-i18n-html="help.main.standings"><strong>Standings</strong> — Live race-to-N progress for teams and individuals this session.</li>
+        <li data-i18n-html="help.main.scoreboard"><strong>Scoreboard</strong> — Sits right above the player cards, visible whether Focus Mode is on or off. "Do not record games statistics and players data" stops every save while it's checked — nothing goes into state, career stats, or ratings until you uncheck it; wins still count live on screen for the rest of this browser tab, but none of it survives a reload. Tap + / − on a player's card to track balls/points/racks toward the target. Reaching the target banks a win and starts the next game. Focus Mode hides every other panel down to just the scoreboard — while in it, a small "Players" chevron above the board still lets you flip who's Playing vs Standby without leaving focus.</li>
+        <li data-i18n-html="help.main.recentGames"><strong>Recent Games</strong> — Every game finished today, most recent first — this keeps building across the whole day even after a race is won and the next one starts fresh. Each winner's rating change from that exact game shows beside their badge; the game that completes a race-to-N gets a gold highlight and its own banner line ("🏆 Alice won the Race to 5 session!").</li>
+        <li data-i18n-html="help.main.todaysNotes"><strong>Today's Notes</strong> — A free-text box for anything worth remembering about today's live play; it saves automatically as you type. Copy/Email/Text Report builds a plain-text day report — who played, win/loss and rating movement for each, total games, game types played, a game-by-game breakdown (grouped by matchup — "Luc won 3 games of 8-Ball against Suresh" rather than one line per game) split into earlier-session/current-session, and your notes — ready to paste, email, or send as a text message.</li>
       </ul>
-      <p>Ratings show as a small badge next to every player's name throughout the app — an Elo-style number (see the Player Stats section below for details). Every player's name is also a shortcut: tap it (the 📊 icon on the roster row) to open their individual stats page.</p>
+      <p data-i18n="help.main.ratingsNote">Ratings show as a small badge next to every player's name throughout the app — an Elo-style number (see the Player Stats section below for details). Every player's name is also a shortcut: tap it (the 📊 icon on the roster row) to open their individual stats page.</p>
     </section>
 
     <section class="help-section" id="help-section-wizard">
-      <h3>Setup Wizard</h3>
-      <p>The fastest way to start playing. Five steps, each with its own on-screen explanation:</p>
+      <h3 data-i18n="help.nav.wizard">Setup Wizard</h3>
+      <p data-i18n="help.wizard.intro">The fastest way to start playing. Five steps, each with its own on-screen explanation:</p>
       <ul>
-        <li><strong>1. Game type &amp; format</strong> — Individual (casual, no fixed target), Race To (asks for a win target), or Tournament Elimination (skips straight to the bracket setup below).</li>
-        <li><strong>2. Players</strong> — Load a saved list and/or add players; each chip has a ✕ to remove someone you don't want in this game.</li>
-        <li><strong>3. Playing vs Standby</strong> — Turn on Playing for everyone in this game (at least two required to continue).</li>
-        <li><strong>4. Rotation</strong> — Plain yes/no: automatically switch game types, or just play one type all session.</li>
-        <li><strong>5. Review &amp; Start</strong> — A summary of every choice; Start applies it all, switches to Focus Mode, and closes the wizard.</li>
+        <li data-i18n-html="help.wizard.step1"><strong>1. Game type &amp; format</strong> — Individual (casual, no fixed target), Race To (asks for a win target), or Tournament Elimination (skips straight to the bracket setup below).</li>
+        <li data-i18n-html="help.wizard.step2"><strong>2. Players</strong> — Load a saved list and/or add players; each chip has a ✕ to remove someone you don't want in this game.</li>
+        <li data-i18n-html="help.wizard.step3"><strong>3. Playing vs Standby</strong> — Turn on Playing for everyone in this game (at least two required to continue).</li>
+        <li data-i18n-html="help.wizard.step4"><strong>4. Rotation</strong> — Plain yes/no: automatically switch game types, or just play one type all session.</li>
+        <li data-i18n-html="help.wizard.step5"><strong>5. Review &amp; Start</strong> — A summary of every choice; Start applies it all, switches to Focus Mode, and closes the wizard.</li>
       </ul>
-      <p>Canceling is always safe — any players added or rotation changes made along the way are already saved, exactly as if you'd used the main page panels directly.</p>
-      <p><strong>⏱️ Only a temporary counter</strong> — check it on Step 1 and a "▶️ Start Game Now" button appears; tapping it skips the rest of the wizard entirely and drops you into Quick Counter: Focus Mode with a bare point tally — no game type, no target, no rotation, no win/loss detection, and nothing written to storage (state, career stats, ratings, saved lists — all of it, gone the moment you reload). Each card's name is directly editable, every card has its own remove button, scores can go negative, and an "+ Add Player" field sits at the end of the row. If there's a saved player list, a "📋 Load Player List" row also appears — loading one makes the active players match that list exactly, dropping anyone not on it to standby (their data isn't lost — typing their name back in reactivates them) and adding/activating everyone who is. "↺ Reset All to 0" zeroes every card's tally at once, no confirmation needed. Everything needed to add, rename, remove, load, reset, and count is right there in the scoreboard, nothing else to set up.</p>
+      <p data-i18n="help.wizard.cancelNote">Canceling is always safe — any players added or rotation changes made along the way are already saved, exactly as if you'd used the main page panels directly.</p>
+      <p data-i18n-html="help.wizard.quickCounterNote"><strong>⏱️ Only a temporary counter</strong> — check it on Step 1 and a "▶️ Start Game Now" button appears; tapping it skips the rest of the wizard entirely and drops you into Quick Counter: Focus Mode with a bare point tally — no game type, no target, no rotation, no win/loss detection, and nothing written to storage (state, career stats, ratings, saved lists — all of it, gone the moment you reload). Each card's name is directly editable, every card has its own remove button, scores can go negative, and an "+ Add Player" field sits at the end of the row. If there's a saved player list, a "📋 Load Player List" row also appears — loading one makes the active players match that list exactly, dropping anyone not on it to standby (their data isn't lost — typing their name back in reactivates them) and adding/activating everyone who is. "↺ Reset All to 0" zeroes every card's tally at once, no confirmation needed. Everything needed to add, rename, remove, load, reset, and count is right there in the scoreboard, nothing else to set up.</p>
     </section>
 
     <section class="help-section" id="help-section-all-players">
-      <h3>All Players</h3>
-      <p>Every player who's ever played on this device — including anyone no longer on the roster, and anyone only found in this session's still-unsaved history.</p>
+      <h3 data-i18n="help.nav.allPlayers">All Players</h3>
+      <p data-i18n="help.allPlayers.intro">Every player who's ever played on this device — including anyone no longer on the roster, and anyone only found in this session's still-unsaved history.</p>
       <ul>
-        <li><strong>Sort by</strong> — win percentage, total wins, or name.</li>
-        <li><strong>Show</strong> — the time period the stats and graphs cover: Today, 1 Week, 1 Month, 6 Months, 1 Year, or All Time.</li>
-        <li><strong>📈 See as Graph / 📊 See as Bars</strong> — Bars show Games Played/Won/Lost as scaled bars plus a timeline. Graph shows a cumulative line chart instead (see below).</li>
-        <li><strong>👥 Current Roster Only</strong> — Hides everyone not on the live roster without deleting anything; turn it off to see everyone again.</li>
+        <li data-i18n-html="help.allPlayers.sortBy"><strong>Sort by</strong> — win percentage, total wins, or name.</li>
+        <li data-i18n-html="help.allPlayers.show"><strong>Show</strong> — the time period the stats and graphs cover: Today, 1 Week, 1 Month, 6 Months, 1 Year, or All Time.</li>
+        <li data-i18n-html="help.allPlayers.viewToggle"><strong>📈 See as Graph / 📊 See as Bars</strong> — Bars show Games Played/Won/Lost as scaled bars plus a timeline. Graph shows a cumulative line chart instead (see below).</li>
+        <li data-i18n-html="help.allPlayers.rosterOnly"><strong>👥 Current Roster Only</strong> — Hides everyone not on the live roster without deleting anything; turn it off to see everyone again.</li>
       </ul>
-      <p>Each card shows the player's rating badge and, if they've played this period, how much it moved ("▲ +18" or "▼ −9"). In graph view, players on the live roster show their chart immediately; everyone else collapses to a name and a Show Graph button, so the page stays scannable. The graph itself plots cumulative games played/won/lost over time — smoothed curves, a dot at every real data point, a legend where any line can be shown or hidden (Lost starts hidden), and a separate Rating chart underneath tracking that player's rating over the same period (its own scale, since ratings and game counts aren't comparable numbers).</p>
+      <p data-i18n="help.allPlayers.graphNote">Each card shows the player's rating badge and, if they've played this period, how much it moved ("▲ +18" or "▼ −9"). In graph view, players on the live roster show their chart immediately; everyone else collapses to a name and a Show Graph button, so the page stays scannable. The graph itself plots cumulative games played/won/lost over time — smoothed curves, a dot at every real data point, a legend where any line can be shown or hidden (Lost starts hidden), and a separate Rating chart underneath tracking that player's rating over the same period (its own scale, since ratings and game counts aren't comparable numbers).</p>
     </section>
 
     <section class="help-section" id="help-section-tournament">
-      <h3>Tournament</h3>
-      <p>A knockout bracket — or a round robin — instead of a regular session.</p>
+      <h3 data-i18n="help.nav.tournament">Tournament</h3>
+      <p data-i18n="help.tournament.intro">A knockout bracket — or a round robin — instead of a regular session.</p>
       <ul>
-        <li><strong>Format</strong> — <em>Double Elimination</em>: lose once, drop to the losers bracket for a second chance; lose twice and you're out. <em>Single Elimination</em>: lose once and you're out — the faster option, no losers bracket or grand final. <em>Round Robin</em>: no elimination at all — everyone plays everyone else once, and whoever has the most match wins once every match is done is champion (a tie is shared by every player at the top).</li>
-        <li><strong>Setup</strong> — game type, per-match target, race-to per match, and a checklist of who's competing. Seeding (and round robin's match order) is a random draw.</li>
-        <li><strong>Reading the bracket</strong> — Winners Bracket, Losers Bracket (double elimination only), and Grand Final render as a horizontal tree with connector lines. The active match is highlighted; eliminated players are struck through; the champion gets a 👑. Round Robin instead shows a live Standings list (ranked by match wins) above the full list of Matches.</li>
+        <li data-i18n-html="help.tournament.format"><strong>Format</strong> — <em>Double Elimination</em>: lose once, drop to the losers bracket for a second chance; lose twice and you're out. <em>Single Elimination</em>: lose once and you're out — the faster option, no losers bracket or grand final. <em>Round Robin</em>: no elimination at all — everyone plays everyone else once, and whoever has the most match wins once every match is done is champion (a tie is shared by every player at the top).</li>
+        <li data-i18n-html="help.tournament.setup"><strong>Setup</strong> — game type, per-match target, race-to per match, and a checklist of who's competing. Seeding (and round robin's match order) is a random draw.</li>
+        <li data-i18n-html="help.tournament.reading"><strong>Reading the bracket</strong> — Winners Bracket, Losers Bracket (double elimination only), and Grand Final render as a horizontal tree with connector lines. The active match is highlighted; eliminated players are struck through; the champion gets a 👑. Round Robin instead shows a live Standings list (ranked by match wins) above the full list of Matches.</li>
       </ul>
-      <p>Every rack played in a tournament still counts toward career stats, ratings, and the All Players graphs — it isn't a separate pool of data.</p>
+      <p data-i18n="help.tournament.careerNote">Every rack played in a tournament still counts toward career stats, ratings, and the All Players graphs — it isn't a separate pool of data.</p>
     </section>
 
     <section class="help-section" id="help-section-player-page">
-      <h3>Player Stats Page</h3>
-      <p>Opened by tapping a player's name anywhere in the app.</p>
+      <h3 data-i18n="help.nav.playerPage">Player Stats Page</h3>
+      <p data-i18n="help.playerPage.intro">Opened by tapping a player's name anywhere in the app.</p>
       <ul>
-        <li><strong>Stats Synopsis</strong> — Rating (current number) and "Rating this period" (how much it's moved), Wins, Losses, and Win % for Today, This Week, This Month, This Year, or All Time.</li>
-        <li><strong>Head-to-Head</strong> — Its own collapsed panel (tap to expand) with a win/loss record against every opponent faced in the selected period; the collapsed summary line lists who they've played without needing to open it.</li>
-        <li><strong>Graph</strong> — The same cumulative games chart as All Players, scoped to this one player, plus the standalone Rating chart underneath.</li>
-        <li><strong>This Session (Live)</strong> — What they've done in the game currently in progress.</li>
-        <li><strong>Session History</strong> — Every past saved session, expandable into the individual games played.</li>
-        <li><strong>Export Stats</strong> saves the current live session into permanent history; <strong>Reset Stats</strong> clears just this player's saved history (their rating is untouched — it lives in its own store and is never reset from here).</li>
+        <li data-i18n-html="help.playerPage.synopsis"><strong>Stats Synopsis</strong> — Rating (current number) and "Rating this period" (how much it's moved), Wins, Losses, and Win % for Today, This Week, This Month, This Year, or All Time.</li>
+        <li data-i18n-html="help.playerPage.h2h"><strong>Head-to-Head</strong> — Its own collapsed panel (tap to expand) with a win/loss record against every opponent faced in the selected period; the collapsed summary line lists who they've played without needing to open it.</li>
+        <li data-i18n-html="help.playerPage.graph"><strong>Graph</strong> — The same cumulative games chart as All Players, scoped to this one player, plus the standalone Rating chart underneath.</li>
+        <li data-i18n-html="help.playerPage.liveSession"><strong>This Session (Live)</strong> — What they've done in the game currently in progress.</li>
+        <li data-i18n-html="help.playerPage.sessionHistory"><strong>Session History</strong> — Every past saved session, expandable into the individual games played.</li>
+        <li data-i18n-html="help.playerPage.exportReset"><strong>Export Stats</strong> saves the current live session into permanent history; <strong>Reset Stats</strong> clears just this player's saved history (their rating is untouched — it lives in its own store and is never reset from here).</li>
       </ul>
-      <p><strong>About ratings:</strong> every player has an automatic, Elo-style rating (roughly 0–900) inspired by the scale FargoRate publishes — the system behind USA Pool League and most competitive USA leagues. A 100-point gap between two ratings works out to about a 2:1 expected win ratio, doubling every 100 points. New players start at 400, unless a starting rating was given when they were added (see Players, above) — that's a one-time seed for a brand-new name only, not an edit of a rating already being tracked. From there it updates itself after every credited game (main scoreboard or tournament rack) — there's no way to edit an established rating by hand. It's a from-scratch calculation matched to Fargo's published odds, not a copy of Fargo's own (proprietary, globally-recomputed) algorithm. The rating badge follows a player's name everywhere throughout the app.</p>
+      <p data-i18n-html="help.playerPage.ratingsAbout"><strong>About ratings:</strong> every player has an automatic, Elo-style rating (roughly 0–900) inspired by the scale FargoRate publishes — the system behind USA Pool League and most competitive USA leagues. A 100-point gap between two ratings works out to about a 2:1 expected win ratio, doubling every 100 points. New players start at 400, unless a starting rating was given when they were added (see Players, above) — that's a one-time seed for a brand-new name only, not an edit of a rating already being tracked. From there it updates itself after every credited game (main scoreboard or tournament rack) — there's no way to edit an established rating by hand. It's a from-scratch calculation matched to Fargo's published odds, not a copy of Fargo's own (proprietary, globally-recomputed) algorithm. The rating badge follows a player's name everywhere throughout the app.</p>
     </section>
     </div>
   </div>
@@ -545,28 +549,30 @@
 <div id="view-player-page" class="hidden">
 
   <header class="app-header player-page-header">
-    <button type="button" id="btn-player-page-back" class="btn btn-ghost screen-back-btn" aria-label="Back"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <button type="button" id="btn-player-page-back" class="btn btn-ghost screen-back-btn" aria-label="Back" data-i18n-aria-label="common.back"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
     <h1 id="player-page-name"></h1>
-    <select id="player-page-switcher" class="player-page-switcher" aria-label="Switch to another player"></select>
-    <button type="button" id="btn-return-to-global-stats" class="btn btn-ghost">🌐 Global Stats</button>
-    <button type="button" id="btn-open-help-player-page" class="btn btn-ghost">❓ Help</button>
+    <select id="player-page-switcher" class="player-page-switcher" aria-label="Switch to another player" data-i18n-aria-label="playerPage.switcherAriaLabel"></select>
+    <button type="button" id="btn-return-to-global-stats" class="btn btn-ghost" data-i18n="playerPage.globalStats">🌐 Global Stats</button>
+    <button type="button" id="btn-open-help-player-page" class="btn btn-ghost" data-i18n="header.help">❓ Help</button>
   </header>
 
+  <p id="player-page-added" class="player-page-added hidden"></p>
+
   <section class="panel" id="player-page-synopsis-panel">
-    <h2>Stats Synopsis</h2>
+    <h2 data-i18n="playerPage.synopsisHeading">Stats Synopsis</h2>
     <div class="row period-filter-row" id="player-page-period-filter">
-      <button type="button" class="btn btn-ghost period-btn" data-period="today">Today</button>
-      <button type="button" class="btn btn-ghost period-btn" data-period="week">This Week</button>
-      <button type="button" class="btn btn-ghost period-btn" data-period="month">This Month</button>
-      <button type="button" class="btn btn-ghost period-btn" data-period="year">This Year</button>
-      <button type="button" class="btn btn-ghost period-btn is-active" data-period="all">All Time</button>
+      <button type="button" class="btn btn-ghost period-btn" data-period="today" data-i18n="period.today">Today</button>
+      <button type="button" class="btn btn-ghost period-btn" data-period="week" data-i18n="period.thisWeek">This Week</button>
+      <button type="button" class="btn btn-ghost period-btn" data-period="month" data-i18n="period.thisMonth">This Month</button>
+      <button type="button" class="btn btn-ghost period-btn" data-period="year" data-i18n="period.thisYear">This Year</button>
+      <button type="button" class="btn btn-ghost period-btn is-active" data-period="all" data-i18n="period.allTime">All Time</button>
     </div>
     <div id="player-page-synopsis-body"></div>
   </section>
 
   <section class="panel collapsible-panel collapsed" id="player-page-h2h-panel">
     <button type="button" class="panel-toggle" id="btn-toggle-player-page-h2h-panel" aria-expanded="false" aria-controls="player-page-h2h-panel-body">
-      <h2>Head-to-Head</h2>
+      <h2 data-i18n="playerPage.h2hHeading">Head-to-Head</h2>
       <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
     </button>
     <p class="panel-summary" id="player-page-h2h-panel-summary"></p>
@@ -576,24 +582,24 @@
   </section>
 
   <section class="panel" id="player-page-graph-panel">
-    <h2>Graph</h2>
+    <h2 data-i18n="playerPage.graphHeading">Graph</h2>
     <div id="player-page-graph-body"></div>
   </section>
 
   <section class="panel" id="player-page-current-panel">
-    <h2>This Session (Live)</h2>
+    <h2 data-i18n="playerPage.liveSessionHeading">This Session (Live)</h2>
     <div id="player-page-current-body"></div>
   </section>
 
   <section class="panel" id="player-page-actions-panel">
     <div class="row">
-      <button type="button" id="btn-player-page-export" class="btn btn-ghost">Export Stats</button>
-      <button type="button" id="btn-player-page-reset" class="btn btn-danger">Reset Stats</button>
+      <button type="button" id="btn-player-page-export" class="btn btn-ghost" data-i18n="playerPage.exportStats">Export Stats</button>
+      <button type="button" id="btn-player-page-reset" class="btn btn-danger" data-i18n="playerPage.resetStats">Reset Stats</button>
     </div>
   </section>
 
   <section class="panel" id="player-page-history-panel">
-    <h2>Session History</h2>
+    <h2 data-i18n="playerPage.historyHeading">Session History</h2>
     <ul id="player-page-history-list" class="player-history-list"></ul>
   </section>
 
@@ -602,34 +608,34 @@
 <div id="view-all-players-page" class="hidden">
 
   <header class="app-header player-page-header">
-    <button type="button" id="btn-all-players-back" class="btn btn-ghost screen-back-btn" aria-label="Back"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
-    <h1>All Players</h1>
-    <button type="button" id="btn-open-help-all-players" class="btn btn-ghost">❓ Help</button>
+    <button type="button" id="btn-all-players-back" class="btn btn-ghost screen-back-btn" aria-label="Back" data-i18n-aria-label="common.back"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <h1 data-i18n="help.nav.allPlayers">All Players</h1>
+    <button type="button" id="btn-open-help-all-players" class="btn btn-ghost" data-i18n="header.help">❓ Help</button>
   </header>
 
   <section class="panel" id="all-players-controls-panel">
     <div class="row">
-      <label for="all-players-sort">Sort by</label>
+      <label for="all-players-sort" data-i18n="allPlayers.sortBy">Sort by</label>
       <select id="all-players-sort">
-        <option value="winpct">Win % (highest first)</option>
-        <option value="wins">Most wins</option>
-        <option value="alpha">Name (A–Z)</option>
+        <option value="winpct" data-i18n="allPlayers.sortWinPct">Win % (highest first)</option>
+        <option value="wins" data-i18n="allPlayers.sortMostWins">Most wins</option>
+        <option value="alpha" data-i18n="allPlayers.sortName">Name (A–Z)</option>
       </select>
     </div>
     <div class="row">
-      <label for="all-players-period">Show</label>
+      <label for="all-players-period" data-i18n="allPlayers.show">Show</label>
       <select id="all-players-period">
-        <option value="today">Today</option>
-        <option value="week">1 Week</option>
-        <option value="month">1 Month</option>
-        <option value="6month">6 Months</option>
-        <option value="year">1 Year</option>
-        <option value="all" selected>All Time</option>
+        <option value="today" data-i18n="period.today">Today</option>
+        <option value="week" data-i18n="period.oneWeek">1 Week</option>
+        <option value="month" data-i18n="period.oneMonth">1 Month</option>
+        <option value="6month" data-i18n="period.sixMonths">6 Months</option>
+        <option value="year" data-i18n="period.oneYear">1 Year</option>
+        <option value="all" selected data-i18n="period.allTime">All Time</option>
       </select>
     </div>
     <div class="row">
-      <button type="button" id="btn-toggle-all-players-view" class="btn btn-ghost">📈 See as Graph</button>
-      <button type="button" id="btn-toggle-roster-filter" class="btn btn-ghost">👥 Current Roster Only</button>
+      <button type="button" id="btn-toggle-all-players-view" class="btn btn-ghost" data-i18n="allPlayers.seeAsGraph">📈 See as Graph</button>
+      <button type="button" id="btn-toggle-roster-filter" class="btn btn-ghost" data-i18n="allPlayers.rosterOnly">👥 Current Roster Only</button>
     </div>
   </section>
 
@@ -640,54 +646,54 @@
 <div id="view-tournament-page" class="hidden">
 
   <header class="app-header player-page-header">
-    <button type="button" id="btn-tournament-back" class="btn btn-ghost screen-back-btn" aria-label="Back"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
-    <h1>Tournament</h1>
-    <button type="button" id="btn-open-help-tournament" class="btn btn-ghost">❓ Help</button>
+    <button type="button" id="btn-tournament-back" class="btn btn-ghost screen-back-btn" aria-label="Back" data-i18n-aria-label="common.back"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <h1 data-i18n="header.tournament">Tournament</h1>
+    <button type="button" id="btn-open-help-tournament" class="btn btn-ghost" data-i18n="header.help">❓ Help</button>
   </header>
 
   <section class="panel" id="tournament-setup-panel">
-    <h2>New Elimination Tournament</h2>
-    <p class="player-stats-note">Players are drawn into the bracket at random. Pick a format below.</p>
+    <h2 data-i18n="tournament.newHeading">New Elimination Tournament</h2>
+    <p class="player-stats-note" data-i18n="tournament.randomDrawNote">Players are drawn into the bracket at random. Pick a format below.</p>
 
     <div class="wizard-format-options">
       <label class="wizard-format-option">
         <input type="radio" name="tournament-format" value="double" checked>
-        <span>🥈 Double Elimination — Winners &amp; Losers Brackets: lose once, drop to the losers bracket for a second chance; lose twice and you're out. Fairer, takes longer.</span>
+        <span data-i18n="tournament.formatDouble">🥈 Double Elimination — Winners &amp; Losers Brackets: lose once, drop to the losers bracket for a second chance; lose twice and you're out. Fairer, takes longer.</span>
       </label>
       <label class="wizard-format-option">
         <input type="radio" name="tournament-format" value="single">
-        <span>🥇 Single Elimination — Only Winners Advance: lose once and you're out. Fastest format, best for a quick knockout.</span>
+        <span data-i18n="tournament.formatSingle">🥇 Single Elimination — Only Winners Advance: lose once and you're out. Fastest format, best for a quick knockout.</span>
       </label>
       <label class="wizard-format-option">
         <input type="radio" name="tournament-format" value="roundrobin">
-        <span>🔄 Round Robin — Everyone Plays Everyone: no elimination, every player faces every other player once, and whoever has the most match wins when it's all done is champion (ties share the win). Best for a casual group where everyone should get equal games in.</span>
+        <span data-i18n="tournament.formatRoundRobin">🔄 Round Robin — Everyone Plays Everyone: no elimination, every player faces every other player once, and whoever has the most match wins when it's all done is champion (ties share the win). Best for a casual group where everyone should get equal games in.</span>
       </label>
     </div>
 
     <div class="row">
-      <label for="tournament-game-type">Game</label>
+      <label for="tournament-game-type" data-i18n="gameSetup.game">Game</label>
       <select id="tournament-game-type"></select>
-      <label for="tournament-target">Target</label>
+      <label for="tournament-target" data-i18n="gameSetup.target">Target</label>
       <input type="number" id="tournament-target" min="1" max="500" value="1">
-      <span id="tournament-target-unit">rack</span>
+      <span id="tournament-target-unit" data-i18n="units.rack">rack</span>
     </div>
     <div class="row">
-      <label for="tournament-race-to">Race-to per match</label>
+      <label for="tournament-race-to" data-i18n="tournament.raceToPerMatch">Race-to per match</label>
       <input type="number" id="tournament-race-to" min="1" max="21" value="2">
-      <span>wins</span>
+      <span data-i18n="common.wins">wins</span>
     </div>
 
-    <h3 class="tournament-players-heading">Players</h3>
+    <h3 class="tournament-players-heading" data-i18n="players.heading">Players</h3>
     <ul id="tournament-player-checklist" class="tournament-player-checklist"></ul>
 
     <div class="row">
-      <button type="button" id="btn-tournament-start" class="btn btn-primary">Start Tournament</button>
+      <button type="button" id="btn-tournament-start" class="btn btn-primary" data-i18n="tournament.start">Start Tournament</button>
     </div>
   </section>
 
   <section class="panel hidden" id="tournament-active-panel">
     <div class="row">
-      <button type="button" id="btn-tournament-abandon" class="btn btn-danger">Abandon Tournament</button>
+      <button type="button" id="btn-tournament-abandon" class="btn btn-danger" data-i18n="tournament.abandon">Abandon Tournament</button>
     </div>
 
     <div id="tournament-champion-banner" class="tournament-winner-banner hidden"></div>
@@ -697,24 +703,24 @@
     <ul id="tournament-ready-list" class="tournament-ready-list"></ul>
 
     <div id="tournament-wb-section">
-      <h2 class="tournament-bracket-heading">Winners Bracket</h2>
+      <h2 class="tournament-bracket-heading" data-i18n="tournament.winnersBracket">Winners Bracket</h2>
       <div id="tournament-wb" class="tournament-bracket-scroll"></div>
     </div>
 
     <div id="tournament-lb-section">
-      <h2 class="tournament-bracket-heading">Losers Bracket</h2>
+      <h2 class="tournament-bracket-heading" data-i18n="tournament.losersBracket">Losers Bracket</h2>
       <div id="tournament-lb" class="tournament-bracket-scroll"></div>
     </div>
 
     <div id="tournament-gf-section">
-      <h2 class="tournament-bracket-heading">Grand Final</h2>
+      <h2 class="tournament-bracket-heading" data-i18n="tournament.grandFinal">Grand Final</h2>
       <div id="tournament-gf" class="tournament-bracket-scroll"></div>
     </div>
 
     <div id="tournament-rr-section" class="hidden">
-      <h2 class="tournament-bracket-heading">Standings</h2>
+      <h2 class="tournament-bracket-heading" data-i18n="standings.heading">Standings</h2>
       <ol id="tournament-rr-standings" class="tournament-rr-standings"></ol>
-      <h2 class="tournament-bracket-heading">Matches</h2>
+      <h2 class="tournament-bracket-heading" data-i18n="tournament.matches">Matches</h2>
       <div id="tournament-rr-matches" class="tournament-rr-matches"></div>
     </div>
   </section>
