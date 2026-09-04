@@ -576,20 +576,22 @@
     // easy-piano letter notes: "We are the champions!" (G F# G F#-E) then
     // dropping a register for "Of the world...!" (D B D). A 9th note (a
     // low G tonic) added at the end for a full cadence, since the source
-    // phrase itself only runs 8. Pitched down an extra octave throughout
-    // for "low pitch".
+    // phrase itself only runs 8. Raised an octave from an earlier pass
+    // that was too low to recognize - still sits a step below the
+    // original vocal register, but this is the floor for staying
+    // recognizable.
     function playChampionsSong() {
-      var freqs = { G3: 196.0, Fs3: 185.0, E3: 164.81, D2: 73.42, B2: 123.47, G2: 98.0 };
+      var freqs = { G4: 392.0, Fs4: 369.99, E4: 329.63, D3: 146.83, B3: 246.94, G3: 196.0 };
       var run = [
-        { n: "G3", t: 0.0, d: 0.2 },
-        { n: "Fs3", t: 0.18, d: 0.2 },
-        { n: "G3", t: 0.36, d: 0.2 },
-        { n: "Fs3", t: 0.54, d: 0.16 },
-        { n: "E3", t: 0.68, d: 0.24 },
-        { n: "D2", t: 0.94, d: 0.26 },
-        { n: "B2", t: 1.22, d: 0.24 },
-        { n: "D2", t: 1.48, d: 0.26 },
-        { n: "G2", t: 1.76, d: 0.9 }
+        { n: "G4", t: 0.0, d: 0.2 },
+        { n: "Fs4", t: 0.18, d: 0.2 },
+        { n: "G4", t: 0.36, d: 0.2 },
+        { n: "Fs4", t: 0.54, d: 0.16 },
+        { n: "E4", t: 0.68, d: 0.24 },
+        { n: "D3", t: 0.94, d: 0.26 },
+        { n: "B3", t: 1.22, d: 0.24 },
+        { n: "D3", t: 1.48, d: 0.26 },
+        { n: "G3", t: 1.76, d: 0.9 }
       ];
       run.forEach(function (note) {
         anthemTone(freqs[note.n] * mult, now + note.t, note.d, 0.22);
@@ -599,20 +601,21 @@
     // The famous bass riff, transcribed from published bass tab (E minor,
     // all on the low E string: frets 0-0-0-0-0-3-0-5, i.e. E E E E E G E A)
     // - a 9th note (E, the loop point) added at the end since the source
-    // riff is 8 notes and repeats from there. Kept in the bass's own low
-    // register.
+    // riff is 8 notes and repeats from there. Raised an octave from an
+    // earlier pass that was too low to recognize - still sits below the
+    // Champions melody's register (it's the bass line, after all).
     function playBitesTheDustSong() {
-      var freqs = { E2: 82.41, G2: 98.0, A2: 110.0 };
+      var freqs = { E3: 164.81, G3: 196.0, A3: 220.0 };
       var run = [
-        { n: "E2", t: 0.0, d: 0.13 },
-        { n: "E2", t: 0.16, d: 0.13 },
-        { n: "E2", t: 0.32, d: 0.13 },
-        { n: "E2", t: 0.48, d: 0.13 },
-        { n: "E2", t: 0.64, d: 0.13 },
-        { n: "G2", t: 0.8, d: 0.15 },
-        { n: "E2", t: 0.98, d: 0.13 },
-        { n: "A2", t: 1.14, d: 0.3 },
-        { n: "E2", t: 1.46, d: 0.7 }
+        { n: "E3", t: 0.0, d: 0.13 },
+        { n: "E3", t: 0.16, d: 0.13 },
+        { n: "E3", t: 0.32, d: 0.13 },
+        { n: "E3", t: 0.48, d: 0.13 },
+        { n: "E3", t: 0.64, d: 0.13 },
+        { n: "G3", t: 0.8, d: 0.15 },
+        { n: "E3", t: 0.98, d: 0.13 },
+        { n: "A3", t: 1.14, d: 0.3 },
+        { n: "E3", t: 1.46, d: 0.7 }
       ];
       run.forEach(function (note) {
         anthemTone(freqs[note.n] * mult, now + note.t, note.d, 0.24);
@@ -2327,7 +2330,7 @@
     return panel;
   }
 
-  function buildMemberCard(player) {
+  function buildMemberCard(player, disabled) {
     var card = document.createElement("div");
     card.className = "member-card";
 
@@ -2348,13 +2351,17 @@
     value.textContent = player.balls || 0;
     card.appendChild(value);
 
-    card.appendChild(buildBallControls(player, false));
+    card.appendChild(buildBallControls(player, disabled));
     markAsKeypadTarget(card, player);
 
     return card;
   }
 
-  function buildTeamPanel(teamId, members) {
+  // opponentEmpty: the other team ("A"/"B") currently has nobody on it -
+  // a team can't play (or score) alone, so this shows a warning instead of
+  // the usual win-progress stat and disables every member's +/- (the real
+  // enforcement is adjustScore's own check; this is just the matching UI).
+  function buildTeamPanel(teamId, members, opponentEmpty) {
     var panel = document.createElement("div");
     panel.className = "team-panel";
 
@@ -2362,6 +2369,13 @@
     name.className = "team-name";
     name.textContent = teamLabelLive(teamId);
     panel.appendChild(name);
+
+    if (opponentEmpty) {
+      var warning = document.createElement("div");
+      warning.className = "team-needs-opponent-warning";
+      warning.textContent = T("scoreboard.teamNeedsOpponent");
+      panel.appendChild(warning);
+    }
 
     var wins = state.teamWins[teamId] || 0;
 
@@ -2397,7 +2411,7 @@
     var memberWrap = document.createElement("div");
     memberWrap.className = "team-members";
     members.forEach(function (p) {
-      memberWrap.appendChild(buildMemberCard(p));
+      memberWrap.appendChild(buildMemberCard(p, opponentEmpty));
     });
     panel.appendChild(memberWrap);
 
@@ -2473,10 +2487,14 @@
 
     if (state.currentGame.mode === "teams") {
       scoreboard.className = "scoreboard scoreboard-teams";
-      ["A", "B"].forEach(function (teamId) {
-        var members = teamMembersLive(teamId);
-        if (!members.length) return;
-        scoreboard.appendChild(buildTeamPanel(teamId, members));
+      var teamAMembers = teamMembersLive("A");
+      var teamBMembers = teamMembersLive("B");
+      [
+        { id: "A", members: teamAMembers, opponentEmpty: teamBMembers.length === 0 },
+        { id: "B", members: teamBMembers, opponentEmpty: teamAMembers.length === 0 }
+      ].forEach(function (team) {
+        if (!team.members.length) return;
+        scoreboard.appendChild(buildTeamPanel(team.id, team.members, team.opponentEmpty));
       });
     } else {
       scoreboard.className = "scoreboard";
@@ -3323,6 +3341,18 @@
   function adjustScore(playerId, delta) {
     var player = getPlayer(playerId);
     if (!player || !player.playing) return;
+
+    // A team can't play (or score) against nobody - blocks both +/- here,
+    // not just the win-credit at target, and is the authoritative check
+    // (buildBallControls also disables the buttons for this, but this is
+    // what actually stops the keypad shortcut too).
+    if (!quickCounterMode && state.currentGame.mode === "teams" && player.teamId) {
+      var otherTeamId = player.teamId === "A" ? "B" : "A";
+      if (teamMembersLive(otherTeamId).length === 0) {
+        showToast(T("toast.teamNeedsOpponent"));
+        return;
+      }
+    }
 
     // Quick Counter: just tally, never check a target or credit a win.
     // Free-form point counter — negative scores are allowed (e.g. golf-
@@ -4497,8 +4527,12 @@
     });
   }
 
+  // Clears every saved player list AND the live roster itself, so the app
+  // starts completely clean with nobody listed - not just the saved
+  // presets in the "Load Player List" dropdown, which is all this used to
+  // touch.
   function resetAllRosterLists() {
-    if (SAVED_ROSTERS.length === 0) {
+    if (SAVED_ROSTERS.length === 0 && state.players.length === 0) {
       showToast(T("toast.noSavedListsToReset"));
       return;
     }
@@ -4507,6 +4541,13 @@
       SAVED_ROSTERS = [];
       saveRostersToStorage(SAVED_ROSTERS);
       populateRosterLoadSelect();
+      state.players = [];
+      state.playerWins = {};
+      state.teamWins = {};
+      state.teamMvpWins = {};
+      saveState();
+      validateNewPlayerNameInput();
+      renderAll();
       showToast(T("toast.rosterListsCleared"));
     });
   }

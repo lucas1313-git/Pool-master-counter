@@ -1277,6 +1277,18 @@ input[type="number"] {
   text-align: center;
 }
 
+.team-needs-opponent-warning {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--danger);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--danger);
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-align: center;
+}
+
 .team-members {
   width: 100%;
   display: flex;
