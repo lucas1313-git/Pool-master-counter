@@ -244,31 +244,78 @@
   // handleKeypadShortcut. Not persisted; always starts cleared on reload.
   var keypadSelectedPlayerId = null;
 
-  // Numbers players 1-9 by their order among activePlayers() (individual
-  // panels and team member cards alike), so pressing that digit key then
-  // selects them for the +/- keypad shortcut. Returns null past 9 active
-  // players - keyboards run out of single digits there anyway.
-  function keypadNumberForPlayer(playerId) {
-    var active = activePlayers();
-    for (var i = 0; i < active.length && i < 9; i++) {
-      if (active[i].id === playerId) return i + 1;
-    }
-    return null;
-  }
+  // Player ids in keypad-number order (index 0 = number 1, etc.) - filled
+  // in by refreshKeypadNumbering() after every scoreboard render, since
+  // numbering follows the ON-SCREEN grid position rather than roster
+  // order (see that function), and that depends on how many columns the
+  // responsive grid actually rendered at the current viewport width.
+  var keypadOrderedPlayerIds = [];
 
   // Appended to a player's card/panel by every builder that has one
-  // (buildIndividualPanel, buildMemberCard, buildQuickCounterPanel): the
-  // small numbered badge, plus the highlight class when this is the
-  // player currently selected for the +/- keypad shortcut.
-  function applyKeypadIndicator(el, player) {
-    el.classList.toggle("is-keypad-selected", player.id === keypadSelectedPlayerId);
-    var num = keypadNumberForPlayer(player.id);
-    if (num) {
-      var badge = document.createElement("span");
-      badge.className = "keypad-number-badge";
-      badge.textContent = num;
-      el.appendChild(badge);
+  // (buildIndividualPanel, buildMemberCard, buildQuickCounterPanel): a
+  // marker plus an (initially empty) number badge - refreshKeypadNumbering
+  // fills in the actual number and highlight state once every card for
+  // this render is in the DOM and laid out.
+  function markAsKeypadTarget(el, player) {
+    el.dataset.keypadPlayerId = player.id;
+    var badge = document.createElement("span");
+    badge.className = "keypad-number-badge";
+    el.appendChild(badge);
+  }
+
+  // Recomputes which number (1-9) each currently-playing player's card
+  // shows, and refreshes every card's highlight state. Individual mode's
+  // grid can wrap into any number of columns depending on viewport width,
+  // so numbering follows actual rendered position, boustrophedon-style -
+  // row 1 left to right, row 2 right to left, row 3 left to right, and
+  // so on - so the reading direction always continues smoothly into the
+  // next row instead of jumping back across the screen. Team mode's
+  // two-column-of-vertically-stacked-members layout doesn't break into
+  // "rows" the same way, so it just keeps DOM order there (team A top to
+  // bottom, then team B top to bottom).
+  function refreshKeypadNumbering() {
+    var cards = Array.prototype.slice.call(scoreboard.querySelectorAll("[data-keypad-player-id]"));
+    var ordered;
+    if (state.currentGame.mode === "teams" || cards.length === 0) {
+      ordered = cards;
+    } else {
+      var withRects = cards.map(function (el) {
+        var r = el.getBoundingClientRect();
+        return { el: el, top: r.top, left: r.left };
+      });
+      var rows = [];
+      withRects.forEach(function (item) {
+        var row = rows.filter(function (r) {
+          return Math.abs(r.top - item.top) < 10;
+        })[0];
+        if (!row) {
+          row = { top: item.top, items: [] };
+          rows.push(row);
+        }
+        row.items.push(item);
+      });
+      rows.sort(function (a, b) {
+        return a.top - b.top;
+      });
+      ordered = [];
+      rows.forEach(function (row, i) {
+        row.items.sort(function (a, b) {
+          return i % 2 === 0 ? a.left - b.left : b.left - a.left;
+        });
+        row.items.forEach(function (item) {
+          ordered.push(item.el);
+        });
+      });
     }
+
+    keypadOrderedPlayerIds = [];
+    ordered.forEach(function (el, i) {
+      var num = i < 9 ? i + 1 : null;
+      var badge = el.querySelector(".keypad-number-badge");
+      if (num) keypadOrderedPlayerIds.push(el.dataset.keypadPlayerId);
+      if (badge) badge.textContent = num || "";
+      el.classList.toggle("is-keypad-selected", el.dataset.keypadPlayerId === keypadSelectedPlayerId);
+    });
   }
 
   function teamMembersLive(teamId) {
@@ -1152,11 +1199,10 @@
     }
 
     if (/^[1-9]$/.test(e.key)) {
-      var active = activePlayers();
-      var target = active[parseInt(e.key, 10) - 1];
-      if (!target) return;
+      var targetId = keypadOrderedPlayerIds[parseInt(e.key, 10) - 1];
+      if (!targetId) return;
       e.preventDefault();
-      keypadSelectedPlayerId = target.id;
+      keypadSelectedPlayerId = targetId;
       renderScoreboard();
       return;
     }
@@ -1176,6 +1222,52 @@
   }
 
   document.addEventListener("keydown", handleKeypadShortcut);
+
+  // Enter/Escape for every other overlay in the app (the generic
+  // confirm/alert/prompt modal already handles its own, right above -
+  // this skips whenever that one's open so it's never double-handled).
+  // Each entry is [overlay, primaryButton, cancelButton] - Enter clicks
+  // the primary button, Escape clicks the cancel button (falling back to
+  // the primary one for overlays that only have a single dismiss
+  // button). The wizard is the one special case: it has its own text
+  // inputs (add-player, etc.) with their own Enter-submits-the-form
+  // behavior, which must win over advancing the wizard step.
+  var OVERLAY_KEY_TARGETS = [
+    [saveSessionOverlay, btnSaveSessionSave, btnSaveSessionCancel],
+    [ratingEditOverlay, btnRatingEditSave, btnRatingEditCancel],
+    [milestoneOverlay, btnMilestoneClose, btnMilestoneClose],
+    [gamewinOverlay, btnGamewinClose, btnGamewinClose],
+    [onHillOverlay, btnOnHillClose, btnOnHillClose],
+    [gameChangeOverlay, btnGameChangeClose, btnGameChangeClose],
+    [helpOverlay, btnHelpClose, btnHelpClose]
+  ];
+
+  function handleOverlayEnterEscape(e) {
+    if (e.key !== "Enter" && e.key !== "Escape") return;
+    if (confirmModalOverlay && !confirmModalOverlay.classList.contains("hidden")) return;
+
+    if (!wizardOverlay.classList.contains("hidden")) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        btnWizardClose.click();
+        return;
+      }
+      if (isTypingIntoField(document.activeElement)) return;
+      e.preventDefault();
+      (btnWizardStart.classList.contains("hidden") ? btnWizardNext : btnWizardStart).click();
+      return;
+    }
+
+    for (var i = 0; i < OVERLAY_KEY_TARGETS.length; i++) {
+      var overlay = OVERLAY_KEY_TARGETS[i][0];
+      if (!overlay || overlay.classList.contains("hidden")) continue;
+      e.preventDefault();
+      (e.key === "Enter" ? OVERLAY_KEY_TARGETS[i][1] : OVERLAY_KEY_TARGETS[i][2]).click();
+      return;
+    }
+  }
+
+  document.addEventListener("keydown", handleOverlayEnterEscape);
 
   function populateGameTypeSelects() {
     [gameTypeSelect, rotationAddType, tournamentGameTypeSelect, wizardGameTypeSelect, wizardRotationAddType].forEach(function (select) {
@@ -1926,7 +2018,7 @@
     panel.appendChild(value);
 
     panel.appendChild(buildBallControls(player, false));
-    applyKeypadIndicator(panel, player);
+    markAsKeypadTarget(panel, player);
 
     return panel;
   }
@@ -2089,7 +2181,7 @@
     panel.appendChild(block);
 
     panel.appendChild(buildBallControls(player, false));
-    applyKeypadIndicator(panel, player);
+    markAsKeypadTarget(panel, player);
 
     return panel;
   }
@@ -2116,7 +2208,7 @@
     card.appendChild(value);
 
     card.appendChild(buildBallControls(player, false));
-    applyKeypadIndicator(card, player);
+    markAsKeypadTarget(card, player);
 
     return card;
   }
@@ -2221,6 +2313,7 @@
         scoreboard.appendChild(buildQuickCounterPanel(p));
       });
       scoreboard.appendChild(buildQuickCounterAddRow());
+      refreshKeypadNumbering();
       return;
     }
 
@@ -2233,6 +2326,7 @@
       hint.className = "empty-hint";
       hint.textContent = T("scoreboard.markPlayingHint");
       scoreboard.appendChild(hint);
+      refreshKeypadNumbering();
       return;
     }
 
@@ -2249,6 +2343,7 @@
         scoreboard.appendChild(buildIndividualPanel(p));
       });
     }
+    refreshKeypadNumbering();
   }
 
   function formatTimestamp(ts, includeDate) {

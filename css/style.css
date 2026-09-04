@@ -1055,28 +1055,35 @@ input[type="number"] {
   position: absolute;
   top: 8px;
   left: 8px;
-  width: 22px;
-  height: 22px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid var(--border);
-  color: var(--text-dim);
-  font-size: 0.75rem;
+  background: rgba(0, 0, 0, 0.55);
+  border: 2px solid var(--accent);
+  color: var(--accent);
+  font-size: 1rem;
   font-weight: 800;
   display: flex;
   align-items: center;
   justify-content: center;
   pointer-events: none;
+  z-index: 1;
+}
+
+.keypad-number-badge:empty {
+  display: none;
 }
 
 .is-keypad-selected {
-  box-shadow: 0 0 0 3px var(--accent) inset;
+  box-shadow: 0 0 0 4px var(--accent) inset;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 22%, var(--felt)) 0%, var(--bg-glow) 100%);
 }
 
 .is-keypad-selected .keypad-number-badge {
   background: var(--accent);
   color: var(--bg);
   border-color: var(--accent);
+  transform: scale(1.1);
 }
 
 .player-name {
