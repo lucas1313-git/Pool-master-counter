@@ -518,36 +518,112 @@
     });
   }
 
-  // A little triumphant fanfare — rising arpeggio into a flourish, held
-  // out to about 3 seconds by a closing chord. Plays on every game win.
+  // A brassy 9-note phrase evoking Queen's "We Are the Champions" (an
+  // homage rather than a literal transcription) — rising to a peak then
+  // settling back on the tonic, drenched in both the shared slapback echo
+  // bus every tone uses AND its own dedicated reverb send (like
+  // playTournamentChampionSound's, just shorter) for a big, anthemic
+  // wash. Plays on every game win. voice picks the per-player pitch
+  // multiplier (VOICE_PITCHES) so different winners land at different
+  // pitches, same as before.
   function playWinSound(voice) {
     var mult = voicePitch(voice);
-    var now = getAudioCtx().currentTime;
+    var ctx = getAudioCtx();
+    var now = ctx.currentTime;
+
+    var convolver = ctx.createConvolver();
+    convolver.buffer = buildReverbImpulse(ctx, 2.4, 2.2);
+    var reverbSend = ctx.createGain();
+    reverbSend.gain.value = 0.6;
+    reverbSend.connect(convolver);
+    convolver.connect(ctx.destination);
+
+    function anthemTone(freq, t, duration, peakGain) {
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.type = "sawtooth";
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(peakGain, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      if (echoSend) gain.connect(echoSend);
+      gain.connect(reverbSend);
+      osc.start(t);
+      osc.stop(t + duration + 0.08);
+
+      var sub = ctx.createOscillator();
+      var subGain = ctx.createGain();
+      sub.type = "triangle";
+      sub.frequency.value = freq / 2;
+      subGain.gain.setValueAtTime(0, t);
+      subGain.gain.linearRampToValueAtTime(peakGain * 0.4, t + 0.02);
+      subGain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+      sub.connect(subGain);
+      subGain.connect(ctx.destination);
+      if (echoSend) subGain.connect(echoSend);
+      subGain.connect(reverbSend);
+      sub.start(t);
+      sub.stop(t + duration + 0.08);
+    }
+
+    var freqs = { D4: 293.66, G4: 392.0, A4: 440.0, B4: 493.88, C5: 523.25 };
     var run = [
-      { f: 523.25, t: 0.0, d: 0.16 },
-      { f: 659.25, t: 0.14, d: 0.16 },
-      { f: 783.99, t: 0.28, d: 0.16 },
-      { f: 1046.5, t: 0.42, d: 0.22 },
-      { f: 987.77, t: 0.68, d: 0.14 },
-      { f: 1046.5, t: 0.8, d: 0.14 },
-      { f: 1174.66, t: 0.92, d: 0.28 }
+      { n: "G4", t: 0.0, d: 0.2 },
+      { n: "G4", t: 0.18, d: 0.2 },
+      { n: "G4", t: 0.36, d: 0.22 },
+      { n: "A4", t: 0.58, d: 0.22 },
+      { n: "C5", t: 0.8, d: 0.3 },
+      { n: "B4", t: 1.1, d: 0.22 },
+      { n: "A4", t: 1.32, d: 0.22 },
+      { n: "D4", t: 1.54, d: 0.24 },
+      { n: "G4", t: 1.78, d: 0.9 }
     ];
-    run.forEach(function (n) {
-      tone(n.f * mult, now + n.t, n.d, "triangle", 0.22);
-    });
-    var chordStart = now + 1.25;
-    var chordDuration = 1.7;
-    [523.25, 659.25, 783.99, 1046.5].forEach(function (f) {
-      tone(f * mult, chordStart, chordDuration, "triangle", 0.16);
+    run.forEach(function (note) {
+      anthemTone(freqs[note.n] * mult, now + note.t, note.d, 0.22);
     });
   }
 
+  // A gentle 14-note pastoral phrase evoking the Beatles' recorder
+  // introduction to "Fool on the Hill" (an homage rather than a literal
+  // transcription) — a soft sine "recorder" timbre with both the shared
+  // slapback echo bus AND its own dedicated reverb send, for a spacious,
+  // dreamy feel fitting a quiet warning rather than a fanfare.
   function playOnHillSound() {
     var ctx = getAudioCtx();
     var now = ctx.currentTime;
-    tone(880, now, 0.09, "square", 0.14);
-    tone(880, now + 0.14, 0.09, "square", 0.14);
-    tone(1108.73, now + 0.28, 0.2, "square", 0.16);
+
+    var convolver = ctx.createConvolver();
+    convolver.buffer = buildReverbImpulse(ctx, 2.8, 2.8);
+    var reverbSend = ctx.createGain();
+    reverbSend.gain.value = 0.55;
+    reverbSend.connect(convolver);
+    convolver.connect(ctx.destination);
+
+    function recorderTone(freq, t, duration, peakGain) {
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(peakGain, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      if (echoSend) gain.connect(echoSend);
+      gain.connect(reverbSend);
+      osc.start(t);
+      osc.stop(t + duration + 0.06);
+    }
+
+    var freqs = { D4: 293.66, E4: 329.63, Fs4: 369.99, G4: 392.0, A4: 440.0, Cs5: 554.37, D5: 587.33 };
+    var melody = ["D4", "E4", "Fs4", "G4", "Fs4", "E4", "D4", "A4", "G4", "Fs4", "E4", "D4", "Cs5", "D5"];
+    var noteDur = 0.27;
+    melody.forEach(function (name, i) {
+      var duration = i === melody.length - 1 ? noteDur * 2.4 : noteDur * 0.95;
+      recorderTone(freqs[name], now + i * noteDur, duration, 0.16);
+    });
   }
 
   // Builds a synthetic reverb impulse response — exponentially decaying
