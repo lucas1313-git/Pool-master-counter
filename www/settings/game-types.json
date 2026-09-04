@@ -1,0 +1,9 @@
+[
+  { "id": "8ball", "label": "8-Ball", "defaultTarget": 1, "unit": "rack" },
+  { "id": "8ballrotation", "label": "8 Ball Rotation", "defaultTarget": 1, "unit": "rack" },
+  { "id": "8ballpunishment", "label": "8 Ball Punishment", "defaultTarget": 1, "unit": "rack" },
+  { "id": "9ball", "label": "9-Ball", "defaultTarget": 1, "unit": "rack" },
+  { "id": "straight", "label": "Straight Pool", "defaultTarget": 100, "unit": "points" },
+  { "id": "onepocket", "label": "One Pocket", "defaultTarget": 8, "unit": "balls" },
+  { "id": "custom", "label": "Custom", "defaultTarget": 1, "unit": "points" }
+]

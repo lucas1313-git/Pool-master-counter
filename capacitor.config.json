@@ -1,0 +1,8 @@
+{
+  "appId": "com.example.poolmastercounter",
+  "appName": "Pool Master Counter",
+  "webDir": "www",
+  "ios": {
+    "contentInset": "always"
+  }
+}
