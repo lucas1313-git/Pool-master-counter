@@ -1066,12 +1066,6 @@ input[type="number"] {
   font-weight: 700;
 }
 
-.stat-mini.stat-mini-team-big {
-  font-size: 24px;
-  font-weight: 700;
-  margin: 4px 0;
-}
-
 .stat-mini strong {
   color: var(--accent);
   font-variant-numeric: tabular-nums;
@@ -1104,6 +1098,12 @@ input[type="number"] {
 
 .stat-value.small {
   font-size: 1.8rem;
+}
+
+.stat-value .flag {
+  margin-left: 0.15em;
+  font-size: 0.55em;
+  vertical-align: middle;
 }
 
 .ball-controls {
@@ -2969,6 +2969,15 @@ input[type="number"] {
 .now-playing-banner .target-note {
   display: block;
   font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  letter-spacing: normal;
+  margin-top: 2px;
+}
+
+.now-playing-banner .rotation-note {
+  display: block;
+  font-size: 0.8rem;
   font-weight: 600;
   color: var(--text-dim);
   letter-spacing: normal;

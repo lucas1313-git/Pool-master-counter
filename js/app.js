@@ -1622,6 +1622,13 @@
     focusPlayersSummary.textContent = T("players.playingOfTotal", { playing: playingCount, total: state.players.length });
   }
 
+  function buildFlagSpan() {
+    var flag = document.createElement("span");
+    flag.className = "flag";
+    flag.textContent = "🏁";
+    return flag;
+  }
+
   function buildStatMini(label, value, milestoneReached, extraClass) {
     var el = document.createElement("div");
     el.className = "stat-mini" + (extraClass ? " " + extraClass : "");
@@ -1629,12 +1636,7 @@
     strong.textContent = value;
     el.appendChild(document.createTextNode(label + ": "));
     el.appendChild(strong);
-    if (milestoneReached) {
-      var flag = document.createElement("span");
-      flag.className = "flag";
-      flag.textContent = "🏁";
-      el.appendChild(flag);
-    }
+    if (milestoneReached) el.appendChild(buildFlagSpan());
     return el;
   }
 
@@ -1865,16 +1867,34 @@
     panel.appendChild(name);
 
     var wins = state.playerWins[player.id] || 0;
-    panel.appendChild(buildStatMini(T("scoreboard.tourneyWin"), wins, wins >= state.raceToWinsTarget, "stat-mini-tourney"));
+
+    // A single-rack game (the common case - standard 8-Ball etc.) has no
+    // meaningful "current rack progress" number to show (it's just 0
+    // until the rack is won, then resets) - show the session win count
+    // big and prominent instead. Anything else (multiple racks to win
+    // one game, or a balls/points game) still shows the ball/point
+    // count toward this game's target, with the win count as a small
+    // badge above it.
+    var isSingleRackGame = state.currentGame.unit === "rack" && state.currentGame.target === 1;
+
+    if (!isSingleRackGame) {
+      panel.appendChild(buildStatMini(T("scoreboard.tourneyWin"), wins, wins >= state.raceToWinsTarget, "stat-mini-tourney"));
+    }
 
     var block = document.createElement("div");
     block.className = "stat-block";
     var label = document.createElement("div");
     label.className = "stat-label";
-    label.textContent = T("scoreboard.gameTargetLabel", { game: GAME_TYPES[state.currentGame.gameType].label, target: state.currentGame.target });
     var value = document.createElement("div");
     value.className = "stat-value";
-    value.textContent = player.balls || 0;
+    if (isSingleRackGame) {
+      label.textContent = T("scoreboard.tourneyWin");
+      value.textContent = wins;
+      if (wins >= state.raceToWinsTarget) value.appendChild(buildFlagSpan());
+    } else {
+      label.textContent = T("scoreboard.gameTargetLabel", { game: GAME_TYPES[state.currentGame.gameType].label, target: state.currentGame.target });
+      value.textContent = player.balls || 0;
+    }
     block.appendChild(label);
     block.appendChild(value);
     panel.appendChild(block);
@@ -1928,23 +1948,27 @@
     // a balls/points game) still shows the team's current-game total.
     var isSingleRackGame = state.currentGame.unit === "rack" && state.currentGame.target === 1;
 
-    if (isSingleRackGame) {
-      panel.appendChild(buildStatMini(T("scoreboard.pairedSessionWinScore"), wins, wins >= state.raceToWinsTarget, "stat-mini-team-big"));
-    } else {
+    if (!isSingleRackGame) {
       panel.appendChild(buildStatMini(T("scoreboard.pairedSessionWin"), wins, wins >= state.raceToWinsTarget));
-
-      var block = document.createElement("div");
-      block.className = "stat-block";
-      var label = document.createElement("div");
-      label.className = "stat-label";
-      label.textContent = T("scoreboard.gameTargetLabel", { game: GAME_TYPES[state.currentGame.gameType].label, target: state.currentGame.target });
-      var value = document.createElement("div");
-      value.className = "stat-value";
-      value.textContent = sumTeamBalls(teamId);
-      block.appendChild(label);
-      block.appendChild(value);
-      panel.appendChild(block);
     }
+
+    var block = document.createElement("div");
+    block.className = "stat-block";
+    var label = document.createElement("div");
+    label.className = "stat-label";
+    var value = document.createElement("div");
+    value.className = "stat-value";
+    if (isSingleRackGame) {
+      label.textContent = T("scoreboard.pairedSessionWinScore");
+      value.textContent = wins;
+      if (wins >= state.raceToWinsTarget) value.appendChild(buildFlagSpan());
+    } else {
+      label.textContent = T("scoreboard.gameTargetLabel", { game: GAME_TYPES[state.currentGame.gameType].label, target: state.currentGame.target });
+      value.textContent = sumTeamBalls(teamId);
+    }
+    block.appendChild(label);
+    block.appendChild(value);
+    panel.appendChild(block);
 
     var memberWrap = document.createElement("div");
     memberWrap.className = "team-members";
@@ -1964,6 +1988,18 @@
     note.className = "target-note";
     note.textContent = T("gameSetup.targetNote", { target: state.currentGame.target, unit: state.currentGame.unit });
     nowPlayingBanner.appendChild(note);
+
+    var rotationInfo = rotationStatusInfo();
+    if (rotationInfo) {
+      var rotationNote = document.createElement("span");
+      rotationNote.className = "rotation-note";
+      rotationNote.textContent = T(rotationInfo.untilSwitch === 1 ? "rotation.statusSwitchesInOne" : "rotation.statusSwitchesInMany", {
+        next: rotationInfo.nextLabel,
+        count: rotationInfo.untilSwitch
+      });
+      nowPlayingBanner.appendChild(rotationNote);
+    }
+
     var duration = document.createElement("span");
     duration.className = "game-duration-live";
     duration.id = "game-duration-live";
