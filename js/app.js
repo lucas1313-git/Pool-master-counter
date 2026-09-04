@@ -520,9 +520,10 @@
 
   // Two alternate victory fanfares, picked at random on each win so a run
   // of single-rack games doesn't hear the same thing every time — Queen's
-  // "We Are the Champions" and "Another One Bites the Dust" (homages
-  // rather than literal transcriptions), both pitched a full octave lower
-  // than the original fanfare, and both drenched in the shared slapback
+  // "We Are the Champions" (from published easy-piano letter notes for the
+  // "we are the champions, my friend" hook) and "Another One Bites the
+  // Dust" (from published bass tab for the main riff), both dropped into
+  // a low register per request, and both drenched in the shared slapback
   // echo bus AND their own dedicated reverb send (like
   // playTournamentChampionSound's, just shorter) for a big, low, anthemic
   // wash. Plays on every game win. voice picks the per-player pitch
@@ -570,39 +571,46 @@
       sub.stop(t + duration + 0.08);
     }
 
-    // Rising to a peak then settling back on the low tonic.
+    // The "we are the champions, my friend(s)" vocal hook, transcribed
+    // from published easy-piano letter notes (D minor: D C# D C#-A F# B F#)
+    // - a 9th note (a low D tonic) added at the end for a cadence, since
+    // the source phrase itself only runs 8. Pitched down two octaves from
+    // the sung melody for "low pitch".
     function playChampionsSong() {
-      var freqs = { D3: 146.83, G3: 196.0, A3: 220.0, B3: 246.94, C4: 261.63 };
+      var freqs = { D2: 73.42, Cs3: 138.59, D3: 146.83, A3: 220.0, Fs2: 92.5, B2: 123.47 };
       var run = [
-        { n: "G3", t: 0.0, d: 0.2 },
-        { n: "G3", t: 0.18, d: 0.2 },
-        { n: "G3", t: 0.36, d: 0.22 },
-        { n: "A3", t: 0.58, d: 0.22 },
-        { n: "C4", t: 0.8, d: 0.3 },
-        { n: "B3", t: 1.1, d: 0.22 },
-        { n: "A3", t: 1.32, d: 0.22 },
-        { n: "D3", t: 1.54, d: 0.24 },
-        { n: "G3", t: 1.78, d: 0.9 }
+        { n: "D3", t: 0.0, d: 0.2 },
+        { n: "Cs3", t: 0.18, d: 0.2 },
+        { n: "D3", t: 0.36, d: 0.2 },
+        { n: "Cs3", t: 0.54, d: 0.16 },
+        { n: "A3", t: 0.68, d: 0.22 },
+        { n: "Fs2", t: 0.92, d: 0.26 },
+        { n: "B2", t: 1.2, d: 0.24 },
+        { n: "Fs2", t: 1.46, d: 0.26 },
+        { n: "D2", t: 1.74, d: 0.9 }
       ];
       run.forEach(function (note) {
         anthemTone(freqs[note.n] * mult, now + note.t, note.d, 0.22);
       });
     }
 
-    // A punchy, repeated-note groove riff, staccato until the held final
-    // note.
+    // The famous bass riff, transcribed from published bass tab (E minor,
+    // all on the low E string: frets 0-0-0-0-0-3-0-5, i.e. E E E E E G E A)
+    // - a 9th note (E, the loop point) added at the end since the source
+    // riff is 8 notes and repeats from there. Kept in the bass's own low
+    // register.
     function playBitesTheDustSong() {
-      var freqs = { B2: 123.47, Cs3: 138.59, D3: 146.83, E3: 164.81, G3: 196.0 };
+      var freqs = { E2: 82.41, G2: 98.0, A2: 110.0 };
       var run = [
-        { n: "E3", t: 0.0, d: 0.13 },
-        { n: "E3", t: 0.16, d: 0.13 },
-        { n: "E3", t: 0.32, d: 0.13 },
-        { n: "G3", t: 0.48, d: 0.15 },
-        { n: "E3", t: 0.66, d: 0.13 },
-        { n: "E3", t: 0.82, d: 0.13 },
-        { n: "D3", t: 0.98, d: 0.15 },
-        { n: "Cs3", t: 1.16, d: 0.16 },
-        { n: "B2", t: 1.34, d: 0.75 }
+        { n: "E2", t: 0.0, d: 0.13 },
+        { n: "E2", t: 0.16, d: 0.13 },
+        { n: "E2", t: 0.32, d: 0.13 },
+        { n: "E2", t: 0.48, d: 0.13 },
+        { n: "E2", t: 0.64, d: 0.13 },
+        { n: "G2", t: 0.8, d: 0.15 },
+        { n: "E2", t: 0.98, d: 0.13 },
+        { n: "A2", t: 1.14, d: 0.3 },
+        { n: "E2", t: 1.46, d: 0.7 }
       ];
       run.forEach(function (note) {
         anthemTone(freqs[note.n] * mult, now + note.t, note.d, 0.24);
@@ -983,6 +991,7 @@
     document.getElementById("btn-open-help-wizard")
   ];
 
+  var btnTestOnboarding = document.getElementById("btn-test-onboarding");
   var btnOpenWizard = document.getElementById("btn-open-wizard");
   var wizardOverlay = document.getElementById("wizard-overlay");
   var btnWizardClose = document.getElementById("btn-wizard-close");
@@ -3061,6 +3070,11 @@
     gamewinDetails.innerHTML = "";
     gamewinDetails.appendChild(buildBallsLeftRow());
     gamewinOverlay.classList.remove("hidden");
+    // Focus the balls-left field so a number key works right away, with
+    // no click needed first - can only happen once the overlay is no
+    // longer .hidden (an element can't take focus while display:none).
+    var ballsLeftInput = gamewinDetails.querySelector(".balls-left-input");
+    if (ballsLeftInput) ballsLeftInput.focus();
   }
 
   function closeGameWinOverlay() {
@@ -6468,12 +6482,8 @@
     top.className = "scale-row-top";
     var l = document.createElement("span");
     l.className = "scale-row-label";
-    l.textContent = label;
-    var v = document.createElement("span");
-    v.className = "scale-row-value";
-    v.textContent = value;
+    l.textContent = T("allPlayers.statWithCount", { label: label, count: value });
     top.appendChild(l);
-    top.appendChild(v);
     row.appendChild(top);
 
     var track = document.createElement("div");
@@ -7218,7 +7228,13 @@
     return section;
   }
 
-  function buildPlayerGraph(stats, minMs, maxMs, period) {
+  // sharedAxisMax (optional): when set (the All Players comparison view
+  // passes the axis for whichever player there has played the most
+  // games), every player's chart uses that SAME y-axis instead of its own
+  // - so the line's climb rate is directly comparable card to card.
+  // Falls back to this player's own axis (the original behavior) for the
+  // single-player stats page, where there's nothing to compare against.
+  function buildPlayerGraph(stats, minMs, maxMs, period, sharedAxisMax) {
     var wrap = document.createElement("div");
     wrap.className = "player-graph-wrap";
 
@@ -7251,7 +7267,7 @@
       return wrap;
     }
 
-    var axisMax = axisMaxFor(maxCount);
+    var axisMax = sharedAxisMax || axisMaxFor(maxCount);
     var width = 600;
     var height = 200;
 
@@ -7473,12 +7489,8 @@
 
   function buildAllPlayerCard(
     stats,
-    maxPlayed,
-    maxWins,
-    maxLosses,
-    maxTournPlayed,
-    maxTournWins,
-    maxTournLosses,
+    sharedAxisMax,
+    tournSharedAxisMax,
     minMs,
     maxMs,
     period,
@@ -7521,7 +7533,7 @@
 
     if (allPlayersViewMode === "graph") {
       if (isInLiveRoster) {
-        li.appendChild(buildPlayerGraph(stats, minMs, maxMs, period));
+        li.appendChild(buildPlayerGraph(stats, minMs, maxMs, period, sharedAxisMax));
       } else {
         var graphHolder = document.createElement("div");
         graphHolder.className = "all-player-graph-holder hidden";
@@ -7531,7 +7543,7 @@
         showGraphBtn.textContent = T("allPlayers.showGraph");
         showGraphBtn.addEventListener("click", function () {
           if (!graphHolder.hasChildNodes()) {
-            graphHolder.appendChild(buildPlayerGraph(stats, minMs, maxMs, period));
+            graphHolder.appendChild(buildPlayerGraph(stats, minMs, maxMs, period, sharedAxisMax));
           }
           var nowHidden = graphHolder.classList.toggle("hidden");
           showGraphBtn.textContent = T(nowHidden ? "allPlayers.showGraph" : "allPlayers.hideGraph");
@@ -7540,13 +7552,17 @@
         li.appendChild(graphHolder);
       }
     } else {
-      li.appendChild(buildScaleRow(T("allPlayers.gamesPlayed"), stats.played, maxPlayed, "scale-fill-played"));
-      li.appendChild(buildScaleRow(T("allPlayers.gamesWon"), stats.wins, maxWins, "scale-fill-won"));
-      li.appendChild(buildScaleRow(T("allPlayers.gamesLost"), stats.losses, maxLosses, "scale-fill-lost"));
+      // Played/won/lost share one scale (played's, since played >= won +
+      // lost for any one player) so equal counts always draw equal bar
+      // lengths and different players' bars stay directly comparable -
+      // same for the tournament trio below.
+      li.appendChild(buildScaleRow(T("allPlayers.gamesPlayed"), stats.played, sharedAxisMax, "scale-fill-played"));
+      li.appendChild(buildScaleRow(T("allPlayers.gamesWon"), stats.wins, sharedAxisMax, "scale-fill-won"));
+      li.appendChild(buildScaleRow(T("allPlayers.gamesLost"), stats.losses, sharedAxisMax, "scale-fill-lost"));
       if (stats.tournamentPlayed > 0) {
-        li.appendChild(buildScaleRow(T("allPlayers.tournamentsPlayed"), stats.tournamentPlayed, maxTournPlayed, "scale-fill-tourn-played"));
-        li.appendChild(buildScaleRow(T("allPlayers.tournamentsWon"), stats.tournamentWins, maxTournWins, "scale-fill-tourn-won"));
-        li.appendChild(buildScaleRow(T("allPlayers.tournamentsLost"), stats.tournamentLosses, maxTournLosses, "scale-fill-tourn-lost"));
+        li.appendChild(buildScaleRow(T("allPlayers.tournamentsPlayed"), stats.tournamentPlayed, tournSharedAxisMax, "scale-fill-tourn-played"));
+        li.appendChild(buildScaleRow(T("allPlayers.tournamentsWon"), stats.tournamentWins, tournSharedAxisMax, "scale-fill-tourn-won"));
+        li.appendChild(buildScaleRow(T("allPlayers.tournamentsLost"), stats.tournamentLosses, tournSharedAxisMax, "scale-fill-tourn-lost"));
       }
 
       if (stats.games.length) {
@@ -7573,20 +7589,18 @@
       return computePlayerCareerStats(name, period);
     });
 
+    // The player with the most games played (maxPlayed) sets the shared
+    // scale for every played/won/lost bar AND every graph's y-axis, for
+    // every player shown - so equal counts always look equal and one
+    // player's chart can be read against another's, instead of each
+    // player silently rescaling to their own numbers. Same idea for the
+    // tournament trio, off tournaments played.
     var maxPlayed = 0;
-    var maxWins = 0;
-    var maxLosses = 0;
     var maxTournPlayed = 0;
-    var maxTournWins = 0;
-    var maxTournLosses = 0;
     var minTs = null;
     stats.forEach(function (s) {
       maxPlayed = Math.max(maxPlayed, s.played);
-      maxWins = Math.max(maxWins, s.wins);
-      maxLosses = Math.max(maxLosses, s.losses);
       maxTournPlayed = Math.max(maxTournPlayed, s.tournamentPlayed);
-      maxTournWins = Math.max(maxTournWins, s.tournamentWins);
-      maxTournLosses = Math.max(maxTournLosses, s.tournamentLosses);
       s.games.forEach(function (g) {
         if (!g.ts) return;
         if (minTs === null || g.ts < minTs) minTs = g.ts;
@@ -7615,11 +7629,7 @@
     if (maxMs <= minMs) maxMs = minMs + 1;
 
     var playedAxisMax = axisMaxFor(maxPlayed);
-    var winsAxisMax = axisMaxFor(maxWins);
-    var lossesAxisMax = axisMaxFor(maxLosses);
     var tournPlayedAxisMax = axisMaxFor(maxTournPlayed);
-    var tournWinsAxisMax = axisMaxFor(maxTournWins);
-    var tournLossesAxisMax = axisMaxFor(maxTournLosses);
 
     var sorted = sortAllPlayerStats(stats, allPlayersSortSelect.value);
 
@@ -7643,11 +7653,7 @@
         buildAllPlayerCard(
           s,
           playedAxisMax,
-          winsAxisMax,
-          lossesAxisMax,
           tournPlayedAxisMax,
-          tournWinsAxisMax,
-          tournLossesAxisMax,
           minMs,
           maxMs,
           period,
@@ -9070,6 +9076,7 @@
     });
   });
 
+  btnTestOnboarding.addEventListener("click", openOnboarding);
   btnOpenWizard.addEventListener("click", openWizard);
   btnWizardClose.addEventListener("click", closeWizard);
   btnWizardCancel.addEventListener("click", closeWizard);
