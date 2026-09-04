@@ -111,7 +111,7 @@
       raceToWinsTarget: 5,
       currentGame: { gameType: "8ball", target: 1, unit: "rack", mode: "individual", startedAt: new Date().toISOString() },
       gameHistory: [],
-      rotation: { enabled: false, order: [], every: 1 },
+      rotation: { enabled: false, order: [], every: 1, manualOffset: 0 },
       gamesPlayedCount: 0
     };
   }
@@ -189,10 +189,11 @@
             parsed.currentGame.target = 1;
           }
           if (!Array.isArray(parsed.gameHistory)) parsed.gameHistory = [];
-          if (!parsed.rotation) parsed.rotation = { enabled: false, order: [], every: 1 };
+          if (!parsed.rotation) parsed.rotation = { enabled: false, order: [], every: 1, manualOffset: 0 };
           if (!Array.isArray(parsed.rotation.order)) parsed.rotation.order = [];
           if (typeof parsed.rotation.every !== "number") parsed.rotation.every = 1;
           if (typeof parsed.rotation.enabled !== "boolean") parsed.rotation.enabled = false;
+          if (typeof parsed.rotation.manualOffset !== "number") parsed.rotation.manualOffset = 0;
           if (typeof parsed.gamesPlayedCount !== "number") parsed.gamesPlayedCount = 0;
           return parsed;
         }
@@ -920,6 +921,10 @@
   var rotationList = document.getElementById("rotation-list");
   var rotationEveryInput = document.getElementById("rotation-every");
   var rotationStatus = document.getElementById("rotation-status");
+  var rotationPositionRow = document.getElementById("rotation-position-row");
+  var rotationPositionLabel = document.getElementById("rotation-position-label");
+  var btnRotationPositionPrev = document.getElementById("btn-rotation-position-prev");
+  var btnRotationPositionNext = document.getElementById("btn-rotation-position-next");
 
   var winToast = document.getElementById("win-toast");
   var scoreboard = document.getElementById("scoreboard");
@@ -1387,12 +1392,27 @@
     );
   }
 
+  // The rotation's current step is normally just derived from how many
+  // games have been played (floor(gamesPlayedCount / every), wrapped to
+  // the order's length) - manualOffset is a hand correction layered on
+  // top of that formula (via moveRotationPosition), for when the
+  // auto-advance lands on the wrong step and needs nudging back into
+  // sync without touching gamesPlayedCount's own bookkeeping.
+  function rotationCurrentIndex() {
+    var len = state.rotation.order.length;
+    if (len === 0) return 0;
+    var every = Math.max(1, state.rotation.every || 1);
+    var derived = Math.floor(state.gamesPlayedCount / every);
+    var offset = state.rotation.manualOffset || 0;
+    return ((derived + offset) % len + len) % len;
+  }
+
   function rotationStatusInfo() {
     if (!(state.rotation.enabled && state.rotation.order.length >= 2)) return null;
     var every = Math.max(1, state.rotation.every || 1);
     var playedInLeg = state.gamesPlayedCount % every;
     var untilSwitch = every - playedInLeg;
-    var currentIndex = Math.floor(state.gamesPlayedCount / every) % state.rotation.order.length;
+    var currentIndex = rotationCurrentIndex();
     var nextIndex = (currentIndex + 1) % state.rotation.order.length;
     return {
       currentLabel: rotationEntryLabel(state.rotation.order[currentIndex]),
@@ -1403,15 +1423,25 @@
 
   function applyRotationIfDue() {
     if (!state.rotation.enabled || state.rotation.order.length === 0) return;
-    var every = Math.max(1, state.rotation.every || 1);
-    var index = Math.floor(state.gamesPlayedCount / every) % state.rotation.order.length;
-    var entry = state.rotation.order[index];
+    var entry = state.rotation.order[rotationCurrentIndex()];
     if (GAME_TYPES[entry.gameType] && (entry.gameType !== state.currentGame.gameType || entry.target !== state.currentGame.target || entry.unit !== state.currentGame.unit)) {
       state.currentGame.gameType = entry.gameType;
       state.currentGame.target = entry.target;
       state.currentGame.unit = entry.unit;
       syncGameTypeUI();
     }
+  }
+
+  // Manually nudges the rotation's current step by ±1 (wrapping), for
+  // correcting drift by hand - see rotationCurrentIndex's comment.
+  // Applies immediately: the current game type switches right away,
+  // same as a natural auto-advance would.
+  function moveRotationPosition(direction) {
+    if (!state.rotation.enabled || state.rotation.order.length < 2) return;
+    state.rotation.manualOffset = (state.rotation.manualOffset || 0) + direction;
+    applyRotationIfDue();
+    saveState();
+    renderAll();
   }
 
   function buildStandingsRow(name, wins, memberNames) {
@@ -1532,7 +1562,24 @@
     });
   }
 
+  // Shows the current rotation step (with ▲/▼ hand-correction buttons)
+  // right in the Players panel, not just tucked away in Game Order - see
+  // moveRotationPosition. Hidden whenever rotation isn't actually running
+  // (off, or fewer than 2 game types to rotate through).
+  function renderRotationPositionControl() {
+    var info = rotationStatusInfo();
+    rotationPositionRow.classList.toggle("hidden", !info);
+    if (!info) return;
+    var index = rotationCurrentIndex();
+    rotationPositionLabel.textContent = T("players.rotationPosition", {
+      label: info.currentLabel,
+      index: index + 1,
+      total: state.rotation.order.length
+    });
+  }
+
   function renderRoster() {
+    renderRotationPositionControl();
     rosterList.innerHTML = "";
     if (state.players.length === 0) {
       var hint = document.createElement("li");
@@ -2700,6 +2747,7 @@
     state.teamMvpWins = {};
     state.gameHistory = [];
     state.gamesPlayedCount = 0;
+    state.rotation.manualOffset = 0;
     resetGameBalls();
     saveState();
     applyRotationIfDue();
@@ -8157,6 +8205,14 @@
     applyRotationIfDue();
     renderRotation();
     renderScoreboard();
+    renderRoster();
+  });
+
+  btnRotationPositionPrev.addEventListener("click", function () {
+    moveRotationPosition(-1);
+  });
+  btnRotationPositionNext.addEventListener("click", function () {
+    moveRotationPosition(1);
   });
 
   rotationAddType.addEventListener("change", function () {
