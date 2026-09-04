@@ -1729,15 +1729,20 @@ input[type="number"] {
   z-index: 1000;
 }
 
+/* Bigger than the shared gamewin/milestone/force-reset baseline on
+   purpose - this one's a time-pressured "step up NOW" warning meant to be
+   readable at a glance from across the table, and it auto-dismisses
+   itself (see announceOnHill's 5s timer) so there's no cost to going
+   large. */
 .onhill-card {
   background: linear-gradient(180deg, var(--felt) 0%, var(--bg-glow) 100%);
   border: 2px solid var(--danger);
   border-radius: var(--radius);
-  max-width: min(94vw, 640px);
+  max-width: min(96vw, 900px);
   max-height: 92vh;
   width: 100%;
   overflow-y: auto;
-  padding: clamp(32px, 6vw, 56px) clamp(28px, 5vw, 48px);
+  padding: clamp(36px, 7vw, 64px) clamp(30px, 6vw, 56px);
   text-align: center;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
   animation: onhill-shake 0.4s ease;
@@ -1751,19 +1756,19 @@ input[type="number"] {
 }
 
 .onhill-emoji {
-  font-size: clamp(2.6rem, 7vw, 5.6rem);
-  margin-bottom: 8px;
+  font-size: clamp(3.4rem, 10vw, 8rem);
+  margin-bottom: 10px;
 }
 
 .onhill-card h2 {
-  margin: 0 0 10px;
+  margin: 0 0 12px;
   color: var(--danger);
-  font-size: clamp(1.5rem, 4.5vw, 3.4rem);
+  font-size: clamp(2rem, 7vw, 5rem);
 }
 
 .onhill-card p {
-  margin: 0 0 22px;
-  font-size: clamp(1.08rem, 3vw, 2.3rem);
+  margin: 0 0 26px;
+  font-size: clamp(1.3rem, 4.5vw, 3.2rem);
   font-weight: 600;
 }
 
@@ -1771,8 +1776,8 @@ input[type="number"] {
   width: 100%;
   background: var(--danger);
   color: #fff;
-  font-size: clamp(1.05rem, 2.6vw, 2.1rem);
-  padding: clamp(12px, 2vw, 22px);
+  font-size: clamp(1.3rem, 3.2vw, 2.6rem);
+  padding: clamp(14px, 2.4vw, 28px);
 }
 
 /* ---------- Game-change popup ---------- */

@@ -2948,13 +2948,29 @@
     });
   }
 
+  // Auto-dismisses on its own after 5s if nobody closes it by hand first -
+  // cleared and restarted on every fresh announcement, and cleared on any
+  // manual close (the button, the backdrop, Enter/Escape, or another
+  // overlay force-closing it) so it never fires late against whatever's
+  // showing by then.
+  var onHillAutoCloseTimer = null;
+
   function announceOnHill(names) {
     onHillMessage.textContent = names + " is ON THE HILL — one more win takes the race to " + state.raceToWinsTarget + "! Better step up. 👀";
     onHillOverlay.classList.remove("hidden");
     playOnHillSound();
+    if (onHillAutoCloseTimer) clearTimeout(onHillAutoCloseTimer);
+    onHillAutoCloseTimer = setTimeout(function () {
+      onHillAutoCloseTimer = null;
+      closeOnHill();
+    }, 5000);
   }
 
   function closeOnHill() {
+    if (onHillAutoCloseTimer) {
+      clearTimeout(onHillAutoCloseTimer);
+      onHillAutoCloseTimer = null;
+    }
     onHillOverlay.classList.add("hidden");
   }
 
