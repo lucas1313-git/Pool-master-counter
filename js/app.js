@@ -1579,7 +1579,6 @@
   }
 
   function renderRoster() {
-    renderRotationPositionControl();
     rosterList.innerHTML = "";
     if (state.players.length === 0) {
       var hint = document.createElement("li");
@@ -2046,6 +2045,7 @@
       });
       nowPlayingBanner.appendChild(rotationNote);
     }
+    renderRotationPositionControl();
 
     var duration = document.createElement("span");
     duration.className = "game-duration-live";
@@ -2067,6 +2067,7 @@
 
     if (quickCounterMode) {
       nowPlayingBanner.innerHTML = "";
+      rotationPositionRow.classList.add("hidden");
       scoreboard.innerHTML = "";
       scoreboard.className = "scoreboard scoreboard-quick";
       var loadRow = buildQuickCounterLoadRow();
@@ -8205,7 +8206,6 @@
     applyRotationIfDue();
     renderRotation();
     renderScoreboard();
-    renderRoster();
   });
 
   btnRotationPositionPrev.addEventListener("click", function () {
