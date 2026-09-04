@@ -111,7 +111,7 @@
       raceToWinsTarget: 5,
       currentGame: { gameType: "8ball", target: 1, unit: "rack", mode: "individual", startedAt: new Date().toISOString() },
       gameHistory: [],
-      rotation: { enabled: false, order: [], every: 1, manualOffset: 0 },
+      rotation: { enabled: false, order: [], every: 1 },
       gamesPlayedCount: 0
     };
   }
@@ -189,11 +189,10 @@
             parsed.currentGame.target = 1;
           }
           if (!Array.isArray(parsed.gameHistory)) parsed.gameHistory = [];
-          if (!parsed.rotation) parsed.rotation = { enabled: false, order: [], every: 1, manualOffset: 0 };
+          if (!parsed.rotation) parsed.rotation = { enabled: false, order: [], every: 1 };
           if (!Array.isArray(parsed.rotation.order)) parsed.rotation.order = [];
           if (typeof parsed.rotation.every !== "number") parsed.rotation.every = 1;
           if (typeof parsed.rotation.enabled !== "boolean") parsed.rotation.enabled = false;
-          if (typeof parsed.rotation.manualOffset !== "number") parsed.rotation.manualOffset = 0;
           if (typeof parsed.gamesPlayedCount !== "number") parsed.gamesPlayedCount = 0;
           return parsed;
         }
@@ -1392,19 +1391,20 @@
     );
   }
 
-  // The rotation's current step is normally just derived from how many
-  // games have been played (floor(gamesPlayedCount / every), wrapped to
-  // the order's length) - manualOffset is a hand correction layered on
-  // top of that formula (via moveRotationPosition), for when the
-  // auto-advance lands on the wrong step and needs nudging back into
-  // sync without touching gamesPlayedCount's own bookkeeping.
+  // The rotation's current step is purely a function of how many games
+  // have been played: floor(gamesPlayedCount / every), wrapped to the
+  // order's length. moveRotationPosition (the ◀/▶ control) hand-drives
+  // that same counter one game at a time - it doesn't jump straight to
+  // a different game type, it just ticks gamesPlayedCount by ±1, same
+  // as a real win/undo would, and lets this formula do what it already
+  // does. So within a leg, a click or two just moves the countdown
+  // toward the next switch; only crossing an `every` boundary actually
+  // changes the active game type.
   function rotationCurrentIndex() {
     var len = state.rotation.order.length;
     if (len === 0) return 0;
     var every = Math.max(1, state.rotation.every || 1);
-    var derived = Math.floor(state.gamesPlayedCount / every);
-    var offset = state.rotation.manualOffset || 0;
-    return ((derived + offset) % len + len) % len;
+    return Math.floor(state.gamesPlayedCount / every) % len;
   }
 
   function rotationStatusInfo() {
@@ -1417,6 +1417,8 @@
     return {
       currentLabel: rotationEntryLabel(state.rotation.order[currentIndex]),
       nextLabel: rotationEntryLabel(state.rotation.order[nextIndex]),
+      playedInLeg: playedInLeg,
+      every: every,
       untilSwitch: untilSwitch
     };
   }
@@ -1432,13 +1434,16 @@
     }
   }
 
-  // Manually nudges the rotation's current step by ±1 (wrapping), for
-  // correcting drift by hand - see rotationCurrentIndex's comment.
-  // Applies immediately: the current game type switches right away,
-  // same as a natural auto-advance would.
+  // The ◀/▶ control: hand-drives gamesPlayedCount by ±1, exactly as if
+  // one more (or one fewer) game had been played toward the rotation's
+  // switch-every countdown - no win/loss is credited to anyone, no
+  // score changes, only the rotation's own counter moves. Reuses
+  // applyRotationIfDue so a click that crosses an `every` boundary
+  // switches the active game type immediately, same as a real win
+  // would.
   function moveRotationPosition(direction) {
     if (!state.rotation.enabled || state.rotation.order.length < 2) return;
-    state.rotation.manualOffset = (state.rotation.manualOffset || 0) + direction;
+    state.gamesPlayedCount = Math.max(0, state.gamesPlayedCount + direction);
     applyRotationIfDue();
     saveState();
     renderAll();
@@ -1570,11 +1575,10 @@
     var info = rotationStatusInfo();
     rotationPositionRow.classList.toggle("hidden", !info);
     if (!info) return;
-    var index = rotationCurrentIndex();
     rotationPositionLabel.textContent = T("players.rotationPosition", {
       label: info.currentLabel,
-      index: index + 1,
-      total: state.rotation.order.length
+      played: info.playedInLeg,
+      every: info.every
     });
   }
 
@@ -2748,7 +2752,6 @@
     state.teamMvpWins = {};
     state.gameHistory = [];
     state.gamesPlayedCount = 0;
-    state.rotation.manualOffset = 0;
     resetGameBalls();
     saveState();
     applyRotationIfDue();
