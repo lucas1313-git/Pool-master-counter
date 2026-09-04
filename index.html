@@ -297,17 +297,21 @@
 </div>
 
 <div id="gamewin-overlay" class="gamewin-overlay hidden">
-  <div class="gamewin-card">
+  <div class="gamewin-card" id="gamewin-card">
     <div class="gamewin-emoji">🎱🏆</div>
     <h2 data-i18n="gamewin.title">Nice shot!</h2>
     <p id="gamewin-message"></p>
     <div id="gamewin-details" class="gamewin-details"></div>
+    <div class="gamewin-quick-actions">
+      <button type="button" id="btn-gamewin-undo" class="btn btn-ghost" data-i18n="gamewin.undoThisWin">↩ Undo this win</button>
+      <button type="button" id="btn-gamewin-reset-today" class="btn btn-danger" data-i18n="gamewin.resetTodayStats">Reset today's stats</button>
+    </div>
     <button type="button" id="btn-gamewin-close" class="btn btn-primary" data-i18n="milestone.nice">Nice!</button>
   </div>
 </div>
 
 <div id="milestone-overlay" class="milestone-overlay hidden">
-  <div class="milestone-card">
+  <div class="milestone-card" id="milestone-card">
     <div class="milestone-emoji">🎉🏆🎉</div>
     <h2 data-i18n="milestone.congrats">Congratulations!</h2>
     <p id="milestone-headline"></p>

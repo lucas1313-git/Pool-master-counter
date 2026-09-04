@@ -1441,6 +1441,18 @@ input[type="number"] {
   width: 100%;
 }
 
+.gamewin-quick-actions {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.gamewin-quick-actions .btn {
+  flex: 1;
+  font-size: 0.85rem;
+  padding: 10px 8px;
+}
+
 /* ---------- Milestone celebration popup ---------- */
 
 .milestone-overlay {
@@ -1507,6 +1519,66 @@ input[type="number"] {
   width: 100%;
 }
 
+/* Single-rack games (unit "rack", target 1) pop these two dialogs after
+   every single win, not just at the end of a race — give them noticeably
+   more room and bigger type in that mode. clamp()'s middle (vw-based) term
+   is what makes this "as big as there's space for, otherwise shrink to
+   fit": on a roomy desktop viewport it settles near the upper (~2x) bound,
+   on a narrow phone viewport in landscape it backs off toward the lower
+   bound instead of overflowing. max-height + overflow-y is the hard
+   backstop for whatever clamp() can't shrink away (e.g. a long player-name
+   list), so the dialog never grows taller than the viewport. */
+.gamewin-card.is-rack-focus,
+.milestone-card.is-rack-focus {
+  max-width: min(94vw, 640px);
+  max-height: 92vh;
+  overflow-y: auto;
+  padding: clamp(32px, 6vw, 56px) clamp(28px, 5vw, 48px);
+}
+
+.gamewin-card.is-rack-focus .gamewin-emoji,
+.milestone-card.is-rack-focus .milestone-emoji {
+  font-size: clamp(2.6rem, 7vw, 5.2rem);
+}
+
+.gamewin-card.is-rack-focus h2,
+.milestone-card.is-rack-focus h2 {
+  font-size: clamp(1.5rem, 4.5vw, 3rem);
+}
+
+.gamewin-card.is-rack-focus p,
+.milestone-card.is-rack-focus p {
+  font-size: clamp(1.08rem, 3vw, 2.16rem);
+}
+
+.gamewin-card.is-rack-focus .gamewin-details,
+.milestone-card.is-rack-focus .milestone-details {
+  max-height: 48vh;
+  overflow-y: auto;
+}
+
+.gamewin-card.is-rack-focus .player-stats-row .label,
+.milestone-card.is-rack-focus .player-stats-row .label {
+  font-size: clamp(0.9rem, 2vw, 1.8rem);
+}
+
+.gamewin-card.is-rack-focus .player-stats-row .value,
+.milestone-card.is-rack-focus .player-stats-row .value {
+  font-size: clamp(1.1rem, 2.4vw, 2.2rem);
+}
+
+.gamewin-card.is-rack-focus .value-list,
+.milestone-card.is-rack-focus .value-list {
+  font-size: clamp(0.95rem, 2.2vw, 1.9rem);
+}
+
+.gamewin-card.is-rack-focus .btn-primary,
+.milestone-card.is-rack-focus .btn-primary,
+.gamewin-card.is-rack-focus .gamewin-quick-actions .btn {
+  font-size: clamp(1.05rem, 2.6vw, 2.1rem);
+  padding: clamp(12px, 2vw, 22px);
+}
+
 .balls-left-row {
   align-items: center;
 }
@@ -1544,6 +1616,45 @@ input[type="number"] {
   text-align: center;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+
+.balls-left-input {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 4px 6px;
+  min-width: 9ch;
+  -moz-appearance: textfield;
+}
+
+.balls-left-input::-webkit-outer-spin-button,
+.balls-left-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.balls-left-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.gamewin-card.is-rack-focus .balls-left-row .label,
+.milestone-card.is-rack-focus .balls-left-row .label {
+  font-size: clamp(0.9rem, 2vw, 1.6rem);
+}
+
+.gamewin-card.is-rack-focus .balls-left-value,
+.milestone-card.is-rack-focus .balls-left-value {
+  font-size: clamp(1rem, 2.2vw, 1.8rem);
+  min-width: 11ch;
+}
+
+.gamewin-card.is-rack-focus .balls-left-btn,
+.milestone-card.is-rack-focus .balls-left-btn {
+  width: clamp(30px, 5vw, 46px);
+  height: clamp(30px, 5vw, 46px);
+  font-size: clamp(1.1rem, 2.4vw, 1.8rem);
 }
 
 .player-game-log-balls-left {
