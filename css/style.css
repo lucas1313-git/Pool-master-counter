@@ -2039,6 +2039,24 @@ input[type="number"] {
   animation: milestone-pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
+.onboarding-card {
+  max-width: 460px;
+  text-align: center;
+}
+
+.onboarding-card .wizard-header {
+  justify-content: center;
+}
+
+.onboarding-card .wizard-body {
+  text-align: left;
+  min-height: 0;
+}
+
+.onboarding-final-footer {
+  margin-top: 20px;
+}
+
 .wizard-close-btn {
   position: absolute;
   top: 10px;

@@ -547,6 +547,63 @@
   </div>
 </div>
 
+<div id="onboarding-overlay" class="wizard-overlay onboarding-overlay hidden">
+  <div class="wizard-card onboarding-card">
+    <div class="wizard-header">
+      <div class="wizard-header-text">
+        <h2 id="onboarding-heading" data-i18n="onboarding.step1Heading">Welcome!</h2>
+        <p class="wizard-progress" id="onboarding-progress">Step 1 of 4</p>
+      </div>
+    </div>
+
+    <div class="wizard-progress-dots" id="onboarding-progress-dots"></div>
+
+    <div class="wizard-body">
+
+      <div class="wizard-step" id="onboarding-step-1">
+        <p class="wizard-step-explain" data-i18n="onboarding.step1Explain">Looks like this is your first time here. We'll walk you through a quick minimum setup — add yourself as a player and decide when you want to start playing. It only takes a minute, and you can change any of it later.</p>
+      </div>
+
+      <div class="wizard-step hidden" id="onboarding-step-2">
+        <p class="wizard-step-explain" data-i18n="onboarding.step2Explain">What should we call you? An optional starting rating carries over a known rating from outside this device — leave it blank to start at the default.</p>
+        <p id="onboarding-name-requirement" class="new-player-name-requirement hidden"></p>
+        <div id="onboarding-name-form" class="row">
+          <input type="text" id="onboarding-name-input" data-i18n-placeholder="players.namePlaceholder" placeholder="Player name" autocomplete="off" required>
+          <input type="number" id="onboarding-rating-input" data-i18n-placeholder="players.ratingPlaceholder" placeholder="Starting rating (optional)" min="0" max="900">
+        </div>
+      </div>
+
+      <div class="wizard-step hidden" id="onboarding-step-3">
+        <p class="wizard-step-explain" data-i18n="onboarding.step3Explain">You're all set up. Ready to play now, or would you rather come back to it later?</p>
+        <div class="wizard-format-options">
+          <label class="wizard-format-option">
+            <input type="radio" name="onboarding-play-choice" value="now" checked>
+            <span data-i18n="onboarding.playNow">▶️ Play now</span>
+          </label>
+          <label class="wizard-format-option">
+            <input type="radio" name="onboarding-play-choice" value="later">
+            <span data-i18n="onboarding.playLater">🕒 I'll play later</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="wizard-step hidden" id="onboarding-step-4">
+        <p class="wizard-step-explain" data-i18n="onboarding.step4Explain">Want a hand picking the game type and getting the rotation right, or are you ready to dive in on your own?</p>
+        <div class="wizard-footer onboarding-final-footer">
+          <button type="button" id="btn-onboarding-run-wizard" class="btn btn-primary" data-i18n="onboarding.runWizard">🧙 Run Setup Wizard (Recommended)</button>
+          <button type="button" id="btn-onboarding-manual" class="btn btn-ghost" data-i18n="onboarding.getToItNow">Get to it now — I know what I'm doing</button>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="wizard-footer" id="onboarding-standard-footer">
+      <button type="button" id="btn-onboarding-cancel" class="btn btn-ghost" data-i18n="common.cancel">Cancel</button>
+      <button type="button" id="btn-onboarding-go" class="btn btn-primary" data-i18n="common.go">Go →</button>
+    </div>
+  </div>
+</div>
+
 <div id="help-overlay" class="help-overlay hidden">
   <div class="help-card">
     <div class="help-header">

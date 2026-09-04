@@ -518,11 +518,13 @@
     });
   }
 
-  // A brassy 9-note phrase evoking Queen's "We Are the Champions" (an
-  // homage rather than a literal transcription) — rising to a peak then
-  // settling back on the tonic, drenched in both the shared slapback echo
-  // bus every tone uses AND its own dedicated reverb send (like
-  // playTournamentChampionSound's, just shorter) for a big, anthemic
+  // Two alternate victory fanfares, picked at random on each win so a run
+  // of single-rack games doesn't hear the same thing every time — Queen's
+  // "We Are the Champions" and "Another One Bites the Dust" (homages
+  // rather than literal transcriptions), both pitched a full octave lower
+  // than the original fanfare, and both drenched in the shared slapback
+  // echo bus AND their own dedicated reverb send (like
+  // playTournamentChampionSound's, just shorter) for a big, low, anthemic
   // wash. Plays on every game win. voice picks the per-player pitch
   // multiplier (VOICE_PITCHES) so different winners land at different
   // pitches, same as before.
@@ -568,21 +570,46 @@
       sub.stop(t + duration + 0.08);
     }
 
-    var freqs = { D4: 293.66, G4: 392.0, A4: 440.0, B4: 493.88, C5: 523.25 };
-    var run = [
-      { n: "G4", t: 0.0, d: 0.2 },
-      { n: "G4", t: 0.18, d: 0.2 },
-      { n: "G4", t: 0.36, d: 0.22 },
-      { n: "A4", t: 0.58, d: 0.22 },
-      { n: "C5", t: 0.8, d: 0.3 },
-      { n: "B4", t: 1.1, d: 0.22 },
-      { n: "A4", t: 1.32, d: 0.22 },
-      { n: "D4", t: 1.54, d: 0.24 },
-      { n: "G4", t: 1.78, d: 0.9 }
-    ];
-    run.forEach(function (note) {
-      anthemTone(freqs[note.n] * mult, now + note.t, note.d, 0.22);
-    });
+    // Rising to a peak then settling back on the low tonic.
+    function playChampionsSong() {
+      var freqs = { D3: 146.83, G3: 196.0, A3: 220.0, B3: 246.94, C4: 261.63 };
+      var run = [
+        { n: "G3", t: 0.0, d: 0.2 },
+        { n: "G3", t: 0.18, d: 0.2 },
+        { n: "G3", t: 0.36, d: 0.22 },
+        { n: "A3", t: 0.58, d: 0.22 },
+        { n: "C4", t: 0.8, d: 0.3 },
+        { n: "B3", t: 1.1, d: 0.22 },
+        { n: "A3", t: 1.32, d: 0.22 },
+        { n: "D3", t: 1.54, d: 0.24 },
+        { n: "G3", t: 1.78, d: 0.9 }
+      ];
+      run.forEach(function (note) {
+        anthemTone(freqs[note.n] * mult, now + note.t, note.d, 0.22);
+      });
+    }
+
+    // A punchy, repeated-note groove riff, staccato until the held final
+    // note.
+    function playBitesTheDustSong() {
+      var freqs = { B2: 123.47, Cs3: 138.59, D3: 146.83, E3: 164.81, G3: 196.0 };
+      var run = [
+        { n: "E3", t: 0.0, d: 0.13 },
+        { n: "E3", t: 0.16, d: 0.13 },
+        { n: "E3", t: 0.32, d: 0.13 },
+        { n: "G3", t: 0.48, d: 0.15 },
+        { n: "E3", t: 0.66, d: 0.13 },
+        { n: "E3", t: 0.82, d: 0.13 },
+        { n: "D3", t: 0.98, d: 0.15 },
+        { n: "Cs3", t: 1.16, d: 0.16 },
+        { n: "B2", t: 1.34, d: 0.75 }
+      ];
+      run.forEach(function (note) {
+        anthemTone(freqs[note.n] * mult, now + note.t, note.d, 0.24);
+      });
+    }
+
+    [playChampionsSong, playBitesTheDustSong][Math.floor(Math.random() * 2)]();
   }
 
   // A gentle 14-note pastoral phrase evoking the Beatles' recorder
@@ -993,6 +1020,21 @@
   var wizardTempCounterCheckbox = document.getElementById("wizard-temp-counter-checkbox");
   var btnWizardStartQuickCounter = document.getElementById("btn-wizard-start-quick-counter");
 
+  var onboardingOverlay = document.getElementById("onboarding-overlay");
+  var onboardingHeading = document.getElementById("onboarding-heading");
+  var onboardingProgress = document.getElementById("onboarding-progress");
+  var onboardingProgressDots = document.getElementById("onboarding-progress-dots");
+  var onboardingNameRequirement = document.getElementById("onboarding-name-requirement");
+  var onboardingNameInput = document.getElementById("onboarding-name-input");
+  var onboardingRatingInput = document.getElementById("onboarding-rating-input");
+  var onboardingPlayChoiceRadios = document.getElementsByName("onboarding-play-choice");
+  var onboardingStandardFooter = document.getElementById("onboarding-standard-footer");
+  var btnOnboardingCancel = document.getElementById("btn-onboarding-cancel");
+  var btnOnboardingGo = document.getElementById("btn-onboarding-go");
+  var btnOnboardingRunWizard = document.getElementById("btn-onboarding-run-wizard");
+  var btnOnboardingManual = document.getElementById("btn-onboarding-manual");
+  var onboardingStep = 1;
+
   var btnToggleFocus = document.getElementById("btn-toggle-focus");
   var focusPlayersWrap = document.getElementById("focus-players-wrap");
   var btnToggleFocusPlayers = document.getElementById("btn-toggle-focus-players");
@@ -1246,6 +1288,7 @@
     return [
       helpOverlay,
       wizardOverlay,
+      onboardingOverlay,
       milestoneOverlay,
       gamewinOverlay,
       forceResetOverlay,
@@ -1320,6 +1363,7 @@
   var OVERLAY_KEY_TARGETS = [
     [saveSessionOverlay, btnSaveSessionSave, btnSaveSessionCancel],
     [ratingEditOverlay, btnRatingEditSave, btnRatingEditCancel],
+    [onboardingOverlay, btnOnboardingGo, btnOnboardingCancel],
     [milestoneOverlay, btnMilestoneClose, btnMilestoneClose],
     [gamewinOverlay, btnGamewinClose, btnGamewinClose],
     [forceResetOverlay, btnForceResetClose, btnForceResetClose],
@@ -5428,6 +5472,133 @@
     wizardOverlay.classList.add("hidden");
   }
 
+  // ---------------------------------------------------------------------
+  // First-time user flow — a short 4-step welcome shown once, only when
+  // this device has no players and no history at all (see
+  // isFirstTimeUser). Every step but the last has a plain Cancel/Go
+  // footer; the last step's own two buttons ARE the terminal actions, so
+  // it has no separate Go. Cancelling (at any step) or finishing both
+  // mark it seen so it never shows again.
+  // ---------------------------------------------------------------------
+
+  var ONBOARDING_SEEN_KEY = "poolMasterCounter.onboardingSeen.v1";
+
+  function hasSeenOnboarding() {
+    try {
+      return localStorage.getItem(ONBOARDING_SEEN_KEY) === "1";
+    } catch (e) {
+      return true;
+    }
+  }
+
+  function markOnboardingSeen() {
+    try {
+      localStorage.setItem(ONBOARDING_SEEN_KEY, "1");
+    } catch (e) {
+      console.warn("Could not save onboarding-seen flag.", e);
+    }
+  }
+
+  // Just the live roster - PLAYER_STATS/SAVED_ROSTERS are pre-seeded with
+  // bundled example data on every device's very first boot
+  // (migrateFromRepoIfNeeded), before this ever runs, so they're never a
+  // reliable signal of whether a real person has set anything up yet.
+  function isFirstTimeUser() {
+    return state.players.length === 0;
+  }
+
+  function onboardingPlayChoice() {
+    for (var i = 0; i < onboardingPlayChoiceRadios.length; i++) {
+      if (onboardingPlayChoiceRadios[i].checked) return onboardingPlayChoiceRadios[i].value;
+    }
+    return "now";
+  }
+
+  function validateOnboardingNameInput() {
+    var trimmed = onboardingNameInput.value.trim();
+    var duplicate = trimmed && isDuplicatePlayerName(trimmed);
+    btnOnboardingGo.disabled = onboardingStep === 2 && (!trimmed || duplicate);
+    if (duplicate) {
+      onboardingNameRequirement.textContent = T("players.duplicateNameHint", { name: capitalizeName(trimmed) });
+      onboardingNameRequirement.classList.remove("hidden");
+    } else {
+      onboardingNameRequirement.classList.add("hidden");
+    }
+  }
+
+  function renderOnboardingStep() {
+    [1, 2, 3, 4].forEach(function (n) {
+      document.getElementById("onboarding-step-" + n).classList.toggle("hidden", n !== onboardingStep);
+    });
+    onboardingHeading.textContent = T("onboarding.step" + onboardingStep + "Heading");
+    onboardingProgress.textContent = T("wizard.stepOf", { step: onboardingStep, total: 4 });
+
+    onboardingProgressDots.innerHTML = "";
+    for (var i = 0; i < 4; i++) {
+      var dot = document.createElement("span");
+      dot.className = "wizard-dot" + (i < onboardingStep - 1 ? " is-done" : i === onboardingStep - 1 ? " is-active" : "");
+      onboardingProgressDots.appendChild(dot);
+    }
+
+    onboardingStandardFooter.classList.toggle("hidden", onboardingStep === 4);
+    if (onboardingStep === 2) validateOnboardingNameInput();
+    else btnOnboardingGo.disabled = false;
+  }
+
+  function openOnboarding() {
+    onboardingStep = 1;
+    onboardingNameInput.value = "";
+    onboardingRatingInput.value = "";
+    onboardingNameRequirement.classList.add("hidden");
+    Array.prototype.forEach.call(onboardingPlayChoiceRadios, function (r) {
+      r.checked = r.value === "now";
+    });
+    renderOnboardingStep();
+    onboardingOverlay.classList.remove("hidden");
+  }
+
+  function closeOnboarding() {
+    onboardingOverlay.classList.add("hidden");
+    markOnboardingSeen();
+  }
+
+  // Go only ever moves forward (there's no Back on this short flow) -
+  // each step does whatever work it owns (adding the player on step 2,
+  // reading the now/later choice on step 3) before advancing.
+  function advanceOnboarding() {
+    if (onboardingStep === 1) {
+      onboardingStep = 2;
+      renderOnboardingStep();
+      onboardingNameInput.focus();
+      return;
+    }
+    if (onboardingStep === 2) {
+      var trimmed = onboardingNameInput.value.trim();
+      if (!trimmed || isDuplicatePlayerName(trimmed)) {
+        validateOnboardingNameInput();
+        return;
+      }
+      var starting = parseStartingRatingInput(onboardingRatingInput);
+      var player = addPlayer(onboardingNameInput.value, starting === null ? undefined : starting);
+      if (player) {
+        player.playing = true;
+        saveState();
+        renderAll();
+      }
+      onboardingStep = 3;
+      renderOnboardingStep();
+      return;
+    }
+    if (onboardingStep === 3) {
+      if (onboardingPlayChoice() === "later") {
+        closeOnboarding();
+        return;
+      }
+      onboardingStep = 4;
+      renderOnboardingStep();
+    }
+  }
+
   // Picks which Help section to jump to based on whichever page/overlay is
   // currently showing, so the same Help button is contextual everywhere.
   function currentHelpSectionId() {
@@ -8913,6 +9084,15 @@
   });
   btnWizardStartQuickCounter.addEventListener("click", startQuickCounter);
 
+  btnOnboardingCancel.addEventListener("click", closeOnboarding);
+  btnOnboardingGo.addEventListener("click", advanceOnboarding);
+  onboardingNameInput.addEventListener("input", validateOnboardingNameInput);
+  btnOnboardingRunWizard.addEventListener("click", function () {
+    closeOnboarding();
+    openWizard();
+  });
+  btnOnboardingManual.addEventListener("click", closeOnboarding);
+
   Array.prototype.forEach.call(wizardFormatRadios, function (radio) {
     radio.addEventListener("change", function () {
       if (!radio.checked) return;
@@ -9108,6 +9288,10 @@
   validateNewPlayerNameInput();
   validateWizardNewPlayerNameInput();
   renderAll();
+
+  if (!hasSeenOnboarding() && isFirstTimeUser()) {
+    openOnboarding();
+  }
 
   var storedFocusMode = "0";
   try {
