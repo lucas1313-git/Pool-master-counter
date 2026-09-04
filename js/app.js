@@ -1803,6 +1803,15 @@
     (memberNames || []).forEach(function (n) {
       nameEl.appendChild(buildRatingBadge(n));
       nameEl.appendChild(buildPlayerLinkIcon(n));
+      var member = state.players.filter(function (p) {
+        return p.name === n;
+      })[0];
+      if (member) {
+        var status = document.createElement("span");
+        status.className = "standings-status" + (member.playing ? " is-playing" : "");
+        status.textContent = T(member.playing ? "players.playing" : "players.standby");
+        nameEl.appendChild(status);
+      }
     });
     var countEl = document.createElement("span");
     countEl.className = "standings-count";
@@ -1823,36 +1832,47 @@
   }
 
   function renderStandings() {
-    standingsTitle.textContent = T("standings.raceToTeams", { target: state.raceToWinsTarget });
+    // The team section only makes sense in Teams mode - a player keeps
+    // their teamId after switching back to Individual (nothing clears it,
+    // since a later switch back to Teams should remember it), so without
+    // this gate teamMembersLive() would keep surfacing them under "Team
+    // A"/"Team B" even while actually playing individually.
+    var isTeamsMode = state.currentGame.mode === "teams";
+    standingsTitle.classList.toggle("hidden", !isTeamsMode);
+    teamStandingsList.classList.toggle("hidden", !isTeamsMode);
 
-    // Teams are tracked per slot ("A"/"B"), not per exact roster combo, so
-    // this always shows exactly the two live team slots - a sub joining or
-    // leaving mid-race just relabels the row, it doesn't spawn a new one.
-    var teamRows = ["A", "B"].filter(function (teamId) {
-      return (state.teamWins[teamId] || 0) > 0 || teamMembersLive(teamId).length > 0;
-    });
+    if (isTeamsMode) {
+      standingsTitle.textContent = T("standings.raceToTeams", { target: state.raceToWinsTarget });
 
-    teamStandingsList.innerHTML = "";
-    if (teamRows.length === 0) {
-      var teamHint = document.createElement("li");
-      teamHint.className = "empty-hint";
-      teamHint.textContent = T("standings.noTeamPairings");
-      teamStandingsList.appendChild(teamHint);
-    } else {
-      teamRows
-        .map(function (teamId) {
-          var namesList = teamMembersLive(teamId).map(function (p) {
-            return p.name;
+      // Teams are tracked per slot ("A"/"B"), not per exact roster combo, so
+      // this always shows exactly the two live team slots - a sub joining or
+      // leaving mid-race just relabels the row, it doesn't spawn a new one.
+      var teamRows = ["A", "B"].filter(function (teamId) {
+        return (state.teamWins[teamId] || 0) > 0 || teamMembersLive(teamId).length > 0;
+      });
+
+      teamStandingsList.innerHTML = "";
+      if (teamRows.length === 0) {
+        var teamHint = document.createElement("li");
+        teamHint.className = "empty-hint";
+        teamHint.textContent = T("standings.noTeamPairings");
+        teamStandingsList.appendChild(teamHint);
+      } else {
+        teamRows
+          .map(function (teamId) {
+            var namesList = teamMembersLive(teamId).map(function (p) {
+              return p.name;
+            });
+            var names = namesList.length ? namesList.join(" & ") : T(teamId === "A" ? "gameSetup.teamA" : "gameSetup.teamB");
+            return { teamId: teamId, names: names, namesList: namesList, wins: state.teamWins[teamId] || 0 };
+          })
+          .sort(function (a, b) {
+            return b.wins - a.wins || a.teamId.localeCompare(b.teamId);
+          })
+          .forEach(function (row) {
+            teamStandingsList.appendChild(buildStandingsRow(row.names, row.wins, row.namesList));
           });
-          var names = namesList.length ? namesList.join(" & ") : T(teamId === "A" ? "gameSetup.teamA" : "gameSetup.teamB");
-          return { teamId: teamId, names: names, namesList: namesList, wins: state.teamWins[teamId] || 0 };
-        })
-        .sort(function (a, b) {
-          return b.wins - a.wins || a.teamId.localeCompare(b.teamId);
-        })
-        .forEach(function (row) {
-          teamStandingsList.appendChild(buildStandingsRow(row.names, row.wins, row.namesList));
-        });
+      }
     }
 
     playerStandingsList.innerHTML = "";
