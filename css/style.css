@@ -337,6 +337,25 @@ body {
   padding-top: 8px;
 }
 
+/* Focus Mode is meant to be read from across the room, so the live score
+   numbers scale up - up to 3x their normal size - the moment a card has
+   the room to spare. Sized off the card's own width (container query
+   units) rather than a fixed multiplier or a player-count check, so it
+   naturally scales back down on its own once enough players are on
+   screen that each card gets narrower - no js layout math needed. */
+#app.focus-mode .player-panel,
+#app.focus-mode .member-card {
+  container-type: inline-size;
+}
+
+#app.focus-mode .stat-value {
+  font-size: clamp(3rem, 24cqw, 9rem);
+}
+
+#app.focus-mode .stat-value.small {
+  font-size: clamp(1.8rem, 14cqw, 5.4rem);
+}
+
 .no-stats-row-inline {
   display: flex;
   align-items: center;
@@ -1718,6 +1737,75 @@ input[type="number"] {
 }
 
 .rating-edit-actions .btn {
+  width: 100%;
+}
+
+/* ---------- Generic modal alert/confirm/prompt (replaces native
+   alert()/confirm()/prompt(), which pause the whole page and read as a
+   browser chrome popup rather than part of the app) ---------- */
+
+.confirm-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 1200;
+}
+
+.confirm-modal-card {
+  background: linear-gradient(180deg, var(--felt-light) 0%, var(--felt) 60%, var(--bg-glow) 100%);
+  border: 2px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 28px 24px;
+  max-width: 400px;
+  width: 100%;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  animation: milestone-pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.confirm-modal-message {
+  margin: 0 0 20px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  white-space: pre-line;
+  overflow-y: auto;
+}
+
+/* Used for long multi-line dumps (e.g. the day report clipboard-copy
+   fallback) instead of a short one-off confirmation sentence. */
+.confirm-modal-message.is-long-text {
+  text-align: left;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.confirm-modal-input-row {
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.confirm-modal-input-row input {
+  width: 100%;
+  text-align: center;
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.confirm-modal-actions {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 10px;
+}
+
+.confirm-modal-actions .btn {
   width: 100%;
 }
 

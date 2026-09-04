@@ -315,6 +315,27 @@
     return audioCtx;
   }
 
+  // iOS Safari can silently drop the very first sound of a page load if
+  // the AudioContext hasn't finished unlocking by the time a tone actually
+  // needs to play - most noticeable in games like 8-Ball, where the very
+  // first "+" tap already IS the win fanfare (target is 1 rack), so
+  // there's no earlier, lower-stakes tap that would have already unlocked
+  // it. Warm the context up (and play a silent buffer, which is what
+  // actually flips iOS's audio-unlock flag) on the very first tap
+  // anywhere on the page, well before any score button gets pressed.
+  function unlockAudioOnFirstInteraction() {
+    var unlock = function () {
+      document.removeEventListener("pointerdown", unlock);
+      var ctx = getAudioCtx();
+      var buffer = ctx.createBuffer(1, 1, 22050);
+      var source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(ctx.destination);
+      source.start(0);
+    };
+    document.addEventListener("pointerdown", unlock);
+  }
+
   // Every tone is two voices: the requested pitch/waveform, plus a quiet
   // octave-up triangle partner that decays faster — that second voice is
   // what turns a flat single-frequency beep into something with a bit of
@@ -888,7 +909,6 @@
   var btnUndoWin = document.getElementById("btn-undo-win");
   var btnShare = document.getElementById("btn-share");
   var btnExportSession = document.getElementById("btn-export-session");
-  var btnResetStats = document.getElementById("btn-reset-stats");
 
   var rotationEnabledCheckbox = document.getElementById("rotation-enabled");
   var rotationLoadSelect = document.getElementById("rotation-load-select");
@@ -954,6 +974,100 @@
   var btnResetAllRatings = document.getElementById("btn-reset-all-ratings");
   var btnResetSessionTournament = document.getElementById("btn-reset-session-tournament");
   var ratingEditTargetName = null;
+
+  var confirmModalOverlay = document.getElementById("confirm-modal-overlay");
+  var confirmModalMessage = document.getElementById("confirm-modal-message");
+  var confirmModalInputRow = document.getElementById("confirm-modal-input-row");
+  var confirmModalInput = document.getElementById("confirm-modal-input");
+  var btnConfirmModalOk = document.getElementById("btn-confirm-modal-ok");
+  var btnConfirmModalCancel = document.getElementById("btn-confirm-modal-cancel");
+
+  // ---------------------------------------------------------------------
+  // Generic modal alert/confirm/prompt - replaces native alert()/
+  // confirm()/prompt(), which freeze the whole page behind browser
+  // chrome instead of feeling like part of the app. One shared overlay,
+  // reconfigured per call; only one is ever open at a time.
+  // ---------------------------------------------------------------------
+
+  var confirmModalOnConfirm = null;
+  var confirmModalOnCancel = null;
+
+  function closeConfirmModal() {
+    confirmModalOverlay.classList.add("hidden");
+    confirmModalOnConfirm = null;
+    confirmModalOnCancel = null;
+  }
+
+  function openConfirmModal(message, showCancel, showInput, inputValue) {
+    confirmModalMessage.textContent = message;
+    confirmModalMessage.classList.toggle("is-long-text", message.length > 200 || message.indexOf("\n") !== -1);
+    confirmModalInputRow.classList.toggle("hidden", !showInput);
+    confirmModalInput.value = showInput ? inputValue || "" : "";
+    btnConfirmModalCancel.classList.toggle("hidden", !showCancel);
+    confirmModalOverlay.classList.remove("hidden");
+    if (showInput) {
+      confirmModalInput.focus();
+      confirmModalInput.select();
+    } else {
+      btnConfirmModalOk.focus();
+    }
+  }
+
+  // Replaces `alert(msg)`. onClose (optional) runs once the user
+  // dismisses it, whether via OK or the backdrop - there's no
+  // "cancelled" state for a single-button alert.
+  function alertModal(message, onClose) {
+    var cb = onClose || null;
+    confirmModalOnConfirm = cb;
+    confirmModalOnCancel = cb;
+    openConfirmModal(message, false, false);
+  }
+
+  // Replaces `if (!confirm(msg)) return; ...rest`. Move ...rest into
+  // onYes; onNo (optional) runs on Cancel/backdrop-dismiss.
+  function confirmModal(message, onYes, onNo) {
+    confirmModalOnConfirm = onYes;
+    confirmModalOnCancel = onNo || null;
+    openConfirmModal(message, true, false);
+  }
+
+  // Replaces `prompt(msg, defaultValue)`. onSubmit receives the entered
+  // string; onCancel (optional) runs on Cancel/backdrop-dismiss instead
+  // (there's no null-return case here the way native prompt() has one).
+  function promptModal(message, defaultValue, onSubmit, onCancel) {
+    confirmModalOnConfirm = function () {
+      onSubmit(confirmModalInput.value);
+    };
+    confirmModalOnCancel = onCancel || null;
+    openConfirmModal(message, true, true, defaultValue);
+  }
+
+  btnConfirmModalOk.addEventListener("click", function () {
+    var cb = confirmModalOnConfirm;
+    closeConfirmModal();
+    if (cb) cb();
+  });
+  btnConfirmModalCancel.addEventListener("click", function () {
+    var cb = confirmModalOnCancel;
+    closeConfirmModal();
+    if (cb) cb();
+  });
+  confirmModalOverlay.addEventListener("click", function (e) {
+    if (e.target !== confirmModalOverlay) return;
+    var cb = confirmModalOnCancel;
+    closeConfirmModal();
+    if (cb) cb();
+  });
+  document.addEventListener("keydown", function (e) {
+    if (confirmModalOverlay.classList.contains("hidden")) return;
+    if (e.key === "Enter") {
+      e.preventDefault();
+      btnConfirmModalOk.click();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      (btnConfirmModalCancel.classList.contains("hidden") ? btnConfirmModalOk : btnConfirmModalCancel).click();
+    }
+  });
 
   function populateGameTypeSelects() {
     [gameTypeSelect, rotationAddType, tournamentGameTypeSelect, wizardGameTypeSelect, wizardRotationAddType].forEach(function (select) {
@@ -1929,18 +2043,18 @@
   // still-open live one, so this list doesn't go back to empty every time
   // someone reaches the race target and startNewSession() clears
   // state.gameHistory for the next race.
-  function todaysHistoryGames() {
+  function recentHistoryGames() {
     return computeDayReportData(todayDateStr()).games.slice().reverse();
   }
 
   function computeHistorySummary() {
-    var n = todaysHistoryGames().length;
-    return n === 0 ? "No games played yet today." : n + " game" + (n === 1 ? "" : "s") + " played today.";
+    var n = recentHistoryGames().length;
+    return n === 0 ? "No games in the last 24 hours." : n + " game" + (n === 1 ? "" : "s") + " in the last 24 hours.";
   }
 
   function renderHistory() {
     historyList.innerHTML = "";
-    var games = todaysHistoryGames();
+    var games = recentHistoryGames();
     setPanelSummary("history-panel", computeHistorySummary());
     if (games.length === 0) {
       var hint = document.createElement("li");
@@ -2286,24 +2400,23 @@
       showToast(T("toast.noWinToUndo"));
       return;
     }
-    if (!confirm(T("confirm.undoWin", { summary: entry.summary }))) {
-      return;
-    }
-    entry.winnerIds.forEach(function (id) {
-      state.playerWins[id] = Math.max(0, (state.playerWins[id] || 0) - 1);
-    });
-    if (entry.isTeam && entry.teamId) {
-      state.teamWins[entry.teamId] = Math.max(0, (state.teamWins[entry.teamId] || 0) - 1);
-      if (entry.mvpId) {
-        state.teamMvpWins[entry.mvpId] = Math.max(0, (state.teamMvpWins[entry.mvpId] || 0) - 1);
+    confirmModal(T("confirm.undoWin", { summary: entry.summary }), function () {
+      entry.winnerIds.forEach(function (id) {
+        state.playerWins[id] = Math.max(0, (state.playerWins[id] || 0) - 1);
+      });
+      if (entry.isTeam && entry.teamId) {
+        state.teamWins[entry.teamId] = Math.max(0, (state.teamWins[entry.teamId] || 0) - 1);
+        if (entry.mvpId) {
+          state.teamMvpWins[entry.mvpId] = Math.max(0, (state.teamMvpWins[entry.mvpId] || 0) - 1);
+        }
       }
-    }
-    state.gameHistory.shift();
-    state.gamesPlayedCount = Math.max(0, state.gamesPlayedCount - 1);
-    applyRotationIfDue();
-    saveState();
-    showToast(T("toast.undidGame", { summary: entry.summary }));
-    renderAll();
+      state.gameHistory.shift();
+      state.gamesPlayedCount = Math.max(0, state.gamesPlayedCount - 1);
+      applyRotationIfDue();
+      saveState();
+      showToast(T("toast.undidGame", { summary: entry.summary }));
+      renderAll();
+    });
   }
 
   function announceOnHill(names) {
@@ -2510,45 +2623,26 @@
   }
 
   function resetCurrentGame() {
-    if (!confirm(T("confirm.resetGame"))) return;
-    resetGameBalls();
-    saveState();
-    renderAll();
-  }
-
-  // True while the in-flight reset (either the instant confirm() below or
-  // the save-session overlay's Save/Skip buttons) should also end the
-  // active tournament once it goes through - set by
-  // resetSessionAndTournament(), left false for the plain "New Game" button
-  // so that one never touches an in-progress tournament (see request: only
-  // an explicit reset or winning the tourney should end it).
-  var pendingResetEndsTournament = false;
-
-  function resetAllStats() {
-    performSessionReset(false);
+    confirmModal(T("confirm.resetGame"), function () {
+      resetGameBalls();
+      saveState();
+      renderAll();
+    });
   }
 
   function resetSessionAndTournament() {
-    performSessionReset(true);
-  }
-
-  function performSessionReset(alsoEndTournament) {
-    pendingResetEndsTournament = alsoEndTournament;
-    var warnsAboutTournament = alsoEndTournament && !!TOURNAMENT;
+    var hasTournament = !!TOURNAMENT;
     if (state.gameHistory.length === 0) {
-      var msg = warnsAboutTournament ? T("confirm.resetSessionAndTournament") : T("confirm.startNewSession");
-      if (!confirm(msg)) {
-        pendingResetEndsTournament = false;
-        return;
-      }
-      startNewSession(false);
-      if (pendingResetEndsTournament) endTournamentSilently();
-      pendingResetEndsTournament = false;
+      var msg = hasTournament ? T("confirm.resetSessionAndTournament") : T("confirm.startNewSession");
+      confirmModal(msg, function () {
+        startNewSession(false);
+        endTournamentSilently();
+      });
       return;
     }
     var count = state.gameHistory.length;
     var message = T(count === 1 ? "saveSession.messageOne" : "saveSession.messageMany", { count: count });
-    if (warnsAboutTournament) message += " " + T("confirm.alsoEndsTournamentNote");
+    if (hasTournament) message += " " + T("confirm.alsoEndsTournamentNote");
     saveSessionMessage.textContent = message;
     saveSessionOverlay.classList.remove("hidden");
   }
@@ -2561,7 +2655,6 @@
 
   function closeSaveSessionPopup() {
     saveSessionOverlay.classList.add("hidden");
-    pendingResetEndsTournament = false;
   }
 
   function startNewSession(saveRoster) {
@@ -2661,19 +2754,22 @@
     saveDayNotesToStorage(DAY_NOTES);
   }
 
-  // Every distinct game played on dateStr (deduped by timestamp across
-  // however many players' individual game lists it shows up in — live
-  // session plus any earlier session saved today) and each player's
-  // win/loss/rating tally for the day. Each game is kept from its
-  // *winning* side's perspective (result === "won") so winnerNames /
-  // opponentNames are neutral (winning side / losing side) rather than
-  // relative to whichever player happened to be iterated last. Also
-  // flagged with isLive: true when it's part of the still-open current
-  // session (state.gameHistory), false when it only exists in a session
-  // already saved earlier today — the closest the data model can get to
-  // distinguishing "earlier today" from "this session" as separate groups.
+  // Every distinct game played in the last 24 hours (deduped by timestamp
+  // across however many players' individual game lists it shows up in —
+  // live session plus any earlier session saved recently) and each
+  // player's win/loss/rating tally for that window. Deliberately a
+  // rolling 24h window rather than a UTC-calendar-day match: the latter
+  // silently drops evening games in any timezone behind UTC, since
+  // ts.slice(0, 10) would already read as "tomorrow". Each game is kept
+  // from its *winning* side's perspective (result === "won") so
+  // winnerNames / opponentNames are neutral (winning side / losing side)
+  // rather than relative to whichever player happened to be iterated
+  // last. Also flagged with isLive: true when it's part of the
+  // still-open current session (state.gameHistory), false when it only
+  // exists in a session already saved within the window.
   function computeDayReportData(dateStr) {
     var names = getAllKnownPlayerNames();
+    var cutoffTs = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     var liveTsSet = {};
     (state.gameHistory || []).forEach(function (entry) {
       if (entry && entry.ts) liveTsSet[entry.ts] = true;
@@ -2682,7 +2778,7 @@
     var players = [];
     names.forEach(function (name) {
       var games = allGamesForPlayerName(name).filter(function (g) {
-        return g.ts && g.ts.slice(0, 10) === dateStr;
+        return g.ts && g.ts >= cutoffTs;
       });
       if (!games.length) return;
       var wins = 0;
@@ -3309,13 +3405,13 @@
       editBtn.title = T("playerPage.editTranslatedName");
       editBtn.addEventListener("click", function (e) {
         e.stopPropagation();
-        var entered = prompt(T("playerPage.editTranslatedNamePrompt", { name: name }), translated || "");
-        if (entered === null) return;
-        setPlayerNameTranslation(name, activeLanguageCode, entered.trim());
-        renderAll();
-        if (typeof renderPlayerSynopsis === "function" && currentStatsPlayerName === name) {
-          openPlayerStatsPage(name, true);
-        }
+        promptModal(T("playerPage.editTranslatedNamePrompt", { name: name }), translated || "", function (entered) {
+          setPlayerNameTranslation(name, activeLanguageCode, entered.trim());
+          renderAll();
+          if (typeof renderPlayerSynopsis === "function" && currentStatsPlayerName === name) {
+            openPlayerStatsPage(name, true);
+          }
+        });
       });
       container.appendChild(editBtn);
     }
@@ -3362,19 +3458,17 @@
   // for why 400 on this 0-900 scale) - as if they were freshly added,
   // with no rating history at all.
   function resetAllPlayersOfficialRating() {
-    if (!confirm(T("confirm.resetAllRatingsExplain", { rating: DEFAULT_RATING }))) {
-      return;
-    }
-    if (!confirm(T("confirm.areYouSure"))) {
-      return;
-    }
-    state.players.forEach(function (p) {
-      var key = findRatingKey(p.name) || p.name;
-      PLAYER_RATINGS[key] = { name: key, rating: DEFAULT_RATING, gamesPlayed: 0, history: [] };
+    confirmModal(T("confirm.resetAllRatingsExplain", { rating: DEFAULT_RATING }), function () {
+      confirmModal(T("confirm.areYouSure"), function () {
+        state.players.forEach(function (p) {
+          var key = findRatingKey(p.name) || p.name;
+          PLAYER_RATINGS[key] = { name: key, rating: DEFAULT_RATING, gamesPlayed: 0, history: [] };
+        });
+        saveRatingsToStorage(PLAYER_RATINGS);
+        renderAll();
+        showToast(T("toast.allRatingsReset"));
+      });
     });
-    saveRatingsToStorage(PLAYER_RATINGS);
-    renderAll();
-    showToast(T("toast.allRatingsReset"));
   }
 
   function openRatingEditPopup(name) {
@@ -3623,18 +3717,31 @@
     savePlayerStatsToStorage(PLAYER_STATS);
   }
 
+  // Clears every player's win/game history on this device - both the
+  // archived PLAYER_STATS store and whatever's still live in the current
+  // session (state.gameHistory/playerWins/teamWins), since a player's
+  // stats page reads both together (see allGamesForPlayerName) and
+  // leaving the live half untouched made this look like it did nothing.
+  // Ratings are a separate, intentionally-preserved store - see
+  // resetAllPlayersOfficialRating for that one.
   function resetAllPlayerStats() {
-    if (!confirm(T("confirm.resetAllPlayerStats"))) {
-      return;
-    }
-    exportAllData();
-    PLAYER_STATS = {};
-    savePlayerStatsToStorage(PLAYER_STATS);
-    if (currentStatsPlayerName) {
-      currentStatsSessions = [];
-      renderPlayerHistoryList([]);
-    }
-    showToast(T("toast.playerStatsCleared"));
+    confirmModal(T("confirm.resetAllPlayerStats"), function () {
+      exportAllData();
+      PLAYER_STATS = {};
+      savePlayerStatsToStorage(PLAYER_STATS);
+      state.playerWins = {};
+      state.teamWins = {};
+      state.teamMvpWins = {};
+      state.gameHistory = [];
+      resetGameBalls();
+      saveState();
+      if (currentStatsPlayerName) {
+        currentStatsSessions = [];
+        renderPlayerHistoryList([]);
+      }
+      renderAll();
+      showToast(T("toast.playerStatsCleared"));
+    });
   }
 
   function resetAllRosterLists() {
@@ -3642,14 +3749,13 @@
       showToast(T("toast.noSavedListsToReset"));
       return;
     }
-    if (!confirm(T("confirm.resetRosterLists"))) {
-      return;
-    }
-    exportRosterLists();
-    SAVED_ROSTERS = [];
-    saveRostersToStorage(SAVED_ROSTERS);
-    populateRosterLoadSelect();
-    showToast(T("toast.rosterListsCleared"));
+    confirmModal(T("confirm.resetRosterLists"), function () {
+      exportRosterLists();
+      SAVED_ROSTERS = [];
+      saveRostersToStorage(SAVED_ROSTERS);
+      populateRosterLoadSelect();
+      showToast(T("toast.rosterListsCleared"));
+    });
   }
 
   // One-time migration: the app used to store rosters/player stats as JSON
@@ -3878,7 +3984,7 @@
       try {
         data = JSON.parse(reader.result);
       } catch (e) {
-        alert(T("alert.notValidJson"));
+        alertModal(T("alert.notValidJson"));
         return;
       }
       var rawList = Array.isArray(data)
@@ -3889,12 +3995,12 @@
         ? data.rosters
         : null;
       if (!rawList) {
-        alert(T("alert.notAPlayerListFile"));
+        alertModal(T("alert.notAPlayerListFile"));
         return;
       }
       var normalized = rawList.map(normalizeImportedRosterEntry).filter(Boolean);
       if (!normalized.length) {
-        alert(T("alert.noValidPlayerLists"));
+        alertModal(T("alert.noValidPlayerLists"));
         return;
       }
       var merge = mergeRosterLists(SAVED_ROSTERS, normalized);
@@ -3911,7 +4017,7 @@
       );
     };
     reader.onerror = function () {
-      alert(T("alert.couldNotReadFile"));
+      alertModal(T("alert.couldNotReadFile"));
     };
     reader.readAsText(file);
   }
@@ -3923,11 +4029,11 @@
       try {
         data = JSON.parse(reader.result);
       } catch (e) {
-        alert(T("alert.notValidJson"));
+        alertModal(T("alert.notValidJson"));
         return;
       }
       if (!data || typeof data !== "object" || !data.state) {
-        alert(T("alert.notABackupFile"));
+        alertModal(T("alert.notABackupFile"));
         return;
       }
 
@@ -3937,100 +4043,100 @@
       // backup's history in without double-counting anything already known.
       var localIsFresh = state.players.length === 0;
 
-      if (!confirm(T(localIsFresh ? "confirm.importBackupFresh" : "confirm.importBackupMerge"))) {
-        return;
-      }
+      confirmModal(T(localIsFresh ? "confirm.importBackupFresh" : "confirm.importBackupMerge"), function () {
+        try {
+          var importedState = data.state && typeof data.state === "object" ? data.state : defaultState();
+          var importedRosters = Array.isArray(data.rosters) ? data.rosters : [];
+          var importedPlayerStats = data.playerStats && typeof data.playerStats === "object" ? data.playerStats : {};
 
-      try {
-        var importedState = data.state && typeof data.state === "object" ? data.state : defaultState();
-        var importedRosters = Array.isArray(data.rosters) ? data.rosters : [];
-        var importedPlayerStats = data.playerStats && typeof data.playerStats === "object" ? data.playerStats : {};
+          var extraSessions = summarizeGameHistoryByPlayer(importedState.gameHistory || []);
+          var mergedPlayerStats = mergePlayerStatsData(PLAYER_STATS, importedPlayerStats, extraSessions);
+          var rosterMerge = mergeRosterLists(SAVED_ROSTERS, importedRosters);
+          var importedRatings = data.ratings && typeof data.ratings === "object" ? data.ratings : {};
+          var mergedRatings = mergeRatingsData(PLAYER_RATINGS, importedRatings);
 
-        var extraSessions = summarizeGameHistoryByPlayer(importedState.gameHistory || []);
-        var mergedPlayerStats = mergePlayerStatsData(PLAYER_STATS, importedPlayerStats, extraSessions);
-        var rosterMerge = mergeRosterLists(SAVED_ROSTERS, importedRosters);
-        var importedRatings = data.ratings && typeof data.ratings === "object" ? data.ratings : {};
-        var mergedRatings = mergeRatingsData(PLAYER_RATINGS, importedRatings);
-
-        var importedRosterPlayerNames = [];
-        importedRosters.forEach(function (r) {
-          (r.players || []).forEach(function (n) {
-            importedRosterPlayerNames.push(n);
-          });
-        });
-
-        var finalState;
-        var newPlayerCount = 0;
-        if (localIsFresh) {
-          finalState = importedState;
-          var freshKnownNames = {};
-          (finalState.players || []).forEach(function (p) {
-            freshKnownNames[normalizeNameKey(p.name)] = true;
-          });
-          importedRosterPlayerNames.forEach(function (name) {
-            if (!name || freshKnownNames[normalizeNameKey(name)]) return;
-            freshKnownNames[normalizeNameKey(name)] = true;
-            finalState.players.push({
-              id: uid(),
-              name: name,
-              voice: finalState.players.length % VOICE_PITCHES.length,
-              playing: false,
-              teamId: null,
-              balls: 0
+          var importedRosterPlayerNames = [];
+          importedRosters.forEach(function (r) {
+            (r.players || []).forEach(function (n) {
+              importedRosterPlayerNames.push(n);
             });
           });
-        } else {
-          finalState = state;
-          var knownNames = {};
+
+          var finalState;
+          var newPlayerCount = 0;
+          if (localIsFresh) {
+            finalState = importedState;
+            var freshKnownNames = {};
+            (finalState.players || []).forEach(function (p) {
+              freshKnownNames[normalizeNameKey(p.name)] = true;
+            });
+            importedRosterPlayerNames.forEach(function (name) {
+              if (!name || freshKnownNames[normalizeNameKey(name)]) return;
+              freshKnownNames[normalizeNameKey(name)] = true;
+              finalState.players.push({
+                id: uid(),
+                name: name,
+                voice: finalState.players.length % VOICE_PITCHES.length,
+                playing: false,
+                teamId: null,
+                balls: 0
+              });
+            });
+          } else {
+            finalState = state;
+            var knownNames = {};
+            finalState.players.forEach(function (p) {
+              knownNames[normalizeNameKey(p.name)] = true;
+            });
+            var candidateNames = (Array.isArray(importedState.players) ? importedState.players : [])
+              .map(function (p) {
+                return p && p.name;
+              })
+              .concat(Object.keys(importedPlayerStats))
+              .concat(Object.keys(extraSessions))
+              .concat(importedRosterPlayerNames);
+            candidateNames.forEach(function (name) {
+              if (!name || knownNames[normalizeNameKey(name)]) return;
+              knownNames[normalizeNameKey(name)] = true;
+              finalState.players.push({
+                id: uid(),
+                name: name,
+                voice: finalState.players.length % VOICE_PITCHES.length,
+                playing: false,
+                teamId: null,
+                balls: 0
+              });
+              newPlayerCount += 1;
+            });
+          }
+
+          // Capitalizes every roster name at once, covering both freshly-
+          // adopted importedState.players (never passed through addPlayer)
+          // and any newly-pushed candidates above, so an imported backup
+          // with lowercase names can't leave the roster inconsistently cased.
           finalState.players.forEach(function (p) {
-            knownNames[normalizeNameKey(p.name)] = true;
+            if (p && p.name) p.name = capitalizeName(p.name);
           });
-          var candidateNames = (Array.isArray(importedState.players) ? importedState.players : [])
-            .map(function (p) {
-              return p && p.name;
-            })
-            .concat(Object.keys(importedPlayerStats))
-            .concat(Object.keys(extraSessions))
-            .concat(importedRosterPlayerNames);
-          candidateNames.forEach(function (name) {
-            if (!name || knownNames[normalizeNameKey(name)]) return;
-            knownNames[normalizeNameKey(name)] = true;
-            finalState.players.push({
-              id: uid(),
-              name: name,
-              voice: finalState.players.length % VOICE_PITCHES.length,
-              playing: false,
-              teamId: null,
-              balls: 0
+
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(finalState));
+          localStorage.setItem(ROSTERS_KEY, JSON.stringify(rosterMerge.rosters));
+          localStorage.setItem(PLAYER_STATS_KEY, JSON.stringify(mergedPlayerStats));
+          localStorage.setItem(RATINGS_KEY, JSON.stringify(mergedRatings));
+
+          if (!localIsFresh) {
+            alertModal(T("alert.mergedImport", { players: newPlayerCount, lists: rosterMerge.added }), function () {
+              location.reload();
             });
-            newPlayerCount += 1;
-          });
+          } else {
+            location.reload();
+          }
+        } catch (e) {
+          alertModal(T("alert.couldNotImport", { message: e.message }));
         }
-
-        // Capitalizes every roster name at once, covering both freshly-
-        // adopted importedState.players (never passed through addPlayer)
-        // and any newly-pushed candidates above, so an imported backup
-        // with lowercase names can't leave the roster inconsistently cased.
-        finalState.players.forEach(function (p) {
-          if (p && p.name) p.name = capitalizeName(p.name);
-        });
-
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(finalState));
-        localStorage.setItem(ROSTERS_KEY, JSON.stringify(rosterMerge.rosters));
-        localStorage.setItem(PLAYER_STATS_KEY, JSON.stringify(mergedPlayerStats));
-        localStorage.setItem(RATINGS_KEY, JSON.stringify(mergedRatings));
-
-        if (!localIsFresh) {
-          alert(T("alert.mergedImport", { players: newPlayerCount, lists: rosterMerge.added }));
-        }
-      } catch (e) {
-        alert(T("alert.couldNotImport", { message: e.message }));
-        return;
-      }
-      location.reload();
+      });
     };
     reader.onerror = function () {
-      alert(T("alert.couldNotReadFile"));
+      alertModal(T("alert.couldNotReadFile"));
     };
     reader.readAsText(file);
   }
@@ -7339,7 +7445,7 @@
   function startTournament() {
     var names = getCheckedTournamentPlayers();
     if (names.length < 2) {
-      alert(T("alert.pickAtLeast2Players"));
+      alertModal(T("alert.pickAtLeast2Players"));
       return;
     }
     var gameType = tournamentGameTypeSelect.value;
@@ -7361,12 +7467,16 @@
 
   function abandonTournament() {
     var isDone = TOURNAMENT && TOURNAMENT.champion;
-    if (!isDone && !confirm(T("confirm.abandonTournament"))) {
-      return;
+    var clear = function () {
+      TOURNAMENT = null;
+      saveTournamentToStorage(null);
+      renderTournamentPage();
+    };
+    if (isDone) {
+      clear();
+    } else {
+      confirmModal(T("confirm.abandonTournament"), clear);
     }
-    TOURNAMENT = null;
-    saveTournamentToStorage(null);
-    renderTournamentPage();
   }
 
   function tournamentMatchCard(match, activeMatchId) {
@@ -7850,13 +7960,12 @@
   function resetPlayerHistoricalStats() {
     var name = currentStatsPlayerName;
     if (!name) return;
-    if (!confirm(T("confirm.resetPlayerStats", { name: name }))) {
-      return;
-    }
-    currentStatsSessions = [];
-    setPlayerSessions(name, []);
-    renderPlayerHistoryList([]);
-    renderPlayerSynopsis();
+    confirmModal(T("confirm.resetPlayerStats", { name: name }), function () {
+      currentStatsSessions = [];
+      setPlayerSessions(name, []);
+      renderPlayerHistoryList([]);
+      renderPlayerSynopsis();
+    });
   }
 
   // ---------------------------------------------------------------------
@@ -8005,7 +8114,6 @@
     exportSession();
     exportAllPlayerStats();
   });
-  btnResetStats.addEventListener("click", resetAllStats);
 
   rotationEnabledCheckbox.addEventListener("change", function () {
     state.rotation.enabled = rotationEnabledCheckbox.checked;
@@ -8058,18 +8166,16 @@
   });
 
   btnSaveSessionSave.addEventListener("click", function () {
-    var endTournament = pendingResetEndsTournament;
     exportSession();
     exportAllPlayerStats();
     closeSaveSessionPopup();
     startNewSession(true);
-    if (endTournament) endTournamentSilently();
+    endTournamentSilently();
   });
   btnSaveSessionSkip.addEventListener("click", function () {
-    var endTournament = pendingResetEndsTournament;
     closeSaveSessionPopup();
     startNewSession(false);
-    if (endTournament) endTournamentSilently();
+    endTournamentSilently();
   });
   btnSaveSessionCancel.addEventListener("click", closeSaveSessionPopup);
   saveSessionOverlay.addEventListener("click", function (e) {
@@ -8085,6 +8191,7 @@
   btnHelpClose.addEventListener("click", closeHelp);
   document.addEventListener("click", hideGraphTooltip);
   document.addEventListener("scroll", hideGraphTooltip, true);
+  unlockAudioOnFirstInteraction();
   helpOverlay.addEventListener("click", function (e) {
     if (e.target === helpOverlay) closeHelp();
   });
@@ -8208,11 +8315,11 @@
           showToast(T("toast.dayReportCopied"));
         },
         function () {
-          alert(text);
+          alertModal(text);
         }
       );
     } else {
-      alert(text);
+      alertModal(text);
     }
   });
 
