@@ -571,23 +571,25 @@
       sub.stop(t + duration + 0.08);
     }
 
-    // The "we are the champions, my friend(s)" vocal hook, transcribed
-    // from published easy-piano letter notes (D minor: D C# D C#-A F# B F#)
-    // - a 9th note (a low D tonic) added at the end for a cadence, since
-    // the source phrase itself only runs 8. Pitched down two octaves from
-    // the sung melody for "low pitch".
+    // The "We are the champions... of the world" refrain specifically
+    // (not the shorter "my friend" line) - transcribed from published
+    // easy-piano letter notes: "We are the champions!" (G F# G F#-E) then
+    // dropping a register for "Of the world...!" (D B D). A 9th note (a
+    // low G tonic) added at the end for a full cadence, since the source
+    // phrase itself only runs 8. Pitched down an extra octave throughout
+    // for "low pitch".
     function playChampionsSong() {
-      var freqs = { D2: 73.42, Cs3: 138.59, D3: 146.83, A3: 220.0, Fs2: 92.5, B2: 123.47 };
+      var freqs = { G3: 196.0, Fs3: 185.0, E3: 164.81, D2: 73.42, B2: 123.47, G2: 98.0 };
       var run = [
-        { n: "D3", t: 0.0, d: 0.2 },
-        { n: "Cs3", t: 0.18, d: 0.2 },
-        { n: "D3", t: 0.36, d: 0.2 },
-        { n: "Cs3", t: 0.54, d: 0.16 },
-        { n: "A3", t: 0.68, d: 0.22 },
-        { n: "Fs2", t: 0.92, d: 0.26 },
-        { n: "B2", t: 1.2, d: 0.24 },
-        { n: "Fs2", t: 1.46, d: 0.26 },
-        { n: "D2", t: 1.74, d: 0.9 }
+        { n: "G3", t: 0.0, d: 0.2 },
+        { n: "Fs3", t: 0.18, d: 0.2 },
+        { n: "G3", t: 0.36, d: 0.2 },
+        { n: "Fs3", t: 0.54, d: 0.16 },
+        { n: "E3", t: 0.68, d: 0.24 },
+        { n: "D2", t: 0.94, d: 0.26 },
+        { n: "B2", t: 1.22, d: 0.24 },
+        { n: "D2", t: 1.48, d: 0.26 },
+        { n: "G2", t: 1.76, d: 0.9 }
       ];
       run.forEach(function (note) {
         anthemTone(freqs[note.n] * mult, now + note.t, note.d, 0.22);
