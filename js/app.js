@@ -107,6 +107,7 @@
       players: [],
       playerWins: {},
       teamWins: {},
+      teamMvpWins: {},
       raceToWinsTarget: 5,
       currentGame: { gameType: "8ball", target: 1, unit: "rack", mode: "individual", startedAt: new Date().toISOString() },
       gameHistory: [],
@@ -176,6 +177,7 @@
           });
           if (!parsed.playerWins) parsed.playerWins = {};
           if (!parsed.teamWins) parsed.teamWins = {};
+          if (!parsed.teamMvpWins) parsed.teamMvpWins = {};
           if (typeof parsed.raceToWinsTarget !== "number") parsed.raceToWinsTarget = 5;
           if (!parsed.currentGame) parsed.currentGame = { gameType: "8ball", target: 1, mode: "individual" };
           if (!parsed.currentGame.startedAt) parsed.currentGame.startedAt = new Date().toISOString();
@@ -259,7 +261,7 @@
         return p.name;
       })
       .join(" & ");
-    return (teamId === "A" ? "Team A" : "Team B") + (names ? " (" + names + ")" : "");
+    return T(teamId === "A" ? "gameSetup.teamA" : "gameSetup.teamB") + (names ? " (" + names + ")" : "");
   }
 
   function sumTeamBalls(teamId) {
@@ -311,6 +313,27 @@
       audioCtx.resume();
     }
     return audioCtx;
+  }
+
+  // iOS Safari can silently drop the very first sound of a page load if
+  // the AudioContext hasn't finished unlocking by the time a tone actually
+  // needs to play - most noticeable in games like 8-Ball, where the very
+  // first "+" tap already IS the win fanfare (target is 1 rack), so
+  // there's no earlier, lower-stakes tap that would have already unlocked
+  // it. Warm the context up (and play a silent buffer, which is what
+  // actually flips iOS's audio-unlock flag) on the very first tap
+  // anywhere on the page, well before any score button gets pressed.
+  function unlockAudioOnFirstInteraction() {
+    var unlock = function () {
+      document.removeEventListener("pointerdown", unlock);
+      var ctx = getAudioCtx();
+      var buffer = ctx.createBuffer(1, 1, 22050);
+      var source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(ctx.destination);
+      source.start(0);
+    };
+    document.addEventListener("pointerdown", unlock);
   }
 
   // Every tone is two voices: the requested pitch/waveform, plus a quiet
@@ -578,6 +601,173 @@
   });
 
   // ---------------------------------------------------------------------
+  // Language / i18n
+  //
+  // Every user-facing string lives in languages/<name>.json, keyed by a
+  // dotted name (e.g. "backup.exportAll"). languages/manifest.json is the
+  // list the selector reads - a plain static site can't ask the server
+  // "what files exist in this folder" over HTTP, so the manifest IS the
+  // directory listing; adding a language means adding both its JSON file
+  // and a manifest entry (see languages/README.md). English is always
+  // loaded as a fallback dictionary, so a key missing from a
+  // partially-translated language falls back to English instead of
+  // showing a raw key. Switching languages persists the choice and
+  // reloads the page - simplest way to guarantee every screen (including
+  // ones not currently visible) re-renders in the new language, and since
+  // all real app state already lives in localStorage, nothing is lost.
+  // ---------------------------------------------------------------------
+
+  var LANGUAGE_KEY = "poolMasterCounter.language.v1";
+  var DEFAULT_LANGUAGE_CODE = "english";
+  var activeLanguageCode = DEFAULT_LANGUAGE_CODE;
+  var LANG_MANIFEST = [{ code: "english", file: "english.json", label: "English", flag: "🇬🇧" }];
+  var LANG_DICT_EN = {};
+  var LANG_DICT_ACTIVE = {};
+  var missingTranslationKeysWarned = {};
+
+  var languageSelect = document.getElementById("language-select");
+
+  function loadLanguageCodeFromStorage() {
+    try {
+      return localStorage.getItem(LANGUAGE_KEY) || DEFAULT_LANGUAGE_CODE;
+    } catch (e) {
+      return DEFAULT_LANGUAGE_CODE;
+    }
+  }
+
+  function saveLanguageCodeToStorage(code) {
+    try {
+      localStorage.setItem(LANGUAGE_KEY, code);
+    } catch (e) {
+      console.warn("Could not save language.", e);
+    }
+  }
+
+  // Looks up key in the active language, falling back to English, then to
+  // the key itself (warning once, not on every call, so a genuinely
+  // missing key can't spam the console or look like a real JS error).
+  // vars supports {{name}} interpolation, e.g. T("wonGame", {name: "Bob"}).
+  function T(key, vars) {
+    var str = LANG_DICT_ACTIVE[key];
+    if (str === undefined) str = LANG_DICT_EN[key];
+    if (str === undefined) {
+      if (!missingTranslationKeysWarned[key]) {
+        missingTranslationKeysWarned[key] = true;
+        console.warn("Missing translation key:", key);
+      }
+      return key;
+    }
+    if (vars) {
+      Object.keys(vars).forEach(function (name) {
+        str = str.split("{{" + name + "}}").join(vars[name]);
+      });
+    }
+    return str;
+  }
+
+  // Translates a raw unit value ("rack"/"balls"/"points", as stored on
+  // state.currentGame/rotation entries) for display - the value itself
+  // stays an untranslated internal identifier, only the shown label
+  // changes with the active language.
+  function unitLabel(unit) {
+    if (unit === "rack") return T("units.rack");
+    if (unit === "balls") return T("units.balls");
+    if (unit === "points") return T("units.points");
+    return unit;
+  }
+
+  // Applies the active dictionary to every static data-i18n[-*] element
+  // under root - called once after boot, and whenever DOM is rebuilt by a
+  // template that predates a language switch (rare, since switching
+  // reloads the page; kept general so it also works for content injected
+  // before boot() runs, e.g. nothing today, but safe for future use).
+  function applyDomTranslations(root) {
+    root.querySelectorAll("[data-i18n]").forEach(function (el) {
+      el.textContent = T(el.getAttribute("data-i18n"));
+    });
+    root.querySelectorAll("[data-i18n-html]").forEach(function (el) {
+      el.innerHTML = T(el.getAttribute("data-i18n-html"));
+    });
+    root.querySelectorAll("[data-i18n-placeholder]").forEach(function (el) {
+      el.setAttribute("placeholder", T(el.getAttribute("data-i18n-placeholder")));
+    });
+    root.querySelectorAll("[data-i18n-aria-label]").forEach(function (el) {
+      el.setAttribute("aria-label", T(el.getAttribute("data-i18n-aria-label")));
+    });
+    root.querySelectorAll("[data-i18n-label]").forEach(function (el) {
+      el.setAttribute("label", T(el.getAttribute("data-i18n-label")));
+    });
+  }
+
+  function fetchLanguageJSON(file) {
+    return fetchFresh("languages/" + file)
+      .then(function (res) {
+        return res.ok ? res.json() : {};
+      })
+      .catch(function () {
+        return {};
+      });
+  }
+
+  function loadLanguageManifest() {
+    return fetchFresh("languages/manifest.json")
+      .then(function (res) {
+        return res.ok ? res.json() : [];
+      })
+      .catch(function () {
+        return [];
+      });
+  }
+
+  function populateLanguageSelect() {
+    languageSelect.innerHTML = "";
+    LANG_MANIFEST.forEach(function (entry) {
+      var opt = document.createElement("option");
+      opt.value = entry.code;
+      opt.textContent = entry.flag + " " + entry.label;
+      languageSelect.appendChild(opt);
+    });
+    languageSelect.value = activeLanguageCode;
+  }
+
+  // Loads the manifest, then English (always, as the fallback dict) and
+  // the active language (if different) in parallel. Resolves once both
+  // dictionaries and the selector are ready - awaited alongside
+  // gameTypesPromise/migrateFromRepoIfNeeded() below, before boot().
+  var languagePromise = loadLanguageManifest().then(function (manifest) {
+    if (Array.isArray(manifest) && manifest.length) LANG_MANIFEST = manifest;
+    activeLanguageCode = loadLanguageCodeFromStorage();
+    if (
+      !LANG_MANIFEST.some(function (e) {
+        return e.code === activeLanguageCode;
+      })
+    ) {
+      activeLanguageCode = DEFAULT_LANGUAGE_CODE;
+    }
+    var englishEntry =
+      LANG_MANIFEST.filter(function (e) {
+        return e.code === DEFAULT_LANGUAGE_CODE;
+      })[0] || { file: "english.json" };
+    var activeEntry =
+      LANG_MANIFEST.filter(function (e) {
+        return e.code === activeLanguageCode;
+      })[0] || englishEntry;
+    return Promise.all([
+      fetchLanguageJSON(englishEntry.file),
+      activeLanguageCode === DEFAULT_LANGUAGE_CODE ? Promise.resolve(null) : fetchLanguageJSON(activeEntry.file)
+    ]).then(function (dicts) {
+      LANG_DICT_EN = dicts[0] || {};
+      LANG_DICT_ACTIVE = dicts[1] || LANG_DICT_EN;
+      populateLanguageSelect();
+    });
+  });
+
+  languageSelect.addEventListener("change", function () {
+    saveLanguageCodeToStorage(languageSelect.value);
+    location.reload();
+  });
+
+  // ---------------------------------------------------------------------
   // DOM refs
   // ---------------------------------------------------------------------
 
@@ -657,6 +847,7 @@
   var appRoot = document.getElementById("app");
   var playerPageView = document.getElementById("view-player-page");
   var playerPageName = document.getElementById("player-page-name");
+  var playerPageAdded = document.getElementById("player-page-added");
   var playerPageCurrentBody = document.getElementById("player-page-current-body");
   var playerPageHistoryList = document.getElementById("player-page-history-list");
   var btnPlayerPageBack = document.getElementById("btn-player-page-back");
@@ -718,7 +909,6 @@
   var btnUndoWin = document.getElementById("btn-undo-win");
   var btnShare = document.getElementById("btn-share");
   var btnExportSession = document.getElementById("btn-export-session");
-  var btnResetStats = document.getElementById("btn-reset-stats");
 
   var rotationEnabledCheckbox = document.getElementById("rotation-enabled");
   var rotationLoadSelect = document.getElementById("rotation-load-select");
@@ -730,6 +920,11 @@
   var rotationList = document.getElementById("rotation-list");
   var rotationEveryInput = document.getElementById("rotation-every");
   var rotationStatus = document.getElementById("rotation-status");
+  var rotationPositionRow = document.getElementById("rotation-position-row");
+  var rotationPositionTrack = document.getElementById("rotation-position-track");
+  var rotationPositionText = document.getElementById("rotation-position-text");
+  var btnRotationPositionPrev = document.getElementById("btn-rotation-position-prev");
+  var btnRotationPositionNext = document.getElementById("btn-rotation-position-next");
 
   var winToast = document.getElementById("win-toast");
   var scoreboard = document.getElementById("scoreboard");
@@ -748,6 +943,19 @@
   var milestoneDetails = document.getElementById("milestone-details");
   var btnMilestoneClose = document.getElementById("btn-milestone-close");
 
+  var gamewinOverlay = document.getElementById("gamewin-overlay");
+  var gamewinMessage = document.getElementById("gamewin-message");
+  var gamewinDetails = document.getElementById("gamewin-details");
+  var btnGamewinClose = document.getElementById("btn-gamewin-close");
+
+  // Optional "balls left on the table" marker for whichever game the
+  // gamewin overlay is currently showing — unset (null) unless the +/-
+  // counter is used. Tracks which game record to patch once the dialog
+  // closes (see showGameWinOverlay/closeGameWinOverlay below).
+  var gamewinBallsLeftValue = null;
+  var gamewinPendingTs = null;
+  var gamewinPendingOnClose = null;
+
   var onHillOverlay = document.getElementById("onhill-overlay");
   var onHillMessage = document.getElementById("onhill-message");
   var btnOnHillClose = document.getElementById("btn-onhill-close");
@@ -762,6 +970,109 @@
   var btnSaveSessionSave = document.getElementById("btn-save-session-save");
   var btnSaveSessionSkip = document.getElementById("btn-save-session-skip");
   var btnSaveSessionCancel = document.getElementById("btn-save-session-cancel");
+
+  var ratingEditOverlay = document.getElementById("rating-edit-overlay");
+  var ratingEditPlayerName = document.getElementById("rating-edit-player-name");
+  var ratingEditInput = document.getElementById("rating-edit-input");
+  var btnRatingEditSave = document.getElementById("btn-rating-edit-save");
+  var btnRatingEditCancel = document.getElementById("btn-rating-edit-cancel");
+  var btnResetAllRatings = document.getElementById("btn-reset-all-ratings");
+  var btnResetSessionTournament = document.getElementById("btn-reset-session-tournament");
+  var ratingEditTargetName = null;
+
+  var confirmModalOverlay = document.getElementById("confirm-modal-overlay");
+  var confirmModalMessage = document.getElementById("confirm-modal-message");
+  var confirmModalInputRow = document.getElementById("confirm-modal-input-row");
+  var confirmModalInput = document.getElementById("confirm-modal-input");
+  var btnConfirmModalOk = document.getElementById("btn-confirm-modal-ok");
+  var btnConfirmModalCancel = document.getElementById("btn-confirm-modal-cancel");
+
+  // ---------------------------------------------------------------------
+  // Generic modal alert/confirm/prompt - replaces native alert()/
+  // confirm()/prompt(), which freeze the whole page behind browser
+  // chrome instead of feeling like part of the app. One shared overlay,
+  // reconfigured per call; only one is ever open at a time.
+  // ---------------------------------------------------------------------
+
+  var confirmModalOnConfirm = null;
+  var confirmModalOnCancel = null;
+
+  function closeConfirmModal() {
+    confirmModalOverlay.classList.add("hidden");
+    confirmModalOnConfirm = null;
+    confirmModalOnCancel = null;
+  }
+
+  function openConfirmModal(message, showCancel, showInput, inputValue) {
+    confirmModalMessage.textContent = message;
+    confirmModalMessage.classList.toggle("is-long-text", message.length > 200 || message.indexOf("\n") !== -1);
+    confirmModalInputRow.classList.toggle("hidden", !showInput);
+    confirmModalInput.value = showInput ? inputValue || "" : "";
+    btnConfirmModalCancel.classList.toggle("hidden", !showCancel);
+    confirmModalOverlay.classList.remove("hidden");
+    if (showInput) {
+      confirmModalInput.focus();
+      confirmModalInput.select();
+    } else {
+      btnConfirmModalOk.focus();
+    }
+  }
+
+  // Replaces `alert(msg)`. onClose (optional) runs once the user
+  // dismisses it, whether via OK or the backdrop - there's no
+  // "cancelled" state for a single-button alert.
+  function alertModal(message, onClose) {
+    var cb = onClose || null;
+    confirmModalOnConfirm = cb;
+    confirmModalOnCancel = cb;
+    openConfirmModal(message, false, false);
+  }
+
+  // Replaces `if (!confirm(msg)) return; ...rest`. Move ...rest into
+  // onYes; onNo (optional) runs on Cancel/backdrop-dismiss.
+  function confirmModal(message, onYes, onNo) {
+    confirmModalOnConfirm = onYes;
+    confirmModalOnCancel = onNo || null;
+    openConfirmModal(message, true, false);
+  }
+
+  // Replaces `prompt(msg, defaultValue)`. onSubmit receives the entered
+  // string; onCancel (optional) runs on Cancel/backdrop-dismiss instead
+  // (there's no null-return case here the way native prompt() has one).
+  function promptModal(message, defaultValue, onSubmit, onCancel) {
+    confirmModalOnConfirm = function () {
+      onSubmit(confirmModalInput.value);
+    };
+    confirmModalOnCancel = onCancel || null;
+    openConfirmModal(message, true, true, defaultValue);
+  }
+
+  btnConfirmModalOk.addEventListener("click", function () {
+    var cb = confirmModalOnConfirm;
+    closeConfirmModal();
+    if (cb) cb();
+  });
+  btnConfirmModalCancel.addEventListener("click", function () {
+    var cb = confirmModalOnCancel;
+    closeConfirmModal();
+    if (cb) cb();
+  });
+  confirmModalOverlay.addEventListener("click", function (e) {
+    if (e.target !== confirmModalOverlay) return;
+    var cb = confirmModalOnCancel;
+    closeConfirmModal();
+    if (cb) cb();
+  });
+  document.addEventListener("keydown", function (e) {
+    if (confirmModalOverlay.classList.contains("hidden")) return;
+    if (e.key === "Enter") {
+      e.preventDefault();
+      btnConfirmModalOk.click();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      (btnConfirmModalCancel.classList.contains("hidden") ? btnConfirmModalOk : btnConfirmModalCancel).click();
+    }
+  });
 
   function populateGameTypeSelects() {
     [gameTypeSelect, rotationAddType, tournamentGameTypeSelect, wizardGameTypeSelect, wizardRotationAddType].forEach(function (select) {
@@ -783,7 +1094,7 @@
 
   function setFocusMode(on) {
     appRoot.classList.toggle("focus-mode", on);
-    btnToggleFocus.textContent = on ? "Show All" : "Focus Mode";
+    btnToggleFocus.textContent = T(on ? "scoreboard.showAll" : "scoreboard.focusMode");
     try {
       localStorage.setItem(FOCUS_MODE_KEY, on ? "1" : "0");
     } catch (e) {
@@ -812,8 +1123,8 @@
   function rotationEntryLabel(entry) {
     var type = GAME_TYPES[entry.gameType];
     var label = type ? type.label : entry.gameType;
-    var unit = entry.unit || (type ? type.unit : "rack");
-    if (unit === "rack" && entry.target !== 1) unit = "racks";
+    var rawUnit = entry.unit || (type ? type.unit : "rack");
+    var unit = rawUnit === "rack" && entry.target !== 1 ? T("units.racks") : unitLabel(rawUnit);
     return label + " — " + entry.target + " " + unit;
   }
 
@@ -945,7 +1256,7 @@
     if (state.rotation.order.length === 0) {
       var hint = document.createElement("li");
       hint.className = "empty-hint";
-      hint.textContent = "No game types added yet.";
+      hint.textContent = T("rotation.noGameTypesYet");
       listEl.appendChild(hint);
       return;
     }
@@ -964,21 +1275,24 @@
     var info = rotationStatusInfo();
     if (info) {
       rotationStatus.innerHTML = "";
-      rotationStatus.appendChild(document.createTextNode("Now: "));
+      rotationStatus.appendChild(document.createTextNode(T("rotation.statusNowLabel")));
       var nowStrong = document.createElement("strong");
       nowStrong.textContent = info.currentLabel;
       rotationStatus.appendChild(nowStrong);
       rotationStatus.appendChild(
         document.createTextNode(
-          " — switches to " + info.nextLabel + " in " + info.untilSwitch + " game" + (info.untilSwitch === 1 ? "" : "s") + "."
+          T(info.untilSwitch === 1 ? "rotation.statusSwitchesInOne" : "rotation.statusSwitchesInMany", {
+            next: info.nextLabel,
+            count: info.untilSwitch
+          })
         )
       );
     } else if (state.rotation.enabled && state.rotation.order.length === 1) {
       rotationStatus.classList.add("is-warning");
-      rotationStatus.textContent = "⚠️ Only one game type in the order — add at least one more or nothing will switch.";
+      rotationStatus.textContent = T("rotation.warningOneType");
     } else if (state.rotation.enabled) {
       rotationStatus.classList.add("is-warning");
-      rotationStatus.textContent = "⚠️ Rotation is on but empty — add game types above for it to take effect.";
+      rotationStatus.textContent = T("rotation.warningEmpty");
     } else {
       rotationStatus.textContent = "";
     }
@@ -989,13 +1303,15 @@
   function computeRotationSummary() {
     if (!state.rotation.enabled) {
       var currentType = GAME_TYPES[state.currentGame.gameType];
-      return "Rotation off — playing " + (currentType ? currentType.label : state.currentGame.gameType) + " only.";
+      return T("rotation.summaryOff", { game: currentType ? currentType.label : state.currentGame.gameType });
     }
     if (state.rotation.order.length < 2) {
-      return "Rotation on, but not set up yet — add at least two game types.";
+      return T("rotation.summaryNotSetUp");
     }
-    return "Rotating " + rotationLabelFor(state.rotation.order) +
-      ", switching every " + state.rotation.every + " game" + (state.rotation.every === 1 ? "" : "s") + ".";
+    return T(state.rotation.every === 1 ? "rotation.summaryRotatingOne" : "rotation.summaryRotatingMany", {
+      label: rotationLabelFor(state.rotation.order),
+      count: state.rotation.every
+    });
   }
 
   function addRotationItem(gameType, target, unit) {
@@ -1063,12 +1379,33 @@
 
   function updateCurrentGameSummary() {
     var type = GAME_TYPES[state.currentGame.gameType];
-    var modeLabel = state.currentGame.mode === "teams" ? "Teams" : "Individual";
+    var modeLabel = state.currentGame.mode === "teams" ? T("gameSetup.teams") : T("gameSetup.individual");
     setPanelSummary(
       "game-setup-panel",
-      (type ? type.label : state.currentGame.gameType) + " (" + state.currentGame.target + " " + state.currentGame.unit + ") · " +
-        modeLabel + " · Race to " + state.raceToWinsTarget + " wins"
+      T("gameSetup.summaryLine", {
+        game: type ? type.label : state.currentGame.gameType,
+        target: state.currentGame.target,
+        unit: unitLabel(state.currentGame.unit),
+        mode: modeLabel,
+        raceTo: state.raceToWinsTarget
+      })
     );
+  }
+
+  // The rotation's current step is purely a function of how many games
+  // have been played: floor(gamesPlayedCount / every), wrapped to the
+  // order's length. moveRotationPosition (the ◀/▶ control) hand-drives
+  // that same counter one game at a time - it doesn't jump straight to
+  // a different game type, it just ticks gamesPlayedCount by ±1, same
+  // as a real win/undo would, and lets this formula do what it already
+  // does. So within a leg, a click or two just moves the countdown
+  // toward the next switch; only crossing an `every` boundary actually
+  // changes the active game type.
+  function rotationCurrentIndex() {
+    var len = state.rotation.order.length;
+    if (len === 0) return 0;
+    var every = Math.max(1, state.rotation.every || 1);
+    return Math.floor(state.gamesPlayedCount / every) % len;
   }
 
   function rotationStatusInfo() {
@@ -1076,26 +1413,41 @@
     var every = Math.max(1, state.rotation.every || 1);
     var playedInLeg = state.gamesPlayedCount % every;
     var untilSwitch = every - playedInLeg;
-    var currentIndex = Math.floor(state.gamesPlayedCount / every) % state.rotation.order.length;
+    var currentIndex = rotationCurrentIndex();
     var nextIndex = (currentIndex + 1) % state.rotation.order.length;
     return {
       currentLabel: rotationEntryLabel(state.rotation.order[currentIndex]),
       nextLabel: rotationEntryLabel(state.rotation.order[nextIndex]),
+      playedInLeg: playedInLeg,
+      every: every,
       untilSwitch: untilSwitch
     };
   }
 
   function applyRotationIfDue() {
     if (!state.rotation.enabled || state.rotation.order.length === 0) return;
-    var every = Math.max(1, state.rotation.every || 1);
-    var index = Math.floor(state.gamesPlayedCount / every) % state.rotation.order.length;
-    var entry = state.rotation.order[index];
+    var entry = state.rotation.order[rotationCurrentIndex()];
     if (GAME_TYPES[entry.gameType] && (entry.gameType !== state.currentGame.gameType || entry.target !== state.currentGame.target || entry.unit !== state.currentGame.unit)) {
       state.currentGame.gameType = entry.gameType;
       state.currentGame.target = entry.target;
       state.currentGame.unit = entry.unit;
       syncGameTypeUI();
     }
+  }
+
+  // The ◀/▶ control: hand-drives gamesPlayedCount by ±1, exactly as if
+  // one more (or one fewer) game had been played toward the rotation's
+  // switch-every countdown - no win/loss is credited to anyone, no
+  // score changes, only the rotation's own counter moves. Reuses
+  // applyRotationIfDue so a click that crosses an `every` boundary
+  // switches the active game type immediately, same as a real win
+  // would.
+  function moveRotationPosition(direction) {
+    if (!state.rotation.enabled || state.rotation.order.length < 2) return;
+    state.gamesPlayedCount = Math.max(0, state.gamesPlayedCount + direction);
+    applyRotationIfDue();
+    saveState();
+    renderAll();
   }
 
   function buildStandingsRow(name, wins, memberNames) {
@@ -1132,31 +1484,32 @@
   }
 
   function renderStandings() {
-    standingsTitle.textContent = "Race to " + state.raceToWinsTarget + " Wins — Teams";
+    standingsTitle.textContent = T("standings.raceToTeams", { target: state.raceToWinsTarget });
 
-    var comboKeys = Object.keys(state.teamWins);
-    ["A", "B"].forEach(function (teamId) {
-      var key = teamComboKey(teamId);
-      if (key && comboKeys.indexOf(key) === -1) comboKeys.push(key);
+    // Teams are tracked per slot ("A"/"B"), not per exact roster combo, so
+    // this always shows exactly the two live team slots - a sub joining or
+    // leaving mid-race just relabels the row, it doesn't spawn a new one.
+    var teamRows = ["A", "B"].filter(function (teamId) {
+      return (state.teamWins[teamId] || 0) > 0 || teamMembersLive(teamId).length > 0;
     });
 
     teamStandingsList.innerHTML = "";
-    if (comboKeys.length === 0) {
+    if (teamRows.length === 0) {
       var teamHint = document.createElement("li");
       teamHint.className = "empty-hint";
-      teamHint.textContent = "No team pairings yet — switch to Teams mode and assign players.";
+      teamHint.textContent = T("standings.noTeamPairings");
       teamStandingsList.appendChild(teamHint);
     } else {
-      comboKeys
-        .map(function (key) {
-          var namesList = key.split("|").map(function (id) {
-            var p = getPlayer(id);
-            return p ? p.name : "?";
+      teamRows
+        .map(function (teamId) {
+          var namesList = teamMembersLive(teamId).map(function (p) {
+            return p.name;
           });
-          return { key: key, names: namesList.join(" & "), namesList: namesList, wins: state.teamWins[key] || 0 };
+          var names = namesList.length ? namesList.join(" & ") : T(teamId === "A" ? "gameSetup.teamA" : "gameSetup.teamB");
+          return { teamId: teamId, names: names, namesList: namesList, wins: state.teamWins[teamId] || 0 };
         })
         .sort(function (a, b) {
-          return b.wins - a.wins || a.names.localeCompare(b.names);
+          return b.wins - a.wins || a.teamId.localeCompare(b.teamId);
         })
         .forEach(function (row) {
           teamStandingsList.appendChild(buildStandingsRow(row.names, row.wins, row.namesList));
@@ -1167,7 +1520,7 @@
     if (state.players.length === 0) {
       var playerHint = document.createElement("li");
       playerHint.className = "empty-hint";
-      playerHint.textContent = "No players yet.";
+      playerHint.textContent = T("standings.noPlayersYet");
       playerStandingsList.appendChild(playerHint);
     } else {
       state.players
@@ -1184,19 +1537,22 @@
   }
 
   function computeStandingsSummary() {
-    if (state.players.length === 0) return "No players yet.";
+    if (state.players.length === 0) return T("standings.noPlayersYet");
     var sorted = state.players.slice().sort(function (a, b) {
       return (state.playerWins[b.id] || 0) - (state.playerWins[a.id] || 0) || a.name.localeCompare(b.name);
     });
     var leader = sorted[0];
     var leaderWins = state.playerWins[leader.id] || 0;
-    if (leaderWins === 0) return "No games won yet this session.";
-    return leader.name + " leads with " + leaderWins + " win" + (leaderWins === 1 ? "" : "s") +
-      " (race to " + state.raceToWinsTarget + ").";
+    if (leaderWins === 0) return T("standings.noGamesWonYet");
+    return T(leaderWins === 1 ? "standings.leaderSummaryOne" : "standings.leaderSummaryMany", {
+      name: leader.name,
+      wins: leaderWins,
+      target: state.raceToWinsTarget
+    });
   }
 
   function computePlayersSummary() {
-    if (state.players.length === 0) return "No players yet — add some below.";
+    if (state.players.length === 0) return T("players.noPlayersYetSummary");
     var playingCount = state.players.filter(function (p) {
       return p.playing;
     }).length;
@@ -1205,8 +1561,60 @@
         return p.name;
       })
       .join(", ");
-    return state.players.length + " player" + (state.players.length === 1 ? "" : "s") +
-      " (" + playingCount + " playing): " + names;
+    return T(state.players.length === 1 ? "players.summaryOne" : "players.summaryMany", {
+      count: state.players.length,
+      playing: playingCount,
+      names: names
+    });
+  }
+
+  // Above ~20 games per leg, individual nodes stop being useful (too
+  // cramped to read) - the track falls back to a plain proportional fill
+  // instead of one node per game.
+  var ROTATION_TRACK_MAX_NODES = 20;
+
+  // A little dot-and-line track between the ◀/▶ buttons: one node per
+  // game in the current leg, with the game just played (playedInLeg)
+  // shown as a bigger, accent-colored node so a glance shows exactly
+  // where the countdown to the next switch stands.
+  function renderRotationPositionTrack(info) {
+    rotationPositionTrack.innerHTML = "";
+    if (info.every > ROTATION_TRACK_MAX_NODES) {
+      var fill = document.createElement("div");
+      fill.className = "rotation-position-fill-track";
+      var bar = document.createElement("div");
+      bar.className = "rotation-position-fill-bar";
+      bar.style.width = (info.playedInLeg / info.every) * 100 + "%";
+      fill.appendChild(bar);
+      rotationPositionTrack.appendChild(fill);
+      return;
+    }
+    for (var i = 0; i < info.every; i++) {
+      if (i > 0) {
+        var connector = document.createElement("span");
+        connector.className = "rotation-position-connector";
+        rotationPositionTrack.appendChild(connector);
+      }
+      var node = document.createElement("span");
+      node.className = "rotation-position-node" + (i === info.playedInLeg ? " is-current" : "");
+      rotationPositionTrack.appendChild(node);
+    }
+  }
+
+  // Shows the current rotation step (with ◀/▶ hand-correction buttons)
+  // right under the "Now Playing" banner - see moveRotationPosition.
+  // Hidden whenever rotation isn't actually running (off, or fewer
+  // than 2 game types to rotate through).
+  function renderRotationPositionControl() {
+    var info = rotationStatusInfo();
+    rotationPositionRow.classList.toggle("hidden", !info);
+    if (!info) return;
+    renderRotationPositionTrack(info);
+    rotationPositionText.textContent = T("players.rotationPosition", {
+      label: info.currentLabel,
+      played: info.playedInLeg,
+      every: info.every
+    });
   }
 
   function renderRoster() {
@@ -1214,11 +1622,11 @@
     if (state.players.length === 0) {
       var hint = document.createElement("li");
       hint.className = "empty-hint";
-      hint.textContent = "Add players to get started.";
+      hint.textContent = T("players.addToGetStarted");
       rosterList.appendChild(hint);
       setPanelSummary("players-panel", computePlayersSummary());
-      renderPlayingToggleListInto(focusPlayersList, "No players yet — add some in the Players panel.");
-      focusPlayersSummary.textContent = "Players";
+      renderPlayingToggleListInto(focusPlayersList, T("players.noPlayersYetPanel"));
+      focusPlayersSummary.textContent = T("players.heading");
       return;
     }
     var showTeamToggle = state.currentGame.mode === "teams";
@@ -1229,14 +1637,24 @@
 
       var name = document.createElement("span");
       name.className = "roster-name";
-      name.textContent = p.name;
+      buildPlayerNameLabel(name, p.name, false);
       row.appendChild(name);
       row.appendChild(buildRatingBadge(p.name));
+
+      var editRatingBtn = document.createElement("button");
+      editRatingBtn.type = "button";
+      editRatingBtn.className = "roster-edit-rating-btn";
+      editRatingBtn.setAttribute("aria-label", T("common.editRatingFor", { name: p.name }));
+      editRatingBtn.textContent = "✏️";
+      editRatingBtn.addEventListener("click", function () {
+        openRatingEditPopup(p.name);
+      });
+      row.appendChild(editRatingBtn);
 
       var playBtn = document.createElement("button");
       playBtn.type = "button";
       playBtn.className = "btn-playing" + (p.playing ? " is-on" : "");
-      playBtn.textContent = p.playing ? "Playing" : "Standby";
+      playBtn.textContent = T(p.playing ? "players.playing" : "players.standby");
       playBtn.addEventListener("click", function () {
         togglePlaying(p.id);
       });
@@ -1282,11 +1700,18 @@
     });
 
     setPanelSummary("players-panel", computePlayersSummary());
-    renderPlayingToggleListInto(focusPlayersList, "No players yet — add some in the Players panel.");
+    renderPlayingToggleListInto(focusPlayersList, T("players.noPlayersYetPanel"));
     var playingCount = state.players.filter(function (p) {
       return p.playing;
     }).length;
-    focusPlayersSummary.textContent = playingCount + " of " + state.players.length + " playing";
+    focusPlayersSummary.textContent = T("players.playingOfTotal", { playing: playingCount, total: state.players.length });
+  }
+
+  function buildFlagSpan() {
+    var flag = document.createElement("span");
+    flag.className = "flag";
+    flag.textContent = "🏁";
+    return flag;
   }
 
   function buildStatMini(label, value, milestoneReached, extraClass) {
@@ -1296,12 +1721,7 @@
     strong.textContent = value;
     el.appendChild(document.createTextNode(label + ": "));
     el.appendChild(strong);
-    if (milestoneReached) {
-      var flag = document.createElement("span");
-      flag.className = "flag";
-      flag.textContent = "🏁";
-      el.appendChild(flag);
-    }
+    if (milestoneReached) el.appendChild(buildFlagSpan());
     return el;
   }
 
@@ -1347,7 +1767,7 @@
       return;
     }
     if (normalizeNameKey(resolved) !== normalizeNameKey(player.name) && isDuplicatePlayerName(resolved)) {
-      showToast("\"" + resolved + "\" is already in your roster.");
+      showToast(T("toast.alreadyInRoster", { name: resolved }));
       renderAll();
       return;
     }
@@ -1418,13 +1838,13 @@
     var input = document.createElement("input");
     input.type = "text";
     input.className = "quick-counter-add-input";
-    input.placeholder = "Add player name";
+    input.placeholder = T("players.namePlaceholder");
     input.autocomplete = "off";
 
     var btn = document.createElement("button");
     btn.type = "button";
     btn.className = "btn btn-primary quick-counter-add-btn";
-    btn.textContent = "+ Add Player";
+    btn.textContent = T("players.addPlayerBtn");
 
     function submit() {
       var name = input.value.trim();
@@ -1439,7 +1859,7 @@
       })[0];
       if (existing) {
         if (existing.playing) {
-          showToast("\"" + existing.name + "\" is already in your roster.");
+          showToast(T("toast.alreadyInRoster", { name: existing.name }));
           return;
         }
         existing.playing = true;
@@ -1483,12 +1903,12 @@
     var btn = document.createElement("button");
     btn.type = "button";
     btn.className = "btn btn-ghost quick-counter-load-btn";
-    btn.textContent = "📋 Load Player List";
+    btn.textContent = T("players.loadPlayerListBtn");
 
     if (SAVED_ROSTERS.length === 0) {
       var opt = document.createElement("option");
       opt.value = "";
-      opt.textContent = "No saved lists yet";
+      opt.textContent = T("players.noSavedListsYet");
       select.appendChild(opt);
       select.disabled = true;
       btn.disabled = true;
@@ -1507,7 +1927,7 @@
     var resetBtn = document.createElement("button");
     resetBtn.type = "button";
     resetBtn.className = "btn btn-ghost quick-counter-reset-btn";
-    resetBtn.textContent = "↺ Reset All to 0";
+    resetBtn.textContent = T("players.resetAllToZero");
     resetBtn.addEventListener("click", function () {
       resetGameBalls();
       saveState();
@@ -1526,22 +1946,40 @@
 
     var name = document.createElement("div");
     name.className = "player-name";
-    name.textContent = player.name;
+    buildPlayerNameLabel(name, player.name, false);
     name.appendChild(buildRatingBadge(player.name));
     name.appendChild(buildPlayerLinkIcon(player.name));
     panel.appendChild(name);
 
     var wins = state.playerWins[player.id] || 0;
-    panel.appendChild(buildStatMini("Tourney win", wins, wins >= state.raceToWinsTarget, "stat-mini-tourney"));
+
+    // A single-rack game (the common case - standard 8-Ball etc.) has no
+    // meaningful "current rack progress" number to show (it's just 0
+    // until the rack is won, then resets) - show the session win count
+    // big and prominent instead. Anything else (multiple racks to win
+    // one game, or a balls/points game) still shows the ball/point
+    // count toward this game's target, with the win count as a small
+    // badge above it.
+    var isSingleRackGame = state.currentGame.unit === "rack" && state.currentGame.target === 1;
+
+    if (!isSingleRackGame) {
+      panel.appendChild(buildStatMini(T("scoreboard.tourneyWin"), wins, wins >= state.raceToWinsTarget, "stat-mini-tourney"));
+    }
 
     var block = document.createElement("div");
     block.className = "stat-block";
     var label = document.createElement("div");
     label.className = "stat-label";
-    label.textContent = GAME_TYPES[state.currentGame.gameType].label + " · Target " + state.currentGame.target;
     var value = document.createElement("div");
     value.className = "stat-value";
-    value.textContent = player.balls || 0;
+    if (isSingleRackGame) {
+      label.textContent = T("scoreboard.tourneyWin");
+      value.textContent = wins;
+      if (wins >= state.raceToWinsTarget) value.appendChild(buildFlagSpan());
+    } else {
+      label.textContent = T("scoreboard.gameTargetLabel", { game: GAME_TYPES[state.currentGame.gameType].label, target: state.currentGame.target });
+      value.textContent = player.balls || 0;
+    }
     block.appendChild(label);
     block.appendChild(value);
     panel.appendChild(block);
@@ -1557,12 +1995,15 @@
 
     var name = document.createElement("div");
     name.className = "member-name";
-    name.textContent = player.name;
+    buildPlayerNameLabel(name, player.name, false);
     name.appendChild(buildPlayerLinkIcon(player.name));
     card.appendChild(name);
 
-    var wins = state.playerWins[player.id] || 0;
-    card.appendChild(buildStatMini("Tourney win", wins, wins >= state.raceToWinsTarget, "stat-mini-tourney"));
+    // Not the team's win count (that's the team panel's own badge) - this
+    // tracks how many times THIS member specifically potted the winning
+    // ball for the team (see the mvp selection in creditWin).
+    var mvpWins = state.teamMvpWins[player.id] || 0;
+    card.appendChild(buildStatMini(T("scoreboard.tourneyWin"), mvpWins, mvpWins >= state.raceToWinsTarget, "stat-mini-tourney"));
 
     var value = document.createElement("div");
     value.className = "stat-value small";
@@ -1583,17 +2024,33 @@
     name.textContent = teamLabelLive(teamId);
     panel.appendChild(name);
 
-    var wins = state.teamWins[teamComboKey(teamId)] || 0;
-    panel.appendChild(buildStatMini("Paired session win", wins, wins >= state.raceToWinsTarget));
+    var wins = state.teamWins[teamId] || 0;
+
+    // A single-rack game (the common case - standard 8-Ball etc.) has no
+    // meaningful "current rack progress" number to show (it's just 0 until
+    // the rack is won, then resets) - show the session win count big and
+    // prominent instead. Anything else (multiple racks to win one game, or
+    // a balls/points game) still shows the team's current-game total.
+    var isSingleRackGame = state.currentGame.unit === "rack" && state.currentGame.target === 1;
+
+    if (!isSingleRackGame) {
+      panel.appendChild(buildStatMini(T("scoreboard.pairedSessionWin"), wins, wins >= state.raceToWinsTarget));
+    }
 
     var block = document.createElement("div");
     block.className = "stat-block";
     var label = document.createElement("div");
     label.className = "stat-label";
-    label.textContent = GAME_TYPES[state.currentGame.gameType].label + " · Target " + state.currentGame.target;
     var value = document.createElement("div");
     value.className = "stat-value";
-    value.textContent = sumTeamBalls(teamId);
+    if (isSingleRackGame) {
+      label.textContent = T("scoreboard.pairedSessionWinScore");
+      value.textContent = wins;
+      if (wins >= state.raceToWinsTarget) value.appendChild(buildFlagSpan());
+    } else {
+      label.textContent = T("scoreboard.gameTargetLabel", { game: GAME_TYPES[state.currentGame.gameType].label, target: state.currentGame.target });
+      value.textContent = sumTeamBalls(teamId);
+    }
     block.appendChild(label);
     block.appendChild(value);
     panel.appendChild(block);
@@ -1611,11 +2068,24 @@
   function renderNowPlayingBanner() {
     var type = GAME_TYPES[state.currentGame.gameType];
     nowPlayingBanner.innerHTML = "";
-    nowPlayingBanner.appendChild(document.createTextNode("🎱 Now Playing: " + type.label));
+    nowPlayingBanner.appendChild(document.createTextNode(T("scoreboard.nowPlayingBanner", { label: type.label })));
     var note = document.createElement("span");
     note.className = "target-note";
-    note.textContent = "Target " + state.currentGame.target + " " + state.currentGame.unit;
+    note.textContent = T("gameSetup.targetNote", { target: state.currentGame.target, unit: state.currentGame.unit });
     nowPlayingBanner.appendChild(note);
+
+    var rotationInfo = rotationStatusInfo();
+    if (rotationInfo) {
+      var rotationNote = document.createElement("span");
+      rotationNote.className = "rotation-note";
+      rotationNote.textContent = T(rotationInfo.untilSwitch === 1 ? "rotation.statusSwitchesInOne" : "rotation.statusSwitchesInMany", {
+        next: rotationInfo.nextLabel,
+        count: rotationInfo.untilSwitch
+      });
+      nowPlayingBanner.appendChild(rotationNote);
+    }
+    renderRotationPositionControl();
+
     var duration = document.createElement("span");
     duration.className = "game-duration-live";
     duration.id = "game-duration-live";
@@ -1628,7 +2098,7 @@
     if (!el || !state.currentGame.startedAt) return;
     var startedAt = new Date(state.currentGame.startedAt).getTime();
     if (isNaN(startedAt)) return;
-    el.textContent = "⏱ Duration: " + formatDuration(Date.now() - startedAt);
+    el.textContent = T("scoreboard.durationLive", { time: formatDuration(Date.now() - startedAt) });
   }
 
   function renderScoreboard() {
@@ -1636,6 +2106,7 @@
 
     if (quickCounterMode) {
       nowPlayingBanner.innerHTML = "";
+      rotationPositionRow.classList.add("hidden");
       scoreboard.innerHTML = "";
       scoreboard.className = "scoreboard scoreboard-quick";
       var loadRow = buildQuickCounterLoadRow();
@@ -1654,7 +2125,7 @@
       scoreboard.className = "scoreboard";
       var hint = document.createElement("div");
       hint.className = "empty-hint";
-      hint.textContent = "Mark players as Playing above to start scoring.";
+      hint.textContent = T("scoreboard.markPlayingHint");
       scoreboard.appendChild(hint);
       return;
     }
@@ -1679,8 +2150,7 @@
     if (!ts || isNaN(d.getTime())) return "";
     var timePart = d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
     if (!includeDate) return timePart;
-    var datePart = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-    return datePart + " · " + timePart;
+    return formatDateISO(d) + " · " + timePart;
   }
 
   function formatDuration(ms) {
@@ -1696,23 +2166,23 @@
   // still-open live one, so this list doesn't go back to empty every time
   // someone reaches the race target and startNewSession() clears
   // state.gameHistory for the next race.
-  function todaysHistoryGames() {
+  function recentHistoryGames() {
     return computeDayReportData(todayDateStr()).games.slice().reverse();
   }
 
   function computeHistorySummary() {
-    var n = todaysHistoryGames().length;
-    return n === 0 ? "No games played yet today." : n + " game" + (n === 1 ? "" : "s") + " played today.";
+    var n = recentHistoryGames().length;
+    return n === 0 ? "No games in the last 24 hours." : n + " game" + (n === 1 ? "" : "s") + " in the last 24 hours.";
   }
 
   function renderHistory() {
     historyList.innerHTML = "";
-    var games = todaysHistoryGames();
+    var games = recentHistoryGames();
     setPanelSummary("history-panel", computeHistorySummary());
     if (games.length === 0) {
       var hint = document.createElement("li");
       hint.className = "empty-hint";
-      hint.textContent = "No games finished yet today.";
+      hint.textContent = T("history.noGamesToday");
       historyList.appendChild(hint);
       return;
     }
@@ -1727,7 +2197,7 @@
       if (durationText) {
         var durationSpan = document.createElement("span");
         durationSpan.className = "history-duration";
-        durationSpan.textContent = "Duration: " + durationText;
+        durationSpan.textContent = T("common.duration", { time: durationText });
         li.appendChild(durationSpan);
       }
       var winner = document.createElement("strong");
@@ -1746,16 +2216,15 @@
         }
       });
       li.appendChild(winner);
-      li.appendChild(document.createTextNode(" won " + entry.gameLabel + " (target " + entry.target + ")"));
+      li.appendChild(document.createTextNode(" " + T("history.wonGameTarget", { game: entry.gameLabel, target: entry.target })));
       if (entry.isTeam && entry.mvpName) {
-        li.appendChild(document.createTextNode(" · 🎯 " + entry.mvpName + " potted it"));
+        li.appendChild(document.createTextNode(" · " + T("history.pottedIt", { name: entry.mvpName })));
         li.appendChild(buildRatingBadge(entry.mvpName));
       }
       if (entry.wonRace) {
         var raceBanner = document.createElement("div");
         raceBanner.className = "history-race-banner";
-        raceBanner.textContent =
-          "🏆 " + entry.winnerNames.join(" & ") + " won the Race to " + entry.raceTarget + " session!";
+        raceBanner.textContent = T("history.wonRaceSession", { names: entry.winnerNames.join(" & "), target: entry.raceTarget });
         li.appendChild(raceBanner);
       }
       historyList.appendChild(li);
@@ -1829,7 +2298,7 @@
     btnAddPlayer.disabled = !trimmed || duplicate;
     if (duplicate) {
       newPlayerNameRequirement.textContent =
-        "\"" + capitalizeName(trimmed) + "\" is already in your roster — use a different name, or add a last name/initial.";
+        T("players.duplicateNameHint", { name: capitalizeName(trimmed) });
       newPlayerNameRequirement.classList.remove("hidden");
     } else {
       newPlayerNameRequirement.classList.add("hidden");
@@ -1853,6 +2322,7 @@
     };
     state.players.push(player);
     saveState();
+    recordPlayerAddedIfNew(name);
     if (typeof startingRating === "number" && !isNaN(startingRating) && !findRatingKey(name)) {
       var entry = ensureRatingEntry(name);
       entry.rating = startingRating;
@@ -1861,25 +2331,19 @@
     return player;
   }
 
+  // Just takes them off today's active list — their saved career stats
+  // and game history stay on this device and still show up on the All
+  // Players page, so there's nothing here worth confirming. Doesn't touch
+  // the saved player lists (see saveRosterSnapshotIfNew) - that only
+  // happens when a new game/session actually starts, not on every roster
+  // edit.
   function removePlayer(id) {
-    // No games recorded yet this session means nothing's at stake — skip
-    // the confirmation and just remove them.
-    if (
-      state.gameHistory.length > 0 &&
-      !confirm(
-        "Remove this player from the current roster? This only takes them off today's active list — " +
-        "their saved career stats and game history stay on this device and will still show up on the " +
-        "All Players page."
-      )
-    ) {
-      return;
-    }
     state.players = state.players.filter(function (p) {
       return p.id !== id;
     });
     delete state.playerWins[id];
+    delete state.teamMvpWins[id];
     saveState();
-    saveRosterSnapshotIfNew(true);
     validateNewPlayerNameInput();
     renderAll();
   }
@@ -1915,7 +2379,7 @@
     }, 4500);
   }
 
-  function creditWin(isTeam, key) {
+  function creditWin(isTeam, key, winnerVoice) {
     var typeLabel = GAME_TYPES[state.currentGame.gameType].label;
     var summary;
     var winnerNames;
@@ -1940,10 +2404,13 @@
       winnerIds = members.map(function (p) {
         return p.id;
       });
-      var comboKey = teamComboKey(key);
-      teamComboKeyValue = comboKey;
-      var newTeamWins = (state.teamWins[comboKey] || 0) + 1;
-      state.teamWins[comboKey] = newTeamWins;
+      // Tallied by team slot ("A"/"B"), not by the exact roster combo, so a
+      // sub joining/leaving mid-race (add player, standby toggle, team
+      // reassignment) doesn't fragment the running win count into a "new"
+      // pairing starting at 0 - see the session-reset bug this fixed.
+      teamComboKeyValue = teamComboKey(key);
+      var newTeamWins = (state.teamWins[key] || 0) + 1;
+      state.teamWins[key] = newTeamWins;
       members.forEach(function (p) {
         state.playerWins[p.id] = (state.playerWins[p.id] || 0) + 1;
       });
@@ -1953,6 +2420,7 @@
       if (mvp) {
         mvpId = mvp.id;
         mvpName = mvp.name;
+        state.teamMvpWins[mvp.id] = (state.teamMvpWins[mvp.id] || 0) + 1;
       }
       summary = teamLabelLive(key) + " won " + typeLabel + " (target " + state.currentGame.target + ")";
       if (target > 0 && newTeamWins % target === 0) {
@@ -1994,6 +2462,7 @@
       winnerNames: winnerNames,
       winnerIds: winnerIds,
       isTeam: isTeam,
+      teamId: isTeam ? key : null,
       teamComboKey: teamComboKeyValue,
       opponentNames: opponentNames,
       mvpId: mvpId,
@@ -2002,7 +2471,8 @@
       summary: summary,
       wonRace: !!milestoneNames,
       raceTarget: target,
-      raceCount: milestoneCount
+      raceCount: milestoneCount,
+      ballsLeftOnTable: null
     });
     if (state.gameHistory.length > 200) state.gameHistory.length = 200;
     if (!noStatsMode) {
@@ -2016,7 +2486,6 @@
       saveRatingsToStorage(PLAYER_RATINGS);
     }
     state.gamesPlayedCount += 1;
-    saveRosterSnapshotIfNew(true);
     saveRotationSnapshotIfNew(true);
     var previousGameType = state.currentGame.gameType;
     var previousTarget = state.currentGame.target;
@@ -2024,45 +2493,53 @@
     applyRotationIfDue();
     var gameTypeChanged = state.currentGame.gameType !== previousGameType ||
       state.currentGame.target !== previousTarget || state.currentGame.unit !== previousUnit;
+
+    resetGameBalls();
+    saveState();
+    playWinSound(winnerVoice);
+    renderAll();
+
     showToast(summary);
-    if (milestoneNames) {
-      celebrateTournamentWin(milestoneNames, milestoneCount);
-    } else if (onHillNames) {
-      announceOnHill(onHillNames);
-    } else if (gameTypeChanged) {
-      announceGameChange(
-        GAME_TYPES[state.currentGame.gameType].label + " (" + state.currentGame.target + " " + state.currentGame.unit + ")"
-      );
-    }
+    // The balls-left counter needs to be set (or skipped) before any of
+    // these run, since celebrateTournamentWin archives this exact game
+    // and resets the session — deferred to showGameWinOverlay's onClose.
+    showGameWinOverlay(summary, ts, function () {
+      if (milestoneNames) {
+        celebrateTournamentWin(milestoneNames, milestoneCount);
+      } else if (onHillNames) {
+        announceOnHill(onHillNames);
+      } else if (gameTypeChanged) {
+        announceGameChange(
+          GAME_TYPES[state.currentGame.gameType].label + " (" + state.currentGame.target + " " + unitLabel(state.currentGame.unit) + ")"
+        );
+      }
+    });
     return summary;
   }
 
   function undoLastWin() {
     var entry = state.gameHistory[0];
     if (!entry || typeof entry === "string" || !entry.winnerIds) {
-      showToast("No recorded win to undo.");
+      showToast(T("toast.noWinToUndo"));
       return;
     }
-    if (
-      !confirm(
-        "Undo the most recent win — " + entry.summary + "? " +
-        "This removes it from the history and reverses the win count. The current game's score isn't affected."
-      )
-    ) {
-      return;
-    }
-    entry.winnerIds.forEach(function (id) {
-      state.playerWins[id] = Math.max(0, (state.playerWins[id] || 0) - 1);
+    confirmModal(T("confirm.undoWin", { summary: entry.summary }), function () {
+      entry.winnerIds.forEach(function (id) {
+        state.playerWins[id] = Math.max(0, (state.playerWins[id] || 0) - 1);
+      });
+      if (entry.isTeam && entry.teamId) {
+        state.teamWins[entry.teamId] = Math.max(0, (state.teamWins[entry.teamId] || 0) - 1);
+        if (entry.mvpId) {
+          state.teamMvpWins[entry.mvpId] = Math.max(0, (state.teamMvpWins[entry.mvpId] || 0) - 1);
+        }
+      }
+      state.gameHistory.shift();
+      state.gamesPlayedCount = Math.max(0, state.gamesPlayedCount - 1);
+      applyRotationIfDue();
+      saveState();
+      showToast(T("toast.undidGame", { summary: entry.summary }));
+      renderAll();
     });
-    if (entry.isTeam && entry.teamComboKey) {
-      state.teamWins[entry.teamComboKey] = Math.max(0, (state.teamWins[entry.teamComboKey] || 0) - 1);
-    }
-    state.gameHistory.shift();
-    state.gamesPlayedCount = Math.max(0, state.gamesPlayedCount - 1);
-    applyRotationIfDue();
-    saveState();
-    showToast("Undid: " + entry.summary);
-    renderAll();
   }
 
   function announceOnHill(names) {
@@ -2076,13 +2553,100 @@
   }
 
   function announceGameChange(label) {
-    gameChangeMessage.textContent = "Now playing: " + label + "!";
+    gameChangeMessage.textContent = T("gamechange.nowPlaying", { label: label });
     gameChangeOverlay.classList.remove("hidden");
     playPositiveSound(null);
   }
 
   function closeGameChange() {
     gameChangeOverlay.classList.add("hidden");
+  }
+
+  // Reflects the current counter value into the dialog and disables "-"
+  // once it can't go any lower than unset.
+  function renderBallsLeftValue(valueEl, minusBtn) {
+    valueEl.textContent = gamewinBallsLeftValue === null ? T("ballsLeft.unset") : String(gamewinBallsLeftValue);
+    minusBtn.disabled = gamewinBallsLeftValue === null;
+  }
+
+  // Optional +/- counter for how many balls were left on the table when
+  // this game ended. Starts unset (null) - "+" from unset goes to 0, "-"
+  // from 0 goes back to unset, so leaving it alone never records a value.
+  // Lives in the per-game win overlay (showGameWinOverlay), not the
+  // tournament/milestone one - it's a property of the specific game just
+  // played, not the race as a whole.
+  function buildBallsLeftRow() {
+    var row = document.createElement("div");
+    row.className = "player-stats-row balls-left-row";
+    var label = document.createElement("span");
+    label.className = "label";
+    label.textContent = T("ballsLeft.label");
+
+    var stepper = document.createElement("div");
+    stepper.className = "balls-left-stepper";
+    var minusBtn = document.createElement("button");
+    minusBtn.type = "button";
+    minusBtn.className = "balls-left-btn minus";
+    minusBtn.textContent = "−";
+    minusBtn.setAttribute("aria-label", T("ballsLeft.decrease"));
+    var valueEl = document.createElement("span");
+    valueEl.className = "balls-left-value";
+    var plusBtn = document.createElement("button");
+    plusBtn.type = "button";
+    plusBtn.className = "balls-left-btn plus";
+    plusBtn.textContent = "+";
+    plusBtn.setAttribute("aria-label", T("ballsLeft.increase"));
+
+    minusBtn.addEventListener("click", function () {
+      if (gamewinBallsLeftValue === null) return;
+      gamewinBallsLeftValue = gamewinBallsLeftValue === 0 ? null : gamewinBallsLeftValue - 1;
+      renderBallsLeftValue(valueEl, minusBtn);
+    });
+    plusBtn.addEventListener("click", function () {
+      gamewinBallsLeftValue = gamewinBallsLeftValue === null ? 0 : gamewinBallsLeftValue + 1;
+      renderBallsLeftValue(valueEl, minusBtn);
+    });
+
+    stepper.appendChild(minusBtn);
+    stepper.appendChild(valueEl);
+    stepper.appendChild(plusBtn);
+    row.appendChild(label);
+    row.appendChild(stepper);
+    renderBallsLeftValue(valueEl, minusBtn);
+    return row;
+  }
+
+  // Shown for every credited win (not just a race-ending one) so the
+  // balls-left marker can be set for that specific game before anything
+  // else happens - in particular, before a race-ending win archives the
+  // game and resets the session in celebrateTournamentWin. onClose runs
+  // whatever should happen next (milestone/on-hill/game-change), deferred
+  // until this dialog is dismissed.
+  function showGameWinOverlay(summary, ts, onClose) {
+    gamewinBallsLeftValue = null;
+    gamewinPendingTs = ts;
+    gamewinPendingOnClose = onClose;
+    gamewinMessage.textContent = summary;
+    gamewinDetails.innerHTML = "";
+    gamewinDetails.appendChild(buildBallsLeftRow());
+    gamewinOverlay.classList.remove("hidden");
+  }
+
+  function closeGameWinOverlay() {
+    // The just-credited game is still the front of gameHistory at this
+    // point (nothing else can run while this dialog is up) - patch the
+    // marker directly onto it so it's already there by the time any
+    // archiving (celebrateTournamentWin's exportAllPlayerStats) reads it.
+    if (gamewinBallsLeftValue !== null && state.gameHistory[0] && state.gameHistory[0].ts === gamewinPendingTs) {
+      state.gameHistory[0].ballsLeftOnTable = gamewinBallsLeftValue;
+      saveState();
+    }
+    gamewinOverlay.classList.add("hidden");
+    var onClose = gamewinPendingOnClose;
+    gamewinBallsLeftValue = null;
+    gamewinPendingTs = null;
+    gamewinPendingOnClose = null;
+    if (onClose) onClose();
   }
 
   function celebrateTournamentWin(names, count) {
@@ -2103,19 +2667,23 @@
     });
     var info = rotationStatusInfo();
 
-    milestoneHeadline.textContent = names + " won the tournament with " + count + " wins! (race-to " + target + ")";
+    milestoneHeadline.textContent = T("milestone.headline", { names: names, count: count, target: target });
 
     milestoneDetails.innerHTML = "";
-    milestoneDetails.appendChild(playerStatsListRow("Players", playerNames, true));
-    milestoneDetails.appendChild(playerStatsRow("Tournament goal", "Race to " + target + " wins"));
+    milestoneDetails.appendChild(playerStatsListRow(T("milestone.players"), playerNames, true));
+    milestoneDetails.appendChild(playerStatsRow(T("milestone.tournamentGoal"), T("milestone.raceToWins", { target: target })));
     if (state.rotation.enabled && state.rotation.order.length > 0) {
       var rotationLabels = state.rotation.order.map(rotationEntryLabel);
-      milestoneDetails.appendChild(playerStatsListRow("Game rotation", rotationLabels));
+      milestoneDetails.appendChild(playerStatsListRow(T("milestone.gameRotation"), rotationLabels));
       if (info) {
         milestoneDetails.appendChild(
           playerStatsRow(
-            "Next switch",
-            info.currentLabel + " → " + info.nextLabel + " in " + info.untilSwitch + " game" + (info.untilSwitch === 1 ? "" : "s")
+            T("milestone.nextSwitch"),
+            T(info.untilSwitch === 1 ? "milestone.nextSwitchDetailOne" : "milestone.nextSwitchDetailMany", {
+              current: info.currentLabel,
+              next: info.nextLabel,
+              count: info.untilSwitch
+            })
           )
         );
       }
@@ -2164,11 +2732,7 @@
 
       if (reached) {
         var winnerVoice = isTeamMode ? null : player.voice;
-        creditWin(isTeamMode, isTeamMode ? player.teamId : playerId);
-        resetGameBalls();
-        saveState();
-        playWinSound(winnerVoice);
-        renderAll();
+        creditWin(isTeamMode, isTeamMode ? player.teamId : playerId, winnerVoice);
         return;
       }
 
@@ -2182,23 +2746,34 @@
   }
 
   function resetCurrentGame() {
-    if (!confirm("Reset the current game's score to zero? (No win will be credited.)")) return;
-    resetGameBalls();
-    saveState();
-    renderAll();
+    confirmModal(T("confirm.resetGame"), function () {
+      resetGameBalls();
+      saveState();
+      renderAll();
+    });
   }
 
-  function resetAllStats() {
+  function resetSessionAndTournament() {
+    var hasTournament = !!TOURNAMENT;
     if (state.gameHistory.length === 0) {
-      if (!confirm("Start a new session? This clears session wins, team wins, and restarts the game rotation from the top.")) return;
-      startNewSession(false);
+      var msg = hasTournament ? T("confirm.resetSessionAndTournament") : T("confirm.startNewSession");
+      confirmModal(msg, function () {
+        startNewSession(false);
+        endTournamentSilently();
+      });
       return;
     }
     var count = state.gameHistory.length;
-    saveSessionMessage.textContent =
-      "You've recorded " + count + " game" + (count === 1 ? "" : "s") + " this session. " +
-      "Save it before starting a new one? This cannot be undone.";
+    var message = T(count === 1 ? "saveSession.messageOne" : "saveSession.messageMany", { count: count });
+    if (hasTournament) message += " " + T("confirm.alsoEndsTournamentNote");
+    saveSessionMessage.textContent = message;
     saveSessionOverlay.classList.remove("hidden");
+  }
+
+  function endTournamentSilently() {
+    TOURNAMENT = null;
+    saveTournamentToStorage(null);
+    renderTournamentPage();
   }
 
   function closeSaveSessionPopup() {
@@ -2209,6 +2784,7 @@
     if (saveRoster) maybeSaveRosterOnNewSession();
     state.playerWins = {};
     state.teamWins = {};
+    state.teamMvpWins = {};
     state.gameHistory = [];
     state.gamesPlayedCount = 0;
     resetGameBalls();
@@ -2221,24 +2797,28 @@
   // Sharing by email
   // ---------------------------------------------------------------------
 
+  // Deliberately NOT run through T() - this is shared out of the app as a
+  // message to other people (email/SMS), same as the day report and every
+  // export, so it stays in a consistent language (English) regardless of
+  // the sender's UI language. See buildDayReportText below for the same
+  // rule applied to the day report.
   function shareStandings() {
     var lines = ["Pool Master Counter — Standings", ""];
     lines.push("Player session wins:");
     state.players.forEach(function (p) {
       lines.push("  " + p.name + ": " + (state.playerWins[p.id] || 0));
     });
-    var teamKeys = Object.keys(state.teamWins);
+    var teamKeys = ["A", "B"].filter(function (teamId) {
+      return (state.teamWins[teamId] || 0) > 0;
+    });
     if (teamKeys.length) {
       lines.push("");
       lines.push("Team pairing wins:");
       teamKeys.forEach(function (key) {
-        var names = key
-          .split("|")
-          .map(function (id) {
-            var p = getPlayer(id);
-            return p ? p.name : "?";
-          })
-          .join(" & ");
+        var namesList = teamMembersLive(key).map(function (p) {
+          return p.name;
+        });
+        var names = namesList.length ? namesList.join(" & ") : "Team " + key;
         lines.push("  " + names + ": " + state.teamWins[key]);
       });
     }
@@ -2297,19 +2877,22 @@
     saveDayNotesToStorage(DAY_NOTES);
   }
 
-  // Every distinct game played on dateStr (deduped by timestamp across
-  // however many players' individual game lists it shows up in — live
-  // session plus any earlier session saved today) and each player's
-  // win/loss/rating tally for the day. Each game is kept from its
-  // *winning* side's perspective (result === "won") so winnerNames /
-  // opponentNames are neutral (winning side / losing side) rather than
-  // relative to whichever player happened to be iterated last. Also
-  // flagged with isLive: true when it's part of the still-open current
-  // session (state.gameHistory), false when it only exists in a session
-  // already saved earlier today — the closest the data model can get to
-  // distinguishing "earlier today" from "this session" as separate groups.
+  // Every distinct game played in the last 24 hours (deduped by timestamp
+  // across however many players' individual game lists it shows up in —
+  // live session plus any earlier session saved recently) and each
+  // player's win/loss/rating tally for that window. Deliberately a
+  // rolling 24h window rather than a UTC-calendar-day match: the latter
+  // silently drops evening games in any timezone behind UTC, since
+  // ts.slice(0, 10) would already read as "tomorrow". Each game is kept
+  // from its *winning* side's perspective (result === "won") so
+  // winnerNames / opponentNames are neutral (winning side / losing side)
+  // rather than relative to whichever player happened to be iterated
+  // last. Also flagged with isLive: true when it's part of the
+  // still-open current session (state.gameHistory), false when it only
+  // exists in a session already saved within the window.
   function computeDayReportData(dateStr) {
     var names = getAllKnownPlayerNames();
+    var cutoffTs = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     var liveTsSet = {};
     (state.gameHistory || []).forEach(function (entry) {
       if (entry && entry.ts) liveTsSet[entry.ts] = true;
@@ -2318,7 +2901,7 @@
     var players = [];
     names.forEach(function (name) {
       var games = allGamesForPlayerName(name).filter(function (g) {
-        return g.ts && g.ts.slice(0, 10) === dateStr;
+        return g.ts && g.ts >= cutoffTs;
       });
       if (!games.length) return;
       var wins = 0;
@@ -2404,9 +2987,20 @@
     return text2;
   }
 
+  // Always YYYY-MM-DD, regardless of the active language - dates are a
+  // global format standardization, not a per-language style. Accepts a
+  // Date, an ISO timestamp string, or a bare YYYY-MM-DD date string.
+  function formatDateISO(input) {
+    var d = input instanceof Date ? input : new Date(input);
+    if (isNaN(d.getTime())) return "";
+    var y = d.getFullYear();
+    var m = d.getMonth() + 1;
+    var day = d.getDate();
+    return y + "-" + (m < 10 ? "0" + m : m) + "-" + (day < 10 ? "0" + day : day);
+  }
+
   function formatReportDateHeading(dateStr) {
-    var d = new Date(dateStr + "T00:00:00");
-    return d.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+    return formatDateISO(dateStr + "T00:00:00");
   }
 
   function buildDayReportText(dateStr) {
@@ -2505,15 +3099,15 @@
         return b.wins - a.wins;
       });
 
-    var teamWins = Object.keys(state.teamWins)
+    var teamWins = ["A", "B"]
+      .filter(function (teamId) {
+        return (state.teamWins[teamId] || 0) > 0;
+      })
       .map(function (key) {
-        var members = key
-          .split("|")
-          .map(function (id) {
-            var p = getPlayer(id);
-            return p ? p.name : "?";
-          })
-          .join(" & ");
+        var namesList = teamMembersLive(key).map(function (p) {
+          return p.name;
+        });
+        var members = namesList.length ? namesList.join(" & ") : "Team " + key;
         return { members: members, wins: state.teamWins[key] };
       })
       .sort(function (a, b) {
@@ -2570,6 +3164,7 @@
   var ROTATIONS_KEY = "poolMasterCounter.rotations.v1";
   var PLAYER_STATS_KEY = "poolMasterCounter.playerStats.v1";
   var RATINGS_KEY = "poolMasterCounter.ratings.v1";
+  var PLAYER_ADDED_KEY = "poolMasterCounter.playerAdded.v1";
 
   function loadRostersFromStorage() {
     try {
@@ -2644,6 +3239,52 @@
       localStorage.setItem(RATINGS_KEY, JSON.stringify(ratings));
     } catch (e) {
       console.warn("Could not save ratings.", e);
+    }
+  }
+
+  // Name -> ISO timestamp of the first time that name was ever added to
+  // this device (see addPlayer / backfillMissingAddedDates below).
+  function loadPlayerAddedFromStorage() {
+    try {
+      var raw = localStorage.getItem(PLAYER_ADDED_KEY);
+      var parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function savePlayerAddedToStorage(added) {
+    if (noStatsMode) return;
+    try {
+      localStorage.setItem(PLAYER_ADDED_KEY, JSON.stringify(added));
+    } catch (e) {
+      console.warn("Could not save player added dates.", e);
+    }
+  }
+
+  // Name -> { languageCode: "translated name" }. Names don't machine-
+  // translate (they're not phrases with a canonical target-language
+  // equivalent), so this is a manually-entered per-player, per-language
+  // nickname rather than anything automatic - see buildPlayerNameLabel.
+  var PLAYER_NAME_TRANSLATIONS_KEY = "poolMasterCounter.playerNameTranslations.v1";
+
+  function loadPlayerNameTranslationsFromStorage() {
+    try {
+      var raw = localStorage.getItem(PLAYER_NAME_TRANSLATIONS_KEY);
+      var parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function savePlayerNameTranslationsToStorage(translations) {
+    if (noStatsMode) return;
+    try {
+      localStorage.setItem(PLAYER_NAME_TRANSLATIONS_KEY, JSON.stringify(translations));
+    } catch (e) {
+      console.warn("Could not save player name translations.", e);
     }
   }
 
@@ -2810,6 +3451,95 @@
     return key ? PLAYER_RATINGS[key] : null;
   }
 
+  var PLAYER_ADDED = loadPlayerAddedFromStorage();
+
+  function findPlayerAddedKey(name) {
+    var key = normalizeNameKey(name);
+    var match = Object.keys(PLAYER_ADDED).filter(function (k) {
+      return normalizeNameKey(k) === key;
+    });
+    return match.length ? match[0] : null;
+  }
+
+  // The ISO timestamp this name was first added to the app, or null if
+  // unknown (never recorded and no game history to infer it from).
+  function getPlayerAddedAt(name) {
+    var key = findPlayerAddedKey(name);
+    return key ? PLAYER_ADDED[key] : null;
+  }
+
+  // Records "now" as name's added date, but only the first time this
+  // exact name is ever seen — re-adding an existing player (e.g. after
+  // removing them from today's roster) must not reset it.
+  function recordPlayerAddedIfNew(name) {
+    if (findPlayerAddedKey(name)) return;
+    PLAYER_ADDED[name] = new Date().toISOString();
+    savePlayerAddedToStorage(PLAYER_ADDED);
+  }
+
+  var PLAYER_NAME_TRANSLATIONS = loadPlayerNameTranslationsFromStorage();
+
+  function findPlayerNameTranslationKey(name) {
+    var key = normalizeNameKey(name);
+    var match = Object.keys(PLAYER_NAME_TRANSLATIONS).filter(function (k) {
+      return normalizeNameKey(k) === key;
+    });
+    return match.length ? match[0] : null;
+  }
+
+  function getPlayerNameTranslation(name, languageCode) {
+    var key = findPlayerNameTranslationKey(name);
+    if (!key) return null;
+    return PLAYER_NAME_TRANSLATIONS[key][languageCode] || null;
+  }
+
+  function setPlayerNameTranslation(name, languageCode, translatedName) {
+    var key = findPlayerNameTranslationKey(name) || name;
+    if (!PLAYER_NAME_TRANSLATIONS[key]) PLAYER_NAME_TRANSLATIONS[key] = {};
+    if (translatedName) PLAYER_NAME_TRANSLATIONS[key][languageCode] = translatedName;
+    else delete PLAYER_NAME_TRANSLATIONS[key][languageCode];
+    savePlayerNameTranslationsToStorage(PLAYER_NAME_TRANSLATIONS);
+  }
+
+  // Builds "Bob (Bobby)" - the plain name, plus a smaller/dimmer
+  // parenthesized translation if one exists for the active language (never
+  // fabricated; English shows just the plain name). Appends directly to
+  // container so call sites can keep using it like a plain name element.
+  // When editable is true (only meaningful on the Player Stats page, where
+  // there's room), also appends a small ✏️ button to set/change the
+  // translation for the active language - names don't machine-translate,
+  // so this is the "if possible" path: a manually-entered nickname per
+  // language rather than anything automatic.
+  function buildPlayerNameLabel(container, name, editable) {
+    container.appendChild(document.createTextNode(name));
+    if (activeLanguageCode === DEFAULT_LANGUAGE_CODE) return;
+    var translated = getPlayerNameTranslation(name, activeLanguageCode);
+    if (translated) {
+      var span = document.createElement("span");
+      span.className = "player-name-translated";
+      span.textContent = "(" + translated + ")";
+      container.appendChild(span);
+    }
+    if (editable) {
+      var editBtn = document.createElement("button");
+      editBtn.type = "button";
+      editBtn.className = "player-name-edit-btn";
+      editBtn.textContent = "✏️";
+      editBtn.title = T("playerPage.editTranslatedName");
+      editBtn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        promptModal(T("playerPage.editTranslatedNamePrompt", { name: name }), translated || "", function (entered) {
+          setPlayerNameTranslation(name, activeLanguageCode, entered.trim());
+          renderAll();
+          if (typeof renderPlayerSynopsis === "function" && currentStatsPlayerName === name) {
+            openPlayerStatsPage(name, true);
+          }
+        });
+      });
+      container.appendChild(editBtn);
+    }
+  }
+
   // The exact rating change this one player got from one specific game —
   // bumpPlayerRating stamps every history entry with the same ts as the
   // gameHistory entry that caused it, so this is just a lookup. Returns
@@ -2831,6 +3561,61 @@
       PLAYER_RATINGS[key] = { name: key, rating: DEFAULT_RATING, gamesPlayed: 0, history: [] };
     }
     return PLAYER_RATINGS[key];
+  }
+
+  // A hand-entered override, not a game result - recorded as its own
+  // history point (so the rating graph reflects it) but doesn't count
+  // toward gamesPlayed, since no game was actually played.
+  function setPlayerRatingManually(name, newRating) {
+    var entry = ensureRatingEntry(name);
+    var ts = new Date().toISOString();
+    var delta = newRating - entry.rating;
+    entry.rating = newRating;
+    entry.history.push({ ts: ts, rating: newRating, delta: delta });
+    if (entry.history.length > RATING_HISTORY_CAP) entry.history.shift();
+    saveRatingsToStorage(PLAYER_RATINGS);
+  }
+
+  // Resets every player currently on the roster back to the default
+  // starting rating (see the "Player ratings" comment above DEFAULT_RATING
+  // for why 400 on this 0-900 scale) - as if they were freshly added,
+  // with no rating history at all.
+  function resetAllPlayersOfficialRating() {
+    confirmModal(T("confirm.resetAllRatingsExplain", { rating: DEFAULT_RATING }), function () {
+      confirmModal(T("confirm.areYouSure"), function () {
+        state.players.forEach(function (p) {
+          var key = findRatingKey(p.name) || p.name;
+          PLAYER_RATINGS[key] = { name: key, rating: DEFAULT_RATING, gamesPlayed: 0, history: [] };
+        });
+        saveRatingsToStorage(PLAYER_RATINGS);
+        renderAll();
+        showToast(T("toast.allRatingsReset"));
+      });
+    });
+  }
+
+  function openRatingEditPopup(name) {
+    ratingEditTargetName = name;
+    ratingEditPlayerName.textContent = name;
+    ratingEditInput.value = getPlayerRating(name);
+    ratingEditOverlay.classList.remove("hidden");
+  }
+
+  function closeRatingEditPopup() {
+    ratingEditTargetName = null;
+    ratingEditOverlay.classList.add("hidden");
+  }
+
+  function saveRatingEditPopup() {
+    if (!ratingEditTargetName) return;
+    var value = parseInt(ratingEditInput.value, 10);
+    if (isNaN(value)) {
+      closeRatingEditPopup();
+      return;
+    }
+    setPlayerRatingManually(ratingEditTargetName, value);
+    closeRatingEditPopup();
+    renderAll();
   }
 
   // Reads the optional "starting rating" field on an add-player form —
@@ -2906,6 +3691,76 @@
     });
   }
 
+  // Ratings only ever update live, at the moment a game is credited — a
+  // player restored from the bundled players/*.json backup (or an
+  // imported backup) arrives with full game history but no rating
+  // history, so their badge shows the flat DEFAULT_RATING no matter their
+  // actual record. This replays every game that's missing from the
+  // ratings' timestamp record (found via each winning side's own game
+  // entry, which always carries the complete winnerNames/opponentNames
+  // for that game) in chronological order, so the rating ends up exactly
+  // where it would have if the game had been rated live. Already-rated
+  // games are skipped by ts, so this is safe to run on every boot.
+  function backfillMissingRatingsFromHistory() {
+    var alreadyRated = {};
+    Object.keys(PLAYER_RATINGS).forEach(function (key) {
+      (PLAYER_RATINGS[key].history || []).forEach(function (h) {
+        alreadyRated[h.ts] = true;
+      });
+    });
+
+    var byTs = {};
+    getAllKnownPlayerNames().forEach(function (name) {
+      allGamesForPlayerName(name).forEach(function (g) {
+        if (g.result !== "won" || !g.ts || alreadyRated[g.ts] || byTs[g.ts]) return;
+        byTs[g.ts] = { ts: g.ts, isTeam: !!g.isTeam, winnerNames: g.winnerNames || [], loserNames: g.opponentNames || [] };
+      });
+    });
+
+    var toApply = Object.keys(byTs)
+      .map(function (ts) {
+        return byTs[ts];
+      })
+      .sort(function (a, b) {
+        return a.ts.localeCompare(b.ts);
+      });
+    if (!toApply.length) return;
+
+    toApply.forEach(function (g) {
+      if (!g.winnerNames.length || !g.loserNames.length) return;
+      if (g.isTeam) {
+        applyTeamRatingResult(g.winnerNames, g.loserNames, g.ts);
+      } else {
+        g.loserNames.forEach(function (loserName) {
+          applyPairwiseRatingResult(g.winnerNames[0], loserName, g.ts);
+        });
+      }
+    });
+    saveRatingsToStorage(PLAYER_RATINGS);
+  }
+
+  // Fills in an "added" date for any known player who doesn't have one —
+  // players restored from the bundled backup or an imported one were never
+  // routed through addPlayer, so there's no true "first added" moment on
+  // record. The earliest game on file is the closest honest estimate;
+  // players with neither an added date nor any games are left alone (no
+  // date is shown for them until they actually play or get re-added).
+  function backfillMissingAddedDates() {
+    var changed = false;
+    getAllKnownPlayerNames().forEach(function (name) {
+      if (findPlayerAddedKey(name)) return;
+      var earliest = null;
+      allGamesForPlayerName(name).forEach(function (g) {
+        if (g.ts && (earliest === null || g.ts < earliest)) earliest = g.ts;
+      });
+      if (earliest) {
+        PLAYER_ADDED[name] = earliest;
+        changed = true;
+      }
+    });
+    if (changed) savePlayerAddedToStorage(PLAYER_ADDED);
+  }
+
   // Net rating change within a period, e.g. for the All Players page. null
   // means "no rating history at all" (never played a rated game).
   function computeRatingPeriodDelta(name, period) {
@@ -2931,7 +3786,7 @@
     var badge = document.createElement("span");
     badge.className = "rating-badge";
     badge.textContent = getPlayerRating(name);
-    badge.title = "Rating (Elo-style, FargoRate-inspired scale)";
+    badge.title = T("common.ratingBadgeTitle");
     return badge;
   }
 
@@ -2985,43 +3840,45 @@
     savePlayerStatsToStorage(PLAYER_STATS);
   }
 
+  // Clears every player's win/game history on this device - both the
+  // archived PLAYER_STATS store and whatever's still live in the current
+  // session (state.gameHistory/playerWins/teamWins), since a player's
+  // stats page reads both together (see allGamesForPlayerName) and
+  // leaving the live half untouched made this look like it did nothing.
+  // Ratings are a separate, intentionally-preserved store - see
+  // resetAllPlayersOfficialRating for that one.
   function resetAllPlayerStats() {
-    if (
-      !confirm(
-        "This clears EVERY player's saved stat history on this device — all sessions, for all players, not just the current live session. " +
-        "A backup file of all your data will be downloaded first, and can be restored later from Import Data. This cannot be undone. Continue?"
-      )
-    ) {
-      return;
-    }
-    exportAllData();
-    PLAYER_STATS = {};
-    savePlayerStatsToStorage(PLAYER_STATS);
-    if (currentStatsPlayerName) {
-      currentStatsSessions = [];
-      renderPlayerHistoryList([]);
-    }
-    showToast("Backed up your data and cleared all players' saved stat history.");
+    confirmModal(T("confirm.resetAllPlayerStats"), function () {
+      exportAllData();
+      PLAYER_STATS = {};
+      savePlayerStatsToStorage(PLAYER_STATS);
+      state.playerWins = {};
+      state.teamWins = {};
+      state.teamMvpWins = {};
+      state.gameHistory = [];
+      resetGameBalls();
+      saveState();
+      if (currentStatsPlayerName) {
+        currentStatsSessions = [];
+        renderPlayerHistoryList([]);
+      }
+      renderAll();
+      showToast(T("toast.playerStatsCleared"));
+    });
   }
 
   function resetAllRosterLists() {
     if (SAVED_ROSTERS.length === 0) {
-      showToast("No saved player lists to reset.");
+      showToast(T("toast.noSavedListsToReset"));
       return;
     }
-    if (
-      !confirm(
-        "This clears every saved player list on this device (everything in the \"Load Player List\" dropdown). " +
-        "A backup file of your player lists will be downloaded first, and can be restored later from Import Player Lists. This cannot be undone. Continue?"
-      )
-    ) {
-      return;
-    }
-    exportRosterLists();
-    SAVED_ROSTERS = [];
-    saveRostersToStorage(SAVED_ROSTERS);
-    populateRosterLoadSelect();
-    showToast("Backed up and cleared all saved player lists.");
+    confirmModal(T("confirm.resetRosterLists"), function () {
+      exportRosterLists();
+      SAVED_ROSTERS = [];
+      saveRostersToStorage(SAVED_ROSTERS);
+      populateRosterLoadSelect();
+      showToast(T("toast.rosterListsCleared"));
+    });
   }
 
   // One-time migration: the app used to store rosters/player stats as JSON
@@ -3250,7 +4107,7 @@
       try {
         data = JSON.parse(reader.result);
       } catch (e) {
-        alert("That file isn't valid JSON.");
+        alertModal(T("alert.notValidJson"));
         return;
       }
       var rawList = Array.isArray(data)
@@ -3261,12 +4118,12 @@
         ? data.rosters
         : null;
       if (!rawList) {
-        alert("That doesn't look like a player list file.");
+        alertModal(T("alert.notAPlayerListFile"));
         return;
       }
       var normalized = rawList.map(normalizeImportedRosterEntry).filter(Boolean);
       if (!normalized.length) {
-        alert("No valid player lists found in that file.");
+        alertModal(T("alert.noValidPlayerLists"));
         return;
       }
       var merge = mergeRosterLists(SAVED_ROSTERS, normalized);
@@ -3274,12 +4131,16 @@
       saveRostersToStorage(SAVED_ROSTERS);
       populateRosterLoadSelect();
       showToast(
-        "Imported " + merge.added + " player list" + (merge.added === 1 ? "" : "s") +
-        (merge.added < normalized.length ? " (some were already saved)." : ".")
+        T(
+          merge.added === 1
+            ? (merge.added < normalized.length ? "toast.importedPlayerListsOne" : "toast.importedPlayerListsOneAll")
+            : (merge.added < normalized.length ? "toast.importedPlayerListsMany" : "toast.importedPlayerListsManyAll"),
+          { count: merge.added }
+        )
       );
     };
     reader.onerror = function () {
-      alert("Could not read that file.");
+      alertModal(T("alert.couldNotReadFile"));
     };
     reader.readAsText(file);
   }
@@ -3291,11 +4152,11 @@
       try {
         data = JSON.parse(reader.result);
       } catch (e) {
-        alert("That file isn't valid JSON.");
+        alertModal(T("alert.notValidJson"));
         return;
       }
       if (!data || typeof data !== "object" || !data.state) {
-        alert("That doesn't look like a Pool Master Counter backup file.");
+        alertModal(T("alert.notABackupFile"));
         return;
       }
 
@@ -3305,110 +4166,100 @@
       // backup's history in without double-counting anything already known.
       var localIsFresh = state.players.length === 0;
 
-      if (
-        !confirm(
-          localIsFresh
-            ? "Import this backup? This device has no players set up yet, so the backup's current game and roster will be loaded as-is."
-            : "Merge this backup into your existing data? Player stats and saved rosters will be combined — games already known on both sides (same player, same time) won't be counted twice. Your current in-progress game stays as-is; any new players from the backup are added to your roster."
-        )
-      ) {
-        return;
-      }
+      confirmModal(T(localIsFresh ? "confirm.importBackupFresh" : "confirm.importBackupMerge"), function () {
+        try {
+          var importedState = data.state && typeof data.state === "object" ? data.state : defaultState();
+          var importedRosters = Array.isArray(data.rosters) ? data.rosters : [];
+          var importedPlayerStats = data.playerStats && typeof data.playerStats === "object" ? data.playerStats : {};
 
-      try {
-        var importedState = data.state && typeof data.state === "object" ? data.state : defaultState();
-        var importedRosters = Array.isArray(data.rosters) ? data.rosters : [];
-        var importedPlayerStats = data.playerStats && typeof data.playerStats === "object" ? data.playerStats : {};
+          var extraSessions = summarizeGameHistoryByPlayer(importedState.gameHistory || []);
+          var mergedPlayerStats = mergePlayerStatsData(PLAYER_STATS, importedPlayerStats, extraSessions);
+          var rosterMerge = mergeRosterLists(SAVED_ROSTERS, importedRosters);
+          var importedRatings = data.ratings && typeof data.ratings === "object" ? data.ratings : {};
+          var mergedRatings = mergeRatingsData(PLAYER_RATINGS, importedRatings);
 
-        var extraSessions = summarizeGameHistoryByPlayer(importedState.gameHistory || []);
-        var mergedPlayerStats = mergePlayerStatsData(PLAYER_STATS, importedPlayerStats, extraSessions);
-        var rosterMerge = mergeRosterLists(SAVED_ROSTERS, importedRosters);
-        var importedRatings = data.ratings && typeof data.ratings === "object" ? data.ratings : {};
-        var mergedRatings = mergeRatingsData(PLAYER_RATINGS, importedRatings);
-
-        var importedRosterPlayerNames = [];
-        importedRosters.forEach(function (r) {
-          (r.players || []).forEach(function (n) {
-            importedRosterPlayerNames.push(n);
-          });
-        });
-
-        var finalState;
-        var newPlayerCount = 0;
-        if (localIsFresh) {
-          finalState = importedState;
-          var freshKnownNames = {};
-          (finalState.players || []).forEach(function (p) {
-            freshKnownNames[normalizeNameKey(p.name)] = true;
-          });
-          importedRosterPlayerNames.forEach(function (name) {
-            if (!name || freshKnownNames[normalizeNameKey(name)]) return;
-            freshKnownNames[normalizeNameKey(name)] = true;
-            finalState.players.push({
-              id: uid(),
-              name: name,
-              voice: finalState.players.length % VOICE_PITCHES.length,
-              playing: false,
-              teamId: null,
-              balls: 0
+          var importedRosterPlayerNames = [];
+          importedRosters.forEach(function (r) {
+            (r.players || []).forEach(function (n) {
+              importedRosterPlayerNames.push(n);
             });
           });
-        } else {
-          finalState = state;
-          var knownNames = {};
+
+          var finalState;
+          var newPlayerCount = 0;
+          if (localIsFresh) {
+            finalState = importedState;
+            var freshKnownNames = {};
+            (finalState.players || []).forEach(function (p) {
+              freshKnownNames[normalizeNameKey(p.name)] = true;
+            });
+            importedRosterPlayerNames.forEach(function (name) {
+              if (!name || freshKnownNames[normalizeNameKey(name)]) return;
+              freshKnownNames[normalizeNameKey(name)] = true;
+              finalState.players.push({
+                id: uid(),
+                name: name,
+                voice: finalState.players.length % VOICE_PITCHES.length,
+                playing: false,
+                teamId: null,
+                balls: 0
+              });
+            });
+          } else {
+            finalState = state;
+            var knownNames = {};
+            finalState.players.forEach(function (p) {
+              knownNames[normalizeNameKey(p.name)] = true;
+            });
+            var candidateNames = (Array.isArray(importedState.players) ? importedState.players : [])
+              .map(function (p) {
+                return p && p.name;
+              })
+              .concat(Object.keys(importedPlayerStats))
+              .concat(Object.keys(extraSessions))
+              .concat(importedRosterPlayerNames);
+            candidateNames.forEach(function (name) {
+              if (!name || knownNames[normalizeNameKey(name)]) return;
+              knownNames[normalizeNameKey(name)] = true;
+              finalState.players.push({
+                id: uid(),
+                name: name,
+                voice: finalState.players.length % VOICE_PITCHES.length,
+                playing: false,
+                teamId: null,
+                balls: 0
+              });
+              newPlayerCount += 1;
+            });
+          }
+
+          // Capitalizes every roster name at once, covering both freshly-
+          // adopted importedState.players (never passed through addPlayer)
+          // and any newly-pushed candidates above, so an imported backup
+          // with lowercase names can't leave the roster inconsistently cased.
           finalState.players.forEach(function (p) {
-            knownNames[normalizeNameKey(p.name)] = true;
+            if (p && p.name) p.name = capitalizeName(p.name);
           });
-          var candidateNames = (Array.isArray(importedState.players) ? importedState.players : [])
-            .map(function (p) {
-              return p && p.name;
-            })
-            .concat(Object.keys(importedPlayerStats))
-            .concat(Object.keys(extraSessions))
-            .concat(importedRosterPlayerNames);
-          candidateNames.forEach(function (name) {
-            if (!name || knownNames[normalizeNameKey(name)]) return;
-            knownNames[normalizeNameKey(name)] = true;
-            finalState.players.push({
-              id: uid(),
-              name: name,
-              voice: finalState.players.length % VOICE_PITCHES.length,
-              playing: false,
-              teamId: null,
-              balls: 0
+
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(finalState));
+          localStorage.setItem(ROSTERS_KEY, JSON.stringify(rosterMerge.rosters));
+          localStorage.setItem(PLAYER_STATS_KEY, JSON.stringify(mergedPlayerStats));
+          localStorage.setItem(RATINGS_KEY, JSON.stringify(mergedRatings));
+
+          if (!localIsFresh) {
+            alertModal(T("alert.mergedImport", { players: newPlayerCount, lists: rosterMerge.added }), function () {
+              location.reload();
             });
-            newPlayerCount += 1;
-          });
+          } else {
+            location.reload();
+          }
+        } catch (e) {
+          alertModal(T("alert.couldNotImport", { message: e.message }));
         }
-
-        // Capitalizes every roster name at once, covering both freshly-
-        // adopted importedState.players (never passed through addPlayer)
-        // and any newly-pushed candidates above, so an imported backup
-        // with lowercase names can't leave the roster inconsistently cased.
-        finalState.players.forEach(function (p) {
-          if (p && p.name) p.name = capitalizeName(p.name);
-        });
-
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(finalState));
-        localStorage.setItem(ROSTERS_KEY, JSON.stringify(rosterMerge.rosters));
-        localStorage.setItem(PLAYER_STATS_KEY, JSON.stringify(mergedPlayerStats));
-        localStorage.setItem(RATINGS_KEY, JSON.stringify(mergedRatings));
-
-        if (!localIsFresh) {
-          alert(
-            "Merged. Added " + newPlayerCount + " new player" + (newPlayerCount === 1 ? "" : "s") +
-            " and " + rosterMerge.added + " saved roster list" + (rosterMerge.added === 1 ? "" : "s") +
-            " from the backup. Your current game wasn't touched."
-          );
-        }
-      } catch (e) {
-        alert("Could not import: " + e.message);
-        return;
-      }
-      location.reload();
+      });
     };
     reader.onerror = function () {
-      alert("Could not read that file.");
+      alertModal(T("alert.couldNotReadFile"));
     };
     reader.readAsText(file);
   }
@@ -3436,7 +4287,7 @@
     if (SAVED_ROSTERS.length === 0) {
       var opt = document.createElement("option");
       opt.value = "";
-      opt.textContent = "No saved lists yet";
+      opt.textContent = T("players.noSavedListsYet");
       rosterLoadSelect.appendChild(opt);
       rosterLoadSelect.disabled = true;
       btnRosterLoad.disabled = true;
@@ -3469,7 +4320,6 @@
         added += 1;
       }
     });
-    saveRosterSnapshotIfNew(true);
     return added;
   }
 
@@ -3516,9 +4366,9 @@
     validateNewPlayerNameInput();
     renderAll();
     if (added === 0) {
-      showToast("Everyone from that saved list is already in your roster.");
+      showToast(T("toast.allFromListAlreadyInRoster"));
     } else {
-      showToast("Added " + added + " player" + (added === 1 ? "" : "s") + " from \"" + roster.label + "\".");
+      showToast(T(added === 1 ? "toast.addedFromListOne" : "toast.addedFromListMany", { count: added, label: roster.label }));
     }
   }
 
@@ -3549,7 +4399,7 @@
       });
     });
     if (alreadySaved) {
-      if (!silent) showToast("This exact player list is already saved.");
+      if (!silent) showToast(T("toast.playerListAlreadySaved"));
       return false;
     }
     var now = new Date().toISOString();
@@ -3564,7 +4414,7 @@
     populateRosterLoadSelect();
     populateWizardRosterLoadSelect();
     exportRosterLists();
-    if (!silent) showToast("Saved roster: " + entry.label);
+    if (!silent) showToast(T("toast.savedRoster", { label: entry.label }));
     return true;
   }
 
@@ -3585,7 +4435,7 @@
     if (SAVED_ROTATIONS.length === 0) {
       var opt = document.createElement("option");
       opt.value = "";
-      opt.textContent = "No saved rotations yet";
+      opt.textContent = T("rotation.noSavedRotationsYet");
       rotationLoadSelect.appendChild(opt);
       rotationLoadSelect.disabled = true;
       btnRotationLoad.disabled = true;
@@ -3624,7 +4474,7 @@
     loadRotationEntry(rotation);
     renderRotation();
     renderWizardIfOpen();
-    showToast("Loaded rotation: \"" + rotation.label + "\".");
+    showToast(T("toast.loadedRotation", { label: rotation.label }));
   }
 
   function rotationLabelFor(order) {
@@ -3649,7 +4499,7 @@
       });
     });
     if (alreadySaved) {
-      if (!silent) showToast("This exact rotation is already saved.");
+      if (!silent) showToast(T("toast.rotationAlreadySaved"));
       return false;
     }
     var now = new Date().toISOString();
@@ -3665,7 +4515,7 @@
     saveRotationsToStorage(SAVED_ROTATIONS);
     populateRotationLoadSelect();
     populateWizardRotationLoadSelect();
-    if (!silent) showToast("Saved rotation: " + entry.label);
+    if (!silent) showToast(T("toast.savedRotation", { label: entry.label }));
     return true;
   }
 
@@ -3693,7 +4543,7 @@
     if (SAVED_ROSTERS.length === 0) {
       var opt = document.createElement("option");
       opt.value = "";
-      opt.textContent = "No saved lists yet";
+      opt.textContent = T("players.noSavedListsYet");
       wizardRosterLoadSelect.appendChild(opt);
       wizardRosterLoadSelect.disabled = true;
       btnWizardRosterLoad.disabled = true;
@@ -3714,7 +4564,7 @@
     if (SAVED_ROTATIONS.length === 0) {
       var opt = document.createElement("option");
       opt.value = "";
-      opt.textContent = "No saved rotations yet";
+      opt.textContent = T("rotation.noSavedRotationsYet");
       wizardRotationLoadSelect.appendChild(opt);
       wizardRotationLoadSelect.disabled = true;
       btnWizardRotationLoad.disabled = true;
@@ -3739,8 +4589,8 @@
     renderAll();
     showToast(
       added === 0
-        ? "Everyone from that saved list is already in your roster."
-        : "Added " + added + " player" + (added === 1 ? "" : "s") + " from \"" + roster.label + "\"."
+        ? T("toast.allFromListAlreadyInRoster")
+        : T(added === 1 ? "toast.addedFromListOne" : "toast.addedFromListMany", { count: added, label: roster.label })
     );
   }
 
@@ -3760,7 +4610,7 @@
     wizardRotationEveryInput.value = state.rotation.every;
     renderRotation();
     renderWizardIfOpen();
-    showToast("Loaded rotation: \"" + rotation.label + "\".");
+    showToast(T("toast.loadedRotation", { label: rotation.label }));
   }
 
   function validateWizardNewPlayerNameInput() {
@@ -3769,7 +4619,7 @@
     btnWizardAddPlayer.disabled = !trimmed || duplicate;
     if (duplicate) {
       wizardNewPlayerNameRequirement.textContent =
-        "\"" + capitalizeName(trimmed) + "\" is already in your roster — use a different name, or add a last name/initial.";
+        T("players.duplicateNameHint", { name: capitalizeName(trimmed) });
       wizardNewPlayerNameRequirement.classList.remove("hidden");
     } else {
       wizardNewPlayerNameRequirement.classList.add("hidden");
@@ -3781,20 +4631,20 @@
     if (state.players.length === 0) {
       var hint = document.createElement("li");
       hint.className = "empty-hint";
-      hint.textContent = "No players yet — add some above.";
+      hint.textContent = T("wizard.noPlayersYetAddAbove");
       wizardPlayerChips.appendChild(hint);
       return;
     }
     state.players.forEach(function (p) {
       var li = document.createElement("li");
       var name = document.createElement("span");
-      name.textContent = p.name;
+      buildPlayerNameLabel(name, p.name, false);
       name.appendChild(buildRatingBadge(p.name));
       var removeBtn = document.createElement("button");
       removeBtn.type = "button";
       removeBtn.className = "wizard-player-chip-remove";
       removeBtn.textContent = "×";
-      removeBtn.setAttribute("aria-label", "Remove " + p.name);
+      removeBtn.setAttribute("aria-label", T("common.removeName", { name: p.name }));
       removeBtn.addEventListener("click", function () {
         removePlayer(p.id);
       });
@@ -3812,14 +4662,14 @@
 
     var name = document.createElement("span");
     name.className = "roster-name";
-    name.textContent = p.name;
+    buildPlayerNameLabel(name, p.name, false);
     row.appendChild(name);
     row.appendChild(buildRatingBadge(p.name));
 
     var playBtn = document.createElement("button");
     playBtn.type = "button";
     playBtn.className = "btn-playing" + (p.playing ? " is-on" : "");
-    playBtn.textContent = p.playing ? "Playing" : "Standby";
+    playBtn.textContent = T(p.playing ? "players.playing" : "players.standby");
     playBtn.addEventListener("click", function () {
       togglePlaying(p.id);
     });
@@ -3865,7 +4715,7 @@
       if (wizardFormat === "raceto") {
         var raceTo = parseInt(wizardRaceToInput.value, 10);
         if (!raceTo || raceTo < 1) {
-          showToast("Enter how many wins to race to.");
+          showToast(T("toast.enterRaceToWins"));
           return false;
         }
       }
@@ -3873,7 +4723,7 @@
     }
     if (wizardStep === 2) {
       if (state.players.length === 0) {
-        showToast("Add at least one player before continuing.");
+        showToast(T("toast.addAtLeastOnePlayer"));
         return false;
       }
       return true;
@@ -3893,7 +4743,7 @@
         return r.checked;
       })[0].value === "yes";
       if (rotationOn && state.rotation.order.length < 2) {
-        showToast("Add at least two game types to the rotation, or choose \"No\".");
+        showToast(T("toast.addAtLeastTwoGameTypes"));
         return false;
       }
       return true;
@@ -3909,7 +4759,7 @@
       document.getElementById("wizard-step-" + n).classList.toggle("hidden", n !== wizardStep);
     });
 
-    wizardProgress.textContent = "Step " + (idx + 1) + " of " + seq.length;
+    wizardProgress.textContent = T("wizard.stepOf", { step: idx + 1, total: seq.length });
 
     wizardProgressDots.innerHTML = "";
     seq.forEach(function (stepNum, i) {
@@ -3923,7 +4773,7 @@
     btnWizardNext.classList.toggle("hidden", isLast);
     btnWizardStart.classList.toggle("hidden", !isLast);
     if (isLast) {
-      btnWizardStart.textContent = wizardFormat === "tournament" ? "🏆 Go to Tournament Setup" : "🎱 Start Game";
+      btnWizardStart.textContent = T(wizardFormat === "tournament" ? "wizard.goToTournamentSetup" : "wizard.startGame");
     }
 
     if (wizardStep === 2) renderWizardPlayerChips();
@@ -3949,29 +4799,34 @@
     }
     var gameLabel = GAME_TYPES[wizardGameTypeSelect.value] ? GAME_TYPES[wizardGameTypeSelect.value].label : wizardGameTypeSelect.value;
     if (wizardFormat === "tournament") {
-      summaryRow("Format", "Tournament Elimination");
-      summaryRow("Game", gameLabel);
-      summaryRow("Players on roster", String(state.players.length));
+      summaryRow(T("wizard.summaryFormat"), T("wizard.summaryTournamentElimination"));
+      summaryRow(T("wizard.summaryGame"), gameLabel);
+      summaryRow(T("wizard.summaryPlayersOnRoster"), String(state.players.length));
       return;
     }
-    summaryRow("Game", gameLabel);
+    summaryRow(T("wizard.summaryGame"), gameLabel);
     summaryRow(
-      "Format",
-      wizardFormat === "raceto" ? "Race to " + (parseInt(wizardRaceToInput.value, 10) || 5) + " wins" : "Individual (casual)"
+      T("wizard.summaryFormat"),
+      wizardFormat === "raceto"
+        ? T("milestone.raceToWins", { target: parseInt(wizardRaceToInput.value, 10) || 5 })
+        : T("wizard.summaryIndividualCasual")
     );
     var playingCount = state.players.filter(function (p) {
       return p.playing;
     }).length;
-    summaryRow("Players playing", playingCount + " of " + state.players.length);
+    summaryRow(T("wizard.summaryPlayersPlaying"), T("wizard.summaryOfTotal", { playing: playingCount, total: state.players.length }));
     var rotationOn = Array.prototype.filter.call(wizardRotationEnabledRadios, function (r) {
       return r.checked;
     })[0].value === "yes";
     var every = state.rotation.every || 1;
     summaryRow(
-      "Rotation",
+      T("wizard.summaryRotation"),
       rotationOn && state.rotation.order.length
-        ? rotationLabelFor(state.rotation.order) + " (every " + every + " game" + (every === 1 ? "" : "s") + ")"
-        : "Off"
+        ? T(every === 1 ? "wizard.summaryRotationOnOne" : "wizard.summaryRotationOnMany", {
+            label: rotationLabelFor(state.rotation.order),
+            count: every
+          })
+        : T("wizard.summaryRotationOff")
     );
   }
 
@@ -4100,7 +4955,7 @@
     updateCurrentGameSummary();
     closeWizard();
     setFocusMode(true);
-    showToast("Let's play! 🎱");
+    showToast(T("toast.letsPlay"));
   }
 
   // Skips the rest of the wizard entirely and drops straight into the
@@ -4118,7 +4973,7 @@
     closeWizard();
     setFocusMode(true);
     renderAll();
-    showToast("Quick counter — add players and tap +/−. Nothing is saved. 🎱");
+    showToast(T("toast.quickCounterTip"));
   }
 
   // ---------------------------------------------------------------------
@@ -4177,7 +5032,8 @@
         durationMs: entry.durationMs,
         wonRace: entry.wonRace,
         raceTarget: entry.raceTarget,
-        raceCount: entry.raceCount
+        raceCount: entry.raceCount,
+        ballsLeftOnTable: entry.ballsLeftOnTable === undefined ? null : entry.ballsLeftOnTable
       });
     });
     if (games.length === 0) return null;
@@ -4277,7 +5133,7 @@
     if (durationText) {
       var durationSpan = document.createElement("span");
       durationSpan.className = "player-game-log-duration";
-      durationSpan.textContent = "Duration: " + durationText;
+      durationSpan.textContent = T("common.duration", { time: durationText });
       div.appendChild(durationSpan);
     }
     div.appendChild(document.createTextNode(" — won by "));
@@ -4285,6 +5141,13 @@
     if (g.isTeam && g.mvpName) {
       div.appendChild(document.createTextNode(" · 🎯 " + g.mvpName + " potted it"));
       div.appendChild(buildRatingBadge(g.mvpName));
+    }
+    if (g.ballsLeftOnTable !== null && g.ballsLeftOnTable !== undefined) {
+      var ballsLeftSpan = document.createElement("span");
+      ballsLeftSpan.className = "player-game-log-balls-left";
+      ballsLeftSpan.textContent = T("history.ballsLeftOnTable", { count: g.ballsLeftOnTable });
+      div.appendChild(document.createTextNode(" · "));
+      div.appendChild(ballsLeftSpan);
     }
     return div;
   }
@@ -4315,13 +5178,13 @@
   function renderLiveSessionForPlayer(name) {
     var live = computeLiveSessionForPlayer(name);
     playerPageCurrentBody.innerHTML = "";
-    playerPageCurrentBody.appendChild(playerStatsRow("Wins today", live.wins));
+    playerPageCurrentBody.appendChild(playerStatsRow(T("playerPage.winsToday"), live.wins));
     playerPageCurrentBody.appendChild(playerGamesLogRow("Games", live.games));
-    playerPageCurrentBody.appendChild(playerStatsListRow("Opponents", live.opponents, true));
+    playerPageCurrentBody.appendChild(playerStatsListRow(T("playerPage.opponents"), live.opponents, true));
     if (live.wonTournament) {
       var trophy = document.createElement("div");
       trophy.className = "tournament-winner-banner";
-      trophy.textContent = "🏆 " + name + " Won the Tournament Today!";
+      trophy.textContent = T("history.wonTournamentToday", { name: name });
       trophy.appendChild(buildRatingBadge(name));
       playerPageCurrentBody.appendChild(trophy);
     }
@@ -4444,31 +5307,39 @@
     var synopsis = computeWinLossSynopsis(filtered);
 
     playerPageSynopsisBody.innerHTML = "";
-    playerPageSynopsisBody.appendChild(synopsisStatRow("Rating", getPlayerRating(currentStatsPlayerName)));
+    playerPageSynopsisBody.appendChild(synopsisStatRow(T("common.rating"), getPlayerRating(currentStatsPlayerName)));
     var ratingDeltaText = formatRatingPeriodDelta(currentStatsPlayerName, currentStatsPeriod);
     if (ratingDeltaText !== null) {
       playerPageSynopsisBody.appendChild(
         synopsisStatRow(
-          "Rating this period",
+          T("playerPage.ratingThisPeriod"),
           ratingDeltaText,
           ratingDeltaText.charAt(0) === "▲" ? "win" : ratingDeltaText.charAt(0) === "▼" ? "loss" : null
         )
       );
     }
-    playerPageSynopsisBody.appendChild(synopsisStatRow("Games won", synopsis.wins, "win"));
-    playerPageSynopsisBody.appendChild(synopsisStatRow("Games lost", synopsis.losses, "loss"));
+    playerPageSynopsisBody.appendChild(synopsisStatRow(T("playerPage.gamesWon"), synopsis.wins, "win"));
+    playerPageSynopsisBody.appendChild(synopsisStatRow(T("playerPage.gamesLost"), synopsis.losses, "loss"));
     playerPageSynopsisBody.appendChild(
-      synopsisStatRow("Win %", synopsis.pct === null ? "—" : synopsis.pct + "%")
+      synopsisStatRow(T("playerPage.winPct"), synopsis.pct === null ? "—" : synopsis.pct + "%")
     );
+
+    // How many of this player's TEAM wins they personally potted the
+    // winning ball for (see the mvp selection in creditWin) - their
+    // individual contribution within the team's overall win count.
+    var teamMvpWinCount = filtered.filter(function (g) {
+      return g.result === "won" && g.mvpName === currentStatsPlayerName;
+    }).length;
+    playerPageSynopsisBody.appendChild(synopsisStatRow(T("playerPage.teamMvpWins"), teamMvpWinCount, "win"));
 
     var tournamentFiltered = filterGamesByPeriod(
       tournamentGamesForPlayerName(currentStatsPlayerName).concat(sessionRaceTournamentGames(allGames)),
       currentStatsPeriod
     );
     var tournamentSynopsis = computeWinLossSynopsis(tournamentFiltered);
-    playerPageSynopsisBody.appendChild(synopsisStatRow("Tournaments played", tournamentSynopsis.total));
-    playerPageSynopsisBody.appendChild(synopsisStatRow("Tournaments won", tournamentSynopsis.wins, "win"));
-    playerPageSynopsisBody.appendChild(synopsisStatRow("Tournaments lost", tournamentSynopsis.losses, "loss"));
+    playerPageSynopsisBody.appendChild(synopsisStatRow(T("playerPage.tournamentsPlayed"), tournamentSynopsis.total));
+    playerPageSynopsisBody.appendChild(synopsisStatRow(T("playerPage.tournamentsWon"), tournamentSynopsis.wins, "win"));
+    playerPageSynopsisBody.appendChild(synopsisStatRow(T("playerPage.tournamentsLost"), tournamentSynopsis.losses, "loss"));
 
     var h2h = computeHeadToHead(filtered);
     setPanelSummary(
@@ -4481,7 +5352,7 @@
     if (h2h.length === 0) {
       var hint = document.createElement("li");
       hint.className = "empty-hint";
-      hint.textContent = "No games against opponents in this period yet.";
+      hint.textContent = T("playerPage.noOpponentGamesThisPeriod");
       playerPageH2hList.appendChild(hint);
       return;
     }
@@ -4559,7 +5430,7 @@
     if (!sessions || sessions.length === 0) {
       var hint = document.createElement("li");
       hint.className = "empty-hint";
-      hint.textContent = "No saved sessions yet for this player — use Export Stats to start tracking.";
+      hint.textContent = T("playerPage.noSavedSessionsYet");
       playerPageHistoryList.appendChild(hint);
       return;
     }
@@ -4588,7 +5459,7 @@
         if (session.wonTournament) {
           var banner = document.createElement("div");
           banner.className = "tournament-winner-banner";
-          banner.textContent = "🏆 " + playerName + " Won the Tournament!";
+          banner.textContent = T("playerPage.wonTournamentBanner", { name: playerName });
           banner.appendChild(buildRatingBadge(playerName));
           li.appendChild(banner);
         }
@@ -4695,14 +5566,23 @@
     if (!skipHistory) pushScreenHistory("player", { name: name });
     currentStatsPlayerName = name;
     currentStatsSessions = null;
-    playerPageName.textContent = name;
+    playerPageName.innerHTML = "";
+    buildPlayerNameLabel(playerPageName, name, true);
     playerPageName.appendChild(buildRatingBadge(name));
+    var addedAt = getPlayerAddedAt(name);
+    if (addedAt) {
+      playerPageAdded.textContent = T("playerPage.added", { date: formatDateISO(addedAt) });
+      playerPageAdded.classList.remove("hidden");
+    } else {
+      playerPageAdded.textContent = "";
+      playerPageAdded.classList.add("hidden");
+    }
     populatePlayerPageSwitcher(name);
     renderLiveSessionForPlayer(name);
     playerPageHistoryList.innerHTML = "";
     var loading = document.createElement("li");
     loading.className = "empty-hint";
-    loading.textContent = "Loading saved history…";
+    loading.textContent = T("playerPage.loadingSavedHistory");
     playerPageHistoryList.appendChild(loading);
 
     appRoot.classList.add("hidden");
@@ -4764,10 +5644,36 @@
     var games = [];
     merged.forEach(function (s) {
       (s.games || []).forEach(function (g) {
-        games.push(g);
+        games.push(fillLegacyGameOpponents(g, s));
       });
     });
     return games;
+  }
+
+  // Sessions saved before per-game opponentNames/teammateNames/isTeam
+  // existed (e.g. the bundled players/*.json backups) only have those
+  // fields at the session level ("opponents"). Backfilling them from
+  // there keeps head-to-head, tooltips, and rating backfill all working
+  // for that older data instead of silently treating it as opponent-less.
+  function fillLegacyGameOpponents(g, session) {
+    if (g.opponentNames) return g;
+    var opponentNames = (session && session.opponents) || [];
+    var isTeam = (g.winnerNames || []).length > 1 || opponentNames.length > 1;
+    return {
+      ts: g.ts,
+      gameLabel: g.gameLabel,
+      target: g.target,
+      result: g.result,
+      winnerNames: g.winnerNames,
+      opponentNames: opponentNames,
+      teammateNames: g.teammateNames || [],
+      isTeam: isTeam,
+      mvpName: g.mvpName,
+      durationMs: g.durationMs,
+      wonRace: g.wonRace,
+      raceTarget: g.raceTarget,
+      raceCount: g.raceCount
+    };
   }
 
   function computePlayerCareerStats(name, period) {
@@ -4873,7 +5779,7 @@
 
     var title = document.createElement("div");
     title.className = "timeline-title";
-    title.textContent = "Timeline";
+    title.textContent = T("common.timeline");
     wrap.appendChild(title);
 
     var track = document.createElement("div");
@@ -5005,7 +5911,7 @@
         }
         return;
       }
-      var key = teamComboLabel(g.teammateNames) || "(teammates unknown)";
+      var key = teamComboLabel(g.teammateNames) || T("graph.teammatesUnknown");
       if (!teamCombos[key]) {
         teamCombos[key] = {
           label: key,
@@ -5205,7 +6111,7 @@
       // instead of the bare opponent name — otherwise "Suresh 2 wins,
       // 0 losses" reads as Suresh's own record, when it's actually
       // this player's record against Suresh.
-      name.textContent = "vs " + opp.name;
+      name.textContent = T("common.vsName", { name: opp.name });
       var record = document.createElement("span");
       record.className = "player-graph-tooltip-record";
       var winWord = opp.wins === 1 ? "win" : "wins";
@@ -5271,7 +6177,7 @@
     ratingRow.className = "player-graph-tooltip-row";
     var ratingLabel = document.createElement("span");
     ratingLabel.className = "player-graph-tooltip-name";
-    ratingLabel.textContent = "Rating";
+    ratingLabel.textContent = T("common.rating");
     var ratingValue = document.createElement("span");
     ratingValue.className = "player-graph-tooltip-record";
     ratingValue.textContent = point.rating;
@@ -5283,7 +6189,7 @@
     youRow.className = "player-graph-tooltip-row";
     var youName = document.createElement("span");
     youName.className = "player-graph-tooltip-name";
-    youName.textContent = "You";
+    youName.textContent = T("common.you");
     var youRecord = document.createElement("span");
     youRecord.className = "player-graph-tooltip-record";
     youRecord.textContent = formatSignedDelta(point.delta);
@@ -5297,7 +6203,7 @@
       noGame.className = "player-graph-tooltip-row";
       var hint = document.createElement("span");
       hint.className = "player-graph-tooltip-record";
-      hint.textContent = "Opponent details unavailable";
+      hint.textContent = T("playerPage.opponentDetailsUnavailable");
       noGame.appendChild(hint);
       el.appendChild(noGame);
     } else {
@@ -5307,7 +6213,7 @@
         row.className = "player-graph-tooltip-row";
         var name = document.createElement("span");
         name.className = "player-graph-tooltip-name";
-        name.textContent = "vs " + oppName;
+        name.textContent = T("common.vsName", { name: oppName });
         var record = document.createElement("span");
         record.className = "player-graph-tooltip-record";
         record.textContent = oppDelta === null ? "—" : formatSignedDelta(oppDelta);
@@ -5441,6 +6347,14 @@
       }
     });
     var lastIdx = allTicks.length - 1;
+    // A narrow (phone-portrait) viewport gives the same-length "Now" text
+    // a much bigger share of the available width than on a wide screen, so
+    // a threshold tuned for desktop isn't enough clearance there — and
+    // since a slightly sparser axis costs nothing on a wide screen either,
+    // just use the wide clearance unconditionally rather than guess a
+    // width breakpoint that has to match every real device.
+    var nowCollisionThreshold = 0.32;
+
     // Guarantee "Now" is the final label, then drop whichever regular tick
     // landed right next to it — including one that happened to already be
     // in the evenly-spaced selection — so the (usually much longer) "Now"
@@ -5448,7 +6362,7 @@
     if (finalIdxs[finalIdxs.length - 1] !== lastIdx) finalIdxs.push(lastIdx);
     while (
       finalIdxs.length > 1 &&
-      (allTicks[lastIdx] - allTicks[finalIdxs[finalIdxs.length - 2]]) / span < 0.14
+      (allTicks[lastIdx] - allTicks[finalIdxs[finalIdxs.length - 2]]) / span < nowCollisionThreshold
     ) {
       finalIdxs.splice(finalIdxs.length - 2, 1);
     }
@@ -5462,11 +6376,11 @@
       if (pos === 0) label.classList.add("is-first");
       if (isNow) label.classList.add("is-last", "is-now");
       label.style.left = pctFor(ms) + "%";
+      // No time-of-day - "Now · Sep 3", not "Now · Sep 3 1:21 PM" - the
+      // extra precision isn't worth how much wider it makes the one label
+      // that always has to fit without overlapping its neighbor.
       label.textContent = isNow
-        ? "Now · " +
-          d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) +
-          " " +
-          d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
+        ? T("graph.nowPrefix") + d.toLocaleDateString(undefined, { month: "short", day: "numeric" })
         : formatAxisTickLabel(d, period);
       axis.appendChild(label);
     });
@@ -5522,7 +6436,7 @@
 
     var heading = document.createElement("h3");
     heading.className = "player-rating-graph-heading";
-    heading.textContent = "Rating";
+    heading.textContent = T("common.rating");
     section.appendChild(heading);
 
     var entry = getPlayerRatingEntry(name);
@@ -5536,7 +6450,7 @@
     if (pointsInWindow.length === 0) {
       var hint = document.createElement("p");
       hint.className = "player-graph-empty";
-      hint.textContent = "No rating changes in this period (currently " + getPlayerRating(name) + ").";
+      hint.textContent = T("playerPage.noRatingChangesThisPeriod", { rating: getPlayerRating(name) });
       section.appendChild(hint);
       return section;
     }
@@ -5606,7 +6520,7 @@
     if (maxCount === 0) {
       var emptyHint = document.createElement("p");
       emptyHint.className = "player-graph-empty";
-      emptyHint.textContent = "No games in this period yet.";
+      emptyHint.textContent = T("playerPage.noGamesThisPeriod");
       wrap.appendChild(emptyHint);
       wrap.appendChild(buildRatingGraphSection(stats.name, stats.games, minMs, maxMs, period));
       return wrap;
@@ -5652,7 +6566,7 @@
         "player-graph-dot player-graph-dot-ind-played",
         null
       );
-      legendItems.push({ color: "var(--info)", style: "solid", label: "Single games played", group: gIndPlayed });
+      legendItems.push({ color: "var(--info)", style: "solid", label: T("graph.singleGamesPlayed"), group: gIndPlayed });
     }
     if (series.individualWon.length) {
       var gIndWon = appendGraphSeries(
@@ -5667,7 +6581,7 @@
         "player-graph-dot player-graph-dot-ind-won",
         null
       );
-      legendItems.push({ color: "var(--accent)", style: "dotted", label: "Single games won", group: gIndWon });
+      legendItems.push({ color: "var(--accent)", style: "dotted", label: T("graph.singleGamesWon"), group: gIndWon });
     }
     if (series.individualLost.length) {
       var gIndLost = appendGraphSeries(
@@ -5686,7 +6600,7 @@
       legendItems.push({
         color: "var(--danger)",
         style: "dashed",
-        label: "Single games lost",
+        label: T("graph.singleGamesLost"),
         group: gIndLost,
         startHidden: true
       });
@@ -5708,7 +6622,7 @@
           "player-graph-dot",
           color
         );
-        legendItems.push({ color: color, style: "solid", label: "w/ " + key + " — Played", group: gComboPlayed });
+        legendItems.push({ color: color, style: "solid", label: T("graph.comboPlayed", { key: key }), group: gComboPlayed });
       }
       if (combo.won.length) {
         var gComboWon = appendGraphSeries(
@@ -5723,7 +6637,7 @@
           "player-graph-dot",
           color
         );
-        legendItems.push({ color: color, style: "dotted", label: "w/ " + key + " — Won", group: gComboWon });
+        legendItems.push({ color: color, style: "dotted", label: T("graph.comboWon", { key: key }), group: gComboWon });
       }
       if (combo.lost.length) {
         var gComboLost = appendGraphSeries(
@@ -5742,7 +6656,7 @@
         legendItems.push({
           color: color,
           style: "dashed",
-          label: "w/ " + key + " — Lost",
+          label: T("graph.comboLost", { key: key }),
           group: gComboLost,
           startHidden: true
         });
@@ -5762,7 +6676,7 @@
         "player-graph-dot",
         TOURNAMENT_PLAYED_COLOR
       );
-      legendItems.push({ color: TOURNAMENT_PLAYED_COLOR, style: "solid", label: "Tournaments played", group: gTournPlayed });
+      legendItems.push({ color: TOURNAMENT_PLAYED_COLOR, style: "solid", label: T("graph.tournamentsPlayed"), group: gTournPlayed });
     }
     if (tournamentSeries.won.length) {
       var gTournWon = appendGraphSeries(
@@ -5777,7 +6691,7 @@
         "player-graph-dot",
         TOURNAMENT_WON_COLOR
       );
-      legendItems.push({ color: TOURNAMENT_WON_COLOR, style: "dotted", label: "Tournament wins", group: gTournWon });
+      legendItems.push({ color: TOURNAMENT_WON_COLOR, style: "dotted", label: T("graph.tournamentWins"), group: gTournWon });
     }
     if (tournamentSeries.lost.length) {
       var gTournLost = appendGraphSeries(
@@ -5792,7 +6706,7 @@
         "player-graph-dot",
         TOURNAMENT_LOST_COLOR
       );
-      legendItems.push({ color: TOURNAMENT_LOST_COLOR, style: "dashed", label: "Tournament losses", group: gTournLost });
+      legendItems.push({ color: TOURNAMENT_LOST_COLOR, style: "dashed", label: T("graph.tournamentLosses"), group: gTournLost });
     }
 
     chart.appendChild(svg);
@@ -5813,12 +6727,12 @@
       var toggleBtn = document.createElement("button");
       toggleBtn.type = "button";
       toggleBtn.className = "player-graph-legend-toggle";
-      toggleBtn.textContent = item.startHidden ? "Show" : "Hide";
+      toggleBtn.textContent = T(item.startHidden ? "common.show" : "common.hide");
       toggleBtn.setAttribute("aria-pressed", item.startHidden ? "false" : "true");
       toggleBtn.addEventListener("click", function () {
         var nowHidden = item.group.classList.toggle("is-hidden");
         row.classList.toggle("is-off", nowHidden);
-        toggleBtn.textContent = nowHidden ? "Show" : "Hide";
+        toggleBtn.textContent = T(nowHidden ? "common.show" : "common.hide");
         toggleBtn.setAttribute("aria-pressed", nowHidden ? "false" : "true");
       });
       row.appendChild(swatch);
@@ -5853,7 +6767,7 @@
     var name = document.createElement("button");
     name.type = "button";
     name.className = "all-player-name";
-    name.textContent = stats.name;
+    buildPlayerNameLabel(name, stats.name, false);
     name.appendChild(buildRatingBadge(stats.name));
     name.setAttribute("aria-label", "View stats for " + stats.name);
     name.addEventListener("click", function () {
@@ -5865,7 +6779,7 @@
     nameGroup.appendChild(buildPlayerLinkIcon(stats.name));
     var summary = document.createElement("span");
     summary.className = "all-player-summary";
-    summary.textContent = stats.winPct === null ? "No games yet" : Math.round(stats.winPct * 100) + "% win rate";
+    summary.textContent = stats.winPct === null ? T("allPlayers.noGamesYet") : T("allPlayers.winRate", { pct: Math.round(stats.winPct * 100) });
     top.appendChild(nameGroup);
     top.appendChild(summary);
     li.appendChild(top);
@@ -5876,7 +6790,7 @@
       ratingStatus.className = "all-player-rating-status";
       if (ratingDeltaText.charAt(0) === "▲") ratingStatus.classList.add("is-up");
       else if (ratingDeltaText.charAt(0) === "▼") ratingStatus.classList.add("is-down");
-      ratingStatus.textContent = "Rating this period: " + ratingDeltaText;
+      ratingStatus.textContent = T("allPlayers.ratingThisPeriod", { delta: ratingDeltaText });
       li.appendChild(ratingStatus);
     }
 
@@ -5889,25 +6803,25 @@
         var showGraphBtn = document.createElement("button");
         showGraphBtn.type = "button";
         showGraphBtn.className = "btn btn-ghost all-player-show-graph-btn";
-        showGraphBtn.textContent = "Show Graph";
+        showGraphBtn.textContent = T("allPlayers.showGraph");
         showGraphBtn.addEventListener("click", function () {
           if (!graphHolder.hasChildNodes()) {
             graphHolder.appendChild(buildPlayerGraph(stats, minMs, maxMs, period));
           }
           var nowHidden = graphHolder.classList.toggle("hidden");
-          showGraphBtn.textContent = nowHidden ? "Show Graph" : "Hide Graph";
+          showGraphBtn.textContent = T(nowHidden ? "allPlayers.showGraph" : "allPlayers.hideGraph");
         });
         li.appendChild(showGraphBtn);
         li.appendChild(graphHolder);
       }
     } else {
-      li.appendChild(buildScaleRow("Games Played", stats.played, maxPlayed, "scale-fill-played"));
-      li.appendChild(buildScaleRow("Games Won", stats.wins, maxWins, "scale-fill-won"));
-      li.appendChild(buildScaleRow("Games Lost", stats.losses, maxLosses, "scale-fill-lost"));
+      li.appendChild(buildScaleRow(T("allPlayers.gamesPlayed"), stats.played, maxPlayed, "scale-fill-played"));
+      li.appendChild(buildScaleRow(T("allPlayers.gamesWon"), stats.wins, maxWins, "scale-fill-won"));
+      li.appendChild(buildScaleRow(T("allPlayers.gamesLost"), stats.losses, maxLosses, "scale-fill-lost"));
       if (stats.tournamentPlayed > 0) {
-        li.appendChild(buildScaleRow("Tournaments Played", stats.tournamentPlayed, maxTournPlayed, "scale-fill-tourn-played"));
-        li.appendChild(buildScaleRow("Tournaments Won", stats.tournamentWins, maxTournWins, "scale-fill-tourn-won"));
-        li.appendChild(buildScaleRow("Tournaments Lost", stats.tournamentLosses, maxTournLosses, "scale-fill-tourn-lost"));
+        li.appendChild(buildScaleRow(T("allPlayers.tournamentsPlayed"), stats.tournamentPlayed, maxTournPlayed, "scale-fill-tourn-played"));
+        li.appendChild(buildScaleRow(T("allPlayers.tournamentsWon"), stats.tournamentWins, maxTournWins, "scale-fill-tourn-won"));
+        li.appendChild(buildScaleRow(T("allPlayers.tournamentsLost"), stats.tournamentLosses, maxTournLosses, "scale-fill-tourn-lost"));
       }
 
       if (stats.games.length) {
@@ -5994,8 +6908,8 @@
       var hint = document.createElement("li");
       hint.className = "empty-hint";
       hint.textContent = allPlayersRosterOnly
-        ? "No players in the current roster. Turn off \"Current Roster Only\" to see everyone."
-        : "No players yet — add players and play a few games first.";
+        ? T("allPlayers.noPlayersRosterOnly")
+        : T("allPlayers.noPlayersYet");
       allPlayersList.appendChild(hint);
       return;
     }
@@ -6621,7 +7535,7 @@
     if (names.length === 0) {
       var hint = document.createElement("li");
       hint.className = "empty-hint";
-      hint.textContent = "Add players first.";
+      hint.textContent = T("tournament.addPlayersFirst");
       tournamentPlayerChecklist.appendChild(hint);
       return;
     }
@@ -6654,7 +7568,7 @@
   function startTournament() {
     var names = getCheckedTournamentPlayers();
     if (names.length < 2) {
-      alert("Pick at least 2 players to start a tournament.");
+      alertModal(T("alert.pickAtLeast2Players"));
       return;
     }
     var gameType = tournamentGameTypeSelect.value;
@@ -6676,17 +7590,16 @@
 
   function abandonTournament() {
     var isDone = TOURNAMENT && TOURNAMENT.champion;
-    if (
-      !isDone &&
-      !confirm(
-        "Abandon this tournament? The bracket will be cleared, but every match already played stays saved in each player's stats."
-      )
-    ) {
-      return;
+    var clear = function () {
+      TOURNAMENT = null;
+      saveTournamentToStorage(null);
+      renderTournamentPage();
+    };
+    if (isDone) {
+      clear();
+    } else {
+      confirmModal(T("confirm.abandonTournament"), clear);
     }
-    TOURNAMENT = null;
-    saveTournamentToStorage(null);
-    renderTournamentPage();
   }
 
   function tournamentMatchCard(match, activeMatchId) {
@@ -6712,13 +7625,13 @@
     if (isActive) {
       var playingNote = document.createElement("div");
       playingNote.className = "tournament-playing-note";
-      playingNote.textContent = "▶ Playing now";
+      playingNote.textContent = T("tournament.playingNow");
       div.appendChild(playingNote);
     } else if (match.a && match.b && !match.winner) {
       var playBtn = document.createElement("button");
       playBtn.type = "button";
       playBtn.className = "btn btn-primary tournament-play-btn";
-      playBtn.textContent = "Play";
+      playBtn.textContent = T("tournament.play");
       playBtn.addEventListener("click", function () {
         startTournamentMatch(match.id);
       });
@@ -6860,13 +7773,13 @@
     nameEl.appendChild(buildPlayerLinkIcon(name));
     panel.appendChild(nameEl);
 
-    panel.appendChild(buildStatMini("Match wins", wins, wins >= t.raceTo));
+    panel.appendChild(buildStatMini(T("tournament.matchWins"), wins, wins >= t.raceTo));
 
     var block = document.createElement("div");
     block.className = "stat-block";
     var label = document.createElement("div");
     label.className = "stat-label";
-    label.textContent = GAME_TYPES[t.gameType].label + " · Target " + t.target;
+    label.textContent = T("scoreboard.gameTargetLabel", { game: GAME_TYPES[t.gameType].label, target: t.target });
     var value = document.createElement("div");
     value.className = "stat-value";
     value.textContent = balls;
@@ -6988,13 +7901,13 @@
       }
     }
 
-    btnTournamentAbandon.textContent = t.champion ? "Start New Tournament" : "Abandon Tournament";
+    btnTournamentAbandon.textContent = T(t.champion ? "tournament.startNew" : "tournament.abandon");
 
     if (t.champion) {
       tournamentChampionBanner.classList.remove("hidden");
       var multipleChampions = !!(t.championNames && t.championNames.length > 1);
       tournamentChampionBanner.textContent =
-        "🏆 " + t.champion + (multipleChampions ? " tied for the win!" : " won the tournament!");
+        T(multipleChampions ? "tournament.tiedForTheWin" : "tournament.wonTheTournament", { champion: t.champion });
       (t.championNames || [t.champion]).forEach(function (name) {
         tournamentChampionBanner.appendChild(buildRatingBadge(name));
       });
@@ -7023,7 +7936,7 @@
     if (isRoundRobin) return;
     var heading = document.createElement("li");
     heading.className = "tournament-ready-heading";
-    heading.textContent = "Ready to play (" + ready.length + ")";
+    heading.textContent = T("tournament.readyToPlay", { count: ready.length });
     tournamentReadyList.appendChild(heading);
     ready.forEach(function (m) {
       var li = document.createElement("li");
@@ -7037,7 +7950,7 @@
       var btn = document.createElement("button");
       btn.type = "button";
       btn.className = "btn btn-primary";
-      btn.textContent = "Play";
+      btn.textContent = T("tournament.play");
       btn.addEventListener("click", function () {
         startTournamentMatch(m.id);
       });
@@ -7155,7 +8068,7 @@
     var name = currentStatsPlayerName;
     if (!name) return;
     if (noStatsMode) {
-      showToast("No Statistic mode is on — nothing was saved.");
+      showToast(T("toast.noStatsModeNothingSaved"));
       return;
     }
     var live = computeLiveSessionForPlayer(name);
@@ -7164,24 +8077,18 @@
     setPlayerSessions(name, sessions);
     renderPlayerHistoryList(sessions);
     renderPlayerSynopsis();
-    showToast("Saved " + name + "'s stats.");
+    showToast(T("toast.statsSaved", { name: name }));
   }
 
   function resetPlayerHistoricalStats() {
     var name = currentStatsPlayerName;
     if (!name) return;
-    if (
-      !confirm(
-        "This clears " + name + "'s saved session history on this device. " +
-        "This session's live stats are not affected. Continue?"
-      )
-    ) {
-      return;
-    }
-    currentStatsSessions = [];
-    setPlayerSessions(name, []);
-    renderPlayerHistoryList([]);
-    renderPlayerSynopsis();
+    confirmModal(T("confirm.resetPlayerStats", { name: name }), function () {
+      currentStatsSessions = [];
+      setPlayerSessions(name, []);
+      renderPlayerHistoryList([]);
+      renderPlayerSynopsis();
+    });
   }
 
   // ---------------------------------------------------------------------
@@ -7189,6 +8096,9 @@
   // ---------------------------------------------------------------------
 
   function boot() {
+  backfillMissingRatingsFromHistory();
+  backfillMissingAddedDates();
+
   btnExportAllData.addEventListener("click", exportAllData);
 
   btnImportAllData.addEventListener("click", function () {
@@ -7204,6 +8114,14 @@
 
   btnResetAllPlayerStats.addEventListener("click", resetAllPlayerStats);
   btnResetRosterLists.addEventListener("click", resetAllRosterLists);
+  btnResetAllRatings.addEventListener("click", resetAllPlayersOfficialRating);
+  btnResetSessionTournament.addEventListener("click", resetSessionAndTournament);
+
+  btnRatingEditSave.addEventListener("click", saveRatingEditPopup);
+  btnRatingEditCancel.addEventListener("click", closeRatingEditPopup);
+  ratingEditOverlay.addEventListener("click", function (e) {
+    if (e.target === ratingEditOverlay) closeRatingEditPopup();
+  });
 
   btnExportRosterLists.addEventListener("click", exportRosterLists);
 
@@ -7234,7 +8152,6 @@
     newPlayerName.value = "";
     newPlayerRatingInput.value = "";
     validateNewPlayerNameInput();
-    saveRosterSnapshotIfNew(true);
     renderAll();
     if (alreadyRated) showToast(player.name + " already has a tracked rating — starting rating not applied.");
   });
@@ -7292,7 +8209,7 @@
       saveState();
       renderAll();
       updateCurrentGameSummary();
-      showToast("Back to the normal game — following your rotation and target settings.");
+      showToast(T("toast.backToNormalGame"));
       return;
     }
 
@@ -7320,7 +8237,6 @@
     exportSession();
     exportAllPlayerStats();
   });
-  btnResetStats.addEventListener("click", resetAllStats);
 
   rotationEnabledCheckbox.addEventListener("change", function () {
     state.rotation.enabled = rotationEnabledCheckbox.checked;
@@ -7328,6 +8244,13 @@
     applyRotationIfDue();
     renderRotation();
     renderScoreboard();
+  });
+
+  btnRotationPositionPrev.addEventListener("click", function () {
+    moveRotationPosition(-1);
+  });
+  btnRotationPositionNext.addEventListener("click", function () {
+    moveRotationPosition(1);
   });
 
   rotationAddType.addEventListener("change", function () {
@@ -7357,6 +8280,11 @@
     if (e.target === milestoneOverlay) closeMilestone();
   });
 
+  btnGamewinClose.addEventListener("click", closeGameWinOverlay);
+  gamewinOverlay.addEventListener("click", function (e) {
+    if (e.target === gamewinOverlay) closeGameWinOverlay();
+  });
+
   btnOnHillClose.addEventListener("click", closeOnHill);
   onHillOverlay.addEventListener("click", function (e) {
     if (e.target === onHillOverlay) closeOnHill();
@@ -7372,10 +8300,12 @@
     exportAllPlayerStats();
     closeSaveSessionPopup();
     startNewSession(true);
+    endTournamentSilently();
   });
   btnSaveSessionSkip.addEventListener("click", function () {
     closeSaveSessionPopup();
     startNewSession(false);
+    endTournamentSilently();
   });
   btnSaveSessionCancel.addEventListener("click", closeSaveSessionPopup);
   saveSessionOverlay.addEventListener("click", function (e) {
@@ -7391,6 +8321,7 @@
   btnHelpClose.addEventListener("click", closeHelp);
   document.addEventListener("click", hideGraphTooltip);
   document.addEventListener("scroll", hideGraphTooltip, true);
+  unlockAudioOnFirstInteraction();
   helpOverlay.addEventListener("click", function (e) {
     if (e.target === helpOverlay) closeHelp();
   });
@@ -7443,7 +8374,6 @@
     wizardNewPlayerName.value = "";
     wizardNewPlayerRatingInput.value = "";
     validateWizardNewPlayerNameInput();
-    saveRosterSnapshotIfNew(true);
     renderAll();
     if (alreadyRated) showToast(player.name + " already has a tracked rating — starting rating not applied.");
   });
@@ -7494,6 +8424,7 @@
   wireCollapsiblePanel("standings-panel", "btn-toggle-standings-panel");
   wireCollapsiblePanel("history-panel", "btn-toggle-history-panel");
   wireCollapsiblePanel("day-notes-panel", "btn-toggle-day-notes-panel");
+  wireCollapsiblePanel("resets-panel", "btn-toggle-resets-panel");
   wireCollapsiblePanel("focus-players-wrap", "btn-toggle-focus-players");
   wireCollapsiblePanel("player-page-h2h-panel", "btn-toggle-player-page-h2h-panel");
 
@@ -7511,14 +8442,14 @@
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(
         function () {
-          showToast("Day report copied.");
+          showToast(T("toast.dayReportCopied"));
         },
         function () {
-          alert(text);
+          alertModal(text);
         }
       );
     } else {
-      alert(text);
+      alertModal(text);
     }
   });
 
@@ -7554,13 +8485,13 @@
   allPlayersPeriodSelect.addEventListener("change", renderAllPlayersPage);
   btnToggleAllPlayersView.addEventListener("click", function () {
     allPlayersViewMode = allPlayersViewMode === "bars" ? "graph" : "bars";
-    btnToggleAllPlayersView.textContent = allPlayersViewMode === "graph" ? "📊 See as Bars" : "📈 See as Graph";
+    btnToggleAllPlayersView.textContent = T(allPlayersViewMode === "graph" ? "allPlayers.seeAsBars" : "allPlayers.seeAsGraph");
     renderAllPlayersPage();
   });
   btnToggleRosterFilter.addEventListener("click", function () {
     allPlayersRosterOnly = !allPlayersRosterOnly;
     btnToggleRosterFilter.classList.toggle("is-active", allPlayersRosterOnly);
-    btnToggleRosterFilter.textContent = allPlayersRosterOnly ? "👥 Showing Roster Only" : "👥 Current Roster Only";
+    btnToggleRosterFilter.textContent = T(allPlayersRosterOnly ? "allPlayers.showingRosterOnly" : "allPlayers.rosterOnly");
     renderAllPlayersPage();
   });
 
@@ -7644,7 +8575,7 @@
       return DEFAULT_GAME_TYPES;
     });
 
-  Promise.all([gameTypesPromise, migrateFromRepoIfNeeded()]).then(function (results) {
+  Promise.all([gameTypesPromise, migrateFromRepoIfNeeded(), languagePromise]).then(function (results) {
     GAME_TYPE_LIST = results[0];
     GAME_TYPE_LIST.forEach(function (t) {
       GAME_TYPES[t.id] = { label: t.label, defaultTarget: t.defaultTarget, unit: t.unit };
@@ -7660,6 +8591,7 @@
       trio[1].value = type.defaultTarget;
       trio[2].value = type.unit;
     });
+    applyDomTranslations(document);
     boot();
   });
 })();

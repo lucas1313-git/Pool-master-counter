@@ -261,7 +261,7 @@ body {
 /* ---------- Header ---------- */
 
 .app-header {
-  padding: 56px 16px 8px;
+  padding: max(16px, env(safe-area-inset-top)) 16px 8px;
   text-align: center;
   display: flex;
   flex-direction: column;
@@ -269,11 +269,8 @@ body {
   gap: 10px;
 }
 
-.theme-select-row {
-  position: fixed;
-  top: max(10px, env(safe-area-inset-top));
-  right: max(10px, env(safe-area-inset-right));
-  z-index: 30;
+.theme-select-row,
+.language-select-row {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -283,12 +280,15 @@ body {
   padding: 6px 10px;
   border-radius: 999px;
   border: 1px solid var(--border);
+  min-width: 0;
 }
 
-.theme-select-row select {
+.theme-select-row select,
+.language-select-row select {
   font-size: 0.78rem;
   padding: 4px 8px;
-  max-width: 34vw;
+  max-width: 120px;
+  min-width: 0;
   background: var(--bg-panel);
   color: var(--text);
   border: 1px solid var(--border);
@@ -296,8 +296,14 @@ body {
 }
 
 @media (max-width: 480px) {
-  .theme-select-row label {
+  .theme-select-row label,
+  .language-select-row label {
     display: none;
+  }
+
+  .theme-select-row select,
+  .language-select-row select {
+    max-width: 30vw;
   }
 }
 
@@ -329,6 +335,25 @@ body {
 
 #app.focus-mode #scoreboard-panel {
   padding-top: 8px;
+}
+
+/* Focus Mode is meant to be read from across the room, so the live score
+   numbers scale up - up to 3x their normal size - the moment a card has
+   the room to spare. Sized off the card's own width (container query
+   units) rather than a fixed multiplier or a player-count check, so it
+   naturally scales back down on its own once enough players are on
+   screen that each card gets narrower - no js layout math needed. */
+#app.focus-mode .player-panel,
+#app.focus-mode .member-card {
+  container-type: inline-size;
+}
+
+#app.focus-mode .stat-value {
+  font-size: clamp(3rem, 24cqw, 9rem);
+}
+
+#app.focus-mode .stat-value.small {
+  font-size: clamp(1.8rem, 14cqw, 5.4rem);
 }
 
 .no-stats-row-inline {
@@ -749,6 +774,26 @@ input[type="number"] {
   font-weight: 600;
 }
 
+.player-name-translated {
+  font-size: 0.8em;
+  font-weight: 400;
+  opacity: 0.65;
+  margin-left: 4px;
+}
+
+.player-name-edit-btn {
+  background: none;
+  border: none;
+  padding: 0 4px;
+  font-size: 0.75em;
+  cursor: pointer;
+  opacity: 0.6;
+}
+
+.player-name-edit-btn:hover {
+  opacity: 1;
+}
+
 .rating-badge {
   display: inline-block;
   margin-left: 7px;
@@ -826,6 +871,22 @@ input[type="number"] {
 }
 
 .roster-stats-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.roster-edit-rating-btn {
+  background: transparent;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  font-size: 0.85rem;
+}
+
+.roster-edit-rating-btn:hover {
   color: var(--accent);
   border-color: var(--accent);
 }
@@ -1037,6 +1098,12 @@ input[type="number"] {
 
 .stat-value.small {
   font-size: 1.8rem;
+}
+
+.stat-value .flag {
+  margin-left: 0.15em;
+  font-size: 0.55em;
+  vertical-align: middle;
 }
 
 .ball-controls {
@@ -1280,6 +1347,61 @@ input[type="number"] {
   font-size: 0.92rem;
 }
 
+/* ---------- Per-game win popup ---------- */
+
+.gamewin-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 1000;
+}
+
+.gamewin-card {
+  background: linear-gradient(180deg, var(--felt-light) 0%, var(--felt) 60%, var(--bg-glow) 100%);
+  border: 2px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 32px 28px;
+  max-width: 380px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  animation: milestone-pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.gamewin-emoji {
+  font-size: 2.6rem;
+  margin-bottom: 8px;
+}
+
+.gamewin-card h2 {
+  margin: 0 0 10px;
+  color: var(--accent);
+  font-size: 1.5rem;
+}
+
+.gamewin-card p {
+  margin: 0 0 22px;
+  font-size: 1.08rem;
+  font-weight: 600;
+}
+
+.gamewin-details {
+  text-align: left;
+  margin-bottom: 20px;
+}
+
+.gamewin-details .player-stats-row {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.gamewin-card .btn-primary {
+  width: 100%;
+}
+
 /* ---------- Milestone celebration popup ---------- */
 
 .milestone-overlay {
@@ -1344,6 +1466,49 @@ input[type="number"] {
 
 .milestone-card .btn-primary {
   width: 100%;
+}
+
+.balls-left-row {
+  align-items: center;
+}
+
+.balls-left-stepper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.balls-left-btn {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  padding: 0;
+  font-size: 1.1rem;
+  font-weight: 800;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.balls-left-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.balls-left-value {
+  min-width: 3ch;
+  text-align: center;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.player-game-log-balls-left {
+  color: var(--text-dim);
 }
 
 /* ---------- On-the-hill warning popup ---------- */
@@ -1497,6 +1662,150 @@ input[type="number"] {
 }
 
 .save-session-actions .btn {
+  width: 100%;
+}
+
+/* ---------- Manual rating adjustment popup ---------- */
+
+.rating-edit-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 1000;
+}
+
+.rating-edit-card {
+  background: linear-gradient(180deg, var(--felt-light) 0%, var(--felt) 60%, var(--bg-glow) 100%);
+  border: 2px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 32px 28px;
+  max-width: 380px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  animation: milestone-pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.rating-edit-emoji {
+  font-size: 2.6rem;
+  margin-bottom: 8px;
+}
+
+.rating-edit-card h2 {
+  margin: 0 0 10px;
+  color: var(--accent);
+  font-size: 1.5rem;
+}
+
+.rating-edit-player-name {
+  margin: 0 0 12px;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.rating-edit-warning {
+  margin: 0 0 20px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-align: left;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.rating-edit-row {
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.rating-edit-row input {
+  max-width: 120px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.rating-edit-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.rating-edit-actions .btn {
+  width: 100%;
+}
+
+/* ---------- Generic modal alert/confirm/prompt (replaces native
+   alert()/confirm()/prompt(), which pause the whole page and read as a
+   browser chrome popup rather than part of the app) ---------- */
+
+.confirm-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 1200;
+}
+
+.confirm-modal-card {
+  background: linear-gradient(180deg, var(--felt-light) 0%, var(--felt) 60%, var(--bg-glow) 100%);
+  border: 2px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 28px 24px;
+  max-width: 400px;
+  width: 100%;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  animation: milestone-pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.confirm-modal-message {
+  margin: 0 0 20px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  white-space: pre-line;
+  overflow-y: auto;
+}
+
+/* Used for long multi-line dumps (e.g. the day report clipboard-copy
+   fallback) instead of a short one-off confirmation sentence. */
+.confirm-modal-message.is-long-text {
+  text-align: left;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.confirm-modal-input-row {
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.confirm-modal-input-row input {
+  width: 100%;
+  text-align: center;
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.confirm-modal-actions {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 10px;
+}
+
+.confirm-modal-actions .btn {
   width: 100%;
 }
 
@@ -1884,6 +2193,13 @@ input[type="number"] {
   padding: 8px 12px;
 }
 
+.player-page-added {
+  margin: -8px 0 16px;
+  text-align: center;
+  font-size: 0.82rem;
+  color: var(--text-dim);
+}
+
 .player-page-switcher {
   flex: 0 1 auto;
   max-width: 40vw;
@@ -1949,6 +2265,98 @@ input[type="number"] {
   font-variant-numeric: tabular-nums;
 }
 
+.rotation-position-row {
+  margin: 0 16px 12px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+
+.rotation-position-label {
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.rotation-position-track-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rotation-position-btn {
+  flex: 0 0 auto;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 4px 8px;
+  font-size: 0.85rem;
+  line-height: 1;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.rotation-position-btn:hover {
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.rotation-position-track {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.rotation-position-node {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border);
+}
+
+.rotation-position-node.is-current {
+  width: 16px;
+  height: 16px;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.25);
+}
+
+.rotation-position-connector {
+  flex: 1 1 auto;
+  height: 2px;
+  min-width: 4px;
+  background: var(--border);
+}
+
+.rotation-position-fill-track {
+  flex: 1;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.rotation-position-fill-bar {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+}
+
+.rotation-position-text {
+  margin-top: 8px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: var(--accent);
+}
+
 .player-stats-note {
   color: var(--text-dim);
   font-size: 0.85rem;
@@ -1980,6 +2388,15 @@ input[type="number"] {
 }
 
 #backup-panel .row .btn {
+  flex: 1 1 140px;
+}
+
+#resets-panel .row {
+  margin-top: 4px;
+  align-items: stretch;
+}
+
+#resets-panel .row .btn {
   flex: 1 1 140px;
 }
 
@@ -2166,6 +2583,13 @@ input[type="number"] {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+#player-page-graph-panel {
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .all-player-card-top {
@@ -2637,6 +3061,15 @@ input[type="number"] {
 .now-playing-banner .target-note {
   display: block;
   font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  letter-spacing: normal;
+  margin-top: 2px;
+}
+
+.now-playing-banner .rotation-note {
+  display: block;
+  font-size: 0.8rem;
   font-weight: 600;
   color: var(--text-dim);
   letter-spacing: normal;

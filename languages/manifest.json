@@ -1,0 +1,6 @@
+[
+  { "code": "english", "file": "english.json", "label": "English", "flag": "🇬🇧" },
+  { "code": "french", "file": "french.json", "label": "Français", "flag": "🇫🇷" },
+  { "code": "spanish", "file": "spanish.json", "label": "Español", "flag": "🇪🇸" },
+  { "code": "cantonese", "file": "cantonese.json", "label": "廣東話", "flag": "🇭🇰" }
+]
