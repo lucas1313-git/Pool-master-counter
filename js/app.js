@@ -921,7 +921,8 @@
   var rotationEveryInput = document.getElementById("rotation-every");
   var rotationStatus = document.getElementById("rotation-status");
   var rotationPositionRow = document.getElementById("rotation-position-row");
-  var rotationPositionLabel = document.getElementById("rotation-position-label");
+  var rotationPositionTrack = document.getElementById("rotation-position-track");
+  var rotationPositionText = document.getElementById("rotation-position-text");
   var btnRotationPositionPrev = document.getElementById("btn-rotation-position-prev");
   var btnRotationPositionNext = document.getElementById("btn-rotation-position-next");
 
@@ -1567,15 +1568,49 @@
     });
   }
 
-  // Shows the current rotation step (with ▲/▼ hand-correction buttons)
-  // right in the Players panel, not just tucked away in Game Order - see
-  // moveRotationPosition. Hidden whenever rotation isn't actually running
-  // (off, or fewer than 2 game types to rotate through).
+  // Above ~20 games per leg, individual nodes stop being useful (too
+  // cramped to read) - the track falls back to a plain proportional fill
+  // instead of one node per game.
+  var ROTATION_TRACK_MAX_NODES = 20;
+
+  // A little dot-and-line track between the ◀/▶ buttons: one node per
+  // game in the current leg, with the game just played (playedInLeg)
+  // shown as a bigger, accent-colored node so a glance shows exactly
+  // where the countdown to the next switch stands.
+  function renderRotationPositionTrack(info) {
+    rotationPositionTrack.innerHTML = "";
+    if (info.every > ROTATION_TRACK_MAX_NODES) {
+      var fill = document.createElement("div");
+      fill.className = "rotation-position-fill-track";
+      var bar = document.createElement("div");
+      bar.className = "rotation-position-fill-bar";
+      bar.style.width = (info.playedInLeg / info.every) * 100 + "%";
+      fill.appendChild(bar);
+      rotationPositionTrack.appendChild(fill);
+      return;
+    }
+    for (var i = 0; i < info.every; i++) {
+      if (i > 0) {
+        var connector = document.createElement("span");
+        connector.className = "rotation-position-connector";
+        rotationPositionTrack.appendChild(connector);
+      }
+      var node = document.createElement("span");
+      node.className = "rotation-position-node" + (i === info.playedInLeg ? " is-current" : "");
+      rotationPositionTrack.appendChild(node);
+    }
+  }
+
+  // Shows the current rotation step (with ◀/▶ hand-correction buttons)
+  // right under the "Now Playing" banner - see moveRotationPosition.
+  // Hidden whenever rotation isn't actually running (off, or fewer
+  // than 2 game types to rotate through).
   function renderRotationPositionControl() {
     var info = rotationStatusInfo();
     rotationPositionRow.classList.toggle("hidden", !info);
     if (!info) return;
-    rotationPositionLabel.textContent = T("players.rotationPosition", {
+    renderRotationPositionTrack(info);
+    rotationPositionText.textContent = T("players.rotationPosition", {
       label: info.currentLabel,
       played: info.playedInLeg,
       every: info.every

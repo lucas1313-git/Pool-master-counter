@@ -230,13 +230,14 @@
       </div>
     </div>
     <div id="now-playing-banner" class="now-playing-banner"></div>
-    <div class="player-stats-row rotation-position-row hidden" id="rotation-position-row">
-      <span class="label" data-i18n="players.rotationPositionLabel">Rotation Position</span>
-      <span class="value rotation-position-value">
+    <div class="rotation-position-row hidden" id="rotation-position-row">
+      <div class="rotation-position-label" data-i18n="players.rotationPositionLabel">Rotation Position</div>
+      <div class="rotation-position-track-row">
         <button type="button" id="btn-rotation-position-prev" class="rotation-position-btn" data-i18n-aria-label="players.rotationPrevAria" aria-label="Move the rotation back by one game">◀</button>
-        <span id="rotation-position-label"></span>
+        <div class="rotation-position-track" id="rotation-position-track"></div>
         <button type="button" id="btn-rotation-position-next" class="rotation-position-btn" data-i18n-aria-label="players.rotationNextAria" aria-label="Advance the rotation by one game">▶</button>
-      </span>
+      </div>
+      <div class="rotation-position-text" id="rotation-position-text"></div>
     </div>
     <div class="scoreboard" id="scoreboard"></div>
   </section>

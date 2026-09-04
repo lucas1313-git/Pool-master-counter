@@ -2265,14 +2265,27 @@ input[type="number"] {
   font-variant-numeric: tabular-nums;
 }
 
-#rotation-position-row {
+.rotation-position-row {
   margin: 0 16px 12px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
 }
 
-.rotation-position-value {
+.rotation-position-label {
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.rotation-position-track-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
 .rotation-position-btn {
@@ -2291,6 +2304,57 @@ input[type="number"] {
 
 .rotation-position-btn:hover {
   background: rgba(0, 0, 0, 0.45);
+}
+
+.rotation-position-track {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.rotation-position-node {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border);
+}
+
+.rotation-position-node.is-current {
+  width: 16px;
+  height: 16px;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.25);
+}
+
+.rotation-position-connector {
+  flex: 1 1 auto;
+  height: 2px;
+  min-width: 4px;
+  background: var(--border);
+}
+
+.rotation-position-fill-track {
+  flex: 1;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.rotation-position-fill-bar {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+}
+
+.rotation-position-text {
+  margin-top: 8px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: var(--accent);
 }
 
 .player-stats-note {
