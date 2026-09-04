@@ -240,6 +240,37 @@
     });
   }
 
+  // The player currently targeted by the 1-9 keypad shortcut - see
+  // handleKeypadShortcut. Not persisted; always starts cleared on reload.
+  var keypadSelectedPlayerId = null;
+
+  // Numbers players 1-9 by their order among activePlayers() (individual
+  // panels and team member cards alike), so pressing that digit key then
+  // selects them for the +/- keypad shortcut. Returns null past 9 active
+  // players - keyboards run out of single digits there anyway.
+  function keypadNumberForPlayer(playerId) {
+    var active = activePlayers();
+    for (var i = 0; i < active.length && i < 9; i++) {
+      if (active[i].id === playerId) return i + 1;
+    }
+    return null;
+  }
+
+  // Appended to a player's card/panel by every builder that has one
+  // (buildIndividualPanel, buildMemberCard, buildQuickCounterPanel): the
+  // small numbered badge, plus the highlight class when this is the
+  // player currently selected for the +/- keypad shortcut.
+  function applyKeypadIndicator(el, player) {
+    el.classList.toggle("is-keypad-selected", player.id === keypadSelectedPlayerId);
+    var num = keypadNumberForPlayer(player.id);
+    if (num) {
+      var badge = document.createElement("span");
+      badge.className = "keypad-number-badge";
+      badge.textContent = num;
+      el.appendChild(badge);
+    }
+  }
+
   function teamMembersLive(teamId) {
     return activePlayers().filter(function (p) {
       return p.teamId === teamId;
@@ -1074,6 +1105,78 @@
     }
   });
 
+  function isTypingIntoField(el) {
+    if (!el) return false;
+    var tag = el.tagName;
+    return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
+  }
+
+  function isAnyOverlayOpen() {
+    return [
+      helpOverlay,
+      wizardOverlay,
+      milestoneOverlay,
+      gamewinOverlay,
+      onHillOverlay,
+      gameChangeOverlay,
+      saveSessionOverlay,
+      ratingEditOverlay,
+      confirmModalOverlay
+    ].some(function (el) {
+      return el && !el.classList.contains("hidden");
+    });
+  }
+
+  // Lets a keyboard (or a numeric keypad) drive scoring without touching
+  // the screen: a digit 1-9 selects (and highlights) the Nth currently-
+  // playing player's card, top to bottom - individual panels and team
+  // member cards numbered in one shared sequence; +/- then adjusts that
+  // selected player's score exactly as tapping their own +/- buttons
+  // would (same adjustScore call, so wins, team mode, and Quick Counter
+  // all just work as normal). Selection persists across repeated +/-
+  // presses until a different digit is pressed, Escape is pressed, the
+  // selected player stops playing, or the scoreboard isn't the visible
+  // screen (an overlay is open, a text field has focus, or a different
+  // page like Tournament/All Players/Player Stats is showing).
+  function handleKeypadShortcut(e) {
+    if (isTypingIntoField(document.activeElement)) return;
+    if (isAnyOverlayOpen()) return;
+    if (appRoot.classList.contains("hidden")) return;
+
+    if (e.key === "Escape") {
+      if (keypadSelectedPlayerId) {
+        keypadSelectedPlayerId = null;
+        renderScoreboard();
+      }
+      return;
+    }
+
+    if (/^[1-9]$/.test(e.key)) {
+      var active = activePlayers();
+      var target = active[parseInt(e.key, 10) - 1];
+      if (!target) return;
+      e.preventDefault();
+      keypadSelectedPlayerId = target.id;
+      renderScoreboard();
+      return;
+    }
+
+    if (e.key === "+" || e.key === "-") {
+      if (!keypadSelectedPlayerId) return;
+      var stillActive = activePlayers().some(function (p) {
+        return p.id === keypadSelectedPlayerId;
+      });
+      if (!stillActive) {
+        keypadSelectedPlayerId = null;
+        return;
+      }
+      e.preventDefault();
+      adjustScore(keypadSelectedPlayerId, e.key === "+" ? 1 : -1);
+    }
+  }
+
+  document.addEventListener("keydown", handleKeypadShortcut);
+
   function populateGameTypeSelects() {
     [gameTypeSelect, rotationAddType, tournamentGameTypeSelect, wizardGameTypeSelect, wizardRotationAddType].forEach(function (select) {
       select.innerHTML = "";
@@ -1823,6 +1926,7 @@
     panel.appendChild(value);
 
     panel.appendChild(buildBallControls(player, false));
+    applyKeypadIndicator(panel, player);
 
     return panel;
   }
@@ -1985,6 +2089,7 @@
     panel.appendChild(block);
 
     panel.appendChild(buildBallControls(player, false));
+    applyKeypadIndicator(panel, player);
 
     return panel;
   }
@@ -2011,6 +2116,7 @@
     card.appendChild(value);
 
     card.appendChild(buildBallControls(player, false));
+    applyKeypadIndicator(card, player);
 
     return card;
   }

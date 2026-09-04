@@ -1038,6 +1038,7 @@ input[type="number"] {
 }
 
 .player-panel {
+  position: relative;
   background: linear-gradient(180deg, var(--felt) 0%, var(--bg-glow) 100%);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -1046,6 +1047,36 @@ input[type="number"] {
   flex-direction: column;
   align-items: center;
   gap: 10px;
+}
+
+/* ---------- Keyboard/keypad scoring shortcut ---------- */
+
+.keypad-number-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 0.75rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.is-keypad-selected {
+  box-shadow: 0 0 0 3px var(--accent) inset;
+}
+
+.is-keypad-selected .keypad-number-badge {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
 }
 
 .player-name {
@@ -1247,6 +1278,7 @@ input[type="number"] {
 }
 
 .member-card {
+  position: relative;
   width: 100%;
   background: rgba(0, 0, 0, 0.25);
   border: 1px solid var(--border);
