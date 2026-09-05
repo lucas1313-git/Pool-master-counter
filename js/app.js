@@ -3810,26 +3810,38 @@
 
   function textTableRow(cells, widths, alignRight) {
     return (
-      "┊ " +
+      "│ " +
       cells
         .map(function (c, i) {
           return padTableCell(c, widths[i], alignRight && alignRight[i]);
         })
-        .join(" ┊ ") +
-      " ┊"
+        .join(" │ ") +
+      " │"
     );
   }
 
-  // A real fixed-width table, dotted borders and all - every column
-  // padded to its widest cell so it lines up vertically in a monospace
-  // view (Copy Report, Notes, most terminals/code blocks).
+  function textTableBorder(widths, left, mid, right) {
+    return (
+      left +
+      widths
+        .map(function (w) {
+          return repeatChar("─", w + 2);
+        })
+        .join(mid) +
+      right
+    );
+  }
+
+  // A real fixed-width box table (┌┬┐├┼┤└┴┘), every column padded to its
+  // widest cell so it lines up vertically in a monospace view (Copy
+  // Report, Notes, most terminals/code blocks).
   function buildTextTable(headers, rows, alignRight) {
     var widths = textTableColumnWidths(headers, rows);
-    var headerRow = textTableRow(headers, widths);
-    var lines = [headerRow, repeatChar("·", headerRow.length)];
+    var lines = [textTableBorder(widths, "┌", "┬", "┐"), textTableRow(headers, widths), textTableBorder(widths, "├", "┼", "┤")];
     rows.forEach(function (r) {
       lines.push(textTableRow(r, widths, alignRight));
     });
+    lines.push(textTableBorder(widths, "└", "┴", "┘"));
     return lines;
   }
 
