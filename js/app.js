@@ -1146,6 +1146,7 @@
   var playerStandingsList = document.getElementById("player-standings-list");
 
   var dayNotesTextarea = document.getElementById("day-notes-textarea");
+  var dayReportFormatSelect = document.getElementById("day-report-format-select");
   var btnDayReportCopy = document.getElementById("btn-day-report-copy");
   var btnDayReportEmail = document.getElementById("btn-day-report-email");
   var btnDayReportSms = document.getElementById("btn-day-report-sms");
@@ -1533,7 +1534,7 @@
   }
 
   // Builds one rotation-order <li> (position, game type, editable target +
-  // unit, up/down/remove controls). Shared by the main Game Order panel
+  // unit, up/down/remove controls). Shared by the main Games Rotations panel
   // and the wizard's rotation step so both stay visually and behaviorally
   // identical. The target/unit are edited in place instead of needing to
   // remove and re-add the entry to change its goal.
@@ -3775,7 +3776,7 @@
     return formatDateISO(dateStr + "T00:00:00");
   }
 
-  function buildDayReportText(dateStr) {
+  function buildDayReportTextTable(dateStr) {
     var data = computeDayReportData(dateStr);
     var divider = "──────────";
     var lines = ["🎱 POOL MASTER COUNTER — DAY REPORT", formatReportDateHeading(dateStr), ""];
@@ -3878,6 +3879,114 @@
       lines.push(notes);
     }
     return lines.join("\n");
+  }
+
+  // Leaderboard-only - fastest to scan, no per-game breakdown.
+  function buildDayReportTextCompact(dateStr) {
+    var data = computeDayReportData(dateStr);
+    var lines = ["🎱 POOL MASTER COUNTER — DAY REPORT", formatReportDateHeading(dateStr), ""];
+    if (data.players.length === 0) {
+      lines.push("No games recorded today.");
+    } else {
+      lines.push("LEADERBOARD");
+      data.players.forEach(function (p, i) {
+        lines.push((i + 1) + ". " + p.name + "   " + p.wins + "W-" + p.losses + "L  " + formatReportRatingDelta(p.ratingDelta) + "   " + p.rating);
+      });
+      lines.push("");
+      var gameTypeCounts = {};
+      data.games.forEach(function (g) {
+        gameTypeCounts[g.gameLabel] = (gameTypeCounts[g.gameLabel] || 0) + 1;
+      });
+      var typesSummary = Object.keys(gameTypeCounts)
+        .map(function (label) {
+          return label + " (" + gameTypeCounts[label] + ")";
+        })
+        .join(", ");
+      lines.push(data.games.length + " game" + (data.games.length === 1 ? "" : "s") + " played" + (typesSummary ? " · " + typesSummary : ""));
+    }
+    var notes = getDayNotes(dateStr);
+    if (notes) {
+      lines.push("");
+      lines.push("Notes: " + notes);
+    }
+    return lines.join("\n");
+  }
+
+  // Closest to the original report layout: full player list + a
+  // checkmarked line per game, under section headers.
+  function buildDayReportTextDetailed(dateStr) {
+    var data = computeDayReportData(dateStr);
+    var longDate;
+    try {
+      longDate = new Date(dateStr + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+    } catch (e) {
+      longDate = formatReportDateHeading(dateStr);
+    }
+    var lines = ["🎱 Pool Master Counter — Day Report", longDate, "══════════════════════════", ""];
+    if (data.players.length === 0) {
+      lines.push("No games recorded today.");
+    } else {
+      lines.push("PLAYERS TODAY");
+      data.players.forEach(function (p) {
+        var winWord = p.wins === 1 ? "win" : "wins";
+        var lossWord = p.losses === 1 ? "loss" : "losses";
+        lines.push("• " + p.name + " — " + p.wins + " " + winWord + ", " + p.losses + " " + lossWord + ", rating " + p.rating + " (" + formatReportRatingDelta(p.ratingDelta) + ")");
+      });
+      lines.push("");
+      lines.push("SUMMARY");
+      lines.push("Total games played: " + data.games.length);
+      var gameTypeCounts = {};
+      data.games.forEach(function (g) {
+        gameTypeCounts[g.gameLabel] = (gameTypeCounts[g.gameLabel] || 0) + 1;
+      });
+      var typesSummary = Object.keys(gameTypeCounts)
+        .map(function (label) {
+          return label + " (" + gameTypeCounts[label] + ")";
+        })
+        .join(", ");
+      if (typesSummary) lines.push("Games played: " + typesSummary);
+      if (data.games.length > 0) {
+        lines.push("");
+        lines.push("GAME DETAILS");
+        groupReportGames(data.games).forEach(function (g) {
+          lines.push("✅ " + formatReportGameGroupLine(g));
+        });
+      }
+    }
+    var notes = getDayNotes(dateStr);
+    if (notes) {
+      lines.push("");
+      lines.push("NOTES");
+      lines.push(notes);
+    }
+    return lines.join("\n");
+  }
+
+  var DAY_REPORT_FORMAT_KEY = "poolMasterCounter.dayReportFormat.v1";
+
+  function loadDayReportFormat() {
+    try {
+      var v = localStorage.getItem(DAY_REPORT_FORMAT_KEY);
+      return v === "compact" || v === "detailed" || v === "table" ? v : "table";
+    } catch (e) {
+      return "table";
+    }
+  }
+
+  function saveDayReportFormat(format) {
+    try {
+      localStorage.setItem(DAY_REPORT_FORMAT_KEY, format);
+    } catch (e) {
+      console.warn("Could not save day report format.", e);
+    }
+  }
+
+  var dayReportFormat = loadDayReportFormat();
+
+  function buildDayReportText(dateStr) {
+    if (dayReportFormat === "compact") return buildDayReportTextCompact(dateStr);
+    if (dayReportFormat === "detailed") return buildDayReportTextDetailed(dateStr);
+    return buildDayReportTextTable(dateStr);
   }
 
   function updateDayNotesSummary() {
@@ -9823,7 +9932,7 @@
     // Unchecking it is the only way out of Quick Counter once you're in
     // Focus Mode (every other control is hidden there) — without this,
     // the scoreboard kept the bare point tally while the rest of the app
-    // (Game Order, Current Game) still showed the real rotation/target as
+    // (Games Rotations, Current Game) still showed the real rotation/target as
     // if it were in effect, which is exactly the mismatch this fixes.
     if (!noStatsCheckbox.checked && quickCounterMode) {
       quickCounterMode = false;
@@ -10096,6 +10205,12 @@
       setDayNotes(todayDateStr(), dayNotesTextarea.value);
       updateDayNotesSummary();
     }, 500);
+  });
+
+  dayReportFormatSelect.value = dayReportFormat;
+  dayReportFormatSelect.addEventListener("change", function () {
+    dayReportFormat = dayReportFormatSelect.value;
+    saveDayReportFormat(dayReportFormat);
   });
 
   btnDayReportCopy.addEventListener("click", function () {
