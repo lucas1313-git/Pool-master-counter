@@ -1041,6 +1041,8 @@
   var onboardingNameRequirement = document.getElementById("onboarding-name-requirement");
   var onboardingNameInput = document.getElementById("onboarding-name-input");
   var onboardingRatingInput = document.getElementById("onboarding-rating-input");
+  var onboardingEmailInput = document.getElementById("onboarding-email-input");
+  var onboardingReportOptInCheckbox = document.getElementById("onboarding-report-optin-checkbox");
   var onboardingPlayChoiceRadios = document.getElementsByName("onboarding-play-choice");
   var onboardingStandardFooter = document.getElementById("onboarding-standard-footer");
   var btnOnboardingCancel = document.getElementById("btn-onboarding-cancel");
@@ -1147,6 +1149,7 @@
   var btnDayReportCopy = document.getElementById("btn-day-report-copy");
   var btnDayReportEmail = document.getElementById("btn-day-report-email");
   var btnDayReportSms = document.getElementById("btn-day-report-sms");
+  var dayReportRecipientsLine = document.getElementById("day-report-recipients-line");
 
   var milestoneOverlay = document.getElementById("milestone-overlay");
   var milestoneHeadline = document.getElementById("milestone-headline");
@@ -1453,6 +1456,7 @@
     renderRotation();
     renderWizardIfOpen();
     updateDayNotesSummary();
+    updateDayReportRecipientsLine();
   }
 
   // A rotation entry is { gameType, target, unit } — its own rule, not
@@ -3662,6 +3666,35 @@
     return text2;
   }
 
+  // Fixed-width padding for the day report's plain-text tables. Pads by
+  // UTF-16 length, so CJK names (double-width in a monospace font) won't
+  // line up as precisely as Latin ones - an accepted limitation of a
+  // plain-text-only report with no real table rendering.
+  function padReportText(str, width, alignRight) {
+    str = String(str);
+    var pad = "";
+    for (var i = str.length; i < width; i++) pad += " ";
+    return alignRight ? pad + str : str + pad;
+  }
+
+  function formatReportRatingDelta(delta) {
+    if (delta === null) return "—";
+    if (delta > 0) return "▲" + delta;
+    if (delta < 0) return "▼" + Math.abs(delta);
+    return "—";
+  }
+
+  function formatReportGameTableRow(group, winnerColWidth, loserColWidth) {
+    var winners = joinNamesForReport(group.winnerNames || []);
+    var losers = joinNamesForReport(group.opponentNames || []);
+    var timeCol = group.count === 1 ? formatReportGameTime(group.ts) : "—";
+    var label = group.gameLabel + (group.count > 1 ? " ×" + group.count : "");
+    // "def.  " is 6 chars - keep the label column aligned even when there's
+    // no recorded opponent to name (e.g. a solo/practice win).
+    var verbSegment = losers ? "def.  " + padReportText(losers, loserColWidth) : padReportText("", 6 + loserColWidth);
+    return padReportText(timeCol, 8) + "  " + padReportText(winners, winnerColWidth) + "  " + verbSegment + "  " + label;
+  }
+
   // Always YYYY-MM-DD, regardless of the active language - dates are a
   // global format standardization, not a per-language style. Accepts a
   // Date, an ISO timestamp string, or a bare YYYY-MM-DD date string.
@@ -3680,35 +3713,63 @@
 
   function buildDayReportText(dateStr) {
     var data = computeDayReportData(dateStr);
-    var lines = ["🎱 Pool Master Counter — Day Report", formatReportDateHeading(dateStr), ""];
+    var divider = "──────────";
+    var lines = ["🎱 POOL MASTER COUNTER — DAY REPORT", formatReportDateHeading(dateStr), ""];
     if (data.players.length === 0) {
       lines.push("No games recorded today.");
     } else {
-      lines.push("Players today:");
+      var nameWidth = data.players.reduce(function (max, p) { return Math.max(max, p.name.length); }, "Player".length);
+      var winWidth = data.players.reduce(function (max, p) { return Math.max(max, String(p.wins).length); }, 1);
+      var lossWidth = data.players.reduce(function (max, p) { return Math.max(max, String(p.losses).length); }, 1);
+      var ratingWidth = data.players.reduce(function (max, p) { return Math.max(max, String(p.rating).length); }, "Rating".length);
+      var deltaWidth = data.players.reduce(function (max, p) { return Math.max(max, formatReportRatingDelta(p.ratingDelta).length); }, 1);
+
+      lines.push(
+        padReportText("Player", nameWidth) +
+          "   " +
+          padReportText("W", winWidth, true) +
+          "   " +
+          padReportText("L", lossWidth, true) +
+          "   " +
+          padReportText("Rating", ratingWidth, true) +
+          "   " +
+          padReportText("Δ", deltaWidth, true)
+      );
+      lines.push(
+        padReportText("", nameWidth).replace(/ /g, "-") +
+          "   " +
+          padReportText("", winWidth).replace(/ /g, "-") +
+          "   " +
+          padReportText("", lossWidth).replace(/ /g, "-") +
+          "   " +
+          padReportText("", ratingWidth).replace(/ /g, "-") +
+          "   " +
+          padReportText("", deltaWidth).replace(/ /g, "-")
+      );
       data.players.forEach(function (p) {
-        var deltaText = p.ratingDelta === null
-          ? ""
-          : p.ratingDelta > 0
-          ? " (▲" + p.ratingDelta + ")"
-          : p.ratingDelta < 0
-          ? " (▼" + p.ratingDelta + ")"
-          : " (—)";
-        var winWord = p.wins === 1 ? "win" : "wins";
-        var lossWord = p.losses === 1 ? "loss" : "losses";
-        lines.push("• " + p.name + " — " + p.wins + " " + winWord + ", " + p.losses + " " + lossWord + ", rating " + p.rating + deltaText);
+        lines.push(
+          padReportText(p.name, nameWidth) +
+            "   " +
+            padReportText(p.wins, winWidth, true) +
+            "   " +
+            padReportText(p.losses, lossWidth, true) +
+            "   " +
+            padReportText(p.rating, ratingWidth, true) +
+            "   " +
+            padReportText(formatReportRatingDelta(p.ratingDelta), deltaWidth, true)
+        );
       });
       lines.push("");
-      lines.push("Total games played: " + data.games.length);
       var gameTypeCounts = {};
       data.games.forEach(function (g) {
         gameTypeCounts[g.gameLabel] = (gameTypeCounts[g.gameLabel] || 0) + 1;
       });
       var typesSummary = Object.keys(gameTypeCounts)
         .map(function (label) {
-          return label + " (" + gameTypeCounts[label] + ")";
+          return label + " ×" + gameTypeCounts[label];
         })
         .join(", ");
-      if (typesSummary) lines.push("Games played: " + typesSummary);
+      lines.push("Total games: " + data.games.length + (typesSummary ? "   |   " + typesSummary : ""));
 
       var earlierGames = data.games.filter(function (g) {
         return !g.isLive;
@@ -3717,27 +3778,30 @@
         return g.isLive;
       });
       var hasBothGroups = earlierGames.length > 0 && liveGames.length > 0;
-      var divider = "──────────";
 
       if (data.games.length > 0) {
+        var winnerColWidth = data.games.reduce(function (max, g) {
+          return Math.max(max, joinNamesForReport(g.winnerNames || []).length);
+        }, 0);
+        var loserColWidth = data.games.reduce(function (max, g) {
+          return Math.max(max, joinNamesForReport(g.opponentNames || []).length);
+        }, 0);
         lines.push("");
+        lines.push("Game Log");
         lines.push(divider);
-        lines.push("Game details:");
         if (hasBothGroups) {
-          lines.push("");
           lines.push("Earlier session:");
           groupReportGames(earlierGames).forEach(function (g) {
-            lines.push(formatReportGameGroupLine(g));
+            lines.push(formatReportGameTableRow(g, winnerColWidth, loserColWidth));
           });
           lines.push("");
-          lines.push(divider);
           lines.push("Current session:");
           groupReportGames(liveGames).forEach(function (g) {
-            lines.push(formatReportGameGroupLine(g));
+            lines.push(formatReportGameTableRow(g, winnerColWidth, loserColWidth));
           });
         } else {
           groupReportGames(data.games).forEach(function (g) {
-            lines.push(formatReportGameGroupLine(g));
+            lines.push(formatReportGameTableRow(g, winnerColWidth, loserColWidth));
           });
         }
       }
@@ -3745,7 +3809,8 @@
     var notes = getDayNotes(dateStr);
     if (notes) {
       lines.push("");
-      lines.push("Notes:");
+      lines.push("Notes");
+      lines.push(divider);
       lines.push(notes);
     }
     return lines.join("\n");
@@ -3759,6 +3824,13 @@
     parts.push(data.players.length + " player" + (data.players.length === 1 ? "" : "s"));
     parts.push(notes ? notes.length + " character note" : "no notes yet");
     setPanelSummary("day-notes-panel", parts.join(" · "));
+  }
+
+  function updateDayReportRecipientsLine() {
+    var contacts = reportOptedInContacts();
+    dayReportRecipientsLine.textContent = contacts.length
+      ? T("dayNotes.recipientsSome", { names: contacts.map(function (c) { return c.name; }).join(", ") })
+      : T("dayNotes.recipientsNone");
   }
 
   // ---------------------------------------------------------------------
@@ -3963,6 +4035,29 @@
     }
   }
 
+  // Name -> { email, reportOptIn }. Collected (optionally) once, in the
+  // onboarding wizard - not exposed on the regular Add Player form.
+  var CONTACTS_KEY = "poolMasterCounter.contacts.v1";
+
+  function loadContactsFromStorage() {
+    try {
+      var raw = localStorage.getItem(CONTACTS_KEY);
+      var parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function saveContactsToStorage(contacts) {
+    if (noStatsMode) return;
+    try {
+      localStorage.setItem(CONTACTS_KEY, JSON.stringify(contacts));
+    } catch (e) {
+      console.warn("Could not save player contacts.", e);
+    }
+  }
+
   // One-time-per-load cleanup: if PLAYER_STATS already has separate entries
   // for the same person under different casing (e.g. "Bob" and "bob" from
   // before names were treated as case-insensitive), merge their sessions
@@ -4150,6 +4245,48 @@
     if (findPlayerAddedKey(name)) return;
     PLAYER_ADDED[name] = new Date().toISOString();
     savePlayerAddedToStorage(PLAYER_ADDED);
+  }
+
+  var PLAYER_CONTACTS = loadContactsFromStorage();
+
+  function findContactKey(name) {
+    var key = normalizeNameKey(name);
+    var match = Object.keys(PLAYER_CONTACTS).filter(function (k) {
+      return normalizeNameKey(k) === key;
+    });
+    return match.length ? match[0] : null;
+  }
+
+  function setPlayerContact(name, email, reportOptIn) {
+    var key = findContactKey(name) || name;
+    PLAYER_CONTACTS[key] = { email: email, reportOptIn: !!reportOptIn };
+    saveContactsToStorage(PLAYER_CONTACTS);
+  }
+
+  // Every stored email opted in to the day report, deduped - used to
+  // pre-fill the report's mailto "to" field.
+  function reportOptedInContacts() {
+    return Object.keys(PLAYER_CONTACTS)
+      .map(function (name) {
+        return { name: name, contact: PLAYER_CONTACTS[name] };
+      })
+      .filter(function (entry) {
+        return entry.contact && entry.contact.reportOptIn && entry.contact.email;
+      });
+  }
+
+  // Local settings win on conflict (this device's own opt-in choice is
+  // more current than whatever an older backup says); anything imported
+  // for a name this device has never heard of gets added.
+  function mergeContactsData(localContacts, importedContacts) {
+    var merged = {};
+    Object.keys(importedContacts || {}).forEach(function (name) {
+      merged[name] = importedContacts[name];
+    });
+    Object.keys(localContacts || {}).forEach(function (name) {
+      merged[name] = localContacts[name];
+    });
+    return merged;
   }
 
   var PLAYER_NAME_TRANSLATIONS = loadPlayerNameTranslationsFromStorage();
@@ -4633,7 +4770,8 @@
       state: state,
       rosters: SAVED_ROSTERS,
       playerStats: PLAYER_STATS,
-      ratings: PLAYER_RATINGS
+      ratings: PLAYER_RATINGS,
+      contacts: PLAYER_CONTACTS
     };
     downloadJSON("pool-master-counter-backup-" + payload.exportedAt.slice(0, 10) + ".json", payload);
   }
@@ -4868,6 +5006,8 @@
           var rosterMerge = mergeRosterLists(SAVED_ROSTERS, importedRosters);
           var importedRatings = data.ratings && typeof data.ratings === "object" ? data.ratings : {};
           var mergedRatings = mergeRatingsData(PLAYER_RATINGS, importedRatings);
+          var importedContacts = data.contacts && typeof data.contacts === "object" ? data.contacts : {};
+          var mergedContacts = mergeContactsData(PLAYER_CONTACTS, importedContacts);
 
           var importedRosterPlayerNames = [];
           importedRosters.forEach(function (r) {
@@ -4936,6 +5076,7 @@
           localStorage.setItem(ROSTERS_KEY, JSON.stringify(rosterMerge.rosters));
           localStorage.setItem(PLAYER_STATS_KEY, JSON.stringify(mergedPlayerStats));
           localStorage.setItem(RATINGS_KEY, JSON.stringify(mergedRatings));
+          localStorage.setItem(CONTACTS_KEY, JSON.stringify(mergedContacts));
 
           if (!localIsFresh) {
             alertModal(T("alert.mergedImport", { players: newPlayerCount, lists: rosterMerge.added }), function () {
@@ -5642,6 +5783,9 @@
     onboardingStep = 1;
     onboardingNameInput.value = "";
     onboardingRatingInput.value = "";
+    onboardingEmailInput.value = "";
+    onboardingReportOptInCheckbox.checked = false;
+    onboardingReportOptInCheckbox.disabled = true;
     onboardingNameRequirement.classList.add("hidden");
     Array.prototype.forEach.call(onboardingPlayChoiceRadios, function (r) {
       r.checked = r.value === "now";
@@ -5676,6 +5820,8 @@
       if (player) {
         player.playing = true;
         saveState();
+        var email = onboardingEmailInput.value.trim();
+        if (email) setPlayerContact(player.name, email, onboardingReportOptInCheckbox.checked);
         renderAll();
       }
       onboardingStep = 3;
@@ -9173,6 +9319,11 @@
   btnOnboardingCancel.addEventListener("click", closeOnboarding);
   btnOnboardingGo.addEventListener("click", advanceOnboarding);
   onboardingNameInput.addEventListener("input", validateOnboardingNameInput);
+  onboardingEmailInput.addEventListener("input", function () {
+    var hasEmail = !!onboardingEmailInput.value.trim();
+    onboardingReportOptInCheckbox.disabled = !hasEmail;
+    if (!hasEmail) onboardingReportOptInCheckbox.checked = false;
+  });
   btnOnboardingRunWizard.addEventListener("click", function () {
     closeOnboarding();
     openWizard();
@@ -9284,7 +9435,12 @@
 
   btnDayReportEmail.addEventListener("click", function () {
     var text = buildDayReportText(todayDateStr());
-    window.location.href = "mailto:?subject=" + encodeURIComponent("Pool Master Counter — Day Report") + "&body=" + encodeURIComponent(text);
+    var to = reportOptedInContacts()
+      .map(function (c) {
+        return encodeURIComponent(c.contact.email);
+      })
+      .join(",");
+    window.location.href = "mailto:" + to + "?subject=" + encodeURIComponent("Pool Master Counter — Day Report") + "&body=" + encodeURIComponent(text);
   });
 
   btnDayReportSms.addEventListener("click", function () {
@@ -9359,6 +9515,7 @@
 
   dayNotesTextarea.value = getDayNotes(todayDateStr());
   updateDayNotesSummary();
+  updateDayReportRecipientsLine();
 
   if (state.rotation.enabled && state.rotation.order.length > 0) {
     state.gamesPlayedCount = 0;

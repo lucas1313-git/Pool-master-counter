@@ -268,6 +268,7 @@
         <button type="button" id="btn-day-report-email" class="btn btn-ghost" data-i18n="dayNotes.emailReport">📧 Email Report</button>
         <button type="button" id="btn-day-report-sms" class="btn btn-ghost" data-i18n="dayNotes.textReport">📱 Text Report</button>
       </div>
+      <p class="player-stats-note" id="day-report-recipients-line"></p>
     </div>
   </section>
 
@@ -572,6 +573,13 @@
           <input type="text" id="onboarding-name-input" data-i18n-placeholder="players.namePlaceholder" placeholder="Player name" autocomplete="off" required>
           <input type="number" id="onboarding-rating-input" data-i18n-placeholder="players.ratingPlaceholder" placeholder="Starting rating (optional)" min="0" max="900">
         </div>
+        <div id="onboarding-email-form" class="row">
+          <input type="email" id="onboarding-email-input" data-i18n-placeholder="onboarding.emailPlaceholder" placeholder="Email (optional)" autocomplete="off">
+        </div>
+        <label class="checkbox-row">
+          <input type="checkbox" id="onboarding-report-optin-checkbox" disabled>
+          <span data-i18n="onboarding.reportOptIn">📧 Email me the day's report</span>
+        </label>
       </div>
 
       <div class="wizard-step hidden" id="onboarding-step-3">
