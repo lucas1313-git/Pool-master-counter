@@ -1390,7 +1390,12 @@
         return;
       }
       e.preventDefault();
-      adjustScore(keypadSelectedPlayerId, e.key === "+" ? 1 : -1);
+      var isSingleRackGame = !quickCounterMode && state.currentGame.unit === "rack" && state.currentGame.target === 1;
+      if (e.key === "-" && isSingleRackGame) {
+        undoLastWin(keypadSelectedPlayerId);
+      } else {
+        adjustScore(keypadSelectedPlayerId, e.key === "+" ? 1 : -1);
+      }
     }
   }
 
@@ -2119,7 +2124,13 @@
     return el;
   }
 
-  function buildBallControls(player, disabled) {
+  // undoOnMinus: single-rack games (see isSingleRackGame) show the
+  // session win count as the "running score" instead of an in-progress
+  // ball count, so there's nothing for "-" to decrement there - it undoes
+  // this player's last win instead (only enabled when they're actually
+  // part of the most recent recorded game, so it can't fire against the
+  // wrong player's win by mistake).
+  function buildBallControls(player, disabled, undoOnMinus) {
     var controls = document.createElement("div");
     controls.className = "ball-controls";
 
@@ -2127,12 +2138,22 @@
     minusBtn.type = "button";
     minusBtn.className = "btn-ball minus";
     minusBtn.textContent = "−";
-    minusBtn.setAttribute("aria-label", "Remove point for " + player.name);
-    var minusAllowNegative = quickCounterMode || state.currentGame.unit !== "rack";
-    minusBtn.disabled = disabled || (!minusAllowNegative && (player.balls || 0) <= 0);
-    minusBtn.addEventListener("click", function () {
-      adjustScore(player.id, -1);
-    });
+    if (undoOnMinus) {
+      minusBtn.setAttribute("aria-label", "Undo last win for " + player.name);
+      var lastGame = state.gameHistory[0];
+      var canUndo = !!(lastGame && typeof lastGame !== "string" && lastGame.winnerIds && lastGame.winnerIds.indexOf(player.id) !== -1);
+      minusBtn.disabled = disabled || !canUndo;
+      minusBtn.addEventListener("click", function () {
+        undoLastWin(player.id);
+      });
+    } else {
+      minusBtn.setAttribute("aria-label", "Remove point for " + player.name);
+      var minusAllowNegative = quickCounterMode || state.currentGame.unit !== "rack";
+      minusBtn.disabled = disabled || (!minusAllowNegative && (player.balls || 0) <= 0);
+      minusBtn.addEventListener("click", function () {
+        adjustScore(player.id, -1);
+      });
+    }
 
     var plusBtn = document.createElement("button");
     plusBtn.type = "button";
@@ -2379,13 +2400,13 @@
     block.appendChild(value);
     panel.appendChild(block);
 
-    panel.appendChild(buildBallControls(player, false));
+    panel.appendChild(buildBallControls(player, false, isSingleRackGame));
     markAsKeypadTarget(panel, player);
 
     return panel;
   }
 
-  function buildMemberCard(player, disabled) {
+  function buildMemberCard(player, disabled, undoOnMinus) {
     var card = document.createElement("div");
     card.className = "member-card";
 
@@ -2406,7 +2427,7 @@
     value.textContent = player.balls || 0;
     card.appendChild(value);
 
-    card.appendChild(buildBallControls(player, disabled));
+    card.appendChild(buildBallControls(player, disabled, undoOnMinus));
     markAsKeypadTarget(card, player);
 
     return card;
@@ -2466,7 +2487,7 @@
     var memberWrap = document.createElement("div");
     memberWrap.className = "team-members";
     members.forEach(function (p) {
-      memberWrap.appendChild(buildMemberCard(p, opponentEmpty));
+      memberWrap.appendChild(buildMemberCard(p, opponentEmpty, isSingleRackGame));
     });
     panel.appendChild(memberWrap);
 
@@ -3019,9 +3040,15 @@
     return entry;
   }
 
-  function undoLastWin() {
+  // playerId, when given, restricts this to "undo the last game, but only
+  // if this specific player was part of it" - used by the per-player "-"
+  // button in single-rack games (see buildBallControls), where there's no
+  // in-progress ball count to decrement and "-" means undo their win
+  // instead. Omitted entirely, this is the standalone "Undo Win" button's
+  // unconditional behavior.
+  function undoLastWin(playerId) {
     var entry = state.gameHistory[0];
-    if (!entry || typeof entry === "string" || !entry.winnerIds) {
+    if (!entry || typeof entry === "string" || !entry.winnerIds || (playerId && entry.winnerIds.indexOf(playerId) === -1)) {
       showToast(T("toast.noWinToUndo"));
       return;
     }
@@ -10198,7 +10225,9 @@
   });
 
   btnResetGame.addEventListener("click", resetCurrentGame);
-  btnUndoWin.addEventListener("click", undoLastWin);
+  btnUndoWin.addEventListener("click", function () {
+    undoLastWin();
+  });
   btnShare.addEventListener("click", shareStandings);
   btnExportSession.addEventListener("click", function () {
     exportSession();
