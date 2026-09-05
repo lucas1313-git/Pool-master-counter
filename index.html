@@ -13,7 +13,7 @@
      bump the ?v= on both the stylesheet and script tags below on every
      deploy that touches css/style.css or js/app.js, or returning users can
      silently keep running old code indefinitely. -->
-<link rel="stylesheet" href="css/style.css?v=20260905e">
+<link rel="stylesheet" href="css/style.css?v=20260905f">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -398,6 +398,26 @@
       <label for="rating-edit-input" data-i18n="ratingEdit.newRating">New rating</label>
       <input type="number" id="rating-edit-input" min="0" max="900">
     </div>
+    <div class="row">
+      <input type="email" id="rating-edit-email-input" data-i18n-placeholder="onboarding.emailPlaceholder" placeholder="Email (optional)" autocomplete="off">
+    </div>
+    <div class="row">
+      <input type="tel" id="rating-edit-phone-input" data-i18n-placeholder="onboarding.phonePlaceholder" placeholder="Phone number (optional)" autocomplete="off">
+    </div>
+    <label class="checkbox-row">
+      <input type="checkbox" id="rating-edit-notify-checkbox" disabled>
+      <span data-i18n="onboarding.reportOptIn">🔔 Receive the day's report</span>
+    </label>
+    <div class="wizard-format-options hidden" id="rating-edit-notify-method-row">
+      <label class="wizard-format-option">
+        <input type="radio" name="rating-edit-notify-method" value="email" checked>
+        <span data-i18n="notify.methodEmail">📧 Email</span>
+      </label>
+      <label class="wizard-format-option">
+        <input type="radio" name="rating-edit-notify-method" value="sms">
+        <span data-i18n="notify.methodSms">📱 SMS</span>
+      </label>
+    </div>
     <div class="rating-edit-actions">
       <button type="button" id="btn-rating-edit-save" class="btn btn-primary" data-i18n="common.save">Save</button>
       <button type="button" id="btn-rating-edit-cancel" class="btn btn-ghost" data-i18n="common.cancel">Cancel</button>
@@ -632,10 +652,23 @@
         <div id="onboarding-email-form" class="row">
           <input type="email" id="onboarding-email-input" data-i18n-placeholder="onboarding.emailPlaceholder" placeholder="Email (optional)" autocomplete="off">
         </div>
+        <div id="onboarding-phone-form" class="row">
+          <input type="tel" id="onboarding-phone-input" data-i18n-placeholder="onboarding.phonePlaceholder" placeholder="Phone number (optional)" autocomplete="off">
+        </div>
         <label class="checkbox-row">
           <input type="checkbox" id="onboarding-report-optin-checkbox" disabled>
-          <span data-i18n="onboarding.reportOptIn">📧 Email me the day's report</span>
+          <span data-i18n="onboarding.reportOptIn">🔔 Receive the day's report</span>
         </label>
+        <div class="wizard-format-options hidden" id="onboarding-notify-method-row">
+          <label class="wizard-format-option">
+            <input type="radio" name="onboarding-notify-method" value="email" checked>
+            <span data-i18n="notify.methodEmail">📧 Email</span>
+          </label>
+          <label class="wizard-format-option">
+            <input type="radio" name="onboarding-notify-method" value="sms">
+            <span data-i18n="notify.methodSms">📱 SMS</span>
+          </label>
+        </div>
       </div>
 
       <div class="wizard-step hidden" id="onboarding-step-3">
@@ -938,6 +971,6 @@
 
 </div>
 
-<script src="js/app.js?v=20260905e"></script>
+<script src="js/app.js?v=20260905f"></script>
 </body>
 </html>

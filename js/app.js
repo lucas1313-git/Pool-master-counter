@@ -1042,7 +1042,10 @@
   var onboardingNameInput = document.getElementById("onboarding-name-input");
   var onboardingRatingInput = document.getElementById("onboarding-rating-input");
   var onboardingEmailInput = document.getElementById("onboarding-email-input");
+  var onboardingPhoneInput = document.getElementById("onboarding-phone-input");
   var onboardingReportOptInCheckbox = document.getElementById("onboarding-report-optin-checkbox");
+  var onboardingNotifyMethodRow = document.getElementById("onboarding-notify-method-row");
+  var onboardingNotifyMethodRadios = document.getElementsByName("onboarding-notify-method");
   var onboardingPlayChoiceRadios = document.getElementsByName("onboarding-play-choice");
   var onboardingStandardFooter = document.getElementById("onboarding-standard-footer");
   var btnOnboardingCancel = document.getElementById("btn-onboarding-cancel");
@@ -1196,6 +1199,11 @@
   var ratingEditOverlay = document.getElementById("rating-edit-overlay");
   var ratingEditPlayerName = document.getElementById("rating-edit-player-name");
   var ratingEditInput = document.getElementById("rating-edit-input");
+  var ratingEditEmailInput = document.getElementById("rating-edit-email-input");
+  var ratingEditPhoneInput = document.getElementById("rating-edit-phone-input");
+  var ratingEditNotifyCheckbox = document.getElementById("rating-edit-notify-checkbox");
+  var ratingEditNotifyMethodRow = document.getElementById("rating-edit-notify-method-row");
+  var ratingEditNotifyMethodRadios = document.getElementsByName("rating-edit-notify-method");
   var btnRatingEditSave = document.getElementById("btn-rating-edit-save");
   var btnRatingEditCancel = document.getElementById("btn-rating-edit-cancel");
   var btnResetAllRatings = document.getElementById("btn-reset-all-ratings");
@@ -4152,10 +4160,16 @@
   }
 
   function updateDayReportRecipientsLine() {
-    var contacts = reportOptedInContacts();
-    dayReportRecipientsLine.textContent = contacts.length
-      ? T("dayNotes.recipientsSome", { names: contacts.map(function (c) { return c.name; }).join(", ") })
-      : T("dayNotes.recipientsNone");
+    var emailContacts = reportOptedInContacts("email");
+    var smsContacts = reportOptedInContacts("sms");
+    var parts = [];
+    if (emailContacts.length) {
+      parts.push(T("dayNotes.recipientsEmail", { names: emailContacts.map(function (c) { return c.name; }).join(", ") }));
+    }
+    if (smsContacts.length) {
+      parts.push(T("dayNotes.recipientsSms", { names: smsContacts.map(function (c) { return c.name; }).join(", ") }));
+    }
+    dayReportRecipientsLine.textContent = parts.length ? parts.join(" · ") : T("dayNotes.recipientsNone");
   }
 
   // ---------------------------------------------------------------------
@@ -4646,21 +4660,59 @@
     return match.length ? match[0] : null;
   }
 
-  function setPlayerContact(name, email, reportOptIn) {
+  // Merges rather than overwrites, because onboarding and the edit-rating
+  // popup can each save a partial patch (e.g. edit-rating changing just
+  // the phone number) for the same player without erasing what the other
+  // one already stored.
+  function setPlayerContact(name, patch) {
     var key = findContactKey(name) || name;
-    PLAYER_CONTACTS[key] = { email: email, reportOptIn: !!reportOptIn };
+    var existing = PLAYER_CONTACTS[key] || {};
+    PLAYER_CONTACTS[key] = {
+      email: patch.email !== undefined ? patch.email : existing.email || "",
+      phone: patch.phone !== undefined ? patch.phone : existing.phone || "",
+      reportOptIn: patch.reportOptIn !== undefined ? !!patch.reportOptIn : !!existing.reportOptIn,
+      notifyMethod: patch.notifyMethod !== undefined ? patch.notifyMethod : existing.notifyMethod || "email"
+    };
     saveContactsToStorage(PLAYER_CONTACTS);
   }
 
-  // Every stored email opted in to the day report, deduped - used to
-  // pre-fill the report's mailto "to" field.
-  function reportOptedInContacts() {
+  function getPlayerContact(name) {
+    var key = findContactKey(name);
+    return key ? PLAYER_CONTACTS[key] : { email: "", phone: "", reportOptIn: false, notifyMethod: "email" };
+  }
+
+  // Shared by onboarding and the edit-rating popup: the "receive the
+  // day's report" checkbox only makes sense once there's somewhere to
+  // send it, and the email/SMS choice only matters once it's checked.
+  function wireNotifyCheckbox(emailInput, phoneInput, checkbox, methodRow) {
+    function refreshEnabled() {
+      var hasContactInfo = !!(emailInput.value.trim() || phoneInput.value.trim());
+      checkbox.disabled = !hasContactInfo;
+      if (!hasContactInfo) {
+        checkbox.checked = false;
+        methodRow.classList.add("hidden");
+      }
+    }
+    emailInput.addEventListener("input", refreshEnabled);
+    phoneInput.addEventListener("input", refreshEnabled);
+    checkbox.addEventListener("change", function () {
+      methodRow.classList.toggle("hidden", !checkbox.checked);
+    });
+  }
+
+  // Every stored contact opted in to the day report, deduped, split by
+  // delivery method - used to pre-fill the report's mailto "to" and the
+  // SMS compose recipient.
+  function reportOptedInContacts(method) {
     return Object.keys(PLAYER_CONTACTS)
       .map(function (name) {
         return { name: name, contact: PLAYER_CONTACTS[name] };
       })
       .filter(function (entry) {
-        return entry.contact && entry.contact.reportOptIn && entry.contact.email;
+        if (!entry.contact || !entry.contact.reportOptIn) return false;
+        var entryMethod = entry.contact.notifyMethod || "email";
+        if (method === "sms") return entryMethod === "sms" && entry.contact.phone;
+        return entryMethod !== "sms" && entry.contact.email;
       });
   }
 
@@ -4843,6 +4895,15 @@
     ratingEditTargetName = name;
     ratingEditPlayerName.textContent = name;
     ratingEditInput.value = getPlayerRating(name);
+    var contact = getPlayerContact(name);
+    ratingEditEmailInput.value = contact.email || "";
+    ratingEditPhoneInput.value = contact.phone || "";
+    ratingEditNotifyCheckbox.disabled = !(contact.email || contact.phone);
+    ratingEditNotifyCheckbox.checked = !ratingEditNotifyCheckbox.disabled && !!contact.reportOptIn;
+    ratingEditNotifyMethodRow.classList.toggle("hidden", !ratingEditNotifyCheckbox.checked);
+    Array.prototype.forEach.call(ratingEditNotifyMethodRadios, function (r) {
+      r.checked = r.value === (contact.notifyMethod || "email");
+    });
     ratingEditOverlay.classList.remove("hidden");
   }
 
@@ -4854,11 +4915,16 @@
   function saveRatingEditPopup() {
     if (!ratingEditTargetName) return;
     var value = parseInt(ratingEditInput.value, 10);
-    if (isNaN(value)) {
-      closeRatingEditPopup();
-      return;
-    }
-    setPlayerRatingManually(ratingEditTargetName, value);
+    if (!isNaN(value)) setPlayerRatingManually(ratingEditTargetName, value);
+    setPlayerContact(ratingEditTargetName, {
+      email: ratingEditEmailInput.value.trim(),
+      phone: ratingEditPhoneInput.value.trim(),
+      reportOptIn: ratingEditNotifyCheckbox.checked,
+      notifyMethod: Array.prototype.filter.call(ratingEditNotifyMethodRadios, function (r) {
+        return r.checked;
+      })[0].value
+    });
+    updateDayReportRecipientsLine();
     closeRatingEditPopup();
     renderAll();
   }
@@ -6686,8 +6752,13 @@
     onboardingNameInput.value = "";
     onboardingRatingInput.value = "";
     onboardingEmailInput.value = "";
+    onboardingPhoneInput.value = "";
     onboardingReportOptInCheckbox.checked = false;
     onboardingReportOptInCheckbox.disabled = true;
+    onboardingNotifyMethodRow.classList.add("hidden");
+    Array.prototype.forEach.call(onboardingNotifyMethodRadios, function (r) {
+      r.checked = r.value === "email";
+    });
     onboardingNameRequirement.classList.add("hidden");
     Array.prototype.forEach.call(onboardingPlayChoiceRadios, function (r) {
       r.checked = r.value === "now";
@@ -6723,7 +6794,18 @@
         player.playing = true;
         saveState();
         var email = onboardingEmailInput.value.trim();
-        if (email) setPlayerContact(player.name, email, onboardingReportOptInCheckbox.checked);
+        var phone = onboardingPhoneInput.value.trim();
+        if (email || phone) {
+          setPlayerContact(player.name, {
+            email: email,
+            phone: phone,
+            reportOptIn: onboardingReportOptInCheckbox.checked,
+            notifyMethod: Array.prototype.filter.call(onboardingNotifyMethodRadios, function (r) {
+              return r.checked;
+            })[0].value
+          });
+          updateDayReportRecipientsLine();
+        }
         renderAll();
       }
       onboardingStep = 3;
@@ -10006,6 +10088,7 @@
   ratingEditOverlay.addEventListener("click", function (e) {
     if (e.target === ratingEditOverlay) closeRatingEditPopup();
   });
+  wireNotifyCheckbox(ratingEditEmailInput, ratingEditPhoneInput, ratingEditNotifyCheckbox, ratingEditNotifyMethodRow);
 
   btnExportRosterLists.addEventListener("click", exportRosterLists);
 
@@ -10261,11 +10344,7 @@
   btnOnboardingCancel.addEventListener("click", closeOnboarding);
   btnOnboardingGo.addEventListener("click", advanceOnboarding);
   onboardingNameInput.addEventListener("input", validateOnboardingNameInput);
-  onboardingEmailInput.addEventListener("input", function () {
-    var hasEmail = !!onboardingEmailInput.value.trim();
-    onboardingReportOptInCheckbox.disabled = !hasEmail;
-    if (!hasEmail) onboardingReportOptInCheckbox.checked = false;
-  });
+  wireNotifyCheckbox(onboardingEmailInput, onboardingPhoneInput, onboardingReportOptInCheckbox, onboardingNotifyMethodRow);
   btnOnboardingRunWizard.addEventListener("click", function () {
     closeOnboarding();
     openWizard();
@@ -10383,7 +10462,7 @@
 
   btnDayReportEmail.addEventListener("click", function () {
     var text = buildDayReportTextPlain(todayDateStr());
-    var to = reportOptedInContacts()
+    var to = reportOptedInContacts("email")
       .map(function (c) {
         return encodeURIComponent(c.contact.email);
       })
@@ -10393,7 +10472,12 @@
 
   btnDayReportSms.addEventListener("click", function () {
     var text = buildDayReportTextPlain(todayDateStr());
-    window.location.href = "sms:&body=" + encodeURIComponent(text);
+    var to = reportOptedInContacts("sms")
+      .map(function (c) {
+        return encodeURIComponent(c.contact.phone);
+      })
+      .join(",");
+    window.location.href = "sms:" + to + "&body=" + encodeURIComponent(text);
   });
 
   btnPlayerPageExport.addEventListener("click", exportCurrentPlayerStats);
