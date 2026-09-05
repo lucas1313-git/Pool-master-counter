@@ -299,6 +299,22 @@
     </div>
   </section>
 
+  <section class="panel collapsible-panel collapsed" id="recover-data-panel">
+    <button type="button" class="panel-toggle" id="btn-toggle-recover-data-panel" aria-expanded="false" aria-controls="recover-data-panel-body">
+      <h2 data-i18n="recoverData.heading">🗄️ Recover Data</h2>
+      <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+    </button>
+    <p class="panel-summary" id="recover-data-panel-summary" data-i18n="recoverData.summary">Restore data from a recent reset, or an imported backup.</p>
+    <div class="panel-body" id="recover-data-panel-body">
+      <p class="player-stats-note" data-i18n="recoverData.note">Every reset above keeps a local copy of what it wiped, newest first. Pick one to selectively restore just the players or games you want back.</p>
+      <ul id="recover-data-list" class="recover-data-list"></ul>
+      <div class="row">
+        <button type="button" id="btn-recover-import-file" class="btn btn-ghost" data-i18n="recoverData.importFile">📂 Import a Backup File to Compare</button>
+        <input type="file" id="recover-import-file-input" accept="application/json" class="hidden">
+      </div>
+    </div>
+  </section>
+
 </div>
 
 <div id="gamewin-overlay" class="gamewin-overlay hidden">
@@ -392,6 +408,29 @@
     <ul id="removed-players-checklist" class="tournament-player-checklist"></ul>
     <div class="rating-edit-actions">
       <button type="button" id="btn-removed-players-continue" class="btn btn-primary" data-i18n="removedPlayers.continue">Continue</button>
+    </div>
+  </div>
+</div>
+
+<div id="recover-detail-overlay" class="recover-detail-overlay hidden">
+  <div class="recover-detail-card">
+    <h2 id="recover-detail-title" data-i18n="recoverData.detailTitle">Recover Data</h2>
+    <p id="recover-detail-explain" class="recover-detail-explain"></p>
+    <div id="recover-players-section">
+      <h3 data-i18n="recoverData.playersHeading">Players</h3>
+      <ul id="recover-players-checklist" class="tournament-player-checklist"></ul>
+    </div>
+    <div id="recover-games-section">
+      <h3 data-i18n="recoverData.gamesHeading">Games</h3>
+      <ul id="recover-games-checklist" class="recover-games-checklist"></ul>
+    </div>
+    <div id="recover-rosters-section">
+      <h3 data-i18n="recoverData.rostersHeading">Saved Player Lists</h3>
+      <ul id="recover-rosters-checklist" class="tournament-player-checklist"></ul>
+    </div>
+    <div class="rating-edit-actions">
+      <button type="button" id="btn-recover-restore" class="btn btn-primary" data-i18n="recoverData.restoreSelected">Restore Selected</button>
+      <button type="button" id="btn-recover-cancel" class="btn btn-ghost" data-i18n="common.cancel">Cancel</button>
     </div>
   </div>
 </div>

@@ -1202,6 +1202,21 @@
   var removedPlayersOverlay = document.getElementById("removed-players-overlay");
   var removedPlayersChecklist = document.getElementById("removed-players-checklist");
   var btnRemovedPlayersContinue = document.getElementById("btn-removed-players-continue");
+
+  var recoverDataList = document.getElementById("recover-data-list");
+  var btnRecoverImportFile = document.getElementById("btn-recover-import-file");
+  var recoverImportFileInput = document.getElementById("recover-import-file-input");
+  var recoverDetailOverlay = document.getElementById("recover-detail-overlay");
+  var recoverDetailTitle = document.getElementById("recover-detail-title");
+  var recoverDetailExplain = document.getElementById("recover-detail-explain");
+  var recoverPlayersSection = document.getElementById("recover-players-section");
+  var recoverPlayersChecklist = document.getElementById("recover-players-checklist");
+  var recoverGamesSection = document.getElementById("recover-games-section");
+  var recoverGamesChecklist = document.getElementById("recover-games-checklist");
+  var recoverRostersSection = document.getElementById("recover-rosters-section");
+  var recoverRostersChecklist = document.getElementById("recover-rosters-checklist");
+  var btnRecoverRestore = document.getElementById("btn-recover-restore");
+  var btnRecoverCancel = document.getElementById("btn-recover-cancel");
   var btnResetSessionTournament = document.getElementById("btn-reset-session-tournament");
   var ratingEditTargetName = null;
 
@@ -1385,6 +1400,7 @@
     [saveSessionOverlay, btnSaveSessionSave, btnSaveSessionCancel],
     [ratingEditOverlay, btnRatingEditSave, btnRatingEditCancel],
     [removedPlayersOverlay, btnRemovedPlayersContinue, btnRemovedPlayersContinue],
+    [recoverDetailOverlay, btnRecoverRestore, btnRecoverCancel],
     [onboardingOverlay, btnOnboardingGo, btnOnboardingCancel],
     [milestoneOverlay, btnMilestoneClose, btnMilestoneClose],
     [gamewinOverlay, btnGamewinClose, btnGamewinClose],
@@ -1462,6 +1478,7 @@
     renderWizardIfOpen();
     updateDayNotesSummary();
     updateDayReportRecipientsLine();
+    renderRecoverDataList();
   }
 
   // A rotation entry is { gameType, target, unit } — its own rule, not
@@ -2942,8 +2959,12 @@
   // stamped at or after this instant, for every rated player - used by
   // "reset today's stats" so a day restarted from scratch also restarts
   // today's rating movement, not just the win/loss counts.
+  // Returns name -> popped history entries (newest first), so callers
+  // that need a recovery snapshot (see resetTodayStats) know exactly what
+  // was reverted, instead of having to diff PLAYER_RATINGS before/after.
   function revertRatingsChangedSince(startMs) {
     var changed = false;
+    var popped = {};
     Object.keys(PLAYER_RATINGS).forEach(function (key) {
       var entry = PLAYER_RATINGS[key];
       var history = entry.history || [];
@@ -2955,9 +2976,12 @@
         entry.rating -= last.delta;
         if (last.fromGame) entry.gamesPlayed = Math.max(0, entry.gamesPlayed - 1);
         changed = true;
+        if (!popped[key]) popped[key] = [];
+        popped[key].push(last);
       }
     });
     if (changed) saveRatingsToStorage(PLAYER_RATINGS);
+    return popped;
   }
 
   // Reverses the win-count, rating, rotation-position and history
@@ -3213,15 +3237,44 @@
   // rewinds every player's rating to what it was before today's play,
   // leaving every earlier day untouched. Lives in the Reset section
   // (Backup & Transfer), for when the whole day's session needs a do-over.
+  // Rebuilds the live session win tallies from state.gameHistory as it
+  // currently stands, rather than adjusting counters by hand - used both
+  // by resetTodayStats (after pruning today's entries) and by the Recover
+  // Data restore flow (after merging archived games back in), so both
+  // stay self-consistent with whatever's actually in the game log.
+  function recomputeLiveWinsFromGameHistory() {
+    state.playerWins = {};
+    state.teamWins = {};
+    state.teamMvpWins = {};
+    state.gameHistory.forEach(function (entry) {
+      if (!entry || typeof entry === "string" || !entry.winnerIds) return;
+      entry.winnerIds.forEach(function (id) {
+        state.playerWins[id] = (state.playerWins[id] || 0) + 1;
+      });
+      if (entry.isTeam && entry.teamId) {
+        state.teamWins[entry.teamId] = (state.teamWins[entry.teamId] || 0) + 1;
+        if (entry.mvpId) {
+          state.teamMvpWins[entry.mvpId] = (state.teamMvpWins[entry.mvpId] || 0) + 1;
+        }
+      }
+    });
+    state.gamesPlayedCount = state.gameHistory.length;
+  }
+
   function resetTodayStats() {
     confirmModal(T("confirm.resetTodayStats"), function () {
       exportAllData();
       var today = todayDateStr();
       var todayStartMs = periodStartDate("today").getTime();
 
+      var prunedSessions = {};
       Object.keys(PLAYER_STATS).forEach(function (key) {
         var entry = PLAYER_STATS[key];
         if (!entry || !Array.isArray(entry.sessions)) return;
+        var todaysSessions = entry.sessions.filter(function (s) {
+          return s.date === today;
+        });
+        if (todaysSessions.length) prunedSessions[key] = todaysSessions;
         entry.sessions = entry.sessions.filter(function (s) {
           return s.date !== today;
         });
@@ -3231,29 +3284,30 @@
       // Keeps any stray earlier-day entries from a session left open across
       // midnight, then rebuilds the live win counters from what's left
       // instead of just zeroing them, so that carryover isn't lost.
+      var todaysGameHistory = (state.gameHistory || []).filter(function (entry) {
+        return entry && entry.ts && localDateStrFromTs(entry.ts) === today;
+      });
       state.gameHistory = (state.gameHistory || []).filter(function (entry) {
         return !(entry && entry.ts && localDateStrFromTs(entry.ts) === today);
       });
-      state.playerWins = {};
-      state.teamWins = {};
-      state.teamMvpWins = {};
-      state.gameHistory.forEach(function (entry) {
-        if (!entry || typeof entry === "string" || !entry.winnerIds) return;
-        entry.winnerIds.forEach(function (id) {
-          state.playerWins[id] = (state.playerWins[id] || 0) + 1;
-        });
-        if (entry.isTeam && entry.teamId) {
-          state.teamWins[entry.teamId] = (state.teamWins[entry.teamId] || 0) + 1;
-          if (entry.mvpId) {
-            state.teamMvpWins[entry.mvpId] = (state.teamMvpWins[entry.mvpId] || 0) + 1;
-          }
-        }
-      });
-      state.gamesPlayedCount = state.gameHistory.length;
+      var prevPlayerWins = JSON.parse(JSON.stringify(state.playerWins));
+      var prevTeamWins = JSON.parse(JSON.stringify(state.teamWins));
+      var prevTeamMvpWins = JSON.parse(JSON.stringify(state.teamMvpWins));
+      recomputeLiveWinsFromGameHistory();
       resetGameBalls();
       saveState();
 
-      revertRatingsChangedSince(todayStartMs);
+      var poppedRatingHistory = revertRatingsChangedSince(todayStartMs);
+
+      saveResetSnapshot("todayStats", T("resetSnapshot.todayStatsLabel", { date: today }), {
+        date: today,
+        prunedSessions: prunedSessions,
+        gameHistory: todaysGameHistory,
+        playerWins: prevPlayerWins,
+        teamWins: prevTeamWins,
+        teamMvpWins: prevTeamMvpWins,
+        ratingHistory: poppedRatingHistory
+      });
 
       if (currentStatsPlayerName) {
         currentStatsSessions = getPlayerSessions(currentStatsPlayerName);
@@ -4094,6 +4148,31 @@
     }
   }
 
+  // Capped local history of what each reset button just wiped, so it can
+  // be recovered from the Recover Data panel without hunting for a
+  // downloaded backup file. Newest first, oldest dropped once full.
+  var RESET_SNAPSHOTS_KEY = "poolMasterCounter.resetSnapshots.v1";
+  var RESET_SNAPSHOTS_CAP = 12;
+
+  function loadResetSnapshotsFromStorage() {
+    try {
+      var raw = localStorage.getItem(RESET_SNAPSHOTS_KEY);
+      var parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function saveResetSnapshotsToStorage(snapshots) {
+    if (noStatsMode) return;
+    try {
+      localStorage.setItem(RESET_SNAPSHOTS_KEY, JSON.stringify(snapshots));
+    } catch (e) {
+      console.warn("Could not save reset snapshots.", e);
+    }
+  }
+
   // One-time-per-load cleanup: if PLAYER_STATS already has separate entries
   // for the same person under different casing (e.g. "Bob" and "bob" from
   // before names were treated as case-insensitive), merge their sessions
@@ -4355,6 +4434,17 @@
     saveRemovedPlayersToStorage(REMOVED_PLAYERS);
   }
 
+  var RESET_SNAPSHOTS = loadResetSnapshotsFromStorage();
+
+  // `data` should already be a plain deep-cloned object (JSON.parse(
+  // JSON.stringify(...)), same pattern celebrateTournamentWin's undo
+  // snapshot uses) holding only the slice that reset is about to wipe.
+  function saveResetSnapshot(type, label, data) {
+    RESET_SNAPSHOTS.unshift({ id: uid(), type: type, ts: new Date().toISOString(), label: label, data: data });
+    RESET_SNAPSHOTS = RESET_SNAPSHOTS.slice(0, RESET_SNAPSHOTS_CAP);
+    saveResetSnapshotsToStorage(RESET_SNAPSHOTS);
+  }
+
   var PLAYER_NAME_TRANSLATIONS = loadPlayerNameTranslationsFromStorage();
 
   function findPlayerNameTranslationKey(name) {
@@ -4461,6 +4551,9 @@
   function resetAllPlayersOfficialRating() {
     confirmModal(T("confirm.resetAllRatingsExplain", { rating: DEFAULT_RATING }), function () {
       confirmModal(T("confirm.areYouSure"), function () {
+        saveResetSnapshot("allRatings", T("resetSnapshot.allRatingsLabel"), {
+          ratings: JSON.parse(JSON.stringify(PLAYER_RATINGS))
+        });
         state.players.forEach(function (p) {
           var key = findRatingKey(p.name) || p.name;
           PLAYER_RATINGS[key] = { name: key, rating: DEFAULT_RATING, gamesPlayed: 0, history: [] };
@@ -4733,6 +4826,13 @@
   function resetAllPlayerStats() {
     confirmModal(T("confirm.resetAllPlayerStats"), function () {
       exportAllData();
+      saveResetSnapshot("allPlayerStats", T("resetSnapshot.allPlayerStatsLabel"), {
+        playerStats: JSON.parse(JSON.stringify(PLAYER_STATS)),
+        gameHistory: JSON.parse(JSON.stringify(state.gameHistory)),
+        playerWins: JSON.parse(JSON.stringify(state.playerWins)),
+        teamWins: JSON.parse(JSON.stringify(state.teamWins)),
+        teamMvpWins: JSON.parse(JSON.stringify(state.teamMvpWins))
+      });
       PLAYER_STATS = {};
       savePlayerStatsToStorage(PLAYER_STATS);
       state.playerWins = {};
@@ -4761,6 +4861,13 @@
     }
     confirmModal(T("confirm.resetRosterLists"), function () {
       exportRosterLists();
+      saveResetSnapshot("rosterLists", T("resetSnapshot.rosterListsLabel"), {
+        rosters: JSON.parse(JSON.stringify(SAVED_ROSTERS)),
+        players: JSON.parse(JSON.stringify(state.players)),
+        playerWins: JSON.parse(JSON.stringify(state.playerWins)),
+        teamWins: JSON.parse(JSON.stringify(state.teamWins)),
+        teamMvpWins: JSON.parse(JSON.stringify(state.teamMvpWins))
+      });
       SAVED_ROSTERS = [];
       saveRostersToStorage(SAVED_ROSTERS);
       populateRosterLoadSelect();
@@ -5240,6 +5347,376 @@
           alertModal(T("alert.couldNotImport", { message: e.message }));
         }
       });
+    };
+    reader.onerror = function () {
+      alertModal(T("alert.couldNotReadFile"));
+    };
+    reader.readAsText(file);
+  }
+
+  // ---------------------------------------------------------------------
+  // Recover Data (reset snapshots + comparison/recovery)
+  // ---------------------------------------------------------------------
+
+  // The player names a snapshot has data for, plus anyone appearing in its
+  // game log (covers a name that shows up in games but has no separate
+  // stats entry for some reason).
+  function namesInSnapshot(type, data) {
+    var names = {};
+    if (type === "todayStats") {
+      Object.keys(data.prunedSessions || {}).forEach(function (n) {
+        names[n] = true;
+      });
+    } else if (type === "allPlayerStats") {
+      Object.keys(data.playerStats || {}).forEach(function (n) {
+        names[n] = true;
+      });
+    } else if (type === "allRatings") {
+      Object.keys(data.ratings || {}).forEach(function (n) {
+        names[n] = true;
+      });
+    } else if (type === "playerStats") {
+      if (data.name) names[data.name] = true;
+    } else if (type === "rosterLists") {
+      (data.players || []).forEach(function (p) {
+        if (p && p.name) names[p.name] = true;
+      });
+    }
+    (data.gameHistory || []).forEach(function (g) {
+      (g.winnerNames || []).concat(g.opponentNames || []).forEach(function (n) {
+        names[n] = true;
+      });
+    });
+    return Object.keys(names).sort(function (a, b) {
+      return a.localeCompare(b);
+    });
+  }
+
+  // A player's sessions as recorded in this snapshot - same shape
+  // mergeSessionLists already knows how to combine, whatever the type.
+  function sessionsInSnapshotForPlayer(type, data, name) {
+    if (type === "todayStats") return data.prunedSessions[name] || [];
+    if (type === "allPlayerStats") return (data.playerStats[name] && data.playerStats[name].sessions) || [];
+    if (type === "playerStats") return data.sessions || [];
+    return [];
+  }
+
+  function summarizeSnapshotPlayer(type, data, name) {
+    if (type === "allRatings") {
+      var r = data.ratings[name];
+      return r ? T("recoverData.ratingSummary", { rating: r.rating, games: r.gamesPlayed || 0 }) : "";
+    }
+    if (type === "rosterLists") return "";
+    var sessions = sessionsInSnapshotForPlayer(type, data, name);
+    var games = 0;
+    var wins = 0;
+    sessions.forEach(function (s) {
+      games += (s.games || []).length;
+      wins += s.wins || 0;
+    });
+    return T("recoverData.gamesSummary", { games: games, wins: wins });
+  }
+
+  function snapshotOverallSummary(type, data) {
+    if (type === "tournament") return T("recoverData.tournamentSummary");
+    var names = namesInSnapshot(type, data);
+    if (type === "rosterLists") {
+      return T("recoverData.rosterListsSummary", { players: names.length, lists: (data.rosters || []).length });
+    }
+    var gameCount = (data.gameHistory || []).length;
+    return gameCount
+      ? T("recoverData.playersAndGamesSummary", { players: names.length, games: gameCount })
+      : T("recoverData.playersSummary", { players: names.length });
+  }
+
+  function renderRecoverDataList() {
+    recoverDataList.innerHTML = "";
+    if (RESET_SNAPSHOTS.length === 0) {
+      var hint = document.createElement("li");
+      hint.className = "empty-hint";
+      hint.textContent = T("recoverData.none");
+      recoverDataList.appendChild(hint);
+      return;
+    }
+    RESET_SNAPSHOTS.forEach(function (entry) {
+      var li = document.createElement("li");
+      li.className = "recover-data-row";
+      var info = document.createElement("div");
+      info.className = "recover-data-row-info";
+      var label = document.createElement("span");
+      label.className = "recover-data-row-label";
+      label.textContent = entry.label;
+      var meta = document.createElement("span");
+      meta.className = "recover-data-row-meta";
+      var when;
+      try {
+        when = new Date(entry.ts).toLocaleString();
+      } catch (e) {
+        when = entry.ts;
+      }
+      meta.textContent = when + " · " + snapshotOverallSummary(entry.type, entry.data);
+      info.appendChild(label);
+      info.appendChild(meta);
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn btn-ghost";
+      btn.textContent = T("recoverData.recover");
+      btn.addEventListener("click", function () {
+        openRecoverDetail(entry.type, entry.label, entry.data);
+      });
+      li.appendChild(info);
+      li.appendChild(btn);
+      recoverDataList.appendChild(li);
+    });
+  }
+
+  var recoverDetailCurrent = null; // { type, data }
+
+  function renderRecoverGamesChecklist(type, data) {
+    if (type !== "todayStats" && type !== "allPlayerStats") {
+      recoverGamesChecklist.innerHTML = "";
+      return;
+    }
+    var checkedNames = {};
+    Array.prototype.forEach.call(recoverPlayersChecklist.querySelectorAll('input[type="checkbox"]:checked'), function (cb) {
+      checkedNames[cb.value] = true;
+    });
+    var relevantGames = (data.gameHistory || []).filter(function (g) {
+      return (g.winnerNames || []).concat(g.opponentNames || []).some(function (n) {
+        return checkedNames[n];
+      });
+    });
+    recoverGamesChecklist.innerHTML = "";
+    relevantGames.forEach(function (g) {
+      var li = document.createElement("li");
+      var label = document.createElement("label");
+      var checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.value = g.ts;
+      checkbox.checked = true;
+      var span = document.createElement("span");
+      var winners = joinNamesForReport(g.winnerNames || []);
+      var losers = joinNamesForReport(g.opponentNames || []);
+      var time = formatReportGameTime(g.ts);
+      span.textContent = (time ? time + " — " : "") + winners + " won " + g.gameLabel + (losers ? " against " + losers : "");
+      label.appendChild(checkbox);
+      label.appendChild(span);
+      li.appendChild(label);
+      recoverGamesChecklist.appendChild(li);
+    });
+  }
+
+  function openRecoverDetail(type, label, data) {
+    recoverDetailCurrent = { type: type, data: data };
+    recoverDetailTitle.textContent = label;
+    recoverDetailExplain.textContent = T("recoverData.detailExplain");
+
+    var isTournament = type === "tournament";
+    var isRosterLists = type === "rosterLists";
+    var hasGames = type === "todayStats" || type === "allPlayerStats";
+    recoverPlayersSection.classList.toggle("hidden", isTournament);
+    recoverGamesSection.classList.toggle("hidden", !hasGames);
+    recoverRostersSection.classList.toggle("hidden", !isRosterLists);
+
+    recoverPlayersChecklist.innerHTML = "";
+    if (!isTournament) {
+      namesInSnapshot(type, data).forEach(function (name) {
+        var li = document.createElement("li");
+        li.className = "tournament-player-check-row";
+        var rowLabel = document.createElement("label");
+        var checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.value = name;
+        checkbox.addEventListener("change", function () {
+          renderRecoverGamesChecklist(type, data);
+        });
+        var span = document.createElement("span");
+        var summary = summarizeSnapshotPlayer(type, data, name);
+        span.textContent = summary ? name + " — " + summary : name;
+        rowLabel.appendChild(checkbox);
+        rowLabel.appendChild(span);
+        li.appendChild(rowLabel);
+        recoverPlayersChecklist.appendChild(li);
+      });
+    }
+    renderRecoverGamesChecklist(type, data);
+
+    recoverRostersChecklist.innerHTML = "";
+    if (isRosterLists) {
+      (data.rosters || []).forEach(function (r) {
+        var li = document.createElement("li");
+        li.className = "tournament-player-check-row";
+        var rowLabel = document.createElement("label");
+        var checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.value = r.id;
+        var span = document.createElement("span");
+        span.textContent = r.label;
+        rowLabel.appendChild(checkbox);
+        rowLabel.appendChild(span);
+        li.appendChild(rowLabel);
+        recoverRostersChecklist.appendChild(li);
+      });
+    }
+
+    recoverDetailOverlay.classList.remove("hidden");
+  }
+
+  function closeRecoverDetail() {
+    recoverDetailOverlay.classList.add("hidden");
+    recoverDetailCurrent = null;
+  }
+
+  // Dedupes by ts (same convention mergeRatingsData uses for rating
+  // history entries), newest first, capped the same way live play caps
+  // state.gameHistory in creditWin.
+  function mergeGameHistoryEntries(local, restored) {
+    var seen = {};
+    (local || []).forEach(function (e) {
+      if (e && e.ts) seen[e.ts] = true;
+    });
+    var merged = (local || []).slice();
+    (restored || []).forEach(function (e) {
+      if (!e || !e.ts || seen[e.ts]) return;
+      seen[e.ts] = true;
+      merged.push(e);
+    });
+    merged.sort(function (a, b) {
+      return (b.ts || "").localeCompare(a.ts || "");
+    });
+    if (merged.length > 200) merged.length = 200;
+    return merged;
+  }
+
+  function restoreCheckedFromSnapshot() {
+    if (!recoverDetailCurrent) return;
+    var type = recoverDetailCurrent.type;
+    var data = recoverDetailCurrent.data;
+
+    if (type === "tournament") {
+      if (TOURNAMENT) {
+        showToast(T("toast.recoverTournamentBlocked"));
+        return;
+      }
+      TOURNAMENT = JSON.parse(JSON.stringify(data.tournament));
+      saveTournamentToStorage(TOURNAMENT);
+      renderTournamentPage();
+      closeRecoverDetail();
+      showToast(T("toast.recoverRestored"));
+      return;
+    }
+
+    var checkedPlayers = Array.prototype.slice
+      .call(recoverPlayersChecklist.querySelectorAll('input[type="checkbox"]:checked'))
+      .map(function (cb) {
+        return cb.value;
+      });
+
+    if (type === "rosterLists") {
+      var checkedRosterIds = Array.prototype.slice
+        .call(recoverRostersChecklist.querySelectorAll('input[type="checkbox"]:checked'))
+        .map(function (cb) {
+          return cb.value;
+        });
+      checkedPlayers.forEach(function (name) {
+        var alreadyThere = state.players.some(function (p) {
+          return normalizeNameKey(p.name) === normalizeNameKey(name);
+        });
+        if (!alreadyThere) addPlayer(name);
+      });
+      if (checkedRosterIds.length) {
+        var toRestore = (data.rosters || []).filter(function (r) {
+          return checkedRosterIds.indexOf(r.id) !== -1;
+        });
+        var merge = mergeRosterLists(SAVED_ROSTERS, toRestore);
+        SAVED_ROSTERS = merge.rosters;
+        saveRostersToStorage(SAVED_ROSTERS);
+        populateRosterLoadSelect();
+      }
+      saveState();
+      renderAll();
+      closeRecoverDetail();
+      showToast(T("toast.recoverRestored"));
+      return;
+    }
+
+    var restoredStats = false;
+    checkedPlayers.forEach(function (name) {
+      var sessions = sessionsInSnapshotForPlayer(type, data, name);
+      if (sessions.length) {
+        var key = findPlayerStatsKey(name) || name;
+        var existing = (PLAYER_STATS[key] && PLAYER_STATS[key].sessions) || [];
+        PLAYER_STATS[key] = { name: key, sessions: mergeSessionLists(existing, sessions) };
+        restoredStats = true;
+      }
+      var historyToRestore =
+        type === "todayStats" && data.ratingHistory
+          ? data.ratingHistory[name]
+          : type === "allRatings" && data.ratings && data.ratings[name]
+          ? data.ratings[name].history
+          : null;
+      if (historyToRestore && historyToRestore.length) {
+        var importedRatingsObj = {};
+        importedRatingsObj[name] = { history: historyToRestore };
+        var mergedR = mergeRatingsData(PLAYER_RATINGS, importedRatingsObj);
+        PLAYER_RATINGS[name] = mergedR[name];
+        restoredStats = true;
+      }
+    });
+    if (restoredStats) {
+      savePlayerStatsToStorage(PLAYER_STATS);
+      saveRatingsToStorage(PLAYER_RATINGS);
+    }
+
+    var checkedGameTs = Array.prototype.slice
+      .call(recoverGamesChecklist.querySelectorAll('input[type="checkbox"]:checked'))
+      .map(function (cb) {
+        return cb.value;
+      });
+    if (checkedGameTs.length) {
+      var gamesToRestore = (data.gameHistory || []).filter(function (g) {
+        return checkedGameTs.indexOf(g.ts) !== -1;
+      });
+      state.gameHistory = mergeGameHistoryEntries(state.gameHistory, gamesToRestore);
+      recomputeLiveWinsFromGameHistory();
+      saveState();
+    }
+
+    renderAll();
+    closeRecoverDetail();
+    showToast(T("toast.recoverRestored"));
+  }
+
+  // A re-imported full backup file doesn't carry a reset "type" of its
+  // own - treat it like an allPlayerStats snapshot (same player+game
+  // checklist shape) so it flows through the identical recovery UI.
+  function normalizeImportedBackupAsSnapshot(data) {
+    var importedState = data.state && typeof data.state === "object" ? data.state : {};
+    return {
+      type: "allPlayerStats",
+      data: {
+        playerStats: data.playerStats && typeof data.playerStats === "object" ? data.playerStats : {},
+        gameHistory: Array.isArray(importedState.gameHistory) ? importedState.gameHistory : []
+      }
+    };
+  }
+
+  function importFileForRecovery(file) {
+    var reader = new FileReader();
+    reader.onload = function () {
+      var data;
+      try {
+        data = JSON.parse(reader.result);
+      } catch (e) {
+        alertModal(T("alert.notValidJson"));
+        return;
+      }
+      if (!data || typeof data !== "object" || !data.state) {
+        alertModal(T("alert.notABackupFile"));
+        return;
+      }
+      var normalized = normalizeImportedBackupAsSnapshot(data);
+      openRecoverDetail(normalized.type, T("recoverData.importedFileLabel"), normalized.data);
     };
     reader.onerror = function () {
       alertModal(T("alert.couldNotReadFile"));
@@ -8698,9 +9175,15 @@
   function abandonTournament() {
     var isDone = TOURNAMENT && TOURNAMENT.champion;
     var clear = function () {
+      if (TOURNAMENT) {
+        saveResetSnapshot("tournament", T("resetSnapshot.tournamentLabel"), {
+          tournament: JSON.parse(JSON.stringify(TOURNAMENT))
+        });
+      }
       TOURNAMENT = null;
       saveTournamentToStorage(null);
       renderTournamentPage();
+      renderRecoverDataList();
     };
     if (isDone) {
       clear();
@@ -9191,10 +9674,15 @@
     var name = currentStatsPlayerName;
     if (!name) return;
     confirmModal(T("confirm.resetPlayerStats", { name: name }), function () {
+      saveResetSnapshot("playerStats", T("resetSnapshot.playerStatsLabel", { name: name }), {
+        name: name,
+        sessions: JSON.parse(JSON.stringify(getPlayerSessions(name)))
+      });
       currentStatsSessions = [];
       setPlayerSessions(name, []);
       renderPlayerHistoryList([]);
       renderPlayerSynopsis();
+      renderRecoverDataList();
     });
   }
 
@@ -9223,6 +9711,21 @@
   btnResetRosterLists.addEventListener("click", resetAllRosterLists);
   btnResetAllRatings.addEventListener("click", resetAllPlayersOfficialRating);
   btnResetSessionTournament.addEventListener("click", resetSessionAndTournament);
+
+  btnRecoverImportFile.addEventListener("click", function () {
+    recoverImportFileInput.click();
+  });
+  recoverImportFileInput.addEventListener("change", function () {
+    var file = recoverImportFileInput.files && recoverImportFileInput.files[0];
+    recoverImportFileInput.value = "";
+    if (!file) return;
+    importFileForRecovery(file);
+  });
+  btnRecoverRestore.addEventListener("click", restoreCheckedFromSnapshot);
+  btnRecoverCancel.addEventListener("click", closeRecoverDetail);
+  recoverDetailOverlay.addEventListener("click", function (e) {
+    if (e.target === recoverDetailOverlay) closeRecoverDetail();
+  });
 
   btnRatingEditSave.addEventListener("click", saveRatingEditPopup);
   btnRatingEditCancel.addEventListener("click", closeRatingEditPopup);
@@ -9419,6 +9922,20 @@
     endTournamentSilently();
   });
   btnSaveSessionSkip.addEventListener("click", function () {
+    // "Skip" never folded this session into PLAYER_STATS (that's what
+    // "Save" does via exportAllPlayerStats) - the only thing about to be
+    // lost is the live gameHistory/win tallies, so snapshot just those.
+    if (state.gameHistory.length) {
+      saveResetSnapshot("todayStats", T("resetSnapshot.sessionSkipLabel", { date: todayDateStr() }), {
+        date: todayDateStr(),
+        prunedSessions: {},
+        gameHistory: JSON.parse(JSON.stringify(state.gameHistory)),
+        playerWins: JSON.parse(JSON.stringify(state.playerWins)),
+        teamWins: JSON.parse(JSON.stringify(state.teamWins)),
+        teamMvpWins: JSON.parse(JSON.stringify(state.teamMvpWins)),
+        ratingHistory: {}
+      });
+    }
     closeSaveSessionPopup();
     startNewSession(false);
     endTournamentSilently();
@@ -9556,6 +10073,7 @@
   wireCollapsiblePanel("history-panel", "btn-toggle-history-panel");
   wireCollapsiblePanel("day-notes-panel", "btn-toggle-day-notes-panel");
   wireCollapsiblePanel("resets-panel", "btn-toggle-resets-panel");
+  wireCollapsiblePanel("recover-data-panel", "btn-toggle-recover-data-panel");
   wireCollapsiblePanel("focus-players-wrap", "btn-toggle-focus-players");
   wireCollapsiblePanel("player-page-h2h-panel", "btn-toggle-player-page-h2h-panel");
 

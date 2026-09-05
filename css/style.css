@@ -2028,6 +2028,125 @@ input[type="number"] {
   padding: 10px 12px;
 }
 
+/* ---------- Recover Data (reset snapshots + comparison/recovery) ---------- */
+
+.recover-data-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.recover-data-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.recover-data-row-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.recover-data-row-label {
+  font-weight: 700;
+}
+
+.recover-data-row-meta {
+  font-size: 0.82rem;
+  color: var(--text-dim);
+}
+
+.recover-detail-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 1000;
+}
+
+.recover-detail-card {
+  background: linear-gradient(180deg, var(--felt-light) 0%, var(--felt) 60%, var(--bg-glow) 100%);
+  border: 2px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 28px 24px;
+  max-width: 560px;
+  width: 100%;
+  max-height: 86vh;
+  overflow-y: auto;
+  text-align: left;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  animation: milestone-pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.recover-detail-card h2 {
+  margin: 0 0 10px;
+  color: var(--accent);
+  font-size: 1.4rem;
+  text-align: center;
+}
+
+.recover-detail-explain {
+  margin: 0 0 18px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.recover-detail-card h3 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+  color: var(--accent);
+}
+
+.recover-games-checklist {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.recover-games-checklist label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  font-size: 0.88rem;
+}
+
+.recover-games-checklist input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  flex-shrink: 0;
+}
+
+.recover-detail-card .rating-edit-actions {
+  margin-top: 8px;
+}
+
 /* ---------- Generic modal alert/confirm/prompt (replaces native
    alert()/confirm()/prompt(), which pause the whole page and read as a
    browser chrome popup rather than part of the app) ---------- */
