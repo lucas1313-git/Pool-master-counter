@@ -8,7 +8,12 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#1a0a0a">
 <title>Pool Master Counter</title>
-<link rel="stylesheet" href="css/style.css">
+<!-- apple-mobile-web-app-capable above makes a home-screen icon load as a
+     standalone view with much stickier caching than a normal Safari tab -
+     bump the ?v= on both the stylesheet and script tags below on every
+     deploy that touches css/style.css or js/app.js, or returning users can
+     silently keep running old code indefinitely. -->
+<link rel="stylesheet" href="css/style.css?v=20260905a">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -933,6 +938,6 @@
 
 </div>
 
-<script src="js/app.js"></script>
+<script src="js/app.js?v=20260905a"></script>
 </body>
 </html>
