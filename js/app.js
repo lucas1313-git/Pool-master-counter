@@ -3675,7 +3675,30 @@
         g.isLive = !!liveTsSet[ts];
         return g;
       });
-    return { date: dateStr, games: games, players: players };
+    // Bracket tournaments (single/double elim, round robin) are tracked
+    // entirely separately from state.gameHistory/PLAYER_STATS - without
+    // this they'd never show up in the day report at all, no matter how
+    // recently one finished.
+    var tournaments = TOURNAMENT_RESULTS.filter(function (r) {
+      return r.format !== "session-race" && r.ts && r.ts >= cutoffTs;
+    }).sort(function (a, b) {
+      return a.ts.localeCompare(b.ts);
+    });
+    return { date: dateStr, games: games, players: players, tournaments: tournaments };
+  }
+
+  function tournamentFormatLabel(format) {
+    if (format === "single") return "Single Elimination";
+    if (format === "double") return "Double Elimination";
+    if (format === "roundrobin") return "Round Robin";
+    return "Tournament";
+  }
+
+  function formatReportTournamentLine(t) {
+    var time = formatReportGameTime(t.ts);
+    var champions = joinNamesForReport(t.championNames || []);
+    var text = champions + " won the " + tournamentFormatLabel(t.format) + " tournament (" + (t.players || []).length + " players)";
+    return "👑 " + (time ? time + " — " : "") + text;
   }
 
   function joinNamesForReport(names) {
@@ -3717,18 +3740,16 @@
     });
   }
 
+  // Always leads with a time, even for a grouped repeat-matchup line
+  // (using the first game's time in that group) - dropping it there was
+  // inconsistent with every other line in the report showing one.
   function formatReportGameGroupLine(group) {
     var winners = joinNamesForReport(group.winnerNames || []);
     var losers = joinNamesForReport(group.opponentNames || []);
-    if (group.count === 1) {
-      var time = formatReportGameTime(group.ts);
-      var text = winners + " won " + group.gameLabel;
-      if (losers) text += " against " + losers;
-      return (time ? time + " — " : "") + text;
-    }
-    var text2 = winners + " won " + group.count + " games of " + group.gameLabel;
-    if (losers) text2 += " against " + losers;
-    return text2;
+    var time = formatReportGameTime(group.ts);
+    var text = group.count === 1 ? winners + " won " + group.gameLabel : winners + " won " + group.count + " games of " + group.gameLabel;
+    if (losers) text += " against " + losers;
+    return (time ? time + " — " : "") + text;
   }
 
   function formatReportRatingDelta(delta) {
@@ -3738,27 +3759,61 @@
     return "—";
   }
 
-  // Markdown-style pipe table row. Column-padding alignment only works in
-  // a monospace font, which most email/SMS/notes apps don't guarantee for
-  // plain text - pipes stay readable as "this is a table" regardless of
-  // font, and render as an actual HTML table in any client/app that
-  // interprets Markdown (Notes, GitHub, many chat apps).
-  function pipeRow(cells) {
-    return "| " + cells.join(" | ") + " |";
+  function repeatChar(ch, count) {
+    var s = "";
+    for (var i = 0; i < count; i++) s += ch;
+    return s;
   }
 
-  function pipeHeaderDivider(count) {
-    var cells = [];
-    for (var i = 0; i < count; i++) cells.push("---");
-    return pipeRow(cells);
+  // Pads by UTF-16 length, so CJK text (double-width in a monospace font)
+  // won't line up as precisely as Latin text - an accepted limitation of
+  // a plain-text-only report with no real table rendering.
+  function padTableCell(text, width, alignRight) {
+    text = String(text);
+    var pad = repeatChar(" ", Math.max(0, width - text.length));
+    return alignRight ? pad + text : text + pad;
   }
 
-  function formatReportGameTableRow(group) {
+  function textTableColumnWidths(headers, rows) {
+    return headers.map(function (h, i) {
+      var width = String(h).length;
+      rows.forEach(function (r) {
+        width = Math.max(width, String(r[i]).length);
+      });
+      return width;
+    });
+  }
+
+  function textTableRow(cells, widths, alignRight) {
+    return (
+      "┊ " +
+      cells
+        .map(function (c, i) {
+          return padTableCell(c, widths[i], alignRight && alignRight[i]);
+        })
+        .join(" ┊ ") +
+      " ┊"
+    );
+  }
+
+  // A real fixed-width table, dotted borders and all - every column
+  // padded to its widest cell so it lines up vertically in a monospace
+  // view (Copy Report, Notes, most terminals/code blocks).
+  function buildTextTable(headers, rows, alignRight) {
+    var widths = textTableColumnWidths(headers, rows);
+    var headerRow = textTableRow(headers, widths);
+    var lines = [headerRow, repeatChar("·", headerRow.length)];
+    rows.forEach(function (r) {
+      lines.push(textTableRow(r, widths, alignRight));
+    });
+    return lines;
+  }
+
+  function gameLogTableRow(group) {
     var winners = joinNamesForReport(group.winnerNames || []);
     var losers = joinNamesForReport(group.opponentNames || []);
-    var timeCol = group.count === 1 ? formatReportGameTime(group.ts) : "—";
     var label = group.gameLabel + (group.count > 1 ? " ×" + group.count : "");
-    return pipeRow([timeCol, winners, losers ? "def." : "", losers, label]);
+    return [formatReportGameTime(group.ts), winners, losers ? "def." : "", losers, label];
   }
 
   // Always YYYY-MM-DD, regardless of the active language - dates are a
@@ -3780,25 +3835,36 @@
   function buildDayReportTextTable(dateStr) {
     var data = computeDayReportData(dateStr);
     var lines = ["🎱 POOL MASTER COUNTER — DAY REPORT", formatReportDateHeading(dateStr), ""];
-    if (data.players.length === 0) {
+    if (data.players.length === 0 && data.tournaments.length === 0) {
       lines.push("No games recorded today.");
     } else {
-      lines.push(pipeRow(["Player", "W", "L", "Rating", "Δ"]));
-      lines.push(pipeHeaderDivider(5));
-      data.players.forEach(function (p) {
-        lines.push(pipeRow([p.name, String(p.wins), String(p.losses), String(p.rating), formatReportRatingDelta(p.ratingDelta)]));
-      });
-      lines.push("");
-      var gameTypeCounts = {};
-      data.games.forEach(function (g) {
-        gameTypeCounts[g.gameLabel] = (gameTypeCounts[g.gameLabel] || 0) + 1;
-      });
-      var typesSummary = Object.keys(gameTypeCounts)
-        .map(function (label) {
-          return label + " ×" + gameTypeCounts[label];
-        })
-        .join(", ");
-      lines.push("**Total games: " + data.games.length + (typesSummary ? "   |   " + typesSummary : "") + "**");
+      if (data.players.length) {
+        var statHeaders = ["Player", "W", "L", "Rating", "Δ"];
+        var statRows = data.players.map(function (p) {
+          return [p.name, String(p.wins), String(p.losses), String(p.rating), formatReportRatingDelta(p.ratingDelta)];
+        });
+        buildTextTable(statHeaders, statRows, [false, true, true, true, true]).forEach(function (l) {
+          lines.push(l);
+        });
+        lines.push("");
+        var gameTypeCounts = {};
+        data.games.forEach(function (g) {
+          gameTypeCounts[g.gameLabel] = (gameTypeCounts[g.gameLabel] || 0) + 1;
+        });
+        var typesSummary = Object.keys(gameTypeCounts)
+          .map(function (label) {
+            return label + " ×" + gameTypeCounts[label];
+          })
+          .join(", ");
+        lines.push("Total games: " + data.games.length + (typesSummary ? "   |   " + typesSummary : ""));
+      }
+
+      if (data.tournaments.length) {
+        lines.push("");
+        data.tournaments.forEach(function (t) {
+          lines.push(formatReportTournamentLine(t));
+        });
+      }
 
       var earlierGames = data.games.filter(function (g) {
         return !g.isLive;
@@ -3807,32 +3873,25 @@
         return g.isLive;
       });
       var hasBothGroups = earlierGames.length > 0 && liveGames.length > 0;
+      var gameLogHeaders = ["Time", "Winner", "", "Loser", "Game"];
 
       if (data.games.length > 0) {
-        var gameLogHeader = pipeRow(["Time", "Winner", "", "Loser", "Game"]);
-        var gameLogDivider = pipeHeaderDivider(5);
         lines.push("");
-        lines.push("### Game Log");
+        lines.push("Game Log");
         if (hasBothGroups) {
           lines.push("");
-          lines.push("**Earlier session:**");
-          lines.push(gameLogHeader);
-          lines.push(gameLogDivider);
-          groupReportGames(earlierGames).forEach(function (g) {
-            lines.push(formatReportGameTableRow(g));
+          lines.push("Earlier session:");
+          buildTextTable(gameLogHeaders, groupReportGames(earlierGames).map(gameLogTableRow)).forEach(function (l) {
+            lines.push(l);
           });
           lines.push("");
-          lines.push("**Current session:**");
-          lines.push(gameLogHeader);
-          lines.push(gameLogDivider);
-          groupReportGames(liveGames).forEach(function (g) {
-            lines.push(formatReportGameTableRow(g));
+          lines.push("Current session:");
+          buildTextTable(gameLogHeaders, groupReportGames(liveGames).map(gameLogTableRow)).forEach(function (l) {
+            lines.push(l);
           });
         } else {
-          lines.push(gameLogHeader);
-          lines.push(gameLogDivider);
-          groupReportGames(data.games).forEach(function (g) {
-            lines.push(formatReportGameTableRow(g));
+          buildTextTable(gameLogHeaders, groupReportGames(data.games).map(gameLogTableRow)).forEach(function (l) {
+            lines.push(l);
           });
         }
       }
@@ -3840,29 +3899,38 @@
     var notes = getDayNotes(dateStr);
     if (notes) {
       lines.push("");
-      lines.push("### Notes");
+      lines.push("Notes");
       lines.push(notes);
     }
     return lines.join("\n");
   }
 
-  // Leaderboard-only - fastest to scan, no per-game breakdown.
   // Leaderboard table only - no game-type breakdown, no game log at all,
   // the shortest of the three formats regardless of how many games were
   // played today.
   function buildDayReportTextCompact(dateStr) {
     var data = computeDayReportData(dateStr);
     var lines = ["🎱 " + formatReportDateHeading(dateStr) + " — Day Report", ""];
-    if (data.players.length === 0) {
+    if (data.players.length === 0 && data.tournaments.length === 0) {
       lines.push("No games recorded today.");
     } else {
-      lines.push(pipeRow(["Player", "W", "L", "Rating", "Δ"]));
-      lines.push(pipeHeaderDivider(5));
-      data.players.forEach(function (p) {
-        lines.push(pipeRow([p.name, String(p.wins), String(p.losses), String(p.rating), formatReportRatingDelta(p.ratingDelta)]));
-      });
-      lines.push("");
-      lines.push(data.games.length + " game" + (data.games.length === 1 ? "" : "s") + " played today.");
+      if (data.players.length) {
+        var statHeaders = ["Player", "W", "L", "Rating", "Δ"];
+        var statRows = data.players.map(function (p) {
+          return [p.name, String(p.wins), String(p.losses), String(p.rating), formatReportRatingDelta(p.ratingDelta)];
+        });
+        buildTextTable(statHeaders, statRows, [false, true, true, true, true]).forEach(function (l) {
+          lines.push(l);
+        });
+        lines.push("");
+        lines.push(data.games.length + " game" + (data.games.length === 1 ? "" : "s") + " played today.");
+      }
+      if (data.tournaments.length) {
+        lines.push("");
+        data.tournaments.forEach(function (t) {
+          lines.push(formatReportTournamentLine(t));
+        });
+      }
     }
     var notes = getDayNotes(dateStr);
     if (notes) {
@@ -3883,28 +3951,39 @@
       longDate = formatReportDateHeading(dateStr);
     }
     var lines = ["🎱 Pool Master Counter — Day Report", longDate, "══════════════════════════", ""];
-    if (data.players.length === 0) {
+    if (data.players.length === 0 && data.tournaments.length === 0) {
       lines.push("No games recorded today.");
     } else {
-      lines.push("PLAYERS TODAY");
-      data.players.forEach(function (p) {
-        var winWord = p.wins === 1 ? "win" : "wins";
-        var lossWord = p.losses === 1 ? "loss" : "losses";
-        lines.push("• " + p.name + " — " + p.wins + " " + winWord + ", " + p.losses + " " + lossWord + ", rating " + p.rating + " (" + formatReportRatingDelta(p.ratingDelta) + ")");
-      });
-      lines.push("");
-      lines.push("SUMMARY");
-      lines.push("Total games played: " + data.games.length);
-      var gameTypeCounts = {};
-      data.games.forEach(function (g) {
-        gameTypeCounts[g.gameLabel] = (gameTypeCounts[g.gameLabel] || 0) + 1;
-      });
-      var typesSummary = Object.keys(gameTypeCounts)
-        .map(function (label) {
-          return label + " (" + gameTypeCounts[label] + ")";
-        })
-        .join(", ");
-      if (typesSummary) lines.push("Games played: " + typesSummary);
+      if (data.players.length) {
+        lines.push("PLAYERS TODAY");
+        data.players.forEach(function (p) {
+          var winWord = p.wins === 1 ? "win" : "wins";
+          var lossWord = p.losses === 1 ? "loss" : "losses";
+          lines.push("• " + p.name + " — " + p.wins + " " + winWord + ", " + p.losses + " " + lossWord + ", rating " + p.rating + " (" + formatReportRatingDelta(p.ratingDelta) + ")");
+        });
+        lines.push("");
+        lines.push("SUMMARY");
+        lines.push("Total games played: " + data.games.length);
+        var gameTypeCounts = {};
+        data.games.forEach(function (g) {
+          gameTypeCounts[g.gameLabel] = (gameTypeCounts[g.gameLabel] || 0) + 1;
+        });
+        var typesSummary = Object.keys(gameTypeCounts)
+          .map(function (label) {
+            return label + " (" + gameTypeCounts[label] + ")";
+          })
+          .join(", ");
+        if (typesSummary) lines.push("Games played: " + typesSummary);
+      }
+
+      if (data.tournaments.length) {
+        lines.push("");
+        lines.push("TOURNAMENTS");
+        data.tournaments.forEach(function (t) {
+          lines.push(formatReportTournamentLine(t));
+        });
+      }
+
       if (data.games.length > 0) {
         lines.push("");
         lines.push("GAME DETAILS");
