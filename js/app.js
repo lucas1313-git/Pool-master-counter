@@ -3731,17 +3731,6 @@
     return text2;
   }
 
-  // Fixed-width padding for the day report's plain-text tables. Pads by
-  // UTF-16 length, so CJK names (double-width in a monospace font) won't
-  // line up as precisely as Latin ones - an accepted limitation of a
-  // plain-text-only report with no real table rendering.
-  function padReportText(str, width, alignRight) {
-    str = String(str);
-    var pad = "";
-    for (var i = str.length; i < width; i++) pad += " ";
-    return alignRight ? pad + str : str + pad;
-  }
-
   function formatReportRatingDelta(delta) {
     if (delta === null) return "—";
     if (delta > 0) return "▲" + delta;
@@ -3749,15 +3738,27 @@
     return "—";
   }
 
-  function formatReportGameTableRow(group, winnerColWidth, loserColWidth) {
+  // Markdown-style pipe table row. Column-padding alignment only works in
+  // a monospace font, which most email/SMS/notes apps don't guarantee for
+  // plain text - pipes stay readable as "this is a table" regardless of
+  // font, and render as an actual HTML table in any client/app that
+  // interprets Markdown (Notes, GitHub, many chat apps).
+  function pipeRow(cells) {
+    return "| " + cells.join(" | ") + " |";
+  }
+
+  function pipeHeaderDivider(count) {
+    var cells = [];
+    for (var i = 0; i < count; i++) cells.push("---");
+    return pipeRow(cells);
+  }
+
+  function formatReportGameTableRow(group) {
     var winners = joinNamesForReport(group.winnerNames || []);
     var losers = joinNamesForReport(group.opponentNames || []);
     var timeCol = group.count === 1 ? formatReportGameTime(group.ts) : "—";
     var label = group.gameLabel + (group.count > 1 ? " ×" + group.count : "");
-    // "def.  " is 6 chars - keep the label column aligned even when there's
-    // no recorded opponent to name (e.g. a solo/practice win).
-    var verbSegment = losers ? "def.  " + padReportText(losers, loserColWidth) : padReportText("", 6 + loserColWidth);
-    return padReportText(timeCol, 8) + "  " + padReportText(winners, winnerColWidth) + "  " + verbSegment + "  " + label;
+    return pipeRow([timeCol, winners, losers ? "def." : "", losers, label]);
   }
 
   // Always YYYY-MM-DD, regardless of the active language - dates are a
@@ -3778,51 +3779,14 @@
 
   function buildDayReportTextTable(dateStr) {
     var data = computeDayReportData(dateStr);
-    var divider = "──────────";
     var lines = ["🎱 POOL MASTER COUNTER — DAY REPORT", formatReportDateHeading(dateStr), ""];
     if (data.players.length === 0) {
       lines.push("No games recorded today.");
     } else {
-      var nameWidth = data.players.reduce(function (max, p) { return Math.max(max, p.name.length); }, "Player".length);
-      var winWidth = data.players.reduce(function (max, p) { return Math.max(max, String(p.wins).length); }, 1);
-      var lossWidth = data.players.reduce(function (max, p) { return Math.max(max, String(p.losses).length); }, 1);
-      var ratingWidth = data.players.reduce(function (max, p) { return Math.max(max, String(p.rating).length); }, "Rating".length);
-      var deltaWidth = data.players.reduce(function (max, p) { return Math.max(max, formatReportRatingDelta(p.ratingDelta).length); }, 1);
-
-      lines.push(
-        padReportText("Player", nameWidth) +
-          "   " +
-          padReportText("W", winWidth, true) +
-          "   " +
-          padReportText("L", lossWidth, true) +
-          "   " +
-          padReportText("Rating", ratingWidth, true) +
-          "   " +
-          padReportText("Δ", deltaWidth, true)
-      );
-      lines.push(
-        padReportText("", nameWidth).replace(/ /g, "-") +
-          "   " +
-          padReportText("", winWidth).replace(/ /g, "-") +
-          "   " +
-          padReportText("", lossWidth).replace(/ /g, "-") +
-          "   " +
-          padReportText("", ratingWidth).replace(/ /g, "-") +
-          "   " +
-          padReportText("", deltaWidth).replace(/ /g, "-")
-      );
+      lines.push(pipeRow(["Player", "W", "L", "Rating", "Δ"]));
+      lines.push(pipeHeaderDivider(5));
       data.players.forEach(function (p) {
-        lines.push(
-          padReportText(p.name, nameWidth) +
-            "   " +
-            padReportText(p.wins, winWidth, true) +
-            "   " +
-            padReportText(p.losses, lossWidth, true) +
-            "   " +
-            padReportText(p.rating, ratingWidth, true) +
-            "   " +
-            padReportText(formatReportRatingDelta(p.ratingDelta), deltaWidth, true)
-        );
+        lines.push(pipeRow([p.name, String(p.wins), String(p.losses), String(p.rating), formatReportRatingDelta(p.ratingDelta)]));
       });
       lines.push("");
       var gameTypeCounts = {};
@@ -3834,7 +3798,7 @@
           return label + " ×" + gameTypeCounts[label];
         })
         .join(", ");
-      lines.push("Total games: " + data.games.length + (typesSummary ? "   |   " + typesSummary : ""));
+      lines.push("**Total games: " + data.games.length + (typesSummary ? "   |   " + typesSummary : "") + "**");
 
       var earlierGames = data.games.filter(function (g) {
         return !g.isLive;
@@ -3845,28 +3809,30 @@
       var hasBothGroups = earlierGames.length > 0 && liveGames.length > 0;
 
       if (data.games.length > 0) {
-        var winnerColWidth = data.games.reduce(function (max, g) {
-          return Math.max(max, joinNamesForReport(g.winnerNames || []).length);
-        }, 0);
-        var loserColWidth = data.games.reduce(function (max, g) {
-          return Math.max(max, joinNamesForReport(g.opponentNames || []).length);
-        }, 0);
+        var gameLogHeader = pipeRow(["Time", "Winner", "", "Loser", "Game"]);
+        var gameLogDivider = pipeHeaderDivider(5);
         lines.push("");
-        lines.push("Game Log");
-        lines.push(divider);
+        lines.push("### Game Log");
         if (hasBothGroups) {
-          lines.push("Earlier session:");
+          lines.push("");
+          lines.push("**Earlier session:**");
+          lines.push(gameLogHeader);
+          lines.push(gameLogDivider);
           groupReportGames(earlierGames).forEach(function (g) {
-            lines.push(formatReportGameTableRow(g, winnerColWidth, loserColWidth));
+            lines.push(formatReportGameTableRow(g));
           });
           lines.push("");
-          lines.push("Current session:");
+          lines.push("**Current session:**");
+          lines.push(gameLogHeader);
+          lines.push(gameLogDivider);
           groupReportGames(liveGames).forEach(function (g) {
-            lines.push(formatReportGameTableRow(g, winnerColWidth, loserColWidth));
+            lines.push(formatReportGameTableRow(g));
           });
         } else {
+          lines.push(gameLogHeader);
+          lines.push(gameLogDivider);
           groupReportGames(data.games).forEach(function (g) {
-            lines.push(formatReportGameTableRow(g, winnerColWidth, loserColWidth));
+            lines.push(formatReportGameTableRow(g));
           });
         }
       }
@@ -3874,35 +3840,29 @@
     var notes = getDayNotes(dateStr);
     if (notes) {
       lines.push("");
-      lines.push("Notes");
-      lines.push(divider);
+      lines.push("### Notes");
       lines.push(notes);
     }
     return lines.join("\n");
   }
 
   // Leaderboard-only - fastest to scan, no per-game breakdown.
+  // Leaderboard table only - no game-type breakdown, no game log at all,
+  // the shortest of the three formats regardless of how many games were
+  // played today.
   function buildDayReportTextCompact(dateStr) {
     var data = computeDayReportData(dateStr);
-    var lines = ["🎱 POOL MASTER COUNTER — DAY REPORT", formatReportDateHeading(dateStr), ""];
+    var lines = ["🎱 " + formatReportDateHeading(dateStr) + " — Day Report", ""];
     if (data.players.length === 0) {
       lines.push("No games recorded today.");
     } else {
-      lines.push("LEADERBOARD");
-      data.players.forEach(function (p, i) {
-        lines.push((i + 1) + ". " + p.name + "   " + p.wins + "W-" + p.losses + "L  " + formatReportRatingDelta(p.ratingDelta) + "   " + p.rating);
+      lines.push(pipeRow(["Player", "W", "L", "Rating", "Δ"]));
+      lines.push(pipeHeaderDivider(5));
+      data.players.forEach(function (p) {
+        lines.push(pipeRow([p.name, String(p.wins), String(p.losses), String(p.rating), formatReportRatingDelta(p.ratingDelta)]));
       });
       lines.push("");
-      var gameTypeCounts = {};
-      data.games.forEach(function (g) {
-        gameTypeCounts[g.gameLabel] = (gameTypeCounts[g.gameLabel] || 0) + 1;
-      });
-      var typesSummary = Object.keys(gameTypeCounts)
-        .map(function (label) {
-          return label + " (" + gameTypeCounts[label] + ")";
-        })
-        .join(", ");
-      lines.push(data.games.length + " game" + (data.games.length === 1 ? "" : "s") + " played" + (typesSummary ? " · " + typesSummary : ""));
+      lines.push(data.games.length + " game" + (data.games.length === 1 ? "" : "s") + " played today.");
     }
     var notes = getDayNotes(dateStr);
     if (notes) {
