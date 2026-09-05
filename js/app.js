@@ -3722,6 +3722,17 @@
     return names.slice(0, -1).join(", ") + ", and " + names[names.length - 1];
   }
 
+  // Same idea as joinNamesForReport, but bounded - an individual-mode
+  // game credits a win against every other active player as "opponents",
+  // so a 5+ player free-for-all can otherwise blow a single table cell
+  // (and the whole column) out to 60+ characters. Table cells stay
+  // readable; prose sentences (Detailed) can afford the full list.
+  function joinNamesCapped(names, cap) {
+    names = names || [];
+    if (names.length <= cap) return joinNamesForReport(names);
+    return names.slice(0, cap).join(", ") + " +" + (names.length - cap) + " more";
+  }
+
   function formatReportGameTime(ts) {
     try {
       return new Date(ts).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
@@ -3822,11 +3833,15 @@
     return lines;
   }
 
+  // Winner/"def."/loser collapsed into one capped "Result" cell instead
+  // of three separate columns - keeps the table's width bounded no
+  // matter how many players were on either side of the game.
   function gameLogTableRow(group) {
-    var winners = joinNamesForReport(group.winnerNames || []);
-    var losers = joinNamesForReport(group.opponentNames || []);
+    var winners = joinNamesCapped(group.winnerNames || [], 2);
+    var losers = joinNamesCapped(group.opponentNames || [], 2);
     var label = group.gameLabel + (group.count > 1 ? " ×" + group.count : "");
-    return [formatReportGameTime(group.ts), winners, losers ? "def." : "", losers, label];
+    var result = losers ? winners + " def. " + losers : winners + " won";
+    return [formatReportGameTime(group.ts), result, label];
   }
 
   // Always YYYY-MM-DD, regardless of the active language - dates are a
@@ -3889,7 +3904,7 @@
         return g.isLive;
       });
       var hasBothGroups = earlierGames.length > 0 && liveGames.length > 0;
-      var gameLogHeaders = ["Time", "Winner", "", "Loser", "Game"];
+      var gameLogHeaders = ["Time", "Result", "Game"];
 
       if (data.games.length > 0) {
         lines.push("");
