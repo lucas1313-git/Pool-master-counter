@@ -1988,6 +1988,46 @@ input[type="number"] {
   width: 100%;
 }
 
+.removed-players-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 1000;
+}
+
+.removed-players-card {
+  background: linear-gradient(180deg, var(--felt-light) 0%, var(--felt) 60%, var(--bg-glow) 100%);
+  border: 2px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 32px 28px;
+  max-width: 480px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  animation: milestone-pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.removed-players-card h2 {
+  margin: 0 0 10px;
+  color: var(--accent);
+  font-size: 1.5rem;
+}
+
+.removed-players-explain {
+  margin: 0 0 20px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-align: left;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
 /* ---------- Generic modal alert/confirm/prompt (replaces native
    alert()/confirm()/prompt(), which pause the whole page and read as a
    browser chrome popup rather than part of the app) ---------- */

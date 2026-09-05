@@ -1198,6 +1198,10 @@
   var btnRatingEditSave = document.getElementById("btn-rating-edit-save");
   var btnRatingEditCancel = document.getElementById("btn-rating-edit-cancel");
   var btnResetAllRatings = document.getElementById("btn-reset-all-ratings");
+
+  var removedPlayersOverlay = document.getElementById("removed-players-overlay");
+  var removedPlayersChecklist = document.getElementById("removed-players-checklist");
+  var btnRemovedPlayersContinue = document.getElementById("btn-removed-players-continue");
   var btnResetSessionTournament = document.getElementById("btn-reset-session-tournament");
   var ratingEditTargetName = null;
 
@@ -1380,6 +1384,7 @@
   var OVERLAY_KEY_TARGETS = [
     [saveSessionOverlay, btnSaveSessionSave, btnSaveSessionCancel],
     [ratingEditOverlay, btnRatingEditSave, btnRatingEditCancel],
+    [removedPlayersOverlay, btnRemovedPlayersContinue, btnRemovedPlayersContinue],
     [onboardingOverlay, btnOnboardingGo, btnOnboardingCancel],
     [milestoneOverlay, btnMilestoneClose, btnMilestoneClose],
     [gamewinOverlay, btnGamewinClose, btnGamewinClose],
@@ -2707,6 +2712,7 @@
     state.players.push(player);
     saveState();
     recordPlayerAddedIfNew(name);
+    clearPlayerRemoved(name);
     if (typeof startingRating === "number" && !isNaN(startingRating) && !findRatingKey(name)) {
       var entry = ensureRatingEntry(name);
       entry.rating = startingRating;
@@ -2720,14 +2726,18 @@
   // Players page, so there's nothing here worth confirming. Doesn't touch
   // the saved player lists (see saveRosterSnapshotIfNew) - that only
   // happens when a new game/session actually starts, not on every roster
-  // edit.
+  // edit. Does record the removal (see markPlayerRemoved) so a later
+  // import of an old backup that still lists this name won't silently
+  // re-add them.
   function removePlayer(id) {
+    var player = getPlayer(id);
     state.players = state.players.filter(function (p) {
       return p.id !== id;
     });
     delete state.playerWins[id];
     delete state.teamMvpWins[id];
     saveState();
+    if (player) markPlayerRemoved(player.name);
     validateNewPlayerNameInput();
     renderAll();
   }
@@ -4058,6 +4068,32 @@
     }
   }
 
+  // Name -> { removedAt }. removePlayer only drops someone from the live
+  // roster (their PLAYER_STATS/PLAYER_RATINGS stay put), so this isn't
+  // about protecting data - it's about remembering the removal was
+  // deliberate, so importAllData doesn't silently re-add them just
+  // because an older backup still lists them.
+  var REMOVED_PLAYERS_KEY = "poolMasterCounter.removedPlayers.v1";
+
+  function loadRemovedPlayersFromStorage() {
+    try {
+      var raw = localStorage.getItem(REMOVED_PLAYERS_KEY);
+      var parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function saveRemovedPlayersToStorage(removed) {
+    if (noStatsMode) return;
+    try {
+      localStorage.setItem(REMOVED_PLAYERS_KEY, JSON.stringify(removed));
+    } catch (e) {
+      console.warn("Could not save removed players.", e);
+    }
+  }
+
   // One-time-per-load cleanup: if PLAYER_STATS already has separate entries
   // for the same person under different casing (e.g. "Bob" and "bob" from
   // before names were treated as case-insensitive), merge their sessions
@@ -4287,6 +4323,36 @@
       merged[name] = localContacts[name];
     });
     return merged;
+  }
+
+  var REMOVED_PLAYERS = loadRemovedPlayersFromStorage();
+
+  function findRemovedPlayerKey(name) {
+    var key = normalizeNameKey(name);
+    var match = Object.keys(REMOVED_PLAYERS).filter(function (k) {
+      return normalizeNameKey(k) === key;
+    });
+    return match.length ? match[0] : null;
+  }
+
+  function markPlayerRemoved(name) {
+    var key = findRemovedPlayerKey(name) || name;
+    REMOVED_PLAYERS[key] = { removedAt: new Date().toISOString() };
+    saveRemovedPlayersToStorage(REMOVED_PLAYERS);
+  }
+
+  function isPlayerRemoved(name) {
+    return !!findRemovedPlayerKey(name);
+  }
+
+  // Called whenever a name becomes an active player again - a deliberate
+  // manual re-add (typed into Add Player, or restored from an import
+  // conflict prompt) means the removal no longer applies.
+  function clearPlayerRemoved(name) {
+    var key = findRemovedPlayerKey(name);
+    if (!key) return;
+    delete REMOVED_PLAYERS[key];
+    saveRemovedPlayersToStorage(REMOVED_PLAYERS);
   }
 
   var PLAYER_NAME_TRANSLATIONS = loadPlayerNameTranslationsFromStorage();
@@ -4974,6 +5040,40 @@
     reader.readAsText(file);
   }
 
+  // Lists `names` in the removed-players conflict overlay, each defaulting
+  // to unchecked (keep removed - the local device's own choice wins by
+  // default). Calls onContinue with just the names the user checked to
+  // restore; importAllData handles actually re-adding them.
+  function showRemovedPlayersConflict(names, onContinue) {
+    removedPlayersChecklist.innerHTML = "";
+    names.forEach(function (name) {
+      var li = document.createElement("li");
+      li.className = "tournament-player-check-row";
+      var label = document.createElement("label");
+      var checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.value = name;
+      var span = document.createElement("span");
+      span.textContent = name;
+      label.appendChild(checkbox);
+      label.appendChild(span);
+      li.appendChild(label);
+      removedPlayersChecklist.appendChild(li);
+    });
+    removedPlayersOverlay.classList.remove("hidden");
+    function handleContinue() {
+      var restored = Array.prototype.slice
+        .call(removedPlayersChecklist.querySelectorAll('input[type="checkbox"]:checked'))
+        .map(function (cb) {
+          return cb.value;
+        });
+      removedPlayersOverlay.classList.add("hidden");
+      btnRemovedPlayersContinue.removeEventListener("click", handleContinue);
+      onContinue(restored);
+    }
+    btnRemovedPlayersContinue.addEventListener("click", handleContinue);
+  }
+
   function importAllData(file) {
     var reader = new FileReader();
     reader.onload = function () {
@@ -5016,16 +5116,40 @@
             });
           });
 
+          // Names skipped because they're in REMOVED_PLAYERS - this
+          // device deliberately removed them, so the import shouldn't
+          // silently re-add them. Collected here and resolved after the
+          // merge via the removed-players conflict overlay.
+          var conflictedNames = [];
+          var conflictSeen = {};
+          function collectConflict(name) {
+            var key = normalizeNameKey(name);
+            if (conflictSeen[key]) return;
+            conflictSeen[key] = true;
+            conflictedNames.push(name);
+          }
+
           var finalState;
           var newPlayerCount = 0;
           if (localIsFresh) {
             finalState = importedState;
+            finalState.players = (finalState.players || []).filter(function (p) {
+              if (p && p.name && isPlayerRemoved(p.name)) {
+                collectConflict(p.name);
+                return false;
+              }
+              return true;
+            });
             var freshKnownNames = {};
-            (finalState.players || []).forEach(function (p) {
+            finalState.players.forEach(function (p) {
               freshKnownNames[normalizeNameKey(p.name)] = true;
             });
             importedRosterPlayerNames.forEach(function (name) {
               if (!name || freshKnownNames[normalizeNameKey(name)]) return;
+              if (isPlayerRemoved(name)) {
+                collectConflict(name);
+                return;
+              }
               freshKnownNames[normalizeNameKey(name)] = true;
               finalState.players.push({
                 id: uid(),
@@ -5051,6 +5175,11 @@
               .concat(importedRosterPlayerNames);
             candidateNames.forEach(function (name) {
               if (!name || knownNames[normalizeNameKey(name)]) return;
+              if (isPlayerRemoved(name)) {
+                knownNames[normalizeNameKey(name)] = true;
+                collectConflict(name);
+                return;
+              }
               knownNames[normalizeNameKey(name)] = true;
               finalState.players.push({
                 id: uid(),
@@ -5072,18 +5201,40 @@
             if (p && p.name) p.name = capitalizeName(p.name);
           });
 
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(finalState));
           localStorage.setItem(ROSTERS_KEY, JSON.stringify(rosterMerge.rosters));
           localStorage.setItem(PLAYER_STATS_KEY, JSON.stringify(mergedPlayerStats));
           localStorage.setItem(RATINGS_KEY, JSON.stringify(mergedRatings));
           localStorage.setItem(CONTACTS_KEY, JSON.stringify(mergedContacts));
 
-          if (!localIsFresh) {
-            alertModal(T("alert.mergedImport", { players: newPlayerCount, lists: rosterMerge.added }), function () {
+          function finishImport() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(finalState));
+            if (!localIsFresh) {
+              alertModal(T("alert.mergedImport", { players: newPlayerCount, lists: rosterMerge.added }), function () {
+                location.reload();
+              });
+            } else {
               location.reload();
+            }
+          }
+
+          if (conflictedNames.length) {
+            showRemovedPlayersConflict(conflictedNames, function (restoredNames) {
+              restoredNames.forEach(function (name) {
+                clearPlayerRemoved(name);
+                finalState.players.push({
+                  id: uid(),
+                  name: capitalizeName(name),
+                  voice: finalState.players.length % VOICE_PITCHES.length,
+                  playing: false,
+                  teamId: null,
+                  balls: 0
+                });
+                if (!localIsFresh) newPlayerCount += 1;
+              });
+              finishImport();
             });
           } else {
-            location.reload();
+            finishImport();
           }
         } catch (e) {
           alertModal(T("alert.couldNotImport", { message: e.message }));
