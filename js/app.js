@@ -3810,38 +3810,40 @@
 
   function textTableRow(cells, widths, alignRight) {
     return (
-      "│ " +
+      "| " +
       cells
         .map(function (c, i) {
           return padTableCell(c, widths[i], alignRight && alignRight[i]);
         })
-        .join(" │ ") +
-      " │"
+        .join(" | ") +
+      " |"
     );
   }
 
-  function textTableBorder(widths, left, mid, right) {
+  function textTableBorder(widths) {
     return (
-      left +
+      "+" +
       widths
         .map(function (w) {
-          return repeatChar("─", w + 2);
+          return repeatChar("-", w + 2);
         })
-        .join(mid) +
-      right
+        .join("+") +
+      "+"
     );
   }
 
-  // A real fixed-width box table (┌┬┐├┼┤└┴┘), every column padded to its
-  // widest cell so it lines up vertically in a monospace view (Copy
-  // Report, Notes, most terminals/code blocks).
+  // A real fixed-width box table, plain ASCII (+ - |) rather than Unicode
+  // box-drawing characters - iMessage/SMS on iPad rendered the Unicode
+  // border set as broken/missing glyphs ("open cells, no horizontal
+  // lines"), which plain ASCII can't do since every font on earth has it.
   function buildTextTable(headers, rows, alignRight) {
     var widths = textTableColumnWidths(headers, rows);
-    var lines = [textTableBorder(widths, "┌", "┬", "┐"), textTableRow(headers, widths), textTableBorder(widths, "├", "┼", "┤")];
+    var border = textTableBorder(widths);
+    var lines = [border, textTableRow(headers, widths), border];
     rows.forEach(function (r) {
       lines.push(textTableRow(r, widths, alignRight));
     });
-    lines.push(textTableBorder(widths, "└", "┴", "┘"));
+    lines.push(border);
     return lines;
   }
 
