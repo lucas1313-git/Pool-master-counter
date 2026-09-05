@@ -4053,14 +4053,15 @@
   }
 
   // No columns to misalign, because there's nowhere for them to align to:
-  // the Messages compose box always renders plain text in the system's
-  // proportional font, so no character-grid table (any character set)
-  // can ever line up there - that's an iOS constraint, not something
-  // fixable by picking different border characters. One clean line per
-  // player/game reads fine regardless of font. Used only by the SMS/Text
-  // Report button - Copy Report and Email Report keep whichever of the
-  // three table formats is selected above.
-  function buildDayReportTextSms(dateStr) {
+  // Mail and Messages compose boxes both render plain text in the
+  // system's proportional font, so no character-grid table (any
+  // character set) can ever line up there - that's a platform
+  // constraint, not something fixable by picking different border
+  // characters. One clean line per player/game reads fine regardless of
+  // font. Used by Email Report and Text Report - Copy Report keeps
+  // whichever of the three table formats is selected above, since
+  // wherever it gets pasted is more likely to preserve a monospace font.
+  function buildDayReportTextPlain(dateStr) {
     var data = computeDayReportData(dateStr);
     var lines = ["🎱 POOL MASTER COUNTER — DAY REPORT", formatReportDateHeading(dateStr), ""];
     if (data.players.length === 0 && data.tournaments.length === 0) {
@@ -10381,7 +10382,7 @@
   });
 
   btnDayReportEmail.addEventListener("click", function () {
-    var text = buildDayReportText(todayDateStr());
+    var text = buildDayReportTextPlain(todayDateStr());
     var to = reportOptedInContacts()
       .map(function (c) {
         return encodeURIComponent(c.contact.email);
@@ -10391,7 +10392,7 @@
   });
 
   btnDayReportSms.addEventListener("click", function () {
-    var text = buildDayReportTextSms(todayDateStr());
+    var text = buildDayReportTextPlain(todayDateStr());
     window.location.href = "sms:&body=" + encodeURIComponent(text);
   });
 
