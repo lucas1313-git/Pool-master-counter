@@ -107,6 +107,33 @@
     </div>
   </section>
 
+  <section class="panel collapsible-panel collapsed" id="resets-panel">
+    <button type="button" class="panel-toggle" id="btn-toggle-resets-panel" aria-expanded="false" aria-controls="resets-panel-body">
+      <h2 data-i18n="resets.heading">⚠️ All Resets</h2>
+      <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+    </button>
+    <p class="panel-summary" id="resets-panel-summary" data-i18n="resets.summary">Every reset button in the app, in one place.</p>
+    <div class="panel-body" id="resets-panel-body">
+      <div class="row">
+        <button type="button" id="btn-reset-game" class="btn btn-ghost" data-i18n="gameSetup.resetGame">Reset Current Game</button>
+      </div>
+      <div class="row">
+        <button type="button" id="btn-reset-session-tournament" class="btn btn-danger" data-i18n="players.resetSessionTournament">⚠️ Reset Tournament</button>
+      </div>
+      <div class="row">
+        <button type="button" id="btn-reset-all-ratings" class="btn btn-danger" data-i18n="players.resetAllRatings">⚠️ Reset All Players' Official Rating</button>
+      </div>
+      <div class="row">
+        <button type="button" id="btn-reset-today-stats" class="btn btn-danger" data-i18n="gamewin.resetTodayStats">Reset today's stats</button>
+      </div>
+      <div class="row">
+        <button type="button" id="btn-reset-all-player-stats" class="btn btn-danger" data-i18n="backup.resetStats">Reset All Player Stats</button>
+        <button type="button" id="btn-reset-roster-lists" class="btn btn-danger" data-i18n="backup.resetLists">Reset Player Lists</button>
+      </div>
+      <p class="player-stats-note" data-i18n="resets.tournamentNote">Ending just an in-progress tournament (without touching the live session) is on the Tournament page's Abandon Tournament button.</p>
+    </div>
+  </section>
+
   <section class="panel collapsible-panel collapsed" id="rotation-panel">
     <button type="button" class="panel-toggle" id="btn-toggle-rotation-panel" aria-expanded="false" aria-controls="rotation-panel-body">
       <h2 data-i18n="rotation.heading">Game Order</h2>
@@ -277,33 +304,6 @@
         <button type="button" id="btn-day-report-sms" class="btn btn-ghost" data-i18n="dayNotes.textReport">📱 Text Report</button>
       </div>
       <p class="player-stats-note" id="day-report-recipients-line"></p>
-    </div>
-  </section>
-
-  <section class="panel collapsible-panel collapsed" id="resets-panel">
-    <button type="button" class="panel-toggle" id="btn-toggle-resets-panel" aria-expanded="false" aria-controls="resets-panel-body">
-      <h2 data-i18n="resets.heading">⚠️ All Resets</h2>
-      <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
-    </button>
-    <p class="panel-summary" id="resets-panel-summary" data-i18n="resets.summary">Every reset button in the app, in one place.</p>
-    <div class="panel-body" id="resets-panel-body">
-      <div class="row">
-        <button type="button" id="btn-reset-game" class="btn btn-ghost" data-i18n="gameSetup.resetGame">Reset Current Game</button>
-      </div>
-      <div class="row">
-        <button type="button" id="btn-reset-session-tournament" class="btn btn-danger" data-i18n="players.resetSessionTournament">⚠️ Reset Tournament</button>
-      </div>
-      <div class="row">
-        <button type="button" id="btn-reset-all-ratings" class="btn btn-danger" data-i18n="players.resetAllRatings">⚠️ Reset All Players' Official Rating</button>
-      </div>
-      <div class="row">
-        <button type="button" id="btn-reset-today-stats" class="btn btn-danger" data-i18n="gamewin.resetTodayStats">Reset today's stats</button>
-      </div>
-      <div class="row">
-        <button type="button" id="btn-reset-all-player-stats" class="btn btn-danger" data-i18n="backup.resetStats">Reset All Player Stats</button>
-        <button type="button" id="btn-reset-roster-lists" class="btn btn-danger" data-i18n="backup.resetLists">Reset Player Lists</button>
-      </div>
-      <p class="player-stats-note" data-i18n="resets.tournamentNote">Ending just an in-progress tournament (without touching the live session) is on the Tournament page's Abandon Tournament button.</p>
     </div>
   </section>
 
