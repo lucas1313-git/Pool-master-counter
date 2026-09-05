@@ -4,6 +4,8 @@
   "alert.mergedImport": "Merged. Added {{players}} new player(s) and {{lists}} saved roster list(s) from the backup. Your current game wasn't touched.",
   "alert.noValidPlayerLists": "No valid player lists found in that file.",
   "alert.notABackupFile": "That doesn't look like a Pool Master Counter backup file.",
+  "alert.notABackupFileIsRosterLists": "That's a Player Lists export, not a full backup — use \"Import Player Lists\" (under Players) instead, or export again with \"Export All Data\".",
+  "alert.notABackupFileIsSession": "That's a Session export, not a full backup — it only has one session's games. Use a file from \"Export All Data\" instead.",
   "alert.notAPlayerListFile": "That doesn't look like a player list file.",
   "alert.notValidJson": "That file isn't valid JSON.",
   "alert.pickAtLeast2Players": "Pick at least 2 players to start a tournament.",

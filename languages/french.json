@@ -4,6 +4,8 @@
   "alert.mergedImport": "Fusionné. {{players}} nouveau(x) joueur(s) et {{lists}} liste(s) de joueurs enregistrée(s) ajoutés depuis la sauvegarde. Votre partie en cours n'a pas été modifiée.",
   "alert.noValidPlayerLists": "Aucune liste de joueurs valide trouvée dans ce fichier.",
   "alert.notABackupFile": "Ce fichier ne ressemble pas à une sauvegarde Pool Master Counter.",
+  "alert.notABackupFileIsRosterLists": "C'est une exportation de Listes de joueurs, pas une sauvegarde complète — utilisez plutôt « Importer des listes de joueurs » (dans Joueurs), ou réexportez avec « Exporter toutes les données ».",
+  "alert.notABackupFileIsSession": "C'est une exportation de Session, pas une sauvegarde complète — elle ne contient que les parties d'une seule session. Utilisez plutôt un fichier issu de « Exporter toutes les données ».",
   "alert.notAPlayerListFile": "Ce fichier ne ressemble pas à un fichier de liste de joueurs.",
   "alert.notValidJson": "Ce fichier n'est pas un JSON valide.",
   "alert.pickAtLeast2Players": "Choisissez au moins 2 joueurs pour démarrer un tournoi.",

@@ -3960,6 +3960,19 @@
     }, 1000);
   }
 
+  // A dropped-in file that parses as JSON but has no `.state` isn't
+  // necessarily garbage - it's often one of this app's OTHER export
+  // shapes (Export Session, Export Player Lists), picked by mistake
+  // because they're both also just called "export" from the buttons.
+  // Naming the actual shape beats a flat "not a backup file".
+  function describeUnrecognizedBackupFile(data) {
+    if (data && Array.isArray(data.rosterLists)) return T("alert.notABackupFileIsRosterLists");
+    if (data && data.currentGame && Array.isArray(data.gameHistory) && data.raceToWinsTarget !== undefined) {
+      return T("alert.notABackupFileIsSession");
+    }
+    return T("alert.notABackupFile");
+  }
+
   function fetchFresh(url) {
     var buster = (url.indexOf("?") === -1 ? "?" : "&") + "v=" + Date.now();
     return fetch(url + buster, { cache: "no-store" });
@@ -5192,7 +5205,7 @@
         return;
       }
       if (!data || typeof data !== "object" || !data.state) {
-        alertModal(T("alert.notABackupFile"));
+        alertModal(describeUnrecognizedBackupFile(data));
         return;
       }
 
@@ -5712,7 +5725,7 @@
         return;
       }
       if (!data || typeof data !== "object" || !data.state) {
-        alertModal(T("alert.notABackupFile"));
+        alertModal(describeUnrecognizedBackupFile(data));
         return;
       }
       var normalized = normalizeImportedBackupAsSnapshot(data);

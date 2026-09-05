@@ -4,6 +4,8 @@
   "alert.mergedImport": "Combinado. Se añadieron {{players}} jugador(es) nuevo(s) y {{lists}} lista(s) de jugadores guardada(s) desde la copia de seguridad. Tu partida actual no fue modificada.",
   "alert.noValidPlayerLists": "No se encontraron listas de jugadores válidas en ese archivo.",
   "alert.notABackupFile": "Eso no parece un archivo de copia de seguridad de Pool Master Counter.",
+  "alert.notABackupFileIsRosterLists": "Eso es una exportación de Listas de Jugadores, no una copia de seguridad completa — usa \"Importar Listas de Jugadores\" (en Jugadores), o exporta de nuevo con \"Exportar Todos los Datos\".",
+  "alert.notABackupFileIsSession": "Eso es una exportación de Sesión, no una copia de seguridad completa — solo tiene las partidas de una sesión. Usa un archivo de \"Exportar Todos los Datos\" en su lugar.",
   "alert.notAPlayerListFile": "Eso no parece un archivo de lista de jugadores.",
   "alert.notValidJson": "Ese archivo no es un JSON válido.",
   "alert.pickAtLeast2Players": "Elige al menos 2 jugadores para iniciar un torneo.",

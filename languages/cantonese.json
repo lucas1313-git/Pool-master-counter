@@ -4,6 +4,8 @@
   "alert.mergedImport": "已合併。由備份檔加咗 {{players}} 位新玩家同 {{lists}} 個已儲存嘅名單。你而家嘅對局冇被更改。",
   "alert.noValidPlayerLists": "呢個檔案入面搵唔到有效嘅玩家名單。",
   "alert.notABackupFile": "呢個唔似係 Pool Master Counter 嘅備份檔。",
+  "alert.notABackupFileIsRosterLists": "呢個係「玩家名單」匯出檔，唔係完整備份——請改用「匯入玩家名單」（喺玩家嗰度），或者用「匯出所有數據」再匯出一次。",
+  "alert.notABackupFileIsSession": "呢個係「對局階段」匯出檔，唔係完整備份——入面淨係得一個對局階段嘅紀錄。請改用「匯出所有數據」嘅檔案。",
   "alert.notAPlayerListFile": "呢個唔似係玩家名單檔案。",
   "alert.notValidJson": "呢個檔案唔係有效嘅 JSON。",
   "alert.pickAtLeast2Players": "請至少揀 2 位玩家先可以開始錦標賽。",
