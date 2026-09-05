@@ -3570,7 +3570,7 @@
   }
 
   // ---------------------------------------------------------------------
-  // Today's Notes & Day Report — free-text notes about today's live play,
+  // Publish Daily Report — free-text notes about today's live play,
   // saved per calendar date, plus a plain-text end-of-day synopsis (who
   // played, results, rating movement, and the notes) ready to copy, email,
   // or text.

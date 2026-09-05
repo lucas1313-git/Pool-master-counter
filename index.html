@@ -13,7 +13,7 @@
      bump the ?v= on both the stylesheet and script tags below on every
      deploy that touches css/style.css or js/app.js, or returning users can
      silently keep running old code indefinitely. -->
-<link rel="stylesheet" href="css/style.css?v=20260905c">
+<link rel="stylesheet" href="css/style.css?v=20260905d">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -245,7 +245,7 @@
 
   <section class="panel collapsible-panel collapsed" id="day-notes-panel">
     <button type="button" class="panel-toggle" id="btn-toggle-day-notes-panel" aria-expanded="false" aria-controls="day-notes-panel-body">
-      <h2 data-i18n="dayNotes.heading">Today's Notes</h2>
+      <h2 data-i18n="dayNotes.heading">Publish Daily Report</h2>
       <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
     </button>
     <p class="panel-summary" id="day-notes-panel-summary"></p>
@@ -697,7 +697,7 @@
         <li data-i18n-html="help.main.standings"><strong>Standings</strong> — Live race-to-N progress for teams and individuals this session.</li>
         <li data-i18n-html="help.main.scoreboard"><strong>Scoreboard</strong> — Sits right above the player cards, visible whether Focus Mode is on or off. "Do not record games statistics and players data" stops every save while it's checked — nothing goes into state, career stats, or ratings until you uncheck it; wins still count live on screen for the rest of this browser tab, but none of it survives a reload. Tap + / − on a player's card to track balls/points/racks toward the target. Reaching the target banks a win and starts the next game. Focus Mode hides every other panel down to just the scoreboard — while in it, a small "Players" chevron above the board still lets you flip who's Playing vs Standby without leaving focus; every number on screen also scales up (up to 3x) to stay readable from across the room, shrinking back down on its own once enough players are on screen that the cards get narrower. Whenever Games Rotations is on with 2+ game types, a "Rotation Position" line appears right under the "Now Playing" banner with ◀/▶ buttons - each tap moves the rotation's own games-toward-the-next-switch counter by exactly one game (the same counter a real win advances), so it only actually changes the active game type once enough taps cross a switch-every boundary. No score, win, or ball count is touched - it's purely for correcting the rotation's position by hand if it ever drifts.</li>
         <li data-i18n-html="help.main.recentGames"><strong>Recent Games</strong> — Every game finished in the last 24 hours, most recent first — a rolling window, not a calendar day, so it keeps building right up until a game finally falls out the far end, even across a race being won and the next one starting fresh. Each winner's rating change from that exact game shows beside their badge; the game that completes a race-to-N gets a gold highlight and its own banner line ("🏆 Alice won the Race to 5 session!").</li>
-        <li data-i18n-html="help.main.todaysNotes"><strong>Today's Notes</strong> — A free-text box for anything worth remembering about today's live play; it saves automatically as you type. Copy/Email/Text Report builds a plain-text day report — who played, win/loss and rating movement for each, total games, game types played, a game-by-game breakdown (grouped by matchup — "Luc won 3 games of 8-Ball against Suresh" rather than one line per game) split into earlier-session/current-session, and your notes — ready to paste, email, or send as a text message.</li>
+        <li data-i18n-html="help.main.todaysNotes"><strong>Publish Daily Report</strong> — A free-text box for anything worth remembering about today's live play; it saves automatically as you type. Copy/Email/Text Report builds a plain-text day report — who played, win/loss and rating movement for each, total games, game types played, a game-by-game breakdown (grouped by matchup — "Luc won 3 games of 8-Ball against Suresh" rather than one line per game) split into earlier-session/current-session, and your notes — ready to paste, email, or send as a text message.</li>
         <li data-i18n-html="help.main.resets"><strong>All Resets</strong> — Every reset button in the app, gathered in one place: Reset Current Game (clears the live score, no win credited), Reset Tournament (offers to save the session first if there are unsaved games, then clears session wins/history and ends any active bracket tournament together), Reset All Players' Official Rating (roster only, back to the default starting rating), and Reset All Player Stats / Reset Player Lists (each backs up first, warns you, then clears — career stats plus the live session, and saved lists, respectively; ratings are never touched). Ending just an in-progress tournament without touching the live session is still on the Tournament page's own Abandon Tournament button.</li>
       </ul>
       <p data-i18n="help.main.ratingsNote">Ratings show as a small badge next to every player's name throughout the app — an Elo-style number (see the Player Stats section below for details). Every player's name is also a shortcut: tap it (the 📊 icon on the roster row) to open their individual stats page.</p>
@@ -938,6 +938,6 @@
 
 </div>
 
-<script src="js/app.js?v=20260905c"></script>
+<script src="js/app.js?v=20260905d"></script>
 </body>
 </html>
