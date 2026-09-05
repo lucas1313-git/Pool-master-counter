@@ -3684,7 +3684,14 @@
     }).sort(function (a, b) {
       return a.ts.localeCompare(b.ts);
     });
-    return { date: dateStr, games: games, players: players, tournaments: tournaments };
+    // The main scoreboard's own "Race to N" milestone (what the in-app
+    // popup itself calls winning "the tournament", and the history list
+    // calls "the session") - a flag on the one game that pushed someone
+    // over the target, already present in `games` above.
+    var raceWins = games.filter(function (g) {
+      return g.wonRace;
+    });
+    return { date: dateStr, games: games, players: players, tournaments: tournaments, raceWins: raceWins };
   }
 
   function tournamentFormatLabel(format) {
@@ -3692,6 +3699,12 @@
     if (format === "double") return "Double Elimination";
     if (format === "roundrobin") return "Round Robin";
     return "Tournament";
+  }
+
+  function formatReportRaceWinLine(g) {
+    var time = formatReportGameTime(g.ts);
+    var names = joinNamesForReport((g.winnerNames || []).length ? g.winnerNames : (g.teammateNames || []));
+    return "🏆 " + (time ? time + " — " : "") + names + " won the Race to " + g.raceTarget + " session!";
   }
 
   function formatReportTournamentLine(t) {
@@ -3859,8 +3872,11 @@
         lines.push("Total games: " + data.games.length + (typesSummary ? "   |   " + typesSummary : ""));
       }
 
-      if (data.tournaments.length) {
+      if (data.raceWins.length || data.tournaments.length) {
         lines.push("");
+        data.raceWins.forEach(function (g) {
+          lines.push(formatReportRaceWinLine(g));
+        });
         data.tournaments.forEach(function (t) {
           lines.push(formatReportTournamentLine(t));
         });
@@ -3925,8 +3941,11 @@
         lines.push("");
         lines.push(data.games.length + " game" + (data.games.length === 1 ? "" : "s") + " played today.");
       }
-      if (data.tournaments.length) {
+      if (data.raceWins.length || data.tournaments.length) {
         lines.push("");
+        data.raceWins.forEach(function (g) {
+          lines.push(formatReportRaceWinLine(g));
+        });
         data.tournaments.forEach(function (t) {
           lines.push(formatReportTournamentLine(t));
         });
@@ -3976,9 +3995,12 @@
         if (typesSummary) lines.push("Games played: " + typesSummary);
       }
 
-      if (data.tournaments.length) {
+      if (data.raceWins.length || data.tournaments.length) {
         lines.push("");
         lines.push("TOURNAMENTS");
+        data.raceWins.forEach(function (g) {
+          lines.push(formatReportRaceWinLine(g));
+        });
         data.tournaments.forEach(function (t) {
           lines.push(formatReportTournamentLine(t));
         });
