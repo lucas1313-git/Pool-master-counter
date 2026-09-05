@@ -96,6 +96,14 @@
         <button type="button" id="btn-import-all-data" class="btn btn-ghost" data-i18n="backup.importData">Import Data</button>
         <input type="file" id="import-file-input" accept="application/json" class="hidden">
       </div>
+
+      <h2 data-i18n="recoverData.heading">🗄️ Recover Data</h2>
+      <p class="player-stats-note" data-i18n="recoverData.note">Every reset below keeps a local copy of what it wiped, newest first. Pick one to selectively restore just the players or games you want back.</p>
+      <ul id="recover-data-list" class="recover-data-list"></ul>
+      <div class="row">
+        <button type="button" id="btn-recover-import-file" class="btn btn-ghost" data-i18n="recoverData.importFile">📂 Import a Backup File to Compare</button>
+        <input type="file" id="recover-import-file-input" accept="application/json" class="hidden">
+      </div>
     </div>
   </section>
 
@@ -296,22 +304,6 @@
         <button type="button" id="btn-reset-roster-lists" class="btn btn-danger" data-i18n="backup.resetLists">Reset Player Lists</button>
       </div>
       <p class="player-stats-note" data-i18n="resets.tournamentNote">Ending just an in-progress tournament (without touching the live session) is on the Tournament page's Abandon Tournament button.</p>
-    </div>
-  </section>
-
-  <section class="panel collapsible-panel collapsed" id="recover-data-panel">
-    <button type="button" class="panel-toggle" id="btn-toggle-recover-data-panel" aria-expanded="false" aria-controls="recover-data-panel-body">
-      <h2 data-i18n="recoverData.heading">🗄️ Recover Data</h2>
-      <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
-    </button>
-    <p class="panel-summary" id="recover-data-panel-summary" data-i18n="recoverData.summary">Restore data from a recent reset, or an imported backup.</p>
-    <div class="panel-body" id="recover-data-panel-body">
-      <p class="player-stats-note" data-i18n="recoverData.note">Every reset above keeps a local copy of what it wiped, newest first. Pick one to selectively restore just the players or games you want back.</p>
-      <ul id="recover-data-list" class="recover-data-list"></ul>
-      <div class="row">
-        <button type="button" id="btn-recover-import-file" class="btn btn-ghost" data-i18n="recoverData.importFile">📂 Import a Backup File to Compare</button>
-        <input type="file" id="recover-import-file-input" accept="application/json" class="hidden">
-      </div>
     </div>
   </section>
 
