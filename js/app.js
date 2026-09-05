@@ -4052,6 +4052,67 @@
     return lines.join("\n");
   }
 
+  // No columns to misalign, because there's nowhere for them to align to:
+  // the Messages compose box always renders plain text in the system's
+  // proportional font, so no character-grid table (any character set)
+  // can ever line up there - that's an iOS constraint, not something
+  // fixable by picking different border characters. One clean line per
+  // player/game reads fine regardless of font. Used only by the SMS/Text
+  // Report button - Copy Report and Email Report keep whichever of the
+  // three table formats is selected above.
+  function buildDayReportTextSms(dateStr) {
+    var data = computeDayReportData(dateStr);
+    var lines = ["🎱 POOL MASTER COUNTER — DAY REPORT", formatReportDateHeading(dateStr), ""];
+    if (data.players.length === 0 && data.tournaments.length === 0) {
+      lines.push("No games recorded today.");
+    } else {
+      if (data.players.length) {
+        data.players.forEach(function (p) {
+          lines.push(p.name + " — " + p.wins + "W-" + p.losses + "L, " + p.rating + " (" + formatReportRatingDelta(p.ratingDelta) + ")");
+        });
+        lines.push("");
+        var gameTypeCounts = {};
+        data.games.forEach(function (g) {
+          gameTypeCounts[g.gameLabel] = (gameTypeCounts[g.gameLabel] || 0) + 1;
+        });
+        var typesSummary = Object.keys(gameTypeCounts)
+          .map(function (label) {
+            return label + " ×" + gameTypeCounts[label];
+          })
+          .join(", ");
+        lines.push("Total games: " + data.games.length + (typesSummary ? " · " + typesSummary : ""));
+      }
+
+      if (data.raceWins.length || data.tournaments.length) {
+        lines.push("");
+        data.raceWins.forEach(function (g) {
+          lines.push(formatReportRaceWinLine(g));
+        });
+        data.tournaments.forEach(function (t) {
+          lines.push(formatReportTournamentLine(t));
+        });
+      }
+
+      if (data.games.length > 0) {
+        lines.push("");
+        lines.push("Game Log");
+        groupReportGames(data.games).forEach(function (g) {
+          var winners = joinNamesCapped(g.winnerNames || [], 2);
+          var losers = joinNamesCapped(g.opponentNames || [], 2);
+          var label = g.gameLabel + (g.count > 1 ? " ×" + g.count : "");
+          var result = losers ? winners + " def. " + losers : winners + " won";
+          lines.push(formatReportGameTime(g.ts) + " · " + result + " · " + label);
+        });
+      }
+    }
+    var notes = getDayNotes(dateStr);
+    if (notes) {
+      lines.push("");
+      lines.push("Notes: " + notes);
+    }
+    return lines.join("\n");
+  }
+
   var DAY_REPORT_FORMAT_KEY = "poolMasterCounter.dayReportFormat.v1";
 
   function loadDayReportFormat() {
@@ -10330,7 +10391,7 @@
   });
 
   btnDayReportSms.addEventListener("click", function () {
-    var text = buildDayReportText(todayDateStr());
+    var text = buildDayReportTextSms(todayDateStr());
     window.location.href = "sms:&body=" + encodeURIComponent(text);
   });
 
