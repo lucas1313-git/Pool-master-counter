@@ -11108,8 +11108,12 @@
   updateDayNotesSummary();
   updateDayReportRecipientsLine();
 
+  // Syncs currentGame to whatever rotation entry the persisted
+  // gamesPlayedCount derives (see rotationCurrentIndex) - not a reset:
+  // gamesPlayedCount itself is left exactly as loadState() restored it,
+  // so a reload lands back on the same rotation position instead of
+  // snapping to the first entry every time the page opens.
   if (state.rotation.enabled && state.rotation.order.length > 0) {
-    state.gamesPlayedCount = 0;
     applyRotationIfDue();
     gameTargetInput.value = state.currentGame.target;
     saveState();
