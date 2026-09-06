@@ -913,10 +913,10 @@ input[type="number"] {
 
 /* ---------- Shot counter (all game types) ---------- */
 
-/* Semi-transparent HUD, keypad-controlled only (see handleKeypadShortcut)
-   - pointer-events:none since there's nothing on it to tap. Sized with
-   clamp() so it stays legible from across the room without overflowing
-   a phone-width viewport. */
+/* Semi-transparent HUD, controlled by the numeric keypad (see
+   handleKeypadShortcut) or a tap/click, which toggles pause the same
+   way "/" does. Sized with clamp() so it stays legible from across the
+   room without overflowing a phone-width viewport. */
 .shot-counter-widget {
   position: fixed;
   top: 12px;
@@ -925,13 +925,13 @@ input[type="number"] {
   background: rgba(0, 0, 0, 0.6);
   border: 2px solid rgba(255, 255, 255, 0.22);
   color: var(--text);
-  padding: clamp(10px, 2vw, 18px) clamp(18px, 4vw, 32px);
+  padding: clamp(20px, 4vw, 36px) clamp(36px, 8vw, 64px);
   border-radius: 999px;
-  font-size: clamp(2rem, 7vw, 3.4rem);
+  font-size: clamp(4rem, 14vw, 6.8rem);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.03em;
-  pointer-events: none;
+  cursor: pointer;
 }
 
 /* ---------- Standings ---------- */

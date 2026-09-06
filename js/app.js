@@ -246,17 +246,21 @@
   // handleKeypadShortcut. Not persisted; always starts cleared on reload.
   var keypadSelectedPlayerId = null;
 
-  // Shot counter (see handleKeypadShortcut's Enter//*/Clear branches and
+  // Shot counter (see handleKeypadShortcut's "/"/*/Clear branches and
   // tickShotCounter) - live-only, like keypadSelectedPlayerId above; only
   // the enabled flag and beep interval on state.currentGame are saved.
   // accumulatedMs is the frozen total from prior running segments;
   // runningSince (a Date.now() timestamp, or null while paused) covers
   // the segment in progress. lastBeepMs is the accumulated-elapsed value
   // at which the beep last fired, so it fires again beepSec later.
+  // lastTickCountdown tracks which of the final 5 countdown seconds (5,
+  // 4, 3, 2, 1) before the next beep already got its warning tick, so a
+  // 1s-interval tick doesn't replay the same second's warning twice.
   var shotCounterAccumulatedMs = 0;
   var shotCounterRunningSince = null;
   var shotCounterHidden = false;
   var shotCounterLastBeepMs = 0;
+  var shotCounterLastTickCountdown = null;
 
   // Player ids in keypad-number order (index 0 = number 1, etc.) - filled
   // in by refreshKeypadNumbering() after every scoreboard render, since
@@ -478,8 +482,16 @@
   function playShotCounterBeep() {
     var ctx = getAudioCtx();
     var now = ctx.currentTime;
-    tone(880, now, 0.12, "sine", 0.25);
-    tone(880, now + 0.18, 0.12, "sine", 0.25);
+    tone(880, now, 0.12, "sine", 0.4);
+    tone(880, now + 0.18, 0.12, "sine", 0.4);
+  }
+
+  // A quiet single tick - the countdown warning in the final 5 seconds
+  // before playShotCounterBeep fires, deliberately much smaller/shorter
+  // than the beep it's leading up to so the two stay easy to tell apart.
+  function playShotCounterTick() {
+    var ctx = getAudioCtx();
+    tone(1200, ctx.currentTime, 0.05, "sine", 0.12);
   }
 
   function playPositiveSound(voice) {
@@ -1433,17 +1445,14 @@
     if (shotCounterActive() && (e.key === "/" || e.key === "*" || e.key === "Clear")) {
       e.preventDefault();
       if (e.key === "/") {
-        if (shotCounterRunningSince) {
-          shotCounterAccumulatedMs += Date.now() - shotCounterRunningSince;
-          shotCounterRunningSince = null;
-        } else {
-          shotCounterRunningSince = Date.now();
-        }
+        toggleShotCounterPause();
+        return;
       } else if (e.key === "*") {
         shotCounterHidden = !shotCounterHidden;
       } else if (e.key === "Clear") {
         shotCounterAccumulatedMs = 0;
         shotCounterLastBeepMs = 0;
+        shotCounterLastTickCountdown = null;
         // While running, elapsed is entirely (now - runningSince) - has
         // to move that reference point up to now too, or a Clear during
         // an unbroken run (the common case: never paused) would do
@@ -2603,6 +2612,7 @@
   function startShotCounter() {
     shotCounterAccumulatedMs = 0;
     shotCounterLastBeepMs = 0;
+    shotCounterLastTickCountdown = null;
     shotCounterRunningSince = Date.now();
     shotCounterHidden = false;
     tickShotCounter();
@@ -2614,7 +2624,21 @@
   function stopShotCounter() {
     shotCounterAccumulatedMs = 0;
     shotCounterLastBeepMs = 0;
+    shotCounterLastTickCountdown = null;
     shotCounterRunningSince = null;
+    tickShotCounter();
+  }
+
+  // Flips pause/unpause - shared by the "/" keypad shortcut and a tap on
+  // the widget itself (see its click listener near boot).
+  function toggleShotCounterPause() {
+    if (!shotCounterActive()) return;
+    if (shotCounterRunningSince) {
+      shotCounterAccumulatedMs += Date.now() - shotCounterRunningSince;
+      shotCounterRunningSince = null;
+    } else {
+      shotCounterRunningSince = Date.now();
+    }
     tickShotCounter();
   }
 
@@ -2633,14 +2657,23 @@
     var timeEl = document.getElementById("shot-counter-time");
     if (timeEl) timeEl.textContent = formatDuration(elapsed);
 
-    // Beeps while running regardless of hidden/visible (explicitly
-    // requested), but pauses along with the counter - runningSince is
-    // null while paused, so this whole block is skipped then.
+    // Beeps (and the countdown ticks leading up to one) while running
+    // regardless of hidden/visible (explicitly requested), but pause
+    // along with the counter - runningSince is null while paused, so
+    // this whole block is skipped then.
     if (shotCounterRunningSince) {
       var beepMs = Math.max(5, state.currentGame.shotCounterBeepSec || 30) * 1000;
-      if (elapsed - shotCounterLastBeepMs >= beepMs) {
+      var remainingMs = beepMs - (elapsed - shotCounterLastBeepMs);
+      if (remainingMs <= 0) {
         shotCounterLastBeepMs = elapsed;
+        shotCounterLastTickCountdown = null;
         playShotCounterBeep();
+      } else if (remainingMs <= 5000) {
+        var countdown = Math.ceil(remainingMs / 1000);
+        if (countdown !== shotCounterLastTickCountdown) {
+          shotCounterLastTickCountdown = countdown;
+          playShotCounterTick();
+        }
       }
     }
   }
@@ -10333,6 +10366,8 @@
     state.currentGame.shotCounterBeepSec = Math.min(600, sec);
     saveState();
   });
+
+  document.getElementById("shot-counter-widget").addEventListener("click", toggleShotCounterPause);
 
   Array.prototype.forEach.call(modeRadios, function (radio) {
     radio.addEventListener("change", function () {
