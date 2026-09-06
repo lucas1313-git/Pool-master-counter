@@ -2586,11 +2586,11 @@
   }
 
   // Shot counter (see handleKeypadShortcut and the shotCounter* module
-  // vars). Relevant only for "balls"-unit games with the Game Setup
-  // checkbox on - Quick Counter has no notion of a game unit, so it's
-  // excluded outright.
+  // vars). Works for every unit (rack/balls/points) as long as the Game
+  // Setup checkbox is on - Quick Counter has no notion of a game unit at
+  // all, so it's excluded outright.
   function shotCounterActive() {
-    return !quickCounterMode && state.currentGame.unit === "balls" && !!state.currentGame.shotCounterEnabled;
+    return !quickCounterMode && !!state.currentGame.shotCounterEnabled;
   }
 
   function shotCounterElapsedMs() {

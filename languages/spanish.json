@@ -106,7 +106,7 @@
   "gameSetup.resetGame": "Restablecer partida actual",
   "gameSetup.shareStandings": "Compartir clasificación",
   "gameSetup.shotCounterBeepEvery": "Pitido cada",
-  "gameSetup.shotCounterEnable": "⏱️ Contador de tiros (juegos de bolas)",
+  "gameSetup.shotCounterEnable": "⏱️ Contador de tiros",
   "gameSetup.summaryLine": "{{game}} ({{target}} {{unit}}) · {{mode}} · Carrera hasta {{raceTo}} victorias",
   "gameSetup.target": "Meta",
   "gameSetup.targetNote": "Meta {{target}} {{unit}}",

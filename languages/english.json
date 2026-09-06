@@ -106,7 +106,7 @@
   "gameSetup.resetGame": "Reset Current Game",
   "gameSetup.shareStandings": "Share Standings",
   "gameSetup.shotCounterBeepEvery": "Beep every",
-  "gameSetup.shotCounterEnable": "⏱️ Shot counter (Balls games)",
+  "gameSetup.shotCounterEnable": "⏱️ Shot counter",
   "gameSetup.summaryLine": "{{game}} ({{target}} {{unit}}) · {{mode}} · Race to {{raceTo}} wins",
   "gameSetup.target": "Target",
   "gameSetup.targetNote": "Target {{target}} {{unit}}",

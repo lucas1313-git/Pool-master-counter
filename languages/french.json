@@ -106,7 +106,7 @@
   "gameSetup.resetGame": "Réinitialiser la partie en cours",
   "gameSetup.shareStandings": "Partager le classement",
   "gameSetup.shotCounterBeepEvery": "Bip toutes les",
-  "gameSetup.shotCounterEnable": "⏱️ Compteur de coups (jeux en boules)",
+  "gameSetup.shotCounterEnable": "⏱️ Compteur de coups",
   "gameSetup.summaryLine": "{{game}} ({{target}} {{unit}}) · {{mode}} · Course jusqu'à {{raceTo}} victoires",
   "gameSetup.target": "Objectif",
   "gameSetup.targetNote": "Objectif {{target}} {{unit}}",
