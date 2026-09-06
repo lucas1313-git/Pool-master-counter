@@ -75,8 +75,9 @@
   // that adding several players in the same second - loading a saved
   // roster list, for instance - can never produce two identical ids.
   // Only ever used to key session-local bookkeeping (state.playerWins,
-  // state.teamMvpWins, gameHistory winnerIds/mvpId) - see findPlayerConflicts
-  // for why every durable, cross-device store is keyed by name instead.
+  // state.teamMvpWins, gameHistory winnerIds/mvpId) - every durable,
+  // cross-device store (ratings, contacts, stats, added-date) is keyed
+  // by name instead, so this format change never touches those.
   function uid() {
     var now = new Date();
     var y = now.getFullYear();
@@ -84,6 +85,44 @@
     var d = String(now.getDate()).padStart(2, "0");
     var unixSec = Math.floor(now.getTime() / 1000);
     return y + "-" + m + "-" + d + "-" + unixSec + "-" + Math.random().toString(36).slice(2, 6);
+  }
+
+  // One-time migration for players created before uid() moved to the
+  // date-based format - they'd otherwise keep an old opaque id forever
+  // (loadState only ever runs this once per boot, on whatever's already
+  // in storage). Every place an id is used as a KEY has to be remapped
+  // together with player.id itself, or a player's win tally/game-history
+  // entries would silently detach from them the moment their id changes.
+  // The date pattern is inlined (not a module-level var) because
+  // loadState() - and this, transitively - runs at var state = loadState()
+  // near the very top of the file, before a var declared further down
+  // would have its assignment executed yet.
+  function migratePlayerIdsToDateFormat(parsedState) {
+    var idPattern = /^\d{4}-\d{2}-\d{2}-\d+-/;
+    var remap = {};
+    (parsedState.players || []).forEach(function (p) {
+      if (!p || !p.id || idPattern.test(p.id)) return;
+      var newId = uid();
+      remap[p.id] = newId;
+      p.id = newId;
+    });
+    if (!Object.keys(remap).length) return;
+    ["playerWins", "teamMvpWins"].forEach(function (storeKey) {
+      var remapped = {};
+      Object.keys(parsedState[storeKey] || {}).forEach(function (oldId) {
+        remapped[remap[oldId] || oldId] = parsedState[storeKey][oldId];
+      });
+      parsedState[storeKey] = remapped;
+    });
+    (parsedState.gameHistory || []).forEach(function (entry) {
+      if (!entry || typeof entry !== "object") return;
+      if (Array.isArray(entry.winnerIds)) {
+        entry.winnerIds = entry.winnerIds.map(function (id) {
+          return remap[id] || id;
+        });
+      }
+      if (entry.mvpId && remap[entry.mvpId]) entry.mvpId = remap[entry.mvpId];
+    });
   }
 
   // Player names are treated as case-insensitive everywhere: "Bob" and
@@ -208,6 +247,7 @@
           if (typeof parsed.rotation.every !== "number") parsed.rotation.every = 1;
           if (typeof parsed.rotation.enabled !== "boolean") parsed.rotation.enabled = false;
           if (typeof parsed.gamesPlayedCount !== "number") parsed.gamesPlayedCount = 0;
+          migratePlayerIdsToDateFormat(parsed);
           return parsed;
         }
       }
