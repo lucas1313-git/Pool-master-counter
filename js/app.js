@@ -1192,6 +1192,7 @@
   var btnDayReportCopy = document.getElementById("btn-day-report-copy");
   var btnDayReportEmail = document.getElementById("btn-day-report-email");
   var btnDayReportSms = document.getElementById("btn-day-report-sms");
+  var btnDayReportShareBackup = document.getElementById("btn-day-report-share-backup");
   var dayReportRecipientsLine = document.getElementById("day-report-recipients-line");
 
   var milestoneOverlay = document.getElementById("milestone-overlay");
@@ -5477,14 +5478,11 @@
     return /\.json$/i.test(trimmed) ? trimmed : trimmed + ".json";
   }
 
-  // filename (optional): only the manual "Export All Data" button passes
-  // one, via the promptModal that lets the user name the file - the
-  // automatic safety-backup call sites (resetTodayStats,
-  // resetAllPlayerStats) call this with no argument on purpose, since
-  // those are silent safety nets and shouldn't interrupt the reset flow
-  // with a prompt.
-  function exportAllData(filename) {
-    var payload = {
+  // Shared by exportAllData and shareReportWithBackup - the exact same
+  // full-app snapshot either way, just delivered differently (a plain
+  // download vs a Web Share attachment).
+  function buildBackupPayload() {
+    return {
       exportedAt: new Date().toISOString(),
       state: state,
       rosters: SAVED_ROSTERS,
@@ -5492,7 +5490,49 @@
       ratings: PLAYER_RATINGS,
       contacts: PLAYER_CONTACTS
     };
-    downloadJSON(filename ? sanitizeBackupFilename(filename) : defaultBackupFilename(), payload);
+  }
+
+  // filename (optional): only the manual "Export All Data" button passes
+  // one, via the promptModal that lets the user name the file - the
+  // automatic safety-backup call sites (resetTodayStats,
+  // resetAllPlayerStats) call this with no argument on purpose, since
+  // those are silent safety nets and shouldn't interrupt the reset flow
+  // with a prompt.
+  function exportAllData(filename) {
+    downloadJSON(filename ? sanitizeBackupFilename(filename) : defaultBackupFilename(), buildBackupPayload());
+  }
+
+  // mailto:/sms: links (what Email/Text Report use) can't carry file
+  // attachments - that's a platform restriction, not something fixable
+  // here. The Web Share API is the actual way to hand a file to Mail,
+  // Messages, AirDrop, etc. with it genuinely attached, so this is a
+  // separate button rather than a mode of the existing two: reuses the
+  // same day-report text (buildDayReportTextPlain, see its own comment
+  // for why it's alignment-free) as the share's `text`, and the same
+  // full-backup payload as exportAllData as the attached file. Falls
+  // back to a plain download - with a toast pointing at Email/Text
+  // Report for the message itself - on a browser/device that can't
+  // share files (canShare with a files array is the correct feature
+  // test; share() alone doesn't imply file support).
+  function shareReportWithBackup() {
+    var text = buildDayReportTextPlain(todayDateStr());
+    var payload = buildBackupPayload();
+    var filename = defaultBackupFilename();
+    var file = new File([JSON.stringify(payload, null, 2)], filename, { type: "application/json" });
+
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({
+        files: [file],
+        title: "Pool Master Counter — Day Report",
+        text: text
+      }).catch(function (err) {
+        if (err && err.name === "AbortError") return;
+        showToast(T("toast.shareFailed"));
+      });
+    } else {
+      downloadJSON(filename, payload);
+      showToast(T("toast.shareFallback"));
+    }
   }
 
   // Pulls every (player, calendar date) pair referenced in an imported
@@ -10711,6 +10751,8 @@
       .join(",");
     window.location.href = "sms:" + to + "&body=" + encodeURIComponent(text);
   });
+
+  btnDayReportShareBackup.addEventListener("click", shareReportWithBackup);
 
   btnPlayerPageExport.addEventListener("click", exportCurrentPlayerStats);
   btnPlayerPageReset.addEventListener("click", resetPlayerHistoricalStats);
