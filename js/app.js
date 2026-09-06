@@ -1426,21 +1426,21 @@
       return;
     }
 
-    // Shot counter: Enter toggles hide/show, "/" pauses, "*" unpauses,
-    // the numeric keypad's dedicated Clear key zeroes it. Only live when
+    // Shot counter: "/" toggles pause/unpause, "*" toggles hide/show, the
+    // numeric keypad's dedicated Clear key zeroes it. Only live when
     // there's actually a counter running (see shotCounterActive), so
     // these keys are inert the rest of the time.
-    if (shotCounterActive() && (e.key === "Enter" || e.key === "/" || e.key === "*" || e.key === "Clear")) {
+    if (shotCounterActive() && (e.key === "/" || e.key === "*" || e.key === "Clear")) {
       e.preventDefault();
-      if (e.key === "Enter") {
-        shotCounterHidden = !shotCounterHidden;
-      } else if (e.key === "/") {
+      if (e.key === "/") {
         if (shotCounterRunningSince) {
           shotCounterAccumulatedMs += Date.now() - shotCounterRunningSince;
           shotCounterRunningSince = null;
+        } else {
+          shotCounterRunningSince = Date.now();
         }
       } else if (e.key === "*") {
-        if (!shotCounterRunningSince) shotCounterRunningSince = Date.now();
+        shotCounterHidden = !shotCounterHidden;
       } else if (e.key === "Clear") {
         shotCounterAccumulatedMs = 0;
         shotCounterLastBeepMs = 0;
