@@ -5509,14 +5509,23 @@
   // separate button rather than a mode of the existing two: reuses the
   // same day-report text (buildDayReportTextPlain, see its own comment
   // for why it's alignment-free) as the share's `text`, and the same
-  // full-backup payload as exportAllData as the attached file. Falls
-  // back to a plain download - with a toast pointing at Email/Text
-  // Report for the message itself - on a browser/device that can't
-  // share files (canShare with a files array is the correct feature
-  // test; share() alone doesn't imply file support).
+  // full-backup payload as exportAllData as the attached file - minus
+  // contacts (email/phone), which have no business leaving the device
+  // in a file meant to be handed to whoever's on the other end of Mail/
+  // Messages/AirDrop. Sending an empty object rather than omitting the
+  // key entirely still round-trips cleanly through mergeContactsData if
+  // this file is ever imported elsewhere: local contact info always
+  // wins on a name conflict there, and an empty import adds nothing, so
+  // an existing player's contact info on the importing device is left
+  // exactly as it was. Falls back to a plain download - with a toast
+  // pointing at Email/Text Report for the message itself - on a
+  // browser/device that can't share files (canShare with a files array
+  // is the correct feature test; share() alone doesn't imply file
+  // support).
   function shareReportWithBackup() {
     var text = buildDayReportTextPlain(todayDateStr());
     var payload = buildBackupPayload();
+    payload.contacts = {};
     var filename = defaultBackupFilename();
     var file = new File([JSON.stringify(payload, null, 2)], filename, { type: "application/json" });
 
