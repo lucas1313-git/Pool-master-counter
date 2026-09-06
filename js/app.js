@@ -70,8 +70,20 @@
     if (changed) saveState();
   })();
 
+  // yyyy-mm-dd-<unix seconds>-<short random> - readable creation date
+  // baked right into the id, plus enough uniqueness (the random suffix)
+  // that adding several players in the same second - loading a saved
+  // roster list, for instance - can never produce two identical ids.
+  // Only ever used to key session-local bookkeeping (state.playerWins,
+  // state.teamMvpWins, gameHistory winnerIds/mvpId) - see findPlayerConflicts
+  // for why every durable, cross-device store is keyed by name instead.
   function uid() {
-    return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    var now = new Date();
+    var y = now.getFullYear();
+    var m = String(now.getMonth() + 1).padStart(2, "0");
+    var d = String(now.getDate()).padStart(2, "0");
+    var unixSec = Math.floor(now.getTime() / 1000);
+    return y + "-" + m + "-" + d + "-" + unixSec + "-" + Math.random().toString(36).slice(2, 6);
   }
 
   // Player names are treated as case-insensitive everywhere: "Bob" and
@@ -1252,6 +1264,10 @@
   var removedPlayersChecklist = document.getElementById("removed-players-checklist");
   var btnRemovedPlayersContinue = document.getElementById("btn-removed-players-continue");
 
+  var playerConflictOverlay = document.getElementById("player-conflict-overlay");
+  var playerConflictList = document.getElementById("player-conflict-list");
+  var btnPlayerConflictContinue = document.getElementById("btn-player-conflict-continue");
+
   var recoverDataList = document.getElementById("recover-data-list");
   var btnRecoverImportFile = document.getElementById("btn-recover-import-file");
   var recoverImportFileInput = document.getElementById("recover-import-file-input");
@@ -1387,7 +1403,8 @@
       gameChangeOverlay,
       saveSessionOverlay,
       ratingEditOverlay,
-      confirmModalOverlay
+      confirmModalOverlay,
+      playerConflictOverlay
     ].some(function (el) {
       return el && !el.classList.contains("hidden");
     });
@@ -5488,7 +5505,8 @@
       rosters: SAVED_ROSTERS,
       playerStats: PLAYER_STATS,
       ratings: PLAYER_RATINGS,
-      contacts: PLAYER_CONTACTS
+      contacts: PLAYER_CONTACTS,
+      playerAdded: PLAYER_ADDED
     };
   }
 
@@ -5627,6 +5645,21 @@
       };
     });
     return result;
+  }
+
+  // Earliest date wins on a name match - "added" should reflect when a
+  // name was truly first seen, on whichever device saw it first, not
+  // whichever side of the import happens to be read last.
+  function mergePlayerAddedData(localAdded, importedAdded) {
+    var merged = {};
+    Object.keys(importedAdded || {}).forEach(function (name) {
+      merged[name] = importedAdded[name];
+    });
+    Object.keys(localAdded || {}).forEach(function (name) {
+      var existing = merged[name];
+      merged[name] = existing && existing < localAdded[name] ? existing : localAdded[name];
+    });
+    return merged;
   }
 
   // Unions two saved-roster-list arrays, skipping entries whose player set
@@ -5776,6 +5809,85 @@
     btnRemovedPlayersContinue.addEventListener("click", handleContinue);
   }
 
+  function formatConflictFacts(facts) {
+    var parts = [];
+    parts.push(T(facts.sessions === 1 ? "playerConflict.oneSession" : "playerConflict.manySessions", { count: facts.sessions }));
+    parts.push(T("playerConflict.ratingFact", { rating: facts.rating }));
+    parts.push(T(facts.addedAt ? "playerConflict.addedFact" : "playerConflict.addedUnknownFact", { date: facts.addedAt || "" }));
+    return parts.join(" · ");
+  }
+
+  // Same-name-on-both-sides conflicts found by importAllData's merge
+  // branch (see there for how `conflicts` - [{name, local, imported}],
+  // each side {rating, sessions, addedAt} - gets built). Each row
+  // defaults to "sync" (today's existing merge-by-name behavior);
+  // picking "keep separate" is what's new. onContinue receives a plain
+  // {name: "sync"|"separate"} map.
+  function showPlayerConflictOverlay(conflicts, onContinue) {
+    playerConflictList.innerHTML = "";
+    conflicts.forEach(function (conflict, i) {
+      var li = document.createElement("li");
+      li.className = "player-conflict-row";
+
+      var nameEl = document.createElement("div");
+      nameEl.className = "player-conflict-row-name";
+      nameEl.textContent = conflict.name;
+      li.appendChild(nameEl);
+
+      var factsEl = document.createElement("div");
+      factsEl.className = "player-conflict-row-facts";
+      factsEl.textContent =
+        T("playerConflict.hereLabel") + " " + formatConflictFacts(conflict.local) + " — " +
+        T("playerConflict.backupLabel") + " " + formatConflictFacts(conflict.imported);
+      li.appendChild(factsEl);
+
+      var choices = document.createElement("div");
+      choices.className = "wizard-format-options";
+      var radioName = "player-conflict-choice-" + i;
+
+      var syncLabel = document.createElement("label");
+      syncLabel.className = "wizard-format-option";
+      var syncRadio = document.createElement("input");
+      syncRadio.type = "radio";
+      syncRadio.name = radioName;
+      syncRadio.value = "sync";
+      syncRadio.checked = true;
+      var syncSpan = document.createElement("span");
+      syncSpan.textContent = T("playerConflict.sync");
+      syncLabel.appendChild(syncRadio);
+      syncLabel.appendChild(syncSpan);
+      choices.appendChild(syncLabel);
+
+      var separateLabel = document.createElement("label");
+      separateLabel.className = "wizard-format-option";
+      var separateRadio = document.createElement("input");
+      separateRadio.type = "radio";
+      separateRadio.name = radioName;
+      separateRadio.value = "separate";
+      var separateSpan = document.createElement("span");
+      separateSpan.textContent = T("playerConflict.keepSeparate");
+      separateLabel.appendChild(separateRadio);
+      separateLabel.appendChild(separateSpan);
+      choices.appendChild(separateLabel);
+
+      li.appendChild(choices);
+      li.dataset.conflictName = conflict.name;
+      playerConflictList.appendChild(li);
+    });
+    playerConflictOverlay.classList.remove("hidden");
+    function handleContinue() {
+      var choices = {};
+      conflicts.forEach(function (conflict, i) {
+        var checked = playerConflictList.querySelector('input[name="player-conflict-choice-' + i + '"]:checked');
+        choices[conflict.name] = checked ? checked.value : "sync";
+      });
+      playerConflictOverlay.classList.add("hidden");
+      btnPlayerConflictContinue.removeEventListener("click", handleContinue);
+      onContinue(choices);
+    }
+    btnPlayerConflictContinue.addEventListener("click", handleContinue);
+  }
+
   function importAllData(file) {
     var reader = new FileReader();
     reader.onload = function () {
@@ -5802,14 +5914,10 @@
           var importedState = data.state && typeof data.state === "object" ? data.state : defaultState();
           var importedRosters = Array.isArray(data.rosters) ? data.rosters : [];
           var importedPlayerStats = data.playerStats && typeof data.playerStats === "object" ? data.playerStats : {};
-
           var extraSessions = summarizeGameHistoryByPlayer(importedState.gameHistory || []);
-          var mergedPlayerStats = mergePlayerStatsData(PLAYER_STATS, importedPlayerStats, extraSessions);
-          var rosterMerge = mergeRosterLists(SAVED_ROSTERS, importedRosters);
           var importedRatings = data.ratings && typeof data.ratings === "object" ? data.ratings : {};
-          var mergedRatings = mergeRatingsData(PLAYER_RATINGS, importedRatings);
           var importedContacts = data.contacts && typeof data.contacts === "object" ? data.contacts : {};
-          var mergedContacts = mergeContactsData(PLAYER_CONTACTS, importedContacts);
+          var importedPlayerAdded = data.playerAdded && typeof data.playerAdded === "object" ? data.playerAdded : {};
 
           var importedRosterPlayerNames = [];
           importedRosters.forEach(function (r) {
@@ -5817,6 +5925,44 @@
               importedRosterPlayerNames.push(n);
             });
           });
+
+          // Finds the actual key in an imported (not-yet-local) store
+          // matching `name`, case-insensitively - the imported side's
+          // own casing may not match what candidateNames used to spot it.
+          function findImportedKey(obj, name) {
+            var key = normalizeNameKey(name);
+            var match = Object.keys(obj || {}).filter(function (k) {
+              return normalizeNameKey(k) === key;
+            });
+            return match.length ? match[0] : null;
+          }
+
+          // Renames `oldName` to `newName` everywhere it appears on the
+          // imported side only - used for a "keep separate" choice below,
+          // so every merge/add step that follows treats it as a brand-new,
+          // distinct name instead of colliding with the local player.
+          function renameImportedName(oldName, newName) {
+            (importedState.players || []).forEach(function (p) {
+              if (p && normalizeNameKey(p.name) === normalizeNameKey(oldName)) p.name = newName;
+            });
+            [importedPlayerStats, extraSessions, importedRatings, importedContacts, importedPlayerAdded].forEach(function (store) {
+              var key = findImportedKey(store, oldName);
+              if (!key) return;
+              var value = store[key];
+              delete store[key];
+              store[newName] = value;
+              if (value && typeof value === "object" && "name" in value) value.name = newName;
+            });
+            importedRosterPlayerNames = importedRosterPlayerNames.map(function (n) {
+              return normalizeNameKey(n) === normalizeNameKey(oldName) ? newName : n;
+            });
+            importedRosters.forEach(function (r) {
+              if (!Array.isArray(r.players)) return;
+              r.players = r.players.map(function (n) {
+                return normalizeNameKey(n) === normalizeNameKey(oldName) ? newName : n;
+              });
+            });
+          }
 
           // Names skipped because they're in REMOVED_PLAYERS - this
           // device deliberately removed them, so the import shouldn't
@@ -5831,113 +5977,195 @@
             conflictedNames.push(name);
           }
 
-          var finalState;
-          var newPlayerCount = 0;
-          if (localIsFresh) {
-            finalState = importedState;
-            finalState.players = (finalState.players || []).filter(function (p) {
-              if (p && p.name && isPlayerRemoved(p.name)) {
-                collectConflict(p.name);
-                return false;
-              }
-              return true;
-            });
-            var freshKnownNames = {};
-            finalState.players.forEach(function (p) {
-              freshKnownNames[normalizeNameKey(p.name)] = true;
-            });
-            importedRosterPlayerNames.forEach(function (name) {
-              if (!name || freshKnownNames[normalizeNameKey(name)]) return;
-              if (isPlayerRemoved(name)) {
-                collectConflict(name);
-                return;
-              }
-              freshKnownNames[normalizeNameKey(name)] = true;
-              finalState.players.push({
-                id: uid(),
-                name: name,
-                voice: finalState.players.length % VOICE_PITCHES.length,
-                playing: false,
-                teamId: null,
-                balls: 0
+          // Runs everything that used to run unconditionally - now after
+          // any same-name choices (see below) have already been applied
+          // as renames on the imported side, so these merges only ever
+          // see one imported name per real local name matched: exactly
+          // one it should combine with (sync) or one that's now distinct
+          // (keep separate).
+          function proceedWithMerge() {
+            var mergedPlayerStats = mergePlayerStatsData(PLAYER_STATS, importedPlayerStats, extraSessions);
+            var rosterMerge = mergeRosterLists(SAVED_ROSTERS, importedRosters);
+            var mergedRatings = mergeRatingsData(PLAYER_RATINGS, importedRatings);
+            var mergedContacts = mergeContactsData(PLAYER_CONTACTS, importedContacts);
+            var mergedPlayerAdded = mergePlayerAddedData(PLAYER_ADDED, importedPlayerAdded);
+
+            var finalState;
+            var newPlayerCount = 0;
+            if (localIsFresh) {
+              finalState = importedState;
+              finalState.players = (finalState.players || []).filter(function (p) {
+                if (p && p.name && isPlayerRemoved(p.name)) {
+                  collectConflict(p.name);
+                  return false;
+                }
+                return true;
               });
-            });
-          } else {
-            finalState = state;
-            var knownNames = {};
-            finalState.players.forEach(function (p) {
-              knownNames[normalizeNameKey(p.name)] = true;
-            });
-            var candidateNames = (Array.isArray(importedState.players) ? importedState.players : [])
-              .map(function (p) {
-                return p && p.name;
-              })
-              .concat(Object.keys(importedPlayerStats))
-              .concat(Object.keys(extraSessions))
-              .concat(importedRosterPlayerNames);
-            candidateNames.forEach(function (name) {
-              if (!name || knownNames[normalizeNameKey(name)]) return;
-              if (isPlayerRemoved(name)) {
-                knownNames[normalizeNameKey(name)] = true;
-                collectConflict(name);
-                return;
-              }
-              knownNames[normalizeNameKey(name)] = true;
-              finalState.players.push({
-                id: uid(),
-                name: name,
-                voice: finalState.players.length % VOICE_PITCHES.length,
-                playing: false,
-                teamId: null,
-                balls: 0
+              var freshKnownNames = {};
+              finalState.players.forEach(function (p) {
+                freshKnownNames[normalizeNameKey(p.name)] = true;
               });
-              newPlayerCount += 1;
-            });
-          }
-
-          // Capitalizes every roster name at once, covering both freshly-
-          // adopted importedState.players (never passed through addPlayer)
-          // and any newly-pushed candidates above, so an imported backup
-          // with lowercase names can't leave the roster inconsistently cased.
-          finalState.players.forEach(function (p) {
-            if (p && p.name) p.name = capitalizeName(p.name);
-          });
-
-          localStorage.setItem(ROSTERS_KEY, JSON.stringify(rosterMerge.rosters));
-          localStorage.setItem(PLAYER_STATS_KEY, JSON.stringify(mergedPlayerStats));
-          localStorage.setItem(RATINGS_KEY, JSON.stringify(mergedRatings));
-          localStorage.setItem(CONTACTS_KEY, JSON.stringify(mergedContacts));
-
-          function finishImport() {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(finalState));
-            if (!localIsFresh) {
-              alertModal(T("alert.mergedImport", { players: newPlayerCount, lists: rosterMerge.added }), function () {
-                location.reload();
-              });
-            } else {
-              location.reload();
-            }
-          }
-
-          if (conflictedNames.length) {
-            showRemovedPlayersConflict(conflictedNames, function (restoredNames) {
-              restoredNames.forEach(function (name) {
-                clearPlayerRemoved(name);
+              importedRosterPlayerNames.forEach(function (name) {
+                if (!name || freshKnownNames[normalizeNameKey(name)]) return;
+                if (isPlayerRemoved(name)) {
+                  collectConflict(name);
+                  return;
+                }
+                freshKnownNames[normalizeNameKey(name)] = true;
                 finalState.players.push({
                   id: uid(),
-                  name: capitalizeName(name),
+                  name: name,
                   voice: finalState.players.length % VOICE_PITCHES.length,
                   playing: false,
                   teamId: null,
                   balls: 0
                 });
-                if (!localIsFresh) newPlayerCount += 1;
               });
-              finishImport();
+            } else {
+              finalState = state;
+              var knownNames = {};
+              finalState.players.forEach(function (p) {
+                knownNames[normalizeNameKey(p.name)] = true;
+              });
+              var candidateNames = (Array.isArray(importedState.players) ? importedState.players : [])
+                .map(function (p) {
+                  return p && p.name;
+                })
+                .concat(Object.keys(importedPlayerStats))
+                .concat(Object.keys(extraSessions))
+                .concat(importedRosterPlayerNames);
+              candidateNames.forEach(function (name) {
+                if (!name || knownNames[normalizeNameKey(name)]) return;
+                if (isPlayerRemoved(name)) {
+                  knownNames[normalizeNameKey(name)] = true;
+                  collectConflict(name);
+                  return;
+                }
+                knownNames[normalizeNameKey(name)] = true;
+                finalState.players.push({
+                  id: uid(),
+                  name: name,
+                  voice: finalState.players.length % VOICE_PITCHES.length,
+                  playing: false,
+                  teamId: null,
+                  balls: 0
+                });
+                newPlayerCount += 1;
+              });
+            }
+
+            // Capitalizes every roster name at once, covering both freshly-
+            // adopted importedState.players (never passed through addPlayer)
+            // and any newly-pushed candidates above, so an imported backup
+            // with lowercase names can't leave the roster inconsistently cased.
+            finalState.players.forEach(function (p) {
+              if (p && p.name) p.name = capitalizeName(p.name);
             });
-          } else {
-            finishImport();
+
+            localStorage.setItem(ROSTERS_KEY, JSON.stringify(rosterMerge.rosters));
+            localStorage.setItem(PLAYER_STATS_KEY, JSON.stringify(mergedPlayerStats));
+            localStorage.setItem(RATINGS_KEY, JSON.stringify(mergedRatings));
+            localStorage.setItem(CONTACTS_KEY, JSON.stringify(mergedContacts));
+            localStorage.setItem(PLAYER_ADDED_KEY, JSON.stringify(mergedPlayerAdded));
+
+            function finishImport() {
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(finalState));
+              if (!localIsFresh) {
+                alertModal(T("alert.mergedImport", { players: newPlayerCount, lists: rosterMerge.added }), function () {
+                  location.reload();
+                });
+              } else {
+                location.reload();
+              }
+            }
+
+            if (conflictedNames.length) {
+              showRemovedPlayersConflict(conflictedNames, function (restoredNames) {
+                restoredNames.forEach(function (name) {
+                  clearPlayerRemoved(name);
+                  finalState.players.push({
+                    id: uid(),
+                    name: capitalizeName(name),
+                    voice: finalState.players.length % VOICE_PITCHES.length,
+                    playing: false,
+                    teamId: null,
+                    balls: 0
+                  });
+                  if (!localIsFresh) newPlayerCount += 1;
+                });
+                finishImport();
+              });
+            } else {
+              finishImport();
+            }
           }
+
+          // Same-name-on-both-sides check: only possible in the merge
+          // case (a fresh local roster has nobody to collide with). Every
+          // existing merge below already treats a name match as "same
+          // person" automatically - this is what makes that a choice
+          // instead, without changing anything about how sync itself works.
+          if (!localIsFresh) {
+            var existingNames = {};
+            state.players.forEach(function (p) {
+              existingNames[normalizeNameKey(p.name)] = p.name;
+            });
+            var seenCandidate = {};
+            var conflicts = [];
+            (Array.isArray(importedState.players) ? importedState.players : [])
+              .map(function (p) {
+                return p && p.name;
+              })
+              .concat(Object.keys(importedPlayerStats))
+              .concat(Object.keys(extraSessions))
+              .concat(importedRosterPlayerNames)
+              .forEach(function (name) {
+                if (!name) return;
+                var key = normalizeNameKey(name);
+                if (seenCandidate[key] || !existingNames[key]) return;
+                seenCandidate[key] = true;
+                var localName = existingNames[key];
+                var localRatingEntry = getPlayerRatingEntry(localName);
+                var localStatsKey = findPlayerStatsKey(localName);
+                var importedRatingKey = findImportedKey(importedRatings, name);
+                var importedStatsKey = findImportedKey(importedPlayerStats, name);
+                var importedAddedKey = findImportedKey(importedPlayerAdded, name);
+                conflicts.push({
+                  name: localName,
+                  local: {
+                    rating: localRatingEntry ? localRatingEntry.rating : DEFAULT_RATING,
+                    sessions: localStatsKey ? (PLAYER_STATS[localStatsKey].sessions || []).length : 0,
+                    addedAt: getPlayerAddedAt(localName) ? getPlayerAddedAt(localName).slice(0, 10) : null
+                  },
+                  imported: {
+                    rating: importedRatingKey ? importedRatings[importedRatingKey].rating : DEFAULT_RATING,
+                    sessions: importedStatsKey ? (importedPlayerStats[importedStatsKey].sessions || []).length : 0,
+                    addedAt: importedAddedKey ? String(importedPlayerAdded[importedAddedKey]).slice(0, 10) : null
+                  }
+                });
+              });
+            if (conflicts.length) {
+              showPlayerConflictOverlay(conflicts, function (choices) {
+                var todayStr = todayDateStr();
+                var usedSeparateNames = {};
+                conflicts.forEach(function (conflict) {
+                  if (choices[conflict.name] !== "separate") return;
+                  var base = conflict.name + " (" + todayStr + ")";
+                  var candidate = base;
+                  var n = 2;
+                  while (existingNames[normalizeNameKey(candidate)] || usedSeparateNames[normalizeNameKey(candidate)]) {
+                    candidate = base + " #" + n;
+                    n += 1;
+                  }
+                  usedSeparateNames[normalizeNameKey(candidate)] = true;
+                  renameImportedName(conflict.name, candidate);
+                });
+                proceedWithMerge();
+              });
+              return;
+            }
+          }
+          proceedWithMerge();
         } catch (e) {
           alertModal(T("alert.couldNotImport", { message: e.message }));
         }

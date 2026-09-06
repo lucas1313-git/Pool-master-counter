@@ -2071,6 +2071,38 @@ input[type="number"] {
   padding: 10px 12px;
 }
 
+/* ---------- Same-name import conflicts ---------- */
+
+.player-conflict-list {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 48vh;
+  overflow-y: auto;
+  text-align: left;
+}
+
+.player-conflict-row {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.player-conflict-row-name {
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+
+.player-conflict-row-facts {
+  color: var(--text-dim);
+  font-size: 0.82rem;
+  margin-bottom: 8px;
+}
+
 /* ---------- Recover Data (reset snapshots + comparison/recovery) ---------- */
 
 .recover-data-list {

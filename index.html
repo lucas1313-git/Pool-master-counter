@@ -13,7 +13,7 @@
      bump the ?v= on both the stylesheet and script tags below on every
      deploy that touches css/style.css or js/app.js, or returning users can
      silently keep running old code indefinitely. -->
-<link rel="stylesheet" href="css/style.css?v=20260906g">
+<link rel="stylesheet" href="css/style.css?v=20260906h">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -444,6 +444,18 @@
     <ul id="removed-players-checklist" class="tournament-player-checklist"></ul>
     <div class="rating-edit-actions">
       <button type="button" id="btn-removed-players-continue" class="btn btn-primary" data-i18n="removedPlayers.continue">Continue</button>
+    </div>
+  </div>
+</div>
+
+<div id="player-conflict-overlay" class="removed-players-overlay hidden">
+  <div class="removed-players-card">
+    <div class="rating-edit-emoji">🧑‍🤝‍🧑</div>
+    <h2 data-i18n="playerConflict.title">Same Name Found</h2>
+    <p class="removed-players-explain" data-i18n="playerConflict.explain">This backup has a player with the same name as someone already here. For each one, choose whether it's the same person (stats get combined) or a different person (imported separately, name-tagged with today's date).</p>
+    <ul id="player-conflict-list" class="player-conflict-list"></ul>
+    <div class="rating-edit-actions">
+      <button type="button" id="btn-player-conflict-continue" class="btn btn-primary" data-i18n="playerConflict.continue">Continue</button>
     </div>
   </div>
 </div>
@@ -986,6 +998,6 @@
   <span id="shot-counter-time">0:00</span>
 </div>
 
-<script src="js/app.js?v=20260906g"></script>
+<script src="js/app.js?v=20260906h"></script>
 </body>
 </html>
