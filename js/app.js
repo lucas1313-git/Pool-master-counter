@@ -1298,11 +1298,17 @@
     confirmModalInput.value = showInput ? inputValue || "" : "";
     btnConfirmModalCancel.classList.toggle("hidden", !showCancel);
     confirmModalOverlay.classList.remove("hidden");
+    // preventScroll: true - this overlay is position:fixed and already
+    // covers the whole viewport, so there's nothing for the browser's
+    // default focus-scroll-into-view behavior to usefully do here; left
+    // on, it was yanking the page underneath back to the focused
+    // element's old scroll position (see the same fix on
+    // showGameWinOverlay's balls-left input).
     if (showInput) {
-      confirmModalInput.focus();
+      confirmModalInput.focus({ preventScroll: true });
       confirmModalInput.select();
     } else {
-      btnConfirmModalOk.focus();
+      btnConfirmModalOk.focus({ preventScroll: true });
     }
   }
 
@@ -3351,8 +3357,14 @@
     // Focus the balls-left field so a number key works right away, with
     // no click needed first - can only happen once the overlay is no
     // longer .hidden (an element can't take focus while display:none).
+    // preventScroll: true - this overlay is position:fixed and already
+    // covers the whole viewport, so the browser's default focus-scroll
+    // behavior only ever yanked the page underneath (particularly
+    // noticeable with many players on screen, crediting a win from far
+    // down the list) back toward this input's old scroll position -
+    // there's nothing useful for it to scroll to.
     var ballsLeftInput = gamewinDetails.querySelector(".balls-left-input");
-    if (ballsLeftInput) ballsLeftInput.focus();
+    if (ballsLeftInput) ballsLeftInput.focus({ preventScroll: true });
   }
 
   function closeGameWinOverlay() {
@@ -6973,7 +6985,7 @@
     if (onboardingStep === 1) {
       onboardingStep = 2;
       renderOnboardingStep();
-      onboardingNameInput.focus();
+      onboardingNameInput.focus({ preventScroll: true });
       return;
     }
     if (onboardingStep === 2) {
