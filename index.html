@@ -13,7 +13,7 @@
      bump the ?v= on both the stylesheet and script tags below on every
      deploy that touches css/style.css or js/app.js, or returning users can
      silently keep running old code indefinitely. -->
-<link rel="stylesheet" href="css/style.css?v=20260905g">
+<link rel="stylesheet" href="css/style.css?v=20260906a">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -145,6 +145,16 @@
         <label for="race-to-wins" data-i18n="gameSetup.raceToMilestone">Race-to milestone</label>
         <input type="number" id="race-to-wins" min="1" max="99" value="5">
         <span data-i18n="common.wins">wins</span>
+      </div>
+
+      <label class="checkbox-row">
+        <input type="checkbox" id="shot-counter-enabled-checkbox">
+        <span data-i18n="gameSetup.shotCounterEnable">⏱️ Shot counter (Balls games)</span>
+      </label>
+      <div class="row hidden" id="shot-counter-beep-row">
+        <label for="shot-counter-beep-input" data-i18n="gameSetup.shotCounterBeepEvery">Beep every</label>
+        <input type="number" id="shot-counter-beep-input" min="5" max="600" value="30">
+        <span data-i18n="common.seconds">seconds</span>
       </div>
 
       <div class="row">
@@ -971,6 +981,10 @@
 
 </div>
 
-<script src="js/app.js?v=20260905g"></script>
+<div id="shot-counter-widget" class="shot-counter-widget hidden">
+  <span id="shot-counter-time">0:00</span>
+</div>
+
+<script src="js/app.js?v=20260906a"></script>
 </body>
 </html>

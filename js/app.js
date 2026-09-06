@@ -109,7 +109,7 @@
       teamWins: {},
       teamMvpWins: {},
       raceToWinsTarget: 5,
-      currentGame: { gameType: "8ball", target: 1, unit: "rack", mode: "individual", startedAt: new Date().toISOString() },
+      currentGame: { gameType: "8ball", target: 1, unit: "rack", mode: "individual", startedAt: new Date().toISOString(), shotCounterEnabled: false, shotCounterBeepSec: 30 },
       gameHistory: [],
       rotation: { enabled: false, order: [], every: 1 },
       gamesPlayedCount: 0
@@ -182,6 +182,8 @@
           if (!parsed.currentGame) parsed.currentGame = { gameType: "8ball", target: 1, mode: "individual" };
           if (!parsed.currentGame.startedAt) parsed.currentGame.startedAt = new Date().toISOString();
           if (typeof parsed.currentGame.unit !== "string" || !parsed.currentGame.unit) parsed.currentGame.unit = null;
+          if (typeof parsed.currentGame.shotCounterEnabled !== "boolean") parsed.currentGame.shotCounterEnabled = false;
+          if (typeof parsed.currentGame.shotCounterBeepSec !== "number") parsed.currentGame.shotCounterBeepSec = 30;
           var EIGHTBALL_FAMILY = ["8ball", "8ballrotation", "8ballpunishment"];
           if (parsed.currentGame.target === 8 && EIGHTBALL_FAMILY.indexOf(parsed.currentGame.gameType) !== -1) {
             parsed.currentGame.target = 1;
@@ -243,6 +245,18 @@
   // The player currently targeted by the 1-9 keypad shortcut - see
   // handleKeypadShortcut. Not persisted; always starts cleared on reload.
   var keypadSelectedPlayerId = null;
+
+  // Shot counter (see handleKeypadShortcut's Enter//*/Clear branches and
+  // tickShotCounter) - live-only, like keypadSelectedPlayerId above; only
+  // the enabled flag and beep interval on state.currentGame are saved.
+  // accumulatedMs is the frozen total from prior running segments;
+  // runningSince (a Date.now() timestamp, or null while paused) covers
+  // the segment in progress. lastBeepMs is the accumulated-elapsed value
+  // at which the beep last fired, so it fires again beepSec later.
+  var shotCounterAccumulatedMs = 0;
+  var shotCounterRunningSince = null;
+  var shotCounterHidden = false;
+  var shotCounterLastBeepMs = 0;
 
   // Player ids in keypad-number order (index 0 = number 1, etc.) - filled
   // in by refreshKeypadNumbering() after every scoreboard render, since
@@ -456,6 +470,16 @@
   function voicePitch(voice) {
     if (typeof voice !== "number") return 1;
     return VOICE_PITCHES[voice % VOICE_PITCHES.length];
+  }
+
+  // A plain pace-reminder beep for the shot counter - two short identical
+  // pips, deliberately simpler than the win/on-hill fanfares since this
+  // one repeats on a timer during play rather than marking a one-off event.
+  function playShotCounterBeep() {
+    var ctx = getAudioCtx();
+    var now = ctx.currentTime;
+    tone(880, now, 0.12, "sine", 0.25);
+    tone(880, now + 0.18, 0.12, "sine", 0.25);
   }
 
   function playPositiveSound(voice) {
@@ -1119,6 +1143,9 @@
   var modeRadios = document.getElementsByName("game-mode");
   var raceToWinsInput = document.getElementById("race-to-wins");
   var noStatsCheckbox = document.getElementById("no-stats-checkbox");
+  var shotCounterEnabledCheckbox = document.getElementById("shot-counter-enabled-checkbox");
+  var shotCounterBeepRow = document.getElementById("shot-counter-beep-row");
+  var shotCounterBeepInput = document.getElementById("shot-counter-beep-input");
 
   var btnResetGame = document.getElementById("btn-reset-game");
   var btnUndoWin = document.getElementById("btn-undo-win");
@@ -1396,6 +1423,34 @@
       } else {
         adjustScore(keypadSelectedPlayerId, e.key === "+" ? 1 : -1);
       }
+      return;
+    }
+
+    // Shot counter: Enter toggles hide/show, "/" pauses, "*" unpauses,
+    // the numeric keypad's dedicated Clear key zeroes it. Only live when
+    // there's actually a counter running (see shotCounterActive), so
+    // these keys are inert the rest of the time.
+    if (shotCounterActive() && (e.key === "Enter" || e.key === "/" || e.key === "*" || e.key === "Clear")) {
+      e.preventDefault();
+      if (e.key === "Enter") {
+        shotCounterHidden = !shotCounterHidden;
+      } else if (e.key === "/") {
+        if (shotCounterRunningSince) {
+          shotCounterAccumulatedMs += Date.now() - shotCounterRunningSince;
+          shotCounterRunningSince = null;
+        }
+      } else if (e.key === "*") {
+        if (!shotCounterRunningSince) shotCounterRunningSince = Date.now();
+      } else if (e.key === "Clear") {
+        shotCounterAccumulatedMs = 0;
+        shotCounterLastBeepMs = 0;
+        // While running, elapsed is entirely (now - runningSince) - has
+        // to move that reference point up to now too, or a Clear during
+        // an unbroken run (the common case: never paused) would do
+        // nothing, since accumulatedMs was already 0.
+        if (shotCounterRunningSince) shotCounterRunningSince = Date.now();
+      }
+      tickShotCounter();
     }
   }
 
@@ -2528,6 +2583,66 @@
     var startedAt = new Date(state.currentGame.startedAt).getTime();
     if (isNaN(startedAt)) return;
     el.textContent = T("scoreboard.durationLive", { time: formatDuration(Date.now() - startedAt) });
+  }
+
+  // Shot counter (see handleKeypadShortcut and the shotCounter* module
+  // vars). Relevant only for "balls"-unit games with the Game Setup
+  // checkbox on - Quick Counter has no notion of a game unit, so it's
+  // excluded outright.
+  function shotCounterActive() {
+    return !quickCounterMode && state.currentGame.unit === "balls" && !!state.currentGame.shotCounterEnabled;
+  }
+
+  function shotCounterElapsedMs() {
+    return shotCounterAccumulatedMs + (shotCounterRunningSince ? Date.now() - shotCounterRunningSince : 0);
+  }
+
+  // Called when the Game Setup checkbox is checked (or a "balls" game
+  // with it already checked is freshly set up) - always starts a clean,
+  // running 0:00, matching "enabling the feature" reading as "start it".
+  function startShotCounter() {
+    shotCounterAccumulatedMs = 0;
+    shotCounterLastBeepMs = 0;
+    shotCounterRunningSince = Date.now();
+    shotCounterHidden = false;
+    tickShotCounter();
+  }
+
+  // Called when the checkbox is unchecked - progress isn't kept (there's
+  // nowhere meaningful to keep it once the feature's off), so re-enabling
+  // later is the same as starting fresh via startShotCounter.
+  function stopShotCounter() {
+    shotCounterAccumulatedMs = 0;
+    shotCounterLastBeepMs = 0;
+    shotCounterRunningSince = null;
+    tickShotCounter();
+  }
+
+  // Runs every second (see the setInterval near boot) and also called
+  // directly after every keypad action, so the widget and beep schedule
+  // react immediately instead of waiting up to a second.
+  function tickShotCounter() {
+    var widget = document.getElementById("shot-counter-widget");
+    if (!widget) return;
+    var active = shotCounterActive();
+    var visible = active && !shotCounterHidden && !isAnyOverlayOpen() && !appRoot.classList.contains("hidden");
+    widget.classList.toggle("hidden", !visible);
+    if (!active) return;
+
+    var elapsed = shotCounterElapsedMs();
+    var timeEl = document.getElementById("shot-counter-time");
+    if (timeEl) timeEl.textContent = formatDuration(elapsed);
+
+    // Beeps while running regardless of hidden/visible (explicitly
+    // requested), but pauses along with the counter - runningSince is
+    // null while paused, so this whole block is skipped then.
+    if (shotCounterRunningSince) {
+      var beepMs = Math.max(5, state.currentGame.shotCounterBeepSec || 30) * 1000;
+      if (elapsed - shotCounterLastBeepMs >= beepMs) {
+        shotCounterLastBeepMs = elapsed;
+        playShotCounterBeep();
+      }
+    }
   }
 
   function renderScoreboard() {
@@ -5304,7 +5419,26 @@
       });
   }
 
-  function exportAllData() {
+  function defaultBackupFilename() {
+    return "pool-master-counter-backup-" + new Date().toISOString().slice(0, 10) + ".json";
+  }
+
+  // Strips characters a filesystem would reject and appends .json if the
+  // caller's name doesn't already end with it - used for a user-typed
+  // backup name, not the auto-generated default (which is already safe).
+  function sanitizeBackupFilename(name) {
+    var trimmed = (name || "").trim().replace(/[\\/:*?"<>|]/g, "");
+    if (!trimmed) return defaultBackupFilename();
+    return /\.json$/i.test(trimmed) ? trimmed : trimmed + ".json";
+  }
+
+  // filename (optional): only the manual "Export All Data" button passes
+  // one, via the promptModal that lets the user name the file - the
+  // automatic safety-backup call sites (resetTodayStats,
+  // resetAllPlayerStats) call this with no argument on purpose, since
+  // those are silent safety nets and shouldn't interrupt the reset flow
+  // with a prompt.
+  function exportAllData(filename) {
     var payload = {
       exportedAt: new Date().toISOString(),
       state: state,
@@ -5313,7 +5447,7 @@
       ratings: PLAYER_RATINGS,
       contacts: PLAYER_CONTACTS
     };
-    downloadJSON("pool-master-counter-backup-" + payload.exportedAt.slice(0, 10) + ".json", payload);
+    downloadJSON(filename ? sanitizeBackupFilename(filename) : defaultBackupFilename(), payload);
   }
 
   // Pulls every (player, calendar date) pair referenced in an imported
@@ -6928,6 +7062,7 @@
     applyRotationIfDue();
     renderAll();
     updateCurrentGameSummary();
+    tickShotCounter();
     closeWizard();
     setFocusMode(true);
     showToast(T("toast.letsPlay"));
@@ -10077,7 +10212,11 @@
   backfillMissingRatingsFromHistory();
   backfillMissingAddedDates();
 
-  btnExportAllData.addEventListener("click", exportAllData);
+  btnExportAllData.addEventListener("click", function () {
+    promptModal(T("backup.exportFilenamePrompt"), defaultBackupFilename(), function (name) {
+      exportAllData(name);
+    });
+  });
 
   btnImportAllData.addEventListener("click", function () {
     importFileInput.click();
@@ -10160,6 +10299,7 @@
     saveState();
     renderScoreboard();
     updateCurrentGameSummary();
+    tickShotCounter();
   });
 
   gameTargetInput.addEventListener("input", function () {
@@ -10176,6 +10316,22 @@
     saveState();
     renderScoreboard();
     updateCurrentGameSummary();
+    tickShotCounter();
+  });
+
+  shotCounterEnabledCheckbox.addEventListener("change", function () {
+    state.currentGame.shotCounterEnabled = shotCounterEnabledCheckbox.checked;
+    saveState();
+    shotCounterBeepRow.classList.toggle("hidden", !shotCounterEnabledCheckbox.checked);
+    if (shotCounterEnabledCheckbox.checked) startShotCounter();
+    else stopShotCounter();
+  });
+
+  shotCounterBeepInput.addEventListener("input", function () {
+    var sec = parseInt(shotCounterBeepInput.value, 10);
+    if (!sec || sec < 5) return;
+    state.currentGame.shotCounterBeepSec = Math.min(600, sec);
+    saveState();
   });
 
   Array.prototype.forEach.call(modeRadios, function (radio) {
@@ -10572,6 +10728,14 @@
   Array.prototype.forEach.call(modeRadios, function (radio) {
     radio.checked = radio.value === state.currentGame.mode;
   });
+  shotCounterEnabledCheckbox.checked = state.currentGame.shotCounterEnabled;
+  shotCounterBeepRow.classList.toggle("hidden", !state.currentGame.shotCounterEnabled);
+  shotCounterBeepInput.value = state.currentGame.shotCounterBeepSec;
+  // Live count is never restored across a reload (see the shotCounter*
+  // module vars) - only the setting is; a "balls" game reloaded with the
+  // checkbox already on starts a fresh running 0:00 rather than staying
+  // enabled-but-frozen.
+  if (state.currentGame.shotCounterEnabled) startShotCounter();
   updateCurrentGameSummary();
 
   dayNotesTextarea.value = getDayNotes(todayDateStr());
@@ -10609,6 +10773,7 @@
   });
 
   setInterval(updateGameDurationDisplay, 1000);
+  setInterval(tickShotCounter, 1000);
   }
 
   // ---------------------------------------------------------------------
