@@ -160,10 +160,11 @@
       teamWins: {},
       teamMvpWins: {},
       raceToWinsTarget: 5,
-      currentGame: { gameType: "8ball", target: 1, unit: "rack", mode: "individual", startedAt: new Date().toISOString(), shotCounterEnabled: false, shotCounterBeepSec: 30 },
+      currentGame: { gameType: "8ball", target: 1, unit: "rack", mode: "individual", startedAt: new Date().toISOString(), shotCounterEnabled: false, shotCounterBeepSec: 30, queueEnabled: false },
       gameHistory: [],
       rotation: { enabled: false, order: [], every: 1 },
-      gamesPlayedCount: 0
+      gamesPlayedCount: 0,
+      queue: []
     };
   }
 
@@ -235,6 +236,8 @@
           if (typeof parsed.currentGame.unit !== "string" || !parsed.currentGame.unit) parsed.currentGame.unit = null;
           if (typeof parsed.currentGame.shotCounterEnabled !== "boolean") parsed.currentGame.shotCounterEnabled = false;
           if (typeof parsed.currentGame.shotCounterBeepSec !== "number") parsed.currentGame.shotCounterBeepSec = 30;
+          if (typeof parsed.currentGame.queueEnabled !== "boolean") parsed.currentGame.queueEnabled = false;
+          if (!Array.isArray(parsed.queue)) parsed.queue = [];
           var EIGHTBALL_FAMILY = ["8ball", "8ballrotation", "8ballpunishment"];
           if (parsed.currentGame.target === 8 && EIGHTBALL_FAMILY.indexOf(parsed.currentGame.gameType) !== -1) {
             parsed.currentGame.target = 1;
@@ -292,6 +295,123 @@
     return state.players.filter(function (p) {
       return p.playing;
     });
+  }
+
+  // "Winner stays" queue mode (state.currentGame.queueEnabled, individual
+  // mode only) - reconciles state.queue (an ordered list of player ids)
+  // against reality instead of requiring every place `playing` can turn
+  // false (togglePlaying, addPlayer's default, roster-list loading, the
+  // wizard, Recover Data restore) to remember to keep it in sync. Anyone
+  // currently standby but not yet tracked lands at the back automatically,
+  // so nobody can silently fall out of the line. Callers that change the
+  // order persist the result back with saveQueue(effectiveQueue()).
+  function effectiveQueue() {
+    var known = {};
+    var ordered = (state.queue || [])
+      .map(function (id) {
+        return getPlayer(id);
+      })
+      .filter(function (p) {
+        return p && !p.playing;
+      });
+    ordered.forEach(function (p) {
+      known[p.id] = true;
+    });
+    state.players.forEach(function (p) {
+      if (!p.playing && !known[p.id]) ordered.push(p);
+    });
+    return ordered;
+  }
+
+  function saveQueue(orderedPlayers) {
+    state.queue = orderedPlayers.map(function (p) {
+      return p.id;
+    });
+  }
+
+  // Mirrors buildRotationRow/renderRotationListInto/moveRotationItem
+  // (the Games Rotation list) - same ordered-list-with-up/down-arrows
+  // interaction, just for standby players instead of game types. No
+  // remove button: leaving the queue means becoming an active player or
+  // being removed from the roster entirely, both already handled by the
+  // existing roster row controls.
+  function buildQueueRow(player, i, total) {
+    var li = document.createElement("li");
+    li.className = "rotation-row";
+
+    var pos = document.createElement("span");
+    pos.className = "rotation-position";
+    pos.textContent = i + 1 + ".";
+
+    var name = document.createElement("span");
+    name.className = "rotation-name";
+    name.textContent = player.name;
+
+    var controls = document.createElement("div");
+    controls.className = "rotation-controls";
+
+    var upBtn = document.createElement("button");
+    upBtn.type = "button";
+    upBtn.textContent = "↑";
+    upBtn.setAttribute("aria-label", "Move " + player.name + " up in the queue");
+    upBtn.disabled = i === 0;
+    upBtn.addEventListener("click", function () {
+      moveQueueItem(i, -1);
+    });
+
+    var downBtn = document.createElement("button");
+    downBtn.type = "button";
+    downBtn.textContent = "↓";
+    downBtn.setAttribute("aria-label", "Move " + player.name + " down in the queue");
+    downBtn.disabled = i === total - 1;
+    downBtn.addEventListener("click", function () {
+      moveQueueItem(i, 1);
+    });
+
+    controls.appendChild(upBtn);
+    controls.appendChild(downBtn);
+
+    li.appendChild(pos);
+    li.appendChild(name);
+    li.appendChild(controls);
+    return li;
+  }
+
+  // Shows/hides the checkbox (Individual mode only) and the queue list
+  // itself (checkbox on + Individual + not Quick Counter), then rebuilds
+  // the list from effectiveQueue() when visible. Called from renderRoster
+  // so it always reflects the latest playing/standby state.
+  function renderQueueList() {
+    var individualMode = !quickCounterMode && state.currentGame.mode === "individual";
+    queueModeRow.classList.toggle("hidden", !individualMode);
+    queueModeCheckbox.checked = state.currentGame.queueEnabled;
+    var queueActive = individualMode && state.currentGame.queueEnabled;
+    queueSection.classList.toggle("hidden", !queueActive);
+    if (!queueActive) return;
+    var queue = effectiveQueue();
+    queueList.innerHTML = "";
+    if (queue.length === 0) {
+      var hint = document.createElement("li");
+      hint.className = "empty-hint";
+      hint.textContent = T("players.queueEmpty");
+      queueList.appendChild(hint);
+      return;
+    }
+    queue.forEach(function (p, i) {
+      queueList.appendChild(buildQueueRow(p, i, queue.length));
+    });
+  }
+
+  function moveQueueItem(index, delta) {
+    var queue = effectiveQueue();
+    var newIndex = index + delta;
+    if (newIndex < 0 || newIndex >= queue.length) return;
+    var tmp = queue[index];
+    queue[index] = queue[newIndex];
+    queue[newIndex] = tmp;
+    saveQueue(queue);
+    saveState();
+    renderQueueList();
   }
 
   // The player currently targeted by the 1-9 keypad shortcut - see
@@ -1067,6 +1187,10 @@
   var newPlayerNameRequirement = document.getElementById("new-player-name-requirement");
   var btnAddPlayer = document.getElementById("btn-add-player");
   var rosterList = document.getElementById("roster-list");
+  var queueModeRow = document.getElementById("queue-mode-row");
+  var queueModeCheckbox = document.getElementById("queue-mode-checkbox");
+  var queueSection = document.getElementById("queue-section");
+  var queueList = document.getElementById("queue-list");
   var rosterLoadSelect = document.getElementById("roster-load-select");
   var btnRosterLoad = document.getElementById("btn-roster-load");
   var btnExportRosterLists = document.getElementById("btn-export-roster-lists");
@@ -2154,6 +2278,7 @@
       setPanelSummary("players-panel", computePlayersSummary());
       renderPlayingToggleListInto(focusPlayersList, T("players.noPlayersYetPanel"));
       focusPlayersSummary.textContent = T("players.heading");
+      renderQueueList();
       return;
     }
     var showTeamToggle = state.currentGame.mode === "teams";
@@ -2232,6 +2357,7 @@
       return p.playing;
     }).length;
     focusPlayersSummary.textContent = T("players.playingOfTotal", { playing: playingCount, total: state.players.length });
+    renderQueueList();
   }
 
   function buildFlagSpan() {
@@ -3001,12 +3127,39 @@
     renderAll();
   }
 
+  // Queue mode (see effectiveQueue) caps individual play at exactly 2
+  // seated whenever anyone's waiting: benching an active player pulls
+  // the queue's front player in the same way a loss would (see
+  // creditWin), and seating a standby player is only allowed when a
+  // seat is actually open - there's no well-defined "who do they
+  // replace" otherwise.
   function togglePlaying(id) {
     var p = getPlayer(id);
     if (!p) return;
-    p.playing = !p.playing;
-    p.balls = 0;
-    if (p.playing && !p.teamId) p.teamId = "A";
+    var queueActive = !quickCounterMode && state.currentGame.mode === "individual" && state.currentGame.queueEnabled;
+
+    if (p.playing) {
+      p.playing = false;
+      p.balls = 0;
+      if (queueActive) {
+        var queue = effectiveQueue();
+        if (queue.length > 1) {
+          var front = queue.shift();
+          front.playing = true;
+          front.balls = 0;
+        }
+        saveQueue(queue);
+      }
+    } else {
+      if (queueActive && activePlayers().length >= 2) {
+        showToast(T("toast.queueTableFull"));
+        return;
+      }
+      p.playing = true;
+      p.balls = 0;
+      if (!p.teamId) p.teamId = "A";
+      if (queueActive) saveQueue(effectiveQueue());
+    }
     saveState();
     renderAll();
   }
@@ -3102,6 +3255,33 @@
         milestoneCount = newPlayerWins;
       } else if (target > 1 && newPlayerWins % target === target - 1) {
         onHillNames = getPlayer(key).name;
+      }
+
+      // "Winner stays" queue mode: send the loser to the back of the
+      // line and bring the next person in - but only if someone's
+      // actually waiting (computed before benching the loser, so an
+      // empty queue leaves them seated, degrading gracefully to plain
+      // 1v1 when there are only 2 individual players total). Queue mode
+      // always keeps exactly 2 seated whenever anyone's waiting (see
+      // togglePlaying and the enable-checkbox logic), so opponentNames
+      // above is already just the one real opponent - no change needed
+      // to the win-crediting/rating math itself.
+      if (state.currentGame.mode === "individual" && state.currentGame.queueEnabled) {
+        var loser = activePlayers().filter(function (p) {
+          return p.id !== key;
+        })[0];
+        if (loser) {
+          var waitingQueue = effectiveQueue();
+          if (waitingQueue.length > 0) {
+            loser.playing = false;
+            loser.balls = 0;
+            var nextUp = waitingQueue.shift();
+            nextUp.playing = true;
+            nextUp.balls = 0;
+            waitingQueue.push(loser);
+            saveQueue(waitingQueue);
+          }
+        }
       }
     }
     var startedAt = state.currentGame.startedAt ? new Date(state.currentGame.startedAt).getTime() : null;
@@ -3694,6 +3874,15 @@
         showToast(T("toast.teamNeedsOpponent"));
         return;
       }
+    }
+
+    // Same idea for queue mode: with the seat cap normally enforced
+    // elsewhere (togglePlaying, the enable checkbox, creditWin's
+    // rotation), this only fires for the edge case of a solo player
+    // left seated with nobody waiting to fill the second seat.
+    if (!quickCounterMode && state.currentGame.mode === "individual" && state.currentGame.queueEnabled && activePlayers().length < 2) {
+      showToast(T("toast.queueNeedsPlayer"));
+      return;
     }
 
     // Quick Counter: just tally, never check a target or credit a win.
@@ -10706,6 +10895,34 @@
       renderAll();
       updateCurrentGameSummary();
     });
+  });
+
+  // Turning queue mode on caps individual play at exactly 2 seated: keep
+  // the first 2 currently-playing players as-is, bench any extras onto
+  // the back of the queue, then (if fewer than 2 ended up seated - e.g.
+  // only 0 or 1 were playing to begin with) pull straight from the
+  // queue's front to fill the empty seat(s), so the table is never left
+  // short a player just from checking the box. Turning it back off
+  // leaves state.queue alone (harmless while unused) so the order is
+  // remembered if it's re-enabled later.
+  queueModeCheckbox.addEventListener("change", function () {
+    state.currentGame.queueEnabled = queueModeCheckbox.checked;
+    if (queueModeCheckbox.checked) {
+      var seated = activePlayers();
+      seated.slice(2).forEach(function (p) {
+        p.playing = false;
+        p.balls = 0;
+      });
+      var queue = effectiveQueue();
+      while (activePlayers().length < 2 && queue.length > 0) {
+        var nextUp = queue.shift();
+        nextUp.playing = true;
+        nextUp.balls = 0;
+      }
+      saveQueue(queue);
+    }
+    saveState();
+    renderAll();
   });
 
   noStatsCheckbox.addEventListener("change", function () {
