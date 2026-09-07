@@ -160,7 +160,7 @@
       teamWins: {},
       teamMvpWins: {},
       raceToWinsTarget: 5,
-      currentGame: { gameType: "8ball", target: 1, unit: "rack", mode: "individual", startedAt: new Date().toISOString(), shotCounterEnabled: false, shotCounterBeepSec: 30, queueEnabled: false },
+      currentGame: { gameType: "8ball", target: 1, unit: "rack", mode: "individual", startedAt: new Date().toISOString(), shotCounterEnabled: false, shotCounterBeepSec: 30, shotCounterHidden: false, queueEnabled: false },
       gameHistory: [],
       rotation: { enabled: false, order: [], every: 1 },
       gamesPlayedCount: 0,
@@ -236,6 +236,7 @@
           if (typeof parsed.currentGame.unit !== "string" || !parsed.currentGame.unit) parsed.currentGame.unit = null;
           if (typeof parsed.currentGame.shotCounterEnabled !== "boolean") parsed.currentGame.shotCounterEnabled = false;
           if (typeof parsed.currentGame.shotCounterBeepSec !== "number") parsed.currentGame.shotCounterBeepSec = 30;
+          if (typeof parsed.currentGame.shotCounterHidden !== "boolean") parsed.currentGame.shotCounterHidden = false;
           if (typeof parsed.currentGame.queueEnabled !== "boolean") parsed.currentGame.queueEnabled = false;
           if (!Array.isArray(parsed.queue)) parsed.queue = [];
           var EIGHTBALL_FAMILY = ["8ball", "8ballrotation", "8ballpunishment"];
@@ -430,7 +431,7 @@
   // 1s-interval tick doesn't replay the same second's warning twice.
   var shotCounterAccumulatedMs = 0;
   var shotCounterRunningSince = null;
-  var shotCounterHidden = false;
+  var shotCounterHidden = !!state.currentGame.shotCounterHidden;
   var shotCounterLastBeepMs = 0;
   var shotCounterLastTickCountdown = null;
 
@@ -1637,6 +1638,8 @@
         return;
       } else if (e.key === "*") {
         shotCounterHidden = !shotCounterHidden;
+        state.currentGame.shotCounterHidden = shotCounterHidden;
+        saveState();
       } else if (e.key === "Clear") {
         shotCounterAccumulatedMs = 0;
         shotCounterLastBeepMs = 0;
@@ -2797,14 +2800,16 @@
   }
 
   // Called when the Game Setup checkbox is checked (or a "balls" game
-  // with it already checked is freshly set up) - always starts a clean,
-  // running 0:00, matching "enabling the feature" reading as "start it".
+  // with it already checked is freshly set up), and also on boot to
+  // resume an already-enabled counter - always starts a clean, running
+  // 0:00. Doesn't touch shotCounterHidden: that's persisted separately
+  // (state.currentGame.shotCounterHidden) so a hidden counter reloads
+  // still hidden instead of popping back up on every page load.
   function startShotCounter() {
     shotCounterAccumulatedMs = 0;
     shotCounterLastBeepMs = 0;
     shotCounterLastTickCountdown = null;
     shotCounterRunningSince = Date.now();
-    shotCounterHidden = false;
     tickShotCounter();
   }
 
@@ -3858,6 +3863,10 @@
       p.balls = 0;
     });
     state.currentGame.startedAt = new Date().toISOString();
+    // A new game/rack means a fresh shot clock too - startShotCounter()
+    // already zeroes elapsed/beep/tick and starts it running without
+    // touching the persisted hidden flag.
+    if (shotCounterActive()) startShotCounter();
   }
 
   function adjustScore(playerId, delta) {
@@ -10872,6 +10881,10 @@
 
   shotCounterEnabledCheckbox.addEventListener("change", function () {
     state.currentGame.shotCounterEnabled = shotCounterEnabledCheckbox.checked;
+    if (shotCounterEnabledCheckbox.checked) {
+      shotCounterHidden = false;
+      state.currentGame.shotCounterHidden = false;
+    }
     saveState();
     shotCounterBeepRow.classList.toggle("hidden", !shotCounterEnabledCheckbox.checked);
     if (shotCounterEnabledCheckbox.checked) startShotCounter();
