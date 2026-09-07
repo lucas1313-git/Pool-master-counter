@@ -329,17 +329,15 @@ body {
   display: none;
 }
 
+/* Focus Mode is a clean, read-from-across-the-room scoreboard - the
+   logo/title, nav buttons, and theme/language/no-stats setup controls
+   have no place in it, and with all of those gone the header itself
+   has nothing left to show. */
 #app.focus-mode .app-header {
-  padding-bottom: 4px;
+  display: none;
 }
 
-/* Focus Mode is a clean, read-from-across-the-room scoreboard - these
-   are setup/settings/navigation controls, not something you need
-   mid-session. */
-#app.focus-mode .theme-select-row,
-#app.focus-mode .language-select-row,
-#app.focus-mode .no-stats-row-inline,
-#app.focus-mode .all-players-nav-btn {
+#app.focus-mode .no-stats-row-inline {
   display: none;
 }
 
