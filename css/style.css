@@ -333,6 +333,14 @@ body {
   padding-bottom: 4px;
 }
 
+/* Focus Mode is a clean, read-from-across-the-room scoreboard - these
+   are setup/settings controls, not something you need mid-session. */
+#app.focus-mode .theme-select-row,
+#app.focus-mode .language-select-row,
+#app.focus-mode .no-stats-row-inline {
+  display: none;
+}
+
 #app.focus-mode #scoreboard-panel {
   padding-top: 8px;
 }
