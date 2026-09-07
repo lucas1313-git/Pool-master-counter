@@ -334,10 +334,12 @@ body {
 }
 
 /* Focus Mode is a clean, read-from-across-the-room scoreboard - these
-   are setup/settings controls, not something you need mid-session. */
+   are setup/settings/navigation controls, not something you need
+   mid-session. */
 #app.focus-mode .theme-select-row,
 #app.focus-mode .language-select-row,
-#app.focus-mode .no-stats-row-inline {
+#app.focus-mode .no-stats-row-inline,
+#app.focus-mode .all-players-nav-btn {
   display: none;
 }
 
