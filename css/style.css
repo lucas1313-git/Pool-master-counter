@@ -364,6 +364,17 @@ body {
   font-size: clamp(1.8rem, 14cqw, 5.4rem);
 }
 
+/* Names need to read from across the room same as the score itself -
+   same container-query scaling as .stat-value above, just a smaller
+   share of the card's width since the score is still the main event. */
+#app.focus-mode .player-name {
+  font-size: clamp(1.8rem, 13cqw, 4.5rem);
+}
+
+#app.focus-mode .member-name {
+  font-size: clamp(1.3rem, 9cqw, 3rem);
+}
+
 .no-stats-row-inline {
   display: flex;
   align-items: center;
