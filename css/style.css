@@ -947,9 +947,13 @@ input[type="number"] {
    exempt from Focus Mode's panel-hiding, it shows up there too with no
    extra wiring (see the #app.focus-mode override below for its
    across-the-room sizing there). Controlled by the numeric keypad (see
-   handleKeypadShortcut), a tap/click (pause), or the Game Setup
-   panel's Show/Hide Timer button. Sized with clamp() so it stays
-   legible without overflowing a phone-width viewport. */
+   handleKeypadShortcut), a tap/click (pause), or either Show/Hide
+   Timer control (the Game Setup panel's, or the small persistent
+   .shot-counter-visibility-toggle button right here in the scoreboard
+   - see tickShotCounter, which keeps that one visible even while this
+   widget itself is hidden, so hiding it never strands anyone without
+   a way back). Sized with clamp() so it stays legible without
+   overflowing a phone-width viewport. */
 .shot-counter-widget {
   display: block;
   width: fit-content;
@@ -965,6 +969,29 @@ input[type="number"] {
   letter-spacing: 0.03em;
   text-align: center;
   cursor: pointer;
+}
+
+/* Quick-access companion to the widget above - unlike it, this stays
+   visible whenever the shot counter is enabled at all, regardless of
+   the widget's own hidden state, so there's always a one-tap way back
+   without digging into Game Setup. */
+.shot-counter-visibility-toggle {
+  display: block;
+  width: 36px;
+  height: 36px;
+  margin: 4px auto 14px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.shot-counter-visibility-toggle:hover {
+  background: rgba(0, 0, 0, 0.5);
+  color: var(--accent);
 }
 
 /* ---------- Standings ---------- */

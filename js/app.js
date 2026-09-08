@@ -2938,8 +2938,14 @@
     var widget = document.getElementById("shot-counter-widget");
     if (!widget) return;
     var active = shotCounterActive();
-    var visible = active && !shotCounterHidden && !isAnyOverlayOpen() && !appRoot.classList.contains("hidden");
+    var overlayOrAppHidden = isAnyOverlayOpen() || appRoot.classList.contains("hidden");
+    var visible = active && !shotCounterHidden && !overlayOrAppHidden;
     widget.classList.toggle("hidden", !visible);
+    // Stays visible whenever the counter is active at all, regardless
+    // of shotCounterHidden - the whole point is a way back once the
+    // widget itself is hidden, so it can't be gated by that same flag.
+    var toggleBtn = document.getElementById("shot-counter-visibility-toggle");
+    if (toggleBtn) toggleBtn.classList.toggle("hidden", !(active && !overlayOrAppHidden));
     if (!active) return;
 
     var elapsed = shotCounterElapsedMs();
@@ -11300,6 +11306,7 @@
   document.getElementById("shot-counter-widget").addEventListener("click", toggleShotCounterPause);
 
   btnShotCounterToggleVisibility.addEventListener("click", toggleShotCounterVisibility);
+  document.getElementById("shot-counter-visibility-toggle").addEventListener("click", toggleShotCounterVisibility);
 
   Array.prototype.forEach.call(modeRadios, function (radio) {
     radio.addEventListener("change", function () {
