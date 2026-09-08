@@ -1335,6 +1335,7 @@
   var shotCounterEnabledCheckbox = document.getElementById("shot-counter-enabled-checkbox");
   var shotCounterBeepRow = document.getElementById("shot-counter-beep-row");
   var shotCounterBeepInput = document.getElementById("shot-counter-beep-input");
+  var btnShotCounterToggleVisibility = document.getElementById("btn-shot-counter-toggle-visibility");
 
   var btnResetGame = document.getElementById("btn-reset-game");
   var btnUndoWin = document.getElementById("btn-undo-win");
@@ -1638,9 +1639,8 @@
         toggleShotCounterPause();
         return;
       } else if (e.key === "*") {
-        shotCounterHidden = !shotCounterHidden;
-        state.currentGame.shotCounterHidden = shotCounterHidden;
-        saveState();
+        toggleShotCounterVisibility();
+        return;
       } else if (e.key === "Clear") {
         shotCounterAccumulatedMs = 0;
         shotCounterLastBeepMs = 0;
@@ -2801,16 +2801,20 @@
   }
 
   // Called when the Game Setup checkbox is checked (or a "balls" game
-  // with it already checked is freshly set up), and also on boot to
-  // resume an already-enabled counter - always starts a clean, running
-  // 0:00. Doesn't touch shotCounterHidden: that's persisted separately
+  // with it already checked is freshly set up), on boot to restore an
+  // already-enabled counter, and on every new game/rack (see
+  // resetGameBalls) - always resets to a clean, paused 0:00 rather than
+  // auto-running: the player starts it themselves (tap the widget or
+  // "/") once they're actually at the table and ready to shoot, instead
+  // of the clock silently running during rack-up/setup time. Doesn't
+  // touch shotCounterHidden: that's persisted separately
   // (state.currentGame.shotCounterHidden) so a hidden counter reloads
   // still hidden instead of popping back up on every page load.
   function startShotCounter() {
     shotCounterAccumulatedMs = 0;
     shotCounterLastBeepMs = 0;
     shotCounterLastTickCountdown = null;
-    shotCounterRunningSince = Date.now();
+    shotCounterRunningSince = null;
     tickShotCounter();
   }
 
@@ -2835,6 +2839,17 @@
     } else {
       shotCounterRunningSince = Date.now();
     }
+    tickShotCounter();
+  }
+
+  // Flips show/hide - shared by the "*" keypad shortcut and the Game
+  // Setup panel's Show/Hide Timer button. Persisted so the widget stays
+  // hidden across a reload instead of popping back up (see startShotCounter).
+  function toggleShotCounterVisibility() {
+    if (!shotCounterActive()) return;
+    shotCounterHidden = !shotCounterHidden;
+    state.currentGame.shotCounterHidden = shotCounterHidden;
+    saveState();
     tickShotCounter();
   }
 
@@ -10977,6 +10992,8 @@
   });
 
   document.getElementById("shot-counter-widget").addEventListener("click", toggleShotCounterPause);
+
+  btnShotCounterToggleVisibility.addEventListener("click", toggleShotCounterVisibility);
 
   Array.prototype.forEach.call(modeRadios, function (radio) {
     radio.addEventListener("change", function () {

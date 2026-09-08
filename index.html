@@ -13,7 +13,7 @@
      bump the ?v= on both the stylesheet and script tags below on every
      deploy that touches css/style.css or js/app.js, or returning users can
      silently keep running old code indefinitely. -->
-<link rel="stylesheet" href="css/style.css?v=20260906s">
+<link rel="stylesheet" href="css/style.css?v=20260906t">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -155,6 +155,7 @@
         <label for="shot-counter-beep-input" data-i18n="gameSetup.shotCounterBeepEvery">Beep every</label>
         <input type="number" id="shot-counter-beep-input" min="5" max="600" value="30">
         <span data-i18n="common.seconds">seconds</span>
+        <button type="button" id="btn-shot-counter-toggle-visibility" class="btn btn-ghost" data-i18n="gameSetup.shotCounterToggleVisibility">👁️ Show/Hide Timer</button>
       </div>
 
       <div class="row">
@@ -1010,6 +1011,6 @@
   <span id="shot-counter-time">0:00</span>
 </div>
 
-<script src="js/app.js?v=20260906s"></script>
+<script src="js/app.js?v=20260906t"></script>
 </body>
 </html>

@@ -110,6 +110,7 @@
   "gameSetup.shareStandings": "Partager le classement",
   "gameSetup.shotCounterBeepEvery": "Bip toutes les",
   "gameSetup.shotCounterEnable": "⏱️ Compteur de coups",
+  "gameSetup.shotCounterToggleVisibility": "👁️ Afficher/Masquer le minuteur",
   "gameSetup.summaryLine": "{{game}} ({{target}} {{unit}}) · {{mode}} · Course jusqu'à {{raceTo}} victoires",
   "gameSetup.target": "Objectif",
   "gameSetup.targetNote": "Objectif {{target}} {{unit}}",

@@ -110,6 +110,7 @@
   "gameSetup.shareStandings": "Compartir clasificación",
   "gameSetup.shotCounterBeepEvery": "Pitido cada",
   "gameSetup.shotCounterEnable": "⏱️ Contador de tiros",
+  "gameSetup.shotCounterToggleVisibility": "👁️ Mostrar/Ocultar temporizador",
   "gameSetup.summaryLine": "{{game}} ({{target}} {{unit}}) · {{mode}} · Carrera hasta {{raceTo}} victorias",
   "gameSetup.target": "Meta",
   "gameSetup.targetNote": "Meta {{target}} {{unit}}",

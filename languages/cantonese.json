@@ -110,6 +110,7 @@
   "gameSetup.shareStandings": "分享排名",
   "gameSetup.shotCounterBeepEvery": "每",
   "gameSetup.shotCounterEnable": "⏱️ 波數計時器",
+  "gameSetup.shotCounterToggleVisibility": "👁️ 顯示/隱藏計時器",
   "gameSetup.summaryLine": "{{game}}（{{target}} {{unit}}）．{{mode}}．連勝到 {{raceTo}} 場",
   "gameSetup.target": "目標",
   "gameSetup.targetNote": "目標 {{target}} {{unit}}",
