@@ -4828,6 +4828,23 @@
     return buildDayReportTextTable(dateStr);
   }
 
+  // Email Report/Text Report/Share Report used to ignore the "Report
+  // format" selector entirely and always send buildDayReportTextPlain
+  // - which reads as "the dropdown doesn't work" from the report-
+  // sharing side, even though Copy Report (buildDayReportText above)
+  // always did respect it. The selector now applies here too, with one
+  // real constraint: Table AND Compact both render a monospace ASCII
+  // grid (buildTextTable) for the leaderboard, which only lines up in
+  // a monospace font - Mail/Messages compose boxes are proportional,
+  // so either selection would arrive visibly broken there. Only
+  // Detailed has no grid at all (bullet points/sections), so it's the
+  // one format that can actually change what gets shared; Table/
+  // Compact still fall back to the alignment-free Plain layout.
+  function buildDayReportTextForSharing(dateStr) {
+    if (dayReportFormat === "detailed") return buildDayReportTextDetailed(dateStr);
+    return buildDayReportTextPlain(dateStr);
+  }
+
   function updateDayNotesSummary() {
     var data = computeDayReportData(todayDateStr());
     var notes = getDayNotes(todayDateStr());
@@ -6156,7 +6173,7 @@
   }
 
   function shareReport() {
-    var text = buildDayReportTextPlain(todayDateStr());
+    var text = buildDayReportTextForSharing(todayDateStr());
     if (dayReportAttachBackupCheckbox.checked) {
       shareReportWithBackupAttachment(text, function () {
         shareReportTextOnly(text);
@@ -11664,7 +11681,7 @@
   });
 
   btnDayReportEmail.addEventListener("click", function () {
-    var text = buildDayReportTextPlain(todayDateStr());
+    var text = buildDayReportTextForSharing(todayDateStr());
     function openEmailCompose() {
       var to = reportOptedInContacts("email")
         .map(function (c) {
@@ -11686,7 +11703,7 @@
   });
 
   btnDayReportSms.addEventListener("click", function () {
-    var text = buildDayReportTextPlain(todayDateStr());
+    var text = buildDayReportTextForSharing(todayDateStr());
     function openSmsCompose() {
       var to = reportOptedInContacts("sms")
         .map(function (c) {
