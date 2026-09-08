@@ -1370,6 +1370,7 @@
   var btnDayReportEmail = document.getElementById("btn-day-report-email");
   var btnDayReportSms = document.getElementById("btn-day-report-sms");
   var btnDayReportShareBackup = document.getElementById("btn-day-report-share-backup");
+  var dayReportAttachBackupCheckbox = document.getElementById("day-report-attach-backup-checkbox");
   var dayReportRecipientsLine = document.getElementById("day-report-recipients-line");
 
   var milestoneOverlay = document.getElementById("milestone-overlay");
@@ -4328,6 +4329,12 @@
   function buildDayReportTextTable(dateStr) {
     var data = computeDayReportData(dateStr);
     var lines = ["🎱 POOL MASTER COUNTER — DAY REPORT", formatReportDateHeading(dateStr), ""];
+    var notes = getDayNotes(dateStr);
+    if (notes) {
+      lines.push("Notes");
+      lines.push(notes);
+      lines.push("");
+    }
     if (data.players.length === 0 && data.tournaments.length === 0) {
       lines.push("No games recorded today.");
     } else {
@@ -4392,12 +4399,6 @@
         }
       }
     }
-    var notes = getDayNotes(dateStr);
-    if (notes) {
-      lines.push("");
-      lines.push("Notes");
-      lines.push(notes);
-    }
     return lines.join("\n");
   }
 
@@ -4407,6 +4408,11 @@
   function buildDayReportTextCompact(dateStr) {
     var data = computeDayReportData(dateStr);
     var lines = ["🎱 " + formatReportDateHeading(dateStr) + " — Day Report", ""];
+    var notes = getDayNotes(dateStr);
+    if (notes) {
+      lines.push("Notes: " + notes);
+      lines.push("");
+    }
     if (data.players.length === 0 && data.tournaments.length === 0) {
       lines.push("No games recorded today.");
     } else {
@@ -4431,11 +4437,6 @@
         });
       }
     }
-    var notes = getDayNotes(dateStr);
-    if (notes) {
-      lines.push("");
-      lines.push("Notes: " + notes);
-    }
     return lines.join("\n");
   }
 
@@ -4450,6 +4451,12 @@
       longDate = formatReportDateHeading(dateStr);
     }
     var lines = ["🎱 Pool Master Counter — Day Report", longDate, "══════════════════════════", ""];
+    var notes = getDayNotes(dateStr);
+    if (notes) {
+      lines.push("NOTES");
+      lines.push(notes);
+      lines.push("");
+    }
     if (data.players.length === 0 && data.tournaments.length === 0) {
       lines.push("No games recorded today.");
     } else {
@@ -4494,12 +4501,6 @@
         });
       }
     }
-    var notes = getDayNotes(dateStr);
-    if (notes) {
-      lines.push("");
-      lines.push("NOTES");
-      lines.push(notes);
-    }
     return lines.join("\n");
   }
 
@@ -4515,6 +4516,11 @@
   function buildDayReportTextPlain(dateStr) {
     var data = computeDayReportData(dateStr);
     var lines = ["🎱 POOL MASTER COUNTER — DAY REPORT", formatReportDateHeading(dateStr), ""];
+    var notes = getDayNotes(dateStr);
+    if (notes) {
+      lines.push("Notes: " + notes);
+      lines.push("");
+    }
     if (data.players.length === 0 && data.tournaments.length === 0) {
       lines.push("No games recorded today.");
     } else {
@@ -4557,11 +4563,6 @@
         });
       }
     }
-    var notes = getDayNotes(dateStr);
-    if (notes) {
-      lines.push("");
-      lines.push("Notes: " + notes);
-    }
     return lines.join("\n");
   }
 
@@ -4585,6 +4586,25 @@
   }
 
   var dayReportFormat = loadDayReportFormat();
+
+  var DAY_REPORT_ATTACH_BACKUP_KEY = "poolMasterCounter.dayReportAttachBackup.v1";
+
+  function loadDayReportAttachBackup() {
+    try {
+      var v = localStorage.getItem(DAY_REPORT_ATTACH_BACKUP_KEY);
+      return v === null ? true : v === "true";
+    } catch (e) {
+      return true;
+    }
+  }
+
+  function saveDayReportAttachBackup(value) {
+    try {
+      localStorage.setItem(DAY_REPORT_ATTACH_BACKUP_KEY, value ? "true" : "false");
+    } catch (e) {
+      console.warn("Could not save day report attach-backup preference.", e);
+    }
+  }
 
   function buildDayReportText(dateStr) {
     if (dayReportFormat === "compact") return buildDayReportTextCompact(dateStr);
@@ -5733,9 +5753,9 @@
     return /\.json$/i.test(trimmed) ? trimmed : trimmed + ".json";
   }
 
-  // Shared by exportAllData and shareReportWithBackup - the exact same
-  // full-app snapshot either way, just delivered differently (a plain
-  // download vs a Web Share attachment).
+  // Shared by exportAllData and shareReport - the exact same full-app
+  // snapshot either way, just delivered differently (a plain download
+  // vs a Web Share attachment).
   function buildBackupPayload() {
     return {
       exportedAt: new Date().toISOString(),
@@ -5758,33 +5778,71 @@
     downloadJSON(filename ? sanitizeBackupFilename(filename) : defaultBackupFilename(), buildBackupPayload());
   }
 
+  // Shared by the Copy Report button and shareReport()'s no-native-share
+  // text-only fallback below.
+  function copyReportToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(
+        function () {
+          showToast(T("toast.dayReportCopied"));
+        },
+        function () {
+          alertModal(text);
+        }
+      );
+    } else {
+      alertModal(text);
+    }
+  }
+
   // mailto:/sms: links (what Email/Text Report use) can't carry file
   // attachments - that's a platform restriction, not something fixable
   // here. The Web Share API is the actual way to hand a file to Mail,
   // Messages, AirDrop, etc. with it genuinely attached, so this is a
-  // separate button rather than a mode of the existing two: reuses the
-  // same day-report text (buildDayReportTextPlain, see its own comment
-  // for why it's alignment-free) as the share's `text`, and the same
-  // full-backup payload as exportAllData as the attached file - minus
-  // contacts (email/phone), which have no business leaving the device
-  // in a file meant to be handed to whoever's on the other end of Mail/
-  // Messages/AirDrop. Sending an empty object rather than omitting the
-  // key entirely still round-trips cleanly through mergeContactsData if
-  // this file is ever imported elsewhere: local contact info always
-  // wins on a name conflict there, and an empty import adds nothing, so
-  // an existing player's contact info on the importing device is left
-  // exactly as it was. Falls back to a plain download - with a toast
-  // pointing at Email/Text Report for the message itself - on a
-  // browser/device that can't share files (canShare with a files array
-  // is the correct feature test; share() alone doesn't imply file
-  // support).
-  function shareReportWithBackup() {
+  // separate button rather than a mode of the existing two. Whether the
+  // backup actually gets attached is gated by the "Attach full backup
+  // file" checkbox (dayReportAttachBackupCheckbox) - unchecked, this is
+  // a plain text share of the day report and nothing more, same as any
+  // other native share sheet. Reuses the same day-report text
+  // (buildDayReportTextPlain, see its own comment for why it's
+  // alignment-free) as the share's `text` either way, and - when
+  // attaching - the same full-backup payload as exportAllData as the
+  // attached file, minus contacts (email/phone), which have no business
+  // leaving the device in a file meant to be handed to whoever's on the
+  // other end of Mail/Messages/AirDrop. Sending an empty object rather
+  // than omitting the key entirely still round-trips cleanly through
+  // mergeContactsData if this file is ever imported elsewhere: local
+  // contact info always wins on a name conflict there, and an empty
+  // import adds nothing, so an existing player's contact info on the
+  // importing device is left exactly as it was.
+  function shareReport() {
     var text = buildDayReportTextPlain(todayDateStr());
+
+    if (!dayReportAttachBackupCheckbox.checked) {
+      if (navigator.share) {
+        navigator.share({ title: "Pool Master Counter — Day Report", text: text }).catch(function (err) {
+          if (err && err.name === "AbortError") return;
+          copyReportToClipboard(text);
+        });
+      } else {
+        copyReportToClipboard(text);
+      }
+      return;
+    }
+
     var payload = buildBackupPayload();
     payload.contacts = {};
     var filename = defaultBackupFilename();
     var file = new File([JSON.stringify(payload, null, 2)], filename, { type: "application/json" });
 
+    // canShare() saying yes doesn't guarantee share() actually works -
+    // some desktop Chrome/macOS combos report file-sharing support but
+    // then reject every call with NotAllowedError. Since Email/Text
+    // Report can't attach a file either, that would leave the backup
+    // completely undeliverable if not for this fallback: any non-abort
+    // failure - unsupported or rejected - still gets the user the file
+    // via a plain download (canShare with a files array is the correct
+    // feature test; share() alone doesn't imply file support).
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       navigator.share({
         files: [file],
@@ -5792,13 +5850,6 @@
         text: text
       }).catch(function (err) {
         if (err && err.name === "AbortError") return;
-        // canShare() saying yes doesn't guarantee share() actually works -
-        // some desktop Chrome/macOS combos report file-sharing support but
-        // then reject every call with NotAllowedError. Since Email/Text
-        // Report (the toast's old advice) can't attach a file either, that
-        // left the backup completely undeliverable - fall back to the same
-        // plain download the no-canShare branch below already uses, so the
-        // user still gets the file no matter why share() failed.
         downloadJSON(filename, payload);
         showToast(T("toast.shareFallback"));
       });
@@ -11232,19 +11283,7 @@
   });
 
   btnDayReportCopy.addEventListener("click", function () {
-    var text = buildDayReportText(todayDateStr());
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(
-        function () {
-          showToast(T("toast.dayReportCopied"));
-        },
-        function () {
-          alertModal(text);
-        }
-      );
-    } else {
-      alertModal(text);
-    }
+    copyReportToClipboard(buildDayReportText(todayDateStr()));
   });
 
   btnDayReportEmail.addEventListener("click", function () {
@@ -11267,7 +11306,12 @@
     window.location.href = "sms:" + to + "&body=" + encodeURIComponent(text);
   });
 
-  btnDayReportShareBackup.addEventListener("click", shareReportWithBackup);
+  dayReportAttachBackupCheckbox.checked = loadDayReportAttachBackup();
+  dayReportAttachBackupCheckbox.addEventListener("change", function () {
+    saveDayReportAttachBackup(dayReportAttachBackupCheckbox.checked);
+  });
+
+  btnDayReportShareBackup.addEventListener("click", shareReport);
 
   btnPlayerPageExport.addEventListener("click", exportCurrentPlayerStats);
   btnPlayerPageReset.addEventListener("click", resetPlayerHistoricalStats);

@@ -13,7 +13,7 @@
      bump the ?v= on both the stylesheet and script tags below on every
      deploy that touches css/style.css or js/app.js, or returning users can
      silently keep running old code indefinitely. -->
-<link rel="stylesheet" href="css/style.css?v=20260906q">
+<link rel="stylesheet" href="css/style.css?v=20260906r">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -278,11 +278,15 @@
           <option value="detailed" data-i18n="dayNotes.formatDetailed">Detailed</option>
         </select>
       </div>
+      <label class="checkbox-row" id="day-report-attach-backup-row">
+        <input type="checkbox" id="day-report-attach-backup-checkbox" checked>
+        <span data-i18n="dayNotes.attachBackup">📎 Attach full backup file when sharing</span>
+      </label>
       <div class="row">
         <button type="button" id="btn-day-report-copy" class="btn btn-ghost" data-i18n="dayNotes.copyReport">📋 Copy Report</button>
         <button type="button" id="btn-day-report-email" class="btn btn-ghost" data-i18n="dayNotes.emailReport">📧 Email Report</button>
         <button type="button" id="btn-day-report-sms" class="btn btn-ghost" data-i18n="dayNotes.textReport">📱 Text Report</button>
-        <button type="button" id="btn-day-report-share-backup" class="btn btn-ghost" data-i18n="dayNotes.shareWithBackup">📎 Share Report + Backup</button>
+        <button type="button" id="btn-day-report-share-backup" class="btn btn-ghost" data-i18n="dayNotes.share">📤 Share Report</button>
       </div>
       <p class="player-stats-note" id="day-report-recipients-line"></p>
     </div>
@@ -1006,6 +1010,6 @@
   <span id="shot-counter-time">0:00</span>
 </div>
 
-<script src="js/app.js?v=20260906q"></script>
+<script src="js/app.js?v=20260906r"></script>
 </body>
 </html>
