@@ -416,7 +416,6 @@
   "toast.rotationAlreadySaved": "This exact rotation is already saved.",
   "toast.savedRoster": "Saved roster: {{label}}",
   "toast.savedRotation": "Saved rotation: {{label}}",
-  "toast.shareFailed": "Couldn't share — try again, or use Email/Text Report instead.",
   "toast.shareFallback": "Backup file downloaded — attach it in Email or Text Report to send it along with the report.",
   "toast.statsSaved": "Saved {{name}}'s stats.",
   "toast.teamNeedsOpponent": "A team can't play alone — add at least one player to the other team first.",

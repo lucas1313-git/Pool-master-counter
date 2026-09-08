@@ -416,7 +416,6 @@
   "toast.rotationAlreadySaved": "Cette rotation exacte est déjà enregistrée.",
   "toast.savedRoster": "Liste enregistrée : {{label}}",
   "toast.savedRotation": "Rotation enregistrée : {{label}}",
-  "toast.shareFailed": "Impossible de partager — réessayez, ou utilisez Email/SMS du rapport.",
   "toast.shareFallback": "Fichier de sauvegarde téléchargé — joignez-le dans Email ou SMS du rapport pour l'envoyer avec le rapport.",
   "toast.statsSaved": "Statistiques de {{name}} enregistrées.",
   "toast.teamNeedsOpponent": "Une équipe ne peut pas jouer seule — ajoutez d'abord au moins un joueur dans l'autre équipe.",

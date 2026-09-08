@@ -5792,7 +5792,15 @@
         text: text
       }).catch(function (err) {
         if (err && err.name === "AbortError") return;
-        showToast(T("toast.shareFailed"));
+        // canShare() saying yes doesn't guarantee share() actually works -
+        // some desktop Chrome/macOS combos report file-sharing support but
+        // then reject every call with NotAllowedError. Since Email/Text
+        // Report (the toast's old advice) can't attach a file either, that
+        // left the backup completely undeliverable - fall back to the same
+        // plain download the no-canShare branch below already uses, so the
+        // user still gets the file no matter why share() failed.
+        downloadJSON(filename, payload);
+        showToast(T("toast.shareFallback"));
       });
     } else {
       downloadJSON(filename, payload);

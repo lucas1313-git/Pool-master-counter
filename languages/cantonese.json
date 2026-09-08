@@ -416,7 +416,6 @@
   "toast.rotationAlreadySaved": "呢個一模一樣嘅輪換已經儲存咗。",
   "toast.savedRoster": "已儲存名單：{{label}}",
   "toast.savedRotation": "已儲存輪換：{{label}}",
-  "toast.shareFailed": "分享唔到——請再試一次，或者用電郵/短訊報告。",
   "toast.shareFallback": "備份檔案已下載——喺電郵或短訊報告入面夾附件，就可以連同報告一齊傳送。",
   "toast.statsSaved": "已儲存 {{name}} 嘅統計。",
   "toast.teamNeedsOpponent": "一隊唔可以自己玩——請先幫另一隊加返最少一位玩家。",
