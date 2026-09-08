@@ -91,6 +91,7 @@
   "dayNotes.heading": "Publish Daily Report",
   "dayNotes.note": "Jot down anything worth remembering about today's live play — who's on fire, funny moments, anything at all. It's saved automatically and folded into the day report below.",
   "dayNotes.placeholder": "Notes about today's play...",
+  "dayNotes.recipientsAttachOverride": "📎 Backup attached — pick who to send it to when you tap Email or Text Report.",
   "dayNotes.recipientsEmail": "Emailed to: {{names}}",
   "dayNotes.recipientsNone": "No one has opted in to receive the report yet — add an email or phone number in the onboarding wizard to opt in.",
   "dayNotes.recipientsSms": "Texted to: {{names}}",

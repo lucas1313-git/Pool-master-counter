@@ -91,6 +91,7 @@
   "dayNotes.heading": "發布每日報告",
   "dayNotes.note": "記低任何值得記住嘅今日對局內容——邊個狀態勁、有咩趣事，乜都得。系統會自動儲存，並且會併入下面嘅每日報告。",
   "dayNotes.placeholder": "關於今日對局嘅筆記……",
+  "dayNotes.recipientsAttachOverride": "📎 已夾附備份——用電郵或短訊傳送時請自行揀收件人。",
   "dayNotes.recipientsEmail": "用電郵傳送畀：{{names}}",
   "dayNotes.recipientsNone": "而家未有人登記收報告——喺歡迎精靈入面填個電郵或電話號碼就可以登記。",
   "dayNotes.recipientsSms": "用短訊傳送畀：{{names}}",

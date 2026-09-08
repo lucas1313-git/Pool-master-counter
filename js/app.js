@@ -4623,6 +4623,15 @@
   }
 
   function updateDayReportRecipientsLine() {
+    // With the backup attached, Email/Text Report route through the OS
+    // share sheet (see shareReportWithBackupAttachment) instead of a
+    // mailto:/sms: link, so the opted-in recipients below are no longer
+    // who it actually goes to - say so instead of showing a list that'd
+    // just be wrong.
+    if (dayReportAttachBackupCheckbox.checked) {
+      dayReportRecipientsLine.textContent = T("dayNotes.recipientsAttachOverride");
+      return;
+    }
     var emailContacts = reportOptedInContacts("email");
     var smsContacts = reportOptedInContacts("sms");
     var parts = [];
@@ -5795,41 +5804,27 @@
     }
   }
 
-  // mailto:/sms: links (what Email/Text Report use) can't carry file
-  // attachments - that's a platform restriction, not something fixable
-  // here. The Web Share API is the actual way to hand a file to Mail,
-  // Messages, AirDrop, etc. with it genuinely attached, so this is a
-  // separate button rather than a mode of the existing two. Whether the
-  // backup actually gets attached is gated by the "Attach full backup
-  // file" checkbox (dayReportAttachBackupCheckbox) - unchecked, this is
-  // a plain text share of the day report and nothing more, same as any
-  // other native share sheet. Reuses the same day-report text
-  // (buildDayReportTextPlain, see its own comment for why it's
-  // alignment-free) as the share's `text` either way, and - when
-  // attaching - the same full-backup payload as exportAllData as the
-  // attached file, minus contacts (email/phone), which have no business
-  // leaving the device in a file meant to be handed to whoever's on the
-  // other end of Mail/Messages/AirDrop. Sending an empty object rather
-  // than omitting the key entirely still round-trips cleanly through
-  // mergeContactsData if this file is ever imported elsewhere: local
-  // contact info always wins on a name conflict there, and an empty
-  // import adds nothing, so an existing player's contact info on the
-  // importing device is left exactly as it was.
-  function shareReport() {
-    var text = buildDayReportTextPlain(todayDateStr());
-
-    if (!dayReportAttachBackupCheckbox.checked) {
-      if (navigator.share) {
-        navigator.share({ title: "Pool Master Counter — Day Report", text: text }).catch(function (err) {
-          if (err && err.name === "AbortError") return;
-          copyReportToClipboard(text);
-        });
-      } else {
-        copyReportToClipboard(text);
-      }
-      return;
-    }
-
+  // mailto:/sms: links (what Email/Text Report use when the backup isn't
+  // being attached) can't carry file attachments - that's a platform
+  // restriction, not something fixable here. The Web Share API is the
+  // actual way to hand a file to Mail, Messages, AirDrop, etc. with it
+  // genuinely attached, so whenever the "Attach full backup file"
+  // checkbox (dayReportAttachBackupCheckbox) is on, Email Report, Text
+  // Report and Share Report all funnel through this instead of a
+  // mailto:/sms: link - which does mean giving up the auto-filled
+  // opted-in recipient for a manual pick in the OS share sheet, but
+  // there's no API that offers both a pre-filled recipient and a real
+  // attachment. Reuses the same full-backup payload as exportAllData as
+  // the attached file, minus contacts (email/phone), which have no
+  // business leaving the device in a file meant to be handed to
+  // whoever's on the other end of Mail/Messages/AirDrop. Sending an
+  // empty object rather than omitting the key entirely still
+  // round-trips cleanly through mergeContactsData if this file is ever
+  // imported elsewhere: local contact info always wins on a name
+  // conflict there, and an empty import adds nothing, so an existing
+  // player's contact info on the importing device is left exactly as
+  // it was.
+  function shareReportWithBackupAttachment(text) {
     var payload = buildBackupPayload();
     payload.contacts = {};
     var filename = defaultBackupFilename();
@@ -5856,6 +5851,30 @@
     } else {
       downloadJSON(filename, payload);
       showToast(T("toast.shareFallback"));
+    }
+  }
+
+  // The "Attach full backup file" checkbox is off: a plain text share of
+  // the day report and nothing more, same as any other native share
+  // sheet - falls back to the same clipboard copy Copy Report uses on a
+  // browser/device with no navigator.share at all.
+  function shareReportTextOnly(text) {
+    if (navigator.share) {
+      navigator.share({ title: "Pool Master Counter — Day Report", text: text }).catch(function (err) {
+        if (err && err.name === "AbortError") return;
+        copyReportToClipboard(text);
+      });
+    } else {
+      copyReportToClipboard(text);
+    }
+  }
+
+  function shareReport() {
+    var text = buildDayReportTextPlain(todayDateStr());
+    if (dayReportAttachBackupCheckbox.checked) {
+      shareReportWithBackupAttachment(text);
+    } else {
+      shareReportTextOnly(text);
     }
   }
 
@@ -11288,6 +11307,10 @@
 
   btnDayReportEmail.addEventListener("click", function () {
     var text = buildDayReportTextPlain(todayDateStr());
+    if (dayReportAttachBackupCheckbox.checked) {
+      shareReportWithBackupAttachment(text);
+      return;
+    }
     var to = reportOptedInContacts("email")
       .map(function (c) {
         return encodeURIComponent(c.contact.email);
@@ -11298,6 +11321,10 @@
 
   btnDayReportSms.addEventListener("click", function () {
     var text = buildDayReportTextPlain(todayDateStr());
+    if (dayReportAttachBackupCheckbox.checked) {
+      shareReportWithBackupAttachment(text);
+      return;
+    }
     var to = reportOptedInContacts("sms")
       .map(function (c) {
         return encodeURIComponent(c.contact.phone);
@@ -11309,6 +11336,7 @@
   dayReportAttachBackupCheckbox.checked = loadDayReportAttachBackup();
   dayReportAttachBackupCheckbox.addEventListener("change", function () {
     saveDayReportAttachBackup(dayReportAttachBackupCheckbox.checked);
+    updateDayReportRecipientsLine();
   });
 
   btnDayReportShareBackup.addEventListener("click", shareReport);
