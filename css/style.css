@@ -1213,6 +1213,14 @@ input[type="number"] {
   text-shadow: 0 2px 5px rgba(0, 0, 0, 0.6);
 }
 
+.fair-race-note {
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
 .stat-value.small {
   font-size: 1.8rem;
 }

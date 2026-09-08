@@ -13,7 +13,7 @@
      bump the ?v= on both the stylesheet and script tags below on every
      deploy that touches css/style.css or js/app.js, or returning users can
      silently keep running old code indefinitely. -->
-<link rel="stylesheet" href="css/style.css?v=20260906w">
+<link rel="stylesheet" href="css/style.css?v=20260908a">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -146,6 +146,11 @@
         <input type="number" id="race-to-wins" min="1" max="99" value="5">
         <span data-i18n="common.wins">wins</span>
       </div>
+
+      <label class="checkbox-row">
+        <input type="checkbox" id="fair-race-enabled-checkbox">
+        <span data-i18n="gameSetup.fairRaceEnable">⚖️ Use Fargo rating to balance the race</span>
+      </label>
 
       <label class="checkbox-row">
         <input type="checkbox" id="shot-counter-enabled-checkbox">
@@ -966,6 +971,11 @@
       <span data-i18n="common.wins">wins</span>
     </div>
 
+    <label class="checkbox-row">
+      <input type="checkbox" id="tournament-fair-race-checkbox">
+      <span data-i18n="tournament.fairRaceEnable">⚖️ Use Fargo rating for tournament goals</span>
+    </label>
+
     <h3 class="tournament-players-heading" data-i18n="players.heading">Players</h3>
     <ul id="tournament-player-checklist" class="tournament-player-checklist"></ul>
 
@@ -1010,6 +1020,6 @@
 
 </div>
 
-<script src="js/app.js?v=20260906w"></script>
+<script src="js/app.js?v=20260908a"></script>
 </body>
 </html>

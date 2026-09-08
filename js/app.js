@@ -168,6 +168,8 @@
       teamWins: {},
       teamMvpWins: {},
       raceToWinsTarget: 5,
+      fairRaceEnabled: false,
+      fairRaceTargets: null,
       currentGame: { gameType: "8ball", target: 1, unit: "rack", mode: "individual", startedAt: new Date().toISOString(), shotCounterEnabled: false, shotCounterBeepSec: 30, shotCounterHidden: false, queueEnabled: false },
       gameHistory: [],
       rotation: { enabled: false, order: [], every: 1 },
@@ -239,6 +241,8 @@
           if (!parsed.teamWins) parsed.teamWins = {};
           if (!parsed.teamMvpWins) parsed.teamMvpWins = {};
           if (typeof parsed.raceToWinsTarget !== "number") parsed.raceToWinsTarget = 5;
+          if (typeof parsed.fairRaceEnabled !== "boolean") parsed.fairRaceEnabled = false;
+          if (typeof parsed.fairRaceTargets !== "object") parsed.fairRaceTargets = null;
           if (!parsed.currentGame) parsed.currentGame = { gameType: "8ball", target: 1, mode: "individual" };
           if (!parsed.currentGame.startedAt) parsed.currentGame.startedAt = new Date().toISOString();
           if (typeof parsed.currentGame.unit !== "string" || !parsed.currentGame.unit) parsed.currentGame.unit = null;
@@ -336,6 +340,55 @@
     state.queue = orderedPlayers.map(function (p) {
       return p.id;
     });
+  }
+
+  // Same reconciliation idea as effectiveQueue() above - a self-healing
+  // cache instead of hooking every place the active roster can change.
+  // Fair race targets (state.fairRaceEnabled) are frozen for as long as
+  // the same set of players/teams stays active: recomputed only when
+  // the roster key actually changes, not on every rating tick from a
+  // win within the race, so nobody's number moves mid-race.
+  function ensureFairRaceTargets() {
+    var isTeamMode = !quickCounterMode && state.currentGame.mode === "teams";
+    var sides = isTeamMode
+      ? ["A", "B"]
+          .filter(function (t) {
+            return teamMembersLive(t).length > 0;
+          })
+          .map(function (t) {
+            return {
+              key: t,
+              rating: averageRating(
+                teamMembersLive(t).map(function (p) {
+                  return p.name;
+                })
+              )
+            };
+          })
+      : activePlayers().map(function (p) {
+          return { key: p.id, rating: getPlayerRating(p.name) };
+        });
+    var rosterKey = sides
+      .map(function (s) {
+        return s.key;
+      })
+      .sort()
+      .join(",");
+    if (!state.fairRaceTargets || state.fairRaceTargets.rosterKey !== rosterKey) {
+      state.fairRaceTargets = { rosterKey: rosterKey, targets: computeFairRaceTargets(sides, state.raceToWinsTarget) };
+    }
+    return state.fairRaceTargets.targets;
+  }
+
+  // The one function every win-target comparison/check should call
+  // instead of reading state.raceToWinsTarget directly - returns the
+  // plain global target when fair race is off (today's behavior,
+  // unchanged), or this specific player's/team's own fair target when
+  // it's on.
+  function effectiveRaceTarget(key) {
+    if (!state.fairRaceEnabled) return state.raceToWinsTarget;
+    var targets = ensureFairRaceTargets();
+    return targets[key] || state.raceToWinsTarget;
   }
 
   // Mirrors buildRotationRow/renderRotationListInto/moveRotationItem
@@ -1322,6 +1375,7 @@
   var tournamentTargetInput = document.getElementById("tournament-target");
   var tournamentTargetUnit = document.getElementById("tournament-target-unit");
   var tournamentRaceToInput = document.getElementById("tournament-race-to");
+  var tournamentFairRaceCheckbox = document.getElementById("tournament-fair-race-checkbox");
   var tournamentPlayerChecklist = document.getElementById("tournament-player-checklist");
   var btnTournamentStart = document.getElementById("btn-tournament-start");
   var btnTournamentAbandon = document.getElementById("btn-tournament-abandon");
@@ -1339,6 +1393,7 @@
   var gameTargetUnitSelect = document.getElementById("game-target-unit-select");
   var modeRadios = document.getElementsByName("game-mode");
   var raceToWinsInput = document.getElementById("race-to-wins");
+  var fairRaceEnabledCheckbox = document.getElementById("fair-race-enabled-checkbox");
   var noStatsCheckbox = document.getElementById("no-stats-checkbox");
   var shotCounterEnabledCheckbox = document.getElementById("shot-counter-enabled-checkbox");
   var shotCounterBeepRow = document.getElementById("shot-counter-beep-row");
@@ -2093,8 +2148,8 @@
     renderAll();
   }
 
-  function buildStandingsRow(name, wins, memberNames) {
-    var target = state.raceToWinsTarget;
+  function buildStandingsRow(name, wins, memberNames, key) {
+    var target = effectiveRaceTarget(key);
     var reached = wins >= target;
     var li = document.createElement("li");
     li.className = "standings-row" + (reached ? " is-reached" : "");
@@ -2174,7 +2229,7 @@
             return b.wins - a.wins || a.teamId.localeCompare(b.teamId);
           })
           .forEach(function (row) {
-            teamStandingsList.appendChild(buildStandingsRow(row.names, row.wins, row.namesList));
+            teamStandingsList.appendChild(buildStandingsRow(row.names, row.wins, row.namesList, row.teamId));
           });
       }
     }
@@ -2192,7 +2247,7 @@
           return (state.playerWins[b.id] || 0) - (state.playerWins[a.id] || 0) || a.name.localeCompare(b.name);
         })
         .forEach(function (p) {
-          playerStandingsList.appendChild(buildStandingsRow(p.name, state.playerWins[p.id] || 0, [p.name]));
+          playerStandingsList.appendChild(buildStandingsRow(p.name, state.playerWins[p.id] || 0, [p.name], p.id));
         });
     }
 
@@ -2210,7 +2265,7 @@
     return T(leaderWins === 1 ? "standings.leaderSummaryOne" : "standings.leaderSummaryMany", {
       name: leader.name,
       wins: leaderWins,
-      target: state.raceToWinsTarget
+      target: effectiveRaceTarget(leader.id)
     });
   }
 
@@ -2387,6 +2442,17 @@
     el.appendChild(document.createTextNode(label + ": "));
     el.appendChild(strong);
     if (milestoneReached) el.appendChild(buildFlagSpan());
+    return el;
+  }
+
+  // Only worth showing once fair race is on, since that's the only
+  // time this side's own target can actually differ from the plain
+  // "Race-to milestone" setting everyone already sees summarized
+  // elsewhere.
+  function buildFairRaceNote(target) {
+    var el = document.createElement("div");
+    el.className = "fair-race-note";
+    el.textContent = T("scoreboard.fairRaceTarget", { target: target });
     return el;
   }
 
@@ -2645,7 +2711,7 @@
     var isSingleRackGame = state.currentGame.unit === "rack" && state.currentGame.target === 1;
 
     if (!isSingleRackGame) {
-      panel.appendChild(buildStatMini(T("scoreboard.tourneyWin"), wins, wins >= state.raceToWinsTarget, "stat-mini-tourney"));
+      panel.appendChild(buildStatMini(T("scoreboard.tourneyWin"), wins, wins >= effectiveRaceTarget(player.id), "stat-mini-tourney"));
     }
 
     var block = document.createElement("div");
@@ -2657,7 +2723,7 @@
     if (isSingleRackGame) {
       label.textContent = T("scoreboard.tourneyWin");
       value.textContent = wins;
-      if (wins >= state.raceToWinsTarget) value.appendChild(buildFlagSpan());
+      if (wins >= effectiveRaceTarget(player.id)) value.appendChild(buildFlagSpan());
     } else {
       label.textContent = T("scoreboard.gameTargetLabel", { game: GAME_TYPES[state.currentGame.gameType].label, target: state.currentGame.target });
       value.textContent = player.balls || 0;
@@ -2665,6 +2731,8 @@
     block.appendChild(label);
     block.appendChild(value);
     panel.appendChild(block);
+
+    if (state.fairRaceEnabled) panel.appendChild(buildFairRaceNote(effectiveRaceTarget(player.id)));
 
     panel.appendChild(buildBallControls(player, false, isSingleRackGame));
     markAsKeypadTarget(panel, player);
@@ -2686,7 +2754,7 @@
     // tracks how many times THIS member specifically potted the winning
     // ball for the team (see the mvp selection in creditWin).
     var mvpWins = state.teamMvpWins[player.id] || 0;
-    card.appendChild(buildStatMini(T("scoreboard.tourneyWin"), mvpWins, mvpWins >= state.raceToWinsTarget, "stat-mini-tourney"));
+    card.appendChild(buildStatMini(T("scoreboard.tourneyWin"), mvpWins, mvpWins >= effectiveRaceTarget(player.teamId), "stat-mini-tourney"));
 
     var value = document.createElement("div");
     value.className = "stat-value small";
@@ -2729,7 +2797,7 @@
     var isSingleRackGame = state.currentGame.unit === "rack" && state.currentGame.target === 1;
 
     if (!isSingleRackGame) {
-      panel.appendChild(buildStatMini(T("scoreboard.pairedSessionWin"), wins, wins >= state.raceToWinsTarget));
+      panel.appendChild(buildStatMini(T("scoreboard.pairedSessionWin"), wins, wins >= effectiveRaceTarget(teamId)));
     }
 
     var block = document.createElement("div");
@@ -2741,7 +2809,7 @@
     if (isSingleRackGame) {
       label.textContent = T("scoreboard.pairedSessionWinScore");
       value.textContent = wins;
-      if (wins >= state.raceToWinsTarget) value.appendChild(buildFlagSpan());
+      if (wins >= effectiveRaceTarget(teamId)) value.appendChild(buildFlagSpan());
     } else {
       label.textContent = T("scoreboard.gameTargetLabel", { game: GAME_TYPES[state.currentGame.gameType].label, target: state.currentGame.target });
       value.textContent = sumTeamBalls(teamId);
@@ -2749,6 +2817,8 @@
     block.appendChild(label);
     block.appendChild(value);
     panel.appendChild(block);
+
+    if (state.fairRaceEnabled) panel.appendChild(buildFairRaceNote(effectiveRaceTarget(teamId)));
 
     var memberWrap = document.createElement("div");
     memberWrap.className = "team-members";
@@ -3231,7 +3301,7 @@
     var milestoneNames = null;
     var milestoneCount = 0;
     var onHillNames = null;
-    var target = state.raceToWinsTarget;
+    var target = effectiveRaceTarget(key);
     var mvpId = null;
     var mvpName = null;
     if (isTeam) {
@@ -3424,7 +3494,7 @@
       if (milestoneNames) {
         celebrateTournamentWin(milestoneNames, milestoneCount);
       } else if (onHillNames) {
-        announceOnHill(onHillNames);
+        announceOnHill(onHillNames, target);
       } else if (gameTypeChanged) {
         announceGameChange(
           GAME_TYPES[state.currentGame.gameType].label + " (" + state.currentGame.target + " " + unitLabel(state.currentGame.unit) + ")"
@@ -3543,8 +3613,8 @@
   // showing by then.
   var onHillAutoCloseTimer = null;
 
-  function announceOnHill(names) {
-    onHillMessage.textContent = names + " is ON THE HILL — one more win takes the race to " + state.raceToWinsTarget + "! Better step up. 👀";
+  function announceOnHill(names, target) {
+    onHillMessage.textContent = names + " is ON THE HILL — one more win takes the race to " + target + "! Better step up. 👀";
     onHillOverlay.classList.remove("hidden");
     playOnHillSound();
     if (onHillAutoCloseTimer) clearTimeout(onHillAutoCloseTimer);
@@ -3880,7 +3950,11 @@
   var lastTournamentWinSnapshot = null;
 
   function celebrateTournamentWin(names, count) {
-    var target = state.raceToWinsTarget;
+    // count is the win tally that just triggered this exact milestone,
+    // so it already *is* whatever target (global or fair) was hit -
+    // no separate lookup needed, and this stays correct even when a
+    // fair-race target differs from state.raceToWinsTarget.
+    var target = count;
 
     // A win one game earlier can leave the on-hill overlay open (it has no
     // reason to auto-close on its own) — without this it stacks visually
@@ -5550,6 +5624,63 @@
   // is a 2:1 expected win ratio, matching FargoRate's published scale.
   function eloExpectedScore(ratingA, ratingB) {
     return 1 / (1 + Math.pow(2, (ratingB - ratingA) / 100));
+  }
+
+  // P(a player racing to needA wins reaches that before an opponent
+  // racing to needB does), given the first player's per-game win
+  // probability p. Plain DP over "wins still needed" from each side -
+  // numerically stable for any race length this app would ever use
+  // (races top out well under 100), no factorials/overflow risk.
+  function raceWinProbability(p, needA, needB) {
+    var memo = {};
+    function f(i, j) {
+      if (i === 0) return 1;
+      if (j === 0) return 0;
+      var k = i + "," + j;
+      if (memo[k] !== undefined) return memo[k];
+      var v = p * f(i - 1, j) + (1 - p) * f(i, j - 1);
+      memo[k] = v;
+      return v;
+    }
+    return f(needA, needB);
+  }
+
+  // The weaker side's fair race length against an anchor racing to
+  // anchorRace, given the anchor's per-game win probability p over this
+  // specific opponent (see eloExpectedScore) - the same underlying
+  // win-probability model FargoRate's Fair Match Calculator uses,
+  // applied here via an exact race-outcome search instead of their
+  // Monte Carlo/lookup-table approach. Tries every candidate length and
+  // keeps whichever lands the match closest to 50/50.
+  function fairRaceTarget(p, anchorRace) {
+    if (p <= 0.5) return anchorRace;
+    var best = anchorRace;
+    var bestDiff = Infinity;
+    for (var n = 1; n <= anchorRace; n++) {
+      var diff = Math.abs(raceWinProbability(p, anchorRace, n) - 0.5);
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        best = n;
+      }
+    }
+    return best;
+  }
+
+  // ratedSides: [{key, rating}] for whoever's active right now (player
+  // ids in individual mode, "A"/"B" in teams, or a bracket match's two
+  // named sides). Returns {key: target}, anchored on the highest
+  // rating - that side races to anchorRace unchanged, everyone else
+  // gets their own fair (equal-or-shorter) race.
+  function computeFairRaceTargets(ratedSides, anchorRace) {
+    var targets = {};
+    if (ratedSides.length === 0) return targets;
+    var anchor = ratedSides.reduce(function (best, s) {
+      return s.rating > best.rating ? s : best;
+    });
+    ratedSides.forEach(function (s) {
+      targets[s.key] = s.key === anchor.key ? anchorRace : fairRaceTarget(eloExpectedScore(anchor.rating, s.rating), anchorRace);
+    });
+    return targets;
   }
 
   // New/lightly-rated players move faster (a "provisional" period) so a
@@ -7952,7 +8083,13 @@
     if (playerId) {
       var wins = state.playerWins[playerId] || 0;
       session.wins = wins;
-      session.wonTournament = wins > 0 && wins >= state.raceToWinsTarget;
+      // This player's win count mirrors their team's shared total in
+      // Teams mode (creditWin bumps every member's playerWins on a
+      // team win), so the target to compare against is the team's,
+      // not an individual fair-race target keyed by this player's id.
+      var livePlayer = getPlayer(playerId);
+      var raceKey = state.currentGame.mode === "teams" && livePlayer && livePlayer.teamId ? livePlayer.teamId : playerId;
+      session.wonTournament = wins > 0 && wins >= effectiveRaceTarget(raceKey);
     } else {
       session.wonTournament = false;
     }
@@ -10238,7 +10375,7 @@
     return { shuffled: shuffled, size: size, wb: wb };
   }
 
-  function buildDoubleEliminationBracket(playerNames, gameType, target, raceTo) {
+  function buildDoubleEliminationBracket(playerNames, gameType, target, raceTo, fairRace) {
     var built = buildWinnersBracketRounds(playerNames);
     var t = {
       format: "double",
@@ -10246,6 +10383,7 @@
       gameType: gameType,
       target: target,
       raceTo: raceTo,
+      fairRace: !!fairRace,
       players: built.shuffled,
       size: built.size,
       wb: built.wb,
@@ -10267,7 +10405,7 @@
   // past the last round, so the losers-bracket logic in advanceBracket
   // never fires) and no grand final — the winners-bracket champion is the
   // tournament champion outright.
-  function buildSingleEliminationBracket(playerNames, gameType, target, raceTo) {
+  function buildSingleEliminationBracket(playerNames, gameType, target, raceTo, fairRace) {
     var built = buildWinnersBracketRounds(playerNames);
     var t = {
       format: "single",
@@ -10275,6 +10413,7 @@
       gameType: gameType,
       target: target,
       raceTo: raceTo,
+      fairRace: !!fairRace,
       players: built.shuffled,
       size: built.size,
       wb: built.wb,
@@ -10295,7 +10434,7 @@
   // player exactly once (shuffled match order only, since there's no
   // seeding to speak of), and the champion is decided once every match
   // has a result — see finalizeRoundRobinIfComplete.
-  function buildRoundRobinTournament(playerNames, gameType, target, raceTo) {
+  function buildRoundRobinTournament(playerNames, gameType, target, raceTo, fairRace) {
     var shuffled = playerNames.slice();
     for (var i = shuffled.length - 1; i > 0; i--) {
       var j = Math.floor(Math.random() * (i + 1));
@@ -10315,6 +10454,7 @@
       gameType: gameType,
       target: target,
       raceTo: raceTo,
+      fairRace: !!fairRace,
       players: shuffled,
       matches: matches,
       champion: null,
@@ -10473,15 +10613,16 @@
     var gameType = tournamentGameTypeSelect.value;
     var target = parseInt(tournamentTargetInput.value, 10) || GAME_TYPES[gameType].defaultTarget;
     var raceTo = parseInt(tournamentRaceToInput.value, 10) || 1;
+    var fairRace = tournamentFairRaceCheckbox.checked;
     var format = Array.prototype.filter.call(tournamentFormatRadios, function (r) {
       return r.checked;
     })[0].value;
     if (format === "roundrobin") {
-      TOURNAMENT = buildRoundRobinTournament(names, gameType, target, raceTo);
+      TOURNAMENT = buildRoundRobinTournament(names, gameType, target, raceTo, fairRace);
     } else if (format === "single") {
-      TOURNAMENT = buildSingleEliminationBracket(names, gameType, target, raceTo);
+      TOURNAMENT = buildSingleEliminationBracket(names, gameType, target, raceTo, fairRace);
     } else {
-      TOURNAMENT = buildDoubleEliminationBracket(names, gameType, target, raceTo);
+      TOURNAMENT = buildDoubleEliminationBracket(names, gameType, target, raceTo, fairRace);
     }
     saveTournamentToStorage(TOURNAMENT);
     renderTournamentPage();
@@ -10615,6 +10756,21 @@
       bWins: 0,
       startedAt: new Date().toISOString()
     };
+    // Frozen for the life of this one match - a bracket match always
+    // has a clean start (unlike the session's ongoing roster), so
+    // there's no self-healing cache to maintain here, just a one-time
+    // computation at the moment the two sides are actually known.
+    if (TOURNAMENT.fairRace) {
+      var targets = computeFairRaceTargets(
+        [
+          { key: "a", rating: getPlayerRating(match.a) },
+          { key: "b", rating: getPlayerRating(match.b) }
+        ],
+        TOURNAMENT.raceTo
+      );
+      TOURNAMENT.active.raceToA = targets.a;
+      TOURNAMENT.active.raceToB = targets.b;
+    }
     saveTournamentToStorage(TOURNAMENT);
     renderTournamentActive();
   }
@@ -10646,7 +10802,9 @@
       t.active.bBalls = 0;
       t.active.startedAt = new Date().toISOString();
       playWinSound(voice);
-      if (t.active[winsKey] >= t.raceTo) {
+      var raceToKey = side === "a" ? "raceToA" : "raceToB";
+      var effectiveMatchRaceTo = t.fairRace && t.active[raceToKey] ? t.active[raceToKey] : t.raceTo;
+      if (t.active[winsKey] >= effectiveMatchRaceTo) {
         var championAlreadyDecided = !!t.champion;
         reportBracketResult(t, match, name);
         if (!championAlreadyDecided && t.champion) {
@@ -10678,7 +10836,9 @@
     nameEl.appendChild(buildPlayerLinkIcon(name));
     panel.appendChild(nameEl);
 
-    panel.appendChild(buildStatMini(T("tournament.matchWins"), wins, wins >= t.raceTo));
+    var raceToKey = side === "a" ? "raceToA" : "raceToB";
+    var sideRaceTo = t.fairRace && t.active && t.active[raceToKey] ? t.active[raceToKey] : t.raceTo;
+    panel.appendChild(buildStatMini(T("tournament.matchWins"), wins, wins >= sideRaceTo));
 
     var block = document.createElement("div");
     block.className = "stat-block";
@@ -10691,6 +10851,8 @@
     block.appendChild(label);
     block.appendChild(value);
     panel.appendChild(block);
+
+    if (t.fairRace) panel.appendChild(buildFairRaceNote(sideRaceTo));
 
     var controls = document.createElement("div");
     controls.className = "ball-controls";
@@ -11207,6 +11369,19 @@
     var target = parseInt(raceToWinsInput.value, 10);
     if (!target || target < 1) return;
     state.raceToWinsTarget = target;
+    // The anchor value just changed - drop the cached fair targets so
+    // they're recomputed against it immediately instead of waiting for
+    // the active roster to also happen to change.
+    state.fairRaceTargets = null;
+    saveState();
+    renderScoreboard();
+    renderStandings();
+    updateCurrentGameSummary();
+  });
+
+  fairRaceEnabledCheckbox.addEventListener("change", function () {
+    state.fairRaceEnabled = fairRaceEnabledCheckbox.checked;
+    state.fairRaceTargets = null;
     saveState();
     renderScoreboard();
     renderStandings();
@@ -11562,6 +11737,7 @@
   gameTargetInput.value = state.currentGame.target;
   gameTargetUnitSelect.value = state.currentGame.unit;
   raceToWinsInput.value = state.raceToWinsTarget;
+  fairRaceEnabledCheckbox.checked = state.fairRaceEnabled;
   Array.prototype.forEach.call(modeRadios, function (radio) {
     radio.checked = radio.value === state.currentGame.mode;
   });
