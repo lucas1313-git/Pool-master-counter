@@ -6083,34 +6083,49 @@
   // actual way to hand a file to Mail, Messages, AirDrop, etc. with it
   // genuinely attached, so whenever the "Attach full backup file"
   // checkbox (dayReportAttachBackupCheckbox) is on, Email Report, Text
-  // Report and Share Report all funnel through this instead of a
-  // mailto:/sms: link - which does mean giving up the auto-filled
-  // opted-in recipient for a manual pick in the OS share sheet, but
-  // there's no API that offers both a pre-filled recipient and a real
-  // attachment. Reuses the same full-backup payload as exportAllData as
-  // the attached file, minus contacts (email/phone), which have no
-  // business leaving the device in a file meant to be handed to
-  // whoever's on the other end of Mail/Messages/AirDrop. Sending an
-  // empty object rather than omitting the key entirely still
-  // round-trips cleanly through mergeContactsData if this file is ever
-  // imported elsewhere: local contact info always wins on a name
-  // conflict there, and an empty import adds nothing, so an existing
-  // player's contact info on the importing device is left exactly as
-  // it was.
-  function shareReportWithBackupAttachment(text) {
+  // Report and Share Report all try this first instead of going
+  // straight to a mailto:/sms: link - which does mean giving up the
+  // auto-filled opted-in recipient for a manual pick in the OS share
+  // sheet, but there's no API that offers both a pre-filled recipient
+  // and a real attachment. Reuses the same full-backup payload as
+  // exportAllData as the attached file, minus contacts (email/phone),
+  // which have no business leaving the device in a file meant to be
+  // handed to whoever's on the other end of Mail/Messages/AirDrop.
+  // Sending an empty object rather than omitting the key entirely
+  // still round-trips cleanly through mergeContactsData if this file
+  // is ever imported elsewhere: local contact info always wins on a
+  // name conflict there, and an empty import adds nothing, so an
+  // existing player's contact info on the importing device is left
+  // exactly as it was.
+  //
+  // onFallback (optional): called whenever the file-attach path fails
+  // for ANY reason - no navigator.share/canShare support at all, or
+  // the harder case some desktop Chrome/macOS combos hit, where
+  // canShare({files}) reports true but share() then rejects every
+  // call anyway (confirmed live). Without this, that failure left
+  // the caller with nothing but a silently downloaded file - no email
+  // composed, no text message started, nothing - which is worse than
+  // what Email/Text Report did before file attachment existed at all.
+  // Callers pass their own normal fallback (open the mailto:/sms:
+  // link, or a text-only share) so a broken share sheet degrades back
+  // to "everything except the actual attachment" instead of "nothing".
+  function shareReportWithBackupAttachment(text, onFallback) {
     var payload = buildBackupPayload();
     payload.contacts = {};
     var filename = defaultBackupFilename();
     var file = new File([JSON.stringify(payload, null, 2)], filename, { type: "application/json" });
 
+    function fallback() {
+      downloadJSON(filename, payload);
+      showToast(T("toast.shareFallback"));
+      if (onFallback) onFallback();
+    }
+
     // canShare() saying yes doesn't guarantee share() actually works -
     // some desktop Chrome/macOS combos report file-sharing support but
-    // then reject every call with NotAllowedError. Since Email/Text
-    // Report can't attach a file either, that would leave the backup
-    // completely undeliverable if not for this fallback: any non-abort
-    // failure - unsupported or rejected - still gets the user the file
-    // via a plain download (canShare with a files array is the correct
-    // feature test; share() alone doesn't imply file support).
+    // then reject every call with NotAllowedError (canShare with a
+    // files array is still the correct feature test up front; share()
+    // alone doesn't imply file support).
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       navigator.share({
         files: [file],
@@ -6118,12 +6133,10 @@
         text: text
       }).catch(function (err) {
         if (err && err.name === "AbortError") return;
-        downloadJSON(filename, payload);
-        showToast(T("toast.shareFallback"));
+        fallback();
       });
     } else {
-      downloadJSON(filename, payload);
-      showToast(T("toast.shareFallback"));
+      fallback();
     }
   }
 
@@ -6145,7 +6158,9 @@
   function shareReport() {
     var text = buildDayReportTextPlain(todayDateStr());
     if (dayReportAttachBackupCheckbox.checked) {
-      shareReportWithBackupAttachment(text);
+      shareReportWithBackupAttachment(text, function () {
+        shareReportTextOnly(text);
+      });
     } else {
       shareReportTextOnly(text);
     }
@@ -11650,30 +11665,41 @@
 
   btnDayReportEmail.addEventListener("click", function () {
     var text = buildDayReportTextPlain(todayDateStr());
+    function openEmailCompose() {
+      var to = reportOptedInContacts("email")
+        .map(function (c) {
+          return encodeURIComponent(c.contact.email);
+        })
+        .join(",");
+      window.location.href = "mailto:" + to + "?subject=" + encodeURIComponent("Pool Master Counter — Day Report") + "&body=" + encodeURIComponent(text);
+    }
     if (dayReportAttachBackupCheckbox.checked) {
-      shareReportWithBackupAttachment(text);
+      // If the share sheet can't actually deliver the attachment (see
+      // shareReportWithBackupAttachment's onFallback), still compose
+      // the email exactly like the unchecked path would - a broken
+      // share sheet on this device shouldn't mean Email Report does
+      // literally nothing.
+      shareReportWithBackupAttachment(text, openEmailCompose);
       return;
     }
-    var to = reportOptedInContacts("email")
-      .map(function (c) {
-        return encodeURIComponent(c.contact.email);
-      })
-      .join(",");
-    window.location.href = "mailto:" + to + "?subject=" + encodeURIComponent("Pool Master Counter — Day Report") + "&body=" + encodeURIComponent(text);
+    openEmailCompose();
   });
 
   btnDayReportSms.addEventListener("click", function () {
     var text = buildDayReportTextPlain(todayDateStr());
+    function openSmsCompose() {
+      var to = reportOptedInContacts("sms")
+        .map(function (c) {
+          return encodeURIComponent(c.contact.phone);
+        })
+        .join(",");
+      window.location.href = "sms:" + to + "&body=" + encodeURIComponent(text);
+    }
     if (dayReportAttachBackupCheckbox.checked) {
-      shareReportWithBackupAttachment(text);
+      shareReportWithBackupAttachment(text, openSmsCompose);
       return;
     }
-    var to = reportOptedInContacts("sms")
-      .map(function (c) {
-        return encodeURIComponent(c.contact.phone);
-      })
-      .join(",");
-    window.location.href = "sms:" + to + "&body=" + encodeURIComponent(text);
+    openSmsCompose();
   });
 
   dayReportAttachBackupCheckbox.checked = loadDayReportAttachBackup();
