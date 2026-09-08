@@ -3301,6 +3301,7 @@
       // check, so skunk detection is skipped for those (see skunk
       // determination below).
       var skunkOpponentBalls = null;
+      var winnerBallsAtWin = getPlayer(key).balls || 0;
       if (opponentNames.length === 1) {
         var skunkOpponent = activePlayers().filter(function (p) {
           return p.id !== key;
@@ -3344,11 +3345,25 @@
     // later from the "Balls left on the table" entry instead (see
     // persistBallsLeftLive).
     var skunk = false;
+    // One Pocket plays a standard 15-ball rack - whatever wasn't
+    // pocketed by either side is what's left on the table, so this
+    // prefills the win popup's manual field instead of leaving it
+    // "Not Set" every time (still editable/overridable there). Same
+    // single-opponent scoping as skunk above - no well-defined "the
+    // other side" to subtract for a free-for-all win.
+    var ballsLeftPrefill = null;
     if (state.currentGame.unit !== "rack") {
       if (isTeam) {
-        skunk = sumTeamBalls(otherTeamId) === 0;
+        var opponentTeamBalls = sumTeamBalls(otherTeamId);
+        skunk = opponentTeamBalls === 0;
+        if (state.currentGame.gameType === "onepocket") {
+          ballsLeftPrefill = Math.max(0, 15 - sumTeamBalls(key) - opponentTeamBalls);
+        }
       } else if (skunkOpponentBalls !== null) {
         skunk = skunkOpponentBalls === 0;
+        if (state.currentGame.gameType === "onepocket") {
+          ballsLeftPrefill = Math.max(0, 15 - winnerBallsAtWin - skunkOpponentBalls);
+        }
       }
     }
 
@@ -3374,7 +3389,7 @@
       raceTarget: target,
       skunk: skunk,
       raceCount: milestoneCount,
-      ballsLeftOnTable: null
+      ballsLeftOnTable: ballsLeftPrefill
     });
     if (state.gameHistory.length > 200) state.gameHistory.length = 200;
     if (!noStatsMode) {
@@ -3678,7 +3693,13 @@
   // whatever should happen next (milestone/on-hill/game-change), deferred
   // until this dialog is dismissed.
   function showGameWinOverlay(summary, ts, onClose) {
-    gamewinBallsLeftValue = null;
+    // One Pocket wins arrive with a computed prefill already sitting on
+    // the fresh gameHistory entry (see creditWin's ballsLeftPrefill) -
+    // pick it up here instead of always starting blank; still just a
+    // starting point, editable/clearable the same as a manually typed
+    // value.
+    var freshEntry = state.gameHistory[0] && state.gameHistory[0].ts === ts ? state.gameHistory[0] : null;
+    gamewinBallsLeftValue = freshEntry && freshEntry.ballsLeftOnTable !== null && freshEntry.ballsLeftOnTable !== undefined ? freshEntry.ballsLeftOnTable : null;
     gamewinPendingTs = ts;
     gamewinPendingOnClose = onClose;
     gamewinMessage.textContent = summary;
