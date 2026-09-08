@@ -1256,6 +1256,7 @@
   var rosterLoadSelect = document.getElementById("roster-load-select");
   var btnRosterLoad = document.getElementById("btn-roster-load");
   var btnExportRosterLists = document.getElementById("btn-export-roster-lists");
+  var btnExportRosterListsCsv = document.getElementById("btn-export-roster-lists-csv");
   var btnImportRosterLists = document.getElementById("btn-import-roster-lists");
   var importRosterListsFileInput = document.getElementById("import-roster-lists-file-input");
 
@@ -1341,6 +1342,7 @@
   var playerPageHistoryList = document.getElementById("player-page-history-list");
   var btnPlayerPageBack = document.getElementById("btn-player-page-back");
   var btnPlayerPageExport = document.getElementById("btn-player-page-export");
+  var btnPlayerPageCsv = document.getElementById("btn-player-page-csv");
   var btnPlayerPageReset = document.getElementById("btn-player-page-reset");
   var playerPagePeriodFilter = document.getElementById("player-page-period-filter");
   var playerPageGraphBody = document.getElementById("player-page-graph-body");
@@ -1357,6 +1359,7 @@
   var allPlayersPeriodSelect = document.getElementById("all-players-period");
   var btnToggleAllPlayersView = document.getElementById("btn-toggle-all-players-view");
   var btnToggleRosterFilter = document.getElementById("btn-toggle-roster-filter");
+  var btnAllPlayersCsv = document.getElementById("btn-all-players-csv");
   var allPlayersList = document.getElementById("all-players-list");
   var allPlayersViewMode = "bars";
   var allPlayersRosterOnly = false;
@@ -4846,6 +4849,27 @@
     return buildDayReportTextPlain(dateStr);
   }
 
+  // The Player Stats page and the All Players page filter by the same
+  // period codes but label them with two different i18n key sets (the
+  // former's buttons say "This Week"/"This Year", the latter's dropdown
+  // says "1 Week"/"1 Year" and adds "6month") - two small maps so a CSV
+  // title line always matches what that page actually has on screen.
+  var PLAYER_PAGE_PERIOD_LABEL_KEYS = {
+    today: "period.today",
+    week: "period.thisWeek",
+    month: "period.thisMonth",
+    year: "period.thisYear",
+    all: "period.allTime"
+  };
+  var ALL_PLAYERS_PERIOD_LABEL_KEYS = {
+    today: "period.today",
+    week: "period.oneWeek",
+    month: "period.oneMonth",
+    "6month": "period.sixMonths",
+    year: "period.oneYear",
+    all: "period.allTime"
+  };
+
   // RFC 4180-ish: only quotes a field when it actually needs it (holds
   // a comma, quote, or newline), doubling any interior quotes - so
   // plain names/numbers stay unquoted and readable if this file is
@@ -6406,6 +6430,20 @@
       })
     };
     downloadJSON("pool-master-counter-player-lists-" + payload.exportedAt.slice(0, 10) + ".json", payload);
+  }
+
+  // A real spreadsheet table of every saved player list - one row per
+  // list, players joined into a single readable cell (a list's whole
+  // point is the group, not one row per member).
+  function buildRosterListsCsv() {
+    var lines = [];
+    lines.push(csvRow(["Pool Master Counter — Player Lists"]));
+    lines.push("\r\n");
+    lines.push(csvRow(["List", "Player Count", "Players", "Saved"]));
+    SAVED_ROSTERS.forEach(function (r) {
+      lines.push(csvRow([r.label, (r.players || []).length, (r.players || []).join(", "), r.savedAt ? formatTimestamp(r.savedAt, true) : ""]));
+    });
+    return "\uFEFF" + lines.join("");
   }
 
   // Accepts a bare array of names, a {label, players} object (the hand-
@@ -8540,6 +8578,73 @@
     });
   }
 
+  // Mirrors exactly what the Player Stats page currently shows (same
+  // period filter, same synopsis/H2H/game-log data) as a real
+  // spreadsheet table instead of a JSON export.
+  function buildPlayerStatsCsv() {
+    var name = currentStatsPlayerName;
+    if (!name) return "";
+    var allGames = collectAllGamesForPlayer(name);
+    var filtered = filterGamesByPeriod(allGames, currentStatsPeriod);
+    var synopsis = computeWinLossSynopsis(filtered);
+    var tournamentFiltered = filterGamesByPeriod(
+      tournamentGamesForPlayerName(name).concat(sessionRaceTournamentGames(allGames)),
+      currentStatsPeriod
+    );
+    var tournamentSynopsis = computeWinLossSynopsis(tournamentFiltered);
+    var h2h = computeHeadToHead(filtered);
+
+    var lines = [];
+    lines.push(csvRow(["Pool Master Counter — Player Stats", name, T(PLAYER_PAGE_PERIOD_LABEL_KEYS[currentStatsPeriod] || "period.allTime")]));
+    lines.push("\r\n");
+
+    lines.push(csvRow(["Rating", "Games Won", "Skunk Wins", "Games Lost", "Skunk Losses", "Win %", "Tournaments Played", "Tournaments Won", "Tournaments Lost"]));
+    lines.push(
+      csvRow([
+        getPlayerRating(name),
+        synopsis.wins,
+        synopsis.skunkWins,
+        synopsis.losses,
+        synopsis.skunkLosses,
+        synopsis.pct === null ? "" : synopsis.pct + "%",
+        tournamentSynopsis.total,
+        tournamentSynopsis.wins,
+        tournamentSynopsis.losses
+      ])
+    );
+    lines.push("\r\n");
+
+    lines.push(csvRow(["Opponent", "Wins", "Losses", "Win %"]));
+    h2h.forEach(function (o) {
+      lines.push(csvRow([o.name, o.wins, o.losses, o.pct === null ? "" : o.pct + "%"]));
+    });
+    lines.push("\r\n");
+
+    lines.push(csvRow(["Time", "Game", "Result", "Winner(s)", "Opponent(s)", "Duration", "Race Milestone", "Skunk", "Balls Left"]));
+    filtered
+      .slice()
+      .sort(function (a, b) {
+        return (a.ts || "").localeCompare(b.ts || "");
+      })
+      .forEach(function (g) {
+        lines.push(
+          csvRow([
+            formatTimestamp(g.ts, true),
+            g.gameLabel,
+            g.result === "won" ? "Won" : "Lost",
+            joinNamesForReport(g.winnerNames || []),
+            joinNamesForReport(g.opponentNames || []),
+            formatDuration(g.durationMs),
+            g.wonRace ? "Race to " + g.raceTarget : "",
+            g.skunk ? "Yes" : "",
+            g.ballsLeftOnTable !== null && g.ballsLeftOnTable !== undefined ? g.ballsLeftOnTable : ""
+          ])
+        );
+      });
+
+    return "\uFEFF" + lines.join("");
+  }
+
   function renderPlayerPageGraph() {
     if (!currentStatsPlayerName) return;
     var period = currentStatsPeriod;
@@ -10089,6 +10194,62 @@
     });
   }
 
+  // Mirrors exactly what's currently on screen (same sort, period, and
+  // roster-only filter as renderAllPlayersPage) as a real spreadsheet
+  // table - one row per player, career totals rather than the graph view.
+  function buildAllPlayersCsv() {
+    var period = allPlayersPeriodSelect.value;
+    var names = getAllKnownPlayerNames();
+    if (allPlayersRosterOnly) {
+      var rosterNames = {};
+      state.players.forEach(function (p) {
+        rosterNames[p.name] = true;
+      });
+      names = names.filter(function (n) {
+        return rosterNames[n];
+      });
+    }
+    var stats = names.map(function (name) {
+      return computePlayerCareerStats(name, period);
+    });
+    var sorted = sortAllPlayerStats(stats, allPlayersSortSelect.value);
+
+    var lines = [];
+    lines.push(csvRow(["Pool Master Counter — All Players", T(ALL_PLAYERS_PERIOD_LABEL_KEYS[period] || "period.allTime")]));
+    lines.push("\r\n");
+
+    lines.push(
+      csvRow([
+        "Player",
+        "Rating",
+        "Played",
+        "Wins",
+        "Losses",
+        "Win %",
+        "Tournaments Played",
+        "Tournaments Won",
+        "Tournaments Lost"
+      ])
+    );
+    sorted.forEach(function (s) {
+      lines.push(
+        csvRow([
+          s.name,
+          getPlayerRating(s.name),
+          s.played,
+          s.wins,
+          s.losses,
+          s.winPct === null ? "" : Math.round(s.winPct * 100) + "%",
+          s.tournamentPlayed,
+          s.tournamentWins,
+          s.tournamentLosses
+        ])
+      );
+    });
+
+    return "\uFEFF" + lines.join("");
+  }
+
   function openAllPlayersPage(skipHistory) {
     if (!skipHistory) pushScreenHistory("all-players");
     renderAllPlayersPage();
@@ -11337,6 +11498,10 @@
   wireNotifyCheckbox(ratingEditEmailInput, ratingEditPhoneInput, ratingEditNotifyCheckbox, ratingEditNotifyMethodRow);
 
   btnExportRosterLists.addEventListener("click", exportRosterLists);
+  btnExportRosterListsCsv.addEventListener("click", function () {
+    var filename = "pool-master-counter-player-lists-" + todayDateStr() + ".csv";
+    downloadTextFile(filename, buildRosterListsCsv(), "text/csv;charset=utf-8");
+  });
 
   btnImportRosterLists.addEventListener("click", function () {
     importRosterListsFileInput.click();
@@ -11816,6 +11981,11 @@
   });
 
   btnPlayerPageExport.addEventListener("click", exportCurrentPlayerStats);
+  btnPlayerPageCsv.addEventListener("click", function () {
+    if (!currentStatsPlayerName) return;
+    var filename = "pool-master-counter-player-stats-" + currentStatsPlayerName.toLowerCase().replace(/[^a-z0-9]+/g, "-") + "-" + todayDateStr() + ".csv";
+    downloadTextFile(filename, buildPlayerStatsCsv(), "text/csv;charset=utf-8");
+  });
   btnPlayerPageReset.addEventListener("click", resetPlayerHistoricalStats);
   btnPlayerPageBack.addEventListener("click", function () {
     closePlayerStatsPage();
@@ -11845,6 +12015,10 @@
     btnToggleRosterFilter.classList.toggle("is-active", allPlayersRosterOnly);
     btnToggleRosterFilter.textContent = T(allPlayersRosterOnly ? "allPlayers.showingRosterOnly" : "allPlayers.rosterOnly");
     renderAllPlayersPage();
+  });
+  btnAllPlayersCsv.addEventListener("click", function () {
+    var filename = "pool-master-counter-all-players-" + todayDateStr() + ".csv";
+    downloadTextFile(filename, buildAllPlayersCsv(), "text/csv;charset=utf-8");
   });
 
   btnOpenTournament.addEventListener("click", function () {

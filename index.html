@@ -13,7 +13,7 @@
      bump the ?v= on both the stylesheet and script tags below on every
      deploy that touches css/style.css or js/app.js, or returning users can
      silently keep running old code indefinitely. -->
-<link rel="stylesheet" href="css/style.css?v=20260908e">
+<link rel="stylesheet" href="css/style.css?v=20260908f">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -193,6 +193,7 @@
       </div>
       <div class="row">
         <button type="button" id="btn-export-roster-lists" class="btn btn-ghost" data-i18n="players.exportLists">Export Player Lists</button>
+        <button type="button" id="btn-export-roster-lists-csv" class="btn btn-ghost" data-i18n="players.exportListsCsv">📊 Export as Excel (CSV)</button>
         <button type="button" id="btn-import-roster-lists" class="btn btn-ghost" data-i18n="players.importLists">Import Player Lists</button>
         <input type="file" id="import-roster-lists-file-input" accept="application/json" class="hidden">
       </div>
@@ -884,6 +885,7 @@
   <section class="panel" id="player-page-actions-panel">
     <div class="row">
       <button type="button" id="btn-player-page-export" class="btn btn-ghost" data-i18n="playerPage.exportStats">Export Stats</button>
+      <button type="button" id="btn-player-page-csv" class="btn btn-ghost" data-i18n="playerPage.exportCsv">📊 Export as Excel (CSV)</button>
       <button type="button" id="btn-player-page-reset" class="btn btn-danger" data-i18n="playerPage.resetStats">Reset Stats</button>
     </div>
   </section>
@@ -926,6 +928,7 @@
     <div class="row">
       <button type="button" id="btn-toggle-all-players-view" class="btn btn-ghost" data-i18n="allPlayers.seeAsGraph">📈 See as Graph</button>
       <button type="button" id="btn-toggle-roster-filter" class="btn btn-ghost" data-i18n="allPlayers.rosterOnly">👥 Current Roster Only</button>
+      <button type="button" id="btn-all-players-csv" class="btn btn-ghost" data-i18n="allPlayers.exportCsv">📊 Export as Excel (CSV)</button>
     </div>
   </section>
 
@@ -1022,6 +1025,6 @@
 
 </div>
 
-<script src="js/app.js?v=20260908e"></script>
+<script src="js/app.js?v=20260908f"></script>
 </body>
 </html>
