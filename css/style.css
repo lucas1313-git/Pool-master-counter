@@ -329,8 +329,16 @@ body {
   display: none;
 }
 
+/* Focus Mode is a clean, read-from-across-the-room scoreboard - the
+   logo/title, nav buttons, and theme/language/no-stats setup controls
+   have no place in it, and with all of those gone the header itself
+   has nothing left to show. */
 #app.focus-mode .app-header {
-  padding-bottom: 4px;
+  display: none;
+}
+
+#app.focus-mode .no-stats-row-inline {
+  display: none;
 }
 
 #app.focus-mode #scoreboard-panel {
@@ -354,6 +362,25 @@ body {
 
 #app.focus-mode .stat-value.small {
   font-size: clamp(1.8rem, 14cqw, 5.4rem);
+}
+
+/* Names need to read from across the room same as the score itself -
+   same container-query scaling as .stat-value above, just a smaller
+   share of the card's width since the score is still the main event. */
+#app.focus-mode .player-name {
+  font-size: clamp(1.8rem, 13cqw, 4.5rem);
+}
+
+#app.focus-mode .member-name {
+  font-size: clamp(1.3rem, 9cqw, 3rem);
+}
+
+/* Same across-the-room readability as the score itself while in Focus
+   Mode - #scoreboard-panel has no container-query width to key off of
+   (unlike the per-card rules above), so this scales off viewport width
+   instead. */
+#app.focus-mode .shot-counter-widget {
+  font-size: clamp(3rem, 11vw, 5.5rem);
 }
 
 .no-stats-row-inline {
@@ -596,7 +623,7 @@ button:disabled {
   font-size: 0.85rem;
 }
 
-input[type="text"], input[type="number"], select {
+input[type="text"], input[type="number"], input[type="email"], input[type="tel"], select {
   font: inherit;
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -606,9 +633,10 @@ input[type="text"], input[type="number"], select {
   min-height: 44px;
 }
 
-input[type="text"] {
+input[type="text"], input[type="email"], input[type="tel"] {
   flex: 1;
   min-width: 140px;
+  font-size: 1.05rem;
 }
 
 .day-notes-textarea {
@@ -910,6 +938,62 @@ input[type="number"] {
   border-radius: 12px;
 }
 
+/* ---------- Shot counter (all game types) ---------- */
+
+/* Lives in the score-keeping area itself (#scoreboard-panel, right
+   under the Now Playing/Duration line) rather than floating over the
+   page, so it's part of the normal game view instead of a separate
+   overlay someone has to notice - and, since #scoreboard-panel is
+   exempt from Focus Mode's panel-hiding, it shows up there too with no
+   extra wiring (see the #app.focus-mode override below for its
+   across-the-room sizing there). Controlled by the numeric keypad (see
+   handleKeypadShortcut), a tap/click (pause), or either Show/Hide
+   Timer control (the Game Setup panel's, or the small persistent
+   .shot-counter-visibility-toggle button right here in the scoreboard
+   - see tickShotCounter, which keeps that one visible even while this
+   widget itself is hidden, so hiding it never strands anyone without
+   a way back). Sized with clamp() so it stays legible without
+   overflowing a phone-width viewport. */
+.shot-counter-widget {
+  display: block;
+  width: fit-content;
+  margin: 4px auto 14px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 2px solid rgba(255, 255, 255, 0.22);
+  color: var(--text);
+  padding: clamp(10px, 2.6vw, 20px) clamp(24px, 6vw, 44px);
+  border-radius: 999px;
+  font-size: clamp(2.4rem, 9vw, 3.8rem);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.03em;
+  text-align: center;
+  cursor: pointer;
+}
+
+/* Quick-access companion to the widget above - unlike it, this stays
+   visible whenever the shot counter is enabled at all, regardless of
+   the widget's own hidden state, so there's always a one-tap way back
+   without digging into Game Setup. */
+.shot-counter-visibility-toggle {
+  display: block;
+  width: 36px;
+  height: 36px;
+  margin: 4px auto 14px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.shot-counter-visibility-toggle:hover {
+  background: rgba(0, 0, 0, 0.5);
+  color: var(--accent);
+}
+
 /* ---------- Standings ---------- */
 
 #standings-panel h2:not(:first-child) {
@@ -947,6 +1031,28 @@ input[type="number"] {
 .standings-name {
   font-weight: 600;
   font-size: 0.92rem;
+}
+
+.standings-status {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  vertical-align: middle;
+  background: var(--bg-panel);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+}
+
+.standings-status.is-playing {
+  background: var(--felt-light);
+  color: var(--on-felt-light);
+  border-color: var(--felt-light);
+  font-weight: 800;
 }
 
 .standings-count {
@@ -1038,6 +1144,7 @@ input[type="number"] {
 }
 
 .player-panel {
+  position: relative;
   background: linear-gradient(180deg, var(--felt) 0%, var(--bg-glow) 100%);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -1046,6 +1153,43 @@ input[type="number"] {
   flex-direction: column;
   align-items: center;
   gap: 10px;
+}
+
+/* ---------- Keyboard/keypad scoring shortcut ---------- */
+
+.keypad-number-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  border: 2px solid var(--accent);
+  color: var(--accent);
+  font-size: 1rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.keypad-number-badge:empty {
+  display: none;
+}
+
+.is-keypad-selected {
+  box-shadow: 0 0 0 4px var(--accent) inset;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 22%, var(--felt)) 0%, var(--bg-glow) 100%);
+}
+
+.is-keypad-selected .keypad-number-badge {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
+  transform: scale(1.1);
 }
 
 .player-name {
@@ -1094,6 +1238,14 @@ input[type="number"] {
   line-height: 1.1;
   color: var(--accent);
   text-shadow: 0 2px 5px rgba(0, 0, 0, 0.6);
+}
+
+.fair-race-note {
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  margin-top: 2px;
 }
 
 .stat-value.small {
@@ -1239,6 +1391,18 @@ input[type="number"] {
   text-align: center;
 }
 
+.team-needs-opponent-warning {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--danger);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--danger);
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-align: center;
+}
+
 .team-members {
   width: 100%;
   display: flex;
@@ -1247,6 +1411,7 @@ input[type="number"] {
 }
 
 .member-card {
+  position: relative;
   width: 100%;
   background: rgba(0, 0, 0, 0.25);
   border: 1px solid var(--border);
@@ -1333,6 +1498,11 @@ input[type="number"] {
   color: var(--danger);
 }
 
+.history-skunk {
+  font-weight: 700;
+  color: var(--accent);
+}
+
 .history-race-win-item {
   border-color: var(--accent) !important;
   background: linear-gradient(180deg, rgba(232, 178, 60, 0.16) 0%, var(--bg-card) 70%) !important;
@@ -1360,38 +1530,52 @@ input[type="number"] {
   z-index: 1000;
 }
 
+/* Both the per-game win popup and the tournament-win popup are meant to be
+   read from across the room, not squinted at up close — computer/tablet
+   viewports get noticeably larger type via clamp() (the vw-based middle
+   term settles near the upper bound on a roomy screen, backing off toward
+   the lower bound only when the viewport genuinely can't fit it, e.g. a
+   long player-name list). Phones get a different treatment entirely below:
+   the dialog fills the whole screen instead of shrinking to a small
+   centered card. max-height + overflow-y is the hard backstop for
+   whatever clamp() can't shrink away, so the dialog never grows taller
+   than the viewport. */
 .gamewin-card {
   background: linear-gradient(180deg, var(--felt-light) 0%, var(--felt) 60%, var(--bg-glow) 100%);
   border: 2px solid var(--accent);
   border-radius: var(--radius);
-  padding: 32px 28px;
-  max-width: 380px;
+  max-width: min(94vw, 640px);
+  max-height: 92vh;
   width: 100%;
+  overflow-y: auto;
+  padding: clamp(32px, 6vw, 56px) clamp(28px, 5vw, 48px);
   text-align: center;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
   animation: milestone-pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .gamewin-emoji {
-  font-size: 2.6rem;
+  font-size: clamp(2.6rem, 7vw, 5.6rem);
   margin-bottom: 8px;
 }
 
 .gamewin-card h2 {
   margin: 0 0 10px;
   color: var(--accent);
-  font-size: 1.5rem;
+  font-size: clamp(1.5rem, 4.5vw, 3.4rem);
 }
 
 .gamewin-card p {
   margin: 0 0 22px;
-  font-size: 1.08rem;
+  font-size: clamp(1.08rem, 3vw, 2.3rem);
   font-weight: 600;
 }
 
 .gamewin-details {
   text-align: left;
   margin-bottom: 20px;
+  max-height: 48vh;
+  overflow-y: auto;
 }
 
 .gamewin-details .player-stats-row {
@@ -1400,6 +1584,32 @@ input[type="number"] {
 
 .gamewin-card .btn-primary {
   width: 100%;
+}
+
+.gamewin-quick-actions {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.gamewin-quick-actions .btn {
+  flex: 1;
+}
+
+/* Read-only badge (see buildSkunkIndicator/updateGamewinSkunkIndicator)
+   - hidden by default, shown the instant the game is known to be a
+   skunk (immediately for points/balls-unit wins, or live as soon as
+   Balls Left on the Table hits 7 for a rack-mode win). */
+.gamewin-skunk-indicator {
+  text-align: center;
+  background: rgba(232, 178, 60, 0.16);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  color: var(--accent);
+  font-weight: 800;
+  font-size: 1.05rem;
+  padding: 8px 12px;
+  margin-top: 8px;
 }
 
 /* ---------- Milestone celebration popup ---------- */
@@ -1419,9 +1629,11 @@ input[type="number"] {
   background: linear-gradient(180deg, var(--felt-light) 0%, var(--felt) 60%, var(--bg-glow) 100%);
   border: 2px solid var(--accent);
   border-radius: var(--radius);
-  padding: 32px 28px;
-  max-width: 380px;
+  max-width: min(94vw, 640px);
+  max-height: 92vh;
   width: 100%;
+  overflow-y: auto;
+  padding: clamp(20px, 3vw, 28px) clamp(18px, 3vw, 24px);
   text-align: center;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
   animation: milestone-pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -1438,26 +1650,33 @@ input[type="number"] {
   }
 }
 
+/* Deliberately much smaller than the gamewin card's win-flash text below
+   (which only ever shows a line or two) - the milestone card can carry a
+   full player list plus a multi-step game rotation, and at the old
+   viewport-scaled sizes that content alone taller than most screens,
+   forcing a scroll to see the Undo/Nice buttons at all. */
 .milestone-emoji {
-  font-size: 2.6rem;
-  margin-bottom: 8px;
+  font-size: clamp(1.8rem, 5vw, 2.6rem);
+  margin-bottom: 6px;
 }
 
 .milestone-card h2 {
-  margin: 0 0 10px;
+  margin: 0 0 8px;
   color: var(--accent);
-  font-size: 1.5rem;
+  font-size: clamp(1.3rem, 3vw, 1.7rem);
 }
 
 .milestone-card p {
-  margin: 0 0 22px;
-  font-size: 1.08rem;
+  margin: 0 0 14px;
+  font-size: clamp(1rem, 2vw, 1.25rem);
   font-weight: 600;
 }
 
 .milestone-details {
   text-align: left;
-  margin-bottom: 20px;
+  margin-bottom: 14px;
+  max-height: 48vh;
+  overflow-y: auto;
 }
 
 .milestone-details .player-stats-row {
@@ -1466,6 +1685,69 @@ input[type="number"] {
 
 .milestone-card .btn-primary {
   width: 100%;
+}
+
+.gamewin-card .player-stats-row .label {
+  font-size: clamp(0.9rem, 2vw, 1.8rem);
+}
+
+.milestone-card .player-stats-row .label {
+  font-size: clamp(0.85rem, 1.4vw, 1rem);
+}
+
+.gamewin-card .player-stats-row .value {
+  font-size: clamp(1.1rem, 2.4vw, 2.2rem);
+}
+
+.milestone-card .player-stats-row .value {
+  font-size: clamp(0.95rem, 1.6vw, 1.15rem);
+}
+
+.gamewin-card .value-list {
+  font-size: clamp(0.95rem, 2.2vw, 1.9rem);
+}
+
+.milestone-card .value-list {
+  font-size: clamp(0.9rem, 1.5vw, 1.05rem);
+}
+
+.gamewin-card .btn-primary,
+.gamewin-card .gamewin-quick-actions .btn {
+  font-size: clamp(1.05rem, 2.6vw, 2.1rem);
+  padding: clamp(12px, 2vw, 22px);
+}
+
+.milestone-card .btn-primary,
+.milestone-card .gamewin-quick-actions .btn {
+  font-size: clamp(0.95rem, 1.6vw, 1.15rem);
+  padding: clamp(10px, 1.2vw, 14px);
+}
+
+/* Phones: fill the whole screen instead of shrinking to a small centered
+   card - there's no "far away" to read from on a phone, so more space for
+   the content matters more than a floating dialog aesthetic. */
+@media (max-width: 640px) {
+  .gamewin-overlay,
+  .milestone-overlay,
+  .force-reset-overlay,
+  .onhill-overlay {
+    padding: 0;
+  }
+
+  .gamewin-card,
+  .milestone-card,
+  .force-reset-card,
+  .onhill-card {
+    max-width: 100vw;
+    width: 100vw;
+    height: 100vh;
+    max-height: 100vh;
+    border-width: 0;
+    border-radius: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
 }
 
 .balls-left-row {
@@ -1507,8 +1789,97 @@ input[type="number"] {
   font-variant-numeric: tabular-nums;
 }
 
+.balls-left-input {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 4px 6px;
+  min-width: 9ch;
+  -moz-appearance: textfield;
+}
+
+.balls-left-input::-webkit-outer-spin-button,
+.balls-left-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.balls-left-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.gamewin-card .balls-left-row .label,
+.milestone-card .balls-left-row .label {
+  font-size: clamp(0.9rem, 2vw, 1.6rem);
+}
+
+.gamewin-card .balls-left-value,
+.milestone-card .balls-left-value {
+  font-size: clamp(1rem, 2.2vw, 1.8rem);
+  min-width: 11ch;
+}
+
+.gamewin-card .balls-left-btn,
+.milestone-card .balls-left-btn {
+  width: clamp(30px, 5vw, 46px);
+  height: clamp(30px, 5vw, 46px);
+  font-size: clamp(1.1rem, 2.4vw, 1.8rem);
+}
+
 .player-game-log-balls-left {
   color: var(--text-dim);
+}
+
+/* ---------- Forced-reset confirmation popup ---------- */
+
+.force-reset-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 1300;
+}
+
+.force-reset-card {
+  background: linear-gradient(180deg, var(--felt-light) 0%, var(--felt) 60%, var(--bg-glow) 100%);
+  border: 2px solid var(--accent);
+  border-radius: var(--radius);
+  max-width: min(94vw, 640px);
+  max-height: 92vh;
+  width: 100%;
+  overflow-y: auto;
+  padding: clamp(32px, 6vw, 56px) clamp(28px, 5vw, 48px);
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  animation: milestone-pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.force-reset-emoji {
+  font-size: clamp(2.6rem, 7vw, 5.6rem);
+  margin-bottom: 8px;
+}
+
+.force-reset-card h2 {
+  margin: 0 0 10px;
+  color: var(--accent);
+  font-size: clamp(1.5rem, 4.5vw, 3.4rem);
+}
+
+.force-reset-card p {
+  margin: 0 0 22px;
+  font-size: clamp(1.08rem, 3vw, 2.3rem);
+  font-weight: 600;
+}
+
+.force-reset-card .btn-primary {
+  width: 100%;
+  font-size: clamp(1.05rem, 2.6vw, 2.1rem);
+  padding: clamp(12px, 2vw, 22px);
 }
 
 /* ---------- On-the-hill warning popup ---------- */
@@ -1524,13 +1895,20 @@ input[type="number"] {
   z-index: 1000;
 }
 
+/* Bigger than the shared gamewin/milestone/force-reset baseline on
+   purpose - this one's a time-pressured "step up NOW" warning meant to be
+   readable at a glance from across the table, and it auto-dismisses
+   itself (see announceOnHill's 5s timer) so there's no cost to going
+   large. */
 .onhill-card {
   background: linear-gradient(180deg, var(--felt) 0%, var(--bg-glow) 100%);
   border: 2px solid var(--danger);
   border-radius: var(--radius);
-  padding: 32px 28px;
-  max-width: 380px;
+  max-width: min(96vw, 900px);
+  max-height: 92vh;
   width: 100%;
+  overflow-y: auto;
+  padding: clamp(36px, 7vw, 64px) clamp(30px, 6vw, 56px);
   text-align: center;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
   animation: onhill-shake 0.4s ease;
@@ -1544,19 +1922,19 @@ input[type="number"] {
 }
 
 .onhill-emoji {
-  font-size: 2.6rem;
-  margin-bottom: 8px;
+  font-size: clamp(3.4rem, 10vw, 8rem);
+  margin-bottom: 10px;
 }
 
 .onhill-card h2 {
-  margin: 0 0 10px;
+  margin: 0 0 12px;
   color: var(--danger);
-  font-size: 1.5rem;
+  font-size: clamp(2rem, 7vw, 5rem);
 }
 
 .onhill-card p {
-  margin: 0 0 22px;
-  font-size: 1.08rem;
+  margin: 0 0 26px;
+  font-size: clamp(1.3rem, 4.5vw, 3.2rem);
   font-weight: 600;
 }
 
@@ -1564,6 +1942,8 @@ input[type="number"] {
   width: 100%;
   background: var(--danger);
   color: #fff;
+  font-size: clamp(1.3rem, 3.2vw, 2.6rem);
+  padding: clamp(14px, 2.4vw, 28px);
 }
 
 /* ---------- Game-change popup ---------- */
@@ -1740,6 +2120,197 @@ input[type="number"] {
   width: 100%;
 }
 
+.removed-players-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 1000;
+}
+
+.removed-players-card {
+  background: linear-gradient(180deg, var(--felt-light) 0%, var(--felt) 60%, var(--bg-glow) 100%);
+  border: 2px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 32px 28px;
+  max-width: 480px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  animation: milestone-pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.removed-players-card h2 {
+  margin: 0 0 10px;
+  color: var(--accent);
+  font-size: 1.5rem;
+}
+
+.removed-players-explain {
+  margin: 0 0 20px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-align: left;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+/* ---------- Same-name import conflicts ---------- */
+
+.player-conflict-list {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 48vh;
+  overflow-y: auto;
+  text-align: left;
+}
+
+.player-conflict-row {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.player-conflict-row-name {
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+
+.player-conflict-row-facts {
+  color: var(--text-dim);
+  font-size: 0.82rem;
+  margin-bottom: 8px;
+}
+
+/* ---------- Recover Data (reset snapshots + comparison/recovery) ---------- */
+
+.recover-data-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.recover-data-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.recover-data-row-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.recover-data-row-label {
+  font-weight: 700;
+}
+
+.recover-data-row-meta {
+  font-size: 0.82rem;
+  color: var(--text-dim);
+}
+
+.recover-detail-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 1000;
+}
+
+.recover-detail-card {
+  background: linear-gradient(180deg, var(--felt-light) 0%, var(--felt) 60%, var(--bg-glow) 100%);
+  border: 2px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 28px 24px;
+  max-width: 560px;
+  width: 100%;
+  max-height: 86vh;
+  overflow-y: auto;
+  text-align: left;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  animation: milestone-pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.recover-detail-card h2 {
+  margin: 0 0 10px;
+  color: var(--accent);
+  font-size: 1.4rem;
+  text-align: center;
+}
+
+.recover-detail-explain {
+  margin: 0 0 18px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.recover-detail-card h3 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+  color: var(--accent);
+}
+
+.recover-games-checklist {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.recover-games-checklist label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  font-size: 0.88rem;
+}
+
+.recover-games-checklist input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  flex-shrink: 0;
+}
+
+.recover-detail-card .rating-edit-actions {
+  margin-top: 8px;
+}
+
 /* ---------- Generic modal alert/confirm/prompt (replaces native
    alert()/confirm()/prompt(), which pause the whole page and read as a
    browser chrome popup rather than part of the app) ---------- */
@@ -1834,6 +2405,24 @@ input[type="number"] {
   overflow-y: auto;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
   animation: milestone-pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.onboarding-card {
+  max-width: 460px;
+  text-align: center;
+}
+
+.onboarding-card .wizard-header {
+  justify-content: center;
+}
+
+.onboarding-card .wizard-body {
+  text-align: left;
+  min-height: 0;
+}
+
+.onboarding-final-footer {
+  margin-top: 20px;
 }
 
 .wizard-close-btn {

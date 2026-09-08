@@ -17,6 +17,14 @@
     { id: "custom", label: "Custom", defaultTarget: 1, unit: "points" }
   ];
 
+  // "Rack" games (target 1, one click = one whole win) have no per-ball
+  // tracking within a rack at all, so a skunk there (loser potted zero
+  // of their own group) can only come from the manually-entered "Balls
+  // left on the table" count - 7 left means all of the loser's 7
+  // object balls are still up, i.e. a skunk. 9-Ball isn't included -
+  // no skunk concept there (confirmed by the user).
+  var SKUNK_RACK_GAME_TYPES = ["8ball", "8ballrotation", "8ballpunishment"];
+
   // ---------------------------------------------------------------------
   // State
   // ---------------------------------------------------------------------
@@ -70,8 +78,59 @@
     if (changed) saveState();
   })();
 
+  // yyyy-mm-dd-<unix seconds>-<short random> - readable creation date
+  // baked right into the id, plus enough uniqueness (the random suffix)
+  // that adding several players in the same second - loading a saved
+  // roster list, for instance - can never produce two identical ids.
+  // Only ever used to key session-local bookkeeping (state.playerWins,
+  // state.teamMvpWins, gameHistory winnerIds/mvpId) - every durable,
+  // cross-device store (ratings, contacts, stats, added-date) is keyed
+  // by name instead, so this format change never touches those.
   function uid() {
-    return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    var now = new Date();
+    var y = now.getFullYear();
+    var m = String(now.getMonth() + 1).padStart(2, "0");
+    var d = String(now.getDate()).padStart(2, "0");
+    var unixSec = Math.floor(now.getTime() / 1000);
+    return y + "-" + m + "-" + d + "-" + unixSec + "-" + Math.random().toString(36).slice(2, 6);
+  }
+
+  // One-time migration for players created before uid() moved to the
+  // date-based format - they'd otherwise keep an old opaque id forever
+  // (loadState only ever runs this once per boot, on whatever's already
+  // in storage). Every place an id is used as a KEY has to be remapped
+  // together with player.id itself, or a player's win tally/game-history
+  // entries would silently detach from them the moment their id changes.
+  // The date pattern is inlined (not a module-level var) because
+  // loadState() - and this, transitively - runs at var state = loadState()
+  // near the very top of the file, before a var declared further down
+  // would have its assignment executed yet.
+  function migratePlayerIdsToDateFormat(parsedState) {
+    var idPattern = /^\d{4}-\d{2}-\d{2}-\d+-/;
+    var remap = {};
+    (parsedState.players || []).forEach(function (p) {
+      if (!p || !p.id || idPattern.test(p.id)) return;
+      var newId = uid();
+      remap[p.id] = newId;
+      p.id = newId;
+    });
+    if (!Object.keys(remap).length) return;
+    ["playerWins", "teamMvpWins"].forEach(function (storeKey) {
+      var remapped = {};
+      Object.keys(parsedState[storeKey] || {}).forEach(function (oldId) {
+        remapped[remap[oldId] || oldId] = parsedState[storeKey][oldId];
+      });
+      parsedState[storeKey] = remapped;
+    });
+    (parsedState.gameHistory || []).forEach(function (entry) {
+      if (!entry || typeof entry !== "object") return;
+      if (Array.isArray(entry.winnerIds)) {
+        entry.winnerIds = entry.winnerIds.map(function (id) {
+          return remap[id] || id;
+        });
+      }
+      if (entry.mvpId && remap[entry.mvpId]) entry.mvpId = remap[entry.mvpId];
+    });
   }
 
   // Player names are treated as case-insensitive everywhere: "Bob" and
@@ -109,10 +168,13 @@
       teamWins: {},
       teamMvpWins: {},
       raceToWinsTarget: 5,
-      currentGame: { gameType: "8ball", target: 1, unit: "rack", mode: "individual", startedAt: new Date().toISOString() },
+      fairRaceEnabled: false,
+      fairRaceTargets: null,
+      currentGame: { gameType: "8ball", target: 1, unit: "rack", mode: "individual", startedAt: new Date().toISOString(), shotCounterEnabled: false, shotCounterBeepSec: 30, shotCounterHidden: false, queueEnabled: false },
       gameHistory: [],
       rotation: { enabled: false, order: [], every: 1 },
-      gamesPlayedCount: 0
+      gamesPlayedCount: 0,
+      queue: []
     };
   }
 
@@ -179,9 +241,16 @@
           if (!parsed.teamWins) parsed.teamWins = {};
           if (!parsed.teamMvpWins) parsed.teamMvpWins = {};
           if (typeof parsed.raceToWinsTarget !== "number") parsed.raceToWinsTarget = 5;
+          if (typeof parsed.fairRaceEnabled !== "boolean") parsed.fairRaceEnabled = false;
+          if (typeof parsed.fairRaceTargets !== "object") parsed.fairRaceTargets = null;
           if (!parsed.currentGame) parsed.currentGame = { gameType: "8ball", target: 1, mode: "individual" };
           if (!parsed.currentGame.startedAt) parsed.currentGame.startedAt = new Date().toISOString();
           if (typeof parsed.currentGame.unit !== "string" || !parsed.currentGame.unit) parsed.currentGame.unit = null;
+          if (typeof parsed.currentGame.shotCounterEnabled !== "boolean") parsed.currentGame.shotCounterEnabled = false;
+          if (typeof parsed.currentGame.shotCounterBeepSec !== "number") parsed.currentGame.shotCounterBeepSec = 30;
+          if (typeof parsed.currentGame.shotCounterHidden !== "boolean") parsed.currentGame.shotCounterHidden = false;
+          if (typeof parsed.currentGame.queueEnabled !== "boolean") parsed.currentGame.queueEnabled = false;
+          if (!Array.isArray(parsed.queue)) parsed.queue = [];
           var EIGHTBALL_FAMILY = ["8ball", "8ballrotation", "8ballpunishment"];
           if (parsed.currentGame.target === 8 && EIGHTBALL_FAMILY.indexOf(parsed.currentGame.gameType) !== -1) {
             parsed.currentGame.target = 1;
@@ -194,6 +263,7 @@
           if (typeof parsed.rotation.every !== "number") parsed.rotation.every = 1;
           if (typeof parsed.rotation.enabled !== "boolean") parsed.rotation.enabled = false;
           if (typeof parsed.gamesPlayedCount !== "number") parsed.gamesPlayedCount = 0;
+          migratePlayerIdsToDateFormat(parsed);
           return parsed;
         }
       }
@@ -237,6 +307,266 @@
   function activePlayers() {
     return state.players.filter(function (p) {
       return p.playing;
+    });
+  }
+
+  // "Winner stays" queue mode (state.currentGame.queueEnabled, individual
+  // mode only) - reconciles state.queue (an ordered list of player ids)
+  // against reality instead of requiring every place `playing` can turn
+  // false (togglePlaying, addPlayer's default, roster-list loading, the
+  // wizard, Recover Data restore) to remember to keep it in sync. Anyone
+  // currently standby but not yet tracked lands at the back automatically,
+  // so nobody can silently fall out of the line. Callers that change the
+  // order persist the result back with saveQueue(effectiveQueue()).
+  function effectiveQueue() {
+    var known = {};
+    var ordered = (state.queue || [])
+      .map(function (id) {
+        return getPlayer(id);
+      })
+      .filter(function (p) {
+        return p && !p.playing;
+      });
+    ordered.forEach(function (p) {
+      known[p.id] = true;
+    });
+    state.players.forEach(function (p) {
+      if (!p.playing && !known[p.id]) ordered.push(p);
+    });
+    return ordered;
+  }
+
+  function saveQueue(orderedPlayers) {
+    state.queue = orderedPlayers.map(function (p) {
+      return p.id;
+    });
+  }
+
+  // Same reconciliation idea as effectiveQueue() above - a self-healing
+  // cache instead of hooking every place the active roster can change.
+  // Fair race targets (state.fairRaceEnabled) are frozen for as long as
+  // the same set of players/teams stays active: recomputed only when
+  // the roster key actually changes, not on every rating tick from a
+  // win within the race, so nobody's number moves mid-race.
+  function ensureFairRaceTargets() {
+    var isTeamMode = !quickCounterMode && state.currentGame.mode === "teams";
+    var sides = isTeamMode
+      ? ["A", "B"]
+          .filter(function (t) {
+            return teamMembersLive(t).length > 0;
+          })
+          .map(function (t) {
+            return {
+              key: t,
+              rating: averageRating(
+                teamMembersLive(t).map(function (p) {
+                  return p.name;
+                })
+              )
+            };
+          })
+      : activePlayers().map(function (p) {
+          return { key: p.id, rating: getPlayerRating(p.name) };
+        });
+    var rosterKey = sides
+      .map(function (s) {
+        return s.key;
+      })
+      .sort()
+      .join(",");
+    if (!state.fairRaceTargets || state.fairRaceTargets.rosterKey !== rosterKey) {
+      state.fairRaceTargets = { rosterKey: rosterKey, targets: computeFairRaceTargets(sides, state.raceToWinsTarget) };
+    }
+    return state.fairRaceTargets.targets;
+  }
+
+  // The one function every win-target comparison/check should call
+  // instead of reading state.raceToWinsTarget directly - returns the
+  // plain global target when fair race is off (today's behavior,
+  // unchanged), or this specific player's/team's own fair target when
+  // it's on.
+  function effectiveRaceTarget(key) {
+    if (!state.fairRaceEnabled) return state.raceToWinsTarget;
+    var targets = ensureFairRaceTargets();
+    return targets[key] || state.raceToWinsTarget;
+  }
+
+  // Mirrors buildRotationRow/renderRotationListInto/moveRotationItem
+  // (the Games Rotation list) - same ordered-list-with-up/down-arrows
+  // interaction, just for standby players instead of game types. No
+  // remove button: leaving the queue means becoming an active player or
+  // being removed from the roster entirely, both already handled by the
+  // existing roster row controls.
+  function buildQueueRow(player, i, total) {
+    var li = document.createElement("li");
+    li.className = "rotation-row";
+
+    var pos = document.createElement("span");
+    pos.className = "rotation-position";
+    pos.textContent = i + 1 + ".";
+
+    var name = document.createElement("span");
+    name.className = "rotation-name";
+    name.textContent = player.name;
+
+    var controls = document.createElement("div");
+    controls.className = "rotation-controls";
+
+    var upBtn = document.createElement("button");
+    upBtn.type = "button";
+    upBtn.textContent = "↑";
+    upBtn.setAttribute("aria-label", "Move " + player.name + " up in the queue");
+    upBtn.disabled = i === 0;
+    upBtn.addEventListener("click", function () {
+      moveQueueItem(i, -1);
+    });
+
+    var downBtn = document.createElement("button");
+    downBtn.type = "button";
+    downBtn.textContent = "↓";
+    downBtn.setAttribute("aria-label", "Move " + player.name + " down in the queue");
+    downBtn.disabled = i === total - 1;
+    downBtn.addEventListener("click", function () {
+      moveQueueItem(i, 1);
+    });
+
+    controls.appendChild(upBtn);
+    controls.appendChild(downBtn);
+
+    li.appendChild(pos);
+    li.appendChild(name);
+    li.appendChild(controls);
+    return li;
+  }
+
+  // Shows/hides the checkbox (Individual mode only) and the queue list
+  // itself (checkbox on + Individual + not Quick Counter), then rebuilds
+  // the list from effectiveQueue() when visible. Called from renderRoster
+  // so it always reflects the latest playing/standby state.
+  function renderQueueList() {
+    var individualMode = !quickCounterMode && state.currentGame.mode === "individual";
+    queueModeRow.classList.toggle("hidden", !individualMode);
+    queueModeCheckbox.checked = state.currentGame.queueEnabled;
+    var queueActive = individualMode && state.currentGame.queueEnabled;
+    queueSection.classList.toggle("hidden", !queueActive);
+    if (!queueActive) return;
+    var queue = effectiveQueue();
+    queueList.innerHTML = "";
+    if (queue.length === 0) {
+      var hint = document.createElement("li");
+      hint.className = "empty-hint";
+      hint.textContent = T("players.queueEmpty");
+      queueList.appendChild(hint);
+      return;
+    }
+    queue.forEach(function (p, i) {
+      queueList.appendChild(buildQueueRow(p, i, queue.length));
+    });
+  }
+
+  function moveQueueItem(index, delta) {
+    var queue = effectiveQueue();
+    var newIndex = index + delta;
+    if (newIndex < 0 || newIndex >= queue.length) return;
+    var tmp = queue[index];
+    queue[index] = queue[newIndex];
+    queue[newIndex] = tmp;
+    saveQueue(queue);
+    saveState();
+    renderQueueList();
+  }
+
+  // The player currently targeted by the 1-9 keypad shortcut - see
+  // handleKeypadShortcut. Not persisted; always starts cleared on reload.
+  var keypadSelectedPlayerId = null;
+
+  // Shot counter (see handleKeypadShortcut's "/"/*/Clear branches and
+  // tickShotCounter) - live-only, like keypadSelectedPlayerId above; only
+  // the enabled flag and beep interval on state.currentGame are saved.
+  // accumulatedMs is the frozen total from prior running segments;
+  // runningSince (a Date.now() timestamp, or null while paused) covers
+  // the segment in progress. lastBeepMs is the accumulated-elapsed value
+  // at which the beep last fired, so it fires again beepSec later.
+  // lastTickCountdown tracks which of the final 5 countdown seconds (5,
+  // 4, 3, 2, 1) before the next beep already got its warning tick, so a
+  // 1s-interval tick doesn't replay the same second's warning twice.
+  var shotCounterAccumulatedMs = 0;
+  var shotCounterRunningSince = null;
+  var shotCounterHidden = !!state.currentGame.shotCounterHidden;
+  var shotCounterLastBeepMs = 0;
+  var shotCounterLastTickCountdown = null;
+
+  // Player ids in keypad-number order (index 0 = number 1, etc.) - filled
+  // in by refreshKeypadNumbering() after every scoreboard render, since
+  // numbering follows the ON-SCREEN grid position rather than roster
+  // order (see that function), and that depends on how many columns the
+  // responsive grid actually rendered at the current viewport width.
+  var keypadOrderedPlayerIds = [];
+
+  // Appended to a player's card/panel by every builder that has one
+  // (buildIndividualPanel, buildMemberCard, buildQuickCounterPanel): a
+  // marker plus an (initially empty) number badge - refreshKeypadNumbering
+  // fills in the actual number and highlight state once every card for
+  // this render is in the DOM and laid out.
+  function markAsKeypadTarget(el, player) {
+    el.dataset.keypadPlayerId = player.id;
+    var badge = document.createElement("span");
+    badge.className = "keypad-number-badge";
+    el.appendChild(badge);
+  }
+
+  // Recomputes which number (1-9) each currently-playing player's card
+  // shows, and refreshes every card's highlight state. Individual mode's
+  // grid can wrap into any number of columns depending on viewport width,
+  // so numbering follows actual rendered position, boustrophedon-style -
+  // row 1 left to right, row 2 right to left, row 3 left to right, and
+  // so on - so the reading direction always continues smoothly into the
+  // next row instead of jumping back across the screen. Team mode's
+  // two-column-of-vertically-stacked-members layout doesn't break into
+  // "rows" the same way, so it just keeps DOM order there (team A top to
+  // bottom, then team B top to bottom).
+  function refreshKeypadNumbering() {
+    var cards = Array.prototype.slice.call(scoreboard.querySelectorAll("[data-keypad-player-id]"));
+    var ordered;
+    if (state.currentGame.mode === "teams" || cards.length === 0) {
+      ordered = cards;
+    } else {
+      var withRects = cards.map(function (el) {
+        var r = el.getBoundingClientRect();
+        return { el: el, top: r.top, left: r.left };
+      });
+      var rows = [];
+      withRects.forEach(function (item) {
+        var row = rows.filter(function (r) {
+          return Math.abs(r.top - item.top) < 10;
+        })[0];
+        if (!row) {
+          row = { top: item.top, items: [] };
+          rows.push(row);
+        }
+        row.items.push(item);
+      });
+      rows.sort(function (a, b) {
+        return a.top - b.top;
+      });
+      ordered = [];
+      rows.forEach(function (row, i) {
+        row.items.sort(function (a, b) {
+          return i % 2 === 0 ? a.left - b.left : b.left - a.left;
+        });
+        row.items.forEach(function (item) {
+          ordered.push(item.el);
+        });
+      });
+    }
+
+    keypadOrderedPlayerIds = [];
+    ordered.forEach(function (el, i) {
+      var num = i < 9 ? i + 1 : null;
+      var badge = el.querySelector(".keypad-number-badge");
+      if (num) keypadOrderedPlayerIds.push(el.dataset.keypadPlayerId);
+      if (badge) badge.textContent = num || "";
+      el.classList.toggle("is-keypad-selected", el.dataset.keypadPlayerId === keypadSelectedPlayerId);
     });
   }
 
@@ -380,6 +710,24 @@
     return VOICE_PITCHES[voice % VOICE_PITCHES.length];
   }
 
+  // A plain pace-reminder beep for the shot counter - two short identical
+  // pips, deliberately simpler than the win/on-hill fanfares since this
+  // one repeats on a timer during play rather than marking a one-off event.
+  function playShotCounterBeep() {
+    var ctx = getAudioCtx();
+    var now = ctx.currentTime;
+    tone(880, now, 0.12, "sine", 0.4);
+    tone(880, now + 0.18, 0.12, "sine", 0.4);
+  }
+
+  // A quiet single tick - the countdown warning in the final 5 seconds
+  // before playShotCounterBeep fires, deliberately much smaller/shorter
+  // than the beep it's leading up to so the two stay easy to tell apart.
+  function playShotCounterTick() {
+    var ctx = getAudioCtx();
+    tone(1200, ctx.currentTime, 0.05, "sine", 0.12);
+  }
+
   function playPositiveSound(voice) {
     var mult = voicePitch(voice);
     var ctx = getAudioCtx();
@@ -440,36 +788,152 @@
     });
   }
 
-  // A little triumphant fanfare — rising arpeggio into a flourish, held
-  // out to about 3 seconds by a closing chord. Plays on every game win.
+  // Two alternate victory fanfares, picked at random on each win so a run
+  // of single-rack games doesn't hear the same thing every time — Queen's
+  // "We Are the Champions" (from published easy-piano letter notes for the
+  // "we are the champions, my friend" hook) and "Another One Bites the
+  // Dust" (from published bass tab for the main riff), both dropped into
+  // a low register per request, and both drenched in the shared slapback
+  // echo bus AND their own dedicated reverb send (like
+  // playTournamentChampionSound's, just shorter) for a big, low, anthemic
+  // wash. Plays on every game win. voice picks the per-player pitch
+  // multiplier (VOICE_PITCHES) so different winners land at different
+  // pitches, same as before.
   function playWinSound(voice) {
     var mult = voicePitch(voice);
-    var now = getAudioCtx().currentTime;
-    var run = [
-      { f: 523.25, t: 0.0, d: 0.16 },
-      { f: 659.25, t: 0.14, d: 0.16 },
-      { f: 783.99, t: 0.28, d: 0.16 },
-      { f: 1046.5, t: 0.42, d: 0.22 },
-      { f: 987.77, t: 0.68, d: 0.14 },
-      { f: 1046.5, t: 0.8, d: 0.14 },
-      { f: 1174.66, t: 0.92, d: 0.28 }
-    ];
-    run.forEach(function (n) {
-      tone(n.f * mult, now + n.t, n.d, "triangle", 0.22);
-    });
-    var chordStart = now + 1.25;
-    var chordDuration = 1.7;
-    [523.25, 659.25, 783.99, 1046.5].forEach(function (f) {
-      tone(f * mult, chordStart, chordDuration, "triangle", 0.16);
-    });
+    var ctx = getAudioCtx();
+    var now = ctx.currentTime;
+
+    var convolver = ctx.createConvolver();
+    convolver.buffer = buildReverbImpulse(ctx, 2.4, 2.2);
+    var reverbSend = ctx.createGain();
+    reverbSend.gain.value = 0.6;
+    reverbSend.connect(convolver);
+    convolver.connect(ctx.destination);
+
+    function anthemTone(freq, t, duration, peakGain) {
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.type = "sawtooth";
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(peakGain, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      if (echoSend) gain.connect(echoSend);
+      gain.connect(reverbSend);
+      osc.start(t);
+      osc.stop(t + duration + 0.08);
+
+      var sub = ctx.createOscillator();
+      var subGain = ctx.createGain();
+      sub.type = "triangle";
+      sub.frequency.value = freq / 2;
+      subGain.gain.setValueAtTime(0, t);
+      subGain.gain.linearRampToValueAtTime(peakGain * 0.4, t + 0.02);
+      subGain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+      sub.connect(subGain);
+      subGain.connect(ctx.destination);
+      if (echoSend) subGain.connect(echoSend);
+      subGain.connect(reverbSend);
+      sub.start(t);
+      sub.stop(t + duration + 0.08);
+    }
+
+    // The "We are the champions... of the world" refrain specifically
+    // (not the shorter "my friend" line) - transcribed from published
+    // easy-piano letter notes: "We are the champions!" (G F# G F#-E) then
+    // dropping a register for "Of the world...!" (D B D). A 9th note (a
+    // low G tonic) added at the end for a full cadence, since the source
+    // phrase itself only runs 8. Raised an octave from an earlier pass
+    // that was too low to recognize - still sits a step below the
+    // original vocal register, but this is the floor for staying
+    // recognizable.
+    function playChampionsSong() {
+      var freqs = { G4: 392.0, Fs4: 369.99, E4: 329.63, D3: 146.83, B3: 246.94, G3: 196.0 };
+      var run = [
+        { n: "G4", t: 0.0, d: 0.2 },
+        { n: "Fs4", t: 0.18, d: 0.2 },
+        { n: "G4", t: 0.36, d: 0.2 },
+        { n: "Fs4", t: 0.54, d: 0.16 },
+        { n: "E4", t: 0.68, d: 0.24 },
+        { n: "D3", t: 0.94, d: 0.26 },
+        { n: "B3", t: 1.22, d: 0.24 },
+        { n: "D3", t: 1.48, d: 0.26 },
+        { n: "G3", t: 1.76, d: 0.9 }
+      ];
+      run.forEach(function (note) {
+        anthemTone(freqs[note.n] * mult, now + note.t, note.d, 0.22);
+      });
+    }
+
+    // The famous bass riff, transcribed from published bass tab (E minor,
+    // all on the low E string: frets 0-0-0-0-0-3-0-5, i.e. E E E E E G E A)
+    // - a 9th note (E, the loop point) added at the end since the source
+    // riff is 8 notes and repeats from there. Raised an octave from an
+    // earlier pass that was too low to recognize - still sits below the
+    // Champions melody's register (it's the bass line, after all).
+    function playBitesTheDustSong() {
+      var freqs = { E3: 164.81, G3: 196.0, A3: 220.0 };
+      var run = [
+        { n: "E3", t: 0.0, d: 0.13 },
+        { n: "E3", t: 0.16, d: 0.13 },
+        { n: "E3", t: 0.32, d: 0.13 },
+        { n: "E3", t: 0.48, d: 0.13 },
+        { n: "E3", t: 0.64, d: 0.13 },
+        { n: "G3", t: 0.8, d: 0.15 },
+        { n: "E3", t: 0.98, d: 0.13 },
+        { n: "A3", t: 1.14, d: 0.3 },
+        { n: "E3", t: 1.46, d: 0.7 }
+      ];
+      run.forEach(function (note) {
+        anthemTone(freqs[note.n] * mult, now + note.t, note.d, 0.24);
+      });
+    }
+
+    [playChampionsSong, playBitesTheDustSong][Math.floor(Math.random() * 2)]();
   }
 
+  // A gentle 14-note pastoral phrase evoking the Beatles' recorder
+  // introduction to "Fool on the Hill" (an homage rather than a literal
+  // transcription) — a soft sine "recorder" timbre with both the shared
+  // slapback echo bus AND its own dedicated reverb send, for a spacious,
+  // dreamy feel fitting a quiet warning rather than a fanfare.
   function playOnHillSound() {
     var ctx = getAudioCtx();
     var now = ctx.currentTime;
-    tone(880, now, 0.09, "square", 0.14);
-    tone(880, now + 0.14, 0.09, "square", 0.14);
-    tone(1108.73, now + 0.28, 0.2, "square", 0.16);
+
+    var convolver = ctx.createConvolver();
+    convolver.buffer = buildReverbImpulse(ctx, 2.8, 2.8);
+    var reverbSend = ctx.createGain();
+    reverbSend.gain.value = 0.55;
+    reverbSend.connect(convolver);
+    convolver.connect(ctx.destination);
+
+    function recorderTone(freq, t, duration, peakGain) {
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(peakGain, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      if (echoSend) gain.connect(echoSend);
+      gain.connect(reverbSend);
+      osc.start(t);
+      osc.stop(t + duration + 0.06);
+    }
+
+    var freqs = { D4: 293.66, E4: 329.63, Fs4: 369.99, G4: 392.0, A4: 440.0, Cs5: 554.37, D5: 587.33 };
+    var melody = ["D4", "E4", "Fs4", "G4", "Fs4", "E4", "D4", "A4", "G4", "Fs4", "E4", "D4", "Cs5", "D5"];
+    var noteDur = 0.27;
+    melody.forEach(function (name, i) {
+      var duration = i === melody.length - 1 ? noteDur * 2.4 : noteDur * 0.95;
+      recorderTone(freqs[name], now + i * noteDur, duration, 0.16);
+    });
   }
 
   // Builds a synthetic reverb impulse response — exponentially decaying
@@ -785,6 +1249,10 @@
   var newPlayerNameRequirement = document.getElementById("new-player-name-requirement");
   var btnAddPlayer = document.getElementById("btn-add-player");
   var rosterList = document.getElementById("roster-list");
+  var queueModeRow = document.getElementById("queue-mode-row");
+  var queueModeCheckbox = document.getElementById("queue-mode-checkbox");
+  var queueSection = document.getElementById("queue-section");
+  var queueList = document.getElementById("queue-list");
   var rosterLoadSelect = document.getElementById("roster-load-select");
   var btnRosterLoad = document.getElementById("btn-roster-load");
   var btnExportRosterLists = document.getElementById("btn-export-roster-lists");
@@ -802,6 +1270,7 @@
     document.getElementById("btn-open-help-wizard")
   ];
 
+  var btnTestOnboarding = document.getElementById("btn-test-onboarding");
   var btnOpenWizard = document.getElementById("btn-open-wizard");
   var wizardOverlay = document.getElementById("wizard-overlay");
   var btnWizardClose = document.getElementById("btn-wizard-close");
@@ -838,6 +1307,26 @@
   var btnWizardStart = document.getElementById("wizard-btn-start");
   var wizardTempCounterCheckbox = document.getElementById("wizard-temp-counter-checkbox");
   var btnWizardStartQuickCounter = document.getElementById("btn-wizard-start-quick-counter");
+
+  var onboardingOverlay = document.getElementById("onboarding-overlay");
+  var onboardingHeading = document.getElementById("onboarding-heading");
+  var onboardingProgress = document.getElementById("onboarding-progress");
+  var onboardingProgressDots = document.getElementById("onboarding-progress-dots");
+  var onboardingNameRequirement = document.getElementById("onboarding-name-requirement");
+  var onboardingNameInput = document.getElementById("onboarding-name-input");
+  var onboardingRatingInput = document.getElementById("onboarding-rating-input");
+  var onboardingEmailInput = document.getElementById("onboarding-email-input");
+  var onboardingPhoneInput = document.getElementById("onboarding-phone-input");
+  var onboardingReportOptInCheckbox = document.getElementById("onboarding-report-optin-checkbox");
+  var onboardingNotifyMethodRow = document.getElementById("onboarding-notify-method-row");
+  var onboardingNotifyMethodRadios = document.getElementsByName("onboarding-notify-method");
+  var onboardingPlayChoiceRadios = document.getElementsByName("onboarding-play-choice");
+  var onboardingStandardFooter = document.getElementById("onboarding-standard-footer");
+  var btnOnboardingCancel = document.getElementById("btn-onboarding-cancel");
+  var btnOnboardingGo = document.getElementById("btn-onboarding-go");
+  var btnOnboardingRunWizard = document.getElementById("btn-onboarding-run-wizard");
+  var btnOnboardingManual = document.getElementById("btn-onboarding-manual");
+  var onboardingStep = 1;
 
   var btnToggleFocus = document.getElementById("btn-toggle-focus");
   var focusPlayersWrap = document.getElementById("focus-players-wrap");
@@ -886,6 +1375,7 @@
   var tournamentTargetInput = document.getElementById("tournament-target");
   var tournamentTargetUnit = document.getElementById("tournament-target-unit");
   var tournamentRaceToInput = document.getElementById("tournament-race-to");
+  var tournamentFairRaceCheckbox = document.getElementById("tournament-fair-race-checkbox");
   var tournamentPlayerChecklist = document.getElementById("tournament-player-checklist");
   var btnTournamentStart = document.getElementById("btn-tournament-start");
   var btnTournamentAbandon = document.getElementById("btn-tournament-abandon");
@@ -903,7 +1393,12 @@
   var gameTargetUnitSelect = document.getElementById("game-target-unit-select");
   var modeRadios = document.getElementsByName("game-mode");
   var raceToWinsInput = document.getElementById("race-to-wins");
+  var fairRaceEnabledCheckbox = document.getElementById("fair-race-enabled-checkbox");
   var noStatsCheckbox = document.getElementById("no-stats-checkbox");
+  var shotCounterEnabledCheckbox = document.getElementById("shot-counter-enabled-checkbox");
+  var shotCounterBeepRow = document.getElementById("shot-counter-beep-row");
+  var shotCounterBeepInput = document.getElementById("shot-counter-beep-input");
+  var btnShotCounterToggleVisibility = document.getElementById("btn-shot-counter-toggle-visibility");
 
   var btnResetGame = document.getElementById("btn-reset-game");
   var btnUndoWin = document.getElementById("btn-undo-win");
@@ -934,19 +1429,31 @@
   var playerStandingsList = document.getElementById("player-standings-list");
 
   var dayNotesTextarea = document.getElementById("day-notes-textarea");
+  var dayReportFormatSelect = document.getElementById("day-report-format-select");
   var btnDayReportCopy = document.getElementById("btn-day-report-copy");
   var btnDayReportEmail = document.getElementById("btn-day-report-email");
   var btnDayReportSms = document.getElementById("btn-day-report-sms");
+  var btnDayReportShareBackup = document.getElementById("btn-day-report-share-backup");
+  var dayReportAttachBackupCheckbox = document.getElementById("day-report-attach-backup-checkbox");
+  var dayReportRecipientsLine = document.getElementById("day-report-recipients-line");
 
   var milestoneOverlay = document.getElementById("milestone-overlay");
   var milestoneHeadline = document.getElementById("milestone-headline");
   var milestoneDetails = document.getElementById("milestone-details");
   var btnMilestoneClose = document.getElementById("btn-milestone-close");
+  var btnMilestoneUndo = document.getElementById("btn-milestone-undo");
 
   var gamewinOverlay = document.getElementById("gamewin-overlay");
   var gamewinMessage = document.getElementById("gamewin-message");
   var gamewinDetails = document.getElementById("gamewin-details");
   var btnGamewinClose = document.getElementById("btn-gamewin-close");
+  var btnGamewinUndo = document.getElementById("btn-gamewin-undo");
+
+  var forceResetOverlay = document.getElementById("force-reset-overlay");
+  var forceResetMessage = document.getElementById("force-reset-message");
+  var btnForceResetClose = document.getElementById("btn-force-reset-close");
+
+  var btnResetTodayStats = document.getElementById("btn-reset-today-stats");
 
   // Optional "balls left on the table" marker for whichever game the
   // gamewin overlay is currently showing — unset (null) unless the +/-
@@ -974,9 +1481,37 @@
   var ratingEditOverlay = document.getElementById("rating-edit-overlay");
   var ratingEditPlayerName = document.getElementById("rating-edit-player-name");
   var ratingEditInput = document.getElementById("rating-edit-input");
+  var ratingEditEmailInput = document.getElementById("rating-edit-email-input");
+  var ratingEditPhoneInput = document.getElementById("rating-edit-phone-input");
+  var ratingEditNotifyCheckbox = document.getElementById("rating-edit-notify-checkbox");
+  var ratingEditNotifyMethodRow = document.getElementById("rating-edit-notify-method-row");
+  var ratingEditNotifyMethodRadios = document.getElementsByName("rating-edit-notify-method");
   var btnRatingEditSave = document.getElementById("btn-rating-edit-save");
   var btnRatingEditCancel = document.getElementById("btn-rating-edit-cancel");
   var btnResetAllRatings = document.getElementById("btn-reset-all-ratings");
+
+  var removedPlayersOverlay = document.getElementById("removed-players-overlay");
+  var removedPlayersChecklist = document.getElementById("removed-players-checklist");
+  var btnRemovedPlayersContinue = document.getElementById("btn-removed-players-continue");
+
+  var playerConflictOverlay = document.getElementById("player-conflict-overlay");
+  var playerConflictList = document.getElementById("player-conflict-list");
+  var btnPlayerConflictContinue = document.getElementById("btn-player-conflict-continue");
+
+  var recoverDataList = document.getElementById("recover-data-list");
+  var btnRecoverImportFile = document.getElementById("btn-recover-import-file");
+  var recoverImportFileInput = document.getElementById("recover-import-file-input");
+  var recoverDetailOverlay = document.getElementById("recover-detail-overlay");
+  var recoverDetailTitle = document.getElementById("recover-detail-title");
+  var recoverDetailExplain = document.getElementById("recover-detail-explain");
+  var recoverPlayersSection = document.getElementById("recover-players-section");
+  var recoverPlayersChecklist = document.getElementById("recover-players-checklist");
+  var recoverGamesSection = document.getElementById("recover-games-section");
+  var recoverGamesChecklist = document.getElementById("recover-games-checklist");
+  var recoverRostersSection = document.getElementById("recover-rosters-section");
+  var recoverRostersChecklist = document.getElementById("recover-rosters-checklist");
+  var btnRecoverRestore = document.getElementById("btn-recover-restore");
+  var btnRecoverCancel = document.getElementById("btn-recover-cancel");
   var btnResetSessionTournament = document.getElementById("btn-reset-session-tournament");
   var ratingEditTargetName = null;
 
@@ -1010,11 +1545,17 @@
     confirmModalInput.value = showInput ? inputValue || "" : "";
     btnConfirmModalCancel.classList.toggle("hidden", !showCancel);
     confirmModalOverlay.classList.remove("hidden");
+    // preventScroll: true - this overlay is position:fixed and already
+    // covers the whole viewport, so there's nothing for the browser's
+    // default focus-scroll-into-view behavior to usefully do here; left
+    // on, it was yanking the page underneath back to the focused
+    // element's old scroll position (see the same fix on
+    // showGameWinOverlay's balls-left input).
     if (showInput) {
-      confirmModalInput.focus();
+      confirmModalInput.focus({ preventScroll: true });
       confirmModalInput.select();
     } else {
-      btnConfirmModalOk.focus();
+      btnConfirmModalOk.focus({ preventScroll: true });
     }
   }
 
@@ -1074,6 +1615,161 @@
     }
   });
 
+  function isTypingIntoField(el) {
+    if (!el) return false;
+    var tag = el.tagName;
+    return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
+  }
+
+  function isAnyOverlayOpen() {
+    return [
+      helpOverlay,
+      wizardOverlay,
+      onboardingOverlay,
+      milestoneOverlay,
+      gamewinOverlay,
+      forceResetOverlay,
+      onHillOverlay,
+      gameChangeOverlay,
+      saveSessionOverlay,
+      ratingEditOverlay,
+      confirmModalOverlay,
+      playerConflictOverlay
+    ].some(function (el) {
+      return el && !el.classList.contains("hidden");
+    });
+  }
+
+  // Lets a keyboard (or a numeric keypad) drive scoring without touching
+  // the screen: a digit 1-9 selects (and highlights) the Nth currently-
+  // playing player's card, top to bottom - individual panels and team
+  // member cards numbered in one shared sequence; +/- then adjusts that
+  // selected player's score exactly as tapping their own +/- buttons
+  // would (same adjustScore call, so wins, team mode, and Quick Counter
+  // all just work as normal). Selection persists across repeated +/-
+  // presses until a different digit is pressed, Escape is pressed, the
+  // selected player stops playing, or the scoreboard isn't the visible
+  // screen (an overlay is open, a text field has focus, or a different
+  // page like Tournament/All Players/Player Stats is showing).
+  function handleKeypadShortcut(e) {
+    if (isTypingIntoField(document.activeElement)) return;
+    if (isAnyOverlayOpen()) return;
+    if (appRoot.classList.contains("hidden")) return;
+
+    if (e.key === "Escape") {
+      if (keypadSelectedPlayerId) {
+        keypadSelectedPlayerId = null;
+        renderScoreboard();
+      }
+      return;
+    }
+
+    if (/^[1-9]$/.test(e.key)) {
+      var targetId = keypadOrderedPlayerIds[parseInt(e.key, 10) - 1];
+      if (!targetId) return;
+      e.preventDefault();
+      keypadSelectedPlayerId = targetId;
+      renderScoreboard();
+      return;
+    }
+
+    if (e.key === "+" || e.key === "-") {
+      if (!keypadSelectedPlayerId) return;
+      var stillActive = activePlayers().some(function (p) {
+        return p.id === keypadSelectedPlayerId;
+      });
+      if (!stillActive) {
+        keypadSelectedPlayerId = null;
+        return;
+      }
+      e.preventDefault();
+      var isSingleRackGame = !quickCounterMode && state.currentGame.unit === "rack" && state.currentGame.target === 1;
+      if (e.key === "-" && isSingleRackGame) {
+        undoLastWin(keypadSelectedPlayerId);
+      } else {
+        adjustScore(keypadSelectedPlayerId, e.key === "+" ? 1 : -1);
+      }
+      return;
+    }
+
+    // Shot counter: "/" toggles pause/unpause, "*" toggles hide/show, the
+    // numeric keypad's dedicated Clear key zeroes it. Only live when
+    // there's actually a counter running (see shotCounterActive), so
+    // these keys are inert the rest of the time.
+    if (shotCounterActive() && (e.key === "/" || e.key === "*" || e.key === "Clear")) {
+      e.preventDefault();
+      if (e.key === "/") {
+        toggleShotCounterPause();
+        return;
+      } else if (e.key === "*") {
+        toggleShotCounterVisibility();
+        return;
+      } else if (e.key === "Clear") {
+        shotCounterAccumulatedMs = 0;
+        shotCounterLastBeepMs = 0;
+        shotCounterLastTickCountdown = null;
+        // While running, elapsed is entirely (now - runningSince) - has
+        // to move that reference point up to now too, or a Clear during
+        // an unbroken run (the common case: never paused) would do
+        // nothing, since accumulatedMs was already 0.
+        if (shotCounterRunningSince) shotCounterRunningSince = Date.now();
+      }
+      tickShotCounter();
+    }
+  }
+
+  document.addEventListener("keydown", handleKeypadShortcut);
+
+  // Enter/Escape for every other overlay in the app (the generic
+  // confirm/alert/prompt modal already handles its own, right above -
+  // this skips whenever that one's open so it's never double-handled).
+  // Each entry is [overlay, primaryButton, cancelButton] - Enter clicks
+  // the primary button, Escape clicks the cancel button (falling back to
+  // the primary one for overlays that only have a single dismiss
+  // button). The wizard is the one special case: it has its own text
+  // inputs (add-player, etc.) with their own Enter-submits-the-form
+  // behavior, which must win over advancing the wizard step.
+  var OVERLAY_KEY_TARGETS = [
+    [saveSessionOverlay, btnSaveSessionSave, btnSaveSessionCancel],
+    [ratingEditOverlay, btnRatingEditSave, btnRatingEditCancel],
+    [removedPlayersOverlay, btnRemovedPlayersContinue, btnRemovedPlayersContinue],
+    [recoverDetailOverlay, btnRecoverRestore, btnRecoverCancel],
+    [onboardingOverlay, btnOnboardingGo, btnOnboardingCancel],
+    [milestoneOverlay, btnMilestoneClose, btnMilestoneClose],
+    [gamewinOverlay, btnGamewinClose, btnGamewinClose],
+    [forceResetOverlay, btnForceResetClose, btnForceResetClose],
+    [onHillOverlay, btnOnHillClose, btnOnHillClose],
+    [gameChangeOverlay, btnGameChangeClose, btnGameChangeClose],
+    [helpOverlay, btnHelpClose, btnHelpClose]
+  ];
+
+  function handleOverlayEnterEscape(e) {
+    if (e.key !== "Enter" && e.key !== "Escape") return;
+    if (confirmModalOverlay && !confirmModalOverlay.classList.contains("hidden")) return;
+
+    if (!wizardOverlay.classList.contains("hidden")) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        btnWizardClose.click();
+        return;
+      }
+      if (isTypingIntoField(document.activeElement)) return;
+      e.preventDefault();
+      (btnWizardStart.classList.contains("hidden") ? btnWizardNext : btnWizardStart).click();
+      return;
+    }
+
+    for (var i = 0; i < OVERLAY_KEY_TARGETS.length; i++) {
+      var overlay = OVERLAY_KEY_TARGETS[i][0];
+      if (!overlay || overlay.classList.contains("hidden")) continue;
+      e.preventDefault();
+      (e.key === "Enter" ? OVERLAY_KEY_TARGETS[i][1] : OVERLAY_KEY_TARGETS[i][2]).click();
+      return;
+    }
+  }
+
+  document.addEventListener("keydown", handleOverlayEnterEscape);
+
   function populateGameTypeSelects() {
     [gameTypeSelect, rotationAddType, tournamentGameTypeSelect, wizardGameTypeSelect, wizardRotationAddType].forEach(function (select) {
       select.innerHTML = "";
@@ -1114,6 +1810,8 @@
     renderRotation();
     renderWizardIfOpen();
     updateDayNotesSummary();
+    updateDayReportRecipientsLine();
+    renderRecoverDataList();
   }
 
   // A rotation entry is { gameType, target, unit } — its own rule, not
@@ -1168,7 +1866,7 @@
   }
 
   // Builds one rotation-order <li> (position, game type, editable target +
-  // unit, up/down/remove controls). Shared by the main Game Order panel
+  // unit, up/down/remove controls). Shared by the main Games Rotations panel
   // and the wizard's rotation step so both stay visually and behaviorally
   // identical. The target/unit are edited in place instead of needing to
   // remove and re-add the entry to change its goal.
@@ -1450,8 +2148,8 @@
     renderAll();
   }
 
-  function buildStandingsRow(name, wins, memberNames) {
-    var target = state.raceToWinsTarget;
+  function buildStandingsRow(name, wins, memberNames, key) {
+    var target = effectiveRaceTarget(key);
     var reached = wins >= target;
     var li = document.createElement("li");
     li.className = "standings-row" + (reached ? " is-reached" : "");
@@ -1464,6 +2162,15 @@
     (memberNames || []).forEach(function (n) {
       nameEl.appendChild(buildRatingBadge(n));
       nameEl.appendChild(buildPlayerLinkIcon(n));
+      var member = state.players.filter(function (p) {
+        return p.name === n;
+      })[0];
+      if (member) {
+        var status = document.createElement("span");
+        status.className = "standings-status" + (member.playing ? " is-playing" : "");
+        status.textContent = T(member.playing ? "players.playing" : "players.standby");
+        nameEl.appendChild(status);
+      }
     });
     var countEl = document.createElement("span");
     countEl.className = "standings-count";
@@ -1484,36 +2191,47 @@
   }
 
   function renderStandings() {
-    standingsTitle.textContent = T("standings.raceToTeams", { target: state.raceToWinsTarget });
+    // The team section only makes sense in Teams mode - a player keeps
+    // their teamId after switching back to Individual (nothing clears it,
+    // since a later switch back to Teams should remember it), so without
+    // this gate teamMembersLive() would keep surfacing them under "Team
+    // A"/"Team B" even while actually playing individually.
+    var isTeamsMode = state.currentGame.mode === "teams";
+    standingsTitle.classList.toggle("hidden", !isTeamsMode);
+    teamStandingsList.classList.toggle("hidden", !isTeamsMode);
 
-    // Teams are tracked per slot ("A"/"B"), not per exact roster combo, so
-    // this always shows exactly the two live team slots - a sub joining or
-    // leaving mid-race just relabels the row, it doesn't spawn a new one.
-    var teamRows = ["A", "B"].filter(function (teamId) {
-      return (state.teamWins[teamId] || 0) > 0 || teamMembersLive(teamId).length > 0;
-    });
+    if (isTeamsMode) {
+      standingsTitle.textContent = T("standings.raceToTeams", { target: state.raceToWinsTarget });
 
-    teamStandingsList.innerHTML = "";
-    if (teamRows.length === 0) {
-      var teamHint = document.createElement("li");
-      teamHint.className = "empty-hint";
-      teamHint.textContent = T("standings.noTeamPairings");
-      teamStandingsList.appendChild(teamHint);
-    } else {
-      teamRows
-        .map(function (teamId) {
-          var namesList = teamMembersLive(teamId).map(function (p) {
-            return p.name;
+      // Teams are tracked per slot ("A"/"B"), not per exact roster combo, so
+      // this always shows exactly the two live team slots - a sub joining or
+      // leaving mid-race just relabels the row, it doesn't spawn a new one.
+      var teamRows = ["A", "B"].filter(function (teamId) {
+        return (state.teamWins[teamId] || 0) > 0 || teamMembersLive(teamId).length > 0;
+      });
+
+      teamStandingsList.innerHTML = "";
+      if (teamRows.length === 0) {
+        var teamHint = document.createElement("li");
+        teamHint.className = "empty-hint";
+        teamHint.textContent = T("standings.noTeamPairings");
+        teamStandingsList.appendChild(teamHint);
+      } else {
+        teamRows
+          .map(function (teamId) {
+            var namesList = teamMembersLive(teamId).map(function (p) {
+              return p.name;
+            });
+            var names = namesList.length ? namesList.join(" & ") : T(teamId === "A" ? "gameSetup.teamA" : "gameSetup.teamB");
+            return { teamId: teamId, names: names, namesList: namesList, wins: state.teamWins[teamId] || 0 };
+          })
+          .sort(function (a, b) {
+            return b.wins - a.wins || a.teamId.localeCompare(b.teamId);
+          })
+          .forEach(function (row) {
+            teamStandingsList.appendChild(buildStandingsRow(row.names, row.wins, row.namesList, row.teamId));
           });
-          var names = namesList.length ? namesList.join(" & ") : T(teamId === "A" ? "gameSetup.teamA" : "gameSetup.teamB");
-          return { teamId: teamId, names: names, namesList: namesList, wins: state.teamWins[teamId] || 0 };
-        })
-        .sort(function (a, b) {
-          return b.wins - a.wins || a.teamId.localeCompare(b.teamId);
-        })
-        .forEach(function (row) {
-          teamStandingsList.appendChild(buildStandingsRow(row.names, row.wins, row.namesList));
-        });
+      }
     }
 
     playerStandingsList.innerHTML = "";
@@ -1529,7 +2247,7 @@
           return (state.playerWins[b.id] || 0) - (state.playerWins[a.id] || 0) || a.name.localeCompare(b.name);
         })
         .forEach(function (p) {
-          playerStandingsList.appendChild(buildStandingsRow(p.name, state.playerWins[p.id] || 0, [p.name]));
+          playerStandingsList.appendChild(buildStandingsRow(p.name, state.playerWins[p.id] || 0, [p.name], p.id));
         });
     }
 
@@ -1547,7 +2265,7 @@
     return T(leaderWins === 1 ? "standings.leaderSummaryOne" : "standings.leaderSummaryMany", {
       name: leader.name,
       wins: leaderWins,
-      target: state.raceToWinsTarget
+      target: effectiveRaceTarget(leader.id)
     });
   }
 
@@ -1627,6 +2345,7 @@
       setPanelSummary("players-panel", computePlayersSummary());
       renderPlayingToggleListInto(focusPlayersList, T("players.noPlayersYetPanel"));
       focusPlayersSummary.textContent = T("players.heading");
+      renderQueueList();
       return;
     }
     var showTeamToggle = state.currentGame.mode === "teams";
@@ -1705,6 +2424,7 @@
       return p.playing;
     }).length;
     focusPlayersSummary.textContent = T("players.playingOfTotal", { playing: playingCount, total: state.players.length });
+    renderQueueList();
   }
 
   function buildFlagSpan() {
@@ -1725,7 +2445,24 @@
     return el;
   }
 
-  function buildBallControls(player, disabled) {
+  // Only worth showing once fair race is on, since that's the only
+  // time this side's own target can actually differ from the plain
+  // "Race-to milestone" setting everyone already sees summarized
+  // elsewhere.
+  function buildFairRaceNote(target) {
+    var el = document.createElement("div");
+    el.className = "fair-race-note";
+    el.textContent = T("scoreboard.fairRaceTarget", { target: target });
+    return el;
+  }
+
+  // undoOnMinus: single-rack games (see isSingleRackGame) show the
+  // session win count as the "running score" instead of an in-progress
+  // ball count, so there's nothing for "-" to decrement there - it undoes
+  // this player's last win instead (only enabled when they're actually
+  // part of the most recent recorded game, so it can't fire against the
+  // wrong player's win by mistake).
+  function buildBallControls(player, disabled, undoOnMinus) {
     var controls = document.createElement("div");
     controls.className = "ball-controls";
 
@@ -1733,12 +2470,22 @@
     minusBtn.type = "button";
     minusBtn.className = "btn-ball minus";
     minusBtn.textContent = "−";
-    minusBtn.setAttribute("aria-label", "Remove point for " + player.name);
-    var minusAllowNegative = quickCounterMode || state.currentGame.unit !== "rack";
-    minusBtn.disabled = disabled || (!minusAllowNegative && (player.balls || 0) <= 0);
-    minusBtn.addEventListener("click", function () {
-      adjustScore(player.id, -1);
-    });
+    if (undoOnMinus) {
+      minusBtn.setAttribute("aria-label", "Undo last win for " + player.name);
+      var lastGame = state.gameHistory[0];
+      var canUndo = !!(lastGame && typeof lastGame !== "string" && lastGame.winnerIds && lastGame.winnerIds.indexOf(player.id) !== -1);
+      minusBtn.disabled = disabled || !canUndo;
+      minusBtn.addEventListener("click", function () {
+        undoLastWin(player.id);
+      });
+    } else {
+      minusBtn.setAttribute("aria-label", "Remove point for " + player.name);
+      var minusAllowNegative = quickCounterMode || state.currentGame.unit !== "rack";
+      minusBtn.disabled = disabled || (!minusAllowNegative && (player.balls || 0) <= 0);
+      minusBtn.addEventListener("click", function () {
+        adjustScore(player.id, -1);
+      });
+    }
 
     var plusBtn = document.createElement("button");
     plusBtn.type = "button";
@@ -1823,6 +2570,7 @@
     panel.appendChild(value);
 
     panel.appendChild(buildBallControls(player, false));
+    markAsKeypadTarget(panel, player);
 
     return panel;
   }
@@ -1963,7 +2711,7 @@
     var isSingleRackGame = state.currentGame.unit === "rack" && state.currentGame.target === 1;
 
     if (!isSingleRackGame) {
-      panel.appendChild(buildStatMini(T("scoreboard.tourneyWin"), wins, wins >= state.raceToWinsTarget, "stat-mini-tourney"));
+      panel.appendChild(buildStatMini(T("scoreboard.tourneyWin"), wins, wins >= effectiveRaceTarget(player.id), "stat-mini-tourney"));
     }
 
     var block = document.createElement("div");
@@ -1975,7 +2723,7 @@
     if (isSingleRackGame) {
       label.textContent = T("scoreboard.tourneyWin");
       value.textContent = wins;
-      if (wins >= state.raceToWinsTarget) value.appendChild(buildFlagSpan());
+      if (wins >= effectiveRaceTarget(player.id)) value.appendChild(buildFlagSpan());
     } else {
       label.textContent = T("scoreboard.gameTargetLabel", { game: GAME_TYPES[state.currentGame.gameType].label, target: state.currentGame.target });
       value.textContent = player.balls || 0;
@@ -1984,12 +2732,15 @@
     block.appendChild(value);
     panel.appendChild(block);
 
-    panel.appendChild(buildBallControls(player, false));
+    if (state.fairRaceEnabled) panel.appendChild(buildFairRaceNote(effectiveRaceTarget(player.id)));
+
+    panel.appendChild(buildBallControls(player, false, isSingleRackGame));
+    markAsKeypadTarget(panel, player);
 
     return panel;
   }
 
-  function buildMemberCard(player) {
+  function buildMemberCard(player, disabled, undoOnMinus) {
     var card = document.createElement("div");
     card.className = "member-card";
 
@@ -2003,19 +2754,24 @@
     // tracks how many times THIS member specifically potted the winning
     // ball for the team (see the mvp selection in creditWin).
     var mvpWins = state.teamMvpWins[player.id] || 0;
-    card.appendChild(buildStatMini(T("scoreboard.tourneyWin"), mvpWins, mvpWins >= state.raceToWinsTarget, "stat-mini-tourney"));
+    card.appendChild(buildStatMini(T("scoreboard.tourneyWin"), mvpWins, mvpWins >= effectiveRaceTarget(player.teamId), "stat-mini-tourney"));
 
     var value = document.createElement("div");
     value.className = "stat-value small";
     value.textContent = player.balls || 0;
     card.appendChild(value);
 
-    card.appendChild(buildBallControls(player, false));
+    card.appendChild(buildBallControls(player, disabled, undoOnMinus));
+    markAsKeypadTarget(card, player);
 
     return card;
   }
 
-  function buildTeamPanel(teamId, members) {
+  // opponentEmpty: the other team ("A"/"B") currently has nobody on it -
+  // a team can't play (or score) alone, so this shows a warning instead of
+  // the usual win-progress stat and disables every member's +/- (the real
+  // enforcement is adjustScore's own check; this is just the matching UI).
+  function buildTeamPanel(teamId, members, opponentEmpty) {
     var panel = document.createElement("div");
     panel.className = "team-panel";
 
@@ -2023,6 +2779,13 @@
     name.className = "team-name";
     name.textContent = teamLabelLive(teamId);
     panel.appendChild(name);
+
+    if (opponentEmpty) {
+      var warning = document.createElement("div");
+      warning.className = "team-needs-opponent-warning";
+      warning.textContent = T("scoreboard.teamNeedsOpponent");
+      panel.appendChild(warning);
+    }
 
     var wins = state.teamWins[teamId] || 0;
 
@@ -2034,7 +2797,7 @@
     var isSingleRackGame = state.currentGame.unit === "rack" && state.currentGame.target === 1;
 
     if (!isSingleRackGame) {
-      panel.appendChild(buildStatMini(T("scoreboard.pairedSessionWin"), wins, wins >= state.raceToWinsTarget));
+      panel.appendChild(buildStatMini(T("scoreboard.pairedSessionWin"), wins, wins >= effectiveRaceTarget(teamId)));
     }
 
     var block = document.createElement("div");
@@ -2046,7 +2809,7 @@
     if (isSingleRackGame) {
       label.textContent = T("scoreboard.pairedSessionWinScore");
       value.textContent = wins;
-      if (wins >= state.raceToWinsTarget) value.appendChild(buildFlagSpan());
+      if (wins >= effectiveRaceTarget(teamId)) value.appendChild(buildFlagSpan());
     } else {
       label.textContent = T("scoreboard.gameTargetLabel", { game: GAME_TYPES[state.currentGame.gameType].label, target: state.currentGame.target });
       value.textContent = sumTeamBalls(teamId);
@@ -2055,10 +2818,12 @@
     block.appendChild(value);
     panel.appendChild(block);
 
+    if (state.fairRaceEnabled) panel.appendChild(buildFairRaceNote(effectiveRaceTarget(teamId)));
+
     var memberWrap = document.createElement("div");
     memberWrap.className = "team-members";
     members.forEach(function (p) {
-      memberWrap.appendChild(buildMemberCard(p));
+      memberWrap.appendChild(buildMemberCard(p, opponentEmpty, isSingleRackGame));
     });
     panel.appendChild(memberWrap);
 
@@ -2101,6 +2866,113 @@
     el.textContent = T("scoreboard.durationLive", { time: formatDuration(Date.now() - startedAt) });
   }
 
+  // Shot counter (see handleKeypadShortcut and the shotCounter* module
+  // vars). Works for every unit (rack/balls/points) as long as the Game
+  // Setup checkbox is on - Quick Counter has no notion of a game unit at
+  // all, so it's excluded outright.
+  function shotCounterActive() {
+    return !quickCounterMode && !!state.currentGame.shotCounterEnabled;
+  }
+
+  function shotCounterElapsedMs() {
+    return shotCounterAccumulatedMs + (shotCounterRunningSince ? Date.now() - shotCounterRunningSince : 0);
+  }
+
+  // Called when the Game Setup checkbox is checked (or a "balls" game
+  // with it already checked is freshly set up), on boot to restore an
+  // already-enabled counter, and on every new game/rack (see
+  // resetGameBalls) - always resets to a clean, paused 0:00 rather than
+  // auto-running: the player starts it themselves (tap the widget or
+  // "/") once they're actually at the table and ready to shoot, instead
+  // of the clock silently running during rack-up/setup time. Doesn't
+  // touch shotCounterHidden: that's persisted separately
+  // (state.currentGame.shotCounterHidden) so a hidden counter reloads
+  // still hidden instead of popping back up on every page load.
+  function startShotCounter() {
+    shotCounterAccumulatedMs = 0;
+    shotCounterLastBeepMs = 0;
+    shotCounterLastTickCountdown = null;
+    shotCounterRunningSince = null;
+    tickShotCounter();
+  }
+
+  // Called when the checkbox is unchecked - progress isn't kept (there's
+  // nowhere meaningful to keep it once the feature's off), so re-enabling
+  // later is the same as starting fresh via startShotCounter.
+  function stopShotCounter() {
+    shotCounterAccumulatedMs = 0;
+    shotCounterLastBeepMs = 0;
+    shotCounterLastTickCountdown = null;
+    shotCounterRunningSince = null;
+    tickShotCounter();
+  }
+
+  // Flips pause/unpause - shared by the "/" keypad shortcut and a tap on
+  // the widget itself (see its click listener near boot).
+  function toggleShotCounterPause() {
+    if (!shotCounterActive()) return;
+    if (shotCounterRunningSince) {
+      shotCounterAccumulatedMs += Date.now() - shotCounterRunningSince;
+      shotCounterRunningSince = null;
+    } else {
+      shotCounterRunningSince = Date.now();
+    }
+    tickShotCounter();
+  }
+
+  // Flips show/hide - shared by the "*" keypad shortcut and the Game
+  // Setup panel's Show/Hide Timer button. Persisted so the widget stays
+  // hidden across a reload instead of popping back up (see startShotCounter).
+  function toggleShotCounterVisibility() {
+    if (!shotCounterActive()) return;
+    shotCounterHidden = !shotCounterHidden;
+    state.currentGame.shotCounterHidden = shotCounterHidden;
+    saveState();
+    tickShotCounter();
+  }
+
+  // Runs every second (see the setInterval near boot) and also called
+  // directly after every keypad action, so the widget and beep schedule
+  // react immediately instead of waiting up to a second.
+  function tickShotCounter() {
+    var widget = document.getElementById("shot-counter-widget");
+    if (!widget) return;
+    var active = shotCounterActive();
+    var overlayOrAppHidden = isAnyOverlayOpen() || appRoot.classList.contains("hidden");
+    var visible = active && !shotCounterHidden && !overlayOrAppHidden;
+    widget.classList.toggle("hidden", !visible);
+    // Stays visible whenever the counter is active at all, regardless
+    // of shotCounterHidden - the whole point is a way back once the
+    // widget itself is hidden, so it can't be gated by that same flag.
+    var toggleBtn = document.getElementById("shot-counter-visibility-toggle");
+    if (toggleBtn) toggleBtn.classList.toggle("hidden", !(active && !overlayOrAppHidden));
+    if (!active) return;
+
+    var elapsed = shotCounterElapsedMs();
+    var timeEl = document.getElementById("shot-counter-time");
+    if (timeEl) timeEl.textContent = formatDuration(elapsed);
+
+    // Beeps (and the countdown ticks leading up to one) while running
+    // regardless of hidden/visible (explicitly requested), but pause
+    // along with the counter - runningSince is null while paused, so
+    // this whole block is skipped then.
+    if (shotCounterRunningSince) {
+      var beepMs = Math.max(5, state.currentGame.shotCounterBeepSec || 30) * 1000;
+      var remainingMs = beepMs - (elapsed - shotCounterLastBeepMs);
+      if (remainingMs <= 0) {
+        shotCounterLastBeepMs = elapsed;
+        shotCounterLastTickCountdown = null;
+        playShotCounterBeep();
+      } else if (remainingMs <= 5000) {
+        var countdown = Math.ceil(remainingMs / 1000);
+        if (countdown !== shotCounterLastTickCountdown) {
+          shotCounterLastTickCountdown = countdown;
+          playShotCounterTick();
+        }
+      }
+    }
+  }
+
   function renderScoreboard() {
     var active = activePlayers();
 
@@ -2115,6 +2987,7 @@
         scoreboard.appendChild(buildQuickCounterPanel(p));
       });
       scoreboard.appendChild(buildQuickCounterAddRow());
+      refreshKeypadNumbering();
       return;
     }
 
@@ -2127,15 +3000,20 @@
       hint.className = "empty-hint";
       hint.textContent = T("scoreboard.markPlayingHint");
       scoreboard.appendChild(hint);
+      refreshKeypadNumbering();
       return;
     }
 
     if (state.currentGame.mode === "teams") {
       scoreboard.className = "scoreboard scoreboard-teams";
-      ["A", "B"].forEach(function (teamId) {
-        var members = teamMembersLive(teamId);
-        if (!members.length) return;
-        scoreboard.appendChild(buildTeamPanel(teamId, members));
+      var teamAMembers = teamMembersLive("A");
+      var teamBMembers = teamMembersLive("B");
+      [
+        { id: "A", members: teamAMembers, opponentEmpty: teamBMembers.length === 0 },
+        { id: "B", members: teamBMembers, opponentEmpty: teamAMembers.length === 0 }
+      ].forEach(function (team) {
+        if (!team.members.length) return;
+        scoreboard.appendChild(buildTeamPanel(team.id, team.members, team.opponentEmpty));
       });
     } else {
       scoreboard.className = "scoreboard";
@@ -2143,6 +3021,7 @@
         scoreboard.appendChild(buildIndividualPanel(p));
       });
     }
+    refreshKeypadNumbering();
   }
 
   function formatTimestamp(ts, includeDate) {
@@ -2220,6 +3099,13 @@
       if (entry.isTeam && entry.mvpName) {
         li.appendChild(document.createTextNode(" · " + T("history.pottedIt", { name: entry.mvpName })));
         li.appendChild(buildRatingBadge(entry.mvpName));
+      }
+      if (entry.skunk) {
+        li.appendChild(document.createTextNode(" · "));
+        var skunkSpan = document.createElement("span");
+        skunkSpan.className = "history-skunk";
+        skunkSpan.textContent = T("history.skunkWin");
+        li.appendChild(skunkSpan);
       }
       if (entry.wonRace) {
         var raceBanner = document.createElement("div");
@@ -2323,6 +3209,7 @@
     state.players.push(player);
     saveState();
     recordPlayerAddedIfNew(name);
+    clearPlayerRemoved(name);
     if (typeof startingRating === "number" && !isNaN(startingRating) && !findRatingKey(name)) {
       var entry = ensureRatingEntry(name);
       entry.rating = startingRating;
@@ -2336,24 +3223,55 @@
   // Players page, so there's nothing here worth confirming. Doesn't touch
   // the saved player lists (see saveRosterSnapshotIfNew) - that only
   // happens when a new game/session actually starts, not on every roster
-  // edit.
+  // edit. Does record the removal (see markPlayerRemoved) so a later
+  // import of an old backup that still lists this name won't silently
+  // re-add them.
   function removePlayer(id) {
+    var player = getPlayer(id);
     state.players = state.players.filter(function (p) {
       return p.id !== id;
     });
     delete state.playerWins[id];
     delete state.teamMvpWins[id];
     saveState();
+    if (player) markPlayerRemoved(player.name);
     validateNewPlayerNameInput();
     renderAll();
   }
 
+  // Queue mode (see effectiveQueue) caps individual play at exactly 2
+  // seated whenever anyone's waiting: benching an active player pulls
+  // the queue's front player in the same way a loss would (see
+  // creditWin), and seating a standby player is only allowed when a
+  // seat is actually open - there's no well-defined "who do they
+  // replace" otherwise.
   function togglePlaying(id) {
     var p = getPlayer(id);
     if (!p) return;
-    p.playing = !p.playing;
-    p.balls = 0;
-    if (p.playing && !p.teamId) p.teamId = "A";
+    var queueActive = !quickCounterMode && state.currentGame.mode === "individual" && state.currentGame.queueEnabled;
+
+    if (p.playing) {
+      p.playing = false;
+      p.balls = 0;
+      if (queueActive) {
+        var queue = effectiveQueue();
+        if (queue.length > 1) {
+          var front = queue.shift();
+          front.playing = true;
+          front.balls = 0;
+        }
+        saveQueue(queue);
+      }
+    } else {
+      if (queueActive && activePlayers().length >= 2) {
+        showToast(T("toast.queueTableFull"));
+        return;
+      }
+      p.playing = true;
+      p.balls = 0;
+      if (!p.teamId) p.teamId = "A";
+      if (queueActive) saveQueue(effectiveQueue());
+    }
     saveState();
     renderAll();
   }
@@ -2389,7 +3307,7 @@
     var milestoneNames = null;
     var milestoneCount = 0;
     var onHillNames = null;
-    var target = state.raceToWinsTarget;
+    var target = effectiveRaceTarget(key);
     var mvpId = null;
     var mvpName = null;
     if (isTeam) {
@@ -2450,7 +3368,81 @@
       } else if (target > 1 && newPlayerWins % target === target - 1) {
         onHillNames = getPlayer(key).name;
       }
+
+      // Captured now, before the queue-mode block below can zero the
+      // loser's balls (and before resetGameBalls() does the same for
+      // everyone a few lines down) - the last moment this game's real
+      // opponent score still exists. Only meaningful for a single
+      // opponent; a free-for-all win has no one "the" opponent to
+      // check, so skunk detection is skipped for those (see skunk
+      // determination below).
+      var skunkOpponentBalls = null;
+      var winnerBallsAtWin = getPlayer(key).balls || 0;
+      if (opponentNames.length === 1) {
+        var skunkOpponent = activePlayers().filter(function (p) {
+          return p.id !== key;
+        })[0];
+        skunkOpponentBalls = skunkOpponent ? (skunkOpponent.balls || 0) : null;
+      }
+
+      // "Winner stays" queue mode: send the loser to the back of the
+      // line and bring the next person in - but only if someone's
+      // actually waiting (computed before benching the loser, so an
+      // empty queue leaves them seated, degrading gracefully to plain
+      // 1v1 when there are only 2 individual players total). Queue mode
+      // always keeps exactly 2 seated whenever anyone's waiting (see
+      // togglePlaying and the enable-checkbox logic), so opponentNames
+      // above is already just the one real opponent - no change needed
+      // to the win-crediting/rating math itself.
+      if (state.currentGame.mode === "individual" && state.currentGame.queueEnabled) {
+        var loser = activePlayers().filter(function (p) {
+          return p.id !== key;
+        })[0];
+        if (loser) {
+          var waitingQueue = effectiveQueue();
+          if (waitingQueue.length > 0) {
+            loser.playing = false;
+            loser.balls = 0;
+            var nextUp = waitingQueue.shift();
+            nextUp.playing = true;
+            nextUp.balls = 0;
+            waitingQueue.push(loser);
+            saveQueue(waitingQueue);
+          }
+        }
+      }
     }
+
+    // Skunk (opponent scored/pocketed zero): only auto-derivable for
+    // "points"/"balls" units, where .balls is a real live-tracked
+    // score right up to this point - "rack" games (the 8-ball family)
+    // have no per-ball tracking within a rack at all (see
+    // adjustScore), so those stay false here and get their real value
+    // later from the "Balls left on the table" entry instead (see
+    // persistBallsLeftLive).
+    var skunk = false;
+    // One Pocket plays a standard 15-ball rack - whatever wasn't
+    // pocketed by either side is what's left on the table, so this
+    // prefills the win popup's manual field instead of leaving it
+    // "Not Set" every time (still editable/overridable there). Same
+    // single-opponent scoping as skunk above - no well-defined "the
+    // other side" to subtract for a free-for-all win.
+    var ballsLeftPrefill = null;
+    if (state.currentGame.unit !== "rack") {
+      if (isTeam) {
+        var opponentTeamBalls = sumTeamBalls(otherTeamId);
+        skunk = opponentTeamBalls === 0;
+        if (state.currentGame.gameType === "onepocket") {
+          ballsLeftPrefill = Math.max(0, 15 - sumTeamBalls(key) - opponentTeamBalls);
+        }
+      } else if (skunkOpponentBalls !== null) {
+        skunk = skunkOpponentBalls === 0;
+        if (state.currentGame.gameType === "onepocket") {
+          ballsLeftPrefill = Math.max(0, 15 - winnerBallsAtWin - skunkOpponentBalls);
+        }
+      }
+    }
+
     var startedAt = state.currentGame.startedAt ? new Date(state.currentGame.startedAt).getTime() : null;
     var durationMs = startedAt ? Math.max(0, Date.now() - startedAt) : null;
     var ts = new Date().toISOString();
@@ -2471,8 +3463,9 @@
       summary: summary,
       wonRace: !!milestoneNames,
       raceTarget: target,
+      skunk: skunk,
       raceCount: milestoneCount,
-      ballsLeftOnTable: null
+      ballsLeftOnTable: ballsLeftPrefill
     });
     if (state.gameHistory.length > 200) state.gameHistory.length = 200;
     if (!noStatsMode) {
@@ -2507,7 +3500,7 @@
       if (milestoneNames) {
         celebrateTournamentWin(milestoneNames, milestoneCount);
       } else if (onHillNames) {
-        announceOnHill(onHillNames);
+        announceOnHill(onHillNames, target);
       } else if (gameTypeChanged) {
         announceGameChange(
           GAME_TYPES[state.currentGame.gameType].label + " (" + state.currentGame.target + " " + unitLabel(state.currentGame.unit) + ")"
@@ -2517,38 +3510,131 @@
     return summary;
   }
 
-  function undoLastWin() {
+  // Reverses every rating-history entry stamped with this exact game's ts,
+  // for everyone whose rating it touched (winner(s) and opponent(s)) - the
+  // exact inverse of bumpPlayerRating. A free-for-all win against N
+  // opponents stamps the winner with N separate pairwise entries at the
+  // same ts (one per applyPairwiseRatingResult call in recordWin), so this
+  // pops all of them for that player, not just one.
+  function retrogradeRatingsForGame(entry) {
+    var names = (entry.winnerNames || []).concat(entry.opponentNames || []);
+    var seen = {};
+    var changed = false;
+    names.forEach(function (name) {
+      if (seen[name]) return;
+      seen[name] = true;
+      var key = findRatingKey(name);
+      if (!key) return;
+      var ratingEntry = PLAYER_RATINGS[key];
+      var history = ratingEntry.history || [];
+      while (history.length && history[history.length - 1].ts === entry.ts) {
+        var popped = history.pop();
+        ratingEntry.rating -= popped.delta;
+        if (popped.fromGame) ratingEntry.gamesPlayed = Math.max(0, ratingEntry.gamesPlayed - 1);
+        changed = true;
+      }
+    });
+    if (changed) saveRatingsToStorage(PLAYER_RATINGS);
+  }
+
+  // Undoes every rating change (from a game or a hand-entered override)
+  // stamped at or after this instant, for every rated player - used by
+  // "reset today's stats" so a day restarted from scratch also restarts
+  // today's rating movement, not just the win/loss counts.
+  // Returns name -> popped history entries (newest first), so callers
+  // that need a recovery snapshot (see resetTodayStats) know exactly what
+  // was reverted, instead of having to diff PLAYER_RATINGS before/after.
+  function revertRatingsChangedSince(startMs) {
+    var changed = false;
+    var popped = {};
+    Object.keys(PLAYER_RATINGS).forEach(function (key) {
+      var entry = PLAYER_RATINGS[key];
+      var history = entry.history || [];
+      while (history.length) {
+        var last = history[history.length - 1];
+        var t = last.ts ? new Date(last.ts).getTime() : NaN;
+        if (isNaN(t) || t < startMs) break;
+        history.pop();
+        entry.rating -= last.delta;
+        if (last.fromGame) entry.gamesPlayed = Math.max(0, entry.gamesPlayed - 1);
+        changed = true;
+        if (!popped[key]) popped[key] = [];
+        popped[key].push(last);
+      }
+    });
+    if (changed) saveRatingsToStorage(PLAYER_RATINGS);
+    return popped;
+  }
+
+  // Reverses the win-count, rating, rotation-position and history
+  // bookkeeping for state.gameHistory[0] and removes it - the shared core
+  // behind every "undo the last game" entry point (the standalone button,
+  // the win popup's, and the tournament popup's) so ratings and
+  // gamesPlayedCount stay correct no matter which one was clicked. No
+  // confirm dialog or UI feedback of its own - callers own that. Returns
+  // the undone entry, or null if there was nothing to undo.
+  function retrogradeLastGame() {
     var entry = state.gameHistory[0];
-    if (!entry || typeof entry === "string" || !entry.winnerIds) {
+    if (!entry || typeof entry === "string" || !entry.winnerIds) return null;
+    entry.winnerIds.forEach(function (id) {
+      state.playerWins[id] = Math.max(0, (state.playerWins[id] || 0) - 1);
+    });
+    if (entry.isTeam && entry.teamId) {
+      state.teamWins[entry.teamId] = Math.max(0, (state.teamWins[entry.teamId] || 0) - 1);
+      if (entry.mvpId) {
+        state.teamMvpWins[entry.mvpId] = Math.max(0, (state.teamMvpWins[entry.mvpId] || 0) - 1);
+      }
+    }
+    retrogradeRatingsForGame(entry);
+    state.gameHistory.shift();
+    state.gamesPlayedCount = Math.max(0, state.gamesPlayedCount - 1);
+    applyRotationIfDue();
+    return entry;
+  }
+
+  // playerId, when given, restricts this to "undo the last game, but only
+  // if this specific player was part of it" - used by the per-player "-"
+  // button in single-rack games (see buildBallControls), where there's no
+  // in-progress ball count to decrement and "-" means undo their win
+  // instead. Omitted entirely, this is the standalone "Undo Win" button's
+  // unconditional behavior.
+  function undoLastWin(playerId) {
+    var entry = state.gameHistory[0];
+    if (!entry || typeof entry === "string" || !entry.winnerIds || (playerId && entry.winnerIds.indexOf(playerId) === -1)) {
       showToast(T("toast.noWinToUndo"));
       return;
     }
     confirmModal(T("confirm.undoWin", { summary: entry.summary }), function () {
-      entry.winnerIds.forEach(function (id) {
-        state.playerWins[id] = Math.max(0, (state.playerWins[id] || 0) - 1);
-      });
-      if (entry.isTeam && entry.teamId) {
-        state.teamWins[entry.teamId] = Math.max(0, (state.teamWins[entry.teamId] || 0) - 1);
-        if (entry.mvpId) {
-          state.teamMvpWins[entry.mvpId] = Math.max(0, (state.teamMvpWins[entry.mvpId] || 0) - 1);
-        }
-      }
-      state.gameHistory.shift();
-      state.gamesPlayedCount = Math.max(0, state.gamesPlayedCount - 1);
-      applyRotationIfDue();
+      var undone = retrogradeLastGame();
       saveState();
-      showToast(T("toast.undidGame", { summary: entry.summary }));
+      showToast(T("toast.undidGame", { summary: undone.summary }));
       renderAll();
     });
   }
 
-  function announceOnHill(names) {
-    onHillMessage.textContent = names + " is ON THE HILL — one more win takes the race to " + state.raceToWinsTarget + "! Better step up. 👀";
+  // Auto-dismisses on its own after 5s if nobody closes it by hand first -
+  // cleared and restarted on every fresh announcement, and cleared on any
+  // manual close (the button, the backdrop, Enter/Escape, or another
+  // overlay force-closing it) so it never fires late against whatever's
+  // showing by then.
+  var onHillAutoCloseTimer = null;
+
+  function announceOnHill(names, target) {
+    onHillMessage.textContent = names + " is ON THE HILL — one more win takes the race to " + target + "! Better step up. 👀";
     onHillOverlay.classList.remove("hidden");
     playOnHillSound();
+    if (onHillAutoCloseTimer) clearTimeout(onHillAutoCloseTimer);
+    onHillAutoCloseTimer = setTimeout(function () {
+      onHillAutoCloseTimer = null;
+      closeOnHill();
+    }, 5000);
   }
 
   function closeOnHill() {
+    if (onHillAutoCloseTimer) {
+      clearTimeout(onHillAutoCloseTimer);
+      onHillAutoCloseTimer = null;
+    }
     onHillOverlay.classList.add("hidden");
   }
 
@@ -2564,17 +3650,58 @@
 
   // Reflects the current counter value into the dialog and disables "-"
   // once it can't go any lower than unset.
-  function renderBallsLeftValue(valueEl, minusBtn) {
-    valueEl.textContent = gamewinBallsLeftValue === null ? T("ballsLeft.unset") : String(gamewinBallsLeftValue);
+  function renderBallsLeftValue(valueInput, minusBtn) {
+    valueInput.value = gamewinBallsLeftValue === null ? "" : String(gamewinBallsLeftValue);
     minusBtn.disabled = gamewinBallsLeftValue === null;
   }
 
-  // Optional +/- counter for how many balls were left on the table when
-  // this game ended. Starts unset (null) - "+" from unset goes to 0, "-"
-  // from 0 goes back to unset, so leaving it alone never records a value.
-  // Lives in the per-game win overlay (showGameWinOverlay), not the
-  // tournament/milestone one - it's a property of the specific game just
-  // played, not the race as a whole.
+  // Writes the current balls-left value straight onto the game it belongs
+  // to and refreshes any player-stats view already open behind the
+  // overlay, the instant it changes - rather than waiting for the dialog
+  // to close (closeGameWinOverlay's own patch-back stays as a harmless,
+  // redundant safety net for it).
+  function persistBallsLeftLive() {
+    if (state.gameHistory[0] && state.gameHistory[0].ts === gamewinPendingTs) {
+      state.gameHistory[0].ballsLeftOnTable = gamewinBallsLeftValue;
+      // Rack-mode skunk only has one source of truth: this field. 7
+      // left means the loser potted none of their 7 object balls.
+      if (SKUNK_RACK_GAME_TYPES.indexOf(state.gameHistory[0].gameType) !== -1) {
+        state.gameHistory[0].skunk = gamewinBallsLeftValue === 7;
+      }
+      saveState();
+      updateGamewinSkunkIndicator();
+      if (currentStatsPlayerName) {
+        currentStatsSessions = getPlayerSessions(currentStatsPlayerName);
+        renderPlayerHistoryList(currentStatsSessions);
+      }
+    }
+  }
+
+  // Read-only badge, not an input - nothing to toggle by hand. Shown
+  // immediately for the auto-detected points/balls-unit case (see
+  // creditWin), and appears live the moment the balls-left stepper
+  // below hits 7 for a rack-mode game (see persistBallsLeftLive).
+  function buildSkunkIndicator() {
+    var el = document.createElement("div");
+    el.className = "gamewin-skunk-indicator hidden";
+    el.textContent = T("skunk.indicator");
+    return el;
+  }
+
+  function updateGamewinSkunkIndicator() {
+    var el = gamewinDetails.querySelector(".gamewin-skunk-indicator");
+    if (!el) return;
+    var isSkunk = !!(state.gameHistory[0] && state.gameHistory[0].ts === gamewinPendingTs && state.gameHistory[0].skunk);
+    el.classList.toggle("hidden", !isSkunk);
+  }
+
+  // Optional +/- counter (also directly typeable on a real keyboard) for
+  // how many balls were left on the table when this game ended. Starts
+  // unset (null) - "+" from unset goes to 0, "-" from 0 goes back to
+  // unset, and clearing the field by hand does the same, so leaving it
+  // alone never records a value. Lives in the per-game win overlay
+  // (showGameWinOverlay), not the tournament/milestone one - it's a
+  // property of the specific game just played, not the race as a whole.
   function buildBallsLeftRow() {
     var row = document.createElement("div");
     row.className = "player-stats-row balls-left-row";
@@ -2589,8 +3716,15 @@
     minusBtn.className = "balls-left-btn minus";
     minusBtn.textContent = "−";
     minusBtn.setAttribute("aria-label", T("ballsLeft.decrease"));
-    var valueEl = document.createElement("span");
-    valueEl.className = "balls-left-value";
+
+    var valueInput = document.createElement("input");
+    valueInput.type = "number";
+    valueInput.inputMode = "numeric";
+    valueInput.min = "0";
+    valueInput.placeholder = T("ballsLeft.unset");
+    valueInput.className = "balls-left-value balls-left-input";
+    valueInput.setAttribute("aria-label", T("ballsLeft.label"));
+
     var plusBtn = document.createElement("button");
     plusBtn.type = "button";
     plusBtn.className = "balls-left-btn plus";
@@ -2600,19 +3734,31 @@
     minusBtn.addEventListener("click", function () {
       if (gamewinBallsLeftValue === null) return;
       gamewinBallsLeftValue = gamewinBallsLeftValue === 0 ? null : gamewinBallsLeftValue - 1;
-      renderBallsLeftValue(valueEl, minusBtn);
+      renderBallsLeftValue(valueInput, minusBtn);
+      persistBallsLeftLive();
     });
     plusBtn.addEventListener("click", function () {
       gamewinBallsLeftValue = gamewinBallsLeftValue === null ? 0 : gamewinBallsLeftValue + 1;
-      renderBallsLeftValue(valueEl, minusBtn);
+      renderBallsLeftValue(valueInput, minusBtn);
+      persistBallsLeftLive();
+    });
+    valueInput.addEventListener("input", function () {
+      if (valueInput.value === "") {
+        gamewinBallsLeftValue = null;
+      } else {
+        var n = parseInt(valueInput.value, 10);
+        gamewinBallsLeftValue = isNaN(n) ? null : Math.max(0, n);
+      }
+      minusBtn.disabled = gamewinBallsLeftValue === null;
+      persistBallsLeftLive();
     });
 
     stepper.appendChild(minusBtn);
-    stepper.appendChild(valueEl);
+    stepper.appendChild(valueInput);
     stepper.appendChild(plusBtn);
     row.appendChild(label);
     row.appendChild(stepper);
-    renderBallsLeftValue(valueEl, minusBtn);
+    renderBallsLeftValue(valueInput, minusBtn);
     return row;
   }
 
@@ -2623,13 +3769,32 @@
   // whatever should happen next (milestone/on-hill/game-change), deferred
   // until this dialog is dismissed.
   function showGameWinOverlay(summary, ts, onClose) {
-    gamewinBallsLeftValue = null;
+    // One Pocket wins arrive with a computed prefill already sitting on
+    // the fresh gameHistory entry (see creditWin's ballsLeftPrefill) -
+    // pick it up here instead of always starting blank; still just a
+    // starting point, editable/clearable the same as a manually typed
+    // value.
+    var freshEntry = state.gameHistory[0] && state.gameHistory[0].ts === ts ? state.gameHistory[0] : null;
+    gamewinBallsLeftValue = freshEntry && freshEntry.ballsLeftOnTable !== null && freshEntry.ballsLeftOnTable !== undefined ? freshEntry.ballsLeftOnTable : null;
     gamewinPendingTs = ts;
     gamewinPendingOnClose = onClose;
     gamewinMessage.textContent = summary;
     gamewinDetails.innerHTML = "";
     gamewinDetails.appendChild(buildBallsLeftRow());
+    gamewinDetails.appendChild(buildSkunkIndicator());
+    updateGamewinSkunkIndicator();
     gamewinOverlay.classList.remove("hidden");
+    // Focus the balls-left field so a number key works right away, with
+    // no click needed first - can only happen once the overlay is no
+    // longer .hidden (an element can't take focus while display:none).
+    // preventScroll: true - this overlay is position:fixed and already
+    // covers the whole viewport, so the browser's default focus-scroll
+    // behavior only ever yanked the page underneath (particularly
+    // noticeable with many players on screen, crediting a win from far
+    // down the list) back toward this input's old scroll position -
+    // there's nothing useful for it to scroll to.
+    var ballsLeftInput = gamewinDetails.querySelector(".balls-left-input");
+    if (ballsLeftInput) ballsLeftInput.focus({ preventScroll: true });
   }
 
   function closeGameWinOverlay() {
@@ -2639,6 +3804,9 @@
     // archiving (celebrateTournamentWin's exportAllPlayerStats) reads it.
     if (gamewinBallsLeftValue !== null && state.gameHistory[0] && state.gameHistory[0].ts === gamewinPendingTs) {
       state.gameHistory[0].ballsLeftOnTable = gamewinBallsLeftValue;
+      if (SKUNK_RACK_GAME_TYPES.indexOf(state.gameHistory[0].gameType) !== -1) {
+        state.gameHistory[0].skunk = gamewinBallsLeftValue === 7;
+      }
       saveState();
     }
     gamewinOverlay.classList.add("hidden");
@@ -2649,13 +3817,169 @@
     if (onClose) onClose();
   }
 
+  // Dismisses the win overlay after a quick-action (undo) has already
+  // changed the game it was celebrating out from under it - skips both the
+  // balls-left patch-back and the queued onClose chain (milestone/on-hill/
+  // game-change), since neither still applies.
+  function dismissGameWinOverlaySilently() {
+    gamewinOverlay.classList.add("hidden");
+    gamewinBallsLeftValue = null;
+    gamewinPendingTs = null;
+    gamewinPendingOnClose = null;
+  }
+
+  // A large, unmissable confirmation that a forced correction actually
+  // happened - shown after the win popup's or tournament popup's "Undo
+  // this win" instead of just a toast, since these fire mid-dispute in
+  // front of a table of people who all need to see it landed.
+  function showForceResetNotice(message) {
+    forceResetMessage.textContent = message;
+    forceResetOverlay.classList.remove("hidden");
+  }
+
+  function closeForceResetNotice() {
+    forceResetOverlay.classList.add("hidden");
+  }
+
+  // Lets a misclick be corrected right from the win popup instead of
+  // hunting for "Undo Last Win" elsewhere - undoes the exact win this
+  // dialog is celebrating (still the front of gameHistory at this point,
+  // same as undoLastWin's own precondition) and closes the dialog without
+  // running its queued follow-up.
+  function undoWinFromGameWinOverlay() {
+    var entry = state.gameHistory[0];
+    if (!entry || typeof entry === "string" || !entry.winnerIds) {
+      showToast(T("toast.noWinToUndo"));
+      return;
+    }
+    confirmModal(T("confirm.undoWin", { summary: entry.summary }), function () {
+      var undone = retrogradeLastGame();
+      saveState();
+      dismissGameWinOverlaySilently();
+      renderAll();
+      showForceResetNotice(T("forceReset.gameMessage", { summary: undone.summary }));
+    });
+  }
+
+  // Wipes every game recorded today - both the still-live session and any
+  // tournaments already archived into PLAYER_STATS earlier today - and
+  // rewinds every player's rating to what it was before today's play,
+  // leaving every earlier day untouched. Lives in the Reset section
+  // (Backup & Transfer), for when the whole day's session needs a do-over.
+  // Rebuilds the live session win tallies from state.gameHistory as it
+  // currently stands, rather than adjusting counters by hand - used both
+  // by resetTodayStats (after pruning today's entries) and by the Recover
+  // Data restore flow (after merging archived games back in), so both
+  // stay self-consistent with whatever's actually in the game log.
+  function recomputeLiveWinsFromGameHistory() {
+    state.playerWins = {};
+    state.teamWins = {};
+    state.teamMvpWins = {};
+    state.gameHistory.forEach(function (entry) {
+      if (!entry || typeof entry === "string" || !entry.winnerIds) return;
+      entry.winnerIds.forEach(function (id) {
+        state.playerWins[id] = (state.playerWins[id] || 0) + 1;
+      });
+      if (entry.isTeam && entry.teamId) {
+        state.teamWins[entry.teamId] = (state.teamWins[entry.teamId] || 0) + 1;
+        if (entry.mvpId) {
+          state.teamMvpWins[entry.mvpId] = (state.teamMvpWins[entry.mvpId] || 0) + 1;
+        }
+      }
+    });
+    state.gamesPlayedCount = state.gameHistory.length;
+  }
+
+  function resetTodayStats() {
+    confirmModal(T("confirm.resetTodayStats"), function () {
+      exportAllData();
+      var today = todayDateStr();
+      var todayStartMs = periodStartDate("today").getTime();
+
+      var prunedSessions = {};
+      Object.keys(PLAYER_STATS).forEach(function (key) {
+        var entry = PLAYER_STATS[key];
+        if (!entry || !Array.isArray(entry.sessions)) return;
+        var todaysSessions = entry.sessions.filter(function (s) {
+          return s.date === today;
+        });
+        if (todaysSessions.length) prunedSessions[key] = todaysSessions;
+        entry.sessions = entry.sessions.filter(function (s) {
+          return s.date !== today;
+        });
+      });
+      savePlayerStatsToStorage(PLAYER_STATS);
+
+      // Keeps any stray earlier-day entries from a session left open across
+      // midnight, then rebuilds the live win counters from what's left
+      // instead of just zeroing them, so that carryover isn't lost.
+      var todaysGameHistory = (state.gameHistory || []).filter(function (entry) {
+        return entry && entry.ts && localDateStrFromTs(entry.ts) === today;
+      });
+      state.gameHistory = (state.gameHistory || []).filter(function (entry) {
+        return !(entry && entry.ts && localDateStrFromTs(entry.ts) === today);
+      });
+      var prevPlayerWins = JSON.parse(JSON.stringify(state.playerWins));
+      var prevTeamWins = JSON.parse(JSON.stringify(state.teamWins));
+      var prevTeamMvpWins = JSON.parse(JSON.stringify(state.teamMvpWins));
+      recomputeLiveWinsFromGameHistory();
+      resetGameBalls();
+      saveState();
+
+      var poppedRatingHistory = revertRatingsChangedSince(todayStartMs);
+
+      saveResetSnapshot("todayStats", T("resetSnapshot.todayStatsLabel", { date: today }), {
+        date: today,
+        prunedSessions: prunedSessions,
+        gameHistory: todaysGameHistory,
+        playerWins: prevPlayerWins,
+        teamWins: prevTeamWins,
+        teamMvpWins: prevTeamMvpWins,
+        ratingHistory: poppedRatingHistory
+      });
+
+      if (currentStatsPlayerName) {
+        currentStatsSessions = getPlayerSessions(currentStatsPlayerName);
+        renderPlayerHistoryList(currentStatsSessions);
+      }
+
+      renderAll();
+      showToast(T("toast.todayStatsCleared"));
+    });
+  }
+
+  // In-memory only (never persisted, same as gamewinPendingOnClose) -
+  // captured fresh at the top of every celebrateTournamentWin call, and
+  // only ever reachable through the "Undo this win" button living inside
+  // the milestone overlay it was captured for, so a stale snapshot can
+  // never be applied after that overlay has closed.
+  var lastTournamentWinSnapshot = null;
+
   function celebrateTournamentWin(names, count) {
-    var target = state.raceToWinsTarget;
+    // count is the win tally that just triggered this exact milestone,
+    // so it already *is* whatever target (global or fair) was hit -
+    // no separate lookup needed, and this stays correct even when a
+    // fair-race target differs from state.raceToWinsTarget.
+    var target = count;
 
     // A win one game earlier can leave the on-hill overlay open (it has no
     // reason to auto-close on its own) — without this it stacks visually
     // behind the milestone overlay that's about to show.
     closeOnHill();
+
+    // Everything below this line rewrites state.gameHistory/PLAYER_STATS -
+    // snapshot first so "Undo this win" can restore the tournament exactly
+    // as it stood right after the winning game was credited, then retrograde
+    // that one game on top of the restored state to land one game earlier.
+    lastTournamentWinSnapshot = {
+      gameHistory: JSON.parse(JSON.stringify(state.gameHistory)),
+      playerWins: JSON.parse(JSON.stringify(state.playerWins)),
+      teamWins: JSON.parse(JSON.stringify(state.teamWins)),
+      teamMvpWins: JSON.parse(JSON.stringify(state.teamMvpWins)),
+      gamesPlayedCount: state.gamesPlayedCount,
+      currentGame: JSON.parse(JSON.stringify(state.currentGame)),
+      playerStats: JSON.parse(JSON.stringify(PLAYER_STATS))
+    };
 
     // Save this tournament's game history to per-player stats before the
     // reset below wipes state.gameHistory, then start the next one fresh.
@@ -2695,6 +4019,37 @@
 
   function closeMilestone() {
     milestoneOverlay.classList.add("hidden");
+    lastTournamentWinSnapshot = null;
+  }
+
+  // Undoes the entire just-finished tournament's archiving/new-session
+  // reset (via the pre-celebration snapshot) and then retrogrades the
+  // winning game on top of that restored state, landing exactly one game
+  // before the win - as if the celebration never happened.
+  function undoTournamentWinFromMilestoneOverlay() {
+    if (!lastTournamentWinSnapshot) {
+      showToast(T("toast.noWinToUndo"));
+      return;
+    }
+    var snapshot = lastTournamentWinSnapshot;
+    confirmModal(T("confirm.undoTournamentWin"), function () {
+      state.gameHistory = snapshot.gameHistory;
+      state.playerWins = snapshot.playerWins;
+      state.teamWins = snapshot.teamWins;
+      state.teamMvpWins = snapshot.teamMvpWins;
+      state.gamesPlayedCount = snapshot.gamesPlayedCount;
+      state.currentGame = snapshot.currentGame;
+      PLAYER_STATS = snapshot.playerStats;
+      savePlayerStatsToStorage(PLAYER_STATS);
+
+      var undone = retrogradeLastGame();
+      saveState();
+      lastTournamentWinSnapshot = null;
+      milestoneOverlay.classList.add("hidden");
+      syncGameTypeUI();
+      renderAll();
+      showForceResetNotice(T("forceReset.tournamentMessage", { summary: undone.summary }));
+    });
   }
 
   function resetGameBalls() {
@@ -2702,11 +4057,36 @@
       p.balls = 0;
     });
     state.currentGame.startedAt = new Date().toISOString();
+    // A new game/rack means a fresh shot clock too - startShotCounter()
+    // already zeroes elapsed/beep/tick and starts it running without
+    // touching the persisted hidden flag.
+    if (shotCounterActive()) startShotCounter();
   }
 
   function adjustScore(playerId, delta) {
     var player = getPlayer(playerId);
     if (!player || !player.playing) return;
+
+    // A team can't play (or score) against nobody - blocks both +/- here,
+    // not just the win-credit at target, and is the authoritative check
+    // (buildBallControls also disables the buttons for this, but this is
+    // what actually stops the keypad shortcut too).
+    if (!quickCounterMode && state.currentGame.mode === "teams" && player.teamId) {
+      var otherTeamId = player.teamId === "A" ? "B" : "A";
+      if (teamMembersLive(otherTeamId).length === 0) {
+        showToast(T("toast.teamNeedsOpponent"));
+        return;
+      }
+    }
+
+    // Same idea for queue mode: with the seat cap normally enforced
+    // elsewhere (togglePlaying, the enable checkbox, creditWin's
+    // rotation), this only fires for the edge case of a solo player
+    // left seated with nobody waiting to fill the second seat.
+    if (!quickCounterMode && state.currentGame.mode === "individual" && state.currentGame.queueEnabled && activePlayers().length < 2) {
+      showToast(T("toast.queueNeedsPlayer"));
+      return;
+    }
 
     // Quick Counter: just tally, never check a target or credit a win.
     // Free-form point counter — negative scores are allowed (e.g. golf-
@@ -2835,7 +4215,7 @@
   }
 
   // ---------------------------------------------------------------------
-  // Today's Notes & Day Report — free-text notes about today's live play,
+  // Publish Daily Report — free-text notes about today's live play,
   // saved per calendar date, plus a plain-text end-of-day synopsis (who
   // played, results, rating movement, and the notes) ready to copy, email,
   // or text.
@@ -2863,8 +4243,17 @@
 
   var DAY_NOTES = loadDayNotesFromStorage();
 
+  // Local calendar day (not UTC) - a UTC slice reads as "tomorrow" for
+  // anyone west of UTC once local evening crosses into UTC's next day,
+  // which silently mis-buckets that session's "today" stats. Matches
+  // periodStartDate("today")'s local-midnight boundary below.
   function todayDateStr() {
-    return new Date().toISOString().slice(0, 10);
+    return localDateStrFromTs(new Date());
+  }
+
+  function localDateStrFromTs(ts) {
+    var d = new Date(ts);
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
   }
 
   function getDayNotes(dateStr) {
@@ -2931,7 +4320,43 @@
         g.isLive = !!liveTsSet[ts];
         return g;
       });
-    return { date: dateStr, games: games, players: players };
+    // Bracket tournaments (single/double elim, round robin) are tracked
+    // entirely separately from state.gameHistory/PLAYER_STATS - without
+    // this they'd never show up in the day report at all, no matter how
+    // recently one finished.
+    var tournaments = TOURNAMENT_RESULTS.filter(function (r) {
+      return r.format !== "session-race" && r.ts && r.ts >= cutoffTs;
+    }).sort(function (a, b) {
+      return a.ts.localeCompare(b.ts);
+    });
+    // The main scoreboard's own "Race to N" milestone (what the in-app
+    // popup itself calls winning "the tournament", and the history list
+    // calls "the session") - a flag on the one game that pushed someone
+    // over the target, already present in `games` above.
+    var raceWins = games.filter(function (g) {
+      return g.wonRace;
+    });
+    return { date: dateStr, games: games, players: players, tournaments: tournaments, raceWins: raceWins };
+  }
+
+  function tournamentFormatLabel(format) {
+    if (format === "single") return "Single Elimination";
+    if (format === "double") return "Double Elimination";
+    if (format === "roundrobin") return "Round Robin";
+    return "Tournament";
+  }
+
+  function formatReportRaceWinLine(g) {
+    var time = formatReportGameTime(g.ts);
+    var names = joinNamesForReport((g.winnerNames || []).length ? g.winnerNames : (g.teammateNames || []));
+    return "🏆 " + (time ? time + " — " : "") + names + " won the Race to " + g.raceTarget + " session!";
+  }
+
+  function formatReportTournamentLine(t) {
+    var time = formatReportGameTime(t.ts);
+    var champions = joinNamesForReport(t.championNames || []);
+    var text = champions + " won the " + tournamentFormatLabel(t.format) + " tournament (" + (t.players || []).length + " players)";
+    return "👑 " + (time ? time + " — " : "") + text;
   }
 
   function joinNamesForReport(names) {
@@ -2940,6 +4365,17 @@
     if (names.length === 1) return names[0];
     if (names.length === 2) return names[0] + " and " + names[1];
     return names.slice(0, -1).join(", ") + ", and " + names[names.length - 1];
+  }
+
+  // Same idea as joinNamesForReport, but bounded - an individual-mode
+  // game credits a win against every other active player as "opponents",
+  // so a 5+ player free-for-all can otherwise blow a single table cell
+  // (and the whole column) out to 60+ characters. Table cells stay
+  // readable; prose sentences (Detailed) can afford the full list.
+  function joinNamesCapped(names, cap) {
+    names = names || [];
+    if (names.length <= cap) return joinNamesForReport(names);
+    return names.slice(0, cap).join(", ") + " +" + (names.length - cap) + " more";
   }
 
   function formatReportGameTime(ts) {
@@ -2963,28 +4399,121 @@
       var key =
         (g.winnerNames || []).slice().sort().join(",") + "|" + (g.opponentNames || []).slice().sort().join(",") + "|" + g.gameLabel;
       if (!byKey[key]) {
-        byKey[key] = { winnerNames: g.winnerNames, opponentNames: g.opponentNames, gameLabel: g.gameLabel, ts: g.ts, count: 0 };
+        byKey[key] = { winnerNames: g.winnerNames, opponentNames: g.opponentNames, gameLabel: g.gameLabel, ts: g.ts, count: 0, skunkCount: 0 };
         order.push(key);
       }
       byKey[key].count += 1;
+      if (g.skunk) byKey[key].skunkCount += 1;
     });
     return order.map(function (k) {
       return byKey[k];
     });
   }
 
+  // Shared by all 4 day-report formats - a grouped matchup line can mix
+  // skunk and non-skunk games against the same opponent (e.g. a race-
+  // to-5 where only some racks were skunks), so this is a count, not a
+  // boolean, and blank whenever none of the group's games were skunks.
+  // Plain hardcoded text, not T() - like every other string in these
+  // report builders, this is a plain-text export meant to be pasted/
+  // shared as-is, not part of the localized UI.
+  function formatSkunkSuffix(skunkCount) {
+    return skunkCount > 0 ? " 🦨×" + skunkCount : "";
+  }
+
+  // Always leads with a time, even for a grouped repeat-matchup line
+  // (using the first game's time in that group) - dropping it there was
+  // inconsistent with every other line in the report showing one.
   function formatReportGameGroupLine(group) {
     var winners = joinNamesForReport(group.winnerNames || []);
     var losers = joinNamesForReport(group.opponentNames || []);
-    if (group.count === 1) {
-      var time = formatReportGameTime(group.ts);
-      var text = winners + " won " + group.gameLabel;
-      if (losers) text += " against " + losers;
-      return (time ? time + " — " : "") + text;
-    }
-    var text2 = winners + " won " + group.count + " games of " + group.gameLabel;
-    if (losers) text2 += " against " + losers;
-    return text2;
+    var time = formatReportGameTime(group.ts);
+    var text = group.count === 1 ? winners + " won " + group.gameLabel : winners + " won " + group.count + " games of " + group.gameLabel;
+    if (losers) text += " against " + losers;
+    text += formatSkunkSuffix(group.skunkCount);
+    return (time ? time + " — " : "") + text;
+  }
+
+  function formatReportRatingDelta(delta) {
+    if (delta === null) return "—";
+    if (delta > 0) return "▲" + delta;
+    if (delta < 0) return "▼" + Math.abs(delta);
+    return "—";
+  }
+
+  function repeatChar(ch, count) {
+    var s = "";
+    for (var i = 0; i < count; i++) s += ch;
+    return s;
+  }
+
+  // Pads by UTF-16 length, so CJK text (double-width in a monospace font)
+  // won't line up as precisely as Latin text - an accepted limitation of
+  // a plain-text-only report with no real table rendering.
+  function padTableCell(text, width, alignRight) {
+    text = String(text);
+    var pad = repeatChar(" ", Math.max(0, width - text.length));
+    return alignRight ? pad + text : text + pad;
+  }
+
+  function textTableColumnWidths(headers, rows) {
+    return headers.map(function (h, i) {
+      var width = String(h).length;
+      rows.forEach(function (r) {
+        width = Math.max(width, String(r[i]).length);
+      });
+      return width;
+    });
+  }
+
+  function textTableRow(cells, widths, alignRight) {
+    return (
+      "| " +
+      cells
+        .map(function (c, i) {
+          return padTableCell(c, widths[i], alignRight && alignRight[i]);
+        })
+        .join(" | ") +
+      " |"
+    );
+  }
+
+  function textTableBorder(widths) {
+    return (
+      "+" +
+      widths
+        .map(function (w) {
+          return repeatChar("-", w + 2);
+        })
+        .join("+") +
+      "+"
+    );
+  }
+
+  // A real fixed-width box table, plain ASCII (+ - |) rather than Unicode
+  // box-drawing characters - iMessage/SMS on iPad rendered the Unicode
+  // border set as broken/missing glyphs ("open cells, no horizontal
+  // lines"), which plain ASCII can't do since every font on earth has it.
+  function buildTextTable(headers, rows, alignRight) {
+    var widths = textTableColumnWidths(headers, rows);
+    var border = textTableBorder(widths);
+    var lines = [border, textTableRow(headers, widths), border];
+    rows.forEach(function (r) {
+      lines.push(textTableRow(r, widths, alignRight));
+    });
+    lines.push(border);
+    return lines;
+  }
+
+  // Winner/"def."/loser collapsed into one capped "Result" cell instead
+  // of three separate columns - keeps the table's width bounded no
+  // matter how many players were on either side of the game.
+  function gameLogTableRow(group) {
+    var winners = joinNamesCapped(group.winnerNames || [], 2);
+    var losers = joinNamesCapped(group.opponentNames || [], 2);
+    var label = group.gameLabel + (group.count > 1 ? " ×" + group.count : "") + formatSkunkSuffix(group.skunkCount);
+    var result = losers ? winners + " def. " + losers : winners + " won";
+    return [formatReportGameTime(group.ts), result, label];
   }
 
   // Always YYYY-MM-DD, regardless of the active language - dates are a
@@ -3003,37 +4532,48 @@
     return formatDateISO(dateStr + "T00:00:00");
   }
 
-  function buildDayReportText(dateStr) {
+  function buildDayReportTextTable(dateStr) {
     var data = computeDayReportData(dateStr);
-    var lines = ["🎱 Pool Master Counter — Day Report", formatReportDateHeading(dateStr), ""];
-    if (data.players.length === 0) {
+    var lines = ["🎱 POOL MASTER COUNTER — DAY REPORT", formatReportDateHeading(dateStr), ""];
+    var notes = getDayNotes(dateStr);
+    if (notes) {
+      lines.push("Notes");
+      lines.push(notes);
+      lines.push("");
+    }
+    if (data.players.length === 0 && data.tournaments.length === 0) {
       lines.push("No games recorded today.");
     } else {
-      lines.push("Players today:");
-      data.players.forEach(function (p) {
-        var deltaText = p.ratingDelta === null
-          ? ""
-          : p.ratingDelta > 0
-          ? " (▲" + p.ratingDelta + ")"
-          : p.ratingDelta < 0
-          ? " (▼" + p.ratingDelta + ")"
-          : " (—)";
-        var winWord = p.wins === 1 ? "win" : "wins";
-        var lossWord = p.losses === 1 ? "loss" : "losses";
-        lines.push("• " + p.name + " — " + p.wins + " " + winWord + ", " + p.losses + " " + lossWord + ", rating " + p.rating + deltaText);
-      });
-      lines.push("");
-      lines.push("Total games played: " + data.games.length);
-      var gameTypeCounts = {};
-      data.games.forEach(function (g) {
-        gameTypeCounts[g.gameLabel] = (gameTypeCounts[g.gameLabel] || 0) + 1;
-      });
-      var typesSummary = Object.keys(gameTypeCounts)
-        .map(function (label) {
-          return label + " (" + gameTypeCounts[label] + ")";
-        })
-        .join(", ");
-      if (typesSummary) lines.push("Games played: " + typesSummary);
+      if (data.players.length) {
+        var statHeaders = ["Player", "W", "L", "Rating", "Δ"];
+        var statRows = data.players.map(function (p) {
+          return [p.name, String(p.wins), String(p.losses), String(p.rating), formatReportRatingDelta(p.ratingDelta)];
+        });
+        buildTextTable(statHeaders, statRows, [false, true, true, true, true]).forEach(function (l) {
+          lines.push(l);
+        });
+        lines.push("");
+        var gameTypeCounts = {};
+        data.games.forEach(function (g) {
+          gameTypeCounts[g.gameLabel] = (gameTypeCounts[g.gameLabel] || 0) + 1;
+        });
+        var typesSummary = Object.keys(gameTypeCounts)
+          .map(function (label) {
+            return label + " ×" + gameTypeCounts[label];
+          })
+          .join(", ");
+        lines.push("Total games: " + data.games.length + (typesSummary ? "   |   " + typesSummary : ""));
+      }
+
+      if (data.raceWins.length || data.tournaments.length) {
+        lines.push("");
+        data.raceWins.forEach(function (g) {
+          lines.push(formatReportRaceWinLine(g));
+        });
+        data.tournaments.forEach(function (t) {
+          lines.push(formatReportTournamentLine(t));
+        });
+      }
 
       var earlierGames = data.games.filter(function (g) {
         return !g.isLive;
@@ -3042,38 +4582,250 @@
         return g.isLive;
       });
       var hasBothGroups = earlierGames.length > 0 && liveGames.length > 0;
-      var divider = "──────────";
+      var gameLogHeaders = ["Time", "Result", "Game"];
 
       if (data.games.length > 0) {
         lines.push("");
-        lines.push(divider);
-        lines.push("Game details:");
+        lines.push("Game Log");
         if (hasBothGroups) {
           lines.push("");
           lines.push("Earlier session:");
-          groupReportGames(earlierGames).forEach(function (g) {
-            lines.push(formatReportGameGroupLine(g));
+          buildTextTable(gameLogHeaders, groupReportGames(earlierGames).map(gameLogTableRow)).forEach(function (l) {
+            lines.push(l);
           });
           lines.push("");
-          lines.push(divider);
           lines.push("Current session:");
-          groupReportGames(liveGames).forEach(function (g) {
-            lines.push(formatReportGameGroupLine(g));
+          buildTextTable(gameLogHeaders, groupReportGames(liveGames).map(gameLogTableRow)).forEach(function (l) {
+            lines.push(l);
           });
         } else {
-          groupReportGames(data.games).forEach(function (g) {
-            lines.push(formatReportGameGroupLine(g));
+          buildTextTable(gameLogHeaders, groupReportGames(data.games).map(gameLogTableRow)).forEach(function (l) {
+            lines.push(l);
           });
         }
       }
     }
+    return lines.join("\n");
+  }
+
+  // Leaderboard table only - no game-type breakdown, no game log at all,
+  // the shortest of the three formats regardless of how many games were
+  // played today.
+  function buildDayReportTextCompact(dateStr) {
+    var data = computeDayReportData(dateStr);
+    var lines = ["🎱 " + formatReportDateHeading(dateStr) + " — Day Report", ""];
     var notes = getDayNotes(dateStr);
     if (notes) {
+      lines.push("Notes: " + notes);
       lines.push("");
-      lines.push("Notes:");
-      lines.push(notes);
+    }
+    if (data.players.length === 0 && data.tournaments.length === 0) {
+      lines.push("No games recorded today.");
+    } else {
+      if (data.players.length) {
+        var statHeaders = ["Player", "W", "L", "Rating", "Δ"];
+        var statRows = data.players.map(function (p) {
+          return [p.name, String(p.wins), String(p.losses), String(p.rating), formatReportRatingDelta(p.ratingDelta)];
+        });
+        buildTextTable(statHeaders, statRows, [false, true, true, true, true]).forEach(function (l) {
+          lines.push(l);
+        });
+        lines.push("");
+        var skunkTotal = data.games.filter(function (g) {
+          return g.skunk;
+        }).length;
+        var gamesLine = data.games.length + " game" + (data.games.length === 1 ? "" : "s") + " played today.";
+        // No per-game log in this format to attach a marker to (see the
+        // other 3 builders' formatSkunkSuffix calls) - a same-line total
+        // instead.
+        if (skunkTotal > 0) {
+          gamesLine += " 🦨 " + skunkTotal + " skunk win" + (skunkTotal === 1 ? "" : "s") + ".";
+        }
+        lines.push(gamesLine);
+      }
+      if (data.raceWins.length || data.tournaments.length) {
+        lines.push("");
+        data.raceWins.forEach(function (g) {
+          lines.push(formatReportRaceWinLine(g));
+        });
+        data.tournaments.forEach(function (t) {
+          lines.push(formatReportTournamentLine(t));
+        });
+      }
     }
     return lines.join("\n");
+  }
+
+  // Closest to the original report layout: full player list + a
+  // checkmarked line per game, under section headers.
+  function buildDayReportTextDetailed(dateStr) {
+    var data = computeDayReportData(dateStr);
+    var longDate;
+    try {
+      longDate = new Date(dateStr + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+    } catch (e) {
+      longDate = formatReportDateHeading(dateStr);
+    }
+    var lines = ["🎱 Pool Master Counter — Day Report", longDate, "══════════════════════════", ""];
+    var notes = getDayNotes(dateStr);
+    if (notes) {
+      lines.push("NOTES");
+      lines.push(notes);
+      lines.push("");
+    }
+    if (data.players.length === 0 && data.tournaments.length === 0) {
+      lines.push("No games recorded today.");
+    } else {
+      if (data.players.length) {
+        lines.push("PLAYERS TODAY");
+        data.players.forEach(function (p) {
+          var winWord = p.wins === 1 ? "win" : "wins";
+          var lossWord = p.losses === 1 ? "loss" : "losses";
+          lines.push("• " + p.name + " — " + p.wins + " " + winWord + ", " + p.losses + " " + lossWord + ", rating " + p.rating + " (" + formatReportRatingDelta(p.ratingDelta) + ")");
+        });
+        lines.push("");
+        lines.push("SUMMARY");
+        lines.push("Total games played: " + data.games.length);
+        var gameTypeCounts = {};
+        data.games.forEach(function (g) {
+          gameTypeCounts[g.gameLabel] = (gameTypeCounts[g.gameLabel] || 0) + 1;
+        });
+        var typesSummary = Object.keys(gameTypeCounts)
+          .map(function (label) {
+            return label + " (" + gameTypeCounts[label] + ")";
+          })
+          .join(", ");
+        if (typesSummary) lines.push("Games played: " + typesSummary);
+      }
+
+      if (data.raceWins.length || data.tournaments.length) {
+        lines.push("");
+        lines.push("TOURNAMENTS");
+        data.raceWins.forEach(function (g) {
+          lines.push(formatReportRaceWinLine(g));
+        });
+        data.tournaments.forEach(function (t) {
+          lines.push(formatReportTournamentLine(t));
+        });
+      }
+
+      if (data.games.length > 0) {
+        lines.push("");
+        lines.push("GAME DETAILS");
+        groupReportGames(data.games).forEach(function (g) {
+          lines.push("✅ " + formatReportGameGroupLine(g));
+        });
+      }
+    }
+    return lines.join("\n");
+  }
+
+  // No columns to misalign, because there's nowhere for them to align to:
+  // Mail and Messages compose boxes both render plain text in the
+  // system's proportional font, so no character-grid table (any
+  // character set) can ever line up there - that's a platform
+  // constraint, not something fixable by picking different border
+  // characters. One clean line per player/game reads fine regardless of
+  // font. Used by Email Report and Text Report - Copy Report keeps
+  // whichever of the three table formats is selected above, since
+  // wherever it gets pasted is more likely to preserve a monospace font.
+  function buildDayReportTextPlain(dateStr) {
+    var data = computeDayReportData(dateStr);
+    var lines = ["🎱 POOL MASTER COUNTER — DAY REPORT", formatReportDateHeading(dateStr), ""];
+    var notes = getDayNotes(dateStr);
+    if (notes) {
+      lines.push("Notes: " + notes);
+      lines.push("");
+    }
+    if (data.players.length === 0 && data.tournaments.length === 0) {
+      lines.push("No games recorded today.");
+    } else {
+      if (data.players.length) {
+        data.players.forEach(function (p) {
+          lines.push(p.name + " — " + p.wins + "W-" + p.losses + "L, " + p.rating + " (" + formatReportRatingDelta(p.ratingDelta) + ")");
+        });
+        lines.push("");
+        var gameTypeCounts = {};
+        data.games.forEach(function (g) {
+          gameTypeCounts[g.gameLabel] = (gameTypeCounts[g.gameLabel] || 0) + 1;
+        });
+        var typesSummary = Object.keys(gameTypeCounts)
+          .map(function (label) {
+            return label + " ×" + gameTypeCounts[label];
+          })
+          .join(", ");
+        lines.push("Total games: " + data.games.length + (typesSummary ? " · " + typesSummary : ""));
+      }
+
+      if (data.raceWins.length || data.tournaments.length) {
+        lines.push("");
+        data.raceWins.forEach(function (g) {
+          lines.push(formatReportRaceWinLine(g));
+        });
+        data.tournaments.forEach(function (t) {
+          lines.push(formatReportTournamentLine(t));
+        });
+      }
+
+      if (data.games.length > 0) {
+        lines.push("");
+        lines.push("Game Log");
+        groupReportGames(data.games).forEach(function (g) {
+          var winners = joinNamesCapped(g.winnerNames || [], 2);
+          var losers = joinNamesCapped(g.opponentNames || [], 2);
+          var label = g.gameLabel + (g.count > 1 ? " ×" + g.count : "") + formatSkunkSuffix(g.skunkCount);
+          var result = losers ? winners + " def. " + losers : winners + " won";
+          lines.push(formatReportGameTime(g.ts) + " · " + result + " · " + label);
+        });
+      }
+    }
+    return lines.join("\n");
+  }
+
+  var DAY_REPORT_FORMAT_KEY = "poolMasterCounter.dayReportFormat.v1";
+
+  function loadDayReportFormat() {
+    try {
+      var v = localStorage.getItem(DAY_REPORT_FORMAT_KEY);
+      return v === "compact" || v === "detailed" || v === "table" ? v : "table";
+    } catch (e) {
+      return "table";
+    }
+  }
+
+  function saveDayReportFormat(format) {
+    try {
+      localStorage.setItem(DAY_REPORT_FORMAT_KEY, format);
+    } catch (e) {
+      console.warn("Could not save day report format.", e);
+    }
+  }
+
+  var dayReportFormat = loadDayReportFormat();
+
+  var DAY_REPORT_ATTACH_BACKUP_KEY = "poolMasterCounter.dayReportAttachBackup.v1";
+
+  function loadDayReportAttachBackup() {
+    try {
+      var v = localStorage.getItem(DAY_REPORT_ATTACH_BACKUP_KEY);
+      return v === null ? true : v === "true";
+    } catch (e) {
+      return true;
+    }
+  }
+
+  function saveDayReportAttachBackup(value) {
+    try {
+      localStorage.setItem(DAY_REPORT_ATTACH_BACKUP_KEY, value ? "true" : "false");
+    } catch (e) {
+      console.warn("Could not save day report attach-backup preference.", e);
+    }
+  }
+
+  function buildDayReportText(dateStr) {
+    if (dayReportFormat === "compact") return buildDayReportTextCompact(dateStr);
+    if (dayReportFormat === "detailed") return buildDayReportTextDetailed(dateStr);
+    return buildDayReportTextTable(dateStr);
   }
 
   function updateDayNotesSummary() {
@@ -3084,6 +4836,28 @@
     parts.push(data.players.length + " player" + (data.players.length === 1 ? "" : "s"));
     parts.push(notes ? notes.length + " character note" : "no notes yet");
     setPanelSummary("day-notes-panel", parts.join(" · "));
+  }
+
+  function updateDayReportRecipientsLine() {
+    // With the backup attached, Email/Text Report route through the OS
+    // share sheet (see shareReportWithBackupAttachment) instead of a
+    // mailto:/sms: link, so the opted-in recipients below are no longer
+    // who it actually goes to - say so instead of showing a list that'd
+    // just be wrong.
+    if (dayReportAttachBackupCheckbox.checked) {
+      dayReportRecipientsLine.textContent = T("dayNotes.recipientsAttachOverride");
+      return;
+    }
+    var emailContacts = reportOptedInContacts("email");
+    var smsContacts = reportOptedInContacts("sms");
+    var parts = [];
+    if (emailContacts.length) {
+      parts.push(T("dayNotes.recipientsEmail", { names: emailContacts.map(function (c) { return c.name; }).join(", ") }));
+    }
+    if (smsContacts.length) {
+      parts.push(T("dayNotes.recipientsSms", { names: smsContacts.map(function (c) { return c.name; }).join(", ") }));
+    }
+    dayReportRecipientsLine.textContent = parts.length ? parts.join(" · ") : T("dayNotes.recipientsNone");
   }
 
   // ---------------------------------------------------------------------
@@ -3147,6 +4921,19 @@
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     }, 1000);
+  }
+
+  // A dropped-in file that parses as JSON but has no `.state` isn't
+  // necessarily garbage - it's often one of this app's OTHER export
+  // shapes (Export Session, Export Player Lists), picked by mistake
+  // because they're both also just called "export" from the buttons.
+  // Naming the actual shape beats a flat "not a backup file".
+  function describeUnrecognizedBackupFile(data) {
+    if (data && Array.isArray(data.rosterLists)) return T("alert.notABackupFileIsRosterLists");
+    if (data && data.currentGame && Array.isArray(data.gameHistory) && data.raceToWinsTarget !== undefined) {
+      return T("alert.notABackupFileIsSession");
+    }
+    return T("alert.notABackupFile");
   }
 
   function fetchFresh(url) {
@@ -3285,6 +5072,80 @@
       localStorage.setItem(PLAYER_NAME_TRANSLATIONS_KEY, JSON.stringify(translations));
     } catch (e) {
       console.warn("Could not save player name translations.", e);
+    }
+  }
+
+  // Name -> { email, reportOptIn }. Collected (optionally) once, in the
+  // onboarding wizard - not exposed on the regular Add Player form.
+  var CONTACTS_KEY = "poolMasterCounter.contacts.v1";
+
+  function loadContactsFromStorage() {
+    try {
+      var raw = localStorage.getItem(CONTACTS_KEY);
+      var parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function saveContactsToStorage(contacts) {
+    if (noStatsMode) return;
+    try {
+      localStorage.setItem(CONTACTS_KEY, JSON.stringify(contacts));
+    } catch (e) {
+      console.warn("Could not save player contacts.", e);
+    }
+  }
+
+  // Name -> { removedAt }. removePlayer only drops someone from the live
+  // roster (their PLAYER_STATS/PLAYER_RATINGS stay put), so this isn't
+  // about protecting data - it's about remembering the removal was
+  // deliberate, so importAllData doesn't silently re-add them just
+  // because an older backup still lists them.
+  var REMOVED_PLAYERS_KEY = "poolMasterCounter.removedPlayers.v1";
+
+  function loadRemovedPlayersFromStorage() {
+    try {
+      var raw = localStorage.getItem(REMOVED_PLAYERS_KEY);
+      var parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function saveRemovedPlayersToStorage(removed) {
+    if (noStatsMode) return;
+    try {
+      localStorage.setItem(REMOVED_PLAYERS_KEY, JSON.stringify(removed));
+    } catch (e) {
+      console.warn("Could not save removed players.", e);
+    }
+  }
+
+  // Capped local history of what each reset button just wiped, so it can
+  // be recovered from the Recover Data panel without hunting for a
+  // downloaded backup file. Newest first, oldest dropped once full.
+  var RESET_SNAPSHOTS_KEY = "poolMasterCounter.resetSnapshots.v1";
+  var RESET_SNAPSHOTS_CAP = 12;
+
+  function loadResetSnapshotsFromStorage() {
+    try {
+      var raw = localStorage.getItem(RESET_SNAPSHOTS_KEY);
+      var parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function saveResetSnapshotsToStorage(snapshots) {
+    if (noStatsMode) return;
+    try {
+      localStorage.setItem(RESET_SNAPSHOTS_KEY, JSON.stringify(snapshots));
+    } catch (e) {
+      console.warn("Could not save reset snapshots.", e);
     }
   }
 
@@ -3477,6 +5338,127 @@
     savePlayerAddedToStorage(PLAYER_ADDED);
   }
 
+  var PLAYER_CONTACTS = loadContactsFromStorage();
+
+  function findContactKey(name) {
+    var key = normalizeNameKey(name);
+    var match = Object.keys(PLAYER_CONTACTS).filter(function (k) {
+      return normalizeNameKey(k) === key;
+    });
+    return match.length ? match[0] : null;
+  }
+
+  // Merges rather than overwrites, because onboarding and the edit-rating
+  // popup can each save a partial patch (e.g. edit-rating changing just
+  // the phone number) for the same player without erasing what the other
+  // one already stored.
+  function setPlayerContact(name, patch) {
+    var key = findContactKey(name) || name;
+    var existing = PLAYER_CONTACTS[key] || {};
+    PLAYER_CONTACTS[key] = {
+      email: patch.email !== undefined ? patch.email : existing.email || "",
+      phone: patch.phone !== undefined ? patch.phone : existing.phone || "",
+      reportOptIn: patch.reportOptIn !== undefined ? !!patch.reportOptIn : !!existing.reportOptIn,
+      notifyMethod: patch.notifyMethod !== undefined ? patch.notifyMethod : existing.notifyMethod || "email"
+    };
+    saveContactsToStorage(PLAYER_CONTACTS);
+  }
+
+  function getPlayerContact(name) {
+    var key = findContactKey(name);
+    return key ? PLAYER_CONTACTS[key] : { email: "", phone: "", reportOptIn: false, notifyMethod: "email" };
+  }
+
+  // Shared by onboarding and the edit-rating popup: the "receive the
+  // day's report" checkbox only makes sense once there's somewhere to
+  // send it, and the email/SMS choice only matters once it's checked.
+  function wireNotifyCheckbox(emailInput, phoneInput, checkbox, methodRow) {
+    function refreshEnabled() {
+      var hasContactInfo = !!(emailInput.value.trim() || phoneInput.value.trim());
+      checkbox.disabled = !hasContactInfo;
+      if (!hasContactInfo) {
+        checkbox.checked = false;
+        methodRow.classList.add("hidden");
+      }
+    }
+    emailInput.addEventListener("input", refreshEnabled);
+    phoneInput.addEventListener("input", refreshEnabled);
+    checkbox.addEventListener("change", function () {
+      methodRow.classList.toggle("hidden", !checkbox.checked);
+    });
+  }
+
+  // Every stored contact opted in to the day report, deduped, split by
+  // delivery method - used to pre-fill the report's mailto "to" and the
+  // SMS compose recipient.
+  function reportOptedInContacts(method) {
+    return Object.keys(PLAYER_CONTACTS)
+      .map(function (name) {
+        return { name: name, contact: PLAYER_CONTACTS[name] };
+      })
+      .filter(function (entry) {
+        if (!entry.contact || !entry.contact.reportOptIn) return false;
+        var entryMethod = entry.contact.notifyMethod || "email";
+        if (method === "sms") return entryMethod === "sms" && entry.contact.phone;
+        return entryMethod !== "sms" && entry.contact.email;
+      });
+  }
+
+  // Local settings win on conflict (this device's own opt-in choice is
+  // more current than whatever an older backup says); anything imported
+  // for a name this device has never heard of gets added.
+  function mergeContactsData(localContacts, importedContacts) {
+    var merged = {};
+    Object.keys(importedContacts || {}).forEach(function (name) {
+      merged[name] = importedContacts[name];
+    });
+    Object.keys(localContacts || {}).forEach(function (name) {
+      merged[name] = localContacts[name];
+    });
+    return merged;
+  }
+
+  var REMOVED_PLAYERS = loadRemovedPlayersFromStorage();
+
+  function findRemovedPlayerKey(name) {
+    var key = normalizeNameKey(name);
+    var match = Object.keys(REMOVED_PLAYERS).filter(function (k) {
+      return normalizeNameKey(k) === key;
+    });
+    return match.length ? match[0] : null;
+  }
+
+  function markPlayerRemoved(name) {
+    var key = findRemovedPlayerKey(name) || name;
+    REMOVED_PLAYERS[key] = { removedAt: new Date().toISOString() };
+    saveRemovedPlayersToStorage(REMOVED_PLAYERS);
+  }
+
+  function isPlayerRemoved(name) {
+    return !!findRemovedPlayerKey(name);
+  }
+
+  // Called whenever a name becomes an active player again - a deliberate
+  // manual re-add (typed into Add Player, or restored from an import
+  // conflict prompt) means the removal no longer applies.
+  function clearPlayerRemoved(name) {
+    var key = findRemovedPlayerKey(name);
+    if (!key) return;
+    delete REMOVED_PLAYERS[key];
+    saveRemovedPlayersToStorage(REMOVED_PLAYERS);
+  }
+
+  var RESET_SNAPSHOTS = loadResetSnapshotsFromStorage();
+
+  // `data` should already be a plain deep-cloned object (JSON.parse(
+  // JSON.stringify(...)), same pattern celebrateTournamentWin's undo
+  // snapshot uses) holding only the slice that reset is about to wipe.
+  function saveResetSnapshot(type, label, data) {
+    RESET_SNAPSHOTS.unshift({ id: uid(), type: type, ts: new Date().toISOString(), label: label, data: data });
+    RESET_SNAPSHOTS = RESET_SNAPSHOTS.slice(0, RESET_SNAPSHOTS_CAP);
+    saveResetSnapshotsToStorage(RESET_SNAPSHOTS);
+  }
+
   var PLAYER_NAME_TRANSLATIONS = loadPlayerNameTranslationsFromStorage();
 
   function findPlayerNameTranslationKey(name) {
@@ -3583,6 +5565,9 @@
   function resetAllPlayersOfficialRating() {
     confirmModal(T("confirm.resetAllRatingsExplain", { rating: DEFAULT_RATING }), function () {
       confirmModal(T("confirm.areYouSure"), function () {
+        saveResetSnapshot("allRatings", T("resetSnapshot.allRatingsLabel"), {
+          ratings: JSON.parse(JSON.stringify(PLAYER_RATINGS))
+        });
         state.players.forEach(function (p) {
           var key = findRatingKey(p.name) || p.name;
           PLAYER_RATINGS[key] = { name: key, rating: DEFAULT_RATING, gamesPlayed: 0, history: [] };
@@ -3598,6 +5583,15 @@
     ratingEditTargetName = name;
     ratingEditPlayerName.textContent = name;
     ratingEditInput.value = getPlayerRating(name);
+    var contact = getPlayerContact(name);
+    ratingEditEmailInput.value = contact.email || "";
+    ratingEditPhoneInput.value = contact.phone || "";
+    ratingEditNotifyCheckbox.disabled = !(contact.email || contact.phone);
+    ratingEditNotifyCheckbox.checked = !ratingEditNotifyCheckbox.disabled && !!contact.reportOptIn;
+    ratingEditNotifyMethodRow.classList.toggle("hidden", !ratingEditNotifyCheckbox.checked);
+    Array.prototype.forEach.call(ratingEditNotifyMethodRadios, function (r) {
+      r.checked = r.value === (contact.notifyMethod || "email");
+    });
     ratingEditOverlay.classList.remove("hidden");
   }
 
@@ -3609,11 +5603,16 @@
   function saveRatingEditPopup() {
     if (!ratingEditTargetName) return;
     var value = parseInt(ratingEditInput.value, 10);
-    if (isNaN(value)) {
-      closeRatingEditPopup();
-      return;
-    }
-    setPlayerRatingManually(ratingEditTargetName, value);
+    if (!isNaN(value)) setPlayerRatingManually(ratingEditTargetName, value);
+    setPlayerContact(ratingEditTargetName, {
+      email: ratingEditEmailInput.value.trim(),
+      phone: ratingEditPhoneInput.value.trim(),
+      reportOptIn: ratingEditNotifyCheckbox.checked,
+      notifyMethod: Array.prototype.filter.call(ratingEditNotifyMethodRadios, function (r) {
+        return r.checked;
+      })[0].value
+    });
+    updateDayReportRecipientsLine();
     closeRatingEditPopup();
     renderAll();
   }
@@ -3633,6 +5632,63 @@
     return 1 / (1 + Math.pow(2, (ratingB - ratingA) / 100));
   }
 
+  // P(a player racing to needA wins reaches that before an opponent
+  // racing to needB does), given the first player's per-game win
+  // probability p. Plain DP over "wins still needed" from each side -
+  // numerically stable for any race length this app would ever use
+  // (races top out well under 100), no factorials/overflow risk.
+  function raceWinProbability(p, needA, needB) {
+    var memo = {};
+    function f(i, j) {
+      if (i === 0) return 1;
+      if (j === 0) return 0;
+      var k = i + "," + j;
+      if (memo[k] !== undefined) return memo[k];
+      var v = p * f(i - 1, j) + (1 - p) * f(i, j - 1);
+      memo[k] = v;
+      return v;
+    }
+    return f(needA, needB);
+  }
+
+  // The weaker side's fair race length against an anchor racing to
+  // anchorRace, given the anchor's per-game win probability p over this
+  // specific opponent (see eloExpectedScore) - the same underlying
+  // win-probability model FargoRate's Fair Match Calculator uses,
+  // applied here via an exact race-outcome search instead of their
+  // Monte Carlo/lookup-table approach. Tries every candidate length and
+  // keeps whichever lands the match closest to 50/50.
+  function fairRaceTarget(p, anchorRace) {
+    if (p <= 0.5) return anchorRace;
+    var best = anchorRace;
+    var bestDiff = Infinity;
+    for (var n = 1; n <= anchorRace; n++) {
+      var diff = Math.abs(raceWinProbability(p, anchorRace, n) - 0.5);
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        best = n;
+      }
+    }
+    return best;
+  }
+
+  // ratedSides: [{key, rating}] for whoever's active right now (player
+  // ids in individual mode, "A"/"B" in teams, or a bracket match's two
+  // named sides). Returns {key: target}, anchored on the highest
+  // rating - that side races to anchorRace unchanged, everyone else
+  // gets their own fair (equal-or-shorter) race.
+  function computeFairRaceTargets(ratedSides, anchorRace) {
+    var targets = {};
+    if (ratedSides.length === 0) return targets;
+    var anchor = ratedSides.reduce(function (best, s) {
+      return s.rating > best.rating ? s : best;
+    });
+    ratedSides.forEach(function (s) {
+      targets[s.key] = s.key === anchor.key ? anchorRace : fairRaceTarget(eloExpectedScore(anchor.rating, s.rating), anchorRace);
+    });
+    return targets;
+  }
+
   // New/lightly-rated players move faster (a "provisional" period) so a
   // handful of games can correct a bad starting estimate quickly; once
   // established, ratings move more slowly and stay stable session to
@@ -3647,7 +5703,12 @@
     var entry = ensureRatingEntry(name);
     entry.rating += delta;
     entry.gamesPlayed += 1;
-    entry.history.push({ ts: ts, rating: entry.rating, delta: delta });
+    // fromGame distinguishes this from a hand-entered override (see
+    // setPlayerRatingManually) so a revert (retrogradeRatingsForGame /
+    // revertRatingsChangedSince) knows whether to also undo the
+    // gamesPlayed bump - a manual edit never touched it, so undoing one
+    // must not decrement it either.
+    entry.history.push({ ts: ts, rating: entry.rating, delta: delta, fromGame: true });
     if (entry.history.length > RATING_HISTORY_CAP) entry.history.shift();
     return entry;
   }
@@ -3850,6 +5911,13 @@
   function resetAllPlayerStats() {
     confirmModal(T("confirm.resetAllPlayerStats"), function () {
       exportAllData();
+      saveResetSnapshot("allPlayerStats", T("resetSnapshot.allPlayerStatsLabel"), {
+        playerStats: JSON.parse(JSON.stringify(PLAYER_STATS)),
+        gameHistory: JSON.parse(JSON.stringify(state.gameHistory)),
+        playerWins: JSON.parse(JSON.stringify(state.playerWins)),
+        teamWins: JSON.parse(JSON.stringify(state.teamWins)),
+        teamMvpWins: JSON.parse(JSON.stringify(state.teamMvpWins))
+      });
       PLAYER_STATS = {};
       savePlayerStatsToStorage(PLAYER_STATS);
       state.playerWins = {};
@@ -3867,16 +5935,34 @@
     });
   }
 
+  // Clears every saved player list AND the live roster itself, so the app
+  // starts completely clean with nobody listed - not just the saved
+  // presets in the "Load Player List" dropdown, which is all this used to
+  // touch.
   function resetAllRosterLists() {
-    if (SAVED_ROSTERS.length === 0) {
+    if (SAVED_ROSTERS.length === 0 && state.players.length === 0) {
       showToast(T("toast.noSavedListsToReset"));
       return;
     }
     confirmModal(T("confirm.resetRosterLists"), function () {
       exportRosterLists();
+      saveResetSnapshot("rosterLists", T("resetSnapshot.rosterListsLabel"), {
+        rosters: JSON.parse(JSON.stringify(SAVED_ROSTERS)),
+        players: JSON.parse(JSON.stringify(state.players)),
+        playerWins: JSON.parse(JSON.stringify(state.playerWins)),
+        teamWins: JSON.parse(JSON.stringify(state.teamWins)),
+        teamMvpWins: JSON.parse(JSON.stringify(state.teamMvpWins))
+      });
       SAVED_ROSTERS = [];
       saveRostersToStorage(SAVED_ROSTERS);
       populateRosterLoadSelect();
+      state.players = [];
+      state.playerWins = {};
+      state.teamWins = {};
+      state.teamMvpWins = {};
+      saveState();
+      validateNewPlayerNameInput();
+      renderAll();
       showToast(T("toast.rosterListsCleared"));
     });
   }
@@ -3936,15 +6022,148 @@
       });
   }
 
-  function exportAllData() {
-    var payload = {
+  function defaultBackupFilename() {
+    return "pool-master-counter-backup-" + new Date().toISOString().slice(0, 10) + ".json";
+  }
+
+  // Strips characters a filesystem would reject and appends .json if the
+  // caller's name doesn't already end with it - used for a user-typed
+  // backup name, not the auto-generated default (which is already safe).
+  function sanitizeBackupFilename(name) {
+    var trimmed = (name || "").trim().replace(/[\\/:*?"<>|]/g, "");
+    if (!trimmed) return defaultBackupFilename();
+    return /\.json$/i.test(trimmed) ? trimmed : trimmed + ".json";
+  }
+
+  // Shared by exportAllData and shareReport - the exact same full-app
+  // snapshot either way, just delivered differently (a plain download
+  // vs a Web Share attachment).
+  function buildBackupPayload() {
+    return {
       exportedAt: new Date().toISOString(),
       state: state,
       rosters: SAVED_ROSTERS,
       playerStats: PLAYER_STATS,
-      ratings: PLAYER_RATINGS
+      ratings: PLAYER_RATINGS,
+      contacts: PLAYER_CONTACTS,
+      playerAdded: PLAYER_ADDED
     };
-    downloadJSON("pool-master-counter-backup-" + payload.exportedAt.slice(0, 10) + ".json", payload);
+  }
+
+  // filename (optional): only the manual "Export All Data" button passes
+  // one, via the promptModal that lets the user name the file - the
+  // automatic safety-backup call sites (resetTodayStats,
+  // resetAllPlayerStats) call this with no argument on purpose, since
+  // those are silent safety nets and shouldn't interrupt the reset flow
+  // with a prompt.
+  function exportAllData(filename) {
+    downloadJSON(filename ? sanitizeBackupFilename(filename) : defaultBackupFilename(), buildBackupPayload());
+  }
+
+  // Shared by the Copy Report button and shareReport()'s no-native-share
+  // text-only fallback below.
+  function copyReportToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(
+        function () {
+          showToast(T("toast.dayReportCopied"));
+        },
+        function () {
+          alertModal(text);
+        }
+      );
+    } else {
+      alertModal(text);
+    }
+  }
+
+  // mailto:/sms: links (what Email/Text Report use when the backup isn't
+  // being attached) can't carry file attachments - that's a platform
+  // restriction, not something fixable here. The Web Share API is the
+  // actual way to hand a file to Mail, Messages, AirDrop, etc. with it
+  // genuinely attached, so whenever the "Attach full backup file"
+  // checkbox (dayReportAttachBackupCheckbox) is on, Email Report, Text
+  // Report and Share Report all try this first instead of going
+  // straight to a mailto:/sms: link - which does mean giving up the
+  // auto-filled opted-in recipient for a manual pick in the OS share
+  // sheet, but there's no API that offers both a pre-filled recipient
+  // and a real attachment. Reuses the same full-backup payload as
+  // exportAllData as the attached file, minus contacts (email/phone),
+  // which have no business leaving the device in a file meant to be
+  // handed to whoever's on the other end of Mail/Messages/AirDrop.
+  // Sending an empty object rather than omitting the key entirely
+  // still round-trips cleanly through mergeContactsData if this file
+  // is ever imported elsewhere: local contact info always wins on a
+  // name conflict there, and an empty import adds nothing, so an
+  // existing player's contact info on the importing device is left
+  // exactly as it was.
+  //
+  // onFallback (optional): called whenever the file-attach path fails
+  // for ANY reason - no navigator.share/canShare support at all, or
+  // the harder case some desktop Chrome/macOS combos hit, where
+  // canShare({files}) reports true but share() then rejects every
+  // call anyway (confirmed live). Without this, that failure left
+  // the caller with nothing but a silently downloaded file - no email
+  // composed, no text message started, nothing - which is worse than
+  // what Email/Text Report did before file attachment existed at all.
+  // Callers pass their own normal fallback (open the mailto:/sms:
+  // link, or a text-only share) so a broken share sheet degrades back
+  // to "everything except the actual attachment" instead of "nothing".
+  function shareReportWithBackupAttachment(text, onFallback) {
+    var payload = buildBackupPayload();
+    payload.contacts = {};
+    var filename = defaultBackupFilename();
+    var file = new File([JSON.stringify(payload, null, 2)], filename, { type: "application/json" });
+
+    function fallback() {
+      downloadJSON(filename, payload);
+      showToast(T("toast.shareFallback"));
+      if (onFallback) onFallback();
+    }
+
+    // canShare() saying yes doesn't guarantee share() actually works -
+    // some desktop Chrome/macOS combos report file-sharing support but
+    // then reject every call with NotAllowedError (canShare with a
+    // files array is still the correct feature test up front; share()
+    // alone doesn't imply file support).
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({
+        files: [file],
+        title: "Pool Master Counter — Day Report",
+        text: text
+      }).catch(function (err) {
+        if (err && err.name === "AbortError") return;
+        fallback();
+      });
+    } else {
+      fallback();
+    }
+  }
+
+  // The "Attach full backup file" checkbox is off: a plain text share of
+  // the day report and nothing more, same as any other native share
+  // sheet - falls back to the same clipboard copy Copy Report uses on a
+  // browser/device with no navigator.share at all.
+  function shareReportTextOnly(text) {
+    if (navigator.share) {
+      navigator.share({ title: "Pool Master Counter — Day Report", text: text }).catch(function (err) {
+        if (err && err.name === "AbortError") return;
+        copyReportToClipboard(text);
+      });
+    } else {
+      copyReportToClipboard(text);
+    }
+  }
+
+  function shareReport() {
+    var text = buildDayReportTextPlain(todayDateStr());
+    if (dayReportAttachBackupCheckbox.checked) {
+      shareReportWithBackupAttachment(text, function () {
+        shareReportTextOnly(text);
+      });
+    } else {
+      shareReportTextOnly(text);
+    }
   }
 
   // Pulls every (player, calendar date) pair referenced in an imported
@@ -4030,6 +6249,21 @@
       };
     });
     return result;
+  }
+
+  // Earliest date wins on a name match - "added" should reflect when a
+  // name was truly first seen, on whichever device saw it first, not
+  // whichever side of the import happens to be read last.
+  function mergePlayerAddedData(localAdded, importedAdded) {
+    var merged = {};
+    Object.keys(importedAdded || {}).forEach(function (name) {
+      merged[name] = importedAdded[name];
+    });
+    Object.keys(localAdded || {}).forEach(function (name) {
+      var existing = merged[name];
+      merged[name] = existing && existing < localAdded[name] ? existing : localAdded[name];
+    });
+    return merged;
   }
 
   // Unions two saved-roster-list arrays, skipping entries whose player set
@@ -4145,6 +6379,119 @@
     reader.readAsText(file);
   }
 
+  // Lists `names` in the removed-players conflict overlay, each defaulting
+  // to unchecked (keep removed - the local device's own choice wins by
+  // default). Calls onContinue with just the names the user checked to
+  // restore; importAllData handles actually re-adding them.
+  function showRemovedPlayersConflict(names, onContinue) {
+    removedPlayersChecklist.innerHTML = "";
+    names.forEach(function (name) {
+      var li = document.createElement("li");
+      li.className = "tournament-player-check-row";
+      var label = document.createElement("label");
+      var checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.value = name;
+      var span = document.createElement("span");
+      span.textContent = name;
+      label.appendChild(checkbox);
+      label.appendChild(span);
+      li.appendChild(label);
+      removedPlayersChecklist.appendChild(li);
+    });
+    removedPlayersOverlay.classList.remove("hidden");
+    function handleContinue() {
+      var restored = Array.prototype.slice
+        .call(removedPlayersChecklist.querySelectorAll('input[type="checkbox"]:checked'))
+        .map(function (cb) {
+          return cb.value;
+        });
+      removedPlayersOverlay.classList.add("hidden");
+      btnRemovedPlayersContinue.removeEventListener("click", handleContinue);
+      onContinue(restored);
+    }
+    btnRemovedPlayersContinue.addEventListener("click", handleContinue);
+  }
+
+  function formatConflictFacts(facts) {
+    var parts = [];
+    parts.push(T(facts.sessions === 1 ? "playerConflict.oneSession" : "playerConflict.manySessions", { count: facts.sessions }));
+    parts.push(T("playerConflict.ratingFact", { rating: facts.rating }));
+    parts.push(T(facts.addedAt ? "playerConflict.addedFact" : "playerConflict.addedUnknownFact", { date: facts.addedAt || "" }));
+    return parts.join(" · ");
+  }
+
+  // Same-name-on-both-sides conflicts found by importAllData's merge
+  // branch (see there for how `conflicts` - [{name, local, imported}],
+  // each side {rating, sessions, addedAt} - gets built). Each row
+  // defaults to "sync" (today's existing merge-by-name behavior);
+  // picking "keep separate" is what's new. onContinue receives a plain
+  // {name: "sync"|"separate"} map.
+  function showPlayerConflictOverlay(conflicts, onContinue) {
+    playerConflictList.innerHTML = "";
+    conflicts.forEach(function (conflict, i) {
+      var li = document.createElement("li");
+      li.className = "player-conflict-row";
+
+      var nameEl = document.createElement("div");
+      nameEl.className = "player-conflict-row-name";
+      nameEl.textContent = conflict.name;
+      li.appendChild(nameEl);
+
+      var factsEl = document.createElement("div");
+      factsEl.className = "player-conflict-row-facts";
+      factsEl.textContent =
+        T("playerConflict.hereLabel") + " " + formatConflictFacts(conflict.local) + " — " +
+        T("playerConflict.backupLabel") + " " + formatConflictFacts(conflict.imported);
+      li.appendChild(factsEl);
+
+      var choices = document.createElement("div");
+      choices.className = "wizard-format-options";
+      var radioName = "player-conflict-choice-" + i;
+
+      var syncLabel = document.createElement("label");
+      syncLabel.className = "wizard-format-option";
+      var syncRadio = document.createElement("input");
+      syncRadio.type = "radio";
+      syncRadio.name = radioName;
+      syncRadio.value = "sync";
+      syncRadio.checked = true;
+      var syncSpan = document.createElement("span");
+      syncSpan.textContent = T("playerConflict.sync");
+      syncLabel.appendChild(syncRadio);
+      syncLabel.appendChild(syncSpan);
+      choices.appendChild(syncLabel);
+
+      var separateLabel = document.createElement("label");
+      separateLabel.className = "wizard-format-option";
+      var separateRadio = document.createElement("input");
+      separateRadio.type = "radio";
+      separateRadio.name = radioName;
+      separateRadio.value = "separate";
+      var separateSpan = document.createElement("span");
+      separateSpan.textContent = T("playerConflict.keepSeparate");
+      separateLabel.appendChild(separateRadio);
+      separateLabel.appendChild(separateSpan);
+      choices.appendChild(separateLabel);
+
+      li.appendChild(choices);
+      li.dataset.conflictName = conflict.name;
+      playerConflictList.appendChild(li);
+    });
+    playerConflictOverlay.classList.remove("hidden");
+    function handleContinue() {
+      var choices = {};
+      conflicts.forEach(function (conflict, i) {
+        var checked = playerConflictList.querySelector('input[name="player-conflict-choice-' + i + '"]:checked');
+        choices[conflict.name] = checked ? checked.value : "sync";
+      });
+      playerConflictOverlay.classList.add("hidden");
+      btnPlayerConflictContinue.removeEventListener("click", handleContinue);
+      onContinue(choices);
+    }
+    btnPlayerConflictContinue.addEventListener("click", handleContinue);
+  }
+
   function importAllData(file) {
     var reader = new FileReader();
     reader.onload = function () {
@@ -4156,7 +6503,7 @@
         return;
       }
       if (!data || typeof data !== "object" || !data.state) {
-        alertModal(T("alert.notABackupFile"));
+        alertModal(describeUnrecognizedBackupFile(data));
         return;
       }
 
@@ -4171,12 +6518,10 @@
           var importedState = data.state && typeof data.state === "object" ? data.state : defaultState();
           var importedRosters = Array.isArray(data.rosters) ? data.rosters : [];
           var importedPlayerStats = data.playerStats && typeof data.playerStats === "object" ? data.playerStats : {};
-
           var extraSessions = summarizeGameHistoryByPlayer(importedState.gameHistory || []);
-          var mergedPlayerStats = mergePlayerStatsData(PLAYER_STATS, importedPlayerStats, extraSessions);
-          var rosterMerge = mergeRosterLists(SAVED_ROSTERS, importedRosters);
           var importedRatings = data.ratings && typeof data.ratings === "object" ? data.ratings : {};
-          var mergedRatings = mergeRatingsData(PLAYER_RATINGS, importedRatings);
+          var importedContacts = data.contacts && typeof data.contacts === "object" ? data.contacts : {};
+          var importedPlayerAdded = data.playerAdded && typeof data.playerAdded === "object" ? data.playerAdded : {};
 
           var importedRosterPlayerNames = [];
           importedRosters.forEach(function (r) {
@@ -4185,78 +6530,620 @@
             });
           });
 
-          var finalState;
-          var newPlayerCount = 0;
-          if (localIsFresh) {
-            finalState = importedState;
-            var freshKnownNames = {};
-            (finalState.players || []).forEach(function (p) {
-              freshKnownNames[normalizeNameKey(p.name)] = true;
+          // Finds the actual key in an imported (not-yet-local) store
+          // matching `name`, case-insensitively - the imported side's
+          // own casing may not match what candidateNames used to spot it.
+          function findImportedKey(obj, name) {
+            var key = normalizeNameKey(name);
+            var match = Object.keys(obj || {}).filter(function (k) {
+              return normalizeNameKey(k) === key;
             });
-            importedRosterPlayerNames.forEach(function (name) {
-              if (!name || freshKnownNames[normalizeNameKey(name)]) return;
-              freshKnownNames[normalizeNameKey(name)] = true;
-              finalState.players.push({
-                id: uid(),
-                name: name,
-                voice: finalState.players.length % VOICE_PITCHES.length,
-                playing: false,
-                teamId: null,
-                balls: 0
+            return match.length ? match[0] : null;
+          }
+
+          // Renames `oldName` to `newName` everywhere it appears on the
+          // imported side only - used for a "keep separate" choice below,
+          // so every merge/add step that follows treats it as a brand-new,
+          // distinct name instead of colliding with the local player.
+          function renameImportedName(oldName, newName) {
+            (importedState.players || []).forEach(function (p) {
+              if (p && normalizeNameKey(p.name) === normalizeNameKey(oldName)) p.name = newName;
+            });
+            [importedPlayerStats, extraSessions, importedRatings, importedContacts, importedPlayerAdded].forEach(function (store) {
+              var key = findImportedKey(store, oldName);
+              if (!key) return;
+              var value = store[key];
+              delete store[key];
+              store[newName] = value;
+              if (value && typeof value === "object" && "name" in value) value.name = newName;
+            });
+            importedRosterPlayerNames = importedRosterPlayerNames.map(function (n) {
+              return normalizeNameKey(n) === normalizeNameKey(oldName) ? newName : n;
+            });
+            importedRosters.forEach(function (r) {
+              if (!Array.isArray(r.players)) return;
+              r.players = r.players.map(function (n) {
+                return normalizeNameKey(n) === normalizeNameKey(oldName) ? newName : n;
               });
             });
-          } else {
-            finalState = state;
-            var knownNames = {};
+          }
+
+          // Names skipped because they're in REMOVED_PLAYERS - this
+          // device deliberately removed them, so the import shouldn't
+          // silently re-add them. Collected here and resolved after the
+          // merge via the removed-players conflict overlay.
+          var conflictedNames = [];
+          var conflictSeen = {};
+          function collectConflict(name) {
+            var key = normalizeNameKey(name);
+            if (conflictSeen[key]) return;
+            conflictSeen[key] = true;
+            conflictedNames.push(name);
+          }
+
+          // Runs everything that used to run unconditionally - now after
+          // any same-name choices (see below) have already been applied
+          // as renames on the imported side, so these merges only ever
+          // see one imported name per real local name matched: exactly
+          // one it should combine with (sync) or one that's now distinct
+          // (keep separate).
+          function proceedWithMerge() {
+            var mergedPlayerStats = mergePlayerStatsData(PLAYER_STATS, importedPlayerStats, extraSessions);
+            var rosterMerge = mergeRosterLists(SAVED_ROSTERS, importedRosters);
+            var mergedRatings = mergeRatingsData(PLAYER_RATINGS, importedRatings);
+            var mergedContacts = mergeContactsData(PLAYER_CONTACTS, importedContacts);
+            var mergedPlayerAdded = mergePlayerAddedData(PLAYER_ADDED, importedPlayerAdded);
+
+            var finalState;
+            var newPlayerCount = 0;
+            if (localIsFresh) {
+              finalState = importedState;
+              finalState.players = (finalState.players || []).filter(function (p) {
+                if (p && p.name && isPlayerRemoved(p.name)) {
+                  collectConflict(p.name);
+                  return false;
+                }
+                return true;
+              });
+              var freshKnownNames = {};
+              finalState.players.forEach(function (p) {
+                freshKnownNames[normalizeNameKey(p.name)] = true;
+              });
+              importedRosterPlayerNames.forEach(function (name) {
+                if (!name || freshKnownNames[normalizeNameKey(name)]) return;
+                if (isPlayerRemoved(name)) {
+                  collectConflict(name);
+                  return;
+                }
+                freshKnownNames[normalizeNameKey(name)] = true;
+                finalState.players.push({
+                  id: uid(),
+                  name: name,
+                  voice: finalState.players.length % VOICE_PITCHES.length,
+                  playing: false,
+                  teamId: null,
+                  balls: 0
+                });
+              });
+            } else {
+              finalState = state;
+              var knownNames = {};
+              finalState.players.forEach(function (p) {
+                knownNames[normalizeNameKey(p.name)] = true;
+              });
+              var candidateNames = (Array.isArray(importedState.players) ? importedState.players : [])
+                .map(function (p) {
+                  return p && p.name;
+                })
+                .concat(Object.keys(importedPlayerStats))
+                .concat(Object.keys(extraSessions))
+                .concat(importedRosterPlayerNames);
+              candidateNames.forEach(function (name) {
+                if (!name || knownNames[normalizeNameKey(name)]) return;
+                if (isPlayerRemoved(name)) {
+                  knownNames[normalizeNameKey(name)] = true;
+                  collectConflict(name);
+                  return;
+                }
+                knownNames[normalizeNameKey(name)] = true;
+                finalState.players.push({
+                  id: uid(),
+                  name: name,
+                  voice: finalState.players.length % VOICE_PITCHES.length,
+                  playing: false,
+                  teamId: null,
+                  balls: 0
+                });
+                newPlayerCount += 1;
+              });
+            }
+
+            // Capitalizes every roster name at once, covering both freshly-
+            // adopted importedState.players (never passed through addPlayer)
+            // and any newly-pushed candidates above, so an imported backup
+            // with lowercase names can't leave the roster inconsistently cased.
             finalState.players.forEach(function (p) {
-              knownNames[normalizeNameKey(p.name)] = true;
+              if (p && p.name) p.name = capitalizeName(p.name);
             });
-            var candidateNames = (Array.isArray(importedState.players) ? importedState.players : [])
+
+            localStorage.setItem(ROSTERS_KEY, JSON.stringify(rosterMerge.rosters));
+            localStorage.setItem(PLAYER_STATS_KEY, JSON.stringify(mergedPlayerStats));
+            localStorage.setItem(RATINGS_KEY, JSON.stringify(mergedRatings));
+            localStorage.setItem(CONTACTS_KEY, JSON.stringify(mergedContacts));
+            localStorage.setItem(PLAYER_ADDED_KEY, JSON.stringify(mergedPlayerAdded));
+
+            function finishImport() {
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(finalState));
+              if (!localIsFresh) {
+                alertModal(T("alert.mergedImport", { players: newPlayerCount, lists: rosterMerge.added }), function () {
+                  location.reload();
+                });
+              } else {
+                location.reload();
+              }
+            }
+
+            if (conflictedNames.length) {
+              showRemovedPlayersConflict(conflictedNames, function (restoredNames) {
+                restoredNames.forEach(function (name) {
+                  clearPlayerRemoved(name);
+                  finalState.players.push({
+                    id: uid(),
+                    name: capitalizeName(name),
+                    voice: finalState.players.length % VOICE_PITCHES.length,
+                    playing: false,
+                    teamId: null,
+                    balls: 0
+                  });
+                  if (!localIsFresh) newPlayerCount += 1;
+                });
+                finishImport();
+              });
+            } else {
+              finishImport();
+            }
+          }
+
+          // Same-name-on-both-sides check: only possible in the merge
+          // case (a fresh local roster has nobody to collide with). Every
+          // existing merge below already treats a name match as "same
+          // person" automatically - this is what makes that a choice
+          // instead, without changing anything about how sync itself works.
+          if (!localIsFresh) {
+            var existingNames = {};
+            state.players.forEach(function (p) {
+              existingNames[normalizeNameKey(p.name)] = p.name;
+            });
+            var seenCandidate = {};
+            var conflicts = [];
+            (Array.isArray(importedState.players) ? importedState.players : [])
               .map(function (p) {
                 return p && p.name;
               })
               .concat(Object.keys(importedPlayerStats))
               .concat(Object.keys(extraSessions))
-              .concat(importedRosterPlayerNames);
-            candidateNames.forEach(function (name) {
-              if (!name || knownNames[normalizeNameKey(name)]) return;
-              knownNames[normalizeNameKey(name)] = true;
-              finalState.players.push({
-                id: uid(),
-                name: name,
-                voice: finalState.players.length % VOICE_PITCHES.length,
-                playing: false,
-                teamId: null,
-                balls: 0
+              .concat(importedRosterPlayerNames)
+              .forEach(function (name) {
+                if (!name) return;
+                var key = normalizeNameKey(name);
+                if (seenCandidate[key] || !existingNames[key]) return;
+                seenCandidate[key] = true;
+                var localName = existingNames[key];
+                var localRatingEntry = getPlayerRatingEntry(localName);
+                var localStatsKey = findPlayerStatsKey(localName);
+                var importedRatingKey = findImportedKey(importedRatings, name);
+                var importedStatsKey = findImportedKey(importedPlayerStats, name);
+                var importedAddedKey = findImportedKey(importedPlayerAdded, name);
+                conflicts.push({
+                  name: localName,
+                  local: {
+                    rating: localRatingEntry ? localRatingEntry.rating : DEFAULT_RATING,
+                    sessions: localStatsKey ? (PLAYER_STATS[localStatsKey].sessions || []).length : 0,
+                    addedAt: getPlayerAddedAt(localName) ? getPlayerAddedAt(localName).slice(0, 10) : null
+                  },
+                  imported: {
+                    rating: importedRatingKey ? importedRatings[importedRatingKey].rating : DEFAULT_RATING,
+                    sessions: importedStatsKey ? (importedPlayerStats[importedStatsKey].sessions || []).length : 0,
+                    addedAt: importedAddedKey ? String(importedPlayerAdded[importedAddedKey]).slice(0, 10) : null
+                  }
+                });
               });
-              newPlayerCount += 1;
-            });
+            if (conflicts.length) {
+              showPlayerConflictOverlay(conflicts, function (choices) {
+                var todayStr = todayDateStr();
+                var usedSeparateNames = {};
+                conflicts.forEach(function (conflict) {
+                  if (choices[conflict.name] !== "separate") return;
+                  var base = conflict.name + " (" + todayStr + ")";
+                  var candidate = base;
+                  var n = 2;
+                  while (existingNames[normalizeNameKey(candidate)] || usedSeparateNames[normalizeNameKey(candidate)]) {
+                    candidate = base + " #" + n;
+                    n += 1;
+                  }
+                  usedSeparateNames[normalizeNameKey(candidate)] = true;
+                  renameImportedName(conflict.name, candidate);
+                });
+                proceedWithMerge();
+              });
+              return;
+            }
           }
-
-          // Capitalizes every roster name at once, covering both freshly-
-          // adopted importedState.players (never passed through addPlayer)
-          // and any newly-pushed candidates above, so an imported backup
-          // with lowercase names can't leave the roster inconsistently cased.
-          finalState.players.forEach(function (p) {
-            if (p && p.name) p.name = capitalizeName(p.name);
-          });
-
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(finalState));
-          localStorage.setItem(ROSTERS_KEY, JSON.stringify(rosterMerge.rosters));
-          localStorage.setItem(PLAYER_STATS_KEY, JSON.stringify(mergedPlayerStats));
-          localStorage.setItem(RATINGS_KEY, JSON.stringify(mergedRatings));
-
-          if (!localIsFresh) {
-            alertModal(T("alert.mergedImport", { players: newPlayerCount, lists: rosterMerge.added }), function () {
-              location.reload();
-            });
-          } else {
-            location.reload();
-          }
+          proceedWithMerge();
         } catch (e) {
           alertModal(T("alert.couldNotImport", { message: e.message }));
         }
       });
+    };
+    reader.onerror = function () {
+      alertModal(T("alert.couldNotReadFile"));
+    };
+    reader.readAsText(file);
+  }
+
+  // ---------------------------------------------------------------------
+  // Recover Data (reset snapshots + comparison/recovery)
+  // ---------------------------------------------------------------------
+
+  // The player names a snapshot has data for, plus anyone appearing in its
+  // game log (covers a name that shows up in games but has no separate
+  // stats entry for some reason).
+  function namesInSnapshot(type, data) {
+    var names = {};
+    if (type === "todayStats") {
+      Object.keys(data.prunedSessions || {}).forEach(function (n) {
+        names[n] = true;
+      });
+    } else if (type === "allPlayerStats") {
+      Object.keys(data.playerStats || {}).forEach(function (n) {
+        names[n] = true;
+      });
+    } else if (type === "allRatings") {
+      Object.keys(data.ratings || {}).forEach(function (n) {
+        names[n] = true;
+      });
+    } else if (type === "playerStats") {
+      if (data.name) names[data.name] = true;
+    } else if (type === "rosterLists") {
+      (data.players || []).forEach(function (p) {
+        if (p && p.name) names[p.name] = true;
+      });
+    }
+    (data.gameHistory || []).forEach(function (g) {
+      (g.winnerNames || []).concat(g.opponentNames || []).forEach(function (n) {
+        names[n] = true;
+      });
+    });
+    return Object.keys(names).sort(function (a, b) {
+      return a.localeCompare(b);
+    });
+  }
+
+  // A player's sessions as recorded in this snapshot - same shape
+  // mergeSessionLists already knows how to combine, whatever the type.
+  function sessionsInSnapshotForPlayer(type, data, name) {
+    if (type === "todayStats") return data.prunedSessions[name] || [];
+    if (type === "allPlayerStats") return (data.playerStats[name] && data.playerStats[name].sessions) || [];
+    if (type === "playerStats") return data.sessions || [];
+    return [];
+  }
+
+  function summarizeSnapshotPlayer(type, data, name) {
+    if (type === "allRatings") {
+      var r = data.ratings[name];
+      return r ? T("recoverData.ratingSummary", { rating: r.rating, games: r.gamesPlayed || 0 }) : "";
+    }
+    if (type === "rosterLists") return "";
+    var sessions = sessionsInSnapshotForPlayer(type, data, name);
+    var games = 0;
+    var wins = 0;
+    sessions.forEach(function (s) {
+      games += (s.games || []).length;
+      wins += s.wins || 0;
+    });
+    return T("recoverData.gamesSummary", { games: games, wins: wins });
+  }
+
+  function snapshotOverallSummary(type, data) {
+    if (type === "tournament") return T("recoverData.tournamentSummary");
+    var names = namesInSnapshot(type, data);
+    if (type === "rosterLists") {
+      return T("recoverData.rosterListsSummary", { players: names.length, lists: (data.rosters || []).length });
+    }
+    var gameCount = (data.gameHistory || []).length;
+    return gameCount
+      ? T("recoverData.playersAndGamesSummary", { players: names.length, games: gameCount })
+      : T("recoverData.playersSummary", { players: names.length });
+  }
+
+  function renderRecoverDataList() {
+    recoverDataList.innerHTML = "";
+    if (RESET_SNAPSHOTS.length === 0) {
+      var hint = document.createElement("li");
+      hint.className = "empty-hint";
+      hint.textContent = T("recoverData.none");
+      recoverDataList.appendChild(hint);
+      return;
+    }
+    RESET_SNAPSHOTS.forEach(function (entry) {
+      var li = document.createElement("li");
+      li.className = "recover-data-row";
+      var info = document.createElement("div");
+      info.className = "recover-data-row-info";
+      var label = document.createElement("span");
+      label.className = "recover-data-row-label";
+      label.textContent = entry.label;
+      var meta = document.createElement("span");
+      meta.className = "recover-data-row-meta";
+      var when;
+      try {
+        when = new Date(entry.ts).toLocaleString();
+      } catch (e) {
+        when = entry.ts;
+      }
+      meta.textContent = when + " · " + snapshotOverallSummary(entry.type, entry.data);
+      info.appendChild(label);
+      info.appendChild(meta);
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn btn-ghost";
+      btn.textContent = T("recoverData.recover");
+      btn.addEventListener("click", function () {
+        openRecoverDetail(entry.type, entry.label, entry.data);
+      });
+      li.appendChild(info);
+      li.appendChild(btn);
+      recoverDataList.appendChild(li);
+    });
+  }
+
+  var recoverDetailCurrent = null; // { type, data }
+
+  function renderRecoverGamesChecklist(type, data) {
+    if (type !== "todayStats" && type !== "allPlayerStats") {
+      recoverGamesChecklist.innerHTML = "";
+      return;
+    }
+    var checkedNames = {};
+    Array.prototype.forEach.call(recoverPlayersChecklist.querySelectorAll('input[type="checkbox"]:checked'), function (cb) {
+      checkedNames[cb.value] = true;
+    });
+    var relevantGames = (data.gameHistory || []).filter(function (g) {
+      return (g.winnerNames || []).concat(g.opponentNames || []).some(function (n) {
+        return checkedNames[n];
+      });
+    });
+    recoverGamesChecklist.innerHTML = "";
+    relevantGames.forEach(function (g) {
+      var li = document.createElement("li");
+      var label = document.createElement("label");
+      var checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.value = g.ts;
+      checkbox.checked = true;
+      var span = document.createElement("span");
+      var winners = joinNamesForReport(g.winnerNames || []);
+      var losers = joinNamesForReport(g.opponentNames || []);
+      var time = formatReportGameTime(g.ts);
+      span.textContent = (time ? time + " — " : "") + winners + " won " + g.gameLabel + (losers ? " against " + losers : "");
+      label.appendChild(checkbox);
+      label.appendChild(span);
+      li.appendChild(label);
+      recoverGamesChecklist.appendChild(li);
+    });
+  }
+
+  function openRecoverDetail(type, label, data) {
+    recoverDetailCurrent = { type: type, data: data };
+    recoverDetailTitle.textContent = label;
+    recoverDetailExplain.textContent = T("recoverData.detailExplain");
+
+    var isTournament = type === "tournament";
+    var isRosterLists = type === "rosterLists";
+    var hasGames = type === "todayStats" || type === "allPlayerStats";
+    recoverPlayersSection.classList.toggle("hidden", isTournament);
+    recoverGamesSection.classList.toggle("hidden", !hasGames);
+    recoverRostersSection.classList.toggle("hidden", !isRosterLists);
+
+    recoverPlayersChecklist.innerHTML = "";
+    if (!isTournament) {
+      namesInSnapshot(type, data).forEach(function (name) {
+        var li = document.createElement("li");
+        li.className = "tournament-player-check-row";
+        var rowLabel = document.createElement("label");
+        var checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.value = name;
+        checkbox.addEventListener("change", function () {
+          renderRecoverGamesChecklist(type, data);
+        });
+        var span = document.createElement("span");
+        var summary = summarizeSnapshotPlayer(type, data, name);
+        span.textContent = summary ? name + " — " + summary : name;
+        rowLabel.appendChild(checkbox);
+        rowLabel.appendChild(span);
+        li.appendChild(rowLabel);
+        recoverPlayersChecklist.appendChild(li);
+      });
+    }
+    renderRecoverGamesChecklist(type, data);
+
+    recoverRostersChecklist.innerHTML = "";
+    if (isRosterLists) {
+      (data.rosters || []).forEach(function (r) {
+        var li = document.createElement("li");
+        li.className = "tournament-player-check-row";
+        var rowLabel = document.createElement("label");
+        var checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.value = r.id;
+        var span = document.createElement("span");
+        span.textContent = r.label;
+        rowLabel.appendChild(checkbox);
+        rowLabel.appendChild(span);
+        li.appendChild(rowLabel);
+        recoverRostersChecklist.appendChild(li);
+      });
+    }
+
+    recoverDetailOverlay.classList.remove("hidden");
+  }
+
+  function closeRecoverDetail() {
+    recoverDetailOverlay.classList.add("hidden");
+    recoverDetailCurrent = null;
+  }
+
+  // Dedupes by ts (same convention mergeRatingsData uses for rating
+  // history entries), newest first, capped the same way live play caps
+  // state.gameHistory in creditWin.
+  function mergeGameHistoryEntries(local, restored) {
+    var seen = {};
+    (local || []).forEach(function (e) {
+      if (e && e.ts) seen[e.ts] = true;
+    });
+    var merged = (local || []).slice();
+    (restored || []).forEach(function (e) {
+      if (!e || !e.ts || seen[e.ts]) return;
+      seen[e.ts] = true;
+      merged.push(e);
+    });
+    merged.sort(function (a, b) {
+      return (b.ts || "").localeCompare(a.ts || "");
+    });
+    if (merged.length > 200) merged.length = 200;
+    return merged;
+  }
+
+  function restoreCheckedFromSnapshot() {
+    if (!recoverDetailCurrent) return;
+    var type = recoverDetailCurrent.type;
+    var data = recoverDetailCurrent.data;
+
+    if (type === "tournament") {
+      if (TOURNAMENT) {
+        showToast(T("toast.recoverTournamentBlocked"));
+        return;
+      }
+      TOURNAMENT = JSON.parse(JSON.stringify(data.tournament));
+      saveTournamentToStorage(TOURNAMENT);
+      renderTournamentPage();
+      closeRecoverDetail();
+      showToast(T("toast.recoverRestored"));
+      return;
+    }
+
+    var checkedPlayers = Array.prototype.slice
+      .call(recoverPlayersChecklist.querySelectorAll('input[type="checkbox"]:checked'))
+      .map(function (cb) {
+        return cb.value;
+      });
+
+    if (type === "rosterLists") {
+      var checkedRosterIds = Array.prototype.slice
+        .call(recoverRostersChecklist.querySelectorAll('input[type="checkbox"]:checked'))
+        .map(function (cb) {
+          return cb.value;
+        });
+      checkedPlayers.forEach(function (name) {
+        var alreadyThere = state.players.some(function (p) {
+          return normalizeNameKey(p.name) === normalizeNameKey(name);
+        });
+        if (!alreadyThere) addPlayer(name);
+      });
+      if (checkedRosterIds.length) {
+        var toRestore = (data.rosters || []).filter(function (r) {
+          return checkedRosterIds.indexOf(r.id) !== -1;
+        });
+        var merge = mergeRosterLists(SAVED_ROSTERS, toRestore);
+        SAVED_ROSTERS = merge.rosters;
+        saveRostersToStorage(SAVED_ROSTERS);
+        populateRosterLoadSelect();
+      }
+      saveState();
+      renderAll();
+      closeRecoverDetail();
+      showToast(T("toast.recoverRestored"));
+      return;
+    }
+
+    var restoredStats = false;
+    checkedPlayers.forEach(function (name) {
+      var sessions = sessionsInSnapshotForPlayer(type, data, name);
+      if (sessions.length) {
+        var key = findPlayerStatsKey(name) || name;
+        var existing = (PLAYER_STATS[key] && PLAYER_STATS[key].sessions) || [];
+        PLAYER_STATS[key] = { name: key, sessions: mergeSessionLists(existing, sessions) };
+        restoredStats = true;
+      }
+      var historyToRestore =
+        type === "todayStats" && data.ratingHistory
+          ? data.ratingHistory[name]
+          : type === "allRatings" && data.ratings && data.ratings[name]
+          ? data.ratings[name].history
+          : null;
+      if (historyToRestore && historyToRestore.length) {
+        var importedRatingsObj = {};
+        importedRatingsObj[name] = { history: historyToRestore };
+        var mergedR = mergeRatingsData(PLAYER_RATINGS, importedRatingsObj);
+        PLAYER_RATINGS[name] = mergedR[name];
+        restoredStats = true;
+      }
+    });
+    if (restoredStats) {
+      savePlayerStatsToStorage(PLAYER_STATS);
+      saveRatingsToStorage(PLAYER_RATINGS);
+    }
+
+    var checkedGameTs = Array.prototype.slice
+      .call(recoverGamesChecklist.querySelectorAll('input[type="checkbox"]:checked'))
+      .map(function (cb) {
+        return cb.value;
+      });
+    if (checkedGameTs.length) {
+      var gamesToRestore = (data.gameHistory || []).filter(function (g) {
+        return checkedGameTs.indexOf(g.ts) !== -1;
+      });
+      state.gameHistory = mergeGameHistoryEntries(state.gameHistory, gamesToRestore);
+      recomputeLiveWinsFromGameHistory();
+      saveState();
+    }
+
+    renderAll();
+    closeRecoverDetail();
+    showToast(T("toast.recoverRestored"));
+  }
+
+  // A re-imported full backup file doesn't carry a reset "type" of its
+  // own - treat it like an allPlayerStats snapshot (same player+game
+  // checklist shape) so it flows through the identical recovery UI.
+  function normalizeImportedBackupAsSnapshot(data) {
+    var importedState = data.state && typeof data.state === "object" ? data.state : {};
+    return {
+      type: "allPlayerStats",
+      data: {
+        playerStats: data.playerStats && typeof data.playerStats === "object" ? data.playerStats : {},
+        gameHistory: Array.isArray(importedState.gameHistory) ? importedState.gameHistory : []
+      }
+    };
+  }
+
+  function importFileForRecovery(file) {
+    var reader = new FileReader();
+    reader.onload = function () {
+      var data;
+      try {
+        data = JSON.parse(reader.result);
+      } catch (e) {
+        alertModal(T("alert.notValidJson"));
+        return;
+      }
+      if (!data || typeof data !== "object" || !data.state) {
+        alertModal(describeUnrecognizedBackupFile(data));
+        return;
+      }
+      var normalized = normalizeImportedBackupAsSnapshot(data);
+      openRecoverDetail(normalized.type, T("recoverData.importedFileLabel"), normalized.data);
     };
     reader.onerror = function () {
       alertModal(T("alert.couldNotReadFile"));
@@ -4874,6 +7761,154 @@
     wizardOverlay.classList.add("hidden");
   }
 
+  // ---------------------------------------------------------------------
+  // First-time user flow — a short 4-step welcome shown once, only when
+  // this device has no players and no history at all (see
+  // isFirstTimeUser). Every step but the last has a plain Cancel/Go
+  // footer; the last step's own two buttons ARE the terminal actions, so
+  // it has no separate Go. Cancelling (at any step) or finishing both
+  // mark it seen so it never shows again.
+  // ---------------------------------------------------------------------
+
+  var ONBOARDING_SEEN_KEY = "poolMasterCounter.onboardingSeen.v1";
+
+  function hasSeenOnboarding() {
+    try {
+      return localStorage.getItem(ONBOARDING_SEEN_KEY) === "1";
+    } catch (e) {
+      return true;
+    }
+  }
+
+  function markOnboardingSeen() {
+    try {
+      localStorage.setItem(ONBOARDING_SEEN_KEY, "1");
+    } catch (e) {
+      console.warn("Could not save onboarding-seen flag.", e);
+    }
+  }
+
+  // Just the live roster - PLAYER_STATS/SAVED_ROSTERS are pre-seeded with
+  // bundled example data on every device's very first boot
+  // (migrateFromRepoIfNeeded), before this ever runs, so they're never a
+  // reliable signal of whether a real person has set anything up yet.
+  function isFirstTimeUser() {
+    return state.players.length === 0;
+  }
+
+  function onboardingPlayChoice() {
+    for (var i = 0; i < onboardingPlayChoiceRadios.length; i++) {
+      if (onboardingPlayChoiceRadios[i].checked) return onboardingPlayChoiceRadios[i].value;
+    }
+    return "now";
+  }
+
+  function validateOnboardingNameInput() {
+    var trimmed = onboardingNameInput.value.trim();
+    var duplicate = trimmed && isDuplicatePlayerName(trimmed);
+    btnOnboardingGo.disabled = onboardingStep === 2 && (!trimmed || duplicate);
+    if (duplicate) {
+      onboardingNameRequirement.textContent = T("players.duplicateNameHint", { name: capitalizeName(trimmed) });
+      onboardingNameRequirement.classList.remove("hidden");
+    } else {
+      onboardingNameRequirement.classList.add("hidden");
+    }
+  }
+
+  function renderOnboardingStep() {
+    [1, 2, 3, 4].forEach(function (n) {
+      document.getElementById("onboarding-step-" + n).classList.toggle("hidden", n !== onboardingStep);
+    });
+    onboardingHeading.textContent = T("onboarding.step" + onboardingStep + "Heading");
+    onboardingProgress.textContent = T("wizard.stepOf", { step: onboardingStep, total: 4 });
+
+    onboardingProgressDots.innerHTML = "";
+    for (var i = 0; i < 4; i++) {
+      var dot = document.createElement("span");
+      dot.className = "wizard-dot" + (i < onboardingStep - 1 ? " is-done" : i === onboardingStep - 1 ? " is-active" : "");
+      onboardingProgressDots.appendChild(dot);
+    }
+
+    onboardingStandardFooter.classList.toggle("hidden", onboardingStep === 4);
+    if (onboardingStep === 2) validateOnboardingNameInput();
+    else btnOnboardingGo.disabled = false;
+  }
+
+  function openOnboarding() {
+    onboardingStep = 1;
+    onboardingNameInput.value = "";
+    onboardingRatingInput.value = "";
+    onboardingEmailInput.value = "";
+    onboardingPhoneInput.value = "";
+    onboardingReportOptInCheckbox.checked = false;
+    onboardingReportOptInCheckbox.disabled = true;
+    onboardingNotifyMethodRow.classList.add("hidden");
+    Array.prototype.forEach.call(onboardingNotifyMethodRadios, function (r) {
+      r.checked = r.value === "email";
+    });
+    onboardingNameRequirement.classList.add("hidden");
+    Array.prototype.forEach.call(onboardingPlayChoiceRadios, function (r) {
+      r.checked = r.value === "now";
+    });
+    renderOnboardingStep();
+    onboardingOverlay.classList.remove("hidden");
+  }
+
+  function closeOnboarding() {
+    onboardingOverlay.classList.add("hidden");
+    markOnboardingSeen();
+  }
+
+  // Go only ever moves forward (there's no Back on this short flow) -
+  // each step does whatever work it owns (adding the player on step 2,
+  // reading the now/later choice on step 3) before advancing.
+  function advanceOnboarding() {
+    if (onboardingStep === 1) {
+      onboardingStep = 2;
+      renderOnboardingStep();
+      onboardingNameInput.focus({ preventScroll: true });
+      return;
+    }
+    if (onboardingStep === 2) {
+      var trimmed = onboardingNameInput.value.trim();
+      if (!trimmed || isDuplicatePlayerName(trimmed)) {
+        validateOnboardingNameInput();
+        return;
+      }
+      var starting = parseStartingRatingInput(onboardingRatingInput);
+      var player = addPlayer(onboardingNameInput.value, starting === null ? undefined : starting);
+      if (player) {
+        player.playing = true;
+        saveState();
+        var email = onboardingEmailInput.value.trim();
+        var phone = onboardingPhoneInput.value.trim();
+        if (email || phone) {
+          setPlayerContact(player.name, {
+            email: email,
+            phone: phone,
+            reportOptIn: onboardingReportOptInCheckbox.checked,
+            notifyMethod: Array.prototype.filter.call(onboardingNotifyMethodRadios, function (r) {
+              return r.checked;
+            })[0].value
+          });
+          updateDayReportRecipientsLine();
+        }
+        renderAll();
+      }
+      onboardingStep = 3;
+      renderOnboardingStep();
+      return;
+    }
+    if (onboardingStep === 3) {
+      if (onboardingPlayChoice() === "later") {
+        closeOnboarding();
+        return;
+      }
+      onboardingStep = 4;
+      renderOnboardingStep();
+    }
+  }
+
   // Picks which Help section to jump to based on whichever page/overlay is
   // currently showing, so the same Help button is contextual everywhere.
   function currentHelpSectionId() {
@@ -4953,6 +7988,7 @@
     applyRotationIfDue();
     renderAll();
     updateCurrentGameSummary();
+    tickShotCounter();
     closeWizard();
     setFocusMode(true);
     showToast(T("toast.letsPlay"));
@@ -4996,7 +8032,7 @@
     var games = [];
     (gameHistory || []).forEach(function (entry) {
       if (!entry || typeof entry === "string" || !entry.winnerNames || !entry.ts) return;
-      if (entry.ts.slice(0, 10) !== dateStr) return;
+      if (localDateStrFromTs(entry.ts) !== dateStr) return;
       var won = entry.winnerNames.indexOf(playerName) !== -1;
       var lost = !won && (entry.opponentNames || []).indexOf(playerName) !== -1;
       if (!won && !lost) return;
@@ -5033,7 +8069,8 @@
         wonRace: entry.wonRace,
         raceTarget: entry.raceTarget,
         raceCount: entry.raceCount,
-        ballsLeftOnTable: entry.ballsLeftOnTable === undefined ? null : entry.ballsLeftOnTable
+        ballsLeftOnTable: entry.ballsLeftOnTable === undefined ? null : entry.ballsLeftOnTable,
+        skunk: entry.skunk === undefined ? false : entry.skunk
       });
     });
     if (games.length === 0) return null;
@@ -5055,7 +8092,7 @@
   // roster entry, wins/wonTournament come from the live id-based counters;
   // otherwise they're derived from the games themselves.
   function computeLiveSessionForPlayer(name) {
-    var today = new Date().toISOString().slice(0, 10);
+    var today = todayDateStr();
     var session = computeSessionFromGameHistory(state.gameHistory, name, today) || {
       date: today,
       wins: 0,
@@ -5067,7 +8104,13 @@
     if (playerId) {
       var wins = state.playerWins[playerId] || 0;
       session.wins = wins;
-      session.wonTournament = wins > 0 && wins >= state.raceToWinsTarget;
+      // This player's win count mirrors their team's shared total in
+      // Teams mode (creditWin bumps every member's playerWins on a
+      // team win), so the target to compare against is the team's,
+      // not an individual fair-race target keyed by this player's id.
+      var livePlayer = getPlayer(playerId);
+      var raceKey = state.currentGame.mode === "teams" && livePlayer && livePlayer.teamId ? livePlayer.teamId : playerId;
+      session.wonTournament = wins > 0 && wins >= effectiveRaceTarget(raceKey);
     } else {
       session.wonTournament = false;
     }
@@ -5243,14 +8286,23 @@
   function computeWinLossSynopsis(games) {
     var wins = 0;
     var losses = 0;
+    var skunkWins = 0;
+    var skunkLosses = 0;
     games.forEach(function (g) {
-      if (g.result === "won") wins += 1;
-      else losses += 1;
+      if (g.result === "won") {
+        wins += 1;
+        if (g.skunk) skunkWins += 1;
+      } else {
+        losses += 1;
+        if (g.skunk) skunkLosses += 1;
+      }
     });
     var total = wins + losses;
     return {
       wins: wins,
       losses: losses,
+      skunkWins: skunkWins,
+      skunkLosses: skunkLosses,
       total: total,
       pct: total ? Math.round((wins / total) * 100) : null
     };
@@ -5318,8 +8370,20 @@
         )
       );
     }
-    playerPageSynopsisBody.appendChild(synopsisStatRow(T("playerPage.gamesWon"), synopsis.wins, "win"));
-    playerPageSynopsisBody.appendChild(synopsisStatRow(T("playerPage.gamesLost"), synopsis.losses, "loss"));
+    playerPageSynopsisBody.appendChild(
+      synopsisStatRow(
+        T("playerPage.gamesWon"),
+        synopsis.skunkWins ? T("playerPage.winsWithSkunk", { wins: synopsis.wins, skunks: synopsis.skunkWins }) : synopsis.wins,
+        "win"
+      )
+    );
+    playerPageSynopsisBody.appendChild(
+      synopsisStatRow(
+        T("playerPage.gamesLost"),
+        synopsis.skunkLosses ? T("playerPage.lossesWithSkunk", { losses: synopsis.losses, skunks: synopsis.skunkLosses }) : synopsis.losses,
+        "loss"
+      )
+    );
     playerPageSynopsisBody.appendChild(
       synopsisStatRow(T("playerPage.winPct"), synopsis.pct === null ? "—" : synopsis.pct + "%")
     );
@@ -5638,7 +8702,7 @@
   // synopsis page does.
   function allGamesForPlayerName(name) {
     var sessions = getPlayerSessions(name);
-    var today = new Date().toISOString().slice(0, 10);
+    var today = todayDateStr();
     var live = computeSessionFromGameHistory(state.gameHistory, name, today);
     var merged = live ? mergeSessionIntoList(sessions, live) : sessions;
     var games = [];
@@ -5672,7 +8736,8 @@
       durationMs: g.durationMs,
       wonRace: g.wonRace,
       raceTarget: g.raceTarget,
-      raceCount: g.raceCount
+      raceCount: g.raceCount,
+      skunk: g.skunk || false
     };
   }
 
@@ -5743,12 +8808,8 @@
     top.className = "scale-row-top";
     var l = document.createElement("span");
     l.className = "scale-row-label";
-    l.textContent = label;
-    var v = document.createElement("span");
-    v.className = "scale-row-value";
-    v.textContent = value;
+    l.textContent = T("allPlayers.statWithCount", { label: label, count: value });
     top.appendChild(l);
-    top.appendChild(v);
     row.appendChild(top);
 
     var track = document.createElement("div");
@@ -6493,7 +9554,13 @@
     return section;
   }
 
-  function buildPlayerGraph(stats, minMs, maxMs, period) {
+  // sharedAxisMax (optional): when set (the All Players comparison view
+  // passes the axis for whichever player there has played the most
+  // games), every player's chart uses that SAME y-axis instead of its own
+  // - so the line's climb rate is directly comparable card to card.
+  // Falls back to this player's own axis (the original behavior) for the
+  // single-player stats page, where there's nothing to compare against.
+  function buildPlayerGraph(stats, minMs, maxMs, period, sharedAxisMax) {
     var wrap = document.createElement("div");
     wrap.className = "player-graph-wrap";
 
@@ -6526,7 +9593,7 @@
       return wrap;
     }
 
-    var axisMax = axisMaxFor(maxCount);
+    var axisMax = sharedAxisMax || axisMaxFor(maxCount);
     var width = 600;
     var height = 200;
 
@@ -6748,12 +9815,8 @@
 
   function buildAllPlayerCard(
     stats,
-    maxPlayed,
-    maxWins,
-    maxLosses,
-    maxTournPlayed,
-    maxTournWins,
-    maxTournLosses,
+    sharedAxisMax,
+    tournSharedAxisMax,
     minMs,
     maxMs,
     period,
@@ -6796,7 +9859,7 @@
 
     if (allPlayersViewMode === "graph") {
       if (isInLiveRoster) {
-        li.appendChild(buildPlayerGraph(stats, minMs, maxMs, period));
+        li.appendChild(buildPlayerGraph(stats, minMs, maxMs, period, sharedAxisMax));
       } else {
         var graphHolder = document.createElement("div");
         graphHolder.className = "all-player-graph-holder hidden";
@@ -6806,7 +9869,7 @@
         showGraphBtn.textContent = T("allPlayers.showGraph");
         showGraphBtn.addEventListener("click", function () {
           if (!graphHolder.hasChildNodes()) {
-            graphHolder.appendChild(buildPlayerGraph(stats, minMs, maxMs, period));
+            graphHolder.appendChild(buildPlayerGraph(stats, minMs, maxMs, period, sharedAxisMax));
           }
           var nowHidden = graphHolder.classList.toggle("hidden");
           showGraphBtn.textContent = T(nowHidden ? "allPlayers.showGraph" : "allPlayers.hideGraph");
@@ -6815,13 +9878,17 @@
         li.appendChild(graphHolder);
       }
     } else {
-      li.appendChild(buildScaleRow(T("allPlayers.gamesPlayed"), stats.played, maxPlayed, "scale-fill-played"));
-      li.appendChild(buildScaleRow(T("allPlayers.gamesWon"), stats.wins, maxWins, "scale-fill-won"));
-      li.appendChild(buildScaleRow(T("allPlayers.gamesLost"), stats.losses, maxLosses, "scale-fill-lost"));
+      // Played/won/lost share one scale (played's, since played >= won +
+      // lost for any one player) so equal counts always draw equal bar
+      // lengths and different players' bars stay directly comparable -
+      // same for the tournament trio below.
+      li.appendChild(buildScaleRow(T("allPlayers.gamesPlayed"), stats.played, sharedAxisMax, "scale-fill-played"));
+      li.appendChild(buildScaleRow(T("allPlayers.gamesWon"), stats.wins, sharedAxisMax, "scale-fill-won"));
+      li.appendChild(buildScaleRow(T("allPlayers.gamesLost"), stats.losses, sharedAxisMax, "scale-fill-lost"));
       if (stats.tournamentPlayed > 0) {
-        li.appendChild(buildScaleRow(T("allPlayers.tournamentsPlayed"), stats.tournamentPlayed, maxTournPlayed, "scale-fill-tourn-played"));
-        li.appendChild(buildScaleRow(T("allPlayers.tournamentsWon"), stats.tournamentWins, maxTournWins, "scale-fill-tourn-won"));
-        li.appendChild(buildScaleRow(T("allPlayers.tournamentsLost"), stats.tournamentLosses, maxTournLosses, "scale-fill-tourn-lost"));
+        li.appendChild(buildScaleRow(T("allPlayers.tournamentsPlayed"), stats.tournamentPlayed, tournSharedAxisMax, "scale-fill-tourn-played"));
+        li.appendChild(buildScaleRow(T("allPlayers.tournamentsWon"), stats.tournamentWins, tournSharedAxisMax, "scale-fill-tourn-won"));
+        li.appendChild(buildScaleRow(T("allPlayers.tournamentsLost"), stats.tournamentLosses, tournSharedAxisMax, "scale-fill-tourn-lost"));
       }
 
       if (stats.games.length) {
@@ -6848,20 +9915,18 @@
       return computePlayerCareerStats(name, period);
     });
 
+    // The player with the most games played (maxPlayed) sets the shared
+    // scale for every played/won/lost bar AND every graph's y-axis, for
+    // every player shown - so equal counts always look equal and one
+    // player's chart can be read against another's, instead of each
+    // player silently rescaling to their own numbers. Same idea for the
+    // tournament trio, off tournaments played.
     var maxPlayed = 0;
-    var maxWins = 0;
-    var maxLosses = 0;
     var maxTournPlayed = 0;
-    var maxTournWins = 0;
-    var maxTournLosses = 0;
     var minTs = null;
     stats.forEach(function (s) {
       maxPlayed = Math.max(maxPlayed, s.played);
-      maxWins = Math.max(maxWins, s.wins);
-      maxLosses = Math.max(maxLosses, s.losses);
       maxTournPlayed = Math.max(maxTournPlayed, s.tournamentPlayed);
-      maxTournWins = Math.max(maxTournWins, s.tournamentWins);
-      maxTournLosses = Math.max(maxTournLosses, s.tournamentLosses);
       s.games.forEach(function (g) {
         if (!g.ts) return;
         if (minTs === null || g.ts < minTs) minTs = g.ts;
@@ -6890,11 +9955,7 @@
     if (maxMs <= minMs) maxMs = minMs + 1;
 
     var playedAxisMax = axisMaxFor(maxPlayed);
-    var winsAxisMax = axisMaxFor(maxWins);
-    var lossesAxisMax = axisMaxFor(maxLosses);
     var tournPlayedAxisMax = axisMaxFor(maxTournPlayed);
-    var tournWinsAxisMax = axisMaxFor(maxTournWins);
-    var tournLossesAxisMax = axisMaxFor(maxTournLosses);
 
     var sorted = sortAllPlayerStats(stats, allPlayersSortSelect.value);
 
@@ -6918,11 +9979,7 @@
         buildAllPlayerCard(
           s,
           playedAxisMax,
-          winsAxisMax,
-          lossesAxisMax,
           tournPlayedAxisMax,
-          tournWinsAxisMax,
-          tournLossesAxisMax,
           minMs,
           maxMs,
           period,
@@ -7339,7 +10396,7 @@
     return { shuffled: shuffled, size: size, wb: wb };
   }
 
-  function buildDoubleEliminationBracket(playerNames, gameType, target, raceTo) {
+  function buildDoubleEliminationBracket(playerNames, gameType, target, raceTo, fairRace) {
     var built = buildWinnersBracketRounds(playerNames);
     var t = {
       format: "double",
@@ -7347,6 +10404,7 @@
       gameType: gameType,
       target: target,
       raceTo: raceTo,
+      fairRace: !!fairRace,
       players: built.shuffled,
       size: built.size,
       wb: built.wb,
@@ -7368,7 +10426,7 @@
   // past the last round, so the losers-bracket logic in advanceBracket
   // never fires) and no grand final — the winners-bracket champion is the
   // tournament champion outright.
-  function buildSingleEliminationBracket(playerNames, gameType, target, raceTo) {
+  function buildSingleEliminationBracket(playerNames, gameType, target, raceTo, fairRace) {
     var built = buildWinnersBracketRounds(playerNames);
     var t = {
       format: "single",
@@ -7376,6 +10434,7 @@
       gameType: gameType,
       target: target,
       raceTo: raceTo,
+      fairRace: !!fairRace,
       players: built.shuffled,
       size: built.size,
       wb: built.wb,
@@ -7396,7 +10455,7 @@
   // player exactly once (shuffled match order only, since there's no
   // seeding to speak of), and the champion is decided once every match
   // has a result — see finalizeRoundRobinIfComplete.
-  function buildRoundRobinTournament(playerNames, gameType, target, raceTo) {
+  function buildRoundRobinTournament(playerNames, gameType, target, raceTo, fairRace) {
     var shuffled = playerNames.slice();
     for (var i = shuffled.length - 1; i > 0; i--) {
       var j = Math.floor(Math.random() * (i + 1));
@@ -7416,6 +10475,7 @@
       gameType: gameType,
       target: target,
       raceTo: raceTo,
+      fairRace: !!fairRace,
       players: shuffled,
       matches: matches,
       champion: null,
@@ -7574,15 +10634,16 @@
     var gameType = tournamentGameTypeSelect.value;
     var target = parseInt(tournamentTargetInput.value, 10) || GAME_TYPES[gameType].defaultTarget;
     var raceTo = parseInt(tournamentRaceToInput.value, 10) || 1;
+    var fairRace = tournamentFairRaceCheckbox.checked;
     var format = Array.prototype.filter.call(tournamentFormatRadios, function (r) {
       return r.checked;
     })[0].value;
     if (format === "roundrobin") {
-      TOURNAMENT = buildRoundRobinTournament(names, gameType, target, raceTo);
+      TOURNAMENT = buildRoundRobinTournament(names, gameType, target, raceTo, fairRace);
     } else if (format === "single") {
-      TOURNAMENT = buildSingleEliminationBracket(names, gameType, target, raceTo);
+      TOURNAMENT = buildSingleEliminationBracket(names, gameType, target, raceTo, fairRace);
     } else {
-      TOURNAMENT = buildDoubleEliminationBracket(names, gameType, target, raceTo);
+      TOURNAMENT = buildDoubleEliminationBracket(names, gameType, target, raceTo, fairRace);
     }
     saveTournamentToStorage(TOURNAMENT);
     renderTournamentPage();
@@ -7591,9 +10652,15 @@
   function abandonTournament() {
     var isDone = TOURNAMENT && TOURNAMENT.champion;
     var clear = function () {
+      if (TOURNAMENT) {
+        saveResetSnapshot("tournament", T("resetSnapshot.tournamentLabel"), {
+          tournament: JSON.parse(JSON.stringify(TOURNAMENT))
+        });
+      }
       TOURNAMENT = null;
       saveTournamentToStorage(null);
       renderTournamentPage();
+      renderRecoverDataList();
     };
     if (isDone) {
       clear();
@@ -7710,6 +10777,21 @@
       bWins: 0,
       startedAt: new Date().toISOString()
     };
+    // Frozen for the life of this one match - a bracket match always
+    // has a clean start (unlike the session's ongoing roster), so
+    // there's no self-healing cache to maintain here, just a one-time
+    // computation at the moment the two sides are actually known.
+    if (TOURNAMENT.fairRace) {
+      var targets = computeFairRaceTargets(
+        [
+          { key: "a", rating: getPlayerRating(match.a) },
+          { key: "b", rating: getPlayerRating(match.b) }
+        ],
+        TOURNAMENT.raceTo
+      );
+      TOURNAMENT.active.raceToA = targets.a;
+      TOURNAMENT.active.raceToB = targets.b;
+    }
     saveTournamentToStorage(TOURNAMENT);
     renderTournamentActive();
   }
@@ -7741,7 +10823,9 @@
       t.active.bBalls = 0;
       t.active.startedAt = new Date().toISOString();
       playWinSound(voice);
-      if (t.active[winsKey] >= t.raceTo) {
+      var raceToKey = side === "a" ? "raceToA" : "raceToB";
+      var effectiveMatchRaceTo = t.fairRace && t.active[raceToKey] ? t.active[raceToKey] : t.raceTo;
+      if (t.active[winsKey] >= effectiveMatchRaceTo) {
         var championAlreadyDecided = !!t.champion;
         reportBracketResult(t, match, name);
         if (!championAlreadyDecided && t.champion) {
@@ -7773,7 +10857,9 @@
     nameEl.appendChild(buildPlayerLinkIcon(name));
     panel.appendChild(nameEl);
 
-    panel.appendChild(buildStatMini(T("tournament.matchWins"), wins, wins >= t.raceTo));
+    var raceToKey = side === "a" ? "raceToA" : "raceToB";
+    var sideRaceTo = t.fairRace && t.active && t.active[raceToKey] ? t.active[raceToKey] : t.raceTo;
+    panel.appendChild(buildStatMini(T("tournament.matchWins"), wins, wins >= sideRaceTo));
 
     var block = document.createElement("div");
     block.className = "stat-block";
@@ -7786,6 +10872,8 @@
     block.appendChild(label);
     block.appendChild(value);
     panel.appendChild(block);
+
+    if (t.fairRace) panel.appendChild(buildFairRaceNote(sideRaceTo));
 
     var controls = document.createElement("div");
     controls.className = "ball-controls";
@@ -8084,10 +11172,15 @@
     var name = currentStatsPlayerName;
     if (!name) return;
     confirmModal(T("confirm.resetPlayerStats", { name: name }), function () {
+      saveResetSnapshot("playerStats", T("resetSnapshot.playerStatsLabel", { name: name }), {
+        name: name,
+        sessions: JSON.parse(JSON.stringify(getPlayerSessions(name)))
+      });
       currentStatsSessions = [];
       setPlayerSessions(name, []);
       renderPlayerHistoryList([]);
       renderPlayerSynopsis();
+      renderRecoverDataList();
     });
   }
 
@@ -8099,7 +11192,11 @@
   backfillMissingRatingsFromHistory();
   backfillMissingAddedDates();
 
-  btnExportAllData.addEventListener("click", exportAllData);
+  btnExportAllData.addEventListener("click", function () {
+    promptModal(T("backup.exportFilenamePrompt"), defaultBackupFilename(), function (name) {
+      exportAllData(name);
+    });
+  });
 
   btnImportAllData.addEventListener("click", function () {
     importFileInput.click();
@@ -8117,11 +11214,27 @@
   btnResetAllRatings.addEventListener("click", resetAllPlayersOfficialRating);
   btnResetSessionTournament.addEventListener("click", resetSessionAndTournament);
 
+  btnRecoverImportFile.addEventListener("click", function () {
+    recoverImportFileInput.click();
+  });
+  recoverImportFileInput.addEventListener("change", function () {
+    var file = recoverImportFileInput.files && recoverImportFileInput.files[0];
+    recoverImportFileInput.value = "";
+    if (!file) return;
+    importFileForRecovery(file);
+  });
+  btnRecoverRestore.addEventListener("click", restoreCheckedFromSnapshot);
+  btnRecoverCancel.addEventListener("click", closeRecoverDetail);
+  recoverDetailOverlay.addEventListener("click", function (e) {
+    if (e.target === recoverDetailOverlay) closeRecoverDetail();
+  });
+
   btnRatingEditSave.addEventListener("click", saveRatingEditPopup);
   btnRatingEditCancel.addEventListener("click", closeRatingEditPopup);
   ratingEditOverlay.addEventListener("click", function (e) {
     if (e.target === ratingEditOverlay) closeRatingEditPopup();
   });
+  wireNotifyCheckbox(ratingEditEmailInput, ratingEditPhoneInput, ratingEditNotifyCheckbox, ratingEditNotifyMethodRow);
 
   btnExportRosterLists.addEventListener("click", exportRosterLists);
 
@@ -8166,6 +11279,7 @@
     saveState();
     renderScoreboard();
     updateCurrentGameSummary();
+    tickShotCounter();
   });
 
   gameTargetInput.addEventListener("input", function () {
@@ -8182,7 +11296,32 @@
     saveState();
     renderScoreboard();
     updateCurrentGameSummary();
+    tickShotCounter();
   });
+
+  shotCounterEnabledCheckbox.addEventListener("change", function () {
+    state.currentGame.shotCounterEnabled = shotCounterEnabledCheckbox.checked;
+    if (shotCounterEnabledCheckbox.checked) {
+      shotCounterHidden = false;
+      state.currentGame.shotCounterHidden = false;
+    }
+    saveState();
+    shotCounterBeepRow.classList.toggle("hidden", !shotCounterEnabledCheckbox.checked);
+    if (shotCounterEnabledCheckbox.checked) startShotCounter();
+    else stopShotCounter();
+  });
+
+  shotCounterBeepInput.addEventListener("input", function () {
+    var sec = parseInt(shotCounterBeepInput.value, 10);
+    if (!sec || sec < 5) return;
+    state.currentGame.shotCounterBeepSec = Math.min(600, sec);
+    saveState();
+  });
+
+  document.getElementById("shot-counter-widget").addEventListener("click", toggleShotCounterPause);
+
+  btnShotCounterToggleVisibility.addEventListener("click", toggleShotCounterVisibility);
+  document.getElementById("shot-counter-visibility-toggle").addEventListener("click", toggleShotCounterVisibility);
 
   Array.prototype.forEach.call(modeRadios, function (radio) {
     radio.addEventListener("change", function () {
@@ -8194,13 +11333,41 @@
     });
   });
 
+  // Turning queue mode on caps individual play at exactly 2 seated: keep
+  // the first 2 currently-playing players as-is, bench any extras onto
+  // the back of the queue, then (if fewer than 2 ended up seated - e.g.
+  // only 0 or 1 were playing to begin with) pull straight from the
+  // queue's front to fill the empty seat(s), so the table is never left
+  // short a player just from checking the box. Turning it back off
+  // leaves state.queue alone (harmless while unused) so the order is
+  // remembered if it's re-enabled later.
+  queueModeCheckbox.addEventListener("change", function () {
+    state.currentGame.queueEnabled = queueModeCheckbox.checked;
+    if (queueModeCheckbox.checked) {
+      var seated = activePlayers();
+      seated.slice(2).forEach(function (p) {
+        p.playing = false;
+        p.balls = 0;
+      });
+      var queue = effectiveQueue();
+      while (activePlayers().length < 2 && queue.length > 0) {
+        var nextUp = queue.shift();
+        nextUp.playing = true;
+        nextUp.balls = 0;
+      }
+      saveQueue(queue);
+    }
+    saveState();
+    renderAll();
+  });
+
   noStatsCheckbox.addEventListener("change", function () {
     noStatsMode = noStatsCheckbox.checked;
 
     // Unchecking it is the only way out of Quick Counter once you're in
     // Focus Mode (every other control is hidden there) — without this,
     // the scoreboard kept the bare point tally while the rest of the app
-    // (Game Order, Current Game) still showed the real rotation/target as
+    // (Games Rotations, Current Game) still showed the real rotation/target as
     // if it were in effect, which is exactly the mismatch this fixes.
     if (!noStatsCheckbox.checked && quickCounterMode) {
       quickCounterMode = false;
@@ -8224,6 +11391,19 @@
     var target = parseInt(raceToWinsInput.value, 10);
     if (!target || target < 1) return;
     state.raceToWinsTarget = target;
+    // The anchor value just changed - drop the cached fair targets so
+    // they're recomputed against it immediately instead of waiting for
+    // the active roster to also happen to change.
+    state.fairRaceTargets = null;
+    saveState();
+    renderScoreboard();
+    renderStandings();
+    updateCurrentGameSummary();
+  });
+
+  fairRaceEnabledCheckbox.addEventListener("change", function () {
+    state.fairRaceEnabled = fairRaceEnabledCheckbox.checked;
+    state.fairRaceTargets = null;
     saveState();
     renderScoreboard();
     renderStandings();
@@ -8231,7 +11411,9 @@
   });
 
   btnResetGame.addEventListener("click", resetCurrentGame);
-  btnUndoWin.addEventListener("click", undoLastWin);
+  btnUndoWin.addEventListener("click", function () {
+    undoLastWin();
+  });
   btnShare.addEventListener("click", shareStandings);
   btnExportSession.addEventListener("click", function () {
     exportSession();
@@ -8276,14 +11458,23 @@
   });
 
   btnMilestoneClose.addEventListener("click", closeMilestone);
+  btnMilestoneUndo.addEventListener("click", undoTournamentWinFromMilestoneOverlay);
   milestoneOverlay.addEventListener("click", function (e) {
     if (e.target === milestoneOverlay) closeMilestone();
   });
 
   btnGamewinClose.addEventListener("click", closeGameWinOverlay);
+  btnGamewinUndo.addEventListener("click", undoWinFromGameWinOverlay);
   gamewinOverlay.addEventListener("click", function (e) {
     if (e.target === gamewinOverlay) closeGameWinOverlay();
   });
+
+  btnForceResetClose.addEventListener("click", closeForceResetNotice);
+  forceResetOverlay.addEventListener("click", function (e) {
+    if (e.target === forceResetOverlay) closeForceResetNotice();
+  });
+
+  btnResetTodayStats.addEventListener("click", resetTodayStats);
 
   btnOnHillClose.addEventListener("click", closeOnHill);
   onHillOverlay.addEventListener("click", function (e) {
@@ -8303,6 +11494,20 @@
     endTournamentSilently();
   });
   btnSaveSessionSkip.addEventListener("click", function () {
+    // "Skip" never folded this session into PLAYER_STATS (that's what
+    // "Save" does via exportAllPlayerStats) - the only thing about to be
+    // lost is the live gameHistory/win tallies, so snapshot just those.
+    if (state.gameHistory.length) {
+      saveResetSnapshot("todayStats", T("resetSnapshot.sessionSkipLabel", { date: todayDateStr() }), {
+        date: todayDateStr(),
+        prunedSessions: {},
+        gameHistory: JSON.parse(JSON.stringify(state.gameHistory)),
+        playerWins: JSON.parse(JSON.stringify(state.playerWins)),
+        teamWins: JSON.parse(JSON.stringify(state.teamWins)),
+        teamMvpWins: JSON.parse(JSON.stringify(state.teamMvpWins)),
+        ratingHistory: {}
+      });
+    }
     closeSaveSessionPopup();
     startNewSession(false);
     endTournamentSilently();
@@ -8336,6 +11541,7 @@
     });
   });
 
+  btnTestOnboarding.addEventListener("click", openOnboarding);
   btnOpenWizard.addEventListener("click", openWizard);
   btnWizardClose.addEventListener("click", closeWizard);
   btnWizardCancel.addEventListener("click", closeWizard);
@@ -8349,6 +11555,16 @@
     btnWizardStartQuickCounter.classList.toggle("hidden", !wizardTempCounterCheckbox.checked);
   });
   btnWizardStartQuickCounter.addEventListener("click", startQuickCounter);
+
+  btnOnboardingCancel.addEventListener("click", closeOnboarding);
+  btnOnboardingGo.addEventListener("click", advanceOnboarding);
+  onboardingNameInput.addEventListener("input", validateOnboardingNameInput);
+  wireNotifyCheckbox(onboardingEmailInput, onboardingPhoneInput, onboardingReportOptInCheckbox, onboardingNotifyMethodRow);
+  btnOnboardingRunWizard.addEventListener("click", function () {
+    closeOnboarding();
+    openWizard();
+  });
+  btnOnboardingManual.addEventListener("click", closeOnboarding);
 
   Array.prototype.forEach.call(wizardFormatRadios, function (radio) {
     radio.addEventListener("change", function () {
@@ -8437,31 +11653,62 @@
     }, 500);
   });
 
+  dayReportFormatSelect.value = dayReportFormat;
+  dayReportFormatSelect.addEventListener("change", function () {
+    dayReportFormat = dayReportFormatSelect.value;
+    saveDayReportFormat(dayReportFormat);
+  });
+
   btnDayReportCopy.addEventListener("click", function () {
-    var text = buildDayReportText(todayDateStr());
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(
-        function () {
-          showToast(T("toast.dayReportCopied"));
-        },
-        function () {
-          alertModal(text);
-        }
-      );
-    } else {
-      alertModal(text);
-    }
+    copyReportToClipboard(buildDayReportText(todayDateStr()));
   });
 
   btnDayReportEmail.addEventListener("click", function () {
-    var text = buildDayReportText(todayDateStr());
-    window.location.href = "mailto:?subject=" + encodeURIComponent("Pool Master Counter — Day Report") + "&body=" + encodeURIComponent(text);
+    var text = buildDayReportTextPlain(todayDateStr());
+    function openEmailCompose() {
+      var to = reportOptedInContacts("email")
+        .map(function (c) {
+          return encodeURIComponent(c.contact.email);
+        })
+        .join(",");
+      window.location.href = "mailto:" + to + "?subject=" + encodeURIComponent("Pool Master Counter — Day Report") + "&body=" + encodeURIComponent(text);
+    }
+    if (dayReportAttachBackupCheckbox.checked) {
+      // If the share sheet can't actually deliver the attachment (see
+      // shareReportWithBackupAttachment's onFallback), still compose
+      // the email exactly like the unchecked path would - a broken
+      // share sheet on this device shouldn't mean Email Report does
+      // literally nothing.
+      shareReportWithBackupAttachment(text, openEmailCompose);
+      return;
+    }
+    openEmailCompose();
   });
 
   btnDayReportSms.addEventListener("click", function () {
-    var text = buildDayReportText(todayDateStr());
-    window.location.href = "sms:&body=" + encodeURIComponent(text);
+    var text = buildDayReportTextPlain(todayDateStr());
+    function openSmsCompose() {
+      var to = reportOptedInContacts("sms")
+        .map(function (c) {
+          return encodeURIComponent(c.contact.phone);
+        })
+        .join(",");
+      window.location.href = "sms:" + to + "&body=" + encodeURIComponent(text);
+    }
+    if (dayReportAttachBackupCheckbox.checked) {
+      shareReportWithBackupAttachment(text, openSmsCompose);
+      return;
+    }
+    openSmsCompose();
   });
+
+  dayReportAttachBackupCheckbox.checked = loadDayReportAttachBackup();
+  dayReportAttachBackupCheckbox.addEventListener("change", function () {
+    saveDayReportAttachBackup(dayReportAttachBackupCheckbox.checked);
+    updateDayReportRecipientsLine();
+  });
+
+  btnDayReportShareBackup.addEventListener("click", shareReport);
 
   btnPlayerPageExport.addEventListener("click", exportCurrentPlayerStats);
   btnPlayerPageReset.addEventListener("click", resetPlayerHistoricalStats);
@@ -8523,16 +11770,30 @@
   gameTargetInput.value = state.currentGame.target;
   gameTargetUnitSelect.value = state.currentGame.unit;
   raceToWinsInput.value = state.raceToWinsTarget;
+  fairRaceEnabledCheckbox.checked = state.fairRaceEnabled;
   Array.prototype.forEach.call(modeRadios, function (radio) {
     radio.checked = radio.value === state.currentGame.mode;
   });
+  shotCounterEnabledCheckbox.checked = state.currentGame.shotCounterEnabled;
+  shotCounterBeepRow.classList.toggle("hidden", !state.currentGame.shotCounterEnabled);
+  shotCounterBeepInput.value = state.currentGame.shotCounterBeepSec;
+  // Live count is never restored across a reload (see the shotCounter*
+  // module vars) - only the setting is; a "balls" game reloaded with the
+  // checkbox already on starts a fresh running 0:00 rather than staying
+  // enabled-but-frozen.
+  if (state.currentGame.shotCounterEnabled) startShotCounter();
   updateCurrentGameSummary();
 
   dayNotesTextarea.value = getDayNotes(todayDateStr());
   updateDayNotesSummary();
+  updateDayReportRecipientsLine();
 
+  // Syncs currentGame to whatever rotation entry the persisted
+  // gamesPlayedCount derives (see rotationCurrentIndex) - not a reset:
+  // gamesPlayedCount itself is left exactly as loadState() restored it,
+  // so a reload lands back on the same rotation position instead of
+  // snapping to the first entry every time the page opens.
   if (state.rotation.enabled && state.rotation.order.length > 0) {
-    state.gamesPlayedCount = 0;
     applyRotationIfDue();
     gameTargetInput.value = state.currentGame.target;
     saveState();
@@ -8546,6 +11807,10 @@
   validateWizardNewPlayerNameInput();
   renderAll();
 
+  if (!hasSeenOnboarding() && isFirstTimeUser()) {
+    openOnboarding();
+  }
+
   var storedFocusMode = "0";
   try {
     storedFocusMode = localStorage.getItem(FOCUS_MODE_KEY) || "0";
@@ -8558,6 +11823,7 @@
   });
 
   setInterval(updateGameDurationDisplay, 1000);
+  setInterval(tickShotCounter, 1000);
   }
 
   // ---------------------------------------------------------------------
