@@ -85,6 +85,7 @@
   "dayNotes.attachBackup": "📎 Attach full backup file when sharing",
   "dayNotes.copyReport": "📋 Copy Report",
   "dayNotes.emailReport": "📧 Email Report",
+  "dayNotes.exportCsv": "📊 Export as Excel (CSV)",
   "dayNotes.formatCompact": "Compact",
   "dayNotes.formatDetailed": "Detailed",
   "dayNotes.formatTable": "Table",

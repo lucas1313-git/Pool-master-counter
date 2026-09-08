@@ -1434,6 +1434,7 @@
   var btnDayReportEmail = document.getElementById("btn-day-report-email");
   var btnDayReportSms = document.getElementById("btn-day-report-sms");
   var btnDayReportShareBackup = document.getElementById("btn-day-report-share-backup");
+  var btnDayReportCsv = document.getElementById("btn-day-report-csv");
   var dayReportAttachBackupCheckbox = document.getElementById("day-report-attach-backup-checkbox");
   var dayReportRecipientsLine = document.getElementById("day-report-recipients-line");
 
@@ -4843,6 +4844,88 @@
   function buildDayReportTextForSharing(dateStr) {
     if (dayReportFormat === "detailed") return buildDayReportTextDetailed(dateStr);
     return buildDayReportTextPlain(dateStr);
+  }
+
+  // RFC 4180-ish: only quotes a field when it actually needs it (holds
+  // a comma, quote, or newline), doubling any interior quotes - so
+  // plain names/numbers stay unquoted and readable if this file is
+  // ever opened in a plain text editor instead of a spreadsheet.
+  function csvField(value) {
+    var s = value === null || value === undefined ? "" : String(value);
+    if (/[",\r\n]/.test(s)) {
+      return '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+  }
+
+  function csvRow(fields) {
+    return fields.map(csvField).join(",") + "\r\n";
+  }
+
+  // A real spreadsheet table - actual comma-separated cells, not the
+  // ASCII-art pipes-and-dashes grid the "Table" text format draws
+  // (which never was a real table to Excel/Numbers/Sheets, just text
+  // shaped like one). Two sections - the player leaderboard, then one
+  // row per individual game rather than grouping repeat matchups the
+  // way the text formats do, since a spreadsheet is exactly the place
+  // someone would want every game visible to filter/sum themselves.
+  function buildDayReportCsv(dateStr) {
+    var data = computeDayReportData(dateStr);
+    var lines = [];
+    lines.push(csvRow(["Pool Master Counter — Day Report", formatReportDateHeading(dateStr)]));
+    lines.push("\r\n");
+
+    lines.push(csvRow(["Player", "Wins", "Losses", "Rating", "Rating Change"]));
+    data.players.forEach(function (p) {
+      lines.push(csvRow([p.name, p.wins, p.losses, p.rating, formatReportRatingDelta(p.ratingDelta)]));
+    });
+    lines.push("\r\n");
+
+    lines.push(csvRow(["Time", "Winner(s)", "Opponent(s)", "Game", "Duration", "Race Milestone", "Skunk"]));
+    data.games.forEach(function (g) {
+      lines.push(
+        csvRow([
+          formatReportGameTime(g.ts),
+          joinNamesForReport(g.winnerNames || []),
+          joinNamesForReport(g.opponentNames || []),
+          g.gameLabel,
+          formatDuration(g.durationMs),
+          g.wonRace ? "Race to " + g.raceTarget : "",
+          g.skunk ? "Yes" : ""
+        ])
+      );
+    });
+
+    if (data.tournaments.length) {
+      lines.push("\r\n");
+      lines.push(csvRow(["Time", "Tournament", "Champion(s)", "Players"]));
+      data.tournaments.forEach(function (t) {
+        lines.push(csvRow([formatReportGameTime(t.ts), tournamentFormatLabel(t.format), joinNamesForReport(t.championNames || []), (t.players || []).length]));
+      });
+    }
+
+    // A leading BOM isn't needed for the delimiters/structure, but
+    // without it Excel (Windows especially, sometimes Mac too) guesses
+    // the wrong encoding for anything outside plain ASCII - accented
+    // or non-Latin player names, the ▲/▼ rating-change marks - and
+    // shows mojibake instead. Harmless elsewhere; every real CSV
+    // reader (including Excel/Numbers/Sheets) strips it silently.
+    return "\uFEFF" + lines.join("");
+  }
+
+  function downloadTextFile(filename, text, mimeType) {
+    var blob = new Blob([text], { type: mimeType });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 1000);
   }
 
   function updateDayNotesSummary() {
@@ -11726,6 +11809,11 @@
   });
 
   btnDayReportShareBackup.addEventListener("click", shareReport);
+
+  btnDayReportCsv.addEventListener("click", function () {
+    var filename = "pool-master-counter-day-report-" + todayDateStr() + ".csv";
+    downloadTextFile(filename, buildDayReportCsv(todayDateStr()), "text/csv;charset=utf-8");
+  });
 
   btnPlayerPageExport.addEventListener("click", exportCurrentPlayerStats);
   btnPlayerPageReset.addEventListener("click", resetPlayerHistoricalStats);

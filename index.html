@@ -13,7 +13,7 @@
      bump the ?v= on both the stylesheet and script tags below on every
      deploy that touches css/style.css or js/app.js, or returning users can
      silently keep running old code indefinitely. -->
-<link rel="stylesheet" href="css/style.css?v=20260908d">
+<link rel="stylesheet" href="css/style.css?v=20260908e">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -297,6 +297,7 @@
         <button type="button" id="btn-day-report-email" class="btn btn-ghost" data-i18n="dayNotes.emailReport">📧 Email Report</button>
         <button type="button" id="btn-day-report-sms" class="btn btn-ghost" data-i18n="dayNotes.textReport">📱 Text Report</button>
         <button type="button" id="btn-day-report-share-backup" class="btn btn-ghost" data-i18n="dayNotes.share">📤 Share Report</button>
+        <button type="button" id="btn-day-report-csv" class="btn btn-ghost" data-i18n="dayNotes.exportCsv">📊 Export as Excel (CSV)</button>
       </div>
       <p class="player-stats-note" id="day-report-recipients-line"></p>
     </div>
@@ -1021,6 +1022,6 @@
 
 </div>
 
-<script src="js/app.js?v=20260908d"></script>
+<script src="js/app.js?v=20260908e"></script>
 </body>
 </html>

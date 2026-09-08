@@ -85,6 +85,7 @@
   "dayNotes.attachBackup": "📎 分享時夾附完整備份檔案",
   "dayNotes.copyReport": "📋 複製報告",
   "dayNotes.emailReport": "📧 用電郵傳送報告",
+  "dayNotes.exportCsv": "📊 匯出做 Excel（CSV）",
   "dayNotes.formatCompact": "精簡",
   "dayNotes.formatDetailed": "詳細",
   "dayNotes.formatTable": "表格",
