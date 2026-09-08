@@ -17,6 +17,14 @@
     { id: "custom", label: "Custom", defaultTarget: 1, unit: "points" }
   ];
 
+  // "Rack" games (target 1, one click = one whole win) have no per-ball
+  // tracking within a rack at all, so a skunk there (loser potted zero
+  // of their own group) can only come from the manually-entered "Balls
+  // left on the table" count - 7 left means all of the loser's 7
+  // object balls are still up, i.e. a skunk. 9-Ball isn't included -
+  // no skunk concept there (confirmed by the user).
+  var SKUNK_RACK_GAME_TYPES = ["8ball", "8ballrotation", "8ballpunishment"];
+
   // ---------------------------------------------------------------------
   // State
   // ---------------------------------------------------------------------
@@ -3016,6 +3024,13 @@
         li.appendChild(document.createTextNode(" · " + T("history.pottedIt", { name: entry.mvpName })));
         li.appendChild(buildRatingBadge(entry.mvpName));
       }
+      if (entry.skunk) {
+        li.appendChild(document.createTextNode(" · "));
+        var skunkSpan = document.createElement("span");
+        skunkSpan.className = "history-skunk";
+        skunkSpan.textContent = T("history.skunkWin");
+        li.appendChild(skunkSpan);
+      }
       if (entry.wonRace) {
         var raceBanner = document.createElement("div");
         raceBanner.className = "history-race-banner";
@@ -3278,6 +3293,21 @@
         onHillNames = getPlayer(key).name;
       }
 
+      // Captured now, before the queue-mode block below can zero the
+      // loser's balls (and before resetGameBalls() does the same for
+      // everyone a few lines down) - the last moment this game's real
+      // opponent score still exists. Only meaningful for a single
+      // opponent; a free-for-all win has no one "the" opponent to
+      // check, so skunk detection is skipped for those (see skunk
+      // determination below).
+      var skunkOpponentBalls = null;
+      if (opponentNames.length === 1) {
+        var skunkOpponent = activePlayers().filter(function (p) {
+          return p.id !== key;
+        })[0];
+        skunkOpponentBalls = skunkOpponent ? (skunkOpponent.balls || 0) : null;
+      }
+
       // "Winner stays" queue mode: send the loser to the back of the
       // line and bring the next person in - but only if someone's
       // actually waiting (computed before benching the loser, so an
@@ -3305,6 +3335,23 @@
         }
       }
     }
+
+    // Skunk (opponent scored/pocketed zero): only auto-derivable for
+    // "points"/"balls" units, where .balls is a real live-tracked
+    // score right up to this point - "rack" games (the 8-ball family)
+    // have no per-ball tracking within a rack at all (see
+    // adjustScore), so those stay false here and get their real value
+    // later from the "Balls left on the table" entry instead (see
+    // persistBallsLeftLive).
+    var skunk = false;
+    if (state.currentGame.unit !== "rack") {
+      if (isTeam) {
+        skunk = sumTeamBalls(otherTeamId) === 0;
+      } else if (skunkOpponentBalls !== null) {
+        skunk = skunkOpponentBalls === 0;
+      }
+    }
+
     var startedAt = state.currentGame.startedAt ? new Date(state.currentGame.startedAt).getTime() : null;
     var durationMs = startedAt ? Math.max(0, Date.now() - startedAt) : null;
     var ts = new Date().toISOString();
@@ -3325,6 +3372,7 @@
       summary: summary,
       wonRace: !!milestoneNames,
       raceTarget: target,
+      skunk: skunk,
       raceCount: milestoneCount,
       ballsLeftOnTable: null
     });
@@ -3524,12 +3572,36 @@
   function persistBallsLeftLive() {
     if (state.gameHistory[0] && state.gameHistory[0].ts === gamewinPendingTs) {
       state.gameHistory[0].ballsLeftOnTable = gamewinBallsLeftValue;
+      // Rack-mode skunk only has one source of truth: this field. 7
+      // left means the loser potted none of their 7 object balls.
+      if (SKUNK_RACK_GAME_TYPES.indexOf(state.gameHistory[0].gameType) !== -1) {
+        state.gameHistory[0].skunk = gamewinBallsLeftValue === 7;
+      }
       saveState();
+      updateGamewinSkunkIndicator();
       if (currentStatsPlayerName) {
         currentStatsSessions = getPlayerSessions(currentStatsPlayerName);
         renderPlayerHistoryList(currentStatsSessions);
       }
     }
+  }
+
+  // Read-only badge, not an input - nothing to toggle by hand. Shown
+  // immediately for the auto-detected points/balls-unit case (see
+  // creditWin), and appears live the moment the balls-left stepper
+  // below hits 7 for a rack-mode game (see persistBallsLeftLive).
+  function buildSkunkIndicator() {
+    var el = document.createElement("div");
+    el.className = "gamewin-skunk-indicator hidden";
+    el.textContent = T("skunk.indicator");
+    return el;
+  }
+
+  function updateGamewinSkunkIndicator() {
+    var el = gamewinDetails.querySelector(".gamewin-skunk-indicator");
+    if (!el) return;
+    var isSkunk = !!(state.gameHistory[0] && state.gameHistory[0].ts === gamewinPendingTs && state.gameHistory[0].skunk);
+    el.classList.toggle("hidden", !isSkunk);
   }
 
   // Optional +/- counter (also directly typeable on a real keyboard) for
@@ -3612,6 +3684,8 @@
     gamewinMessage.textContent = summary;
     gamewinDetails.innerHTML = "";
     gamewinDetails.appendChild(buildBallsLeftRow());
+    gamewinDetails.appendChild(buildSkunkIndicator());
+    updateGamewinSkunkIndicator();
     gamewinOverlay.classList.remove("hidden");
     // Focus the balls-left field so a number key works right away, with
     // no click needed first - can only happen once the overlay is no
@@ -3633,6 +3707,9 @@
     // archiving (celebrateTournamentWin's exportAllPlayerStats) reads it.
     if (gamewinBallsLeftValue !== null && state.gameHistory[0] && state.gameHistory[0].ts === gamewinPendingTs) {
       state.gameHistory[0].ballsLeftOnTable = gamewinBallsLeftValue;
+      if (SKUNK_RACK_GAME_TYPES.indexOf(state.gameHistory[0].gameType) !== -1) {
+        state.gameHistory[0].skunk = gamewinBallsLeftValue === 7;
+      }
       saveState();
     }
     gamewinOverlay.classList.add("hidden");
@@ -4221,14 +4298,26 @@
       var key =
         (g.winnerNames || []).slice().sort().join(",") + "|" + (g.opponentNames || []).slice().sort().join(",") + "|" + g.gameLabel;
       if (!byKey[key]) {
-        byKey[key] = { winnerNames: g.winnerNames, opponentNames: g.opponentNames, gameLabel: g.gameLabel, ts: g.ts, count: 0 };
+        byKey[key] = { winnerNames: g.winnerNames, opponentNames: g.opponentNames, gameLabel: g.gameLabel, ts: g.ts, count: 0, skunkCount: 0 };
         order.push(key);
       }
       byKey[key].count += 1;
+      if (g.skunk) byKey[key].skunkCount += 1;
     });
     return order.map(function (k) {
       return byKey[k];
     });
+  }
+
+  // Shared by all 4 day-report formats - a grouped matchup line can mix
+  // skunk and non-skunk games against the same opponent (e.g. a race-
+  // to-5 where only some racks were skunks), so this is a count, not a
+  // boolean, and blank whenever none of the group's games were skunks.
+  // Plain hardcoded text, not T() - like every other string in these
+  // report builders, this is a plain-text export meant to be pasted/
+  // shared as-is, not part of the localized UI.
+  function formatSkunkSuffix(skunkCount) {
+    return skunkCount > 0 ? " 🦨×" + skunkCount : "";
   }
 
   // Always leads with a time, even for a grouped repeat-matchup line
@@ -4240,6 +4329,7 @@
     var time = formatReportGameTime(group.ts);
     var text = group.count === 1 ? winners + " won " + group.gameLabel : winners + " won " + group.count + " games of " + group.gameLabel;
     if (losers) text += " against " + losers;
+    text += formatSkunkSuffix(group.skunkCount);
     return (time ? time + " — " : "") + text;
   }
 
@@ -4320,7 +4410,7 @@
   function gameLogTableRow(group) {
     var winners = joinNamesCapped(group.winnerNames || [], 2);
     var losers = joinNamesCapped(group.opponentNames || [], 2);
-    var label = group.gameLabel + (group.count > 1 ? " ×" + group.count : "");
+    var label = group.gameLabel + (group.count > 1 ? " ×" + group.count : "") + formatSkunkSuffix(group.skunkCount);
     var result = losers ? winners + " def. " + losers : winners + " won";
     return [formatReportGameTime(group.ts), result, label];
   }
@@ -4440,7 +4530,17 @@
           lines.push(l);
         });
         lines.push("");
-        lines.push(data.games.length + " game" + (data.games.length === 1 ? "" : "s") + " played today.");
+        var skunkTotal = data.games.filter(function (g) {
+          return g.skunk;
+        }).length;
+        var gamesLine = data.games.length + " game" + (data.games.length === 1 ? "" : "s") + " played today.";
+        // No per-game log in this format to attach a marker to (see the
+        // other 3 builders' formatSkunkSuffix calls) - a same-line total
+        // instead.
+        if (skunkTotal > 0) {
+          gamesLine += " 🦨 " + skunkTotal + " skunk win" + (skunkTotal === 1 ? "" : "s") + ".";
+        }
+        lines.push(gamesLine);
       }
       if (data.raceWins.length || data.tournaments.length) {
         lines.push("");
@@ -4572,7 +4672,7 @@
         groupReportGames(data.games).forEach(function (g) {
           var winners = joinNamesCapped(g.winnerNames || [], 2);
           var losers = joinNamesCapped(g.opponentNames || [], 2);
-          var label = g.gameLabel + (g.count > 1 ? " ×" + g.count : "");
+          var label = g.gameLabel + (g.count > 1 ? " ×" + g.count : "") + formatSkunkSuffix(g.skunkCount);
           var result = losers ? winners + " def. " + losers : winners + " won";
           lines.push(formatReportGameTime(g.ts) + " · " + result + " · " + label);
         });
@@ -7796,7 +7896,8 @@
         wonRace: entry.wonRace,
         raceTarget: entry.raceTarget,
         raceCount: entry.raceCount,
-        ballsLeftOnTable: entry.ballsLeftOnTable === undefined ? null : entry.ballsLeftOnTable
+        ballsLeftOnTable: entry.ballsLeftOnTable === undefined ? null : entry.ballsLeftOnTable,
+        skunk: entry.skunk === undefined ? false : entry.skunk
       });
     });
     if (games.length === 0) return null;
@@ -8006,14 +8107,23 @@
   function computeWinLossSynopsis(games) {
     var wins = 0;
     var losses = 0;
+    var skunkWins = 0;
+    var skunkLosses = 0;
     games.forEach(function (g) {
-      if (g.result === "won") wins += 1;
-      else losses += 1;
+      if (g.result === "won") {
+        wins += 1;
+        if (g.skunk) skunkWins += 1;
+      } else {
+        losses += 1;
+        if (g.skunk) skunkLosses += 1;
+      }
     });
     var total = wins + losses;
     return {
       wins: wins,
       losses: losses,
+      skunkWins: skunkWins,
+      skunkLosses: skunkLosses,
       total: total,
       pct: total ? Math.round((wins / total) * 100) : null
     };
@@ -8081,8 +8191,20 @@
         )
       );
     }
-    playerPageSynopsisBody.appendChild(synopsisStatRow(T("playerPage.gamesWon"), synopsis.wins, "win"));
-    playerPageSynopsisBody.appendChild(synopsisStatRow(T("playerPage.gamesLost"), synopsis.losses, "loss"));
+    playerPageSynopsisBody.appendChild(
+      synopsisStatRow(
+        T("playerPage.gamesWon"),
+        synopsis.skunkWins ? T("playerPage.winsWithSkunk", { wins: synopsis.wins, skunks: synopsis.skunkWins }) : synopsis.wins,
+        "win"
+      )
+    );
+    playerPageSynopsisBody.appendChild(
+      synopsisStatRow(
+        T("playerPage.gamesLost"),
+        synopsis.skunkLosses ? T("playerPage.lossesWithSkunk", { losses: synopsis.losses, skunks: synopsis.skunkLosses }) : synopsis.losses,
+        "loss"
+      )
+    );
     playerPageSynopsisBody.appendChild(
       synopsisStatRow(T("playerPage.winPct"), synopsis.pct === null ? "—" : synopsis.pct + "%")
     );
@@ -8435,7 +8557,8 @@
       durationMs: g.durationMs,
       wonRace: g.wonRace,
       raceTarget: g.raceTarget,
-      raceCount: g.raceCount
+      raceCount: g.raceCount,
+      skunk: g.skunk || false
     };
   }
 

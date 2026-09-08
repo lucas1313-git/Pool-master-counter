@@ -1463,6 +1463,11 @@ input[type="number"] {
   color: var(--danger);
 }
 
+.history-skunk {
+  font-weight: 700;
+  color: var(--accent);
+}
+
 .history-race-win-item {
   border-color: var(--accent) !important;
   background: linear-gradient(180deg, rgba(232, 178, 60, 0.16) 0%, var(--bg-card) 70%) !important;
@@ -1554,6 +1559,22 @@ input[type="number"] {
 
 .gamewin-quick-actions .btn {
   flex: 1;
+}
+
+/* Read-only badge (see buildSkunkIndicator/updateGamewinSkunkIndicator)
+   - hidden by default, shown the instant the game is known to be a
+   skunk (immediately for points/balls-unit wins, or live as soon as
+   Balls Left on the Table hits 7 for a rack-mode win). */
+.gamewin-skunk-indicator {
+  text-align: center;
+  background: rgba(232, 178, 60, 0.16);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  color: var(--accent);
+  font-weight: 800;
+  font-size: 1.05rem;
+  padding: 8px 12px;
+  margin-top: 8px;
 }
 
 /* ---------- Milestone celebration popup ---------- */
