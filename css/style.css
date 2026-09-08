@@ -375,6 +375,14 @@ body {
   font-size: clamp(1.3rem, 9cqw, 3rem);
 }
 
+/* Same across-the-room readability as the score itself while in Focus
+   Mode - #scoreboard-panel has no container-query width to key off of
+   (unlike the per-card rules above), so this scales off viewport width
+   instead. */
+#app.focus-mode .shot-counter-widget {
+  font-size: clamp(3rem, 11vw, 5.5rem);
+}
+
 .no-stats-row-inline {
   display: flex;
   align-items: center;
@@ -932,24 +940,30 @@ input[type="number"] {
 
 /* ---------- Shot counter (all game types) ---------- */
 
-/* Semi-transparent HUD, controlled by the numeric keypad (see
-   handleKeypadShortcut) or a tap/click, which toggles pause the same
-   way "/" does. Sized with clamp() so it stays legible from across the
-   room without overflowing a phone-width viewport. */
+/* Lives in the score-keeping area itself (#scoreboard-panel, right
+   under the Now Playing/Duration line) rather than floating over the
+   page, so it's part of the normal game view instead of a separate
+   overlay someone has to notice - and, since #scoreboard-panel is
+   exempt from Focus Mode's panel-hiding, it shows up there too with no
+   extra wiring (see the #app.focus-mode override below for its
+   across-the-room sizing there). Controlled by the numeric keypad (see
+   handleKeypadShortcut), a tap/click (pause), or the Game Setup
+   panel's Show/Hide Timer button. Sized with clamp() so it stays
+   legible without overflowing a phone-width viewport. */
 .shot-counter-widget {
-  position: fixed;
-  top: 12px;
-  right: 12px;
-  z-index: 60;
+  display: block;
+  width: fit-content;
+  margin: 4px auto 14px;
   background: rgba(0, 0, 0, 0.6);
   border: 2px solid rgba(255, 255, 255, 0.22);
   color: var(--text);
-  padding: clamp(20px, 4vw, 36px) clamp(36px, 8vw, 64px);
+  padding: clamp(10px, 2.6vw, 20px) clamp(24px, 6vw, 44px);
   border-radius: 999px;
-  font-size: clamp(4rem, 14vw, 6.8rem);
+  font-size: clamp(2.4rem, 9vw, 3.8rem);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.03em;
+  text-align: center;
   cursor: pointer;
 }
 
