@@ -1,0 +1,29 @@
+{
+  "name": "pool-master-counter",
+  "version": "1.0.0",
+  "description": "Native iOS/Android wrapper (Capacitor) for the Pool Master Counter static web app.",
+  "private": true,
+  "scripts": {
+    "sync:ios": "rm -rf www && mkdir -p www && cp index.html manifest.json www/ && cp -R css js languages icons www/ && npx cap sync ios"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lucas1313-git/Pool-master-counter.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/lucas1313-git/Pool-master-counter/issues"
+  },
+  "homepage": "https://github.com/lucas1313-git/Pool-master-counter#readme",
+  "dependencies": {
+    "@capacitor/cli": "^8.5.1",
+    "@capacitor/core": "^8.5.1",
+    "@capacitor/ios": "^8.5.1"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5"
+  }
+}
