@@ -106,7 +106,7 @@
   "dayNotes.note": "Anota cualquier cosa que valga la pena recordar sobre el juego de hoy — quién está en racha, momentos graciosos, lo que sea. Se guarda automáticamente y se incluye en el informe del día a continuación.",
   "dayNotes.placeholder": "Notas sobre el juego de hoy...",
   "dayNotes.printReport": "🖨️ Imprimir informe",
-  "dayNotes.recipientsAttachOverride": "📎 Copia de seguridad adjunta — elige el destinatario al enviar por Correo o SMS.",
+  "dayNotes.recipientsAttachOverride": "📎 Hay un adjunto seleccionado — toca Compartir informe y elige el destinatario.",
   "dayNotes.recipientsEmail": "Enviado por correo a: {{names}}",
   "dayNotes.recipientsNone": "Todavía nadie se ha inscrito para recibir el informe — añade un correo o un número de teléfono en el asistente de bienvenida para inscribirte.",
   "dayNotes.recipientsSms": "Enviado por SMS a: {{names}}",

@@ -5875,11 +5875,18 @@
 
   function updateDayReportRecipientsLine() {
     // With either attachment on, Email/Text Report route through the OS
-    // share sheet (see shareReportWithAttachments) instead of a
-    // mailto:/sms: link, so the opted-in recipients below are no longer
-    // who it actually goes to - say so instead of showing a list that'd
-    // just be wrong.
-    if (dayReportAttachBackupCheckbox.checked || dayReportAttachColorfulCheckbox.checked) {
+    // share sheet (see shareReportWithAttachments) exactly like Share
+    // Report does, instead of a distinct mailto:/sms: link - so with an
+    // attachment on, all three buttons genuinely do the same thing (open
+    // the same share sheet) and showing three of them is just confusing.
+    // Hide Email/Text and leave only Share Report, which is the one whose
+    // label actually describes what's about to happen; both come back the
+    // moment every attach checkbox is off again and Email/Text return to
+    // composing a real, distinct email/text message.
+    var hasAttachment = dayReportAttachBackupCheckbox.checked || dayReportAttachColorfulCheckbox.checked;
+    btnDayReportEmail.classList.toggle("hidden", hasAttachment);
+    btnDayReportSms.classList.toggle("hidden", hasAttachment);
+    if (hasAttachment) {
       dayReportRecipientsLine.textContent = T("dayNotes.recipientsAttachOverride");
       return;
     }

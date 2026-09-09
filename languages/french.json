@@ -106,7 +106,7 @@
   "dayNotes.note": "Notez tout ce qui vaut la peine d'être retenu sur la partie du jour — qui est en feu, les moments drôles, tout ce que vous voulez. C'est enregistré automatiquement et intégré au rapport du jour ci-dessous.",
   "dayNotes.placeholder": "Notes sur la partie d'aujourd'hui...",
   "dayNotes.printReport": "🖨️ Imprimer le rapport",
-  "dayNotes.recipientsAttachOverride": "📎 Sauvegarde jointe — choisissez le destinataire lors de l'envoi par Email ou SMS.",
+  "dayNotes.recipientsAttachOverride": "📎 Une pièce jointe est sélectionnée — appuyez sur Partager le rapport et choisissez le destinataire.",
   "dayNotes.recipientsEmail": "Envoyé par e-mail à : {{names}}",
   "dayNotes.recipientsNone": "Personne n'a encore accepté de recevoir le rapport — ajoutez un e-mail ou un numéro de téléphone dans l'assistant de bienvenue pour vous inscrire.",
   "dayNotes.recipientsSms": "Envoyé par SMS à : {{names}}",
