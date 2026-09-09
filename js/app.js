@@ -1449,6 +1449,7 @@
   var dayReportPrintView = document.getElementById("day-report-print-view");
   var btnDayReportColorful = document.getElementById("btn-day-report-colorful");
   var dayReportAttachBackupCheckbox = document.getElementById("day-report-attach-backup-checkbox");
+  var dayReportAttachColorfulCheckbox = document.getElementById("day-report-attach-colorful-checkbox");
   var dayReportRecipientsLine = document.getElementById("day-report-recipients-line");
 
   var milestoneOverlay = document.getElementById("milestone-overlay");
@@ -4926,14 +4927,14 @@
   // conscious for paper) and buildDayReportCsv (bare data, no styling
   // possible in a spreadsheet) - three different jobs, three different
   // builders, all sharing the same computeDayReportData source.
-  function buildDayReportColorfulHtml(dateStr) {
+  // Single source of truth for the colorful report's content, consumed by
+  // both buildDayReportColorfulHtml (the viewable page) and
+  // buildDayReportImageBlob (the native PNG used when sharing straight
+  // from the main app) - one pass over computeDayReportData, plain data
+  // only, no HTML/canvas concerns here.
+  function computeReportImageData(dateStr) {
     var data = computeDayReportData(dateStr);
     var tokens = readReportThemeTokens();
-    var rootVars = Object.keys(tokens)
-      .map(function (k) {
-        return k + ": " + (tokens[k] || "") + ";";
-      })
-      .join(" ");
 
     var longDate;
     try {
@@ -4953,100 +4954,114 @@
       }, 0) || 1;
     var rankMedals = ["🥇", "🥈", "🥉"];
 
-    // Each section below builds its HTML string for the viewable page AND a
-    // parallel plain-data array from the exact same loop - the latter gets
-    // embedded as JSON for the Share button's canvas renderer (see
-    // buildColorfulReportShareScript), so both outputs stay in sync from one
-    // pass over the data instead of two independent derivations.
-    var playersForImage = [];
-    var leaderboardHtml = data.players
-      .map(function (p, i) {
-        var medal = rankMedals[i] || i + 1 + ".";
-        var barPct = Math.round((p.wins / maxWins) * 100);
-        var deltaClass = p.ratingDelta > 0 ? "up" : p.ratingDelta < 0 ? "down" : "flat";
-        var deltaText = formatReportRatingDelta(p.ratingDelta);
-        playersForImage.push({
-          medal: medal,
-          name: p.name,
-          rating: p.rating,
-          deltaText: deltaText,
-          deltaClass: deltaClass,
-          wins: p.wins,
-          losses: p.losses,
-          barPct: barPct
-        });
-        return (
-          '<div class="player-card">' +
-          '<div class="rank">' + medal + "</div>" +
-          '<div class="card-main">' +
-          '<div class="card-top">' +
-          '<span class="name">' + escapeHtmlForReport(p.name) + "</span>" +
-          '<span class="rating">' + p.rating + ' <span class="delta ' + deltaClass + '">' + escapeHtmlForReport(deltaText) + "</span></span>" +
-          "</div>" +
-          '<div class="record"><span class="win">' + p.wins + 'W</span> · <span class="loss">' + p.losses + "L</span></div>" +
-          '<div class="bar-track"><div class="bar-fill" style="width:' + barPct + '%"></div></div>' +
-          "</div>" +
-          "</div>"
-        );
-      })
-      .join("");
+    var players = data.players.map(function (p, i) {
+      var barPct = Math.round((p.wins / maxWins) * 100);
+      var deltaClass = p.ratingDelta > 0 ? "up" : p.ratingDelta < 0 ? "down" : "flat";
+      return {
+        medal: rankMedals[i] || i + 1 + ".",
+        name: p.name,
+        rating: p.rating,
+        deltaText: formatReportRatingDelta(p.ratingDelta),
+        deltaClass: deltaClass,
+        wins: p.wins,
+        losses: p.losses,
+        barPct: barPct
+      };
+    });
 
-    var highlightsForImage = [];
-    var highlightsHtml = "";
+    var highlights = [];
     data.raceWins.forEach(function (g) {
       var names = joinNamesForReport(((g.winnerNames && g.winnerNames.length ? g.winnerNames : g.teammateNames) || []));
-      var line = "🏆 " + names + " won the Race to " + g.raceTarget + " session!";
-      highlightsForImage.push(line);
-      highlightsHtml += '<div class="highlight-card">' + escapeHtmlForReport(line) + "</div>";
+      highlights.push("🏆 " + names + " won the Race to " + g.raceTarget + " session!");
     });
     data.tournaments.forEach(function (t) {
       var champs = joinNamesForReport(t.championNames || []);
-      var line = "👑 " + champs + " won the " + tournamentFormatLabel(t.format) + " tournament (" + (t.players || []).length + " players)";
-      highlightsForImage.push(line);
-      highlightsHtml += '<div class="highlight-card">' + escapeHtmlForReport(line) + "</div>";
+      highlights.push("👑 " + champs + " won the " + tournamentFormatLabel(t.format) + " tournament (" + (t.players || []).length + " players)");
     });
 
-    var gamesForImage = [];
-    var gamesHtml = groupReportGames(data.games)
-      .map(function (g) {
-        var winners = joinNamesForReport(g.winnerNames || []);
-        var losers = joinNamesForReport(g.opponentNames || []);
-        var descText = losers ? winners + " def. " + losers : winners + " won";
-        var countText = g.count > 1 ? " ×" + g.count : "";
-        var skunkText = g.skunkCount > 0 ? " 🦨×" + g.skunkCount : "";
-        var time = formatReportGameTime(g.ts);
-        gamesForImage.push({ time: time, desc: descText + " · " + g.gameLabel + countText + skunkText, isSkunk: g.skunkCount > 0 });
-        var desc = losers
-          ? "<strong>" + escapeHtmlForReport(winners) + "</strong> def. " + escapeHtmlForReport(losers)
-          : "<strong>" + escapeHtmlForReport(winners) + "</strong> won";
-        var skunkHtml = g.skunkCount > 0 ? ' <span class="skunk-badge">🦨×' + g.skunkCount + "</span>" : "";
+    var games = groupReportGames(data.games).map(function (g) {
+      var winners = joinNamesForReport(g.winnerNames || []);
+      var losers = joinNamesForReport(g.opponentNames || []);
+      var countText = g.count > 1 ? " ×" + g.count : "";
+      var label = g.gameLabel + countText;
+      var plainResult = losers ? winners + " def. " + losers : winners + " won";
+      var skunkText = g.skunkCount > 0 ? " 🦨×" + g.skunkCount : "";
+      return {
+        time: formatReportGameTime(g.ts),
+        winners: winners,
+        losers: losers,
+        label: label,
+        skunkCount: g.skunkCount,
+        // Flat plain-text form for the canvas renderer, which can't draw
+        // the HTML view's bolded-winner markup - built once here so both
+        // consumers agree on the exact wording.
+        desc: plainResult + " · " + label + skunkText
+      };
+    });
+
+    return {
+      dateStr: dateStr,
+      longDate: longDate,
+      generatedAt: formatTimestamp(new Date().toISOString(), true),
+      tokens: tokens,
+      players: players,
+      highlights: highlights,
+      games: games,
+      notes: dayNotesTextarea.value || null
+    };
+  }
+
+  function buildDayReportColorfulHtml(dateStr) {
+    var reportImageData = computeReportImageData(dateStr);
+    var tokens = reportImageData.tokens;
+    var rootVars = Object.keys(tokens)
+      .map(function (k) {
+        return k + ": " + (tokens[k] || "") + ";";
+      })
+      .join(" ");
+
+    var leaderboardHtml = reportImageData.players
+      .map(function (p) {
         return (
-          '<div class="game-row">' +
-          '<span class="time">' + escapeHtmlForReport(time) + "</span>" +
-          '<span class="desc">' + desc + " · " + escapeHtmlForReport(g.gameLabel) + countText + skunkHtml + "</span>" +
+          '<div class="player-card">' +
+          '<div class="rank">' + p.medal + "</div>" +
+          '<div class="card-main">' +
+          '<div class="card-top">' +
+          '<span class="name">' + escapeHtmlForReport(p.name) + "</span>" +
+          '<span class="rating">' + p.rating + ' <span class="delta ' + p.deltaClass + '">' + escapeHtmlForReport(p.deltaText) + "</span></span>" +
+          "</div>" +
+          '<div class="record"><span class="win">' + p.wins + 'W</span> · <span class="loss">' + p.losses + "L</span></div>" +
+          '<div class="bar-track"><div class="bar-fill" style="width:' + p.barPct + '%"></div></div>' +
+          "</div>" +
           "</div>"
         );
       })
       .join("");
 
-    var notesHtml = "";
-    var notes = dayNotesTextarea.value;
-    if (notes) {
-      notesHtml =
-        '<div class="section"><h2>Notes</h2><div class="notes-card">' + escapeHtmlForReport(notes) + "</div></div>";
-    }
+    var highlightsHtml = reportImageData.highlights
+      .map(function (line) {
+        return '<div class="highlight-card">' + escapeHtmlForReport(line) + "</div>";
+      })
+      .join("");
 
-    var generatedAt = formatTimestamp(new Date().toISOString(), true);
-    var reportImageData = {
-      dateStr: dateStr,
-      longDate: longDate,
-      generatedAt: generatedAt,
-      tokens: tokens,
-      players: playersForImage,
-      highlights: highlightsForImage,
-      games: gamesForImage,
-      notes: notes || null
-    };
+    var gamesHtml = reportImageData.games
+      .map(function (g) {
+        var resultHtml = g.losers
+          ? "<strong>" + escapeHtmlForReport(g.winners) + "</strong> def. " + escapeHtmlForReport(g.losers)
+          : "<strong>" + escapeHtmlForReport(g.winners) + "</strong> won";
+        var skunkHtml = g.skunkCount > 0 ? ' <span class="skunk-badge">🦨×' + g.skunkCount + "</span>" : "";
+        return (
+          '<div class="game-row">' +
+          '<span class="time">' + escapeHtmlForReport(g.time) + "</span>" +
+          '<span class="desc">' + resultHtml + " · " + escapeHtmlForReport(g.label) + skunkHtml + "</span>" +
+          "</div>"
+        );
+      })
+      .join("");
+
+    var notesHtml = reportImageData.notes
+      ? '<div class="section"><h2>Notes</h2><div class="notes-card">' + escapeHtmlForReport(reportImageData.notes) + "</div></div>"
+      : "";
 
     return (
       "<!DOCTYPE html>\n" +
@@ -5095,25 +5110,310 @@
       "</style></head><body><div class=\"wrap\">" +
       '<div class="toolbar"><button type="button" class="share-btn" id="shareReportBtn">📤 Share</button></div>' +
       '<div class="hero"><h1>🎱 Pool Master Counter</h1><div class="date">' +
-      escapeHtmlForReport(longDate) +
+      escapeHtmlForReport(reportImageData.longDate) +
       '</div><div class="tagline">Don\'t get cocky!</div></div>' +
-      (data.players.length
+      (reportImageData.players.length
         ? '<div class="section"><h2>Leaderboard</h2><div class="leaderboard">' + leaderboardHtml + "</div></div>"
         : '<div class="section"><p class="empty-note">No games recorded today.</p></div>') +
       (highlightsHtml ? '<div class="section"><h2>Highlights</h2>' + highlightsHtml + "</div>" : "") +
       (gamesHtml ? '<div class="section"><h2>Game Log</h2><div class="game-log">' + gamesHtml + "</div></div>" : "") +
       notesHtml +
-      "<footer>Generated " + escapeHtmlForReport(generatedAt) + " · Pool Master Counter</footer>" +
+      "<footer>Generated " + escapeHtmlForReport(reportImageData.generatedAt) + " · Pool Master Counter</footer>" +
       "</div>" +
       buildColorfulReportShareScript(reportImageData) +
       "</body></html>"
     );
   }
 
+  function reportCanvasRoundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  function reportCanvasWrapText(ctx, text, maxWidth) {
+    var words = text.split(/\s+/);
+    var lines = [];
+    var current = "";
+    words.forEach(function (word) {
+      var test = current ? current + " " + word : word;
+      if (ctx.measureText(test).width > maxWidth && current) {
+        lines.push(current);
+        current = word;
+      } else {
+        current = test;
+      }
+    });
+    if (current) lines.push(current);
+    return lines;
+  }
+
+  function reportCanvasTruncate(ctx, text, maxWidth) {
+    if (ctx.measureText(text).width <= maxWidth) return text;
+    var t = text;
+    while (t.length > 1 && ctx.measureText(t + "…").width > maxWidth) {
+      t = t.slice(0, -1);
+    }
+    return t + "…";
+  }
+
+  // The native counterpart to buildColorfulReportShareScript's embedded
+  // canvas renderer below - same layout/drawing logic, written as real JS
+  // instead of a string, since this one runs directly in the main app
+  // (used when the "Attach colorful report image" checkbox is on) rather
+  // than inside the standalone report tab, which has no access back here.
+  function buildReportCanvasFromData(reportData) {
+    var tokens = reportData.tokens;
+    function tok(name, fallback) {
+      return tokens[name] || fallback;
+    }
+    var font = tok("--font-family", "sans-serif");
+    var W = 680,
+      PAD = 28,
+      CW = W - PAD * 2,
+      SCALE = 2;
+    var HERO_H = 128,
+      SECTION_GAP = 30,
+      LABEL_H = 26,
+      PLAYER_ROW_H = 78,
+      PLAYER_GAP = 10;
+    var HIGHLIGHT_ROW_H = 40,
+      HIGHLIGHT_GAP = 8,
+      GAME_ROW_H = 30,
+      NOTES_LINE_H = 20,
+      NOTES_PAD = 18,
+      FOOTER_H = 56;
+
+    var measureCanvas = document.createElement("canvas");
+    var mctx = measureCanvas.getContext("2d");
+    var notesLines = [];
+    if (reportData.notes) {
+      mctx.font = "italic 14px " + font;
+      notesLines = reportCanvasWrapText(mctx, reportData.notes, CW - 36);
+    }
+
+    var hasPlayers = reportData.players.length > 0;
+    var y = HERO_H;
+    if (hasPlayers) {
+      y += SECTION_GAP + LABEL_H + reportData.players.length * PLAYER_ROW_H;
+    } else {
+      y += SECTION_GAP + 30;
+    }
+    if (reportData.highlights.length) {
+      y += SECTION_GAP + LABEL_H + reportData.highlights.length * HIGHLIGHT_ROW_H;
+    }
+    var logH = 0;
+    if (reportData.games.length) {
+      logH = reportData.games.length * GAME_ROW_H + 16;
+      y += SECTION_GAP + LABEL_H + logH;
+    }
+    var notesCardH = 0;
+    if (reportData.notes) {
+      notesCardH = NOTES_PAD * 2 + notesLines.length * NOTES_LINE_H;
+      y += SECTION_GAP + LABEL_H + notesCardH;
+    }
+    y += FOOTER_H;
+
+    var canvas = document.createElement("canvas");
+    canvas.width = W * SCALE;
+    canvas.height = y * SCALE;
+    var ctx = canvas.getContext("2d");
+    ctx.scale(SCALE, SCALE);
+
+    ctx.fillStyle = tok("--bg", "#1a0a0a");
+    ctx.fillRect(0, 0, W, y);
+
+    var grad = ctx.createLinearGradient(0, 0, W, HERO_H);
+    grad.addColorStop(0, tok("--felt", "#5c0f14"));
+    grad.addColorStop(1, tok("--felt-light", "#8a1a1f"));
+    ctx.fillStyle = grad;
+    reportCanvasRoundRect(ctx, PAD, 0, CW, HERO_H, 18);
+    ctx.fill();
+    ctx.fillStyle = tok("--text", "#f6efe9");
+    ctx.textAlign = "center";
+    ctx.font = "bold 24px " + font;
+    ctx.fillText("🎱 Pool Master Counter", W / 2, 48);
+    ctx.font = "16px " + font;
+    ctx.globalAlpha = 0.9;
+    ctx.fillText(reportData.longDate, W / 2, 76);
+    ctx.globalAlpha = 0.65;
+    ctx.font = "italic 13px " + font;
+    ctx.fillText("Don’t get cocky!", W / 2, 100);
+    ctx.globalAlpha = 1;
+    ctx.textAlign = "left";
+
+    var cy = HERO_H + SECTION_GAP;
+
+    function drawLabel(text) {
+      ctx.fillStyle = tok("--text-dim", "#c9a2a2");
+      ctx.font = "bold 12px " + font;
+      ctx.fillText(text.toUpperCase(), PAD, cy + 12);
+      cy += LABEL_H;
+    }
+
+    if (hasPlayers) {
+      drawLabel("Leaderboard");
+      reportData.players.forEach(function (p) {
+        var cardY = cy,
+          cardH = PLAYER_ROW_H - PLAYER_GAP;
+        ctx.fillStyle = tok("--bg-card", "#2e1414");
+        reportCanvasRoundRect(ctx, PAD, cardY, CW, cardH, 12);
+        ctx.fill();
+        ctx.strokeStyle = tok("--border", "#4a1e1e");
+        ctx.lineWidth = 1;
+        reportCanvasRoundRect(ctx, PAD, cardY, CW, cardH, 12);
+        ctx.stroke();
+
+        ctx.fillStyle = tok("--text", "#f6efe9");
+        ctx.font = "20px " + font;
+        ctx.textAlign = "center";
+        ctx.fillText(p.medal, PAD + 26, cardY + 34);
+        ctx.textAlign = "left";
+
+        var contentX = PAD + 54,
+          contentW = CW - 54 - 18;
+        ctx.font = "bold 15px " + font;
+        ctx.fillStyle = tok("--text", "#f6efe9");
+        ctx.fillText(reportCanvasTruncate(ctx, p.name, contentW - 90), contentX, cardY + 22);
+
+        ctx.font = "13px " + font;
+        ctx.textAlign = "right";
+        var deltaColor = p.deltaClass === "up" ? tok("--accent", "#e8b923") : p.deltaClass === "down" ? tok("--danger", "#ff5252") : tok("--text-dim", "#c9a2a2");
+        ctx.fillStyle = deltaColor;
+        ctx.fillText(p.deltaText, PAD + CW - 18, cardY + 22);
+        var deltaW = ctx.measureText(p.deltaText).width;
+        ctx.fillStyle = tok("--text-dim", "#c9a2a2");
+        ctx.fillText(p.rating + "  ", PAD + CW - 18 - deltaW, cardY + 22);
+        ctx.textAlign = "left";
+
+        ctx.font = "13px " + font;
+        ctx.fillStyle = tok("--accent", "#e8b923");
+        var winsText = p.wins + "W";
+        ctx.fillText(winsText, contentX, cardY + 42);
+        var winsW = ctx.measureText(winsText).width;
+        ctx.fillStyle = tok("--text-dim", "#c9a2a2");
+        ctx.fillText(" · ", contentX + winsW, cardY + 42);
+        var sepW = ctx.measureText(" · ").width;
+        ctx.fillStyle = tok("--danger", "#ff5252");
+        ctx.fillText(p.losses + "L", contentX + winsW + sepW, cardY + 42);
+
+        var barY = cardY + 54,
+          barW = contentW;
+        ctx.fillStyle = tok("--bg-panel", "#241010");
+        reportCanvasRoundRect(ctx, contentX, barY, barW, 5, 3);
+        ctx.fill();
+        ctx.fillStyle = tok("--accent", "#e8b923");
+        var fillW = Math.max(4, (barW * p.barPct) / 100);
+        reportCanvasRoundRect(ctx, contentX, barY, fillW, 5, 3);
+        ctx.fill();
+
+        cy += PLAYER_ROW_H;
+      });
+    } else {
+      ctx.fillStyle = tok("--text-dim", "#c9a2a2");
+      ctx.font = "italic 14px " + font;
+      ctx.fillText("No games recorded today.", PAD, cy + 14);
+      cy += 30;
+    }
+
+    if (reportData.highlights.length) {
+      cy += SECTION_GAP - PLAYER_GAP;
+      drawLabel("Highlights");
+      reportData.highlights.forEach(function (line) {
+        var g = ctx.createLinearGradient(PAD, cy, PAD + CW, cy);
+        g.addColorStop(0, tok("--accent-dark", "#b8890f"));
+        g.addColorStop(1, tok("--accent", "#e8b923"));
+        ctx.fillStyle = g;
+        reportCanvasRoundRect(ctx, PAD, cy, CW, HIGHLIGHT_ROW_H - HIGHLIGHT_GAP, 12);
+        ctx.fill();
+        ctx.fillStyle = tok("--on-accent", "#241a00");
+        ctx.font = "bold 13px " + font;
+        ctx.fillText(reportCanvasTruncate(ctx, line, CW - 32), PAD + 16, cy + 21);
+        cy += HIGHLIGHT_ROW_H;
+      });
+    }
+
+    if (reportData.games.length) {
+      cy += SECTION_GAP - HIGHLIGHT_GAP;
+      drawLabel("Game Log");
+      ctx.fillStyle = tok("--bg-card", "#2e1414");
+      reportCanvasRoundRect(ctx, PAD, cy, CW, logH, 12);
+      ctx.fill();
+      ctx.strokeStyle = tok("--border", "#4a1e1e");
+      reportCanvasRoundRect(ctx, PAD, cy, CW, logH, 12);
+      ctx.stroke();
+      var rowY = cy + 8;
+      reportData.games.forEach(function (g, i) {
+        ctx.font = "12px " + font;
+        ctx.fillStyle = tok("--text-dim", "#c9a2a2");
+        ctx.fillText(g.time, PAD + 16, rowY + 20);
+        ctx.font = "13px " + font;
+        ctx.fillStyle = g.skunkCount > 0 ? tok("--info", "#5aa9e6") : tok("--text", "#f6efe9");
+        ctx.fillText(reportCanvasTruncate(ctx, g.desc, CW - 100), PAD + 78, rowY + 20);
+        if (i < reportData.games.length - 1) {
+          ctx.strokeStyle = tok("--border", "#4a1e1e");
+          ctx.beginPath();
+          ctx.moveTo(PAD + 16, rowY + GAME_ROW_H - 4);
+          ctx.lineTo(PAD + CW - 16, rowY + GAME_ROW_H - 4);
+          ctx.stroke();
+        }
+        rowY += GAME_ROW_H;
+      });
+      cy += logH;
+    }
+
+    if (reportData.notes) {
+      cy += SECTION_GAP;
+      drawLabel("Notes");
+      ctx.fillStyle = tok("--bg-card", "#2e1414");
+      reportCanvasRoundRect(ctx, PAD, cy, CW, notesCardH, 8);
+      ctx.fill();
+      ctx.fillStyle = tok("--accent", "#e8b923");
+      ctx.fillRect(PAD, cy, 4, notesCardH);
+      ctx.fillStyle = tok("--text", "#f6efe9");
+      ctx.font = "italic 14px " + font;
+      var ny = cy + NOTES_PAD + 12;
+      notesLines.forEach(function (line) {
+        ctx.fillText(line, PAD + 18, ny);
+        ny += NOTES_LINE_H;
+      });
+      cy += notesCardH;
+    }
+
+    ctx.textAlign = "center";
+    ctx.font = "11px " + font;
+    ctx.fillStyle = tok("--text-dim", "#c9a2a2");
+    ctx.fillText("Generated " + reportData.generatedAt + " · Pool Master Counter", W / 2, cy + 32);
+    ctx.textAlign = "left";
+
+    return canvas;
+  }
+
+  // Promise<Blob|null> - resolves null (rather than rejecting) on any
+  // drawing failure, so a caller building a share-attachment list can
+  // just skip a null entry instead of needing its own try/catch.
+  function buildDayReportImageBlob(dateStr) {
+    return new Promise(function (resolve) {
+      try {
+        var canvas = buildReportCanvasFromData(computeReportImageData(dateStr));
+        canvas.toBlob(function (blob) {
+          resolve(blob || null);
+        }, "image/png");
+      } catch (e) {
+        console.warn("Could not build colorful report image.", e);
+        resolve(null);
+      }
+    });
+  }
+
   // The report is a fully separate document once opened (its own tab, its
   // own JS context) - it has no access back to this app's functions, so it
   // needs its own copy of the canShare({files})-first, download-fallback
-  // pattern shareReportWithBackupAttachment uses above. Sharing the raw
+  // pattern shareReportWithAttachments uses above. Sharing the raw
   // .html file turned out to be a dead end in practice: Messages on Mac has
   // no preview for an .html attachment, so it just shows a generic gray
   // file box - not useful to the person receiving it. This instead draws
@@ -5293,7 +5593,7 @@
       'ctx.fillStyle=tok("--text-dim","#c9a2a2");',
       "ctx.fillText(g.time,PAD+16,rowY+20);",
       'ctx.font="13px "+font;',
-      'ctx.fillStyle=g.isSkunk?tok("--info","#5aa9e6"):tok("--text","#f6efe9");',
+      'ctx.fillStyle=g.skunkCount>0?tok("--info","#5aa9e6"):tok("--text","#f6efe9");',
       "ctx.fillText(truncate(ctx,g.desc,CW-100),PAD+78,rowY+20);",
       "if(i<DATA.games.length-1){",
       'ctx.strokeStyle=tok("--border","#4a1e1e");',
@@ -5412,6 +5712,28 @@
       localStorage.setItem(DAY_REPORT_ATTACH_BACKUP_KEY, value ? "true" : "false");
     } catch (e) {
       console.warn("Could not save day report attach-backup preference.", e);
+    }
+  }
+
+  // Opt-in (default off, unlike the backup checkbox's default-on) - this
+  // changes what Email/Text/Share Report do only once someone deliberately
+  // turns it on, so today's behavior stays exactly as it was for everyone
+  // who doesn't.
+  var DAY_REPORT_ATTACH_COLORFUL_KEY = "poolMasterCounter.dayReportAttachColorful.v1";
+
+  function loadDayReportAttachColorful() {
+    try {
+      return localStorage.getItem(DAY_REPORT_ATTACH_COLORFUL_KEY) === "true";
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function saveDayReportAttachColorful(value) {
+    try {
+      localStorage.setItem(DAY_REPORT_ATTACH_COLORFUL_KEY, value ? "true" : "false");
+    } catch (e) {
+      console.warn("Could not save day report attach-colorful preference.", e);
     }
   }
 
@@ -5552,12 +5874,12 @@
   }
 
   function updateDayReportRecipientsLine() {
-    // With the backup attached, Email/Text Report route through the OS
-    // share sheet (see shareReportWithBackupAttachment) instead of a
+    // With either attachment on, Email/Text Report route through the OS
+    // share sheet (see shareReportWithAttachments) instead of a
     // mailto:/sms: link, so the opted-in recipients below are no longer
     // who it actually goes to - say so instead of showing a list that'd
     // just be wrong.
-    if (dayReportAttachBackupCheckbox.checked) {
+    if (dayReportAttachBackupCheckbox.checked || dayReportAttachColorfulCheckbox.checked) {
       dayReportRecipientsLine.textContent = T("dayNotes.recipientsAttachOverride");
       return;
     }
@@ -6878,26 +7200,64 @@
     }
   }
 
-  // mailto:/sms: links (what Email/Text Report use when the backup isn't
-  // being attached) can't carry file attachments - that's a platform
+  // Builds whichever File attachments the two "Attach ... when sharing"
+  // checkboxes call for, in parallel - the backup JSON is synchronous
+  // (built from data already in memory), the colorful report PNG isn't
+  // (a canvas draw + toBlob), so this always returns a Promise even
+  // though the common case (only the backup checkbox, or neither) never
+  // actually waits on anything.
+  function collectDayReportAttachments() {
+    var files = [];
+    var tasks = [];
+    if (dayReportAttachBackupCheckbox.checked) {
+      // Reuses the same full-backup payload as exportAllData, minus
+      // contacts (email/phone), which have no business leaving the
+      // device in a file meant to be handed to whoever's on the other
+      // end of Mail/Messages/AirDrop. Sending an empty object rather
+      // than omitting the key entirely still round-trips cleanly
+      // through mergeContactsData if this file is ever imported
+      // elsewhere: local contact info always wins on a name conflict
+      // there, and an empty import adds nothing.
+      var payload = buildBackupPayload();
+      payload.contacts = {};
+      files.push(new File([JSON.stringify(payload, null, 2)], defaultBackupFilename(), { type: "application/json" }));
+    }
+    if (dayReportAttachColorfulCheckbox.checked) {
+      tasks.push(
+        buildDayReportImageBlob(todayDateStr()).then(function (blob) {
+          if (blob) files.push(new File([blob], "pool-master-counter-report-" + todayDateStr() + ".png", { type: "image/png" }));
+        })
+      );
+    }
+    return Promise.all(tasks).then(function () {
+      return files;
+    });
+  }
+
+  function downloadFileObject(file) {
+    var url = URL.createObjectURL(file);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = file.name;
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 1000);
+  }
+
+  // mailto:/sms: links (what Email/Text Report use when nothing's being
+  // attached) can't carry file attachments - that's a platform
   // restriction, not something fixable here. The Web Share API is the
   // actual way to hand a file to Mail, Messages, AirDrop, etc. with it
-  // genuinely attached, so whenever the "Attach full backup file"
-  // checkbox (dayReportAttachBackupCheckbox) is on, Email Report, Text
-  // Report and Share Report all try this first instead of going
-  // straight to a mailto:/sms: link - which does mean giving up the
-  // auto-filled opted-in recipient for a manual pick in the OS share
-  // sheet, but there's no API that offers both a pre-filled recipient
-  // and a real attachment. Reuses the same full-backup payload as
-  // exportAllData as the attached file, minus contacts (email/phone),
-  // which have no business leaving the device in a file meant to be
-  // handed to whoever's on the other end of Mail/Messages/AirDrop.
-  // Sending an empty object rather than omitting the key entirely
-  // still round-trips cleanly through mergeContactsData if this file
-  // is ever imported elsewhere: local contact info always wins on a
-  // name conflict there, and an empty import adds nothing, so an
-  // existing player's contact info on the importing device is left
-  // exactly as it was.
+  // genuinely attached, so whenever either "Attach ... when sharing"
+  // checkbox is on, Email Report, Text Report and Share Report all try
+  // this first instead of going straight to a mailto:/sms: link - which
+  // does mean giving up the auto-filled opted-in recipient for a manual
+  // pick in the OS share sheet, but there's no API that offers both a
+  // pre-filled recipient and a real attachment.
   //
   // onFallback (optional): called whenever the file-attach path fails
   // for ANY reason - no navigator.share/canShare support at all, or
@@ -6910,41 +7270,43 @@
   // Callers pass their own normal fallback (open the mailto:/sms:
   // link, or a text-only share) so a broken share sheet degrades back
   // to "everything except the actual attachment" instead of "nothing".
-  function shareReportWithBackupAttachment(text, onFallback) {
-    var payload = buildBackupPayload();
-    payload.contacts = {};
-    var filename = defaultBackupFilename();
-    var file = new File([JSON.stringify(payload, null, 2)], filename, { type: "application/json" });
+  function shareReportWithAttachments(text, onFallback) {
+    collectDayReportAttachments().then(function (files) {
+      if (!files.length) {
+        if (onFallback) onFallback();
+        return;
+      }
 
-    function fallback() {
-      downloadJSON(filename, payload);
-      showToast(T("toast.shareFallback"));
-      if (onFallback) onFallback();
-    }
+      function fallback() {
+        files.forEach(downloadFileObject);
+        showToast(T("toast.shareFallback"));
+        if (onFallback) onFallback();
+      }
 
-    // canShare() saying yes doesn't guarantee share() actually works -
-    // some desktop Chrome/macOS combos report file-sharing support but
-    // then reject every call with NotAllowedError (canShare with a
-    // files array is still the correct feature test up front; share()
-    // alone doesn't imply file support).
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      navigator.share({
-        files: [file],
-        title: "Pool Master Counter — Day Report",
-        text: text
-      }).catch(function (err) {
-        if (err && err.name === "AbortError") return;
+      // canShare() saying yes doesn't guarantee share() actually works -
+      // some desktop Chrome/macOS combos report file-sharing support but
+      // then reject every call with NotAllowedError (canShare with a
+      // files array is still the correct feature test up front; share()
+      // alone doesn't imply file support).
+      if (navigator.canShare && navigator.canShare({ files: files })) {
+        navigator.share({
+          files: files,
+          title: "Pool Master Counter — Day Report",
+          text: text
+        }).catch(function (err) {
+          if (err && err.name === "AbortError") return;
+          fallback();
+        });
+      } else {
         fallback();
-      });
-    } else {
-      fallback();
-    }
+      }
+    });
   }
 
-  // The "Attach full backup file" checkbox is off: a plain text share of
-  // the day report and nothing more, same as any other native share
-  // sheet - falls back to the same clipboard copy Copy Report uses on a
-  // browser/device with no navigator.share at all.
+  // Neither attach checkbox is on: a plain text share of the day report
+  // and nothing more, same as any other native share sheet - falls back
+  // to the same clipboard copy Copy Report uses on a browser/device with
+  // no navigator.share at all.
   function shareReportTextOnly(text) {
     if (navigator.share) {
       navigator.share({ title: "Pool Master Counter — Day Report", text: text }).catch(function (err) {
@@ -6958,8 +7320,8 @@
 
   function shareReport() {
     var text = buildDayReportTextForSharing(todayDateStr());
-    if (dayReportAttachBackupCheckbox.checked) {
-      shareReportWithBackupAttachment(text, function () {
+    if (dayReportAttachBackupCheckbox.checked || dayReportAttachColorfulCheckbox.checked) {
+      shareReportWithAttachments(text, function () {
         shareReportTextOnly(text);
       });
     } else {
@@ -12972,13 +13334,12 @@
         .join(",");
       window.location.href = "mailto:" + to + "?subject=" + encodeURIComponent("Pool Master Counter — Day Report") + "&body=" + encodeURIComponent(text);
     }
-    if (dayReportAttachBackupCheckbox.checked) {
-      // If the share sheet can't actually deliver the attachment (see
-      // shareReportWithBackupAttachment's onFallback), still compose
-      // the email exactly like the unchecked path would - a broken
-      // share sheet on this device shouldn't mean Email Report does
-      // literally nothing.
-      shareReportWithBackupAttachment(text, openEmailCompose);
+    if (dayReportAttachBackupCheckbox.checked || dayReportAttachColorfulCheckbox.checked) {
+      // If the share sheet can't actually deliver the attachment(s) (see
+      // shareReportWithAttachments' onFallback), still compose the email
+      // exactly like the unchecked path would - a broken share sheet on
+      // this device shouldn't mean Email Report does literally nothing.
+      shareReportWithAttachments(text, openEmailCompose);
       return;
     }
     openEmailCompose();
@@ -12994,8 +13355,8 @@
         .join(",");
       window.location.href = "sms:" + to + "&body=" + encodeURIComponent(text);
     }
-    if (dayReportAttachBackupCheckbox.checked) {
-      shareReportWithBackupAttachment(text, openSmsCompose);
+    if (dayReportAttachBackupCheckbox.checked || dayReportAttachColorfulCheckbox.checked) {
+      shareReportWithAttachments(text, openSmsCompose);
       return;
     }
     openSmsCompose();
@@ -13004,6 +13365,12 @@
   dayReportAttachBackupCheckbox.checked = loadDayReportAttachBackup();
   dayReportAttachBackupCheckbox.addEventListener("change", function () {
     saveDayReportAttachBackup(dayReportAttachBackupCheckbox.checked);
+    updateDayReportRecipientsLine();
+  });
+
+  dayReportAttachColorfulCheckbox.checked = loadDayReportAttachColorful();
+  dayReportAttachColorfulCheckbox.addEventListener("change", function () {
+    saveDayReportAttachColorful(dayReportAttachColorfulCheckbox.checked);
     updateDayReportRecipientsLine();
   });
 
