@@ -1180,6 +1180,15 @@ input[type="number"] {
   display: none;
 }
 
+/* The badge sits absolutely positioned at top:8/left:8 at 30x30, so its
+   bottom edge reaches 38px down from the card's top edge - when a real
+   number is showing, push the whole card's content below that instead of
+   letting the centered name text start right under (and behind) it. */
+.player-panel:has(.keypad-number-badge:not(:empty)),
+.member-card:has(.keypad-number-badge:not(:empty)) {
+  padding-top: 40px;
+}
+
 .is-keypad-selected {
   box-shadow: 0 0 0 4px var(--accent) inset;
   background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 22%, var(--felt)) 0%, var(--bg-glow) 100%);
