@@ -1,0 +1,31 @@
+{
+  "identifier" : "3B7F1A2C-6E4D-4B8A-9C2F-1D5E7A8B9C0D",
+  "nonRenewingSubscriptions" : [],
+  "products" : [
+    {
+      "displayPrice" : "4.99",
+      "familyShareable" : false,
+      "internalID" : "6E1A2B3C-4D5E-4F60-8A7B-9C0D1E2F3A4B",
+      "localizations" : [
+        {
+          "description" : "Unlocks Pro features, including Colorful Reports.",
+          "displayName" : "Pool Master Counter Pro",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.poolmastercounter.app.pro",
+      "referenceName" : "Pro Unlock",
+      "type" : "NonConsumable"
+    }
+  ],
+  "settings" : {
+    "_applicationInternalID" : "0",
+    "_developerTeamID" : "0",
+    "_lastSynchronizedDate" : 0
+  },
+  "subscriptionGroups" : [],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
+  }
+}
