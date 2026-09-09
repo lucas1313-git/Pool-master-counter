@@ -4953,18 +4953,35 @@
       }, 0) || 1;
     var rankMedals = ["🥇", "🥈", "🥉"];
 
+    // Each section below builds its HTML string for the viewable page AND a
+    // parallel plain-data array from the exact same loop - the latter gets
+    // embedded as JSON for the Share button's canvas renderer (see
+    // buildColorfulReportShareScript), so both outputs stay in sync from one
+    // pass over the data instead of two independent derivations.
+    var playersForImage = [];
     var leaderboardHtml = data.players
       .map(function (p, i) {
         var medal = rankMedals[i] || i + 1 + ".";
         var barPct = Math.round((p.wins / maxWins) * 100);
         var deltaClass = p.ratingDelta > 0 ? "up" : p.ratingDelta < 0 ? "down" : "flat";
+        var deltaText = formatReportRatingDelta(p.ratingDelta);
+        playersForImage.push({
+          medal: medal,
+          name: p.name,
+          rating: p.rating,
+          deltaText: deltaText,
+          deltaClass: deltaClass,
+          wins: p.wins,
+          losses: p.losses,
+          barPct: barPct
+        });
         return (
           '<div class="player-card">' +
           '<div class="rank">' + medal + "</div>" +
           '<div class="card-main">' +
           '<div class="card-top">' +
           '<span class="name">' + escapeHtmlForReport(p.name) + "</span>" +
-          '<span class="rating">' + p.rating + ' <span class="delta ' + deltaClass + '">' + escapeHtmlForReport(formatReportRatingDelta(p.ratingDelta)) + "</span></span>" +
+          '<span class="rating">' + p.rating + ' <span class="delta ' + deltaClass + '">' + escapeHtmlForReport(deltaText) + "</span></span>" +
           "</div>" +
           '<div class="record"><span class="win">' + p.wins + 'W</span> · <span class="loss">' + p.losses + "L</span></div>" +
           '<div class="bar-track"><div class="bar-fill" style="width:' + barPct + '%"></div></div>' +
@@ -4974,41 +4991,39 @@
       })
       .join("");
 
+    var highlightsForImage = [];
     var highlightsHtml = "";
     data.raceWins.forEach(function (g) {
       var names = joinNamesForReport(((g.winnerNames && g.winnerNames.length ? g.winnerNames : g.teammateNames) || []));
-      highlightsHtml +=
-        '<div class="highlight-card">🏆 ' +
-        escapeHtmlForReport(names) +
-        " won the Race to " +
-        g.raceTarget +
-        " session!</div>";
+      var line = "🏆 " + names + " won the Race to " + g.raceTarget + " session!";
+      highlightsForImage.push(line);
+      highlightsHtml += '<div class="highlight-card">' + escapeHtmlForReport(line) + "</div>";
     });
     data.tournaments.forEach(function (t) {
       var champs = joinNamesForReport(t.championNames || []);
-      highlightsHtml +=
-        '<div class="highlight-card">👑 ' +
-        escapeHtmlForReport(champs) +
-        " won the " +
-        tournamentFormatLabel(t.format) +
-        " tournament (" +
-        (t.players || []).length +
-        " players)</div>";
+      var line = "👑 " + champs + " won the " + tournamentFormatLabel(t.format) + " tournament (" + (t.players || []).length + " players)";
+      highlightsForImage.push(line);
+      highlightsHtml += '<div class="highlight-card">' + escapeHtmlForReport(line) + "</div>";
     });
 
+    var gamesForImage = [];
     var gamesHtml = groupReportGames(data.games)
       .map(function (g) {
         var winners = joinNamesForReport(g.winnerNames || []);
         var losers = joinNamesForReport(g.opponentNames || []);
+        var descText = losers ? winners + " def. " + losers : winners + " won";
+        var countText = g.count > 1 ? " ×" + g.count : "";
+        var skunkText = g.skunkCount > 0 ? " 🦨×" + g.skunkCount : "";
+        var time = formatReportGameTime(g.ts);
+        gamesForImage.push({ time: time, desc: descText + " · " + g.gameLabel + countText + skunkText, isSkunk: g.skunkCount > 0 });
         var desc = losers
           ? "<strong>" + escapeHtmlForReport(winners) + "</strong> def. " + escapeHtmlForReport(losers)
           : "<strong>" + escapeHtmlForReport(winners) + "</strong> won";
-        var countText = g.count > 1 ? " ×" + g.count : "";
-        var skunk = g.skunkCount > 0 ? ' <span class="skunk-badge">🦨×' + g.skunkCount + "</span>" : "";
+        var skunkHtml = g.skunkCount > 0 ? ' <span class="skunk-badge">🦨×' + g.skunkCount + "</span>" : "";
         return (
           '<div class="game-row">' +
-          '<span class="time">' + escapeHtmlForReport(formatReportGameTime(g.ts)) + "</span>" +
-          '<span class="desc">' + desc + " · " + escapeHtmlForReport(g.gameLabel) + countText + skunk + "</span>" +
+          '<span class="time">' + escapeHtmlForReport(time) + "</span>" +
+          '<span class="desc">' + desc + " · " + escapeHtmlForReport(g.gameLabel) + countText + skunkHtml + "</span>" +
           "</div>"
         );
       })
@@ -5022,6 +5037,16 @@
     }
 
     var generatedAt = formatTimestamp(new Date().toISOString(), true);
+    var reportImageData = {
+      dateStr: dateStr,
+      longDate: longDate,
+      generatedAt: generatedAt,
+      tokens: tokens,
+      players: playersForImage,
+      highlights: highlightsForImage,
+      games: gamesForImage,
+      notes: notes || null
+    };
 
     return (
       "<!DOCTYPE html>\n" +
@@ -5080,46 +5105,261 @@
       notesHtml +
       "<footer>Generated " + escapeHtmlForReport(generatedAt) + " · Pool Master Counter</footer>" +
       "</div>" +
-      buildColorfulReportShareScript(dateStr) +
+      buildColorfulReportShareScript(reportImageData) +
       "</body></html>"
     );
   }
 
   // The report is a fully separate document once opened (its own tab, its
-  // own JS context) - it has no access back to this app's functions or
-  // File-sharing helpers, so it needs its own small, self-contained copy
-  // of the same canShare({files})-first, download-fallback pattern
-  // shareReportWithBackupAttachment uses above. Re-serializes the live DOM
-  // at share time (document.documentElement.outerHTML) rather than
-  // embedding a second copy of the HTML string inside itself - nothing on
-  // this static page changes state before a click, so that's exact.
-  function buildColorfulReportShareScript(dateStr) {
-    var filename = "pool-master-counter-report-" + dateStr + ".html";
-    return (
-      "<script>(function(){" +
-      'var filename=' + JSON.stringify(filename) + ";" +
-      "function currentHtml(){return \"<!doctype html>\\n\"+document.documentElement.outerHTML;}" +
-      "function fallbackDownload(){" +
-      'var blob=new Blob([currentHtml()],{type:"text/html"});' +
-      "var url=URL.createObjectURL(blob);" +
-      'var a=document.createElement("a");' +
-      "a.href=url;a.download=filename;" +
-      "document.body.appendChild(a);a.click();" +
-      "setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},1000);" +
-      "}" +
-      "function shareIt(){" +
-      'var file=new File([currentHtml()],filename,{type:"text/html"});' +
-      "if(navigator.canShare&&navigator.canShare({files:[file]})){" +
-      "navigator.share({files:[file],title:document.title}).catch(function(err){" +
-      'if(err&&err.name==="AbortError")return;' +
-      "fallbackDownload();" +
-      "});" +
-      "}else{fallbackDownload();}" +
-      "}" +
-      'document.getElementById("shareReportBtn").addEventListener("click",shareIt);' +
-      "})();</" +
-      "script>"
-    );
+  // own JS context) - it has no access back to this app's functions, so it
+  // needs its own copy of the canShare({files})-first, download-fallback
+  // pattern shareReportWithBackupAttachment uses above. Sharing the raw
+  // .html file turned out to be a dead end in practice: Messages on Mac has
+  // no preview for an .html attachment, so it just shows a generic gray
+  // file box - not useful to the person receiving it. This instead draws
+  // the same leaderboard/highlights/game-log/notes as a real PNG image on
+  // an offscreen <canvas> (plain 2D drawing, not a DOM screenshot, so it
+  // renders identically everywhere with no html2canvas-style dependency)
+  // and shares/downloads THAT - something every messaging app already
+  // knows how to preview inline as a photo. reportData is the same plain
+  // player/highlight/game/notes arrays buildDayReportColorfulHtml already
+  // builds for the HTML view, embedded here as JSON so this canvas
+  // renderer needs no access back to the app's own data functions.
+  function buildColorfulReportShareScript(reportData) {
+    var filename = "pool-master-counter-report-" + reportData.dateStr + ".png";
+    // Escaping "<" (not just "</script>") is the standard safe way to embed
+    // JSON inside a <script> block - covers a player name that happens to
+    // contain "</script>" verbatim, and any other "<..." sequence an HTML
+    // parser could misread while scanning for the tag's end.
+    var dataJson = JSON.stringify(reportData).replace(/</g, "\\u003c");
+    var lines = [
+      "<" + "script>",
+      "(function(){",
+      "var DATA=" + dataJson + ";",
+      'var filename=' + JSON.stringify(filename) + ";",
+      "var W=680,PAD=28,CW=W-PAD*2,SCALE=2;",
+      "var HERO_H=128,SECTION_GAP=30,LABEL_H=26,PLAYER_ROW_H=78,PLAYER_GAP=10;",
+      "var HIGHLIGHT_ROW_H=40,HIGHLIGHT_GAP=8,GAME_ROW_H=30,NOTES_LINE_H=20,NOTES_PAD=18,FOOTER_H=56;",
+      "function tok(name,fallback){return DATA.tokens[name]||fallback;}",
+      "function roundRect(ctx,x,y,w,h,r){",
+      "ctx.beginPath();",
+      "ctx.moveTo(x+r,y);",
+      "ctx.arcTo(x+w,y,x+w,y+h,r);",
+      "ctx.arcTo(x+w,y+h,x,y+h,r);",
+      "ctx.arcTo(x,y+h,x,y,r);",
+      "ctx.arcTo(x,y,x+w,y,r);",
+      "ctx.closePath();",
+      "}",
+      "function wrapText(ctx,text,maxWidth){",
+      'var words=text.split(/\\s+/);',
+      'var lines=[],current="";',
+      "for(var i=0;i<words.length;i++){",
+      "var word=words[i];",
+      'var test=current?current+" "+word:word;',
+      "if(ctx.measureText(test).width>maxWidth&&current){lines.push(current);current=word;}",
+      "else{current=test;}",
+      "}",
+      "if(current)lines.push(current);",
+      "return lines;",
+      "}",
+      "function truncate(ctx,text,maxWidth){",
+      "if(ctx.measureText(text).width<=maxWidth)return text;",
+      "var t=text;",
+      'while(t.length>1&&ctx.measureText(t+"…").width>maxWidth){t=t.slice(0,-1);}',
+      'return t+"…";',
+      "}",
+      "function renderReportPNG(){",
+      'var font=DATA.tokens["--font-family"]||"sans-serif";',
+      'var measureCanvas=document.createElement("canvas");',
+      'var mctx=measureCanvas.getContext("2d");',
+      "var notesLines=[];",
+      "if(DATA.notes){",
+      'mctx.font="italic 14px "+font;',
+      "notesLines=wrapText(mctx,DATA.notes,CW-36);",
+      "}",
+      "var hasPlayers=DATA.players.length>0;",
+      "var y=HERO_H;",
+      "if(hasPlayers){y+=SECTION_GAP+LABEL_H+DATA.players.length*PLAYER_ROW_H;}",
+      "else{y+=SECTION_GAP+30;}",
+      "if(DATA.highlights.length){y+=SECTION_GAP+LABEL_H+DATA.highlights.length*HIGHLIGHT_ROW_H;}",
+      "var logH=0;",
+      "if(DATA.games.length){logH=DATA.games.length*GAME_ROW_H+16;y+=SECTION_GAP+LABEL_H+logH;}",
+      "var notesCardH=0;",
+      "if(DATA.notes){notesCardH=NOTES_PAD*2+notesLines.length*NOTES_LINE_H;y+=SECTION_GAP+LABEL_H+notesCardH;}",
+      "y+=FOOTER_H;",
+      'var canvas=document.createElement("canvas");',
+      "canvas.width=W*SCALE;canvas.height=y*SCALE;",
+      'var ctx=canvas.getContext("2d");',
+      "ctx.scale(SCALE,SCALE);",
+      'ctx.fillStyle=tok("--bg","#1a0a0a");',
+      "ctx.fillRect(0,0,W,y);",
+      "var grad=ctx.createLinearGradient(0,0,W,HERO_H);",
+      'grad.addColorStop(0,tok("--felt","#5c0f14"));',
+      'grad.addColorStop(1,tok("--felt-light","#8a1a1f"));',
+      "ctx.fillStyle=grad;",
+      "roundRect(ctx,PAD,0,CW,HERO_H,18);ctx.fill();",
+      'ctx.fillStyle=tok("--text","#f6efe9");',
+      'ctx.textAlign="center";',
+      'ctx.font="bold 24px "+font;',
+      'ctx.fillText("🎱 Pool Master Counter",W/2,48);',
+      'ctx.font="16px "+font;',
+      "ctx.globalAlpha=0.9;",
+      "ctx.fillText(DATA.longDate,W/2,76);",
+      "ctx.globalAlpha=0.65;",
+      'ctx.font="italic 13px "+font;',
+      'ctx.fillText("Don’t get cocky!",W/2,100);',
+      "ctx.globalAlpha=1;",
+      'ctx.textAlign="left";',
+      "var cy=HERO_H+SECTION_GAP;",
+      "function drawLabel(text){",
+      'ctx.fillStyle=tok("--text-dim","#c9a2a2");',
+      'ctx.font="bold 12px "+font;',
+      "ctx.fillText(text.toUpperCase(),PAD,cy+12);",
+      "cy+=LABEL_H;",
+      "}",
+      "if(hasPlayers){",
+      'drawLabel("Leaderboard");',
+      "DATA.players.forEach(function(p){",
+      "var cardY=cy,cardH=PLAYER_ROW_H-PLAYER_GAP;",
+      'ctx.fillStyle=tok("--bg-card","#2e1414");',
+      "roundRect(ctx,PAD,cardY,CW,cardH,12);ctx.fill();",
+      'ctx.strokeStyle=tok("--border","#4a1e1e");ctx.lineWidth=1;',
+      "roundRect(ctx,PAD,cardY,CW,cardH,12);ctx.stroke();",
+      'ctx.fillStyle=tok("--text","#f6efe9");',
+      'ctx.font="20px "+font;ctx.textAlign="center";',
+      "ctx.fillText(p.medal,PAD+26,cardY+34);",
+      'ctx.textAlign="left";',
+      "var contentX=PAD+54,contentW=CW-54-18;",
+      'ctx.font="bold 15px "+font;',
+      'ctx.fillStyle=tok("--text","#f6efe9");',
+      "ctx.fillText(truncate(ctx,p.name,contentW-90),contentX,cardY+22);",
+      'ctx.font="13px "+font;ctx.textAlign="right";',
+      'var deltaColor=p.deltaClass==="up"?tok("--accent","#e8b923"):p.deltaClass==="down"?tok("--danger","#ff5252"):tok("--text-dim","#c9a2a2");',
+      "ctx.fillStyle=deltaColor;",
+      "ctx.fillText(p.deltaText,PAD+CW-18,cardY+22);",
+      "var deltaW=ctx.measureText(p.deltaText).width;",
+      'ctx.fillStyle=tok("--text-dim","#c9a2a2");',
+      'ctx.fillText(p.rating+"  ",PAD+CW-18-deltaW,cardY+22);',
+      'ctx.textAlign="left";',
+      'ctx.font="13px "+font;',
+      'ctx.fillStyle=tok("--accent","#e8b923");',
+      'var winsText=p.wins+"W";',
+      "ctx.fillText(winsText,contentX,cardY+42);",
+      "var winsW=ctx.measureText(winsText).width;",
+      'ctx.fillStyle=tok("--text-dim","#c9a2a2");',
+      'ctx.fillText(" · ",contentX+winsW,cardY+42);',
+      'var sepW=ctx.measureText(" · ").width;',
+      'ctx.fillStyle=tok("--danger","#ff5252");',
+      'ctx.fillText(p.losses+"L",contentX+winsW+sepW,cardY+42);',
+      "var barY=cardY+54,barW=contentW;",
+      'ctx.fillStyle=tok("--bg-panel","#241010");',
+      "roundRect(ctx,contentX,barY,barW,5,3);ctx.fill();",
+      'ctx.fillStyle=tok("--accent","#e8b923");',
+      "var fillW=Math.max(4,barW*p.barPct/100);",
+      "roundRect(ctx,contentX,barY,fillW,5,3);ctx.fill();",
+      "cy+=PLAYER_ROW_H;",
+      "});",
+      "}else{",
+      'ctx.fillStyle=tok("--text-dim","#c9a2a2");',
+      'ctx.font="italic 14px "+font;',
+      'ctx.fillText("No games recorded today.",PAD,cy+14);',
+      "cy+=30;",
+      "}",
+      "if(DATA.highlights.length){",
+      "cy+=SECTION_GAP-PLAYER_GAP;",
+      'drawLabel("Highlights");',
+      "DATA.highlights.forEach(function(line){",
+      "var g=ctx.createLinearGradient(PAD,cy,PAD+CW,cy);",
+      'g.addColorStop(0,tok("--accent-dark","#b8890f"));',
+      'g.addColorStop(1,tok("--accent","#e8b923"));',
+      "ctx.fillStyle=g;",
+      "roundRect(ctx,PAD,cy,CW,HIGHLIGHT_ROW_H-HIGHLIGHT_GAP,12);ctx.fill();",
+      'ctx.fillStyle=tok("--on-accent","#241a00");',
+      'ctx.font="bold 13px "+font;',
+      "ctx.fillText(truncate(ctx,line,CW-32),PAD+16,cy+21);",
+      "cy+=HIGHLIGHT_ROW_H;",
+      "});",
+      "}",
+      "if(DATA.games.length){",
+      "cy+=SECTION_GAP-HIGHLIGHT_GAP;",
+      'drawLabel("Game Log");',
+      'ctx.fillStyle=tok("--bg-card","#2e1414");',
+      "roundRect(ctx,PAD,cy,CW,logH,12);ctx.fill();",
+      'ctx.strokeStyle=tok("--border","#4a1e1e");',
+      "roundRect(ctx,PAD,cy,CW,logH,12);ctx.stroke();",
+      "var rowY=cy+8;",
+      "DATA.games.forEach(function(g,i){",
+      'ctx.font="12px "+font;',
+      'ctx.fillStyle=tok("--text-dim","#c9a2a2");',
+      "ctx.fillText(g.time,PAD+16,rowY+20);",
+      'ctx.font="13px "+font;',
+      'ctx.fillStyle=g.isSkunk?tok("--info","#5aa9e6"):tok("--text","#f6efe9");',
+      "ctx.fillText(truncate(ctx,g.desc,CW-100),PAD+78,rowY+20);",
+      "if(i<DATA.games.length-1){",
+      'ctx.strokeStyle=tok("--border","#4a1e1e");',
+      "ctx.beginPath();",
+      "ctx.moveTo(PAD+16,rowY+GAME_ROW_H-4);",
+      "ctx.lineTo(PAD+CW-16,rowY+GAME_ROW_H-4);",
+      "ctx.stroke();",
+      "}",
+      "rowY+=GAME_ROW_H;",
+      "});",
+      "cy+=logH;",
+      "}",
+      "if(DATA.notes){",
+      "cy+=SECTION_GAP;",
+      'drawLabel("Notes");',
+      'ctx.fillStyle=tok("--bg-card","#2e1414");',
+      "roundRect(ctx,PAD,cy,CW,notesCardH,8);ctx.fill();",
+      'ctx.fillStyle=tok("--accent","#e8b923");',
+      "ctx.fillRect(PAD,cy,4,notesCardH);",
+      'ctx.fillStyle=tok("--text","#f6efe9");',
+      'ctx.font="italic 14px "+font;',
+      "var ny=cy+NOTES_PAD+12;",
+      "notesLines.forEach(function(line){ctx.fillText(line,PAD+18,ny);ny+=NOTES_LINE_H;});",
+      "cy+=notesCardH;",
+      "}",
+      'ctx.textAlign="center";',
+      'ctx.font="11px "+font;',
+      'ctx.fillStyle=tok("--text-dim","#c9a2a2");',
+      'ctx.fillText("Generated "+DATA.generatedAt+" · Pool Master Counter",W/2,cy+32);',
+      'ctx.textAlign="left";',
+      "return canvas;",
+      "}",
+      "function fallbackDownload(blob){",
+      "var url=URL.createObjectURL(blob);",
+      'var a=document.createElement("a");',
+      "a.href=url;a.download=filename;",
+      "document.body.appendChild(a);a.click();",
+      "setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},1000);",
+      "}",
+      "function shareIt(){",
+      'var btn=document.getElementById("shareReportBtn");',
+      "var originalLabel=btn.textContent;",
+      'btn.textContent="⏳ Preparing…";',
+      "btn.disabled=true;",
+      "setTimeout(function(){",
+      "try{",
+      "var canvas=renderReportPNG();",
+      "canvas.toBlob(function(blob){",
+      "btn.textContent=originalLabel;btn.disabled=false;",
+      "if(!blob)return;",
+      'var file=new File([blob],filename,{type:"image/png"});',
+      "if(navigator.canShare&&navigator.canShare({files:[file]})){",
+      'navigator.share({files:[file],title:document.title}).catch(function(err){',
+      'if(err&&err.name==="AbortError")return;',
+      "fallbackDownload(blob);",
+      "});",
+      "}else{fallbackDownload(blob);}",
+      '},"image/png");',
+      "}catch(e){btn.textContent=originalLabel;btn.disabled=false;}",
+      "},10);",
+      "}",
+      'document.getElementById("shareReportBtn").addEventListener("click",shareIt);',
+      "})();",
+      "</" + "script>"
+    ];
+    return lines.join("\n");
   }
 
   // Opened in a new tab rather than downloaded outright - the point is to
