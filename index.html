@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260909a">
+<link rel="stylesheet" href="css/style.css?v=20260909b">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -898,6 +898,17 @@
     </div>
   </section>
 
+  <section class="panel collapsible-panel collapsed" id="player-page-teams-panel">
+    <button type="button" class="panel-toggle" id="btn-toggle-player-page-teams-panel" aria-expanded="false" aria-controls="player-page-teams-panel-body">
+      <h2 data-i18n="playerPage.teamsHeading">Teams</h2>
+      <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+    </button>
+    <p class="panel-summary" id="player-page-teams-panel-summary"></p>
+    <div class="panel-body" id="player-page-teams-panel-body">
+      <ul id="player-page-teams-list" class="player-h2h-list"></ul>
+    </div>
+  </section>
+
   <section class="panel" id="player-page-graph-panel">
     <h2 data-i18n="playerPage.graphHeading">Graph</h2>
     <div id="player-page-graph-body"></div>
@@ -1016,7 +1027,10 @@
       <input type="checkbox" id="tournament-seeded-checkbox">
       <span data-i18n="tournament.seededEnable">🔢 Set seeds manually (unchecked = random draw)</span>
     </label>
+    <p class="player-stats-note" data-i18n="tournament.teamHelp">Optionally type a team name (or just a number) next to two or more players to group them into one entrant — pick an existing team from the list, or type a new one.</p>
+    <datalist id="tournament-team-options"></datalist>
     <ul id="tournament-player-checklist" class="tournament-player-checklist"></ul>
+    <p class="player-stats-note hidden" id="tournament-team-preview"></p>
 
     <div class="row">
       <button type="button" id="btn-tournament-start" class="btn btn-primary" data-i18n="tournament.start">Start Tournament</button>
@@ -1069,6 +1083,6 @@
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260909a"></script>
+<script src="js/app.js?v=20260909b"></script>
 </body>
 </html>

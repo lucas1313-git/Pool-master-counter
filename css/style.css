@@ -3731,6 +3731,7 @@ input[type="number"] {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-wrap: wrap;
 }
 
 .tournament-player-check-row label {
@@ -3747,6 +3748,28 @@ input[type="number"] {
   color: var(--text);
   text-align: center;
   font-size: 0.9rem;
+}
+
+.tournament-team-input {
+  flex: 1 1 84px;
+  min-width: 70px;
+  height: auto !important;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.tournament-match-team-members {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
 }
 
 .tournament-bracket-heading {

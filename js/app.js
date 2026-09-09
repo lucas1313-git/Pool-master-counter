@@ -280,6 +280,23 @@
     return defaultState();
   }
 
+  // Auto-archives the Colorful Report (see computeReportImageData, which
+  // already archives its result as a side effect) once the app has sat
+  // idle for an hour after the last real action. A debounced one-shot
+  // timer rather than a periodic poll - rescheduled on every saveState()
+  // call - fires as close as possible to exactly one hour after the LAST
+  // save, which needs no extra "last activity" bookkeeping and minimizes
+  // (though can't fully eliminate, since computeDayReportData always
+  // reads "today" regardless of what date string it's given) the case
+  // where that hour crosses midnight.
+  var idleReportTimer = null;
+  function scheduleIdleReportAutoSave() {
+    if (idleReportTimer) clearTimeout(idleReportTimer);
+    idleReportTimer = setTimeout(function () {
+      if (state.gameHistory.length > 0) computeReportImageData(todayDateStr());
+    }, 60 * 60 * 1000);
+  }
+
   function saveState() {
     if (noStatsMode) return;
     try {
@@ -287,6 +304,7 @@
     } catch (e) {
       console.warn("Could not save state.", e);
     }
+    scheduleIdleReportAutoSave();
   }
 
   function getPlayer(id) {
@@ -1351,6 +1369,7 @@
   var playerPagePeriodButtons = playerPagePeriodFilter.querySelectorAll(".period-btn");
   var playerPageSynopsisBody = document.getElementById("player-page-synopsis-body");
   var playerPageH2hList = document.getElementById("player-page-h2h-list");
+  var playerPageTeamsList = document.getElementById("player-page-teams-list");
   var btnReturnToGlobalStats = document.getElementById("btn-return-to-global-stats");
   var playerPageSwitcher = document.getElementById("player-page-switcher");
 
@@ -1384,6 +1403,8 @@
   var tournamentFairRaceCheckbox = document.getElementById("tournament-fair-race-checkbox");
   var tournamentSeededCheckbox = document.getElementById("tournament-seeded-checkbox");
   var tournamentPlayerChecklist = document.getElementById("tournament-player-checklist");
+  var tournamentTeamOptionsDatalist = document.getElementById("tournament-team-options");
+  var tournamentTeamPreview = document.getElementById("tournament-team-preview");
   var btnTournamentStart = document.getElementById("btn-tournament-start");
   var btnTournamentAbandon = document.getElementById("btn-tournament-abandon");
   var btnTournamentPrint = document.getElementById("btn-tournament-print");
@@ -6015,6 +6036,7 @@
   var PLAYER_STATS_KEY = "poolMasterCounter.playerStats.v1";
   var RATINGS_KEY = "poolMasterCounter.ratings.v1";
   var PLAYER_ADDED_KEY = "poolMasterCounter.playerAdded.v1";
+  var TEAMS_KEY = "poolMasterCounter.teams.v1";
 
   function loadRostersFromStorage() {
     try {
@@ -6033,6 +6055,71 @@
     } catch (e) {
       console.warn("Could not save rosters.", e);
     }
+  }
+
+  // Named, persisted tournament teams - {id, name, members:[playerName,...],
+  // createdAt}. Kept separate from the main scoreboard's ad-hoc, session-
+  // only "Team A/B" mode (state.teamWins etc.) - these are reusable across
+  // tournaments, the way a saved roster is reusable across sessions.
+  function loadTeamsFromStorage() {
+    try {
+      var raw = localStorage.getItem(TEAMS_KEY);
+      var parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function saveTeamsToStorage(teams) {
+    if (noStatsMode) return;
+    try {
+      localStorage.setItem(TEAMS_KEY, JSON.stringify(teams));
+    } catch (e) {
+      console.warn("Could not save teams.", e);
+    }
+  }
+
+  var SAVED_TEAMS = loadTeamsFromStorage();
+
+  function findTeamByName(name) {
+    var key = normalizeNameKey(name);
+    var match = SAVED_TEAMS.filter(function (t) {
+      return normalizeNameKey(t.name) === key;
+    });
+    return match.length ? match[0] : null;
+  }
+
+  function normalizedMemberSetKey(members) {
+    return (members || [])
+      .map(normalizeNameKey)
+      .sort()
+      .join("|");
+  }
+
+  function findTeamByMembers(members) {
+    var key = normalizedMemberSetKey(members);
+    var match = SAVED_TEAMS.filter(function (t) {
+      return normalizedMemberSetKey(t.members) === key;
+    });
+    return match.length ? match[0] : null;
+  }
+
+  // Creates a new saved team, or - if this exact name is already saved -
+  // redefines its membership to the current lineup. "Current lineup wins"
+  // is a deliberate simplification (this is a casual home-game tool, not a
+  // tournament-director product, same philosophy as the seeding fallback
+  // below) rather than blocking on a mismatch.
+  function upsertTeamFromTournamentEntry(name, members) {
+    var existing = findTeamByName(name);
+    if (existing) {
+      existing.members = members.slice();
+    } else {
+      SAVED_TEAMS = SAVED_TEAMS.concat([
+        { id: "team-" + uid(), name: name, members: members.slice(), createdAt: new Date().toISOString() }
+      ]);
+    }
+    saveTeamsToStorage(SAVED_TEAMS);
   }
 
   function loadRotationsFromStorage() {
@@ -7297,6 +7384,7 @@
       exportedAt: new Date().toISOString(),
       state: state,
       rosters: SAVED_ROSTERS,
+      teams: SAVED_TEAMS,
       playerStats: PLAYER_STATS,
       ratings: PLAYER_RATINGS,
       contacts: PLAYER_CONTACTS,
@@ -7638,6 +7726,34 @@
     return { rosters: merged, added: added };
   }
 
+  // Same "union, skip what's already known" shape as mergeRosterLists, but
+  // keyed by name (a team's whole point is being a named, reusable entity)
+  // rather than by member set - on a name collision the local team wins
+  // and the imported one is simply skipped, rather than silently
+  // overwriting a locally-redefined lineup.
+  function mergeTeamLists(localTeams, importedTeams) {
+    var seen = {};
+    var merged = [];
+    (localTeams || []).forEach(function (t) {
+      var key = normalizeNameKey(t.name);
+      if (seen[key]) return;
+      seen[key] = true;
+      merged.push(t);
+    });
+    var added = 0;
+    (importedTeams || []).forEach(function (t) {
+      var key = normalizeNameKey(t.name);
+      if (!t.name || seen[key]) return;
+      seen[key] = true;
+      merged.push(t);
+      added += 1;
+    });
+    merged.sort(function (a, b) {
+      return (a.createdAt || "").localeCompare(b.createdAt || "");
+    });
+    return { teams: merged, added: added };
+  }
+
   // A friendly, hand-editable export: just label + players per list, no
   // internal id/savedAt bookkeeping to get wrong when writing one by hand.
   function exportRosterLists() {
@@ -7893,6 +8009,7 @@
         try {
           var importedState = data.state && typeof data.state === "object" ? data.state : defaultState();
           var importedRosters = Array.isArray(data.rosters) ? data.rosters : [];
+          var importedTeams = Array.isArray(data.teams) ? data.teams : [];
           var importedPlayerStats = data.playerStats && typeof data.playerStats === "object" ? data.playerStats : {};
           var extraSessions = summarizeGameHistoryByPlayer(importedState.gameHistory || []);
           var importedRatings = data.ratings && typeof data.ratings === "object" ? data.ratings : {};
@@ -7966,6 +8083,7 @@
           function proceedWithMerge() {
             var mergedPlayerStats = mergePlayerStatsData(PLAYER_STATS, importedPlayerStats, extraSessions);
             var rosterMerge = mergeRosterLists(SAVED_ROSTERS, importedRosters);
+            var teamMerge = mergeTeamLists(SAVED_TEAMS, importedTeams);
             var mergedRatings = mergeRatingsData(PLAYER_RATINGS, importedRatings);
             var mergedContacts = mergeContactsData(PLAYER_CONTACTS, importedContacts);
             var mergedPlayerAdded = mergePlayerAddedData(PLAYER_ADDED, importedPlayerAdded);
@@ -8043,6 +8161,7 @@
             });
 
             localStorage.setItem(ROSTERS_KEY, JSON.stringify(rosterMerge.rosters));
+            localStorage.setItem(TEAMS_KEY, JSON.stringify(teamMerge.teams));
             localStorage.setItem(PLAYER_STATS_KEY, JSON.stringify(mergedPlayerStats));
             localStorage.setItem(RATINGS_KEY, JSON.stringify(mergedRatings));
             localStorage.setItem(CONTACTS_KEY, JSON.stringify(mergedContacts));
@@ -9722,6 +9841,47 @@
       });
   }
 
+  // Same shape as computeHeadToHead, but grouped by teammate combo
+  // (teamComboLabel(g.teammateNames), already used by the graph's team-
+  // combo series) instead of by opponent - one row per distinct group of
+  // people this player has been teamed up with (tournament teams and the
+  // main scoreboard's ad-hoc Team A/B mode both write isTeam/teammateNames
+  // the same way, so both show up here). Each combo is decorated with its
+  // saved team name (findTeamByMembers, matched on the FULL roster -
+  // teammateNames excludes the viewed player themself, so it's added back
+  // in) when one exists, falling back to just the partner names.
+  function computeTeamRecords(games, viewedPlayerName) {
+    var map = {};
+    var order = [];
+    games.forEach(function (g) {
+      if (!g.isTeam || !(g.teammateNames || []).length) return;
+      var key = teamComboLabel(g.teammateNames);
+      if (!map[key]) {
+        map[key] = { partners: g.teammateNames.slice(), wins: 0, losses: 0 };
+        order.push(key);
+      }
+      if (g.result === "won") map[key].wins += 1;
+      else map[key].losses += 1;
+    });
+    return order
+      .map(function (key) {
+        var rec = map[key];
+        var total = rec.wins + rec.losses;
+        var saved = findTeamByMembers(rec.partners.concat([viewedPlayerName]));
+        return {
+          teamName: saved ? saved.name : null,
+          partners: rec.partners,
+          wins: rec.wins,
+          losses: rec.losses,
+          total: total,
+          pct: total ? Math.round((rec.wins / total) * 100) : null
+        };
+      })
+      .sort(function (a, b) {
+        return b.total - a.total || a.partners.join(",").localeCompare(b.partners.join(","));
+      });
+  }
+
   function synopsisStatRow(label, value, variant) {
     var row = document.createElement("div");
     row.className = "player-stats-row";
@@ -9802,26 +9962,63 @@
       hint.className = "empty-hint";
       hint.textContent = T("playerPage.noOpponentGamesThisPeriod");
       playerPageH2hList.appendChild(hint);
-      return;
+    } else {
+      h2h.forEach(function (opp) {
+        var li = document.createElement("li");
+        li.className = "player-h2h-row";
+        var name = document.createElement("span");
+        name.className = "player-h2h-name";
+        name.textContent = opp.name;
+        name.appendChild(buildRatingBadge(opp.name));
+        var record = document.createElement("span");
+        record.className = "player-h2h-record";
+        record.textContent = opp.wins + "–" + opp.losses;
+        var pct = document.createElement("span");
+        pct.className = "player-h2h-pct";
+        pct.textContent = opp.pct === null ? "—" : opp.pct + "%";
+        li.appendChild(name);
+        li.appendChild(record);
+        li.appendChild(pct);
+        playerPageH2hList.appendChild(li);
+      });
     }
-    h2h.forEach(function (opp) {
-      var li = document.createElement("li");
-      li.className = "player-h2h-row";
-      var name = document.createElement("span");
-      name.className = "player-h2h-name";
-      name.textContent = opp.name;
-      name.appendChild(buildRatingBadge(opp.name));
-      var record = document.createElement("span");
-      record.className = "player-h2h-record";
-      record.textContent = opp.wins + "–" + opp.losses;
-      var pct = document.createElement("span");
-      pct.className = "player-h2h-pct";
-      pct.textContent = opp.pct === null ? "—" : opp.pct + "%";
-      li.appendChild(name);
-      li.appendChild(record);
-      li.appendChild(pct);
-      playerPageH2hList.appendChild(li);
-    });
+
+    var teamRecords = computeTeamRecords(filtered, currentStatsPlayerName);
+    setPanelSummary(
+      "player-page-teams-panel",
+      teamRecords.length === 0
+        ? "No teams yet this period."
+        : teamRecords.length + " team" + (teamRecords.length === 1 ? "" : "s") + " played on"
+    );
+    playerPageTeamsList.innerHTML = "";
+    if (teamRecords.length === 0) {
+      var teamHint = document.createElement("li");
+      teamHint.className = "empty-hint";
+      teamHint.textContent = T("playerPage.noTeamGamesThisPeriod");
+      playerPageTeamsList.appendChild(teamHint);
+    } else {
+      teamRecords.forEach(function (rec) {
+        var li = document.createElement("li");
+        li.className = "player-h2h-row";
+        var name = document.createElement("span");
+        name.className = "player-h2h-name";
+        var partnerNames = joinNamesForReport(rec.partners);
+        name.textContent = rec.teamName ? rec.teamName + " — " + partnerNames : partnerNames;
+        rec.partners.forEach(function (partnerName) {
+          name.appendChild(buildRatingBadge(partnerName));
+        });
+        var record = document.createElement("span");
+        record.className = "player-h2h-record";
+        record.textContent = rec.wins + "–" + rec.losses;
+        var pct = document.createElement("span");
+        pct.className = "player-h2h-pct";
+        pct.textContent = rec.pct === null ? "—" : rec.pct + "%";
+        li.appendChild(name);
+        li.appendChild(record);
+        li.appendChild(pct);
+        playerPageTeamsList.appendChild(li);
+      });
+    }
   }
 
   // Mirrors exactly what the Player Stats page currently shows (same
@@ -11578,17 +11775,35 @@
   // Called once, right when a bracket's champion is first decided — records
   // a win for the champion and a loss for every other entrant. Skipped
   // under noStatsMode, same as every other persistence path.
+  // t.players/t.championNames hold bracket ENTRANT labels (a team's label
+  // for a team entrant) - flattened here into real member names via
+  // entrantMembers before storing, so a player who only ever entered via
+  // a team still shows up (and shows the right won/lost result) in their
+  // own tournamentGamesForPlayerName history below. entrantMembers itself
+  // is also stored, so that function can tell a player's own teammates
+  // apart from real opponents.
   function recordTournamentCompletion(t) {
     if (noStatsMode) return;
+    var entrantMembers = t.entrantMembers || {};
+    function flattenEntrants(labels) {
+      var out = [];
+      (labels || []).forEach(function (label) {
+        (entrantMembers[label] || [label]).forEach(function (name) {
+          out.push(name);
+        });
+      });
+      return out;
+    }
     var ts = new Date().toISOString();
     TOURNAMENT_RESULTS.unshift({
       ts: ts,
       // Round Robin can end in a tie shared by more than one champion;
       // t.championNames already holds all of them there. Bracket formats
       // only ever have a single winner.
-      championNames: t.championNames || [t.champion],
+      championNames: flattenEntrants(t.championNames || [t.champion]),
       format: t.format,
-      players: t.players.slice()
+      players: flattenEntrants(t.players),
+      entrantMembers: entrantMembers
     });
     if (TOURNAMENT_RESULTS.length > 200) TOURNAMENT_RESULTS.length = 200;
     saveTournamentResultsToStorage(TOURNAMENT_RESULTS);
@@ -11634,11 +11849,28 @@
     TOURNAMENT_RESULTS.forEach(function (r) {
       if (r.format === "session-race") return;
       if ((r.players || []).indexOf(name) === -1) return;
+      // r.entrantMembers is absent on older records (or solo-only
+      // tournaments saved before teams existed) - in that case every
+      // other player counts as an opponent, same as always. When present,
+      // exclude this player's own teammates (found by scanning for the
+      // entrant whose members include `name`) so a team win/loss doesn't
+      // also list a teammate as something this player "played against."
+      var ownTeammates = {};
+      if (r.entrantMembers) {
+        Object.keys(r.entrantMembers).forEach(function (label) {
+          var members = r.entrantMembers[label];
+          if (members.indexOf(name) !== -1) {
+            members.forEach(function (n) {
+              ownTeammates[n] = true;
+            });
+          }
+        });
+      }
       games.push({
         ts: r.ts,
         result: (r.championNames || []).indexOf(name) !== -1 ? "won" : "lost",
         opponentNames: r.players.filter(function (n) {
-          return n !== name;
+          return n !== name && !ownTeammates[n];
         }),
         gameLabel: "Tournament"
       });
@@ -12284,7 +12516,11 @@
     advanceBracket(t);
   }
 
-  function recordTournamentRackWin(winnerName, loserName, durationMs) {
+  function recordTournamentRackWin(winnerLabel, loserLabel, durationMs) {
+    var entrantMembers = TOURNAMENT.entrantMembers || {};
+    var winnerMembers = entrantMembers[winnerLabel] || [winnerLabel];
+    var loserMembers = entrantMembers[loserLabel] || [loserLabel];
+    var isTeam = winnerMembers.length > 1 || loserMembers.length > 1;
     var typeLabel = GAME_TYPES[TOURNAMENT.gameType] ? GAME_TYPES[TOURNAMENT.gameType].label : TOURNAMENT.gameType;
     var ts = new Date().toISOString();
     state.gameHistory.unshift({
@@ -12292,18 +12528,31 @@
       gameType: TOURNAMENT.gameType,
       gameLabel: typeLabel,
       target: TOURNAMENT.target,
-      winnerNames: [winnerName],
-      opponentNames: [loserName],
-      isTeam: false,
+      winnerNames: winnerMembers,
+      opponentNames: loserMembers,
+      isTeam: isTeam,
       mvpId: null,
       mvpName: null,
       durationMs: durationMs,
-      summary: winnerName + " won " + typeLabel + " (tournament vs " + loserName + ")"
+      summary: winnerLabel + " won " + typeLabel + " (tournament vs " + loserLabel + ")"
     });
     if (state.gameHistory.length > 200) state.gameHistory.length = 200;
-    applyPairwiseRatingResult(winnerName, loserName, ts);
+    if (isTeam) {
+      applyTeamRatingResult(winnerMembers, loserMembers, ts);
+    } else {
+      applyPairwiseRatingResult(winnerMembers[0], loserMembers[0], ts);
+    }
     saveRatingsToStorage(PLAYER_RATINGS);
     saveState();
+  }
+
+  function renderTournamentTeamOptions() {
+    tournamentTeamOptionsDatalist.innerHTML = "";
+    SAVED_TEAMS.forEach(function (t) {
+      var opt = document.createElement("option");
+      opt.value = t.name;
+      tournamentTeamOptionsDatalist.appendChild(opt);
+    });
   }
 
   function renderTournamentPlayerChecklist() {
@@ -12315,6 +12564,7 @@
       activeNames[p.name] = true;
     });
     tournamentPlayerChecklist.innerHTML = "";
+    renderTournamentTeamOptions();
     if (names.length === 0) {
       var hint = document.createElement("li");
       hint.className = "empty-hint";
@@ -12342,37 +12592,112 @@
       seedInput.className = "tournament-seed-input" + (tournamentSeededCheckbox.checked ? "" : " hidden");
       seedInput.setAttribute("aria-label", T("tournament.seedLabel"));
       li.appendChild(seedInput);
+      var teamInput = document.createElement("input");
+      teamInput.type = "text";
+      teamInput.className = "tournament-team-input";
+      teamInput.setAttribute("list", "tournament-team-options");
+      teamInput.setAttribute("aria-label", T("tournament.teamLabel"));
+      teamInput.setAttribute("placeholder", T("tournament.teamLabel"));
+      li.appendChild(teamInput);
       tournamentPlayerChecklist.appendChild(li);
     });
+    renderTournamentTeamPreview();
   }
 
-  function getCheckedTournamentPlayers() {
-    return Array.prototype.slice
-      .call(tournamentPlayerChecklist.querySelectorAll('input[type="checkbox"]:checked'))
-      .map(function (cb) {
-        return cb.value;
-      });
+  // Groups the checked checklist rows into bracket entrants: a blank Team
+  // field is never grouped with anything else (each blank row is always
+  // its own solo entrant - keyed by player name, not by the shared empty
+  // string, or every solo player would collapse into one fake team). Two
+  // or more checked rows sharing the same (trimmed, case-insensitive) Team
+  // value become one team entrant, labeled with the exact text as first
+  // typed. A team value that collides with an existing player's name is
+  // rejected (treated as blank) and reported back via collidedTeamNames,
+  // since team and player names share one lookup namespace everywhere
+  // downstream (getPlayerIdByName, rating lookups).
+  function getTournamentEntrants() {
+    var rows = Array.prototype.slice.call(tournamentPlayerChecklist.querySelectorAll(".tournament-player-check-row"));
+    var knownPlayerKeys = {};
+    getAllKnownPlayerNames().forEach(function (n) {
+      knownPlayerKeys[normalizeNameKey(n)] = true;
+    });
+    var entrantsByKey = {};
+    var order = [];
+    var collidedTeamNames = [];
+    rows.forEach(function (li) {
+      var cb = li.querySelector('input[type="checkbox"]');
+      if (!cb || !cb.checked) return;
+      var name = cb.value;
+      var teamInput = li.querySelector(".tournament-team-input");
+      var rawTeam = teamInput ? teamInput.value.trim() : "";
+      var isCollision = !!rawTeam && knownPlayerKeys[normalizeNameKey(rawTeam)];
+      if (isCollision) collidedTeamNames.push(rawTeam);
+      var teamValue = isCollision ? "" : rawTeam;
+      var key = teamValue ? "team:" + normalizeNameKey(teamValue) : "solo:" + normalizeNameKey(name);
+      if (!entrantsByKey[key]) {
+        entrantsByKey[key] = { label: teamValue || name, members: [] };
+        order.push(key);
+      }
+      entrantsByKey[key].members.push(name);
+    });
+    return {
+      entrants: order.map(function (key) {
+        return entrantsByKey[key];
+      }),
+      collidedTeamNames: collidedTeamNames
+    };
+  }
+
+  // Live "who's on this team" hint under the checklist, recomputed on
+  // every checkbox/team-input change - satisfies knowing your teammates
+  // before the tournament starts, not just after.
+  function renderTournamentTeamPreview() {
+    var teamEntrants = getTournamentEntrants().entrants.filter(function (e) {
+      return e.members.length > 1;
+    });
+    if (teamEntrants.length === 0) {
+      tournamentTeamPreview.textContent = "";
+      tournamentTeamPreview.classList.add("hidden");
+      return;
+    }
+    tournamentTeamPreview.classList.remove("hidden");
+    tournamentTeamPreview.textContent = teamEntrants
+      .map(function (e) {
+        return T("tournament.teamPreviewLine", { team: e.label, members: e.members.join(", ") });
+      })
+      .join("  ·  ");
   }
 
   // Returns null when seeding is off (today's exact random-draw behavior).
-  // When on, reads each checked row's seed number - left blank, duplicated,
-  // or invalid entries all fall back to that player's position in the
-  // checklist (already alphabetical), nudged past any number a real seed
+  // When on, resolves one seed per ENTRANT (not per row): the lowest
+  // explicit seed number typed among that entrant's member rows, else its
+  // first member's checklist position - left blank, duplicated, or invalid
+  // entries all fall back this way, nudged past any number a real seed
   // already claimed, rather than erroring - this is a casual home-game
   // tool, not a tournament-director product.
-  function getTournamentSeeds() {
+  function getTournamentSeeds(entrants) {
     if (!tournamentSeededCheckbox.checked) return null;
     var rows = Array.prototype.slice.call(tournamentPlayerChecklist.querySelectorAll(".tournament-player-check-row"));
-    var checkedRows = rows.filter(function (li) {
+    var checklistPositionByName = {};
+    var seedValueByName = {};
+    rows.forEach(function (li, idx) {
       var cb = li.querySelector('input[type="checkbox"]');
-      return cb && cb.checked;
+      if (!cb) return;
+      checklistPositionByName[cb.value] = idx + 1;
+      var seedInput = li.querySelector(".tournament-seed-input");
+      seedValueByName[cb.value] = seedInput ? parseInt(seedInput.value, 10) : NaN;
     });
     var claimedSeeds = {};
-    var entries = checkedRows.map(function (li, idx) {
-      var cb = li.querySelector('input[type="checkbox"]');
-      var seedInput = li.querySelector(".tournament-seed-input");
-      var raw = seedInput ? parseInt(seedInput.value, 10) : NaN;
-      return { name: cb.value, seed: raw, checklistPosition: idx + 1 };
+    var entries = entrants.map(function (entrant) {
+      var explicit = null;
+      entrant.members.forEach(function (name) {
+        var v = seedValueByName[name];
+        if (v >= 1 && (explicit === null || v < explicit)) explicit = v;
+      });
+      var firstPosition = entrant.members.reduce(function (min, name) {
+        var pos = checklistPositionByName[name] || Infinity;
+        return pos < min ? pos : min;
+      }, Infinity);
+      return { name: entrant.label, seed: explicit, checklistPosition: firstPosition };
     });
     entries.forEach(function (entry) {
       if (entry.seed >= 1 && !claimedSeeds[entry.seed]) {
@@ -12398,11 +12723,23 @@
   }
 
   function startTournament() {
-    var names = getCheckedTournamentPlayers();
-    if (names.length < 2) {
+    var grouped = getTournamentEntrants();
+    var entrants = grouped.entrants;
+    if (grouped.collidedTeamNames.length) {
+      showToast(T("tournament.teamNameConflictsWithPlayer", { names: grouped.collidedTeamNames.join(", ") }));
+    }
+    if (entrants.length < 2) {
       alertModal(T("alert.pickAtLeast2Players"));
       return;
     }
+    var entrantMembers = {};
+    entrants.forEach(function (e) {
+      entrantMembers[e.label] = e.members;
+      if (e.members.length > 1) upsertTeamFromTournamentEntry(e.label, e.members);
+    });
+    var names = entrants.map(function (e) {
+      return e.label;
+    });
     var gameType = tournamentGameTypeSelect.value;
     var target = parseInt(tournamentTargetInput.value, 10) || GAME_TYPES[gameType].defaultTarget;
     var raceTo = parseInt(tournamentRaceToInput.value, 10) || 1;
@@ -12410,7 +12747,7 @@
     var format = Array.prototype.filter.call(tournamentFormatRadios, function (r) {
       return r.checked;
     })[0].value;
-    var seedInfo = getTournamentSeeds();
+    var seedInfo = getTournamentSeeds(entrants);
     var seededOrder = seedInfo
       ? seedInfo.map(function (s) {
           return s.name;
@@ -12425,6 +12762,7 @@
     } else {
       TOURNAMENT = buildDoubleEliminationBracket(names, gameType, target, raceTo, fairRace, seededOrder);
     }
+    TOURNAMENT.entrantMembers = entrantMembers;
     saveTournamentToStorage(TOURNAMENT);
     renderTournamentPage();
   }
@@ -12449,7 +12787,30 @@
     }
   }
 
-  function tournamentMatchCard(match, activeMatchId) {
+  // Appends either a single name + rating badge + link icon (a solo
+  // entrant) or the team label plus a compact member sub-list (each real
+  // member with its own badge + link) - shared by every place a bracket
+  // entrant name is shown, so ratings/links/"who's on this team" stay
+  // correct wherever a team entrant appears.
+  function appendEntrantIdentity(container, name, t) {
+    var members = (t && t.entrantMembers && t.entrantMembers[name]) || [name];
+    if (members.length <= 1) {
+      container.appendChild(buildRatingBadge(name));
+      container.appendChild(buildPlayerLinkIcon(name));
+      return;
+    }
+    var sub = document.createElement("div");
+    sub.className = "tournament-match-team-members";
+    members.forEach(function (memberName, i) {
+      if (i > 0) sub.appendChild(document.createTextNode(", "));
+      sub.appendChild(document.createTextNode(memberName));
+      sub.appendChild(buildRatingBadge(memberName));
+      sub.appendChild(buildPlayerLinkIcon(memberName));
+    });
+    container.appendChild(sub);
+  }
+
+  function tournamentMatchCard(match, activeMatchId, t) {
     var div = document.createElement("div");
     var isActive = activeMatchId === match.id;
     var stateClass = match.winner ? "is-done" : isActive ? "is-active" : match.a && match.b ? "is-ready" : "is-pending";
@@ -12463,8 +12824,7 @@
       if (match.winner && name === match.loser) row.classList.add("is-loser");
       row.textContent = (isWinner ? "👑 " : "") + (name || "—");
       if (name) {
-        row.appendChild(buildRatingBadge(name));
-        row.appendChild(buildPlayerLinkIcon(name));
+        appendEntrantIdentity(row, name, t);
       }
       div.appendChild(row);
     });
@@ -12498,7 +12858,7 @@
   // wrapper's actual size.
   function renderWbTreeNode(t, ri, mi, activeMatchId) {
     var match = t.wb[ri][mi];
-    var card = tournamentMatchCard(match, activeMatchId);
+    var card = tournamentMatchCard(match, activeMatchId, t);
     if (ri === 0) {
       card.classList.add("wb-tree-leaf");
       return card;
@@ -12523,7 +12883,7 @@
     container.appendChild(root);
   }
 
-  function renderBracketColumns(container, rounds, activeMatchId) {
+  function renderBracketColumns(container, rounds, activeMatchId, t) {
     container.innerHTML = "";
     if (!rounds.length) {
       var hint = document.createElement("p");
@@ -12540,7 +12900,7 @@
       heading.textContent = round.length ? round[0].tag : "Round " + (i + 1);
       col.appendChild(heading);
       round.forEach(function (m) {
-        col.appendChild(tournamentMatchCard(m, activeMatchId));
+        col.appendChild(tournamentMatchCard(m, activeMatchId, t));
       });
       container.appendChild(col);
     });
@@ -12562,10 +12922,11 @@
     // there's no self-healing cache to maintain here, just a one-time
     // computation at the moment the two sides are actually known.
     if (TOURNAMENT.fairRace) {
+      var entrantMembersForRace = TOURNAMENT.entrantMembers || {};
       var targets = computeFairRaceTargets(
         [
-          { key: "a", rating: getPlayerRating(match.a) },
-          { key: "b", rating: getPlayerRating(match.b) }
+          { key: "a", rating: averageRating(entrantMembersForRace[match.a] || [match.a]) },
+          { key: "b", rating: averageRating(entrantMembersForRace[match.b] || [match.b]) }
         ],
         TOURNAMENT.raceTo
       );
@@ -12591,7 +12952,8 @@
 
     var name = side === "a" ? match.a : match.b;
     var otherName = side === "a" ? match.b : match.a;
-    var player = getPlayer(getPlayerIdByName(name));
+    var members = (t.entrantMembers && t.entrantMembers[name]) || [name];
+    var player = getPlayer(getPlayerIdByName(members[0]));
     var voice = player ? player.voice : undefined;
 
     if (delta > 0 && next >= t.target) {
@@ -12633,8 +12995,7 @@
     var nameEl = document.createElement("div");
     nameEl.className = "player-name";
     nameEl.textContent = name;
-    nameEl.appendChild(buildRatingBadge(name));
-    nameEl.appendChild(buildPlayerLinkIcon(name));
+    appendEntrantIdentity(nameEl, name, t);
     panel.appendChild(nameEl);
 
     var raceToKey = side === "a" ? "raceToA" : "raceToB";
@@ -12720,8 +13081,7 @@
     var name = document.createElement("span");
     name.className = "tournament-rr-standings-name";
     name.textContent = (isChampion ? "👑 " : "") + s.name;
-    name.appendChild(buildRatingBadge(s.name));
-    name.appendChild(buildPlayerLinkIcon(s.name));
+    appendEntrantIdentity(name, s.name, t);
     var record = document.createElement("span");
     record.className = "tournament-rr-standings-record";
     record.textContent = s.wins + " win" + (s.wins === 1 ? "" : "s") + " / " + s.played + " played";
@@ -12740,8 +13100,7 @@
     var name = document.createElement("span");
     name.className = "tournament-rr-standings-name";
     name.textContent = (isChampion ? "👑 " : "") + s.name;
-    name.appendChild(buildRatingBadge(s.name));
-    name.appendChild(buildPlayerLinkIcon(s.name));
+    appendEntrantIdentity(name, s.name, t);
     var record = document.createElement("span");
     record.className = "tournament-rr-standings-record";
     record.textContent =
@@ -12772,7 +13131,7 @@
       heading.textContent = round.length ? round[0].tag : "Round " + (i + 1);
       col.appendChild(heading);
       round.forEach(function (m) {
-        col.appendChild(tournamentMatchCard(m, activeMatchId));
+        col.appendChild(tournamentMatchCard(m, activeMatchId, t));
       });
       tournamentSwissMatchesEl.appendChild(col);
     });
@@ -12792,7 +13151,7 @@
 
     tournamentRrMatchesEl.innerHTML = "";
     t.matches.forEach(function (m) {
-      tournamentRrMatchesEl.appendChild(tournamentMatchCard(m, activeMatchId));
+      tournamentRrMatchesEl.appendChild(tournamentMatchCard(m, activeMatchId, t));
     });
   }
 
@@ -12816,8 +13175,8 @@
     } else {
       renderWbTree(tournamentWbEl, t, activeMatchId);
       if (!isSingle) {
-        renderBracketColumns(tournamentLbEl, t.lbRounds, activeMatchId);
-        renderBracketColumns(tournamentGfEl, t.grandFinal.length ? [t.grandFinal] : [], activeMatchId);
+        renderBracketColumns(tournamentLbEl, t.lbRounds, activeMatchId, t);
+        renderBracketColumns(tournamentGfEl, t.grandFinal.length ? [t.grandFinal] : [], activeMatchId, t);
       }
     }
 
@@ -12829,7 +13188,7 @@
       tournamentChampionBanner.textContent =
         T(multipleChampions ? "tournament.tiedForTheWin" : "tournament.wonTheTournament", { champion: t.champion });
       (t.championNames || [t.champion]).forEach(function (name) {
-        tournamentChampionBanner.appendChild(buildRatingBadge(name));
+        appendEntrantIdentity(tournamentChampionBanner, name, t);
       });
     } else {
       tournamentChampionBanner.classList.add("hidden");
@@ -12864,9 +13223,9 @@
       li.className = "tournament-ready-row";
       var text = document.createElement("span");
       text.appendChild(document.createTextNode(m.a));
-      text.appendChild(buildRatingBadge(m.a));
+      appendEntrantIdentity(text, m.a, t);
       text.appendChild(document.createTextNode(" vs " + m.b));
-      text.appendChild(buildRatingBadge(m.b));
+      appendEntrantIdentity(text, m.b, t);
       text.appendChild(document.createTextNode(" (" + m.tag + ")"));
       var btn = document.createElement("button");
       btn.type = "button";
@@ -13484,6 +13843,7 @@
   wireCollapsiblePanel("resets-panel", "btn-toggle-resets-panel");
   wireCollapsiblePanel("focus-players-wrap", "btn-toggle-focus-players");
   wireCollapsiblePanel("player-page-h2h-panel", "btn-toggle-player-page-h2h-panel");
+  wireCollapsiblePanel("player-page-teams-panel", "btn-toggle-player-page-teams-panel");
 
   var dayNotesSaveTimer = null;
   dayNotesTextarea.addEventListener("input", function () {
@@ -13626,6 +13986,8 @@
       input.classList.toggle("hidden", !show);
     });
   });
+  tournamentPlayerChecklist.addEventListener("change", renderTournamentTeamPreview);
+  tournamentPlayerChecklist.addEventListener("input", renderTournamentTeamPreview);
   btnTournamentAbandon.addEventListener("click", abandonTournament);
   btnTournamentPrint.addEventListener("click", function () { window.print(); });
   tournamentGameTypeSelect.addEventListener("change", function () {
