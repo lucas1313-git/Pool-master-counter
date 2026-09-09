@@ -1370,6 +1370,7 @@
   var playerPageSynopsisBody = document.getElementById("player-page-synopsis-body");
   var playerPageH2hList = document.getElementById("player-page-h2h-list");
   var playerPageTeamsList = document.getElementById("player-page-teams-list");
+  var playerPageAchievementsList = document.getElementById("player-page-achievements-list");
   var btnReturnToGlobalStats = document.getElementById("btn-return-to-global-stats");
   var playerPageSwitcher = document.getElementById("player-page-switcher");
 
@@ -9883,6 +9884,138 @@
       });
   }
 
+  // Player achievements - pure functions of data already tracked (game
+  // history, ratings, tournament results), computed fresh on every render
+  // exactly like computeHeadToHead/computeTeamRecords above: no new
+  // persisted storage, no migration risk. Lifetime totals, not period-
+  // scoped - these shouldn't change just because the Synopsis period
+  // dropdown does. Adding a future achievement is a one-line table entry
+  // here, not new plumbing.
+  var ACHIEVEMENT_DEFS = [
+    { id: "gamesPlayed", icon: "🎮", tiers: [10, 50, 200], compute: function (ctx) { return ctx.allGames.length; } },
+    { id: "wins", icon: "🏅", tiers: [1, 25, 100], compute: function (ctx) { return ctx.synopsis.wins; } },
+    { id: "winStreak", icon: "🔥", tiers: [3, 5, 10], compute: function (ctx) { return ctx.longestStreak; } },
+    // "MVP" = the existing team-MVP data (whoever potted the winning ball
+    // on a team win, already shown as "Team wins potted (MVP)" below) -
+    // turned into a badge, not a new tournament-MVP computation.
+    { id: "mvpPots", icon: "🌟", tiers: [1, 10, 30], compute: function (ctx) { return ctx.mvpPots; } },
+    { id: "tournamentTitles", icon: "🏆", tiers: [1, 3, 10], compute: function (ctx) { return ctx.tournamentWins; } }
+  ];
+
+  var SPECIAL_ACHIEVEMENT_DEFS = [
+    { id: "skunkMaster", icon: "🦨", compute: function (ctx) { return ctx.synopsis.skunkWins > 0; } }
+  ];
+
+  function computeAchievements(name) {
+    var allGames = collectAllGamesForPlayer(name);
+    var synopsis = computeWinLossSynopsis(allGames);
+    var sorted = allGames.slice().sort(function (a, b) {
+      return (a.ts || "").localeCompare(b.ts || "");
+    });
+    var longestStreak = 0;
+    var current = 0;
+    sorted.forEach(function (g) {
+      if (g.result === "won") {
+        current += 1;
+        if (current > longestStreak) longestStreak = current;
+      } else {
+        current = 0;
+      }
+    });
+    var mvpPots = allGames.filter(function (g) {
+      return g.result === "won" && g.mvpName === name;
+    }).length;
+    var tournamentGames = tournamentGamesForPlayerName(name).concat(sessionRaceTournamentGames(allGames));
+    var tournamentWins = computeWinLossSynopsis(tournamentGames).wins;
+    var ctx = {
+      allGames: allGames,
+      synopsis: synopsis,
+      longestStreak: longestStreak,
+      mvpPots: mvpPots,
+      tournamentWins: tournamentWins
+    };
+
+    var ladders = ACHIEVEMENT_DEFS.map(function (def) {
+      var value = def.compute(ctx);
+      var tier = 0;
+      def.tiers.forEach(function (threshold) {
+        if (value >= threshold) tier += 1;
+      });
+      return {
+        id: def.id,
+        icon: def.icon,
+        tier: tier,
+        value: value,
+        nextGoal: tier < def.tiers.length ? def.tiers[tier] : null
+      };
+    });
+    var specials = SPECIAL_ACHIEVEMENT_DEFS.map(function (def) {
+      return { id: def.id, icon: def.icon, unlocked: !!def.compute(ctx) };
+    });
+    return { ladders: ladders, specials: specials };
+  }
+
+  function achievementTierMedal(tier) {
+    return tier >= 3 ? "🥇" : tier >= 2 ? "🥈" : tier >= 1 ? "🥉" : "";
+  }
+
+  function buildAchievementBadge(icon, labelText, unlocked, progressText) {
+    var chip = document.createElement("div");
+    chip.className = "achievement-badge" + (unlocked ? " is-unlocked" : "");
+    var iconEl = document.createElement("div");
+    iconEl.className = "achievement-badge-icon";
+    iconEl.textContent = icon;
+    var labelEl = document.createElement("div");
+    labelEl.className = "achievement-badge-label";
+    labelEl.textContent = labelText;
+    chip.appendChild(iconEl);
+    chip.appendChild(labelEl);
+    if (progressText) {
+      var progressEl = document.createElement("div");
+      progressEl.className = "achievement-badge-progress";
+      progressEl.textContent = progressText;
+      chip.appendChild(progressEl);
+    }
+    return chip;
+  }
+
+  function renderPlayerAchievements() {
+    if (!currentStatsPlayerName) return;
+    var data = computeAchievements(currentStatsPlayerName);
+    var unlockedCount =
+      data.ladders.filter(function (a) {
+        return a.tier > 0;
+      }).length +
+      data.specials.filter(function (a) {
+        return a.unlocked;
+      }).length;
+    var totalCount = data.ladders.length + data.specials.length;
+    setPanelSummary(
+      "player-page-achievements-panel",
+      T("playerPage.achievementsSummary", { unlocked: unlockedCount, total: totalCount })
+    );
+    playerPageAchievementsList.innerHTML = "";
+    data.ladders.forEach(function (a) {
+      var medal = achievementTierMedal(a.tier);
+      var label = (medal ? medal + " " : "") + T("achievements." + a.id);
+      var progress = a.nextGoal === null ? T("achievements.maxed") : a.value + "/" + a.nextGoal;
+      var chip = buildAchievementBadge(a.icon, label, a.tier > 0, progress);
+      var desc = document.createElement("div");
+      desc.className = "achievement-badge-desc";
+      desc.textContent = T("achievements." + a.id + "Desc");
+      chip.appendChild(desc);
+      playerPageAchievementsList.appendChild(chip);
+    });
+    data.specials.forEach(function (a) {
+      var chip = buildAchievementBadge(a.icon, T("achievements." + a.id), a.unlocked, null);
+      var desc = document.createElement("div");
+      desc.className = "achievement-badge-desc";
+      desc.textContent = T("achievements." + a.id + "Desc");
+      chip.appendChild(desc);
+      playerPageAchievementsList.appendChild(chip);
+    });
+  }
+
   function synopsisStatRow(label, value, variant) {
     var row = document.createElement("div");
     row.className = "player-stats-row";
@@ -10020,6 +10153,8 @@
         playerPageTeamsList.appendChild(li);
       });
     }
+
+    renderPlayerAchievements();
   }
 
   // Mirrors exactly what the Player Stats page currently shows (same
@@ -13902,6 +14037,7 @@
   wireCollapsiblePanel("focus-players-wrap", "btn-toggle-focus-players");
   wireCollapsiblePanel("player-page-h2h-panel", "btn-toggle-player-page-h2h-panel");
   wireCollapsiblePanel("player-page-teams-panel", "btn-toggle-player-page-teams-panel");
+  wireCollapsiblePanel("player-page-achievements-panel", "btn-toggle-player-page-achievements-panel");
 
   var dayNotesSaveTimer = null;
   dayNotesTextarea.addEventListener("input", function () {

@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260909c">
+<link rel="stylesheet" href="css/style.css?v=20260909d">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -887,6 +887,17 @@
     <div id="player-page-synopsis-body"></div>
   </section>
 
+  <section class="panel collapsible-panel collapsed" id="player-page-achievements-panel">
+    <button type="button" class="panel-toggle" id="btn-toggle-player-page-achievements-panel" aria-expanded="false" aria-controls="player-page-achievements-panel-body">
+      <h2 data-i18n="playerPage.achievementsHeading">Achievements</h2>
+      <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+    </button>
+    <p class="panel-summary" id="player-page-achievements-panel-summary"></p>
+    <div class="panel-body" id="player-page-achievements-panel-body">
+      <div id="player-page-achievements-list" class="achievement-badge-grid"></div>
+    </div>
+  </section>
+
   <section class="panel collapsible-panel collapsed" id="player-page-h2h-panel">
     <button type="button" class="panel-toggle" id="btn-toggle-player-page-h2h-panel" aria-expanded="false" aria-controls="player-page-h2h-panel-body">
       <h2 data-i18n="playerPage.h2hHeading">Head-to-Head</h2>
@@ -1087,6 +1098,6 @@
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260909c"></script>
+<script src="js/app.js?v=20260909d"></script>
 </body>
 </html>
