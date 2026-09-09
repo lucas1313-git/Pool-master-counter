@@ -3721,6 +3721,28 @@ input[type="number"] {
   accent-color: var(--accent);
 }
 
+.tournament-player-check-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tournament-player-check-row label {
+  flex: 1;
+}
+
+.tournament-seed-input {
+  width: 44px !important;
+  height: auto !important;
+  padding: 6px 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card);
+  color: var(--text);
+  text-align: center;
+  font-size: 0.9rem;
+}
+
 .tournament-bracket-heading {
   margin: 20px 16px 8px;
 }
@@ -3942,4 +3964,54 @@ input[type="number"] {
   flex-wrap: wrap;
   gap: 16px;
   padding: 0 16px 16px;
+}
+
+/* ---------------------------------------------------------------------
+   Print views - the bracket prints its live on-screen DOM directly (chrome
+   hidden, scroll containers unclipped); the daily report has no on-screen
+   DOM at all, so it renders into #day-report-print-view on demand and that
+   container becomes the only thing visible for the duration of the print.
+   --------------------------------------------------------------------- */
+
+@media print {
+  .app-header.player-page-header,
+  #tournament-setup-panel,
+  #btn-tournament-abandon,
+  #tournament-current-match-panel,
+  #tournament-ready-list,
+  .tournament-play-btn,
+  #btn-tournament-print { display: none !important; }
+
+  .tournament-bracket-scroll { overflow-x: visible !important; }
+  .tournament-round-col,
+  .tournament-match-card { width: auto !important; min-width: 150px; }
+
+  body:has(#day-report-print-view:not(.hidden)) > *:not(#day-report-print-view) {
+    display: none !important;
+  }
+  #day-report-print-view:not(.hidden) { display: block; }
+
+  #day-report-print-view h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  #day-report-print-view .print-report-date { color: #444; margin: 0 0 20px; }
+  #day-report-print-view h2 { font-size: 1.05rem; margin: 20px 0 8px; }
+  #day-report-print-view .print-report-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+  }
+  #day-report-print-view .print-report-table th,
+  #day-report-print-view .print-report-table td {
+    border: 1px solid #999;
+    padding: 4px 8px;
+    text-align: left;
+  }
+  #day-report-print-view ul { margin: 0; padding-left: 20px; font-size: 0.9rem; }
+  #day-report-print-view .print-report-notes { white-space: pre-wrap; font-size: 0.9rem; }
+
+  /* @page size intentionally left at the browser default (portrait) - it's
+     a single global at-rule with no way to scope by which view is printing,
+     and portrait suits the report table; the bracket's own print button can
+     be flipped to landscape with one click in the browser's print dialog if
+     a wide bracket needs it. */
+  @page { margin: 0.5in; }
 }
