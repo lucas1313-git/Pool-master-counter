@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260909b">
+<link rel="stylesheet" href="css/style.css?v=20260909c">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -1027,7 +1027,11 @@
       <input type="checkbox" id="tournament-seeded-checkbox">
       <span data-i18n="tournament.seededEnable">🔢 Set seeds manually (unchecked = random draw)</span>
     </label>
-    <p class="player-stats-note" data-i18n="tournament.teamHelp">Optionally type a team name (or just a number) next to two or more players to group them into one entrant — pick an existing team from the list, or type a new one.</p>
+    <label class="checkbox-row">
+      <input type="checkbox" id="tournament-teams-enabled-checkbox">
+      <span data-i18n="tournament.teamsEnable">🤝 Play as teams (group matching Team fields below into one bracket entrant)</span>
+    </label>
+    <p class="player-stats-note" data-i18n="tournament.teamHelp">Type a team name (or just a number) next to a player either way — pick an existing team from the list, or type a new one. With "Play as teams" on, two or more players sharing the same value play as one entrant; with it off, matches stay one-on-one but the team name is still shown next to each player.</p>
     <datalist id="tournament-team-options"></datalist>
     <ul id="tournament-player-checklist" class="tournament-player-checklist"></ul>
     <p class="player-stats-note hidden" id="tournament-team-preview"></p>
@@ -1083,6 +1087,6 @@
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260909b"></script>
+<script src="js/app.js?v=20260909c"></script>
 </body>
 </html>

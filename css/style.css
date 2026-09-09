@@ -3772,6 +3772,13 @@ input[type="number"] {
   margin-top: 2px;
 }
 
+.tournament-match-team-tag {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  font-style: italic;
+  margin-left: 4px;
+}
+
 .tournament-bracket-heading {
   margin: 20px 16px 8px;
 }

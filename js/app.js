@@ -1402,6 +1402,7 @@
   var tournamentRaceToInput = document.getElementById("tournament-race-to");
   var tournamentFairRaceCheckbox = document.getElementById("tournament-fair-race-checkbox");
   var tournamentSeededCheckbox = document.getElementById("tournament-seeded-checkbox");
+  var tournamentTeamsEnabledCheckbox = document.getElementById("tournament-teams-enabled-checkbox");
   var tournamentPlayerChecklist = document.getElementById("tournament-player-checklist");
   var tournamentTeamOptionsDatalist = document.getElementById("tournament-team-options");
   var tournamentTeamPreview = document.getElementById("tournament-team-preview");
@@ -12546,13 +12547,40 @@
     saveState();
   }
 
+  // Offers every previously-saved team name PLUS whatever's currently
+  // typed into any other row right now - so a brand-new team name shows
+  // up as a pickable option for the next row immediately, without having
+  // to wait for a tournament to actually start (which is the only point
+  // SAVED_TEAMS itself gets updated).
   function renderTournamentTeamOptions() {
-    tournamentTeamOptionsDatalist.innerHTML = "";
+    var seen = {};
+    var names = [];
+    function addName(n) {
+      if (!n) return;
+      var key = normalizeNameKey(n);
+      if (seen[key]) return;
+      seen[key] = true;
+      names.push(n);
+    }
     SAVED_TEAMS.forEach(function (t) {
+      addName(t.name);
+    });
+    Array.prototype.forEach.call(tournamentPlayerChecklist.querySelectorAll(".tournament-team-input"), function (input) {
+      addName(input.value.trim());
+    });
+    tournamentTeamOptionsDatalist.innerHTML = "";
+    names.forEach(function (name) {
       var opt = document.createElement("option");
-      opt.value = t.name;
+      opt.value = name;
       tournamentTeamOptionsDatalist.appendChild(opt);
     });
+  }
+
+  // Re-renders both the team-options datalist and the team preview line -
+  // wired to every checkbox/team-input change on the checklist.
+  function refreshTournamentTeamUi() {
+    renderTournamentTeamOptions();
+    renderTournamentTeamPreview();
   }
 
   function renderTournamentPlayerChecklist() {
@@ -12604,23 +12632,26 @@
     renderTournamentTeamPreview();
   }
 
-  // Groups the checked checklist rows into bracket entrants: a blank Team
-  // field is never grouped with anything else (each blank row is always
-  // its own solo entrant - keyed by player name, not by the shared empty
-  // string, or every solo player would collapse into one fake team). Two
-  // or more checked rows sharing the same (trimmed, case-insensitive) Team
-  // value become one team entrant, labeled with the exact text as first
-  // typed. A team value that collides with an existing player's name is
+  // Groups the checked checklist rows into bracket entrants. Grouping two
+  // or more rows into one shared entrant only happens when "Play as
+  // teams" is on AND they share the same (trimmed, case-insensitive) Team
+  // value - otherwise every row is always its own solo entrant, matches
+  // stay one-on-one. Either way, a non-blank Team value is kept on the
+  // entrant as `teamName` - purely informational when it didn't result in
+  // grouping (teams off, or nobody else typed the same value), so
+  // "who plays with whom" is still visible even when it isn't driving the
+  // bracket. A team value that collides with an existing player's name is
   // rejected (treated as blank) and reported back via collidedTeamNames,
   // since team and player names share one lookup namespace everywhere
   // downstream (getPlayerIdByName, rating lookups).
   function getTournamentEntrants() {
+    var teamsEnabled = tournamentTeamsEnabledCheckbox.checked;
     var rows = Array.prototype.slice.call(tournamentPlayerChecklist.querySelectorAll(".tournament-player-check-row"));
     var knownPlayerKeys = {};
     getAllKnownPlayerNames().forEach(function (n) {
       knownPlayerKeys[normalizeNameKey(n)] = true;
     });
-    var entrantsByKey = {};
+    var groupsByKey = {};
     var order = [];
     var collidedTeamNames = [];
     rows.forEach(function (li) {
@@ -12632,39 +12663,51 @@
       var isCollision = !!rawTeam && knownPlayerKeys[normalizeNameKey(rawTeam)];
       if (isCollision) collidedTeamNames.push(rawTeam);
       var teamValue = isCollision ? "" : rawTeam;
-      var key = teamValue ? "team:" + normalizeNameKey(teamValue) : "solo:" + normalizeNameKey(name);
-      if (!entrantsByKey[key]) {
-        entrantsByKey[key] = { label: teamValue || name, members: [] };
-        order.push(key);
+      var groupKey = teamsEnabled && teamValue ? "team:" + normalizeNameKey(teamValue) : "solo:" + normalizeNameKey(name);
+      if (!groupsByKey[groupKey]) {
+        groupsByKey[groupKey] = { teamLabel: teamValue, members: [] };
+        order.push(groupKey);
       }
-      entrantsByKey[key].members.push(name);
+      groupsByKey[groupKey].members.push({ name: name, teamName: teamValue || null });
     });
-    return {
-      entrants: order.map(function (key) {
-        return entrantsByKey[key];
-      }),
-      collidedTeamNames: collidedTeamNames
-    };
+    var entrants = order.map(function (key) {
+      var g = groupsByKey[key];
+      var isRealTeam = g.members.length > 1;
+      return {
+        label: isRealTeam ? g.teamLabel : g.members[0].name,
+        members: g.members.map(function (m) {
+          return m.name;
+        }),
+        teamName: g.members[0].teamName
+      };
+    });
+    return { entrants: entrants, collidedTeamNames: collidedTeamNames };
   }
 
   // Live "who's on this team" hint under the checklist, recomputed on
   // every checkbox/team-input change - satisfies knowing your teammates
-  // before the tournament starts, not just after.
+  // before the tournament starts, not just after. Shows a grouped line
+  // for real (2+ member) team entrants, and a shorter solo-tag line for
+  // any player whose typed Team value didn't result in grouping (teams
+  // off, or nobody else typed the same value) - covers both "playing as
+  // teams" and "just want the team noted" cases.
   function renderTournamentTeamPreview() {
-    var teamEntrants = getTournamentEntrants().entrants.filter(function (e) {
-      return e.members.length > 1;
+    var entrants = getTournamentEntrants().entrants;
+    var lines = [];
+    entrants.forEach(function (e) {
+      if (e.members.length > 1) {
+        lines.push(T("tournament.teamPreviewLine", { team: e.label, members: e.members.join(", ") }));
+      } else if (e.teamName) {
+        lines.push(T("tournament.teamPreviewSoloLine", { player: e.label, team: e.teamName }));
+      }
     });
-    if (teamEntrants.length === 0) {
+    if (lines.length === 0) {
       tournamentTeamPreview.textContent = "";
       tournamentTeamPreview.classList.add("hidden");
       return;
     }
     tournamentTeamPreview.classList.remove("hidden");
-    tournamentTeamPreview.textContent = teamEntrants
-      .map(function (e) {
-        return T("tournament.teamPreviewLine", { team: e.label, members: e.members.join(", ") });
-      })
-      .join("  ·  ");
+    tournamentTeamPreview.textContent = lines.join("  ·  ");
   }
 
   // Returns null when seeding is off (today's exact random-draw behavior).
@@ -12733,9 +12776,14 @@
       return;
     }
     var entrantMembers = {};
+    var entrantTeamNames = {};
     entrants.forEach(function (e) {
       entrantMembers[e.label] = e.members;
-      if (e.members.length > 1) upsertTeamFromTournamentEntry(e.label, e.members);
+      if (e.members.length > 1) {
+        upsertTeamFromTournamentEntry(e.label, e.members);
+      } else if (e.teamName) {
+        entrantTeamNames[e.label] = e.teamName;
+      }
     });
     var names = entrants.map(function (e) {
       return e.label;
@@ -12763,6 +12811,7 @@
       TOURNAMENT = buildDoubleEliminationBracket(names, gameType, target, raceTo, fairRace, seededOrder);
     }
     TOURNAMENT.entrantMembers = entrantMembers;
+    TOURNAMENT.entrantTeamNames = entrantTeamNames;
     saveTournamentToStorage(TOURNAMENT);
     renderTournamentPage();
   }
@@ -12788,15 +12837,24 @@
   }
 
   // Appends either a single name + rating badge + link icon (a solo
-  // entrant) or the team label plus a compact member sub-list (each real
-  // member with its own badge + link) - shared by every place a bracket
-  // entrant name is shown, so ratings/links/"who's on this team" stay
-  // correct wherever a team entrant appears.
+  // entrant - plus a small "(Team Name)" tag when this tournament isn't
+  // playing as teams but the player's team was still noted at setup) or
+  // the team label plus a compact member sub-list (each real member with
+  // its own badge + link) - shared by every place a bracket entrant name
+  // is shown, so ratings/links/"who's on this team" stay correct wherever
+  // a team entrant appears.
   function appendEntrantIdentity(container, name, t) {
     var members = (t && t.entrantMembers && t.entrantMembers[name]) || [name];
     if (members.length <= 1) {
       container.appendChild(buildRatingBadge(name));
       container.appendChild(buildPlayerLinkIcon(name));
+      var teamName = t && t.entrantTeamNames && t.entrantTeamNames[name];
+      if (teamName) {
+        var tag = document.createElement("span");
+        tag.className = "tournament-match-team-tag";
+        tag.textContent = "(" + teamName + ")";
+        container.appendChild(tag);
+      }
       return;
     }
     var sub = document.createElement("div");
@@ -13986,8 +14044,9 @@
       input.classList.toggle("hidden", !show);
     });
   });
-  tournamentPlayerChecklist.addEventListener("change", renderTournamentTeamPreview);
-  tournamentPlayerChecklist.addEventListener("input", renderTournamentTeamPreview);
+  tournamentPlayerChecklist.addEventListener("change", refreshTournamentTeamUi);
+  tournamentPlayerChecklist.addEventListener("input", refreshTournamentTeamUi);
+  tournamentTeamsEnabledCheckbox.addEventListener("change", renderTournamentTeamPreview);
   btnTournamentAbandon.addEventListener("click", abandonTournament);
   btnTournamentPrint.addEventListener("click", function () { window.print(); });
   tournamentGameTypeSelect.addEventListener("change", function () {
