@@ -50,6 +50,20 @@
   // anyway (no completed games, ever).
   var quickCounterMode = false;
 
+  // Paywall/IAP scaffolding — Apple requires purchasable digital content
+  // to go through StoreKit, which only exists inside a real native app
+  // container (Capacitor injects `Capacitor` into the page only when
+  // running natively, e.g. wrapped for the App Store — it's simply
+  // undefined on the plain web/PWA version). So the gate below only ever
+  // activates on native; the free web app is completely unaffected.
+  // `proUnlocked`/`adUnlockedThisSession` start false and are only ever
+  // set true after a real (StoreKit Testing, for now) purchase/restore or
+  // a completed fake-ad view — see requireProOrShowPaywall.
+  var IS_NATIVE = typeof Capacitor !== "undefined" && !!(Capacitor.isNativePlatform && Capacitor.isNativePlatform());
+  var Purchases = IS_NATIVE && Capacitor.registerPlugin ? Capacitor.registerPlugin("Purchases") : null;
+  var proUnlocked = false;
+  var adUnlockedThisSession = false;
+
   // Self-healing pass for names saved before capitalization was enforced
   // everywhere (or from a device/import that predates it): fixes casing in
   // place on state.players and every gameHistory entry's winner/opponent/
@@ -1572,6 +1586,14 @@
   var confirmModalOnConfirm = null;
   var confirmModalOnCancel = null;
 
+  var paywallModalOverlay = document.getElementById("paywall-modal-overlay");
+  var btnPaywallUnlock = document.getElementById("btn-paywall-unlock");
+  var btnPaywallWatchAd = document.getElementById("btn-paywall-watch-ad");
+  var btnPaywallRestore = document.getElementById("btn-paywall-restore");
+  var btnPaywallCancel = document.getElementById("btn-paywall-cancel");
+  var fakeAdModalOverlay = document.getElementById("fake-ad-modal-overlay");
+  var fakeAdModalMessage = document.getElementById("fake-ad-modal-message");
+
   function closeConfirmModal() {
     confirmModalOverlay.classList.add("hidden");
     confirmModalOnConfirm = null;
@@ -1654,6 +1676,124 @@
       (btnConfirmModalCancel.classList.contains("hidden") ? btnConfirmModalOk : btnConfirmModalCancel).click();
     }
   });
+
+  // ---------------------------------------------------------------------
+  // Paywall scaffolding — native-only (see IS_NATIVE above). Gates a
+  // feature behind either a real (StoreKit Testing, for now) purchase or
+  // a fake rewarded-ad view, so the purchase/restore/ad mechanics can be
+  // tested end to end before any real pricing/feature decisions are made.
+  // ---------------------------------------------------------------------
+
+  var proPriceDisplay = null;
+  var paywallPendingCallback = null;
+
+  // Gate a feature behind Pro: runs onUnlocked immediately when there's
+  // nothing to gate (web) or it's already unlocked (purchased, restored,
+  // or this session's one fake-ad view already redeemed); otherwise shows
+  // the paywall and holds onUnlocked until the user unlocks one way or
+  // another (or just cancels, in which case nothing runs).
+  function requireProOrShowPaywall(onUnlocked) {
+    if (!IS_NATIVE || proUnlocked || adUnlockedThisSession) {
+      onUnlocked();
+      return;
+    }
+    openPaywallModal(onUnlocked);
+  }
+
+  function openPaywallModal(onUnlocked) {
+    paywallPendingCallback = onUnlocked;
+    btnPaywallUnlock.textContent = T("paywall.unlockButton", { price: proPriceDisplay || "…" });
+    paywallModalOverlay.classList.remove("hidden");
+  }
+
+  function closePaywallModal() {
+    paywallModalOverlay.classList.add("hidden");
+  }
+
+  function runPaywallPendingCallback() {
+    var cb = paywallPendingCallback;
+    paywallPendingCallback = null;
+    if (cb) cb();
+  }
+
+  btnPaywallUnlock.addEventListener("click", function () {
+    if (!Purchases) return;
+    Purchases.purchasePro()
+      .then(function (result) {
+        if (result && result.unlocked) {
+          proUnlocked = true;
+          closePaywallModal();
+          showToast(T("paywall.unlockedToast"));
+          runPaywallPendingCallback();
+        }
+        // Cancelled/pending: leave the paywall open so the user can pick
+        // a different option instead of silently doing nothing.
+      })
+      .catch(function () {
+        showToast(T("paywall.purchaseFailed"));
+      });
+  });
+
+  btnPaywallRestore.addEventListener("click", function () {
+    if (!Purchases) return;
+    Purchases.restorePurchases()
+      .then(function (result) {
+        if (result && result.unlocked) {
+          proUnlocked = true;
+          closePaywallModal();
+          showToast(T("paywall.unlockedToast"));
+          runPaywallPendingCallback();
+        } else {
+          showToast(T("paywall.purchaseFailed"));
+        }
+      })
+      .catch(function () {
+        showToast(T("paywall.purchaseFailed"));
+      });
+  });
+
+  btnPaywallWatchAd.addEventListener("click", function () {
+    closePaywallModal();
+    playFakeRewardedAd(function () {
+      adUnlockedThisSession = true;
+      runPaywallPendingCallback();
+    });
+  });
+
+  btnPaywallCancel.addEventListener("click", function () {
+    paywallPendingCallback = null;
+    closePaywallModal();
+  });
+
+  paywallModalOverlay.addEventListener("click", function (e) {
+    if (e.target !== paywallModalOverlay) return;
+    paywallPendingCallback = null;
+    closePaywallModal();
+  });
+
+  // A scripted "ad" with no real ad network involved - a countdown, then
+  // a completion message, then onDone. Standing in for a real rewarded-ad
+  // SDK (choosing one, App Tracking Transparency, privacy manifest
+  // updates) until that's a separate, deliberate decision.
+  function playFakeRewardedAd(onDone) {
+    fakeAdModalMessage.textContent = T("paywall.adPlaying");
+    fakeAdModalOverlay.classList.remove("hidden");
+    var remaining = 3;
+    var tick = function () {
+      if (remaining <= 0) {
+        fakeAdModalMessage.textContent = T("paywall.adCompleteToast");
+        setTimeout(function () {
+          fakeAdModalOverlay.classList.add("hidden");
+          onDone();
+        }, 900);
+        return;
+      }
+      fakeAdModalMessage.textContent = T("paywall.adPlaying") + " " + remaining + "…";
+      remaining -= 1;
+      setTimeout(tick, 1000);
+    };
+    tick();
+  }
 
   function isTypingIntoField(el) {
     if (!el) return false;
@@ -13577,6 +13717,18 @@
   backfillMissingRatingsFromHistory();
   backfillMissingAddedDates();
 
+  if (Purchases) {
+    Purchases.isProUnlocked()
+      .then(function (result) {
+        if (!result) return;
+        proUnlocked = !!result.unlocked;
+        if (result.price) proPriceDisplay = result.price;
+      })
+      .catch(function () {
+        console.warn("Could not check Pro entitlement.");
+      });
+  }
+
   btnExportAllData.addEventListener("click", function () {
     promptModal(T("backup.exportFilenamePrompt"), defaultBackupFilename(), function (name) {
       exportAllData(name);
@@ -14104,7 +14256,16 @@
 
   dayReportAttachColorfulCheckbox.checked = loadDayReportAttachColorful();
   dayReportAttachColorfulCheckbox.addEventListener("change", function () {
-    saveDayReportAttachColorful(dayReportAttachColorfulCheckbox.checked);
+    if (dayReportAttachColorfulCheckbox.checked) {
+      dayReportAttachColorfulCheckbox.checked = false;
+      requireProOrShowPaywall(function () {
+        dayReportAttachColorfulCheckbox.checked = true;
+        saveDayReportAttachColorful(true);
+        updateDayReportRecipientsLine();
+      });
+      return;
+    }
+    saveDayReportAttachColorful(false);
     updateDayReportRecipientsLine();
   });
 
@@ -14124,7 +14285,9 @@
     dayReportPrintView.classList.add("hidden");
   });
 
-  btnDayReportColorful.addEventListener("click", openDayReportColorful);
+  btnDayReportColorful.addEventListener("click", function () {
+    requireProOrShowPaywall(openDayReportColorful);
+  });
 
   btnPlayerPageExport.addEventListener("click", exportCurrentPlayerStats);
   btnPlayerPageCsv.addEventListener("click", function () {

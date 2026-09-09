@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260909e">
+<link rel="stylesheet" href="css/style.css?v=20260909f">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -543,6 +543,25 @@
       <button type="button" id="btn-confirm-modal-ok" class="btn btn-primary" data-i18n="common.ok">OK</button>
       <button type="button" id="btn-confirm-modal-cancel" class="btn btn-ghost hidden" data-i18n="common.cancel">Cancel</button>
     </div>
+  </div>
+</div>
+
+<div id="paywall-modal-overlay" class="confirm-modal-overlay hidden">
+  <div class="confirm-modal-card">
+    <p class="confirm-modal-message" data-i18n="paywall.heading">🎨 Colorful Reports — Pro Feature</p>
+    <p class="player-stats-note" data-i18n="paywall.body">Colorful Reports are a Pro feature. Unlock them for good, or watch a quick ad to unlock this one time.</p>
+    <div class="confirm-modal-actions paywall-modal-actions">
+      <button type="button" id="btn-paywall-unlock" class="btn btn-primary">🔓 Unlock Pro</button>
+      <button type="button" id="btn-paywall-watch-ad" class="btn btn-ghost" data-i18n="paywall.watchAdButton">📺 Watch an ad to unlock once</button>
+      <button type="button" id="btn-paywall-restore" class="btn btn-ghost" data-i18n="paywall.restoreButton">Restore Purchases</button>
+      <button type="button" id="btn-paywall-cancel" class="btn btn-ghost" data-i18n="common.cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="fake-ad-modal-overlay" class="confirm-modal-overlay hidden">
+  <div class="confirm-modal-card">
+    <p class="confirm-modal-message" id="fake-ad-modal-message" data-i18n="paywall.adPlaying">📺 Ad playing…</p>
   </div>
 </div>
 
@@ -1098,6 +1117,6 @@
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260909e"></script>
+<script src="js/app.js?v=20260909f"></script>
 </body>
 </html>
