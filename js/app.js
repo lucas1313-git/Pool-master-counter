@@ -1513,6 +1513,8 @@
   var playerConflictList = document.getElementById("player-conflict-list");
   var btnPlayerConflictContinue = document.getElementById("btn-player-conflict-continue");
 
+  var reportArchiveList = document.getElementById("report-archive-list");
+
   var recoverDataList = document.getElementById("recover-data-list");
   var btnRecoverImportFile = document.getElementById("btn-recover-import-file");
   var recoverImportFileInput = document.getElementById("recover-import-file-input");
@@ -1827,6 +1829,7 @@
     updateDayNotesSummary();
     updateDayReportRecipientsLine();
     renderRecoverDataList();
+    renderReportArchiveList();
   }
 
   // A rotation entry is { gameType, target, unit } — its own rule, not
@@ -4999,7 +5002,7 @@
       };
     });
 
-    return {
+    var result = {
       dateStr: dateStr,
       longDate: longDate,
       generatedAt: formatTimestamp(new Date().toISOString(), true),
@@ -5009,10 +5012,15 @@
       games: games,
       notes: dayNotesTextarea.value || null
     };
+    archiveDayReport(result);
+    return result;
   }
 
   function buildDayReportColorfulHtml(dateStr) {
-    var reportImageData = computeReportImageData(dateStr);
+    return buildDayReportColorfulHtmlFromData(computeReportImageData(dateStr));
+  }
+
+  function buildDayReportColorfulHtmlFromData(reportImageData) {
     var tokens = reportImageData.tokens;
     var rootVars = Object.keys(tokens)
       .map(function (k) {
@@ -5066,7 +5074,7 @@
     return (
       "<!DOCTYPE html>\n" +
       '<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">' +
-      "<title>Pool Master Counter — " + escapeHtmlForReport(formatReportDateHeading(dateStr)) + "</title>" +
+      "<title>Pool Master Counter — " + escapeHtmlForReport(formatReportDateHeading(reportImageData.dateStr)) + "</title>" +
       "<style>" +
       ":root { " + rootVars + " }" +
       "* { box-sizing: border-box; }" +
@@ -5397,9 +5405,13 @@
   // drawing failure, so a caller building a share-attachment list can
   // just skip a null entry instead of needing its own try/catch.
   function buildDayReportImageBlob(dateStr) {
+    return buildDayReportImageBlobFromData(computeReportImageData(dateStr));
+  }
+
+  function buildDayReportImageBlobFromData(reportImageData) {
     return new Promise(function (resolve) {
       try {
-        var canvas = buildReportCanvasFromData(computeReportImageData(dateStr));
+        var canvas = buildReportCanvasFromData(reportImageData);
         canvas.toBlob(function (blob) {
           resolve(blob || null);
         }, "image/png");
@@ -5666,7 +5678,16 @@
   // view it first; from there the browser's own Save/Print/Share affords
   // everything "share" needs, on a real self-contained HTML document.
   function openDayReportColorful() {
-    var html = buildDayReportColorfulHtml(todayDateStr());
+    openDayReportColorfulFromData(computeReportImageData(todayDateStr()));
+  }
+
+  // Shared by the live "today" button and the Report Archive's View
+  // action - the archive path passes in already-saved data (re-tokenized
+  // with the current theme by hydrateArchivedReportImageData) instead of
+  // computeReportImageData, since the latter can only ever see the last
+  // 24 hours of live game history and would return nothing for a past day.
+  function openDayReportColorfulFromData(reportImageData) {
+    var html = buildDayReportColorfulHtmlFromData(reportImageData);
     var blob = new Blob([html], { type: "text/html" });
     var url = URL.createObjectURL(blob);
     window.open(url, "_blank");
@@ -6189,6 +6210,157 @@
     } catch (e) {
       console.warn("Could not save reset snapshots.", e);
     }
+  }
+
+  // Capped local archive of every colorful report ever generated, one
+  // entry per day (regenerating the same day overwrites its entry).
+  // computeDayReportData only ever sees the last 24 hours of live game
+  // history no matter what dateStr it's given, so without this a report
+  // becomes permanently unrecoverable the moment that window rolls past
+  // it - this is the only place "yesterday's report" lives at all. Only
+  // the already-computed numbers are kept, never theme tokens or a PNG,
+  // so re-viewing an old entry (hydrateArchivedReportImageData) always
+  // re-draws with whichever theme is active right now.
+  var REPORT_ARCHIVE_KEY = "poolMasterCounter.reportArchive.v1";
+  var REPORT_ARCHIVE_CAP = 90;
+
+  function loadReportArchiveFromStorage() {
+    try {
+      var raw = localStorage.getItem(REPORT_ARCHIVE_KEY);
+      var parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function saveReportArchiveToStorage(entries) {
+    if (noStatsMode) return;
+    try {
+      localStorage.setItem(REPORT_ARCHIVE_KEY, JSON.stringify(entries));
+    } catch (e) {
+      console.warn("Could not save report archive.", e);
+    }
+  }
+
+  var REPORT_ARCHIVE = loadReportArchiveFromStorage();
+
+  function archiveDayReport(reportImageData) {
+    if (noStatsMode) return;
+    var snapshot = {
+      dateStr: reportImageData.dateStr,
+      longDate: reportImageData.longDate,
+      generatedAt: reportImageData.generatedAt,
+      players: reportImageData.players,
+      highlights: reportImageData.highlights,
+      games: reportImageData.games,
+      notes: reportImageData.notes
+    };
+    REPORT_ARCHIVE = REPORT_ARCHIVE.filter(function (entry) {
+      return entry.dateStr !== snapshot.dateStr;
+    });
+    REPORT_ARCHIVE.unshift(snapshot);
+    REPORT_ARCHIVE = REPORT_ARCHIVE.slice(0, REPORT_ARCHIVE_CAP);
+    saveReportArchiveToStorage(REPORT_ARCHIVE);
+    renderReportArchiveList();
+  }
+
+  function findReportArchiveEntry(dateStr) {
+    var match = REPORT_ARCHIVE.filter(function (entry) {
+      return entry.dateStr === dateStr;
+    });
+    return match.length ? match[0] : null;
+  }
+
+  function deleteArchivedReport(dateStr) {
+    REPORT_ARCHIVE = REPORT_ARCHIVE.filter(function (entry) {
+      return entry.dateStr !== dateStr;
+    });
+    saveReportArchiveToStorage(REPORT_ARCHIVE);
+    renderReportArchiveList();
+  }
+
+  // Re-attaches a fresh read of the CURRENT theme's colors to a saved
+  // snapshot - the deliberate tradeoff behind storing data instead of a
+  // rendered image: an old report always looks right for today's theme,
+  // at the cost of not being a pixel-exact record of how it looked when
+  // it was first generated.
+  function hydrateArchivedReportImageData(entry) {
+    return {
+      dateStr: entry.dateStr,
+      longDate: entry.longDate,
+      generatedAt: entry.generatedAt,
+      tokens: readReportThemeTokens(),
+      players: entry.players,
+      highlights: entry.highlights,
+      games: entry.games,
+      notes: entry.notes
+    };
+  }
+
+  function openArchivedReport(dateStr) {
+    var entry = findReportArchiveEntry(dateStr);
+    if (!entry) return;
+    openDayReportColorfulFromData(hydrateArchivedReportImageData(entry));
+  }
+
+  function reportArchiveRowMeta(entry) {
+    return T("reportArchive.rowMeta", {
+      players: (entry.players || []).length,
+      games: (entry.games || []).length,
+      generatedAt: entry.generatedAt
+    });
+  }
+
+  function renderReportArchiveList() {
+    if (!reportArchiveList) return;
+    reportArchiveList.innerHTML = "";
+    if (REPORT_ARCHIVE.length === 0) {
+      var hint = document.createElement("li");
+      hint.className = "empty-hint";
+      hint.textContent = T("reportArchive.none");
+      reportArchiveList.appendChild(hint);
+      return;
+    }
+    REPORT_ARCHIVE.forEach(function (entry) {
+      var li = document.createElement("li");
+      li.className = "recover-data-row";
+      var info = document.createElement("div");
+      info.className = "recover-data-row-info";
+      var label = document.createElement("span");
+      label.className = "recover-data-row-label";
+      label.textContent = entry.longDate || entry.dateStr;
+      var meta = document.createElement("span");
+      meta.className = "recover-data-row-meta";
+      meta.textContent = reportArchiveRowMeta(entry);
+      info.appendChild(label);
+      info.appendChild(meta);
+
+      var actions = document.createElement("div");
+      actions.className = "report-archive-row-actions";
+      var viewBtn = document.createElement("button");
+      viewBtn.type = "button";
+      viewBtn.className = "btn btn-ghost";
+      viewBtn.textContent = T("reportArchive.view");
+      viewBtn.addEventListener("click", function () {
+        openArchivedReport(entry.dateStr);
+      });
+      var deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.className = "btn btn-ghost";
+      deleteBtn.textContent = T("reportArchive.delete");
+      deleteBtn.addEventListener("click", function () {
+        confirmModal(T("reportArchive.confirmDelete", { date: entry.longDate || entry.dateStr }), function () {
+          deleteArchivedReport(entry.dateStr);
+        });
+      });
+      actions.appendChild(viewBtn);
+      actions.appendChild(deleteBtn);
+
+      li.appendChild(info);
+      li.appendChild(actions);
+      reportArchiveList.appendChild(li);
+    });
   }
 
   // One-time-per-load cleanup: if PLAYER_STATS already has separate entries
@@ -13308,6 +13480,7 @@
   wireCollapsiblePanel("standings-panel", "btn-toggle-standings-panel");
   wireCollapsiblePanel("history-panel", "btn-toggle-history-panel");
   wireCollapsiblePanel("day-notes-panel", "btn-toggle-day-notes-panel");
+  wireCollapsiblePanel("report-archive-panel", "btn-toggle-report-archive-panel");
   wireCollapsiblePanel("resets-panel", "btn-toggle-resets-panel");
   wireCollapsiblePanel("focus-players-wrap", "btn-toggle-focus-players");
   wireCollapsiblePanel("player-page-h2h-panel", "btn-toggle-player-page-h2h-panel");

@@ -2229,6 +2229,12 @@ input[type="number"] {
   color: var(--text-dim);
 }
 
+.report-archive-row-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 .recover-detail-overlay {
   position: fixed;
   inset: 0;

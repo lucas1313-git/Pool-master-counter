@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260908n">
+<link rel="stylesheet" href="css/style.css?v=20260909a">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -311,6 +311,17 @@
         <button type="button" id="btn-day-report-colorful" class="btn btn-ghost" data-i18n="dayNotes.colorfulReport">🎨 Colorful Report</button>
       </div>
       <p class="player-stats-note" id="day-report-recipients-line"></p>
+    </div>
+  </section>
+
+  <section class="panel collapsible-panel collapsed" id="report-archive-panel">
+    <button type="button" class="panel-toggle" id="btn-toggle-report-archive-panel" aria-expanded="false" aria-controls="report-archive-panel-body">
+      <h2 data-i18n="reportArchive.heading">🗂️ Report Archive</h2>
+      <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+    </button>
+    <p class="panel-summary" id="report-archive-panel-summary" data-i18n="reportArchive.summary">Every colorful report you generate is saved here automatically, so you can revisit any day later.</p>
+    <div class="panel-body" id="report-archive-panel-body">
+      <ul id="report-archive-list" class="recover-data-list"></ul>
     </div>
   </section>
 
@@ -1058,6 +1069,6 @@
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260908n"></script>
+<script src="js/app.js?v=20260909a"></script>
 </body>
 </html>
