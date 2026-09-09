@@ -6254,17 +6254,46 @@
 
   var LAST_SYNC_EXPORT_KEY = "poolMasterCounter.lastSyncExportedAt";
   var LAST_SYNC_IMPORT_KEY = "poolMasterCounter.lastSyncImportedAt";
+  var LAST_SYNC_EXPORTER_NAME_KEY = "poolMasterCounter.lastSyncExporterName";
+  var LAST_SYNC_IMPORT_NAME_KEY = "poolMasterCounter.lastSyncImportedFromName";
+
+  function loadLastSyncExporterName() {
+    try {
+      return localStorage.getItem(LAST_SYNC_EXPORTER_NAME_KEY) || "";
+    } catch (e) {
+      return "";
+    }
+  }
+
+  function saveLastSyncExporterName(name) {
+    try {
+      localStorage.setItem(LAST_SYNC_EXPORTER_NAME_KEY, name || "");
+    } catch (e) {
+      console.warn("Could not save sync exporter name.", e);
+    }
+  }
 
   function defaultBackupFilename() {
     return "pool-master-counter-backup-" + new Date().toISOString().slice(0, 10) + ".json";
   }
 
-  // Fixed name, deliberately not date-stamped like defaultBackupFilename -
-  // this is the "sync" file, meant to be re-exported often and to overwrite
-  // the same iCloud Drive copy each time rather than piling up dated
-  // duplicates like a one-off archival backup would.
-  function defaultSyncFilename() {
-    return "pool-master-counter-sync.json";
+  // Date + day-of-week (e.g. "2026-09-08-Tuesday") plus, when given, the
+  // exporting person's name - so several people syncing the same iCloud
+  // Drive folder each land a distinct, dated file instead of everyone
+  // colliding on one filename or overwriting each other's export.
+  // Both halves must come from the same local calendar day - toISOString()
+  // is UTC, so pairing it with a locale (local-time) weekday name could
+  // silently mismatch near midnight (e.g. a UTC-behind timezone rolling
+  // into a new UTC date while it's still evening locally): formatDateISO
+  // and toLocaleDateString both read local getFullYear/getMonth/getDate
+  // under the hood, so they always agree.
+  function defaultSyncFilename(exporterName) {
+    var now = new Date();
+    var dayName = now.toLocaleDateString(undefined, { weekday: "long" });
+    var base = formatDateISO(now) + "-" + dayName;
+    var trimmedName = (exporterName || "").trim();
+    if (trimmedName) base += "-" + trimmedName;
+    return sanitizeBackupFilename(base);
   }
 
   // Strips characters a filesystem would reject and appends .json if the
@@ -6304,33 +6333,49 @@
   // Not a new storage mechanism - Safari has no programmatic access to a
   // real iCloud Drive folder (no showSaveFilePicker/showOpenFilePicker
   // support), so this is the same <a download> flow as exportAllData, just
-  // with a fixed filename (no prompt) so repeated exports overwrite the
-  // same iCloud Drive file instead of piling up dated backups, and a
-  // "last synced" timestamp so the habit is visible.
+  // dated + named (see defaultSyncFilename) so several people syncing the
+  // same iCloud Drive folder each land their own distinct file, and a
+  // "last synced" timestamp/exporter name so the habit is visible.
   function exportForSync() {
-    var payload = buildBackupPayload();
-    downloadJSON(defaultSyncFilename(), payload);
-    try {
-      localStorage.setItem(LAST_SYNC_EXPORT_KEY, payload.exportedAt);
-    } catch (e) {
-      console.warn("Could not save last-sync-export timestamp.", e);
-    }
-    renderSyncStatusLine();
+    promptModal(T("backup.syncExportNamePrompt"), loadLastSyncExporterName(), function (nameInput) {
+      var exporterName = (nameInput || "").trim();
+      saveLastSyncExporterName(exporterName);
+      var payload = buildBackupPayload();
+      payload.exportedBy = exporterName || null;
+      downloadJSON(defaultSyncFilename(exporterName), payload);
+      try {
+        localStorage.setItem(LAST_SYNC_EXPORT_KEY, payload.exportedAt);
+      } catch (e) {
+        console.warn("Could not save last-sync-export timestamp.", e);
+      }
+      renderSyncStatusLine();
+    });
   }
 
   function renderSyncStatusLine() {
-    var exportedAt, importedAt;
+    var exportedAt, importedAt, exporterName, importedFromName;
     try {
       exportedAt = localStorage.getItem(LAST_SYNC_EXPORT_KEY);
       importedAt = localStorage.getItem(LAST_SYNC_IMPORT_KEY);
+      exporterName = localStorage.getItem(LAST_SYNC_EXPORTER_NAME_KEY);
+      importedFromName = localStorage.getItem(LAST_SYNC_IMPORT_NAME_KEY);
     } catch (e) {
       exportedAt = null;
       importedAt = null;
+      exporterName = null;
+      importedFromName = null;
     }
     var exportedText = exportedAt ? formatTimestamp(exportedAt, true) : T("backup.syncStatusNever");
     var importedText = importedAt ? formatTimestamp(importedAt, true) : T("backup.syncStatusNever");
-    syncStatusLine.textContent =
-      T("backup.syncStatusExported", { when: exportedText }) + " · " + T("backup.syncStatusImported", { when: importedText });
+    var exportedLine =
+      exportedAt && exporterName
+        ? T("backup.syncStatusExportedByName", { when: exportedText, name: exporterName })
+        : T("backup.syncStatusExported", { when: exportedText });
+    var importedLine =
+      importedAt && importedFromName
+        ? T("backup.syncStatusImportedFromName", { when: importedText, name: importedFromName })
+        : T("backup.syncStatusImported", { when: importedText });
+    syncStatusLine.textContent = exportedLine + " · " + importedLine;
   }
 
   // Shared by the Copy Report button and shareReport()'s no-native-share
@@ -6813,8 +6858,9 @@
         lastSyncExportedAt = null;
       }
       var syncHint = data.exportedAt
-        ? T("confirm.importBackupSyncHint", {
+        ? T(data.exportedBy ? "confirm.importBackupSyncHintByName" : "confirm.importBackupSyncHint", {
             imported: formatTimestamp(data.exportedAt, true),
+            name: data.exportedBy,
             lastExport: lastSyncExportedAt ? formatTimestamp(lastSyncExportedAt, true) : T("backup.syncStatusNever")
           }) + " "
         : "";
@@ -6982,6 +7028,7 @@
               if (data.exportedAt) {
                 try {
                   localStorage.setItem(LAST_SYNC_IMPORT_KEY, data.exportedAt);
+                  if (data.exportedBy) localStorage.setItem(LAST_SYNC_IMPORT_NAME_KEY, data.exportedBy);
                 } catch (e) {
                   console.warn("Could not save last-sync-import timestamp.", e);
                 }
