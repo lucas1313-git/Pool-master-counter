@@ -5063,7 +5063,12 @@
       ".notes-card { background: var(--bg-card); border-left: 4px solid var(--accent); border-radius: 8px; padding: 16px 18px; font-style: italic; white-space: pre-wrap; }" +
       ".empty-note { color: var(--text-dim); font-style: italic; }" +
       "footer { margin-top: 40px; text-align: center; color: var(--text-dim); font-size: .78rem; }" +
+      ".toolbar { display: flex; justify-content: flex-end; margin-bottom: 14px; }" +
+      ".share-btn { display: inline-flex; align-items: center; gap: 6px; background: var(--bg-card); color: var(--text); border: 1px solid var(--border); border-radius: 999px; padding: 8px 18px; font-size: .85rem; font-family: inherit; cursor: pointer; }" +
+      ".share-btn:hover { border-color: var(--accent); color: var(--accent); }" +
+      "@media print { .toolbar { display: none; } }" +
       "</style></head><body><div class=\"wrap\">" +
+      '<div class="toolbar"><button type="button" class="share-btn" id="shareReportBtn">📤 Share</button></div>' +
       '<div class="hero"><h1>🎱 Pool Master Counter</h1><div class="date">' +
       escapeHtmlForReport(longDate) +
       '</div><div class="tagline">Don\'t get cocky!</div></div>' +
@@ -5074,7 +5079,46 @@
       (gamesHtml ? '<div class="section"><h2>Game Log</h2><div class="game-log">' + gamesHtml + "</div></div>" : "") +
       notesHtml +
       "<footer>Generated " + escapeHtmlForReport(generatedAt) + " · Pool Master Counter</footer>" +
-      "</div></body></html>"
+      "</div>" +
+      buildColorfulReportShareScript(dateStr) +
+      "</body></html>"
+    );
+  }
+
+  // The report is a fully separate document once opened (its own tab, its
+  // own JS context) - it has no access back to this app's functions or
+  // File-sharing helpers, so it needs its own small, self-contained copy
+  // of the same canShare({files})-first, download-fallback pattern
+  // shareReportWithBackupAttachment uses above. Re-serializes the live DOM
+  // at share time (document.documentElement.outerHTML) rather than
+  // embedding a second copy of the HTML string inside itself - nothing on
+  // this static page changes state before a click, so that's exact.
+  function buildColorfulReportShareScript(dateStr) {
+    var filename = "pool-master-counter-report-" + dateStr + ".html";
+    return (
+      "<script>(function(){" +
+      'var filename=' + JSON.stringify(filename) + ";" +
+      "function currentHtml(){return \"<!doctype html>\\n\"+document.documentElement.outerHTML;}" +
+      "function fallbackDownload(){" +
+      'var blob=new Blob([currentHtml()],{type:"text/html"});' +
+      "var url=URL.createObjectURL(blob);" +
+      'var a=document.createElement("a");' +
+      "a.href=url;a.download=filename;" +
+      "document.body.appendChild(a);a.click();" +
+      "setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},1000);" +
+      "}" +
+      "function shareIt(){" +
+      'var file=new File([currentHtml()],filename,{type:"text/html"});' +
+      "if(navigator.canShare&&navigator.canShare({files:[file]})){" +
+      "navigator.share({files:[file],title:document.title}).catch(function(err){" +
+      'if(err&&err.name==="AbortError")return;' +
+      "fallbackDownload();" +
+      "});" +
+      "}else{fallbackDownload();}" +
+      "}" +
+      'document.getElementById("shareReportBtn").addEventListener("click",shareIt);' +
+      "})();</" +
+      "script>"
     );
   }
 
