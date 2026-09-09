@@ -3162,6 +3162,55 @@ input[type="number"] {
   font-variant-numeric: tabular-nums;
 }
 
+.achievement-badge-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.achievement-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 2px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 8px;
+  filter: grayscale(1);
+  opacity: 0.55;
+}
+
+.achievement-badge.is-unlocked {
+  filter: none;
+  opacity: 1;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+
+.achievement-badge-icon {
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.achievement-badge-label {
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.achievement-badge-progress {
+  color: var(--accent);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8rem;
+}
+
+.achievement-badge-desc {
+  color: var(--text-dim);
+  font-size: 0.72rem;
+}
+
 /* ---------- All Players page ---------- */
 
 .all-players-list {
@@ -3770,6 +3819,13 @@ input[type="number"] {
   align-items: center;
   gap: 4px;
   margin-top: 2px;
+}
+
+.tournament-match-team-tag {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  font-style: italic;
+  margin-left: 4px;
 }
 
 .tournament-bracket-heading {
