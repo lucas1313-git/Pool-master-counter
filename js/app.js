@@ -59,8 +59,13 @@
   // `proUnlocked`/`adUnlockedThisSession` start false and are only ever
   // set true after a real (StoreKit Testing, for now) purchase/restore or
   // a completed fake-ad view — see requireProOrShowPaywall.
+  // No bundler here (plain <script> tags), so the @capacitor/core npm
+  // helpers (registerPlugin, etc.) were never loaded onto the page - only
+  // the native-injected window.Capacitor bridge object itself is
+  // available, which exposes registered plugins directly as
+  // Capacitor.Plugins.<jsName> (each method already returns a Promise).
   var IS_NATIVE = typeof Capacitor !== "undefined" && !!(Capacitor.isNativePlatform && Capacitor.isNativePlatform());
-  var Purchases = IS_NATIVE && Capacitor.registerPlugin ? Capacitor.registerPlugin("Purchases") : null;
+  var Purchases = IS_NATIVE && Capacitor.Plugins ? Capacitor.Plugins.Purchases : null;
   var proUnlocked = false;
   var adUnlockedThisSession = false;
 
