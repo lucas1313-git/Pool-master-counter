@@ -94,6 +94,7 @@
   "confirm.undoTournamentWin": "¿Deshacer la victoria del torneo y volver a una partida antes de ella? Esto desarchiva el torneo, restaura la sesión en curso al estado justo antes de la partida ganadora, y revierte el contador de victorias y el cambio de clasificación de esa partida. Esto no se puede deshacer.",
   "confirm.undoWin": "¿Deshacer la victoria más reciente — {{summary}}? Esto la elimina del historial e invierte el contador de victorias. El marcador de la partida actual no se ve afectado.",
   "dayNotes.attachBackup": "📎 Adjuntar archivo de copia de seguridad completo al compartir",
+  "dayNotes.colorfulReport": "🎨 Informe a color",
   "dayNotes.copyReport": "📋 Copiar informe",
   "dayNotes.emailReport": "📧 Enviar informe por correo",
   "dayNotes.exportCsv": "📊 Exportar como Excel (CSV)",

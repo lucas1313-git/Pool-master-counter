@@ -1447,6 +1447,7 @@
   var btnDayReportCsv = document.getElementById("btn-day-report-csv");
   var btnDayReportPrint = document.getElementById("btn-day-report-print");
   var dayReportPrintView = document.getElementById("day-report-print-view");
+  var btnDayReportColorful = document.getElementById("btn-day-report-colorful");
   var dayReportAttachBackupCheckbox = document.getElementById("day-report-attach-backup-checkbox");
   var dayReportRecipientsLine = document.getElementById("day-report-recipients-line");
 
@@ -4890,6 +4891,204 @@
       notesP.textContent = notes;
       dayReportPrintView.appendChild(notesP);
     }
+  }
+
+  function escapeHtmlForReport(value) {
+    var map = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+    return String(value === null || value === undefined ? "" : value).replace(/[&<>"']/g, function (ch) {
+      return map[ch];
+    });
+  }
+
+  // Reads this device's own currently-active theme (one of the 10 in
+  // css/style.css) straight off :root's computed custom properties, so
+  // the standalone colorful report always matches whatever look the app
+  // itself has right now - no separate palette to keep in sync by hand.
+  function readReportThemeTokens() {
+    var style = getComputedStyle(document.documentElement);
+    var names = [
+      "--bg", "--bg-panel", "--bg-card", "--felt", "--felt-light", "--accent", "--accent-dark",
+      "--danger", "--danger-dark", "--info", "--info-dark", "--text", "--text-dim", "--border",
+      "--bg-glow", "--on-accent", "--on-felt-light", "--font-family"
+    ];
+    var tokens = {};
+    names.forEach(function (name) {
+      tokens[name] = style.getPropertyValue(name).trim();
+    });
+    return tokens;
+  }
+
+  // A genuinely designed, colorful standalone report - a real HTML
+  // document (self-contained, no external fonts/scripts, so it still
+  // opens correctly saved to disk or emailed with no connection) meant
+  // to be viewed and shared, not printed. Built entirely separately from
+  // renderDayReportPrintView above (which is deliberately plain/ink-
+  // conscious for paper) and buildDayReportCsv (bare data, no styling
+  // possible in a spreadsheet) - three different jobs, three different
+  // builders, all sharing the same computeDayReportData source.
+  function buildDayReportColorfulHtml(dateStr) {
+    var data = computeDayReportData(dateStr);
+    var tokens = readReportThemeTokens();
+    var rootVars = Object.keys(tokens)
+      .map(function (k) {
+        return k + ": " + (tokens[k] || "") + ";";
+      })
+      .join(" ");
+
+    var longDate;
+    try {
+      longDate = new Date(dateStr + "T00:00:00").toLocaleDateString(undefined, {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric"
+      });
+    } catch (e) {
+      longDate = formatReportDateHeading(dateStr);
+    }
+
+    var maxWins =
+      data.players.reduce(function (m, p) {
+        return Math.max(m, p.wins);
+      }, 0) || 1;
+    var rankMedals = ["🥇", "🥈", "🥉"];
+
+    var leaderboardHtml = data.players
+      .map(function (p, i) {
+        var medal = rankMedals[i] || i + 1 + ".";
+        var barPct = Math.round((p.wins / maxWins) * 100);
+        var deltaClass = p.ratingDelta > 0 ? "up" : p.ratingDelta < 0 ? "down" : "flat";
+        return (
+          '<div class="player-card">' +
+          '<div class="rank">' + medal + "</div>" +
+          '<div class="card-main">' +
+          '<div class="card-top">' +
+          '<span class="name">' + escapeHtmlForReport(p.name) + "</span>" +
+          '<span class="rating">' + p.rating + ' <span class="delta ' + deltaClass + '">' + escapeHtmlForReport(formatReportRatingDelta(p.ratingDelta)) + "</span></span>" +
+          "</div>" +
+          '<div class="record"><span class="win">' + p.wins + 'W</span> · <span class="loss">' + p.losses + "L</span></div>" +
+          '<div class="bar-track"><div class="bar-fill" style="width:' + barPct + '%"></div></div>' +
+          "</div>" +
+          "</div>"
+        );
+      })
+      .join("");
+
+    var highlightsHtml = "";
+    data.raceWins.forEach(function (g) {
+      var names = joinNamesForReport(((g.winnerNames && g.winnerNames.length ? g.winnerNames : g.teammateNames) || []));
+      highlightsHtml +=
+        '<div class="highlight-card">🏆 ' +
+        escapeHtmlForReport(names) +
+        " won the Race to " +
+        g.raceTarget +
+        " session!</div>";
+    });
+    data.tournaments.forEach(function (t) {
+      var champs = joinNamesForReport(t.championNames || []);
+      highlightsHtml +=
+        '<div class="highlight-card">👑 ' +
+        escapeHtmlForReport(champs) +
+        " won the " +
+        tournamentFormatLabel(t.format) +
+        " tournament (" +
+        (t.players || []).length +
+        " players)</div>";
+    });
+
+    var gamesHtml = groupReportGames(data.games)
+      .map(function (g) {
+        var winners = joinNamesForReport(g.winnerNames || []);
+        var losers = joinNamesForReport(g.opponentNames || []);
+        var desc = losers
+          ? "<strong>" + escapeHtmlForReport(winners) + "</strong> def. " + escapeHtmlForReport(losers)
+          : "<strong>" + escapeHtmlForReport(winners) + "</strong> won";
+        var countText = g.count > 1 ? " ×" + g.count : "";
+        var skunk = g.skunkCount > 0 ? ' <span class="skunk-badge">🦨×' + g.skunkCount + "</span>" : "";
+        return (
+          '<div class="game-row">' +
+          '<span class="time">' + escapeHtmlForReport(formatReportGameTime(g.ts)) + "</span>" +
+          '<span class="desc">' + desc + " · " + escapeHtmlForReport(g.gameLabel) + countText + skunk + "</span>" +
+          "</div>"
+        );
+      })
+      .join("");
+
+    var notesHtml = "";
+    var notes = dayNotesTextarea.value;
+    if (notes) {
+      notesHtml =
+        '<div class="section"><h2>Notes</h2><div class="notes-card">' + escapeHtmlForReport(notes) + "</div></div>";
+    }
+
+    var generatedAt = formatTimestamp(new Date().toISOString(), true);
+
+    return (
+      "<!DOCTYPE html>\n" +
+      '<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">' +
+      "<title>Pool Master Counter — " + escapeHtmlForReport(formatReportDateHeading(dateStr)) + "</title>" +
+      "<style>" +
+      ":root { " + rootVars + " }" +
+      "* { box-sizing: border-box; }" +
+      "body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font-family); }" +
+      ".wrap { max-width: 720px; margin: 0 auto; padding: 32px 20px 64px; }" +
+      ".hero { background: linear-gradient(135deg, var(--felt), var(--felt-light)); border-radius: 20px; padding: 32px 28px; text-align: center; box-shadow: 0 12px 32px rgba(0,0,0,.35); }" +
+      ".hero h1 { margin: 0; font-size: 1.7rem; }" +
+      ".hero .date { margin-top: 8px; font-size: 1.05rem; opacity: .9; }" +
+      ".hero .tagline { margin-top: 14px; font-style: italic; opacity: .65; font-size: .9rem; }" +
+      ".section { margin-top: 32px; }" +
+      ".section h2 { font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; color: var(--text-dim); margin: 0 0 14px; }" +
+      ".leaderboard { display: flex; flex-direction: column; gap: 10px; }" +
+      ".player-card { display: flex; align-items: center; gap: 14px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; }" +
+      ".player-card .rank { font-size: 1.3rem; width: 30px; flex-shrink: 0; text-align: center; }" +
+      ".player-card .card-main { flex: 1; min-width: 0; }" +
+      ".player-card .card-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }" +
+      ".player-card .name { font-weight: 700; font-size: 1.02rem; }" +
+      ".player-card .rating { font-variant-numeric: tabular-nums; font-size: .85rem; background: var(--bg-panel); padding: 2px 9px; border-radius: 999px; flex-shrink: 0; }" +
+      ".player-card .delta.up { color: var(--accent); }" +
+      ".player-card .delta.down { color: var(--danger); }" +
+      ".player-card .delta.flat { color: var(--text-dim); }" +
+      ".player-card .record { margin-top: 4px; font-size: .88rem; font-variant-numeric: tabular-nums; color: var(--text-dim); }" +
+      ".player-card .win { color: var(--accent); font-weight: 700; }" +
+      ".player-card .loss { color: var(--danger); font-weight: 700; }" +
+      ".bar-track { margin-top: 8px; height: 6px; background: var(--bg-panel); border-radius: 4px; overflow: hidden; }" +
+      ".bar-fill { height: 100%; background: var(--accent); }" +
+      ".highlight-card { background: linear-gradient(135deg, var(--accent-dark), var(--accent)); color: var(--on-accent); border-radius: 14px; padding: 14px 18px; margin-bottom: 10px; font-weight: 600; }" +
+      ".highlight-card:last-child { margin-bottom: 0; }" +
+      ".game-log { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }" +
+      ".game-row { display: flex; gap: 14px; padding: 11px 16px; border-bottom: 1px solid var(--border); font-size: .9rem; }" +
+      ".game-row:last-child { border-bottom: none; }" +
+      ".game-row .time { color: var(--text-dim); font-variant-numeric: tabular-nums; width: 66px; flex-shrink: 0; }" +
+      ".skunk-badge { color: var(--info); }" +
+      ".notes-card { background: var(--bg-card); border-left: 4px solid var(--accent); border-radius: 8px; padding: 16px 18px; font-style: italic; white-space: pre-wrap; }" +
+      ".empty-note { color: var(--text-dim); font-style: italic; }" +
+      "footer { margin-top: 40px; text-align: center; color: var(--text-dim); font-size: .78rem; }" +
+      "</style></head><body><div class=\"wrap\">" +
+      '<div class="hero"><h1>🎱 Pool Master Counter</h1><div class="date">' +
+      escapeHtmlForReport(longDate) +
+      '</div><div class="tagline">Don\'t get cocky!</div></div>' +
+      (data.players.length
+        ? '<div class="section"><h2>Leaderboard</h2><div class="leaderboard">' + leaderboardHtml + "</div></div>"
+        : '<div class="section"><p class="empty-note">No games recorded today.</p></div>') +
+      (highlightsHtml ? '<div class="section"><h2>Highlights</h2>' + highlightsHtml + "</div>" : "") +
+      (gamesHtml ? '<div class="section"><h2>Game Log</h2><div class="game-log">' + gamesHtml + "</div></div>" : "") +
+      notesHtml +
+      "<footer>Generated " + escapeHtmlForReport(generatedAt) + " · Pool Master Counter</footer>" +
+      "</div></body></html>"
+    );
+  }
+
+  // Opened in a new tab rather than downloaded outright - the point is to
+  // view it first; from there the browser's own Save/Print/Share affords
+  // everything "share" needs, on a real self-contained HTML document.
+  function openDayReportColorful() {
+    var html = buildDayReportColorfulHtml(todayDateStr());
+    var blob = new Blob([html], { type: "text/html" });
+    var url = URL.createObjectURL(blob);
+    window.open(url, "_blank");
+    setTimeout(function () {
+      URL.revokeObjectURL(url);
+    }, 60000);
   }
 
   var DAY_REPORT_FORMAT_KEY = "poolMasterCounter.dayReportFormat.v1";
@@ -12539,6 +12738,8 @@
   window.addEventListener("afterprint", function () {
     dayReportPrintView.classList.add("hidden");
   });
+
+  btnDayReportColorful.addEventListener("click", openDayReportColorful);
 
   btnPlayerPageExport.addEventListener("click", exportCurrentPlayerStats);
   btnPlayerPageCsv.addEventListener("click", function () {

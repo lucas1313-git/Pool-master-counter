@@ -94,6 +94,7 @@
   "confirm.undoTournamentWin": "Annuler la victoire du tournoi et revenir à une partie avant celle-ci ? Ceci désarchive le tournoi, restaure la session en cours à l'état juste avant la partie gagnante, et annule le compteur de victoires et le changement de classement de cette partie. Cette action est irréversible.",
   "confirm.undoWin": "Annuler la victoire la plus récente — {{summary}} ? Ceci la retire de l'historique et inverse le compteur de victoires. Le score de la partie en cours n'est pas affecté.",
   "dayNotes.attachBackup": "📎 Joindre le fichier de sauvegarde complet lors du partage",
+  "dayNotes.colorfulReport": "🎨 Rapport en couleur",
   "dayNotes.copyReport": "📋 Copier le rapport",
   "dayNotes.emailReport": "📧 Envoyer le rapport par e-mail",
   "dayNotes.exportCsv": "📊 Exporter en Excel (CSV)",

@@ -94,6 +94,7 @@
   "confirm.undoTournamentWin": "Undo the tournament win and go back to one game before it? This un-archives the tournament, restores the live session to right before the winning game, and reverses that game's win count and rating change. This cannot be undone.",
   "confirm.undoWin": "Undo the most recent win — {{summary}}? This removes it from the history and reverses the win count. The current game's score isn't affected.",
   "dayNotes.attachBackup": "📎 Attach full backup file when sharing",
+  "dayNotes.colorfulReport": "🎨 Colorful Report",
   "dayNotes.copyReport": "📋 Copy Report",
   "dayNotes.emailReport": "📧 Email Report",
   "dayNotes.exportCsv": "📊 Export as Excel (CSV)",

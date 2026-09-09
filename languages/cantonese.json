@@ -94,6 +94,7 @@
   "confirm.undoTournamentWin": "要撤銷錦標賽嘅勝利，返去贏之前嗰一局嗎？呢個動作會取消錦標賽嘅歸檔，將而家嘅場次還原返去贏嗰局之前嘅狀態，並且撤銷嗰局嘅勝場計數同評分變化。呢個動作無法復原。",
   "confirm.undoWin": "要撤銷最近一次勝利——{{summary}}嗎？呢個動作會由紀錄入面移除，並且撤銷勝場計數。而家對局嘅比數唔受影響。",
   "dayNotes.attachBackup": "📎 分享時夾附完整備份檔案",
+  "dayNotes.colorfulReport": "🎨 彩色報告",
   "dayNotes.copyReport": "📋 複製報告",
   "dayNotes.emailReport": "📧 用電郵傳送報告",
   "dayNotes.exportCsv": "📊 匯出做 Excel（CSV）",
