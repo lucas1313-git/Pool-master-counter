@@ -518,6 +518,8 @@
   "toast.undidGame": "Annulé : {{summary}}",
   "tournament.abandon": "Abandonner le tournoi",
   "tournament.addPlayersFirst": "Ajoutez d'abord des joueurs.",
+  "tournament.byeLabel": "EXEMPT",
+  "tournament.byeNote": "Exempt — pas d'adversaire ce tour, qualification automatique.",
   "tournament.fairRaceEnable": "⚖️ Utiliser la cote Fargo pour les objectifs du tournoi",
   "tournament.fairRaceExplain": "Chaque match court normalement au même objectif. Activé, le côté le moins bien classé reçoit un objectif plus court — calculé pour que le match soit proche d'un pile ou face selon l'écart de classement. L'objectif du côté le mieux classé ne change pas.",
   "tournament.fairRaceInfoAria": "Qu'est-ce que cela signifie ?",

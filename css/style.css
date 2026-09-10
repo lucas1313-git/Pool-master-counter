@@ -4240,6 +4240,16 @@ input[type="number"] {
   color: var(--info);
 }
 
+.tournament-bye-note {
+  margin-top: 2px;
+  padding: 6px 8px;
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: 700;
+  font-style: italic;
+  opacity: 0.75;
+}
+
 .tournament-match-side {
   padding: 6px 8px;
   border-radius: 6px;
