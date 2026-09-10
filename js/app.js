@@ -1514,6 +1514,7 @@
   var btnRotationPositionNext = document.getElementById("btn-rotation-position-next");
 
   var winToast = document.getElementById("win-toast");
+  var pageToast = document.getElementById("page-toast");
   var scoreboard = document.getElementById("scoreboard");
   var historyList = document.getElementById("history-list");
   var standingsTitle = document.getElementById("standings-title");
@@ -3519,12 +3520,23 @@
   // Scoring
   // ---------------------------------------------------------------------
 
+  // .win-toast lives inline inside #app (between the rotation/queue
+  // section and Standings, by design - it's meant to be seen while
+  // scrolling the main page), so it's invisible whenever a full-screen
+  // page (All Players, Tournament, Player, Contact Sheet) hides #app
+  // itself. Route to .page-toast, a fixed overlay, instead whenever
+  // that's the case, so every showToast() call stays visible no matter
+  // which screen is open.
   function showToast(message) {
-    winToast.textContent = "🏆 " + message;
-    winToast.classList.remove("hidden");
+    var onMain = !appRoot.classList.contains("hidden");
+    var target = onMain ? winToast : pageToast;
+    var other = onMain ? pageToast : winToast;
+    other.classList.add("hidden");
+    target.textContent = "🏆 " + message;
+    target.classList.remove("hidden");
     clearTimeout(toastTimer);
     toastTimer = setTimeout(function () {
-      winToast.classList.add("hidden");
+      target.classList.add("hidden");
     }, 4500);
   }
 

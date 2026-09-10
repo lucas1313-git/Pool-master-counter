@@ -968,6 +968,28 @@ input[type="number"] {
   border-radius: 12px;
 }
 
+/* Same message, but for anywhere #app itself is hidden (All Players,
+   Tournament, Player, Contact Sheet) - .win-toast lives inside #app and
+   sits inline in its layout, so it's invisible whenever a full-screen
+   page is showing instead. This is a fixed overlay, always on top,
+   shown/hidden by the same showToast() based on which one is visible. */
+.page-toast {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1400;
+  max-width: min(92vw, 480px);
+  text-align: center;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 800;
+  font-size: 1rem;
+  padding: 12px 18px;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
 /* ---------- Shot counter (all game types) ---------- */
 
 /* Lives in the score-keeping area itself (#scoreboard-panel, right
