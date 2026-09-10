@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260910r">
+<link rel="stylesheet" href="css/style.css?v=20260910t">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -1158,15 +1158,15 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
         <button type="button" id="btn-tournament-start" class="btn btn-primary" data-i18n="tournament.start">Start Tournament</button>
       </div>
 
-      <label class="checkbox-row tournament-teams-row">
+      <label class="wizard-format-option tournament-teams-row">
         <input type="checkbox" id="tournament-teams-enabled-checkbox">
         <span data-i18n="tournament.teamsEnable">🤝 Play as teams (group matching Team fields below into one bracket entrant)</span>
       </label>
 
-      <div class="row tournament-tables-row">
-        <label for="tournament-table-count" data-i18n="tournament.tableCount">🎱 Number of Tables</label>
+      <label class="wizard-format-option tournament-tables-row" for="tournament-table-count">
+        <span data-i18n="tournament.tableCount">🎱 Number of Tables</span>
         <input type="number" id="tournament-table-count" min="1" max="20" value="1">
-      </div>
+      </label>
 
       <datalist id="tournament-team-options"></datalist>
       <ul id="tournament-player-checklist" class="tournament-player-checklist"></ul>

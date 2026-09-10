@@ -581,7 +581,7 @@
   "tournament.tableLabel": "波枱",
   "tournament.tableOption": "{{table}}號波枱",
   "tournament.tablePlayedOn": "喺{{table}}號波枱打嘅",
-  "tournament.tableUnassigned": "——未分配——",
+  "tournament.tableUnassigned": "揀波枱",
   "tournament.tapToFocus": "撳一下睇呢個",
   "tournament.teamLabel": "隊伍",
   "tournament.teamNameConflictsWithPlayer": "隊名同某位玩家嘅名一樣，已忽略咗，改為單人參賽：{{names}}",
