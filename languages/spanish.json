@@ -518,6 +518,8 @@
   "toast.undidGame": "Deshecho: {{summary}}",
   "tournament.abandon": "Abandonar torneo",
   "tournament.addPlayersFirst": "Añade jugadores primero.",
+  "tournament.byeLabel": "EXENTO",
+  "tournament.byeNote": "Exento — sin rival esta ronda, avanza automáticamente.",
   "tournament.fairRaceEnable": "⚖️ Usar la clasificación Fargo para las metas del torneo",
   "tournament.fairRaceExplain": "Cada partida normalmente corre a la misma meta. Con esto activado, el lado peor clasificado recibe una meta más corta — calculada para que la partida quede cerca de un 50/50 según la diferencia de clasificación. La meta del lado mejor clasificado no cambia.",
   "tournament.fairRaceInfoAria": "¿Qué significa esto?",

@@ -14009,13 +14009,21 @@
     // who has to beat them twice to take it). That's invisible from the
     // card alone, so it's called out directly on their name.
     var isGf = isGrandFinalMatch(t, match);
+    // A structural bye (not enough real entrants to fill every round-1
+    // slot, see buildWinnersBracketRounds) resolves with a winner but
+    // only one real side - without calling that out explicitly, it
+    // reads exactly like a phantom "already won without playing", which
+    // is confusing on its own and especially so when several byes land
+    // at once. Every OTHER empty side just means "not decided yet" and
+    // still shows the plain em dash.
+    var isByeMatch = !!match.winner && (match.a === null) !== (match.b === null);
     [match.a, match.b].forEach(function (name) {
       var row = document.createElement("div");
       row.className = "tournament-match-side";
       var isWinner = match.winner && name === match.winner;
       if (isWinner) row.classList.add("is-winner");
       if (match.winner && name === match.loser) row.classList.add("is-loser");
-      row.textContent = (isWinner ? "👑 " : "") + (name || "—");
+      row.textContent = (isWinner ? "👑 " : "") + (name || (isByeMatch ? T("tournament.byeLabel") : "—"));
       if (name) {
         appendEntrantIdentity(row, name, t);
         if (isGf && name === t.lbChampion) {
@@ -14028,7 +14036,12 @@
       div.appendChild(row);
     });
 
-    if (isActive) {
+    if (isByeMatch) {
+      var byeNote = document.createElement("div");
+      byeNote.className = "tournament-bye-note";
+      byeNote.textContent = T("tournament.byeNote");
+      div.appendChild(byeNote);
+    } else if (isActive) {
       var playingNote = document.createElement("div");
       playingNote.className = "tournament-playing-note";
       playingNote.textContent = T("tournament.playingNow");
