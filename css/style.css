@@ -3769,7 +3769,8 @@ input[type="number"] {
 
 /* ---------- Elimination Tournament ---------- */
 
-.tournament-players-heading {
+.tournament-players-heading,
+.tournament-section-heading {
   margin: 4px 0 10px;
   font-size: 0.9rem;
   color: var(--text-dim);
@@ -3777,31 +3778,35 @@ input[type="number"] {
   letter-spacing: 0.05em;
 }
 
+.format-info-btn {
+  flex-shrink: 0;
+  margin-left: auto;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.format-info-btn:hover {
+  color: var(--text);
+  border-color: var(--text-dim);
+}
+
 .tournament-player-checklist {
   list-style: none;
   margin: 0 0 16px;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 8px;
-}
-
-.tournament-player-check-row label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 10px 12px;
-  cursor: pointer;
-  font-size: 0.95rem;
-}
-
-.tournament-player-check-row input {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--accent);
 }
 
 .tournament-player-check-row {
@@ -3809,10 +3814,25 @@ input[type="number"] {
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
 }
 
 .tournament-player-check-row label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex: 1;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.tournament-player-check-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
 }
 
 .tournament-seed-input {

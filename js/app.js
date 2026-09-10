@@ -1431,7 +1431,12 @@
   var tournamentTargetUnit = document.getElementById("tournament-target-unit");
   var tournamentRaceToInput = document.getElementById("tournament-race-to");
   var tournamentFairRaceCheckbox = document.getElementById("tournament-fair-race-checkbox");
-  var tournamentSeededCheckbox = document.getElementById("tournament-seeded-checkbox");
+  var tournamentSeedModeRadios = document.getElementsByName("tournament-seed-mode");
+  var tournamentFormatInfoOverlay = document.getElementById("tournament-format-info-overlay");
+  var tournamentFormatInfoBody = document.getElementById("tournament-format-info-body");
+  var btnTournamentFormatInfoSelect = document.getElementById("btn-tournament-format-info-select");
+  var btnTournamentFormatInfoCancel = document.getElementById("btn-tournament-format-info-cancel");
+  var tournamentFormatInfoPendingRadio = null;
   var tournamentTeamsEnabledCheckbox = document.getElementById("tournament-teams-enabled-checkbox");
   var tournamentPlayerChecklist = document.getElementById("tournament-player-checklist");
   var tournamentTeamOptionsDatalist = document.getElementById("tournament-team-options");
@@ -9572,7 +9577,7 @@
   function openOnboarding() {
     onboardingStep = 1;
     onboardingNameInput.value = "";
-    onboardingRatingInput.value = "";
+    onboardingRatingInput.value = String(DEFAULT_RATING);
     onboardingEmailInput.value = "";
     onboardingPhoneInput.value = "";
     onboardingReportOptInCheckbox.checked = false;
@@ -12948,6 +12953,13 @@
     renderTournamentTeamPreview();
   }
 
+  function isTournamentSeededManually() {
+    var checked = Array.prototype.filter.call(tournamentSeedModeRadios, function (r) {
+      return r.checked;
+    })[0];
+    return !!checked && checked.value === "manual";
+  }
+
   function renderTournamentPlayerChecklist() {
     var names = getAllKnownPlayerNames().sort(function (a, b) {
       return a.localeCompare(b);
@@ -12982,7 +12994,7 @@
       var seedInput = document.createElement("input");
       seedInput.type = "number";
       seedInput.min = "1";
-      seedInput.className = "tournament-seed-input" + (tournamentSeededCheckbox.checked ? "" : " hidden");
+      seedInput.className = "tournament-seed-input" + (isTournamentSeededManually() ? "" : " hidden");
       seedInput.setAttribute("aria-label", T("tournament.seedLabel"));
       li.appendChild(seedInput);
       var teamInput = document.createElement("input");
@@ -13083,7 +13095,7 @@
   // already claimed, rather than erroring - this is a casual home-game
   // tool, not a tournament-director product.
   function getTournamentSeeds(entrants) {
-    if (!tournamentSeededCheckbox.checked) return null;
+    if (!isTournamentSeededManually()) return null;
     var rows = Array.prototype.slice.call(tournamentPlayerChecklist.querySelectorAll(".tournament-player-check-row"));
     var checklistPositionByName = {};
     var seedValueByName = {};
@@ -13895,11 +13907,15 @@
       return;
     }
     var starting = parseStartingRatingInput(newPlayerRatingInput);
-    var alreadyRated = starting !== null && !!findRatingKey(resolvePlayerName(trimmed));
+    // Only worth a heads-up if they typed something other than the
+    // prefilled default - leaving it at 400 is indistinguishable from
+    // not touching it, so it shouldn't warn on every re-add of an
+    // already-rated name the way an explicit custom number should.
+    var alreadyRated = starting !== null && starting !== DEFAULT_RATING && !!findRatingKey(resolvePlayerName(trimmed));
     var player = addPlayer(newPlayerName.value, starting === null ? undefined : starting);
     if (!player) return;
     newPlayerName.value = "";
-    newPlayerRatingInput.value = "";
+    newPlayerRatingInput.value = String(DEFAULT_RATING);
     validateNewPlayerNameInput();
     renderAll();
     if (alreadyRated) showToast(player.name + " already has a tracked rating — starting rating not applied.");
@@ -14221,11 +14237,11 @@
       return;
     }
     var starting = parseStartingRatingInput(wizardNewPlayerRatingInput);
-    var alreadyRated = starting !== null && !!findRatingKey(resolvePlayerName(trimmed));
+    var alreadyRated = starting !== null && starting !== DEFAULT_RATING && !!findRatingKey(resolvePlayerName(trimmed));
     var player = addPlayer(wizardNewPlayerName.value, starting === null ? undefined : starting);
     if (!player) return;
     wizardNewPlayerName.value = "";
-    wizardNewPlayerRatingInput.value = "";
+    wizardNewPlayerRatingInput.value = String(DEFAULT_RATING);
     validateWizardNewPlayerNameInput();
     renderAll();
     if (alreadyRated) showToast(player.name + " already has a tracked rating — starting rating not applied.");
@@ -14430,11 +14446,46 @@
     closeTournamentPage();
   });
   btnTournamentStart.addEventListener("click", startTournament);
-  tournamentSeededCheckbox.addEventListener("change", function () {
-    var show = tournamentSeededCheckbox.checked;
-    Array.prototype.forEach.call(tournamentPlayerChecklist.querySelectorAll(".tournament-seed-input"), function (input) {
-      input.classList.toggle("hidden", !show);
+  Array.prototype.forEach.call(tournamentSeedModeRadios, function (radio) {
+    radio.addEventListener("change", function () {
+      var show = isTournamentSeededManually();
+      Array.prototype.forEach.call(tournamentPlayerChecklist.querySelectorAll(".tournament-seed-input"), function (input) {
+        input.classList.toggle("hidden", !show);
+      });
     });
+  });
+
+  // The long per-format explanation lives in a hidden sibling <span>
+  // (data-info-target) so it stays in the normal i18n flow while the
+  // visible radio row itself only shows a short name - "?" pops it into
+  // this shared little popup instead. Picking "Yes, this format" just
+  // checks the radio the popup was opened from; nothing else reads a
+  // "change" event off these radios (see startTournament), so no event
+  // needs dispatching.
+  Array.prototype.forEach.call(document.querySelectorAll(".format-info-btn"), function (btn) {
+    btn.addEventListener("click", function () {
+      var label = btn.closest("label");
+      var radio = label ? label.querySelector('input[type="radio"]') : null;
+      var textEl = document.getElementById(btn.getAttribute("data-info-target"));
+      if (!radio || !textEl) return;
+      tournamentFormatInfoPendingRadio = radio;
+      tournamentFormatInfoBody.textContent = textEl.textContent;
+      tournamentFormatInfoOverlay.classList.remove("hidden");
+    });
+  });
+  btnTournamentFormatInfoSelect.addEventListener("click", function () {
+    if (tournamentFormatInfoPendingRadio) tournamentFormatInfoPendingRadio.checked = true;
+    tournamentFormatInfoPendingRadio = null;
+    tournamentFormatInfoOverlay.classList.add("hidden");
+  });
+  btnTournamentFormatInfoCancel.addEventListener("click", function () {
+    tournamentFormatInfoPendingRadio = null;
+    tournamentFormatInfoOverlay.classList.add("hidden");
+  });
+  tournamentFormatInfoOverlay.addEventListener("click", function (e) {
+    if (e.target !== tournamentFormatInfoOverlay) return;
+    tournamentFormatInfoPendingRadio = null;
+    tournamentFormatInfoOverlay.classList.add("hidden");
   });
   tournamentPlayerChecklist.addEventListener("change", refreshTournamentTeamUi);
   tournamentPlayerChecklist.addEventListener("input", refreshTournamentTeamUi);
