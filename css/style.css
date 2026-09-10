@@ -1,8 +1,8 @@
 /* ---------- Themes ----------
-   Ten self-contained palettes (colors + font family only — no network
-   fonts, everything falls back through system font stacks so the app
-   stays fully offline-capable). Bare :root is "Crimson Felt", the
-   original look and the default; the rest override via
+   Sixteen self-contained palettes (colors + font family only — no
+   network fonts, everything falls back through system font stacks so
+   the app stays fully offline-capable). Bare :root is "Crimson Felt",
+   the original look and the default; the rest override via
    :root[data-theme="..."], which JS sets on <html> and persists to
    localStorage. Each sets its own color-scheme (dark or light) so native
    form controls/scrollbars render correctly either way. */
@@ -139,6 +139,90 @@
   color-scheme: dark;
 }
 
+:root[data-theme="sunset-blaze"] {
+  --bg: #1a0e1f;
+  --bg-panel: #251530;
+  --bg-card: #2f1a3d;
+  --felt: #7a2a4a;
+  --felt-light: #b0446a;
+  --accent: #ff7a45;
+  --accent-dark: #cc5f34;
+  --danger: #ff4d6d;
+  --danger-dark: #c93a56;
+  --info: #5b8def;
+  --info-dark: #3f68b8;
+  --text: #fff0e6;
+  --text-dim: #d9a8b8;
+  --border: #4a2540;
+  --bg-glow: #3d1a35;
+  --on-accent: #2a1206;
+  --on-felt-light: #fff0e6;
+  --font-family: Optima, Candara, "Segoe UI", sans-serif;
+}
+
+:root[data-theme="red-and-pink"] {
+  --bg: #1c0510;
+  --bg-panel: #2a0818;
+  --bg-card: #380b20;
+  --felt: #8c0f3a;
+  --felt-light: #c2185b;
+  --accent: #ff4081;
+  --accent-dark: #c60055;
+  --danger: #ff1744;
+  --danger-dark: #c4001d;
+  --info: #4fc3f7;
+  --info-dark: #0288d1;
+  --text: #ffe6ef;
+  --text-dim: #e08aa8;
+  --border: #5c1030;
+  --bg-glow: #4a0e28;
+  --on-accent: #fff0f5;
+  --on-felt-light: #fff0f5;
+  --font-family: Futura, "Century Gothic", "Trebuchet MS", sans-serif;
+}
+
+:root[data-theme="gold-mine"] {
+  --bg: #140d06;
+  --bg-panel: #1f150a;
+  --bg-card: #2a1c0d;
+  --felt: #4a3218;
+  --felt-light: #6b4a22;
+  --accent: #d4a017;
+  --accent-dark: #a67d12;
+  --danger: #c0392b;
+  --danger-dark: #922b21;
+  --info: #4a90a4;
+  --info-dark: #34677a;
+  --text: #f5e6c8;
+  --text-dim: #b39b72;
+  --border: #3d2a14;
+  --bg-glow: #33220f;
+  --on-accent: #221604;
+  --on-felt-light: #f5e6c8;
+  --font-family: Copperplate, Rockwell, Georgia, serif;
+}
+
+:root[data-theme="rock-and-roll"] {
+  --bg: #0a0a0a;
+  --bg-panel: #141414;
+  --bg-card: #1c1c1c;
+  --felt: #2b2b2b;
+  --felt-light: #3d3d3d;
+  --accent: #e10600;
+  --accent-dark: #a80400;
+  --danger: #ff3b3b;
+  --danger-dark: #c92a2a;
+  --info: #d9d9d9;
+  --info-dark: #a6a6a6;
+  --text: #f5f5f5;
+  --text-dim: #b0b0b0;
+  --border: #3d3d3d;
+  --bg-glow: #1c1c1c;
+  --on-accent: #fff5f5;
+  --on-felt-light: #f5f5f5;
+  --font-family: Impact, "Arial Black", Arial, sans-serif;
+}
+
 :root[data-theme="daybreak-chalk"] {
   --bg: #f5f1e8;
   --bg-panel: #ffffff;
@@ -180,6 +264,52 @@
   --on-accent: #fbf8fc;
   --graph-bg: rgba(107, 45, 92, 0.08);
   --font-family: "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  color-scheme: light;
+}
+
+:root[data-theme="sunrise-glow"] {
+  --bg: #fff3ea;
+  --bg-panel: #ffffff;
+  --bg-card: #fff8f2;
+  --felt: #ffd9b8;
+  --felt-light: #ffe8cf;
+  --accent: #ff7e5f;
+  --accent-dark: #cc6349;
+  --danger: #e0524f;
+  --danger-dark: #ad3d3b;
+  --info: #4a90c2;
+  --info-dark: #356b91;
+  --text: #3a2a20;
+  --text-dim: #8a6f5c;
+  --border: #f0c9a0;
+  --bg-glow: #ffe4c4;
+  --on-accent: #fff8ef;
+  --on-felt-light: #3a2a20;
+  --graph-bg: rgba(255, 126, 95, 0.08);
+  --font-family: Avenir, "Century Gothic", "Trebuchet MS", sans-serif;
+  color-scheme: light;
+}
+
+:root[data-theme="stainless-steel"] {
+  --bg: #e8eaec;
+  --bg-panel: #f4f5f6;
+  --bg-card: #ffffff;
+  --felt: #c7ccd1;
+  --felt-light: #dde1e4;
+  --accent: #3b6e8f;
+  --accent-dark: #2a5066;
+  --danger: #b83232;
+  --danger-dark: #8c2525;
+  --info: #5a7d99;
+  --info-dark: #3f5a70;
+  --text: #20262b;
+  --text-dim: #5c6870;
+  --border: #b7bec4;
+  --bg-glow: #dfe3e6;
+  --on-accent: #f4f8fa;
+  --on-felt-light: #20262b;
+  --graph-bg: rgba(59, 110, 143, 0.08);
+  --font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   color-scheme: light;
 }
 
