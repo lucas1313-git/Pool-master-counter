@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260910o">
+<link rel="stylesheet" href="css/style.css?v=20260910p">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -1132,7 +1132,7 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
     <div class="tournament-setup-section tournament-setup-players-section">
       <h3 class="tournament-players-heading" data-i18n="players.heading">Players</h3>
-      <div class="wizard-format-options tournament-seed-mode-options">
+      <div class="wizard-format-options tournament-seed-mode-options tournament-selection-group">
         <label class="wizard-format-option">
           <input type="radio" name="tournament-seed-mode" value="random" checked>
           <span data-i18n="tournament.seedModeRandom">🎲 Random selection</span>
@@ -1146,24 +1146,31 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
           <span data-i18n="tournament.seedModeRating">⚖️ Match Similar Ratings</span>
           <button type="button" class="format-info-btn" data-info-title="tournament-seed-rating-title" data-info-target="tournament-seed-rating-text" data-i18n-aria-label="tournament.formatInfoAria" aria-label="More about this seeding mode">❓</button>
         </label>
+        <label class="wizard-format-option">
+          <input type="checkbox" id="tournament-select-all-checkbox">
+          <span data-i18n="tournament.selectAll">✅ Select All</span>
+        </label>
       </div>
       <span id="tournament-seed-rating-title" data-i18n="tournament.seedModeRatingTitle" hidden>Match Similar Ratings Seeding</span>
       <span id="tournament-seed-rating-text" data-i18n="tournament.seedModeRatingExplain" hidden>Round 1 pairs the closest-rated players against each other instead of spreading them apart - the strongest face off immediately, so one player can't just coast past weak opponents to the final.</span>
-      <label class="checkbox-row">
+
+      <div class="row tournament-start-row">
+        <button type="button" id="btn-tournament-start" class="btn btn-primary" data-i18n="tournament.start">Start Tournament</button>
+      </div>
+
+      <label class="checkbox-row tournament-teams-row">
         <input type="checkbox" id="tournament-teams-enabled-checkbox">
         <span data-i18n="tournament.teamsEnable">🤝 Play as teams (group matching Team fields below into one bracket entrant)</span>
       </label>
-      <label class="checkbox-row">
-        <input type="checkbox" id="tournament-select-all-checkbox">
-        <span data-i18n="tournament.selectAll">✅ Select All</span>
-      </label>
+
+      <div class="row tournament-tables-row">
+        <label for="tournament-table-count" data-i18n="tournament.tableCount">🎱 Number of Tables</label>
+        <input type="number" id="tournament-table-count" min="1" max="20" value="1">
+      </div>
+
       <datalist id="tournament-team-options"></datalist>
       <ul id="tournament-player-checklist" class="tournament-player-checklist"></ul>
       <p class="player-stats-note hidden" id="tournament-team-preview"></p>
-    </div>
-
-    <div class="row">
-      <button type="button" id="btn-tournament-start" class="btn btn-primary" data-i18n="tournament.start">Start Tournament</button>
     </div>
   </section>
 
@@ -1224,6 +1231,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260910n"></script>
+<script src="js/app.js?v=20260910o"></script>
 </body>
 </html>

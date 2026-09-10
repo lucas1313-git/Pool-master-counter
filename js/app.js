@@ -1449,6 +1449,7 @@
   var tournamentRaceToInput = document.getElementById("tournament-race-to");
   var tournamentFairRaceCheckbox = document.getElementById("tournament-fair-race-checkbox");
   var btnFairRaceInfo = document.getElementById("btn-fair-race-info");
+  var tournamentTableCountInput = document.getElementById("tournament-table-count");
   var tournamentSeedModeRadios = document.getElementsByName("tournament-seed-mode");
   var tournamentFormatInfoOverlay = document.getElementById("tournament-format-info-overlay");
   var tournamentFormatInfoTitle = document.getElementById("tournament-format-info-title");
@@ -12655,6 +12656,7 @@
         return typeof entry === "string" ? { name: entry, feeder: null } : entry;
       });
     }
+    if (t && typeof t.tableCount !== "number") t.tableCount = 1;
     return t;
   }
 
@@ -12835,8 +12837,10 @@
   // winner became this match's .a/.b - only ever set for losers-bracket
   // matches (see pairUpNames), so the losers bracket can be drawn as a
   // real connected tree instead of flat labeled columns. Winners-bracket
-  // matches don't need this: their feeders are always exactly
-  // t.wb[ri-1][mi*2] and [mi*2+1], computable from position alone.
+  // matches don't need this: their feeders are always computable from
+  // position alone, t.wb[ri-1][mi*2] and [mi*2+1] - the second one just
+  // won't exist for a pendingBye match (see buildWinnersBracketRounds),
+  // which only ever has the one.
   function createBracketMatch(a, b, tag, feederA, feederB) {
     return {
       id: uid(),
@@ -12847,7 +12851,8 @@
       tag: tag,
       collected: false,
       feederA: feederA || null,
-      feederB: feederB || null
+      feederB: feederB || null,
+      table: null
     };
   }
 
@@ -12965,6 +12970,15 @@
               var nxt = t.wb[ri + 1][Math.floor(mi / 2)];
               if (mi % 2 === 0) nxt.a = m.winner;
               else nxt.b = m.winner;
+              // pendingBye matches (see buildWinnersBracketRounds) only
+              // ever get ONE feeder by construction - the moment it
+              // arrives, that's the whole match, exactly like a round-1
+              // bye already resolves the instant it's built, just now
+              // possibly happening in any later round too.
+              if (nxt.pendingBye && nxt.winner === null) {
+                nxt.winner = nxt.a !== null ? nxt.a : nxt.b;
+                nxt.loser = null;
+              }
             } else {
               t.wbChampion = m.winner;
             }
@@ -13062,11 +13076,19 @@
 
   // Shuffles the field and builds the empty winners-bracket rounds shared
   // by both tournament formats — round 1 seeded with the standard spread
-  // (1v4/2v3, etc.) so byes land spread across the draw, every later round
-  // starting empty until winners advance into it.
+  // (1v4/2v3, etc.) so any bye lands away from the strongest seeds,
+  // every later round starting empty until winners advance into it.
+  // Unlike a classic "pad straight to the next power of two" bracket,
+  // rounds here are only ever sized to fit however many real entrants
+  // (or, from round 2 on, real winners) actually exist - at most one
+  // match anywhere ever needs a bye (see the pendingBye rounds below),
+  // instead of a small or awkward field (9 players, or even 10) dumping
+  // most of the round-1 byes needed to reach a power of two all at
+  // once and letting several of them land on each other as an
+  // apparently-already-decided later round.
   // seededOrder (optional): a real 1..N ranking supplied by the organizer
   // (see getTournamentSeeds) instead of the default random draw. Either
-  // way, seedOrder(size) below is what actually spreads seed 1/2/3/4... onto
+  // way, seedOrder below is what actually spreads seed 1/2/3/4... onto
   // opposite halves of the bracket so they can't meet early - that spread
   // happens the same way whether the ranking behind it is random or real.
   // pairAdjacent (optional): the opposite of that spread - used for
@@ -13091,35 +13113,64 @@
       }
     }
     var n = shuffled.length;
-    var size = nextPow2(n);
     var slots;
     if (pairAdjacent) {
-      var byeCount = size - n;
-      var paired = shuffled.slice(0, n - byeCount);
-      var byeReceivers = shuffled.slice(n - byeCount);
-      slots = paired.slice();
-      byeReceivers.forEach(function (name) {
-        slots.push(name, null);
-      });
+      // Adjacent-rated players pair off in order; the single weakest
+      // (last, since shuffled/seededOrder is already strongest-to-
+      // weakest here) gets the bye when n is odd - same principle as
+      // byes always going to the weakest player in this mode, just
+      // needing at most one now instead of however many it used to take
+      // to pad all the way to a power of two.
+      var byeCount = n % 2;
+      slots = shuffled.slice(0, n - byeCount);
+      if (byeCount) slots.push(shuffled[n - 1], null);
     } else {
-      var order = seedOrder(size);
-      slots = order.map(function (s) {
-        return s <= n ? shuffled[s - 1] : null;
-      });
+      // Same spread seedOrder already used to keep strong seeds apart
+      // across the draw (1 vs the bottom seed, 2 vs the next-from-
+      // bottom, etc.) - computed against the next power of two as
+      // always, but now only to DERIVE that spread order, not to size
+      // the round: the phantom seed numbers beyond n are dropped
+      // instead of becoming real bye slots, so pairing what's left two
+      // at a time needs at most one true bye (whoever's odd one out),
+      // not "however many seeds it takes to reach a power of two".
+      var spread = seedOrder(nextPow2(n))
+        .filter(function (s) {
+          return s <= n;
+        })
+        .map(function (s) {
+          return shuffled[s - 1];
+        });
+      slots = spread.slice();
+      if (n % 2 === 1) slots.push(null);
     }
 
     var wb = [];
     var r1 = [];
-    for (var k = 0; k < size; k += 2) {
+    for (var k = 0; k < slots.length; k += 2) {
       r1.push(createBracketMatch(slots[k], slots[k + 1], "Winners R1"));
     }
     wb.push(r1);
-    var nrounds = Math.round(Math.log(size) / Math.log(2));
-    for (var r = 1; r < nrounds; r++) {
+
+    // Every later round is sized to fit however many winners the round
+    // before it can actually produce - ceil(), not an exact half, since
+    // an odd match count (itself possible whenever the round before IT
+    // had an odd number of real entrants) leaves one winner with nobody
+    // to pair against yet. That leftover match is flagged pendingBye
+    // (instead of resolved immediately the way round 1's bye already is
+    // above) because - unlike round 1 - who actually lands in it isn't
+    // known until its one real feeder match has been played;
+    // advanceBracket resolves it the instant that happens. This is the
+    // whole reason a small or awkwardly-sized field no longer needs to
+    // be padded out to the next power of two up front: at most one
+    // match anywhere ever needs a bye, rather than dumping every
+    // "missing" slot into round 1 alone.
+    while (wb[wb.length - 1].length > 1) {
       var prev = wb[wb.length - 1];
       var cur = [];
-      for (var m = 0; m < prev.length / 2; m++) {
-        cur.push(createBracketMatch(null, null, "Winners R" + (r + 1)));
+      for (var m = 0; m < prev.length; m += 2) {
+        var match = createBracketMatch(null, null, "Winners R" + (wb.length + 1));
+        if (m + 1 >= prev.length) match.pendingBye = true;
+        cur.push(match);
       }
       wb.push(cur);
     }
@@ -13135,7 +13186,7 @@
       }
     });
 
-    return { shuffled: shuffled, size: size, wb: wb };
+    return { shuffled: shuffled, size: nextPow2(n), wb: wb };
   }
 
   function buildDoubleEliminationBracket(playerNames, gameType, target, raceTo, fairRace, seededOrder, pairAdjacent) {
@@ -13941,6 +13992,7 @@
     }
     TOURNAMENT.entrantMembers = entrantMembers;
     TOURNAMENT.entrantTeamNames = entrantTeamNames;
+    TOURNAMENT.tableCount = Math.max(1, parseInt(tournamentTableCountInput.value, 10) || 1);
     saveTournamentToStorage(TOURNAMENT);
     renderTournamentPage();
   }
@@ -14036,6 +14088,51 @@
       div.appendChild(row);
     });
 
+    // A multi-table event needs to tell players where to actually go
+    // play, not just that they're up - only worth showing at all once
+    // there's more than one table to choose between, and only for a
+    // real, still-undecided match (a finished one just shows which
+    // table it was on, if any, instead of a picker there's nothing left
+    // to pick).
+    if (t.tableCount > 1 && match.a && match.b) {
+      if (match.winner) {
+        if (match.table) {
+          var tableDoneLabel = document.createElement("div");
+          tableDoneLabel.className = "tournament-match-table-played";
+          tableDoneLabel.textContent = T("tournament.tablePlayedOn", { table: match.table });
+          div.appendChild(tableDoneLabel);
+        }
+      } else {
+        var tableRow = document.createElement("label");
+        tableRow.className = "tournament-match-table-row";
+        var tableRowSpan = document.createElement("span");
+        tableRowSpan.textContent = T("tournament.tableLabel");
+        var tableSelect = document.createElement("select");
+        tableSelect.className = "tournament-match-table-select";
+        var unassignedOpt = document.createElement("option");
+        unassignedOpt.value = "";
+        unassignedOpt.textContent = T("tournament.tableUnassigned");
+        tableSelect.appendChild(unassignedOpt);
+        for (var tableNum = 1; tableNum <= t.tableCount; tableNum++) {
+          var tableOpt = document.createElement("option");
+          tableOpt.value = String(tableNum);
+          tableOpt.textContent = T("tournament.tableOption", { table: tableNum });
+          if (match.table === tableNum) tableOpt.selected = true;
+          tableSelect.appendChild(tableOpt);
+        }
+        tableSelect.addEventListener("click", function (e) {
+          e.stopPropagation();
+        });
+        tableSelect.addEventListener("change", function () {
+          match.table = tableSelect.value ? parseInt(tableSelect.value, 10) : null;
+          saveTournamentToStorage(t);
+        });
+        tableRow.appendChild(tableRowSpan);
+        tableRow.appendChild(tableSelect);
+        div.appendChild(tableRow);
+      }
+    }
+
     if (isByeMatch) {
       var byeNote = document.createElement("div");
       byeNote.className = "tournament-bye-note";
@@ -14092,14 +14189,28 @@
     heading.textContent = wbRoundLabel(t.wb[ri].length);
     wrap.appendChild(heading);
     wrap.appendChild(card);
+    // A round-1 match is always a real leaf (two real players, no WB
+    // history behind it). A pendingBye slot in a later round (see
+    // buildWinnersBracketRounds) only ever has ONE real feeder, not
+    // zero - t.wb[ri-1] simply has no SECOND match to recurse into for
+    // it, so only that one side renders a child instead of two. Losing
+    // that first feeder too (treating the whole node as a leaf the
+    // moment either side is missing) would silently drop a real match -
+    // and everything behind it - from the tree entirely.
     if (ri === 0) {
+      wrap.classList.add("wb-tree-leaf");
+      return wrap;
+    }
+    var hasLeftFeeder = mi * 2 < t.wb[ri - 1].length;
+    var hasRightFeeder = mi * 2 + 1 < t.wb[ri - 1].length;
+    if (!hasLeftFeeder && !hasRightFeeder) {
       wrap.classList.add("wb-tree-leaf");
       return wrap;
     }
     var childrenWrap = document.createElement("div");
     childrenWrap.className = "wb-tree-children";
-    childrenWrap.appendChild(renderWbTreeNode(t, ri - 1, mi * 2, activeMatchId));
-    childrenWrap.appendChild(renderWbTreeNode(t, ri - 1, mi * 2 + 1, activeMatchId));
+    if (hasLeftFeeder) childrenWrap.appendChild(renderWbTreeNode(t, ri - 1, mi * 2, activeMatchId));
+    if (hasRightFeeder) childrenWrap.appendChild(renderWbTreeNode(t, ri - 1, mi * 2 + 1, activeMatchId));
 
     var node = document.createElement("div");
     node.className = "wb-tree-node";
@@ -14316,6 +14427,13 @@
     }
     saveTournamentToStorage(TOURNAMENT);
     renderTournamentActive();
+    // Tapping Play can happen from anywhere on a long bracket page (the
+    // Ready to Play list, or a match card deep in the tree) - the score
+    // itself renders into tournamentCurrentMatchPanel regardless of
+    // where that tap came from, so jump there directly instead of
+    // leaving whoever just started the match staring at wherever they
+    // happened to be scrolled to.
+    tournamentCurrentMatchPanel.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   function tournamentAdjustScore(side, delta) {
@@ -14442,7 +14560,8 @@
 
     var banner = document.createElement("div");
     banner.className = "now-playing-banner tournament-now-playing";
-    banner.textContent = gameType.label + " — " + match.tag;
+    banner.textContent =
+      gameType.label + " — " + match.tag + (t.tableCount > 1 && match.table ? " — " + T("tournament.tableOption", { table: match.table }) : "");
     tournamentCurrentMatchPanel.appendChild(banner);
 
     var board = document.createElement("div");
@@ -14656,6 +14775,28 @@
       appendEntrantIdentity(text, m.a, t);
       text.appendChild(document.createTextNode(" vs " + m.b));
       appendEntrantIdentity(text, m.b, t);
+      li.appendChild(tag);
+      li.appendChild(text);
+      if (t.tableCount > 1) {
+        var readyTableSelect = document.createElement("select");
+        readyTableSelect.className = "tournament-match-table-select";
+        var readyUnassignedOpt = document.createElement("option");
+        readyUnassignedOpt.value = "";
+        readyUnassignedOpt.textContent = T("tournament.tableUnassigned");
+        readyTableSelect.appendChild(readyUnassignedOpt);
+        for (var readyTableNum = 1; readyTableNum <= t.tableCount; readyTableNum++) {
+          var readyTableOpt = document.createElement("option");
+          readyTableOpt.value = String(readyTableNum);
+          readyTableOpt.textContent = T("tournament.tableOption", { table: readyTableNum });
+          if (m.table === readyTableNum) readyTableOpt.selected = true;
+          readyTableSelect.appendChild(readyTableOpt);
+        }
+        readyTableSelect.addEventListener("change", function () {
+          m.table = readyTableSelect.value ? parseInt(readyTableSelect.value, 10) : null;
+          saveTournamentToStorage(t);
+        });
+        li.appendChild(readyTableSelect);
+      }
       var btn = document.createElement("button");
       btn.type = "button";
       btn.className = "btn btn-primary";
@@ -14663,8 +14804,6 @@
       btn.addEventListener("click", function () {
         startTournamentMatch(m.id);
       });
-      li.appendChild(tag);
-      li.appendChild(text);
       li.appendChild(btn);
       tournamentReadyList.appendChild(li);
     });
