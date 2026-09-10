@@ -1441,6 +1441,15 @@
   var tournamentFormatInfoPendingRadio = null;
   var tournamentTeamsEnabledCheckbox = document.getElementById("tournament-teams-enabled-checkbox");
   var tournamentSelectAllCheckbox = document.getElementById("tournament-select-all-checkbox");
+  // Remembers exactly who was checked right before "Select All" was
+  // turned on, so turning it back off restores that instead of just
+  // clearing everyone - null whenever Select All isn't active. Declared
+  // here (not down by the rest of the Select All wiring) because
+  // renderTournamentPlayerChecklist, which also reads/resets this, is
+  // defined outside boot() - a variable declared inside boot() would be
+  // invisible to it regardless of call order, since closures resolve by
+  // where a function is lexically defined, not when it happens to run.
+  var tournamentSelectAllSnapshot = null;
   var tournamentPlayerChecklist = document.getElementById("tournament-player-checklist");
   var tournamentTeamOptionsDatalist = document.getElementById("tournament-team-options");
   var tournamentTeamPreview = document.getElementById("tournament-team-preview");
@@ -14926,11 +14935,8 @@
     return Array.prototype.slice.call(tournamentPlayerChecklist.querySelectorAll('input[type="checkbox"]'));
   }
 
-  // Remembers exactly who was checked right before "Select All" was
-  // turned on, so turning it back off restores that instead of just
-  // clearing everyone - null whenever Select All isn't active.
-  var tournamentSelectAllSnapshot = null;
-
+  // tournamentSelectAllSnapshot itself is declared up with the other
+  // top-level DOM refs, not here - see the comment there for why.
   tournamentSelectAllCheckbox.addEventListener("change", function () {
     var boxes = tournamentPlayerCheckboxes();
     if (tournamentSelectAllCheckbox.checked) {
