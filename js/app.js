@@ -13386,6 +13386,7 @@
   }
 
   function startTournament() {
+    lbTreeExpandedNodes = {};
     var grouped = getTournamentEntrants();
     var entrants = grouped.entrants;
     if (grouped.collidedTeamNames.length) {
@@ -13634,8 +13635,50 @@
   // exactly 2 children per node - a losers match never exists until both
   // of its feeders are known).
 
+  // How many LB-match levels deep (from whichever frontier match is
+  // currently the tree's root) stay expanded by default before folding
+  // into a "+" stub - since the root itself is always whatever match
+  // hasn't been consumed yet, this naturally slides forward as the
+  // bracket plays out: each new round becomes the new depth-0 root, so
+  // the round that used to be visible at the deepest level is exactly
+  // the one that now falls past the threshold and collapses. Keyed by
+  // match id so a manual expand survives this same match staying just
+  // past the threshold on the next render, but forgets once that match
+  // is no longer part of the tree at all (a fresh id per tournament, so
+  // nothing carries over to the next one).
+  var LB_TREE_VISIBLE_DEPTH = 3;
+  var lbTreeExpandedNodes = {};
+
   function isLosersMatch(match) {
     return typeof match.tag === "string" && match.tag.indexOf("Losers") === 0;
+  }
+
+  // How many further LB-only levels exist below this match (0 if none of
+  // its feeders are themselves LB matches) - used purely to word the
+  // collapsed stub ("2 earlier rounds" vs "1 earlier round").
+  function lbSubtreeDepth(match) {
+    var a = match.feederA && isLosersMatch(match.feederA) ? lbSubtreeDepth(match.feederA) + 1 : 0;
+    var b = match.feederB && isLosersMatch(match.feederB) ? lbSubtreeDepth(match.feederB) + 1 : 0;
+    return Math.max(a, b);
+  }
+
+  function renderLbCollapsedStub(match, extraRounds) {
+    var stub = document.createElement("button");
+    stub.type = "button";
+    stub.className = "wb-tree-card-wrap lb-tree-collapsed-stub wb-tree-leaf";
+    var plus = document.createElement("div");
+    plus.className = "lb-tree-collapsed-plus";
+    plus.textContent = "➕";
+    var label = document.createElement("div");
+    label.className = "lb-tree-collapsed-label";
+    label.textContent = T("tournament.lbTreeShowEarlier", { count: extraRounds + 1 });
+    stub.appendChild(plus);
+    stub.appendChild(label);
+    stub.addEventListener("click", function () {
+      lbTreeExpandedNodes[match.id] = true;
+      renderTournamentActive();
+    });
+    return stub;
   }
 
   // A losers-bracket match is still "in progress" (not yet the frontier)
@@ -13664,9 +13707,11 @@
   // own tree) or the winners-bracket match this side just dropped out
   // of - shown as a compact stub naming who dropped and from where,
   // rather than a full duplicate of a card the winners tree already
-  // shows in full elsewhere on the page.
-  function renderLbFeederNode(feeder, activeMatchId, t) {
-    if (isLosersMatch(feeder)) return renderLbTreeNode(feeder, activeMatchId, t);
+  // shows in full elsewhere on the page. depth counts LB-match levels
+  // from the current root, passed through to renderLbTreeNode so it can
+  // decide whether this feeder is still past the visible window.
+  function renderLbFeederNode(feeder, activeMatchId, t, depth) {
+    if (isLosersMatch(feeder)) return renderLbTreeNode(feeder, activeMatchId, t, depth);
     var stub = document.createElement("div");
     stub.className = "wb-tree-card-wrap lb-tree-wb-stub";
     var heading = document.createElement("div");
@@ -13681,7 +13726,10 @@
     return stub;
   }
 
-  function renderLbTreeNode(match, activeMatchId, t) {
+  function renderLbTreeNode(match, activeMatchId, t, depth) {
+    if (depth >= LB_TREE_VISIBLE_DEPTH && !lbTreeExpandedNodes[match.id]) {
+      return renderLbCollapsedStub(match, lbSubtreeDepth(match));
+    }
     var card = tournamentMatchCard(match, activeMatchId, t);
     var wrap = document.createElement("div");
     wrap.className = "wb-tree-card-wrap";
@@ -13696,8 +13744,8 @@
     }
     var childrenWrap = document.createElement("div");
     childrenWrap.className = "wb-tree-children";
-    if (match.feederA) childrenWrap.appendChild(renderLbFeederNode(match.feederA, activeMatchId, t));
-    if (match.feederB) childrenWrap.appendChild(renderLbFeederNode(match.feederB, activeMatchId, t));
+    if (match.feederA) childrenWrap.appendChild(renderLbFeederNode(match.feederA, activeMatchId, t, depth + 1));
+    if (match.feederB) childrenWrap.appendChild(renderLbFeederNode(match.feederB, activeMatchId, t, depth + 1));
     var node = document.createElement("div");
     node.className = "wb-tree-node";
     node.appendChild(childrenWrap);
@@ -13716,7 +13764,7 @@
       return;
     }
     roots.forEach(function (rootMatch) {
-      var root = renderLbTreeNode(rootMatch, activeMatchId, t);
+      var root = renderLbTreeNode(rootMatch, activeMatchId, t, 0);
       root.classList.add("wb-tree-root", "lb-tree-root");
       container.appendChild(root);
     });

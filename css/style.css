@@ -553,6 +553,15 @@ button:disabled {
   border-radius: var(--radius);
   padding: 16px;
   margin: 8px 16px;
+  /* #app is a column flexbox, so every panel is a flex item with a
+     default min-width of "auto" (i.e. its content's own min-content
+     width) - wide unconstrained content (like a many-round bracket
+     tree) can silently push the whole page wider than the viewport
+     that way, bypassing any overflow-x:auto set on something inside
+     the panel entirely, since the overflow never happens there in the
+     first place. This lets the panel actually shrink to the viewport,
+     so that inner scrolling can do its job. */
+  min-width: 0;
 }
 
 .panel h2 {
@@ -4048,6 +4057,39 @@ input[type="number"] {
 .lb-tree-wb-stub-name {
   font-size: 0.85rem;
   color: var(--text-dim);
+}
+
+/* The collapsed "+" placeholder standing in for however many earlier
+   rounds have scrolled past the visible window - a real <button> (not a
+   div) so it's focusable/clickable like everything else, with its
+   native button chrome reset back to match the rest of the tree. */
+.lb-tree-collapsed-stub {
+  justify-content: center;
+  align-items: center;
+  padding: 10px 8px;
+  border: 2px dashed var(--accent);
+  border-radius: 10px;
+  background: rgba(232, 185, 35, 0.08);
+  text-align: center;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.lb-tree-collapsed-stub:hover {
+  background: rgba(232, 185, 35, 0.18);
+}
+
+.lb-tree-collapsed-plus {
+  font-size: 1.3rem;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.lb-tree-collapsed-label {
+  font-size: 0.78rem;
+  color: var(--accent);
+  font-weight: 700;
 }
 
 .lb-tree-root + .lb-tree-root {
