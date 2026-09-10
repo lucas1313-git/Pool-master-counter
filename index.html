@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260910c">
+<link rel="stylesheet" href="css/style.css?v=20260910d">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -1035,28 +1035,40 @@
       <label class="wizard-format-option">
         <input type="radio" name="tournament-format" value="double" checked>
         <span data-i18n="tournament.formatDoubleShort">🥈 Double Elimination</span>
-        <button type="button" class="format-info-btn" data-info-target="tournament-format-text-double" data-i18n-aria-label="tournament.formatInfoAria" aria-label="More about this tournament format">❓</button>
+        <button type="button" class="format-info-btn" data-info-title="tournament-format-title-double" data-info-target="tournament-format-text-double" data-i18n-aria-label="tournament.formatInfoAria" aria-label="More about this tournament format">❓</button>
       </label>
       <label class="wizard-format-option">
         <input type="radio" name="tournament-format" value="single">
         <span data-i18n="tournament.formatSingleShort">🥇 Single Elimination</span>
-        <button type="button" class="format-info-btn" data-info-target="tournament-format-text-single" data-i18n-aria-label="tournament.formatInfoAria" aria-label="More about this tournament format">❓</button>
+        <button type="button" class="format-info-btn" data-info-title="tournament-format-title-single" data-info-target="tournament-format-text-single" data-i18n-aria-label="tournament.formatInfoAria" aria-label="More about this tournament format">❓</button>
       </label>
       <label class="wizard-format-option">
         <input type="radio" name="tournament-format" value="roundrobin">
         <span data-i18n="tournament.formatRoundRobinShort">🔄 Round Robin</span>
-        <button type="button" class="format-info-btn" data-info-target="tournament-format-text-roundrobin" data-i18n-aria-label="tournament.formatInfoAria" aria-label="More about this tournament format">❓</button>
+        <button type="button" class="format-info-btn" data-info-title="tournament-format-title-roundrobin" data-info-target="tournament-format-text-roundrobin" data-i18n-aria-label="tournament.formatInfoAria" aria-label="More about this tournament format">❓</button>
       </label>
       <label class="wizard-format-option">
         <input type="radio" name="tournament-format" value="swiss">
         <span data-i18n="tournament.formatSwissShort">🇨🇭 Swiss</span>
-        <button type="button" class="format-info-btn" data-info-target="tournament-format-text-swiss" data-i18n-aria-label="tournament.formatInfoAria" aria-label="More about this tournament format">❓</button>
+        <button type="button" class="format-info-btn" data-info-title="tournament-format-title-swiss" data-info-target="tournament-format-text-swiss" data-i18n-aria-label="tournament.formatInfoAria" aria-label="More about this tournament format">❓</button>
       </label>
     </div>
-    <span id="tournament-format-text-double" data-i18n="tournament.formatDouble" hidden>🥈 Double Elimination — Winners &amp; Losers Brackets: lose once, drop to the losers bracket for a second chance; lose twice and you're out. Fairer, takes longer.</span>
-    <span id="tournament-format-text-single" data-i18n="tournament.formatSingle" hidden>🥇 Single Elimination — Only Winners Advance: lose once and you're out. Fastest format, best for a quick knockout.</span>
-    <span id="tournament-format-text-roundrobin" data-i18n="tournament.formatRoundRobin" hidden>🔄 Round Robin — Everyone Plays Everyone: no elimination, every player faces every other player once, and whoever has the most match wins when it's all done is champion (ties share the win). Best for a casual group where everyone should get equal games in.</span>
-    <span id="tournament-format-text-swiss" data-i18n="tournament.formatSwiss" hidden>🇨🇭 Swiss — Paired by Record Each Round: no elimination, players are paired each round against others with a similar win count (never a rematch), for a fixed number of rounds. Most wins at the end is champion, ties share it. Good for a mid-size field that's too big for round robin.</span>
+    <span id="tournament-format-title-double" data-i18n="tournament.formatDoubleTitle" hidden>Double Elimination Tournament Format</span>
+    <span id="tournament-format-text-double" data-i18n="tournament.formatDouble" hidden>Winners &amp; Losers Brackets: lose once, drop to the losers bracket for a second chance; lose twice and you're out.
+
+Fairer than single elimination since one bad game doesn't end your tournament — but it takes longer to play out.</span>
+    <span id="tournament-format-title-single" data-i18n="tournament.formatSingleTitle" hidden>Single Elimination Tournament Format</span>
+    <span id="tournament-format-text-single" data-i18n="tournament.formatSingle" hidden>Only winners advance: lose once and you're out.
+
+The fastest format — best for a quick knockout when there isn't time for a longer event.</span>
+    <span id="tournament-format-title-roundrobin" data-i18n="tournament.formatRoundRobinTitle" hidden>Round Robin Tournament Format</span>
+    <span id="tournament-format-text-roundrobin" data-i18n="tournament.formatRoundRobin" hidden>No elimination — every player faces every other player once.
+
+Whoever has the most match wins when it's all done is champion (ties share the win). Best for a casual group where everyone should get equal games in.</span>
+    <span id="tournament-format-title-swiss" data-i18n="tournament.formatSwissTitle" hidden>Swiss Tournament Format</span>
+    <span id="tournament-format-text-swiss" data-i18n="tournament.formatSwiss" hidden>A proper non-elimination format where everyone plays a fixed number of rounds (e.g., 4 or 5), drawn each time against opponents with identical win-loss records.
+
+Once those scheduled rounds wrap up, whoever has bagged the most match victories takes the crown!</span>
 
     <h3 class="tournament-section-heading" data-i18n="tournament.gameSectionHeading">Game Type</h3>
     <div class="row">
@@ -1102,6 +1114,7 @@
 
   <div id="tournament-format-info-overlay" class="confirm-modal-overlay hidden">
     <div class="confirm-modal-card">
+      <h3 id="tournament-format-info-title" class="confirm-modal-title"></h3>
       <p id="tournament-format-info-body" class="confirm-modal-message"></p>
       <div class="confirm-modal-actions">
         <button type="button" id="btn-tournament-format-info-select" class="btn btn-primary" data-i18n="tournament.formatInfoConfirm">✅ Yes, this format</button>
@@ -1156,6 +1169,6 @@
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260910c"></script>
+<script src="js/app.js?v=20260910d"></script>
 </body>
 </html>

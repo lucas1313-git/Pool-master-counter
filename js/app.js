@@ -1433,6 +1433,7 @@
   var tournamentFairRaceCheckbox = document.getElementById("tournament-fair-race-checkbox");
   var tournamentSeedModeRadios = document.getElementsByName("tournament-seed-mode");
   var tournamentFormatInfoOverlay = document.getElementById("tournament-format-info-overlay");
+  var tournamentFormatInfoTitle = document.getElementById("tournament-format-info-title");
   var tournamentFormatInfoBody = document.getElementById("tournament-format-info-body");
   var btnTournamentFormatInfoSelect = document.getElementById("btn-tournament-format-info-select");
   var btnTournamentFormatInfoCancel = document.getElementById("btn-tournament-format-info-cancel");
@@ -14659,8 +14660,10 @@
       var label = btn.closest("label");
       var radio = label ? label.querySelector('input[type="radio"]') : null;
       var textEl = document.getElementById(btn.getAttribute("data-info-target"));
+      var titleEl = document.getElementById(btn.getAttribute("data-info-title"));
       if (!radio || !textEl) return;
       tournamentFormatInfoPendingRadio = radio;
+      tournamentFormatInfoTitle.textContent = titleEl ? titleEl.textContent : "";
       tournamentFormatInfoBody.textContent = textEl.textContent;
       tournamentFormatInfoOverlay.classList.remove("hidden");
     });

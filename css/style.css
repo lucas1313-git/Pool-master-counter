@@ -2375,6 +2375,12 @@ input[type="number"] {
   animation: milestone-pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
+.confirm-modal-title {
+  margin: 0 0 10px;
+  font-size: 1.15rem;
+  color: var(--accent);
+}
+
 .confirm-modal-message {
   margin: 0 0 20px;
   font-size: 1rem;
@@ -3780,7 +3786,6 @@ input[type="number"] {
 
 .format-info-btn {
   flex-shrink: 0;
-  margin-left: auto;
   width: 26px;
   height: 26px;
   border-radius: 50%;
@@ -3798,6 +3803,18 @@ input[type="number"] {
 .format-info-btn:hover {
   color: var(--text);
   border-color: var(--text-dim);
+}
+
+/* The shared `select { flex: 1 }` rule makes a dropdown greedily fill
+   whatever's left in its row - fine for a row that's just one select,
+   but here it stretches the Game picker across most of the panel's
+   width even though "Game" and "Target"/rack-count still need room
+   next to it, leaving an oddly sparse-looking row. Capped instead of
+   overriding the shared rule, so every other select in the app keeps
+   its current (wider, single-control-per-row) behavior. */
+#tournament-setup-panel select {
+  flex: 0 1 220px;
+  max-width: 220px;
 }
 
 .tournament-player-checklist {
