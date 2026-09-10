@@ -3777,16 +3777,22 @@ input[type="number"] {
 /* ---------- Elimination Tournament ---------- */
 
 /* Tournament Type and Game Type are narrow, self-contained option
-   groups with no real reason to stretch across the whole panel - a
-   single-column grid track auto-sizes to whichever of the two has the
-   wider content (so they match each other) and is then capped at 40% of
-   the viewport; anything that would still overflow that (e.g. a select)
-   shrinks to fit instead, handled by its own width rule below. Players
-   is deliberately its own section outside this grid - it needs room for
-   up to 4 player cards across, which is routinely wider than 40vw. */
+   groups with no real reason to stretch across the whole panel.
+   align-items: flex-start on a column flex container is what actually
+   does the "shrink to content, don't stretch to fill the row" job here
+   (a CSS Grid minmax(0, max-content) track was tried first, but
+   max-content sizing around a <select> is a known cross-browser soft
+   spot - this flex pattern has a much longer, more reliable track
+   record). Each section is then separately capped at 40% of the
+   viewport - they no longer force-match each other's width the way the
+   grid version aimed for, but they do reliably stop stretching, which
+   is the part that was actually broken. Players is deliberately its own
+   section below this one - it needs room for up to 4 player cards
+   across, which is routinely wider than 40vw. */
 .tournament-setup-narrow-sections {
-  display: grid;
-  grid-template-columns: minmax(0, min(max-content, 40vw));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 14px;
   margin-bottom: 14px;
 }
@@ -3796,6 +3802,8 @@ input[type="number"] {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 14px;
+  width: fit-content;
+  max-width: 40vw;
 }
 
 .tournament-setup-players-section {
