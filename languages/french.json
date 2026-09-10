@@ -581,7 +581,7 @@
   "tournament.tableLabel": "Table",
   "tournament.tableOption": "Table {{table}}",
   "tournament.tablePlayedOn": "Jouée sur la Table {{table}}",
-  "tournament.tableUnassigned": "— non assignée —",
+  "tournament.tableUnassigned": "Sélectionner une Table",
   "tournament.tapToFocus": "toucher pour afficher",
   "tournament.teamLabel": "Équipe",
   "tournament.teamNameConflictsWithPlayer": "Le(s) nom(s) d'équipe correspondant au nom d'un joueur ont été ignorés — joué en solo à la place : {{names}}",

@@ -581,7 +581,7 @@
   "tournament.tableLabel": "Table",
   "tournament.tableOption": "Table {{table}}",
   "tournament.tablePlayedOn": "Played on Table {{table}}",
-  "tournament.tableUnassigned": "— unassigned —",
+  "tournament.tableUnassigned": "Select Table",
   "tournament.tapToFocus": "tap to focus",
   "tournament.teamLabel": "Team",
   "tournament.teamNameConflictsWithPlayer": "Team name(s) matching a player's name were ignored — played solo instead: {{names}}",
