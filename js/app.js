@@ -1422,6 +1422,10 @@
   var btnContactSheetBack = document.getElementById("btn-contact-sheet-back");
   var btnContactSheetSelectAll = document.getElementById("btn-contact-sheet-select-all");
   var btnContactSheetImportRosters = document.getElementById("btn-contact-sheet-import-rosters");
+  var btnContactSheetImportJson = document.getElementById("btn-contact-sheet-import-json");
+  var contactSheetImportJsonFileInput = document.getElementById("contact-sheet-import-json-file-input");
+  var btnContactSheetExportJson = document.getElementById("btn-contact-sheet-export-json");
+  var btnContactSheetVcard = document.getElementById("btn-contact-sheet-vcard");
   var btnContactSheetEmail = document.getElementById("btn-contact-sheet-email");
   var btnContactSheetSms = document.getElementById("btn-contact-sheet-sms");
   var contactSheetSelectedSummary = document.getElementById("contact-sheet-selected-summary");
@@ -12428,9 +12432,20 @@
   }
 
   // Builds a mailto:/sms: compose link for whichever selected contacts
-  // actually have that channel filled in - silently skipping (not
-  // blocking on) anyone selected who doesn't, since some of the group
-  // missing a phone number shouldn't stop texting the ones who have one.
+  // actually have that channel filled in - not blocking on anyone
+  // selected who doesn't, since some of the group missing a phone
+  // number shouldn't stop texting the ones who have one, but naming
+  // exactly who got left out instead of silently dropping them, so a
+  // shorter-than-expected group is never a surprise.
+  //
+  // SMS specifically also copies the full number list to the clipboard
+  // before opening Messages: `sms:` with several comma-separated
+  // recipients is genuinely unreliable handed off from a WKWebView (an
+  // iOS/WKWebView quirk, not something fixable in the URL itself) - it
+  // often only pre-fills the first one or two. The copied list is the
+  // fallback for pasting in the rest by hand when that happens. mailto:
+  // doesn't have this problem (every mail client handles a real
+  // comma-separated recipient list correctly), so email skips it.
   function composeToSelectedContacts(method) {
     var names = Object.keys(contactSheetSelected).filter(function (n) {
       return contactSheetSelected[n];
@@ -12439,10 +12454,29 @@
       var c = getPlayerContact(n);
       return method === "sms" ? !!c.phone : !!c.email;
     });
+    var skipped = names.filter(function (n) {
+      return withChannel.indexOf(n) === -1;
+    });
     if (!withChannel.length) {
       showToast(T(method === "sms" ? "contactSheet.noPhonesSelected" : "contactSheet.noEmailsSelected"));
       return;
     }
+    var toastParts = [];
+    if (skipped.length) {
+      toastParts.push(T(method === "sms" ? "contactSheet.skippedNoPhone" : "contactSheet.skippedNoEmail", { names: skipped.join(", ") }));
+    }
+    if (method === "sms") {
+      var rawNumbers = withChannel
+        .map(function (n) {
+          return getPlayerContact(n).phone;
+        })
+        .join(", ");
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(rawNumbers);
+      }
+      toastParts.push(T("contactSheet.smsNumbersCopied"));
+    }
+    if (toastParts.length) showToast(toastParts.join(" "));
     var to = withChannel
       .map(function (n) {
         var c = getPlayerContact(n);
@@ -12450,6 +12484,150 @@
       })
       .join(",");
     window.location.href = (method === "sms" ? "sms:" : "mailto:") + to;
+  }
+
+  // Flexible parser for a contacts JSON import: accepts our own export
+  // shape (name -> {email, phone, nickname, ...}, as produced by
+  // exportContactsToJson) or a plain array of {name, email, phone,
+  // nickname} objects (easier to hand-write or produce from another
+  // source) - whichever one a given file turns out to be.
+  function normalizeImportedContactsPayload(data) {
+    var result = {};
+    if (Array.isArray(data)) {
+      data.forEach(function (entry) {
+        if (!entry || typeof entry !== "object" || !entry.name) return;
+        var name = capitalizeName(String(entry.name).trim());
+        if (!name) return;
+        result[name] = {
+          email: entry.email || "",
+          phone: entry.phone || "",
+          nickname: entry.nickname || "",
+          reportOptIn: !!entry.reportOptIn,
+          notifyMethod: entry.notifyMethod || "email",
+          updatedAt: entry.updatedAt || 0
+        };
+      });
+    } else if (data && typeof data === "object") {
+      Object.keys(data).forEach(function (rawName) {
+        var entry = data[rawName];
+        if (!entry || typeof entry !== "object") return;
+        var name = capitalizeName(String(rawName).trim());
+        if (!name) return;
+        result[name] = {
+          email: entry.email || "",
+          phone: entry.phone || "",
+          nickname: entry.nickname || "",
+          reportOptIn: !!entry.reportOptIn,
+          notifyMethod: entry.notifyMethod || "email",
+          updatedAt: entry.updatedAt || 0
+        };
+      });
+    }
+    return result;
+  }
+
+  // Reads a user-picked JSON file and merges it into PLAYER_CONTACTS via
+  // the same recency-aware mergeContactsData used for a full-backup
+  // restore, so an import from a file follows the exact same "whichever
+  // side was actually edited more recently wins" rule - an imported
+  // record with no updatedAt of its own (e.g. hand-written) counts as
+  // timestamp 0, so it only fills in names this device doesn't already
+  // have real contact info for.
+  function importContactsJsonFile(file) {
+    var reader = new FileReader();
+    reader.onload = function () {
+      var data;
+      try {
+        data = JSON.parse(reader.result);
+      } catch (e) {
+        alertModal(T("alert.notValidJson"));
+        return;
+      }
+      var imported = normalizeImportedContactsPayload(data);
+      var importedCount = Object.keys(imported).length;
+      if (!importedCount) {
+        alertModal(T("contactSheet.noValidContactsInFile"));
+        return;
+      }
+      var before = Object.keys(PLAYER_CONTACTS).length;
+      PLAYER_CONTACTS = mergeContactsData(PLAYER_CONTACTS, imported);
+      saveContactsToStorage(PLAYER_CONTACTS);
+      var added = Object.keys(PLAYER_CONTACTS).length - before;
+      renderContactSheetPage();
+      showToast(T("contactSheet.importedJsonToast", { count: importedCount, added: added }));
+    };
+    reader.onerror = function () {
+      alertModal(T("alert.notValidJson"));
+    };
+    reader.readAsText(file);
+  }
+
+  // A friendly, hand-editable export mirroring exportRosterLists - the
+  // exact shape normalizeImportedContactsPayload reads back in, so
+  // exporting from one device and importing on another round-trips
+  // losslessly (recency stamps included, so a re-import later resolves
+  // conflicts exactly like a real merge would).
+  function exportContactsToJson() {
+    downloadJSON("pool-master-counter-contacts-" + todayDateStr() + ".json", PLAYER_CONTACTS);
+  }
+
+  // Escapes the characters vCard (RFC 6350) requires escaped inside a
+  // field value - backslash first, so it doesn't double-escape the ones
+  // added right after it.
+  function vCardEscape(value) {
+    return String(value || "")
+      .replace(/\\/g, "\\\\")
+      .replace(/\n/g, "\\n")
+      .replace(/,/g, "\\,")
+      .replace(/;/g, "\\;");
+  }
+
+  // Builds one multi-contact .vcf (vCard 3.0) file from every given
+  // name that has at least an email or phone - the standard format
+  // iOS/macOS Contacts, Google Contacts, Outlook, etc. all know how to
+  // import directly, either via the "Add to Contacts" option in the
+  // share sheet this gets handed to, or by opening the saved file.
+  function buildVCard(names) {
+    return names
+      .map(function (name) {
+        var c = getPlayerContact(name);
+        var lines = ["BEGIN:VCARD", "VERSION:3.0", "FN:" + vCardEscape(name), "N:" + vCardEscape(name) + ";;;;"];
+        if (c.nickname) lines.push("NICKNAME:" + vCardEscape(c.nickname));
+        if (c.email) lines.push("EMAIL;TYPE=INTERNET:" + vCardEscape(c.email));
+        if (c.phone) lines.push("TEL;TYPE=CELL:" + vCardEscape(c.phone));
+        lines.push("NOTE:Pool Master Counter player");
+        lines.push("END:VCARD");
+        return lines.join("\r\n");
+      })
+      .join("\r\n");
+  }
+
+  // Exports the selected players (or, with nothing checked, every known
+  // player who has an email or phone on file) as a vCard, handed to the
+  // OS share sheet so "Add to Contacts" is one tap away - falls back to
+  // a plain file download (still a real, importable .vcf) wherever the
+  // Web Share API file support isn't there.
+  function exportSelectedToAddressBook() {
+    var selected = Object.keys(contactSheetSelected).filter(function (n) {
+      return contactSheetSelected[n];
+    });
+    var names = (selected.length ? selected : contactSheetAllNames()).filter(function (n) {
+      var c = getPlayerContact(n);
+      return !!(c.email || c.phone);
+    });
+    if (!names.length) {
+      showToast(T("contactSheet.noContactsToExport"));
+      return;
+    }
+    var file = new File([buildVCard(names)], "pool-master-counter-contacts.vcf", { type: "text/vcard" });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file], title: T("contactSheet.exportAddressBook") }).catch(function (err) {
+        if (err && err.name === "AbortError") return;
+        downloadFileObject(file);
+      });
+    } else {
+      downloadFileObject(file);
+    }
   }
 
   // ---------------------------------------------------------------------
@@ -15273,6 +15451,16 @@
     renderContactSheetPage();
   });
   btnContactSheetImportRosters.addEventListener("click", importRosterNamesIntoContacts);
+  btnContactSheetImportJson.addEventListener("click", function () {
+    contactSheetImportJsonFileInput.click();
+  });
+  contactSheetImportJsonFileInput.addEventListener("change", function () {
+    var file = contactSheetImportJsonFileInput.files && contactSheetImportJsonFileInput.files[0];
+    contactSheetImportJsonFileInput.value = "";
+    if (file) importContactsJsonFile(file);
+  });
+  btnContactSheetExportJson.addEventListener("click", exportContactsToJson);
+  btnContactSheetVcard.addEventListener("click", exportSelectedToAddressBook);
   btnContactSheetEmail.addEventListener("click", function () {
     composeToSelectedContacts("email");
   });

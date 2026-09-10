@@ -1034,10 +1034,18 @@
       <button type="button" id="btn-contact-sheet-select-all" class="btn btn-ghost" data-i18n="contactSheet.selectAll">✅ Select All</button>
       <button type="button" id="btn-contact-sheet-import-rosters" class="btn btn-ghost" data-i18n="contactSheet.importRosters">📥 Import Names From Past Player Lists</button>
     </div>
+    <div class="row">
+      <button type="button" id="btn-contact-sheet-import-json" class="btn btn-ghost" data-i18n="contactSheet.importJson">📥 Import Contacts From JSON</button>
+      <button type="button" id="btn-contact-sheet-export-json" class="btn btn-ghost" data-i18n="contactSheet.exportJson">📤 Export Contacts To JSON</button>
+      <input type="file" id="contact-sheet-import-json-file-input" accept="application/json" class="hidden">
+    </div>
     <p id="contact-sheet-selected-summary" class="player-stats-note"></p>
     <div class="row">
       <button type="button" id="btn-contact-sheet-email" class="btn btn-primary" data-i18n="contactSheet.emailSelected">✉️ Email Selected</button>
       <button type="button" id="btn-contact-sheet-sms" class="btn btn-primary" data-i18n="contactSheet.smsSelected">💬 Text Selected</button>
+    </div>
+    <div class="row">
+      <button type="button" id="btn-contact-sheet-vcard" class="btn btn-primary" data-i18n="contactSheet.exportAddressBook">📇 Export to Address Book</button>
     </div>
   </section>
 
@@ -1216,6 +1224,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260910l"></script>
+<script src="js/app.js?v=20260910m"></script>
 </body>
 </html>
