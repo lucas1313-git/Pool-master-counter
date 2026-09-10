@@ -13220,7 +13220,7 @@
       grandFinal: [],
       champion: null,
       activeMatches: [],
-      focusedTable: null
+      focusedTable: "all"
     };
     advanceBracket(t);
     return t;
@@ -13251,7 +13251,7 @@
       grandFinal: [],
       champion: null,
       activeMatches: [],
-      focusedTable: null
+      focusedTable: "all"
     };
     advanceBracket(t);
     return t;
@@ -13287,7 +13287,7 @@
       champion: null,
       championNames: null,
       activeMatches: [],
-      focusedTable: null
+      focusedTable: "all"
     };
   }
 
@@ -13327,7 +13327,7 @@
       champion: null,
       championNames: null,
       activeMatches: [],
-      focusedTable: null
+      focusedTable: "all"
     };
     t.rounds.push(pairSwissRound(t));
     return t;
@@ -14122,6 +14122,15 @@
           tableDoneLabel.textContent = T("tournament.tablePlayedOn", { table: match.table });
           div.appendChild(tableDoneLabel);
         }
+      } else if (isActive) {
+        // Locked once the game's actually underway - reassigning a
+        // table mid-match is exactly the "wait, which table is this
+        // again" confusion a table picker exists to prevent, not
+        // something it should ever let happen.
+        var tableLockedLabel = document.createElement("div");
+        tableLockedLabel.className = "tournament-match-table-played";
+        tableLockedLabel.textContent = T("tournament.tableOption", { table: match.table });
+        div.appendChild(tableLockedLabel);
       } else {
         var tableRow = document.createElement("label");
         tableRow.className = "tournament-match-table-row";
@@ -14467,7 +14476,10 @@
       active.raceToB = targets.b;
     }
     t.activeMatches.push(active);
-    t.focusedTable = table;
+    // "All Tables" by default - the whole point of seeing every live
+    // table is that starting one more of them shouldn't quietly narrow
+    // the view down to just it.
+    t.focusedTable = "all";
     saveTournamentToStorage(t);
     renderTournamentActive();
     // Tapping Play can happen from anywhere on a long bracket page (the
@@ -14524,12 +14536,10 @@
         }
         var finishedIdx = t.activeMatches.indexOf(active);
         if (finishedIdx !== -1) t.activeMatches.splice(finishedIdx, 1);
-        // Hand focus to whichever other table still has a game going,
-        // if any - never leave focus pointed at the table that just
-        // finished.
-        if (t.focusedTable === active.table) {
-          t.focusedTable = t.activeMatches.length ? t.activeMatches[0].table : null;
-        }
+        // Back to seeing every table once one of them just wrapped up -
+        // never leave focus silently pointed at a table that no longer
+        // has a game running.
+        if (t.focusedTable === active.table) t.focusedTable = "all";
         saveTournamentToStorage(t);
         renderTournamentPage();
         showTournamentMatchWinPopup(t, match, name);
@@ -14614,25 +14624,39 @@
   // Single-table events never have more than one entry in
   // t.activeMatches, so this collapses back to exactly the old
   // one-board-only behavior for them.
+  // t.focusedTable now holds either a table number or the literal
+  // string "all" - "all" is the default the moment there's more than
+  // one table live (so a newly-started second match doesn't silently
+  // vanish behind whichever table happened to be focused already), and
+  // it's what a table's own game finishing falls back to as well.
+  // There's deliberately no way to switch which board you're looking
+  // at except this dropdown - not by tapping a board, since a stray tap
+  // switching away mid-game was exactly the confusion this was meant to
+  // avoid.
   function renderTournamentActiveMatch() {
     var t = TOURNAMENT;
     tournamentCurrentMatchPanel.innerHTML = "";
     if (!t || !t.activeMatches.length) return;
-    if (!t.activeMatches.some(function (a) { return a.table === t.focusedTable; })) {
-      t.focusedTable = t.activeMatches[0].table;
-    }
     var sorted = t.activeMatches.slice().sort(function (a, b) {
       return a.table - b.table;
     });
+    if (t.focusedTable !== "all" && !sorted.some(function (a) { return a.table === t.focusedTable; })) {
+      t.focusedTable = "all";
+    }
 
     if (sorted.length > 1) {
       var focusRow = document.createElement("div");
       focusRow.className = "row tournament-table-focus-row";
       var focusLabel = document.createElement("label");
       focusLabel.setAttribute("for", "tournament-table-focus-select");
-      focusLabel.textContent = T("tournament.focusTable");
+      focusLabel.textContent = T("tournament.selectTableLabel");
       var focusSelect = document.createElement("select");
       focusSelect.id = "tournament-table-focus-select";
+      var allOpt = document.createElement("option");
+      allOpt.value = "all";
+      allOpt.textContent = T("tournament.seeAllTables");
+      if (t.focusedTable === "all") allOpt.selected = true;
+      focusSelect.appendChild(allOpt);
       sorted.forEach(function (active) {
         var m = findBracketMatchById(t, active.matchId);
         var opt = document.createElement("option");
@@ -14642,7 +14666,7 @@
         focusSelect.appendChild(opt);
       });
       focusSelect.addEventListener("change", function () {
-        t.focusedTable = parseInt(focusSelect.value, 10);
+        t.focusedTable = focusSelect.value === "all" ? "all" : parseInt(focusSelect.value, 10);
         saveTournamentToStorage(t);
         renderTournamentActiveMatch();
       });
@@ -14651,59 +14675,43 @@
       tournamentCurrentMatchPanel.appendChild(focusRow);
     }
 
-    var stack = document.createElement("div");
-    stack.className = "tournament-live-boards-stack";
-    var peekDepth = 0;
-    // Focused board renders last (on top in DOM/paint order too, not
-    // just via z-index) so its own box-shadow isn't drawn over by a
-    // peek card that happens to follow it.
-    var focused = null;
-    sorted.forEach(function (active) {
-      if (active.table === t.focusedTable) {
-        focused = active;
-        return;
-      }
-      stack.appendChild(buildTournamentFloatingBoard(active, t, false, ++peekDepth));
+    var toShow = t.focusedTable === "all" ? sorted : sorted.filter(function (a) {
+      return a.table === t.focusedTable;
     });
-    if (focused) stack.appendChild(buildTournamentFloatingBoard(focused, t, true, 0));
+    var stack = document.createElement("div");
+    stack.className = "tournament-live-boards-stack" + (toShow.length > 1 ? " is-stacked" : "");
+    toShow.forEach(function (active, idx) {
+      stack.appendChild(buildTournamentFloatingBoard(active, t, idx));
+    });
     tournamentCurrentMatchPanel.appendChild(stack);
   }
 
-  function buildTournamentFloatingBoard(active, t, isFocused, peekDepth) {
+  function buildTournamentFloatingBoard(active, t, stackIndex) {
     var match = findBracketMatchById(t, active.matchId);
     var cardWrap = document.createElement("div");
-    cardWrap.className = "tournament-floating-board" + (isFocused ? " is-focused" : "");
+    cardWrap.className = "tournament-floating-board";
     if (!match) return cardWrap;
-    if (!isFocused) {
-      cardWrap.style.setProperty("--stack-depth", String(peekDepth));
-      cardWrap.setAttribute("role", "button");
-      cardWrap.setAttribute("tabindex", "0");
-      cardWrap.addEventListener("click", function () {
-        t.focusedTable = active.table;
-        saveTournamentToStorage(t);
-        renderTournamentActiveMatch();
-      });
-    }
+    cardWrap.style.setProperty("--stack-index", String(stackIndex));
 
     var gameType = GAME_TYPES[t.gameType];
     var banner = document.createElement("div");
     banner.className = "now-playing-banner tournament-now-playing";
-    banner.textContent =
-      gameType.label + " — " + match.tag + (t.tableCount > 1 ? " — " + T("tournament.tableOption", { table: active.table }) : "");
+    // [Table number] [player vs player] [round] [game type], in that
+    // order - table number only shown at all once there's more than
+    // one to distinguish.
+    var headerParts = [];
+    if (t.tableCount > 1) headerParts.push(T("tournament.tableOption", { table: active.table }));
+    headerParts.push(match.a + " vs " + match.b);
+    headerParts.push(matchRoundLabel(t, match));
+    headerParts.push(gameType.label);
+    banner.textContent = headerParts.join(" — ");
     cardWrap.appendChild(banner);
 
-    if (isFocused) {
-      var board = document.createElement("div");
-      board.className = "scoreboard";
-      board.appendChild(buildTournamentSidePanel(match.a, "a", active.aBalls, active.aWins, t, active));
-      board.appendChild(buildTournamentSidePanel(match.b, "b", active.bBalls, active.bWins, t, active));
-      cardWrap.appendChild(board);
-    } else {
-      var peek = document.createElement("div");
-      peek.className = "tournament-floating-board-peek";
-      peek.textContent = match.a + " (" + active.aWins + ") " + T("common.wins") + " — " + match.b + " (" + active.bWins + ") " + T("common.wins") + " — " + T("tournament.tapToFocus");
-      cardWrap.appendChild(peek);
-    }
+    var board = document.createElement("div");
+    board.className = "scoreboard";
+    board.appendChild(buildTournamentSidePanel(match.a, "a", active.aBalls, active.aWins, t, active));
+    board.appendChild(buildTournamentSidePanel(match.b, "b", active.bBalls, active.bWins, t, active));
+    cardWrap.appendChild(board);
     return cardWrap;
   }
 
