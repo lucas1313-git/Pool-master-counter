@@ -50,6 +50,25 @@
   // anyway (no completed games, ever).
   var quickCounterMode = false;
 
+  // Paywall/IAP scaffolding — Apple requires purchasable digital content
+  // to go through StoreKit, which only exists inside a real native app
+  // container (Capacitor injects `Capacitor` into the page only when
+  // running natively, e.g. wrapped for the App Store — it's simply
+  // undefined on the plain web/PWA version). So the gate below only ever
+  // activates on native; the free web app is completely unaffected.
+  // `proUnlocked`/`adUnlockedThisSession` start false and are only ever
+  // set true after a real (StoreKit Testing, for now) purchase/restore or
+  // a completed fake-ad view — see requireProOrShowPaywall.
+  // No bundler here (plain <script> tags), so the @capacitor/core npm
+  // helpers (registerPlugin, etc.) were never loaded onto the page - only
+  // the native-injected window.Capacitor bridge object itself is
+  // available, which exposes registered plugins directly as
+  // Capacitor.Plugins.<jsName> (each method already returns a Promise).
+  var IS_NATIVE = typeof Capacitor !== "undefined" && !!(Capacitor.isNativePlatform && Capacitor.isNativePlatform());
+  var Purchases = IS_NATIVE && Capacitor.Plugins ? Capacitor.Plugins.Purchases : null;
+  var proUnlocked = false;
+  var adUnlockedThisSession = false;
+
   // Self-healing pass for names saved before capitalization was enforced
   // everywhere (or from a device/import that predates it): fixes casing in
   // place on state.players and every gameHistory entry's winner/opponent/
@@ -144,14 +163,23 @@
   // Generic chevron collapse/expand for any element carrying the
   // .collapsible-panel class — a panel, or (for Focus Mode) a smaller
   // in-scoreboard block. Reused by every collapsible section on the page.
+  // The one-line summary (id="<panelElId>-summary") sits outside the
+  // toggle <button> as a plain sibling <p> - a <p> isn't valid inside a
+  // <button>, so it can't just be moved in - but while collapsed it's
+  // the only other visible part of the panel, so it gets the same click
+  // handler too: together the button and the summary line are the
+  // entire folded area, and both now toggle it, not just the heading row.
   function wireCollapsiblePanel(panelElId, buttonElId) {
     var panel = document.getElementById(panelElId);
     var btn = document.getElementById(buttonElId);
-    btn.addEventListener("click", function () {
+    var summary = document.getElementById(panelElId + "-summary");
+    function toggle() {
       var willExpand = panel.classList.contains("collapsed");
       panel.classList.toggle("collapsed");
       btn.setAttribute("aria-expanded", willExpand ? "true" : "false");
-    });
+    }
+    btn.addEventListener("click", toggle);
+    if (summary && summary.tagName === "P") summary.addEventListener("click", toggle);
   }
 
   // Updates the one-line "what's inside" sentence shown only while a
@@ -280,6 +308,23 @@
     return defaultState();
   }
 
+  // Auto-archives the Colorful Report (see computeReportImageData, which
+  // already archives its result as a side effect) once the app has sat
+  // idle for an hour after the last real action. A debounced one-shot
+  // timer rather than a periodic poll - rescheduled on every saveState()
+  // call - fires as close as possible to exactly one hour after the LAST
+  // save, which needs no extra "last activity" bookkeeping and minimizes
+  // (though can't fully eliminate, since computeDayReportData always
+  // reads "today" regardless of what date string it's given) the case
+  // where that hour crosses midnight.
+  var idleReportTimer = null;
+  function scheduleIdleReportAutoSave() {
+    if (idleReportTimer) clearTimeout(idleReportTimer);
+    idleReportTimer = setTimeout(function () {
+      if (state.gameHistory.length > 0) computeReportImageData(todayDateStr());
+    }, 60 * 60 * 1000);
+  }
+
   function saveState() {
     if (noStatsMode) return;
     try {
@@ -287,6 +332,7 @@
     } catch (e) {
       console.warn("Could not save state.", e);
     }
+    scheduleIdleReportAutoSave();
   }
 
   function getPlayer(id) {
@@ -1237,9 +1283,12 @@
 
   var btnExportAllData = document.getElementById("btn-export-all-data");
   var btnImportAllData = document.getElementById("btn-import-all-data");
+  var btnExportSync = document.getElementById("btn-export-sync");
+  var syncStatusLine = document.getElementById("sync-status-line");
   var importFileInput = document.getElementById("import-file-input");
   var btnResetAllPlayerStats = document.getElementById("btn-reset-all-player-stats");
   var btnResetRosterLists = document.getElementById("btn-reset-roster-lists");
+  var btnFullReset = document.getElementById("btn-full-reset");
   var backupPanel = document.getElementById("backup-panel");
   var btnToggleBackupPanel = document.getElementById("btn-toggle-backup-panel");
 
@@ -1256,6 +1305,7 @@
   var rosterLoadSelect = document.getElementById("roster-load-select");
   var btnRosterLoad = document.getElementById("btn-roster-load");
   var btnExportRosterLists = document.getElementById("btn-export-roster-lists");
+  var btnExportRosterListsCsv = document.getElementById("btn-export-roster-lists-csv");
   var btnImportRosterLists = document.getElementById("btn-import-roster-lists");
   var importRosterListsFileInput = document.getElementById("import-roster-lists-file-input");
 
@@ -1341,12 +1391,15 @@
   var playerPageHistoryList = document.getElementById("player-page-history-list");
   var btnPlayerPageBack = document.getElementById("btn-player-page-back");
   var btnPlayerPageExport = document.getElementById("btn-player-page-export");
+  var btnPlayerPageCsv = document.getElementById("btn-player-page-csv");
   var btnPlayerPageReset = document.getElementById("btn-player-page-reset");
   var playerPagePeriodFilter = document.getElementById("player-page-period-filter");
   var playerPageGraphBody = document.getElementById("player-page-graph-body");
   var playerPagePeriodButtons = playerPagePeriodFilter.querySelectorAll(".period-btn");
   var playerPageSynopsisBody = document.getElementById("player-page-synopsis-body");
   var playerPageH2hList = document.getElementById("player-page-h2h-list");
+  var playerPageTeamsList = document.getElementById("player-page-teams-list");
+  var playerPageAchievementsList = document.getElementById("player-page-achievements-list");
   var btnReturnToGlobalStats = document.getElementById("btn-return-to-global-stats");
   var playerPageSwitcher = document.getElementById("player-page-switcher");
 
@@ -1357,6 +1410,7 @@
   var allPlayersPeriodSelect = document.getElementById("all-players-period");
   var btnToggleAllPlayersView = document.getElementById("btn-toggle-all-players-view");
   var btnToggleRosterFilter = document.getElementById("btn-toggle-roster-filter");
+  var btnAllPlayersCsv = document.getElementById("btn-all-players-csv");
   var allPlayersList = document.getElementById("all-players-list");
   var allPlayersViewMode = "bars";
   var allPlayersRosterOnly = false;
@@ -1369,16 +1423,39 @@
   var tournamentFormatRadios = document.getElementsByName("tournament-format");
   var tournamentWbSection = document.getElementById("tournament-wb-section");
   var tournamentLbSection = document.getElementById("tournament-lb-section");
-  var tournamentGfSection = document.getElementById("tournament-gf-section");
+  var tournamentTimelineEl = document.getElementById("tournament-timeline");
   var tournamentRrSection = document.getElementById("tournament-rr-section");
+  var tournamentSwissSection = document.getElementById("tournament-swiss-section");
   var tournamentGameTypeSelect = document.getElementById("tournament-game-type");
   var tournamentTargetInput = document.getElementById("tournament-target");
   var tournamentTargetUnit = document.getElementById("tournament-target-unit");
   var tournamentRaceToInput = document.getElementById("tournament-race-to");
   var tournamentFairRaceCheckbox = document.getElementById("tournament-fair-race-checkbox");
+  var btnFairRaceInfo = document.getElementById("btn-fair-race-info");
+  var tournamentSeedModeRadios = document.getElementsByName("tournament-seed-mode");
+  var tournamentFormatInfoOverlay = document.getElementById("tournament-format-info-overlay");
+  var tournamentFormatInfoTitle = document.getElementById("tournament-format-info-title");
+  var tournamentFormatInfoBody = document.getElementById("tournament-format-info-body");
+  var btnTournamentFormatInfoSelect = document.getElementById("btn-tournament-format-info-select");
+  var btnTournamentFormatInfoCancel = document.getElementById("btn-tournament-format-info-cancel");
+  var tournamentFormatInfoPendingRadio = null;
+  var tournamentTeamsEnabledCheckbox = document.getElementById("tournament-teams-enabled-checkbox");
+  var tournamentSelectAllCheckbox = document.getElementById("tournament-select-all-checkbox");
+  // Remembers exactly who was checked right before "Select All" was
+  // turned on, so turning it back off restores that instead of just
+  // clearing everyone - null whenever Select All isn't active. Declared
+  // here (not down by the rest of the Select All wiring) because
+  // renderTournamentPlayerChecklist, which also reads/resets this, is
+  // defined outside boot() - a variable declared inside boot() would be
+  // invisible to it regardless of call order, since closures resolve by
+  // where a function is lexically defined, not when it happens to run.
+  var tournamentSelectAllSnapshot = null;
   var tournamentPlayerChecklist = document.getElementById("tournament-player-checklist");
+  var tournamentTeamOptionsDatalist = document.getElementById("tournament-team-options");
+  var tournamentTeamPreview = document.getElementById("tournament-team-preview");
   var btnTournamentStart = document.getElementById("btn-tournament-start");
   var btnTournamentAbandon = document.getElementById("btn-tournament-abandon");
+  var btnTournamentPrint = document.getElementById("btn-tournament-print");
   var tournamentChampionBanner = document.getElementById("tournament-champion-banner");
   var tournamentCurrentMatchPanel = document.getElementById("tournament-current-match-panel");
   var tournamentReadyList = document.getElementById("tournament-ready-list");
@@ -1387,6 +1464,8 @@
   var tournamentGfEl = document.getElementById("tournament-gf");
   var tournamentRrStandingsEl = document.getElementById("tournament-rr-standings");
   var tournamentRrMatchesEl = document.getElementById("tournament-rr-matches");
+  var tournamentSwissStandingsEl = document.getElementById("tournament-swiss-standings");
+  var tournamentSwissMatchesEl = document.getElementById("tournament-swiss-matches");
 
   var gameTypeSelect = document.getElementById("game-type");
   var gameTargetInput = document.getElementById("game-target");
@@ -1434,7 +1513,12 @@
   var btnDayReportEmail = document.getElementById("btn-day-report-email");
   var btnDayReportSms = document.getElementById("btn-day-report-sms");
   var btnDayReportShareBackup = document.getElementById("btn-day-report-share-backup");
+  var btnDayReportCsv = document.getElementById("btn-day-report-csv");
+  var btnDayReportPrint = document.getElementById("btn-day-report-print");
+  var dayReportPrintView = document.getElementById("day-report-print-view");
+  var btnDayReportColorful = document.getElementById("btn-day-report-colorful");
   var dayReportAttachBackupCheckbox = document.getElementById("day-report-attach-backup-checkbox");
+  var dayReportAttachColorfulCheckbox = document.getElementById("day-report-attach-colorful-checkbox");
   var dayReportRecipientsLine = document.getElementById("day-report-recipients-line");
 
   var milestoneOverlay = document.getElementById("milestone-overlay");
@@ -1442,6 +1526,11 @@
   var milestoneDetails = document.getElementById("milestone-details");
   var btnMilestoneClose = document.getElementById("btn-milestone-close");
   var btnMilestoneUndo = document.getElementById("btn-milestone-undo");
+  var tournamentMatchWinOverlay = document.getElementById("tournament-match-win-overlay");
+  var tournamentMatchWinEmoji = document.getElementById("tournament-match-win-emoji");
+  var tournamentMatchWinHeadline = document.getElementById("tournament-match-win-headline");
+  var tournamentMatchWinSubtext = document.getElementById("tournament-match-win-subtext");
+  var btnTournamentMatchWinClose = document.getElementById("btn-tournament-match-win-close");
 
   var gamewinOverlay = document.getElementById("gamewin-overlay");
   var gamewinMessage = document.getElementById("gamewin-message");
@@ -1498,6 +1587,8 @@
   var playerConflictList = document.getElementById("player-conflict-list");
   var btnPlayerConflictContinue = document.getElementById("btn-player-conflict-continue");
 
+  var reportArchiveList = document.getElementById("report-archive-list");
+
   var recoverDataList = document.getElementById("recover-data-list");
   var btnRecoverImportFile = document.getElementById("btn-recover-import-file");
   var recoverImportFileInput = document.getElementById("recover-import-file-input");
@@ -1531,6 +1622,14 @@
 
   var confirmModalOnConfirm = null;
   var confirmModalOnCancel = null;
+
+  var paywallModalOverlay = document.getElementById("paywall-modal-overlay");
+  var btnPaywallUnlock = document.getElementById("btn-paywall-unlock");
+  var btnPaywallWatchAd = document.getElementById("btn-paywall-watch-ad");
+  var btnPaywallRestore = document.getElementById("btn-paywall-restore");
+  var btnPaywallCancel = document.getElementById("btn-paywall-cancel");
+  var fakeAdModalOverlay = document.getElementById("fake-ad-modal-overlay");
+  var fakeAdModalMessage = document.getElementById("fake-ad-modal-message");
 
   function closeConfirmModal() {
     confirmModalOverlay.classList.add("hidden");
@@ -1614,6 +1713,124 @@
       (btnConfirmModalCancel.classList.contains("hidden") ? btnConfirmModalOk : btnConfirmModalCancel).click();
     }
   });
+
+  // ---------------------------------------------------------------------
+  // Paywall scaffolding — native-only (see IS_NATIVE above). Gates a
+  // feature behind either a real (StoreKit Testing, for now) purchase or
+  // a fake rewarded-ad view, so the purchase/restore/ad mechanics can be
+  // tested end to end before any real pricing/feature decisions are made.
+  // ---------------------------------------------------------------------
+
+  var proPriceDisplay = null;
+  var paywallPendingCallback = null;
+
+  // Gate a feature behind Pro: runs onUnlocked immediately when there's
+  // nothing to gate (web) or it's already unlocked (purchased, restored,
+  // or this session's one fake-ad view already redeemed); otherwise shows
+  // the paywall and holds onUnlocked until the user unlocks one way or
+  // another (or just cancels, in which case nothing runs).
+  function requireProOrShowPaywall(onUnlocked) {
+    if (!IS_NATIVE || proUnlocked || adUnlockedThisSession) {
+      onUnlocked();
+      return;
+    }
+    openPaywallModal(onUnlocked);
+  }
+
+  function openPaywallModal(onUnlocked) {
+    paywallPendingCallback = onUnlocked;
+    btnPaywallUnlock.textContent = T("paywall.unlockButton", { price: proPriceDisplay || "…" });
+    paywallModalOverlay.classList.remove("hidden");
+  }
+
+  function closePaywallModal() {
+    paywallModalOverlay.classList.add("hidden");
+  }
+
+  function runPaywallPendingCallback() {
+    var cb = paywallPendingCallback;
+    paywallPendingCallback = null;
+    if (cb) cb();
+  }
+
+  btnPaywallUnlock.addEventListener("click", function () {
+    if (!Purchases) return;
+    Purchases.purchasePro()
+      .then(function (result) {
+        if (result && result.unlocked) {
+          proUnlocked = true;
+          closePaywallModal();
+          showToast(T("paywall.unlockedToast"));
+          runPaywallPendingCallback();
+        }
+        // Cancelled/pending: leave the paywall open so the user can pick
+        // a different option instead of silently doing nothing.
+      })
+      .catch(function () {
+        showToast(T("paywall.purchaseFailed"));
+      });
+  });
+
+  btnPaywallRestore.addEventListener("click", function () {
+    if (!Purchases) return;
+    Purchases.restorePurchases()
+      .then(function (result) {
+        if (result && result.unlocked) {
+          proUnlocked = true;
+          closePaywallModal();
+          showToast(T("paywall.unlockedToast"));
+          runPaywallPendingCallback();
+        } else {
+          showToast(T("paywall.purchaseFailed"));
+        }
+      })
+      .catch(function () {
+        showToast(T("paywall.purchaseFailed"));
+      });
+  });
+
+  btnPaywallWatchAd.addEventListener("click", function () {
+    closePaywallModal();
+    playFakeRewardedAd(function () {
+      adUnlockedThisSession = true;
+      runPaywallPendingCallback();
+    });
+  });
+
+  btnPaywallCancel.addEventListener("click", function () {
+    paywallPendingCallback = null;
+    closePaywallModal();
+  });
+
+  paywallModalOverlay.addEventListener("click", function (e) {
+    if (e.target !== paywallModalOverlay) return;
+    paywallPendingCallback = null;
+    closePaywallModal();
+  });
+
+  // A scripted "ad" with no real ad network involved - a countdown, then
+  // a completion message, then onDone. Standing in for a real rewarded-ad
+  // SDK (choosing one, App Tracking Transparency, privacy manifest
+  // updates) until that's a separate, deliberate decision.
+  function playFakeRewardedAd(onDone) {
+    fakeAdModalMessage.textContent = T("paywall.adPlaying");
+    fakeAdModalOverlay.classList.remove("hidden");
+    var remaining = 3;
+    var tick = function () {
+      if (remaining <= 0) {
+        fakeAdModalMessage.textContent = T("paywall.adCompleteToast");
+        setTimeout(function () {
+          fakeAdModalOverlay.classList.add("hidden");
+          onDone();
+        }, 900);
+        return;
+      }
+      fakeAdModalMessage.textContent = T("paywall.adPlaying") + " " + remaining + "…";
+      remaining -= 1;
+      setTimeout(tick, 1000);
+    };
+    tick();
+  }
 
   function isTypingIntoField(el) {
     if (!el) return false;
@@ -1812,6 +2029,7 @@
     updateDayNotesSummary();
     updateDayReportRecipientsLine();
     renderRecoverDataList();
+    renderReportArchiveList();
   }
 
   // A rotation entry is { gameType, target, unit } — its own rule, not
@@ -4343,6 +4561,7 @@
     if (format === "single") return "Single Elimination";
     if (format === "double") return "Double Elimination";
     if (format === "roundrobin") return "Round Robin";
+    if (format === "swiss") return "Swiss";
     return "Tournament";
   }
 
@@ -4782,6 +5001,901 @@
     return lines.join("\n");
   }
 
+  function printReportSectionHeading(text) {
+    var h = document.createElement("h2");
+    h.textContent = text;
+    return h;
+  }
+
+  // A genuinely new render path, not a retrofit of the plain-text builders
+  // above - the day report has no on-screen DOM anywhere else in the app
+  // (buildDayReportText* only ever produce strings for clipboard/email/sms),
+  // so this is the one place a printed page has real HTML - a real <table>
+  // for the leaderboard instead of the monospace ASCII grid the "Table"
+  // text format uses, since a browser's print layout doesn't need a
+  // fixed-width font to keep columns aligned.
+  function renderDayReportPrintView(dateStr) {
+    var data = computeDayReportData(dateStr);
+    dayReportPrintView.innerHTML = "";
+
+    var title = document.createElement("h1");
+    title.textContent = "🎱 Pool Master Counter — Day Report";
+    dayReportPrintView.appendChild(title);
+
+    var dateHeading = document.createElement("p");
+    dateHeading.className = "print-report-date";
+    dateHeading.textContent = formatReportDateHeading(dateStr);
+    dayReportPrintView.appendChild(dateHeading);
+
+    if (data.players.length === 0 && data.tournaments.length === 0) {
+      var empty = document.createElement("p");
+      empty.textContent = "No games recorded today.";
+      dayReportPrintView.appendChild(empty);
+    } else {
+      if (data.players.length) {
+        dayReportPrintView.appendChild(printReportSectionHeading("Players Today"));
+        var table = document.createElement("table");
+        table.className = "print-report-table";
+        var thead = document.createElement("thead");
+        var headRow = document.createElement("tr");
+        ["Player", "Wins", "Losses", "Rating", "Rating Change"].forEach(function (h) {
+          var th = document.createElement("th");
+          th.textContent = h;
+          headRow.appendChild(th);
+        });
+        thead.appendChild(headRow);
+        table.appendChild(thead);
+        var tbody = document.createElement("tbody");
+        data.players.forEach(function (p) {
+          var row = document.createElement("tr");
+          [p.name, p.wins, p.losses, p.rating, formatReportRatingDelta(p.ratingDelta)].forEach(function (value) {
+            var td = document.createElement("td");
+            td.textContent = value;
+            row.appendChild(td);
+          });
+          tbody.appendChild(row);
+        });
+        table.appendChild(tbody);
+        dayReportPrintView.appendChild(table);
+      }
+
+      if (data.raceWins.length || data.tournaments.length) {
+        dayReportPrintView.appendChild(printReportSectionHeading("Tournaments"));
+        var tournList = document.createElement("ul");
+        data.raceWins.forEach(function (g) {
+          var li = document.createElement("li");
+          li.textContent = formatReportRaceWinLine(g);
+          tournList.appendChild(li);
+        });
+        data.tournaments.forEach(function (t) {
+          var li = document.createElement("li");
+          li.textContent = formatReportTournamentLine(t);
+          tournList.appendChild(li);
+        });
+        dayReportPrintView.appendChild(tournList);
+      }
+
+      if (data.games.length > 0) {
+        dayReportPrintView.appendChild(printReportSectionHeading("Game Details"));
+        var gamesList = document.createElement("ul");
+        groupReportGames(data.games).forEach(function (g) {
+          var li = document.createElement("li");
+          li.textContent = formatReportGameGroupLine(g);
+          gamesList.appendChild(li);
+        });
+        dayReportPrintView.appendChild(gamesList);
+      }
+    }
+
+    var notes = dayNotesTextarea.value;
+    if (notes) {
+      dayReportPrintView.appendChild(printReportSectionHeading("Notes"));
+      var notesP = document.createElement("p");
+      notesP.className = "print-report-notes";
+      notesP.textContent = notes;
+      dayReportPrintView.appendChild(notesP);
+    }
+  }
+
+  function escapeHtmlForReport(value) {
+    var map = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+    return String(value === null || value === undefined ? "" : value).replace(/[&<>"']/g, function (ch) {
+      return map[ch];
+    });
+  }
+
+  // Reads this device's own currently-active theme (one of the 10 in
+  // css/style.css) straight off :root's computed custom properties, so
+  // the standalone colorful report always matches whatever look the app
+  // itself has right now - no separate palette to keep in sync by hand.
+  function readReportThemeTokens() {
+    var style = getComputedStyle(document.documentElement);
+    var names = [
+      "--bg", "--bg-panel", "--bg-card", "--felt", "--felt-light", "--accent", "--accent-dark",
+      "--danger", "--danger-dark", "--info", "--info-dark", "--text", "--text-dim", "--border",
+      "--bg-glow", "--on-accent", "--on-felt-light", "--font-family"
+    ];
+    var tokens = {};
+    names.forEach(function (name) {
+      tokens[name] = style.getPropertyValue(name).trim();
+    });
+    return tokens;
+  }
+
+  // A genuinely designed, colorful standalone report - a real HTML
+  // document (self-contained, no external fonts/scripts, so it still
+  // opens correctly saved to disk or emailed with no connection) meant
+  // to be viewed and shared, not printed. Built entirely separately from
+  // renderDayReportPrintView above (which is deliberately plain/ink-
+  // conscious for paper) and buildDayReportCsv (bare data, no styling
+  // possible in a spreadsheet) - three different jobs, three different
+  // builders, all sharing the same computeDayReportData source.
+  // Single source of truth for the colorful report's content, consumed by
+  // both buildDayReportColorfulHtml (the viewable page) and
+  // buildDayReportImageBlob (the native PNG used when sharing straight
+  // from the main app) - one pass over computeDayReportData, plain data
+  // only, no HTML/canvas concerns here.
+  function computeReportImageData(dateStr) {
+    var data = computeDayReportData(dateStr);
+    var tokens = readReportThemeTokens();
+
+    var longDate;
+    try {
+      longDate = new Date(dateStr + "T00:00:00").toLocaleDateString(undefined, {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric"
+      });
+    } catch (e) {
+      longDate = formatReportDateHeading(dateStr);
+    }
+
+    var maxWins =
+      data.players.reduce(function (m, p) {
+        return Math.max(m, p.wins);
+      }, 0) || 1;
+    var rankMedals = ["🥇", "🥈", "🥉"];
+
+    var players = data.players.map(function (p, i) {
+      var barPct = Math.round((p.wins / maxWins) * 100);
+      var deltaClass = p.ratingDelta > 0 ? "up" : p.ratingDelta < 0 ? "down" : "flat";
+      return {
+        medal: rankMedals[i] || i + 1 + ".",
+        name: p.name,
+        rating: p.rating,
+        deltaText: formatReportRatingDelta(p.ratingDelta),
+        deltaClass: deltaClass,
+        wins: p.wins,
+        losses: p.losses,
+        barPct: barPct
+      };
+    });
+
+    var highlights = [];
+    data.raceWins.forEach(function (g) {
+      var names = joinNamesForReport(((g.winnerNames && g.winnerNames.length ? g.winnerNames : g.teammateNames) || []));
+      highlights.push("🏆 " + names + " won the Race to " + g.raceTarget + " session!");
+    });
+    data.tournaments.forEach(function (t) {
+      var champs = joinNamesForReport(t.championNames || []);
+      highlights.push("👑 " + champs + " won the " + tournamentFormatLabel(t.format) + " tournament (" + (t.players || []).length + " players)");
+    });
+
+    var games = groupReportGames(data.games).map(function (g) {
+      var winners = joinNamesForReport(g.winnerNames || []);
+      var losers = joinNamesForReport(g.opponentNames || []);
+      var countText = g.count > 1 ? " ×" + g.count : "";
+      var label = g.gameLabel + countText;
+      var plainResult = losers ? winners + " def. " + losers : winners + " won";
+      var skunkText = g.skunkCount > 0 ? " 🦨×" + g.skunkCount : "";
+      return {
+        time: formatReportGameTime(g.ts),
+        winners: winners,
+        losers: losers,
+        label: label,
+        skunkCount: g.skunkCount,
+        // Flat plain-text form for the canvas renderer, which can't draw
+        // the HTML view's bolded-winner markup - built once here so both
+        // consumers agree on the exact wording.
+        desc: plainResult + " · " + label + skunkText
+      };
+    });
+
+    var result = {
+      dateStr: dateStr,
+      longDate: longDate,
+      generatedAt: formatTimestamp(new Date().toISOString(), true),
+      tokens: tokens,
+      players: players,
+      highlights: highlights,
+      games: games,
+      notes: dayNotesTextarea.value || null
+    };
+    archiveDayReport(result);
+    return result;
+  }
+
+  function buildDayReportColorfulHtml(dateStr) {
+    return buildDayReportColorfulHtmlFromData(computeReportImageData(dateStr));
+  }
+
+  function buildDayReportColorfulHtmlFromData(reportImageData) {
+    var tokens = reportImageData.tokens;
+    var rootVars = Object.keys(tokens)
+      .map(function (k) {
+        return k + ": " + (tokens[k] || "") + ";";
+      })
+      .join(" ");
+
+    var leaderboardHtml = reportImageData.players
+      .map(function (p) {
+        return (
+          '<div class="player-card">' +
+          '<div class="rank">' + p.medal + "</div>" +
+          '<div class="card-main">' +
+          '<div class="card-top">' +
+          '<span class="name">' + escapeHtmlForReport(p.name) + "</span>" +
+          '<span class="rating">' + p.rating + ' <span class="delta ' + p.deltaClass + '">' + escapeHtmlForReport(p.deltaText) + "</span></span>" +
+          "</div>" +
+          '<div class="record"><span class="win">' + p.wins + 'W</span> · <span class="loss">' + p.losses + "L</span></div>" +
+          '<div class="bar-track"><div class="bar-fill" style="width:' + p.barPct + '%"></div></div>' +
+          "</div>" +
+          "</div>"
+        );
+      })
+      .join("");
+
+    var highlightsHtml = reportImageData.highlights
+      .map(function (line) {
+        return '<div class="highlight-card">' + escapeHtmlForReport(line) + "</div>";
+      })
+      .join("");
+
+    var gamesHtml = reportImageData.games
+      .map(function (g) {
+        var resultHtml = g.losers
+          ? "<strong>" + escapeHtmlForReport(g.winners) + "</strong> def. " + escapeHtmlForReport(g.losers)
+          : "<strong>" + escapeHtmlForReport(g.winners) + "</strong> won";
+        var skunkHtml = g.skunkCount > 0 ? ' <span class="skunk-badge">🦨×' + g.skunkCount + "</span>" : "";
+        return (
+          '<div class="game-row">' +
+          '<span class="time">' + escapeHtmlForReport(g.time) + "</span>" +
+          '<span class="desc">' + resultHtml + " · " + escapeHtmlForReport(g.label) + skunkHtml + "</span>" +
+          "</div>"
+        );
+      })
+      .join("");
+
+    var notesHtml = reportImageData.notes
+      ? '<div class="section"><h2>Notes</h2><div class="notes-card">' + escapeHtmlForReport(reportImageData.notes) + "</div></div>"
+      : "";
+
+    return (
+      "<!DOCTYPE html>\n" +
+      '<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">' +
+      "<title>Pool Master Counter — " + escapeHtmlForReport(formatReportDateHeading(reportImageData.dateStr)) + "</title>" +
+      "<style>" +
+      ":root { " + rootVars + " }" +
+      "* { box-sizing: border-box; }" +
+      "body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font-family); }" +
+      ".wrap { max-width: 720px; margin: 0 auto; padding: 32px 20px 64px; }" +
+      ".hero { background: linear-gradient(135deg, var(--felt), var(--felt-light)); border-radius: 20px; padding: 32px 28px; text-align: center; box-shadow: 0 12px 32px rgba(0,0,0,.35); }" +
+      ".hero h1 { margin: 0; font-size: 1.7rem; }" +
+      ".hero .date { margin-top: 8px; font-size: 1.05rem; opacity: .9; }" +
+      ".hero .tagline { margin-top: 14px; font-style: italic; opacity: .65; font-size: .9rem; }" +
+      ".section { margin-top: 32px; }" +
+      ".section h2 { font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; color: var(--text-dim); margin: 0 0 14px; }" +
+      ".leaderboard { display: flex; flex-direction: column; gap: 10px; }" +
+      ".player-card { display: flex; align-items: center; gap: 14px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; }" +
+      ".player-card .rank { font-size: 1.3rem; width: 30px; flex-shrink: 0; text-align: center; }" +
+      ".player-card .card-main { flex: 1; min-width: 0; }" +
+      ".player-card .card-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }" +
+      ".player-card .name { font-weight: 700; font-size: 1.02rem; }" +
+      ".player-card .rating { font-variant-numeric: tabular-nums; font-size: .85rem; background: var(--bg-panel); padding: 2px 9px; border-radius: 999px; flex-shrink: 0; }" +
+      ".player-card .delta.up { color: var(--accent); }" +
+      ".player-card .delta.down { color: var(--danger); }" +
+      ".player-card .delta.flat { color: var(--text-dim); }" +
+      ".player-card .record { margin-top: 4px; font-size: .88rem; font-variant-numeric: tabular-nums; color: var(--text-dim); }" +
+      ".player-card .win { color: var(--accent); font-weight: 700; }" +
+      ".player-card .loss { color: var(--danger); font-weight: 700; }" +
+      ".bar-track { margin-top: 8px; height: 6px; background: var(--bg-panel); border-radius: 4px; overflow: hidden; }" +
+      ".bar-fill { height: 100%; background: var(--accent); }" +
+      ".highlight-card { background: linear-gradient(135deg, var(--accent-dark), var(--accent)); color: var(--on-accent); border-radius: 14px; padding: 14px 18px; margin-bottom: 10px; font-weight: 600; }" +
+      ".highlight-card:last-child { margin-bottom: 0; }" +
+      ".game-log { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }" +
+      ".game-row { display: flex; gap: 14px; padding: 11px 16px; border-bottom: 1px solid var(--border); font-size: .9rem; }" +
+      ".game-row:last-child { border-bottom: none; }" +
+      ".game-row .time { color: var(--text-dim); font-variant-numeric: tabular-nums; width: 66px; flex-shrink: 0; }" +
+      ".skunk-badge { color: var(--info); }" +
+      ".notes-card { background: var(--bg-card); border-left: 4px solid var(--accent); border-radius: 8px; padding: 16px 18px; font-style: italic; white-space: pre-wrap; }" +
+      ".empty-note { color: var(--text-dim); font-style: italic; }" +
+      "footer { margin-top: 40px; text-align: center; color: var(--text-dim); font-size: .78rem; }" +
+      ".toolbar { display: flex; justify-content: flex-end; margin-bottom: 14px; }" +
+      ".share-btn { display: inline-flex; align-items: center; gap: 6px; background: var(--bg-card); color: var(--text); border: 1px solid var(--border); border-radius: 999px; padding: 8px 18px; font-size: .85rem; font-family: inherit; cursor: pointer; }" +
+      ".share-btn:hover { border-color: var(--accent); color: var(--accent); }" +
+      "@media print { .toolbar { display: none; } }" +
+      "</style></head><body><div class=\"wrap\">" +
+      '<div class="toolbar"><button type="button" class="share-btn" id="shareReportBtn">📤 Share</button></div>' +
+      '<div class="hero"><h1>🎱 Pool Master Counter</h1><div class="date">' +
+      escapeHtmlForReport(reportImageData.longDate) +
+      '</div><div class="tagline">Don\'t get cocky!</div></div>' +
+      (reportImageData.players.length
+        ? '<div class="section"><h2>Leaderboard</h2><div class="leaderboard">' + leaderboardHtml + "</div></div>"
+        : '<div class="section"><p class="empty-note">No games recorded today.</p></div>') +
+      (highlightsHtml ? '<div class="section"><h2>Highlights</h2>' + highlightsHtml + "</div>" : "") +
+      (gamesHtml ? '<div class="section"><h2>Game Log</h2><div class="game-log">' + gamesHtml + "</div></div>" : "") +
+      notesHtml +
+      "<footer>Generated " + escapeHtmlForReport(reportImageData.generatedAt) + " · Pool Master Counter</footer>" +
+      "</div>" +
+      buildColorfulReportShareScript(reportImageData) +
+      "</body></html>"
+    );
+  }
+
+  function reportCanvasRoundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  function reportCanvasWrapText(ctx, text, maxWidth) {
+    var words = text.split(/\s+/);
+    var lines = [];
+    var current = "";
+    words.forEach(function (word) {
+      var test = current ? current + " " + word : word;
+      if (ctx.measureText(test).width > maxWidth && current) {
+        lines.push(current);
+        current = word;
+      } else {
+        current = test;
+      }
+    });
+    if (current) lines.push(current);
+    return lines;
+  }
+
+  function reportCanvasTruncate(ctx, text, maxWidth) {
+    if (ctx.measureText(text).width <= maxWidth) return text;
+    var t = text;
+    while (t.length > 1 && ctx.measureText(t + "…").width > maxWidth) {
+      t = t.slice(0, -1);
+    }
+    return t + "…";
+  }
+
+  // The native counterpart to buildColorfulReportShareScript's embedded
+  // canvas renderer below - same layout/drawing logic, written as real JS
+  // instead of a string, since this one runs directly in the main app
+  // (used when the "Attach colorful report image" checkbox is on) rather
+  // than inside the standalone report tab, which has no access back here.
+  function buildReportCanvasFromData(reportData) {
+    var tokens = reportData.tokens;
+    function tok(name, fallback) {
+      return tokens[name] || fallback;
+    }
+    var font = tok("--font-family", "sans-serif");
+    var W = 680,
+      PAD = 28,
+      CW = W - PAD * 2,
+      SCALE = 2;
+    var HERO_H = 128,
+      SECTION_GAP = 30,
+      LABEL_H = 26,
+      PLAYER_ROW_H = 78,
+      PLAYER_GAP = 10;
+    var HIGHLIGHT_ROW_H = 40,
+      HIGHLIGHT_GAP = 8,
+      GAME_ROW_H = 30,
+      NOTES_LINE_H = 20,
+      NOTES_PAD = 18,
+      FOOTER_H = 56;
+
+    var measureCanvas = document.createElement("canvas");
+    var mctx = measureCanvas.getContext("2d");
+    var notesLines = [];
+    if (reportData.notes) {
+      mctx.font = "italic 14px " + font;
+      notesLines = reportCanvasWrapText(mctx, reportData.notes, CW - 36);
+    }
+
+    var hasPlayers = reportData.players.length > 0;
+    var y = HERO_H;
+    if (hasPlayers) {
+      y += SECTION_GAP + LABEL_H + reportData.players.length * PLAYER_ROW_H;
+    } else {
+      y += SECTION_GAP + 30;
+    }
+    if (reportData.highlights.length) {
+      y += SECTION_GAP + LABEL_H + reportData.highlights.length * HIGHLIGHT_ROW_H;
+    }
+    var logH = 0;
+    if (reportData.games.length) {
+      logH = reportData.games.length * GAME_ROW_H + 16;
+      y += SECTION_GAP + LABEL_H + logH;
+    }
+    var notesCardH = 0;
+    if (reportData.notes) {
+      notesCardH = NOTES_PAD * 2 + notesLines.length * NOTES_LINE_H;
+      y += SECTION_GAP + LABEL_H + notesCardH;
+    }
+    y += FOOTER_H;
+
+    var canvas = document.createElement("canvas");
+    canvas.width = W * SCALE;
+    canvas.height = y * SCALE;
+    var ctx = canvas.getContext("2d");
+    ctx.scale(SCALE, SCALE);
+
+    ctx.fillStyle = tok("--bg", "#1a0a0a");
+    ctx.fillRect(0, 0, W, y);
+
+    var grad = ctx.createLinearGradient(0, 0, W, HERO_H);
+    grad.addColorStop(0, tok("--felt", "#5c0f14"));
+    grad.addColorStop(1, tok("--felt-light", "#8a1a1f"));
+    ctx.fillStyle = grad;
+    reportCanvasRoundRect(ctx, PAD, 0, CW, HERO_H, 18);
+    ctx.fill();
+    ctx.fillStyle = tok("--text", "#f6efe9");
+    ctx.textAlign = "center";
+    ctx.font = "bold 24px " + font;
+    ctx.fillText("🎱 Pool Master Counter", W / 2, 48);
+    ctx.font = "16px " + font;
+    ctx.globalAlpha = 0.9;
+    ctx.fillText(reportData.longDate, W / 2, 76);
+    ctx.globalAlpha = 0.65;
+    ctx.font = "italic 13px " + font;
+    ctx.fillText("Don’t get cocky!", W / 2, 100);
+    ctx.globalAlpha = 1;
+    ctx.textAlign = "left";
+
+    var cy = HERO_H + SECTION_GAP;
+
+    function drawLabel(text) {
+      ctx.fillStyle = tok("--text-dim", "#c9a2a2");
+      ctx.font = "bold 12px " + font;
+      ctx.fillText(text.toUpperCase(), PAD, cy + 12);
+      cy += LABEL_H;
+    }
+
+    if (hasPlayers) {
+      drawLabel("Leaderboard");
+      reportData.players.forEach(function (p) {
+        var cardY = cy,
+          cardH = PLAYER_ROW_H - PLAYER_GAP;
+        ctx.fillStyle = tok("--bg-card", "#2e1414");
+        reportCanvasRoundRect(ctx, PAD, cardY, CW, cardH, 12);
+        ctx.fill();
+        ctx.strokeStyle = tok("--border", "#4a1e1e");
+        ctx.lineWidth = 1;
+        reportCanvasRoundRect(ctx, PAD, cardY, CW, cardH, 12);
+        ctx.stroke();
+
+        ctx.fillStyle = tok("--text", "#f6efe9");
+        ctx.font = "20px " + font;
+        ctx.textAlign = "center";
+        ctx.fillText(p.medal, PAD + 26, cardY + 34);
+        ctx.textAlign = "left";
+
+        var contentX = PAD + 54,
+          contentW = CW - 54 - 18;
+        ctx.font = "bold 15px " + font;
+        ctx.fillStyle = tok("--text", "#f6efe9");
+        ctx.fillText(reportCanvasTruncate(ctx, p.name, contentW - 90), contentX, cardY + 22);
+
+        ctx.font = "13px " + font;
+        ctx.textAlign = "right";
+        var deltaColor = p.deltaClass === "up" ? tok("--accent", "#e8b923") : p.deltaClass === "down" ? tok("--danger", "#ff5252") : tok("--text-dim", "#c9a2a2");
+        ctx.fillStyle = deltaColor;
+        ctx.fillText(p.deltaText, PAD + CW - 18, cardY + 22);
+        var deltaW = ctx.measureText(p.deltaText).width;
+        ctx.fillStyle = tok("--text-dim", "#c9a2a2");
+        ctx.fillText(p.rating + "  ", PAD + CW - 18 - deltaW, cardY + 22);
+        ctx.textAlign = "left";
+
+        ctx.font = "13px " + font;
+        ctx.fillStyle = tok("--accent", "#e8b923");
+        var winsText = p.wins + "W";
+        ctx.fillText(winsText, contentX, cardY + 42);
+        var winsW = ctx.measureText(winsText).width;
+        ctx.fillStyle = tok("--text-dim", "#c9a2a2");
+        ctx.fillText(" · ", contentX + winsW, cardY + 42);
+        var sepW = ctx.measureText(" · ").width;
+        ctx.fillStyle = tok("--danger", "#ff5252");
+        ctx.fillText(p.losses + "L", contentX + winsW + sepW, cardY + 42);
+
+        var barY = cardY + 54,
+          barW = contentW;
+        ctx.fillStyle = tok("--bg-panel", "#241010");
+        reportCanvasRoundRect(ctx, contentX, barY, barW, 5, 3);
+        ctx.fill();
+        ctx.fillStyle = tok("--accent", "#e8b923");
+        var fillW = Math.max(4, (barW * p.barPct) / 100);
+        reportCanvasRoundRect(ctx, contentX, barY, fillW, 5, 3);
+        ctx.fill();
+
+        cy += PLAYER_ROW_H;
+      });
+    } else {
+      ctx.fillStyle = tok("--text-dim", "#c9a2a2");
+      ctx.font = "italic 14px " + font;
+      ctx.fillText("No games recorded today.", PAD, cy + 14);
+      cy += 30;
+    }
+
+    if (reportData.highlights.length) {
+      cy += SECTION_GAP - PLAYER_GAP;
+      drawLabel("Highlights");
+      reportData.highlights.forEach(function (line) {
+        var g = ctx.createLinearGradient(PAD, cy, PAD + CW, cy);
+        g.addColorStop(0, tok("--accent-dark", "#b8890f"));
+        g.addColorStop(1, tok("--accent", "#e8b923"));
+        ctx.fillStyle = g;
+        reportCanvasRoundRect(ctx, PAD, cy, CW, HIGHLIGHT_ROW_H - HIGHLIGHT_GAP, 12);
+        ctx.fill();
+        ctx.fillStyle = tok("--on-accent", "#241a00");
+        ctx.font = "bold 13px " + font;
+        ctx.fillText(reportCanvasTruncate(ctx, line, CW - 32), PAD + 16, cy + 21);
+        cy += HIGHLIGHT_ROW_H;
+      });
+    }
+
+    if (reportData.games.length) {
+      cy += SECTION_GAP - HIGHLIGHT_GAP;
+      drawLabel("Game Log");
+      ctx.fillStyle = tok("--bg-card", "#2e1414");
+      reportCanvasRoundRect(ctx, PAD, cy, CW, logH, 12);
+      ctx.fill();
+      ctx.strokeStyle = tok("--border", "#4a1e1e");
+      reportCanvasRoundRect(ctx, PAD, cy, CW, logH, 12);
+      ctx.stroke();
+      var rowY = cy + 8;
+      reportData.games.forEach(function (g, i) {
+        ctx.font = "12px " + font;
+        ctx.fillStyle = tok("--text-dim", "#c9a2a2");
+        ctx.fillText(g.time, PAD + 16, rowY + 20);
+        ctx.font = "13px " + font;
+        ctx.fillStyle = g.skunkCount > 0 ? tok("--info", "#5aa9e6") : tok("--text", "#f6efe9");
+        ctx.fillText(reportCanvasTruncate(ctx, g.desc, CW - 100), PAD + 78, rowY + 20);
+        if (i < reportData.games.length - 1) {
+          ctx.strokeStyle = tok("--border", "#4a1e1e");
+          ctx.beginPath();
+          ctx.moveTo(PAD + 16, rowY + GAME_ROW_H - 4);
+          ctx.lineTo(PAD + CW - 16, rowY + GAME_ROW_H - 4);
+          ctx.stroke();
+        }
+        rowY += GAME_ROW_H;
+      });
+      cy += logH;
+    }
+
+    if (reportData.notes) {
+      cy += SECTION_GAP;
+      drawLabel("Notes");
+      ctx.fillStyle = tok("--bg-card", "#2e1414");
+      reportCanvasRoundRect(ctx, PAD, cy, CW, notesCardH, 8);
+      ctx.fill();
+      ctx.fillStyle = tok("--accent", "#e8b923");
+      ctx.fillRect(PAD, cy, 4, notesCardH);
+      ctx.fillStyle = tok("--text", "#f6efe9");
+      ctx.font = "italic 14px " + font;
+      var ny = cy + NOTES_PAD + 12;
+      notesLines.forEach(function (line) {
+        ctx.fillText(line, PAD + 18, ny);
+        ny += NOTES_LINE_H;
+      });
+      cy += notesCardH;
+    }
+
+    ctx.textAlign = "center";
+    ctx.font = "11px " + font;
+    ctx.fillStyle = tok("--text-dim", "#c9a2a2");
+    ctx.fillText("Generated " + reportData.generatedAt + " · Pool Master Counter", W / 2, cy + 32);
+    ctx.textAlign = "left";
+
+    return canvas;
+  }
+
+  // Promise<Blob|null> - resolves null (rather than rejecting) on any
+  // drawing failure, so a caller building a share-attachment list can
+  // just skip a null entry instead of needing its own try/catch.
+  function buildDayReportImageBlob(dateStr) {
+    return buildDayReportImageBlobFromData(computeReportImageData(dateStr));
+  }
+
+  function buildDayReportImageBlobFromData(reportImageData) {
+    return new Promise(function (resolve) {
+      try {
+        var canvas = buildReportCanvasFromData(reportImageData);
+        canvas.toBlob(function (blob) {
+          resolve(blob || null);
+        }, "image/png");
+      } catch (e) {
+        console.warn("Could not build colorful report image.", e);
+        resolve(null);
+      }
+    });
+  }
+
+  // The report is a fully separate document once opened (its own tab, its
+  // own JS context) - it has no access back to this app's functions, so it
+  // needs its own copy of the canShare({files})-first, download-fallback
+  // pattern shareReportWithAttachments uses above. Sharing the raw
+  // .html file turned out to be a dead end in practice: Messages on Mac has
+  // no preview for an .html attachment, so it just shows a generic gray
+  // file box - not useful to the person receiving it. This instead draws
+  // the same leaderboard/highlights/game-log/notes as a real PNG image on
+  // an offscreen <canvas> (plain 2D drawing, not a DOM screenshot, so it
+  // renders identically everywhere with no html2canvas-style dependency)
+  // and shares/downloads THAT - something every messaging app already
+  // knows how to preview inline as a photo. reportData is the same plain
+  // player/highlight/game/notes arrays buildDayReportColorfulHtml already
+  // builds for the HTML view, embedded here as JSON so this canvas
+  // renderer needs no access back to the app's own data functions.
+  function buildColorfulReportShareScript(reportData) {
+    var filename = "pool-master-counter-report-" + reportData.dateStr + ".png";
+    // Escaping "<" (not just "</script>") is the standard safe way to embed
+    // JSON inside a <script> block - covers a player name that happens to
+    // contain "</script>" verbatim, and any other "<..." sequence an HTML
+    // parser could misread while scanning for the tag's end.
+    var dataJson = JSON.stringify(reportData).replace(/</g, "\\u003c");
+    var lines = [
+      "<" + "script>",
+      "(function(){",
+      "var DATA=" + dataJson + ";",
+      'var filename=' + JSON.stringify(filename) + ";",
+      "var W=680,PAD=28,CW=W-PAD*2,SCALE=2;",
+      "var HERO_H=128,SECTION_GAP=30,LABEL_H=26,PLAYER_ROW_H=78,PLAYER_GAP=10;",
+      "var HIGHLIGHT_ROW_H=40,HIGHLIGHT_GAP=8,GAME_ROW_H=30,NOTES_LINE_H=20,NOTES_PAD=18,FOOTER_H=56;",
+      "function tok(name,fallback){return DATA.tokens[name]||fallback;}",
+      "function roundRect(ctx,x,y,w,h,r){",
+      "ctx.beginPath();",
+      "ctx.moveTo(x+r,y);",
+      "ctx.arcTo(x+w,y,x+w,y+h,r);",
+      "ctx.arcTo(x+w,y+h,x,y+h,r);",
+      "ctx.arcTo(x,y+h,x,y,r);",
+      "ctx.arcTo(x,y,x+w,y,r);",
+      "ctx.closePath();",
+      "}",
+      "function wrapText(ctx,text,maxWidth){",
+      'var words=text.split(/\\s+/);',
+      'var lines=[],current="";',
+      "for(var i=0;i<words.length;i++){",
+      "var word=words[i];",
+      'var test=current?current+" "+word:word;',
+      "if(ctx.measureText(test).width>maxWidth&&current){lines.push(current);current=word;}",
+      "else{current=test;}",
+      "}",
+      "if(current)lines.push(current);",
+      "return lines;",
+      "}",
+      "function truncate(ctx,text,maxWidth){",
+      "if(ctx.measureText(text).width<=maxWidth)return text;",
+      "var t=text;",
+      'while(t.length>1&&ctx.measureText(t+"…").width>maxWidth){t=t.slice(0,-1);}',
+      'return t+"…";',
+      "}",
+      "function renderReportPNG(){",
+      'var font=DATA.tokens["--font-family"]||"sans-serif";',
+      'var measureCanvas=document.createElement("canvas");',
+      'var mctx=measureCanvas.getContext("2d");',
+      "var notesLines=[];",
+      "if(DATA.notes){",
+      'mctx.font="italic 14px "+font;',
+      "notesLines=wrapText(mctx,DATA.notes,CW-36);",
+      "}",
+      "var hasPlayers=DATA.players.length>0;",
+      "var y=HERO_H;",
+      "if(hasPlayers){y+=SECTION_GAP+LABEL_H+DATA.players.length*PLAYER_ROW_H;}",
+      "else{y+=SECTION_GAP+30;}",
+      "if(DATA.highlights.length){y+=SECTION_GAP+LABEL_H+DATA.highlights.length*HIGHLIGHT_ROW_H;}",
+      "var logH=0;",
+      "if(DATA.games.length){logH=DATA.games.length*GAME_ROW_H+16;y+=SECTION_GAP+LABEL_H+logH;}",
+      "var notesCardH=0;",
+      "if(DATA.notes){notesCardH=NOTES_PAD*2+notesLines.length*NOTES_LINE_H;y+=SECTION_GAP+LABEL_H+notesCardH;}",
+      "y+=FOOTER_H;",
+      'var canvas=document.createElement("canvas");',
+      "canvas.width=W*SCALE;canvas.height=y*SCALE;",
+      'var ctx=canvas.getContext("2d");',
+      "ctx.scale(SCALE,SCALE);",
+      'ctx.fillStyle=tok("--bg","#1a0a0a");',
+      "ctx.fillRect(0,0,W,y);",
+      "var grad=ctx.createLinearGradient(0,0,W,HERO_H);",
+      'grad.addColorStop(0,tok("--felt","#5c0f14"));',
+      'grad.addColorStop(1,tok("--felt-light","#8a1a1f"));',
+      "ctx.fillStyle=grad;",
+      "roundRect(ctx,PAD,0,CW,HERO_H,18);ctx.fill();",
+      'ctx.fillStyle=tok("--text","#f6efe9");',
+      'ctx.textAlign="center";',
+      'ctx.font="bold 24px "+font;',
+      'ctx.fillText("🎱 Pool Master Counter",W/2,48);',
+      'ctx.font="16px "+font;',
+      "ctx.globalAlpha=0.9;",
+      "ctx.fillText(DATA.longDate,W/2,76);",
+      "ctx.globalAlpha=0.65;",
+      'ctx.font="italic 13px "+font;',
+      'ctx.fillText("Don’t get cocky!",W/2,100);',
+      "ctx.globalAlpha=1;",
+      'ctx.textAlign="left";',
+      "var cy=HERO_H+SECTION_GAP;",
+      "function drawLabel(text){",
+      'ctx.fillStyle=tok("--text-dim","#c9a2a2");',
+      'ctx.font="bold 12px "+font;',
+      "ctx.fillText(text.toUpperCase(),PAD,cy+12);",
+      "cy+=LABEL_H;",
+      "}",
+      "if(hasPlayers){",
+      'drawLabel("Leaderboard");',
+      "DATA.players.forEach(function(p){",
+      "var cardY=cy,cardH=PLAYER_ROW_H-PLAYER_GAP;",
+      'ctx.fillStyle=tok("--bg-card","#2e1414");',
+      "roundRect(ctx,PAD,cardY,CW,cardH,12);ctx.fill();",
+      'ctx.strokeStyle=tok("--border","#4a1e1e");ctx.lineWidth=1;',
+      "roundRect(ctx,PAD,cardY,CW,cardH,12);ctx.stroke();",
+      'ctx.fillStyle=tok("--text","#f6efe9");',
+      'ctx.font="20px "+font;ctx.textAlign="center";',
+      "ctx.fillText(p.medal,PAD+26,cardY+34);",
+      'ctx.textAlign="left";',
+      "var contentX=PAD+54,contentW=CW-54-18;",
+      'ctx.font="bold 15px "+font;',
+      'ctx.fillStyle=tok("--text","#f6efe9");',
+      "ctx.fillText(truncate(ctx,p.name,contentW-90),contentX,cardY+22);",
+      'ctx.font="13px "+font;ctx.textAlign="right";',
+      'var deltaColor=p.deltaClass==="up"?tok("--accent","#e8b923"):p.deltaClass==="down"?tok("--danger","#ff5252"):tok("--text-dim","#c9a2a2");',
+      "ctx.fillStyle=deltaColor;",
+      "ctx.fillText(p.deltaText,PAD+CW-18,cardY+22);",
+      "var deltaW=ctx.measureText(p.deltaText).width;",
+      'ctx.fillStyle=tok("--text-dim","#c9a2a2");',
+      'ctx.fillText(p.rating+"  ",PAD+CW-18-deltaW,cardY+22);',
+      'ctx.textAlign="left";',
+      'ctx.font="13px "+font;',
+      'ctx.fillStyle=tok("--accent","#e8b923");',
+      'var winsText=p.wins+"W";',
+      "ctx.fillText(winsText,contentX,cardY+42);",
+      "var winsW=ctx.measureText(winsText).width;",
+      'ctx.fillStyle=tok("--text-dim","#c9a2a2");',
+      'ctx.fillText(" · ",contentX+winsW,cardY+42);',
+      'var sepW=ctx.measureText(" · ").width;',
+      'ctx.fillStyle=tok("--danger","#ff5252");',
+      'ctx.fillText(p.losses+"L",contentX+winsW+sepW,cardY+42);',
+      "var barY=cardY+54,barW=contentW;",
+      'ctx.fillStyle=tok("--bg-panel","#241010");',
+      "roundRect(ctx,contentX,barY,barW,5,3);ctx.fill();",
+      'ctx.fillStyle=tok("--accent","#e8b923");',
+      "var fillW=Math.max(4,barW*p.barPct/100);",
+      "roundRect(ctx,contentX,barY,fillW,5,3);ctx.fill();",
+      "cy+=PLAYER_ROW_H;",
+      "});",
+      "}else{",
+      'ctx.fillStyle=tok("--text-dim","#c9a2a2");',
+      'ctx.font="italic 14px "+font;',
+      'ctx.fillText("No games recorded today.",PAD,cy+14);',
+      "cy+=30;",
+      "}",
+      "if(DATA.highlights.length){",
+      "cy+=SECTION_GAP-PLAYER_GAP;",
+      'drawLabel("Highlights");',
+      "DATA.highlights.forEach(function(line){",
+      "var g=ctx.createLinearGradient(PAD,cy,PAD+CW,cy);",
+      'g.addColorStop(0,tok("--accent-dark","#b8890f"));',
+      'g.addColorStop(1,tok("--accent","#e8b923"));',
+      "ctx.fillStyle=g;",
+      "roundRect(ctx,PAD,cy,CW,HIGHLIGHT_ROW_H-HIGHLIGHT_GAP,12);ctx.fill();",
+      'ctx.fillStyle=tok("--on-accent","#241a00");',
+      'ctx.font="bold 13px "+font;',
+      "ctx.fillText(truncate(ctx,line,CW-32),PAD+16,cy+21);",
+      "cy+=HIGHLIGHT_ROW_H;",
+      "});",
+      "}",
+      "if(DATA.games.length){",
+      "cy+=SECTION_GAP-HIGHLIGHT_GAP;",
+      'drawLabel("Game Log");',
+      'ctx.fillStyle=tok("--bg-card","#2e1414");',
+      "roundRect(ctx,PAD,cy,CW,logH,12);ctx.fill();",
+      'ctx.strokeStyle=tok("--border","#4a1e1e");',
+      "roundRect(ctx,PAD,cy,CW,logH,12);ctx.stroke();",
+      "var rowY=cy+8;",
+      "DATA.games.forEach(function(g,i){",
+      'ctx.font="12px "+font;',
+      'ctx.fillStyle=tok("--text-dim","#c9a2a2");',
+      "ctx.fillText(g.time,PAD+16,rowY+20);",
+      'ctx.font="13px "+font;',
+      'ctx.fillStyle=g.skunkCount>0?tok("--info","#5aa9e6"):tok("--text","#f6efe9");',
+      "ctx.fillText(truncate(ctx,g.desc,CW-100),PAD+78,rowY+20);",
+      "if(i<DATA.games.length-1){",
+      'ctx.strokeStyle=tok("--border","#4a1e1e");',
+      "ctx.beginPath();",
+      "ctx.moveTo(PAD+16,rowY+GAME_ROW_H-4);",
+      "ctx.lineTo(PAD+CW-16,rowY+GAME_ROW_H-4);",
+      "ctx.stroke();",
+      "}",
+      "rowY+=GAME_ROW_H;",
+      "});",
+      "cy+=logH;",
+      "}",
+      "if(DATA.notes){",
+      "cy+=SECTION_GAP;",
+      'drawLabel("Notes");',
+      'ctx.fillStyle=tok("--bg-card","#2e1414");',
+      "roundRect(ctx,PAD,cy,CW,notesCardH,8);ctx.fill();",
+      'ctx.fillStyle=tok("--accent","#e8b923");',
+      "ctx.fillRect(PAD,cy,4,notesCardH);",
+      'ctx.fillStyle=tok("--text","#f6efe9");',
+      'ctx.font="italic 14px "+font;',
+      "var ny=cy+NOTES_PAD+12;",
+      "notesLines.forEach(function(line){ctx.fillText(line,PAD+18,ny);ny+=NOTES_LINE_H;});",
+      "cy+=notesCardH;",
+      "}",
+      'ctx.textAlign="center";',
+      'ctx.font="11px "+font;',
+      'ctx.fillStyle=tok("--text-dim","#c9a2a2");',
+      'ctx.fillText("Generated "+DATA.generatedAt+" · Pool Master Counter",W/2,cy+32);',
+      'ctx.textAlign="left";',
+      "return canvas;",
+      "}",
+      "function fallbackDownload(blob){",
+      "var url=URL.createObjectURL(blob);",
+      'var a=document.createElement("a");',
+      "a.href=url;a.download=filename;",
+      "document.body.appendChild(a);a.click();",
+      "setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},1000);",
+      "}",
+      "function shareIt(){",
+      'var btn=document.getElementById("shareReportBtn");',
+      "var originalLabel=btn.textContent;",
+      'btn.textContent="⏳ Preparing…";',
+      "btn.disabled=true;",
+      "setTimeout(function(){",
+      "try{",
+      "var canvas=renderReportPNG();",
+      "canvas.toBlob(function(blob){",
+      "btn.textContent=originalLabel;btn.disabled=false;",
+      "if(!blob)return;",
+      'var file=new File([blob],filename,{type:"image/png"});',
+      "if(navigator.canShare&&navigator.canShare({files:[file]})){",
+      'navigator.share({files:[file],title:document.title}).catch(function(err){',
+      'if(err&&err.name==="AbortError")return;',
+      "fallbackDownload(blob);",
+      "});",
+      "}else{fallbackDownload(blob);}",
+      '},"image/png");',
+      "}catch(e){btn.textContent=originalLabel;btn.disabled=false;}",
+      "},10);",
+      "}",
+      'document.getElementById("shareReportBtn").addEventListener("click",shareIt);',
+      "})();",
+      "</" + "script>"
+    ];
+    return lines.join("\n");
+  }
+
+  // Opened in a new tab rather than downloaded outright - the point is to
+  // view it first; from there the browser's own Save/Print/Share affords
+  // everything "share" needs, on a real self-contained HTML document.
+  function openDayReportColorful() {
+    openDayReportColorfulFromData(computeReportImageData(todayDateStr()));
+  }
+
+  // Shared by the live "today" button and the Report Archive's View
+  // action - the archive path passes in already-saved data (re-tokenized
+  // with the current theme by hydrateArchivedReportImageData) instead of
+  // computeReportImageData, since the latter can only ever see the last
+  // 24 hours of live game history and would return nothing for a past day.
+  function openDayReportColorfulFromData(reportImageData) {
+    var html = buildDayReportColorfulHtmlFromData(reportImageData);
+    var blob = new Blob([html], { type: "text/html" });
+    var url = URL.createObjectURL(blob);
+    window.open(url, "_blank");
+    setTimeout(function () {
+      URL.revokeObjectURL(url);
+    }, 60000);
+  }
+
   var DAY_REPORT_FORMAT_KEY = "poolMasterCounter.dayReportFormat.v1";
 
   function loadDayReportFormat() {
@@ -4822,10 +5936,152 @@
     }
   }
 
+  // Opt-in (default off, unlike the backup checkbox's default-on) - this
+  // changes what Email/Text/Share Report do only once someone deliberately
+  // turns it on, so today's behavior stays exactly as it was for everyone
+  // who doesn't.
+  var DAY_REPORT_ATTACH_COLORFUL_KEY = "poolMasterCounter.dayReportAttachColorful.v1";
+
+  function loadDayReportAttachColorful() {
+    try {
+      return localStorage.getItem(DAY_REPORT_ATTACH_COLORFUL_KEY) === "true";
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function saveDayReportAttachColorful(value) {
+    try {
+      localStorage.setItem(DAY_REPORT_ATTACH_COLORFUL_KEY, value ? "true" : "false");
+    } catch (e) {
+      console.warn("Could not save day report attach-colorful preference.", e);
+    }
+  }
+
   function buildDayReportText(dateStr) {
     if (dayReportFormat === "compact") return buildDayReportTextCompact(dateStr);
     if (dayReportFormat === "detailed") return buildDayReportTextDetailed(dateStr);
     return buildDayReportTextTable(dateStr);
+  }
+
+  // Email Report/Text Report/Share Report used to ignore the "Report
+  // format" selector entirely and always send buildDayReportTextPlain
+  // - which reads as "the dropdown doesn't work" from the report-
+  // sharing side, even though Copy Report (buildDayReportText above)
+  // always did respect it. The selector now applies here too, with one
+  // real constraint: Table AND Compact both render a monospace ASCII
+  // grid (buildTextTable) for the leaderboard, which only lines up in
+  // a monospace font - Mail/Messages compose boxes are proportional,
+  // so either selection would arrive visibly broken there. Only
+  // Detailed has no grid at all (bullet points/sections), so it's the
+  // one format that can actually change what gets shared; Table/
+  // Compact still fall back to the alignment-free Plain layout.
+  function buildDayReportTextForSharing(dateStr) {
+    if (dayReportFormat === "detailed") return buildDayReportTextDetailed(dateStr);
+    return buildDayReportTextPlain(dateStr);
+  }
+
+  // The Player Stats page and the All Players page filter by the same
+  // period codes but label them with two different i18n key sets (the
+  // former's buttons say "This Week"/"This Year", the latter's dropdown
+  // says "1 Week"/"1 Year" and adds "6month") - two small maps so a CSV
+  // title line always matches what that page actually has on screen.
+  var PLAYER_PAGE_PERIOD_LABEL_KEYS = {
+    today: "period.today",
+    week: "period.thisWeek",
+    month: "period.thisMonth",
+    year: "period.thisYear",
+    all: "period.allTime"
+  };
+  var ALL_PLAYERS_PERIOD_LABEL_KEYS = {
+    today: "period.today",
+    week: "period.oneWeek",
+    month: "period.oneMonth",
+    "6month": "period.sixMonths",
+    year: "period.oneYear",
+    all: "period.allTime"
+  };
+
+  // RFC 4180-ish: only quotes a field when it actually needs it (holds
+  // a comma, quote, or newline), doubling any interior quotes - so
+  // plain names/numbers stay unquoted and readable if this file is
+  // ever opened in a plain text editor instead of a spreadsheet.
+  function csvField(value) {
+    var s = value === null || value === undefined ? "" : String(value);
+    if (/[",\r\n]/.test(s)) {
+      return '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+  }
+
+  function csvRow(fields) {
+    return fields.map(csvField).join(",") + "\r\n";
+  }
+
+  // A real spreadsheet table - actual comma-separated cells, not the
+  // ASCII-art pipes-and-dashes grid the "Table" text format draws
+  // (which never was a real table to Excel/Numbers/Sheets, just text
+  // shaped like one). Two sections - the player leaderboard, then one
+  // row per individual game rather than grouping repeat matchups the
+  // way the text formats do, since a spreadsheet is exactly the place
+  // someone would want every game visible to filter/sum themselves.
+  function buildDayReportCsv(dateStr) {
+    var data = computeDayReportData(dateStr);
+    var lines = [];
+    lines.push(csvRow(["Pool Master Counter — Day Report", formatReportDateHeading(dateStr)]));
+    lines.push("\r\n");
+
+    lines.push(csvRow(["Player", "Wins", "Losses", "Rating", "Rating Change"]));
+    data.players.forEach(function (p) {
+      lines.push(csvRow([p.name, p.wins, p.losses, p.rating, formatReportRatingDelta(p.ratingDelta)]));
+    });
+    lines.push("\r\n");
+
+    lines.push(csvRow(["Time", "Winner(s)", "Opponent(s)", "Game", "Duration", "Race Milestone", "Skunk"]));
+    data.games.forEach(function (g) {
+      lines.push(
+        csvRow([
+          formatReportGameTime(g.ts),
+          joinNamesForReport(g.winnerNames || []),
+          joinNamesForReport(g.opponentNames || []),
+          g.gameLabel,
+          formatDuration(g.durationMs),
+          g.wonRace ? "Race to " + g.raceTarget : "",
+          g.skunk ? "Yes" : ""
+        ])
+      );
+    });
+
+    if (data.tournaments.length) {
+      lines.push("\r\n");
+      lines.push(csvRow(["Time", "Tournament", "Champion(s)", "Players"]));
+      data.tournaments.forEach(function (t) {
+        lines.push(csvRow([formatReportGameTime(t.ts), tournamentFormatLabel(t.format), joinNamesForReport(t.championNames || []), (t.players || []).length]));
+      });
+    }
+
+    // A leading BOM isn't needed for the delimiters/structure, but
+    // without it Excel (Windows especially, sometimes Mac too) guesses
+    // the wrong encoding for anything outside plain ASCII - accented
+    // or non-Latin player names, the ▲/▼ rating-change marks - and
+    // shows mojibake instead. Harmless elsewhere; every real CSV
+    // reader (including Excel/Numbers/Sheets) strips it silently.
+    return "\uFEFF" + lines.join("");
+  }
+
+  function downloadTextFile(filename, text, mimeType) {
+    var blob = new Blob([text], { type: mimeType });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 1000);
   }
 
   function updateDayNotesSummary() {
@@ -4839,12 +6095,19 @@
   }
 
   function updateDayReportRecipientsLine() {
-    // With the backup attached, Email/Text Report route through the OS
-    // share sheet (see shareReportWithBackupAttachment) instead of a
-    // mailto:/sms: link, so the opted-in recipients below are no longer
-    // who it actually goes to - say so instead of showing a list that'd
-    // just be wrong.
-    if (dayReportAttachBackupCheckbox.checked) {
+    // With either attachment on, Email/Text Report route through the OS
+    // share sheet (see shareReportWithAttachments) exactly like Share
+    // Report does, instead of a distinct mailto:/sms: link - so with an
+    // attachment on, all three buttons genuinely do the same thing (open
+    // the same share sheet) and showing three of them is just confusing.
+    // Hide Email/Text and leave only Share Report, which is the one whose
+    // label actually describes what's about to happen; both come back the
+    // moment every attach checkbox is off again and Email/Text return to
+    // composing a real, distinct email/text message.
+    var hasAttachment = dayReportAttachBackupCheckbox.checked || dayReportAttachColorfulCheckbox.checked;
+    btnDayReportEmail.classList.toggle("hidden", hasAttachment);
+    btnDayReportSms.classList.toggle("hidden", hasAttachment);
+    if (hasAttachment) {
       dayReportRecipientsLine.textContent = T("dayNotes.recipientsAttachOverride");
       return;
     }
@@ -4952,6 +6215,7 @@
   var PLAYER_STATS_KEY = "poolMasterCounter.playerStats.v1";
   var RATINGS_KEY = "poolMasterCounter.ratings.v1";
   var PLAYER_ADDED_KEY = "poolMasterCounter.playerAdded.v1";
+  var TEAMS_KEY = "poolMasterCounter.teams.v1";
 
   function loadRostersFromStorage() {
     try {
@@ -4970,6 +6234,71 @@
     } catch (e) {
       console.warn("Could not save rosters.", e);
     }
+  }
+
+  // Named, persisted tournament teams - {id, name, members:[playerName,...],
+  // createdAt}. Kept separate from the main scoreboard's ad-hoc, session-
+  // only "Team A/B" mode (state.teamWins etc.) - these are reusable across
+  // tournaments, the way a saved roster is reusable across sessions.
+  function loadTeamsFromStorage() {
+    try {
+      var raw = localStorage.getItem(TEAMS_KEY);
+      var parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function saveTeamsToStorage(teams) {
+    if (noStatsMode) return;
+    try {
+      localStorage.setItem(TEAMS_KEY, JSON.stringify(teams));
+    } catch (e) {
+      console.warn("Could not save teams.", e);
+    }
+  }
+
+  var SAVED_TEAMS = loadTeamsFromStorage();
+
+  function findTeamByName(name) {
+    var key = normalizeNameKey(name);
+    var match = SAVED_TEAMS.filter(function (t) {
+      return normalizeNameKey(t.name) === key;
+    });
+    return match.length ? match[0] : null;
+  }
+
+  function normalizedMemberSetKey(members) {
+    return (members || [])
+      .map(normalizeNameKey)
+      .sort()
+      .join("|");
+  }
+
+  function findTeamByMembers(members) {
+    var key = normalizedMemberSetKey(members);
+    var match = SAVED_TEAMS.filter(function (t) {
+      return normalizedMemberSetKey(t.members) === key;
+    });
+    return match.length ? match[0] : null;
+  }
+
+  // Creates a new saved team, or - if this exact name is already saved -
+  // redefines its membership to the current lineup. "Current lineup wins"
+  // is a deliberate simplification (this is a casual home-game tool, not a
+  // tournament-director product, same philosophy as the seeding fallback
+  // below) rather than blocking on a mismatch.
+  function upsertTeamFromTournamentEntry(name, members) {
+    var existing = findTeamByName(name);
+    if (existing) {
+      existing.members = members.slice();
+    } else {
+      SAVED_TEAMS = SAVED_TEAMS.concat([
+        { id: "team-" + uid(), name: name, members: members.slice(), createdAt: new Date().toISOString() }
+      ]);
+    }
+    saveTeamsToStorage(SAVED_TEAMS);
   }
 
   function loadRotationsFromStorage() {
@@ -5147,6 +6476,157 @@
     } catch (e) {
       console.warn("Could not save reset snapshots.", e);
     }
+  }
+
+  // Capped local archive of every colorful report ever generated, one
+  // entry per day (regenerating the same day overwrites its entry).
+  // computeDayReportData only ever sees the last 24 hours of live game
+  // history no matter what dateStr it's given, so without this a report
+  // becomes permanently unrecoverable the moment that window rolls past
+  // it - this is the only place "yesterday's report" lives at all. Only
+  // the already-computed numbers are kept, never theme tokens or a PNG,
+  // so re-viewing an old entry (hydrateArchivedReportImageData) always
+  // re-draws with whichever theme is active right now.
+  var REPORT_ARCHIVE_KEY = "poolMasterCounter.reportArchive.v1";
+  var REPORT_ARCHIVE_CAP = 90;
+
+  function loadReportArchiveFromStorage() {
+    try {
+      var raw = localStorage.getItem(REPORT_ARCHIVE_KEY);
+      var parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function saveReportArchiveToStorage(entries) {
+    if (noStatsMode) return;
+    try {
+      localStorage.setItem(REPORT_ARCHIVE_KEY, JSON.stringify(entries));
+    } catch (e) {
+      console.warn("Could not save report archive.", e);
+    }
+  }
+
+  var REPORT_ARCHIVE = loadReportArchiveFromStorage();
+
+  function archiveDayReport(reportImageData) {
+    if (noStatsMode) return;
+    var snapshot = {
+      dateStr: reportImageData.dateStr,
+      longDate: reportImageData.longDate,
+      generatedAt: reportImageData.generatedAt,
+      players: reportImageData.players,
+      highlights: reportImageData.highlights,
+      games: reportImageData.games,
+      notes: reportImageData.notes
+    };
+    REPORT_ARCHIVE = REPORT_ARCHIVE.filter(function (entry) {
+      return entry.dateStr !== snapshot.dateStr;
+    });
+    REPORT_ARCHIVE.unshift(snapshot);
+    REPORT_ARCHIVE = REPORT_ARCHIVE.slice(0, REPORT_ARCHIVE_CAP);
+    saveReportArchiveToStorage(REPORT_ARCHIVE);
+    renderReportArchiveList();
+  }
+
+  function findReportArchiveEntry(dateStr) {
+    var match = REPORT_ARCHIVE.filter(function (entry) {
+      return entry.dateStr === dateStr;
+    });
+    return match.length ? match[0] : null;
+  }
+
+  function deleteArchivedReport(dateStr) {
+    REPORT_ARCHIVE = REPORT_ARCHIVE.filter(function (entry) {
+      return entry.dateStr !== dateStr;
+    });
+    saveReportArchiveToStorage(REPORT_ARCHIVE);
+    renderReportArchiveList();
+  }
+
+  // Re-attaches a fresh read of the CURRENT theme's colors to a saved
+  // snapshot - the deliberate tradeoff behind storing data instead of a
+  // rendered image: an old report always looks right for today's theme,
+  // at the cost of not being a pixel-exact record of how it looked when
+  // it was first generated.
+  function hydrateArchivedReportImageData(entry) {
+    return {
+      dateStr: entry.dateStr,
+      longDate: entry.longDate,
+      generatedAt: entry.generatedAt,
+      tokens: readReportThemeTokens(),
+      players: entry.players,
+      highlights: entry.highlights,
+      games: entry.games,
+      notes: entry.notes
+    };
+  }
+
+  function openArchivedReport(dateStr) {
+    var entry = findReportArchiveEntry(dateStr);
+    if (!entry) return;
+    openDayReportColorfulFromData(hydrateArchivedReportImageData(entry));
+  }
+
+  function reportArchiveRowMeta(entry) {
+    return T("reportArchive.rowMeta", {
+      players: (entry.players || []).length,
+      games: (entry.games || []).length,
+      generatedAt: entry.generatedAt
+    });
+  }
+
+  function renderReportArchiveList() {
+    if (!reportArchiveList) return;
+    reportArchiveList.innerHTML = "";
+    if (REPORT_ARCHIVE.length === 0) {
+      var hint = document.createElement("li");
+      hint.className = "empty-hint";
+      hint.textContent = T("reportArchive.none");
+      reportArchiveList.appendChild(hint);
+      return;
+    }
+    REPORT_ARCHIVE.forEach(function (entry) {
+      var li = document.createElement("li");
+      li.className = "recover-data-row";
+      var info = document.createElement("div");
+      info.className = "recover-data-row-info";
+      var label = document.createElement("span");
+      label.className = "recover-data-row-label";
+      label.textContent = entry.longDate || entry.dateStr;
+      var meta = document.createElement("span");
+      meta.className = "recover-data-row-meta";
+      meta.textContent = reportArchiveRowMeta(entry);
+      info.appendChild(label);
+      info.appendChild(meta);
+
+      var actions = document.createElement("div");
+      actions.className = "report-archive-row-actions";
+      var viewBtn = document.createElement("button");
+      viewBtn.type = "button";
+      viewBtn.className = "btn btn-ghost";
+      viewBtn.textContent = T("reportArchive.view");
+      viewBtn.addEventListener("click", function () {
+        openArchivedReport(entry.dateStr);
+      });
+      var deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.className = "btn btn-ghost";
+      deleteBtn.textContent = T("reportArchive.delete");
+      deleteBtn.addEventListener("click", function () {
+        confirmModal(T("reportArchive.confirmDelete", { date: entry.longDate || entry.dateStr }), function () {
+          deleteArchivedReport(entry.dateStr);
+        });
+      });
+      actions.appendChild(viewBtn);
+      actions.appendChild(deleteBtn);
+
+      li.appendChild(info);
+      li.appendChild(actions);
+      reportArchiveList.appendChild(li);
+    });
   }
 
   // One-time-per-load cleanup: if PLAYER_STATS already has separate entries
@@ -5369,6 +6849,50 @@
     return key ? PLAYER_CONTACTS[key] : { email: "", phone: "", reportOptIn: false, notifyMethod: "email" };
   }
 
+  // Formats digits-as-typed to match the phone convention of the
+  // currently active app language (same country each language's flag in
+  // languages/manifest.json already implies - UK for English, since
+  // that's the manifest's own flag choice, not a US assumption). Purely
+  // a typing aid: the formatted string (with its spaces) is what gets
+  // saved, same as the raw input always was.
+  function formatPhoneNumberForActiveLanguage(rawValue) {
+    var digits = (rawValue || "").replace(/\D/g, "");
+    if (activeLanguageCode === "french") {
+      // France: 0X XX XX XX XX
+      digits = digits.slice(0, 10);
+      return digits.replace(/(\d{1,2})(\d{1,2})?(\d{1,2})?(\d{1,2})?(\d{1,2})?/, function (m, a, b, c, d, e) {
+        return [a, b, c, d, e].filter(Boolean).join(" ");
+      });
+    }
+    if (activeLanguageCode === "spanish") {
+      // Spain: XXX XXX XXX
+      digits = digits.slice(0, 9);
+      return digits.replace(/(\d{1,3})(\d{1,3})?(\d{1,3})?/, function (m, a, b, c) {
+        return [a, b, c].filter(Boolean).join(" ");
+      });
+    }
+    if (activeLanguageCode === "cantonese") {
+      // Hong Kong: XXXX XXXX
+      digits = digits.slice(0, 8);
+      return digits.replace(/(\d{1,4})(\d{1,4})?/, function (m, a, b) {
+        return [a, b].filter(Boolean).join(" ");
+      });
+    }
+    // English -> UK mobile: 07XXX XXXXXX
+    digits = digits.slice(0, 11);
+    if (digits.length <= 5) return digits;
+    return digits.slice(0, 5) + " " + digits.slice(5);
+  }
+
+  // Reformats on every keystroke, always placing the cursor at the end -
+  // simplest behavior for a short, mostly-typed-left-to-right field like
+  // this, at the cost of mid-string editing not being caret-perfect.
+  function wirePhoneFormatting(input) {
+    input.addEventListener("input", function () {
+      input.value = formatPhoneNumberForActiveLanguage(input.value);
+    });
+  }
+
   // Shared by onboarding and the edit-rating popup: the "receive the
   // day's report" checkbox only makes sense once there's somewhere to
   // send it, and the email/SMS choice only matters once it's checked.
@@ -5585,7 +7109,7 @@
     ratingEditInput.value = getPlayerRating(name);
     var contact = getPlayerContact(name);
     ratingEditEmailInput.value = contact.email || "";
-    ratingEditPhoneInput.value = contact.phone || "";
+    ratingEditPhoneInput.value = formatPhoneNumberForActiveLanguage(contact.phone || "");
     ratingEditNotifyCheckbox.disabled = !(contact.email || contact.phone);
     ratingEditNotifyCheckbox.checked = !ratingEditNotifyCheckbox.disabled && !!contact.reportOptIn;
     ratingEditNotifyMethodRow.classList.toggle("hidden", !ratingEditNotifyCheckbox.checked);
@@ -5967,6 +7491,37 @@
     });
   }
 
+  // The single most destructive action in the app - wipes every
+  // poolMasterCounter.* key out of localStorage (every player, rating,
+  // roster, game, tournament, and setting) and reloads, so the device
+  // comes back up exactly as it would on a brand new install, migration
+  // path and all. A full data backup downloads automatically first;
+  // unlike every reset above, recovery from here is only ever that
+  // downloaded file via Import Data - the in-app Recover Data list
+  // restores individual slices, not a whole wiped device, so this
+  // intentionally doesn't add an entry there.
+  function performFullFactoryReset() {
+    confirmModal(T("confirm.fullResetExplain"), function () {
+      confirmModal(T("confirm.fullResetAreYouCertain"), function () {
+        exportAllData();
+        var keysToRemove = [];
+        for (var i = 0; i < localStorage.length; i++) {
+          var key = localStorage.key(i);
+          if (key && key.indexOf("poolMasterCounter.") === 0) keysToRemove.push(key);
+        }
+        keysToRemove.forEach(function (key) {
+          localStorage.removeItem(key);
+        });
+        // The backup download is a same-tick <a>.click(), which some
+        // browsers need a beat to actually start before navigation - see
+        // downloadJSON/exportAllData above.
+        setTimeout(function () {
+          location.reload();
+        }, 400);
+      });
+    });
+  }
+
   // One-time migration: the app used to store rosters/player stats as JSON
   // files committed to this GitHub repo. The first time this version boots,
   // pull in whatever's still out there so history isn't lost, then never
@@ -6022,8 +7577,48 @@
       });
   }
 
+  var LAST_SYNC_EXPORT_KEY = "poolMasterCounter.lastSyncExportedAt";
+  var LAST_SYNC_IMPORT_KEY = "poolMasterCounter.lastSyncImportedAt";
+  var LAST_SYNC_EXPORTER_NAME_KEY = "poolMasterCounter.lastSyncExporterName";
+  var LAST_SYNC_IMPORT_NAME_KEY = "poolMasterCounter.lastSyncImportedFromName";
+
+  function loadLastSyncExporterName() {
+    try {
+      return localStorage.getItem(LAST_SYNC_EXPORTER_NAME_KEY) || "";
+    } catch (e) {
+      return "";
+    }
+  }
+
+  function saveLastSyncExporterName(name) {
+    try {
+      localStorage.setItem(LAST_SYNC_EXPORTER_NAME_KEY, name || "");
+    } catch (e) {
+      console.warn("Could not save sync exporter name.", e);
+    }
+  }
+
   function defaultBackupFilename() {
     return "pool-master-counter-backup-" + new Date().toISOString().slice(0, 10) + ".json";
+  }
+
+  // Date + day-of-week (e.g. "2026-09-08-Tuesday") plus, when given, the
+  // exporting person's name - so several people syncing the same iCloud
+  // Drive folder each land a distinct, dated file instead of everyone
+  // colliding on one filename or overwriting each other's export.
+  // Both halves must come from the same local calendar day - toISOString()
+  // is UTC, so pairing it with a locale (local-time) weekday name could
+  // silently mismatch near midnight (e.g. a UTC-behind timezone rolling
+  // into a new UTC date while it's still evening locally): formatDateISO
+  // and toLocaleDateString both read local getFullYear/getMonth/getDate
+  // under the hood, so they always agree.
+  function defaultSyncFilename(exporterName) {
+    var now = new Date();
+    var dayName = now.toLocaleDateString(undefined, { weekday: "long" });
+    var base = formatDateISO(now) + "-" + dayName;
+    var trimmedName = (exporterName || "").trim();
+    if (trimmedName) base += "-" + trimmedName;
+    return sanitizeBackupFilename(base);
   }
 
   // Strips characters a filesystem would reject and appends .json if the
@@ -6043,6 +7638,7 @@
       exportedAt: new Date().toISOString(),
       state: state,
       rosters: SAVED_ROSTERS,
+      teams: SAVED_TEAMS,
       playerStats: PLAYER_STATS,
       ratings: PLAYER_RATINGS,
       contacts: PLAYER_CONTACTS,
@@ -6058,6 +7654,54 @@
   // with a prompt.
   function exportAllData(filename) {
     downloadJSON(filename ? sanitizeBackupFilename(filename) : defaultBackupFilename(), buildBackupPayload());
+  }
+
+  // Not a new storage mechanism - Safari has no programmatic access to a
+  // real iCloud Drive folder (no showSaveFilePicker/showOpenFilePicker
+  // support), so this is the same <a download> flow as exportAllData, just
+  // dated + named (see defaultSyncFilename) so several people syncing the
+  // same iCloud Drive folder each land their own distinct file, and a
+  // "last synced" timestamp/exporter name so the habit is visible.
+  function exportForSync() {
+    promptModal(T("backup.syncExportNamePrompt"), loadLastSyncExporterName(), function (nameInput) {
+      var exporterName = (nameInput || "").trim();
+      saveLastSyncExporterName(exporterName);
+      var payload = buildBackupPayload();
+      payload.exportedBy = exporterName || null;
+      downloadJSON(defaultSyncFilename(exporterName), payload);
+      try {
+        localStorage.setItem(LAST_SYNC_EXPORT_KEY, payload.exportedAt);
+      } catch (e) {
+        console.warn("Could not save last-sync-export timestamp.", e);
+      }
+      renderSyncStatusLine();
+    });
+  }
+
+  function renderSyncStatusLine() {
+    var exportedAt, importedAt, exporterName, importedFromName;
+    try {
+      exportedAt = localStorage.getItem(LAST_SYNC_EXPORT_KEY);
+      importedAt = localStorage.getItem(LAST_SYNC_IMPORT_KEY);
+      exporterName = localStorage.getItem(LAST_SYNC_EXPORTER_NAME_KEY);
+      importedFromName = localStorage.getItem(LAST_SYNC_IMPORT_NAME_KEY);
+    } catch (e) {
+      exportedAt = null;
+      importedAt = null;
+      exporterName = null;
+      importedFromName = null;
+    }
+    var exportedText = exportedAt ? formatTimestamp(exportedAt, true) : T("backup.syncStatusNever");
+    var importedText = importedAt ? formatTimestamp(importedAt, true) : T("backup.syncStatusNever");
+    var exportedLine =
+      exportedAt && exporterName
+        ? T("backup.syncStatusExportedByName", { when: exportedText, name: exporterName })
+        : T("backup.syncStatusExported", { when: exportedText });
+    var importedLine =
+      importedAt && importedFromName
+        ? T("backup.syncStatusImportedFromName", { when: importedText, name: importedFromName })
+        : T("backup.syncStatusImported", { when: importedText });
+    syncStatusLine.textContent = exportedLine + " · " + importedLine;
   }
 
   // Shared by the Copy Report button and shareReport()'s no-native-share
@@ -6077,26 +7721,64 @@
     }
   }
 
-  // mailto:/sms: links (what Email/Text Report use when the backup isn't
-  // being attached) can't carry file attachments - that's a platform
+  // Builds whichever File attachments the two "Attach ... when sharing"
+  // checkboxes call for, in parallel - the backup JSON is synchronous
+  // (built from data already in memory), the colorful report PNG isn't
+  // (a canvas draw + toBlob), so this always returns a Promise even
+  // though the common case (only the backup checkbox, or neither) never
+  // actually waits on anything.
+  function collectDayReportAttachments() {
+    var files = [];
+    var tasks = [];
+    if (dayReportAttachBackupCheckbox.checked) {
+      // Reuses the same full-backup payload as exportAllData, minus
+      // contacts (email/phone), which have no business leaving the
+      // device in a file meant to be handed to whoever's on the other
+      // end of Mail/Messages/AirDrop. Sending an empty object rather
+      // than omitting the key entirely still round-trips cleanly
+      // through mergeContactsData if this file is ever imported
+      // elsewhere: local contact info always wins on a name conflict
+      // there, and an empty import adds nothing.
+      var payload = buildBackupPayload();
+      payload.contacts = {};
+      files.push(new File([JSON.stringify(payload, null, 2)], defaultBackupFilename(), { type: "application/json" }));
+    }
+    if (dayReportAttachColorfulCheckbox.checked) {
+      tasks.push(
+        buildDayReportImageBlob(todayDateStr()).then(function (blob) {
+          if (blob) files.push(new File([blob], "pool-master-counter-report-" + todayDateStr() + ".png", { type: "image/png" }));
+        })
+      );
+    }
+    return Promise.all(tasks).then(function () {
+      return files;
+    });
+  }
+
+  function downloadFileObject(file) {
+    var url = URL.createObjectURL(file);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = file.name;
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 1000);
+  }
+
+  // mailto:/sms: links (what Email/Text Report use when nothing's being
+  // attached) can't carry file attachments - that's a platform
   // restriction, not something fixable here. The Web Share API is the
   // actual way to hand a file to Mail, Messages, AirDrop, etc. with it
-  // genuinely attached, so whenever the "Attach full backup file"
-  // checkbox (dayReportAttachBackupCheckbox) is on, Email Report, Text
-  // Report and Share Report all try this first instead of going
-  // straight to a mailto:/sms: link - which does mean giving up the
-  // auto-filled opted-in recipient for a manual pick in the OS share
-  // sheet, but there's no API that offers both a pre-filled recipient
-  // and a real attachment. Reuses the same full-backup payload as
-  // exportAllData as the attached file, minus contacts (email/phone),
-  // which have no business leaving the device in a file meant to be
-  // handed to whoever's on the other end of Mail/Messages/AirDrop.
-  // Sending an empty object rather than omitting the key entirely
-  // still round-trips cleanly through mergeContactsData if this file
-  // is ever imported elsewhere: local contact info always wins on a
-  // name conflict there, and an empty import adds nothing, so an
-  // existing player's contact info on the importing device is left
-  // exactly as it was.
+  // genuinely attached, so whenever either "Attach ... when sharing"
+  // checkbox is on, Email Report, Text Report and Share Report all try
+  // this first instead of going straight to a mailto:/sms: link - which
+  // does mean giving up the auto-filled opted-in recipient for a manual
+  // pick in the OS share sheet, but there's no API that offers both a
+  // pre-filled recipient and a real attachment.
   //
   // onFallback (optional): called whenever the file-attach path fails
   // for ANY reason - no navigator.share/canShare support at all, or
@@ -6109,41 +7791,43 @@
   // Callers pass their own normal fallback (open the mailto:/sms:
   // link, or a text-only share) so a broken share sheet degrades back
   // to "everything except the actual attachment" instead of "nothing".
-  function shareReportWithBackupAttachment(text, onFallback) {
-    var payload = buildBackupPayload();
-    payload.contacts = {};
-    var filename = defaultBackupFilename();
-    var file = new File([JSON.stringify(payload, null, 2)], filename, { type: "application/json" });
+  function shareReportWithAttachments(text, onFallback) {
+    collectDayReportAttachments().then(function (files) {
+      if (!files.length) {
+        if (onFallback) onFallback();
+        return;
+      }
 
-    function fallback() {
-      downloadJSON(filename, payload);
-      showToast(T("toast.shareFallback"));
-      if (onFallback) onFallback();
-    }
+      function fallback() {
+        files.forEach(downloadFileObject);
+        showToast(T("toast.shareFallback"));
+        if (onFallback) onFallback();
+      }
 
-    // canShare() saying yes doesn't guarantee share() actually works -
-    // some desktop Chrome/macOS combos report file-sharing support but
-    // then reject every call with NotAllowedError (canShare with a
-    // files array is still the correct feature test up front; share()
-    // alone doesn't imply file support).
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      navigator.share({
-        files: [file],
-        title: "Pool Master Counter — Day Report",
-        text: text
-      }).catch(function (err) {
-        if (err && err.name === "AbortError") return;
+      // canShare() saying yes doesn't guarantee share() actually works -
+      // some desktop Chrome/macOS combos report file-sharing support but
+      // then reject every call with NotAllowedError (canShare with a
+      // files array is still the correct feature test up front; share()
+      // alone doesn't imply file support).
+      if (navigator.canShare && navigator.canShare({ files: files })) {
+        navigator.share({
+          files: files,
+          title: "Pool Master Counter — Day Report",
+          text: text
+        }).catch(function (err) {
+          if (err && err.name === "AbortError") return;
+          fallback();
+        });
+      } else {
         fallback();
-      });
-    } else {
-      fallback();
-    }
+      }
+    });
   }
 
-  // The "Attach full backup file" checkbox is off: a plain text share of
-  // the day report and nothing more, same as any other native share
-  // sheet - falls back to the same clipboard copy Copy Report uses on a
-  // browser/device with no navigator.share at all.
+  // Neither attach checkbox is on: a plain text share of the day report
+  // and nothing more, same as any other native share sheet - falls back
+  // to the same clipboard copy Copy Report uses on a browser/device with
+  // no navigator.share at all.
   function shareReportTextOnly(text) {
     if (navigator.share) {
       navigator.share({ title: "Pool Master Counter — Day Report", text: text }).catch(function (err) {
@@ -6156,9 +7840,9 @@
   }
 
   function shareReport() {
-    var text = buildDayReportTextPlain(todayDateStr());
-    if (dayReportAttachBackupCheckbox.checked) {
-      shareReportWithBackupAttachment(text, function () {
+    var text = buildDayReportTextForSharing(todayDateStr());
+    if (dayReportAttachBackupCheckbox.checked || dayReportAttachColorfulCheckbox.checked) {
+      shareReportWithAttachments(text, function () {
         shareReportTextOnly(text);
       });
     } else {
@@ -6296,6 +7980,34 @@
     return { rosters: merged, added: added };
   }
 
+  // Same "union, skip what's already known" shape as mergeRosterLists, but
+  // keyed by name (a team's whole point is being a named, reusable entity)
+  // rather than by member set - on a name collision the local team wins
+  // and the imported one is simply skipped, rather than silently
+  // overwriting a locally-redefined lineup.
+  function mergeTeamLists(localTeams, importedTeams) {
+    var seen = {};
+    var merged = [];
+    (localTeams || []).forEach(function (t) {
+      var key = normalizeNameKey(t.name);
+      if (seen[key]) return;
+      seen[key] = true;
+      merged.push(t);
+    });
+    var added = 0;
+    (importedTeams || []).forEach(function (t) {
+      var key = normalizeNameKey(t.name);
+      if (!t.name || seen[key]) return;
+      seen[key] = true;
+      merged.push(t);
+      added += 1;
+    });
+    merged.sort(function (a, b) {
+      return (a.createdAt || "").localeCompare(b.createdAt || "");
+    });
+    return { teams: merged, added: added };
+  }
+
   // A friendly, hand-editable export: just label + players per list, no
   // internal id/savedAt bookkeeping to get wrong when writing one by hand.
   function exportRosterLists() {
@@ -6306,6 +8018,20 @@
       })
     };
     downloadJSON("pool-master-counter-player-lists-" + payload.exportedAt.slice(0, 10) + ".json", payload);
+  }
+
+  // A real spreadsheet table of every saved player list - one row per
+  // list, players joined into a single readable cell (a list's whole
+  // point is the group, not one row per member).
+  function buildRosterListsCsv() {
+    var lines = [];
+    lines.push(csvRow(["Pool Master Counter — Player Lists"]));
+    lines.push("\r\n");
+    lines.push(csvRow(["List", "Player Count", "Players", "Saved"]));
+    SAVED_ROSTERS.forEach(function (r) {
+      lines.push(csvRow([r.label, (r.players || []).length, (r.players || []).join(", "), r.savedAt ? formatTimestamp(r.savedAt, true) : ""]));
+    });
+    return "\uFEFF" + lines.join("");
   }
 
   // Accepts a bare array of names, a {label, players} object (the hand-
@@ -6513,10 +8239,31 @@
       // backup's history in without double-counting anything already known.
       var localIsFresh = state.players.length === 0;
 
-      confirmModal(T(localIsFresh ? "confirm.importBackupFresh" : "confirm.importBackupMerge"), function () {
+      // Informational only, never a blocking gate - the merge logic below
+      // already handles conflicts safely regardless of which side is
+      // newer. exportedAt is written into every backup payload but was,
+      // until now, never read back on import; comparing it against this
+      // device's own last sync-export (if any) just tells the user what
+      // they're about to bring in.
+      var lastSyncExportedAt;
+      try {
+        lastSyncExportedAt = localStorage.getItem(LAST_SYNC_EXPORT_KEY);
+      } catch (e) {
+        lastSyncExportedAt = null;
+      }
+      var syncHint = data.exportedAt
+        ? T(data.exportedBy ? "confirm.importBackupSyncHintByName" : "confirm.importBackupSyncHint", {
+            imported: formatTimestamp(data.exportedAt, true),
+            name: data.exportedBy,
+            lastExport: lastSyncExportedAt ? formatTimestamp(lastSyncExportedAt, true) : T("backup.syncStatusNever")
+          }) + " "
+        : "";
+
+      confirmModal(syncHint + T(localIsFresh ? "confirm.importBackupFresh" : "confirm.importBackupMerge"), function () {
         try {
           var importedState = data.state && typeof data.state === "object" ? data.state : defaultState();
           var importedRosters = Array.isArray(data.rosters) ? data.rosters : [];
+          var importedTeams = Array.isArray(data.teams) ? data.teams : [];
           var importedPlayerStats = data.playerStats && typeof data.playerStats === "object" ? data.playerStats : {};
           var extraSessions = summarizeGameHistoryByPlayer(importedState.gameHistory || []);
           var importedRatings = data.ratings && typeof data.ratings === "object" ? data.ratings : {};
@@ -6590,6 +8337,7 @@
           function proceedWithMerge() {
             var mergedPlayerStats = mergePlayerStatsData(PLAYER_STATS, importedPlayerStats, extraSessions);
             var rosterMerge = mergeRosterLists(SAVED_ROSTERS, importedRosters);
+            var teamMerge = mergeTeamLists(SAVED_TEAMS, importedTeams);
             var mergedRatings = mergeRatingsData(PLAYER_RATINGS, importedRatings);
             var mergedContacts = mergeContactsData(PLAYER_CONTACTS, importedContacts);
             var mergedPlayerAdded = mergePlayerAddedData(PLAYER_ADDED, importedPlayerAdded);
@@ -6667,12 +8415,21 @@
             });
 
             localStorage.setItem(ROSTERS_KEY, JSON.stringify(rosterMerge.rosters));
+            localStorage.setItem(TEAMS_KEY, JSON.stringify(teamMerge.teams));
             localStorage.setItem(PLAYER_STATS_KEY, JSON.stringify(mergedPlayerStats));
             localStorage.setItem(RATINGS_KEY, JSON.stringify(mergedRatings));
             localStorage.setItem(CONTACTS_KEY, JSON.stringify(mergedContacts));
             localStorage.setItem(PLAYER_ADDED_KEY, JSON.stringify(mergedPlayerAdded));
 
             function finishImport() {
+              if (data.exportedAt) {
+                try {
+                  localStorage.setItem(LAST_SYNC_IMPORT_KEY, data.exportedAt);
+                  if (data.exportedBy) localStorage.setItem(LAST_SYNC_IMPORT_NAME_KEY, data.exportedBy);
+                } catch (e) {
+                  console.warn("Could not save last-sync-import timestamp.", e);
+                }
+              }
               localStorage.setItem(STORAGE_KEY, JSON.stringify(finalState));
               if (!localIsFresh) {
                 alertModal(T("alert.mergedImport", { players: newPlayerCount, lists: rosterMerge.added }), function () {
@@ -7837,7 +9594,7 @@
   function openOnboarding() {
     onboardingStep = 1;
     onboardingNameInput.value = "";
-    onboardingRatingInput.value = "";
+    onboardingRatingInput.value = String(DEFAULT_RATING);
     onboardingEmailInput.value = "";
     onboardingPhoneInput.value = "";
     onboardingReportOptInCheckbox.checked = false;
@@ -8338,6 +10095,179 @@
       });
   }
 
+  // Same shape as computeHeadToHead, but grouped by teammate combo
+  // (teamComboLabel(g.teammateNames), already used by the graph's team-
+  // combo series) instead of by opponent - one row per distinct group of
+  // people this player has been teamed up with (tournament teams and the
+  // main scoreboard's ad-hoc Team A/B mode both write isTeam/teammateNames
+  // the same way, so both show up here). Each combo is decorated with its
+  // saved team name (findTeamByMembers, matched on the FULL roster -
+  // teammateNames excludes the viewed player themself, so it's added back
+  // in) when one exists, falling back to just the partner names.
+  function computeTeamRecords(games, viewedPlayerName) {
+    var map = {};
+    var order = [];
+    games.forEach(function (g) {
+      if (!g.isTeam || !(g.teammateNames || []).length) return;
+      var key = teamComboLabel(g.teammateNames);
+      if (!map[key]) {
+        map[key] = { partners: g.teammateNames.slice(), wins: 0, losses: 0 };
+        order.push(key);
+      }
+      if (g.result === "won") map[key].wins += 1;
+      else map[key].losses += 1;
+    });
+    return order
+      .map(function (key) {
+        var rec = map[key];
+        var total = rec.wins + rec.losses;
+        var saved = findTeamByMembers(rec.partners.concat([viewedPlayerName]));
+        return {
+          teamName: saved ? saved.name : null,
+          partners: rec.partners,
+          wins: rec.wins,
+          losses: rec.losses,
+          total: total,
+          pct: total ? Math.round((rec.wins / total) * 100) : null
+        };
+      })
+      .sort(function (a, b) {
+        return b.total - a.total || a.partners.join(",").localeCompare(b.partners.join(","));
+      });
+  }
+
+  // Player achievements - pure functions of data already tracked (game
+  // history, ratings, tournament results), computed fresh on every render
+  // exactly like computeHeadToHead/computeTeamRecords above: no new
+  // persisted storage, no migration risk. Lifetime totals, not period-
+  // scoped - these shouldn't change just because the Synopsis period
+  // dropdown does. Adding a future achievement is a one-line table entry
+  // here, not new plumbing.
+  var ACHIEVEMENT_DEFS = [
+    { id: "gamesPlayed", icon: "🎮", tiers: [10, 50, 200], compute: function (ctx) { return ctx.allGames.length; } },
+    { id: "wins", icon: "🏅", tiers: [1, 25, 100], compute: function (ctx) { return ctx.synopsis.wins; } },
+    { id: "winStreak", icon: "🔥", tiers: [3, 5, 10], compute: function (ctx) { return ctx.longestStreak; } },
+    // "MVP" = the existing team-MVP data (whoever potted the winning ball
+    // on a team win, already shown as "Team wins potted (MVP)" below) -
+    // turned into a badge, not a new tournament-MVP computation.
+    { id: "mvpPots", icon: "🌟", tiers: [1, 10, 30], compute: function (ctx) { return ctx.mvpPots; } },
+    { id: "tournamentTitles", icon: "🏆", tiers: [1, 3, 10], compute: function (ctx) { return ctx.tournamentWins; } }
+  ];
+
+  var SPECIAL_ACHIEVEMENT_DEFS = [
+    { id: "skunkMaster", icon: "🦨", compute: function (ctx) { return ctx.synopsis.skunkWins > 0; } }
+  ];
+
+  function computeAchievements(name) {
+    var allGames = collectAllGamesForPlayer(name);
+    var synopsis = computeWinLossSynopsis(allGames);
+    var sorted = allGames.slice().sort(function (a, b) {
+      return (a.ts || "").localeCompare(b.ts || "");
+    });
+    var longestStreak = 0;
+    var current = 0;
+    sorted.forEach(function (g) {
+      if (g.result === "won") {
+        current += 1;
+        if (current > longestStreak) longestStreak = current;
+      } else {
+        current = 0;
+      }
+    });
+    var mvpPots = allGames.filter(function (g) {
+      return g.result === "won" && g.mvpName === name;
+    }).length;
+    var tournamentGames = tournamentGamesForPlayerName(name).concat(sessionRaceTournamentGames(allGames));
+    var tournamentWins = computeWinLossSynopsis(tournamentGames).wins;
+    var ctx = {
+      allGames: allGames,
+      synopsis: synopsis,
+      longestStreak: longestStreak,
+      mvpPots: mvpPots,
+      tournamentWins: tournamentWins
+    };
+
+    var ladders = ACHIEVEMENT_DEFS.map(function (def) {
+      var value = def.compute(ctx);
+      var tier = 0;
+      def.tiers.forEach(function (threshold) {
+        if (value >= threshold) tier += 1;
+      });
+      return {
+        id: def.id,
+        icon: def.icon,
+        tier: tier,
+        value: value,
+        nextGoal: tier < def.tiers.length ? def.tiers[tier] : null
+      };
+    });
+    var specials = SPECIAL_ACHIEVEMENT_DEFS.map(function (def) {
+      return { id: def.id, icon: def.icon, unlocked: !!def.compute(ctx) };
+    });
+    return { ladders: ladders, specials: specials };
+  }
+
+  function achievementTierMedal(tier) {
+    return tier >= 3 ? "🥇" : tier >= 2 ? "🥈" : tier >= 1 ? "🥉" : "";
+  }
+
+  function buildAchievementBadge(icon, labelText, unlocked, progressText) {
+    var chip = document.createElement("div");
+    chip.className = "achievement-badge" + (unlocked ? " is-unlocked" : "");
+    var iconEl = document.createElement("div");
+    iconEl.className = "achievement-badge-icon";
+    iconEl.textContent = icon;
+    var labelEl = document.createElement("div");
+    labelEl.className = "achievement-badge-label";
+    labelEl.textContent = labelText;
+    chip.appendChild(iconEl);
+    chip.appendChild(labelEl);
+    if (progressText) {
+      var progressEl = document.createElement("div");
+      progressEl.className = "achievement-badge-progress";
+      progressEl.textContent = progressText;
+      chip.appendChild(progressEl);
+    }
+    return chip;
+  }
+
+  function renderPlayerAchievements() {
+    if (!currentStatsPlayerName) return;
+    var data = computeAchievements(currentStatsPlayerName);
+    var unlockedCount =
+      data.ladders.filter(function (a) {
+        return a.tier > 0;
+      }).length +
+      data.specials.filter(function (a) {
+        return a.unlocked;
+      }).length;
+    var totalCount = data.ladders.length + data.specials.length;
+    setPanelSummary(
+      "player-page-achievements-panel",
+      T("playerPage.achievementsSummary", { unlocked: unlockedCount, total: totalCount })
+    );
+    playerPageAchievementsList.innerHTML = "";
+    data.ladders.forEach(function (a) {
+      var medal = achievementTierMedal(a.tier);
+      var label = (medal ? medal + " " : "") + T("achievements." + a.id);
+      var progress = a.nextGoal === null ? T("achievements.maxed") : a.value + "/" + a.nextGoal;
+      var chip = buildAchievementBadge(a.icon, label, a.tier > 0, progress);
+      var desc = document.createElement("div");
+      desc.className = "achievement-badge-desc";
+      desc.textContent = T("achievements." + a.id + "Desc");
+      chip.appendChild(desc);
+      playerPageAchievementsList.appendChild(chip);
+    });
+    data.specials.forEach(function (a) {
+      var chip = buildAchievementBadge(a.icon, T("achievements." + a.id), a.unlocked, null);
+      var desc = document.createElement("div");
+      desc.className = "achievement-badge-desc";
+      desc.textContent = T("achievements." + a.id + "Desc");
+      chip.appendChild(desc);
+      playerPageAchievementsList.appendChild(chip);
+    });
+  }
+
   function synopsisStatRow(label, value, variant) {
     var row = document.createElement("div");
     row.className = "player-stats-row";
@@ -8418,26 +10348,132 @@
       hint.className = "empty-hint";
       hint.textContent = T("playerPage.noOpponentGamesThisPeriod");
       playerPageH2hList.appendChild(hint);
-      return;
+    } else {
+      h2h.forEach(function (opp) {
+        var li = document.createElement("li");
+        li.className = "player-h2h-row";
+        var name = document.createElement("span");
+        name.className = "player-h2h-name";
+        name.textContent = opp.name;
+        name.appendChild(buildRatingBadge(opp.name));
+        var record = document.createElement("span");
+        record.className = "player-h2h-record";
+        record.textContent = opp.wins + "–" + opp.losses;
+        var pct = document.createElement("span");
+        pct.className = "player-h2h-pct";
+        pct.textContent = opp.pct === null ? "—" : opp.pct + "%";
+        li.appendChild(name);
+        li.appendChild(record);
+        li.appendChild(pct);
+        playerPageH2hList.appendChild(li);
+      });
     }
-    h2h.forEach(function (opp) {
-      var li = document.createElement("li");
-      li.className = "player-h2h-row";
-      var name = document.createElement("span");
-      name.className = "player-h2h-name";
-      name.textContent = opp.name;
-      name.appendChild(buildRatingBadge(opp.name));
-      var record = document.createElement("span");
-      record.className = "player-h2h-record";
-      record.textContent = opp.wins + "–" + opp.losses;
-      var pct = document.createElement("span");
-      pct.className = "player-h2h-pct";
-      pct.textContent = opp.pct === null ? "—" : opp.pct + "%";
-      li.appendChild(name);
-      li.appendChild(record);
-      li.appendChild(pct);
-      playerPageH2hList.appendChild(li);
+
+    var teamRecords = computeTeamRecords(filtered, currentStatsPlayerName);
+    setPanelSummary(
+      "player-page-teams-panel",
+      teamRecords.length === 0
+        ? "No teams yet this period."
+        : teamRecords.length + " team" + (teamRecords.length === 1 ? "" : "s") + " played on"
+    );
+    playerPageTeamsList.innerHTML = "";
+    if (teamRecords.length === 0) {
+      var teamHint = document.createElement("li");
+      teamHint.className = "empty-hint";
+      teamHint.textContent = T("playerPage.noTeamGamesThisPeriod");
+      playerPageTeamsList.appendChild(teamHint);
+    } else {
+      teamRecords.forEach(function (rec) {
+        var li = document.createElement("li");
+        li.className = "player-h2h-row";
+        var name = document.createElement("span");
+        name.className = "player-h2h-name";
+        var partnerNames = joinNamesForReport(rec.partners);
+        name.textContent = rec.teamName ? rec.teamName + " — " + partnerNames : partnerNames;
+        rec.partners.forEach(function (partnerName) {
+          name.appendChild(buildRatingBadge(partnerName));
+        });
+        var record = document.createElement("span");
+        record.className = "player-h2h-record";
+        record.textContent = rec.wins + "–" + rec.losses;
+        var pct = document.createElement("span");
+        pct.className = "player-h2h-pct";
+        pct.textContent = rec.pct === null ? "—" : rec.pct + "%";
+        li.appendChild(name);
+        li.appendChild(record);
+        li.appendChild(pct);
+        playerPageTeamsList.appendChild(li);
+      });
+    }
+
+    renderPlayerAchievements();
+  }
+
+  // Mirrors exactly what the Player Stats page currently shows (same
+  // period filter, same synopsis/H2H/game-log data) as a real
+  // spreadsheet table instead of a JSON export.
+  function buildPlayerStatsCsv() {
+    var name = currentStatsPlayerName;
+    if (!name) return "";
+    var allGames = collectAllGamesForPlayer(name);
+    var filtered = filterGamesByPeriod(allGames, currentStatsPeriod);
+    var synopsis = computeWinLossSynopsis(filtered);
+    var tournamentFiltered = filterGamesByPeriod(
+      tournamentGamesForPlayerName(name).concat(sessionRaceTournamentGames(allGames)),
+      currentStatsPeriod
+    );
+    var tournamentSynopsis = computeWinLossSynopsis(tournamentFiltered);
+    var h2h = computeHeadToHead(filtered);
+
+    var lines = [];
+    lines.push(csvRow(["Pool Master Counter — Player Stats", name, T(PLAYER_PAGE_PERIOD_LABEL_KEYS[currentStatsPeriod] || "period.allTime")]));
+    lines.push("\r\n");
+
+    lines.push(csvRow(["Rating", "Games Won", "Skunk Wins", "Games Lost", "Skunk Losses", "Win %", "Tournaments Played", "Tournaments Won", "Tournaments Lost"]));
+    lines.push(
+      csvRow([
+        getPlayerRating(name),
+        synopsis.wins,
+        synopsis.skunkWins,
+        synopsis.losses,
+        synopsis.skunkLosses,
+        synopsis.pct === null ? "" : synopsis.pct + "%",
+        tournamentSynopsis.total,
+        tournamentSynopsis.wins,
+        tournamentSynopsis.losses
+      ])
+    );
+    lines.push("\r\n");
+
+    lines.push(csvRow(["Opponent", "Wins", "Losses", "Win %"]));
+    h2h.forEach(function (o) {
+      lines.push(csvRow([o.name, o.wins, o.losses, o.pct === null ? "" : o.pct + "%"]));
     });
+    lines.push("\r\n");
+
+    lines.push(csvRow(["Time", "Game", "Result", "Winner(s)", "Opponent(s)", "Duration", "Race Milestone", "Skunk", "Balls Left"]));
+    filtered
+      .slice()
+      .sort(function (a, b) {
+        return (a.ts || "").localeCompare(b.ts || "");
+      })
+      .forEach(function (g) {
+        lines.push(
+          csvRow([
+            formatTimestamp(g.ts, true),
+            g.gameLabel,
+            g.result === "won" ? "Won" : "Lost",
+            joinNamesForReport(g.winnerNames || []),
+            joinNamesForReport(g.opponentNames || []),
+            formatDuration(g.durationMs),
+            g.wonRace ? "Race to " + g.raceTarget : "",
+            g.skunk ? "Yes" : "",
+            g.ballsLeftOnTable !== null && g.ballsLeftOnTable !== undefined ? g.ballsLeftOnTable : ""
+          ])
+        );
+      });
+
+    return "\uFEFF" + lines.join("");
   }
 
   function renderPlayerPageGraph() {
@@ -9155,13 +11191,13 @@
   // wherever a graph dot was clicked, listing every opponent behind that
   // point and the win/loss record against each. One shared tooltip node
   // for the whole app — only one is ever open at a time.
-  function showGraphDotTooltip(clientX, clientY, games) {
+  function showGraphDotTooltip(clientX, clientY, games, seriesLabel) {
     var el = getGraphTooltipEl();
     var perOpponent = summarizeGraphDotGames(games);
     el.innerHTML = "";
     var title = document.createElement("div");
     title.className = "player-graph-tooltip-title";
-    title.textContent = games.length + " game" + (games.length === 1 ? "" : "s") + " here";
+    title.textContent = T("playerPage.graphDotTitle", { series: seriesLabel, count: games.length });
     el.appendChild(title);
     perOpponent.forEach(function (opp) {
       var row = document.createElement("div");
@@ -9234,6 +11270,7 @@
     title.textContent = formatTimestamp(point.ts, true);
     el.appendChild(title);
 
+    var previousRating = point.rating - point.delta;
     var ratingRow = document.createElement("div");
     ratingRow.className = "player-graph-tooltip-row";
     var ratingLabel = document.createElement("span");
@@ -9241,7 +11278,7 @@
     ratingLabel.textContent = T("common.rating");
     var ratingValue = document.createElement("span");
     ratingValue.className = "player-graph-tooltip-record";
-    ratingValue.textContent = point.rating;
+    ratingValue.textContent = T("playerPage.ratingWasNow", { was: previousRating, now: point.rating });
     ratingRow.appendChild(ratingLabel);
     ratingRow.appendChild(ratingValue);
     el.appendChild(ratingRow);
@@ -9297,7 +11334,7 @@
   // tap precisely) that reveals a tooltip with the opponent(s) and win/
   // loss for every game bucketed into that point — see
   // showGraphDotTooltip/summarizeGraphDotGames.
-  function appendGraphSeries(svg, points, minMs, maxMs, width, height, axisMax, lineClass, dotClass, color, startHidden) {
+  function appendGraphSeries(svg, points, minMs, maxMs, width, height, axisMax, lineClass, dotClass, color, startHidden, seriesLabel) {
     var geo = buildSeriesGeometry(points, minMs, maxMs, width, height, axisMax);
     var group = svgEl("g", { class: "player-graph-series" + (startHidden ? " is-hidden" : "") });
     var pathAttrs = { d: geo.path, fill: "none", class: lineClass };
@@ -9311,7 +11348,7 @@
         var hit = svgEl("circle", { cx: pt.x, cy: pt.y, r: 9, class: "player-graph-dot-hit" });
         hit.addEventListener("click", function (e) {
           e.stopPropagation();
-          showGraphDotTooltip(e.clientX, e.clientY, pt.games);
+          showGraphDotTooltip(e.clientX, e.clientY, pt.games, seriesLabel);
         });
         group.appendChild(hit);
       }
@@ -9621,6 +11658,7 @@
     var legendItems = [];
 
     if (series.individualPlayed.length) {
+      var indPlayedLabel = T("graph.singleGamesPlayed");
       var gIndPlayed = appendGraphSeries(
         svg,
         series.individualPlayed,
@@ -9631,11 +11669,14 @@
         axisMax,
         "player-graph-line player-graph-line-ind-played",
         "player-graph-dot player-graph-dot-ind-played",
-        null
+        null,
+        false,
+        indPlayedLabel
       );
-      legendItems.push({ color: "var(--info)", style: "solid", label: T("graph.singleGamesPlayed"), group: gIndPlayed });
+      legendItems.push({ color: "var(--info)", style: "solid", label: indPlayedLabel, group: gIndPlayed });
     }
     if (series.individualWon.length) {
+      var indWonLabel = T("graph.singleGamesWon");
       var gIndWon = appendGraphSeries(
         svg,
         series.individualWon,
@@ -9646,11 +11687,14 @@
         axisMax,
         "player-graph-line player-graph-line-dotted player-graph-line-ind-won",
         "player-graph-dot player-graph-dot-ind-won",
-        null
+        null,
+        false,
+        indWonLabel
       );
-      legendItems.push({ color: "var(--accent)", style: "dotted", label: T("graph.singleGamesWon"), group: gIndWon });
+      legendItems.push({ color: "var(--accent)", style: "dotted", label: indWonLabel, group: gIndWon });
     }
     if (series.individualLost.length) {
+      var indLostLabel = T("graph.singleGamesLost");
       var gIndLost = appendGraphSeries(
         svg,
         series.individualLost,
@@ -9662,12 +11706,13 @@
         "player-graph-line player-graph-line-dashed player-graph-line-ind-lost",
         "player-graph-dot player-graph-dot-ind-lost",
         null,
-        true
+        true,
+        indLostLabel
       );
       legendItems.push({
         color: "var(--danger)",
         style: "dashed",
-        label: T("graph.singleGamesLost"),
+        label: indLostLabel,
         group: gIndLost,
         startHidden: true
       });
@@ -9677,6 +11722,7 @@
       var combo = series.teamCombos[key];
       var color = TEAM_COMBO_PALETTE[idx % TEAM_COMBO_PALETTE.length];
       if (combo.played.length) {
+        var comboPlayedLabel = T("graph.comboPlayed", { key: key });
         var gComboPlayed = appendGraphSeries(
           svg,
           combo.played,
@@ -9687,11 +11733,14 @@
           axisMax,
           "player-graph-line",
           "player-graph-dot",
-          color
+          color,
+          false,
+          comboPlayedLabel
         );
-        legendItems.push({ color: color, style: "solid", label: T("graph.comboPlayed", { key: key }), group: gComboPlayed });
+        legendItems.push({ color: color, style: "solid", label: comboPlayedLabel, group: gComboPlayed });
       }
       if (combo.won.length) {
+        var comboWonLabel = T("graph.comboWon", { key: key });
         var gComboWon = appendGraphSeries(
           svg,
           combo.won,
@@ -9702,11 +11751,14 @@
           axisMax,
           "player-graph-line player-graph-line-dotted",
           "player-graph-dot",
-          color
+          color,
+          false,
+          comboWonLabel
         );
-        legendItems.push({ color: color, style: "dotted", label: T("graph.comboWon", { key: key }), group: gComboWon });
+        legendItems.push({ color: color, style: "dotted", label: comboWonLabel, group: gComboWon });
       }
       if (combo.lost.length) {
+        var comboLostLabel = T("graph.comboLost", { key: key });
         var gComboLost = appendGraphSeries(
           svg,
           combo.lost,
@@ -9718,12 +11770,13 @@
           "player-graph-line player-graph-line-dashed",
           "player-graph-dot",
           color,
-          true
+          true,
+          comboLostLabel
         );
         legendItems.push({
           color: color,
           style: "dashed",
-          label: T("graph.comboLost", { key: key }),
+          label: comboLostLabel,
           group: gComboLost,
           startHidden: true
         });
@@ -9731,6 +11784,7 @@
     });
 
     if (tournamentSeries.played.length) {
+      var tournPlayedLabel = T("graph.tournamentsPlayed");
       var gTournPlayed = appendGraphSeries(
         svg,
         tournamentSeries.played,
@@ -9741,11 +11795,14 @@
         axisMax,
         "player-graph-line",
         "player-graph-dot",
-        TOURNAMENT_PLAYED_COLOR
+        TOURNAMENT_PLAYED_COLOR,
+        false,
+        tournPlayedLabel
       );
-      legendItems.push({ color: TOURNAMENT_PLAYED_COLOR, style: "solid", label: T("graph.tournamentsPlayed"), group: gTournPlayed });
+      legendItems.push({ color: TOURNAMENT_PLAYED_COLOR, style: "solid", label: tournPlayedLabel, group: gTournPlayed });
     }
     if (tournamentSeries.won.length) {
+      var tournWonLabel = T("graph.tournamentWins");
       var gTournWon = appendGraphSeries(
         svg,
         tournamentSeries.won,
@@ -9756,11 +11813,14 @@
         axisMax,
         "player-graph-line player-graph-line-dotted",
         "player-graph-dot",
-        TOURNAMENT_WON_COLOR
+        TOURNAMENT_WON_COLOR,
+        false,
+        tournWonLabel
       );
-      legendItems.push({ color: TOURNAMENT_WON_COLOR, style: "dotted", label: T("graph.tournamentWins"), group: gTournWon });
+      legendItems.push({ color: TOURNAMENT_WON_COLOR, style: "dotted", label: tournWonLabel, group: gTournWon });
     }
     if (tournamentSeries.lost.length) {
+      var tournLostLabel = T("graph.tournamentLosses");
       var gTournLost = appendGraphSeries(
         svg,
         tournamentSeries.lost,
@@ -9771,9 +11831,11 @@
         axisMax,
         "player-graph-line player-graph-line-dashed",
         "player-graph-dot",
-        TOURNAMENT_LOST_COLOR
+        TOURNAMENT_LOST_COLOR,
+        false,
+        tournLostLabel
       );
-      legendItems.push({ color: TOURNAMENT_LOST_COLOR, style: "dashed", label: T("graph.tournamentLosses"), group: gTournLost });
+      legendItems.push({ color: TOURNAMENT_LOST_COLOR, style: "dashed", label: tournLostLabel, group: gTournLost });
     }
 
     chart.appendChild(svg);
@@ -9989,6 +12051,62 @@
     });
   }
 
+  // Mirrors exactly what's currently on screen (same sort, period, and
+  // roster-only filter as renderAllPlayersPage) as a real spreadsheet
+  // table - one row per player, career totals rather than the graph view.
+  function buildAllPlayersCsv() {
+    var period = allPlayersPeriodSelect.value;
+    var names = getAllKnownPlayerNames();
+    if (allPlayersRosterOnly) {
+      var rosterNames = {};
+      state.players.forEach(function (p) {
+        rosterNames[p.name] = true;
+      });
+      names = names.filter(function (n) {
+        return rosterNames[n];
+      });
+    }
+    var stats = names.map(function (name) {
+      return computePlayerCareerStats(name, period);
+    });
+    var sorted = sortAllPlayerStats(stats, allPlayersSortSelect.value);
+
+    var lines = [];
+    lines.push(csvRow(["Pool Master Counter — All Players", T(ALL_PLAYERS_PERIOD_LABEL_KEYS[period] || "period.allTime")]));
+    lines.push("\r\n");
+
+    lines.push(
+      csvRow([
+        "Player",
+        "Rating",
+        "Played",
+        "Wins",
+        "Losses",
+        "Win %",
+        "Tournaments Played",
+        "Tournaments Won",
+        "Tournaments Lost"
+      ])
+    );
+    sorted.forEach(function (s) {
+      lines.push(
+        csvRow([
+          s.name,
+          getPlayerRating(s.name),
+          s.played,
+          s.wins,
+          s.losses,
+          s.winPct === null ? "" : Math.round(s.winPct * 100) + "%",
+          s.tournamentPlayed,
+          s.tournamentWins,
+          s.tournamentLosses
+        ])
+      );
+    });
+
+    return "\uFEFF" + lines.join("");
+  }
+
   function openAllPlayersPage(skipHistory) {
     if (!skipHistory) pushScreenHistory("all-players");
     renderAllPlayersPage();
@@ -10021,10 +12139,25 @@
 
   var TOURNAMENT_KEY = "poolMasterCounter.tournament.v1";
 
+  // lbWaiting used to be a plain array of names; it's now { name, feeder }
+  // entries so the losers bracket can carry feeder-match links through a
+  // save/reload. A tournament already in progress from before that change
+  // would otherwise resume with plain strings and break every .name/
+  // .feeder access below - normalized back into shape here, feeder-less
+  // (same as any entry that's always had no feeder to speak of).
+  function normalizeLoadedTournament(t) {
+    if (t && Array.isArray(t.lbWaiting)) {
+      t.lbWaiting = t.lbWaiting.map(function (entry) {
+        return typeof entry === "string" ? { name: entry, feeder: null } : entry;
+      });
+    }
+    return t;
+  }
+
   function loadTournamentFromStorage() {
     try {
       var raw = localStorage.getItem(TOURNAMENT_KEY);
-      return raw ? JSON.parse(raw) : null;
+      return raw ? normalizeLoadedTournament(JSON.parse(raw)) : null;
     } catch (e) {
       return null;
     }
@@ -10071,17 +12204,35 @@
   // Called once, right when a bracket's champion is first decided — records
   // a win for the champion and a loss for every other entrant. Skipped
   // under noStatsMode, same as every other persistence path.
+  // t.players/t.championNames hold bracket ENTRANT labels (a team's label
+  // for a team entrant) - flattened here into real member names via
+  // entrantMembers before storing, so a player who only ever entered via
+  // a team still shows up (and shows the right won/lost result) in their
+  // own tournamentGamesForPlayerName history below. entrantMembers itself
+  // is also stored, so that function can tell a player's own teammates
+  // apart from real opponents.
   function recordTournamentCompletion(t) {
     if (noStatsMode) return;
+    var entrantMembers = t.entrantMembers || {};
+    function flattenEntrants(labels) {
+      var out = [];
+      (labels || []).forEach(function (label) {
+        (entrantMembers[label] || [label]).forEach(function (name) {
+          out.push(name);
+        });
+      });
+      return out;
+    }
     var ts = new Date().toISOString();
     TOURNAMENT_RESULTS.unshift({
       ts: ts,
       // Round Robin can end in a tie shared by more than one champion;
       // t.championNames already holds all of them there. Bracket formats
       // only ever have a single winner.
-      championNames: t.championNames || [t.champion],
+      championNames: flattenEntrants(t.championNames || [t.champion]),
       format: t.format,
-      players: t.players.slice()
+      players: flattenEntrants(t.players),
+      entrantMembers: entrantMembers
     });
     if (TOURNAMENT_RESULTS.length > 200) TOURNAMENT_RESULTS.length = 200;
     saveTournamentResultsToStorage(TOURNAMENT_RESULTS);
@@ -10127,11 +12278,28 @@
     TOURNAMENT_RESULTS.forEach(function (r) {
       if (r.format === "session-race") return;
       if ((r.players || []).indexOf(name) === -1) return;
+      // r.entrantMembers is absent on older records (or solo-only
+      // tournaments saved before teams existed) - in that case every
+      // other player counts as an opponent, same as always. When present,
+      // exclude this player's own teammates (found by scanning for the
+      // entrant whose members include `name`) so a team win/loss doesn't
+      // also list a teammate as something this player "played against."
+      var ownTeammates = {};
+      if (r.entrantMembers) {
+        Object.keys(r.entrantMembers).forEach(function (label) {
+          var members = r.entrantMembers[label];
+          if (members.indexOf(name) !== -1) {
+            members.forEach(function (n) {
+              ownTeammates[n] = true;
+            });
+          }
+        });
+      }
       games.push({
         ts: r.ts,
         result: (r.championNames || []).indexOf(name) !== -1 ? "won" : "lost",
         opponentNames: r.players.filter(function (n) {
-          return n !== name;
+          return n !== name && !ownTeammates[n];
         }),
         gameLabel: "Tournament"
       });
@@ -10159,18 +12327,40 @@
     return result;
   }
 
-  function createBracketMatch(a, b, tag) {
-    return { id: uid(), a: a || null, b: b || null, winner: null, loser: null, tag: tag, collected: false };
+  // feederA/feederB (optional) are the specific match objects whose
+  // winner became this match's .a/.b - only ever set for losers-bracket
+  // matches (see pairUpNames), so the losers bracket can be drawn as a
+  // real connected tree instead of flat labeled columns. Winners-bracket
+  // matches don't need this: their feeders are always exactly
+  // t.wb[ri-1][mi*2] and [mi*2+1], computable from position alone.
+  function createBracketMatch(a, b, tag, feederA, feederB) {
+    return {
+      id: uid(),
+      a: a || null,
+      b: b || null,
+      winner: null,
+      loser: null,
+      tag: tag,
+      collected: false,
+      feederA: feederA || null,
+      feederB: feederB || null
+    };
   }
 
-  function pairUpNames(names, tag) {
+  // Pairs up consecutive { name, feeder } entries (feeder is the match
+  // that produced that name, or null if it has none - e.g. round robin
+  // never uses this) into new matches, stamping each with where its two
+  // sides actually came from. leftover carries its own feeder through
+  // too, so it's never lost if this name has to wait another round
+  // before finally getting paired.
+  function pairUpNames(entries, tag) {
     var matches = [];
     var i = 0;
-    while (i + 1 < names.length) {
-      matches.push(createBracketMatch(names[i], names[i + 1], tag));
+    while (i + 1 < entries.length) {
+      matches.push(createBracketMatch(entries[i].name, entries[i + 1].name, tag, entries[i].feeder, entries[i + 1].feeder));
       i += 2;
     }
-    var leftover = i < names.length ? [names[i]] : [];
+    var leftover = i < entries.length ? [entries[i]] : [];
     return { matches: matches, leftover: leftover };
   }
 
@@ -10212,8 +12402,19 @@
     });
   }
 
+  // Only the latest round can ever have a pending match - earlier rounds
+  // are, by construction, always fully decided before the next one is
+  // generated (see finalizeSwissRoundIfComplete).
+  function pendingSwissMatches(t) {
+    var latest = t.rounds[t.rounds.length - 1] || [];
+    return latest.filter(function (m) {
+      return m.a !== null && m.b !== null && m.winner === null;
+    });
+  }
+
   function pendingBracketMatches(t) {
     if (t.format === "roundrobin") return pendingRrMatches(t);
+    if (t.format === "swiss") return pendingSwissMatches(t);
     return pendingWbMatches(t).concat(pendingLbMatches(t), pendingGfMatches(t));
   }
 
@@ -10221,6 +12422,10 @@
     var all = [];
     if (t.format === "roundrobin") {
       all = t.matches;
+    } else if (t.format === "swiss") {
+      t.rounds.forEach(function (r) {
+        all = all.concat(r);
+      });
     } else {
       t.wb.forEach(function (r) {
         all = all.concat(r);
@@ -10265,17 +12470,21 @@
 
       while (t.lbNextWbRoundToDrop < t.wb.length && wbRoundComplete(t, t.lbNextWbRoundToDrop)) {
         var ri2 = t.lbNextWbRoundToDrop;
-        var losers = t.wb[ri2]
-          .map(function (m) {
-            return m.loser;
+        // Each drop-in's feeder is the exact WB match it lost - so a
+        // fresh drop always knows where it came from, same as anyone
+        // already sitting in lbWaiting (see the two spots below that
+        // push onto it, both of which carry a feeder along too).
+        var dropped = t.wb[ri2]
+          .filter(function (m) {
+            return m.loser !== null;
           })
-          .filter(function (x) {
-            return x !== null;
+          .map(function (m) {
+            return { name: m.loser, feeder: m };
           });
         t.lbNextWbRoundToDrop += 1;
         changed = true;
         if (ri2 === 0) {
-          var res = pairUpNames(losers, "Losers R1");
+          var res = pairUpNames(dropped, "Losers R1");
           if (res.matches.length) t.lbRounds.push(res.matches);
           t.lbWaiting = t.lbWaiting.concat(res.leftover);
         } else {
@@ -10284,16 +12493,16 @@
           var li = 0;
           var wi = 0;
           var waiting = t.lbWaiting;
-          while (li < losers.length || wi < waiting.length) {
-            if (wi < waiting.length && li < losers.length) {
-              matches2.push(createBracketMatch(waiting[wi], losers[li], "Losers"));
+          while (li < dropped.length || wi < waiting.length) {
+            if (wi < waiting.length && li < dropped.length) {
+              matches2.push(createBracketMatch(waiting[wi].name, dropped[li].name, "Losers", waiting[wi].feeder, dropped[li].feeder));
               wi += 1;
               li += 1;
             } else if (wi < waiting.length) {
               newWaiting.push(waiting[wi]);
               wi += 1;
             } else {
-              newWaiting.push(losers[li]);
+              newWaiting.push(dropped[li]);
               li += 1;
             }
           }
@@ -10306,7 +12515,7 @@
         rnd.forEach(function (m) {
           if (m.winner !== null && !m.collected) {
             m.collected = true;
-            t.lbWaiting.push(m.winner);
+            t.lbWaiting.push({ name: m.winner, feeder: m });
             changed = true;
           }
         });
@@ -10330,7 +12539,7 @@
         pendingLbMatches(t).length === 0 &&
         t.lbWaiting.length === 1
       ) {
-        t.lbChampion = t.lbWaiting[0];
+        t.lbChampion = t.lbWaiting[0].name;
         changed = true;
       }
 
@@ -10351,20 +12560,49 @@
   // by both tournament formats — round 1 seeded with the standard spread
   // (1v4/2v3, etc.) so byes land spread across the draw, every later round
   // starting empty until winners advance into it.
-  function buildWinnersBracketRounds(playerNames) {
-    var shuffled = playerNames.slice();
-    for (var i = shuffled.length - 1; i > 0; i--) {
-      var j = Math.floor(Math.random() * (i + 1));
-      var tmp = shuffled[i];
-      shuffled[i] = shuffled[j];
-      shuffled[j] = tmp;
+  // seededOrder (optional): a real 1..N ranking supplied by the organizer
+  // (see getTournamentSeeds) instead of the default random draw. Either
+  // way, seedOrder(size) below is what actually spreads seed 1/2/3/4... onto
+  // opposite halves of the bracket so they can't meet early - that spread
+  // happens the same way whether the ranking behind it is random or real.
+  // pairAdjacent (optional): the opposite of that spread - used for
+  // "Match Similar Ratings" seeding, where seededOrder is already
+  // strongest-to-weakest and the whole point is for adjacent ranks to
+  // play each other round 1 instead of being kept apart. Byes in this
+  // mode go to the weakest players (paired against nobody) rather than
+  // the standard convention of rewarding the strongest with a bye - a
+  // bye here would let a top player dodge the very round-1 gauntlet this
+  // mode exists to create.
+  function buildWinnersBracketRounds(playerNames, seededOrder, pairAdjacent) {
+    var shuffled;
+    if (seededOrder) {
+      shuffled = seededOrder.slice();
+    } else {
+      shuffled = playerNames.slice();
+      for (var i = shuffled.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var tmp = shuffled[i];
+        shuffled[i] = shuffled[j];
+        shuffled[j] = tmp;
+      }
     }
     var n = shuffled.length;
     var size = nextPow2(n);
-    var order = seedOrder(size);
-    var slots = order.map(function (s) {
-      return s <= n ? shuffled[s - 1] : null;
-    });
+    var slots;
+    if (pairAdjacent) {
+      var byeCount = size - n;
+      var paired = shuffled.slice(0, n - byeCount);
+      var byeReceivers = shuffled.slice(n - byeCount);
+      slots = paired.slice();
+      byeReceivers.forEach(function (name) {
+        slots.push(name, null);
+      });
+    } else {
+      var order = seedOrder(size);
+      slots = order.map(function (s) {
+        return s <= n ? shuffled[s - 1] : null;
+      });
+    }
 
     var wb = [];
     var r1 = [];
@@ -10396,8 +12634,8 @@
     return { shuffled: shuffled, size: size, wb: wb };
   }
 
-  function buildDoubleEliminationBracket(playerNames, gameType, target, raceTo, fairRace) {
-    var built = buildWinnersBracketRounds(playerNames);
+  function buildDoubleEliminationBracket(playerNames, gameType, target, raceTo, fairRace, seededOrder, pairAdjacent) {
+    var built = buildWinnersBracketRounds(playerNames, seededOrder, pairAdjacent);
     var t = {
       format: "double",
       createdAt: new Date().toISOString(),
@@ -10426,8 +12664,8 @@
   // past the last round, so the losers-bracket logic in advanceBracket
   // never fires) and no grand final — the winners-bracket champion is the
   // tournament champion outright.
-  function buildSingleEliminationBracket(playerNames, gameType, target, raceTo, fairRace) {
-    var built = buildWinnersBracketRounds(playerNames);
+  function buildSingleEliminationBracket(playerNames, gameType, target, raceTo, fairRace, seededOrder, pairAdjacent) {
+    var built = buildWinnersBracketRounds(playerNames, seededOrder, pairAdjacent);
     var t = {
       format: "single",
       createdAt: new Date().toISOString(),
@@ -10484,6 +12722,47 @@
     };
   }
 
+  // Swiss: no elimination, and not every possible pairing either — each
+  // round pairs players against others with a similar record so far
+  // (never a repeat pairing), for a fixed number of rounds sized to the
+  // field (ceil(log2(n)), the standard convention — enough rounds to
+  // separate a field this size without playing every pairing the way
+  // round robin does). Built round-by-round: only round 1 is created
+  // here, via pairSwissRound below; later rounds are appended as each
+  // one finishes (see finalizeSwissRoundIfComplete).
+  function buildSwissTournament(playerNames, gameType, target, raceTo, fairRace, seededOrder) {
+    var ordered;
+    if (seededOrder) {
+      ordered = seededOrder.slice();
+    } else {
+      ordered = playerNames.slice();
+      for (var i = ordered.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var tmp = ordered[i];
+        ordered[i] = ordered[j];
+        ordered[j] = tmp;
+      }
+    }
+    var t = {
+      format: "swiss",
+      createdAt: new Date().toISOString(),
+      gameType: gameType,
+      target: target,
+      raceTo: raceTo,
+      fairRace: !!fairRace,
+      players: ordered,
+      totalRounds: Math.max(1, Math.ceil(Math.log(ordered.length) / Math.log(2))),
+      rounds: [],
+      byeHistory: {},
+      pairHistory: {},
+      champion: null,
+      championNames: null,
+      active: null
+    };
+    t.rounds.push(pairSwissRound(t));
+    return t;
+  }
+
   // Ranks every entrant by match wins (most first, name as a stable
   // tiebreaker for display order only — a true tie in wins is reflected
   // by championNames holding more than one name, not by this ordering).
@@ -10510,6 +12789,124 @@
       });
   }
 
+  // Shared by swissPairingOrder and swissStandings below - just a plain
+  // win count per player from every decided match across every round
+  // played so far (byes included, since a bye already counts as a win).
+  function swissWinsMap(t) {
+    var wins = {};
+    t.players.forEach(function (name) {
+      wins[name] = 0;
+    });
+    t.rounds.forEach(function (round) {
+      round.forEach(function (m) {
+        if (m.winner !== null) wins[m.winner] = (wins[m.winner] || 0) + 1;
+      });
+    });
+    return wins;
+  }
+
+  // Ranks the field by wins for PAIRING purposes - ties broken by each
+  // player's original seed/shuffle position (t.players order), not by
+  // name. Round 1 needs this for the standard seed-1-vs-middle-seed
+  // opening spread; later rounds stay deterministic relative to strength
+  // instead of re-sorting alphabetically on every tie. Contrast with
+  // swissStandings below, which is for DISPLAY and ties by name instead.
+  function swissPairingOrder(t) {
+    var wins = swissWinsMap(t);
+    return t.players.slice().sort(function (a, b) {
+      return (wins[b] || 0) - (wins[a] || 0) || t.players.indexOf(a) - t.players.indexOf(b);
+    });
+  }
+
+  // Wins/played, plus a simplified Buchholz score (sum of each opponent's
+  // own win total) as a tiebreak for DISPLAY only - it never decides the
+  // champion (see finalizeSwissRoundIfComplete), matching how a tied
+  // finish is handled everywhere else in this app (Round Robin shares the
+  // win rather than picking a tiebreaker winner).
+  function swissStandings(t) {
+    var wins = swissWinsMap(t);
+    var played = {};
+    var opponentsOf = {};
+    t.players.forEach(function (name) {
+      played[name] = 0;
+      opponentsOf[name] = [];
+    });
+    t.rounds.forEach(function (round) {
+      round.forEach(function (m) {
+        if (m.winner === null || m.b === null) return; // a bye has no real opponent
+        played[m.a] = (played[m.a] || 0) + 1;
+        played[m.b] = (played[m.b] || 0) + 1;
+        opponentsOf[m.a].push(m.b);
+        opponentsOf[m.b].push(m.a);
+      });
+    });
+    return t.players
+      .map(function (name) {
+        var buchholz = opponentsOf[name].reduce(function (sum, opp) {
+          return sum + (wins[opp] || 0);
+        }, 0);
+        return { name: name, wins: wins[name] || 0, played: played[name] || 0, buchholz: buchholz };
+      })
+      .sort(function (x, y) {
+        return y.wins - x.wins || y.buchholz - x.buchholz || x.name.localeCompare(y.name);
+      });
+  }
+
+  function swissPairKey(a, b) {
+    return [a, b].sort().join("|");
+  }
+
+  // Greedy pairing: walk the field ranked by current record, pairing each
+  // still-unpaired player with the next unpaired player below them they
+  // haven't already played. Simple and good enough for the small fields
+  // this app is built for, not a formal Swiss pairing engine — if every
+  // remaining candidate has already been played (only realistic in a very
+  // small field over many rounds), pairs with the closest-ranked available
+  // opponent anyway rather than erroring.
+  function pairSwissRound(t) {
+    var ranked = swissPairingOrder(t);
+    var roundNum = t.rounds.length + 1;
+    var unpaired = ranked.slice();
+    var matches = [];
+
+    // Odd field: the bye goes to the lowest-ranked player who hasn't had
+    // one yet, falling back to lowest-ranked overall if everyone has -
+    // resolved immediately, the same way a structural round-1 bye is
+    // resolved in buildWinnersBracketRounds, rather than left pending.
+    if (unpaired.length % 2 === 1) {
+      var byeIndex = -1;
+      for (var i = unpaired.length - 1; i >= 0; i--) {
+        if (!t.byeHistory[unpaired[i]]) {
+          byeIndex = i;
+          break;
+        }
+      }
+      if (byeIndex === -1) byeIndex = unpaired.length - 1;
+      var byeName = unpaired.splice(byeIndex, 1)[0];
+      var byeMatch = createBracketMatch(byeName, null, "Swiss R" + roundNum);
+      byeMatch.winner = byeName;
+      matches.push(byeMatch);
+      t.byeHistory[byeName] = (t.byeHistory[byeName] || 0) + 1;
+    }
+
+    while (unpaired.length) {
+      var name = unpaired.shift();
+      var opponentIndex = -1;
+      for (var k = 0; k < unpaired.length; k++) {
+        if (!t.pairHistory[swissPairKey(name, unpaired[k])]) {
+          opponentIndex = k;
+          break;
+        }
+      }
+      if (opponentIndex === -1) opponentIndex = 0;
+      var opponent = unpaired.splice(opponentIndex, 1)[0];
+      matches.push(createBracketMatch(name, opponent, "Swiss R" + roundNum));
+      t.pairHistory[swissPairKey(name, opponent)] = true;
+    }
+
+    return matches;
+  }
+
   // Once every round-robin match has a result, the champion is whoever
   // has the most match wins — a tie at the top makes every tied player a
   // champion (championNames holds all of them; TOURNAMENT_RESULTS
@@ -10533,6 +12930,34 @@
     t.champion = champions.join(" & ");
   }
 
+  // Once every match in the latest Swiss round has a result: either the
+  // whole tournament is done (totalRounds reached — champion decided by
+  // most wins, ties shared exactly like Round Robin's tied finish, never
+  // broken by Buchholz) or the next round's pairings are generated and
+  // appended.
+  function finalizeSwissRoundIfComplete(t) {
+    var latest = t.rounds[t.rounds.length - 1];
+    var allDecided = latest.every(function (m) {
+      return m.winner !== null;
+    });
+    if (!allDecided) return;
+    if (t.rounds.length >= t.totalRounds) {
+      var standings = swissStandings(t);
+      var topWins = standings[0].wins;
+      var champions = standings
+        .filter(function (s) {
+          return s.wins === topWins;
+        })
+        .map(function (s) {
+          return s.name;
+        });
+      t.championNames = champions;
+      t.champion = champions.join(" & ");
+      return;
+    }
+    t.rounds.push(pairSwissRound(t));
+  }
+
   function isGrandFinalMatch(t, match) {
     return t.grandFinal.indexOf(match) !== -1;
   }
@@ -10543,6 +12968,10 @@
     match.loser = match.a === winnerName ? match.b : match.a;
     if (t.format === "roundrobin") {
       finalizeRoundRobinIfComplete(t);
+      return;
+    }
+    if (t.format === "swiss") {
+      finalizeSwissRoundIfComplete(t);
       return;
     }
     if (isGrandFinalMatch(t, match)) {
@@ -10561,7 +12990,111 @@
     advanceBracket(t);
   }
 
-  function recordTournamentRackWin(winnerName, loserName, durationMs) {
+  // A semifinal or final (WB final, or anything in the Grand Final) gets
+  // a little extra visual weight in the ready-to-play list - it's a
+  // bigger moment than an early round, so it should feel like one.
+  function isMarqueeTournamentMatch(t, match) {
+    if (isGrandFinalMatch(t, match)) return true;
+    if (!t.wb.length) return false;
+    var lastRound = t.wb[t.wb.length - 1];
+    var semiRound = t.wb.length >= 2 ? t.wb[t.wb.length - 2] : null;
+    return lastRound.indexOf(match) !== -1 || (!!semiRound && semiRound.indexOf(match) !== -1);
+  }
+
+  function findWbPosition(t, match) {
+    for (var ri = 0; ri < t.wb.length; ri++) {
+      var mi = t.wb[ri].indexOf(match);
+      if (mi !== -1) return { ri: ri, mi: mi };
+    }
+    return null;
+  }
+
+  // A winners-bracket match's internal tag is just "Winners R3" - not
+  // wrong, but not what a player actually calls that round out loud.
+  // Swaps in the same Final/Semifinal/Quarterfinal/Round-of-N label the
+  // bracket tree itself shows above each card (wbRoundLabel) wherever a
+  // WB match's round gets named back to the player; Grand Final and
+  // losers-bracket tags are already plain-language as-is.
+  function matchRoundLabel(t, match) {
+    if (isGrandFinalMatch(t, match)) return match.tag;
+    var pos = findWbPosition(t, match);
+    if (pos) return wbRoundLabel(t.wb[pos.ri].length);
+    return match.tag;
+  }
+
+  // Figures out what to tell a just-crowned match winner about what's
+  // next: the next match they've already been placed into (by the
+  // advanceBracket call that already ran before this is called) and who
+  // they'll face, or - if that slot isn't filled yet - the specific
+  // still-pending match that will decide it, when that's computable (the
+  // winners bracket's round/index math makes this exact; the losers
+  // bracket's matches aren't linked that way, so it falls back to a
+  // generic "the bracket's still catching up" line there). Returns null
+  // when the tournament itself is already over - the caller shows a
+  // champion headline instead in that case.
+  function describeWhatsNextForWinner(t, justPlayedMatch, winnerName) {
+    if (t.champion) return null;
+    function findOpenMatchIn(list) {
+      for (var i = 0; i < list.length; i++) {
+        var m = list[i];
+        if (!m.winner && (m.a === winnerName || m.b === winnerName)) return m;
+      }
+      return null;
+    }
+    var flatWb = [].concat.apply([], t.wb);
+    var flatLb = [].concat.apply([], t.lbRounds);
+    var next = findOpenMatchIn(t.grandFinal) || findOpenMatchIn(flatWb) || findOpenMatchIn(flatLb);
+    if (!next) {
+      if (t.wbChampion === winnerName && t.grandFinal.length === 0) {
+        return T("tournament.nextWaitingForLosersChampion");
+      }
+      return T("tournament.nextWaitingGeneric");
+    }
+    var nextRoundLabel = matchRoundLabel(t, next);
+    var opponent = next.a === winnerName ? next.b : next.a;
+    if (opponent) {
+      return T("tournament.nextAdvance", { round: nextRoundLabel, opponent: opponent });
+    }
+    var pos = findWbPosition(t, justPlayedMatch);
+    if (pos) {
+      var siblingIdx = pos.mi % 2 === 0 ? pos.mi + 1 : pos.mi - 1;
+      var sibling = t.wb[pos.ri][siblingIdx];
+      if (sibling && sibling.a && sibling.b && !sibling.winner) {
+        return T("tournament.nextWaitingForMatch", { round: nextRoundLabel, a: sibling.a, b: sibling.b });
+      }
+    }
+    return T("tournament.nextWaitingGenericRound", { round: nextRoundLabel });
+  }
+
+  function closeTournamentMatchWinPopup() {
+    tournamentMatchWinOverlay.classList.add("hidden");
+  }
+
+  // The gratifying "you won that match" moment the live scoreboard's own
+  // win popup never covers for bracket play (tournamentAdjustScore scores
+  // a match with its own +/- steppers, not creditWin) - shown right after
+  // reportBracketResult/advanceBracket have already placed the winner
+  // into whatever comes next, so describeWhatsNextForWinner can just read
+  // that placement back out rather than recompute it.
+  function showTournamentMatchWinPopup(t, justPlayedMatch, winnerName) {
+    if (t.format !== "single" && t.format !== "double") return;
+    if (t.champion) {
+      tournamentMatchWinEmoji.textContent = "🏆🎉";
+      tournamentMatchWinHeadline.textContent = T("tournament.matchWinChampionHeadline", { winner: t.champion });
+      tournamentMatchWinSubtext.textContent = "";
+    } else {
+      tournamentMatchWinEmoji.textContent = "🏆";
+      tournamentMatchWinHeadline.textContent = T("tournament.matchWinHeadline", { winner: winnerName });
+      tournamentMatchWinSubtext.textContent = describeWhatsNextForWinner(t, justPlayedMatch, winnerName) || "";
+    }
+    tournamentMatchWinOverlay.classList.remove("hidden");
+  }
+
+  function recordTournamentRackWin(winnerLabel, loserLabel, durationMs) {
+    var entrantMembers = TOURNAMENT.entrantMembers || {};
+    var winnerMembers = entrantMembers[winnerLabel] || [winnerLabel];
+    var loserMembers = entrantMembers[loserLabel] || [loserLabel];
+    var isTeam = winnerMembers.length > 1 || loserMembers.length > 1;
     var typeLabel = GAME_TYPES[TOURNAMENT.gameType] ? GAME_TYPES[TOURNAMENT.gameType].label : TOURNAMENT.gameType;
     var ts = new Date().toISOString();
     state.gameHistory.unshift({
@@ -10569,18 +13102,72 @@
       gameType: TOURNAMENT.gameType,
       gameLabel: typeLabel,
       target: TOURNAMENT.target,
-      winnerNames: [winnerName],
-      opponentNames: [loserName],
-      isTeam: false,
+      winnerNames: winnerMembers,
+      opponentNames: loserMembers,
+      isTeam: isTeam,
       mvpId: null,
       mvpName: null,
       durationMs: durationMs,
-      summary: winnerName + " won " + typeLabel + " (tournament vs " + loserName + ")"
+      summary: winnerLabel + " won " + typeLabel + " (tournament vs " + loserLabel + ")"
     });
     if (state.gameHistory.length > 200) state.gameHistory.length = 200;
-    applyPairwiseRatingResult(winnerName, loserName, ts);
+    if (isTeam) {
+      applyTeamRatingResult(winnerMembers, loserMembers, ts);
+    } else {
+      applyPairwiseRatingResult(winnerMembers[0], loserMembers[0], ts);
+    }
     saveRatingsToStorage(PLAYER_RATINGS);
     saveState();
+  }
+
+  // Offers every previously-saved team name PLUS whatever's currently
+  // typed into any other row right now - so a brand-new team name shows
+  // up as a pickable option for the next row immediately, without having
+  // to wait for a tournament to actually start (which is the only point
+  // SAVED_TEAMS itself gets updated).
+  function renderTournamentTeamOptions() {
+    var seen = {};
+    var names = [];
+    function addName(n) {
+      if (!n) return;
+      var key = normalizeNameKey(n);
+      if (seen[key]) return;
+      seen[key] = true;
+      names.push(n);
+    }
+    SAVED_TEAMS.forEach(function (t) {
+      addName(t.name);
+    });
+    Array.prototype.forEach.call(tournamentPlayerChecklist.querySelectorAll(".tournament-team-input"), function (input) {
+      addName(input.value.trim());
+    });
+    tournamentTeamOptionsDatalist.innerHTML = "";
+    names.forEach(function (name) {
+      var opt = document.createElement("option");
+      opt.value = name;
+      tournamentTeamOptionsDatalist.appendChild(opt);
+    });
+  }
+
+  // Re-renders both the team-options datalist and the team preview line -
+  // wired to every checkbox/team-input change on the checklist.
+  function refreshTournamentTeamUi() {
+    renderTournamentTeamOptions();
+    renderTournamentTeamPreview();
+  }
+
+  function tournamentSeedMode() {
+    var checked = Array.prototype.filter.call(tournamentSeedModeRadios, function (r) {
+      return r.checked;
+    })[0];
+    return checked ? checked.value : "random";
+  }
+
+  function isTournamentSeededManually() {
+    var checked = Array.prototype.filter.call(tournamentSeedModeRadios, function (r) {
+      return r.checked;
+    })[0];
+    return !!checked && checked.value === "manual";
   }
 
   function renderTournamentPlayerChecklist() {
@@ -10591,7 +13178,12 @@
     activePlayers().forEach(function (p) {
       activeNames[p.name] = true;
     });
+    // A fresh render means a fresh checklist DOM - any earlier Select All
+    // snapshot no longer refers to anything real.
+    tournamentSelectAllCheckbox.checked = false;
+    tournamentSelectAllSnapshot = null;
     tournamentPlayerChecklist.innerHTML = "";
+    renderTournamentTeamOptions();
     if (names.length === 0) {
       var hint = document.createElement("li");
       hint.className = "empty-hint";
@@ -10613,24 +13205,210 @@
       label.appendChild(checkbox);
       label.appendChild(span);
       li.appendChild(label);
+      var seedInput = document.createElement("input");
+      seedInput.type = "number";
+      seedInput.min = "1";
+      seedInput.className = "tournament-seed-input" + (isTournamentSeededManually() ? "" : " hidden");
+      seedInput.setAttribute("aria-label", T("tournament.seedLabel"));
+      li.appendChild(seedInput);
+      var teamInput = document.createElement("input");
+      teamInput.type = "text";
+      teamInput.className = "tournament-team-input";
+      teamInput.setAttribute("list", "tournament-team-options");
+      teamInput.setAttribute("aria-label", T("tournament.teamLabel"));
+      teamInput.setAttribute("placeholder", T("tournament.teamLabel"));
+      li.appendChild(teamInput);
       tournamentPlayerChecklist.appendChild(li);
     });
+    renderTournamentTeamPreview();
   }
 
-  function getCheckedTournamentPlayers() {
-    return Array.prototype.slice
-      .call(tournamentPlayerChecklist.querySelectorAll('input[type="checkbox"]:checked'))
-      .map(function (cb) {
-        return cb.value;
+  // Groups the checked checklist rows into bracket entrants. Grouping two
+  // or more rows into one shared entrant only happens when "Play as
+  // teams" is on AND they share the same (trimmed, case-insensitive) Team
+  // value - otherwise every row is always its own solo entrant, matches
+  // stay one-on-one. Either way, a non-blank Team value is kept on the
+  // entrant as `teamName` - purely informational when it didn't result in
+  // grouping (teams off, or nobody else typed the same value), so
+  // "who plays with whom" is still visible even when it isn't driving the
+  // bracket. A team value that collides with an existing player's name is
+  // rejected (treated as blank) and reported back via collidedTeamNames,
+  // since team and player names share one lookup namespace everywhere
+  // downstream (getPlayerIdByName, rating lookups).
+  function getTournamentEntrants() {
+    var teamsEnabled = tournamentTeamsEnabledCheckbox.checked;
+    var rows = Array.prototype.slice.call(tournamentPlayerChecklist.querySelectorAll(".tournament-player-check-row"));
+    var knownPlayerKeys = {};
+    getAllKnownPlayerNames().forEach(function (n) {
+      knownPlayerKeys[normalizeNameKey(n)] = true;
+    });
+    var groupsByKey = {};
+    var order = [];
+    var collidedTeamNames = [];
+    rows.forEach(function (li) {
+      var cb = li.querySelector('input[type="checkbox"]');
+      if (!cb || !cb.checked) return;
+      var name = cb.value;
+      var teamInput = li.querySelector(".tournament-team-input");
+      var rawTeam = teamInput ? teamInput.value.trim() : "";
+      var isCollision = !!rawTeam && knownPlayerKeys[normalizeNameKey(rawTeam)];
+      if (isCollision) collidedTeamNames.push(rawTeam);
+      var teamValue = isCollision ? "" : rawTeam;
+      var groupKey = teamsEnabled && teamValue ? "team:" + normalizeNameKey(teamValue) : "solo:" + normalizeNameKey(name);
+      if (!groupsByKey[groupKey]) {
+        groupsByKey[groupKey] = { teamLabel: teamValue, members: [] };
+        order.push(groupKey);
+      }
+      groupsByKey[groupKey].members.push({ name: name, teamName: teamValue || null });
+    });
+    var entrants = order.map(function (key) {
+      var g = groupsByKey[key];
+      var isRealTeam = g.members.length > 1;
+      return {
+        label: isRealTeam ? g.teamLabel : g.members[0].name,
+        members: g.members.map(function (m) {
+          return m.name;
+        }),
+        teamName: g.members[0].teamName
+      };
+    });
+    return { entrants: entrants, collidedTeamNames: collidedTeamNames };
+  }
+
+  // Live "who's on this team" hint under the checklist, recomputed on
+  // every checkbox/team-input change - satisfies knowing your teammates
+  // before the tournament starts, not just after. Shows a grouped line
+  // for real (2+ member) team entrants, and a shorter solo-tag line for
+  // any player whose typed Team value didn't result in grouping (teams
+  // off, or nobody else typed the same value) - covers both "playing as
+  // teams" and "just want the team noted" cases.
+  function renderTournamentTeamPreview() {
+    var entrants = getTournamentEntrants().entrants;
+    var lines = [];
+    entrants.forEach(function (e) {
+      if (e.members.length > 1) {
+        lines.push(T("tournament.teamPreviewLine", { team: e.label, members: e.members.join(", ") }));
+      } else if (e.teamName) {
+        lines.push(T("tournament.teamPreviewSoloLine", { player: e.label, team: e.teamName }));
+      }
+    });
+    if (lines.length === 0) {
+      tournamentTeamPreview.textContent = "";
+      tournamentTeamPreview.classList.add("hidden");
+      return;
+    }
+    tournamentTeamPreview.classList.remove("hidden");
+    tournamentTeamPreview.textContent = lines.join("  ·  ");
+  }
+
+  // Ranks entrants strongest-to-weakest by average rating (team-aware -
+  // an entrant's members' ratings are averaged the same way Fair Race
+  // treats a team as a single combined strength). Ties keep checklist
+  // order, so it's still deterministic rather than depending on object
+  // iteration order.
+  function tournamentEntrantsByRatingDesc(entrants) {
+    return entrants
+      .map(function (entrant, idx) {
+        return { name: entrant.label, rating: averageRating(entrant.members), idx: idx };
+      })
+      .sort(function (a, b) {
+        return b.rating - a.rating || a.idx - b.idx;
+      })
+      .map(function (entry) {
+        return entry.name;
+      });
+  }
+
+  // Returns null when seeding is off (today's exact random-draw behavior).
+  // For "rating" mode, resolves straight to a strongest-to-weakest order
+  // (seed 1 = highest rated) - buildWinnersBracketRounds is told to pair
+  // that order adjacently (see pairAdjacent) instead of spreading it
+  // apart the way a real seed number normally would, so the closest-
+  // rated players meet in round 1 instead of being kept apart.
+  // For "manual" mode, resolves one seed per ENTRANT (not per row): the
+  // lowest explicit seed number typed among that entrant's member rows,
+  // else its first member's checklist position - left blank, duplicated,
+  // or invalid entries all fall back this way, nudged past any number a
+  // real seed already claimed, rather than erroring - this is a casual
+  // home-game tool, not a tournament-director product.
+  function getTournamentSeeds(entrants) {
+    var mode = tournamentSeedMode();
+    if (mode === "rating") {
+      return tournamentEntrantsByRatingDesc(entrants).map(function (name, i) {
+        return { name: name, seed: i + 1 };
+      });
+    }
+    if (mode !== "manual") return null;
+    var rows = Array.prototype.slice.call(tournamentPlayerChecklist.querySelectorAll(".tournament-player-check-row"));
+    var checklistPositionByName = {};
+    var seedValueByName = {};
+    rows.forEach(function (li, idx) {
+      var cb = li.querySelector('input[type="checkbox"]');
+      if (!cb) return;
+      checklistPositionByName[cb.value] = idx + 1;
+      var seedInput = li.querySelector(".tournament-seed-input");
+      seedValueByName[cb.value] = seedInput ? parseInt(seedInput.value, 10) : NaN;
+    });
+    var claimedSeeds = {};
+    var entries = entrants.map(function (entrant) {
+      var explicit = null;
+      entrant.members.forEach(function (name) {
+        var v = seedValueByName[name];
+        if (v >= 1 && (explicit === null || v < explicit)) explicit = v;
+      });
+      var firstPosition = entrant.members.reduce(function (min, name) {
+        var pos = checklistPositionByName[name] || Infinity;
+        return pos < min ? pos : min;
+      }, Infinity);
+      return { name: entrant.label, seed: explicit, checklistPosition: firstPosition };
+    });
+    entries.forEach(function (entry) {
+      if (entry.seed >= 1 && !claimedSeeds[entry.seed]) {
+        claimedSeeds[entry.seed] = true;
+      } else {
+        entry.seed = null;
+      }
+    });
+    entries.forEach(function (entry) {
+      if (entry.seed !== null) return;
+      var candidate = entry.checklistPosition;
+      while (claimedSeeds[candidate]) candidate += 1;
+      entry.seed = candidate;
+      claimedSeeds[candidate] = true;
+    });
+    return entries
+      .map(function (entry) {
+        return { name: entry.name, seed: entry.seed };
+      })
+      .sort(function (a, b) {
+        return a.seed - b.seed;
       });
   }
 
   function startTournament() {
-    var names = getCheckedTournamentPlayers();
-    if (names.length < 2) {
+    lbTreeExpandedNodes = {};
+    var grouped = getTournamentEntrants();
+    var entrants = grouped.entrants;
+    if (grouped.collidedTeamNames.length) {
+      showToast(T("tournament.teamNameConflictsWithPlayer", { names: grouped.collidedTeamNames.join(", ") }));
+    }
+    if (entrants.length < 2) {
       alertModal(T("alert.pickAtLeast2Players"));
       return;
     }
+    var entrantMembers = {};
+    var entrantTeamNames = {};
+    entrants.forEach(function (e) {
+      entrantMembers[e.label] = e.members;
+      if (e.members.length > 1) {
+        upsertTeamFromTournamentEntry(e.label, e.members);
+      } else if (e.teamName) {
+        entrantTeamNames[e.label] = e.teamName;
+      }
+    });
+    var names = entrants.map(function (e) {
+      return e.label;
+    });
     var gameType = tournamentGameTypeSelect.value;
     var target = parseInt(tournamentTargetInput.value, 10) || GAME_TYPES[gameType].defaultTarget;
     var raceTo = parseInt(tournamentRaceToInput.value, 10) || 1;
@@ -10638,13 +13416,27 @@
     var format = Array.prototype.filter.call(tournamentFormatRadios, function (r) {
       return r.checked;
     })[0].value;
+    var seedInfo = getTournamentSeeds(entrants);
+    var seededOrder = seedInfo
+      ? seedInfo.map(function (s) {
+          return s.name;
+        })
+      : null;
+    // Only meaningful for the two bracket formats - Swiss already pairs
+    // adjacent-in-order players round to round on its own (see
+    // pairSwissRound), and round robin has no concept of seeding at all.
+    var pairAdjacent = tournamentSeedMode() === "rating";
     if (format === "roundrobin") {
       TOURNAMENT = buildRoundRobinTournament(names, gameType, target, raceTo, fairRace);
+    } else if (format === "swiss") {
+      TOURNAMENT = buildSwissTournament(names, gameType, target, raceTo, fairRace, seededOrder);
     } else if (format === "single") {
-      TOURNAMENT = buildSingleEliminationBracket(names, gameType, target, raceTo, fairRace);
+      TOURNAMENT = buildSingleEliminationBracket(names, gameType, target, raceTo, fairRace, seededOrder, pairAdjacent);
     } else {
-      TOURNAMENT = buildDoubleEliminationBracket(names, gameType, target, raceTo, fairRace);
+      TOURNAMENT = buildDoubleEliminationBracket(names, gameType, target, raceTo, fairRace, seededOrder, pairAdjacent);
     }
+    TOURNAMENT.entrantMembers = entrantMembers;
+    TOURNAMENT.entrantTeamNames = entrantTeamNames;
     saveTournamentToStorage(TOURNAMENT);
     renderTournamentPage();
   }
@@ -10669,12 +13461,50 @@
     }
   }
 
-  function tournamentMatchCard(match, activeMatchId) {
+  // Appends either a single name + rating badge + link icon (a solo
+  // entrant - plus a small "(Team Name)" tag when this tournament isn't
+  // playing as teams but the player's team was still noted at setup) or
+  // the team label plus a compact member sub-list (each real member with
+  // its own badge + link) - shared by every place a bracket entrant name
+  // is shown, so ratings/links/"who's on this team" stay correct wherever
+  // a team entrant appears.
+  function appendEntrantIdentity(container, name, t) {
+    var members = (t && t.entrantMembers && t.entrantMembers[name]) || [name];
+    if (members.length <= 1) {
+      container.appendChild(buildRatingBadge(name));
+      container.appendChild(buildPlayerLinkIcon(name));
+      var teamName = t && t.entrantTeamNames && t.entrantTeamNames[name];
+      if (teamName) {
+        var tag = document.createElement("span");
+        tag.className = "tournament-match-team-tag";
+        tag.textContent = "(" + teamName + ")";
+        container.appendChild(tag);
+      }
+      return;
+    }
+    var sub = document.createElement("div");
+    sub.className = "tournament-match-team-members";
+    members.forEach(function (memberName, i) {
+      if (i > 0) sub.appendChild(document.createTextNode(", "));
+      sub.appendChild(document.createTextNode(memberName));
+      sub.appendChild(buildRatingBadge(memberName));
+      sub.appendChild(buildPlayerLinkIcon(memberName));
+    });
+    container.appendChild(sub);
+  }
+
+  function tournamentMatchCard(match, activeMatchId, t) {
     var div = document.createElement("div");
     var isActive = activeMatchId === match.id;
     var stateClass = match.winner ? "is-done" : isActive ? "is-active" : match.a && match.b ? "is-ready" : "is-pending";
     div.className = "tournament-match-card " + stateClass;
 
+    // In the Grand Final, the two sides aren't symmetric the way every
+    // other match is - one came in with zero losses (the winners-bracket
+    // champion), the other already has one (the losers-bracket champion,
+    // who has to beat them twice to take it). That's invisible from the
+    // card alone, so it's called out directly on their name.
+    var isGf = isGrandFinalMatch(t, match);
     [match.a, match.b].forEach(function (name) {
       var row = document.createElement("div");
       row.className = "tournament-match-side";
@@ -10683,8 +13513,13 @@
       if (match.winner && name === match.loser) row.classList.add("is-loser");
       row.textContent = (isWinner ? "👑 " : "") + (name || "—");
       if (name) {
-        row.appendChild(buildRatingBadge(name));
-        row.appendChild(buildPlayerLinkIcon(name));
+        appendEntrantIdentity(row, name, t);
+        if (isGf && name === t.lbChampion) {
+          var lbTag = document.createElement("span");
+          lbTag.className = "tournament-match-lb-tag";
+          lbTag.textContent = T("tournament.fromLosersBracket");
+          row.appendChild(lbTag);
+        }
       }
       div.appendChild(row);
     });
@@ -10708,6 +13543,18 @@
     return div;
   }
 
+  // "Final" for a 1-match round, "Semifinal" for 2, "Quarterfinal" for 4,
+  // else "Round of N" (N = players entering that round) - derived purely
+  // from how many matches are in the round, so it's automatically right
+  // whether the bracket only ever has a Final, or goes all the way down
+  // to a Quarterfinal (or further) when there are enough entrants.
+  function wbRoundLabel(matchCount) {
+    if (matchCount === 1) return T("tournament.roundFinal");
+    if (matchCount === 2) return T("tournament.roundSemifinal");
+    if (matchCount === 4) return T("tournament.roundQuarterfinal");
+    return T("tournament.roundOfN", { n: matchCount * 2 });
+  }
+
   // Renders the winners bracket as a real horizontal tree: round 1 on the
   // left, each pair of matches converging into the match they feed, all the
   // way to the final on the right. Built as nested "children + this round's
@@ -10715,13 +13562,22 @@
   // pure CSS (percentages against each pair's own wrapper), needing no
   // pixel measurement, because a 2-item "space-around" column always places
   // its items at exactly 25%/75% of the wrapper's height regardless of the
-  // wrapper's actual size.
+  // wrapper's actual size. Each card gets its own round-name label right
+  // above it (see wbRoundLabel) since there's no single stable column to
+  // hang one shared header off of in a nested-tree layout.
   function renderWbTreeNode(t, ri, mi, activeMatchId) {
     var match = t.wb[ri][mi];
-    var card = tournamentMatchCard(match, activeMatchId);
+    var card = tournamentMatchCard(match, activeMatchId, t);
+    var wrap = document.createElement("div");
+    wrap.className = "wb-tree-card-wrap";
+    var heading = document.createElement("div");
+    heading.className = "tournament-round-heading";
+    heading.textContent = wbRoundLabel(t.wb[ri].length);
+    wrap.appendChild(heading);
+    wrap.appendChild(card);
     if (ri === 0) {
-      card.classList.add("wb-tree-leaf");
-      return card;
+      wrap.classList.add("wb-tree-leaf");
+      return wrap;
     }
     var childrenWrap = document.createElement("div");
     childrenWrap.className = "wb-tree-children";
@@ -10731,7 +13587,7 @@
     var node = document.createElement("div");
     node.className = "wb-tree-node";
     node.appendChild(childrenWrap);
-    node.appendChild(card);
+    node.appendChild(wrap);
     return node;
   }
 
@@ -10743,7 +13599,7 @@
     container.appendChild(root);
   }
 
-  function renderBracketColumns(container, rounds, activeMatchId) {
+  function renderBracketColumns(container, rounds, activeMatchId, t) {
     container.innerHTML = "";
     if (!rounds.length) {
       var hint = document.createElement("p");
@@ -10760,9 +13616,157 @@
       heading.textContent = round.length ? round[0].tag : "Round " + (i + 1);
       col.appendChild(heading);
       round.forEach(function (m) {
-        col.appendChild(tournamentMatchCard(m, activeMatchId));
+        col.appendChild(tournamentMatchCard(m, activeMatchId, t));
       });
       container.appendChild(col);
+    });
+  }
+
+  // ---------- Losers bracket tree ----------
+  // Unlike the winners bracket, a losers-bracket match's two feeders
+  // aren't at a fixed position computable from round/index math - one
+  // side is often a fresh winners-bracket drop-in, the other a survivor
+  // from the previous losers round, and those two ages don't line up
+  // into a clean symmetric tree. So every LB match is stamped at
+  // creation time with the *actual* match objects that produced its two
+  // sides (see createBracketMatch/pairUpNames in advanceBracket) and the
+  // tree below is built by following those links directly, reusing the
+  // exact same connector-line CSS as the winners tree (still always
+  // exactly 2 children per node - a losers match never exists until both
+  // of its feeders are known).
+
+  // How many LB-match levels deep (from whichever frontier match is
+  // currently the tree's root) stay expanded by default before folding
+  // into a "+" stub - since the root itself is always whatever match
+  // hasn't been consumed yet, this naturally slides forward as the
+  // bracket plays out: each new round becomes the new depth-0 root, so
+  // the round that used to be visible at the deepest level is exactly
+  // the one that now falls past the threshold and collapses. Keyed by
+  // match id so a manual expand survives this same match staying just
+  // past the threshold on the next render, but forgets once that match
+  // is no longer part of the tree at all (a fresh id per tournament, so
+  // nothing carries over to the next one).
+  var LB_TREE_VISIBLE_DEPTH = 3;
+  var lbTreeExpandedNodes = {};
+
+  function isLosersMatch(match) {
+    return typeof match.tag === "string" && match.tag.indexOf("Losers") === 0;
+  }
+
+  // How many further LB-only levels exist below this match (0 if none of
+  // its feeders are themselves LB matches) - used purely to word the
+  // collapsed stub ("2 earlier rounds" vs "1 earlier round").
+  function lbSubtreeDepth(match) {
+    var a = match.feederA && isLosersMatch(match.feederA) ? lbSubtreeDepth(match.feederA) + 1 : 0;
+    var b = match.feederB && isLosersMatch(match.feederB) ? lbSubtreeDepth(match.feederB) + 1 : 0;
+    return Math.max(a, b);
+  }
+
+  function renderLbCollapsedStub(match, extraRounds) {
+    var stub = document.createElement("button");
+    stub.type = "button";
+    stub.className = "wb-tree-card-wrap lb-tree-collapsed-stub wb-tree-leaf";
+    var plus = document.createElement("div");
+    plus.className = "lb-tree-collapsed-plus";
+    plus.textContent = "➕";
+    var label = document.createElement("div");
+    label.className = "lb-tree-collapsed-label";
+    label.textContent = T("tournament.lbTreeShowEarlier", { count: extraRounds + 1 });
+    stub.appendChild(plus);
+    stub.appendChild(label);
+    stub.addEventListener("click", function () {
+      lbTreeExpandedNodes[match.id] = true;
+      renderTournamentActive();
+    });
+    return stub;
+  }
+
+  // A losers-bracket match is still "in progress" (not yet the frontier)
+  // once some later match has consumed its winner as a feeder. What's
+  // left after removing every match that's referenced as somebody else's
+  // feeder is the current set of independent branches - there can be
+  // several at once early on, only merging into one (the eventual LB
+  // final) as the bracket plays out, so this can return more than one
+  // match.
+  function lbFrontierMatches(t) {
+    var consumedIds = {};
+    var all = [];
+    t.lbRounds.forEach(function (rnd) {
+      rnd.forEach(function (m) {
+        all.push(m);
+        if (m.feederA) consumedIds[m.feederA.id] = true;
+        if (m.feederB) consumedIds[m.feederB.id] = true;
+      });
+    });
+    return all.filter(function (m) {
+      return !consumedIds[m.id];
+    });
+  }
+
+  // A feeder is either another losers-bracket match (recurse into its
+  // own tree) or the winners-bracket match this side just dropped out
+  // of - shown as a compact stub naming who dropped and from where,
+  // rather than a full duplicate of a card the winners tree already
+  // shows in full elsewhere on the page. depth counts LB-match levels
+  // from the current root, passed through to renderLbTreeNode so it can
+  // decide whether this feeder is still past the visible window.
+  function renderLbFeederNode(feeder, activeMatchId, t, depth) {
+    if (isLosersMatch(feeder)) return renderLbTreeNode(feeder, activeMatchId, t, depth);
+    var stub = document.createElement("div");
+    stub.className = "wb-tree-card-wrap lb-tree-wb-stub";
+    var heading = document.createElement("div");
+    heading.className = "tournament-round-heading";
+    heading.textContent = matchRoundLabel(t, feeder);
+    var name = document.createElement("div");
+    name.className = "lb-tree-wb-stub-name";
+    name.textContent = "⬇ " + feeder.loser;
+    stub.appendChild(heading);
+    stub.appendChild(name);
+    stub.classList.add("wb-tree-leaf");
+    return stub;
+  }
+
+  function renderLbTreeNode(match, activeMatchId, t, depth) {
+    if (depth >= LB_TREE_VISIBLE_DEPTH && !lbTreeExpandedNodes[match.id]) {
+      return renderLbCollapsedStub(match, lbSubtreeDepth(match));
+    }
+    var card = tournamentMatchCard(match, activeMatchId, t);
+    var wrap = document.createElement("div");
+    wrap.className = "wb-tree-card-wrap";
+    var heading = document.createElement("div");
+    heading.className = "tournament-round-heading";
+    heading.textContent = matchRoundLabel(t, match);
+    wrap.appendChild(heading);
+    wrap.appendChild(card);
+    if (!match.feederA && !match.feederB) {
+      wrap.classList.add("wb-tree-leaf");
+      return wrap;
+    }
+    var childrenWrap = document.createElement("div");
+    childrenWrap.className = "wb-tree-children";
+    if (match.feederA) childrenWrap.appendChild(renderLbFeederNode(match.feederA, activeMatchId, t, depth + 1));
+    if (match.feederB) childrenWrap.appendChild(renderLbFeederNode(match.feederB, activeMatchId, t, depth + 1));
+    var node = document.createElement("div");
+    node.className = "wb-tree-node";
+    node.appendChild(childrenWrap);
+    node.appendChild(wrap);
+    return node;
+  }
+
+  function renderLbTree(container, t, activeMatchId) {
+    container.innerHTML = "";
+    var roots = lbFrontierMatches(t);
+    if (!roots.length) {
+      var hint = document.createElement("p");
+      hint.className = "empty-hint";
+      hint.textContent = "—";
+      container.appendChild(hint);
+      return;
+    }
+    roots.forEach(function (rootMatch) {
+      var root = renderLbTreeNode(rootMatch, activeMatchId, t, 0);
+      root.classList.add("wb-tree-root", "lb-tree-root");
+      container.appendChild(root);
     });
   }
 
@@ -10782,10 +13786,11 @@
     // there's no self-healing cache to maintain here, just a one-time
     // computation at the moment the two sides are actually known.
     if (TOURNAMENT.fairRace) {
+      var entrantMembersForRace = TOURNAMENT.entrantMembers || {};
       var targets = computeFairRaceTargets(
         [
-          { key: "a", rating: getPlayerRating(match.a) },
-          { key: "b", rating: getPlayerRating(match.b) }
+          { key: "a", rating: averageRating(entrantMembersForRace[match.a] || [match.a]) },
+          { key: "b", rating: averageRating(entrantMembersForRace[match.b] || [match.b]) }
         ],
         TOURNAMENT.raceTo
       );
@@ -10811,7 +13816,8 @@
 
     var name = side === "a" ? match.a : match.b;
     var otherName = side === "a" ? match.b : match.a;
-    var player = getPlayer(getPlayerIdByName(name));
+    var members = (t.entrantMembers && t.entrantMembers[name]) || [name];
+    var player = getPlayer(getPlayerIdByName(members[0]));
     var voice = player ? player.voice : undefined;
 
     if (delta > 0 && next >= t.target) {
@@ -10835,6 +13841,7 @@
         t.active = null;
         saveTournamentToStorage(t);
         renderTournamentPage();
+        showTournamentMatchWinPopup(t, match, name);
         return;
       }
     } else if (delta > 0) {
@@ -10853,8 +13860,7 @@
     var nameEl = document.createElement("div");
     nameEl.className = "player-name";
     nameEl.textContent = name;
-    nameEl.appendChild(buildRatingBadge(name));
-    nameEl.appendChild(buildPlayerLinkIcon(name));
+    appendEntrantIdentity(nameEl, name, t);
     panel.appendChild(nameEl);
 
     var raceToKey = side === "a" ? "raceToA" : "raceToB";
@@ -10940,14 +13946,60 @@
     var name = document.createElement("span");
     name.className = "tournament-rr-standings-name";
     name.textContent = (isChampion ? "👑 " : "") + s.name;
-    name.appendChild(buildRatingBadge(s.name));
-    name.appendChild(buildPlayerLinkIcon(s.name));
+    appendEntrantIdentity(name, s.name, t);
     var record = document.createElement("span");
     record.className = "tournament-rr-standings-record";
     record.textContent = s.wins + " win" + (s.wins === 1 ? "" : "s") + " / " + s.played + " played";
     li.appendChild(name);
     li.appendChild(record);
     return li;
+  }
+
+  // Same shape as roundRobinStandingsRow, plus a Buchholz figure - the
+  // strength-of-schedule tiebreak that's meaningful in Swiss (where not
+  // everyone plays everyone) but has no equivalent in Round Robin.
+  function swissStandingsRow(s, t) {
+    var li = document.createElement("li");
+    var isChampion = t.championNames && t.championNames.indexOf(s.name) !== -1;
+    li.className = "tournament-rr-standings-row" + (isChampion ? " is-champion" : "");
+    var name = document.createElement("span");
+    name.className = "tournament-rr-standings-name";
+    name.textContent = (isChampion ? "👑 " : "") + s.name;
+    appendEntrantIdentity(name, s.name, t);
+    var record = document.createElement("span");
+    record.className = "tournament-rr-standings-record";
+    record.textContent =
+      s.wins + " win" + (s.wins === 1 ? "" : "s") + " / " + s.played + " played · " + T("standings.buchholz", { count: s.buchholz });
+    li.appendChild(name);
+    li.appendChild(record);
+    return li;
+  }
+
+  // Swiss has no bracket tree either, so like Round Robin it gets its own
+  // board: a live standings list (wins/played/Buchholz) plus every round
+  // played so far as its own labeled group of match cards - only the
+  // latest round can ever have anything still pending (see
+  // pendingSwissMatches), but every earlier round stays visible as a
+  // record of what's already been played.
+  function renderSwissBoard(t, activeMatchId) {
+    tournamentSwissStandingsEl.innerHTML = "";
+    swissStandings(t).forEach(function (s) {
+      tournamentSwissStandingsEl.appendChild(swissStandingsRow(s, t));
+    });
+
+    tournamentSwissMatchesEl.innerHTML = "";
+    t.rounds.forEach(function (round, i) {
+      var col = document.createElement("div");
+      col.className = "tournament-round-col";
+      var heading = document.createElement("div");
+      heading.className = "tournament-round-heading";
+      heading.textContent = round.length ? round[0].tag : "Round " + (i + 1);
+      col.appendChild(heading);
+      round.forEach(function (m) {
+        col.appendChild(tournamentMatchCard(m, activeMatchId, t));
+      });
+      tournamentSwissMatchesEl.appendChild(col);
+    });
   }
 
   // Round Robin has no bracket tree to render, so it gets its own board:
@@ -10964,7 +14016,49 @@
 
     tournamentRrMatchesEl.innerHTML = "";
     t.matches.forEach(function (m) {
-      tournamentRrMatchesEl.appendChild(tournamentMatchCard(m, activeMatchId));
+      tournamentRrMatchesEl.appendChild(tournamentMatchCard(m, activeMatchId, t));
+    });
+  }
+
+  // A quick "you are here" stage tracker across the top of the bracket -
+  // only shown once there's actually more than one stage to track (a
+  // 2-3 entrant field is just a Final, nothing to get lost in). Stages
+  // done so far are struck through, the current one is bold/accented,
+  // everything after is dim.
+  function renderTournamentTimeline(t) {
+    tournamentTimelineEl.innerHTML = "";
+    var isEliminationFormat = t.format === "single" || t.format === "double";
+    if (!isEliminationFormat || t.wb.length < 2) {
+      tournamentTimelineEl.classList.add("hidden");
+      return;
+    }
+    tournamentTimelineEl.classList.remove("hidden");
+    var stages = t.wb.map(function (round) {
+      return wbRoundLabel(round.length);
+    });
+    if (t.format === "double") stages.push(T("tournament.grandFinal"));
+    var currentIdx = stages.length - 1;
+    for (var ri = 0; ri < t.wb.length; ri++) {
+      var roundDone = t.wb[ri].every(function (m) {
+        return !!m.winner;
+      });
+      if (!roundDone) {
+        currentIdx = ri;
+        break;
+      }
+    }
+    if (t.champion) currentIdx = stages.length - 1;
+    stages.forEach(function (label, i) {
+      if (i > 0) {
+        var arrow = document.createElement("span");
+        arrow.className = "tournament-timeline-arrow";
+        arrow.textContent = "→";
+        tournamentTimelineEl.appendChild(arrow);
+      }
+      var stage = document.createElement("span");
+      stage.className = "tournament-timeline-stage" + (i === currentIdx ? " is-current" : i < currentIdx ? " is-done" : "");
+      stage.textContent = label;
+      tournamentTimelineEl.appendChild(stage);
     });
   }
 
@@ -10973,21 +14067,27 @@
     var activeMatchId = t.active ? t.active.matchId : null;
     var isSingle = t.format === "single";
     var isRoundRobin = t.format === "roundrobin";
+    var isSwiss = t.format === "swiss";
 
-    tournamentWbSection.classList.toggle("hidden", isRoundRobin);
-    tournamentLbSection.classList.toggle("hidden", isRoundRobin || isSingle);
-    tournamentGfSection.classList.toggle("hidden", isRoundRobin || isSingle);
+    tournamentWbSection.classList.toggle("hidden", isRoundRobin || isSwiss);
+    tournamentLbSection.classList.toggle("hidden", isRoundRobin || isSingle || isSwiss);
+    tournamentGfEl.classList.toggle("hidden", isRoundRobin || isSingle || isSwiss);
     tournamentRrSection.classList.toggle("hidden", !isRoundRobin);
+    tournamentSwissSection.classList.toggle("hidden", !isSwiss);
 
     if (isRoundRobin) {
       renderRoundRobinBoard(t, activeMatchId);
+    } else if (isSwiss) {
+      renderSwissBoard(t, activeMatchId);
     } else {
       renderWbTree(tournamentWbEl, t, activeMatchId);
       if (!isSingle) {
-        renderBracketColumns(tournamentLbEl, t.lbRounds, activeMatchId);
-        renderBracketColumns(tournamentGfEl, t.grandFinal.length ? [t.grandFinal] : [], activeMatchId);
+        renderLbTree(tournamentLbEl, t, activeMatchId);
+        renderBracketColumns(tournamentGfEl, t.grandFinal.length ? [t.grandFinal] : [], activeMatchId, t);
       }
     }
+
+    renderTournamentTimeline(t);
 
     btnTournamentAbandon.textContent = T(t.champion ? "tournament.startNew" : "tournament.abandon");
 
@@ -10997,7 +14097,7 @@
       tournamentChampionBanner.textContent =
         T(multipleChampions ? "tournament.tiedForTheWin" : "tournament.wonTheTournament", { champion: t.champion });
       (t.championNames || [t.champion]).forEach(function (name) {
-        tournamentChampionBanner.appendChild(buildRatingBadge(name));
+        appendEntrantIdentity(tournamentChampionBanner, name, t);
       });
     } else {
       tournamentChampionBanner.classList.add("hidden");
@@ -11019,22 +14119,26 @@
       startTournamentMatch(ready[0].id);
       return;
     }
-    // Round Robin's Matches grid above already shows every pending match
-    // with its own Play button — no need for a second "ready" list too.
-    if (isRoundRobin) return;
+    // Round Robin's and Swiss's Matches grids above already show every
+    // pending match with its own Play button — no need for a second
+    // "ready" list too.
+    if (isRoundRobin || isSwiss) return;
     var heading = document.createElement("li");
     heading.className = "tournament-ready-heading";
     heading.textContent = T("tournament.readyToPlay", { count: ready.length });
     tournamentReadyList.appendChild(heading);
     ready.forEach(function (m) {
       var li = document.createElement("li");
-      li.className = "tournament-ready-row";
+      li.className = "tournament-ready-row" + (isMarqueeTournamentMatch(t, m) ? " is-marquee" : "");
+      var tag = document.createElement("span");
+      tag.className = "tournament-ready-tag";
+      tag.textContent = m.tag;
       var text = document.createElement("span");
+      text.className = "tournament-ready-names";
       text.appendChild(document.createTextNode(m.a));
-      text.appendChild(buildRatingBadge(m.a));
+      appendEntrantIdentity(text, m.a, t);
       text.appendChild(document.createTextNode(" vs " + m.b));
-      text.appendChild(buildRatingBadge(m.b));
-      text.appendChild(document.createTextNode(" (" + m.tag + ")"));
+      appendEntrantIdentity(text, m.b, t);
       var btn = document.createElement("button");
       btn.type = "button";
       btn.className = "btn btn-primary";
@@ -11042,6 +14146,7 @@
       btn.addEventListener("click", function () {
         startTournamentMatch(m.id);
       });
+      li.appendChild(tag);
       li.appendChild(text);
       li.appendChild(btn);
       tournamentReadyList.appendChild(li);
@@ -11192,6 +14297,18 @@
   backfillMissingRatingsFromHistory();
   backfillMissingAddedDates();
 
+  if (Purchases) {
+    Purchases.isProUnlocked()
+      .then(function (result) {
+        if (!result) return;
+        proUnlocked = !!result.unlocked;
+        if (result.price) proPriceDisplay = result.price;
+      })
+      .catch(function () {
+        console.warn("Could not check Pro entitlement.");
+      });
+  }
+
   btnExportAllData.addEventListener("click", function () {
     promptModal(T("backup.exportFilenamePrompt"), defaultBackupFilename(), function (name) {
       exportAllData(name);
@@ -11209,9 +14326,13 @@
     importAllData(file);
   });
 
+  btnExportSync.addEventListener("click", exportForSync);
+  renderSyncStatusLine();
+
   btnResetAllPlayerStats.addEventListener("click", resetAllPlayerStats);
   btnResetRosterLists.addEventListener("click", resetAllRosterLists);
   btnResetAllRatings.addEventListener("click", resetAllPlayersOfficialRating);
+  btnFullReset.addEventListener("click", performFullFactoryReset);
   btnResetSessionTournament.addEventListener("click", resetSessionAndTournament);
 
   btnRecoverImportFile.addEventListener("click", function () {
@@ -11235,8 +14356,13 @@
     if (e.target === ratingEditOverlay) closeRatingEditPopup();
   });
   wireNotifyCheckbox(ratingEditEmailInput, ratingEditPhoneInput, ratingEditNotifyCheckbox, ratingEditNotifyMethodRow);
+  wirePhoneFormatting(ratingEditPhoneInput);
 
   btnExportRosterLists.addEventListener("click", exportRosterLists);
+  btnExportRosterListsCsv.addEventListener("click", function () {
+    var filename = "pool-master-counter-player-lists-" + todayDateStr() + ".csv";
+    downloadTextFile(filename, buildRosterListsCsv(), "text/csv;charset=utf-8");
+  });
 
   btnImportRosterLists.addEventListener("click", function () {
     importRosterListsFileInput.click();
@@ -11259,11 +14385,15 @@
       return;
     }
     var starting = parseStartingRatingInput(newPlayerRatingInput);
-    var alreadyRated = starting !== null && !!findRatingKey(resolvePlayerName(trimmed));
+    // Only worth a heads-up if they typed something other than the
+    // prefilled default - leaving it at 400 is indistinguishable from
+    // not touching it, so it shouldn't warn on every re-add of an
+    // already-rated name the way an explicit custom number should.
+    var alreadyRated = starting !== null && starting !== DEFAULT_RATING && !!findRatingKey(resolvePlayerName(trimmed));
     var player = addPlayer(newPlayerName.value, starting === null ? undefined : starting);
     if (!player) return;
     newPlayerName.value = "";
-    newPlayerRatingInput.value = "";
+    newPlayerRatingInput.value = String(DEFAULT_RATING);
     validateNewPlayerNameInput();
     renderAll();
     if (alreadyRated) showToast(player.name + " already has a tracked rating — starting rating not applied.");
@@ -11463,6 +14593,11 @@
     if (e.target === milestoneOverlay) closeMilestone();
   });
 
+  btnTournamentMatchWinClose.addEventListener("click", closeTournamentMatchWinPopup);
+  tournamentMatchWinOverlay.addEventListener("click", function (e) {
+    if (e.target === tournamentMatchWinOverlay) closeTournamentMatchWinPopup();
+  });
+
   btnGamewinClose.addEventListener("click", closeGameWinOverlay);
   btnGamewinUndo.addEventListener("click", undoWinFromGameWinOverlay);
   gamewinOverlay.addEventListener("click", function (e) {
@@ -11560,6 +14695,7 @@
   btnOnboardingGo.addEventListener("click", advanceOnboarding);
   onboardingNameInput.addEventListener("input", validateOnboardingNameInput);
   wireNotifyCheckbox(onboardingEmailInput, onboardingPhoneInput, onboardingReportOptInCheckbox, onboardingNotifyMethodRow);
+  wirePhoneFormatting(onboardingPhoneInput);
   btnOnboardingRunWizard.addEventListener("click", function () {
     closeOnboarding();
     openWizard();
@@ -11584,11 +14720,11 @@
       return;
     }
     var starting = parseStartingRatingInput(wizardNewPlayerRatingInput);
-    var alreadyRated = starting !== null && !!findRatingKey(resolvePlayerName(trimmed));
+    var alreadyRated = starting !== null && starting !== DEFAULT_RATING && !!findRatingKey(resolvePlayerName(trimmed));
     var player = addPlayer(wizardNewPlayerName.value, starting === null ? undefined : starting);
     if (!player) return;
     wizardNewPlayerName.value = "";
-    wizardNewPlayerRatingInput.value = "";
+    wizardNewPlayerRatingInput.value = String(DEFAULT_RATING);
     validateWizardNewPlayerNameInput();
     renderAll();
     if (alreadyRated) showToast(player.name + " already has a tracked rating — starting rating not applied.");
@@ -11640,9 +14776,12 @@
   wireCollapsiblePanel("standings-panel", "btn-toggle-standings-panel");
   wireCollapsiblePanel("history-panel", "btn-toggle-history-panel");
   wireCollapsiblePanel("day-notes-panel", "btn-toggle-day-notes-panel");
+  wireCollapsiblePanel("report-archive-panel", "btn-toggle-report-archive-panel");
   wireCollapsiblePanel("resets-panel", "btn-toggle-resets-panel");
   wireCollapsiblePanel("focus-players-wrap", "btn-toggle-focus-players");
   wireCollapsiblePanel("player-page-h2h-panel", "btn-toggle-player-page-h2h-panel");
+  wireCollapsiblePanel("player-page-teams-panel", "btn-toggle-player-page-teams-panel");
+  wireCollapsiblePanel("player-page-achievements-panel", "btn-toggle-player-page-achievements-panel");
 
   var dayNotesSaveTimer = null;
   dayNotesTextarea.addEventListener("input", function () {
@@ -11664,7 +14803,7 @@
   });
 
   btnDayReportEmail.addEventListener("click", function () {
-    var text = buildDayReportTextPlain(todayDateStr());
+    var text = buildDayReportTextForSharing(todayDateStr());
     function openEmailCompose() {
       var to = reportOptedInContacts("email")
         .map(function (c) {
@@ -11673,20 +14812,19 @@
         .join(",");
       window.location.href = "mailto:" + to + "?subject=" + encodeURIComponent("Pool Master Counter — Day Report") + "&body=" + encodeURIComponent(text);
     }
-    if (dayReportAttachBackupCheckbox.checked) {
-      // If the share sheet can't actually deliver the attachment (see
-      // shareReportWithBackupAttachment's onFallback), still compose
-      // the email exactly like the unchecked path would - a broken
-      // share sheet on this device shouldn't mean Email Report does
-      // literally nothing.
-      shareReportWithBackupAttachment(text, openEmailCompose);
+    if (dayReportAttachBackupCheckbox.checked || dayReportAttachColorfulCheckbox.checked) {
+      // If the share sheet can't actually deliver the attachment(s) (see
+      // shareReportWithAttachments' onFallback), still compose the email
+      // exactly like the unchecked path would - a broken share sheet on
+      // this device shouldn't mean Email Report does literally nothing.
+      shareReportWithAttachments(text, openEmailCompose);
       return;
     }
     openEmailCompose();
   });
 
   btnDayReportSms.addEventListener("click", function () {
-    var text = buildDayReportTextPlain(todayDateStr());
+    var text = buildDayReportTextForSharing(todayDateStr());
     function openSmsCompose() {
       var to = reportOptedInContacts("sms")
         .map(function (c) {
@@ -11695,8 +14833,8 @@
         .join(",");
       window.location.href = "sms:" + to + "&body=" + encodeURIComponent(text);
     }
-    if (dayReportAttachBackupCheckbox.checked) {
-      shareReportWithBackupAttachment(text, openSmsCompose);
+    if (dayReportAttachBackupCheckbox.checked || dayReportAttachColorfulCheckbox.checked) {
+      shareReportWithAttachments(text, openSmsCompose);
       return;
     }
     openSmsCompose();
@@ -11708,9 +14846,47 @@
     updateDayReportRecipientsLine();
   });
 
+  dayReportAttachColorfulCheckbox.checked = loadDayReportAttachColorful();
+  dayReportAttachColorfulCheckbox.addEventListener("change", function () {
+    if (dayReportAttachColorfulCheckbox.checked) {
+      dayReportAttachColorfulCheckbox.checked = false;
+      requireProOrShowPaywall(function () {
+        dayReportAttachColorfulCheckbox.checked = true;
+        saveDayReportAttachColorful(true);
+        updateDayReportRecipientsLine();
+      });
+      return;
+    }
+    saveDayReportAttachColorful(false);
+    updateDayReportRecipientsLine();
+  });
+
   btnDayReportShareBackup.addEventListener("click", shareReport);
 
+  btnDayReportCsv.addEventListener("click", function () {
+    var filename = "pool-master-counter-day-report-" + todayDateStr() + ".csv";
+    downloadTextFile(filename, buildDayReportCsv(todayDateStr()), "text/csv;charset=utf-8");
+  });
+
+  btnDayReportPrint.addEventListener("click", function () {
+    renderDayReportPrintView(todayDateStr());
+    dayReportPrintView.classList.remove("hidden");
+    window.print();
+  });
+  window.addEventListener("afterprint", function () {
+    dayReportPrintView.classList.add("hidden");
+  });
+
+  btnDayReportColorful.addEventListener("click", function () {
+    requireProOrShowPaywall(openDayReportColorful);
+  });
+
   btnPlayerPageExport.addEventListener("click", exportCurrentPlayerStats);
+  btnPlayerPageCsv.addEventListener("click", function () {
+    if (!currentStatsPlayerName) return;
+    var filename = "pool-master-counter-player-stats-" + currentStatsPlayerName.toLowerCase().replace(/[^a-z0-9]+/g, "-") + "-" + todayDateStr() + ".csv";
+    downloadTextFile(filename, buildPlayerStatsCsv(), "text/csv;charset=utf-8");
+  });
   btnPlayerPageReset.addEventListener("click", resetPlayerHistoricalStats);
   btnPlayerPageBack.addEventListener("click", function () {
     closePlayerStatsPage();
@@ -11741,6 +14917,10 @@
     btnToggleRosterFilter.textContent = T(allPlayersRosterOnly ? "allPlayers.showingRosterOnly" : "allPlayers.rosterOnly");
     renderAllPlayersPage();
   });
+  btnAllPlayersCsv.addEventListener("click", function () {
+    var filename = "pool-master-counter-all-players-" + todayDateStr() + ".csv";
+    downloadTextFile(filename, buildAllPlayersCsv(), "text/csv;charset=utf-8");
+  });
 
   btnOpenTournament.addEventListener("click", function () {
     openTournamentPage();
@@ -11749,7 +14929,93 @@
     closeTournamentPage();
   });
   btnTournamentStart.addEventListener("click", startTournament);
+  Array.prototype.forEach.call(tournamentSeedModeRadios, function (radio) {
+    radio.addEventListener("change", function () {
+      var show = isTournamentSeededManually();
+      Array.prototype.forEach.call(tournamentPlayerChecklist.querySelectorAll(".tournament-seed-input"), function (input) {
+        input.classList.toggle("hidden", !show);
+      });
+    });
+  });
+
+  // The long per-format explanation lives in a hidden sibling <span>
+  // (data-info-target) so it stays in the normal i18n flow while the
+  // visible radio row itself only shows a short name - "?" pops it into
+  // this shared little popup instead. Picking "Yes, this format" just
+  // checks the radio the popup was opened from; nothing else reads a
+  // "change" event off these radios (see startTournament), so no event
+  // needs dispatching.
+  Array.prototype.forEach.call(document.querySelectorAll(".format-info-btn"), function (btn) {
+    btn.addEventListener("click", function () {
+      var label = btn.closest("label");
+      var radio = label ? label.querySelector('input[type="radio"]') : null;
+      var textEl = document.getElementById(btn.getAttribute("data-info-target"));
+      var titleEl = document.getElementById(btn.getAttribute("data-info-title"));
+      if (!radio || !textEl) return;
+      tournamentFormatInfoPendingRadio = radio;
+      tournamentFormatInfoTitle.textContent = titleEl ? titleEl.textContent : "";
+      tournamentFormatInfoBody.textContent = textEl.textContent;
+      tournamentFormatInfoOverlay.classList.remove("hidden");
+    });
+  });
+  btnTournamentFormatInfoSelect.addEventListener("click", function () {
+    if (tournamentFormatInfoPendingRadio) tournamentFormatInfoPendingRadio.checked = true;
+    tournamentFormatInfoPendingRadio = null;
+    tournamentFormatInfoOverlay.classList.add("hidden");
+  });
+  btnTournamentFormatInfoCancel.addEventListener("click", function () {
+    tournamentFormatInfoPendingRadio = null;
+    tournamentFormatInfoOverlay.classList.add("hidden");
+  });
+  tournamentFormatInfoOverlay.addEventListener("click", function (e) {
+    if (e.target !== tournamentFormatInfoOverlay) return;
+    tournamentFormatInfoPendingRadio = null;
+    tournamentFormatInfoOverlay.classList.add("hidden");
+  });
+  tournamentPlayerChecklist.addEventListener("change", refreshTournamentTeamUi);
+  tournamentPlayerChecklist.addEventListener("input", refreshTournamentTeamUi);
+  tournamentTeamsEnabledCheckbox.addEventListener("change", renderTournamentTeamPreview);
+  btnFairRaceInfo.addEventListener("click", function () {
+    alertModal(T("tournament.fairRaceExplain"));
+  });
+
+  function tournamentPlayerCheckboxes() {
+    return Array.prototype.slice.call(tournamentPlayerChecklist.querySelectorAll('input[type="checkbox"]'));
+  }
+
+  // tournamentSelectAllSnapshot itself is declared up with the other
+  // top-level DOM refs, not here - see the comment there for why.
+  tournamentSelectAllCheckbox.addEventListener("change", function () {
+    var boxes = tournamentPlayerCheckboxes();
+    if (tournamentSelectAllCheckbox.checked) {
+      tournamentSelectAllSnapshot = {};
+      boxes.forEach(function (cb) {
+        tournamentSelectAllSnapshot[cb.value] = cb.checked;
+        cb.checked = true;
+      });
+    } else {
+      var snapshot = tournamentSelectAllSnapshot || {};
+      boxes.forEach(function (cb) {
+        cb.checked = !!snapshot[cb.value];
+      });
+      tournamentSelectAllSnapshot = null;
+    }
+    refreshTournamentTeamUi();
+  });
+
+  // If the user unchecks one player by hand while Select All is on, the
+  // checkbox no longer honestly describes the state - un-tick it too
+  // (without touching the snapshot; that only ever changes when Select
+  // All itself is toggled, not from incidental individual clicks).
+  tournamentPlayerChecklist.addEventListener("change", function (e) {
+    if (e.target.type !== "checkbox" || !tournamentSelectAllCheckbox.checked) return;
+    var stillAllChecked = tournamentPlayerCheckboxes().every(function (cb) {
+      return cb.checked;
+    });
+    if (!stillAllChecked) tournamentSelectAllCheckbox.checked = false;
+  });
   btnTournamentAbandon.addEventListener("click", abandonTournament);
+  btnTournamentPrint.addEventListener("click", function () { window.print(); });
   tournamentGameTypeSelect.addEventListener("change", function () {
     var type = GAME_TYPES[tournamentGameTypeSelect.value];
     tournamentTargetInput.value = type.defaultTarget;
