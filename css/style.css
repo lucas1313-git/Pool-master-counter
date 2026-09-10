@@ -3804,10 +3804,10 @@ input[type="number"] {
   padding: 14px;
   width: fit-content;
   max-width: 40vw;
+  margin: 0 auto;
 }
 
 .tournament-setup-players-section {
-  width: fit-content;
   max-width: 100%;
   margin: 0 auto 14px;
 }
