@@ -622,6 +622,7 @@ button:disabled {
 
 .collapsible-panel.collapsed .panel-summary {
   display: block;
+  cursor: pointer;
 }
 
 .row {

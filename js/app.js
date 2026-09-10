@@ -163,14 +163,23 @@
   // Generic chevron collapse/expand for any element carrying the
   // .collapsible-panel class — a panel, or (for Focus Mode) a smaller
   // in-scoreboard block. Reused by every collapsible section on the page.
+  // The one-line summary (id="<panelElId>-summary") sits outside the
+  // toggle <button> as a plain sibling <p> - a <p> isn't valid inside a
+  // <button>, so it can't just be moved in - but while collapsed it's
+  // the only other visible part of the panel, so it gets the same click
+  // handler too: together the button and the summary line are the
+  // entire folded area, and both now toggle it, not just the heading row.
   function wireCollapsiblePanel(panelElId, buttonElId) {
     var panel = document.getElementById(panelElId);
     var btn = document.getElementById(buttonElId);
-    btn.addEventListener("click", function () {
+    var summary = document.getElementById(panelElId + "-summary");
+    function toggle() {
       var willExpand = panel.classList.contains("collapsed");
       panel.classList.toggle("collapsed");
       btn.setAttribute("aria-expanded", willExpand ? "true" : "false");
-    });
+    }
+    btn.addEventListener("click", toggle);
+    if (summary && summary.tagName === "P") summary.addEventListener("click", toggle);
   }
 
   // Updates the one-line "what's inside" sentence shown only while a
