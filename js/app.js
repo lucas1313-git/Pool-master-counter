@@ -1415,6 +1415,19 @@
   var allPlayersViewMode = "bars";
   var allPlayersRosterOnly = false;
 
+  var btnOpenGlobalStats = document.getElementById("btn-open-global-stats");
+
+  var btnOpenContactSheet = document.getElementById("btn-open-contact-sheet");
+  var contactSheetPageView = document.getElementById("view-contact-sheet-page");
+  var btnContactSheetBack = document.getElementById("btn-contact-sheet-back");
+  var btnContactSheetSelectAll = document.getElementById("btn-contact-sheet-select-all");
+  var btnContactSheetImportRosters = document.getElementById("btn-contact-sheet-import-rosters");
+  var btnContactSheetEmail = document.getElementById("btn-contact-sheet-email");
+  var btnContactSheetSms = document.getElementById("btn-contact-sheet-sms");
+  var contactSheetSelectedSummary = document.getElementById("contact-sheet-selected-summary");
+  var contactSheetList = document.getElementById("contact-sheet-list");
+  var contactSheetSelected = {};
+
   var btnOpenTournament = document.getElementById("btn-open-tournament");
   var tournamentPageView = document.getElementById("view-tournament-page");
   var btnTournamentBack = document.getElementById("btn-tournament-back");
@@ -6838,15 +6851,79 @@
     PLAYER_CONTACTS[key] = {
       email: patch.email !== undefined ? patch.email : existing.email || "",
       phone: patch.phone !== undefined ? patch.phone : existing.phone || "",
+      nickname: patch.nickname !== undefined ? patch.nickname : existing.nickname || "",
       reportOptIn: patch.reportOptIn !== undefined ? !!patch.reportOptIn : !!existing.reportOptIn,
-      notifyMethod: patch.notifyMethod !== undefined ? patch.notifyMethod : existing.notifyMethod || "email"
+      notifyMethod: patch.notifyMethod !== undefined ? patch.notifyMethod : existing.notifyMethod || "email",
+      // Stamped on every write (even one that only touches a single
+      // field) so mergeContactsData can tell, per name, which side of an
+      // import was actually edited more recently - see its own comment.
+      updatedAt: Date.now()
     };
     saveContactsToStorage(PLAYER_CONTACTS);
   }
 
   function getPlayerContact(name) {
     var key = findContactKey(name);
-    return key ? PLAYER_CONTACTS[key] : { email: "", phone: "", reportOptIn: false, notifyMethod: "email" };
+    return key ? PLAYER_CONTACTS[key] : { email: "", phone: "", nickname: "", reportOptIn: false, notifyMethod: "email" };
+  }
+
+  // Renames a player everywhere their identity is a record key - stats,
+  // ratings, contacts, and any saved per-language display name - plus
+  // their entry on the live roster if they're currently on it, so their
+  // whole history stays attached to the new name instead of quietly
+  // starting over under it. Deliberately leaves state.gameHistory (and
+  // saved rosters) alone: a finished game is a record of what happened
+  // at the time, not a live reference, so past entries keep showing the
+  // name as it was then - the same reasoning mergeRosterLists follows
+  // for saved player lists. Returns "" on success, or a translated error
+  // string (empty/duplicate name) the Contact Sheet can show directly.
+  function renamePlayerEverywhere(oldName, newRawName) {
+    var newName = resolvePlayerName(newRawName);
+    if (!newName) return T("contactSheet.nameRequired");
+    if (normalizeNameKey(newName) === normalizeNameKey(oldName)) return "";
+    var newKey = normalizeNameKey(newName);
+    var oldKey = normalizeNameKey(oldName);
+    var alreadyUsed = contactSheetAllNames().some(function (n) {
+      return normalizeNameKey(n) === newKey && normalizeNameKey(n) !== oldKey;
+    });
+    if (alreadyUsed) return T("contactSheet.nameAlreadyUsed", { name: newName });
+
+    var statsKey = findPlayerStatsKey(oldName);
+    if (statsKey) {
+      PLAYER_STATS[newName] = PLAYER_STATS[statsKey];
+      PLAYER_STATS[newName].name = newName;
+      if (statsKey !== newName) delete PLAYER_STATS[statsKey];
+      savePlayerStatsToStorage(PLAYER_STATS);
+    }
+
+    var ratingKey = findRatingKey(oldName);
+    if (ratingKey) {
+      PLAYER_RATINGS[newName] = PLAYER_RATINGS[ratingKey];
+      PLAYER_RATINGS[newName].name = newName;
+      if (ratingKey !== newName) delete PLAYER_RATINGS[ratingKey];
+      saveRatingsToStorage(PLAYER_RATINGS);
+    }
+
+    var contactKey = findContactKey(oldName);
+    if (contactKey) {
+      PLAYER_CONTACTS[newName] = PLAYER_CONTACTS[contactKey];
+      if (contactKey !== newName) delete PLAYER_CONTACTS[contactKey];
+      saveContactsToStorage(PLAYER_CONTACTS);
+    }
+
+    var translationKey = findPlayerNameTranslationKey(oldName);
+    if (translationKey) {
+      PLAYER_NAME_TRANSLATIONS[newName] = PLAYER_NAME_TRANSLATIONS[translationKey];
+      if (translationKey !== newName) delete PLAYER_NAME_TRANSLATIONS[translationKey];
+      savePlayerNameTranslationsToStorage(PLAYER_NAME_TRANSLATIONS);
+    }
+
+    state.players.forEach(function (p) {
+      if (normalizeNameKey(p.name) === oldKey) p.name = newName;
+    });
+    saveState();
+
+    return "";
   }
 
   // Formats digits-as-typed to match the phone convention of the
@@ -6931,13 +7008,27 @@
   // Local settings win on conflict (this device's own opt-in choice is
   // more current than whatever an older backup says); anything imported
   // for a name this device has never heard of gets added.
+  // Whichever side was actually edited more recently wins, per name -
+  // not "local always wins" like every other merge* helper here, since
+  // contacts (email/phone/nickname) are exactly the kind of record that
+  // gets corrected on whichever device someone happens to be using, and
+  // a blanket "local wins" would silently discard a newer edit made
+  // elsewhere just because this device's copy is older. A record saved
+  // before `updatedAt` existed counts as timestamp 0, so any genuinely
+  // timestamped record - local or imported - always outranks it.
   function mergeContactsData(localContacts, importedContacts) {
     var merged = {};
     Object.keys(importedContacts || {}).forEach(function (name) {
       merged[name] = importedContacts[name];
     });
     Object.keys(localContacts || {}).forEach(function (name) {
-      merged[name] = localContacts[name];
+      var local = localContacts[name];
+      var imported = merged[name];
+      if (!imported) {
+        merged[name] = local;
+        return;
+      }
+      merged[name] = (local.updatedAt || 0) >= (imported.updatedAt || 0) ? local : imported;
     });
     return merged;
   }
@@ -7017,7 +7108,22 @@
   // so this is the "if possible" path: a manually-entered nickname per
   // language rather than anything automatic.
   function buildPlayerNameLabel(container, name, editable) {
-    container.appendChild(document.createTextNode(name));
+    // A nickname (set on the Contact Sheet) takes over as the name shown
+    // everywhere this helper is used - the scoreboard included, since
+    // that's the whole point of one - with the real name kept visible in
+    // parens right after it. The real name (`name`) still drives every
+    // lookup below (translation, stats, rename) - the nickname is purely
+    // a display overlay, never a second identity.
+    var nickname = getPlayerContact(name).nickname;
+    if (nickname) {
+      container.appendChild(document.createTextNode(nickname));
+      var realNameSpan = document.createElement("span");
+      realNameSpan.className = "player-name-real";
+      realNameSpan.textContent = "(" + name + ")";
+      container.appendChild(realNameSpan);
+    } else {
+      container.appendChild(document.createTextNode(name));
+    }
     if (activeLanguageCode === DEFAULT_LANGUAGE_CODE) return;
     var translated = getPlayerNameTranslation(name, activeLanguageCode);
     if (translated) {
@@ -10622,11 +10728,13 @@
       if (!playerPageView.classList.contains("hidden")) closePlayerStatsPage(true);
       else if (!allPlayersPageView.classList.contains("hidden")) closeAllPlayersPage(true);
       else if (!tournamentPageView.classList.contains("hidden")) closeTournamentPage(true);
+      else if (!contactSheetPageView.classList.contains("hidden")) closeContactSheetPage(true);
       return;
     }
     if (state.screen === "all-players") openAllPlayersPage(true);
     else if (state.screen === "tournament") openTournamentPage(true);
     else if (state.screen === "player") openPlayerStatsPage(state.name, true);
+    else if (state.screen === "contact-sheet") openContactSheetPage(true);
   });
 
   history.replaceState({ screen: "main" }, "", location.pathname + location.search);
@@ -10688,6 +10796,7 @@
     appRoot.classList.add("hidden");
     allPlayersPageView.classList.add("hidden");
     tournamentPageView.classList.add("hidden");
+    contactSheetPageView.classList.add("hidden");
     playerPageView.classList.remove("hidden");
     window.scrollTo(0, 0);
 
@@ -12113,6 +12222,7 @@
     appRoot.classList.add("hidden");
     tournamentPageView.classList.add("hidden");
     playerPageView.classList.add("hidden");
+    contactSheetPageView.classList.add("hidden");
     allPlayersPageView.classList.remove("hidden");
     window.scrollTo(0, 0);
   }
@@ -12124,6 +12234,210 @@
     }
     allPlayersPageView.classList.add("hidden");
     appRoot.classList.remove("hidden");
+  }
+
+  // ---------------------------------------------------------------------
+  // Contact Sheet — every known player's real name, nickname, email and
+  // phone in one editable list, with per-row checkboxes for firing off a
+  // single group email or text to whichever subset is selected.
+  // ---------------------------------------------------------------------
+
+  // Real names only (a nickname is a display-time overlay, not a second
+  // identity) - anyone with saved stats/ratings, anyone on the live
+  // roster, and anyone with contact info already on file, so removing a
+  // player from the roster doesn't drop their contact details off this
+  // page.
+  function contactSheetAllNames() {
+    var map = {};
+    getAllKnownPlayerNames().forEach(function (n) {
+      map[normalizeNameKey(n)] = n;
+    });
+    Object.keys(PLAYER_CONTACTS).forEach(function (n) {
+      var key = normalizeNameKey(n);
+      if (!map[key]) map[key] = n;
+    });
+    return Object.keys(map)
+      .map(function (k) {
+        return map[k];
+      })
+      .sort(function (a, b) {
+        return a.localeCompare(b);
+      });
+  }
+
+  // Adds a blank contact record for anyone who only ever shows up in an
+  // old saved player list (never actually got a game logged, and nobody
+  // has entered contact info for them yet) - so they show up here to
+  // fill in. Never touches a name that already has a contact record,
+  // whatever its age, since a roster carries nothing (just a name) that
+  // could ever be "newer" than real contact info already on file.
+  function importRosterNamesIntoContacts() {
+    var added = 0;
+    SAVED_ROSTERS.forEach(function (r) {
+      (r.players || []).forEach(function (n) {
+        if (!findContactKey(n)) {
+          setPlayerContact(n, {});
+          added += 1;
+        }
+      });
+    });
+    renderContactSheetPage();
+    showToast(T("contactSheet.importedToast", { count: added }));
+  }
+
+  function updateContactSheetSelectedSummary() {
+    var names = Object.keys(contactSheetSelected).filter(function (n) {
+      return contactSheetSelected[n];
+    });
+    contactSheetSelectedSummary.textContent = T("contactSheet.selectedCount", { count: names.length });
+  }
+
+  function contactSheetFieldWrap(labelKey, input) {
+    var label = document.createElement("label");
+    var span = document.createElement("span");
+    span.textContent = T(labelKey);
+    label.appendChild(span);
+    label.appendChild(input);
+    return label;
+  }
+
+  function contactSheetRow(name) {
+    var li = document.createElement("li");
+    li.className = "contact-sheet-row";
+
+    var checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = !!contactSheetSelected[name];
+    checkbox.setAttribute("aria-label", T("contactSheet.selectPlayer", { name: name }));
+    checkbox.addEventListener("change", function () {
+      if (checkbox.checked) contactSheetSelected[name] = true;
+      else delete contactSheetSelected[name];
+      updateContactSheetSelectedSummary();
+    });
+    li.appendChild(checkbox);
+
+    var fields = document.createElement("div");
+    fields.className = "contact-sheet-fields";
+    var contact = getPlayerContact(name);
+
+    var nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.value = name;
+    nameInput.addEventListener("change", function () {
+      var newName = nameInput.value;
+      var error = renamePlayerEverywhere(name, newName);
+      if (error) {
+        showToast(error);
+        nameInput.value = name;
+        return;
+      }
+      if (contactSheetSelected[name]) {
+        delete contactSheetSelected[name];
+        contactSheetSelected[resolvePlayerName(newName)] = true;
+      }
+      renderContactSheetPage();
+      renderAll();
+    });
+    fields.appendChild(contactSheetFieldWrap("contactSheet.name", nameInput));
+
+    var nicknameInput = document.createElement("input");
+    nicknameInput.type = "text";
+    nicknameInput.value = contact.nickname || "";
+    nicknameInput.placeholder = T("contactSheet.nicknamePlaceholder");
+    nicknameInput.addEventListener("change", function () {
+      setPlayerContact(name, { nickname: nicknameInput.value.trim() });
+      renderAll();
+    });
+    fields.appendChild(contactSheetFieldWrap("contactSheet.nickname", nicknameInput));
+
+    var emailInput = document.createElement("input");
+    emailInput.type = "email";
+    emailInput.value = contact.email || "";
+    emailInput.placeholder = T("onboarding.emailPlaceholder");
+    emailInput.addEventListener("change", function () {
+      setPlayerContact(name, { email: emailInput.value.trim() });
+    });
+    fields.appendChild(contactSheetFieldWrap("contactSheet.email", emailInput));
+
+    var phoneInput = document.createElement("input");
+    phoneInput.type = "tel";
+    phoneInput.value = formatPhoneNumberForActiveLanguage(contact.phone || "");
+    phoneInput.placeholder = T("onboarding.phonePlaceholder");
+    wirePhoneFormatting(phoneInput);
+    phoneInput.addEventListener("change", function () {
+      setPlayerContact(name, { phone: phoneInput.value.trim() });
+    });
+    fields.appendChild(contactSheetFieldWrap("contactSheet.phone", phoneInput));
+
+    li.appendChild(fields);
+    li.appendChild(buildPlayerLinkIcon(name));
+    return li;
+  }
+
+  function renderContactSheetPage() {
+    var names = contactSheetAllNames();
+    // Drop selections for anyone no longer in the list (e.g. after a
+    // rename folds two rows into one).
+    Object.keys(contactSheetSelected).forEach(function (n) {
+      if (names.indexOf(n) === -1) delete contactSheetSelected[n];
+    });
+    contactSheetList.innerHTML = "";
+    if (names.length === 0) {
+      var hint = document.createElement("li");
+      hint.className = "empty-hint";
+      hint.textContent = T("contactSheet.noPlayersYet");
+      contactSheetList.appendChild(hint);
+    } else {
+      names.forEach(function (n) {
+        contactSheetList.appendChild(contactSheetRow(n));
+      });
+    }
+    updateContactSheetSelectedSummary();
+  }
+
+  function openContactSheetPage(skipHistory) {
+    if (!skipHistory) pushScreenHistory("contact-sheet");
+    renderContactSheetPage();
+    appRoot.classList.add("hidden");
+    allPlayersPageView.classList.add("hidden");
+    playerPageView.classList.add("hidden");
+    tournamentPageView.classList.add("hidden");
+    contactSheetPageView.classList.remove("hidden");
+    window.scrollTo(0, 0);
+  }
+
+  function closeContactSheetPage(skipHistory) {
+    if (!skipHistory) {
+      navigateBack();
+      return;
+    }
+    contactSheetPageView.classList.add("hidden");
+    appRoot.classList.remove("hidden");
+  }
+
+  // Builds a mailto:/sms: compose link for whichever selected contacts
+  // actually have that channel filled in - silently skipping (not
+  // blocking on) anyone selected who doesn't, since some of the group
+  // missing a phone number shouldn't stop texting the ones who have one.
+  function composeToSelectedContacts(method) {
+    var names = Object.keys(contactSheetSelected).filter(function (n) {
+      return contactSheetSelected[n];
+    });
+    var withChannel = names.filter(function (n) {
+      var c = getPlayerContact(n);
+      return method === "sms" ? !!c.phone : !!c.email;
+    });
+    if (!withChannel.length) {
+      showToast(T(method === "sms" ? "contactSheet.noPhonesSelected" : "contactSheet.noEmailsSelected"));
+      return;
+    }
+    var to = withChannel
+      .map(function (n) {
+        var c = getPlayerContact(n);
+        return encodeURIComponent(method === "sms" ? c.phone : c.email);
+      })
+      .join(",");
+    window.location.href = (method === "sms" ? "sms:" : "mailto:") + to;
   }
 
   // ---------------------------------------------------------------------
@@ -14172,6 +14486,7 @@
     appRoot.classList.add("hidden");
     allPlayersPageView.classList.add("hidden");
     playerPageView.classList.add("hidden");
+    contactSheetPageView.classList.add("hidden");
     tournamentPageView.classList.remove("hidden");
     window.scrollTo(0, 0);
   }
@@ -14920,6 +15235,37 @@
   btnAllPlayersCsv.addEventListener("click", function () {
     var filename = "pool-master-counter-all-players-" + todayDateStr() + ".csv";
     downloadTextFile(filename, buildAllPlayersCsv(), "text/csv;charset=utf-8");
+  });
+
+  btnOpenGlobalStats.addEventListener("click", function () {
+    openAllPlayersPage();
+  });
+
+  btnOpenContactSheet.addEventListener("click", function () {
+    openContactSheetPage();
+  });
+  btnContactSheetBack.addEventListener("click", function () {
+    closeContactSheetPage();
+  });
+  btnContactSheetSelectAll.addEventListener("click", function () {
+    var names = contactSheetAllNames();
+    var allSelected = names.length > 0 && names.every(function (n) {
+      return !!contactSheetSelected[n];
+    });
+    contactSheetSelected = {};
+    if (!allSelected) {
+      names.forEach(function (n) {
+        contactSheetSelected[n] = true;
+      });
+    }
+    renderContactSheetPage();
+  });
+  btnContactSheetImportRosters.addEventListener("click", importRosterNamesIntoContacts);
+  btnContactSheetEmail.addEventListener("click", function () {
+    composeToSelectedContacts("email");
+  });
+  btnContactSheetSms.addEventListener("click", function () {
+    composeToSelectedContacts("sms");
   });
 
   btnOpenTournament.addEventListener("click", function () {
