@@ -505,6 +505,7 @@
   "tournament.formatSwiss": "Un formato sin eliminación de verdad, donde todos juegan un número fijo de rondas (por ejemplo, 4 o 5), enfrentándose cada vez a rivales con el mismo balance de victorias y derrotas.\n\nUna vez terminadas esas rondas programadas, quien haya acumulado más victorias en partido se lleva la corona.",
   "tournament.formatSwissShort": "🇨🇭 Suizo",
   "tournament.formatSwissTitle": "Formato de Torneo Suizo",
+  "tournament.fromLosersBracket": "🔻 Viene del cuadro de perdedores",
   "tournament.gameSectionHeading": "Tipo de Partida",
   "tournament.grandFinal": "Gran final",
   "tournament.losersBracket": "Cuadro de perdedores",

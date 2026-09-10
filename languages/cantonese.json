@@ -505,6 +505,7 @@
   "tournament.formatSwiss": "一個真正冇淘汰嘅賽制，每個人都會打固定圈數（例如4圈或者5圈），每次都會同戰績（勝負場數）一樣嘅對手配對。\n\n打完晒預定嘅圈數之後，邊個攞得最多場勝利，邊個就攞冠軍！",
   "tournament.formatSwissShort": "🇨🇭 瑞士制",
   "tournament.formatSwissTitle": "瑞士制錦標賽賽制",
+  "tournament.fromLosersBracket": "🔻 嚟自敗部",
   "tournament.gameSectionHeading": "對局類型",
   "tournament.grandFinal": "總決賽",
   "tournament.losersBracket": "敗部",

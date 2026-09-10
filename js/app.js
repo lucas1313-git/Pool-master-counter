@@ -12938,6 +12938,19 @@
     return null;
   }
 
+  // A winners-bracket match's internal tag is just "Winners R3" - not
+  // wrong, but not what a player actually calls that round out loud.
+  // Swaps in the same Final/Semifinal/Quarterfinal/Round-of-N label the
+  // bracket tree itself shows above each card (wbRoundLabel) wherever a
+  // WB match's round gets named back to the player; Grand Final and
+  // losers-bracket tags are already plain-language as-is.
+  function matchRoundLabel(t, match) {
+    if (isGrandFinalMatch(t, match)) return match.tag;
+    var pos = findWbPosition(t, match);
+    if (pos) return wbRoundLabel(t.wb[pos.ri].length);
+    return match.tag;
+  }
+
   // Figures out what to tell a just-crowned match winner about what's
   // next: the next match they've already been placed into (by the
   // advanceBracket call that already ran before this is called) and who
@@ -12966,19 +12979,20 @@
       }
       return T("tournament.nextWaitingGeneric");
     }
+    var nextRoundLabel = matchRoundLabel(t, next);
     var opponent = next.a === winnerName ? next.b : next.a;
     if (opponent) {
-      return T("tournament.nextAdvance", { round: next.tag, opponent: opponent });
+      return T("tournament.nextAdvance", { round: nextRoundLabel, opponent: opponent });
     }
     var pos = findWbPosition(t, justPlayedMatch);
     if (pos) {
       var siblingIdx = pos.mi % 2 === 0 ? pos.mi + 1 : pos.mi - 1;
       var sibling = t.wb[pos.ri][siblingIdx];
       if (sibling && sibling.a && sibling.b && !sibling.winner) {
-        return T("tournament.nextWaitingForMatch", { round: next.tag, a: sibling.a, b: sibling.b });
+        return T("tournament.nextWaitingForMatch", { round: nextRoundLabel, a: sibling.a, b: sibling.b });
       }
     }
-    return T("tournament.nextWaitingGenericRound", { round: next.tag });
+    return T("tournament.nextWaitingGenericRound", { round: nextRoundLabel });
   }
 
   function closeTournamentMatchWinPopup() {
@@ -13369,6 +13383,12 @@
     var stateClass = match.winner ? "is-done" : isActive ? "is-active" : match.a && match.b ? "is-ready" : "is-pending";
     div.className = "tournament-match-card " + stateClass;
 
+    // In the Grand Final, the two sides aren't symmetric the way every
+    // other match is - one came in with zero losses (the winners-bracket
+    // champion), the other already has one (the losers-bracket champion,
+    // who has to beat them twice to take it). That's invisible from the
+    // card alone, so it's called out directly on their name.
+    var isGf = isGrandFinalMatch(t, match);
     [match.a, match.b].forEach(function (name) {
       var row = document.createElement("div");
       row.className = "tournament-match-side";
@@ -13378,6 +13398,12 @@
       row.textContent = (isWinner ? "👑 " : "") + (name || "—");
       if (name) {
         appendEntrantIdentity(row, name, t);
+        if (isGf && name === t.lbChampion) {
+          var lbTag = document.createElement("span");
+          lbTag.className = "tournament-match-lb-tag";
+          lbTag.textContent = T("tournament.fromLosersBracket");
+          row.appendChild(lbTag);
+        }
       }
       div.appendChild(row);
     });

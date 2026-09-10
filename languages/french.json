@@ -505,6 +505,7 @@
   "tournament.formatSwiss": "Un véritable format sans élimination où chacun joue un nombre fixe de rondes (par exemple 4 ou 5), avec un tirage à chaque fois contre des adversaires ayant un bilan victoires-défaites identique.\n\nUne fois ces rondes prévues terminées, celui qui a accumulé le plus de victoires en match remporte le titre !",
   "tournament.formatSwissShort": "🇨🇭 Suisse",
   "tournament.formatSwissTitle": "Format de tournoi Suisse",
+  "tournament.fromLosersBracket": "🔻 Vient du tableau des perdants",
   "tournament.gameSectionHeading": "Type de partie",
   "tournament.grandFinal": "Grande finale",
   "tournament.losersBracket": "Tableau des perdants",

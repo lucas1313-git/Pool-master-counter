@@ -505,6 +505,7 @@
   "tournament.formatSwiss": "A proper non-elimination format where everyone plays a fixed number of rounds (e.g., 4 or 5), drawn each time against opponents with identical win-loss records.\n\nOnce those scheduled rounds wrap up, whoever has bagged the most match victories takes the crown!",
   "tournament.formatSwissShort": "🇨🇭 Swiss",
   "tournament.formatSwissTitle": "Swiss Tournament Format",
+  "tournament.fromLosersBracket": "🔻 From the Losers Bracket",
   "tournament.gameSectionHeading": "Game Type",
   "tournament.grandFinal": "Grand Final",
   "tournament.losersBracket": "Losers Bracket",

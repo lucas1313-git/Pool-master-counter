@@ -3893,6 +3893,15 @@ input[type="number"] {
   margin-left: 4px;
 }
 
+.tournament-match-lb-tag {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-style: normal;
+  color: var(--danger);
+  margin-top: 1px;
+}
+
 .tournament-bracket-heading {
   margin: 20px 16px 8px;
 }
