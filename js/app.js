@@ -1367,6 +1367,9 @@
   var onboardingRatingInput = document.getElementById("onboarding-rating-input");
   var onboardingEmailInput = document.getElementById("onboarding-email-input");
   var onboardingPhoneInput = document.getElementById("onboarding-phone-input");
+  var checkOnboardingEmailValidity = null;
+  var checkOnboardingPhoneValidity = null;
+  var onboardingContactRequirement = document.getElementById("onboarding-contact-requirement");
   var onboardingReportOptInCheckbox = document.getElementById("onboarding-report-optin-checkbox");
   var onboardingNotifyMethodRow = document.getElementById("onboarding-notify-method-row");
   var onboardingNotifyMethodRadios = document.getElementsByName("onboarding-notify-method");
@@ -1591,6 +1594,8 @@
   var ratingEditInput = document.getElementById("rating-edit-input");
   var ratingEditEmailInput = document.getElementById("rating-edit-email-input");
   var ratingEditPhoneInput = document.getElementById("rating-edit-phone-input");
+  var checkRatingEditEmailValidity = null;
+  var checkRatingEditPhoneValidity = null;
   var ratingEditNotifyCheckbox = document.getElementById("rating-edit-notify-checkbox");
   var ratingEditNotifyMethodRow = document.getElementById("rating-edit-notify-method-row");
   var ratingEditNotifyMethodRadios = document.getElementsByName("rating-edit-notify-method");
@@ -6987,6 +6992,46 @@
     });
   }
 
+  // The same per-language digit count formatPhoneNumberForActiveLanguage
+  // already formats toward (and truncates at) - a real number for the
+  // active language's convention has to actually reach that count, not
+  // just stop short of it partway through.
+  var PHONE_DIGIT_LENGTH_BY_LANGUAGE = { french: 10, spanish: 9, cantonese: 8 };
+  function expectedPhoneDigitLength() {
+    return PHONE_DIGIT_LENGTH_BY_LANGUAGE[activeLanguageCode] || 11;
+  }
+
+  // Email/phone are optional everywhere they appear - an empty field is
+  // always valid, only a non-empty one that isn't actually a usable
+  // phone number/email is rejected.
+  function isValidPhoneNumber(rawValue) {
+    var digits = (rawValue || "").replace(/\D/g, "");
+    if (!digits) return true;
+    return digits.length === expectedPhoneDigitLength();
+  }
+
+  function isValidEmail(rawValue) {
+    var trimmed = (rawValue || "").trim();
+    if (!trimmed) return true;
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
+  }
+
+  // Live red-outline feedback the moment a phone/email field stops
+  // being valid, not just when something tries to save it - returns a
+  // checkValidity() a caller can also run synchronously right before
+  // actually saving, so a value that was never blurred (typed, then
+  // straight to tapping Save) still gets caught.
+  function wireFieldValidity(input, validatorFn) {
+    function check() {
+      var ok = validatorFn(input.value);
+      input.classList.toggle("field-invalid", !ok);
+      return ok;
+    }
+    input.addEventListener("input", check);
+    input.addEventListener("blur", check);
+    return check;
+  }
+
   // Shared by onboarding and the edit-rating popup: the "receive the
   // day's report" checkbox only makes sense once there's somewhere to
   // send it, and the email/SMS choice only matters once it's checked.
@@ -7249,6 +7294,12 @@
 
   function saveRatingEditPopup() {
     if (!ratingEditTargetName) return;
+    var emailOk = checkRatingEditEmailValidity();
+    var phoneOk = checkRatingEditPhoneValidity();
+    if (!emailOk || !phoneOk) {
+      showToast(T(!emailOk ? "contactSheet.invalidEmail" : "contactSheet.invalidPhone"));
+      return;
+    }
     var value = parseInt(ratingEditInput.value, 10);
     if (!isNaN(value)) setPlayerRatingManually(ratingEditTargetName, value);
     setPlayerContact(ratingEditTargetName, {
@@ -9755,6 +9806,14 @@
         validateOnboardingNameInput();
         return;
       }
+      var emailOk = checkOnboardingEmailValidity();
+      var phoneOk = checkOnboardingPhoneValidity();
+      if (!emailOk || !phoneOk) {
+        onboardingContactRequirement.textContent = T(!emailOk ? "contactSheet.invalidEmail" : "contactSheet.invalidPhone");
+        onboardingContactRequirement.classList.remove("hidden");
+        return;
+      }
+      onboardingContactRequirement.classList.add("hidden");
       var starting = parseStartingRatingInput(onboardingRatingInput);
       var player = addPlayer(onboardingNameInput.value, starting === null ? undefined : starting);
       if (player) {
@@ -12371,7 +12430,14 @@
     emailInput.type = "email";
     emailInput.value = contact.email || "";
     emailInput.placeholder = T("onboarding.emailPlaceholder");
+    var checkEmailValidity = wireFieldValidity(emailInput, isValidEmail);
     emailInput.addEventListener("change", function () {
+      if (!checkEmailValidity()) {
+        showToast(T("contactSheet.invalidEmail"));
+        emailInput.value = contact.email || "";
+        checkEmailValidity();
+        return;
+      }
       setPlayerContact(name, { email: emailInput.value.trim() });
     });
     fields.appendChild(contactSheetFieldWrap("contactSheet.email", emailInput));
@@ -12381,7 +12447,14 @@
     phoneInput.value = formatPhoneNumberForActiveLanguage(contact.phone || "");
     phoneInput.placeholder = T("onboarding.phonePlaceholder");
     wirePhoneFormatting(phoneInput);
+    var checkPhoneValidity = wireFieldValidity(phoneInput, isValidPhoneNumber);
     phoneInput.addEventListener("change", function () {
+      if (!checkPhoneValidity()) {
+        showToast(T("contactSheet.invalidPhone"));
+        phoneInput.value = formatPhoneNumberForActiveLanguage(contact.phone || "");
+        checkPhoneValidity();
+        return;
+      }
       setPlayerContact(name, { phone: phoneInput.value.trim() });
     });
     fields.appendChild(contactSheetFieldWrap("contactSheet.phone", phoneInput));
@@ -15178,6 +15251,8 @@
   });
   wireNotifyCheckbox(ratingEditEmailInput, ratingEditPhoneInput, ratingEditNotifyCheckbox, ratingEditNotifyMethodRow);
   wirePhoneFormatting(ratingEditPhoneInput);
+  checkRatingEditEmailValidity = wireFieldValidity(ratingEditEmailInput, isValidEmail);
+  checkRatingEditPhoneValidity = wireFieldValidity(ratingEditPhoneInput, isValidPhoneNumber);
 
   btnExportRosterLists.addEventListener("click", exportRosterLists);
   btnExportRosterListsCsv.addEventListener("click", function () {
@@ -15517,6 +15592,8 @@
   onboardingNameInput.addEventListener("input", validateOnboardingNameInput);
   wireNotifyCheckbox(onboardingEmailInput, onboardingPhoneInput, onboardingReportOptInCheckbox, onboardingNotifyMethodRow);
   wirePhoneFormatting(onboardingPhoneInput);
+  checkOnboardingEmailValidity = wireFieldValidity(onboardingEmailInput, isValidEmail);
+  checkOnboardingPhoneValidity = wireFieldValidity(onboardingPhoneInput, isValidPhoneNumber);
   btnOnboardingRunWizard.addEventListener("click", function () {
     closeOnboarding();
     openWizard();
