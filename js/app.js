@@ -11179,13 +11179,13 @@
   // wherever a graph dot was clicked, listing every opponent behind that
   // point and the win/loss record against each. One shared tooltip node
   // for the whole app — only one is ever open at a time.
-  function showGraphDotTooltip(clientX, clientY, games) {
+  function showGraphDotTooltip(clientX, clientY, games, seriesLabel) {
     var el = getGraphTooltipEl();
     var perOpponent = summarizeGraphDotGames(games);
     el.innerHTML = "";
     var title = document.createElement("div");
     title.className = "player-graph-tooltip-title";
-    title.textContent = games.length + " game" + (games.length === 1 ? "" : "s") + " here";
+    title.textContent = T("playerPage.graphDotTitle", { series: seriesLabel, count: games.length });
     el.appendChild(title);
     perOpponent.forEach(function (opp) {
       var row = document.createElement("div");
@@ -11258,6 +11258,7 @@
     title.textContent = formatTimestamp(point.ts, true);
     el.appendChild(title);
 
+    var previousRating = point.rating - point.delta;
     var ratingRow = document.createElement("div");
     ratingRow.className = "player-graph-tooltip-row";
     var ratingLabel = document.createElement("span");
@@ -11265,7 +11266,7 @@
     ratingLabel.textContent = T("common.rating");
     var ratingValue = document.createElement("span");
     ratingValue.className = "player-graph-tooltip-record";
-    ratingValue.textContent = point.rating;
+    ratingValue.textContent = T("playerPage.ratingWasNow", { was: previousRating, now: point.rating });
     ratingRow.appendChild(ratingLabel);
     ratingRow.appendChild(ratingValue);
     el.appendChild(ratingRow);
@@ -11321,7 +11322,7 @@
   // tap precisely) that reveals a tooltip with the opponent(s) and win/
   // loss for every game bucketed into that point — see
   // showGraphDotTooltip/summarizeGraphDotGames.
-  function appendGraphSeries(svg, points, minMs, maxMs, width, height, axisMax, lineClass, dotClass, color, startHidden) {
+  function appendGraphSeries(svg, points, minMs, maxMs, width, height, axisMax, lineClass, dotClass, color, startHidden, seriesLabel) {
     var geo = buildSeriesGeometry(points, minMs, maxMs, width, height, axisMax);
     var group = svgEl("g", { class: "player-graph-series" + (startHidden ? " is-hidden" : "") });
     var pathAttrs = { d: geo.path, fill: "none", class: lineClass };
@@ -11335,7 +11336,7 @@
         var hit = svgEl("circle", { cx: pt.x, cy: pt.y, r: 9, class: "player-graph-dot-hit" });
         hit.addEventListener("click", function (e) {
           e.stopPropagation();
-          showGraphDotTooltip(e.clientX, e.clientY, pt.games);
+          showGraphDotTooltip(e.clientX, e.clientY, pt.games, seriesLabel);
         });
         group.appendChild(hit);
       }
@@ -11645,6 +11646,7 @@
     var legendItems = [];
 
     if (series.individualPlayed.length) {
+      var indPlayedLabel = T("graph.singleGamesPlayed");
       var gIndPlayed = appendGraphSeries(
         svg,
         series.individualPlayed,
@@ -11655,11 +11657,14 @@
         axisMax,
         "player-graph-line player-graph-line-ind-played",
         "player-graph-dot player-graph-dot-ind-played",
-        null
+        null,
+        false,
+        indPlayedLabel
       );
-      legendItems.push({ color: "var(--info)", style: "solid", label: T("graph.singleGamesPlayed"), group: gIndPlayed });
+      legendItems.push({ color: "var(--info)", style: "solid", label: indPlayedLabel, group: gIndPlayed });
     }
     if (series.individualWon.length) {
+      var indWonLabel = T("graph.singleGamesWon");
       var gIndWon = appendGraphSeries(
         svg,
         series.individualWon,
@@ -11670,11 +11675,14 @@
         axisMax,
         "player-graph-line player-graph-line-dotted player-graph-line-ind-won",
         "player-graph-dot player-graph-dot-ind-won",
-        null
+        null,
+        false,
+        indWonLabel
       );
-      legendItems.push({ color: "var(--accent)", style: "dotted", label: T("graph.singleGamesWon"), group: gIndWon });
+      legendItems.push({ color: "var(--accent)", style: "dotted", label: indWonLabel, group: gIndWon });
     }
     if (series.individualLost.length) {
+      var indLostLabel = T("graph.singleGamesLost");
       var gIndLost = appendGraphSeries(
         svg,
         series.individualLost,
@@ -11686,12 +11694,13 @@
         "player-graph-line player-graph-line-dashed player-graph-line-ind-lost",
         "player-graph-dot player-graph-dot-ind-lost",
         null,
-        true
+        true,
+        indLostLabel
       );
       legendItems.push({
         color: "var(--danger)",
         style: "dashed",
-        label: T("graph.singleGamesLost"),
+        label: indLostLabel,
         group: gIndLost,
         startHidden: true
       });
@@ -11701,6 +11710,7 @@
       var combo = series.teamCombos[key];
       var color = TEAM_COMBO_PALETTE[idx % TEAM_COMBO_PALETTE.length];
       if (combo.played.length) {
+        var comboPlayedLabel = T("graph.comboPlayed", { key: key });
         var gComboPlayed = appendGraphSeries(
           svg,
           combo.played,
@@ -11711,11 +11721,14 @@
           axisMax,
           "player-graph-line",
           "player-graph-dot",
-          color
+          color,
+          false,
+          comboPlayedLabel
         );
-        legendItems.push({ color: color, style: "solid", label: T("graph.comboPlayed", { key: key }), group: gComboPlayed });
+        legendItems.push({ color: color, style: "solid", label: comboPlayedLabel, group: gComboPlayed });
       }
       if (combo.won.length) {
+        var comboWonLabel = T("graph.comboWon", { key: key });
         var gComboWon = appendGraphSeries(
           svg,
           combo.won,
@@ -11726,11 +11739,14 @@
           axisMax,
           "player-graph-line player-graph-line-dotted",
           "player-graph-dot",
-          color
+          color,
+          false,
+          comboWonLabel
         );
-        legendItems.push({ color: color, style: "dotted", label: T("graph.comboWon", { key: key }), group: gComboWon });
+        legendItems.push({ color: color, style: "dotted", label: comboWonLabel, group: gComboWon });
       }
       if (combo.lost.length) {
+        var comboLostLabel = T("graph.comboLost", { key: key });
         var gComboLost = appendGraphSeries(
           svg,
           combo.lost,
@@ -11742,12 +11758,13 @@
           "player-graph-line player-graph-line-dashed",
           "player-graph-dot",
           color,
-          true
+          true,
+          comboLostLabel
         );
         legendItems.push({
           color: color,
           style: "dashed",
-          label: T("graph.comboLost", { key: key }),
+          label: comboLostLabel,
           group: gComboLost,
           startHidden: true
         });
@@ -11755,6 +11772,7 @@
     });
 
     if (tournamentSeries.played.length) {
+      var tournPlayedLabel = T("graph.tournamentsPlayed");
       var gTournPlayed = appendGraphSeries(
         svg,
         tournamentSeries.played,
@@ -11765,11 +11783,14 @@
         axisMax,
         "player-graph-line",
         "player-graph-dot",
-        TOURNAMENT_PLAYED_COLOR
+        TOURNAMENT_PLAYED_COLOR,
+        false,
+        tournPlayedLabel
       );
-      legendItems.push({ color: TOURNAMENT_PLAYED_COLOR, style: "solid", label: T("graph.tournamentsPlayed"), group: gTournPlayed });
+      legendItems.push({ color: TOURNAMENT_PLAYED_COLOR, style: "solid", label: tournPlayedLabel, group: gTournPlayed });
     }
     if (tournamentSeries.won.length) {
+      var tournWonLabel = T("graph.tournamentWins");
       var gTournWon = appendGraphSeries(
         svg,
         tournamentSeries.won,
@@ -11780,11 +11801,14 @@
         axisMax,
         "player-graph-line player-graph-line-dotted",
         "player-graph-dot",
-        TOURNAMENT_WON_COLOR
+        TOURNAMENT_WON_COLOR,
+        false,
+        tournWonLabel
       );
-      legendItems.push({ color: TOURNAMENT_WON_COLOR, style: "dotted", label: T("graph.tournamentWins"), group: gTournWon });
+      legendItems.push({ color: TOURNAMENT_WON_COLOR, style: "dotted", label: tournWonLabel, group: gTournWon });
     }
     if (tournamentSeries.lost.length) {
+      var tournLostLabel = T("graph.tournamentLosses");
       var gTournLost = appendGraphSeries(
         svg,
         tournamentSeries.lost,
@@ -11795,9 +11819,11 @@
         axisMax,
         "player-graph-line player-graph-line-dashed",
         "player-graph-dot",
-        TOURNAMENT_LOST_COLOR
+        TOURNAMENT_LOST_COLOR,
+        false,
+        tournLostLabel
       );
-      legendItems.push({ color: TOURNAMENT_LOST_COLOR, style: "dashed", label: T("graph.tournamentLosses"), group: gTournLost });
+      legendItems.push({ color: TOURNAMENT_LOST_COLOR, style: "dashed", label: tournLostLabel, group: gTournLost });
     }
 
     chart.appendChild(svg);
