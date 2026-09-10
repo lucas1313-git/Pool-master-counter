@@ -4449,51 +4449,33 @@ input[type="number"] {
   align-items: center;
 }
 
-/* A multi-table event's live boards, stacked like a small deck of
-   cards: the focused one sits in normal flow (so the stack's own
-   height always matches whatever's actually showing, never a guess),
-   with every other table's board peeking out below it as a thin,
-   tappable strip - tapping one (or picking it from the focus dropdown
-   above) brings it to the front instead. */
+/* A multi-table event's live boards. Picking "See All Tables" from the
+   focus dropdown shows every one of them at once, each a full,
+   independently-scorable board - stacked as a cascading deck (each
+   card nudged over from the last) purely as a visual cue that these
+   are separate tables, not a single long scoreboard. Picking one
+   specific table instead shows just that one board, full width, no
+   cascade. Either way each card gets a felt-toned background so it
+   reads as its own distinct surface against the page behind it,
+   noticeably more than the standard panel background most cards use. */
 .tournament-live-boards-stack {
-  position: relative;
   margin: 0 16px 16px;
 }
 
-.tournament-floating-board.is-focused {
-  position: relative;
-  z-index: 50;
-  background: var(--bg-panel);
+.tournament-floating-board {
+  background: var(--felt);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35);
   padding: 10px 0;
 }
 
-.tournament-floating-board:not(.is-focused) {
-  position: absolute;
-  left: 4px;
-  right: 4px;
-  bottom: calc(-1 * var(--stack-depth, 1) * 10px);
-  z-index: calc(20 - var(--stack-depth, 1));
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
-  opacity: 0.75;
-  cursor: pointer;
-  overflow: hidden;
+.tournament-live-boards-stack.is-stacked .tournament-floating-board {
+  margin: 0 0 14px calc(var(--stack-index, 0) * 14px);
 }
 
-.tournament-floating-board:not(.is-focused) .tournament-now-playing {
-  margin: 8px 12px 0;
-}
-
-.tournament-floating-board-peek {
-  margin: 4px 12px 10px;
-  text-align: center;
-  font-size: 0.82rem;
-  font-weight: 700;
+.tournament-live-boards-stack.is-stacked .tournament-floating-board:last-child {
+  margin-bottom: 0;
 }
 
 /* ---------- Round Robin: standings list + a wrapping grid of every
