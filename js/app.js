@@ -12657,6 +12657,17 @@
       });
     }
     if (t && typeof t.tableCount !== "number") t.tableCount = 1;
+    // Pre-multi-table saves have a single t.active object instead of
+    // t.activeMatches - fold it in as table 1's entry rather than
+    // losing an in-progress match's live score on the first load after
+    // this update.
+    if (t && t.active && !Array.isArray(t.activeMatches)) {
+      t.active.table = t.active.table || 1;
+      t.activeMatches = [t.active];
+    }
+    if (t && !Array.isArray(t.activeMatches)) t.activeMatches = [];
+    if (t && t.active !== undefined) delete t.active;
+    if (t && typeof t.focusedTable !== "number" && t.activeMatches.length) t.focusedTable = t.activeMatches[0].table;
     return t;
   }
 
@@ -13208,7 +13219,8 @@
       lbChampion: null,
       grandFinal: [],
       champion: null,
-      active: null
+      activeMatches: [],
+      focusedTable: null
     };
     advanceBracket(t);
     return t;
@@ -13238,7 +13250,8 @@
       lbChampion: null,
       grandFinal: [],
       champion: null,
-      active: null
+      activeMatches: [],
+      focusedTable: null
     };
     advanceBracket(t);
     return t;
@@ -13273,7 +13286,8 @@
       matches: matches,
       champion: null,
       championNames: null,
-      active: null
+      activeMatches: [],
+      focusedTable: null
     };
   }
 
@@ -13312,7 +13326,8 @@
       pairHistory: {},
       champion: null,
       championNames: null,
-      active: null
+      activeMatches: [],
+      focusedTable: null
     };
     t.rounds.push(pairSwissRound(t));
     return t;
@@ -14049,9 +14064,14 @@
     container.appendChild(sub);
   }
 
+  // activeMatchId: either a single match id (string) or a set of them
+  // ({id: true, ...}, one per table currently live) - a multi-table
+  // event can have several matches "active" (is-active styling, no Play
+  // button) at once, not just the one match ID this used to be.
   function tournamentMatchCard(match, activeMatchId, t) {
     var div = document.createElement("div");
-    var isActive = activeMatchId === match.id;
+    var isActive =
+      typeof activeMatchId === "string" ? activeMatchId === match.id : !!(activeMatchId && activeMatchId[match.id]);
     var stateClass = match.winner ? "is-done" : isActive ? "is-active" : match.a && match.b ? "is-ready" : "is-pending";
     div.className = "tournament-match-card " + stateClass;
 
@@ -14398,11 +14418,32 @@
     });
   }
 
+  // Which physical table a just-started match should occupy: its own
+  // assigned table (see the per-match Table picker) when there's more
+  // than one to choose from, otherwise always table 1 - a single-table
+  // event never needed that picker in the first place, so it shouldn't
+  // need one here either.
+  function tournamentMatchTableOrDefault(match, t) {
+    if (t.tableCount <= 1) return 1;
+    return match.table || null;
+  }
+
   function startTournamentMatch(matchId) {
-    var match = findBracketMatchById(TOURNAMENT, matchId);
+    var t = TOURNAMENT;
+    var match = findBracketMatchById(t, matchId);
     if (!match || match.winner) return;
-    TOURNAMENT.active = {
+    var table = tournamentMatchTableOrDefault(match, t);
+    if (!table) {
+      showToast(T("tournament.assignTableFirst"));
+      return;
+    }
+    if (t.activeMatches.some(function (a) { return a.table === table; })) {
+      showToast(T("tournament.tableAlreadyInUse", { table: table }));
+      return;
+    }
+    var active = {
       matchId: matchId,
+      table: table,
       aBalls: 0,
       bBalls: 0,
       aWins: 0,
@@ -14413,19 +14454,21 @@
     // has a clean start (unlike the session's ongoing roster), so
     // there's no self-healing cache to maintain here, just a one-time
     // computation at the moment the two sides are actually known.
-    if (TOURNAMENT.fairRace) {
-      var entrantMembersForRace = TOURNAMENT.entrantMembers || {};
+    if (t.fairRace) {
+      var entrantMembersForRace = t.entrantMembers || {};
       var targets = computeFairRaceTargets(
         [
           { key: "a", rating: averageRating(entrantMembersForRace[match.a] || [match.a]) },
           { key: "b", rating: averageRating(entrantMembersForRace[match.b] || [match.b]) }
         ],
-        TOURNAMENT.raceTo
+        t.raceTo
       );
-      TOURNAMENT.active.raceToA = targets.a;
-      TOURNAMENT.active.raceToB = targets.b;
+      active.raceToA = targets.a;
+      active.raceToB = targets.b;
     }
-    saveTournamentToStorage(TOURNAMENT);
+    t.activeMatches.push(active);
+    t.focusedTable = table;
+    saveTournamentToStorage(t);
     renderTournamentActive();
     // Tapping Play can happen from anywhere on a long bracket page (the
     // Ready to Play list, or a match card deep in the tree) - the score
@@ -14436,18 +14479,24 @@
     tournamentCurrentMatchPanel.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  function tournamentAdjustScore(side, delta) {
+  // active: the specific t.activeMatches entry this board's +/- buttons
+  // belong to (passed straight through from buildTournamentSidePanel,
+  // which itself only ever renders for one particular table's board at
+  // a time) - never inferred from "whichever table is focused right
+  // now", so a stray tap can't land on the wrong table's score even if
+  // focus changed a beat earlier.
+  function tournamentAdjustScore(active, side, delta) {
     var t = TOURNAMENT;
-    if (!t || !t.active) return;
-    var match = findBracketMatchById(t, t.active.matchId);
+    if (!t || !active) return;
+    var match = findBracketMatchById(t, active.matchId);
     if (!match) return;
     var gameType = GAME_TYPES[t.gameType];
     var allowNegative = gameType.unit !== "rack";
     var ballsKey = side === "a" ? "aBalls" : "bBalls";
     var winsKey = side === "a" ? "aWins" : "bWins";
-    var next = (t.active[ballsKey] || 0) + delta;
+    var next = (active[ballsKey] || 0) + delta;
     if (next < 0 && !allowNegative) next = 0;
-    t.active[ballsKey] = next;
+    active[ballsKey] = next;
 
     var name = side === "a" ? match.a : match.b;
     var otherName = side === "a" ? match.b : match.a;
@@ -14456,24 +14505,31 @@
     var voice = player ? player.voice : undefined;
 
     if (delta > 0 && next >= t.target) {
-      t.active[winsKey] += 1;
-      var startedMs = t.active.startedAt ? new Date(t.active.startedAt).getTime() : null;
+      active[winsKey] += 1;
+      var startedMs = active.startedAt ? new Date(active.startedAt).getTime() : null;
       var durationMs = startedMs ? Math.max(0, Date.now() - startedMs) : null;
       recordTournamentRackWin(name, otherName, durationMs);
-      t.active.aBalls = 0;
-      t.active.bBalls = 0;
-      t.active.startedAt = new Date().toISOString();
+      active.aBalls = 0;
+      active.bBalls = 0;
+      active.startedAt = new Date().toISOString();
       playWinSound(voice);
       var raceToKey = side === "a" ? "raceToA" : "raceToB";
-      var effectiveMatchRaceTo = t.fairRace && t.active[raceToKey] ? t.active[raceToKey] : t.raceTo;
-      if (t.active[winsKey] >= effectiveMatchRaceTo) {
+      var effectiveMatchRaceTo = t.fairRace && active[raceToKey] ? active[raceToKey] : t.raceTo;
+      if (active[winsKey] >= effectiveMatchRaceTo) {
         var championAlreadyDecided = !!t.champion;
         reportBracketResult(t, match, name);
         if (!championAlreadyDecided && t.champion) {
           recordTournamentCompletion(t);
           playTournamentChampionSound();
         }
-        t.active = null;
+        var finishedIdx = t.activeMatches.indexOf(active);
+        if (finishedIdx !== -1) t.activeMatches.splice(finishedIdx, 1);
+        // Hand focus to whichever other table still has a game going,
+        // if any - never leave focus pointed at the table that just
+        // finished.
+        if (t.focusedTable === active.table) {
+          t.focusedTable = t.activeMatches.length ? t.activeMatches[0].table : null;
+        }
         saveTournamentToStorage(t);
         renderTournamentPage();
         showTournamentMatchWinPopup(t, match, name);
@@ -14488,7 +14544,7 @@
     renderTournamentActiveMatch();
   }
 
-  function buildTournamentSidePanel(name, side, balls, wins, t) {
+  function buildTournamentSidePanel(name, side, balls, wins, t, active) {
     var panel = document.createElement("div");
     panel.className = "player-panel";
 
@@ -14499,7 +14555,7 @@
     panel.appendChild(nameEl);
 
     var raceToKey = side === "a" ? "raceToA" : "raceToB";
-    var sideRaceTo = t.fairRace && t.active && t.active[raceToKey] ? t.active[raceToKey] : t.raceTo;
+    var sideRaceTo = t.fairRace && active && active[raceToKey] ? active[raceToKey] : t.raceTo;
     panel.appendChild(buildStatMini(T("tournament.matchWins"), wins, wins >= sideRaceTo));
 
     var block = document.createElement("div");
@@ -14528,7 +14584,7 @@
     minusBtn.setAttribute("aria-label", "Remove point for " + name);
     minusBtn.disabled = !allowNegative && balls <= 0;
     minusBtn.addEventListener("click", function () {
-      tournamentAdjustScore(side, -1);
+      tournamentAdjustScore(active, side, -1);
     });
 
     var plusBtn = document.createElement("button");
@@ -14537,7 +14593,7 @@
     plusBtn.textContent = "+";
     plusBtn.setAttribute("aria-label", "Add point for " + name);
     plusBtn.addEventListener("click", function () {
-      tournamentAdjustScore(side, 1);
+      tournamentAdjustScore(active, side, 1);
     });
 
     controls.appendChild(minusBtn);
@@ -14547,28 +14603,108 @@
     return panel;
   }
 
+  // A multi-table event can have one live match per table at once -
+  // rendered as a stack of floating boards (see .tournament-floating-
+  // board), only the focused one showing a real interactive scoreboard.
+  // The others peek out from behind it as thin, tappable strips (their
+  // own current score, but no +/- controls) purely so a table's game
+  // can't be scored by mistake while looking at a different table's
+  // board - tapping a peek (or picking it from the focus dropdown, once
+  // there's more than one table live) is what brings it to the front.
+  // Single-table events never have more than one entry in
+  // t.activeMatches, so this collapses back to exactly the old
+  // one-board-only behavior for them.
   function renderTournamentActiveMatch() {
     var t = TOURNAMENT;
     tournamentCurrentMatchPanel.innerHTML = "";
-    if (!t || !t.active) return;
-    var match = findBracketMatchById(t, t.active.matchId);
-    if (!match) {
-      t.active = null;
-      return;
+    if (!t || !t.activeMatches.length) return;
+    if (!t.activeMatches.some(function (a) { return a.table === t.focusedTable; })) {
+      t.focusedTable = t.activeMatches[0].table;
     }
-    var gameType = GAME_TYPES[t.gameType];
+    var sorted = t.activeMatches.slice().sort(function (a, b) {
+      return a.table - b.table;
+    });
 
+    if (sorted.length > 1) {
+      var focusRow = document.createElement("div");
+      focusRow.className = "row tournament-table-focus-row";
+      var focusLabel = document.createElement("label");
+      focusLabel.setAttribute("for", "tournament-table-focus-select");
+      focusLabel.textContent = T("tournament.focusTable");
+      var focusSelect = document.createElement("select");
+      focusSelect.id = "tournament-table-focus-select";
+      sorted.forEach(function (active) {
+        var m = findBracketMatchById(t, active.matchId);
+        var opt = document.createElement("option");
+        opt.value = String(active.table);
+        opt.textContent = T("tournament.tableOption", { table: active.table }) + (m ? " — " + m.a + " vs " + m.b : "");
+        if (active.table === t.focusedTable) opt.selected = true;
+        focusSelect.appendChild(opt);
+      });
+      focusSelect.addEventListener("change", function () {
+        t.focusedTable = parseInt(focusSelect.value, 10);
+        saveTournamentToStorage(t);
+        renderTournamentActiveMatch();
+      });
+      focusRow.appendChild(focusLabel);
+      focusRow.appendChild(focusSelect);
+      tournamentCurrentMatchPanel.appendChild(focusRow);
+    }
+
+    var stack = document.createElement("div");
+    stack.className = "tournament-live-boards-stack";
+    var peekDepth = 0;
+    // Focused board renders last (on top in DOM/paint order too, not
+    // just via z-index) so its own box-shadow isn't drawn over by a
+    // peek card that happens to follow it.
+    var focused = null;
+    sorted.forEach(function (active) {
+      if (active.table === t.focusedTable) {
+        focused = active;
+        return;
+      }
+      stack.appendChild(buildTournamentFloatingBoard(active, t, false, ++peekDepth));
+    });
+    if (focused) stack.appendChild(buildTournamentFloatingBoard(focused, t, true, 0));
+    tournamentCurrentMatchPanel.appendChild(stack);
+  }
+
+  function buildTournamentFloatingBoard(active, t, isFocused, peekDepth) {
+    var match = findBracketMatchById(t, active.matchId);
+    var cardWrap = document.createElement("div");
+    cardWrap.className = "tournament-floating-board" + (isFocused ? " is-focused" : "");
+    if (!match) return cardWrap;
+    if (!isFocused) {
+      cardWrap.style.setProperty("--stack-depth", String(peekDepth));
+      cardWrap.setAttribute("role", "button");
+      cardWrap.setAttribute("tabindex", "0");
+      cardWrap.addEventListener("click", function () {
+        t.focusedTable = active.table;
+        saveTournamentToStorage(t);
+        renderTournamentActiveMatch();
+      });
+    }
+
+    var gameType = GAME_TYPES[t.gameType];
     var banner = document.createElement("div");
     banner.className = "now-playing-banner tournament-now-playing";
     banner.textContent =
-      gameType.label + " — " + match.tag + (t.tableCount > 1 && match.table ? " — " + T("tournament.tableOption", { table: match.table }) : "");
-    tournamentCurrentMatchPanel.appendChild(banner);
+      gameType.label + " — " + match.tag + (t.tableCount > 1 ? " — " + T("tournament.tableOption", { table: active.table }) : "");
+    cardWrap.appendChild(banner);
 
-    var board = document.createElement("div");
-    board.className = "scoreboard";
-    board.appendChild(buildTournamentSidePanel(match.a, "a", t.active.aBalls, t.active.aWins, t));
-    board.appendChild(buildTournamentSidePanel(match.b, "b", t.active.bBalls, t.active.bWins, t));
-    tournamentCurrentMatchPanel.appendChild(board);
+    if (isFocused) {
+      var board = document.createElement("div");
+      board.className = "scoreboard";
+      board.appendChild(buildTournamentSidePanel(match.a, "a", active.aBalls, active.aWins, t, active));
+      board.appendChild(buildTournamentSidePanel(match.b, "b", active.bBalls, active.bWins, t, active));
+      cardWrap.appendChild(board);
+    } else {
+      var peek = document.createElement("div");
+      peek.className = "tournament-floating-board-peek";
+      peek.textContent = match.a + " (" + active.aWins + ") " + T("common.wins") + " — " + match.b + " (" + active.bWins + ") " + T("common.wins") + " — " + T("tournament.tapToFocus");
+      cardWrap.appendChild(peek);
+    }
+    return cardWrap;
   }
 
   // Standings ranked by match wins (most first); the name is only a
@@ -14700,7 +14836,10 @@
 
   function renderTournamentActive() {
     var t = TOURNAMENT;
-    var activeMatchId = t.active ? t.active.matchId : null;
+    var activeMatchId = {};
+    t.activeMatches.forEach(function (a) {
+      activeMatchId[a.matchId] = true;
+    });
     var isSingle = t.format === "single";
     var isRoundRobin = t.format === "roundrobin";
     var isSwiss = t.format === "swiss";
@@ -14743,15 +14882,32 @@
     tournamentReadyList.innerHTML = "";
     tournamentCurrentMatchPanel.innerHTML = "";
 
-    if (t.active) {
-      renderTournamentActiveMatch();
-      return;
-    }
+    // A single-table event still shows only ONE live board and nothing
+    // else once it's up, exactly like before. A multi-table event can
+    // have several tables live at once, so a busy table (or several)
+    // doesn't stop the Ready to Play list from also showing whatever's
+    // still free to start on another one.
+    renderTournamentActiveMatch();
+    if (t.tableCount <= 1 && t.activeMatches.length) return;
     if (t.champion) return;
 
     var ready = pendingBracketMatches(t);
+    if (t.activeMatches.length) {
+      var busyMatchIds = {};
+      t.activeMatches.forEach(function (a) {
+        busyMatchIds[a.matchId] = true;
+      });
+      ready = ready.filter(function (m) {
+        return !busyMatchIds[m.id];
+      });
+    }
     if (ready.length === 0) return;
-    if (ready.length === 1) {
+    // Only a single-table event gets the "just start it" shortcut -
+    // with one table there's never a real choice about where a match
+    // should be played, so there's no reason to make someone tap Play
+    // for it. A multi-table event always needs an explicit tap (it
+    // picks up the match's assigned table, or asks for one).
+    if (t.tableCount <= 1 && ready.length === 1) {
       startTournamentMatch(ready[0].id);
       return;
     }
