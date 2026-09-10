@@ -4444,6 +4444,58 @@ input[type="number"] {
   margin: 0 16px 16px;
 }
 
+.tournament-table-focus-row {
+  margin: 0 16px 10px;
+  align-items: center;
+}
+
+/* A multi-table event's live boards, stacked like a small deck of
+   cards: the focused one sits in normal flow (so the stack's own
+   height always matches whatever's actually showing, never a guess),
+   with every other table's board peeking out below it as a thin,
+   tappable strip - tapping one (or picking it from the focus dropdown
+   above) brings it to the front instead. */
+.tournament-live-boards-stack {
+  position: relative;
+  margin: 0 16px 16px;
+}
+
+.tournament-floating-board.is-focused {
+  position: relative;
+  z-index: 50;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35);
+  padding: 10px 0;
+}
+
+.tournament-floating-board:not(.is-focused) {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: calc(-1 * var(--stack-depth, 1) * 10px);
+  z-index: calc(20 - var(--stack-depth, 1));
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+  opacity: 0.75;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.tournament-floating-board:not(.is-focused) .tournament-now-playing {
+  margin: 8px 12px 0;
+}
+
+.tournament-floating-board-peek {
+  margin: 4px 12px 10px;
+  text-align: center;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
 /* ---------- Round Robin: standings list + a wrapping grid of every
    match (no bracket tree — every match is visible from the start). ---------- */
 
