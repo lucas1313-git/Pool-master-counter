@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260910f">
+<link rel="stylesheet" href="css/style.css?v=20260910h">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -1030,82 +1030,102 @@
     <h2 data-i18n="tournament.newHeading">New Elimination Tournament</h2>
     <p class="player-stats-note" data-i18n="tournament.randomDrawNote">Players are drawn into the bracket at random. Pick a format below.</p>
 
-    <h3 class="tournament-section-heading" data-i18n="tournament.formatSectionHeading">Tournament Type</h3>
-    <div class="wizard-format-options">
-      <label class="wizard-format-option">
-        <input type="radio" name="tournament-format" value="double" checked>
-        <span data-i18n="tournament.formatDoubleShort">🥈 Double Elimination</span>
-        <button type="button" class="format-info-btn" data-info-title="tournament-format-title-double" data-info-target="tournament-format-text-double" data-i18n-aria-label="tournament.formatInfoAria" aria-label="More about this tournament format">❓</button>
-      </label>
-      <label class="wizard-format-option">
-        <input type="radio" name="tournament-format" value="single">
-        <span data-i18n="tournament.formatSingleShort">🥇 Single Elimination</span>
-        <button type="button" class="format-info-btn" data-info-title="tournament-format-title-single" data-info-target="tournament-format-text-single" data-i18n-aria-label="tournament.formatInfoAria" aria-label="More about this tournament format">❓</button>
-      </label>
-      <label class="wizard-format-option">
-        <input type="radio" name="tournament-format" value="roundrobin">
-        <span data-i18n="tournament.formatRoundRobinShort">🔄 Round Robin</span>
-        <button type="button" class="format-info-btn" data-info-title="tournament-format-title-roundrobin" data-info-target="tournament-format-text-roundrobin" data-i18n-aria-label="tournament.formatInfoAria" aria-label="More about this tournament format">❓</button>
-      </label>
-      <label class="wizard-format-option">
-        <input type="radio" name="tournament-format" value="swiss">
-        <span data-i18n="tournament.formatSwissShort">🇨🇭 Swiss</span>
-        <button type="button" class="format-info-btn" data-info-title="tournament-format-title-swiss" data-info-target="tournament-format-text-swiss" data-i18n-aria-label="tournament.formatInfoAria" aria-label="More about this tournament format">❓</button>
-      </label>
-    </div>
-    <span id="tournament-format-title-double" data-i18n="tournament.formatDoubleTitle" hidden>Double Elimination Tournament Format</span>
-    <span id="tournament-format-text-double" data-i18n="tournament.formatDouble" hidden>Winners &amp; Losers Brackets: lose once, drop to the losers bracket for a second chance; lose twice and you're out.
+    <div class="tournament-setup-narrow-sections">
+      <div class="tournament-setup-section">
+        <h3 class="tournament-section-heading" data-i18n="tournament.formatSectionHeading">Tournament Type</h3>
+        <div class="wizard-format-options">
+          <label class="wizard-format-option">
+            <input type="radio" name="tournament-format" value="double" checked>
+            <span data-i18n="tournament.formatDoubleShort">🥈 Double Elimination</span>
+            <button type="button" class="format-info-btn" data-info-title="tournament-format-title-double" data-info-target="tournament-format-text-double" data-i18n-aria-label="tournament.formatInfoAria" aria-label="More about this tournament format">❓</button>
+          </label>
+          <label class="wizard-format-option">
+            <input type="radio" name="tournament-format" value="single">
+            <span data-i18n="tournament.formatSingleShort">🥇 Single Elimination</span>
+            <button type="button" class="format-info-btn" data-info-title="tournament-format-title-single" data-info-target="tournament-format-text-single" data-i18n-aria-label="tournament.formatInfoAria" aria-label="More about this tournament format">❓</button>
+          </label>
+          <label class="wizard-format-option">
+            <input type="radio" name="tournament-format" value="roundrobin">
+            <span data-i18n="tournament.formatRoundRobinShort">🔄 Round Robin</span>
+            <button type="button" class="format-info-btn" data-info-title="tournament-format-title-roundrobin" data-info-target="tournament-format-text-roundrobin" data-i18n-aria-label="tournament.formatInfoAria" aria-label="More about this tournament format">❓</button>
+          </label>
+          <label class="wizard-format-option">
+            <input type="radio" name="tournament-format" value="swiss">
+            <span data-i18n="tournament.formatSwissShort">🇨🇭 Swiss</span>
+            <button type="button" class="format-info-btn" data-info-title="tournament-format-title-swiss" data-info-target="tournament-format-text-swiss" data-i18n-aria-label="tournament.formatInfoAria" aria-label="More about this tournament format">❓</button>
+          </label>
+        </div>
+        <span id="tournament-format-title-double" data-i18n="tournament.formatDoubleTitle" hidden>Double Elimination Tournament Format</span>
+        <span id="tournament-format-text-double" data-i18n="tournament.formatDouble" hidden>Winners &amp; Losers Brackets: lose once, drop to the losers bracket for a second chance; lose twice and you're out.
 
 Fairer than single elimination since one bad game doesn't end your tournament — but it takes longer to play out.</span>
-    <span id="tournament-format-title-single" data-i18n="tournament.formatSingleTitle" hidden>Single Elimination Tournament Format</span>
-    <span id="tournament-format-text-single" data-i18n="tournament.formatSingle" hidden>Only winners advance: lose once and you're out.
+        <span id="tournament-format-title-single" data-i18n="tournament.formatSingleTitle" hidden>Single Elimination Tournament Format</span>
+        <span id="tournament-format-text-single" data-i18n="tournament.formatSingle" hidden>Only winners advance: lose once and you're out.
 
 The fastest format — best for a quick knockout when there isn't time for a longer event.</span>
-    <span id="tournament-format-title-roundrobin" data-i18n="tournament.formatRoundRobinTitle" hidden>Round Robin Tournament Format</span>
-    <span id="tournament-format-text-roundrobin" data-i18n="tournament.formatRoundRobin" hidden>No elimination — every player faces every other player once.
+        <span id="tournament-format-title-roundrobin" data-i18n="tournament.formatRoundRobinTitle" hidden>Round Robin Tournament Format</span>
+        <span id="tournament-format-text-roundrobin" data-i18n="tournament.formatRoundRobin" hidden>No elimination — every player faces every other player once.
 
 Whoever has the most match wins when it's all done is champion (ties share the win). Best for a casual group where everyone should get equal games in.</span>
-    <span id="tournament-format-title-swiss" data-i18n="tournament.formatSwissTitle" hidden>Swiss Tournament Format</span>
-    <span id="tournament-format-text-swiss" data-i18n="tournament.formatSwiss" hidden>A proper non-elimination format where everyone plays a fixed number of rounds (e.g., 4 or 5), drawn each time against opponents with identical win-loss records.
+        <span id="tournament-format-title-swiss" data-i18n="tournament.formatSwissTitle" hidden>Swiss Tournament Format</span>
+        <span id="tournament-format-text-swiss" data-i18n="tournament.formatSwiss" hidden>A proper non-elimination format where everyone plays a fixed number of rounds (e.g., 4 or 5), drawn each time against opponents with identical win-loss records.
 
 Once those scheduled rounds wrap up, whoever has bagged the most match victories takes the crown!</span>
+      </div>
 
-    <h3 class="tournament-section-heading" data-i18n="tournament.gameSectionHeading">Game Type</h3>
-    <div class="row">
-      <label for="tournament-game-type" data-i18n="gameSetup.game">Game</label>
-      <select id="tournament-game-type"></select>
-      <label for="tournament-target" data-i18n="gameSetup.target">Target</label>
-      <input type="number" id="tournament-target" min="1" max="500" value="1">
-      <span id="tournament-target-unit" data-i18n="units.rack">rack</span>
+      <div class="tournament-setup-section">
+        <h3 class="tournament-section-heading" data-i18n="tournament.gameSectionHeading">Game Type</h3>
+        <div class="row">
+          <label for="tournament-game-type" data-i18n="gameSetup.game">Game</label>
+          <select id="tournament-game-type"></select>
+          <label for="tournament-target" data-i18n="gameSetup.target">Target</label>
+          <input type="number" id="tournament-target" min="1" max="500" value="1">
+          <span id="tournament-target-unit" data-i18n="units.rack">rack</span>
+        </div>
+        <div class="row">
+          <label for="tournament-race-to" data-i18n="tournament.raceToPerMatch">Race-to per match</label>
+          <input type="number" id="tournament-race-to" min="1" max="21" value="2">
+          <span data-i18n="common.wins">wins</span>
+        </div>
+        <label class="checkbox-row">
+          <input type="checkbox" id="tournament-fair-race-checkbox">
+          <span data-i18n="tournament.fairRaceEnable">⚖️ Use Fargo rating for tournament goals</span>
+          <button type="button" id="btn-fair-race-info" class="format-info-btn" data-i18n-aria-label="tournament.fairRaceInfoAria" aria-label="What does this mean?">❓</button>
+        </label>
+      </div>
     </div>
-    <div class="row">
-      <label for="tournament-race-to" data-i18n="tournament.raceToPerMatch">Race-to per match</label>
-      <input type="number" id="tournament-race-to" min="1" max="21" value="2">
-      <span data-i18n="common.wins">wins</span>
-    </div>
-    <label class="checkbox-row">
-      <input type="checkbox" id="tournament-fair-race-checkbox">
-      <span data-i18n="tournament.fairRaceEnable">⚖️ Use Fargo rating for tournament goals</span>
-    </label>
 
-    <h3 class="tournament-players-heading" data-i18n="players.heading">Players</h3>
-    <div class="wizard-format-options tournament-seed-mode-options">
-      <label class="wizard-format-option">
-        <input type="radio" name="tournament-seed-mode" value="random" checked>
-        <span data-i18n="tournament.seedModeRandom">🎲 Random selection</span>
+    <div class="tournament-setup-section tournament-setup-players-section">
+      <h3 class="tournament-players-heading" data-i18n="players.heading">Players</h3>
+      <div class="wizard-format-options tournament-seed-mode-options">
+        <label class="wizard-format-option">
+          <input type="radio" name="tournament-seed-mode" value="random" checked>
+          <span data-i18n="tournament.seedModeRandom">🎲 Random selection</span>
+        </label>
+        <label class="wizard-format-option">
+          <input type="radio" name="tournament-seed-mode" value="manual">
+          <span data-i18n="tournament.seedModeManual">🔢 Set seed manually</span>
+        </label>
+        <label class="wizard-format-option">
+          <input type="radio" name="tournament-seed-mode" value="rating">
+          <span data-i18n="tournament.seedModeRating">⚖️ Match Similar Ratings</span>
+          <button type="button" class="format-info-btn" data-info-title="tournament-seed-rating-title" data-info-target="tournament-seed-rating-text" data-i18n-aria-label="tournament.formatInfoAria" aria-label="More about this seeding mode">❓</button>
+        </label>
+      </div>
+      <span id="tournament-seed-rating-title" data-i18n="tournament.seedModeRatingTitle" hidden>Match Similar Ratings Seeding</span>
+      <span id="tournament-seed-rating-text" data-i18n="tournament.seedModeRatingExplain" hidden>Round 1 pairs the closest-rated players against each other instead of spreading them apart - the strongest face off immediately, so one player can't just coast past weak opponents to the final.</span>
+      <label class="checkbox-row">
+        <input type="checkbox" id="tournament-teams-enabled-checkbox">
+        <span data-i18n="tournament.teamsEnable">🤝 Play as teams (group matching Team fields below into one bracket entrant)</span>
       </label>
-      <label class="wizard-format-option">
-        <input type="radio" name="tournament-seed-mode" value="manual">
-        <span data-i18n="tournament.seedModeManual">🔢 Set seed manually</span>
+      <label class="checkbox-row">
+        <input type="checkbox" id="tournament-select-all-checkbox">
+        <span data-i18n="tournament.selectAll">✅ Select All</span>
       </label>
+      <datalist id="tournament-team-options"></datalist>
+      <ul id="tournament-player-checklist" class="tournament-player-checklist"></ul>
+      <p class="player-stats-note hidden" id="tournament-team-preview"></p>
     </div>
-    <label class="checkbox-row">
-      <input type="checkbox" id="tournament-teams-enabled-checkbox">
-      <span data-i18n="tournament.teamsEnable">🤝 Play as teams (group matching Team fields below into one bracket entrant)</span>
-    </label>
-    <datalist id="tournament-team-options"></datalist>
-    <ul id="tournament-player-checklist" class="tournament-player-checklist"></ul>
-    <p class="player-stats-note hidden" id="tournament-team-preview"></p>
 
     <div class="row">
       <button type="button" id="btn-tournament-start" class="btn btn-primary" data-i18n="tournament.start">Start Tournament</button>
@@ -1169,6 +1189,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260910f"></script>
+<script src="js/app.js?v=20260910h"></script>
 </body>
 </html>

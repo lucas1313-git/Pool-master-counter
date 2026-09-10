@@ -699,6 +699,7 @@ input[type="number"] {
 .checkbox-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   cursor: pointer;
   color: var(--text-dim);
@@ -3775,6 +3776,46 @@ input[type="number"] {
 
 /* ---------- Elimination Tournament ---------- */
 
+/* Tournament Type and Game Type are narrow, self-contained option
+   groups with no real reason to stretch across the whole panel - a
+   single-column grid track auto-sizes to whichever of the two has the
+   wider content (so they match each other) and is then capped at 40% of
+   the viewport; anything that would still overflow that (e.g. a select)
+   shrinks to fit instead, handled by its own width rule below. Players
+   is deliberately its own section outside this grid - it needs room for
+   up to 4 player cards across, which is routinely wider than 40vw. */
+.tournament-setup-narrow-sections {
+  display: grid;
+  grid-template-columns: minmax(0, min(max-content, 40vw));
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.tournament-setup-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+
+.tournament-setup-players-section {
+  width: fit-content;
+  max-width: 100%;
+  margin-bottom: 14px;
+}
+
+/* Radio rows default to stretching across their container (see
+   .wizard-format-options elsewhere) - here they should only ever be as
+   wide as their own widest option, not the whole section. */
+#tournament-setup-panel .wizard-format-options {
+  width: fit-content;
+  max-width: 100%;
+}
+
+#tournament-setup-panel .wizard-format-option {
+  flex-wrap: wrap;
+}
+
 .tournament-players-heading,
 .tournament-section-heading {
   margin: 4px 0 10px;
@@ -3823,6 +3864,9 @@ input[type="number"] {
   padding: 0;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  /* Never more than 4 across, however wide the screen - a 5th+ player
+     wraps to another row instead of the grid just keeping adding columns. */
+  max-width: calc(4 * 220px + 3 * 8px);
   gap: 8px;
 }
 
@@ -3831,7 +3875,10 @@ input[type="number"] {
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
-  background: var(--bg-card);
+  /* A shade lighter than the section card it sits in (which is already
+     lighter than the page background) so each player still reads as its
+     own distinct row instead of blending into the section around it. */
+  background: rgba(255, 255, 255, 0.06);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 8px 10px;
@@ -3853,7 +3900,9 @@ input[type="number"] {
 }
 
 .tournament-seed-input {
-  width: 44px !important;
+  /* Wide enough for a 3-digit seed plus the native number spinner
+     arrows - 44px was clipping both. */
+  width: 64px !important;
   height: auto !important;
   padding: 6px 4px;
   border: 1px solid var(--border);

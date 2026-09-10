@@ -1431,6 +1431,7 @@
   var tournamentTargetUnit = document.getElementById("tournament-target-unit");
   var tournamentRaceToInput = document.getElementById("tournament-race-to");
   var tournamentFairRaceCheckbox = document.getElementById("tournament-fair-race-checkbox");
+  var btnFairRaceInfo = document.getElementById("btn-fair-race-info");
   var tournamentSeedModeRadios = document.getElementsByName("tournament-seed-mode");
   var tournamentFormatInfoOverlay = document.getElementById("tournament-format-info-overlay");
   var tournamentFormatInfoTitle = document.getElementById("tournament-format-info-title");
@@ -1439,6 +1440,7 @@
   var btnTournamentFormatInfoCancel = document.getElementById("btn-tournament-format-info-cancel");
   var tournamentFormatInfoPendingRadio = null;
   var tournamentTeamsEnabledCheckbox = document.getElementById("tournament-teams-enabled-checkbox");
+  var tournamentSelectAllCheckbox = document.getElementById("tournament-select-all-checkbox");
   var tournamentPlayerChecklist = document.getElementById("tournament-player-checklist");
   var tournamentTeamOptionsDatalist = document.getElementById("tournament-team-options");
   var tournamentTeamPreview = document.getElementById("tournament-team-preview");
@@ -12554,7 +12556,15 @@
   // way, seedOrder(size) below is what actually spreads seed 1/2/3/4... onto
   // opposite halves of the bracket so they can't meet early - that spread
   // happens the same way whether the ranking behind it is random or real.
-  function buildWinnersBracketRounds(playerNames, seededOrder) {
+  // pairAdjacent (optional): the opposite of that spread - used for
+  // "Match Similar Ratings" seeding, where seededOrder is already
+  // strongest-to-weakest and the whole point is for adjacent ranks to
+  // play each other round 1 instead of being kept apart. Byes in this
+  // mode go to the weakest players (paired against nobody) rather than
+  // the standard convention of rewarding the strongest with a bye - a
+  // bye here would let a top player dodge the very round-1 gauntlet this
+  // mode exists to create.
+  function buildWinnersBracketRounds(playerNames, seededOrder, pairAdjacent) {
     var shuffled;
     if (seededOrder) {
       shuffled = seededOrder.slice();
@@ -12569,10 +12579,21 @@
     }
     var n = shuffled.length;
     var size = nextPow2(n);
-    var order = seedOrder(size);
-    var slots = order.map(function (s) {
-      return s <= n ? shuffled[s - 1] : null;
-    });
+    var slots;
+    if (pairAdjacent) {
+      var byeCount = size - n;
+      var paired = shuffled.slice(0, n - byeCount);
+      var byeReceivers = shuffled.slice(n - byeCount);
+      slots = paired.slice();
+      byeReceivers.forEach(function (name) {
+        slots.push(name, null);
+      });
+    } else {
+      var order = seedOrder(size);
+      slots = order.map(function (s) {
+        return s <= n ? shuffled[s - 1] : null;
+      });
+    }
 
     var wb = [];
     var r1 = [];
@@ -12604,8 +12625,8 @@
     return { shuffled: shuffled, size: size, wb: wb };
   }
 
-  function buildDoubleEliminationBracket(playerNames, gameType, target, raceTo, fairRace, seededOrder) {
-    var built = buildWinnersBracketRounds(playerNames, seededOrder);
+  function buildDoubleEliminationBracket(playerNames, gameType, target, raceTo, fairRace, seededOrder, pairAdjacent) {
+    var built = buildWinnersBracketRounds(playerNames, seededOrder, pairAdjacent);
     var t = {
       format: "double",
       createdAt: new Date().toISOString(),
@@ -12634,8 +12655,8 @@
   // past the last round, so the losers-bracket logic in advanceBracket
   // never fires) and no grand final — the winners-bracket champion is the
   // tournament champion outright.
-  function buildSingleEliminationBracket(playerNames, gameType, target, raceTo, fairRace, seededOrder) {
-    var built = buildWinnersBracketRounds(playerNames, seededOrder);
+  function buildSingleEliminationBracket(playerNames, gameType, target, raceTo, fairRace, seededOrder, pairAdjacent) {
+    var built = buildWinnersBracketRounds(playerNames, seededOrder, pairAdjacent);
     var t = {
       format: "single",
       createdAt: new Date().toISOString(),
@@ -13126,6 +13147,13 @@
     renderTournamentTeamPreview();
   }
 
+  function tournamentSeedMode() {
+    var checked = Array.prototype.filter.call(tournamentSeedModeRadios, function (r) {
+      return r.checked;
+    })[0];
+    return checked ? checked.value : "random";
+  }
+
   function isTournamentSeededManually() {
     var checked = Array.prototype.filter.call(tournamentSeedModeRadios, function (r) {
       return r.checked;
@@ -13141,6 +13169,10 @@
     activePlayers().forEach(function (p) {
       activeNames[p.name] = true;
     });
+    // A fresh render means a fresh checklist DOM - any earlier Select All
+    // snapshot no longer refers to anything real.
+    tournamentSelectAllCheckbox.checked = false;
+    tournamentSelectAllSnapshot = null;
     tournamentPlayerChecklist.innerHTML = "";
     renderTournamentTeamOptions();
     if (names.length === 0) {
@@ -13260,15 +13292,44 @@
     tournamentTeamPreview.textContent = lines.join("  ·  ");
   }
 
+  // Ranks entrants strongest-to-weakest by average rating (team-aware -
+  // an entrant's members' ratings are averaged the same way Fair Race
+  // treats a team as a single combined strength). Ties keep checklist
+  // order, so it's still deterministic rather than depending on object
+  // iteration order.
+  function tournamentEntrantsByRatingDesc(entrants) {
+    return entrants
+      .map(function (entrant, idx) {
+        return { name: entrant.label, rating: averageRating(entrant.members), idx: idx };
+      })
+      .sort(function (a, b) {
+        return b.rating - a.rating || a.idx - b.idx;
+      })
+      .map(function (entry) {
+        return entry.name;
+      });
+  }
+
   // Returns null when seeding is off (today's exact random-draw behavior).
-  // When on, resolves one seed per ENTRANT (not per row): the lowest
-  // explicit seed number typed among that entrant's member rows, else its
-  // first member's checklist position - left blank, duplicated, or invalid
-  // entries all fall back this way, nudged past any number a real seed
-  // already claimed, rather than erroring - this is a casual home-game
-  // tool, not a tournament-director product.
+  // For "rating" mode, resolves straight to a strongest-to-weakest order
+  // (seed 1 = highest rated) - buildWinnersBracketRounds is told to pair
+  // that order adjacently (see pairAdjacent) instead of spreading it
+  // apart the way a real seed number normally would, so the closest-
+  // rated players meet in round 1 instead of being kept apart.
+  // For "manual" mode, resolves one seed per ENTRANT (not per row): the
+  // lowest explicit seed number typed among that entrant's member rows,
+  // else its first member's checklist position - left blank, duplicated,
+  // or invalid entries all fall back this way, nudged past any number a
+  // real seed already claimed, rather than erroring - this is a casual
+  // home-game tool, not a tournament-director product.
   function getTournamentSeeds(entrants) {
-    if (!isTournamentSeededManually()) return null;
+    var mode = tournamentSeedMode();
+    if (mode === "rating") {
+      return tournamentEntrantsByRatingDesc(entrants).map(function (name, i) {
+        return { name: name, seed: i + 1 };
+      });
+    }
+    if (mode !== "manual") return null;
     var rows = Array.prototype.slice.call(tournamentPlayerChecklist.querySelectorAll(".tournament-player-check-row"));
     var checklistPositionByName = {};
     var seedValueByName = {};
@@ -13351,14 +13412,18 @@
           return s.name;
         })
       : null;
+    // Only meaningful for the two bracket formats - Swiss already pairs
+    // adjacent-in-order players round to round on its own (see
+    // pairSwissRound), and round robin has no concept of seeding at all.
+    var pairAdjacent = tournamentSeedMode() === "rating";
     if (format === "roundrobin") {
       TOURNAMENT = buildRoundRobinTournament(names, gameType, target, raceTo, fairRace);
     } else if (format === "swiss") {
       TOURNAMENT = buildSwissTournament(names, gameType, target, raceTo, fairRace, seededOrder);
     } else if (format === "single") {
-      TOURNAMENT = buildSingleEliminationBracket(names, gameType, target, raceTo, fairRace, seededOrder);
+      TOURNAMENT = buildSingleEliminationBracket(names, gameType, target, raceTo, fairRace, seededOrder, pairAdjacent);
     } else {
-      TOURNAMENT = buildDoubleEliminationBracket(names, gameType, target, raceTo, fairRace, seededOrder);
+      TOURNAMENT = buildDoubleEliminationBracket(names, gameType, target, raceTo, fairRace, seededOrder, pairAdjacent);
     }
     TOURNAMENT.entrantMembers = entrantMembers;
     TOURNAMENT.entrantTeamNames = entrantTeamNames;
@@ -14853,6 +14918,48 @@
   tournamentPlayerChecklist.addEventListener("change", refreshTournamentTeamUi);
   tournamentPlayerChecklist.addEventListener("input", refreshTournamentTeamUi);
   tournamentTeamsEnabledCheckbox.addEventListener("change", renderTournamentTeamPreview);
+  btnFairRaceInfo.addEventListener("click", function () {
+    alertModal(T("tournament.fairRaceExplain"));
+  });
+
+  function tournamentPlayerCheckboxes() {
+    return Array.prototype.slice.call(tournamentPlayerChecklist.querySelectorAll('input[type="checkbox"]'));
+  }
+
+  // Remembers exactly who was checked right before "Select All" was
+  // turned on, so turning it back off restores that instead of just
+  // clearing everyone - null whenever Select All isn't active.
+  var tournamentSelectAllSnapshot = null;
+
+  tournamentSelectAllCheckbox.addEventListener("change", function () {
+    var boxes = tournamentPlayerCheckboxes();
+    if (tournamentSelectAllCheckbox.checked) {
+      tournamentSelectAllSnapshot = {};
+      boxes.forEach(function (cb) {
+        tournamentSelectAllSnapshot[cb.value] = cb.checked;
+        cb.checked = true;
+      });
+    } else {
+      var snapshot = tournamentSelectAllSnapshot || {};
+      boxes.forEach(function (cb) {
+        cb.checked = !!snapshot[cb.value];
+      });
+      tournamentSelectAllSnapshot = null;
+    }
+    refreshTournamentTeamUi();
+  });
+
+  // If the user unchecks one player by hand while Select All is on, the
+  // checkbox no longer honestly describes the state - un-tick it too
+  // (without touching the snapshot; that only ever changes when Select
+  // All itself is toggled, not from incidental individual clicks).
+  tournamentPlayerChecklist.addEventListener("change", function (e) {
+    if (e.target.type !== "checkbox" || !tournamentSelectAllCheckbox.checked) return;
+    var stillAllChecked = tournamentPlayerCheckboxes().every(function (cb) {
+      return cb.checked;
+    });
+    if (!stillAllChecked) tournamentSelectAllCheckbox.checked = false;
+  });
   btnTournamentAbandon.addEventListener("click", abandonTournament);
   btnTournamentPrint.addEventListener("click", function () { window.print(); });
   tournamentGameTypeSelect.addEventListener("change", function () {
