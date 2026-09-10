@@ -521,6 +521,24 @@ button:active {
 
 .btn-danger:hover { filter: brightness(1.1); }
 
+.full-reset-block {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--danger);
+}
+
+.btn-full-reset {
+  background: #1a0000;
+  color: #ff6b6b;
+  border: 2px solid var(--danger);
+}
+
+.btn-full-reset:hover {
+  background: var(--danger);
+  color: #fff;
+  filter: none;
+}
+
 button:disabled {
   opacity: 0.4;
   cursor: not-allowed;

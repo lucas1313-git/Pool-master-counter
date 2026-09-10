@@ -1279,6 +1279,7 @@
   var importFileInput = document.getElementById("import-file-input");
   var btnResetAllPlayerStats = document.getElementById("btn-reset-all-player-stats");
   var btnResetRosterLists = document.getElementById("btn-reset-roster-lists");
+  var btnFullReset = document.getElementById("btn-full-reset");
   var backupPanel = document.getElementById("backup-panel");
   var btnToggleBackupPanel = document.getElementById("btn-toggle-backup-panel");
 
@@ -7412,6 +7413,37 @@
       validateNewPlayerNameInput();
       renderAll();
       showToast(T("toast.rosterListsCleared"));
+    });
+  }
+
+  // The single most destructive action in the app - wipes every
+  // poolMasterCounter.* key out of localStorage (every player, rating,
+  // roster, game, tournament, and setting) and reloads, so the device
+  // comes back up exactly as it would on a brand new install, migration
+  // path and all. A full data backup downloads automatically first;
+  // unlike every reset above, recovery from here is only ever that
+  // downloaded file via Import Data - the in-app Recover Data list
+  // restores individual slices, not a whole wiped device, so this
+  // intentionally doesn't add an entry there.
+  function performFullFactoryReset() {
+    confirmModal(T("confirm.fullResetExplain"), function () {
+      confirmModal(T("confirm.fullResetAreYouCertain"), function () {
+        exportAllData();
+        var keysToRemove = [];
+        for (var i = 0; i < localStorage.length; i++) {
+          var key = localStorage.key(i);
+          if (key && key.indexOf("poolMasterCounter.") === 0) keysToRemove.push(key);
+        }
+        keysToRemove.forEach(function (key) {
+          localStorage.removeItem(key);
+        });
+        // The backup download is a same-tick <a>.click(), which some
+        // browsers need a beat to actually start before navigation - see
+        // downloadJSON/exportAllData above.
+        setTimeout(function () {
+          location.reload();
+        }, 400);
+      });
     });
   }
 
@@ -13757,6 +13789,7 @@
   btnResetAllPlayerStats.addEventListener("click", resetAllPlayerStats);
   btnResetRosterLists.addEventListener("click", resetAllRosterLists);
   btnResetAllRatings.addEventListener("click", resetAllPlayersOfficialRating);
+  btnFullReset.addEventListener("click", performFullFactoryReset);
   btnResetSessionTournament.addEventListener("click", resetSessionAndTournament);
 
   btnRecoverImportFile.addEventListener("click", function () {

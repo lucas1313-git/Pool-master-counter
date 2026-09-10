@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260909g">
+<link rel="stylesheet" href="css/style.css?v=20260909h">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -378,6 +378,12 @@
         <button type="button" id="btn-reset-roster-lists" class="btn btn-danger" data-i18n="backup.resetLists">Reset Player Lists</button>
       </div>
       <p class="player-stats-note" data-i18n="resets.tournamentNote">Ending just an in-progress tournament (without touching the live session) is on the Tournament page's Abandon Tournament button.</p>
+      <div class="full-reset-block">
+        <p class="player-stats-note" data-i18n="resets.fullResetNote">Everything below this line wipes the entire device back to a brand new install — every player, rating, roster, and setting. A full backup downloads automatically first.</p>
+        <div class="row">
+          <button type="button" id="btn-full-reset" class="btn btn-danger btn-full-reset" data-i18n="resets.fullReset">💀 Full Reset — Wipe Everything</button>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -1117,6 +1123,6 @@
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260909g"></script>
+<script src="js/app.js?v=20260909h"></script>
 </body>
 </html>
