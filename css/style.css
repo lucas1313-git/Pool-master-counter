@@ -521,6 +521,24 @@ button:active {
 
 .btn-danger:hover { filter: brightness(1.1); }
 
+.full-reset-block {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--danger);
+}
+
+.btn-full-reset {
+  background: #1a0000;
+  color: #ff6b6b;
+  border: 2px solid var(--danger);
+}
+
+.btn-full-reset:hover {
+  background: var(--danger);
+  color: #fff;
+  filter: none;
+}
+
 button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
@@ -535,6 +553,15 @@ button:disabled {
   border-radius: var(--radius);
   padding: 16px;
   margin: 8px 16px;
+  /* #app is a column flexbox, so every panel is a flex item with a
+     default min-width of "auto" (i.e. its content's own min-content
+     width) - wide unconstrained content (like a many-round bracket
+     tree) can silently push the whole page wider than the viewport
+     that way, bypassing any overflow-x:auto set on something inside
+     the panel entirely, since the overflow never happens there in the
+     first place. This lets the panel actually shrink to the viewport,
+     so that inner scrolling can do its job. */
+  min-width: 0;
 }
 
 .panel h2 {
@@ -604,6 +631,7 @@ button:disabled {
 
 .collapsible-panel.collapsed .panel-summary {
   display: block;
+  cursor: pointer;
 }
 
 .row {
@@ -680,6 +708,7 @@ input[type="number"] {
 .checkbox-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   cursor: pointer;
   color: var(--text-dim);
@@ -2356,6 +2385,12 @@ input[type="number"] {
   animation: milestone-pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
+.confirm-modal-title {
+  margin: 0 0 10px;
+  font-size: 1.15rem;
+  color: var(--accent);
+}
+
 .confirm-modal-message {
   margin: 0 0 20px;
   font-size: 1rem;
@@ -3750,7 +3785,56 @@ input[type="number"] {
 
 /* ---------- Elimination Tournament ---------- */
 
-.tournament-players-heading {
+/* Tournament Type and Game Type are narrow, self-contained option
+   groups with no real reason to stretch across the whole panel.
+   align-items: flex-start on a column flex container is what actually
+   does the "shrink to content, don't stretch to fill the row" job here
+   (a CSS Grid minmax(0, max-content) track was tried first, but
+   max-content sizing around a <select> is a known cross-browser soft
+   spot - this flex pattern has a much longer, more reliable track
+   record). Each section is then separately capped at 40% of the
+   viewport - they no longer force-match each other's width the way the
+   grid version aimed for, but they do reliably stop stretching, which
+   is the part that was actually broken. Players is deliberately its own
+   section below this one - it needs room for up to 4 player cards
+   across, which is routinely wider than 40vw. */
+.tournament-setup-narrow-sections {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.tournament-setup-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  width: fit-content;
+  max-width: 40vw;
+  margin: 0 auto;
+}
+
+.tournament-setup-players-section {
+  max-width: 100%;
+  margin: 0 auto 14px;
+}
+
+/* Radio rows default to stretching across their container (see
+   .wizard-format-options elsewhere) - here they should only ever be as
+   wide as their own widest option, not the whole section. */
+#tournament-setup-panel .wizard-format-options {
+  width: fit-content;
+  max-width: 100%;
+}
+
+#tournament-setup-panel .wizard-format-option {
+  flex-wrap: wrap;
+}
+
+.tournament-players-heading,
+.tournament-section-heading {
   margin: 4px 0 10px;
   font-size: 0.9rem;
   color: var(--text-dim);
@@ -3758,31 +3842,49 @@ input[type="number"] {
   letter-spacing: 0.05em;
 }
 
+.format-info-btn {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.format-info-btn:hover {
+  color: var(--text);
+  border-color: var(--text-dim);
+}
+
+/* The shared `select { flex: 1 }` rule makes a dropdown greedily fill
+   whatever's left in its row - fine for a row that's just one select,
+   but here it stretches the Game picker across most of the panel's
+   width even though "Game" and "Target"/rack-count still need room
+   next to it, leaving an oddly sparse-looking row. Capped instead of
+   overriding the shared rule, so every other select in the app keeps
+   its current (wider, single-control-per-row) behavior. */
+#tournament-setup-panel select {
+  flex: 0 1 220px;
+  max-width: 220px;
+}
+
 .tournament-player-checklist {
   list-style: none;
   margin: 0 0 16px;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  /* Never more than 4 across, however wide the screen - a 5th+ player
+     wraps to another row instead of the grid just keeping adding columns. */
+  max-width: calc(4 * 220px + 3 * 8px);
   gap: 8px;
-}
-
-.tournament-player-check-row label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 10px 12px;
-  cursor: pointer;
-  font-size: 0.95rem;
-}
-
-.tournament-player-check-row input {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--accent);
 }
 
 .tournament-player-check-row {
@@ -3790,14 +3892,34 @@ input[type="number"] {
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
+  /* A shade lighter than the section card it sits in (which is already
+     lighter than the page background) so each player still reads as its
+     own distinct row instead of blending into the section around it. */
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
 }
 
 .tournament-player-check-row label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex: 1;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.tournament-player-check-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
 }
 
 .tournament-seed-input {
-  width: 44px !important;
+  /* Wide enough for a 3-digit seed plus the native number spinner
+     arrows - 44px was clipping both. */
+  width: 64px !important;
   height: auto !important;
   padding: 6px 4px;
   border: 1px solid var(--border);
@@ -3835,6 +3957,15 @@ input[type="number"] {
   color: var(--text-dim);
   font-style: italic;
   margin-left: 4px;
+}
+
+.tournament-match-lb-tag {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-style: normal;
+  color: var(--danger);
+  margin-top: 1px;
 }
 
 .tournament-bracket-heading {
@@ -3886,11 +4017,101 @@ input[type="number"] {
 
 .wb-tree-root {
   display: flex;
+  align-items: center;
 }
 
 .wb-tree-node {
   display: flex;
   align-items: center;
+}
+
+/* Each match card gets its own round label directly above it (Final /
+   Semifinal / Quarterfinal / Round of N) rather than one shared header
+   row - the nested tree layout doesn't have stable per-round columns to
+   align a single header against, but every card already knows its own
+   round, so labeling each one is both simpler and never misaligned. */
+.wb-tree-card-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 190px;
+  flex-shrink: 0;
+}
+
+.wb-tree-card-wrap .tournament-round-heading {
+  margin: 0;
+}
+
+/* A losers-bracket tree's "leaf" is often just a reference to the
+   winners-bracket match someone dropped out of, not a full duplicate
+   card (that match is already shown in full in the winners tree above). */
+.lb-tree-wb-stub {
+  justify-content: center;
+  padding: 10px 8px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.15);
+  text-align: center;
+}
+
+.lb-tree-wb-stub-name {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+
+/* The collapsed "+" placeholder standing in for however many earlier
+   rounds have scrolled past the visible window - a real <button> (not a
+   div) so it's focusable/clickable like everything else, with its
+   native button chrome reset back to match the rest of the tree. */
+.lb-tree-collapsed-stub {
+  justify-content: center;
+  align-items: center;
+  padding: 10px 8px;
+  border: 2px dashed var(--accent);
+  border-radius: 10px;
+  background: rgba(232, 185, 35, 0.08);
+  text-align: center;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.lb-tree-collapsed-stub:hover {
+  background: rgba(232, 185, 35, 0.18);
+}
+
+.lb-tree-collapsed-plus {
+  font-size: 1.3rem;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.lb-tree-collapsed-label {
+  font-size: 0.78rem;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.lb-tree-root + .lb-tree-root {
+  margin-left: 24px;
+  padding-left: 24px;
+  border-left: 1px dashed var(--border);
+}
+
+.tournament-wb-inline,
+.tournament-gf-inline {
+  display: flex;
+  align-items: center;
+}
+
+.tournament-gf-inline {
+  margin-left: 28px;
+  padding-left: 28px;
+  border-left: 1px dashed var(--border);
+}
+
+.tournament-gf-inline .tournament-round-col {
+  min-width: 190px;
 }
 
 .wb-tree-children {
@@ -3959,8 +4180,19 @@ input[type="number"] {
 }
 
 .tournament-match-side.is-loser {
-  opacity: 0.55;
+  opacity: 0.4;
+  color: var(--text-dim);
   text-decoration: line-through;
+  text-decoration-thickness: 2.5px;
+  text-decoration-color: var(--text-dim);
+}
+
+/* Losers-bracket match cards get their own tint so it's obvious at a
+   glance which side of the bracket you're looking at, without having to
+   read the column heading. */
+#tournament-lb .tournament-match-card {
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, var(--bg-card));
 }
 
 .tournament-play-btn {
@@ -3988,12 +4220,70 @@ input[type="number"] {
 .tournament-ready-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
+  flex-wrap: wrap;
   gap: 10px;
+  max-width: 520px;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 10px 14px;
+}
+
+/* Bumps a semifinal/final match up visually - a little gold glow so it
+   reads as a bigger moment than an early-round match. */
+.tournament-ready-row.is-marquee {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent), 0 0 16px rgba(232, 185, 35, 0.25);
+}
+
+.tournament-ready-tag {
+  font-weight: 800;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.tournament-ready-names {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.tournament-ready-row .btn {
+  flex-shrink: 0;
+}
+
+.tournament-timeline {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 16px 16px;
+  padding: 10px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 0.85rem;
+}
+
+.tournament-timeline-stage {
+  color: var(--text-dim);
+}
+
+.tournament-timeline-stage.is-done {
+  color: var(--text-dim);
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+.tournament-timeline-stage.is-current {
+  color: var(--accent);
+  font-weight: 800;
+  font-size: 0.95rem;
+}
+
+.tournament-timeline-arrow {
+  color: var(--text-dim);
+  opacity: 0.6;
 }
 
 .tournament-now-playing {
@@ -4073,6 +4363,7 @@ input[type="number"] {
   #btn-tournament-abandon,
   #tournament-current-match-panel,
   #tournament-ready-list,
+  #tournament-timeline,
   .tournament-play-btn,
   #btn-tournament-print { display: none !important; }
 

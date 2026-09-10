@@ -163,14 +163,23 @@
   // Generic chevron collapse/expand for any element carrying the
   // .collapsible-panel class — a panel, or (for Focus Mode) a smaller
   // in-scoreboard block. Reused by every collapsible section on the page.
+  // The one-line summary (id="<panelElId>-summary") sits outside the
+  // toggle <button> as a plain sibling <p> - a <p> isn't valid inside a
+  // <button>, so it can't just be moved in - but while collapsed it's
+  // the only other visible part of the panel, so it gets the same click
+  // handler too: together the button and the summary line are the
+  // entire folded area, and both now toggle it, not just the heading row.
   function wireCollapsiblePanel(panelElId, buttonElId) {
     var panel = document.getElementById(panelElId);
     var btn = document.getElementById(buttonElId);
-    btn.addEventListener("click", function () {
+    var summary = document.getElementById(panelElId + "-summary");
+    function toggle() {
       var willExpand = panel.classList.contains("collapsed");
       panel.classList.toggle("collapsed");
       btn.setAttribute("aria-expanded", willExpand ? "true" : "false");
-    });
+    }
+    btn.addEventListener("click", toggle);
+    if (summary && summary.tagName === "P") summary.addEventListener("click", toggle);
   }
 
   // Updates the one-line "what's inside" sentence shown only while a
@@ -1279,6 +1288,7 @@
   var importFileInput = document.getElementById("import-file-input");
   var btnResetAllPlayerStats = document.getElementById("btn-reset-all-player-stats");
   var btnResetRosterLists = document.getElementById("btn-reset-roster-lists");
+  var btnFullReset = document.getElementById("btn-full-reset");
   var backupPanel = document.getElementById("backup-panel");
   var btnToggleBackupPanel = document.getElementById("btn-toggle-backup-panel");
 
@@ -1413,7 +1423,7 @@
   var tournamentFormatRadios = document.getElementsByName("tournament-format");
   var tournamentWbSection = document.getElementById("tournament-wb-section");
   var tournamentLbSection = document.getElementById("tournament-lb-section");
-  var tournamentGfSection = document.getElementById("tournament-gf-section");
+  var tournamentTimelineEl = document.getElementById("tournament-timeline");
   var tournamentRrSection = document.getElementById("tournament-rr-section");
   var tournamentSwissSection = document.getElementById("tournament-swiss-section");
   var tournamentGameTypeSelect = document.getElementById("tournament-game-type");
@@ -1421,8 +1431,25 @@
   var tournamentTargetUnit = document.getElementById("tournament-target-unit");
   var tournamentRaceToInput = document.getElementById("tournament-race-to");
   var tournamentFairRaceCheckbox = document.getElementById("tournament-fair-race-checkbox");
-  var tournamentSeededCheckbox = document.getElementById("tournament-seeded-checkbox");
+  var btnFairRaceInfo = document.getElementById("btn-fair-race-info");
+  var tournamentSeedModeRadios = document.getElementsByName("tournament-seed-mode");
+  var tournamentFormatInfoOverlay = document.getElementById("tournament-format-info-overlay");
+  var tournamentFormatInfoTitle = document.getElementById("tournament-format-info-title");
+  var tournamentFormatInfoBody = document.getElementById("tournament-format-info-body");
+  var btnTournamentFormatInfoSelect = document.getElementById("btn-tournament-format-info-select");
+  var btnTournamentFormatInfoCancel = document.getElementById("btn-tournament-format-info-cancel");
+  var tournamentFormatInfoPendingRadio = null;
   var tournamentTeamsEnabledCheckbox = document.getElementById("tournament-teams-enabled-checkbox");
+  var tournamentSelectAllCheckbox = document.getElementById("tournament-select-all-checkbox");
+  // Remembers exactly who was checked right before "Select All" was
+  // turned on, so turning it back off restores that instead of just
+  // clearing everyone - null whenever Select All isn't active. Declared
+  // here (not down by the rest of the Select All wiring) because
+  // renderTournamentPlayerChecklist, which also reads/resets this, is
+  // defined outside boot() - a variable declared inside boot() would be
+  // invisible to it regardless of call order, since closures resolve by
+  // where a function is lexically defined, not when it happens to run.
+  var tournamentSelectAllSnapshot = null;
   var tournamentPlayerChecklist = document.getElementById("tournament-player-checklist");
   var tournamentTeamOptionsDatalist = document.getElementById("tournament-team-options");
   var tournamentTeamPreview = document.getElementById("tournament-team-preview");
@@ -1499,6 +1526,11 @@
   var milestoneDetails = document.getElementById("milestone-details");
   var btnMilestoneClose = document.getElementById("btn-milestone-close");
   var btnMilestoneUndo = document.getElementById("btn-milestone-undo");
+  var tournamentMatchWinOverlay = document.getElementById("tournament-match-win-overlay");
+  var tournamentMatchWinEmoji = document.getElementById("tournament-match-win-emoji");
+  var tournamentMatchWinHeadline = document.getElementById("tournament-match-win-headline");
+  var tournamentMatchWinSubtext = document.getElementById("tournament-match-win-subtext");
+  var btnTournamentMatchWinClose = document.getElementById("btn-tournament-match-win-close");
 
   var gamewinOverlay = document.getElementById("gamewin-overlay");
   var gamewinMessage = document.getElementById("gamewin-message");
@@ -6817,6 +6849,50 @@
     return key ? PLAYER_CONTACTS[key] : { email: "", phone: "", reportOptIn: false, notifyMethod: "email" };
   }
 
+  // Formats digits-as-typed to match the phone convention of the
+  // currently active app language (same country each language's flag in
+  // languages/manifest.json already implies - UK for English, since
+  // that's the manifest's own flag choice, not a US assumption). Purely
+  // a typing aid: the formatted string (with its spaces) is what gets
+  // saved, same as the raw input always was.
+  function formatPhoneNumberForActiveLanguage(rawValue) {
+    var digits = (rawValue || "").replace(/\D/g, "");
+    if (activeLanguageCode === "french") {
+      // France: 0X XX XX XX XX
+      digits = digits.slice(0, 10);
+      return digits.replace(/(\d{1,2})(\d{1,2})?(\d{1,2})?(\d{1,2})?(\d{1,2})?/, function (m, a, b, c, d, e) {
+        return [a, b, c, d, e].filter(Boolean).join(" ");
+      });
+    }
+    if (activeLanguageCode === "spanish") {
+      // Spain: XXX XXX XXX
+      digits = digits.slice(0, 9);
+      return digits.replace(/(\d{1,3})(\d{1,3})?(\d{1,3})?/, function (m, a, b, c) {
+        return [a, b, c].filter(Boolean).join(" ");
+      });
+    }
+    if (activeLanguageCode === "cantonese") {
+      // Hong Kong: XXXX XXXX
+      digits = digits.slice(0, 8);
+      return digits.replace(/(\d{1,4})(\d{1,4})?/, function (m, a, b) {
+        return [a, b].filter(Boolean).join(" ");
+      });
+    }
+    // English -> UK mobile: 07XXX XXXXXX
+    digits = digits.slice(0, 11);
+    if (digits.length <= 5) return digits;
+    return digits.slice(0, 5) + " " + digits.slice(5);
+  }
+
+  // Reformats on every keystroke, always placing the cursor at the end -
+  // simplest behavior for a short, mostly-typed-left-to-right field like
+  // this, at the cost of mid-string editing not being caret-perfect.
+  function wirePhoneFormatting(input) {
+    input.addEventListener("input", function () {
+      input.value = formatPhoneNumberForActiveLanguage(input.value);
+    });
+  }
+
   // Shared by onboarding and the edit-rating popup: the "receive the
   // day's report" checkbox only makes sense once there's somewhere to
   // send it, and the email/SMS choice only matters once it's checked.
@@ -7033,7 +7109,7 @@
     ratingEditInput.value = getPlayerRating(name);
     var contact = getPlayerContact(name);
     ratingEditEmailInput.value = contact.email || "";
-    ratingEditPhoneInput.value = contact.phone || "";
+    ratingEditPhoneInput.value = formatPhoneNumberForActiveLanguage(contact.phone || "");
     ratingEditNotifyCheckbox.disabled = !(contact.email || contact.phone);
     ratingEditNotifyCheckbox.checked = !ratingEditNotifyCheckbox.disabled && !!contact.reportOptIn;
     ratingEditNotifyMethodRow.classList.toggle("hidden", !ratingEditNotifyCheckbox.checked);
@@ -7412,6 +7488,37 @@
       validateNewPlayerNameInput();
       renderAll();
       showToast(T("toast.rosterListsCleared"));
+    });
+  }
+
+  // The single most destructive action in the app - wipes every
+  // poolMasterCounter.* key out of localStorage (every player, rating,
+  // roster, game, tournament, and setting) and reloads, so the device
+  // comes back up exactly as it would on a brand new install, migration
+  // path and all. A full data backup downloads automatically first;
+  // unlike every reset above, recovery from here is only ever that
+  // downloaded file via Import Data - the in-app Recover Data list
+  // restores individual slices, not a whole wiped device, so this
+  // intentionally doesn't add an entry there.
+  function performFullFactoryReset() {
+    confirmModal(T("confirm.fullResetExplain"), function () {
+      confirmModal(T("confirm.fullResetAreYouCertain"), function () {
+        exportAllData();
+        var keysToRemove = [];
+        for (var i = 0; i < localStorage.length; i++) {
+          var key = localStorage.key(i);
+          if (key && key.indexOf("poolMasterCounter.") === 0) keysToRemove.push(key);
+        }
+        keysToRemove.forEach(function (key) {
+          localStorage.removeItem(key);
+        });
+        // The backup download is a same-tick <a>.click(), which some
+        // browsers need a beat to actually start before navigation - see
+        // downloadJSON/exportAllData above.
+        setTimeout(function () {
+          location.reload();
+        }, 400);
+      });
     });
   }
 
@@ -9487,7 +9594,7 @@
   function openOnboarding() {
     onboardingStep = 1;
     onboardingNameInput.value = "";
-    onboardingRatingInput.value = "";
+    onboardingRatingInput.value = String(DEFAULT_RATING);
     onboardingEmailInput.value = "";
     onboardingPhoneInput.value = "";
     onboardingReportOptInCheckbox.checked = false;
@@ -11084,13 +11191,13 @@
   // wherever a graph dot was clicked, listing every opponent behind that
   // point and the win/loss record against each. One shared tooltip node
   // for the whole app — only one is ever open at a time.
-  function showGraphDotTooltip(clientX, clientY, games) {
+  function showGraphDotTooltip(clientX, clientY, games, seriesLabel) {
     var el = getGraphTooltipEl();
     var perOpponent = summarizeGraphDotGames(games);
     el.innerHTML = "";
     var title = document.createElement("div");
     title.className = "player-graph-tooltip-title";
-    title.textContent = games.length + " game" + (games.length === 1 ? "" : "s") + " here";
+    title.textContent = T("playerPage.graphDotTitle", { series: seriesLabel, count: games.length });
     el.appendChild(title);
     perOpponent.forEach(function (opp) {
       var row = document.createElement("div");
@@ -11163,6 +11270,7 @@
     title.textContent = formatTimestamp(point.ts, true);
     el.appendChild(title);
 
+    var previousRating = point.rating - point.delta;
     var ratingRow = document.createElement("div");
     ratingRow.className = "player-graph-tooltip-row";
     var ratingLabel = document.createElement("span");
@@ -11170,7 +11278,7 @@
     ratingLabel.textContent = T("common.rating");
     var ratingValue = document.createElement("span");
     ratingValue.className = "player-graph-tooltip-record";
-    ratingValue.textContent = point.rating;
+    ratingValue.textContent = T("playerPage.ratingWasNow", { was: previousRating, now: point.rating });
     ratingRow.appendChild(ratingLabel);
     ratingRow.appendChild(ratingValue);
     el.appendChild(ratingRow);
@@ -11226,7 +11334,7 @@
   // tap precisely) that reveals a tooltip with the opponent(s) and win/
   // loss for every game bucketed into that point — see
   // showGraphDotTooltip/summarizeGraphDotGames.
-  function appendGraphSeries(svg, points, minMs, maxMs, width, height, axisMax, lineClass, dotClass, color, startHidden) {
+  function appendGraphSeries(svg, points, minMs, maxMs, width, height, axisMax, lineClass, dotClass, color, startHidden, seriesLabel) {
     var geo = buildSeriesGeometry(points, minMs, maxMs, width, height, axisMax);
     var group = svgEl("g", { class: "player-graph-series" + (startHidden ? " is-hidden" : "") });
     var pathAttrs = { d: geo.path, fill: "none", class: lineClass };
@@ -11240,7 +11348,7 @@
         var hit = svgEl("circle", { cx: pt.x, cy: pt.y, r: 9, class: "player-graph-dot-hit" });
         hit.addEventListener("click", function (e) {
           e.stopPropagation();
-          showGraphDotTooltip(e.clientX, e.clientY, pt.games);
+          showGraphDotTooltip(e.clientX, e.clientY, pt.games, seriesLabel);
         });
         group.appendChild(hit);
       }
@@ -11550,6 +11658,7 @@
     var legendItems = [];
 
     if (series.individualPlayed.length) {
+      var indPlayedLabel = T("graph.singleGamesPlayed");
       var gIndPlayed = appendGraphSeries(
         svg,
         series.individualPlayed,
@@ -11560,11 +11669,14 @@
         axisMax,
         "player-graph-line player-graph-line-ind-played",
         "player-graph-dot player-graph-dot-ind-played",
-        null
+        null,
+        false,
+        indPlayedLabel
       );
-      legendItems.push({ color: "var(--info)", style: "solid", label: T("graph.singleGamesPlayed"), group: gIndPlayed });
+      legendItems.push({ color: "var(--info)", style: "solid", label: indPlayedLabel, group: gIndPlayed });
     }
     if (series.individualWon.length) {
+      var indWonLabel = T("graph.singleGamesWon");
       var gIndWon = appendGraphSeries(
         svg,
         series.individualWon,
@@ -11575,11 +11687,14 @@
         axisMax,
         "player-graph-line player-graph-line-dotted player-graph-line-ind-won",
         "player-graph-dot player-graph-dot-ind-won",
-        null
+        null,
+        false,
+        indWonLabel
       );
-      legendItems.push({ color: "var(--accent)", style: "dotted", label: T("graph.singleGamesWon"), group: gIndWon });
+      legendItems.push({ color: "var(--accent)", style: "dotted", label: indWonLabel, group: gIndWon });
     }
     if (series.individualLost.length) {
+      var indLostLabel = T("graph.singleGamesLost");
       var gIndLost = appendGraphSeries(
         svg,
         series.individualLost,
@@ -11591,12 +11706,13 @@
         "player-graph-line player-graph-line-dashed player-graph-line-ind-lost",
         "player-graph-dot player-graph-dot-ind-lost",
         null,
-        true
+        true,
+        indLostLabel
       );
       legendItems.push({
         color: "var(--danger)",
         style: "dashed",
-        label: T("graph.singleGamesLost"),
+        label: indLostLabel,
         group: gIndLost,
         startHidden: true
       });
@@ -11606,6 +11722,7 @@
       var combo = series.teamCombos[key];
       var color = TEAM_COMBO_PALETTE[idx % TEAM_COMBO_PALETTE.length];
       if (combo.played.length) {
+        var comboPlayedLabel = T("graph.comboPlayed", { key: key });
         var gComboPlayed = appendGraphSeries(
           svg,
           combo.played,
@@ -11616,11 +11733,14 @@
           axisMax,
           "player-graph-line",
           "player-graph-dot",
-          color
+          color,
+          false,
+          comboPlayedLabel
         );
-        legendItems.push({ color: color, style: "solid", label: T("graph.comboPlayed", { key: key }), group: gComboPlayed });
+        legendItems.push({ color: color, style: "solid", label: comboPlayedLabel, group: gComboPlayed });
       }
       if (combo.won.length) {
+        var comboWonLabel = T("graph.comboWon", { key: key });
         var gComboWon = appendGraphSeries(
           svg,
           combo.won,
@@ -11631,11 +11751,14 @@
           axisMax,
           "player-graph-line player-graph-line-dotted",
           "player-graph-dot",
-          color
+          color,
+          false,
+          comboWonLabel
         );
-        legendItems.push({ color: color, style: "dotted", label: T("graph.comboWon", { key: key }), group: gComboWon });
+        legendItems.push({ color: color, style: "dotted", label: comboWonLabel, group: gComboWon });
       }
       if (combo.lost.length) {
+        var comboLostLabel = T("graph.comboLost", { key: key });
         var gComboLost = appendGraphSeries(
           svg,
           combo.lost,
@@ -11647,12 +11770,13 @@
           "player-graph-line player-graph-line-dashed",
           "player-graph-dot",
           color,
-          true
+          true,
+          comboLostLabel
         );
         legendItems.push({
           color: color,
           style: "dashed",
-          label: T("graph.comboLost", { key: key }),
+          label: comboLostLabel,
           group: gComboLost,
           startHidden: true
         });
@@ -11660,6 +11784,7 @@
     });
 
     if (tournamentSeries.played.length) {
+      var tournPlayedLabel = T("graph.tournamentsPlayed");
       var gTournPlayed = appendGraphSeries(
         svg,
         tournamentSeries.played,
@@ -11670,11 +11795,14 @@
         axisMax,
         "player-graph-line",
         "player-graph-dot",
-        TOURNAMENT_PLAYED_COLOR
+        TOURNAMENT_PLAYED_COLOR,
+        false,
+        tournPlayedLabel
       );
-      legendItems.push({ color: TOURNAMENT_PLAYED_COLOR, style: "solid", label: T("graph.tournamentsPlayed"), group: gTournPlayed });
+      legendItems.push({ color: TOURNAMENT_PLAYED_COLOR, style: "solid", label: tournPlayedLabel, group: gTournPlayed });
     }
     if (tournamentSeries.won.length) {
+      var tournWonLabel = T("graph.tournamentWins");
       var gTournWon = appendGraphSeries(
         svg,
         tournamentSeries.won,
@@ -11685,11 +11813,14 @@
         axisMax,
         "player-graph-line player-graph-line-dotted",
         "player-graph-dot",
-        TOURNAMENT_WON_COLOR
+        TOURNAMENT_WON_COLOR,
+        false,
+        tournWonLabel
       );
-      legendItems.push({ color: TOURNAMENT_WON_COLOR, style: "dotted", label: T("graph.tournamentWins"), group: gTournWon });
+      legendItems.push({ color: TOURNAMENT_WON_COLOR, style: "dotted", label: tournWonLabel, group: gTournWon });
     }
     if (tournamentSeries.lost.length) {
+      var tournLostLabel = T("graph.tournamentLosses");
       var gTournLost = appendGraphSeries(
         svg,
         tournamentSeries.lost,
@@ -11700,9 +11831,11 @@
         axisMax,
         "player-graph-line player-graph-line-dashed",
         "player-graph-dot",
-        TOURNAMENT_LOST_COLOR
+        TOURNAMENT_LOST_COLOR,
+        false,
+        tournLostLabel
       );
-      legendItems.push({ color: TOURNAMENT_LOST_COLOR, style: "dashed", label: T("graph.tournamentLosses"), group: gTournLost });
+      legendItems.push({ color: TOURNAMENT_LOST_COLOR, style: "dashed", label: tournLostLabel, group: gTournLost });
     }
 
     chart.appendChild(svg);
@@ -12006,10 +12139,25 @@
 
   var TOURNAMENT_KEY = "poolMasterCounter.tournament.v1";
 
+  // lbWaiting used to be a plain array of names; it's now { name, feeder }
+  // entries so the losers bracket can carry feeder-match links through a
+  // save/reload. A tournament already in progress from before that change
+  // would otherwise resume with plain strings and break every .name/
+  // .feeder access below - normalized back into shape here, feeder-less
+  // (same as any entry that's always had no feeder to speak of).
+  function normalizeLoadedTournament(t) {
+    if (t && Array.isArray(t.lbWaiting)) {
+      t.lbWaiting = t.lbWaiting.map(function (entry) {
+        return typeof entry === "string" ? { name: entry, feeder: null } : entry;
+      });
+    }
+    return t;
+  }
+
   function loadTournamentFromStorage() {
     try {
       var raw = localStorage.getItem(TOURNAMENT_KEY);
-      return raw ? JSON.parse(raw) : null;
+      return raw ? normalizeLoadedTournament(JSON.parse(raw)) : null;
     } catch (e) {
       return null;
     }
@@ -12179,18 +12327,40 @@
     return result;
   }
 
-  function createBracketMatch(a, b, tag) {
-    return { id: uid(), a: a || null, b: b || null, winner: null, loser: null, tag: tag, collected: false };
+  // feederA/feederB (optional) are the specific match objects whose
+  // winner became this match's .a/.b - only ever set for losers-bracket
+  // matches (see pairUpNames), so the losers bracket can be drawn as a
+  // real connected tree instead of flat labeled columns. Winners-bracket
+  // matches don't need this: their feeders are always exactly
+  // t.wb[ri-1][mi*2] and [mi*2+1], computable from position alone.
+  function createBracketMatch(a, b, tag, feederA, feederB) {
+    return {
+      id: uid(),
+      a: a || null,
+      b: b || null,
+      winner: null,
+      loser: null,
+      tag: tag,
+      collected: false,
+      feederA: feederA || null,
+      feederB: feederB || null
+    };
   }
 
-  function pairUpNames(names, tag) {
+  // Pairs up consecutive { name, feeder } entries (feeder is the match
+  // that produced that name, or null if it has none - e.g. round robin
+  // never uses this) into new matches, stamping each with where its two
+  // sides actually came from. leftover carries its own feeder through
+  // too, so it's never lost if this name has to wait another round
+  // before finally getting paired.
+  function pairUpNames(entries, tag) {
     var matches = [];
     var i = 0;
-    while (i + 1 < names.length) {
-      matches.push(createBracketMatch(names[i], names[i + 1], tag));
+    while (i + 1 < entries.length) {
+      matches.push(createBracketMatch(entries[i].name, entries[i + 1].name, tag, entries[i].feeder, entries[i + 1].feeder));
       i += 2;
     }
-    var leftover = i < names.length ? [names[i]] : [];
+    var leftover = i < entries.length ? [entries[i]] : [];
     return { matches: matches, leftover: leftover };
   }
 
@@ -12300,17 +12470,21 @@
 
       while (t.lbNextWbRoundToDrop < t.wb.length && wbRoundComplete(t, t.lbNextWbRoundToDrop)) {
         var ri2 = t.lbNextWbRoundToDrop;
-        var losers = t.wb[ri2]
-          .map(function (m) {
-            return m.loser;
+        // Each drop-in's feeder is the exact WB match it lost - so a
+        // fresh drop always knows where it came from, same as anyone
+        // already sitting in lbWaiting (see the two spots below that
+        // push onto it, both of which carry a feeder along too).
+        var dropped = t.wb[ri2]
+          .filter(function (m) {
+            return m.loser !== null;
           })
-          .filter(function (x) {
-            return x !== null;
+          .map(function (m) {
+            return { name: m.loser, feeder: m };
           });
         t.lbNextWbRoundToDrop += 1;
         changed = true;
         if (ri2 === 0) {
-          var res = pairUpNames(losers, "Losers R1");
+          var res = pairUpNames(dropped, "Losers R1");
           if (res.matches.length) t.lbRounds.push(res.matches);
           t.lbWaiting = t.lbWaiting.concat(res.leftover);
         } else {
@@ -12319,16 +12493,16 @@
           var li = 0;
           var wi = 0;
           var waiting = t.lbWaiting;
-          while (li < losers.length || wi < waiting.length) {
-            if (wi < waiting.length && li < losers.length) {
-              matches2.push(createBracketMatch(waiting[wi], losers[li], "Losers"));
+          while (li < dropped.length || wi < waiting.length) {
+            if (wi < waiting.length && li < dropped.length) {
+              matches2.push(createBracketMatch(waiting[wi].name, dropped[li].name, "Losers", waiting[wi].feeder, dropped[li].feeder));
               wi += 1;
               li += 1;
             } else if (wi < waiting.length) {
               newWaiting.push(waiting[wi]);
               wi += 1;
             } else {
-              newWaiting.push(losers[li]);
+              newWaiting.push(dropped[li]);
               li += 1;
             }
           }
@@ -12341,7 +12515,7 @@
         rnd.forEach(function (m) {
           if (m.winner !== null && !m.collected) {
             m.collected = true;
-            t.lbWaiting.push(m.winner);
+            t.lbWaiting.push({ name: m.winner, feeder: m });
             changed = true;
           }
         });
@@ -12365,7 +12539,7 @@
         pendingLbMatches(t).length === 0 &&
         t.lbWaiting.length === 1
       ) {
-        t.lbChampion = t.lbWaiting[0];
+        t.lbChampion = t.lbWaiting[0].name;
         changed = true;
       }
 
@@ -12391,7 +12565,15 @@
   // way, seedOrder(size) below is what actually spreads seed 1/2/3/4... onto
   // opposite halves of the bracket so they can't meet early - that spread
   // happens the same way whether the ranking behind it is random or real.
-  function buildWinnersBracketRounds(playerNames, seededOrder) {
+  // pairAdjacent (optional): the opposite of that spread - used for
+  // "Match Similar Ratings" seeding, where seededOrder is already
+  // strongest-to-weakest and the whole point is for adjacent ranks to
+  // play each other round 1 instead of being kept apart. Byes in this
+  // mode go to the weakest players (paired against nobody) rather than
+  // the standard convention of rewarding the strongest with a bye - a
+  // bye here would let a top player dodge the very round-1 gauntlet this
+  // mode exists to create.
+  function buildWinnersBracketRounds(playerNames, seededOrder, pairAdjacent) {
     var shuffled;
     if (seededOrder) {
       shuffled = seededOrder.slice();
@@ -12406,10 +12588,21 @@
     }
     var n = shuffled.length;
     var size = nextPow2(n);
-    var order = seedOrder(size);
-    var slots = order.map(function (s) {
-      return s <= n ? shuffled[s - 1] : null;
-    });
+    var slots;
+    if (pairAdjacent) {
+      var byeCount = size - n;
+      var paired = shuffled.slice(0, n - byeCount);
+      var byeReceivers = shuffled.slice(n - byeCount);
+      slots = paired.slice();
+      byeReceivers.forEach(function (name) {
+        slots.push(name, null);
+      });
+    } else {
+      var order = seedOrder(size);
+      slots = order.map(function (s) {
+        return s <= n ? shuffled[s - 1] : null;
+      });
+    }
 
     var wb = [];
     var r1 = [];
@@ -12441,8 +12634,8 @@
     return { shuffled: shuffled, size: size, wb: wb };
   }
 
-  function buildDoubleEliminationBracket(playerNames, gameType, target, raceTo, fairRace, seededOrder) {
-    var built = buildWinnersBracketRounds(playerNames, seededOrder);
+  function buildDoubleEliminationBracket(playerNames, gameType, target, raceTo, fairRace, seededOrder, pairAdjacent) {
+    var built = buildWinnersBracketRounds(playerNames, seededOrder, pairAdjacent);
     var t = {
       format: "double",
       createdAt: new Date().toISOString(),
@@ -12471,8 +12664,8 @@
   // past the last round, so the losers-bracket logic in advanceBracket
   // never fires) and no grand final — the winners-bracket champion is the
   // tournament champion outright.
-  function buildSingleEliminationBracket(playerNames, gameType, target, raceTo, fairRace, seededOrder) {
-    var built = buildWinnersBracketRounds(playerNames, seededOrder);
+  function buildSingleEliminationBracket(playerNames, gameType, target, raceTo, fairRace, seededOrder, pairAdjacent) {
+    var built = buildWinnersBracketRounds(playerNames, seededOrder, pairAdjacent);
     var t = {
       format: "single",
       createdAt: new Date().toISOString(),
@@ -12797,6 +12990,106 @@
     advanceBracket(t);
   }
 
+  // A semifinal or final (WB final, or anything in the Grand Final) gets
+  // a little extra visual weight in the ready-to-play list - it's a
+  // bigger moment than an early round, so it should feel like one.
+  function isMarqueeTournamentMatch(t, match) {
+    if (isGrandFinalMatch(t, match)) return true;
+    if (!t.wb.length) return false;
+    var lastRound = t.wb[t.wb.length - 1];
+    var semiRound = t.wb.length >= 2 ? t.wb[t.wb.length - 2] : null;
+    return lastRound.indexOf(match) !== -1 || (!!semiRound && semiRound.indexOf(match) !== -1);
+  }
+
+  function findWbPosition(t, match) {
+    for (var ri = 0; ri < t.wb.length; ri++) {
+      var mi = t.wb[ri].indexOf(match);
+      if (mi !== -1) return { ri: ri, mi: mi };
+    }
+    return null;
+  }
+
+  // A winners-bracket match's internal tag is just "Winners R3" - not
+  // wrong, but not what a player actually calls that round out loud.
+  // Swaps in the same Final/Semifinal/Quarterfinal/Round-of-N label the
+  // bracket tree itself shows above each card (wbRoundLabel) wherever a
+  // WB match's round gets named back to the player; Grand Final and
+  // losers-bracket tags are already plain-language as-is.
+  function matchRoundLabel(t, match) {
+    if (isGrandFinalMatch(t, match)) return match.tag;
+    var pos = findWbPosition(t, match);
+    if (pos) return wbRoundLabel(t.wb[pos.ri].length);
+    return match.tag;
+  }
+
+  // Figures out what to tell a just-crowned match winner about what's
+  // next: the next match they've already been placed into (by the
+  // advanceBracket call that already ran before this is called) and who
+  // they'll face, or - if that slot isn't filled yet - the specific
+  // still-pending match that will decide it, when that's computable (the
+  // winners bracket's round/index math makes this exact; the losers
+  // bracket's matches aren't linked that way, so it falls back to a
+  // generic "the bracket's still catching up" line there). Returns null
+  // when the tournament itself is already over - the caller shows a
+  // champion headline instead in that case.
+  function describeWhatsNextForWinner(t, justPlayedMatch, winnerName) {
+    if (t.champion) return null;
+    function findOpenMatchIn(list) {
+      for (var i = 0; i < list.length; i++) {
+        var m = list[i];
+        if (!m.winner && (m.a === winnerName || m.b === winnerName)) return m;
+      }
+      return null;
+    }
+    var flatWb = [].concat.apply([], t.wb);
+    var flatLb = [].concat.apply([], t.lbRounds);
+    var next = findOpenMatchIn(t.grandFinal) || findOpenMatchIn(flatWb) || findOpenMatchIn(flatLb);
+    if (!next) {
+      if (t.wbChampion === winnerName && t.grandFinal.length === 0) {
+        return T("tournament.nextWaitingForLosersChampion");
+      }
+      return T("tournament.nextWaitingGeneric");
+    }
+    var nextRoundLabel = matchRoundLabel(t, next);
+    var opponent = next.a === winnerName ? next.b : next.a;
+    if (opponent) {
+      return T("tournament.nextAdvance", { round: nextRoundLabel, opponent: opponent });
+    }
+    var pos = findWbPosition(t, justPlayedMatch);
+    if (pos) {
+      var siblingIdx = pos.mi % 2 === 0 ? pos.mi + 1 : pos.mi - 1;
+      var sibling = t.wb[pos.ri][siblingIdx];
+      if (sibling && sibling.a && sibling.b && !sibling.winner) {
+        return T("tournament.nextWaitingForMatch", { round: nextRoundLabel, a: sibling.a, b: sibling.b });
+      }
+    }
+    return T("tournament.nextWaitingGenericRound", { round: nextRoundLabel });
+  }
+
+  function closeTournamentMatchWinPopup() {
+    tournamentMatchWinOverlay.classList.add("hidden");
+  }
+
+  // The gratifying "you won that match" moment the live scoreboard's own
+  // win popup never covers for bracket play (tournamentAdjustScore scores
+  // a match with its own +/- steppers, not creditWin) - shown right after
+  // reportBracketResult/advanceBracket have already placed the winner
+  // into whatever comes next, so describeWhatsNextForWinner can just read
+  // that placement back out rather than recompute it.
+  function showTournamentMatchWinPopup(t, justPlayedMatch, winnerName) {
+    if (t.format !== "single" && t.format !== "double") return;
+    if (t.champion) {
+      tournamentMatchWinEmoji.textContent = "🏆🎉";
+      tournamentMatchWinHeadline.textContent = T("tournament.matchWinChampionHeadline", { winner: t.champion });
+      tournamentMatchWinSubtext.textContent = "";
+    } else {
+      tournamentMatchWinEmoji.textContent = "🏆";
+      tournamentMatchWinHeadline.textContent = T("tournament.matchWinHeadline", { winner: winnerName });
+      tournamentMatchWinSubtext.textContent = describeWhatsNextForWinner(t, justPlayedMatch, winnerName) || "";
+    }
+    tournamentMatchWinOverlay.classList.remove("hidden");
+  }
+
   function recordTournamentRackWin(winnerLabel, loserLabel, durationMs) {
     var entrantMembers = TOURNAMENT.entrantMembers || {};
     var winnerMembers = entrantMembers[winnerLabel] || [winnerLabel];
@@ -12863,6 +13156,20 @@
     renderTournamentTeamPreview();
   }
 
+  function tournamentSeedMode() {
+    var checked = Array.prototype.filter.call(tournamentSeedModeRadios, function (r) {
+      return r.checked;
+    })[0];
+    return checked ? checked.value : "random";
+  }
+
+  function isTournamentSeededManually() {
+    var checked = Array.prototype.filter.call(tournamentSeedModeRadios, function (r) {
+      return r.checked;
+    })[0];
+    return !!checked && checked.value === "manual";
+  }
+
   function renderTournamentPlayerChecklist() {
     var names = getAllKnownPlayerNames().sort(function (a, b) {
       return a.localeCompare(b);
@@ -12871,6 +13178,10 @@
     activePlayers().forEach(function (p) {
       activeNames[p.name] = true;
     });
+    // A fresh render means a fresh checklist DOM - any earlier Select All
+    // snapshot no longer refers to anything real.
+    tournamentSelectAllCheckbox.checked = false;
+    tournamentSelectAllSnapshot = null;
     tournamentPlayerChecklist.innerHTML = "";
     renderTournamentTeamOptions();
     if (names.length === 0) {
@@ -12897,7 +13208,7 @@
       var seedInput = document.createElement("input");
       seedInput.type = "number";
       seedInput.min = "1";
-      seedInput.className = "tournament-seed-input" + (tournamentSeededCheckbox.checked ? "" : " hidden");
+      seedInput.className = "tournament-seed-input" + (isTournamentSeededManually() ? "" : " hidden");
       seedInput.setAttribute("aria-label", T("tournament.seedLabel"));
       li.appendChild(seedInput);
       var teamInput = document.createElement("input");
@@ -12990,15 +13301,44 @@
     tournamentTeamPreview.textContent = lines.join("  ·  ");
   }
 
+  // Ranks entrants strongest-to-weakest by average rating (team-aware -
+  // an entrant's members' ratings are averaged the same way Fair Race
+  // treats a team as a single combined strength). Ties keep checklist
+  // order, so it's still deterministic rather than depending on object
+  // iteration order.
+  function tournamentEntrantsByRatingDesc(entrants) {
+    return entrants
+      .map(function (entrant, idx) {
+        return { name: entrant.label, rating: averageRating(entrant.members), idx: idx };
+      })
+      .sort(function (a, b) {
+        return b.rating - a.rating || a.idx - b.idx;
+      })
+      .map(function (entry) {
+        return entry.name;
+      });
+  }
+
   // Returns null when seeding is off (today's exact random-draw behavior).
-  // When on, resolves one seed per ENTRANT (not per row): the lowest
-  // explicit seed number typed among that entrant's member rows, else its
-  // first member's checklist position - left blank, duplicated, or invalid
-  // entries all fall back this way, nudged past any number a real seed
-  // already claimed, rather than erroring - this is a casual home-game
-  // tool, not a tournament-director product.
+  // For "rating" mode, resolves straight to a strongest-to-weakest order
+  // (seed 1 = highest rated) - buildWinnersBracketRounds is told to pair
+  // that order adjacently (see pairAdjacent) instead of spreading it
+  // apart the way a real seed number normally would, so the closest-
+  // rated players meet in round 1 instead of being kept apart.
+  // For "manual" mode, resolves one seed per ENTRANT (not per row): the
+  // lowest explicit seed number typed among that entrant's member rows,
+  // else its first member's checklist position - left blank, duplicated,
+  // or invalid entries all fall back this way, nudged past any number a
+  // real seed already claimed, rather than erroring - this is a casual
+  // home-game tool, not a tournament-director product.
   function getTournamentSeeds(entrants) {
-    if (!tournamentSeededCheckbox.checked) return null;
+    var mode = tournamentSeedMode();
+    if (mode === "rating") {
+      return tournamentEntrantsByRatingDesc(entrants).map(function (name, i) {
+        return { name: name, seed: i + 1 };
+      });
+    }
+    if (mode !== "manual") return null;
     var rows = Array.prototype.slice.call(tournamentPlayerChecklist.querySelectorAll(".tournament-player-check-row"));
     var checklistPositionByName = {};
     var seedValueByName = {};
@@ -13046,6 +13386,7 @@
   }
 
   function startTournament() {
+    lbTreeExpandedNodes = {};
     var grouped = getTournamentEntrants();
     var entrants = grouped.entrants;
     if (grouped.collidedTeamNames.length) {
@@ -13081,14 +13422,18 @@
           return s.name;
         })
       : null;
+    // Only meaningful for the two bracket formats - Swiss already pairs
+    // adjacent-in-order players round to round on its own (see
+    // pairSwissRound), and round robin has no concept of seeding at all.
+    var pairAdjacent = tournamentSeedMode() === "rating";
     if (format === "roundrobin") {
       TOURNAMENT = buildRoundRobinTournament(names, gameType, target, raceTo, fairRace);
     } else if (format === "swiss") {
       TOURNAMENT = buildSwissTournament(names, gameType, target, raceTo, fairRace, seededOrder);
     } else if (format === "single") {
-      TOURNAMENT = buildSingleEliminationBracket(names, gameType, target, raceTo, fairRace, seededOrder);
+      TOURNAMENT = buildSingleEliminationBracket(names, gameType, target, raceTo, fairRace, seededOrder, pairAdjacent);
     } else {
-      TOURNAMENT = buildDoubleEliminationBracket(names, gameType, target, raceTo, fairRace, seededOrder);
+      TOURNAMENT = buildDoubleEliminationBracket(names, gameType, target, raceTo, fairRace, seededOrder, pairAdjacent);
     }
     TOURNAMENT.entrantMembers = entrantMembers;
     TOURNAMENT.entrantTeamNames = entrantTeamNames;
@@ -13154,6 +13499,12 @@
     var stateClass = match.winner ? "is-done" : isActive ? "is-active" : match.a && match.b ? "is-ready" : "is-pending";
     div.className = "tournament-match-card " + stateClass;
 
+    // In the Grand Final, the two sides aren't symmetric the way every
+    // other match is - one came in with zero losses (the winners-bracket
+    // champion), the other already has one (the losers-bracket champion,
+    // who has to beat them twice to take it). That's invisible from the
+    // card alone, so it's called out directly on their name.
+    var isGf = isGrandFinalMatch(t, match);
     [match.a, match.b].forEach(function (name) {
       var row = document.createElement("div");
       row.className = "tournament-match-side";
@@ -13163,6 +13514,12 @@
       row.textContent = (isWinner ? "👑 " : "") + (name || "—");
       if (name) {
         appendEntrantIdentity(row, name, t);
+        if (isGf && name === t.lbChampion) {
+          var lbTag = document.createElement("span");
+          lbTag.className = "tournament-match-lb-tag";
+          lbTag.textContent = T("tournament.fromLosersBracket");
+          row.appendChild(lbTag);
+        }
       }
       div.appendChild(row);
     });
@@ -13186,6 +13543,18 @@
     return div;
   }
 
+  // "Final" for a 1-match round, "Semifinal" for 2, "Quarterfinal" for 4,
+  // else "Round of N" (N = players entering that round) - derived purely
+  // from how many matches are in the round, so it's automatically right
+  // whether the bracket only ever has a Final, or goes all the way down
+  // to a Quarterfinal (or further) when there are enough entrants.
+  function wbRoundLabel(matchCount) {
+    if (matchCount === 1) return T("tournament.roundFinal");
+    if (matchCount === 2) return T("tournament.roundSemifinal");
+    if (matchCount === 4) return T("tournament.roundQuarterfinal");
+    return T("tournament.roundOfN", { n: matchCount * 2 });
+  }
+
   // Renders the winners bracket as a real horizontal tree: round 1 on the
   // left, each pair of matches converging into the match they feed, all the
   // way to the final on the right. Built as nested "children + this round's
@@ -13193,13 +13562,22 @@
   // pure CSS (percentages against each pair's own wrapper), needing no
   // pixel measurement, because a 2-item "space-around" column always places
   // its items at exactly 25%/75% of the wrapper's height regardless of the
-  // wrapper's actual size.
+  // wrapper's actual size. Each card gets its own round-name label right
+  // above it (see wbRoundLabel) since there's no single stable column to
+  // hang one shared header off of in a nested-tree layout.
   function renderWbTreeNode(t, ri, mi, activeMatchId) {
     var match = t.wb[ri][mi];
     var card = tournamentMatchCard(match, activeMatchId, t);
+    var wrap = document.createElement("div");
+    wrap.className = "wb-tree-card-wrap";
+    var heading = document.createElement("div");
+    heading.className = "tournament-round-heading";
+    heading.textContent = wbRoundLabel(t.wb[ri].length);
+    wrap.appendChild(heading);
+    wrap.appendChild(card);
     if (ri === 0) {
-      card.classList.add("wb-tree-leaf");
-      return card;
+      wrap.classList.add("wb-tree-leaf");
+      return wrap;
     }
     var childrenWrap = document.createElement("div");
     childrenWrap.className = "wb-tree-children";
@@ -13209,7 +13587,7 @@
     var node = document.createElement("div");
     node.className = "wb-tree-node";
     node.appendChild(childrenWrap);
-    node.appendChild(card);
+    node.appendChild(wrap);
     return node;
   }
 
@@ -13241,6 +13619,154 @@
         col.appendChild(tournamentMatchCard(m, activeMatchId, t));
       });
       container.appendChild(col);
+    });
+  }
+
+  // ---------- Losers bracket tree ----------
+  // Unlike the winners bracket, a losers-bracket match's two feeders
+  // aren't at a fixed position computable from round/index math - one
+  // side is often a fresh winners-bracket drop-in, the other a survivor
+  // from the previous losers round, and those two ages don't line up
+  // into a clean symmetric tree. So every LB match is stamped at
+  // creation time with the *actual* match objects that produced its two
+  // sides (see createBracketMatch/pairUpNames in advanceBracket) and the
+  // tree below is built by following those links directly, reusing the
+  // exact same connector-line CSS as the winners tree (still always
+  // exactly 2 children per node - a losers match never exists until both
+  // of its feeders are known).
+
+  // How many LB-match levels deep (from whichever frontier match is
+  // currently the tree's root) stay expanded by default before folding
+  // into a "+" stub - since the root itself is always whatever match
+  // hasn't been consumed yet, this naturally slides forward as the
+  // bracket plays out: each new round becomes the new depth-0 root, so
+  // the round that used to be visible at the deepest level is exactly
+  // the one that now falls past the threshold and collapses. Keyed by
+  // match id so a manual expand survives this same match staying just
+  // past the threshold on the next render, but forgets once that match
+  // is no longer part of the tree at all (a fresh id per tournament, so
+  // nothing carries over to the next one).
+  var LB_TREE_VISIBLE_DEPTH = 3;
+  var lbTreeExpandedNodes = {};
+
+  function isLosersMatch(match) {
+    return typeof match.tag === "string" && match.tag.indexOf("Losers") === 0;
+  }
+
+  // How many further LB-only levels exist below this match (0 if none of
+  // its feeders are themselves LB matches) - used purely to word the
+  // collapsed stub ("2 earlier rounds" vs "1 earlier round").
+  function lbSubtreeDepth(match) {
+    var a = match.feederA && isLosersMatch(match.feederA) ? lbSubtreeDepth(match.feederA) + 1 : 0;
+    var b = match.feederB && isLosersMatch(match.feederB) ? lbSubtreeDepth(match.feederB) + 1 : 0;
+    return Math.max(a, b);
+  }
+
+  function renderLbCollapsedStub(match, extraRounds) {
+    var stub = document.createElement("button");
+    stub.type = "button";
+    stub.className = "wb-tree-card-wrap lb-tree-collapsed-stub wb-tree-leaf";
+    var plus = document.createElement("div");
+    plus.className = "lb-tree-collapsed-plus";
+    plus.textContent = "➕";
+    var label = document.createElement("div");
+    label.className = "lb-tree-collapsed-label";
+    label.textContent = T("tournament.lbTreeShowEarlier", { count: extraRounds + 1 });
+    stub.appendChild(plus);
+    stub.appendChild(label);
+    stub.addEventListener("click", function () {
+      lbTreeExpandedNodes[match.id] = true;
+      renderTournamentActive();
+    });
+    return stub;
+  }
+
+  // A losers-bracket match is still "in progress" (not yet the frontier)
+  // once some later match has consumed its winner as a feeder. What's
+  // left after removing every match that's referenced as somebody else's
+  // feeder is the current set of independent branches - there can be
+  // several at once early on, only merging into one (the eventual LB
+  // final) as the bracket plays out, so this can return more than one
+  // match.
+  function lbFrontierMatches(t) {
+    var consumedIds = {};
+    var all = [];
+    t.lbRounds.forEach(function (rnd) {
+      rnd.forEach(function (m) {
+        all.push(m);
+        if (m.feederA) consumedIds[m.feederA.id] = true;
+        if (m.feederB) consumedIds[m.feederB.id] = true;
+      });
+    });
+    return all.filter(function (m) {
+      return !consumedIds[m.id];
+    });
+  }
+
+  // A feeder is either another losers-bracket match (recurse into its
+  // own tree) or the winners-bracket match this side just dropped out
+  // of - shown as a compact stub naming who dropped and from where,
+  // rather than a full duplicate of a card the winners tree already
+  // shows in full elsewhere on the page. depth counts LB-match levels
+  // from the current root, passed through to renderLbTreeNode so it can
+  // decide whether this feeder is still past the visible window.
+  function renderLbFeederNode(feeder, activeMatchId, t, depth) {
+    if (isLosersMatch(feeder)) return renderLbTreeNode(feeder, activeMatchId, t, depth);
+    var stub = document.createElement("div");
+    stub.className = "wb-tree-card-wrap lb-tree-wb-stub";
+    var heading = document.createElement("div");
+    heading.className = "tournament-round-heading";
+    heading.textContent = matchRoundLabel(t, feeder);
+    var name = document.createElement("div");
+    name.className = "lb-tree-wb-stub-name";
+    name.textContent = "⬇ " + feeder.loser;
+    stub.appendChild(heading);
+    stub.appendChild(name);
+    stub.classList.add("wb-tree-leaf");
+    return stub;
+  }
+
+  function renderLbTreeNode(match, activeMatchId, t, depth) {
+    if (depth >= LB_TREE_VISIBLE_DEPTH && !lbTreeExpandedNodes[match.id]) {
+      return renderLbCollapsedStub(match, lbSubtreeDepth(match));
+    }
+    var card = tournamentMatchCard(match, activeMatchId, t);
+    var wrap = document.createElement("div");
+    wrap.className = "wb-tree-card-wrap";
+    var heading = document.createElement("div");
+    heading.className = "tournament-round-heading";
+    heading.textContent = matchRoundLabel(t, match);
+    wrap.appendChild(heading);
+    wrap.appendChild(card);
+    if (!match.feederA && !match.feederB) {
+      wrap.classList.add("wb-tree-leaf");
+      return wrap;
+    }
+    var childrenWrap = document.createElement("div");
+    childrenWrap.className = "wb-tree-children";
+    if (match.feederA) childrenWrap.appendChild(renderLbFeederNode(match.feederA, activeMatchId, t, depth + 1));
+    if (match.feederB) childrenWrap.appendChild(renderLbFeederNode(match.feederB, activeMatchId, t, depth + 1));
+    var node = document.createElement("div");
+    node.className = "wb-tree-node";
+    node.appendChild(childrenWrap);
+    node.appendChild(wrap);
+    return node;
+  }
+
+  function renderLbTree(container, t, activeMatchId) {
+    container.innerHTML = "";
+    var roots = lbFrontierMatches(t);
+    if (!roots.length) {
+      var hint = document.createElement("p");
+      hint.className = "empty-hint";
+      hint.textContent = "—";
+      container.appendChild(hint);
+      return;
+    }
+    roots.forEach(function (rootMatch) {
+      var root = renderLbTreeNode(rootMatch, activeMatchId, t, 0);
+      root.classList.add("wb-tree-root", "lb-tree-root");
+      container.appendChild(root);
     });
   }
 
@@ -13315,6 +13841,7 @@
         t.active = null;
         saveTournamentToStorage(t);
         renderTournamentPage();
+        showTournamentMatchWinPopup(t, match, name);
         return;
       }
     } else if (delta > 0) {
@@ -13493,6 +14020,48 @@
     });
   }
 
+  // A quick "you are here" stage tracker across the top of the bracket -
+  // only shown once there's actually more than one stage to track (a
+  // 2-3 entrant field is just a Final, nothing to get lost in). Stages
+  // done so far are struck through, the current one is bold/accented,
+  // everything after is dim.
+  function renderTournamentTimeline(t) {
+    tournamentTimelineEl.innerHTML = "";
+    var isEliminationFormat = t.format === "single" || t.format === "double";
+    if (!isEliminationFormat || t.wb.length < 2) {
+      tournamentTimelineEl.classList.add("hidden");
+      return;
+    }
+    tournamentTimelineEl.classList.remove("hidden");
+    var stages = t.wb.map(function (round) {
+      return wbRoundLabel(round.length);
+    });
+    if (t.format === "double") stages.push(T("tournament.grandFinal"));
+    var currentIdx = stages.length - 1;
+    for (var ri = 0; ri < t.wb.length; ri++) {
+      var roundDone = t.wb[ri].every(function (m) {
+        return !!m.winner;
+      });
+      if (!roundDone) {
+        currentIdx = ri;
+        break;
+      }
+    }
+    if (t.champion) currentIdx = stages.length - 1;
+    stages.forEach(function (label, i) {
+      if (i > 0) {
+        var arrow = document.createElement("span");
+        arrow.className = "tournament-timeline-arrow";
+        arrow.textContent = "→";
+        tournamentTimelineEl.appendChild(arrow);
+      }
+      var stage = document.createElement("span");
+      stage.className = "tournament-timeline-stage" + (i === currentIdx ? " is-current" : i < currentIdx ? " is-done" : "");
+      stage.textContent = label;
+      tournamentTimelineEl.appendChild(stage);
+    });
+  }
+
   function renderTournamentActive() {
     var t = TOURNAMENT;
     var activeMatchId = t.active ? t.active.matchId : null;
@@ -13502,7 +14071,7 @@
 
     tournamentWbSection.classList.toggle("hidden", isRoundRobin || isSwiss);
     tournamentLbSection.classList.toggle("hidden", isRoundRobin || isSingle || isSwiss);
-    tournamentGfSection.classList.toggle("hidden", isRoundRobin || isSingle || isSwiss);
+    tournamentGfEl.classList.toggle("hidden", isRoundRobin || isSingle || isSwiss);
     tournamentRrSection.classList.toggle("hidden", !isRoundRobin);
     tournamentSwissSection.classList.toggle("hidden", !isSwiss);
 
@@ -13513,10 +14082,12 @@
     } else {
       renderWbTree(tournamentWbEl, t, activeMatchId);
       if (!isSingle) {
-        renderBracketColumns(tournamentLbEl, t.lbRounds, activeMatchId, t);
+        renderLbTree(tournamentLbEl, t, activeMatchId);
         renderBracketColumns(tournamentGfEl, t.grandFinal.length ? [t.grandFinal] : [], activeMatchId, t);
       }
     }
+
+    renderTournamentTimeline(t);
 
     btnTournamentAbandon.textContent = T(t.champion ? "tournament.startNew" : "tournament.abandon");
 
@@ -13558,13 +14129,16 @@
     tournamentReadyList.appendChild(heading);
     ready.forEach(function (m) {
       var li = document.createElement("li");
-      li.className = "tournament-ready-row";
+      li.className = "tournament-ready-row" + (isMarqueeTournamentMatch(t, m) ? " is-marquee" : "");
+      var tag = document.createElement("span");
+      tag.className = "tournament-ready-tag";
+      tag.textContent = m.tag;
       var text = document.createElement("span");
+      text.className = "tournament-ready-names";
       text.appendChild(document.createTextNode(m.a));
       appendEntrantIdentity(text, m.a, t);
       text.appendChild(document.createTextNode(" vs " + m.b));
       appendEntrantIdentity(text, m.b, t);
-      text.appendChild(document.createTextNode(" (" + m.tag + ")"));
       var btn = document.createElement("button");
       btn.type = "button";
       btn.className = "btn btn-primary";
@@ -13572,6 +14146,7 @@
       btn.addEventListener("click", function () {
         startTournamentMatch(m.id);
       });
+      li.appendChild(tag);
       li.appendChild(text);
       li.appendChild(btn);
       tournamentReadyList.appendChild(li);
@@ -13757,6 +14332,7 @@
   btnResetAllPlayerStats.addEventListener("click", resetAllPlayerStats);
   btnResetRosterLists.addEventListener("click", resetAllRosterLists);
   btnResetAllRatings.addEventListener("click", resetAllPlayersOfficialRating);
+  btnFullReset.addEventListener("click", performFullFactoryReset);
   btnResetSessionTournament.addEventListener("click", resetSessionAndTournament);
 
   btnRecoverImportFile.addEventListener("click", function () {
@@ -13780,6 +14356,7 @@
     if (e.target === ratingEditOverlay) closeRatingEditPopup();
   });
   wireNotifyCheckbox(ratingEditEmailInput, ratingEditPhoneInput, ratingEditNotifyCheckbox, ratingEditNotifyMethodRow);
+  wirePhoneFormatting(ratingEditPhoneInput);
 
   btnExportRosterLists.addEventListener("click", exportRosterLists);
   btnExportRosterListsCsv.addEventListener("click", function () {
@@ -13808,11 +14385,15 @@
       return;
     }
     var starting = parseStartingRatingInput(newPlayerRatingInput);
-    var alreadyRated = starting !== null && !!findRatingKey(resolvePlayerName(trimmed));
+    // Only worth a heads-up if they typed something other than the
+    // prefilled default - leaving it at 400 is indistinguishable from
+    // not touching it, so it shouldn't warn on every re-add of an
+    // already-rated name the way an explicit custom number should.
+    var alreadyRated = starting !== null && starting !== DEFAULT_RATING && !!findRatingKey(resolvePlayerName(trimmed));
     var player = addPlayer(newPlayerName.value, starting === null ? undefined : starting);
     if (!player) return;
     newPlayerName.value = "";
-    newPlayerRatingInput.value = "";
+    newPlayerRatingInput.value = String(DEFAULT_RATING);
     validateNewPlayerNameInput();
     renderAll();
     if (alreadyRated) showToast(player.name + " already has a tracked rating — starting rating not applied.");
@@ -14012,6 +14593,11 @@
     if (e.target === milestoneOverlay) closeMilestone();
   });
 
+  btnTournamentMatchWinClose.addEventListener("click", closeTournamentMatchWinPopup);
+  tournamentMatchWinOverlay.addEventListener("click", function (e) {
+    if (e.target === tournamentMatchWinOverlay) closeTournamentMatchWinPopup();
+  });
+
   btnGamewinClose.addEventListener("click", closeGameWinOverlay);
   btnGamewinUndo.addEventListener("click", undoWinFromGameWinOverlay);
   gamewinOverlay.addEventListener("click", function (e) {
@@ -14109,6 +14695,7 @@
   btnOnboardingGo.addEventListener("click", advanceOnboarding);
   onboardingNameInput.addEventListener("input", validateOnboardingNameInput);
   wireNotifyCheckbox(onboardingEmailInput, onboardingPhoneInput, onboardingReportOptInCheckbox, onboardingNotifyMethodRow);
+  wirePhoneFormatting(onboardingPhoneInput);
   btnOnboardingRunWizard.addEventListener("click", function () {
     closeOnboarding();
     openWizard();
@@ -14133,11 +14720,11 @@
       return;
     }
     var starting = parseStartingRatingInput(wizardNewPlayerRatingInput);
-    var alreadyRated = starting !== null && !!findRatingKey(resolvePlayerName(trimmed));
+    var alreadyRated = starting !== null && starting !== DEFAULT_RATING && !!findRatingKey(resolvePlayerName(trimmed));
     var player = addPlayer(wizardNewPlayerName.value, starting === null ? undefined : starting);
     if (!player) return;
     wizardNewPlayerName.value = "";
-    wizardNewPlayerRatingInput.value = "";
+    wizardNewPlayerRatingInput.value = String(DEFAULT_RATING);
     validateWizardNewPlayerNameInput();
     renderAll();
     if (alreadyRated) showToast(player.name + " already has a tracked rating — starting rating not applied.");
@@ -14342,15 +14929,91 @@
     closeTournamentPage();
   });
   btnTournamentStart.addEventListener("click", startTournament);
-  tournamentSeededCheckbox.addEventListener("change", function () {
-    var show = tournamentSeededCheckbox.checked;
-    Array.prototype.forEach.call(tournamentPlayerChecklist.querySelectorAll(".tournament-seed-input"), function (input) {
-      input.classList.toggle("hidden", !show);
+  Array.prototype.forEach.call(tournamentSeedModeRadios, function (radio) {
+    radio.addEventListener("change", function () {
+      var show = isTournamentSeededManually();
+      Array.prototype.forEach.call(tournamentPlayerChecklist.querySelectorAll(".tournament-seed-input"), function (input) {
+        input.classList.toggle("hidden", !show);
+      });
     });
+  });
+
+  // The long per-format explanation lives in a hidden sibling <span>
+  // (data-info-target) so it stays in the normal i18n flow while the
+  // visible radio row itself only shows a short name - "?" pops it into
+  // this shared little popup instead. Picking "Yes, this format" just
+  // checks the radio the popup was opened from; nothing else reads a
+  // "change" event off these radios (see startTournament), so no event
+  // needs dispatching.
+  Array.prototype.forEach.call(document.querySelectorAll(".format-info-btn"), function (btn) {
+    btn.addEventListener("click", function () {
+      var label = btn.closest("label");
+      var radio = label ? label.querySelector('input[type="radio"]') : null;
+      var textEl = document.getElementById(btn.getAttribute("data-info-target"));
+      var titleEl = document.getElementById(btn.getAttribute("data-info-title"));
+      if (!radio || !textEl) return;
+      tournamentFormatInfoPendingRadio = radio;
+      tournamentFormatInfoTitle.textContent = titleEl ? titleEl.textContent : "";
+      tournamentFormatInfoBody.textContent = textEl.textContent;
+      tournamentFormatInfoOverlay.classList.remove("hidden");
+    });
+  });
+  btnTournamentFormatInfoSelect.addEventListener("click", function () {
+    if (tournamentFormatInfoPendingRadio) tournamentFormatInfoPendingRadio.checked = true;
+    tournamentFormatInfoPendingRadio = null;
+    tournamentFormatInfoOverlay.classList.add("hidden");
+  });
+  btnTournamentFormatInfoCancel.addEventListener("click", function () {
+    tournamentFormatInfoPendingRadio = null;
+    tournamentFormatInfoOverlay.classList.add("hidden");
+  });
+  tournamentFormatInfoOverlay.addEventListener("click", function (e) {
+    if (e.target !== tournamentFormatInfoOverlay) return;
+    tournamentFormatInfoPendingRadio = null;
+    tournamentFormatInfoOverlay.classList.add("hidden");
   });
   tournamentPlayerChecklist.addEventListener("change", refreshTournamentTeamUi);
   tournamentPlayerChecklist.addEventListener("input", refreshTournamentTeamUi);
   tournamentTeamsEnabledCheckbox.addEventListener("change", renderTournamentTeamPreview);
+  btnFairRaceInfo.addEventListener("click", function () {
+    alertModal(T("tournament.fairRaceExplain"));
+  });
+
+  function tournamentPlayerCheckboxes() {
+    return Array.prototype.slice.call(tournamentPlayerChecklist.querySelectorAll('input[type="checkbox"]'));
+  }
+
+  // tournamentSelectAllSnapshot itself is declared up with the other
+  // top-level DOM refs, not here - see the comment there for why.
+  tournamentSelectAllCheckbox.addEventListener("change", function () {
+    var boxes = tournamentPlayerCheckboxes();
+    if (tournamentSelectAllCheckbox.checked) {
+      tournamentSelectAllSnapshot = {};
+      boxes.forEach(function (cb) {
+        tournamentSelectAllSnapshot[cb.value] = cb.checked;
+        cb.checked = true;
+      });
+    } else {
+      var snapshot = tournamentSelectAllSnapshot || {};
+      boxes.forEach(function (cb) {
+        cb.checked = !!snapshot[cb.value];
+      });
+      tournamentSelectAllSnapshot = null;
+    }
+    refreshTournamentTeamUi();
+  });
+
+  // If the user unchecks one player by hand while Select All is on, the
+  // checkbox no longer honestly describes the state - un-tick it too
+  // (without touching the snapshot; that only ever changes when Select
+  // All itself is toggled, not from incidental individual clicks).
+  tournamentPlayerChecklist.addEventListener("change", function (e) {
+    if (e.target.type !== "checkbox" || !tournamentSelectAllCheckbox.checked) return;
+    var stillAllChecked = tournamentPlayerCheckboxes().every(function (cb) {
+      return cb.checked;
+    });
+    if (!stillAllChecked) tournamentSelectAllCheckbox.checked = false;
+  });
   btnTournamentAbandon.addEventListener("click", abandonTournament);
   btnTournamentPrint.addEventListener("click", function () { window.print(); });
   tournamentGameTypeSelect.addEventListener("change", function () {
