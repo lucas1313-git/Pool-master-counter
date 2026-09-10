@@ -3925,11 +3925,45 @@ input[type="number"] {
 
 .wb-tree-root {
   display: flex;
+  align-items: center;
 }
 
 .wb-tree-node {
   display: flex;
   align-items: center;
+}
+
+/* Each match card gets its own round label directly above it (Final /
+   Semifinal / Quarterfinal / Round of N) rather than one shared header
+   row - the nested tree layout doesn't have stable per-round columns to
+   align a single header against, but every card already knows its own
+   round, so labeling each one is both simpler and never misaligned. */
+.wb-tree-card-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 190px;
+  flex-shrink: 0;
+}
+
+.wb-tree-card-wrap .tournament-round-heading {
+  margin: 0;
+}
+
+.tournament-wb-inline,
+.tournament-gf-inline {
+  display: flex;
+  align-items: center;
+}
+
+.tournament-gf-inline {
+  margin-left: 28px;
+  padding-left: 28px;
+  border-left: 1px dashed var(--border);
+}
+
+.tournament-gf-inline .tournament-round-col {
+  min-width: 190px;
 }
 
 .wb-tree-children {
@@ -3998,8 +4032,19 @@ input[type="number"] {
 }
 
 .tournament-match-side.is-loser {
-  opacity: 0.55;
+  opacity: 0.4;
+  color: var(--text-dim);
   text-decoration: line-through;
+  text-decoration-thickness: 2.5px;
+  text-decoration-color: var(--text-dim);
+}
+
+/* Losers-bracket match cards get their own tint so it's obvious at a
+   glance which side of the bracket you're looking at, without having to
+   read the column heading. */
+#tournament-lb .tournament-match-card {
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, var(--bg-card));
 }
 
 .tournament-play-btn {
@@ -4027,12 +4072,70 @@ input[type="number"] {
 .tournament-ready-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
+  flex-wrap: wrap;
   gap: 10px;
+  max-width: 520px;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 10px 14px;
+}
+
+/* Bumps a semifinal/final match up visually - a little gold glow so it
+   reads as a bigger moment than an early-round match. */
+.tournament-ready-row.is-marquee {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent), 0 0 16px rgba(232, 185, 35, 0.25);
+}
+
+.tournament-ready-tag {
+  font-weight: 800;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.tournament-ready-names {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.tournament-ready-row .btn {
+  flex-shrink: 0;
+}
+
+.tournament-timeline {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 16px 16px;
+  padding: 10px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 0.85rem;
+}
+
+.tournament-timeline-stage {
+  color: var(--text-dim);
+}
+
+.tournament-timeline-stage.is-done {
+  color: var(--text-dim);
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+.tournament-timeline-stage.is-current {
+  color: var(--accent);
+  font-weight: 800;
+  font-size: 0.95rem;
+}
+
+.tournament-timeline-arrow {
+  color: var(--text-dim);
+  opacity: 0.6;
 }
 
 .tournament-now-playing {
@@ -4112,6 +4215,7 @@ input[type="number"] {
   #btn-tournament-abandon,
   #tournament-current-match-panel,
   #tournament-ready-list,
+  #tournament-timeline,
   .tournament-play-btn,
   #btn-tournament-print { display: none !important; }
 

@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260910a">
+<link rel="stylesheet" href="css/style.css?v=20260910b">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -412,6 +412,15 @@
       <button type="button" id="btn-milestone-undo" class="btn btn-ghost" data-i18n="gamewin.undoThisWin">↩ Undo this win</button>
     </div>
     <button type="button" id="btn-milestone-close" class="btn btn-primary" data-i18n="milestone.nice">Nice!</button>
+  </div>
+</div>
+
+<div id="tournament-match-win-overlay" class="milestone-overlay hidden">
+  <div class="milestone-card">
+    <div class="milestone-emoji" id="tournament-match-win-emoji">🏆</div>
+    <h2 id="tournament-match-win-headline"></h2>
+    <p id="tournament-match-win-subtext"></p>
+    <button type="button" id="btn-tournament-match-win-close" class="btn btn-primary" data-i18n="milestone.nice">Nice!</button>
   </div>
 </div>
 
@@ -1113,19 +1122,19 @@
 
     <ul id="tournament-ready-list" class="tournament-ready-list"></ul>
 
+    <div id="tournament-timeline" class="tournament-timeline hidden"></div>
+
     <div id="tournament-wb-section">
       <h2 class="tournament-bracket-heading" data-i18n="tournament.winnersBracket">Winners Bracket</h2>
-      <div id="tournament-wb" class="tournament-bracket-scroll"></div>
+      <div class="tournament-bracket-scroll">
+        <div id="tournament-wb" class="tournament-wb-inline"></div>
+        <div id="tournament-gf" class="tournament-gf-inline"></div>
+      </div>
     </div>
 
     <div id="tournament-lb-section">
       <h2 class="tournament-bracket-heading" data-i18n="tournament.losersBracket">Losers Bracket</h2>
       <div id="tournament-lb" class="tournament-bracket-scroll"></div>
-    </div>
-
-    <div id="tournament-gf-section">
-      <h2 class="tournament-bracket-heading" data-i18n="tournament.grandFinal">Grand Final</h2>
-      <div id="tournament-gf" class="tournament-bracket-scroll"></div>
     </div>
 
     <div id="tournament-rr-section" class="hidden">
@@ -1147,6 +1156,6 @@
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260910a"></script>
+<script src="js/app.js?v=20260910b"></script>
 </body>
 </html>

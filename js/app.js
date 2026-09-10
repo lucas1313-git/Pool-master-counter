@@ -1423,7 +1423,7 @@
   var tournamentFormatRadios = document.getElementsByName("tournament-format");
   var tournamentWbSection = document.getElementById("tournament-wb-section");
   var tournamentLbSection = document.getElementById("tournament-lb-section");
-  var tournamentGfSection = document.getElementById("tournament-gf-section");
+  var tournamentTimelineEl = document.getElementById("tournament-timeline");
   var tournamentRrSection = document.getElementById("tournament-rr-section");
   var tournamentSwissSection = document.getElementById("tournament-swiss-section");
   var tournamentGameTypeSelect = document.getElementById("tournament-game-type");
@@ -1514,6 +1514,11 @@
   var milestoneDetails = document.getElementById("milestone-details");
   var btnMilestoneClose = document.getElementById("btn-milestone-close");
   var btnMilestoneUndo = document.getElementById("btn-milestone-undo");
+  var tournamentMatchWinOverlay = document.getElementById("tournament-match-win-overlay");
+  var tournamentMatchWinEmoji = document.getElementById("tournament-match-win-emoji");
+  var tournamentMatchWinHeadline = document.getElementById("tournament-match-win-headline");
+  var tournamentMatchWinSubtext = document.getElementById("tournament-match-win-subtext");
+  var btnTournamentMatchWinClose = document.getElementById("btn-tournament-match-win-close");
 
   var gamewinOverlay = document.getElementById("gamewin-overlay");
   var gamewinMessage = document.getElementById("gamewin-message");
@@ -12887,6 +12892,92 @@
     advanceBracket(t);
   }
 
+  // A semifinal or final (WB final, or anything in the Grand Final) gets
+  // a little extra visual weight in the ready-to-play list - it's a
+  // bigger moment than an early round, so it should feel like one.
+  function isMarqueeTournamentMatch(t, match) {
+    if (isGrandFinalMatch(t, match)) return true;
+    if (!t.wb.length) return false;
+    var lastRound = t.wb[t.wb.length - 1];
+    var semiRound = t.wb.length >= 2 ? t.wb[t.wb.length - 2] : null;
+    return lastRound.indexOf(match) !== -1 || (!!semiRound && semiRound.indexOf(match) !== -1);
+  }
+
+  function findWbPosition(t, match) {
+    for (var ri = 0; ri < t.wb.length; ri++) {
+      var mi = t.wb[ri].indexOf(match);
+      if (mi !== -1) return { ri: ri, mi: mi };
+    }
+    return null;
+  }
+
+  // Figures out what to tell a just-crowned match winner about what's
+  // next: the next match they've already been placed into (by the
+  // advanceBracket call that already ran before this is called) and who
+  // they'll face, or - if that slot isn't filled yet - the specific
+  // still-pending match that will decide it, when that's computable (the
+  // winners bracket's round/index math makes this exact; the losers
+  // bracket's matches aren't linked that way, so it falls back to a
+  // generic "the bracket's still catching up" line there). Returns null
+  // when the tournament itself is already over - the caller shows a
+  // champion headline instead in that case.
+  function describeWhatsNextForWinner(t, justPlayedMatch, winnerName) {
+    if (t.champion) return null;
+    function findOpenMatchIn(list) {
+      for (var i = 0; i < list.length; i++) {
+        var m = list[i];
+        if (!m.winner && (m.a === winnerName || m.b === winnerName)) return m;
+      }
+      return null;
+    }
+    var flatWb = [].concat.apply([], t.wb);
+    var flatLb = [].concat.apply([], t.lbRounds);
+    var next = findOpenMatchIn(t.grandFinal) || findOpenMatchIn(flatWb) || findOpenMatchIn(flatLb);
+    if (!next) {
+      if (t.wbChampion === winnerName && t.grandFinal.length === 0) {
+        return T("tournament.nextWaitingForLosersChampion");
+      }
+      return T("tournament.nextWaitingGeneric");
+    }
+    var opponent = next.a === winnerName ? next.b : next.a;
+    if (opponent) {
+      return T("tournament.nextAdvance", { round: next.tag, opponent: opponent });
+    }
+    var pos = findWbPosition(t, justPlayedMatch);
+    if (pos) {
+      var siblingIdx = pos.mi % 2 === 0 ? pos.mi + 1 : pos.mi - 1;
+      var sibling = t.wb[pos.ri][siblingIdx];
+      if (sibling && sibling.a && sibling.b && !sibling.winner) {
+        return T("tournament.nextWaitingForMatch", { round: next.tag, a: sibling.a, b: sibling.b });
+      }
+    }
+    return T("tournament.nextWaitingGenericRound", { round: next.tag });
+  }
+
+  function closeTournamentMatchWinPopup() {
+    tournamentMatchWinOverlay.classList.add("hidden");
+  }
+
+  // The gratifying "you won that match" moment the live scoreboard's own
+  // win popup never covers for bracket play (tournamentAdjustScore scores
+  // a match with its own +/- steppers, not creditWin) - shown right after
+  // reportBracketResult/advanceBracket have already placed the winner
+  // into whatever comes next, so describeWhatsNextForWinner can just read
+  // that placement back out rather than recompute it.
+  function showTournamentMatchWinPopup(t, justPlayedMatch, winnerName) {
+    if (t.format !== "single" && t.format !== "double") return;
+    if (t.champion) {
+      tournamentMatchWinEmoji.textContent = "🏆🎉";
+      tournamentMatchWinHeadline.textContent = T("tournament.matchWinChampionHeadline", { winner: t.champion });
+      tournamentMatchWinSubtext.textContent = "";
+    } else {
+      tournamentMatchWinEmoji.textContent = "🏆";
+      tournamentMatchWinHeadline.textContent = T("tournament.matchWinHeadline", { winner: winnerName });
+      tournamentMatchWinSubtext.textContent = describeWhatsNextForWinner(t, justPlayedMatch, winnerName) || "";
+    }
+    tournamentMatchWinOverlay.classList.remove("hidden");
+  }
+
   function recordTournamentRackWin(winnerLabel, loserLabel, durationMs) {
     var entrantMembers = TOURNAMENT.entrantMembers || {};
     var winnerMembers = entrantMembers[winnerLabel] || [winnerLabel];
@@ -13283,6 +13374,18 @@
     return div;
   }
 
+  // "Final" for a 1-match round, "Semifinal" for 2, "Quarterfinal" for 4,
+  // else "Round of N" (N = players entering that round) - derived purely
+  // from how many matches are in the round, so it's automatically right
+  // whether the bracket only ever has a Final, or goes all the way down
+  // to a Quarterfinal (or further) when there are enough entrants.
+  function wbRoundLabel(matchCount) {
+    if (matchCount === 1) return T("tournament.roundFinal");
+    if (matchCount === 2) return T("tournament.roundSemifinal");
+    if (matchCount === 4) return T("tournament.roundQuarterfinal");
+    return T("tournament.roundOfN", { n: matchCount * 2 });
+  }
+
   // Renders the winners bracket as a real horizontal tree: round 1 on the
   // left, each pair of matches converging into the match they feed, all the
   // way to the final on the right. Built as nested "children + this round's
@@ -13290,13 +13393,22 @@
   // pure CSS (percentages against each pair's own wrapper), needing no
   // pixel measurement, because a 2-item "space-around" column always places
   // its items at exactly 25%/75% of the wrapper's height regardless of the
-  // wrapper's actual size.
+  // wrapper's actual size. Each card gets its own round-name label right
+  // above it (see wbRoundLabel) since there's no single stable column to
+  // hang one shared header off of in a nested-tree layout.
   function renderWbTreeNode(t, ri, mi, activeMatchId) {
     var match = t.wb[ri][mi];
     var card = tournamentMatchCard(match, activeMatchId, t);
+    var wrap = document.createElement("div");
+    wrap.className = "wb-tree-card-wrap";
+    var heading = document.createElement("div");
+    heading.className = "tournament-round-heading";
+    heading.textContent = wbRoundLabel(t.wb[ri].length);
+    wrap.appendChild(heading);
+    wrap.appendChild(card);
     if (ri === 0) {
-      card.classList.add("wb-tree-leaf");
-      return card;
+      wrap.classList.add("wb-tree-leaf");
+      return wrap;
     }
     var childrenWrap = document.createElement("div");
     childrenWrap.className = "wb-tree-children";
@@ -13306,7 +13418,7 @@
     var node = document.createElement("div");
     node.className = "wb-tree-node";
     node.appendChild(childrenWrap);
-    node.appendChild(card);
+    node.appendChild(wrap);
     return node;
   }
 
@@ -13412,6 +13524,7 @@
         t.active = null;
         saveTournamentToStorage(t);
         renderTournamentPage();
+        showTournamentMatchWinPopup(t, match, name);
         return;
       }
     } else if (delta > 0) {
@@ -13590,6 +13703,48 @@
     });
   }
 
+  // A quick "you are here" stage tracker across the top of the bracket -
+  // only shown once there's actually more than one stage to track (a
+  // 2-3 entrant field is just a Final, nothing to get lost in). Stages
+  // done so far are struck through, the current one is bold/accented,
+  // everything after is dim.
+  function renderTournamentTimeline(t) {
+    tournamentTimelineEl.innerHTML = "";
+    var isEliminationFormat = t.format === "single" || t.format === "double";
+    if (!isEliminationFormat || t.wb.length < 2) {
+      tournamentTimelineEl.classList.add("hidden");
+      return;
+    }
+    tournamentTimelineEl.classList.remove("hidden");
+    var stages = t.wb.map(function (round) {
+      return wbRoundLabel(round.length);
+    });
+    if (t.format === "double") stages.push(T("tournament.grandFinal"));
+    var currentIdx = stages.length - 1;
+    for (var ri = 0; ri < t.wb.length; ri++) {
+      var roundDone = t.wb[ri].every(function (m) {
+        return !!m.winner;
+      });
+      if (!roundDone) {
+        currentIdx = ri;
+        break;
+      }
+    }
+    if (t.champion) currentIdx = stages.length - 1;
+    stages.forEach(function (label, i) {
+      if (i > 0) {
+        var arrow = document.createElement("span");
+        arrow.className = "tournament-timeline-arrow";
+        arrow.textContent = "→";
+        tournamentTimelineEl.appendChild(arrow);
+      }
+      var stage = document.createElement("span");
+      stage.className = "tournament-timeline-stage" + (i === currentIdx ? " is-current" : i < currentIdx ? " is-done" : "");
+      stage.textContent = label;
+      tournamentTimelineEl.appendChild(stage);
+    });
+  }
+
   function renderTournamentActive() {
     var t = TOURNAMENT;
     var activeMatchId = t.active ? t.active.matchId : null;
@@ -13599,7 +13754,7 @@
 
     tournamentWbSection.classList.toggle("hidden", isRoundRobin || isSwiss);
     tournamentLbSection.classList.toggle("hidden", isRoundRobin || isSingle || isSwiss);
-    tournamentGfSection.classList.toggle("hidden", isRoundRobin || isSingle || isSwiss);
+    tournamentGfEl.classList.toggle("hidden", isRoundRobin || isSingle || isSwiss);
     tournamentRrSection.classList.toggle("hidden", !isRoundRobin);
     tournamentSwissSection.classList.toggle("hidden", !isSwiss);
 
@@ -13614,6 +13769,8 @@
         renderBracketColumns(tournamentGfEl, t.grandFinal.length ? [t.grandFinal] : [], activeMatchId, t);
       }
     }
+
+    renderTournamentTimeline(t);
 
     btnTournamentAbandon.textContent = T(t.champion ? "tournament.startNew" : "tournament.abandon");
 
@@ -13655,13 +13812,16 @@
     tournamentReadyList.appendChild(heading);
     ready.forEach(function (m) {
       var li = document.createElement("li");
-      li.className = "tournament-ready-row";
+      li.className = "tournament-ready-row" + (isMarqueeTournamentMatch(t, m) ? " is-marquee" : "");
+      var tag = document.createElement("span");
+      tag.className = "tournament-ready-tag";
+      tag.textContent = m.tag;
       var text = document.createElement("span");
+      text.className = "tournament-ready-names";
       text.appendChild(document.createTextNode(m.a));
       appendEntrantIdentity(text, m.a, t);
       text.appendChild(document.createTextNode(" vs " + m.b));
       appendEntrantIdentity(text, m.b, t);
-      text.appendChild(document.createTextNode(" (" + m.tag + ")"));
       var btn = document.createElement("button");
       btn.type = "button";
       btn.className = "btn btn-primary";
@@ -13669,6 +13829,7 @@
       btn.addEventListener("click", function () {
         startTournamentMatch(m.id);
       });
+      li.appendChild(tag);
       li.appendChild(text);
       li.appendChild(btn);
       tournamentReadyList.appendChild(li);
@@ -14113,6 +14274,11 @@
   btnMilestoneUndo.addEventListener("click", undoTournamentWinFromMilestoneOverlay);
   milestoneOverlay.addEventListener("click", function (e) {
     if (e.target === milestoneOverlay) closeMilestone();
+  });
+
+  btnTournamentMatchWinClose.addEventListener("click", closeTournamentMatchWinPopup);
+  tournamentMatchWinOverlay.addEventListener("click", function (e) {
+    if (e.target === tournamentMatchWinOverlay) closeTournamentMatchWinPopup();
   });
 
   btnGamewinClose.addEventListener("click", closeGameWinOverlay);
