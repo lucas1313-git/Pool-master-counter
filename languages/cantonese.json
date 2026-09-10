@@ -117,6 +117,8 @@
   "contactSheet.importRosters": "📥 由舊玩家名單入面加名",
   "contactSheet.importedJsonToast": "由檔案入面加咗 {{count}} 個聯絡人（{{added}} 個新嘅）。",
   "contactSheet.importedToast": "由舊名單加咗 {{count}} 個玩家。",
+  "contactSheet.invalidEmail": "呢個電郵地址好似唔啱格式。",
+  "contactSheet.invalidPhone": "呢個電話號碼好似未打齊。",
   "contactSheet.name": "名",
   "contactSheet.nameAlreadyUsed": "「{{name}}」已經係第二個人嘅名。",
   "contactSheet.nameRequired": "請輸入名。",

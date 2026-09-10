@@ -117,6 +117,8 @@
   "contactSheet.importRosters": "📥 Importar Nombres de Listas Anteriores",
   "contactSheet.importedJsonToast": "Se importaron {{count}} contacto(s) del archivo ({{added}} nuevo(s)).",
   "contactSheet.importedToast": "Se añadieron {{count}} jugador(es) de listas anteriores.",
+  "contactSheet.invalidEmail": "Esa dirección de correo no parece válida.",
+  "contactSheet.invalidPhone": "Ese número de teléfono no parece completo.",
   "contactSheet.name": "Nombre",
   "contactSheet.nameAlreadyUsed": "«{{name}}» ya es el nombre de otra persona.",
   "contactSheet.nameRequired": "Introduce un nombre.",

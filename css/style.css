@@ -667,6 +667,15 @@ input[type="text"], input[type="email"], input[type="tel"] {
   font-size: 1.05rem;
 }
 
+/* A phone/email field that isn't empty but also isn't a real, complete
+   phone number or email address (see isValidPhoneNumber/isValidEmail) -
+   checked live as it's typed, not just when something tries to save
+   it. */
+input.field-invalid {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 1px var(--danger);
+}
+
 .day-notes-textarea {
   font: inherit;
   background: var(--bg-card);
