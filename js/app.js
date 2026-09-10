@@ -6818,6 +6818,50 @@
     return key ? PLAYER_CONTACTS[key] : { email: "", phone: "", reportOptIn: false, notifyMethod: "email" };
   }
 
+  // Formats digits-as-typed to match the phone convention of the
+  // currently active app language (same country each language's flag in
+  // languages/manifest.json already implies - UK for English, since
+  // that's the manifest's own flag choice, not a US assumption). Purely
+  // a typing aid: the formatted string (with its spaces) is what gets
+  // saved, same as the raw input always was.
+  function formatPhoneNumberForActiveLanguage(rawValue) {
+    var digits = (rawValue || "").replace(/\D/g, "");
+    if (activeLanguageCode === "french") {
+      // France: 0X XX XX XX XX
+      digits = digits.slice(0, 10);
+      return digits.replace(/(\d{1,2})(\d{1,2})?(\d{1,2})?(\d{1,2})?(\d{1,2})?/, function (m, a, b, c, d, e) {
+        return [a, b, c, d, e].filter(Boolean).join(" ");
+      });
+    }
+    if (activeLanguageCode === "spanish") {
+      // Spain: XXX XXX XXX
+      digits = digits.slice(0, 9);
+      return digits.replace(/(\d{1,3})(\d{1,3})?(\d{1,3})?/, function (m, a, b, c) {
+        return [a, b, c].filter(Boolean).join(" ");
+      });
+    }
+    if (activeLanguageCode === "cantonese") {
+      // Hong Kong: XXXX XXXX
+      digits = digits.slice(0, 8);
+      return digits.replace(/(\d{1,4})(\d{1,4})?/, function (m, a, b) {
+        return [a, b].filter(Boolean).join(" ");
+      });
+    }
+    // English -> UK mobile: 07XXX XXXXXX
+    digits = digits.slice(0, 11);
+    if (digits.length <= 5) return digits;
+    return digits.slice(0, 5) + " " + digits.slice(5);
+  }
+
+  // Reformats on every keystroke, always placing the cursor at the end -
+  // simplest behavior for a short, mostly-typed-left-to-right field like
+  // this, at the cost of mid-string editing not being caret-perfect.
+  function wirePhoneFormatting(input) {
+    input.addEventListener("input", function () {
+      input.value = formatPhoneNumberForActiveLanguage(input.value);
+    });
+  }
+
   // Shared by onboarding and the edit-rating popup: the "receive the
   // day's report" checkbox only makes sense once there's somewhere to
   // send it, and the email/SMS choice only matters once it's checked.
@@ -7034,7 +7078,7 @@
     ratingEditInput.value = getPlayerRating(name);
     var contact = getPlayerContact(name);
     ratingEditEmailInput.value = contact.email || "";
-    ratingEditPhoneInput.value = contact.phone || "";
+    ratingEditPhoneInput.value = formatPhoneNumberForActiveLanguage(contact.phone || "");
     ratingEditNotifyCheckbox.disabled = !(contact.email || contact.phone);
     ratingEditNotifyCheckbox.checked = !ratingEditNotifyCheckbox.disabled && !!contact.reportOptIn;
     ratingEditNotifyMethodRow.classList.toggle("hidden", !ratingEditNotifyCheckbox.checked);
@@ -13813,6 +13857,7 @@
     if (e.target === ratingEditOverlay) closeRatingEditPopup();
   });
   wireNotifyCheckbox(ratingEditEmailInput, ratingEditPhoneInput, ratingEditNotifyCheckbox, ratingEditNotifyMethodRow);
+  wirePhoneFormatting(ratingEditPhoneInput);
 
   btnExportRosterLists.addEventListener("click", exportRosterLists);
   btnExportRosterListsCsv.addEventListener("click", function () {
@@ -14142,6 +14187,7 @@
   btnOnboardingGo.addEventListener("click", advanceOnboarding);
   onboardingNameInput.addEventListener("input", validateOnboardingNameInput);
   wireNotifyCheckbox(onboardingEmailInput, onboardingPhoneInput, onboardingReportOptInCheckbox, onboardingNotifyMethodRow);
+  wirePhoneFormatting(onboardingPhoneInput);
   btnOnboardingRunWizard.addEventListener("click", function () {
     closeOnboarding();
     openWizard();

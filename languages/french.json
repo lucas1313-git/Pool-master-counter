@@ -244,7 +244,7 @@
   "notify.methodSms": "📱 SMS",
   "onboarding.emailPlaceholder": "E-mail (facultatif)",
   "onboarding.getToItNow": "Commencer maintenant — je sais ce que je fais",
-  "onboarding.phonePlaceholder": "Numéro de téléphone (facultatif)",
+  "onboarding.phonePlaceholder": "Numéro de téléphone, ex. 06 12 34 56 78 (facultatif)",
   "onboarding.playLater": "🕒 Je jouerai plus tard",
   "onboarding.playNow": "▶️ Jouer maintenant",
   "onboarding.reportOptIn": "🔔 Recevoir le rapport du jour",
