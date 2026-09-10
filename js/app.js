@@ -12128,10 +12128,25 @@
 
   var TOURNAMENT_KEY = "poolMasterCounter.tournament.v1";
 
+  // lbWaiting used to be a plain array of names; it's now { name, feeder }
+  // entries so the losers bracket can carry feeder-match links through a
+  // save/reload. A tournament already in progress from before that change
+  // would otherwise resume with plain strings and break every .name/
+  // .feeder access below - normalized back into shape here, feeder-less
+  // (same as any entry that's always had no feeder to speak of).
+  function normalizeLoadedTournament(t) {
+    if (t && Array.isArray(t.lbWaiting)) {
+      t.lbWaiting = t.lbWaiting.map(function (entry) {
+        return typeof entry === "string" ? { name: entry, feeder: null } : entry;
+      });
+    }
+    return t;
+  }
+
   function loadTournamentFromStorage() {
     try {
       var raw = localStorage.getItem(TOURNAMENT_KEY);
-      return raw ? JSON.parse(raw) : null;
+      return raw ? normalizeLoadedTournament(JSON.parse(raw)) : null;
     } catch (e) {
       return null;
     }
@@ -12301,18 +12316,40 @@
     return result;
   }
 
-  function createBracketMatch(a, b, tag) {
-    return { id: uid(), a: a || null, b: b || null, winner: null, loser: null, tag: tag, collected: false };
+  // feederA/feederB (optional) are the specific match objects whose
+  // winner became this match's .a/.b - only ever set for losers-bracket
+  // matches (see pairUpNames), so the losers bracket can be drawn as a
+  // real connected tree instead of flat labeled columns. Winners-bracket
+  // matches don't need this: their feeders are always exactly
+  // t.wb[ri-1][mi*2] and [mi*2+1], computable from position alone.
+  function createBracketMatch(a, b, tag, feederA, feederB) {
+    return {
+      id: uid(),
+      a: a || null,
+      b: b || null,
+      winner: null,
+      loser: null,
+      tag: tag,
+      collected: false,
+      feederA: feederA || null,
+      feederB: feederB || null
+    };
   }
 
-  function pairUpNames(names, tag) {
+  // Pairs up consecutive { name, feeder } entries (feeder is the match
+  // that produced that name, or null if it has none - e.g. round robin
+  // never uses this) into new matches, stamping each with where its two
+  // sides actually came from. leftover carries its own feeder through
+  // too, so it's never lost if this name has to wait another round
+  // before finally getting paired.
+  function pairUpNames(entries, tag) {
     var matches = [];
     var i = 0;
-    while (i + 1 < names.length) {
-      matches.push(createBracketMatch(names[i], names[i + 1], tag));
+    while (i + 1 < entries.length) {
+      matches.push(createBracketMatch(entries[i].name, entries[i + 1].name, tag, entries[i].feeder, entries[i + 1].feeder));
       i += 2;
     }
-    var leftover = i < names.length ? [names[i]] : [];
+    var leftover = i < entries.length ? [entries[i]] : [];
     return { matches: matches, leftover: leftover };
   }
 
@@ -12422,17 +12459,21 @@
 
       while (t.lbNextWbRoundToDrop < t.wb.length && wbRoundComplete(t, t.lbNextWbRoundToDrop)) {
         var ri2 = t.lbNextWbRoundToDrop;
-        var losers = t.wb[ri2]
-          .map(function (m) {
-            return m.loser;
+        // Each drop-in's feeder is the exact WB match it lost - so a
+        // fresh drop always knows where it came from, same as anyone
+        // already sitting in lbWaiting (see the two spots below that
+        // push onto it, both of which carry a feeder along too).
+        var dropped = t.wb[ri2]
+          .filter(function (m) {
+            return m.loser !== null;
           })
-          .filter(function (x) {
-            return x !== null;
+          .map(function (m) {
+            return { name: m.loser, feeder: m };
           });
         t.lbNextWbRoundToDrop += 1;
         changed = true;
         if (ri2 === 0) {
-          var res = pairUpNames(losers, "Losers R1");
+          var res = pairUpNames(dropped, "Losers R1");
           if (res.matches.length) t.lbRounds.push(res.matches);
           t.lbWaiting = t.lbWaiting.concat(res.leftover);
         } else {
@@ -12441,16 +12482,16 @@
           var li = 0;
           var wi = 0;
           var waiting = t.lbWaiting;
-          while (li < losers.length || wi < waiting.length) {
-            if (wi < waiting.length && li < losers.length) {
-              matches2.push(createBracketMatch(waiting[wi], losers[li], "Losers"));
+          while (li < dropped.length || wi < waiting.length) {
+            if (wi < waiting.length && li < dropped.length) {
+              matches2.push(createBracketMatch(waiting[wi].name, dropped[li].name, "Losers", waiting[wi].feeder, dropped[li].feeder));
               wi += 1;
               li += 1;
             } else if (wi < waiting.length) {
               newWaiting.push(waiting[wi]);
               wi += 1;
             } else {
-              newWaiting.push(losers[li]);
+              newWaiting.push(dropped[li]);
               li += 1;
             }
           }
@@ -12463,7 +12504,7 @@
         rnd.forEach(function (m) {
           if (m.winner !== null && !m.collected) {
             m.collected = true;
-            t.lbWaiting.push(m.winner);
+            t.lbWaiting.push({ name: m.winner, feeder: m });
             changed = true;
           }
         });
@@ -12487,7 +12528,7 @@
         pendingLbMatches(t).length === 0 &&
         t.lbWaiting.length === 1
       ) {
-        t.lbChampion = t.lbWaiting[0];
+        t.lbChampion = t.lbWaiting[0].name;
         changed = true;
       }
 
@@ -13506,6 +13547,107 @@
     });
   }
 
+  // ---------- Losers bracket tree ----------
+  // Unlike the winners bracket, a losers-bracket match's two feeders
+  // aren't at a fixed position computable from round/index math - one
+  // side is often a fresh winners-bracket drop-in, the other a survivor
+  // from the previous losers round, and those two ages don't line up
+  // into a clean symmetric tree. So every LB match is stamped at
+  // creation time with the *actual* match objects that produced its two
+  // sides (see createBracketMatch/pairUpNames in advanceBracket) and the
+  // tree below is built by following those links directly, reusing the
+  // exact same connector-line CSS as the winners tree (still always
+  // exactly 2 children per node - a losers match never exists until both
+  // of its feeders are known).
+
+  function isLosersMatch(match) {
+    return typeof match.tag === "string" && match.tag.indexOf("Losers") === 0;
+  }
+
+  // A losers-bracket match is still "in progress" (not yet the frontier)
+  // once some later match has consumed its winner as a feeder. What's
+  // left after removing every match that's referenced as somebody else's
+  // feeder is the current set of independent branches - there can be
+  // several at once early on, only merging into one (the eventual LB
+  // final) as the bracket plays out, so this can return more than one
+  // match.
+  function lbFrontierMatches(t) {
+    var consumedIds = {};
+    var all = [];
+    t.lbRounds.forEach(function (rnd) {
+      rnd.forEach(function (m) {
+        all.push(m);
+        if (m.feederA) consumedIds[m.feederA.id] = true;
+        if (m.feederB) consumedIds[m.feederB.id] = true;
+      });
+    });
+    return all.filter(function (m) {
+      return !consumedIds[m.id];
+    });
+  }
+
+  // A feeder is either another losers-bracket match (recurse into its
+  // own tree) or the winners-bracket match this side just dropped out
+  // of - shown as a compact stub naming who dropped and from where,
+  // rather than a full duplicate of a card the winners tree already
+  // shows in full elsewhere on the page.
+  function renderLbFeederNode(feeder, activeMatchId, t) {
+    if (isLosersMatch(feeder)) return renderLbTreeNode(feeder, activeMatchId, t);
+    var stub = document.createElement("div");
+    stub.className = "wb-tree-card-wrap lb-tree-wb-stub";
+    var heading = document.createElement("div");
+    heading.className = "tournament-round-heading";
+    heading.textContent = matchRoundLabel(t, feeder);
+    var name = document.createElement("div");
+    name.className = "lb-tree-wb-stub-name";
+    name.textContent = "⬇ " + feeder.loser;
+    stub.appendChild(heading);
+    stub.appendChild(name);
+    stub.classList.add("wb-tree-leaf");
+    return stub;
+  }
+
+  function renderLbTreeNode(match, activeMatchId, t) {
+    var card = tournamentMatchCard(match, activeMatchId, t);
+    var wrap = document.createElement("div");
+    wrap.className = "wb-tree-card-wrap";
+    var heading = document.createElement("div");
+    heading.className = "tournament-round-heading";
+    heading.textContent = matchRoundLabel(t, match);
+    wrap.appendChild(heading);
+    wrap.appendChild(card);
+    if (!match.feederA && !match.feederB) {
+      wrap.classList.add("wb-tree-leaf");
+      return wrap;
+    }
+    var childrenWrap = document.createElement("div");
+    childrenWrap.className = "wb-tree-children";
+    if (match.feederA) childrenWrap.appendChild(renderLbFeederNode(match.feederA, activeMatchId, t));
+    if (match.feederB) childrenWrap.appendChild(renderLbFeederNode(match.feederB, activeMatchId, t));
+    var node = document.createElement("div");
+    node.className = "wb-tree-node";
+    node.appendChild(childrenWrap);
+    node.appendChild(wrap);
+    return node;
+  }
+
+  function renderLbTree(container, t, activeMatchId) {
+    container.innerHTML = "";
+    var roots = lbFrontierMatches(t);
+    if (!roots.length) {
+      var hint = document.createElement("p");
+      hint.className = "empty-hint";
+      hint.textContent = "—";
+      container.appendChild(hint);
+      return;
+    }
+    roots.forEach(function (rootMatch) {
+      var root = renderLbTreeNode(rootMatch, activeMatchId, t);
+      root.classList.add("wb-tree-root", "lb-tree-root");
+      container.appendChild(root);
+    });
+  }
+
   function startTournamentMatch(matchId) {
     var match = findBracketMatchById(TOURNAMENT, matchId);
     if (!match || match.winner) return;
@@ -13818,7 +13960,7 @@
     } else {
       renderWbTree(tournamentWbEl, t, activeMatchId);
       if (!isSingle) {
-        renderBracketColumns(tournamentLbEl, t.lbRounds, activeMatchId, t);
+        renderLbTree(tournamentLbEl, t, activeMatchId);
         renderBracketColumns(tournamentGfEl, t.grandFinal.length ? [t.grandFinal] : [], activeMatchId, t);
       }
     }

@@ -3976,6 +3976,29 @@ input[type="number"] {
   margin: 0;
 }
 
+/* A losers-bracket tree's "leaf" is often just a reference to the
+   winners-bracket match someone dropped out of, not a full duplicate
+   card (that match is already shown in full in the winners tree above). */
+.lb-tree-wb-stub {
+  justify-content: center;
+  padding: 10px 8px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.15);
+  text-align: center;
+}
+
+.lb-tree-wb-stub-name {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+
+.lb-tree-root + .lb-tree-root {
+  margin-left: 24px;
+  padding-left: 24px;
+  border-left: 1px dashed var(--border);
+}
+
 .tournament-wb-inline,
 .tournament-gf-inline {
   display: flex;
