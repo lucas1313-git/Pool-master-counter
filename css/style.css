@@ -3907,6 +3907,34 @@ input[type="number"] {
   max-width: 100%;
 }
 
+/* Groups the three seed-mode choices with Select All (a checkbox, not
+   a seed mode - it lives here for quick access right next to them, not
+   because it's actually one of them) into one visually distinct block,
+   set apart from the rest of the Players section below it. */
+.tournament-selection-group {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  margin-bottom: 10px;
+}
+
+.tournament-start-row {
+  margin: 0 0 14px;
+}
+
+.tournament-teams-row {
+  margin-bottom: 10px;
+}
+
+.tournament-tables-row {
+  margin-bottom: 14px;
+}
+
+.tournament-tables-row input[type="number"] {
+  width: 70px;
+}
+
 #tournament-setup-panel .wizard-format-option {
   flex-wrap: wrap;
 }
@@ -4044,6 +4072,30 @@ input[type="number"] {
   font-style: normal;
   color: var(--danger);
   margin-top: 1px;
+}
+
+.tournament-match-table-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  opacity: 0.85;
+}
+
+.tournament-match-table-select {
+  font-size: 0.78rem;
+  padding: 2px 4px;
+}
+
+.tournament-match-table-played {
+  margin-top: 2px;
+  text-align: center;
+  font-size: 0.76rem;
+  font-weight: 700;
+  opacity: 0.65;
 }
 
 .tournament-bracket-heading {
@@ -4209,6 +4261,16 @@ input[type="number"] {
   right: 28px;
   width: 1px;
   background: var(--border);
+}
+
+/* A pendingBye node (see buildWinnersBracketRounds/renderWbTreeNode)
+   only ever has one real feeder, not two - with a single centered
+   child instead of a 25%/75% pair, the vertical connector collapses to
+   the same midpoint the horizontal one already meets it at, instead of
+   floating disconnected between two positions nothing occupies. */
+.wb-tree-children:has(> :only-child)::before {
+  top: 50%;
+  bottom: 50%;
 }
 
 .wb-tree-children::after {
