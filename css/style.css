@@ -3931,6 +3931,11 @@ input[type="number"] {
   margin-bottom: 14px;
 }
 
+.tournament-tables-row span {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
 .tournament-tables-row input[type="number"] {
   width: 70px;
 }
