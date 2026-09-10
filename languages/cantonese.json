@@ -518,6 +518,8 @@
   "toast.undidGame": "已撤銷：{{summary}}",
   "tournament.abandon": "放棄錦標賽",
   "tournament.addPlayersFirst": "請先新增玩家。",
+  "tournament.byeLabel": "輪空",
+  "tournament.byeNote": "輪空——呢round冇對手，自動晉級。",
   "tournament.fairRaceEnable": "⚖️ 用 Fargo 評分嚟定錦標賽目標",
   "tournament.fairRaceExplain": "一般嚟講每場對局都係打去同一個目標。開咗呢個之後，評分低嗰邊嘅目標會縮短——按評分差計到盡量接近一半一半嘅機會率。評分高嗰邊嘅目標就唔會變。",
   "tournament.fairRaceInfoAria": "呢個係咩意思？",

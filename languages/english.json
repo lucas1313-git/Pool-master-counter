@@ -518,6 +518,8 @@
   "toast.undidGame": "Undid: {{summary}}",
   "tournament.abandon": "Abandon Tournament",
   "tournament.addPlayersFirst": "Add players first.",
+  "tournament.byeLabel": "BYE",
+  "tournament.byeNote": "Bye — no opponent this round, advances automatically.",
   "tournament.fairRaceEnable": "⚖️ Use Fargo rating for tournament goals",
   "tournament.fairRaceExplain": "Every match normally races to the same target. With this on, the lower-rated side gets a shorter target instead — calculated so the match lands close to a coin-flip based on the rating gap. The higher-rated side's target stays the same.",
   "tournament.fairRaceInfoAria": "What does this mean?",
