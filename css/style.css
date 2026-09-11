@@ -513,6 +513,22 @@ body {
   font-size: clamp(3rem, 11vw, 5.5rem);
 }
 
+/* The keypad shortcut number needs the same across-the-room readability
+   as everything else in Focus Mode - scales with the card same as
+   .stat-value above, floored well above the normal-mode 24px minimum. */
+#app.focus-mode .keypad-number-badge {
+  width: clamp(42px, 12cqw, 64px);
+  height: clamp(42px, 12cqw, 64px);
+  font-size: clamp(24px, 8cqw, 40px);
+  top: 10px;
+  left: 10px;
+}
+
+#app.focus-mode .player-panel:has(.keypad-number-badge:not(:empty)),
+#app.focus-mode .member-card:has(.keypad-number-badge:not(:empty)) {
+  padding-top: 76px;
+}
+
 .no-stats-row-inline {
   display: flex;
   align-items: center;
@@ -690,8 +706,15 @@ button:disabled {
      that way, bypassing any overflow-x:auto set on something inside
      the panel entirely, since the overflow never happens there in the
      first place. This lets the panel actually shrink to the viewport,
-     so that inner scrolling can do its job. */
+     so that inner scrolling can do its job. Same reasoning applies on
+     the vertical axis: a panel's default min-height is likewise its
+     own content's min-content height, which can similarly stop the
+     page from growing/scrolling past a panel whose content has grown
+     taller than the viewport (Focus Mode's Team view, with several
+     member cards stacked at its across-the-room font sizes, is exactly
+     that case) instead of just flowing past it normally. */
   min-width: 0;
+  min-height: 0;
 }
 
 .panel h2 {
@@ -1274,6 +1297,16 @@ input[type="number"] {
 
 .scoreboard {
   flex: 1;
+  /* A flex item's default min-height is "auto" (its own content's
+     min-content size) - same class of bug already found and fixed once
+     this session for .panel's horizontal equivalent (min-width). In
+     Focus Mode's Team view specifically, member cards can grow quite
+     tall (see the container-query font scaling below), and #app is
+     itself a column flex container - without this, WebKit can refuse
+     to let the page grow/scroll past #app's own box to reveal the rest
+     of a tall team roster instead of just growing normally past one
+     screen's height. */
+  min-height: 0;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
   gap: 10px;
@@ -1352,13 +1385,13 @@ input[type="number"] {
   position: absolute;
   top: 8px;
   left: 8px;
-  width: 30px;
-  height: 30px;
+  width: 42px;
+  height: 42px;
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.55);
   border: 2px solid var(--accent);
   color: var(--accent);
-  font-size: 1rem;
+  font-size: 24px;
   font-weight: 800;
   display: flex;
   align-items: center;
@@ -1371,13 +1404,13 @@ input[type="number"] {
   display: none;
 }
 
-/* The badge sits absolutely positioned at top:8/left:8 at 30x30, so its
-   bottom edge reaches 38px down from the card's top edge - when a real
+/* The badge sits absolutely positioned at top:8/left:8 at 42x42, so its
+   bottom edge reaches 50px down from the card's top edge - when a real
    number is showing, push the whole card's content below that instead of
    letting the centered name text start right under (and behind) it. */
 .player-panel:has(.keypad-number-badge:not(:empty)),
 .member-card:has(.keypad-number-badge:not(:empty)) {
-  padding-top: 40px;
+  padding-top: 52px;
 }
 
 .is-keypad-selected {
