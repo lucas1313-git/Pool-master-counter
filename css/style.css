@@ -1,5 +1,5 @@
 /* ---------- Themes ----------
-   Twenty self-contained palettes (colors + font family — no network
+   Nineteen self-contained palettes (colors + font family — no network
    fonts, everything falls back through system font stacks so the app
    stays fully offline-capable). Bare :root is "Crimson Felt", the
    original look and the default; the rest override via
@@ -7,14 +7,13 @@
    localStorage. Each sets its own color-scheme (dark or light) so native
    form controls/scrollbars render correctly either way.
 
-   Six themes (stainless-steel, copper-shine, opal-shimmer, rock-and-
-   roll, flowery-forest, bamboo) additionally override --body-surface/
+   Five themes (stainless-steel, copper-shine, opal-shimmer, rock-and-
+   roll, flowery-forest) additionally override --body-surface/
    --panel-surface/--btn-primary-surface/--modal-surface (defined once
    at bare :root, defaulting to exactly what body/.panel/.btn-primary/
-   .confirm-modal-card already painted) with real multi-stop or
-   repeating gradients - brushed metal, iridescence, concert spotlights,
-   dappled forest light, or bamboo stalks - instead of just evocatively-
-   named flat colors. */
+   .confirm-modal-card already painted) with real multi-stop gradients -
+   brushed metal, iridescence, concert spotlights, or dappled forest
+   light - instead of just evocatively-named flat colors. */
 
 :root {
   --bg: #1a0a0a;
@@ -370,44 +369,45 @@
 }
 
 :root[data-theme="copper-shine"] {
-  --bg: #2a1408;
-  --bg-panel: #3a1d0e;
-  --bg-card: #452412;
-  --felt: #8a4a1e;
-  --felt-light: #c1712c;
-  --accent: #e8863a;
-  --accent-dark: #b3641f;
+  --bg: #4a2c14;
+  --bg-panel: #5c3a1c;
+  --bg-card: #6b4423;
+  --felt: #8a5a2e;
+  --felt-light: #a56f3a;
+  --accent: #d99a55;
+  --accent-dark: #a97a3f;
   --danger: #d9432e;
   --danger-dark: #a3311f;
-  --info: #4fa8a0;
-  --info-dark: #367a74;
+  --info: #6fb8b0;
+  --info-dark: #4f8f88;
   --text: #fbe8d8;
-  --text-dim: #d4a179;
-  --border: #6b3813;
-  --bg-glow: #52280f;
-  --on-accent: #2a1206;
-  --on-felt-light: #2a1206;
-  --graph-bg: rgba(232, 134, 58, 0.1);
+  --text-dim: #d9b48a;
+  --border: #7a4e28;
+  --bg-glow: #6b4423;
+  --on-accent: #2a1608;
+  --on-felt-light: #2a1608;
+  --graph-bg: rgba(217, 154, 85, 0.1);
   --font-family: Rockwell, Georgia, "Iowan Old Style", serif;
   color-scheme: dark;
-  /* Warm metal streaks - bright copper highlight bands over a darker
-     patina base, the same raking-light idea as Stainless Steel but
-     shifted to copper's orange-brown hue. */
+  /* Warm copper glow - gentle highlight bands over a mid-tone patina
+     base, all kept within one warm brown-to-light-copper band (no
+     near-black or near-white extremes) for a soft sheen rather than
+     stark contrast. */
   --body-surface: linear-gradient(
     120deg,
-    #3d1f0d 0%,
-    #8a4a1e 14%,
-    #e8a35c 26%,
-    #b3641f 40%,
-    #5c2c10 52%,
-    #c1712c 64%,
-    #e8a35c 76%,
-    #4a2410 90%,
-    #2a1408 100%
+    #5c3a1c 0%,
+    #8a5a2e 14%,
+    #c99356 26%,
+    #a56f3a 40%,
+    #6b4423 52%,
+    #b3813f 64%,
+    #c99356 76%,
+    #5c3a1c 90%,
+    #4a2c14 100%
   );
-  --panel-surface: linear-gradient(140deg, #452412 0%, #8a4a1e 20%, #d98a3f 38%, #6b3813 58%, #c1712c 76%, #3a1d0e 100%);
-  --btn-primary-surface: linear-gradient(150deg, #7a3e14 0%, #b3641f 25%, #f0b06a 50%, #b3641f 75%, #7a3e14 100%);
-  --modal-surface: linear-gradient(160deg, #452412 0%, #8a4a1e 22%, #d98a3f 45%, #6b3813 65%, #c1712c 85%, #3a1d0e 100%);
+  --panel-surface: linear-gradient(140deg, #6b4423 0%, #a56f3a 20%, #c99356 38%, #7a4e28 58%, #ad7b40 76%, #5c3a1c 100%);
+  --btn-primary-surface: linear-gradient(150deg, #a56f3a 0%, #c99356 25%, #e6b878 50%, #c99356 75%, #a56f3a 100%);
+  --modal-surface: linear-gradient(160deg, #6b4423 0%, #a56f3a 22%, #c99356 45%, #7a4e28 65%, #ad7b40 85%, #5c3a1c 100%);
 }
 
 :root[data-theme="opal-shimmer"] {
@@ -508,65 +508,6 @@
     linear-gradient(160deg, #ffffff 0%, #f3f8ed 50%, #eef4e5 100%);
 }
 
-:root[data-theme="bamboo"] {
-  --bg: #f2edd9;
-  --bg-panel: #f8f4e4;
-  --bg-card: #fdfbf2;
-  --felt: #d9cf9a;
-  --felt-light: #e8e0b8;
-  --accent: #8a9a3f;
-  --accent-dark: #667429;
-  --danger: #b5602e;
-  --danger-dark: #8a4620;
-  --info: #5a8a7a;
-  --info-dark: #3f6659;
-  --text: #3a3420;
-  --text-dim: #746a48;
-  --border: #cabb7e;
-  --bg-glow: #ede4c0;
-  --on-accent: #fdfbe8;
-  --on-felt-light: #3a3420;
-  --graph-bg: rgba(138, 154, 63, 0.08);
-  --font-family: Optima, "Century Gothic", "Trebuchet MS", sans-serif;
-  color-scheme: light;
-  /* Pale bamboo stalks: a repeating vertical highlight/body/gutter
-     pattern for individual stalks side by side, crossed with widely-
-     spaced horizontal bands for the stalks' segment nodes. */
-  --body-surface: repeating-linear-gradient(180deg, rgba(122, 116, 41, 0.12) 0px, rgba(122, 116, 41, 0.12) 3px, rgba(122, 116, 41, 0) 3px, rgba(122, 116, 41, 0) 140px),
-    repeating-linear-gradient(
-      90deg,
-      rgba(255, 255, 255, 0.35) 0px,
-      rgba(255, 255, 255, 0.35) 6px,
-      rgba(201, 214, 138, 0.25) 6px,
-      rgba(201, 214, 138, 0.25) 34px,
-      rgba(138, 154, 63, 0.15) 34px,
-      rgba(138, 154, 63, 0.15) 40px
-    ),
-    linear-gradient(180deg, #ede4c0 0%, #f2edd9 100%);
-  --panel-surface: repeating-linear-gradient(
-      90deg,
-      rgba(255, 255, 255, 0.4) 0px,
-      rgba(255, 255, 255, 0.4) 4px,
-      rgba(201, 214, 138, 0.2) 4px,
-      rgba(201, 214, 138, 0.2) 22px,
-      rgba(138, 154, 63, 0.12) 22px,
-      rgba(138, 154, 63, 0.12) 26px
-    ),
-    linear-gradient(var(--bg-panel), var(--bg-panel));
-  --btn-primary-surface: linear-gradient(90deg, #667429 0%, #c9d68a 18%, #ffffff 30%, #c9d68a 42%, #8a9a3f 60%, #667429 100%);
-  --modal-surface: repeating-linear-gradient(180deg, rgba(122, 116, 41, 0.1) 0px, rgba(122, 116, 41, 0.1) 3px, rgba(122, 116, 41, 0) 3px, rgba(122, 116, 41, 0) 160px),
-    repeating-linear-gradient(
-      90deg,
-      rgba(255, 255, 255, 0.35) 0px,
-      rgba(255, 255, 255, 0.35) 6px,
-      rgba(201, 214, 138, 0.22) 6px,
-      rgba(201, 214, 138, 0.22) 32px,
-      rgba(138, 154, 63, 0.14) 32px,
-      rgba(138, 154, 63, 0.14) 38px
-    ),
-    linear-gradient(180deg, #fdfbf2 0%, #f2edd9 100%);
-}
-
 :root[data-theme="blackout-contrast"] {
   --bg: #000000;
   --bg-panel: #0a0a0a;
@@ -615,8 +556,17 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+/* min-height, not height: a themed body background (see --body-surface)
+   is painted once across body's own box at its natural size - if body
+   were capped at exactly one viewport tall while real page content
+   (the common case - rosters, game history, brackets) runs taller, the
+   background would need to repeat down the extra length, and a
+   multi-stop/diagonal gradient's top and bottom edges rarely match,
+   producing a visible seam at the repeat boundary. Letting body grow
+   with its content instead means there's only ever one full-length
+   paint, so nothing needs to tile. */
 html, body {
-  height: 100%;
+  min-height: 100%;
 }
 
 body {
