@@ -1,11 +1,19 @@
 /* ---------- Themes ----------
-   Sixteen self-contained palettes (colors + font family only — no
-   network fonts, everything falls back through system font stacks so
-   the app stays fully offline-capable). Bare :root is "Crimson Felt",
-   the original look and the default; the rest override via
+   Eighteen self-contained palettes (colors + font family — no network
+   fonts, everything falls back through system font stacks so the app
+   stays fully offline-capable). Bare :root is "Crimson Felt", the
+   original look and the default; the rest override via
    :root[data-theme="..."], which JS sets on <html> and persists to
    localStorage. Each sets its own color-scheme (dark or light) so native
-   form controls/scrollbars render correctly either way. */
+   form controls/scrollbars render correctly either way.
+
+   Three "material" themes (stainless-steel, copper-shine, opal-shimmer)
+   additionally override --body-surface/--panel-surface/
+   --btn-primary-surface/--modal-surface (defined once at bare :root,
+   defaulting to exactly what body/.panel/.btn-primary/.confirm-modal-
+   card already painted) with real multi-stop gradients, for an actual
+   brushed-metal or iridescent reflection instead of just metallic-
+   sounding flat colors. */
 
 :root {
   --bg: #1a0a0a;
@@ -36,6 +44,17 @@
      accent color instead, so it never reads as flat neutral gray the
      way a black-alpha wash over a white panel would. */
   --graph-bg: rgba(0, 0, 0, 0.25);
+  /* Four surfaces a "material" theme (stainless-steel, copper-shine,
+     opal-shimmer) overrides with a real multi-stop gradient instead of
+     a flat color, for an actual brushed-metal/iridescent reflection
+     rather than just picking metallic-sounding colors. Every other
+     theme leaves these at their default, which exactly matches what
+     body/.panel/.btn-primary/.confirm-modal-card already painted before
+     this existed - zero visual change for them. */
+  --body-surface: radial-gradient(ellipse at top, var(--bg-glow) 0%, var(--bg) 60%);
+  --panel-surface: var(--bg-panel);
+  --btn-primary-surface: var(--accent);
+  --modal-surface: linear-gradient(180deg, var(--felt-light) 0%, var(--felt) 60%, var(--bg-glow) 100%);
   color-scheme: dark;
 }
 
@@ -291,26 +310,144 @@
 }
 
 :root[data-theme="stainless-steel"] {
-  --bg: #e8eaec;
-  --bg-panel: #f4f5f6;
-  --bg-card: #ffffff;
-  --felt: #c7ccd1;
-  --felt-light: #dde1e4;
+  --bg: #c7ced3;
+  --bg-panel: #e6e9eb;
+  --bg-card: #f4f6f7;
+  --felt: #9aa4ac;
+  --felt-light: #c7ced3;
   --accent: #3b6e8f;
-  --accent-dark: #2a5066;
+  --accent-dark: #24455a;
   --danger: #b83232;
   --danger-dark: #8c2525;
   --info: #5a7d99;
   --info-dark: #3f5a70;
-  --text: #20262b;
-  --text-dim: #5c6870;
-  --border: #b7bec4;
-  --bg-glow: #dfe3e6;
+  --text: #1c2226;
+  --text-dim: #4c5860;
+  --border: #8b969e;
+  --bg-glow: #eef1f2;
   --on-accent: #f4f8fa;
-  --on-felt-light: #20262b;
+  --on-felt-light: #1c2226;
   --graph-bg: rgba(59, 110, 143, 0.08);
   --font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   color-scheme: light;
+  /* Diagonal brushed-steel streaks - alternating light/dark bands like
+     light raking across a photographed sheet of stainless, rather than
+     a flat "metallic-sounding" gray. */
+  --body-surface: linear-gradient(
+    115deg,
+    #aab3ba 0%,
+    #e4e8eb 12%,
+    #ffffff 22%,
+    #c2cad0 32%,
+    #8f9aa2 44%,
+    #d8dde1 56%,
+    #ffffff 68%,
+    #b2bac0 80%,
+    #e8ecef 92%,
+    #ced5da 100%
+  );
+  --panel-surface: linear-gradient(135deg, #f4f6f7 0%, #ffffff 16%, #c9d0d5 36%, #eef1f3 56%, #ffffff 74%, #b7bfc5 100%);
+  --btn-primary-surface: linear-gradient(150deg, #1c4258 0%, #3b6e8f 25%, #a9d3ea 50%, #3b6e8f 75%, #1c4258 100%);
+  --modal-surface: linear-gradient(160deg, #f4f6f7 0%, #ffffff 16%, #c2cad0 40%, #eef1f3 60%, #ffffff 80%, #aab3ba 100%);
+}
+
+:root[data-theme="copper-shine"] {
+  --bg: #2a1408;
+  --bg-panel: #3a1d0e;
+  --bg-card: #452412;
+  --felt: #8a4a1e;
+  --felt-light: #c1712c;
+  --accent: #e8863a;
+  --accent-dark: #b3641f;
+  --danger: #d9432e;
+  --danger-dark: #a3311f;
+  --info: #4fa8a0;
+  --info-dark: #367a74;
+  --text: #fbe8d8;
+  --text-dim: #d4a179;
+  --border: #6b3813;
+  --bg-glow: #52280f;
+  --on-accent: #2a1206;
+  --on-felt-light: #2a1206;
+  --graph-bg: rgba(232, 134, 58, 0.1);
+  --font-family: Rockwell, Georgia, "Iowan Old Style", serif;
+  color-scheme: dark;
+  /* Warm metal streaks - bright copper highlight bands over a darker
+     patina base, the same raking-light idea as Stainless Steel but
+     shifted to copper's orange-brown hue. */
+  --body-surface: linear-gradient(
+    120deg,
+    #3d1f0d 0%,
+    #8a4a1e 14%,
+    #e8a35c 26%,
+    #b3641f 40%,
+    #5c2c10 52%,
+    #c1712c 64%,
+    #e8a35c 76%,
+    #4a2410 90%,
+    #2a1408 100%
+  );
+  --panel-surface: linear-gradient(140deg, #452412 0%, #8a4a1e 20%, #d98a3f 38%, #6b3813 58%, #c1712c 76%, #3a1d0e 100%);
+  --btn-primary-surface: linear-gradient(150deg, #7a3e14 0%, #b3641f 25%, #f0b06a 50%, #b3641f 75%, #7a3e14 100%);
+  --modal-surface: linear-gradient(160deg, #452412 0%, #8a4a1e 22%, #d98a3f 45%, #6b3813 65%, #c1712c 85%, #3a1d0e 100%);
+}
+
+:root[data-theme="opal-shimmer"] {
+  --bg: #f3f0f5;
+  --bg-panel: #faf8fb;
+  --bg-card: #ffffff;
+  --felt: #e0d8ea;
+  --felt-light: #f0e8f5;
+  --accent: #8a4fb8;
+  --accent-dark: #6b3a94;
+  --danger: #d9587a;
+  --danger-dark: #a83f5c;
+  --info: #3f8fae;
+  --info-dark: #2c6a84;
+  --text: #2e2438;
+  --text-dim: #6d6080;
+  --border: #ddd0e6;
+  --bg-glow: #efe6f5;
+  --on-accent: #fdfaff;
+  --on-felt-light: #2e2438;
+  --graph-bg: rgba(138, 79, 184, 0.08);
+  --font-family: "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  color-scheme: light;
+  /* A soft pearly base with a diagonal sweep of pastel hues - the closest
+     a flat CSS gradient gets to opal's shifting rainbow play-of-color.
+     The button additionally animates its own gradient position (see the
+     opal-shimmer-shift keyframes below) for real movement/shimmer. */
+  --body-surface: linear-gradient(
+    120deg,
+    #e8f5f0 0%,
+    #f5e8f0 14%,
+    #e8ecf7 28%,
+    #fdf3e0 42%,
+    #f0e0f5 56%,
+    #e0f0ef 70%,
+    #f7e8ec 84%,
+    #eef0f9 100%
+  );
+  --panel-surface: linear-gradient(135deg, #ffffff 0%, #eef7f2 16%, #f7ecf5 32%, #ecf0fb 48%, #fdf6e8 64%, #f3e8f7 80%, #ffffff 100%);
+  --btn-primary-surface: linear-gradient(150deg, #6b3d8c 0%, #a874c7 20%, #5fa39d 40%, #b487c2 60%, #5f7cc2 80%, #6b3d8c 100%);
+  --modal-surface: linear-gradient(160deg, #ffffff 0%, #f0f7f2 16%, #f7ecf5 34%, #ecf0fb 52%, #fdf6e8 70%, #f3e8f7 88%, #ffffff 100%);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-theme="opal-shimmer"] .btn-primary {
+    background-size: 250% 250%;
+    animation: opal-shimmer-shift 9s ease-in-out infinite;
+  }
+}
+
+@keyframes opal-shimmer-shift {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
 }
 
 :root[data-theme="blackout-contrast"] {
@@ -367,7 +504,7 @@ html, body {
 
 body {
   margin: 0;
-  background: radial-gradient(ellipse at top, var(--bg-glow) 0%, var(--bg) 60%);
+  background: var(--body-surface);
   color: var(--text);
   font-family: var(--font-family);
   -webkit-font-smoothing: antialiased;
@@ -641,7 +778,7 @@ button:active {
 }
 
 .btn-primary {
-  background: var(--accent);
+  background: var(--btn-primary-surface);
   color: var(--on-accent);
   font-weight: 700;
 }
@@ -694,7 +831,7 @@ button:disabled {
 /* ---------- Panels ---------- */
 
 .panel {
-  background: var(--bg-panel);
+  background: var(--panel-surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
@@ -2590,7 +2727,7 @@ input[type="number"] {
 }
 
 .confirm-modal-card {
-  background: linear-gradient(180deg, var(--felt-light) 0%, var(--felt) 60%, var(--bg-glow) 100%);
+  background: var(--modal-surface);
   border: 2px solid var(--accent);
   border-radius: var(--radius);
   padding: 28px 24px;
