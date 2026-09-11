@@ -774,6 +774,17 @@
     tone(1200, ctx.currentTime, 0.05, "sine", 0.12);
   }
 
+  // A soft, low "you're now scoring for this player" cue for the keypad
+  // shortcut's player-switch (pressing 1-9 during a points/ball game) -
+  // deliberately mellow and quiet, a single low sine tone rather than
+  // the brighter triangle used for an actual point, so it reads as a
+  // gentle "got it" instead of competing with the real scoring sounds.
+  function playPlayerSwitchSound(voice) {
+    var mult = voicePitch(voice);
+    var ctx = getAudioCtx();
+    tone(196 * mult, ctx.currentTime, 0.18, "sine", 0.14);
+  }
+
   function playPositiveSound(voice) {
     var mult = voicePitch(voice);
     var ctx = getAudioCtx();
@@ -1917,6 +1928,13 @@
       e.preventDefault();
       keypadSelectedPlayerId = targetId;
       renderScoreboard();
+      // Only during an actual points/ball game - Quick Counter is a
+      // plain running tally with no target/win to track, so there's no
+      // "who am I scoring for right now" state this cue needs to confirm.
+      if (!quickCounterMode) {
+        var switchedTo = getPlayer(targetId);
+        if (switchedTo) playPlayerSwitchSound(switchedTo.voice);
+      }
       // Focus Mode's across-the-room card sizes mean a big roster (team
       // play especially) can run well past one screen - the shortcut
       // just picked a specific player's card by number, not necessarily
