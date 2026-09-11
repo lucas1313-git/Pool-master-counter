@@ -3116,6 +3116,35 @@
     return card;
   }
 
+  // The persistent club team (see buildClubTeamBadge) every one of these
+  // names shares, or null if there are fewer than two names, any of them
+  // has no club team set, or they don't all match - "2 players... set to
+  // play together" is the literal condition, not just "someone here has
+  // a club team".
+  function sharedClubTeamName(names) {
+    if (!names || names.length < 2) return null;
+    var first = getPlayerContact(names[0]).clubTeam;
+    if (!first) return null;
+    var key = normalizeNameKey(first);
+    var allMatch = names.every(function (n) {
+      return normalizeNameKey(getPlayerContact(n).clubTeam || "") === key;
+    });
+    return allMatch ? first : null;
+  }
+
+  // A big, across-the-room-readable banner for when the club team name
+  // itself is the headline, not just a small tag next to it - only
+  // appears once two teammates sharing that name are actually playing
+  // together (see sharedClubTeamName), not just whenever one exists.
+  function buildSharedTeamBanner(names) {
+    var clubName = sharedClubTeamName(names);
+    if (!clubName) return null;
+    var el = document.createElement("div");
+    el.className = "shared-team-banner";
+    el.textContent = "🏷️ " + clubName;
+    return el;
+  }
+
   // opponentEmpty: the other team ("A"/"B") currently has nobody on it -
   // a team can't play (or score) alone, so this shows a warning instead of
   // the usual win-progress stat and disables every member's +/- (the real
@@ -3123,6 +3152,13 @@
   function buildTeamPanel(teamId, members, opponentEmpty) {
     var panel = document.createElement("div");
     panel.className = "team-panel";
+
+    var sharedBanner = buildSharedTeamBanner(
+      members.map(function (p) {
+        return p.name;
+      })
+    );
+    if (sharedBanner) panel.appendChild(sharedBanner);
 
     var name = document.createElement("div");
     name.className = "team-name";
@@ -15795,6 +15831,13 @@
 
     var nameEl = document.createElement("div");
     nameEl.className = "player-name";
+    // A grouped 2+-member entrant is playing under whatever team name
+    // got them paired in the first place (see getTournamentEntrants) -
+    // that name (not necessarily any one member's persistent club team,
+    // since it's freely editable per tournament) is the headline here,
+    // so it gets the same large treatment as buildTeamPanel's banner.
+    var entrantMembers = (t.entrantMembers && t.entrantMembers[name]) || [name];
+    if (entrantMembers.length > 1) nameEl.classList.add("shared-team-name");
     nameEl.textContent = name;
     appendEntrantIdentity(nameEl, name, t);
     panel.appendChild(nameEl);

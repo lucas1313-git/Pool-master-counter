@@ -1908,6 +1908,32 @@ input[type="number"] {
   text-align: center;
 }
 
+/* The club team's own name (see buildSharedTeamBanner) is the headline
+   once two teammates sharing it are actually playing together - sized
+   to read from well across a room, the same "big enough to matter"
+   scale as .stat-value, not just a slightly-bolder label. */
+.shared-team-banner {
+  font-size: clamp(1.8rem, 7vw, 3.2rem);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--accent);
+  text-align: center;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  line-height: 1.1;
+}
+
+/* Same idea, applied to a tournament match side's own name (see
+   buildTournamentSidePanel) instead of a separate banner element - it's
+   already the one thing shown there, so it just needs to be bigger
+   rather than duplicated. */
+.player-name.shared-team-name {
+  font-size: clamp(1.6rem, 6vw, 2.6rem);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
 .team-needs-opponent-warning {
   width: 100%;
   background: rgba(0, 0, 0, 0.3);
