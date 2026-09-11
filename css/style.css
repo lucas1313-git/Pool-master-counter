@@ -3621,6 +3621,13 @@ input[type="number"] {
   flex: 1;
 }
 
+.leaderboard-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
 .leaderboard-name-btn {
   background: none;
   border: none;
@@ -3637,6 +3644,27 @@ input[type="number"] {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+/* Opens a plain-language explanation (see explainLeaderboardRanking) of
+   why this player ranks where they do relative to whoever's directly
+   above them - kept small and secondary so it doesn't compete with the
+   name for attention. */
+.leaderboard-explain-btn {
+  background: var(--bg-glow);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  border-radius: 50%;
+  padding: 0;
+  font-size: 0.72rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .leaderboard-name-btn:hover,

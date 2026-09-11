@@ -12561,17 +12561,58 @@
   var LEADERBOARD_MIN_GAMES = 10;
   var LEADERBOARD_LAST_SHOWN_KEY = "poolMasterCounter.leaderboardLastShown.v1";
   var LEADERBOARD_AUTO_SHOW_MS = 12 * 60 * 60 * 1000;
+  // Points per tournament win - deliberately large relative to the other
+  // terms (a rating swing of a full 100 points is only +5) so tournament
+  // success is a genuinely heavy factor, not a tiebreaker.
+  var LEADERBOARD_TOURNAMENT_WIN_WEIGHT = 6;
+  // Points per average ball left on the table across a player's wins -
+  // rewards winning by a wide margin (opponent barely got started), not
+  // just winning. Games where this was never recorded don't count for
+  // or against anyone (see averageBallsLeftOnWins).
+  var LEADERBOARD_DOMINANCE_WEIGHT = 1.5;
+
+  // Only wins where the balls-left-on-table stepper (see
+  // persistBallsLeftLive) was actually used contribute - most win
+  // objects won't have it set, and treating an unset value as 0 would
+  // wrongly punish players (or games/eras) that never touched that
+  // control instead of just excluding them from this factor.
+  function averageBallsLeftOnWins(games) {
+    var vals = [];
+    games.forEach(function (g) {
+      if (g.result === "won" && typeof g.ballsLeftOnTable === "number") {
+        vals.push(g.ballsLeftOnTable);
+      }
+    });
+    if (!vals.length) return 0;
+    var sum = vals.reduce(function (a, b) {
+      return a + b;
+    }, 0);
+    return sum / vals.length;
+  }
 
   // A regularized win rate (so a 2-0 newcomer can't outrank a proven
   // 40-10 veteran - the +LEADERBOARD_MIN_GAMES in the denominator acts
-  // like assuming everyone starts with that many "neutral" games) plus a
-  // rating component and a log-scaled activity bonus that rewards
-  // playing more without letting raw volume alone swamp the win rate.
-  function computeLeaderboardMvpScore(entry) {
+  // like assuming everyone starts with that many "neutral" games), a
+  // heavily-weighted tournament-win bonus, a rating component, a bonus
+  // for winning by wide margins, and a log-scaled activity bonus that
+  // rewards playing more without letting raw volume alone swamp the win
+  // rate. Returns every term separately (not just the total) so
+  // explainLeaderboardRanking can point at exactly which ones decided a
+  // given pair's order.
+  function computeLeaderboardScoreBreakdown(entry) {
     var winRateTerm = (entry.wins / (entry.gamesPlayed + LEADERBOARD_MIN_GAMES)) * 100;
+    var tournamentTerm = entry.tournamentWins * LEADERBOARD_TOURNAMENT_WIN_WEIGHT;
     var ratingTerm = entry.rating / 20;
+    var dominanceTerm = entry.avgBallsLeftOnWins * LEADERBOARD_DOMINANCE_WEIGHT;
     var activityTerm = Math.log2(entry.gamesPlayed) * 2;
-    return winRateTerm + ratingTerm + activityTerm;
+    return {
+      winRateTerm: winRateTerm,
+      tournamentTerm: tournamentTerm,
+      ratingTerm: ratingTerm,
+      dominanceTerm: dominanceTerm,
+      activityTerm: activityTerm,
+      total: winRateTerm + tournamentTerm + ratingTerm + dominanceTerm + activityTerm
+    };
   }
 
   function computeLeaderboardEntries() {
@@ -12585,14 +12626,17 @@
           gamesPlayed: gamesPlayed,
           wins: wins,
           winPct: gamesPlayed ? wins / gamesPlayed : 0,
-          rating: getPlayerRating(name)
+          rating: getPlayerRating(name),
+          tournamentWins: stats.tournamentWins,
+          avgBallsLeftOnWins: averageBallsLeftOnWins(stats.games.concat(stats.tournamentGames))
         };
       })
       .filter(function (e) {
         return e.gamesPlayed >= LEADERBOARD_MIN_GAMES;
       });
     entries.forEach(function (e) {
-      e.mvpScore = computeLeaderboardMvpScore(e);
+      e.scoreBreakdown = computeLeaderboardScoreBreakdown(e);
+      e.mvpScore = e.scoreBreakdown.total;
     });
     entries.sort(function (a, b) {
       return b.mvpScore - a.mvpScore;
@@ -12600,9 +12644,111 @@
     return entries;
   }
 
+  // Which of {a, b} the given score-breakdown term favors, and by how
+  // much - the raw building block explainLeaderboardRanking sorts on to
+  // decide which reasons are worth mentioning at all.
+  function leaderboardReasonCategories(a, b) {
+    return [
+      {
+        delta: a.scoreBreakdown.winRateTerm - b.scoreBreakdown.winRateTerm,
+        describe: function (leader, other) {
+          return T("leaderboard.reasonWinRate", {
+            leader: leader.name,
+            leaderVal: Math.round(leader.winPct * 100) + "%",
+            otherVal: Math.round(other.winPct * 100) + "%"
+          });
+        }
+      },
+      {
+        delta: a.scoreBreakdown.tournamentTerm - b.scoreBreakdown.tournamentTerm,
+        describe: function (leader, other) {
+          return T("leaderboard.reasonTournament", {
+            leader: leader.name,
+            leaderVal: leader.tournamentWins,
+            otherVal: other.tournamentWins
+          });
+        }
+      },
+      {
+        delta: a.scoreBreakdown.ratingTerm - b.scoreBreakdown.ratingTerm,
+        describe: function (leader, other) {
+          return T("leaderboard.reasonRating", {
+            leader: leader.name,
+            leaderVal: leader.rating,
+            otherVal: other.rating
+          });
+        }
+      },
+      {
+        delta: a.scoreBreakdown.dominanceTerm - b.scoreBreakdown.dominanceTerm,
+        describe: function (leader, other) {
+          return T("leaderboard.reasonDominance", {
+            leader: leader.name,
+            leaderVal: leader.avgBallsLeftOnWins.toFixed(1),
+            otherVal: other.avgBallsLeftOnWins.toFixed(1)
+          });
+        }
+      },
+      {
+        delta: a.scoreBreakdown.activityTerm - b.scoreBreakdown.activityTerm,
+        describe: function (leader, other) {
+          return T("leaderboard.reasonActivity", {
+            leader: leader.name,
+            leaderVal: leader.gamesPlayed,
+            otherVal: other.gamesPlayed
+          });
+        }
+      }
+    ];
+  }
+
+  // Plain-language explanation of why `a` (the higher-ranked of the
+  // pair) outranks `b` overall, e.g. explaining rank 1 vs rank 2. Leads
+  // with whichever factors actually decided it (sorted by how many
+  // points each one contributed), and separately calls out any factor
+  // that actually favors `b` - so a player who's ahead on rating but
+  // still ranked lower overall isn't a mystery.
+  function explainLeaderboardRanking(a, b) {
+    var categories = leaderboardReasonCategories(a, b);
+    var supporting = [];
+    var against = [];
+    categories.forEach(function (cat) {
+      if (Math.abs(cat.delta) < 0.05) return;
+      var favorsA = cat.delta > 0;
+      var leader = favorsA ? a : b;
+      var other = favorsA ? b : a;
+      var line = cat.describe(leader, other);
+      (favorsA ? supporting : against).push({ weight: Math.abs(cat.delta), line: line });
+    });
+    supporting.sort(function (x, y) {
+      return y.weight - x.weight;
+    });
+    against.sort(function (x, y) {
+      return y.weight - x.weight;
+    });
+
+    var lines = [T("leaderboard.explainIntro", { a: a.name, b: b.name })];
+    if (supporting.length === 0) {
+      lines.push(T("leaderboard.explainClose", { a: a.name, b: b.name }));
+    } else {
+      lines.push("");
+      supporting.slice(0, 3).forEach(function (s) {
+        lines.push("• " + s.line);
+      });
+    }
+    if (against.length > 0) {
+      lines.push("");
+      lines.push(T("leaderboard.explainDespite", { b: b.name }));
+      against.slice(0, 2).forEach(function (s) {
+        lines.push("• " + s.line);
+      });
+    }
+    return lines.join("\n");
+  }
+
   var LEADERBOARD_RANK_MEDALS = ["🥇", "🥈", "🥉"];
 
-  function leaderboardRow(entry, rank) {
+  function leaderboardRow(entry, rank, entries) {
     var li = document.createElement("li");
     li.className = "leaderboard-row leaderboard-rank-" + rank;
     if (rank <= 2) li.classList.add("leaderboard-row-top");
@@ -12614,6 +12760,9 @@
 
     var body = document.createElement("div");
     body.className = "leaderboard-row-body";
+
+    var nameRow = document.createElement("div");
+    nameRow.className = "leaderboard-name-row";
 
     var nameBtn = document.createElement("button");
     nameBtn.type = "button";
@@ -12628,16 +12777,42 @@
     nameBtn.addEventListener("click", function () {
       openPlayerStatsPage(entry.name);
     });
-    body.appendChild(nameBtn);
+    nameRow.appendChild(nameBtn);
+
+    // Rank 1 explains itself against rank 2 (the concrete "why did #1
+    // beat #2" case); everyone else explains themselves against whoever
+    // is directly above them in the list.
+    var comparisonOther = rank === 1 ? entries[1] : entries[rank - 2];
+    if (comparisonOther) {
+      var explainBtn = document.createElement("button");
+      explainBtn.type = "button";
+      explainBtn.className = "leaderboard-explain-btn";
+      explainBtn.textContent = "❓";
+      explainBtn.setAttribute("aria-label", T("leaderboard.explainAria", { name: entry.name }));
+      explainBtn.addEventListener("click", function () {
+        var higher = rank === 1 ? entry : comparisonOther;
+        var lower = rank === 1 ? comparisonOther : entry;
+        alertModal(explainLeaderboardRanking(higher, lower));
+      });
+      nameRow.appendChild(explainBtn);
+    }
+    body.appendChild(nameRow);
 
     var stats = document.createElement("div");
     stats.className = "leaderboard-row-stats";
-    stats.textContent = T("leaderboard.rowStats", {
-      wins: entry.wins,
-      games: entry.gamesPlayed,
-      pct: Math.round(entry.winPct * 100),
-      rating: entry.rating
-    });
+    var statParts = [
+      T("leaderboard.statWins", { wins: entry.wins }),
+      T("leaderboard.statGames", { games: entry.gamesPlayed }),
+      T("leaderboard.statWinPct", { pct: Math.round(entry.winPct * 100) })
+    ];
+    if (entry.tournamentWins > 0) {
+      statParts.push(T("leaderboard.statTournamentWins", { wins: entry.tournamentWins }));
+    }
+    if (entry.avgBallsLeftOnWins > 0) {
+      statParts.push(T("leaderboard.statDominance", { balls: entry.avgBallsLeftOnWins.toFixed(1) }));
+    }
+    statParts.push(T("leaderboard.statRating", { rating: entry.rating }));
+    stats.textContent = statParts.join(" • ");
     body.appendChild(stats);
 
     li.appendChild(body);
@@ -12654,10 +12829,14 @@
       leaderboardList.classList.remove("hidden");
       leaderboardEmptyHint.classList.add("hidden");
       entries.forEach(function (entry, i) {
-        leaderboardList.appendChild(leaderboardRow(entry, i + 1));
+        leaderboardList.appendChild(leaderboardRow(entry, i + 1, entries));
       });
     }
-    leaderboardFormulaNote.textContent = T("leaderboard.formulaNote", { minGames: LEADERBOARD_MIN_GAMES });
+    leaderboardFormulaNote.textContent = T("leaderboard.formulaNote", {
+      minGames: LEADERBOARD_MIN_GAMES,
+      tournamentWeight: LEADERBOARD_TOURNAMENT_WIN_WEIGHT,
+      dominanceWeight: LEADERBOARD_DOMINANCE_WEIGHT
+    });
   }
 
   function openLeaderboardPage(skipHistory) {
