@@ -788,7 +788,7 @@
     var now = ctx.currentTime;
     var pips = Math.max(1, count || 1);
     for (var i = 0; i < pips; i++) {
-      tone(165 * mult, now + i * 0.16, 0.12, "sine", 0.32);
+      tone(165 * mult, now + i * 0.3, 0.12, "sine", 0.32);
     }
   }
 
