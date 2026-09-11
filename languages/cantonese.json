@@ -612,6 +612,7 @@
   "tournament.gameSectionHeading": "對局類型",
   "tournament.grandFinal": "總決賽",
   "tournament.lbTreeShowEarlier": "➕ 顯示之前 {{count}} 圈",
+  "tournament.lbTreeShowMoreBranches": "➕ 顯示多{{count}}場賽事",
   "tournament.losersBracket": "敗部",
   "tournament.matchWinChampionHeadline": "🏆🎉 {{winner}} 贏咗成個錦標賽！",
   "tournament.matchWinHeadline": "🏆 {{winner}} 贏咗呢場波！",

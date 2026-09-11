@@ -612,6 +612,7 @@
   "tournament.gameSectionHeading": "Type de partie",
   "tournament.grandFinal": "Grande finale",
   "tournament.lbTreeShowEarlier": "➕ Afficher {{count}} ronde(s) précédente(s)",
+  "tournament.lbTreeShowMoreBranches": "➕ Afficher {{count}} match(s) de plus",
   "tournament.losersBracket": "Tableau des perdants",
   "tournament.matchWinChampionHeadline": "🏆🎉 {{winner}} remporte le tournoi !",
   "tournament.matchWinHeadline": "🏆 {{winner}} remporte le match !",
