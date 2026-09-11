@@ -1442,6 +1442,13 @@
 
   var btnOpenGlobalStats = document.getElementById("btn-open-global-stats");
 
+  var btnOpenLeaderboard = document.getElementById("btn-open-leaderboard");
+  var leaderboardPageView = document.getElementById("view-leaderboard-page");
+  var btnLeaderboardBack = document.getElementById("btn-leaderboard-back");
+  var leaderboardList = document.getElementById("leaderboard-list");
+  var leaderboardEmptyHint = document.getElementById("leaderboard-empty-hint");
+  var leaderboardFormulaNote = document.getElementById("leaderboard-formula-note");
+
   var btnOpenContactSheet = document.getElementById("btn-open-contact-sheet");
   var contactSheetPageView = document.getElementById("view-contact-sheet-page");
   var btnContactSheetBack = document.getElementById("btn-contact-sheet-back");
@@ -10845,12 +10852,14 @@
       else if (!allPlayersPageView.classList.contains("hidden")) closeAllPlayersPage(true);
       else if (!tournamentPageView.classList.contains("hidden")) closeTournamentPage(true);
       else if (!contactSheetPageView.classList.contains("hidden")) closeContactSheetPage(true);
+      else if (!leaderboardPageView.classList.contains("hidden")) closeLeaderboardPage(true);
       return;
     }
     if (state.screen === "all-players") openAllPlayersPage(true);
     else if (state.screen === "tournament") openTournamentPage(true);
     else if (state.screen === "player") openPlayerStatsPage(state.name, true);
     else if (state.screen === "contact-sheet") openContactSheetPage(true);
+    else if (state.screen === "leaderboard") openLeaderboardPage(true);
   });
 
   history.replaceState({ screen: "main" }, "", location.pathname + location.search);
@@ -10913,6 +10922,7 @@
     allPlayersPageView.classList.add("hidden");
     tournamentPageView.classList.add("hidden");
     contactSheetPageView.classList.add("hidden");
+    leaderboardPageView.classList.add("hidden");
     playerPageView.classList.remove("hidden");
     window.scrollTo(0, 0);
 
@@ -12339,6 +12349,7 @@
     tournamentPageView.classList.add("hidden");
     playerPageView.classList.add("hidden");
     contactSheetPageView.classList.add("hidden");
+    leaderboardPageView.classList.add("hidden");
     allPlayersPageView.classList.remove("hidden");
     window.scrollTo(0, 0);
   }
@@ -12532,6 +12543,7 @@
     allPlayersPageView.classList.add("hidden");
     playerPageView.classList.add("hidden");
     tournamentPageView.classList.add("hidden");
+    leaderboardPageView.classList.add("hidden");
     contactSheetPageView.classList.remove("hidden");
     window.scrollTo(0, 0);
   }
@@ -12543,6 +12555,141 @@
     }
     contactSheetPageView.classList.add("hidden");
     appRoot.classList.remove("hidden");
+  }
+
+  var LEADERBOARD_MIN_GAMES = 10;
+  var LEADERBOARD_LAST_SHOWN_KEY = "poolMasterCounter.leaderboardLastShown.v1";
+  var LEADERBOARD_AUTO_SHOW_MS = 12 * 60 * 60 * 1000;
+
+  // A regularized win rate (so a 2-0 newcomer can't outrank a proven
+  // 40-10 veteran - the +LEADERBOARD_MIN_GAMES in the denominator acts
+  // like assuming everyone starts with that many "neutral" games) plus a
+  // rating component and a log-scaled activity bonus that rewards
+  // playing more without letting raw volume alone swamp the win rate.
+  function computeLeaderboardMvpScore(entry) {
+    var winRateTerm = (entry.wins / (entry.gamesPlayed + LEADERBOARD_MIN_GAMES)) * 100;
+    var ratingTerm = entry.rating / 20;
+    var activityTerm = Math.log2(entry.gamesPlayed) * 2;
+    return winRateTerm + ratingTerm + activityTerm;
+  }
+
+  function computeLeaderboardEntries() {
+    var entries = getAllKnownPlayerNames()
+      .map(function (name) {
+        var stats = computePlayerCareerStats(name, "all");
+        var gamesPlayed = stats.played + stats.tournamentPlayed;
+        var wins = stats.wins + stats.tournamentWins;
+        return {
+          name: name,
+          gamesPlayed: gamesPlayed,
+          wins: wins,
+          winPct: gamesPlayed ? wins / gamesPlayed : 0,
+          rating: getPlayerRating(name)
+        };
+      })
+      .filter(function (e) {
+        return e.gamesPlayed >= LEADERBOARD_MIN_GAMES;
+      });
+    entries.forEach(function (e) {
+      e.mvpScore = computeLeaderboardMvpScore(e);
+    });
+    entries.sort(function (a, b) {
+      return b.mvpScore - a.mvpScore;
+    });
+    return entries;
+  }
+
+  var LEADERBOARD_RANK_MEDALS = ["🥇", "🥈", "🥉"];
+
+  function leaderboardRow(entry, rank) {
+    var li = document.createElement("li");
+    li.className = "leaderboard-row leaderboard-rank-" + rank;
+    if (rank <= 2) li.classList.add("leaderboard-row-top");
+
+    var rankEl = document.createElement("div");
+    rankEl.className = "leaderboard-rank";
+    rankEl.textContent = LEADERBOARD_RANK_MEDALS[rank - 1] || "#" + rank;
+    li.appendChild(rankEl);
+
+    var body = document.createElement("div");
+    body.className = "leaderboard-row-body";
+
+    var nameBtn = document.createElement("button");
+    nameBtn.type = "button";
+    nameBtn.className = "leaderboard-name-btn";
+    nameBtn.textContent = entry.name;
+    if (rank === 1) {
+      var mvpTag = document.createElement("span");
+      mvpTag.className = "leaderboard-mvp-tag";
+      mvpTag.textContent = T("leaderboard.mvp");
+      nameBtn.appendChild(mvpTag);
+    }
+    nameBtn.addEventListener("click", function () {
+      openPlayerStatsPage(entry.name);
+    });
+    body.appendChild(nameBtn);
+
+    var stats = document.createElement("div");
+    stats.className = "leaderboard-row-stats";
+    stats.textContent = T("leaderboard.rowStats", {
+      wins: entry.wins,
+      games: entry.gamesPlayed,
+      pct: Math.round(entry.winPct * 100),
+      rating: entry.rating
+    });
+    body.appendChild(stats);
+
+    li.appendChild(body);
+    return li;
+  }
+
+  function renderLeaderboardPage() {
+    var entries = computeLeaderboardEntries();
+    leaderboardList.innerHTML = "";
+    if (entries.length === 0) {
+      leaderboardList.classList.add("hidden");
+      leaderboardEmptyHint.classList.remove("hidden");
+    } else {
+      leaderboardList.classList.remove("hidden");
+      leaderboardEmptyHint.classList.add("hidden");
+      entries.forEach(function (entry, i) {
+        leaderboardList.appendChild(leaderboardRow(entry, i + 1));
+      });
+    }
+    leaderboardFormulaNote.textContent = T("leaderboard.formulaNote", { minGames: LEADERBOARD_MIN_GAMES });
+  }
+
+  function openLeaderboardPage(skipHistory) {
+    if (!skipHistory) pushScreenHistory("leaderboard");
+    renderLeaderboardPage();
+    appRoot.classList.add("hidden");
+    allPlayersPageView.classList.add("hidden");
+    playerPageView.classList.add("hidden");
+    tournamentPageView.classList.add("hidden");
+    contactSheetPageView.classList.add("hidden");
+    leaderboardPageView.classList.remove("hidden");
+    window.scrollTo(0, 0);
+    localStorage.setItem(LEADERBOARD_LAST_SHOWN_KEY, String(Date.now()));
+  }
+
+  function closeLeaderboardPage(skipHistory) {
+    if (!skipHistory) {
+      navigateBack();
+      return;
+    }
+    leaderboardPageView.classList.add("hidden");
+    appRoot.classList.remove("hidden");
+  }
+
+  function maybeAutoShowLeaderboard() {
+    // Only interrupt the main screen - never pop the leaderboard over a
+    // page the player is already actively using (mid-tournament, editing
+    // contacts, etc.).
+    if (appRoot.classList.contains("hidden")) return;
+    var lastShown = parseInt(localStorage.getItem(LEADERBOARD_LAST_SHOWN_KEY) || "0", 10);
+    if (Date.now() - lastShown < LEADERBOARD_AUTO_SHOW_MS) return;
+    if (computeLeaderboardEntries().length === 0) return;
+    openLeaderboardPage();
   }
 
   // Builds a mailto:/sms: compose link for whichever selected contacts
@@ -15106,6 +15253,7 @@
     allPlayersPageView.classList.add("hidden");
     playerPageView.classList.add("hidden");
     contactSheetPageView.classList.add("hidden");
+    leaderboardPageView.classList.add("hidden");
     tournamentPageView.classList.remove("hidden");
     window.scrollTo(0, 0);
   }
@@ -15870,6 +16018,13 @@
   btnContactSheetBack.addEventListener("click", function () {
     closeContactSheetPage();
   });
+
+  btnOpenLeaderboard.addEventListener("click", function () {
+    openLeaderboardPage();
+  });
+  btnLeaderboardBack.addEventListener("click", function () {
+    closeLeaderboardPage();
+  });
   btnContactSheetSelectAll.addEventListener("click", function () {
     var names = contactSheetAllNames();
     var allSelected = names.length > 0 && names.every(function (n) {
@@ -16069,6 +16224,11 @@
 
   setInterval(updateGameDurationDisplay, 1000);
   setInterval(tickShotCounter, 1000);
+
+  maybeAutoShowLeaderboard();
+  // Also re-check periodically so a session left open continuously for
+  // 12+ hours still gets the pop-up, not just a fresh app launch.
+  setInterval(maybeAutoShowLeaderboard, 5 * 60 * 1000);
   }
 
   // ---------------------------------------------------------------------
