@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260911d">
+<link rel="stylesheet" href="css/style.css?v=20260911e">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -588,6 +588,39 @@
 <div id="fake-ad-modal-overlay" class="confirm-modal-overlay hidden">
   <div class="confirm-modal-card">
     <p class="confirm-modal-message" id="fake-ad-modal-message" data-i18n="paywall.adPlaying">📺 Ad playing…</p>
+  </div>
+</div>
+
+<div id="full-reset-step2-overlay" class="confirm-modal-overlay hidden">
+  <div class="confirm-modal-card">
+    <p class="confirm-modal-message" data-i18n="confirm.fullResetAreYouCertain">Are you absolutely certain? This cannot be undone (besides the backup file that just downloaded).</p>
+    <div class="confirm-modal-actions full-reset-step2-actions">
+      <button type="button" id="btn-full-reset-step2-yes" class="btn btn-danger" data-i18n="resets.fullResetYesWipeEverything">💀 Yes, Wipe Everything</button>
+      <button type="button" id="btn-full-reset-step2-by-dates" class="btn btn-ghost" data-i18n="resets.deleteByDatesButton">🗓️ Delete by Dates</button>
+      <button type="button" id="btn-full-reset-step2-cancel" class="btn btn-ghost" data-i18n="common.cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="delete-by-date-modal-overlay" class="confirm-modal-overlay hidden">
+  <div class="confirm-modal-card delete-by-date-card">
+    <h3 class="confirm-modal-title" data-i18n="resets.deleteByDatesHeading">🗓️ Delete by Dates</h3>
+    <p class="player-stats-note" data-i18n="resets.deleteByDatesExplain">Pick one or more days below — every game, tournament result, rating change, and note recorded on those days will be wiped everywhere, for every player. Days with no recorded data can't be picked.</p>
+
+    <div class="delete-by-date-nav">
+      <button type="button" id="btn-delete-by-date-prev-month" class="btn btn-ghost delete-by-date-nav-btn" aria-label="Previous month" data-i18n-aria-label="resets.deleteByDatesPrevMonth">‹</button>
+      <span id="delete-by-date-month-label" class="delete-by-date-month-label"></span>
+      <button type="button" id="btn-delete-by-date-next-month" class="btn btn-ghost delete-by-date-nav-btn" aria-label="Next month" data-i18n-aria-label="resets.deleteByDatesNextMonth">›</button>
+    </div>
+
+    <div id="delete-by-date-calendar-grid" class="delete-by-date-calendar"></div>
+
+    <p id="delete-by-date-selected-summary" class="delete-by-date-selected-summary"></p>
+
+    <div class="confirm-modal-actions">
+      <button type="button" id="btn-delete-by-date-confirm" class="btn btn-danger" disabled data-i18n="resets.deleteByDatesConfirmButton">🗑️ Delete Selected Days</button>
+      <button type="button" id="btn-delete-by-date-cancel" class="btn btn-ghost" data-i18n="common.cancel">Cancel</button>
+    </div>
   </div>
 </div>
 
@@ -1260,6 +1293,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260911d"></script>
+<script src="js/app.js?v=20260911e"></script>
 </body>
 </html>
