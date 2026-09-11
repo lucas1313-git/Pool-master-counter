@@ -2625,6 +2625,94 @@ input[type="number"] {
   width: 100%;
 }
 
+/* ---------- Delete by Dates ---------- */
+
+.delete-by-date-card {
+  max-width: 480px;
+}
+
+.delete-by-date-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 4px 0 10px;
+}
+
+.delete-by-date-nav-btn {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  font-size: 1.3rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.delete-by-date-month-label {
+  font-weight: 700;
+  color: var(--on-felt-light);
+  text-transform: capitalize;
+}
+
+.delete-by-date-calendar {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.delete-by-date-weekday {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--on-felt-light);
+  opacity: 0.7;
+  text-align: center;
+  padding: 4px 0;
+}
+
+.delete-by-date-day {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid transparent;
+  background: none;
+  color: var(--on-felt-light);
+  opacity: 0.3;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0;
+}
+
+.delete-by-date-day.is-blank {
+  visibility: hidden;
+}
+
+.delete-by-date-day.has-data {
+  opacity: 1;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  font-weight: 700;
+}
+
+.delete-by-date-day.is-today {
+  box-shadow: 0 0 0 2px var(--accent-dark) inset;
+}
+
+.delete-by-date-day.is-selected {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+.delete-by-date-selected-summary {
+  margin: 0 0 16px;
+  font-size: 0.85rem;
+  color: var(--on-felt-light);
+  opacity: 0.9;
+}
+
 /* ---------- Setup wizard ---------- */
 
 .wizard-overlay {

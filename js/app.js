@@ -1311,6 +1311,18 @@
   var btnResetAllPlayerStats = document.getElementById("btn-reset-all-player-stats");
   var btnResetRosterLists = document.getElementById("btn-reset-roster-lists");
   var btnFullReset = document.getElementById("btn-full-reset");
+  var fullResetStep2Overlay = document.getElementById("full-reset-step2-overlay");
+  var btnFullResetStep2Yes = document.getElementById("btn-full-reset-step2-yes");
+  var btnFullResetStep2ByDates = document.getElementById("btn-full-reset-step2-by-dates");
+  var btnFullResetStep2Cancel = document.getElementById("btn-full-reset-step2-cancel");
+  var deleteByDateOverlay = document.getElementById("delete-by-date-modal-overlay");
+  var deleteByDateGrid = document.getElementById("delete-by-date-calendar-grid");
+  var deleteByDateMonthLabel = document.getElementById("delete-by-date-month-label");
+  var btnDeleteByDatePrevMonth = document.getElementById("btn-delete-by-date-prev-month");
+  var btnDeleteByDateNextMonth = document.getElementById("btn-delete-by-date-next-month");
+  var deleteByDateSelectedSummary = document.getElementById("delete-by-date-selected-summary");
+  var btnDeleteByDateConfirm = document.getElementById("btn-delete-by-date-confirm");
+  var btnDeleteByDateCancel = document.getElementById("btn-delete-by-date-cancel");
   var backupPanel = document.getElementById("backup-panel");
   var btnToggleBackupPanel = document.getElementById("btn-toggle-backup-panel");
 
@@ -7722,25 +7734,270 @@
   // downloaded file via Import Data - the in-app Recover Data list
   // restores individual slices, not a whole wiped device, so this
   // intentionally doesn't add an entry there.
+  // The second warning step offers three ways out, not two - see
+  // openDeleteByDatePicker below for why "wipe one specific day" got
+  // pulled out of the all-or-nothing Full Reset flow.
+  function openFullResetStep2() {
+    fullResetStep2Overlay.classList.remove("hidden");
+  }
+
+  function closeFullResetStep2() {
+    fullResetStep2Overlay.classList.add("hidden");
+  }
+
   function performFullFactoryReset() {
     confirmModal(T("confirm.fullResetExplain"), function () {
-      confirmModal(T("confirm.fullResetAreYouCertain"), function () {
-        exportAllData();
-        var keysToRemove = [];
-        for (var i = 0; i < localStorage.length; i++) {
-          var key = localStorage.key(i);
-          if (key && key.indexOf("poolMasterCounter.") === 0) keysToRemove.push(key);
-        }
-        keysToRemove.forEach(function (key) {
-          localStorage.removeItem(key);
-        });
-        // The backup download is a same-tick <a>.click(), which some
-        // browsers need a beat to actually start before navigation - see
-        // downloadJSON/exportAllData above.
-        setTimeout(function () {
-          location.reload();
-        }, 400);
+      openFullResetStep2();
+    });
+  }
+
+  // ---------------------------------------------------------------------
+  // Delete by Dates - offered as an alternative to Full Reset's all-or-
+  // nothing "wipe everything" step, for surgically removing every trace
+  // of one or more specific days: player session history, any of today's
+  // not-yet-archived live games, rating history (backing the rating
+  // value itself out by the same amount), tournament results, day notes,
+  // and the day-report archive. Deliberately literal about "wipe
+  // everything from that date" - nothing recorded on a wiped day
+  // survives anywhere in the app.
+  // ---------------------------------------------------------------------
+
+  // Every local calendar date (YYYY-MM-DD) with ANY data recorded
+  // anywhere - drives which days the calendar lets you pick at all.
+  function collectRecordedDates() {
+    var dates = {};
+    Object.keys(PLAYER_STATS).forEach(function (key) {
+      (PLAYER_STATS[key].sessions || []).forEach(function (s) {
+        if (s.date) dates[s.date] = true;
       });
+    });
+    state.gameHistory.forEach(function (g) {
+      if (g && g.ts) dates[localDateStrFromTs(g.ts)] = true;
+    });
+    TOURNAMENT_RESULTS.forEach(function (r) {
+      if (r.ts) dates[localDateStrFromTs(r.ts)] = true;
+    });
+    Object.keys(DAY_NOTES).forEach(function (d) {
+      if (DAY_NOTES[d]) dates[d] = true;
+    });
+    return dates;
+  }
+
+  // Removes every trace of one local calendar date across every store the
+  // app keeps. Returns what was actually removed from player sessions and
+  // live game history so the caller can offer it back through the
+  // existing Recover Data list - a partial safety net (ratings and
+  // tournament results aren't restorable that way, same limitation the
+  // "allPlayerStats" reset above already has) on top of the full JSON
+  // backup already downloaded before this ever runs.
+  function wipeAllDataForDate(dateStr) {
+    var removedSessionsByName = {};
+    Object.keys(PLAYER_STATS).forEach(function (key) {
+      var entry = PLAYER_STATS[key];
+      var sessions = entry.sessions || [];
+      var kept = [];
+      sessions.forEach(function (s) {
+        if (s.date === dateStr) {
+          if (!removedSessionsByName[entry.name]) removedSessionsByName[entry.name] = [];
+          removedSessionsByName[entry.name].push(s);
+        } else {
+          kept.push(s);
+        }
+      });
+      entry.sessions = kept;
+    });
+    savePlayerStatsToStorage(PLAYER_STATS);
+
+    var removedGameHistory = [];
+    var keptGameHistory = [];
+    state.gameHistory.forEach(function (g) {
+      if (g && g.ts && localDateStrFromTs(g.ts) === dateStr) {
+        removedGameHistory.push(g);
+        (g.winnerIds || []).forEach(function (id) {
+          state.playerWins[id] = Math.max(0, (state.playerWins[id] || 0) - 1);
+        });
+        if (g.isTeam && g.teamId) {
+          state.teamWins[g.teamId] = Math.max(0, (state.teamWins[g.teamId] || 0) - 1);
+          if (g.mvpId) {
+            state.teamMvpWins[g.mvpId] = Math.max(0, (state.teamMvpWins[g.mvpId] || 0) - 1);
+          }
+        }
+        state.gamesPlayedCount = Math.max(0, state.gamesPlayedCount - 1);
+      } else {
+        keptGameHistory.push(g);
+      }
+    });
+    state.gameHistory = keptGameHistory;
+
+    Object.keys(PLAYER_RATINGS).forEach(function (key) {
+      var entry = PLAYER_RATINGS[key];
+      var history = entry.history || [];
+      var kept = [];
+      history.forEach(function (h) {
+        if (h.ts && localDateStrFromTs(h.ts) === dateStr) {
+          entry.rating -= h.delta;
+          if (h.fromGame) entry.gamesPlayed = Math.max(0, entry.gamesPlayed - 1);
+        } else {
+          kept.push(h);
+        }
+      });
+      entry.history = kept;
+    });
+    saveRatingsToStorage(PLAYER_RATINGS);
+
+    TOURNAMENT_RESULTS = TOURNAMENT_RESULTS.filter(function (r) {
+      return !(r.ts && localDateStrFromTs(r.ts) === dateStr);
+    });
+    saveTournamentResultsToStorage(TOURNAMENT_RESULTS);
+
+    if (DAY_NOTES[dateStr]) {
+      delete DAY_NOTES[dateStr];
+      saveDayNotesToStorage(DAY_NOTES);
+    }
+
+    var reportArchiveBefore = REPORT_ARCHIVE.length;
+    REPORT_ARCHIVE = REPORT_ARCHIVE.filter(function (entry) {
+      return entry.dateStr !== dateStr;
+    });
+    if (REPORT_ARCHIVE.length !== reportArchiveBefore) saveReportArchiveToStorage(REPORT_ARCHIVE);
+
+    saveState();
+    return { removedSessionsByName: removedSessionsByName, removedGameHistory: removedGameHistory };
+  }
+
+  var deleteByDateSelected = {};
+  var deleteByDateViewMonth = new Date();
+
+  function deleteByDateCellClicked(dateStr) {
+    if (deleteByDateSelected[dateStr]) delete deleteByDateSelected[dateStr];
+    else deleteByDateSelected[dateStr] = true;
+    renderDeleteByDateCalendar();
+  }
+
+  function updateDeleteByDateSummary() {
+    var dates = Object.keys(deleteByDateSelected).sort();
+    btnDeleteByDateConfirm.disabled = dates.length === 0;
+    deleteByDateSelectedSummary.textContent = dates.length
+      ? T("resets.deleteByDatesSelectedCount", { count: dates.length, dates: dates.join(", ") })
+      : T("resets.deleteByDatesNoneSelected");
+  }
+
+  function buildDeleteByDateDayCell(dateStr, dayNum, hasData, isSelected, isToday) {
+    var cell = document.createElement("button");
+    cell.type = "button";
+    cell.className = "delete-by-date-day";
+    cell.textContent = String(dayNum);
+    if (isToday) cell.classList.add("is-today");
+    if (!hasData) {
+      cell.disabled = true;
+      return cell;
+    }
+    cell.classList.add("has-data");
+    if (isSelected) cell.classList.add("is-selected");
+    cell.setAttribute("aria-pressed", isSelected ? "true" : "false");
+    cell.addEventListener("click", function () {
+      deleteByDateCellClicked(dateStr);
+    });
+    return cell;
+  }
+
+  // No custom i18n for weekday initials - deferred to the browser's own
+  // locale via toLocaleDateString, same approach already used for the
+  // day-report's weekday name and the All Players weekly graph labels.
+  function deleteByDateWeekdayLabels() {
+    var labels = [];
+    for (var i = 0; i < 7; i++) {
+      labels.push(new Date(2024, 0, 7 + i).toLocaleDateString(undefined, { weekday: "narrow" }));
+    }
+    return labels;
+  }
+
+  function renderDeleteByDateCalendar() {
+    var recorded = collectRecordedDates();
+    var year = deleteByDateViewMonth.getFullYear();
+    var month = deleteByDateViewMonth.getMonth();
+    deleteByDateMonthLabel.textContent = deleteByDateViewMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+    deleteByDateGrid.innerHTML = "";
+
+    deleteByDateWeekdayLabels().forEach(function (label) {
+      var h = document.createElement("div");
+      h.className = "delete-by-date-weekday";
+      h.textContent = label;
+      deleteByDateGrid.appendChild(h);
+    });
+
+    var startOffset = new Date(year, month, 1).getDay();
+    var daysInMonth = new Date(year, month + 1, 0).getDate();
+    var today = todayDateStr();
+
+    for (var i = 0; i < startOffset; i++) {
+      var blank = document.createElement("div");
+      blank.className = "delete-by-date-day is-blank";
+      deleteByDateGrid.appendChild(blank);
+    }
+
+    for (var day = 1; day <= daysInMonth; day++) {
+      var dateStr = year + "-" + String(month + 1).padStart(2, "0") + "-" + String(day).padStart(2, "0");
+      deleteByDateGrid.appendChild(
+        buildDeleteByDateDayCell(dateStr, day, !!recorded[dateStr], !!deleteByDateSelected[dateStr], dateStr === today)
+      );
+    }
+
+    updateDeleteByDateSummary();
+  }
+
+  // Opens on whichever month the most recent recorded data actually
+  // falls in, rather than always the real-world current month - most of
+  // the time that's the same thing, but it means a device that hasn't
+  // been used this calendar month still lands somewhere with selectable
+  // days instead of an empty grid the user has to page back from.
+  function openDeleteByDatePicker() {
+    deleteByDateSelected = {};
+    var recorded = Object.keys(collectRecordedDates()).sort();
+    var anchor = recorded.length ? new Date(recorded[recorded.length - 1] + "T00:00:00") : new Date();
+    deleteByDateViewMonth = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+    renderDeleteByDateCalendar();
+    deleteByDateOverlay.classList.remove("hidden");
+  }
+
+  function closeDeleteByDatePicker() {
+    deleteByDateOverlay.classList.add("hidden");
+  }
+
+  function confirmDeleteByDateSelection() {
+    var dates = Object.keys(deleteByDateSelected).sort();
+    if (!dates.length) return;
+    confirmModal(T("resets.deleteByDatesConfirm", { count: dates.length, dates: dates.join(", ") }), function () {
+      exportAllData();
+      var combinedSessionsByName = {};
+      var combinedGameHistory = [];
+      dates.forEach(function (dateStr) {
+        var result = wipeAllDataForDate(dateStr);
+        Object.keys(result.removedSessionsByName).forEach(function (name) {
+          if (!combinedSessionsByName[name]) combinedSessionsByName[name] = [];
+          combinedSessionsByName[name] = combinedSessionsByName[name].concat(result.removedSessionsByName[name]);
+        });
+        combinedGameHistory = combinedGameHistory.concat(result.removedGameHistory);
+      });
+
+      var playerStatsSnapshot = {};
+      Object.keys(combinedSessionsByName).forEach(function (name) {
+        playerStatsSnapshot[name] = { name: name, sessions: combinedSessionsByName[name] };
+      });
+      saveResetSnapshot("allPlayerStats", T("resetSnapshot.deleteByDatesLabel", { dates: dates.join(", ") }), {
+        playerStats: playerStatsSnapshot,
+        gameHistory: combinedGameHistory
+      });
+
+      closeDeleteByDatePicker();
+      if (currentStatsPlayerName) {
+        currentStatsSessions = getPlayerSessions(currentStatsPlayerName);
+        renderPlayerHistoryList(currentStatsSessions);
+        renderPlayerSynopsis();
+      }
+      renderRecoverDataList();
+      renderAll();
+      showToast(T("toast.deleteByDatesDone", { count: dates.length }));
     });
   }
 
@@ -15612,6 +15869,47 @@
   btnResetRosterLists.addEventListener("click", resetAllRosterLists);
   btnResetAllRatings.addEventListener("click", resetAllPlayersOfficialRating);
   btnFullReset.addEventListener("click", performFullFactoryReset);
+
+  btnFullResetStep2Yes.addEventListener("click", function () {
+    closeFullResetStep2();
+    exportAllData();
+    var keysToRemove = [];
+    for (var i = 0; i < localStorage.length; i++) {
+      var key = localStorage.key(i);
+      if (key && key.indexOf("poolMasterCounter.") === 0) keysToRemove.push(key);
+    }
+    keysToRemove.forEach(function (key) {
+      localStorage.removeItem(key);
+    });
+    // The backup download is a same-tick <a>.click(), which some
+    // browsers need a beat to actually start before navigation - see
+    // downloadJSON/exportAllData above.
+    setTimeout(function () {
+      location.reload();
+    }, 400);
+  });
+  btnFullResetStep2ByDates.addEventListener("click", function () {
+    closeFullResetStep2();
+    openDeleteByDatePicker();
+  });
+  btnFullResetStep2Cancel.addEventListener("click", closeFullResetStep2);
+  fullResetStep2Overlay.addEventListener("click", function (e) {
+    if (e.target === fullResetStep2Overlay) closeFullResetStep2();
+  });
+
+  btnDeleteByDatePrevMonth.addEventListener("click", function () {
+    deleteByDateViewMonth = new Date(deleteByDateViewMonth.getFullYear(), deleteByDateViewMonth.getMonth() - 1, 1);
+    renderDeleteByDateCalendar();
+  });
+  btnDeleteByDateNextMonth.addEventListener("click", function () {
+    deleteByDateViewMonth = new Date(deleteByDateViewMonth.getFullYear(), deleteByDateViewMonth.getMonth() + 1, 1);
+    renderDeleteByDateCalendar();
+  });
+  btnDeleteByDateConfirm.addEventListener("click", confirmDeleteByDateSelection);
+  btnDeleteByDateCancel.addEventListener("click", closeDeleteByDatePicker);
+  deleteByDateOverlay.addEventListener("click", function (e) {
+    if (e.target === deleteByDateOverlay) closeDeleteByDatePicker();
+  });
   btnResetSessionTournament.addEventListener("click", resetSessionAndTournament);
 
   btnRecoverImportFile.addEventListener("click", function () {
