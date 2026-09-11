@@ -10477,6 +10477,7 @@
       var myRawSide = won ? entry.winnerNames : entry.opponentNames || [];
       games.push({
         ts: entry.ts,
+        gameType: entry.gameType,
         gameLabel: entry.gameLabel,
         target: entry.target,
         result: won ? "won" : "lost",
@@ -13023,38 +13024,60 @@
   // terms (a rating swing of a full 100 points is only +5) so tournament
   // success is a genuinely heavy factor, not a tiebreaker.
   var LEADERBOARD_TOURNAMENT_WIN_WEIGHT = 6;
-  // Points per average ball left on the table across a player's wins -
-  // rewards winning by a wide margin (opponent barely got started), not
-  // just winning. Games where this was never recorded don't count for
-  // or against anyone (see averageBallsLeftOnWins).
-  var LEADERBOARD_DOMINANCE_WEIGHT = 1.5;
+  // Points per average dominance ratio across a player's wins - rewards
+  // winning by a wide margin (opponent barely got started), not just
+  // winning. The ratio is 0-1 (see averageDominanceRatio), so this
+  // multiplies up to a comparable scale to the other terms; a player
+  // who empties the rack on every win (ratio 1.0) gets the full weight,
+  // typical dominant wins land well under it.
+  var LEADERBOARD_DOMINANCE_WEIGHT = 15;
   // Points per skunk win (opponent potted zero balls) - deliberately
-  // small and in the same range as LEADERBOARD_DOMINANCE_WEIGHT (both
-  // are "style" bonuses on top of a win, not primary drivers like win
-  // rate/rating). Unlike win rate (capped near 100) or rating (capped
-  // at 45), this term has no ceiling - a strong player can rack up
-  // enough skunks over a career that a too-large weight here lets it
-  // swamp everything else, which is exactly what happened at the
-  // original weight of 4.
-  var LEADERBOARD_SKUNK_WIN_WEIGHT = 1.5;
+  // small (both this and dominance are "style" bonuses on top of a win,
+  // not primary drivers like win rate/rating). Unlike win rate (capped
+  // near 100) or rating (capped at 45), this term has no ceiling - a
+  // strong player can rack up enough skunks over a career that too
+  // large a weight here lets it swamp everything else, which is what
+  // happened at the original weight of 4.
+  var LEADERBOARD_SKUNK_WIN_WEIGHT = 1;
+
+  // How many balls are actually in play for a given game type - the
+  // scale "balls left on the table" is relative TO. Only game types
+  // with a well-defined physical rack size are covered: One Pocket
+  // plays a standard full 15-ball rack, while the 8-ball family's own
+  // convention (see the "Rack-mode skunk" comment on
+  // persistBallsLeftLive) is specifically the loser's own 7 object
+  // balls, not the whole rack. Anything else (9-ball, Straight Pool,
+  // Custom) has no fixed scale this field was ever designed around, so
+  // it's deliberately left out rather than guessed at.
+  var LEADERBOARD_BALLS_LEFT_MAX_BY_GAME_TYPE = {
+    onepocket: 15,
+    "8ball": 7,
+    "8ballrotation": 7,
+    "8ballpunishment": 7
+  };
 
   // Only wins where the balls-left-on-table stepper (see
-  // persistBallsLeftLive) was actually used contribute - most win
-  // objects won't have it set, and treating an unset value as 0 would
-  // wrongly punish players (or games/eras) that never touched that
-  // control instead of just excluding them from this factor.
-  function averageBallsLeftOnWins(games) {
-    var vals = [];
+  // persistBallsLeftLive) was actually used, AND the game type has a
+  // known scale to divide by, contribute - most win objects won't have
+  // it set, and treating an unset/unscaled value as 0 would wrongly
+  // punish players (or games/eras) that never touched that control
+  // instead of just excluding them from this factor. The per-game ratio
+  // (0-1) is what actually gets averaged, not the raw ball count, so a
+  // One Pocket win and an 8-Ball win are comparable instead of the
+  // bigger-rack game type mechanically outscoring the smaller one.
+  function averageDominanceRatio(games) {
+    var ratios = [];
     games.forEach(function (g) {
-      if (g.result === "won" && typeof g.ballsLeftOnTable === "number") {
-        vals.push(g.ballsLeftOnTable);
-      }
+      if (g.result !== "won" || typeof g.ballsLeftOnTable !== "number") return;
+      var max = LEADERBOARD_BALLS_LEFT_MAX_BY_GAME_TYPE[g.gameType];
+      if (!max) return;
+      ratios.push(Math.min(1, g.ballsLeftOnTable / max));
     });
-    if (!vals.length) return 0;
-    var sum = vals.reduce(function (a, b) {
+    if (!ratios.length) return 0;
+    var sum = ratios.reduce(function (a, b) {
       return a + b;
     }, 0);
-    return sum / vals.length;
+    return sum / ratios.length;
   }
 
   // How many of a player's wins were skunks (opponent potted zero
@@ -13081,7 +13104,7 @@
     var winRateTerm = (entry.wins / (entry.gamesPlayed + LEADERBOARD_MIN_GAMES)) * 100;
     var tournamentTerm = entry.tournamentWins * LEADERBOARD_TOURNAMENT_WIN_WEIGHT;
     var ratingTerm = entry.rating / 20;
-    var dominanceTerm = entry.avgBallsLeftOnWins * LEADERBOARD_DOMINANCE_WEIGHT;
+    var dominanceTerm = entry.avgDominanceRatio * LEADERBOARD_DOMINANCE_WEIGHT;
     var skunkTerm = entry.skunkWins * LEADERBOARD_SKUNK_WIN_WEIGHT;
     var activityTerm = Math.log2(entry.gamesPlayed) * 2;
     return {
@@ -13108,7 +13131,7 @@
           winPct: gamesPlayed ? wins / gamesPlayed : 0,
           rating: getPlayerRating(name),
           tournamentWins: stats.tournamentWins,
-          avgBallsLeftOnWins: averageBallsLeftOnWins(stats.games.concat(stats.tournamentGames)),
+          avgDominanceRatio: averageDominanceRatio(stats.games.concat(stats.tournamentGames)),
           skunkWins: countSkunkWins(stats.games.concat(stats.tournamentGames))
         };
       })
@@ -13165,8 +13188,8 @@
         describe: function (leader, other) {
           return T("leaderboard.reasonDominance", {
             leader: leader.name,
-            leaderVal: leader.avgBallsLeftOnWins.toFixed(1),
-            otherVal: other.avgBallsLeftOnWins.toFixed(1)
+            leaderVal: Math.round(leader.avgDominanceRatio * 100) + "%",
+            otherVal: Math.round(other.avgDominanceRatio * 100) + "%"
           });
         }
       },
@@ -13316,8 +13339,8 @@
     if (entry.tournamentWins > 0) {
       statParts.push(T("leaderboard.statTournamentWins", { wins: entry.tournamentWins }));
     }
-    if (entry.avgBallsLeftOnWins > 0) {
-      statParts.push(T("leaderboard.statDominance", { balls: entry.avgBallsLeftOnWins.toFixed(1) }));
+    if (entry.avgDominanceRatio > 0) {
+      statParts.push(T("leaderboard.statDominance", { pct: Math.round(entry.avgDominanceRatio * 100) }));
     }
     if (entry.skunkWins > 0) {
       statParts.push(T("leaderboard.statSkunkWins", { wins: entry.skunkWins }));
