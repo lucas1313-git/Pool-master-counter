@@ -774,15 +774,16 @@
     tone(1200, ctx.currentTime, 0.05, "sine", 0.12);
   }
 
-  // A soft, low "you're now scoring for this player" cue for the keypad
+  // A low "you're now scoring for this player" cue for the keypad
   // shortcut's player-switch (pressing 1-9 during a points/ball game) -
-  // deliberately mellow and quiet, a single low sine tone rather than
-  // the brighter triangle used for an actual point, so it reads as a
-  // gentle "got it" instead of competing with the real scoring sounds.
+  // a single low sine tone rather than the brighter triangle used for
+  // an actual point, so it still reads as a mellow "got it" rather than
+  // competing with the real scoring sounds, just pitched low enough
+  // (and now loud enough) to actually be heard clearly over table noise.
   function playPlayerSwitchSound(voice) {
     var mult = voicePitch(voice);
     var ctx = getAudioCtx();
-    tone(196 * mult, ctx.currentTime, 0.18, "sine", 0.14);
+    tone(165 * mult, ctx.currentTime, 0.18, "sine", 0.32);
   }
 
   function playPositiveSound(voice) {
