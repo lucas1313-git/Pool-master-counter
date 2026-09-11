@@ -840,20 +840,14 @@
     subOsc.stop(startTime + duration + 0.05);
   }
 
-  // "Sad trombone": a slow descending minor motif, each note drooping
-  // downward, ending on a long, low, fading groan — very sad on purpose.
+  // "Sad trombone": a single note that droops all the way down over its
+  // own length instead of a multi-note descending motif — still very
+  // sad on purpose, just one long downward glide rather than several
+  // short ones.
   function playNegativeSound(voice) {
     var mult = voicePitch(voice);
     var now = getAudioCtx().currentTime;
-    var notes = [
-      { f: 392.0, t: 0.0, d: 0.32, bend: 0.94 },
-      { f: 369.99, t: 0.28, d: 0.32, bend: 0.94 },
-      { f: 349.23, t: 0.56, d: 0.32, bend: 0.92 },
-      { f: 293.66, t: 0.84, d: 1.2, bend: 0.72 }
-    ];
-    notes.forEach(function (n) {
-      sadTone(n.f * mult, now + n.t, n.d, n.bend);
-    });
+    sadTone(392.0 * mult, now, 1.5, 0.55);
   }
 
   // Two alternate victory fanfares, picked at random on each win so a run
