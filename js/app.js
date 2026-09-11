@@ -776,14 +776,20 @@
 
   // A low "you're now scoring for this player" cue for the keypad
   // shortcut's player-switch (pressing 1-9 during a points/ball game) -
-  // a single low sine tone rather than the brighter triangle used for
-  // an actual point, so it still reads as a mellow "got it" rather than
-  // competing with the real scoring sounds, just pitched low enough
-  // (and now loud enough) to actually be heard clearly over table noise.
-  function playPlayerSwitchSound(voice) {
+  // low sine pips rather than the brighter triangle used for an actual
+  // point, so it still reads as a mellow "got it" rather than competing
+  // with the real scoring sounds. count is the keypad number just
+  // pressed (player 1's shortcut pips once, player 2's twice, and so
+  // on) so the number itself is audible, not just which card lit up -
+  // useful without having to look at the screen at all.
+  function playPlayerSwitchSound(voice, count) {
     var mult = voicePitch(voice);
     var ctx = getAudioCtx();
-    tone(165 * mult, ctx.currentTime, 0.18, "sine", 0.32);
+    var now = ctx.currentTime;
+    var pips = Math.max(1, count || 1);
+    for (var i = 0; i < pips; i++) {
+      tone(165 * mult, now + i * 0.16, 0.12, "sine", 0.32);
+    }
   }
 
   function playPositiveSound(voice) {
@@ -1924,7 +1930,8 @@
     }
 
     if (/^[1-9]$/.test(e.key)) {
-      var targetId = keypadOrderedPlayerIds[parseInt(e.key, 10) - 1];
+      var keypadNum = parseInt(e.key, 10);
+      var targetId = keypadOrderedPlayerIds[keypadNum - 1];
       if (!targetId) return;
       e.preventDefault();
       keypadSelectedPlayerId = targetId;
@@ -1934,7 +1941,7 @@
       // "who am I scoring for right now" state this cue needs to confirm.
       if (!quickCounterMode) {
         var switchedTo = getPlayer(targetId);
-        if (switchedTo) playPlayerSwitchSound(switchedTo.voice);
+        if (switchedTo) playPlayerSwitchSound(switchedTo.voice, keypadNum);
       }
       // Focus Mode's across-the-room card sizes mean a big roster (team
       // play especially) can run well past one screen - the shortcut
