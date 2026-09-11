@@ -268,6 +268,7 @@
   "leaderboard.heading": "Leaderboard",
   "leaderboard.mvp": "MVP",
   "leaderboard.notEnoughData": "Nobody has played enough games yet — everyone needs at least 10 (regular or tournament, combined) before they can be ranked.",
+  "leaderboard.playButton": "▶️ Back to the Game",
   "leaderboard.rowStats": "{{wins}} wins • {{games}} games • {{pct}}% win rate • {{rating}} rating",
   "milestone.congrats": "Congratulations!",
   "milestone.gameRotation": "Game rotation",

@@ -268,6 +268,7 @@
   "leaderboard.heading": "Classement",
   "leaderboard.mvp": "MVP",
   "leaderboard.notEnoughData": "Personne n'a encore assez joué — il faut au moins 10 parties (normales ou de tournoi, combinées) pour être classé.",
+  "leaderboard.playButton": "▶️ Retour au Jeu",
   "leaderboard.rowStats": "{{wins}} victoires • {{games}} parties • {{pct}} % de victoires • cote {{rating}}",
   "milestone.congrats": "Félicitations !",
   "milestone.gameRotation": "Rotation des parties",

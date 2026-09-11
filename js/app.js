@@ -1445,6 +1445,7 @@
   var btnOpenLeaderboard = document.getElementById("btn-open-leaderboard");
   var leaderboardPageView = document.getElementById("view-leaderboard-page");
   var btnLeaderboardBack = document.getElementById("btn-leaderboard-back");
+  var btnLeaderboardPlay = document.getElementById("btn-leaderboard-play");
   var leaderboardList = document.getElementById("leaderboard-list");
   var leaderboardEmptyHint = document.getElementById("leaderboard-empty-hint");
   var leaderboardFormulaNote = document.getElementById("leaderboard-formula-note");
@@ -16023,6 +16024,9 @@
     openLeaderboardPage();
   });
   btnLeaderboardBack.addEventListener("click", function () {
+    closeLeaderboardPage();
+  });
+  btnLeaderboardPlay.addEventListener("click", function () {
     closeLeaderboardPage();
   });
   btnContactSheetSelectAll.addEventListener("click", function () {

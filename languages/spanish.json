@@ -268,6 +268,7 @@
   "leaderboard.heading": "Clasificación",
   "leaderboard.mvp": "MVP",
   "leaderboard.notEnoughData": "Todavía nadie ha jugado suficientes partidas — se necesitan al menos 10 (normales o de torneo, combinadas) para poder aparecer en la clasificación.",
+  "leaderboard.playButton": "▶️ Volver al Juego",
   "leaderboard.rowStats": "{{wins}} victorias • {{games}} partidas • {{pct}}% de victorias • puntuación {{rating}}",
   "milestone.congrats": "¡Felicidades!",
   "milestone.gameRotation": "Rotación de partidas",
