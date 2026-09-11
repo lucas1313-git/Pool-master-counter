@@ -15114,6 +15114,7 @@
 
   function startTournament() {
     lbTreeExpandedNodes = {};
+    lbTreeAllRootsExpanded = false;
     var grouped = getTournamentEntrants();
     var entrants = grouped.entrants;
     if (grouped.collidedTeamNames.length) {
@@ -15567,6 +15568,39 @@
     return node;
   }
 
+  // Depth-collapsing (LB_TREE_VISIBLE_DEPTH above) only ever folds how
+  // far a single branch stacks, not how many independent branches exist
+  // side by side - and a big field can have a lot of those simultaneously
+  // early on (see lbFrontierMatches), each one its own full-width tree
+  // root, which is what was actually driving the reported horizontal
+  // overflow ("spills to the right... with many players") even with
+  // depth-collapsing already in place. This caps how many roots render
+  // by default the same way: a "+N more branches" stub standing in for
+  // the rest, expandable on tap. Not reset per-render (only per new
+  // tournament, see startTournament) so a manual expand sticks across
+  // re-renders as matches get scored.
+  var LB_TREE_MAX_VISIBLE_ROOTS = 4;
+  var lbTreeAllRootsExpanded = false;
+
+  function renderLbRootsCollapsedStub(hiddenCount) {
+    var stub = document.createElement("button");
+    stub.type = "button";
+    stub.className = "wb-tree-card-wrap lb-tree-collapsed-stub wb-tree-leaf lb-tree-roots-stub";
+    var plus = document.createElement("div");
+    plus.className = "lb-tree-collapsed-plus";
+    plus.textContent = "➕";
+    var label = document.createElement("div");
+    label.className = "lb-tree-collapsed-label";
+    label.textContent = T("tournament.lbTreeShowMoreBranches", { count: hiddenCount });
+    stub.appendChild(plus);
+    stub.appendChild(label);
+    stub.addEventListener("click", function () {
+      lbTreeAllRootsExpanded = true;
+      renderTournamentActive();
+    });
+    return stub;
+  }
+
   function renderLbTree(container, t, activeMatchId) {
     container.innerHTML = "";
     var roots = lbFrontierMatches(t);
@@ -15577,11 +15611,16 @@
       container.appendChild(hint);
       return;
     }
-    roots.forEach(function (rootMatch) {
+    var visibleRoots = lbTreeAllRootsExpanded ? roots : roots.slice(0, LB_TREE_MAX_VISIBLE_ROOTS);
+    visibleRoots.forEach(function (rootMatch) {
       var root = renderLbTreeNode(rootMatch, activeMatchId, t, 0);
       root.classList.add("wb-tree-root", "lb-tree-root");
       container.appendChild(root);
     });
+    var hiddenCount = roots.length - visibleRoots.length;
+    if (hiddenCount > 0) {
+      container.appendChild(renderLbRootsCollapsedStub(hiddenCount));
+    }
   }
 
   // Which physical table a just-started match should occupy: its own
