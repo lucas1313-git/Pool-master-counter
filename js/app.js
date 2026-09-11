@@ -1917,6 +1917,16 @@
       e.preventDefault();
       keypadSelectedPlayerId = targetId;
       renderScoreboard();
+      // Focus Mode's across-the-room card sizes mean a big roster (team
+      // play especially) can run well past one screen - the shortcut
+      // just picked a specific player's card by number, not necessarily
+      // one already in view, so jump to the bottom of the page to bring
+      // whichever card that was into view instead of leaving whoever
+      // used the shortcut staring at wherever they happened to be
+      // scrolled to.
+      if (appRoot.classList.contains("focus-mode")) {
+        window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+      }
       return;
     }
 
