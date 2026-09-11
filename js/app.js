@@ -13028,10 +13028,15 @@
   // just winning. Games where this was never recorded don't count for
   // or against anyone (see averageBallsLeftOnWins).
   var LEADERBOARD_DOMINANCE_WEIGHT = 1.5;
-  // Points per skunk win (opponent potted zero balls) - a discrete,
-  // rarer achievement than an ordinary win, so weighted well above a
-  // single point of win-rate but below a whole tournament win.
-  var LEADERBOARD_SKUNK_WIN_WEIGHT = 4;
+  // Points per skunk win (opponent potted zero balls) - deliberately
+  // small and in the same range as LEADERBOARD_DOMINANCE_WEIGHT (both
+  // are "style" bonuses on top of a win, not primary drivers like win
+  // rate/rating). Unlike win rate (capped near 100) or rating (capped
+  // at 45), this term has no ceiling - a strong player can rack up
+  // enough skunks over a career that a too-large weight here lets it
+  // swamp everything else, which is exactly what happened at the
+  // original weight of 4.
+  var LEADERBOARD_SKUNK_WIN_WEIGHT = 1.5;
 
   // Only wins where the balls-left-on-table stepper (see
   // persistBallsLeftLive) was actually used contribute - most win
