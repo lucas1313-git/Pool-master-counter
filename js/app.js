@@ -1683,6 +1683,7 @@
   var confirmModalMessage = document.getElementById("confirm-modal-message");
   var confirmModalInputRow = document.getElementById("confirm-modal-input-row");
   var confirmModalInput = document.getElementById("confirm-modal-input");
+  var confirmModalInputOptions = document.getElementById("confirm-modal-input-options");
   var btnConfirmModalOk = document.getElementById("btn-confirm-modal-ok");
   var btnConfirmModalCancel = document.getElementById("btn-confirm-modal-cancel");
 
@@ -1752,11 +1753,23 @@
   // Replaces `prompt(msg, defaultValue)`. onSubmit receives the entered
   // string; onCancel (optional) runs on Cancel/backdrop-dismiss instead
   // (there's no null-return case here the way native prompt() has one).
-  function promptModal(message, defaultValue, onSubmit, onCancel) {
+  // suggestions (optional) fills the input's shared datalist with
+  // existing values to pick from (native browser autocomplete - the
+  // field stays free text, nothing forces picking one) - always reset
+  // on every call, even to empty, so a previous prompt's suggestions
+  // (e.g. team names) never linger into an unrelated one that didn't
+  // ask for any.
+  function promptModal(message, defaultValue, onSubmit, onCancel, suggestions) {
     confirmModalOnConfirm = function () {
       onSubmit(confirmModalInput.value);
     };
     confirmModalOnCancel = onCancel || null;
+    confirmModalInputOptions.innerHTML = "";
+    (suggestions || []).forEach(function (value) {
+      var opt = document.createElement("option");
+      opt.value = value;
+      confirmModalInputOptions.appendChild(opt);
+    });
     openConfirmModal(message, true, true, defaultValue);
   }
 
@@ -7841,10 +7854,16 @@
     badge.textContent = current ? "🏷️ " + current : T("players.addTeamName");
     badge.setAttribute("aria-label", T("players.editTeamNameFor", { name: name }));
     badge.addEventListener("click", function () {
-      promptModal(T("players.teamNamePrompt", { name: name }), current, function (value) {
-        setPlayerContact(name, { clubTeam: value.trim() });
-        renderRoster();
-      });
+      promptModal(
+        T("players.teamNamePrompt", { name: name }),
+        current,
+        function (value) {
+          setPlayerContact(name, { clubTeam: value.trim() });
+          renderRoster();
+        },
+        null,
+        collectKnownTeamNames()
+      );
     });
     return badge;
   }
@@ -14844,7 +14863,13 @@
   // up as a pickable option for the next row immediately, without having
   // to wait for a tournament to actually start (which is the only point
   // SAVED_TEAMS itself gets updated).
-  function renderTournamentTeamOptions() {
+  // Every team name known anywhere - saved tournament teams (SAVED_TEAMS)
+  // plus every player's persistent club team (see buildClubTeamBadge) -
+  // deduplicated case/whitespace-insensitively. Shared by the tournament
+  // setup checklist's own datalist (renderTournamentTeamOptions, which
+  // adds this session's live-typed values on top) and the Players
+  // section's "assign a team" prompt, so both offer the same suggestions.
+  function collectKnownTeamNames() {
     var seen = {};
     var names = [];
     function addName(n) {
@@ -14860,8 +14885,22 @@
     getAllKnownPlayerNames().forEach(function (n) {
       addName(getPlayerContact(n).clubTeam);
     });
+    return names;
+  }
+
+  function renderTournamentTeamOptions() {
+    var names = collectKnownTeamNames();
+    var seen = {};
+    names.forEach(function (n) {
+      seen[normalizeNameKey(n)] = true;
+    });
     Array.prototype.forEach.call(tournamentPlayerChecklist.querySelectorAll(".tournament-team-input"), function (input) {
-      addName(input.value.trim());
+      var trimmed = input.value.trim();
+      var key = normalizeNameKey(trimmed);
+      if (trimmed && !seen[key]) {
+        seen[key] = true;
+        names.push(trimmed);
+      }
     });
     tournamentTeamOptionsDatalist.innerHTML = "";
     names.forEach(function (name) {
