@@ -12703,21 +12703,23 @@
   }
 
   // Plain-language explanation of why `a` (the higher-ranked of the
-  // pair) outranks `b` overall, e.g. explaining rank 1 vs rank 2. Leads
-  // with whichever factors actually decided it (sorted by how many
-  // points each one contributed), and separately calls out any factor
-  // that actually favors `b` - so a player who's ahead on rating but
-  // still ranked lower overall isn't a mystery.
+  // pair) outranks `b` overall, e.g. explaining rank 1 vs rank 2. Opens
+  // with the actual point totals so the winner is never in doubt, then
+  // every factor that moved the needle either way - each with its own
+  // point value - so it's obvious not just THAT the reasons favoring
+  // `a` outweigh the ones favoring `b`, but by how much. A tiny
+  // per-category threshold (not 0 outright) only filters out true
+  // floating-point noise from an exact tie, never a real difference.
   function explainLeaderboardRanking(a, b) {
     var categories = leaderboardReasonCategories(a, b);
     var supporting = [];
     var against = [];
     categories.forEach(function (cat) {
-      if (Math.abs(cat.delta) < 0.05) return;
+      if (Math.abs(cat.delta) < 0.01) return;
       var favorsA = cat.delta > 0;
       var leader = favorsA ? a : b;
       var other = favorsA ? b : a;
-      var line = cat.describe(leader, other);
+      var line = cat.describe(leader, other) + " " + T("leaderboard.reasonPoints", { points: Math.abs(cat.delta).toFixed(1) });
       (favorsA ? supporting : against).push({ weight: Math.abs(cat.delta), line: line });
     });
     supporting.sort(function (x, y) {
@@ -12727,19 +12729,34 @@
       return y.weight - x.weight;
     });
 
-    var lines = [T("leaderboard.explainIntro", { a: a.name, b: b.name })];
-    if (supporting.length === 0) {
-      lines.push(T("leaderboard.explainClose", { a: a.name, b: b.name }));
-    } else {
+    var lines = [
+      T("leaderboard.explainVerdict", {
+        a: a.name,
+        scoreA: a.mvpScore.toFixed(1),
+        b: b.name,
+        scoreB: b.mvpScore.toFixed(1)
+      })
+    ];
+
+    if (supporting.length === 0 && against.length === 0) {
       lines.push("");
-      supporting.slice(0, 3).forEach(function (s) {
-        lines.push("• " + s.line);
-      });
+      lines.push(T("leaderboard.explainClose", { a: a.name, b: b.name }));
+      return lines.join("\n");
     }
+
+    lines.push("");
+    lines.push(T("leaderboard.explainIntro", { a: a.name, b: b.name }));
+    supporting.forEach(function (s) {
+      lines.push("• " + s.line);
+    });
+    if (supporting.length === 0) {
+      lines.push(T("leaderboard.explainNoSingleReason"));
+    }
+
     if (against.length > 0) {
       lines.push("");
-      lines.push(T("leaderboard.explainDespite", { b: b.name }));
-      against.slice(0, 2).forEach(function (s) {
+      lines.push(T("leaderboard.explainDespite", { a: a.name, b: b.name }));
+      against.forEach(function (s) {
         lines.push("• " + s.line);
       });
     }
