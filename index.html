@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260911l">
+<link rel="stylesheet" href="css/style.css?v=20260911m">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -1110,6 +1110,17 @@
     <p class="leaderboard-banner-sub" data-i18n="leaderboard.bannerSub">The best players, ranked by performance</p>
   </div>
 
+  <div class="leaderboard-view-toggle" role="radiogroup" data-i18n-aria-label="leaderboard.viewToggleAria" aria-label="Show leaderboard for">
+    <label class="leaderboard-view-option">
+      <input type="radio" name="leaderboard-view" id="leaderboard-view-players" value="players" checked>
+      <span data-i18n="leaderboard.viewPlayers">Players</span>
+    </label>
+    <label class="leaderboard-view-option">
+      <input type="radio" name="leaderboard-view" id="leaderboard-view-teams" value="teams">
+      <span data-i18n="leaderboard.viewTeams">Teams</span>
+    </label>
+  </div>
+
   <ul id="leaderboard-list" class="leaderboard-list"></ul>
 
   <p id="leaderboard-empty-hint" class="empty-hint hidden" data-i18n="leaderboard.notEnoughData">Nobody has played enough games yet — everyone needs at least 10 (regular or tournament, combined) before they can be ranked.</p>
@@ -1298,6 +1309,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260911n"></script>
+<script src="js/app.js?v=20260911o"></script>
 </body>
 </html>
