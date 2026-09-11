@@ -2164,6 +2164,20 @@ input[type="number"] {
   margin-top: 8px;
 }
 
+/* "Count this win for the team" checkbox (see buildCountsForTeamRow) -
+   only shown for a solo win by someone with a persistent club team. */
+.gamewin-counts-for-team-row {
+  cursor: pointer;
+  margin-top: 8px;
+}
+
+.gamewin-counts-for-team-row input[type="checkbox"] {
+  width: 22px;
+  height: 22px;
+  accent-color: var(--accent);
+  flex: 0 0 auto;
+}
+
 /* ---------- Milestone celebration popup ---------- */
 
 .milestone-overlay {
