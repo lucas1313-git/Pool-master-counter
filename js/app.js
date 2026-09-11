@@ -1622,6 +1622,13 @@
   var gamewinBallsLeftValue = null;
   var gamewinPendingTs = null;
   var gamewinPendingOnClose = null;
+  // "Count this win for the team" checkbox (see buildCountsForTeamRow) -
+  // gamewinCountsForTeamName is the club team it would be credited to
+  // (null when the win isn't a solo win by someone on a club team, so
+  // the row isn't even shown), gamewinCountsForTeamValue is whether the
+  // checkbox is currently checked.
+  var gamewinCountsForTeamName = null;
+  var gamewinCountsForTeamValue = false;
 
   var onHillOverlay = document.getElementById("onhill-overlay");
   var onHillCard = onHillOverlay.querySelector(".onhill-card");
@@ -3862,7 +3869,15 @@
       raceTarget: target,
       skunk: skunk,
       raceCount: milestoneCount,
-      ballsLeftOnTable: ballsLeftPrefill
+      ballsLeftOnTable: ballsLeftPrefill,
+      // Which persistent club team (see buildClubTeamBadge), if any, this
+      // individual win is credited to - set from the win popup's own
+      // checkbox (see buildCountsForTeamRow), patched on right before the
+      // popup closes exactly like ballsLeftOnTable/skunk above. null for
+      // every game unless a solo winner with a club team explicitly opts
+      // this one in - a player's team stats aren't just every game they
+      // ever played, only the ones marked as playing for the team.
+      teamCredit: null
     });
     if (state.gameHistory.length > 200) state.gameHistory.length = 200;
     if (!noStatsMode) {
@@ -4115,6 +4130,46 @@
     el.classList.toggle("hidden", !isSkunk);
   }
 
+  // Writes the checkbox's current state straight onto the game it
+  // belongs to, same live-patch pattern as persistBallsLeftLive - a
+  // player's club team stats (see computeClubTeamAggregate,
+  // Player Stats page) aren't just every game they ever won, only the
+  // ones explicitly marked here as playing for the team.
+  function persistCountsForTeamLive() {
+    if (state.gameHistory[0] && state.gameHistory[0].ts === gamewinPendingTs) {
+      state.gameHistory[0].teamCredit = gamewinCountsForTeamValue ? gamewinCountsForTeamName : null;
+      saveState();
+      if (currentStatsPlayerName) {
+        currentStatsSessions = getPlayerSessions(currentStatsPlayerName);
+        renderPlayerSynopsis();
+      }
+    }
+  }
+
+  // Only ever shown for a solo win (individual mode, one winner) by
+  // someone with a persistent club team (see buildClubTeamBadge) -
+  // "Play as Teams" mode games already have their own separate team-wins
+  // counter (state.teamWins) and aren't what this is for. Unchecked by
+  // default: most solo games are just personal practice, only some are
+  // an official team match that should count toward the team's record.
+  function buildCountsForTeamRow(teamName) {
+    var row = document.createElement("label");
+    row.className = "player-stats-row gamewin-counts-for-team-row";
+    var label = document.createElement("span");
+    label.className = "label";
+    label.textContent = T("gamewin.countsForTeamLabel", { team: teamName });
+    var checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = gamewinCountsForTeamValue;
+    checkbox.addEventListener("change", function () {
+      gamewinCountsForTeamValue = checkbox.checked;
+      persistCountsForTeamLive();
+    });
+    row.appendChild(label);
+    row.appendChild(checkbox);
+    return row;
+  }
+
   // Optional +/- counter (also directly typeable on a real keyboard) for
   // how many balls were left on the table when this game ended. Starts
   // unset (null) - "+" from unset goes to 0, "-" from 0 goes back to
@@ -4203,6 +4258,15 @@
     gamewinDetails.appendChild(buildBallsLeftRow());
     gamewinDetails.appendChild(buildSkunkIndicator());
     updateGamewinSkunkIndicator();
+    // Only a solo (non-"Play as Teams") win by someone with a club team
+    // gets the "count this win for the team" checkbox - see
+    // buildCountsForTeamRow.
+    gamewinCountsForTeamName =
+      freshEntry && !freshEntry.isTeam && freshEntry.winnerNames && freshEntry.winnerNames.length === 1
+        ? getPlayerContact(freshEntry.winnerNames[0]).clubTeam || null
+        : null;
+    gamewinCountsForTeamValue = !!(freshEntry && freshEntry.teamCredit);
+    if (gamewinCountsForTeamName) gamewinDetails.appendChild(buildCountsForTeamRow(gamewinCountsForTeamName));
     gamewinOverlay.classList.remove("hidden");
     // Focus the balls-left field so a number key works right away, with
     // no click needed first - can only happen once the overlay is no
@@ -4222,11 +4286,14 @@
     // point (nothing else can run while this dialog is up) - patch the
     // marker directly onto it so it's already there by the time any
     // archiving (celebrateTournamentWin's exportAllPlayerStats) reads it.
-    if (gamewinBallsLeftValue !== null && state.gameHistory[0] && state.gameHistory[0].ts === gamewinPendingTs) {
-      state.gameHistory[0].ballsLeftOnTable = gamewinBallsLeftValue;
-      if (SKUNK_RACK_GAME_TYPES.indexOf(state.gameHistory[0].gameType) !== -1) {
-        state.gameHistory[0].skunk = gamewinBallsLeftValue === 7;
+    if (state.gameHistory[0] && state.gameHistory[0].ts === gamewinPendingTs) {
+      if (gamewinBallsLeftValue !== null) {
+        state.gameHistory[0].ballsLeftOnTable = gamewinBallsLeftValue;
+        if (SKUNK_RACK_GAME_TYPES.indexOf(state.gameHistory[0].gameType) !== -1) {
+          state.gameHistory[0].skunk = gamewinBallsLeftValue === 7;
+        }
       }
+      state.gameHistory[0].teamCredit = gamewinCountsForTeamValue ? gamewinCountsForTeamName : null;
       saveState();
     }
     gamewinOverlay.classList.add("hidden");
@@ -4234,6 +4301,8 @@
     gamewinBallsLeftValue = null;
     gamewinPendingTs = null;
     gamewinPendingOnClose = null;
+    gamewinCountsForTeamName = null;
+    gamewinCountsForTeamValue = false;
     if (onClose) onClose();
   }
 
@@ -4244,6 +4313,8 @@
   function dismissGameWinOverlaySilently() {
     gamewinOverlay.classList.add("hidden");
     gamewinBallsLeftValue = null;
+    gamewinCountsForTeamName = null;
+    gamewinCountsForTeamValue = false;
     gamewinPendingTs = null;
     gamewinPendingOnClose = null;
   }
@@ -10611,7 +10682,8 @@
         raceTarget: entry.raceTarget,
         raceCount: entry.raceCount,
         ballsLeftOnTable: entry.ballsLeftOnTable === undefined ? null : entry.ballsLeftOnTable,
-        skunk: entry.skunk === undefined ? false : entry.skunk
+        skunk: entry.skunk === undefined ? false : entry.skunk,
+        teamCredit: entry.teamCredit || null
       });
     });
     if (games.length === 0) return null;
@@ -11213,17 +11285,30 @@
       });
       var myTeamSynopsis = computeWinLossSynopsis(myTeamGames);
 
+      // Separately, solo (individual-mode) wins explicitly marked via the
+      // win popup's "Count this win for the team" checkbox (see
+      // buildCountsForTeamRow) - games that aren't "Play as Teams" co-op
+      // wins at all, just an individual win this player chose to credit
+      // to the team.
+      var creditedSoloWins = filtered.filter(function (g) {
+        return !g.isTeam && g.teamCredit && normalizeNameKey(g.teamCredit) === normalizeNameKey(clubTeamName);
+      }).length;
+
       var myTeamHeading = document.createElement("div");
       myTeamHeading.className = "clubteam-block-heading";
       myTeamHeading.textContent = T("playerPage.clubTeamMyRecordHeading", { team: clubTeamName });
       playerPageClubTeamBlock.appendChild(myTeamHeading);
 
-      if (myTeamSynopsis.total === 0) {
+      playerPageClubTeamBlock.appendChild(
+        synopsisStatRow(T("playerPage.clubTeamCreditedSoloWins"), creditedSoloWins, creditedSoloWins ? "win" : null)
+      );
+
+      if (myTeamSynopsis.total === 0 && creditedSoloWins === 0) {
         var noClubTeamGames = document.createElement("p");
         noClubTeamGames.className = "empty-hint";
         noClubTeamGames.textContent = T("playerPage.clubTeamNoGamesYet", { team: clubTeamName });
         playerPageClubTeamBlock.appendChild(noClubTeamGames);
-      } else {
+      } else if (myTeamSynopsis.total > 0) {
         playerPageClubTeamBlock.appendChild(synopsisStatRow(T("playerPage.gamesWon"), myTeamSynopsis.wins, "win"));
         playerPageClubTeamBlock.appendChild(synopsisStatRow(T("playerPage.gamesLost"), myTeamSynopsis.losses, "loss"));
         playerPageClubTeamBlock.appendChild(
