@@ -13028,6 +13028,10 @@
   // just winning. Games where this was never recorded don't count for
   // or against anyone (see averageBallsLeftOnWins).
   var LEADERBOARD_DOMINANCE_WEIGHT = 1.5;
+  // Points per skunk win (opponent potted zero balls) - a discrete,
+  // rarer achievement than an ordinary win, so weighted well above a
+  // single point of win-rate but below a whole tournament win.
+  var LEADERBOARD_SKUNK_WIN_WEIGHT = 4;
 
   // Only wins where the balls-left-on-table stepper (see
   // persistBallsLeftLive) was actually used contribute - most win
@@ -13048,28 +13052,41 @@
     return sum / vals.length;
   }
 
+  // How many of a player's wins were skunks (opponent potted zero
+  // balls) - see the skunk determination in creditWin/persistBallsLeft-
+  // Live, stamped onto the game entry itself as g.skunk.
+  function countSkunkWins(games) {
+    var count = 0;
+    games.forEach(function (g) {
+      if (g.result === "won" && g.skunk) count += 1;
+    });
+    return count;
+  }
+
   // A regularized win rate (so a 2-0 newcomer can't outrank a proven
   // 40-10 veteran - the +LEADERBOARD_MIN_GAMES in the denominator acts
   // like assuming everyone starts with that many "neutral" games), a
   // heavily-weighted tournament-win bonus, a rating component, a bonus
-  // for winning by wide margins, and a log-scaled activity bonus that
-  // rewards playing more without letting raw volume alone swamp the win
-  // rate. Returns every term separately (not just the total) so
-  // explainLeaderboardRanking can point at exactly which ones decided a
-  // given pair's order.
+  // for winning by wide margins, a bonus for skunk wins, and a log-
+  // scaled activity bonus that rewards playing more without letting raw
+  // volume alone swamp the win rate. Returns every term separately (not
+  // just the total) so explainLeaderboardRanking can point at exactly
+  // which ones decided a given pair's order.
   function computeLeaderboardScoreBreakdown(entry) {
     var winRateTerm = (entry.wins / (entry.gamesPlayed + LEADERBOARD_MIN_GAMES)) * 100;
     var tournamentTerm = entry.tournamentWins * LEADERBOARD_TOURNAMENT_WIN_WEIGHT;
     var ratingTerm = entry.rating / 20;
     var dominanceTerm = entry.avgBallsLeftOnWins * LEADERBOARD_DOMINANCE_WEIGHT;
+    var skunkTerm = entry.skunkWins * LEADERBOARD_SKUNK_WIN_WEIGHT;
     var activityTerm = Math.log2(entry.gamesPlayed) * 2;
     return {
       winRateTerm: winRateTerm,
       tournamentTerm: tournamentTerm,
       ratingTerm: ratingTerm,
       dominanceTerm: dominanceTerm,
+      skunkTerm: skunkTerm,
       activityTerm: activityTerm,
-      total: winRateTerm + tournamentTerm + ratingTerm + dominanceTerm + activityTerm
+      total: winRateTerm + tournamentTerm + ratingTerm + dominanceTerm + skunkTerm + activityTerm
     };
   }
 
@@ -13086,7 +13103,8 @@
           winPct: gamesPlayed ? wins / gamesPlayed : 0,
           rating: getPlayerRating(name),
           tournamentWins: stats.tournamentWins,
-          avgBallsLeftOnWins: averageBallsLeftOnWins(stats.games.concat(stats.tournamentGames))
+          avgBallsLeftOnWins: averageBallsLeftOnWins(stats.games.concat(stats.tournamentGames)),
+          skunkWins: countSkunkWins(stats.games.concat(stats.tournamentGames))
         };
       })
       .filter(function (e) {
@@ -13144,6 +13162,16 @@
             leader: leader.name,
             leaderVal: leader.avgBallsLeftOnWins.toFixed(1),
             otherVal: other.avgBallsLeftOnWins.toFixed(1)
+          });
+        }
+      },
+      {
+        delta: a.scoreBreakdown.skunkTerm - b.scoreBreakdown.skunkTerm,
+        describe: function (leader, other) {
+          return T("leaderboard.reasonSkunk", {
+            leader: leader.name,
+            leaderVal: leader.skunkWins,
+            otherVal: other.skunkWins
           });
         }
       },
@@ -13286,6 +13314,9 @@
     if (entry.avgBallsLeftOnWins > 0) {
       statParts.push(T("leaderboard.statDominance", { balls: entry.avgBallsLeftOnWins.toFixed(1) }));
     }
+    if (entry.skunkWins > 0) {
+      statParts.push(T("leaderboard.statSkunkWins", { wins: entry.skunkWins }));
+    }
     statParts.push(T("leaderboard.statRating", { rating: entry.rating }));
     stats.textContent = statParts.join(" • ");
     body.appendChild(stats);
@@ -13310,7 +13341,8 @@
     leaderboardFormulaNote.textContent = T("leaderboard.formulaNote", {
       minGames: LEADERBOARD_MIN_GAMES,
       tournamentWeight: LEADERBOARD_TOURNAMENT_WIN_WEIGHT,
-      dominanceWeight: LEADERBOARD_DOMINANCE_WEIGHT
+      dominanceWeight: LEADERBOARD_DOMINANCE_WEIGHT,
+      skunkWeight: LEADERBOARD_SKUNK_WIN_WEIGHT
     });
   }
 
