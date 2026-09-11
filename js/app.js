@@ -1572,6 +1572,7 @@
   var playerStandingsList = document.getElementById("player-standings-list");
 
   var dayNotesTextarea = document.getElementById("day-notes-textarea");
+  var runRecordsSummary = document.getElementById("run-records-summary");
   var dayReportFormatSelect = document.getElementById("day-report-format-select");
   var btnDayReportCopy = document.getElementById("btn-day-report-copy");
   var btnDayReportEmail = document.getElementById("btn-day-report-email");
@@ -1952,6 +1953,13 @@
       var targetId = keypadOrderedPlayerIds[keypadNum - 1];
       if (!targetId) return;
       e.preventDefault();
+      // "The counter should stop when we select the next player" - an
+      // explicit keypad switch away from whoever's on a run stops it
+      // right here, even before the newly-selected player has scored
+      // anything yet (bumpRunForPlayer would only catch it once they do).
+      if (runTrackingApplies() && currentRunPlayerId && currentRunPlayerId !== targetId) {
+        resetCurrentRun();
+      }
       keypadSelectedPlayerId = targetId;
       renderScoreboard();
       // Only during an actual points/ball game - Quick Counter is a
@@ -2111,6 +2119,7 @@
     renderRotation();
     renderWizardIfOpen();
     updateDayNotesSummary();
+    updateRunRecordsSummary();
     updateDayReportRecipientsLine();
     renderRecoverDataList();
     renderReportArchiveList();
@@ -2990,6 +2999,18 @@
     return row;
   }
 
+  // A little "🔥 N in a row" badge for whichever player currently has an
+  // active run (see bumpRunForPlayer) - only during a balls/points game,
+  // and only ever shown for the one player it's tracking right now.
+  function buildRunStreakBadge(player) {
+    if (!runTrackingApplies()) return null;
+    if (currentRunPlayerId !== player.id || currentRunCount < 1) return null;
+    var badge = document.createElement("div");
+    badge.className = "run-streak-badge";
+    badge.textContent = T("scoreboard.runStreak", { count: currentRunCount });
+    return badge;
+  }
+
   function buildIndividualPanel(player) {
     var panel = document.createElement("div");
     panel.className = "player-panel";
@@ -3034,6 +3055,9 @@
     block.appendChild(value);
     panel.appendChild(block);
 
+    var runBadge = buildRunStreakBadge(player);
+    if (runBadge) panel.appendChild(runBadge);
+
     if (state.fairRaceEnabled) panel.appendChild(buildFairRaceNote(effectiveRaceTarget(player.id)));
 
     panel.appendChild(buildBallControls(player, false, isSingleRackGame));
@@ -3062,6 +3086,9 @@
     value.className = "stat-value small";
     value.textContent = player.balls || 0;
     card.appendChild(value);
+
+    var runBadge = buildRunStreakBadge(player);
+    if (runBadge) card.appendChild(runBadge);
 
     card.appendChild(buildBallControls(player, disabled, undoOnMinus));
     markAsKeypadTarget(card, player);
@@ -4374,6 +4401,112 @@
     // already zeroes elapsed/beep/tick and starts it running without
     // touching the persisted hidden flag.
     if (shotCounterActive()) startShotCounter();
+    resetCurrentRun();
+  }
+
+  // ---------------------------------------------------------------------
+  // "Balls in a row" run tracking - only meaningful for games scored
+  // ball-by-ball or point-by-point (unit "balls"/"points"; see
+  // GAME_TYPES). A rack-unit game's "+1" already means "won the whole
+  // rack," not "potted one more ball," so there's no run to track there.
+  // Session-only state (not persisted, like keypadSelectedPlayerId) - the
+  // two records below are what actually survive a reload.
+  // ---------------------------------------------------------------------
+
+  var RUN_RECORDS_KEY = "poolMasterCounter.runRecords.v1";
+  // A single ball isn't a "run" worth immortalizing as a record.
+  var RUN_RECORD_MIN_TO_TRACK = 2;
+
+  function loadRunRecordsFromStorage() {
+    try {
+      var raw = localStorage.getItem(RUN_RECORDS_KEY);
+      var parsed = raw ? JSON.parse(raw) : null;
+      return {
+        allTimeBest: parsed && parsed.allTimeBest ? parsed.allTimeBest : null,
+        dailyBest: parsed && parsed.dailyBest ? parsed.dailyBest : null
+      };
+    } catch (e) {
+      return { allTimeBest: null, dailyBest: null };
+    }
+  }
+
+  function saveRunRecordsToStorage(data) {
+    try {
+      localStorage.setItem(RUN_RECORDS_KEY, JSON.stringify(data));
+    } catch (e) {
+      console.warn("Could not save run records.", e);
+    }
+  }
+
+  var RUN_RECORDS = loadRunRecordsFromStorage();
+
+  // dailyBest is stored as a single ongoing value, not one entry per day
+  // - this is what makes "is it actually today's record" a read-side
+  // question: a value left over from a previous day (nobody's beaten it
+  // yet today) reads as "no record yet today," not yesterday's number.
+  function getTodaysBestRun() {
+    if (!RUN_RECORDS.dailyBest) return null;
+    return localDateStrFromTs(RUN_RECORDS.dailyBest.ts) === todayDateStr() ? RUN_RECORDS.dailyBest : null;
+  }
+
+  function getAllTimeBestRun() {
+    return RUN_RECORDS.allTimeBest;
+  }
+
+  // Checked continuously as a run grows (see bumpRunForPlayer), not just
+  // once when it "ends" - a run's final length is its peak, so comparing
+  // on every extra ball is exactly equivalent and means there's no
+  // separate "finalize" step that could miss it.
+  function checkRunRecords(playerName, value) {
+    if (value < RUN_RECORD_MIN_TO_TRACK) return;
+    var changed = false;
+    var nowTs = new Date().toISOString();
+    if (!RUN_RECORDS.allTimeBest || value > RUN_RECORDS.allTimeBest.value) {
+      RUN_RECORDS.allTimeBest = { name: playerName, value: value, ts: nowTs };
+      changed = true;
+    }
+    var dailyStale = !RUN_RECORDS.dailyBest || localDateStrFromTs(RUN_RECORDS.dailyBest.ts) !== todayDateStr();
+    if (dailyStale || value > RUN_RECORDS.dailyBest.value) {
+      RUN_RECORDS.dailyBest = { name: playerName, value: value, ts: nowTs };
+      changed = true;
+    }
+    if (changed) saveRunRecordsToStorage(RUN_RECORDS);
+  }
+
+  var currentRunPlayerId = null;
+  var currentRunPlayerName = null;
+  var currentRunCount = 0;
+
+  function resetCurrentRun() {
+    currentRunPlayerId = null;
+    currentRunPlayerName = null;
+    currentRunCount = 0;
+  }
+
+  function runTrackingApplies() {
+    return !quickCounterMode && state.currentGame.unit !== "rack";
+  }
+
+  // Called from adjustScore for every +/- - a run switches (and the old
+  // one simply stops growing, already checked against the records on
+  // every ball it gained) the instant a DIFFERENT player scores, and an
+  // explicit keypad switch to someone else (see handleKeypadShortcut)
+  // stops it even before they've scored anything yet, per "the counter
+  // should stop when we select the next player."
+  function bumpRunForPlayer(playerId, delta) {
+    if (!runTrackingApplies()) return;
+    if (delta > 0) {
+      if (currentRunPlayerId !== playerId) {
+        currentRunPlayerId = playerId;
+        var p = getPlayer(playerId);
+        currentRunPlayerName = p ? p.name : null;
+        currentRunCount = 0;
+      }
+      currentRunCount += 1;
+      if (currentRunPlayerName) checkRunRecords(currentRunPlayerName, currentRunCount);
+    } else if (delta < 0 && currentRunPlayerId === playerId) {
+      currentRunCount = Math.max(0, currentRunCount - 1);
+    }
   }
 
   function adjustScore(playerId, delta) {
@@ -4417,6 +4550,7 @@
     var next = (player.balls || 0) + delta;
     if (next < 0 && !allowNegative) next = 0;
     player.balls = next;
+    bumpRunForPlayer(playerId, delta);
 
     if (delta > 0) {
       var target = state.currentGame.target;
@@ -4649,7 +4783,11 @@
     var raceWins = games.filter(function (g) {
       return g.wonRace;
     });
-    return { date: dateStr, games: games, players: players, tournaments: tournaments, raceWins: raceWins };
+    // Only the live "today" record is tracked (see checkRunRecords) -
+    // there's no historical per-day archive, so a report for a past
+    // date has nothing to show here.
+    var bestRunToday = dateStr === todayDateStr() ? getTodaysBestRun() : null;
+    return { date: dateStr, games: games, players: players, tournaments: tournaments, raceWins: raceWins, bestRunToday: bestRunToday };
   }
 
   function tournamentFormatLabel(format) {
@@ -4671,6 +4809,10 @@
     var champions = joinNamesForReport(t.championNames || []);
     var text = champions + " won the " + tournamentFormatLabel(t.format) + " tournament (" + (t.players || []).length + " players)";
     return "👑 " + (time ? time + " — " : "") + text;
+  }
+
+  function formatReportBestRunLine(run) {
+    return "🔥 Best run of the day: " + run.value + " in a row (" + run.name + ")";
   }
 
   function joinNamesForReport(names) {
@@ -4879,7 +5021,7 @@
         lines.push("Total games: " + data.games.length + (typesSummary ? "   |   " + typesSummary : ""));
       }
 
-      if (data.raceWins.length || data.tournaments.length) {
+      if (data.raceWins.length || data.tournaments.length || data.bestRunToday) {
         lines.push("");
         data.raceWins.forEach(function (g) {
           lines.push(formatReportRaceWinLine(g));
@@ -4887,6 +5029,7 @@
         data.tournaments.forEach(function (t) {
           lines.push(formatReportTournamentLine(t));
         });
+        if (data.bestRunToday) lines.push(formatReportBestRunLine(data.bestRunToday));
       }
 
       var earlierGames = data.games.filter(function (g) {
@@ -4957,7 +5100,7 @@
         }
         lines.push(gamesLine);
       }
-      if (data.raceWins.length || data.tournaments.length) {
+      if (data.raceWins.length || data.tournaments.length || data.bestRunToday) {
         lines.push("");
         data.raceWins.forEach(function (g) {
           lines.push(formatReportRaceWinLine(g));
@@ -4965,6 +5108,7 @@
         data.tournaments.forEach(function (t) {
           lines.push(formatReportTournamentLine(t));
         });
+        if (data.bestRunToday) lines.push(formatReportBestRunLine(data.bestRunToday));
       }
     }
     return lines.join("\n");
@@ -5012,7 +5156,7 @@
         if (typesSummary) lines.push("Games played: " + typesSummary);
       }
 
-      if (data.raceWins.length || data.tournaments.length) {
+      if (data.raceWins.length || data.tournaments.length || data.bestRunToday) {
         lines.push("");
         lines.push("TOURNAMENTS");
         data.raceWins.forEach(function (g) {
@@ -5021,6 +5165,7 @@
         data.tournaments.forEach(function (t) {
           lines.push(formatReportTournamentLine(t));
         });
+        if (data.bestRunToday) lines.push(formatReportBestRunLine(data.bestRunToday));
       }
 
       if (data.games.length > 0) {
@@ -5071,7 +5216,7 @@
         lines.push("Total games: " + data.games.length + (typesSummary ? " · " + typesSummary : ""));
       }
 
-      if (data.raceWins.length || data.tournaments.length) {
+      if (data.raceWins.length || data.tournaments.length || data.bestRunToday) {
         lines.push("");
         data.raceWins.forEach(function (g) {
           lines.push(formatReportRaceWinLine(g));
@@ -5079,6 +5224,7 @@
         data.tournaments.forEach(function (t) {
           lines.push(formatReportTournamentLine(t));
         });
+        if (data.bestRunToday) lines.push(formatReportBestRunLine(data.bestRunToday));
       }
 
       if (data.games.length > 0) {
@@ -5154,7 +5300,7 @@
         dayReportPrintView.appendChild(table);
       }
 
-      if (data.raceWins.length || data.tournaments.length) {
+      if (data.raceWins.length || data.tournaments.length || data.bestRunToday) {
         dayReportPrintView.appendChild(printReportSectionHeading("Tournaments"));
         var tournList = document.createElement("ul");
         data.raceWins.forEach(function (g) {
@@ -5167,6 +5313,11 @@
           li.textContent = formatReportTournamentLine(t);
           tournList.appendChild(li);
         });
+        if (data.bestRunToday) {
+          var runLi = document.createElement("li");
+          runLi.textContent = formatReportBestRunLine(data.bestRunToday);
+          tournList.appendChild(runLi);
+        }
         dayReportPrintView.appendChild(tournList);
       }
 
@@ -6155,6 +6306,12 @@
       });
     }
 
+    if (data.bestRunToday) {
+      lines.push("\r\n");
+      lines.push(csvRow(["Best Run Today", "Player"]));
+      lines.push(csvRow([data.bestRunToday.value, data.bestRunToday.name]));
+    }
+
     // A leading BOM isn't needed for the delimiters/structure, but
     // without it Excel (Windows especially, sometimes Mac too) guesses
     // the wrong encoding for anything outside plain ASCII - accented
@@ -6187,6 +6344,26 @@
     parts.push(data.players.length + " player" + (data.players.length === 1 ? "" : "s"));
     parts.push(notes ? notes.length + " character note" : "no notes yet");
     setPanelSummary("day-notes-panel", parts.join(" · "));
+  }
+
+  // Live "🔥 best run today / 🏆 all-time record" line in the Publish
+  // Daily Report panel - hidden entirely until the feature actually has
+  // data (nobody's ever run 2+ balls in a row on this device yet).
+  function updateRunRecordsSummary() {
+    var allTimeRun = getAllTimeBestRun();
+    if (!allTimeRun) {
+      runRecordsSummary.classList.add("hidden");
+      return;
+    }
+    var todaysRun = getTodaysBestRun();
+    // "No run yet today" is its own sentence rather than trying to
+    // template an optional player name away inside one i18n string.
+    var todayLine = todaysRun
+      ? T("dayNotes.bestRunToday", { value: todaysRun.value, name: todaysRun.name })
+      : T("dayNotes.noRunYetToday");
+    var allTimeLine = T("dayNotes.bestRunAllTime", { value: allTimeRun.value, name: allTimeRun.name });
+    runRecordsSummary.textContent = todayLine + "   ·   " + allTimeLine;
+    runRecordsSummary.classList.remove("hidden");
   }
 
   function updateDayReportRecipientsLine() {
@@ -10804,6 +10981,27 @@
     playerPageSynopsisBody.appendChild(
       synopsisStatRow(T("playerPage.winPct"), synopsis.pct === null ? "—" : synopsis.pct + "%")
     );
+
+    // Only shown once the feature actually has data - a device where
+    // nobody's ever run 2+ balls in a row yet has nothing worth showing.
+    var allTimeRun = getAllTimeBestRun();
+    if (allTimeRun) {
+      playerPageSynopsisBody.appendChild(
+        synopsisStatRow(
+          T("playerPage.allTimeBestRun"),
+          T("playerPage.bestRunValue", { value: allTimeRun.value, name: allTimeRun.name }),
+          allTimeRun.name === currentStatsPlayerName ? "win" : null
+        )
+      );
+      var todaysRun = getTodaysBestRun();
+      playerPageSynopsisBody.appendChild(
+        synopsisStatRow(
+          T("playerPage.todaysBestRun"),
+          todaysRun ? T("playerPage.bestRunValue", { value: todaysRun.value, name: todaysRun.name }) : T("playerPage.noRunYetToday"),
+          todaysRun && todaysRun.name === currentStatsPlayerName ? "win" : null
+        )
+      );
+    }
 
     // How many of this player's TEAM wins they personally potted the
     // winning ball for (see the mvp selection in creditWin) - their
