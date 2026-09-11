@@ -1240,12 +1240,21 @@ input[type="number"] {
   opacity: 1;
 }
 
+/* A flat 30%-black wash read fine on the original dark felt themes,
+   but on any light theme it turns into a muddy mid-gray chip that
+   --accent text can't reliably read against (and even on a dark theme,
+   a fixed black doesn't necessarily suit an unrelated hue like Opal's
+   purple or Copper's warm brown). A tint of the theme's own accent
+   color into its own panel color instead always stays light on light
+   themes and dark on dark ones, the same relationship --accent-as-text
+   already relies on everywhere else it's used (player-name links,
+   leaderboard rows, etc.) without a contrast problem. */
 .rating-badge {
   display: inline-block;
   margin-left: 7px;
   padding: 2px 8px;
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.3);
+  background: color-mix(in srgb, var(--accent) 18%, var(--bg-panel));
   border: 1px solid var(--border);
   color: var(--accent);
   font-size: 0.95rem;
@@ -3903,10 +3912,14 @@ input[type="number"] {
 
 /* The circular back arrow up in the header is easy to miss on a screen
    that auto-pops-up uninvited (see maybeAutoShowLeaderboard) - this is
-   the unmissable, unambiguous way out, front and center in the banner. */
+   the unmissable, unambiguous way out, sitting right below the ranked
+   list (or the empty-state hint standing in for it) so it's the next
+   thing there is to do once you're done reading. */
 .leaderboard-play-btn {
   display: block;
-  margin: 18px auto 0;
+  width: max-content;
+  max-width: 100%;
+  margin: 18px auto 16px;
   font-size: 1.05rem;
   font-weight: 800;
   padding: 14px 28px;
