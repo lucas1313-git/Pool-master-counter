@@ -1439,6 +1439,7 @@
   var playerPageSynopsisBody = document.getElementById("player-page-synopsis-body");
   var playerPageH2hList = document.getElementById("player-page-h2h-list");
   var playerPageTeamsList = document.getElementById("player-page-teams-list");
+  var playerPageClubTeamBlock = document.getElementById("player-page-clubteam-block");
   var playerPageAchievementsList = document.getElementById("player-page-achievements-list");
   var btnReturnToGlobalStats = document.getElementById("btn-return-to-global-stats");
   var playerPageSwitcher = document.getElementById("player-page-switcher");
@@ -11173,6 +11174,66 @@
       });
     }
 
+    // Persistent club team (see buildClubTeamBadge), not the ad-hoc
+    // teammate-combo records built below - only shown once there's an
+    // actual team of 2+ to report on, same threshold buildSharedTeamBanner
+    // uses for the big on-scoreboard team name.
+    var clubTeamName = getPlayerContact(currentStatsPlayerName).clubTeam;
+    var clubTeamMembers = clubTeamName ? getClubTeamMembers(clubTeamName) : [];
+    playerPageClubTeamBlock.innerHTML = "";
+    if (clubTeamName && clubTeamMembers.length >= 2) {
+      playerPageClubTeamBlock.classList.remove("hidden");
+      var teamAgg = computeClubTeamAggregate(clubTeamMembers);
+
+      var teamHeading = document.createElement("div");
+      teamHeading.className = "clubteam-block-heading";
+      teamHeading.textContent = T("playerPage.clubTeamStatsHeading", { team: clubTeamName });
+      playerPageClubTeamBlock.appendChild(teamHeading);
+
+      playerPageClubTeamBlock.appendChild(synopsisStatRow(T("playerPage.clubTeamGamesPlayed"), teamAgg.gamesPlayed));
+      playerPageClubTeamBlock.appendChild(
+        synopsisStatRow(T("playerPage.clubTeamWinRate"), Math.round(teamAgg.winPct * 100) + "%")
+      );
+      playerPageClubTeamBlock.appendChild(
+        synopsisStatRow(T("playerPage.clubTeamTournamentWins"), teamAgg.tournamentWins, teamAgg.tournamentWins ? "win" : null)
+      );
+      playerPageClubTeamBlock.appendChild(synopsisStatRow(T("playerPage.clubTeamRating"), Math.round(teamAgg.rating)));
+
+      // This player's own record specifically while paired with a
+      // teammate from the same club team (not every ad-hoc partner they've
+      // ever played with) - scoped to the same period filter as the rest
+      // of this page, unlike the lifetime team totals above.
+      var myTeamGames = filtered.filter(function (g) {
+        return (
+          g.isTeam &&
+          (g.teammateNames || []).some(function (tm) {
+            return normalizeNameKey(getPlayerContact(tm).clubTeam || "") === normalizeNameKey(clubTeamName);
+          })
+        );
+      });
+      var myTeamSynopsis = computeWinLossSynopsis(myTeamGames);
+
+      var myTeamHeading = document.createElement("div");
+      myTeamHeading.className = "clubteam-block-heading";
+      myTeamHeading.textContent = T("playerPage.clubTeamMyRecordHeading", { team: clubTeamName });
+      playerPageClubTeamBlock.appendChild(myTeamHeading);
+
+      if (myTeamSynopsis.total === 0) {
+        var noClubTeamGames = document.createElement("p");
+        noClubTeamGames.className = "empty-hint";
+        noClubTeamGames.textContent = T("playerPage.clubTeamNoGamesYet", { team: clubTeamName });
+        playerPageClubTeamBlock.appendChild(noClubTeamGames);
+      } else {
+        playerPageClubTeamBlock.appendChild(synopsisStatRow(T("playerPage.gamesWon"), myTeamSynopsis.wins, "win"));
+        playerPageClubTeamBlock.appendChild(synopsisStatRow(T("playerPage.gamesLost"), myTeamSynopsis.losses, "loss"));
+        playerPageClubTeamBlock.appendChild(
+          synopsisStatRow(T("playerPage.winPct"), myTeamSynopsis.pct === null ? "—" : myTeamSynopsis.pct + "%")
+        );
+      }
+    } else {
+      playerPageClubTeamBlock.classList.add("hidden");
+    }
+
     var teamRecords = computeTeamRecords(filtered, currentStatsPlayerName);
     setPanelSummary(
       "player-page-teams-panel",
@@ -13288,6 +13349,67 @@
   // entry in the Players view - the two views are just different
   // groupings of the same underlying game history, not a choice between
   // crediting the player or the team.
+  // Everyone (from any source - roster, stats, history) whose persistent
+  // club team (see buildClubTeamBadge) matches the given name, case-
+  // insensitively. Shared by the team leaderboard grouping below and by
+  // the Player Stats page's own "my team" block, so both agree on who
+  // counts as a teammate.
+  function getClubTeamMembers(clubTeam) {
+    var key = normalizeNameKey(clubTeam);
+    if (!key) return [];
+    return getAllKnownPlayerNames().filter(function (name) {
+      return normalizeNameKey(getPlayerContact(name).clubTeam || "") === key;
+    });
+  }
+
+  // Sums a set of teammates' individual career stats into one team-shaped
+  // record (rating averaged, same as tournament seeding - see
+  // averageRating) - no separate win counter of its own, a team's stats
+  // are just its members' stats added together. Shared by
+  // computeLeaderboardTeamEntries (which additionally filters/ranks by
+  // LEADERBOARD_MIN_GAMES) and the Player Stats page, which shows every
+  // team regardless of game count since it's about this one player's
+  // team, not a ranking.
+  function computeClubTeamAggregate(members) {
+    var gamesPlayed = 0;
+    var wins = 0;
+    var tournamentWins = 0;
+    var skunkWins = 0;
+    var ratingSum = 0;
+    var allMemberGames = [];
+    members.forEach(function (name) {
+      var stats = computePlayerCareerStats(name, "all");
+      gamesPlayed += stats.played + stats.tournamentPlayed;
+      wins += stats.wins + stats.tournamentWins;
+      tournamentWins += stats.tournamentWins;
+      var games = stats.games.concat(stats.tournamentGames);
+      skunkWins += countSkunkWins(games);
+      allMemberGames = allMemberGames.concat(games);
+      ratingSum += getPlayerRating(name);
+    });
+    return {
+      members: members,
+      gamesPlayed: gamesPlayed,
+      wins: wins,
+      winPct: gamesPlayed ? wins / gamesPlayed : 0,
+      rating: members.length ? ratingSum / members.length : 0,
+      tournamentWins: tournamentWins,
+      avgDominanceRatio: averageDominanceRatio(allMemberGames),
+      skunkWins: skunkWins
+    };
+  }
+
+  // A "team" here is nothing more than the set of players who've typed
+  // the same persistent club team name (see buildClubTeamBadge) -
+  // there's no separate win counter to maintain: a team's stats are
+  // just its members' individual stats summed together (rating
+  // averaged, the same way team strength is already treated for
+  // tournament seeding - see averageRating), run through the exact same
+  // computeLeaderboardScoreBreakdown formula used for players. A player
+  // who's part of a team still keeps their own personal leaderboard
+  // entry in the Players view - the two views are just different
+  // groupings of the same underlying game history, not a choice between
+  // crediting the player or the team.
   function computeLeaderboardTeamEntries() {
     var groupsByKey = {};
     var order = [];
@@ -13305,33 +13427,9 @@
     var entries = order
       .map(function (key) {
         var group = groupsByKey[key];
-        var gamesPlayed = 0;
-        var wins = 0;
-        var tournamentWins = 0;
-        var skunkWins = 0;
-        var ratingSum = 0;
-        var allMemberGames = [];
-        group.members.forEach(function (name) {
-          var stats = computePlayerCareerStats(name, "all");
-          gamesPlayed += stats.played + stats.tournamentPlayed;
-          wins += stats.wins + stats.tournamentWins;
-          tournamentWins += stats.tournamentWins;
-          var games = stats.games.concat(stats.tournamentGames);
-          skunkWins += countSkunkWins(games);
-          allMemberGames = allMemberGames.concat(games);
-          ratingSum += getPlayerRating(name);
-        });
-        return {
-          name: group.teamName,
-          members: group.members,
-          gamesPlayed: gamesPlayed,
-          wins: wins,
-          winPct: gamesPlayed ? wins / gamesPlayed : 0,
-          rating: ratingSum / group.members.length,
-          tournamentWins: tournamentWins,
-          avgDominanceRatio: averageDominanceRatio(allMemberGames),
-          skunkWins: skunkWins
-        };
+        var agg = computeClubTeamAggregate(group.members);
+        agg.name = group.teamName;
+        return agg;
       })
       .filter(function (e) {
         return e.gamesPlayed >= LEADERBOARD_MIN_GAMES;
@@ -13542,6 +13640,14 @@
       members.className = "leaderboard-team-members";
       members.textContent = entry.members.join(" & ");
       body.appendChild(members);
+    } else {
+      var clubTeam = getPlayerContact(entry.name).clubTeam;
+      if (clubTeam) {
+        var teamTag = document.createElement("div");
+        teamTag.className = "leaderboard-team-members";
+        teamTag.textContent = T("leaderboard.memberOfTeam", { team: clubTeam });
+        body.appendChild(teamTag);
+      }
     }
 
     var stats = document.createElement("div");
