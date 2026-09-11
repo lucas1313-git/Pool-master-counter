@@ -1621,6 +1621,7 @@
   var gamewinPendingOnClose = null;
 
   var onHillOverlay = document.getElementById("onhill-overlay");
+  var onHillCard = onHillOverlay.querySelector(".onhill-card");
   var onHillMessage = document.getElementById("onhill-message");
   var btnOnHillClose = document.getElementById("btn-onhill-close");
 
@@ -3962,9 +3963,32 @@
   // showing by then.
   var onHillAutoCloseTimer = null;
 
+  // The card's CSS clamp()s only ever see viewport size, never how much
+  // text actually landed in it - a long free-for-all name list ("Alice,
+  // Bob, Carla, and Dave is ON THE HILL...") at this card's deliberately
+  // huge baseline sizes can overflow even the svh-capped max-height on a
+  // short/narrow screen no matter how those clamp()s are tuned. Once the
+  // real text is painted, shrink every font on the card by the same
+  // --onhill-scale factor, in small steps, until scrollHeight actually
+  // fits within clientHeight (the max-height-constrained box) or a floor
+  // is hit - never illegible, and overflow-y:auto still catches the
+  // rare remainder.
+  var ONHILL_MIN_SCALE = 0.45;
+  var ONHILL_SCALE_STEP = 0.05;
+
+  function fitOnHillCardToViewport() {
+    onHillCard.style.removeProperty("--onhill-scale");
+    var scale = 1;
+    while (onHillCard.scrollHeight > onHillCard.clientHeight && scale > ONHILL_MIN_SCALE) {
+      scale -= ONHILL_SCALE_STEP;
+      onHillCard.style.setProperty("--onhill-scale", scale.toFixed(2));
+    }
+  }
+
   function announceOnHill(names, target) {
     onHillMessage.textContent = names + " is ON THE HILL — one more win takes the race to " + target + "! Better step up. 👀";
     onHillOverlay.classList.remove("hidden");
+    fitOnHillCardToViewport();
     playOnHillSound();
     if (onHillAutoCloseTimer) clearTimeout(onHillAutoCloseTimer);
     onHillAutoCloseTimer = setTimeout(function () {
@@ -13020,6 +13044,20 @@
   var LEADERBOARD_MIN_GAMES = 10;
   var LEADERBOARD_LAST_SHOWN_KEY = "poolMasterCounter.leaderboardLastShown.v1";
   var LEADERBOARD_AUTO_SHOW_MS = 12 * 60 * 60 * 1000;
+  // A second, independent trigger alongside the "hasn't been shown in
+  // 12h" one above: the device just sitting open and untouched for a
+  // long stretch (left on a table between games, forgotten overnight
+  // without the app ever being closed) - tracked in memory only, not
+  // persisted, since actually closing and reopening the app is itself
+  // activity and already covered by the 12h check.
+  var LEADERBOARD_IDLE_SHOW_MS = 2 * 60 * 60 * 1000;
+  var lastActivityTs = Date.now();
+  function markUserActivity() {
+    lastActivityTs = Date.now();
+  }
+  ["pointerdown", "keydown", "touchstart"].forEach(function (evt) {
+    document.addEventListener(evt, markUserActivity);
+  });
   // Points per tournament win - deliberately large relative to the other
   // terms (a rating swing of a full 100 points is only +5) so tournament
   // success is a genuinely heavy factor, not a tiebreaker.
@@ -13401,10 +13439,18 @@
     // page the player is already actively using (mid-tournament, editing
     // contacts, etc.).
     if (appRoot.classList.contains("hidden")) return;
+    var now = Date.now();
     var lastShown = parseInt(localStorage.getItem(LEADERBOARD_LAST_SHOWN_KEY) || "0", 10);
-    if (Date.now() - lastShown < LEADERBOARD_AUTO_SHOW_MS) return;
+    var shownLongAgo = now - lastShown >= LEADERBOARD_AUTO_SHOW_MS;
+    var idleLongEnough = now - lastActivityTs >= LEADERBOARD_IDLE_SHOW_MS;
+    if (!shownLongAgo && !idleLongEnough) return;
     if (computeLeaderboardEntries().length === 0) return;
     openLeaderboardPage();
+    // Showing it is itself the response to the idle stretch - without
+    // this, the next 5-minute check (see the setInterval below) would
+    // immediately consider the device "still idle" and reopen it again
+    // the moment it's closed, even if the player is now actively there.
+    lastActivityTs = now;
   }
 
   // Builds a mailto:/sms: compose link for whichever selected contacts
