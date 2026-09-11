@@ -718,8 +718,10 @@
   // body/shimmer, and it's always a soft waveform even when the main tone
   // uses a harsher one (sawtooth/square), which rounds off the edge
   // without losing that tone's identity. Both voices feed the shared echo
-  // bus alongside the dry signal.
-  function tone(freq, startTime, duration, type, peakGain) {
+  // bus alongside the dry signal, unless noEcho opts a specific sound out
+  // of that (repeated pips - see playPlayerSwitchSound - blur together
+  // once the echo bus's own tail is still ringing under the next one).
+  function tone(freq, startTime, duration, type, peakGain, noEcho) {
     var ctx = getAudioCtx();
 
     var osc = ctx.createOscillator();
@@ -731,7 +733,7 @@
     gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
     osc.connect(gain);
     gain.connect(ctx.destination);
-    if (echoSend) gain.connect(echoSend);
+    if (echoSend && !noEcho) gain.connect(echoSend);
     osc.start(startTime);
     osc.stop(startTime + duration + 0.02);
 
@@ -746,7 +748,7 @@
     gain2.gain.exponentialRampToValueAtTime(0.0008, startTime + overtoneDuration);
     osc2.connect(gain2);
     gain2.connect(ctx.destination);
-    if (echoSend) gain2.connect(echoSend);
+    if (echoSend && !noEcho) gain2.connect(echoSend);
     osc2.start(startTime);
     osc2.stop(startTime + overtoneDuration + 0.02);
   }
@@ -781,14 +783,16 @@
   // with the real scoring sounds. count is the keypad number just
   // pressed (player 1's shortcut pips once, player 2's twice, and so
   // on) so the number itself is audible, not just which card lit up -
-  // useful without having to look at the screen at all.
+  // useful without having to look at the screen at all. Dry (no echo
+  // bus, see tone's noEcho) - the shared slapback tail was still
+  // ringing under the next pip, blurring the count together.
   function playPlayerSwitchSound(voice, count) {
     var mult = voicePitch(voice);
     var ctx = getAudioCtx();
     var now = ctx.currentTime;
     var pips = Math.max(1, count || 1);
     for (var i = 0; i < pips; i++) {
-      tone(165 * mult, now + i * 0.3, 0.12, "sine", 0.32);
+      tone(165 * mult, now + i * 0.45, 0.12, "sine", 0.5, true);
     }
   }
 
