@@ -381,33 +381,55 @@
   --info: #6fb8b0;
   --info-dark: #4f8f88;
   --text: #fbe8d8;
-  --text-dim: #d9b48a;
+  --text-dim: #f4e3cc;
   --border: #7a4e28;
   --bg-glow: #6b4423;
   --on-accent: #2a1608;
   --on-felt-light: #2a1608;
   --graph-bg: rgba(217, 154, 85, 0.1);
-  --font-family: Rockwell, Georgia, "Iowan Old Style", serif;
+  /* Verdana's wide letterforms and tall x-height read far more clearly
+     than a classic serif over a warm, busy gradient background. */
+  --font-family: Verdana, Tahoma, "Segoe UI", sans-serif;
   color-scheme: dark;
   /* Warm copper glow - gentle highlight bands over a mid-tone patina
-     base, all kept within one warm brown-to-light-copper band (no
-     near-black or near-white extremes) for a soft sheen rather than
-     stark contrast. */
+     base. --text/--text-dim sit directly on body-surface (the header's
+     ghost buttons and title have no background of their own) and on
+     panel-surface/modal-surface (regular panel/card content), so every
+     stop here is capped at #8a5a2e or darker - light enough to still
+     read as a warm copper shimmer, dark enough to keep text legible
+     everywhere the gradient shows through (checked against WCAG's 4.5:1
+     minimum). The brighter highlight band is reserved for
+     btn-primary-surface, where the text sitting on it (--on-accent) is
+     dark, not light, so it can safely go all the way up to a bright
+     highlight without the same problem. */
   --body-surface: linear-gradient(
     120deg,
     #5c3a1c 0%,
-    #8a5a2e 14%,
-    #c99356 26%,
-    #a56f3a 40%,
-    #6b4423 52%,
-    #b3813f 64%,
-    #c99356 76%,
-    #5c3a1c 90%,
-    #4a2c14 100%
+    #7a4e28 16%,
+    #8a5a2e 28%,
+    #6b4423 42%,
+    #855530 56%,
+    #7a4e28 70%,
+    #8a5a2e 84%,
+    #5c3a1c 100%
   );
-  --panel-surface: linear-gradient(140deg, #6b4423 0%, #a56f3a 20%, #c99356 38%, #7a4e28 58%, #ad7b40 76%, #5c3a1c 100%);
+  --panel-surface: linear-gradient(140deg, #6b4423 0%, #8a5a2e 28%, #7a4e28 52%, #855530 76%, #5c3a1c 100%);
   --btn-primary-surface: linear-gradient(150deg, #a56f3a 0%, #c99356 25%, #e6b878 50%, #c99356 75%, #a56f3a 100%);
-  --modal-surface: linear-gradient(160deg, #6b4423 0%, #a56f3a 22%, #c99356 45%, #7a4e28 65%, #ad7b40 85%, #5c3a1c 100%);
+  --modal-surface: linear-gradient(160deg, #6b4423 0%, #8a5a2e 24%, #7a4e28 48%, #855530 72%, #5c3a1c 100%);
+}
+
+/* --text/--text-dim were re-tuned against body/panel/modal-surface
+   above (see the comment there), but semantic text colors that also
+   render directly on those same gradients - --accent (player-name
+   links), --danger, --info - can't be individually re-tuned without
+   either clashing with the theme's own hue or losing their meaning
+   across every other theme. A soft dark halo, inherited onto every
+   piece of text in this theme instead, gives all of them a consistent
+   legibility boost regardless of which exact gradient stop sits behind
+   them. Elements with their own text-shadow (e.g. .stat-value) already
+   override this locally, so it only fills the gap. */
+:root[data-theme="copper-shine"] body {
+  text-shadow: 0 1px 3px rgba(20, 10, 2, 0.65);
 }
 
 :root[data-theme="opal-shimmer"] {
