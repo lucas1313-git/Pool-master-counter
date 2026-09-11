@@ -1461,6 +1461,8 @@
   var leaderboardPageView = document.getElementById("view-leaderboard-page");
   var btnLeaderboardBack = document.getElementById("btn-leaderboard-back");
   var btnLeaderboardPlay = document.getElementById("btn-leaderboard-play");
+  var leaderboardViewPlayersRadio = document.getElementById("leaderboard-view-players");
+  var leaderboardViewTeamsRadio = document.getElementById("leaderboard-view-teams");
   var leaderboardList = document.getElementById("leaderboard-list");
   var leaderboardEmptyHint = document.getElementById("leaderboard-empty-hint");
   var leaderboardFormulaNote = document.getElementById("leaderboard-formula-note");
@@ -2674,6 +2676,7 @@
       buildPlayerNameLabel(name, p.name, false);
       row.appendChild(name);
       row.appendChild(buildRatingBadge(p.name));
+      row.appendChild(buildClubTeamBadge(p.name));
 
       var editRatingBtn = document.createElement("button");
       editRatingBtn.type = "button";
@@ -7138,6 +7141,14 @@
       email: patch.email !== undefined ? patch.email : existing.email || "",
       phone: patch.phone !== undefined ? patch.phone : existing.phone || "",
       nickname: patch.nickname !== undefined ? patch.nickname : existing.nickname || "",
+      // A persistent club/squad affiliation - independent of any one
+      // tournament's "Play as Teams" pairing (state.players[i].teamId,
+      // which is just this session's live A/B side). Purely a default:
+      // the tournament setup checklist's own per-player Team field (see
+      // getTournamentEntrants) is pre-filled from this but stays freely
+      // editable per tournament, so it "could be used... but not
+      // necessarily" per the request that introduced it.
+      clubTeam: patch.clubTeam !== undefined ? patch.clubTeam : existing.clubTeam || "",
       reportOptIn: patch.reportOptIn !== undefined ? !!patch.reportOptIn : !!existing.reportOptIn,
       notifyMethod: patch.notifyMethod !== undefined ? patch.notifyMethod : existing.notifyMethod || "email",
       // Stamped on every write (even one that only touches a single
@@ -7150,7 +7161,7 @@
 
   function getPlayerContact(name) {
     var key = findContactKey(name);
-    return key ? PLAYER_CONTACTS[key] : { email: "", phone: "", nickname: "", reportOptIn: false, notifyMethod: "email" };
+    return key ? PLAYER_CONTACTS[key] : { email: "", phone: "", nickname: "", clubTeam: "", reportOptIn: false, notifyMethod: "email" };
   }
 
   // Renames a player everywhere their identity is a record key - stats,
@@ -7810,6 +7821,31 @@
     badge.className = "rating-badge";
     badge.textContent = getPlayerRating(name);
     badge.title = T("common.ratingBadgeTitle");
+    return badge;
+  }
+
+  // A small "🏷️ Team Name" tag next to each roster row - a persistent,
+  // free-text club/squad affiliation, completely separate from a live
+  // tournament's own "Play as Teams" A/B assignment (player.teamId,
+  // which only exists once a teams-mode game is actually set up and
+  // resets with every new one). Tapping it opens a plain prompt to set,
+  // change, or clear it. The value only pre-fills (never locks) the
+  // tournament setup checklist's own per-player Team field (see
+  // getTournamentEntrants), so it "could be used for tournaments but
+  // not necessarily" - still freely editable per tournament.
+  function buildClubTeamBadge(name) {
+    var current = getPlayerContact(name).clubTeam;
+    var badge = document.createElement("button");
+    badge.type = "button";
+    badge.className = "club-team-badge" + (current ? "" : " is-unset");
+    badge.textContent = current ? "🏷️ " + current : T("players.addTeamName");
+    badge.setAttribute("aria-label", T("players.editTeamNameFor", { name: name }));
+    badge.addEventListener("click", function () {
+      promptModal(T("players.teamNamePrompt", { name: name }), current, function (value) {
+        setPlayerContact(name, { clubTeam: value.trim() });
+        renderRoster();
+      });
+    });
     return badge;
   }
 
@@ -13186,6 +13222,75 @@
     return entries;
   }
 
+  // A "team" here is nothing more than the set of players who've typed
+  // the same persistent club team name (see buildClubTeamBadge) -
+  // there's no separate win counter to maintain: a team's stats are
+  // just its members' individual stats summed together (rating
+  // averaged, the same way team strength is already treated for
+  // tournament seeding - see averageRating), run through the exact same
+  // computeLeaderboardScoreBreakdown formula used for players. A player
+  // who's part of a team still keeps their own personal leaderboard
+  // entry in the Players view - the two views are just different
+  // groupings of the same underlying game history, not a choice between
+  // crediting the player or the team.
+  function computeLeaderboardTeamEntries() {
+    var groupsByKey = {};
+    var order = [];
+    getAllKnownPlayerNames().forEach(function (name) {
+      var team = getPlayerContact(name).clubTeam;
+      if (!team) return;
+      var key = normalizeNameKey(team);
+      if (!groupsByKey[key]) {
+        groupsByKey[key] = { teamName: team, members: [] };
+        order.push(key);
+      }
+      groupsByKey[key].members.push(name);
+    });
+
+    var entries = order
+      .map(function (key) {
+        var group = groupsByKey[key];
+        var gamesPlayed = 0;
+        var wins = 0;
+        var tournamentWins = 0;
+        var skunkWins = 0;
+        var ratingSum = 0;
+        var allMemberGames = [];
+        group.members.forEach(function (name) {
+          var stats = computePlayerCareerStats(name, "all");
+          gamesPlayed += stats.played + stats.tournamentPlayed;
+          wins += stats.wins + stats.tournamentWins;
+          tournamentWins += stats.tournamentWins;
+          var games = stats.games.concat(stats.tournamentGames);
+          skunkWins += countSkunkWins(games);
+          allMemberGames = allMemberGames.concat(games);
+          ratingSum += getPlayerRating(name);
+        });
+        return {
+          name: group.teamName,
+          members: group.members,
+          gamesPlayed: gamesPlayed,
+          wins: wins,
+          winPct: gamesPlayed ? wins / gamesPlayed : 0,
+          rating: ratingSum / group.members.length,
+          tournamentWins: tournamentWins,
+          avgDominanceRatio: averageDominanceRatio(allMemberGames),
+          skunkWins: skunkWins
+        };
+      })
+      .filter(function (e) {
+        return e.gamesPlayed >= LEADERBOARD_MIN_GAMES;
+      });
+    entries.forEach(function (e) {
+      e.scoreBreakdown = computeLeaderboardScoreBreakdown(e);
+      e.mvpScore = e.scoreBreakdown.total;
+    });
+    entries.sort(function (a, b) {
+      return b.mvpScore - a.mvpScore;
+    });
+    return entries;
+  }
+
   // Which of {a, b} the given score-breakdown term favors, and by how
   // much - the raw building block explainLeaderboardRanking sorts on to
   // decide which reasons are worth mentioning at all.
@@ -13317,7 +13422,13 @@
 
   var LEADERBOARD_RANK_MEDALS = ["🥇", "🥈", "🥉"];
 
+  // Team entries (see computeLeaderboardTeamEntries) carry a `members`
+  // array that player entries never have - the one signal this function
+  // needs to tell them apart, since everything else about the two
+  // shapes (name, gamesPlayed, wins, winPct, rating, tournamentWins,
+  // avgDominanceRatio, skunkWins, scoreBreakdown, mvpScore) is identical.
   function leaderboardRow(entry, rank, entries) {
+    var isTeamEntry = !!entry.members;
     var li = document.createElement("li");
     li.className = "leaderboard-row leaderboard-rank-" + rank;
     if (rank <= 2) li.classList.add("leaderboard-row-top");
@@ -13333,20 +13444,24 @@
     var nameRow = document.createElement("div");
     nameRow.className = "leaderboard-name-row";
 
-    var nameBtn = document.createElement("button");
-    nameBtn.type = "button";
-    nameBtn.className = "leaderboard-name-btn";
-    nameBtn.textContent = entry.name;
+    // A team name has no stats page of its own to jump to, so it's
+    // plain text there; a player name stays the existing clickable link.
+    var nameEl = document.createElement(isTeamEntry ? "span" : "button");
+    if (!isTeamEntry) nameEl.type = "button";
+    nameEl.className = "leaderboard-name-btn";
+    nameEl.textContent = entry.name;
     if (rank === 1) {
       var mvpTag = document.createElement("span");
       mvpTag.className = "leaderboard-mvp-tag";
-      mvpTag.textContent = T("leaderboard.mvp");
-      nameBtn.appendChild(mvpTag);
+      mvpTag.textContent = T(isTeamEntry ? "leaderboard.topTeamTag" : "leaderboard.mvp");
+      nameEl.appendChild(mvpTag);
     }
-    nameBtn.addEventListener("click", function () {
-      openPlayerStatsPage(entry.name);
-    });
-    nameRow.appendChild(nameBtn);
+    if (!isTeamEntry) {
+      nameEl.addEventListener("click", function () {
+        openPlayerStatsPage(entry.name);
+      });
+    }
+    nameRow.appendChild(nameEl);
 
     // Rank 1 explains itself against rank 2 (the concrete "why did #1
     // beat #2" case); everyone else explains themselves against whoever
@@ -13367,6 +13482,13 @@
     }
     body.appendChild(nameRow);
 
+    if (isTeamEntry) {
+      var members = document.createElement("div");
+      members.className = "leaderboard-team-members";
+      members.textContent = entry.members.join(" & ");
+      body.appendChild(members);
+    }
+
     var stats = document.createElement("div");
     stats.className = "leaderboard-row-stats";
     var statParts = [
@@ -13383,7 +13505,7 @@
     if (entry.skunkWins > 0) {
       statParts.push(T("leaderboard.statSkunkWins", { wins: entry.skunkWins }));
     }
-    statParts.push(T("leaderboard.statRating", { rating: entry.rating }));
+    statParts.push(T(isTeamEntry ? "leaderboard.statAvgRating" : "leaderboard.statRating", { rating: Math.round(entry.rating) }));
     stats.textContent = statParts.join(" • ");
     body.appendChild(stats);
 
@@ -13392,11 +13514,15 @@
   }
 
   function renderLeaderboardPage() {
-    var entries = computeLeaderboardEntries();
+    var isTeamView = leaderboardViewTeamsRadio.checked;
+    var entries = isTeamView ? computeLeaderboardTeamEntries() : computeLeaderboardEntries();
     leaderboardList.innerHTML = "";
     if (entries.length === 0) {
       leaderboardList.classList.add("hidden");
       leaderboardEmptyHint.classList.remove("hidden");
+      leaderboardEmptyHint.textContent = T(isTeamView ? "leaderboard.notEnoughTeamData" : "leaderboard.notEnoughData", {
+        minGames: LEADERBOARD_MIN_GAMES
+      });
     } else {
       leaderboardList.classList.remove("hidden");
       leaderboardEmptyHint.classList.add("hidden");
@@ -13524,6 +13650,7 @@
           email: entry.email || "",
           phone: entry.phone || "",
           nickname: entry.nickname || "",
+          clubTeam: entry.clubTeam || "",
           reportOptIn: !!entry.reportOptIn,
           notifyMethod: entry.notifyMethod || "email",
           updatedAt: entry.updatedAt || 0
@@ -13539,6 +13666,7 @@
           email: entry.email || "",
           phone: entry.phone || "",
           nickname: entry.nickname || "",
+          clubTeam: entry.clubTeam || "",
           reportOptIn: !!entry.reportOptIn,
           notifyMethod: entry.notifyMethod || "email",
           updatedAt: entry.updatedAt || 0
@@ -14729,6 +14857,9 @@
     SAVED_TEAMS.forEach(function (t) {
       addName(t.name);
     });
+    getAllKnownPlayerNames().forEach(function (n) {
+      addName(getPlayerContact(n).clubTeam);
+    });
     Array.prototype.forEach.call(tournamentPlayerChecklist.querySelectorAll(".tournament-team-input"), function (input) {
       addName(input.value.trim());
     });
@@ -14808,6 +14939,11 @@
       teamInput.setAttribute("list", "tournament-team-options");
       teamInput.setAttribute("aria-label", T("tournament.teamLabel"));
       teamInput.setAttribute("placeholder", T("tournament.teamLabel"));
+      // Defaults to this player's persistent club team (see
+      // buildClubTeamBadge) - a convenience so it doesn't have to be
+      // retyped every tournament, not a requirement: still freely
+      // editable or clearable per tournament right here.
+      teamInput.value = getPlayerContact(name).clubTeam || "";
       li.appendChild(teamInput);
       tournamentPlayerChecklist.appendChild(li);
     });
@@ -16829,6 +16965,9 @@
   });
   btnLeaderboardPlay.addEventListener("click", function () {
     closeLeaderboardPage();
+  });
+  [leaderboardViewPlayersRadio, leaderboardViewTeamsRadio].forEach(function (radio) {
+    radio.addEventListener("change", renderLeaderboardPage);
   });
   btnContactSheetSelectAll.addEventListener("click", function () {
     var names = contactSheetAllNames();

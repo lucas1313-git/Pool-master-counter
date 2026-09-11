@@ -1263,6 +1263,31 @@ input[type="number"] {
   font-variant-numeric: tabular-nums;
 }
 
+/* A persistent club/squad tag (see buildClubTeamBadge) - deliberately
+   styled in --info rather than --accent so it reads as a distinct kind
+   of badge from the rating right next to it. Dashed and dimmer when
+   unset, as an "add one" invitation rather than looking like a bug. */
+.club-team-badge {
+  display: inline-block;
+  margin-left: 7px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--info) 18%, var(--bg-panel));
+  border: 1px solid var(--border);
+  color: var(--info);
+  font-size: 0.85rem;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+.club-team-badge.is-unset {
+  background: transparent;
+  border-style: dashed;
+  color: var(--text-dim);
+  font-weight: 500;
+  opacity: 0.8;
+}
+
 .btn-playing {
   background: var(--bg-panel);
   color: var(--text-dim);
@@ -3924,6 +3949,44 @@ input[type="number"] {
   color: var(--on-felt-light);
   opacity: 0.85;
   font-size: 0.9rem;
+}
+
+.leaderboard-view-toggle {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: 14px 0;
+}
+
+.leaderboard-view-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  background: var(--bg-panel);
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--text-dim);
+}
+
+.leaderboard-view-option:has(input:checked) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 20%, var(--bg-panel));
+  color: var(--accent);
+}
+
+.leaderboard-view-option input {
+  accent-color: var(--accent);
+}
+
+.leaderboard-team-members {
+  margin-top: 2px;
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  font-style: italic;
 }
 
 /* The circular back arrow up in the header is easy to miss on a screen
