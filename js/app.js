@@ -1084,7 +1084,7 @@
   }
 
   // ---------------------------------------------------------------------
-  // Theme — twenty color/font palettes, applied as a data-theme attribute
+  // Theme — nineteen color/font palettes, applied as a data-theme attribute
   // on <html> so every CSS custom property cascades from there. The
   // choice persists to localStorage; a tiny inline script in <head>
   // applies it synchronously on load (before the stylesheet paints) so
@@ -1103,14 +1103,13 @@
     "red-and-pink": "#1c0510",
     "gold-mine": "#140d06",
     "rock-and-roll": "#0a0a0a",
-    "copper-shine": "#2a1408",
+    "copper-shine": "#4a2c14",
     "daybreak-chalk": "#f5f1e8",
     "pearl-lounge": "#f4f2f6",
     "sunrise-glow": "#fff3ea",
     "stainless-steel": "#c7ced3",
     "opal-shimmer": "#f3f0f5",
     "flowery-forest": "#f6f8f0",
-    "bamboo": "#f2edd9",
     "blackout-contrast": "#000000",
     "paper-contrast": "#ffffff"
   };
