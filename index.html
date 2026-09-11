@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260910w">
+<link rel="stylesheet" href="css/style.css?v=20260911a">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -64,6 +64,7 @@
       <button type="button" id="btn-open-wizard" class="btn btn-primary all-players-nav-btn" data-i18n="header.startWizard">🧙 Start Wizard</button>
       <button type="button" id="btn-open-tournament" class="btn btn-ghost all-players-nav-btn" data-i18n="header.tournament">🏆 Tournament</button>
       <button type="button" id="btn-open-global-stats" class="btn btn-ghost all-players-nav-btn" data-i18n="header.globalStats">🌐 Global Stats</button>
+      <button type="button" id="btn-open-leaderboard" class="btn btn-ghost all-players-nav-btn" data-i18n="header.leaderboard">🏆 Leaderboard</button>
       <button type="button" id="btn-open-contact-sheet" class="btn btn-ghost all-players-nav-btn" data-i18n="header.contactSheet">📇 Contact Sheet</button>
       <button type="button" id="btn-open-help" class="btn btn-ghost all-players-nav-btn" data-i18n="header.help">❓ Help</button>
       <div class="theme-select-row">
@@ -1060,6 +1061,26 @@
 
 </div>
 
+<div id="view-leaderboard-page" class="hidden">
+
+  <header class="app-header player-page-header">
+    <button type="button" id="btn-leaderboard-back" class="btn btn-ghost screen-back-btn" aria-label="Back" data-i18n-aria-label="common.back"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <h1 data-i18n="leaderboard.heading">Leaderboard</h1>
+  </header>
+
+  <div id="leaderboard-banner" class="leaderboard-banner">
+    <div class="leaderboard-banner-title" data-i18n="leaderboard.bannerTitle">🏆 Hall of Fame 🏆</div>
+    <p class="leaderboard-banner-sub" data-i18n="leaderboard.bannerSub">The best players, ranked by performance</p>
+  </div>
+
+  <ul id="leaderboard-list" class="leaderboard-list"></ul>
+
+  <p id="leaderboard-empty-hint" class="empty-hint hidden" data-i18n="leaderboard.notEnoughData">Nobody has played enough games yet — everyone needs at least 10 (regular or tournament, combined) before they can be ranked.</p>
+
+  <p id="leaderboard-formula-note" class="leaderboard-formula-note"></p>
+
+</div>
+
 <div id="view-tournament-page" class="hidden">
 
   <header class="app-header player-page-header">
@@ -1238,6 +1259,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260910z"></script>
+<script src="js/app.js?v=20260911a"></script>
 </body>
 </html>
