@@ -2398,6 +2398,14 @@ input[type="number"] {
   border-radius: var(--radius);
   max-width: min(96vw, 900px);
   max-height: 92vh;
+  /* svh ("small" viewport height) is the height guaranteed visible even
+     with a mobile browser's address/toolbar chrome on screen - plain vh
+     can be based on the chrome-collapsed viewport instead, so content
+     sized against it can end up taller than what's actually visible
+     until the user scrolls. Declared after the vh fallback so browsers
+     without svh support just keep using that; ones that do support it
+     override with the safer value. */
+  max-height: calc(92svh - 8px);
   width: 100%;
   overflow-y: auto;
   padding: clamp(36px, 7vw, 64px) clamp(30px, 6vw, 56px);
@@ -2413,20 +2421,28 @@ input[type="number"] {
   100% { transform: scale(1) rotate(0deg); }
 }
 
+/* --onhill-scale (1 by default) is set by fitOnHillCardToViewport() -
+   a long player-name list at this card's already-large baseline sizes
+   can overflow even the svh-based max-height above on a short/narrow
+   screen no matter how the clamp()s below are tuned (clamp only ever
+   sees viewport size, never how much text there actually is), so once
+   painted, JS measures the real overflow and shrinks every font on the
+   card by the same factor until it actually fits (floored so text
+   never goes illegibly small; scrolls the small remainder if it does). */
 .onhill-emoji {
-  font-size: clamp(3.4rem, 10vw, 8rem);
+  font-size: calc(clamp(3.4rem, 10vw, 8rem) * var(--onhill-scale, 1));
   margin-bottom: 10px;
 }
 
 .onhill-card h2 {
   margin: 0 0 12px;
   color: var(--danger);
-  font-size: clamp(2rem, 7vw, 5rem);
+  font-size: calc(clamp(2rem, 7vw, 5rem) * var(--onhill-scale, 1));
 }
 
 .onhill-card p {
   margin: 0 0 26px;
-  font-size: clamp(1.3rem, 4.5vw, 3.2rem);
+  font-size: calc(clamp(1.3rem, 4.5vw, 3.2rem) * var(--onhill-scale, 1));
   font-weight: 600;
 }
 
@@ -2434,7 +2450,7 @@ input[type="number"] {
   width: 100%;
   background: var(--danger);
   color: #fff;
-  font-size: clamp(1.3rem, 3.2vw, 2.6rem);
+  font-size: calc(clamp(1.3rem, 3.2vw, 2.6rem) * var(--onhill-scale, 1));
   padding: clamp(14px, 2.4vw, 28px);
 }
 
