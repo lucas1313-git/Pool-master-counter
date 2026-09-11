@@ -1,5 +1,5 @@
 /* ---------- Themes ----------
-   Eighteen self-contained palettes (colors + font family — no network
+   Twenty self-contained palettes (colors + font family — no network
    fonts, everything falls back through system font stacks so the app
    stays fully offline-capable). Bare :root is "Crimson Felt", the
    original look and the default; the rest override via
@@ -7,13 +7,14 @@
    localStorage. Each sets its own color-scheme (dark or light) so native
    form controls/scrollbars render correctly either way.
 
-   Three "material" themes (stainless-steel, copper-shine, opal-shimmer)
-   additionally override --body-surface/--panel-surface/
-   --btn-primary-surface/--modal-surface (defined once at bare :root,
-   defaulting to exactly what body/.panel/.btn-primary/.confirm-modal-
-   card already painted) with real multi-stop gradients, for an actual
-   brushed-metal or iridescent reflection instead of just metallic-
-   sounding flat colors. */
+   Six themes (stainless-steel, copper-shine, opal-shimmer, rock-and-
+   roll, flowery-forest, bamboo) additionally override --body-surface/
+   --panel-surface/--btn-primary-surface/--modal-surface (defined once
+   at bare :root, defaulting to exactly what body/.panel/.btn-primary/
+   .confirm-modal-card already painted) with real multi-stop or
+   repeating gradients - brushed metal, iridescence, concert spotlights,
+   dappled forest light, or bamboo stalks - instead of just evocatively-
+   named flat colors. */
 
 :root {
   --bg: #1a0a0a;
@@ -240,6 +241,23 @@
   --on-accent: #fff5f5;
   --on-felt-light: #f5f5f5;
   --font-family: Impact, "Arial Black", Arial, sans-serif;
+  /* Concert-stage spotlights - overlapping colored light cones beaming
+     down from the rig onto a dark stage floor, instead of a flat black
+     backdrop. */
+  --body-surface: radial-gradient(circle at 18% 0%, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0) 24%),
+    radial-gradient(circle at 50% -8%, rgba(225, 6, 0, 0.42) 0%, rgba(225, 6, 0, 0) 30%),
+    radial-gradient(circle at 82% 0%, rgba(124, 77, 255, 0.32) 0%, rgba(124, 77, 255, 0) 26%),
+    radial-gradient(circle at 35% 100%, rgba(0, 180, 255, 0.16) 0%, rgba(0, 180, 255, 0) 35%),
+    radial-gradient(ellipse at top, #2b2b2b 0%, #0a0a0a 60%);
+  --panel-surface: radial-gradient(circle at 25% 0%, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0) 42%),
+    radial-gradient(circle at 85% 100%, rgba(225, 6, 0, 0.14) 0%, rgba(225, 6, 0, 0) 45%),
+    linear-gradient(var(--bg-panel), var(--bg-panel));
+  --btn-primary-surface: radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0) 45%),
+    linear-gradient(145deg, #ff3b3b 0%, #e10600 50%, #7a0300 100%);
+  --modal-surface: radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0) 40%),
+    radial-gradient(circle at 12% 100%, rgba(124, 77, 255, 0.16) 0%, rgba(124, 77, 255, 0) 45%),
+    radial-gradient(circle at 88% 100%, rgba(225, 6, 0, 0.16) 0%, rgba(225, 6, 0, 0) 45%),
+    linear-gradient(180deg, #3d3d3d 0%, #2b2b2b 60%, #1c1c1c 100%);
 }
 
 :root[data-theme="daybreak-chalk"] {
@@ -448,6 +466,105 @@
   50% {
     background-position: 100% 50%;
   }
+}
+
+:root[data-theme="flowery-forest"] {
+  --bg: #f6f8f0;
+  --bg-panel: #fbfcf7;
+  --bg-card: #ffffff;
+  --felt: #dce8d0;
+  --felt-light: #ecf3e2;
+  --accent: #7a9d5c;
+  --accent-dark: #5c7a42;
+  --danger: #d97a7a;
+  --danger-dark: #b05a5a;
+  --info: #7aa8c4;
+  --info-dark: #5a86a3;
+  --text: #33402a;
+  --text-dim: #71805f;
+  --border: #d4e0c5;
+  --bg-glow: #eef4e5;
+  --on-accent: #f8fbf3;
+  --on-felt-light: #33402a;
+  --graph-bg: rgba(122, 157, 92, 0.08);
+  --font-family: Garamond, Baskerville, Georgia, serif;
+  color-scheme: light;
+  /* Soft blooms of leaf-green and flower-blush over a pale canopy-light
+     wash - delicate rather than literal branch/leaf line art, since a
+     flat gradient can't draw shapes, but the same dappled-light feeling. */
+  --body-surface: radial-gradient(circle at 15% 8%, rgba(163, 201, 124, 0.35) 0%, rgba(163, 201, 124, 0) 30%),
+    radial-gradient(circle at 85% 14%, rgba(255, 214, 224, 0.4) 0%, rgba(255, 214, 224, 0) 25%),
+    radial-gradient(circle at 22% 86%, rgba(200, 225, 170, 0.35) 0%, rgba(200, 225, 170, 0) 32%),
+    radial-gradient(circle at 78% 92%, rgba(255, 232, 214, 0.3) 0%, rgba(255, 232, 214, 0) 28%),
+    radial-gradient(circle at 50% 50%, rgba(236, 243, 226, 0.5) 0%, rgba(236, 243, 226, 0) 60%),
+    linear-gradient(180deg, #eef4e5 0%, #f6f8f0 100%);
+  --panel-surface: radial-gradient(circle at 8% 0%, rgba(163, 201, 124, 0.18) 0%, rgba(163, 201, 124, 0) 38%),
+    radial-gradient(circle at 92% 100%, rgba(255, 214, 224, 0.22) 0%, rgba(255, 214, 224, 0) 42%),
+    linear-gradient(var(--bg-panel), var(--bg-panel));
+  --btn-primary-surface: radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0) 45%),
+    linear-gradient(145deg, #9dc47a 0%, #7a9d5c 55%, #5c7a42 100%);
+  --modal-surface: radial-gradient(circle at 12% 0%, rgba(163, 201, 124, 0.25) 0%, rgba(163, 201, 124, 0) 42%),
+    radial-gradient(circle at 88% 100%, rgba(255, 214, 224, 0.28) 0%, rgba(255, 214, 224, 0) 44%),
+    linear-gradient(160deg, #ffffff 0%, #f3f8ed 50%, #eef4e5 100%);
+}
+
+:root[data-theme="bamboo"] {
+  --bg: #f2edd9;
+  --bg-panel: #f8f4e4;
+  --bg-card: #fdfbf2;
+  --felt: #d9cf9a;
+  --felt-light: #e8e0b8;
+  --accent: #8a9a3f;
+  --accent-dark: #667429;
+  --danger: #b5602e;
+  --danger-dark: #8a4620;
+  --info: #5a8a7a;
+  --info-dark: #3f6659;
+  --text: #3a3420;
+  --text-dim: #746a48;
+  --border: #cabb7e;
+  --bg-glow: #ede4c0;
+  --on-accent: #fdfbe8;
+  --on-felt-light: #3a3420;
+  --graph-bg: rgba(138, 154, 63, 0.08);
+  --font-family: Optima, "Century Gothic", "Trebuchet MS", sans-serif;
+  color-scheme: light;
+  /* Pale bamboo stalks: a repeating vertical highlight/body/gutter
+     pattern for individual stalks side by side, crossed with widely-
+     spaced horizontal bands for the stalks' segment nodes. */
+  --body-surface: repeating-linear-gradient(180deg, rgba(122, 116, 41, 0.12) 0px, rgba(122, 116, 41, 0.12) 3px, rgba(122, 116, 41, 0) 3px, rgba(122, 116, 41, 0) 140px),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.35) 0px,
+      rgba(255, 255, 255, 0.35) 6px,
+      rgba(201, 214, 138, 0.25) 6px,
+      rgba(201, 214, 138, 0.25) 34px,
+      rgba(138, 154, 63, 0.15) 34px,
+      rgba(138, 154, 63, 0.15) 40px
+    ),
+    linear-gradient(180deg, #ede4c0 0%, #f2edd9 100%);
+  --panel-surface: repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.4) 0px,
+      rgba(255, 255, 255, 0.4) 4px,
+      rgba(201, 214, 138, 0.2) 4px,
+      rgba(201, 214, 138, 0.2) 22px,
+      rgba(138, 154, 63, 0.12) 22px,
+      rgba(138, 154, 63, 0.12) 26px
+    ),
+    linear-gradient(var(--bg-panel), var(--bg-panel));
+  --btn-primary-surface: linear-gradient(90deg, #667429 0%, #c9d68a 18%, #ffffff 30%, #c9d68a 42%, #8a9a3f 60%, #667429 100%);
+  --modal-surface: repeating-linear-gradient(180deg, rgba(122, 116, 41, 0.1) 0px, rgba(122, 116, 41, 0.1) 3px, rgba(122, 116, 41, 0) 3px, rgba(122, 116, 41, 0) 160px),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.35) 0px,
+      rgba(255, 255, 255, 0.35) 6px,
+      rgba(201, 214, 138, 0.22) 6px,
+      rgba(201, 214, 138, 0.22) 32px,
+      rgba(138, 154, 63, 0.14) 32px,
+      rgba(138, 154, 63, 0.14) 38px
+    ),
+    linear-gradient(180deg, #fdfbf2 0%, #f2edd9 100%);
 }
 
 :root[data-theme="blackout-contrast"] {
