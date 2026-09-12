@@ -11011,7 +11011,8 @@
   ];
 
   var SPECIAL_ACHIEVEMENT_DEFS = [
-    { id: "skunkMaster", icon: "🦨", compute: function (ctx) { return ctx.synopsis.skunkWins > 0; } }
+    { id: "skunker", icon: "🦨", compute: function (ctx) { return ctx.synopsis.skunkWins >= 1; } },
+    { id: "skunkMaster", icon: "🦨👑", compute: function (ctx) { return ctx.synopsis.skunkWins >= 5; } }
   ];
 
   function computeAchievements(name) {
