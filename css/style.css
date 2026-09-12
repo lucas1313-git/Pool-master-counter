@@ -1845,8 +1845,50 @@ input[type="number"] {
   cursor: pointer;
 }
 
+/* Quick Counter's player count is unpredictable (one tap can add or
+   remove a card mid-session) and usually small, so - unlike the regular
+   scoreboard's grid, which is meant to spread a full roster evenly -
+   this stays a flex row of fixed-ish-width cards that wrap and stay
+   centered as a group, rather than being stretched across the whole
+   width or left stranded at the edge by the grid's own extra empty
+   columns (which the full-width rows below kept "alive" even with only
+   one or two actual player cards to show). */
+.scoreboard.scoreboard-quick {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.scoreboard.scoreboard-quick .quick-counter-panel {
+  flex: 0 1 230px;
+}
+
+@media (max-width: 480px) {
+  .scoreboard.scoreboard-quick .quick-counter-panel {
+    flex-basis: 142px;
+  }
+}
+
+.quick-counter-gametype-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.quick-counter-gametype-row label {
+  flex-shrink: 0;
+  color: var(--text-dim);
+}
+
+.quick-counter-gametype-select {
+  flex: 1;
+  min-width: 140px;
+}
+
 .quick-counter-add-row {
-  grid-column: 1 / -1;
+  width: 100%;
   display: flex;
   gap: 10px;
   background: var(--bg-card);
@@ -1865,7 +1907,7 @@ input[type="number"] {
 }
 
 .quick-counter-load-row {
-  grid-column: 1 / -1;
+  width: 100%;
   display: flex;
   flex-wrap: wrap;
   gap: 10px;

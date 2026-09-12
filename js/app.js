@@ -2975,6 +2975,37 @@
     return row;
   }
 
+  // Quick Counter's own game-type picker — purely a label for whoever's
+  // looking at the screen (what are we even counting here?), not
+  // something that drives any win/target logic the way it does for a
+  // real game (quickCounterMode skips all of that). Defaults to whatever
+  // state.currentGame.gameType already was; changing it only updates that
+  // same field, so it's remembered if the wizard is used again later.
+  function buildQuickCounterGameTypeRow() {
+    var row = document.createElement("div");
+    row.className = "quick-counter-gametype-row";
+    var label = document.createElement("label");
+    label.setAttribute("for", "quick-counter-game-type-select");
+    label.textContent = T("gameSetup.game");
+    var select = document.createElement("select");
+    select.id = "quick-counter-game-type-select";
+    select.className = "quick-counter-gametype-select";
+    GAME_TYPE_LIST.forEach(function (t) {
+      var opt = document.createElement("option");
+      opt.value = t.id;
+      opt.textContent = t.label;
+      select.appendChild(opt);
+    });
+    select.value = state.currentGame.gameType;
+    select.addEventListener("change", function () {
+      state.currentGame.gameType = select.value;
+      saveState();
+    });
+    row.appendChild(label);
+    row.appendChild(select);
+    return row;
+  }
+
   // Quick Counter's "Load Player List": picks a saved list and makes the
   // active set match it exactly (see loadPlayerListForQuickCounter) — the
   // fast way to swap in a known group instead of adding everyone by hand.
@@ -3375,6 +3406,7 @@
       rotationPositionRow.classList.add("hidden");
       scoreboard.innerHTML = "";
       scoreboard.className = "scoreboard scoreboard-quick";
+      scoreboard.appendChild(buildQuickCounterGameTypeRow());
       var loadRow = buildQuickCounterLoadRow();
       if (loadRow) scoreboard.appendChild(loadRow);
       active.forEach(function (p) {
