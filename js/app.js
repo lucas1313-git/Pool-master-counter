@@ -11111,9 +11111,20 @@
     return null;
   }
 
+  // currentStatsSessions is only ever kept in sync with whichever player
+  // the Player Stats page currently has open (see openPlayerStatsPage) -
+  // reusing it here for any OTHER name would silently return that other
+  // player's saved sessions (or none at all, if the page is closed),
+  // which is exactly what made a player's achievements disappear on the
+  // leaderboard while still showing correctly on their own stats page.
+  // Fetch a real saved-sessions lookup for anyone else; only the
+  // currently-open page's own player reuses the cache (it can hold
+  // in-progress edits - e.g. the win popup's live balls-left patch-back -
+  // that a fresh getPlayerSessions() read wouldn't see yet).
   function collectAllGamesForPlayer(name) {
     var live = computeLiveSessionForPlayer(name);
-    var sessions = mergeSessionIntoList(currentStatsSessions || [], live);
+    var savedSessions = name === currentStatsPlayerName ? currentStatsSessions || [] : getPlayerSessions(name);
+    var sessions = mergeSessionIntoList(savedSessions, live);
     var games = [];
     sessions.forEach(function (s) {
       (s.games || []).forEach(function (g) {
