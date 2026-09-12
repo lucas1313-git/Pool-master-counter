@@ -1394,6 +1394,7 @@
   var btnWizardStart = document.getElementById("wizard-btn-start");
   var wizardTempCounterCheckbox = document.getElementById("wizard-temp-counter-checkbox");
   var btnWizardStartQuickCounter = document.getElementById("btn-wizard-start-quick-counter");
+  var btnWizardJustACounter = document.getElementById("btn-wizard-just-a-counter");
 
   var onboardingOverlay = document.getElementById("onboarding-overlay");
   var onboardingHeading = document.getElementById("onboarding-heading");
@@ -10605,14 +10606,14 @@
     showToast(T("toast.letsPlay"));
   }
 
-  // Skips the rest of the wizard entirely and drops straight into the
-  // bare-bones Quick Counter scoreboard — no game type, no target, no
-  // rotation, no win/loss detection, just a per-player tally that can be
-  // renamed/added/removed right from the cards. Implies noStatsMode, since
-  // saveState/savePlayerStatsToStorage/saveRatingsToStorage/
+  // Shared by startQuickCounter and startJustACounter - flips on the
+  // bare-bones Quick Counter scoreboard itself (no game type, no target,
+  // no rotation, no win/loss detection, just a per-player tally that can
+  // be renamed/added/removed right from the cards). Implies noStatsMode,
+  // since saveState/savePlayerStatsToStorage/saveRatingsToStorage/
   // saveRostersToStorage/saveRotationsToStorage guards make that a no-op
   // anyway and there's never a "completed game" to record here.
-  function startQuickCounter() {
+  function enterQuickCounterMode(toastMessage) {
     noStatsMode = true;
     noStatsCheckbox.checked = true;
     quickCounterMode = true;
@@ -10620,7 +10621,46 @@
     closeWizard();
     setFocusMode(true);
     renderAll();
-    showToast(T("toast.quickCounterTip"));
+    showToast(toastMessage);
+  }
+
+  // Skips the rest of the wizard entirely and drops straight into Quick
+  // Counter with whichever players are already set up (or none yet - the
+  // add-player row is right there on the cards).
+  function startQuickCounter() {
+    enterQuickCounterMode(T("toast.quickCounterTip"));
+  }
+
+  // Smallest "Player N" not already taken by an existing roster name (any
+  // case) - used below so an auto-named opponent never collides with a
+  // real player someone already added.
+  function nextAvailablePlayerNumber() {
+    var used = {};
+    state.players.forEach(function (p) {
+      var m = /^player (\d+)$/i.exec(p.name.trim());
+      if (m) used[parseInt(m[1], 10)] = true;
+    });
+    var n = 1;
+    while (used[n]) n += 1;
+    return n;
+  }
+
+  // The laziest possible path into a bare tally - skips game type,
+  // rotation, and naming an opponent entirely. Pairs whoever's already
+  // playing (or first on the roster, or a freshly added "Player N" if
+  // the roster's empty) against a second auto-named "Player N", marks
+  // only those two Playing (everyone else goes to Standby, same as
+  // picking a fresh pair for any other game), and drops straight into
+  // Quick Counter - individual mode, no stats, two taps and you're
+  // tallying.
+  function startJustACounter() {
+    var first = activePlayers()[0] || state.players[0] || addPlayer("Player " + nextAvailablePlayerNumber());
+    var second = addPlayer("Player " + nextAvailablePlayerNumber());
+    state.players.forEach(function (p) {
+      p.playing = p.id === first.id || p.id === second.id;
+    });
+    state.currentGame.mode = "individual";
+    enterQuickCounterMode(T("toast.justCounterTip", { a: first.name, b: second.name }));
   }
 
   // ---------------------------------------------------------------------
@@ -17025,6 +17065,7 @@
     btnWizardStartQuickCounter.classList.toggle("hidden", !wizardTempCounterCheckbox.checked);
   });
   btnWizardStartQuickCounter.addEventListener("click", startQuickCounter);
+  btnWizardJustACounter.addEventListener("click", startJustACounter);
 
   btnOnboardingCancel.addEventListener("click", closeOnboarding);
   btnOnboardingGo.addEventListener("click", advanceOnboarding);
