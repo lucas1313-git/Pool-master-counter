@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260911s">
+<link rel="stylesheet" href="css/style.css?v=20260911t">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -593,6 +593,16 @@
 <div id="fake-ad-modal-overlay" class="confirm-modal-overlay hidden">
   <div class="confirm-modal-card">
     <p class="confirm-modal-message" id="fake-ad-modal-message" data-i18n="paywall.adPlaying">📺 Ad playing…</p>
+  </div>
+</div>
+
+<div id="achievements-modal-overlay" class="confirm-modal-overlay hidden">
+  <div class="confirm-modal-card achievements-modal-card">
+    <h3 id="achievements-modal-title" class="confirm-modal-title"></h3>
+    <div id="achievements-modal-list" class="achievement-badge-grid"></div>
+    <div class="confirm-modal-actions">
+      <button type="button" id="btn-achievements-modal-close" class="btn btn-primary" data-i18n="common.close">Close</button>
+    </div>
   </div>
 </div>
 
@@ -1317,6 +1327,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260911z1"></script>
+<script src="js/app.js?v=20260911z2"></script>
 </body>
 </html>

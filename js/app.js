@@ -1504,6 +1504,10 @@
   var leaderboardList = document.getElementById("leaderboard-list");
   var leaderboardEmptyHint = document.getElementById("leaderboard-empty-hint");
   var leaderboardFormulaNote = document.getElementById("leaderboard-formula-note");
+  var achievementsModalOverlay = document.getElementById("achievements-modal-overlay");
+  var achievementsModalTitle = document.getElementById("achievements-modal-title");
+  var achievementsModalList = document.getElementById("achievements-modal-list");
+  var btnAchievementsModalClose = document.getElementById("btn-achievements-modal-close");
 
   var btnOpenContactSheet = document.getElementById("btn-open-contact-sheet");
   var contactSheetPageView = document.getElementById("view-contact-sheet-page");
@@ -2113,7 +2117,8 @@
     [forceResetOverlay, btnForceResetClose, btnForceResetClose],
     [onHillOverlay, btnOnHillClose, btnOnHillClose],
     [gameChangeOverlay, btnGameChangeClose, btnGameChangeClose],
-    [helpOverlay, btnHelpClose, btnHelpClose]
+    [helpOverlay, btnHelpClose, btnHelpClose],
+    [achievementsModalOverlay, btnAchievementsModalClose, btnAchievementsModalClose]
   ];
 
   function handleOverlayEnterEscape(e) {
@@ -11255,6 +11260,50 @@
     return chip;
   }
 
+  // Shared by the Player Stats page's own achievements panel and the
+  // leaderboard's per-player achievements popup (see openAchievementsModal)
+  // - every ladder tier (medal-annotated once unlocked, with a "3/10"-style
+  // progress note toward the next tier) plus every special, each with its
+  // own description underneath.
+  function buildAchievementBadgesFragment(data) {
+    var frag = document.createDocumentFragment();
+    data.ladders.forEach(function (a) {
+      var medal = achievementTierMedal(a.tier);
+      var label = (medal ? medal + " " : "") + T("achievements." + a.id);
+      var progress = a.nextGoal === null ? T("achievements.maxed") : a.value + "/" + a.nextGoal;
+      var chip = buildAchievementBadge(a.icon, label, a.tier > 0, progress);
+      var desc = document.createElement("div");
+      desc.className = "achievement-badge-desc";
+      desc.textContent = T("achievements." + a.id + "Desc");
+      chip.appendChild(desc);
+      frag.appendChild(chip);
+    });
+    data.specials.forEach(function (a) {
+      var chip = buildAchievementBadge(a.icon, T("achievements." + a.id), a.unlocked, null);
+      var desc = document.createElement("div");
+      desc.className = "achievement-badge-desc";
+      desc.textContent = T("achievements." + a.id + "Desc");
+      chip.appendChild(desc);
+      frag.appendChild(chip);
+    });
+    return frag;
+  }
+
+  // The leaderboard's per-player achievements popup (see the icon row
+  // built by buildLeaderboardAchievementIcons) - the full badge grid for
+  // one player, same content as their own Player Stats page's
+  // Achievements panel, just reachable without leaving the leaderboard.
+  function openAchievementsModal(name) {
+    achievementsModalTitle.textContent = T("leaderboard.achievementsModalTitle", { name: name });
+    achievementsModalList.innerHTML = "";
+    achievementsModalList.appendChild(buildAchievementBadgesFragment(computeAchievements(name)));
+    achievementsModalOverlay.classList.remove("hidden");
+  }
+
+  function closeAchievementsModal() {
+    achievementsModalOverlay.classList.add("hidden");
+  }
+
   function renderPlayerAchievements() {
     if (!currentStatsPlayerName) return;
     var data = computeAchievements(currentStatsPlayerName);
@@ -11271,25 +11320,7 @@
       T("playerPage.achievementsSummary", { unlocked: unlockedCount, total: totalCount })
     );
     playerPageAchievementsList.innerHTML = "";
-    data.ladders.forEach(function (a) {
-      var medal = achievementTierMedal(a.tier);
-      var label = (medal ? medal + " " : "") + T("achievements." + a.id);
-      var progress = a.nextGoal === null ? T("achievements.maxed") : a.value + "/" + a.nextGoal;
-      var chip = buildAchievementBadge(a.icon, label, a.tier > 0, progress);
-      var desc = document.createElement("div");
-      desc.className = "achievement-badge-desc";
-      desc.textContent = T("achievements." + a.id + "Desc");
-      chip.appendChild(desc);
-      playerPageAchievementsList.appendChild(chip);
-    });
-    data.specials.forEach(function (a) {
-      var chip = buildAchievementBadge(a.icon, T("achievements." + a.id), a.unlocked, null);
-      var desc = document.createElement("div");
-      desc.className = "achievement-badge-desc";
-      desc.textContent = T("achievements." + a.id + "Desc");
-      chip.appendChild(desc);
-      playerPageAchievementsList.appendChild(chip);
-    });
+    playerPageAchievementsList.appendChild(buildAchievementBadgesFragment(data));
   }
 
   function synopsisStatRow(label, value, variant) {
@@ -13859,6 +13890,39 @@
 
   var LEADERBOARD_RANK_MEDALS = ["🥇", "🥈", "🥉"];
 
+  // The row of unlocked-achievement icons shown under a player's name on
+  // the leaderboard (Players view only - see leaderboardRow) - every icon
+  // opens the exact same popup (openAchievementsModal) for that player,
+  // there's nothing achievement-specific to jump to within it. null when
+  // this player hasn't unlocked anything yet, so the row is simply
+  // omitted rather than shown empty.
+  function buildLeaderboardAchievementIcons(name) {
+    var data = computeAchievements(name);
+    var icons = [];
+    data.ladders.forEach(function (a) {
+      if (a.tier > 0) icons.push(a.icon);
+    });
+    data.specials.forEach(function (a) {
+      if (a.unlocked) icons.push(a.icon);
+    });
+    if (icons.length === 0) return null;
+    var row = document.createElement("div");
+    row.className = "leaderboard-achievements-row";
+    icons.forEach(function (icon) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "leaderboard-achievement-icon";
+      btn.textContent = icon;
+      btn.setAttribute("aria-label", T("leaderboard.achievementsAriaLabel", { name: name }));
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        openAchievementsModal(name);
+      });
+      row.appendChild(btn);
+    });
+    return row;
+  }
+
   // Team entries (see computeLeaderboardTeamEntries) carry a `members`
   // array that player entries never have - the one signal this function
   // needs to tell them apart, since everything else about the two
@@ -13918,6 +13982,11 @@
       nameRow.appendChild(explainBtn);
     }
     body.appendChild(nameRow);
+
+    if (!isTeamEntry) {
+      var achievementIcons = buildLeaderboardAchievementIcons(entry.name);
+      if (achievementIcons) body.appendChild(achievementIcons);
+    }
 
     if (isTeamEntry) {
       var members = document.createElement("div");
@@ -17157,6 +17226,11 @@
   btnGameChangeClose.addEventListener("click", closeGameChange);
   gameChangeOverlay.addEventListener("click", function (e) {
     if (e.target === gameChangeOverlay) closeGameChange();
+  });
+
+  btnAchievementsModalClose.addEventListener("click", closeAchievementsModal);
+  achievementsModalOverlay.addEventListener("click", function (e) {
+    if (e.target === achievementsModalOverlay) closeAchievementsModal();
   });
 
   btnSaveSessionSave.addEventListener("click", function () {
