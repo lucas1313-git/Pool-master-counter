@@ -3373,6 +3373,10 @@ input[type="number"] {
   width: 100%;
 }
 
+.wizard-just-counter-btn {
+  width: 100%;
+}
+
 .wizard-player-chips {
   list-style: none;
   margin: 4px 0 0;
