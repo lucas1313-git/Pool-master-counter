@@ -821,13 +821,29 @@
     clickSound(now + 0.05, 560 * mult, 0.22);
   }
 
-  // A single soft, low tap - just enough to confirm a point was removed,
-  // without the theatrics a whole "sad trombone" line would add to what
-  // is usually just a quick misclick correction.
+  // A contact click (same as playPositiveSound's, just lower) followed
+  // by a short downward-drooping tail - enough of a "sad trombone" flavor
+  // to actually read as a letdown, without going back to a full 1.5s
+  // glide for what's usually just a quick misclick correction.
   function playNegativeSound(voice) {
     var mult = voicePitch(voice);
-    var now = getAudioCtx().currentTime;
-    clickSound(now, 180 * mult, 0.3);
+    var ctx = getAudioCtx();
+    var now = ctx.currentTime;
+    clickSound(now, 180 * mult, 0.42);
+
+    var droop = ctx.createOscillator();
+    var droopGain = ctx.createGain();
+    droop.type = "triangle";
+    droop.frequency.setValueAtTime(260 * mult, now);
+    droop.frequency.exponentialRampToValueAtTime(120 * mult, now + 0.55);
+    droopGain.gain.setValueAtTime(0, now);
+    droopGain.gain.linearRampToValueAtTime(0.32, now + 0.04);
+    droopGain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+    droop.connect(droopGain);
+    droopGain.connect(ctx.destination);
+    if (echoSend) droopGain.connect(echoSend);
+    droop.start(now);
+    droop.stop(now + 0.65);
   }
 
   // Two alternate victory fanfares, picked at random on each win so a run
