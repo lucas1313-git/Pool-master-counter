@@ -821,29 +821,55 @@
     clickSound(now + 0.05, 560 * mult, 0.22);
   }
 
-  // A contact click (same as playPositiveSound's, just lower) followed
-  // by a short downward-drooping tail - enough of a "sad trombone" flavor
-  // to actually read as a letdown, without going back to a full 1.5s
-  // glide for what's usually just a quick misclick correction.
+  // A contact click (same as playPositiveSound's, just lower) followed by
+  // a drawn-out, human "Awwwwww..." - a sawtooth "vocal cord" buzz shaped
+  // by two bandpass filters tuned near a low back vowel's formants (~600Hz
+  // and ~1000Hz, the resonances that make a buzz sound like "aw" instead
+  // of a flat tone), with a light vibrato for voice-like character and
+  // the pitch drooping down hard over the whole thing - a disappointed
+  // exhale trailing off, not a musical note.
   function playNegativeSound(voice) {
     var mult = voicePitch(voice);
     var ctx = getAudioCtx();
     var now = ctx.currentTime;
-    clickSound(now, 180 * mult, 0.42);
+    var duration = 1.3;
+    clickSound(now, 150 * mult, 0.38);
 
-    var droop = ctx.createOscillator();
-    var droopGain = ctx.createGain();
-    droop.type = "triangle";
-    droop.frequency.setValueAtTime(260 * mult, now);
-    droop.frequency.exponentialRampToValueAtTime(120 * mult, now + 0.55);
-    droopGain.gain.setValueAtTime(0, now);
-    droopGain.gain.linearRampToValueAtTime(0.32, now + 0.04);
-    droopGain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
-    droop.connect(droopGain);
-    droopGain.connect(ctx.destination);
-    if (echoSend) droopGain.connect(echoSend);
-    droop.start(now);
-    droop.stop(now + 0.65);
+    var voiceOsc = ctx.createOscillator();
+    voiceOsc.type = "sawtooth";
+    voiceOsc.frequency.setValueAtTime(160 * mult, now);
+    voiceOsc.frequency.exponentialRampToValueAtTime(65 * mult, now + duration);
+
+    var vibrato = ctx.createOscillator();
+    var vibratoGain = ctx.createGain();
+    vibrato.type = "sine";
+    vibrato.frequency.value = 5.5;
+    vibratoGain.gain.value = 4 * mult;
+    vibrato.connect(vibratoGain);
+    vibratoGain.connect(voiceOsc.frequency);
+    vibrato.start(now);
+    vibrato.stop(now + duration + 0.1);
+
+    function formant(freq, q, peakGain) {
+      var filter = ctx.createBiquadFilter();
+      filter.type = "bandpass";
+      filter.frequency.value = freq;
+      filter.Q.value = q;
+      var gain = ctx.createGain();
+      gain.gain.setValueAtTime(0, now);
+      gain.gain.linearRampToValueAtTime(peakGain, now + 0.09);
+      gain.gain.setValueAtTime(peakGain, now + duration * 0.55);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+      voiceOsc.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+      if (echoSend) gain.connect(echoSend);
+    }
+    formant(600, 6, 0.55);
+    formant(1000, 6, 0.32);
+
+    voiceOsc.start(now);
+    voiceOsc.stop(now + duration + 0.1);
   }
 
   // Two alternate victory fanfares, picked at random on each win so a run
