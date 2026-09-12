@@ -814,11 +814,86 @@
   // by a brighter "drop" tap - reading as one satisfying clack rather
   // than a synthesizer arpeggio, for the sound heard most often in the
   // whole app (every "+" tap).
+  // A flute-like "victory" rise: a sine fundamental (plus a quiet 2nd
+  // harmonic for a touch of body) climbing in pitch, settling into a
+  // gentle held "landing" note with light vibrato for the last quarter
+  // second rather than decaying away - plus a very light breath-noise
+  // layer for the airiness real flute tone has. voice's pitch multiplier
+  // (mult) shifts the whole thing per player, same as every other sound.
+  // Picked (as "Flute Rise + Gentle Landing", lightened on the breath
+  // layer) out of several rounds of alternatives - short percussive
+  // clicks, then vocal "Yeah!" shouts - that didn't land.
   function playPositiveSound(voice) {
     var mult = voicePitch(voice);
-    var now = getAudioCtx().currentTime;
-    clickSound(now, 300 * mult, 0.35);
-    clickSound(now + 0.05, 560 * mult, 0.22);
+    var ctx = getAudioCtx();
+    var now = ctx.currentTime;
+    var duration = 1.0;
+    var attack = 0.08;
+    var sustainEnd = now + duration * 0.6;
+    var end = now + duration;
+    var peak = 0.48;
+    var tailFloor = 0.05;
+
+    function applyEnvelope(gainParam, peakVal, floorVal) {
+      gainParam.setValueAtTime(0, now);
+      gainParam.linearRampToValueAtTime(peakVal, now + attack);
+      gainParam.setValueAtTime(peakVal, sustainEnd);
+      gainParam.exponentialRampToValueAtTime(floorVal, end);
+    }
+
+    var osc = ctx.createOscillator();
+    var oscGain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(300 * mult, now);
+    osc.frequency.linearRampToValueAtTime(480 * mult, now + 0.7);
+    applyEnvelope(oscGain.gain, peak * 0.92, tailFloor * 0.92);
+    osc.connect(oscGain);
+    oscGain.connect(ctx.destination);
+    if (echoSend) oscGain.connect(echoSend);
+    osc.start(now);
+    osc.stop(end + 0.1);
+
+    var overtone = ctx.createOscillator();
+    var overtoneGain = ctx.createGain();
+    overtone.type = "sine";
+    overtone.frequency.setValueAtTime(600 * mult, now);
+    overtone.frequency.linearRampToValueAtTime(960 * mult, now + 0.7);
+    applyEnvelope(overtoneGain.gain, peak * 0.08, tailFloor * 0.08);
+    overtone.connect(overtoneGain);
+    overtoneGain.connect(ctx.destination);
+    if (echoSend) overtoneGain.connect(echoSend);
+    overtone.start(now);
+    overtone.stop(end + 0.1);
+
+    // The vibrato only appears for the "landing" at the end, fading in
+    // over the last quarter second rather than running the whole time.
+    var vibrato = ctx.createOscillator();
+    var vibratoDepth = ctx.createGain();
+    vibrato.type = "sine";
+    vibrato.frequency.value = 5.2;
+    vibratoDepth.gain.setValueAtTime(0, now + 0.7);
+    vibratoDepth.gain.linearRampToValueAtTime(3 * mult, end);
+    vibrato.connect(vibratoDepth);
+    vibratoDepth.connect(osc.frequency);
+    vibrato.start(now);
+    vibrato.stop(end + 0.1);
+
+    // A light breath-noise layer for a touch of flute airiness - kept
+    // deliberately subtle so it reads as texture, not hiss.
+    var noise = ctx.createBufferSource();
+    noise.buffer = buildNoiseBuffer(ctx, duration);
+    var breathFilter = ctx.createBiquadFilter();
+    breathFilter.type = "bandpass";
+    breathFilter.frequency.value = 3400;
+    breathFilter.Q.value = 0.9;
+    var breathGain = ctx.createGain();
+    applyEnvelope(breathGain.gain, peak * 0.04, tailFloor * 0.04);
+    noise.connect(breathFilter);
+    breathFilter.connect(breathGain);
+    breathGain.connect(ctx.destination);
+    if (echoSend) breathGain.connect(echoSend);
+    noise.start(now);
+    noise.stop(end + 0.05);
   }
 
   // A contact click (same as playPositiveSound's, just lower) followed by
