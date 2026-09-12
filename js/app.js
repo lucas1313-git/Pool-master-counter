@@ -712,142 +712,122 @@
     document.addEventListener("pointerdown", unlock);
   }
 
-  // Every tone is two voices: the requested pitch/waveform, plus a quiet
-  // octave-up triangle partner that decays faster — that second voice is
-  // what turns a flat single-frequency beep into something with a bit of
-  // body/shimmer, and it's always a soft waveform even when the main tone
-  // uses a harsher one (sawtooth/square), which rounds off the edge
-  // without losing that tone's identity. Both voices feed the shared echo
-  // bus alongside the dry signal, unless noEcho opts a specific sound out
-  // of that (repeated pips - see playPlayerSwitchSound - blur together
-  // once the echo bus's own tail is still ringing under the next one).
-  function tone(freq, startTime, duration, type, peakGain, noEcho) {
-    var ctx = getAudioCtx();
-
-    var osc = ctx.createOscillator();
-    var gain = ctx.createGain();
-    osc.type = type || "sine";
-    osc.frequency.value = freq;
-    gain.gain.setValueAtTime(0, startTime);
-    gain.gain.linearRampToValueAtTime(peakGain, startTime + 0.015);
-    gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    if (echoSend && !noEcho) gain.connect(echoSend);
-    osc.start(startTime);
-    osc.stop(startTime + duration + 0.02);
-
-    var overtoneDuration = duration * 0.7;
-    var osc2 = ctx.createOscillator();
-    var gain2 = ctx.createGain();
-    osc2.type = "triangle";
-    osc2.frequency.value = freq * 2;
-    osc2.detune.value = 6;
-    gain2.gain.setValueAtTime(0, startTime);
-    gain2.gain.linearRampToValueAtTime(peakGain * 0.18, startTime + 0.015);
-    gain2.gain.exponentialRampToValueAtTime(0.0008, startTime + overtoneDuration);
-    osc2.connect(gain2);
-    gain2.connect(ctx.destination);
-    if (echoSend && !noEcho) gain2.connect(echoSend);
-    osc2.start(startTime);
-    osc2.stop(startTime + overtoneDuration + 0.02);
-  }
-
   function voicePitch(voice) {
     if (typeof voice !== "number") return 1;
     return VOICE_PITCHES[voice % VOICE_PITCHES.length];
   }
 
-  // A plain pace-reminder beep for the shot counter - two short identical
-  // pips, deliberately simpler than the win/on-hill fanfares since this
-  // one repeats on a timer during play rather than marking a one-off event.
-  function playShotCounterBeep() {
+  // White noise for the percussive "click" sounds below - freshly built
+  // per call since these are all a few hundredths of a second, so
+  // caching a buffer isn't worth the complexity.
+  function buildNoiseBuffer(ctx, duration) {
+    var length = Math.max(1, Math.floor(ctx.sampleRate * duration));
+    var buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+    var data = buffer.getChannelData(0);
+    for (var i = 0; i < length; i++) {
+      data[i] = Math.random() * 2 - 1;
+    }
+    return buffer;
+  }
+
+  // A short, physical "click" - a band-passed noise burst (the actual
+  // contact transient) plus a quick pitched knock underneath for body -
+  // standing in for a real cue-ball/rack sound instead of a plain
+  // oscillator beep. Used for every frequent, everyday cue (scoring,
+  // the shot counter, player-switch pips) so the sounds heard constantly
+  // during play read as physical taps rather than synthesizer blips; the
+  // occasional fanfares (playWinSound etc.) stay melodic, built from
+  // their own inline oscillator tones further down. freq tunes both the
+  // knock's pitch and the noise burst's filter (higher = lighter tap,
+  // lower = heavier thud).
+  function clickSound(startTime, freq, peakGain, noEcho) {
     var ctx = getAudioCtx();
-    var now = ctx.currentTime;
-    tone(880, now, 0.12, "sine", 0.4);
-    tone(880, now + 0.18, 0.12, "sine", 0.4);
+
+    var noise = ctx.createBufferSource();
+    noise.buffer = buildNoiseBuffer(ctx, 0.025);
+    var noiseFilter = ctx.createBiquadFilter();
+    noiseFilter.type = "bandpass";
+    noiseFilter.frequency.value = freq * 2.5;
+    noiseFilter.Q.value = 1;
+    var noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(peakGain * 0.7, startTime);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.025);
+    noise.connect(noiseFilter);
+    noiseFilter.connect(noiseGain);
+    noiseGain.connect(ctx.destination);
+    if (echoSend && !noEcho) noiseGain.connect(echoSend);
+    noise.start(startTime);
+    noise.stop(startTime + 0.03);
+
+    var knock = ctx.createOscillator();
+    var knockGain = ctx.createGain();
+    knock.type = "sine";
+    knock.frequency.setValueAtTime(freq * 1.5, startTime);
+    knock.frequency.exponentialRampToValueAtTime(freq * 0.7, startTime + 0.05);
+    knockGain.gain.setValueAtTime(0, startTime);
+    knockGain.gain.linearRampToValueAtTime(peakGain, startTime + 0.004);
+    knockGain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.08);
+    knock.connect(knockGain);
+    knockGain.connect(ctx.destination);
+    if (echoSend && !noEcho) knockGain.connect(echoSend);
+    knock.start(startTime);
+    knock.stop(startTime + 0.09);
+  }
+
+  // A plain pace-reminder click for the shot counter - two short
+  // identical taps, deliberately simpler than the win/on-hill fanfares
+  // since this one repeats on a timer during play rather than marking a
+  // one-off event.
+  function playShotCounterBeep() {
+    var now = getAudioCtx().currentTime;
+    clickSound(now, 520, 0.35);
+    clickSound(now + 0.18, 520, 0.35);
   }
 
   // A quiet single tick - the countdown warning in the final 5 seconds
   // before playShotCounterBeep fires, deliberately much smaller/shorter
   // than the beep it's leading up to so the two stay easy to tell apart.
   function playShotCounterTick() {
-    var ctx = getAudioCtx();
-    tone(1200, ctx.currentTime, 0.05, "sine", 0.12);
+    clickSound(getAudioCtx().currentTime, 700, 0.14);
   }
 
   // A low "you're now scoring for this player" cue for the keypad
   // shortcut's player-switch (pressing 1-9 during a points/ball game) -
-  // low sine pips rather than the brighter triangle used for an actual
+  // low, soft taps rather than the brighter click used for an actual
   // point, so it still reads as a mellow "got it" rather than competing
   // with the real scoring sounds. count is the keypad number just
-  // pressed (player 1's shortcut pips once, player 2's twice, and so
+  // pressed (player 1's shortcut taps once, player 2's twice, and so
   // on) so the number itself is audible, not just which card lit up -
   // useful without having to look at the screen at all. Dry (no echo
-  // bus, see tone's noEcho) - the shared slapback tail was still
-  // ringing under the next pip, blurring the count together.
+  // bus, see clickSound's noEcho) - the shared slapback tail was still
+  // ringing under the next tap, blurring the count together.
   function playPlayerSwitchSound(voice, count) {
     var mult = voicePitch(voice);
-    var ctx = getAudioCtx();
-    var now = ctx.currentTime;
+    var now = getAudioCtx().currentTime;
     var pips = Math.max(1, count || 1);
     for (var i = 0; i < pips; i++) {
-      tone(165 * mult, now + i * 0.45, 0.12, "sine", 0.5, true);
+      clickSound(now + i * 0.4, 260 * mult, 0.4, true);
     }
   }
 
+  // A short two-part click - a lower "contact" tap immediately followed
+  // by a brighter "drop" tap - reading as one satisfying clack rather
+  // than a synthesizer arpeggio, for the sound heard most often in the
+  // whole app (every "+" tap).
   function playPositiveSound(voice) {
     var mult = voicePitch(voice);
-    var ctx = getAudioCtx();
-    var now = ctx.currentTime;
-    tone(660 * mult, now, 0.09, "triangle", 0.22);
-    tone(990 * mult, now + 0.07, 0.14, "triangle", 0.2);
+    var now = getAudioCtx().currentTime;
+    clickSound(now, 300 * mult, 0.35);
+    clickSound(now + 0.05, 560 * mult, 0.22);
   }
 
-  // A single droopy "sad trombone" note: pitch bends downward over its
-  // whole duration (osc.frequency.exponentialRampToValueAtTime) instead of
-  // holding steady, plus a quiet sub-octave sine underneath for a low,
-  // mournful groan. Shares the echo bus with everything else.
-  function sadTone(freq, startTime, duration, bendTo) {
-    var ctx = getAudioCtx();
-
-    var osc = ctx.createOscillator();
-    var gain = ctx.createGain();
-    osc.type = "sawtooth";
-    osc.frequency.setValueAtTime(freq, startTime);
-    osc.frequency.exponentialRampToValueAtTime(freq * bendTo, startTime + duration);
-    gain.gain.setValueAtTime(0, startTime);
-    gain.gain.linearRampToValueAtTime(0.2, startTime + 0.03);
-    gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    if (echoSend) gain.connect(echoSend);
-    osc.start(startTime);
-    osc.stop(startTime + duration + 0.05);
-
-    var subOsc = ctx.createOscillator();
-    var subGain = ctx.createGain();
-    subOsc.type = "sine";
-    subOsc.frequency.setValueAtTime(freq / 2, startTime);
-    subOsc.frequency.exponentialRampToValueAtTime((freq * bendTo) / 2, startTime + duration);
-    subGain.gain.setValueAtTime(0, startTime);
-    subGain.gain.linearRampToValueAtTime(0.12, startTime + 0.03);
-    subGain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
-    subOsc.connect(subGain);
-    subGain.connect(ctx.destination);
-    if (echoSend) subGain.connect(echoSend);
-    subOsc.start(startTime);
-    subOsc.stop(startTime + duration + 0.05);
-  }
-
-  // "Sad trombone": a single note that droops all the way down over its
-  // own length instead of a multi-note descending motif — still very
-  // sad on purpose, just one long downward glide rather than several
-  // short ones.
+  // A single soft, low tap - just enough to confirm a point was removed,
+  // without the theatrics a whole "sad trombone" line would add to what
+  // is usually just a quick misclick correction.
   function playNegativeSound(voice) {
     var mult = voicePitch(voice);
     var now = getAudioCtx().currentTime;
-    sadTone(392.0 * mult, now, 1.5, 0.55);
+    clickSound(now, 180 * mult, 0.3);
   }
 
   // Two alternate victory fanfares, picked at random on each win so a run
@@ -878,10 +858,18 @@
       var gain = ctx.createGain();
       osc.type = "sawtooth";
       osc.frequency.value = freq;
+      // Tames the sawtooth's buzzy upper harmonics - the raw waveform
+      // reads as an old chiptune synth; this warms it toward a brass-like
+      // tone without giving up the extra harmonic richness a plain
+      // sine/triangle anthem would lack.
+      var warmth = ctx.createBiquadFilter();
+      warmth.type = "lowpass";
+      warmth.frequency.value = 1800;
       gain.gain.setValueAtTime(0, t);
       gain.gain.linearRampToValueAtTime(peakGain, t + 0.02);
       gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
-      osc.connect(gain);
+      osc.connect(warmth);
+      warmth.connect(gain);
       gain.connect(ctx.destination);
       if (echoSend) gain.connect(echoSend);
       gain.connect(reverbSend);
@@ -1039,15 +1027,21 @@
 
     // A low sawtooth note plus a sub-octave sine underneath for weight —
     // both fed into the big reverb send above (not the shared echo bus).
+    // Same warmth filter as playWinSound's anthemTone - tames the raw
+    // sawtooth's buzzy top end toward something brassier.
     function lowReverbTone(freq, t, duration, peakGain) {
       var osc = ctx.createOscillator();
       var gain = ctx.createGain();
       osc.type = "sawtooth";
       osc.frequency.value = freq;
+      var warmth = ctx.createBiquadFilter();
+      warmth.type = "lowpass";
+      warmth.frequency.value = 1600;
       gain.gain.setValueAtTime(0, t);
       gain.gain.linearRampToValueAtTime(peakGain, t + 0.025);
       gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
-      osc.connect(gain);
+      osc.connect(warmth);
+      warmth.connect(gain);
       gain.connect(ctx.destination);
       gain.connect(reverbSend);
       osc.start(t);
