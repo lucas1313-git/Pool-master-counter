@@ -4647,12 +4647,63 @@
     return RUN_RECORDS.allTimeBest;
   }
 
+  // Per-player best-ever run, separate from RUN_RECORDS above (which only
+  // remembers the single global all-time/daily record, not who else came
+  // close). Used by the leaderboard's run bonus (computeLeaderboardScore-
+  // Breakdown) and the Streak Shooter achievement - same findContactKey-
+  // style case-insensitive key lookup as PLAYER_CONTACTS.
+  var PLAYER_BEST_RUNS_KEY = "poolMasterCounter.playerBestRuns.v1";
+
+  function loadPlayerBestRunsFromStorage() {
+    try {
+      var raw = localStorage.getItem(PLAYER_BEST_RUNS_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function savePlayerBestRunsToStorage(data) {
+    try {
+      localStorage.setItem(PLAYER_BEST_RUNS_KEY, JSON.stringify(data));
+    } catch (e) {
+      console.warn("Could not save player best runs.", e);
+    }
+  }
+
+  var PLAYER_BEST_RUNS = loadPlayerBestRunsFromStorage();
+
+  function findPlayerBestRunKey(name) {
+    var key = normalizeNameKey(name);
+    var match = Object.keys(PLAYER_BEST_RUNS).filter(function (k) {
+      return normalizeNameKey(k) === key;
+    });
+    return match.length ? match[0] : null;
+  }
+
+  // This player's own best "balls in a row" run ever recorded, 0 if
+  // they've never had one worth tracking (see RUN_RECORD_MIN_TO_TRACK).
+  function getPlayerBestRun(name) {
+    var key = findPlayerBestRunKey(name);
+    return key ? PLAYER_BEST_RUNS[key].value : 0;
+  }
+
+  function recordPlayerBestRunIfHigher(name, value) {
+    var key = findPlayerBestRunKey(name) || name;
+    var existing = PLAYER_BEST_RUNS[key];
+    if (!existing || value > existing.value) {
+      PLAYER_BEST_RUNS[key] = { name: name, value: value, ts: new Date().toISOString() };
+      savePlayerBestRunsToStorage(PLAYER_BEST_RUNS);
+    }
+  }
+
   // Checked continuously as a run grows (see bumpRunForPlayer), not just
   // once when it "ends" - a run's final length is its peak, so comparing
   // on every extra ball is exactly equivalent and means there's no
   // separate "finalize" step that could miss it.
   function checkRunRecords(playerName, value) {
     if (value < RUN_RECORD_MIN_TO_TRACK) return;
+    recordPlayerBestRunIfHigher(playerName, value);
     var changed = false;
     var nowTs = new Date().toISOString();
     if (!RUN_RECORDS.allTimeBest || value > RUN_RECORDS.allTimeBest.value) {
@@ -11094,7 +11145,13 @@
 
   var SPECIAL_ACHIEVEMENT_DEFS = [
     { id: "skunker", icon: "🦨", compute: function (ctx) { return ctx.synopsis.skunkWins >= 1; } },
-    { id: "skunkMaster", icon: "🦨👑", compute: function (ctx) { return ctx.synopsis.skunkWins >= 5; } }
+    { id: "skunkMaster", icon: "🦨👑", compute: function (ctx) { return ctx.synopsis.skunkWins >= 5; } },
+    // "Balls in a row" (see the run-tracking section above, bumpRunForPlayer)
+    // - a single-game potting streak, not a win streak like winStreak above.
+    { id: "streakShooter", icon: "🎯", compute: function (ctx) { return ctx.bestRun > 5; } },
+    // Whoever currently holds RUN_RECORDS.allTimeBest - moves to a new
+    // player the moment someone else beats it, same as a real record.
+    { id: "runLegend", icon: "🐐", compute: function (ctx) { return ctx.isRunRecordHolder; } }
   ];
 
   function computeAchievements(name) {
@@ -11123,7 +11180,9 @@
       synopsis: synopsis,
       longestStreak: longestStreak,
       mvpPots: mvpPots,
-      tournamentWins: tournamentWins
+      tournamentWins: tournamentWins,
+      bestRun: getPlayerBestRun(name),
+      isRunRecordHolder: !!(RUN_RECORDS.allTimeBest && normalizeNameKey(RUN_RECORDS.allTimeBest.name) === normalizeNameKey(name))
     };
 
     var ladders = ACHIEVEMENT_DEFS.map(function (def) {
@@ -13397,6 +13456,14 @@
   // large a weight here lets it swamp everything else, which is what
   // happened at the original weight of 4.
   var LEADERBOARD_SKUNK_WIN_WEIGHT = 1;
+  // A player's best-ever "balls in a row" run (see the run-tracking
+  // section above, getPlayerBestRun) only starts contributing once it
+  // reaches this length - a 2-3 ball run is unremarkable, 5+ is the
+  // threshold worth rewarding. Points scale with how far past it a
+  // player's best run goes (a 5-run is worth one unit, a 10-run six),
+  // not just a flat bonus for clearing the bar.
+  var LEADERBOARD_RUN_BONUS_MIN = 5;
+  var LEADERBOARD_RUN_WEIGHT = 2;
 
   // How many balls are actually in play for a given game type - the
   // scale "balls left on the table" is relative TO. Only game types
@@ -13464,6 +13531,10 @@
     var ratingTerm = entry.rating / 20;
     var dominanceTerm = entry.avgDominanceRatio * LEADERBOARD_DOMINANCE_WEIGHT;
     var skunkTerm = entry.skunkWins * LEADERBOARD_SKUNK_WIN_WEIGHT;
+    var runTerm =
+      entry.bestRun >= LEADERBOARD_RUN_BONUS_MIN
+        ? (entry.bestRun - (LEADERBOARD_RUN_BONUS_MIN - 1)) * LEADERBOARD_RUN_WEIGHT
+        : 0;
     var activityTerm = Math.log2(entry.gamesPlayed) * 2;
     return {
       winRateTerm: winRateTerm,
@@ -13471,8 +13542,9 @@
       ratingTerm: ratingTerm,
       dominanceTerm: dominanceTerm,
       skunkTerm: skunkTerm,
+      runTerm: runTerm,
       activityTerm: activityTerm,
-      total: winRateTerm + tournamentTerm + ratingTerm + dominanceTerm + skunkTerm + activityTerm
+      total: winRateTerm + tournamentTerm + ratingTerm + dominanceTerm + skunkTerm + runTerm + activityTerm
     };
   }
 
@@ -13490,7 +13562,8 @@
           rating: getPlayerRating(name),
           tournamentWins: stats.tournamentWins,
           avgDominanceRatio: averageDominanceRatio(stats.games.concat(stats.tournamentGames)),
-          skunkWins: countSkunkWins(stats.games.concat(stats.tournamentGames))
+          skunkWins: countSkunkWins(stats.games.concat(stats.tournamentGames)),
+          bestRun: getPlayerBestRun(name)
         };
       })
       .filter(function (e) {
@@ -13544,6 +13617,7 @@
     var tournamentWins = 0;
     var skunkWins = 0;
     var ratingSum = 0;
+    var bestRun = 0;
     var allMemberGames = [];
     members.forEach(function (name) {
       var stats = computePlayerCareerStats(name, "all");
@@ -13554,6 +13628,7 @@
       skunkWins += countSkunkWins(games);
       allMemberGames = allMemberGames.concat(games);
       ratingSum += getPlayerRating(name);
+      bestRun = Math.max(bestRun, getPlayerBestRun(name));
     });
     return {
       members: members,
@@ -13563,7 +13638,12 @@
       rating: members.length ? ratingSum / members.length : 0,
       tournamentWins: tournamentWins,
       avgDominanceRatio: averageDominanceRatio(allMemberGames),
-      skunkWins: skunkWins
+      skunkWins: skunkWins,
+      // The team's proudest individual run, not summed across members -
+      // a "5 in a row" is an individual feat the team gets bragging
+      // rights for, same idea as skunkWins already being per-member wins
+      // added together rather than some team-wide concept of its own.
+      bestRun: bestRun
     };
   }
 
@@ -13664,6 +13744,16 @@
             leader: leader.name,
             leaderVal: leader.skunkWins,
             otherVal: other.skunkWins
+          });
+        }
+      },
+      {
+        delta: a.scoreBreakdown.runTerm - b.scoreBreakdown.runTerm,
+        describe: function (leader, other) {
+          return T("leaderboard.reasonRun", {
+            leader: leader.name,
+            leaderVal: leader.bestRun,
+            otherVal: other.bestRun
           });
         }
       },
@@ -13834,6 +13924,9 @@
     if (entry.skunkWins > 0) {
       statParts.push(T("leaderboard.statSkunkWins", { wins: entry.skunkWins }));
     }
+    if (entry.bestRun >= LEADERBOARD_RUN_BONUS_MIN) {
+      statParts.push(T("leaderboard.statBestRun", { count: entry.bestRun }));
+    }
     statParts.push(T(isTeamEntry ? "leaderboard.statAvgRating" : "leaderboard.statRating", { rating: Math.round(entry.rating) }));
     stats.textContent = statParts.join(" • ");
     body.appendChild(stats);
@@ -13863,7 +13956,9 @@
       minGames: LEADERBOARD_MIN_GAMES,
       tournamentWeight: LEADERBOARD_TOURNAMENT_WIN_WEIGHT,
       dominanceWeight: LEADERBOARD_DOMINANCE_WEIGHT,
-      skunkWeight: LEADERBOARD_SKUNK_WIN_WEIGHT
+      skunkWeight: LEADERBOARD_SKUNK_WIN_WEIGHT,
+      runMin: LEADERBOARD_RUN_BONUS_MIN,
+      runWeight: LEADERBOARD_RUN_WEIGHT
     });
   }
 
