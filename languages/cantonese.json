@@ -213,6 +213,7 @@
   "groupSession.intro": "俾同一WiFi嘅另一部電話加入,一齊操作呢個即時計分板。",
   "groupSession.joinUrlLabel": "加入連結",
   "groupSession.keepAwakeHint": "主持期間請保持螢幕開住,唔好關呢個分頁",
+  "groupSession.originError": "連接唔到本機伺服器。請用電腦嘅本機地址開返呢個應用程式(啟動伺服器嗰陣會顯示地址)——用GitHub版嘅應用程式係冇辦法主持嘅。",
   "groupSession.qrHint": "用電話相機掃描加入",
   "groupSession.stopHostingButton": "停止主持",
   "groupSession.waitingForHostUndo": "等緊主持人確認撤銷",

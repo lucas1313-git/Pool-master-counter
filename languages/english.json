@@ -213,6 +213,7 @@
   "groupSession.intro": "Let another phone on this WiFi join and control this live scoreboard.",
   "groupSession.joinUrlLabel": "Join URL",
   "groupSession.keepAwakeHint": "Keep this screen on and this tab open while hosting",
+  "groupSession.originError": "Couldn't reach the local server. Open this app at your computer's local address (shown when you run the server) — hosting doesn't work from a GitHub-hosted copy of the app.",
   "groupSession.qrHint": "Scan with a phone camera to join",
   "groupSession.stopHostingButton": "Stop Hosting",
   "groupSession.waitingForHostUndo": "Waiting for host to confirm undo",
