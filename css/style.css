@@ -4124,6 +4124,30 @@ input[type="number"] {
   font-weight: 800;
 }
 
+/* An <a>, not a <button> - this project's button styling (padding,
+   radius, cursor) lives on the bare `button` element selector, so a link
+   needs its own rule to look the same. */
+.group-session-install-link {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  margin: 16px auto;
+  padding: 12px 24px;
+  border-radius: 10px;
+  background: var(--btn-primary-surface);
+  color: var(--on-accent);
+  font-weight: 700;
+  font-size: 1rem;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+
+.group-session-install-link:hover {
+  filter: brightness(1.08);
+}
+
 .network-status-bar {
   position: sticky;
   top: 0;
