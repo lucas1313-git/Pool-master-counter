@@ -14397,10 +14397,16 @@
     return null;
   }
 
+  // Deliberately NOT the generic .../releases/latest/download/<file> form -
+  // that resolves against whichever release GitHub currently has flagged
+  // "Latest" (Stable-v1), not this auto-built one (desktop-latest is kept
+  // out of that flag on purpose, so it doesn't steal the badge - see
+  // build-desktop.yml's make_latest:false). Pointing at the tag directly
+  // works regardless of which release is "Latest".
   var DESKTOP_DOWNLOAD_URLS = {
-    mac: "https://github.com/lucas1313-git/Pool-master-counter/releases/latest/download/PoolMasterCounter-mac-arm64.zip",
-    windows: "https://github.com/lucas1313-git/Pool-master-counter/releases/latest/download/PoolMasterCounter-win-x64.exe",
-    linux: "https://github.com/lucas1313-git/Pool-master-counter/releases/latest/download/PoolMasterCounter-linux-x64.tar.gz",
+    mac: "https://github.com/lucas1313-git/Pool-master-counter/releases/download/desktop-latest/PoolMasterCounter-mac-arm64.zip",
+    windows: "https://github.com/lucas1313-git/Pool-master-counter/releases/download/desktop-latest/PoolMasterCounter-win-x64.exe",
+    linux: "https://github.com/lucas1313-git/Pool-master-counter/releases/download/desktop-latest/PoolMasterCounter-linux-x64.tar.gz",
   };
 
   function renderInstallPrompt() {
