@@ -213,6 +213,7 @@
   "groupSession.intro": "Laissez un autre téléphone sur ce WiFi rejoindre et contrôler ce tableau de score en direct.",
   "groupSession.joinUrlLabel": "Lien pour rejoindre",
   "groupSession.keepAwakeHint": "Gardez cet écran allumé et cet onglet ouvert pendant l'hébergement",
+  "groupSession.originError": "Impossible de joindre le serveur local. Ouvrez cette application à l'adresse locale de votre ordinateur (affichée au lancement du serveur) — l'hébergement ne fonctionne pas depuis une copie hébergée sur GitHub.",
   "groupSession.qrHint": "Scannez avec l'appareil photo d'un téléphone pour rejoindre",
   "groupSession.stopHostingButton": "Arrêter l'hébergement",
   "groupSession.waitingForHostUndo": "En attente de confirmation de l'hôte pour annuler",

@@ -1619,6 +1619,7 @@
   var groupSessionQrImg = document.getElementById("group-session-qr");
   var groupSessionGuestCount = document.getElementById("group-session-guest-count");
   var groupSessionHostPanel = document.getElementById("group-session-host-panel");
+  var groupSessionOriginError = document.getElementById("group-session-origin-error");
   var networkStatusBar = document.getElementById("network-status-bar");
   var networkStatusPill = document.getElementById("network-status-pill");
   var btnLeaveSession = document.getElementById("btn-leave-session");
@@ -14378,32 +14379,40 @@
   }
 
   function startHostingSession() {
-    networkMode = "host";
-    document.body.classList.add("network-host-mode");
-    openRelayConnection("host");
-    if (navigator.wakeLock) {
-      navigator.wakeLock
-        .request("screen")
-        .then(function (lock) {
-          networkWakeLock = lock;
-        })
-        .catch(function () {});
-    }
+    groupSessionOriginError.classList.add("hidden");
+    // Probe /api/lan-info first, before doing anything else - it only
+    // exists on the local relay server, so it's the cheapest reliable way
+    // to tell "this page is being served by the relay" apart from "this is
+    // a GitHub-hosted (or any other static) copy of the app". Skipping this
+    // check would mean silently opening a WebSocket that can never
+    // connect, retrying forever with nothing to explain why to the user.
     fetch("/api/lan-info")
       .then(function (res) {
+        if (!res.ok) throw new Error("bad status " + res.status);
         return res.json();
       })
       .then(function (info) {
         if (info.addresses && info.addresses.length) {
           networkLanBase = info.addresses[0] + ":" + info.port;
-          if (networkMode === "host") renderGroupSessionPage();
         }
+        networkMode = "host";
+        document.body.classList.add("network-host-mode");
+        openRelayConnection("host");
+        if (navigator.wakeLock) {
+          navigator.wakeLock
+            .request("screen")
+            .then(function (lock) {
+              networkWakeLock = lock;
+            })
+            .catch(function () {});
+        }
+        renderGroupSessionPage();
+        updateNetworkStatusUI();
       })
       .catch(function (e) {
-        console.warn("[GroupSession] could not detect LAN address, falling back to " + location.host, e);
+        console.error("[GroupSession] /api/lan-info unreachable - this page is probably not being served by the local relay server:", e);
+        groupSessionOriginError.classList.remove("hidden");
       });
-    renderGroupSessionPage();
-    updateNetworkStatusUI();
   }
 
   function stopHostingSession() {

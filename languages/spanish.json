@@ -213,6 +213,7 @@
   "groupSession.intro": "Deja que otro teléfono en este WiFi se una y controle este marcador en vivo.",
   "groupSession.joinUrlLabel": "Enlace para unirse",
   "groupSession.keepAwakeHint": "Mantén esta pantalla encendida y esta pestaña abierta mientras alojas",
+  "groupSession.originError": "No se pudo conectar con el servidor local. Abre esta aplicación en la dirección local de tu computadora (que se muestra al ejecutar el servidor) — alojar no funciona desde una copia alojada en GitHub.",
   "groupSession.qrHint": "Escanea con la cámara de un teléfono para unirte",
   "groupSession.stopHostingButton": "Detener alojamiento",
   "groupSession.waitingForHostUndo": "Esperando que el anfitrión confirme deshacer",
