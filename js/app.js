@@ -50,6 +50,22 @@
   // anyway (no completed games, ever).
   var quickCounterMode = false;
 
+  // Group Session — LAN multiplayer relay (see server/server.js). "host"
+  // keeps running every bit of real game logic exactly as offline, just
+  // also broadcasts state after every save and executes a small
+  // whitelist of remote-tap requests from guests; "guest" never mutates
+  // state locally, only sends those requests and renders whatever state
+  // the host broadcasts back. networkHostConnected is guest-only - false
+  // whenever the relay reports the host isn't currently reachable, which
+  // disables the guest's own scoring buttons (see buildBallControls).
+  var networkMode = "off"; // "off" | "host" | "guest"
+  var networkWs = null;
+  var networkGuestCount = 0;
+  var networkHostConnected = true;
+  var networkReconnectDelay = 1000;
+  var networkReconnectTimer = null;
+  var networkWakeLock = null;
+
   // Paywall/IAP scaffolding — Apple requires purchasable digital content
   // to go through StoreKit, which only exists inside a real native app
   // container (Capacitor injects `Capacitor` into the page only when
@@ -326,6 +342,12 @@
   }
 
   function saveState() {
+    // Network broadcast and local persistence are separate concerns -
+    // hooked before the noStatsMode guard so a host using "No Statistics"
+    // (or Quick Counter) can still share a session live; only THIS
+    // device's own history stays unsaved, exactly as that mode already
+    // promises elsewhere.
+    broadcastStateIfNetworked();
     if (noStatsMode) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -1582,6 +1604,19 @@
   var achievementsModalList = document.getElementById("achievements-modal-list");
   var btnAchievementsModalClose = document.getElementById("btn-achievements-modal-close");
 
+  var btnOpenGroupSession = document.getElementById("btn-open-group-session");
+  var groupSessionPageView = document.getElementById("view-group-session-page");
+  var btnGroupSessionBack = document.getElementById("btn-group-session-back");
+  var btnGroupSessionHost = document.getElementById("btn-group-session-host");
+  var btnGroupSessionStop = document.getElementById("btn-group-session-stop");
+  var groupSessionJoinUrl = document.getElementById("group-session-join-url");
+  var groupSessionQrImg = document.getElementById("group-session-qr");
+  var groupSessionGuestCount = document.getElementById("group-session-guest-count");
+  var groupSessionHostPanel = document.getElementById("group-session-host-panel");
+  var networkStatusBar = document.getElementById("network-status-bar");
+  var networkStatusPill = document.getElementById("network-status-pill");
+  var btnLeaveSession = document.getElementById("btn-leave-session");
+
   var btnOpenContactSheet = document.getElementById("btn-open-contact-sheet");
   var contactSheetPageView = document.getElementById("view-contact-sheet-page");
   var btnContactSheetBack = document.getElementById("btn-contact-sheet-back");
@@ -2135,9 +2170,9 @@
       e.preventDefault();
       var isSingleRackGame = !quickCounterMode && state.currentGame.unit === "rack" && state.currentGame.target === 1;
       if (e.key === "-" && isSingleRackGame) {
-        undoLastWin(keypadSelectedPlayerId);
+        requestUndoLastWin(keypadSelectedPlayerId);
       } else {
-        adjustScore(keypadSelectedPlayerId, e.key === "+" ? 1 : -1);
+        requestAdjustScore(keypadSelectedPlayerId, e.key === "+" ? 1 : -1);
       }
       return;
     }
@@ -2924,20 +2959,23 @@
     minusBtn.type = "button";
     minusBtn.className = "btn-ball minus";
     minusBtn.textContent = "−";
+    // A guest whose host has dropped can't do anything meaningful - stay
+    // disabled until host-status:true comes back over the relay.
+    var networkBlocked = networkMode === "guest" && !networkHostConnected;
     if (undoOnMinus) {
       minusBtn.setAttribute("aria-label", "Undo last win for " + player.name);
       var lastGame = state.gameHistory[0];
       var canUndo = !!(lastGame && typeof lastGame !== "string" && lastGame.winnerIds && lastGame.winnerIds.indexOf(player.id) !== -1);
-      minusBtn.disabled = disabled || !canUndo;
+      minusBtn.disabled = disabled || !canUndo || networkBlocked;
       minusBtn.addEventListener("click", function () {
-        undoLastWin(player.id);
+        requestUndoLastWin(player.id);
       });
     } else {
       minusBtn.setAttribute("aria-label", "Remove point for " + player.name);
       var minusAllowNegative = quickCounterMode || state.currentGame.unit !== "rack";
-      minusBtn.disabled = disabled || (!minusAllowNegative && (player.balls || 0) <= 0);
+      minusBtn.disabled = disabled || (!minusAllowNegative && (player.balls || 0) <= 0) || networkBlocked;
       minusBtn.addEventListener("click", function () {
-        adjustScore(player.id, -1);
+        requestAdjustScore(player.id, -1);
       });
     }
 
@@ -2946,9 +2984,9 @@
     plusBtn.className = "btn-ball plus";
     plusBtn.textContent = "+";
     plusBtn.setAttribute("aria-label", "Add point for " + player.name);
-    plusBtn.disabled = disabled;
+    plusBtn.disabled = disabled || networkBlocked;
     plusBtn.addEventListener("click", function () {
-      adjustScore(player.id, 1);
+      requestAdjustScore(player.id, 1);
     });
 
     controls.appendChild(minusBtn);
@@ -11857,6 +11895,7 @@
       else if (!tournamentPageView.classList.contains("hidden")) closeTournamentPage(true);
       else if (!contactSheetPageView.classList.contains("hidden")) closeContactSheetPage(true);
       else if (!leaderboardPageView.classList.contains("hidden")) closeLeaderboardPage(true);
+      else if (!groupSessionPageView.classList.contains("hidden")) closeGroupSessionPage(true);
       return;
     }
     if (state.screen === "all-players") openAllPlayersPage(true);
@@ -11864,6 +11903,7 @@
     else if (state.screen === "player") openPlayerStatsPage(state.name, true);
     else if (state.screen === "contact-sheet") openContactSheetPage(true);
     else if (state.screen === "leaderboard") openLeaderboardPage(true);
+    else if (state.screen === "group-session") openGroupSessionPage(true);
   });
 
   history.replaceState({ screen: "main" }, "", location.pathname + location.search);
@@ -14163,6 +14203,268 @@
     appRoot.classList.remove("hidden");
   }
 
+  // ---------------------------------------------------------------------
+  // Group Session — LAN multiplayer relay (see server/server.js for the
+  // other half). "host" keeps running every bit of real game logic
+  // exactly as it does fully offline - it just also broadcasts its state
+  // after every save (see broadcastStateIfNetworked, hooked into
+  // saveState/saveTournamentToStorage) and executes a small whitelist of
+  // remote-tap requests from guests through those exact same functions
+  // (dispatchNetworkAction), so win detection/sounds/achievements/rating
+  // all fire identically no matter who tapped the button. "guest" never
+  // mutates state locally at all - the three request* wrappers below are
+  // the only thing any UI call site changes to call, and they either
+  // send a request over the relay (guest) or call the real function
+  // directly, today's exact behavior (host or fully offline).
+  // ---------------------------------------------------------------------
+
+  function networkWsUrl() {
+    var scheme = location.protocol === "https:" ? "wss://" : "ws://";
+    return scheme + location.host + "/ws";
+  }
+
+  function scheduleNetworkReconnect(role) {
+    if (networkMode === "off") return;
+    networkReconnectTimer = setTimeout(function () {
+      networkReconnectTimer = null;
+      openRelayConnection(role);
+    }, networkReconnectDelay);
+    networkReconnectDelay = Math.min(networkReconnectDelay * 2, 10000);
+  }
+
+  function openRelayConnection(role) {
+    if (networkReconnectTimer) {
+      clearTimeout(networkReconnectTimer);
+      networkReconnectTimer = null;
+    }
+    var ws;
+    try {
+      ws = new WebSocket(networkWsUrl());
+    } catch (e) {
+      scheduleNetworkReconnect(role);
+      return;
+    }
+    networkWs = ws;
+    updateNetworkStatusUI();
+
+    ws.addEventListener("open", function () {
+      networkReconnectDelay = 1000;
+      ws.send(JSON.stringify({ type: "hello", role: role }));
+      if (role === "host") broadcastStateIfNetworked();
+      updateNetworkStatusUI();
+    });
+
+    ws.addEventListener("message", function (e) {
+      var msg;
+      try {
+        msg = JSON.parse(e.data);
+      } catch (err) {
+        return;
+      }
+      if (msg.type === "state" && networkMode === "guest") {
+        hydrateFromNetworkSnapshot(msg);
+      } else if (msg.type === "action" && networkMode === "host") {
+        dispatchNetworkAction(msg);
+      } else if (msg.type === "guest-count" && networkMode === "host") {
+        networkGuestCount = msg.count;
+        updateNetworkStatusUI();
+      } else if (msg.type === "host-status" && networkMode === "guest") {
+        networkHostConnected = !!msg.connected;
+        updateNetworkStatusUI();
+        renderAll();
+      }
+    });
+
+    ws.addEventListener("close", function () {
+      if (networkWs !== ws) return; // superseded by a newer connection already
+      networkWs = null;
+      if (networkMode === "off") return;
+      updateNetworkStatusUI();
+      scheduleNetworkReconnect(role);
+    });
+
+    ws.addEventListener("error", function () {
+      ws.close();
+    });
+  }
+
+  function closeRelayConnection() {
+    if (networkReconnectTimer) {
+      clearTimeout(networkReconnectTimer);
+      networkReconnectTimer = null;
+    }
+    if (networkWs) {
+      var ws = networkWs;
+      networkWs = null;
+      ws.close();
+    }
+  }
+
+  // Hooked into saveState/saveTournamentToStorage - a no-op unless this
+  // device is actively hosting with an open connection.
+  function broadcastStateIfNetworked() {
+    if (networkMode !== "host" || !networkWs || networkWs.readyState !== 1) return;
+    networkWs.send(JSON.stringify({ type: "state", state: state, tournament: TOURNAMENT }));
+  }
+
+  // Guest-only - a full replace, never a merge, and deliberately never
+  // calls saveState()/saveTournamentToStorage(): a guest's own device
+  // must never persist the host's session data as its own local history.
+  function hydrateFromNetworkSnapshot(snapshot) {
+    state = snapshot.state;
+    TOURNAMENT = snapshot.tournament || null;
+    renderAll();
+    renderTournamentPage();
+  }
+
+  // Host-only whitelist of exactly the functions a guest is ever allowed
+  // to trigger remotely.
+  function dispatchNetworkAction(msg) {
+    if (msg.fn === "adjustScore") {
+      adjustScore(msg.args[0], msg.args[1]);
+    } else if (msg.fn === "undoLastWin") {
+      undoLastWin(msg.args[0]);
+    } else if (msg.fn === "tournamentAdjustScore") {
+      var active = ((TOURNAMENT && TOURNAMENT.activeMatches) || []).filter(function (a) {
+        return a.matchId === msg.args[0];
+      })[0];
+      if (active) tournamentAdjustScore(active, msg.args[1], msg.args[2]);
+    }
+  }
+
+  function requestAdjustScore(playerId, delta) {
+    if (networkMode === "guest") {
+      if (networkWs) networkWs.send(JSON.stringify({ type: "action", fn: "adjustScore", args: [playerId, delta] }));
+      return;
+    }
+    adjustScore(playerId, delta);
+  }
+
+  // undoLastWin opens a confirmModal - triggered remotely, that dialog
+  // appears on the HOST's screen (undo is destructive; a guest shouldn't
+  // be able to unilaterally erase a recorded win). The guest sees nothing
+  // happen until the host responds, so this shows its own toast rather
+  // than leaving that silent.
+  function requestUndoLastWin(playerId) {
+    if (networkMode === "guest") {
+      if (networkWs) networkWs.send(JSON.stringify({ type: "action", fn: "undoLastWin", args: [playerId] }));
+      showToast(T("groupSession.waitingForHostUndo"));
+      return;
+    }
+    undoLastWin(playerId);
+  }
+
+  function requestTournamentAdjustScore(active, side, delta) {
+    if (networkMode === "guest") {
+      if (networkWs) {
+        networkWs.send(JSON.stringify({ type: "action", fn: "tournamentAdjustScore", args: [active.matchId, side, delta] }));
+      }
+      return;
+    }
+    tournamentAdjustScore(active, side, delta);
+  }
+
+  function startHostingSession() {
+    networkMode = "host";
+    document.body.classList.add("network-host-mode");
+    openRelayConnection("host");
+    if (navigator.wakeLock) {
+      navigator.wakeLock
+        .request("screen")
+        .then(function (lock) {
+          networkWakeLock = lock;
+        })
+        .catch(function () {});
+    }
+    renderGroupSessionPage();
+    updateNetworkStatusUI();
+  }
+
+  function stopHostingSession() {
+    networkMode = "off";
+    document.body.classList.remove("network-host-mode");
+    closeRelayConnection();
+    networkGuestCount = 0;
+    if (networkWakeLock) {
+      networkWakeLock.release().catch(function () {});
+      networkWakeLock = null;
+    }
+    renderGroupSessionPage();
+    updateNetworkStatusUI();
+  }
+
+  // A guest's whole in-memory state came from the host - once they leave,
+  // the cleanest thing is to reload straight back into this device's own
+  // real local session (untouched the whole time - see
+  // hydrateFromNetworkSnapshot) rather than leaving the host's borrowed
+  // data on screen. Dropping the ?join=1 query param is what keeps the
+  // next load from re-entering guest mode.
+  function leaveSession() {
+    location.href = location.pathname;
+  }
+
+  function renderGroupSessionPage() {
+    var hosting = networkMode === "host";
+    btnGroupSessionHost.classList.toggle("hidden", hosting);
+    groupSessionHostPanel.classList.toggle("hidden", !hosting);
+    if (!hosting) return;
+    var joinUrl = location.protocol + "//" + location.host + "/?join=1";
+    groupSessionJoinUrl.textContent = joinUrl;
+    groupSessionQrImg.src = "/api/qr.png?url=" + encodeURIComponent(joinUrl);
+    groupSessionGuestCount.textContent =
+      networkGuestCount === 1
+        ? T("groupSession.guestCountOne")
+        : T("groupSession.guestCountMany", { count: networkGuestCount });
+  }
+
+  function openGroupSessionPage(skipHistory) {
+    if (!skipHistory) pushScreenHistory("group-session");
+    renderGroupSessionPage();
+    appRoot.classList.add("hidden");
+    allPlayersPageView.classList.add("hidden");
+    playerPageView.classList.add("hidden");
+    tournamentPageView.classList.add("hidden");
+    contactSheetPageView.classList.add("hidden");
+    leaderboardPageView.classList.add("hidden");
+    groupSessionPageView.classList.remove("hidden");
+    window.scrollTo(0, 0);
+  }
+
+  function closeGroupSessionPage(skipHistory) {
+    if (!skipHistory) {
+      navigateBack();
+      return;
+    }
+    groupSessionPageView.classList.add("hidden");
+    appRoot.classList.remove("hidden");
+  }
+
+  // Drives both the host's and the guest's small persistent status pill -
+  // hidden entirely once networkMode is back to "off".
+  function updateNetworkStatusUI() {
+    if (networkMode === "off") {
+      networkStatusBar.classList.add("hidden");
+      return;
+    }
+    networkStatusBar.classList.remove("hidden");
+    btnLeaveSession.textContent = T(networkMode === "host" ? "groupSession.stopHostingButton" : "network.leaveSessionButton");
+    networkStatusPill.classList.remove("is-connecting", "is-connected", "is-host-away", "is-disconnected");
+    var connecting = !networkWs || networkWs.readyState !== 1;
+    if (networkMode === "guest" && !networkHostConnected) {
+      networkStatusPill.classList.add("is-host-away");
+      networkStatusPill.textContent = T("network.statusHostAway");
+    } else if (connecting) {
+      networkStatusPill.classList.add(networkWs ? "is-connecting" : "is-disconnected");
+      networkStatusPill.textContent = networkWs ? T("network.statusConnecting") : T("network.statusDisconnected");
+    } else {
+      networkStatusPill.classList.add("is-connected");
+      networkStatusPill.textContent = T("network.statusConnected");
+    }
+    if (networkMode === "host" && !groupSessionHostPanel.classList.contains("hidden")) {
+      renderGroupSessionPage();
+    }
+  }
+
   function maybeAutoShowLeaderboard() {
     // Only interrupt the main screen - never pop the leaderboard over a
     // page the player is already actively using (mid-tournament, editing
@@ -14433,6 +14735,7 @@
   }
 
   function saveTournamentToStorage(t) {
+    broadcastStateIfNetworked();
     try {
       if (t) localStorage.setItem(TOURNAMENT_KEY, JSON.stringify(t));
       else localStorage.removeItem(TOURNAMENT_KEY);
@@ -16413,14 +16716,16 @@
     var unit = GAME_TYPES[t.gameType].unit;
     var allowNegative = unit !== "rack";
 
+    var networkBlocked = networkMode === "guest" && !networkHostConnected;
+
     var minusBtn = document.createElement("button");
     minusBtn.type = "button";
     minusBtn.className = "btn-ball minus";
     minusBtn.textContent = "−";
     minusBtn.setAttribute("aria-label", "Remove point for " + name);
-    minusBtn.disabled = !allowNegative && balls <= 0;
+    minusBtn.disabled = (!allowNegative && balls <= 0) || networkBlocked;
     minusBtn.addEventListener("click", function () {
-      tournamentAdjustScore(active, side, -1);
+      requestTournamentAdjustScore(active, side, -1);
     });
 
     var plusBtn = document.createElement("button");
@@ -16428,8 +16733,9 @@
     plusBtn.className = "btn-ball plus";
     plusBtn.textContent = "+";
     plusBtn.setAttribute("aria-label", "Add point for " + name);
+    plusBtn.disabled = networkBlocked;
     plusBtn.addEventListener("click", function () {
-      tournamentAdjustScore(active, side, 1);
+      requestTournamentAdjustScore(active, side, 1);
     });
 
     controls.appendChild(minusBtn);
@@ -17644,6 +17950,20 @@
   [leaderboardViewPlayersRadio, leaderboardViewTeamsRadio].forEach(function (radio) {
     radio.addEventListener("change", renderLeaderboardPage);
   });
+
+  btnOpenGroupSession.addEventListener("click", function () {
+    openGroupSessionPage();
+  });
+  btnGroupSessionBack.addEventListener("click", function () {
+    closeGroupSessionPage();
+  });
+  btnGroupSessionHost.addEventListener("click", startHostingSession);
+  btnGroupSessionStop.addEventListener("click", stopHostingSession);
+  btnLeaveSession.addEventListener("click", function () {
+    if (networkMode === "host") stopHostingSession();
+    else leaveSession();
+  });
+
   btnContactSheetSelectAll.addEventListener("click", function () {
     var names = contactSheetAllNames();
     var allSelected = names.length > 0 && names.every(function (n) {
@@ -17883,5 +18203,15 @@
     });
     applyDomTranslations(document);
     boot();
+
+    // A join link (?join=1, from the Group Session QR/URL) puts this
+    // device straight into guest mode - GAME_TYPES is already populated
+    // and boot() has already run by this point, so it's safe to hydrate
+    // and render the instant the host's first state snapshot arrives.
+    if (location.search.indexOf("join=1") !== -1) {
+      networkMode = "guest";
+      document.body.classList.add("network-guest-mode");
+      openRelayConnection("guest");
+    }
   });
 })();

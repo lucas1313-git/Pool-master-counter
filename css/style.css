@@ -4101,6 +4101,124 @@ input[type="number"] {
   font-style: italic;
 }
 
+/* ---------- Group Session (LAN multiplayer relay) ---------- */
+
+.network-status-bar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 16px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+}
+
+.network-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.82rem;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+
+.network-status-pill.is-connecting {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-panel));
+}
+
+.network-status-pill.is-connected {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 24%, var(--bg-panel));
+}
+
+.network-status-pill.is-host-away,
+.network-status-pill.is-disconnected {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 16%, var(--bg-panel));
+}
+
+.group-session-join-url-label {
+  margin: 16px 0 2px;
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.group-session-join-url {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  word-break: break-all;
+  user-select: all;
+}
+
+.group-session-qr {
+  display: block;
+  width: 220px;
+  height: 220px;
+  margin: 16px auto 4px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: #fff;
+  padding: 10px;
+}
+
+.group-session-qr-hint {
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+
+.group-session-guest-count {
+  text-align: center;
+  font-weight: 700;
+  color: var(--accent);
+  margin: 12px 0;
+}
+
+#group-session-host-panel #btn-group-session-stop {
+  display: block;
+  margin: 12px auto 0;
+}
+
+/* Guest-mode scoping: hide everything except the live scoreboard/
+   standings and (if a tournament is running) the active match view - a
+   guest can tap +/- and undo, nothing else. Reuses the real, already-
+   fully-featured panels rather than a separate stripped-down template. */
+body.network-guest-mode #rotation-panel,
+body.network-guest-mode #game-setup-panel,
+body.network-guest-mode #players-panel,
+body.network-guest-mode #history-panel,
+body.network-guest-mode #day-notes-panel,
+body.network-guest-mode #report-archive-panel,
+body.network-guest-mode #backup-panel,
+body.network-guest-mode #resets-panel,
+body.network-guest-mode #tournament-setup-panel,
+body.network-guest-mode .header-nav-row #btn-test-onboarding,
+body.network-guest-mode .header-nav-row #btn-open-wizard,
+body.network-guest-mode .header-nav-row #btn-open-tournament,
+body.network-guest-mode .header-nav-row #btn-open-global-stats,
+body.network-guest-mode .header-nav-row #btn-open-contact-sheet,
+body.network-guest-mode .header-nav-row #btn-open-group-session {
+  display: none !important;
+}
+
 /* Unlocked-achievement icons under a leaderboard player's name (see
    buildLeaderboardAchievementIcons) - every icon opens the same full
    achievements popup for that player (openAchievementsModal), so they're
