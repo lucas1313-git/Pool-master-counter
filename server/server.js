@@ -33,6 +33,30 @@ var REPO_ROOT = path.resolve(__dirname, "..");
 var app = express();
 app.use(express.static(REPO_ROOT, { extensions: ["html"] }));
 
+function lanAddresses() {
+  var interfaces = os.networkInterfaces();
+  var addresses = [];
+  Object.keys(interfaces).forEach(function (name) {
+    (interfaces[name] || []).forEach(function (iface) {
+      if (iface.family === "IPv4" && !iface.internal) {
+        addresses.push(iface.address);
+      }
+    });
+  });
+  return addresses;
+}
+
+// The host's browser needs to know its own LAN-reachable address to build
+// a join URL/QR that a *different* device can actually use. It can't infer
+// this from location.host - if the host opened the app via
+// http://localhost:4173/ (the natural thing to type on the machine running
+// this server), a join link built from that would tell every guest's phone
+// to connect to its own localhost, which silently fails with no useful
+// error. So the app fetches this instead of trusting its own origin.
+app.get("/api/lan-info", function (req, res) {
+  res.json({ addresses: lanAddresses(), port: PORT });
+});
+
 app.get("/api/qr.png", function (req, res) {
   var url = req.query.url;
   if (!url) {
@@ -125,19 +149,6 @@ wss.on("connection", function (ws) {
     }
   });
 });
-
-function lanAddresses() {
-  var interfaces = os.networkInterfaces();
-  var addresses = [];
-  Object.keys(interfaces).forEach(function (name) {
-    (interfaces[name] || []).forEach(function (iface) {
-      if (iface.family === "IPv4" && !iface.internal) {
-        addresses.push(iface.address);
-      }
-    });
-  });
-  return addresses;
-}
 
 wss.on("error", function (err) {
   if (err.code === "EADDRINUSE") {
