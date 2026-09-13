@@ -65,6 +65,12 @@
   var networkReconnectDelay = 1000;
   var networkReconnectTimer = null;
   var networkWakeLock = null;
+  // "<lan-ip>:<port>" the server detects itself, fetched fresh each time
+  // hosting starts. Overrides location.host when building the join URL/QR
+  // - if the host opened the app as http://localhost:4173/ (the natural
+  // thing to type on the machine running the server), location.host alone
+  // would produce a join link that only works on the host's own device.
+  var networkLanBase = null;
 
   // Paywall/IAP scaffolding — Apple requires purchasable digital content
   // to go through StoreKit, which only exists inside a real native app
@@ -14237,17 +14243,21 @@
       clearTimeout(networkReconnectTimer);
       networkReconnectTimer = null;
     }
+    var url = networkWsUrl();
     var ws;
     try {
-      ws = new WebSocket(networkWsUrl());
+      ws = new WebSocket(url);
     } catch (e) {
+      console.error("[GroupSession] WebSocket constructor threw for " + url + ":", e);
       scheduleNetworkReconnect(role);
       return;
     }
+    console.log("[GroupSession] connecting as " + role + " to " + url);
     networkWs = ws;
     updateNetworkStatusUI();
 
     ws.addEventListener("open", function () {
+      console.log("[GroupSession] socket open, sending hello as " + role);
       networkReconnectDelay = 1000;
       ws.send(JSON.stringify({ type: "hello", role: role }));
       if (role === "host") broadcastStateIfNetworked();
@@ -14259,6 +14269,7 @@
       try {
         msg = JSON.parse(e.data);
       } catch (err) {
+        console.error("[GroupSession] could not parse message:", e.data, err);
         return;
       }
       if (msg.type === "state" && networkMode === "guest") {
@@ -14275,15 +14286,17 @@
       }
     });
 
-    ws.addEventListener("close", function () {
+    ws.addEventListener("close", function (e) {
       if (networkWs !== ws) return; // superseded by a newer connection already
+      console.warn("[GroupSession] socket closed (code " + e.code + (e.reason ? ", reason: " + e.reason : "") + "), reconnecting in " + networkReconnectDelay + "ms");
       networkWs = null;
       if (networkMode === "off") return;
       updateNetworkStatusUI();
       scheduleNetworkReconnect(role);
     });
 
-    ws.addEventListener("error", function () {
+    ws.addEventListener("error", function (e) {
+      console.error("[GroupSession] socket error for " + url, e);
       ws.close();
     });
   }
@@ -14376,6 +14389,19 @@
         })
         .catch(function () {});
     }
+    fetch("/api/lan-info")
+      .then(function (res) {
+        return res.json();
+      })
+      .then(function (info) {
+        if (info.addresses && info.addresses.length) {
+          networkLanBase = info.addresses[0] + ":" + info.port;
+          if (networkMode === "host") renderGroupSessionPage();
+        }
+      })
+      .catch(function (e) {
+        console.warn("[GroupSession] could not detect LAN address, falling back to " + location.host, e);
+      });
     renderGroupSessionPage();
     updateNetworkStatusUI();
   }
@@ -14385,6 +14411,7 @@
     document.body.classList.remove("network-host-mode");
     closeRelayConnection();
     networkGuestCount = 0;
+    networkLanBase = null;
     if (networkWakeLock) {
       networkWakeLock.release().catch(function () {});
       networkWakeLock = null;
@@ -14408,7 +14435,7 @@
     btnGroupSessionHost.classList.toggle("hidden", hosting);
     groupSessionHostPanel.classList.toggle("hidden", !hosting);
     if (!hosting) return;
-    var joinUrl = location.protocol + "//" + location.host + "/?join=1";
+    var joinUrl = location.protocol + "//" + (networkLanBase || location.host) + "/?join=1";
     groupSessionJoinUrl.textContent = joinUrl;
     groupSessionQrImg.src = "/api/qr.png?url=" + encodeURIComponent(joinUrl);
     groupSessionGuestCount.textContent =
