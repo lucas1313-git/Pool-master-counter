@@ -1,0 +1,10 @@
+{
+  "name": "pool-master-counter-desktop-build",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Build-only tooling that packages server/ + the app's static files into a standalone, dependency-free desktop binary (Node Single Executable Application). Never installed or run by an end user directly - only used by .github/workflows/build-desktop.yml.",
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "postject": "1.0.0-alpha.6"
+  }
+}

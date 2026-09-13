@@ -217,6 +217,7 @@ This is a static site — no build step or dependencies.
 
 - **Locally:** open `index.html` in a browser, or serve the folder (e.g. `python3 -m http.server`) and visit it.
 - **Online:** enable GitHub Pages for this repo (Settings → Pages → deploy from the `main` branch) and it's live at `https://<username>.github.io/Pool-master-counter/`.
+- **Desktop app (no setup):** for the "Group Session" feature (a second phone on the same WiFi joining a live scoring session — see `server/README.md`), download a portable, zero-install binary from [Releases](../../releases/tag/desktop-latest) — no git, no Node, no terminal. These are built by `installer/` (a self-contained subdirectory, same pattern as `server/`), so `main`'s own dependency-free footprint described above is unaffected.
 
 Three other branches exist alongside `main`:
 

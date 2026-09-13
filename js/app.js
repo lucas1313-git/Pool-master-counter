@@ -1620,6 +1620,10 @@
   var groupSessionGuestCount = document.getElementById("group-session-guest-count");
   var groupSessionHostPanel = document.getElementById("group-session-host-panel");
   var groupSessionOriginError = document.getElementById("group-session-origin-error");
+  var groupSessionInstallPrompt = document.getElementById("group-session-install-prompt");
+  var groupSessionInstallLink = document.getElementById("group-session-install-link");
+  var groupSessionInstallUnsupported = document.getElementById("group-session-install-unsupported");
+  var groupSessionInstallSecurityNote = document.getElementById("group-session-install-security-note");
   var networkStatusBar = document.getElementById("network-status-bar");
   var networkStatusPill = document.getElementById("network-status-pill");
   var btnLeaveSession = document.getElementById("btn-leave-session");
@@ -14378,6 +14382,47 @@
     tournamentAdjustScore(active, side, delta);
   }
 
+  // iPadOS 13+ reports navigator.platform as "MacIntel" like a real Mac,
+  // so touch support is the only reliable way to tell an iPad apart from
+  // an actual Mac - a desktop binary can't run on either kind of phone or
+  // tablet, so those all fall through to null (unsupported).
+  function detectDesktopOS() {
+    var ua = navigator.userAgent || "";
+    var platform = navigator.platform || "";
+    if (/iPhone|iPad|iPod|Android/.test(ua)) return null;
+    if (platform === "MacIntel" && navigator.maxTouchPoints > 1) return null;
+    if (/Mac/.test(platform)) return "mac";
+    if (/Win/.test(platform)) return "windows";
+    if (/Linux/.test(platform)) return "linux";
+    return null;
+  }
+
+  var DESKTOP_DOWNLOAD_URLS = {
+    mac: "https://github.com/lucas1313-git/Pool-master-counter/releases/latest/download/PoolMasterCounter-mac-arm64.zip",
+    windows: "https://github.com/lucas1313-git/Pool-master-counter/releases/latest/download/PoolMasterCounter-win-x64.exe",
+    linux: "https://github.com/lucas1313-git/Pool-master-counter/releases/latest/download/PoolMasterCounter-linux-x64.tar.gz",
+  };
+
+  function renderInstallPrompt() {
+    var os = detectDesktopOS();
+    groupSessionInstallUnsupported.classList.toggle("hidden", !!os);
+    groupSessionInstallLink.classList.toggle("hidden", !os);
+    if (!os) {
+      groupSessionInstallSecurityNote.textContent = "";
+      return;
+    }
+    var osLabel = os === "mac" ? "Mac (Apple Silicon)" : os === "windows" ? "Windows" : "Linux";
+    groupSessionInstallLink.href = DESKTOP_DOWNLOAD_URLS[os];
+    groupSessionInstallLink.textContent = T("groupSession.installButton", { os: osLabel });
+    groupSessionInstallSecurityNote.textContent = T(
+      os === "mac"
+        ? "groupSession.installSecurityNoteMac"
+        : os === "windows"
+        ? "groupSession.installSecurityNoteWindows"
+        : "groupSession.installSecurityNoteLinux"
+    );
+  }
+
   function startHostingSession() {
     groupSessionOriginError.classList.add("hidden");
     // Probe /api/lan-info first, before doing anything else - it only
@@ -14412,6 +14457,8 @@
       .catch(function (e) {
         console.error("[GroupSession] /api/lan-info unreachable - this page is probably not being served by the local relay server:", e);
         groupSessionOriginError.classList.remove("hidden");
+        groupSessionInstallPrompt.classList.remove("hidden");
+        renderInstallPrompt();
       });
   }
 
