@@ -15,9 +15,17 @@
 var http = require("http");
 var os = require("os");
 var path = require("path");
-var express = require("express");
-var WebSocket = require("ws");
-var QRCode = require("qrcode");
+var express, WebSocket, QRCode;
+try {
+  express = require("express");
+  WebSocket = require("ws");
+  QRCode = require("qrcode");
+} catch (e) {
+  console.error("Dependencies aren't installed yet.");
+  console.error("Run this first, from inside the server/ folder:");
+  console.error("  npm install");
+  process.exit(1);
+}
 
 var PORT = process.env.PORT || 4173;
 var REPO_ROOT = path.resolve(__dirname, "..");
@@ -130,6 +138,18 @@ function lanAddresses() {
   });
   return addresses;
 }
+
+wss.on("error", function (err) {
+  if (err.code === "EADDRINUSE") {
+    console.error("Port " + PORT + " is already in use.");
+    console.error("Is the server already running in another terminal/tab?");
+    console.error("Either close that one, or run this one on a different port:");
+    console.error("  PORT=4174 npm start");
+  } else {
+    console.error("Could not start the server:", err.message);
+  }
+  process.exit(1);
+});
 
 httpServer.listen(PORT, function () {
   var addresses = lanAddresses();

@@ -4103,6 +4103,27 @@ input[type="number"] {
 
 /* ---------- Group Session (LAN multiplayer relay) ---------- */
 
+/* The page view itself is a bare top-level sibling of #app (same as
+   every other view-*-page), with no ambient width constraint - #app
+   gets its own max-width/centering rule, this needs the same. */
+#view-group-session-page {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 0 16px 24px;
+  box-sizing: border-box;
+}
+
+#btn-group-session-host,
+#group-session-host-panel #btn-group-session-stop {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  margin: 20px auto;
+  padding: 14px 28px;
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
 .network-status-bar {
   position: sticky;
   top: 0;
@@ -4153,6 +4174,7 @@ input[type="number"] {
   font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  text-align: center;
 }
 
 .group-session-join-url {
@@ -4166,6 +4188,8 @@ input[type="number"] {
   padding: 10px 14px;
   word-break: break-all;
   user-select: all;
+  text-align: center;
+  box-sizing: border-box;
 }
 
 .group-session-qr {
@@ -4190,11 +4214,6 @@ input[type="number"] {
   font-weight: 700;
   color: var(--accent);
   margin: 12px 0;
-}
-
-#group-session-host-panel #btn-group-session-stop {
-  display: block;
-  margin: 12px auto 0;
 }
 
 /* Guest-mode scoping: hide everything except the live scoreboard/
