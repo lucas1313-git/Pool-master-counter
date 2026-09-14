@@ -213,7 +213,7 @@
   "groupSession.installButton": "⬇️ Download for {{os}}",
   "groupSession.installIntro": "Prefer to host from your own computer? Download a portable app for this — nothing to install, no admin rights needed.",
   "groupSession.installSecurityNoteLinux": "First launch only: right-click the file → Properties → Permissions → \"Allow executing as a program\" (or run chmod +x), then double-click it.",
-  "groupSession.installSecurityNoteMac": "Open the .dmg, drag the app into Applications, then (first launch only) right-click it → Open → Open. This isn't code-signed (no paid Apple developer certificate), so macOS shows this warning once — that's expected for a free, independent app.",
+  "groupSession.installSecurityNoteMac": "Open the .dmg, drag the app into Applications. First launch only: macOS will say it can't verify the app is free of malware - this is because it isn't code-signed (no paid Apple developer certificate), not an actual problem. Open Terminal and run: xattr -d com.apple.quarantine /Applications/PoolMasterCounter.app - then open it normally. (Older macOS: right-click the app → Open → Open works instead.)",
   "groupSession.installSecurityNoteWindows": "First launch only: click \"More info\" → \"Run anyway\". This isn't code-signed (no paid certificate), so Windows SmartScreen shows this warning once — that's expected for a free, independent app.",
   "groupSession.installUnsupportedOs": "Hosting needs a desktop computer on this WiFi — this won't run on a phone.",
   "groupSession.intro": "Let another phone on this WiFi join and control this live scoreboard.",

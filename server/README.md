@@ -25,10 +25,15 @@ relay), or directly from
 It isn't code-signed (no paid developer certificate), so your OS will show
 one security warning the first time you run it - that's expected for a
 free, independent app:
-- **Mac:** a real `.dmg` disk image - open it, drag Pool Master Counter
-  into Applications, then (first launch only) right-click it → Open →
-  Open. It opens a Terminal window to run the server in - keep that
-  window open while hosting, close it to stop.
+- **Mac:** a real `.dmg` disk image - open it and drag Pool Master
+  Counter into Applications. First launch only, macOS will say it can't
+  verify the app is free of malware (ad-hoc signed, no paid Apple
+  developer certificate) - on macOS 15 (Sequoia) and later, right-click →
+  Open no longer bypasses this the way it used to; instead open Terminal
+  and run `xattr -d com.apple.quarantine /Applications/PoolMasterCounter.app`,
+  then open it normally. (Older macOS: right-click the app → Open → Open
+  still works.) Launching it opens a Terminal window to run the server in
+  - keep that window open while hosting, close it to stop.
 - **Windows:** click "More info" → "Run anyway" on the SmartScreen prompt.
 - **Linux:** mark the file executable first (`chmod +x`, or via your file
   manager's Properties → Permissions) if it doesn't run directly.
