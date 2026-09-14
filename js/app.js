@@ -5390,6 +5390,11 @@
   function buildDayReportTextTable(dateStr) {
     var data = computeDayReportData(dateStr);
     var lines = ["🎱 POOL MASTER COUNTER — DAY REPORT", formatReportDateHeading(dateStr), ""];
+    var leaderboardChangeLines = computeLeaderboardChangesLines();
+    if (leaderboardChangeLines) {
+      lines = lines.concat(leaderboardChangeLines);
+      lines.push("");
+    }
     var notes = getDayNotes(dateStr);
     if (notes) {
       lines.push("Notes");
@@ -5470,6 +5475,11 @@
   function buildDayReportTextCompact(dateStr) {
     var data = computeDayReportData(dateStr);
     var lines = ["🎱 " + formatReportDateHeading(dateStr) + " — Day Report", ""];
+    var leaderboardChangeLines = computeLeaderboardChangesLines();
+    if (leaderboardChangeLines) {
+      lines = lines.concat(leaderboardChangeLines);
+      lines.push("");
+    }
     var notes = getDayNotes(dateStr);
     if (notes) {
       lines.push("Notes: " + notes);
@@ -5524,6 +5534,11 @@
       longDate = formatReportDateHeading(dateStr);
     }
     var lines = ["🎱 Pool Master Counter — Day Report", longDate, "══════════════════════════", ""];
+    var leaderboardChangeLines = computeLeaderboardChangesLines();
+    if (leaderboardChangeLines) {
+      lines = lines.concat(leaderboardChangeLines);
+      lines.push("");
+    }
     var notes = getDayNotes(dateStr);
     if (notes) {
       lines.push("NOTES");
@@ -5590,6 +5605,11 @@
   function buildDayReportTextPlain(dateStr) {
     var data = computeDayReportData(dateStr);
     var lines = ["🎱 POOL MASTER COUNTER — DAY REPORT", formatReportDateHeading(dateStr), ""];
+    var leaderboardChangeLines = computeLeaderboardChangesLines();
+    if (leaderboardChangeLines) {
+      lines = lines.concat(leaderboardChangeLines);
+      lines.push("");
+    }
     var notes = getDayNotes(dateStr);
     if (notes) {
       lines.push("Notes: " + notes);
@@ -5666,6 +5686,18 @@
     dateHeading.className = "print-report-date";
     dateHeading.textContent = formatReportDateHeading(dateStr);
     dayReportPrintView.appendChild(dateHeading);
+
+    var leaderboardChangeLines = computeLeaderboardChangesLines();
+    if (leaderboardChangeLines) {
+      dayReportPrintView.appendChild(printReportSectionHeading(leaderboardChangeLines[0]));
+      var leaderboardChangeList = document.createElement("ul");
+      leaderboardChangeLines.slice(1).forEach(function (line) {
+        var li = document.createElement("li");
+        li.textContent = line;
+        leaderboardChangeList.appendChild(li);
+      });
+      dayReportPrintView.appendChild(leaderboardChangeList);
+    }
 
     if (data.players.length === 0 && data.tournaments.length === 0) {
       var empty = document.createElement("p");
@@ -8935,6 +8967,7 @@
 
   function shareReport() {
     var text = buildDayReportTextForSharing(todayDateStr());
+    commitLeaderboardSnapshot();
     if (dayReportAttachBackupCheckbox.checked || dayReportAttachColorfulCheckbox.checked) {
       shareReportWithAttachments(text, function () {
         shareReportTextOnly(text);
@@ -13616,6 +13649,15 @@
   var LEADERBOARD_MIN_GAMES = 10;
   var LEADERBOARD_LAST_SHOWN_KEY = "poolMasterCounter.leaderboardLastShown.v1";
   var LEADERBOARD_AUTO_SHOW_MS = 12 * 60 * 60 * 1000;
+  // A snapshot of the last-published ranking (name + rank only, players
+  // only - the day report has never covered the Teams view), so the day
+  // report can mention what moved since whoever last actually sent one -
+  // not "since 24h ago" or "since midnight", since nothing in this app
+  // tracks calendar-day boundaries; "since the last time someone told
+  // people" is the only baseline that's actually meaningful here, and it's
+  // what committing on every real publish action gives for free.
+  var LEADERBOARD_SNAPSHOT_KEY = "poolMasterCounter.leaderboardSnapshot.v1";
+  var LEADERBOARD_CHANGE_MOVERS_CAP = 3;
   // A second, independent trigger alongside the "hasn't been shown in
   // 12h" one above: the device just sitting open and untouched for a
   // long stretch (left on a table between games, forgotten overnight
@@ -13770,6 +13812,102 @@
       return b.mvpScore - a.mvpScore;
     });
     return entries;
+  }
+
+  function loadLeaderboardSnapshot() {
+    try {
+      var raw = localStorage.getItem(LEADERBOARD_SNAPSHOT_KEY);
+      if (!raw) return null;
+      var parsed = JSON.parse(raw);
+      return parsed && Array.isArray(parsed.entries) ? parsed : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function currentLeaderboardSnapshotEntries() {
+    return computeLeaderboardEntries().map(function (e, i) {
+      return { name: e.name, rank: i + 1 };
+    });
+  }
+
+  // Called from every genuine "publish" action (Copy/Email/Text/Share/
+  // Print Report) - not from CSV export or the Colorful report image,
+  // which don't display the change summary this snapshot feeds, so
+  // committing there would silently reset the baseline for a channel that
+  // never showed anyone what changed.
+  function commitLeaderboardSnapshot() {
+    try {
+      localStorage.setItem(
+        LEADERBOARD_SNAPSHOT_KEY,
+        JSON.stringify({ entries: currentLeaderboardSnapshotEntries(), ts: new Date().toISOString() })
+      );
+    } catch (e) {
+      console.warn("Could not save leaderboard snapshot.", e);
+    }
+  }
+
+  // Short "what changed" lines for the day report - null when there's
+  // nothing to compare against yet (first-ever publish) or nothing
+  // changed since the last one. The #1 spot changing hands is always
+  // called out first and separately (it's the one thing worth leading
+  // with); everyone else who moved is listed in rank order and capped at
+  // LEADERBOARD_CHANGE_MOVERS_CAP so a big reshuffle (e.g. several
+  // players crossing the minimum-games line the same day) can't turn this
+  // into a wall of text - "just a mention", not a full audit.
+  function computeLeaderboardChangesLines() {
+    var snapshot = loadLeaderboardSnapshot();
+    if (!snapshot) return null;
+    var previous = snapshot.entries;
+    var current = currentLeaderboardSnapshotEntries();
+
+    var previousRankByName = {};
+    previous.forEach(function (e) {
+      previousRankByName[e.name] = e.rank;
+    });
+    var currentNameSet = {};
+    current.forEach(function (e) {
+      currentNameSet[e.name] = true;
+    });
+
+    var previousMvp = previous.length ? previous[0].name : null;
+    var currentMvp = current.length ? current[0].name : null;
+    var mvpChanged = currentMvp && previousMvp && currentMvp !== previousMvp;
+
+    // Plain hardcoded English, deliberately - matches every other line in
+    // this file's day-report builders (see e.g. "No games recorded
+    // today." above), none of which run through T(). This report is text
+    // shared with other people over email/SMS, not app UI, so it's never
+    // been localized to the sender's own language setting.
+    var movers = [];
+    current.forEach(function (e) {
+      if (mvpChanged && e.name === currentMvp) return; // covered by the MVP line instead
+      var prevRank = previousRankByName[e.name];
+      if (prevRank === undefined) {
+        movers.push(e.name + " joined the rankings at #" + e.rank + ".");
+      } else if (prevRank !== e.rank) {
+        movers.push(
+          e.rank < prevRank
+            ? e.name + " climbed to #" + e.rank + " (was #" + prevRank + ")."
+            : e.name + " dropped to #" + e.rank + " (was #" + prevRank + ")."
+        );
+      }
+    });
+    previous.forEach(function (e) {
+      if (!currentNameSet[e.name]) movers.push(e.name + " dropped out of the rankings.");
+    });
+
+    if (!mvpChanged && movers.length === 0) return null;
+
+    var lines = ["🏆 Leaderboard update:"];
+    if (mvpChanged) lines.push("New MVP — " + currentMvp + " (was " + previousMvp + ").");
+    var shown = movers.slice(0, LEADERBOARD_CHANGE_MOVERS_CAP);
+    var overflow = movers.length - shown.length;
+    lines = lines.concat(shown);
+    if (overflow > 0) {
+      lines.push("...and " + overflow + " more change" + (overflow === 1 ? "" : "s") + ".");
+    }
+    return lines;
   }
 
   // A "team" here is nothing more than the set of players who've typed
@@ -17950,10 +18088,12 @@
 
   btnDayReportCopy.addEventListener("click", function () {
     copyReportToClipboard(buildDayReportText(todayDateStr()));
+    commitLeaderboardSnapshot();
   });
 
   btnDayReportEmail.addEventListener("click", function () {
     var text = buildDayReportTextForSharing(todayDateStr());
+    commitLeaderboardSnapshot();
     function openEmailCompose() {
       var to = reportOptedInContacts("email")
         .map(function (c) {
@@ -17975,6 +18115,7 @@
 
   btnDayReportSms.addEventListener("click", function () {
     var text = buildDayReportTextForSharing(todayDateStr());
+    commitLeaderboardSnapshot();
     function openSmsCompose() {
       var to = reportOptedInContacts("sms")
         .map(function (c) {
@@ -18020,6 +18161,7 @@
 
   btnDayReportPrint.addEventListener("click", function () {
     renderDayReportPrintView(todayDateStr());
+    commitLeaderboardSnapshot();
     dayReportPrintView.classList.remove("hidden");
     window.print();
   });
