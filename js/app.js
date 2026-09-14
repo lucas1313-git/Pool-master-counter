@@ -1600,6 +1600,7 @@
   var leaderboardPageView = document.getElementById("view-leaderboard-page");
   var btnLeaderboardBack = document.getElementById("btn-leaderboard-back");
   var btnLeaderboardPlay = document.getElementById("btn-leaderboard-play");
+  var btnLeaderboardShare = document.getElementById("btn-leaderboard-share");
   var leaderboardViewPlayersRadio = document.getElementById("leaderboard-view-players");
   var leaderboardViewTeamsRadio = document.getElementById("leaderboard-view-teams");
   var leaderboardList = document.getElementById("leaderboard-list");
@@ -14063,6 +14064,30 @@
   // needs to tell them apart, since everything else about the two
   // shapes (name, gamesPlayed, wins, winPct, rating, tournamentWins,
   // avgDominanceRatio, skunkWins, scoreBreakdown, mvpScore) is identical.
+  // Shared by the on-screen leaderboard row and the plain-text share
+  // export, so the two never drift apart.
+  function leaderboardStatParts(entry, isTeamEntry) {
+    var statParts = [
+      T("leaderboard.statWins", { wins: entry.wins }),
+      T("leaderboard.statGames", { games: entry.gamesPlayed }),
+      T("leaderboard.statWinPct", { pct: Math.round(entry.winPct * 100) })
+    ];
+    if (entry.tournamentWins > 0) {
+      statParts.push(T("leaderboard.statTournamentWins", { wins: entry.tournamentWins }));
+    }
+    if (entry.avgDominanceRatio > 0) {
+      statParts.push(T("leaderboard.statDominance", { pct: Math.round(entry.avgDominanceRatio * 100) }));
+    }
+    if (entry.skunkWins > 0) {
+      statParts.push(T("leaderboard.statSkunkWins", { wins: entry.skunkWins }));
+    }
+    if (entry.bestRun >= LEADERBOARD_RUN_BONUS_MIN) {
+      statParts.push(T("leaderboard.statBestRun", { count: entry.bestRun }));
+    }
+    statParts.push(T(isTeamEntry ? "leaderboard.statAvgRating" : "leaderboard.statRating", { rating: Math.round(entry.rating) }));
+    return statParts;
+  }
+
   function leaderboardRow(entry, rank, entries) {
     var isTeamEntry = !!entry.members;
     var li = document.createElement("li");
@@ -14140,25 +14165,7 @@
 
     var stats = document.createElement("div");
     stats.className = "leaderboard-row-stats";
-    var statParts = [
-      T("leaderboard.statWins", { wins: entry.wins }),
-      T("leaderboard.statGames", { games: entry.gamesPlayed }),
-      T("leaderboard.statWinPct", { pct: Math.round(entry.winPct * 100) })
-    ];
-    if (entry.tournamentWins > 0) {
-      statParts.push(T("leaderboard.statTournamentWins", { wins: entry.tournamentWins }));
-    }
-    if (entry.avgDominanceRatio > 0) {
-      statParts.push(T("leaderboard.statDominance", { pct: Math.round(entry.avgDominanceRatio * 100) }));
-    }
-    if (entry.skunkWins > 0) {
-      statParts.push(T("leaderboard.statSkunkWins", { wins: entry.skunkWins }));
-    }
-    if (entry.bestRun >= LEADERBOARD_RUN_BONUS_MIN) {
-      statParts.push(T("leaderboard.statBestRun", { count: entry.bestRun }));
-    }
-    statParts.push(T(isTeamEntry ? "leaderboard.statAvgRating" : "leaderboard.statRating", { rating: Math.round(entry.rating) }));
-    stats.textContent = statParts.join(" • ");
+    stats.textContent = leaderboardStatParts(entry, isTeamEntry).join(" • ");
     body.appendChild(stats);
 
     li.appendChild(body);
@@ -14190,6 +14197,55 @@
       runMin: LEADERBOARD_RUN_BONUS_MIN,
       runWeight: LEADERBOARD_RUN_WEIGHT
     });
+  }
+
+  // Plain text, not a screenshot - works with any share target (text
+  // message, chat app, clipboard) without needing canvas rendering or a
+  // file attachment, matching how Copy/Share Report already works for the
+  // day report (see shareReportTextOnly).
+  function buildLeaderboardShareText() {
+    var isTeamView = leaderboardViewTeamsRadio.checked;
+    var entries = isTeamView ? computeLeaderboardTeamEntries() : computeLeaderboardEntries();
+    var scopeLabel = T(isTeamView ? "leaderboard.viewTeams" : "leaderboard.viewPlayers");
+    var lines = [T("leaderboard.shareHeading", { scope: scopeLabel }), ""];
+    if (entries.length === 0) {
+      lines.push(T(isTeamView ? "leaderboard.notEnoughTeamData" : "leaderboard.notEnoughData", { minGames: LEADERBOARD_MIN_GAMES }));
+    } else {
+      entries.forEach(function (entry, i) {
+        var rank = i + 1;
+        var medal = LEADERBOARD_RANK_MEDALS[rank - 1] || "#" + rank;
+        var name = entry.name + (rank === 1 ? " (" + T(isTeamView ? "leaderboard.topTeamTag" : "leaderboard.mvp") + ")" : "");
+        lines.push(medal + " " + name + " — " + leaderboardStatParts(entry, isTeamView).join(" • "));
+      });
+    }
+    return lines.join("\n");
+  }
+
+  function shareLeaderboard() {
+    var text = buildLeaderboardShareText();
+    if (navigator.share) {
+      navigator.share({ title: T("leaderboard.shareHeading", { scope: T(leaderboardViewTeamsRadio.checked ? "leaderboard.viewTeams" : "leaderboard.viewPlayers") }), text: text }).catch(function (err) {
+        if (err && err.name === "AbortError") return;
+        copyLeaderboardToClipboard(text);
+      });
+    } else {
+      copyLeaderboardToClipboard(text);
+    }
+  }
+
+  function copyLeaderboardToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(
+        function () {
+          showToast(T("toast.leaderboardCopied"));
+        },
+        function () {
+          alertModal(text);
+        }
+      );
+    } else {
+      alertModal(text);
+    }
   }
 
   function openLeaderboardPage(skipHistory) {
@@ -18036,6 +18092,7 @@
   btnLeaderboardPlay.addEventListener("click", function () {
     closeLeaderboardPage();
   });
+  btnLeaderboardShare.addEventListener("click", shareLeaderboard);
   [leaderboardViewPlayersRadio, leaderboardViewTeamsRadio].forEach(function (radio) {
     radio.addEventListener("change", renderLeaderboardPage);
   });

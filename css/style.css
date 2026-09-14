@@ -4314,15 +4314,26 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
    the unmissable, unambiguous way out, sitting right below the ranked
    list (or the empty-state hint standing in for it) so it's the next
    thing there is to do once you're done reading. */
+.leaderboard-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0 16px;
+}
+
 .leaderboard-play-btn {
-  display: block;
-  width: max-content;
-  max-width: 100%;
-  margin: 18px auto 16px;
   font-size: 1.05rem;
   font-weight: 800;
   padding: 14px 28px;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+.leaderboard-share-btn {
+  font-size: 1.05rem;
+  font-weight: 700;
+  padding: 14px 24px;
 }
 
 .leaderboard-list {
