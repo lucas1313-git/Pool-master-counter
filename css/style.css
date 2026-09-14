@@ -2616,6 +2616,61 @@ input[type="number"] {
   width: 100%;
 }
 
+/* ---------- Queue swap popup ---------- */
+
+/* Same "readable from across the table" sizing idea as .onhill-card
+   (see the comment there) - a busy/loud room needs the incoming player's
+   name to be unmissable, which is the whole point of this popup (see
+   announceQueueSwap). --accent instead of --danger: this is good news
+   for the player coming in, not a warning. */
+.queueswap-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 1000;
+}
+
+.queueswap-card {
+  background: linear-gradient(180deg, var(--felt-light) 0%, var(--felt) 60%, var(--bg-glow) 100%);
+  border: 2px solid var(--accent);
+  border-radius: var(--radius);
+  max-width: min(96vw, 900px);
+  max-height: calc(92svh - 8px);
+  width: 100%;
+  overflow-y: auto;
+  padding: clamp(36px, 7vw, 64px) clamp(30px, 6vw, 56px);
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  animation: onhill-shake 0.4s ease;
+}
+
+.queueswap-emoji {
+  font-size: clamp(3.4rem, 10vw, 8rem);
+  margin-bottom: 10px;
+}
+
+.queueswap-card h2 {
+  margin: 0 0 12px;
+  color: var(--accent);
+  font-size: clamp(2rem, 7vw, 5rem);
+}
+
+.queueswap-card p {
+  margin: 0 0 26px;
+  font-size: clamp(1.3rem, 4.5vw, 3.2rem);
+  font-weight: 600;
+}
+
+.queueswap-card .btn-primary {
+  width: 100%;
+  font-size: clamp(1.3rem, 3.2vw, 2.6rem);
+  padding: clamp(14px, 2.4vw, 28px);
+}
+
 /* ---------- Save session before reset popup ---------- */
 
 .save-session-overlay {

@@ -522,6 +522,8 @@
     queueModeRow.classList.toggle("hidden", !individualMode);
     queueModeCheckbox.checked = state.currentGame.queueEnabled;
     var queueActive = individualMode && state.currentGame.queueEnabled;
+    queueSwapStickyRow.classList.toggle("hidden", !queueActive);
+    queueSwapStickyCheckbox.checked = loadQueueSwapSticky();
     queueSection.classList.toggle("hidden", !queueActive);
     if (!queueActive) return;
     var queue = effectiveQueue();
@@ -1799,6 +1801,12 @@
   var gameChangeOverlay = document.getElementById("gamechange-overlay");
   var gameChangeMessage = document.getElementById("gamechange-message");
   var btnGameChangeClose = document.getElementById("btn-gamechange-close");
+
+  var queueSwapOverlay = document.getElementById("queueswap-overlay");
+  var queueSwapMessage = document.getElementById("queueswap-message");
+  var btnQueueSwapClose = document.getElementById("btn-queueswap-close");
+  var queueSwapStickyRow = document.getElementById("queue-swap-sticky-row");
+  var queueSwapStickyCheckbox = document.getElementById("queue-swap-sticky-checkbox");
   var nowPlayingBanner = document.getElementById("now-playing-banner");
 
   var saveSessionOverlay = document.getElementById("save-session-overlay");
@@ -2103,6 +2111,7 @@
       forceResetOverlay,
       onHillOverlay,
       gameChangeOverlay,
+      queueSwapOverlay,
       saveSessionOverlay,
       ratingEditOverlay,
       confirmModalOverlay,
@@ -2237,6 +2246,7 @@
     [forceResetOverlay, btnForceResetClose, btnForceResetClose],
     [onHillOverlay, btnOnHillClose, btnOnHillClose],
     [gameChangeOverlay, btnGameChangeClose, btnGameChangeClose],
+    [queueSwapOverlay, btnQueueSwapClose, btnQueueSwapClose],
     [helpOverlay, btnHelpClose, btnHelpClose],
     [achievementsModalOverlay, btnAchievementsModalClose, btnAchievementsModalClose]
   ];
@@ -3849,12 +3859,29 @@
           var front = queue.shift();
           front.playing = true;
           front.balls = 0;
+          saveQueue(queue);
+          saveState();
+          renderAll();
+          announceQueueSwap(front.name, p.name);
+          return;
         }
         saveQueue(queue);
       }
     } else {
       if (queueActive && activePlayers().length >= 2) {
-        showToast(T("toast.queueTableFull"));
+        // Both seats are taken - but this player isn't turned away, just
+        // bumped to the very front of the standby queue (effectiveQueue()
+        // already treats every non-playing roster player as queued, so
+        // adding someone new here was never actually blocked - only
+        // *seating* them immediately is). They'll be the next one in.
+        var bumped = effectiveQueue().filter(function (q) {
+          return q.id !== p.id;
+        });
+        bumped.unshift(p);
+        saveQueue(bumped);
+        saveState();
+        renderAll();
+        showToast(T("toast.queuePlayerBumped", { name: p.name }));
         return;
       }
       p.playing = true;
@@ -3908,6 +3935,7 @@
     var milestoneNames = null;
     var milestoneCount = 0;
     var onHillNames = null;
+    var queueSwapInfo = null;
     var target = effectiveRaceTarget(key);
     var mvpId = null;
     var mvpName = null;
@@ -4009,6 +4037,7 @@
             nextUp.balls = 0;
             waitingQueue.push(loser);
             saveQueue(waitingQueue);
+            queueSwapInfo = { newName: nextUp.name, benchedName: loser.name };
           }
         }
       }
@@ -4114,6 +4143,8 @@
         announceGameChange(
           GAME_TYPES[state.currentGame.gameType].label + " (" + state.currentGame.target + " " + unitLabel(state.currentGame.unit) + ")"
         );
+      } else if (queueSwapInfo) {
+        announceQueueSwap(queueSwapInfo.newName, queueSwapInfo.benchedName);
       }
     });
     return summary;
@@ -4278,6 +4309,57 @@
 
   function closeGameChange() {
     gameChangeOverlay.classList.add("hidden");
+  }
+
+  var QUEUE_SWAP_STICKY_KEY = "poolMasterCounter.queueSwapSticky.v1";
+
+  function loadQueueSwapSticky() {
+    try {
+      return localStorage.getItem(QUEUE_SWAP_STICKY_KEY) === "true";
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function saveQueueSwapSticky(value) {
+    try {
+      localStorage.setItem(QUEUE_SWAP_STICKY_KEY, value ? "true" : "false");
+    } catch (e) {
+      console.warn("Could not save queue-swap notice preference.", e);
+    }
+  }
+
+  var queueSwapAutoCloseTimer = null;
+
+  // Big, hard-to-miss popup for whoever just got seated by the "Winner
+  // Stays" queue (a win swapping the loser out, or manually benching the
+  // active player) - a busy/loud pool room can't rely on a small toast
+  // for this, since the incoming player needs to actually notice it's
+  // their turn. Auto-closes after 5s by default, same as announceOnHill;
+  // queueSwapStickyCheckbox (players.queueSwapStickyLabel) lets someone
+  // running a noisy room keep it up until it's manually dismissed instead.
+  function announceQueueSwap(newName, benchedName) {
+    queueSwapMessage.textContent = T("queueswap.message", { newName: newName, benchedName: benchedName });
+    queueSwapOverlay.classList.remove("hidden");
+    playPositiveSound(null);
+    if (queueSwapAutoCloseTimer) {
+      clearTimeout(queueSwapAutoCloseTimer);
+      queueSwapAutoCloseTimer = null;
+    }
+    if (!loadQueueSwapSticky()) {
+      queueSwapAutoCloseTimer = setTimeout(function () {
+        queueSwapAutoCloseTimer = null;
+        closeQueueSwap();
+      }, 5000);
+    }
+  }
+
+  function closeQueueSwap() {
+    if (queueSwapAutoCloseTimer) {
+      clearTimeout(queueSwapAutoCloseTimer);
+      queueSwapAutoCloseTimer = null;
+    }
+    queueSwapOverlay.classList.add("hidden");
   }
 
   // Reflects the current counter value into the dialog and disables "-"
@@ -17899,6 +17981,14 @@
   btnGameChangeClose.addEventListener("click", closeGameChange);
   gameChangeOverlay.addEventListener("click", function (e) {
     if (e.target === gameChangeOverlay) closeGameChange();
+  });
+
+  btnQueueSwapClose.addEventListener("click", closeQueueSwap);
+  queueSwapOverlay.addEventListener("click", function (e) {
+    if (e.target === queueSwapOverlay) closeQueueSwap();
+  });
+  queueSwapStickyCheckbox.addEventListener("change", function () {
+    saveQueueSwapSticky(queueSwapStickyCheckbox.checked);
   });
 
   btnAchievementsModalClose.addEventListener("click", closeAchievementsModal);
