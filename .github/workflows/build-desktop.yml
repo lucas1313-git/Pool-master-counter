@@ -32,7 +32,7 @@ jobs:
       matrix:
         include:
           - os: macos-14
-            artifact: PoolMasterCounter-mac-arm64.zip
+            artifact: PoolMasterCounter-mac-arm64.dmg
           - os: windows-latest
             artifact: PoolMasterCounter-win-x64.exe
           - os: ubuntu-latest
@@ -68,21 +68,55 @@ jobs:
       - name: Generate the SEA preparation blob
         run: cd installer && node --experimental-sea-config generated/sea-config.json
 
-      - name: Build the macOS binary
+      - name: Build the macOS .app bundle
         if: runner.os == 'macOS'
         run: |
           cd installer
-          cp "$(command -v node)" generated/PoolMasterCounter
-          codesign --remove-signature generated/PoolMasterCounter
-          npx postject generated/PoolMasterCounter NODE_SEA_BLOB generated/sea-prep.blob \
+          APP=generated/PoolMasterCounter.app
+          mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+
+          # The real server binary - built exactly as before, just placed
+          # inside the bundle under a name distinct from the bundle's own
+          # main executable (see launch.sh below).
+          cp "$(command -v node)" "$APP/Contents/MacOS/PoolMasterCounterServer"
+          codesign --remove-signature "$APP/Contents/MacOS/PoolMasterCounterServer"
+          npx postject "$APP/Contents/MacOS/PoolMasterCounterServer" NODE_SEA_BLOB generated/sea-prep.blob \
             --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2 \
             --macho-segment-name NODE_SEA
-          codesign --sign - generated/PoolMasterCounter
-          chmod +x generated/PoolMasterCounter
-          cp "mac/Start Pool Master Counter.command" generated/
-          chmod +x "generated/Start Pool Master Counter.command"
-          cd generated
-          zip -X -r "../../${{ matrix.artifact }}" PoolMasterCounter "Start Pool Master Counter.command"
+          chmod +x "$APP/Contents/MacOS/PoolMasterCounterServer"
+
+          # CFBundleExecutable - opens the server in a visible Terminal
+          # window instead of running it silently in the background (see
+          # mac/launch.sh for why).
+          cp mac/launch.sh "$APP/Contents/MacOS/PoolMasterCounter"
+          chmod +x "$APP/Contents/MacOS/PoolMasterCounter"
+          cp mac/Info.plist "$APP/Contents/Info.plist"
+
+          mkdir -p /tmp/AppIcon.iconset
+          SRC=../icons/icon-512.png
+          sips -z 16 16     $SRC --out /tmp/AppIcon.iconset/icon_16x16.png
+          sips -z 32 32     $SRC --out /tmp/AppIcon.iconset/icon_16x16@2x.png
+          sips -z 32 32     $SRC --out /tmp/AppIcon.iconset/icon_32x32.png
+          sips -z 64 64     $SRC --out /tmp/AppIcon.iconset/icon_32x32@2x.png
+          sips -z 128 128   $SRC --out /tmp/AppIcon.iconset/icon_128x128.png
+          sips -z 256 256   $SRC --out /tmp/AppIcon.iconset/icon_128x128@2x.png
+          sips -z 256 256   $SRC --out /tmp/AppIcon.iconset/icon_256x256.png
+          sips -z 512 512   $SRC --out /tmp/AppIcon.iconset/icon_256x256@2x.png
+          sips -z 512 512   $SRC --out /tmp/AppIcon.iconset/icon_512x512.png
+          sips -z 1024 1024 $SRC --out /tmp/AppIcon.iconset/icon_512x512@2x.png
+          iconutil -c icns /tmp/AppIcon.iconset -o "$APP/Contents/Resources/AppIcon.icns"
+          rm -rf /tmp/AppIcon.iconset
+
+          # Signs the already-injected server binary too (--deep) - both
+          # need a valid ad-hoc signature to run once the .dmg's quarantine
+          # attribute is in play, not just the bundle's main executable.
+          codesign --deep --force --sign - "$APP"
+
+          rm -rf generated/dmg-root
+          mkdir -p generated/dmg-root
+          cp -R "$APP" generated/dmg-root/
+          ln -s /Applications generated/dmg-root/Applications
+          hdiutil create -volname "Pool Master Counter" -srcfolder generated/dmg-root -ov -format UDZO "../${{ matrix.artifact }}"
 
       - name: Build the Windows binary
         if: runner.os == 'Windows'
