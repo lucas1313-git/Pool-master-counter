@@ -15,17 +15,20 @@ npm start
 ### Prefer not to use the command line?
 
 Download a portable desktop build instead - no git, no Node.js, no
-terminal. It's a single file that starts this same server and opens your
-browser to it; nothing gets installed on your computer (no admin rights,
-no registry/launchd changes, nothing to uninstall later). Get it from the
-app's own Group Session page (it shows a download link once it detects
-you're not currently running the relay), or directly from
+terminal. It starts this same server and opens your browser to it; no
+admin rights, no registry changes, nothing to uninstall beyond dragging
+one file to the trash. Get it from the app's own Group Session page (it
+shows a download link once it detects you're not currently running the
+relay), or directly from
 [the latest release](https://github.com/lucas1313-git/Pool-master-counter/releases/tag/desktop-latest).
 
 It isn't code-signed (no paid developer certificate), so your OS will show
 one security warning the first time you run it - that's expected for a
 free, independent app:
-- **Mac:** right-click the app → Open → Open.
+- **Mac:** a real `.dmg` disk image - open it, drag Pool Master Counter
+  into Applications, then (first launch only) right-click it → Open →
+  Open. It opens a Terminal window to run the server in - keep that
+  window open while hosting, close it to stop.
 - **Windows:** click "More info" → "Run anyway" on the SmartScreen prompt.
 - **Linux:** mark the file executable first (`chmod +x`, or via your file
   manager's Properties → Permissions) if it doesn't run directly.
