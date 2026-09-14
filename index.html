@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260913e">
+<link rel="stylesheet" href="css/style.css?v=20260913f">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -226,6 +226,10 @@
       <label class="checkbox-row" id="queue-mode-row">
         <input type="checkbox" id="queue-mode-checkbox">
         <span data-i18n="players.queueModeEnable">🎱 Winner Stays (queue standby players)</span>
+      </label>
+      <label class="checkbox-row" id="queue-swap-sticky-row">
+        <input type="checkbox" id="queue-swap-sticky-checkbox">
+        <span data-i18n="players.queueSwapStickyLabel">📌 Keep the new-player notice on screen until dismissed (for busy rooms)</span>
       </label>
       <ul id="roster-list" class="roster-list"></ul>
       <div id="queue-section" class="hidden">
@@ -469,6 +473,15 @@
     <h2 data-i18n="gamechange.title">Game Changed!</h2>
     <p id="gamechange-message"></p>
     <button type="button" id="btn-gamechange-close" class="btn btn-primary" data-i18n="gamechange.letsGo">Let's go!</button>
+  </div>
+</div>
+
+<div id="queueswap-overlay" class="queueswap-overlay hidden">
+  <div class="queueswap-card">
+    <div class="queueswap-emoji">🔄🎱</div>
+    <h2 data-i18n="queueswap.title">You're Up!</h2>
+    <p id="queueswap-message"></p>
+    <button type="button" id="btn-queueswap-close" class="btn btn-primary" data-i18n="queueswap.gotIt">Got it!</button>
   </div>
 </div>
 
@@ -1369,6 +1382,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260913h"></script>
+<script src="js/app.js?v=20260913i"></script>
 </body>
 </html>
