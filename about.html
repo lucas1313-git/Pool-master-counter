@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pool Master Counter — Free Pool Scoreboard &amp; Stats</title>
+<meta name="description" content="A guided tour of the free, no-account pool scoreboard: its purpose, who it's for, both setup wizards, and every feature — with real screenshots throughout.">
+<meta property="og:title" content="Pool Master Counter">
+<meta property="og:description" content="The scoreboard for the table you actually play on. Free, no account, runs in your browser.">
+<meta property="og:image" content="https://lucas1313-git.github.io/Pool-master-counter/docs/screenshots/live-scoreboard.jpg">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="icons/favicon-32.png">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500;1,9..144,600&family=Figtree:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  :root {
+    color-scheme: light;
+    --bg: #f3ede1;
+    --surface: #ffffff;
+    --surface-2: #ece1cb;
+    --ink: #182b20;
+    --ink-dim: #4c5e50;
+    --ink-faint: #7d8c7e;
+    --border: #ddceac;
+    --border-soft: #e8ddc2;
+    --brass: #9c701c;
+    --brass-ink: #6f4f13;
+    --brass-tint: #f1e2b8;
+    --rail: #832a37;
+    --rail-tint: #f5e3e2;
+    --felt: #163928;
+    --felt-ink: #eef2ea;
+    --on-brass: #241a06;
+    --shadow: 0 1px 2px rgba(24, 43, 32, 0.07), 0 14px 36px -18px rgba(24, 43, 32, 0.32);
+    --shadow-lg: 0 24px 64px -20px rgba(15, 28, 20, 0.4);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #0a1712;
+      --surface: #0f2318;
+      --surface-2: #16311f;
+      --ink: #f1ece0;
+      --ink-dim: #b6c6ba;
+      --ink-faint: #7d9484;
+      --border: #23422f;
+      --border-soft: #1b3325;
+      --brass: #dcb75f;
+      --brass-ink: #f1d68f;
+      --brass-tint: #2c2513;
+      --rail: #d97984;
+      --rail-tint: #3a1c20;
+      --felt: #0c2318;
+      --felt-ink: #f1ece0;
+      --on-brass: #241a06;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 16px 40px -18px rgba(0, 0, 0, 0.7);
+      --shadow-lg: 0 30px 80px -24px rgba(0, 0, 0, 0.75);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0a1712;
+    --surface: #0f2318;
+    --surface-2: #16311f;
+    --ink: #f1ece0;
+    --ink-dim: #b6c6ba;
+    --ink-faint: #7d9484;
+    --border: #23422f;
+    --border-soft: #1b3325;
+    --brass: #dcb75f;
+    --brass-ink: #f1d68f;
+    --brass-tint: #2c2513;
+    --rail: #d97984;
+    --rail-tint: #3a1c20;
+    --felt: #0c2318;
+    --felt-ink: #f1ece0;
+    --on-brass: #241a06;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 16px 40px -18px rgba(0, 0, 0, 0.7);
+    --shadow-lg: 0 30px 80px -24px rgba(0, 0, 0, 0.75);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body { margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Figtree", ui-sans-serif, system-ui, sans-serif;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  img { display: block; max-width: 100%; }
+
+  h1, h2, h3, h4 {
+    font-family: "Fraunces", Georgia, serif;
+    text-wrap: balance;
+    color: var(--ink);
+    margin: 0;
+  }
+
+  p { margin: 0; color: var(--ink-dim); }
+  strong { color: var(--ink); font-weight: 700; }
+
+  a { color: inherit; }
+
+  ::selection { background: var(--brass-tint); color: var(--on-brass); }
+  :focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; }
+
+  .mono {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+  }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--brass-ink);
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .wrap {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding-inline: 24px;
+  }
+
+  /* ---------------- nav ---------------- */
+
+  nav.top {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border-soft);
+  }
+
+  nav.top .wrap {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding-block: 14px;
+    max-width: 1120px;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: "Fraunces", serif;
+    font-weight: 600;
+    font-size: 17px;
+    color: var(--ink);
+    text-decoration: none;
+  }
+
+  .brand img { width: 30px; height: 30px; border-radius: 8px; box-shadow: var(--shadow); }
+
+  .navlinks { display: flex; align-items: center; gap: 22px; }
+  .navlinks a.textlink {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--ink-dim);
+    text-decoration: none;
+  }
+  .navlinks a.textlink:hover { color: var(--ink); }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: "Figtree", sans-serif;
+    font-weight: 700;
+    font-size: 14px;
+    padding: 10px 18px;
+    border-radius: 9px;
+    text-decoration: none;
+    border: 1px solid transparent;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .btn-brass { background: var(--brass); color: var(--on-brass); box-shadow: var(--shadow); }
+  .btn-brass:hover { filter: brightness(1.06); }
+  .btn-ghost { background: transparent; border-color: var(--border); color: var(--ink); }
+  .btn-ghost:hover { background: var(--surface-2); }
+  .btn-lg { padding: 15px 26px; font-size: 15.5px; border-radius: 11px; }
+
+  /* ---------------- hero ---------------- */
+
+  header.hero { padding-block: 64px 40px; }
+
+  .hero-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 40px;
+    align-items: center;
+  }
+  @media (min-width: 880px) {
+    .hero-grid { grid-template-columns: 1fr 1fr; gap: 20px; }
+  }
+
+  .hero h1 {
+    margin-top: 18px;
+    font-size: clamp(2.3rem, 5.2vw, 3.4rem);
+    font-weight: 600;
+    line-height: 1.06;
+    letter-spacing: -0.01em;
+  }
+  .hero h1 em {
+    font-style: italic;
+    color: var(--brass-ink);
+  }
+
+  .hero .dek {
+    margin-top: 20px;
+    font-size: 17px;
+    color: var(--ink-dim);
+    max-width: 46ch;
+  }
+
+  .hero .cta-row {
+    margin-top: 30px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .hero .fineprint {
+    margin-top: 16px;
+    font-size: 12.5px;
+    color: var(--ink-faint);
+    font-family: "IBM Plex Mono", monospace;
+  }
+
+  .frame {
+    position: relative;
+    border-radius: 18px;
+    padding: 10px;
+    background: linear-gradient(155deg, var(--felt) 0%, #0a1e14 100%);
+    box-shadow: var(--shadow-lg);
+  }
+  .frame::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 18px;
+    border: 1px solid color-mix(in srgb, var(--brass) 45%, transparent);
+    pointer-events: none;
+  }
+  .frame img {
+    width: 100%;
+    border-radius: 11px;
+    display: block;
+  }
+  .frame .pin {
+    position: absolute;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #f6e3a8, var(--brass) 70%);
+    box-shadow: 0 1px 2px rgba(0,0,0,.5);
+  }
+  .frame .pin.tl { top: 7px; left: 7px; }
+  .frame .pin.tr { top: 7px; right: 7px; }
+  .frame .pin.bl { bottom: 7px; left: 7px; }
+  .frame .pin.br { bottom: 7px; right: 7px; }
+
+  .frame-cap {
+    margin-top: 12px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11.5px;
+    color: var(--ink-faint);
+    text-align: center;
+  }
+
+  /* ---------------- sections ---------------- */
+
+  section { padding-block: 56px; }
+  section.tight { padding-block: 32px; }
+
+  .section-head { max-width: 62ch; }
+  .section-head h2 {
+    margin-top: 10px;
+    font-size: clamp(1.6rem, 3.4vw, 2.15rem);
+    font-weight: 600;
+  }
+  .section-head .lede {
+    margin-top: 14px;
+    font-size: 15.5px;
+    color: var(--ink-dim);
+  }
+
+  hr.rule {
+    border: none;
+    height: 1px;
+    background: var(--border-soft);
+    margin: 0;
+  }
+
+  /* purpose callout */
+
+  .contrast-plate {
+    margin-top: 28px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .contrast-cell {
+    background: var(--surface);
+    padding: 22px 22px 24px;
+  }
+  .contrast-cell.win { background: var(--felt); }
+  .contrast-cell .tag {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .contrast-cell.win .tag { color: color-mix(in srgb, var(--felt-ink) 65%, transparent); }
+  .contrast-cell h4 {
+    margin-top: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .contrast-cell.win h4 { color: var(--felt-ink); }
+  .contrast-cell p { margin-top: 8px; font-size: 13.5px; }
+  .contrast-cell.win p { color: color-mix(in srgb, var(--felt-ink) 78%, transparent); }
+
+  /* personas */
+
+  .personas {
+    margin-top: 30px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+  }
+  .persona {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 22px;
+    box-shadow: var(--shadow);
+  }
+  .persona .who {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--brass-ink);
+  }
+  .persona h3 {
+    margin-top: 8px;
+    font-size: 18px;
+    font-weight: 600;
+  }
+  .persona p { margin-top: 10px; font-size: 13.8px; }
+
+  /* wizard steps */
+
+  .step-rail {
+    margin-top: 26px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .step-chip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 9px 16px 9px 10px;
+    box-shadow: var(--shadow);
+  }
+  .step-chip .num {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--felt);
+    color: var(--felt-ink);
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11.5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .step-chip span.label { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+
+  .wizard-block {
+    margin-top: 44px;
+    display: grid;
+    gap: 32px;
+  }
+  @media (min-width: 900px) {
+    .wizard-block.with-image { grid-template-columns: 1fr 1fr; align-items: center; }
+  }
+  .wizard-copy .kicker {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .wizard-copy h3 {
+    margin-top: 8px;
+    font-size: clamp(1.3rem, 2.6vw, 1.7rem);
+    font-weight: 600;
+  }
+  .wizard-copy p.desc { margin-top: 12px; font-size: 14.8px; }
+  .wizard-note {
+    margin-top: 18px;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    background: var(--rail-tint);
+    border: 1px solid color-mix(in srgb, var(--rail) 35%, var(--border));
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 13px;
+    color: var(--ink);
+  }
+  .wizard-note b { color: var(--rail); }
+
+  /* feature tour rows */
+
+  .tour-row {
+    margin-top: 72px;
+    display: grid;
+    gap: 34px;
+  }
+  .tour-row:first-of-type { margin-top: 44px; }
+  @media (min-width: 900px) {
+    .tour-row { grid-template-columns: 1fr 1fr; align-items: center; }
+    .tour-row.flip .tour-copy { order: 2; }
+    .tour-row.flip .tour-media { order: 1; }
+  }
+
+  .tour-copy .kicker {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--brass-ink);
+  }
+  .tour-copy h3 {
+    margin-top: 10px;
+    font-size: clamp(1.35rem, 2.8vw, 1.85rem);
+    font-weight: 600;
+  }
+  .tour-copy p.desc { margin-top: 13px; font-size: 15px; }
+  .tour-list {
+    margin-top: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    padding: 0;
+  }
+  .tour-list li {
+    list-style: none;
+    font-size: 13.8px;
+    color: var(--ink-dim);
+    padding-left: 20px;
+    position: relative;
+  }
+  .tour-list li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 8px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--brass);
+  }
+  .tour-list li strong { color: var(--ink); }
+
+  .tour-media .frame { padding: 8px; }
+  .tour-media.two-up {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  @media (min-width: 640px) {
+    .tour-media.two-up.side { grid-template-columns: 1fr 1fr; }
+  }
+
+  /* rack (highlight grid) */
+
+  .rack {
+    margin-top: 30px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 14px;
+  }
+  .ball {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px 20px 22px;
+    box-shadow: var(--shadow);
+  }
+  .ball .num {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: var(--felt);
+    color: var(--felt-ink);
+    font-family: "IBM Plex Mono", monospace;
+    font-weight: 600;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .ball h4 {
+    margin-top: 14px;
+    font-size: 15.5px;
+    font-weight: 600;
+  }
+  .ball p { margin-top: 8px; font-size: 13.3px; }
+
+  /* CTA band */
+
+  .cta-band {
+    margin-top: 8px;
+    border-radius: 20px;
+    background: linear-gradient(155deg, var(--felt) 0%, #0a1e14 100%);
+    color: var(--felt-ink);
+    padding: 52px 36px;
+    text-align: center;
+    box-shadow: var(--shadow-lg);
+    border: 1px solid color-mix(in srgb, var(--brass) 35%, transparent);
+  }
+  .cta-band .eyebrow { color: color-mix(in srgb, var(--brass-ink) 90%, white 10%); }
+  .cta-band h2 {
+    margin-top: 12px;
+    color: var(--felt-ink);
+    font-size: clamp(1.7rem, 4vw, 2.4rem);
+  }
+  .cta-band p {
+    margin: 14px auto 0;
+    max-width: 46ch;
+    color: color-mix(in srgb, var(--felt-ink) 78%, transparent);
+    font-size: 15px;
+  }
+  .cta-band .cta-row { margin-top: 26px; justify-content: center; }
+  .cta-band .btn-ghost { border-color: color-mix(in srgb, var(--felt-ink) 35%, transparent); color: var(--felt-ink); }
+  .cta-band .btn-ghost:hover { background: color-mix(in srgb, var(--felt-ink) 12%, transparent); }
+
+  footer {
+    margin-top: 60px;
+    padding-block: 30px 60px;
+    border-top: 1px solid var(--border-soft);
+  }
+  footer .wrap {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 14px;
+    align-items: center;
+  }
+  footer .tagline {
+    font-family: "Fraunces", serif;
+    font-style: italic;
+    font-size: 14.5px;
+    color: var(--ink-dim);
+  }
+  footer .footlinks { display: flex; gap: 18px; }
+  footer a.textlink {
+    font-size: 12.8px;
+    font-weight: 600;
+    color: var(--ink-faint);
+    text-decoration: none;
+  }
+  footer a.textlink:hover { color: var(--ink); }
+</style>
+</head>
+<body>
+
+<nav class="top">
+  <div class="wrap">
+    <a class="brand" href="about.html"><img src="icons/icon-512.png" alt=""> Pool Master Counter</a>
+    <div class="navlinks">
+      <a class="textlink" href="#purpose">Purpose</a>
+      <a class="textlink" href="#wizards">Wizards</a>
+      <a class="textlink" href="#tour">Features</a>
+      <a class="btn btn-brass" href="index.html">Open the App</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <div class="eyebrow">Free &middot; No account &middot; Runs in your browser</div>
+      <h1>The scoreboard for the table you actually play on<em>.</em></h1>
+      <p class="dek">Pool Master Counter keeps score for whatever's in front of you tonight &mdash; 8&#8209;Ball, 9&#8209;Ball, Straight Pool, One Pocket &mdash; and quietly remembers every rack after that: who's hot, who owes who a rematch, and by how much. No sign&#8209;up, no server, nothing to install unless you want to.</p>
+      <div class="cta-row">
+        <a class="btn btn-brass btn-lg" href="index.html">Open the App &rarr;</a>
+        <a class="btn btn-ghost btn-lg" href="https://github.com/lucas1313-git/Pool-master-counter" target="_blank" rel="noopener">View the Source</a>
+      </div>
+      <div class="fineprint">DON'T GET COCKY. &mdash; the app's own words, top of every page.</div>
+    </div>
+    <div>
+      <div class="frame">
+        <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+        <img src="docs/screenshots/setup-panels.jpg" alt="Pool Master Counter's main page: Backup &amp; Transfer, Game Order, and Current Game panels, with the live scoreboard below">
+      </div>
+      <div class="frame-cap">the actual app &mdash; not a mockup</div>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <section id="purpose">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="eyebrow">Purpose</div>
+        <h2>A real scoreboard, not a tally app that outgrew its welcome</h2>
+        <p class="lede">Most pool apps pick one job: a bare "+1" counter, or a heavyweight platform built for a tournament director running eight tables at once. Pool Master Counter sits in the gap between them &mdash; live scoring good enough to run from across the room, plus the stats, ratings, and bracket play a long&#8209;running group actually wants, without ever asking anyone to make an account.</p>
+      </div>
+      <div class="contrast-plate">
+        <div class="contrast-cell">
+          <div class="tag">Not this</div>
+          <h4>A stopwatch with two names on it</h4>
+          <p>Race&#8209;to counting and nothing else &mdash; close the tab and the whole night is gone. Fine for one game; useless for a group that plays every week.</p>
+        </div>
+        <div class="contrast-cell win">
+          <div class="tag">Pool Master Counter</div>
+          <h4>Score tonight, remember every night</h4>
+          <p>The live board, a running rating for everyone, head&#8209;to&#8209;head records, and a basic bracket &mdash; free, local, permanent &mdash; for one table and the people who keep showing up to it.</p>
+        </div>
+        <div class="contrast-cell">
+          <div class="tag">Not this either</div>
+          <h4>Tournament&#8209;operations software</h4>
+          <p>Built for 64&#8209;bracket events across a dozen physical tables, a director approving results, an account for every player. Overkill for a Tuesday night.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="who">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="eyebrow">Who it's for</div>
+        <h2>Built for the table, not the tour</h2>
+        <p class="lede">Four ways people actually end up using it &mdash; often more than one, on the same night.</p>
+      </div>
+      <div class="personas">
+        <div class="persona">
+          <div class="who">The regulars</div>
+          <h3>A home table or bar league that plays every week</h3>
+          <p>Everyone gets an automatic rating, a head&#8209;to&#8209;head record against everyone else, and a graph of the whole rivalry over time &mdash; without anyone having to remember to write it down.</p>
+        </div>
+        <div class="persona">
+          <div class="who">The host</div>
+          <h3>Whoever's running pool night</h3>
+          <p>Focus Mode clears the screen down to a scoreboard large enough to read from the other side of the room, and a notes box turns tonight into a text or email recap afterward.</p>
+        </div>
+        <div class="persona">
+          <div class="who">The organizer</div>
+          <h3>A small club running an informal night</h3>
+          <p>Single elimination, double elimination, or round robin &mdash; a real bracket with standings and match cards, set up in under a minute, no separate app or spreadsheet.</p>
+        </div>
+        <div class="persona">
+          <div class="who">Just visiting</div>
+          <h3>Someone who wants a tally and nothing else</h3>
+          <p>Quick Counter skips setup entirely: type two names, tap +/&minus;. Nothing is saved, nothing to configure &mdash; for the game that doesn't need a permanent record.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="wizards">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="eyebrow">The wizards</div>
+        <h2>Guided when you want it, out of the way when you don't</h2>
+        <p class="lede">Two separate wizards cover the two moments that actually need explaining &mdash; the very first time anyone opens the app, and the start of each new game after that. Both can be skipped, and canceling either one loses nothing already set up.</p>
+      </div>
+
+      <div class="wizard-block">
+        <div class="wizard-copy">
+          <div class="kicker">First launch &middot; 4 steps</div>
+          <h3>&ldquo;Welcome!&rdquo; &mdash; the one&#8209;time setup</h3>
+          <p class="desc">The very first time the app opens on a device, a short wizard gets one player set up and asks what to do next &mdash; nothing more. It never reappears after that.</p>
+          <div class="step-rail">
+            <div class="step-chip"><span class="num">1</span><span class="label">Welcome!</span></div>
+            <div class="step-chip"><span class="num">2</span><span class="label">What should we call you?</span></div>
+            <div class="step-chip"><span class="num">3</span><span class="label">Ready to play?</span></div>
+            <div class="step-chip"><span class="num">4</span><span class="label">One more thing</span></div>
+          </div>
+          <div class="wizard-note"><b>Skippable at every step</b> &mdash; "Get to it now, I know what I'm doing" drops straight into the app for anyone who'd rather not be walked through it.</div>
+        </div>
+      </div>
+
+      <div class="wizard-block with-image">
+        <div class="wizard-copy">
+          <div class="kicker">Every new game &middot; 5 steps &middot; &ldquo;&#129497; Start Wizard&rdquo;</div>
+          <h3>The Game Setup Wizard</h3>
+          <p class="desc">The fastest way into an actual game: pick the format, add players, and start &mdash; each step explained in plain language as you go.</p>
+          <div class="step-rail">
+            <div class="step-chip"><span class="num">1</span><span class="label">Game type &amp; format</span></div>
+            <div class="step-chip"><span class="num">2</span><span class="label">Players</span></div>
+            <div class="step-chip"><span class="num">3</span><span class="label">Playing vs. Standby</span></div>
+            <div class="step-chip"><span class="num">4</span><span class="label">Rotation</span></div>
+            <div class="step-chip"><span class="num">5</span><span class="label">Review &amp; Start</span></div>
+          </div>
+          <div class="wizard-note"><b>Cancel any time</b> &mdash; any players added or rotation changes made are already saved, exactly as if you'd used the panels directly.</div>
+        </div>
+        <div class="tour-media">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/wizard-step1.jpg" alt="Game Setup Wizard, step 1 of 5: choosing 9-Ball and Individual play">
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tour">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="eyebrow">The full tour</div>
+        <h2>Everything on the table</h2>
+        <p class="lede">Every screen below is the real app, not a mockup.</p>
+      </div>
+
+      <div class="tour-row">
+        <div class="tour-copy">
+          <div class="kicker">Live play</div>
+          <h3>A scoreboard built to be read from across the room</h3>
+          <p class="desc">Tap +/&minus; on a player's card to track balls, points, or racks toward the target &mdash; each tap plays its own synthesized tone. Reaching the target banks the win and starts the next game automatically.</p>
+          <ul class="tour-list">
+            <li><strong>Focus Mode</strong> hides every setup panel down to just the board.</li>
+            <li><strong>Milestone, On&#8209;the&#8209;Hill, and Game Changed</strong> pop&#8209;ups mark a win, a one&#8209;win warning, and a rotation switch.</li>
+            <li><strong>Undo Last Win, Share Standings, Export Session</strong> &mdash; one tap away, always.</li>
+          </ul>
+        </div>
+        <div class="tour-media">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/live-scoreboard.jpg" alt="Live scoreboard mid-session with four players racing to 5 wins in 9-Ball">
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-row flip">
+        <div class="tour-copy">
+          <div class="kicker">Look &amp; feel</div>
+          <h3>Ten themes, switched in one tap</h3>
+          <p class="desc">Six dark palettes, two genuine light modes, and two high&#8209;contrast pairs &mdash; every color that sits on an accent background is computed per theme to stay legible, so a button is never guessing at its own contrast.</p>
+          <ul class="tour-list">
+            <li><strong>Crimson Felt</strong> is the original look and the default.</li>
+            <li><strong>Daybreak Chalk</strong> and <strong>Pearl Lounge</strong> are real light themes, not a lightened dark one.</li>
+            <li><strong>Blackout Contrast</strong> and <strong>Paper Contrast</strong> push legibility as far as it goes.</li>
+          </ul>
+        </div>
+        <div class="tour-media">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/themes.jpg" alt="The Daybreak Chalk light theme, showing the collapsed setup panels">
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-row">
+        <div class="tour-copy">
+          <div class="kicker">Players</div>
+          <h3>A roster that remembers itself</h3>
+          <p class="desc">Add a name and it's auto&#8209;capitalized and checked for duplicates as you type. Tap Standby/Playing to move someone in or out of tonight's game without losing them from the roster.</p>
+          <ul class="tour-list">
+            <li><strong>Saved player lists</strong> auto&#8209;save every distinct group you've ever played with &mdash; one tap to load.</li>
+            <li><strong>Names are case&#8209;insensitive</strong> &mdash; "bob" and "Bob" are always the same person.</li>
+            <li>Removing someone from tonight never touches their career stats.</li>
+          </ul>
+        </div>
+        <div class="tour-media">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/players-panel.jpg" alt="Players panel with four players marked Playing and per-player standings below">
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-row flip">
+        <div class="tour-copy">
+          <div class="kicker">Tournaments</div>
+          <h3>A real bracket, not a spreadsheet</h3>
+          <p class="desc">Single elimination, double elimination, or round robin, set up from the same wizard or the Tournament page. Brackets render as a connected tree; round robin shows live standings next to every match at once.</p>
+          <ul class="tour-list">
+            <li>Eliminated players show struck&#8209;through, right in the bracket.</li>
+            <li>A round robin tie at the top makes every tied player a champion together.</li>
+            <li>Every rack still counts toward career stats and ratings &mdash; it's not a separate pool of data.</li>
+          </ul>
+        </div>
+        <div class="tour-media two-up side">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/tournament-bracket.jpg" alt="Winners bracket, round 1, showing the active match and the rest of the tree">
+          </div>
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/tournament-roundrobin.jpg" alt="Round robin standings and every match card at once">
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-row">
+        <div class="tour-copy">
+          <div class="kicker">All Players</div>
+          <h3>Every player who's ever picked up a cue here</h3>
+          <p class="desc">Sort by win percentage, wins, or name, and filter by period &mdash; today, a week, a year, all time. Switch to a cumulative line graph per player, with click&#8209;to&#8209;reveal detail on every data point.</p>
+          <ul class="tour-list">
+            <li>Bar view: games played/won/lost, plus a timeline of when.</li>
+            <li>Graph view: tap any dot for the opponents and results behind it.</li>
+            <li>A small rating badge follows every name, everywhere it appears.</li>
+          </ul>
+        </div>
+        <div class="tour-media two-up">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/all-players-bars.jpg" alt="All Players bar view showing games played, won, and lost per player">
+          </div>
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/all-players-graph.jpg" alt="All Players graph view with a legend of toggleable lines">
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-row flip">
+        <div class="tour-copy">
+          <div class="kicker">One player, in full</div>
+          <h3>Every player gets their own page</h3>
+          <p class="desc">Tap any name to open it: a stats synopsis for today through all&#8209;time, a complete head&#8209;to&#8209;head record against every opponent faced, and the same graphs scoped to just them.</p>
+          <ul class="tour-list">
+            <li>A header dropdown jumps straight to any other player &mdash; no trip back to All Players.</li>
+            <li>Session History expands into every individual game played.</li>
+            <li>Export Stats or Reset just this player's saved history, independently of everyone else's.</li>
+          </ul>
+        </div>
+        <div class="tour-media">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/player-stats-page.jpg" alt="Alice's player page: 22 wins, 6 losses, a 79% win rate, and head-to-head records">
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-row">
+        <div class="tour-copy">
+          <div class="kicker">The night, written down</div>
+          <h3>Notes tonight, a report you can actually send</h3>
+          <p class="desc">A free&#8209;text box for anything worth remembering &mdash; who's on fire, funny moments &mdash; saves automatically as you type. Copy, Email, or Text Report turns it into a real recap: every player's win/loss and rating move, total games, and your notes.</p>
+          <ul class="tour-list">
+            <li>Built fresh from live and saved sessions, so it's accurate even after a mid&#8209;day reset.</li>
+            <li>Ready to paste, email, or send as a text, as&#8209;is.</li>
+          </ul>
+        </div>
+        <div class="tour-media">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/day-notes.jpg" alt="Today's Notes panel with a saved note and Copy/Email/Text Report buttons">
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-row flip">
+        <div class="tour-copy">
+          <div class="kicker">Your data, your device</div>
+          <h3>Backup, iCloud sync, and a real desktop app</h3>
+          <p class="desc">Everything lives in the browser on the device it's used on &mdash; there's no cloud account. Export All Data for a full JSON backup, or Export for iCloud Sync to move a session between your own devices.</p>
+          <ul class="tour-list">
+            <li>Import <em>merges</em> &mdash; nothing already here gets overwritten or double&#8209;counted.</li>
+            <li>A free desktop download runs the local relay a second phone can join to score the same live game together.</li>
+          </ul>
+        </div>
+        <div class="tour-media">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/backup-panel.jpg" alt="Backup & Transfer panel, expanded, with Export All Data and Import Data buttons">
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-row">
+        <div class="tour-copy">
+          <div class="kicker">Never stuck</div>
+          <h3>One guide, contextual to wherever you are</h3>
+          <p class="desc">A single Help &amp; Guide overlay covers every feature on every page &mdash; and it's contextual: opening it jumps straight to the section for whatever page you're currently on, with the rest one scroll away.</p>
+        </div>
+        <div class="tour-media">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/help-guide.jpg" alt="The Help & Guide overlay, open on the Main Page section">
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="rack">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="eyebrow">More in the rack</div>
+        <h2>The rest of what's in here</h2>
+        <p class="lede">Smaller in screen space, not in usefulness.</p>
+      </div>
+      <div class="rack">
+        <div class="ball">
+          <div class="num">&#127942;</div>
+          <h4>Hall of Fame leaderboard</h4>
+          <p>An MVP score blends win rate, tournament wins, rating, dominant wins, and long runs into one ranking &mdash; with a plain&#8209;language "why am I ranked here" explainer for every player, and a share button for the whole board.</p>
+        </div>
+        <div class="ball">
+          <div class="num">&#128288;</div>
+          <h4>Fargo&#8209;style ratings</h4>
+          <p>Every player gets an automatic, Elo&#8209;style rating on the same published scale FargoRate uses &mdash; a 100&#8209;point gap works out to about a 2:1 favorite. No way to edit one by hand; it only moves from real games.</p>
+        </div>
+        <div class="ball">
+          <div class="num">&#9878;&#65039;</div>
+          <h4>Fair Match handicapping</h4>
+          <p>Turn it on and the lower&#8209;rated side gets a shorter race target instead of the same one &mdash; calculated to land the match close to a coin&#8209;flip based on the actual rating gap.</p>
+        </div>
+        <div class="ball">
+          <div class="num">&#129446;</div>
+          <h4>Skunk detection</h4>
+          <p>A loser who potted nothing gets flagged automatically for balls/points games, and derived from "balls left on the table" for the 8&#8209;Ball family &mdash; correctly left out of 9&#8209;Ball, where it isn't a real concept.</p>
+        </div>
+        <div class="ball">
+          <div class="num">&#127925;</div>
+          <h4>Sound with nothing to download</h4>
+          <p>Every tone is synthesized live with the Web Audio API. Reach a race&#8209;to&#8209;N milestone and it plays the full 30&#8209;note theme from Beethoven's 9th, pitched low with a reverb tail.</p>
+        </div>
+        <div class="ball">
+          <div class="num">&#128241;</div>
+          <h4>Group Session</h4>
+          <p>Host a session on the local WiFi and a second phone can scan a QR code to join and actively score the same live game &mdash; no internet, no account, nothing leaves the room.</p>
+        </div>
+        <div class="ball">
+          <div class="num">&#9203;</div>
+          <h4>Quick Counter</h4>
+          <p>"Just give me a counter" skips the wizard entirely &mdash; a bare, editable tally with no game type, no target, and nothing written to storage. Reload the page and it's gone, on purpose.</p>
+        </div>
+        <div class="ball">
+          <div class="num">&#128274;</div>
+          <h4>Nothing leaves the device</h4>
+          <p>No account, no server, no analytics. Every player, stat, rating, and bracket lives in local storage on the device you're using, until you choose to export it.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="cta-band">
+        <div class="eyebrow">Rack 'em up</div>
+        <h2>Free, forever, for one table.</h2>
+        <p>No account to create, nothing to install, nothing sent anywhere. Open it on whatever's already in your pocket and start the next game.</p>
+        <div class="cta-row">
+          <a class="btn btn-brass btn-lg" href="index.html">Open the App &rarr;</a>
+          <a class="btn btn-ghost btn-lg" href="https://github.com/lucas1313-git/Pool-master-counter" target="_blank" rel="noopener">View the Source</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="tagline">&ldquo;Don't get cocky.&rdquo;</div>
+    <div class="footlinks">
+      <a class="textlink" href="index.html">Open the App</a>
+      <a class="textlink" href="https://github.com/lucas1313-git/Pool-master-counter" target="_blank" rel="noopener">GitHub</a>
+      <a class="textlink" href="https://github.com/lucas1313-git/Pool-master-counter/blob/main/README.md" target="_blank" rel="noopener">Full Documentation</a>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
