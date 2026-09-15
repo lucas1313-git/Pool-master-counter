@@ -625,7 +625,6 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 16px;
     padding: 14px 20px 20px;
     background: rgba(5, 10, 7, 0.97);
   }
@@ -644,6 +643,12 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    /* Fixed reserve for the caption/footer below, which is positioned
+       absolutely (out of flow) so its actual text height never changes
+       how much room the image gets — otherwise a 1-line vs 2-line
+       caption would shift the image (y the fixed prev/next buttons
+       would visibly drift relative to it) from one slide to the next. */
+    padding-bottom: 112px;
   }
   .lightbox-frame {
     position: relative;
@@ -663,6 +668,17 @@
     border-radius: 14px;
     box-shadow: var(--shadow-lg);
     background: var(--felt);
+  }
+  .lightbox-footer {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 0 20px;
   }
   .lightbox-caption {
     max-width: 900px;
@@ -719,7 +735,8 @@
     font-size: 19px;
   }
   @media (max-width: 640px) {
-    .lightbox { padding: 10px 14px 14px; gap: 12px; }
+    .lightbox { padding: 10px 14px 14px; }
+    .lightbox-stage { padding-bottom: 92px; }
     .lightbox-btn { width: 42px; height: 42px; font-size: 20px; }
     .lightbox-prev { left: 8px; }
     .lightbox-next { right: 8px; }
@@ -1167,9 +1184,11 @@
       <button type="button" class="lightbox-btn lightbox-prev" id="lightbox-prev" aria-label="Captura anterior">&#8249;</button>
       <button type="button" class="lightbox-btn lightbox-next" id="lightbox-next" aria-label="Captura siguiente">&#8250;</button>
     </div>
+    <div class="lightbox-footer">
+      <p class="lightbox-caption" id="lightbox-caption"></p>
+      <p class="lightbox-count" id="lightbox-count"></p>
+    </div>
   </div>
-  <p class="lightbox-caption" id="lightbox-caption"></p>
-  <p class="lightbox-count" id="lightbox-count"></p>
 </div>
 
 <script>
