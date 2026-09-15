@@ -613,6 +613,106 @@
     text-decoration: none;
   }
   footer a.textlink:hover { color: var(--ink); }
+
+  /* ---------------- lightbox slideshow ---------------- */
+  .frame { cursor: zoom-in; }
+  .frame:focus-visible { outline: 2px solid var(--brass); outline-offset: 4px; }
+
+  .lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(8, 14, 10, 0.88);
+    backdrop-filter: blur(3px);
+  }
+  .lightbox[hidden] { display: none; }
+  .lightbox-stage {
+    position: relative;
+    width: min(100%, 1000px);
+  }
+  .lightbox-frame {
+    position: relative;
+    width: 100%;
+    max-height: 78vh;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: var(--shadow-lg);
+    background: var(--felt);
+  }
+  .lightbox-frame img {
+    display: block;
+    width: 100%;
+    max-height: 78vh;
+    object-fit: contain;
+    background: var(--felt);
+  }
+  .lightbox-caption {
+    margin-top: 16px;
+    max-width: 640px;
+    text-align: center;
+    font-family: "Figtree", sans-serif;
+    font-size: 14.5px;
+    line-height: 1.5;
+    color: var(--felt-ink);
+  }
+  .lightbox-count {
+    margin-top: 6px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11.5px;
+    letter-spacing: 0.04em;
+    color: color-mix(in srgb, var(--felt-ink) 65%, transparent);
+  }
+  .lightbox-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 1px solid color-mix(in srgb, var(--brass) 55%, transparent);
+    background: color-mix(in srgb, var(--felt) 70%, black 10%);
+    color: var(--brass-ink);
+    font-family: "Figtree", sans-serif;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .lightbox-btn:hover { background: var(--brass); color: var(--on-brass); }
+  .lightbox-prev { left: 14px; }
+  .lightbox-next { right: 14px; }
+  .lightbox-close {
+    position: absolute;
+    top: -16px;
+    right: -16px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 1px solid color-mix(in srgb, var(--brass) 55%, transparent);
+    background: var(--surface);
+    color: var(--ink);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow);
+  }
+  .lightbox-close:hover { background: var(--rail); color: var(--rail-tint); }
+  @media (max-width: 640px) {
+    .lightbox-btn { width: 38px; height: 38px; font-size: 17px; }
+    .lightbox-prev { left: 4px; }
+    .lightbox-next { right: 4px; }
+    .lightbox-close { top: -14px; right: 4px; }
+  }
 </style>
 </head>
 <body>
@@ -796,9 +896,9 @@
         <div class="tour-copy">
           <div class="kicker">Apparence</div>
           <h3>Dix-neuf thèmes, changés en un tap</h3>
-          <p class="desc">Du vert billard feutré aux teintes pastel chatoyantes, plus deux vrais modes clairs et deux paires à contraste élevé &mdash; chaque couleur posée sur un fond d'accent est calculée par thème pour rester lisible, si bien qu'un bouton ne devine jamais son propre contraste.</p>
+          <p class="desc">Un vert billard profond jusqu'à un chatoiement pastel doux, plus deux vrais modes clairs et deux paires à contraste élevé &mdash; chaque couleur posée sur un fond d'accent est calculée par thème pour rester lisible, si bien qu'un bouton ne devine jamais son propre contraste.</p>
           <ul class="tour-list">
-            <li><strong>Crimson Felt</strong> est l'apparence d'origine et celle par défaut ; <strong>Opal</strong> est le plus récent, tout en lavete douce et reflets changeants.</li>
+            <li><strong>Crimson Felt</strong> est l'apparence d'origine et celle par défaut.</li>
             <li><strong>Daybreak Chalk</strong> et <strong>Pearl Lounge</strong> sont de vrais thèmes clairs, pas un thème sombre éclairci.</li>
             <li><strong>Blackout Contrast</strong> et <strong>Paper Contrast</strong> poussent la lisibilité au maximum.</li>
           </ul>
@@ -806,7 +906,7 @@
         <div class="tour-media">
           <div class="frame">
             <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
-            <img src="docs/screenshots/themes.jpg" alt="Le thème Opal sélectionné dans la navigation du haut, un lavete chatoyant sur tous les panneaux">
+            <img src="docs/screenshots/themes.jpg" alt="Le thème clair Daybreak Chalk, montrant les panneaux de configuration repliés">
           </div>
         </div>
       </div>
@@ -1039,6 +1139,122 @@
     </div>
   </div>
 </footer>
+
+<div class="lightbox" id="lightbox" hidden role="dialog" aria-modal="true" aria-label="Visionneuse de captures d'écran">
+  <div class="lightbox-stage">
+    <div class="lightbox-frame">
+      <img id="lightbox-img" src="" alt="">
+      <button type="button" class="lightbox-btn lightbox-prev" id="lightbox-prev" aria-label="Capture d'écran précédente">&#8249;</button>
+      <button type="button" class="lightbox-btn lightbox-next" id="lightbox-next" aria-label="Capture d'écran suivante">&#8250;</button>
+    </div>
+    <button type="button" class="lightbox-close" id="lightbox-close" aria-label="Fermer">&#215;</button>
+  </div>
+  <p class="lightbox-caption" id="lightbox-caption"></p>
+  <p class="lightbox-count" id="lightbox-count"></p>
+</div>
+
+<script>
+(function () {
+  var frames = Array.prototype.slice.call(document.querySelectorAll(".frame"));
+  var slides = frames.map(function (frame) {
+    var img = frame.querySelector("img");
+    return { src: img.getAttribute("src"), caption: img.getAttribute("alt") || "" };
+  });
+
+  var lightbox = document.getElementById("lightbox");
+  var lightboxImg = document.getElementById("lightbox-img");
+  var lightboxCaption = document.getElementById("lightbox-caption");
+  var lightboxCount = document.getElementById("lightbox-count");
+  var prevBtn = document.getElementById("lightbox-prev");
+  var nextBtn = document.getElementById("lightbox-next");
+  var closeBtn = document.getElementById("lightbox-close");
+
+  var currentIndex = 0;
+  var autoplayTimer = null;
+  var lastFocused = null;
+
+  function render() {
+    var slide = slides[currentIndex];
+    lightboxImg.setAttribute("src", slide.src);
+    lightboxImg.setAttribute("alt", slide.caption);
+    lightboxCaption.textContent = slide.caption;
+    lightboxCount.textContent = (currentIndex + 1) + " / " + slides.length;
+  }
+
+  function stopAutoplay() {
+    if (autoplayTimer) {
+      clearInterval(autoplayTimer);
+      autoplayTimer = null;
+    }
+  }
+
+  function startAutoplay() {
+    stopAutoplay();
+    autoplayTimer = setInterval(function () {
+      currentIndex = (currentIndex + 1) % slides.length;
+      render();
+    }, 4500);
+  }
+
+  function openAt(index, triggerEl) {
+    if (!slides.length) { return; }
+    currentIndex = index;
+    lastFocused = triggerEl || document.activeElement;
+    render();
+    lightbox.hidden = false;
+    closeBtn.focus();
+    startAutoplay();
+  }
+
+  function close() {
+    lightbox.hidden = true;
+    stopAutoplay();
+    if (lastFocused && typeof lastFocused.focus === "function") {
+      lastFocused.focus();
+    }
+  }
+
+  function goPrev() {
+    stopAutoplay();
+    currentIndex = (currentIndex - 1 + slides.length) % slides.length;
+    render();
+  }
+
+  function goNext() {
+    stopAutoplay();
+    currentIndex = (currentIndex + 1) % slides.length;
+    render();
+  }
+
+  frames.forEach(function (frame, index) {
+    frame.setAttribute("tabindex", "0");
+    frame.setAttribute("role", "button");
+    frame.setAttribute("aria-label", "Ouvrir la capture d'écran dans le diaporama");
+    frame.addEventListener("click", function () { openAt(index, frame); });
+    frame.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        openAt(index, frame);
+      }
+    });
+  });
+
+  prevBtn.addEventListener("click", goPrev);
+  nextBtn.addEventListener("click", goNext);
+  closeBtn.addEventListener("click", close);
+
+  lightbox.addEventListener("click", function (e) {
+    if (e.target === lightbox) { close(); }
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (lightbox.hidden) { return; }
+    if (e.key === "Escape") { close(); }
+    else if (e.key === "ArrowLeft") { goPrev(); }
+    else if (e.key === "ArrowRight") { goNext(); }
+  });
+})();
+</script>
 
 </body>
 </html>
