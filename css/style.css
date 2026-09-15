@@ -853,13 +853,14 @@ body {
 
 button {
   font: inherit;
-  border: none;
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 12px 16px;
   cursor: pointer;
   user-select: none;
   touch-action: manipulation;
   transition: transform 0.06s ease, filter 0.15s ease;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.25);
 }
 
 button:active {
@@ -870,6 +871,7 @@ button:active {
   background: var(--btn-primary-surface);
   color: var(--on-accent);
   font-weight: 700;
+  border-color: var(--accent-dark);
 }
 
 .btn-primary:hover { filter: brightness(1.08); }
@@ -889,6 +891,7 @@ button:active {
   background: var(--danger);
   color: #fff;
   font-weight: 600;
+  border-color: var(--danger-dark);
 }
 
 .btn-danger:hover { filter: brightness(1.1); }
@@ -958,6 +961,7 @@ button:disabled {
   width: 100%;
   background: none;
   border: none;
+  box-shadow: none;
   padding: 0;
   margin: 0 0 12px;
   cursor: pointer;
@@ -1230,6 +1234,7 @@ input[type="number"] {
 .player-name-edit-btn {
   background: none;
   border: none;
+  box-shadow: none;
   padding: 0 4px;
   font-size: 0.75em;
   cursor: pointer;
@@ -3123,6 +3128,7 @@ input[type="number"] {
   justify-content: center;
   border-radius: 50%;
   border: 1px solid transparent;
+  box-shadow: none;
   background: none;
   color: var(--on-felt-light);
   opacity: 0.3;
@@ -3210,6 +3216,7 @@ input[type="number"] {
   right: 12px;
   background: none;
   border: none;
+  box-shadow: none;
   color: var(--text-dim);
   font-size: 1.6rem;
   line-height: 1;
@@ -3497,6 +3504,7 @@ input[type="number"] {
 .wizard-player-chip-remove {
   background: none;
   border: none;
+  box-shadow: none;
   color: var(--text-dim);
   font-size: 1.1rem;
   line-height: 1;
@@ -4452,6 +4460,7 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
 .leaderboard-name-btn {
   background: none;
   border: none;
+  box-shadow: none;
   padding: 0;
   color: var(--accent);
   font: inherit;
@@ -4547,6 +4556,7 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
 .all-player-name {
   background: none;
   border: none;
+  box-shadow: none;
   padding: 0;
   border-radius: 0;
   color: var(--accent);
