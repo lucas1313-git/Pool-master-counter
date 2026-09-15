@@ -626,92 +626,103 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 24px;
-    background: rgba(8, 14, 10, 0.88);
-    backdrop-filter: blur(3px);
+    gap: 20px;
+    padding: 20px;
+    background: rgba(5, 10, 7, 0.97);
   }
   .lightbox[hidden] { display: none; }
   .lightbox-stage {
     position: relative;
-    width: min(100%, 1000px);
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
   .lightbox-frame {
     position: relative;
-    width: 100%;
-    max-height: 78vh;
-    border-radius: 14px;
-    overflow: hidden;
-    box-shadow: var(--shadow-lg);
-    background: var(--felt);
+    height: 100%;
+    max-width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
   .lightbox-frame img {
     display: block;
-    width: 100%;
-    max-height: 78vh;
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
     object-fit: contain;
+    border-radius: 14px;
+    box-shadow: var(--shadow-lg);
     background: var(--felt);
   }
   .lightbox-caption {
-    margin-top: 16px;
-    max-width: 640px;
+    max-width: 900px;
     text-align: center;
     font-family: "Figtree", sans-serif;
-    font-size: 14.5px;
-    line-height: 1.5;
+    font-weight: 600;
+    font-size: clamp(18px, 2.4vw, 25px);
+    line-height: 1.45;
     color: var(--felt-ink);
   }
   .lightbox-count {
-    margin-top: 6px;
     font-family: "IBM Plex Mono", monospace;
-    font-size: 11.5px;
-    letter-spacing: 0.04em;
+    font-size: 13.5px;
+    letter-spacing: 0.06em;
     color: color-mix(in srgb, var(--felt-ink) 65%, transparent);
   }
   .lightbox-btn {
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
-    width: 44px;
-    height: 44px;
+    width: 58px;
+    height: 58px;
     border-radius: 50%;
     border: 1px solid color-mix(in srgb, var(--brass) 55%, transparent);
-    background: color-mix(in srgb, var(--felt) 70%, black 10%);
+    background: color-mix(in srgb, var(--felt) 65%, black 15%);
     color: var(--brass-ink);
     font-family: "Figtree", sans-serif;
-    font-size: 20px;
+    font-size: 28px;
     line-height: 1;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
+    z-index: 2;
   }
   .lightbox-btn:hover { background: var(--brass); color: var(--on-brass); }
-  .lightbox-prev { left: 14px; }
-  .lightbox-next { right: 14px; }
+  .lightbox-prev { left: 16px; }
+  .lightbox-next { right: 16px; }
   .lightbox-close {
     position: absolute;
-    top: -16px;
-    right: -16px;
-    width: 40px;
-    height: 40px;
+    top: 20px;
+    right: 20px;
+    width: 48px;
+    height: 48px;
     border-radius: 50%;
     border: 1px solid color-mix(in srgb, var(--brass) 55%, transparent);
     background: var(--surface);
     color: var(--ink);
-    font-size: 18px;
+    font-size: 22px;
     line-height: 1;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     box-shadow: var(--shadow);
+    z-index: 3;
   }
   .lightbox-close:hover { background: var(--rail); color: var(--rail-tint); }
   @media (max-width: 640px) {
-    .lightbox-btn { width: 38px; height: 38px; font-size: 17px; }
-    .lightbox-prev { left: 4px; }
-    .lightbox-next { right: 4px; }
-    .lightbox-close { top: -14px; right: 4px; }
+    .lightbox { padding: 14px; gap: 14px; }
+    .lightbox-btn { width: 46px; height: 46px; font-size: 22px; }
+    .lightbox-prev { left: 6px; }
+    .lightbox-next { right: 6px; }
+    .lightbox-close { top: 12px; right: 12px; width: 42px; height: 42px; }
+    .lightbox-caption { font-size: 16.5px; }
   }
 </style>
 </head>
@@ -1141,13 +1152,13 @@
 </footer>
 
 <div class="lightbox" id="lightbox" hidden role="dialog" aria-modal="true" aria-label="截圖睇相器">
+  <button type="button" class="lightbox-close" id="lightbox-close" aria-label="閂">&#215;</button>
   <div class="lightbox-stage">
     <div class="lightbox-frame">
       <img id="lightbox-img" src="" alt="">
       <button type="button" class="lightbox-btn lightbox-prev" id="lightbox-prev" aria-label="上一張截圖">&#8249;</button>
       <button type="button" class="lightbox-btn lightbox-next" id="lightbox-next" aria-label="下一張截圖">&#8250;</button>
     </div>
-    <button type="button" class="lightbox-close" id="lightbox-close" aria-label="閂">&#215;</button>
   </div>
   <p class="lightbox-caption" id="lightbox-caption"></p>
   <p class="lightbox-count" id="lightbox-count"></p>
@@ -1193,7 +1204,7 @@
     autoplayTimer = setInterval(function () {
       currentIndex = (currentIndex + 1) % slides.length;
       render();
-    }, 4500);
+    }, 6000);
   }
 
   function openAt(index, triggerEl) {
