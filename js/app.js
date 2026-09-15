@@ -5207,9 +5207,22 @@
   // last. Also flagged with isLive: true when it's part of the
   // still-open current session (state.gameHistory), false when it only
   // exists in a session already saved within the window.
-  function computeDayReportData(dateStr) {
+  // exactDate (default false): the normal "live" mode always means "the
+  // last 24 real-time hours", regardless of what dateStr is labeled with
+  // (see the note below on bestRunToday) - that's fine for the actual
+  // Publish Daily Report panel (always "today"), but it means imported
+  // history from another device's already-finished session (anything
+  // more than 24h old by the time it's imported) can never appear here
+  // no matter how long you wait. Passing exactDate:true switches every
+  // filter below to an exact calendar-date match instead, so a past
+  // date can be reconstructed from history on demand - see
+  // archiveImportedReportDates, the only current caller.
+  function computeDayReportData(dateStr, exactDate) {
     var names = getAllKnownPlayerNames();
     var cutoffTs = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    function inRange(ts) {
+      return exactDate ? localDateStrFromTs(ts) === dateStr : ts >= cutoffTs;
+    }
     var liveTsSet = {};
     (state.gameHistory || []).forEach(function (entry) {
       if (entry && entry.ts) liveTsSet[entry.ts] = true;
@@ -5218,7 +5231,7 @@
     var players = [];
     names.forEach(function (name) {
       var games = allGamesForPlayerName(name).filter(function (g) {
-        return g.ts && g.ts >= cutoffTs;
+        return g.ts && inRange(g.ts);
       });
       if (!games.length) return;
       var wins = 0;
@@ -5235,7 +5248,7 @@
         wins: wins,
         losses: games.length - wins,
         rating: getPlayerRating(name),
-        ratingDelta: computeRatingPeriodDelta(name, "today")
+        ratingDelta: exactDate ? computeRatingDeltaForDate(name, dateStr) : computeRatingPeriodDelta(name, "today")
       });
     });
     players.sort(function (a, b) {
@@ -5253,7 +5266,7 @@
     // this they'd never show up in the day report at all, no matter how
     // recently one finished.
     var tournaments = TOURNAMENT_RESULTS.filter(function (r) {
-      return r.format !== "session-race" && r.ts && r.ts >= cutoffTs;
+      return r.format !== "session-race" && r.ts && inRange(r.ts);
     }).sort(function (a, b) {
       return a.ts.localeCompare(b.ts);
     });
@@ -5894,8 +5907,8 @@
   // buildDayReportImageBlob (the native PNG used when sharing straight
   // from the main app) - one pass over computeDayReportData, plain data
   // only, no HTML/canvas concerns here.
-  function computeReportImageData(dateStr) {
-    var data = computeDayReportData(dateStr);
+  function computeReportImageData(dateStr, exactDate) {
+    var data = computeDayReportData(dateStr, exactDate);
     var tokens = readReportThemeTokens();
 
     var longDate;
@@ -7323,6 +7336,58 @@
     return match.length ? match[0] : null;
   }
 
+  // Importing a backup can bring in a whole finished session from
+  // another device (anything more than 24h old by now, which "last
+  // session" almost always is) - the normal Report Archive path only
+  // ever looks at live state.gameHistory from the last 24 real-time
+  // hours (see computeDayReportData), so that import would otherwise
+  // never surface there no matter how long you wait. Rather than
+  // reconstruct it mid-import (importAllData always ends in a reload,
+  // and its own in-memory PLAYER_STATS/PLAYER_RATINGS/state aren't
+  // consistently updated pre-reload in every branch - the fresh-device
+  // path in particular leaves the global `state` stale until reload),
+  // the dates worth archiving are queued here and actually built once,
+  // right after the post-import reload, when everything is freshly and
+  // correctly loaded from localStorage - see consumePendingArchiveDates.
+  var PENDING_ARCHIVE_DATES_KEY = "poolMasterCounter.pendingArchiveDates.v1";
+
+  function queuePendingArchiveDates(dates) {
+    if (!dates.length) return;
+    try {
+      var existing = JSON.parse(localStorage.getItem(PENDING_ARCHIVE_DATES_KEY) || "[]");
+      if (!Array.isArray(existing)) existing = [];
+      var merged = existing.concat(dates).filter(function (d, i, arr) {
+        return arr.indexOf(d) === i;
+      });
+      localStorage.setItem(PENDING_ARCHIVE_DATES_KEY, JSON.stringify(merged));
+    } catch (e) {
+      console.warn("Could not queue imported dates for the report archive.", e);
+    }
+  }
+
+  function consumePendingArchiveDates() {
+    var pending;
+    try {
+      pending = JSON.parse(localStorage.getItem(PENDING_ARCHIVE_DATES_KEY) || "[]");
+    } catch (e) {
+      pending = [];
+    }
+    if (!Array.isArray(pending) || !pending.length) return;
+    try {
+      localStorage.removeItem(PENDING_ARCHIVE_DATES_KEY);
+    } catch (e) {
+      console.warn("Could not clear the pending report-archive queue.", e);
+    }
+    var today = todayDateStr();
+    pending.forEach(function (dateStr) {
+      // "Today" stays owned by the normal live mechanism (see
+      // scheduleIdleReportAutoSave) - reconstructing it here mid-day from
+      // a point-in-time snapshot would fight with that, not complement it.
+      if (dateStr === today || findReportArchiveEntry(dateStr)) return;
+      computeReportImageData(dateStr, true);
+    });
+  }
+
   function deleteArchivedReport(dateStr) {
     REPORT_ARCHIVE = REPORT_ARCHIVE.filter(function (entry) {
       return entry.dateStr !== dateStr;
@@ -8295,6 +8360,31 @@
       }
     }
     return entry.rating - startRating;
+  }
+
+  // Same idea as computeRatingPeriodDelta, but bounded to a single past
+  // calendar date instead of "since some period start, up to the
+  // player's current rating right now" - for a historical date being
+  // reconstructed after the fact (see archiveImportedReportDates), "vs
+  // right now" would include every rating change since, not just that
+  // day's. History is stored oldest-first, so a single forward pass
+  // tracks the last rating strictly before the day started (the
+  // baseline) and the last one at-or-before the day ended (where it
+  // landed) in one go.
+  function computeRatingDeltaForDate(name, dateStr) {
+    var entry = getPlayerRatingEntry(name);
+    if (!entry || entry.history.length === 0) return null;
+    var dayStartMs = new Date(dateStr + "T00:00:00").getTime();
+    var dayEndMs = dayStartMs + 24 * 60 * 60 * 1000;
+    var startRating = DEFAULT_RATING;
+    var endRating = null;
+    entry.history.forEach(function (h) {
+      var t = new Date(h.ts).getTime();
+      if (t < dayStartMs) startRating = h.rating;
+      if (t < dayEndMs) endRating = h.rating;
+    });
+    if (endRating === null) return null;
+    return endRating - startRating;
   }
 
   // A small "412" badge next to a player's name, used everywhere a name
@@ -9544,6 +9634,24 @@
           // one it should combine with (sync) or one that's now distinct
           // (keep separate).
           function proceedWithMerge() {
+            // Every distinct date this import actually brings sessions
+            // for - queued now (see queuePendingArchiveDates) so the
+            // Report Archive picks them up right after the reload below,
+            // regardless of how old they are.
+            var importedDates = {};
+            Object.keys(importedPlayerStats || {}).forEach(function (name) {
+              var entry = importedPlayerStats[name];
+              (entry && Array.isArray(entry.sessions) ? entry.sessions : []).forEach(function (s) {
+                if (s && s.date) importedDates[s.date] = true;
+              });
+            });
+            Object.keys(extraSessions || {}).forEach(function (name) {
+              (extraSessions[name] || []).forEach(function (s) {
+                if (s && s.date) importedDates[s.date] = true;
+              });
+            });
+            queuePendingArchiveDates(Object.keys(importedDates));
+
             var mergedPlayerStats = mergePlayerStatsData(PLAYER_STATS, importedPlayerStats, extraSessions);
             var rosterMerge = mergeRosterLists(SAVED_ROSTERS, importedRosters);
             var teamMerge = mergeTeamLists(SAVED_TEAMS, importedTeams);
@@ -18581,6 +18689,7 @@
     });
     applyDomTranslations(document);
     boot();
+    consumePendingArchiveDates();
 
     // A join link (?join=1, from the Group Session QR/URL) puts this
     // device straight into guest mode - GAME_TYPES is already populated
