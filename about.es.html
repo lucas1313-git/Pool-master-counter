@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pool Master Counter — Free Pool Scoreboard &amp; Stats</title>
-<meta name="description" content="A guided tour of the free, no-account pool scoreboard: its purpose, who it's for, both setup wizards, and every feature — with real screenshots throughout.">
+<title>Pool Master Counter — Marcador de billar gratis</title>
+<meta name="description" content="Un recorrido guiado por el marcador de billar gratuito y sin cuenta: su propósito, a quién va dirigido, los dos asistentes de configuración, y todas las funciones — con capturas de pantalla reales en todo momento.">
 <meta property="og:title" content="Pool Master Counter">
-<meta property="og:description" content="The scoreboard for the table you actually play on. Free, no account, runs in your browser.">
+<meta property="og:description" content="El marcador para la mesa en la que realmente juegas. Gratis, sin cuenta, funciona en tu navegador.">
 <meta property="og:image" content="https://lucas1313-git.github.io/Pool-master-counter/docs/screenshots/live-scoreboard.jpg">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
@@ -153,7 +153,7 @@
     max-width: 1120px;
   }
 
-  .brand {
+  .bry {
     display: flex;
     align-items: center;
     gap: 10px;
@@ -164,7 +164,7 @@
     text-decoration: none;
   }
 
-  .brand img { width: 30px; height: 30px; border-radius: 8px; box-shadow: var(--shadow); }
+  .bry img { width: 30px; height: 30px; border-radius: 8px; box-shadow: var(--shadow); }
 
   .navlinks { display: flex; align-items: center; gap: 22px; }
   .navlinks a.textlink {
@@ -559,9 +559,9 @@
   }
   .ball p { margin-top: 8px; font-size: 13.3px; }
 
-  /* CTA band */
+  /* CTA by */
 
-  .cta-band {
+  .cta-by {
     margin-top: 8px;
     border-radius: 20px;
     background: linear-gradient(155deg, var(--felt) 0%, #0a1e14 100%);
@@ -571,21 +571,21 @@
     box-shadow: var(--shadow-lg);
     border: 1px solid color-mix(in srgb, var(--brass) 35%, transparent);
   }
-  .cta-band .eyebrow { color: color-mix(in srgb, var(--brass-ink) 90%, white 10%); }
-  .cta-band h2 {
+  .cta-by .eyebrow { color: color-mix(in srgb, var(--brass-ink) 90%, white 10%); }
+  .cta-by h2 {
     margin-top: 12px;
     color: var(--felt-ink);
     font-size: clamp(1.7rem, 4vw, 2.4rem);
   }
-  .cta-band p {
+  .cta-by p {
     margin: 14px auto 0;
     max-width: 46ch;
     color: color-mix(in srgb, var(--felt-ink) 78%, transparent);
     font-size: 15px;
   }
-  .cta-band .cta-row { margin-top: 26px; justify-content: center; }
-  .cta-band .btn-ghost { border-color: color-mix(in srgb, var(--felt-ink) 35%, transparent); color: var(--felt-ink); }
-  .cta-band .btn-ghost:hover { background: color-mix(in srgb, var(--felt-ink) 12%, transparent); }
+  .cta-by .cta-row { margin-top: 26px; justify-content: center; }
+  .cta-by .btn-ghost { border-color: color-mix(in srgb, var(--felt-ink) 35%, transparent); color: var(--felt-ink); }
+  .cta-by .btn-ghost:hover { background: color-mix(in srgb, var(--felt-ink) 12%, transparent); }
 
   footer {
     margin-top: 60px;
@@ -619,18 +619,18 @@
 
 <nav class="top">
   <div class="wrap">
-    <a class="brand" href="about.html"><img src="icons/icon-512.png" alt=""> Pool Master Counter</a>
+    <a class="bry" href="about.html"><img src="icons/icon-512.png" alt=""> Pool Master Counter</a>
     <div class="navlinks">
-      <a class="textlink" href="#purpose">Purpose</a>
-      <a class="textlink" href="#wizards">Wizards</a>
-      <a class="textlink" href="#tour">Features</a>
+      <a class="textlink" href="#purpose">Propósito</a>
+      <a class="textlink" href="#wizards">Asistentes</a>
+      <a class="textlink" href="#tour">Funciones</a>
       <div class="langswitch">
-        <a href="about.html" class="is-active">EN</a>
+        <a href="about.html">EN</a>
         <a href="about.fr.html">FR</a>
-        <a href="about.es.html">ES</a>
+        <a href="about.es.html" class="is-active">ES</a>
         <a href="about.zh-yue.html">粵</a>
       </div>
-      <a class="btn btn-brass" href="index.html">Open the App</a>
+      <a class="btn btn-brass" href="index.html">Abrir la app</a>
     </div>
   </div>
 </nav>
@@ -638,21 +638,21 @@
 <header class="hero">
   <div class="wrap hero-grid">
     <div>
-      <div class="eyebrow">Free &middot; No account &middot; Runs in your browser</div>
-      <h1>The scoreboard for the table you actually play on<em>.</em></h1>
-      <p class="dek">Pool Master Counter keeps score for whatever's in front of you tonight &mdash; 8&#8209;Ball, 9&#8209;Ball, Straight Pool, One Pocket &mdash; and quietly remembers every rack after that: who's hot, who owes who a rematch, and by how much. No sign&#8209;up, no server, nothing to install unless you want to.</p>
+      <div class="eyebrow">Gratis &middot; Sin cuenta &middot; Funciona en tu navegador</div>
+      <h1>El marcador para la mesa en la que realmente juegas<em>.</em></h1>
+      <p class="dek">Pool Master Counter lleva el marcador de lo que sea que tengas delante esta noche &mdash; 8&#8209;Ball, 9&#8209;Ball, Straight Pool, One Pocket &mdash; y después recuerda discretamente cada rack: quién está en racha, quién le debe una revancha a quién, y por cuánto. Sin registro, sin servidor, nada que instalar a menos que quieras.</p>
       <div class="cta-row">
-        <a class="btn btn-brass btn-lg" href="index.html">Open the App &rarr;</a>
-        <a class="btn btn-ghost btn-lg" href="https://github.com/lucas1313-git/Pool-master-counter" target="_blank" rel="noopener">View the Source</a>
+        <a class="btn btn-brass btn-lg" href="index.html">Abrir la app &rarr;</a>
+        <a class="btn btn-ghost btn-lg" href="https://github.com/lucas1313-git/Pool-master-counter" target="_blank" rel="noopener">Ver el código fuente</a>
       </div>
-      <div class="fineprint">DON'T GET COCKY. &mdash; the app's own words, top of every page.</div>
+      <div class="fineprint">DON'T GET COCKY. &mdash; las propias palabras de la app, en la parte superior de cada página.</div>
     </div>
     <div>
       <div class="frame">
         <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
-        <img src="docs/screenshots/setup-panels.jpg" alt="Pool Master Counter's main page: Backup &amp; Transfer, Game Order, and Current Game panels, with the live scoreboard below">
+        <img src="docs/screenshots/setup-panels.jpg" alt="Página principal de Pool Master Counter: paneles de Copia de seguridad y transferencia, Orden de partidas, y Partida actual, con el marcador en vivo debajo">
       </div>
-      <div class="frame-cap">the actual app &mdash; not a mockup</div>
+      <div class="frame-cap">la app real &mdash; no una maqueta</div>
     </div>
   </div>
 </header>
@@ -662,25 +662,25 @@
   <section id="purpose">
     <div class="wrap">
       <div class="section-head">
-        <div class="eyebrow">Purpose</div>
-        <h2>A real scoreboard, not a tally app that outgrew its welcome</h2>
-        <p class="lede">Most pool apps pick one job: a bare "+1" counter, or a heavyweight platform built for a tournament director running eight tables at once. Pool Master Counter sits in the gap between them &mdash; live scoring good enough to run from across the room, plus the stats, ratings, and bracket play a long&#8209;running group actually wants, without ever asking anyone to make an account.</p>
+        <div class="eyebrow">Propósito</div>
+        <h2>Un marcador de verdad, no una app de conteo que se quedó corta</h2>
+        <p class="lede">La mayoría de las apps de billar hacen un solo trabajo: un contador básico de «+1», o una plataforma pesada creada para un director de torneo que gestiona ocho mesas a la vez. Pool Master Counter se sitúa en el espacio entre ambas &mdash; un marcador en vivo suficientemente legible desde el otro lado de la sala, además de las estadísticas, clasificaciones y torneos que un grupo habitual realmente quiere, sin pedirle nunca a nadie que cree una cuenta.</p>
       </div>
       <div class="contrast-plate">
         <div class="contrast-cell">
-          <div class="tag">Not this</div>
-          <h4>A stopwatch with two names on it</h4>
-          <p>Race&#8209;to counting and nothing else &mdash; close the tab and the whole night is gone. Fine for one game; useless for a group that plays every week.</p>
+          <div class="tag">Esto no</div>
+          <h4>Un cronómetro con dos nombres encima</h4>
+          <p>Un simple conteo de «primero a» y nada más &mdash; cierras la pestaña y se pierde toda la noche. Bien para una partida; inútil para un grupo que juega cada semana.</p>
         </div>
         <div class="contrast-cell win">
           <div class="tag">Pool Master Counter</div>
-          <h4>Score tonight, remember every night</h4>
-          <p>The live board, a running rating for everyone, head&#8209;to&#8209;head records, and a basic bracket &mdash; free, local, permanent &mdash; for one table and the people who keep showing up to it.</p>
+          <h4>Anota esta noche, recuerda cada noche</h4>
+          <p>El marcador en vivo, una clasificación continua para todos, el historial de enfrentamientos directos, y un cuadro básico &mdash; gratis, local, permanente &mdash; para una mesa y la gente que sigue apareciendo por ella.</p>
         </div>
         <div class="contrast-cell">
-          <div class="tag">Not this either</div>
-          <h4>Tournament&#8209;operations software</h4>
-          <p>Built for 64&#8209;bracket events across a dozen physical tables, a director approving results, an account for every player. Overkill for a Tuesday night.</p>
+          <div class="tag">Esto tampoco</div>
+          <h4>Software de gestión de torneos</h4>
+          <p>Diseñado para eventos de 64 plazas en una docena de mesas físicas, un director que aprueba los resultados, una cuenta para cada jugador. Demasiado para un martes cualquiera.</p>
         </div>
       </div>
     </div>
@@ -689,30 +689,30 @@
   <section id="who">
     <div class="wrap">
       <div class="section-head">
-        <div class="eyebrow">Who it's for</div>
-        <h2>Built for the table, not the tour</h2>
-        <p class="lede">Four ways people actually end up using it &mdash; often more than one, on the same night.</p>
+        <div class="eyebrow">A quién va dirigido</div>
+        <h2>Diseñado para la mesa, no para el circuito</h2>
+        <p class="lede">Cuatro maneras en las que la gente termina usándolo &mdash; a menudo más de una, la misma noche.</p>
       </div>
       <div class="personas">
         <div class="persona">
-          <div class="who">The regulars</div>
-          <h3>A home table or bar league that plays every week</h3>
-          <p>Everyone gets an automatic rating, a head&#8209;to&#8209;head record against everyone else, and a graph of the whole rivalry over time &mdash; without anyone having to remember to write it down.</p>
+          <div class="who">Los habituales</div>
+          <h3>Una mesa en casa o una liga de bar que juega cada semana</h3>
+          <p>Todos obtienen una clasificación automática, un historial de enfrentamientos directos contra todos los demás, y una gráfica de toda la rivalidad a lo largo del tiempo &mdash; sin que nadie tenga que acordarse de anotarlo.</p>
         </div>
         <div class="persona">
-          <div class="who">The host</div>
-          <h3>Whoever's running pool night</h3>
-          <p>Focus Mode clears the screen down to a scoreboard large enough to read from the other side of the room, and a notes box turns tonight into a text or email recap afterward.</p>
+          <div class="who">El anfitrión</div>
+          <h3>Quien organice la noche de billar</h3>
+          <p>El Modo Enfoque despeja la pantalla hasta dejar un marcador lo bastante grye para leerlo desde el otro lado de la sala, y un cuadro de notas convierte la noche en un resumen por SMS o correo después.</p>
         </div>
         <div class="persona">
-          <div class="who">The organizer</div>
-          <h3>A small club running an informal night</h3>
-          <p>Single elimination, double elimination, or round robin &mdash; a real bracket with standings and match cards, set up in under a minute, no separate app or spreadsheet.</p>
+          <div class="who">El organizador</div>
+          <h3>Un club pequeño organizyo una noche informal</h3>
+          <p>Eliminación simple, doble eliminación, o round robin &mdash; un cuadro de verdad con clasificación y fichas de partido, configurado en menos de un minuto, sin app ni hoja de cálculo aparte.</p>
         </div>
         <div class="persona">
-          <div class="who">Just visiting</div>
-          <h3>Someone who wants a tally and nothing else</h3>
-          <p>Quick Counter skips setup entirely: type two names, tap +/&minus;. Nothing is saved, nothing to configure &mdash; for the game that doesn't need a permanent record.</p>
+          <div class="who">Solo de paso</div>
+          <h3>Alguien que solo quiere un contador y nada más</h3>
+          <p>Quick Counter se salta la configuración por completo: escribe dos nombres, toca +/&minus;. No se guarda nada, no hay nada que configurar &mdash; para la partida que no necesita quedar registrada.</p>
         </div>
       </div>
     </div>
@@ -721,44 +721,44 @@
   <section id="wizards">
     <div class="wrap">
       <div class="section-head">
-        <div class="eyebrow">The wizards</div>
-        <h2>Guided when you want it, out of the way when you don't</h2>
-        <p class="lede">Two separate wizards cover the two moments that actually need explaining &mdash; the very first time anyone opens the app, and the start of each new game after that. Both can be skipped, and canceling either one loses nothing already set up.</p>
+        <div class="eyebrow">Los asistentes</div>
+        <h2>Guiado cuyo lo quieres, discreto cuyo no</h2>
+        <p class="lede">Dos asistentes independientes cubren los dos momentos que realmente necesitan explicación &mdash; la primerísima vez que alguien abre la app, y el inicio de cada partida nueva después. Ambos se pueden omitir, y cancelar cualquiera de los dos no pierde nada de lo ya configurado.</p>
       </div>
 
       <div class="wizard-block">
         <div class="wizard-copy">
-          <div class="kicker">First launch &middot; 4 steps</div>
-          <h3>&ldquo;Welcome!&rdquo; &mdash; the one&#8209;time setup</h3>
-          <p class="desc">The very first time the app opens on a device, a short wizard gets one player set up and asks what to do next &mdash; nothing more. It never reappears after that.</p>
+          <div class="kicker">Primer inicio &middot; 4 pasos</div>
+          <h3>&ldquo;Welcome!&rdquo; &mdash; la configuración única</h3>
+          <p class="desc">La primerísima vez que la app se abre en un dispositivo, un breve asistente configura a un jugador y pregunta qué hacer a continuación &mdash; nada más. Nunca vuelve a aparecer después de eso.</p>
           <div class="step-rail">
             <div class="step-chip"><span class="num">1</span><span class="label">Welcome!</span></div>
             <div class="step-chip"><span class="num">2</span><span class="label">What should we call you?</span></div>
             <div class="step-chip"><span class="num">3</span><span class="label">Ready to play?</span></div>
             <div class="step-chip"><span class="num">4</span><span class="label">One more thing</span></div>
           </div>
-          <div class="wizard-note"><b>Skippable at every step</b> &mdash; "Get to it now, I know what I'm doing" drops straight into the app for anyone who'd rather not be walked through it.</div>
+          <div class="wizard-note"><b>Se puede omitir en cada paso</b> &mdash; «Get to it now, I know what I'm doing» lleva directo a la app para quien prefiera no ser guiado paso a paso.</div>
         </div>
       </div>
 
       <div class="wizard-block with-image">
         <div class="wizard-copy">
-          <div class="kicker">Every new game &middot; 5 steps &middot; &ldquo;&#129497; Start Wizard&rdquo;</div>
-          <h3>The Game Setup Wizard</h3>
-          <p class="desc">The fastest way into an actual game: pick the format, add players, and start &mdash; each step explained in plain language as you go.</p>
+          <div class="kicker">Cada partida nueva &middot; 5 pasos &middot; &ldquo;&#129497; Start Wizard&rdquo;</div>
+          <h3>El asistente de configuración de partida</h3>
+          <p class="desc">La forma más rápida de entrar en una partida de verdad: elige el formato, añade jugadores, y empieza &mdash; cada paso explicado en lenguaje sencillo sobre la marcha.</p>
           <div class="step-rail">
-            <div class="step-chip"><span class="num">1</span><span class="label">Game type &amp; format</span></div>
-            <div class="step-chip"><span class="num">2</span><span class="label">Players</span></div>
-            <div class="step-chip"><span class="num">3</span><span class="label">Playing vs. Standby</span></div>
-            <div class="step-chip"><span class="num">4</span><span class="label">Rotation</span></div>
-            <div class="step-chip"><span class="num">5</span><span class="label">Review &amp; Start</span></div>
+            <div class="step-chip"><span class="num">1</span><span class="label">Tipo de partida y formato</span></div>
+            <div class="step-chip"><span class="num">2</span><span class="label">Jugadores</span></div>
+            <div class="step-chip"><span class="num">3</span><span class="label">Jugyo vs. En espera</span></div>
+            <div class="step-chip"><span class="num">4</span><span class="label">Rotación</span></div>
+            <div class="step-chip"><span class="num">5</span><span class="label">Revisión e inicio</span></div>
           </div>
-          <div class="wizard-note"><b>Cancel any time</b> &mdash; any players added or rotation changes made are already saved, exactly as if you'd used the panels directly.</div>
+          <div class="wizard-note"><b>Cancelar en cualquier momento</b> &mdash; los jugadores añadidos o los cambios de rotación ya hechos ya están guardados, exactamente como si hubieras usado los paneles directamente.</div>
         </div>
         <div class="tour-media">
           <div class="frame">
             <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
-            <img src="docs/screenshots/wizard-step1.jpg" alt="Game Setup Wizard, step 1 of 5: choosing 9-Ball and Individual play">
+            <img src="docs/screenshots/wizard-step1.jpg" alt="Asistente de configuración de partida, paso 1 de 5: eligiendo 9-Ball y modo Individual">
           </div>
         </div>
       </div>
@@ -768,179 +768,179 @@
   <section id="tour">
     <div class="wrap">
       <div class="section-head">
-        <div class="eyebrow">The full tour</div>
-        <h2>Everything on the table</h2>
-        <p class="lede">Every screen below is the real app, not a mockup.</p>
+        <div class="eyebrow">El recorrido completo</div>
+        <h2>Todo lo que hay sobre la mesa</h2>
+        <p class="lede">Cada pantalla a continuación es la app real, no una maqueta.</p>
       </div>
 
       <div class="tour-row">
         <div class="tour-copy">
-          <div class="kicker">Live play</div>
-          <h3>A scoreboard built to be read from across the room</h3>
-          <p class="desc">Tap +/&minus; on a player's card to track balls, points, or racks toward the target &mdash; each tap plays its own synthesized tone. Reaching the target banks the win and starts the next game automatically.</p>
+          <div class="kicker">Juego en vivo</div>
+          <h3>Un marcador diseñado para leerse desde el otro lado de la sala</h3>
+          <p class="desc">Toca +/&minus; en la tarjeta de un jugador para seguir bolas, puntos o racks hacia la meta &mdash; cada toque reproduce su propio tono sintetizado. Alcanzar la meta registra la victoria e inicia automáticamente la siguiente partida.</p>
           <ul class="tour-list">
-            <li><strong>Focus Mode</strong> hides every setup panel down to just the board.</li>
-            <li><strong>Milestone, On&#8209;the&#8209;Hill, and Game Changed</strong> pop&#8209;ups mark a win, a one&#8209;win warning, and a rotation switch.</li>
-            <li><strong>Undo Last Win, Share Standings, Export Session</strong> &mdash; one tap away, always.</li>
+            <li><strong>Modo Enfoque</strong> oculta todos los paneles de configuración y deja solo el marcador.</li>
+            <li><strong>Milestone, On&#8209;the&#8209;Hill, y Game Changed</strong> ventanas emergentes que marcan una victoria, un aviso a una victoria de la meta, y un cambio de rotación.</li>
+            <li><strong>Undo Last Win, Share Styings, Export Session</strong> &mdash; siempre a un toque de distancia.</li>
           </ul>
         </div>
         <div class="tour-media">
           <div class="frame">
             <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
-            <img src="docs/screenshots/live-scoreboard.jpg" alt="Live scoreboard mid-session with four players racing to 5 wins in 9-Ball">
+            <img src="docs/screenshots/live-scoreboard.jpg" alt="Marcador en vivo a mitad de sesión con cuatro jugadores compitiendo a 5 victorias en 9-Ball">
           </div>
         </div>
       </div>
 
       <div class="tour-row flip">
         <div class="tour-copy">
-          <div class="kicker">Look &amp; feel</div>
-          <h3>Ten themes, switched in one tap</h3>
-          <p class="desc">Six dark palettes, two genuine light modes, and two high&#8209;contrast pairs &mdash; every color that sits on an accent background is computed per theme to stay legible, so a button is never guessing at its own contrast.</p>
+          <div class="kicker">Aspecto</div>
+          <h3>Diez temas, cambiados con un toque</h3>
+          <p class="desc">Seis paletas oscuras, dos modos claros genuinos, y dos pares de alto contraste &mdash; cada color que se apoya sobre un fondo de acento se calcula por tema para seguir siendo legible, de modo que un botón nunca improvisa su propio contraste.</p>
           <ul class="tour-list">
-            <li><strong>Crimson Felt</strong> is the original look and the default.</li>
-            <li><strong>Daybreak Chalk</strong> and <strong>Pearl Lounge</strong> are real light themes, not a lightened dark one.</li>
-            <li><strong>Blackout Contrast</strong> and <strong>Paper Contrast</strong> push legibility as far as it goes.</li>
+            <li><strong>Crimson Felt</strong> es el aspecto original y el predeterminado.</li>
+            <li><strong>Daybreak Chalk</strong> y <strong>Pearl Lounge</strong> son temas claros de verdad, no un tema oscuro aclarado.</li>
+            <li><strong>Blackout Contrast</strong> y <strong>Paper Contrast</strong> llevan la legibilidad al máximo.</li>
           </ul>
         </div>
         <div class="tour-media">
           <div class="frame">
             <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
-            <img src="docs/screenshots/themes.jpg" alt="The Daybreak Chalk light theme, showing the collapsed setup panels">
+            <img src="docs/screenshots/themes.jpg" alt="El tema claro Daybreak Chalk, mostryo los paneles de configuración plegados">
           </div>
         </div>
       </div>
 
       <div class="tour-row">
         <div class="tour-copy">
-          <div class="kicker">Players</div>
-          <h3>A roster that remembers itself</h3>
-          <p class="desc">Add a name and it's auto&#8209;capitalized and checked for duplicates as you type. Tap Standby/Playing to move someone in or out of tonight's game without losing them from the roster.</p>
+          <div class="kicker">Jugadores</div>
+          <h3>Una lista de jugadores que se recuerda a sí misma</h3>
+          <p class="desc">Añade un nombre y se pone en mayúscula automáticamente y se comprueba por duplicados mientras escribes. Toca En espera/Jugyo para meter o sacar a alguien de la partida de esta noche sin perderlo de la lista.</p>
           <ul class="tour-list">
-            <li><strong>Saved player lists</strong> auto&#8209;save every distinct group you've ever played with &mdash; one tap to load.</li>
-            <li><strong>Names are case&#8209;insensitive</strong> &mdash; "bob" and "Bob" are always the same person.</li>
-            <li>Removing someone from tonight never touches their career stats.</li>
+            <li><strong>Listas de jugadores guardadas</strong> guardan automáticamente cada grupo distinto con el que hayas jugado alguna vez &mdash; un toque para cargarlo.</li>
+            <li><strong>Los nombres no distinguen mayúsculas de minúsculas</strong> &mdash; «bob» y «Bob» son siempre la misma persona.</li>
+            <li>Quitar a alguien de esta noche nunca afecta a sus estadísticas de carrera.</li>
           </ul>
         </div>
         <div class="tour-media">
           <div class="frame">
             <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
-            <img src="docs/screenshots/players-panel.jpg" alt="Players panel with four players marked Playing and per-player standings below">
+            <img src="docs/screenshots/players-panel.jpg" alt="Panel de jugadores con cuatro jugadores marcados como Jugyo y la clasificación por jugador debajo">
           </div>
         </div>
       </div>
 
       <div class="tour-row flip">
         <div class="tour-copy">
-          <div class="kicker">Tournaments</div>
-          <h3>A real bracket, not a spreadsheet</h3>
-          <p class="desc">Single elimination, double elimination, or round robin, set up from the same wizard or the Tournament page. Brackets render as a connected tree; round robin shows live standings next to every match at once.</p>
+          <div class="kicker">Torneos</div>
+          <h3>Un cuadro de verdad, no una hoja de cálculo</h3>
+          <p class="desc">Eliminación simple, doble eliminación, o round robin, configurados desde el mismo asistente o la página de Torneo. Los cuadros se muestran como un árbol conectado; el round robin muestra la clasificación en vivo junto a todos los partidos a la vez.</p>
           <ul class="tour-list">
-            <li>Eliminated players show struck&#8209;through, right in the bracket.</li>
-            <li>A round robin tie at the top makes every tied player a champion together.</li>
-            <li>Every rack still counts toward career stats and ratings &mdash; it's not a separate pool of data.</li>
+            <li>Los jugadores eliminados aparecen tachados, directamente en el cuadro.</li>
+            <li>Un empate en la cima de un round robin convierte a todos los jugadores empatados en campeones juntos.</li>
+            <li>Cada rack sigue contyo para las estadísticas de carrera y las clasificaciones &mdash; no es un conjunto de datos aparte.</li>
           </ul>
         </div>
         <div class="tour-media two-up side">
           <div class="frame">
             <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
-            <img src="docs/screenshots/tournament-bracket.jpg" alt="Winners bracket, round 1, showing the active match and the rest of the tree">
+            <img src="docs/screenshots/tournament-bracket.jpg" alt="Cuadro de ganadores, ronda 1, mostryo el partido activo y el resto del árbol">
           </div>
           <div class="frame">
             <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
-            <img src="docs/screenshots/tournament-roundrobin.jpg" alt="Round robin standings and every match card at once">
+            <img src="docs/screenshots/tournament-roundrobin.jpg" alt="Clasificación del round robin y todas las fichas de partido a la vez">
           </div>
         </div>
       </div>
 
       <div class="tour-row">
         <div class="tour-copy">
-          <div class="kicker">All Players</div>
-          <h3>Every player who's ever picked up a cue here</h3>
-          <p class="desc">Sort by win percentage, wins, or name, and filter by period &mdash; today, a week, a year, all time. Switch to a cumulative line graph per player, with click&#8209;to&#8209;reveal detail on every data point.</p>
+          <div class="kicker">Todos los jugadores</div>
+          <h3>Todos los jugadores que alguna vez han cogido un taco aquí</h3>
+          <p class="desc">Ordena por porcentaje de victorias, victorias, o nombre, y filtra por periodo &mdash; hoy, una semana, un año, todo el tiempo. Cambia a una gráfica lineal acumulada por jugador, con detalle al hacer clic en cada punto.</p>
           <ul class="tour-list">
-            <li>Bar view: games played/won/lost, plus a timeline of when.</li>
-            <li>Graph view: tap any dot for the opponents and results behind it.</li>
-            <li>A small rating badge follows every name, everywhere it appears.</li>
+            <li>Vista de barras: partidas jugadas/ganadas/perdidas, más una línea de tiempo de cuándo.</li>
+            <li>Vista de gráfica: toca cualquier punto para ver los rivales y resultados detrás de él.</li>
+            <li>Una pequeña insignia de clasificación acompaña a cada nombre, en todos los sitios donde aparece.</li>
           </ul>
         </div>
         <div class="tour-media two-up">
           <div class="frame">
             <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
-            <img src="docs/screenshots/all-players-bars.jpg" alt="All Players bar view showing games played, won, and lost per player">
+            <img src="docs/screenshots/all-players-bars.jpg" alt="Vista de barras de Todos los jugadores mostryo partidas jugadas, ganadas, y perdidas por jugador">
           </div>
           <div class="frame">
             <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
-            <img src="docs/screenshots/all-players-graph.jpg" alt="All Players graph view with a legend of toggleable lines">
-          </div>
-        </div>
-      </div>
-
-      <div class="tour-row flip">
-        <div class="tour-copy">
-          <div class="kicker">One player, in full</div>
-          <h3>Every player gets their own page</h3>
-          <p class="desc">Tap any name to open it: a stats synopsis for today through all&#8209;time, a complete head&#8209;to&#8209;head record against every opponent faced, and the same graphs scoped to just them.</p>
-          <ul class="tour-list">
-            <li>A header dropdown jumps straight to any other player &mdash; no trip back to All Players.</li>
-            <li>Session History expands into every individual game played.</li>
-            <li>Export Stats or Reset just this player's saved history, independently of everyone else's.</li>
-          </ul>
-        </div>
-        <div class="tour-media">
-          <div class="frame">
-            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
-            <img src="docs/screenshots/player-stats-page.jpg" alt="Alice's player page: 22 wins, 6 losses, a 79% win rate, and head-to-head records">
-          </div>
-        </div>
-      </div>
-
-      <div class="tour-row">
-        <div class="tour-copy">
-          <div class="kicker">The night, written down</div>
-          <h3>Notes tonight, a report you can actually send</h3>
-          <p class="desc">A free&#8209;text box for anything worth remembering &mdash; who's on fire, funny moments &mdash; saves automatically as you type. Copy, Email, or Text Report turns it into a real recap: every player's win/loss and rating move, total games, and your notes.</p>
-          <ul class="tour-list">
-            <li>Built fresh from live and saved sessions, so it's accurate even after a mid&#8209;day reset.</li>
-            <li>Ready to paste, email, or send as a text, as&#8209;is.</li>
-          </ul>
-        </div>
-        <div class="tour-media">
-          <div class="frame">
-            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
-            <img src="docs/screenshots/day-notes.jpg" alt="Today's Notes panel with a saved note and Copy/Email/Text Report buttons">
+            <img src="docs/screenshots/all-players-graph.jpg" alt="Vista de gráfica de Todos los jugadores con una leyenda de líneas activables">
           </div>
         </div>
       </div>
 
       <div class="tour-row flip">
         <div class="tour-copy">
-          <div class="kicker">Your data, your device</div>
-          <h3>Backup, iCloud sync, and a real desktop app</h3>
-          <p class="desc">Everything lives in the browser on the device it's used on &mdash; there's no cloud account. Export All Data for a full JSON backup, or Export for iCloud Sync to move a session between your own devices.</p>
+          <div class="kicker">Un jugador, al completo</div>
+          <h3>Cada jugador tiene su propia página</h3>
+          <p class="desc">Toca cualquier nombre para abrirla: un resumen de estadísticas de hoy a todo el tiempo, un historial completo de enfrentamientos directos contra cada rival al que se ha enfrentado, y las mismas gráficas limitadas solo a esa persona.</p>
           <ul class="tour-list">
-            <li>Import <em>merges</em> &mdash; nothing already here gets overwritten or double&#8209;counted.</li>
-            <li>A free desktop download runs the local relay a second phone can join to score the same live game together.</li>
+            <li>Un menú desplegable en la cabecera salta directo a cualquier otro jugador &mdash; sin necesidad de volver a Todos los jugadores.</li>
+            <li>El historial de sesiones se despliega en cada partida individual jugada.</li>
+            <li>Exporta las estadísticas o restablece solo el historial guardado de este jugador, independientemente del de los demás.</li>
           </ul>
         </div>
         <div class="tour-media">
           <div class="frame">
             <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
-            <img src="docs/screenshots/backup-panel.jpg" alt="Backup & Transfer panel, expanded, with Export All Data and Import Data buttons">
+            <img src="docs/screenshots/player-stats-page.jpg" alt="Página de jugadora de Alice: 22 victorias, 6 derrotas, una tasa de victorias del 79%, e historiales de enfrentamientos directos">
           </div>
         </div>
       </div>
 
       <div class="tour-row">
         <div class="tour-copy">
-          <div class="kicker">Never stuck</div>
-          <h3>One guide, contextual to wherever you are</h3>
-          <p class="desc">A single Help &amp; Guide overlay covers every feature on every page &mdash; and it's contextual: opening it jumps straight to the section for whatever page you're currently on, with the rest one scroll away.</p>
+          <div class="kicker">La noche, por escrito</div>
+          <h3>Notas esta noche, un informe que de verdad puedes enviar</h3>
+          <p class="desc">Un cuadro de texto libre para cualquier cosa que valga la pena recordar &mdash; quién está en racha, momentos graciosos &mdash; se guarda automáticamente mientras escribes. Copiar, enviar por correo, o enviar por SMS el informe lo convierte en un resumen real: victorias/derrotas y cambio de clasificación de cada jugador, total de partidas, y tus notas.</p>
+          <ul class="tour-list">
+            <li>Generado de nuevo a partir de las sesiones en vivo y guardadas, así que es preciso incluso después de un reinicio a mitad del día.</li>
+            <li>Listo para pegar, enviar por correo, o myar como SMS, tal cual.</li>
+          </ul>
         </div>
         <div class="tour-media">
           <div class="frame">
             <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
-            <img src="docs/screenshots/help-guide.jpg" alt="The Help & Guide overlay, open on the Main Page section">
+            <img src="docs/screenshots/day-notes.jpg" alt="Panel de Notas de hoy con una nota guardada y los botones Copiar/Correo/SMS del informe">
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-row flip">
+        <div class="tour-copy">
+          <div class="kicker">Tus datos, tu dispositivo</div>
+          <h3>Copia de seguridad, sincronización con iCloud, y una app de escritorio de verdad</h3>
+          <p class="desc">Todo vive en el navegador, en el dispositivo donde se usa &mdash; no hay cuenta en la nube. Exportar todos los datos para una copia de seguridad JSON completa, o Exportar para sincronizar con iCloud para mover una sesión entre tus propios dispositivos.</p>
+          <ul class="tour-list">
+            <li>Importar datos <em>combina</em> &mdash; nada de lo que ya está aquí se sobrescribe ni se cuenta por duplicado.</li>
+            <li>Una descarga de escritorio gratuita ejecuta el relé local al que un segundo teléfono puede unirse para anotar la misma partida en vivo juntos.</li>
+          </ul>
+        </div>
+        <div class="tour-media">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/backup-panel.jpg" alt="Panel de Copia de seguridad y transferencia, desplegado, con los botones Exportar todos los datos e Importar datosar datos">
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-row">
+        <div class="tour-copy">
+          <div class="kicker">Nunca atascado</div>
+          <h3>Una sola guía, contextual a donde estés</h3>
+          <p class="desc">Una única ventana de Ayuda y Guía cubre cada función en cada página &mdash; y es contextual: al abrirla, salta directo a la sección de la página en la que estés, con el resto a un scroll de distancia.</p>
+        </div>
+        <div class="tour-media">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/help-guide.jpg" alt="La ventana de Ayuda y Guía, abierta en la sección Página principal">
           </div>
         </div>
       </div>
@@ -950,50 +950,50 @@
   <section id="rack">
     <div class="wrap">
       <div class="section-head">
-        <div class="eyebrow">More in the rack</div>
-        <h2>The rest of what's in here</h2>
-        <p class="lede">Smaller in screen space, not in usefulness.</p>
+        <div class="eyebrow">Más en el rack</div>
+        <h2>El resto de lo que hay aquí</h2>
+        <p class="lede">Más pequeño en pantalla, no en utilidad.</p>
       </div>
       <div class="rack">
         <div class="ball">
           <div class="num">&#127942;</div>
-          <h4>Hall of Fame leaderboard</h4>
-          <p>An MVP score blends win rate, tournament wins, rating, dominant wins, and long runs into one ranking &mdash; with a plain&#8209;language "why am I ranked here" explainer for every player, and a share button for the whole board.</p>
+          <h4>Tabla de clasificación del Salón de la Fama</h4>
+          <p>Una puntuación MVP combina la tasa de victorias, victorias en torneos, clasificación, victorias dominantes, y rachas largas en una sola clasificación &mdash; con una explicación en lenguaje sencillo de «por qué estoy clasificado aquí» para cada jugador, y un botón para compartir toda la tabla.</p>
         </div>
         <div class="ball">
           <div class="num">&#128288;</div>
-          <h4>Fargo&#8209;style ratings</h4>
-          <p>Every player gets an automatic, Elo&#8209;style rating on the same published scale FargoRate uses &mdash; a 100&#8209;point gap works out to about a 2:1 favorite. No way to edit one by hand; it only moves from real games.</p>
+          <h4>Clasificaciones estilo Fargo</h4>
+          <p>Cada jugador obtiene una clasificación automática de estilo Elo, en la misma escala publicada que usa FargoRate &mdash; una diferencia de 100 puntos equivale a un favorito de más o menos 2 a 1. No hay forma de editarla a mano; solo se mueve con partidas reales.</p>
         </div>
         <div class="ball">
           <div class="num">&#9878;&#65039;</div>
-          <h4>Fair Match handicapping</h4>
-          <p>Turn it on and the lower&#8209;rated side gets a shorter race target instead of the same one &mdash; calculated to land the match close to a coin&#8209;flip based on the actual rating gap.</p>
+          <h4>Hándicap Fair Match</h4>
+          <p>Actívalo y el byo peor clasificado recibe un objetivo de carrera más corto en lugar del mismo &mdash; calculado para que el partido se acerque a un cara o cruz según la diferencia real de clasificación.</p>
         </div>
         <div class="ball">
           <div class="num">&#129446;</div>
-          <h4>Skunk detection</h4>
-          <p>A loser who potted nothing gets flagged automatically for balls/points games, and derived from "balls left on the table" for the 8&#8209;Ball family &mdash; correctly left out of 9&#8209;Ball, where it isn't a real concept.</p>
+          <h4>Detección de skunk</h4>
+          <p>Un perdedor que no ha embocado nada se marca automáticamente en las partidas de bolas/puntos, y se deduce de las «bolas que quedan en la mesa» para la familia 8&#8209;Ball &mdash; correctamente excluido del 9&#8209;Ball, donde no es un concepto real.</p>
         </div>
         <div class="ball">
           <div class="num">&#127925;</div>
-          <h4>Sound with nothing to download</h4>
-          <p>Every tone is synthesized live with the Web Audio API. Reach a race&#8209;to&#8209;N milestone and it plays the full 30&#8209;note theme from Beethoven's 9th, pitched low with a reverb tail.</p>
+          <h4>Sonido sin nada que descargar</h4>
+          <p>Cada sonido se sintetiza en vivo con la Web Audio API. Al alcanzar una meta de «primero a N» suena el tema completo de 30 notas de la Novena de Beethoven, en tono grave y con una cola de reverberación.</p>
         </div>
         <div class="ball">
           <div class="num">&#128241;</div>
           <h4>Group Session</h4>
-          <p>Host a session on the local WiFi and a second phone can scan a QR code to join and actively score the same live game &mdash; no internet, no account, nothing leaves the room.</p>
+          <p>Aloja una sesión en el WiFi local y un segundo teléfono puede escanear un código QR para unirse y anotar activamente la misma partida en vivo &mdash; sin internet, sin cuenta, nada sale de la sala.</p>
         </div>
         <div class="ball">
           <div class="num">&#9203;</div>
           <h4>Quick Counter</h4>
-          <p>"Just give me a counter" skips the wizard entirely &mdash; a bare, editable tally with no game type, no target, and nothing written to storage. Reload the page and it's gone, on purpose.</p>
+          <p>«Just give me a counter» se salta el asistente por completo &mdash; un contador básico y editable sin tipo de partida, sin meta, y sin nada escrito en el almacenamiento. Recarga la página y desaparece, a propósito.</p>
         </div>
         <div class="ball">
           <div class="num">&#128274;</div>
-          <h4>Nothing leaves the device</h4>
-          <p>No account, no server, no analytics. Every player, stat, rating, and bracket lives in local storage on the device you're using, until you choose to export it.</p>
+          <h4>Nada sale del dispositivo</h4>
+          <p>Sin cuenta, sin servidor, sin analítica. Cada jugador, estadística, clasificación, y cuadro vive en el almacenamiento local del dispositivo que estás usyo, hasta que decidas exportarlo.</p>
         </div>
       </div>
     </div>
@@ -1001,13 +1001,13 @@
 
   <section>
     <div class="wrap">
-      <div class="cta-band">
-        <div class="eyebrow">Rack 'em up</div>
-        <h2>Free, forever, for one table.</h2>
-        <p>No account to create, nothing to install, nothing sent anywhere. Open it on whatever's already in your pocket and start the next game.</p>
+      <div class="cta-by">
+        <div class="eyebrow">A montar el rack</div>
+        <h2>Gratis, para siempre, para una mesa.</h2>
+        <p>Ninguna cuenta que crear, nada que instalar, nada enviado a ningún sitio. Ábrelo en lo que ya llevas en el bolsillo y empieza la siguiente partida.</p>
         <div class="cta-row">
-          <a class="btn btn-brass btn-lg" href="index.html">Open the App &rarr;</a>
-          <a class="btn btn-ghost btn-lg" href="https://github.com/lucas1313-git/Pool-master-counter" target="_blank" rel="noopener">View the Source</a>
+          <a class="btn btn-brass btn-lg" href="index.html">Abrir la app &rarr;</a>
+          <a class="btn btn-ghost btn-lg" href="https://github.com/lucas1313-git/Pool-master-counter" target="_blank" rel="noopener">Ver el código fuente</a>
         </div>
       </div>
     </div>
@@ -1019,9 +1019,9 @@
   <div class="wrap">
     <div class="tagline">&ldquo;Don't get cocky.&rdquo;</div>
     <div class="footlinks">
-      <a class="textlink" href="index.html">Open the App</a>
+      <a class="textlink" href="index.html">Abrir la app</a>
       <a class="textlink" href="https://github.com/lucas1313-git/Pool-master-counter" target="_blank" rel="noopener">GitHub</a>
-      <a class="textlink" href="https://github.com/lucas1313-git/Pool-master-counter/blob/main/README.md" target="_blank" rel="noopener">Full Documentation</a>
+      <a class="textlink" href="https://github.com/lucas1313-git/Pool-master-counter/blob/main/README.md" target="_blank" rel="noopener">Documentación completa</a>
     </div>
   </div>
 </footer>
