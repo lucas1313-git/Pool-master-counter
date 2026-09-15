@@ -682,42 +682,48 @@
   .lightbox-btn,
   .lightbox-close {
     border-radius: 50%;
-    border: 1px solid color-mix(in srgb, var(--brass-ink) 40%, transparent);
-    background: var(--brass);
-    color: var(--on-brass);
+    border: 1px solid rgba(220, 183, 95, 0.32);
+    background: rgba(18, 32, 24, 0.55);
+    backdrop-filter: blur(8px);
+    color: #ecdfb8;
     font-family: "Figtree", sans-serif;
+    font-weight: 300;
     line-height: 1;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: var(--shadow);
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   }
   .lightbox-btn:hover,
-  .lightbox-close:hover { background: var(--brass-ink); color: var(--on-brass); }
+  .lightbox-close:hover {
+    background: rgba(220, 183, 95, 0.92);
+    border-color: rgba(220, 183, 95, 0.92);
+    color: #201705;
+  }
   .lightbox-btn {
-    position: absolute;
+    position: fixed;
     top: 50%;
     transform: translateY(-50%);
-    width: 58px;
-    height: 58px;
-    font-size: 28px;
+    width: 52px;
+    height: 52px;
+    font-size: 26px;
     z-index: 2;
   }
-  .lightbox-prev { left: 16px; }
-  .lightbox-next { right: 16px; }
+  .lightbox-prev { left: 20px; }
+  .lightbox-next { right: 20px; }
   .lightbox-close {
     flex: 0 0 auto;
-    width: 44px;
-    height: 44px;
-    font-size: 21px;
+    width: 42px;
+    height: 42px;
+    font-size: 19px;
   }
   @media (max-width: 640px) {
     .lightbox { padding: 10px 14px 14px; gap: 12px; }
-    .lightbox-btn { width: 46px; height: 46px; font-size: 22px; }
-    .lightbox-prev { left: 6px; }
-    .lightbox-next { right: 6px; }
-    .lightbox-close { width: 40px; height: 40px; font-size: 19px; }
+    .lightbox-btn { width: 42px; height: 42px; font-size: 20px; }
+    .lightbox-prev { left: 8px; }
+    .lightbox-next { right: 8px; }
+    .lightbox-close { width: 38px; height: 38px; font-size: 17px; }
     .lightbox-caption { font-size: 16.5px; }
   }
 </style>
@@ -891,10 +897,14 @@
             <li><strong>Undo Last Win, Share Standings, Export Session</strong> &mdash; one tap away, always.</li>
           </ul>
         </div>
-        <div class="tour-media">
+        <div class="tour-media two-up">
           <div class="frame">
             <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
             <img src="docs/screenshots/live-scoreboard.jpg" alt="Live scoreboard mid-session with four players racing to 5 wins in 9-Ball">
+          </div>
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/focus-mode.jpg" alt="Focus Mode: every setup panel hidden, just the scoreboard and rotation position left">
           </div>
         </div>
       </div>
