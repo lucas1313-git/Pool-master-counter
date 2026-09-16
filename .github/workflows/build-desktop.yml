@@ -68,6 +68,26 @@ jobs:
       - name: Generate the SEA preparation blob
         run: cd installer && node --experimental-sea-config generated/sea-config.json
 
+      - name: Import Developer ID certificate
+        if: runner.os == 'macOS'
+        env:
+          MAC_CERT_BASE64: ${{ secrets.MAC_CERT_BASE64 }}
+          MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+          MAC_KEYCHAIN_PASSWORD: ${{ secrets.MAC_KEYCHAIN_PASSWORD }}
+        run: |
+          CERTIFICATE_PATH=$RUNNER_TEMP/mac_cert.p12
+          KEYCHAIN_PATH=$RUNNER_TEMP/mac-signing.keychain-db
+
+          echo -n "$MAC_CERT_BASE64" | base64 --decode -o $CERTIFICATE_PATH
+
+          security create-keychain -p "$MAC_KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$MAC_KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+          security import $CERTIFICATE_PATH -P "$MAC_CERT_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH login.keychain-db
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -k "$MAC_KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
       - name: Build the macOS .app bundle
         if: runner.os == 'macOS'
         run: |
@@ -108,15 +128,36 @@ jobs:
           rm -rf /tmp/AppIcon.iconset
 
           # Signs the already-injected server binary too (--deep) - both
-          # need a valid ad-hoc signature to run once the .dmg's quarantine
-          # attribute is in play, not just the bundle's main executable.
-          codesign --deep --force --sign - "$APP"
+          # need a real Developer ID signature (with the hardened runtime,
+          # required for notarization) to pass Gatekeeper. The JIT/exec-mem
+          # entitlements are needed because the signed binary is Node's own
+          # runtime (V8), not a plain compiled app.
+          codesign --deep --force --sign "Developer ID Application: Luc Martin (UFAU7GCXKV)" \
+            --options runtime --entitlements mac/entitlements.plist "$APP"
 
           rm -rf generated/dmg-root
           mkdir -p generated/dmg-root
           cp -R "$APP" generated/dmg-root/
           ln -s /Applications generated/dmg-root/Applications
           hdiutil create -volname "Pool Master Counter" -srcfolder generated/dmg-root -ov -format UDZO "../${{ matrix.artifact }}"
+
+      - name: Notarize and staple the .dmg
+        if: runner.os == 'macOS'
+        env:
+          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+          APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+        run: |
+          KEY_PATH=$RUNNER_TEMP/AuthKey_notary.p8
+          echo "$APPSTORE_API_PRIVATE_KEY" > "$KEY_PATH"
+
+          xcrun notarytool submit "${{ matrix.artifact }}" \
+            --key "$KEY_PATH" \
+            --key-id "$APPSTORE_API_KEY_ID" \
+            --issuer "$APPSTORE_API_ISSUER_ID" \
+            --wait
+
+          xcrun stapler staple "${{ matrix.artifact }}"
 
       - name: Build the Windows binary
         if: runner.os == 'Windows'
@@ -162,7 +203,7 @@ jobs:
             Auto-built from the latest `main` (${{ github.sha }}).
 
             Portable, zero-installation binaries - no admin rights, nothing
-            added to your computer beyond the file itself. Not code-signed
-            (no paid certificate), so first launch shows one OS security
-            warning - see the app's Group Session page for instructions.
+            added to your computer beyond the file itself. The macOS build
+            is signed with a Developer ID certificate and notarized by
+            Apple, so it opens normally with no security warning.
           files: dist/*
