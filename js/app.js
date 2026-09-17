@@ -32,6 +32,13 @@
   var state = loadState();
   var toastTimer = null;
 
+  // Set right before the one renderAll() call triggered by a player
+  // gaining a point, then cleared right after - so the score-card
+  // builders below can flash just that player's number for that single
+  // render pass without any stale/leftover highlight on a later,
+  // unrelated render.
+  var lastScoredPlayerId = null;
+
   // "No Statistic will be recorded" mode — a purely in-memory session with
   // nothing written to localStorage: no state, no PLAYER_STATS, no
   // PLAYER_RATINGS. Never persisted itself (always starts off on reload),
@@ -840,27 +847,27 @@
     }
   }
 
-  // A short two-part click - a lower "contact" tap immediately followed
-  // by a brighter "drop" tap - reading as one satisfying clack rather
-  // than a synthesizer arpeggio, for the sound heard most often in the
-  // whole app (every "+" tap).
   // A flute-like "victory" rise: a sine fundamental (plus a quiet 2nd
   // harmonic for a touch of body) climbing in pitch, settling into a
-  // gentle held "landing" note with light vibrato for the last quarter
-  // second rather than decaying away - plus a very light breath-noise
-  // layer for the airiness real flute tone has. voice's pitch multiplier
-  // (mult) shifts the whole thing per player, same as every other sound.
-  // Picked (as "Flute Rise + Gentle Landing", lightened on the breath
-  // layer) out of several rounds of alternatives - short percussive
-  // clicks, then vocal "Yeah!" shouts - that didn't land.
+  // gentle held "landing" note with light vibrato for the last part
+  // rather than decaying away - plus a very light breath-noise layer for
+  // the airiness real flute tone has. voice's pitch multiplier (mult)
+  // shifts the whole thing per player, same as every other sound. 2
+  // seconds long (per request) - riseEnd marks the 70%-through point
+  // where the pitch rise finishes and the vibrato landing begins, scaled
+  // off duration so the shape stays proportional if duration ever
+  // changes again. Picked (as "Flute Rise + Gentle Landing", lightened on
+  // the breath layer) out of several rounds of alternatives - short
+  // percussive clicks, then vocal "Yeah!" shouts - that didn't land.
   function playPositiveSound(voice) {
     var mult = voicePitch(voice);
     var ctx = getAudioCtx();
     var now = ctx.currentTime;
-    var duration = 1.0;
+    var duration = 2.0;
     var attack = 0.08;
     var sustainEnd = now + duration * 0.6;
     var end = now + duration;
+    var riseEnd = now + duration * 0.7;
     var peak = 0.48;
     var tailFloor = 0.05;
 
@@ -875,7 +882,7 @@
     var oscGain = ctx.createGain();
     osc.type = "sine";
     osc.frequency.setValueAtTime(300 * mult, now);
-    osc.frequency.linearRampToValueAtTime(480 * mult, now + 0.7);
+    osc.frequency.linearRampToValueAtTime(480 * mult, riseEnd);
     applyEnvelope(oscGain.gain, peak * 0.92, tailFloor * 0.92);
     osc.connect(oscGain);
     oscGain.connect(ctx.destination);
@@ -887,7 +894,7 @@
     var overtoneGain = ctx.createGain();
     overtone.type = "sine";
     overtone.frequency.setValueAtTime(600 * mult, now);
-    overtone.frequency.linearRampToValueAtTime(960 * mult, now + 0.7);
+    overtone.frequency.linearRampToValueAtTime(960 * mult, riseEnd);
     applyEnvelope(overtoneGain.gain, peak * 0.08, tailFloor * 0.08);
     overtone.connect(overtoneGain);
     overtoneGain.connect(ctx.destination);
@@ -896,12 +903,12 @@
     overtone.stop(end + 0.1);
 
     // The vibrato only appears for the "landing" at the end, fading in
-    // over the last quarter second rather than running the whole time.
+    // once the rise finishes rather than running the whole time.
     var vibrato = ctx.createOscillator();
     var vibratoDepth = ctx.createGain();
     vibrato.type = "sine";
     vibrato.frequency.value = 5.2;
-    vibratoDepth.gain.setValueAtTime(0, now + 0.7);
+    vibratoDepth.gain.setValueAtTime(0, riseEnd);
     vibratoDepth.gain.linearRampToValueAtTime(3 * mult, end);
     vibrato.connect(vibratoDepth);
     vibratoDepth.connect(osc.frequency);
@@ -926,53 +933,80 @@
     noise.stop(end + 0.05);
   }
 
-  // A contact click (same as playPositiveSound's, just lower) followed by
-  // a short, round "aw" - a plain sine carrying the pitch (which droops
-  // low, down to 60Hz*mult) plus a quiet triangle "body" run through one
-  // low-Q bandpass filter for a touch of vowel character, without the
-  // sawtooth buzz or high-Q ringing that read as metallic. Picked over
-  // several other takes (louder/richer sawtooth-based ones included) as
-  // the smoothest and shortest of the bunch.
+  // The exact mirror of playPositiveSound (per request: "same crescendo
+  // ... but descending instead of up, same sound volume") - identical
+  // envelope, layering (fundamental + overtone + vibrato landing + breath
+  // noise), duration, and gains, just with every frequency ramp flipped
+  // to fall (480→300 / 960→600) instead of rise, landing low instead of
+  // high.
   function playNegativeSound(voice) {
     var mult = voicePitch(voice);
     var ctx = getAudioCtx();
     var now = ctx.currentTime;
-    var duration = 0.5;
-    clickSound(now, 150 * mult, 0.38);
+    var duration = 2.0;
+    var attack = 0.08;
+    var sustainEnd = now + duration * 0.6;
+    var end = now + duration;
+    var fallEnd = now + duration * 0.7;
+    var peak = 0.48;
+    var tailFloor = 0.05;
+
+    function applyEnvelope(gainParam, peakVal, floorVal) {
+      gainParam.setValueAtTime(0, now);
+      gainParam.linearRampToValueAtTime(peakVal, now + attack);
+      gainParam.setValueAtTime(peakVal, sustainEnd);
+      gainParam.exponentialRampToValueAtTime(floorVal, end);
+    }
 
     var osc = ctx.createOscillator();
     var oscGain = ctx.createGain();
     osc.type = "sine";
-    osc.frequency.setValueAtTime(140 * mult, now);
-    osc.frequency.exponentialRampToValueAtTime(60 * mult, now + duration);
-    oscGain.gain.setValueAtTime(0, now);
-    oscGain.gain.linearRampToValueAtTime(0.42, now + 0.05);
-    oscGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+    osc.frequency.setValueAtTime(480 * mult, now);
+    osc.frequency.linearRampToValueAtTime(300 * mult, fallEnd);
+    applyEnvelope(oscGain.gain, peak * 0.92, tailFloor * 0.92);
     osc.connect(oscGain);
     oscGain.connect(ctx.destination);
     if (echoSend) oscGain.connect(echoSend);
     osc.start(now);
-    osc.stop(now + duration + 0.1);
+    osc.stop(end + 0.1);
 
-    var body = ctx.createOscillator();
-    body.type = "triangle";
-    body.frequency.setValueAtTime(140 * mult, now);
-    body.frequency.exponentialRampToValueAtTime(60 * mult, now + duration);
-    var bodyFilter = ctx.createBiquadFilter();
-    bodyFilter.type = "bandpass";
-    bodyFilter.frequency.value = 500;
-    bodyFilter.Q.value = 1.2;
-    var bodyGain = ctx.createGain();
-    bodyGain.gain.setValueAtTime(0, now);
-    bodyGain.gain.linearRampToValueAtTime(0.22, now + 0.07);
-    bodyGain.gain.setValueAtTime(0.22, now + duration * 0.5);
-    bodyGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-    body.connect(bodyFilter);
-    bodyFilter.connect(bodyGain);
-    bodyGain.connect(ctx.destination);
-    if (echoSend) bodyGain.connect(echoSend);
-    body.start(now);
-    body.stop(now + duration + 0.1);
+    var overtone = ctx.createOscillator();
+    var overtoneGain = ctx.createGain();
+    overtone.type = "sine";
+    overtone.frequency.setValueAtTime(960 * mult, now);
+    overtone.frequency.linearRampToValueAtTime(600 * mult, fallEnd);
+    applyEnvelope(overtoneGain.gain, peak * 0.08, tailFloor * 0.08);
+    overtone.connect(overtoneGain);
+    overtoneGain.connect(ctx.destination);
+    if (echoSend) overtoneGain.connect(echoSend);
+    overtone.start(now);
+    overtone.stop(end + 0.1);
+
+    var vibrato = ctx.createOscillator();
+    var vibratoDepth = ctx.createGain();
+    vibrato.type = "sine";
+    vibrato.frequency.value = 5.2;
+    vibratoDepth.gain.setValueAtTime(0, fallEnd);
+    vibratoDepth.gain.linearRampToValueAtTime(3 * mult, end);
+    vibrato.connect(vibratoDepth);
+    vibratoDepth.connect(osc.frequency);
+    vibrato.start(now);
+    vibrato.stop(end + 0.1);
+
+    var noise = ctx.createBufferSource();
+    noise.buffer = buildNoiseBuffer(ctx, duration);
+    var breathFilter = ctx.createBiquadFilter();
+    breathFilter.type = "bandpass";
+    breathFilter.frequency.value = 3400;
+    breathFilter.Q.value = 0.9;
+    var breathGain = ctx.createGain();
+    applyEnvelope(breathGain.gain, peak * 0.04, tailFloor * 0.04);
+    noise.connect(breathFilter);
+    breathFilter.connect(breathGain);
+    breathGain.connect(ctx.destination);
+    if (echoSend) breathGain.connect(echoSend);
+    noise.start(now);
+    noise.stop(end + 0.05);
   }
 
   // Two alternate victory fanfares, picked at random on each win so a run
@@ -2975,6 +3009,13 @@
   // this player's last win instead (only enabled when they're actually
   // part of the most recent recorded game, so it can't fire against the
   // wrong player's win by mistake).
+  // Flashes a player's score number for the one render pass right after
+  // they gain a point (see lastScoredPlayerId) - a CSS animation, so it
+  // plays once and settles back on its own without needing any cleanup.
+  function applyScoreFlash(valueEl, player) {
+    if (player.id === lastScoredPlayerId) valueEl.classList.add("stat-value-flash");
+  }
+
   function buildBallControls(player, disabled, undoOnMinus) {
     var controls = document.createElement("div");
     controls.className = "ball-controls";
@@ -3083,6 +3124,7 @@
     var value = document.createElement("div");
     value.className = "stat-value";
     value.textContent = player.balls || 0;
+    applyScoreFlash(value, player);
     panel.appendChild(value);
 
     panel.appendChild(buildBallControls(player, false));
@@ -3286,6 +3328,7 @@
     } else {
       label.textContent = T("scoreboard.gameTargetLabel", { game: GAME_TYPES[state.currentGame.gameType].label, target: state.currentGame.target });
       value.textContent = player.balls || 0;
+      applyScoreFlash(value, player);
     }
     block.appendChild(label);
     block.appendChild(value);
@@ -3321,6 +3364,7 @@
     var value = document.createElement("div");
     value.className = "stat-value small";
     value.textContent = player.balls || 0;
+    applyScoreFlash(value, player);
     card.appendChild(value);
 
     var runBadge = buildRunStreakBadge(player);
@@ -5023,9 +5067,14 @@
     if (quickCounterMode) {
       player.balls = (player.balls || 0) + delta;
       saveState();
-      if (delta > 0) playPositiveSound(player.voice);
-      else playNegativeSound(player.voice);
+      if (delta > 0) {
+        playPositiveSound(player.voice);
+        lastScoredPlayerId = playerId;
+      } else {
+        playNegativeSound(player.voice);
+      }
       renderAll();
+      lastScoredPlayerId = null;
       return;
     }
 
@@ -5048,11 +5097,13 @@
 
       saveState();
       playPositiveSound(player.voice);
+      lastScoredPlayerId = playerId;
     } else {
       saveState();
       playNegativeSound(player.voice);
     }
     renderAll();
+    lastScoredPlayerId = null;
   }
 
   function resetCurrentGame() {
