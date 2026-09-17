@@ -1627,6 +1627,7 @@
   var groupSessionInstallLink = document.getElementById("group-session-install-link");
   var groupSessionInstallUnsupported = document.getElementById("group-session-install-unsupported");
   var groupSessionInstallSecurityNote = document.getElementById("group-session-install-security-note");
+  var btnGroupSessionExportBeforeInstall = document.getElementById("btn-group-session-export-before-install");
   var networkStatusBar = document.getElementById("network-status-bar");
   var networkStatusPill = document.getElementById("network-status-pill");
   var btnLeaveSession = document.getElementById("btn-leave-session");
@@ -18445,6 +18446,9 @@
   });
   btnGroupSessionHost.addEventListener("click", startHostingSession);
   btnGroupSessionStop.addEventListener("click", stopHostingSession);
+  btnGroupSessionExportBeforeInstall.addEventListener("click", function () {
+    exportAllData();
+  });
   btnLeaveSession.addEventListener("click", function () {
     if (networkMode === "host") stopHostingSession();
     else leaveSession();
