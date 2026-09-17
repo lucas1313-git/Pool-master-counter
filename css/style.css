@@ -4177,7 +4177,8 @@ input[type="number"] {
 }
 
 #btn-group-session-host,
-#group-session-host-panel #btn-group-session-stop {
+#group-session-host-panel #btn-group-session-stop,
+#btn-group-session-export-before-install {
   display: block;
   width: max-content;
   max-width: 100%;
