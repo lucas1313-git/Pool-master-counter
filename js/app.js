@@ -1602,6 +1602,7 @@
   var leaderboardPageView = document.getElementById("view-leaderboard-page");
   var btnLeaderboardBack = document.getElementById("btn-leaderboard-back");
   var btnLeaderboardPlay = document.getElementById("btn-leaderboard-play");
+  var btnLeaderboardPlayTop = document.getElementById("btn-leaderboard-play-top");
   var btnLeaderboardShare = document.getElementById("btn-leaderboard-share");
   var leaderboardViewPlayersRadio = document.getElementById("leaderboard-view-players");
   var leaderboardViewTeamsRadio = document.getElementById("leaderboard-view-teams");
@@ -18369,6 +18370,10 @@
   });
 
   btnDayReportColorful.addEventListener("click", function () {
+    if (!computeDayReportData(todayDateStr()).players.length) {
+      showToast(T("history.noGamesToday"));
+      return;
+    }
     requireProOrShowPaywall(openDayReportColorful);
   });
 
@@ -18433,6 +18438,9 @@
   btnLeaderboardPlay.addEventListener("click", function () {
     closeLeaderboardPage();
   });
+  btnLeaderboardPlayTop.addEventListener("click", function () {
+    closeLeaderboardPage();
+  });
   btnLeaderboardShare.addEventListener("click", shareLeaderboard);
   [leaderboardViewPlayersRadio, leaderboardViewTeamsRadio].forEach(function (radio) {
     radio.addEventListener("change", renderLeaderboardPage);
@@ -18448,6 +18456,9 @@
   btnGroupSessionStop.addEventListener("click", stopHostingSession);
   btnGroupSessionExportBeforeInstall.addEventListener("click", function () {
     exportAllData();
+  });
+  groupSessionInstallLink.addEventListener("click", function () {
+    showToast(T("groupSession.downloadStartedReminder"));
   });
   btnLeaveSession.addEventListener("click", function () {
     if (networkMode === "host") stopHostingSession();

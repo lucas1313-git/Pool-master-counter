@@ -1147,6 +1147,8 @@
     <p class="leaderboard-banner-sub" data-i18n="leaderboard.bannerSub">The best players, ranked by performance</p>
   </div>
 
+  <button type="button" id="btn-leaderboard-play-top" class="btn btn-primary leaderboard-play-btn" data-i18n="leaderboard.playButton">▶️ Back to the Game</button>
+
   <div class="leaderboard-view-toggle" role="radiogroup" data-i18n-aria-label="leaderboard.viewToggleAria" aria-label="Show leaderboard for">
     <label class="leaderboard-view-option">
       <input type="radio" name="leaderboard-view" id="leaderboard-view-players" value="players" checked>
@@ -1185,11 +1187,11 @@
 
   <div id="group-session-install-prompt" class="hidden">
     <p class="player-stats-note" data-i18n="groupSession.installIntro">Prefer to host from your own computer? Download a portable app for this — nothing to install, no admin rights needed.</p>
+    <p class="player-stats-note" data-i18n="groupSession.exportBeforeInstallNote">This app and the desktop app don't share data automatically — export your current session now, then use Import Data on the desktop app's page to bring it back.</p>
+    <button type="button" id="btn-group-session-export-before-install" class="btn btn-primary" data-i18n="groupSession.exportBeforeInstallButton">💾 1. Export This Session</button>
     <a id="group-session-install-link" class="group-session-install-link hidden" href="#" target="_blank" rel="noopener"></a>
     <p id="group-session-install-unsupported" class="player-stats-note hidden" data-i18n="groupSession.installUnsupportedOs">Hosting needs a desktop computer on this WiFi — this won't run on a phone.</p>
     <p id="group-session-install-security-note" class="group-session-qr-hint"></p>
-    <p class="player-stats-note" data-i18n="groupSession.exportBeforeInstallNote">This app and the desktop app don't share data automatically — export your current session now, then use Import Data on the desktop app's page to bring it back.</p>
-    <button type="button" id="btn-group-session-export-before-install" class="btn btn-ghost" data-i18n="groupSession.exportBeforeInstallButton">💾 Export This Session</button>
   </div>
 
   <button type="button" id="btn-group-session-host" class="btn btn-primary" data-i18n="groupSession.hostButton">🎯 Host This Session</button>
