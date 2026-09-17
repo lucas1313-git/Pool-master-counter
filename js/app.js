@@ -863,7 +863,7 @@
     var mult = voicePitch(voice);
     var ctx = getAudioCtx();
     var now = ctx.currentTime;
-    var duration = 1.0;
+    var duration = 0.5;
     var attack = 0.08;
     var sustainEnd = now + duration * 0.6;
     var end = now + duration;
@@ -943,7 +943,7 @@
     var mult = voicePitch(voice);
     var ctx = getAudioCtx();
     var now = ctx.currentTime;
-    var duration = 1.0;
+    var duration = 0.5;
     var attack = 0.08;
     var sustainEnd = now + duration * 0.6;
     var end = now + duration;
