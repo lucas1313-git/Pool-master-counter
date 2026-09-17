@@ -4297,6 +4297,19 @@ input[type="number"] {
   font-size: 0.85rem;
 }
 
+.group-session-security-note {
+  text-align: center;
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  margin: 16px 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
 .group-session-error {
   text-align: center;
   color: var(--danger);
