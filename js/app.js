@@ -852,18 +852,18 @@
   // gentle held "landing" note with light vibrato for the last part
   // rather than decaying away - plus a very light breath-noise layer for
   // the airiness real flute tone has. voice's pitch multiplier (mult)
-  // shifts the whole thing per player, same as every other sound. 2
-  // seconds long (per request) - riseEnd marks the 70%-through point
-  // where the pitch rise finishes and the vibrato landing begins, scaled
-  // off duration so the shape stays proportional if duration ever
-  // changes again. Picked (as "Flute Rise + Gentle Landing", lightened on
-  // the breath layer) out of several rounds of alternatives - short
-  // percussive clicks, then vocal "Yeah!" shouts - that didn't land.
+  // shifts the whole thing per player, same as every other sound. riseEnd
+  // marks the 70%-through point where the pitch rise finishes and the
+  // vibrato landing begins, scaled off duration so the shape stays
+  // proportional if duration ever changes again. Picked (as "Flute Rise
+  // + Gentle Landing", lightened on the breath layer) out of several
+  // rounds of alternatives - short percussive clicks, then vocal "Yeah!"
+  // shouts - that didn't land.
   function playPositiveSound(voice) {
     var mult = voicePitch(voice);
     var ctx = getAudioCtx();
     var now = ctx.currentTime;
-    var duration = 2.0;
+    var duration = 1.0;
     var attack = 0.08;
     var sustainEnd = now + duration * 0.6;
     var end = now + duration;
@@ -943,7 +943,7 @@
     var mult = voicePitch(voice);
     var ctx = getAudioCtx();
     var now = ctx.currentTime;
-    var duration = 2.0;
+    var duration = 1.0;
     var attack = 0.08;
     var sustainEnd = now + duration * 0.6;
     var end = now + duration;
