@@ -4047,6 +4047,41 @@ input[type="number"] {
   opacity: 0.7;
 }
 
+/* Step-by-step rating history (see buildRatingHistorySection) - reuses
+   .player-history-row/-top/-detail from the Session History list above
+   for the same card look, just with its own delta coloring. */
+.rating-history-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rating-history-delta {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.rating-history-delta.is-positive {
+  color: var(--accent);
+}
+
+.rating-history-delta.is-negative {
+  color: var(--danger);
+}
+
+.rating-history-delta.is-flat {
+  color: var(--text-dim);
+}
+
+.rating-history-show-more {
+  display: block;
+  width: max-content;
+  margin: 0 auto;
+}
+
 /* ---------- Player stats synopsis ---------- */
 
 .period-filter-row {

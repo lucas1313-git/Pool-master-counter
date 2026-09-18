@@ -12526,6 +12526,7 @@
 
     playerPageGraphBody.innerHTML = "";
     playerPageGraphBody.appendChild(buildPlayerGraph(stats, minMs, maxMs, period));
+    playerPageGraphBody.appendChild(buildRatingHistorySection(currentStatsPlayerName));
   }
 
   function setStatsPeriod(period) {
@@ -12700,6 +12701,7 @@
     if (!skipHistory) pushScreenHistory("player", { name: name });
     currentStatsPlayerName = name;
     currentStatsSessions = null;
+    ratingHistoryVisibleCount = RATING_HISTORY_DISPLAY_STEP;
     playerPageName.innerHTML = "";
     buildPlayerNameLabel(playerPageName, name, true);
     playerPageName.appendChild(buildRatingBadge(name));
@@ -13559,6 +13561,185 @@
     });
     svg.appendChild(group);
     return group;
+  }
+
+  // A player's rating as of just before ts — same backward-scan style as
+  // computeRatingDeltaForDate, reused here to reconstruct an OPPONENT's
+  // rating at the moment of a specific past game (their *current* rating
+  // is the wrong number to explain an old game's math with).
+  function ratingBeforeTs(name, ts) {
+    var entry = getPlayerRatingEntry(name);
+    if (!entry) return DEFAULT_RATING;
+    var tMs = new Date(ts).getTime();
+    var result = DEFAULT_RATING;
+    entry.history.forEach(function (h) {
+      if (new Date(h.ts).getTime() < tMs) result = h.rating;
+    });
+    return result;
+  }
+
+  function averageRatingBeforeTs(names, ts) {
+    if (!names.length) return DEFAULT_RATING;
+    var sum = names.reduce(function (total, n) {
+      return total + ratingBeforeTs(n, ts);
+    }, 0);
+    return sum / names.length;
+  }
+
+  // Step-by-step rating history for the player stats page, per request:
+  // every entry gets who it was against, both sides' ratings at the time
+  // (not now), the resulting win probability, the K-factor that applied,
+  // and the actual result — not just the bare delta the graph already
+  // shows as a line. Most recent first; initially shows a recent slice
+  // (see RATING_HISTORY_DISPLAY_STEP) with a button to reveal more,
+  // since an active player's history can run up to RATING_HISTORY_CAP
+  // (500) entries.
+  var RATING_HISTORY_DISPLAY_STEP = 25;
+  var ratingHistoryVisibleCount = RATING_HISTORY_DISPLAY_STEP;
+
+  function buildRatingHistoryEntryRow(name, h, gamesPlayedBefore, selfRatingBefore, winMultiOpponentIndex) {
+    var li = document.createElement("li");
+    li.className = "player-history-row rating-history-row";
+
+    var top = document.createElement("div");
+    top.className = "player-history-top";
+    var date = document.createElement("span");
+    date.className = "player-history-date";
+    date.textContent = formatTimestamp(h.ts, true);
+    var delta = document.createElement("span");
+    var isPositive = h.delta > 0;
+    delta.className = "rating-history-delta " + (isPositive ? "is-positive" : h.delta < 0 ? "is-negative" : "is-flat");
+    delta.textContent = (isPositive ? "+" : "") + h.delta + " (" + selfRatingBefore + " → " + h.rating + ")";
+    top.appendChild(date);
+    top.appendChild(delta);
+    li.appendChild(top);
+
+    var detail = document.createElement("div");
+    detail.className = "player-history-detail";
+
+    if (!h.fromGame) {
+      detail.textContent = T("playerPage.ratingHistoryManual");
+      li.appendChild(detail);
+      return li;
+    }
+
+    var game = allGamesForPlayerName(name).filter(function (g) {
+      return g.ts === h.ts;
+    })[0];
+
+    if (!game) {
+      // A rating history entry with no matching game entry (e.g. that
+      // game's session was since cleared by a reset) - still real, just
+      // nothing left to explain the matchup with.
+      detail.textContent = T("playerPage.ratingHistoryNoGameFound");
+      li.appendChild(detail);
+      return li;
+    }
+
+    // A single non-team win credited against several simultaneous
+    // opponents (e.g. a Winner Stays/queue table) runs one independent
+    // pairwise update per opponent (see creditWin's opponentNames.forEach
+    // -> applyPairwiseRatingResult), so this player gets one history
+    // entry per opponent at that exact same ts - not one entry covering
+    // all of them. winMultiOpponentIndex (passed by buildRatingHistory-
+    // Section, which counts same-ts occurrences in original push order)
+    // picks out the ONE opponent this specific entry's delta was
+    // actually against, instead of misattributing every one of those
+    // rows to the whole group.
+    var isTeam = !!game.isTeam;
+    var isMultiWin = !isTeam && game.result === "won" && (game.opponentNames || []).length > 1 && winMultiOpponentIndex !== null && winMultiOpponentIndex !== undefined;
+    var opponentNames = isMultiWin ? [game.opponentNames[winMultiOpponentIndex]] : game.opponentNames || [];
+    var oppRatingBefore = isTeam
+      ? Math.round(averageRatingBeforeTs(opponentNames, h.ts))
+      : opponentNames.length
+      ? ratingBeforeTs(opponentNames[0], h.ts)
+      : null;
+
+    var pieces = [];
+    if (opponentNames.length) {
+      pieces.push(
+        T(isTeam ? "playerPage.ratingHistoryVsTeam" : "playerPage.ratingHistoryVsOne", {
+          names: opponentNames.join(" & "),
+          rating: oppRatingBefore
+        })
+      );
+    }
+    if (oppRatingBefore !== null) {
+      var expectedPct = Math.round(eloExpectedScore(selfRatingBefore, oppRatingBefore) * 100);
+      pieces.push(T("playerPage.ratingHistoryExpectedPct", { pct: expectedPct }));
+    }
+    var k = isTeam ? RATING_K_PROVISIONAL : ratingKFor(gamesPlayedBefore);
+    var kStatus = isTeam || gamesPlayedBefore < RATING_PROVISIONAL_GAMES
+      ? T("playerPage.ratingHistoryProvisional", { games: RATING_PROVISIONAL_GAMES })
+      : T("playerPage.ratingHistoryEstablished");
+    pieces.push(T("playerPage.ratingHistoryKNote", { k: k, status: kStatus }));
+    pieces.push(T(game.result === "won" ? "playerPage.ratingHistoryResultWon" : "playerPage.ratingHistoryResultLost"));
+
+    detail.textContent = pieces.join(" · ");
+    li.appendChild(detail);
+    return li;
+  }
+
+  function buildRatingHistorySection(name) {
+    var section = document.createElement("div");
+    section.className = "player-rating-graph-wrap";
+
+    var heading = document.createElement("h3");
+    heading.className = "player-rating-graph-heading";
+    heading.textContent = T("playerPage.ratingHistoryHeading");
+    section.appendChild(heading);
+
+    var entry = getPlayerRatingEntry(name);
+    var history = entry ? entry.history : [];
+    if (history.length === 0) {
+      var hint = document.createElement("p");
+      hint.className = "player-graph-empty";
+      hint.textContent = T("playerPage.ratingHistoryEmpty");
+      section.appendChild(hint);
+      return section;
+    }
+
+    // Oldest-first in storage; walk it once forward to reconstruct each
+    // entry's "before" rating, how many fromGame entries preceded it (==
+    // gamesPlayed at that moment, for the K-factor), and - for a win
+    // credited against several opponents at once - which same-ts
+    // occurrence this is (sameTsSeen), so buildRatingHistoryEntryRow can
+    // pick the one opponent this specific delta was actually against
+    // instead of the whole group. Then reverse for most-recent-first
+    // display.
+    var rows = [];
+    var gamesPlayedSoFar = 0;
+    var selfRatingSoFar = DEFAULT_RATING;
+    var sameTsSeen = {};
+    history.forEach(function (h) {
+      var occurrenceIndex = sameTsSeen[h.ts] || 0;
+      sameTsSeen[h.ts] = occurrenceIndex + 1;
+      rows.push({ h: h, gamesPlayedBefore: gamesPlayedSoFar, selfRatingBefore: selfRatingSoFar, occurrenceIndex: occurrenceIndex });
+      if (h.fromGame) gamesPlayedSoFar += 1;
+      selfRatingSoFar = h.rating;
+    });
+    rows.reverse();
+
+    var list = document.createElement("ul");
+    list.className = "rating-history-list";
+    rows.slice(0, ratingHistoryVisibleCount).forEach(function (r) {
+      list.appendChild(buildRatingHistoryEntryRow(name, r.h, r.gamesPlayedBefore, r.selfRatingBefore, r.occurrenceIndex));
+    });
+    section.appendChild(list);
+
+    if (rows.length > ratingHistoryVisibleCount) {
+      var showMoreBtn = document.createElement("button");
+      showMoreBtn.type = "button";
+      showMoreBtn.className = "btn btn-ghost rating-history-show-more";
+      showMoreBtn.textContent = T("playerPage.ratingHistoryShowMore", { count: rows.length - ratingHistoryVisibleCount });
+      showMoreBtn.addEventListener("click", function () {
+        ratingHistoryVisibleCount += RATING_HISTORY_DISPLAY_STEP;
+        renderPlayerPageGraph();
+      });
+      section.appendChild(showMoreBtn);
+    }
+
+    return section;
   }
 
   // A small standalone "rating over time" chart, appended after the main
