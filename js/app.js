@@ -14572,10 +14572,13 @@
   // Points per average dominance ratio across a player's wins - rewards
   // winning by a wide margin (opponent barely got started), not just
   // winning. The ratio is 0-1 (see averageDominanceRatio), so this
-  // multiplies up to a comparable scale to the other terms; a player
-  // who empties the rack on every win (ratio 1.0) gets the full weight,
-  // typical dominant wins land well under it.
-  var LEADERBOARD_DOMINANCE_WEIGHT = 15;
+  // multiplies up to the term's max at ratio 1.0 (emptying the rack
+  // every win); typical dominant wins land well under it. Deliberately
+  // the smallest-influence term of the six per request (win rate,
+  // rating, games played, skunks, run, THEN dominance) - lower than
+  // LEADERBOARD_RUN_BONUS_MAX below, since a run of skilled shooting is
+  // judged a bigger deal than a lopsided final score.
+  var LEADERBOARD_DOMINANCE_WEIGHT = 5;
   // Points per skunk win (opponent potted zero balls) - deliberately
   // small (both this and dominance are "style" bonuses on top of a win,
   // not primary drivers like win rate/rating). Unlike win rate (capped
@@ -14589,9 +14592,14 @@
   // reaches this length - a 2-3 ball run is unremarkable, 5+ is the
   // threshold worth rewarding. Points scale with how far past it a
   // player's best run goes (a 5-run is worth one unit, a 10-run six),
-  // not just a flat bonus for clearing the bar.
+  // not just a flat bonus for clearing the bar - but capped at
+  // LEADERBOARD_RUN_BONUS_MAX so one exceptional outlier run can't ever
+  // swamp win rate/rating/activity/skunks the way an uncapped version
+  // of this term could (a 30-ball run used to add 52 points outright,
+  // comfortably beating a max-possible rating term of 45).
   var LEADERBOARD_RUN_BONUS_MIN = 5;
   var LEADERBOARD_RUN_WEIGHT = 2;
+  var LEADERBOARD_RUN_BONUS_MAX = 8;
 
   // How many balls are actually in play for a given game type - the
   // scale "balls left on the table" is relative TO. Only game types
@@ -14661,7 +14669,7 @@
     var skunkTerm = entry.skunkWins * LEADERBOARD_SKUNK_WIN_WEIGHT;
     var runTerm =
       entry.bestRun >= LEADERBOARD_RUN_BONUS_MIN
-        ? (entry.bestRun - (LEADERBOARD_RUN_BONUS_MIN - 1)) * LEADERBOARD_RUN_WEIGHT
+        ? Math.min((entry.bestRun - (LEADERBOARD_RUN_BONUS_MIN - 1)) * LEADERBOARD_RUN_WEIGHT, LEADERBOARD_RUN_BONUS_MAX)
         : 0;
     var activityTerm = Math.log2(entry.gamesPlayed) * 2;
     return {
