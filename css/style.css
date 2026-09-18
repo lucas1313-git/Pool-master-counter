@@ -1064,16 +1064,6 @@ button:disabled {
   margin-bottom: 0;
 }
 
-/* Undo Last Win is the last row in Current Game, right after a cluster
-   of boxed checkboxes - without this it reads as cramped against both
-   the checkbox above and the panel's own bottom edge. Matches
-   .row:last-child's specificity (class + pseudo-class) so source order
-   settles it instead of needing !important. */
-.row.undo-win-row:last-child {
-  margin-top: 16px;
-  margin-bottom: 4px;
-}
-
 .row label {
   color: var(--text-dim);
   font-size: 0.85rem;
@@ -5373,6 +5363,52 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
 .format-info-btn:hover {
   color: var(--text);
   border-color: var(--text-dim);
+}
+
+/* Groups related Current Session controls into clearly separated boxed
+   blocks (Tournament Setup, Current Game) - same boxed-card language as
+   .tournament-setup-section, just full-width instead of that one's
+   fit-content/40vw sizing (which is specific to the Tournament wizard's
+   side-by-side narrow-column layout, wrong for a single linear panel). */
+.session-subsection {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 14px;
+}
+
+.session-subsection-heading {
+  margin: 0 0 10px;
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--accent);
+}
+
+/* A smaller sub-heading within a .session-subsection (e.g. "Tournament
+   Type" / "Games Rotation" inside "Tournament Setup") - same visual
+   weight as .tournament-section-heading elsewhere. */
+.session-subsection-subheading {
+  margin: 14px 0 8px;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.session-subsection-subheading:first-child {
+  margin-top: 0;
+}
+
+.fair-race-explain-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.fair-race-explain-row .player-stats-note {
+  margin: 0;
 }
 
 /* The shared `select { flex: 1 }` rule makes a dropdown greedily fill

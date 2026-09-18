@@ -1742,6 +1742,7 @@
   var tournamentRaceToInput = document.getElementById("tournament-race-to");
   var tournamentFairRaceCheckbox = document.getElementById("tournament-fair-race-checkbox");
   var btnFairRaceInfo = document.getElementById("btn-fair-race-info");
+  var btnFairRaceInfoSession = document.getElementById("btn-fair-race-info-session");
   var tournamentTableCountInput = document.getElementById("tournament-table-count");
   var tournamentSeedModeRadios = document.getElementsByName("tournament-seed-mode");
   var tournamentFormatInfoOverlay = document.getElementById("tournament-format-info-overlay");
@@ -1800,7 +1801,6 @@
   var timedTournamentPauseToggle = document.getElementById("timed-tournament-pause-toggle");
 
   var btnResetGame = document.getElementById("btn-reset-game");
-  var btnUndoWin = document.getElementById("btn-undo-win");
   var btnShare = document.getElementById("btn-share");
   var btnExportSession = document.getElementById("btn-export-session");
 
@@ -14565,10 +14565,14 @@
   ["pointerdown", "keydown", "touchstart"].forEach(function (evt) {
     document.addEventListener(evt, markUserActivity);
   });
-  // Points per tournament win - deliberately large relative to the other
-  // terms (a rating swing of a full 100 points is only +5) so tournament
-  // success is a genuinely heavy factor, not a tiebreaker.
-  var LEADERBOARD_TOURNAMENT_WIN_WEIGHT = 6;
+  // Points per tournament win - sits right after rating in influence per
+  // request (win rate, rating, tournament wins, games played, skunks,
+  // run, THEN dominance). At 3/win, a single win (3) lands below a
+  // typical rating gap's contribution (ratingTerm = rating/20, so even a
+  // modest ~60-point gap is worth 3+) rather than swamping it outright -
+  // the old weight of 6 meant one win alone beat a full 100-point rating
+  // swing (worth only 5).
+  var LEADERBOARD_TOURNAMENT_WIN_WEIGHT = 3;
   // Points per average dominance ratio across a player's wins - rewards
   // winning by a wide margin (opponent barely got started), not just
   // winning. The ratio is 0-1 (see averageDominanceRatio), so this
@@ -18785,9 +18789,6 @@
   });
 
   btnResetGame.addEventListener("click", resetCurrentGame);
-  btnUndoWin.addEventListener("click", function () {
-    undoLastWin();
-  });
   btnShare.addEventListener("click", shareStandings);
   btnExportSession.addEventListener("click", function () {
     exportSession();
@@ -19335,6 +19336,9 @@
   tournamentPlayerChecklist.addEventListener("input", refreshTournamentTeamUi);
   tournamentTeamsEnabledCheckbox.addEventListener("change", renderTournamentTeamPreview);
   btnFairRaceInfo.addEventListener("click", function () {
+    alertModal(T("tournament.fairRaceExplain"));
+  });
+  btnFairRaceInfoSession.addEventListener("click", function () {
     alertModal(T("tournament.fairRaceExplain"));
   });
 
