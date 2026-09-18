@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260917e">
+<link rel="stylesheet" href="css/style.css?v=20260917f">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -168,7 +168,12 @@
         <span data-i18n="rotation.autoRotate">Rotate game types automatically</span>
       </label>
 
-      <div class="row">
+      <div class="row mode-row">
+        <label><input type="radio" name="race-mode" id="race-mode-raceto" value="raceto" checked> <span data-i18n="gameSetup.raceModeRaceTo">🏁 Race to Wins</span></label>
+        <label><input type="radio" name="race-mode" id="race-mode-single" value="single"> <span data-i18n="gameSetup.raceModeSingle">🎯 Single Game</span></label>
+      </div>
+
+      <div class="row" id="race-to-wins-row">
         <label for="race-to-wins" data-i18n="gameSetup.raceToMilestone">Race-to milestone</label>
         <input type="number" id="race-to-wins" min="1" max="99" value="5">
         <span data-i18n="common.wins">wins</span>
@@ -193,7 +198,6 @@
       <div class="row">
         <button type="button" id="btn-undo-win" class="btn btn-ghost" data-i18n="gameSetup.undoWin">Undo Last Win</button>
         <button type="button" id="btn-share" class="btn btn-ghost" data-i18n="gameSetup.shareStandings">Share Standings</button>
-        <button type="button" id="btn-export-session" class="btn btn-ghost" data-i18n="gameSetup.exportSession">Export Session</button>
       </div>
     </div>
   </section>
@@ -366,6 +370,10 @@
         <button type="button" id="btn-import-all-data" class="btn btn-ghost" data-i18n="backup.importData">Import Data</button>
         <input type="file" id="import-file-input" accept="application/json" class="hidden">
       </div>
+      <div class="row">
+        <button type="button" id="btn-export-session" class="btn btn-ghost" data-i18n="gameSetup.exportSession">Export Session</button>
+      </div>
+      <p class="player-stats-note" data-i18n="backup.exportSessionNote">Just the current live session (players and wins) as its own JSON file - Export All Data above covers everything, including career stats, ratings, and saved lists.</p>
       <div class="row">
         <button type="button" id="btn-export-sync" class="btn btn-primary" data-i18n="backup.syncExport">☁️ Export for iCloud Sync</button>
       </div>
@@ -1391,6 +1399,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260917e"></script>
+<script src="js/app.js?v=20260917f"></script>
 </body>
 </html>

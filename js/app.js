@@ -39,6 +39,11 @@
   // unrelated render.
   var lastScoredPlayerId = null;
 
+  // Remembers the last "Race to Wins" number entered so switching from
+  // Single Game back to Race to Wins restores it, instead of always
+  // landing back on some hardcoded default.
+  var lastRaceToWinsTarget = 5;
+
   // "No Statistic will be recorded" mode — a purely in-memory session with
   // nothing written to localStorage: no state, no PLAYER_STATS, no
   // PLAYER_RATINGS. Never persisted itself (always starts off on reload),
@@ -1740,6 +1745,9 @@
   var gameTargetUnitSelect = document.getElementById("game-target-unit-select");
   var modeRadios = document.getElementsByName("game-mode");
   var raceToWinsInput = document.getElementById("race-to-wins");
+  var raceToWinsRow = document.getElementById("race-to-wins-row");
+  var raceModeRaceToRadio = document.getElementById("race-mode-raceto");
+  var raceModeSingleRadio = document.getElementById("race-mode-single");
   var fairRaceEnabledCheckbox = document.getElementById("fair-race-enabled-checkbox");
   var noStatsCheckbox = document.getElementById("no-stats-checkbox");
   var shotCounterEnabledCheckbox = document.getElementById("shot-counter-enabled-checkbox");
@@ -11118,6 +11126,8 @@
     gameTargetInput.value = state.currentGame.target;
     gameTargetUnitSelect.value = state.currentGame.unit;
     raceToWinsInput.value = state.raceToWinsTarget;
+    if (state.raceToWinsTarget !== 1) lastRaceToWinsTarget = state.raceToWinsTarget;
+    renderRaceMode();
     Array.prototype.forEach.call(modeRadios, function (r) {
       r.checked = r.value === "individual";
     });
@@ -18042,15 +18052,58 @@
     );
   });
 
+  // Keeps the Race to Wins/Single Game radios honest without touching
+  // race-to-wins-row's visibility - that's only ever toggled by an
+  // explicit radio click (see below), never by typing in the number
+  // field itself, so the row can't vanish out from under the user mid-
+  // edit just because they typed "1".
+  function syncRaceModeRadios() {
+    var isSingle = state.raceToWinsTarget === 1;
+    raceModeSingleRadio.checked = isSingle;
+    raceModeRaceToRadio.checked = !isSingle;
+  }
+
+  function renderRaceMode() {
+    syncRaceModeRadios();
+    raceToWinsRow.classList.toggle("hidden", state.raceToWinsTarget === 1);
+  }
+
   raceToWinsInput.addEventListener("input", function () {
     var target = parseInt(raceToWinsInput.value, 10);
     if (!target || target < 1) return;
     state.raceToWinsTarget = target;
+    if (target !== 1) lastRaceToWinsTarget = target;
     // The anchor value just changed - drop the cached fair targets so
     // they're recomputed against it immediately instead of waiting for
     // the active roster to also happen to change.
     state.fairRaceTargets = null;
     saveState();
+    syncRaceModeRadios();
+    renderScoreboard();
+    renderStandings();
+    updateCurrentGameSummary();
+  });
+
+  raceModeSingleRadio.addEventListener("change", function () {
+    if (!raceModeSingleRadio.checked) return;
+    if (state.raceToWinsTarget !== 1) lastRaceToWinsTarget = state.raceToWinsTarget;
+    state.raceToWinsTarget = 1;
+    raceToWinsInput.value = 1;
+    state.fairRaceTargets = null;
+    saveState();
+    renderRaceMode();
+    renderScoreboard();
+    renderStandings();
+    updateCurrentGameSummary();
+  });
+
+  raceModeRaceToRadio.addEventListener("change", function () {
+    if (!raceModeRaceToRadio.checked) return;
+    state.raceToWinsTarget = lastRaceToWinsTarget || 5;
+    raceToWinsInput.value = state.raceToWinsTarget;
+    state.fairRaceTargets = null;
+    saveState();
+    renderRaceMode();
     renderScoreboard();
     renderStandings();
     updateCurrentGameSummary();
@@ -18675,6 +18728,8 @@
   gameTargetInput.value = state.currentGame.target;
   gameTargetUnitSelect.value = state.currentGame.unit;
   raceToWinsInput.value = state.raceToWinsTarget;
+  if (state.raceToWinsTarget !== 1) lastRaceToWinsTarget = state.raceToWinsTarget;
+  renderRaceMode();
   fairRaceEnabledCheckbox.checked = state.fairRaceEnabled;
   Array.prototype.forEach.call(modeRadios, function (radio) {
     radio.checked = radio.value === state.currentGame.mode;
