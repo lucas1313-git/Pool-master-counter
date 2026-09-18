@@ -2174,11 +2174,48 @@
   // member cards numbered in one shared sequence; +/- then adjusts that
   // selected player's score exactly as tapping their own +/- buttons
   // would (same adjustScore call, so wins, team mode, and Quick Counter
-  // all just work as normal). Selection persists across repeated +/-
-  // presses until a different digit is pressed, Escape is pressed, the
-  // selected player stops playing, or the scoreboard isn't the visible
-  // screen (an overlay is open, a text field has focus, or a different
-  // page like Tournament/All Players/Player Stats is showing).
+  // all just work as normal). Enter advances the selection to whoever's
+  // next in that same numbered sequence (wrapping back to #1 after the
+  // last player) - a fast "next player's turn" without having to know
+  // or reach for their specific number. Selection persists across
+  // repeated +/- (or Enter) presses until a different digit is pressed,
+  // Escape is pressed, the selected player stops playing, or the
+  // scoreboard isn't the visible screen (an overlay is open, a text
+  // field has focus, or a different page like Tournament/All Players/
+  // Player Stats is showing).
+  // Shared by the digit shortcut and Enter's "next player" (see
+  // handleKeypadShortcut) - everything that happens on an actual keypad
+  // selection change, regardless of how the target was picked.
+  function selectKeypadPlayer(targetId, keypadNum) {
+    if (!targetId) return;
+    // "The counter should stop when we select the next player" - an
+    // explicit keypad switch away from whoever's on a run stops it
+    // right here, even before the newly-selected player has scored
+    // anything yet (bumpRunForPlayer would only catch it once they do).
+    if (runTrackingApplies() && currentRunPlayerId && currentRunPlayerId !== targetId) {
+      resetCurrentRun();
+    }
+    keypadSelectedPlayerId = targetId;
+    renderScoreboard();
+    // Only during an actual points/ball game - Quick Counter is a
+    // plain running tally with no target/win to track, so there's no
+    // "who am I scoring for right now" state this cue needs to confirm.
+    if (!quickCounterMode) {
+      var switchedTo = getPlayer(targetId);
+      if (switchedTo) playPlayerSwitchSound(switchedTo.voice, keypadNum);
+    }
+    // Focus Mode's across-the-room card sizes mean a big roster (team
+    // play especially) can run well past one screen - the shortcut
+    // just picked a specific player's card by number, not necessarily
+    // one already in view, so jump to the bottom of the page to bring
+    // whichever card that was into view instead of leaving whoever
+    // used the shortcut staring at wherever they happened to be
+    // scrolled to.
+    if (appRoot.classList.contains("focus-mode")) {
+      window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+    }
+  }
+
   function handleKeypadShortcut(e) {
     if (isTypingIntoField(document.activeElement)) return;
     if (isAnyOverlayOpen()) return;
@@ -2197,32 +2234,23 @@
       var targetId = keypadOrderedPlayerIds[keypadNum - 1];
       if (!targetId) return;
       e.preventDefault();
-      // "The counter should stop when we select the next player" - an
-      // explicit keypad switch away from whoever's on a run stops it
-      // right here, even before the newly-selected player has scored
-      // anything yet (bumpRunForPlayer would only catch it once they do).
-      if (runTrackingApplies() && currentRunPlayerId && currentRunPlayerId !== targetId) {
-        resetCurrentRun();
-      }
-      keypadSelectedPlayerId = targetId;
-      renderScoreboard();
-      // Only during an actual points/ball game - Quick Counter is a
-      // plain running tally with no target/win to track, so there's no
-      // "who am I scoring for right now" state this cue needs to confirm.
-      if (!quickCounterMode) {
-        var switchedTo = getPlayer(targetId);
-        if (switchedTo) playPlayerSwitchSound(switchedTo.voice, keypadNum);
-      }
-      // Focus Mode's across-the-room card sizes mean a big roster (team
-      // play especially) can run well past one screen - the shortcut
-      // just picked a specific player's card by number, not necessarily
-      // one already in view, so jump to the bottom of the page to bring
-      // whichever card that was into view instead of leaving whoever
-      // used the shortcut staring at wherever they happened to be
-      // scrolled to.
-      if (appRoot.classList.contains("focus-mode")) {
-        window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
-      }
+      selectKeypadPlayer(targetId, keypadNum);
+      return;
+    }
+
+    // Numberpad Enter - keypadOrderedPlayerIds is refreshed after every
+    // render (see refreshKeypadNumbering), so it's always this device's
+    // current on-screen player order; advancing through it by one each
+    // Enter press is what "switch focus to the next player" means in
+    // practice. Wraps back to #1 after the last player, and starts at
+    // #1 if nobody's selected yet (keypadSelectedPlayerId's index comes
+    // back -1, and -1 + 1 wraps to 0 via the modulo below).
+    if (e.key === "Enter") {
+      if (keypadOrderedPlayerIds.length === 0) return;
+      e.preventDefault();
+      var currentIdx = keypadSelectedPlayerId ? keypadOrderedPlayerIds.indexOf(keypadSelectedPlayerId) : -1;
+      var nextIdx = (currentIdx + 1) % keypadOrderedPlayerIds.length;
+      selectKeypadPlayer(keypadOrderedPlayerIds[nextIdx], nextIdx + 1);
       return;
     }
 
