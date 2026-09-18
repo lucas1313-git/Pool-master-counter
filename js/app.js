@@ -10882,6 +10882,15 @@
     return label;
   }
 
+  // setup.label is always the auto-generated configuration summary
+  // (recomputed at save time, never edited); setup.name is the optional
+  // custom title from the Manage Saved Setups dialog. Everywhere a saved
+  // setup is shown to the user, the name (when set) leads and the
+  // auto-summary follows for context, instead of replacing it outright.
+  function gameSetupDisplayLabel(setup) {
+    return setup.name ? setup.name + " — " + setup.label : setup.label;
+  }
+
   function gameSetupsEqual(a, b) {
     return (
       a.gameType === b.gameType &&
@@ -10921,7 +10930,7 @@
     SAVED_GAME_SETUPS.forEach(function (s, i) {
       var o = document.createElement("option");
       o.value = String(i);
-      o.textContent = s.label;
+      o.textContent = gameSetupDisplayLabel(s);
       gameSetupLoadSelect.appendChild(o);
     });
   }
@@ -10949,17 +10958,48 @@
     SAVED_GAME_SETUPS.forEach(function (s) {
       var li = document.createElement("li");
       li.className = "game-setup-manage-row";
-      var label = document.createElement("label");
+
+      var checkboxLabel = document.createElement("label");
+      checkboxLabel.className = "game-setup-manage-checkbox-wrap";
       var checkbox = document.createElement("input");
       checkbox.type = "checkbox";
       checkbox.value = s.id;
-      var span = document.createElement("span");
-      span.textContent = s.label;
-      label.appendChild(checkbox);
-      label.appendChild(span);
-      li.appendChild(label);
+      checkboxLabel.appendChild(checkbox);
+      li.appendChild(checkboxLabel);
+
+      var info = document.createElement("div");
+      info.className = "game-setup-manage-info";
+
+      var nameInput = document.createElement("input");
+      nameInput.type = "text";
+      nameInput.className = "game-setup-manage-name-input";
+      nameInput.dataset.id = s.id;
+      nameInput.placeholder = T("gameSetup.manageSetupsNamePlaceholder");
+      nameInput.value = s.name || "";
+      nameInput.setAttribute("aria-label", T("gameSetup.manageSetupsNameAria"));
+      info.appendChild(nameInput);
+
+      var detail = document.createElement("span");
+      detail.className = "game-setup-manage-detail";
+      detail.textContent = s.label;
+      info.appendChild(detail);
+
+      li.appendChild(info);
       gameSetupManageList.appendChild(li);
     });
+  }
+
+  // A blank name just clears the field back to the auto-generated label
+  // everywhere it's shown, same as it always was - a custom name isn't
+  // required, only offered.
+  function renameSavedGameSetup(id, name) {
+    var setup = SAVED_GAME_SETUPS.filter(function (s) { return s.id === id; })[0];
+    if (!setup) return;
+    var trimmed = (name || "").trim();
+    if (trimmed) setup.name = trimmed;
+    else delete setup.name;
+    saveGameSetupsToStorage(SAVED_GAME_SETUPS);
+    populateGameSetupLoadSelect();
   }
 
   function updateGameSetupManageDeleteState() {
@@ -11054,7 +11094,7 @@
     applyRotationIfDue();
     renderAll();
     updateCurrentGameSummary();
-    showToast(T("toast.loadedGameSetup", { label: setup.label }));
+    showToast(T("toast.loadedGameSetup", { label: gameSetupDisplayLabel(setup) }));
   }
 
   // Silent auto-snapshot, same convention as saveRotationSnapshotIfNew -
@@ -19010,6 +19050,10 @@
     if (e.target === gameSetupManageOverlay) closeGameSetupManageModal();
   });
   gameSetupManageList.addEventListener("change", function (e) {
+    if (e.target.classList.contains("game-setup-manage-name-input")) {
+      renameSavedGameSetup(e.target.dataset.id, e.target.value);
+      return;
+    }
     if (e.target.type !== "checkbox") return;
     updateGameSetupManageDeleteState();
   });

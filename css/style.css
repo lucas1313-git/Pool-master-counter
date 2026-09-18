@@ -3292,25 +3292,52 @@ input[type="number"] {
 }
 
 .game-setup-manage-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 8px 10px;
+  padding: 10px;
 }
 
-.game-setup-manage-row label {
+.game-setup-manage-checkbox-wrap {
   display: flex;
   align-items: center;
-  gap: 10px;
+  /* Matches the name input's own min-height so the checkbox lines up
+     with it at the top of the row instead of the row's full (taller,
+     once the detail line wraps) height. */
+  height: 44px;
   cursor: pointer;
-  font-size: 0.9rem;
+  flex-shrink: 0;
 }
 
-.game-setup-manage-row input {
+.game-setup-manage-checkbox-wrap input {
   width: 20px;
   height: 20px;
   accent-color: var(--accent);
   flex-shrink: 0;
+}
+
+.game-setup-manage-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+/* The custom title (e.g. "Thursday game") a saved setup can be given -
+   optional, so it looks like a normal text field rather than a required
+   one until something's actually typed into it. */
+.game-setup-manage-name-input {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.game-setup-manage-detail {
+  font-size: 0.8rem;
+  color: var(--text-dim);
 }
 
 /* ---------- Delete by Dates ---------- */
