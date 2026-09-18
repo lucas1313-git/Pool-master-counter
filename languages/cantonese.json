@@ -54,7 +54,7 @@
   "allPlayers.winRate": "勝率 {{pct}}%",
   "backup.exportAll": "匯出所有資料",
   "backup.exportFilenamePrompt": "幫呢個備份檔案改個名：",
-  "backup.exportSessionNote": "淨係而家嘅live場次（球員同勝場）自己一個JSON檔——上面嘅匯出所有資料就包晒晒，career stats、rating同埋已save嘅名單都有。",
+  "backup.exportSessionNote": "淨係而家嘅live場次（球員同勝場）自己一個JSON檔,或者一段文字撮要嚟share——上面嘅匯出所有資料就包晒晒，career stats、rating同埋已save嘅名單都有。",
   "backup.heading": "備份與轉移",
   "backup.importData": "匯入資料",
   "backup.note": "所有統計同對局資料只存放喺呢部裝置度。匯出備份檔就可以將所有嘢搬去另一部 iPhone、iPad 或電腦。",

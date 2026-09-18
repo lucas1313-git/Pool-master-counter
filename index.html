@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260917f">
+<link rel="stylesheet" href="css/style.css?v=20260917g">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -118,7 +118,7 @@
     <p class="panel-summary" id="rotation-panel-summary"></p>
     <div class="panel-body" id="rotation-panel-body">
       <div class="row">
-        <label class="checkbox-row rotation-toggle-checkbox"><input type="checkbox" id="rotation-enabled"> <span data-i18n="rotation.autoRotate">Rotate game types automatically</span></label>
+        <label class="checkbox-row checkbox-row-prominent"><input type="checkbox" id="rotation-enabled"> <span data-i18n="rotation.autoRotate">Rotate game types automatically</span></label>
       </div>
       <div class="row">
         <select id="rotation-load-select"></select>
@@ -163,7 +163,7 @@
         </select>
       </div>
 
-      <label class="checkbox-row rotation-toggle-checkbox">
+      <label class="checkbox-row checkbox-row-prominent">
         <input type="checkbox" id="game-setup-rotation-enabled">
         <span data-i18n="rotation.autoRotate">Rotate game types automatically</span>
       </label>
@@ -179,12 +179,12 @@
         <span data-i18n="common.wins">wins</span>
       </div>
 
-      <label class="checkbox-row">
+      <label class="checkbox-row checkbox-row-prominent">
         <input type="checkbox" id="fair-race-enabled-checkbox">
         <span data-i18n="gameSetup.fairRaceEnable">⚖️ Use Fargo rating to balance the race</span>
       </label>
 
-      <label class="checkbox-row">
+      <label class="checkbox-row checkbox-row-prominent">
         <input type="checkbox" id="shot-counter-enabled-checkbox">
         <span data-i18n="gameSetup.shotCounterEnable">⏱️ Shot counter</span>
       </label>
@@ -197,7 +197,6 @@
 
       <div class="row">
         <button type="button" id="btn-undo-win" class="btn btn-ghost" data-i18n="gameSetup.undoWin">Undo Last Win</button>
-        <button type="button" id="btn-share" class="btn btn-ghost" data-i18n="gameSetup.shareStandings">Share Standings</button>
       </div>
     </div>
   </section>
@@ -372,8 +371,9 @@
       </div>
       <div class="row">
         <button type="button" id="btn-export-session" class="btn btn-ghost" data-i18n="gameSetup.exportSession">Export Session</button>
+        <button type="button" id="btn-share" class="btn btn-ghost" data-i18n="gameSetup.shareStandings">Share Standings</button>
       </div>
-      <p class="player-stats-note" data-i18n="backup.exportSessionNote">Just the current live session (players and wins) as its own JSON file - Export All Data above covers everything, including career stats, ratings, and saved lists.</p>
+      <p class="player-stats-note" data-i18n="backup.exportSessionNote">Just the current live session (players and wins) as its own JSON file or a text summary to share - Export All Data above covers everything, including career stats, ratings, and saved lists.</p>
       <div class="row">
         <button type="button" id="btn-export-sync" class="btn btn-primary" data-i18n="backup.syncExport">☁️ Export for iCloud Sync</button>
       </div>
@@ -1399,6 +1399,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260917f"></script>
+<script src="js/app.js?v=20260917g"></script>
 </body>
 </html>

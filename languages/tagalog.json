@@ -54,7 +54,7 @@
   "allPlayers.winRate": "{{pct}}% win rate",
   "backup.exportAll": "I-export Lahat ng Data",
   "backup.exportFilenamePrompt": "Pangalanan ang backup file na ito:",
-  "backup.exportSessionNote": "Ang kasalukuyang live session lang (mga manlalaro at panalo) bilang sarili nitong JSON file - sakop na ng Export All Data sa itaas ang lahat, kasama ang career stats, ratings, at naka-save na listahan.",
+  "backup.exportSessionNote": "Ang kasalukuyang live session lang (mga manlalaro at panalo) bilang sarili nitong JSON file o isang buod na text para i-share - sakop na ng Export All Data sa itaas ang lahat, kasama ang career stats, ratings, at naka-save na listahan.",
   "backup.heading": "Backup at Paglipat",
   "backup.importData": "I-import ang Data",
   "backup.note": "Ang lahat ng stats at session data ay nasa device na ito lang. Mag-export ng backup file para ilipat ang lahat sa ibang iPhone, iPad, o computer.",

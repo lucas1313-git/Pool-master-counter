@@ -54,7 +54,7 @@
   "allPlayers.winRate": "{{pct}}% win rate",
   "backup.exportAll": "Export All Data",
   "backup.exportFilenamePrompt": "Name this backup file:",
-  "backup.exportSessionNote": "Just the current live session (players and wins) as its own JSON file - Export All Data above covers everything, including career stats, ratings, and saved lists.",
+  "backup.exportSessionNote": "Just the current live session (players and wins) as its own JSON file or a text summary to share - Export All Data above covers everything, including career stats, ratings, and saved lists.",
   "backup.heading": "Backup & Transfer",
   "backup.importData": "Import Data",
   "backup.note": "All stats and session data live on this device only. Export a backup file to move everything to another iPhone, iPad, or computer.",

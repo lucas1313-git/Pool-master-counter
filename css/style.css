@@ -1136,12 +1136,13 @@ input[type="number"] {
   flex: 0 0 auto;
 }
 
-/* "Rotate game types automatically" is an easy-to-miss dim checkbox row
-   otherwise - a boxed, bold, accent-highlighted toggle (matching the
-   Individual/Teams treatment above) makes on/off obvious at a glance.
-   Shared class, not an id, since this toggle appears twice - once in
-   Games Rotations, once (a synced mirror) in Current Game. */
-.checkbox-row.rotation-toggle-checkbox {
+/* An easy-to-miss dim checkbox row otherwise - a boxed, bold, accent-
+   highlighted toggle (matching the Individual/Teams treatment above)
+   makes on/off obvious at a glance. Shared class since it's used on
+   several important settings toggles (rotation - which appears twice,
+   once in Games Rotations and once as a synced mirror in Current Game -
+   plus Fargo balancing and the shot counter). */
+.checkbox-row.checkbox-row-prominent {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -1151,13 +1152,13 @@ input[type="number"] {
   color: var(--text);
 }
 
-.checkbox-row.rotation-toggle-checkbox:has(input:checked) {
+.checkbox-row.checkbox-row-prominent:has(input:checked) {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 16%, var(--bg-card));
   color: var(--accent);
 }
 
-.checkbox-row.rotation-toggle-checkbox input[type="checkbox"] {
+.checkbox-row.checkbox-row-prominent input[type="checkbox"] {
   width: 24px;
   height: 24px;
 }

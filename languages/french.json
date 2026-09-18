@@ -54,7 +54,7 @@
   "allPlayers.winRate": "{{pct}} % de victoires",
   "backup.exportAll": "Exporter toutes les données",
   "backup.exportFilenamePrompt": "Nommez ce fichier de sauvegarde :",
-  "backup.exportSessionNote": "Juste la session en direct actuelle (joueurs et victoires) comme son propre fichier JSON - Exporter Toutes les Données ci-dessus couvre tout, y compris les statistiques de carrière, les classements et les listes enregistrées.",
+  "backup.exportSessionNote": "Juste la session en direct actuelle (joueurs et victoires) comme son propre fichier JSON ou un résumé texte à partager - Exporter Toutes les Données ci-dessus couvre tout, y compris les statistiques de carrière, les classements et les listes enregistrées.",
   "backup.heading": "Sauvegarde et transfert",
   "backup.importData": "Importer des données",
   "backup.note": "Toutes les statistiques et données de session ne vivent que sur cet appareil. Exportez un fichier de sauvegarde pour tout transférer vers un autre iPhone, iPad ou ordinateur.",
