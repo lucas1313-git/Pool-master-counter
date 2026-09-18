@@ -1155,6 +1155,19 @@ input[type="number"] {
   flex: 0 0 auto;
 }
 
+/* Race-to milestone and Ends-after-minutes sit right under the
+   Race to Wins / Timed Tournament pair above them - same flex basis as
+   .mode-row label so each settings column lines up with its control
+   instead of stacking as two separate full-width rows. */
+.settings-col {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex: 1;
+  min-width: 140px;
+}
+
 .checkbox-row {
   display: flex;
   align-items: center;
@@ -4594,6 +4607,14 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   font-weight: 800;
   padding: 14px 28px;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+/* The top copy sits alone between the banner and the view toggle - as a
+   plain inline-block button it defaults to the left edge instead of
+   reading as centered on the page like everything around it. */
+#btn-leaderboard-play-top {
+  display: block;
+  margin: 0 auto 16px;
 }
 
 .leaderboard-share-btn {

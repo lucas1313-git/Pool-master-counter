@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260918g">
+<link rel="stylesheet" href="css/style.css?v=20260918h">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -168,15 +168,17 @@
             <span data-i18n="gameSetup.timedTournamentEnable">⏰ Timed Tournament</span>
           </label>
         </div>
-        <div class="row" id="race-to-wins-row">
-          <label for="race-to-wins" data-i18n="gameSetup.raceToMilestone">Race-to milestone</label>
-          <input type="number" id="race-to-wins" min="1" max="99" value="5">
-          <span data-i18n="common.wins">wins</span>
-        </div>
-        <div class="row hidden" id="timed-tournament-minutes-row">
-          <label for="timed-tournament-minutes-input" data-i18n="gameSetup.timedTournamentEndsAfter">Ends after</label>
-          <input type="number" id="timed-tournament-minutes-input" min="1" max="600" value="60">
-          <span data-i18n="common.minutes">minutes</span>
+        <div class="row settings-row">
+          <div class="settings-col" id="race-to-wins-row">
+            <label for="race-to-wins" data-i18n="gameSetup.raceToMilestone">Race-to milestone</label>
+            <input type="number" id="race-to-wins" min="1" max="99" value="5">
+            <span data-i18n="common.wins">wins</span>
+          </div>
+          <div class="settings-col hidden" id="timed-tournament-minutes-row">
+            <label for="timed-tournament-minutes-input" data-i18n="gameSetup.timedTournamentEndsAfter">Ends after</label>
+            <input type="number" id="timed-tournament-minutes-input" min="1" max="600" value="60">
+            <span data-i18n="common.minutes">minutes</span>
+          </div>
         </div>
 
         <h4 class="session-subsection-subheading" data-i18n="gameSetup.gamesRotationHeading">Games Rotation</h4>
@@ -1428,6 +1430,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260918g"></script>
+<script src="js/app.js?v=20260918h"></script>
 </body>
 </html>
