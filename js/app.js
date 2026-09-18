@@ -1781,6 +1781,12 @@
 
   var gameSetupLoadSelect = document.getElementById("game-setup-load-select");
   var btnGameSetupLoad = document.getElementById("btn-game-setup-load");
+  var btnGameSetupManage = document.getElementById("btn-game-setup-manage");
+  var gameSetupManageOverlay = document.getElementById("game-setup-manage-overlay");
+  var gameSetupManageList = document.getElementById("game-setup-manage-list");
+  var gameSetupManageSelectAllCheckbox = document.getElementById("game-setup-manage-select-all-checkbox");
+  var btnGameSetupManageDelete = document.getElementById("btn-game-setup-manage-delete");
+  var btnGameSetupManageCancel = document.getElementById("btn-game-setup-manage-cancel");
   var gameTypeSelect = document.getElementById("game-type");
   var gameTargetInput = document.getElementById("game-target");
   var gameTargetUnitSelect = document.getElementById("game-target-unit-select");
@@ -10906,15 +10912,87 @@
       gameSetupLoadSelect.appendChild(opt);
       gameSetupLoadSelect.disabled = true;
       btnGameSetupLoad.disabled = true;
+      btnGameSetupManage.disabled = true;
       return;
     }
     gameSetupLoadSelect.disabled = false;
     btnGameSetupLoad.disabled = false;
+    btnGameSetupManage.disabled = false;
     SAVED_GAME_SETUPS.forEach(function (s, i) {
       var o = document.createElement("option");
       o.value = String(i);
       o.textContent = s.label;
       gameSetupLoadSelect.appendChild(o);
+    });
+  }
+
+  // ---------------------------------------------------------------------
+  // Manage Saved Setups modal - a checklist of every saved game setup with
+  // a Select All master checkbox up top and a Delete Selected button,
+  // for bulk cleanup of a list that (by design) grows silently over time
+  // via saveGameSetupSnapshotIfNew with no explicit save step to gate it.
+  // ---------------------------------------------------------------------
+
+  function gameSetupManageCheckboxes() {
+    return Array.prototype.slice.call(gameSetupManageList.querySelectorAll('input[type="checkbox"]'));
+  }
+
+  function renderGameSetupManageList() {
+    gameSetupManageList.innerHTML = "";
+    if (SAVED_GAME_SETUPS.length === 0) {
+      var hint = document.createElement("li");
+      hint.className = "empty-hint";
+      hint.textContent = T("gameSetup.noSavedSetupsYet");
+      gameSetupManageList.appendChild(hint);
+      return;
+    }
+    SAVED_GAME_SETUPS.forEach(function (s) {
+      var li = document.createElement("li");
+      li.className = "game-setup-manage-row";
+      var label = document.createElement("label");
+      var checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.value = s.id;
+      var span = document.createElement("span");
+      span.textContent = s.label;
+      label.appendChild(checkbox);
+      label.appendChild(span);
+      li.appendChild(label);
+      gameSetupManageList.appendChild(li);
+    });
+  }
+
+  function updateGameSetupManageDeleteState() {
+    var boxes = gameSetupManageCheckboxes();
+    var checkedCount = boxes.filter(function (cb) { return cb.checked; }).length;
+    btnGameSetupManageDelete.disabled = checkedCount === 0;
+    gameSetupManageSelectAllCheckbox.checked = boxes.length > 0 && checkedCount === boxes.length;
+  }
+
+  function openGameSetupManageModal() {
+    gameSetupManageSelectAllCheckbox.checked = false;
+    renderGameSetupManageList();
+    updateGameSetupManageDeleteState();
+    gameSetupManageOverlay.classList.remove("hidden");
+  }
+
+  function closeGameSetupManageModal() {
+    gameSetupManageOverlay.classList.add("hidden");
+  }
+
+  function confirmDeleteSelectedGameSetups() {
+    var ids = gameSetupManageCheckboxes()
+      .filter(function (cb) { return cb.checked; })
+      .map(function (cb) { return cb.value; });
+    if (!ids.length) return;
+    confirmModal(T("gameSetup.manageSetupsConfirmDelete", { count: ids.length }), function () {
+      var idSet = {};
+      ids.forEach(function (id) { idSet[id] = true; });
+      SAVED_GAME_SETUPS = SAVED_GAME_SETUPS.filter(function (s) { return !idSet[s.id]; });
+      saveGameSetupsToStorage(SAVED_GAME_SETUPS);
+      populateGameSetupLoadSelect();
+      closeGameSetupManageModal();
+      showToast(T("toast.deletedGameSetups", { count: ids.length }));
     });
   }
 
@@ -18925,6 +19003,23 @@
   btnRosterLoad.addEventListener("click", loadSelectedRoster);
   btnRotationLoad.addEventListener("click", loadSelectedRotation);
   btnGameSetupLoad.addEventListener("click", loadSelectedGameSetup);
+  btnGameSetupManage.addEventListener("click", openGameSetupManageModal);
+  btnGameSetupManageCancel.addEventListener("click", closeGameSetupManageModal);
+  btnGameSetupManageDelete.addEventListener("click", confirmDeleteSelectedGameSetups);
+  gameSetupManageOverlay.addEventListener("click", function (e) {
+    if (e.target === gameSetupManageOverlay) closeGameSetupManageModal();
+  });
+  gameSetupManageList.addEventListener("change", function (e) {
+    if (e.target.type !== "checkbox") return;
+    updateGameSetupManageDeleteState();
+  });
+  gameSetupManageSelectAllCheckbox.addEventListener("change", function () {
+    var checked = gameSetupManageSelectAllCheckbox.checked;
+    gameSetupManageCheckboxes().forEach(function (cb) {
+      cb.checked = checked;
+    });
+    updateGameSetupManageDeleteState();
+  });
 
   btnOpenHelpButtons.forEach(function (btn) {
     if (btn) btn.addEventListener("click", openHelp);
