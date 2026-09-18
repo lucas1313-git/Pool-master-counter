@@ -1740,6 +1740,8 @@
   var tournamentSwissStandingsEl = document.getElementById("tournament-swiss-standings");
   var tournamentSwissMatchesEl = document.getElementById("tournament-swiss-matches");
 
+  var gameSetupLoadSelect = document.getElementById("game-setup-load-select");
+  var btnGameSetupLoad = document.getElementById("btn-game-setup-load");
   var gameTypeSelect = document.getElementById("game-type");
   var gameTargetInput = document.getElementById("game-target");
   var gameTargetUnitSelect = document.getElementById("game-target-unit-select");
@@ -2577,6 +2579,7 @@
     });
     saveState();
     saveRotationSnapshotIfNew(true);
+    saveGameSetupSnapshotIfNew();
     applyRotationIfDue();
     renderRotation();
     renderScoreboard();
@@ -2587,6 +2590,7 @@
     state.rotation.order.splice(index, 1);
     saveState();
     saveRotationSnapshotIfNew(true);
+    saveGameSetupSnapshotIfNew();
     applyRotationIfDue();
     renderRotation();
     renderScoreboard();
@@ -2602,6 +2606,7 @@
     arr[newIndex] = tmp;
     saveState();
     saveRotationSnapshotIfNew(true);
+    saveGameSetupSnapshotIfNew();
     applyRotationIfDue();
     renderRotation();
     renderScoreboard();
@@ -2618,6 +2623,7 @@
     if (typeof changes.unit === "string") entry.unit = changes.unit;
     saveState();
     saveRotationSnapshotIfNew(true);
+    saveGameSetupSnapshotIfNew();
     applyRotationIfDue();
     renderRotation();
     renderScoreboard();
@@ -4174,6 +4180,7 @@
     }
     state.gamesPlayedCount += 1;
     saveRotationSnapshotIfNew(true);
+    saveGameSetupSnapshotIfNew();
     var previousGameType = state.currentGame.gameType;
     var previousTarget = state.currentGame.target;
     var previousUnit = state.currentGame.unit;
@@ -7073,6 +7080,7 @@
 
   var ROSTERS_KEY = "poolMasterCounter.rosters.v1";
   var ROTATIONS_KEY = "poolMasterCounter.rotations.v1";
+  var GAME_SETUPS_KEY = "poolMasterCounter.gameSetups.v1";
   var PLAYER_STATS_KEY = "poolMasterCounter.playerStats.v1";
   var RATINGS_KEY = "poolMasterCounter.ratings.v1";
   var PLAYER_ADDED_KEY = "poolMasterCounter.playerAdded.v1";
@@ -7178,6 +7186,25 @@
       localStorage.setItem(ROTATIONS_KEY, JSON.stringify(rotations));
     } catch (e) {
       console.warn("Could not save rotations.", e);
+    }
+  }
+
+  function loadGameSetupsFromStorage() {
+    try {
+      var raw = localStorage.getItem(GAME_SETUPS_KEY);
+      var parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function saveGameSetupsToStorage(setups) {
+    if (noStatsMode) return;
+    try {
+      localStorage.setItem(GAME_SETUPS_KEY, JSON.stringify(setups));
+    } catch (e) {
+      console.warn("Could not save game setups.", e);
     }
   }
 
@@ -10540,6 +10567,168 @@
     populateRotationLoadSelect();
     populateWizardRotationLoadSelect();
     if (!silent) showToast(T("toast.savedRotation", { label: entry.label }));
+    return true;
+  }
+
+  // ---------------------------------------------------------------------
+  // Game Setup presets - the FULL "how this table is configured" bundle
+  // (game type/target/unit, Individual vs Teams, Race to Wins vs Single
+  // Game, the rotation lineup, fair race, shot counter), as one loadable
+  // entry - broader than SAVED_ROTATIONS above, which only remembers the
+  // rotation lineup by itself. Same silent-auto-snapshot convention as
+  // rotations/roster lists: nothing to name or explicitly save, it just
+  // captures whatever's actually in play (see the saveGameSetupSnapshot
+  // IfNew() call sites) the moment it's a genuinely new combination.
+  // ---------------------------------------------------------------------
+
+  var SAVED_GAME_SETUPS = loadGameSetupsFromStorage();
+
+  function currentGameSetupSnapshotData() {
+    return {
+      gameType: state.currentGame.gameType,
+      target: state.currentGame.target,
+      unit: state.currentGame.unit,
+      mode: state.currentGame.mode,
+      raceToWinsTarget: state.raceToWinsTarget,
+      rotation: {
+        enabled: !!state.rotation.enabled,
+        order: state.rotation.order.map(function (e) {
+          return { gameType: e.gameType, target: e.target, unit: e.unit };
+        }),
+        every: state.rotation.every || 1
+      },
+      fairRaceEnabled: !!state.fairRaceEnabled,
+      shotCounterEnabled: !!state.currentGame.shotCounterEnabled,
+      shotCounterBeepSec: state.currentGame.shotCounterBeepSec
+    };
+  }
+
+  function gameSetupLabelFor(setup) {
+    var type = GAME_TYPES[setup.gameType];
+    var modeLabel = setup.mode === "teams" ? T("gameSetup.teams") : T("gameSetup.individual");
+    var raceLabel = setup.raceToWinsTarget === 1 ? T("gameSetup.raceModeSingle") : T("gameSetup.raceModeRaceTo") + " " + setup.raceToWinsTarget;
+    var label =
+      (type ? type.label : setup.gameType) +
+      " (" + setup.target + " " + unitLabel(setup.unit) + ") · " +
+      modeLabel + " · " + raceLabel;
+    if (setup.rotation.enabled && setup.rotation.order.length > 1) {
+      label += " · " + T("rotation.heading") + ": " + rotationLabelFor(setup.rotation.order);
+    }
+    return label;
+  }
+
+  function gameSetupsEqual(a, b) {
+    return (
+      a.gameType === b.gameType &&
+      a.target === b.target &&
+      a.unit === b.unit &&
+      a.mode === b.mode &&
+      a.raceToWinsTarget === b.raceToWinsTarget &&
+      a.fairRaceEnabled === b.fairRaceEnabled &&
+      a.shotCounterEnabled === b.shotCounterEnabled &&
+      a.shotCounterBeepSec === b.shotCounterBeepSec &&
+      a.rotation.enabled === b.rotation.enabled &&
+      a.rotation.every === b.rotation.every &&
+      a.rotation.order.length === b.rotation.order.length &&
+      a.rotation.order.every(function (e, i) {
+        return rotationEntriesEqual(e, b.rotation.order[i]);
+      })
+    );
+  }
+
+  function populateGameSetupLoadSelect() {
+    gameSetupLoadSelect.innerHTML = "";
+    if (SAVED_GAME_SETUPS.length === 0) {
+      var opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = T("gameSetup.noSavedSetupsYet");
+      gameSetupLoadSelect.appendChild(opt);
+      gameSetupLoadSelect.disabled = true;
+      btnGameSetupLoad.disabled = true;
+      return;
+    }
+    gameSetupLoadSelect.disabled = false;
+    btnGameSetupLoad.disabled = false;
+    SAVED_GAME_SETUPS.forEach(function (s, i) {
+      var o = document.createElement("option");
+      o.value = String(i);
+      o.textContent = s.label;
+      gameSetupLoadSelect.appendChild(o);
+    });
+  }
+
+  // Replaces every field the snapshot covers outright, same as
+  // loadRotationEntry - a saved setup is a whole table configuration to
+  // switch to, not something to merge piece by piece.
+  function loadGameSetupEntry(setup) {
+    if (!setup) return;
+    state.currentGame.gameType = setup.gameType;
+    state.currentGame.target = setup.target;
+    state.currentGame.unit = setup.unit;
+    state.currentGame.mode = setup.mode;
+    state.currentGame.shotCounterEnabled = setup.shotCounterEnabled;
+    state.currentGame.shotCounterBeepSec = setup.shotCounterBeepSec;
+    state.raceToWinsTarget = setup.raceToWinsTarget;
+    if (setup.raceToWinsTarget !== 1) lastRaceToWinsTarget = setup.raceToWinsTarget;
+    state.rotation = {
+      enabled: !!setup.rotation.enabled,
+      order: setup.rotation.order.map(function (e) {
+        return { gameType: e.gameType, target: e.target, unit: e.unit };
+      }),
+      every: setup.rotation.every || 1
+    };
+    state.fairRaceEnabled = setup.fairRaceEnabled;
+    state.fairRaceTargets = null;
+    saveState();
+    applyRotationIfDue();
+  }
+
+  function loadSelectedGameSetup() {
+    var idx = parseInt(gameSetupLoadSelect.value, 10);
+    var setup = SAVED_GAME_SETUPS[idx];
+    if (!setup) return;
+    loadGameSetupEntry(setup);
+
+    gameTypeSelect.value = state.currentGame.gameType;
+    gameTargetInput.value = state.currentGame.target;
+    gameTargetUnitSelect.value = state.currentGame.unit;
+    raceToWinsInput.value = state.raceToWinsTarget;
+    raceModeSingleRadio.checked = state.raceToWinsTarget === 1;
+    raceModeRaceToRadio.checked = state.raceToWinsTarget !== 1;
+    raceToWinsRow.classList.toggle("hidden", state.raceToWinsTarget === 1);
+    Array.prototype.forEach.call(modeRadios, function (r) {
+      r.checked = r.value === state.currentGame.mode;
+    });
+    fairRaceEnabledCheckbox.checked = state.fairRaceEnabled;
+    shotCounterEnabledCheckbox.checked = state.currentGame.shotCounterEnabled;
+    shotCounterBeepRow.classList.toggle("hidden", !state.currentGame.shotCounterEnabled);
+    shotCounterBeepInput.value = state.currentGame.shotCounterBeepSec;
+
+    renderRotation();
+    applyRotationIfDue();
+    renderAll();
+    updateCurrentGameSummary();
+    showToast(T("toast.loadedGameSetup", { label: setup.label }));
+  }
+
+  // Silent auto-snapshot, same convention as saveRotationSnapshotIfNew -
+  // called wherever the setup meaningfully changes (see call sites) so a
+  // configuration that's actually been used becomes loadable later
+  // without any explicit "save" step.
+  function saveGameSetupSnapshotIfNew() {
+    if (noStatsMode) return false;
+    var data = currentGameSetupSnapshotData();
+    var alreadySaved = SAVED_GAME_SETUPS.some(function (s) {
+      return gameSetupsEqual(s, data);
+    });
+    if (alreadySaved) return false;
+    var now = new Date().toISOString();
+    data.id = "gamesetup-" + now.replace(/[:.]/g, "-");
+    data.label = gameSetupLabelFor(data);
+    data.savedAt = now;
+    SAVED_GAME_SETUPS = SAVED_GAME_SETUPS.concat([data]);
+    saveGameSetupsToStorage(SAVED_GAME_SETUPS);
+    populateGameSetupLoadSelect();
     return true;
   }
 
@@ -17942,6 +18131,7 @@
     gameTargetInput.value = type.defaultTarget;
     gameTargetUnitSelect.value = type.unit;
     saveState();
+    saveGameSetupSnapshotIfNew();
     renderScoreboard();
     updateCurrentGameSummary();
     tickShotCounter();
@@ -17952,6 +18142,7 @@
     if (!target || target < 1) return;
     state.currentGame.target = target;
     saveState();
+    saveGameSetupSnapshotIfNew();
     renderScoreboard();
     updateCurrentGameSummary();
   });
@@ -17959,6 +18150,7 @@
   gameTargetUnitSelect.addEventListener("change", function () {
     state.currentGame.unit = gameTargetUnitSelect.value;
     saveState();
+    saveGameSetupSnapshotIfNew();
     renderScoreboard();
     updateCurrentGameSummary();
     tickShotCounter();
@@ -17971,6 +18163,7 @@
       state.currentGame.shotCounterHidden = false;
     }
     saveState();
+    saveGameSetupSnapshotIfNew();
     shotCounterBeepRow.classList.toggle("hidden", !shotCounterEnabledCheckbox.checked);
     if (shotCounterEnabledCheckbox.checked) startShotCounter();
     else stopShotCounter();
@@ -17993,6 +18186,7 @@
       if (!radio.checked) return;
       state.currentGame.mode = radio.value;
       saveState();
+      saveGameSetupSnapshotIfNew();
       renderAll();
       updateCurrentGameSummary();
     });
@@ -18078,6 +18272,7 @@
     // the active roster to also happen to change.
     state.fairRaceTargets = null;
     saveState();
+    saveGameSetupSnapshotIfNew();
     syncRaceModeRadios();
     renderScoreboard();
     renderStandings();
@@ -18091,6 +18286,7 @@
     raceToWinsInput.value = 1;
     state.fairRaceTargets = null;
     saveState();
+    saveGameSetupSnapshotIfNew();
     renderRaceMode();
     renderScoreboard();
     renderStandings();
@@ -18103,6 +18299,7 @@
     raceToWinsInput.value = state.raceToWinsTarget;
     state.fairRaceTargets = null;
     saveState();
+    saveGameSetupSnapshotIfNew();
     renderRaceMode();
     renderScoreboard();
     renderStandings();
@@ -18113,6 +18310,7 @@
     state.fairRaceEnabled = fairRaceEnabledCheckbox.checked;
     state.fairRaceTargets = null;
     saveState();
+    saveGameSetupSnapshotIfNew();
     renderScoreboard();
     renderStandings();
     updateCurrentGameSummary();
@@ -18131,6 +18329,7 @@
   rotationEnabledCheckbox.addEventListener("change", function () {
     state.rotation.enabled = rotationEnabledCheckbox.checked;
     saveState();
+    saveGameSetupSnapshotIfNew();
     applyRotationIfDue();
     renderRotation();
     renderScoreboard();
@@ -18143,6 +18342,7 @@
   gameSetupRotationEnabledCheckbox.addEventListener("change", function () {
     state.rotation.enabled = gameSetupRotationEnabledCheckbox.checked;
     saveState();
+    saveGameSetupSnapshotIfNew();
     applyRotationIfDue();
     renderRotation();
     renderScoreboard();
@@ -18257,6 +18457,7 @@
 
   btnRosterLoad.addEventListener("click", loadSelectedRoster);
   btnRotationLoad.addEventListener("click", loadSelectedRotation);
+  btnGameSetupLoad.addEventListener("click", loadSelectedGameSetup);
 
   btnOpenHelpButtons.forEach(function (btn) {
     if (btn) btn.addEventListener("click", openHelp);
@@ -18761,6 +18962,7 @@
 
   populateRosterLoadSelect();
   populateRotationLoadSelect();
+  populateGameSetupLoadSelect();
   populateWizardRosterLoadSelect();
   populateWizardRotationLoadSelect();
   validateNewPlayerNameInput();

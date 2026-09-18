@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260917i">
+<link rel="stylesheet" href="css/style.css?v=20260917k">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -151,6 +151,11 @@
     </button>
     <p class="panel-summary" id="game-setup-panel-summary"></p>
     <div class="panel-body" id="game-setup-panel-body">
+      <div class="row">
+        <select id="game-setup-load-select"></select>
+        <button type="button" id="btn-game-setup-load" class="btn btn-ghost" data-i18n="gameSetup.loadSetup">Load Setup</button>
+      </div>
+
       <div class="row">
         <label for="game-type" data-i18n="gameSetup.game">Game</label>
         <select id="game-type"></select>
@@ -1399,6 +1404,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260917i"></script>
+<script src="js/app.js?v=20260917k"></script>
 </body>
 </html>
