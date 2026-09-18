@@ -1060,6 +1060,16 @@ button:disabled {
   margin-bottom: 0;
 }
 
+/* Undo Last Win is the last row in Current Game, right after a cluster
+   of boxed checkboxes - without this it reads as cramped against both
+   the checkbox above and the panel's own bottom edge. Matches
+   .row:last-child's specificity (class + pseudo-class) so source order
+   settles it instead of needing !important. */
+.row.undo-win-row:last-child {
+  margin-top: 16px;
+  margin-bottom: 4px;
+}
+
 .row label {
   color: var(--text-dim);
   font-size: 0.85rem;
