@@ -755,6 +755,37 @@ body {
   padding-top: 76px;
 }
 
+/* The +/- buttons read the same as everything else above in Focus Mode
+   - scales with the card same as .stat-value, just never shrinks below
+   the normal-mode min-height. */
+#app.focus-mode .btn-ball {
+  min-height: clamp(64px, 7cqw, 90px);
+  font-size: clamp(1.6rem, 3cqw, 2.2rem);
+}
+
+/* The currently keypad-selected player (see keypadSelectedPlayerId) -
+   the one about to receive the next +/-/undo keypress - gets a visibly
+   bigger card (box, fonts, and controls all together, since they're all
+   inside it) in Focus Mode, per request. zoom rather than
+   transform:scale, since zoom's footprint counts in normal layout flow
+   - the grid/flex container around it reflows to make room instead of
+   letting it overlap a neighbor, which is what keeps this "grows if
+   there's space, less if there isn't" with no JS layout math needed.
+   (grid-column:span was tried first so a selected card could claim a
+   second column outright, but it fed back into the cqw-based font
+   sizing above in a circular way - the bigger font made the column
+   demand more space, which warped every other column's width too - so
+   plain zoom on the whole card, letting normal grid/flex reflow handle
+   the rest, is both simpler and the one that's actually stable.) */
+#app.focus-mode .player-panel.is-keypad-selected,
+#app.focus-mode .member-card.is-keypad-selected {
+  zoom: 1.3;
+}
+
+#app.focus-mode .member-card.is-keypad-selected {
+  zoom: 1.3;
+}
+
 .no-stats-row-inline {
   display: flex;
   align-items: center;
