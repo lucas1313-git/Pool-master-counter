@@ -2607,7 +2607,6 @@
     });
     saveState();
     saveRotationSnapshotIfNew(true);
-    saveGameSetupSnapshotIfNew();
     applyRotationIfDue();
     renderRotation();
     renderScoreboard();
@@ -2618,7 +2617,6 @@
     state.rotation.order.splice(index, 1);
     saveState();
     saveRotationSnapshotIfNew(true);
-    saveGameSetupSnapshotIfNew();
     applyRotationIfDue();
     renderRotation();
     renderScoreboard();
@@ -2634,7 +2632,6 @@
     arr[newIndex] = tmp;
     saveState();
     saveRotationSnapshotIfNew(true);
-    saveGameSetupSnapshotIfNew();
     applyRotationIfDue();
     renderRotation();
     renderScoreboard();
@@ -2651,7 +2648,6 @@
     if (typeof changes.unit === "string") entry.unit = changes.unit;
     saveState();
     saveRotationSnapshotIfNew(true);
-    saveGameSetupSnapshotIfNew();
     applyRotationIfDue();
     renderRotation();
     renderScoreboard();
@@ -4208,7 +4204,6 @@
     }
     state.gamesPlayedCount += 1;
     saveRotationSnapshotIfNew(true);
-    saveGameSetupSnapshotIfNew();
     var previousGameType = state.currentGame.gameType;
     var previousTarget = state.currentGame.target;
     var previousUnit = state.currentGame.unit;
@@ -5195,6 +5190,11 @@
     state.gamesPlayedCount = 0;
     resetGameBalls();
     saveState();
+    // "Save the setup only when the game starts" - this is that moment,
+    // both for a manual reset and for the automatic reset right after a
+    // race-to-N win (see celebrateTournamentWin) - not on every field
+    // tweak along the way (see saveGameSetupSnapshotIfNew's own comment).
+    saveGameSetupSnapshotIfNew();
     applyRotationIfDue();
     renderAll();
   }
@@ -18159,7 +18159,6 @@
     gameTargetInput.value = type.defaultTarget;
     gameTargetUnitSelect.value = type.unit;
     saveState();
-    saveGameSetupSnapshotIfNew();
     renderScoreboard();
     updateCurrentGameSummary();
     tickShotCounter();
@@ -18170,7 +18169,6 @@
     if (!target || target < 1) return;
     state.currentGame.target = target;
     saveState();
-    saveGameSetupSnapshotIfNew();
     renderScoreboard();
     updateCurrentGameSummary();
   });
@@ -18178,7 +18176,6 @@
   gameTargetUnitSelect.addEventListener("change", function () {
     state.currentGame.unit = gameTargetUnitSelect.value;
     saveState();
-    saveGameSetupSnapshotIfNew();
     renderScoreboard();
     updateCurrentGameSummary();
     tickShotCounter();
@@ -18191,7 +18188,6 @@
       state.currentGame.shotCounterHidden = false;
     }
     saveState();
-    saveGameSetupSnapshotIfNew();
     shotCounterBeepRow.classList.toggle("hidden", !shotCounterEnabledCheckbox.checked);
     if (shotCounterEnabledCheckbox.checked) startShotCounter();
     else stopShotCounter();
@@ -18214,7 +18210,6 @@
       if (!radio.checked) return;
       state.currentGame.mode = radio.value;
       saveState();
-      saveGameSetupSnapshotIfNew();
       renderAll();
       updateCurrentGameSummary();
     });
@@ -18300,7 +18295,6 @@
     // the active roster to also happen to change.
     state.fairRaceTargets = null;
     saveState();
-    saveGameSetupSnapshotIfNew();
     syncRaceModeRadios();
     renderScoreboard();
     renderStandings();
@@ -18314,7 +18308,6 @@
     raceToWinsInput.value = 1;
     state.fairRaceTargets = null;
     saveState();
-    saveGameSetupSnapshotIfNew();
     renderRaceMode();
     renderScoreboard();
     renderStandings();
@@ -18327,7 +18320,6 @@
     raceToWinsInput.value = state.raceToWinsTarget;
     state.fairRaceTargets = null;
     saveState();
-    saveGameSetupSnapshotIfNew();
     renderRaceMode();
     renderScoreboard();
     renderStandings();
@@ -18338,7 +18330,6 @@
     state.fairRaceEnabled = fairRaceEnabledCheckbox.checked;
     state.fairRaceTargets = null;
     saveState();
-    saveGameSetupSnapshotIfNew();
     renderScoreboard();
     renderStandings();
     updateCurrentGameSummary();
@@ -18357,7 +18348,6 @@
   rotationEnabledCheckbox.addEventListener("change", function () {
     state.rotation.enabled = rotationEnabledCheckbox.checked;
     saveState();
-    saveGameSetupSnapshotIfNew();
     applyRotationIfDue();
     renderRotation();
     renderScoreboard();
@@ -18370,7 +18360,6 @@
   gameSetupRotationEnabledCheckbox.addEventListener("change", function () {
     state.rotation.enabled = gameSetupRotationEnabledCheckbox.checked;
     saveState();
-    saveGameSetupSnapshotIfNew();
     applyRotationIfDue();
     renderRotation();
     renderScoreboard();
