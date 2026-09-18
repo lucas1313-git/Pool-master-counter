@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260918b">
+<link rel="stylesheet" href="css/style.css?v=20260918c">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -184,20 +184,32 @@
         <span data-i18n="common.wins">wins</span>
       </div>
 
-      <label class="checkbox-row checkbox-row-prominent">
-        <input type="checkbox" id="fair-race-enabled-checkbox">
-        <span data-i18n="gameSetup.fairRaceEnable">⚖️ Use Fargo rating to balance the race</span>
-      </label>
+      <div class="row">
+        <label class="checkbox-row checkbox-row-prominent">
+          <input type="checkbox" id="fair-race-enabled-checkbox">
+          <span data-i18n="gameSetup.fairRaceEnable">⚖️ Use Fargo rating to balance the race</span>
+        </label>
 
-      <label class="checkbox-row checkbox-row-prominent">
-        <input type="checkbox" id="shot-counter-enabled-checkbox">
-        <span data-i18n="gameSetup.shotCounterEnable">⏱️ Shot counter</span>
-      </label>
+        <label class="checkbox-row checkbox-row-prominent">
+          <input type="checkbox" id="shot-counter-enabled-checkbox">
+          <span data-i18n="gameSetup.shotCounterEnable">⏱️ Shot counter</span>
+        </label>
+
+        <label class="checkbox-row checkbox-row-prominent">
+          <input type="checkbox" id="timed-tournament-enabled-checkbox">
+          <span data-i18n="gameSetup.timedTournamentEnable">⏰ Timed Tournament</span>
+        </label>
+      </div>
       <div class="row hidden" id="shot-counter-beep-row">
         <label for="shot-counter-beep-input" data-i18n="gameSetup.shotCounterBeepEvery">Beep every</label>
         <input type="number" id="shot-counter-beep-input" min="5" max="600" value="30">
         <span data-i18n="common.seconds">seconds</span>
         <button type="button" id="btn-shot-counter-toggle-visibility" class="btn btn-ghost" data-i18n="gameSetup.shotCounterToggleVisibility">👁️ Show/Hide Timer</button>
+      </div>
+      <div class="row hidden" id="timed-tournament-minutes-row">
+        <label for="timed-tournament-minutes-input" data-i18n="gameSetup.timedTournamentEndsAfter">Ends after</label>
+        <input type="number" id="timed-tournament-minutes-input" min="1" max="600" value="60">
+        <span data-i18n="common.minutes">minutes</span>
       </div>
 
       <div class="row undo-win-row">
@@ -297,6 +309,10 @@
       <span id="shot-counter-time">0:00</span>
     </div>
     <button type="button" id="shot-counter-visibility-toggle" class="shot-counter-visibility-toggle hidden" data-i18n-aria-label="gameSetup.shotCounterToggleVisibility" aria-label="Show/Hide Timer">👁️</button>
+    <div id="timed-tournament-widget" class="timed-tournament-widget hidden">
+      <span id="timed-tournament-time">0:00</span>
+      <button type="button" id="timed-tournament-pause-toggle" class="timed-tournament-pause-toggle" data-i18n-aria-label="gameSetup.timedTournamentPauseAria" aria-label="Pause the tournament timer">⏸️</button>
+    </div>
     <div class="scoreboard" id="scoreboard"></div>
   </section>
 
@@ -1404,6 +1420,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260918b"></script>
+<script src="js/app.js?v=20260918c"></script>
 </body>
 </html>

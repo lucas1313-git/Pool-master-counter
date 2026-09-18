@@ -739,6 +739,10 @@ body {
   font-size: clamp(3rem, 11vw, 5.5rem);
 }
 
+#app.focus-mode #timed-tournament-time {
+  font-size: clamp(2.6rem, 9vw, 4.6rem);
+}
+
 /* The keypad shortcut number needs the same across-the-room readability
    as everything else in Focus Mode - scales with the card same as
    .stat-value above, floored well above the normal-mode 24px minimum. */
@@ -1191,6 +1195,11 @@ input[type="number"] {
   font-size: 1.05rem;
   font-weight: 700;
   color: var(--text);
+  /* Lets several of these share one .row (Fargo/Shot Counter/Timed
+     Tournament) instead of each being a full-width block - a lone one
+     (the rotation toggle) just fills its row same as before. */
+  flex: 1;
+  min-width: 140px;
 }
 
 .checkbox-row.checkbox-row-prominent:has(input:checked) {
@@ -1562,6 +1571,49 @@ input[type="number"] {
 .shot-counter-visibility-toggle:hover {
   background: rgba(0, 0, 0, 0.5);
   color: var(--accent);
+}
+
+/* ---------- Timed Tournament ---------- */
+
+/* Same "lives in the score-keeping area, exempt from Focus Mode's
+   panel-hiding" placement as .shot-counter-widget above, but visually
+   distinct (warm border) since both can be on screen together and need
+   to read as two different clocks, not one. Shows the tournament's
+   remaining time - see tickTimedTournament. */
+.timed-tournament-widget {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  margin: 4px auto 14px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 2px solid rgba(255, 154, 60, 0.55);
+  color: var(--text);
+  padding: clamp(8px, 2.2vw, 16px) clamp(18px, 5vw, 32px);
+  border-radius: 999px;
+}
+
+#timed-tournament-time {
+  font-size: clamp(2rem, 7.5vw, 3.2rem);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.03em;
+}
+
+.timed-tournament-pause-toggle {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 999px;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.timed-tournament-pause-toggle:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 /* ---------- Standings ---------- */

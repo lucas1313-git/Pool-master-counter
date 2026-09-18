@@ -232,7 +232,7 @@
       raceToWinsTarget: 5,
       fairRaceEnabled: false,
       fairRaceTargets: null,
-      currentGame: { gameType: "8ball", target: 1, unit: "rack", mode: "individual", startedAt: new Date().toISOString(), shotCounterEnabled: false, shotCounterBeepSec: 30, shotCounterHidden: false, queueEnabled: false },
+      currentGame: { gameType: "8ball", target: 1, unit: "rack", mode: "individual", startedAt: new Date().toISOString(), shotCounterEnabled: false, shotCounterBeepSec: 30, shotCounterHidden: false, queueEnabled: false, timedTournamentEnabled: false, timedTournamentMinutes: 60 },
       gameHistory: [],
       rotation: { enabled: false, order: [], every: 1 },
       gamesPlayedCount: 0,
@@ -312,6 +312,8 @@
           if (typeof parsed.currentGame.shotCounterBeepSec !== "number") parsed.currentGame.shotCounterBeepSec = 30;
           if (typeof parsed.currentGame.shotCounterHidden !== "boolean") parsed.currentGame.shotCounterHidden = false;
           if (typeof parsed.currentGame.queueEnabled !== "boolean") parsed.currentGame.queueEnabled = false;
+          if (typeof parsed.currentGame.timedTournamentEnabled !== "boolean") parsed.currentGame.timedTournamentEnabled = false;
+          if (typeof parsed.currentGame.timedTournamentMinutes !== "number") parsed.currentGame.timedTournamentMinutes = 60;
           if (!Array.isArray(parsed.queue)) parsed.queue = [];
           var EIGHTBALL_FAMILY = ["8ball", "8ballrotation", "8ballpunishment"];
           if (parsed.currentGame.target === 8 && EIGHTBALL_FAMILY.indexOf(parsed.currentGame.gameType) !== -1) {
@@ -584,6 +586,20 @@
   var shotCounterLastBeepMs = 0;
   var shotCounterLastTickCountdown = null;
 
+  // Timed Tournament - same live-only bookkeeping shape as the shot
+  // counter above, just counting down to a single expiration instead of
+  // counting up to repeating beeps. Unlike the shot counter it starts
+  // out RUNNING (not paused) the moment it's turned on or a new round
+  // begins, since a whole-tournament clock shouldn't need a separate
+  // "go" tap. The two beeped flags are one-shot per round - each resets
+  // back to false whenever the timer (re)starts (see
+  // startTimedTournament) so the 5-minute and 1-minute warnings each
+  // fire exactly once per round.
+  var timedTournamentAccumulatedMs = 0;
+  var timedTournamentRunningSince = null;
+  var timedTournamentBeeped5Min = false;
+  var timedTournamentBeeped1Min = false;
+
   // Player ids in keypad-number order (index 0 = number 1, etc.) - filled
   // in by refreshKeypadNumbering() after every scoreboard render, since
   // numbering follows the ON-SCREEN grid position rather than roster
@@ -831,6 +847,28 @@
   // than the beep it's leading up to so the two stay easy to tell apart.
   function playShotCounterTick() {
     clickSound(getAudioCtx().currentTime, 700, 0.14);
+  }
+
+  // Timed Tournament's 5-minutes-remaining warning - three low, evenly-
+  // spaced clicks. Deliberately a different pitch and a different count
+  // (three, not two) from playShotCounterBeep's two brighter taps, since
+  // both counters can plausibly be running at once and need to be
+  // tellable apart without looking at the screen.
+  function playTimedTournamentFiveMinWarning() {
+    var now = getAudioCtx().currentTime;
+    clickSound(now, 320, 0.4);
+    clickSound(now + 0.22, 320, 0.4);
+    clickSound(now + 0.44, 320, 0.4);
+  }
+
+  // The 1-minute warning - higher and faster than the 5-minute one
+  // above, since there's a lot less time left to react.
+  function playTimedTournamentOneMinWarning() {
+    var now = getAudioCtx().currentTime;
+    clickSound(now, 880, 0.42);
+    clickSound(now + 0.12, 880, 0.42);
+    clickSound(now + 0.24, 880, 0.42);
+    clickSound(now + 0.36, 880, 0.42);
   }
 
   // A low "you're now scoring for this player" cue for the keypad
@@ -1756,6 +1794,10 @@
   var shotCounterBeepRow = document.getElementById("shot-counter-beep-row");
   var shotCounterBeepInput = document.getElementById("shot-counter-beep-input");
   var btnShotCounterToggleVisibility = document.getElementById("btn-shot-counter-toggle-visibility");
+  var timedTournamentEnabledCheckbox = document.getElementById("timed-tournament-enabled-checkbox");
+  var timedTournamentMinutesRow = document.getElementById("timed-tournament-minutes-row");
+  var timedTournamentMinutesInput = document.getElementById("timed-tournament-minutes-input");
+  var timedTournamentPauseToggle = document.getElementById("timed-tournament-pause-toggle");
 
   var btnResetGame = document.getElementById("btn-reset-game");
   var btnUndoWin = document.getElementById("btn-undo-win");
@@ -3545,7 +3587,16 @@
 
   function updateGameDurationDisplay() {
     var el = document.getElementById("game-duration-live");
-    if (!el || !state.currentGame.startedAt) return;
+    if (!el) return;
+    // Timed Tournament replaces the plain elapsed-time readout with its
+    // own countdown in this exact spot while it's on, per request -
+    // same #game-duration-live element either way, just a different
+    // source/direction for the number.
+    if (timedTournamentActive()) {
+      el.textContent = T("timedTournament.remainingLive", { time: formatDuration(timedTournamentRemainingMs()) });
+      return;
+    }
+    if (!state.currentGame.startedAt) return;
     var startedAt = new Date(state.currentGame.startedAt).getTime();
     if (isNaN(startedAt)) return;
     el.textContent = T("scoreboard.durationLive", { time: formatDuration(Date.now() - startedAt) });
@@ -3655,6 +3706,179 @@
           playShotCounterTick();
         }
       }
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // Timed Tournament - a whole-session countdown, independent of the
+  // shot counter above, that ends the tournament (same archive/reset
+  // celebrateTournamentWin does, just triggered by the clock instead of
+  // a win) once it reaches zero. See the module vars near
+  // keypadSelectedPlayerId for the live bookkeeping shape.
+  // ---------------------------------------------------------------------
+
+  function timedTournamentActive() {
+    return !quickCounterMode && !!state.currentGame.timedTournamentEnabled;
+  }
+
+  function timedTournamentElapsedMs() {
+    return timedTournamentAccumulatedMs + (timedTournamentRunningSince ? Date.now() - timedTournamentRunningSince : 0);
+  }
+
+  function timedTournamentDurationMs() {
+    return Math.max(1, state.currentGame.timedTournamentMinutes || 60) * 60000;
+  }
+
+  function timedTournamentRemainingMs() {
+    return Math.max(0, timedTournamentDurationMs() - timedTournamentElapsedMs());
+  }
+
+  // Called when the checkbox is checked, and again every time a new
+  // round starts (see startNewSession) if it's still enabled then -
+  // unlike the shot counter, this starts out RUNNING, not paused, since
+  // a whole-tournament clock shouldn't need a separate "go" tap.
+  function startTimedTournament() {
+    timedTournamentAccumulatedMs = 0;
+    timedTournamentRunningSince = Date.now();
+    timedTournamentBeeped5Min = false;
+    timedTournamentBeeped1Min = false;
+    tickTimedTournament();
+  }
+
+  // Called when the checkbox is unchecked - like the shot counter,
+  // there's nowhere meaningful to keep progress once the feature's off.
+  function stopTimedTournament() {
+    timedTournamentAccumulatedMs = 0;
+    timedTournamentRunningSince = null;
+    timedTournamentBeeped5Min = false;
+    timedTournamentBeeped1Min = false;
+    tickTimedTournament();
+  }
+
+  // Shared by the small pause button on the widget - same accumulate-
+  // on-pause/resume-from-a-fresh-timestamp pattern as
+  // toggleShotCounterPause.
+  function toggleTimedTournamentPause() {
+    if (!timedTournamentActive()) return;
+    if (timedTournamentRunningSince) {
+      timedTournamentAccumulatedMs += Date.now() - timedTournamentRunningSince;
+      timedTournamentRunningSince = null;
+    } else {
+      timedTournamentRunningSince = Date.now();
+    }
+    tickTimedTournament();
+  }
+
+  // Individual mode: ranks currently-active players by session wins.
+  // Teams mode: ranks the two sides by team wins. A tie in wins is
+  // broken by whatever's currently on the board (this session's running
+  // point tally) only for a "points" unit game - rack/balls games have
+  // no meaningful partial score to break a tie with, so those just stay
+  // tied. Returns null if there's nobody to rank at all.
+  function computeTimedTournamentResult() {
+    var isTeams = state.currentGame.mode === "teams";
+    var scores;
+    if (isTeams) {
+      scores = ["A", "B"]
+        .filter(function (key) {
+          return teamMembersLive(key).length > 0;
+        })
+        .map(function (key) {
+          var names = teamMembersLive(key).map(function (p) {
+            return p.name;
+          });
+          return { name: names.length ? names.join(" & ") : "Team " + key, wins: state.teamWins[key] || 0, points: sumTeamBalls(key) };
+        });
+    } else {
+      scores = activePlayers().map(function (p) {
+        return { name: p.name, wins: state.playerWins[p.id] || 0, points: p.balls || 0 };
+      });
+    }
+    if (scores.length === 0) return null;
+    var maxWins = Math.max.apply(
+      null,
+      scores.map(function (s) {
+        return s.wins;
+      })
+    );
+    var tied = scores.filter(function (s) {
+      return s.wins === maxWins;
+    });
+    if (tied.length > 1 && state.currentGame.unit === "points") {
+      var maxPoints = Math.max.apply(
+        null,
+        tied.map(function (s) {
+          return s.points;
+        })
+      );
+      tied = tied.filter(function (s) {
+        return s.points === maxPoints;
+      });
+    }
+    return {
+      names: tied
+        .map(function (s) {
+          return s.name;
+        })
+        .join(" & "),
+      count: maxWins
+    };
+  }
+
+  // The clock hitting zero - same archive-and-reset celebrateTournamentWin
+  // does for a race-to-N win, just with "Time up!" framing instead and
+  // no per-win "undo" snapshot (there's no single game to retrograde back
+  // past the way there is for an actual credited win).
+  function celebrateTimedTournamentEnd() {
+    var result = computeTimedTournamentResult();
+    if (!result || result.count === 0) {
+      // Nobody's actually played yet this round - nothing to celebrate,
+      // just quietly start the next round's clock.
+      startTimedTournament();
+      return;
+    }
+
+    closeOnHill();
+    lastTournamentWinSnapshot = null;
+    exportAllPlayerStats();
+    startNewSession(true);
+
+    milestoneHeadline.textContent = T("timedTournament.headline", { names: result.names, count: result.count });
+    milestoneDetails.innerHTML = "";
+    milestoneDetails.appendChild(playerStatsRow(T("milestone.tournamentGoal"), T("timedTournament.expiredLabel")));
+    milestoneOverlay.classList.remove("hidden");
+    playTournamentChampionSound();
+  }
+
+  // Runs on the same 1-second cadence as tickShotCounter (see the
+  // setInterval near boot).
+  function tickTimedTournament() {
+    var widget = document.getElementById("timed-tournament-widget");
+    if (!widget) return;
+    var active = timedTournamentActive();
+    var overlayOrAppHidden = isAnyOverlayOpen() || appRoot.classList.contains("hidden");
+    widget.classList.toggle("hidden", !(active && !overlayOrAppHidden));
+    if (!active) return;
+
+    var remaining = timedTournamentRemainingMs();
+    var timeEl = document.getElementById("timed-tournament-time");
+    if (timeEl) timeEl.textContent = formatDuration(remaining);
+    if (timedTournamentPauseToggle) {
+      timedTournamentPauseToggle.textContent = timedTournamentRunningSince ? "⏸️" : "▶️";
+    }
+
+    if (!timedTournamentRunningSince) return;
+
+    if (remaining <= 0) {
+      celebrateTimedTournamentEnd();
+      return;
+    }
+    if (remaining <= 60000 && !timedTournamentBeeped1Min) {
+      timedTournamentBeeped1Min = true;
+      playTimedTournamentOneMinWarning();
+    } else if (remaining <= 5 * 60000 && !timedTournamentBeeped5Min) {
+      timedTournamentBeeped5Min = true;
+      playTimedTournamentFiveMinWarning();
     }
   }
 
@@ -5189,6 +5413,11 @@
     state.gameHistory = [];
     state.gamesPlayedCount = 0;
     resetGameBalls();
+    // A new round of a Timed Tournament re-arms the clock fresh - same
+    // "still enabled -> starts running again" behavior as every other
+    // per-session reset, not a one-shot that turns itself off after
+    // firing once (see celebrateTimedTournamentEnd, which calls this).
+    if (timedTournamentActive()) startTimedTournament();
     saveState();
     // "Save the setup only when the game starts" - this is that moment,
     // both for a manual reset and for the automatic reset right after a
@@ -10627,7 +10856,9 @@
       },
       fairRaceEnabled: !!state.fairRaceEnabled,
       shotCounterEnabled: !!state.currentGame.shotCounterEnabled,
-      shotCounterBeepSec: state.currentGame.shotCounterBeepSec
+      shotCounterBeepSec: state.currentGame.shotCounterBeepSec,
+      timedTournamentEnabled: !!state.currentGame.timedTournamentEnabled,
+      timedTournamentMinutes: state.currentGame.timedTournamentMinutes
     };
   }
 
@@ -10655,6 +10886,8 @@
       a.fairRaceEnabled === b.fairRaceEnabled &&
       a.shotCounterEnabled === b.shotCounterEnabled &&
       a.shotCounterBeepSec === b.shotCounterBeepSec &&
+      a.timedTournamentEnabled === b.timedTournamentEnabled &&
+      a.timedTournamentMinutes === b.timedTournamentMinutes &&
       a.rotation.enabled === b.rotation.enabled &&
       a.rotation.every === b.rotation.every &&
       a.rotation.order.length === b.rotation.order.length &&
@@ -10696,6 +10929,8 @@
     state.currentGame.mode = setup.mode;
     state.currentGame.shotCounterEnabled = setup.shotCounterEnabled;
     state.currentGame.shotCounterBeepSec = setup.shotCounterBeepSec;
+    state.currentGame.timedTournamentEnabled = !!setup.timedTournamentEnabled;
+    state.currentGame.timedTournamentMinutes = setup.timedTournamentMinutes || 60;
     state.raceToWinsTarget = setup.raceToWinsTarget;
     if (setup.raceToWinsTarget !== 1) lastRaceToWinsTarget = setup.raceToWinsTarget;
     state.rotation = {
@@ -10731,6 +10966,11 @@
     shotCounterEnabledCheckbox.checked = state.currentGame.shotCounterEnabled;
     shotCounterBeepRow.classList.toggle("hidden", !state.currentGame.shotCounterEnabled);
     shotCounterBeepInput.value = state.currentGame.shotCounterBeepSec;
+    timedTournamentEnabledCheckbox.checked = state.currentGame.timedTournamentEnabled;
+    timedTournamentMinutesRow.classList.toggle("hidden", !state.currentGame.timedTournamentEnabled);
+    timedTournamentMinutesInput.value = state.currentGame.timedTournamentMinutes;
+    if (timedTournamentActive()) startTimedTournament();
+    else stopTimedTournament();
 
     renderRotation();
     applyRotationIfDue();
@@ -18205,6 +18445,26 @@
   btnShotCounterToggleVisibility.addEventListener("click", toggleShotCounterVisibility);
   document.getElementById("shot-counter-visibility-toggle").addEventListener("click", toggleShotCounterVisibility);
 
+  timedTournamentEnabledCheckbox.addEventListener("change", function () {
+    state.currentGame.timedTournamentEnabled = timedTournamentEnabledCheckbox.checked;
+    saveState();
+    timedTournamentMinutesRow.classList.toggle("hidden", !timedTournamentEnabledCheckbox.checked);
+    if (timedTournamentEnabledCheckbox.checked) startTimedTournament();
+    else stopTimedTournament();
+  });
+
+  timedTournamentMinutesInput.addEventListener("input", function () {
+    var min = parseInt(timedTournamentMinutesInput.value, 10);
+    if (!min || min < 1) return;
+    state.currentGame.timedTournamentMinutes = Math.min(600, min);
+    saveState();
+  });
+
+  timedTournamentPauseToggle.addEventListener("click", function (e) {
+    e.stopPropagation();
+    toggleTimedTournamentPause();
+  });
+
   Array.prototype.forEach.call(modeRadios, function (radio) {
     radio.addEventListener("change", function () {
       if (!radio.checked) return;
@@ -18960,6 +19220,13 @@
   // checkbox already on starts a fresh running 0:00 rather than staying
   // enabled-but-frozen.
   if (state.currentGame.shotCounterEnabled) startShotCounter();
+  timedTournamentEnabledCheckbox.checked = state.currentGame.timedTournamentEnabled;
+  timedTournamentMinutesRow.classList.toggle("hidden", !state.currentGame.timedTournamentEnabled);
+  timedTournamentMinutesInput.value = state.currentGame.timedTournamentMinutes;
+  // Same "live count never survives a reload, only the setting does" as
+  // the shot counter above - a reload with it already on starts a fresh
+  // full-duration countdown rather than staying enabled-but-frozen.
+  if (state.currentGame.timedTournamentEnabled) startTimedTournament();
   updateCurrentGameSummary();
 
   dayNotesTextarea.value = getDayNotes(todayDateStr());
@@ -19003,6 +19270,7 @@
 
   setInterval(updateGameDurationDisplay, 1000);
   setInterval(tickShotCounter, 1000);
+  setInterval(tickTimedTournament, 1000);
 
   maybeAutoShowLeaderboard();
   // Also re-check periodically so a session left open continuously for
