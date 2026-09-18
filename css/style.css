@@ -1076,6 +1076,16 @@ select {
   min-width: 140px;
 }
 
+/* The game type picker gets lost among the smaller Target/unit fields
+   next to it - bigger, bolder, and accent-bordered so it reads as the
+   primary choice in that row. */
+#game-type {
+  font-size: 1.15rem;
+  font-weight: 700;
+  border-color: var(--accent);
+  min-width: 180px;
+}
+
 input[type="number"] {
   width: 80px;
 }
@@ -1083,18 +1093,31 @@ input[type="number"] {
 .mode-row label {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex: 1;
   min-width: 140px;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 10px 12px;
+  padding: 12px 14px;
   cursor: pointer;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+/* Individual/Teams currently isn't obvious at a glance - a clear filled
+   highlight on whichever is selected, not just the small radio dot. */
+.mode-row label:has(input:checked) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, var(--bg-card));
+  color: var(--accent);
 }
 
 .mode-row input[type="radio"] {
   accent-color: var(--accent);
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
 }
 
 .checkbox-row {
@@ -1111,6 +1134,32 @@ input[type="number"] {
   height: 20px;
   accent-color: var(--accent);
   flex: 0 0 auto;
+}
+
+/* "Rotate game types automatically" is an easy-to-miss dim checkbox row
+   otherwise - a boxed, bold, accent-highlighted toggle (matching the
+   Individual/Teams treatment above) makes on/off obvious at a glance.
+   Shared class, not an id, since this toggle appears twice - once in
+   Games Rotations, once (a synced mirror) in Current Game. */
+.checkbox-row.rotation-toggle-checkbox {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.checkbox-row.rotation-toggle-checkbox:has(input:checked) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, var(--bg-card));
+  color: var(--accent);
+}
+
+.checkbox-row.rotation-toggle-checkbox input[type="checkbox"] {
+  width: 24px;
+  height: 24px;
 }
 
 /* ---------- Game rotation ---------- */

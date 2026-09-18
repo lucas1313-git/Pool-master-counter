@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260917c">
+<link rel="stylesheet" href="css/style.css?v=20260917e">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -118,7 +118,7 @@
     <p class="panel-summary" id="rotation-panel-summary"></p>
     <div class="panel-body" id="rotation-panel-body">
       <div class="row">
-        <label class="checkbox-row"><input type="checkbox" id="rotation-enabled"> <span data-i18n="rotation.autoRotate">Rotate game types automatically</span></label>
+        <label class="checkbox-row rotation-toggle-checkbox"><input type="checkbox" id="rotation-enabled"> <span data-i18n="rotation.autoRotate">Rotate game types automatically</span></label>
       </div>
       <div class="row">
         <select id="rotation-load-select"></select>
@@ -162,6 +162,11 @@
           <option value="points" data-i18n="units.points">points</option>
         </select>
       </div>
+
+      <label class="checkbox-row rotation-toggle-checkbox">
+        <input type="checkbox" id="game-setup-rotation-enabled">
+        <span data-i18n="rotation.autoRotate">Rotate game types automatically</span>
+      </label>
 
       <div class="row">
         <label for="race-to-wins" data-i18n="gameSetup.raceToMilestone">Race-to milestone</label>
@@ -1386,6 +1391,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260917c"></script>
+<script src="js/app.js?v=20260917e"></script>
 </body>
 </html>

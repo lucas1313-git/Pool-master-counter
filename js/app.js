@@ -1753,6 +1753,7 @@
   var btnExportSession = document.getElementById("btn-export-session");
 
   var rotationEnabledCheckbox = document.getElementById("rotation-enabled");
+  var gameSetupRotationEnabledCheckbox = document.getElementById("game-setup-rotation-enabled");
   var rotationLoadSelect = document.getElementById("rotation-load-select");
   var btnRotationLoad = document.getElementById("btn-rotation-load");
   var rotationAddType = document.getElementById("rotation-add-type");
@@ -2511,6 +2512,7 @@
 
   function renderRotation() {
     rotationEnabledCheckbox.checked = state.rotation.enabled;
+    gameSetupRotationEnabledCheckbox.checked = state.rotation.enabled;
     rotationEveryInput.value = state.rotation.every;
 
     renderRotationListInto(rotationList);
@@ -18075,6 +18077,18 @@
 
   rotationEnabledCheckbox.addEventListener("change", function () {
     state.rotation.enabled = rotationEnabledCheckbox.checked;
+    saveState();
+    applyRotationIfDue();
+    renderRotation();
+    renderScoreboard();
+  });
+
+  // A synced mirror of the toggle above, living in Current Game too (see
+  // renderRotation, which keeps both checkboxes' checked state in sync
+  // with state.rotation.enabled) - so switching rotation on/off doesn't
+  // require opening the separate Games Rotations panel.
+  gameSetupRotationEnabledCheckbox.addEventListener("change", function () {
+    state.rotation.enabled = gameSetupRotationEnabledCheckbox.checked;
     saveState();
     applyRotationIfDue();
     renderRotation();
