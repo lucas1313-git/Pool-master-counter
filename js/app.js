@@ -208,7 +208,7 @@
   // - the chevron can't live inside the toggle <button> anymore in that
   // layout (a <button> can't contain another <button>), so it's wired
   // here as its own click target instead.
-  function wireCollapsiblePanel(panelElId, buttonElId, extraToggleElId) {
+  function wireCollapsiblePanel(panelElId, buttonElId, extraToggleElId, extraToggleSkipSelector) {
     var panel = document.getElementById(panelElId);
     var btn = document.getElementById(buttonElId);
     var summary = document.getElementById(panelElId + "-summary");
@@ -220,7 +220,18 @@
     }
     btn.addEventListener("click", toggle);
     if (summary && summary.tagName === "P") summary.addEventListener("click", toggle);
-    if (extraToggle) extraToggle.addEventListener("click", toggle);
+    if (extraToggle) {
+      // extraToggleSkipSelector lets extraToggle be a whole container (e.g.
+      // Rating History's header row, so the entire collapsed row is
+      // clickable, not just its title button) while still leaving clicks
+      // on its own interactive descendants (the title button already
+      // toggles itself; the "?" info button opens its own popup) alone,
+      // instead of double-toggling or hijacking their click.
+      extraToggle.addEventListener("click", function (e) {
+        if (extraToggleSkipSelector && e.target.closest(extraToggleSkipSelector)) return;
+        toggle();
+      });
+    }
   }
 
   // Jumps to another collapsible panel elsewhere on the page - expanding
@@ -12537,19 +12548,26 @@
       h2h.forEach(function (opp) {
         var li = document.createElement("li");
         li.className = "player-h2h-row";
+        // Name gets its own full-width row up top, like a title - never
+        // truncated, same as the All Players cards - since a record and
+        // percentage sharing that line would otherwise squeeze long
+        // names down to an ellipsis.
         var name = document.createElement("span");
         name.className = "player-h2h-name";
         name.textContent = opp.name;
         name.appendChild(buildRatingBadge(opp.name));
+        var meta = document.createElement("span");
+        meta.className = "player-h2h-meta";
         var record = document.createElement("span");
         record.className = "player-h2h-record";
         record.textContent = opp.wins + "–" + opp.losses;
         var pct = document.createElement("span");
         pct.className = "player-h2h-pct";
         pct.textContent = opp.pct === null ? "—" : opp.pct + "%";
+        meta.appendChild(record);
+        meta.appendChild(pct);
         li.appendChild(name);
-        li.appendChild(record);
-        li.appendChild(pct);
+        li.appendChild(meta);
         playerPageH2hList.appendChild(li);
       });
     }
@@ -12651,15 +12669,18 @@
         rec.partners.forEach(function (partnerName) {
           name.appendChild(buildRatingBadge(partnerName));
         });
+        var meta = document.createElement("span");
+        meta.className = "player-h2h-meta";
         var record = document.createElement("span");
         record.className = "player-h2h-record";
         record.textContent = rec.wins + "–" + rec.losses;
         var pct = document.createElement("span");
         pct.className = "player-h2h-pct";
         pct.textContent = rec.pct === null ? "—" : rec.pct + "%";
+        meta.appendChild(record);
+        meta.appendChild(pct);
         li.appendChild(name);
-        li.appendChild(record);
-        li.appendChild(pct);
+        li.appendChild(meta);
         playerPageTeamsList.appendChild(li);
       });
     }
@@ -19692,7 +19713,12 @@
   wireCollapsiblePanel("focus-players-wrap", "btn-toggle-focus-players");
   wireCollapsiblePanel("player-page-synopsis-panel", "btn-toggle-player-page-synopsis-panel");
   wireCollapsiblePanel("player-page-graph-panel", "btn-toggle-player-page-graph-panel");
-  wireCollapsiblePanel("player-page-rating-history-panel", "btn-toggle-player-page-rating-history-panel", "rating-history-chevron");
+  wireCollapsiblePanel(
+    "player-page-rating-history-panel",
+    "btn-toggle-player-page-rating-history-panel",
+    "rating-history-header",
+    "#btn-toggle-player-page-rating-history-panel, #btn-rating-history-info"
+  );
   wireCollapsiblePanel("player-page-current-panel", "btn-toggle-player-page-current-panel");
   wireCollapsiblePanel("player-page-history-panel", "btn-toggle-player-page-history-panel");
   wireCollapsiblePanel("player-page-h2h-panel", "btn-toggle-player-page-h2h-panel");
