@@ -217,12 +217,12 @@ This is a static site — no build step or dependencies.
 
 - **Locally:** open `index.html` in a browser, or serve the folder (e.g. `python3 -m http.server`) and visit it.
 - **Online:** enable GitHub Pages for this repo (Settings → Pages → deploy from the `main` branch) and it's live at `https://<username>.github.io/Pool-master-counter/`.
-- **Desktop app (no setup):** for the "Group Session" feature (a second phone on the same WiFi joining a live scoring session — see `server/README.md`), download a portable, zero-install binary from [Releases](../../releases/tag/desktop-latest) — no git, no Node, no terminal. These are built by `installer/` (a self-contained subdirectory, same pattern as `server/`), so `main`'s own dependency-free footprint described above is unaffected.
+- **Desktop app (no setup):** for the "Group Session" feature (a second phone on the same WiFi joining a live scoring session — see `server/README.md`), download a portable, zero-install binary from [Releases](../../releases/tag/desktop-latest) — no git, no Node, no terminal. These are built by `installer/` (a self-contained subdirectory, same pattern as `server/`) whenever the `release` branch (below) is pushed, so `main`'s own dependency-free footprint described above is unaffected.
 
 Three other branches exist alongside `main`:
 
 - **`stable`** — a snapshot of `main` at known-good points, fast-forwarded only when explicitly requested. Same unminified source as `main`.
-- **`release`** — a minified build (via `rjsmin`/`rcssmin`) of the latest `main`, rebuilt from scratch each time rather than diffed, since it's purely derived output.
+- **`release`** — a minified build (via `rjsmin`/`rcssmin`) of the latest `main`, rebuilt from scratch each time rather than diffed, since it's purely derived output. Pushing this branch is also what triggers the desktop app build (`.github/workflows/build-desktop.yml`), so the shipped binaries always come from this minified snapshot rather than directly from `main`.
 - **`tests`** — the browser test suite described below. It never touches the app's own dependency-free footprint on `main`.
 
 ## Testing

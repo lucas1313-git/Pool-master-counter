@@ -12,7 +12,7 @@ name: Build desktop app
 
 on:
   push:
-    branches: [main]
+    branches: [release]
     paths:
       - "index.html"
       - "manifest.json"
@@ -200,7 +200,7 @@ jobs:
           name: "Pool Master Counter — Desktop app (auto-built)"
           make_latest: false
           body: |
-            Auto-built from the latest `main` (${{ github.sha }}).
+            Auto-built from the latest `release` (${{ github.sha }}).
 
             Portable, zero-installation binaries - no admin rights, nothing
             added to your computer beyond the file itself. The macOS build
