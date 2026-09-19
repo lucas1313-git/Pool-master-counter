@@ -2607,6 +2607,16 @@ input[type="number"] {
   border-color: var(--accent);
 }
 
+/* Context for the balls-left prefill on a points-unit win (see
+   creditWin's pointsGapPrefill / showGameWinOverlay) - why that
+   particular number got suggested, not just the number itself. */
+.balls-left-points-hint {
+  margin: -4px 0 0;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  text-align: center;
+}
+
 .gamewin-card .balls-left-row .label,
 .milestone-card .balls-left-row .label {
   font-size: clamp(0.9rem, 2vw, 1.6rem);

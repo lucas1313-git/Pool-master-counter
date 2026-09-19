@@ -74,6 +74,7 @@
   "ballsLeft.decrease": "Retirer une boule",
   "ballsLeft.increase": "Ajouter une boule",
   "ballsLeft.label": "Boules restantes sur la table",
+  "ballsLeft.pointsGapHint": "{{points}} pts sous {{target}} ≈ {{balls}}/7 boules restantes",
   "ballsLeft.unset": "Non défini",
   "brand.name": "Pool Master Counter",
   "brand.slogan": "Ne fais pas le malin !",

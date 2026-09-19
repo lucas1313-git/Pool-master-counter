@@ -74,6 +74,7 @@
   "ballsLeft.decrease": "Mag-alis ng bola",
   "ballsLeft.increase": "Magdagdag ng bola",
   "ballsLeft.label": "Mga natitirang bola sa mesa",
+  "ballsLeft.pointsGapHint": "{{points}} puntos kulang sa {{target}} ≈ {{balls}}/7 bola ang natitira",
   "ballsLeft.unset": "Hindi Naka-set",
   "brand.name": "Pool Master Counter",
   "brand.slogan": "Huwag maging sobrang tiwala!",
