@@ -247,6 +247,35 @@
     panel.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
+  // The Player Stats page's minimal section chips (see
+  // #player-page-panel-chips) - same "compact control, separate
+  // full-width detail below, click toggles + scrolls to it, non-
+  // accordion" system as the All Players page's player cards (see
+  // buildAllPlayerCard/equalizeAllPlayerCardWidths), just for a fixed
+  // set of named sections instead of one card per player.
+  function wirePlayerPageDetailChip(chipElId, detailElId) {
+    var chip = document.getElementById(chipElId);
+    var detail = document.getElementById(detailElId);
+    chip.addEventListener("click", function () {
+      var willExpand = detail.hidden;
+      detail.hidden = !willExpand;
+      chip.setAttribute("aria-expanded", willExpand ? "true" : "false");
+      chip.classList.toggle("is-active", willExpand);
+      if (willExpand) detail.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
+  // Same idea as expandAndScrollToPanel above, but for a
+  // wirePlayerPageDetailChip pair instead of an old-style
+  // .collapsible-panel - used by cross-references like "Rating this
+  // period" -> Rating History and the stat detail popup's "View Full
+  // Graph" button.
+  function expandAndScrollToDetailChip(chipElId, detailElId) {
+    var detail = document.getElementById(detailElId);
+    if (detail.hidden) document.getElementById(chipElId).click();
+    detail.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   // A brief accent-colored flash around an element - used to catch the
   // eye when its data just changed underneath the player without the
   // page itself moving (e.g. switching the Stats Synopsis period filter
@@ -12452,7 +12481,7 @@
           ratingDeltaText,
           ratingDeltaText.charAt(0) === "▲" ? "win" : ratingDeltaText.charAt(0) === "▼" ? "loss" : null,
           function () {
-            expandAndScrollToPanel("player-page-rating-history-panel", "btn-toggle-player-page-rating-history-panel");
+            expandAndScrollToDetailChip("player-page-rating-history-chip", "player-page-rating-history-detail");
           }
         )
       );
@@ -19712,18 +19741,13 @@
   wireCollapsiblePanel("resets-panel", "btn-toggle-resets-panel");
   wireCollapsiblePanel("focus-players-wrap", "btn-toggle-focus-players");
   wireCollapsiblePanel("player-page-synopsis-panel", "btn-toggle-player-page-synopsis-panel");
-  wireCollapsiblePanel("player-page-graph-panel", "btn-toggle-player-page-graph-panel");
-  wireCollapsiblePanel(
-    "player-page-rating-history-panel",
-    "btn-toggle-player-page-rating-history-panel",
-    "rating-history-header",
-    "#btn-toggle-player-page-rating-history-panel, #btn-rating-history-info"
-  );
-  wireCollapsiblePanel("player-page-current-panel", "btn-toggle-player-page-current-panel");
-  wireCollapsiblePanel("player-page-history-panel", "btn-toggle-player-page-history-panel");
-  wireCollapsiblePanel("player-page-h2h-panel", "btn-toggle-player-page-h2h-panel");
-  wireCollapsiblePanel("player-page-teams-panel", "btn-toggle-player-page-teams-panel");
-  wireCollapsiblePanel("player-page-achievements-panel", "btn-toggle-player-page-achievements-panel");
+  wirePlayerPageDetailChip("player-page-achievements-chip", "player-page-achievements-detail");
+  wirePlayerPageDetailChip("player-page-h2h-chip", "player-page-h2h-detail");
+  wirePlayerPageDetailChip("player-page-teams-chip", "player-page-teams-detail");
+  wirePlayerPageDetailChip("player-page-graph-chip", "player-page-graph-detail");
+  wirePlayerPageDetailChip("player-page-rating-history-chip", "player-page-rating-history-detail");
+  wirePlayerPageDetailChip("player-page-current-chip", "player-page-current-detail");
+  wirePlayerPageDetailChip("player-page-history-chip", "player-page-history-detail");
 
   var dayNotesSaveTimer = null;
   dayNotesTextarea.addEventListener("input", function () {
@@ -19847,7 +19871,7 @@
   // left collapsed, same as clicking its own toggle would.
   btnPlayerStatDetailViewGraph.addEventListener("click", function () {
     closePlayerStatDetail();
-    expandAndScrollToPanel("player-page-graph-panel", "btn-toggle-player-page-graph-panel");
+    expandAndScrollToDetailChip("player-page-graph-chip", "player-page-graph-detail");
   });
   btnPlayerPageBack.addEventListener("click", function () {
     closePlayerStatsPage();
@@ -20108,10 +20132,14 @@
   // either lifetime or live-only and don't move when the filter does).
   var PERIOD_SCOPED_PANEL_IDS = [
     "player-page-synopsis-panel",
-    "player-page-h2h-panel",
-    "player-page-teams-panel",
-    "player-page-graph-panel",
-    "player-page-rating-history-panel"
+    "player-page-h2h-chip",
+    "player-page-h2h-detail",
+    "player-page-teams-chip",
+    "player-page-teams-detail",
+    "player-page-graph-chip",
+    "player-page-graph-detail",
+    "player-page-rating-history-chip",
+    "player-page-rating-history-detail"
   ];
 
   Array.prototype.forEach.call(playerPagePeriodButtons, function (btn) {

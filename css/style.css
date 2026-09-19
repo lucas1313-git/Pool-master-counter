@@ -4191,36 +4191,76 @@ input[type="number"] {
   opacity: 0.7;
 }
 
-/* The Rating History panel-toggle button can't hold a second, real
-   button of its own (a <button> can't nest inside a <button>), so the
-   title-only toggle button, the section's own "?" (opens the general,
-   beginner-language explanation), and the chevron are three separate
-   items in this row instead - "?" right after the title, chevron
-   pushed to the far right. The whole row is still clickable to
-   expand/collapse (not just the title text) via wireCollapsiblePanel's
-   extraToggleElId/extraToggleSkipSelector, which skip only the title
-   button and the "?" button themselves so they keep their own actions. */
-.rating-history-header {
+/* Player Stats page's section chips + their full-width detail area -
+   the same "compact control, separate full-width detail below, click
+   toggles + scrolls to it, non-accordion" system as the All Players
+   page's player cards (see .all-player-card / .all-player-detail),
+   just for a fixed set of named sections instead of one card per
+   player (see wirePlayerPageDetailChip). Flex-wrap, not grid, so each
+   chip is only as wide as its own title needs. */
+.player-page-panel-chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 8px 16px;
+}
+
+.player-page-panel-chip {
+  flex: 0 0 auto;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 10px 18px;
+  font: inherit;
+  font-weight: 700;
+  color: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.player-page-panel-chip.is-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+  font-weight: 700;
+}
+
+.player-page-detail-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 16px 24px;
+}
+
+.player-page-detail {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.player-page-detail-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin: 0 0 12px;
-  cursor: pointer;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
 }
 
-.collapsible-panel.collapsed .rating-history-header {
-  margin-bottom: 0;
-}
-
-.rating-history-header .panel-toggle {
-  flex: 0 0 auto;
-  width: auto;
+.player-page-detail-header h2 {
   margin: 0;
 }
 
-.rating-history-header .panel-chevron {
-  margin-left: auto;
-  cursor: pointer;
+.player-page-detail-summary {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  margin: 0 0 12px;
+}
+
+.player-page-detail-summary:empty {
+  display: none;
 }
 
 /* Step-by-step rating history (see renderRatingHistorySection) - reuses
@@ -4424,16 +4464,21 @@ input[type="number"] {
   margin-top: 0;
 }
 
+/* Side by side, each row only as wide as its own content needs - same
+   flex-wrap idea as the All Players card grid (see
+   .all-players-list), instead of one row per opponent/team stretched
+   across the full page width. */
 .player-h2h-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .player-h2h-row {
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -4443,19 +4488,19 @@ input[type="number"] {
   padding: 10px 14px;
 }
 
-/* Its own full-width row up top, like a title - never truncated, same
-   as the All Players cards (see .all-player-card-name), since sharing
-   a line with the record/percentage would otherwise squeeze long names
-   (or, for Teams rows, multiple partner names) down to an ellipsis. */
+/* Its own full-width row up top, like a title - never wrapped or
+   truncated, same as the All Players cards (see .all-player-card-name)
+   - the row (not the page) just grows to fit it, since the list above
+   is a flex-wrap row of independently-sized cards, not a single
+   full-width column. */
 .player-h2h-name {
   font-weight: 700;
-  overflow-wrap: break-word;
+  white-space: nowrap;
 }
 
 .player-h2h-meta {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 10px;
 }
 
@@ -5125,11 +5170,6 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
 
 .all-player-card-leaving {
   animation: all-player-card-out 0.4s ease-in forwards;
-}
-
-#player-page-graph-panel {
-  max-width: 100%;
-  overflow-x: hidden;
 }
 
 /* The toggle button (name/rating/win-rate) can't also hold the link

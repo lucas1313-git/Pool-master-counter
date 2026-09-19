@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260918ze">
+<link rel="stylesheet" href="css/style.css?v=20260919a">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -1088,75 +1088,20 @@
     </div>
   </section>
 
-  <section class="panel collapsible-panel collapsed" id="player-page-achievements-panel">
-    <button type="button" class="panel-toggle" id="btn-toggle-player-page-achievements-panel" aria-expanded="false" aria-controls="player-page-achievements-panel-body">
-      <h2 data-i18n="playerPage.achievementsHeading">Achievements</h2>
-      <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
-    </button>
-    <p class="panel-summary" id="player-page-achievements-panel-summary"></p>
-    <div class="panel-body" id="player-page-achievements-panel-body">
-      <div id="player-page-achievements-list" class="achievement-badge-grid"></div>
-    </div>
-  </section>
-
-  <section class="panel collapsible-panel collapsed" id="player-page-h2h-panel">
-    <button type="button" class="panel-toggle" id="btn-toggle-player-page-h2h-panel" aria-expanded="false" aria-controls="player-page-h2h-panel-body">
-      <h2 data-i18n="playerPage.h2hHeading">Head-to-Head</h2>
-      <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
-    </button>
-    <p class="panel-summary" id="player-page-h2h-panel-summary"></p>
-    <div class="panel-body" id="player-page-h2h-panel-body">
-      <ul id="player-page-h2h-list" class="player-h2h-list"></ul>
-    </div>
-  </section>
-
-  <section class="panel collapsible-panel collapsed" id="player-page-teams-panel">
-    <button type="button" class="panel-toggle" id="btn-toggle-player-page-teams-panel" aria-expanded="false" aria-controls="player-page-teams-panel-body">
-      <h2 data-i18n="playerPage.teamsHeading">Teams</h2>
-      <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
-    </button>
-    <p class="panel-summary" id="player-page-teams-panel-summary"></p>
-    <div class="panel-body" id="player-page-teams-panel-body">
-      <div id="player-page-clubteam-block" class="clubteam-block hidden"></div>
-      <ul id="player-page-teams-list" class="player-h2h-list"></ul>
-    </div>
-  </section>
-
-  <section class="panel collapsible-panel collapsed" id="player-page-graph-panel">
-    <button type="button" class="panel-toggle" id="btn-toggle-player-page-graph-panel" aria-expanded="false" aria-controls="player-page-graph-panel-body">
-      <h2 data-i18n="playerPage.graphHeading">Graph</h2>
-      <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
-    </button>
-    <p class="panel-summary" id="player-page-graph-panel-summary"></p>
-    <div class="panel-body" id="player-page-graph-panel-body">
-      <div id="player-page-graph-body"></div>
-    </div>
-  </section>
-
-  <section class="panel collapsible-panel collapsed" id="player-page-rating-history-panel">
-    <div class="rating-history-header" id="rating-history-header">
-      <button type="button" class="panel-toggle" id="btn-toggle-player-page-rating-history-panel" aria-expanded="false" aria-controls="player-page-rating-history-panel-body">
-        <h2 data-i18n="playerPage.ratingHistoryHeading">Rating History</h2>
-      </button>
-      <button type="button" id="btn-rating-history-info" class="format-info-btn plain-info-btn" data-i18n-aria-label="playerPage.ratingKInfoAria" aria-label="What does K mean?">❓</button>
-      <span class="panel-chevron" id="rating-history-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
-    </div>
-    <p class="panel-summary" id="player-page-rating-history-panel-summary"></p>
-    <div class="panel-body" id="player-page-rating-history-panel-body">
-      <div id="player-page-rating-history-body"></div>
-    </div>
-  </section>
-
-  <section class="panel collapsible-panel collapsed" id="player-page-current-panel">
-    <button type="button" class="panel-toggle" id="btn-toggle-player-page-current-panel" aria-expanded="false" aria-controls="player-page-current-panel-body">
-      <h2 data-i18n="playerPage.liveSessionHeading">This Session (Live)</h2>
-      <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
-    </button>
-    <p class="panel-summary" id="player-page-current-panel-summary"></p>
-    <div class="panel-body" id="player-page-current-panel-body">
-      <div id="player-page-current-body"></div>
-    </div>
-  </section>
+  <!-- Minimal, title-only chips - the same "compact card, click opens a
+       full-width detail below and scrolls to it, non-accordion" system
+       as the All Players page's player cards (see .all-player-card /
+       .all-player-detail), just for these 7 fixed sections instead of
+       one card per player. -->
+  <div id="player-page-panel-chips" class="player-page-panel-chip-grid">
+    <button type="button" class="player-page-panel-chip" id="player-page-achievements-chip" aria-expanded="false" aria-controls="player-page-achievements-detail" data-i18n="playerPage.achievementsHeading">Achievements</button>
+    <button type="button" class="player-page-panel-chip" id="player-page-h2h-chip" aria-expanded="false" aria-controls="player-page-h2h-detail" data-i18n="playerPage.h2hHeading">Head-to-Head</button>
+    <button type="button" class="player-page-panel-chip" id="player-page-teams-chip" aria-expanded="false" aria-controls="player-page-teams-detail" data-i18n="playerPage.teamsHeading">Teams</button>
+    <button type="button" class="player-page-panel-chip" id="player-page-graph-chip" aria-expanded="false" aria-controls="player-page-graph-detail" data-i18n="playerPage.graphHeading">Graph</button>
+    <button type="button" class="player-page-panel-chip" id="player-page-rating-history-chip" aria-expanded="false" aria-controls="player-page-rating-history-detail" data-i18n="playerPage.ratingHistoryHeading">Rating History</button>
+    <button type="button" class="player-page-panel-chip" id="player-page-current-chip" aria-expanded="false" aria-controls="player-page-current-detail" data-i18n="playerPage.liveSessionHeading">This Session (Live)</button>
+    <button type="button" class="player-page-panel-chip" id="player-page-history-chip" aria-expanded="false" aria-controls="player-page-history-detail" data-i18n="playerPage.historyHeading">Session History</button>
+  </div>
 
   <section class="panel" id="player-page-actions-panel">
     <div class="row">
@@ -1166,16 +1111,53 @@
     </div>
   </section>
 
-  <section class="panel collapsible-panel collapsed" id="player-page-history-panel">
-    <button type="button" class="panel-toggle" id="btn-toggle-player-page-history-panel" aria-expanded="false" aria-controls="player-page-history-panel-body">
-      <h2 data-i18n="playerPage.historyHeading">Session History</h2>
-      <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
-    </button>
-    <p class="panel-summary" id="player-page-history-panel-summary"></p>
-    <div class="panel-body" id="player-page-history-panel-body">
+  <div id="player-page-detail-section" class="player-page-detail-section">
+    <div class="player-page-detail" id="player-page-achievements-detail" hidden>
+      <div class="player-page-detail-header"><h2 data-i18n="playerPage.achievementsHeading">Achievements</h2></div>
+      <p class="player-page-detail-summary" id="player-page-achievements-panel-summary"></p>
+      <div id="player-page-achievements-list" class="achievement-badge-grid"></div>
+    </div>
+
+    <div class="player-page-detail" id="player-page-h2h-detail" hidden>
+      <div class="player-page-detail-header"><h2 data-i18n="playerPage.h2hHeading">Head-to-Head</h2></div>
+      <p class="player-page-detail-summary" id="player-page-h2h-panel-summary"></p>
+      <ul id="player-page-h2h-list" class="player-h2h-list"></ul>
+    </div>
+
+    <div class="player-page-detail" id="player-page-teams-detail" hidden>
+      <div class="player-page-detail-header"><h2 data-i18n="playerPage.teamsHeading">Teams</h2></div>
+      <p class="player-page-detail-summary" id="player-page-teams-panel-summary"></p>
+      <div id="player-page-clubteam-block" class="clubteam-block hidden"></div>
+      <ul id="player-page-teams-list" class="player-h2h-list"></ul>
+    </div>
+
+    <div class="player-page-detail" id="player-page-graph-detail" hidden>
+      <div class="player-page-detail-header"><h2 data-i18n="playerPage.graphHeading">Graph</h2></div>
+      <p class="player-page-detail-summary" id="player-page-graph-panel-summary"></p>
+      <div id="player-page-graph-body"></div>
+    </div>
+
+    <div class="player-page-detail" id="player-page-rating-history-detail" hidden>
+      <div class="player-page-detail-header">
+        <h2 data-i18n="playerPage.ratingHistoryHeading">Rating History</h2>
+        <button type="button" id="btn-rating-history-info" class="format-info-btn plain-info-btn" data-i18n-aria-label="playerPage.ratingKInfoAria" aria-label="What does K mean?">❓</button>
+      </div>
+      <p class="player-page-detail-summary" id="player-page-rating-history-panel-summary"></p>
+      <div id="player-page-rating-history-body"></div>
+    </div>
+
+    <div class="player-page-detail" id="player-page-current-detail" hidden>
+      <div class="player-page-detail-header"><h2 data-i18n="playerPage.liveSessionHeading">This Session (Live)</h2></div>
+      <p class="player-page-detail-summary" id="player-page-current-panel-summary"></p>
+      <div id="player-page-current-body"></div>
+    </div>
+
+    <div class="player-page-detail" id="player-page-history-detail" hidden>
+      <div class="player-page-detail-header"><h2 data-i18n="playerPage.historyHeading">Session History</h2></div>
+      <p class="player-page-detail-summary" id="player-page-history-panel-summary"></p>
       <ul id="player-page-history-list" class="player-history-list"></ul>
     </div>
-  </section>
+  </div>
 
 </div>
 
@@ -1505,6 +1487,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260918ze"></script>
+<script src="js/app.js?v=20260919a"></script>
 </body>
 </html>
