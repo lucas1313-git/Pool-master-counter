@@ -5080,11 +5080,42 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   line-height: 1.4;
 }
 
+@keyframes all-player-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .all-player-card {
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
+  animation: all-player-card-in 0.22s ease-out;
+}
+
+/* Plays just before a card is dropped from the list by the "Current
+   Roster Only" filter, so it visibly shrinks and fades away instead of
+   silently vanishing - the click handler waits for this to finish
+   before actually rebuilding the list without these cards. */
+@keyframes all-player-card-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+
+.all-player-card-leaving {
+  animation: all-player-card-out 0.22s ease-in forwards;
 }
 
 #player-page-graph-panel {

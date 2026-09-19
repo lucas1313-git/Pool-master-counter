@@ -1718,6 +1718,8 @@
   var allPlayersViewMode = "bars";
   var allPlayersRosterOnly = false;
   var allPlayersAllExpanded = false;
+  // Must match the .all-player-card-leaving CSS animation's duration.
+  var ALL_PLAYER_CARD_LEAVE_MS = 220;
 
   var btnOpenGlobalStats = document.getElementById("btn-open-global-stats");
 
@@ -14642,6 +14644,7 @@
   ) {
     var li = document.createElement("li");
     li.className = "all-player-card is-collapsed";
+    li.dataset.playerName = stats.name;
 
     var header = document.createElement("div");
     header.className = "all-player-card-header";
@@ -14681,7 +14684,6 @@
       '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
 
     header.appendChild(toggleBtn);
-    header.appendChild(buildPlayerLinkIcon(stats.name));
     header.appendChild(chevron);
     li.appendChild(header);
 
@@ -19845,9 +19847,33 @@
     renderAllPlayersPage();
   });
   btnToggleRosterFilter.addEventListener("click", function () {
-    allPlayersRosterOnly = !allPlayersRosterOnly;
-    btnToggleRosterFilter.classList.toggle("is-active", allPlayersRosterOnly);
-    btnToggleRosterFilter.textContent = T(allPlayersRosterOnly ? "allPlayers.showingRosterOnly" : "allPlayers.rosterOnly");
+    var turningOn = !allPlayersRosterOnly;
+    btnToggleRosterFilter.classList.toggle("is-active", turningOn);
+    btnToggleRosterFilter.textContent = T(turningOn ? "allPlayers.seeAllPlayers" : "allPlayers.rosterOnly");
+
+    // Turning the filter on: let the cards for players NOT on the roster
+    // fade/shrink out first, so it visibly reads as those players
+    // disappearing rather than the whole list just silently changing -
+    // then rebuild the list (which drops them) once the animation ends.
+    if (turningOn) {
+      var rosterNames = {};
+      state.players.forEach(function (p) {
+        rosterNames[p.name] = true;
+      });
+      var leavingCards = Array.prototype.filter.call(allPlayersList.querySelectorAll(".all-player-card"), function (card) {
+        return !rosterNames[card.dataset.playerName];
+      });
+      if (leavingCards.length) {
+        leavingCards.forEach(function (card) {
+          card.classList.add("all-player-card-leaving");
+        });
+        allPlayersRosterOnly = true;
+        window.setTimeout(renderAllPlayersPage, ALL_PLAYER_CARD_LEAVE_MS);
+        return;
+      }
+    }
+
+    allPlayersRosterOnly = turningOn;
     renderAllPlayersPage();
   });
   btnAllPlayersCsv.addEventListener("click", function () {
