@@ -3233,7 +3233,13 @@ input[type="number"] {
 
 .confirm-modal-message {
   margin: 0 0 20px;
-  font-size: 1rem;
+  /* This app is meant to be read across a table, not held up close -
+     explanatory popups (the rating system, K-factor, why a specific
+     game moved the rating the way it did, ...) are exactly the content
+     someone leans back to read, so the text needs to hold up at a few
+     feet, not just at arm's length. */
+  font-size: 1.25rem;
+  line-height: 1.5;
   font-weight: 600;
   color: var(--text-dim);
   white-space: pre-line;
@@ -3241,10 +3247,14 @@ input[type="number"] {
 }
 
 /* Used for long multi-line dumps (e.g. the day report clipboard-copy
-   fallback) instead of a short one-off confirmation sentence. */
+   fallback) instead of a short one-off confirmation sentence - still
+   noticeably bigger than before, just a step down from the default so
+   a dense multi-line report has a chance of fitting without excessive
+   scrolling. */
 .confirm-modal-message.is-long-text {
   text-align: left;
-  font-size: 0.85rem;
+  font-size: 1.1rem;
+  line-height: 1.4;
   font-weight: 500;
 }
 
