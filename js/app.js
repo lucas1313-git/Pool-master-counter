@@ -14762,6 +14762,28 @@
     return { card: li, detail: detail };
   }
 
+  // Cards size to their own name (see .all-player-card-name), so the
+  // one with the longest name is naturally the widest - this measures
+  // that natural width and stretches every other card to match it, so
+  // they all read as one uniform grid despite the underlying flex-wrap
+  // layout. Deferred to the next frame because renderAllPlayersPage can
+  // run while the page is still hidden (display:none), where every
+  // card would measure 0px wide.
+  function equalizeAllPlayerCardWidths() {
+    var cards = allPlayersList.querySelectorAll(".all-player-card");
+    if (!cards.length) return;
+    var maxWidth = 0;
+    Array.prototype.forEach.call(cards, function (card) {
+      card.style.width = "";
+      maxWidth = Math.max(maxWidth, card.offsetWidth);
+    });
+    if (maxWidth > 0) {
+      Array.prototype.forEach.call(cards, function (card) {
+        card.style.width = maxWidth + "px";
+      });
+    }
+  }
+
   function renderAllPlayersPage() {
     // The list is rebuilt from scratch below, so any expand/collapse
     // state (including the Expand All toggle) resets along with it -
@@ -14857,6 +14879,7 @@
       allPlayersList.appendChild(built.card);
       allPlayersDetailSection.appendChild(built.detail);
     });
+    requestAnimationFrame(equalizeAllPlayerCardWidths);
   }
 
   // Mirrors exactly what's currently on screen (same sort, period, and
