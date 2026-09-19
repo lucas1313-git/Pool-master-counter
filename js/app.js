@@ -12,6 +12,8 @@
     { id: "8ballrotation", label: "8 Ball Rotation", defaultTarget: 1, unit: "rack" },
     { id: "8ballpunishment", label: "8 Ball Punishment", defaultTarget: 1, unit: "rack" },
     { id: "9ball", label: "9-Ball", defaultTarget: 1, unit: "rack" },
+    { id: "10ball", label: "10-Ball", defaultTarget: 1, unit: "rack" },
+    { id: "15ballrotation", label: "15 Ball Rotation", defaultTarget: 61, unit: "points" },
     { id: "straight", label: "Straight Pool", defaultTarget: 100, unit: "points" },
     { id: "onepocket", label: "One Pocket", defaultTarget: 8, unit: "balls" },
     { id: "custom", label: "Custom", defaultTarget: 1, unit: "points" }
@@ -16169,9 +16171,9 @@
   // build-desktop.yml's make_latest:false). Pointing at the tag directly
   // works regardless of which release is "Latest".
   var DESKTOP_DOWNLOAD_URLS = {
-    mac: "https://github.com/lucas1313-git/Pool-master-counter/releases/download/desktop-latest/PoolMasterCounter-mac-arm64.dmg",
-    windows: "https://github.com/lucas1313-git/Pool-master-counter/releases/download/desktop-latest/PoolMasterCounter-win-x64.exe",
-    linux: "https://github.com/lucas1313-git/Pool-master-counter/releases/download/desktop-latest/PoolMasterCounter-linux-x64.tar.gz",
+    mac: "https://github.com/lucas1313-git/Pool-master-counter-releases/releases/download/desktop-latest/PoolMasterCounter-mac-arm64.dmg",
+    windows: "https://github.com/lucas1313-git/Pool-master-counter-releases/releases/download/desktop-latest/PoolMasterCounter-win-x64.exe",
+    linux: "https://github.com/lucas1313-git/Pool-master-counter-releases/releases/download/desktop-latest/PoolMasterCounter-linux-x64.tar.gz",
   };
 
   function renderInstallPrompt() {
