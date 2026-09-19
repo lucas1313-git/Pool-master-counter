@@ -1653,6 +1653,7 @@
   var playerPagePeriodFilter = document.getElementById("player-page-period-filter");
   var playerPageGraphBody = document.getElementById("player-page-graph-body");
   var playerPageRatingHistoryBody = document.getElementById("player-page-rating-history-body");
+  var btnRatingHistoryInfo = document.getElementById("btn-rating-history-info");
   var playerPagePeriodButtons = playerPagePeriodFilter.querySelectorAll(".period-btn");
   var playerPageSynopsisBody = document.getElementById("player-page-synopsis-body");
   var playerPageH2hList = document.getElementById("player-page-h2h-list");
@@ -13922,17 +13923,7 @@
 
     var isPositive = h.delta > 0;
     var isNegative = h.delta < 0;
-    var deltaBox = document.createElement("div");
-    deltaBox.className = "rating-history-delta " + (isPositive ? "is-positive" : isNegative ? "is-negative" : "is-flat");
-    var deltaValue = document.createElement("span");
-    deltaValue.className = "rating-history-delta-value";
-    deltaValue.textContent = (isPositive ? "+" : "") + h.delta;
-    var deltaRange = document.createElement("span");
-    deltaRange.className = "rating-history-delta-range";
-    deltaRange.textContent = selfRatingBefore + " → " + h.rating;
-    deltaBox.appendChild(deltaValue);
-    deltaBox.appendChild(deltaRange);
-    inner.appendChild(deltaBox);
+    var deltaSigned = (isPositive ? "+" : "") + h.delta;
 
     var detail = document.createElement("div");
     detail.className = "player-history-detail";
@@ -13943,13 +13934,21 @@
         })[0]
       : null;
 
+    // Built alongside the on-screen detail text, for this row's own "?"
+    // button (see rowInfoBtn below) - a plain-language paragraph or two
+    // grounded in this specific row's actual numbers, not the general
+    // explanation the section-level "?" gives.
+    var explanationText;
+
     if (!h.fromGame) {
       detail.appendChild(buildRatingHistoryDetailLine([document.createTextNode(T("playerPage.ratingHistoryManual"))]));
+      explanationText = T("playerPage.ratingRowExplainManual", { from: selfRatingBefore, to: h.rating });
     } else if (!game) {
       // A rating history entry with no matching game entry (e.g. that
       // game's session was since cleared by a reset) - still real, just
       // nothing left to explain the matchup with.
       detail.appendChild(buildRatingHistoryDetailLine([document.createTextNode(T("playerPage.ratingHistoryNoGameFound"))]));
+      explanationText = T("playerPage.ratingRowExplainNoGame", { from: selfRatingBefore, to: h.rating, delta: deltaSigned });
     } else {
       // A single non-team win credited against several simultaneous
       // opponents (e.g. a Winner Stays/queue table) runs one independent
@@ -13971,22 +13970,20 @@
         : null;
 
       // Line 1: who it was against and how it was expected to go. Line 2:
-      // the K-factor note (with its own "what does this mean?" button)
-      // and the result - split right before "K=", instead of one long
-      // run-on line.
+      // the K-factor note and the result - split right before "K=",
+      // instead of one long run-on line.
+      var matchupText = null;
       var line1Pieces = [];
       if (opponentNames.length) {
-        line1Pieces.push(
-          document.createTextNode(
-            T(isTeam ? "playerPage.ratingHistoryVsTeam" : "playerPage.ratingHistoryVsOne", {
-              names: opponentNames.join(" & "),
-              rating: oppRatingBefore
-            })
-          )
-        );
+        matchupText = T(isTeam ? "playerPage.ratingHistoryVsTeam" : "playerPage.ratingHistoryVsOne", {
+          names: opponentNames.join(" & "),
+          rating: oppRatingBefore
+        });
+        line1Pieces.push(document.createTextNode(matchupText));
       }
+      var expectedPct = null;
       if (oppRatingBefore !== null) {
-        var expectedPct = Math.round(eloExpectedScore(selfRatingBefore, oppRatingBefore) * 100);
+        expectedPct = Math.round(eloExpectedScore(selfRatingBefore, oppRatingBefore) * 100);
         line1Pieces.push(document.createTextNode(T("playerPage.ratingHistoryExpectedPct", { pct: expectedPct })));
       }
       if (line1Pieces.length) detail.appendChild(buildRatingHistoryDetailLine(line1Pieces));
@@ -13995,25 +13992,59 @@
       var kStatus = isTeam || gamesPlayedBefore < RATING_PROVISIONAL_GAMES
         ? T("playerPage.ratingHistoryProvisional", { games: RATING_PROVISIONAL_GAMES })
         : T("playerPage.ratingHistoryEstablished");
-      var kNote = document.createTextNode(T("playerPage.ratingHistoryKNote", { k: k, status: kStatus }));
-      var kInfoBtn = document.createElement("button");
-      kInfoBtn.type = "button";
-      kInfoBtn.className = "format-info-btn rating-k-info-btn";
-      kInfoBtn.textContent = "❓";
-      kInfoBtn.setAttribute("aria-label", T("playerPage.ratingKInfoAria"));
-      kInfoBtn.addEventListener("click", function () {
-        alertModal(T("playerPage.ratingKExplain"));
-      });
-      var resultNode = document.createTextNode(T(game.result === "won" ? "playerPage.ratingHistoryResultWon" : "playerPage.ratingHistoryResultLost"));
-      var line2 = document.createElement("div");
-      line2.className = "rating-history-detail-line";
-      line2.appendChild(kNote);
-      line2.appendChild(kInfoBtn);
-      line2.appendChild(document.createTextNode(" · "));
-      line2.appendChild(resultNode);
-      detail.appendChild(line2);
+      detail.appendChild(
+        buildRatingHistoryDetailLine([
+          document.createTextNode(T("playerPage.ratingHistoryKNote", { k: k, status: kStatus })),
+          document.createTextNode(T(game.result === "won" ? "playerPage.ratingHistoryResultWon" : "playerPage.ratingHistoryResultLost"))
+        ])
+      );
+
+      // The magnitude reasoning: a favorite winning (or an underdog
+      // losing) barely moves the rating, while an upset (or an
+      // unexpected loss) moves it a lot - this is the actual "why" a
+      // beginner is asking about when they wonder why one win was worth
+      // +2 and another +9.
+      var outcomeKey;
+      if (expectedPct === null) {
+        outcomeKey = game.result === "won" ? "playerPage.ratingRowExplainGenericWon" : "playerPage.ratingRowExplainGenericLost";
+      } else if (game.result === "won") {
+        outcomeKey = expectedPct >= 50 ? "playerPage.ratingRowExplainWonFavored" : "playerPage.ratingRowExplainWonUnderdog";
+      } else {
+        outcomeKey = expectedPct >= 50 ? "playerPage.ratingRowExplainLostFavored" : "playerPage.ratingRowExplainLostUnderdog";
+      }
+
+      var explanationParts = [];
+      if (matchupText) {
+        explanationParts.push(expectedPct === null ? matchupText : matchupText + " · " + T("playerPage.ratingHistoryExpectedPct", { pct: expectedPct }));
+      }
+      explanationParts.push(T("playerPage.ratingRowExplainKFactor", { k: k, status: kStatus }));
+      explanationParts.push(T(outcomeKey, { delta: deltaSigned, from: selfRatingBefore, to: h.rating }));
+      explanationText = explanationParts.join("\n\n");
     }
     inner.appendChild(detail);
+
+    var deltaBox = document.createElement("div");
+    deltaBox.className = "rating-history-delta " + (isPositive ? "is-positive" : isNegative ? "is-negative" : "is-flat");
+    var deltaValue = document.createElement("span");
+    deltaValue.className = "rating-history-delta-value";
+    deltaValue.textContent = deltaSigned;
+    var deltaRange = document.createElement("span");
+    deltaRange.className = "rating-history-delta-range";
+    deltaRange.textContent = selfRatingBefore + " → " + h.rating;
+    var rowInfoBtn = document.createElement("button");
+    rowInfoBtn.type = "button";
+    rowInfoBtn.className = "format-info-btn rating-row-info-btn";
+    rowInfoBtn.textContent = "❓";
+    rowInfoBtn.setAttribute("aria-label", T("playerPage.ratingRowInfoAria"));
+    rowInfoBtn.addEventListener("click", function () {
+      alertModal(explanationText);
+    });
+    deltaBox.appendChild(deltaValue);
+    deltaBox.appendChild(deltaRange);
+    deltaBox.appendChild(rowInfoBtn);
+    // Inserted right after the date, ahead of the detail text already
+    // appended above, so visual order stays date -> delta box -> detail.
+    inner.insertBefore(deltaBox, detail);
 
     li.appendChild(inner);
     return li;
@@ -19721,6 +19752,9 @@
   });
   btnFairRaceInfoSession.addEventListener("click", function () {
     alertModal(T("tournament.fairRaceExplain"));
+  });
+  btnRatingHistoryInfo.addEventListener("click", function () {
+    alertModal(T("playerPage.ratingKExplain"));
   });
 
   function tournamentPlayerCheckboxes() {

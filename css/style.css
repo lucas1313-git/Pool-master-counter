@@ -4164,6 +4164,27 @@ input[type="number"] {
   opacity: 0.7;
 }
 
+/* The Rating History panel-toggle button can't hold a second, real
+   button of its own (a <button> can't nest inside a <button>), so the
+   section's own "?" (opens the general, beginner-language explanation)
+   sits beside it in this wrapper instead of inside it. */
+.rating-history-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 12px;
+}
+
+.collapsible-panel.collapsed .rating-history-header {
+  margin-bottom: 0;
+}
+
+.rating-history-header .panel-toggle {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
 /* Step-by-step rating history (see renderRatingHistorySection) - reuses
    .player-history-row/-detail from the Session History list above for
    the same card look. Multiple columns instead of one tall stack, each
@@ -4197,7 +4218,7 @@ input[type="number"] {
 
 .rating-history-delta {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
   border: 2px solid var(--border);
   border-radius: 8px;
@@ -4247,14 +4268,13 @@ input[type="number"] {
   margin-top: 3px;
 }
 
-/* Sits inline in the K=x line's text instead of the default 26px
-   circle, which reads oversized next to 0.85rem text. */
-.rating-k-info-btn {
+/* Sits to the right of the +/- and old->new inside their own box,
+   smaller than the default 26px circle so it doesn't dwarf them. */
+.rating-row-info-btn {
   width: 20px;
   height: 20px;
   font-size: 0.65rem;
-  margin: 0 2px;
-  vertical-align: middle;
+  flex-shrink: 0;
 }
 
 .rating-history-show-more {
