@@ -223,6 +223,19 @@
     if (extraToggle) extraToggle.addEventListener("click", toggle);
   }
 
+  // Jumps to another collapsible panel elsewhere on the page - expanding
+  // it first (via its own toggle button, so aria-expanded/chevron state
+  // stay correct) if it was left collapsed, then scrolling it into view.
+  // Used by cross-references like "Rating this period" -> Rating History
+  // and the stat detail popup's "View Full Graph" button.
+  function expandAndScrollToPanel(panelElId, toggleBtnElId) {
+    var panel = document.getElementById(panelElId);
+    if (panel.classList.contains("collapsed")) {
+      document.getElementById(toggleBtnElId).click();
+    }
+    panel.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   // Updates the one-line "what's inside" sentence shown only while a
   // collapsible panel is collapsed (id="<panelElId>-summary").
   function setPanelSummary(panelElId, text) {
@@ -12389,7 +12402,10 @@
         synopsisStatRow(
           T("playerPage.ratingThisPeriod"),
           ratingDeltaText,
-          ratingDeltaText.charAt(0) === "▲" ? "win" : ratingDeltaText.charAt(0) === "▼" ? "loss" : null
+          ratingDeltaText.charAt(0) === "▲" ? "win" : ratingDeltaText.charAt(0) === "▼" ? "loss" : null,
+          function () {
+            expandAndScrollToPanel("player-page-rating-history-panel", "btn-toggle-player-page-rating-history-panel");
+          }
         )
       );
     }
@@ -19602,11 +19618,7 @@
   // left collapsed, same as clicking its own toggle would.
   btnPlayerStatDetailViewGraph.addEventListener("click", function () {
     closePlayerStatDetail();
-    var graphPanel = document.getElementById("player-page-graph-panel");
-    if (graphPanel.classList.contains("collapsed")) {
-      document.getElementById("btn-toggle-player-page-graph-panel").click();
-    }
-    graphPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+    expandAndScrollToPanel("player-page-graph-panel", "btn-toggle-player-page-graph-panel");
   });
   btnPlayerPageBack.addEventListener("click", function () {
     closePlayerStatsPage();
