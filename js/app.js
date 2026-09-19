@@ -1714,6 +1714,7 @@
   var btnAllPlayersCsv = document.getElementById("btn-all-players-csv");
   var btnAllPlayersExpandAll = document.getElementById("btn-all-players-expand-all");
   var allPlayersList = document.getElementById("all-players-list");
+  var allPlayersDetailSection = document.getElementById("all-players-detail-section");
   var allPlayersViewMode = "bars";
   var allPlayersRosterOnly = false;
   var allPlayersAllExpanded = false;
@@ -14615,15 +14616,21 @@
     return wrap;
   }
 
-  // Collapsed by default to just the name, rating, and win rate - the
-  // rest (bars/timeline or the full graph) lives in .all-player-card-body
-  // and only renders visible once expanded, independently per card (no
-  // accordion - expanding one never touches any other card's state,
-  // since each card's own classList is the only place that state lives).
+  // Every collapsed card is just name/rating/win-rate, one line each,
+  // truncated with an ellipsis rather than wrapped - so every card in
+  // the grid ends up the same shape regardless of name length, instead
+  // of a long name pushing just its own card taller than its neighbors.
   // The toggle button can't also hold the "view full stats page" link
   // icon or the chevron (a <button> can't contain another <button>), so
   // both sit outside it as siblings in .all-player-card-header instead -
   // same fix as Rating History's own title/❓/chevron split.
+  //
+  // The full view (bars/timeline, or the full graph) does NOT live
+  // inside the card - it's built here as a separate, full-width
+  // "detail" element meant to be appended to #all-players-detail-section
+  // instead, below the whole grid, so it's never squeezed into one
+  // grid column's width. Returns { card, detail } - the caller appends
+  // each to its own container.
   function buildAllPlayerCard(
     stats,
     sharedAxisMax,
@@ -14646,10 +14653,10 @@
 
     var nameGroup = document.createElement("span");
     nameGroup.className = "all-player-name-group";
-    var name = document.createElement("span");
-    name.className = "all-player-name";
-    buildPlayerNameLabel(name, stats.name, false);
-    nameGroup.appendChild(name);
+    var cardName = document.createElement("span");
+    cardName.className = "all-player-card-name";
+    buildPlayerNameLabel(cardName, stats.name, false);
+    nameGroup.appendChild(cardName);
     nameGroup.appendChild(buildRatingBadge(stats.name));
 
     var summary = document.createElement("span");
@@ -14665,22 +14672,34 @@
     chevron.innerHTML =
       '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
 
-    function toggleExpanded() {
-      var willExpand = li.classList.contains("is-collapsed");
-      li.classList.toggle("is-collapsed");
-      toggleBtn.setAttribute("aria-expanded", willExpand ? "true" : "false");
-      if (willExpand) li.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-    toggleBtn.addEventListener("click", toggleExpanded);
-    chevron.addEventListener("click", toggleExpanded);
-
     header.appendChild(toggleBtn);
     header.appendChild(buildPlayerLinkIcon(stats.name));
     header.appendChild(chevron);
     li.appendChild(header);
 
-    var body = document.createElement("div");
-    body.className = "all-player-card-body";
+    var detail = document.createElement("div");
+    detail.className = "all-player-detail";
+    detail.hidden = true;
+
+    var detailHeader = document.createElement("div");
+    detailHeader.className = "all-player-detail-header";
+    var detailName = document.createElement("span");
+    detailName.className = "all-player-name";
+    buildPlayerNameLabel(detailName, stats.name, false);
+    detailHeader.appendChild(detailName);
+    detailHeader.appendChild(buildRatingBadge(stats.name));
+    detailHeader.appendChild(buildPlayerLinkIcon(stats.name));
+    detail.appendChild(detailHeader);
+
+    function toggleExpanded() {
+      var willExpand = detail.hidden;
+      detail.hidden = !willExpand;
+      li.classList.toggle("is-collapsed", !willExpand);
+      toggleBtn.setAttribute("aria-expanded", willExpand ? "true" : "false");
+      if (willExpand) detail.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    toggleBtn.addEventListener("click", toggleExpanded);
+    chevron.addEventListener("click", toggleExpanded);
 
     var ratingDeltaText = formatRatingPeriodDelta(stats.name, period);
     if (ratingDeltaText !== null) {
@@ -14689,12 +14708,12 @@
       if (ratingDeltaText.charAt(0) === "▲") ratingStatus.classList.add("is-up");
       else if (ratingDeltaText.charAt(0) === "▼") ratingStatus.classList.add("is-down");
       ratingStatus.textContent = T("allPlayers.ratingThisPeriod", { delta: ratingDeltaText });
-      body.appendChild(ratingStatus);
+      detail.appendChild(ratingStatus);
     }
 
     if (allPlayersViewMode === "graph") {
       if (isInLiveRoster) {
-        body.appendChild(buildPlayerGraph(stats, minMs, maxMs, period, sharedAxisMax));
+        detail.appendChild(buildPlayerGraph(stats, minMs, maxMs, period, sharedAxisMax));
       } else {
         var graphHolder = document.createElement("div");
         graphHolder.className = "all-player-graph-holder hidden";
@@ -14710,30 +14729,29 @@
           showGraphBtn.textContent = T(nowHidden ? "allPlayers.showGraph" : "allPlayers.hideGraph");
           if (!nowHidden) graphHolder.scrollIntoView({ behavior: "smooth", block: "start" });
         });
-        body.appendChild(showGraphBtn);
-        body.appendChild(graphHolder);
+        detail.appendChild(showGraphBtn);
+        detail.appendChild(graphHolder);
       }
     } else {
       // Played/won/lost share one scale (played's, since played >= won +
       // lost for any one player) so equal counts always draw equal bar
       // lengths and different players' bars stay directly comparable -
       // same for the tournament trio below.
-      body.appendChild(buildScaleRow(T("allPlayers.gamesPlayed"), stats.played, sharedAxisMax, "scale-fill-played"));
-      body.appendChild(buildScaleRow(T("allPlayers.gamesWon"), stats.wins, sharedAxisMax, "scale-fill-won"));
-      body.appendChild(buildScaleRow(T("allPlayers.gamesLost"), stats.losses, sharedAxisMax, "scale-fill-lost"));
+      detail.appendChild(buildScaleRow(T("allPlayers.gamesPlayed"), stats.played, sharedAxisMax, "scale-fill-played"));
+      detail.appendChild(buildScaleRow(T("allPlayers.gamesWon"), stats.wins, sharedAxisMax, "scale-fill-won"));
+      detail.appendChild(buildScaleRow(T("allPlayers.gamesLost"), stats.losses, sharedAxisMax, "scale-fill-lost"));
       if (stats.tournamentPlayed > 0) {
-        body.appendChild(buildScaleRow(T("allPlayers.tournamentsPlayed"), stats.tournamentPlayed, tournSharedAxisMax, "scale-fill-tourn-played"));
-        body.appendChild(buildScaleRow(T("allPlayers.tournamentsWon"), stats.tournamentWins, tournSharedAxisMax, "scale-fill-tourn-won"));
-        body.appendChild(buildScaleRow(T("allPlayers.tournamentsLost"), stats.tournamentLosses, tournSharedAxisMax, "scale-fill-tourn-lost"));
+        detail.appendChild(buildScaleRow(T("allPlayers.tournamentsPlayed"), stats.tournamentPlayed, tournSharedAxisMax, "scale-fill-tourn-played"));
+        detail.appendChild(buildScaleRow(T("allPlayers.tournamentsWon"), stats.tournamentWins, tournSharedAxisMax, "scale-fill-tourn-won"));
+        detail.appendChild(buildScaleRow(T("allPlayers.tournamentsLost"), stats.tournamentLosses, tournSharedAxisMax, "scale-fill-tourn-lost"));
       }
 
       if (stats.games.length) {
-        body.appendChild(buildTimelineRow(stats.games, minMs, maxMs));
+        detail.appendChild(buildTimelineRow(stats.games, minMs, maxMs));
       }
     }
-    li.appendChild(body);
 
-    return li;
+    return { card: li, detail: detail };
   }
 
   function renderAllPlayersPage() {
@@ -14808,6 +14826,7 @@
     });
 
     allPlayersList.innerHTML = "";
+    allPlayersDetailSection.innerHTML = "";
     if (sorted.length === 0) {
       var hint = document.createElement("li");
       hint.className = "empty-hint";
@@ -14818,17 +14837,17 @@
       return;
     }
     sorted.forEach(function (s) {
-      allPlayersList.appendChild(
-        buildAllPlayerCard(
-          s,
-          playedAxisMax,
-          tournPlayedAxisMax,
-          minMs,
-          maxMs,
-          period,
-          !!liveRosterNames[s.name]
-        )
+      var built = buildAllPlayerCard(
+        s,
+        playedAxisMax,
+        tournPlayedAxisMax,
+        minMs,
+        maxMs,
+        period,
+        !!liveRosterNames[s.name]
       );
+      allPlayersList.appendChild(built.card);
+      allPlayersDetailSection.appendChild(built.detail);
     });
   }
 
@@ -19811,6 +19830,9 @@
       card.classList.toggle("is-collapsed", !allPlayersAllExpanded);
       var toggle = card.querySelector(".all-player-card-toggle");
       if (toggle) toggle.setAttribute("aria-expanded", allPlayersAllExpanded ? "true" : "false");
+    });
+    Array.prototype.forEach.call(allPlayersDetailSection.querySelectorAll(".all-player-detail"), function (detail) {
+      detail.hidden = !allPlayersAllExpanded;
     });
   });
 

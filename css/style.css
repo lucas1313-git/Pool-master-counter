@@ -4517,9 +4517,10 @@ input[type="number"] {
 
 /* Multiple columns instead of one tall stack, each just wide enough for
    a collapsed card's name/rating/win-rate row - as many as the screen
-   fits, flowing left to right then down. Expanded cards (which can run
-   much taller once bars/timeline or a full graph shows) don't stretch
-   their row-mates - see align-items below. */
+   fits, flowing left to right then down. Every card is always the same
+   compact name/rating/win-rate shape (the full view lives in a separate
+   full-width section below instead), so grid's default stretch keeps
+   every card in a row the same height too. */
 .all-players-list {
   list-style: none;
   margin: 0;
@@ -4527,7 +4528,33 @@ input[type="number"] {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 12px;
-  align-items: start;
+}
+
+/* Full-width expanded player detail, appended below the whole card
+   grid rather than inside any one grid column, so it always gets the
+   entire page width to lay out bars/timeline or the full graph in. */
+.all-players-detail-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 16px 24px;
+}
+
+.all-player-detail {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.all-player-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
 }
 
 .contact-sheet-list {
@@ -5071,24 +5098,19 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
 /* The toggle button (name/rating/win-rate) can't also hold the link
    icon or the chevron - a <button> can't nest another <button> - so all
    three are separate flex items here instead, the same split Rating
-   History's own header uses. */
+   History's own header uses. This header is the entire card now - the
+   full view lives in a separate .all-player-detail element below the
+   whole grid instead of inside the card. */
 .all-player-card-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 16px;
-}
-
-.all-player-card.is-collapsed .all-player-card-header {
-  margin-bottom: 0;
 }
 
 .all-player-card-toggle {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 10px;
+  flex-direction: column;
+  gap: 4px;
   flex: 1;
   min-width: 0;
   background: none;
@@ -5099,12 +5121,6 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   font: inherit;
   color: inherit;
   text-align: left;
-}
-
-/* Collapsed by default (see buildAllPlayerCard) - only this header
-   stays visible, so this is the entire card until it's expanded. */
-.all-player-card.is-collapsed .all-player-card-body {
-  display: none;
 }
 
 .all-player-card-chevron {
@@ -5122,11 +5138,26 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   font-weight: 800;
 }
 
+/* Never wraps to a second line - long names get truncated with an
+   ellipsis instead, so every collapsed card keeps the same height
+   regardless of name length. */
+.all-player-card-name {
+  color: var(--accent);
+  font-size: 1.15rem;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+}
+
 .all-player-name-group {
   display: flex;
   align-items: center;
   gap: 6px;
   min-width: 0;
+  width: 100%;
 }
 
 .player-link-icon {
@@ -5148,7 +5179,7 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   color: var(--text-dim);
   font-size: 0.85rem;
   font-variant-numeric: tabular-nums;
-  text-align: right;
+  text-align: left;
 }
 
 .all-player-rating-status {
