@@ -12650,24 +12650,33 @@
     date.textContent = formatTimestamp(g.ts, true);
     textCol.appendChild(date);
 
-    var pieces = [g.gameLabel];
+    // The opponent name is the one piece worth picking out at a glance
+    // in an otherwise-dim detail line - built as its own bold element
+    // instead of folded into the plain joined text the other pieces use.
+    var pieces = [document.createTextNode(g.gameLabel)];
     var opponentNames = g.opponentNames || [];
     if (opponentNames.length) {
-      pieces.push(
-        T(g.isTeam ? "playerPage.statDetailVsTeam" : "playerPage.statDetailVsOne", { names: opponentNames.join(" & ") })
-      );
+      var opponentEl = document.createElement("strong");
+      opponentEl.className = "player-stat-detail-opponent";
+      opponentEl.textContent = T(g.isTeam ? "playerPage.statDetailVsTeam" : "playerPage.statDetailVsOne", {
+        names: opponentNames.join(" & ")
+      });
+      pieces.push(opponentEl);
     }
-    pieces.push(T(g.result === "won" ? "playerPage.ratingHistoryResultWon" : "playerPage.ratingHistoryResultLost"));
-    if (g.wonRace && g.raceTarget) pieces.push(T("playerPage.statDetailRaceTo", { target: g.raceTarget }));
+    pieces.push(document.createTextNode(T(g.result === "won" ? "playerPage.ratingHistoryResultWon" : "playerPage.ratingHistoryResultLost")));
+    if (g.wonRace && g.raceTarget) pieces.push(document.createTextNode(T("playerPage.statDetailRaceTo", { target: g.raceTarget })));
     var durationText = formatDuration(g.durationMs);
-    if (durationText) pieces.push(T("common.duration", { time: durationText }));
+    if (durationText) pieces.push(document.createTextNode(T("common.duration", { time: durationText })));
     if (g.ballsLeftOnTable !== null && g.ballsLeftOnTable !== undefined) {
-      pieces.push(T("history.ballsLeftOnTable", { count: g.ballsLeftOnTable }));
+      pieces.push(document.createTextNode(T("history.ballsLeftOnTable", { count: g.ballsLeftOnTable })));
     }
 
     var detail = document.createElement("div");
     detail.className = "player-history-detail";
-    detail.textContent = pieces.join(" · ");
+    pieces.forEach(function (piece, i) {
+      if (i > 0) detail.appendChild(document.createTextNode(" · "));
+      detail.appendChild(piece);
+    });
     textCol.appendChild(detail);
     inner.appendChild(textCol);
 

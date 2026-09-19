@@ -4254,6 +4254,13 @@ input[type="number"] {
   text-align: left;
 }
 
+/* The opponent name is the one piece of the (otherwise dim) detail
+   line worth picking out at a glance. */
+.player-stat-detail-opponent {
+  color: var(--text);
+  font-weight: 700;
+}
+
 /* ---------- Player stats synopsis ---------- */
 
 .period-filter-row {
