@@ -1658,6 +1658,12 @@
   var playerPageH2hList = document.getElementById("player-page-h2h-list");
   var playerPageTeamsList = document.getElementById("player-page-teams-list");
   var playerPageClubTeamBlock = document.getElementById("player-page-clubteam-block");
+  var playerStatDetailOverlay = document.getElementById("player-stat-detail-overlay");
+  var playerStatDetailTitle = document.getElementById("player-stat-detail-title");
+  var playerStatDetailList = document.getElementById("player-stat-detail-list");
+  var playerStatDetailNote = document.getElementById("player-stat-detail-note");
+  var btnPlayerStatDetailViewGraph = document.getElementById("btn-player-stat-detail-view-graph");
+  var btnPlayerStatDetailClose = document.getElementById("btn-player-stat-detail-close");
   var playerPageAchievementsList = document.getElementById("player-page-achievements-list");
   var btnReturnToGlobalStats = document.getElementById("btn-return-to-global-stats");
   var playerPageSwitcher = document.getElementById("player-page-switcher");
@@ -12322,9 +12328,14 @@
     playerPageAchievementsList.appendChild(buildAchievementBadgesFragment(data));
   }
 
-  function synopsisStatRow(label, value, variant) {
+  // onClick (optional) is only passed for rows backed by an actual list
+  // of games (Games Won/Lost, Tournaments Played/Won/Lost) - it opens the
+  // detail popup for that exact slice of games. Rows without a natural
+  // "list of events" behind them (Rating, Win %, best runs, ...) stay
+  // plain, non-interactive rows.
+  function synopsisStatRow(label, value, variant, onClick) {
     var row = document.createElement("div");
-    row.className = "player-stats-row";
+    row.className = "player-stats-row" + (onClick ? " is-clickable" : "");
     var l = document.createElement("span");
     l.className = "label";
     l.textContent = label;
@@ -12333,6 +12344,16 @@
     v.textContent = value;
     row.appendChild(l);
     row.appendChild(v);
+    if (onClick) {
+      row.setAttribute("role", "button");
+      row.tabIndex = 0;
+      row.addEventListener("click", onClick);
+      row.addEventListener("keydown", function (e) {
+        if (e.key !== "Enter" && e.key !== " ") return;
+        e.preventDefault();
+        onClick();
+      });
+    }
     return row;
   }
 
@@ -12364,18 +12385,22 @@
         )
       );
     }
+    var gamesWonList = filtered.filter(function (g) { return g.result === "won"; });
+    var gamesLostList = filtered.filter(function (g) { return g.result === "lost"; });
     playerPageSynopsisBody.appendChild(
       synopsisStatRow(
         T("playerPage.gamesWon"),
         synopsis.skunkWins ? T("playerPage.winsWithSkunk", { wins: synopsis.wins, skunks: synopsis.skunkWins }) : synopsis.wins,
-        "win"
+        "win",
+        function () { openPlayerStatDetail(T("playerPage.gamesWon"), gamesWonList); }
       )
     );
     playerPageSynopsisBody.appendChild(
       synopsisStatRow(
         T("playerPage.gamesLost"),
         synopsis.skunkLosses ? T("playerPage.lossesWithSkunk", { losses: synopsis.losses, skunks: synopsis.skunkLosses }) : synopsis.losses,
-        "loss"
+        "loss",
+        function () { openPlayerStatDetail(T("playerPage.gamesLost"), gamesLostList); }
       )
     );
     playerPageSynopsisBody.appendChild(
@@ -12416,9 +12441,23 @@
       currentStatsPeriod
     );
     var tournamentSynopsis = computeWinLossSynopsis(tournamentFiltered);
-    playerPageSynopsisBody.appendChild(synopsisStatRow(T("playerPage.tournamentsPlayed"), tournamentSynopsis.total));
-    playerPageSynopsisBody.appendChild(synopsisStatRow(T("playerPage.tournamentsWon"), tournamentSynopsis.wins, "win"));
-    playerPageSynopsisBody.appendChild(synopsisStatRow(T("playerPage.tournamentsLost"), tournamentSynopsis.losses, "loss"));
+    var tournamentsWonList = tournamentFiltered.filter(function (g) { return g.result === "won"; });
+    var tournamentsLostList = tournamentFiltered.filter(function (g) { return g.result === "lost"; });
+    playerPageSynopsisBody.appendChild(
+      synopsisStatRow(T("playerPage.tournamentsPlayed"), tournamentSynopsis.total, null, function () {
+        openPlayerStatDetail(T("playerPage.tournamentsPlayed"), tournamentFiltered);
+      })
+    );
+    playerPageSynopsisBody.appendChild(
+      synopsisStatRow(T("playerPage.tournamentsWon"), tournamentSynopsis.wins, "win", function () {
+        openPlayerStatDetail(T("playerPage.tournamentsWon"), tournamentsWonList);
+      })
+    );
+    playerPageSynopsisBody.appendChild(
+      synopsisStatRow(T("playerPage.tournamentsLost"), tournamentSynopsis.losses, "loss", function () {
+        openPlayerStatDetail(T("playerPage.tournamentsLost"), tournamentsLostList);
+      })
+    );
 
     var h2h = computeHeadToHead(filtered);
     setPanelSummary(
@@ -12565,6 +12604,116 @@
     }
 
     renderPlayerAchievements();
+  }
+
+  // ---------------------------------------------------------------------
+  // Stat detail popup - opened by clicking Games Won/Lost or Tournaments
+  // Played/Won/Lost in the synopsis (see synopsisStatRow's onClick). Shows
+  // the most recent 20 games behind that number, reusing the same row
+  // layout as Rating History (explanation left, rating delta right) since
+  // it's the same kind of "what actually happened, and what did it cost/
+  // earn" entry.
+  // ---------------------------------------------------------------------
+
+  var PLAYER_STAT_DETAIL_DISPLAY_LIMIT = 20;
+
+  // A game can move this player's rating by more than one point at once
+  // (e.g. a single non-team win credited against several simultaneous
+  // opponents runs one pairwise update per opponent - see
+  // buildRatingHistoryEntryRow's own comment on this) - every rating-
+  // history entry stamped with this exact game's ts belongs to it, so
+  // their deltas are summed into one net figure for the row.
+  function playerStatDetailRatingDelta(name, ts) {
+    var entry = getPlayerRatingEntry(name);
+    var history = entry ? entry.history : [];
+    var total = 0;
+    var found = false;
+    history.forEach(function (h) {
+      if (h.ts !== ts) return;
+      total += h.delta;
+      found = true;
+    });
+    return found ? total : null;
+  }
+
+  function buildPlayerStatDetailRow(name, g) {
+    var li = document.createElement("li");
+    li.className = "player-history-row rating-history-row";
+
+    var inner = document.createElement("div");
+    inner.className = "rating-history-row-inner";
+
+    var textCol = document.createElement("div");
+    textCol.className = "rating-history-row-text";
+    var date = document.createElement("span");
+    date.className = "player-history-date";
+    date.textContent = formatTimestamp(g.ts, true);
+    textCol.appendChild(date);
+
+    var pieces = [g.gameLabel];
+    var opponentNames = g.opponentNames || [];
+    if (opponentNames.length) {
+      pieces.push(
+        T(g.isTeam ? "playerPage.statDetailVsTeam" : "playerPage.statDetailVsOne", { names: opponentNames.join(" & ") })
+      );
+    }
+    pieces.push(T(g.result === "won" ? "playerPage.ratingHistoryResultWon" : "playerPage.ratingHistoryResultLost"));
+    if (g.wonRace && g.raceTarget) pieces.push(T("playerPage.statDetailRaceTo", { target: g.raceTarget }));
+    var durationText = formatDuration(g.durationMs);
+    if (durationText) pieces.push(T("common.duration", { time: durationText }));
+    if (g.ballsLeftOnTable !== null && g.ballsLeftOnTable !== undefined) {
+      pieces.push(T("history.ballsLeftOnTable", { count: g.ballsLeftOnTable }));
+    }
+
+    var detail = document.createElement("div");
+    detail.className = "player-history-detail";
+    detail.textContent = pieces.join(" · ");
+    textCol.appendChild(detail);
+    inner.appendChild(textCol);
+
+    var delta = playerStatDetailRatingDelta(name, g.ts);
+    var isPositive = delta !== null && delta > 0;
+    var isNegative = delta !== null && delta < 0;
+    var deltaBox = document.createElement("div");
+    deltaBox.className = "rating-history-delta " + (isPositive ? "is-positive" : isNegative ? "is-negative" : "is-flat");
+    var deltaValue = document.createElement("span");
+    deltaValue.className = "rating-history-delta-value";
+    deltaValue.textContent = delta === null ? "—" : (isPositive ? "+" : "") + delta;
+    deltaBox.appendChild(deltaValue);
+    inner.appendChild(deltaBox);
+
+    li.appendChild(inner);
+    return li;
+  }
+
+  function openPlayerStatDetail(title, games) {
+    playerStatDetailTitle.textContent = title;
+    var sorted = (games || []).slice().sort(function (a, b) {
+      return (b.ts || "").localeCompare(a.ts || "");
+    });
+    var shown = sorted.slice(0, PLAYER_STAT_DETAIL_DISPLAY_LIMIT);
+
+    playerStatDetailList.innerHTML = "";
+    if (shown.length === 0) {
+      var hint = document.createElement("li");
+      hint.className = "empty-hint";
+      hint.textContent = T("playerPage.statDetailEmpty");
+      playerStatDetailList.appendChild(hint);
+    } else {
+      shown.forEach(function (g) {
+        playerStatDetailList.appendChild(buildPlayerStatDetailRow(currentStatsPlayerName, g));
+      });
+    }
+    playerStatDetailNote.textContent =
+      sorted.length > PLAYER_STAT_DETAIL_DISPLAY_LIMIT
+        ? T("playerPage.statDetailShowingLast20", { total: sorted.length })
+        : "";
+
+    playerStatDetailOverlay.classList.remove("hidden");
+  }
+
+  function closePlayerStatDetail() {
+    playerStatDetailOverlay.classList.add("hidden");
   }
 
   // Mirrors exactly what the Player Stats page currently shows (same
@@ -19350,6 +19499,21 @@
     downloadTextFile(filename, buildPlayerStatsCsv(), "text/csv;charset=utf-8");
   });
   btnPlayerPageReset.addEventListener("click", resetPlayerHistoricalStats);
+  btnPlayerStatDetailClose.addEventListener("click", closePlayerStatDetail);
+  playerStatDetailOverlay.addEventListener("click", function (e) {
+    if (e.target === playerStatDetailOverlay) closePlayerStatDetail();
+  });
+  // Jumps to the Graph panel for the full picture behind whatever slice
+  // of games the popup was just showing - expanding it first if it was
+  // left collapsed, same as clicking its own toggle would.
+  btnPlayerStatDetailViewGraph.addEventListener("click", function () {
+    closePlayerStatDetail();
+    var graphPanel = document.getElementById("player-page-graph-panel");
+    if (graphPanel.classList.contains("collapsed")) {
+      document.getElementById("btn-toggle-player-page-graph-panel").click();
+    }
+    graphPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
   btnPlayerPageBack.addEventListener("click", function () {
     closePlayerStatsPage();
   });

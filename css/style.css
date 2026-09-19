@@ -3913,6 +3913,19 @@ input[type="number"] {
   font-variant-numeric: tabular-nums;
 }
 
+/* Games Won/Lost and Tournaments Played/Won/Lost open the stat detail
+   popup (see synopsisStatRow's onClick / openPlayerStatDetail) - a
+   visible affordance so it doesn't look identical to the plain,
+   non-interactive rows around it. */
+.player-stats-row.is-clickable {
+  cursor: pointer;
+}
+
+.player-stats-row.is-clickable:hover,
+.player-stats-row.is-clickable:focus-visible {
+  border-color: var(--accent);
+}
+
 .rotation-position-row {
   margin: 0 16px 12px;
   background: rgba(0, 0, 0, 0.25);
@@ -4226,6 +4239,19 @@ input[type="number"] {
   display: block;
   width: max-content;
   margin: 0 auto;
+}
+
+/* Stat detail popup (Games Won/Lost, Tournaments Played/Won/Lost) -
+   reuses .rating-history-list/-row-inner/-delta for the same layout,
+   just in its own modal instead of a page panel. */
+.player-stat-detail-card {
+  max-width: 480px;
+}
+
+.player-stat-detail-list {
+  max-height: 50vh;
+  overflow-y: auto;
+  text-align: left;
 }
 
 /* ---------- Player stats synopsis ---------- */

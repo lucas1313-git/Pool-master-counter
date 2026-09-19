@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260918l">
+<link rel="stylesheet" href="css/style.css?v=20260918m">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -718,6 +718,18 @@
     <div class="confirm-modal-actions">
       <button type="button" id="btn-game-setup-manage-delete" class="btn btn-danger" disabled data-i18n="gameSetup.manageSetupsDeleteButton">🗑️ Delete Selected</button>
       <button type="button" id="btn-game-setup-manage-cancel" class="btn btn-ghost" data-i18n="common.cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="player-stat-detail-overlay" class="confirm-modal-overlay hidden">
+  <div class="confirm-modal-card player-stat-detail-card">
+    <h3 class="confirm-modal-title" id="player-stat-detail-title"></h3>
+    <ul id="player-stat-detail-list" class="rating-history-list player-stat-detail-list"></ul>
+    <p class="player-stats-note" id="player-stat-detail-note"></p>
+    <div class="confirm-modal-actions">
+      <button type="button" id="btn-player-stat-detail-view-graph" class="btn btn-primary" data-i18n="playerPage.statDetailViewGraph">📈 View Full Graph</button>
+      <button type="button" id="btn-player-stat-detail-close" class="btn btn-ghost" data-i18n="common.close">Close</button>
     </div>
   </div>
 </div>
@@ -1485,6 +1497,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260918l"></script>
+<script src="js/app.js?v=20260918m"></script>
 </body>
 </html>
