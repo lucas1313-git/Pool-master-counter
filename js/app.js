@@ -14651,20 +14651,28 @@
     toggleBtn.className = "all-player-card-toggle";
     toggleBtn.setAttribute("aria-expanded", "false");
 
+    // The name sits alone on its own full-width row up top, like a
+    // title - never wrapped or truncated, so the card grows as wide as
+    // it needs to show the whole name on one line. The rating badge
+    // moves down to sit beside the win-rate line instead.
     var nameGroup = document.createElement("span");
     nameGroup.className = "all-player-name-group";
     var cardName = document.createElement("span");
     cardName.className = "all-player-card-name";
     buildPlayerNameLabel(cardName, stats.name, false);
     nameGroup.appendChild(cardName);
-    nameGroup.appendChild(buildRatingBadge(stats.name));
+
+    var metaRow = document.createElement("span");
+    metaRow.className = "all-player-meta-row";
+    metaRow.appendChild(buildRatingBadge(stats.name));
 
     var summary = document.createElement("span");
     summary.className = "all-player-summary";
     summary.textContent = stats.winPct === null ? T("allPlayers.noGamesYet") : T("allPlayers.winRate", { pct: Math.round(stats.winPct * 100) });
+    metaRow.appendChild(summary);
 
     toggleBtn.appendChild(nameGroup);
-    toggleBtn.appendChild(summary);
+    toggleBtn.appendChild(metaRow);
 
     var chevron = document.createElement("span");
     chevron.className = "panel-chevron all-player-card-chevron";

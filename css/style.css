@@ -4515,18 +4515,17 @@ input[type="number"] {
 
 /* ---------- All Players page ---------- */
 
-/* Multiple columns instead of one tall stack, each just wide enough for
-   a collapsed card's name/rating/win-rate row - as many as the screen
-   fits, flowing left to right then down. Every card is always the same
-   compact name/rating/win-rate shape (the full view lives in a separate
-   full-width section below instead), so grid's default stretch keeps
-   every card in a row the same height too. */
+/* Flowing left to right then down, as many as the screen fits. Flex
+   (not grid) so each card is only as wide as its own name needs -
+   names are never wrapped or truncated (see .all-player-card-name), so
+   a card with a long name simply grows wider instead of every column
+   being forced to match it. */
 .all-players-list {
   list-style: none;
   margin: 0;
   padding: 8px 16px 24px;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 12px;
 }
 
@@ -5086,8 +5085,6 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
-  max-width: 100%;
-  overflow-x: hidden;
 }
 
 #player-page-graph-panel {
@@ -5110,9 +5107,8 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
 .all-player-card-toggle {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 4px;
-  flex: 1;
-  min-width: 0;
   background: none;
   border: none;
   box-shadow: none;
@@ -5121,6 +5117,7 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   font: inherit;
   color: inherit;
   text-align: left;
+  white-space: nowrap;
 }
 
 .all-player-card-chevron {
@@ -5138,25 +5135,26 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   font-weight: 800;
 }
 
-/* Full name always shown, never truncated - long names wrap onto a
-   second line instead, and the card grows to fit (see align-items on
-   .all-players-list, which stretches every card in a row to match
-   whichever one grew tallest, so rows stay visually even). */
+/* The name is the card's title - its own full-width row up top, never
+   wrapped or truncated. The card (a flex item, not a grid column) just
+   grows as wide as the name needs instead of clipping it. */
 .all-player-card-name {
+  display: block;
   color: var(--accent);
-  font-size: 1.15rem;
+  font-size: 1.2rem;
   font-weight: 800;
-  overflow-wrap: break-word;
-  min-width: 0;
-  flex: 1;
+  white-space: nowrap;
 }
 
 .all-player-name-group {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  min-width: 0;
+  display: block;
   width: 100%;
+}
+
+.all-player-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .player-link-icon {
