@@ -28,6 +28,8 @@
   "alert.notAPlayerListFile": "Mukhang hindi ito player list file.",
   "alert.notValidJson": "Hindi valid JSON ang file na iyon.",
   "alert.pickAtLeast2Players": "Pumili ng hindi bababa sa 2 manlalaro para magsimula ng tournament.",
+  "allPlayers.collapseAll": "⬆️ I-collapse Lahat",
+  "allPlayers.expandAll": "⬇️ I-expand Lahat",
   "allPlayers.exportCsv": "📊 I-export bilang Excel (CSV)",
   "allPlayers.gamesLost": "Mga Talo",
   "allPlayers.gamesPlayed": "Mga Larong Nilaro",

@@ -4515,13 +4515,19 @@ input[type="number"] {
 
 /* ---------- All Players page ---------- */
 
+/* Multiple columns instead of one tall stack, each just wide enough for
+   a collapsed card's name/rating/win-rate row - as many as the screen
+   fits, flowing left to right then down. Expanded cards (which can run
+   much taller once bars/timeline or a full graph shows) don't stretch
+   their row-mates - see align-items below. */
 .all-players-list {
   list-style: none;
   margin: 0;
   padding: 8px 16px 24px;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 12px;
+  align-items: start;
 }
 
 .contact-sheet-list {
@@ -5062,39 +5068,65 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   overflow-x: hidden;
 }
 
-.all-player-card-top {
+/* The toggle button (name/rating/win-rate) can't also hold the link
+   icon or the chevron - a <button> can't nest another <button> - so all
+   three are separate flex items here instead, the same split Rating
+   History's own header uses. */
+.all-player-card-header {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 16px;
 }
 
-.all-player-name {
+.all-player-card.is-collapsed .all-player-card-header {
+  margin-bottom: 0;
+}
+
+.all-player-card-toggle {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
   background: none;
   border: none;
   box-shadow: none;
   padding: 0;
-  border-radius: 0;
-  color: var(--accent);
+  cursor: pointer;
   font: inherit;
-  font-size: 1.15rem;
-  font-weight: 800;
+  color: inherit;
   text-align: left;
-  text-decoration: underline;
-  text-decoration-color: transparent;
-  transition: transform 0.06s ease, filter 0.15s ease, text-decoration-color 0.15s ease;
 }
 
-.all-player-name:hover,
-.all-player-name:focus-visible {
-  text-decoration-color: var(--accent);
+/* Collapsed by default (see buildAllPlayerCard) - only this header
+   stays visible, so this is the entire card until it's expanded. */
+.all-player-card.is-collapsed .all-player-card-body {
+  display: none;
+}
+
+.all-player-card-chevron {
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.all-player-card.is-collapsed .all-player-card-chevron {
+  transform: rotate(-90deg) scale(1.45);
+}
+
+.all-player-name {
+  color: var(--accent);
+  font-size: 1.15rem;
+  font-weight: 800;
 }
 
 .all-player-name-group {
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
 }
 
 .player-link-icon {

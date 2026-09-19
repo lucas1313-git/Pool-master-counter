@@ -28,6 +28,8 @@
   "alert.notAPlayerListFile": "呢個唔似係玩家名單檔案。",
   "alert.notValidJson": "呢個檔案唔係有效嘅 JSON。",
   "alert.pickAtLeast2Players": "請至少揀 2 位玩家先可以開始錦標賽。",
+  "allPlayers.collapseAll": "⬆️ 全部收埋",
+  "allPlayers.expandAll": "⬇️ 全部展開",
   "allPlayers.exportCsv": "📊 匯出做 Excel（CSV）",
   "allPlayers.gamesLost": "負場",
   "allPlayers.gamesPlayed": "已玩局數",

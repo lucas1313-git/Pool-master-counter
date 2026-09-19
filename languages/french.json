@@ -28,6 +28,8 @@
   "alert.notAPlayerListFile": "Ce fichier ne ressemble pas à un fichier de liste de joueurs.",
   "alert.notValidJson": "Ce fichier n'est pas un JSON valide.",
   "alert.pickAtLeast2Players": "Choisissez au moins 2 joueurs pour démarrer un tournoi.",
+  "allPlayers.collapseAll": "⬆️ Tout Réduire",
+  "allPlayers.expandAll": "⬇️ Tout Développer",
   "allPlayers.exportCsv": "📊 Exporter en Excel (CSV)",
   "allPlayers.gamesLost": "Parties perdues",
   "allPlayers.gamesPlayed": "Parties jouées",

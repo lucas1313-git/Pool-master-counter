@@ -1712,9 +1712,11 @@
   var btnToggleAllPlayersView = document.getElementById("btn-toggle-all-players-view");
   var btnToggleRosterFilter = document.getElementById("btn-toggle-roster-filter");
   var btnAllPlayersCsv = document.getElementById("btn-all-players-csv");
+  var btnAllPlayersExpandAll = document.getElementById("btn-all-players-expand-all");
   var allPlayersList = document.getElementById("all-players-list");
   var allPlayersViewMode = "bars";
   var allPlayersRosterOnly = false;
+  var allPlayersAllExpanded = false;
 
   var btnOpenGlobalStats = document.getElementById("btn-open-global-stats");
 
@@ -14613,6 +14615,15 @@
     return wrap;
   }
 
+  // Collapsed by default to just the name, rating, and win rate - the
+  // rest (bars/timeline or the full graph) lives in .all-player-card-body
+  // and only renders visible once expanded, independently per card (no
+  // accordion - expanding one never touches any other card's state,
+  // since each card's own classList is the only place that state lives).
+  // The toggle button can't also hold the "view full stats page" link
+  // icon or the chevron (a <button> can't contain another <button>), so
+  // both sit outside it as siblings in .all-player-card-header instead -
+  // same fix as Rating History's own title/❓/chevron split.
   function buildAllPlayerCard(
     stats,
     sharedAxisMax,
@@ -14623,29 +14634,53 @@
     isInLiveRoster
   ) {
     var li = document.createElement("li");
-    li.className = "all-player-card";
+    li.className = "all-player-card is-collapsed";
 
-    var top = document.createElement("div");
-    top.className = "all-player-card-top";
-    var name = document.createElement("button");
-    name.type = "button";
+    var header = document.createElement("div");
+    header.className = "all-player-card-header";
+
+    var toggleBtn = document.createElement("button");
+    toggleBtn.type = "button";
+    toggleBtn.className = "all-player-card-toggle";
+    toggleBtn.setAttribute("aria-expanded", "false");
+
+    var nameGroup = document.createElement("span");
+    nameGroup.className = "all-player-name-group";
+    var name = document.createElement("span");
     name.className = "all-player-name";
     buildPlayerNameLabel(name, stats.name, false);
-    name.appendChild(buildRatingBadge(stats.name));
-    name.setAttribute("aria-label", "View stats for " + stats.name);
-    name.addEventListener("click", function () {
-      openPlayerStatsPage(stats.name);
-    });
-    var nameGroup = document.createElement("div");
-    nameGroup.className = "all-player-name-group";
     nameGroup.appendChild(name);
-    nameGroup.appendChild(buildPlayerLinkIcon(stats.name));
+    nameGroup.appendChild(buildRatingBadge(stats.name));
+
     var summary = document.createElement("span");
     summary.className = "all-player-summary";
     summary.textContent = stats.winPct === null ? T("allPlayers.noGamesYet") : T("allPlayers.winRate", { pct: Math.round(stats.winPct * 100) });
-    top.appendChild(nameGroup);
-    top.appendChild(summary);
-    li.appendChild(top);
+
+    toggleBtn.appendChild(nameGroup);
+    toggleBtn.appendChild(summary);
+
+    var chevron = document.createElement("span");
+    chevron.className = "panel-chevron all-player-card-chevron";
+    chevron.setAttribute("aria-hidden", "true");
+    chevron.innerHTML =
+      '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
+
+    function toggleExpanded() {
+      var willExpand = li.classList.contains("is-collapsed");
+      li.classList.toggle("is-collapsed");
+      toggleBtn.setAttribute("aria-expanded", willExpand ? "true" : "false");
+      if (willExpand) li.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    toggleBtn.addEventListener("click", toggleExpanded);
+    chevron.addEventListener("click", toggleExpanded);
+
+    header.appendChild(toggleBtn);
+    header.appendChild(buildPlayerLinkIcon(stats.name));
+    header.appendChild(chevron);
+    li.appendChild(header);
+
+    var body = document.createElement("div");
+    body.className = "all-player-card-body";
 
     var ratingDeltaText = formatRatingPeriodDelta(stats.name, period);
     if (ratingDeltaText !== null) {
@@ -14654,12 +14689,12 @@
       if (ratingDeltaText.charAt(0) === "▲") ratingStatus.classList.add("is-up");
       else if (ratingDeltaText.charAt(0) === "▼") ratingStatus.classList.add("is-down");
       ratingStatus.textContent = T("allPlayers.ratingThisPeriod", { delta: ratingDeltaText });
-      li.appendChild(ratingStatus);
+      body.appendChild(ratingStatus);
     }
 
     if (allPlayersViewMode === "graph") {
       if (isInLiveRoster) {
-        li.appendChild(buildPlayerGraph(stats, minMs, maxMs, period, sharedAxisMax));
+        body.appendChild(buildPlayerGraph(stats, minMs, maxMs, period, sharedAxisMax));
       } else {
         var graphHolder = document.createElement("div");
         graphHolder.className = "all-player-graph-holder hidden";
@@ -14673,33 +14708,41 @@
           }
           var nowHidden = graphHolder.classList.toggle("hidden");
           showGraphBtn.textContent = T(nowHidden ? "allPlayers.showGraph" : "allPlayers.hideGraph");
+          if (!nowHidden) graphHolder.scrollIntoView({ behavior: "smooth", block: "start" });
         });
-        li.appendChild(showGraphBtn);
-        li.appendChild(graphHolder);
+        body.appendChild(showGraphBtn);
+        body.appendChild(graphHolder);
       }
     } else {
       // Played/won/lost share one scale (played's, since played >= won +
       // lost for any one player) so equal counts always draw equal bar
       // lengths and different players' bars stay directly comparable -
       // same for the tournament trio below.
-      li.appendChild(buildScaleRow(T("allPlayers.gamesPlayed"), stats.played, sharedAxisMax, "scale-fill-played"));
-      li.appendChild(buildScaleRow(T("allPlayers.gamesWon"), stats.wins, sharedAxisMax, "scale-fill-won"));
-      li.appendChild(buildScaleRow(T("allPlayers.gamesLost"), stats.losses, sharedAxisMax, "scale-fill-lost"));
+      body.appendChild(buildScaleRow(T("allPlayers.gamesPlayed"), stats.played, sharedAxisMax, "scale-fill-played"));
+      body.appendChild(buildScaleRow(T("allPlayers.gamesWon"), stats.wins, sharedAxisMax, "scale-fill-won"));
+      body.appendChild(buildScaleRow(T("allPlayers.gamesLost"), stats.losses, sharedAxisMax, "scale-fill-lost"));
       if (stats.tournamentPlayed > 0) {
-        li.appendChild(buildScaleRow(T("allPlayers.tournamentsPlayed"), stats.tournamentPlayed, tournSharedAxisMax, "scale-fill-tourn-played"));
-        li.appendChild(buildScaleRow(T("allPlayers.tournamentsWon"), stats.tournamentWins, tournSharedAxisMax, "scale-fill-tourn-won"));
-        li.appendChild(buildScaleRow(T("allPlayers.tournamentsLost"), stats.tournamentLosses, tournSharedAxisMax, "scale-fill-tourn-lost"));
+        body.appendChild(buildScaleRow(T("allPlayers.tournamentsPlayed"), stats.tournamentPlayed, tournSharedAxisMax, "scale-fill-tourn-played"));
+        body.appendChild(buildScaleRow(T("allPlayers.tournamentsWon"), stats.tournamentWins, tournSharedAxisMax, "scale-fill-tourn-won"));
+        body.appendChild(buildScaleRow(T("allPlayers.tournamentsLost"), stats.tournamentLosses, tournSharedAxisMax, "scale-fill-tourn-lost"));
       }
 
       if (stats.games.length) {
-        li.appendChild(buildTimelineRow(stats.games, minMs, maxMs));
+        body.appendChild(buildTimelineRow(stats.games, minMs, maxMs));
       }
     }
+    li.appendChild(body);
 
     return li;
   }
 
   function renderAllPlayersPage() {
+    // The list is rebuilt from scratch below, so any expand/collapse
+    // state (including the Expand All toggle) resets along with it -
+    // same convention this page's "Show Graph" buttons already followed
+    // before cards themselves were collapsible.
+    allPlayersAllExpanded = false;
+    btnAllPlayersExpandAll.textContent = T("allPlayers.expandAll");
     var period = allPlayersPeriodSelect.value;
     var names = getAllKnownPlayerNames();
     if (allPlayersRosterOnly) {
@@ -19760,6 +19803,15 @@
   btnAllPlayersCsv.addEventListener("click", function () {
     var filename = "pool-master-counter-all-players-" + todayDateStr() + ".csv";
     downloadTextFile(filename, buildAllPlayersCsv(), "text/csv;charset=utf-8");
+  });
+  btnAllPlayersExpandAll.addEventListener("click", function () {
+    allPlayersAllExpanded = !allPlayersAllExpanded;
+    btnAllPlayersExpandAll.textContent = T(allPlayersAllExpanded ? "allPlayers.collapseAll" : "allPlayers.expandAll");
+    Array.prototype.forEach.call(allPlayersList.querySelectorAll(".all-player-card"), function (card) {
+      card.classList.toggle("is-collapsed", !allPlayersAllExpanded);
+      var toggle = card.querySelector(".all-player-card-toggle");
+      if (toggle) toggle.setAttribute("aria-expanded", allPlayersAllExpanded ? "true" : "false");
+    });
   });
 
   btnOpenGlobalStats.addEventListener("click", function () {
