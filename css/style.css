@@ -5096,7 +5096,7 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
-  animation: all-player-card-in 0.22s ease-out;
+  animation: all-player-card-in 0.4s ease-out;
 }
 
 /* Plays just before a card is dropped from the list by the "Current
@@ -5115,7 +5115,7 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
 }
 
 .all-player-card-leaving {
-  animation: all-player-card-out 0.22s ease-in forwards;
+  animation: all-player-card-out 0.4s ease-in forwards;
 }
 
 #player-page-graph-panel {

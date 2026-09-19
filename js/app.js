@@ -1719,7 +1719,7 @@
   var allPlayersRosterOnly = false;
   var allPlayersAllExpanded = false;
   // Must match the .all-player-card-leaving CSS animation's duration.
-  var ALL_PLAYER_CARD_LEAVE_MS = 220;
+  var ALL_PLAYER_CARD_LEAVE_MS = 400;
 
   var btnOpenGlobalStats = document.getElementById("btn-open-global-stats");
 
