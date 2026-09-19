@@ -12122,6 +12122,15 @@
       var diffToMonday = day === 0 ? 6 : day - 1;
       return new Date(now.getFullYear(), now.getMonth(), now.getDate() - diffToMonday);
     }
+    // A rolling 7-day window ending today, not "since Monday" - used
+    // only by the Leaderboard's "This Week" (see leaderboardPeriod),
+    // which needs the last full week of activity regardless of what day
+    // of the week it currently is. Calendar-week "week" above stays as
+    // it was for Player Stats/All Players, which this deliberately
+    // doesn't touch.
+    if (period === "last7") {
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
+    }
     if (period === "month") {
       return new Date(now.getFullYear(), now.getMonth(), 1);
     }
