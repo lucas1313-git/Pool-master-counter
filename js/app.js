@@ -1773,6 +1773,8 @@
   var btnLeaderboardShare = document.getElementById("btn-leaderboard-share");
   var leaderboardViewPlayersRadio = document.getElementById("leaderboard-view-players");
   var leaderboardViewTeamsRadio = document.getElementById("leaderboard-view-teams");
+  var leaderboardPeriodFilter = document.getElementById("leaderboard-period-filter");
+  var leaderboardPeriodButtons = leaderboardPeriodFilter.querySelectorAll(".period-btn");
   var leaderboardList = document.getElementById("leaderboard-list");
   var leaderboardEmptyHint = document.getElementById("leaderboard-empty-hint");
   var leaderboardFormulaNote = document.getElementById("leaderboard-formula-note");
@@ -15208,6 +15210,11 @@
   }
 
   var LEADERBOARD_MIN_GAMES = 10;
+  // Which period the leaderboard page is currently evaluating - "week",
+  // "month", or "all" (matching filterGamesByPeriod's own vocabulary).
+  // Sticky for the session like the All Players page's own filters, not
+  // reset back to "all" every time the page is reopened.
+  var leaderboardPeriod = "all";
   var LEADERBOARD_LAST_SHOWN_KEY = "poolMasterCounter.leaderboardLastShown.v1";
   var LEADERBOARD_AUTO_SHOW_MS = 12 * 60 * 60 * 1000;
   // A snapshot of the last-published ranking (name + rank only, players
@@ -15324,17 +15331,55 @@
     return count;
   }
 
+  // How short a week/month evaluation window can push the qualifying
+  // bar and win-rate regularizer (see leaderboardMinGamesForPeriod)
+  // down before it stops following this period's own activity level -
+  // a genuinely dead period (0-1 games played by anyone) shouldn't
+  // collapse both toward zero, which would let one lucky win rank #1.
+  var LEADERBOARD_PERIOD_MIN_GAMES_FLOOR = 3;
+
+  // LEADERBOARD_MIN_GAMES (10) was tuned around a whole career's worth
+  // of games - reusing that same fixed number as both the qualifying
+  // bar and the win-rate regularizer (see computeLeaderboardScoreBreak-
+  // down) for a single week or month would either shut the board out
+  // most weeks (few groups play 10+ games in seven days) or, if just
+  // lowered arbitrarily, smooth win rate by an amount that has nothing
+  // to do with how much pool this group actually played that period.
+  // Instead, for "week"/"month" both numbers track this period's own
+  // average games played per active player (rounded, floored so a
+  // near-silent period can't collapse both toward zero): a busy week
+  // raises the bar and dilutes win rate more per extra game the same
+  // way the all-time constant always has, while a quiet week relaxes
+  // both instead of disqualifying everyone or letting win rate swing
+  // wildly on a game or two. gamesPlayedList is every candidate's raw
+  // games-played count for the period being evaluated (players or
+  // teams - whichever computeLeaderboardEntries/-TeamEntries is
+  // building), before the qualifying filter is applied.
+  function leaderboardMinGamesForPeriod(period, gamesPlayedList) {
+    if (period === "all") return LEADERBOARD_MIN_GAMES;
+    var active = gamesPlayedList.filter(function (n) {
+      return n > 0;
+    });
+    if (!active.length) return LEADERBOARD_PERIOD_MIN_GAMES_FLOOR;
+    var total = active.reduce(function (sum, n) {
+      return sum + n;
+    }, 0);
+    return Math.max(LEADERBOARD_PERIOD_MIN_GAMES_FLOOR, Math.round(total / active.length));
+  }
+
   // A regularized win rate (so a 2-0 newcomer can't outrank a proven
-  // 40-10 veteran - the +LEADERBOARD_MIN_GAMES in the denominator acts
-  // like assuming everyone starts with that many "neutral" games), a
-  // heavily-weighted tournament-win bonus, a rating component, a bonus
-  // for winning by wide margins, a bonus for skunk wins, and a log-
-  // scaled activity bonus that rewards playing more without letting raw
-  // volume alone swamp the win rate. Returns every term separately (not
-  // just the total) so explainLeaderboardRanking can point at exactly
-  // which ones decided a given pair's order.
-  function computeLeaderboardScoreBreakdown(entry) {
-    var winRateTerm = (entry.wins / (entry.gamesPlayed + LEADERBOARD_MIN_GAMES)) * 100;
+  // 40-10 veteran - the +minGames in the denominator acts like
+  // assuming everyone starts with that many "neutral" games; see
+  // leaderboardMinGamesForPeriod for where minGames itself comes from
+  // per period), a heavily-weighted tournament-win bonus, a rating
+  // component, a bonus for winning by wide margins, a bonus for skunk
+  // wins, and a log-scaled activity bonus that rewards playing more
+  // without letting raw volume alone swamp the win rate. Returns every
+  // term separately (not just the total) so explainLeaderboardRanking
+  // can point at exactly which ones decided a given pair's order.
+  function computeLeaderboardScoreBreakdown(entry, minGames) {
+    if (typeof minGames !== "number") minGames = LEADERBOARD_MIN_GAMES;
+    var winRateTerm = (entry.wins / (entry.gamesPlayed + minGames)) * 100;
     var tournamentTerm = entry.tournamentWins * LEADERBOARD_TOURNAMENT_WIN_WEIGHT;
     var ratingTerm = entry.rating / 20;
     var dominanceTerm = entry.avgDominanceRatio * LEADERBOARD_DOMINANCE_WEIGHT;
@@ -15356,29 +15401,41 @@
     };
   }
 
-  function computeLeaderboardEntries() {
-    var entries = getAllKnownPlayerNames()
-      .map(function (name) {
-        var stats = computePlayerCareerStats(name, "all");
-        var gamesPlayed = stats.played + stats.tournamentPlayed;
-        var wins = stats.wins + stats.tournamentWins;
-        return {
-          name: name,
-          gamesPlayed: gamesPlayed,
-          wins: wins,
-          winPct: gamesPlayed ? wins / gamesPlayed : 0,
-          rating: getPlayerRating(name),
-          tournamentWins: stats.tournamentWins,
-          avgDominanceRatio: averageDominanceRatio(stats.games.concat(stats.tournamentGames)),
-          skunkWins: countSkunkWins(stats.games.concat(stats.tournamentGames)),
-          bestRun: getPlayerBestRun(name)
-        };
+  // period: "week"/"month"/"all" (defaults to "all"). The returned
+  // array also carries a .minGames property (see
+  // leaderboardMinGamesForPeriod) so callers that need to show it (the
+  // formula note, the "not enough data" hint) don't have to recompute
+  // it themselves from a second pass over every player.
+  function computeLeaderboardEntries(period) {
+    period = period || "all";
+    var rawEntries = getAllKnownPlayerNames().map(function (name) {
+      var stats = computePlayerCareerStats(name, period);
+      var gamesPlayed = stats.played + stats.tournamentPlayed;
+      var wins = stats.wins + stats.tournamentWins;
+      return {
+        name: name,
+        gamesPlayed: gamesPlayed,
+        wins: wins,
+        winPct: gamesPlayed ? wins / gamesPlayed : 0,
+        rating: getPlayerRating(name),
+        tournamentWins: stats.tournamentWins,
+        avgDominanceRatio: averageDominanceRatio(stats.games.concat(stats.tournamentGames)),
+        skunkWins: countSkunkWins(stats.games.concat(stats.tournamentGames)),
+        bestRun: getPlayerBestRun(name)
+      };
+    });
+    var minGames = leaderboardMinGamesForPeriod(
+      period,
+      rawEntries.map(function (e) {
+        return e.gamesPlayed;
       })
-      .filter(function (e) {
-        return e.gamesPlayed >= LEADERBOARD_MIN_GAMES;
-      });
+    );
+    var entries = rawEntries.filter(function (e) {
+      return e.gamesPlayed >= minGames;
+    });
+    entries.minGames = minGames;
     entries.forEach(function (e) {
-      e.scoreBreakdown = computeLeaderboardScoreBreakdown(e);
+      e.scoreBreakdown = computeLeaderboardScoreBreakdown(e, minGames);
       e.mvpScore = e.scoreBreakdown.total;
     });
     entries.sort(function (a, b) {
@@ -15399,7 +15456,11 @@
   }
 
   function currentLeaderboardSnapshotEntries() {
-    return computeLeaderboardEntries().map(function (e, i) {
+    // Always the all-time ranking, regardless of whatever period the
+    // Leaderboard page itself currently has selected - this tracks the
+    // persistent ranking's movement between publishes, not a snapshot
+    // of whichever period view happened to be open when it was taken.
+    return computeLeaderboardEntries("all").map(function (e, i) {
       return { name: e.name, rank: i + 1 };
     });
   }
@@ -15515,7 +15576,8 @@
   // LEADERBOARD_MIN_GAMES) and the Player Stats page, which shows every
   // team regardless of game count since it's about this one player's
   // team, not a ranking.
-  function computeClubTeamAggregate(members) {
+  function computeClubTeamAggregate(members, period) {
+    period = period || "all";
     var gamesPlayed = 0;
     var wins = 0;
     var tournamentWins = 0;
@@ -15524,7 +15586,7 @@
     var bestRun = 0;
     var allMemberGames = [];
     members.forEach(function (name) {
-      var stats = computePlayerCareerStats(name, "all");
+      var stats = computePlayerCareerStats(name, period);
       gamesPlayed += stats.played + stats.tournamentPlayed;
       wins += stats.wins + stats.tournamentWins;
       tournamentWins += stats.tournamentWins;
@@ -15562,7 +15624,8 @@
   // entry in the Players view - the two views are just different
   // groupings of the same underlying game history, not a choice between
   // crediting the player or the team.
-  function computeLeaderboardTeamEntries() {
+  function computeLeaderboardTeamEntries(period) {
+    period = period || "all";
     var groupsByKey = {};
     var order = [];
     getAllKnownPlayerNames().forEach(function (name) {
@@ -15576,18 +15639,24 @@
       groupsByKey[key].members.push(name);
     });
 
-    var entries = order
-      .map(function (key) {
-        var group = groupsByKey[key];
-        var agg = computeClubTeamAggregate(group.members);
-        agg.name = group.teamName;
-        return agg;
+    var rawEntries = order.map(function (key) {
+      var group = groupsByKey[key];
+      var agg = computeClubTeamAggregate(group.members, period);
+      agg.name = group.teamName;
+      return agg;
+    });
+    var minGames = leaderboardMinGamesForPeriod(
+      period,
+      rawEntries.map(function (e) {
+        return e.gamesPlayed;
       })
-      .filter(function (e) {
-        return e.gamesPlayed >= LEADERBOARD_MIN_GAMES;
-      });
+    );
+    var entries = rawEntries.filter(function (e) {
+      return e.gamesPlayed >= minGames;
+    });
+    entries.minGames = minGames;
     entries.forEach(function (e) {
-      e.scoreBreakdown = computeLeaderboardScoreBreakdown(e);
+      e.scoreBreakdown = computeLeaderboardScoreBreakdown(e, minGames);
       e.mvpScore = e.scoreBreakdown.total;
     });
     entries.sort(function (a, b) {
@@ -15885,13 +15954,13 @@
 
   function renderLeaderboardPage() {
     var isTeamView = leaderboardViewTeamsRadio.checked;
-    var entries = isTeamView ? computeLeaderboardTeamEntries() : computeLeaderboardEntries();
+    var entries = isTeamView ? computeLeaderboardTeamEntries(leaderboardPeriod) : computeLeaderboardEntries(leaderboardPeriod);
     leaderboardList.innerHTML = "";
     if (entries.length === 0) {
       leaderboardList.classList.add("hidden");
       leaderboardEmptyHint.classList.remove("hidden");
       leaderboardEmptyHint.textContent = T(isTeamView ? "leaderboard.notEnoughTeamData" : "leaderboard.notEnoughData", {
-        minGames: LEADERBOARD_MIN_GAMES
+        minGames: entries.minGames
       });
     } else {
       leaderboardList.classList.remove("hidden");
@@ -15901,7 +15970,7 @@
       });
     }
     leaderboardFormulaNote.textContent = T("leaderboard.formulaNote", {
-      minGames: LEADERBOARD_MIN_GAMES,
+      minGames: entries.minGames,
       tournamentWeight: LEADERBOARD_TOURNAMENT_WIN_WEIGHT,
       dominanceWeight: LEADERBOARD_DOMINANCE_WEIGHT,
       skunkWeight: LEADERBOARD_SKUNK_WIN_WEIGHT,
@@ -15916,11 +15985,11 @@
   // day report (see shareReportTextOnly).
   function buildLeaderboardShareText() {
     var isTeamView = leaderboardViewTeamsRadio.checked;
-    var entries = isTeamView ? computeLeaderboardTeamEntries() : computeLeaderboardEntries();
+    var entries = isTeamView ? computeLeaderboardTeamEntries(leaderboardPeriod) : computeLeaderboardEntries(leaderboardPeriod);
     var scopeLabel = T(isTeamView ? "leaderboard.viewTeams" : "leaderboard.viewPlayers");
     var lines = [T("leaderboard.shareHeading", { scope: scopeLabel }), ""];
     if (entries.length === 0) {
-      lines.push(T(isTeamView ? "leaderboard.notEnoughTeamData" : "leaderboard.notEnoughData", { minGames: LEADERBOARD_MIN_GAMES }));
+      lines.push(T(isTeamView ? "leaderboard.notEnoughTeamData" : "leaderboard.notEnoughData", { minGames: entries.minGames }));
     } else {
       entries.forEach(function (entry, i) {
         var rank = i + 1;
@@ -16331,7 +16400,10 @@
     var shownLongAgo = now - lastShown >= LEADERBOARD_AUTO_SHOW_MS;
     var idleLongEnough = now - lastActivityTs >= LEADERBOARD_IDLE_SHOW_MS;
     if (!shownLongAgo && !idleLongEnough) return;
-    if (computeLeaderboardEntries().length === 0) return;
+    // Whatever period the page will actually open to (see
+    // renderLeaderboardPage), so this gate can't wrongly skip - or
+    // wrongly show an empty board for - a period that isn't "all".
+    if (computeLeaderboardEntries(leaderboardPeriod).length === 0) return;
     openLeaderboardPage();
     // Showing it is itself the response to the idle stretch - without
     // this, the next 5-minute check (see the setInterval below) would
@@ -19971,6 +20043,15 @@
   btnLeaderboardShare.addEventListener("click", shareLeaderboard);
   [leaderboardViewPlayersRadio, leaderboardViewTeamsRadio].forEach(function (radio) {
     radio.addEventListener("change", renderLeaderboardPage);
+  });
+  Array.prototype.forEach.call(leaderboardPeriodButtons, function (btn) {
+    btn.addEventListener("click", function () {
+      leaderboardPeriod = btn.getAttribute("data-period");
+      Array.prototype.forEach.call(leaderboardPeriodButtons, function (b) {
+        b.classList.toggle("is-active", b === btn);
+      });
+      renderLeaderboardPage();
+    });
   });
 
   btnOpenGroupSession.addEventListener("click", function () {
