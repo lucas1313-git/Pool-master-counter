@@ -27,6 +27,15 @@
   // no skunk concept there (confirmed by the user).
   var SKUNK_RACK_GAME_TYPES = ["8ball", "8ballrotation", "8ballpunishment"];
 
+  // Rotation games where the balls are shot in shared numerical order
+  // rather than each player having their own object-ball group (the
+  // 8-ball family) or a points total to fall short of (Straight Pool,
+  // 15 Ball Rotation, Custom) - there's no well-defined "balls left"
+  // quantity for either player here, so the win popup's field is
+  // hidden entirely for these instead of showing a control that can
+  // never mean anything (see showGameWinOverlay).
+  var BALLS_LEFT_HIDDEN_GAME_TYPES = ["9ball", "10ball"];
+
   // ---------------------------------------------------------------------
   // State
   // ---------------------------------------------------------------------
@@ -4354,6 +4363,22 @@
     }, 4500);
   }
 
+  // Converts a point-based game's "how far short of the target the
+  // loser finished" onto the exact same 0-7 "balls left on the table"
+  // scale the 8-ball family already uses (see
+  // LEADERBOARD_BALLS_LEFT_MAX_BY_GAME_TYPE) - a blowout (loser far
+  // from target) reads as a high ball count, a nail-biter (loser
+  // nearly got there) as a low one, the same way "balls left" already
+  // works for a rack game. A plain ratio, so it works for any target
+  // (25, 50, 61, 100, a custom number...) without a per-target lookup -
+  // e.g. 30 points short of a 70-point target is 30/70 of the way
+  // there, i.e. (30/70)*7 = 3 balls left, exactly like 3 balls left of
+  // a possible 7 in 8-ball.
+  function pointsGapToBallsLeft(gap, gameTarget) {
+    if (!gameTarget) return 0;
+    return Math.max(0, Math.min(7, Math.round((gap / gameTarget) * 7)));
+  }
+
   function creditWin(isTeam, key, winnerVoice) {
     var typeLabel = GAME_TYPES[state.currentGame.gameType].label;
     var summary;
@@ -4487,17 +4512,52 @@
     // single-opponent scoping as skunk above - no well-defined "the
     // other side" to subtract for a free-for-all win.
     var ballsLeftPrefill = null;
+    // Points-unit only: the raw "target minus loser's points" average
+    // (unrounded-ish - see below), kept alongside the 0-7
+    // ballsLeftPrefill purely so the win popup can show both ("30
+    // points behind, ≈3 balls") - see showGameWinOverlay/
+    // buildBallsLeftRow. null for every other unit.
+    var pointsGapPrefill = null;
     if (state.currentGame.unit !== "rack") {
       if (isTeam) {
         var opponentTeamBalls = sumTeamBalls(otherTeamId);
         skunk = opponentTeamBalls === 0;
         if (state.currentGame.gameType === "onepocket") {
           ballsLeftPrefill = Math.max(0, 15 - sumTeamBalls(key) - opponentTeamBalls);
+        } else if (state.currentGame.unit === "points") {
+          // Exactly 2 teams ever exist (see otherTeamId above), so
+          // there's only ever one "loser" to average here.
+          pointsGapPrefill = Math.max(0, state.currentGame.target - opponentTeamBalls);
+          ballsLeftPrefill = pointsGapToBallsLeft(pointsGapPrefill, state.currentGame.target);
         }
       } else if (skunkOpponentBalls !== null) {
         skunk = skunkOpponentBalls === 0;
         if (state.currentGame.gameType === "onepocket") {
           ballsLeftPrefill = Math.max(0, 15 - winnerBallsAtWin - skunkOpponentBalls);
+        }
+      }
+      // Points-unit, individual mode: every other active player is a
+      // "loser" here (1 for a normal 1v1, more for a free-for-all) -
+      // each has their own gap to the target, and the winner's own
+      // prefill is the AVERAGE of those gaps (converted to balls once,
+      // at the end, rather than rounding each player's gap to a ball
+      // count first and then averaging - avoids compounding rounding
+      // error). Deliberately not folded into the skunkOpponentBalls
+      // branch above, which only ever looks at a single opponent.
+      if (!isTeam && state.currentGame.unit === "points") {
+        var loserGaps = activePlayers()
+          .filter(function (p) {
+            return p.id !== key;
+          })
+          .map(function (p) {
+            return Math.max(0, state.currentGame.target - (p.balls || 0));
+          });
+        if (loserGaps.length) {
+          pointsGapPrefill =
+            loserGaps.reduce(function (sum, g) {
+              return sum + g;
+            }, 0) / loserGaps.length;
+          ballsLeftPrefill = pointsGapToBallsLeft(pointsGapPrefill, state.currentGame.target);
         }
       }
     }
@@ -4525,6 +4585,11 @@
       skunk: skunk,
       raceCount: milestoneCount,
       ballsLeftOnTable: ballsLeftPrefill,
+      // Points-unit only (see pointsGapPrefill above) - the raw
+      // average points-behind number the win popup shows next to its
+      // 0-7 balls-equivalent. Purely informational context, never read
+      // by any stat - null for every other unit.
+      pointsGapAtWin: pointsGapPrefill,
       // Which persistent club team (see buildClubTeamBadge), if any, this
       // individual win is credited to - set from the win popup's own
       // checkbox (see buildCountsForTeamRow), patched on right before the
@@ -4952,18 +5017,33 @@
   // whatever should happen next (milestone/on-hill/game-change), deferred
   // until this dialog is dismissed.
   function showGameWinOverlay(summary, ts, onClose) {
-    // One Pocket wins arrive with a computed prefill already sitting on
-    // the fresh gameHistory entry (see creditWin's ballsLeftPrefill) -
-    // pick it up here instead of always starting blank; still just a
-    // starting point, editable/clearable the same as a manually typed
-    // value.
+    // One Pocket/points-unit wins arrive with a computed prefill already
+    // sitting on the fresh gameHistory entry (see creditWin's
+    // ballsLeftPrefill) - pick it up here instead of always starting
+    // blank; still just a starting point, editable/clearable the same
+    // as a manually typed value.
     var freshEntry = state.gameHistory[0] && state.gameHistory[0].ts === ts ? state.gameHistory[0] : null;
     gamewinBallsLeftValue = freshEntry && freshEntry.ballsLeftOnTable !== null && freshEntry.ballsLeftOnTable !== undefined ? freshEntry.ballsLeftOnTable : null;
     gamewinPendingTs = ts;
     gamewinPendingOnClose = onClose;
     gamewinMessage.textContent = summary;
     gamewinDetails.innerHTML = "";
-    gamewinDetails.appendChild(buildBallsLeftRow());
+    // 9-Ball/10-Ball have no well-defined "balls left" concept (see
+    // LEADERBOARD_BALLS_LEFT_MAX_BY_GAME_TYPE) - no field to show at
+    // all for them, rather than one that's always meaningless to fill in.
+    if (BALLS_LEFT_HIDDEN_GAME_TYPES.indexOf(state.currentGame.gameType) === -1) {
+      gamewinDetails.appendChild(buildBallsLeftRow());
+      if (freshEntry && typeof freshEntry.pointsGapAtWin === "number") {
+        var pointsHint = document.createElement("p");
+        pointsHint.className = "balls-left-points-hint";
+        pointsHint.textContent = T("ballsLeft.pointsGapHint", {
+          points: Math.round(freshEntry.pointsGapAtWin),
+          target: freshEntry.target,
+          balls: freshEntry.ballsLeftOnTable
+        });
+        gamewinDetails.appendChild(pointsHint);
+      }
+    }
     gamewinDetails.appendChild(buildSkunkIndicator());
     updateGamewinSkunkIndicator();
     // Only a solo (non-"Play as Teams") win by someone with a club team
@@ -15294,19 +15374,26 @@
   var LEADERBOARD_RUN_BONUS_MAX = 8;
 
   // How many balls are actually in play for a given game type - the
-  // scale "balls left on the table" is relative TO. Only game types
-  // with a well-defined physical rack size are covered: One Pocket
-  // plays a standard full 15-ball rack, while the 8-ball family's own
-  // convention (see the "Rack-mode skunk" comment on
-  // persistBallsLeftLive) is specifically the loser's own 7 object
-  // balls, not the whole rack. Anything else (9-ball, Straight Pool,
-  // Custom) has no fixed scale this field was ever designed around, so
-  // it's deliberately left out rather than guessed at.
+  // scale "balls left on the table" is relative TO. One Pocket plays a
+  // standard full 15-ball rack; the 8-ball family's own convention (see
+  // the "Rack-mode skunk" comment on persistBallsLeftLive) is
+  // specifically the loser's own 7 object balls, not the whole rack.
+  // Points-unit games (Straight Pool, 15 Ball Rotation, Custom) store
+  // their ballsLeftOnTable already pre-converted onto that same 0-7
+  // scale (see creditWin's pointsGapToBallsLeft), so they share 8-ball's
+  // max of 7 here rather than needing one of their own. 9-Ball/10-Ball
+  // have no fixed scale this field was ever designed around (no per-
+  // player "own balls" group the way 8-ball or points-unit games have),
+  // so those stay deliberately left out rather than guessed at - see
+  // also showGameWinOverlay, which hides the field entirely for them.
   var LEADERBOARD_BALLS_LEFT_MAX_BY_GAME_TYPE = {
     onepocket: 15,
     "8ball": 7,
     "8ballrotation": 7,
-    "8ballpunishment": 7
+    "8ballpunishment": 7,
+    straight: 7,
+    "15ballrotation": 7,
+    custom: 7
   };
 
   // Only wins where the balls-left-on-table stepper (see
