@@ -4667,6 +4667,21 @@ input[type="number"] {
 
 /* ---------- Leaderboard ---------- */
 
+/* Unlike the other full-screen pages, this one's content (the banner,
+   list, etc.) isn't built from .panel elements, which is where every
+   other page's side gutter actually comes from (.panel's own left/
+   right margin) - nothing here had one, so everything ran edge to
+   edge. The header already gives itself the matching 16px via
+   .app-header's own padding, so it gets canceled back out here to
+   avoid doubling up on top of this page-level padding. */
+#view-leaderboard-page {
+  padding: 0 16px 24px;
+}
+
+#view-leaderboard-page > .app-header {
+  margin: 0 -16px;
+}
+
 .leaderboard-banner {
   text-align: center;
   padding: 20px 16px 24px;
