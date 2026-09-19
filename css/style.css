@@ -3886,8 +3886,12 @@ input[type="number"] {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid var(--border);
+  /* A theme-defined card color, not a flat black overlay - the overlay
+     reads fine darkening an already-dark panel, but on a light theme
+     (Stainless Steel, Pearl Lounge, ...) it just muddies the light
+     panel surface into a low-contrast gray box. */
+  background: var(--bg-card);
+  border: 2px solid var(--border);
   border-radius: 10px;
   padding: 10px 14px;
   margin-bottom: 8px;
@@ -3898,7 +3902,7 @@ input[type="number"] {
 }
 
 .player-stats-row .label {
-  color: var(--text-dim);
+  color: var(--text);
   font-size: 0.9rem;
 }
 
@@ -4312,8 +4316,8 @@ input[type="number"] {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid var(--border);
+  background: var(--bg-card);
+  border: 2px solid var(--border);
   border-radius: 10px;
   padding: 10px 14px;
 }
@@ -4353,7 +4357,7 @@ input[type="number"] {
   align-items: center;
   text-align: center;
   gap: 2px;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 12px 8px;

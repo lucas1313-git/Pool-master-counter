@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260918k">
+<link rel="stylesheet" href="css/style.css?v=20260918l">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -1110,9 +1110,15 @@
     </div>
   </section>
 
-  <section class="panel" id="player-page-graph-panel">
-    <h2 data-i18n="playerPage.graphHeading">Graph</h2>
-    <div id="player-page-graph-body"></div>
+  <section class="panel collapsible-panel" id="player-page-graph-panel">
+    <button type="button" class="panel-toggle" id="btn-toggle-player-page-graph-panel" aria-expanded="true" aria-controls="player-page-graph-panel-body">
+      <h2 data-i18n="playerPage.graphHeading">Graph</h2>
+      <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+    </button>
+    <p class="panel-summary" id="player-page-graph-panel-summary"></p>
+    <div class="panel-body" id="player-page-graph-panel-body">
+      <div id="player-page-graph-body"></div>
+    </div>
   </section>
 
   <section class="panel collapsible-panel collapsed" id="player-page-rating-history-panel">
@@ -1126,9 +1132,15 @@
     </div>
   </section>
 
-  <section class="panel" id="player-page-current-panel">
-    <h2 data-i18n="playerPage.liveSessionHeading">This Session (Live)</h2>
-    <div id="player-page-current-body"></div>
+  <section class="panel collapsible-panel" id="player-page-current-panel">
+    <button type="button" class="panel-toggle" id="btn-toggle-player-page-current-panel" aria-expanded="true" aria-controls="player-page-current-panel-body">
+      <h2 data-i18n="playerPage.liveSessionHeading">This Session (Live)</h2>
+      <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+    </button>
+    <p class="panel-summary" id="player-page-current-panel-summary"></p>
+    <div class="panel-body" id="player-page-current-panel-body">
+      <div id="player-page-current-body"></div>
+    </div>
   </section>
 
   <section class="panel" id="player-page-actions-panel">
@@ -1139,9 +1151,15 @@
     </div>
   </section>
 
-  <section class="panel" id="player-page-history-panel">
-    <h2 data-i18n="playerPage.historyHeading">Session History</h2>
-    <ul id="player-page-history-list" class="player-history-list"></ul>
+  <section class="panel collapsible-panel collapsed" id="player-page-history-panel">
+    <button type="button" class="panel-toggle" id="btn-toggle-player-page-history-panel" aria-expanded="false" aria-controls="player-page-history-panel-body">
+      <h2 data-i18n="playerPage.historyHeading">Session History</h2>
+      <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+    </button>
+    <p class="panel-summary" id="player-page-history-panel-summary"></p>
+    <div class="panel-body" id="player-page-history-panel-body">
+      <ul id="player-page-history-list" class="player-history-list"></ul>
+    </div>
   </section>
 
 </div>
@@ -1467,6 +1485,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260918k"></script>
+<script src="js/app.js?v=20260918l"></script>
 </body>
 </html>

@@ -11984,6 +11984,7 @@
 
   function renderLiveSessionForPlayer(name) {
     var live = computeLiveSessionForPlayer(name);
+    setPanelSummary("player-page-current-panel", T("playerPage.liveSessionSummary", { wins: live.wins, games: live.games.length }));
     playerPageCurrentBody.innerHTML = "";
     playerPageCurrentBody.appendChild(playerStatsRow(T("playerPage.winsToday"), live.wins));
     playerPageCurrentBody.appendChild(playerGamesLogRow("Games", live.games));
@@ -12653,6 +12654,8 @@
     maxMs = Date.now();
     if (maxMs <= minMs) maxMs = minMs + 1;
 
+    setPanelSummary("player-page-graph-panel", T("playerPage.graphSummary", { count: stats.games.length }));
+
     playerPageGraphBody.innerHTML = "";
     playerPageGraphBody.appendChild(buildPlayerGraph(stats, minMs, maxMs, period));
     renderRatingHistorySection(currentStatsPlayerName);
@@ -12684,6 +12687,10 @@
   }
 
   function renderPlayerHistoryList(sessions) {
+    setPanelSummary(
+      "player-page-history-panel",
+      !sessions || sessions.length === 0 ? T("playerPage.noSavedSessionsYet") : T("playerPage.historySummary", { count: sessions.length })
+    );
     playerPageHistoryList.innerHTML = "";
     if (!sessions || sessions.length === 0) {
       var hint = document.createElement("li");
@@ -19222,7 +19229,10 @@
   wireCollapsiblePanel("resets-panel", "btn-toggle-resets-panel");
   wireCollapsiblePanel("focus-players-wrap", "btn-toggle-focus-players");
   wireCollapsiblePanel("player-page-synopsis-panel", "btn-toggle-player-page-synopsis-panel");
+  wireCollapsiblePanel("player-page-graph-panel", "btn-toggle-player-page-graph-panel");
   wireCollapsiblePanel("player-page-rating-history-panel", "btn-toggle-player-page-rating-history-panel");
+  wireCollapsiblePanel("player-page-current-panel", "btn-toggle-player-page-current-panel");
+  wireCollapsiblePanel("player-page-history-panel", "btn-toggle-player-page-history-panel");
   wireCollapsiblePanel("player-page-h2h-panel", "btn-toggle-player-page-h2h-panel");
   wireCollapsiblePanel("player-page-teams-panel", "btn-toggle-player-page-teams-panel");
   wireCollapsiblePanel("player-page-achievements-panel", "btn-toggle-player-page-achievements-panel");
