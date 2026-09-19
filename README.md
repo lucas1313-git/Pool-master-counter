@@ -222,7 +222,7 @@ This is a static site — no build step or dependencies.
 Three other branches exist alongside `main`:
 
 - **`stable`** — a snapshot of `main` at known-good points, fast-forwarded only when explicitly requested. Same unminified source as `main`.
-- **`release`** — a minified build (via `rjsmin`/`rcssmin`) of the latest `main`, rebuilt from scratch each time rather than diffed, since it's purely derived output. Pushing this branch is also what triggers the desktop app build (`.github/workflows/build-desktop.yml`), so the shipped binaries always come from this minified snapshot rather than directly from `main`.
+- **`release`** — a minified build (JS via `terser` with compress+mangle, CSS via `rcssmin`) of the latest `main`, rebuilt from scratch each time rather than diffed, since it's purely derived output. Terser also renames every local identifier to a short, meaningless name, which is safe here since the whole app is one self-contained IIFE with no global `window.*` API surface. Pushing this branch is also what triggers the desktop app build (`.github/workflows/build-desktop.yml`), so the shipped binaries always come from this minified/mangled snapshot rather than directly from `main`.
 - **`tests`** — the browser test suite described below. It never touches the app's own dependency-free footprint on `main`.
 
 ## Testing
