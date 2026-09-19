@@ -5138,23 +5138,22 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   font-weight: 800;
 }
 
-/* Never wraps to a second line - long names get truncated with an
-   ellipsis instead, so every collapsed card keeps the same height
-   regardless of name length. */
+/* Full name always shown, never truncated - long names wrap onto a
+   second line instead, and the card grows to fit (see align-items on
+   .all-players-list, which stretches every card in a row to match
+   whichever one grew tallest, so rows stay visually even). */
 .all-player-card-name {
   color: var(--accent);
   font-size: 1.15rem;
   font-weight: 800;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: break-word;
   min-width: 0;
   flex: 1;
 }
 
 .all-player-name-group {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 6px;
   min-width: 0;
   width: 100%;
