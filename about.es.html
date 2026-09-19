@@ -1,0 +1,1299 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pool Master Counter — Marcador de billar gratis</title>
+<meta name="description" content="Un recorrido guiado por el marcador de billar gratuito y sin cuenta: su propósito, a quién va dirigido, los dos asistentes de configuración, y todas las funciones — con capturas de pantalla reales en todo momento.">
+<meta property="og:title" content="Pool Master Counter">
+<meta property="og:description" content="El marcador para la mesa en la que realmente juegas. Gratis, sin cuenta, funciona en tu navegador.">
+<meta property="og:image" content="https://lucas1313-git.github.io/Pool-master-counter/docs/screenshots/live-scoreboard.jpg">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="icons/favicon-32.png">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500;1,9..144,600&family=Figtree:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  :root {
+    color-scheme: light;
+    --bg: #f3ede1;
+    --surface: #ffffff;
+    --surface-2: #ece1cb;
+    --ink: #182b20;
+    --ink-dim: #4c5e50;
+    --ink-faint: #7d8c7e;
+    --border: #ddceac;
+    --border-soft: #e8ddc2;
+    --brass: #9c701c;
+    --brass-ink: #6f4f13;
+    --brass-tint: #f1e2b8;
+    --rail: #832a37;
+    --rail-tint: #f5e3e2;
+    --felt: #163928;
+    --felt-ink: #eef2ea;
+    --on-brass: #241a06;
+    --shadow: 0 1px 2px rgba(24, 43, 32, 0.07), 0 14px 36px -18px rgba(24, 43, 32, 0.32);
+    --shadow-lg: 0 24px 64px -20px rgba(15, 28, 20, 0.4);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #0a1712;
+      --surface: #0f2318;
+      --surface-2: #16311f;
+      --ink: #f1ece0;
+      --ink-dim: #b6c6ba;
+      --ink-faint: #7d9484;
+      --border: #23422f;
+      --border-soft: #1b3325;
+      --brass: #dcb75f;
+      --brass-ink: #f1d68f;
+      --brass-tint: #2c2513;
+      --rail: #d97984;
+      --rail-tint: #3a1c20;
+      --felt: #0c2318;
+      --felt-ink: #f1ece0;
+      --on-brass: #241a06;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 16px 40px -18px rgba(0, 0, 0, 0.7);
+      --shadow-lg: 0 30px 80px -24px rgba(0, 0, 0, 0.75);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0a1712;
+    --surface: #0f2318;
+    --surface-2: #16311f;
+    --ink: #f1ece0;
+    --ink-dim: #b6c6ba;
+    --ink-faint: #7d9484;
+    --border: #23422f;
+    --border-soft: #1b3325;
+    --brass: #dcb75f;
+    --brass-ink: #f1d68f;
+    --brass-tint: #2c2513;
+    --rail: #d97984;
+    --rail-tint: #3a1c20;
+    --felt: #0c2318;
+    --felt-ink: #f1ece0;
+    --on-brass: #241a06;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 16px 40px -18px rgba(0, 0, 0, 0.7);
+    --shadow-lg: 0 30px 80px -24px rgba(0, 0, 0, 0.75);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body { margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Figtree", ui-sans-serif, system-ui, sans-serif;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  img { display: block; max-width: 100%; }
+
+  h1, h2, h3, h4 {
+    font-family: "Fraunces", Georgia, serif;
+    text-wrap: balance;
+    color: var(--ink);
+    margin: 0;
+  }
+
+  p { margin: 0; color: var(--ink-dim); }
+  strong { color: var(--ink); font-weight: 700; }
+
+  a { color: inherit; }
+
+  ::selection { background: var(--brass-tint); color: var(--on-brass); }
+  :focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; }
+
+  .mono {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+  }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--brass-ink);
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .wrap {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding-inline: 24px;
+  }
+
+  /* ---------------- nav ---------------- */
+
+  nav.top {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border-soft);
+  }
+
+  nav.top .wrap {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding-block: 14px;
+    max-width: 1120px;
+  }
+
+  .bry {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: "Fraunces", serif;
+    font-weight: 600;
+    font-size: 17px;
+    color: var(--ink);
+    text-decoration: none;
+  }
+
+  .bry img { width: 30px; height: 30px; border-radius: 8px; box-shadow: var(--shadow); }
+
+  .navlinks { display: flex; align-items: center; gap: 22px; }
+  .navlinks a.textlink {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--ink-dim);
+    text-decoration: none;
+  }
+  .navlinks a.textlink:hover { color: var(--ink); }
+
+  .langswitch {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 3px;
+    background: var(--surface);
+  }
+  .langswitch a {
+    padding: 4px 8px;
+    border-radius: 5px;
+    text-decoration: none;
+    color: var(--ink-faint);
+  }
+  .langswitch a:hover { color: var(--ink); }
+  .langswitch a.is-active { background: var(--felt); color: var(--felt-ink); }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: "Figtree", sans-serif;
+    font-weight: 700;
+    font-size: 14px;
+    padding: 10px 18px;
+    border-radius: 9px;
+    text-decoration: none;
+    border: 1px solid transparent;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .btn-brass { background: var(--brass); color: var(--on-brass); box-shadow: var(--shadow); }
+  .btn-brass:hover { filter: brightness(1.06); }
+  .btn-ghost { background: transparent; border-color: var(--border); color: var(--ink); }
+  .btn-ghost:hover { background: var(--surface-2); }
+  .btn-lg { padding: 15px 26px; font-size: 15.5px; border-radius: 11px; }
+
+  /* ---------------- hero ---------------- */
+
+  header.hero { padding-block: 64px 40px; }
+
+  .hero-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 40px;
+    align-items: center;
+  }
+  @media (min-width: 880px) {
+    .hero-grid { grid-template-columns: 1fr 1fr; gap: 20px; }
+  }
+
+  .hero h1 {
+    margin-top: 18px;
+    font-size: clamp(2.3rem, 5.2vw, 3.4rem);
+    font-weight: 600;
+    line-height: 1.06;
+    letter-spacing: -0.01em;
+  }
+  .hero h1 em {
+    font-style: italic;
+    color: var(--brass-ink);
+  }
+
+  .hero .dek {
+    margin-top: 20px;
+    font-size: 17px;
+    color: var(--ink-dim);
+    max-width: 46ch;
+  }
+
+  .hero .cta-row {
+    margin-top: 30px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .hero .fineprint {
+    margin-top: 16px;
+    font-size: 12.5px;
+    color: var(--ink-faint);
+    font-family: "IBM Plex Mono", monospace;
+  }
+
+  .frame {
+    position: relative;
+    border-radius: 18px;
+    padding: 10px;
+    background: linear-gradient(155deg, var(--felt) 0%, #0a1e14 100%);
+    box-shadow: var(--shadow-lg);
+  }
+  .frame::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 18px;
+    border: 1px solid color-mix(in srgb, var(--brass) 45%, transparent);
+    pointer-events: none;
+  }
+  .frame img {
+    width: 100%;
+    border-radius: 11px;
+    display: block;
+  }
+  .frame .pin {
+    position: absolute;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #f6e3a8, var(--brass) 70%);
+    box-shadow: 0 1px 2px rgba(0,0,0,.5);
+  }
+  .frame .pin.tl { top: 7px; left: 7px; }
+  .frame .pin.tr { top: 7px; right: 7px; }
+  .frame .pin.bl { bottom: 7px; left: 7px; }
+  .frame .pin.br { bottom: 7px; right: 7px; }
+
+  .frame-cap {
+    margin-top: 12px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11.5px;
+    color: var(--ink-faint);
+    text-align: center;
+  }
+
+  /* ---------------- sections ---------------- */
+
+  section { padding-block: 56px; }
+  section.tight { padding-block: 32px; }
+
+  .section-head { max-width: 62ch; }
+  .section-head h2 {
+    margin-top: 10px;
+    font-size: clamp(1.6rem, 3.4vw, 2.15rem);
+    font-weight: 600;
+  }
+  .section-head .lede {
+    margin-top: 14px;
+    font-size: 15.5px;
+    color: var(--ink-dim);
+  }
+
+  hr.rule {
+    border: none;
+    height: 1px;
+    background: var(--border-soft);
+    margin: 0;
+  }
+
+  /* purpose callout */
+
+  .contrast-plate {
+    margin-top: 28px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .contrast-cell {
+    background: var(--surface);
+    padding: 22px 22px 24px;
+  }
+  .contrast-cell.win { background: var(--felt); }
+  .contrast-cell .tag {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .contrast-cell.win .tag { color: color-mix(in srgb, var(--felt-ink) 65%, transparent); }
+  .contrast-cell h4 {
+    margin-top: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .contrast-cell.win h4 { color: var(--felt-ink); }
+  .contrast-cell p { margin-top: 8px; font-size: 13.5px; }
+  .contrast-cell.win p { color: color-mix(in srgb, var(--felt-ink) 78%, transparent); }
+
+  /* personas */
+
+  .personas {
+    margin-top: 30px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+  }
+  .persona {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 22px;
+    box-shadow: var(--shadow);
+  }
+  .persona .who {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--brass-ink);
+  }
+  .persona h3 {
+    margin-top: 8px;
+    font-size: 18px;
+    font-weight: 600;
+  }
+  .persona p { margin-top: 10px; font-size: 13.8px; }
+
+  /* wizard steps */
+
+  .step-rail {
+    margin-top: 26px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .step-chip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 9px 16px 9px 10px;
+    box-shadow: var(--shadow);
+  }
+  .step-chip .num {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--felt);
+    color: var(--felt-ink);
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11.5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .step-chip span.label { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+
+  .wizard-block {
+    margin-top: 44px;
+    display: grid;
+    gap: 32px;
+  }
+  @media (min-width: 900px) {
+    .wizard-block.with-image { grid-template-columns: 1fr 1fr; align-items: center; }
+  }
+  .wizard-copy .kicker {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .wizard-copy h3 {
+    margin-top: 8px;
+    font-size: clamp(1.3rem, 2.6vw, 1.7rem);
+    font-weight: 600;
+  }
+  .wizard-copy p.desc { margin-top: 12px; font-size: 14.8px; }
+  .wizard-note {
+    margin-top: 18px;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    background: var(--rail-tint);
+    border: 1px solid color-mix(in srgb, var(--rail) 35%, var(--border));
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 13px;
+    color: var(--ink);
+  }
+  .wizard-note b { color: var(--rail); }
+
+  /* feature tour rows */
+
+  .tour-row {
+    margin-top: 72px;
+    display: grid;
+    gap: 34px;
+  }
+  .tour-row:first-of-type { margin-top: 44px; }
+  @media (min-width: 900px) {
+    .tour-row { grid-template-columns: 1fr 1fr; align-items: center; }
+    .tour-row.flip .tour-copy { order: 2; }
+    .tour-row.flip .tour-media { order: 1; }
+  }
+
+  .tour-copy .kicker {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--brass-ink);
+  }
+  .tour-copy h3 {
+    margin-top: 10px;
+    font-size: clamp(1.35rem, 2.8vw, 1.85rem);
+    font-weight: 600;
+  }
+  .tour-copy p.desc { margin-top: 13px; font-size: 15px; }
+  .tour-list {
+    margin-top: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    padding: 0;
+  }
+  .tour-list li {
+    list-style: none;
+    font-size: 13.8px;
+    color: var(--ink-dim);
+    padding-left: 20px;
+    position: relative;
+  }
+  .tour-list li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 8px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--brass);
+  }
+  .tour-list li strong { color: var(--ink); }
+
+  .tour-media .frame { padding: 8px; }
+  .tour-media.two-up {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  @media (min-width: 640px) {
+    .tour-media.two-up.side { grid-template-columns: 1fr 1fr; }
+  }
+
+  /* rack (highlight grid) */
+
+  .rack {
+    margin-top: 30px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 14px;
+  }
+  .ball {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px 20px 22px;
+    box-shadow: var(--shadow);
+  }
+  .ball .num {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: var(--felt);
+    color: var(--felt-ink);
+    font-family: "IBM Plex Mono", monospace;
+    font-weight: 600;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .ball h4 {
+    margin-top: 14px;
+    font-size: 15.5px;
+    font-weight: 600;
+  }
+  .ball p { margin-top: 8px; font-size: 13.3px; }
+
+  /* CTA by */
+
+  .cta-by {
+    margin-top: 8px;
+    border-radius: 20px;
+    background: linear-gradient(155deg, var(--felt) 0%, #0a1e14 100%);
+    color: var(--felt-ink);
+    padding: 52px 36px;
+    text-align: center;
+    box-shadow: var(--shadow-lg);
+    border: 1px solid color-mix(in srgb, var(--brass) 35%, transparent);
+  }
+  .cta-by .eyebrow { color: color-mix(in srgb, var(--brass-ink) 90%, white 10%); }
+  .cta-by h2 {
+    margin-top: 12px;
+    color: var(--felt-ink);
+    font-size: clamp(1.7rem, 4vw, 2.4rem);
+  }
+  .cta-by p {
+    margin: 14px auto 0;
+    max-width: 46ch;
+    color: color-mix(in srgb, var(--felt-ink) 78%, transparent);
+    font-size: 15px;
+  }
+  .cta-by .cta-row { margin-top: 26px; justify-content: center; }
+  .cta-by .btn-ghost { border-color: color-mix(in srgb, var(--felt-ink) 35%, transparent); color: var(--felt-ink); }
+  .cta-by .btn-ghost:hover { background: color-mix(in srgb, var(--felt-ink) 12%, transparent); }
+
+  footer {
+    margin-top: 60px;
+    padding-block: 30px 60px;
+    border-top: 1px solid var(--border-soft);
+  }
+  footer .wrap {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 14px;
+    align-items: center;
+  }
+  footer .tagline {
+    font-family: "Fraunces", serif;
+    font-style: italic;
+    font-size: 14.5px;
+    color: var(--ink-dim);
+  }
+  footer .footlinks { display: flex; gap: 18px; }
+  footer a.textlink {
+    font-size: 12.8px;
+    font-weight: 600;
+    color: var(--ink-faint);
+    text-decoration: none;
+  }
+  footer a.textlink:hover { color: var(--ink); }
+
+  /* ---------------- lightbox slideshow ---------------- */
+  .frame { cursor: zoom-in; }
+  .frame:focus-visible { outline: 2px solid var(--brass); outline-offset: 4px; }
+
+  .lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 14px 20px 20px;
+    background: rgba(5, 10, 7, 0.97);
+  }
+  .lightbox[hidden] { display: none; }
+  .lightbox-topbar {
+    flex: 0 0 auto;
+    width: 100%;
+    display: flex;
+    justify-content: flex-end;
+  }
+  .lightbox-stage {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* Fixed reserve for the caption/footer below, which is positioned
+       absolutely (out of flow) so its actual text height never changes
+       how much room the image gets — otherwise a 1-line vs 2-line
+       caption would shift the image (y the fixed prev/next buttons
+       would visibly drift relative to it) from one slide to the next. */
+    padding-bottom: 112px;
+  }
+  .lightbox-frame {
+    position: relative;
+    height: 100%;
+    max-width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .lightbox-frame img {
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    border-radius: 14px;
+    box-shadow: var(--shadow-lg);
+    background: var(--felt);
+  }
+  .lightbox-footer {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 0 20px;
+  }
+  .lightbox-caption {
+    max-width: 900px;
+    text-align: center;
+    font-family: "Figtree", sans-serif;
+    font-weight: 600;
+    font-size: clamp(18px, 2.4vw, 25px);
+    line-height: 1.45;
+    color: var(--felt-ink);
+  }
+  .lightbox-count {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 13.5px;
+    letter-spacing: 0.06em;
+    color: color-mix(in srgb, var(--felt-ink) 65%, transparent);
+  }
+  .lightbox-btn,
+  .lightbox-close {
+    border-radius: 50%;
+    border: 1px solid rgba(220, 183, 95, 0.32);
+    background: rgba(18, 32, 24, 0.55);
+    backdrop-filter: blur(8px);
+    color: #ecdfb8;
+    font-family: "Figtree", sans-serif;
+    font-weight: 300;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  }
+  .lightbox-btn:hover,
+  .lightbox-close:hover {
+    background: rgba(220, 183, 95, 0.92);
+    border-color: rgba(220, 183, 95, 0.92);
+    color: #201705;
+  }
+  .lightbox-btn {
+    position: fixed;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 52px;
+    height: 52px;
+    font-size: 26px;
+    z-index: 2;
+  }
+  .lightbox-prev { left: 20px; }
+  .lightbox-next { right: 20px; }
+  .lightbox-close {
+    flex: 0 0 auto;
+    width: 42px;
+    height: 42px;
+    font-size: 19px;
+  }
+  @media (max-width: 640px) {
+    .lightbox { padding: 10px 14px 14px; }
+    .lightbox-stage { padding-bottom: 92px; }
+    .lightbox-btn { width: 42px; height: 42px; font-size: 20px; }
+    .lightbox-prev { left: 8px; }
+    .lightbox-next { right: 8px; }
+    .lightbox-close { width: 38px; height: 38px; font-size: 17px; }
+    .lightbox-caption { font-size: 16.5px; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="top">
+  <div class="wrap">
+    <a class="bry" href="about.html"><img src="icons/icon-512.png" alt=""> Pool Master Counter</a>
+    <div class="navlinks">
+      <a class="textlink" href="#purpose">Propósito</a>
+      <a class="textlink" href="#wizards">Asistentes</a>
+      <a class="textlink" href="#tour">Funciones</a>
+      <div class="langswitch">
+        <a href="about.html">EN</a>
+        <a href="about.fr.html">FR</a>
+        <a href="about.es.html" class="is-active">ES</a>
+        <a href="about.tl.html">TL</a>
+        <a href="about.zh-yue.html">粵</a>
+      </div>
+      <a class="btn btn-brass" href="index.html">Abrir la app</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <div class="eyebrow">Gratis &middot; Sin cuenta &middot; Funciona en tu navegador</div>
+      <h1>El marcador para la mesa en la que realmente juegas<em>.</em></h1>
+      <p class="dek">Pool Master Counter lleva el marcador de lo que sea que tengas delante esta noche &mdash; 8&#8209;Ball, 9&#8209;Ball, Straight Pool, One Pocket &mdash; y después recuerda discretamente cada rack: quién está en racha, quién le debe una revancha a quién, y por cuánto. Sin registro, sin servidor, nada que instalar a menos que quieras.</p>
+      <div class="cta-row">
+        <a class="btn btn-brass btn-lg" href="index.html">Abrir la app &rarr;</a>
+        <a class="btn btn-ghost btn-lg" href="https://github.com/lucas1313-git/Pool-master-counter" target="_blank" rel="noopener">Ver el código fuente</a>
+      </div>
+      <div class="fineprint">DON'T GET COCKY. &mdash; las propias palabras de la app, en la parte superior de cada página.</div>
+    </div>
+    <div>
+      <div class="frame">
+        <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+        <img src="docs/screenshots/setup-panels.jpg" alt="Página principal de Pool Master Counter: paneles de Copia de seguridad y transferencia, Orden de partidas, y Partida actual, con el marcador en vivo debajo">
+      </div>
+      <div class="frame-cap">la app real &mdash; no una maqueta</div>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <section id="purpose">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="eyebrow">Propósito</div>
+        <h2>Un marcador de verdad, no una app de conteo que se quedó corta</h2>
+        <p class="lede">La mayoría de las apps de billar hacen un solo trabajo: un contador básico de «+1», o una plataforma pesada creada para un director de torneo que gestiona ocho mesas a la vez. Pool Master Counter se sitúa en el espacio entre ambas &mdash; un marcador en vivo suficientemente legible desde el otro lado de la sala, además de las estadísticas, clasificaciones y torneos que un grupo habitual realmente quiere, sin pedirle nunca a nadie que cree una cuenta.</p>
+      </div>
+      <div class="contrast-plate">
+        <div class="contrast-cell">
+          <div class="tag">Esto no</div>
+          <h4>Un cronómetro con dos nombres encima</h4>
+          <p>Un simple conteo de «primero a» y nada más &mdash; cierras la pestaña y se pierde toda la noche. Bien para una partida; inútil para un grupo que juega cada semana.</p>
+        </div>
+        <div class="contrast-cell win">
+          <div class="tag">Pool Master Counter</div>
+          <h4>Anota esta noche, recuerda cada noche</h4>
+          <p>El marcador en vivo, una clasificación continua para todos, el historial de enfrentamientos directos, y un cuadro básico &mdash; gratis, local, permanente &mdash; para una mesa y la gente que sigue apareciendo por ella.</p>
+        </div>
+        <div class="contrast-cell">
+          <div class="tag">Esto tampoco</div>
+          <h4>Software de gestión de torneos</h4>
+          <p>Diseñado para eventos de 64 plazas en una docena de mesas físicas, un director que aprueba los resultados, una cuenta para cada jugador. Demasiado para un martes cualquiera.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="who">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="eyebrow">A quién va dirigido</div>
+        <h2>Diseñado para la mesa, no para el circuito</h2>
+        <p class="lede">Cuatro maneras en las que la gente termina usándolo &mdash; a menudo más de una, la misma noche.</p>
+      </div>
+      <div class="personas">
+        <div class="persona">
+          <div class="who">Los habituales</div>
+          <h3>Una mesa en casa o una liga de bar que juega cada semana</h3>
+          <p>Todos obtienen una clasificación automática, un historial de enfrentamientos directos contra todos los demás, y una gráfica de toda la rivalidad a lo largo del tiempo &mdash; sin que nadie tenga que acordarse de anotarlo.</p>
+        </div>
+        <div class="persona">
+          <div class="who">El anfitrión</div>
+          <h3>Quien organice la noche de billar</h3>
+          <p>El Modo Enfoque despeja la pantalla hasta dejar un marcador lo bastante grye para leerlo desde el otro lado de la sala, y un cuadro de notas convierte la noche en un resumen por SMS o correo después.</p>
+        </div>
+        <div class="persona">
+          <div class="who">El organizador</div>
+          <h3>Un club pequeño organizyo una noche informal</h3>
+          <p>Eliminación simple, doble eliminación, o round robin &mdash; un cuadro de verdad con clasificación y fichas de partido, configurado en menos de un minuto, sin app ni hoja de cálculo aparte.</p>
+        </div>
+        <div class="persona">
+          <div class="who">Solo de paso</div>
+          <h3>Alguien que solo quiere un contador y nada más</h3>
+          <p>Quick Counter se salta la configuración por completo: escribe dos nombres, toca +/&minus;. No se guarda nada, no hay nada que configurar &mdash; para la partida que no necesita quedar registrada.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="wizards">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="eyebrow">Los asistentes</div>
+        <h2>Guiado cuyo lo quieres, discreto cuyo no</h2>
+        <p class="lede">Dos asistentes independientes cubren los dos momentos que realmente necesitan explicación &mdash; la primerísima vez que alguien abre la app, y el inicio de cada partida nueva después. Ambos se pueden omitir, y cancelar cualquiera de los dos no pierde nada de lo ya configurado.</p>
+      </div>
+
+      <div class="wizard-block">
+        <div class="wizard-copy">
+          <div class="kicker">Primer inicio &middot; 4 pasos</div>
+          <h3>&ldquo;Welcome!&rdquo; &mdash; la configuración única</h3>
+          <p class="desc">La primerísima vez que la app se abre en un dispositivo, un breve asistente configura a un jugador y pregunta qué hacer a continuación &mdash; nada más. Nunca vuelve a aparecer después de eso.</p>
+          <div class="step-rail">
+            <div class="step-chip"><span class="num">1</span><span class="label">Welcome!</span></div>
+            <div class="step-chip"><span class="num">2</span><span class="label">What should we call you?</span></div>
+            <div class="step-chip"><span class="num">3</span><span class="label">Ready to play?</span></div>
+            <div class="step-chip"><span class="num">4</span><span class="label">One more thing</span></div>
+          </div>
+          <div class="wizard-note"><b>Se puede omitir en cada paso</b> &mdash; «Get to it now, I know what I'm doing» lleva directo a la app para quien prefiera no ser guiado paso a paso.</div>
+        </div>
+      </div>
+
+      <div class="wizard-block with-image">
+        <div class="wizard-copy">
+          <div class="kicker">Cada partida nueva &middot; 5 pasos &middot; &ldquo;&#129497; Start Wizard&rdquo;</div>
+          <h3>El asistente de configuración de partida</h3>
+          <p class="desc">La forma más rápida de entrar en una partida de verdad: elige el formato, añade jugadores, y empieza &mdash; cada paso explicado en lenguaje sencillo sobre la marcha.</p>
+          <div class="step-rail">
+            <div class="step-chip"><span class="num">1</span><span class="label">Tipo de partida y formato</span></div>
+            <div class="step-chip"><span class="num">2</span><span class="label">Jugadores</span></div>
+            <div class="step-chip"><span class="num">3</span><span class="label">Jugyo vs. En espera</span></div>
+            <div class="step-chip"><span class="num">4</span><span class="label">Rotación</span></div>
+            <div class="step-chip"><span class="num">5</span><span class="label">Revisión e inicio</span></div>
+          </div>
+          <div class="wizard-note"><b>Cancelar en cualquier momento</b> &mdash; los jugadores añadidos o los cambios de rotación ya hechos ya están guardados, exactamente como si hubieras usado los paneles directamente.</div>
+        </div>
+        <div class="tour-media">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/wizard-step1.jpg" alt="Asistente de configuración de partida, paso 1 de 5: eligiendo 9-Ball y modo Individual">
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tour">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="eyebrow">El recorrido completo</div>
+        <h2>Todo lo que hay sobre la mesa</h2>
+        <p class="lede">Cada pantalla a continuación es la app real, no una maqueta.</p>
+      </div>
+
+      <div class="tour-row">
+        <div class="tour-copy">
+          <div class="kicker">Juego en vivo</div>
+          <h3>Un marcador diseñado para leerse desde el otro lado de la sala</h3>
+          <p class="desc">Toca +/&minus; en la tarjeta de un jugador para seguir bolas, puntos o racks hacia la meta &mdash; cada toque reproduce su propio tono sintetizado. Alcanzar la meta registra la victoria e inicia automáticamente la siguiente partida.</p>
+          <ul class="tour-list">
+            <li><strong>Modo Enfoque</strong> oculta todos los paneles de configuración y deja solo el marcador.</li>
+            <li><strong>Milestone, On&#8209;the&#8209;Hill, y Game Changed</strong> ventanas emergentes que marcan una victoria, un aviso a una victoria de la meta, y un cambio de rotación.</li>
+            <li><strong>Undo Last Win, Share Styings, Export Session</strong> &mdash; siempre a un toque de distancia.</li>
+          </ul>
+        </div>
+        <div class="tour-media two-up">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/live-scoreboard.jpg" alt="Marcador en vivo a mitad de sesión con cuatro jugadores compitiendo a 5 victorias en 9-Ball">
+          </div>
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/focus-mode.jpg" alt="Modo Enfoque: todos los paneles de configuración ocultos, solo quedan el marcador y la posición de rotación">
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-row flip">
+        <div class="tour-copy">
+          <div class="kicker">Aspecto</div>
+          <h3>Diecinueve temas, cambiados con un toque</h3>
+          <p class="desc">Desde un verde de tapete profundo hasta un brillo pastel suave, además de dos modos claros genuinos y dos pares de alto contraste &mdash; cada color que se apoya sobre un fondo de acento se calcula por tema para seguir siendo legible, de modo que un botón nunca improvisa su propio contraste.</p>
+          <ul class="tour-list">
+            <li><strong>Crimson Felt</strong> es el aspecto original y el predeterminado.</li>
+            <li><strong>Daybreak Chalk</strong> y <strong>Pearl Lounge</strong> son temas claros de verdad, no un tema oscuro aclarado.</li>
+            <li><strong>Blackout Contrast</strong> y <strong>Paper Contrast</strong> llevan la legibilidad al máximo.</li>
+          </ul>
+        </div>
+        <div class="tour-media">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/themes.jpg" alt="El tema claro Daybreak Chalk, mostryo los paneles de configuración plegados">
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-row">
+        <div class="tour-copy">
+          <div class="kicker">Jugadores</div>
+          <h3>Una lista de jugadores que se recuerda a sí misma</h3>
+          <p class="desc">Añade un nombre y se pone en mayúscula automáticamente y se comprueba por duplicados mientras escribes. Toca En espera/Jugyo para meter o sacar a alguien de la partida de esta noche sin perderlo de la lista.</p>
+          <ul class="tour-list">
+            <li><strong>Listas de jugadores guardadas</strong> guardan automáticamente cada grupo distinto con el que hayas jugado alguna vez &mdash; un toque para cargarlo.</li>
+            <li><strong>Los nombres no distinguen mayúsculas de minúsculas</strong> &mdash; «bob» y «Bob» son siempre la misma persona.</li>
+            <li>Quitar a alguien de esta noche nunca afecta a sus estadísticas de carrera.</li>
+          </ul>
+        </div>
+        <div class="tour-media">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/players-panel.jpg" alt="Panel de jugadores con cuatro jugadores marcados como Jugyo y la clasificación por jugador debajo">
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-row flip">
+        <div class="tour-copy">
+          <div class="kicker">Torneos</div>
+          <h3>Un cuadro de verdad, no una hoja de cálculo</h3>
+          <p class="desc">Eliminación simple, doble eliminación, round robin, o suizo, configurados desde el mismo asistente o la página de Torneo. Los cuadros se muestran como un árbol conectado &mdash; lado de ganadores, lado de perdedores, y una Gran Final que sigue una remontada hasta el final del cuadro de perdedores.</p>
+          <ul class="tour-list">
+            <li>Los jugadores eliminados aparecen tachados, directamente en el cuadro.</li>
+            <li>Caer al cuadro de perdedores no significa que se acabó &mdash; gánalo y te enfrentas al campeón del cuadro de ganadores en la Gran Final.</li>
+            <li>Cada rack sigue contyo para las estadísticas de carrera y las clasificaciones &mdash; no es un conjunto de datos aparte.</li>
+          </ul>
+        </div>
+        <div class="tour-media two-up side">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/tournament-bracket.jpg" alt="Cuadros de ganadores y perdedores con una Gran Final en vivo, un retador llegado del cuadro de perdedores">
+          </div>
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/tournament-losers-bracket.jpg" alt="Una remontada completa en el cuadro de perdedores, ronda tras ronda, hasta la Gran Final">
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-row">
+        <div class="tour-copy">
+          <div class="kicker">Todos los jugadores</div>
+          <h3>Todos los jugadores que alguna vez han cogido un taco aquí</h3>
+          <p class="desc">Ordena por porcentaje de victorias, victorias, o nombre, y filtra por periodo &mdash; hoy, una semana, un año, todo el tiempo. Cambia a una gráfica lineal acumulada por jugador, con detalle al hacer clic en cada punto.</p>
+          <ul class="tour-list">
+            <li>Vista de barras: partidas jugadas/ganadas/perdidas, más una línea de tiempo de cuándo.</li>
+            <li>Vista de gráfica: toca cualquier punto para ver los rivales y resultados detrás de él.</li>
+            <li>Una pequeña insignia de clasificación acompaña a cada nombre, en todos los sitios donde aparece.</li>
+          </ul>
+        </div>
+        <div class="tour-media two-up">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/all-players-bars.jpg" alt="Vista de barras de Todos los jugadores mostryo partidas jugadas, ganadas, y perdidas por jugador">
+          </div>
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/all-players-graph.jpg" alt="Vista de gráfica de Todos los jugadores con una leyenda de líneas activables">
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-row flip">
+        <div class="tour-copy">
+          <div class="kicker">Un jugador, al completo</div>
+          <h3>Cada jugador tiene su propia página</h3>
+          <p class="desc">Toca cualquier nombre para abrirla: un resumen de estadísticas de hoy a todo el tiempo, un historial completo de enfrentamientos directos contra cada rival al que se ha enfrentado, y las mismas gráficas limitadas solo a esa persona.</p>
+          <ul class="tour-list">
+            <li>Un menú desplegable en la cabecera salta directo a cualquier otro jugador &mdash; sin necesidad de volver a Todos los jugadores.</li>
+            <li>El historial de sesiones se despliega en cada partida individual jugada.</li>
+            <li>Exporta las estadísticas o restablece solo el historial guardado de este jugador, independientemente del de los demás.</li>
+          </ul>
+        </div>
+        <div class="tour-media">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/player-stats-page.jpg" alt="Página de jugadora de Alice: 22 victorias, 6 derrotas, una tasa de victorias del 79%, e historiales de enfrentamientos directos">
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-row">
+        <div class="tour-copy">
+          <div class="kicker">La noche, por escrito</div>
+          <h3>Notas esta noche, un informe que de verdad puedes enviar</h3>
+          <p class="desc">Un cuadro de texto libre para cualquier cosa que valga la pena recordar &mdash; quién está en racha, momentos graciosos &mdash; se guarda automáticamente mientras escribes. Copiar, enviar por correo, o enviar por SMS el informe lo convierte en un resumen real: victorias/derrotas y cambio de clasificación de cada jugador, total de partidas, y tus notas.</p>
+          <ul class="tour-list">
+            <li>Generado de nuevo a partir de las sesiones en vivo y guardadas, así que es preciso incluso después de un reinicio a mitad del día.</li>
+            <li>Listo para pegar, enviar por correo, o myar como SMS, tal cual.</li>
+          </ul>
+        </div>
+        <div class="tour-media">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/day-notes.jpg" alt="Panel de Notas de hoy con una nota guardada y los botones Copiar/Correo/SMS del informe">
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-row flip">
+        <div class="tour-copy">
+          <div class="kicker">Tus datos, tu dispositivo</div>
+          <h3>Copia de seguridad, sincronización con iCloud, y una app de escritorio de verdad</h3>
+          <p class="desc">Todo vive en el navegador, en el dispositivo donde se usa &mdash; no hay cuenta en la nube. Exportar todos los datos para una copia de seguridad JSON completa, o Exportar para sincronizar con iCloud para mover una sesión entre tus propios dispositivos.</p>
+          <ul class="tour-list">
+            <li>Importar datos <em>combina</em> &mdash; nada de lo que ya está aquí se sobrescribe ni se cuenta por duplicado.</li>
+            <li>Una descarga de escritorio gratuita ejecuta el relé local al que un segundo teléfono puede unirse para anotar la misma partida en vivo juntos.</li>
+          </ul>
+        </div>
+        <div class="tour-media">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/backup-panel.jpg" alt="Panel de Copia de seguridad y transferencia, desplegado, con los botones Exportar todos los datos e Importar datosar datos">
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-row">
+        <div class="tour-copy">
+          <div class="kicker">Nunca atascado</div>
+          <h3>Una sola guía, contextual a donde estés</h3>
+          <p class="desc">Una única ventana de Ayuda y Guía cubre cada función en cada página &mdash; y es contextual: al abrirla, salta directo a la sección de la página en la que estés, con el resto a un scroll de distancia.</p>
+        </div>
+        <div class="tour-media">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/help-guide.jpg" alt="La ventana de Ayuda y Guía, abierta en la sección Página principal">
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-row flip">
+        <div class="tour-copy">
+          <div class="kicker">Motivo de orgullo</div>
+          <h3>La tabla de clasificación del Salón de la Fama</h3>
+          <p class="desc">Una puntuación MVP combina la tasa de victorias, victorias en torneos, clasificación, victorias dominantes, y rachas largas en una sola clasificación, una vez que un jugador tiene suficientes partidas registradas para ser juzgado con justicia.</p>
+          <ul class="tour-list">
+            <li>Puestos de podio en oro, plata, y bronce, con una explicación en lenguaje sencillo de «por qué estoy clasificado aquí» para cada jugador.</li>
+            <li>Una clasificación de Equipos dedicada está a un toque de distancia para el juego en grupo.</li>
+            <li>Comparte toda la tabla como un informe, igual que cualquier otra página de estadísticas.</li>
+          </ul>
+        </div>
+        <div class="tour-media">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/leaderboard.jpg" alt="Tabla de clasificación del Salón de la Fama, jugadores clasificados con una etiqueta MVP dorada y medallas de podio">
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="rack">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="eyebrow">Más en el rack</div>
+        <h2>El resto de lo que hay aquí</h2>
+        <p class="lede">Más pequeño en pantalla, no en utilidad.</p>
+      </div>
+      <div class="rack">
+        <div class="ball">
+          <div class="num">&#128288;</div>
+          <h4>Clasificaciones estilo Fargo</h4>
+          <p>Cada jugador obtiene una clasificación automática de estilo Elo, en la misma escala publicada que usa FargoRate &mdash; una diferencia de 100 puntos equivale a un favorito de más o menos 2 a 1. No hay forma de editarla a mano; solo se mueve con partidas reales.</p>
+        </div>
+        <div class="ball">
+          <div class="num">&#9878;&#65039;</div>
+          <h4>Hándicap Fair Match</h4>
+          <p>Actívalo y el byo peor clasificado recibe un objetivo de carrera más corto en lugar del mismo &mdash; calculado para que el partido se acerque a un cara o cruz según la diferencia real de clasificación.</p>
+        </div>
+        <div class="ball">
+          <div class="num">&#129446;</div>
+          <h4>Detección de skunk</h4>
+          <p>Un perdedor que no ha embocado nada se marca automáticamente en las partidas de bolas/puntos, y se deduce de las «bolas que quedan en la mesa» para la familia 8&#8209;Ball &mdash; correctamente excluido del 9&#8209;Ball, donde no es un concepto real.</p>
+        </div>
+        <div class="ball">
+          <div class="num">&#127925;</div>
+          <h4>Sonido sin nada que descargar</h4>
+          <p>Cada sonido se sintetiza en vivo con la Web Audio API. Al alcanzar una meta de «primero a N» suena el tema completo de 30 notas de la Novena de Beethoven, en tono grave y con una cola de reverberación.</p>
+        </div>
+        <div class="ball">
+          <div class="num">&#128241;</div>
+          <h4>Group Session</h4>
+          <p>Aloja una sesión en el WiFi local y un segundo teléfono puede escanear un código QR para unirse y anotar activamente la misma partida en vivo &mdash; sin internet, sin cuenta, nada sale de la sala.</p>
+        </div>
+        <div class="ball">
+          <div class="num">&#9203;</div>
+          <h4>Quick Counter</h4>
+          <p>«Just give me a counter» se salta el asistente por completo &mdash; un contador básico y editable sin tipo de partida, sin meta, y sin nada escrito en el almacenamiento. Recarga la página y desaparece, a propósito.</p>
+        </div>
+        <div class="ball">
+          <div class="num">&#128274;</div>
+          <h4>Nada sale del dispositivo</h4>
+          <p>Sin cuenta, sin servidor, sin analítica. Cada jugador, estadística, clasificación, y cuadro vive en el almacenamiento local del dispositivo que estás usyo, hasta que decidas exportarlo.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="cta-by">
+        <div class="eyebrow">A montar el rack</div>
+        <h2>Gratis, para siempre, para una mesa.</h2>
+        <p>Ninguna cuenta que crear, nada que instalar, nada enviado a ningún sitio. Ábrelo en lo que ya llevas en el bolsillo y empieza la siguiente partida.</p>
+        <div class="cta-row">
+          <a class="btn btn-brass btn-lg" href="index.html">Abrir la app &rarr;</a>
+          <a class="btn btn-ghost btn-lg" href="https://github.com/lucas1313-git/Pool-master-counter" target="_blank" rel="noopener">Ver el código fuente</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="tagline">&ldquo;Don't get cocky.&rdquo;</div>
+    <div class="footlinks">
+      <a class="textlink" href="index.html">Abrir la app</a>
+      <a class="textlink" href="https://github.com/lucas1313-git/Pool-master-counter" target="_blank" rel="noopener">GitHub</a>
+      <a class="textlink" href="https://github.com/lucas1313-git/Pool-master-counter/blob/main/README.md" target="_blank" rel="noopener">Documentación completa</a>
+    </div>
+  </div>
+</footer>
+
+<div class="lightbox" id="lightbox" hidden role="dialog" aria-modal="true" aria-label="Visor de capturas de pantalla">
+  <div class="lightbox-topbar">
+    <button type="button" class="lightbox-close" id="lightbox-close" aria-label="Cerrar">&#215;</button>
+  </div>
+  <div class="lightbox-stage">
+    <div class="lightbox-frame">
+      <img id="lightbox-img" src="" alt="">
+      <button type="button" class="lightbox-btn lightbox-prev" id="lightbox-prev" aria-label="Captura anterior">&#8249;</button>
+      <button type="button" class="lightbox-btn lightbox-next" id="lightbox-next" aria-label="Captura siguiente">&#8250;</button>
+    </div>
+    <div class="lightbox-footer">
+      <p class="lightbox-caption" id="lightbox-caption"></p>
+      <p class="lightbox-count" id="lightbox-count"></p>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var frames = Array.prototype.slice.call(document.querySelectorAll(".frame"));
+  var slides = frames.map(function (frame) {
+    var img = frame.querySelector("img");
+    return { src: img.getAttribute("src"), caption: img.getAttribute("alt") || "" };
+  });
+
+  var lightbox = document.getElementById("lightbox");
+  var lightboxImg = document.getElementById("lightbox-img");
+  var lightboxCaption = document.getElementById("lightbox-caption");
+  var lightboxCount = document.getElementById("lightbox-count");
+  var prevBtn = document.getElementById("lightbox-prev");
+  var nextBtn = document.getElementById("lightbox-next");
+  var closeBtn = document.getElementById("lightbox-close");
+
+  var currentIndex = 0;
+  var autoplayTimer = null;
+  var lastFocused = null;
+
+  function render() {
+    var slide = slides[currentIndex];
+    lightboxImg.setAttribute("src", slide.src);
+    lightboxImg.setAttribute("alt", slide.caption);
+    lightboxCaption.textContent = slide.caption;
+    lightboxCount.textContent = (currentIndex + 1) + " / " + slides.length;
+  }
+
+  function stopAutoplay() {
+    if (autoplayTimer) {
+      clearInterval(autoplayTimer);
+      autoplayTimer = null;
+    }
+  }
+
+  function startAutoplay() {
+    stopAutoplay();
+    autoplayTimer = setInterval(function () {
+      currentIndex = (currentIndex + 1) % slides.length;
+      render();
+    }, 12000);
+  }
+
+  function openAt(index, triggerEl) {
+    if (!slides.length) { return; }
+    currentIndex = index;
+    lastFocused = triggerEl || document.activeElement;
+    render();
+    lightbox.hidden = false;
+    closeBtn.focus();
+    startAutoplay();
+  }
+
+  function close() {
+    lightbox.hidden = true;
+    stopAutoplay();
+    if (lastFocused && typeof lastFocused.focus === "function") {
+      lastFocused.focus();
+    }
+  }
+
+  function goPrev() {
+    stopAutoplay();
+    currentIndex = (currentIndex - 1 + slides.length) % slides.length;
+    render();
+  }
+
+  function goNext() {
+    stopAutoplay();
+    currentIndex = (currentIndex + 1) % slides.length;
+    render();
+  }
+
+  frames.forEach(function (frame, index) {
+    frame.setAttribute("tabindex", "0");
+    frame.setAttribute("role", "button");
+    frame.setAttribute("aria-label", "Abrir la captura en el pase de diapositivas");
+    frame.addEventListener("click", function () { openAt(index, frame); });
+    frame.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        openAt(index, frame);
+      }
+    });
+  });
+
+  prevBtn.addEventListener("click", goPrev);
+  nextBtn.addEventListener("click", goNext);
+  closeBtn.addEventListener("click", close);
+
+  lightbox.addEventListener("click", function (e) {
+    if (e.target === lightbox) { close(); }
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (lightbox.hidden) { return; }
+    if (e.key === "Escape") { close(); }
+    else if (e.key === "ArrowLeft") { goPrev(); }
+    else if (e.key === "ArrowRight") { goNext(); }
+  });
+})();
+</script>
+
+</body>
+</html>

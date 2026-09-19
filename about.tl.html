@@ -1,0 +1,1299 @@
+<!DOCTYPE html>
+<html lang="tl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pool Master Counter — Libreng Pool Scoreboard at Stats</title>
+<meta name="description" content="Isang gabay sa libreng pool scoreboard na walang account: ang layunin nito, kung para kanino ito, ang dalawang setup wizard, at bawat tampok — may tunay na screenshot sa buong page.">
+<meta property="og:title" content="Pool Master Counter">
+<meta property="og:description" content="Ang scoreboard para sa mesang tunay mong nilalaruan. Libre, walang account, tumatakbo sa browser mo.">
+<meta property="og:image" content="https://lucas1313-git.github.io/Pool-master-counter/docs/screenshots/live-scoreboard.jpg">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="icons/favicon-32.png">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500;1,9..144,600&family=Figtree:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  :root {
+    color-scheme: light;
+    --bg: #f3ede1;
+    --surface: #ffffff;
+    --surface-2: #ece1cb;
+    --ink: #182b20;
+    --ink-dim: #4c5e50;
+    --ink-faint: #7d8c7e;
+    --border: #ddceac;
+    --border-soft: #e8ddc2;
+    --brass: #9c701c;
+    --brass-ink: #6f4f13;
+    --brass-tint: #f1e2b8;
+    --rail: #832a37;
+    --rail-tint: #f5e3e2;
+    --felt: #163928;
+    --felt-ink: #eef2ea;
+    --on-brass: #241a06;
+    --shadow: 0 1px 2px rgba(24, 43, 32, 0.07), 0 14px 36px -18px rgba(24, 43, 32, 0.32);
+    --shadow-lg: 0 24px 64px -20px rgba(15, 28, 20, 0.4);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #0a1712;
+      --surface: #0f2318;
+      --surface-2: #16311f;
+      --ink: #f1ece0;
+      --ink-dim: #b6c6ba;
+      --ink-faint: #7d9484;
+      --border: #23422f;
+      --border-soft: #1b3325;
+      --brass: #dcb75f;
+      --brass-ink: #f1d68f;
+      --brass-tint: #2c2513;
+      --rail: #d97984;
+      --rail-tint: #3a1c20;
+      --felt: #0c2318;
+      --felt-ink: #f1ece0;
+      --on-brass: #241a06;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 16px 40px -18px rgba(0, 0, 0, 0.7);
+      --shadow-lg: 0 30px 80px -24px rgba(0, 0, 0, 0.75);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0a1712;
+    --surface: #0f2318;
+    --surface-2: #16311f;
+    --ink: #f1ece0;
+    --ink-dim: #b6c6ba;
+    --ink-faint: #7d9484;
+    --border: #23422f;
+    --border-soft: #1b3325;
+    --brass: #dcb75f;
+    --brass-ink: #f1d68f;
+    --brass-tint: #2c2513;
+    --rail: #d97984;
+    --rail-tint: #3a1c20;
+    --felt: #0c2318;
+    --felt-ink: #f1ece0;
+    --on-brass: #241a06;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 16px 40px -18px rgba(0, 0, 0, 0.7);
+    --shadow-lg: 0 30px 80px -24px rgba(0, 0, 0, 0.75);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body { margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Figtree", ui-sans-serif, system-ui, sans-serif;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  img { display: block; max-width: 100%; }
+
+  h1, h2, h3, h4 {
+    font-family: "Fraunces", Georgia, serif;
+    text-wrap: balance;
+    color: var(--ink);
+    margin: 0;
+  }
+
+  p { margin: 0; color: var(--ink-dim); }
+  strong { color: var(--ink); font-weight: 700; }
+
+  a { color: inherit; }
+
+  ::selection { background: var(--brass-tint); color: var(--on-brass); }
+  :focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; }
+
+  .mono {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+  }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--brass-ink);
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .wrap {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding-inline: 24px;
+  }
+
+  /* ---------------- nav ---------------- */
+
+  nav.top {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border-soft);
+  }
+
+  nav.top .wrap {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding-block: 14px;
+    max-width: 1120px;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: "Fraunces", serif;
+    font-weight: 600;
+    font-size: 17px;
+    color: var(--ink);
+    text-decoration: none;
+  }
+
+  .brand img { width: 30px; height: 30px; border-radius: 8px; box-shadow: var(--shadow); }
+
+  .navlinks { display: flex; align-items: center; gap: 22px; }
+  .navlinks a.textlink {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--ink-dim);
+    text-decoration: none;
+  }
+  .navlinks a.textlink:hover { color: var(--ink); }
+
+  .langswitch {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 3px;
+    background: var(--surface);
+  }
+  .langswitch a {
+    padding: 4px 8px;
+    border-radius: 5px;
+    text-decoration: none;
+    color: var(--ink-faint);
+  }
+  .langswitch a:hover { color: var(--ink); }
+  .langswitch a.is-active { background: var(--felt); color: var(--felt-ink); }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: "Figtree", sans-serif;
+    font-weight: 700;
+    font-size: 14px;
+    padding: 10px 18px;
+    border-radius: 9px;
+    text-decoration: none;
+    border: 1px solid transparent;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .btn-brass { background: var(--brass); color: var(--on-brass); box-shadow: var(--shadow); }
+  .btn-brass:hover { filter: brightness(1.06); }
+  .btn-ghost { background: transparent; border-color: var(--border); color: var(--ink); }
+  .btn-ghost:hover { background: var(--surface-2); }
+  .btn-lg { padding: 15px 26px; font-size: 15.5px; border-radius: 11px; }
+
+  /* ---------------- hero ---------------- */
+
+  header.hero { padding-block: 64px 40px; }
+
+  .hero-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 40px;
+    align-items: center;
+  }
+  @media (min-width: 880px) {
+    .hero-grid { grid-template-columns: 1fr 1fr; gap: 20px; }
+  }
+
+  .hero h1 {
+    margin-top: 18px;
+    font-size: clamp(2.3rem, 5.2vw, 3.4rem);
+    font-weight: 600;
+    line-height: 1.06;
+    letter-spacing: -0.01em;
+  }
+  .hero h1 em {
+    font-style: italic;
+    color: var(--brass-ink);
+  }
+
+  .hero .dek {
+    margin-top: 20px;
+    font-size: 17px;
+    color: var(--ink-dim);
+    max-width: 46ch;
+  }
+
+  .hero .cta-row {
+    margin-top: 30px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .hero .fineprint {
+    margin-top: 16px;
+    font-size: 12.5px;
+    color: var(--ink-faint);
+    font-family: "IBM Plex Mono", monospace;
+  }
+
+  .frame {
+    position: relative;
+    border-radius: 18px;
+    padding: 10px;
+    background: linear-gradient(155deg, var(--felt) 0%, #0a1e14 100%);
+    box-shadow: var(--shadow-lg);
+  }
+  .frame::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 18px;
+    border: 1px solid color-mix(in srgb, var(--brass) 45%, transparent);
+    pointer-events: none;
+  }
+  .frame img {
+    width: 100%;
+    border-radius: 11px;
+    display: block;
+  }
+  .frame .pin {
+    position: absolute;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #f6e3a8, var(--brass) 70%);
+    box-shadow: 0 1px 2px rgba(0,0,0,.5);
+  }
+  .frame .pin.tl { top: 7px; left: 7px; }
+  .frame .pin.tr { top: 7px; right: 7px; }
+  .frame .pin.bl { bottom: 7px; left: 7px; }
+  .frame .pin.br { bottom: 7px; right: 7px; }
+
+  .frame-cap {
+    margin-top: 12px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11.5px;
+    color: var(--ink-faint);
+    text-align: center;
+  }
+
+  /* ---------------- sections ---------------- */
+
+  section { padding-block: 56px; }
+  section.tight { padding-block: 32px; }
+
+  .section-head { max-width: 62ch; }
+  .section-head h2 {
+    margin-top: 10px;
+    font-size: clamp(1.6rem, 3.4vw, 2.15rem);
+    font-weight: 600;
+  }
+  .section-head .lede {
+    margin-top: 14px;
+    font-size: 15.5px;
+    color: var(--ink-dim);
+  }
+
+  hr.rule {
+    border: none;
+    height: 1px;
+    background: var(--border-soft);
+    margin: 0;
+  }
+
+  /* purpose callout */
+
+  .contrast-plate {
+    margin-top: 28px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .contrast-cell {
+    background: var(--surface);
+    padding: 22px 22px 24px;
+  }
+  .contrast-cell.win { background: var(--felt); }
+  .contrast-cell .tag {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .contrast-cell.win .tag { color: color-mix(in srgb, var(--felt-ink) 65%, transparent); }
+  .contrast-cell h4 {
+    margin-top: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .contrast-cell.win h4 { color: var(--felt-ink); }
+  .contrast-cell p { margin-top: 8px; font-size: 13.5px; }
+  .contrast-cell.win p { color: color-mix(in srgb, var(--felt-ink) 78%, transparent); }
+
+  /* personas */
+
+  .personas {
+    margin-top: 30px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+  }
+  .persona {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 22px;
+    box-shadow: var(--shadow);
+  }
+  .persona .who {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--brass-ink);
+  }
+  .persona h3 {
+    margin-top: 8px;
+    font-size: 18px;
+    font-weight: 600;
+  }
+  .persona p { margin-top: 10px; font-size: 13.8px; }
+
+  /* wizard steps */
+
+  .step-rail {
+    margin-top: 26px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .step-chip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 9px 16px 9px 10px;
+    box-shadow: var(--shadow);
+  }
+  .step-chip .num {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--felt);
+    color: var(--felt-ink);
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11.5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .step-chip span.label { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+
+  .wizard-block {
+    margin-top: 44px;
+    display: grid;
+    gap: 32px;
+  }
+  @media (min-width: 900px) {
+    .wizard-block.with-image { grid-template-columns: 1fr 1fr; align-items: center; }
+  }
+  .wizard-copy .kicker {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .wizard-copy h3 {
+    margin-top: 8px;
+    font-size: clamp(1.3rem, 2.6vw, 1.7rem);
+    font-weight: 600;
+  }
+  .wizard-copy p.desc { margin-top: 12px; font-size: 14.8px; }
+  .wizard-note {
+    margin-top: 18px;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    background: var(--rail-tint);
+    border: 1px solid color-mix(in srgb, var(--rail) 35%, var(--border));
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 13px;
+    color: var(--ink);
+  }
+  .wizard-note b { color: var(--rail); }
+
+  /* feature tour rows */
+
+  .tour-row {
+    margin-top: 72px;
+    display: grid;
+    gap: 34px;
+  }
+  .tour-row:first-of-type { margin-top: 44px; }
+  @media (min-width: 900px) {
+    .tour-row { grid-template-columns: 1fr 1fr; align-items: center; }
+    .tour-row.flip .tour-copy { order: 2; }
+    .tour-row.flip .tour-media { order: 1; }
+  }
+
+  .tour-copy .kicker {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--brass-ink);
+  }
+  .tour-copy h3 {
+    margin-top: 10px;
+    font-size: clamp(1.35rem, 2.8vw, 1.85rem);
+    font-weight: 600;
+  }
+  .tour-copy p.desc { margin-top: 13px; font-size: 15px; }
+  .tour-list {
+    margin-top: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    padding: 0;
+  }
+  .tour-list li {
+    list-style: none;
+    font-size: 13.8px;
+    color: var(--ink-dim);
+    padding-left: 20px;
+    position: relative;
+  }
+  .tour-list li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 8px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--brass);
+  }
+  .tour-list li strong { color: var(--ink); }
+
+  .tour-media .frame { padding: 8px; }
+  .tour-media.two-up {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  @media (min-width: 640px) {
+    .tour-media.two-up.side { grid-template-columns: 1fr 1fr; }
+  }
+
+  /* rack (highlight grid) */
+
+  .rack {
+    margin-top: 30px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 14px;
+  }
+  .ball {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px 20px 22px;
+    box-shadow: var(--shadow);
+  }
+  .ball .num {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: var(--felt);
+    color: var(--felt-ink);
+    font-family: "IBM Plex Mono", monospace;
+    font-weight: 600;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .ball h4 {
+    margin-top: 14px;
+    font-size: 15.5px;
+    font-weight: 600;
+  }
+  .ball p { margin-top: 8px; font-size: 13.3px; }
+
+  /* CTA band */
+
+  .cta-band {
+    margin-top: 8px;
+    border-radius: 20px;
+    background: linear-gradient(155deg, var(--felt) 0%, #0a1e14 100%);
+    color: var(--felt-ink);
+    padding: 52px 36px;
+    text-align: center;
+    box-shadow: var(--shadow-lg);
+    border: 1px solid color-mix(in srgb, var(--brass) 35%, transparent);
+  }
+  .cta-band .eyebrow { color: color-mix(in srgb, var(--brass-ink) 90%, white 10%); }
+  .cta-band h2 {
+    margin-top: 12px;
+    color: var(--felt-ink);
+    font-size: clamp(1.7rem, 4vw, 2.4rem);
+  }
+  .cta-band p {
+    margin: 14px auto 0;
+    max-width: 46ch;
+    color: color-mix(in srgb, var(--felt-ink) 78%, transparent);
+    font-size: 15px;
+  }
+  .cta-band .cta-row { margin-top: 26px; justify-content: center; }
+  .cta-band .btn-ghost { border-color: color-mix(in srgb, var(--felt-ink) 35%, transparent); color: var(--felt-ink); }
+  .cta-band .btn-ghost:hover { background: color-mix(in srgb, var(--felt-ink) 12%, transparent); }
+
+  footer {
+    margin-top: 60px;
+    padding-block: 30px 60px;
+    border-top: 1px solid var(--border-soft);
+  }
+  footer .wrap {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 14px;
+    align-items: center;
+  }
+  footer .tagline {
+    font-family: "Fraunces", serif;
+    font-style: italic;
+    font-size: 14.5px;
+    color: var(--ink-dim);
+  }
+  footer .footlinks { display: flex; gap: 18px; }
+  footer a.textlink {
+    font-size: 12.8px;
+    font-weight: 600;
+    color: var(--ink-faint);
+    text-decoration: none;
+  }
+  footer a.textlink:hover { color: var(--ink); }
+
+  /* ---------------- lightbox slideshow ---------------- */
+  .frame { cursor: zoom-in; }
+  .frame:focus-visible { outline: 2px solid var(--brass); outline-offset: 4px; }
+
+  .lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 14px 20px 20px;
+    background: rgba(5, 10, 7, 0.97);
+  }
+  .lightbox[hidden] { display: none; }
+  .lightbox-topbar {
+    flex: 0 0 auto;
+    width: 100%;
+    display: flex;
+    justify-content: flex-end;
+  }
+  .lightbox-stage {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* Fixed reserve for the caption/footer below, which is positioned
+       absolutely (out of flow) so its actual text height never changes
+       how much room the image gets — otherwise a 1-line vs 2-line
+       caption would shift the image (and the fixed prev/next buttons
+       would visibly drift relative to it) from one slide to the next. */
+    padding-bottom: 112px;
+  }
+  .lightbox-frame {
+    position: relative;
+    height: 100%;
+    max-width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .lightbox-frame img {
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    border-radius: 14px;
+    box-shadow: var(--shadow-lg);
+    background: var(--felt);
+  }
+  .lightbox-footer {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 0 20px;
+  }
+  .lightbox-caption {
+    max-width: 900px;
+    text-align: center;
+    font-family: "Figtree", sans-serif;
+    font-weight: 600;
+    font-size: clamp(18px, 2.4vw, 25px);
+    line-height: 1.45;
+    color: var(--felt-ink);
+  }
+  .lightbox-count {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 13.5px;
+    letter-spacing: 0.06em;
+    color: color-mix(in srgb, var(--felt-ink) 65%, transparent);
+  }
+  .lightbox-btn,
+  .lightbox-close {
+    border-radius: 50%;
+    border: 1px solid rgba(220, 183, 95, 0.32);
+    background: rgba(18, 32, 24, 0.55);
+    backdrop-filter: blur(8px);
+    color: #ecdfb8;
+    font-family: "Figtree", sans-serif;
+    font-weight: 300;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  }
+  .lightbox-btn:hover,
+  .lightbox-close:hover {
+    background: rgba(220, 183, 95, 0.92);
+    border-color: rgba(220, 183, 95, 0.92);
+    color: #201705;
+  }
+  .lightbox-btn {
+    position: fixed;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 52px;
+    height: 52px;
+    font-size: 26px;
+    z-index: 2;
+  }
+  .lightbox-prev { left: 20px; }
+  .lightbox-next { right: 20px; }
+  .lightbox-close {
+    flex: 0 0 auto;
+    width: 42px;
+    height: 42px;
+    font-size: 19px;
+  }
+  @media (max-width: 640px) {
+    .lightbox { padding: 10px 14px 14px; }
+    .lightbox-stage { padding-bottom: 92px; }
+    .lightbox-btn { width: 42px; height: 42px; font-size: 20px; }
+    .lightbox-prev { left: 8px; }
+    .lightbox-next { right: 8px; }
+    .lightbox-close { width: 38px; height: 38px; font-size: 17px; }
+    .lightbox-caption { font-size: 16.5px; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="top">
+  <div class="wrap">
+    <a class="brand" href="about.html"><img src="icons/icon-512.png" alt=""> Pool Master Counter</a>
+    <div class="navlinks">
+      <a class="textlink" href="#purpose">Layunin</a>
+      <a class="textlink" href="#wizards">Mga Wizard</a>
+      <a class="textlink" href="#tour">Mga Tampok</a>
+      <div class="langswitch">
+        <a href="about.html">EN</a>
+        <a href="about.fr.html">FR</a>
+        <a href="about.es.html">ES</a>
+        <a href="about.tl.html" class="is-active">TL</a>
+        <a href="about.zh-yue.html">粵</a>
+      </div>
+      <a class="btn btn-brass" href="index.html">Buksan ang App</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <div class="eyebrow">Libre &middot; Walang account &middot; Tumatakbo sa browser mo</div>
+      <h1>Ang scoreboard para sa mesang tunay mong nilalaruan<em>.</em></h1>
+      <p class="dek">Sinusubaybayan ng Pool Master Counter ang score ng anumang laro mo ngayong gabi &mdash; 8&#8209;Ball, 9&#8209;Ball, Straight Pool, One Pocket &mdash; at tahimik na naaalala ang bawat rack pagkatapos: sino ang nasa porma, sino ang may utang na rematch, at gaano karami. Walang pagpaparehistro, walang server, walang kailangang i-install maliban kung gusto mo.</p>
+      <div class="cta-row">
+        <a class="btn btn-brass btn-lg" href="index.html">Buksan ang App &rarr;</a>
+        <a class="btn btn-ghost btn-lg" href="https://github.com/lucas1313-git/Pool-master-counter" target="_blank" rel="noopener">Tingnan ang Source</a>
+      </div>
+      <div class="fineprint">HUWAG MAGING SOBRANG TIWALA. &mdash; sariling salita ng app, sa itaas ng bawat page.</div>
+    </div>
+    <div>
+      <div class="frame">
+        <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+        <img src="docs/screenshots/setup-panels.jpg" alt="Pangunahing page ng Pool Master Counter: mga panel na Backup at Transfer, Game Order, at Current Game, may live scoreboard sa ibaba">
+      </div>
+      <div class="frame-cap">ang tunay na app &mdash; hindi mockup</div>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <section id="purpose">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="eyebrow">Layunin</div>
+        <h2>Isang tunay na scoreboard, hindi isang tally app na sumobra na sa ginawa</h2>
+        <p class="lede">Karamihan ng pool app ay pumipili ng isang trabaho: isang hubad na "+1" counter, o isang mabigat na platform na ginawa para sa tournament director na nagpapatakbo ng walong mesa nang sabay-sabay. Ang Pool Master Counter ay nasa gitna ng dalawang ito &mdash; sapat na live scoring para patakbuhin mula sa kabilang panig ng kwarto, kasama ang stats, rating, at bracket play na tunay na gusto ng isang grupong matagal nang naglalaro, nang hindi hinihiling sa sinuman na gumawa ng account.</p>
+      </div>
+      <div class="contrast-plate">
+        <div class="contrast-cell">
+          <div class="tag">Hindi ito</div>
+          <h4>Isang stopwatch na may dalawang pangalan</h4>
+          <p>Race&#8209;to counting at wala nang iba &mdash; isara ang tab at nawala na ang buong gabi. Sapat para sa isang laro; walang silbi para sa grupong naglalaro tuwing linggo.</p>
+        </div>
+        <div class="contrast-cell win">
+          <div class="tag">Pool Master Counter</div>
+          <h4>I-score ngayong gabi, alalahanin ang bawat gabi</h4>
+          <p>Ang live board, patuloy na rating para sa lahat, head&#8209;to&#8209;head na talaan, at pangunahing bracket &mdash; libre, lokal, permanente &mdash; para sa isang mesa at sa mga taong palaging pumupunta rito.</p>
+        </div>
+        <div class="contrast-cell">
+          <div class="tag">Hindi rin ito</div>
+          <h4>Tournament&#8209;operations software</h4>
+          <p>Ginawa para sa 64&#8209;bracket na events sa labindalawang mesa, isang director na nag-a-approve ng resulta, account para sa bawat manlalaro. Sobra na para sa isang Martes na gabi.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="who">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="eyebrow">Para kanino ito</div>
+        <h2>Ginawa para sa mesa, hindi para sa tour</h2>
+        <p class="lede">Apat na paraan kung paano talaga ginagamit ito ng mga tao &mdash; kadalasan mahigit isa, sa parehong gabi.</p>
+      </div>
+      <div class="personas">
+        <div class="persona">
+          <div class="who">Ang mga regular</div>
+          <h3>Isang home table o bar league na naglalaro tuwing linggo</h3>
+          <p>Ang bawat isa ay nakakakuha ng awtomatikong rating, head&#8209;to&#8209;head na talaan laban sa lahat, at graph ng buong karibalan sa paglipas ng panahon &mdash; nang hindi kinakailangang alalahanin ninuman na isulat ito.</p>
+        </div>
+        <div class="persona">
+          <div class="who">Ang host</div>
+          <h3>Kung sino man ang nagpapatakbo ng pool night</h3>
+          <p>Nililinis ng Focus Mode ang screen tungo sa isang scoreboard na sapat kalaki para basahin mula sa kabilang panig ng kwarto, at ang kahon ng tala ay ginagawang text o email recap ang gabing ito pagkatapos.</p>
+        </div>
+        <div class="persona">
+          <div class="who">Ang organizer</div>
+          <h3>Isang maliit na club na nagpapatakbo ng impormal na gabi</h3>
+          <p>Single elimination, double elimination, o round robin &mdash; isang tunay na bracket na may standings at match cards, na na-set up sa loob ng isang minuto, walang hiwalay na app o spreadsheet.</p>
+        </div>
+        <div class="persona">
+          <div class="who">Dumadaan lang</div>
+          <h3>Isang taong gusto lang ng tally at wala nang iba</h3>
+          <p>Lalaktawan ng Quick Counter ang buong setup: mag-type ng dalawang pangalan, pindutin ang +/&minus;. Walang nase-save, walang kailangang i-configure &mdash; para sa larong hindi kailangan ng permanenteng talaan.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="wizards">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="eyebrow">Ang mga wizard</div>
+        <h2>Ginagabayan kapag gusto mo, wala sa daanan kapag ayaw mo</h2>
+        <p class="lede">Dalawang hiwalay na wizard ang sumasaklaw sa dalawang sandaling talagang kailangang ipaliwanag &mdash; ang unang beses na binubuksan ninuman ang app, at ang simula ng bawat bagong laro pagkatapos noon. Pareho itong pwedeng laktawan, at ang pagkansela sa alinman ay hindi mawawala ang anumang na-set up na.</p>
+      </div>
+
+      <div class="wizard-block">
+        <div class="wizard-copy">
+          <div class="kicker">Unang launch &middot; 4 hakbang</div>
+          <h3>&ldquo;Maligayang pagdating!&rdquo; &mdash; ang isang-beses lang na setup</h3>
+          <p class="desc">Sa unang beses na buksan ang app sa isang device, isang maikling wizard ang nagse-set up ng isang manlalaro at nagtatanong kung ano ang susunod &mdash; wala nang iba. Hindi na ito lalabas ulit pagkatapos noon.</p>
+          <div class="step-rail">
+            <div class="step-chip"><span class="num">1</span><span class="label">Maligayang pagdating!</span></div>
+            <div class="step-chip"><span class="num">2</span><span class="label">Ano ang itatawag namin sa iyo?</span></div>
+            <div class="step-chip"><span class="num">3</span><span class="label">Handa nang maglaro?</span></div>
+            <div class="step-chip"><span class="num">4</span><span class="label">Isa pang bagay</span></div>
+          </div>
+          <div class="wizard-note"><b>Puwedeng laktawan sa bawat hakbang</b> &mdash; direktang dadalhin ka sa app ng "Sige na, alam ko na ang gagawin" para sa sinumang ayaw nang gabayan.</div>
+        </div>
+      </div>
+
+      <div class="wizard-block with-image">
+        <div class="wizard-copy">
+          <div class="kicker">Bawat bagong laro &middot; 5 hakbang &middot; &ldquo;&#129497; Simulan ang Wizard&rdquo;</div>
+          <h3>Ang Game Setup Wizard</h3>
+          <p class="desc">Ang pinakamabilis na paraan papunta sa tunay na laro: piliin ang format, magdagdag ng manlalaro, at magsimula &mdash; bawat hakbang ay ipinapaliwanag sa simpleng salita habang tumatagal.</p>
+          <div class="step-rail">
+            <div class="step-chip"><span class="num">1</span><span class="label">Uri ng laro at format</span></div>
+            <div class="step-chip"><span class="num">2</span><span class="label">Mga Manlalaro</span></div>
+            <div class="step-chip"><span class="num">3</span><span class="label">Playing kumpara sa Standby</span></div>
+            <div class="step-chip"><span class="num">4</span><span class="label">Rotation</span></div>
+            <div class="step-chip"><span class="num">5</span><span class="label">Suriin at Simulan</span></div>
+          </div>
+          <div class="wizard-note"><b>Kanselahin anumang oras</b> &mdash; ang anumang manlalarong idinagdag o pagbabago sa rotation ay naka-save na, eksaktong tulad na ginamit mo direkta ang mga panel.</div>
+        </div>
+        <div class="tour-media">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/wizard-step1.jpg" alt="Game Setup Wizard, hakbang 1 sa 5: pinipili ang 9-Ball at Indibidwal na laro">
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tour">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="eyebrow">Ang buong tour</div>
+        <h2>Lahat ng nasa mesa</h2>
+        <p class="lede">Ang bawat screen sa ibaba ay ang tunay na app, hindi mockup.</p>
+      </div>
+
+      <div class="tour-row">
+        <div class="tour-copy">
+          <div class="kicker">Live na laro</div>
+          <h3>Isang scoreboard na ginawang mabasa mula sa kabilang panig ng kwarto</h3>
+          <p class="desc">Pindutin ang +/&minus; sa card ng manlalaro para subaybayan ang bola, puntos, o rack papunta sa target &mdash; bawat pindot ay may sariling tunog. Ang pag-abot sa target ay awtomatikong nagbibigay ng panalo at sinisimulan ang susunod na laro.</p>
+          <ul class="tour-list">
+            <li>Itinatago ng <strong>Focus Mode</strong> ang bawat setup panel tungo sa board lang.</li>
+            <li>Ang mga pop&#8209;up na <strong>Milestone, On&#8209;the&#8209;Hill, at Game Changed</strong> ay minamarkahan ang isang panalo, babala ng isang-panalo na lang, at pagpapalit ng rotation.</li>
+            <li><strong>Undo Last Win, Share Standings, Export Session</strong> &mdash; isang pindot lang ang layo, palagi.</li>
+          </ul>
+        </div>
+        <div class="tour-media two-up">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/live-scoreboard.jpg" alt="Live scoreboard sa gitna ng session na may apat na manlalaro na nag-ra-race sa 5 panalo sa 9-Ball">
+          </div>
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/focus-mode.jpg" alt="Focus Mode: nakatago ang bawat setup panel, natitira lang ang scoreboard at posisyon ng rotation">
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-row flip">
+        <div class="tour-copy">
+          <div class="kicker">Hitsura at damdamin</div>
+          <h3>Labinsiyam na tema, papalitan sa isang pindot</h3>
+          <p class="desc">Mula sa malalim na felt green hanggang sa malambot na pastel shimmer, kasama ang dalawang tunay na light mode at dalawang high&#8209;contrast na pares &mdash; ang bawat kulay na nasa accent background ay kinakalkula kada tema para manatiling madaling basahin, kaya hindi kailanman nagpapalagay ang isang button sa sarili nitong contrast.</p>
+          <ul class="tour-list">
+            <li>Ang <strong>Crimson Felt</strong> ang orihinal na hitsura at ang default.</li>
+            <li>Ang <strong>Daybreak Chalk</strong> at <strong>Pearl Lounge</strong> ay tunay na light theme, hindi lang pinaliwanag na madilim na tema.</li>
+            <li>Ang <strong>Blackout Contrast</strong> at <strong>Paper Contrast</strong> ay itinutulak ang pagiging madaling basahin hanggang sa pinakamalayo.</li>
+          </ul>
+        </div>
+        <div class="tour-media">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/themes.jpg" alt="Ang Daybreak Chalk light theme, ipinapakita ang naka-collapse na setup panels">
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-row">
+        <div class="tour-copy">
+          <div class="kicker">Mga Manlalaro</div>
+          <h3>Isang roster na naaalala ang sarili nito</h3>
+          <p class="desc">Magdagdag ng pangalan at awtomatiko itong naka-capitalize at sinusuri para sa duplicate habang nagta-type ka. Pindutin ang Standby/Playing para ilipat ang isang tao papasok o palabas sa laro ngayong gabi nang hindi sila nawawala sa roster.</p>
+          <ul class="tour-list">
+            <li>Awtomatikong nase-save ng <strong>naka-save na listahan ng manlalaro</strong> ang bawat kakaibang grupong nalaruan mo na &mdash; isang pindot para i-load.</li>
+            <li><strong>Hindi case-sensitive ang mga pangalan</strong> &mdash; ang "bob" at "Bob" ay palaging parehong tao.</li>
+            <li>Ang pag-alis sa isang tao ngayong gabi ay hindi kailanman ginagalaw ang career stats nila.</li>
+          </ul>
+        </div>
+        <div class="tour-media">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/players-panel.jpg" alt="Players panel na may apat na manlalarong markadong Playing at standings kada manlalaro sa ibaba">
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-row flip">
+        <div class="tour-copy">
+          <div class="kicker">Mga Tournament</div>
+          <h3>Isang tunay na bracket, hindi spreadsheet</h3>
+          <p class="desc">Single elimination, double elimination, round robin, o Swiss, na-set up mula sa parehong wizard o sa Tournament page. Ang mga bracket ay ipinapakita bilang isang magkakaugnay na puno &mdash; panig ng winners, panig ng losers, at isang Grand Final na sumusubaybay sa takbo mula mismo sa losers bracket.</p>
+          <ul class="tour-list">
+            <li>Ang mga natanggal na manlalaro ay may guhit-tawid, mismo sa bracket.</li>
+            <li>Kapag bumaba ka sa losers bracket ay hindi ka pa tapos &mdash; manalo ka rito at makakaharap mo ang kampeon ng winners sa Grand Final.</li>
+            <li>Ang bawat rack ay binibilang pa rin sa career stats at rating &mdash; hindi ito hiwalay na tipon ng datos.</li>
+          </ul>
+        </div>
+        <div class="tour-media two-up side">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/tournament-bracket.jpg" alt="Winners at losers brackets na may live na Grand Final, isang challenger na dumarating mula sa losers bracket">
+          </div>
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/tournament-losers-bracket.jpg" alt="Isang buong takbo sa losers bracket, round kada round, na nagtatapos sa Grand Final">
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-row">
+        <div class="tour-copy">
+          <div class="kicker">Lahat ng Manlalaro</div>
+          <h3>Bawat manlalarong nakahawak na ng cue dito</h3>
+          <p class="desc">Ayusin ayon sa win percentage, panalo, o pangalan, at i-filter ayon sa panahon &mdash; ngayon, isang linggo, isang taon, buong panahon. Lumipat sa cumulative line graph kada manlalaro, na may click&#8209;para-ipakita ng detalye sa bawat data point.</p>
+          <ul class="tour-list">
+            <li>Bar view: mga larong nilaro/napanalunan/natalo, kasama ang timeline kung kailan.</li>
+            <li>Graph view: pindutin ang anumang tuldok para sa mga kalaban at resulta sa likod nito.</li>
+            <li>Isang maliit na rating badge ang sumusunod sa bawat pangalan, saan man ito lumitaw.</li>
+          </ul>
+        </div>
+        <div class="tour-media two-up">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/all-players-bars.jpg" alt="All Players bar view na nagpapakita ng mga larong nilaro, napanalunan, at natalo kada manlalaro">
+          </div>
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/all-players-graph.jpg" alt="All Players graph view na may legend ng mga linyang pwedeng i-toggle">
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-row flip">
+        <div class="tour-copy">
+          <div class="kicker">Isang manlalaro, nang buo</div>
+          <h3>Bawat manlalaro ay may sariling page</h3>
+          <p class="desc">Pindutin ang anumang pangalan para buksan ito: buod ng stats mula ngayon hanggang buong-panahon, kumpletong head&#8209;to&#8209;head na talaan laban sa bawat kalabang kinaharap, at ang parehong mga graph na para lang sa kanila.</p>
+          <ul class="tour-list">
+            <li>Ang header dropdown ay direktang lumilipat sa ibang manlalaro &mdash; walang kailangang balik sa All Players.</li>
+            <li>Ang Session History ay pinapalawak tungo sa bawat indibidwal na larong nilaro.</li>
+            <li>I-export ang Stats o i-reset lang ang naka-save na history ng manlalarong ito, hiwalay sa ibang lahat.</li>
+          </ul>
+        </div>
+        <div class="tour-media">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/player-stats-page.jpg" alt="Player page ni Alice: 22 panalo, 6 talo, 79% win rate, at head-to-head na talaan">
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-row">
+        <div class="tour-copy">
+          <div class="kicker">Ang gabi, nakasulat</div>
+          <h3>Mga tala ngayong gabi, isang report na tunay mong maipapadala</h3>
+          <p class="desc">Isang malayang lugar para sa kahit anong dapat tandaan &mdash; sino ang nasa porma, nakakatawang sandali &mdash; awtomatikong nase-save habang nagta-type ka. Ginagawa ng Copy, Email, o Text Report na tunay na recap ito: panalo/talo at galaw ng rating ng bawat manlalaro, kabuuang laro, at ang mga tala mo.</p>
+          <ul class="tour-list">
+            <li>Sariwang binubuo mula sa live at naka-save na session, kaya tumpak ito kahit pagkatapos ng reset sa kalagitnaan ng araw.</li>
+            <li>Handa nang i-paste, i-email, o ipadala bilang text, kung ano man ito.</li>
+          </ul>
+        </div>
+        <div class="tour-media">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/day-notes.jpg" alt="Panel ng Today's Notes na may naka-save na tala at mga button na Copy/Email/Text Report">
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-row flip">
+        <div class="tour-copy">
+          <div class="kicker">Ang datos mo, ang device mo</div>
+          <h3>Backup, iCloud sync, at isang tunay na desktop app</h3>
+          <p class="desc">Lahat ay nasa browser sa device na ginagamitan nito &mdash; walang cloud account. Gamitin ang Export All Data para sa buong JSON backup, o Export for iCloud Sync para ilipat ang session sa pagitan ng sarili mong mga device.</p>
+          <ul class="tour-list">
+            <li>Ang Import ay <em>nagme-merge</em> &mdash; walang mapapalitan o dobleng mabibilang na nariyan na.</li>
+            <li>Ang libreng desktop download ay nagpapatakbo ng local relay na pwedeng sumali ang pangalawang telepono para i-score nang magkasama ang parehong live na laro.</li>
+          </ul>
+        </div>
+        <div class="tour-media">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/backup-panel.jpg" alt="Panel ng Backup at Transfer, nakabukas, may mga button na Export All Data at Import Data">
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-row">
+        <div class="tour-copy">
+          <div class="kicker">Hindi kailanman matitigilan</div>
+          <h3>Isang gabay, kontekstuwal saan ka man</h3>
+          <p class="desc">Sinasaklaw ng iisang Help at Guide overlay ang bawat tampok sa bawat page &mdash; at ito ay kontekstuwal: ang pagbukas dito ay direktang pupunta sa seksyon ng anumang page na kinaroroonan mo ngayon, may natitira na isang scroll na lang ang layo.</p>
+        </div>
+        <div class="tour-media">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/help-guide.jpg" alt="Ang Help at Guide overlay, nakabukas sa seksyon ng Main Page">
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-row flip">
+        <div class="tour-copy">
+          <div class="kicker">Karapatang magyabang</div>
+          <h3>Ang Hall of Fame leaderboard</h3>
+          <p class="desc">Pinagsasama ng MVP score ang win rate, panalo sa tournament, rating, dominanteng panalo, at mahahabang run tungo sa isang ranggo, kapag may sapat na ang manlalaro na laro sa board para husgahan nang patas.</p>
+          <ul class="tour-list">
+            <li>Gold, silver, at bronze na puwesto sa podium, na may simpleng paliwanag na "bakit ako naka-ranggo dito" para sa bawat manlalaro.</li>
+            <li>May sariling Teams leaderboard na isang pindot lang ang layo para sa group play.</li>
+            <li>I-share ang buong board bilang report, tulad ng ibang stats page.</li>
+          </ul>
+        </div>
+        <div class="tour-media">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/leaderboard.jpg" alt="Hall of Fame leaderboard, mga naka-ranggong manlalaro na may gold na MVP tag at podium medals">
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="rack">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="eyebrow">Higit pa sa rack</div>
+        <h2>Ang natitira pang laman dito</h2>
+        <p class="lede">Mas maliit sa screen space, hindi sa kapakinabangan.</p>
+      </div>
+      <div class="rack">
+        <div class="ball">
+          <div class="num">&#128288;</div>
+          <h4>Fargo&#8209;style na rating</h4>
+          <p>Ang bawat manlalaro ay awtomatikong nakakakuha ng Elo&#8209;style na rating sa parehong inilathalang scale na ginagamit ng FargoRate &mdash; ang agwat na 100 puntos ay katumbas ng humigit-kumulang 2:1 na paborito. Walang paraan na i-edit ito nang manu-mano; gumagalaw lang ito mula sa tunay na laro.</p>
+        </div>
+        <div class="ball">
+          <div class="num">&#9878;&#65039;</div>
+          <h4>Fair Match handicapping</h4>
+          <p>I-on ito at ang panig na mas mababa ang rating ay makakakuha ng mas maikling race target sa halip na pareho &mdash; kinakalkula para maging malapit sa coin&#8209;flip ang match batay sa tunay na agwat ng rating.</p>
+        </div>
+        <div class="ball">
+          <div class="num">&#129446;</div>
+          <h4>Skunk detection</h4>
+          <p>Ang isang natalong walang na-pot ay awtomatikong nafla-flag para sa mga larong balls/points, at hinango mula sa "mga natitirang bola sa mesa" para sa 8&#8209;Ball family &mdash; tama namang hindi kasama ang 9&#8209;Ball, kung saan hindi ito tunay na konsepto.</p>
+        </div>
+        <div class="ball">
+          <div class="num">&#127925;</div>
+          <h4>Tunog na walang kailangang i-download</h4>
+          <p>Ang bawat tunog ay ginagawa nang live gamit ang Web Audio API. Umabot sa race&#8209;to&#8209;N milestone at tutugtog ang buong 30&#8209;notang tema mula sa Beethoven's 9th, mababa ang tono na may reverb.</p>
+        </div>
+        <div class="ball">
+          <div class="num">&#128241;</div>
+          <h4>Group Session</h4>
+          <p>Mag-host ng session sa local WiFi at ang pangalawang telepono ay pwedeng mag-scan ng QR code para sumali at aktibong i-score ang parehong live na laro &mdash; walang internet, walang account, walang lalabas sa kwarto.</p>
+        </div>
+        <div class="ball">
+          <div class="num">&#9203;</div>
+          <h4>Quick Counter</h4>
+          <p>Ang "Bigyan lang ako ng counter" ay lalaktaw sa buong wizard &mdash; isang hubad, ma-edit na tally na walang uri ng laro, walang target, at walang isinusulat sa storage. I-reload ang page at mawawala ito, sinasadya.</p>
+        </div>
+        <div class="ball">
+          <div class="num">&#128274;</div>
+          <h4>Walang lalabas sa device</h4>
+          <p>Walang account, walang server, walang analytics. Ang bawat manlalaro, stat, rating, at bracket ay nasa local storage ng device na ginagamit mo, hanggang piliin mong i-export ito.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="cta-band">
+        <div class="eyebrow">Ihanda na</div>
+        <h2>Libre, walang hanggan, para sa isang mesa.</h2>
+        <p>Walang account na gagawin, walang kailangang i-install, walang ipinapadala kahit saan. Buksan ito sa anumang nasa bulsa mo na at simulan ang susunod na laro.</p>
+        <div class="cta-row">
+          <a class="btn btn-brass btn-lg" href="index.html">Buksan ang App &rarr;</a>
+          <a class="btn btn-ghost btn-lg" href="https://github.com/lucas1313-git/Pool-master-counter" target="_blank" rel="noopener">Tingnan ang Source</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="tagline">&ldquo;Huwag maging sobrang tiwala.&rdquo;</div>
+    <div class="footlinks">
+      <a class="textlink" href="index.html">Buksan ang App</a>
+      <a class="textlink" href="https://github.com/lucas1313-git/Pool-master-counter" target="_blank" rel="noopener">GitHub</a>
+      <a class="textlink" href="https://github.com/lucas1313-git/Pool-master-counter/blob/main/README.md" target="_blank" rel="noopener">Kumpletong Dokumentasyon</a>
+    </div>
+  </div>
+</footer>
+
+<div class="lightbox" id="lightbox" hidden role="dialog" aria-modal="true" aria-label="Tagatingin ng screenshot">
+  <div class="lightbox-topbar">
+    <button type="button" class="lightbox-close" id="lightbox-close" aria-label="Isara">&#215;</button>
+  </div>
+  <div class="lightbox-stage">
+    <div class="lightbox-frame">
+      <img id="lightbox-img" src="" alt="">
+      <button type="button" class="lightbox-btn lightbox-prev" id="lightbox-prev" aria-label="Nakaraang screenshot">&#8249;</button>
+      <button type="button" class="lightbox-btn lightbox-next" id="lightbox-next" aria-label="Susunod na screenshot">&#8250;</button>
+    </div>
+    <div class="lightbox-footer">
+      <p class="lightbox-caption" id="lightbox-caption"></p>
+      <p class="lightbox-count" id="lightbox-count"></p>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var frames = Array.prototype.slice.call(document.querySelectorAll(".frame"));
+  var slides = frames.map(function (frame) {
+    var img = frame.querySelector("img");
+    return { src: img.getAttribute("src"), caption: img.getAttribute("alt") || "" };
+  });
+
+  var lightbox = document.getElementById("lightbox");
+  var lightboxImg = document.getElementById("lightbox-img");
+  var lightboxCaption = document.getElementById("lightbox-caption");
+  var lightboxCount = document.getElementById("lightbox-count");
+  var prevBtn = document.getElementById("lightbox-prev");
+  var nextBtn = document.getElementById("lightbox-next");
+  var closeBtn = document.getElementById("lightbox-close");
+
+  var currentIndex = 0;
+  var autoplayTimer = null;
+  var lastFocused = null;
+
+  function render() {
+    var slide = slides[currentIndex];
+    lightboxImg.setAttribute("src", slide.src);
+    lightboxImg.setAttribute("alt", slide.caption);
+    lightboxCaption.textContent = slide.caption;
+    lightboxCount.textContent = (currentIndex + 1) + " / " + slides.length;
+  }
+
+  function stopAutoplay() {
+    if (autoplayTimer) {
+      clearInterval(autoplayTimer);
+      autoplayTimer = null;
+    }
+  }
+
+  function startAutoplay() {
+    stopAutoplay();
+    autoplayTimer = setInterval(function () {
+      currentIndex = (currentIndex + 1) % slides.length;
+      render();
+    }, 12000);
+  }
+
+  function openAt(index, triggerEl) {
+    if (!slides.length) { return; }
+    currentIndex = index;
+    lastFocused = triggerEl || document.activeElement;
+    render();
+    lightbox.hidden = false;
+    closeBtn.focus();
+    startAutoplay();
+  }
+
+  function close() {
+    lightbox.hidden = true;
+    stopAutoplay();
+    if (lastFocused && typeof lastFocused.focus === "function") {
+      lastFocused.focus();
+    }
+  }
+
+  function goPrev() {
+    stopAutoplay();
+    currentIndex = (currentIndex - 1 + slides.length) % slides.length;
+    render();
+  }
+
+  function goNext() {
+    stopAutoplay();
+    currentIndex = (currentIndex + 1) % slides.length;
+    render();
+  }
+
+  frames.forEach(function (frame, index) {
+    frame.setAttribute("tabindex", "0");
+    frame.setAttribute("role", "button");
+    frame.setAttribute("aria-label", "Buksan ang screenshot sa slideshow");
+    frame.addEventListener("click", function () { openAt(index, frame); });
+    frame.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        openAt(index, frame);
+      }
+    });
+  });
+
+  prevBtn.addEventListener("click", goPrev);
+  nextBtn.addEventListener("click", goNext);
+  closeBtn.addEventListener("click", close);
+
+  lightbox.addEventListener("click", function (e) {
+    if (e.target === lightbox) { close(); }
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (lightbox.hidden) { return; }
+    if (e.key === "Escape") { close(); }
+    else if (e.key === "ArrowLeft") { goPrev(); }
+    else if (e.key === "ArrowRight") { goNext(); }
+  });
+})();
+</script>
+
+</body>
+</html>

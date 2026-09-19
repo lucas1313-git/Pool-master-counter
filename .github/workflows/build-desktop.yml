@@ -1,0 +1,209 @@
+name: Build desktop app
+
+# Builds a standalone, dependency-free desktop binary per OS (Node Single
+# Executable Application: server/ + the app's static files bundled into
+# one file, no Node.js required on the end user's machine) and publishes
+# them to a rolling GitHub Release that the "Download for..." button on
+# the GitHub Pages site links to via releases/latest/download/<filename>.
+#
+# macOS is arm64 (Apple Silicon) only - Node's SEA feature is untested by
+# upstream on macOS x64 ("is not currently supported and is skipped in
+# the tests" per Node's own docs).
+
+on:
+  push:
+    branches: [release]
+    paths:
+      - "index.html"
+      - "manifest.json"
+      - "css/**"
+      - "js/**"
+      - "languages/**"
+      - "icons/**"
+      - "server/**"
+      - "installer/**"
+      - ".github/workflows/build-desktop.yml"
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            artifact: PoolMasterCounter-mac-arm64.dmg
+          - os: windows-latest
+            artifact: PoolMasterCounter-win-x64.exe
+          - os: ubuntu-latest
+            artifact: PoolMasterCounter-linux-x64.tar.gz
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install server dependencies
+        run: cd server && npm ci
+
+      - name: Install build tooling
+        run: cd installer && npm ci
+
+      - name: Bundle the standalone entry point
+        run: |
+          cd installer
+          npx esbuild standalone-entry.js \
+            --bundle --platform=node --target=node24 \
+            --external:bufferutil --external:utf-8-validate \
+            --outfile=generated/bundle.js
+
+      - name: Generate the SEA config (embeds the app's static assets)
+        run: cd installer && node generate-sea-config.js
+
+      - name: Generate the SEA preparation blob
+        run: cd installer && node --experimental-sea-config generated/sea-config.json
+
+      - name: Import Developer ID certificate
+        if: runner.os == 'macOS'
+        env:
+          MAC_CERT_BASE64: ${{ secrets.MAC_CERT_BASE64 }}
+          MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+          MAC_KEYCHAIN_PASSWORD: ${{ secrets.MAC_KEYCHAIN_PASSWORD }}
+        run: |
+          CERTIFICATE_PATH=$RUNNER_TEMP/mac_cert.p12
+          KEYCHAIN_PATH=$RUNNER_TEMP/mac-signing.keychain-db
+
+          echo -n "$MAC_CERT_BASE64" | base64 --decode -o $CERTIFICATE_PATH
+
+          security create-keychain -p "$MAC_KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$MAC_KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+          security import $CERTIFICATE_PATH -P "$MAC_CERT_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH login.keychain-db
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -k "$MAC_KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+      - name: Build the macOS .app bundle
+        if: runner.os == 'macOS'
+        run: |
+          cd installer
+          APP=generated/PoolMasterCounter.app
+          mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+
+          # The real server binary - built exactly as before, just placed
+          # inside the bundle under a name distinct from the bundle's own
+          # main executable (see launch.sh below).
+          cp "$(command -v node)" "$APP/Contents/MacOS/PoolMasterCounterServer"
+          codesign --remove-signature "$APP/Contents/MacOS/PoolMasterCounterServer"
+          npx postject "$APP/Contents/MacOS/PoolMasterCounterServer" NODE_SEA_BLOB generated/sea-prep.blob \
+            --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2 \
+            --macho-segment-name NODE_SEA
+          chmod +x "$APP/Contents/MacOS/PoolMasterCounterServer"
+
+          # CFBundleExecutable - opens the server in a visible Terminal
+          # window instead of running it silently in the background (see
+          # mac/launch.sh for why).
+          cp mac/launch.sh "$APP/Contents/MacOS/PoolMasterCounter"
+          chmod +x "$APP/Contents/MacOS/PoolMasterCounter"
+          cp mac/Info.plist "$APP/Contents/Info.plist"
+
+          mkdir -p /tmp/AppIcon.iconset
+          SRC=../icons/icon-512.png
+          sips -z 16 16     $SRC --out /tmp/AppIcon.iconset/icon_16x16.png
+          sips -z 32 32     $SRC --out /tmp/AppIcon.iconset/icon_16x16@2x.png
+          sips -z 32 32     $SRC --out /tmp/AppIcon.iconset/icon_32x32.png
+          sips -z 64 64     $SRC --out /tmp/AppIcon.iconset/icon_32x32@2x.png
+          sips -z 128 128   $SRC --out /tmp/AppIcon.iconset/icon_128x128.png
+          sips -z 256 256   $SRC --out /tmp/AppIcon.iconset/icon_128x128@2x.png
+          sips -z 256 256   $SRC --out /tmp/AppIcon.iconset/icon_256x256.png
+          sips -z 512 512   $SRC --out /tmp/AppIcon.iconset/icon_256x256@2x.png
+          sips -z 512 512   $SRC --out /tmp/AppIcon.iconset/icon_512x512.png
+          sips -z 1024 1024 $SRC --out /tmp/AppIcon.iconset/icon_512x512@2x.png
+          iconutil -c icns /tmp/AppIcon.iconset -o "$APP/Contents/Resources/AppIcon.icns"
+          rm -rf /tmp/AppIcon.iconset
+
+          # Signs the already-injected server binary too (--deep) - both
+          # need a real Developer ID signature (with the hardened runtime,
+          # required for notarization) to pass Gatekeeper. The JIT/exec-mem
+          # entitlements are needed because the signed binary is Node's own
+          # runtime (V8), not a plain compiled app.
+          codesign --deep --force --sign "Developer ID Application: Luc Martin (UFAU7GCXKV)" \
+            --options runtime --entitlements mac/entitlements.plist "$APP"
+
+          rm -rf generated/dmg-root
+          mkdir -p generated/dmg-root
+          cp -R "$APP" generated/dmg-root/
+          ln -s /Applications generated/dmg-root/Applications
+          hdiutil create -volname "Pool Master Counter" -srcfolder generated/dmg-root -ov -format UDZO "../${{ matrix.artifact }}"
+
+      - name: Notarize and staple the .dmg
+        if: runner.os == 'macOS'
+        env:
+          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+          APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+        run: |
+          KEY_PATH=$RUNNER_TEMP/AuthKey_notary.p8
+          echo "$APPSTORE_API_PRIVATE_KEY" > "$KEY_PATH"
+
+          xcrun notarytool submit "${{ matrix.artifact }}" \
+            --key "$KEY_PATH" \
+            --key-id "$APPSTORE_API_KEY_ID" \
+            --issuer "$APPSTORE_API_ISSUER_ID" \
+            --wait
+
+          xcrun stapler staple "${{ matrix.artifact }}"
+
+      - name: Build the Windows binary
+        if: runner.os == 'Windows'
+        run: |
+          cd installer
+          cp "$(command -v node)" generated/PoolMasterCounter.exe
+          npx postject generated/PoolMasterCounter.exe NODE_SEA_BLOB generated/sea-prep.blob \
+            --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2
+          mv generated/PoolMasterCounter.exe "../${{ matrix.artifact }}"
+
+      - name: Build the Linux binary
+        if: runner.os == 'Linux'
+        run: |
+          cd installer
+          cp "$(command -v node)" generated/PoolMasterCounter
+          npx postject generated/PoolMasterCounter NODE_SEA_BLOB generated/sea-prep.blob \
+            --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2
+          chmod +x generated/PoolMasterCounter
+          tar -czf "../${{ matrix.artifact }}" -C generated PoolMasterCounter
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: desktop-latest
+          name: "Pool Master Counter — Desktop app (auto-built)"
+          make_latest: false
+          body: |
+            Auto-built from the latest `release` (${{ github.sha }}).
+
+            Portable, zero-installation binaries - no admin rights, nothing
+            added to your computer beyond the file itself. The macOS build
+            is signed with a Developer ID certificate and notarized by
+            Apple, so it opens normally with no security warning.
+          files: dist/*

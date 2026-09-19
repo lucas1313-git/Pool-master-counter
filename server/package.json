@@ -1,0 +1,15 @@
+{
+  "name": "pool-master-counter-group-session-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local LAN relay server for Pool Master Counter's Group Session feature - serves the app and relays live scoring between a host device and any guests who join on the same WiFi.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "qrcode": "^1.5.3",
+    "ws": "^8.17.0"
+  }
+}

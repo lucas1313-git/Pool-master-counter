@@ -1,0 +1,1299 @@
+<!DOCTYPE html>
+<html lang="zh-yue">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pool Master Counter — 免費桌球計分程式</title>
+<meta name="description" content="免費、唔使開戶口嘅桌球計分程式導覽：佢嘅用途、邊啲人啱用、兩個設定精靈，同埋所有功能——全程都用真實截圖。">
+<meta property="og:title" content="Pool Master Counter">
+<meta property="og:description" content="為你真正打緊嗰張枱而設嘅計分板。免費、唔使開戶口，喺瀏覽器度就用得。">
+<meta property="og:image" content="https://lucas1313-git.github.io/Pool-master-counter/docs/screenshots/live-scoreboard.jpg">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="icons/favicon-32.png">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500;1,9..144,600&family=Figtree:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  :root {
+    color-scheme: light;
+    --bg: #f3ede1;
+    --surface: #ffffff;
+    --surface-2: #ece1cb;
+    --ink: #182b20;
+    --ink-dim: #4c5e50;
+    --ink-faint: #7d8c7e;
+    --border: #ddceac;
+    --border-soft: #e8ddc2;
+    --brass: #9c701c;
+    --brass-ink: #6f4f13;
+    --brass-tint: #f1e2b8;
+    --rail: #832a37;
+    --rail-tint: #f5e3e2;
+    --felt: #163928;
+    --felt-ink: #eef2ea;
+    --on-brass: #241a06;
+    --shadow: 0 1px 2px rgba(24, 43, 32, 0.07), 0 14px 36px -18px rgba(24, 43, 32, 0.32);
+    --shadow-lg: 0 24px 64px -20px rgba(15, 28, 20, 0.4);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #0a1712;
+      --surface: #0f2318;
+      --surface-2: #16311f;
+      --ink: #f1ece0;
+      --ink-dim: #b6c6ba;
+      --ink-faint: #7d9484;
+      --border: #23422f;
+      --border-soft: #1b3325;
+      --brass: #dcb75f;
+      --brass-ink: #f1d68f;
+      --brass-tint: #2c2513;
+      --rail: #d97984;
+      --rail-tint: #3a1c20;
+      --felt: #0c2318;
+      --felt-ink: #f1ece0;
+      --on-brass: #241a06;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 16px 40px -18px rgba(0, 0, 0, 0.7);
+      --shadow-lg: 0 30px 80px -24px rgba(0, 0, 0, 0.75);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0a1712;
+    --surface: #0f2318;
+    --surface-2: #16311f;
+    --ink: #f1ece0;
+    --ink-dim: #b6c6ba;
+    --ink-faint: #7d9484;
+    --border: #23422f;
+    --border-soft: #1b3325;
+    --brass: #dcb75f;
+    --brass-ink: #f1d68f;
+    --brass-tint: #2c2513;
+    --rail: #d97984;
+    --rail-tint: #3a1c20;
+    --felt: #0c2318;
+    --felt-ink: #f1ece0;
+    --on-brass: #241a06;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 16px 40px -18px rgba(0, 0, 0, 0.7);
+    --shadow-lg: 0 30px 80px -24px rgba(0, 0, 0, 0.75);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body { margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Figtree", ui-sans-serif, system-ui, sans-serif;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  img { display: block; max-width: 100%; }
+
+  h1, h2, h3, h4 {
+    font-family: "Fraunces", Georgia, serif;
+    text-wrap: balance;
+    color: var(--ink);
+    margin: 0;
+  }
+
+  p { margin: 0; color: var(--ink-dim); }
+  strong { color: var(--ink); font-weight: 700; }
+
+  a { color: inherit; }
+
+  ::selection { background: var(--brass-tint); color: var(--on-brass); }
+  :focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; }
+
+  .mono {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+  }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--brass-ink);
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .wrap {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding-inline: 24px;
+  }
+
+  /* ---------------- nav ---------------- */
+
+  nav.top {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border-soft);
+  }
+
+  nav.top .wrap {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding-block: 14px;
+    max-width: 1120px;
+  }
+
+  .br同 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: "Fraunces", serif;
+    font-weight: 600;
+    font-size: 17px;
+    color: var(--ink);
+    text-decoration: none;
+  }
+
+  .br同 img { width: 30px; height: 30px; border-radius: 8px; box-shadow: var(--shadow); }
+
+  .navlinks { display: flex; align-items: center; gap: 22px; }
+  .navlinks a.textlink {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--ink-dim);
+    text-decoration: none;
+  }
+  .navlinks a.textlink:hover { color: var(--ink); }
+
+  .langswitch {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 3px;
+    background: var(--surface);
+  }
+  .langswitch a {
+    padding: 4px 8px;
+    border-radius: 5px;
+    text-decoration: none;
+    color: var(--ink-faint);
+  }
+  .langswitch a:hover { color: var(--ink); }
+  .langswitch a.is-active { background: var(--felt); color: var(--felt-ink); }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: "Figtree", sans-serif;
+    font-weight: 700;
+    font-size: 14px;
+    padding: 10px 18px;
+    border-radius: 9px;
+    text-decoration: none;
+    border: 1px solid transparent;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .btn-brass { background: var(--brass); color: var(--on-brass); box-shadow: var(--shadow); }
+  .btn-brass:hover { filter: brightness(1.06); }
+  .btn-ghost { background: transparent; border-color: var(--border); color: var(--ink); }
+  .btn-ghost:hover { background: var(--surface-2); }
+  .btn-lg { padding: 15px 26px; font-size: 15.5px; border-radius: 11px; }
+
+  /* ---------------- hero ---------------- */
+
+  header.hero { padding-block: 64px 40px; }
+
+  .hero-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 40px;
+    align-items: center;
+  }
+  @media (min-width: 880px) {
+    .hero-grid { grid-template-columns: 1fr 1fr; gap: 20px; }
+  }
+
+  .hero h1 {
+    margin-top: 18px;
+    font-size: clamp(2.3rem, 5.2vw, 3.4rem);
+    font-weight: 600;
+    line-height: 1.06;
+    letter-spacing: -0.01em;
+  }
+  .hero h1 em {
+    font-style: italic;
+    color: var(--brass-ink);
+  }
+
+  .hero .dek {
+    margin-top: 20px;
+    font-size: 17px;
+    color: var(--ink-dim);
+    max-width: 46ch;
+  }
+
+  .hero .cta-row {
+    margin-top: 30px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .hero .fineprint {
+    margin-top: 16px;
+    font-size: 12.5px;
+    color: var(--ink-faint);
+    font-family: "IBM Plex Mono", monospace;
+  }
+
+  .frame {
+    position: relative;
+    border-radius: 18px;
+    padding: 10px;
+    background: linear-gradient(155deg, var(--felt) 0%, #0a1e14 100%);
+    box-shadow: var(--shadow-lg);
+  }
+  .frame::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 18px;
+    border: 1px solid color-mix(in srgb, var(--brass) 45%, transparent);
+    pointer-events: none;
+  }
+  .frame img {
+    width: 100%;
+    border-radius: 11px;
+    display: block;
+  }
+  .frame .pin {
+    position: absolute;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #f6e3a8, var(--brass) 70%);
+    box-shadow: 0 1px 2px rgba(0,0,0,.5);
+  }
+  .frame .pin.tl { top: 7px; left: 7px; }
+  .frame .pin.tr { top: 7px; right: 7px; }
+  .frame .pin.bl { bottom: 7px; left: 7px; }
+  .frame .pin.br { bottom: 7px; right: 7px; }
+
+  .frame-cap {
+    margin-top: 12px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11.5px;
+    color: var(--ink-faint);
+    text-align: center;
+  }
+
+  /* ---------------- sections ---------------- */
+
+  section { padding-block: 56px; }
+  section.tight { padding-block: 32px; }
+
+  .section-head { max-width: 62ch; }
+  .section-head h2 {
+    margin-top: 10px;
+    font-size: clamp(1.6rem, 3.4vw, 2.15rem);
+    font-weight: 600;
+  }
+  .section-head .lede {
+    margin-top: 14px;
+    font-size: 15.5px;
+    color: var(--ink-dim);
+  }
+
+  hr.rule {
+    border: none;
+    height: 1px;
+    background: var(--border-soft);
+    margin: 0;
+  }
+
+  /* purpose callout */
+
+  .contrast-plate {
+    margin-top: 28px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .contrast-cell {
+    background: var(--surface);
+    padding: 22px 22px 24px;
+  }
+  .contrast-cell.win { background: var(--felt); }
+  .contrast-cell .tag {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .contrast-cell.win .tag { color: color-mix(in srgb, var(--felt-ink) 65%, transparent); }
+  .contrast-cell h4 {
+    margin-top: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .contrast-cell.win h4 { color: var(--felt-ink); }
+  .contrast-cell p { margin-top: 8px; font-size: 13.5px; }
+  .contrast-cell.win p { color: color-mix(in srgb, var(--felt-ink) 78%, transparent); }
+
+  /* personas */
+
+  .personas {
+    margin-top: 30px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+  }
+  .persona {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 22px;
+    box-shadow: var(--shadow);
+  }
+  .persona .who {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--brass-ink);
+  }
+  .persona h3 {
+    margin-top: 8px;
+    font-size: 18px;
+    font-weight: 600;
+  }
+  .persona p { margin-top: 10px; font-size: 13.8px; }
+
+  /* wizard steps */
+
+  .step-rail {
+    margin-top: 26px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .step-chip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 9px 16px 9px 10px;
+    box-shadow: var(--shadow);
+  }
+  .step-chip .num {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--felt);
+    color: var(--felt-ink);
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11.5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .step-chip span.label { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+
+  .wizard-block {
+    margin-top: 44px;
+    display: grid;
+    gap: 32px;
+  }
+  @media (min-width: 900px) {
+    .wizard-block.with-image { grid-template-columns: 1fr 1fr; align-items: center; }
+  }
+  .wizard-copy .kicker {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .wizard-copy h3 {
+    margin-top: 8px;
+    font-size: clamp(1.3rem, 2.6vw, 1.7rem);
+    font-weight: 600;
+  }
+  .wizard-copy p.desc { margin-top: 12px; font-size: 14.8px; }
+  .wizard-note {
+    margin-top: 18px;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    background: var(--rail-tint);
+    border: 1px solid color-mix(in srgb, var(--rail) 35%, var(--border));
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 13px;
+    color: var(--ink);
+  }
+  .wizard-note b { color: var(--rail); }
+
+  /* feature tour rows */
+
+  .tour-row {
+    margin-top: 72px;
+    display: grid;
+    gap: 34px;
+  }
+  .tour-row:first-of-type { margin-top: 44px; }
+  @media (min-width: 900px) {
+    .tour-row { grid-template-columns: 1fr 1fr; align-items: center; }
+    .tour-row.flip .tour-copy { order: 2; }
+    .tour-row.flip .tour-media { order: 1; }
+  }
+
+  .tour-copy .kicker {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--brass-ink);
+  }
+  .tour-copy h3 {
+    margin-top: 10px;
+    font-size: clamp(1.35rem, 2.8vw, 1.85rem);
+    font-weight: 600;
+  }
+  .tour-copy p.desc { margin-top: 13px; font-size: 15px; }
+  .tour-list {
+    margin-top: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    padding: 0;
+  }
+  .tour-list li {
+    list-style: none;
+    font-size: 13.8px;
+    color: var(--ink-dim);
+    padding-left: 20px;
+    position: relative;
+  }
+  .tour-list li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 8px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--brass);
+  }
+  .tour-list li strong { color: var(--ink); }
+
+  .tour-media .frame { padding: 8px; }
+  .tour-media.two-up {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  @media (min-width: 640px) {
+    .tour-media.two-up.side { grid-template-columns: 1fr 1fr; }
+  }
+
+  /* rack (highlight grid) */
+
+  .rack {
+    margin-top: 30px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 14px;
+  }
+  .ball {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px 20px 22px;
+    box-shadow: var(--shadow);
+  }
+  .ball .num {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: var(--felt);
+    color: var(--felt-ink);
+    font-family: "IBM Plex Mono", monospace;
+    font-weight: 600;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .ball h4 {
+    margin-top: 14px;
+    font-size: 15.5px;
+    font-weight: 600;
+  }
+  .ball p { margin-top: 8px; font-size: 13.3px; }
+
+  /* CTA b同 */
+
+  .cta-b同 {
+    margin-top: 8px;
+    border-radius: 20px;
+    background: linear-gradient(155deg, var(--felt) 0%, #0a1e14 100%);
+    color: var(--felt-ink);
+    padding: 52px 36px;
+    text-align: center;
+    box-shadow: var(--shadow-lg);
+    border: 1px solid color-mix(in srgb, var(--brass) 35%, transparent);
+  }
+  .cta-b同 .eyebrow { color: color-mix(in srgb, var(--brass-ink) 90%, white 10%); }
+  .cta-b同 h2 {
+    margin-top: 12px;
+    color: var(--felt-ink);
+    font-size: clamp(1.7rem, 4vw, 2.4rem);
+  }
+  .cta-b同 p {
+    margin: 14px auto 0;
+    max-width: 46ch;
+    color: color-mix(in srgb, var(--felt-ink) 78%, transparent);
+    font-size: 15px;
+  }
+  .cta-b同 .cta-row { margin-top: 26px; justify-content: center; }
+  .cta-b同 .btn-ghost { border-color: color-mix(in srgb, var(--felt-ink) 35%, transparent); color: var(--felt-ink); }
+  .cta-b同 .btn-ghost:hover { background: color-mix(in srgb, var(--felt-ink) 12%, transparent); }
+
+  footer {
+    margin-top: 60px;
+    padding-block: 30px 60px;
+    border-top: 1px solid var(--border-soft);
+  }
+  footer .wrap {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 14px;
+    align-items: center;
+  }
+  footer .tagline {
+    font-family: "Fraunces", serif;
+    font-style: italic;
+    font-size: 14.5px;
+    color: var(--ink-dim);
+  }
+  footer .footlinks { display: flex; gap: 18px; }
+  footer a.textlink {
+    font-size: 12.8px;
+    font-weight: 600;
+    color: var(--ink-faint);
+    text-decoration: none;
+  }
+  footer a.textlink:hover { color: var(--ink); }
+
+  /* ---------------- lightbox slideshow ---------------- */
+  .frame { cursor: zoom-in; }
+  .frame:focus-visible { outline: 2px solid var(--brass); outline-offset: 4px; }
+
+  .lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 14px 20px 20px;
+    background: rgba(5, 10, 7, 0.97);
+  }
+  .lightbox[hidden] { display: none; }
+  .lightbox-topbar {
+    flex: 0 0 auto;
+    width: 100%;
+    display: flex;
+    justify-content: flex-end;
+  }
+  .lightbox-stage {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* Fixed reserve for the caption/footer below, which is positioned
+       absolutely (out of flow) so its actual text height never changes
+       how much room the image gets — otherwise a 1-line vs 2-line
+       caption would shift the image (同 the fixed prev/next buttons
+       would visibly drift relative to it) from one slide to the next. */
+    padding-bottom: 112px;
+  }
+  .lightbox-frame {
+    position: relative;
+    height: 100%;
+    max-width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .lightbox-frame img {
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    border-radius: 14px;
+    box-shadow: var(--shadow-lg);
+    background: var(--felt);
+  }
+  .lightbox-footer {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 0 20px;
+  }
+  .lightbox-caption {
+    max-width: 900px;
+    text-align: center;
+    font-family: "Figtree", sans-serif;
+    font-weight: 600;
+    font-size: clamp(18px, 2.4vw, 25px);
+    line-height: 1.45;
+    color: var(--felt-ink);
+  }
+  .lightbox-count {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 13.5px;
+    letter-spacing: 0.06em;
+    color: color-mix(in srgb, var(--felt-ink) 65%, transparent);
+  }
+  .lightbox-btn,
+  .lightbox-close {
+    border-radius: 50%;
+    border: 1px solid rgba(220, 183, 95, 0.32);
+    background: rgba(18, 32, 24, 0.55);
+    backdrop-filter: blur(8px);
+    color: #ecdfb8;
+    font-family: "Figtree", sans-serif;
+    font-weight: 300;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  }
+  .lightbox-btn:hover,
+  .lightbox-close:hover {
+    background: rgba(220, 183, 95, 0.92);
+    border-color: rgba(220, 183, 95, 0.92);
+    color: #201705;
+  }
+  .lightbox-btn {
+    position: fixed;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 52px;
+    height: 52px;
+    font-size: 26px;
+    z-index: 2;
+  }
+  .lightbox-prev { left: 20px; }
+  .lightbox-next { right: 20px; }
+  .lightbox-close {
+    flex: 0 0 auto;
+    width: 42px;
+    height: 42px;
+    font-size: 19px;
+  }
+  @media (max-width: 640px) {
+    .lightbox { padding: 10px 14px 14px; }
+    .lightbox-stage { padding-bottom: 92px; }
+    .lightbox-btn { width: 42px; height: 42px; font-size: 20px; }
+    .lightbox-prev { left: 8px; }
+    .lightbox-next { right: 8px; }
+    .lightbox-close { width: 38px; height: 38px; font-size: 17px; }
+    .lightbox-caption { font-size: 16.5px; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="top">
+  <div class="wrap">
+    <a class="br同" href="about.html"><img src="icons/icon-512.png" alt=""> Pool Master Counter</a>
+    <div class="navlinks">
+      <a class="textlink" href="#purpose">用途</a>
+      <a class="textlink" href="#wizards">設定精靈</a>
+      <a class="textlink" href="#tour">功能</a>
+      <div class="langswitch">
+        <a href="about.html">EN</a>
+        <a href="about.fr.html">FR</a>
+        <a href="about.es.html">ES</a>
+        <a href="about.tl.html">TL</a>
+        <a href="about.zh-yue.html" class="is-active">粵</a>
+      </div>
+      <a class="btn btn-brass" href="index.html">打開個應用程式</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <div class="eyebrow">免費 &middot; 唔使開戶口 &middot; 喺瀏覽器度就用得</div>
+      <h1>為你真正打緊嗰張枱而設嘅計分板<em>.</em></h1>
+      <p class="dek">Pool Master Counter幫你計今晚打緊嘅任何一種波——8&#8209;Ball、9&#8209;Ball、Straight Pool、One Pocket——之後仲會靜靜哋幫你記住每一局:邊個手風順、邊個蝕咗場數要翻本、蝕幾多。唔使註冊、唔使伺服器、如果你唔想就乜都唔使裝。</p>
+      <div class="cta-row">
+        <a class="btn btn-brass btn-lg" href="index.html">打開個應用程式 &rarr;</a>
+        <a class="btn btn-ghost btn-lg" href="https://github.com/lucas1313-git/Pool-master-counter" target="_blank" rel="noopener">睇原始碼</a>
+      </div>
+      <div class="fineprint">DON'T GET COCKY.——呢句係個應用程式自己講嘅,每一版頁面頂部都有。</div>
+    </div>
+    <div>
+      <div class="frame">
+        <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+        <img src="docs/screenshots/setup-panels.jpg" alt="Pool Master Counter嘅主頁面:備份與轉移、對局順序,同埋現行對局面板,底下仲有即時計分板">
+      </div>
+      <div class="frame-cap">真正嘅應用程式畫面——唔係模擬圖</div>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <section id="purpose">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="eyebrow">用途</div>
+        <h2>一個真正嘅計分板,唔係個「濫竽充數」嘅計數程式</h2>
+        <p class="lede">大部分桌球應用程式淨係做一件事:一個淨係識「+1」嘅計數機,或者係做畀要同時管八張枱嘅賽事總監用嘅重型平台。Pool Master Counter就啱啱好夾喺中間&mdash;即時計分要夠大隻,喺房嗰頭都睇到,仲有長期一齊打嘅一班人真正想要嘅統計、評分同賽制,完全唔使任何人開戶口。</p>
+      </div>
+      <div class="contrast-plate">
+        <div class="contrast-cell">
+          <div class="tag">唔係呢啲</div>
+          <h4>一個淨係寫住兩個名嘅計時器</h4>
+          <p>淨係識計「打到幾多贏」,咩都冇埋&mdash;閂咗個分頁成晚嘅嘢就冇晒。打一場就啱用,但係個班人日日打就用唔到。</p>
+        </div>
+        <div class="contrast-cell win">
+          <div class="tag">Pool Master Counter</div>
+          <h4>今晚計分,每晚都記得住</h4>
+          <p>即時計分板、每個人不斷更新嘅評分、對頭賽戰績,仲有基本賽制&mdash;免費、本機、永久保存&mdash;為咗一張枱同埋成日嚟打嘅班friend。</p>
+        </div>
+        <div class="contrast-cell">
+          <div class="tag">呢啲都唔係</div>
+          <h4>賽事營運軟件</h4>
+          <p>為咗成打枱嘅64人淘汰賽事而設,要有總監批核賽果,每個球員都要開戶口。一個普通星期二夜晚用呢啲就大件夾細件。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="who">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="eyebrow">邊啲人啱用</div>
+        <h2>為咗張枱而設,唔係為咗巡迴賽</h2>
+        <p class="lede">人哋實際會用嚟做嘅四種情況&mdash;成日一個晚上就不止一種。</p>
+      </div>
+      <div class="personas">
+        <div class="persona">
+          <div class="who">老友記</div>
+          <h3>屋企張枱或者酒吧聯賽,日日打</h3>
+          <p>個個都會自動有評分、同埋每個對手嘅對頭戰績,仲有成段時間嘅對抗關係圖表&mdash;唔使邊個記得去寫低。</p>
+        </div>
+        <div class="persona">
+          <div class="who">主持人</div>
+          <h3>邊個負責搞呢晚桌球局</h3>
+          <p>Focus Mode會將畫面清到淨返一個夠大字嘅計分板,喺房嗰頭都睇到,仲有個筆記框幫你將今晚變成事後可以send嘅短訊或者電郵摘要。</p>
+        </div>
+        <div class="persona">
+          <div class="who">搞手</div>
+          <h3>細規模會社搞一個隨意夜晚</h3>
+          <p>單淘汰、雙淘汰,或者Round Robin&mdash;真正嘅賽程表連埋排名同賽事卡,一分鐘內就set好,唔使開多個應用程式或者試算表。</p>
+        </div>
+        <div class="persona">
+          <div class="who">淨係嚟玩下</div>
+          <h3>淨係想要個計數機,乜都唔使嘅人</h3>
+          <p>Quick Counter完全唔使設定:打兩個名,撳+/&minus;就得。乜都唔會儲存,乜都唔使set&mdash;啱晒唔需要留底嘅一局波。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="wizards">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="eyebrow">設定精靈</div>
+        <h2>想要有得指引就有,唔想要就唔阻你</h2>
+        <p class="lede">兩個獨立嘅設定精靈,覆蓋咗真正需要解釋嘅兩個時刻&mdash;任何人第一次打開個應用程式嗰陣,同埋之後每次開新局嗰陣。兩個都可以跳過,取消任何一個都唔會令已經set好嘅嘢消失。</p>
+      </div>
+
+      <div class="wizard-block">
+        <div class="wizard-copy">
+          <div class="kicker">第一次開啟 &middot; 4個步驟</div>
+          <h3>&ldquo;Welcome!&rdquo;&mdash;淨係得一次嘅設定</h3>
+          <p class="desc">個應用程式第一次喺部裝置度打開,會有個簡短精靈幫你set好一個球員,再問你下一步想點&mdash;僅此而已。之後就唔會再出現。</p>
+          <div class="step-rail">
+            <div class="step-chip"><span class="num">1</span><span class="label">Welcome!</span></div>
+            <div class="step-chip"><span class="num">2</span><span class="label">What should we call you?</span></div>
+            <div class="step-chip"><span class="num">3</span><span class="label">Ready to play?</span></div>
+            <div class="step-chip"><span class="num">4</span><span class="label">One more thing</span></div>
+          </div>
+          <div class="wizard-note"><b>每一步都可以跳過</b> &mdash;撳「Get to it now, I know what I'm doing」就會直接跳去用個應用程式,啱晒唔想俾人一步步教嘅人。</div>
+        </div>
+      </div>
+
+      <div class="wizard-block with-image">
+        <div class="wizard-copy">
+          <div class="kicker">每次開新局 &middot; 5個步驟 &middot; &ldquo;&#129497; Start Wizard&rdquo;</div>
+          <h3>對局設定精靈</h3>
+          <p class="desc">入局最快嘅方法:揀格式、加球員,然後開始&mdash;每一步都用簡單易明嘅話解釋畀你聽。</p>
+          <div class="step-rail">
+            <div class="step-chip"><span class="num">1</span><span class="label">對局類型同格式</span></div>
+            <div class="step-chip"><span class="num">2</span><span class="label">球員</span></div>
+            <div class="step-chip"><span class="num">3</span><span class="label">落場 vs. 企埋一邊</span></div>
+            <div class="step-chip"><span class="num">4</span><span class="label">輪換</span></div>
+            <div class="step-chip"><span class="num">5</span><span class="label">檢查同開始</span></div>
+          </div>
+          <div class="wizard-note"><b>隨時可以取消</b> &mdash;已經加咗嘅球員或者輪換改動都已經儲存咗,同直接用返個面板去改係一樣效果。</div>
+        </div>
+        <div class="tour-media">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/wizard-step1.jpg" alt="對局設定精靈,第1步(共5步):揀9-Ball同個人賽">
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tour">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="eyebrow">完整導覽</div>
+        <h2>枱面上嘅一切</h2>
+        <p class="lede">以下每一個畫面都係真正嘅應用程式,唔係模擬圖。</p>
+      </div>
+
+      <div class="tour-row">
+        <div class="tour-copy">
+          <div class="kicker">即時對局</div>
+          <h3>設計嚟喺房嗰頭都睇到嘅計分板</h3>
+          <p class="desc">喺球員卡度撳+/&minus;就可以追蹤波、分數或者局數去追目標&mdash;每一下撳都會播返個合成音效。追到目標就會自動記低場贏波,再開始下一局。</p>
+          <ul class="tour-list">
+            <li><strong>Focus Mode</strong> 會收埋晒所有設定面板,淨返個計分板。</li>
+            <li><strong>Milestone、On&#8209;the&#8209;Hill,同埋Game Changed</strong> 彈出視窗會標示一場勝利、仲差一場就達標嘅提示,同埋輪換切換。</li>
+            <li><strong>Undo Last Win、Share St同ings、Export Session</strong> &mdash;隨時一撳就用到。</li>
+          </ul>
+        </div>
+        <div class="tour-media two-up">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/live-scoreboard.jpg" alt="場次中途嘅即時計分板,四位球員喺9-Ball度打緊「打到5場」">
+          </div>
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/focus-mode.jpg" alt="Focus Mode:所有設定面板都收埋咗,淨返計分板同輪換位置">
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-row flip">
+        <div class="tour-copy">
+          <div class="kicker">外觀</div>
+          <h3>十九個主題,一撳就換</h3>
+          <p class="desc">由深沉嘅桌球呢絨綠色,到柔和嘅粉彩閃爍色調都有,仲有兩個真正嘅淺色模式同兩對高對比配色&mdash;每一種疊喺主題色背景上嘅顏色都係按主題計算出嚟,保證睇得清楚,所以個掣永遠都唔使靠估自己夠唔夠對比。</p>
+          <ul class="tour-list">
+            <li><strong>Crimson Felt</strong> 係原本嘅外觀,亦都係預設嘅。</li>
+            <li><strong>Daybreak Chalk</strong> 同 <strong>Pearl Lounge</strong> 係真正嘅淺色主題,唔係淺化版嘅深色主題。</li>
+            <li><strong>Blackout Contrast</strong> 同 <strong>Paper Contrast</strong> 將清晰易讀推到極致。</li>
+          </ul>
+        </div>
+        <div class="tour-media">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/themes.jpg" alt="Daybreak Chalk淺色主題,顯示收埋咗嘅設定面板">
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-row">
+        <div class="tour-copy">
+          <div class="kicker">球員</div>
+          <h3>自己記得晒嘅名單</h3>
+          <p class="desc">打個名入去,佢會自動變大階同埋即時check有冇重複。撳「企埋一邊/落場」就可以將人拉入拉出今晚場波,又唔會將佢哋喺名單度剷走。</p>
+          <ul class="tour-list">
+            <li><strong>已儲存嘅球員名單</strong> 會自動儲存返你打過嘅每一個唔同班底&mdash;一撳就載入返嚟。</li>
+            <li><strong>個名唔分大細階</strong> &mdash;「bob」同「Bob」永遠都係同一個人。</li>
+            <li>今晚將個人移走都唔會影響到佢嘅生涯統計。</li>
+          </ul>
+        </div>
+        <div class="tour-media">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/players-panel.jpg" alt="球員面板,四位球員都標咗「落場」,下面仲有逐位球員嘅排名">
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-row flip">
+        <div class="tour-copy">
+          <div class="kicker">賽事</div>
+          <h3>真正嘅賽程表,唔係試算表</h3>
+          <p class="desc">單淘汰、雙淘汰、Round Robin,或者Swiss賽制,都可以喺同一個精靈或者賽事版度set。賽程表會用連接住嘅樹狀圖顯示&mdash;勝方一邊、敗部一邊,仲有個總決賽會追蹤成個由敗部一路打上嚟嘅過程。</p>
+          <ul class="tour-list">
+            <li>被淘汰嘅球員會喺賽程表度直接畫線劃掉。</li>
+            <li>跌落敗部都未算完&mdash;一路贏到尾就可以喺總決賽度同勝方冠軍對決。</li>
+            <li>每一局都仲係計落生涯統計同評分入面&mdash;唔係獨立分開嘅一堆資料。</li>
+          </ul>
+        </div>
+        <div class="tour-media two-up side">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/tournament-bracket.jpg" alt="勝方同敗部賽程表,連埋即時進行緊嘅總決賽,一個由敗部殺出嚟嘅挑戰者">
+          </div>
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/tournament-losers-bracket.jpg" alt="喺敗部一路捱到嘅完整過程,一輪接一輪,直到總決賽">
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-row">
+        <div class="tour-copy">
+          <div class="kicker">所有球員</div>
+          <h3>喺呢度攞過球桿嘅每一位球員</h3>
+          <p class="desc">可以按勝率、勝場,或者名一嚟排,再揀時期篩選&mdash;今日、一個星期、一年、全部時間。仲可以切換去每位球員嘅累積折線圖,撳一撳每個數據點就會顯示詳情。</p>
+          <ul class="tour-list">
+            <li>長條圖檢視:打咗/贏咗/輸咗幾多局,仲有幾時打嘅時間軸。</li>
+            <li>圖表檢視:撳任何一個點就會顯示背後嘅對手同賽果。</li>
+            <li>每個名旁邊都會跟住一個細細嘅評分徽章,喺邊度出現都會有。</li>
+          </ul>
+        </div>
+        <div class="tour-media two-up">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/all-players-bars.jpg" alt="「所有球員」長條圖檢視,顯示逐位球員打咗、贏咗、輸咗幾多局">
+          </div>
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/all-players-graph.jpg" alt="「所有球員」圖表檢視,有個可以開關線條嘅圖例">
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-row flip">
+        <div class="tour-copy">
+          <div class="kicker">一位球員嘅全部</div>
+          <h3>每位球員都有自己嘅專頁</h3>
+          <p class="desc">撳任何一個名就會打開:由今日到全部時間嘅統計概覽、同每個交過手嘅對手嘅完整對頭戰績,仲有淨係屬於呢個人嘅同一套圖表。</p>
+          <ul class="tour-list">
+            <li>頂部有個下拉選單可以直接跳去任何其他球員&mdash;唔使返轉頭去「所有球員」度。</li>
+            <li>場次歷史可以展開睇返每一局獨立嘅賽事。</li>
+            <li>可以匯出統計,或者淨係重設呢位球員嘅已儲存歷史,同其他人嘅完全獨立。</li>
+          </ul>
+        </div>
+        <div class="tour-media">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/player-stats-page.jpg" alt="Alice嘅球員專頁:22勝、6負,勝率79%,仲有對頭戰績">
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-row">
+        <div class="tour-copy">
+          <div class="kicker">將呢一晚寫低</div>
+          <h3>今晚記低筆記,做一份真係傳送到嘅報告</h3>
+          <p class="desc">一個自由文字框,記低任何值得記住嘅嘢&mdash;邊個手風順、有咩趣事&mdash;打字嗰陣會自動儲存。「複製、電郵,或者短訊傳送報告」會將佢變成一份真正嘅摘要:每位球員嘅勝負同評分變動、總局數,仲有你嘅筆記。</p>
+          <ul class="tour-list">
+            <li>會即時由現場同已儲存嘅場次重新整合,所以就算中途reset咗都仲係準確。</li>
+            <li>隨時可以直接貼上、用電郵或者短訊傳送,唔使再改。</li>
+          </ul>
+        </div>
+        <div class="tour-media">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/day-notes.jpg" alt="「今日筆記」面板,有一則已儲存嘅筆記,仲有複製/電郵/短訊傳送報告嘅掣">
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-row flip">
+        <div class="tour-copy">
+          <div class="kicker">你嘅資料,你部機</div>
+          <h3>備份、iCloud同步,仲有真正嘅桌面應用程式</h3>
+          <p class="desc">所有嘢都住喺你部裝置嘅瀏覽器入面&mdash;冇雲端戶口呢回事。「匯出所有資料」會做一個完整嘅JSON備份,或者「匯出做iCloud同步」可以喺你自己嘅裝置之間搬場次過去。</p>
+          <ul class="tour-list">
+            <li>匯入資料 <em>會合併資料</em> &mdash;已經喺度嘅嘢唔會俾人覆蓋或者計多次。</li>
+            <li>免費嘅桌面版下載可以行返個本機中繼,等第二部電話都可以加入,一齊為同一場即時波計分。</li>
+          </ul>
+        </div>
+        <div class="tour-media">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/backup-panel.jpg" alt="「備份與轉移」面板,已展開,有「匯出所有資料」同「匯入資料」嘅掣">
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-row">
+        <div class="tour-copy">
+          <div class="kicker">永遠唔驚唔識用</div>
+          <h3>一個指南,跟住你所在位置嚟顯示</h3>
+          <p class="desc">一個「說明與指南」視窗涵蓋咗每一版頁面嘅所有功能&mdash;而且會跟住你所在位置:打開嗰陣會直接跳去你而家所在頁面嘅相關部分,其餘部分掃一掃就到。</p>
+        </div>
+        <div class="tour-media">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/help-guide.jpg" alt="「說明與指南」視窗,打開緊喺「主頁面」呢一部分">
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-row flip">
+        <div class="tour-copy">
+          <div class="kicker">威畀人睇嘅本錢</div>
+          <h3>殿堂排行榜</h3>
+          <p class="desc">MVP分數會將勝率、賽事勝場、評分、大勝場數,同埋長連勝全部混埋做一個排名,前提係嗰位球員要打夠場數先可以俾人公平咁評分。</p>
+          <ul class="tour-list">
+            <li>金、銀、銅獎台位置,每位球員都有一個用簡單話講嘅「點解我排呢度」解釋。</li>
+            <li>仲有個專門嘅隊際排行榜,一撳就到,啱晒分組對戰。</li>
+            <li>可以將成個排行榜當報告咁分享出去,同其他統計頁面一樣。</li>
+          </ul>
+        </div>
+        <div class="tour-media">
+          <div class="frame">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <img src="docs/screenshots/leaderboard.jpg" alt="殿堂排行榜,球員排名連埋金色MVP標籤同獎台獎牌">
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="rack">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="eyebrow">仲有更多喺個rack度</div>
+        <h2>呢度其餘嘅嘢</h2>
+        <p class="lede">喺畫面度細粒啲,但唔代表冇用。</p>
+      </div>
+      <div class="rack">
+        <div class="ball">
+          <div class="num">&#128288;</div>
+          <h4>Fargo式評分</h4>
+          <p>每位球員都會自動有一個Elo式評分,用嘅係同FargoRate公開一樣嘅比例&mdash;差100分大約等於2:1嘅勝算。完全冇得手動改;淨係靠真正打波先會郁。</p>
+        </div>
+        <div class="ball">
+          <div class="num">&#9878;&#65039;</div>
+          <h4>Fair Match讓分</h4>
+          <p>打開咗之後,評分較低嗰邊會攞到一個較短嘅目標,唔使同對方一樣&mdash;會按實際評分差距計到成場波接近對半開。</p>
+        </div>
+        <div class="ball">
+          <div class="num">&#129446;</div>
+          <h4>「剃光頭」偵測</h4>
+          <p>如果輸家一個波都冇入,喺波/分數對局度會自動標記,喺8&#8209;Ball系列就會由「枱面剩返幾多波」推算出嚟&mdash;9&#8209;Ball就冇呢個概念,所以正確咁冇計埋。</p>
+        </div>
+        <div class="ball">
+          <div class="num">&#127925;</div>
+          <h4>唔使下載嘅聲效</h4>
+          <p>每個音效都係用Web Audio API即時合成出嚟。打到「打到N場」嘅里程碑,就會播成30個音嘅貝多芬第九交響曲主題,音調較低仲有殘響尾巴。</p>
+        </div>
+        <div class="ball">
+          <div class="num">&#128241;</div>
+          <h4>Group Session</h4>
+          <p>喺本機WiFi度host一個場次,第二部電話掃一掃QR code就可以加入,一齊主動為同一場即時波計分&mdash;唔使上網、唔使開戶口,乜嘢都唔會離開間房。</p>
+        </div>
+        <div class="ball">
+          <div class="num">&#9203;</div>
+          <h4>Quick Counter</h4>
+          <p>撳「Just give me a counter」就會完全跳過個精靈&mdash;一個淨係可以編輯嘅簡單計數,冇對局類型、冇目標,亦都唔會寫入儲存空間。重新載入個頁面佢就會冇咗,呢個係特登嘅。</p>
+        </div>
+        <div class="ball">
+          <div class="num">&#128274;</div>
+          <h4>乜嘢都唔會離開部裝置</h4>
+          <p>冇戶口、冇伺服器、冇分析追蹤。每一位球員、統計、評分同賽程表,都住喺你而家用緊嗰部裝置嘅本機儲存入面,直到你揀咗匯出為止。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="cta-b同">
+        <div class="eyebrow">擺陣開波</div>
+        <h2>免費、永遠、只為一張枱。</h2>
+        <p>唔使開戶口、唔使裝嘢、乜資料都唔會send去邊度。用你袋入面本身有嗰部機打開佢,就可以開始下一局。</p>
+        <div class="cta-row">
+          <a class="btn btn-brass btn-lg" href="index.html">打開個應用程式 &rarr;</a>
+          <a class="btn btn-ghost btn-lg" href="https://github.com/lucas1313-git/Pool-master-counter" target="_blank" rel="noopener">睇原始碼</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="tagline">&ldquo;Don't get cocky.&rdquo;</div>
+    <div class="footlinks">
+      <a class="textlink" href="index.html">打開個應用程式</a>
+      <a class="textlink" href="https://github.com/lucas1313-git/Pool-master-counter" target="_blank" rel="noopener">GitHub</a>
+      <a class="textlink" href="https://github.com/lucas1313-git/Pool-master-counter/blob/main/README.md" target="_blank" rel="noopener">完整文件</a>
+    </div>
+  </div>
+</footer>
+
+<div class="lightbox" id="lightbox" hidden role="dialog" aria-modal="true" aria-label="截圖睇相器">
+  <div class="lightbox-topbar">
+    <button type="button" class="lightbox-close" id="lightbox-close" aria-label="閂">&#215;</button>
+  </div>
+  <div class="lightbox-stage">
+    <div class="lightbox-frame">
+      <img id="lightbox-img" src="" alt="">
+      <button type="button" class="lightbox-btn lightbox-prev" id="lightbox-prev" aria-label="上一張截圖">&#8249;</button>
+      <button type="button" class="lightbox-btn lightbox-next" id="lightbox-next" aria-label="下一張截圖">&#8250;</button>
+    </div>
+    <div class="lightbox-footer">
+      <p class="lightbox-caption" id="lightbox-caption"></p>
+      <p class="lightbox-count" id="lightbox-count"></p>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var frames = Array.prototype.slice.call(document.querySelectorAll(".frame"));
+  var slides = frames.map(function (frame) {
+    var img = frame.querySelector("img");
+    return { src: img.getAttribute("src"), caption: img.getAttribute("alt") || "" };
+  });
+
+  var lightbox = document.getElementById("lightbox");
+  var lightboxImg = document.getElementById("lightbox-img");
+  var lightboxCaption = document.getElementById("lightbox-caption");
+  var lightboxCount = document.getElementById("lightbox-count");
+  var prevBtn = document.getElementById("lightbox-prev");
+  var nextBtn = document.getElementById("lightbox-next");
+  var closeBtn = document.getElementById("lightbox-close");
+
+  var currentIndex = 0;
+  var autoplayTimer = null;
+  var lastFocused = null;
+
+  function render() {
+    var slide = slides[currentIndex];
+    lightboxImg.setAttribute("src", slide.src);
+    lightboxImg.setAttribute("alt", slide.caption);
+    lightboxCaption.textContent = slide.caption;
+    lightboxCount.textContent = (currentIndex + 1) + " / " + slides.length;
+  }
+
+  function stopAutoplay() {
+    if (autoplayTimer) {
+      clearInterval(autoplayTimer);
+      autoplayTimer = null;
+    }
+  }
+
+  function startAutoplay() {
+    stopAutoplay();
+    autoplayTimer = setInterval(function () {
+      currentIndex = (currentIndex + 1) % slides.length;
+      render();
+    }, 12000);
+  }
+
+  function openAt(index, triggerEl) {
+    if (!slides.length) { return; }
+    currentIndex = index;
+    lastFocused = triggerEl || document.activeElement;
+    render();
+    lightbox.hidden = false;
+    closeBtn.focus();
+    startAutoplay();
+  }
+
+  function close() {
+    lightbox.hidden = true;
+    stopAutoplay();
+    if (lastFocused && typeof lastFocused.focus === "function") {
+      lastFocused.focus();
+    }
+  }
+
+  function goPrev() {
+    stopAutoplay();
+    currentIndex = (currentIndex - 1 + slides.length) % slides.length;
+    render();
+  }
+
+  function goNext() {
+    stopAutoplay();
+    currentIndex = (currentIndex + 1) % slides.length;
+    render();
+  }
+
+  frames.forEach(function (frame, index) {
+    frame.setAttribute("tabindex", "0");
+    frame.setAttribute("role", "button");
+    frame.setAttribute("aria-label", "喺投影片放映度打開截圖");
+    frame.addEventListener("click", function () { openAt(index, frame); });
+    frame.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        openAt(index, frame);
+      }
+    });
+  });
+
+  prevBtn.addEventListener("click", goPrev);
+  nextBtn.addEventListener("click", goNext);
+  closeBtn.addEventListener("click", close);
+
+  lightbox.addEventListener("click", function (e) {
+    if (e.target === lightbox) { close(); }
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (lightbox.hidden) { return; }
+    if (e.key === "Escape") { close(); }
+    else if (e.key === "ArrowLeft") { goPrev(); }
+    else if (e.key === "ArrowRight") { goNext(); }
+  });
+})();
+</script>
+
+</body>
+</html>
