@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260918j">
+<link rel="stylesheet" href="css/style.css?v=20260918k">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -1058,16 +1058,22 @@
 
   <p id="player-page-added" class="player-page-added hidden"></p>
 
-  <section class="panel" id="player-page-synopsis-panel">
-    <h2 data-i18n="playerPage.synopsisHeading">Stats Synopsis</h2>
-    <div class="row period-filter-row" id="player-page-period-filter">
-      <button type="button" class="btn btn-ghost period-btn" data-period="today" data-i18n="period.today">Today</button>
-      <button type="button" class="btn btn-ghost period-btn" data-period="week" data-i18n="period.thisWeek">This Week</button>
-      <button type="button" class="btn btn-ghost period-btn" data-period="month" data-i18n="period.thisMonth">This Month</button>
-      <button type="button" class="btn btn-ghost period-btn" data-period="year" data-i18n="period.thisYear">This Year</button>
-      <button type="button" class="btn btn-ghost period-btn is-active" data-period="all" data-i18n="period.allTime">All Time</button>
+  <section class="panel collapsible-panel" id="player-page-synopsis-panel">
+    <button type="button" class="panel-toggle" id="btn-toggle-player-page-synopsis-panel" aria-expanded="true" aria-controls="player-page-synopsis-panel-body">
+      <h2 data-i18n="playerPage.synopsisHeading">Stats Synopsis</h2>
+      <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+    </button>
+    <p class="panel-summary" id="player-page-synopsis-panel-summary"></p>
+    <div class="panel-body" id="player-page-synopsis-panel-body">
+      <div class="row period-filter-row" id="player-page-period-filter">
+        <button type="button" class="btn btn-ghost period-btn" data-period="today" data-i18n="period.today">Today</button>
+        <button type="button" class="btn btn-ghost period-btn" data-period="week" data-i18n="period.thisWeek">This Week</button>
+        <button type="button" class="btn btn-ghost period-btn" data-period="month" data-i18n="period.thisMonth">This Month</button>
+        <button type="button" class="btn btn-ghost period-btn" data-period="year" data-i18n="period.thisYear">This Year</button>
+        <button type="button" class="btn btn-ghost period-btn is-active" data-period="all" data-i18n="period.allTime">All Time</button>
+      </div>
+      <div id="player-page-synopsis-body"></div>
     </div>
-    <div id="player-page-synopsis-body"></div>
   </section>
 
   <section class="panel collapsible-panel collapsed" id="player-page-achievements-panel">
@@ -1107,6 +1113,17 @@
   <section class="panel" id="player-page-graph-panel">
     <h2 data-i18n="playerPage.graphHeading">Graph</h2>
     <div id="player-page-graph-body"></div>
+  </section>
+
+  <section class="panel collapsible-panel collapsed" id="player-page-rating-history-panel">
+    <button type="button" class="panel-toggle" id="btn-toggle-player-page-rating-history-panel" aria-expanded="false" aria-controls="player-page-rating-history-panel-body">
+      <h2 data-i18n="playerPage.ratingHistoryHeading">Rating History</h2>
+      <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+    </button>
+    <p class="panel-summary" id="player-page-rating-history-panel-summary"></p>
+    <div class="panel-body" id="player-page-rating-history-panel-body">
+      <div id="player-page-rating-history-body"></div>
+    </div>
   </section>
 
   <section class="panel" id="player-page-current-panel">
@@ -1450,6 +1467,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260918j"></script>
+<script src="js/app.js?v=20260918k"></script>
 </body>
 </html>

@@ -1652,6 +1652,7 @@
   var btnPlayerPageReset = document.getElementById("btn-player-page-reset");
   var playerPagePeriodFilter = document.getElementById("player-page-period-filter");
   var playerPageGraphBody = document.getElementById("player-page-graph-body");
+  var playerPageRatingHistoryBody = document.getElementById("player-page-rating-history-body");
   var playerPagePeriodButtons = playerPagePeriodFilter.querySelectorAll(".period-btn");
   var playerPageSynopsisBody = document.getElementById("player-page-synopsis-body");
   var playerPageH2hList = document.getElementById("player-page-h2h-list");
@@ -12340,6 +12341,16 @@
     var filtered = filterGamesByPeriod(allGames, currentStatsPeriod);
     var synopsis = computeWinLossSynopsis(filtered);
 
+    setPanelSummary(
+      "player-page-synopsis-panel",
+      T("playerPage.synopsisSummaryLine", {
+        rating: getPlayerRating(currentStatsPlayerName),
+        wins: synopsis.wins,
+        losses: synopsis.losses,
+        pct: synopsis.pct === null ? "—" : synopsis.pct + "%"
+      })
+    );
+
     playerPageSynopsisBody.innerHTML = "";
     playerPageSynopsisBody.appendChild(synopsisStatRow(T("common.rating"), getPlayerRating(currentStatsPlayerName)));
     var ratingDeltaText = formatRatingPeriodDelta(currentStatsPlayerName, currentStatsPeriod);
@@ -12644,7 +12655,7 @@
 
     playerPageGraphBody.innerHTML = "";
     playerPageGraphBody.appendChild(buildPlayerGraph(stats, minMs, maxMs, period));
-    playerPageGraphBody.appendChild(buildRatingHistorySection(currentStatsPlayerName));
+    renderRatingHistorySection(currentStatsPlayerName);
   }
 
   function setStatsPeriod(period) {
@@ -13719,102 +13730,122 @@
     var li = document.createElement("li");
     li.className = "player-history-row rating-history-row";
 
-    var top = document.createElement("div");
-    top.className = "player-history-top";
+    var inner = document.createElement("div");
+    inner.className = "rating-history-row-inner";
+
+    // Explanation first (date + the "why" text), delta number after it -
+    // the number is the whole point of the row, so it reads last, as the
+    // payoff, rather than leading before there's any context for it.
+    var textCol = document.createElement("div");
+    textCol.className = "rating-history-row-text";
     var date = document.createElement("span");
     date.className = "player-history-date";
     date.textContent = formatTimestamp(h.ts, true);
-    var delta = document.createElement("span");
-    var isPositive = h.delta > 0;
-    delta.className = "rating-history-delta " + (isPositive ? "is-positive" : h.delta < 0 ? "is-negative" : "is-flat");
-    delta.textContent = (isPositive ? "+" : "") + h.delta + " (" + selfRatingBefore + " → " + h.rating + ")";
-    top.appendChild(date);
-    top.appendChild(delta);
-    li.appendChild(top);
+    textCol.appendChild(date);
 
     var detail = document.createElement("div");
     detail.className = "player-history-detail";
 
+    var game = h.fromGame
+      ? allGamesForPlayerName(name).filter(function (g) {
+          return g.ts === h.ts;
+        })[0]
+      : null;
+
     if (!h.fromGame) {
       detail.textContent = T("playerPage.ratingHistoryManual");
-      li.appendChild(detail);
-      return li;
-    }
-
-    var game = allGamesForPlayerName(name).filter(function (g) {
-      return g.ts === h.ts;
-    })[0];
-
-    if (!game) {
+    } else if (!game) {
       // A rating history entry with no matching game entry (e.g. that
       // game's session was since cleared by a reset) - still real, just
       // nothing left to explain the matchup with.
       detail.textContent = T("playerPage.ratingHistoryNoGameFound");
-      li.appendChild(detail);
-      return li;
-    }
+    } else {
+      // A single non-team win credited against several simultaneous
+      // opponents (e.g. a Winner Stays/queue table) runs one independent
+      // pairwise update per opponent (see creditWin's opponentNames.forEach
+      // -> applyPairwiseRatingResult), so this player gets one history
+      // entry per opponent at that exact same ts - not one entry covering
+      // all of them. winMultiOpponentIndex (passed by renderRatingHistory-
+      // Section, which counts same-ts occurrences in original push order)
+      // picks out the ONE opponent this specific entry's delta was
+      // actually against, instead of misattributing every one of those
+      // rows to the whole group.
+      var isTeam = !!game.isTeam;
+      var isMultiWin = !isTeam && game.result === "won" && (game.opponentNames || []).length > 1 && winMultiOpponentIndex !== null && winMultiOpponentIndex !== undefined;
+      var opponentNames = isMultiWin ? [game.opponentNames[winMultiOpponentIndex]] : game.opponentNames || [];
+      var oppRatingBefore = isTeam
+        ? Math.round(averageRatingBeforeTs(opponentNames, h.ts))
+        : opponentNames.length
+        ? ratingBeforeTs(opponentNames[0], h.ts)
+        : null;
 
-    // A single non-team win credited against several simultaneous
-    // opponents (e.g. a Winner Stays/queue table) runs one independent
-    // pairwise update per opponent (see creditWin's opponentNames.forEach
-    // -> applyPairwiseRatingResult), so this player gets one history
-    // entry per opponent at that exact same ts - not one entry covering
-    // all of them. winMultiOpponentIndex (passed by buildRatingHistory-
-    // Section, which counts same-ts occurrences in original push order)
-    // picks out the ONE opponent this specific entry's delta was
-    // actually against, instead of misattributing every one of those
-    // rows to the whole group.
-    var isTeam = !!game.isTeam;
-    var isMultiWin = !isTeam && game.result === "won" && (game.opponentNames || []).length > 1 && winMultiOpponentIndex !== null && winMultiOpponentIndex !== undefined;
-    var opponentNames = isMultiWin ? [game.opponentNames[winMultiOpponentIndex]] : game.opponentNames || [];
-    var oppRatingBefore = isTeam
-      ? Math.round(averageRatingBeforeTs(opponentNames, h.ts))
-      : opponentNames.length
-      ? ratingBeforeTs(opponentNames[0], h.ts)
-      : null;
+      var pieces = [];
+      if (opponentNames.length) {
+        pieces.push(
+          T(isTeam ? "playerPage.ratingHistoryVsTeam" : "playerPage.ratingHistoryVsOne", {
+            names: opponentNames.join(" & "),
+            rating: oppRatingBefore
+          })
+        );
+      }
+      if (oppRatingBefore !== null) {
+        var expectedPct = Math.round(eloExpectedScore(selfRatingBefore, oppRatingBefore) * 100);
+        pieces.push(T("playerPage.ratingHistoryExpectedPct", { pct: expectedPct }));
+      }
+      var k = isTeam ? RATING_K_PROVISIONAL : ratingKFor(gamesPlayedBefore);
+      var kStatus = isTeam || gamesPlayedBefore < RATING_PROVISIONAL_GAMES
+        ? T("playerPage.ratingHistoryProvisional", { games: RATING_PROVISIONAL_GAMES })
+        : T("playerPage.ratingHistoryEstablished");
+      pieces.push(T("playerPage.ratingHistoryKNote", { k: k, status: kStatus }));
+      pieces.push(T(game.result === "won" ? "playerPage.ratingHistoryResultWon" : "playerPage.ratingHistoryResultLost"));
 
-    var pieces = [];
-    if (opponentNames.length) {
-      pieces.push(
-        T(isTeam ? "playerPage.ratingHistoryVsTeam" : "playerPage.ratingHistoryVsOne", {
-          names: opponentNames.join(" & "),
-          rating: oppRatingBefore
-        })
-      );
+      detail.textContent = pieces.join(" · ");
     }
-    if (oppRatingBefore !== null) {
-      var expectedPct = Math.round(eloExpectedScore(selfRatingBefore, oppRatingBefore) * 100);
-      pieces.push(T("playerPage.ratingHistoryExpectedPct", { pct: expectedPct }));
-    }
-    var k = isTeam ? RATING_K_PROVISIONAL : ratingKFor(gamesPlayedBefore);
-    var kStatus = isTeam || gamesPlayedBefore < RATING_PROVISIONAL_GAMES
-      ? T("playerPage.ratingHistoryProvisional", { games: RATING_PROVISIONAL_GAMES })
-      : T("playerPage.ratingHistoryEstablished");
-    pieces.push(T("playerPage.ratingHistoryKNote", { k: k, status: kStatus }));
-    pieces.push(T(game.result === "won" ? "playerPage.ratingHistoryResultWon" : "playerPage.ratingHistoryResultLost"));
+    textCol.appendChild(detail);
+    inner.appendChild(textCol);
 
-    detail.textContent = pieces.join(" · ");
-    li.appendChild(detail);
+    // The delta box stretches to match textCol's full height (default
+    // flex cross-axis behavior) and centers its own two lines within
+    // that height, so the number reads big and vertically centered
+    // against the date+explanation block beside it, not squeezed into
+    // just the top line's height.
+    var isPositive = h.delta > 0;
+    var deltaBox = document.createElement("div");
+    deltaBox.className = "rating-history-delta " + (isPositive ? "is-positive" : h.delta < 0 ? "is-negative" : "is-flat");
+    var deltaValue = document.createElement("span");
+    deltaValue.className = "rating-history-delta-value";
+    deltaValue.textContent = (isPositive ? "+" : "") + h.delta;
+    var deltaRange = document.createElement("span");
+    deltaRange.className = "rating-history-delta-range";
+    deltaRange.textContent = selfRatingBefore + " → " + h.rating;
+    deltaBox.appendChild(deltaValue);
+    deltaBox.appendChild(deltaRange);
+    inner.appendChild(deltaBox);
+
+    li.appendChild(inner);
     return li;
   }
 
-  function buildRatingHistorySection(name) {
-    var section = document.createElement("div");
-    section.className = "player-rating-graph-wrap";
-
-    var heading = document.createElement("h3");
-    heading.className = "player-rating-graph-heading";
-    heading.textContent = T("playerPage.ratingHistoryHeading");
-    section.appendChild(heading);
-
+  // Rating History is its own collapsible panel (id="player-page-rating-
+  // history-panel") rather than a plain div inside the Graph panel - the
+  // heading lives statically in that panel's toggle button, so this only
+  // has to fill the body + the collapsed-state summary line.
+  function renderRatingHistorySection(name) {
     var entry = getPlayerRatingEntry(name);
     var history = entry ? entry.history : [];
+
+    setPanelSummary(
+      "player-page-rating-history-panel",
+      history.length === 0 ? T("playerPage.ratingHistoryEmpty") : T("playerPage.ratingHistorySummary", { count: history.length })
+    );
+
+    playerPageRatingHistoryBody.innerHTML = "";
     if (history.length === 0) {
       var hint = document.createElement("p");
       hint.className = "player-graph-empty";
       hint.textContent = T("playerPage.ratingHistoryEmpty");
-      section.appendChild(hint);
-      return section;
+      playerPageRatingHistoryBody.appendChild(hint);
+      return;
     }
 
     // Oldest-first in storage; walk it once forward to reconstruct each
@@ -13843,7 +13874,7 @@
     rows.slice(0, ratingHistoryVisibleCount).forEach(function (r) {
       list.appendChild(buildRatingHistoryEntryRow(name, r.h, r.gamesPlayedBefore, r.selfRatingBefore, r.occurrenceIndex));
     });
-    section.appendChild(list);
+    playerPageRatingHistoryBody.appendChild(list);
 
     if (rows.length > ratingHistoryVisibleCount) {
       var showMoreBtn = document.createElement("button");
@@ -13852,12 +13883,10 @@
       showMoreBtn.textContent = T("playerPage.ratingHistoryShowMore", { count: rows.length - ratingHistoryVisibleCount });
       showMoreBtn.addEventListener("click", function () {
         ratingHistoryVisibleCount += RATING_HISTORY_DISPLAY_STEP;
-        renderPlayerPageGraph();
+        renderRatingHistorySection(name);
       });
-      section.appendChild(showMoreBtn);
+      playerPageRatingHistoryBody.appendChild(showMoreBtn);
     }
-
-    return section;
   }
 
   // A small standalone "rating over time" chart, appended after the main
@@ -19192,6 +19221,8 @@
   wireCollapsiblePanel("report-archive-panel", "btn-toggle-report-archive-panel");
   wireCollapsiblePanel("resets-panel", "btn-toggle-resets-panel");
   wireCollapsiblePanel("focus-players-wrap", "btn-toggle-focus-players");
+  wireCollapsiblePanel("player-page-synopsis-panel", "btn-toggle-player-page-synopsis-panel");
+  wireCollapsiblePanel("player-page-rating-history-panel", "btn-toggle-player-page-rating-history-panel");
   wireCollapsiblePanel("player-page-h2h-panel", "btn-toggle-player-page-h2h-panel");
   wireCollapsiblePanel("player-page-teams-panel", "btn-toggle-player-page-teams-panel");
   wireCollapsiblePanel("player-page-achievements-panel", "btn-toggle-player-page-achievements-panel");

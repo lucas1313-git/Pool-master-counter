@@ -4147,9 +4147,9 @@ input[type="number"] {
   opacity: 0.7;
 }
 
-/* Step-by-step rating history (see buildRatingHistorySection) - reuses
-   .player-history-row/-top/-detail from the Session History list above
-   for the same card look, just with its own delta coloring. */
+/* Step-by-step rating history (see renderRatingHistorySection) - reuses
+   .player-history-row/-detail from the Session History list above for
+   the same card look, just with its own two-column layout below. */
 .rating-history-list {
   list-style: none;
   padding: 0;
@@ -4159,20 +4159,62 @@ input[type="number"] {
   gap: 8px;
 }
 
+/* A thicker border than the plain Session History cards - this list is
+   the one the user specifically called out as hard to read. */
+.player-history-row.rating-history-row {
+  border-width: 2px;
+}
+
+/* Explanation (date + detail, two lines) on the left; the delta number
+   on the right, stretched to that same two-line height (default flex
+   cross-axis behavior) and vertically centered within it - the number
+   is the payoff of the row, so it gets the room and the size. */
+.rating-history-row-inner {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.rating-history-row-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.rating-history-row-text .player-history-detail {
+  margin-top: 4px;
+}
+
 .rating-history-delta {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-end;
+  flex: 0 0 auto;
+  text-align: right;
+}
+
+.rating-history-delta-value {
   font-weight: 800;
+  font-size: 1.6rem;
+  line-height: 1.15;
   font-variant-numeric: tabular-nums;
 }
 
-.rating-history-delta.is-positive {
+.rating-history-delta-range {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.rating-history-delta.is-positive .rating-history-delta-value {
   color: var(--accent);
 }
 
-.rating-history-delta.is-negative {
+.rating-history-delta.is-negative .rating-history-delta-value {
   color: var(--danger);
 }
 
-.rating-history-delta.is-flat {
+.rating-history-delta.is-flat .rating-history-delta-value {
   color: var(--text-dim);
 }
 
@@ -4206,6 +4248,37 @@ input[type="number"] {
 
 .player-stats-row .value.value-loss {
   color: var(--danger);
+}
+
+/* Multiple columns instead of one tall stack of full-width rows - each
+   column is sized to comfortably fit the widest label+value pair (e.g.
+   "Team wins potted (MVP)"), and auto-fill repeats that column as many
+   times as the page width allows, with the grid gap doing double duty
+   as the margin between columns and between rows. */
+#player-page-synopsis-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+#player-page-synopsis-body .player-stats-row {
+  margin-bottom: 0;
+  justify-content: flex-start;
+  gap: 10px;
+  border-width: 2px;
+}
+
+/* The label ("the definition") was --text-dim, hard to read against
+   these dark cards - full text color instead, with the value directly
+   next to it (not pushed to the far edge) so the number reads as
+   "right after the definition" rather than across the row from it. */
+#player-page-synopsis-body .player-stats-row .label {
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+#player-page-synopsis-body .player-stats-row .value {
+  font-size: 1.25rem;
 }
 
 .clubteam-block {
