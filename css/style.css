@@ -5635,6 +5635,14 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   border-color: var(--text-dim);
 }
 
+/* No dark circle behind it - just the ❓ glyph, for spots where the
+   filled/bordered look is too heavy (Rating History's own info
+   buttons). */
+.format-info-btn.plain-info-btn {
+  background: none;
+  border: none;
+}
+
 /* Groups related Current Session controls into clearly separated boxed
    blocks (Tournament Setup, Current Game) - same boxed-card language as
    .tournament-setup-section, just full-width instead of that one's

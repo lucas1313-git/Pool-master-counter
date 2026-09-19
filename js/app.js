@@ -13969,24 +13969,45 @@
         ? ratingBeforeTs(opponentNames[0], h.ts)
         : null;
 
-      // Line 1: who it was against and how it was expected to go. Line 2:
-      // the K-factor note and the result - split right before "K=",
-      // instead of one long run-on line.
+      // Line 1: who it was against, both ratings at the time, and
+      // whether this player was expected to win or lose it - framed as
+      // "expected to lose ~70%" rather than "expected ~30% to win",
+      // since the latter reads as favored at a glance. Line 2: the
+      // K-factor note and the result - split right before "K=", instead
+      // of one long run-on line.
       var matchupText = null;
-      var line1Pieces = [];
+      // The player's own actual win probability (0-100), kept separate
+      // from whatever percentage ends up shown (which flips to the loss
+      // side when they're the underdog) - the outcome reasoning below
+      // needs the real win probability to know who was favored.
+      var rawExpectedPct = null;
       if (opponentNames.length) {
-        matchupText = T(isTeam ? "playerPage.ratingHistoryVsTeam" : "playerPage.ratingHistoryVsOne", {
-          names: opponentNames.join(" & "),
-          rating: oppRatingBefore
-        });
-        line1Pieces.push(document.createTextNode(matchupText));
+        if (oppRatingBefore !== null) {
+          rawExpectedPct = Math.round(eloExpectedScore(selfRatingBefore, oppRatingBefore) * 100);
+          var favored = rawExpectedPct >= 50;
+          matchupText = T(
+            isTeam
+              ? favored
+                ? "playerPage.ratingRowMatchupTeamWin"
+                : "playerPage.ratingRowMatchupTeamLose"
+              : favored
+              ? "playerPage.ratingRowMatchupOneWin"
+              : "playerPage.ratingRowMatchupOneLose",
+            {
+              names: opponentNames.join(" & "),
+              oppRating: oppRatingBefore,
+              selfRating: selfRatingBefore,
+              pct: favored ? rawExpectedPct : 100 - rawExpectedPct
+            }
+          );
+        } else {
+          matchupText = T(isTeam ? "playerPage.ratingHistoryVsTeam" : "playerPage.ratingHistoryVsOne", {
+            names: opponentNames.join(" & "),
+            rating: oppRatingBefore
+          });
+        }
+        detail.appendChild(buildRatingHistoryDetailLine([document.createTextNode(matchupText)]));
       }
-      var expectedPct = null;
-      if (oppRatingBefore !== null) {
-        expectedPct = Math.round(eloExpectedScore(selfRatingBefore, oppRatingBefore) * 100);
-        line1Pieces.push(document.createTextNode(T("playerPage.ratingHistoryExpectedPct", { pct: expectedPct })));
-      }
-      if (line1Pieces.length) detail.appendChild(buildRatingHistoryDetailLine(line1Pieces));
 
       var k = isTeam ? RATING_K_PROVISIONAL : ratingKFor(gamesPlayedBefore);
       var kStatus = isTeam || gamesPlayedBefore < RATING_PROVISIONAL_GAMES
@@ -14005,18 +14026,16 @@
       // beginner is asking about when they wonder why one win was worth
       // +2 and another +9.
       var outcomeKey;
-      if (expectedPct === null) {
+      if (rawExpectedPct === null) {
         outcomeKey = game.result === "won" ? "playerPage.ratingRowExplainGenericWon" : "playerPage.ratingRowExplainGenericLost";
       } else if (game.result === "won") {
-        outcomeKey = expectedPct >= 50 ? "playerPage.ratingRowExplainWonFavored" : "playerPage.ratingRowExplainWonUnderdog";
+        outcomeKey = rawExpectedPct >= 50 ? "playerPage.ratingRowExplainWonFavored" : "playerPage.ratingRowExplainWonUnderdog";
       } else {
-        outcomeKey = expectedPct >= 50 ? "playerPage.ratingRowExplainLostFavored" : "playerPage.ratingRowExplainLostUnderdog";
+        outcomeKey = rawExpectedPct >= 50 ? "playerPage.ratingRowExplainLostFavored" : "playerPage.ratingRowExplainLostUnderdog";
       }
 
       var explanationParts = [];
-      if (matchupText) {
-        explanationParts.push(expectedPct === null ? matchupText : matchupText + " · " + T("playerPage.ratingHistoryExpectedPct", { pct: expectedPct }));
-      }
+      if (matchupText) explanationParts.push(matchupText);
       explanationParts.push(T("playerPage.ratingRowExplainKFactor", { k: k, status: kStatus }));
       explanationParts.push(T(outcomeKey, { delta: deltaSigned, from: selfRatingBefore, to: h.rating }));
       explanationText = explanationParts.join("\n\n");
@@ -14033,7 +14052,7 @@
     deltaRange.textContent = selfRatingBefore + " → " + h.rating;
     var rowInfoBtn = document.createElement("button");
     rowInfoBtn.type = "button";
-    rowInfoBtn.className = "format-info-btn rating-row-info-btn";
+    rowInfoBtn.className = "format-info-btn plain-info-btn rating-row-info-btn";
     rowInfoBtn.textContent = "❓";
     rowInfoBtn.setAttribute("aria-label", T("playerPage.ratingRowInfoAria"));
     rowInfoBtn.addEventListener("click", function () {
