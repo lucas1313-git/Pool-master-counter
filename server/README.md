@@ -20,7 +20,7 @@ admin rights, no registry changes, nothing to uninstall beyond dragging
 one file to the trash. Get it from the app's own Group Session page (it
 shows a download link once it detects you're not currently running the
 relay), or directly from
-[the latest release](https://github.com/lucas1313-git/Pool-master-counter/releases/tag/desktop-latest).
+[the latest release](https://github.com/lucas1313-git/Pool-master-counter-releases/releases/tag/desktop-latest).
 
 It isn't code-signed (no paid developer certificate), so your OS will show
 one security warning the first time you run it - that's expected for a

@@ -3,8 +3,9 @@ name: Build desktop app
 # Builds a standalone, dependency-free desktop binary per OS (Node Single
 # Executable Application: server/ + the app's static files bundled into
 # one file, no Node.js required on the end user's machine) and publishes
-# them to a rolling GitHub Release that the "Download for..." button on
-# the GitHub Pages site links to via releases/latest/download/<filename>.
+# them to a rolling GitHub Release on a separate public repo
+# (Pool-master-counter-releases) rather than this one, so the download
+# links keep working while this repo is private - see README.md.
 #
 # macOS is arm64 (Apple Silicon) only - Node's SEA feature is untested by
 # upstream on macOS x64 ("is not currently supported and is skipped in
@@ -186,21 +187,29 @@ jobs:
   release:
     needs: build
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
 
+      # Published to a separate public repo (not this one) so the
+      # download links keep working even though this repo is private -
+      # GitHub Release assets require repo access to fetch, unlike
+      # Pages content, which stays public regardless of repo visibility.
+      # Needs a fine-grained PAT with "Contents: Read and write" on that
+      # repo, stored here as the RELEASES_REPO_TOKEN secret (the default
+      # GITHUB_TOKEN can't write to a different repo).
       - uses: softprops/action-gh-release@v2
         with:
+          repository: lucas1313-git/Pool-master-counter-releases
+          token: ${{ secrets.RELEASES_REPO_TOKEN }}
           tag_name: desktop-latest
           name: "Pool Master Counter — Desktop app (auto-built)"
           make_latest: false
           body: |
-            Auto-built from the latest `release` (${{ github.sha }}).
+            Auto-built from the latest `release` (${{ github.sha }}) of the
+            [main repository](https://github.com/lucas1313-git/Pool-master-counter).
 
             Portable, zero-installation binaries - no admin rights, nothing
             added to your computer beyond the file itself. The macOS build
