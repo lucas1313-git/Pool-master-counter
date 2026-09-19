@@ -203,10 +203,16 @@
   // the only other visible part of the panel, so it gets the same click
   // handler too: together the button and the summary line are the
   // entire folded area, and both now toggle it, not just the heading row.
-  function wireCollapsiblePanel(panelElId, buttonElId) {
+  // extraToggleElId (optional) is for a panel whose header has its own
+  // extra button between the title and the chevron (Rating History's "?")
+  // - the chevron can't live inside the toggle <button> anymore in that
+  // layout (a <button> can't contain another <button>), so it's wired
+  // here as its own click target instead.
+  function wireCollapsiblePanel(panelElId, buttonElId, extraToggleElId) {
     var panel = document.getElementById(panelElId);
     var btn = document.getElementById(buttonElId);
     var summary = document.getElementById(panelElId + "-summary");
+    var extraToggle = extraToggleElId ? document.getElementById(extraToggleElId) : null;
     function toggle() {
       var willExpand = panel.classList.contains("collapsed");
       panel.classList.toggle("collapsed");
@@ -214,6 +220,7 @@
     }
     btn.addEventListener("click", toggle);
     if (summary && summary.tagName === "P") summary.addEventListener("click", toggle);
+    if (extraToggle) extraToggle.addEventListener("click", toggle);
   }
 
   // Updates the one-line "what's inside" sentence shown only while a
@@ -19466,7 +19473,7 @@
   wireCollapsiblePanel("focus-players-wrap", "btn-toggle-focus-players");
   wireCollapsiblePanel("player-page-synopsis-panel", "btn-toggle-player-page-synopsis-panel");
   wireCollapsiblePanel("player-page-graph-panel", "btn-toggle-player-page-graph-panel");
-  wireCollapsiblePanel("player-page-rating-history-panel", "btn-toggle-player-page-rating-history-panel");
+  wireCollapsiblePanel("player-page-rating-history-panel", "btn-toggle-player-page-rating-history-panel", "rating-history-chevron");
   wireCollapsiblePanel("player-page-current-panel", "btn-toggle-player-page-current-panel");
   wireCollapsiblePanel("player-page-history-panel", "btn-toggle-player-page-history-panel");
   wireCollapsiblePanel("player-page-h2h-panel", "btn-toggle-player-page-h2h-panel");

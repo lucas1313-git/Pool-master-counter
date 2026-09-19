@@ -4166,12 +4166,15 @@ input[type="number"] {
 
 /* The Rating History panel-toggle button can't hold a second, real
    button of its own (a <button> can't nest inside a <button>), so the
-   section's own "?" (opens the general, beginner-language explanation)
-   sits beside it in this wrapper instead of inside it. */
+   title-only toggle button, the section's own "?" (opens the general,
+   beginner-language explanation), and the chevron are three separate
+   items in this row instead - "?" right after the title, chevron
+   pushed to the far right (still clickable - see wireCollapsiblePanel's
+   extraToggleElId). */
 .rating-history-header {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   margin: 0 0 12px;
 }
 
@@ -4180,9 +4183,14 @@ input[type="number"] {
 }
 
 .rating-history-header .panel-toggle {
-  flex: 1;
-  min-width: 0;
+  flex: 0 0 auto;
+  width: auto;
   margin: 0;
+}
+
+.rating-history-header .panel-chevron {
+  margin-left: auto;
+  cursor: pointer;
 }
 
 /* Step-by-step rating history (see renderRatingHistorySection) - reuses
