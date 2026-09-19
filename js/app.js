@@ -236,6 +236,21 @@
     panel.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
+  // A brief accent-colored flash around an element - used to catch the
+  // eye when its data just changed underneath the player without the
+  // page itself moving (e.g. switching the Stats Synopsis period filter
+  // re-renders several panels' numbers in place, which is easy to miss
+  // if nothing visibly signals "this just updated"). Removing the class
+  // before re-adding it (with a forced reflow in between) restarts the
+  // CSS animation even if the same element was just flashed a moment
+  // ago - simply re-adding an already-present class wouldn't replay it.
+  function flashDataChanged(el) {
+    if (!el) return;
+    el.classList.remove("data-flash");
+    void el.offsetWidth;
+    el.classList.add("data-flash");
+  }
+
   // Updates the one-line "what's inside" sentence shown only while a
   // collapsible panel is collapsed (id="<panelElId>-summary").
   function setPanelSummary(panelElId, text) {
@@ -19838,9 +19853,23 @@
     tournamentTargetUnit.textContent = type.unit;
   });
 
+  // Every panel whose numbers are scoped to the period filter (not
+  // Achievements, Session History, or This Session (Live), which are
+  // either lifetime or live-only and don't move when the filter does).
+  var PERIOD_SCOPED_PANEL_IDS = [
+    "player-page-synopsis-panel",
+    "player-page-h2h-panel",
+    "player-page-teams-panel",
+    "player-page-graph-panel",
+    "player-page-rating-history-panel"
+  ];
+
   Array.prototype.forEach.call(playerPagePeriodButtons, function (btn) {
     btn.addEventListener("click", function () {
       setStatsPeriod(btn.getAttribute("data-period"));
+      PERIOD_SCOPED_PANEL_IDS.forEach(function (id) {
+        flashDataChanged(document.getElementById(id));
+      });
     });
   });
 
