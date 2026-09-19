@@ -1760,8 +1760,12 @@
   var allPlayersViewMode = "bars";
   var allPlayersRosterOnly = false;
   var allPlayersAllExpanded = false;
-  // Must match the .all-player-card-leaving CSS animation's duration.
-  var ALL_PLAYER_CARD_LEAVE_MS = 400;
+  // Shared "blind change" fade timing - how long a card/row plays its
+  // leaving animation before the list actually rebuilds without it (see
+  // .all-player-card-leaving and .leaderboard-row-leaving; both reuse
+  // the same all-player-card-in/-out keyframes). Must match those CSS
+  // animations' own duration.
+  var CARD_FADE_LEAVE_MS = 400;
 
   var btnOpenGlobalStats = document.getElementById("btn-open-global-stats");
 
@@ -20039,7 +20043,7 @@
           card.classList.add("all-player-card-leaving");
         });
         allPlayersRosterOnly = true;
-        window.setTimeout(renderAllPlayersPage, ALL_PLAYER_CARD_LEAVE_MS);
+        window.setTimeout(renderAllPlayersPage, CARD_FADE_LEAVE_MS);
         return;
       }
     }
@@ -20093,10 +20097,29 @@
   });
   Array.prototype.forEach.call(leaderboardPeriodButtons, function (btn) {
     btn.addEventListener("click", function () {
-      leaderboardPeriod = btn.getAttribute("data-period");
+      var newPeriod = btn.getAttribute("data-period");
+      if (newPeriod === leaderboardPeriod) return;
       Array.prototype.forEach.call(leaderboardPeriodButtons, function (b) {
         b.classList.toggle("is-active", b === btn);
       });
+
+      // Same "blind change" effect as the All Players roster filter:
+      // let the currently-shown rows fade/shrink out first, so a period
+      // switch (a completely different ranking, not just a few rows
+      // dropping out) visibly reads as the board changing rather than
+      // silently swapping underneath the player.
+      var leavingRows = leaderboardList.querySelectorAll("li");
+      if (leavingRows.length) {
+        Array.prototype.forEach.call(leavingRows, function (row) {
+          row.classList.add("leaderboard-row-leaving");
+        });
+        window.setTimeout(function () {
+          leaderboardPeriod = newPeriod;
+          renderLeaderboardPage();
+        }, CARD_FADE_LEAVE_MS);
+        return;
+      }
+      leaderboardPeriod = newPeriod;
       renderLeaderboardPage();
     });
   });

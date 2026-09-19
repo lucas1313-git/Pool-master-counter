@@ -5035,6 +5035,19 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   border-radius: var(--radius);
   padding: 12px 14px;
   min-width: 0;
+  /* Same "blind change" fade as the All Players page's cards (reuses
+     those same keyframes) - plays on every render, including a period
+     switch, so the board settling into its new ranking reads as a
+     visible change instead of the numbers just silently swapping. */
+  animation: all-player-card-in 0.4s ease-out;
+}
+
+/* Plays on the old rows just before a period switch rebuilds the list
+   without them (see the leaderboard period button click handler) - the
+   full board fading/shrinking out reads as "this is now a different
+   ranking", not just a values update. */
+.leaderboard-row-leaving {
+  animation: all-player-card-out 0.4s ease-in forwards;
 }
 
 .leaderboard-rank-1 {
