@@ -13976,7 +13976,11 @@
 
     highlight(opponentDisplay);
     highlight(String(oppRatingBefore));
-    highlight(String(selfRatingBefore));
+    // Grouped with the label that precedes it in every ratingRowMatchup*
+    // template ("your rating was {{selfRating}}", translated) rather
+    // than just the bare number, since "your rating was" is the part
+    // that actually tells the reader which number is theirs.
+    highlight(T("playerPage.ratingRowYourRatingLabel") + String(selfRatingBefore));
 
     // The outcome phrase ("lose ~70%"/"win ~70%", whatever this
     // language's word is) isn't a single interpolated value - it's

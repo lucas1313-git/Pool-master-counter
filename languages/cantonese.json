@@ -487,6 +487,7 @@
   "playerPage.ratingRowMatchupOneWin": "對 {{names}}（當時評分{{oppRating}}——你嗰陣評分係{{selfRating}}）你預期會贏～{{pct}}%",
   "playerPage.ratingRowMatchupTeamLose": "對 {{names}}（當時平均評分{{oppRating}}——你嗰陣評分係{{selfRating}}）你預期會輸～{{pct}}%",
   "playerPage.ratingRowMatchupTeamWin": "對 {{names}}（當時平均評分{{oppRating}}——你嗰陣評分係{{selfRating}}）你預期會贏～{{pct}}%",
+  "playerPage.ratingRowYourRatingLabel": "你嗰陣評分係",
   "playerPage.ratingThisPeriod": "呢段時間嘅評分",
   "playerPage.ratingWasNow": "由 {{was}} 變成 {{now}}",
   "playerPage.resetStats": "重設統計",

@@ -487,6 +487,7 @@
   "playerPage.ratingRowMatchupOneWin": "vs {{names}} (que tenía una clasificación de {{oppRating}} en ese momento — la tuya era {{selfRating}}) se esperaba que ganaras ~{{pct}}%",
   "playerPage.ratingRowMatchupTeamLose": "vs {{names}} (cuyas clasificaciones promediaban {{oppRating}} en ese momento — la tuya era {{selfRating}}) se esperaba que perdieras ~{{pct}}%",
   "playerPage.ratingRowMatchupTeamWin": "vs {{names}} (cuyas clasificaciones promediaban {{oppRating}} en ese momento — la tuya era {{selfRating}}) se esperaba que ganaras ~{{pct}}%",
+  "playerPage.ratingRowYourRatingLabel": "la tuya era ",
   "playerPage.ratingThisPeriod": "Clasificación en este período",
   "playerPage.ratingWasNow": "era {{was}}, ahora {{now}}",
   "playerPage.resetStats": "Restablecer estadísticas",

@@ -487,6 +487,7 @@
   "playerPage.ratingRowMatchupOneWin": "laban kay {{names}} (na may rating na {{oppRating}} noon — ang rating mo ay {{selfRating}}) inaasahang mananalo ka ~{{pct}}%",
   "playerPage.ratingRowMatchupTeamLose": "laban kina {{names}} (na ang average na rating ay {{oppRating}} noon — ang rating mo ay {{selfRating}}) inaasahang matatalo ka ~{{pct}}%",
   "playerPage.ratingRowMatchupTeamWin": "laban kina {{names}} (na ang average na rating ay {{oppRating}} noon — ang rating mo ay {{selfRating}}) inaasahang mananalo ka ~{{pct}}%",
+  "playerPage.ratingRowYourRatingLabel": "ang rating mo ay ",
   "playerPage.ratingThisPeriod": "Rating sa panahong ito",
   "playerPage.ratingWasNow": "dati'y {{was}}, ngayon ay {{now}}",
   "playerPage.resetStats": "I-reset ang Stats",

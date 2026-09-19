@@ -487,6 +487,7 @@
   "playerPage.ratingRowMatchupOneWin": "vs {{names}} (who was rated {{oppRating}} at the time — your rating was {{selfRating}}) you were expected to win ~{{pct}}%",
   "playerPage.ratingRowMatchupTeamLose": "vs {{names}} (whose ratings averaged {{oppRating}} at the time — your rating was {{selfRating}}) you were expected to lose ~{{pct}}%",
   "playerPage.ratingRowMatchupTeamWin": "vs {{names}} (whose ratings averaged {{oppRating}} at the time — your rating was {{selfRating}}) you were expected to win ~{{pct}}%",
+  "playerPage.ratingRowYourRatingLabel": "your rating was ",
   "playerPage.ratingThisPeriod": "Rating this period",
   "playerPage.ratingWasNow": "was {{was}}, now {{now}}",
   "playerPage.resetStats": "Reset Stats",
