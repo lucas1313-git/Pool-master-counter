@@ -15338,6 +15338,14 @@
   // collapse both toward zero, which would let one lucky win rank #1.
   var LEADERBOARD_PERIOD_MIN_GAMES_FLOOR = 3;
 
+  // A reference window this period's own activity rate gets scaled to -
+  // see leaderboardMinGamesForPeriod. Both "week" and "month" end up
+  // expressing "this group's typical WEEKLY activity", just measured
+  // over however many days each period actually covers, instead of a
+  // raw period total that would keep compounding the longer a period
+  // runs (see that function's own comment for why a raw total broke).
+  var LEADERBOARD_MIN_GAMES_REFERENCE_DAYS = 7;
+
   // LEADERBOARD_MIN_GAMES (10) was tuned around a whole career's worth
   // of games - reusing that same fixed number as both the qualifying
   // bar and the win-rate regularizer (see computeLeaderboardScoreBreak-
@@ -15345,17 +15353,35 @@
   // most weeks (few groups play 10+ games in seven days) or, if just
   // lowered arbitrarily, smooth win rate by an amount that has nothing
   // to do with how much pool this group actually played that period.
-  // Instead, for "week"/"month" both numbers track this period's own
-  // average games played per active player (rounded, floored so a
-  // near-silent period can't collapse both toward zero): a busy week
-  // raises the bar and dilutes win rate more per extra game the same
-  // way the all-time constant always has, while a quiet week relaxes
-  // both instead of disqualifying everyone or letting win rate swing
-  // wildly on a game or two. gamesPlayedList is every candidate's raw
-  // games-played count for the period being evaluated (players or
-  // teams - whichever computeLeaderboardEntries/-TeamEntries is
-  // building), before the qualifying filter is applied.
-  function leaderboardMinGamesForPeriod(period, gamesPlayedList) {
+  // Instead, for "week"/"month" both numbers track this group's own
+  // ACTIVITY RATE (average games played per active player, per
+  // LEADERBOARD_MIN_GAMES_REFERENCE_DAYS-day window - rounded, floored
+  // so a near-silent period can't collapse both toward zero): a busy
+  // stretch raises the bar and dilutes win rate more per extra game the
+  // same way the all-time constant always has, while a quiet one
+  // relaxes both instead of disqualifying everyone or letting win rate
+  // swing wildly on a game or two.
+  //
+  // Deliberately a RATE, not each period's raw total games - a raw
+  // total would keep growing the longer a period runs even at a
+  // perfectly constant pace (a whole month naturally racks up ~4x more
+  // total games than one week of the same play frequency), which
+  // produced a genuinely confusing bug: a player only active this past
+  // week could clear the (small, week-sized) weekly bar and the
+  // (fixed) all-time bar, yet fail to clear the far larger monthly bar
+  // built from everyone else's FULL month of accumulated games -
+  // vanishing from "This Month" while still ranked in both "This Week"
+  // and "All Time". Normalizing to a rate keeps week's and month's bars
+  // representing the same underlying "how active is this group right
+  // now" question instead of one compounding with elapsed days.
+  //
+  // gamesPlayedList is every candidate's raw games-played count for the
+  // period being evaluated (players or teams - whichever
+  // computeLeaderboardEntries/-TeamEntries is building), before the
+  // qualifying filter is applied. periodDays is how many days that
+  // period actually covers so far (see periodStartDate) - at least 1,
+  // so a check made on day one of a week/month can't divide by zero.
+  function leaderboardMinGamesForPeriod(period, gamesPlayedList, periodDays) {
     if (period === "all") return LEADERBOARD_MIN_GAMES;
     var active = gamesPlayedList.filter(function (n) {
       return n > 0;
@@ -15364,7 +15390,17 @@
     var total = active.reduce(function (sum, n) {
       return sum + n;
     }, 0);
-    return Math.max(LEADERBOARD_PERIOD_MIN_GAMES_FLOOR, Math.round(total / active.length));
+    var avgPerDay = total / active.length / Math.max(1, periodDays);
+    return Math.max(LEADERBOARD_PERIOD_MIN_GAMES_FLOOR, Math.round(avgPerDay * LEADERBOARD_MIN_GAMES_REFERENCE_DAYS));
+  }
+
+  // Whole days elapsed so far within the given period (>= 1, so "today
+  // is the 1st of the month" still divides safely) - see
+  // leaderboardMinGamesForPeriod, the only caller.
+  function leaderboardElapsedDaysInPeriod(period) {
+    if (period === "all") return null;
+    var start = periodStartDate(period).getTime();
+    return Math.max(1, Math.round((Date.now() - start) / 86400000));
   }
 
   // A regularized win rate (so a 2-0 newcomer can't outrank a proven
@@ -15428,7 +15464,8 @@
       period,
       rawEntries.map(function (e) {
         return e.gamesPlayed;
-      })
+      }),
+      leaderboardElapsedDaysInPeriod(period)
     );
     var entries = rawEntries.filter(function (e) {
       return e.gamesPlayed >= minGames;
@@ -15649,7 +15686,8 @@
       period,
       rawEntries.map(function (e) {
         return e.gamesPlayed;
-      })
+      }),
+      leaderboardElapsedDaysInPeriod(period)
     );
     var entries = rawEntries.filter(function (e) {
       return e.gamesPlayed >= minGames;
