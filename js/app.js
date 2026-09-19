@@ -2026,9 +2026,26 @@
     confirmModalOnCancel = null;
   }
 
+  // message is normally a plain string, set via textContent so nothing
+  // in it (a player's own name, say) is ever parsed as markup. It can
+  // also be a Node/DocumentFragment - built the same safe way, out of
+  // createElement/createTextNode rather than innerHTML - for the rare
+  // case some part of the message needs its own styling (see
+  // buildMatchupSentence's highlighted names/numbers).
   function openConfirmModal(message, showCancel, showInput, inputValue) {
-    confirmModalMessage.textContent = message;
-    confirmModalMessage.classList.toggle("is-long-text", message.length > 200 || message.indexOf("\n") !== -1);
+    var isNode = message instanceof Node;
+    if (isNode) {
+      confirmModalMessage.textContent = "";
+      // Cloned rather than moved in directly - appendChild on a
+      // DocumentFragment (or any Node already built once) empties it, so
+      // reusing the same built message a second time (e.g. clicking the
+      // same row's "?" twice) would otherwise open an empty popup.
+      confirmModalMessage.appendChild(message.cloneNode(true));
+    } else {
+      confirmModalMessage.textContent = message;
+    }
+    var plainText = isNode ? confirmModalMessage.textContent : message;
+    confirmModalMessage.classList.toggle("is-long-text", plainText.length > 200 || plainText.indexOf("\n") !== -1);
     confirmModalInputRow.classList.toggle("hidden", !showInput);
     confirmModalInput.value = showInput ? inputValue || "" : "";
     btnConfirmModalCancel.classList.toggle("hidden", !showCancel);
@@ -13930,6 +13947,60 @@
   var RATING_HISTORY_DISPLAY_STEP = 25;
   var ratingHistoryVisibleCount = RATING_HISTORY_DISPLAY_STEP;
 
+  // Wraps a handful of already-known substrings (the opponent name, the
+  // two ratings, and the win/lose-plus-percentage phrase) of an already-
+  // translated matchup sentence in bold, accent-colored spans, so the
+  // actual facts stand out from the connecting words around them -
+  // without touching translation strings or ever parsing the sentence
+  // as markup (values are found by plain substring search and moved
+  // into elements built with createElement, the same safe pattern as
+  // everywhere else in this file). Each value is searched for in the
+  // remaining, not-yet-consumed tail of the sentence, in the same
+  // left-to-right order it was interpolated in - guaranteed by this
+  // app's own ratingRowMatchup* templates, which always read
+  // "vs {{names}} (... {{oppRating}} ... {{selfRating}}) ... {{pct}}%".
+  function buildMatchupSentence(matchupText, opponentDisplay, oppRatingBefore, selfRatingBefore, displayPct) {
+    var frag = document.createDocumentFragment();
+    var remaining = matchupText;
+
+    function highlight(value) {
+      var idx = remaining.indexOf(value);
+      if (idx === -1) return;
+      if (idx > 0) frag.appendChild(document.createTextNode(remaining.slice(0, idx)));
+      var span = document.createElement("strong");
+      span.className = "rating-row-highlight";
+      span.textContent = value;
+      frag.appendChild(span);
+      remaining = remaining.slice(idx + value.length);
+    }
+
+    highlight(opponentDisplay);
+    highlight(String(oppRatingBefore));
+    highlight(String(selfRatingBefore));
+
+    // The outcome phrase ("lose ~70%"/"win ~70%", whatever this
+    // language's word is) isn't a single interpolated value - it's
+    // found structurally, as the one word immediately before "~NN%",
+    // since every version of this template puts the verb directly next
+    // to the percentage with nothing in between.
+    var pctToken = "~" + displayPct + "%";
+    var pctIdx = remaining.indexOf(pctToken);
+    if (pctIdx !== -1) {
+      var beforePct = remaining.slice(0, pctIdx).replace(/\s+$/, "");
+      var lastSpace = beforePct.lastIndexOf(" ");
+      var verbStart = lastSpace === -1 ? 0 : lastSpace + 1;
+      if (verbStart > 0) frag.appendChild(document.createTextNode(remaining.slice(0, verbStart)));
+      var outcomeSpan = document.createElement("strong");
+      outcomeSpan.className = "rating-row-highlight";
+      outcomeSpan.textContent = remaining.slice(verbStart, pctIdx + pctToken.length);
+      frag.appendChild(outcomeSpan);
+      remaining = remaining.slice(pctIdx + pctToken.length);
+    }
+
+    frag.appendChild(document.createTextNode(remaining));
+    return frag;
+  }
+
   // One line of the detail text - pieces (text nodes and/or elements,
   // e.g. the K-info button) joined with " · " the same way the old
   // single-line version was, just split across two of these instead of
@@ -14014,6 +14085,8 @@
       // K-factor note and the result - split right before "K=", instead
       // of one long run-on line.
       var matchupText = null;
+      var opponentDisplay = opponentNames.join(" & ");
+      var displayPct = null;
       // The player's own actual win probability (0-100), kept separate
       // from whatever percentage ends up shown (which flips to the loss
       // side when they're the underdog) - the outcome reasoning below
@@ -14023,6 +14096,7 @@
         if (oppRatingBefore !== null) {
           rawExpectedPct = Math.round(eloExpectedScore(selfRatingBefore, oppRatingBefore) * 100);
           var favored = rawExpectedPct >= 50;
+          displayPct = favored ? rawExpectedPct : 100 - rawExpectedPct;
           matchupText = T(
             isTeam
               ? favored
@@ -14032,19 +14106,22 @@
               ? "playerPage.ratingRowMatchupOneWin"
               : "playerPage.ratingRowMatchupOneLose",
             {
-              names: opponentNames.join(" & "),
+              names: opponentDisplay,
               oppRating: oppRatingBefore,
               selfRating: selfRatingBefore,
-              pct: favored ? rawExpectedPct : 100 - rawExpectedPct
+              pct: displayPct
             }
+          );
+          detail.appendChild(
+            buildRatingHistoryDetailLine([buildMatchupSentence(matchupText, opponentDisplay, oppRatingBefore, selfRatingBefore, displayPct)])
           );
         } else {
           matchupText = T(isTeam ? "playerPage.ratingHistoryVsTeam" : "playerPage.ratingHistoryVsOne", {
-            names: opponentNames.join(" & "),
+            names: opponentDisplay,
             rating: oppRatingBefore
           });
+          detail.appendChild(buildRatingHistoryDetailLine([document.createTextNode(matchupText)]));
         }
-        detail.appendChild(buildRatingHistoryDetailLine([document.createTextNode(matchupText)]));
       }
 
       var k = isTeam ? RATING_K_PROVISIONAL : ratingKFor(gamesPlayedBefore);
@@ -14072,11 +14149,23 @@
         outcomeKey = rawExpectedPct >= 50 ? "playerPage.ratingRowExplainLostFavored" : "playerPage.ratingRowExplainLostUnderdog";
       }
 
-      var explanationParts = [];
-      if (matchupText) explanationParts.push(matchupText);
-      explanationParts.push(T("playerPage.ratingRowExplainKFactor", { k: k, status: kStatus }));
-      explanationParts.push(T(outcomeKey, { delta: deltaSigned, from: selfRatingBefore, to: h.rating }));
-      explanationText = explanationParts.join("\n\n");
+      var kFactorSentence = T("playerPage.ratingRowExplainKFactor", { k: k, status: kStatus });
+      var outcomeSentence = T(outcomeKey, { delta: deltaSigned, from: selfRatingBefore, to: h.rating });
+      if (matchupText && displayPct !== null) {
+        // A fresh fragment - buildMatchupSentence's first one was already
+        // consumed into the on-screen detail line above, and a node can
+        // only live in one place in the DOM at a time.
+        var explanationFrag = document.createDocumentFragment();
+        explanationFrag.appendChild(buildMatchupSentence(matchupText, opponentDisplay, oppRatingBefore, selfRatingBefore, displayPct));
+        explanationFrag.appendChild(document.createTextNode("\n\n" + kFactorSentence + "\n\n" + outcomeSentence));
+        explanationText = explanationFrag;
+      } else {
+        var explanationParts = [];
+        if (matchupText) explanationParts.push(matchupText);
+        explanationParts.push(kFactorSentence);
+        explanationParts.push(outcomeSentence);
+        explanationText = explanationParts.join("\n\n");
+      }
     }
     inner.appendChild(detail);
 

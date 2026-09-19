@@ -4303,6 +4303,15 @@ input[type="number"] {
   margin-top: 3px;
 }
 
+/* The actual facts in a matchup sentence (see buildMatchupSentence) -
+   the opponent's name, both ratings, and the win/lose-and-percentage
+   verdict - picked out from the connecting words around them. */
+.rating-row-highlight {
+  color: var(--accent);
+  font-weight: 800;
+  font-size: 1.1em;
+}
+
 /* Sits to the right of the +/- and old->new inside their own box,
    smaller than the default 26px circle so it doesn't dwarf them. */
 .rating-row-info-btn {
