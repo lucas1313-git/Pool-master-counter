@@ -4166,14 +4166,17 @@ input[type="number"] {
 
 /* Step-by-step rating history (see renderRatingHistorySection) - reuses
    .player-history-row/-detail from the Session History list above for
-   the same card look, just with its own two-column layout below. */
+   the same card look. Multiple columns instead of one tall stack, each
+   sized to comfortably fit a card's content, as many as the page width
+   allows, flowing left to right then down. */
 .rating-history-list {
   list-style: none;
   padding: 0;
   margin: 0 0 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 10px;
+  align-items: start;
 }
 
 /* A thicker border than the plain Session History cards - this list is
@@ -4182,49 +4185,51 @@ input[type="number"] {
   border-width: 2px;
 }
 
-/* Explanation (date + detail, two lines) on the left; the delta number
-   on the right, stretched to that same two-line height (default flex
-   cross-axis behavior) and vertically centered within it - the number
-   is the payoff of the row, so it gets the room and the size. */
+/* Top to bottom instead of left/right: date, then the +/- and old->new
+   boxed together right under it, then the explanation - each only as
+   tall as its own content needs. */
 .rating-history-row-inner {
   display: flex;
-  justify-content: space-between;
-  gap: 14px;
-}
-
-.rating-history-row-text {
-  flex: 1;
-  min-width: 0;
-}
-
-.rating-history-row-text .player-history-detail {
-  margin-top: 4px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
 }
 
 .rating-history-delta {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: flex-end;
-  flex: 0 0 auto;
-  text-align: right;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 10px;
 }
 
 .rating-history-delta-value {
   font-weight: 800;
-  font-size: 1.6rem;
+  font-size: 1.3rem;
   line-height: 1.15;
   font-variant-numeric: tabular-nums;
 }
 
+/* Bold and full-contrast, not the small dim label it used to be - it's
+   half of the payoff of the row (the other half being the +/- itself). */
 .rating-history-delta-range {
-  font-size: 0.75rem;
-  color: var(--text-dim);
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--text);
   font-variant-numeric: tabular-nums;
+}
+
+.rating-history-delta.is-positive {
+  border-color: var(--accent);
 }
 
 .rating-history-delta.is-positive .rating-history-delta-value {
   color: var(--accent);
+}
+
+.rating-history-delta.is-negative {
+  border-color: var(--danger);
 }
 
 .rating-history-delta.is-negative .rating-history-delta-value {
@@ -4233,6 +4238,23 @@ input[type="number"] {
 
 .rating-history-delta.is-flat .rating-history-delta-value {
   color: var(--text-dim);
+}
+
+/* Each detail line (see buildRatingHistoryDetailLine) stacks with a
+   little breathing room - the split into two lines is what keeps a
+   game's explanation from reading as one dense run-on sentence. */
+.rating-history-detail-line + .rating-history-detail-line {
+  margin-top: 3px;
+}
+
+/* Sits inline in the K=x line's text instead of the default 26px
+   circle, which reads oversized next to 0.85rem text. */
+.rating-k-info-btn {
+  width: 20px;
+  height: 20px;
+  font-size: 0.65rem;
+  margin: 0 2px;
+  vertical-align: middle;
 }
 
 .rating-history-show-more {

@@ -472,6 +472,8 @@
   "playerPage.ratingHistorySummary": "已記錄{{count}}次評分變動",
   "playerPage.ratingHistoryVsOne": "對 {{names}}（當時評分{{rating}}）",
   "playerPage.ratingHistoryVsTeam": "對 {{names}}（當時平均評分{{rating}}）",
+  "playerPage.ratingKExplain": "每個玩家一開始評分係400。打完一局之後，贏嗰個評分會升，輸嗰個會跌——但升跌幅度唔一定一樣，睇兩樣嘢：\n\n1. 場波幾意外。贏一個評分高好多嘅對手，會令你評分升多過贏一個本身就預咗你會贏嘅對手。\n\n2. 呢度顯示嘅「K」數值。佢決定評分變化嘅速度。新玩家（未夠20場）用K=24，等佢哋評分可以快啲追返上真正實力；夠20場之後K就跌到8，等一次意外結果唔會令評分震盪太大。",
+  "playerPage.ratingKInfoAria": "K係咩意思？",
   "playerPage.ratingThisPeriod": "呢段時間嘅評分",
   "playerPage.ratingWasNow": "由 {{was}} 變成 {{now}}",
   "playerPage.resetStats": "重設統計",

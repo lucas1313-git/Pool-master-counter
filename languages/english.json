@@ -472,6 +472,8 @@
   "playerPage.ratingHistorySummary": "{{count}} rating change(s) recorded",
   "playerPage.ratingHistoryVsOne": "vs {{names}} (rated {{rating}} at the time)",
   "playerPage.ratingHistoryVsTeam": "vs {{names}} (avg rated {{rating}} at the time)",
+  "playerPage.ratingKExplain": "Every player starts at a rating of 400. After each game, the winner's rating goes up and the loser's goes down - but not always by the same amount. Two things decide how much:\n\n1. How surprising the result was. Beating someone rated much higher than you moves your rating more than beating someone you were expected to beat anyway.\n\n2. The \"K\" number shown here. It controls how fast a rating is allowed to change. New players (under 20 games) use K=24, so their rating catches up to their real skill quickly. Once established, K drops to 8, so one unusual result doesn't swing things too much.",
+  "playerPage.ratingKInfoAria": "What does K mean?",
   "playerPage.ratingThisPeriod": "Rating this period",
   "playerPage.ratingWasNow": "was {{was}}, now {{now}}",
   "playerPage.resetStats": "Reset Stats",

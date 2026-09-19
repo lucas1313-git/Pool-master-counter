@@ -472,6 +472,8 @@
   "playerPage.ratingHistorySummary": "{{count}} changement(s) de classement enregistré(s)",
   "playerPage.ratingHistoryVsOne": "contre {{names}} (classé {{rating}} à l'époque)",
   "playerPage.ratingHistoryVsTeam": "contre {{names}} (classement moyen {{rating}} à l'époque)",
+  "playerPage.ratingKExplain": "Chaque joueur commence avec un classement de 400. Après chaque partie, le classement du gagnant monte et celui du perdant descend - mais pas toujours de la même quantité. Deux choses déterminent de combien :\n\n1. À quel point le résultat était surprenant. Battre quelqu'un avec un classement bien plus élevé fait plus bouger votre classement que battre quelqu'un que vous étiez déjà censé battre.\n\n2. Le nombre « K » affiché ici. Il contrôle la vitesse à laquelle un classement peut changer. Les nouveaux joueurs (moins de 20 parties) utilisent K=24, pour que leur classement rattrape rapidement leur vrai niveau. Une fois établi, K descend à 8, pour qu'un résultat inhabituel ne fasse pas trop varier les choses.",
+  "playerPage.ratingKInfoAria": "Que veut dire K ?",
   "playerPage.ratingThisPeriod": "Classement sur cette période",
   "playerPage.ratingWasNow": "était {{was}}, maintenant {{now}}",
   "playerPage.resetStats": "Réinitialiser les statistiques",

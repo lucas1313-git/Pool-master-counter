@@ -472,6 +472,8 @@
   "playerPage.ratingHistorySummary": "{{count}} pagbabago ng rating ang naitala",
   "playerPage.ratingHistoryVsOne": "laban kay {{names}} (rating {{rating}} noon)",
   "playerPage.ratingHistoryVsTeam": "laban kina {{names}} (average rating {{rating}} noon)",
+  "playerPage.ratingKExplain": "Ang bawat manlalaro ay nagsisimula sa rating na 400. Pagkatapos ng bawat laro, tumataas ang rating ng nanalo at bumababa ang rating ng natalo - pero hindi palaging pareho ang dami. Dalawang bagay ang nagpapasya kung gaano karami:\n\n1. Kung gaano kagulat ang resulta. Ang pagtalo sa isang mas mataas nang malaki ang rating ay mas malaki ang epekto sa rating mo kaysa pagtalo sa taong inaasahan mo nang matalo.\n\n2. Ang \"K\" na numero na makikita rito. Ito ang kumokontrol kung gaano kabilis puwedeng magbago ang rating. Ang mga bagong manlalaro (wala pang 20 laro) ay gumagamit ng K=24, para mabilis na maabot ng rating nila ang totoong lebel ng galing nila. Kapag established na, bumababa ang K sa 8, para hindi masyadong maapektuhan ng isang hindi pangkaraniwang resulta.",
+  "playerPage.ratingKInfoAria": "Ano ang ibig sabihin ng K?",
   "playerPage.ratingThisPeriod": "Rating sa panahong ito",
   "playerPage.ratingWasNow": "dati'y {{was}}, ngayon ay {{now}}",
   "playerPage.resetStats": "I-reset ang Stats",

@@ -12643,12 +12643,21 @@
     var inner = document.createElement("div");
     inner.className = "rating-history-row-inner";
 
-    var textCol = document.createElement("div");
-    textCol.className = "rating-history-row-text";
     var date = document.createElement("span");
     date.className = "player-history-date";
     date.textContent = formatTimestamp(g.ts, true);
-    textCol.appendChild(date);
+    inner.appendChild(date);
+
+    var delta = playerStatDetailRatingDelta(name, g.ts);
+    var isPositive = delta !== null && delta > 0;
+    var isNegative = delta !== null && delta < 0;
+    var deltaBox = document.createElement("div");
+    deltaBox.className = "rating-history-delta " + (isPositive ? "is-positive" : isNegative ? "is-negative" : "is-flat");
+    var deltaValue = document.createElement("span");
+    deltaValue.className = "rating-history-delta-value";
+    deltaValue.textContent = delta === null ? "—" : (isPositive ? "+" : "") + delta;
+    deltaBox.appendChild(deltaValue);
+    inner.appendChild(deltaBox);
 
     // The opponent name is the one piece worth picking out at a glance
     // in an otherwise-dim detail line - built as its own bold element
@@ -12673,23 +12682,14 @@
 
     var detail = document.createElement("div");
     detail.className = "player-history-detail";
+    var line = document.createElement("div");
+    line.className = "rating-history-detail-line";
     pieces.forEach(function (piece, i) {
-      if (i > 0) detail.appendChild(document.createTextNode(" · "));
-      detail.appendChild(piece);
+      if (i > 0) line.appendChild(document.createTextNode(" · "));
+      line.appendChild(piece);
     });
-    textCol.appendChild(detail);
-    inner.appendChild(textCol);
-
-    var delta = playerStatDetailRatingDelta(name, g.ts);
-    var isPositive = delta !== null && delta > 0;
-    var isNegative = delta !== null && delta < 0;
-    var deltaBox = document.createElement("div");
-    deltaBox.className = "rating-history-delta " + (isPositive ? "is-positive" : isNegative ? "is-negative" : "is-flat");
-    var deltaValue = document.createElement("span");
-    deltaValue.className = "rating-history-delta-value";
-    deltaValue.textContent = delta === null ? "—" : (isPositive ? "+" : "") + delta;
-    deltaBox.appendChild(deltaValue);
-    inner.appendChild(deltaBox);
+    detail.appendChild(line);
+    inner.appendChild(detail);
 
     li.appendChild(inner);
     return li;
@@ -13891,6 +13891,20 @@
   var RATING_HISTORY_DISPLAY_STEP = 25;
   var ratingHistoryVisibleCount = RATING_HISTORY_DISPLAY_STEP;
 
+  // One line of the detail text - pieces (text nodes and/or elements,
+  // e.g. the K-info button) joined with " · " the same way the old
+  // single-line version was, just split across two of these instead of
+  // one long line.
+  function buildRatingHistoryDetailLine(pieces) {
+    var line = document.createElement("div");
+    line.className = "rating-history-detail-line";
+    pieces.forEach(function (piece, i) {
+      if (i > 0) line.appendChild(document.createTextNode(" · "));
+      line.appendChild(piece);
+    });
+    return line;
+  }
+
   function buildRatingHistoryEntryRow(name, h, gamesPlayedBefore, selfRatingBefore, winMultiOpponentIndex) {
     var li = document.createElement("li");
     li.className = "player-history-row rating-history-row";
@@ -13898,15 +13912,27 @@
     var inner = document.createElement("div");
     inner.className = "rating-history-row-inner";
 
-    // Explanation first (date + the "why" text), delta number after it -
-    // the number is the whole point of the row, so it reads last, as the
-    // payoff, rather than leading before there's any context for it.
-    var textCol = document.createElement("div");
-    textCol.className = "rating-history-row-text";
+    // Date on top, then the +/- and old->new boxed together right under
+    // it (left-aligned, not stretched off to the side), then the "why"
+    // text below that - reading top to bottom instead of left/right.
     var date = document.createElement("span");
     date.className = "player-history-date";
     date.textContent = formatTimestamp(h.ts, true);
-    textCol.appendChild(date);
+    inner.appendChild(date);
+
+    var isPositive = h.delta > 0;
+    var isNegative = h.delta < 0;
+    var deltaBox = document.createElement("div");
+    deltaBox.className = "rating-history-delta " + (isPositive ? "is-positive" : isNegative ? "is-negative" : "is-flat");
+    var deltaValue = document.createElement("span");
+    deltaValue.className = "rating-history-delta-value";
+    deltaValue.textContent = (isPositive ? "+" : "") + h.delta;
+    var deltaRange = document.createElement("span");
+    deltaRange.className = "rating-history-delta-range";
+    deltaRange.textContent = selfRatingBefore + " → " + h.rating;
+    deltaBox.appendChild(deltaValue);
+    deltaBox.appendChild(deltaRange);
+    inner.appendChild(deltaBox);
 
     var detail = document.createElement("div");
     detail.className = "player-history-detail";
@@ -13918,12 +13944,12 @@
       : null;
 
     if (!h.fromGame) {
-      detail.textContent = T("playerPage.ratingHistoryManual");
+      detail.appendChild(buildRatingHistoryDetailLine([document.createTextNode(T("playerPage.ratingHistoryManual"))]));
     } else if (!game) {
       // A rating history entry with no matching game entry (e.g. that
       // game's session was since cleared by a reset) - still real, just
       // nothing left to explain the matchup with.
-      detail.textContent = T("playerPage.ratingHistoryNoGameFound");
+      detail.appendChild(buildRatingHistoryDetailLine([document.createTextNode(T("playerPage.ratingHistoryNoGameFound"))]));
     } else {
       // A single non-team win credited against several simultaneous
       // opponents (e.g. a Winner Stays/queue table) runs one independent
@@ -13944,48 +13970,50 @@
         ? ratingBeforeTs(opponentNames[0], h.ts)
         : null;
 
-      var pieces = [];
+      // Line 1: who it was against and how it was expected to go. Line 2:
+      // the K-factor note (with its own "what does this mean?" button)
+      // and the result - split right before "K=", instead of one long
+      // run-on line.
+      var line1Pieces = [];
       if (opponentNames.length) {
-        pieces.push(
-          T(isTeam ? "playerPage.ratingHistoryVsTeam" : "playerPage.ratingHistoryVsOne", {
-            names: opponentNames.join(" & "),
-            rating: oppRatingBefore
-          })
+        line1Pieces.push(
+          document.createTextNode(
+            T(isTeam ? "playerPage.ratingHistoryVsTeam" : "playerPage.ratingHistoryVsOne", {
+              names: opponentNames.join(" & "),
+              rating: oppRatingBefore
+            })
+          )
         );
       }
       if (oppRatingBefore !== null) {
         var expectedPct = Math.round(eloExpectedScore(selfRatingBefore, oppRatingBefore) * 100);
-        pieces.push(T("playerPage.ratingHistoryExpectedPct", { pct: expectedPct }));
+        line1Pieces.push(document.createTextNode(T("playerPage.ratingHistoryExpectedPct", { pct: expectedPct })));
       }
+      if (line1Pieces.length) detail.appendChild(buildRatingHistoryDetailLine(line1Pieces));
+
       var k = isTeam ? RATING_K_PROVISIONAL : ratingKFor(gamesPlayedBefore);
       var kStatus = isTeam || gamesPlayedBefore < RATING_PROVISIONAL_GAMES
         ? T("playerPage.ratingHistoryProvisional", { games: RATING_PROVISIONAL_GAMES })
         : T("playerPage.ratingHistoryEstablished");
-      pieces.push(T("playerPage.ratingHistoryKNote", { k: k, status: kStatus }));
-      pieces.push(T(game.result === "won" ? "playerPage.ratingHistoryResultWon" : "playerPage.ratingHistoryResultLost"));
-
-      detail.textContent = pieces.join(" · ");
+      var kNote = document.createTextNode(T("playerPage.ratingHistoryKNote", { k: k, status: kStatus }));
+      var kInfoBtn = document.createElement("button");
+      kInfoBtn.type = "button";
+      kInfoBtn.className = "format-info-btn rating-k-info-btn";
+      kInfoBtn.textContent = "❓";
+      kInfoBtn.setAttribute("aria-label", T("playerPage.ratingKInfoAria"));
+      kInfoBtn.addEventListener("click", function () {
+        alertModal(T("playerPage.ratingKExplain"));
+      });
+      var resultNode = document.createTextNode(T(game.result === "won" ? "playerPage.ratingHistoryResultWon" : "playerPage.ratingHistoryResultLost"));
+      var line2 = document.createElement("div");
+      line2.className = "rating-history-detail-line";
+      line2.appendChild(kNote);
+      line2.appendChild(kInfoBtn);
+      line2.appendChild(document.createTextNode(" · "));
+      line2.appendChild(resultNode);
+      detail.appendChild(line2);
     }
-    textCol.appendChild(detail);
-    inner.appendChild(textCol);
-
-    // The delta box stretches to match textCol's full height (default
-    // flex cross-axis behavior) and centers its own two lines within
-    // that height, so the number reads big and vertically centered
-    // against the date+explanation block beside it, not squeezed into
-    // just the top line's height.
-    var isPositive = h.delta > 0;
-    var deltaBox = document.createElement("div");
-    deltaBox.className = "rating-history-delta " + (isPositive ? "is-positive" : h.delta < 0 ? "is-negative" : "is-flat");
-    var deltaValue = document.createElement("span");
-    deltaValue.className = "rating-history-delta-value";
-    deltaValue.textContent = (isPositive ? "+" : "") + h.delta;
-    var deltaRange = document.createElement("span");
-    deltaRange.className = "rating-history-delta-range";
-    deltaRange.textContent = selfRatingBefore + " → " + h.rating;
-    deltaBox.appendChild(deltaValue);
-    deltaBox.appendChild(deltaRange);
-    inner.appendChild(deltaBox);
+    inner.appendChild(detail);
 
     li.appendChild(inner);
     return li;
