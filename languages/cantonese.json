@@ -74,6 +74,7 @@
   "ballsLeft.decrease": "減少一個波",
   "ballsLeft.increase": "增加一個波",
   "ballsLeft.label": "檯面剩低嘅波",
+  "ballsLeft.pointsGapHint": "差 {{points}} 分先夠 {{target}} 分（≈{{balls}}/7 個波）",
   "ballsLeft.unset": "未設定",
   "brand.name": "Pool Master Counter",
   "brand.slogan": "唔好托大呀！",

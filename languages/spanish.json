@@ -74,6 +74,7 @@
   "ballsLeft.decrease": "Quitar una bola",
   "ballsLeft.increase": "Añadir una bola",
   "ballsLeft.label": "Bolas restantes en la mesa",
+  "ballsLeft.pointsGapHint": "{{points}} pts por debajo de {{target}} ≈ {{balls}}/7 bolas restantes",
   "ballsLeft.unset": "No definido",
   "brand.name": "Pool Master Counter",
   "brand.slogan": "¡No te confíes!",

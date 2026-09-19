@@ -74,6 +74,7 @@
   "ballsLeft.decrease": "Remove a ball",
   "ballsLeft.increase": "Add a ball",
   "ballsLeft.label": "Balls left on the table",
+  "ballsLeft.pointsGapHint": "{{points}} pts short of {{target}} ≈ {{balls}}/7 balls left",
   "ballsLeft.unset": "Not Set",
   "brand.name": "Pool Master Counter",
   "brand.slogan": "Don't get cocky!",
