@@ -1889,6 +1889,17 @@ input[type="number"] {
   transform: scale(1.1);
 }
 
+/* 15 Ball Rotation's keypad score-entry mode (see handleKeypadShortcut) -
+   the same badge spot as a plain number, but widened into a pill so a
+   multi-digit rotation score ("+15") still fits on one line. */
+.keypad-number-badge.is-entry-buffer {
+  width: auto;
+  min-width: 42px;
+  padding: 0 10px;
+  border-radius: 21px;
+  font-size: 20px;
+}
+
 .player-name {
   font-size: 1.15rem;
   font-weight: 700;

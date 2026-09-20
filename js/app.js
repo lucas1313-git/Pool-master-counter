@@ -656,6 +656,16 @@
   // handleKeypadShortcut. Not persisted; always starts cleared on reload.
   var keypadSelectedPlayerId = null;
 
+  // 15 Ball Rotation's keypad score-entry mode (see handleKeypadShortcut
+  // and isKeypadScoreEntryGame): "+" starts it, digits accumulate into
+  // keypadEntryBuffer, a second "+" (or Enter) adds that whole number to
+  // the selected player's score in one shot - large rotation scores (11,
+  // 15...) don't fit the plain 1-9-selects-a-player / +/- adds-one scheme
+  // the rest of the app's keypad shortcut uses. Session-only, like
+  // keypadSelectedPlayerId above.
+  var keypadEntryMode = false;
+  var keypadEntryBuffer = "";
+
   // Shot counter (see handleKeypadShortcut's "/"/*/Clear branches and
   // tickShotCounter) - live-only, like keypadSelectedPlayerId above; only
   // the enabled flag and beep interval on state.currentGame are saved.
@@ -750,13 +760,28 @@
       });
     }
 
+    // 15 Ball Rotation repurposes digits for score-entry (see
+    // handleKeypadShortcut) rather than picking a player by number, so
+    // the number badges would be actively misleading there - instead,
+    // the selected player's badge shows the score being typed in
+    // (e.g. "+" just after pressing it, "+15" once digits follow).
+    var scoreEntryGame = isKeypadScoreEntryGame();
     keypadOrderedPlayerIds = [];
     ordered.forEach(function (el, i) {
       var num = i < 9 ? i + 1 : null;
       var badge = el.querySelector(".keypad-number-badge");
+      var isSelected = el.dataset.keypadPlayerId === keypadSelectedPlayerId;
       if (num) keypadOrderedPlayerIds.push(el.dataset.keypadPlayerId);
-      if (badge) badge.textContent = num || "";
-      el.classList.toggle("is-keypad-selected", el.dataset.keypadPlayerId === keypadSelectedPlayerId);
+      if (badge) {
+        if (scoreEntryGame) {
+          badge.textContent = isSelected && keypadEntryMode ? "+" + keypadEntryBuffer : "";
+          badge.classList.toggle("is-entry-buffer", isSelected && keypadEntryMode);
+        } else {
+          badge.textContent = num || "";
+          badge.classList.remove("is-entry-buffer");
+        }
+      }
+      el.classList.toggle("is-keypad-selected", isSelected);
     });
   }
 
@@ -2389,8 +2414,39 @@
   // Shared by the digit shortcut and Enter's "next player" (see
   // handleKeypadShortcut) - everything that happens on an actual keypad
   // selection change, regardless of how the target was picked.
+  // True only for an actual 15 Ball Rotation game (not Quick Counter,
+  // which has no gameType/target at all) - the one game type whose
+  // keypad shortcut swaps the plain 1-9 player-select / +1-per-press
+  // scheme for score-entry mode (see handleKeypadShortcut), since a
+  // single rack can be worth up to 15 points in one shot.
+  function isKeypadScoreEntryGame() {
+    return !quickCounterMode && state.currentGame.gameType === "15ballrotation";
+  }
+
+  function cancelKeypadEntry() {
+    keypadEntryMode = false;
+    keypadEntryBuffer = "";
+  }
+
+  // Parses whatever digits were typed and adds that whole amount to the
+  // selected player's score in one requestAdjustScore call (same path
+  // the plain +/- shortcut uses, so wins/team mode/guest routing all
+  // still work) - an empty or all-zero buffer just cancels quietly,
+  // same as pressing "+" then immediately "+" again with nothing typed.
+  function finalizeKeypadEntry() {
+    var amount = parseInt(keypadEntryBuffer, 10);
+    var targetId = keypadSelectedPlayerId;
+    cancelKeypadEntry();
+    if (!isNaN(amount) && amount !== 0 && targetId) {
+      requestAdjustScore(targetId, amount);
+    } else {
+      renderScoreboard();
+    }
+  }
+
   function selectKeypadPlayer(targetId, keypadNum) {
     if (!targetId) return;
+    cancelKeypadEntry();
     // "The counter should stop when we select the next player" - an
     // explicit keypad switch away from whoever's on a run stops it
     // right here, even before the newly-selected player has scored
@@ -2424,7 +2480,16 @@
     if (isAnyOverlayOpen()) return;
     if (appRoot.classList.contains("hidden")) return;
 
+    var scoreEntryGame = isKeypadScoreEntryGame();
+
     if (e.key === "Escape") {
+      // A pending score entry cancels first (same feel as backing out of
+      // a text field) - a second Escape then deselects the player.
+      if (scoreEntryGame && keypadEntryMode) {
+        cancelKeypadEntry();
+        renderScoreboard();
+        return;
+      }
       if (keypadSelectedPlayerId) {
         keypadSelectedPlayerId = null;
         renderScoreboard();
@@ -2432,7 +2497,21 @@
       return;
     }
 
+    // 15 Ball Rotation, mid score-entry: digits build up the typed
+    // amount instead of selecting a player by number (0 included, unlike
+    // the plain 1-9 player-select below - a rotation score can start
+    // with a 0, e.g. "10"). See isKeypadScoreEntryGame/finalizeKeypadEntry.
+    if (scoreEntryGame && keypadEntryMode && /^[0-9]$/.test(e.key)) {
+      e.preventDefault();
+      keypadEntryBuffer += e.key;
+      renderScoreboard();
+      return;
+    }
+
     if (/^[1-9]$/.test(e.key)) {
+      // Selecting a player by number is exactly what 15 Ball Rotation's
+      // score-entry mode repurposes digits for - see above.
+      if (scoreEntryGame) return;
       var keypadNum = parseInt(e.key, 10);
       var targetId = keypadOrderedPlayerIds[keypadNum - 1];
       if (!targetId) return;
@@ -2447,8 +2526,13 @@
     // Enter press is what "switch focus to the next player" means in
     // practice. Wraps back to #1 after the last player, and starts at
     // #1 if nobody's selected yet (keypadSelectedPlayerId's index comes
-    // back -1, and -1 + 1 wraps to 0 via the modulo below).
+    // back -1, and -1 + 1 wraps to 0 via the modulo below). A pending
+    // score entry (15 Ball Rotation) is finalized first, so typing a
+    // number then hitting Enter both banks the score AND advances to the
+    // next player in one press - selectKeypadPlayer clears the entry
+    // state either way, even if the buffer was left empty.
     if (e.key === "Enter") {
+      if (scoreEntryGame && keypadEntryMode && keypadEntryBuffer) finalizeKeypadEntry();
       if (keypadOrderedPlayerIds.length === 0) return;
       e.preventDefault();
       var currentIdx = keypadSelectedPlayerId ? keypadOrderedPlayerIds.indexOf(keypadSelectedPlayerId) : -1;
@@ -2464,9 +2548,32 @@
       });
       if (!stillActive) {
         keypadSelectedPlayerId = null;
+        cancelKeypadEntry();
         return;
       }
       e.preventDefault();
+
+      // 15 Ball Rotation: "+" starts score-entry mode, then finalizes
+      // (banks the typed amount) on a second press - it never means
+      // "+1" here, since every rack is worth more than one point. "-"
+      // mid-entry cancels the pending number instead of a stray -1.
+      if (scoreEntryGame) {
+        if (e.key === "+") {
+          if (keypadEntryMode) finalizeKeypadEntry();
+          else {
+            keypadEntryMode = true;
+            keypadEntryBuffer = "";
+            renderScoreboard();
+          }
+        } else if (keypadEntryMode) {
+          cancelKeypadEntry();
+          renderScoreboard();
+        } else {
+          requestAdjustScore(keypadSelectedPlayerId, -1);
+        }
+        return;
+      }
+
       var isSingleRackGame = !quickCounterMode && state.currentGame.unit === "rack" && state.currentGame.target === 1;
       if (e.key === "-" && isSingleRackGame) {
         requestUndoLastWin(keypadSelectedPlayerId);
@@ -5545,7 +5652,11 @@
         currentRunPlayerName = p ? p.name : null;
         currentRunCount = 0;
       }
-      currentRunCount += 1;
+      // delta, not a flat +1 - the plain +/- buttons only ever send 1,
+      // but 15 Ball Rotation's keypad score-entry mode (see
+      // finalizeKeypadEntry) can bank a whole rack in one call, and that
+      // whole amount belongs to this same uninterrupted run.
+      currentRunCount += delta;
       if (currentRunPlayerName) checkRunRecords(currentRunPlayerName, currentRunCount);
     } else if (delta < 0 && currentRunPlayerId === playerId) {
       currentRunCount = Math.max(0, currentRunCount - 1);
