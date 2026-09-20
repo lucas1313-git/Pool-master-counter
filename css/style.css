@@ -3413,6 +3413,77 @@ input[type="number"] {
   color: var(--text-dim);
 }
 
+/* ---------- Setup Preview & Edit ---------- */
+
+/* Wider than the plain .confirm-modal-card default (400px) - this one
+   holds a whole small form, not a sentence and two buttons - and solid
+   --bg-panel rather than the felt-gradient --modal-surface most of that
+   family uses, since the body text here is small/dense (labels, field
+   values), not the large celebratory headline size that gradient reads
+   fine behind in every theme. */
+.game-setup-preview-card {
+  max-width: 560px;
+  background: var(--bg-panel);
+  color: var(--text);
+  text-align: left;
+}
+
+.game-setup-preview-title {
+  color: var(--text);
+  text-align: center;
+}
+
+.game-setup-preview-subtitle {
+  text-align: center;
+  margin: 0 0 16px;
+}
+
+.game-setup-preview-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  max-height: 55vh;
+  padding-right: 2px;
+  margin-bottom: 16px;
+}
+
+.game-setup-preview-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.game-setup-preview-section-label {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+
+.game-setup-preview-row {
+  flex-wrap: wrap;
+}
+
+.game-setup-preview-row label {
+  color: var(--text);
+}
+
+.game-setup-preview-rotation-list {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--text);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.game-setup-preview-rotation-hint {
+  margin: 0;
+}
+
 /* ---------- Delete by Dates ---------- */
 
 .delete-by-date-card {
