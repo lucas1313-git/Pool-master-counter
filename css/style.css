@@ -3794,7 +3794,14 @@ input[type="number"] {
   margin-top: 14px;
 }
 
-.help-nav-link {
+/* .rules-nav-link (the Game Rules modal's own jump links) shares this
+   look but stays a separate class from .help-nav-link on purpose - the
+   app's Help overlay wires up every .help-nav-link globally by that
+   class name alone (see helpNavLinks in app.js), and giving the Game
+   Rules modal's links the same class would silently pull them into
+   that other overlay's click handler instead of their own. */
+.help-nav-link,
+.rules-nav-link {
   display: inline-block;
   padding: 6px 12px;
   border: 1px solid var(--border);
@@ -3806,7 +3813,9 @@ input[type="number"] {
 }
 
 .help-nav-link:hover,
-.help-nav-link.is-active {
+.help-nav-link.is-active,
+.rules-nav-link:hover,
+.rules-nav-link.is-active {
   border-color: var(--accent);
   color: var(--accent);
 }
@@ -3830,13 +3839,29 @@ input[type="number"] {
   font-size: 1.05rem;
 }
 
+/* Subsection headings within a single .help-section - the Game Rules
+   modal's longer rule sets (Punishment especially) need a level below
+   h3 to break up "The break" / "Punishments" / "The 8-ball" etc., which
+   the app's own Help document never needed since its sections stay
+   flat lists. */
+.help-section h4 {
+  margin: 16px 0 6px;
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+.help-section h4:first-of-type {
+  margin-top: 4px;
+}
+
 .help-section p {
   margin: 0 0 12px;
   line-height: 1.5;
   font-size: 0.92rem;
 }
 
-.help-section ul {
+.help-section ul,
+.help-section ol {
   margin: 0 0 12px;
   padding-left: 20px;
   line-height: 1.5;
