@@ -1595,7 +1595,7 @@ input[type="number"] {
   margin: 4px auto 14px;
   background: rgba(0, 0, 0, 0.6);
   border: 2px solid rgba(255, 255, 255, 0.22);
-  color: var(--text);
+  color: #fff;
   padding: clamp(10px, 2.6vw, 20px) clamp(24px, 6vw, 44px);
   border-radius: 999px;
   font-size: clamp(2.4rem, 9vw, 3.8rem);
@@ -1620,13 +1620,13 @@ input[type="number"] {
   border-radius: 999px;
   font-size: 1.1rem;
   line-height: 1;
-  color: var(--text-dim);
+  color: rgba(255, 255, 255, 0.75);
   cursor: pointer;
 }
 
 .shot-counter-visibility-toggle:hover {
   background: rgba(0, 0, 0, 0.5);
-  color: var(--accent);
+  color: #fff;
 }
 
 /* ---------- Timed Tournament ---------- */
@@ -1644,7 +1644,7 @@ input[type="number"] {
   margin: 4px auto 14px;
   background: rgba(0, 0, 0, 0.6);
   border: 2px solid rgba(255, 154, 60, 0.55);
-  color: var(--text);
+  color: #fff;
   padding: clamp(8px, 2.2vw, 16px) clamp(18px, 5vw, 32px);
   border-radius: 999px;
 }
@@ -2040,7 +2040,7 @@ input[type="number"] {
   text-align: center;
   font-size: 1.05rem;
   font-weight: 700;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 6px 8px;
@@ -2212,11 +2212,11 @@ input[type="number"] {
 
 .team-needs-opponent-warning {
   width: 100%;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--bg-panel);
   border: 1px solid var(--danger);
   border-radius: 8px;
   padding: 8px 10px;
-  color: var(--danger);
+  color: var(--text);
   font-size: 0.85rem;
   font-weight: 700;
   text-align: center;
@@ -2232,7 +2232,7 @@ input[type="number"] {
 .member-card {
   position: relative;
   width: 100%;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 10px;
@@ -2398,7 +2398,7 @@ input[type="number"] {
 }
 
 .gamewin-details .player-stats-row {
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--bg-panel);
 }
 
 .gamewin-card .btn-primary {
@@ -2513,7 +2513,7 @@ input[type="number"] {
 }
 
 .milestone-details .player-stats-row {
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--bg-panel);
 }
 
 .milestone-card .btn-primary {
@@ -2623,7 +2623,7 @@ input[type="number"] {
 }
 
 .balls-left-input {
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--text);
@@ -3005,9 +3005,9 @@ input[type="number"] {
   margin: 0 0 20px;
   font-size: 0.88rem;
   font-weight: 600;
-  color: var(--text-dim);
+  color: var(--text);
   text-align: left;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--bg-panel);
   border-radius: 10px;
   padding: 10px 12px;
 }
@@ -3067,9 +3067,9 @@ input[type="number"] {
   margin: 0 0 20px;
   font-size: 0.88rem;
   font-weight: 600;
-  color: var(--text-dim);
+  color: var(--text);
   text-align: left;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--bg-panel);
   border-radius: 10px;
   padding: 10px 12px;
 }
@@ -3089,7 +3089,7 @@ input[type="number"] {
 }
 
 .player-conflict-row {
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 10px 12px;
@@ -3185,8 +3185,8 @@ input[type="number"] {
   margin: 0 0 18px;
   font-size: 0.88rem;
   font-weight: 600;
-  color: var(--text-dim);
-  background: rgba(0, 0, 0, 0.3);
+  color: var(--text);
+  background: var(--bg-panel);
   border-radius: 10px;
   padding: 10px 12px;
 }
@@ -3639,7 +3639,7 @@ input[type="number"] {
   color: var(--text);
   text-decoration: none;
   font-size: 0.82rem;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg-panel);
 }
 
 .help-nav-link:hover,
@@ -3761,7 +3761,7 @@ input[type="number"] {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   cursor: pointer;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg-panel);
 }
 
 .wizard-format-option:has(input:checked) {
@@ -3797,7 +3797,7 @@ input[type="number"] {
   border: 1px dashed var(--border);
   border-radius: var(--radius);
   cursor: pointer;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg-panel);
 }
 
 .wizard-temp-counter-checkbox-label:has(input:checked) {
@@ -3831,7 +3831,7 @@ input[type="number"] {
   display: flex;
   align-items: center;
   gap: 6px;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 999px;
   padding: 5px 8px 5px 12px;
@@ -3863,13 +3863,13 @@ input[type="number"] {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--bg-panel);
   border-radius: var(--radius);
   padding: 10px 14px;
 }
 
 .wizard-summary-row .label {
-  color: var(--text-dim);
+  color: var(--text);
 }
 
 .wizard-summary-row .value {
@@ -5879,8 +5879,8 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   height: 26px;
   border-radius: 50%;
   border: 1px solid var(--border);
-  background: rgba(0, 0, 0, 0.25);
-  color: var(--text-dim);
+  background: var(--bg-panel);
+  color: var(--text);
   font-size: 0.8rem;
   line-height: 1;
   cursor: pointer;
@@ -6159,13 +6159,13 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   padding: 10px 8px;
   border: 1px dashed var(--border);
   border-radius: 10px;
-  background: rgba(0, 0, 0, 0.15);
+  background: var(--bg-panel);
   text-align: center;
 }
 
 .lb-tree-wb-stub-name {
   font-size: 0.85rem;
-  color: var(--text-dim);
+  color: var(--text);
 }
 
 /* The collapsed "+" placeholder standing in for however many earlier
@@ -6294,7 +6294,7 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
 .tournament-match-side {
   padding: 6px 8px;
   border-radius: 6px;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg-panel);
   font-size: 0.88rem;
   font-weight: 600;
   white-space: nowrap;
