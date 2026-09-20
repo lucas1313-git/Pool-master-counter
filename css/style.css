@@ -1381,7 +1381,7 @@ input[type="number"] {
   border-radius: 999px;
   background: color-mix(in srgb, var(--accent) 18%, var(--bg-panel));
   border: 1px solid var(--border);
-  color: var(--accent);
+  color: var(--text);
   font-size: 0.95rem;
   font-weight: 700;
   vertical-align: middle;
@@ -4075,10 +4075,11 @@ input[type="number"] {
 .tournament-winner-banner {
   margin: 10px 0 4px;
   padding: 12px 14px;
-  background: linear-gradient(180deg, var(--felt-light) 0%, var(--felt) 100%);
+  background: var(--bg-panel);
   border: 2px solid var(--accent);
   border-radius: 10px;
-  color: var(--accent);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 35%, transparent);
+  color: var(--text);
   font-size: 1.25rem;
   font-weight: 800;
   text-align: center;
