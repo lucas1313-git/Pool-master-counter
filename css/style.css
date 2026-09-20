@@ -699,21 +699,57 @@ body {
 
 #app.focus-mode #scoreboard-panel {
   padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+/* With only a couple of players on screen, .scoreboard's existing
+   flex:1 (see the base rule above) already lets it claim the rest of
+   #scoreboard-panel's height once the header/panels above are gone -
+   the pieces here just make that leftover height actually reach the
+   cards instead of turning into blank space below them: rows share it
+   equally (floored so a busy roster with many rows never gets
+   squeezed thinner than a normal-sized card), and each card stretches
+   to fill its row rather than sitting top-aligned at its own content
+   height. */
+#app.focus-mode .scoreboard {
+  grid-auto-rows: minmax(260px, 1fr);
+  align-items: stretch;
+}
+
+#app.focus-mode .player-panel {
+  justify-content: space-evenly;
 }
 
 /* Focus Mode is meant to be read from across the room, so the live score
    numbers scale up - up to 3x their normal size - the moment a card has
-   the room to spare. Sized off the card's own width (container query
-   units) rather than a fixed multiplier or a player-count check, so it
-   naturally scales back down on its own once enough players are on
-   screen that each card gets narrower - no js layout math needed. */
-#app.focus-mode .player-panel,
-#app.focus-mode .member-card {
-  container-type: inline-size;
+   the room to spare. Sized off the card's own box (container query
+   units, keying off whichever of width/height is tighter via min())
+   rather than a fixed multiplier or a player-count check, so it scales
+   back down on its own once enough players are on screen to make each
+   card smaller in either dimension - no js layout math needed.
+   container-type:size (both axes) rather than just inline-size, since
+   the row-stretching above is exactly what now gives .player-panel a
+   real, extrinsic height for cqh units to measure. Team mode's
+   .member-card stays inline-size-only below - it never gets an
+   explicit height of its own (.team-members is plain content-flow
+   inside .team-panel, not a grid track), so sizing it off cqh here
+   would just measure whatever arbitrary height the contain box
+   collapses to and make the card's own content overflow it. */
+#app.focus-mode .player-panel {
+  container-type: size;
 }
 
-#app.focus-mode .stat-value {
-  font-size: clamp(3rem, 24cqw, 9rem);
+/* Scoped to .player-panel specifically (not a bare .stat-value/
+   .player-name rule) - both classes are reused outside it (team score,
+   quick-counter panel, tournament bracket side panels) on boxes that
+   don't get the container-type:size treatment above, where a cqh term
+   would measure a meaningless/zero block size instead of falling back
+   to the old cqw-only behavior those places still rely on. */
+#app.focus-mode .player-panel .stat-value {
+  font-size: clamp(3rem, min(24cqw, 20cqh), 9rem);
 }
 
 #app.focus-mode .stat-value.small {
@@ -722,9 +758,9 @@ body {
 
 /* Names need to read from across the room same as the score itself -
    same container-query scaling as .stat-value above, just a smaller
-   share of the card's width since the score is still the main event. */
-#app.focus-mode .player-name {
-  font-size: clamp(1.8rem, 13cqw, 4.5rem);
+   share of the card's box since the score is still the main event. */
+#app.focus-mode .player-panel .player-name {
+  font-size: clamp(1.8rem, min(13cqw, 11cqh), 4.5rem);
 }
 
 #app.focus-mode .member-name {
@@ -3964,20 +4000,20 @@ input[type="number"] {
 }
 
 .rotation-position-row {
-  margin: 0 16px 12px;
-  background: rgba(0, 0, 0, 0.25);
+  margin: 0 16px 10px;
+  background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 10px 14px;
+  padding: 6px 12px;
 }
 
 .rotation-position-label {
-  color: var(--text-dim);
+  color: var(--text);
   font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   text-align: center;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .rotation-position-track-row {
@@ -3993,15 +4029,15 @@ input[type="number"] {
   padding: 4px 8px;
   font-size: 0.85rem;
   line-height: 1;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 8px;
-  color: var(--accent);
+  color: var(--text);
   cursor: pointer;
 }
 
 .rotation-position-btn:hover {
-  background: rgba(0, 0, 0, 0.45);
+  background: color-mix(in srgb, var(--bg-card) 80%, var(--border));
 }
 
 .rotation-position-track {
@@ -4023,7 +4059,7 @@ input[type="number"] {
   width: 16px;
   height: 16px;
   background: var(--accent);
-  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 0 0 3px var(--bg-panel);
 }
 
 .rotation-position-connector {
@@ -4048,11 +4084,11 @@ input[type="number"] {
 }
 
 .rotation-position-text {
-  margin-top: 8px;
+  margin-top: 4px;
   text-align: center;
   font-weight: 700;
   font-size: 0.92rem;
-  color: var(--accent);
+  color: var(--text);
 }
 
 .player-stats-note {
