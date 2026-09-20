@@ -1467,7 +1467,7 @@ input[type="number"] {
    color everywhere in the app. */
 .rating-pronostic {
   display: inline-block;
-  margin-left: 6px;
+  margin: 0 6px;
   font-size: 0.72rem;
   font-weight: 700;
   color: var(--text-dim);
