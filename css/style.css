@@ -5596,6 +5596,15 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   vertical-align: middle;
 }
 
+/* Scoreboard name row only, not the base rule - .player-link-icon has
+   zero margin of its own (other contexts, e.g. .contact-sheet-row
+   below, already space it via their own flex gap instead), so here it
+   was sitting flush against whatever precedes it (.rating-badge, or
+   .rating-pronostic when shown) with no breathing room at all. */
+.player-name .player-link-icon {
+  margin: 0 6px;
+}
+
 .player-link-icon svg {
   display: block;
 }
