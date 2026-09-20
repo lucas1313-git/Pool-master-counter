@@ -93,6 +93,7 @@
   "common.or": "o",
   "common.rating": "Rating",
   "common.ratingBadgeTitle": "Rating (Elo-style, hango sa FargoRate scale)",
+  "common.ratingPronosticTitle": "Tinatayang pagbabago sa rating kapag nanalo o natalo ang panig na ito ngayon",
   "common.removeName": "Alisin si {{name}}",
   "common.save": "I-save",
   "common.seconds": "segundo",

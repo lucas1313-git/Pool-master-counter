@@ -1456,6 +1456,33 @@ input[type="number"] {
   font-variant-numeric: tabular-nums;
 }
 
+/* A live "+X / -Y" preview of the rating swing at stake in the current
+   game (see ratingPronosticVsOpponent/teamRatingPronosticVsOpponent) -
+   deliberately smaller and quieter than .rating-badge itself (the
+   actual rating, not a projection, stays the visually louder of the
+   two) since this is a secondary, "for the curious" detail rather than
+   the headline number. .is-up/.is-down reuse the same green/red the
+   rating history section already uses for a real delta
+   (.history-rating-delta), so a rating going up or down reads the same
+   color everywhere in the app. */
+.rating-pronostic {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  vertical-align: middle;
+  font-variant-numeric: tabular-nums;
+}
+
+.rating-pronostic .is-up {
+  color: #6fcf6f;
+}
+
+.rating-pronostic .is-down {
+  color: var(--danger);
+}
+
 /* A persistent club/squad tag (see buildClubTeamBadge) - deliberately
    styled in --info rather than --accent so it reads as a distinct kind
    of badge from the rating right next to it. Dashed and dimmer when

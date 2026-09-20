@@ -93,6 +93,7 @@
   "common.or": "or",
   "common.rating": "Rating",
   "common.ratingBadgeTitle": "Rating (Elo-style, FargoRate-inspired scale)",
+  "common.ratingPronosticTitle": "Projected rating change if this side wins or loses right now",
   "common.removeName": "Remove {{name}}",
   "common.save": "Save",
   "common.seconds": "seconds",

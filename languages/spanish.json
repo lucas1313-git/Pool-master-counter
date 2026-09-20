@@ -93,6 +93,7 @@
   "common.or": "o",
   "common.rating": "Clasificación",
   "common.ratingBadgeTitle": "Clasificación (estilo Elo, inspirada en la escala de FargoRate)",
+  "common.ratingPronosticTitle": "Cambio de clasificación proyectado si este lado gana o pierde ahora mismo",
   "common.removeName": "Quitar a {{name}}",
   "common.save": "Guardar",
   "common.seconds": "segundos",

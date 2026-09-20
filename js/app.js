@@ -3702,6 +3702,20 @@
     return badge;
   }
 
+  // The one other active player, but only when there's exactly one -
+  // with 3+ people simultaneously "Playing" a win is credited against
+  // every one of them at once (see the opponentNames.forEach in
+  // creditWin), so "if you lose" would mean losing to any of several
+  // different people at different rating gaps. Rather than guessing
+  // which one, the rating pronostic (see ratingPronosticVsOpponent)
+  // simply doesn't show at all outside the clean two-player case.
+  function soleActiveOpponent(player) {
+    var others = activePlayers().filter(function (p) {
+      return p.id !== player.id;
+    });
+    return others.length === 1 ? others[0] : null;
+  }
+
   function buildIndividualPanel(player) {
     var panel = document.createElement("div");
     panel.className = "player-panel";
@@ -3710,6 +3724,10 @@
     name.className = "player-name";
     buildPlayerNameLabel(name, player.name, false);
     name.appendChild(buildRatingBadge(player.name));
+    var soleOpponent = soleActiveOpponent(player);
+    if (soleOpponent) {
+      name.appendChild(buildRatingPronosticEl(ratingPronosticVsOpponent(player.name, getPlayerRating(soleOpponent.name))));
+    }
     name.appendChild(buildPlayerLinkIcon(player.name));
     panel.appendChild(name);
 
@@ -3843,6 +3861,21 @@
       warning.className = "team-needs-opponent-warning";
       warning.textContent = T("scoreboard.teamNeedsOpponent");
       panel.appendChild(warning);
+    } else {
+      // Team mode is always exactly A vs B (see gameSetup.teamA/teamB),
+      // so unlike individual mode's soleActiveOpponent guard, "the
+      // opponent" is never ambiguous here - the other team, whichever
+      // one this one isn't.
+      var opponentTeamMembers = teamMembersLive(teamId === "A" ? "B" : "A").map(function (p) {
+        return p.name;
+      });
+      var teamPronostic = teamRatingPronosticVsOpponent(
+        members.map(function (p) {
+          return p.name;
+        }),
+        opponentTeamMembers
+      );
+      panel.appendChild(buildRatingPronosticEl(teamPronostic));
     }
 
     var wins = state.teamWins[teamId] || 0;
@@ -9093,6 +9126,59 @@
   // two-step K-factor instead of a continuous blend.
   function ratingKFor(gamesPlayed) {
     return gamesPlayed < RATING_PROVISIONAL_GAMES ? RATING_K_PROVISIONAL : RATING_K_ESTABLISHED;
+  }
+
+  // A live "+X if you win / -Y if you lose" preview of the rating swing
+  // a single named opponent represents right now, using the exact same
+  // math applyPairwiseRatingResult uses when a win is actually credited
+  // - own rating/K-factor for each side, the other's rating only for the
+  // expected-score term - just read-only (getPlayerRatingEntry, never
+  // ensureRatingEntry, so merely opening the scoreboard can't create a
+  // rating entry for someone who hasn't played a rated game yet).
+  function ratingPronosticVsOpponent(name, opponentRating) {
+    var entry = getPlayerRatingEntry(name);
+    var myRating = entry ? entry.rating : DEFAULT_RATING;
+    var gamesPlayed = entry ? entry.gamesPlayed : 0;
+    var k = ratingKFor(gamesPlayed);
+    var expected = eloExpectedScore(myRating, opponentRating);
+    return { win: Math.round(k * (1 - expected)), lose: -Math.round(k * expected) };
+  }
+
+  // Same idea, but for a team result (see applyTeamRatingResult) - a
+  // flat K-factor and each side's average rating instead of a per-player
+  // K, since that's what actually gets applied to every member of the
+  // team alike. Mirrors ratingPronosticVsOpponent's win/lose split
+  // above, not just "lose = -win": applyTeamRatingResult recomputes
+  // expectedWinner fresh from whichever side actually won, so unless
+  // the match is exactly 50/50 the win and lose swings are genuinely
+  // different sizes (the favorite risks more than it stands to gain).
+  function teamRatingPronosticVsOpponent(teamNames, opponentNames) {
+    var myAvg = averageRating(teamNames);
+    var oppAvg = averageRating(opponentNames);
+    var expected = eloExpectedScore(myAvg, oppAvg);
+    return { win: Math.round(RATING_K_PROVISIONAL * (1 - expected)), lose: -Math.round(RATING_K_PROVISIONAL * expected) };
+  }
+
+  // Small "+X / -Y" preview element (see ratingPronosticVsOpponent above)
+  // - only meaningful with exactly one well-defined opponent, since with
+  // 3+ active players in individual mode a "lose" outcome could mean
+  // losing to any of several different people at different rating gaps;
+  // callers simply don't call this (or pass null) in that case rather
+  // than this function guessing which opponent to use.
+  function buildRatingPronosticEl(pronostic) {
+    var el = document.createElement("span");
+    el.className = "rating-pronostic";
+    el.title = T("common.ratingPronosticTitle");
+    var winSpan = document.createElement("span");
+    winSpan.className = "is-up";
+    winSpan.textContent = "+" + pronostic.win;
+    var loseSpan = document.createElement("span");
+    loseSpan.className = "is-down";
+    loseSpan.textContent = String(pronostic.lose);
+    el.appendChild(winSpan);
+    el.appendChild(document.createTextNode(" / "));
+    el.appendChild(loseSpan);
+    return el;
   }
 
   function bumpPlayerRating(name, delta, ts) {
