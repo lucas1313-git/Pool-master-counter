@@ -5586,6 +5586,14 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   padding: 0;
   border-radius: 50%;
   flex-shrink: 0;
+  /* Sits inline next to .rating-badge/.rating-pronostic (both
+     vertical-align:middle) wherever a name row isn't itself a flex
+     container (e.g. .player-name on the scoreboard) - inline-flex
+     defaults to baseline alignment like plain text, which reads
+     visibly lower than those two. Harmless where a parent row IS flex
+     (e.g. .contact-sheet-row below), since vertical-align only affects
+     normal inline flow, never a flex item's own cross-axis position. */
+  vertical-align: middle;
 }
 
 .player-link-icon svg {
