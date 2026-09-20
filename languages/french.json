@@ -101,7 +101,7 @@
   "common.vsName": "vs {{name}}",
   "common.wins": "victoires",
   "common.you": "Vous",
-  "confirm.abandonTournament": "Abandonner ce tournoi ? Le tableau sera effacé, mais chaque match déjà joué reste enregistré dans les statistiques de chaque joueur.",
+  "confirm.abandonTournament": "Abandonner ce tournoi ? Le tableau sera effacé et le classement de chaque joueur reviendra à ce qu'il était avant ce tournoi, mais chaque match déjà joué reste enregistré dans les statistiques de chaque joueur.",
   "confirm.alsoEndsTournamentNote": "Votre tournoi en cours sera également terminé et son tableau effacé (les matchs déjà joués restent enregistrés dans les statistiques de chaque joueur).",
   "confirm.areYouSure": "Êtes-vous sûr ? Cette action est irréversible.",
   "confirm.fullResetAreYouCertain": "Êtes-vous absolument certain ? Cette action est irréversible (à part le fichier de sauvegarde qui vient de se télécharger).",
