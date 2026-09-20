@@ -1890,14 +1890,26 @@ input[type="number"] {
 }
 
 /* 15 Ball Rotation's keypad score-entry mode (see handleKeypadShortcut) -
-   the same badge spot as a plain number, but widened into a pill so a
-   multi-digit rotation score ("+15") still fits on one line. */
+   the same badge spot as a plain number, but widened into a taller pill
+   (bigger than the base 42px/24px badge, not smaller) so the number
+   being typed in is easy to read at a glance from across the table,
+   while still fitting a multi-digit rotation score ("+15") on one line. */
 .keypad-number-badge.is-entry-buffer {
   width: auto;
-  min-width: 42px;
-  padding: 0 10px;
-  border-radius: 21px;
-  font-size: 20px;
+  min-width: 64px;
+  height: 56px;
+  padding: 0 16px;
+  border-radius: 28px;
+  font-size: 32px;
+}
+
+/* The entry-buffer pill is taller than the plain 42px badge the shared
+   padding-top above clears for, so it needs its own larger clearance -
+   more specific than (and placed after) that general rule, so it wins
+   only while an entry is actually showing. */
+.player-panel:has(.keypad-number-badge.is-entry-buffer),
+.member-card:has(.keypad-number-badge.is-entry-buffer) {
+  padding-top: 66px;
 }
 
 .player-name {

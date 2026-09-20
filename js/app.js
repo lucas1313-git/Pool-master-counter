@@ -657,14 +657,20 @@
   var keypadSelectedPlayerId = null;
 
   // 15 Ball Rotation's keypad score-entry mode (see handleKeypadShortcut
-  // and isKeypadScoreEntryGame): "+" starts it, digits accumulate into
-  // keypadEntryBuffer, a second "+" (or Enter) adds that whole number to
-  // the selected player's score in one shot - large rotation scores (11,
-  // 15...) don't fit the plain 1-9-selects-a-player / +/- adds-one scheme
-  // the rest of the app's keypad shortcut uses. Session-only, like
+  // and isKeypadScoreEntryGame): "+" or "-" starts it, digits accumulate
+  // into keypadEntryBuffer, and a repeat press of either key (or Enter)
+  // banks that whole number onto the selected player's score in one shot
+  // - large rotation scores (11, 15...) don't fit the plain
+  // 1-9-selects-a-player / +/- adds-one scheme the rest of the app's
+  // keypad shortcut uses. keypadEntrySign (+1/-1) tracks which of "+"/"-"
+  // armed the current entry, so "+12+15+1+" adds three numbers and
+  // "-2-12-5-" subtracts three, and either key mid-entry both banks the
+  // pending number AND re-arms for the next one with its own sign in the
+  // same press - see finalizeKeypadEntry. Session-only, like
   // keypadSelectedPlayerId above.
   var keypadEntryMode = false;
   var keypadEntryBuffer = "";
+  var keypadEntrySign = 1;
 
   // Shot counter (see handleKeypadShortcut's "/"/*/Clear branches and
   // tickShotCounter) - live-only, like keypadSelectedPlayerId above; only
@@ -774,7 +780,7 @@
       if (num) keypadOrderedPlayerIds.push(el.dataset.keypadPlayerId);
       if (badge) {
         if (scoreEntryGame) {
-          badge.textContent = isSelected && keypadEntryMode ? "+" + keypadEntryBuffer : "";
+          badge.textContent = isSelected && keypadEntryMode ? (keypadEntrySign < 0 ? "-" : "+") + keypadEntryBuffer : "";
           badge.classList.toggle("is-entry-buffer", isSelected && keypadEntryMode);
         } else {
           badge.textContent = num || "";
@@ -2426,19 +2432,34 @@
   function cancelKeypadEntry() {
     keypadEntryMode = false;
     keypadEntryBuffer = "";
+    keypadEntrySign = 1;
   }
 
-  // Parses whatever digits were typed and adds that whole amount to the
-  // selected player's score in one requestAdjustScore call (same path
-  // the plain +/- shortcut uses, so wins/team mode/guest routing all
-  // still work) - an empty or all-zero buffer just cancels quietly,
-  // same as pressing "+" then immediately "+" again with nothing typed.
-  function finalizeKeypadEntry() {
+  // Parses whatever digits were typed and adds (or, sign permitting,
+  // subtracts) that whole amount to the selected player's score in one
+  // requestAdjustScore call (same path the plain +/- shortcut uses, so
+  // wins/team mode/guest routing all still work) - an empty or all-zero
+  // buffer just cancels/re-arms quietly, same as pressing "+" then
+  // immediately "+" again with nothing typed.
+  //
+  // `rearmSign`, when given (+1/-1), leaves entry mode armed right away
+  // for another number with that sign instead of fully exiting it - the
+  // same "+"/"-" press that banks the current number is what starts the
+  // next one, so "+12+15+1+" or "-2-12-5-" never needs an extra press in
+  // between. Omitted for Enter/Clear/Escape, which bank (if there's
+  // anything pending) and then leave entry mode off entirely.
+  function finalizeKeypadEntry(rearmSign) {
     var amount = parseInt(keypadEntryBuffer, 10);
     var targetId = keypadSelectedPlayerId;
-    cancelKeypadEntry();
+    var sign = keypadEntrySign;
+    if (rearmSign) {
+      keypadEntryBuffer = "";
+      keypadEntrySign = rearmSign;
+    } else {
+      cancelKeypadEntry();
+    }
     if (!isNaN(amount) && amount !== 0 && targetId) {
-      requestAdjustScore(targetId, amount);
+      requestAdjustScore(targetId, amount * sign);
     } else {
       renderScoreboard();
     }
@@ -2494,6 +2515,18 @@
         keypadSelectedPlayerId = null;
         renderScoreboard();
       }
+      return;
+    }
+
+    // Numberpad Clear: wipes a pending 15 Ball Rotation entry outright
+    // (no banking, unlike "+"/"-" mid-entry) - the same cancel Escape
+    // does, just reachable from the numpad itself. Only intercepted
+    // while there's actually something to clear, so it still falls
+    // through to the shot counter's own Clear handling below otherwise.
+    if (scoreEntryGame && keypadEntryMode && e.key === "Clear") {
+      e.preventDefault();
+      cancelKeypadEntry();
+      renderScoreboard();
       return;
     }
 
@@ -2553,23 +2586,23 @@
       }
       e.preventDefault();
 
-      // 15 Ball Rotation: "+" starts score-entry mode, then finalizes
-      // (banks the typed amount) on a second press - it never means
-      // "+1" here, since every rack is worth more than one point. "-"
-      // mid-entry cancels the pending number instead of a stray -1.
+      // 15 Ball Rotation: "+"/"-" both start score-entry mode (with
+      // their own sign) and both bank+re-arm on a repeat press - neither
+      // ever means a bare +1/-1 here, since every rack is worth more
+      // than one point. Mid-entry, whichever key is pressed banks the
+      // pending number with the CURRENT sign, then immediately arms a
+      // fresh entry with the sign of the key that was just pressed, so
+      // "+12+15+1+" adds three numbers and "-2-12-5-" subtracts three,
+      // all without an extra press in between - see finalizeKeypadEntry.
       if (scoreEntryGame) {
-        if (e.key === "+") {
-          if (keypadEntryMode) finalizeKeypadEntry();
-          else {
-            keypadEntryMode = true;
-            keypadEntryBuffer = "";
-            renderScoreboard();
-          }
-        } else if (keypadEntryMode) {
-          cancelKeypadEntry();
-          renderScoreboard();
+        var sign = e.key === "+" ? 1 : -1;
+        if (keypadEntryMode) {
+          finalizeKeypadEntry(sign);
         } else {
-          requestAdjustScore(keypadSelectedPlayerId, -1);
+          keypadEntryMode = true;
+          keypadEntryBuffer = "";
+          keypadEntrySign = sign;
+          renderScoreboard();
         }
         return;
       }
@@ -5659,7 +5692,11 @@
       currentRunCount += delta;
       if (currentRunPlayerName) checkRunRecords(currentRunPlayerName, currentRunCount);
     } else if (delta < 0 && currentRunPlayerId === playerId) {
-      currentRunCount = Math.max(0, currentRunCount - 1);
+      // delta, not a flat -1, for the same reason as the positive branch
+      // above - 15 Ball Rotation's score-entry mode can now subtract a
+      // whole multi-point correction in one call (e.g. "-12"), and the
+      // run streak should shrink by that whole amount, not just by 1.
+      currentRunCount = Math.max(0, currentRunCount + delta);
     }
   }
 
