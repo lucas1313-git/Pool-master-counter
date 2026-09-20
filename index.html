@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260920j">
+<link rel="stylesheet" href="css/style.css?v=20260920k">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -207,6 +207,7 @@
         <div class="row">
           <label for="game-type" data-i18n="gameSetup.game">Game</label>
           <select id="game-type"></select>
+          <button type="button" id="btn-game-rules-info" class="format-info-btn" data-i18n-aria-label="gameRules.buttonAria" aria-label="Special rules for Punishment, 15 Ball Rotation, and 8 Ball Rotation">❓</button>
           <label for="game-target" data-i18n="gameSetup.target">Target</label>
           <input type="number" id="game-target" min="1" max="500" value="1">
           <select id="game-target-unit-select">
@@ -1150,6 +1151,30 @@
   </div>
 </div>
 
+<!-- Rules for the game types that don't play like standard, well-known
+     pool - the actual rule text lives in rules/punishment.html and
+     rules/rotation.html (fetched and injected into #game-rules-body on
+     first open, see loadGameRulesContent), not inline here or in the
+     app's own Help document above, so it stays easy to find and edit on
+     its own regardless of language/UI chrome changes. -->
+<div id="game-rules-overlay" class="help-overlay hidden">
+  <div class="help-card">
+    <div class="help-header">
+      <button type="button" id="btn-game-rules-close" class="wizard-close-btn" aria-label="Close game rules" data-i18n-aria-label="gameRules.closeAriaLabel">×</button>
+      <h2 class="help-title" data-i18n="gameRules.title">📜 Special Game Rules</h2>
+      <p class="help-intro" data-i18n="gameRules.intro">House rules for the game types that play a little differently — jump to any of them below.</p>
+
+      <nav class="help-nav">
+        <a href="#rules-section-punishment" class="rules-nav-link" data-i18n="gameRules.nav.punishment">8 Ball Punishment</a>
+        <a href="#rules-section-15ballrotation" class="rules-nav-link" data-i18n="gameRules.nav.rotation15">15 Ball Rotation</a>
+        <a href="#rules-section-8ballrotation" class="rules-nav-link" data-i18n="gameRules.nav.rotation8">8 Ball Rotation</a>
+      </nav>
+    </div>
+
+    <div class="help-body" id="game-rules-body"></div>
+  </div>
+</div>
+
 <div id="view-player-page" class="hidden">
 
   <header class="app-header player-page-header">
@@ -1604,6 +1629,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260920j"></script>
+<script src="js/app.js?v=20260920k"></script>
 </body>
 </html>
