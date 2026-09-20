@@ -1690,6 +1690,13 @@
     document.getElementById("btn-open-help-wizard")
   ];
 
+  var btnGameRulesInfo = document.getElementById("btn-game-rules-info");
+  var gameRulesOverlay = document.getElementById("game-rules-overlay");
+  var btnGameRulesClose = document.getElementById("btn-game-rules-close");
+  var gameRulesBody = document.getElementById("game-rules-body");
+  var gameRulesNavLinks = document.querySelectorAll(".rules-nav-link");
+  var gameRulesContentPromise = null;
+
   var btnTestOnboarding = document.getElementById("btn-test-onboarding");
   var btnOpenWizard = document.getElementById("btn-open-wizard");
   var wizardOverlay = document.getElementById("wizard-overlay");
@@ -12332,6 +12339,45 @@
     helpOverlay.classList.add("hidden");
   }
 
+  // The rule text itself lives in rules/punishment.html and
+  // rules/rotation.html, not inline in this file or in index.html (see
+  // the comment above #game-rules-overlay) - fetched once on first open
+  // and cached in gameRulesContentPromise so re-opening or jumping
+  // between sections never re-fetches. Both files are plain HTML
+  // fragments (a couple of .help-section blocks each, same markup the
+  // app's own Help document uses) that get concatenated straight into
+  // #game-rules-body.
+  function loadGameRulesContent() {
+    if (!gameRulesContentPromise) {
+      gameRulesContentPromise = Promise.all([
+        fetch("rules/punishment.html").then(function (r) { return r.text(); }),
+        fetch("rules/rotation.html").then(function (r) { return r.text(); })
+      ]).then(function (parts) {
+        gameRulesBody.innerHTML = parts[0] + parts[1];
+      });
+    }
+    return gameRulesContentPromise;
+  }
+
+  // Mirrors scrollHelpToSection above - same sticky-header offset math,
+  // just scoped to the Game Rules modal's own card/header instead.
+  function scrollGameRulesToSection(targetId) {
+    var target = document.getElementById(targetId);
+    var card = gameRulesOverlay.querySelector(".help-card");
+    var header = gameRulesOverlay.querySelector(".help-header");
+    if (!target || !card || !header) return;
+    card.scrollTop = target.offsetTop - header.offsetHeight - 8;
+  }
+
+  function openGameRules() {
+    gameRulesOverlay.classList.remove("hidden");
+    loadGameRulesContent();
+  }
+
+  function closeGameRules() {
+    gameRulesOverlay.classList.add("hidden");
+  }
+
   function finalizeWizardAndStart() {
     // Quick Counter's tally is free-form (can be negative, has no
     // relation to any target) — never carry it into a real game or a
@@ -20587,6 +20633,24 @@
         link.classList.toggle("is-active", link === a);
       });
       scrollHelpToSection(targetId);
+    });
+  });
+
+  btnGameRulesInfo.addEventListener("click", openGameRules);
+  btnGameRulesClose.addEventListener("click", closeGameRules);
+  gameRulesOverlay.addEventListener("click", function (e) {
+    if (e.target === gameRulesOverlay) closeGameRules();
+  });
+  Array.prototype.forEach.call(gameRulesNavLinks, function (a) {
+    a.addEventListener("click", function (e) {
+      e.preventDefault();
+      var targetId = a.getAttribute("href").slice(1);
+      Array.prototype.forEach.call(gameRulesNavLinks, function (link) {
+        link.classList.toggle("is-active", link === a);
+      });
+      loadGameRulesContent().then(function () {
+        scrollGameRulesToSection(targetId);
+      });
     });
   });
 
