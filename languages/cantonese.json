@@ -693,6 +693,7 @@
   "toast.leaderboardCopied": "排行榜已複製。",
   "toast.letsPlay": "開波喇！🎱",
   "toast.loadedGameSetup": "已載入設定：「{{label}}」。",
+  "toast.loadedRosterListPrevails": "已載入「{{label}}」——加咗 {{addedCount}} 位，轉咗 {{standbyCount}} 位去候場。",
   "toast.loadedRotation": "已載入輪換：「{{label}}」。",
   "toast.noSavedListsToReset": "冇已儲存嘅玩家名單或者陣容玩家可以重設。",
   "toast.noStatsModeNothingSaved": "「唔記錄統計」模式已開啟——冇嘢被儲存。",

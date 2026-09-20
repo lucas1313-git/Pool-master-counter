@@ -693,6 +693,7 @@
   "toast.leaderboardCopied": "Clasificación copiada.",
   "toast.letsPlay": "¡Vamos a jugar! 🎱",
   "toast.loadedGameSetup": "Configuración cargada: «{{label}}».",
+  "toast.loadedRosterListPrevails": "Lista «{{label}}» cargada — {{addedCount}} añadidos, {{standbyCount}} pasados a Standby.",
   "toast.loadedRotation": "Rotación cargada: «{{label}}».",
   "toast.noSavedListsToReset": "No hay listas de jugadores guardadas ni jugadores en la plantilla para restablecer.",
   "toast.noStatsModeNothingSaved": "El modo sin estadísticas está activado — no se guardó nada.",
