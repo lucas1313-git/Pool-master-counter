@@ -1912,10 +1912,16 @@ input[type="number"] {
    half of the original too-large pass (36cqw/170px) - sized down twice
    now on direct feedback that it read as oversized at the table, not
    from the card-fit math alone. max-width below is just a safety net
-   for an unexpected extreme (e.g. a stray 3-digit entry). */
+   for an unexpected extreme (e.g. a stray 3-digit entry).
+   top/left bumped to 14px (from the plain circular badge's 8px) so the
+   bigger rectangle reads as a separate shape floating over the card
+   instead of looking flush with its corner; max-width's 28px subtracted
+   is that same 14px on both sides, keeping the gap symmetric. */
 .keypad-number-badge.is-entry-buffer {
+  top: 14px;
+  left: 14px;
   width: auto;
-  max-width: calc(100cqw - 16px);
+  max-width: calc(100cqw - 28px);
   height: 1.75em;
   padding: 0 0.3em;
   border-radius: var(--radius);
@@ -1926,13 +1932,13 @@ input[type="number"] {
 
 /* The entry-buffer badge's height (see above) scales with the card's
    own width, so its clearance below the badge has to track that same
-   value instead of a fixed px number - 8px top offset + the badge's
-   own height (1.75 times its font-size) + a small gap. More specific
-   than (and placed after) the plain-badge clearance rule above, so it
-   wins only while an entry is actually showing. */
+   value instead of a fixed px number - 14px top offset (see above) +
+   the badge's own height (1.75 times its font-size) + a small gap.
+   More specific than (and placed after) the plain-badge clearance rule
+   above, so it wins only while an entry is actually showing. */
 .player-panel:has(.keypad-number-badge.is-entry-buffer),
 .member-card:has(.keypad-number-badge.is-entry-buffer) {
-  padding-top: calc(8px + 1.75 * clamp(20px, 12.6cqw, 60px) + 6px);
+  padding-top: calc(14px + 1.75 * clamp(20px, 12.6cqw, 60px) + 6px);
 }
 
 .player-name {
