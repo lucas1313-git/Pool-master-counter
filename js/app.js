@@ -1892,6 +1892,33 @@
   var gameSetupManageSelectAllCheckbox = document.getElementById("game-setup-manage-select-all-checkbox");
   var btnGameSetupManageDelete = document.getElementById("btn-game-setup-manage-delete");
   var btnGameSetupManageCancel = document.getElementById("btn-game-setup-manage-cancel");
+
+  var btnGameSetupPreview = document.getElementById("btn-game-setup-preview");
+  var gameSetupPreviewOverlay = document.getElementById("game-setup-preview-overlay");
+  var gameSetupPreviewSubtitle = document.getElementById("game-setup-preview-subtitle");
+  var gameSetupPreviewTypeSelect = document.getElementById("game-setup-preview-type");
+  var gameSetupPreviewTargetInput = document.getElementById("game-setup-preview-target");
+  var gameSetupPreviewUnitSelect = document.getElementById("game-setup-preview-unit");
+  var gameSetupPreviewModeIndividualRadio = document.getElementById("game-setup-preview-mode-individual");
+  var gameSetupPreviewModeTeamsRadio = document.getElementById("game-setup-preview-mode-teams");
+  var gameSetupPreviewRaceModeRacetoRadio = document.getElementById("game-setup-preview-race-mode-raceto");
+  var gameSetupPreviewRaceModeSingleRadio = document.getElementById("game-setup-preview-race-mode-single");
+  var gameSetupPreviewRaceToRow = document.getElementById("game-setup-preview-race-to-row");
+  var gameSetupPreviewRaceToInput = document.getElementById("game-setup-preview-race-to");
+  var gameSetupPreviewTimedEnabledCheckbox = document.getElementById("game-setup-preview-timed-enabled");
+  var gameSetupPreviewTimedRow = document.getElementById("game-setup-preview-timed-row");
+  var gameSetupPreviewTimedMinutesInput = document.getElementById("game-setup-preview-timed-minutes");
+  var gameSetupPreviewRotationEnabledCheckbox = document.getElementById("game-setup-preview-rotation-enabled");
+  var gameSetupPreviewRotationEveryRow = document.getElementById("game-setup-preview-rotation-every-row");
+  var gameSetupPreviewRotationEveryInput = document.getElementById("game-setup-preview-rotation-every");
+  var gameSetupPreviewRotationList = document.getElementById("game-setup-preview-rotation-list");
+  var gameSetupPreviewRotationHint = document.getElementById("game-setup-preview-rotation-hint");
+  var gameSetupPreviewFairRaceEnabledCheckbox = document.getElementById("game-setup-preview-fair-race-enabled");
+  var gameSetupPreviewShotCounterEnabledCheckbox = document.getElementById("game-setup-preview-shot-counter-enabled");
+  var gameSetupPreviewShotCounterRow = document.getElementById("game-setup-preview-shot-counter-row");
+  var gameSetupPreviewShotCounterBeepInput = document.getElementById("game-setup-preview-shot-counter-beep");
+  var btnGameSetupPreviewLoad = document.getElementById("btn-game-setup-preview-load");
+  var btnGameSetupPreviewCancel = document.getElementById("btn-game-setup-preview-cancel");
   var gameTypeSelect = document.getElementById("game-type");
   var gameTargetInput = document.getElementById("game-target");
   var gameTargetUnitSelect = document.getElementById("game-target-unit-select");
@@ -2524,7 +2551,7 @@
   document.addEventListener("keydown", handleOverlayEnterEscape);
 
   function populateGameTypeSelects() {
-    [gameTypeSelect, rotationAddType, tournamentGameTypeSelect, wizardGameTypeSelect, wizardRotationAddType].forEach(function (select) {
+    [gameTypeSelect, rotationAddType, tournamentGameTypeSelect, wizardGameTypeSelect, wizardRotationAddType, gameSetupPreviewTypeSelect].forEach(function (select) {
       select.innerHTML = "";
       GAME_TYPE_LIST.forEach(function (t) {
         var opt = document.createElement("option");
@@ -11125,11 +11152,13 @@
       gameSetupLoadSelect.appendChild(opt);
       gameSetupLoadSelect.disabled = true;
       btnGameSetupLoad.disabled = true;
+      btnGameSetupPreview.disabled = true;
       btnGameSetupManage.disabled = true;
       return;
     }
     gameSetupLoadSelect.disabled = false;
     btnGameSetupLoad.disabled = false;
+    btnGameSetupPreview.disabled = false;
     btnGameSetupManage.disabled = false;
     SAVED_GAME_SETUPS.forEach(function (s, i) {
       var o = document.createElement("option");
@@ -11268,10 +11297,17 @@
     applyRotationIfDue();
   }
 
-  function loadSelectedGameSetup() {
-    var idx = parseInt(gameSetupLoadSelect.value, 10);
-    var setup = SAVED_GAME_SETUPS[idx];
-    if (!setup) return;
+  // Applies a setup object (either one taken verbatim from SAVED_GAME_SETUPS,
+  // or one hand-edited in the preview popup below) to state, syncs every
+  // main-panel control to match, and re-renders - the common tail shared by
+  // "Load Setup" and the preview popup's own "Load Setup" button, so both
+  // paths stay in lockstep instead of drifting apart over time. toastLabel
+  // is passed separately (rather than always deriving it from the setup)
+  // since the preview popup's edited setup has no saved id/label of its own
+  // to describe itself with - saveGameSetupSnapshotIfNew (already called
+  // wherever a game/session actually starts) is what turns a genuinely new
+  // combination loaded this way into a saved entry, not this function.
+  function applyGameSetupAndSyncUI(setup, toastLabel) {
     loadGameSetupEntry(setup);
 
     gameTypeSelect.value = state.currentGame.gameType;
@@ -11298,7 +11334,106 @@
     applyRotationIfDue();
     renderAll();
     updateCurrentGameSummary();
-    showToast(T("toast.loadedGameSetup", { label: gameSetupDisplayLabel(setup) }));
+    showToast(T("toast.loadedGameSetup", { label: toastLabel }));
+  }
+
+  function loadSelectedGameSetup() {
+    var idx = parseInt(gameSetupLoadSelect.value, 10);
+    var setup = SAVED_GAME_SETUPS[idx];
+    if (!setup) return;
+    applyGameSetupAndSyncUI(setup, gameSetupDisplayLabel(setup));
+  }
+
+  // ---------------------------------------------------------------------
+  // Setup Preview & Edit popup - the "?" beside Load Setup. Shows every
+  // field a saved setup carries in plain, editable form instead of just
+  // the terse one-line dropdown label, so it's actually clear what's about
+  // to be loaded before committing to it. The rotation LINEUP itself stays
+  // read-only (see the hint in the popup) - editing individual steps here
+  // would mean re-building the whole dedicated rotation editor a second
+  // time in miniature, so only whether rotation runs and how often it
+  // switches are editable; the full lineup is still one tap away in
+  // Current Session's own Games Rotation section.
+  // ---------------------------------------------------------------------
+
+  var gameSetupPreviewOriginal = null;
+
+  function renderGameSetupPreviewRotationList(setup) {
+    var hasSteps = setup.rotation.order.length > 0;
+    gameSetupPreviewRotationList.classList.toggle("hidden", !hasSteps);
+    gameSetupPreviewRotationHint.classList.toggle("hidden", !hasSteps);
+    if (hasSteps) gameSetupPreviewRotationList.textContent = rotationLabelFor(setup.rotation.order);
+  }
+
+  function openGameSetupPreview() {
+    var idx = parseInt(gameSetupLoadSelect.value, 10);
+    var setup = SAVED_GAME_SETUPS[idx];
+    if (!setup) return;
+    gameSetupPreviewOriginal = setup;
+
+    gameSetupPreviewSubtitle.textContent = gameSetupDisplayLabel(setup);
+    gameSetupPreviewTypeSelect.value = setup.gameType;
+    gameSetupPreviewTargetInput.value = setup.target;
+    gameSetupPreviewUnitSelect.value = setup.unit;
+    gameSetupPreviewModeIndividualRadio.checked = setup.mode !== "teams";
+    gameSetupPreviewModeTeamsRadio.checked = setup.mode === "teams";
+    gameSetupPreviewRaceModeSingleRadio.checked = setup.raceToWinsTarget === 1;
+    gameSetupPreviewRaceModeRacetoRadio.checked = setup.raceToWinsTarget !== 1;
+    gameSetupPreviewRaceToRow.classList.toggle("hidden", setup.raceToWinsTarget === 1);
+    gameSetupPreviewRaceToInput.value = setup.raceToWinsTarget === 1 ? 5 : setup.raceToWinsTarget;
+    gameSetupPreviewTimedEnabledCheckbox.checked = !!setup.timedTournamentEnabled;
+    gameSetupPreviewTimedRow.classList.toggle("hidden", !setup.timedTournamentEnabled);
+    gameSetupPreviewTimedMinutesInput.value = setup.timedTournamentMinutes || 60;
+    gameSetupPreviewRotationEnabledCheckbox.checked = !!setup.rotation.enabled;
+    gameSetupPreviewRotationEveryRow.classList.toggle("hidden", !setup.rotation.enabled);
+    gameSetupPreviewRotationEveryInput.value = setup.rotation.every || 1;
+    renderGameSetupPreviewRotationList(setup);
+    gameSetupPreviewFairRaceEnabledCheckbox.checked = !!setup.fairRaceEnabled;
+    gameSetupPreviewShotCounterEnabledCheckbox.checked = !!setup.shotCounterEnabled;
+    gameSetupPreviewShotCounterRow.classList.toggle("hidden", !setup.shotCounterEnabled);
+    gameSetupPreviewShotCounterBeepInput.value = setup.shotCounterBeepSec || 30;
+
+    gameSetupPreviewOverlay.classList.remove("hidden");
+  }
+
+  function closeGameSetupPreview() {
+    gameSetupPreviewOverlay.classList.add("hidden");
+    gameSetupPreviewOriginal = null;
+  }
+
+  // Reads the popup's own fields back into a setup-shaped object, same
+  // shape as currentGameSetupSnapshotData()/SAVED_GAME_SETUPS entries, so
+  // it can go straight into applyGameSetupAndSyncUI. The rotation order
+  // array is carried over unchanged from the setup being previewed, since
+  // the individual steps aren't editable here (see comment above).
+  function readGameSetupPreviewEdits() {
+    var raceToRaw = parseInt(gameSetupPreviewRaceToInput.value, 10) || 5;
+    return {
+      gameType: gameSetupPreviewTypeSelect.value,
+      target: parseInt(gameSetupPreviewTargetInput.value, 10) || 1,
+      unit: gameSetupPreviewUnitSelect.value,
+      mode: gameSetupPreviewModeTeamsRadio.checked ? "teams" : "individual",
+      raceToWinsTarget: gameSetupPreviewRaceModeSingleRadio.checked ? 1 : Math.max(1, raceToRaw),
+      rotation: {
+        enabled: gameSetupPreviewRotationEnabledCheckbox.checked,
+        order: gameSetupPreviewOriginal.rotation.order.map(function (e) {
+          return { gameType: e.gameType, target: e.target, unit: e.unit };
+        }),
+        every: parseInt(gameSetupPreviewRotationEveryInput.value, 10) || 1
+      },
+      fairRaceEnabled: gameSetupPreviewFairRaceEnabledCheckbox.checked,
+      shotCounterEnabled: gameSetupPreviewShotCounterEnabledCheckbox.checked,
+      shotCounterBeepSec: parseInt(gameSetupPreviewShotCounterBeepInput.value, 10) || 30,
+      timedTournamentEnabled: gameSetupPreviewTimedEnabledCheckbox.checked,
+      timedTournamentMinutes: parseInt(gameSetupPreviewTimedMinutesInput.value, 10) || 60
+    };
+  }
+
+  function loadGameSetupFromPreview() {
+    if (!gameSetupPreviewOriginal) return;
+    var edited = readGameSetupPreviewEdits();
+    closeGameSetupPreview();
+    applyGameSetupAndSyncUI(edited, gameSetupLabelFor(edited));
   }
 
   // Silent auto-snapshot, same convention as saveRotationSnapshotIfNew -
@@ -19852,6 +19987,32 @@
       cb.checked = checked;
     });
     updateGameSetupManageDeleteState();
+  });
+
+  btnGameSetupPreview.addEventListener("click", openGameSetupPreview);
+  btnGameSetupPreviewCancel.addEventListener("click", closeGameSetupPreview);
+  btnGameSetupPreviewLoad.addEventListener("click", loadGameSetupFromPreview);
+  gameSetupPreviewOverlay.addEventListener("click", function (e) {
+    if (e.target === gameSetupPreviewOverlay) closeGameSetupPreview();
+  });
+  gameSetupPreviewTypeSelect.addEventListener("change", function () {
+    var type = GAME_TYPES[gameSetupPreviewTypeSelect.value];
+    if (type) gameSetupPreviewUnitSelect.value = type.unit;
+  });
+  gameSetupPreviewRaceModeRacetoRadio.addEventListener("change", function () {
+    gameSetupPreviewRaceToRow.classList.toggle("hidden", !gameSetupPreviewRaceModeRacetoRadio.checked);
+  });
+  gameSetupPreviewRaceModeSingleRadio.addEventListener("change", function () {
+    gameSetupPreviewRaceToRow.classList.toggle("hidden", gameSetupPreviewRaceModeSingleRadio.checked);
+  });
+  gameSetupPreviewTimedEnabledCheckbox.addEventListener("change", function () {
+    gameSetupPreviewTimedRow.classList.toggle("hidden", !gameSetupPreviewTimedEnabledCheckbox.checked);
+  });
+  gameSetupPreviewRotationEnabledCheckbox.addEventListener("change", function () {
+    gameSetupPreviewRotationEveryRow.classList.toggle("hidden", !gameSetupPreviewRotationEnabledCheckbox.checked);
+  });
+  gameSetupPreviewShotCounterEnabledCheckbox.addEventListener("change", function () {
+    gameSetupPreviewShotCounterRow.classList.toggle("hidden", !gameSetupPreviewShotCounterEnabledCheckbox.checked);
   });
 
   btnOpenHelpButtons.forEach(function (btn) {

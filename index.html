@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260919o">
+<link rel="stylesheet" href="css/style.css?v=20260919p">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -158,6 +158,7 @@
         <div class="row">
           <select id="game-setup-load-select"></select>
           <button type="button" id="btn-game-setup-load" class="btn btn-ghost" data-i18n="gameSetup.loadSetup">Load Setup</button>
+          <button type="button" id="btn-game-setup-preview" class="format-info-btn" data-i18n-aria-label="gameSetup.previewSetupAria" aria-label="What does this saved setup include?">❓</button>
           <button type="button" id="btn-game-setup-manage" class="btn btn-ghost" data-i18n="gameSetup.manageSetups">🧹 Manage</button>
         </div>
 
@@ -718,6 +719,97 @@
     <div class="confirm-modal-actions">
       <button type="button" id="btn-game-setup-manage-delete" class="btn btn-danger" disabled data-i18n="gameSetup.manageSetupsDeleteButton">🗑️ Delete Selected</button>
       <button type="button" id="btn-game-setup-manage-cancel" class="btn btn-ghost" data-i18n="common.cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="game-setup-preview-overlay" class="confirm-modal-overlay hidden">
+  <div class="confirm-modal-card game-setup-preview-card">
+    <h3 class="confirm-modal-title game-setup-preview-title" data-i18n="gameSetup.previewTitle">🔍 Setup Details</h3>
+    <p class="player-stats-note game-setup-preview-subtitle" id="game-setup-preview-subtitle"></p>
+
+    <div class="game-setup-preview-body">
+      <div class="game-setup-preview-section">
+        <div class="game-setup-preview-section-label" data-i18n="gameSetup.currentGameSubheading">Current Game</div>
+        <div class="row game-setup-preview-row">
+          <label for="game-setup-preview-type" data-i18n="gameSetup.game">Game</label>
+          <select id="game-setup-preview-type"></select>
+          <label for="game-setup-preview-target" data-i18n="gameSetup.target">Target</label>
+          <input type="number" id="game-setup-preview-target" min="1" max="500" value="1">
+          <select id="game-setup-preview-unit">
+            <option value="rack" data-i18n="units.rack">rack</option>
+            <option value="balls" data-i18n="units.balls">balls</option>
+            <option value="points" data-i18n="units.points">points</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="game-setup-preview-section">
+        <div class="game-setup-preview-section-label" data-i18n="players.heading">Players</div>
+        <div class="row mode-row game-setup-preview-row">
+          <label><input type="radio" name="game-setup-preview-mode" id="game-setup-preview-mode-individual" value="individual"> <span data-i18n="gameSetup.individual">Individual</span></label>
+          <label><input type="radio" name="game-setup-preview-mode" id="game-setup-preview-mode-teams" value="teams"> <span data-i18n="gameSetup.teams">Teams</span></label>
+        </div>
+      </div>
+
+      <div class="game-setup-preview-section">
+        <div class="game-setup-preview-section-label" data-i18n="gameSetup.tournamentTypeHeading">Tournament Type</div>
+        <div class="row mode-row game-setup-preview-row">
+          <label><input type="radio" name="game-setup-preview-race-mode" id="game-setup-preview-race-mode-raceto" value="raceto"> <span data-i18n="gameSetup.raceModeRaceTo">🏁 Race to Wins</span></label>
+          <label><input type="radio" name="game-setup-preview-race-mode" id="game-setup-preview-race-mode-single" value="single"> <span data-i18n="gameSetup.raceModeSingle">🎯 Single Game</span></label>
+        </div>
+        <div class="row game-setup-preview-row" id="game-setup-preview-race-to-row">
+          <label for="game-setup-preview-race-to" data-i18n="gameSetup.raceToMilestone">Race-to milestone</label>
+          <input type="number" id="game-setup-preview-race-to" min="1" max="99" value="5">
+          <span data-i18n="common.wins">wins</span>
+        </div>
+        <label class="checkbox-row checkbox-row-prominent">
+          <input type="checkbox" id="game-setup-preview-timed-enabled">
+          <span data-i18n="gameSetup.timedTournamentEnable">⏰ Timed Tournament</span>
+        </label>
+        <div class="row game-setup-preview-row hidden" id="game-setup-preview-timed-row">
+          <label for="game-setup-preview-timed-minutes" data-i18n="gameSetup.timedTournamentEndsAfter">Ends after</label>
+          <input type="number" id="game-setup-preview-timed-minutes" min="1" max="600" value="60">
+          <span data-i18n="common.minutes">minutes</span>
+        </div>
+      </div>
+
+      <div class="game-setup-preview-section">
+        <div class="game-setup-preview-section-label" data-i18n="gameSetup.gamesRotationHeading">Games Rotation</div>
+        <label class="checkbox-row checkbox-row-prominent">
+          <input type="checkbox" id="game-setup-preview-rotation-enabled">
+          <span data-i18n="rotation.autoRotate">Rotate game types automatically</span>
+        </label>
+        <div class="row game-setup-preview-row hidden" id="game-setup-preview-rotation-every-row">
+          <label for="game-setup-preview-rotation-every" data-i18n="rotation.switchEvery">Switch every</label>
+          <input type="number" id="game-setup-preview-rotation-every" min="1" max="99" value="1">
+          <span data-i18n="common.games">games</span>
+        </div>
+        <p class="game-setup-preview-rotation-list hidden" id="game-setup-preview-rotation-list"></p>
+        <p class="player-stats-note game-setup-preview-rotation-hint hidden" id="game-setup-preview-rotation-hint" data-i18n="gameSetup.previewRotationHint">To change the individual steps, edit the Games Rotation lineup in Current Session.</p>
+      </div>
+
+      <div class="game-setup-preview-section">
+        <div class="game-setup-preview-section-label" data-i18n="gameSetup.otherOptionsHeading">Other Options</div>
+        <label class="checkbox-row checkbox-row-prominent">
+          <input type="checkbox" id="game-setup-preview-fair-race-enabled">
+          <span data-i18n="gameSetup.fairRaceEnable">⚖️ Use Fargo rating to balance the race</span>
+        </label>
+        <label class="checkbox-row checkbox-row-prominent">
+          <input type="checkbox" id="game-setup-preview-shot-counter-enabled">
+          <span data-i18n="gameSetup.shotCounterEnable">⏱️ Shot counter</span>
+        </label>
+        <div class="row game-setup-preview-row hidden" id="game-setup-preview-shot-counter-row">
+          <label for="game-setup-preview-shot-counter-beep" data-i18n="gameSetup.shotCounterBeepEvery">Beep every</label>
+          <input type="number" id="game-setup-preview-shot-counter-beep" min="5" max="600" value="30">
+          <span data-i18n="common.seconds">seconds</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="confirm-modal-actions">
+      <button type="button" id="btn-game-setup-preview-load" class="btn btn-primary" data-i18n="gameSetup.loadSetup">Load Setup</button>
+      <button type="button" id="btn-game-setup-preview-cancel" class="btn btn-ghost" data-i18n="common.cancel">Cancel</button>
     </div>
   </div>
 </div>
@@ -1493,6 +1585,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260919o"></script>
+<script src="js/app.js?v=20260919p"></script>
 </body>
 </html>
