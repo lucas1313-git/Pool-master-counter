@@ -1908,18 +1908,18 @@ input[type="number"] {
    font-size, so the whole rectangle grows/shrinks as one proportional
    shape instead of needing its own separately-tuned clamp() per
    property.
-   18cqw/85px ceiling is half of an earlier, too-large pass (36cqw/170px)
-   - that version fit its card fine but read as oversized at the table,
-   so this is a deliberately smaller target, not one derived from the
-   card-fit math alone. max-width below is just a safety net for an
-   unexpected extreme (e.g. a stray 3-digit entry). */
+   12.6cqw/60px ceiling is 70% of the previous pass (18cqw/85px), itself
+   half of the original too-large pass (36cqw/170px) - sized down twice
+   now on direct feedback that it read as oversized at the table, not
+   from the card-fit math alone. max-width below is just a safety net
+   for an unexpected extreme (e.g. a stray 3-digit entry). */
 .keypad-number-badge.is-entry-buffer {
   width: auto;
   max-width: calc(100cqw - 16px);
   height: 1.75em;
   padding: 0 0.3em;
   border-radius: var(--radius);
-  font-size: clamp(28px, 18cqw, 85px);
+  font-size: clamp(20px, 12.6cqw, 60px);
   line-height: 1;
   white-space: nowrap;
 }
@@ -1932,7 +1932,7 @@ input[type="number"] {
    wins only while an entry is actually showing. */
 .player-panel:has(.keypad-number-badge.is-entry-buffer),
 .member-card:has(.keypad-number-badge.is-entry-buffer) {
-  padding-top: calc(8px + 1.75 * clamp(28px, 18cqw, 85px) + 6px);
+  padding-top: calc(8px + 1.75 * clamp(20px, 12.6cqw, 60px) + 6px);
 }
 
 .player-name {
