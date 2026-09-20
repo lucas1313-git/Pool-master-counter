@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260919q">
+<link rel="stylesheet" href="css/style.css?v=20260919r">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -1321,7 +1321,10 @@
     </div>
     <div class="row">
       <button type="button" id="btn-contact-sheet-vcard" class="btn btn-primary" data-i18n="contactSheet.exportAddressBook">📇 Export to Address Book</button>
+      <button type="button" id="btn-contact-sheet-import-vcard" class="btn btn-ghost" data-i18n="contactSheet.importVcard">📇 Import From vCard</button>
+      <input type="file" id="contact-sheet-import-vcard-file-input" accept=".vcf,text/vcard" class="hidden">
     </div>
+    <p class="player-stats-note" data-i18n="contactSheet.importVcardHint">To bring in contacts from your computer: in Contacts, select the people you want and choose File → Export → Export vCard, then import that file here. Existing email/phone/nickname are never overwritten - only blanks get filled in.</p>
   </section>
 
   <ul id="contact-sheet-list" class="contact-sheet-list"></ul>
@@ -1585,6 +1588,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260919q"></script>
+<script src="js/app.js?v=20260919r"></script>
 </body>
 </html>

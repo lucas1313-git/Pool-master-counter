@@ -1824,6 +1824,8 @@
   var contactSheetImportJsonFileInput = document.getElementById("contact-sheet-import-json-file-input");
   var btnContactSheetExportJson = document.getElementById("btn-contact-sheet-export-json");
   var btnContactSheetVcard = document.getElementById("btn-contact-sheet-vcard");
+  var btnContactSheetImportVcard = document.getElementById("btn-contact-sheet-import-vcard");
+  var contactSheetImportVcardFileInput = document.getElementById("contact-sheet-import-vcard-file-input");
   var btnContactSheetEmail = document.getElementById("btn-contact-sheet-email");
   var btnContactSheetSms = document.getElementById("btn-contact-sheet-sms");
   var contactSheetSelectedSummary = document.getElementById("contact-sheet-selected-summary");
@@ -16926,6 +16928,121 @@
     }
   }
 
+  // Reverses vCardEscape - unescapes the RFC 6350 backslash sequences a
+  // real-world .vcf (from Contacts, Google, Outlook, ...) actually uses.
+  function vCardUnescape(value) {
+    return String(value || "")
+      .replace(/\\n/gi, "\n")
+      .replace(/\\,/g, ",")
+      .replace(/\\;/g, ";")
+      .replace(/\\\\/g, "\\");
+  }
+
+  // Parses a .vcf file's text into [{name, nickname, email, phone}, ...] -
+  // handles multiple BEGIN:VCARD...END:VCARD blocks in one file (exactly
+  // how Contacts/Google/Outlook export more than one contact at a time)
+  // and RFC 6350 line folding (a long property value continued on the
+  // next physical line, marked by a leading space/tab) before reading
+  // individual property lines - real exports (photos especially) fold
+  // constantly, and skipping this would otherwise scramble every line
+  // after the first folded one. Only the fields this app actually has a
+  // field for are read; everything else (photo, address, org, ...) is
+  // ignored rather than erroring.
+  function parseVCardFile(text) {
+    var unfolded = String(text || "")
+      .replace(/\r\n/g, "\n")
+      .replace(/\r/g, "\n")
+      .replace(/\n[ \t]/g, "");
+    var blocks = unfolded.split(/BEGIN:VCARD/i).slice(1);
+    var contacts = [];
+    blocks.forEach(function (block) {
+      var fn = "";
+      var givenName = "";
+      var familyName = "";
+      var nickname = "";
+      var email = "";
+      var phone = "";
+      block.split("\n").forEach(function (rawLine) {
+        var line = rawLine.trim();
+        if (!line || /^END:VCARD/i.test(line)) return;
+        var colonIdx = line.indexOf(":");
+        if (colonIdx === -1) return;
+        var key = line.slice(0, colonIdx).split(";")[0].toUpperCase();
+        var value = line.slice(colonIdx + 1);
+        if (key === "FN" && !fn) {
+          fn = vCardUnescape(value);
+        } else if (key === "N" && !givenName && !familyName) {
+          var parts = value.split(";");
+          familyName = vCardUnescape(parts[0] || "");
+          givenName = vCardUnescape(parts[1] || "");
+        } else if (key === "NICKNAME" && !nickname) {
+          nickname = vCardUnescape(value.split(",")[0]);
+        } else if (key === "EMAIL" && !email) {
+          email = vCardUnescape(value);
+        } else if (key === "TEL" && !phone) {
+          phone = vCardUnescape(value);
+        }
+      });
+      var name = (fn || [givenName, familyName].filter(Boolean).join(" ")).trim();
+      if (!name) return;
+      contacts.push({ name: name, nickname: nickname, email: email, phone: phone });
+    });
+    return contacts;
+  }
+
+  // Fills in email/phone/nickname from a vCard for anyone who doesn't
+  // already have that field set - never overwrites something already on
+  // file, since a vCard export isn't necessarily more current than a
+  // manual edit made here (unlike the JSON import/export round-trip,
+  // which carries its own updatedAt for a real recency-based merge - see
+  // mergeContactsData). A name with no existing contact record at all
+  // becomes a new one, same as typing it in fresh (see
+  // importRosterNamesIntoContacts for the same "new blank contact"
+  // pattern applied to old roster names instead).
+  function importVCardFile(file) {
+    var reader = new FileReader();
+    reader.onload = function () {
+      var contacts = parseVCardFile(String(reader.result || ""));
+      if (!contacts.length) {
+        alertModal(T("contactSheet.noValidContactsInFile"));
+        return;
+      }
+      var added = 0;
+      var updated = 0;
+      contacts.forEach(function (c) {
+        var existingKey = findContactKey(c.name);
+        var existing = existingKey ? PLAYER_CONTACTS[existingKey] : null;
+        var patch = {};
+        var changed = false;
+        if (c.nickname && !(existing && existing.nickname)) {
+          patch.nickname = c.nickname;
+          changed = true;
+        }
+        if (c.email && !(existing && existing.email)) {
+          patch.email = c.email;
+          changed = true;
+        }
+        if (c.phone && !(existing && existing.phone)) {
+          patch.phone = c.phone;
+          changed = true;
+        }
+        if (!existing) {
+          setPlayerContact(c.name, patch);
+          added += 1;
+        } else if (changed) {
+          setPlayerContact(c.name, patch);
+          updated += 1;
+        }
+      });
+      renderContactSheetPage();
+      showToast(T("contactSheet.importedVcardToast", { count: contacts.length, added: added, updated: updated }));
+    };
+    reader.onerror = function () {
+      alertModal(T("contactSheet.noValidContactsInFile"));
+    };
+    reader.readAsText(file);
+  }
+
   // ---------------------------------------------------------------------
   // Elimination Tournament — double-elimination bracket.
   //
@@ -20473,6 +20590,14 @@
   });
   btnContactSheetExportJson.addEventListener("click", exportContactsToJson);
   btnContactSheetVcard.addEventListener("click", exportSelectedToAddressBook);
+  btnContactSheetImportVcard.addEventListener("click", function () {
+    contactSheetImportVcardFileInput.click();
+  });
+  contactSheetImportVcardFileInput.addEventListener("change", function () {
+    var file = contactSheetImportVcardFileInput.files && contactSheetImportVcardFileInput.files[0];
+    contactSheetImportVcardFileInput.value = "";
+    if (file) importVCardFile(file);
+  });
   btnContactSheetEmail.addEventListener("click", function () {
     composeToSelectedContacts("email");
   });
