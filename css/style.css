@@ -1444,7 +1444,12 @@ input[type="number"] {
    leaderboard rows, etc.) without a contrast problem. */
 .rating-badge {
   display: inline-block;
-  margin-left: 7px;
+  /* Right margin (not a matching one on .rating-pronostic's left below)
+     is what actually spaces this from whatever follows it - .rating-
+     pronostic when shown, or .player-link-icon directly when it isn't
+     - one-sided on purpose so adjacent margins don't stack into an
+     uneven gap; see the comment on .rating-pronostic below. */
+  margin: 0 8px 0 7px;
   padding: 2px 8px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--accent) 18%, var(--bg-panel));
@@ -1464,11 +1469,16 @@ input[type="number"] {
    the headline number. .is-up/.is-down reuse the same green/red the
    rating history section already uses for a real delta
    (.history-rating-delta), so a rating going up or down reads the same
-   color everywhere in the app. */
+   color everywhere in the app.
+   Only a right margin, matching .rating-badge above - the gap before
+   this element already comes from the badge's own margin-right, so a
+   left margin here too would add to it instead of matching it. Keeps
+   the badge -> pronostic -> arrow spacing evenly distributed (8px
+   each) instead of some gaps doubling up. */
 .rating-pronostic {
   display: inline-block;
-  margin: 0 6px;
-  font-size: 0.72rem;
+  margin: 0 8px 0 0;
+  font-size: 0.8rem;
   font-weight: 700;
   color: var(--text-dim);
   vertical-align: middle;
@@ -5599,10 +5609,25 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
 /* Scoreboard name row only, not the base rule - .player-link-icon has
    zero margin of its own (other contexts, e.g. .contact-sheet-row
    below, already space it via their own flex gap instead), so here it
-   was sitting flush against whatever precedes it (.rating-badge, or
-   .rating-pronostic when shown) with no breathing room at all. */
+   was sitting flush against whatever precedes it with no breathing
+   room at all. The row's order is name -> arrow -> rating badge ->
+   pronostic (see buildIndividualPanel), so unlike .rating-badge/
+   .rating-pronostic (which only ever need a trailing margin, since
+   something managed by this same spacing scheme always precedes them
+   here) the arrow is first and needs its own left margin too, to gap
+   it from the plain name text nothing else provides that for. */
 .player-name .player-link-icon {
-  margin: 0 6px;
+  margin: 0 8px;
+}
+
+/* The arrow's own margin-right above already provides the gap into
+   the badge in this reordered row, so the badge's base margin-left
+   (7px, meant for contexts where it follows plain name text directly)
+   would double up here - cancelled back to 0. Its margin-right (8px,
+   from the base rule) is kept as-is, matching the row's other 8px
+   gaps and providing the gap into .rating-pronostic when shown. */
+.player-name .rating-badge {
+  margin-left: 0;
 }
 
 .player-link-icon svg {
