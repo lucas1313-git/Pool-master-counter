@@ -93,6 +93,7 @@
   "common.or": "或",
   "common.rating": "評分",
   "common.ratingBadgeTitle": "評分（Elo 風格，靈感嚟自 FargoRate 刻度）",
+  "common.ratingPronosticTitle": "而家贏或輸嘅話，評分預計會變幾多",
   "common.removeName": "移除 {{name}}",
   "common.save": "儲存",
   "common.seconds": "秒",
