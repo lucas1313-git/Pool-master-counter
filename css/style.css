@@ -1841,6 +1841,14 @@ input[type="number"] {
   flex-direction: column;
   align-items: center;
   gap: 10px;
+  /* Lets the score-entry badge below size itself off this card's own
+     width (cqw) rather than the viewport - the same "shrinks on its own
+     once more players make each card narrower" idea the Focus Mode
+     score numbers already use further up this file, just inline-size
+     only (this card's height is plain content flow, not an explicit
+     grid-row height like Focus Mode's is, so cqh here would measure
+     something meaningless). */
+  container-type: inline-size;
 }
 
 /* ---------- Keyboard/keypad scoring shortcut ---------- */
@@ -1890,26 +1898,44 @@ input[type="number"] {
 }
 
 /* 15 Ball Rotation's keypad score-entry mode (see handleKeypadShortcut) -
-   the same badge spot as a plain number, but widened into a taller pill
-   (bigger than the base 42px/24px badge, not smaller) so the number
-   being typed in is easy to read at a glance from across the table,
-   while still fitting a multi-digit rotation score ("+15") on one line. */
+   the same badge spot as a plain number, but widened into a pill (about
+   3x the plain 42px/24px badge at a normal ~230px-wide card) so a
+   two-digit rotation score ("+15") reads at a glance from across the
+   table. Sized off the card's own width (cqw, via .player-panel/
+   .member-card's container-type above) rather than a fixed px value, so
+   it scales back down on its own once enough players are on screen to
+   narrow the cards - same idea as Focus Mode's score-number scaling
+   further up this file. font-size is the only cqw-driven value; every
+   other dimension is in em off that same font-size, so the whole pill
+   grows/shrinks as one proportional shape instead of needing its own
+   separately-tuned clamp() per property. */
 .keypad-number-badge.is-entry-buffer {
   width: auto;
-  min-width: 64px;
-  height: 56px;
-  padding: 0 16px;
-  border-radius: 28px;
-  font-size: 32px;
+  /* No min-width here on purpose - it would fight max-width below for
+     a wide card + short content (just "+" armed, nothing typed yet),
+     and per the CSS spec min-width wins that conflict, defeating the
+     max-width cap entirely. Letting width stay purely content-driven
+     (padding + text) up to that cap is what actually keeps the pill
+     inside the card at every combination of card width and digit
+     count. */
+  max-width: calc(100cqw - 16px);
+  height: 1.75em;
+  padding: 0 0.25em;
+  border-radius: 999px;
+  font-size: clamp(48px, 42cqw, 132px);
+  line-height: 1;
+  white-space: nowrap;
 }
 
-/* The entry-buffer pill is taller than the plain 42px badge the shared
-   padding-top above clears for, so it needs its own larger clearance -
-   more specific than (and placed after) that general rule, so it wins
-   only while an entry is actually showing. */
+/* The entry-buffer pill's height (see above) scales with the card's own
+   width, so its clearance below the badge has to track that same value
+   instead of a fixed px number - 8px top offset + the pill's own height
+   (1.75 times its font-size) + a small gap. More specific than (and
+   placed after) the plain-badge clearance rule above, so it wins only
+   while an entry is actually showing. */
 .player-panel:has(.keypad-number-badge.is-entry-buffer),
 .member-card:has(.keypad-number-badge.is-entry-buffer) {
-  padding-top: 66px;
+  padding-top: calc(8px + 1.75 * clamp(48px, 42cqw, 132px) + 6px);
 }
 
 .player-name {
@@ -2263,6 +2289,9 @@ input[type="number"] {
   flex-direction: column;
   align-items: center;
   gap: 6px;
+  /* Same cqw sizing context as .player-panel above, for the score-entry
+     badge. */
+  container-type: inline-size;
 }
 
 .member-name {
