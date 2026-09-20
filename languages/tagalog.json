@@ -693,6 +693,7 @@
   "toast.leaderboardCopied": "Na-copy ang leaderboard.",
   "toast.letsPlay": "Tara, maglaro na tayo! 🎱",
   "toast.loadedGameSetup": "Na-load ang setup: \"{{label}}\".",
+  "toast.loadedRosterListPrevails": "Na-load ang \"{{label}}\" — {{addedCount}} idinagdag, {{standbyCount}} inilipat sa Standby.",
   "toast.loadedRotation": "Na-load ang rotation: \"{{label}}\".",
   "toast.noSavedListsToReset": "Walang naka-save na listahan ng manlalaro o roster na i-rereset.",
   "toast.noStatsModeNothingSaved": "Naka-on ang No Statistic mode — walang na-save.",
