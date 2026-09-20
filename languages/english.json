@@ -101,7 +101,7 @@
   "common.vsName": "vs {{name}}",
   "common.wins": "wins",
   "common.you": "You",
-  "confirm.abandonTournament": "Abandon this tournament? The bracket will be cleared, but every match already played stays saved in each player's stats.",
+  "confirm.abandonTournament": "Abandon this tournament? The bracket will be cleared and every player's rating will be restored to what it was before this tournament, but the matches already played stay saved in each player's stats.",
   "confirm.alsoEndsTournamentNote": "Your active tournament will also be ended and its bracket cleared (matches already played stay saved in each player's stats).",
   "confirm.areYouSure": "Are you sure? This cannot be undone.",
   "confirm.fullResetAreYouCertain": "Are you absolutely certain? This cannot be undone (besides the backup file that just downloaded).",

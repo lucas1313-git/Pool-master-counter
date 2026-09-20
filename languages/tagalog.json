@@ -101,7 +101,7 @@
   "common.vsName": "laban kay {{name}}",
   "common.wins": "panalo",
   "common.you": "Ikaw",
-  "confirm.abandonTournament": "Iwan ang tournament na ito? Buburahin ang bracket, pero mananatiling naka-save sa stats ng bawat manlalaro ang bawat laro na nailaro na.",
+  "confirm.abandonTournament": "Iwan ang tournament na ito? Buburahin ang bracket at ibabalik ang rating ng bawat manlalaro sa kung ano ito bago ang tournament na ito, pero mananatiling naka-save sa stats ng bawat manlalaro ang bawat laro na nailaro na.",
   "confirm.alsoEndsTournamentNote": "Matatapos din ang aktibong tournament mo at mabubura ang bracket nito (ang mga larong nailaro na ay mananatiling naka-save sa stats ng bawat manlalaro).",
   "confirm.areYouSure": "Sigurado ka ba? Hindi na ito maaaring bawiin.",
   "confirm.fullResetAreYouCertain": "Sigurado ka na ba talaga? Hindi na ito maaaring bawiin (maliban sa backup file na kararaan lang i-download).",
