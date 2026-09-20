@@ -1831,6 +1831,10 @@
   var contactSheetSelectedSummary = document.getElementById("contact-sheet-selected-summary");
   var contactSheetList = document.getElementById("contact-sheet-list");
   var contactSheetSelected = {};
+  var btnContactSheetGraveyard = document.getElementById("btn-contact-sheet-graveyard");
+  var graveyardPageView = document.getElementById("view-graveyard-page");
+  var btnGraveyardBack = document.getElementById("btn-graveyard-back");
+  var graveyardList = document.getElementById("graveyard-list");
 
   var btnOpenTournament = document.getElementById("btn-open-tournament");
   var tournamentPageView = document.getElementById("view-tournament-page");
@@ -3394,6 +3398,10 @@
     function submit() {
       var name = input.value.trim();
       if (!name) return;
+      if (isPlayerGraveyarded(resolvePlayerName(name))) {
+        showToast(T("toast.playerInGraveyard", { name: capitalizeName(name) }));
+        return;
+      }
       // A name that matches someone already on standby (e.g. dropped by a
       // list load) reactivates them instead of being rejected as a
       // duplicate — otherwise there'd be no way to bring them back from
@@ -4151,7 +4159,7 @@
       winner.appendChild(document.createTextNode("🏆 "));
       entry.winnerNames.forEach(function (n, i) {
         if (i > 0) winner.appendChild(document.createTextNode(" & "));
-        winner.appendChild(document.createTextNode(n));
+        appendHistoricalPlayerName(winner, n);
         winner.appendChild(buildRatingBadge(n));
         var delta = getPlayerRatingDeltaForGame(n, entry.ts);
         if (delta !== null) {
@@ -4242,16 +4250,31 @@
     });
   }
 
+  // "duplicate" (already on the live roster) or "graveyard" (deleted —
+  // typing it back in doesn't resurrect them, only the Graveyard page's
+  // Reactivate button or importing them again does), or null if the name
+  // is free to add. Checked wherever a player is added by manually typing
+  // a name; bulk-import flows (loadRosterEntry, importVCardFile, backup
+  // restore) call addPlayer directly and skip this on purpose.
+  function playerNameBlockedReason(name) {
+    if (!name) return null;
+    if (isDuplicatePlayerName(name)) return "duplicate";
+    if (isPlayerGraveyarded(resolvePlayerName(name))) return "graveyard";
+    return null;
+  }
+
   // Live-updates the Add button + the red requirement note as the name
   // field changes, so a duplicate (or empty) name can never be submitted.
   // The note only shows when there's an actual conflict to report.
   function validateNewPlayerNameInput() {
     var trimmed = newPlayerName.value.trim();
-    var duplicate = trimmed && isDuplicatePlayerName(trimmed);
-    btnAddPlayer.disabled = !trimmed || duplicate;
-    if (duplicate) {
-      newPlayerNameRequirement.textContent =
-        T("players.duplicateNameHint", { name: capitalizeName(trimmed) });
+    var reason = trimmed ? playerNameBlockedReason(trimmed) : null;
+    btnAddPlayer.disabled = !trimmed || !!reason;
+    if (reason) {
+      newPlayerNameRequirement.textContent = T(
+        reason === "graveyard" ? "players.graveyardedNameHint" : "players.duplicateNameHint",
+        { name: capitalizeName(trimmed) }
+      );
       newPlayerNameRequirement.classList.remove("hidden");
     } else {
       newPlayerNameRequirement.classList.add("hidden");
@@ -4277,6 +4300,7 @@
     saveState();
     recordPlayerAddedIfNew(name);
     clearPlayerRemoved(name);
+    reactivatePlayerFromGraveyard(name);
     if (typeof startingRating === "number" && !isNaN(startingRating) && !findRatingKey(name)) {
       var entry = ensureRatingEntry(name);
       entry.rating = startingRating;
@@ -7826,6 +7850,37 @@
     }
   }
 
+  // Name -> { removedAt }. Distinct from REMOVED_PLAYERS above (which only
+  // means "off today's roster" and is silently cleared by any normal
+  // re-add): this is the Contact Sheet's Graveyard — a deliberate full
+  // deletion. A graveyarded name is hidden everywhere names are browsed
+  // (Add Player autocomplete, All Players, Leaderboard, Contact Sheet) and
+  // can no longer be typed back in via Add Player, but their saved
+  // PLAYER_STATS/PLAYER_RATINGS/PLAYER_CONTACTS and past game history are
+  // never touched, so other players' completed games stay intact. Only
+  // reactivating from the Graveyard page (or importing them again) clears
+  // this and brings them back.
+  var GRAVEYARD_PLAYERS_KEY = "poolMasterCounter.graveyardPlayers.v1";
+
+  function loadGraveyardPlayersFromStorage() {
+    try {
+      var raw = localStorage.getItem(GRAVEYARD_PLAYERS_KEY);
+      var parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function saveGraveyardPlayersToStorage(graveyard) {
+    if (noStatsMode) return;
+    try {
+      localStorage.setItem(GRAVEYARD_PLAYERS_KEY, JSON.stringify(graveyard));
+    } catch (e) {
+      console.warn("Could not save graveyard players.", e);
+    }
+  }
+
   // Capped local history of what each reset button just wiped, so it can
   // be recovered from the Recover Data panel without hunting for a
   // downloaded backup file. Newest first, oldest dropped once full.
@@ -8523,6 +8578,77 @@
     saveRemovedPlayersToStorage(REMOVED_PLAYERS);
   }
 
+  var GRAVEYARD_PLAYERS = loadGraveyardPlayersFromStorage();
+
+  function findGraveyardPlayerKey(name) {
+    var key = normalizeNameKey(name);
+    var match = Object.keys(GRAVEYARD_PLAYERS).filter(function (k) {
+      return normalizeNameKey(k) === key;
+    });
+    return match.length ? match[0] : null;
+  }
+
+  function isPlayerGraveyarded(name) {
+    return !!findGraveyardPlayerKey(name);
+  }
+
+  // Fully deletes a player from the active system (see the Contact Sheet's
+  // "Remove" action): drops them from the live roster if present, but
+  // deliberately leaves PLAYER_STATS/PLAYER_RATINGS/PLAYER_CONTACTS and
+  // state.gameHistory untouched — past games (including other players'
+  // head-to-head/tournament records that mention this name) stay intact,
+  // just with this name shown struck through and no longer linked.
+  function sendPlayerToGraveyard(name) {
+    var existing = state.players.filter(function (p) {
+      return normalizeNameKey(p.name) === normalizeNameKey(name);
+    })[0];
+    if (existing) {
+      state.players = state.players.filter(function (p) {
+        return p.id !== existing.id;
+      });
+      delete state.playerWins[existing.id];
+      delete state.teamMvpWins[existing.id];
+      saveState();
+      name = existing.name;
+    }
+    var key = findGraveyardPlayerKey(name) || name;
+    GRAVEYARD_PLAYERS[key] = { removedAt: new Date().toISOString() };
+    saveGraveyardPlayersToStorage(GRAVEYARD_PLAYERS);
+  }
+
+  // Called from the Graveyard page's Reactivate button, or automatically
+  // whenever a bulk-import flow (roster list load, vCard import, backup
+  // restore) brings this name back in — per-name stats/ratings/contacts
+  // were never deleted, so they simply become visible again.
+  function reactivatePlayerFromGraveyard(name) {
+    var key = findGraveyardPlayerKey(name);
+    if (!key) return;
+    delete GRAVEYARD_PLAYERS[key];
+    saveGraveyardPlayersToStorage(GRAVEYARD_PLAYERS);
+  }
+
+  function getGraveyardPlayerNames() {
+    return Object.keys(GRAVEYARD_PLAYERS).sort(function (a, b) {
+      return normalizeNameKey(a).localeCompare(normalizeNameKey(b));
+    });
+  }
+
+  // For a name mentioned in a past game (recent history, a player's own
+  // game log) that may since have been graveyarded: shows it struck
+  // through and dimmed instead of the plain name, so other players' saved
+  // games stay intact and readable without pretending the graveyarded
+  // player is still an active part of the system.
+  function appendHistoricalPlayerName(container, name) {
+    if (isPlayerGraveyarded(name)) {
+      var span = document.createElement("span");
+      span.className = "graveyarded-player-name";
+      span.textContent = name;
+      container.appendChild(span);
+      return;
+    }
+    container.appendChild(document.createTextNode(name));
+  }
+
   var RESET_SNAPSHOTS = loadResetSnapshotsFromStorage();
 
   // `data` should already be a plain deep-cloned object (JSON.parse(
@@ -9008,6 +9134,7 @@
   // (scoreboard cards, standings, tournament bracket cards, All Players),
   // alongside (not instead of) whatever else that name already does.
   function buildPlayerLinkIcon(name) {
+    if (isPlayerGraveyarded(name)) return document.createDocumentFragment();
     var btn = document.createElement("button");
     btn.type = "button";
     btn.className = "btn btn-ghost player-link-icon";
@@ -10149,6 +10276,23 @@
             (r.players || []).forEach(function (n) {
               importedRosterPlayerNames.push(n);
             });
+          });
+
+          // Importing a backup that mentions a graveyarded name counts as
+          // "importing them again" - resurrect them so the merge below
+          // (and everything downstream) treats them as a normal player
+          // again, per the Graveyard's stated resurrection path.
+          (importedState.players || []).forEach(function (p) {
+            if (p && p.name) reactivatePlayerFromGraveyard(p.name);
+          });
+          Object.keys(importedPlayerStats).forEach(function (n) {
+            reactivatePlayerFromGraveyard(n);
+          });
+          Object.keys(importedContacts).forEach(function (n) {
+            reactivatePlayerFromGraveyard(n);
+          });
+          importedRosterPlayerNames.forEach(function (n) {
+            reactivatePlayerFromGraveyard(n);
           });
 
           // Finds the actual key in an imported (not-yet-local) store
@@ -11584,11 +11728,13 @@
 
   function validateWizardNewPlayerNameInput() {
     var trimmed = wizardNewPlayerName.value.trim();
-    var duplicate = trimmed && isDuplicatePlayerName(trimmed);
-    btnWizardAddPlayer.disabled = !trimmed || duplicate;
-    if (duplicate) {
-      wizardNewPlayerNameRequirement.textContent =
-        T("players.duplicateNameHint", { name: capitalizeName(trimmed) });
+    var reason = trimmed ? playerNameBlockedReason(trimmed) : null;
+    btnWizardAddPlayer.disabled = !trimmed || !!reason;
+    if (reason) {
+      wizardNewPlayerNameRequirement.textContent = T(
+        reason === "graveyard" ? "players.graveyardedNameHint" : "players.duplicateNameHint",
+        { name: capitalizeName(trimmed) }
+      );
       wizardNewPlayerNameRequirement.classList.remove("hidden");
     } else {
       wizardNewPlayerNameRequirement.classList.add("hidden");
@@ -11887,10 +12033,13 @@
 
   function validateOnboardingNameInput() {
     var trimmed = onboardingNameInput.value.trim();
-    var duplicate = trimmed && isDuplicatePlayerName(trimmed);
-    btnOnboardingGo.disabled = onboardingStep === 2 && (!trimmed || duplicate);
-    if (duplicate) {
-      onboardingNameRequirement.textContent = T("players.duplicateNameHint", { name: capitalizeName(trimmed) });
+    var reason = trimmed ? playerNameBlockedReason(trimmed) : null;
+    btnOnboardingGo.disabled = onboardingStep === 2 && (!trimmed || !!reason);
+    if (reason) {
+      onboardingNameRequirement.textContent = T(
+        reason === "graveyard" ? "players.graveyardedNameHint" : "players.duplicateNameHint",
+        { name: capitalizeName(trimmed) }
+      );
       onboardingNameRequirement.classList.remove("hidden");
     } else {
       onboardingNameRequirement.classList.add("hidden");
@@ -11953,7 +12102,7 @@
     }
     if (onboardingStep === 2) {
       var trimmed = onboardingNameInput.value.trim();
-      if (!trimmed || isDuplicatePlayerName(trimmed)) {
+      if (!trimmed || playerNameBlockedReason(trimmed)) {
         validateOnboardingNameInput();
         return;
       }
@@ -12275,7 +12424,7 @@
     if (isPlayerNames && items.length) {
       items.forEach(function (n, i) {
         if (i > 0) v.appendChild(document.createTextNode(", "));
-        v.appendChild(document.createTextNode(n));
+        appendHistoricalPlayerName(v, n);
         v.appendChild(buildRatingBadge(n));
       });
     } else {
@@ -12300,7 +12449,7 @@
     winner.appendChild(document.createTextNode("🏆 "));
     (g.winnerNames || []).forEach(function (n, i) {
       if (i > 0) winner.appendChild(document.createTextNode(" & "));
-      winner.appendChild(document.createTextNode(n));
+      appendHistoricalPlayerName(winner, n);
       winner.appendChild(buildRatingBadge(n));
     });
     div.appendChild(time);
@@ -12857,7 +13006,7 @@
         // names down to an ellipsis.
         var name = document.createElement("span");
         name.className = "player-h2h-name";
-        name.textContent = opp.name;
+        appendHistoricalPlayerName(name, opp.name);
         name.appendChild(buildRatingBadge(opp.name));
         var meta = document.createElement("span");
         meta.className = "player-h2h-meta";
@@ -13286,8 +13435,15 @@
           detail.appendChild(document.createTextNode("Games: " + gamesText));
           detail.appendChild(document.createElement("br"));
         }
-        var opponentsText = session.opponents && session.opponents.length ? session.opponents.join(", ") : "—";
-        detail.appendChild(document.createTextNode("Opponents: " + opponentsText));
+        detail.appendChild(document.createTextNode("Opponents: "));
+        if (session.opponents && session.opponents.length) {
+          session.opponents.forEach(function (n, i) {
+            if (i > 0) detail.appendChild(document.createTextNode(", "));
+            appendHistoricalPlayerName(detail, n);
+          });
+        } else {
+          detail.appendChild(document.createTextNode("—"));
+        }
         li.appendChild(detail);
 
         playerPageHistoryList.appendChild(li);
@@ -13331,6 +13487,7 @@
       else if (!allPlayersPageView.classList.contains("hidden")) closeAllPlayersPage(true);
       else if (!tournamentPageView.classList.contains("hidden")) closeTournamentPage(true);
       else if (!contactSheetPageView.classList.contains("hidden")) closeContactSheetPage(true);
+      else if (!graveyardPageView.classList.contains("hidden")) closeContactSheetPage(true);
       else if (!leaderboardPageView.classList.contains("hidden")) closeLeaderboardPage(true);
       else if (!groupSessionPageView.classList.contains("hidden")) closeGroupSessionPage(true);
       return;
@@ -13339,6 +13496,7 @@
     else if (state.screen === "tournament") openTournamentPage(true);
     else if (state.screen === "player") openPlayerStatsPage(state.name, true);
     else if (state.screen === "contact-sheet") openContactSheetPage(true);
+    else if (state.screen === "graveyard") openGraveyardPage(true);
     else if (state.screen === "leaderboard") openLeaderboardPage(true);
     else if (state.screen === "group-session") openGroupSessionPage(true);
   });
@@ -13404,6 +13562,7 @@
     allPlayersPageView.classList.add("hidden");
     tournamentPageView.classList.add("hidden");
     contactSheetPageView.classList.add("hidden");
+    graveyardPageView.classList.add("hidden");
     leaderboardPageView.classList.add("hidden");
     playerPageView.classList.remove("hidden");
     window.scrollTo(0, 0);
@@ -13445,9 +13604,13 @@
   // into one canonical entry.
   function getAllKnownPlayerNames() {
     var map = buildNameCasingMap();
-    return Object.keys(map).map(function (k) {
-      return map[k];
-    });
+    return Object.keys(map)
+      .map(function (k) {
+        return map[k];
+      })
+      .filter(function (name) {
+        return !isPlayerGraveyarded(name);
+      });
   }
 
   // All of one player's games — saved history plus whatever's still live
@@ -15271,6 +15434,7 @@
     tournamentPageView.classList.add("hidden");
     playerPageView.classList.add("hidden");
     contactSheetPageView.classList.add("hidden");
+    graveyardPageView.classList.add("hidden");
     leaderboardPageView.classList.add("hidden");
     allPlayersPageView.classList.remove("hidden");
     window.scrollTo(0, 0);
@@ -15434,6 +15598,23 @@
 
     li.appendChild(fields);
     li.appendChild(buildPlayerLinkIcon(name));
+
+    var removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "btn btn-ghost contact-sheet-remove-btn";
+    removeBtn.setAttribute("aria-label", T("contactSheet.removePlayerAria", { name: name }));
+    removeBtn.textContent = "🗑️";
+    removeBtn.addEventListener("click", function () {
+      confirmModal(T("confirm.sendPlayerToGraveyard", { name: name }), function () {
+        sendPlayerToGraveyard(name);
+        delete contactSheetSelected[name];
+        renderContactSheetPage();
+        renderAll();
+        showToast(T("toast.playerSentToGraveyard", { name: name }));
+      });
+    });
+    li.appendChild(removeBtn);
+
     return li;
   }
 
@@ -15467,6 +15648,7 @@
     tournamentPageView.classList.add("hidden");
     leaderboardPageView.classList.add("hidden");
     contactSheetPageView.classList.remove("hidden");
+    graveyardPageView.classList.add("hidden");
     window.scrollTo(0, 0);
   }
 
@@ -15476,7 +15658,69 @@
       return;
     }
     contactSheetPageView.classList.add("hidden");
+    graveyardPageView.classList.add("hidden");
     appRoot.classList.remove("hidden");
+  }
+
+  // Reached only from the Contact Sheet (its own top-of-page button), so
+  // "back" here always means "back to the Contact Sheet" - see
+  // closeGraveyardPage - never all the way to main.
+  function renderGraveyardPage() {
+    var names = getGraveyardPlayerNames();
+    graveyardList.innerHTML = "";
+    if (names.length === 0) {
+      var hint = document.createElement("li");
+      hint.className = "empty-hint";
+      hint.textContent = T("graveyard.empty");
+      graveyardList.appendChild(hint);
+      return;
+    }
+    names.forEach(function (name) {
+      var li = document.createElement("li");
+      li.className = "graveyard-row";
+
+      var nameSpan = document.createElement("span");
+      nameSpan.className = "graveyard-name";
+      nameSpan.textContent = name;
+      li.appendChild(nameSpan);
+
+      var dateSpan = document.createElement("span");
+      dateSpan.className = "graveyard-date";
+      dateSpan.textContent = T("graveyard.removedOn", { date: formatTimestamp(GRAVEYARD_PLAYERS[name].removedAt, false) });
+      li.appendChild(dateSpan);
+
+      var reactivateBtn = document.createElement("button");
+      reactivateBtn.type = "button";
+      reactivateBtn.className = "btn btn-primary";
+      reactivateBtn.textContent = T("graveyard.reactivate");
+      reactivateBtn.addEventListener("click", function () {
+        reactivatePlayerFromGraveyard(name);
+        renderGraveyardPage();
+        renderAll();
+        showToast(T("toast.playerReactivated", { name: name }));
+      });
+      li.appendChild(reactivateBtn);
+
+      graveyardList.appendChild(li);
+    });
+  }
+
+  function openGraveyardPage(skipHistory) {
+    if (!skipHistory) pushScreenHistory("graveyard");
+    renderGraveyardPage();
+    contactSheetPageView.classList.add("hidden");
+    graveyardPageView.classList.remove("hidden");
+    window.scrollTo(0, 0);
+  }
+
+  function closeGraveyardPage(skipHistory) {
+    if (!skipHistory) {
+      navigateBack();
+      return;
+    }
+    graveyardPageView.classList.add("hidden");
+    contactSheetPageView.classList.remove("hidden");
+    renderContactSheetPage();
   }
 
   var LEADERBOARD_MIN_GAMES = 10;
@@ -16351,6 +16595,7 @@
     playerPageView.classList.add("hidden");
     tournamentPageView.classList.add("hidden");
     contactSheetPageView.classList.add("hidden");
+    graveyardPageView.classList.add("hidden");
     leaderboardPageView.classList.remove("hidden");
     window.scrollTo(0, 0);
     localStorage.setItem(LEADERBOARD_LAST_SHOWN_KEY, String(Date.now()));
@@ -16665,6 +16910,7 @@
     playerPageView.classList.add("hidden");
     tournamentPageView.classList.add("hidden");
     contactSheetPageView.classList.add("hidden");
+    graveyardPageView.classList.add("hidden");
     leaderboardPageView.classList.add("hidden");
     groupSessionPageView.classList.remove("hidden");
     window.scrollTo(0, 0);
@@ -17009,7 +17255,12 @@
       }
       var added = 0;
       var updated = 0;
+      var resurrected = 0;
       contacts.forEach(function (c) {
+        if (isPlayerGraveyarded(c.name)) {
+          reactivatePlayerFromGraveyard(c.name);
+          resurrected += 1;
+        }
         var existingKey = findContactKey(c.name);
         var existing = existingKey ? PLAYER_CONTACTS[existingKey] : null;
         var patch = {};
@@ -17035,7 +17286,14 @@
         }
       });
       renderContactSheetPage();
-      showToast(T("contactSheet.importedVcardToast", { count: contacts.length, added: added, updated: updated }));
+      showToast(
+        T(resurrected > 0 ? "contactSheet.importedVcardToastWithResurrected" : "contactSheet.importedVcardToast", {
+          count: contacts.length,
+          added: added,
+          updated: updated,
+          resurrected: resurrected
+        })
+      );
     };
     reader.onerror = function () {
       alertModal(T("contactSheet.noValidContactsInFile"));
@@ -18494,6 +18752,7 @@
   function appendEntrantIdentity(container, name, t) {
     var members = (t && t.entrantMembers && t.entrantMembers[name]) || [name];
     if (members.length <= 1) {
+      if (isPlayerGraveyarded(name)) container.classList.add("graveyarded-entrant");
       container.appendChild(buildRatingBadge(name));
       container.appendChild(buildPlayerLinkIcon(name));
       var teamName = t && t.entrantTeamNames && t.entrantTeamNames[name];
@@ -18509,7 +18768,7 @@
     sub.className = "tournament-match-team-members";
     members.forEach(function (memberName, i) {
       if (i > 0) sub.appendChild(document.createTextNode(", "));
-      sub.appendChild(document.createTextNode(memberName));
+      appendHistoricalPlayerName(sub, memberName);
       sub.appendChild(buildRatingBadge(memberName));
       sub.appendChild(buildPlayerLinkIcon(memberName));
     });
@@ -19493,6 +19752,7 @@
     allPlayersPageView.classList.add("hidden");
     playerPageView.classList.add("hidden");
     contactSheetPageView.classList.add("hidden");
+    graveyardPageView.classList.add("hidden");
     leaderboardPageView.classList.add("hidden");
     tournamentPageView.classList.remove("hidden");
     window.scrollTo(0, 0);
@@ -19745,7 +20005,7 @@
   addPlayerForm.addEventListener("submit", function (e) {
     e.preventDefault();
     var trimmed = newPlayerName.value.trim();
-    if (!trimmed || isDuplicatePlayerName(trimmed)) {
+    if (!trimmed || playerNameBlockedReason(trimmed)) {
       validateNewPlayerNameInput();
       return;
     }
@@ -20224,7 +20484,7 @@
   wizardAddPlayerForm.addEventListener("submit", function (e) {
     e.preventDefault();
     var trimmed = wizardNewPlayerName.value.trim();
-    if (!trimmed || isDuplicatePlayerName(trimmed)) {
+    if (!trimmed || playerNameBlockedReason(trimmed)) {
       validateWizardNewPlayerNameInput();
       return;
     }
@@ -20500,6 +20760,13 @@
   });
   btnContactSheetBack.addEventListener("click", function () {
     closeContactSheetPage();
+  });
+
+  btnContactSheetGraveyard.addEventListener("click", function () {
+    openGraveyardPage();
+  });
+  btnGraveyardBack.addEventListener("click", function () {
+    closeGraveyardPage();
   });
 
   btnOpenLeaderboard.addEventListener("click", function () {

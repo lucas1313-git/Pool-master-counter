@@ -4783,6 +4783,56 @@ input[type="number"] {
   flex-shrink: 0;
 }
 
+.contact-sheet-remove-btn {
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+
+/* A player deleted from the Contact Sheet (see the Graveyard) - shown
+   wherever their name still appears in a past game (recent history, a
+   player's own game log/opponents list, a completed tournament bracket)
+   so old records stay legible without reading as still-active. --text-dim
+   is already verified readable against every panel/card surface in every
+   theme (see the other --text-dim uses throughout this file). */
+.graveyarded-player-name,
+.graveyarded-entrant {
+  color: var(--text-dim);
+  text-decoration: line-through;
+}
+
+/* ---------- Graveyard ---------- */
+
+.graveyard-list {
+  list-style: none;
+  margin: 0;
+  padding: 8px 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.graveyard-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+
+.graveyard-name {
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+}
+
+.graveyard-date {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+
 /* ---------- Leaderboard ---------- */
 
 /* Unlike the other full-screen pages, this one's content (the banner,
