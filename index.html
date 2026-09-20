@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260919r">
+<link rel="stylesheet" href="css/style.css?v=20260919s">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -1306,6 +1306,9 @@
 
   <section class="panel" id="contact-sheet-controls-panel">
     <div class="row">
+      <button type="button" id="btn-contact-sheet-graveyard" class="btn btn-ghost" data-i18n="contactSheet.openGraveyard">🪦 Graveyard</button>
+    </div>
+    <div class="row">
       <button type="button" id="btn-contact-sheet-select-all" class="btn btn-ghost" data-i18n="contactSheet.selectAll">✅ Select All</button>
       <button type="button" id="btn-contact-sheet-import-rosters" class="btn btn-ghost" data-i18n="contactSheet.importRosters">📥 Import Names From Past Player Lists</button>
     </div>
@@ -1328,6 +1331,19 @@
   </section>
 
   <ul id="contact-sheet-list" class="contact-sheet-list"></ul>
+
+</div>
+
+<div id="view-graveyard-page" class="hidden">
+
+  <header class="app-header player-page-header">
+    <button type="button" id="btn-graveyard-back" class="btn btn-ghost screen-back-btn" aria-label="Back" data-i18n-aria-label="common.back"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <h1 data-i18n="graveyard.heading">Graveyard</h1>
+  </header>
+
+  <p class="player-stats-note" data-i18n="graveyard.hint">Players removed from the Contact Sheet rest here. Their past games and stats stay untouched - reactivate one to bring them fully back.</p>
+
+  <ul id="graveyard-list" class="graveyard-list"></ul>
 
 </div>
 
@@ -1588,6 +1604,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260919r"></script>
+<script src="js/app.js?v=20260919s"></script>
 </body>
 </html>
