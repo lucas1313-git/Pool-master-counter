@@ -801,26 +801,30 @@ body {
    beats no ID), so without a dedicated override here the 15 Ball
    Rotation entry rectangle would collapse back into that small fixed
    circle in Focus Mode - exactly the "too small" it was reported as.
-   Resets back to auto/em sizing and doubles every value from that base
-   rule (40px/25.2cqw/120px font, was 20px/12.6cqw/60px) for the same
-   across-the-room readability every other Focus Mode element gets over
-   its normal-mode counterpart. Padding and offset from the card edge
-   are bumped too (0.4em/20px, from 0.3em/14px) so it stays clearly
-   separated at this larger size instead of looking cramped. */
+   Resets back to auto/em sizing; font-size matches the normal-mode rule
+   exactly (doubling it read as too big) - padding and offset from the
+   card edge stay a bit bigger (0.4em/20px, vs normal mode's 0.3em/14px)
+   so it still reads as clearly separated on Focus Mode's larger card. */
 #app.focus-mode .keypad-number-badge.is-entry-buffer {
   width: auto;
   height: 1.75em;
   max-width: calc(100cqw - 40px);
   padding: 0 0.4em;
   border-radius: var(--radius);
-  font-size: clamp(40px, 25.2cqw, 120px);
+  font-size: clamp(20px, 12.6cqw, 60px);
   top: 20px;
   left: 20px;
 }
 
+/* Floats over the card instead of reserving space below it, per
+   request - the plain badge's :not(:empty) rule above would otherwise
+   still push the card's content down by 76px while an entry is active
+   (it's never :empty then), so this cancels that back to the card's
+   own normal padding (matches the plain .player-panel rule - Focus
+   Mode sets no padding override of its own). */
 #app.focus-mode .player-panel:has(.keypad-number-badge.is-entry-buffer),
 #app.focus-mode .member-card:has(.keypad-number-badge.is-entry-buffer) {
-  padding-top: calc(20px + 1.75 * clamp(40px, 25.2cqw, 120px) + 12px);
+  padding-top: 16px;
 }
 
 /* The +/- buttons read the same as everything else above in Focus Mode
@@ -1958,15 +1962,20 @@ input[type="number"] {
   white-space: nowrap;
 }
 
-/* The entry-buffer badge's height (see above) scales with the card's
-   own width, so its clearance below the badge has to track that same
-   value instead of a fixed px number - 14px top offset (see above) +
-   the badge's own height (1.75 times its font-size) + a small gap.
-   More specific than (and placed after) the plain-badge clearance rule
-   above, so it wins only while an entry is actually showing. */
-.player-panel:has(.keypad-number-badge.is-entry-buffer),
+/* Floats over the card instead of reserving space below it, per
+   request - the plain badge's :not(:empty) rule above would otherwise
+   still push the card's content down by 52px while an entry is active
+   (it's never :empty then), so this cancels that back to each card
+   type's own normal padding (16px .player-panel / 10px .member-card -
+   see their base rules). More specific than (and placed after) that
+   :not(:empty) rule, so it wins only while an entry is actually
+   showing. */
+.player-panel:has(.keypad-number-badge.is-entry-buffer) {
+  padding-top: 16px;
+}
+
 .member-card:has(.keypad-number-badge.is-entry-buffer) {
-  padding-top: calc(14px + 1.75 * clamp(20px, 12.6cqw, 60px) + 6px);
+  padding-top: 10px;
 }
 
 .player-name {
