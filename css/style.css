@@ -2344,7 +2344,7 @@ input[type="number"] {
 
 .gamewin-card h2 {
   margin: 0 0 10px;
-  color: var(--accent);
+  color: var(--text);
   font-size: clamp(1.5rem, 4.5vw, 3.4rem);
 }
 
@@ -2459,7 +2459,7 @@ input[type="number"] {
 
 .milestone-card h2 {
   margin: 0 0 8px;
-  color: var(--accent);
+  color: var(--text);
   font-size: clamp(1.3rem, 3vw, 1.7rem);
 }
 
@@ -2673,7 +2673,7 @@ input[type="number"] {
 
 .force-reset-card h2 {
   margin: 0 0 10px;
-  color: var(--accent);
+  color: var(--text);
   font-size: clamp(1.5rem, 4.5vw, 3.4rem);
 }
 
@@ -2751,7 +2751,7 @@ input[type="number"] {
 
 .onhill-card h2 {
   margin: 0 0 12px;
-  color: var(--danger);
+  color: var(--text);
   font-size: calc(clamp(2rem, 7vw, 5rem) * var(--onhill-scale, 1));
 }
 
@@ -2801,7 +2801,7 @@ input[type="number"] {
 
 .gamechange-card h2 {
   margin: 0 0 10px;
-  color: var(--accent);
+  color: var(--text);
   font-size: 1.5rem;
 }
 
@@ -2854,7 +2854,7 @@ input[type="number"] {
 
 .queueswap-card h2 {
   margin: 0 0 12px;
-  color: var(--accent);
+  color: var(--text);
   font-size: clamp(2rem, 7vw, 5rem);
 }
 
@@ -2902,7 +2902,7 @@ input[type="number"] {
 
 .save-session-card h2 {
   margin: 0 0 10px;
-  color: var(--accent);
+  color: var(--text);
   font-size: 1.5rem;
 }
 
@@ -2955,7 +2955,7 @@ input[type="number"] {
 
 .rating-edit-card h2 {
   margin: 0 0 10px;
-  color: var(--accent);
+  color: var(--text);
   font-size: 1.5rem;
 }
 
@@ -3023,7 +3023,7 @@ input[type="number"] {
 
 .removed-players-card h2 {
   margin: 0 0 10px;
-  color: var(--accent);
+  color: var(--text);
   font-size: 1.5rem;
 }
 
@@ -3140,7 +3140,7 @@ input[type="number"] {
 
 .recover-detail-card h2 {
   margin: 0 0 10px;
-  color: var(--accent);
+  color: var(--text);
   font-size: 1.4rem;
   text-align: center;
 }
@@ -3158,7 +3158,7 @@ input[type="number"] {
 .recover-detail-card h3 {
   margin: 0 0 8px;
   font-size: 1rem;
-  color: var(--accent);
+  color: var(--text);
 }
 
 .recover-games-checklist {
@@ -3946,7 +3946,7 @@ input[type="number"] {
 .player-stats-row .value {
   font-weight: 800;
   font-size: 1.1rem;
-  color: var(--accent);
+  color: var(--text);
   font-variant-numeric: tabular-nums;
 }
 
