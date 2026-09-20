@@ -5,6 +5,25 @@
   var OLD_STORAGE_KEY = "poolMasterCounter.state.v1";
   var VOICE_PITCHES = [1.0, 1.26, 1.5, 0.79, 1.89, 0.63];
 
+  // This script's own "?v=" cache-bust suffix (see index.html's own
+  // script tag), reused as a query param on fetch("rules/*.html") calls
+  // - those plain fetches have no cache-busting of their own otherwise,
+  // so a browser that already cached an old rules/*.html would keep
+  // serving it forever even after the file's content changes on disk.
+  // Piggybacking on the same suffix this file's own <script> tag already
+  // gets bumped with on every shipped change means editing rules
+  // content "just works" the next time index.html's version bump ships,
+  // with no separate versioning step to remember. document.currentScript
+  // is only reliable synchronously while this script is first
+  // evaluating, hence reading it up here at the very top of the file
+  // rather than lazily inside loadGameRulesContent.
+  var APP_ASSET_VERSION = (function () {
+    var scriptEl = document.currentScript || document.querySelector('script[src*="app.js"]');
+    var src = scriptEl ? scriptEl.getAttribute("src") || "" : "";
+    var match = src.match(/[?&]v=([^&]+)/);
+    return match ? match[1] : "";
+  })();
+
   var GAME_TYPES = {};
   var GAME_TYPE_LIST = [];
   var DEFAULT_GAME_TYPES = [
@@ -12349,9 +12368,10 @@
   // #game-rules-body.
   function loadGameRulesContent() {
     if (!gameRulesContentPromise) {
+      var v = APP_ASSET_VERSION ? "?v=" + APP_ASSET_VERSION : "";
       gameRulesContentPromise = Promise.all([
-        fetch("rules/punishment.html").then(function (r) { return r.text(); }),
-        fetch("rules/rotation.html").then(function (r) { return r.text(); })
+        fetch("rules/punishment.html" + v).then(function (r) { return r.text(); }),
+        fetch("rules/rotation.html" + v).then(function (r) { return r.text(); })
       ]).then(function (parts) {
         gameRulesBody.innerHTML = parts[0] + parts[1];
       });
