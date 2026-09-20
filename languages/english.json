@@ -693,6 +693,7 @@
   "toast.leaderboardCopied": "Leaderboard copied.",
   "toast.letsPlay": "Let's play! 🎱",
   "toast.loadedGameSetup": "Loaded setup: \"{{label}}\".",
+  "toast.loadedRosterListPrevails": "Loaded \"{{label}}\" — {{addedCount}} added, {{standbyCount}} moved to standby.",
   "toast.loadedRotation": "Loaded rotation: \"{{label}}\".",
   "toast.noSavedListsToReset": "No saved player lists or roster players to reset.",
   "toast.noStatsModeNothingSaved": "No Statistic mode is on — nothing was saved.",

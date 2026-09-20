@@ -10851,21 +10851,42 @@
   // Adds every player from a saved roster entry who isn't already on the
   // live roster (case-insensitive), leaving everything else untouched.
   // Shared by the main "Load Player List" button and the wizard.
+  // Makes the active roster match the loaded list exactly, not just add
+  // to it - anyone currently playing but missing from the list drops to
+  // Standby (their data stays put, same as the manual Standby toggle -
+  // see loadPlayerListForQuickCounter below for the identical pattern
+  // applied to Group Session), and everyone on the list is added or
+  // reactivated and marked playing. Returns how many were newly added and
+  // how many existing players got benched, so callers can report both.
   function loadRosterEntry(roster) {
-    if (!roster) return 0;
-    var existingNames = state.players.map(function (p) {
-      return normalizeNameKey(p.name);
+    if (!roster) return { added: 0, standby: 0 };
+    var listKeys = {};
+    roster.players.forEach(function (name) {
+      listKeys[normalizeNameKey(name)] = true;
+    });
+    var standby = 0;
+    state.players.forEach(function (p) {
+      if (p.playing && !listKeys[normalizeNameKey(p.name)]) {
+        p.playing = false;
+        standby += 1;
+      }
     });
     var added = 0;
     roster.players.forEach(function (name) {
       var key = normalizeNameKey(name);
-      if (existingNames.indexOf(key) === -1) {
-        addPlayer(name);
-        existingNames.push(key);
+      var existing = state.players.filter(function (p) {
+        return normalizeNameKey(p.name) === key;
+      })[0];
+      if (existing) {
+        existing.playing = true;
+      } else {
+        var player = addPlayer(name);
+        if (player) player.playing = true;
         added += 1;
       }
     });
-    return added;
+    saveState();
+    return { added: added, standby: standby };
   }
 
   // Quick Counter's own "Load Player List": unlike loadRosterEntry (which
@@ -10907,13 +10928,17 @@
     var idx = parseInt(rosterLoadSelect.value, 10);
     var roster = SAVED_ROSTERS[idx];
     if (!roster) return;
-    var added = loadRosterEntry(roster);
+    var result = loadRosterEntry(roster);
     validateNewPlayerNameInput();
     renderAll();
-    if (added === 0) {
+    if (result.added === 0 && result.standby === 0) {
       showToast(T("toast.allFromListAlreadyInRoster"));
+    } else if (result.standby === 0) {
+      showToast(T(result.added === 1 ? "toast.addedFromListOne" : "toast.addedFromListMany", { count: result.added, label: roster.label }));
     } else {
-      showToast(T(added === 1 ? "toast.addedFromListOne" : "toast.addedFromListMany", { count: added, label: roster.label }));
+      showToast(
+        T("toast.loadedRosterListPrevails", { label: roster.label, addedCount: result.added, standbyCount: result.standby })
+      );
     }
   }
 
@@ -11522,14 +11547,18 @@
     var idx = parseInt(wizardRosterLoadSelect.value, 10);
     var roster = SAVED_ROSTERS[idx];
     if (!roster) return;
-    var added = loadRosterEntry(roster);
+    var result = loadRosterEntry(roster);
     validateWizardNewPlayerNameInput();
     renderAll();
-    showToast(
-      added === 0
-        ? T("toast.allFromListAlreadyInRoster")
-        : T(added === 1 ? "toast.addedFromListOne" : "toast.addedFromListMany", { count: added, label: roster.label })
-    );
+    if (result.added === 0 && result.standby === 0) {
+      showToast(T("toast.allFromListAlreadyInRoster"));
+    } else if (result.standby === 0) {
+      showToast(T(result.added === 1 ? "toast.addedFromListOne" : "toast.addedFromListMany", { count: result.added, label: roster.label }));
+    } else {
+      showToast(
+        T("toast.loadedRosterListPrevails", { label: roster.label, addedCount: result.added, standbyCount: result.standby })
+      );
+    }
   }
 
   function syncWizardRotationEnabledRadios() {
