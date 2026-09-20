@@ -3723,12 +3723,12 @@
     var name = document.createElement("div");
     name.className = "player-name";
     buildPlayerNameLabel(name, player.name, false);
+    name.appendChild(buildPlayerLinkIcon(player.name));
     name.appendChild(buildRatingBadge(player.name));
     var soleOpponent = soleActiveOpponent(player);
     if (soleOpponent) {
       name.appendChild(buildRatingPronosticEl(ratingPronosticVsOpponent(player.name, getPlayerRating(soleOpponent.name))));
     }
-    name.appendChild(buildPlayerLinkIcon(player.name));
     panel.appendChild(name);
 
     var wins = state.playerWins[player.id] || 0;
