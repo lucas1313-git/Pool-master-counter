@@ -101,7 +101,7 @@
   "common.vsName": "vs {{name}}",
   "common.wins": "victorias",
   "common.you": "Tú",
-  "confirm.abandonTournament": "¿Abandonar este torneo? El cuadro se borrará, pero cada partido ya jugado se mantiene guardado en las estadísticas de cada jugador.",
+  "confirm.abandonTournament": "¿Abandonar este torneo? El cuadro se borrará y la clasificación de cada jugador volverá a lo que era antes de este torneo, pero cada partido ya jugado se mantiene guardado en las estadísticas de cada jugador.",
   "confirm.alsoEndsTournamentNote": "Tu torneo activo también terminará y su cuadro se borrará (los partidos ya jugados se mantienen guardados en las estadísticas de cada jugador).",
   "confirm.areYouSure": "¿Estás seguro? Esto no se puede deshacer.",
   "confirm.fullResetAreYouCertain": "¿Estás absolutamente seguro? Esto no se puede deshacer (aparte del archivo de respaldo que se acaba de descargar).",

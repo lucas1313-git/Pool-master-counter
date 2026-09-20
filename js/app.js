@@ -10647,6 +10647,17 @@
       }
       TOURNAMENT = JSON.parse(JSON.stringify(data.tournament));
       saveTournamentToStorage(TOURNAMENT);
+      if (data.ratingHistory) {
+        var importedTournamentRatings = {};
+        Object.keys(data.ratingHistory).forEach(function (name) {
+          importedTournamentRatings[name] = { history: data.ratingHistory[name] };
+        });
+        var mergedTournamentRatings = mergeRatingsData(PLAYER_RATINGS, importedTournamentRatings);
+        Object.keys(importedTournamentRatings).forEach(function (name) {
+          PLAYER_RATINGS[name] = mergedTournamentRatings[name];
+        });
+        saveRatingsToStorage(PLAYER_RATINGS);
+      }
       renderTournamentPage();
       closeRecoverDetail();
       showToast(T("toast.recoverRestored"));
@@ -18166,14 +18177,24 @@
     var isDone = TOURNAMENT && TOURNAMENT.champion;
     var clear = function () {
       if (TOURNAMENT) {
-        saveResetSnapshot("tournament", T("resetSnapshot.tournamentLabel"), {
-          tournament: JSON.parse(JSON.stringify(TOURNAMENT))
-        });
+        var snapshotData = { tournament: JSON.parse(JSON.stringify(TOURNAMENT)) };
+        // Only an incomplete tournament is being thrown away - one that
+        // already crowned a champion is just being dismissed after a
+        // normal finish, and its rating impact is meant to stick exactly
+        // like any other completed game.
+        if (!isDone) {
+          var startMs = new Date(TOURNAMENT.createdAt).getTime();
+          if (!isNaN(startMs)) snapshotData.ratingHistory = revertRatingsChangedSince(startMs);
+        }
+        saveResetSnapshot("tournament", T("resetSnapshot.tournamentLabel"), snapshotData);
       }
       TOURNAMENT = null;
       saveTournamentToStorage(null);
       renderTournamentPage();
-      renderRecoverDataList();
+      // Rating badges reverted above show up all over the app (roster,
+      // scoreboard, standings), not just the tournament page - a full
+      // refresh keeps every one of them in sync immediately.
+      renderAll();
     };
     if (isDone) {
       clear();
@@ -19780,7 +19801,15 @@
     // "Skip" never folded this session into PLAYER_STATS (that's what
     // "Save" does via exportAllPlayerStats) - the only thing about to be
     // lost is the live gameHistory/win tallies, so snapshot just those.
+    // Discarding the session's record without also unwinding the rating
+    // movement it caused would leave ratings permanently reflecting games
+    // the player just chose to treat as if they never happened - so this
+    // rewinds every rating change stamped at or after the session's own
+    // first game, the same way "Reset today's stats" rewinds from
+    // midnight.
     if (state.gameHistory.length) {
+      var sessionStartMs = new Date(state.gameHistory[state.gameHistory.length - 1].ts).getTime();
+      var poppedSessionRatingHistory = isNaN(sessionStartMs) ? {} : revertRatingsChangedSince(sessionStartMs);
       saveResetSnapshot("todayStats", T("resetSnapshot.sessionSkipLabel", { date: todayDateStr() }), {
         date: todayDateStr(),
         prunedSessions: {},
@@ -19788,7 +19817,7 @@
         playerWins: JSON.parse(JSON.stringify(state.playerWins)),
         teamWins: JSON.parse(JSON.stringify(state.teamWins)),
         teamMvpWins: JSON.parse(JSON.stringify(state.teamMvpWins)),
-        ratingHistory: {}
+        ratingHistory: poppedSessionRatingHistory
       });
     }
     closeSaveSessionPopup();

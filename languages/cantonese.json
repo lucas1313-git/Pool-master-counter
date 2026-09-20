@@ -101,7 +101,7 @@
   "common.vsName": "對 {{name}}",
   "common.wins": "勝",
   "common.you": "你",
-  "confirm.abandonTournament": "要放棄呢個錦標賽嗎？對戰表會被清空，但每場已經打完嘅比賽都仍然會記錄喺每位玩家嘅統計入面。",
+  "confirm.abandonTournament": "要放棄呢個錦標賽嗎？對戰表會被清空，每位玩家嘅評分都會打返去呢個錦標賽開始之前嘅狀態，但每場已經打完嘅比賽都仍然會記錄喺每位玩家嘅統計入面。",
   "confirm.alsoEndsTournamentNote": "你而家進行緊嘅錦標賽都會一併結束，對戰表會被清空（已經打完嘅比賽仍然會記錄喺每位玩家嘅統計入面）。",
   "confirm.areYouSure": "你確定嗎？呢個操作無法還原。",
   "confirm.fullResetAreYouCertain": "你真係肯定嗎？呢個動作冇得返轉頭㗎（除咗頭先下載咗嘅備份檔案）。",
