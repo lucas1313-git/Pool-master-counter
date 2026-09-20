@@ -3,8 +3,9 @@ name: Build desktop app
 # Builds a standalone, dependency-free desktop binary per OS (Node Single
 # Executable Application: server/ + the app's static files bundled into
 # one file, no Node.js required on the end user's machine) and publishes
-# them to a rolling GitHub Release that the "Download for..." button on
-# the GitHub Pages site links to via releases/latest/download/<filename>.
+# them to a rolling GitHub Release on a separate public repo
+# (Pool-master-counter-releases) rather than this one, so the download
+# links keep working while this repo is private - see README.md.
 #
 # macOS is arm64 (Apple Silicon) only - Node's SEA feature is untested by
 # upstream on macOS x64 ("is not currently supported and is skipped in
@@ -12,7 +13,7 @@ name: Build desktop app
 
 on:
   push:
-    branches: [main]
+    branches: [release]
     paths:
       - "index.html"
       - "manifest.json"
@@ -68,6 +69,26 @@ jobs:
       - name: Generate the SEA preparation blob
         run: cd installer && node --experimental-sea-config generated/sea-config.json
 
+      - name: Import Developer ID certificate
+        if: runner.os == 'macOS'
+        env:
+          MAC_CERT_BASE64: ${{ secrets.MAC_CERT_BASE64 }}
+          MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+          MAC_KEYCHAIN_PASSWORD: ${{ secrets.MAC_KEYCHAIN_PASSWORD }}
+        run: |
+          CERTIFICATE_PATH=$RUNNER_TEMP/mac_cert.p12
+          KEYCHAIN_PATH=$RUNNER_TEMP/mac-signing.keychain-db
+
+          echo -n "$MAC_CERT_BASE64" | base64 --decode -o $CERTIFICATE_PATH
+
+          security create-keychain -p "$MAC_KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$MAC_KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+          security import $CERTIFICATE_PATH -P "$MAC_CERT_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH login.keychain-db
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -k "$MAC_KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
       - name: Build the macOS .app bundle
         if: runner.os == 'macOS'
         run: |
@@ -108,15 +129,36 @@ jobs:
           rm -rf /tmp/AppIcon.iconset
 
           # Signs the already-injected server binary too (--deep) - both
-          # need a valid ad-hoc signature to run once the .dmg's quarantine
-          # attribute is in play, not just the bundle's main executable.
-          codesign --deep --force --sign - "$APP"
+          # need a real Developer ID signature (with the hardened runtime,
+          # required for notarization) to pass Gatekeeper. The JIT/exec-mem
+          # entitlements are needed because the signed binary is Node's own
+          # runtime (V8), not a plain compiled app.
+          codesign --deep --force --sign "Developer ID Application: Luc Martin (UFAU7GCXKV)" \
+            --options runtime --entitlements mac/entitlements.plist "$APP"
 
           rm -rf generated/dmg-root
           mkdir -p generated/dmg-root
           cp -R "$APP" generated/dmg-root/
           ln -s /Applications generated/dmg-root/Applications
           hdiutil create -volname "Pool Master Counter" -srcfolder generated/dmg-root -ov -format UDZO "../${{ matrix.artifact }}"
+
+      - name: Notarize and staple the .dmg
+        if: runner.os == 'macOS'
+        env:
+          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+          APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+        run: |
+          KEY_PATH=$RUNNER_TEMP/AuthKey_notary.p8
+          echo "$APPSTORE_API_PRIVATE_KEY" > "$KEY_PATH"
+
+          xcrun notarytool submit "${{ matrix.artifact }}" \
+            --key "$KEY_PATH" \
+            --key-id "$APPSTORE_API_KEY_ID" \
+            --issuer "$APPSTORE_API_ISSUER_ID" \
+            --wait
+
+          xcrun stapler staple "${{ matrix.artifact }}"
 
       - name: Build the Windows binary
         if: runner.os == 'Windows'
@@ -145,24 +187,32 @@ jobs:
   release:
     needs: build
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
 
+      # Published to a separate public repo (not this one) so the
+      # download links keep working even though this repo is private -
+      # GitHub Release assets require repo access to fetch, unlike
+      # Pages content, which stays public regardless of repo visibility.
+      # Needs a fine-grained PAT with "Contents: Read and write" on that
+      # repo, stored here as the RELEASES_REPO_TOKEN secret (the default
+      # GITHUB_TOKEN can't write to a different repo).
       - uses: softprops/action-gh-release@v2
         with:
+          repository: lucas1313-git/Pool-master-counter-releases
+          token: ${{ secrets.RELEASES_REPO_TOKEN }}
           tag_name: desktop-latest
           name: "Pool Master Counter — Desktop app (auto-built)"
           make_latest: false
           body: |
-            Auto-built from the latest `main` (${{ github.sha }}).
+            Auto-built from the latest `release` (${{ github.sha }}) of the
+            [main repository](https://github.com/lucas1313-git/Pool-master-counter).
 
             Portable, zero-installation binaries - no admin rights, nothing
-            added to your computer beyond the file itself. Not code-signed
-            (no paid certificate), so first launch shows one OS security
-            warning - see the app's Group Session page for instructions.
+            added to your computer beyond the file itself. The macOS build
+            is signed with a Developer ID certificate and notarized by
+            Apple, so it opens normally with no security warning.
           files: dist/*

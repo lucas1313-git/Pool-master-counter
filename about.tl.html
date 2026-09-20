@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="tl">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pool Master Counter — Tableau de score de billard gratuit</title>
-<meta name="description" content="Une visite guidée du tableau de score de billard gratuit et sans compte : son objectif, à qui il s'adresse, les deux assistants de configuration, et toutes les fonctionnalités — avec de vraies captures d'écran tout du long.">
+<title>Pool Master Counter — Libreng Pool Scoreboard at Stats</title>
+<meta name="description" content="Isang gabay sa libreng pool scoreboard na walang account: ang layunin nito, kung para kanino ito, ang dalawang setup wizard, at bawat tampok — may tunay na screenshot sa buong page.">
 <meta property="og:title" content="Pool Master Counter">
-<meta property="og:description" content="Le tableau de score pour la table sur laquelle vous jouez vraiment. Gratuit, sans compte, fonctionne dans votre navigateur.">
+<meta property="og:description" content="Ang scoreboard para sa mesang tunay mong nilalaruan. Libre, walang account, tumatakbo sa browser mo.">
 <meta property="og:image" content="https://lucas1313-git.github.io/Pool-master-counter/docs/screenshots/live-scoreboard.jpg">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
@@ -153,7 +153,7 @@
     max-width: 1120px;
   }
 
-  .bret {
+  .brand {
     display: flex;
     align-items: center;
     gap: 10px;
@@ -164,7 +164,7 @@
     text-decoration: none;
   }
 
-  .bret img { width: 30px; height: 30px; border-radius: 8px; box-shadow: var(--shadow); }
+  .brand img { width: 30px; height: 30px; border-radius: 8px; box-shadow: var(--shadow); }
 
   .navlinks { display: flex; align-items: center; gap: 22px; }
   .navlinks a.textlink {
@@ -559,9 +559,9 @@
   }
   .ball p { margin-top: 8px; font-size: 13.3px; }
 
-  /* CTA bet */
+  /* CTA band */
 
-  .cta-bet {
+  .cta-band {
     margin-top: 8px;
     border-radius: 20px;
     background: linear-gradient(155deg, var(--felt) 0%, #0a1e14 100%);
@@ -571,21 +571,21 @@
     box-shadow: var(--shadow-lg);
     border: 1px solid color-mix(in srgb, var(--brass) 35%, transparent);
   }
-  .cta-bet .eyebrow { color: color-mix(in srgb, var(--brass-ink) 90%, white 10%); }
-  .cta-bet h2 {
+  .cta-band .eyebrow { color: color-mix(in srgb, var(--brass-ink) 90%, white 10%); }
+  .cta-band h2 {
     margin-top: 12px;
     color: var(--felt-ink);
     font-size: clamp(1.7rem, 4vw, 2.4rem);
   }
-  .cta-bet p {
+  .cta-band p {
     margin: 14px auto 0;
     max-width: 46ch;
     color: color-mix(in srgb, var(--felt-ink) 78%, transparent);
     font-size: 15px;
   }
-  .cta-bet .cta-row { margin-top: 26px; justify-content: center; }
-  .cta-bet .btn-ghost { border-color: color-mix(in srgb, var(--felt-ink) 35%, transparent); color: var(--felt-ink); }
-  .cta-bet .btn-ghost:hover { background: color-mix(in srgb, var(--felt-ink) 12%, transparent); }
+  .cta-band .cta-row { margin-top: 26px; justify-content: center; }
+  .cta-band .btn-ghost { border-color: color-mix(in srgb, var(--felt-ink) 35%, transparent); color: var(--felt-ink); }
+  .cta-band .btn-ghost:hover { background: color-mix(in srgb, var(--felt-ink) 12%, transparent); }
 
   footer {
     margin-top: 60px;
@@ -646,7 +646,7 @@
     /* Fixed reserve for the caption/footer below, which is positioned
        absolutely (out of flow) so its actual text height never changes
        how much room the image gets — otherwise a 1-line vs 2-line
-       caption would shift the image (et the fixed prev/next buttons
+       caption would shift the image (and the fixed prev/next buttons
        would visibly drift relative to it) from one slide to the next. */
     padding-bottom: 112px;
   }
@@ -749,19 +749,19 @@
 
 <nav class="top">
   <div class="wrap">
-    <a class="bret" href="about.html"><img src="icons/icon-512.png" alt=""> Pool Master Counter</a>
+    <a class="brand" href="about.html"><img src="icons/icon-512.png" alt=""> Pool Master Counter</a>
     <div class="navlinks">
-      <a class="textlink" href="#purpose">Objectif</a>
-      <a class="textlink" href="#wizards">Assistants</a>
-      <a class="textlink" href="#tour">Fonctionnalités</a>
+      <a class="textlink" href="#purpose">Layunin</a>
+      <a class="textlink" href="#wizards">Mga Wizard</a>
+      <a class="textlink" href="#tour">Mga Tampok</a>
       <div class="langswitch">
         <a href="about.html">EN</a>
-        <a href="about.fr.html" class="is-active">FR</a>
+        <a href="about.fr.html">FR</a>
         <a href="about.es.html">ES</a>
-        <a href="about.tl.html">TL</a>
+        <a href="about.tl.html" class="is-active">TL</a>
         <a href="about.zh-yue.html">粵</a>
       </div>
-      <a class="btn btn-brass" href="index.html">Ouvrir l'application</a>
+      <a class="btn btn-brass" href="index.html">Buksan ang App</a>
     </div>
   </div>
 </nav>
@@ -769,21 +769,21 @@
 <header class="hero">
   <div class="wrap hero-grid">
     <div>
-      <div class="eyebrow">Gratuit &middot; Sans compte &middot; Fonctionne dans votre navigateur</div>
-      <h1>Le tableau de score pour la table sur laquelle vous jouez vraiment<em>.</em></h1>
-      <p class="dek">Pool Master Counter compte les points de la partie devant vous ce soir &mdash; 8&#8209;Ball, 9&#8209;Ball, Straight Pool, One Pocket &mdash; puis se souvient discrètement de chaque rack ensuite : qui est en forme, qui doit une revanche à qui, et de combien. Pas d'inscription, pas de serveur, rien à installer sauf si vous le voulez.</p>
+      <div class="eyebrow">Libre &middot; Walang account &middot; Tumatakbo sa browser mo</div>
+      <h1>Ang scoreboard para sa mesang tunay mong nilalaruan<em>.</em></h1>
+      <p class="dek">Sinusubaybayan ng Pool Master Counter ang score ng anumang laro mo ngayong gabi &mdash; 8&#8209;Ball, 9&#8209;Ball, Straight Pool, One Pocket &mdash; at tahimik na naaalala ang bawat rack pagkatapos: sino ang nasa porma, sino ang may utang na rematch, at gaano karami. Walang pagpaparehistro, walang server, walang kailangang i-install maliban kung gusto mo.</p>
       <div class="cta-row">
-        <a class="btn btn-brass btn-lg" href="index.html">Ouvrir l'application &rarr;</a>
-        <a class="btn btn-ghost btn-lg" href="https://github.com/lucas1313-git/Pool-master-counter" target="_blank" rel="noopener">Voir le code source</a>
+        <a class="btn btn-brass btn-lg" href="index.html">Buksan ang App &rarr;</a>
+        <a class="btn btn-ghost btn-lg" href="https://github.com/lucas1313-git/Pool-master-counter" target="_blank" rel="noopener">Tingnan ang Source</a>
       </div>
-      <div class="fineprint">DON'T GET COCKY. &mdash; les propres mots de l'application, en haut de chaque page.</div>
+      <div class="fineprint">HUWAG MAGING SOBRANG TIWALA. &mdash; sariling salita ng app, sa itaas ng bawat page.</div>
     </div>
     <div>
       <div class="frame">
         <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
-        <img src="docs/screenshots/setup-panels.jpg" alt="Page principale de Pool Master Counter : panneaux Sauvegarde &amp; Transfert, Ordre des parties, et Partie en cours, avec le tableau de score en direct en dessous">
+        <img src="docs/screenshots/setup-panels.jpg" alt="Pangunahing page ng Pool Master Counter: mga panel na Backup at Transfer, Game Order, at Current Game, may live scoreboard sa ibaba">
       </div>
-      <div class="frame-cap">la vraie application &mdash; pas une maquette</div>
+      <div class="frame-cap">ang tunay na app &mdash; hindi mockup</div>
     </div>
   </div>
 </header>
@@ -793,25 +793,25 @@
   <section id="purpose">
     <div class="wrap">
       <div class="section-head">
-        <div class="eyebrow">Objectif</div>
-        <h2>Un vrai tableau de score, pas une appli de comptage qui a fini par trop s'imposer</h2>
-        <p class="lede">La plupart des applis de billard ne font qu'une seule chose : un simple compteur « +1 », ou une plateforme lourde conçue pour un directeur de tournoi gérant huit tables à la fois. Pool Master Counter se situe entre les deux &mdash; un score en direct suffisamment lisible pour être suivi depuis l'autre bout de la pièce, plus les statistiques, les classements et les tournois qu'un groupe fidèle veut vraiment, sans jamais demeter à personne de créer un compte.</p>
+        <div class="eyebrow">Layunin</div>
+        <h2>Isang tunay na scoreboard, hindi isang tally app na sumobra na sa ginawa</h2>
+        <p class="lede">Karamihan ng pool app ay pumipili ng isang trabaho: isang hubad na "+1" counter, o isang mabigat na platform na ginawa para sa tournament director na nagpapatakbo ng walong mesa nang sabay-sabay. Ang Pool Master Counter ay nasa gitna ng dalawang ito &mdash; sapat na live scoring para patakbuhin mula sa kabilang panig ng kwarto, kasama ang stats, rating, at bracket play na tunay na gusto ng isang grupong matagal nang naglalaro, nang hindi hinihiling sa sinuman na gumawa ng account.</p>
       </div>
       <div class="contrast-plate">
         <div class="contrast-cell">
-          <div class="tag">Pas ça</div>
-          <h4>Un chronomètre avec deux noms dessus</h4>
-          <p>Un simple comptage « premier à » et rien d'autre &mdash; fermez l'onglet et toute la soirée disparaît. Très bien pour une partie ; inutile pour un groupe qui joue chaque semaine.</p>
+          <div class="tag">Hindi ito</div>
+          <h4>Isang stopwatch na may dalawang pangalan</h4>
+          <p>Race&#8209;to counting at wala nang iba &mdash; isara ang tab at nawala na ang buong gabi. Sapat para sa isang laro; walang silbi para sa grupong naglalaro tuwing linggo.</p>
         </div>
         <div class="contrast-cell win">
           <div class="tag">Pool Master Counter</div>
-          <h4>Comptez ce soir, souvenez&#8209;vous de chaque soir</h4>
-          <p>Le tableau en direct, un classement continu pour chacun, l'historique des face&#8209;à&#8209;face, et un tournoi de base &mdash; gratuit, local, permanent &mdash; pour une table et les gens qui continuent d'y venir.</p>
+          <h4>I-score ngayong gabi, alalahanin ang bawat gabi</h4>
+          <p>Ang live board, patuloy na rating para sa lahat, head&#8209;to&#8209;head na talaan, at pangunahing bracket &mdash; libre, lokal, permanente &mdash; para sa isang mesa at sa mga taong palaging pumupunta rito.</p>
         </div>
         <div class="contrast-cell">
-          <div class="tag">Pas ça non plus</div>
-          <h4>Un logiciel de gestion de tournois</h4>
-          <p>Conçu pour des événements à 64 places sur une dizaine de tables physiques, un directeur validant les résultats, un compte pour chaque joueur. Beaucoup trop pour un mardi soir.</p>
+          <div class="tag">Hindi rin ito</div>
+          <h4>Tournament&#8209;operations software</h4>
+          <p>Ginawa para sa 64&#8209;bracket na events sa labindalawang mesa, isang director na nag-a-approve ng resulta, account para sa bawat manlalaro. Sobra na para sa isang Martes na gabi.</p>
         </div>
       </div>
     </div>
@@ -820,30 +820,30 @@
   <section id="who">
     <div class="wrap">
       <div class="section-head">
-        <div class="eyebrow">À qui ça s'adresse</div>
-        <h2>Conçu pour la table, pas pour le circuit</h2>
-        <p class="lede">Quatre façons dont les gens finissent réellement par l'utiliser &mdash; souvent plusieurs à la fois, le même soir.</p>
+        <div class="eyebrow">Para kanino ito</div>
+        <h2>Ginawa para sa mesa, hindi para sa tour</h2>
+        <p class="lede">Apat na paraan kung paano talaga ginagamit ito ng mga tao &mdash; kadalasan mahigit isa, sa parehong gabi.</p>
       </div>
       <div class="personas">
         <div class="persona">
-          <div class="who">Les habitués</div>
-          <h3>Une table à la maison ou une ligue de bar qui joue chaque semaine</h3>
-          <p>Chacun obtient un classement automatique, un historique de face&#8209;à&#8209;face contre tous les autres, et un graphique de toute la rivalité dans le temps &mdash; sans que personne n'ait à penser à le noter.</p>
+          <div class="who">Ang mga regular</div>
+          <h3>Isang home table o bar league na naglalaro tuwing linggo</h3>
+          <p>Ang bawat isa ay nakakakuha ng awtomatikong rating, head&#8209;to&#8209;head na talaan laban sa lahat, at graph ng buong karibalan sa paglipas ng panahon &mdash; nang hindi kinakailangang alalahanin ninuman na isulat ito.</p>
         </div>
         <div class="persona">
-          <div class="who">L'hôte</div>
-          <h3>Celui ou celle qui organise la soirée billard</h3>
-          <p>Le Mode Focus épure l'écran jusqu'à un tableau de score assez gret pour être lu depuis l'autre bout de la pièce, et une zone de notes transforme la soirée en récapitulatif par SMS ou e-mail ensuite.</p>
+          <div class="who">Ang host</div>
+          <h3>Kung sino man ang nagpapatakbo ng pool night</h3>
+          <p>Nililinis ng Focus Mode ang screen tungo sa isang scoreboard na sapat kalaki para basahin mula sa kabilang panig ng kwarto, at ang kahon ng tala ay ginagawang text o email recap ang gabing ito pagkatapos.</p>
         </div>
         <div class="persona">
-          <div class="who">L'organisateur</div>
-          <h3>Un petit club organisant une soirée informelle</h3>
-          <p>Élimination simple, double élimination, ou round robin &mdash; un vrai tableau avec classement et fiches de match, configuré en moins d'une minute, sans appli ni tableur à part.</p>
+          <div class="who">Ang organizer</div>
+          <h3>Isang maliit na club na nagpapatakbo ng impormal na gabi</h3>
+          <p>Single elimination, double elimination, o round robin &mdash; isang tunay na bracket na may standings at match cards, na na-set up sa loob ng isang minuto, walang hiwalay na app o spreadsheet.</p>
         </div>
         <div class="persona">
-          <div class="who">Juste de passage</div>
-          <h3>Quelqu'un qui veut juste un compteur et rien d'autre</h3>
-          <p>Quick Counter saute complètement la configuration : tapez deux noms, appuyez sur +/&minus;. Rien n'est enregistré, rien à configurer &mdash; pour la partie qui n'a pas besoin d'être conservée.</p>
+          <div class="who">Dumadaan lang</div>
+          <h3>Isang taong gusto lang ng tally at wala nang iba</h3>
+          <p>Lalaktawan ng Quick Counter ang buong setup: mag-type ng dalawang pangalan, pindutin ang +/&minus;. Walang nase-save, walang kailangang i-configure &mdash; para sa larong hindi kailangan ng permanenteng talaan.</p>
         </div>
       </div>
     </div>
@@ -852,44 +852,44 @@
   <section id="wizards">
     <div class="wrap">
       <div class="section-head">
-        <div class="eyebrow">Les assistants</div>
-        <h2>Guidé quet vous le voulez, discret quet vous n'en voulez pas</h2>
-        <p class="lede">Deux assistants distincts couvrent les deux moments qui ont vraiment besoin d'être expliqués &mdash; la toute première fois que quelqu'un ouvre l'application, et le début de chaque nouvelle partie ensuite. Les deux peuvent être passés, et annuler l'un ou l'autre ne perd rien de ce qui a déjà été configuré.</p>
+        <div class="eyebrow">Ang mga wizard</div>
+        <h2>Ginagabayan kapag gusto mo, wala sa daanan kapag ayaw mo</h2>
+        <p class="lede">Dalawang hiwalay na wizard ang sumasaklaw sa dalawang sandaling talagang kailangang ipaliwanag &mdash; ang unang beses na binubuksan ninuman ang app, at ang simula ng bawat bagong laro pagkatapos noon. Pareho itong pwedeng laktawan, at ang pagkansela sa alinman ay hindi mawawala ang anumang na-set up na.</p>
       </div>
 
       <div class="wizard-block">
         <div class="wizard-copy">
-          <div class="kicker">Premier lancement &middot; 4 étapes</div>
-          <h3>&ldquo;Welcome!&rdquo; &mdash; la configuration unique</h3>
-          <p class="desc">La toute première fois que l'application s'ouvre sur un appareil, un court assistant configure un joueur et demete quoi faire ensuite &mdash; rien de plus. Il ne réapparaît jamais après ça.</p>
+          <div class="kicker">Unang launch &middot; 4 hakbang</div>
+          <h3>&ldquo;Maligayang pagdating!&rdquo; &mdash; ang isang-beses lang na setup</h3>
+          <p class="desc">Sa unang beses na buksan ang app sa isang device, isang maikling wizard ang nagse-set up ng isang manlalaro at nagtatanong kung ano ang susunod &mdash; wala nang iba. Hindi na ito lalabas ulit pagkatapos noon.</p>
           <div class="step-rail">
-            <div class="step-chip"><span class="num">1</span><span class="label">Welcome!</span></div>
-            <div class="step-chip"><span class="num">2</span><span class="label">What should we call you?</span></div>
-            <div class="step-chip"><span class="num">3</span><span class="label">Ready to play?</span></div>
-            <div class="step-chip"><span class="num">4</span><span class="label">One more thing</span></div>
+            <div class="step-chip"><span class="num">1</span><span class="label">Maligayang pagdating!</span></div>
+            <div class="step-chip"><span class="num">2</span><span class="label">Ano ang itatawag namin sa iyo?</span></div>
+            <div class="step-chip"><span class="num">3</span><span class="label">Handa nang maglaro?</span></div>
+            <div class="step-chip"><span class="num">4</span><span class="label">Isa pang bagay</span></div>
           </div>
-          <div class="wizard-note"><b>Peut être ignoré à chaque étape</b> &mdash; « Get to it now, I know what I'm doing » amène directement dans l'application pour ceux qui préfèrent ne pas être guidés.</div>
+          <div class="wizard-note"><b>Puwedeng laktawan sa bawat hakbang</b> &mdash; direktang dadalhin ka sa app ng "Sige na, alam ko na ang gagawin" para sa sinumang ayaw nang gabayan.</div>
         </div>
       </div>
 
       <div class="wizard-block with-image">
         <div class="wizard-copy">
-          <div class="kicker">Chaque nouvelle partie &middot; 5 étapes &middot; &ldquo;&#129497; Start Wizard&rdquo;</div>
-          <h3>L'assistant de configuration de partie</h3>
-          <p class="desc">Le moyen le plus rapide d'entrer dans une vraie partie : choisissez le format, ajoutez des joueurs, et commencez &mdash; chaque étape expliquée en langage clair au fur et à mesure.</p>
+          <div class="kicker">Bawat bagong laro &middot; 5 hakbang &middot; &ldquo;&#129497; Simulan ang Wizard&rdquo;</div>
+          <h3>Ang Game Setup Wizard</h3>
+          <p class="desc">Ang pinakamabilis na paraan papunta sa tunay na laro: piliin ang format, magdagdag ng manlalaro, at magsimula &mdash; bawat hakbang ay ipinapaliwanag sa simpleng salita habang tumatagal.</p>
           <div class="step-rail">
-            <div class="step-chip"><span class="num">1</span><span class="label">Type de partie et format</span></div>
-            <div class="step-chip"><span class="num">2</span><span class="label">Joueurs</span></div>
-            <div class="step-chip"><span class="num">3</span><span class="label">En jeu vs. En attente</span></div>
+            <div class="step-chip"><span class="num">1</span><span class="label">Uri ng laro at format</span></div>
+            <div class="step-chip"><span class="num">2</span><span class="label">Mga Manlalaro</span></div>
+            <div class="step-chip"><span class="num">3</span><span class="label">Playing kumpara sa Standby</span></div>
             <div class="step-chip"><span class="num">4</span><span class="label">Rotation</span></div>
-            <div class="step-chip"><span class="num">5</span><span class="label">Vérification et démarrage</span></div>
+            <div class="step-chip"><span class="num">5</span><span class="label">Suriin at Simulan</span></div>
           </div>
-          <div class="wizard-note"><b>Annuler à tout moment</b> &mdash; les joueurs ajoutés ou les changements de rotation déjà faits sont déjà enregistrés, exactement comme si vous aviez utilisé les panneaux directement.</div>
+          <div class="wizard-note"><b>Kanselahin anumang oras</b> &mdash; ang anumang manlalarong idinagdag o pagbabago sa rotation ay naka-save na, eksaktong tulad na ginamit mo direkta ang mga panel.</div>
         </div>
         <div class="tour-media">
           <div class="frame">
             <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
-            <img src="docs/screenshots/wizard-step1.jpg" alt="Assistant de configuration de partie, étape 1 sur 5 : choix du 9-Ball et du mode Individuel">
+            <img src="docs/screenshots/wizard-step1.jpg" alt="Game Setup Wizard, hakbang 1 sa 5: pinipili ang 9-Ball at Indibidwal na laro">
           </div>
         </div>
       </div>
@@ -899,202 +899,202 @@
   <section id="tour">
     <div class="wrap">
       <div class="section-head">
-        <div class="eyebrow">La visite complète</div>
-        <h2>Tout ce qu'il y a sur la table</h2>
-        <p class="lede">Chaque écran ci&#8209;dessous est la vraie application, pas une maquette.</p>
+        <div class="eyebrow">Ang buong tour</div>
+        <h2>Lahat ng nasa mesa</h2>
+        <p class="lede">Ang bawat screen sa ibaba ay ang tunay na app, hindi mockup.</p>
       </div>
 
       <div class="tour-row">
         <div class="tour-copy">
-          <div class="kicker">Partie en direct</div>
-          <h3>Un tableau de score conçu pour être lu depuis l'autre bout de la pièce</h3>
-          <p class="desc">Appuyez sur +/&minus; sur la carte d'un joueur pour suivre les billes, points ou racks vers l'objectif &mdash; chaque appui joue son propre son synthétisé. Atteindre l'objectif enregistre la victoire et démarre automatiquement la partie suivante.</p>
+          <div class="kicker">Live na laro</div>
+          <h3>Isang scoreboard na ginawang mabasa mula sa kabilang panig ng kwarto</h3>
+          <p class="desc">Pindutin ang +/&minus; sa card ng manlalaro para subaybayan ang bola, puntos, o rack papunta sa target &mdash; bawat pindot ay may sariling tunog. Ang pag-abot sa target ay awtomatikong nagbibigay ng panalo at sinisimulan ang susunod na laro.</p>
           <ul class="tour-list">
-            <li><strong>Mode Focus</strong> masque tous les panneaux de configuration pour ne laisser que le tableau.</li>
-            <li><strong>Milestone, On&#8209;the&#8209;Hill, et Game Changed</strong> des fenêtres qui signalent une victoire, un avertissement à une victoire de la cible, et un changement de rotation.</li>
-            <li><strong>Undo Last Win, Share Stetings, Export Session</strong> &mdash; toujours à portée d'un tap.</li>
+            <li>Itinatago ng <strong>Focus Mode</strong> ang bawat setup panel tungo sa board lang.</li>
+            <li>Ang mga pop&#8209;up na <strong>Milestone, On&#8209;the&#8209;Hill, at Game Changed</strong> ay minamarkahan ang isang panalo, babala ng isang-panalo na lang, at pagpapalit ng rotation.</li>
+            <li><strong>Undo Last Win, Share Standings, Export Session</strong> &mdash; isang pindot lang ang layo, palagi.</li>
           </ul>
         </div>
         <div class="tour-media two-up">
           <div class="frame">
             <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
-            <img src="docs/screenshots/live-scoreboard.jpg" alt="Tableau de score en direct en milieu de session avec quatre joueurs visant 5 victoires en 9-Ball">
+            <img src="docs/screenshots/live-scoreboard.jpg" alt="Live scoreboard sa gitna ng session na may apat na manlalaro na nag-ra-race sa 5 panalo sa 9-Ball">
           </div>
           <div class="frame">
             <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
-            <img src="docs/screenshots/focus-mode.jpg" alt="Mode Focus : tous les panneaux de configuration masqués, il ne reste que le tableau de score et la position de rotation">
+            <img src="docs/screenshots/focus-mode.jpg" alt="Focus Mode: nakatago ang bawat setup panel, natitira lang ang scoreboard at posisyon ng rotation">
           </div>
         </div>
       </div>
 
       <div class="tour-row flip">
         <div class="tour-copy">
-          <div class="kicker">Apparence</div>
-          <h3>Dix-neuf thèmes, changés en un tap</h3>
-          <p class="desc">Un vert billard profond jusqu'à un chatoiement pastel doux, plus deux vrais modes clairs et deux paires à contraste élevé &mdash; chaque couleur posée sur un fond d'accent est calculée par thème pour rester lisible, si bien qu'un bouton ne devine jamais son propre contraste.</p>
+          <div class="kicker">Hitsura at damdamin</div>
+          <h3>Labinsiyam na tema, papalitan sa isang pindot</h3>
+          <p class="desc">Mula sa malalim na felt green hanggang sa malambot na pastel shimmer, kasama ang dalawang tunay na light mode at dalawang high&#8209;contrast na pares &mdash; ang bawat kulay na nasa accent background ay kinakalkula kada tema para manatiling madaling basahin, kaya hindi kailanman nagpapalagay ang isang button sa sarili nitong contrast.</p>
           <ul class="tour-list">
-            <li><strong>Crimson Felt</strong> est l'apparence d'origine et celle par défaut.</li>
-            <li><strong>Daybreak Chalk</strong> et <strong>Pearl Lounge</strong> sont de vrais thèmes clairs, pas un thème sombre éclairci.</li>
-            <li><strong>Blackout Contrast</strong> et <strong>Paper Contrast</strong> poussent la lisibilité au maximum.</li>
+            <li>Ang <strong>Crimson Felt</strong> ang orihinal na hitsura at ang default.</li>
+            <li>Ang <strong>Daybreak Chalk</strong> at <strong>Pearl Lounge</strong> ay tunay na light theme, hindi lang pinaliwanag na madilim na tema.</li>
+            <li>Ang <strong>Blackout Contrast</strong> at <strong>Paper Contrast</strong> ay itinutulak ang pagiging madaling basahin hanggang sa pinakamalayo.</li>
           </ul>
         </div>
         <div class="tour-media">
           <div class="frame">
             <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
-            <img src="docs/screenshots/themes.jpg" alt="Le thème clair Daybreak Chalk, montrant les panneaux de configuration repliés">
+            <img src="docs/screenshots/themes.jpg" alt="Ang Daybreak Chalk light theme, ipinapakita ang naka-collapse na setup panels">
           </div>
         </div>
       </div>
 
       <div class="tour-row">
         <div class="tour-copy">
-          <div class="kicker">Joueurs</div>
-          <h3>Une liste de joueurs qui se souvient d'elle&#8209;même</h3>
-          <p class="desc">Ajoutez un nom, il est automatiquement mis en majuscule et vérifié pour les doublons pendant que vous tapez. Appuyez sur En attente/En jeu pour faire entrer ou sortir quelqu'un de la partie du soir sans le perdre de la liste.</p>
+          <div class="kicker">Mga Manlalaro</div>
+          <h3>Isang roster na naaalala ang sarili nito</h3>
+          <p class="desc">Magdagdag ng pangalan at awtomatiko itong naka-capitalize at sinusuri para sa duplicate habang nagta-type ka. Pindutin ang Standby/Playing para ilipat ang isang tao papasok o palabas sa laro ngayong gabi nang hindi sila nawawala sa roster.</p>
           <ul class="tour-list">
-            <li><strong>Listes de joueurs enregistrées</strong> enregistrent automatiquement chaque groupe distinct avec qui vous avez déjà joué &mdash; un tap pour charger.</li>
-            <li><strong>Les noms ne sont pas sensibles à la casse</strong> &mdash; « bob » et « Bob » sont toujours la même personne.</li>
-            <li>Retirer quelqu'un de ce soir ne touche jamais à ses statistiques de carrière.</li>
+            <li>Awtomatikong nase-save ng <strong>naka-save na listahan ng manlalaro</strong> ang bawat kakaibang grupong nalaruan mo na &mdash; isang pindot para i-load.</li>
+            <li><strong>Hindi case-sensitive ang mga pangalan</strong> &mdash; ang "bob" at "Bob" ay palaging parehong tao.</li>
+            <li>Ang pag-alis sa isang tao ngayong gabi ay hindi kailanman ginagalaw ang career stats nila.</li>
           </ul>
         </div>
         <div class="tour-media">
           <div class="frame">
             <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
-            <img src="docs/screenshots/players-panel.jpg" alt="Panneau des joueurs avec quatre joueurs marqués En jeu et le classement par joueur en dessous">
+            <img src="docs/screenshots/players-panel.jpg" alt="Players panel na may apat na manlalarong markadong Playing at standings kada manlalaro sa ibaba">
           </div>
         </div>
       </div>
 
       <div class="tour-row flip">
         <div class="tour-copy">
-          <div class="kicker">Tournois</div>
-          <h3>Un vrai tableau, pas un tableur</h3>
-          <p class="desc">Élimination simple, double élimination, round robin, ou Suisse, configurés depuis le même assistant ou la page Tournoi. Les tableaux s'affichent comme un arbre connecté &mdash; côté vainqueurs, côté perdants, et une Grete Finale qui suit un parcours venu jusqu'au bout du tableau des perdants.</p>
+          <div class="kicker">Mga Tournament</div>
+          <h3>Isang tunay na bracket, hindi spreadsheet</h3>
+          <p class="desc">Single elimination, double elimination, round robin, o Swiss, na-set up mula sa parehong wizard o sa Tournament page. Ang mga bracket ay ipinapakita bilang isang magkakaugnay na puno &mdash; panig ng winners, panig ng losers, at isang Grand Final na sumusubaybay sa takbo mula mismo sa losers bracket.</p>
           <ul class="tour-list">
-            <li>Les joueurs éliminés apparaissent barrés, directement dans le tableau.</li>
-            <li>Tomber dans le tableau des perdants ne veut pas dire que c'est fini &mdash; remportez-le et vous affrontez le champion du tableau des vainqueurs en Grete Finale.</li>
-            <li>Chaque rack compte toujours pour les statistiques de carrière et les classements &mdash; ce n'est pas un ensemble de données séparé.</li>
+            <li>Ang mga natanggal na manlalaro ay may guhit-tawid, mismo sa bracket.</li>
+            <li>Kapag bumaba ka sa losers bracket ay hindi ka pa tapos &mdash; manalo ka rito at makakaharap mo ang kampeon ng winners sa Grand Final.</li>
+            <li>Ang bawat rack ay binibilang pa rin sa career stats at rating &mdash; hindi ito hiwalay na tipon ng datos.</li>
           </ul>
         </div>
         <div class="tour-media two-up side">
           <div class="frame">
             <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
-            <img src="docs/screenshots/tournament-bracket.jpg" alt="Tableaux des vainqueurs et des perdants avec une Grete Finale en direct, un challenger venu du tableau des perdants">
+            <img src="docs/screenshots/tournament-bracket.jpg" alt="Winners at losers brackets na may live na Grand Final, isang challenger na dumarating mula sa losers bracket">
           </div>
           <div class="frame">
             <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
-            <img src="docs/screenshots/tournament-losers-bracket.jpg" alt="Un parcours complet dans le tableau des perdants, tour après tour, jusqu'à la Grete Finale">
+            <img src="docs/screenshots/tournament-losers-bracket.jpg" alt="Isang buong takbo sa losers bracket, round kada round, na nagtatapos sa Grand Final">
           </div>
         </div>
       </div>
 
       <div class="tour-row">
         <div class="tour-copy">
-          <div class="kicker">Tous les joueurs</div>
-          <h3>Tous les joueurs qui ont déjà pris une queue ici</h3>
-          <p class="desc">Triez par pourcentage de victoires, victoires, ou nom, et filtrez par période &mdash; aujourd'hui, une semaine, un an, tout le temps. Passez à un graphique linéaire cumulatif par joueur, avec un détail au clic sur chaque point.</p>
+          <div class="kicker">Lahat ng Manlalaro</div>
+          <h3>Bawat manlalarong nakahawak na ng cue dito</h3>
+          <p class="desc">Ayusin ayon sa win percentage, panalo, o pangalan, at i-filter ayon sa panahon &mdash; ngayon, isang linggo, isang taon, buong panahon. Lumipat sa cumulative line graph kada manlalaro, na may click&#8209;para-ipakita ng detalye sa bawat data point.</p>
           <ul class="tour-list">
-            <li>Vue en barres : parties jouées/gagnées/perdues, plus une chronologie de quet.</li>
-            <li>Vue graphique : appuyez sur n'importe quel point pour voir les adversaires et résultats derrière.</li>
-            <li>Un petit badge de classement suit chaque nom, partout où il apparaît.</li>
+            <li>Bar view: mga larong nilaro/napanalunan/natalo, kasama ang timeline kung kailan.</li>
+            <li>Graph view: pindutin ang anumang tuldok para sa mga kalaban at resulta sa likod nito.</li>
+            <li>Isang maliit na rating badge ang sumusunod sa bawat pangalan, saan man ito lumitaw.</li>
           </ul>
         </div>
         <div class="tour-media two-up">
           <div class="frame">
             <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
-            <img src="docs/screenshots/all-players-bars.jpg" alt="Vue en barres de Tous les joueurs montrant les parties jouées, gagnées, et perdues par joueur">
+            <img src="docs/screenshots/all-players-bars.jpg" alt="All Players bar view na nagpapakita ng mga larong nilaro, napanalunan, at natalo kada manlalaro">
           </div>
           <div class="frame">
             <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
-            <img src="docs/screenshots/all-players-graph.jpg" alt="Vue graphique de Tous les joueurs avec une légende de lignes activables">
+            <img src="docs/screenshots/all-players-graph.jpg" alt="All Players graph view na may legend ng mga linyang pwedeng i-toggle">
           </div>
         </div>
       </div>
 
       <div class="tour-row flip">
         <div class="tour-copy">
-          <div class="kicker">Un joueur, en détail</div>
-          <h3>Chaque joueur a sa propre page</h3>
-          <p class="desc">Appuyez sur n'importe quel nom pour l'ouvrir : un résumé des statistiques d'aujourd'hui à toujours, un historique complet de face&#8209;à&#8209;face contre chaque adversaire affronté, et les mêmes graphiques limités à cette personne.</p>
+          <div class="kicker">Isang manlalaro, nang buo</div>
+          <h3>Bawat manlalaro ay may sariling page</h3>
+          <p class="desc">Pindutin ang anumang pangalan para buksan ito: buod ng stats mula ngayon hanggang buong-panahon, kumpletong head&#8209;to&#8209;head na talaan laban sa bawat kalabang kinaharap, at ang parehong mga graph na para lang sa kanila.</p>
           <ul class="tour-list">
-            <li>Un menu déroulant dans l'en&#8209;tête saute directement à n'importe quel autre joueur &mdash; pas besoin de retourner à Tous les joueurs.</li>
-            <li>L'historique des sessions se déploie sur chaque partie individuelle jouée.</li>
-            <li>Exportez les statistiques ou réinitialisez uniquement l'historique enregistré de ce joueur, indépendamment de celui des autres.</li>
+            <li>Ang header dropdown ay direktang lumilipat sa ibang manlalaro &mdash; walang kailangang balik sa All Players.</li>
+            <li>Ang Session History ay pinapalawak tungo sa bawat indibidwal na larong nilaro.</li>
+            <li>I-export ang Stats o i-reset lang ang naka-save na history ng manlalarong ito, hiwalay sa ibang lahat.</li>
           </ul>
         </div>
         <div class="tour-media">
           <div class="frame">
             <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
-            <img src="docs/screenshots/player-stats-page.jpg" alt="Page joueur d'Alice : 22 victoires, 6 défaites, un taux de victoire de 79 %, et l'historique des face-à-face">
+            <img src="docs/screenshots/player-stats-page.jpg" alt="Player page ni Alice: 22 panalo, 6 talo, 79% win rate, at head-to-head na talaan">
           </div>
         </div>
       </div>
 
       <div class="tour-row">
         <div class="tour-copy">
-          <div class="kicker">La soirée, consignée</div>
-          <h3>Des notes ce soir, un rapport que vous pouvez vraiment envoyer</h3>
-          <p class="desc">Une zone de texte libre pour tout ce qui vaut la peine d'être retenu &mdash; qui est en forme, les moments drôles &mdash; s'enregistre automatiquement pendant que vous tapez. Copier, Envoyer par e&#8209;mail, ou par SMS le rapport le transforme en un vrai récapitulatif : victoires/défaites et évolution du classement de chaque joueur, total des parties, et vos notes.</p>
+          <div class="kicker">Ang gabi, nakasulat</div>
+          <h3>Mga tala ngayong gabi, isang report na tunay mong maipapadala</h3>
+          <p class="desc">Isang malayang lugar para sa kahit anong dapat tandaan &mdash; sino ang nasa porma, nakakatawang sandali &mdash; awtomatikong nase-save habang nagta-type ka. Ginagawa ng Copy, Email, o Text Report na tunay na recap ito: panalo/talo at galaw ng rating ng bawat manlalaro, kabuuang laro, at ang mga tala mo.</p>
           <ul class="tour-list">
-            <li>Généré à neuf à partir des sessions en direct et enregistrées, donc précis même après une réinitialisation en milieu de journée.</li>
-            <li>Prêt à coller, envoyer par e&#8209;mail, ou par SMS, tel quel.</li>
+            <li>Sariwang binubuo mula sa live at naka-save na session, kaya tumpak ito kahit pagkatapos ng reset sa kalagitnaan ng araw.</li>
+            <li>Handa nang i-paste, i-email, o ipadala bilang text, kung ano man ito.</li>
           </ul>
         </div>
         <div class="tour-media">
           <div class="frame">
             <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
-            <img src="docs/screenshots/day-notes.jpg" alt="Panneau Notes du jour avec une note enregistrée et les boutons Copier/E-mail/SMS le rapport">
+            <img src="docs/screenshots/day-notes.jpg" alt="Panel ng Today's Notes na may naka-save na tala at mga button na Copy/Email/Text Report">
           </div>
         </div>
       </div>
 
       <div class="tour-row flip">
         <div class="tour-copy">
-          <div class="kicker">Vos données, votre appareil</div>
-          <h3>Sauvegarde, synchronisation iCloud, et une vraie application de bureau</h3>
-          <p class="desc">Tout est conservé dans le navigateur, sur l'appareil où l'application est utilisée &mdash; il n'y a pas de compte cloud. Exporter toutes les données pour une sauvegarde JSON complète, ou Exporter pour la synchro iCloud pour déplacer une session entre vos propres appareils.</p>
+          <div class="kicker">Ang datos mo, ang device mo</div>
+          <h3>Backup, iCloud sync, at isang tunay na desktop app</h3>
+          <p class="desc">Lahat ay nasa browser sa device na ginagamitan nito &mdash; walang cloud account. Gamitin ang Export All Data para sa buong JSON backup, o Export for iCloud Sync para ilipat ang session sa pagitan ng sarili mong mga device.</p>
           <ul class="tour-list">
-            <li>L'importation <em>fusionne</em> &mdash; rien de ce qui est déjà là n'est écrasé ni compté en double.</li>
-            <li>Un téléchargement de bureau gratuit fait tourner le relais local qu'un second téléphone peut rejoindre pour marquer la même partie ensemble.</li>
+            <li>Ang Import ay <em>nagme-merge</em> &mdash; walang mapapalitan o dobleng mabibilang na nariyan na.</li>
+            <li>Ang libreng desktop download ay nagpapatakbo ng local relay na pwedeng sumali ang pangalawang telepono para i-score nang magkasama ang parehong live na laro.</li>
           </ul>
         </div>
         <div class="tour-media">
           <div class="frame">
             <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
-            <img src="docs/screenshots/backup-panel.jpg" alt="Panneau Sauvegarde & Transfert, déplié, avec les boutons Exporter toutes les données et L'importationer des données">
+            <img src="docs/screenshots/backup-panel.jpg" alt="Panel ng Backup at Transfer, nakabukas, may mga button na Export All Data at Import Data">
           </div>
         </div>
       </div>
 
       <div class="tour-row">
         <div class="tour-copy">
-          <div class="kicker">Jamais bloqué</div>
-          <h3>Un seul guide, contextuel à l'endroit où vous êtes</h3>
-          <p class="desc">Une seule fenêtre Aide &amp; Guide couvre chaque fonctionnalité sur chaque page &mdash; et elle est contextuelle : l'ouvrir saute directement à la section correspondant à la page où vous êtes, le reste étant à portée de défilement.</p>
+          <div class="kicker">Hindi kailanman matitigilan</div>
+          <h3>Isang gabay, kontekstuwal saan ka man</h3>
+          <p class="desc">Sinasaklaw ng iisang Help at Guide overlay ang bawat tampok sa bawat page &mdash; at ito ay kontekstuwal: ang pagbukas dito ay direktang pupunta sa seksyon ng anumang page na kinaroroonan mo ngayon, may natitira na isang scroll na lang ang layo.</p>
         </div>
         <div class="tour-media">
           <div class="frame">
             <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
-            <img src="docs/screenshots/help-guide.jpg" alt="La fenêtre Aide & Guide, ouverte sur la section Page principale">
+            <img src="docs/screenshots/help-guide.jpg" alt="Ang Help at Guide overlay, nakabukas sa seksyon ng Main Page">
           </div>
         </div>
       </div>
 
       <div class="tour-row flip">
         <div class="tour-copy">
-          <div class="kicker">De quoi se vanter</div>
-          <h3>Le classement du Panthéon</h3>
-          <p class="desc">Un score MVP mélange taux de victoire, victoires en tournoi, classement, victoires dominantes, et longues séries en un seul classement, une fois qu'un joueur a assez de parties au compteur pour être jugé équitablement.</p>
+          <div class="kicker">Karapatang magyabang</div>
+          <h3>Ang Hall of Fame leaderboard</h3>
+          <p class="desc">Pinagsasama ng MVP score ang win rate, panalo sa tournament, rating, dominanteng panalo, at mahahabang run tungo sa isang ranggo, kapag may sapat na ang manlalaro na laro sa board para husgahan nang patas.</p>
           <ul class="tour-list">
-            <li>Des places de podium en or, argent, et bronze, avec une explication en langage clair « pourquoi suis&#8209;je classé ici » pour chaque joueur.</li>
-            <li>Un classement Équipes dédié est accessible en un tap pour le jeu en groupe.</li>
-            <li>Partagez tout le tableau comme un rapport, comme n'importe quelle autre page de statistiques.</li>
+            <li>Gold, silver, at bronze na puwesto sa podium, na may simpleng paliwanag na "bakit ako naka-ranggo dito" para sa bawat manlalaro.</li>
+            <li>May sariling Teams leaderboard na isang pindot lang ang layo para sa group play.</li>
+            <li>I-share ang buong board bilang report, tulad ng ibang stats page.</li>
           </ul>
         </div>
         <div class="tour-media">
           <div class="frame">
             <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
-            <img src="docs/screenshots/leaderboard.jpg" alt="Classement du Panthéon, joueurs classés avec une étiquette MVP dorée et des médailles de podium">
+            <img src="docs/screenshots/leaderboard.jpg" alt="Hall of Fame leaderboard, mga naka-ranggong manlalaro na may gold na MVP tag at podium medals">
           </div>
         </div>
       </div>
@@ -1104,45 +1104,45 @@
   <section id="rack">
     <div class="wrap">
       <div class="section-head">
-        <div class="eyebrow">Encore plus dans le rack</div>
-        <h2>Le reste de ce qu'il y a ici</h2>
-        <p class="lede">Plus petit à l'écran, pas moins utile.</p>
+        <div class="eyebrow">Higit pa sa rack</div>
+        <h2>Ang natitira pang laman dito</h2>
+        <p class="lede">Mas maliit sa screen space, hindi sa kapakinabangan.</p>
       </div>
       <div class="rack">
         <div class="ball">
           <div class="num">&#128288;</div>
-          <h4>Classement façon Fargo</h4>
-          <p>Chaque joueur obtient un classement automatique de type Elo, sur la même échelle publiée qu'utilise FargoRate &mdash; un écart de 100 points donne environ un favori à 2 contre 1. Aucun moyen de le modifier à la main ; il ne bouge qu'avec de vraies parties.</p>
+          <h4>Fargo&#8209;style na rating</h4>
+          <p>Ang bawat manlalaro ay awtomatikong nakakakuha ng Elo&#8209;style na rating sa parehong inilathalang scale na ginagamit ng FargoRate &mdash; ang agwat na 100 puntos ay katumbas ng humigit-kumulang 2:1 na paborito. Walang paraan na i-edit ito nang manu-mano; gumagalaw lang ito mula sa tunay na laro.</p>
         </div>
         <div class="ball">
           <div class="num">&#9878;&#65039;</div>
-          <h4>Heticap Fair Match</h4>
-          <p>Activez&#8209;le et le camp le moins bien classé reçoit un objectif plus court au lieu du même &mdash; calculé pour que le match soit proche d'un pile ou face selon l'écart de classement réel.</p>
+          <h4>Fair Match handicapping</h4>
+          <p>I-on ito at ang panig na mas mababa ang rating ay makakakuha ng mas maikling race target sa halip na pareho &mdash; kinakalkula para maging malapit sa coin&#8209;flip ang match batay sa tunay na agwat ng rating.</p>
         </div>
         <div class="ball">
           <div class="num">&#129446;</div>
-          <h4>Détection du skunk</h4>
-          <p>Un perdant qui n'a rien rentré est automatiquement signalé pour les parties en billes/points, et déduit des « billes restant sur la table » pour la famille 8&#8209;Ball &mdash; volontairement exclu du 9&#8209;Ball, où ce n'est pas un vrai concept.</p>
+          <h4>Skunk detection</h4>
+          <p>Ang isang natalong walang na-pot ay awtomatikong nafla-flag para sa mga larong balls/points, at hinango mula sa "mga natitirang bola sa mesa" para sa 8&#8209;Ball family &mdash; tama namang hindi kasama ang 9&#8209;Ball, kung saan hindi ito tunay na konsepto.</p>
         </div>
         <div class="ball">
           <div class="num">&#127925;</div>
-          <h4>Du son sans rien à télécharger</h4>
-          <p>Chaque son est synthétisé en direct avec la Web Audio API. Atteindre un objectif « premier à N » déclenche le thème complet de 30 notes de la 9e de Beethoven, grave et avec une traîne de réverbération.</p>
+          <h4>Tunog na walang kailangang i-download</h4>
+          <p>Ang bawat tunog ay ginagawa nang live gamit ang Web Audio API. Umabot sa race&#8209;to&#8209;N milestone at tutugtog ang buong 30&#8209;notang tema mula sa Beethoven's 9th, mababa ang tono na may reverb.</p>
         </div>
         <div class="ball">
           <div class="num">&#128241;</div>
           <h4>Group Session</h4>
-          <p>Hébergez une session sur le WiFi local et un second téléphone peut scanner un code QR pour rejoindre et marquer activement la même partie en direct &mdash; pas d'internet, pas de compte, rien ne sort de la pièce.</p>
+          <p>Mag-host ng session sa local WiFi at ang pangalawang telepono ay pwedeng mag-scan ng QR code para sumali at aktibong i-score ang parehong live na laro &mdash; walang internet, walang account, walang lalabas sa kwarto.</p>
         </div>
         <div class="ball">
           <div class="num">&#9203;</div>
           <h4>Quick Counter</h4>
-          <p>« Just give me a counter » saute complètement l'assistant &mdash; un simple compteur modifiable sans type de partie, sans objectif, et rien d'écrit en mémoire. Rechargez la page et il disparaît, volontairement.</p>
+          <p>Ang "Bigyan lang ako ng counter" ay lalaktaw sa buong wizard &mdash; isang hubad, ma-edit na tally na walang uri ng laro, walang target, at walang isinusulat sa storage. I-reload ang page at mawawala ito, sinasadya.</p>
         </div>
         <div class="ball">
           <div class="num">&#128274;</div>
-          <h4>Rien ne quitte l'appareil</h4>
-          <p>Pas de compte, pas de serveur, pas d'analytique. Chaque joueur, statistique, classement, et tableau vit dans le stockage local de l'appareil que vous utilisez, jusqu'à ce que vous choisissiez de l'exporter.</p>
+          <h4>Walang lalabas sa device</h4>
+          <p>Walang account, walang server, walang analytics. Ang bawat manlalaro, stat, rating, at bracket ay nasa local storage ng device na ginagamit mo, hanggang piliin mong i-export ito.</p>
         </div>
       </div>
     </div>
@@ -1150,13 +1150,13 @@
 
   <section>
     <div class="wrap">
-      <div class="cta-bet">
-        <div class="eyebrow">En avant, on rack</div>
-        <h2>Gratuit, pour toujours, pour une table.</h2>
-        <p>Aucun compte à créer, rien à installer, rien envoyé nulle part. Ouvrez&#8209;le sur ce que vous avez déjà en poche et démarrez la prochaine partie.</p>
+      <div class="cta-band">
+        <div class="eyebrow">Ihanda na</div>
+        <h2>Libre, walang hanggan, para sa isang mesa.</h2>
+        <p>Walang account na gagawin, walang kailangang i-install, walang ipinapadala kahit saan. Buksan ito sa anumang nasa bulsa mo na at simulan ang susunod na laro.</p>
         <div class="cta-row">
-          <a class="btn btn-brass btn-lg" href="index.html">Ouvrir l'application &rarr;</a>
-          <a class="btn btn-ghost btn-lg" href="https://github.com/lucas1313-git/Pool-master-counter" target="_blank" rel="noopener">Voir le code source</a>
+          <a class="btn btn-brass btn-lg" href="index.html">Buksan ang App &rarr;</a>
+          <a class="btn btn-ghost btn-lg" href="https://github.com/lucas1313-git/Pool-master-counter" target="_blank" rel="noopener">Tingnan ang Source</a>
         </div>
       </div>
     </div>
@@ -1166,24 +1166,24 @@
 
 <footer>
   <div class="wrap">
-    <div class="tagline">&ldquo;Don't get cocky.&rdquo;</div>
+    <div class="tagline">&ldquo;Huwag maging sobrang tiwala.&rdquo;</div>
     <div class="footlinks">
-      <a class="textlink" href="index.html">Ouvrir l'application</a>
+      <a class="textlink" href="index.html">Buksan ang App</a>
       <a class="textlink" href="https://github.com/lucas1313-git/Pool-master-counter" target="_blank" rel="noopener">GitHub</a>
-      <a class="textlink" href="https://github.com/lucas1313-git/Pool-master-counter/blob/main/README.md" target="_blank" rel="noopener">Documentation complète</a>
+      <a class="textlink" href="https://github.com/lucas1313-git/Pool-master-counter/blob/main/README.md" target="_blank" rel="noopener">Kumpletong Dokumentasyon</a>
     </div>
   </div>
 </footer>
 
-<div class="lightbox" id="lightbox" hidden role="dialog" aria-modal="true" aria-label="Visionneuse de captures d'écran">
+<div class="lightbox" id="lightbox" hidden role="dialog" aria-modal="true" aria-label="Tagatingin ng screenshot">
   <div class="lightbox-topbar">
-    <button type="button" class="lightbox-close" id="lightbox-close" aria-label="Fermer">&#215;</button>
+    <button type="button" class="lightbox-close" id="lightbox-close" aria-label="Isara">&#215;</button>
   </div>
   <div class="lightbox-stage">
     <div class="lightbox-frame">
       <img id="lightbox-img" src="" alt="">
-      <button type="button" class="lightbox-btn lightbox-prev" id="lightbox-prev" aria-label="Capture d'écran précédente">&#8249;</button>
-      <button type="button" class="lightbox-btn lightbox-next" id="lightbox-next" aria-label="Capture d'écran suivante">&#8250;</button>
+      <button type="button" class="lightbox-btn lightbox-prev" id="lightbox-prev" aria-label="Nakaraang screenshot">&#8249;</button>
+      <button type="button" class="lightbox-btn lightbox-next" id="lightbox-next" aria-label="Susunod na screenshot">&#8250;</button>
     </div>
     <div class="lightbox-footer">
       <p class="lightbox-caption" id="lightbox-caption"></p>
@@ -1268,7 +1268,7 @@
   frames.forEach(function (frame, index) {
     frame.setAttribute("tabindex", "0");
     frame.setAttribute("role", "button");
-    frame.setAttribute("aria-label", "Ouvrir la capture d'écran dans le diaporama");
+    frame.setAttribute("aria-label", "Buksan ang screenshot sa slideshow");
     frame.addEventListener("click", function () { openAt(index, frame); });
     frame.addEventListener("keydown", function (e) {
       if (e.key === "Enter" || e.key === " ") {

@@ -699,21 +699,57 @@ body {
 
 #app.focus-mode #scoreboard-panel {
   padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+/* With only a couple of players on screen, .scoreboard's existing
+   flex:1 (see the base rule above) already lets it claim the rest of
+   #scoreboard-panel's height once the header/panels above are gone -
+   the pieces here just make that leftover height actually reach the
+   cards instead of turning into blank space below them: rows share it
+   equally (floored so a busy roster with many rows never gets
+   squeezed thinner than a normal-sized card), and each card stretches
+   to fill its row rather than sitting top-aligned at its own content
+   height. */
+#app.focus-mode .scoreboard {
+  grid-auto-rows: minmax(340px, 1fr);
+  align-items: stretch;
+}
+
+#app.focus-mode .player-panel {
+  justify-content: space-evenly;
 }
 
 /* Focus Mode is meant to be read from across the room, so the live score
    numbers scale up - up to 3x their normal size - the moment a card has
-   the room to spare. Sized off the card's own width (container query
-   units) rather than a fixed multiplier or a player-count check, so it
-   naturally scales back down on its own once enough players are on
-   screen that each card gets narrower - no js layout math needed. */
-#app.focus-mode .player-panel,
-#app.focus-mode .member-card {
-  container-type: inline-size;
+   the room to spare. Sized off the card's own box (container query
+   units, keying off whichever of width/height is tighter via min())
+   rather than a fixed multiplier or a player-count check, so it scales
+   back down on its own once enough players are on screen to make each
+   card smaller in either dimension - no js layout math needed.
+   container-type:size (both axes) rather than just inline-size, since
+   the row-stretching above is exactly what now gives .player-panel a
+   real, extrinsic height for cqh units to measure. Team mode's
+   .member-card stays inline-size-only below - it never gets an
+   explicit height of its own (.team-members is plain content-flow
+   inside .team-panel, not a grid track), so sizing it off cqh here
+   would just measure whatever arbitrary height the contain box
+   collapses to and make the card's own content overflow it. */
+#app.focus-mode .player-panel {
+  container-type: size;
 }
 
-#app.focus-mode .stat-value {
-  font-size: clamp(3rem, 24cqw, 9rem);
+/* Scoped to .player-panel specifically (not a bare .stat-value/
+   .player-name rule) - both classes are reused outside it (team score,
+   quick-counter panel, tournament bracket side panels) on boxes that
+   don't get the container-type:size treatment above, where a cqh term
+   would measure a meaningless/zero block size instead of falling back
+   to the old cqw-only behavior those places still rely on. */
+#app.focus-mode .player-panel .stat-value {
+  font-size: clamp(3rem, min(40cqw, 45cqh), 14rem);
 }
 
 #app.focus-mode .stat-value.small {
@@ -722,9 +758,9 @@ body {
 
 /* Names need to read from across the room same as the score itself -
    same container-query scaling as .stat-value above, just a smaller
-   share of the card's width since the score is still the main event. */
-#app.focus-mode .player-name {
-  font-size: clamp(1.8rem, 13cqw, 4.5rem);
+   share of the card's box since the score is still the main event. */
+#app.focus-mode .player-panel .player-name {
+  font-size: clamp(1.8rem, min(15cqw, 15cqh), 5rem);
 }
 
 #app.focus-mode .member-name {
@@ -737,6 +773,10 @@ body {
    instead. */
 #app.focus-mode .shot-counter-widget {
   font-size: clamp(3rem, 11vw, 5.5rem);
+}
+
+#app.focus-mode #timed-tournament-time {
+  font-size: clamp(2.6rem, 9vw, 4.6rem);
 }
 
 /* The keypad shortcut number needs the same across-the-room readability
@@ -753,6 +793,37 @@ body {
 #app.focus-mode .player-panel:has(.keypad-number-badge:not(:empty)),
 #app.focus-mode .member-card:has(.keypad-number-badge:not(:empty)) {
   padding-top: 76px;
+}
+
+/* The +/- buttons read the same as everything else above in Focus Mode
+   - scales with the card same as .stat-value, just never shrinks below
+   the normal-mode min-height. */
+#app.focus-mode .btn-ball {
+  min-height: clamp(64px, 7cqw, 90px);
+  font-size: clamp(1.6rem, 3cqw, 2.2rem);
+}
+
+/* The currently keypad-selected player (see keypadSelectedPlayerId) -
+   the one about to receive the next +/-/undo keypress - gets a visibly
+   bigger card (box, fonts, and controls all together, since they're all
+   inside it) in Focus Mode, per request. zoom rather than
+   transform:scale, since zoom's footprint counts in normal layout flow
+   - the grid/flex container around it reflows to make room instead of
+   letting it overlap a neighbor, which is what keeps this "grows if
+   there's space, less if there isn't" with no JS layout math needed.
+   (grid-column:span was tried first so a selected card could claim a
+   second column outright, but it fed back into the cqw-based font
+   sizing above in a circular way - the bigger font made the column
+   demand more space, which warped every other column's width too - so
+   plain zoom on the whole card, letting normal grid/flex reflow handle
+   the rest, is both simpler and the one that's actually stable.) */
+#app.focus-mode .player-panel.is-keypad-selected,
+#app.focus-mode .member-card.is-keypad-selected {
+  zoom: 1.3;
+}
+
+#app.focus-mode .member-card.is-keypad-selected {
+  zoom: 1.3;
 }
 
 .no-stats-row-inline {
@@ -946,6 +1017,23 @@ button:disabled {
   min-height: 0;
 }
 
+/* Brief accent glow around a panel whose data just changed out from
+   under the player without the page itself moving - e.g. switching the
+   Stats Synopsis period filter (see flashDataChanged). Fades back to
+   the panel's normal border on its own; nothing to clean up after. */
+@keyframes data-flash-pulse {
+  0% {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 70%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+.data-flash {
+  animation: data-flash-pulse 0.8s ease-out;
+}
+
 .panel h2 {
   margin: 0 0 12px;
   font-size: 1.05rem;
@@ -1076,6 +1164,16 @@ select {
   min-width: 140px;
 }
 
+/* The game type picker gets lost among the smaller Target/unit fields
+   next to it - bigger, bolder, and accent-bordered so it reads as the
+   primary choice in that row. */
+#game-type {
+  font-size: 1.15rem;
+  font-weight: 700;
+  border-color: var(--accent);
+  min-width: 180px;
+}
+
 input[type="number"] {
   width: 80px;
 }
@@ -1083,18 +1181,44 @@ input[type="number"] {
 .mode-row label {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex: 1;
   min-width: 140px;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 10px 12px;
+  padding: 12px 14px;
   cursor: pointer;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+/* Individual/Teams currently isn't obvious at a glance - a clear filled
+   highlight on whichever is selected, not just the small radio dot. */
+.mode-row label:has(input:checked) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, var(--bg-card));
+  color: var(--accent);
 }
 
 .mode-row input[type="radio"] {
   accent-color: var(--accent);
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+}
+
+/* Race-to milestone and Ends-after-minutes sit right under the
+   Race to Wins / Timed Tournament pair above them - same flex basis as
+   .mode-row label so each settings column lines up with its control
+   instead of stacking as two separate full-width rows. */
+.settings-col {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex: 1;
+  min-width: 140px;
 }
 
 .checkbox-row {
@@ -1111,6 +1235,38 @@ input[type="number"] {
   height: 20px;
   accent-color: var(--accent);
   flex: 0 0 auto;
+}
+
+/* An easy-to-miss dim checkbox row otherwise - a boxed, bold, accent-
+   highlighted toggle (matching the Individual/Teams treatment above)
+   makes on/off obvious at a glance. Shared class since it's used on
+   several important settings toggles (rotation - which appears twice,
+   once in Games Rotations and once as a synced mirror in Current Game -
+   plus Fargo balancing and the shot counter). */
+.checkbox-row.checkbox-row-prominent {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+  /* Lets several of these share one .row (Fargo/Shot Counter/Timed
+     Tournament) instead of each being a full-width block - a lone one
+     (the rotation toggle) just fills its row same as before. */
+  flex: 1;
+  min-width: 140px;
+}
+
+.checkbox-row.checkbox-row-prominent:has(input:checked) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, var(--bg-card));
+  color: var(--accent);
+}
+
+.checkbox-row.checkbox-row-prominent input[type="checkbox"] {
+  width: 24px;
+  height: 24px;
 }
 
 /* ---------- Game rotation ---------- */
@@ -1261,7 +1417,7 @@ input[type="number"] {
   border-radius: 999px;
   background: color-mix(in srgb, var(--accent) 18%, var(--bg-panel));
   border: 1px solid var(--border);
-  color: var(--accent);
+  color: var(--text);
   font-size: 0.95rem;
   font-weight: 700;
   vertical-align: middle;
@@ -1439,7 +1595,7 @@ input[type="number"] {
   margin: 4px auto 14px;
   background: rgba(0, 0, 0, 0.6);
   border: 2px solid rgba(255, 255, 255, 0.22);
-  color: var(--text);
+  color: #fff;
   padding: clamp(10px, 2.6vw, 20px) clamp(24px, 6vw, 44px);
   border-radius: 999px;
   font-size: clamp(2.4rem, 9vw, 3.8rem);
@@ -1464,13 +1620,56 @@ input[type="number"] {
   border-radius: 999px;
   font-size: 1.1rem;
   line-height: 1;
-  color: var(--text-dim);
+  color: rgba(255, 255, 255, 0.75);
   cursor: pointer;
 }
 
 .shot-counter-visibility-toggle:hover {
   background: rgba(0, 0, 0, 0.5);
-  color: var(--accent);
+  color: #fff;
+}
+
+/* ---------- Timed Tournament ---------- */
+
+/* Same "lives in the score-keeping area, exempt from Focus Mode's
+   panel-hiding" placement as .shot-counter-widget above, but visually
+   distinct (warm border) since both can be on screen together and need
+   to read as two different clocks, not one. Shows the tournament's
+   remaining time - see tickTimedTournament. */
+.timed-tournament-widget {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  margin: 4px auto 14px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 2px solid rgba(255, 154, 60, 0.55);
+  color: #fff;
+  padding: clamp(8px, 2.2vw, 16px) clamp(18px, 5vw, 32px);
+  border-radius: 999px;
+}
+
+#timed-tournament-time {
+  font-size: clamp(2rem, 7.5vw, 3.2rem);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.03em;
+}
+
+.timed-tournament-pause-toggle {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 999px;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.timed-tournament-pause-toggle:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 /* ---------- Standings ---------- */
@@ -1690,6 +1889,17 @@ input[type="number"] {
   transform: scale(1.1);
 }
 
+/* 15 Ball Rotation's keypad score-entry mode (see handleKeypadShortcut) -
+   the same badge spot as a plain number, but widened into a pill so a
+   multi-digit rotation score ("+15") still fits on one line. */
+.keypad-number-badge.is-entry-buffer {
+  width: auto;
+  min-width: 42px;
+  padding: 0 10px;
+  border-radius: 21px;
+  font-size: 20px;
+}
+
 .player-name {
   font-size: 1.15rem;
   font-weight: 700;
@@ -1736,6 +1946,27 @@ input[type="number"] {
   line-height: 1.1;
   color: var(--accent);
   text-shadow: 0 2px 5px rgba(0, 0, 0, 0.6);
+}
+
+/* Flashed on a player's score number for one render pass right after
+   they gain a point (see applyScoreFlash/lastScoredPlayerId in app.js) -
+   a brief bright pop that settles back into the normal accent color on
+   its own, no JS cleanup needed since it's a one-shot animation. */
+.stat-value-flash {
+  animation: stat-value-flash 0.6s ease-out;
+}
+
+@keyframes stat-value-flash {
+  0% {
+    transform: scale(1.35);
+    color: #fff;
+    text-shadow: 0 0 18px var(--accent), 0 2px 5px rgba(0, 0, 0, 0.6);
+  }
+  100% {
+    transform: scale(1);
+    color: var(--accent);
+    text-shadow: 0 2px 5px rgba(0, 0, 0, 0.6);
+  }
 }
 
 .fair-race-note {
@@ -1820,7 +2051,7 @@ input[type="number"] {
   text-align: center;
   font-size: 1.05rem;
   font-weight: 700;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 6px 8px;
@@ -1992,11 +2223,11 @@ input[type="number"] {
 
 .team-needs-opponent-warning {
   width: 100%;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--bg-panel);
   border: 1px solid var(--danger);
   border-radius: 8px;
   padding: 8px 10px;
-  color: var(--danger);
+  color: var(--text);
   font-size: 0.85rem;
   font-weight: 700;
   text-align: center;
@@ -2012,7 +2243,7 @@ input[type="number"] {
 .member-card {
   position: relative;
   width: 100%;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 10px;
@@ -2160,7 +2391,7 @@ input[type="number"] {
 
 .gamewin-card h2 {
   margin: 0 0 10px;
-  color: var(--accent);
+  color: var(--text);
   font-size: clamp(1.5rem, 4.5vw, 3.4rem);
 }
 
@@ -2178,7 +2409,7 @@ input[type="number"] {
 }
 
 .gamewin-details .player-stats-row {
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--bg-panel);
 }
 
 .gamewin-card .btn-primary {
@@ -2275,7 +2506,7 @@ input[type="number"] {
 
 .milestone-card h2 {
   margin: 0 0 8px;
-  color: var(--accent);
+  color: var(--text);
   font-size: clamp(1.3rem, 3vw, 1.7rem);
 }
 
@@ -2293,7 +2524,7 @@ input[type="number"] {
 }
 
 .milestone-details .player-stats-row {
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--bg-panel);
 }
 
 .milestone-card .btn-primary {
@@ -2403,7 +2634,7 @@ input[type="number"] {
 }
 
 .balls-left-input {
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--text);
@@ -2421,6 +2652,16 @@ input[type="number"] {
 .balls-left-input:focus {
   outline: none;
   border-color: var(--accent);
+}
+
+/* Context for the balls-left prefill on a points-unit win (see
+   creditWin's pointsGapPrefill / showGameWinOverlay) - why that
+   particular number got suggested, not just the number itself. */
+.balls-left-points-hint {
+  margin: -4px 0 0;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  text-align: center;
 }
 
 .gamewin-card .balls-left-row .label,
@@ -2479,7 +2720,7 @@ input[type="number"] {
 
 .force-reset-card h2 {
   margin: 0 0 10px;
-  color: var(--accent);
+  color: var(--text);
   font-size: clamp(1.5rem, 4.5vw, 3.4rem);
 }
 
@@ -2557,7 +2798,7 @@ input[type="number"] {
 
 .onhill-card h2 {
   margin: 0 0 12px;
-  color: var(--danger);
+  color: var(--text);
   font-size: calc(clamp(2rem, 7vw, 5rem) * var(--onhill-scale, 1));
 }
 
@@ -2607,7 +2848,7 @@ input[type="number"] {
 
 .gamechange-card h2 {
   margin: 0 0 10px;
-  color: var(--accent);
+  color: var(--text);
   font-size: 1.5rem;
 }
 
@@ -2660,7 +2901,7 @@ input[type="number"] {
 
 .queueswap-card h2 {
   margin: 0 0 12px;
-  color: var(--accent);
+  color: var(--text);
   font-size: clamp(2rem, 7vw, 5rem);
 }
 
@@ -2708,7 +2949,7 @@ input[type="number"] {
 
 .save-session-card h2 {
   margin: 0 0 10px;
-  color: var(--accent);
+  color: var(--text);
   font-size: 1.5rem;
 }
 
@@ -2761,7 +3002,7 @@ input[type="number"] {
 
 .rating-edit-card h2 {
   margin: 0 0 10px;
-  color: var(--accent);
+  color: var(--text);
   font-size: 1.5rem;
 }
 
@@ -2775,9 +3016,9 @@ input[type="number"] {
   margin: 0 0 20px;
   font-size: 0.88rem;
   font-weight: 600;
-  color: var(--text-dim);
+  color: var(--text);
   text-align: left;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--bg-panel);
   border-radius: 10px;
   padding: 10px 12px;
 }
@@ -2829,7 +3070,7 @@ input[type="number"] {
 
 .removed-players-card h2 {
   margin: 0 0 10px;
-  color: var(--accent);
+  color: var(--text);
   font-size: 1.5rem;
 }
 
@@ -2837,9 +3078,9 @@ input[type="number"] {
   margin: 0 0 20px;
   font-size: 0.88rem;
   font-weight: 600;
-  color: var(--text-dim);
+  color: var(--text);
   text-align: left;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--bg-panel);
   border-radius: 10px;
   padding: 10px 12px;
 }
@@ -2859,7 +3100,7 @@ input[type="number"] {
 }
 
 .player-conflict-row {
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 10px 12px;
@@ -2946,7 +3187,7 @@ input[type="number"] {
 
 .recover-detail-card h2 {
   margin: 0 0 10px;
-  color: var(--accent);
+  color: var(--text);
   font-size: 1.4rem;
   text-align: center;
 }
@@ -2955,8 +3196,8 @@ input[type="number"] {
   margin: 0 0 18px;
   font-size: 0.88rem;
   font-weight: 600;
-  color: var(--text-dim);
-  background: rgba(0, 0, 0, 0.3);
+  color: var(--text);
+  background: var(--bg-panel);
   border-radius: 10px;
   padding: 10px 12px;
 }
@@ -2964,7 +3205,7 @@ input[type="number"] {
 .recover-detail-card h3 {
   margin: 0 0 8px;
   font-size: 1rem;
-  color: var(--accent);
+  color: var(--text);
 }
 
 .recover-games-checklist {
@@ -3016,6 +3257,16 @@ input[type="number"] {
   z-index: 1200;
 }
 
+/* alertModal/confirmModal (#confirm-modal-overlay) is meant to layer on
+   top of any other still-open overlay in this same shared class - e.g.
+   confirming a delete while the picker behind it stays open until the
+   answer comes back. Same z-index as every other .confirm-modal-overlay
+   would leave stacking to DOM order instead, which hides it behind
+   whichever overlay markup happens to come later in the document. */
+#confirm-modal-overlay {
+  z-index: 1300;
+}
+
 .confirm-modal-card {
   background: var(--modal-surface);
   border: 2px solid var(--accent);
@@ -3039,7 +3290,13 @@ input[type="number"] {
 
 .confirm-modal-message {
   margin: 0 0 20px;
-  font-size: 1rem;
+  /* This app is meant to be read across a table, not held up close -
+     explanatory popups (the rating system, K-factor, why a specific
+     game moved the rating the way it did, ...) are exactly the content
+     someone leans back to read, so the text needs to hold up at a few
+     feet, not just at arm's length. */
+  font-size: 1.25rem;
+  line-height: 1.5;
   font-weight: 600;
   color: var(--text-dim);
   white-space: pre-line;
@@ -3047,10 +3304,14 @@ input[type="number"] {
 }
 
 /* Used for long multi-line dumps (e.g. the day report clipboard-copy
-   fallback) instead of a short one-off confirmation sentence. */
+   fallback) instead of a short one-off confirmation sentence - still
+   noticeably bigger than before, just a step down from the default so
+   a dense multi-line report has a chance of fitting without excessive
+   scrolling. */
 .confirm-modal-message.is-long-text {
   text-align: left;
-  font-size: 0.85rem;
+  font-size: 1.1rem;
+  line-height: 1.4;
   font-weight: 500;
 }
 
@@ -3074,6 +3335,164 @@ input[type="number"] {
 
 .confirm-modal-actions .btn {
   width: 100%;
+}
+
+/* ---------- Manage Saved Setups ---------- */
+
+.game-setup-manage-card {
+  max-width: 480px;
+}
+
+.game-setup-manage-select-all {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+
+.game-setup-manage-select-all input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent);
+  flex-shrink: 0;
+}
+
+.game-setup-manage-list {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 40vh;
+  overflow-y: auto;
+  text-align: left;
+}
+
+.game-setup-manage-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.game-setup-manage-checkbox-wrap {
+  display: flex;
+  align-items: center;
+  /* Matches the name input's own min-height so the checkbox lines up
+     with it at the top of the row instead of the row's full (taller,
+     once the detail line wraps) height. */
+  height: 44px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.game-setup-manage-checkbox-wrap input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent);
+  flex-shrink: 0;
+}
+
+.game-setup-manage-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+/* The custom title (e.g. "Thursday game") a saved setup can be given -
+   optional, so it looks like a normal text field rather than a required
+   one until something's actually typed into it. */
+.game-setup-manage-name-input {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.game-setup-manage-detail {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+/* ---------- Setup Preview & Edit ---------- */
+
+/* Wider than the plain .confirm-modal-card default (400px) - this one
+   holds a whole small form, not a sentence and two buttons - and solid
+   --bg-panel rather than the felt-gradient --modal-surface most of that
+   family uses, since the body text here is small/dense (labels, field
+   values), not the large celebratory headline size that gradient reads
+   fine behind in every theme. */
+.game-setup-preview-card {
+  max-width: 560px;
+  background: var(--bg-panel);
+  color: var(--text);
+  text-align: left;
+}
+
+.game-setup-preview-title {
+  color: var(--text);
+  text-align: center;
+}
+
+.game-setup-preview-subtitle {
+  text-align: center;
+  margin: 0 0 16px;
+}
+
+.game-setup-preview-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  max-height: 55vh;
+  padding-right: 2px;
+  margin-bottom: 16px;
+}
+
+.game-setup-preview-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.game-setup-preview-section-label {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+
+.game-setup-preview-row {
+  flex-wrap: wrap;
+}
+
+.game-setup-preview-row label {
+  color: var(--text);
+}
+
+.game-setup-preview-rotation-list {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--text);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.game-setup-preview-rotation-hint {
+  margin: 0;
 }
 
 /* ---------- Delete by Dates ---------- */
@@ -3302,7 +3721,7 @@ input[type="number"] {
   color: var(--text);
   text-decoration: none;
   font-size: 0.82rem;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg-panel);
 }
 
 .help-nav-link:hover,
@@ -3424,7 +3843,7 @@ input[type="number"] {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   cursor: pointer;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg-panel);
 }
 
 .wizard-format-option:has(input:checked) {
@@ -3460,7 +3879,7 @@ input[type="number"] {
   border: 1px dashed var(--border);
   border-radius: var(--radius);
   cursor: pointer;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg-panel);
 }
 
 .wizard-temp-counter-checkbox-label:has(input:checked) {
@@ -3494,7 +3913,7 @@ input[type="number"] {
   display: flex;
   align-items: center;
   gap: 6px;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 999px;
   padding: 5px 8px 5px 12px;
@@ -3526,13 +3945,13 @@ input[type="number"] {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--bg-panel);
   border-radius: var(--radius);
   padding: 10px 14px;
 }
 
 .wizard-summary-row .label {
-  color: var(--text-dim);
+  color: var(--text);
 }
 
 .wizard-summary-row .value {
@@ -3622,8 +4041,12 @@ input[type="number"] {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid var(--border);
+  /* A theme-defined card color, not a flat black overlay - the overlay
+     reads fine darkening an already-dark panel, but on a light theme
+     (Stainless Steel, Pearl Lounge, ...) it just muddies the light
+     panel surface into a low-contrast gray box. */
+  background: var(--bg-card);
+  border: 2px solid var(--border);
   border-radius: 10px;
   padding: 10px 14px;
   margin-bottom: 8px;
@@ -3634,32 +4057,45 @@ input[type="number"] {
 }
 
 .player-stats-row .label {
-  color: var(--text-dim);
+  color: var(--text);
   font-size: 0.9rem;
 }
 
 .player-stats-row .value {
   font-weight: 800;
   font-size: 1.1rem;
-  color: var(--accent);
+  color: var(--text);
   font-variant-numeric: tabular-nums;
 }
 
+/* Games Won/Lost and Tournaments Played/Won/Lost open the stat detail
+   popup (see synopsisStatRow's onClick / openPlayerStatDetail) - a
+   visible affordance so it doesn't look identical to the plain,
+   non-interactive rows around it. */
+.player-stats-row.is-clickable {
+  cursor: pointer;
+}
+
+.player-stats-row.is-clickable:hover,
+.player-stats-row.is-clickable:focus-visible {
+  border-color: var(--accent);
+}
+
 .rotation-position-row {
-  margin: 0 16px 12px;
-  background: rgba(0, 0, 0, 0.25);
+  margin: 0 16px 10px;
+  background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 10px 14px;
+  padding: 6px 12px;
 }
 
 .rotation-position-label {
-  color: var(--text-dim);
+  color: var(--text);
   font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   text-align: center;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .rotation-position-track-row {
@@ -3675,15 +4111,15 @@ input[type="number"] {
   padding: 4px 8px;
   font-size: 0.85rem;
   line-height: 1;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 8px;
-  color: var(--accent);
+  color: var(--text);
   cursor: pointer;
 }
 
 .rotation-position-btn:hover {
-  background: rgba(0, 0, 0, 0.45);
+  background: color-mix(in srgb, var(--bg-card) 80%, var(--border));
 }
 
 .rotation-position-track {
@@ -3705,7 +4141,7 @@ input[type="number"] {
   width: 16px;
   height: 16px;
   background: var(--accent);
-  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 0 0 3px var(--bg-panel);
 }
 
 .rotation-position-connector {
@@ -3730,11 +4166,11 @@ input[type="number"] {
 }
 
 .rotation-position-text {
-  margin-top: 8px;
+  margin-top: 4px;
   text-align: center;
   font-weight: 700;
   font-size: 0.92rem;
-  color: var(--accent);
+  color: var(--text);
 }
 
 .player-stats-note {
@@ -3757,10 +4193,11 @@ input[type="number"] {
 .tournament-winner-banner {
   margin: 10px 0 4px;
   padding: 12px 14px;
-  background: linear-gradient(180deg, var(--felt-light) 0%, var(--felt) 100%);
+  background: var(--bg-panel);
   border: 2px solid var(--accent);
   border-radius: 10px;
-  color: var(--accent);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 35%, transparent);
+  color: var(--text);
   font-size: 1.25rem;
   font-weight: 800;
   text-align: center;
@@ -3883,6 +4320,205 @@ input[type="number"] {
   opacity: 0.7;
 }
 
+/* Player Stats page's section chips + their full-width detail area -
+   the same "compact control, separate full-width detail below, click
+   toggles + scrolls to it, non-accordion" system as the All Players
+   page's player cards (see .all-player-card / .all-player-detail),
+   just for a fixed set of named sections instead of one card per
+   player (see wirePlayerPageDetailChip). Flex-wrap, not grid, so each
+   chip is only as wide as its own title needs. */
+.player-page-panel-chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 8px 16px;
+}
+
+.player-page-panel-chip {
+  flex: 0 0 auto;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 10px 18px;
+  font: inherit;
+  font-weight: 700;
+  color: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.player-page-panel-chip.is-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+  font-weight: 700;
+}
+
+.player-page-detail-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 16px 24px;
+}
+
+.player-page-detail {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.player-page-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.player-page-detail-header h2 {
+  margin: 0;
+}
+
+.player-page-detail-summary {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  margin: 0 0 12px;
+}
+
+.player-page-detail-summary:empty {
+  display: none;
+}
+
+/* Step-by-step rating history (see renderRatingHistorySection) - reuses
+   .player-history-row/-detail from the Session History list above for
+   the same card look. Multiple columns instead of one tall stack, each
+   sized to comfortably fit a card's content, as many as the page width
+   allows, flowing left to right then down. */
+.rating-history-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 10px;
+  align-items: start;
+}
+
+/* A thicker border than the plain Session History cards - this list is
+   the one the user specifically called out as hard to read. */
+.player-history-row.rating-history-row {
+  border-width: 2px;
+}
+
+/* Top to bottom instead of left/right: date, then the +/- and old->new
+   boxed together right under it, then the explanation - each only as
+   tall as its own content needs. */
+.rating-history-row-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.rating-history-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 10px;
+}
+
+.rating-history-delta-value {
+  font-weight: 800;
+  font-size: 1.3rem;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Bold and full-contrast, not the small dim label it used to be - it's
+   half of the payoff of the row (the other half being the +/- itself). */
+.rating-history-delta-range {
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.rating-history-delta.is-positive {
+  border-color: var(--accent);
+}
+
+.rating-history-delta.is-positive .rating-history-delta-value {
+  color: var(--accent);
+}
+
+.rating-history-delta.is-negative {
+  border-color: var(--danger);
+}
+
+.rating-history-delta.is-negative .rating-history-delta-value {
+  color: var(--danger);
+}
+
+.rating-history-delta.is-flat .rating-history-delta-value {
+  color: var(--text-dim);
+}
+
+/* Each detail line (see buildRatingHistoryDetailLine) stacks with a
+   little breathing room - the split into two lines is what keeps a
+   game's explanation from reading as one dense run-on sentence. */
+.rating-history-detail-line + .rating-history-detail-line {
+  margin-top: 3px;
+}
+
+/* The actual facts in a matchup sentence (see buildMatchupSentence) -
+   the opponent's name, both ratings, and the win/lose-and-percentage
+   verdict - picked out from the connecting words around them. */
+.rating-row-highlight {
+  color: var(--accent);
+  font-weight: 800;
+  font-size: 1.1em;
+}
+
+/* Sits to the right of the +/- and old->new inside their own box,
+   smaller than the default 26px circle so it doesn't dwarf them. */
+.rating-row-info-btn {
+  width: 20px;
+  height: 20px;
+  font-size: 0.65rem;
+  flex-shrink: 0;
+}
+
+.rating-history-show-more {
+  display: block;
+  width: max-content;
+  margin: 0 auto;
+}
+
+/* Stat detail popup (Games Won/Lost, Tournaments Played/Won/Lost) -
+   reuses .rating-history-list/-row-inner/-delta for the same layout,
+   just in its own modal instead of a page panel. */
+.player-stat-detail-card {
+  max-width: 480px;
+}
+
+.player-stat-detail-list {
+  max-height: 50vh;
+  overflow-y: auto;
+  text-align: left;
+}
+
+/* The opponent name is the one piece of the (otherwise dim) detail
+   line worth picking out at a glance. */
+.player-stat-detail-opponent {
+  color: var(--text);
+  font-weight: 700;
+}
+
 /* ---------- Player stats synopsis ---------- */
 
 .period-filter-row {
@@ -3909,6 +4545,37 @@ input[type="number"] {
   color: var(--danger);
 }
 
+/* Multiple columns instead of one tall stack of full-width rows - each
+   column is sized to comfortably fit the widest label+value pair (e.g.
+   "Team wins potted (MVP)"), and auto-fill repeats that column as many
+   times as the page width allows, with the grid gap doing double duty
+   as the margin between columns and between rows. */
+#player-page-synopsis-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+#player-page-synopsis-body .player-stats-row {
+  margin-bottom: 0;
+  justify-content: flex-start;
+  gap: 10px;
+  border-width: 2px;
+}
+
+/* The label ("the definition") was --text-dim, hard to read against
+   these dark cards - full text color instead, with the value directly
+   next to it (not pushed to the far edge) so the number reads as
+   "right after the definition" rather than across the row from it. */
+#player-page-synopsis-body .player-stats-row .label {
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+#player-page-synopsis-body .player-stats-row .value {
+  font-size: 1.25rem;
+}
+
 .clubteam-block {
   margin-bottom: 14px;
   padding-bottom: 10px;
@@ -3926,33 +4593,44 @@ input[type="number"] {
   margin-top: 0;
 }
 
+/* Side by side, each row only as wide as its own content needs - same
+   flex-wrap idea as the All Players card grid (see
+   .all-players-list), instead of one row per opponent/team stretched
+   across the full page width. */
 .player-h2h-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .player-h2h-row {
+  flex: 0 0 auto;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid var(--border);
+  flex-direction: column;
+  gap: 4px;
+  background: var(--bg-card);
+  border: 2px solid var(--border);
   border-radius: 10px;
   padding: 10px 14px;
 }
 
+/* Its own full-width row up top, like a title - never wrapped or
+   truncated, same as the All Players cards (see .all-player-card-name)
+   - the row (not the page) just grows to fit it, since the list above
+   is a flex-wrap row of independently-sized cards, not a single
+   full-width column. */
 .player-h2h-name {
-  flex: 1;
   font-weight: 700;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.player-h2h-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .player-h2h-record {
@@ -3981,7 +4659,7 @@ input[type="number"] {
   align-items: center;
   text-align: center;
   gap: 2px;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 12px 8px;
@@ -4020,13 +4698,45 @@ input[type="number"] {
 
 /* ---------- All Players page ---------- */
 
+/* Flowing left to right then down, as many as the screen fits. Flex
+   (not grid) so each card is only as wide as its own name needs -
+   names are never wrapped or truncated (see .all-player-card-name), so
+   a card with a long name simply grows wider instead of every column
+   being forced to match it. */
 .all-players-list {
   list-style: none;
   margin: 0;
   padding: 8px 16px 24px;
   display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+/* Full-width expanded player detail, appended below the whole card
+   grid rather than inside any one grid column, so it always gets the
+   entire page width to lay out bars/timeline or the full graph in. */
+.all-players-detail-section {
+  display: flex;
   flex-direction: column;
   gap: 12px;
+  padding: 0 16px 24px;
+}
+
+.all-player-detail {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.all-player-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
 }
 
 .contact-sheet-list {
@@ -4084,7 +4794,72 @@ input[type="number"] {
   flex-shrink: 0;
 }
 
+.contact-sheet-remove-btn {
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+
+/* A player deleted from the Contact Sheet (see the Graveyard) - shown
+   wherever their name still appears in a past game (recent history, a
+   player's own game log/opponents list, a completed tournament bracket)
+   so old records stay legible without reading as still-active. --text-dim
+   is already verified readable against every panel/card surface in every
+   theme (see the other --text-dim uses throughout this file). */
+.graveyarded-player-name,
+.graveyarded-entrant {
+  color: var(--text-dim);
+  text-decoration: line-through;
+}
+
+/* ---------- Graveyard ---------- */
+
+.graveyard-list {
+  list-style: none;
+  margin: 0;
+  padding: 8px 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.graveyard-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+
+.graveyard-name {
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+}
+
+.graveyard-date {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+
 /* ---------- Leaderboard ---------- */
+
+/* Unlike the other full-screen pages, this one's content (the banner,
+   list, etc.) isn't built from .panel elements, which is where every
+   other page's side gutter actually comes from (.panel's own left/
+   right margin) - nothing here had one, so everything ran edge to
+   edge. The header already gives itself the matching 16px via
+   .app-header's own padding, so it gets canceled back out here to
+   avoid doubling up on top of this page-level padding. */
+#view-leaderboard-page {
+  padding: 0 16px 24px;
+}
+
+#view-leaderboard-page > .app-header {
+  margin: 0 -16px;
+}
 
 .leaderboard-banner {
   text-align: center;
@@ -4177,7 +4952,8 @@ input[type="number"] {
 }
 
 #btn-group-session-host,
-#group-session-host-panel #btn-group-session-stop {
+#group-session-host-panel #btn-group-session-stop,
+#btn-group-session-export-before-install {
   display: block;
   width: max-content;
   max-width: 100%;
@@ -4296,6 +5072,19 @@ input[type="number"] {
   font-size: 0.85rem;
 }
 
+.group-session-security-note {
+  text-align: center;
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  margin: 16px 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
 .group-session-error {
   text-align: center;
   color: var(--danger);
@@ -4393,6 +5182,14 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
 }
 
+/* The top copy sits alone between the banner and the view toggle - as a
+   plain inline-block button it defaults to the left edge instead of
+   reading as centered on the page like everything around it. */
+#btn-leaderboard-play-top {
+  display: block;
+  margin: 0 auto 16px;
+}
+
 .leaderboard-share-btn {
   font-size: 1.05rem;
   font-weight: 700;
@@ -4417,6 +5214,19 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   border-radius: var(--radius);
   padding: 12px 14px;
   min-width: 0;
+  /* Same "blind change" fade as the All Players page's cards (reuses
+     those same keyframes) - plays on every render, including a period
+     switch, so the board settling into its new ranking reads as a
+     visible change instead of the numbers just silently swapping. */
+  animation: all-player-card-in 0.4s ease-out;
+}
+
+/* Plays on the old rows just before a period switch rebuilds the list
+   without them (see the leaderboard period button click handler) - the
+   full board fading/shrinking out reads as "this is now a different
+   ranking", not just a values update. */
+.leaderboard-row-leaving {
+  animation: all-player-card-out 0.4s ease-in forwards;
 }
 
 .leaderboard-rank-1 {
@@ -4531,53 +5341,107 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   line-height: 1.4;
 }
 
+@keyframes all-player-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .all-player-card {
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
-  max-width: 100%;
-  overflow-x: hidden;
+  animation: all-player-card-in 0.4s ease-out;
 }
 
-#player-page-graph-panel {
-  max-width: 100%;
-  overflow-x: hidden;
+/* Plays just before a card is dropped from the list by the "Current
+   Roster Only" filter, so it visibly shrinks and fades away instead of
+   silently vanishing - the click handler waits for this to finish
+   before actually rebuilding the list without these cards. */
+@keyframes all-player-card-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.9);
+  }
 }
 
-.all-player-card-top {
+.all-player-card-leaving {
+  animation: all-player-card-out 0.4s ease-in forwards;
+}
+
+/* The toggle button (name/rating/win-rate) can't also hold the link
+   icon or the chevron - a <button> can't nest another <button> - so all
+   three are separate flex items here instead, the same split Rating
+   History's own header uses. This header is the entire card now - the
+   full view lives in a separate .all-player-detail element below the
+   whole grid instead of inside the card. */
+.all-player-card-header {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 16px;
+  align-items: center;
+  gap: 8px;
 }
 
-.all-player-name {
+.all-player-card-toggle {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
   background: none;
   border: none;
   box-shadow: none;
   padding: 0;
-  border-radius: 0;
-  color: var(--accent);
+  cursor: pointer;
   font: inherit;
-  font-size: 1.15rem;
-  font-weight: 800;
+  color: inherit;
   text-align: left;
-  text-decoration: underline;
-  text-decoration-color: transparent;
-  transition: transform 0.06s ease, filter 0.15s ease, text-decoration-color 0.15s ease;
+  white-space: nowrap;
 }
 
-.all-player-name:hover,
-.all-player-name:focus-visible {
-  text-decoration-color: var(--accent);
+.all-player-card-chevron {
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.all-player-card.is-collapsed .all-player-card-chevron {
+  transform: rotate(-90deg) scale(1.45);
+}
+
+.all-player-name {
+  color: var(--accent);
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+/* The name is the card's title - its own full-width row up top, never
+   wrapped or truncated. The card (a flex item, not a grid column) just
+   grows as wide as the name needs instead of clipping it. */
+.all-player-card-name {
+  display: block;
+  color: var(--accent);
+  font-size: 1.2rem;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 .all-player-name-group {
+  display: block;
+  width: 100%;
+}
+
+.all-player-meta-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .player-link-icon {
@@ -4599,7 +5463,7 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   color: var(--text-dim);
   font-size: 0.85rem;
   font-variant-numeric: tabular-nums;
-  text-align: right;
+  text-align: left;
 }
 
 .all-player-rating-status {
@@ -5147,8 +6011,8 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   height: 26px;
   border-radius: 50%;
   border: 1px solid var(--border);
-  background: rgba(0, 0, 0, 0.25);
-  color: var(--text-dim);
+  background: var(--bg-panel);
+  color: var(--text);
   font-size: 0.8rem;
   line-height: 1;
   cursor: pointer;
@@ -5160,6 +6024,60 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
 .format-info-btn:hover {
   color: var(--text);
   border-color: var(--text-dim);
+}
+
+/* No dark circle behind it - just the ❓ glyph, for spots where the
+   filled/bordered look is too heavy (Rating History's own info
+   buttons). */
+.format-info-btn.plain-info-btn {
+  background: none;
+  border: none;
+}
+
+/* Groups related Current Session controls into clearly separated boxed
+   blocks (Tournament Setup, Current Game) - same boxed-card language as
+   .tournament-setup-section, just full-width instead of that one's
+   fit-content/40vw sizing (which is specific to the Tournament wizard's
+   side-by-side narrow-column layout, wrong for a single linear panel). */
+.session-subsection {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 14px;
+}
+
+.session-subsection-heading {
+  margin: 0 0 10px;
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--accent);
+}
+
+/* A smaller sub-heading within a .session-subsection (e.g. "Tournament
+   Type" / "Games Rotation" inside "Tournament Setup") - same visual
+   weight as .tournament-section-heading elsewhere. */
+.session-subsection-subheading {
+  margin: 14px 0 8px;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.session-subsection-subheading:first-child {
+  margin-top: 0;
+}
+
+.fair-race-explain-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.fair-race-explain-row .player-stats-note {
+  margin: 0;
 }
 
 /* The shared `select { flex: 1 }` rule makes a dropdown greedily fill
@@ -5373,13 +6291,13 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   padding: 10px 8px;
   border: 1px dashed var(--border);
   border-radius: 10px;
-  background: rgba(0, 0, 0, 0.15);
+  background: var(--bg-panel);
   text-align: center;
 }
 
 .lb-tree-wb-stub-name {
   font-size: 0.85rem;
-  color: var(--text-dim);
+  color: var(--text);
 }
 
 /* The collapsed "+" placeholder standing in for however many earlier
@@ -5508,7 +6426,7 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
 .tournament-match-side {
   padding: 6px 8px;
   border-radius: 6px;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg-panel);
   font-size: 0.88rem;
   font-weight: 600;
   white-space: nowrap;
