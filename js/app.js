@@ -8280,6 +8280,17 @@
     return match.length ? match[0] : null;
   }
 
+  // A member belongs to at most one team per league - "assign a team to a
+  // table" seeds that table's queue with the whole roster, so a name on
+  // two teams at once would make that seed ambiguous. Returns the team
+  // they're already on, or null.
+  function leagueTeamForMember(league, name) {
+    var match = (league.teams || []).filter(function (t) {
+      return t.memberNames.indexOf(name) !== -1;
+    });
+    return match.length ? match[0] : null;
+  }
+
   function createLeagueTeam(league, name) {
     var trimmed = (name || "").trim();
     if (!trimmed) return;
@@ -8300,6 +8311,7 @@
   function addMemberToTeam(league, teamId, name) {
     var team = findLeagueTeamById(league, teamId);
     if (!team || team.memberNames.indexOf(name) !== -1) return;
+    if (leagueTeamForMember(league, name)) return;
     team.memberNames = team.memberNames.concat([name]);
     saveLeaguesToStorage(LEAGUES);
   }
@@ -8849,9 +8861,15 @@
       var addRow = document.createElement("div");
       addRow.className = "row";
       var addSelect = document.createElement("select");
+      // Excludes anyone already on ANY team in this league (not just this
+      // one) - a member belongs to at most one team, so moving someone
+      // between teams means removing them from their current team first,
+      // then adding them to the new one.
       var already = {};
-      team.memberNames.forEach(function (n) {
-        already[n] = true;
+      league.teams.forEach(function (t) {
+        t.memberNames.forEach(function (n) {
+          already[n] = true;
+        });
       });
       var candidates = league.members.filter(function (m) {
         return !already[m.name];
