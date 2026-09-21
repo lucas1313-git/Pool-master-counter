@@ -149,8 +149,22 @@ jobs:
           mkdir -p ~/private_keys
           echo "$APPSTORE_API_PRIVATE_KEY" > ~/private_keys/AuthKey_$APPSTORE_API_KEY_ID.p8
 
+          # altool is notorious for printing "ERROR:" and still exiting 0
+          # (e.g. when App Store Connect has no app record yet for this
+          # bundle ID) - a plain `xcrun altool ...` line here would show
+          # green on every run regardless of whether anything actually
+          # reached TestFlight, exactly what happened silently for a
+          # while. Tee to a log and fail the step ourselves if either the
+          # exit code or the output itself says this didn't work.
+          set +e
           xcrun altool --upload-app \
             --type ios \
             --file "$RUNNER_TEMP/export/App.ipa" \
             --apiKey "$APPSTORE_API_KEY_ID" \
-            --apiIssuer "$APPSTORE_API_ISSUER_ID"
+            --apiIssuer "$APPSTORE_API_ISSUER_ID" 2>&1 | tee "$RUNNER_TEMP/altool-upload.log"
+          ALTOOL_EXIT=${PIPESTATUS[0]}
+          set -e
+          if [ "$ALTOOL_EXIT" -ne 0 ] || grep -q "ERROR" "$RUNNER_TEMP/altool-upload.log"; then
+            echo "::error::altool upload failed (exit $ALTOOL_EXIT) - see the ERROR line above."
+            exit 1
+          fi
