@@ -1696,6 +1696,7 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
             <th data-i18n="league.colSkillLevel">SL</th>
             <th data-i18n="league.colPoints">Points</th>
             <th data-i18n="league.colRecord">W-L</th>
+            <th data-i18n="league.colSession">Session</th>
             <th id="league-col-remove-header" class="hidden"></th>
           </tr>
         </thead>
@@ -1729,8 +1730,12 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
             <option value="rotatingLines" data-i18n="league.teamRotationRotatingLines">Rotating Lines</option>
             <option value="roundRobin" data-i18n="league.teamRotationRoundRobin">Round-Robin</option>
           </select>
+          <label for="league-max-games-input" data-i18n="league.maxGamesLabel">🎯 Max Games / Player (Session)</label>
+          <input type="number" id="league-max-games-input" min="0" max="99" value="0">
+          <button type="button" id="btn-league-reset-session-counts" class="btn btn-ghost" data-i18n="league.resetSessionCountsButton">↺ Reset Session Counts</button>
         </div>
         <p class="player-stats-note" data-i18n="league.teamRotationHelp">When a table has a Team A and Team B assigned (Per-Table Queue), this decides how their players are matched up: Rotating Lines keeps cycling front-of-A vs front-of-B, Round-Robin schedules every A player against every B player once.</p>
+        <p class="player-stats-note" data-i18n="league.maxGamesHelp">0 means unlimited. Once a member reaches this many games since the last reset, they're skipped for any new match (manual, queued, or team rotation) until you reset session counts for the next time this league meets — their lifetime stats keep counting either way.</p>
         <div id="league-tables-grid" class="league-tables-grid"></div>
       </div>
 

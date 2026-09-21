@@ -2059,6 +2059,8 @@
   var leagueTableCountInput = document.getElementById("league-table-count");
   var leagueQueueModeSelect = document.getElementById("league-queue-mode-select");
   var leagueTeamRotationSelect = document.getElementById("league-team-rotation-select");
+  var leagueMaxGamesInput = document.getElementById("league-max-games-input");
+  var btnLeagueResetSessionCounts = document.getElementById("btn-league-reset-session-counts");
   var leagueTablesGrid = document.getElementById("league-tables-grid");
   var leagueCurrentMatchPanel = document.getElementById("league-current-match-panel");
 
@@ -7968,6 +7970,8 @@
     if (!l.tableTeamQueues || typeof l.tableTeamQueues !== "object") l.tableTeamQueues = {};
     if (!l.tableRoundRobin || typeof l.tableRoundRobin !== "object") l.tableRoundRobin = {};
     if (!Array.isArray(l.teams)) l.teams = [];
+    if (typeof l.maxGamesPerPlayer !== "number" || l.maxGamesPerPlayer < 0) l.maxGamesPerPlayer = 0;
+    if (!l.sessionGameCounts || typeof l.sessionGameCounts !== "object") l.sessionGameCounts = {};
     return l;
   }
 
@@ -8067,7 +8071,9 @@
       teamRotationMode: "rotatingLines",
       tableTeamQueues: {},
       tableRoundRobin: {},
-      teams: []
+      teams: [],
+      maxGamesPerPlayer: 0,
+      sessionGameCounts: {}
     };
     LEAGUES = LEAGUES.concat([league]);
     saveLeaguesToStorage(LEAGUES);
@@ -8134,6 +8140,7 @@
         return n !== name;
       });
     });
+    delete league.sessionGameCounts[name];
     saveLeaguesToStorage(LEAGUES);
   }
 
@@ -8195,6 +8202,8 @@
     else memberB.matchesWon += 1;
     memberA.leaguePoints += leaguePointsA;
     memberB.leaguePoints += leaguePointsB;
+    bumpLeagueSessionGameCount(league, nameA);
+    bumpLeagueSessionGameCount(league, nameB);
 
     saveLeaguesToStorage(LEAGUES);
   }
@@ -8325,6 +8334,49 @@
     return match.length ? match[0] : null;
   }
 
+  // Whether two names are on the same league team - two players sharing a
+  // team never play each other, in any hosting mode. Two names with no
+  // team (or on different teams) are always a valid pairing.
+  function leagueSameTeam(league, nameA, nameB) {
+    var teamA = leagueTeamForMember(league, nameA);
+    var teamB = leagueTeamForMember(league, nameB);
+    return !!(teamA && teamB && teamA.id === teamB.id);
+  }
+
+  // "Name (Team)" for display next to a player anywhere in the League UI -
+  // just the bare name if they're not on a team.
+  function leagueNameWithTeam(league, name) {
+    var team = leagueTeamForMember(league, name);
+    return team ? name + " (" + team.name + ")" : name;
+  }
+
+  function leagueSessionGameCount(league, name) {
+    return league.sessionGameCounts[name] || 0;
+  }
+
+  // A per-night limit (league.maxGamesPerPlayer, 0 = unlimited) tracked in
+  // league.sessionGameCounts - separate from each member's lifetime
+  // matchesPlayed, and reset to zero by the organizer via
+  // resetLeagueSessionGameCounts before the next time this league meets.
+  function leagueMemberAtSessionCap(league, name) {
+    if (!league.maxGamesPerPlayer) return false;
+    return leagueSessionGameCount(league, name) >= league.maxGamesPerPlayer;
+  }
+
+  function bumpLeagueSessionGameCount(league, name) {
+    league.sessionGameCounts[name] = (league.sessionGameCounts[name] || 0) + 1;
+  }
+
+  function resetLeagueSessionGameCounts(league) {
+    league.sessionGameCounts = {};
+    saveLeaguesToStorage(LEAGUES);
+  }
+
+  function setLeagueMaxGamesPerPlayer(league, max) {
+    league.maxGamesPerPlayer = Math.max(0, parseInt(max, 10) || 0);
+    saveLeaguesToStorage(LEAGUES);
+  }
+
   function createLeagueTeam(league, name) {
     var trimmed = (name || "").trim();
     if (!trimmed) return;
@@ -8443,6 +8495,13 @@
     if (!findLeagueTeamById(league, teamId)) return;
     var key = tableQueueKey(table);
     if (!league.tableTeamAssignment[key]) league.tableTeamAssignment[key] = { a: null, b: null };
+    var otherSide = side === "a" ? "b" : "a";
+    if (league.tableTeamAssignment[key][otherSide] === teamId) {
+      // Same team on both sides would pit teammates against each other -
+      // the whole point of team-vs-team hosting is two DIFFERENT rosters.
+      showToast(T("league.sameTeamNotAllowed"));
+      return;
+    }
     league.tableTeamAssignment[key][side] = teamId;
     recomputeTableTeamState(league, key);
     saveLeaguesToStorage(LEAGUES);
@@ -8462,39 +8521,62 @@
     return !!(assignment && assignment.a && assignment.b);
   }
 
+  function firstNonCappedName(league, names) {
+    for (var i = 0; i < names.length; i++) {
+      if (!leagueMemberAtSessionCap(league, names[i])) return names[i];
+    }
+    return null;
+  }
+
   // The next team-vs-team pairing this table would propose, or null if
-  // neither rotation style has one ready yet (an empty rotating line, or a
-  // completed round-robin schedule).
+  // neither rotation style has one ready yet (an empty rotating line, a
+  // completed round-robin schedule, or everyone left is at their session
+  // cap). scheduleIndex (round-robin only) tells consumeNextTeamPair how
+  // far to advance the cursor, since a capped-out player can push the
+  // returned pair past whatever schedule.cursor currently points at.
   function nextTeamPairForTable(league, table) {
     var key = tableQueueKey(table);
     var assignment = league.tableTeamAssignment[key];
     if (!assignment || !assignment.a || !assignment.b) return null;
     if (league.teamRotationMode === "roundRobin") {
       var schedule = league.tableRoundRobin[key];
-      if (!schedule || schedule.cursor >= schedule.pairs.length) return null;
-      var pair = schedule.pairs[schedule.cursor];
-      return { a: pair.a, b: pair.b };
+      if (!schedule) return null;
+      for (var i = schedule.cursor; i < schedule.pairs.length; i++) {
+        var pair = schedule.pairs[i];
+        if (!leagueMemberAtSessionCap(league, pair.a) && !leagueMemberAtSessionCap(league, pair.b)) {
+          return { a: pair.a, b: pair.b, scheduleIndex: i };
+        }
+      }
+      return null;
     }
     var tq = league.tableTeamQueues[key];
-    if (!tq || !tq.a.length || !tq.b.length) return null;
-    return { a: tq.a[0], b: tq.b[0] };
+    if (!tq) return null;
+    var nameA = firstNonCappedName(league, tq.a);
+    var nameB = firstNonCappedName(league, tq.b);
+    if (!nameA || !nameB) return null;
+    return { a: nameA, b: nameB };
   }
 
   // Removes the pairing nextTeamPairForTable just proposed once it's
-  // actually confirmed and started - advances the round-robin cursor, or
-  // pops the front of each rotating line (rotatePlayerToTeamLineBack below
-  // is what pushes those two names back on, once the match finishes).
-  function consumeNextTeamPair(league, table) {
+  // actually confirmed and started - advances the round-robin cursor past
+  // it (skipping over any capped-out pairs nextTeamPairForTable had to
+  // look past), or removes those two specific names from their rotating
+  // line (not always the front, if a capped-out player was skipped -
+  // rotatePlayerToTeamLineBack below is what pushes those two names back
+  // on, once the match finishes).
+  function consumeNextTeamPair(league, table, pair) {
     var key = tableQueueKey(table);
     if (league.teamRotationMode === "roundRobin") {
       var schedule = league.tableRoundRobin[key];
-      if (schedule) schedule.cursor += 1;
+      if (schedule && typeof pair.scheduleIndex === "number") schedule.cursor = pair.scheduleIndex + 1;
       return;
     }
     var tq = league.tableTeamQueues[key];
     if (tq) {
-      tq.a.shift();
-      tq.b.shift();
+      var idxA = tq.a.indexOf(pair.a);
+      if (idxA !== -1) tq.a.splice(idxA, 1);
+      var idxB = tq.b.indexOf(pair.b);
+      if (idxB !== -1) tq.b.splice(idxB, 1);
     }
   }
 
@@ -8535,6 +8617,12 @@
   // leagueAdjustScore knows to rotate the two players back into their own
   // team's line (rotatingLines) instead of the plain shared-queue rotation,
   // or to leave them be (roundRobin - each pairing plays once).
+  //
+  // The last-line-of-defense checks here (same team, session cap) run no
+  // matter which UI path a match was proposed from - manual selects, a
+  // plain queue auto-proposal, or a team-vs-team rotation - so every one
+  // of those callers only needs its own UX around the rejection, never its
+  // own copy of the rule.
   function startLeagueMatch(league, table, nameA, nameB, teamRotationMode) {
     if (!league || !nameA || !nameB || nameA === nameB) return false;
     if (
@@ -8543,6 +8631,14 @@
       })
     ) {
       showToast(T("league.tableAlreadyInUse", { table: table }));
+      return false;
+    }
+    if (leagueSameTeam(league, nameA, nameB)) {
+      showToast(T("league.sameTeamNotAllowed"));
+      return false;
+    }
+    if (leagueMemberAtSessionCap(league, nameA) || leagueMemberAtSessionCap(league, nameB)) {
+      showToast(T("league.sessionCapReached"));
       return false;
     }
     var memberA = league.members.filter(function (m) {
@@ -8572,36 +8668,57 @@
     return true;
   }
 
-  // Checks whichever queue applies to this now-idle table and, if two or
-  // more names are waiting, plays a notification sound and confirms the
-  // proposed pairing before starting it - declining just leaves the table
-  // idle (its manual assign UI, plus this same proposal re-triggerable via
-  // "Start Next in Queue"). A table with two teams assigned routes to
-  // proposeNextTeamMatch instead, which draws from the team-vs-team state
-  // (a rotating line pair or a round-robin schedule) rather than a plain
-  // shared queue.
+  // The next valid pairing a plain (non-team) queue would propose: the
+  // earliest name not yet at their session cap, paired with the earliest
+  // later name that's neither capped nor on the same team as them. Skips
+  // straight past any name that can't play right now rather than blocking
+  // the whole queue on them - they stay right where they are for next time.
+  function findNextPlainPairing(league, queue) {
+    if (!queue) return null;
+    for (var i = 0; i < queue.length; i++) {
+      var nameA = queue[i];
+      if (leagueMemberAtSessionCap(league, nameA)) continue;
+      for (var j = i + 1; j < queue.length; j++) {
+        var nameB = queue[j];
+        if (leagueMemberAtSessionCap(league, nameB)) continue;
+        if (!leagueSameTeam(league, nameA, nameB)) return { a: nameA, b: nameB };
+      }
+    }
+    return null;
+  }
+
+  // Checks whichever queue applies to this now-idle table and, if a valid
+  // pairing is waiting, plays a notification sound and confirms it before
+  // starting - declining just leaves the table idle (its manual assign UI,
+  // plus this same proposal re-triggerable via "Start Next in Queue"). A
+  // table with two teams assigned routes to proposeNextTeamMatch instead,
+  // which draws from the team-vs-team state (a rotating line pair or a
+  // round-robin schedule) rather than a plain shared queue.
   function proposeNextMatchIfQueued(league, table) {
     if (league.queueMode === "perTable" && isTableInTeamMode(league, table)) {
       proposeNextTeamMatch(league, table);
       return;
     }
     var queue = queueForTable(league, table);
-    if (!queue || queue.length < 2) return;
-    var nameA = queue[0];
-    var nameB = queue[1];
+    var pair = findNextPlainPairing(league, queue);
+    if (!pair) return;
     playPositiveSound();
     confirmModal(
-      T("league.nextUpConfirm", { table: table, a: nameA, b: nameB }),
+      T("league.nextUpConfirm", { table: table, a: leagueNameWithTeam(league, pair.a), b: leagueNameWithTeam(league, pair.b) }),
       function () {
         var l = findLeagueById(league.id);
         if (!l) return;
         var q = queueForTable(l, table);
-        if (!q || q[0] !== nameA || q[1] !== nameB) {
+        var stillPair = findNextPlainPairing(l, q);
+        if (!stillPair || stillPair.a !== pair.a || stillPair.b !== pair.b) {
           renderLeaguePage();
           return;
         }
-        q.splice(0, 2);
-        startLeagueMatch(l, table, nameA, nameB);
+        var idxA = q.indexOf(pair.a);
+        if (idxA !== -1) q.splice(idxA, 1);
+        var idxB = q.indexOf(pair.b);
+        if (idxB !== -1) q.splice(idxB, 1);
+        startLeagueMatch(l, table, pair.a, pair.b);
         saveLeaguesToStorage(LEAGUES);
         renderLeaguePage();
       },
@@ -8617,7 +8734,7 @@
     var mode = league.teamRotationMode;
     playPositiveSound();
     confirmModal(
-      T("league.nextUpConfirm", { table: table, a: pair.a, b: pair.b }),
+      T("league.nextUpConfirm", { table: table, a: leagueNameWithTeam(league, pair.a), b: leagueNameWithTeam(league, pair.b) }),
       function () {
         var l = findLeagueById(league.id);
         if (!l) return;
@@ -8626,7 +8743,7 @@
           renderLeaguePage();
           return;
         }
-        consumeNextTeamPair(l, table);
+        consumeNextTeamPair(l, table, pair);
         startLeagueMatch(l, table, pair.a, pair.b, mode);
         saveLeaguesToStorage(LEAGUES);
         renderLeaguePage();
@@ -8694,7 +8811,7 @@
 
     var nameEl = document.createElement("div");
     nameEl.className = "player-name";
-    nameEl.textContent = name + " (SL " + skillLevel + ")";
+    nameEl.textContent = leagueNameWithTeam(league, name) + " (SL " + skillLevel + ")";
     panel.appendChild(nameEl);
 
     var block = document.createElement("div");
@@ -8747,7 +8864,7 @@
     banner.className = "now-playing-banner tournament-now-playing";
     var headerParts = [];
     if (league.tableCount > 1) headerParts.push(T("league.tableOption", { table: active.table }));
-    headerParts.push(active.nameA + " vs " + active.nameB);
+    headerParts.push(leagueNameWithTeam(league, active.nameA) + " vs " + leagueNameWithTeam(league, active.nameB));
     banner.textContent = headerParts.join(" — ");
     cardWrap.appendChild(banner);
 
@@ -8795,7 +8912,7 @@
       sorted.forEach(function (active) {
         var opt = document.createElement("option");
         opt.value = String(active.table);
-        opt.textContent = T("league.tableOption", { table: active.table }) + " — " + active.nameA + " vs " + active.nameB;
+        opt.textContent = T("league.tableOption", { table: active.table }) + " — " + leagueNameWithTeam(league, active.nameA) + " vs " + leagueNameWithTeam(league, active.nameB);
         if (active.table === league.focusedTable) opt.selected = true;
         focusSelect.appendChild(opt);
       });
@@ -8844,7 +8961,8 @@
       card.classList.add("is-occupied");
       var summary = document.createElement("div");
       summary.className = "league-table-slot-summary";
-      summary.textContent = active.nameA + " vs " + active.nameB + " — " + active.scoreA + "/" + active.targetA + " : " + active.scoreB + "/" + active.targetB;
+      summary.textContent =
+        leagueNameWithTeam(league, active.nameA) + " vs " + leagueNameWithTeam(league, active.nameB) + " — " + active.scoreA + "/" + active.targetA + " : " + active.scoreB + "/" + active.targetB;
       card.appendChild(summary);
 
       var jumpBtn = document.createElement("button");
@@ -8864,7 +8982,7 @@
     card.classList.add("is-idle");
     var busy = leagueMembersInActiveMatch(league);
     var available = league.members.filter(function (m) {
-      return !busy[m.name];
+      return !busy[m.name] && !leagueMemberAtSessionCap(league, m.name);
     });
 
     if (league.queueMode === "none") {
@@ -8874,7 +8992,7 @@
         available.forEach(function (m) {
           var opt = document.createElement("option");
           opt.value = m.name;
-          opt.textContent = m.name + " (SL " + m.skillLevel + ")";
+          opt.textContent = leagueNameWithTeam(league, m.name) + " (SL " + m.skillLevel + ")";
           sel.appendChild(opt);
         });
       });
@@ -8898,6 +9016,10 @@
         var b = selB.value;
         if (!a || !b || a === b) {
           alertModal(T("league.matchNeedsTwoDistinct"));
+          return;
+        }
+        if (leagueSameTeam(league, a, b)) {
+          alertModal(T("league.sameTeamNotAllowed"));
           return;
         }
         if (startLeagueMatch(league, tableNum, a, b)) renderLeaguePage();
@@ -9020,7 +9142,7 @@
               inLine[n] = true;
             });
             var lineCandidates = (team ? team.memberNames : []).filter(function (n) {
-              return !inLine[n];
+              return !inLine[n] && !leagueMemberAtSessionCap(league, n);
             });
             lineCandidates.forEach(function (n) {
               var opt = document.createElement("option");
@@ -9077,7 +9199,7 @@
       queue.forEach(function (name) {
         var li = document.createElement("li");
         var span = document.createElement("span");
-        span.textContent = name;
+        span.textContent = leagueNameWithTeam(league, name);
         li.appendChild(span);
         var removeBtn = document.createElement("button");
         removeBtn.type = "button";
@@ -9107,7 +9229,7 @@
     addCandidates.forEach(function (m) {
       var opt = document.createElement("option");
       opt.value = m.name;
-      opt.textContent = m.name;
+      opt.textContent = leagueNameWithTeam(league, m.name);
       addSelect.appendChild(opt);
     });
     var addBtn = document.createElement("button");
@@ -9142,7 +9264,7 @@
     startNextBtn.type = "button";
     startNextBtn.className = "btn btn-primary";
     startNextBtn.textContent = T("league.startNextInQueueButton");
-    startNextBtn.disabled = queue.length < 2;
+    startNextBtn.disabled = !findNextPlainPairing(league, queue);
     startNextBtn.addEventListener("click", function () {
       proposeNextMatchIfQueued(league, tableNum);
     });
@@ -9307,7 +9429,7 @@
     if (sorted.length === 0) {
       var emptyRow = document.createElement("tr");
       var emptyCell = document.createElement("td");
-      emptyCell.colSpan = league.isOrganizer ? 5 : 4;
+      emptyCell.colSpan = league.isOrganizer ? 6 : 5;
       emptyCell.className = "empty-hint";
       emptyCell.textContent = T("league.noMembersYet");
       emptyRow.appendChild(emptyCell);
@@ -9317,7 +9439,7 @@
         var row = document.createElement("tr");
 
         var nameCell = document.createElement("td");
-        nameCell.textContent = m.name;
+        nameCell.textContent = leagueNameWithTeam(league, m.name);
         row.appendChild(nameCell);
 
         var slCell = document.createElement("td");
@@ -9348,6 +9470,12 @@
         recordCell.textContent = m.matchesWon + "-" + (m.matchesPlayed - m.matchesWon);
         row.appendChild(recordCell);
 
+        var sessionCell = document.createElement("td");
+        var sessionCount = leagueSessionGameCount(league, m.name);
+        sessionCell.textContent = league.maxGamesPerPlayer ? sessionCount + "/" + league.maxGamesPerPlayer : String(sessionCount);
+        if (leagueMemberAtSessionCap(league, m.name)) sessionCell.classList.add("league-session-cap-reached");
+        row.appendChild(sessionCell);
+
         if (league.isOrganizer) {
           var removeCell = document.createElement("td");
           var removeBtn = document.createElement("button");
@@ -9372,6 +9500,7 @@
       leagueQueueModeSelect.value = league.queueMode;
       leagueTeamRotationSelect.value = league.teamRotationMode;
       leagueTableCountInput.value = league.tableCount;
+      leagueMaxGamesInput.value = league.maxGamesPerPlayer;
       renderLeagueTablesGrid(league);
     }
 
@@ -22360,6 +22489,20 @@
     if (!league) return;
     setLeagueTeamRotationMode(league, leagueTeamRotationSelect.value);
     renderLeaguePage();
+  });
+  leagueMaxGamesInput.addEventListener("change", function () {
+    var league = findLeagueById(activeLeagueId);
+    if (!league) return;
+    setLeagueMaxGamesPerPlayer(league, leagueMaxGamesInput.value);
+    renderLeaguePage();
+  });
+  btnLeagueResetSessionCounts.addEventListener("click", function () {
+    var league = findLeagueById(activeLeagueId);
+    if (!league) return;
+    confirmModal(T("league.resetSessionCountsConfirm"), function () {
+      resetLeagueSessionGameCounts(league);
+      renderLeaguePage();
+    });
   });
 
   btnTestOnboarding.addEventListener("click", openOnboarding);

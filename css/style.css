@@ -6903,6 +6903,11 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   border-bottom: none;
 }
 
+.league-session-cap-reached {
+  color: #e08a3c;
+  font-weight: 700;
+}
+
 #league-live-hosting-section {
   margin-top: 14px;
   padding-top: 14px;
