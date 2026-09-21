@@ -2100,7 +2100,8 @@
   var multiTableHostOverlay = document.getElementById("multi-table-host-overlay");
   var multiTableHostLinkNote = document.getElementById("multi-table-host-link-note");
   var btnMultiTableOpenGroupSession = document.getElementById("btn-multi-table-open-group-session");
-  var btnMultiTableDownload = document.getElementById("btn-multi-table-download");
+  var btnMultiTableDownloadData = document.getElementById("btn-multi-table-download-data");
+  var btnMultiTableDownloadApp = document.getElementById("btn-multi-table-download-app");
   var btnMultiTableClose = document.getElementById("btn-multi-table-close");
   var leagueWizardQueueModeSelect = document.getElementById("league-wizard-queue-mode");
   var leagueWizardRotationRow = document.getElementById("league-wizard-rotation-row");
@@ -10177,10 +10178,19 @@
 
   var multiTableHostSettingStep = null;
 
+  // Two separate buttons (numbered, like Group Session's own "1. Export /
+  // 2. Download" pair) rather than one button firing both downloads at
+  // once - Chrome (and other browsers) throttle/silently drop a second
+  // automatic download a page tries to trigger without its own distinct
+  // click, so each file here needs its own real user gesture to be
+  // reliable.
   function openMultiTableHostPrompt(settingStep) {
     multiTableHostSettingStep = settingStep;
     multiTableHostLinkNote.classList.add("hidden");
     multiTableHostLinkNote.textContent = "";
+    var os = detectDesktopOS();
+    btnMultiTableDownloadApp.classList.toggle("hidden", !os);
+    if (os) btnMultiTableDownloadApp.textContent = T("multiTable.downloadAppButton", { os: DESKTOP_OS_LABELS[os] });
     multiTableHostOverlay.classList.remove("hidden");
   }
 
@@ -10188,15 +10198,27 @@
     multiTableHostOverlay.classList.add("hidden");
   }
 
-  // Same full backup Export All Data already produces - the in-progress
+  // A fixed (not timestamped) filename for this flow's backup download,
+  // so it lands in the browser's default Downloads folder somewhere
+  // predictable - the desktop app's very first startup (see
+  // installer/standalone-entry.js's consumePendingHandoffStep) looks for
+  // exactly this name to know it should open straight to the import
+  // prompt instead of the plain home page. A downloaded, signed binary is
+  // identical for every download, so a file left on disk is the only way
+  // to hand it a parameter at all.
+  var MULTI_TABLE_HANDOFF_FILENAME = "pool-master-counter-handoff.json";
+
+  // Same full backup Export All Data always produces - the in-progress
   // tournament/league setup lives in the same global state/TOURNAMENT/
   // LEAGUES data that captures, so there's nothing wizard-specific to
-  // export separately.
-  function downloadSetupForMultiTableHost() {
-    exportAllData();
+  // export separately - just the fixed filename above instead of the
+  // usual timestamped one, plus a pendingWizardStep field the desktop
+  // app's startup check reads (see consumePendingHandoffStep) to decide
+  // whether/how to open straight to the import prompt.
+  function downloadMultiTableHostData() {
     var step = multiTableHostSettingStep || "wizardGame";
-    var url = location.origin + location.pathname + "?loadsetting=true&settingStep=" + step;
-    multiTableHostLinkNote.textContent = T("multiTable.linkNote", { url: url });
+    exportAllData(MULTI_TABLE_HANDOFF_FILENAME, false, { pendingWizardStep: step });
+    multiTableHostLinkNote.textContent = T("multiTable.dataDownloadedNote");
     multiTableHostLinkNote.classList.remove("hidden");
   }
 
@@ -12301,9 +12323,17 @@
   // "Export All Data" button's own checkbox ever passes true; every
   // other call site leaves this off on purpose, since an automatic
   // safety backup needs to be a real, complete backup.
-  function exportAllData(filename, obfuscate) {
+  // extraFields (optional): merged onto the payload as-is - only
+  // downloadSetupForMultiTableHost passes this, to stamp a
+  // pendingWizardStep field onto an otherwise completely normal export.
+  function exportAllData(filename, obfuscate, extraFields) {
     var payload = buildBackupPayload();
     if (obfuscate) payload.contacts = {};
+    if (extraFields) {
+      Object.keys(extraFields).forEach(function (key) {
+        payload[key] = extraFields[key];
+      });
+    }
     downloadJSON(filename ? sanitizeBackupFilename(filename) : defaultBackupFilename(), payload);
   }
 
@@ -19911,6 +19941,30 @@
     linux: "https://github.com/lucas1313-git/Pool-master-counter-releases/releases/download/desktop-latest/PoolMasterCounter-linux-x64.tar.gz",
   };
 
+  var DESKTOP_OS_LABELS = { mac: "Mac", windows: "Windows", linux: "Linux" };
+
+  // Used by the multi-table hosting handoff (downloadSetupForMultiTableHost)
+  // to grab the installer immediately alongside the data export, without
+  // waiting for the organizer to separately find their way to Group
+  // Session's own install prompt. A plain <a target="_blank"> click (same
+  // approach as groupSessionInstallLink) rather than location.href, so it
+  // doesn't navigate the organizer's own in-progress session away.
+  // Returns the detected os ("mac"/"windows"/"linux"), or null if this
+  // device can't run the desktop app at all (phone/tablet) - callers use
+  // that to know whether an installer download actually happened.
+  function downloadDesktopInstaller() {
+    var os = detectDesktopOS();
+    if (!os) return null;
+    var a = document.createElement("a");
+    a.href = DESKTOP_DOWNLOAD_URLS[os];
+    a.target = "_blank";
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    return os;
+  }
+
   function renderInstallPrompt() {
     var os = detectDesktopOS();
     groupSessionInstallUnsupported.classList.toggle("hidden", !!os);
@@ -24165,7 +24219,11 @@
     openGroupSessionPage();
     if (networkMode !== "host") startHostingSession();
   });
-  btnMultiTableDownload.addEventListener("click", downloadSetupForMultiTableHost);
+  btnMultiTableDownloadData.addEventListener("click", downloadMultiTableHostData);
+  btnMultiTableDownloadApp.addEventListener("click", function () {
+    downloadDesktopInstaller();
+    showToast(T("groupSession.downloadStartedReminder"));
+  });
   btnMultiTableClose.addEventListener("click", closeMultiTableHostPrompt);
   multiTableHostOverlay.addEventListener("click", function (e) {
     if (e.target === multiTableHostOverlay) closeMultiTableHostPrompt();

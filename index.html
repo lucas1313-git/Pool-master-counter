@@ -689,8 +689,14 @@
     <p class="player-stats-note" id="multi-table-host-body" data-i18n="multiTable.promptBody">Each table needs its own device connected to the same local server. Open Group Session to connect this device as the host, or download the app if this page can't host directly.</p>
     <p class="player-stats-note hidden" id="multi-table-host-link-note"></p>
     <div class="confirm-modal-actions">
+      <!-- .confirm-modal-actions is column-reverse (see style.css) - this
+           block reads bottom-to-top visually, so the primary CTA (Open
+           Group Session) is listed first here to land at the bottom, and
+           the two numbered download buttons are listed 2-then-1 so they
+           land in 1-then-2 reading order above it. -->
       <button type="button" id="btn-multi-table-open-group-session" class="btn btn-primary" data-i18n="multiTable.openGroupSessionButton">🔗 Open Group Session</button>
-      <button type="button" id="btn-multi-table-download" class="btn btn-ghost" data-i18n="multiTable.downloadButton">⬇️ Download &amp; Take My Setup</button>
+      <button type="button" id="btn-multi-table-download-app" class="btn btn-ghost hidden" data-i18n="multiTable.downloadAppButton">⬇️ 2. Download the App</button>
+      <button type="button" id="btn-multi-table-download-data" class="btn btn-ghost" data-i18n="multiTable.downloadDataButton">💾 1. Download My Setup</button>
       <button type="button" id="btn-multi-table-close" class="btn btn-ghost" data-i18n="common.close">Close</button>
     </div>
   </div>
@@ -1906,6 +1912,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260921i"></script>
+<script src="js/app.js?v=20260921m"></script>
 </body>
 </html>
