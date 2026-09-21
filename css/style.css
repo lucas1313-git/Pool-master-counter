@@ -3433,6 +3433,79 @@ input[type="number"] {
   font-weight: 500;
 }
 
+/* "Import & Replace" (squash) confirmation - deliberately louder and
+   more alarming than the plain .confirm-modal-* pattern above (danger
+   red border instead of the accent color, a large skull, oversized
+   "Are you sure?" text) since this is the one truly destructive action
+   in the whole Backup & Transfer panel - everything else there either
+   only adds data (Import Data's merge) or, for the resets elsewhere in
+   the app, already keeps its own local undo copy. z-index above even
+   #confirm-modal-overlay so this always wins if somehow both are ever
+   open at once. */
+.squash-warning-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 1400;
+}
+
+.squash-warning-card {
+  background: var(--modal-surface);
+  border: 3px solid var(--danger);
+  border-radius: var(--radius);
+  padding: 28px 24px;
+  max-width: 440px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
+  animation: milestone-pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.squash-warning-icon {
+  font-size: 4.5rem;
+  line-height: 1;
+}
+
+.squash-warning-title {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--danger);
+}
+
+.squash-warning-body {
+  margin: 0;
+  font-size: 1.05rem;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+.squash-keep-players-row {
+  text-align: left;
+  width: 100%;
+}
+
+.squash-warning-actions {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  margin-top: 6px;
+}
+
+.squash-warning-actions button {
+  flex: 1;
+}
+
 .confirm-modal-input-row {
   justify-content: center;
   margin-bottom: 20px;

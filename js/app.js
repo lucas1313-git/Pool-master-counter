@@ -1663,6 +1663,13 @@
   var btnExportSync = document.getElementById("btn-export-sync");
   var syncStatusLine = document.getElementById("sync-status-line");
   var importFileInput = document.getElementById("import-file-input");
+  var btnSquashImportData = document.getElementById("btn-squash-import-data");
+  var squashImportFileInput = document.getElementById("squash-import-file-input");
+  var squashWarningOverlay = document.getElementById("squash-warning-overlay");
+  var squashWarningBody = document.getElementById("squash-warning-body");
+  var squashKeepPlayersCheckbox = document.getElementById("squash-keep-players-checkbox");
+  var btnSquashCancel = document.getElementById("btn-squash-cancel");
+  var btnSquashConfirm = document.getElementById("btn-squash-confirm");
   var btnResetAllPlayerStats = document.getElementById("btn-reset-all-player-stats");
   var btnResetRosterLists = document.getElementById("btn-reset-roster-lists");
   var btnFullReset = document.getElementById("btn-full-reset");
@@ -10939,6 +10946,161 @@
       alertModal(T("alert.couldNotReadFile"));
     };
     reader.readAsText(file);
+  }
+
+  // ---------------------------------------------------------------------
+  // Import & Replace ("squash") - the destructive counterpart to
+  // importAllData's merge above. Two variants, chosen via the warning
+  // dialog's checkbox:
+  //  - Full squash: every store buildBackupPayload knows about (state,
+  //    rosters, teams, playerStats, ratings, contacts, playerAdded) is
+  //    wholesale replaced by the imported file's version - not merged,
+  //    not folded in, just adopted as-is, the same scope the app
+  //    already treats as "a backup."
+  //  - Keep-players squash: the same wholesale replacement, except the
+  //    roster is rebuilt as the union of local + imported player names
+  //    (deduped case-insensitively; local casing/contact info wins a
+  //    collision) and every one of those players' stats/ratings/history
+  //    is left blank rather than adopted from either side - "squash the
+  //    game data, keep the players."
+  // Both variants always download a full backup of the CURRENT local
+  // data first (exportAllData), before touching anything - the one hard
+  // requirement for a feature whose whole job is destroying data.
+  // ---------------------------------------------------------------------
+
+  var pendingSquashImportData = null;
+
+  function findKeyCaseInsensitive(obj, name) {
+    var key = normalizeNameKey(name);
+    var match = Object.keys(obj || {}).filter(function (k) {
+      return normalizeNameKey(k) === key;
+    });
+    return match.length ? match[0] : null;
+  }
+
+  function squashImportFile(file) {
+    var reader = new FileReader();
+    reader.onload = function () {
+      var data;
+      try {
+        data = JSON.parse(reader.result);
+      } catch (e) {
+        alertModal(T("alert.notValidJson"));
+        return;
+      }
+      if (!data || typeof data !== "object" || !data.state) {
+        alertModal(describeUnrecognizedBackupFile(data));
+        return;
+      }
+      pendingSquashImportData = data;
+      squashKeepPlayersCheckbox.checked = false;
+      squashWarningBody.textContent = data.exportedAt
+        ? T("backup.squashWarningBodyDated", { date: formatTimestamp(data.exportedAt, true) })
+        : T("backup.squashWarningBody");
+      squashWarningOverlay.classList.remove("hidden");
+    };
+    reader.onerror = function () {
+      alertModal(T("alert.couldNotReadFile"));
+    };
+    reader.readAsText(file);
+  }
+
+  function closeSquashWarning() {
+    pendingSquashImportData = null;
+    squashKeepPlayersCheckbox.checked = false;
+    squashWarningOverlay.classList.add("hidden");
+  }
+
+  // Rebuilds the player roster + contacts as the union of both sides'
+  // names, every player fresh (no stats/ratings/history carried over
+  // from either side - that's the whole point of this mode). Contact
+  // info: whichever side actually has non-empty info for that name,
+  // local first (this device's own roster is the more likely source of
+  // truth for its own players' contact details).
+  function buildUnionedPlayersAndContacts(localPlayers, importedPlayers, importedContacts) {
+    var nameByKey = {};
+    var order = [];
+    function add(p) {
+      if (!p || !p.name) return;
+      var key = normalizeNameKey(p.name);
+      if (!nameByKey[key]) {
+        nameByKey[key] = p.name;
+        order.push(key);
+      }
+    }
+    (localPlayers || []).forEach(add);
+    (importedPlayers || []).forEach(add);
+
+    var players = order.map(function (key) {
+      return { id: uid(), name: nameByKey[key], voice: 0, playing: false, teamId: null, balls: 0 };
+    });
+
+    var contacts = {};
+    order.forEach(function (key) {
+      var name = nameByKey[key];
+      var localContact = getPlayerContact(name);
+      var localHasInfo = !!(localContact.email || localContact.phone || localContact.nickname || localContact.clubTeam);
+      if (localHasInfo) {
+        contacts[name] = localContact;
+        return;
+      }
+      var importedKey = findKeyCaseInsensitive(importedContacts, name);
+      contacts[name] = importedKey ? importedContacts[importedKey] : localContact;
+    });
+
+    return { players: players, contacts: contacts };
+  }
+
+  function performSquash(keepPlayersOnly) {
+    var data = pendingSquashImportData;
+    if (!data) return;
+
+    // The one non-negotiable part of this feature: back up what's here
+    // right now, before any of it is replaced.
+    exportAllData("pool-master-counter-pre-squash-backup-" + new Date().toISOString().slice(0, 10) + "-" + Date.now() + ".json");
+
+    var importedState = data.state && typeof data.state === "object" ? data.state : defaultState();
+    var resultingPlayerCount;
+
+    if (keepPlayersOnly) {
+      var built = buildUnionedPlayersAndContacts(state.players, importedState.players, data.contacts && typeof data.contacts === "object" ? data.contacts : {});
+      var freshState = defaultState();
+      freshState.players = built.players;
+      state = freshState;
+      SAVED_ROSTERS = [];
+      SAVED_TEAMS = [];
+      PLAYER_STATS = {};
+      PLAYER_RATINGS = {};
+      PLAYER_CONTACTS = built.contacts;
+      var stampNow = new Date().toISOString();
+      PLAYER_ADDED = {};
+      built.players.forEach(function (p) {
+        PLAYER_ADDED[p.name] = stampNow;
+      });
+      resultingPlayerCount = built.players.length;
+    } else {
+      state = importedState;
+      SAVED_ROSTERS = Array.isArray(data.rosters) ? data.rosters : [];
+      SAVED_TEAMS = Array.isArray(data.teams) ? data.teams : [];
+      PLAYER_STATS = data.playerStats && typeof data.playerStats === "object" ? data.playerStats : {};
+      PLAYER_RATINGS = data.ratings && typeof data.ratings === "object" ? data.ratings : {};
+      PLAYER_CONTACTS = data.contacts && typeof data.contacts === "object" ? data.contacts : {};
+      PLAYER_ADDED = data.playerAdded && typeof data.playerAdded === "object" ? data.playerAdded : {};
+      resultingPlayerCount = (importedState.players || []).length;
+    }
+
+    saveState();
+    saveRostersToStorage(SAVED_ROSTERS);
+    saveTeamsToStorage(SAVED_TEAMS);
+    savePlayerStatsToStorage(PLAYER_STATS);
+    saveRatingsToStorage(PLAYER_RATINGS);
+    saveContactsToStorage(PLAYER_CONTACTS);
+    savePlayerAddedToStorage(PLAYER_ADDED);
+
+    closeSquashWarning();
+    alertModal(T(keepPlayersOnly ? "alert.squashDoneKeepPlayers" : "alert.squashDoneFull", { count: resultingPlayerCount }), function () {
+      location.reload();
+    });
   }
 
   // ---------------------------------------------------------------------
@@ -20314,6 +20476,23 @@
     importFileInput.value = "";
     if (!file) return;
     importAllData(file);
+  });
+
+  btnSquashImportData.addEventListener("click", function () {
+    squashImportFileInput.click();
+  });
+  squashImportFileInput.addEventListener("change", function () {
+    var file = squashImportFileInput.files && squashImportFileInput.files[0];
+    squashImportFileInput.value = "";
+    if (!file) return;
+    squashImportFile(file);
+  });
+  btnSquashCancel.addEventListener("click", closeSquashWarning);
+  squashWarningOverlay.addEventListener("click", function (e) {
+    if (e.target === squashWarningOverlay) closeSquashWarning();
+  });
+  btnSquashConfirm.addEventListener("click", function () {
+    performSquash(squashKeepPlayersCheckbox.checked);
   });
 
   btnExportSync.addEventListener("click", exportForSync);
