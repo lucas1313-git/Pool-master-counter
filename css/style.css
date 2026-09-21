@@ -6996,6 +6996,76 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   gap: 8px;
 }
 
+/* Team-vs-team hosting: the Team A / Team B assignment row on a table
+   slot, then either a rotating pair of lines or a round-robin match card,
+   depending on the league's teamRotationMode. */
+.league-team-slots-row {
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+
+.league-team-slots-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  flex: 1;
+  min-width: 90px;
+}
+
+.league-team-vs-label {
+  font-weight: 800;
+  margin-top: 2px;
+}
+
+.league-team-line {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.league-team-line-heading {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  font-weight: 700;
+}
+
+.league-roundrobin-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.league-roundrobin-pair {
+  font-size: 0.85rem;
+  padding: 3px 6px;
+  border-radius: 6px;
+}
+
+.league-roundrobin-pair.is-played {
+  color: var(--text-dim);
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+.league-roundrobin-pair.is-next {
+  background: color-mix(in srgb, var(--accent) 18%, var(--bg-card));
+  font-weight: 700;
+}
+
 .league-teams-list {
   list-style: none;
   margin: 10px 0 0;

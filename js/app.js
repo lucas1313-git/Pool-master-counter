@@ -2058,6 +2058,7 @@
   var btnLeagueCreateTeam = document.getElementById("btn-league-create-team");
   var leagueTableCountInput = document.getElementById("league-table-count");
   var leagueQueueModeSelect = document.getElementById("league-queue-mode-select");
+  var leagueTeamRotationSelect = document.getElementById("league-team-rotation-select");
   var leagueTablesGrid = document.getElementById("league-tables-grid");
   var leagueCurrentMatchPanel = document.getElementById("league-current-match-panel");
 
@@ -7956,6 +7957,16 @@
     if (!Array.isArray(l.roomQueue)) l.roomQueue = [];
     if (!l.tableQueues || typeof l.tableQueues !== "object") l.tableQueues = {};
     if (!l.tableTeamAssignment || typeof l.tableTeamAssignment !== "object") l.tableTeamAssignment = {};
+    // Migrate the original single-team-per-table shape (a bare team id
+    // string) to the two-side {a, b} shape team-vs-team hosting needs.
+    Object.keys(l.tableTeamAssignment).forEach(function (key) {
+      var v = l.tableTeamAssignment[key];
+      if (typeof v === "string") l.tableTeamAssignment[key] = { a: v, b: null };
+      else if (!v || typeof v !== "object") delete l.tableTeamAssignment[key];
+    });
+    if (l.teamRotationMode !== "roundRobin") l.teamRotationMode = "rotatingLines";
+    if (!l.tableTeamQueues || typeof l.tableTeamQueues !== "object") l.tableTeamQueues = {};
+    if (!l.tableRoundRobin || typeof l.tableRoundRobin !== "object") l.tableRoundRobin = {};
     if (!Array.isArray(l.teams)) l.teams = [];
     return l;
   }
@@ -8053,6 +8064,9 @@
       roomQueue: [],
       tableQueues: {},
       tableTeamAssignment: {},
+      teamRotationMode: "rotatingLines",
+      tableTeamQueues: {},
+      tableRoundRobin: {},
       teams: []
     };
     LEAGUES = LEAGUES.concat([league]);
@@ -8094,6 +8108,26 @@
       league.tableQueues[k] = league.tableQueues[k].filter(function (n) {
         return n !== name;
       });
+    });
+    Object.keys(league.tableTeamQueues || {}).forEach(function (k) {
+      var tq = league.tableTeamQueues[k];
+      tq.a = tq.a.filter(function (n) {
+        return n !== name;
+      });
+      tq.b = tq.b.filter(function (n) {
+        return n !== name;
+      });
+    });
+    // Drop any not-yet-played round-robin pairing involving this member -
+    // already-played pairings (before the schedule's cursor) stay put, they
+    // already happened.
+    Object.keys(league.tableRoundRobin || {}).forEach(function (k) {
+      var schedule = league.tableRoundRobin[k];
+      var already = schedule.pairs.slice(0, schedule.cursor);
+      var upcoming = schedule.pairs.slice(schedule.cursor).filter(function (p) {
+        return p.a !== name && p.b !== name;
+      });
+      schedule.pairs = already.concat(upcoming);
     });
     (league.teams || []).forEach(function (t) {
       t.memberNames = t.memberNames.filter(function (n) {
@@ -8303,7 +8337,18 @@
       return t.id !== teamId;
     });
     Object.keys(league.tableTeamAssignment).forEach(function (key) {
-      if (league.tableTeamAssignment[key] === teamId) delete league.tableTeamAssignment[key];
+      var assignment = league.tableTeamAssignment[key];
+      if (!assignment) return;
+      var touched = false;
+      if (assignment.a === teamId) {
+        assignment.a = null;
+        touched = true;
+      }
+      if (assignment.b === teamId) {
+        assignment.b = null;
+        touched = true;
+      }
+      if (touched) recomputeTableTeamState(league, key);
     });
     saveLeaguesToStorage(LEAGUES);
   }
@@ -8330,16 +8375,149 @@
     saveLeaguesToStorage(LEAGUES);
   }
 
-  // One-click convenience: seeds a table's own queue with a team's current
-  // roster, in order, and remembers which team it was purely for display
-  // ("Table 2 — Sharks"). From then on it's just that table's ordinary
-  // per-table queue - same rotation, same confirm-before-starting flow.
-  function assignTeamToTable(league, table, teamId) {
-    var team = findLeagueTeamById(league, teamId);
-    if (!team) return;
+  function setLeagueTeamRotationMode(league, mode) {
+    league.teamRotationMode = mode === "roundRobin" ? "roundRobin" : "rotatingLines";
+    // Re-seed every table that already has both sides assigned so it
+    // switches to the newly chosen style immediately, instead of leaving
+    // it running whichever style was active when it was assigned.
+    Object.keys(league.tableTeamAssignment).forEach(function (key) {
+      var assignment = league.tableTeamAssignment[key];
+      if (assignment && assignment.a && assignment.b) recomputeTableTeamState(league, key);
+    });
+    saveLeaguesToStorage(LEAGUES);
+  }
+
+  // Every A-player-vs-B-player pairing exactly once, in roster order - the
+  // "full round-robin schedule" rotation style. cursor points at the next
+  // not-yet-started pairing; consumeNextTeamPair below just advances it.
+  function buildRoundRobinSchedule(league, teamIdA, teamIdB) {
+    var teamA = findLeagueTeamById(league, teamIdA);
+    var teamB = findLeagueTeamById(league, teamIdB);
+    var pairs = [];
+    (teamA ? teamA.memberNames : []).forEach(function (a) {
+      (teamB ? teamB.memberNames : []).forEach(function (b) {
+        pairs.push({ a: a, b: b });
+      });
+    });
+    return { pairs: pairs, cursor: 0 };
+  }
+
+  // Rebuilds whatever team-vs-table state this table needs after its
+  // assignment changed (a side assigned/unassigned, or the league's
+  // rotation style changed): a fresh rotating-lines pair of queues, a
+  // fresh round-robin schedule, or - if only one side is set - falls back
+  // to the original single-team seed of the table's plain shared queue.
+  // key is the tableQueueKey string, since callers already have it.
+  function recomputeTableTeamState(league, key) {
+    var assignment = league.tableTeamAssignment[key];
+    delete league.tableTeamQueues[key];
+    delete league.tableRoundRobin[key];
+    if (!assignment || (!assignment.a && !assignment.b)) {
+      delete league.tableTeamAssignment[key];
+      delete league.tableQueues[key];
+      return;
+    }
+    if (assignment.a && assignment.b) {
+      if (league.teamRotationMode === "roundRobin") {
+        league.tableRoundRobin[key] = buildRoundRobinSchedule(league, assignment.a, assignment.b);
+      } else {
+        var teamA = findLeagueTeamById(league, assignment.a);
+        var teamB = findLeagueTeamById(league, assignment.b);
+        league.tableTeamQueues[key] = {
+          a: teamA ? teamA.memberNames.slice() : [],
+          b: teamB ? teamB.memberNames.slice() : []
+        };
+      }
+      delete league.tableQueues[key];
+    } else {
+      var soloSide = assignment.a ? "a" : "b";
+      var soloTeam = findLeagueTeamById(league, assignment[soloSide]);
+      league.tableQueues[key] = soloTeam ? soloTeam.memberNames.slice() : [];
+    }
+  }
+
+  // Assigns one side (Team A or Team B) of a table to a league team. Once
+  // both sides are set, the table switches from its plain shared queue to
+  // dedicated team-vs-team hosting per the league's rotation style.
+  function assignTeamToTable(league, table, side, teamId) {
+    if (!findLeagueTeamById(league, teamId)) return;
     var key = tableQueueKey(table);
-    league.tableQueues[key] = team.memberNames.slice();
-    league.tableTeamAssignment[key] = teamId;
+    if (!league.tableTeamAssignment[key]) league.tableTeamAssignment[key] = { a: null, b: null };
+    league.tableTeamAssignment[key][side] = teamId;
+    recomputeTableTeamState(league, key);
+    saveLeaguesToStorage(LEAGUES);
+  }
+
+  function unassignTeamFromTable(league, table, side) {
+    var key = tableQueueKey(table);
+    var assignment = league.tableTeamAssignment[key];
+    if (!assignment) return;
+    assignment[side] = null;
+    recomputeTableTeamState(league, key);
+    saveLeaguesToStorage(LEAGUES);
+  }
+
+  function isTableInTeamMode(league, table) {
+    var assignment = league.tableTeamAssignment[tableQueueKey(table)];
+    return !!(assignment && assignment.a && assignment.b);
+  }
+
+  // The next team-vs-team pairing this table would propose, or null if
+  // neither rotation style has one ready yet (an empty rotating line, or a
+  // completed round-robin schedule).
+  function nextTeamPairForTable(league, table) {
+    var key = tableQueueKey(table);
+    var assignment = league.tableTeamAssignment[key];
+    if (!assignment || !assignment.a || !assignment.b) return null;
+    if (league.teamRotationMode === "roundRobin") {
+      var schedule = league.tableRoundRobin[key];
+      if (!schedule || schedule.cursor >= schedule.pairs.length) return null;
+      var pair = schedule.pairs[schedule.cursor];
+      return { a: pair.a, b: pair.b };
+    }
+    var tq = league.tableTeamQueues[key];
+    if (!tq || !tq.a.length || !tq.b.length) return null;
+    return { a: tq.a[0], b: tq.b[0] };
+  }
+
+  // Removes the pairing nextTeamPairForTable just proposed once it's
+  // actually confirmed and started - advances the round-robin cursor, or
+  // pops the front of each rotating line (rotatePlayerToTeamLineBack below
+  // is what pushes those two names back on, once the match finishes).
+  function consumeNextTeamPair(league, table) {
+    var key = tableQueueKey(table);
+    if (league.teamRotationMode === "roundRobin") {
+      var schedule = league.tableRoundRobin[key];
+      if (schedule) schedule.cursor += 1;
+      return;
+    }
+    var tq = league.tableTeamQueues[key];
+    if (tq) {
+      tq.a.shift();
+      tq.b.shift();
+    }
+  }
+
+  function rotatePlayerToTeamLineBack(league, table, side, name) {
+    var tq = league.tableTeamQueues[tableQueueKey(table)];
+    if (!tq) return;
+    var idx = tq[side].indexOf(name);
+    if (idx !== -1) tq[side].splice(idx, 1);
+    tq[side].push(name);
+  }
+
+  function addNameToTeamLine(league, table, side, name) {
+    var tq = league.tableTeamQueues[tableQueueKey(table)];
+    if (!tq || tq[side].indexOf(name) !== -1) return;
+    tq[side].push(name);
+    saveLeaguesToStorage(LEAGUES);
+  }
+
+  function removeNameFromTeamLine(league, table, side, name) {
+    var tq = league.tableTeamQueues[tableQueueKey(table)];
+    if (!tq) return;
+    var idx = tq[side].indexOf(name);
+    if (idx !== -1) tq[side].splice(idx, 1);
     saveLeaguesToStorage(LEAGUES);
   }
 
@@ -8352,7 +8530,12 @@
     return names;
   }
 
-  function startLeagueMatch(league, table, nameA, nameB) {
+  // teamRotationMode (optional): tags the created active match as having
+  // come from team-vs-team hosting ("rotatingLines" or "roundRobin"), so
+  // leagueAdjustScore knows to rotate the two players back into their own
+  // team's line (rotatingLines) instead of the plain shared-queue rotation,
+  // or to leave them be (roundRobin - each pairing plays once).
+  function startLeagueMatch(league, table, nameA, nameB, teamRotationMode) {
     if (!league || !nameA || !nameB || nameA === nameB) return false;
     if (
       league.activeMatches.some(function (a) {
@@ -8382,6 +8565,7 @@
       scoreB: 0,
       startedAt: new Date().toISOString()
     };
+    if (teamRotationMode) active.teamRotationMode = teamRotationMode;
     league.activeMatches = league.activeMatches.concat([active]);
     league.focusedTable = "all";
     saveLeaguesToStorage(LEAGUES);
@@ -8392,8 +8576,15 @@
   // more names are waiting, plays a notification sound and confirms the
   // proposed pairing before starting it - declining just leaves the table
   // idle (its manual assign UI, plus this same proposal re-triggerable via
-  // "Start Next in Queue").
+  // "Start Next in Queue"). A table with two teams assigned routes to
+  // proposeNextTeamMatch instead, which draws from the team-vs-team state
+  // (a rotating line pair or a round-robin schedule) rather than a plain
+  // shared queue.
   function proposeNextMatchIfQueued(league, table) {
+    if (league.queueMode === "perTable" && isTableInTeamMode(league, table)) {
+      proposeNextTeamMatch(league, table);
+      return;
+    }
     var queue = queueForTable(league, table);
     if (!queue || queue.length < 2) return;
     var nameA = queue[0];
@@ -8411,6 +8602,32 @@
         }
         q.splice(0, 2);
         startLeagueMatch(l, table, nameA, nameB);
+        saveLeaguesToStorage(LEAGUES);
+        renderLeaguePage();
+      },
+      function () {
+        renderLeaguePage();
+      }
+    );
+  }
+
+  function proposeNextTeamMatch(league, table) {
+    var pair = nextTeamPairForTable(league, table);
+    if (!pair) return;
+    var mode = league.teamRotationMode;
+    playPositiveSound();
+    confirmModal(
+      T("league.nextUpConfirm", { table: table, a: pair.a, b: pair.b }),
+      function () {
+        var l = findLeagueById(league.id);
+        if (!l) return;
+        var stillPair = nextTeamPairForTable(l, table);
+        if (!stillPair || stillPair.a !== pair.a || stillPair.b !== pair.b) {
+          renderLeaguePage();
+          return;
+        }
+        consumeNextTeamPair(l, table);
+        startLeagueMatch(l, table, pair.a, pair.b, mode);
         saveLeaguesToStorage(LEAGUES);
         renderLeaguePage();
       },
@@ -8442,7 +8659,14 @@
       var idx = league.activeMatches.indexOf(active);
       if (idx !== -1) league.activeMatches.splice(idx, 1);
       if (league.focusedTable === table) league.focusedTable = "all";
-      if (league.queueMode !== "none") {
+      if (active.teamRotationMode === "rotatingLines") {
+        // Both players go to the back of their OWN team's line, not a
+        // shared one - nameA always came from side A's line and nameB
+        // from side B's, since proposeNextTeamMatch always starts a match
+        // in that fixed order.
+        rotatePlayerToTeamLineBack(league, table, "a", active.nameA);
+        rotatePlayerToTeamLineBack(league, table, "b", active.nameB);
+      } else if (!active.teamRotationMode && league.queueMode !== "none") {
         rotatePlayerToQueueBack(league, table, active.nameA);
         rotatePlayerToQueueBack(league, table, active.nameB);
       }
@@ -8682,6 +8906,160 @@
       return card;
     }
 
+    // Per-table team assignment (queueMode "perTable" only): two
+    // independent slots, Team A and Team B. Assigning both switches this
+    // table from its plain shared queue to dedicated team-vs-team hosting
+    // (see isTableInTeamMode below); assigning just one falls back to the
+    // original single-team seed of the plain queue.
+    if (league.queueMode === "perTable") {
+      var assignment = league.tableTeamAssignment[tableQueueKey(tableNum)] || { a: null, b: null };
+      var slotsRow = document.createElement("div");
+      slotsRow.className = "row league-team-slots-row";
+      ["a", "b"].forEach(function (side) {
+        var label = document.createElement("label");
+        label.textContent = side === "a" ? T("league.teamSlotALabel") : T("league.teamSlotBLabel");
+        var sel = document.createElement("select");
+        var noneOpt = document.createElement("option");
+        noneOpt.value = "";
+        noneOpt.textContent = T("league.teamSlotNoneOption");
+        sel.appendChild(noneOpt);
+        league.teams.forEach(function (t) {
+          var opt = document.createElement("option");
+          opt.value = t.id;
+          opt.textContent = t.name;
+          sel.appendChild(opt);
+        });
+        sel.value = assignment[side] || "";
+        sel.addEventListener("change", function () {
+          if (sel.value) assignTeamToTable(league, tableNum, side, sel.value);
+          else unassignTeamFromTable(league, tableNum, side);
+          renderLeaguePage();
+        });
+        label.appendChild(sel);
+        slotsRow.appendChild(label);
+      });
+      card.appendChild(slotsRow);
+
+      if (isTableInTeamMode(league, tableNum)) {
+        var teamA = findLeagueTeamById(league, assignment.a);
+        var teamB = findLeagueTeamById(league, assignment.b);
+        var vsLabel = document.createElement("div");
+        vsLabel.className = "league-team-vs-label";
+        vsLabel.textContent = T("league.teamVsLabel", { teamA: teamA ? teamA.name : "?", teamB: teamB ? teamB.name : "?" });
+        card.appendChild(vsLabel);
+
+        if (league.teamRotationMode === "roundRobin") {
+          var schedule = league.tableRoundRobin[tableQueueKey(tableNum)];
+          var rrCard = document.createElement("div");
+          rrCard.className = "league-roundrobin-card";
+          if (schedule && schedule.pairs.length) {
+            schedule.pairs.forEach(function (p, pairIdx) {
+              var pairRow = document.createElement("div");
+              pairRow.className = "league-roundrobin-pair";
+              if (pairIdx < schedule.cursor) pairRow.classList.add("is-played");
+              else if (pairIdx === schedule.cursor) pairRow.classList.add("is-next");
+              pairRow.textContent = p.a + " vs " + p.b;
+              rrCard.appendChild(pairRow);
+            });
+          } else {
+            var emptyRr = document.createElement("div");
+            emptyRr.className = "empty-hint";
+            emptyRr.textContent = T("league.roundRobinComplete");
+            rrCard.appendChild(emptyRr);
+          }
+          card.appendChild(rrCard);
+        } else {
+          [
+            ["a", teamA],
+            ["b", teamB]
+          ].forEach(function (entry) {
+            var side = entry[0];
+            var team = entry[1];
+            var lineWrap = document.createElement("div");
+            lineWrap.className = "league-team-line";
+            var lineHeading = document.createElement("div");
+            lineHeading.className = "league-team-line-heading";
+            lineHeading.textContent = T("league.teamLineHeading", { team: team ? team.name : "?" });
+            lineWrap.appendChild(lineHeading);
+
+            var tq = league.tableTeamQueues[tableQueueKey(tableNum)] || { a: [], b: [] };
+            var lineNames = tq[side] || [];
+            var lineList = document.createElement("ol");
+            lineList.className = "league-queue-list";
+            if (!lineNames.length) {
+              var lineEmpty = document.createElement("li");
+              lineEmpty.className = "empty-hint";
+              lineEmpty.textContent = T("league.queueEmptyHint");
+              lineList.appendChild(lineEmpty);
+            } else {
+              lineNames.forEach(function (name) {
+                var li = document.createElement("li");
+                var span = document.createElement("span");
+                span.textContent = name;
+                li.appendChild(span);
+                var removeBtn = document.createElement("button");
+                removeBtn.type = "button";
+                removeBtn.className = "btn btn-ghost";
+                removeBtn.textContent = "✕";
+                removeBtn.setAttribute("aria-label", T("league.removeFromQueueAria", { name: name }));
+                removeBtn.addEventListener("click", function () {
+                  removeNameFromTeamLine(league, tableNum, side, name);
+                  renderLeaguePage();
+                });
+                li.appendChild(removeBtn);
+                lineList.appendChild(li);
+              });
+            }
+            lineWrap.appendChild(lineList);
+
+            var lineAddRow = document.createElement("div");
+            lineAddRow.className = "row";
+            var lineAddSelect = document.createElement("select");
+            var inLine = {};
+            lineNames.forEach(function (n) {
+              inLine[n] = true;
+            });
+            var lineCandidates = (team ? team.memberNames : []).filter(function (n) {
+              return !inLine[n];
+            });
+            lineCandidates.forEach(function (n) {
+              var opt = document.createElement("option");
+              opt.value = n;
+              opt.textContent = n;
+              lineAddSelect.appendChild(opt);
+            });
+            var lineAddBtn = document.createElement("button");
+            lineAddBtn.type = "button";
+            lineAddBtn.className = "btn btn-ghost";
+            lineAddBtn.textContent = T("league.addToQueueButton");
+            lineAddBtn.disabled = lineCandidates.length === 0;
+            lineAddBtn.addEventListener("click", function () {
+              if (!lineAddSelect.value) return;
+              addNameToTeamLine(league, tableNum, side, lineAddSelect.value);
+              renderLeaguePage();
+            });
+            lineAddRow.appendChild(lineAddSelect);
+            lineAddRow.appendChild(lineAddBtn);
+            lineWrap.appendChild(lineAddRow);
+
+            card.appendChild(lineWrap);
+          });
+        }
+
+        var startTeamMatchBtn = document.createElement("button");
+        startTeamMatchBtn.type = "button";
+        startTeamMatchBtn.className = "btn btn-primary";
+        startTeamMatchBtn.textContent = T("league.startNextTeamMatchButton");
+        startTeamMatchBtn.disabled = !nextTeamPairForTable(league, tableNum);
+        startTeamMatchBtn.addEventListener("click", function () {
+          proposeNextMatchIfQueued(league, tableNum);
+        });
+        card.appendChild(startTeamMatchBtn);
+
+        return card;
+      }
+    }
+
     var queue = queueForTable(league, tableNum);
     var queueLabel = document.createElement("div");
     queueLabel.className = "league-table-slot-queue-label";
@@ -8746,37 +9124,16 @@
     addRow.appendChild(addBtn);
     card.appendChild(addRow);
 
-    if (league.queueMode === "perTable" && league.teams.length) {
-      var teamRow = document.createElement("div");
-      teamRow.className = "row";
-      var teamSelect = document.createElement("select");
-      league.teams.forEach(function (t) {
-        var opt = document.createElement("option");
-        opt.value = t.id;
-        opt.textContent = t.name;
-        teamSelect.appendChild(opt);
-      });
-      var assignBtn = document.createElement("button");
-      assignBtn.type = "button";
-      assignBtn.className = "btn btn-ghost";
-      assignBtn.textContent = T("league.assignTeamToTableButton");
-      assignBtn.addEventListener("click", function () {
-        if (!teamSelect.value) return;
-        assignTeamToTable(league, tableNum, teamSelect.value);
-        renderLeaguePage();
-      });
-      teamRow.appendChild(teamSelect);
-      teamRow.appendChild(assignBtn);
-      card.appendChild(teamRow);
-
-      var assignedTeamId = league.tableTeamAssignment[tableQueueKey(tableNum)];
-      if (assignedTeamId) {
-        var assignedTeam = findLeagueTeamById(league, assignedTeamId);
-        if (assignedTeam) {
-          var assignedNote = document.createElement("div");
-          assignedNote.className = "league-table-slot-team-note";
-          assignedNote.textContent = T("league.tableTeamAssignedNote", { team: assignedTeam.name });
-          card.appendChild(assignedNote);
+    if (league.queueMode === "perTable") {
+      var soloAssignment = league.tableTeamAssignment[tableQueueKey(tableNum)];
+      var soloTeamId = soloAssignment ? soloAssignment.a || soloAssignment.b : null;
+      if (soloTeamId) {
+        var soloTeam = findLeagueTeamById(league, soloTeamId);
+        if (soloTeam) {
+          var soloNote = document.createElement("div");
+          soloNote.className = "league-table-slot-team-note";
+          soloNote.textContent = T("league.tableTeamAssignedNote", { team: soloTeam.name });
+          card.appendChild(soloNote);
         }
       }
     }
@@ -9013,6 +9370,7 @@
     if (league.isOrganizer) {
       renderLeagueTeams(league);
       leagueQueueModeSelect.value = league.queueMode;
+      leagueTeamRotationSelect.value = league.teamRotationMode;
       leagueTableCountInput.value = league.tableCount;
       renderLeagueTablesGrid(league);
     }
@@ -21995,6 +22353,12 @@
     var league = findLeagueById(activeLeagueId);
     if (!league) return;
     setLeagueQueueMode(league, leagueQueueModeSelect.value);
+    renderLeaguePage();
+  });
+  leagueTeamRotationSelect.addEventListener("change", function () {
+    var league = findLeagueById(activeLeagueId);
+    if (!league) return;
+    setLeagueTeamRotationMode(league, leagueTeamRotationSelect.value);
     renderLeaguePage();
   });
 

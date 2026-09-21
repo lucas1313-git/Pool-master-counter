@@ -1724,7 +1724,13 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
             <option value="perTable" data-i18n="league.queueModePerTable">Per-Table Queue</option>
             <option value="perRoom" data-i18n="league.queueModePerRoom">Per-Room Queue</option>
           </select>
+          <label for="league-team-rotation-select" data-i18n="league.teamRotationLabel">Team Rotation</label>
+          <select id="league-team-rotation-select">
+            <option value="rotatingLines" data-i18n="league.teamRotationRotatingLines">Rotating Lines</option>
+            <option value="roundRobin" data-i18n="league.teamRotationRoundRobin">Round-Robin</option>
+          </select>
         </div>
+        <p class="player-stats-note" data-i18n="league.teamRotationHelp">When a table has a Team A and Team B assigned (Per-Table Queue), this decides how their players are matched up: Rotating Lines keeps cycling front-of-A vs front-of-B, Round-Robin schedules every A player against every B player once.</p>
         <div id="league-tables-grid" class="league-tables-grid"></div>
       </div>
 
