@@ -7080,6 +7080,42 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   gap: 10px;
 }
 
+/* Setup Wizard: "Who's Playing Tonight" checklist and the Teams &
+   Captains step - both reuse the app's own .checkbox-row / .row / .btn
+   language, these two rules are just the list containers. */
+.league-wizard-roster-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.league-wizard-teams-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.league-wizard-team-block {
+  padding: 12px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.league-wizard-team-block h4 {
+  margin: 0 0 6px;
+}
+
+.league-wizard-team-absent-note {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+
 .league-team-row {
   padding: 10px 12px;
   background: var(--bg-panel);

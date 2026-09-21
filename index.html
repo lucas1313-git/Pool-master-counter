@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260921a">
+<link rel="stylesheet" href="css/style.css?v=20260921b">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -1646,6 +1646,7 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
   <header class="app-header player-page-header">
     <button type="button" id="btn-league-back" class="btn btn-ghost screen-back-btn" aria-label="Back" data-i18n-aria-label="common.back"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
     <h1 data-i18n="header.league">League</h1>
+    <button type="button" id="btn-open-league-wizard" class="btn btn-primary" data-i18n="league.wizard.openButton">🧙 Setup Tonight</button>
     <button type="button" id="btn-open-help-league" class="btn btn-ghost" data-i18n="header.help">❓ Help</button>
   </header>
 
@@ -1745,8 +1746,91 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 </div>
 
+<div id="league-wizard-overlay" class="wizard-overlay hidden">
+  <div class="wizard-card">
+    <button type="button" id="btn-league-wizard-close" class="wizard-close-btn" aria-label="Close wizard" data-i18n-aria-label="wizard.closeAriaLabel">×</button>
+
+    <div class="wizard-header">
+      <div class="wizard-header-text">
+        <h2 data-i18n="league.wizard.title">🧙 Setup Tonight's League Games</h2>
+        <p class="wizard-progress" id="league-wizard-progress">Step 1 of 6</p>
+      </div>
+    </div>
+
+    <div class="wizard-progress-dots" id="league-wizard-progress-dots"></div>
+
+    <div class="wizard-body">
+
+      <div class="wizard-step" id="league-wizard-step-1">
+        <p class="wizard-step-explain" data-i18n="league.wizard.step1Explain">Check off everyone playing tonight. Unchecked members are skipped everywhere a match gets picked — auto-proposed or started by hand — until you check them back in.</p>
+        <div class="row">
+          <button type="button" id="btn-league-wizard-mark-all" class="btn btn-ghost" data-i18n="league.wizard.markAllButton">✅ Mark All Present</button>
+          <button type="button" id="btn-league-wizard-mark-none" class="btn btn-ghost" data-i18n="league.wizard.markNoneButton">Mark None Present</button>
+        </div>
+        <ul id="league-wizard-roster-list" class="league-wizard-roster-list"></ul>
+      </div>
+
+      <div class="wizard-step hidden" id="league-wizard-step-2">
+        <p class="wizard-step-explain" data-i18n="league.wizard.step2Explain">For any team with players here tonight, pick who's running their lineup.</p>
+        <div id="league-wizard-teams-list" class="league-wizard-teams-list"></div>
+      </div>
+
+      <div class="wizard-step hidden" id="league-wizard-step-3">
+        <p class="wizard-step-explain" data-i18n="league.wizard.step3Explain">How many tables are running tonight, and how should the next match get picked once one frees up?</p>
+        <div class="row">
+          <label for="league-wizard-table-count" data-i18n="league.tableCountLabel">🎱 Number of Tables</label>
+          <input type="number" id="league-wizard-table-count" min="1" max="20" value="1">
+        </div>
+        <div class="row">
+          <label for="league-wizard-queue-mode" data-i18n="league.queueModeLabel">Queue Mode</label>
+          <select id="league-wizard-queue-mode">
+            <option value="none" data-i18n="league.queueModeNone">Manual (organizer assigns)</option>
+            <option value="perTable" data-i18n="league.queueModePerTable">Per-Table Queue</option>
+            <option value="perRoom" data-i18n="league.queueModePerRoom">Per-Room Queue</option>
+          </select>
+        </div>
+        <div class="row hidden" id="league-wizard-rotation-row">
+          <label for="league-wizard-team-rotation" data-i18n="league.teamRotationLabel">Team Rotation</label>
+          <select id="league-wizard-team-rotation">
+            <option value="rotatingLines" data-i18n="league.teamRotationRotatingLines">Rotating Lines</option>
+            <option value="roundRobin" data-i18n="league.teamRotationRoundRobin">Round-Robin</option>
+          </select>
+        </div>
+        <p class="player-stats-note" data-i18n="league.teamRotationHelp">When a table has a Team A and Team B assigned (Per-Table Queue), this decides how their players are matched up: Rotating Lines keeps cycling front-of-A vs front-of-B, Round-Robin schedules every A player against every B player once.</p>
+      </div>
+
+      <div class="wizard-step hidden" id="league-wizard-step-4">
+        <p class="wizard-step-explain" id="league-wizard-step4-explain"></p>
+        <div id="league-wizard-match-tables" class="league-tables-grid"></div>
+      </div>
+
+      <div class="wizard-step hidden" id="league-wizard-step-5">
+        <p class="wizard-step-explain" data-i18n="league.wizard.step5Explain">Optionally cap how many games each player gets tonight, so everyone gets roughly equal table time.</p>
+        <div class="row">
+          <label for="league-wizard-max-games" data-i18n="league.maxGamesLabel">🎯 Max Games / Player (Session)</label>
+          <input type="number" id="league-wizard-max-games" min="0" max="99" value="0">
+        </div>
+        <p class="player-stats-note" data-i18n="league.maxGamesHelp">0 means unlimited. Once a member reaches this many games since the last reset, they're skipped for any new match (manual, queued, or team rotation) until you reset session counts for the next time this league meets — their lifetime stats keep counting either way.</p>
+      </div>
+
+      <div class="wizard-step hidden" id="league-wizard-step-6">
+        <p class="wizard-step-explain" data-i18n="league.wizard.step6Explain">Here's tonight's setup — everything below is already saved. Hit Finish to head to the Tables section and start playing.</p>
+        <div id="league-wizard-summary" class="wizard-summary"></div>
+      </div>
+
+    </div>
+
+    <div class="wizard-footer">
+      <button type="button" id="btn-league-wizard-back" class="btn btn-ghost" data-i18n="wizard.back">← Back</button>
+      <button type="button" id="btn-league-wizard-cancel" class="btn btn-ghost" data-i18n="common.cancel">Cancel</button>
+      <button type="button" id="btn-league-wizard-next" class="btn btn-primary" data-i18n="wizard.next">Next →</button>
+      <button type="button" id="btn-league-wizard-finish" class="btn btn-primary hidden" data-i18n="league.wizard.finishButton">🎱 Finish Setup</button>
+    </div>
+  </div>
+</div>
+
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260921a"></script>
+<script src="js/app.js?v=20260921b"></script>
 </body>
 </html>

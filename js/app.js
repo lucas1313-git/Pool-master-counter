@@ -2061,6 +2061,28 @@
   var leagueTeamRotationSelect = document.getElementById("league-team-rotation-select");
   var leagueMaxGamesInput = document.getElementById("league-max-games-input");
   var btnLeagueResetSessionCounts = document.getElementById("btn-league-reset-session-counts");
+
+  var btnOpenLeagueWizard = document.getElementById("btn-open-league-wizard");
+  var leagueWizardOverlay = document.getElementById("league-wizard-overlay");
+  var btnLeagueWizardClose = document.getElementById("btn-league-wizard-close");
+  var leagueWizardProgress = document.getElementById("league-wizard-progress");
+  var leagueWizardProgressDots = document.getElementById("league-wizard-progress-dots");
+  var leagueWizardRosterList = document.getElementById("league-wizard-roster-list");
+  var btnLeagueWizardMarkAll = document.getElementById("btn-league-wizard-mark-all");
+  var btnLeagueWizardMarkNone = document.getElementById("btn-league-wizard-mark-none");
+  var leagueWizardTeamsList = document.getElementById("league-wizard-teams-list");
+  var leagueWizardTableCountInput = document.getElementById("league-wizard-table-count");
+  var leagueWizardQueueModeSelect = document.getElementById("league-wizard-queue-mode");
+  var leagueWizardRotationRow = document.getElementById("league-wizard-rotation-row");
+  var leagueWizardTeamRotationSelect = document.getElementById("league-wizard-team-rotation");
+  var leagueWizardStep4Explain = document.getElementById("league-wizard-step4-explain");
+  var leagueWizardMatchTables = document.getElementById("league-wizard-match-tables");
+  var leagueWizardMaxGamesInput = document.getElementById("league-wizard-max-games");
+  var leagueWizardSummary = document.getElementById("league-wizard-summary");
+  var btnLeagueWizardBack = document.getElementById("btn-league-wizard-back");
+  var btnLeagueWizardCancel = document.getElementById("btn-league-wizard-cancel");
+  var btnLeagueWizardNext = document.getElementById("btn-league-wizard-next");
+  var btnLeagueWizardFinish = document.getElementById("btn-league-wizard-finish");
   var leagueTablesGrid = document.getElementById("league-tables-grid");
   var leagueCurrentMatchPanel = document.getElementById("league-current-match-panel");
 
@@ -7970,8 +7992,18 @@
     if (!l.tableTeamQueues || typeof l.tableTeamQueues !== "object") l.tableTeamQueues = {};
     if (!l.tableRoundRobin || typeof l.tableRoundRobin !== "object") l.tableRoundRobin = {};
     if (!Array.isArray(l.teams)) l.teams = [];
+    l.teams.forEach(function (t) {
+      if (typeof t.captainName !== "string") t.captainName = null;
+    });
     if (typeof l.maxGamesPerPlayer !== "number" || l.maxGamesPerPlayer < 0) l.maxGamesPerPlayer = 0;
     if (!l.sessionGameCounts || typeof l.sessionGameCounts !== "object") l.sessionGameCounts = {};
+    // "Who's playing tonight" (set by the Setup Wizard's first step) -
+    // tonightRosterConfigured stays false (everyone eligible, matching
+    // pre-wizard behavior) until the wizard's roster step is actually
+    // touched, since an empty tonightRoster alone can't distinguish
+    // "never configured" from "organizer explicitly checked nobody in yet".
+    if (!Array.isArray(l.tonightRoster)) l.tonightRoster = [];
+    if (typeof l.tonightRosterConfigured !== "boolean") l.tonightRosterConfigured = false;
     return l;
   }
 
@@ -8073,7 +8105,9 @@
       tableRoundRobin: {},
       teams: [],
       maxGamesPerPlayer: 0,
-      sessionGameCounts: {}
+      sessionGameCounts: {},
+      tonightRoster: [],
+      tonightRosterConfigured: false
     };
     LEAGUES = LEAGUES.concat([league]);
     saveLeaguesToStorage(LEAGUES);
@@ -8377,10 +8411,68 @@
     saveLeaguesToStorage(LEAGUES);
   }
 
+  // "Who's playing tonight", set by the Setup Wizard's first step -
+  // league.tonightRosterConfigured stays false (everyone eligible,
+  // matching the app's pre-wizard behavior) until the roster is actually
+  // touched, since an empty tonightRoster alone can't tell "never
+  // configured" apart from "organizer explicitly checked nobody in yet".
+  function leagueMemberPlayingTonight(league, name) {
+    if (!league.tonightRosterConfigured) return true;
+    return league.tonightRoster.indexOf(name) !== -1;
+  }
+
+  function setLeagueTonightRosterMember(league, name, isPresent) {
+    // First touch of an unconfigured roster starts from "everyone
+    // eligible" (matching what leagueMemberPlayingTonight already reports
+    // for it) rather than an empty list - otherwise toggling any one
+    // member off would silently mark every OTHER member absent too.
+    if (!league.tonightRosterConfigured) {
+      league.tonightRoster = league.members.map(function (m) {
+        return m.name;
+      });
+    }
+    league.tonightRosterConfigured = true;
+    var idx = league.tonightRoster.indexOf(name);
+    if (isPresent && idx === -1) league.tonightRoster.push(name);
+    else if (!isPresent && idx !== -1) league.tonightRoster.splice(idx, 1);
+    saveLeaguesToStorage(LEAGUES);
+  }
+
+  function markAllLeagueMembersPresentTonight(league) {
+    league.tonightRosterConfigured = true;
+    league.tonightRoster = league.members.map(function (m) {
+      return m.name;
+    });
+    saveLeaguesToStorage(LEAGUES);
+  }
+
+  function markNoLeagueMembersPresentTonight(league) {
+    league.tonightRosterConfigured = true;
+    league.tonightRoster = [];
+    saveLeaguesToStorage(LEAGUES);
+  }
+
+  // A player eligible to start a new match right now: present tonight (or
+  // the roster was never configured, meaning nobody's been excluded) and
+  // not yet at their session cap. Used everywhere a "next up" name gets
+  // picked automatically (plain-queue pairing, team rotation lines/
+  // schedule) so an absent or capped-out member is skipped rather than
+  // blocking the whole proposal.
+  function leagueMemberEligibleNow(league, name) {
+    return leagueMemberPlayingTonight(league, name) && !leagueMemberAtSessionCap(league, name);
+  }
+
   function createLeagueTeam(league, name) {
     var trimmed = (name || "").trim();
     if (!trimmed) return;
-    league.teams = league.teams.concat([{ id: "team-" + uid(), name: trimmed, memberNames: [] }]);
+    league.teams = league.teams.concat([{ id: "team-" + uid(), name: trimmed, memberNames: [], captainName: null }]);
+    saveLeaguesToStorage(LEAGUES);
+  }
+
+  function setLeagueTeamCaptain(league, teamId, name) {
+    var team = findLeagueTeamById(league, teamId);
+    if (!team) return;
+    team.captainName = name && team.memberNames.indexOf(name) !== -1 ? name : null;
     saveLeaguesToStorage(LEAGUES);
   }
 
@@ -8419,6 +8511,7 @@
     team.memberNames = team.memberNames.filter(function (n) {
       return n !== name;
     });
+    if (team.captainName === name) team.captainName = null;
     saveLeaguesToStorage(LEAGUES);
   }
 
@@ -8521,19 +8614,20 @@
     return !!(assignment && assignment.a && assignment.b);
   }
 
-  function firstNonCappedName(league, names) {
+  function firstEligibleName(league, names) {
     for (var i = 0; i < names.length; i++) {
-      if (!leagueMemberAtSessionCap(league, names[i])) return names[i];
+      if (leagueMemberEligibleNow(league, names[i])) return names[i];
     }
     return null;
   }
 
   // The next team-vs-team pairing this table would propose, or null if
   // neither rotation style has one ready yet (an empty rotating line, a
-  // completed round-robin schedule, or everyone left is at their session
-  // cap). scheduleIndex (round-robin only) tells consumeNextTeamPair how
-  // far to advance the cursor, since a capped-out player can push the
-  // returned pair past whatever schedule.cursor currently points at.
+  // completed round-robin schedule, or everyone left is absent tonight or
+  // at their session cap). scheduleIndex (round-robin only) tells
+  // consumeNextTeamPair how far to advance the cursor, since a skipped
+  // player can push the returned pair past whatever schedule.cursor
+  // currently points at.
   function nextTeamPairForTable(league, table) {
     var key = tableQueueKey(table);
     var assignment = league.tableTeamAssignment[key];
@@ -8543,7 +8637,7 @@
       if (!schedule) return null;
       for (var i = schedule.cursor; i < schedule.pairs.length; i++) {
         var pair = schedule.pairs[i];
-        if (!leagueMemberAtSessionCap(league, pair.a) && !leagueMemberAtSessionCap(league, pair.b)) {
+        if (leagueMemberEligibleNow(league, pair.a) && leagueMemberEligibleNow(league, pair.b)) {
           return { a: pair.a, b: pair.b, scheduleIndex: i };
         }
       }
@@ -8551,8 +8645,8 @@
     }
     var tq = league.tableTeamQueues[key];
     if (!tq) return null;
-    var nameA = firstNonCappedName(league, tq.a);
-    var nameB = firstNonCappedName(league, tq.b);
+    var nameA = firstEligibleName(league, tq.a);
+    var nameB = firstEligibleName(league, tq.b);
     if (!nameA || !nameB) return null;
     return { a: nameA, b: nameB };
   }
@@ -8641,6 +8735,10 @@
       showToast(T("league.sessionCapReached"));
       return false;
     }
+    if (!leagueMemberPlayingTonight(league, nameA) || !leagueMemberPlayingTonight(league, nameB)) {
+      showToast(T("league.notPlayingTonight"));
+      return false;
+    }
     var memberA = league.members.filter(function (m) {
       return m.name === nameA;
     })[0];
@@ -8669,18 +8767,19 @@
   }
 
   // The next valid pairing a plain (non-team) queue would propose: the
-  // earliest name not yet at their session cap, paired with the earliest
-  // later name that's neither capped nor on the same team as them. Skips
-  // straight past any name that can't play right now rather than blocking
-  // the whole queue on them - they stay right where they are for next time.
+  // earliest name that's eligible right now (present tonight, not at
+  // their session cap), paired with the earliest later eligible name
+  // that's not on the same team as them. Skips straight past anyone who
+  // can't play right now rather than blocking the whole queue on them -
+  // they stay right where they are for next time.
   function findNextPlainPairing(league, queue) {
     if (!queue) return null;
     for (var i = 0; i < queue.length; i++) {
       var nameA = queue[i];
-      if (leagueMemberAtSessionCap(league, nameA)) continue;
+      if (!leagueMemberEligibleNow(league, nameA)) continue;
       for (var j = i + 1; j < queue.length; j++) {
         var nameB = queue[j];
-        if (leagueMemberAtSessionCap(league, nameB)) continue;
+        if (!leagueMemberEligibleNow(league, nameB)) continue;
         if (!leagueSameTeam(league, nameA, nameB)) return { a: nameA, b: nameB };
       }
     }
@@ -8982,7 +9081,7 @@
     card.classList.add("is-idle");
     var busy = leagueMembersInActiveMatch(league);
     var available = league.members.filter(function (m) {
-      return !busy[m.name] && !leagueMemberAtSessionCap(league, m.name);
+      return !busy[m.name] && leagueMemberEligibleNow(league, m.name);
     });
 
     if (league.queueMode === "none") {
@@ -9142,7 +9241,7 @@
               inLine[n] = true;
             });
             var lineCandidates = (team ? team.memberNames : []).filter(function (n) {
-              return !inLine[n] && !leagueMemberAtSessionCap(league, n);
+              return !inLine[n] && leagueMemberEligibleNow(league, n);
             });
             lineCandidates.forEach(function (n) {
               var opt = document.createElement("option");
@@ -9321,7 +9420,7 @@
           var chip = document.createElement("span");
           chip.className = "league-team-member-chip";
           var chipLabel = document.createElement("span");
-          chipLabel.textContent = name;
+          chipLabel.textContent = name === team.captainName ? T("league.captainChipLabel", { name: name }) : name;
           chip.appendChild(chipLabel);
           var removeMemberBtn = document.createElement("button");
           removeMemberBtn.type = "button";
@@ -9336,6 +9435,32 @@
         });
       }
       li.appendChild(membersRow);
+
+      if (team.memberNames.length) {
+        var captainRow = document.createElement("div");
+        captainRow.className = "row";
+        var captainLabel = document.createElement("label");
+        captainLabel.textContent = T("league.captainLabel");
+        var captainSelect = document.createElement("select");
+        var captainNoneOpt = document.createElement("option");
+        captainNoneOpt.value = "";
+        captainNoneOpt.textContent = T("league.teamSlotNoneOption");
+        captainSelect.appendChild(captainNoneOpt);
+        team.memberNames.forEach(function (name) {
+          var opt = document.createElement("option");
+          opt.value = name;
+          opt.textContent = name;
+          captainSelect.appendChild(opt);
+        });
+        captainSelect.value = team.captainName || "";
+        captainSelect.addEventListener("change", function () {
+          setLeagueTeamCaptain(league, team.id, captainSelect.value);
+          renderLeaguePage();
+        });
+        captainLabel.appendChild(captainSelect);
+        captainRow.appendChild(captainLabel);
+        li.appendChild(captainRow);
+      }
 
       var addRow = document.createElement("div");
       addRow.className = "row";
@@ -9529,6 +9654,296 @@
     }
     leaguePageView.classList.add("hidden");
     appRoot.classList.remove("hidden");
+  }
+
+  // ---------------------------------------------------------------------
+  // League Setup Wizard - "get the evening running" in a fixed, explicit
+  // sequence: who's here, team captains, tables/rotation, matching teams
+  // or players to tables, a per-player game cap, then a review. Unlike
+  // the main Game Setup Wizard (wizardStepSequence(), which skips steps
+  // based on format), every step here always shows - its CONTENT adapts
+  // instead (e.g. step 2 just explains itself away when there are no
+  // teams yet) - simpler to reason about for a settings-review flow like
+  // this one. Every control writes straight through the same setter
+  // functions the League page's own Tables/Teams sections already use
+  // (setLeagueQueueMode, assignTeamToTable, etc.), so Cancel is always
+  // safe - whatever's been touched is already saved, same philosophy the
+  // main wizard documents for itself.
+  // ---------------------------------------------------------------------
+
+  var LEAGUE_WIZARD_STEP_COUNT = 6;
+  var leagueWizardStep = 1;
+
+  function leagueWizardOrganizerLeague() {
+    var league = activeLeagueId ? findLeagueById(activeLeagueId) : null;
+    return league && league.isOrganizer ? league : null;
+  }
+
+  function renderLeagueWizardRoster() {
+    var league = leagueWizardOrganizerLeague();
+    leagueWizardRosterList.innerHTML = "";
+    if (!league) return;
+    if (!league.members.length) {
+      var emptyLi = document.createElement("li");
+      emptyLi.className = "empty-hint";
+      emptyLi.textContent = T("league.noMembersYet");
+      leagueWizardRosterList.appendChild(emptyLi);
+      return;
+    }
+    league.members.forEach(function (m) {
+      var li = document.createElement("li");
+      var label = document.createElement("label");
+      label.className = "checkbox-row";
+      var checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = leagueMemberPlayingTonight(league, m.name);
+      checkbox.addEventListener("change", function () {
+        setLeagueTonightRosterMember(league, m.name, checkbox.checked);
+      });
+      var span = document.createElement("span");
+      span.textContent = leagueNameWithTeam(league, m.name) + " — SL " + m.skillLevel;
+      label.appendChild(checkbox);
+      label.appendChild(span);
+      li.appendChild(label);
+      leagueWizardRosterList.appendChild(li);
+    });
+  }
+
+  function renderLeagueWizardTeams() {
+    var league = leagueWizardOrganizerLeague();
+    leagueWizardTeamsList.innerHTML = "";
+    if (!league) return;
+    if (!league.teams.length) {
+      var emptyDiv = document.createElement("div");
+      emptyDiv.className = "empty-hint";
+      emptyDiv.textContent = T("league.wizard.noTeamsHint");
+      leagueWizardTeamsList.appendChild(emptyDiv);
+      return;
+    }
+    league.teams.forEach(function (team) {
+      var present = team.memberNames.filter(function (n) {
+        return leagueMemberPlayingTonight(league, n);
+      });
+      var block = document.createElement("div");
+      block.className = "league-wizard-team-block";
+      var heading = document.createElement("h4");
+      heading.textContent = team.name;
+      block.appendChild(heading);
+
+      if (!present.length) {
+        var note = document.createElement("div");
+        note.className = "league-wizard-team-absent-note";
+        note.textContent = T("league.wizard.teamNotPlayingTonight");
+        block.appendChild(note);
+        leagueWizardTeamsList.appendChild(block);
+        return;
+      }
+
+      var row = document.createElement("div");
+      row.className = "row";
+      var label = document.createElement("label");
+      label.textContent = T("league.captainLabel");
+      var select = document.createElement("select");
+      var noneOpt = document.createElement("option");
+      noneOpt.value = "";
+      noneOpt.textContent = T("league.teamSlotNoneOption");
+      select.appendChild(noneOpt);
+      present.forEach(function (name) {
+        var opt = document.createElement("option");
+        opt.value = name;
+        opt.textContent = name;
+        select.appendChild(opt);
+      });
+      select.value = team.captainName && present.indexOf(team.captainName) !== -1 ? team.captainName : "";
+      select.addEventListener("change", function () {
+        setLeagueTeamCaptain(league, team.id, select.value);
+      });
+      label.appendChild(select);
+      row.appendChild(label);
+      block.appendChild(row);
+      leagueWizardTeamsList.appendChild(block);
+    });
+  }
+
+  function syncLeagueWizardTablesStep() {
+    var league = leagueWizardOrganizerLeague();
+    if (!league) return;
+    leagueWizardTableCountInput.value = league.tableCount;
+    leagueWizardQueueModeSelect.value = league.queueMode;
+    leagueWizardTeamRotationSelect.value = league.teamRotationMode;
+    leagueWizardRotationRow.classList.toggle("hidden", league.queueMode !== "perTable" || !league.teams.length);
+  }
+
+  // Step 4 only builds real UI for the one genuinely new case this wizard
+  // adds - assigning two teams to a table under Per-Table Queue. Every
+  // other combination (no teams, Manual, or Per-Room) already has its own
+  // full UI in the Tables section below, so this step just explains what
+  // to expect there instead of duplicating it.
+  function renderLeagueWizardMatchStep() {
+    var league = leagueWizardOrganizerLeague();
+    leagueWizardMatchTables.innerHTML = "";
+    if (!league) return;
+    var teamsWithPresentMembers = league.teams.filter(function (t) {
+      return t.memberNames.some(function (n) {
+        return leagueMemberPlayingTonight(league, n);
+      });
+    });
+    if (league.queueMode === "perTable" && teamsWithPresentMembers.length >= 2) {
+      leagueWizardStep4Explain.textContent = T("league.wizard.step4ExplainTeams");
+      for (var i = 1; i <= league.tableCount; i++) {
+        leagueWizardMatchTables.appendChild(buildLeagueWizardTeamSlotCard(league, i, teamsWithPresentMembers));
+      }
+      return;
+    }
+    if (league.queueMode === "none") {
+      leagueWizardStep4Explain.textContent = T("league.wizard.step4ExplainManual");
+    } else if (league.queueMode === "perRoom") {
+      leagueWizardStep4Explain.textContent = T("league.wizard.step4ExplainRoom");
+    } else {
+      leagueWizardStep4Explain.textContent = T("league.wizard.step4ExplainPerTableNoTeams");
+    }
+  }
+
+  // A trimmed-down version of buildLeagueTableSlotCard's team-slots-row -
+  // just the Team A / Team B pickers (scoped to teams with someone
+  // playing tonight), reusing the exact same assignTeamToTable /
+  // unassignTeamFromTable calls so the result is identical to setting it
+  // from the Tables section itself.
+  function buildLeagueWizardTeamSlotCard(league, tableNum, teamsWithPresentMembers) {
+    var card = document.createElement("div");
+    card.className = "league-table-slot";
+    var heading = document.createElement("div");
+    heading.className = "league-table-slot-heading";
+    heading.textContent = T("league.tableOption", { table: tableNum });
+    card.appendChild(heading);
+
+    var assignment = league.tableTeamAssignment[tableQueueKey(tableNum)] || { a: null, b: null };
+    var slotsRow = document.createElement("div");
+    slotsRow.className = "row league-team-slots-row";
+    ["a", "b"].forEach(function (side) {
+      var label = document.createElement("label");
+      label.textContent = side === "a" ? T("league.teamSlotALabel") : T("league.teamSlotBLabel");
+      var sel = document.createElement("select");
+      var noneOpt = document.createElement("option");
+      noneOpt.value = "";
+      noneOpt.textContent = T("league.teamSlotNoneOption");
+      sel.appendChild(noneOpt);
+      teamsWithPresentMembers.forEach(function (t) {
+        var opt = document.createElement("option");
+        opt.value = t.id;
+        opt.textContent = t.name;
+        sel.appendChild(opt);
+      });
+      sel.value = assignment[side] || "";
+      sel.addEventListener("change", function () {
+        if (sel.value) assignTeamToTable(league, tableNum, side, sel.value);
+        else unassignTeamFromTable(league, tableNum, side);
+        renderLeagueWizardMatchStep();
+      });
+      label.appendChild(sel);
+      slotsRow.appendChild(label);
+    });
+    card.appendChild(slotsRow);
+    return card;
+  }
+
+  function renderLeagueWizardSummary() {
+    var league = leagueWizardOrganizerLeague();
+    leagueWizardSummary.innerHTML = "";
+    if (!league) return;
+    function summaryRow(label, value) {
+      var r = document.createElement("div");
+      r.className = "wizard-summary-row";
+      var l = document.createElement("span");
+      l.className = "label";
+      l.textContent = label;
+      var v = document.createElement("span");
+      v.className = "value";
+      v.textContent = value;
+      r.appendChild(l);
+      r.appendChild(v);
+      leagueWizardSummary.appendChild(r);
+    }
+    var playingTonight = league.members.filter(function (m) {
+      return leagueMemberPlayingTonight(league, m.name);
+    });
+    summaryRow(T("league.wizard.summaryLeague"), league.name);
+    summaryRow(T("league.wizard.summaryPlaying"), T("wizard.summaryOfTotal", { playing: playingTonight.length, total: league.members.length }));
+    var captains = league.teams
+      .filter(function (t) {
+        return t.captainName;
+      })
+      .map(function (t) {
+        return t.name + ": " + t.captainName;
+      });
+    summaryRow(T("league.wizard.summaryCaptains"), captains.length ? captains.join(", ") : T("league.wizard.summaryNone"));
+    var queueModeLabel =
+      league.queueMode === "perTable" ? T("league.queueModePerTable") : league.queueMode === "perRoom" ? T("league.queueModePerRoom") : T("league.queueModeNone");
+    summaryRow(T("league.wizard.summaryTables"), String(league.tableCount));
+    summaryRow(T("league.wizard.summaryQueueMode"), queueModeLabel);
+    if (league.queueMode === "perTable" && league.teams.length) {
+      summaryRow(
+        T("league.teamRotationLabel"),
+        league.teamRotationMode === "roundRobin" ? T("league.teamRotationRoundRobin") : T("league.teamRotationRotatingLines")
+      );
+    }
+    summaryRow(T("league.wizard.summaryMaxGames"), league.maxGamesPerPlayer ? String(league.maxGamesPerPlayer) : T("league.wizard.summaryUnlimited"));
+  }
+
+  function renderLeagueWizardStep() {
+    [1, 2, 3, 4, 5, 6].forEach(function (n) {
+      document.getElementById("league-wizard-step-" + n).classList.toggle("hidden", n !== leagueWizardStep);
+    });
+    leagueWizardProgress.textContent = T("wizard.stepOf", { step: leagueWizardStep, total: LEAGUE_WIZARD_STEP_COUNT });
+    leagueWizardProgressDots.innerHTML = "";
+    for (var i = 1; i <= LEAGUE_WIZARD_STEP_COUNT; i++) {
+      var dot = document.createElement("span");
+      dot.className = "wizard-dot" + (i < leagueWizardStep ? " is-done" : i === leagueWizardStep ? " is-active" : "");
+      leagueWizardProgressDots.appendChild(dot);
+    }
+    btnLeagueWizardBack.classList.toggle("hidden", leagueWizardStep === 1);
+    var isLast = leagueWizardStep === LEAGUE_WIZARD_STEP_COUNT;
+    btnLeagueWizardNext.classList.toggle("hidden", isLast);
+    btnLeagueWizardFinish.classList.toggle("hidden", !isLast);
+
+    if (leagueWizardStep === 1) renderLeagueWizardRoster();
+    else if (leagueWizardStep === 2) renderLeagueWizardTeams();
+    else if (leagueWizardStep === 3) syncLeagueWizardTablesStep();
+    else if (leagueWizardStep === 4) renderLeagueWizardMatchStep();
+    else if (leagueWizardStep === 5) {
+      var league = leagueWizardOrganizerLeague();
+      if (league) leagueWizardMaxGamesInput.value = league.maxGamesPerPlayer;
+    } else if (leagueWizardStep === 6) renderLeagueWizardSummary();
+  }
+
+  function leagueWizardNext() {
+    if (leagueWizardStep < LEAGUE_WIZARD_STEP_COUNT) {
+      leagueWizardStep += 1;
+      renderLeagueWizardStep();
+    }
+  }
+
+  function leagueWizardBack() {
+    if (leagueWizardStep > 1) {
+      leagueWizardStep -= 1;
+      renderLeagueWizardStep();
+    }
+  }
+
+  function openLeagueWizard() {
+    var league = leagueWizardOrganizerLeague();
+    if (!league) {
+      showToast(T("league.wizard.needLeagueFirst"));
+      return;
+    }
+    leagueWizardStep = 1;
+    renderLeagueWizardStep();
+    leagueWizardOverlay.classList.remove("hidden");
+  }
+
+  function closeLeagueWizard() {
+    leagueWizardOverlay.classList.add("hidden");
+    renderLeaguePage();
   }
 
   function loadRotationsFromStorage() {
@@ -22503,6 +22918,53 @@
       resetLeagueSessionGameCounts(league);
       renderLeaguePage();
     });
+  });
+
+  btnOpenLeagueWizard.addEventListener("click", openLeagueWizard);
+  btnLeagueWizardClose.addEventListener("click", closeLeagueWizard);
+  btnLeagueWizardCancel.addEventListener("click", closeLeagueWizard);
+  leagueWizardOverlay.addEventListener("click", function (e) {
+    if (e.target === leagueWizardOverlay) closeLeagueWizard();
+  });
+  btnLeagueWizardBack.addEventListener("click", leagueWizardBack);
+  btnLeagueWizardNext.addEventListener("click", leagueWizardNext);
+  btnLeagueWizardFinish.addEventListener("click", function () {
+    closeLeagueWizard();
+    leagueTablesGrid.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+  btnLeagueWizardMarkAll.addEventListener("click", function () {
+    var league = leagueWizardOrganizerLeague();
+    if (!league) return;
+    markAllLeagueMembersPresentTonight(league);
+    renderLeagueWizardRoster();
+  });
+  btnLeagueWizardMarkNone.addEventListener("click", function () {
+    var league = leagueWizardOrganizerLeague();
+    if (!league) return;
+    markNoLeagueMembersPresentTonight(league);
+    renderLeagueWizardRoster();
+  });
+  leagueWizardTableCountInput.addEventListener("change", function () {
+    var league = leagueWizardOrganizerLeague();
+    if (!league) return;
+    league.tableCount = Math.max(1, Math.min(20, parseInt(leagueWizardTableCountInput.value, 10) || 1));
+    saveLeaguesToStorage(LEAGUES);
+  });
+  leagueWizardQueueModeSelect.addEventListener("change", function () {
+    var league = leagueWizardOrganizerLeague();
+    if (!league) return;
+    setLeagueQueueMode(league, leagueWizardQueueModeSelect.value);
+    syncLeagueWizardTablesStep();
+  });
+  leagueWizardTeamRotationSelect.addEventListener("change", function () {
+    var league = leagueWizardOrganizerLeague();
+    if (!league) return;
+    setLeagueTeamRotationMode(league, leagueWizardTeamRotationSelect.value);
+  });
+  leagueWizardMaxGamesInput.addEventListener("change", function () {
+    var league = leagueWizardOrganizerLeague();
+    if (!league) return;
+    setLeagueMaxGamesPerPlayer(league, leagueWizardMaxGamesInput.value);
   });
 
   btnTestOnboarding.addEventListener("click", openOnboarding);
