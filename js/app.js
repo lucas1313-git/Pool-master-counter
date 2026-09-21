@@ -10726,13 +10726,19 @@
   }
 
   // Formats digits-as-typed to match the phone convention of the
-  // currently active app language (same country each language's flag in
-  // languages/manifest.json already implies - UK for English, since
-  // that's the manifest's own flag choice, not a US assumption). Purely
-  // a typing aid: the formatted string (with its spaces) is what gets
-  // saved, same as the raw input always was.
+  // currently active app language. Purely a typing aid: the formatted
+  // string (with its spaces/punctuation) is what gets saved, same as the
+  // raw input always was.
   function formatPhoneNumberForActiveLanguage(rawValue) {
     var digits = (rawValue || "").replace(/\D/g, "");
+    if (activeLanguageCode === "english") {
+      // US: (XXX) XXX-XXXX
+      digits = digits.slice(0, 10);
+      if (digits.length === 0) return "";
+      if (digits.length < 4) return "(" + digits;
+      if (digits.length < 7) return "(" + digits.slice(0, 3) + ") " + digits.slice(3);
+      return "(" + digits.slice(0, 3) + ") " + digits.slice(3, 6) + "-" + digits.slice(6);
+    }
     if (activeLanguageCode === "french") {
       // France: 0X XX XX XX XX
       digits = digits.slice(0, 10);
@@ -10754,10 +10760,11 @@
         return [a, b].filter(Boolean).join(" ");
       });
     }
-    // English -> UK mobile: 07XXX XXXXXX
+    // Tagalog -> Philippines mobile: 09XX XXX XXXX
     digits = digits.slice(0, 11);
-    if (digits.length <= 5) return digits;
-    return digits.slice(0, 5) + " " + digits.slice(5);
+    if (digits.length <= 4) return digits;
+    if (digits.length <= 7) return digits.slice(0, 4) + " " + digits.slice(4);
+    return digits.slice(0, 4) + " " + digits.slice(4, 7) + " " + digits.slice(7);
   }
 
   // Reformats on every keystroke, always placing the cursor at the end -
@@ -10773,7 +10780,7 @@
   // already formats toward (and truncates at) - a real number for the
   // active language's convention has to actually reach that count, not
   // just stop short of it partway through.
-  var PHONE_DIGIT_LENGTH_BY_LANGUAGE = { french: 10, spanish: 9, cantonese: 8 };
+  var PHONE_DIGIT_LENGTH_BY_LANGUAGE = { english: 10, french: 10, spanish: 9, cantonese: 8, tagalog: 11 };
   function expectedPhoneDigitLength() {
     return PHONE_DIGIT_LENGTH_BY_LANGUAGE[activeLanguageCode] || 11;
   }
