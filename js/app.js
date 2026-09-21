@@ -15121,6 +15121,23 @@
     gameRulesOverlay.classList.add("hidden");
   }
 
+  // Keeps the Race to Wins/Single Game radios honest without touching
+  // race-to-wins-row's visibility - that's only ever toggled by an
+  // explicit radio click (see below), never by typing in the number
+  // field itself, so the row can't vanish out from under the user mid-
+  // edit just because they typed "1". Top-level (not inside boot()) so
+  // finalizeWizardAndStart, a sibling top-level function, can call it too.
+  function syncRaceModeRadios() {
+    var isSingle = state.raceToWinsTarget === 1;
+    raceModeSingleRadio.checked = isSingle;
+    raceModeRaceToRadio.checked = !isSingle;
+  }
+
+  function renderRaceMode() {
+    syncRaceModeRadios();
+    raceToWinsRow.classList.toggle("hidden", state.raceToWinsTarget === 1);
+  }
+
   function finalizeWizardAndStart() {
     // Quick Counter's tally is free-form (can be negative, has no
     // relation to any target) — never carry it into a real game or a
@@ -23125,22 +23142,6 @@
         : "No Statistic mode is off — games will be tracked normally again."
     );
   });
-
-  // Keeps the Race to Wins/Single Game radios honest without touching
-  // race-to-wins-row's visibility - that's only ever toggled by an
-  // explicit radio click (see below), never by typing in the number
-  // field itself, so the row can't vanish out from under the user mid-
-  // edit just because they typed "1".
-  function syncRaceModeRadios() {
-    var isSingle = state.raceToWinsTarget === 1;
-    raceModeSingleRadio.checked = isSingle;
-    raceModeRaceToRadio.checked = !isSingle;
-  }
-
-  function renderRaceMode() {
-    syncRaceModeRadios();
-    raceToWinsRow.classList.toggle("hidden", state.raceToWinsTarget === 1);
-  }
 
   raceToWinsInput.addEventListener("input", function () {
     var target = parseInt(raceToWinsInput.value, 10);
