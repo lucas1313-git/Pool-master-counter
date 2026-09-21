@@ -63,6 +63,7 @@
   "backup.importData": "Importar datos",
   "backup.importDataNote": "Se combina con lo que ya hay en este dispositivo — nada se elimina aquí, los jugadores con el mismo nombre pasan por una verificación de conflicto, y el historial de ambos lados se combina.",
   "backup.note": "Todas las estadísticas y datos de sesión viven solo en este dispositivo. Exporta un archivo de copia de seguridad para trasladarlo todo a otro iPhone, iPad u ordenador.",
+  "backup.obfuscateLabel": "🕵️ Ocultar información personal (omite el correo y el teléfono de cada jugador de esta exportación — solo nombres)",
   "backup.resetLists": "⚠️ Restablecer listas de jugadores y plantilla",
   "backup.resetStats": "Restablecer todas las estadísticas",
   "backup.squashAreYouSure": "¿Estás seguro?",

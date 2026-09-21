@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260920y">
+<link rel="stylesheet" href="css/style.css?v=20260920z">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -398,6 +398,10 @@
     <p class="panel-summary" id="backup-panel-summary" data-i18n="backup.summary">Export or import your data, or reset player stats and saved lists.</p>
     <div class="panel-body" id="backup-panel-body">
       <p class="player-stats-note" data-i18n="backup.note">All stats and session data live on this device only. Export a backup file to move everything to another iPhone, iPad, or computer.</p>
+      <label class="checkbox-row checkbox-row-prominent">
+        <input type="checkbox" id="export-obfuscate-checkbox">
+        <span data-i18n="backup.obfuscateLabel">🕵️ Obfuscate personal information (omit every player's email &amp; phone from this export — names only)</span>
+      </label>
       <div class="row">
         <button type="button" id="btn-export-all-data" class="btn btn-primary" data-i18n="backup.exportAll">Export All Data</button>
         <button type="button" id="btn-import-all-data" class="btn btn-ghost" data-i18n="backup.importData">Import Data</button>
@@ -1651,6 +1655,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260920y"></script>
+<script src="js/app.js?v=20260920z"></script>
 </body>
 </html>

@@ -63,6 +63,7 @@
   "backup.importData": "匯入資料",
   "backup.importDataNote": "同呢部裝置已有嘅資料合併——呢度唔會刪除任何嘢，同名嘅玩家會有衝突檢查，兩邊嘅紀錄會合埋一齊。",
   "backup.note": "所有統計同對局資料只存放喺呢部裝置度。匯出備份檔就可以將所有嘢搬去另一部 iPhone、iPad 或電腦。",
+  "backup.obfuscateLabel": "🕵️ 隱藏個人資料（呢次匯出唔包括每位玩家嘅電郵同電話——淨係得名）",
   "backup.resetLists": "⚠️ 重設玩家名單同陣容",
   "backup.resetStats": "重設所有玩家統計",
   "backup.squashAreYouSure": "你確定嗎？",
