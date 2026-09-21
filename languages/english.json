@@ -63,6 +63,7 @@
   "backup.importData": "Import Data",
   "backup.importDataNote": "Merges into what's already on this device — nothing here is deleted, same-named players get a conflict check, and history from both sides is combined.",
   "backup.note": "All stats and session data live on this device only. Export a backup file to move everything to another iPhone, iPad, or computer.",
+  "backup.obfuscateLabel": "🕵️ Obfuscate personal information (omit every player's email & phone from this export — names only)",
   "backup.resetLists": "⚠️ Reset Player Lists & Roster",
   "backup.resetStats": "Reset All Player Stats",
   "backup.squashAreYouSure": "Are you sure?",
