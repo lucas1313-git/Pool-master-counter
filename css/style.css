@@ -4395,6 +4395,20 @@ input[type="number"] {
   text-align: center;
 }
 
+/* An emphasized callout variant of .player-stats-note - bigger, bordered,
+   and tinted so a note that's easy to skim past otherwise (the
+   multi-table hosting explanation) reads as unmissable instead. */
+.player-stats-note.callout-note {
+  color: var(--text);
+  font-size: 1.05rem;
+  font-weight: 700;
+  border: 2px solid var(--accent);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  padding: 12px 14px;
+  margin: 4px 0 14px;
+}
+
 .run-records-summary {
   font-weight: 700;
   color: var(--accent);
