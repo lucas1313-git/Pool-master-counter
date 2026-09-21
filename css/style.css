@@ -6903,39 +6903,155 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   border-bottom: none;
 }
 
-.league-match-live {
-  display: flex;
+#league-live-hosting-section {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+#league-teams-section,
+#league-tables-section {
+  margin-bottom: 18px;
+}
+
+.league-tables-header-row {
+  align-items: center;
   flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 20px;
-  margin-top: 12px;
-  padding: 14px;
+  gap: 10px 16px;
+}
+
+.league-tables-header-row h4 {
+  margin: 0;
+  flex: 1 0 100%;
+}
+
+#league-table-count {
+  width: 70px;
+}
+
+/* One cell per hosted table - idle cells show an assign form (shape
+   depends on the league's queueMode), occupied cells show a compact
+   one-line score summary plus a jump-to-board shortcut. This grid is
+   what gives the organizer "a graphic representation of the running
+   tables and who is playing in them" at a glance, before ever
+   scrolling down to the full live boards. */
+.league-tables-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.league-table-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }
 
-.league-match-side {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  min-width: 110px;
+.league-table-slot.is-occupied {
+  border-color: var(--accent);
 }
 
-.league-match-side-name {
-  font-weight: 700;
-}
-
-.league-match-side-score {
-  font-size: 1.8rem;
+.league-table-slot-heading {
   font-weight: 800;
-  color: var(--accent);
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-dim);
+}
+
+.league-table-slot-summary {
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
-.league-match-side-score.is-target-reached {
-  color: #6fcf6f;
+.league-table-slot-queue-label {
+  font-size: 0.82rem;
+  color: var(--text-dim);
+  font-weight: 700;
+}
+
+.league-table-slot-team-note {
+  font-size: 0.82rem;
+  color: var(--text-dim);
+}
+
+.league-queue-list {
+  list-style: decimal;
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.league-queue-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.league-teams-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.league-team-row {
+  padding: 10px 12px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.league-team-row-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-weight: 700;
+}
+
+.league-team-members {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.league-team-member-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg-panel));
+  border: 1px solid var(--border);
+  font-size: 0.82rem;
+}
+
+.league-team-member-chip button {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
+.league-team-member-chip button:hover {
+  opacity: 1;
 }
 
 /* ---------------------------------------------------------------------

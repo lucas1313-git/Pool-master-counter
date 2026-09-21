@@ -1705,6 +1705,7 @@
     document.getElementById("btn-open-help"),
     document.getElementById("btn-open-help-all-players"),
     document.getElementById("btn-open-help-tournament"),
+    document.getElementById("btn-open-help-league"),
     document.getElementById("btn-open-help-player-page"),
     document.getElementById("btn-open-help-wizard")
   ];
@@ -2030,7 +2031,10 @@
   var teamStandingsList = document.getElementById("team-standings-list");
   var playerStandingsList = document.getElementById("player-standings-list");
 
-  var leaguePanelSummary = document.getElementById("league-panel-summary");
+  var leaguePageView = document.getElementById("view-league-page");
+  var btnOpenLeague = document.getElementById("btn-open-league");
+  var btnLeagueBack = document.getElementById("btn-league-back");
+  var btnOpenHelpLeague = document.getElementById("btn-open-help-league");
   var leagueSelect = document.getElementById("league-select");
   var btnLeagueImport = document.getElementById("btn-league-import");
   var leagueImportFileInput = document.getElementById("league-import-file-input");
@@ -2048,21 +2052,14 @@
   var btnLeagueAddMember = document.getElementById("btn-league-add-member");
   var leagueStandingsBody = document.getElementById("league-standings-body");
   var leagueColRemoveHeader = document.getElementById("league-col-remove-header");
-  var leagueMatchSection = document.getElementById("league-match-section");
-  var leagueMatchPlayerASelect = document.getElementById("league-match-player-a");
-  var leagueMatchPlayerBSelect = document.getElementById("league-match-player-b");
-  var btnLeagueMatchStart = document.getElementById("btn-league-match-start");
-  var leagueMatchLive = document.getElementById("league-match-live");
-  var leagueMatchNameA = document.getElementById("league-match-name-a");
-  var leagueMatchNameB = document.getElementById("league-match-name-b");
-  var leagueMatchScoreAEl = document.getElementById("league-match-score-a");
-  var leagueMatchScoreBEl = document.getElementById("league-match-score-b");
-  var btnLeagueMatchAMinus = document.getElementById("btn-league-match-a-minus");
-  var btnLeagueMatchAPlus = document.getElementById("btn-league-match-a-plus");
-  var btnLeagueMatchBMinus = document.getElementById("btn-league-match-b-minus");
-  var btnLeagueMatchBPlus = document.getElementById("btn-league-match-b-plus");
-  var btnLeagueMatchRecord = document.getElementById("btn-league-match-record");
-  var btnLeagueMatchCancel = document.getElementById("btn-league-match-cancel");
+  var leagueLiveHostingSection = document.getElementById("league-live-hosting-section");
+  var leagueTeamsList = document.getElementById("league-teams-list");
+  var leagueNewTeamNameInput = document.getElementById("league-new-team-name");
+  var btnLeagueCreateTeam = document.getElementById("btn-league-create-team");
+  var leagueTableCountInput = document.getElementById("league-table-count");
+  var leagueQueueModeSelect = document.getElementById("league-queue-mode-select");
+  var leagueTablesGrid = document.getElementById("league-tables-grid");
+  var leagueCurrentMatchPanel = document.getElementById("league-current-match-panel");
 
   var dayNotesTextarea = document.getElementById("day-notes-textarea");
   var runRecordsSummary = document.getElementById("run-records-summary");
@@ -2800,7 +2797,11 @@
     updateDayReportRecipientsLine();
     renderRecoverDataList();
     renderReportArchiveList();
-    renderLeaguePanel();
+    // League is its own page now (not an always-rendered panel) and its
+    // render rebuilds a whole Tables Overview grid - skip it on every
+    // ordinary scoreboard tap's renderAll() and only do the work while the
+    // page is actually open; openLeaguePage already renders once on entry.
+    if (!leaguePageView.classList.contains("hidden")) renderLeaguePage();
   }
 
   // A rotation entry is { gameType, target, unit } — its own rule, not
@@ -7941,11 +7942,31 @@
 
   var LEAGUES_KEY = "poolMasterCounter.leagues.v1";
 
+  // Default-fills the multi-table hosting fields onto a league object that
+  // may predate them (either loaded from storage before this feature, or a
+  // freshly-imported file from another device) - same self-healing shape
+  // as normalizeLoadedTournament, applied in-place so every caller can just
+  // trust the fields exist.
+  function normalizeLeagueDefaults(l) {
+    if (!l) return l;
+    if (typeof l.tableCount !== "number" || l.tableCount < 1) l.tableCount = 1;
+    if (!Array.isArray(l.activeMatches)) l.activeMatches = [];
+    if (typeof l.focusedTable === "undefined" || l.focusedTable === null) l.focusedTable = "all";
+    if (l.queueMode !== "perTable" && l.queueMode !== "perRoom") l.queueMode = "none";
+    if (!Array.isArray(l.roomQueue)) l.roomQueue = [];
+    if (!l.tableQueues || typeof l.tableQueues !== "object") l.tableQueues = {};
+    if (!l.tableTeamAssignment || typeof l.tableTeamAssignment !== "object") l.tableTeamAssignment = {};
+    if (!Array.isArray(l.teams)) l.teams = [];
+    return l;
+  }
+
   function loadLeaguesFromStorage() {
     try {
       var raw = localStorage.getItem(LEAGUES_KEY);
       var parsed = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed) ? parsed : [];
+      var arr = Array.isArray(parsed) ? parsed : [];
+      arr.forEach(normalizeLeagueDefaults);
+      return arr;
     } catch (e) {
       return [];
     }
@@ -7962,14 +7983,6 @@
 
   var LEAGUES = loadLeaguesFromStorage();
   var activeLeagueId = LEAGUES.length ? LEAGUES[0].id : null;
-
-  // Transient (never persisted) state for whichever match is currently
-  // being scored in the "Record a Match" mini-scoreboard - cleared by
-  // Cancel or by a successful Record Result.
-  var leagueMatchPlayerA = null;
-  var leagueMatchPlayerB = null;
-  var leagueMatchScoreA = 0;
-  var leagueMatchScoreB = 0;
 
   // 8-Ball: race-to (games needed to win a match) depends only on a
   // player's own Skill Level, not their opponent's - that's the whole
@@ -8032,7 +8045,15 @@
       createdAt: new Date().toISOString(),
       exportedAt: null,
       members: [],
-      matches: []
+      matches: [],
+      tableCount: 1,
+      activeMatches: [],
+      focusedTable: "all",
+      queueMode: "none",
+      roomQueue: [],
+      tableQueues: {},
+      tableTeamAssignment: {},
+      teams: []
     };
     LEAGUES = LEAGUES.concat([league]);
     saveLeaguesToStorage(LEAGUES);
@@ -8058,9 +8079,26 @@
     saveLeaguesToStorage(LEAGUES);
   }
 
+  // Also strips the removed member out of any queue or team they were
+  // sitting in - an orphaned name in a queue/team list would otherwise
+  // linger and eventually get proposed for a match against a player no
+  // longer in the league.
   function removeLeagueMember(league, name) {
     league.members = league.members.filter(function (m) {
       return m.name !== name;
+    });
+    league.roomQueue = (league.roomQueue || []).filter(function (n) {
+      return n !== name;
+    });
+    Object.keys(league.tableQueues || {}).forEach(function (k) {
+      league.tableQueues[k] = league.tableQueues[k].filter(function (n) {
+        return n !== name;
+      });
+    });
+    (league.teams || []).forEach(function (t) {
+      t.memberNames = t.memberNames.filter(function (n) {
+        return n !== name;
+      });
     });
     saveLeaguesToStorage(LEAGUES);
   }
@@ -8159,15 +8197,18 @@
       // An imported copy is always read-only, even re-importing what was
       // originally this same device's own export (see the sync model in
       // the block comment above) - the organizer flag never survives a
-      // round trip through a file.
+      // round trip through a file. Live-hosting state (activeMatches/
+      // queues/teams) is organizer-only UI, so an imported copy carrying
+      // it is harmless - it just never renders.
       imported.isOrganizer = false;
+      normalizeLeagueDefaults(imported);
       var proceed = function () {
         LEAGUES = LEAGUES.filter(function (l) {
           return l.id !== imported.id;
         }).concat([imported]);
         saveLeaguesToStorage(LEAGUES);
         activeLeagueId = imported.id;
-        renderLeaguePanel();
+        renderLeaguePage();
       };
       if (findLeagueById(imported.id)) {
         confirmModal(T("league.importOverwriteConfirm", { name: imported.name }), proceed, null);
@@ -8178,7 +8219,668 @@
     reader.readAsText(file);
   }
 
-  function renderLeaguePanel() {
+  // ---------------------------------------------------------------------
+  // League multi-table hosting - modeled directly on Tournament's own
+  // tableCount/activeMatches/focusedTable pattern (see
+  // startTournamentMatch/tournamentAdjustScore/renderTournamentActiveMatch
+  // above), minus the rack-race/bracket layer: a League match is already a
+  // single contest to one SL-derived target, so reaching it finishes the
+  // whole match immediately via recordLeagueMatch.
+  // ---------------------------------------------------------------------
+
+  function tableQueueKey(table) {
+    return String(table);
+  }
+
+  // Returns the live array backing whichever queue applies to this table
+  // under the league's current queueMode - the league-wide room queue, this
+  // table's own queue (created on first use), or null under "none" (no
+  // queue - the organizer assigns tables manually).
+  function queueForTable(league, table) {
+    if (league.queueMode === "perRoom") return league.roomQueue;
+    if (league.queueMode === "perTable") {
+      var key = tableQueueKey(table);
+      if (!league.tableQueues[key]) league.tableQueues[key] = [];
+      return league.tableQueues[key];
+    }
+    return null;
+  }
+
+  function addNameToQueue(league, table, name) {
+    var queue = queueForTable(league, table);
+    if (!queue || queue.indexOf(name) !== -1) return;
+    queue.push(name);
+    saveLeaguesToStorage(LEAGUES);
+  }
+
+  function removeNameFromQueue(league, table, name) {
+    var queue = queueForTable(league, table);
+    if (!queue) return;
+    var idx = queue.indexOf(name);
+    if (idx !== -1) queue.splice(idx, 1);
+    saveLeaguesToStorage(LEAGUES);
+  }
+
+  // Both players from a just-finished match rejoin the back of the line
+  // rather than dropping out - confirmed with the user as "everyone
+  // rotates out" (no winner-stays carryover here), which is what makes a
+  // seeded queue self-sustaining once it's going.
+  function rotatePlayerToQueueBack(league, table, name) {
+    var queue = queueForTable(league, table);
+    if (!queue) return;
+    var idx = queue.indexOf(name);
+    if (idx !== -1) queue.splice(idx, 1);
+    queue.push(name);
+  }
+
+  function findLeagueTeamById(league, teamId) {
+    var match = (league.teams || []).filter(function (t) {
+      return t.id === teamId;
+    });
+    return match.length ? match[0] : null;
+  }
+
+  function createLeagueTeam(league, name) {
+    var trimmed = (name || "").trim();
+    if (!trimmed) return;
+    league.teams = league.teams.concat([{ id: "team-" + uid(), name: trimmed, memberNames: [] }]);
+    saveLeaguesToStorage(LEAGUES);
+  }
+
+  function removeLeagueTeam(league, teamId) {
+    league.teams = league.teams.filter(function (t) {
+      return t.id !== teamId;
+    });
+    Object.keys(league.tableTeamAssignment).forEach(function (key) {
+      if (league.tableTeamAssignment[key] === teamId) delete league.tableTeamAssignment[key];
+    });
+    saveLeaguesToStorage(LEAGUES);
+  }
+
+  function addMemberToTeam(league, teamId, name) {
+    var team = findLeagueTeamById(league, teamId);
+    if (!team || team.memberNames.indexOf(name) !== -1) return;
+    team.memberNames = team.memberNames.concat([name]);
+    saveLeaguesToStorage(LEAGUES);
+  }
+
+  function removeMemberFromTeam(league, teamId, name) {
+    var team = findLeagueTeamById(league, teamId);
+    if (!team) return;
+    team.memberNames = team.memberNames.filter(function (n) {
+      return n !== name;
+    });
+    saveLeaguesToStorage(LEAGUES);
+  }
+
+  function setLeagueQueueMode(league, mode) {
+    league.queueMode = mode === "perTable" || mode === "perRoom" ? mode : "none";
+    saveLeaguesToStorage(LEAGUES);
+  }
+
+  // One-click convenience: seeds a table's own queue with a team's current
+  // roster, in order, and remembers which team it was purely for display
+  // ("Table 2 — Sharks"). From then on it's just that table's ordinary
+  // per-table queue - same rotation, same confirm-before-starting flow.
+  function assignTeamToTable(league, table, teamId) {
+    var team = findLeagueTeamById(league, teamId);
+    if (!team) return;
+    var key = tableQueueKey(table);
+    league.tableQueues[key] = team.memberNames.slice();
+    league.tableTeamAssignment[key] = teamId;
+    saveLeaguesToStorage(LEAGUES);
+  }
+
+  function leagueMembersInActiveMatch(league) {
+    var names = {};
+    league.activeMatches.forEach(function (a) {
+      names[a.nameA] = true;
+      names[a.nameB] = true;
+    });
+    return names;
+  }
+
+  function startLeagueMatch(league, table, nameA, nameB) {
+    if (!league || !nameA || !nameB || nameA === nameB) return false;
+    if (
+      league.activeMatches.some(function (a) {
+        return a.table === table;
+      })
+    ) {
+      showToast(T("league.tableAlreadyInUse", { table: table }));
+      return false;
+    }
+    var memberA = league.members.filter(function (m) {
+      return m.name === nameA;
+    })[0];
+    var memberB = league.members.filter(function (m) {
+      return m.name === nameB;
+    })[0];
+    if (!memberA || !memberB) return false;
+    var active = {
+      id: "active-" + uid(),
+      table: table,
+      nameA: nameA,
+      nameB: nameB,
+      skillLevelA: memberA.skillLevel,
+      skillLevelB: memberB.skillLevel,
+      targetA: apaMatchTarget(league.format, memberA.skillLevel),
+      targetB: apaMatchTarget(league.format, memberB.skillLevel),
+      scoreA: 0,
+      scoreB: 0,
+      startedAt: new Date().toISOString()
+    };
+    league.activeMatches = league.activeMatches.concat([active]);
+    league.focusedTable = "all";
+    saveLeaguesToStorage(LEAGUES);
+    return true;
+  }
+
+  // Checks whichever queue applies to this now-idle table and, if two or
+  // more names are waiting, plays a notification sound and confirms the
+  // proposed pairing before starting it - declining just leaves the table
+  // idle (its manual assign UI, plus this same proposal re-triggerable via
+  // "Start Next in Queue").
+  function proposeNextMatchIfQueued(league, table) {
+    var queue = queueForTable(league, table);
+    if (!queue || queue.length < 2) return;
+    var nameA = queue[0];
+    var nameB = queue[1];
+    playPositiveSound();
+    confirmModal(
+      T("league.nextUpConfirm", { table: table, a: nameA, b: nameB }),
+      function () {
+        var l = findLeagueById(league.id);
+        if (!l) return;
+        var q = queueForTable(l, table);
+        if (!q || q[0] !== nameA || q[1] !== nameB) {
+          renderLeaguePage();
+          return;
+        }
+        q.splice(0, 2);
+        startLeagueMatch(l, table, nameA, nameB);
+        saveLeaguesToStorage(LEAGUES);
+        renderLeaguePage();
+      },
+      function () {
+        renderLeaguePage();
+      }
+    );
+  }
+
+  // active: the specific league.activeMatches entry this board's +/-
+  // buttons belong to, passed straight through from buildLeagueSidePanel -
+  // never inferred from "whichever table is focused right now", same
+  // guard tournamentAdjustScore uses.
+  function leagueAdjustScore(league, active, side, delta) {
+    if (!league || !active) return;
+    var scoreKey = side === "a" ? "scoreA" : "scoreB";
+    var targetKey = side === "a" ? "targetA" : "targetB";
+    var next = Math.max(0, (active[scoreKey] || 0) + delta);
+    active[scoreKey] = next;
+
+    var name = side === "a" ? active.nameA : active.nameB;
+    var player = getPlayer(getPlayerIdByName(name));
+    var voice = player ? player.voice : undefined;
+
+    if (delta > 0 && next >= active[targetKey]) {
+      playWinSound(voice);
+      recordLeagueMatch(league, active.nameA, active.targetA, active.scoreA, active.nameB, active.targetB, active.scoreB);
+      var table = active.table;
+      var idx = league.activeMatches.indexOf(active);
+      if (idx !== -1) league.activeMatches.splice(idx, 1);
+      if (league.focusedTable === table) league.focusedTable = "all";
+      if (league.queueMode !== "none") {
+        rotatePlayerToQueueBack(league, table, active.nameA);
+        rotatePlayerToQueueBack(league, table, active.nameB);
+      }
+      saveLeaguesToStorage(LEAGUES);
+      renderLeaguePage();
+      if (league.queueMode !== "none") proposeNextMatchIfQueued(league, table);
+      return;
+    } else if (delta > 0) {
+      playPositiveSound(voice);
+    } else {
+      playNegativeSound(voice);
+    }
+    saveLeaguesToStorage(LEAGUES);
+    renderLeagueActiveMatches();
+  }
+
+  function buildLeagueSidePanel(active, side, league) {
+    var name = side === "a" ? active.nameA : active.nameB;
+    var skillLevel = side === "a" ? active.skillLevelA : active.skillLevelB;
+    var score = side === "a" ? active.scoreA : active.scoreB;
+    var target = side === "a" ? active.targetA : active.targetB;
+
+    var panel = document.createElement("div");
+    panel.className = "player-panel";
+
+    var nameEl = document.createElement("div");
+    nameEl.className = "player-name";
+    nameEl.textContent = name + " (SL " + skillLevel + ")";
+    panel.appendChild(nameEl);
+
+    var block = document.createElement("div");
+    block.className = "stat-block";
+    var label = document.createElement("div");
+    label.className = "stat-label";
+    label.textContent = T("league.scoreTargetLabel", { target: target });
+    var value = document.createElement("div");
+    value.className = "stat-value";
+    value.textContent = score;
+    block.appendChild(label);
+    block.appendChild(value);
+    panel.appendChild(block);
+
+    var controls = document.createElement("div");
+    controls.className = "ball-controls";
+
+    var minusBtn = document.createElement("button");
+    minusBtn.type = "button";
+    minusBtn.className = "btn-ball minus";
+    minusBtn.textContent = "−";
+    minusBtn.setAttribute("aria-label", "Remove point for " + name);
+    minusBtn.disabled = score <= 0;
+    minusBtn.addEventListener("click", function () {
+      leagueAdjustScore(league, active, side, -1);
+    });
+
+    var plusBtn = document.createElement("button");
+    plusBtn.type = "button";
+    plusBtn.className = "btn-ball plus";
+    plusBtn.textContent = "+";
+    plusBtn.setAttribute("aria-label", "Add point for " + name);
+    plusBtn.addEventListener("click", function () {
+      leagueAdjustScore(league, active, side, 1);
+    });
+
+    controls.appendChild(minusBtn);
+    controls.appendChild(plusBtn);
+    panel.appendChild(controls);
+
+    return panel;
+  }
+
+  function buildLeagueFloatingBoard(active, league, stackIndex) {
+    var cardWrap = document.createElement("div");
+    cardWrap.className = "tournament-floating-board";
+    cardWrap.style.setProperty("--stack-index", String(stackIndex));
+
+    var banner = document.createElement("div");
+    banner.className = "now-playing-banner tournament-now-playing";
+    var headerParts = [];
+    if (league.tableCount > 1) headerParts.push(T("league.tableOption", { table: active.table }));
+    headerParts.push(active.nameA + " vs " + active.nameB);
+    banner.textContent = headerParts.join(" — ");
+    cardWrap.appendChild(banner);
+
+    var board = document.createElement("div");
+    board.className = "scoreboard";
+    board.appendChild(buildLeagueSidePanel(active, "a", league));
+    board.appendChild(buildLeagueSidePanel(active, "b", league));
+    cardWrap.appendChild(board);
+    return cardWrap;
+  }
+
+  // Same "stack of floating boards" pattern as
+  // renderTournamentActiveMatch, deliberately no click-to-focus - only the
+  // dropdown switches which table's board is interactive, so a stray tap
+  // can't jump to a different table's live score mid-game.
+  function renderLeagueActiveMatches() {
+    var league = activeLeagueId ? findLeagueById(activeLeagueId) : null;
+    leagueCurrentMatchPanel.innerHTML = "";
+    if (!league || !league.isOrganizer || !league.activeMatches.length) return;
+    var sorted = league.activeMatches.slice().sort(function (a, b) {
+      return a.table - b.table;
+    });
+    if (
+      league.focusedTable !== "all" &&
+      !sorted.some(function (a) {
+        return a.table === league.focusedTable;
+      })
+    ) {
+      league.focusedTable = "all";
+    }
+
+    if (sorted.length > 1) {
+      var focusRow = document.createElement("div");
+      focusRow.className = "row tournament-table-focus-row";
+      var focusLabel = document.createElement("label");
+      focusLabel.setAttribute("for", "league-table-focus-select");
+      focusLabel.textContent = T("league.selectTableLabel");
+      var focusSelect = document.createElement("select");
+      focusSelect.id = "league-table-focus-select";
+      var allOpt = document.createElement("option");
+      allOpt.value = "all";
+      allOpt.textContent = T("league.seeAllTables");
+      if (league.focusedTable === "all") allOpt.selected = true;
+      focusSelect.appendChild(allOpt);
+      sorted.forEach(function (active) {
+        var opt = document.createElement("option");
+        opt.value = String(active.table);
+        opt.textContent = T("league.tableOption", { table: active.table }) + " — " + active.nameA + " vs " + active.nameB;
+        if (active.table === league.focusedTable) opt.selected = true;
+        focusSelect.appendChild(opt);
+      });
+      focusSelect.addEventListener("change", function () {
+        league.focusedTable = focusSelect.value === "all" ? "all" : parseInt(focusSelect.value, 10);
+        saveLeaguesToStorage(LEAGUES);
+        renderLeagueActiveMatches();
+      });
+      focusRow.appendChild(focusLabel);
+      focusRow.appendChild(focusSelect);
+      leagueCurrentMatchPanel.appendChild(focusRow);
+    }
+
+    var toShow =
+      league.focusedTable === "all"
+        ? sorted
+        : sorted.filter(function (a) {
+            return a.table === league.focusedTable;
+          });
+    var stack = document.createElement("div");
+    stack.className = "tournament-live-boards-stack" + (toShow.length > 1 ? " is-stacked" : "");
+    toShow.forEach(function (active, idx) {
+      stack.appendChild(buildLeagueFloatingBoard(active, league, idx));
+    });
+    leagueCurrentMatchPanel.appendChild(stack);
+  }
+
+  // One Tables Overview cell: occupied shows a compact score summary plus
+  // a jump-to-board shortcut; idle shows an assign form whose shape
+  // depends on the league's queueMode (manual pair-picker, or that
+  // table's/room's own queue with add/remove and an Assign Team option).
+  function buildLeagueTableSlotCard(league, tableNum) {
+    var card = document.createElement("div");
+    card.className = "league-table-slot";
+
+    var heading = document.createElement("div");
+    heading.className = "league-table-slot-heading";
+    heading.textContent = T("league.tableOption", { table: tableNum });
+    card.appendChild(heading);
+
+    var active = league.activeMatches.filter(function (a) {
+      return a.table === tableNum;
+    })[0];
+
+    if (active) {
+      card.classList.add("is-occupied");
+      var summary = document.createElement("div");
+      summary.className = "league-table-slot-summary";
+      summary.textContent = active.nameA + " vs " + active.nameB + " — " + active.scoreA + "/" + active.targetA + " : " + active.scoreB + "/" + active.targetB;
+      card.appendChild(summary);
+
+      var jumpBtn = document.createElement("button");
+      jumpBtn.type = "button";
+      jumpBtn.className = "btn btn-ghost";
+      jumpBtn.textContent = T("league.jumpToBoardButton");
+      jumpBtn.addEventListener("click", function () {
+        league.focusedTable = tableNum;
+        saveLeaguesToStorage(LEAGUES);
+        renderLeaguePage();
+        leagueCurrentMatchPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+      card.appendChild(jumpBtn);
+      return card;
+    }
+
+    card.classList.add("is-idle");
+    var busy = leagueMembersInActiveMatch(league);
+    var available = league.members.filter(function (m) {
+      return !busy[m.name];
+    });
+
+    if (league.queueMode === "none") {
+      var selA = document.createElement("select");
+      var selB = document.createElement("select");
+      [selA, selB].forEach(function (sel) {
+        available.forEach(function (m) {
+          var opt = document.createElement("option");
+          opt.value = m.name;
+          opt.textContent = m.name + " (SL " + m.skillLevel + ")";
+          sel.appendChild(opt);
+        });
+      });
+      if (available.length > 1) selB.selectedIndex = 1;
+      var row1 = document.createElement("div");
+      row1.className = "row";
+      row1.appendChild(selA);
+      var vs = document.createElement("span");
+      vs.textContent = T("league.vsLabel");
+      row1.appendChild(vs);
+      row1.appendChild(selB);
+      card.appendChild(row1);
+
+      var startBtn = document.createElement("button");
+      startBtn.type = "button";
+      startBtn.className = "btn btn-primary";
+      startBtn.textContent = T("league.startMatchButton");
+      startBtn.disabled = available.length < 2;
+      startBtn.addEventListener("click", function () {
+        var a = selA.value;
+        var b = selB.value;
+        if (!a || !b || a === b) {
+          alertModal(T("league.matchNeedsTwoDistinct"));
+          return;
+        }
+        if (startLeagueMatch(league, tableNum, a, b)) renderLeaguePage();
+      });
+      card.appendChild(startBtn);
+      return card;
+    }
+
+    var queue = queueForTable(league, tableNum);
+    var queueLabel = document.createElement("div");
+    queueLabel.className = "league-table-slot-queue-label";
+    queueLabel.textContent = league.queueMode === "perRoom" ? T("league.roomQueueHeading") : T("league.tableQueueHeading", { table: tableNum });
+    card.appendChild(queueLabel);
+
+    var list = document.createElement("ol");
+    list.className = "league-queue-list";
+    if (!queue.length) {
+      var emptyLi = document.createElement("li");
+      emptyLi.className = "empty-hint";
+      emptyLi.textContent = T("league.queueEmptyHint");
+      list.appendChild(emptyLi);
+    } else {
+      queue.forEach(function (name) {
+        var li = document.createElement("li");
+        var span = document.createElement("span");
+        span.textContent = name;
+        li.appendChild(span);
+        var removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "btn btn-ghost";
+        removeBtn.textContent = "✕";
+        removeBtn.setAttribute("aria-label", T("league.removeFromQueueAria", { name: name }));
+        removeBtn.addEventListener("click", function () {
+          removeNameFromQueue(league, tableNum, name);
+          renderLeaguePage();
+        });
+        li.appendChild(removeBtn);
+        list.appendChild(li);
+      });
+    }
+    card.appendChild(list);
+
+    var addRow = document.createElement("div");
+    addRow.className = "row";
+    var addSelect = document.createElement("select");
+    var inQueue = {};
+    queue.forEach(function (n) {
+      inQueue[n] = true;
+    });
+    var addCandidates = league.members.filter(function (m) {
+      return !inQueue[m.name];
+    });
+    addCandidates.forEach(function (m) {
+      var opt = document.createElement("option");
+      opt.value = m.name;
+      opt.textContent = m.name;
+      addSelect.appendChild(opt);
+    });
+    var addBtn = document.createElement("button");
+    addBtn.type = "button";
+    addBtn.className = "btn btn-ghost";
+    addBtn.textContent = T("league.addToQueueButton");
+    addBtn.disabled = addCandidates.length === 0;
+    addBtn.addEventListener("click", function () {
+      if (!addSelect.value) return;
+      addNameToQueue(league, tableNum, addSelect.value);
+      renderLeaguePage();
+    });
+    addRow.appendChild(addSelect);
+    addRow.appendChild(addBtn);
+    card.appendChild(addRow);
+
+    if (league.queueMode === "perTable" && league.teams.length) {
+      var teamRow = document.createElement("div");
+      teamRow.className = "row";
+      var teamSelect = document.createElement("select");
+      league.teams.forEach(function (t) {
+        var opt = document.createElement("option");
+        opt.value = t.id;
+        opt.textContent = t.name;
+        teamSelect.appendChild(opt);
+      });
+      var assignBtn = document.createElement("button");
+      assignBtn.type = "button";
+      assignBtn.className = "btn btn-ghost";
+      assignBtn.textContent = T("league.assignTeamToTableButton");
+      assignBtn.addEventListener("click", function () {
+        if (!teamSelect.value) return;
+        assignTeamToTable(league, tableNum, teamSelect.value);
+        renderLeaguePage();
+      });
+      teamRow.appendChild(teamSelect);
+      teamRow.appendChild(assignBtn);
+      card.appendChild(teamRow);
+
+      var assignedTeamId = league.tableTeamAssignment[tableQueueKey(tableNum)];
+      if (assignedTeamId) {
+        var assignedTeam = findLeagueTeamById(league, assignedTeamId);
+        if (assignedTeam) {
+          var assignedNote = document.createElement("div");
+          assignedNote.className = "league-table-slot-team-note";
+          assignedNote.textContent = T("league.tableTeamAssignedNote", { team: assignedTeam.name });
+          card.appendChild(assignedNote);
+        }
+      }
+    }
+
+    var startNextBtn = document.createElement("button");
+    startNextBtn.type = "button";
+    startNextBtn.className = "btn btn-primary";
+    startNextBtn.textContent = T("league.startNextInQueueButton");
+    startNextBtn.disabled = queue.length < 2;
+    startNextBtn.addEventListener("click", function () {
+      proposeNextMatchIfQueued(league, tableNum);
+    });
+    card.appendChild(startNextBtn);
+
+    return card;
+  }
+
+  function renderLeagueTablesGrid(league) {
+    leagueTablesGrid.innerHTML = "";
+    for (var i = 1; i <= league.tableCount; i++) {
+      leagueTablesGrid.appendChild(buildLeagueTableSlotCard(league, i));
+    }
+  }
+
+  function renderLeagueTeams(league) {
+    leagueTeamsList.innerHTML = "";
+    if (!league.teams.length) {
+      var emptyLi = document.createElement("li");
+      emptyLi.className = "empty-hint";
+      emptyLi.textContent = T("league.teamsNoneYet");
+      leagueTeamsList.appendChild(emptyLi);
+    }
+    league.teams.forEach(function (team) {
+      var li = document.createElement("li");
+      li.className = "league-team-row";
+
+      var header = document.createElement("div");
+      header.className = "league-team-row-header";
+      var nameEl = document.createElement("span");
+      nameEl.textContent = team.name;
+      header.appendChild(nameEl);
+      var removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "btn btn-ghost";
+      removeBtn.textContent = "✕";
+      removeBtn.setAttribute("aria-label", T("league.removeTeamAria", { name: team.name }));
+      removeBtn.addEventListener("click", function () {
+        removeLeagueTeam(league, team.id);
+        renderLeaguePage();
+      });
+      header.appendChild(removeBtn);
+      li.appendChild(header);
+
+      var membersRow = document.createElement("div");
+      membersRow.className = "league-team-members";
+      if (!team.memberNames.length) {
+        var noneSpan = document.createElement("span");
+        noneSpan.className = "empty-hint";
+        noneSpan.textContent = T("league.teamNoMembers");
+        membersRow.appendChild(noneSpan);
+      } else {
+        team.memberNames.forEach(function (name) {
+          var chip = document.createElement("span");
+          chip.className = "league-team-member-chip";
+          var chipLabel = document.createElement("span");
+          chipLabel.textContent = name;
+          chip.appendChild(chipLabel);
+          var removeMemberBtn = document.createElement("button");
+          removeMemberBtn.type = "button";
+          removeMemberBtn.textContent = "✕";
+          removeMemberBtn.setAttribute("aria-label", T("league.removeMemberAria", { name: name }));
+          removeMemberBtn.addEventListener("click", function () {
+            removeMemberFromTeam(league, team.id, name);
+            renderLeaguePage();
+          });
+          chip.appendChild(removeMemberBtn);
+          membersRow.appendChild(chip);
+        });
+      }
+      li.appendChild(membersRow);
+
+      var addRow = document.createElement("div");
+      addRow.className = "row";
+      var addSelect = document.createElement("select");
+      var already = {};
+      team.memberNames.forEach(function (n) {
+        already[n] = true;
+      });
+      var candidates = league.members.filter(function (m) {
+        return !already[m.name];
+      });
+      candidates.forEach(function (m) {
+        var opt = document.createElement("option");
+        opt.value = m.name;
+        opt.textContent = m.name;
+        addSelect.appendChild(opt);
+      });
+      var addBtn = document.createElement("button");
+      addBtn.type = "button";
+      addBtn.className = "btn btn-ghost";
+      addBtn.textContent = T("league.addMemberButton");
+      addBtn.disabled = candidates.length === 0;
+      addBtn.addEventListener("click", function () {
+        if (!addSelect.value) return;
+        addMemberToTeam(league, team.id, addSelect.value);
+        renderLeaguePage();
+      });
+      addRow.appendChild(addSelect);
+      addRow.appendChild(addBtn);
+      li.appendChild(addRow);
+
+      leagueTeamsList.appendChild(li);
+    });
+  }
+
+  function renderLeaguePage() {
     leagueSelect.innerHTML = "";
     LEAGUES.forEach(function (l) {
       var opt = document.createElement("option");
@@ -8200,15 +8902,14 @@
     leagueNewForm.classList.toggle("hidden", !!league);
     leagueDetail.classList.toggle("hidden", !league);
 
-    leaguePanelSummary.textContent = league ? T("league.summaryLine", { name: league.name, count: league.members.length }) : T("league.summaryNone");
-
     if (!league) return;
+    normalizeLeagueDefaults(league);
 
     leagueDetailName.textContent = league.name + " — " + (league.format === "apa9ball" ? T("league.format9Ball") : T("league.format8Ball"));
     leagueReadonlyBadge.classList.toggle("hidden", !!league.isOrganizer);
     leagueOrganizerOnly.classList.toggle("hidden", !league.isOrganizer);
-    leagueMatchSection.classList.toggle("hidden", !league.isOrganizer);
     leagueColRemoveHeader.classList.toggle("hidden", !league.isOrganizer);
+    leagueLiveHostingSection.classList.toggle("hidden", !league.isOrganizer);
 
     // Add-member candidates: known players not already in the league.
     leagueAddMemberSelect.innerHTML = "";
@@ -8256,7 +8957,7 @@
           slInput.addEventListener("change", function () {
             var v = Math.max(range.min, Math.min(range.max, parseInt(slInput.value, 10) || range.min));
             setLeagueMemberSkillLevel(league, m.name, v);
-            renderLeaguePanel();
+            renderLeaguePage();
           });
           slCell.appendChild(slInput);
         } else {
@@ -8281,7 +8982,7 @@
           removeBtn.setAttribute("aria-label", T("league.removeMemberAria", { name: m.name }));
           removeBtn.addEventListener("click", function () {
             removeLeagueMember(league, m.name);
-            renderLeaguePanel();
+            renderLeaguePage();
           });
           removeCell.appendChild(removeBtn);
           row.appendChild(removeCell);
@@ -8292,57 +8993,37 @@
     }
 
     if (league.isOrganizer) {
-      [leagueMatchPlayerASelect, leagueMatchPlayerBSelect].forEach(function (sel) {
-        var prevValue = sel.value;
-        sel.innerHTML = "";
-        league.members.forEach(function (m) {
-          var opt = document.createElement("option");
-          opt.value = m.name;
-          opt.textContent = m.name + " (SL " + m.skillLevel + ")";
-          sel.appendChild(opt);
-        });
-        if (
-          prevValue &&
-          league.members.some(function (m) {
-            return m.name === prevValue;
-          })
-        ) {
-          sel.value = prevValue;
-        }
-      });
-      btnLeagueMatchStart.disabled = league.members.length < 2;
+      renderLeagueTeams(league);
+      leagueQueueModeSelect.value = league.queueMode;
+      leagueTableCountInput.value = league.tableCount;
+      renderLeagueTablesGrid(league);
     }
 
-    var matchInProgress = !!(leagueMatchPlayerA && leagueMatchPlayerB);
-    leagueMatchLive.classList.toggle("hidden", !matchInProgress);
-    if (matchInProgress) {
-      var memberA = league.members.filter(function (m) {
-        return m.name === leagueMatchPlayerA;
-      })[0];
-      var memberB = league.members.filter(function (m) {
-        return m.name === leagueMatchPlayerB;
-      })[0];
-      if (!memberA || !memberB) {
-        // A member was removed mid-match - bail out of the match cleanly
-        // rather than leave the live scoreboard pointing at a name that's
-        // no longer in the league.
-        leagueMatchPlayerA = null;
-        leagueMatchPlayerB = null;
-        leagueMatchScoreA = 0;
-        leagueMatchScoreB = 0;
-        leagueMatchLive.classList.add("hidden");
-      } else {
-        var targetA = apaMatchTarget(league.format, memberA.skillLevel);
-        var targetB = apaMatchTarget(league.format, memberB.skillLevel);
-        leagueMatchNameA.textContent = leagueMatchPlayerA + " (SL " + memberA.skillLevel + ")";
-        leagueMatchNameB.textContent = leagueMatchPlayerB + " (SL " + memberB.skillLevel + ")";
-        leagueMatchScoreAEl.textContent = leagueMatchScoreA + " / " + targetA;
-        leagueMatchScoreBEl.textContent = leagueMatchScoreB + " / " + targetB;
-        leagueMatchScoreAEl.classList.toggle("is-target-reached", leagueMatchScoreA >= targetA);
-        leagueMatchScoreBEl.classList.toggle("is-target-reached", leagueMatchScoreB >= targetB);
-        btnLeagueMatchRecord.disabled = !(leagueMatchScoreA >= targetA || leagueMatchScoreB >= targetB);
-      }
+    renderLeagueActiveMatches();
+  }
+
+  function openLeaguePage(skipHistory) {
+    if (!skipHistory) pushScreenHistory("league");
+    renderLeaguePage();
+    appRoot.classList.add("hidden");
+    allPlayersPageView.classList.add("hidden");
+    playerPageView.classList.add("hidden");
+    contactSheetPageView.classList.add("hidden");
+    graveyardPageView.classList.add("hidden");
+    leaderboardPageView.classList.add("hidden");
+    tournamentPageView.classList.add("hidden");
+    groupSessionPageView.classList.add("hidden");
+    leaguePageView.classList.remove("hidden");
+    window.scrollTo(0, 0);
+  }
+
+  function closeLeaguePage(skipHistory) {
+    if (!skipHistory) {
+      navigateBack();
+      return;
     }
+    leaguePageView.classList.add("hidden");
+    appRoot.classList.remove("hidden");
   }
 
   function loadRotationsFromStorage() {
@@ -12872,6 +13553,7 @@
   function currentHelpSectionId() {
     if (!wizardOverlay.classList.contains("hidden")) return "help-section-wizard";
     if (!tournamentPageView.classList.contains("hidden")) return "help-section-tournament";
+    if (!leaguePageView.classList.contains("hidden")) return "help-section-league";
     if (!allPlayersPageView.classList.contains("hidden")) return "help-section-all-players";
     if (!playerPageView.classList.contains("hidden")) return "help-section-player-page";
     return "help-section-main";
@@ -14249,6 +14931,7 @@
       else if (!graveyardPageView.classList.contains("hidden")) closeContactSheetPage(true);
       else if (!leaderboardPageView.classList.contains("hidden")) closeLeaderboardPage(true);
       else if (!groupSessionPageView.classList.contains("hidden")) closeGroupSessionPage(true);
+      else if (!leaguePageView.classList.contains("hidden")) closeLeaguePage(true);
       return;
     }
     if (state.screen === "all-players") openAllPlayersPage(true);
@@ -14258,6 +14941,7 @@
     else if (state.screen === "graveyard") openGraveyardPage(true);
     else if (state.screen === "leaderboard") openLeaderboardPage(true);
     else if (state.screen === "group-session") openGroupSessionPage(true);
+    else if (state.screen === "league") openLeaguePage(true);
   });
 
   history.replaceState({ screen: "main" }, "", location.pathname + location.search);
@@ -14323,6 +15007,7 @@
     contactSheetPageView.classList.add("hidden");
     graveyardPageView.classList.add("hidden");
     leaderboardPageView.classList.add("hidden");
+    leaguePageView.classList.add("hidden");
     playerPageView.classList.remove("hidden");
     window.scrollTo(0, 0);
 
@@ -16195,6 +16880,7 @@
     contactSheetPageView.classList.add("hidden");
     graveyardPageView.classList.add("hidden");
     leaderboardPageView.classList.add("hidden");
+    leaguePageView.classList.add("hidden");
     allPlayersPageView.classList.remove("hidden");
     window.scrollTo(0, 0);
   }
@@ -16406,6 +17092,7 @@
     playerPageView.classList.add("hidden");
     tournamentPageView.classList.add("hidden");
     leaderboardPageView.classList.add("hidden");
+    leaguePageView.classList.add("hidden");
     contactSheetPageView.classList.remove("hidden");
     graveyardPageView.classList.add("hidden");
     window.scrollTo(0, 0);
@@ -17355,6 +18042,7 @@
     tournamentPageView.classList.add("hidden");
     contactSheetPageView.classList.add("hidden");
     graveyardPageView.classList.add("hidden");
+    leaguePageView.classList.add("hidden");
     leaderboardPageView.classList.remove("hidden");
     window.scrollTo(0, 0);
     localStorage.setItem(LEADERBOARD_LAST_SHOWN_KEY, String(Date.now()));
@@ -17671,6 +18359,7 @@
     contactSheetPageView.classList.add("hidden");
     graveyardPageView.classList.add("hidden");
     leaderboardPageView.classList.add("hidden");
+    leaguePageView.classList.add("hidden");
     groupSessionPageView.classList.remove("hidden");
     window.scrollTo(0, 0);
   }
@@ -20513,6 +21202,7 @@
     contactSheetPageView.classList.add("hidden");
     graveyardPageView.classList.add("hidden");
     leaderboardPageView.classList.add("hidden");
+    leaguePageView.classList.add("hidden");
     tournamentPageView.classList.remove("hidden");
     window.scrollTo(0, 0);
   }
@@ -21219,9 +21909,16 @@
     });
   });
 
+  btnOpenLeague.addEventListener("click", function () {
+    openLeaguePage();
+  });
+  btnLeagueBack.addEventListener("click", function () {
+    closeLeaguePage();
+  });
+
   leagueSelect.addEventListener("change", function () {
     activeLeagueId = leagueSelect.value === "__new__" ? null : leagueSelect.value;
-    renderLeaguePanel();
+    renderLeaguePage();
   });
   btnLeagueCreate.addEventListener("click", function () {
     var name = leagueNewNameInput.value.trim();
@@ -21232,26 +21929,26 @@
     });
     createLeague(name, format);
     leagueNewNameInput.value = "";
-    renderLeaguePanel();
+    renderLeaguePage();
   });
   btnLeagueDelete.addEventListener("click", function () {
     var league = findLeagueById(activeLeagueId);
     if (!league) return;
     confirmModal(T("league.deleteConfirm", { name: league.name }), function () {
       deleteLeague(league.id);
-      renderLeaguePanel();
+      renderLeaguePage();
     });
   });
   btnLeagueAddMember.addEventListener("click", function () {
     var league = findLeagueById(activeLeagueId);
     if (!league || !leagueAddMemberSelect.value) return;
     addLeagueMember(league, leagueAddMemberSelect.value);
-    renderLeaguePanel();
+    renderLeaguePage();
   });
   btnLeagueExport.addEventListener("click", function () {
     var league = findLeagueById(activeLeagueId);
     if (league) exportLeague(league);
-    renderLeaguePanel();
+    renderLeaguePage();
   });
   btnLeagueImport.addEventListener("click", function () {
     leagueImportFileInput.click();
@@ -21262,62 +21959,25 @@
     leagueImportFileInput.value = "";
   });
 
-  btnLeagueMatchStart.addEventListener("click", function () {
+  btnLeagueCreateTeam.addEventListener("click", function () {
     var league = findLeagueById(activeLeagueId);
     if (!league) return;
-    var a = leagueMatchPlayerASelect.value;
-    var b = leagueMatchPlayerBSelect.value;
-    if (!a || !b || a === b) {
-      alertModal(T("league.matchNeedsTwoDistinct"));
-      return;
-    }
-    leagueMatchPlayerA = a;
-    leagueMatchPlayerB = b;
-    leagueMatchScoreA = 0;
-    leagueMatchScoreB = 0;
-    renderLeaguePanel();
+    createLeagueTeam(league, leagueNewTeamNameInput.value);
+    leagueNewTeamNameInput.value = "";
+    renderLeaguePage();
   });
-  btnLeagueMatchAMinus.addEventListener("click", function () {
-    leagueMatchScoreA = Math.max(0, leagueMatchScoreA - 1);
-    renderLeaguePanel();
-  });
-  btnLeagueMatchAPlus.addEventListener("click", function () {
-    leagueMatchScoreA += 1;
-    renderLeaguePanel();
-  });
-  btnLeagueMatchBMinus.addEventListener("click", function () {
-    leagueMatchScoreB = Math.max(0, leagueMatchScoreB - 1);
-    renderLeaguePanel();
-  });
-  btnLeagueMatchBPlus.addEventListener("click", function () {
-    leagueMatchScoreB += 1;
-    renderLeaguePanel();
-  });
-  btnLeagueMatchCancel.addEventListener("click", function () {
-    leagueMatchPlayerA = null;
-    leagueMatchPlayerB = null;
-    leagueMatchScoreA = 0;
-    leagueMatchScoreB = 0;
-    renderLeaguePanel();
-  });
-  btnLeagueMatchRecord.addEventListener("click", function () {
+  leagueTableCountInput.addEventListener("change", function () {
     var league = findLeagueById(activeLeagueId);
-    if (!league || !leagueMatchPlayerA || !leagueMatchPlayerB) return;
-    var memberA = league.members.filter(function (m) {
-      return m.name === leagueMatchPlayerA;
-    })[0];
-    var memberB = league.members.filter(function (m) {
-      return m.name === leagueMatchPlayerB;
-    })[0];
-    if (!memberA || !memberB) return;
-    var targetA = apaMatchTarget(league.format, memberA.skillLevel);
-    var targetB = apaMatchTarget(league.format, memberB.skillLevel);
-    recordLeagueMatch(league, leagueMatchPlayerA, targetA, leagueMatchScoreA, leagueMatchPlayerB, targetB, leagueMatchScoreB);
-    leagueMatchPlayerA = null;
-    leagueMatchPlayerB = null;
-    leagueMatchScoreA = 0;
-    leagueMatchScoreB = 0;
-    renderLeaguePanel();
+    if (!league) return;
+    league.tableCount = Math.max(1, Math.min(20, parseInt(leagueTableCountInput.value, 10) || 1));
+    saveLeaguesToStorage(LEAGUES);
+    renderLeaguePage();
+  });
+  leagueQueueModeSelect.addEventListener("change", function () {
+    var league = findLeagueById(activeLeagueId);
+    if (!league) return;
+    setLeagueQueueMode(league, leagueQueueModeSelect.value);
+    renderLeaguePage();
   });
 
   btnTestOnboarding.addEventListener("click", openOnboarding);
@@ -21421,7 +22081,6 @@
   wireCollapsiblePanel("game-setup-panel", "btn-toggle-game-setup-panel");
   wireCollapsiblePanel("players-panel", "btn-toggle-players-panel");
   wireCollapsiblePanel("standings-panel", "btn-toggle-standings-panel");
-  wireCollapsiblePanel("league-panel", "btn-toggle-league-panel");
   wireCollapsiblePanel("history-panel", "btn-toggle-history-panel");
   wireCollapsiblePanel("day-notes-panel", "btn-toggle-day-notes-panel");
   wireCollapsiblePanel("report-archive-panel", "btn-toggle-report-archive-panel");
