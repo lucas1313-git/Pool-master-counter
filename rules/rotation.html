@@ -1,0 +1,50 @@
+<section class="help-section" id="rules-section-15ballrotation">
+  <h3>🔢 15 Ball Rotation</h3>
+
+  <h4>Object</h4>
+  <p>The object of the game is to score more points than the opponent(s) by pocketing higher-scoring balls. A frame (individual game) is won when a player or team reaches a number of points — usually 61 — that makes it impossible for the opponent(s) to win. A match may consist of multiple frames (e.g. a race to 10), or multiple rounds of multiple frames, as in other pool games.</p>
+
+  <h4>Scoring</h4>
+  <p>Points are scored by pocketing object balls; the points awarded equal the number printed on the ball — pocketing the 4-ball scores 4 points. In a two-player (or two-team) game, the frame is over once a player or team has at least 61 points, one more than half the 120 points available. A 60-60 tie can occur, in which case the player who last legally pocketed a ball is credited with a bonus point and declared the winner. With more than two players or teams, the winning score is whichever number will mathematically eliminate the others from outscoring the leader.</p>
+
+  <h4>Set up</h4>
+  <p>Balls are racked in a triangle as in 8-Ball, but with the 1-ball at the front (apex) on the foot spot, the 2-ball at the right rear corner and the 3-ball at the left rear corner (as in Kelly Pool), and the 15-ball — the highest value — in the center; every other ball is placed randomly, and every ball must be touching.</p>
+
+  <h4>Game play</h4>
+  <p>The lowest-numbered object ball on the table at any time is the "ball-on" and must be struck first on every shot — including the break shot, where a side break is a foul — regardless of which ball the player actually intends to pocket. Players may use the lowest ball to pocket other, higher-value balls. Since this isn't a call-shot game, points also count if a ball is pocketed unintentionally but legally (a "fluke" or "slop shot"). A player's turn continues until a shot fails to legally pocket a ball, a foul is committed, or the frame ends. Illegally pocketed balls are spotted.</p>
+
+  <h4>Safeties</h4>
+  <p>Safety play is fairly strictly limited. If a player legally pockets a ball, they must shoot again — there's no provision for a called, intentional safety that also pockets a ball. A safety that simply drives the ball-on to its closest cushion, without contacting another object ball during the shot, is limited to two such shots per player per frame. Other safeties are unlimited, provided the lowest-numbered ball is struck first and either at least two object balls move during the shot, or the ball-on is driven to a cushion that isn't the closest one to it.</p>
+
+  <h4>Philippine Variant — Kitchen Safety</h4>
+  <p>A common house variant played in the Philippines offers an alternative to the closest-cushion safety above: instead of driving the ball-on to a cushion, the shooting player may spot the ball-on on the foot spot and pass play to the opponent, who must shoot from the kitchen (behind the head string) — but that opponent gets first choice of whether to take the shot themselves, or pass it right back to the original player, who then has to take it instead. Once one of the two actually shoots, play continues as normal from there.</p>
+
+  <h4>Fouls</h4>
+  <p>On a foul (other than a foul break or a cue-ball scratch, below), the incoming player may either take the next shot or require the opponent to do so, with all balls left as they lie either way. If the fouling opponent scratched the cue ball into a pocket or off the table, the incoming player gets ball in hand behind the head string — though they may instead require the fouling player to shoot again from there. A shot taken from behind the head string must send the cue ball across it; however, if the ball-on itself is behind the head string, the player with ball in hand may optionally have it spotted on the foot spot before shooting. There's no point penalty for a foul, but three consecutive fouls by the same player is a loss of frame.</p>
+  <p>Fouls include:</p>
+  <ul>
+    <li>Failure to hit the lowest-numbered object ball first (or at all)</li>
+    <li>Failure to make an open break on the break shot (the incoming player may either accept the balls as they lie and shoot from ball-in-hand behind the head string, or demand a re-rack and a new break shot)</li>
+    <li>Scratching the cue ball into a pocket or off the table (incoming player gets ball in hand behind the head string, but may instead force the fouling opponent to shoot)</li>
+    <li>Failure to either legally pocket an object ball or drive any ball to a cushion</li>
+    <li>Knocking an object ball off the table (it's spotted, but balls legally pocketed on that same shot are not)</li>
+    <li>A third or later one-ball safety to the closest cushion (see Safeties, above)</li>
+  </ul>
+
+  <h4>Scoring in this app</h4>
+  <p>This app tracks each player's running point total directly on their card, and converts the balls left on the table into a win-odds estimate the same way it does for Straight Pool.</p>
+</section>
+
+<section class="help-section" id="rules-section-8ballrotation">
+  <h3>🎱 8 Ball Rotation</h3>
+  <p>A house variant that plays like standard call-shot 8-Ball, but borrows Rotation's shot-order discipline. If your table plays a different house version, this section lives in its own file (<code>rules/rotation.html</code>) — feel free to edit it to match.</p>
+
+  <h4>Object balls and groups</h4>
+  <p>Break and object-ball assignment follow standard 8-Ball: whoever legally pockets a ball from a group (solids or stripes) first is assigned that group for the rest of the rack.</p>
+
+  <h4>Shot order</h4>
+  <p>Unlike regular 8-Ball, a shooter can't freely choose any ball from their own group — each shot must first contact the lowest-numbered ball still on the table (from either group) before touching any other ball, the same discipline 15 Ball Rotation uses. A wrong-ball-first contact is a foul and gives the incoming player ball in hand.</p>
+
+  <h4>Winning</h4>
+  <p>Once a player has legally pocketed every ball in their group, they must call their shot on the 8-ball and pocket it to win the rack. A foul on the 8-ball (a wrong-ball-first contact, a scratch, etc.) loses the rack outright for the shooter. This app scores 8 Ball Rotation the same way as regular 8-Ball — one rack won counts as one point toward the session's target.</p>
+</section>

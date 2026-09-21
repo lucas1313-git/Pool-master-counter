@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260919t">
+<link rel="stylesheet" href="css/style.css?v=20260921g">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -68,6 +68,7 @@
       <button type="button" id="btn-test-onboarding" class="btn btn-ghost all-players-nav-btn" data-i18n="header.welcomeNewPlayer">👋 Welcome New Player</button>
       <button type="button" id="btn-open-wizard" class="btn btn-primary all-players-nav-btn" data-i18n="header.startWizard">🧙 Start Wizard</button>
       <button type="button" id="btn-open-tournament" class="btn btn-ghost all-players-nav-btn" data-i18n="header.tournament">🏆 Tournament</button>
+      <button type="button" id="btn-open-league" class="btn btn-ghost all-players-nav-btn" data-i18n="header.league">🏆 League</button>
       <button type="button" id="btn-open-global-stats" class="btn btn-ghost all-players-nav-btn" data-i18n="header.globalStats">🌐 Global Stats</button>
       <button type="button" id="btn-open-leaderboard" class="btn btn-ghost all-players-nav-btn" data-i18n="header.leaderboard">🏆 Leaderboard</button>
       <button type="button" id="btn-open-group-session" class="btn btn-ghost all-players-nav-btn" data-i18n="header.groupSession">🎯 Group Session</button>
@@ -207,6 +208,7 @@
         <div class="row">
           <label for="game-type" data-i18n="gameSetup.game">Game</label>
           <select id="game-type"></select>
+          <button type="button" id="btn-game-rules-info" class="format-info-btn" data-i18n-aria-label="gameRules.buttonAria" aria-label="Special rules for Punishment, 15 Ball Rotation, and 8 Ball Rotation">❓</button>
           <label for="game-target" data-i18n="gameSetup.target">Target</label>
           <input type="number" id="game-target" min="1" max="500" value="1">
           <select id="game-target-unit-select">
@@ -293,7 +295,7 @@
   </section>
 
   <section id="scoreboard-panel">
-    <button type="button" id="btn-toggle-focus" class="btn btn-ghost focus-toggle-btn" data-i18n="scoreboard.focusMode">Focus Mode</button>
+    <button type="button" id="btn-toggle-focus" class="btn btn-primary focus-toggle-btn" data-i18n="scoreboard.focusMode">Focus Mode</button>
     <label class="no-stats-row-inline">
       <input type="checkbox" id="no-stats-checkbox">
       <span data-i18n="scoreboard.noStatsMode">Do not record games statistics and players data</span>
@@ -397,10 +399,36 @@
     <p class="panel-summary" id="backup-panel-summary" data-i18n="backup.summary">Export or import your data, or reset player stats and saved lists.</p>
     <div class="panel-body" id="backup-panel-body">
       <p class="player-stats-note" data-i18n="backup.note">All stats and session data live on this device only. Export a backup file to move everything to another iPhone, iPad, or computer.</p>
+      <label class="checkbox-row checkbox-row-prominent">
+        <input type="checkbox" id="export-obfuscate-checkbox">
+        <span data-i18n="backup.obfuscateLabel">🕵️ Obfuscate personal information (omit every player's email &amp; phone from this export — names only)</span>
+      </label>
       <div class="row">
         <button type="button" id="btn-export-all-data" class="btn btn-primary" data-i18n="backup.exportAll">Export All Data</button>
         <button type="button" id="btn-import-all-data" class="btn btn-ghost" data-i18n="backup.importData">Import Data</button>
         <input type="file" id="import-file-input" accept="application/json" class="hidden">
+      </div>
+      <p class="player-stats-note" data-i18n="backup.importDataNote">Merges into what's already on this device — nothing here is deleted, same-named players get a conflict check, and history from both sides is combined.</p>
+      <div class="row">
+        <button type="button" id="btn-squash-import-data" class="btn btn-danger" data-i18n="backup.squashButton">💀 Import &amp; Replace</button>
+        <input type="file" id="squash-import-file-input" accept="application/json" class="hidden">
+      </div>
+      <p class="player-stats-note" data-i18n="backup.squashNote">Instead of merging, replaces everything on this device with the imported file. A full backup of what's currently here downloads automatically first.</p>
+      <div id="squash-warning-overlay" class="squash-warning-overlay hidden">
+        <div class="squash-warning-card">
+          <div class="squash-warning-icon" aria-hidden="true">💀</div>
+          <h2 class="squash-warning-title" data-i18n="backup.squashAreYouSure">Are you sure?</h2>
+          <p class="squash-warning-body" id="squash-warning-body"></p>
+          <label class="checkbox-row checkbox-row-prominent squash-keep-players-row">
+            <input type="checkbox" id="squash-keep-players-checkbox">
+            <span data-i18n="backup.squashKeepPlayersLabel">Keep players (name &amp; contact info only, combined from both sides) — clear everyone's stats, ratings, and history instead of replacing them</span>
+          </label>
+          <p class="player-stats-note" data-i18n="backup.squashBackupNote">Your current data downloads as a full backup the moment you confirm, before anything is replaced.</p>
+          <div class="squash-warning-actions">
+            <button type="button" id="btn-squash-cancel" class="btn btn-ghost" data-i18n="common.cancel">Cancel</button>
+            <button type="button" id="btn-squash-confirm" class="btn btn-danger" data-i18n="backup.squashConfirmButton">Yes, Replace Everything</button>
+          </div>
+        </div>
       </div>
       <div class="row">
         <button type="button" id="btn-export-session" class="btn btn-ghost" data-i18n="gameSetup.exportSession">Export Session</button>
@@ -651,6 +679,25 @@
       <button type="button" id="btn-paywall-watch-ad" class="btn btn-ghost" data-i18n="paywall.watchAdButton">📺 Watch an ad to unlock once</button>
       <button type="button" id="btn-paywall-restore" class="btn btn-ghost" data-i18n="paywall.restoreButton">Restore Purchases</button>
       <button type="button" id="btn-paywall-cancel" class="btn btn-ghost" data-i18n="common.cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="multi-table-host-overlay" class="confirm-modal-overlay hidden">
+  <div class="confirm-modal-card">
+    <p class="confirm-modal-message" data-i18n="multiTable.promptTitle">🖥️ Host Multiple Tables</p>
+    <p class="player-stats-note" id="multi-table-host-body" data-i18n="multiTable.promptBody">Each table needs its own device connected to the same local server. Open Group Session to connect this device as the host, or download the app if this page can't host directly.</p>
+    <p class="player-stats-note hidden" id="multi-table-host-link-note"></p>
+    <div class="confirm-modal-actions">
+      <!-- .confirm-modal-actions is column-reverse (see style.css) - this
+           block reads bottom-to-top visually, so the primary CTA (Open
+           Group Session) is listed first here to land at the bottom, and
+           the two numbered download buttons are listed 2-then-1 so they
+           land in 1-then-2 reading order above it. -->
+      <button type="button" id="btn-multi-table-open-group-session" class="btn btn-primary" data-i18n="multiTable.openGroupSessionButton">🔗 Open Group Session</button>
+      <button type="button" id="btn-multi-table-download-app" class="btn btn-ghost hidden" data-i18n="multiTable.downloadAppButton">⬇️ 2. Download the App</button>
+      <button type="button" id="btn-multi-table-download-data" class="btn btn-ghost" data-i18n="multiTable.downloadDataButton">💾 1. Download My Setup</button>
+      <button type="button" id="btn-multi-table-close" class="btn btn-ghost" data-i18n="common.close">Close</button>
     </div>
   </div>
 </div>
@@ -979,6 +1026,7 @@
       <button type="button" id="wizard-btn-back" class="btn btn-ghost" data-i18n="wizard.back">← Back</button>
       <button type="button" id="wizard-btn-cancel" class="btn btn-ghost" data-i18n="common.cancel">Cancel</button>
       <button type="button" id="wizard-btn-next" class="btn btn-primary" data-i18n="wizard.next">Next →</button>
+      <button type="button" id="wizard-btn-start-tournament" class="btn btn-ghost hidden" data-i18n="wizard.startTournamentButton">🏆 Start a Tournament</button>
       <button type="button" id="wizard-btn-start" class="btn btn-primary hidden" data-i18n="wizard.startGame">🎱 Start Game</button>
     </div>
   </div>
@@ -1074,6 +1122,7 @@
         <a href="#help-section-wizard" class="help-nav-link" data-i18n="help.nav.wizard">Setup Wizard</a>
         <a href="#help-section-all-players" class="help-nav-link" data-i18n="help.nav.allPlayers">All Players</a>
         <a href="#help-section-tournament" class="help-nav-link" data-i18n="help.nav.tournament">Tournament</a>
+        <a href="#help-section-league" class="help-nav-link" data-i18n="help.nav.league">League</a>
         <a href="#help-section-player-page" class="help-nav-link" data-i18n="help.nav.playerPage">Player Stats</a>
       </nav>
     </div>
@@ -1133,6 +1182,18 @@
       <p data-i18n="help.tournament.careerNote">Every rack played in a tournament still counts toward career stats, ratings, and the All Players graphs — it isn't a separate pool of data.</p>
     </section>
 
+    <section class="help-section" id="help-section-league">
+      <h3 data-i18n="help.nav.league">League</h3>
+      <p data-i18n="help.league.intro">An ongoing, never-ending APA-style handicap points ladder for a fixed group of players — Skill Levels handicap each match's target so a mismatch still plays close. No server: the organizer exports a league file, everyone else imports it to see standings.</p>
+      <ul>
+        <li data-i18n-html="help.league.setup"><strong>Setup</strong> — create a league (8-Ball or 9-Ball), add members from your known players, and set each member's Skill Level (a suggested value is filled in from their app rating, freely editable).</li>
+        <li data-i18n-html="help.league.tables"><strong>Tables</strong> — set how many physical tables are running; each shows up as its own slot in the Tables grid, and a match scored to its target there finishes and updates standings automatically, on its own board, without affecting any other table's live game.</li>
+        <li data-i18n-html="help.league.queue"><strong>Queue Mode</strong> — Manual leaves every table's next pairing to the organizer. Per-Table Queue gives each table its own line; Per-Room Queue shares one line across every table. Either way, both players from a finished match rotate to the back of the line rather than dropping out, and a confirm dialog (with a sound) proposes the next pairing the moment a table frees up.</li>
+        <li data-i18n-html="help.league.teams"><strong>Teams</strong> — group league members into teams, then assign a team to a table (Per-Table Queue mode) to seed that table's queue with the whole roster in order — a one-tap way to keep a team's players rotating through their table on their own.</li>
+      </ul>
+      <p data-i18n="help.league.exportNote">Export League/Import League share a league file between devices — an imported copy is always read-only, even re-imported back onto the organizer's own device.</p>
+    </section>
+
     <section class="help-section" id="help-section-player-page">
       <h3 data-i18n="help.nav.playerPage">Player Stats Page</h3>
       <p data-i18n="help.playerPage.intro">Opened by tapping a player's name anywhere in the app.</p>
@@ -1147,6 +1208,30 @@
       <p data-i18n-html="help.playerPage.ratingsAbout"><strong>About ratings:</strong> every player has an automatic, Elo-style rating (roughly 0–900) inspired by the scale FargoRate publishes — the system behind USA Pool League and most competitive USA leagues. A 100-point gap between two ratings works out to about a 2:1 expected win ratio, doubling every 100 points. New players start at 400, unless a starting rating was given when they were added (see Players, above) — that's a one-time seed for a brand-new name only, not an edit of a rating already being tracked. From there it updates itself after every credited game (main scoreboard or tournament rack) — there's no way to edit an established rating by hand. It's a from-scratch calculation matched to Fargo's published odds, not a copy of Fargo's own (proprietary, globally-recomputed) algorithm. The rating badge follows a player's name everywhere throughout the app.</p>
     </section>
     </div>
+  </div>
+</div>
+
+<!-- Rules for the game types that don't play like standard, well-known
+     pool - the actual rule text lives in rules/punishment.html and
+     rules/rotation.html (fetched and injected into #game-rules-body on
+     first open, see loadGameRulesContent), not inline here or in the
+     app's own Help document above, so it stays easy to find and edit on
+     its own regardless of language/UI chrome changes. -->
+<div id="game-rules-overlay" class="help-overlay hidden">
+  <div class="help-card">
+    <div class="help-header">
+      <button type="button" id="btn-game-rules-close" class="wizard-close-btn" aria-label="Close game rules" data-i18n-aria-label="gameRules.closeAriaLabel">×</button>
+      <h2 class="help-title" data-i18n="gameRules.title">📜 Special Game Rules</h2>
+      <p class="help-intro" data-i18n="gameRules.intro">House rules for the game types that play a little differently — jump to any of them below.</p>
+
+      <nav class="help-nav">
+        <a href="#rules-section-punishment" class="rules-nav-link" data-i18n="gameRules.nav.punishment">8 Ball Punishment</a>
+        <a href="#rules-section-15ballrotation" class="rules-nav-link" data-i18n="gameRules.nav.rotation15">15 Ball Rotation</a>
+        <a href="#rules-section-8ballrotation" class="rules-nav-link" data-i18n="gameRules.nav.rotation8">8 Ball Rotation</a>
+      </nav>
+    </div>
+
+    <div class="help-body" id="game-rules-body"></div>
   </div>
 </div>
 
@@ -1436,114 +1521,139 @@
 
   <section class="panel" id="tournament-setup-panel">
     <h2 data-i18n="tournament.newHeading">New Elimination Tournament</h2>
-    <p class="player-stats-note" data-i18n="tournament.randomDrawNote">Players are drawn into the bracket at random. Pick a format below.</p>
+    <p class="wizard-progress" id="tournament-setup-progress">Step 1 of 4</p>
+    <div class="wizard-progress-dots" id="tournament-setup-progress-dots"></div>
 
-    <div class="tournament-setup-narrow-sections">
-      <div class="tournament-setup-section">
-        <h3 class="tournament-section-heading" data-i18n="tournament.formatSectionHeading">Tournament Type</h3>
-        <div class="wizard-format-options">
-          <label class="wizard-format-option">
-            <input type="radio" name="tournament-format" value="double" checked>
-            <span data-i18n="tournament.formatDoubleShort">🥈 Double Elimination</span>
-            <button type="button" class="format-info-btn" data-info-title="tournament-format-title-double" data-info-target="tournament-format-text-double" data-i18n-aria-label="tournament.formatInfoAria" aria-label="More about this tournament format">❓</button>
-          </label>
-          <label class="wizard-format-option">
-            <input type="radio" name="tournament-format" value="single">
-            <span data-i18n="tournament.formatSingleShort">🥇 Single Elimination</span>
-            <button type="button" class="format-info-btn" data-info-title="tournament-format-title-single" data-info-target="tournament-format-text-single" data-i18n-aria-label="tournament.formatInfoAria" aria-label="More about this tournament format">❓</button>
-          </label>
-          <label class="wizard-format-option">
-            <input type="radio" name="tournament-format" value="roundrobin">
-            <span data-i18n="tournament.formatRoundRobinShort">🔄 Round Robin</span>
-            <button type="button" class="format-info-btn" data-info-title="tournament-format-title-roundrobin" data-info-target="tournament-format-text-roundrobin" data-i18n-aria-label="tournament.formatInfoAria" aria-label="More about this tournament format">❓</button>
-          </label>
-          <label class="wizard-format-option">
-            <input type="radio" name="tournament-format" value="swiss">
-            <span data-i18n="tournament.formatSwissShort">🇨🇭 Swiss</span>
-            <button type="button" class="format-info-btn" data-info-title="tournament-format-title-swiss" data-info-target="tournament-format-text-swiss" data-i18n-aria-label="tournament.formatInfoAria" aria-label="More about this tournament format">❓</button>
-          </label>
-        </div>
-        <span id="tournament-format-title-double" data-i18n="tournament.formatDoubleTitle" hidden>Double Elimination Tournament Format</span>
-        <span id="tournament-format-text-double" data-i18n="tournament.formatDouble" hidden>Winners &amp; Losers Brackets: lose once, drop to the losers bracket for a second chance; lose twice and you're out.
+    <div class="wizard-body">
+
+      <div class="tournament-setup-step" id="tournament-setup-step-1">
+        <p class="wizard-step-explain" data-i18n="tournament.wizardStep1Explain">Pick how the bracket eliminates players. Double Elimination gives everyone a second chance after one loss; Single Elimination is the fastest; Round Robin and Swiss never eliminate anyone.</p>
+        <div class="tournament-setup-section">
+          <h3 class="tournament-section-heading" data-i18n="tournament.formatSectionHeading">Tournament Type</h3>
+          <div class="wizard-format-options">
+            <label class="wizard-format-option">
+              <input type="radio" name="tournament-format" value="double" checked>
+              <span data-i18n="tournament.formatDoubleShort">🥈 Double Elimination</span>
+              <button type="button" class="format-info-btn" data-info-title="tournament-format-title-double" data-info-target="tournament-format-text-double" data-i18n-aria-label="tournament.formatInfoAria" aria-label="More about this tournament format">❓</button>
+            </label>
+            <label class="wizard-format-option">
+              <input type="radio" name="tournament-format" value="single">
+              <span data-i18n="tournament.formatSingleShort">🥇 Single Elimination</span>
+              <button type="button" class="format-info-btn" data-info-title="tournament-format-title-single" data-info-target="tournament-format-text-single" data-i18n-aria-label="tournament.formatInfoAria" aria-label="More about this tournament format">❓</button>
+            </label>
+            <label class="wizard-format-option">
+              <input type="radio" name="tournament-format" value="roundrobin">
+              <span data-i18n="tournament.formatRoundRobinShort">🔄 Round Robin</span>
+              <button type="button" class="format-info-btn" data-info-title="tournament-format-title-roundrobin" data-info-target="tournament-format-text-roundrobin" data-i18n-aria-label="tournament.formatInfoAria" aria-label="More about this tournament format">❓</button>
+            </label>
+            <label class="wizard-format-option">
+              <input type="radio" name="tournament-format" value="swiss">
+              <span data-i18n="tournament.formatSwissShort">🇨🇭 Swiss</span>
+              <button type="button" class="format-info-btn" data-info-title="tournament-format-title-swiss" data-info-target="tournament-format-text-swiss" data-i18n-aria-label="tournament.formatInfoAria" aria-label="More about this tournament format">❓</button>
+            </label>
+          </div>
+          <span id="tournament-format-title-double" data-i18n="tournament.formatDoubleTitle" hidden>Double Elimination Tournament Format</span>
+          <span id="tournament-format-text-double" data-i18n="tournament.formatDouble" hidden>Winners &amp; Losers Brackets: lose once, drop to the losers bracket for a second chance; lose twice and you're out.
 
 Fairer than single elimination since one bad game doesn't end your tournament — but it takes longer to play out.</span>
-        <span id="tournament-format-title-single" data-i18n="tournament.formatSingleTitle" hidden>Single Elimination Tournament Format</span>
-        <span id="tournament-format-text-single" data-i18n="tournament.formatSingle" hidden>Only winners advance: lose once and you're out.
+          <span id="tournament-format-title-single" data-i18n="tournament.formatSingleTitle" hidden>Single Elimination Tournament Format</span>
+          <span id="tournament-format-text-single" data-i18n="tournament.formatSingle" hidden>Only winners advance: lose once and you're out.
 
 The fastest format — best for a quick knockout when there isn't time for a longer event.</span>
-        <span id="tournament-format-title-roundrobin" data-i18n="tournament.formatRoundRobinTitle" hidden>Round Robin Tournament Format</span>
-        <span id="tournament-format-text-roundrobin" data-i18n="tournament.formatRoundRobin" hidden>No elimination — every player faces every other player once.
+          <span id="tournament-format-title-roundrobin" data-i18n="tournament.formatRoundRobinTitle" hidden>Round Robin Tournament Format</span>
+          <span id="tournament-format-text-roundrobin" data-i18n="tournament.formatRoundRobin" hidden>No elimination — every player faces every other player once.
 
 Whoever has the most match wins when it's all done is champion (ties share the win). Best for a casual group where everyone should get equal games in.</span>
-        <span id="tournament-format-title-swiss" data-i18n="tournament.formatSwissTitle" hidden>Swiss Tournament Format</span>
-        <span id="tournament-format-text-swiss" data-i18n="tournament.formatSwiss" hidden>A proper non-elimination format where everyone plays a fixed number of rounds (e.g., 4 or 5), drawn each time against opponents with identical win-loss records.
+          <span id="tournament-format-title-swiss" data-i18n="tournament.formatSwissTitle" hidden>Swiss Tournament Format</span>
+          <span id="tournament-format-text-swiss" data-i18n="tournament.formatSwiss" hidden>A proper non-elimination format where everyone plays a fixed number of rounds (e.g., 4 or 5), drawn each time against opponents with identical win-loss records.
 
 Once those scheduled rounds wrap up, whoever has bagged the most match victories takes the crown!</span>
+        </div>
       </div>
 
-      <div class="tournament-setup-section">
-        <h3 class="tournament-section-heading" data-i18n="tournament.gameSectionHeading">Game Type</h3>
-        <div class="row">
-          <label for="tournament-game-type" data-i18n="gameSetup.game">Game</label>
-          <select id="tournament-game-type"></select>
-          <label for="tournament-target" data-i18n="gameSetup.target">Target</label>
-          <input type="number" id="tournament-target" min="1" max="500" value="1">
-          <span id="tournament-target-unit" data-i18n="units.rack">rack</span>
+      <div class="tournament-setup-step hidden" id="tournament-setup-step-2">
+        <p class="wizard-step-explain" data-i18n="tournament.wizardStep2Explain">Choose the game, how many racks decide it, and how many games it takes to win a match.</p>
+        <div class="tournament-setup-section">
+          <h3 class="tournament-section-heading" data-i18n="tournament.gameSectionHeading">Game Type</h3>
+          <div class="row">
+            <label for="tournament-game-type" data-i18n="gameSetup.game">Game</label>
+            <select id="tournament-game-type"></select>
+            <label for="tournament-target" data-i18n="gameSetup.target">Target</label>
+            <input type="number" id="tournament-target" min="1" max="500" value="1">
+            <span id="tournament-target-unit" data-i18n="units.rack">rack</span>
+          </div>
+          <div class="row">
+            <label for="tournament-race-to" data-i18n="tournament.raceToPerMatch">Race-to per match</label>
+            <input type="number" id="tournament-race-to" min="1" max="21" value="2">
+            <span data-i18n="common.wins">wins</span>
+          </div>
+          <label class="checkbox-row">
+            <input type="checkbox" id="tournament-fair-race-checkbox">
+            <span data-i18n="tournament.fairRaceEnable">⚖️ Use Fargo rating for tournament goals</span>
+            <button type="button" id="btn-fair-race-info" class="format-info-btn" data-i18n-aria-label="tournament.fairRaceInfoAria" aria-label="What does this mean?">❓</button>
+          </label>
         </div>
-        <div class="row">
-          <label for="tournament-race-to" data-i18n="tournament.raceToPerMatch">Race-to per match</label>
-          <input type="number" id="tournament-race-to" min="1" max="21" value="2">
-          <span data-i18n="common.wins">wins</span>
-        </div>
-        <label class="checkbox-row">
-          <input type="checkbox" id="tournament-fair-race-checkbox">
-          <span data-i18n="tournament.fairRaceEnable">⚖️ Use Fargo rating for tournament goals</span>
-          <button type="button" id="btn-fair-race-info" class="format-info-btn" data-i18n-aria-label="tournament.fairRaceInfoAria" aria-label="What does this mean?">❓</button>
-        </label>
       </div>
+
+      <div class="tournament-setup-step hidden" id="tournament-setup-step-3">
+        <p class="wizard-step-explain" data-i18n="tournament.wizardStep3Explain">Decide how the bracket gets seeded, then check off who's playing. Turn on team play if pairs or groups should share one bracket slot.</p>
+        <div class="tournament-setup-section tournament-setup-players-section">
+          <h3 class="tournament-players-heading" data-i18n="players.heading">Players</h3>
+          <div class="wizard-format-options tournament-seed-mode-options tournament-selection-group">
+            <label class="wizard-format-option">
+              <input type="radio" name="tournament-seed-mode" value="random" checked>
+              <span data-i18n="tournament.seedModeRandom">🎲 Random selection</span>
+            </label>
+            <label class="wizard-format-option">
+              <input type="radio" name="tournament-seed-mode" value="manual">
+              <span data-i18n="tournament.seedModeManual">🔢 Set seed manually</span>
+            </label>
+            <label class="wizard-format-option">
+              <input type="radio" name="tournament-seed-mode" value="rating">
+              <span data-i18n="tournament.seedModeRating">⚖️ Match Similar Ratings</span>
+              <button type="button" class="format-info-btn" data-info-title="tournament-seed-rating-title" data-info-target="tournament-seed-rating-text" data-i18n-aria-label="tournament.formatInfoAria" aria-label="More about this seeding mode">❓</button>
+            </label>
+            <label class="wizard-format-option">
+              <input type="checkbox" id="tournament-select-all-checkbox">
+              <span data-i18n="tournament.selectAll">✅ Select All</span>
+            </label>
+          </div>
+          <span id="tournament-seed-rating-title" data-i18n="tournament.seedModeRatingTitle" hidden>Match Similar Ratings Seeding</span>
+          <span id="tournament-seed-rating-text" data-i18n="tournament.seedModeRatingExplain" hidden>Round 1 pairs the closest-rated players against each other instead of spreading them apart - the strongest face off immediately, so one player can't just coast past weak opponents to the final.</span>
+
+          <label class="wizard-format-option tournament-teams-row">
+            <input type="checkbox" id="tournament-teams-enabled-checkbox">
+            <span data-i18n="tournament.teamsEnable">🤝 Play as teams (group matching Team fields below into one bracket entrant)</span>
+          </label>
+
+          <datalist id="tournament-team-options"></datalist>
+          <ul id="tournament-player-checklist" class="tournament-player-checklist"></ul>
+          <p class="player-stats-note hidden" id="tournament-team-preview"></p>
+        </div>
+      </div>
+
+      <div class="tournament-setup-step hidden" id="tournament-setup-step-4">
+        <p class="wizard-step-explain" data-i18n="tournament.wizardStep4Explain">How many tables are running tonight? With more than one, you can host each on its own device right after you start.</p>
+        <div class="tournament-setup-section">
+          <label class="wizard-format-option tournament-tables-row" for="tournament-table-count">
+            <span data-i18n="tournament.tableCount">🎱 Number of Tables</span>
+            <input type="number" id="tournament-table-count" min="1" max="20" value="1">
+          </label>
+
+          <label class="wizard-format-option hidden" id="tournament-multi-client-row">
+            <input type="checkbox" id="tournament-multi-client-checkbox">
+            <span data-i18n="multiTable.checkboxLabel">🖥️ Each table runs its own device</span>
+          </label>
+          <p class="player-stats-note callout-note hidden" id="tournament-multi-client-note" data-i18n="multiTable.wizardNotice">Hosting separate devices per table needs the local server running — you'll get a link to connect them, or to download the app, right after you start.</p>
+        </div>
+      </div>
+
     </div>
 
-    <div class="tournament-setup-section tournament-setup-players-section">
-      <h3 class="tournament-players-heading" data-i18n="players.heading">Players</h3>
-      <div class="wizard-format-options tournament-seed-mode-options tournament-selection-group">
-        <label class="wizard-format-option">
-          <input type="radio" name="tournament-seed-mode" value="random" checked>
-          <span data-i18n="tournament.seedModeRandom">🎲 Random selection</span>
-        </label>
-        <label class="wizard-format-option">
-          <input type="radio" name="tournament-seed-mode" value="manual">
-          <span data-i18n="tournament.seedModeManual">🔢 Set seed manually</span>
-        </label>
-        <label class="wizard-format-option">
-          <input type="radio" name="tournament-seed-mode" value="rating">
-          <span data-i18n="tournament.seedModeRating">⚖️ Match Similar Ratings</span>
-          <button type="button" class="format-info-btn" data-info-title="tournament-seed-rating-title" data-info-target="tournament-seed-rating-text" data-i18n-aria-label="tournament.formatInfoAria" aria-label="More about this seeding mode">❓</button>
-        </label>
-        <label class="wizard-format-option">
-          <input type="checkbox" id="tournament-select-all-checkbox">
-          <span data-i18n="tournament.selectAll">✅ Select All</span>
-        </label>
-      </div>
-      <span id="tournament-seed-rating-title" data-i18n="tournament.seedModeRatingTitle" hidden>Match Similar Ratings Seeding</span>
-      <span id="tournament-seed-rating-text" data-i18n="tournament.seedModeRatingExplain" hidden>Round 1 pairs the closest-rated players against each other instead of spreading them apart - the strongest face off immediately, so one player can't just coast past weak opponents to the final.</span>
-
-      <div class="row tournament-start-row">
-        <button type="button" id="btn-tournament-start" class="btn btn-primary" data-i18n="tournament.start">Start Tournament</button>
-      </div>
-
-      <label class="wizard-format-option tournament-teams-row">
-        <input type="checkbox" id="tournament-teams-enabled-checkbox">
-        <span data-i18n="tournament.teamsEnable">🤝 Play as teams (group matching Team fields below into one bracket entrant)</span>
-      </label>
-
-      <label class="wizard-format-option tournament-tables-row" for="tournament-table-count">
-        <span data-i18n="tournament.tableCount">🎱 Number of Tables</span>
-        <input type="number" id="tournament-table-count" min="1" max="20" value="1">
-      </label>
-
-      <datalist id="tournament-team-options"></datalist>
-      <ul id="tournament-player-checklist" class="tournament-player-checklist"></ul>
-      <p class="player-stats-note hidden" id="tournament-team-preview"></p>
+    <div class="wizard-footer">
+      <button type="button" id="btn-tournament-setup-back" class="btn btn-ghost hidden" data-i18n="wizard.back">← Back</button>
+      <button type="button" id="btn-tournament-setup-next" class="btn btn-primary" data-i18n="wizard.next">Next →</button>
+      <button type="button" id="btn-tournament-start" class="btn btn-primary hidden" data-i18n="tournament.start">Start Tournament</button>
     </div>
   </section>
 
@@ -1602,8 +1712,206 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 </div>
 
+<div id="view-league-page" class="hidden">
+
+  <header class="app-header player-page-header">
+    <button type="button" id="btn-league-back" class="btn btn-ghost screen-back-btn" aria-label="Back" data-i18n-aria-label="common.back"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <h1 data-i18n="header.league">League</h1>
+    <button type="button" id="btn-open-league-wizard" class="btn btn-primary" data-i18n="league.wizard.openButton">🧙 Setup Tonight</button>
+    <button type="button" id="btn-open-help-league" class="btn btn-ghost" data-i18n="header.help">❓ Help</button>
+  </header>
+
+  <section class="panel" id="league-setup-panel">
+    <p class="player-stats-note" data-i18n="league.intro">An APA-style handicap league for a fixed group of players — Skill Levels handicap the race so a mismatch still plays close. No server: the organizer exports a league file, everyone else imports it to see standings.</p>
+
+    <div class="row">
+      <select id="league-select"></select>
+      <button type="button" id="btn-league-import" class="btn btn-ghost" data-i18n="league.importButton">📥 Import League</button>
+      <input type="file" id="league-import-file-input" accept="application/json" class="hidden">
+    </div>
+
+    <div id="league-new-form" class="league-new-form hidden">
+      <div class="row">
+        <label for="league-new-name" data-i18n="league.newNameLabel">League name</label>
+        <input type="text" id="league-new-name" maxlength="60">
+      </div>
+      <div class="row league-format-row">
+        <label><input type="radio" name="league-new-format" value="apa8ball" checked> <span data-i18n="league.format8Ball">APA 8-Ball</span></label>
+        <label><input type="radio" name="league-new-format" value="apa9ball"> <span data-i18n="league.format9Ball">APA 9-Ball</span></label>
+      </div>
+      <button type="button" id="btn-league-create" class="btn btn-primary" data-i18n="league.createButton">Create League</button>
+    </div>
+  </section>
+
+  <section class="panel league-detail hidden" id="league-detail">
+    <div class="league-detail-header">
+      <h3 id="league-detail-name"></h3>
+      <span id="league-readonly-badge" class="league-readonly-badge hidden" data-i18n="league.readOnlyBadge">Imported — read-only</span>
+      <button type="button" id="btn-league-export" class="btn btn-ghost" data-i18n="league.exportButton">📤 Export League</button>
+      <button type="button" id="btn-league-delete" class="btn btn-danger" data-i18n="league.deleteButton">🗑️ Delete League</button>
+    </div>
+
+    <div id="league-organizer-only">
+      <h4 data-i18n="league.membersHeading">Members</h4>
+      <div class="row">
+        <select id="league-add-member-select"></select>
+        <button type="button" id="btn-league-add-member" class="btn btn-ghost" data-i18n="league.addMemberButton">+ Add</button>
+      </div>
+    </div>
+
+    <h4 data-i18n="league.standingsHeading">Standings</h4>
+    <div class="league-standings-table-wrap">
+      <table class="league-standings-table" id="league-standings-table">
+        <thead>
+          <tr>
+            <th data-i18n="league.colMember">Member</th>
+            <th data-i18n="league.colSkillLevel">SL</th>
+            <th data-i18n="league.colPoints">Points</th>
+            <th data-i18n="league.colRecord">W-L</th>
+            <th data-i18n="league.colSession">Session</th>
+            <th id="league-col-remove-header" class="hidden"></th>
+          </tr>
+        </thead>
+        <tbody id="league-standings-body"></tbody>
+      </table>
+    </div>
+
+    <div id="league-live-hosting-section">
+      <div id="league-teams-section">
+        <h4 data-i18n="league.teamsHeading">Teams</h4>
+        <div class="row">
+          <input type="text" id="league-new-team-name" maxlength="40" data-i18n-placeholder="league.newTeamPlaceholder" placeholder="Team name">
+          <button type="button" id="btn-league-create-team" class="btn btn-ghost" data-i18n="league.createTeamButton">+ Add Team</button>
+        </div>
+        <ul id="league-teams-list" class="league-teams-list"></ul>
+      </div>
+
+      <div id="league-tables-section">
+        <div class="row league-tables-header-row">
+          <h4 data-i18n="league.tablesHeading">Tables</h4>
+          <label for="league-table-count" data-i18n="league.tableCountLabel">🎱 Number of Tables</label>
+          <input type="number" id="league-table-count" min="1" max="20" value="1">
+          <label for="league-queue-mode-select" data-i18n="league.queueModeLabel">Queue Mode</label>
+          <select id="league-queue-mode-select">
+            <option value="none" data-i18n="league.queueModeNone">Manual (organizer assigns)</option>
+            <option value="perTable" data-i18n="league.queueModePerTable">Per-Table Queue</option>
+            <option value="perRoom" data-i18n="league.queueModePerRoom">Per-Room Queue</option>
+          </select>
+          <label for="league-team-rotation-select" data-i18n="league.teamRotationLabel">Team Rotation</label>
+          <select id="league-team-rotation-select">
+            <option value="rotatingLines" data-i18n="league.teamRotationRotatingLines">Rotating Lines (next pair auto-cycles)</option>
+            <option value="roundRobin" data-i18n="league.teamRotationRoundRobin">Round-Robin (everyone plays everyone)</option>
+          </select>
+          <button type="button" id="btn-league-team-rotation-info" class="format-info-btn" data-i18n-aria-label="league.teamRotationInfoAria" aria-label="What do these mean?">❓</button>
+          <label for="league-max-games-input" data-i18n="league.maxGamesLabel">🎯 Max Games / Player (Session)</label>
+          <input type="number" id="league-max-games-input" min="0" max="99" value="0">
+          <button type="button" id="btn-league-reset-session-counts" class="btn btn-ghost" data-i18n="league.resetSessionCountsButton">↺ Reset Session Counts</button>
+        </div>
+        <p class="player-stats-note" data-i18n="league.maxGamesHelp">0 means unlimited. Once a member reaches this many games since the last reset, they're skipped for any new match (manual, queued, or team rotation) until you reset session counts for the next time this league meets — their lifetime stats keep counting either way.</p>
+        <div id="league-tables-grid" class="league-tables-grid"></div>
+      </div>
+
+      <div id="league-current-match-panel"></div>
+    </div>
+  </section>
+
+</div>
+
+<div id="league-wizard-overlay" class="wizard-overlay hidden">
+  <div class="wizard-card">
+    <button type="button" id="btn-league-wizard-close" class="wizard-close-btn" aria-label="Close wizard" data-i18n-aria-label="wizard.closeAriaLabel">×</button>
+
+    <div class="wizard-header">
+      <div class="wizard-header-text">
+        <h2 data-i18n="league.wizard.title">🧙 Setup Tonight's League Games</h2>
+        <p class="wizard-progress" id="league-wizard-progress">Step 1 of 6</p>
+      </div>
+    </div>
+
+    <div class="wizard-progress-dots" id="league-wizard-progress-dots"></div>
+
+    <div class="wizard-body">
+
+      <div class="wizard-step" id="league-wizard-step-1">
+        <p class="wizard-step-explain" data-i18n="league.wizard.step1Explain">Check off everyone playing tonight. Unchecked members are skipped everywhere a match gets picked — auto-proposed or started by hand — until you check them back in.</p>
+        <div class="row">
+          <button type="button" id="btn-league-wizard-mark-all" class="btn btn-ghost" data-i18n="league.wizard.markAllButton">✅ Mark All Present</button>
+          <button type="button" id="btn-league-wizard-mark-none" class="btn btn-ghost" data-i18n="league.wizard.markNoneButton">Mark None Present</button>
+        </div>
+        <ul id="league-wizard-roster-list" class="league-wizard-roster-list"></ul>
+        <div class="row league-wizard-add-contact-row">
+          <label for="league-wizard-add-contact-select" data-i18n="league.wizard.addFromContactsLabel">+ Add from Contacts</label>
+          <select id="league-wizard-add-contact-select"></select>
+          <button type="button" id="btn-league-wizard-add-contact" class="btn btn-ghost" data-i18n="league.wizard.addFromContactsButton">+ Add &amp; Mark Present</button>
+        </div>
+      </div>
+
+      <div class="wizard-step hidden" id="league-wizard-step-2">
+        <p class="wizard-step-explain" data-i18n="league.wizard.step2Explain">For any team with players here tonight, pick who's running their lineup.</p>
+        <div id="league-wizard-teams-list" class="league-wizard-teams-list"></div>
+      </div>
+
+      <div class="wizard-step hidden" id="league-wizard-step-3">
+        <p class="wizard-step-explain" data-i18n="league.wizard.step3Explain">How many tables are running tonight, and how should the next match get picked once one frees up?</p>
+        <div class="row">
+          <label for="league-wizard-table-count" data-i18n="league.tableCountLabel">🎱 Number of Tables</label>
+          <input type="number" id="league-wizard-table-count" min="1" max="20" value="1">
+        </div>
+        <div class="row">
+          <label for="league-wizard-queue-mode" data-i18n="league.queueModeLabel">Queue Mode</label>
+          <select id="league-wizard-queue-mode">
+            <option value="none" data-i18n="league.queueModeNone">Manual (organizer assigns)</option>
+            <option value="perTable" data-i18n="league.queueModePerTable">Per-Table Queue</option>
+            <option value="perRoom" data-i18n="league.queueModePerRoom">Per-Room Queue</option>
+          </select>
+        </div>
+        <div class="row hidden" id="league-wizard-rotation-row">
+          <label for="league-wizard-team-rotation" data-i18n="league.teamRotationLabel">Team Rotation</label>
+          <select id="league-wizard-team-rotation">
+            <option value="rotatingLines" data-i18n="league.teamRotationRotatingLines">Rotating Lines (next pair auto-cycles)</option>
+            <option value="roundRobin" data-i18n="league.teamRotationRoundRobin">Round-Robin (everyone plays everyone)</option>
+          </select>
+          <button type="button" id="btn-league-wizard-team-rotation-info" class="format-info-btn" data-i18n-aria-label="league.teamRotationInfoAria" aria-label="What do these mean?">❓</button>
+        </div>
+        <label class="wizard-format-option hidden" id="league-wizard-multi-client-row">
+          <input type="checkbox" id="league-wizard-multi-client-checkbox">
+          <span data-i18n="multiTable.checkboxLabel">🖥️ Each table runs its own device</span>
+        </label>
+        <p class="player-stats-note callout-note hidden" id="league-wizard-multi-client-note" data-i18n="multiTable.wizardNotice">Hosting separate devices per table needs the local server running — you'll get a link to connect them, or to download the app, right after you start.</p>
+      </div>
+
+      <div class="wizard-step hidden" id="league-wizard-step-4">
+        <p class="wizard-step-explain" id="league-wizard-step4-explain"></p>
+        <div id="league-wizard-match-tables" class="league-tables-grid"></div>
+      </div>
+
+      <div class="wizard-step hidden" id="league-wizard-step-5">
+        <p class="wizard-step-explain" data-i18n="league.wizard.step5Explain">Optionally cap how many games each player gets tonight, so everyone gets roughly equal table time.</p>
+        <div class="row">
+          <label for="league-wizard-max-games" data-i18n="league.maxGamesLabel">🎯 Max Games / Player (Session)</label>
+          <input type="number" id="league-wizard-max-games" min="0" max="99" value="0">
+        </div>
+        <p class="player-stats-note" data-i18n="league.maxGamesHelp">0 means unlimited. Once a member reaches this many games since the last reset, they're skipped for any new match (manual, queued, or team rotation) until you reset session counts for the next time this league meets — their lifetime stats keep counting either way.</p>
+      </div>
+
+      <div class="wizard-step hidden" id="league-wizard-step-6">
+        <p class="wizard-step-explain" data-i18n="league.wizard.step6Explain">Here's tonight's setup — everything below is already saved. Hit Finish to head to the Tables section and start playing.</p>
+        <div id="league-wizard-summary" class="wizard-summary"></div>
+      </div>
+
+    </div>
+
+    <div class="wizard-footer">
+      <button type="button" id="btn-league-wizard-back" class="btn btn-ghost" data-i18n="wizard.back">← Back</button>
+      <button type="button" id="btn-league-wizard-cancel" class="btn btn-ghost" data-i18n="common.cancel">Cancel</button>
+      <button type="button" id="btn-league-wizard-next" class="btn btn-primary" data-i18n="wizard.next">Next →</button>
+      <button type="button" id="btn-league-wizard-finish" class="btn btn-primary hidden" data-i18n="league.wizard.finishButton">🎱 Finish Setup</button>
+    </div>
+  </div>
+</div>
+
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260919t"></script>
+<script src="js/app.js?v=20260921m"></script>
 </body>
 </html>
