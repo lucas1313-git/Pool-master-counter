@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260920w">
+<link rel="stylesheet" href="css/style.css?v=20260920x">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -402,6 +402,28 @@
         <button type="button" id="btn-export-all-data" class="btn btn-primary" data-i18n="backup.exportAll">Export All Data</button>
         <button type="button" id="btn-import-all-data" class="btn btn-ghost" data-i18n="backup.importData">Import Data</button>
         <input type="file" id="import-file-input" accept="application/json" class="hidden">
+      </div>
+      <p class="player-stats-note" data-i18n="backup.importDataNote">Merges into what's already on this device — nothing here is deleted, same-named players get a conflict check, and history from both sides is combined.</p>
+      <div class="row">
+        <button type="button" id="btn-squash-import-data" class="btn btn-danger" data-i18n="backup.squashButton">💀 Import &amp; Replace</button>
+        <input type="file" id="squash-import-file-input" accept="application/json" class="hidden">
+      </div>
+      <p class="player-stats-note" data-i18n="backup.squashNote">Instead of merging, replaces everything on this device with the imported file. A full backup of what's currently here downloads automatically first.</p>
+      <div id="squash-warning-overlay" class="squash-warning-overlay hidden">
+        <div class="squash-warning-card">
+          <div class="squash-warning-icon" aria-hidden="true">💀</div>
+          <h2 class="squash-warning-title" data-i18n="backup.squashAreYouSure">Are you sure?</h2>
+          <p class="squash-warning-body" id="squash-warning-body"></p>
+          <label class="checkbox-row checkbox-row-prominent squash-keep-players-row">
+            <input type="checkbox" id="squash-keep-players-checkbox">
+            <span data-i18n="backup.squashKeepPlayersLabel">Keep players (name &amp; contact info only, combined from both sides) — clear everyone's stats, ratings, and history instead of replacing them</span>
+          </label>
+          <p class="player-stats-note" data-i18n="backup.squashBackupNote">Your current data downloads as a full backup the moment you confirm, before anything is replaced.</p>
+          <div class="squash-warning-actions">
+            <button type="button" id="btn-squash-cancel" class="btn btn-ghost" data-i18n="common.cancel">Cancel</button>
+            <button type="button" id="btn-squash-confirm" class="btn btn-danger" data-i18n="backup.squashConfirmButton">Yes, Replace Everything</button>
+          </div>
+        </div>
       </div>
       <div class="row">
         <button type="button" id="btn-export-session" class="btn btn-ghost" data-i18n="gameSetup.exportSession">Export Session</button>
@@ -1629,6 +1651,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260920w"></script>
+<script src="js/app.js?v=20260920x"></script>
 </body>
 </html>
