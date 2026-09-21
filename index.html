@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260921c">
+<link rel="stylesheet" href="css/style.css?v=20260921d">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -1768,6 +1768,11 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
           <button type="button" id="btn-league-wizard-mark-none" class="btn btn-ghost" data-i18n="league.wizard.markNoneButton">Mark None Present</button>
         </div>
         <ul id="league-wizard-roster-list" class="league-wizard-roster-list"></ul>
+        <div class="row league-wizard-add-contact-row">
+          <label for="league-wizard-add-contact-select" data-i18n="league.wizard.addFromContactsLabel">+ Add from Contacts</label>
+          <select id="league-wizard-add-contact-select"></select>
+          <button type="button" id="btn-league-wizard-add-contact" class="btn btn-ghost" data-i18n="league.wizard.addFromContactsButton">+ Add &amp; Mark Present</button>
+        </div>
       </div>
 
       <div class="wizard-step hidden" id="league-wizard-step-2">
@@ -1831,6 +1836,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260921c"></script>
+<script src="js/app.js?v=20260921d"></script>
 </body>
 </html>

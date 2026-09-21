@@ -466,6 +466,8 @@
   "league.teamsHeading": "隊伍",
   "league.teamsNoneYet": "重未有隊伍——喺上面加一隊啦。",
   "league.vsLabel": "對",
+  "league.wizard.addFromContactsButton": "+ 加入並標記出席",
+  "league.wizard.addFromContactsLabel": "+ 由通訊錄加入",
   "league.wizard.assignTeamButton": "指派",
   "league.wizard.finishButton": "🎱 完成設定",
   "league.wizard.markAllButton": "✅ 全部標記出席",

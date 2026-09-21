@@ -2071,6 +2071,8 @@
   var leagueWizardRosterList = document.getElementById("league-wizard-roster-list");
   var btnLeagueWizardMarkAll = document.getElementById("btn-league-wizard-mark-all");
   var btnLeagueWizardMarkNone = document.getElementById("btn-league-wizard-mark-none");
+  var leagueWizardAddContactSelect = document.getElementById("league-wizard-add-contact-select");
+  var btnLeagueWizardAddContact = document.getElementById("btn-league-wizard-add-contact");
   var leagueWizardTeamsList = document.getElementById("league-wizard-teams-list");
   var leagueWizardTableCountInput = document.getElementById("league-wizard-table-count");
   var leagueWizardQueueModeSelect = document.getElementById("league-wizard-queue-mode");
@@ -9690,7 +9692,6 @@
       emptyLi.className = "empty-hint";
       emptyLi.textContent = T("league.noMembersYet");
       leagueWizardRosterList.appendChild(emptyLi);
-      return;
     }
     // This league "works with teams" the moment any team exists at all -
     // once it does, every present member really ought to be on one, so a
@@ -9744,6 +9745,25 @@
 
       leagueWizardRosterList.appendChild(li);
     });
+
+    // Anyone known to the app at all (the same list the Contact Sheet
+    // shows - played before, or just has contact info on file), not
+    // limited to today's live scoreboard roster - a league night often
+    // draws people who haven't shown up in the current session yet.
+    var memberNameKeys = league.members.map(function (m) {
+      return normalizeNameKey(m.name);
+    });
+    var contactCandidates = contactSheetAllNames().filter(function (n) {
+      return memberNameKeys.indexOf(normalizeNameKey(n)) === -1;
+    });
+    leagueWizardAddContactSelect.innerHTML = "";
+    contactCandidates.forEach(function (n) {
+      var opt = document.createElement("option");
+      opt.value = n;
+      opt.textContent = n;
+      leagueWizardAddContactSelect.appendChild(opt);
+    });
+    btnLeagueWizardAddContact.disabled = contactCandidates.length === 0;
   }
 
   function renderLeagueWizardTeams() {
@@ -22982,6 +23002,14 @@
     var league = leagueWizardOrganizerLeague();
     if (!league) return;
     markNoLeagueMembersPresentTonight(league);
+    renderLeagueWizardRoster();
+  });
+  btnLeagueWizardAddContact.addEventListener("click", function () {
+    var league = leagueWizardOrganizerLeague();
+    if (!league || !leagueWizardAddContactSelect.value) return;
+    var name = leagueWizardAddContactSelect.value;
+    addLeagueMember(league, name);
+    setLeagueTonightRosterMember(league, name, true);
     renderLeagueWizardRoster();
   });
   leagueWizardTableCountInput.addEventListener("change", function () {

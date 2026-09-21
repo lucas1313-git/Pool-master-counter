@@ -466,6 +466,8 @@
   "league.teamsHeading": "Équipes",
   "league.teamsNoneYet": "Aucune équipe pour l'instant — ajoutez-en une ci-dessus.",
   "league.vsLabel": "contre",
+  "league.wizard.addFromContactsButton": "+ Ajouter et Marquer Présent",
+  "league.wizard.addFromContactsLabel": "+ Ajouter depuis les Contacts",
   "league.wizard.assignTeamButton": "Assigner",
   "league.wizard.finishButton": "🎱 Terminer la Configuration",
   "league.wizard.markAllButton": "✅ Marquer Tout le Monde Présent",

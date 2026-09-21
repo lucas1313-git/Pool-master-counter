@@ -7177,6 +7177,13 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   flex-wrap: wrap;
 }
 
+.league-wizard-add-contact-row {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  align-items: center;
+}
+
 .league-team-row {
   padding: 10px 12px;
   background: var(--bg-panel);
