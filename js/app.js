@@ -1659,6 +1659,7 @@
   // ---------------------------------------------------------------------
 
   var btnExportAllData = document.getElementById("btn-export-all-data");
+  var exportObfuscateCheckbox = document.getElementById("export-obfuscate-checkbox");
   var btnImportAllData = document.getElementById("btn-import-all-data");
   var btnExportSync = document.getElementById("btn-export-sync");
   var syncStatusLine = document.getElementById("sync-status-line");
@@ -10044,11 +10045,19 @@
   // filename (optional): only the manual "Export All Data" button passes
   // one, via the promptModal that lets the user name the file - the
   // automatic safety-backup call sites (resetTodayStats,
-  // resetAllPlayerStats) call this with no argument on purpose, since
-  // those are silent safety nets and shouldn't interrupt the reset flow
-  // with a prompt.
-  function exportAllData(filename) {
-    downloadJSON(filename ? sanitizeBackupFilename(filename) : defaultBackupFilename(), buildBackupPayload());
+  // resetAllPlayerStats, performSquash's pre-squash backup) call this
+  // with no argument on purpose, since those are silent safety nets and
+  // shouldn't interrupt their own flow with a prompt.
+  // obfuscate (optional, default false): strips every player's contact
+  // info from the export entirely (same "just names, no email/phone"
+  // treatment shareReport already gives a shared Day Report) - only the
+  // "Export All Data" button's own checkbox ever passes true; every
+  // other call site leaves this off on purpose, since an automatic
+  // safety backup needs to be a real, complete backup.
+  function exportAllData(filename, obfuscate) {
+    var payload = buildBackupPayload();
+    if (obfuscate) payload.contacts = {};
+    downloadJSON(filename ? sanitizeBackupFilename(filename) : defaultBackupFilename(), payload);
   }
 
   // Not a new storage mechanism - Safari has no programmatic access to a
@@ -11274,7 +11283,15 @@
       SAVED_TEAMS = Array.isArray(data.teams) ? data.teams : [];
       PLAYER_STATS = data.playerStats && typeof data.playerStats === "object" ? data.playerStats : {};
       PLAYER_RATINGS = data.ratings && typeof data.ratings === "object" ? data.ratings : {};
-      PLAYER_CONTACTS = data.contacts && typeof data.contacts === "object" ? data.contacts : {};
+      // The one deliberate exception to "squash = exact replace": reuses
+      // the regular merge-import's own mergeContactsData (newer-wins per
+      // name, but a name missing from the import entirely - exactly what
+      // an obfuscated export produces, see exportAllData's obfuscate
+      // flag - falls back to whatever's already local) instead of a
+      // blind overwrite, so squashing an obfuscated or otherwise
+      // contact-light backup can never erase real local email/phone
+      // data with blanks.
+      PLAYER_CONTACTS = mergeContactsData(PLAYER_CONTACTS, data.contacts);
       PLAYER_ADDED = data.playerAdded && typeof data.playerAdded === "object" ? data.playerAdded : {};
       RUN_RECORDS = data.runRecords && typeof data.runRecords === "object" ? data.runRecords : { allTimeBest: null, dailyBest: null };
       PLAYER_BEST_RUNS = data.playerBestRuns && typeof data.playerBestRuns === "object" ? data.playerBestRuns : {};
@@ -20688,8 +20705,9 @@
   }
 
   btnExportAllData.addEventListener("click", function () {
+    var obfuscate = exportObfuscateCheckbox.checked;
     promptModal(T("backup.exportFilenamePrompt"), defaultBackupFilename(), function (name) {
-      exportAllData(name);
+      exportAllData(name, obfuscate);
     });
   });
 

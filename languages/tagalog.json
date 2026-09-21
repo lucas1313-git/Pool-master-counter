@@ -63,6 +63,7 @@
   "backup.importData": "I-import ang Data",
   "backup.importDataNote": "Isinasama sa nandiyan na sa device na ito — walang binubura dito, may conflict check para sa magkaparehong pangalan, at pinagsasama ang history mula sa dalawang panig.",
   "backup.note": "Ang lahat ng stats at session data ay nasa device na ito lang. Mag-export ng backup file para ilipat ang lahat sa ibang iPhone, iPad, o computer.",
+  "backup.obfuscateLabel": "🕵️ I-obfuscate ang personal na impormasyon (huwag isama ang email at phone ng bawat manlalaro sa export na ito — pangalan lang)",
   "backup.resetLists": "⚠️ I-reset ang Listahan ng Manlalaro at Roster",
   "backup.resetStats": "I-reset ang Lahat ng Stats ng Manlalaro",
   "backup.squashAreYouSure": "Sigurado ka ba?",
