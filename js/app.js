@@ -10004,9 +10004,18 @@
     return /\.json$/i.test(trimmed) ? trimmed : trimmed + ".json";
   }
 
-  // Shared by exportAllData and shareReport - the exact same full-app
-  // snapshot either way, just delivered differently (a plain download
-  // vs a Web Share attachment).
+  // Shared by exportAllData, exportForSync, and shareReport - the exact
+  // same full-app snapshot every time, just delivered differently (a
+  // plain download, a dated/named download, or a Web Share attachment).
+  // Every localStorage-backed store in the app that's genuinely "pool
+  // counter data" lives here - the run/best-run records ("balls in a
+  // row"), saved rotations/setups, name translations, the removed/
+  // graveyard lists, reset snapshots, the report archive, and both
+  // tournament stores, alongside the original seven fields. Deliberately
+  // NOT included: theme/language/focusMode/onboardingSeen and the other
+  // pure per-device UI preferences, plus the leaderboard cache (just a
+  // regenerable snapshot) - those aren't data a second manager's device
+  // should have forced onto it by importing someone else's backup.
   function buildBackupPayload() {
     return {
       exportedAt: new Date().toISOString(),
@@ -10016,7 +10025,19 @@
       playerStats: PLAYER_STATS,
       ratings: PLAYER_RATINGS,
       contacts: PLAYER_CONTACTS,
-      playerAdded: PLAYER_ADDED
+      playerAdded: PLAYER_ADDED,
+      runRecords: RUN_RECORDS,
+      playerBestRuns: PLAYER_BEST_RUNS,
+      dayNotes: DAY_NOTES,
+      rotations: SAVED_ROTATIONS,
+      gameSetups: SAVED_GAME_SETUPS,
+      playerNameTranslations: PLAYER_NAME_TRANSLATIONS,
+      removedPlayers: REMOVED_PLAYERS,
+      graveyardPlayers: GRAVEYARD_PLAYERS,
+      resetSnapshots: RESET_SNAPSHOTS,
+      reportArchive: REPORT_ARCHIVE,
+      tournament: TOURNAMENT,
+      tournamentResults: TOURNAMENT_RESULTS
     };
   }
 
@@ -10381,6 +10402,118 @@
       return (a.createdAt || "").localeCompare(b.createdAt || "");
     });
     return { teams: merged, added: added };
+  }
+
+  // ---------------------------------------------------------------------
+  // Merge helpers for the backup fields added alongside the original
+  // seven above (rotations, game setups, run records, name translations,
+  // removed/graveyard lists, reset snapshots, report archive, tournament
+  // stores) - generic where a bespoke rule isn't needed, since these are
+  // all secondary/auxiliary stores next to the sophisticated conflict
+  // resolution the original seven already have above.
+  // ---------------------------------------------------------------------
+
+  // Union by a dedup key, local entries first, any imported entry whose
+  // key isn't already present appended after. capAndSort (optional)
+  // re-sorts/truncates the same way the store's own save path already
+  // does, for the few stores that keep a newest-first cap.
+  function mergeArrayByKey(localArr, importedArr, keyFn, capAndSort) {
+    var seen = {};
+    var merged = [];
+    (localArr || []).forEach(function (item) {
+      var key = keyFn(item);
+      if (seen[key]) return;
+      seen[key] = true;
+      merged.push(item);
+    });
+    (importedArr || []).forEach(function (item) {
+      var key = keyFn(item);
+      if (seen[key]) return;
+      seen[key] = true;
+      merged.push(item);
+    });
+    return capAndSort ? capAndSort(merged) : merged;
+  }
+
+  function capAndSortByFieldDesc(field, cap) {
+    return function (arr) {
+      var sorted = arr.slice().sort(function (a, b) {
+        return String(b[field] || "").localeCompare(String(a[field] || ""));
+      });
+      return cap ? sorted.slice(0, cap) : sorted;
+    };
+  }
+
+  // Union for a { key: value } map with no meaningful "which side is
+  // better" signal (day notes, name translations) - local wins a
+  // collision.
+  function mergeMapPreferLocal(localMap, importedMap) {
+    var merged = {};
+    Object.keys(importedMap || {}).forEach(function (key) {
+      merged[key] = importedMap[key];
+    });
+    Object.keys(localMap || {}).forEach(function (key) {
+      merged[key] = localMap[key];
+    });
+    return merged;
+  }
+
+  // Union for a { name: {...} } flag map where presence on EITHER side
+  // should carry through - removed/graveyarded on either device stays
+  // removed/graveyarded after the merge (used for REMOVED_PLAYERS and
+  // GRAVEYARD_PLAYERS).
+  function mergeFlagMapUnion(localMap, importedMap) {
+    var merged = {};
+    Object.keys(importedMap || {}).forEach(function (key) {
+      merged[key] = importedMap[key];
+    });
+    Object.keys(localMap || {}).forEach(function (key) {
+      merged[key] = localMap[key];
+    });
+    return merged;
+  }
+
+  // "Balls in a row" records - keeps whichever side's value is actually
+  // higher, the same "higher wins" rule checkRunRecords already applies
+  // live during play, so a merge lands on exactly the record either
+  // device would have if they'd been playing on the same device the
+  // whole time.
+  function mergeRunRecords(localRecords, importedRecords) {
+    var merged = {
+      allTimeBest: localRecords && localRecords.allTimeBest ? localRecords.allTimeBest : null,
+      dailyBest: localRecords && localRecords.dailyBest ? localRecords.dailyBest : null
+    };
+    var importedAllTime = importedRecords && importedRecords.allTimeBest;
+    if (importedAllTime && (!merged.allTimeBest || importedAllTime.value > merged.allTimeBest.value)) {
+      merged.allTimeBest = importedAllTime;
+    }
+    var importedDaily = importedRecords && importedRecords.dailyBest;
+    var localDailyIsToday = merged.dailyBest && localDateStrFromTs(merged.dailyBest.ts) === todayDateStr();
+    var importedDailyIsToday = importedDaily && localDateStrFromTs(importedDaily.ts) === todayDateStr();
+    if (importedDailyIsToday && (!localDailyIsToday || importedDaily.value > merged.dailyBest.value)) {
+      merged.dailyBest = importedDaily;
+    } else if (!localDailyIsToday && !importedDailyIsToday) {
+      merged.dailyBest = null;
+    }
+    return merged;
+  }
+
+  function mergePlayerBestRuns(localBestRuns, importedBestRuns) {
+    var merged = {};
+    Object.keys(localBestRuns || {}).forEach(function (key) {
+      merged[key] = localBestRuns[key];
+    });
+    Object.keys(importedBestRuns || {}).forEach(function (key) {
+      var imported = importedBestRuns[key];
+      if (!imported) return;
+      var existingKey = findKeyCaseInsensitive(merged, imported.name);
+      if (!existingKey) {
+        merged[key] = imported;
+      } else if (imported.value > merged[existingKey].value) {
+        merged[existingKey] = imported;
+      }
+    });
+    return merged;
   }
 
   // A friendly, hand-editable export: just label + players per list, no
@@ -10751,6 +10884,32 @@
             var mergedRatings = mergeRatingsData(PLAYER_RATINGS, importedRatings);
             var mergedContacts = mergeContactsData(PLAYER_CONTACTS, importedContacts);
             var mergedPlayerAdded = mergePlayerAddedData(PLAYER_ADDED, importedPlayerAdded);
+            var mergedRunRecords = mergeRunRecords(RUN_RECORDS, data.runRecords);
+            var mergedPlayerBestRuns = mergePlayerBestRuns(PLAYER_BEST_RUNS, data.playerBestRuns);
+            var mergedDayNotes = mergeMapPreferLocal(DAY_NOTES, data.dayNotes);
+            var mergedRotations = mergeArrayByKey(SAVED_ROTATIONS, data.rotations, function (r) {
+              return r.id || r.label;
+            });
+            var mergedGameSetups = mergeArrayByKey(SAVED_GAME_SETUPS, data.gameSetups, function (s) {
+              return s.id;
+            });
+            var mergedPlayerNameTranslations = mergeMapPreferLocal(PLAYER_NAME_TRANSLATIONS, data.playerNameTranslations);
+            var mergedRemovedPlayers = mergeFlagMapUnion(REMOVED_PLAYERS, data.removedPlayers);
+            var mergedGraveyardPlayers = mergeFlagMapUnion(GRAVEYARD_PLAYERS, data.graveyardPlayers);
+            var mergedResetSnapshots = mergeArrayByKey(RESET_SNAPSHOTS, data.resetSnapshots, function (s) {
+              return s.id;
+            }, capAndSortByFieldDesc("ts", RESET_SNAPSHOTS_CAP));
+            var mergedReportArchive = mergeArrayByKey(REPORT_ARCHIVE, data.reportArchive, function (r) {
+              return r.dateStr;
+            }, capAndSortByFieldDesc("dateStr", REPORT_ARCHIVE_CAP));
+            // Singleton, not a collection - keep whichever live/in-progress
+            // tournament is actually local (don't clobber a bracket someone
+            // is mid-match on with an unrelated one from the import); only
+            // adopt the imported one if there's no local tournament at all.
+            var mergedTournament = TOURNAMENT || data.tournament || null;
+            var mergedTournamentResults = mergeArrayByKey(TOURNAMENT_RESULTS, data.tournamentResults, function (t) {
+              return t.ts;
+            }, capAndSortByFieldDesc("ts", 200));
 
             var finalState;
             var newPlayerCount = 0;
@@ -10830,6 +10989,18 @@
             localStorage.setItem(RATINGS_KEY, JSON.stringify(mergedRatings));
             localStorage.setItem(CONTACTS_KEY, JSON.stringify(mergedContacts));
             localStorage.setItem(PLAYER_ADDED_KEY, JSON.stringify(mergedPlayerAdded));
+            localStorage.setItem(RUN_RECORDS_KEY, JSON.stringify(mergedRunRecords));
+            localStorage.setItem(PLAYER_BEST_RUNS_KEY, JSON.stringify(mergedPlayerBestRuns));
+            localStorage.setItem(DAY_NOTES_KEY, JSON.stringify(mergedDayNotes));
+            localStorage.setItem(ROTATIONS_KEY, JSON.stringify(mergedRotations));
+            localStorage.setItem(GAME_SETUPS_KEY, JSON.stringify(mergedGameSetups));
+            localStorage.setItem(PLAYER_NAME_TRANSLATIONS_KEY, JSON.stringify(mergedPlayerNameTranslations));
+            localStorage.setItem(REMOVED_PLAYERS_KEY, JSON.stringify(mergedRemovedPlayers));
+            localStorage.setItem(GRAVEYARD_PLAYERS_KEY, JSON.stringify(mergedGraveyardPlayers));
+            localStorage.setItem(RESET_SNAPSHOTS_KEY, JSON.stringify(mergedResetSnapshots));
+            localStorage.setItem(REPORT_ARCHIVE_KEY, JSON.stringify(mergedReportArchive));
+            if (mergedTournament) localStorage.setItem(TOURNAMENT_KEY, JSON.stringify(mergedTournament));
+            localStorage.setItem(TOURNAMENT_RESULTS_KEY, JSON.stringify(mergedTournamentResults));
 
             function finishImport() {
               if (data.exportedAt) {
@@ -11078,6 +11249,25 @@
         PLAYER_ADDED[p.name] = stampNow;
       });
       resultingPlayerCount = built.players.length;
+      // "Squash the game data" - every one of these is game data, not
+      // player identity, so it's blanked the same way PLAYER_STATS/
+      // PLAYER_RATINGS are above, regardless of what either side's
+      // import/local copy had.
+      RUN_RECORDS = { allTimeBest: null, dailyBest: null };
+      PLAYER_BEST_RUNS = {};
+      DAY_NOTES = {};
+      SAVED_ROTATIONS = [];
+      SAVED_GAME_SETUPS = [];
+      REMOVED_PLAYERS = {};
+      GRAVEYARD_PLAYERS = {};
+      RESET_SNAPSHOTS = [];
+      REPORT_ARCHIVE = [];
+      TOURNAMENT = null;
+      TOURNAMENT_RESULTS = [];
+      // Name translations are the one exception - they're a per-player
+      // display preference, closer to contact info than to play history,
+      // so they're unioned like contacts rather than wiped.
+      PLAYER_NAME_TRANSLATIONS = mergeMapPreferLocal(PLAYER_NAME_TRANSLATIONS, data.playerNameTranslations);
     } else {
       state = importedState;
       SAVED_ROSTERS = Array.isArray(data.rosters) ? data.rosters : [];
@@ -11086,16 +11276,52 @@
       PLAYER_RATINGS = data.ratings && typeof data.ratings === "object" ? data.ratings : {};
       PLAYER_CONTACTS = data.contacts && typeof data.contacts === "object" ? data.contacts : {};
       PLAYER_ADDED = data.playerAdded && typeof data.playerAdded === "object" ? data.playerAdded : {};
+      RUN_RECORDS = data.runRecords && typeof data.runRecords === "object" ? data.runRecords : { allTimeBest: null, dailyBest: null };
+      PLAYER_BEST_RUNS = data.playerBestRuns && typeof data.playerBestRuns === "object" ? data.playerBestRuns : {};
+      DAY_NOTES = data.dayNotes && typeof data.dayNotes === "object" ? data.dayNotes : {};
+      SAVED_ROTATIONS = Array.isArray(data.rotations) ? data.rotations : [];
+      SAVED_GAME_SETUPS = Array.isArray(data.gameSetups) ? data.gameSetups : [];
+      PLAYER_NAME_TRANSLATIONS = data.playerNameTranslations && typeof data.playerNameTranslations === "object" ? data.playerNameTranslations : {};
+      REMOVED_PLAYERS = data.removedPlayers && typeof data.removedPlayers === "object" ? data.removedPlayers : {};
+      GRAVEYARD_PLAYERS = data.graveyardPlayers && typeof data.graveyardPlayers === "object" ? data.graveyardPlayers : {};
+      RESET_SNAPSHOTS = Array.isArray(data.resetSnapshots) ? data.resetSnapshots : [];
+      REPORT_ARCHIVE = Array.isArray(data.reportArchive) ? data.reportArchive : [];
+      TOURNAMENT = data.tournament && typeof data.tournament === "object" ? data.tournament : null;
+      TOURNAMENT_RESULTS = Array.isArray(data.tournamentResults) ? data.tournamentResults : [];
       resultingPlayerCount = (importedState.players || []).length;
     }
 
-    saveState();
-    saveRostersToStorage(SAVED_ROSTERS);
-    saveTeamsToStorage(SAVED_TEAMS);
-    savePlayerStatsToStorage(PLAYER_STATS);
-    saveRatingsToStorage(PLAYER_RATINGS);
-    saveContactsToStorage(PLAYER_CONTACTS);
-    savePlayerAddedToStorage(PLAYER_ADDED);
+    // Direct localStorage writes, not the usual save*ToStorage wrappers -
+    // several of those (including saveState itself) silently no-op under
+    // noStatsMode, and saveState/saveTournamentToStorage also trigger a
+    // live network broadcast, neither of which belongs in the middle of
+    // an explicit, just-confirmed data-replacement that's about to
+    // reload the page anyway. Same bypass importAllData's own finishImport
+    // already uses for exactly this reason.
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      localStorage.setItem(ROSTERS_KEY, JSON.stringify(SAVED_ROSTERS));
+      localStorage.setItem(TEAMS_KEY, JSON.stringify(SAVED_TEAMS));
+      localStorage.setItem(PLAYER_STATS_KEY, JSON.stringify(PLAYER_STATS));
+      localStorage.setItem(RATINGS_KEY, JSON.stringify(PLAYER_RATINGS));
+      localStorage.setItem(CONTACTS_KEY, JSON.stringify(PLAYER_CONTACTS));
+      localStorage.setItem(PLAYER_ADDED_KEY, JSON.stringify(PLAYER_ADDED));
+      localStorage.setItem(RUN_RECORDS_KEY, JSON.stringify(RUN_RECORDS));
+      localStorage.setItem(PLAYER_BEST_RUNS_KEY, JSON.stringify(PLAYER_BEST_RUNS));
+      localStorage.setItem(DAY_NOTES_KEY, JSON.stringify(DAY_NOTES));
+      localStorage.setItem(ROTATIONS_KEY, JSON.stringify(SAVED_ROTATIONS));
+      localStorage.setItem(GAME_SETUPS_KEY, JSON.stringify(SAVED_GAME_SETUPS));
+      localStorage.setItem(PLAYER_NAME_TRANSLATIONS_KEY, JSON.stringify(PLAYER_NAME_TRANSLATIONS));
+      localStorage.setItem(REMOVED_PLAYERS_KEY, JSON.stringify(REMOVED_PLAYERS));
+      localStorage.setItem(GRAVEYARD_PLAYERS_KEY, JSON.stringify(GRAVEYARD_PLAYERS));
+      localStorage.setItem(RESET_SNAPSHOTS_KEY, JSON.stringify(RESET_SNAPSHOTS));
+      localStorage.setItem(REPORT_ARCHIVE_KEY, JSON.stringify(REPORT_ARCHIVE));
+      if (TOURNAMENT) localStorage.setItem(TOURNAMENT_KEY, JSON.stringify(TOURNAMENT));
+      else localStorage.removeItem(TOURNAMENT_KEY);
+      localStorage.setItem(TOURNAMENT_RESULTS_KEY, JSON.stringify(TOURNAMENT_RESULTS));
+    } catch (e) {
+      console.warn("Could not save squashed data.", e);
+    }
 
     closeSquashWarning();
     alertModal(T(keepPlayersOnly ? "alert.squashDoneKeepPlayers" : "alert.squashDoneFull", { count: resultingPlayerCount }), function () {
