@@ -1760,6 +1760,7 @@
   var btnWizardCancel = document.getElementById("wizard-btn-cancel");
   var btnWizardNext = document.getElementById("wizard-btn-next");
   var btnWizardStart = document.getElementById("wizard-btn-start");
+  var btnWizardStartTournament = document.getElementById("wizard-btn-start-tournament");
   var wizardTempCounterCheckbox = document.getElementById("wizard-temp-counter-checkbox");
   var btnWizardStartQuickCounter = document.getElementById("btn-wizard-start-quick-counter");
   var btnWizardJustACounter = document.getElementById("btn-wizard-just-a-counter");
@@ -1907,6 +1908,12 @@
   var btnTournamentBack = document.getElementById("btn-tournament-back");
   var tournamentSetupPanel = document.getElementById("tournament-setup-panel");
   var tournamentActivePanel = document.getElementById("tournament-active-panel");
+  var tournamentSetupProgress = document.getElementById("tournament-setup-progress");
+  var tournamentSetupProgressDots = document.getElementById("tournament-setup-progress-dots");
+  var btnTournamentSetupBack = document.getElementById("btn-tournament-setup-back");
+  var btnTournamentSetupNext = document.getElementById("btn-tournament-setup-next");
+  var tournamentSetupStep = 1;
+  var TOURNAMENT_SETUP_STEP_COUNT = 4;
   var tournamentFormatRadios = document.getElementsByName("tournament-format");
   var tournamentWbSection = document.getElementById("tournament-wb-section");
   var tournamentLbSection = document.getElementById("tournament-lb-section");
@@ -14905,6 +14912,11 @@
     var isLast = idx === seq.length - 1;
     btnWizardNext.classList.toggle("hidden", isLast);
     btnWizardStart.classList.toggle("hidden", !isLast);
+    // Only offered on the normal (non tournament-radio) path: someone who
+    // picked "tournament" in step 1 already gets there via btnWizardStart
+    // itself (see below), so a second button doing the same thing here
+    // would be redundant.
+    btnWizardStartTournament.classList.toggle("hidden", !isLast || wizardFormat === "tournament");
     if (isLast) {
       btnWizardStart.textContent = T(wizardFormat === "tournament" ? "wizard.goToTournamentSetup" : "wizard.startGame");
     }
@@ -15005,6 +15017,19 @@
 
   function closeWizard() {
     wizardOverlay.classList.add("hidden");
+  }
+
+  // Shared by both routes into the guided Tournament setup: picking
+  // "Tournament Elimination" in step 1 (which skips straight to step 5),
+  // and the "Start a Tournament" button offered on step 5 of the normal
+  // Individual/Race To path once players are already added. Either way,
+  // openTournamentPage resets to its own step 1 and renders the player
+  // checklist from activePlayers() - whoever this wizard already marked
+  // Playing (if any) shows up pre-checked there for free, since both
+  // screens read/write the same state.players.
+  function goToTournamentSetupFromWizard() {
+    closeWizard();
+    openTournamentPage();
   }
 
   // ---------------------------------------------------------------------
@@ -15275,8 +15300,7 @@
       noStatsCheckbox.checked = false;
     }
     if (wizardFormat === "tournament") {
-      closeWizard();
-      openTournamentPage();
+      goToTournamentSetupFromWizard();
       return;
     }
     var typeId = wizardGameTypeSelect.value;
@@ -21812,6 +21836,7 @@
         saveResetSnapshot("tournament", T("resetSnapshot.tournamentLabel"), snapshotData);
       }
       TOURNAMENT = null;
+      tournamentSetupStep = 1;
       saveTournamentToStorage(null);
       renderTournamentPage();
       // Rating badges reverted above show up all over the app (roster,
@@ -22816,6 +22841,43 @@
     });
   }
 
+  // Steps through the same setup fields the old single-page panel always
+  // had (tournament type -> game type -> players/seeding -> tables) -
+  // nothing about validation or how a tournament actually gets built
+  // changes, this only controls which of the four .tournament-setup-step
+  // blocks is visible. Reflects tournamentSetupStep as-is; only
+  // openTournamentPage/abandonTournament reset that var back to 1, so a
+  // re-render triggered elsewhere (e.g. adding a player from another
+  // screen) never yanks the organizer back to step 1 mid-setup.
+  function renderTournamentSetupStep() {
+    for (var n = 1; n <= TOURNAMENT_SETUP_STEP_COUNT; n++) {
+      document.getElementById("tournament-setup-step-" + n).classList.toggle("hidden", n !== tournamentSetupStep);
+    }
+    tournamentSetupProgress.textContent = T("wizard.stepOf", { step: tournamentSetupStep, total: TOURNAMENT_SETUP_STEP_COUNT });
+    tournamentSetupProgressDots.innerHTML = "";
+    for (var i = 1; i <= TOURNAMENT_SETUP_STEP_COUNT; i++) {
+      var dot = document.createElement("span");
+      dot.className = "wizard-dot" + (i < tournamentSetupStep ? " is-done" : i === tournamentSetupStep ? " is-active" : "");
+      tournamentSetupProgressDots.appendChild(dot);
+    }
+    var isLast = tournamentSetupStep === TOURNAMENT_SETUP_STEP_COUNT;
+    btnTournamentSetupBack.classList.toggle("hidden", tournamentSetupStep === 1);
+    btnTournamentSetupNext.classList.toggle("hidden", isLast);
+    btnTournamentStart.classList.toggle("hidden", !isLast);
+  }
+
+  function tournamentSetupGoNext() {
+    if (tournamentSetupStep >= TOURNAMENT_SETUP_STEP_COUNT) return;
+    tournamentSetupStep += 1;
+    renderTournamentSetupStep();
+  }
+
+  function tournamentSetupGoBack() {
+    if (tournamentSetupStep <= 1) return;
+    tournamentSetupStep -= 1;
+    renderTournamentSetupStep();
+  }
+
   function renderTournamentPage() {
     if (TOURNAMENT) {
       tournamentSetupPanel.classList.add("hidden");
@@ -22825,6 +22887,7 @@
       tournamentActivePanel.classList.add("hidden");
       tournamentSetupPanel.classList.remove("hidden");
       renderTournamentPlayerChecklist();
+      renderTournamentSetupStep();
       tournamentTargetUnit.textContent = GAME_TYPES[tournamentGameTypeSelect.value].unit;
       toggleTournamentMultiClientVisibility();
     }
@@ -22832,6 +22895,7 @@
 
   function openTournamentPage(skipHistory) {
     if (!skipHistory) pushScreenHistory("tournament");
+    if (!TOURNAMENT) tournamentSetupStep = 1;
     renderTournamentPage();
     appRoot.classList.add("hidden");
     allPlayersPageView.classList.add("hidden");
@@ -23714,6 +23778,7 @@
   btnWizardBack.addEventListener("click", wizardBack);
   btnWizardNext.addEventListener("click", wizardNext);
   btnWizardStart.addEventListener("click", finalizeWizardAndStart);
+  btnWizardStartTournament.addEventListener("click", goToTournamentSetupFromWizard);
   wizardTempCounterCheckbox.addEventListener("change", function () {
     btnWizardStartQuickCounter.classList.toggle("hidden", !wizardTempCounterCheckbox.checked);
   });
@@ -24152,6 +24217,8 @@
     closeTournamentPage();
   });
   btnTournamentStart.addEventListener("click", startTournament);
+  btnTournamentSetupNext.addEventListener("click", tournamentSetupGoNext);
+  btnTournamentSetupBack.addEventListener("click", tournamentSetupGoBack);
   Array.prototype.forEach.call(tournamentSeedModeRadios, function (radio) {
     radio.addEventListener("change", function () {
       var show = isTournamentSeededManually();
