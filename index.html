@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260920z">
+<link rel="stylesheet" href="css/style.css?v=20260921f">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -68,6 +68,7 @@
       <button type="button" id="btn-test-onboarding" class="btn btn-ghost all-players-nav-btn" data-i18n="header.welcomeNewPlayer">👋 Welcome New Player</button>
       <button type="button" id="btn-open-wizard" class="btn btn-primary all-players-nav-btn" data-i18n="header.startWizard">🧙 Start Wizard</button>
       <button type="button" id="btn-open-tournament" class="btn btn-ghost all-players-nav-btn" data-i18n="header.tournament">🏆 Tournament</button>
+      <button type="button" id="btn-open-league" class="btn btn-ghost all-players-nav-btn" data-i18n="header.league">🏆 League</button>
       <button type="button" id="btn-open-global-stats" class="btn btn-ghost all-players-nav-btn" data-i18n="header.globalStats">🌐 Global Stats</button>
       <button type="button" id="btn-open-leaderboard" class="btn btn-ghost all-players-nav-btn" data-i18n="header.leaderboard">🏆 Leaderboard</button>
       <button type="button" id="btn-open-group-session" class="btn btn-ghost all-players-nav-btn" data-i18n="header.groupSession">🎯 Group Session</button>
@@ -1101,6 +1102,7 @@
         <a href="#help-section-wizard" class="help-nav-link" data-i18n="help.nav.wizard">Setup Wizard</a>
         <a href="#help-section-all-players" class="help-nav-link" data-i18n="help.nav.allPlayers">All Players</a>
         <a href="#help-section-tournament" class="help-nav-link" data-i18n="help.nav.tournament">Tournament</a>
+        <a href="#help-section-league" class="help-nav-link" data-i18n="help.nav.league">League</a>
         <a href="#help-section-player-page" class="help-nav-link" data-i18n="help.nav.playerPage">Player Stats</a>
       </nav>
     </div>
@@ -1158,6 +1160,18 @@
         <li data-i18n-html="help.tournament.reading"><strong>Reading the bracket</strong> — Winners Bracket, Losers Bracket (double elimination only), and Grand Final render as a horizontal tree with connector lines. The active match is highlighted; eliminated players are struck through; the champion gets a 👑. Round Robin instead shows a live Standings list (ranked by match wins) above the full list of Matches. Swiss shows the same kind of Standings list (with a Buchholz strength-of-schedule figure for reference) above every round played so far, each as its own labeled group of matches.</li>
       </ul>
       <p data-i18n="help.tournament.careerNote">Every rack played in a tournament still counts toward career stats, ratings, and the All Players graphs — it isn't a separate pool of data.</p>
+    </section>
+
+    <section class="help-section" id="help-section-league">
+      <h3 data-i18n="help.nav.league">League</h3>
+      <p data-i18n="help.league.intro">An ongoing, never-ending APA-style handicap points ladder for a fixed group of players — Skill Levels handicap each match's target so a mismatch still plays close. No server: the organizer exports a league file, everyone else imports it to see standings.</p>
+      <ul>
+        <li data-i18n-html="help.league.setup"><strong>Setup</strong> — create a league (8-Ball or 9-Ball), add members from your known players, and set each member's Skill Level (a suggested value is filled in from their app rating, freely editable).</li>
+        <li data-i18n-html="help.league.tables"><strong>Tables</strong> — set how many physical tables are running; each shows up as its own slot in the Tables grid, and a match scored to its target there finishes and updates standings automatically, on its own board, without affecting any other table's live game.</li>
+        <li data-i18n-html="help.league.queue"><strong>Queue Mode</strong> — Manual leaves every table's next pairing to the organizer. Per-Table Queue gives each table its own line; Per-Room Queue shares one line across every table. Either way, both players from a finished match rotate to the back of the line rather than dropping out, and a confirm dialog (with a sound) proposes the next pairing the moment a table frees up.</li>
+        <li data-i18n-html="help.league.teams"><strong>Teams</strong> — group league members into teams, then assign a team to a table (Per-Table Queue mode) to seed that table's queue with the whole roster in order — a one-tap way to keep a team's players rotating through their table on their own.</li>
+      </ul>
+      <p data-i18n="help.league.exportNote">Export League/Import League share a league file between devices — an imported copy is always read-only, even re-imported back onto the organizer's own device.</p>
     </section>
 
     <section class="help-section" id="help-section-player-page">
@@ -1653,8 +1667,201 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 </div>
 
+<div id="view-league-page" class="hidden">
+
+  <header class="app-header player-page-header">
+    <button type="button" id="btn-league-back" class="btn btn-ghost screen-back-btn" aria-label="Back" data-i18n-aria-label="common.back"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <h1 data-i18n="header.league">League</h1>
+    <button type="button" id="btn-open-league-wizard" class="btn btn-primary" data-i18n="league.wizard.openButton">🧙 Setup Tonight</button>
+    <button type="button" id="btn-open-help-league" class="btn btn-ghost" data-i18n="header.help">❓ Help</button>
+  </header>
+
+  <section class="panel" id="league-setup-panel">
+    <p class="player-stats-note" data-i18n="league.intro">An APA-style handicap league for a fixed group of players — Skill Levels handicap the race so a mismatch still plays close. No server: the organizer exports a league file, everyone else imports it to see standings.</p>
+
+    <div class="row">
+      <select id="league-select"></select>
+      <button type="button" id="btn-league-import" class="btn btn-ghost" data-i18n="league.importButton">📥 Import League</button>
+      <input type="file" id="league-import-file-input" accept="application/json" class="hidden">
+    </div>
+
+    <div id="league-new-form" class="league-new-form hidden">
+      <div class="row">
+        <label for="league-new-name" data-i18n="league.newNameLabel">League name</label>
+        <input type="text" id="league-new-name" maxlength="60">
+      </div>
+      <div class="row league-format-row">
+        <label><input type="radio" name="league-new-format" value="apa8ball" checked> <span data-i18n="league.format8Ball">APA 8-Ball</span></label>
+        <label><input type="radio" name="league-new-format" value="apa9ball"> <span data-i18n="league.format9Ball">APA 9-Ball</span></label>
+      </div>
+      <button type="button" id="btn-league-create" class="btn btn-primary" data-i18n="league.createButton">Create League</button>
+    </div>
+  </section>
+
+  <section class="panel league-detail hidden" id="league-detail">
+    <div class="league-detail-header">
+      <h3 id="league-detail-name"></h3>
+      <span id="league-readonly-badge" class="league-readonly-badge hidden" data-i18n="league.readOnlyBadge">Imported — read-only</span>
+      <button type="button" id="btn-league-export" class="btn btn-ghost" data-i18n="league.exportButton">📤 Export League</button>
+      <button type="button" id="btn-league-delete" class="btn btn-danger" data-i18n="league.deleteButton">🗑️ Delete League</button>
+    </div>
+
+    <div id="league-organizer-only">
+      <h4 data-i18n="league.membersHeading">Members</h4>
+      <div class="row">
+        <select id="league-add-member-select"></select>
+        <button type="button" id="btn-league-add-member" class="btn btn-ghost" data-i18n="league.addMemberButton">+ Add</button>
+      </div>
+    </div>
+
+    <h4 data-i18n="league.standingsHeading">Standings</h4>
+    <div class="league-standings-table-wrap">
+      <table class="league-standings-table" id="league-standings-table">
+        <thead>
+          <tr>
+            <th data-i18n="league.colMember">Member</th>
+            <th data-i18n="league.colSkillLevel">SL</th>
+            <th data-i18n="league.colPoints">Points</th>
+            <th data-i18n="league.colRecord">W-L</th>
+            <th data-i18n="league.colSession">Session</th>
+            <th id="league-col-remove-header" class="hidden"></th>
+          </tr>
+        </thead>
+        <tbody id="league-standings-body"></tbody>
+      </table>
+    </div>
+
+    <div id="league-live-hosting-section">
+      <div id="league-teams-section">
+        <h4 data-i18n="league.teamsHeading">Teams</h4>
+        <div class="row">
+          <input type="text" id="league-new-team-name" maxlength="40" data-i18n-placeholder="league.newTeamPlaceholder" placeholder="Team name">
+          <button type="button" id="btn-league-create-team" class="btn btn-ghost" data-i18n="league.createTeamButton">+ Add Team</button>
+        </div>
+        <ul id="league-teams-list" class="league-teams-list"></ul>
+      </div>
+
+      <div id="league-tables-section">
+        <div class="row league-tables-header-row">
+          <h4 data-i18n="league.tablesHeading">Tables</h4>
+          <label for="league-table-count" data-i18n="league.tableCountLabel">🎱 Number of Tables</label>
+          <input type="number" id="league-table-count" min="1" max="20" value="1">
+          <label for="league-queue-mode-select" data-i18n="league.queueModeLabel">Queue Mode</label>
+          <select id="league-queue-mode-select">
+            <option value="none" data-i18n="league.queueModeNone">Manual (organizer assigns)</option>
+            <option value="perTable" data-i18n="league.queueModePerTable">Per-Table Queue</option>
+            <option value="perRoom" data-i18n="league.queueModePerRoom">Per-Room Queue</option>
+          </select>
+          <label for="league-team-rotation-select" data-i18n="league.teamRotationLabel">Team Rotation</label>
+          <select id="league-team-rotation-select">
+            <option value="rotatingLines" data-i18n="league.teamRotationRotatingLines">Rotating Lines (next pair auto-cycles)</option>
+            <option value="roundRobin" data-i18n="league.teamRotationRoundRobin">Round-Robin (everyone plays everyone)</option>
+          </select>
+          <button type="button" id="btn-league-team-rotation-info" class="format-info-btn" data-i18n-aria-label="league.teamRotationInfoAria" aria-label="What do these mean?">❓</button>
+          <label for="league-max-games-input" data-i18n="league.maxGamesLabel">🎯 Max Games / Player (Session)</label>
+          <input type="number" id="league-max-games-input" min="0" max="99" value="0">
+          <button type="button" id="btn-league-reset-session-counts" class="btn btn-ghost" data-i18n="league.resetSessionCountsButton">↺ Reset Session Counts</button>
+        </div>
+        <p class="player-stats-note" data-i18n="league.maxGamesHelp">0 means unlimited. Once a member reaches this many games since the last reset, they're skipped for any new match (manual, queued, or team rotation) until you reset session counts for the next time this league meets — their lifetime stats keep counting either way.</p>
+        <div id="league-tables-grid" class="league-tables-grid"></div>
+      </div>
+
+      <div id="league-current-match-panel"></div>
+    </div>
+  </section>
+
+</div>
+
+<div id="league-wizard-overlay" class="wizard-overlay hidden">
+  <div class="wizard-card">
+    <button type="button" id="btn-league-wizard-close" class="wizard-close-btn" aria-label="Close wizard" data-i18n-aria-label="wizard.closeAriaLabel">×</button>
+
+    <div class="wizard-header">
+      <div class="wizard-header-text">
+        <h2 data-i18n="league.wizard.title">🧙 Setup Tonight's League Games</h2>
+        <p class="wizard-progress" id="league-wizard-progress">Step 1 of 6</p>
+      </div>
+    </div>
+
+    <div class="wizard-progress-dots" id="league-wizard-progress-dots"></div>
+
+    <div class="wizard-body">
+
+      <div class="wizard-step" id="league-wizard-step-1">
+        <p class="wizard-step-explain" data-i18n="league.wizard.step1Explain">Check off everyone playing tonight. Unchecked members are skipped everywhere a match gets picked — auto-proposed or started by hand — until you check them back in.</p>
+        <div class="row">
+          <button type="button" id="btn-league-wizard-mark-all" class="btn btn-ghost" data-i18n="league.wizard.markAllButton">✅ Mark All Present</button>
+          <button type="button" id="btn-league-wizard-mark-none" class="btn btn-ghost" data-i18n="league.wizard.markNoneButton">Mark None Present</button>
+        </div>
+        <ul id="league-wizard-roster-list" class="league-wizard-roster-list"></ul>
+        <div class="row league-wizard-add-contact-row">
+          <label for="league-wizard-add-contact-select" data-i18n="league.wizard.addFromContactsLabel">+ Add from Contacts</label>
+          <select id="league-wizard-add-contact-select"></select>
+          <button type="button" id="btn-league-wizard-add-contact" class="btn btn-ghost" data-i18n="league.wizard.addFromContactsButton">+ Add &amp; Mark Present</button>
+        </div>
+      </div>
+
+      <div class="wizard-step hidden" id="league-wizard-step-2">
+        <p class="wizard-step-explain" data-i18n="league.wizard.step2Explain">For any team with players here tonight, pick who's running their lineup.</p>
+        <div id="league-wizard-teams-list" class="league-wizard-teams-list"></div>
+      </div>
+
+      <div class="wizard-step hidden" id="league-wizard-step-3">
+        <p class="wizard-step-explain" data-i18n="league.wizard.step3Explain">How many tables are running tonight, and how should the next match get picked once one frees up?</p>
+        <div class="row">
+          <label for="league-wizard-table-count" data-i18n="league.tableCountLabel">🎱 Number of Tables</label>
+          <input type="number" id="league-wizard-table-count" min="1" max="20" value="1">
+        </div>
+        <div class="row">
+          <label for="league-wizard-queue-mode" data-i18n="league.queueModeLabel">Queue Mode</label>
+          <select id="league-wizard-queue-mode">
+            <option value="none" data-i18n="league.queueModeNone">Manual (organizer assigns)</option>
+            <option value="perTable" data-i18n="league.queueModePerTable">Per-Table Queue</option>
+            <option value="perRoom" data-i18n="league.queueModePerRoom">Per-Room Queue</option>
+          </select>
+        </div>
+        <div class="row hidden" id="league-wizard-rotation-row">
+          <label for="league-wizard-team-rotation" data-i18n="league.teamRotationLabel">Team Rotation</label>
+          <select id="league-wizard-team-rotation">
+            <option value="rotatingLines" data-i18n="league.teamRotationRotatingLines">Rotating Lines (next pair auto-cycles)</option>
+            <option value="roundRobin" data-i18n="league.teamRotationRoundRobin">Round-Robin (everyone plays everyone)</option>
+          </select>
+          <button type="button" id="btn-league-wizard-team-rotation-info" class="format-info-btn" data-i18n-aria-label="league.teamRotationInfoAria" aria-label="What do these mean?">❓</button>
+        </div>
+      </div>
+
+      <div class="wizard-step hidden" id="league-wizard-step-4">
+        <p class="wizard-step-explain" id="league-wizard-step4-explain"></p>
+        <div id="league-wizard-match-tables" class="league-tables-grid"></div>
+      </div>
+
+      <div class="wizard-step hidden" id="league-wizard-step-5">
+        <p class="wizard-step-explain" data-i18n="league.wizard.step5Explain">Optionally cap how many games each player gets tonight, so everyone gets roughly equal table time.</p>
+        <div class="row">
+          <label for="league-wizard-max-games" data-i18n="league.maxGamesLabel">🎯 Max Games / Player (Session)</label>
+          <input type="number" id="league-wizard-max-games" min="0" max="99" value="0">
+        </div>
+        <p class="player-stats-note" data-i18n="league.maxGamesHelp">0 means unlimited. Once a member reaches this many games since the last reset, they're skipped for any new match (manual, queued, or team rotation) until you reset session counts for the next time this league meets — their lifetime stats keep counting either way.</p>
+      </div>
+
+      <div class="wizard-step hidden" id="league-wizard-step-6">
+        <p class="wizard-step-explain" data-i18n="league.wizard.step6Explain">Here's tonight's setup — everything below is already saved. Hit Finish to head to the Tables section and start playing.</p>
+        <div id="league-wizard-summary" class="wizard-summary"></div>
+      </div>
+
+    </div>
+
+    <div class="wizard-footer">
+      <button type="button" id="btn-league-wizard-back" class="btn btn-ghost" data-i18n="wizard.back">← Back</button>
+      <button type="button" id="btn-league-wizard-cancel" class="btn btn-ghost" data-i18n="common.cancel">Cancel</button>
+      <button type="button" id="btn-league-wizard-next" class="btn btn-primary" data-i18n="wizard.next">Next →</button>
+      <button type="button" id="btn-league-wizard-finish" class="btn btn-primary hidden" data-i18n="league.wizard.finishButton">🎱 Finish Setup</button>
+    </div>
+  </div>
+</div>
+
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260920z"></script>
+<script src="js/app.js?v=20260921f"></script>
 </body>
 </html>

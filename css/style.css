@@ -6894,6 +6894,419 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
 }
 
 /* ---------------------------------------------------------------------
+   League (APA-style handicap league) - see the League panel in
+   index.html and the League block in app.js. Deliberately reuses the
+   app's existing .panel/.row/.btn language rather than inventing a new
+   visual style for this one feature.
+   --------------------------------------------------------------------- */
+
+.league-new-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 12px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.league-format-row {
+  gap: 16px;
+}
+
+.league-detail {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.league-detail-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.league-detail-header h3 {
+  margin: 0;
+  flex: 1;
+  min-width: 120px;
+}
+
+.league-readonly-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 18%, var(--bg-panel));
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.league-standings-table-wrap {
+  overflow-x: auto;
+  margin-bottom: 14px;
+}
+
+.league-standings-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.league-standings-table th,
+.league-standings-table td {
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+
+.league-standings-table th {
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.league-standings-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.league-session-cap-reached {
+  color: #e08a3c;
+  font-weight: 700;
+}
+
+#league-live-hosting-section {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+#league-teams-section,
+#league-tables-section {
+  margin-bottom: 18px;
+}
+
+.league-tables-header-row {
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+
+.league-tables-header-row h4 {
+  margin: 0;
+  flex: 1 0 100%;
+}
+
+#league-table-count {
+  width: 70px;
+}
+
+/* One cell per hosted table - idle cells show an assign form (shape
+   depends on the league's queueMode), occupied cells show a compact
+   one-line score summary plus a jump-to-board shortcut. This grid is
+   what gives the organizer "a graphic representation of the running
+   tables and who is playing in them" at a glance, before ever
+   scrolling down to the full live boards. */
+.league-tables-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+  margin-top: 10px;
+}
+
+.league-table-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  /* A grid item's default min-width is "auto" (its content's natural
+     width), which can force the whole grid wider than its container and
+     push the page into horizontal scroll once names/scores get long -
+     this lets the card actually shrink to its column and wrap instead. */
+  min-width: 0;
+}
+
+.league-table-slot.is-occupied {
+  border-color: var(--accent);
+}
+
+.league-table-slot-heading {
+  font-weight: 800;
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-dim);
+}
+
+.league-table-slot-summary {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.league-table-slot-queue-label {
+  font-size: 0.95rem;
+  color: var(--text-dim);
+  font-weight: 700;
+}
+
+.league-table-slot-team-note {
+  font-size: 0.9rem;
+  color: var(--text-dim);
+}
+
+.league-queue-list {
+  list-style: decimal;
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.league-queue-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.league-queue-list li span {
+  overflow-wrap: anywhere;
+}
+
+/* Team-vs-team hosting: the Team A / Team B assignment row on a table
+   slot, then either a rotating pair of lines or a round-robin match card,
+   depending on the league's teamRotationMode. */
+.league-team-slots-row {
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+
+.league-team-slots-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.9rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  flex: 1;
+  min-width: 110px;
+}
+
+.league-team-vs-label {
+  font-weight: 800;
+  font-size: 1.05rem;
+  margin-top: 2px;
+}
+
+.league-team-line {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.league-team-line-heading {
+  font-size: 0.9rem;
+  color: var(--text-dim);
+  font-weight: 700;
+}
+
+.league-roundrobin-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.league-roundrobin-pair {
+  font-size: 0.95rem;
+  padding: 4px 6px;
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+}
+
+.league-roundrobin-pair.is-played {
+  color: var(--text-dim);
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+.league-roundrobin-pair.is-next {
+  background: color-mix(in srgb, var(--accent) 18%, var(--bg-card));
+  font-weight: 700;
+}
+
+.league-teams-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Setup Wizard: "Who's Playing Tonight" checklist and the Teams &
+   Captains step - both reuse the app's own .checkbox-row / .row / .btn
+   language, these two rules are just the list containers. */
+.league-wizard-roster-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.league-wizard-teams-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.league-wizard-team-block {
+  padding: 12px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.league-wizard-team-block h4 {
+  margin: 0 0 6px;
+}
+
+.league-wizard-team-absent-note {
+  color: var(--text-dim);
+  font-size: 0.95rem;
+}
+
+/* The "Captain" picker - shared by the Teams section on the League page
+   and the wizard's Teams & Captains step, both build this exact markup
+   (a .row > label > "Captain" text + <select>). A plain label's text and
+   its child select butt up against each other with no gap by default. */
+.league-captain-row label {
+  display: flex;
+  align-items: center;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.league-captain-row select {
+  margin-left: 10px;
+}
+
+/* League Setup Wizard - roomier card (step 4's Team A/B pickers need the
+   width) and a readable font floor throughout; scoped to this overlay
+   only so the main Game Setup Wizard keeps its own sizing. */
+#league-wizard-overlay .wizard-card {
+  max-width: 720px;
+}
+
+#league-wizard-overlay .wizard-step-explain {
+  font-size: 1rem;
+}
+
+#league-wizard-overlay .row label {
+  font-size: 0.95rem;
+}
+
+#league-wizard-overlay .checkbox-row,
+#league-wizard-overlay select,
+#league-wizard-overlay input {
+  font-size: 1rem;
+}
+
+#league-wizard-overlay .wizard-summary-row .label,
+#league-wizard-overlay .wizard-summary-row .value {
+  font-size: 1rem;
+}
+
+.league-wizard-assign-team-row {
+  margin-left: 28px;
+  margin-top: 2px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.league-wizard-add-contact-row {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  align-items: center;
+}
+
+.league-team-row {
+  padding: 10px 12px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.league-team-row-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-weight: 700;
+}
+
+.league-team-members {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.league-team-member-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg-panel));
+  border: 1px solid var(--border);
+  font-size: 0.82rem;
+}
+
+.league-team-member-chip button {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
+.league-team-member-chip button:hover {
+  opacity: 1;
+}
+
+/* ---------------------------------------------------------------------
    Print views - the bracket prints its live on-screen DOM directly (chrome
    hidden, scroll containers unclipped); the daily report has no on-screen
    DOM at all, so it renders into #day-report-print-view on demand and that
