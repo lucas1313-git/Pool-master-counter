@@ -2030,6 +2030,40 @@
   var teamStandingsList = document.getElementById("team-standings-list");
   var playerStandingsList = document.getElementById("player-standings-list");
 
+  var leaguePanelSummary = document.getElementById("league-panel-summary");
+  var leagueSelect = document.getElementById("league-select");
+  var btnLeagueImport = document.getElementById("btn-league-import");
+  var leagueImportFileInput = document.getElementById("league-import-file-input");
+  var leagueNewForm = document.getElementById("league-new-form");
+  var leagueNewNameInput = document.getElementById("league-new-name");
+  var leagueNewFormatRadios = document.getElementsByName("league-new-format");
+  var btnLeagueCreate = document.getElementById("btn-league-create");
+  var leagueDetail = document.getElementById("league-detail");
+  var leagueDetailName = document.getElementById("league-detail-name");
+  var leagueReadonlyBadge = document.getElementById("league-readonly-badge");
+  var btnLeagueExport = document.getElementById("btn-league-export");
+  var btnLeagueDelete = document.getElementById("btn-league-delete");
+  var leagueOrganizerOnly = document.getElementById("league-organizer-only");
+  var leagueAddMemberSelect = document.getElementById("league-add-member-select");
+  var btnLeagueAddMember = document.getElementById("btn-league-add-member");
+  var leagueStandingsBody = document.getElementById("league-standings-body");
+  var leagueColRemoveHeader = document.getElementById("league-col-remove-header");
+  var leagueMatchSection = document.getElementById("league-match-section");
+  var leagueMatchPlayerASelect = document.getElementById("league-match-player-a");
+  var leagueMatchPlayerBSelect = document.getElementById("league-match-player-b");
+  var btnLeagueMatchStart = document.getElementById("btn-league-match-start");
+  var leagueMatchLive = document.getElementById("league-match-live");
+  var leagueMatchNameA = document.getElementById("league-match-name-a");
+  var leagueMatchNameB = document.getElementById("league-match-name-b");
+  var leagueMatchScoreAEl = document.getElementById("league-match-score-a");
+  var leagueMatchScoreBEl = document.getElementById("league-match-score-b");
+  var btnLeagueMatchAMinus = document.getElementById("btn-league-match-a-minus");
+  var btnLeagueMatchAPlus = document.getElementById("btn-league-match-a-plus");
+  var btnLeagueMatchBMinus = document.getElementById("btn-league-match-b-minus");
+  var btnLeagueMatchBPlus = document.getElementById("btn-league-match-b-plus");
+  var btnLeagueMatchRecord = document.getElementById("btn-league-match-record");
+  var btnLeagueMatchCancel = document.getElementById("btn-league-match-cancel");
+
   var dayNotesTextarea = document.getElementById("day-notes-textarea");
   var runRecordsSummary = document.getElementById("run-records-summary");
   var dayReportFormatSelect = document.getElementById("day-report-format-select");
@@ -2766,6 +2800,7 @@
     updateDayReportRecipientsLine();
     renderRecoverDataList();
     renderReportArchiveList();
+    renderLeaguePanel();
   }
 
   // A rotation entry is { gameType, target, unit } — its own rule, not
@@ -7884,6 +7919,430 @@
       ]);
     }
     saveTeamsToStorage(SAVED_TEAMS);
+  }
+
+  // ---------------------------------------------------------------------
+  // League (APA-style handicap league) - an organizer-managed group of
+  // players competing over time, scored with the real APA Skill Level
+  // handicap system so a mismatched pairing still plays close. Local-only,
+  // no server: the organizer's device is the single source of truth for a
+  // league (isOrganizer:true there), shared to other devices purely via
+  // exportLeague/importLeagueFile (the same downloadJSON pattern every
+  // other export in this app uses) - an imported copy always renders
+  // read-only, even re-imported back onto the organizer's own device.
+  //
+  // The two charts below are independently reconstructed from APA's
+  // publicly published Skill Level handicap tables, not sourced from
+  // APA's own (unlicensed-for-third-parties) materials - treat the exact
+  // numbers as a reasonable stand-in, not a certified/tournament-legal
+  // reproduction. Easy to find and hand-edit right here if a league's
+  // current APA handbook numbers differ.
+  // ---------------------------------------------------------------------
+
+  var LEAGUES_KEY = "poolMasterCounter.leagues.v1";
+
+  function loadLeaguesFromStorage() {
+    try {
+      var raw = localStorage.getItem(LEAGUES_KEY);
+      var parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function saveLeaguesToStorage(leagues) {
+    if (noStatsMode) return;
+    try {
+      localStorage.setItem(LEAGUES_KEY, JSON.stringify(leagues));
+    } catch (e) {
+      console.warn("Could not save leagues.", e);
+    }
+  }
+
+  var LEAGUES = loadLeaguesFromStorage();
+  var activeLeagueId = LEAGUES.length ? LEAGUES[0].id : null;
+
+  // Transient (never persisted) state for whichever match is currently
+  // being scored in the "Record a Match" mini-scoreboard - cleared by
+  // Cancel or by a successful Record Result.
+  var leagueMatchPlayerA = null;
+  var leagueMatchPlayerB = null;
+  var leagueMatchScoreA = 0;
+  var leagueMatchScoreB = 0;
+
+  // 8-Ball: race-to (games needed to win a match) depends only on a
+  // player's own Skill Level, not their opponent's - that's the whole
+  // point of the handicap, a low-SL player needs fewer games than a
+  // high-SL player regardless of who they're facing.
+  var APA_8BALL_RACE_TO = { 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9 };
+  var APA_8BALL_MIN_SL = 2;
+  var APA_8BALL_MAX_SL = 9;
+
+  // 9-Ball: race-to a points total per rack, again a function of a
+  // player's own Skill Level alone. Real APA scoring also assigns each
+  // numbered ball a point value while playing (balls 1-8 worth 1 point
+  // each, the 9-ball itself worth 2) - this app doesn't simulate
+  // individual balls (no game type here does; every score is a plain
+  // running tally, same as 15 Ball Rotation's own points), so that detail
+  // is informational only, not something the +/- counters below enforce.
+  var APA_9BALL_POINTS_TARGET = { 1: 14, 2: 19, 3: 25, 4: 31, 5: 38, 6: 46, 7: 55, 8: 65, 9: 75 };
+  var APA_9BALL_MIN_SL = 1;
+  var APA_9BALL_MAX_SL = 9;
+
+  function apaSkillLevelRange(format) {
+    return format === "apa9ball" ? { min: APA_9BALL_MIN_SL, max: APA_9BALL_MAX_SL } : { min: APA_8BALL_MIN_SL, max: APA_8BALL_MAX_SL };
+  }
+
+  function apaMatchTarget(format, skillLevel) {
+    var chart = format === "apa9ball" ? APA_9BALL_POINTS_TARGET : APA_8BALL_RACE_TO;
+    var range = apaSkillLevelRange(format);
+    return chart[skillLevel] || chart[range.min];
+  }
+
+  // A starting-point suggestion only (the organizer can always override) -
+  // maps this app's own Elo-style rating (see getPlayerRating,
+  // DEFAULT_RATING=400) onto a plausible Skill Level for the chosen
+  // format. Not an APA calculation - there's no real conversion between
+  // the two systems - just a reasonable spread across the SL range keyed
+  // off where this player's rating falls within the band ratings in this
+  // app actually tend to occupy (roughly 200-700 after a handful of
+  // games), clamped at both ends for anyone outside it.
+  function suggestSkillLevelFromRating(rating, format) {
+    var range = apaSkillLevelRange(format);
+    var normalized = (rating - 200) / (700 - 200);
+    normalized = Math.max(0, Math.min(1, normalized));
+    var suggested = Math.round(range.min + normalized * (range.max - range.min));
+    return Math.max(range.min, Math.min(range.max, suggested));
+  }
+
+  function findLeagueById(id) {
+    var match = LEAGUES.filter(function (l) {
+      return l.id === id;
+    });
+    return match.length ? match[0] : null;
+  }
+
+  function createLeague(name, format) {
+    var league = {
+      id: "league-" + uid(),
+      name: name,
+      format: format,
+      isOrganizer: true,
+      createdAt: new Date().toISOString(),
+      exportedAt: null,
+      members: [],
+      matches: []
+    };
+    LEAGUES = LEAGUES.concat([league]);
+    saveLeaguesToStorage(LEAGUES);
+    activeLeagueId = league.id;
+    return league;
+  }
+
+  function deleteLeague(id) {
+    LEAGUES = LEAGUES.filter(function (l) {
+      return l.id !== id;
+    });
+    saveLeaguesToStorage(LEAGUES);
+    if (activeLeagueId === id) activeLeagueId = LEAGUES.length ? LEAGUES[0].id : null;
+  }
+
+  function addLeagueMember(league, name) {
+    var already = league.members.some(function (m) {
+      return normalizeNameKey(m.name) === normalizeNameKey(name);
+    });
+    if (already) return;
+    var suggested = suggestSkillLevelFromRating(getPlayerRating(name), league.format);
+    league.members = league.members.concat([{ name: name, skillLevel: suggested, leaguePoints: 0, matchesPlayed: 0, matchesWon: 0 }]);
+    saveLeaguesToStorage(LEAGUES);
+  }
+
+  function removeLeagueMember(league, name) {
+    league.members = league.members.filter(function (m) {
+      return m.name !== name;
+    });
+    saveLeaguesToStorage(LEAGUES);
+  }
+
+  function setLeagueMemberSkillLevel(league, name, skillLevel) {
+    var member = league.members.filter(function (m) {
+      return m.name === name;
+    })[0];
+    if (!member) return;
+    member.skillLevel = skillLevel;
+    saveLeaguesToStorage(LEAGUES);
+  }
+
+  // Standings points for one finished match - a simplified stand-in for
+  // APA's own full Team Points formula (which is built around 5-person
+  // team segments this app doesn't model): the winner banks 2 points; the
+  // loser banks 1 "close match" point if they reached at least half of
+  // their own target, otherwise 0. Simple, integer, easy to reason about -
+  // not a claim of official APA precision.
+  function leaguePointsForResult(winnerScore, winnerTarget, loserScore, loserTarget) {
+    var loserCredit = loserScore >= loserTarget / 2 ? 1 : 0;
+    return { winnerPoints: 2, loserPoints: loserCredit };
+  }
+
+  function recordLeagueMatch(league, nameA, targetA, scoreA, nameB, targetB, scoreB) {
+    var memberA = league.members.filter(function (m) {
+      return m.name === nameA;
+    })[0];
+    var memberB = league.members.filter(function (m) {
+      return m.name === nameB;
+    })[0];
+    if (!memberA || !memberB) return;
+    var aWon = scoreA >= targetA;
+    var winner = aWon ? nameA : nameB;
+    var pts = aWon ? leaguePointsForResult(scoreA, targetA, scoreB, targetB) : leaguePointsForResult(scoreB, targetB, scoreA, targetA);
+    var leaguePointsA = aWon ? pts.winnerPoints : pts.loserPoints;
+    var leaguePointsB = aWon ? pts.loserPoints : pts.winnerPoints;
+
+    league.matches = league.matches.concat([
+      {
+        id: "match-" + uid(),
+        ts: new Date().toISOString(),
+        playerA: nameA,
+        playerB: nameB,
+        skillLevelA: memberA.skillLevel,
+        skillLevelB: memberB.skillLevel,
+        targetA: targetA,
+        targetB: targetB,
+        scoreA: scoreA,
+        scoreB: scoreB,
+        winner: winner,
+        leaguePointsA: leaguePointsA,
+        leaguePointsB: leaguePointsB
+      }
+    ]);
+
+    memberA.matchesPlayed += 1;
+    memberB.matchesPlayed += 1;
+    if (aWon) memberA.matchesWon += 1;
+    else memberB.matchesWon += 1;
+    memberA.leaguePoints += leaguePointsA;
+    memberB.leaguePoints += leaguePointsB;
+
+    saveLeaguesToStorage(LEAGUES);
+  }
+
+  function leagueStandingsSorted(league) {
+    return league.members.slice().sort(function (a, b) {
+      return b.leaguePoints - a.leaguePoints || b.matchesWon - a.matchesWon || a.name.localeCompare(b.name);
+    });
+  }
+
+  function exportLeague(league) {
+    league.exportedAt = new Date().toISOString();
+    saveLeaguesToStorage(LEAGUES);
+    var payload = { exportedAt: league.exportedAt, league: league };
+    var safeName = league.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+    downloadJSON("league-" + safeName + "-" + formatDateISO(new Date()) + ".json", payload);
+  }
+
+  function importLeagueFile(file) {
+    var reader = new FileReader();
+    reader.onload = function () {
+      var data;
+      try {
+        data = JSON.parse(reader.result);
+      } catch (e) {
+        alertModal(T("league.importInvalidFile"));
+        return;
+      }
+      var imported = data && data.league ? data.league : null;
+      if (!imported || !imported.id || !Array.isArray(imported.members)) {
+        alertModal(T("league.importInvalidFile"));
+        return;
+      }
+      // An imported copy is always read-only, even re-importing what was
+      // originally this same device's own export (see the sync model in
+      // the block comment above) - the organizer flag never survives a
+      // round trip through a file.
+      imported.isOrganizer = false;
+      var proceed = function () {
+        LEAGUES = LEAGUES.filter(function (l) {
+          return l.id !== imported.id;
+        }).concat([imported]);
+        saveLeaguesToStorage(LEAGUES);
+        activeLeagueId = imported.id;
+        renderLeaguePanel();
+      };
+      if (findLeagueById(imported.id)) {
+        confirmModal(T("league.importOverwriteConfirm", { name: imported.name }), proceed, null);
+      } else {
+        proceed();
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function renderLeaguePanel() {
+    leagueSelect.innerHTML = "";
+    LEAGUES.forEach(function (l) {
+      var opt = document.createElement("option");
+      opt.value = l.id;
+      opt.textContent = l.name + (l.isOrganizer ? "" : " (" + T("league.importedSuffix") + ")");
+      leagueSelect.appendChild(opt);
+    });
+    var newOpt = document.createElement("option");
+    newOpt.value = "__new__";
+    newOpt.textContent = T("league.newLeagueOption");
+    leagueSelect.appendChild(newOpt);
+
+    if (!activeLeagueId || !findLeagueById(activeLeagueId)) {
+      activeLeagueId = LEAGUES.length ? LEAGUES[0].id : null;
+    }
+    leagueSelect.value = activeLeagueId || "__new__";
+
+    var league = activeLeagueId ? findLeagueById(activeLeagueId) : null;
+    leagueNewForm.classList.toggle("hidden", !!league);
+    leagueDetail.classList.toggle("hidden", !league);
+
+    leaguePanelSummary.textContent = league ? T("league.summaryLine", { name: league.name, count: league.members.length }) : T("league.summaryNone");
+
+    if (!league) return;
+
+    leagueDetailName.textContent = league.name + " — " + (league.format === "apa9ball" ? T("league.format9Ball") : T("league.format8Ball"));
+    leagueReadonlyBadge.classList.toggle("hidden", !!league.isOrganizer);
+    leagueOrganizerOnly.classList.toggle("hidden", !league.isOrganizer);
+    leagueMatchSection.classList.toggle("hidden", !league.isOrganizer);
+    leagueColRemoveHeader.classList.toggle("hidden", !league.isOrganizer);
+
+    // Add-member candidates: known players not already in the league.
+    leagueAddMemberSelect.innerHTML = "";
+    var memberNameKeys = league.members.map(function (m) {
+      return normalizeNameKey(m.name);
+    });
+    var candidates = state.players.filter(function (p) {
+      return memberNameKeys.indexOf(normalizeNameKey(p.name)) === -1;
+    });
+    candidates.forEach(function (p) {
+      var opt = document.createElement("option");
+      opt.value = p.name;
+      opt.textContent = p.name;
+      leagueAddMemberSelect.appendChild(opt);
+    });
+    btnLeagueAddMember.disabled = candidates.length === 0;
+
+    leagueStandingsBody.innerHTML = "";
+    var sorted = leagueStandingsSorted(league);
+    if (sorted.length === 0) {
+      var emptyRow = document.createElement("tr");
+      var emptyCell = document.createElement("td");
+      emptyCell.colSpan = league.isOrganizer ? 5 : 4;
+      emptyCell.className = "empty-hint";
+      emptyCell.textContent = T("league.noMembersYet");
+      emptyRow.appendChild(emptyCell);
+      leagueStandingsBody.appendChild(emptyRow);
+    } else {
+      sorted.forEach(function (m) {
+        var row = document.createElement("tr");
+
+        var nameCell = document.createElement("td");
+        nameCell.textContent = m.name;
+        row.appendChild(nameCell);
+
+        var slCell = document.createElement("td");
+        if (league.isOrganizer) {
+          var range = apaSkillLevelRange(league.format);
+          var slInput = document.createElement("input");
+          slInput.type = "number";
+          slInput.min = range.min;
+          slInput.max = range.max;
+          slInput.value = m.skillLevel;
+          slInput.className = "league-sl-input";
+          slInput.addEventListener("change", function () {
+            var v = Math.max(range.min, Math.min(range.max, parseInt(slInput.value, 10) || range.min));
+            setLeagueMemberSkillLevel(league, m.name, v);
+            renderLeaguePanel();
+          });
+          slCell.appendChild(slInput);
+        } else {
+          slCell.textContent = m.skillLevel;
+        }
+        row.appendChild(slCell);
+
+        var ptsCell = document.createElement("td");
+        ptsCell.textContent = m.leaguePoints;
+        row.appendChild(ptsCell);
+
+        var recordCell = document.createElement("td");
+        recordCell.textContent = m.matchesWon + "-" + (m.matchesPlayed - m.matchesWon);
+        row.appendChild(recordCell);
+
+        if (league.isOrganizer) {
+          var removeCell = document.createElement("td");
+          var removeBtn = document.createElement("button");
+          removeBtn.type = "button";
+          removeBtn.className = "btn btn-ghost";
+          removeBtn.textContent = "✕";
+          removeBtn.setAttribute("aria-label", T("league.removeMemberAria", { name: m.name }));
+          removeBtn.addEventListener("click", function () {
+            removeLeagueMember(league, m.name);
+            renderLeaguePanel();
+          });
+          removeCell.appendChild(removeBtn);
+          row.appendChild(removeCell);
+        }
+
+        leagueStandingsBody.appendChild(row);
+      });
+    }
+
+    if (league.isOrganizer) {
+      [leagueMatchPlayerASelect, leagueMatchPlayerBSelect].forEach(function (sel) {
+        var prevValue = sel.value;
+        sel.innerHTML = "";
+        league.members.forEach(function (m) {
+          var opt = document.createElement("option");
+          opt.value = m.name;
+          opt.textContent = m.name + " (SL " + m.skillLevel + ")";
+          sel.appendChild(opt);
+        });
+        if (
+          prevValue &&
+          league.members.some(function (m) {
+            return m.name === prevValue;
+          })
+        ) {
+          sel.value = prevValue;
+        }
+      });
+      btnLeagueMatchStart.disabled = league.members.length < 2;
+    }
+
+    var matchInProgress = !!(leagueMatchPlayerA && leagueMatchPlayerB);
+    leagueMatchLive.classList.toggle("hidden", !matchInProgress);
+    if (matchInProgress) {
+      var memberA = league.members.filter(function (m) {
+        return m.name === leagueMatchPlayerA;
+      })[0];
+      var memberB = league.members.filter(function (m) {
+        return m.name === leagueMatchPlayerB;
+      })[0];
+      if (!memberA || !memberB) {
+        // A member was removed mid-match - bail out of the match cleanly
+        // rather than leave the live scoreboard pointing at a name that's
+        // no longer in the league.
+        leagueMatchPlayerA = null;
+        leagueMatchPlayerB = null;
+        leagueMatchScoreA = 0;
+        leagueMatchScoreB = 0;
+        leagueMatchLive.classList.add("hidden");
+      } else {
+        var targetA = apaMatchTarget(league.format, memberA.skillLevel);
+        var targetB = apaMatchTarget(league.format, memberB.skillLevel);
+        leagueMatchNameA.textContent = leagueMatchPlayerA + " (SL " + memberA.skillLevel + ")";
+        leagueMatchNameB.textContent = leagueMatchPlayerB + " (SL " + memberB.skillLevel + ")";
+        leagueMatchScoreAEl.textContent = leagueMatchScoreA + " / " + targetA;
+        leagueMatchScoreBEl.textContent = leagueMatchScoreB + " / " + targetB;
+        leagueMatchScoreAEl.classList.toggle("is-target-reached", leagueMatchScoreA >= targetA);
+        leagueMatchScoreBEl.classList.toggle("is-target-reached", leagueMatchScoreB >= targetB);
+        btnLeagueMatchRecord.disabled = !(leagueMatchScoreA >= targetA || leagueMatchScoreB >= targetB);
+      }
+    }
   }
 
   function loadRotationsFromStorage() {
@@ -20760,6 +21219,107 @@
     });
   });
 
+  leagueSelect.addEventListener("change", function () {
+    activeLeagueId = leagueSelect.value === "__new__" ? null : leagueSelect.value;
+    renderLeaguePanel();
+  });
+  btnLeagueCreate.addEventListener("click", function () {
+    var name = leagueNewNameInput.value.trim();
+    if (!name) return;
+    var format = "apa8ball";
+    Array.prototype.forEach.call(leagueNewFormatRadios, function (r) {
+      if (r.checked) format = r.value;
+    });
+    createLeague(name, format);
+    leagueNewNameInput.value = "";
+    renderLeaguePanel();
+  });
+  btnLeagueDelete.addEventListener("click", function () {
+    var league = findLeagueById(activeLeagueId);
+    if (!league) return;
+    confirmModal(T("league.deleteConfirm", { name: league.name }), function () {
+      deleteLeague(league.id);
+      renderLeaguePanel();
+    });
+  });
+  btnLeagueAddMember.addEventListener("click", function () {
+    var league = findLeagueById(activeLeagueId);
+    if (!league || !leagueAddMemberSelect.value) return;
+    addLeagueMember(league, leagueAddMemberSelect.value);
+    renderLeaguePanel();
+  });
+  btnLeagueExport.addEventListener("click", function () {
+    var league = findLeagueById(activeLeagueId);
+    if (league) exportLeague(league);
+    renderLeaguePanel();
+  });
+  btnLeagueImport.addEventListener("click", function () {
+    leagueImportFileInput.click();
+  });
+  leagueImportFileInput.addEventListener("change", function () {
+    var file = leagueImportFileInput.files[0];
+    if (file) importLeagueFile(file);
+    leagueImportFileInput.value = "";
+  });
+
+  btnLeagueMatchStart.addEventListener("click", function () {
+    var league = findLeagueById(activeLeagueId);
+    if (!league) return;
+    var a = leagueMatchPlayerASelect.value;
+    var b = leagueMatchPlayerBSelect.value;
+    if (!a || !b || a === b) {
+      alertModal(T("league.matchNeedsTwoDistinct"));
+      return;
+    }
+    leagueMatchPlayerA = a;
+    leagueMatchPlayerB = b;
+    leagueMatchScoreA = 0;
+    leagueMatchScoreB = 0;
+    renderLeaguePanel();
+  });
+  btnLeagueMatchAMinus.addEventListener("click", function () {
+    leagueMatchScoreA = Math.max(0, leagueMatchScoreA - 1);
+    renderLeaguePanel();
+  });
+  btnLeagueMatchAPlus.addEventListener("click", function () {
+    leagueMatchScoreA += 1;
+    renderLeaguePanel();
+  });
+  btnLeagueMatchBMinus.addEventListener("click", function () {
+    leagueMatchScoreB = Math.max(0, leagueMatchScoreB - 1);
+    renderLeaguePanel();
+  });
+  btnLeagueMatchBPlus.addEventListener("click", function () {
+    leagueMatchScoreB += 1;
+    renderLeaguePanel();
+  });
+  btnLeagueMatchCancel.addEventListener("click", function () {
+    leagueMatchPlayerA = null;
+    leagueMatchPlayerB = null;
+    leagueMatchScoreA = 0;
+    leagueMatchScoreB = 0;
+    renderLeaguePanel();
+  });
+  btnLeagueMatchRecord.addEventListener("click", function () {
+    var league = findLeagueById(activeLeagueId);
+    if (!league || !leagueMatchPlayerA || !leagueMatchPlayerB) return;
+    var memberA = league.members.filter(function (m) {
+      return m.name === leagueMatchPlayerA;
+    })[0];
+    var memberB = league.members.filter(function (m) {
+      return m.name === leagueMatchPlayerB;
+    })[0];
+    if (!memberA || !memberB) return;
+    var targetA = apaMatchTarget(league.format, memberA.skillLevel);
+    var targetB = apaMatchTarget(league.format, memberB.skillLevel);
+    recordLeagueMatch(league, leagueMatchPlayerA, targetA, leagueMatchScoreA, leagueMatchPlayerB, targetB, leagueMatchScoreB);
+    leagueMatchPlayerA = null;
+    leagueMatchPlayerB = null;
+    leagueMatchScoreA = 0;
+    leagueMatchScoreB = 0;
+    renderLeaguePanel();
+  });
+
   btnTestOnboarding.addEventListener("click", openOnboarding);
   btnOpenWizard.addEventListener("click", openWizard);
   btnWizardClose.addEventListener("click", closeWizard);
@@ -20861,6 +21421,7 @@
   wireCollapsiblePanel("game-setup-panel", "btn-toggle-game-setup-panel");
   wireCollapsiblePanel("players-panel", "btn-toggle-players-panel");
   wireCollapsiblePanel("standings-panel", "btn-toggle-standings-panel");
+  wireCollapsiblePanel("league-panel", "btn-toggle-league-panel");
   wireCollapsiblePanel("history-panel", "btn-toggle-history-panel");
   wireCollapsiblePanel("day-notes-panel", "btn-toggle-day-notes-panel");
   wireCollapsiblePanel("report-archive-panel", "btn-toggle-report-archive-panel");

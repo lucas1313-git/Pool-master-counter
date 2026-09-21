@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260920t">
+<link rel="stylesheet" href="css/style.css?v=20260920u">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -290,6 +290,98 @@
       <ul id="team-standings-list" class="standings-list"></ul>
       <h2 id="standings-title-individual" data-i18n="standings.individual">Individual</h2>
       <ul id="player-standings-list" class="standings-list"></ul>
+    </div>
+  </section>
+
+  <section class="panel collapsible-panel collapsed" id="league-panel">
+    <button type="button" class="panel-toggle" id="btn-toggle-league-panel" aria-expanded="false" aria-controls="league-panel-body">
+      <h2 data-i18n="league.heading">🏆 League</h2>
+      <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+    </button>
+    <p class="panel-summary" id="league-panel-summary"></p>
+    <div class="panel-body" id="league-panel-body">
+      <p class="player-stats-note" data-i18n="league.intro">An APA-style handicap league for a fixed group of players — Skill Levels handicap the race so a mismatch still plays close. No server: the organizer exports a league file, everyone else imports it to see standings.</p>
+
+      <div class="row">
+        <select id="league-select"></select>
+        <button type="button" id="btn-league-import" class="btn btn-ghost" data-i18n="league.importButton">📥 Import League</button>
+        <input type="file" id="league-import-file-input" accept="application/json" class="hidden">
+      </div>
+
+      <div id="league-new-form" class="league-new-form hidden">
+        <div class="row">
+          <label for="league-new-name" data-i18n="league.newNameLabel">League name</label>
+          <input type="text" id="league-new-name" maxlength="60">
+        </div>
+        <div class="row league-format-row">
+          <label><input type="radio" name="league-new-format" value="apa8ball" checked> <span data-i18n="league.format8Ball">APA 8-Ball</span></label>
+          <label><input type="radio" name="league-new-format" value="apa9ball"> <span data-i18n="league.format9Ball">APA 9-Ball</span></label>
+        </div>
+        <button type="button" id="btn-league-create" class="btn btn-primary" data-i18n="league.createButton">Create League</button>
+      </div>
+
+      <div id="league-detail" class="league-detail hidden">
+        <div class="league-detail-header">
+          <h3 id="league-detail-name"></h3>
+          <span id="league-readonly-badge" class="league-readonly-badge hidden" data-i18n="league.readOnlyBadge">Imported — read-only</span>
+          <button type="button" id="btn-league-export" class="btn btn-ghost" data-i18n="league.exportButton">📤 Export League</button>
+          <button type="button" id="btn-league-delete" class="btn btn-danger" data-i18n="league.deleteButton">🗑️ Delete League</button>
+        </div>
+
+        <div id="league-organizer-only">
+          <h4 data-i18n="league.membersHeading">Members</h4>
+          <div class="row">
+            <select id="league-add-member-select"></select>
+            <button type="button" id="btn-league-add-member" class="btn btn-ghost" data-i18n="league.addMemberButton">+ Add</button>
+          </div>
+        </div>
+
+        <h4 data-i18n="league.standingsHeading">Standings</h4>
+        <div class="league-standings-table-wrap">
+          <table class="league-standings-table" id="league-standings-table">
+            <thead>
+              <tr>
+                <th data-i18n="league.colMember">Member</th>
+                <th data-i18n="league.colSkillLevel">SL</th>
+                <th data-i18n="league.colPoints">Points</th>
+                <th data-i18n="league.colRecord">W-L</th>
+                <th id="league-col-remove-header" class="hidden"></th>
+              </tr>
+            </thead>
+            <tbody id="league-standings-body"></tbody>
+          </table>
+        </div>
+
+        <div id="league-match-section">
+          <h4 data-i18n="league.recordMatchHeading">Record a Match</h4>
+          <div class="row">
+            <select id="league-match-player-a"></select>
+            <span data-i18n="league.vsLabel">vs</span>
+            <select id="league-match-player-b"></select>
+            <button type="button" id="btn-league-match-start" class="btn btn-ghost" data-i18n="league.startMatchButton">Start Match</button>
+          </div>
+          <div id="league-match-live" class="league-match-live hidden">
+            <div class="league-match-side">
+              <div class="league-match-side-name" id="league-match-name-a"></div>
+              <div class="league-match-side-score" id="league-match-score-a"></div>
+              <div class="row">
+                <button type="button" id="btn-league-match-a-minus" class="btn btn-ghost">−</button>
+                <button type="button" id="btn-league-match-a-plus" class="btn btn-ghost">+</button>
+              </div>
+            </div>
+            <div class="league-match-side">
+              <div class="league-match-side-name" id="league-match-name-b"></div>
+              <div class="league-match-side-score" id="league-match-score-b"></div>
+              <div class="row">
+                <button type="button" id="btn-league-match-b-minus" class="btn btn-ghost">−</button>
+                <button type="button" id="btn-league-match-b-plus" class="btn btn-ghost">+</button>
+              </div>
+            </div>
+            <button type="button" id="btn-league-match-record" class="btn btn-primary" disabled data-i18n="league.recordResultButton">Record Result</button>
+            <button type="button" id="btn-league-match-cancel" class="btn btn-ghost" data-i18n="common.cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -1629,6 +1721,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260920t"></script>
+<script src="js/app.js?v=20260920u"></script>
 </body>
 </html>

@@ -6821,6 +6821,124 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
 }
 
 /* ---------------------------------------------------------------------
+   League (APA-style handicap league) - see the League panel in
+   index.html and the League block in app.js. Deliberately reuses the
+   app's existing .panel/.row/.btn language rather than inventing a new
+   visual style for this one feature.
+   --------------------------------------------------------------------- */
+
+.league-new-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 12px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.league-format-row {
+  gap: 16px;
+}
+
+.league-detail {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.league-detail-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.league-detail-header h3 {
+  margin: 0;
+  flex: 1;
+  min-width: 120px;
+}
+
+.league-readonly-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 18%, var(--bg-panel));
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.league-standings-table-wrap {
+  overflow-x: auto;
+  margin-bottom: 14px;
+}
+
+.league-standings-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.league-standings-table th,
+.league-standings-table td {
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+
+.league-standings-table th {
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.league-standings-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.league-match-live {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 20px;
+  margin-top: 12px;
+  padding: 14px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.league-match-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 110px;
+}
+
+.league-match-side-name {
+  font-weight: 700;
+}
+
+.league-match-side-score {
+  font-size: 1.8rem;
+  font-weight: 800;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.league-match-side-score.is-target-reached {
+  color: #6fcf6f;
+}
+
+/* ---------------------------------------------------------------------
    Print views - the bracket prints its live on-screen DOM directly (chrome
    hidden, scroll containers unclipped); the daily report has no on-screen
    DOM at all, so it renders into #day-report-print-view on demand and that
