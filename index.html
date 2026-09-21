@@ -683,6 +683,19 @@
   </div>
 </div>
 
+<div id="multi-table-host-overlay" class="confirm-modal-overlay hidden">
+  <div class="confirm-modal-card">
+    <p class="confirm-modal-message" data-i18n="multiTable.promptTitle">🖥️ Host Multiple Tables</p>
+    <p class="player-stats-note" id="multi-table-host-body" data-i18n="multiTable.promptBody">Each table needs its own device connected to the same local server. Open Group Session to connect this device as the host, or download the app if this page can't host directly.</p>
+    <p class="player-stats-note hidden" id="multi-table-host-link-note"></p>
+    <div class="confirm-modal-actions">
+      <button type="button" id="btn-multi-table-open-group-session" class="btn btn-primary" data-i18n="multiTable.openGroupSessionButton">🔗 Open Group Session</button>
+      <button type="button" id="btn-multi-table-download" class="btn btn-ghost" data-i18n="multiTable.downloadButton">⬇️ Download &amp; Take My Setup</button>
+      <button type="button" id="btn-multi-table-close" class="btn btn-ghost" data-i18n="common.close">Close</button>
+    </div>
+  </div>
+</div>
+
 <div id="fake-ad-modal-overlay" class="confirm-modal-overlay hidden">
   <div class="confirm-modal-card">
     <p class="confirm-modal-message" id="fake-ad-modal-message" data-i18n="paywall.adPlaying">📺 Ad playing…</p>
@@ -1606,6 +1619,12 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
         <input type="number" id="tournament-table-count" min="1" max="20" value="1">
       </label>
 
+      <label class="wizard-format-option hidden" id="tournament-multi-client-row">
+        <input type="checkbox" id="tournament-multi-client-checkbox">
+        <span data-i18n="multiTable.checkboxLabel">🖥️ Each table runs its own device</span>
+      </label>
+      <p class="player-stats-note hidden" id="tournament-multi-client-note" data-i18n="multiTable.wizardNotice">Hosting separate devices per table needs the local server running — you'll get a link to connect them, or to download the app, right after you start.</p>
+
       <datalist id="tournament-team-options"></datalist>
       <ul id="tournament-player-checklist" class="tournament-player-checklist"></ul>
       <p class="player-stats-note hidden" id="tournament-team-preview"></p>
@@ -1828,6 +1847,11 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
           </select>
           <button type="button" id="btn-league-wizard-team-rotation-info" class="format-info-btn" data-i18n-aria-label="league.teamRotationInfoAria" aria-label="What do these mean?">❓</button>
         </div>
+        <label class="wizard-format-option hidden" id="league-wizard-multi-client-row">
+          <input type="checkbox" id="league-wizard-multi-client-checkbox">
+          <span data-i18n="multiTable.checkboxLabel">🖥️ Each table runs its own device</span>
+        </label>
+        <p class="player-stats-note hidden" id="league-wizard-multi-client-note" data-i18n="multiTable.wizardNotice">Hosting separate devices per table needs the local server running — you'll get a link to connect them, or to download the app, right after you start.</p>
       </div>
 
       <div class="wizard-step hidden" id="league-wizard-step-4">
@@ -1862,6 +1886,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260921g"></script>
+<script src="js/app.js?v=20260921h"></script>
 </body>
 </html>
