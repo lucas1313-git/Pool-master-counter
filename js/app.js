@@ -1921,6 +1921,9 @@
   var btnFairRaceInfo = document.getElementById("btn-fair-race-info");
   var btnFairRaceInfoSession = document.getElementById("btn-fair-race-info-session");
   var tournamentTableCountInput = document.getElementById("tournament-table-count");
+  var tournamentMultiClientRow = document.getElementById("tournament-multi-client-row");
+  var tournamentMultiClientCheckbox = document.getElementById("tournament-multi-client-checkbox");
+  var tournamentMultiClientNote = document.getElementById("tournament-multi-client-note");
   var tournamentSeedModeRadios = document.getElementsByName("tournament-seed-mode");
   var tournamentFormatInfoOverlay = document.getElementById("tournament-format-info-overlay");
   var tournamentFormatInfoTitle = document.getElementById("tournament-format-info-title");
@@ -2083,6 +2086,15 @@
   var btnLeagueWizardAddContact = document.getElementById("btn-league-wizard-add-contact");
   var leagueWizardTeamsList = document.getElementById("league-wizard-teams-list");
   var leagueWizardTableCountInput = document.getElementById("league-wizard-table-count");
+  var leagueWizardMultiClientRow = document.getElementById("league-wizard-multi-client-row");
+  var leagueWizardMultiClientCheckbox = document.getElementById("league-wizard-multi-client-checkbox");
+  var leagueWizardMultiClientNote = document.getElementById("league-wizard-multi-client-note");
+
+  var multiTableHostOverlay = document.getElementById("multi-table-host-overlay");
+  var multiTableHostLinkNote = document.getElementById("multi-table-host-link-note");
+  var btnMultiTableOpenGroupSession = document.getElementById("btn-multi-table-open-group-session");
+  var btnMultiTableDownload = document.getElementById("btn-multi-table-download");
+  var btnMultiTableClose = document.getElementById("btn-multi-table-close");
   var leagueWizardQueueModeSelect = document.getElementById("league-wizard-queue-mode");
   var leagueWizardRotationRow = document.getElementById("league-wizard-rotation-row");
   var leagueWizardTeamRotationSelect = document.getElementById("league-wizard-team-rotation");
@@ -9944,6 +9956,7 @@
     leagueWizardQueueModeSelect.value = league.queueMode;
     leagueWizardTeamRotationSelect.value = league.teamRotationMode;
     leagueWizardRotationRow.classList.toggle("hidden", league.queueMode !== "perTable" || !league.teams.length);
+    toggleLeagueWizardMultiClientVisibility();
   }
 
   // Step 4 only builds real UI for the one genuinely new case this wizard
@@ -10114,8 +10127,110 @@
   }
 
   function closeLeagueWizard() {
+    var wantsMultiClient = leagueWizardMultiClientCheckbox.checked;
     leagueWizardOverlay.classList.add("hidden");
     renderLeaguePage();
+    if (wantsMultiClient) openMultiTableHostPrompt("wizardLeague");
+  }
+
+  // ---------------------------------------------------------------------
+  // Multi-table hosting handoff - "each table runs its own device" (asked
+  // in both the Tournament setup panel and the League wizard's Tables
+  // step, once table count > 1). Running several independently-scored
+  // tables on separate devices needs Group Session's real LAN relay
+  // server (see startHostingSession) - the static GitHub Pages copy of
+  // this app can't host it. This section just points the organizer at
+  // Group Session (which already detects that and offers the desktop
+  // app download on its own), and separately offers a way to carry
+  // today's setup over to that other device: export a full backup and
+  // hand back a link of the shape ?loadsetting=true&settingStep=
+  // wizardGame|wizardLeague. Opening that link on the destination device
+  // prompts to pick that exported file, then reopens the same wizard
+  // once the import (which always ends in a reload - see finishImport)
+  // has actually landed - see checkLoadSettingUrlParam/
+  // checkPendingWizardReopen below, and the PENDING_WIZARD_REOPEN_KEY
+  // localStorage flag that survives that reload.
+  // ---------------------------------------------------------------------
+
+  function toggleTournamentMultiClientVisibility() {
+    var count = parseInt(tournamentTableCountInput.value, 10) || 1;
+    var eligible = count > 1;
+    tournamentMultiClientRow.classList.toggle("hidden", !eligible);
+    if (!eligible) tournamentMultiClientCheckbox.checked = false;
+    tournamentMultiClientNote.classList.toggle("hidden", !eligible || !tournamentMultiClientCheckbox.checked);
+  }
+
+  function toggleLeagueWizardMultiClientVisibility() {
+    var count = parseInt(leagueWizardTableCountInput.value, 10) || 1;
+    var eligible = count > 1;
+    leagueWizardMultiClientRow.classList.toggle("hidden", !eligible);
+    if (!eligible) leagueWizardMultiClientCheckbox.checked = false;
+    leagueWizardMultiClientNote.classList.toggle("hidden", !eligible || !leagueWizardMultiClientCheckbox.checked);
+  }
+
+  var multiTableHostSettingStep = null;
+
+  function openMultiTableHostPrompt(settingStep) {
+    multiTableHostSettingStep = settingStep;
+    multiTableHostLinkNote.classList.add("hidden");
+    multiTableHostLinkNote.textContent = "";
+    multiTableHostOverlay.classList.remove("hidden");
+  }
+
+  function closeMultiTableHostPrompt() {
+    multiTableHostOverlay.classList.add("hidden");
+  }
+
+  // Same full backup Export All Data already produces - the in-progress
+  // tournament/league setup lives in the same global state/TOURNAMENT/
+  // LEAGUES data that captures, so there's nothing wizard-specific to
+  // export separately.
+  function downloadSetupForMultiTableHost() {
+    exportAllData();
+    var step = multiTableHostSettingStep || "wizardGame";
+    var url = location.origin + location.pathname + "?loadsetting=true&settingStep=" + step;
+    multiTableHostLinkNote.textContent = T("multiTable.linkNote", { url: url });
+    multiTableHostLinkNote.classList.remove("hidden");
+  }
+
+  var PENDING_WIZARD_REOPEN_KEY = "poolMasterCounter.pendingWizardReopen.v1";
+
+  function checkLoadSettingUrlParam() {
+    var params;
+    try {
+      params = new URLSearchParams(location.search);
+    } catch (e) {
+      return;
+    }
+    if (params.get("loadsetting") !== "true") return;
+    var settingStep = params.get("settingStep") === "wizardLeague" ? "wizardLeague" : "wizardGame";
+    // Strip the params immediately - importAllData's own flow always
+    // ends in a location.reload() of the current URL, and this must not
+    // fire the prompt a second time once that happens.
+    history.replaceState({}, "", location.pathname);
+    confirmModal(T("multiTable.loadSettingPrompt"), function () {
+      try {
+        localStorage.setItem(PENDING_WIZARD_REOPEN_KEY, settingStep);
+      } catch (e) {
+        console.warn("Could not save pending wizard reopen.", e);
+      }
+      importFileInput.click();
+    });
+  }
+
+  function checkPendingWizardReopen() {
+    var settingStep;
+    try {
+      settingStep = localStorage.getItem(PENDING_WIZARD_REOPEN_KEY);
+    } catch (e) {
+      settingStep = null;
+    }
+    if (!settingStep) return;
+    try {
+      localStorage.removeItem(PENDING_WIZARD_REOPEN_KEY);
+    } catch (e) {}
+    if (settingStep === "wizardLeague") openLeagueWizard();
+    else openWizard();
   }
 
   function loadRotationsFromStorage() {
@@ -12162,7 +12277,8 @@
       resetSnapshots: RESET_SNAPSHOTS,
       reportArchive: REPORT_ARCHIVE,
       tournament: TOURNAMENT,
-      tournamentResults: TOURNAMENT_RESULTS
+      tournamentResults: TOURNAMENT_RESULTS,
+      leagues: LEAGUES
     };
   }
 
@@ -12910,6 +13026,8 @@
           var importedRatings = data.ratings && typeof data.ratings === "object" ? data.ratings : {};
           var importedContacts = data.contacts && typeof data.contacts === "object" ? data.contacts : {};
           var importedPlayerAdded = data.playerAdded && typeof data.playerAdded === "object" ? data.playerAdded : {};
+          var importedLeagues = Array.isArray(data.leagues) ? data.leagues : [];
+          importedLeagues.forEach(normalizeLeagueDefaults);
 
           var importedRosterPlayerNames = [];
           importedRosters.forEach(function (r) {
@@ -13013,6 +13131,9 @@
 
             var mergedPlayerStats = mergePlayerStatsData(PLAYER_STATS, importedPlayerStats, extraSessions);
             var rosterMerge = mergeRosterLists(SAVED_ROSTERS, importedRosters);
+            var leagueMerge = mergeArrayByKey(LEAGUES, importedLeagues, function (l) {
+              return l.id;
+            });
             var teamMerge = mergeTeamLists(SAVED_TEAMS, importedTeams);
             var mergedRatings = mergeRatingsData(PLAYER_RATINGS, importedRatings);
             var mergedContacts = mergeContactsData(PLAYER_CONTACTS, importedContacts);
@@ -13134,6 +13255,7 @@
             localStorage.setItem(REPORT_ARCHIVE_KEY, JSON.stringify(mergedReportArchive));
             if (mergedTournament) localStorage.setItem(TOURNAMENT_KEY, JSON.stringify(mergedTournament));
             localStorage.setItem(TOURNAMENT_RESULTS_KEY, JSON.stringify(mergedTournamentResults));
+            localStorage.setItem(LEAGUES_KEY, JSON.stringify(leagueMerge));
 
             function finishImport() {
               if (data.exportedAt) {
@@ -21671,6 +21793,7 @@
     TOURNAMENT.tableCount = Math.max(1, parseInt(tournamentTableCountInput.value, 10) || 1);
     saveTournamentToStorage(TOURNAMENT);
     renderTournamentPage();
+    if (tournamentMultiClientCheckbox.checked) openMultiTableHostPrompt("wizardGame");
   }
 
   function abandonTournament() {
@@ -22703,6 +22826,7 @@
       tournamentSetupPanel.classList.remove("hidden");
       renderTournamentPlayerChecklist();
       tournamentTargetUnit.textContent = GAME_TYPES[tournamentGameTypeSelect.value].unit;
+      toggleTournamentMultiClientVisibility();
     }
   }
 
@@ -23556,7 +23680,10 @@
     if (!league) return;
     league.tableCount = Math.max(1, Math.min(20, parseInt(leagueWizardTableCountInput.value, 10) || 1));
     saveLeaguesToStorage(LEAGUES);
+    toggleLeagueWizardMultiClientVisibility();
   });
+  leagueWizardTableCountInput.addEventListener("input", toggleLeagueWizardMultiClientVisibility);
+  leagueWizardMultiClientCheckbox.addEventListener("change", toggleLeagueWizardMultiClientVisibility);
   leagueWizardQueueModeSelect.addEventListener("change", function () {
     var league = leagueWizardOrganizerLeague();
     if (!league) return;
@@ -23968,6 +24095,17 @@
     else leaveSession();
   });
 
+  btnMultiTableOpenGroupSession.addEventListener("click", function () {
+    closeMultiTableHostPrompt();
+    openGroupSessionPage();
+    if (networkMode !== "host") startHostingSession();
+  });
+  btnMultiTableDownload.addEventListener("click", downloadSetupForMultiTableHost);
+  btnMultiTableClose.addEventListener("click", closeMultiTableHostPrompt);
+  multiTableHostOverlay.addEventListener("click", function (e) {
+    if (e.target === multiTableHostOverlay) closeMultiTableHostPrompt();
+  });
+
   btnContactSheetSelectAll.addEventListener("click", function () {
     var names = contactSheetAllNames();
     var allSelected = names.length > 0 && names.every(function (n) {
@@ -24060,6 +24198,8 @@
   tournamentPlayerChecklist.addEventListener("change", refreshTournamentTeamUi);
   tournamentPlayerChecklist.addEventListener("input", refreshTournamentTeamUi);
   tournamentTeamsEnabledCheckbox.addEventListener("change", renderTournamentTeamPreview);
+  tournamentTableCountInput.addEventListener("input", toggleTournamentMultiClientVisibility);
+  tournamentMultiClientCheckbox.addEventListener("change", toggleTournamentMultiClientVisibility);
   btnFairRaceInfo.addEventListener("click", function () {
     alertModal(T("tournament.fairRaceExplain"));
   });
@@ -24215,6 +24355,9 @@
   // Also re-check periodically so a session left open continuously for
   // 12+ hours still gets the pop-up, not just a fresh app launch.
   setInterval(maybeAutoShowLeaderboard, 5 * 60 * 1000);
+
+  checkPendingWizardReopen();
+  checkLoadSettingUrlParam();
   }
 
   // ---------------------------------------------------------------------
