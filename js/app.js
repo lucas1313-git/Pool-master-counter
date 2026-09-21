@@ -5715,6 +5715,109 @@
     if (changed) saveRunRecordsToStorage(RUN_RECORDS);
   }
 
+  // One-time cleanup for a real bug in the bumpRunForPlayer above (now
+  // fixed): an earlier version counted "balls in a row" as the SUM of
+  // each ball's point value instead of a flat +1 per ball, so any run
+  // recorded while playing 15 Ball Rotation before the fix may be
+  // inflated - potting the 15-ball then the 8-ball wrongly recorded as
+  // "23 in a row" instead of the correct "2". There's no way to recover
+  // the true ball count from an already-inflated stored value, so
+  // rather than guess a "corrected" number, this clears just the
+  // specific run-record field(s) provably written during a 15 Ball
+  // Rotation game for that same player - nothing else (no game history,
+  // no player stats, no ratings, no other game type's run records) is
+  // touched. Gated by RUN_RECORDS_FIX_KEY so it only actually does
+  // anything once, even though boot() calls it every time.
+  var RUN_RECORDS_FIX_KEY = "poolMasterCounter.runRecordsFix.v1";
+
+  // True if `name` was a participant in a 15 Ball Rotation game (in
+  // either the live state.gameHistory or that player's archived
+  // PLAYER_STATS sessions) whose play window covers `ts` - a game's own
+  // recorded ts marks when it *ended*, so the window is
+  // [ts - durationMs, ts]; checkRunRecords stamps a run record's own ts
+  // live, mid-game, so a genuinely bug-affected record's ts always
+  // falls inside that same game's window. A small slack accounts for
+  // clock/serialization jitter, not for matching a different game.
+  function playerWasIn15BallRotationWindow(name, ts) {
+    var target = new Date(ts).getTime();
+    if (isNaN(target)) return false;
+    var nameKey = normalizeNameKey(name);
+    function entryCovers(entry) {
+      if (!entry || entry.gameType !== "15ballrotation") return false;
+      var end = new Date(entry.ts).getTime();
+      if (isNaN(end)) return false;
+      var start = end - (entry.durationMs || 0);
+      if (target < start - 1000 || target > end + 1000) return false;
+      var names = [].concat(entry.winnerNames || []).concat(entry.opponentNames || []).concat(entry.teammateNames || []);
+      return names.some(function (n) {
+        return normalizeNameKey(n) === nameKey;
+      });
+    }
+    if ((state.gameHistory || []).some(entryCovers)) return true;
+    var statsEntry = PLAYER_STATS[findPlayerStatsKey(name) || name];
+    if (statsEntry && Array.isArray(statsEntry.sessions)) {
+      for (var i = 0; i < statsEntry.sessions.length; i++) {
+        if ((statsEntry.sessions[i].games || []).some(entryCovers)) return true;
+      }
+    }
+    return false;
+  }
+
+  // A run record is treated as bug-affected if EITHER of two things is
+  // true:
+  //  1. It's provably tied to a *completed* 15 Ball Rotation game (see
+  //     playerWasIn15BallRotationWindow) - the precise case.
+  //  2. Its value exceeds 15 - mathematically impossible for a
+  //     legitimate 15 Ball Rotation run regardless of provenance (only
+  //     15 object balls exist in the rack, so nobody can legally run
+  //     more than 15 in a row there), and this bug is the only way any
+  //     run record in this app could ever be inflated in the first
+  //     place (every other point/ball-scoring game sends a plain +1 per
+  //     click, never a multi-point keypad entry). This catches the case
+  //     the first check alone would miss: a run set mid-game in a 15
+  //     Ball Rotation session that was later abandoned/reset rather
+  //     than won, which leaves no completed game-history entry to
+  //     correlate against at all.
+  // The one residual risk, accepted deliberately rather than silently:
+  // a genuinely long Straight Pool run (which legitimately can exceed
+  // 15) stored as a player's current best would also get cleared by
+  // check 2 if the precise check 1 doesn't also confirm it. There's no
+  // further signal available to tell the two apart after the fact.
+  function isBugAffectedRunRecord(record) {
+    if (!record) return false;
+    if (record.value > 15) return true;
+    return playerWasIn15BallRotationWindow(record.name, record.ts);
+  }
+
+  function fixCorruptedRunRecords() {
+    if (localStorage.getItem(RUN_RECORDS_FIX_KEY)) return;
+
+    var changedRunRecords = false;
+    ["allTimeBest", "dailyBest"].forEach(function (field) {
+      if (isBugAffectedRunRecord(RUN_RECORDS[field])) {
+        RUN_RECORDS[field] = null;
+        changedRunRecords = true;
+      }
+    });
+    if (changedRunRecords) saveRunRecordsToStorage(RUN_RECORDS);
+
+    var changedPlayerBest = false;
+    Object.keys(PLAYER_BEST_RUNS).forEach(function (key) {
+      if (isBugAffectedRunRecord(PLAYER_BEST_RUNS[key])) {
+        delete PLAYER_BEST_RUNS[key];
+        changedPlayerBest = true;
+      }
+    });
+    if (changedPlayerBest) savePlayerBestRunsToStorage(PLAYER_BEST_RUNS);
+
+    try {
+      localStorage.setItem(RUN_RECORDS_FIX_KEY, "1");
+    } catch (e) {
+      // If storage is unavailable this simply re-attempts next boot -
+      // safe, since clearing an already-cleared field is a no-op.
+    }
+  }
+
   var currentRunPlayerId = null;
   var currentRunPlayerName = null;
   var currentRunCount = 0;
@@ -5735,6 +5838,18 @@
   // explicit keypad switch to someone else (see handleKeypadShortcut)
   // stops it even before they've scored anything yet, per "the counter
   // should stop when we select the next player."
+  //
+  // Always +/-1 per call, never delta - "balls in a row" counts balls,
+  // not points. adjustScore is called exactly once per potted ball
+  // (finalizeKeypadEntry finalizes one number - one ball - at a time,
+  // even when that ball's own point value is >1, e.g. sinking the
+  // 15-ball in 15 Ball Rotation is +15 points but still only 1 ball).
+  // An earlier version of this function used `delta` here on the theory
+  // that a keypad entry could "bank a whole rack in one call" - that
+  // was wrong: potting the 15-ball then the 8-ball is a 2-ball run
+  // worth 23 points, not a 23-ball run. See fixCorruptedRunRecords for
+  // the one-time cleanup of records this bug already wrote before it
+  // was fixed.
   function bumpRunForPlayer(playerId, delta) {
     if (!runTrackingApplies()) return;
     if (delta > 0) {
@@ -5744,18 +5859,10 @@
         currentRunPlayerName = p ? p.name : null;
         currentRunCount = 0;
       }
-      // delta, not a flat +1 - the plain +/- buttons only ever send 1,
-      // but 15 Ball Rotation's keypad score-entry mode (see
-      // finalizeKeypadEntry) can bank a whole rack in one call, and that
-      // whole amount belongs to this same uninterrupted run.
-      currentRunCount += delta;
+      currentRunCount += 1;
       if (currentRunPlayerName) checkRunRecords(currentRunPlayerName, currentRunCount);
     } else if (delta < 0 && currentRunPlayerId === playerId) {
-      // delta, not a flat -1, for the same reason as the positive branch
-      // above - 15 Ball Rotation's score-entry mode can now subtract a
-      // whole multi-point correction in one call (e.g. "-12"), and the
-      // run streak should shrink by that whole amount, not just by 1.
-      currentRunCount = Math.max(0, currentRunCount + delta);
+      currentRunCount = Math.max(0, currentRunCount - 1);
     }
   }
 
@@ -20178,6 +20285,7 @@
   function boot() {
   backfillMissingRatingsFromHistory();
   backfillMissingAddedDates();
+  fixCorruptedRunRecords();
 
   if (Purchases) {
     Purchases.isProUnlocked()
