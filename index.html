@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260921b">
+<link rel="stylesheet" href="css/style.css?v=20260921c">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -1728,14 +1728,14 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
           </select>
           <label for="league-team-rotation-select" data-i18n="league.teamRotationLabel">Team Rotation</label>
           <select id="league-team-rotation-select">
-            <option value="rotatingLines" data-i18n="league.teamRotationRotatingLines">Rotating Lines</option>
-            <option value="roundRobin" data-i18n="league.teamRotationRoundRobin">Round-Robin</option>
+            <option value="rotatingLines" data-i18n="league.teamRotationRotatingLines">Rotating Lines (next pair auto-cycles)</option>
+            <option value="roundRobin" data-i18n="league.teamRotationRoundRobin">Round-Robin (everyone plays everyone)</option>
           </select>
+          <button type="button" id="btn-league-team-rotation-info" class="format-info-btn" data-i18n-aria-label="league.teamRotationInfoAria" aria-label="What do these mean?">❓</button>
           <label for="league-max-games-input" data-i18n="league.maxGamesLabel">🎯 Max Games / Player (Session)</label>
           <input type="number" id="league-max-games-input" min="0" max="99" value="0">
           <button type="button" id="btn-league-reset-session-counts" class="btn btn-ghost" data-i18n="league.resetSessionCountsButton">↺ Reset Session Counts</button>
         </div>
-        <p class="player-stats-note" data-i18n="league.teamRotationHelp">When a table has a Team A and Team B assigned (Per-Table Queue), this decides how their players are matched up: Rotating Lines keeps cycling front-of-A vs front-of-B, Round-Robin schedules every A player against every B player once.</p>
         <p class="player-stats-note" data-i18n="league.maxGamesHelp">0 means unlimited. Once a member reaches this many games since the last reset, they're skipped for any new match (manual, queued, or team rotation) until you reset session counts for the next time this league meets — their lifetime stats keep counting either way.</p>
         <div id="league-tables-grid" class="league-tables-grid"></div>
       </div>
@@ -1792,11 +1792,11 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
         <div class="row hidden" id="league-wizard-rotation-row">
           <label for="league-wizard-team-rotation" data-i18n="league.teamRotationLabel">Team Rotation</label>
           <select id="league-wizard-team-rotation">
-            <option value="rotatingLines" data-i18n="league.teamRotationRotatingLines">Rotating Lines</option>
-            <option value="roundRobin" data-i18n="league.teamRotationRoundRobin">Round-Robin</option>
+            <option value="rotatingLines" data-i18n="league.teamRotationRotatingLines">Rotating Lines (next pair auto-cycles)</option>
+            <option value="roundRobin" data-i18n="league.teamRotationRoundRobin">Round-Robin (everyone plays everyone)</option>
           </select>
+          <button type="button" id="btn-league-wizard-team-rotation-info" class="format-info-btn" data-i18n-aria-label="league.teamRotationInfoAria" aria-label="What do these mean?">❓</button>
         </div>
-        <p class="player-stats-note" data-i18n="league.teamRotationHelp">When a table has a Team A and Team B assigned (Per-Table Queue), this decides how their players are matched up: Rotating Lines keeps cycling front-of-A vs front-of-B, Round-Robin schedules every A player against every B player once.</p>
       </div>
 
       <div class="wizard-step hidden" id="league-wizard-step-4">
@@ -1831,6 +1831,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260921b"></script>
+<script src="js/app.js?v=20260921c"></script>
 </body>
 </html>

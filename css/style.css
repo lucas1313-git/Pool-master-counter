@@ -6942,8 +6942,8 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
    scrolling down to the full live boards. */
 .league-tables-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
   margin-top: 10px;
 }
 
@@ -6955,6 +6955,11 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
+  /* A grid item's default min-width is "auto" (its content's natural
+     width), which can force the whole grid wider than its container and
+     push the page into horizontal scroll once names/scores get long -
+     this lets the card actually shrink to its column and wrap instead. */
+  min-width: 0;
 }
 
 .league-table-slot.is-occupied {
@@ -6963,7 +6968,7 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
 
 .league-table-slot-heading {
   font-weight: 800;
-  font-size: 0.82rem;
+  font-size: 0.95rem;
   text-transform: uppercase;
   letter-spacing: 0.03em;
   color: var(--text-dim);
@@ -6972,16 +6977,17 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
 .league-table-slot-summary {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
 
 .league-table-slot-queue-label {
-  font-size: 0.82rem;
+  font-size: 0.95rem;
   color: var(--text-dim);
   font-weight: 700;
 }
 
 .league-table-slot-team-note {
-  font-size: 0.82rem;
+  font-size: 0.9rem;
   color: var(--text-dim);
 }
 
@@ -7001,6 +7007,10 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   gap: 8px;
 }
 
+.league-queue-list li span {
+  overflow-wrap: anywhere;
+}
+
 /* Team-vs-team hosting: the Team A / Team B assignment row on a table
    slot, then either a rotating pair of lines or a round-robin match card,
    depending on the league's teamRotationMode. */
@@ -7013,16 +7023,17 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 0.78rem;
+  font-size: 0.9rem;
   color: var(--text-dim);
   text-transform: uppercase;
   letter-spacing: 0.03em;
   flex: 1;
-  min-width: 90px;
+  min-width: 110px;
 }
 
 .league-team-vs-label {
   font-weight: 800;
+  font-size: 1.05rem;
   margin-top: 2px;
 }
 
@@ -7037,7 +7048,7 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
 }
 
 .league-team-line-heading {
-  font-size: 0.78rem;
+  font-size: 0.9rem;
   color: var(--text-dim);
   font-weight: 700;
 }
@@ -7055,9 +7066,10 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
 }
 
 .league-roundrobin-pair {
-  font-size: 0.85rem;
-  padding: 3px 6px;
+  font-size: 0.95rem;
+  padding: 4px 6px;
   border-radius: 6px;
+  overflow-wrap: anywhere;
 }
 
 .league-roundrobin-pair.is-played {
@@ -7113,7 +7125,56 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
 
 .league-wizard-team-absent-note {
   color: var(--text-dim);
-  font-size: 0.85rem;
+  font-size: 0.95rem;
+}
+
+/* The "Captain" picker - shared by the Teams section on the League page
+   and the wizard's Teams & Captains step, both build this exact markup
+   (a .row > label > "Captain" text + <select>). A plain label's text and
+   its child select butt up against each other with no gap by default. */
+.league-captain-row label {
+  display: flex;
+  align-items: center;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.league-captain-row select {
+  margin-left: 10px;
+}
+
+/* League Setup Wizard - roomier card (step 4's Team A/B pickers need the
+   width) and a readable font floor throughout; scoped to this overlay
+   only so the main Game Setup Wizard keeps its own sizing. */
+#league-wizard-overlay .wizard-card {
+  max-width: 720px;
+}
+
+#league-wizard-overlay .wizard-step-explain {
+  font-size: 1rem;
+}
+
+#league-wizard-overlay .row label {
+  font-size: 0.95rem;
+}
+
+#league-wizard-overlay .checkbox-row,
+#league-wizard-overlay select,
+#league-wizard-overlay input {
+  font-size: 1rem;
+}
+
+#league-wizard-overlay .wizard-summary-row .label,
+#league-wizard-overlay .wizard-summary-row .value {
+  font-size: 1rem;
+}
+
+.league-wizard-assign-team-row {
+  margin-left: 28px;
+  margin-top: 2px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 .league-team-row {

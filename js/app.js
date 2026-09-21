@@ -2059,6 +2059,7 @@
   var leagueTableCountInput = document.getElementById("league-table-count");
   var leagueQueueModeSelect = document.getElementById("league-queue-mode-select");
   var leagueTeamRotationSelect = document.getElementById("league-team-rotation-select");
+  var btnLeagueTeamRotationInfo = document.getElementById("btn-league-team-rotation-info");
   var leagueMaxGamesInput = document.getElementById("league-max-games-input");
   var btnLeagueResetSessionCounts = document.getElementById("btn-league-reset-session-counts");
 
@@ -2075,6 +2076,7 @@
   var leagueWizardQueueModeSelect = document.getElementById("league-wizard-queue-mode");
   var leagueWizardRotationRow = document.getElementById("league-wizard-rotation-row");
   var leagueWizardTeamRotationSelect = document.getElementById("league-wizard-team-rotation");
+  var btnLeagueWizardTeamRotationInfo = document.getElementById("btn-league-wizard-team-rotation-info");
   var leagueWizardStep4Explain = document.getElementById("league-wizard-step4-explain");
   var leagueWizardMatchTables = document.getElementById("league-wizard-match-tables");
   var leagueWizardMaxGamesInput = document.getElementById("league-wizard-max-games");
@@ -9438,7 +9440,7 @@
 
       if (team.memberNames.length) {
         var captainRow = document.createElement("div");
-        captainRow.className = "row";
+        captainRow.className = "row league-captain-row";
         var captainLabel = document.createElement("label");
         captainLabel.textContent = T("league.captainLabel");
         var captainSelect = document.createElement("select");
@@ -9690,6 +9692,11 @@
       leagueWizardRosterList.appendChild(emptyLi);
       return;
     }
+    // This league "works with teams" the moment any team exists at all -
+    // once it does, every present member really ought to be on one, so a
+    // present-but-teamless member gets a right-there "Assign to team"
+    // picker instead of silently staying out of any team-vs-team hosting.
+    var usesTeams = league.teams.length > 0;
     league.members.forEach(function (m) {
       var li = document.createElement("li");
       var label = document.createElement("label");
@@ -9699,12 +9706,42 @@
       checkbox.checked = leagueMemberPlayingTonight(league, m.name);
       checkbox.addEventListener("change", function () {
         setLeagueTonightRosterMember(league, m.name, checkbox.checked);
+        renderLeagueWizardRoster();
       });
       var span = document.createElement("span");
       span.textContent = leagueNameWithTeam(league, m.name) + " — SL " + m.skillLevel;
       label.appendChild(checkbox);
       label.appendChild(span);
       li.appendChild(label);
+
+      if (usesTeams && checkbox.checked && !leagueTeamForMember(league, m.name)) {
+        var assignRow = document.createElement("div");
+        assignRow.className = "row league-wizard-assign-team-row";
+        var warn = document.createElement("span");
+        warn.className = "league-wizard-team-absent-note";
+        warn.textContent = T("league.wizard.noTeamWarning");
+        assignRow.appendChild(warn);
+        var teamSelect = document.createElement("select");
+        league.teams.forEach(function (t) {
+          var opt = document.createElement("option");
+          opt.value = t.id;
+          opt.textContent = t.name;
+          teamSelect.appendChild(opt);
+        });
+        var assignBtn = document.createElement("button");
+        assignBtn.type = "button";
+        assignBtn.className = "btn btn-ghost";
+        assignBtn.textContent = T("league.wizard.assignTeamButton");
+        assignBtn.addEventListener("click", function () {
+          if (!teamSelect.value) return;
+          addMemberToTeam(league, teamSelect.value, m.name);
+          renderLeagueWizardRoster();
+        });
+        assignRow.appendChild(teamSelect);
+        assignRow.appendChild(assignBtn);
+        li.appendChild(assignRow);
+      }
+
       leagueWizardRosterList.appendChild(li);
     });
   }
@@ -9740,7 +9777,7 @@
       }
 
       var row = document.createElement("div");
-      row.className = "row";
+      row.className = "row league-captain-row";
       var label = document.createElement("label");
       label.textContent = T("league.captainLabel");
       var select = document.createElement("select");
@@ -22905,6 +22942,9 @@
     setLeagueTeamRotationMode(league, leagueTeamRotationSelect.value);
     renderLeaguePage();
   });
+  btnLeagueTeamRotationInfo.addEventListener("click", function () {
+    alertModal(T("league.teamRotationHelp"));
+  });
   leagueMaxGamesInput.addEventListener("change", function () {
     var league = findLeagueById(activeLeagueId);
     if (!league) return;
@@ -22960,6 +23000,9 @@
     var league = leagueWizardOrganizerLeague();
     if (!league) return;
     setLeagueTeamRotationMode(league, leagueWizardTeamRotationSelect.value);
+  });
+  btnLeagueWizardTeamRotationInfo.addEventListener("click", function () {
+    alertModal(T("league.teamRotationHelp"));
   });
   leagueWizardMaxGamesInput.addEventListener("change", function () {
     var league = leagueWizardOrganizerLeague();
