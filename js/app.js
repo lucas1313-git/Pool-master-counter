@@ -2075,6 +2075,7 @@
   var leagueAddMemberWrap = document.getElementById("league-add-member-wrap");
   var leagueAddMemberInput = null;
   var btnLeagueAddMember = document.getElementById("btn-league-add-member");
+  var leagueAddMemberContactsCheckbox = document.getElementById("league-add-member-contacts-checkbox");
   var leagueStandingsBody = document.getElementById("league-standings-body");
   var leagueStandingsSortSelect = document.getElementById("league-standings-sort-select");
   var leagueColRemoveHeader = document.getElementById("league-col-remove-header");
@@ -2100,8 +2101,10 @@
   var leagueWizardRosterList = document.getElementById("league-wizard-roster-list");
   var btnLeagueWizardMarkAll = document.getElementById("btn-league-wizard-mark-all");
   var btnLeagueWizardMarkNone = document.getElementById("btn-league-wizard-mark-none");
-  var leagueWizardAddContactSelect = document.getElementById("league-wizard-add-contact-select");
+  var leagueWizardAddContactWrap = document.getElementById("league-wizard-add-contact-wrap");
+  var leagueWizardAddContactInput = null;
   var btnLeagueWizardAddContact = document.getElementById("btn-league-wizard-add-contact");
+  var leagueWizardAddContactContactsCheckbox = document.getElementById("league-wizard-add-contact-contacts-checkbox");
   var leagueWizardTeamsList = document.getElementById("league-wizard-teams-list");
   var leagueWizardTableCountInput = document.getElementById("league-wizard-table-count");
   var leagueWizardMultiClientRow = document.getElementById("league-wizard-multi-client-row");
@@ -10201,14 +10204,10 @@
     var contactCandidates = contactSheetAllNames().filter(function (n) {
       return memberNameKeys.indexOf(normalizeNameKey(n)) === -1;
     });
-    leagueWizardAddContactSelect.innerHTML = "";
-    contactCandidates.forEach(function (n) {
-      var opt = document.createElement("option");
-      opt.value = n;
-      opt.textContent = n;
-      leagueWizardAddContactSelect.appendChild(opt);
-    });
-    btnLeagueWizardAddContact.disabled = contactCandidates.length === 0;
+    leagueWizardAddContactWrap.innerHTML = "";
+    var wizardAddContactCombo = buildLeagueNameAutocomplete(contactCandidates, T("league.queueAddPlaceholder"), "league-add-member-input");
+    leagueWizardAddContactInput = wizardAddContactCombo.input;
+    leagueWizardAddContactWrap.appendChild(wizardAddContactCombo.wrapper);
   }
 
   function renderLeagueWizardTeams() {
@@ -24149,8 +24148,24 @@
     var league = findLeagueById(activeLeagueId);
     var name = leagueAddMemberInput ? leagueAddMemberInput.value.trim() : "";
     if (!league || !name) return;
+    // A brand new name (not already in the Contact Sheet) only gets
+    // registered there too if the checkbox is on - otherwise they're
+    // added to this league alone, same as before this checkbox existed.
+    // An existing contact's own canonical name/casing is used either
+    // way, so the league roster and Contact Sheet never end up with two
+    // differently-cased entries for the same person.
+    var existingPlayer = state.players.filter(function (p) {
+      return normalizeNameKey(p.name) === normalizeNameKey(name);
+    })[0];
+    if (existingPlayer) {
+      name = existingPlayer.name;
+    } else if (leagueAddMemberContactsCheckbox.checked) {
+      var newPlayer = addPlayer(name);
+      if (newPlayer) name = newPlayer.name;
+    }
     addLeagueMember(league, name);
     renderLeaguePage();
+    renderAll();
   });
   leagueStandingsSortSelect.addEventListener("change", function () {
     leagueStandingsSortMode = leagueStandingsSortSelect.value;
@@ -24254,11 +24269,24 @@
   });
   btnLeagueWizardAddContact.addEventListener("click", function () {
     var league = leagueWizardOrganizerLeague();
-    if (!league || !leagueWizardAddContactSelect.value) return;
-    var name = leagueWizardAddContactSelect.value;
+    var name = leagueWizardAddContactInput ? leagueWizardAddContactInput.value.trim() : "";
+    if (!league || !name) return;
+    // Same "only register a brand new name in the Contact Sheet if the
+    // checkbox is on" behavior as the League page's own Add Member
+    // field - see its click handler for the full reasoning.
+    var existingPlayer = state.players.filter(function (p) {
+      return normalizeNameKey(p.name) === normalizeNameKey(name);
+    })[0];
+    if (existingPlayer) {
+      name = existingPlayer.name;
+    } else if (leagueWizardAddContactContactsCheckbox.checked) {
+      var newPlayer = addPlayer(name);
+      if (newPlayer) name = newPlayer.name;
+    }
     addLeagueMember(league, name);
     setLeagueTonightRosterMember(league, name, true);
     renderLeagueWizardRoster();
+    renderAll();
   });
   leagueWizardTableCountInput.addEventListener("change", function () {
     var league = leagueWizardOrganizerLeague();

@@ -410,6 +410,7 @@
   "leaderboard.viewToggleAria": "Show leaderboard for",
   "league.addMemberButton": "+ Add",
   "league.addPlayerToTeamButton": "+ Add Player to {{team}}",
+  "league.addToContactsLabel": "Add to Contact Sheet if new",
   "league.addToQueueButton": "+ Add",
   "league.captainChipLabel": "© {{name}}",
   "league.captainLabel": "Captain",

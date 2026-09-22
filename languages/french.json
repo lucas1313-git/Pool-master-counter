@@ -410,6 +410,7 @@
   "leaderboard.viewToggleAria": "Afficher le classement pour",
   "league.addMemberButton": "+ Ajouter",
   "league.addPlayerToTeamButton": "+ Ajouter un Joueur aux {{team}}",
+  "league.addToContactsLabel": "Ajouter à la Fiche de Contacts si nouveau",
   "league.addToQueueButton": "+ Ajouter",
   "league.captainChipLabel": "© {{name}}",
   "league.captainLabel": "Capitaine",
