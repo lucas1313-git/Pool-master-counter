@@ -1897,6 +1897,7 @@
   var contactSheetImportVcardFileInput = document.getElementById("contact-sheet-import-vcard-file-input");
   var btnContactSheetEmail = document.getElementById("btn-contact-sheet-email");
   var btnContactSheetSms = document.getElementById("btn-contact-sheet-sms");
+  var btnContactSheetGraveyardSelected = document.getElementById("btn-contact-sheet-graveyard-selected");
   var contactSheetSelectedSummary = document.getElementById("contact-sheet-selected-summary");
   var contactSheetList = document.getElementById("contact-sheet-list");
   var contactSheetSelected = {};
@@ -9951,6 +9952,17 @@
     leagueAddMemberInput = addMemberCombo.input;
     leagueAddMemberWrap.appendChild(addMemberCombo.wrapper);
 
+    // FLIP-animates rows into their new order on re-sort, instead of an
+    // abrupt jump straight to it - a sudden rearrangement reads as
+    // unrelated new content rather than the same people moving, an
+    // effect called "change blindness". Recorded by member name (not
+    // row index) since names change position; one with no prior
+    // position (e.g. a brand new member) just appears in place.
+    var previousRowTops = {};
+    Array.prototype.forEach.call(leagueStandingsBody.children, function (tr) {
+      if (tr.dataset.memberName) previousRowTops[tr.dataset.memberName] = tr.getBoundingClientRect().top;
+    });
+
     leagueStandingsSortSelect.value = leagueStandingsSortMode;
     leagueStandingsBody.innerHTML = "";
     var sorted = leagueStandingsSorted(league);
@@ -9965,6 +9977,7 @@
     } else {
       sorted.forEach(function (m) {
         var row = document.createElement("tr");
+        row.dataset.memberName = m.name;
 
         var nameCell = document.createElement("td");
         nameCell.className = "league-standings-name-cell";
@@ -10022,6 +10035,30 @@
         }
 
         leagueStandingsBody.appendChild(row);
+      });
+    }
+
+    var rowsToFlipAnimate = [];
+    Array.prototype.forEach.call(leagueStandingsBody.children, function (tr) {
+      var oldTop = previousRowTops[tr.dataset.memberName];
+      if (oldTop == null) return;
+      var delta = oldTop - tr.getBoundingClientRect().top;
+      if (!delta) return;
+      tr.style.transition = "none";
+      tr.style.transform = "translateY(" + delta + "px)";
+      rowsToFlipAnimate.push(tr);
+    });
+    if (rowsToFlipAnimate.length) {
+      // Forces the browser to commit the instant, transition-less jump
+      // to each row's old position (set above) before the next frame
+      // animates away from it - without this the two style writes can
+      // get coalesced into one frame and the transition never plays.
+      leagueStandingsBody.offsetHeight;
+      requestAnimationFrame(function () {
+        rowsToFlipAnimate.forEach(function (tr) {
+          tr.style.transition = "transform 320ms ease";
+          tr.style.transform = "";
+        });
       });
     }
 
@@ -24677,6 +24714,24 @@
   });
   btnContactSheetSms.addEventListener("click", function () {
     composeToSelectedContacts("sms");
+  });
+  btnContactSheetGraveyardSelected.addEventListener("click", function () {
+    var names = Object.keys(contactSheetSelected).filter(function (n) {
+      return contactSheetSelected[n];
+    });
+    if (!names.length) {
+      showToast(T("contactSheet.noneSelectedForGraveyard"));
+      return;
+    }
+    confirmModal(T("confirm.sendSelectedPlayersToGraveyard", { count: names.length }), function () {
+      names.forEach(function (n) {
+        sendPlayerToGraveyard(n);
+      });
+      contactSheetSelected = {};
+      renderContactSheetPage();
+      renderAll();
+      showToast(T("toast.playersSentToGraveyard", { count: names.length }));
+    });
   });
 
   btnOpenTournament.addEventListener("click", function () {
