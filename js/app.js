@@ -2113,6 +2113,7 @@
   var leagueHandicapChartNewSlInput = document.getElementById("league-handicap-chart-new-sl");
   var leagueHandicapChartNewValueInput = document.getElementById("league-handicap-chart-new-value");
   var btnLeagueHandicapChartAdd = document.getElementById("btn-league-handicap-chart-add");
+  var btnLeagueHandicapChartSave = document.getElementById("btn-league-handicap-chart-save");
   var btnLeagueResetSessionCounts = document.getElementById("btn-league-reset-session-counts");
 
   var btnOpenLeagueWizard = document.getElementById("btn-open-league-wizard");
@@ -8385,16 +8386,16 @@
     return Object.assign({}, shared, custom);
   }
 
-  // The "View/Edit Table" overlay body - one row per Skill Level in the
-  // effective (shared + this league's own override) chart, each row's
-  // value editable in place; editing or adding always writes into this
-  // league's own customHandicapCharts (never the shared app-wide one),
-  // so a value that started as the shared default becomes this league's
-  // own number the moment it's touched. Removing a row deletes only
-  // this league's override for that Skill Level - if the shared chart
-  // still has an entry there too, the row reappears showing that value
-  // on the next render, same as any other default-vs-override setting.
-  function renderLeagueHandicapChartEditor(league) {
+  // The table editor works on a draft (Skill Level -> value, flat since
+  // it's always scoped to whichever one system+format is currently open)
+  // instead of writing straight into the league on every keystroke -
+  // add/edit/remove all just update this and re-render; nothing reaches
+  // league.customHandicapCharts (or gets saved) until Save is clicked.
+  // Reopening the editor discards any unsaved draft and starts fresh
+  // from what's actually saved.
+  var leagueHandicapChartDraft = null;
+
+  function openLeagueHandicapChartEditor(league) {
     var fmt = league.format === "apa9ball" ? "9ball" : "8ball";
     var system = league.handicapSystem;
     leagueHandicapChartTitle.textContent =
@@ -8402,7 +8403,24 @@
     leagueHandicapChartTargetHeader.textContent = T(fmt === "9ball" ? "league.handicapChartTargetPoints" : "league.handicapChartTargetGames");
 
     var merged = leagueEffectiveHandicapChart(league);
-    var skillLevels = Object.keys(merged)
+    // Nothing saved or shared yet for this system (true for BCA/VNBA/TAP
+    // until the organizer has entered their own numbers at least once) -
+    // pre-fill the draft with APA's real chart as a concrete starting
+    // point to edit from rather than an empty table, since it's the only
+    // actual published chart this app has; nothing is written to the
+    // league until Save, so this alone never claims to BE that league's
+    // official numbers.
+    leagueHandicapChartDraft = Object.keys(merged).length ? Object.assign({}, merged) : Object.assign({}, HANDICAP_CHARTS.apa[fmt]);
+
+    renderLeagueHandicapChartEditorRows(league);
+    leagueHandicapChartOverlay.classList.remove("hidden");
+  }
+
+  // Draws the table from the current draft - called on open and after
+  // every add/remove (a plain value edit updates the draft in place
+  // without needing to redraw the row it's already showing).
+  function renderLeagueHandicapChartEditorRows(league) {
+    var skillLevels = Object.keys(leagueHandicapChartDraft)
       .map(Number)
       .sort(function (a, b) {
         return a - b;
@@ -8430,17 +8448,15 @@
         valueInput.type = "number";
         valueInput.min = "1";
         valueInput.max = "999";
-        valueInput.value = merged[sl];
+        valueInput.value = leagueHandicapChartDraft[sl];
         valueInput.className = "league-handicap-chart-value-input";
         valueInput.addEventListener("change", function () {
           var v = parseInt(valueInput.value, 10);
           if (!v || v < 1) {
-            valueInput.value = merged[sl];
+            valueInput.value = leagueHandicapChartDraft[sl];
             return;
           }
-          league.customHandicapCharts[system][fmt][sl] = v;
-          saveLeaguesToStorage(LEAGUES);
-          renderLeagueHandicapChartEditor(league);
+          leagueHandicapChartDraft[sl] = v;
         });
         valueCell.appendChild(valueInput);
         tr.appendChild(valueCell);
@@ -8452,9 +8468,8 @@
         removeBtn.textContent = "✕";
         removeBtn.setAttribute("aria-label", T("league.handicapChartRemoveAria", { sl: sl }));
         removeBtn.addEventListener("click", function () {
-          delete league.customHandicapCharts[system][fmt][sl];
-          saveLeaguesToStorage(LEAGUES);
-          renderLeagueHandicapChartEditor(league);
+          delete leagueHandicapChartDraft[sl];
+          renderLeagueHandicapChartEditorRows(league);
         });
         removeCell.appendChild(removeBtn);
         tr.appendChild(removeCell);
@@ -24446,8 +24461,7 @@
   btnLeagueHandicapChartOpen.addEventListener("click", function () {
     var league = findLeagueById(activeLeagueId);
     if (!league) return;
-    renderLeagueHandicapChartEditor(league);
-    leagueHandicapChartOverlay.classList.remove("hidden");
+    openLeagueHandicapChartEditor(league);
   });
   btnLeagueHandicapChartClose.addEventListener("click", function () {
     leagueHandicapChartOverlay.classList.add("hidden");
@@ -24464,12 +24478,18 @@
       showToast(T("league.handicapChartInvalidToast"));
       return;
     }
-    var fmt = league.format === "apa9ball" ? "9ball" : "8ball";
-    league.customHandicapCharts[league.handicapSystem][fmt][sl] = value;
-    saveLeaguesToStorage(LEAGUES);
+    leagueHandicapChartDraft[sl] = value;
     leagueHandicapChartNewSlInput.value = "";
     leagueHandicapChartNewValueInput.value = "";
-    renderLeagueHandicapChartEditor(league);
+    renderLeagueHandicapChartEditorRows(league);
+  });
+  btnLeagueHandicapChartSave.addEventListener("click", function () {
+    var league = findLeagueById(activeLeagueId);
+    if (!league) return;
+    var fmt = league.format === "apa9ball" ? "9ball" : "8ball";
+    league.customHandicapCharts[league.handicapSystem][fmt] = Object.assign({}, leagueHandicapChartDraft);
+    saveLeaguesToStorage(LEAGUES);
+    showToast(T("league.handicapChartSavedToast"));
   });
   btnLeagueDelete.addEventListener("click", function () {
     var league = findLeagueById(activeLeagueId);

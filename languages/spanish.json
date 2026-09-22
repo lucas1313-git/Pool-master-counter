@@ -435,6 +435,8 @@
   "league.handicapChartInvalidToast": "Ingresa un Nivel de Habilidad y un valor.",
   "league.handicapChartOpenButton": "📊 Ver/Editar Tabla {{system}}",
   "league.handicapChartRemoveAria": "Quitar Nivel de Habilidad {{sl}}",
+  "league.handicapChartSaveButton": "💾 Guardar",
+  "league.handicapChartSavedToast": "Guardado — estos números ahora se usan para los partidos de esta liga.",
   "league.handicapChartSkillLevel": "Nivel de Habilidad",
   "league.handicapChartTargetGames": "Partidas para Ganar",
   "league.handicapChartTargetPoints": "Puntos para Ganar",
