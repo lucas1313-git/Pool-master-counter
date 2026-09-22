@@ -441,6 +441,7 @@
   "league.notPlayingTonight": "嗰位波友今晚未有標記做出席。",
   "league.openModeHelp": "完全跳過隊伍部分——主辦人淨係逐張枱揀兩個成員嚟打波。",
   "league.openModeLabel": "公開聯賽（冇隊伍——純粹球員對球員）",
+  "league.queueAddPlaceholder": "球員姓名",
   "league.queueEmptyHint": "隊伍空空如也",
   "league.queueModeLabel": "輪候模式",
   "league.queueModeNone": "手動（由組織者指派）",

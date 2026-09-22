@@ -441,6 +441,7 @@
   "league.notPlayingTonight": "Ce joueur n'est pas marqué comme jouant ce soir.",
   "league.openModeHelp": "Ignore complètement la section Équipes — l'organisateur choisit simplement deux membres pour jouer, table par table.",
   "league.openModeLabel": "Ligue Ouverte (sans équipes — joueur contre joueur)",
+  "league.queueAddPlaceholder": "Nom du Joueur",
   "league.queueEmptyHint": "La file est vide",
   "league.queueModeLabel": "Mode de File d'Attente",
   "league.queueModeNone": "Manuel (l'organisateur assigne)",
