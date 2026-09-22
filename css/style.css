@@ -6962,8 +6962,22 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   border-radius: var(--radius);
 }
 
+/* League page text minimum: the app-wide .row label default (0.85rem,
+   under 14px) reads too small on a page meant to be legible at a glance -
+   every label in the new-league form gets bumped here. */
+.league-new-form label {
+  font-size: 0.9rem;
+}
+
 .league-format-row {
   gap: 16px;
+}
+
+/* Same 14px-minimum reasoning as .league-new-form label above, for the
+   page's own intro copy specifically (the ">" keeps this off the
+   already-larger .league-max-games-help paragraphs nested deeper in). */
+#league-setup-panel > .player-stats-note {
+  font-size: 0.9rem;
 }
 
 .league-detail {
@@ -6981,10 +6995,9 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
 }
 
 /* No flex:1 here on purpose - a short league name stretching to fill
-   the whole row (shoving Export/Delete off to the far edge) is what
-   made this header read as "way too wide" next to the rest of the
-   app's plain left-to-right button rows. Sized to its own text, same
-   as every other heading. */
+   the whole row is what made this header read as "way too wide" next
+   to the rest of the app's plain left-to-right button rows. Sized to
+   its own text, same as every other heading. */
 .league-detail-header h3 {
   margin: 0;
 }
@@ -7006,7 +7019,7 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   background: color-mix(in srgb, var(--accent) 18%, var(--bg-panel));
   border: 1px solid var(--border);
   color: var(--text-dim);
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   font-weight: 700;
 }
 
@@ -7036,7 +7049,7 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
 
 .league-standings-table th {
   color: var(--text-dim);
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
@@ -7075,6 +7088,7 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
    top to bottom, one decision at a time. */
 .league-settings-row label {
   min-width: 200px;
+  font-size: 0.9rem;
 }
 
 .league-max-games-help {
@@ -7241,13 +7255,17 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   font-weight: 700;
 }
 
+/* At least 2 team cards fit side by side on a computer screen, more if
+   there's room - same auto-fill grid pattern as the Tables Overview
+   grid, at a narrower minimum since a team card holds less than a
+   table slot does. */
 .league-teams-list {
   list-style: none;
   margin: 10px 0 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 14px;
 }
 
 /* Setup Wizard: "Who's Playing Tonight" checklist and the Teams &
@@ -7300,6 +7318,19 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
 
 .league-captain-row select {
   margin-left: 10px;
+  flex: 0 1 200px;
+}
+
+/* Team name input and the per-team "add a player" select default to
+   the app-wide flex:1/min-width:140px rule, which stretches them the
+   full width of the card - way more room than a name or a short roster
+   list needs. */
+#league-new-team-name {
+  flex: 0 1 240px;
+}
+
+.league-team-add-player-select {
+  flex: 0 1 220px;
 }
 
 /* League Setup Wizard - same look as the main Game Setup Wizard
@@ -7332,7 +7363,26 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   border-radius: var(--radius);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+  /* Grid item default min-width is "auto" (its content's own width) -
+     see the identical note on .league-table-slot - this lets the card
+     shrink to its grid column instead of forcing the whole row wider. */
+  min-width: 0;
+}
+
+/* Team name and captain are this team's identity - one compact,
+   bordered block instead of spanning the full card width. Sized to its
+   own content (inline-flex + align-self) rather than stretched. */
+.league-team-identity {
+  display: inline-flex;
+  flex-direction: column;
+  align-self: flex-start;
+  gap: 6px;
+  padding: 8px 12px;
+  max-width: 100%;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
 }
 
 .league-team-row-header {
@@ -7349,15 +7399,19 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   gap: 6px;
 }
 
+/* Roster names are what an organizer scans this card for - sized well
+   past the page's 14px floor so they actually stand out from the chip's
+   own remove button and the smaller controls around it. */
 .league-team-member-chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 3px 8px;
+  gap: 8px;
+  padding: 6px 12px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--accent) 14%, var(--bg-panel));
   border: 1px solid var(--border);
-  font-size: 0.82rem;
+  font-size: 1.05rem;
+  font-weight: 600;
 }
 
 .league-team-member-chip button {
@@ -7366,7 +7420,7 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   color: inherit;
   cursor: pointer;
   padding: 0;
-  font-size: 0.8rem;
+  font-size: 0.95rem;
   opacity: 0.7;
 }
 
