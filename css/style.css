@@ -7380,6 +7380,10 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   flex: 0 1 220px;
 }
 
+.league-add-member-input {
+  flex: 0 1 260px;
+}
+
 /* Hand-built autocomplete (see buildLeagueNameAutocomplete) - the
    suggestion list is positioned relative to this wrapper so it drops
    below the input in normal flow, never over it (the native <input
