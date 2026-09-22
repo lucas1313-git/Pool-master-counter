@@ -8378,19 +8378,40 @@
     return system === "bca";
   }
 
-  function leagueHandicapLookupKey(league, member) {
-    return leagueHandicapUsesRating(league.handicapSystem) ? getPlayerRating(member.name) : member.skillLevel;
-  }
-
   function leagueMatchTargetForMember(league, member) {
     if (!league.useHandicap) return league.handicapBaseGames;
     var fmt = league.format === "apa9ball" ? "9ball" : "8ball";
-    var key = leagueHandicapLookupKey(league, member);
     var custom = ((league.customHandicapCharts || {})[league.handicapSystem] || {})[fmt] || {};
-    if (typeof custom[key] === "number") return custom[key];
+    if (typeof custom[member.skillLevel] === "number") return custom[member.skillLevel];
     var shared = (HANDICAP_CHARTS[league.handicapSystem] || HANDICAP_CHARTS.apa)[fmt] || {};
-    var value = shared[key];
+    var value = shared[member.skillLevel];
     return typeof value === "number" ? value : league.handicapBaseGames;
+  }
+
+  // BCA's handicap isn't a per-player lookup at all - it's a ratio
+  // applied to the RATING GAP between the two players actually being
+  // matched (real rating-based handicapping compares two opponents, not
+  // one player's number in isolation). The lower-rated player always
+  // races to Base Games to Win; the higher-rated player's target climbs
+  // from there, one extra game for every BCA_RATING_POINTS_PER_GAME of
+  // gap - equal ratings mean an equal, unhandicapped race. See
+  // renderLeagueHandicapChartRatio for the same math shown as a table.
+  var BCA_RATING_POINTS_PER_GAME = 4;
+
+  function bcaExtraGamesForRatingGap(gap) {
+    return Math.round(Math.abs(gap) / BCA_RATING_POINTS_PER_GAME);
+  }
+
+  function leagueBcaMatchTargets(league, memberA, memberB) {
+    var base = league.handicapBaseGames;
+    if (!league.useHandicap) return { targetA: base, targetB: base };
+    var ratingA = getPlayerRating(memberA.name);
+    var ratingB = getPlayerRating(memberB.name);
+    var extra = bcaExtraGamesForRatingGap(ratingA - ratingB);
+    return {
+      targetA: ratingA >= ratingB ? base + extra : base,
+      targetB: ratingB >= ratingA ? base + extra : base
+    };
   }
 
   // What the "View/Edit Table" editor shows: this league's own numbers
@@ -8419,20 +8440,24 @@
     var system = league.handicapSystem;
     var readOnly = system === "bca";
     leagueHandicapChartTitle.textContent =
-      T(league.format === "apa9ball" ? "league.format9Ball" : "league.format8Ball", { system: handicapSystemLabel(system) }) + " " + T("league.handicapChartTitleSuffix");
+      T(league.format === "apa9ball" ? "league.format9Ball" : "league.format8Ball", { system: handicapSystemLabel(system) }) +
+      " " +
+      T(readOnly ? "league.handicapChartRatioTitleSuffix" : "league.handicapChartTitleSuffix");
     leagueHandicapChartAddRow.classList.toggle("hidden", readOnly);
     btnLeagueHandicapChartSave.classList.toggle("hidden", readOnly);
 
     if (readOnly) {
-      // BCA has no organizer-editable chart at all (see
-      // leagueHandicapUsesRating) - its numbers come only from this
-      // app's own Rating plus whatever's in the shared
-      // data/handicap-charts.json file, so this is purely a "here's what
-      // each of your members would actually get" preview, not a form.
-      leagueHandicapChartExplain.textContent = T("league.handicapChartExplainReadOnly");
-      leagueHandicapChartKeyHeader.textContent = T("league.colMember");
-      leagueHandicapChartTargetHeader.textContent = T(fmt === "9ball" ? "league.handicapChartTargetPoints" : "league.handicapChartTargetGames");
-      renderLeagueHandicapChartReadOnlyMembers(league);
+      // BCA has no organizer-editable chart at all - it's a ratio applied
+      // to the rating gap between whoever's actually playing (see
+      // leagueBcaMatchTargets), so there's nothing per-player to look up
+      // or edit here, just the ratio itself worked out at sample gaps.
+      leagueHandicapChartExplain.textContent = T("league.handicapChartExplainReadOnly", {
+        base: league.handicapBaseGames,
+        ratio: BCA_RATING_POINTS_PER_GAME
+      });
+      leagueHandicapChartKeyHeader.textContent = T("league.handicapChartRatingGap");
+      leagueHandicapChartTargetHeader.textContent = T(fmt === "9ball" ? "league.handicapChartExtraPoints" : "league.handicapChartExtraGames");
+      renderLeagueHandicapChartRatio(league);
     } else {
       leagueHandicapChartTargetHeader.textContent = T(fmt === "9ball" ? "league.handicapChartTargetPoints" : "league.handicapChartTargetGames");
       leagueHandicapChartKeyHeader.textContent = T("league.handicapChartSkillLevel");
@@ -8460,34 +8485,26 @@
   // exact value leagueMatchTargetForMember would compute for them, so
   // "no editing" still means "see what the handicap will be" in
   // practice, not a guess.
-  function renderLeagueHandicapChartReadOnlyMembers(league) {
+  // BCA's target is relative (see leagueBcaMatchTargets), so a per-member
+  // row showing one absolute number would be meaningless without knowing
+  // who they're playing - this shows the actual ratio instead, worked
+  // out at a spread of sample rating gaps, so the organizer can see
+  // exactly how many extra games any given gap adds.
+  var BCA_RATIO_SAMPLE_GAPS = [4, 8, 12, 16, 20, 24, 28, 32, 40, 60, 80];
+
+  function renderLeagueHandicapChartRatio(league) {
     leagueHandicapChartBody.innerHTML = "";
-    if (!league.members.length) {
-      var emptyRow = document.createElement("tr");
-      var emptyCell = document.createElement("td");
-      emptyCell.colSpan = 3;
-      emptyCell.className = "empty-hint";
-      emptyCell.textContent = T("league.noMembersYet");
-      emptyRow.appendChild(emptyCell);
-      leagueHandicapChartBody.appendChild(emptyRow);
-      return;
-    }
-    league.members
-      .slice()
-      .sort(function (a, b) {
-        return a.name.localeCompare(b.name);
-      })
-      .forEach(function (m) {
-        var tr = document.createElement("tr");
-        var nameCell = document.createElement("td");
-        nameCell.textContent = leagueNameWithTeam(league, m.name);
-        tr.appendChild(nameCell);
-        var ratingCell = document.createElement("td");
-        ratingCell.textContent = getPlayerRating(m.name) + " → " + leagueMatchTargetForMember(league, m);
-        tr.appendChild(ratingCell);
-        tr.appendChild(document.createElement("td"));
-        leagueHandicapChartBody.appendChild(tr);
-      });
+    BCA_RATIO_SAMPLE_GAPS.forEach(function (gap) {
+      var tr = document.createElement("tr");
+      var gapCell = document.createElement("td");
+      gapCell.textContent = gap;
+      tr.appendChild(gapCell);
+      var extraCell = document.createElement("td");
+      extraCell.textContent = "+" + bcaExtraGamesForRatingGap(gap);
+      tr.appendChild(extraCell);
+      tr.appendChild(document.createElement("td"));
+      leagueHandicapChartBody.appendChild(tr);
+    });
   }
 
   // Draws the table from the current draft - called on open and after
@@ -9305,6 +9322,10 @@
       return m.name === nameB;
     })[0];
     if (!memberA || !memberB) return false;
+    var targets =
+      league.handicapSystem === "bca"
+        ? leagueBcaMatchTargets(league, memberA, memberB)
+        : { targetA: leagueMatchTargetForMember(league, memberA), targetB: leagueMatchTargetForMember(league, memberB) };
     var active = {
       id: "active-" + uid(),
       table: table,
@@ -9312,8 +9333,8 @@
       nameB: nameB,
       skillLevelA: memberA.skillLevel,
       skillLevelB: memberB.skillLevel,
-      targetA: leagueMatchTargetForMember(league, memberA),
-      targetB: leagueMatchTargetForMember(league, memberB),
+      targetA: targets.targetA,
+      targetB: targets.targetB,
       scoreA: 0,
       scoreB: 0,
       startedAt: new Date().toISOString()
