@@ -6980,10 +6980,23 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   margin-bottom: 10px;
 }
 
+/* No flex:1 here on purpose - a short league name stretching to fill
+   the whole row (shoving Export/Delete off to the far edge) is what
+   made this header read as "way too wide" next to the rest of the
+   app's plain left-to-right button rows. Sized to its own text, same
+   as every other heading. */
 .league-detail-header h3 {
   margin: 0;
-  flex: 1;
-  min-width: 120px;
+}
+
+/* select already gets flex:1 as its own default (see base select rule)
+   so it can share a .row evenly with several other fields - fine there,
+   but a league/member picker alone next to one button has nothing to
+   share with and balloons to fill the entire panel width instead of
+   staying a normal-sized dropdown like the rest of the app's pickers. */
+#league-select,
+#league-add-member-select {
+  flex: 0 1 320px;
 }
 
 .league-readonly-badge {
