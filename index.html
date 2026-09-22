@@ -1756,6 +1756,16 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
         <label><input type="radio" name="league-new-format" value="apa9ball"> <span data-i18n="league.format9Ball">APA 9-Ball</span></label>
       </div>
       <div class="row">
+        <label for="league-new-handicap-system" data-i18n="league.newHandicapSystemLabel">Rating System</label>
+        <select id="league-new-handicap-system">
+          <option value="apa" data-i18n="league.handicapSystemApa">APA</option>
+          <option value="bca" data-i18n="league.handicapSystemBca">BCA</option>
+          <option value="vnba" data-i18n="league.handicapSystemVnba">VNBA</option>
+          <option value="tap" data-i18n="league.handicapSystemTap">TAP</option>
+        </select>
+        <button type="button" id="btn-league-new-handicap-system-info" class="format-info-btn" data-i18n-aria-label="league.handicapSystemInfoAria" aria-label="What's the difference?">❓</button>
+      </div>
+      <div class="row">
         <label><input type="checkbox" id="league-new-open-mode"> <span data-i18n="league.openModeLabel">Open League (no teams — pure player vs player)</span></label>
       </div>
       <p class="player-stats-note league-max-games-help" data-i18n="league.openModeHelp">Skips the Teams section entirely — the organizer just picks any two members to play, table by table.</p>
@@ -1870,6 +1880,10 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
             <button type="button" id="btn-league-reset-session-counts" class="btn btn-ghost" data-i18n="league.resetSessionCountsButton">↺ Reset Session Counts</button>
           </div>
         </div>
+        <label class="checkbox-row checkbox-row-prominent league-mode-toggle hidden" id="league-tables-open-toggle-row">
+          <input type="checkbox" id="league-tables-open-toggle">
+          <span data-i18n="league.openModeLabel">Open League (no teams — pure player vs player)</span>
+        </label>
         <div id="league-tables-grid" class="league-tables-grid"></div>
       </div>
 
@@ -2008,6 +2022,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260922m"></script>
+<script src="js/app.js?v=20260922n"></script>
 </body>
 </html>

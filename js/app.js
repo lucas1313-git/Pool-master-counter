@@ -2063,6 +2063,8 @@
   var leagueNewForm = document.getElementById("league-new-form");
   var leagueNewNameInput = document.getElementById("league-new-name");
   var leagueNewFormatRadios = document.getElementsByName("league-new-format");
+  var leagueNewHandicapSystemSelect = document.getElementById("league-new-handicap-system");
+  var btnLeagueNewHandicapSystemInfo = document.getElementById("btn-league-new-handicap-system-info");
   var leagueNewOpenModeInput = document.getElementById("league-new-open-mode");
   var btnLeagueCreate = document.getElementById("btn-league-create");
   var leagueDetail = document.getElementById("league-detail");
@@ -2097,6 +2099,8 @@
   var leagueUseHandicapCheckbox = document.getElementById("league-use-handicap-checkbox");
   var leagueHandicapSystemSelect = document.getElementById("league-handicap-system-select");
   var leagueHandicapBaseInput = document.getElementById("league-handicap-base-input");
+  var leagueTablesOpenToggleRow = document.getElementById("league-tables-open-toggle-row");
+  var leagueTablesOpenToggle = document.getElementById("league-tables-open-toggle");
   var btnLeagueResetSessionCounts = document.getElementById("btn-league-reset-session-counts");
 
   var btnOpenLeagueWizard = document.getElementById("btn-open-league-wizard");
@@ -8344,7 +8348,7 @@
     return match.length ? match[0] : null;
   }
 
-  function createLeague(name, format, isOpen) {
+  function createLeague(name, format, isOpen, handicapSystem) {
     var league = {
       id: "league-" + uid(),
       name: name,
@@ -8372,9 +8376,11 @@
       tonightRosterConfigured: false,
       // On by default (APA) so a fresh league's matches are handicapped
       // exactly like every league before this setting existed - see
-      // leagueMatchTargetForMember for how these three combine.
+      // leagueMatchTargetForMember for how these three combine. The
+      // Rating System picked on the creation form seeds this; anything
+      // not one of the four known values falls back to APA.
       useHandicap: true,
-      handicapSystem: "apa",
+      handicapSystem: ["apa", "bca", "vnba", "tap"].indexOf(handicapSystem) !== -1 ? handicapSystem : "apa",
       handicapBaseGames: defaultHandicapBaseGames(format)
     };
     LEAGUES = LEAGUES.concat([league]);
@@ -10021,7 +10027,13 @@
     newOpt.textContent = T("league.newLeagueOption");
     leagueSelect.appendChild(newOpt);
 
-    if (!activeLeagueId || !findLeagueById(activeLeagueId)) {
+    // Only fall back to the first league for a genuinely dangling
+    // reference (e.g. the active league got deleted) - activeLeagueId
+    // is also null right after picking "+ New League" with other
+    // leagues still around, and that's not a fallback case, it's the
+    // point of that option; falling back there made "+ New League"
+    // impossible to actually reach whenever any league already existed.
+    if (activeLeagueId && !findLeagueById(activeLeagueId)) {
       activeLeagueId = LEAGUES.length ? LEAGUES[0].id : null;
     }
     leagueSelect.value = activeLeagueId || "__new__";
@@ -10193,6 +10205,15 @@
       leagueUseHandicapCheckbox.checked = league.useHandicap;
       leagueHandicapSystemSelect.value = league.handicapSystem;
       leagueHandicapBaseInput.value = league.handicapBaseGames;
+      // A convenience mirror of the top-of-page Open League toggle, right
+      // where it matters most (it changes how every table card below
+      // renders) - only worth showing before any team exists, since once
+      // one does, switching modes is a bigger decision than a stray tap
+      // down here should trigger. Both toggles read/write the same
+      // league.isOpen, so they always agree - see leagueTablesOpenToggle's
+      // own change handler and leagueDetailOpenToggle's above.
+      leagueTablesOpenToggleRow.classList.toggle("hidden", league.teams.length > 0);
+      leagueTablesOpenToggle.checked = league.isOpen;
       renderLeagueTablesGrid(league);
     }
 
@@ -24250,9 +24271,21 @@
     Array.prototype.forEach.call(leagueNewFormatRadios, function (r) {
       if (r.checked) format = r.value;
     });
-    createLeague(name, format, leagueNewOpenModeInput.checked);
+    createLeague(name, format, leagueNewOpenModeInput.checked, leagueNewHandicapSystemSelect.value);
     leagueNewNameInput.value = "";
     leagueNewOpenModeInput.checked = false;
+    leagueNewHandicapSystemSelect.value = "apa";
+    renderLeaguePage();
+  });
+  btnLeagueNewHandicapSystemInfo.addEventListener("click", function () {
+    alertModal(T("league.handicapSystemInfoText"));
+  });
+  leagueTablesOpenToggle.addEventListener("change", function () {
+    var league = findLeagueById(activeLeagueId);
+    if (!league) return;
+    league.isOpen = leagueTablesOpenToggle.checked;
+    normalizeLeagueDefaults(league);
+    saveLeaguesToStorage(LEAGUES);
     renderLeaguePage();
   });
   btnLeagueDelete.addEventListener("click", function () {
