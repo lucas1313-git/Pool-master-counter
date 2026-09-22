@@ -1715,7 +1715,8 @@
     document.getElementById("btn-open-help-tournament"),
     document.getElementById("btn-open-help-league"),
     document.getElementById("btn-open-help-player-page"),
-    document.getElementById("btn-open-help-wizard")
+    document.getElementById("btn-open-help-wizard"),
+    document.getElementById("btn-open-help-league-wizard")
   ];
 
   var btnGameRulesInfo = document.getElementById("btn-game-rules-info");

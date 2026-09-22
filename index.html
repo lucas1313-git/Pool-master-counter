@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260921i">
+<link rel="stylesheet" href="css/style.css?v=20260921k">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -1829,9 +1829,36 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="league-wizard-overlay" class="wizard-overlay hidden">
   <div class="wizard-card">
+    <button type="button" id="btn-open-help-league-wizard" class="wizard-close-btn wizard-help-btn" aria-label="Help" data-i18n-aria-label="common.help">❓</button>
     <button type="button" id="btn-league-wizard-close" class="wizard-close-btn" aria-label="Close wizard" data-i18n-aria-label="wizard.closeAriaLabel">×</button>
 
     <div class="wizard-header">
+      <svg class="wizard-mascot" viewBox="0 0 120 150" role="img" aria-label="Cartoon wizard mascot">
+        <defs>
+          <radialGradient id="leagueWizardOrbGlow" cx="50%" cy="50%" r="60%">
+            <stop offset="0%" stop-color="#fff3c4" />
+            <stop offset="100%" stop-color="#d9a441" />
+          </radialGradient>
+        </defs>
+        <line x1="97" y1="60" x2="108" y2="128" stroke="#7a5230" stroke-width="4" stroke-linecap="round" />
+        <circle cx="97" cy="55" r="9" fill="url(#leagueWizardOrbGlow)" />
+        <path d="M60,18 L88,72 Q60,84 32,72 Z" fill="#3d2b6b" />
+        <path d="M60,18 L88,72 Q60,80 55,70 Z" fill="#4d3684" />
+        <ellipse cx="60" cy="73" rx="30" ry="7" fill="#3d2b6b" />
+        <path d="M50,26 l6,-14 l6,14 l-6,5 z" fill="#e8c25a" />
+        <path d="M60,74 Q60,110 40,138 L80,138 Q60,110 60,74 Z" fill="#4d3684" />
+        <path d="M60,74 Q60,110 40,138 L52,138 Q56,106 60,74 Z" fill="#5b41a0" />
+        <circle cx="46" cy="98" r="1.6" fill="#f4e6b8" />
+        <circle cx="66" cy="112" r="1.6" fill="#f4e6b8" />
+        <circle cx="54" cy="124" r="1.6" fill="#f4e6b8" />
+        <circle cx="72" cy="94" r="1.6" fill="#f4e6b8" />
+        <circle cx="60" cy="58" r="19" fill="#e7b98c" />
+        <path d="M41,58 Q40,84 60,90 Q80,84 79,58 Q79,74 60,80 Q41,74 41,58 Z" fill="#f2f2f2" />
+        <path d="M46,52 Q60,44 74,52 Q74,44 60,40 Q46,44 46,52 Z" fill="#f2f2f2" />
+        <circle cx="52" cy="56" r="2.2" fill="#2a2a2a" />
+        <circle cx="68" cy="56" r="2.2" fill="#2a2a2a" />
+        <path d="M56,64 Q60,67 64,64" stroke="#c98f5e" stroke-width="1.6" fill="none" stroke-linecap="round" />
+      </svg>
       <div class="wizard-header-text">
         <h2 data-i18n="league.wizard.title">🧙 Setup Tonight's League Games</h2>
         <p class="wizard-progress" id="league-wizard-progress">Step 1 of 6</p>
@@ -1922,6 +1949,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260921o"></script>
+<script src="js/app.js?v=20260921p"></script>
 </body>
 </html>
