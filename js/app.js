@@ -9676,10 +9676,17 @@
     }
 
     var queue = queueForTable(league, tableNum);
+    // Boxed together (see .league-table-slot-queue-box) so "who's
+    // waiting" reads as one self-contained unit within the card, the
+    // same way each team's own line already does in team-vs-team mode
+    // (.league-team-line) - mirrors that existing pattern.
+    var queueBox = document.createElement("div");
+    queueBox.className = "league-table-slot-queue-box";
+
     var queueLabel = document.createElement("div");
     queueLabel.className = "league-table-slot-queue-label";
     queueLabel.textContent = league.queueMode === "perRoom" ? T("league.roomQueueHeading") : T("league.tableQueueHeading", { table: tableNum });
-    card.appendChild(queueLabel);
+    queueBox.appendChild(queueLabel);
 
     var list = document.createElement("ol");
     list.className = "league-queue-list";
@@ -9707,7 +9714,7 @@
         list.appendChild(li);
       });
     }
-    card.appendChild(list);
+    queueBox.appendChild(list);
 
     var addRow = document.createElement("div");
     addRow.className = "row";
@@ -9744,7 +9751,8 @@
     });
     addRow.appendChild(addCombo.wrapper);
     addRow.appendChild(addBtn);
-    card.appendChild(addRow);
+    queueBox.appendChild(addRow);
+    card.appendChild(queueBox);
 
     if (league.queueMode === "perTable") {
       var soloAssignment = league.tableTeamAssignment[tableQueueKey(tableNum)];

@@ -7162,7 +7162,7 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   flex-direction: column;
   gap: 10px;
   padding: 18px;
-  background: var(--bg-panel);
+  background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   /* A grid item's default min-width is "auto" (its content's natural
@@ -7201,6 +7201,21 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   color: var(--text-dim);
 }
 
+/* Boxes the "who's waiting" queue (label + list + add row) as its own
+   distinct unit within a table card - the card itself already popped a
+   shade lighter than its panel (see .league-table-slot), so this goes
+   one step further with color-mix rather than reusing --bg-card verbatim,
+   or it'd read as flush with the card instead of nested inside it. */
+.league-table-slot-queue-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: color-mix(in srgb, var(--bg-card) 80%, var(--border));
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
 .league-queue-list {
   list-style: decimal;
   margin: 0;
@@ -7228,6 +7243,8 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   flex-wrap: wrap;
   gap: 14px 20px;
   margin: 4px 0;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
 }
 
 .league-team-slots-row label {
@@ -7257,7 +7274,10 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   flex-direction: column;
   gap: 8px;
   padding: 14px;
-  background: var(--bg-card);
+  /* Same nested-a-shade-further reasoning as .league-table-slot-queue-box
+     - this sits inside a table card that's --bg-card itself now, so a
+     bare --bg-card here would no longer read as its own boxed unit. */
+  background: color-mix(in srgb, var(--bg-card) 80%, var(--border));
   border: 1px solid var(--border);
   border-radius: 10px;
 }
@@ -7273,7 +7293,7 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   flex-direction: column;
   gap: 4px;
   padding: 8px;
-  background: var(--bg-card);
+  background: color-mix(in srgb, var(--bg-card) 80%, var(--border));
   border: 1px solid var(--border);
   border-radius: 10px;
   max-height: 180px;
