@@ -7512,7 +7512,12 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
    Standings, Teams roster editor, and Tables config rows; keeps the
    header (so Back and the toggle itself stay reachable), the Tables
    Overview grid, and the live boards - several tables can be running
-   at once, so this stays about legibility, not narrowing to one. */
+   at once, so this stays about legibility, not narrowing to one.
+   Only the live boards themselves get the bigger read-from-across-
+   the-room treatment below - the Tables Overview cards are a compact
+   management UI (idle-table pickers, queues, Start Match), not
+   something meant to be read at a distance, so they stay their normal
+   size even while this is on. */
 #view-league-page.league-focus-mode #league-setup-panel,
 #view-league-page.league-focus-mode #league-organizer-only,
 #view-league-page.league-focus-mode #league-standings-section,
@@ -7520,18 +7525,6 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
 #view-league-page.league-focus-mode #league-tables-config,
 #view-league-page.league-focus-mode .league-mode-toggle {
   display: none;
-}
-
-#view-league-page.league-focus-mode #league-tables-section h4 {
-  font-size: 1.3rem;
-}
-
-#view-league-page.league-focus-mode .league-table-slot-heading {
-  font-size: 1.1rem;
-}
-
-#view-league-page.league-focus-mode .league-table-slot-summary {
-  font-size: 1.15rem;
 }
 
 /* League's live boards reuse the main scoreboard's own .player-panel/
