@@ -2061,6 +2061,7 @@
   var leagueNewForm = document.getElementById("league-new-form");
   var leagueNewNameInput = document.getElementById("league-new-name");
   var leagueNewFormatRadios = document.getElementsByName("league-new-format");
+  var leagueNewOpenModeInput = document.getElementById("league-new-open-mode");
   var btnLeagueCreate = document.getElementById("btn-league-create");
   var leagueDetail = document.getElementById("league-detail");
   var leagueDetailName = document.getElementById("league-detail-name");
@@ -2073,11 +2074,14 @@
   var leagueStandingsBody = document.getElementById("league-standings-body");
   var leagueColRemoveHeader = document.getElementById("league-col-remove-header");
   var leagueLiveHostingSection = document.getElementById("league-live-hosting-section");
+  var leagueTeamsSection = document.getElementById("league-teams-section");
   var leagueTeamsList = document.getElementById("league-teams-list");
   var leagueNewTeamNameInput = document.getElementById("league-new-team-name");
   var btnLeagueCreateTeam = document.getElementById("btn-league-create-team");
   var leagueTableCountInput = document.getElementById("league-table-count");
+  var leagueQueueModeRow = document.getElementById("league-queue-mode-row");
   var leagueQueueModeSelect = document.getElementById("league-queue-mode-select");
+  var leagueTeamRotationRow = document.getElementById("league-team-rotation-row");
   var leagueTeamRotationSelect = document.getElementById("league-team-rotation-select");
   var btnLeagueTeamRotationInfo = document.getElementById("btn-league-team-rotation-info");
   var leagueMaxGamesInput = document.getElementById("league-max-games-input");
@@ -8116,10 +8120,12 @@
   // trust the fields exist.
   function normalizeLeagueDefaults(l) {
     if (!l) return l;
+    if (typeof l.isOpen !== "boolean") l.isOpen = false;
     if (typeof l.tableCount !== "number" || l.tableCount < 1) l.tableCount = 1;
     if (!Array.isArray(l.activeMatches)) l.activeMatches = [];
     if (typeof l.focusedTable === "undefined" || l.focusedTable === null) l.focusedTable = "all";
     if (l.queueMode !== "perTable" && l.queueMode !== "perRoom") l.queueMode = "none";
+    if (l.isOpen) l.queueMode = "none";
     if (!Array.isArray(l.roomQueue)) l.roomQueue = [];
     if (!l.tableQueues || typeof l.tableQueues !== "object") l.tableQueues = {};
     if (!l.tableTeamAssignment || typeof l.tableTeamAssignment !== "object") l.tableTeamAssignment = {};
@@ -8225,12 +8231,13 @@
     return match.length ? match[0] : null;
   }
 
-  function createLeague(name, format) {
+  function createLeague(name, format, isOpen) {
     var league = {
       id: "league-" + uid(),
       name: name,
       format: format,
       isOrganizer: true,
+      isOpen: !!isOpen,
       createdAt: new Date().toISOString(),
       exportedAt: null,
       members: [],
@@ -8735,6 +8742,26 @@
   // Assigns one side (Team A or Team B) of a table to a league team. Once
   // both sides are set, the table switches from its plain shared queue to
   // dedicated team-vs-team hosting per the league's rotation style.
+  // True if teamId is already hosting on some OTHER table/side than the
+  // one being asked about here - a roster can only be assigned to one
+  // match at a time, so it must disappear from every other table's Team
+  // A/B dropdown the moment it's picked anywhere. The (table, side) pair
+  // is excluded from its own check so re-selecting a team's own current
+  // slot never counts as a conflict with itself.
+  function leagueTeamAssignedElsewhere(league, teamId, table, side) {
+    var here = tableQueueKey(table);
+    var assignments = league.tableTeamAssignment || {};
+    return Object.keys(assignments).some(function (key) {
+      var a = assignments[key];
+      if (!a) return false;
+      if (key === here) {
+        var otherSide = side === "a" ? "b" : "a";
+        return a[otherSide] === teamId;
+      }
+      return a.a === teamId || a.b === teamId;
+    });
+  }
+
   function assignTeamToTable(league, table, side, teamId) {
     if (!findLeagueTeamById(league, teamId)) return;
     var key = tableQueueKey(table);
@@ -8744,6 +8771,12 @@
       // Same team on both sides would pit teammates against each other -
       // the whole point of team-vs-team hosting is two DIFFERENT rosters.
       showToast(T("league.sameTeamNotAllowed"));
+      return;
+    }
+    if (leagueTeamAssignedElsewhere(league, teamId, table, side)) {
+      // Defense in depth - the dropdown itself already excludes these,
+      // but this guards any other future caller of assignTeamToTable.
+      showToast(T("league.teamAlreadyHostingElsewhere"));
       return;
     }
     league.tableTeamAssignment[key][side] = teamId;
@@ -9293,9 +9326,16 @@
         var sel = document.createElement("select");
         var noneOpt = document.createElement("option");
         noneOpt.value = "";
-        noneOpt.textContent = T("league.teamSlotNoneOption");
+        noneOpt.textContent = T("league.tableTeamSlotPrompt");
         sel.appendChild(noneOpt);
         league.teams.forEach(function (t) {
+          // A team with nobody on its roster has nothing to seed a queue
+          // with, and a team already hosting on another table/side can't
+          // also host here - both stay hidden until that changes, except
+          // this exact side's own current pick, which must stay listed
+          // so re-rendering the same choice doesn't make it vanish.
+          if (!t.memberNames.length && t.id !== assignment[side]) return;
+          if (leagueTeamAssignedElsewhere(league, t.id, tableNum, side)) return;
           var opt = document.createElement("option");
           opt.value = t.id;
           opt.textContent = t.name;
@@ -9774,7 +9814,14 @@
     }
 
     if (league.isOrganizer) {
-      renderLeagueTeams(league);
+      // Open leagues skip team-vs-team hosting entirely (no rosters to
+      // build, so no queue-mode or rotation-style choice to make) - the
+      // Tables Overview grid's own "none" queueMode branch already plays
+      // plain player-vs-player, unchanged.
+      leagueTeamsSection.classList.toggle("hidden", league.isOpen);
+      leagueQueueModeRow.classList.toggle("hidden", league.isOpen);
+      leagueTeamRotationRow.classList.toggle("hidden", league.isOpen);
+      if (!league.isOpen) renderLeagueTeams(league);
       leagueQueueModeSelect.value = league.queueMode;
       leagueTeamRotationSelect.value = league.teamRotationMode;
       leagueTableCountInput.value = league.tableCount;
@@ -10036,6 +10083,7 @@
       noneOpt.textContent = T("league.teamSlotNoneOption");
       sel.appendChild(noneOpt);
       teamsWithPresentMembers.forEach(function (t) {
+        if (t.id !== assignment[side] && leagueTeamAssignedElsewhere(league, t.id, tableNum, side)) return;
         var opt = document.createElement("option");
         opt.value = t.id;
         opt.textContent = t.name;
@@ -23816,8 +23864,9 @@
     Array.prototype.forEach.call(leagueNewFormatRadios, function (r) {
       if (r.checked) format = r.value;
     });
-    createLeague(name, format);
+    createLeague(name, format, leagueNewOpenModeInput.checked);
     leagueNewNameInput.value = "";
+    leagueNewOpenModeInput.checked = false;
     renderLeaguePage();
   });
   btnLeagueDelete.addEventListener("click", function () {

@@ -7095,7 +7095,7 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
    scrolling down to the full live boards. */
 .league-tables-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
   gap: 14px;
   margin-top: 10px;
 }
@@ -7169,19 +7169,24 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
    depending on the league's teamRotationMode. */
 .league-team-slots-row {
   flex-wrap: wrap;
-  gap: 10px 16px;
+  gap: 14px 20px;
+  margin: 4px 0;
 }
 
 .league-team-slots-row label {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   font-size: 0.9rem;
   color: var(--text-dim);
   text-transform: uppercase;
   letter-spacing: 0.03em;
   flex: 1;
-  min-width: 110px;
+  min-width: 170px;
+}
+
+.league-team-slots-row select {
+  width: 100%;
 }
 
 .league-team-vs-label {
