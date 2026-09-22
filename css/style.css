@@ -7382,7 +7382,7 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   top: 100%;
   left: 0;
   right: 0;
-  z-index: 20;
+  z-index: 500;
   margin: 4px 0 0;
   padding: 4px;
   list-style: none;
@@ -7503,6 +7503,54 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
 
 .league-team-member-chip button:hover {
   opacity: 1;
+}
+
+/* League's own Focus Mode - same "declutter, don't just hide everyone
+   but one" spirit as the main scoreboard's #app.focus-mode, but scoped
+   here since the League page (#view-league-page) is a separate view
+   from #app, not a descendant of it. Hides the picker/setup, Members,
+   Standings, Teams roster editor, and Tables config rows; keeps the
+   header (so Back and the toggle itself stay reachable), the Tables
+   Overview grid, and the live boards - several tables can be running
+   at once, so this stays about legibility, not narrowing to one. */
+#view-league-page.league-focus-mode #league-setup-panel,
+#view-league-page.league-focus-mode #league-organizer-only,
+#view-league-page.league-focus-mode #league-standings-section,
+#view-league-page.league-focus-mode #league-teams-section,
+#view-league-page.league-focus-mode #league-tables-config,
+#view-league-page.league-focus-mode .league-mode-toggle {
+  display: none;
+}
+
+#view-league-page.league-focus-mode #league-tables-section h4 {
+  font-size: 1.3rem;
+}
+
+#view-league-page.league-focus-mode .league-table-slot-heading {
+  font-size: 1.1rem;
+}
+
+#view-league-page.league-focus-mode .league-table-slot-summary {
+  font-size: 1.15rem;
+}
+
+/* League's live boards reuse the main scoreboard's own .player-panel/
+   .stat-value/.btn-ball classes (see buildLeagueSidePanel) - scaled up
+   here the same way #app.focus-mode scales the main scoreboard, just
+   with a fixed bump rather than that system's container-query sizing,
+   since League's board stack (one-to-several boards, not a fixed grid)
+   doesn't have the same fully-known layout to size off of. */
+#view-league-page.league-focus-mode .player-name {
+  font-size: 1.3rem;
+}
+
+#view-league-page.league-focus-mode .stat-value {
+  font-size: 3rem;
+}
+
+#view-league-page.league-focus-mode .btn-ball {
+  min-height: 64px;
+  font-size: 1.4rem;
 }
 
 /* ---------------------------------------------------------------------
