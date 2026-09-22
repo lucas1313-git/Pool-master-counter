@@ -9609,6 +9609,7 @@
       var header = document.createElement("div");
       header.className = "league-team-row-header";
       var nameEl = document.createElement("span");
+      nameEl.className = "league-team-name";
       nameEl.textContent = team.name;
       header.appendChild(nameEl);
       var removeBtn = document.createElement("button");
@@ -9679,8 +9680,6 @@
 
       var addRow = document.createElement("div");
       addRow.className = "row";
-      var addSelect = document.createElement("select");
-      addSelect.className = "league-team-add-player-select";
       // Excludes anyone already on ANY team in this league (not just this
       // one) - a member belongs to at most one team, so moving someone
       // between teams means removing them from their current team first,
@@ -9694,23 +9693,40 @@
       var candidates = league.members.filter(function (m) {
         return !already[m.name];
       });
+      // A text input backed by a datalist, not a plain select - lets the
+      // organizer either pick an existing member (autocomplete) or type
+      // someone brand new who isn't a league member yet; the Add handler
+      // below adds them as one automatically, same as the table queue's
+      // own name input does.
+      var addInput = document.createElement("input");
+      addInput.type = "text";
+      addInput.className = "league-team-add-player-select";
+      addInput.placeholder = T("league.queueAddPlaceholder");
+      var addDatalistId = "league-team-" + team.id + "-add-player-datalist";
+      addInput.setAttribute("list", addDatalistId);
+      var addDatalist = document.createElement("datalist");
+      addDatalist.id = addDatalistId;
       candidates.forEach(function (m) {
         var opt = document.createElement("option");
         opt.value = m.name;
-        opt.textContent = m.name;
-        addSelect.appendChild(opt);
+        addDatalist.appendChild(opt);
       });
       var addBtn = document.createElement("button");
       addBtn.type = "button";
       addBtn.className = "btn btn-ghost";
       addBtn.textContent = T("league.addPlayerToTeamButton", { team: team.name });
-      addBtn.disabled = candidates.length === 0;
       addBtn.addEventListener("click", function () {
-        if (!addSelect.value) return;
-        addMemberToTeam(league, team.id, addSelect.value);
+        var name = addInput.value.trim();
+        if (!name) return;
+        var existingMember = league.members.filter(function (m) {
+          return normalizeNameKey(m.name) === normalizeNameKey(name);
+        })[0];
+        if (!existingMember) addLeagueMember(league, name);
+        addMemberToTeam(league, team.id, existingMember ? existingMember.name : name);
         renderLeaguePage();
       });
-      addRow.appendChild(addSelect);
+      addRow.appendChild(addInput);
+      addRow.appendChild(addDatalist);
       addRow.appendChild(addBtn);
       li.appendChild(addRow);
 
