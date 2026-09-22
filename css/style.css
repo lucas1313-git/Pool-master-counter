@@ -6190,12 +6190,21 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
    is the part that was actually broken. Players is deliberately its own
    section below this one - it needs room for up to 4 player cards
    across, which is routinely wider than 40vw. */
-.tournament-setup-narrow-sections {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 14px;
-  margin-bottom: 14px;
+/* The panel itself (progress header, dots, each step, and the footer's
+   Back/Next/Start buttons) is otherwise a plain .panel - full viewport
+   width like every other full-page view. That reads fine for content
+   that wants the width (a bracket, a wide table), but this wizard's
+   own content is already narrow and centered per step - left unconstrained,
+   the panel just wraps a small centered card in a huge expanse of
+   card background, and .wizard-footer's buttons/.wizard-progress-dots
+   (both flex-fill their container) stretch to match that oversized
+   width instead of sizing like every other button/progress bar in the
+   app. Capping the panel itself fixes both at once. Matches the League
+   wizard modal's own width (#league-wizard-overlay .wizard-card) so the
+   app's step-by-step wizards feel consistent with each other. */
+#tournament-setup-panel {
+  max-width: 720px;
+  margin: 8px auto;
 }
 
 .tournament-setup-section {
