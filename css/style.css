@@ -7391,16 +7391,15 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   min-width: 0;
 }
 
-/* Team name and captain are this team's identity - one compact,
-   bordered block instead of spanning the full card width. Sized to its
-   own content (inline-flex + align-self) rather than stretched. */
+/* Team name and captain are this team's identity - one bordered block
+   spanning the card's own width (the card's padding is what keeps it
+   off the card's outer edge, same margin every other row in the card
+   respects). */
 .league-team-identity {
-  display: inline-flex;
+  display: flex;
   flex-direction: column;
-  align-self: flex-start;
   gap: 6px;
   padding: 8px 12px;
-  max-width: 100%;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -7412,6 +7411,12 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   justify-content: space-between;
   gap: 10px;
   font-weight: 700;
+}
+
+/* A bit bigger than the row's own remove button - the name is what an
+   organizer scans this identity block for. */
+.league-team-name {
+  font-size: 1.15rem;
 }
 
 .league-team-members {
