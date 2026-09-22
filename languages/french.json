@@ -421,6 +421,7 @@
   "league.deleteConfirm": "Supprimer « {{name}} » ? Cette action est irréversible.",
   "league.exportButton": "📤 Exporter la ligue",
   "league.focusModeButton": "🔎 Mode Concentration",
+  "league.focusThisTableButton": "🔎 Se Concentrer sur cette Table",
   "league.format8Ball": "APA 8-Ball",
   "league.format9Ball": "APA 9-Ball",
   "league.heading": "🏆 Ligue",

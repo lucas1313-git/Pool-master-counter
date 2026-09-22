@@ -9189,6 +9189,26 @@
     cardWrap.className = "tournament-floating-board";
     cardWrap.style.setProperty("--stack-index", String(stackIndex));
 
+    // A dedicated button, not a tap-anywhere-on-the-card gesture - a
+    // stray tap on a live board still can't jump to a different table's
+    // score mid-game, only this specific control can. Same effect as
+    // picking this table from the focus dropdown below (or "all" again,
+    // toggling back), just reachable right from the board itself.
+    var headerRow = document.createElement("div");
+    headerRow.className = "league-board-header-row";
+    var isFocused = league.focusedTable === active.table;
+    var focusBtn = document.createElement("button");
+    focusBtn.type = "button";
+    focusBtn.className = "btn btn-ghost league-board-focus-btn";
+    focusBtn.textContent = isFocused ? T("league.seeAllTables") : T("league.focusThisTableButton");
+    focusBtn.addEventListener("click", function () {
+      league.focusedTable = isFocused ? "all" : active.table;
+      saveLeaguesToStorage(LEAGUES);
+      renderLeagueActiveMatches();
+    });
+    headerRow.appendChild(focusBtn);
+    cardWrap.appendChild(headerRow);
+
     var banner = document.createElement("div");
     banner.className = "now-playing-banner tournament-now-playing";
     var headerParts = [];
@@ -9205,10 +9225,11 @@
     return cardWrap;
   }
 
-  // Same "stack of floating boards" pattern as
-  // renderTournamentActiveMatch, deliberately no click-to-focus - only the
-  // dropdown switches which table's board is interactive, so a stray tap
-  // can't jump to a different table's live score mid-game.
+  // Same "stack of floating boards" pattern as renderTournamentActiveMatch.
+  // Focusing one table is only ever a deliberate action - either the
+  // dropdown below or each board's own focus button (see
+  // buildLeagueFloatingBoard) - never a tap on the board itself, so a
+  // stray tap can't jump to a different table's live score mid-game.
   function renderLeagueActiveMatches() {
     var league = activeLeagueId ? findLeagueById(activeLeagueId) : null;
     leagueCurrentMatchPanel.innerHTML = "";

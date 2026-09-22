@@ -421,6 +421,7 @@
   "league.deleteConfirm": "刪除「{{name}}」？呢個操作冇得返轉頭。",
   "league.exportButton": "📤 匯出聯賽",
   "league.focusModeButton": "🔎 專注模式",
+  "league.focusThisTableButton": "🔎 專注呢張枱",
   "league.format8Ball": "APA 8-Ball",
   "league.format9Ball": "APA 9-Ball",
   "league.heading": "🏆 聯賽",
