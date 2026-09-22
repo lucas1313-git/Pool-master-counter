@@ -6888,6 +6888,25 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   margin-bottom: 0;
 }
 
+/* League-only: a small focus button at the top of each live board (see
+   buildLeagueFloatingBoard) - .tournament-floating-board itself stays
+   untouched since Tournament reuses that class as-is. */
+.league-board-header-row {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 16px 6px;
+}
+
+.league-board-focus-btn {
+  font-size: 0.9rem;
+  padding: 6px 12px;
+}
+
+#view-league-page.league-focus-mode .league-board-focus-btn {
+  font-size: 1.05rem;
+  padding: 10px 16px;
+}
+
 /* ---------- Round Robin: standings list + a wrapping grid of every
    match (no bracket tree — every match is visible from the start). ---------- */
 
