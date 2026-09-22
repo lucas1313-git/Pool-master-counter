@@ -1301,6 +1301,16 @@ input[type="number"] {
   height: 24px;
 }
 
+/* A <select> dropped inline into a prominent checkbox row (the league
+   handicap-system picker) would otherwise inherit the app-wide bare
+   select rule's flex:1/min-width:140px and stretch to dominate the row
+   - this keeps it sized to its own short option text instead. */
+.checkbox-row.checkbox-row-prominent select {
+  flex: 0 1 auto;
+  min-width: 0;
+  font: inherit;
+}
+
 /* ---------- Game rotation ---------- */
 
 .rotation-list {
