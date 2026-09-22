@@ -7216,6 +7216,41 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
    shade lighter than its panel (see .league-table-slot), so this goes
    one step further with color-mix rather than reusing --bg-card verbatim,
    or it'd read as flush with the card instead of nested inside it. */
+/* The organizer's own editable Skill Level chart for a non-APA system
+   (see btn-league-handicap-chart-open / leagueMatchTargetForMember) -
+   same look as .league-standings-table, just its own class since it
+   lives in a different overlay entirely. */
+.league-handicap-chart-table {
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+  width: 100%;
+  margin-bottom: 14px;
+}
+
+.league-handicap-chart-table th,
+.league-handicap-chart-table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  font-size: 1.05rem;
+}
+
+.league-handicap-chart-table th {
+  color: var(--text-dim);
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.league-handicap-chart-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.league-handicap-chart-value-input {
+  width: 100%;
+  min-width: 0;
+}
+
 .league-table-slot-queue-box {
   display: flex;
   flex-direction: column;
