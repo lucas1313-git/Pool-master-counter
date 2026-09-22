@@ -541,6 +541,7 @@
   "multiTable.downloadDataButton": "💾 1. Descargar mi Configuración",
   "multiTable.installStepLabel": "🚀 3. Instalar y Abrir la App",
   "multiTable.loadSettingPrompt": "Elige el archivo de configuración que descargaste en el otro dispositivo para continuar justo donde lo dejaste.",
+  "multiTable.mobileHostUnsupportedNotice": "Cada mesa en su propio dispositivo necesita una laptop o computadora de escritorio funcionando como anfitrión — este teléfono o tablet no puede hacer esa parte. Aun así puedes gestionar todas las mesas directamente desde este dispositivo.",
   "multiTable.openGroupSessionButton": "🔗 Abrir Sesión de Grupo",
   "multiTable.promptBody": "Cada mesa necesita su propio dispositivo conectado al mismo servidor local. Abre la Sesión de Grupo para conectar este dispositivo como anfitrión, o descarga la app si esta página no puede alojar directamente.",
   "multiTable.promptTitle": "🖥️ Alojar Varias Mesas",

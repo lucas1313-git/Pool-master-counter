@@ -10449,7 +10449,19 @@
     var wantsMultiClient = leagueWizardMultiClientCheckbox.checked;
     leagueWizardOverlay.classList.add("hidden");
     renderLeaguePage();
-    if (wantsMultiClient) openMultiTableHostPrompt("wizardLeague");
+    if (wantsMultiClient) {
+      // A phone or tablet can never itself run the local relay server
+      // separate per-table devices would connect to (see
+      // toggleLeagueWizardMultiClientVisibility) - the wizard's own note
+      // already said so while the box was checked, so this doesn't
+      // redirect into that flow at all on one, just reinforces it and
+      // lets the organizer carry on managing every table from right here.
+      if (detectDesktopOS()) {
+        openMultiTableHostPrompt("wizardLeague");
+      } else {
+        showToast(T("multiTable.mobileHostUnsupportedNotice"));
+      }
+    }
   }
 
   // ---------------------------------------------------------------------
@@ -10479,12 +10491,19 @@
     tournamentMultiClientNote.classList.toggle("hidden", !eligible || !tournamentMultiClientCheckbox.checked);
   }
 
+  // On a phone or tablet (detectDesktopOS() null - see below), this
+  // device can never be the one running the local relay server that
+  // separate per-table devices connect to, so checking this box here
+  // says so up front instead of the normal "here's how hosting works"
+  // note - closeLeagueWizard skips the actual hosting prompt/redirect
+  // for the same reason once the wizard finishes.
   function toggleLeagueWizardMultiClientVisibility() {
     var count = parseInt(leagueWizardTableCountInput.value, 10) || 1;
     var eligible = count > 1;
     leagueWizardMultiClientRow.classList.toggle("hidden", !eligible);
     if (!eligible) leagueWizardMultiClientCheckbox.checked = false;
     leagueWizardMultiClientNote.classList.toggle("hidden", !eligible || !leagueWizardMultiClientCheckbox.checked);
+    leagueWizardMultiClientNote.textContent = T(detectDesktopOS() ? "multiTable.wizardNotice" : "multiTable.mobileHostUnsupportedNotice");
   }
 
   var multiTableHostSettingStep = null;

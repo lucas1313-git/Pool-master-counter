@@ -541,6 +541,7 @@
   "multiTable.downloadDataButton": "💾 1. Télécharger ma Config",
   "multiTable.installStepLabel": "🚀 3. Installer et Ouvrir l'appli",
   "multiTable.loadSettingPrompt": "Choisissez le fichier de paramètres téléchargé sur l'autre appareil pour reprendre exactement où vous en étiez.",
+  "multiTable.mobileHostUnsupportedNotice": "Chaque table sur son propre appareil a besoin d'un ordinateur portable ou de bureau pour héberger — ce téléphone ou cette tablette ne peut pas faire ça. Vous pouvez quand même gérer toutes les tables directement depuis cet appareil.",
   "multiTable.openGroupSessionButton": "🔗 Ouvrir la Session de Groupe",
   "multiTable.promptBody": "Chaque table a besoin de son propre appareil connecté au même serveur local. Ouvrez la Session de Groupe pour connecter cet appareil en tant qu'hôte, ou téléchargez l'appli si cette page ne peut pas héberger directement.",
   "multiTable.promptTitle": "🖥️ Héberger Plusieurs Tables",
