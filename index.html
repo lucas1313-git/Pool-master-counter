@@ -1246,13 +1246,13 @@
     <div class="help-header">
       <button type="button" id="btn-league-handicap-chart-close" class="wizard-close-btn" aria-label="Close" data-i18n-aria-label="common.close">×</button>
       <h2 class="help-title" id="league-handicap-chart-title">BCA 8-Ball Chart</h2>
-      <p class="help-intro" data-i18n="league.handicapChartExplain">Your own numbers for this league's Skill Level chart, saved with this league and included whenever you export it. A Skill Level not listed here falls back to Base Games to Win.</p>
+      <p class="help-intro" id="league-handicap-chart-explain" data-i18n="league.handicapChartExplain">Your own numbers for this league's Skill Level chart, saved with this league and included whenever you export it. A Skill Level not listed here falls back to Base Games to Win.</p>
     </div>
     <div class="help-body">
       <table class="league-handicap-chart-table">
         <thead>
           <tr>
-            <th data-i18n="league.handicapChartSkillLevel">Skill Level</th>
+            <th id="league-handicap-chart-key-header" data-i18n="league.handicapChartSkillLevel">Skill Level</th>
             <th id="league-handicap-chart-target-header" data-i18n="league.handicapChartTargetGames">Games to Win</th>
             <th></th>
           </tr>
@@ -1260,7 +1260,7 @@
         <tbody id="league-handicap-chart-body"></tbody>
       </table>
       <div class="row">
-        <input type="number" id="league-handicap-chart-new-sl" data-i18n-placeholder="league.handicapChartSkillLevel" placeholder="Skill Level" min="1" max="99">
+        <input type="number" id="league-handicap-chart-new-sl" data-i18n-placeholder="league.handicapChartSkillLevel" placeholder="Skill Level" min="1" max="999">
         <input type="number" id="league-handicap-chart-new-value" data-i18n-placeholder="league.handicapChartTargetGames" placeholder="Games to Win" min="1" max="999">
         <button type="button" id="btn-league-handicap-chart-add" class="btn btn-ghost" data-i18n="league.handicapChartAddButton">+ Add</button>
       </div>
@@ -1840,7 +1840,7 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
             <tr>
               <th data-i18n="league.colMember">Member</th>
               <th data-i18n="league.colSkillLevel">SL</th>
-              <th data-i18n="league.colPoints">Points</th>
+              <th id="league-col-points-header" data-i18n="league.colPoints">Points</th>
               <th data-i18n="league.colRecord">W-L</th>
               <th data-i18n="league.colSession">Session</th>
               <th id="league-col-remove-header" class="hidden"></th>
@@ -2053,6 +2053,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260922q"></script>
+<script src="js/app.js?v=20260922s"></script>
 </body>
 </html>

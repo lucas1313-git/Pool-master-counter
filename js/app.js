@@ -2086,6 +2086,7 @@
   var leagueStandingsBody = document.getElementById("league-standings-body");
   var leagueStandingsSortSelect = document.getElementById("league-standings-sort-select");
   var leagueColRemoveHeader = document.getElementById("league-col-remove-header");
+  var leagueColPointsHeader = document.getElementById("league-col-points-header");
   var leagueLiveHostingSection = document.getElementById("league-live-hosting-section");
   var leagueTeamsSection = document.getElementById("league-teams-section");
   var leagueTeamsList = document.getElementById("league-teams-list");
@@ -2108,7 +2109,9 @@
   var leagueHandicapChartOverlay = document.getElementById("league-handicap-chart-overlay");
   var btnLeagueHandicapChartClose = document.getElementById("btn-league-handicap-chart-close");
   var leagueHandicapChartTitle = document.getElementById("league-handicap-chart-title");
+  var leagueHandicapChartExplain = document.getElementById("league-handicap-chart-explain");
   var leagueHandicapChartTargetHeader = document.getElementById("league-handicap-chart-target-header");
+  var leagueHandicapChartKeyHeader = document.getElementById("league-handicap-chart-key-header");
   var leagueHandicapChartBody = document.getElementById("league-handicap-chart-body");
   var leagueHandicapChartNewSlInput = document.getElementById("league-handicap-chart-new-sl");
   var leagueHandicapChartNewValueInput = document.getElementById("league-handicap-chart-new-value");
@@ -8364,13 +8367,29 @@
   // Skill Level, or the base number if that Skill Level isn't in the
   // chart (an empty BCA/VNBA/TAP chart before the organizer has added
   // their own league's numbers means every member falls back to base).
-  function leagueMatchTargetForMember(league, skillLevel) {
+  // BCA defaults to this app's own Elo-style rating (see buildRatingBadge/
+  // getPlayerRating - already described to players as "FargoRate-inspired")
+  // as its handicap key instead of the manually-set Skill Level field,
+  // since BCAPL leagues commonly handicap off FargoRate in practice (see
+  // the BCA/BCAPL section of the handicap research this feature is built
+  // from) and this app has no separate Fargo integration to pull a real
+  // FargoRate number from - every other system keys off Skill Level.
+  function leagueHandicapUsesRating(system) {
+    return system === "bca";
+  }
+
+  function leagueHandicapLookupKey(league, member) {
+    return leagueHandicapUsesRating(league.handicapSystem) ? getPlayerRating(member.name) : member.skillLevel;
+  }
+
+  function leagueMatchTargetForMember(league, member) {
     if (!league.useHandicap) return league.handicapBaseGames;
     var fmt = league.format === "apa9ball" ? "9ball" : "8ball";
+    var key = leagueHandicapLookupKey(league, member);
     var custom = ((league.customHandicapCharts || {})[league.handicapSystem] || {})[fmt] || {};
-    if (typeof custom[skillLevel] === "number") return custom[skillLevel];
+    if (typeof custom[key] === "number") return custom[key];
     var shared = (HANDICAP_CHARTS[league.handicapSystem] || HANDICAP_CHARTS.apa)[fmt] || {};
-    var value = shared[skillLevel];
+    var value = shared[key];
     return typeof value === "number" ? value : league.handicapBaseGames;
   }
 
@@ -8398,9 +8417,14 @@
   function openLeagueHandicapChartEditor(league) {
     var fmt = league.format === "apa9ball" ? "9ball" : "8ball";
     var system = league.handicapSystem;
+    var usesRating = leagueHandicapUsesRating(system);
     leagueHandicapChartTitle.textContent =
       T(league.format === "apa9ball" ? "league.format9Ball" : "league.format8Ball", { system: handicapSystemLabel(system) }) + " " + T("league.handicapChartTitleSuffix");
     leagueHandicapChartTargetHeader.textContent = T(fmt === "9ball" ? "league.handicapChartTargetPoints" : "league.handicapChartTargetGames");
+    var keyLabel = T(usesRating ? "common.rating" : "league.handicapChartSkillLevel");
+    leagueHandicapChartKeyHeader.textContent = keyLabel;
+    leagueHandicapChartNewSlInput.placeholder = keyLabel;
+    leagueHandicapChartExplain.textContent = T(usesRating ? "league.handicapChartExplainRating" : "league.handicapChartExplain");
 
     var merged = leagueEffectiveHandicapChart(league);
     // Nothing saved or shared yet for this system (true for BCA/VNBA/TAP
@@ -8409,8 +8433,12 @@
     // point to edit from rather than an empty table, since it's the only
     // actual published chart this app has; nothing is written to the
     // league until Save, so this alone never claims to BE that league's
-    // official numbers.
-    leagueHandicapChartDraft = Object.keys(merged).length ? Object.assign({}, merged) : Object.assign({}, HANDICAP_CHARTS.apa[fmt]);
+    // official numbers. Skipped for BCA: APA's chart is keyed by Skill
+    // Level 2-9, meaningless against a ~0-900 Rating scale, so there's
+    // nothing sensible to pre-fill from - it starts from whatever's
+    // already saved (or empty) either way.
+    leagueHandicapChartDraft =
+      Object.keys(merged).length || usesRating ? Object.assign({}, merged) : Object.assign({}, HANDICAP_CHARTS.apa[fmt]);
 
     renderLeagueHandicapChartEditorRows(league);
     leagueHandicapChartOverlay.classList.remove("hidden");
@@ -8432,7 +8460,7 @@
       var emptyCell = document.createElement("td");
       emptyCell.colSpan = 3;
       emptyCell.className = "empty-hint";
-      emptyCell.textContent = T("league.handicapChartEmptyHint");
+      emptyCell.textContent = T(leagueHandicapUsesRating(league.handicapSystem) ? "league.handicapChartEmptyHintRating" : "league.handicapChartEmptyHint");
       emptyRow.appendChild(emptyCell);
       leagueHandicapChartBody.appendChild(emptyRow);
     } else {
@@ -9238,8 +9266,8 @@
       nameB: nameB,
       skillLevelA: memberA.skillLevel,
       skillLevelB: memberB.skillLevel,
-      targetA: leagueMatchTargetForMember(league, memberA.skillLevel),
-      targetB: leagueMatchTargetForMember(league, memberB.skillLevel),
+      targetA: leagueMatchTargetForMember(league, memberA),
+      targetB: leagueMatchTargetForMember(league, memberB),
       scoreA: 0,
       scoreB: 0,
       startedAt: new Date().toISOString()
@@ -10252,6 +10280,15 @@
     });
 
     leagueStandingsSortSelect.value = leagueStandingsSortMode;
+    // BCA hands off its handicap key to this app's own Rating (see
+    // leagueHandicapUsesRating) - the Points column shows that same
+    // number there instead of league points, since league points aren't
+    // what's actually deciding anyone's target in that league. Every
+    // other system keeps showing league points as always. Either way
+    // the name badge (see buildRatingBadge above) keeps showing Rating
+    // too, so it's never hidden just because a league isn't on BCA.
+    var pointsColShowsRating = leagueHandicapUsesRating(league.handicapSystem);
+    leagueColPointsHeader.textContent = T(pointsColShowsRating ? "common.rating" : "league.colPoints");
     leagueStandingsBody.innerHTML = "";
     var sorted = leagueStandingsSorted(league);
     if (sorted.length === 0) {
@@ -10294,7 +10331,7 @@
         row.appendChild(slCell);
 
         var ptsCell = document.createElement("td");
-        ptsCell.textContent = m.leaguePoints;
+        ptsCell.textContent = pointsColShowsRating ? getPlayerRating(m.name) : m.leaguePoints;
         row.appendChild(ptsCell);
 
         var recordCell = document.createElement("td");
