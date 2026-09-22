@@ -410,6 +410,7 @@
   "leaderboard.viewToggleAria": "Ipakita ang leaderboard para sa",
   "league.addMemberButton": "+ Idagdag",
   "league.addPlayerToTeamButton": "+ Magdagdag ng Manlalaro sa {{team}}",
+  "league.addToContactsLabel": "Idagdag sa Contact Sheet kung bago",
   "league.addToQueueButton": "+ Idagdag",
   "league.captainChipLabel": "© {{name}}",
   "league.captainLabel": "Captain",

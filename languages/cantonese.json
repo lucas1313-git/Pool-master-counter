@@ -410,6 +410,7 @@
   "leaderboard.viewToggleAria": "顯示邊種排行榜",
   "league.addMemberButton": "+ 加入",
   "league.addPlayerToTeamButton": "+ 加入球員去{{team}}",
+  "league.addToContactsLabel": "如果係新球員就加入聯絡表",
   "league.addToQueueButton": "+ 加入",
   "league.captainChipLabel": "© {{name}}",
   "league.captainLabel": "隊長",
