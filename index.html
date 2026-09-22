@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260921t">
+<link rel="stylesheet" href="css/style.css?v=20260922a">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -1728,6 +1728,7 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
     <button type="button" id="btn-league-back" class="btn btn-ghost screen-back-btn" aria-label="Back" data-i18n-aria-label="common.back"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
     <h1 data-i18n="header.league">League</h1>
     <button type="button" id="btn-open-league-wizard" class="btn btn-primary" data-i18n="league.wizard.openButton">🧙 Setup Tonight</button>
+    <button type="button" id="btn-league-toggle-focus" class="btn btn-primary" data-i18n="league.focusModeButton">🔎 Focus Mode</button>
     <button type="button" id="btn-open-help-league" class="btn btn-ghost" data-i18n="header.help">❓ Help</button>
   </header>
 
@@ -1774,21 +1775,23 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
       </div>
     </div>
 
-    <h4 data-i18n="league.standingsHeading">Standings</h4>
-    <div class="league-standings-table-wrap">
-      <table class="league-standings-table" id="league-standings-table">
-        <thead>
-          <tr>
-            <th data-i18n="league.colMember">Member</th>
-            <th data-i18n="league.colSkillLevel">SL</th>
-            <th data-i18n="league.colPoints">Points</th>
-            <th data-i18n="league.colRecord">W-L</th>
-            <th data-i18n="league.colSession">Session</th>
-            <th id="league-col-remove-header" class="hidden"></th>
-          </tr>
-        </thead>
-        <tbody id="league-standings-body"></tbody>
-      </table>
+    <div id="league-standings-section">
+      <h4 data-i18n="league.standingsHeading">Standings</h4>
+      <div class="league-standings-table-wrap">
+        <table class="league-standings-table" id="league-standings-table">
+          <thead>
+            <tr>
+              <th data-i18n="league.colMember">Member</th>
+              <th data-i18n="league.colSkillLevel">SL</th>
+              <th data-i18n="league.colPoints">Points</th>
+              <th data-i18n="league.colRecord">W-L</th>
+              <th data-i18n="league.colSession">Session</th>
+              <th id="league-col-remove-header" class="hidden"></th>
+            </tr>
+          </thead>
+          <tbody id="league-standings-body"></tbody>
+        </table>
+      </div>
     </div>
 
     <div id="league-live-hosting-section">
@@ -1803,33 +1806,35 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
       <div id="league-tables-section">
         <h4 data-i18n="league.tablesHeading">Tables</h4>
-        <div class="row league-settings-row">
-          <label for="league-table-count" data-i18n="league.tableCountLabel">🎱 Number of Tables</label>
-          <input type="number" id="league-table-count" min="1" max="20" value="1">
-        </div>
-        <div class="row league-settings-row" id="league-queue-mode-row">
-          <label for="league-queue-mode-select" data-i18n="league.queueModeLabel">Queue Mode</label>
-          <select id="league-queue-mode-select">
-            <option value="none" data-i18n="league.queueModeNone">Manual (organizer assigns)</option>
-            <option value="perTable" data-i18n="league.queueModePerTable">Per-Table Queue</option>
-            <option value="perRoom" data-i18n="league.queueModePerRoom">Per-Room Queue</option>
-          </select>
-        </div>
-        <div class="row league-settings-row" id="league-team-rotation-row">
-          <label for="league-team-rotation-select" data-i18n="league.teamRotationLabel">Team Rotation</label>
-          <select id="league-team-rotation-select">
-            <option value="rotatingLines" data-i18n="league.teamRotationRotatingLines">Rotating Lines (next pair auto-cycles)</option>
-            <option value="roundRobin" data-i18n="league.teamRotationRoundRobin">Round-Robin (everyone plays everyone)</option>
-          </select>
-          <button type="button" id="btn-league-team-rotation-info" class="format-info-btn" data-i18n-aria-label="league.teamRotationInfoAria" aria-label="What do these mean?">❓</button>
-        </div>
-        <div class="row league-settings-row">
-          <label for="league-max-games-input" data-i18n="league.maxGamesLabel">🎯 Max Games / Player (Session)</label>
-          <input type="number" id="league-max-games-input" min="0" max="99" value="0">
-        </div>
-        <p class="player-stats-note league-max-games-help" data-i18n="league.maxGamesHelp">0 means unlimited. Once a member reaches this many games since the last reset, they're skipped for any new match (manual, queued, or team rotation) until you reset session counts for the next time this league meets — their lifetime stats keep counting either way.</p>
-        <div class="row league-settings-row">
-          <button type="button" id="btn-league-reset-session-counts" class="btn btn-ghost" data-i18n="league.resetSessionCountsButton">↺ Reset Session Counts</button>
+        <div id="league-tables-config">
+          <div class="row league-settings-row">
+            <label for="league-table-count" data-i18n="league.tableCountLabel">🎱 Number of Tables</label>
+            <input type="number" id="league-table-count" min="1" max="20" value="1">
+          </div>
+          <div class="row league-settings-row" id="league-queue-mode-row">
+            <label for="league-queue-mode-select" data-i18n="league.queueModeLabel">Queue Mode</label>
+            <select id="league-queue-mode-select">
+              <option value="none" data-i18n="league.queueModeNone">Manual (organizer assigns)</option>
+              <option value="perTable" data-i18n="league.queueModePerTable">Per-Table Queue</option>
+              <option value="perRoom" data-i18n="league.queueModePerRoom">Per-Room Queue</option>
+            </select>
+          </div>
+          <div class="row league-settings-row" id="league-team-rotation-row">
+            <label for="league-team-rotation-select" data-i18n="league.teamRotationLabel">Team Rotation</label>
+            <select id="league-team-rotation-select">
+              <option value="rotatingLines" data-i18n="league.teamRotationRotatingLines">Rotating Lines (next pair auto-cycles)</option>
+              <option value="roundRobin" data-i18n="league.teamRotationRoundRobin">Round-Robin (everyone plays everyone)</option>
+            </select>
+            <button type="button" id="btn-league-team-rotation-info" class="format-info-btn" data-i18n-aria-label="league.teamRotationInfoAria" aria-label="What do these mean?">❓</button>
+          </div>
+          <div class="row league-settings-row">
+            <label for="league-max-games-input" data-i18n="league.maxGamesLabel">🎯 Max Games / Player (Session)</label>
+            <input type="number" id="league-max-games-input" min="0" max="99" value="0">
+          </div>
+          <p class="player-stats-note league-max-games-help" data-i18n="league.maxGamesHelp">0 means unlimited. Once a member reaches this many games since the last reset, they're skipped for any new match (manual, queued, or team rotation) until you reset session counts for the next time this league meets — their lifetime stats keep counting either way.</p>
+          <div class="row league-settings-row">
+            <button type="button" id="btn-league-reset-session-counts" class="btn btn-ghost" data-i18n="league.resetSessionCountsButton">↺ Reset Session Counts</button>
+          </div>
         </div>
         <div id="league-tables-grid" class="league-tables-grid"></div>
       </div>
@@ -1962,6 +1967,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260921y"></script>
+<script src="js/app.js?v=20260922b"></script>
 </body>
 </html>

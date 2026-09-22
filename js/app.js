@@ -2054,6 +2054,7 @@
   var leaguePageView = document.getElementById("view-league-page");
   var btnOpenLeague = document.getElementById("btn-open-league");
   var btnLeagueBack = document.getElementById("btn-league-back");
+  var btnLeagueToggleFocus = document.getElementById("btn-league-toggle-focus");
   var btnOpenHelpLeague = document.getElementById("btn-open-help-league");
   var leagueSelect = document.getElementById("league-select");
   var btnLeagueImport = document.getElementById("btn-league-import");
@@ -2843,6 +2844,27 @@
       localStorage.setItem(FOCUS_MODE_KEY, on ? "1" : "0");
     } catch (e) {
       console.warn("Could not save focus mode preference.", e);
+    }
+  }
+
+  // Same idea as the main scoreboard's Focus Mode, scoped to the League
+  // page instead: hides the picker/setup/admin sections (new-league form,
+  // Members, Standings, Teams roster editor, Tables config rows) but
+  // keeps the Tables Overview grid and the live boards themselves - a
+  // league can have several tables running at once, so "focus" here
+  // means decluttering around them, not narrowing down to just one.
+  // Per-table zoom (See All Tables vs one specific table) is the
+  // existing focusedTable selector in renderLeagueActiveMatches, which
+  // still works the same whether this is on or off.
+  var LEAGUE_FOCUS_MODE_KEY = "poolMasterCounter.leagueFocusMode";
+
+  function setLeagueFocusMode(on) {
+    leaguePageView.classList.toggle("league-focus-mode", on);
+    btnLeagueToggleFocus.textContent = T(on ? "scoreboard.showAll" : "league.focusModeButton");
+    try {
+      localStorage.setItem(LEAGUE_FOCUS_MODE_KEY, on ? "1" : "0");
+    } catch (e) {
+      console.warn("Could not save league focus mode preference.", e);
     }
   }
 
@@ -9067,6 +9089,13 @@
     var player = getPlayer(getPlayerIdByName(name));
     var voice = player ? player.voice : undefined;
 
+    // Every tap rebuilds the live board (see renderLeagueActiveMatches),
+    // which removes the +/- button that was just tapped from the DOM -
+    // losing focus on a still-focused element makes some browsers reset
+    // scroll to the top, so every point scored reads as the page jumping.
+    // Restoring the exact position right after the rebuild is the fix.
+    var scrollY = window.scrollY;
+
     if (delta > 0 && next >= active[targetKey]) {
       playWinSound(voice);
       recordLeagueMatch(league, active.nameA, active.targetA, active.scoreA, active.nameB, active.targetB, active.scoreB);
@@ -9087,6 +9116,7 @@
       }
       saveLeaguesToStorage(LEAGUES);
       renderLeaguePage();
+      window.scrollTo(0, scrollY);
       if (league.queueMode !== "none") proposeNextMatchIfQueued(league, table);
       return;
     } else if (delta > 0) {
@@ -9096,6 +9126,7 @@
     }
     saveLeaguesToStorage(LEAGUES);
     renderLeagueActiveMatches();
+    window.scrollTo(0, scrollY);
   }
 
   function buildLeagueSidePanel(active, side, league) {
@@ -9254,7 +9285,16 @@
     var input = document.createElement("input");
     input.type = "text";
     input.placeholder = placeholder;
+    // iOS Safari (and Chrome/every other iOS browser, all WKWebView
+    // under the hood) is notorious for ignoring a bare autocomplete=off
+    // on fields it heuristically detects as a "name" - the extra
+    // attributes here are the standard workaround to actually suppress
+    // its own QuickType/predictive suggestion bar, a separate overlay
+    // from this dropdown that can also sit over the field.
     input.setAttribute("autocomplete", "off");
+    input.setAttribute("autocorrect", "off");
+    input.setAttribute("autocapitalize", "off");
+    input.setAttribute("spellcheck", "false");
     wrapper.appendChild(input);
 
     var list = document.createElement("ul");
@@ -24780,6 +24820,17 @@
   setFocusMode(storedFocusMode === "1");
   btnToggleFocus.addEventListener("click", function () {
     setFocusMode(!appRoot.classList.contains("focus-mode"));
+  });
+
+  var storedLeagueFocusMode = "0";
+  try {
+    storedLeagueFocusMode = localStorage.getItem(LEAGUE_FOCUS_MODE_KEY) || "0";
+  } catch (e) {
+    storedLeagueFocusMode = "0";
+  }
+  setLeagueFocusMode(storedLeagueFocusMode === "1");
+  btnLeagueToggleFocus.addEventListener("click", function () {
+    setLeagueFocusMode(!leaguePageView.classList.contains("league-focus-mode"));
   });
 
   setInterval(updateGameDurationDisplay, 1000);
