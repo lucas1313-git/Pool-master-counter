@@ -9582,6 +9582,13 @@
       var li = document.createElement("li");
       li.className = "league-team-row";
 
+      // Team name and its captain are the team's identity - grouped into
+      // their own bordered block so they read as one unit, separate from
+      // the roster chips and add-player controls below.
+      var identityBlock = document.createElement("div");
+      identityBlock.className = "league-team-identity";
+      li.appendChild(identityBlock);
+
       var header = document.createElement("div");
       header.className = "league-team-row-header";
       var nameEl = document.createElement("span");
@@ -9597,7 +9604,7 @@
         renderLeaguePage();
       });
       header.appendChild(removeBtn);
-      li.appendChild(header);
+      identityBlock.appendChild(header);
 
       var membersRow = document.createElement("div");
       membersRow.className = "league-team-members";
@@ -9650,12 +9657,13 @@
         });
         captainLabel.appendChild(captainSelect);
         captainRow.appendChild(captainLabel);
-        li.appendChild(captainRow);
+        identityBlock.appendChild(captainRow);
       }
 
       var addRow = document.createElement("div");
       addRow.className = "row";
       var addSelect = document.createElement("select");
+      addSelect.className = "league-team-add-player-select";
       // Excludes anyone already on ANY team in this league (not just this
       // one) - a member belongs to at most one team, so moving someone
       // between teams means removing them from their current team first,
@@ -9714,6 +9722,8 @@
     var league = activeLeagueId ? findLeagueById(activeLeagueId) : null;
     leagueNewForm.classList.toggle("hidden", !!league);
     leagueDetail.classList.toggle("hidden", !league);
+    btnLeagueExport.classList.toggle("hidden", !league);
+    btnLeagueDelete.classList.toggle("hidden", !league);
 
     if (!league) return;
     normalizeLeagueDefaults(league);
