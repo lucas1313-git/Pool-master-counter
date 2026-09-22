@@ -9341,9 +9341,6 @@
     input.addEventListener("input", function () {
       openListFor(input.value);
     });
-    input.addEventListener("focus", function () {
-      openListFor(input.value);
-    });
     input.addEventListener("blur", function () {
       closeList();
     });
