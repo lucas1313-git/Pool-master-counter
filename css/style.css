@@ -7015,29 +7015,41 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   margin-bottom: 14px;
 }
 
+/* No width:100% on purpose - table-layout stays the browser default
+   (auto), which sizes each column to its own widest cell (mostly the
+   Member column's names) instead of stretching every column evenly
+   across the whole panel. That's what made this unreadable at a
+   glance: a one-character "W-L" column and a long member name got the
+   same width, so most rows were mostly empty space. */
 .league-standings-table {
-  width: 100%;
   border-collapse: collapse;
   font-variant-numeric: tabular-nums;
 }
 
 .league-standings-table th,
 .league-standings-table td {
-  padding: 8px 10px;
+  padding: 12px 20px;
   text-align: left;
   border-bottom: 1px solid var(--border);
-  font-size: 0.9rem;
+  font-size: 1.05rem;
 }
 
 .league-standings-table th {
   color: var(--text-dim);
-  font-size: 0.78rem;
+  font-size: 0.85rem;
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
 
 .league-standings-table tbody tr:last-child td {
   border-bottom: none;
+}
+
+/* Member names read first and matter most at a glance from across the
+   table - bigger and bolder than the rest of the row's stats. */
+.league-standings-name-cell {
+  font-size: 1.3rem;
+  font-weight: 700;
 }
 
 .league-session-cap-reached {
@@ -7056,15 +7068,19 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   margin-bottom: 18px;
 }
 
-.league-tables-header-row {
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px 16px;
+/* Number of Tables / Queue Mode / Team Rotation / Max Games, each its
+   own label+control row stacked into one column instead of all
+   wrapping together in a single crowded row - matches how every other
+   settings list in the app (e.g. the League wizard's own steps) reads
+   top to bottom, one decision at a time. */
+.league-settings-row label {
+  min-width: 200px;
 }
 
-.league-tables-header-row h4 {
-  margin: 0;
-  flex: 1 0 100%;
+.league-max-games-help {
+  font-size: 1rem;
+  text-align: left;
+  margin: 0 0 12px;
 }
 
 #league-table-count {
@@ -7087,8 +7103,8 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
 .league-table-slot {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px;
+  gap: 10px;
+  padding: 18px;
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -7177,8 +7193,8 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
 .league-team-line {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 8px;
+  gap: 8px;
+  padding: 14px;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 10px;
