@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260921m">
+<link rel="stylesheet" href="css/style.css?v=20260921n">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -1749,6 +1749,10 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
         <label><input type="radio" name="league-new-format" value="apa8ball" checked> <span data-i18n="league.format8Ball">APA 8-Ball</span></label>
         <label><input type="radio" name="league-new-format" value="apa9ball"> <span data-i18n="league.format9Ball">APA 9-Ball</span></label>
       </div>
+      <div class="row">
+        <label><input type="checkbox" id="league-new-open-mode"> <span data-i18n="league.openModeLabel">Open League (no teams — pure player vs player)</span></label>
+      </div>
+      <p class="player-stats-note league-max-games-help" data-i18n="league.openModeHelp">Skips the Teams section entirely — the organizer just picks any two members to play, table by table.</p>
       <button type="button" id="btn-league-create" class="btn btn-primary" data-i18n="league.createButton">Create League</button>
     </div>
   </section>
@@ -1802,7 +1806,7 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
           <label for="league-table-count" data-i18n="league.tableCountLabel">🎱 Number of Tables</label>
           <input type="number" id="league-table-count" min="1" max="20" value="1">
         </div>
-        <div class="row league-settings-row">
+        <div class="row league-settings-row" id="league-queue-mode-row">
           <label for="league-queue-mode-select" data-i18n="league.queueModeLabel">Queue Mode</label>
           <select id="league-queue-mode-select">
             <option value="none" data-i18n="league.queueModeNone">Manual (organizer assigns)</option>
@@ -1810,7 +1814,7 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
             <option value="perRoom" data-i18n="league.queueModePerRoom">Per-Room Queue</option>
           </select>
         </div>
-        <div class="row league-settings-row">
+        <div class="row league-settings-row" id="league-team-rotation-row">
           <label for="league-team-rotation-select" data-i18n="league.teamRotationLabel">Team Rotation</label>
           <select id="league-team-rotation-select">
             <option value="rotatingLines" data-i18n="league.teamRotationRotatingLines">Rotating Lines (next pair auto-cycles)</option>
@@ -1957,6 +1961,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260921q"></script>
+<script src="js/app.js?v=20260921r"></script>
 </body>
 </html>
