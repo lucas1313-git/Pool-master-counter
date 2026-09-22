@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260921n">
+<link rel="stylesheet" href="css/style.css?v=20260921o">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -1737,6 +1737,8 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
     <div class="row">
       <select id="league-select"></select>
       <button type="button" id="btn-league-import" class="btn btn-ghost" data-i18n="league.importButton">📥 Import League</button>
+      <button type="button" id="btn-league-export" class="btn btn-ghost hidden" data-i18n="league.exportButton">📤 Export League</button>
+      <button type="button" id="btn-league-delete" class="btn btn-danger hidden" data-i18n="league.deleteButton">🗑️ Delete League</button>
       <input type="file" id="league-import-file-input" accept="application/json" class="hidden">
     </div>
 
@@ -1761,8 +1763,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
     <div class="league-detail-header">
       <h3 id="league-detail-name"></h3>
       <span id="league-readonly-badge" class="league-readonly-badge hidden" data-i18n="league.readOnlyBadge">Imported — read-only</span>
-      <button type="button" id="btn-league-export" class="btn btn-ghost" data-i18n="league.exportButton">📤 Export League</button>
-      <button type="button" id="btn-league-delete" class="btn btn-danger" data-i18n="league.deleteButton">🗑️ Delete League</button>
     </div>
 
     <div id="league-organizer-only">
@@ -1961,6 +1961,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260921r"></script>
+<script src="js/app.js?v=20260921s"></script>
 </body>
 </html>
