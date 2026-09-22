@@ -1776,6 +1776,10 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
         <div id="league-add-member-wrap"></div>
         <button type="button" id="btn-league-add-member" class="btn btn-ghost" data-i18n="league.addMemberButton">+ Add</button>
       </div>
+      <label class="checkbox-row">
+        <input type="checkbox" id="league-add-member-contacts-checkbox">
+        <span data-i18n="league.addToContactsLabel">Add to Contact Sheet if new</span>
+      </label>
     </div>
 
     <div id="league-standings-section">
@@ -1906,10 +1910,13 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
         </div>
         <ul id="league-wizard-roster-list" class="league-wizard-roster-list"></ul>
         <div class="row league-wizard-add-contact-row">
-          <label for="league-wizard-add-contact-select" data-i18n="league.wizard.addFromContactsLabel">+ Add from Contacts</label>
-          <select id="league-wizard-add-contact-select"></select>
+          <div id="league-wizard-add-contact-wrap"></div>
           <button type="button" id="btn-league-wizard-add-contact" class="btn btn-ghost" data-i18n="league.wizard.addFromContactsButton">+ Add &amp; Mark Present</button>
         </div>
+        <label class="checkbox-row">
+          <input type="checkbox" id="league-wizard-add-contact-contacts-checkbox">
+          <span data-i18n="league.addToContactsLabel">Add to Contact Sheet if new</span>
+        </label>
       </div>
 
       <div class="wizard-step hidden" id="league-wizard-step-2">
@@ -1978,6 +1985,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260922i"></script>
+<script src="js/app.js?v=20260922j"></script>
 </body>
 </html>
