@@ -2103,6 +2103,16 @@
   var leagueHandicapBaseInput = document.getElementById("league-handicap-base-input");
   var leagueTablesOpenToggleRow = document.getElementById("league-tables-open-toggle-row");
   var leagueTablesOpenToggle = document.getElementById("league-tables-open-toggle");
+  var leagueHandicapChartOpenRow = document.getElementById("league-handicap-chart-open-row");
+  var btnLeagueHandicapChartOpen = document.getElementById("btn-league-handicap-chart-open");
+  var leagueHandicapChartOverlay = document.getElementById("league-handicap-chart-overlay");
+  var btnLeagueHandicapChartClose = document.getElementById("btn-league-handicap-chart-close");
+  var leagueHandicapChartTitle = document.getElementById("league-handicap-chart-title");
+  var leagueHandicapChartTargetHeader = document.getElementById("league-handicap-chart-target-header");
+  var leagueHandicapChartBody = document.getElementById("league-handicap-chart-body");
+  var leagueHandicapChartNewSlInput = document.getElementById("league-handicap-chart-new-sl");
+  var leagueHandicapChartNewValueInput = document.getElementById("league-handicap-chart-new-value");
+  var btnLeagueHandicapChartAdd = document.getElementById("btn-league-handicap-chart-add");
   var btnLeagueResetSessionCounts = document.getElementById("btn-league-reset-session-counts");
 
   var btnOpenLeagueWizard = document.getElementById("btn-open-league-wizard");
@@ -8208,6 +8218,13 @@
     if (typeof l.useHandicap !== "boolean") l.useHandicap = true;
     if (["apa", "bca", "vnba", "tap"].indexOf(l.handicapSystem) === -1) l.handicapSystem = "apa";
     if (typeof l.handicapBaseGames !== "number" || l.handicapBaseGames < 1) l.handicapBaseGames = defaultHandicapBaseGames(l.format);
+    if (!l.customHandicapCharts || typeof l.customHandicapCharts !== "object") l.customHandicapCharts = blankHandicapChartsBySystem();
+    ["apa", "bca", "vnba", "tap"].forEach(function (system) {
+      if (!l.customHandicapCharts[system] || typeof l.customHandicapCharts[system] !== "object") l.customHandicapCharts[system] = {};
+      ["8ball", "9ball"].forEach(function (fmt) {
+        if (!l.customHandicapCharts[system][fmt] || typeof l.customHandicapCharts[system][fmt] !== "object") l.customHandicapCharts[system][fmt] = {};
+      });
+    });
     return l;
   }
 
@@ -8265,14 +8282,26 @@
   // APA_8BALL_RACE_TO/APA_9BALL_POINTS_TARGET above) so the app works
   // correctly even before data/handicap-charts.json has loaded, or if it
   // never does (offline, fetch blocked, etc.) - BCA/VNBA/TAP start empty
-  // either way since none of them publish one universal chart; the
-  // organizer's own league's numbers only ever come from that file.
+  // either way since none of them publish one universal chart. This is
+  // the shared, app-wide fallback only; each league's own numbers live
+  // on the league itself (customHandicapCharts, edited via "View/Edit
+  // Table") and take priority over this when present - see
+  // leagueEffectiveHandicapChart.
   var HANDICAP_CHARTS = {
     apa: { "8ball": Object.assign({}, APA_8BALL_RACE_TO), "9ball": Object.assign({}, APA_9BALL_POINTS_TARGET) },
     bca: { "8ball": {}, "9ball": {} },
     vnba: { "8ball": {}, "9ball": {} },
     tap: { "8ball": {}, "9ball": {} }
   };
+
+  function blankHandicapChartsBySystem() {
+    return {
+      apa: { "8ball": {}, "9ball": {} },
+      bca: { "8ball": {}, "9ball": {} },
+      vnba: { "8ball": {}, "9ball": {} },
+      tap: { "8ball": {}, "9ball": {} }
+    };
+  }
 
   // Fetched once at startup (fire-and-forget - see the call near boot).
   // Editing data/handicap-charts.json and reloading the app is the whole
@@ -8337,9 +8366,102 @@
   function leagueMatchTargetForMember(league, skillLevel) {
     if (!league.useHandicap) return league.handicapBaseGames;
     var fmt = league.format === "apa9ball" ? "9ball" : "8ball";
-    var chart = (HANDICAP_CHARTS[league.handicapSystem] || HANDICAP_CHARTS.apa)[fmt] || {};
-    var value = chart[skillLevel];
+    var custom = ((league.customHandicapCharts || {})[league.handicapSystem] || {})[fmt] || {};
+    if (typeof custom[skillLevel] === "number") return custom[skillLevel];
+    var shared = (HANDICAP_CHARTS[league.handicapSystem] || HANDICAP_CHARTS.apa)[fmt] || {};
+    var value = shared[skillLevel];
     return typeof value === "number" ? value : league.handicapBaseGames;
+  }
+
+  // What the "View/Edit Table" editor shows: this league's own numbers
+  // (customHandicapCharts) layered over the shared app-wide chart
+  // (HANDICAP_CHARTS, from data/handicap-charts.json) for whichever
+  // Skill Levels the league hasn't overridden itself yet - exactly the
+  // same priority leagueMatchTargetForMember uses to pick a target.
+  function leagueEffectiveHandicapChart(league) {
+    var fmt = league.format === "apa9ball" ? "9ball" : "8ball";
+    var shared = (HANDICAP_CHARTS[league.handicapSystem] || {})[fmt] || {};
+    var custom = ((league.customHandicapCharts || {})[league.handicapSystem] || {})[fmt] || {};
+    return Object.assign({}, shared, custom);
+  }
+
+  // The "View/Edit Table" overlay body - one row per Skill Level in the
+  // effective (shared + this league's own override) chart, each row's
+  // value editable in place; editing or adding always writes into this
+  // league's own customHandicapCharts (never the shared app-wide one),
+  // so a value that started as the shared default becomes this league's
+  // own number the moment it's touched. Removing a row deletes only
+  // this league's override for that Skill Level - if the shared chart
+  // still has an entry there too, the row reappears showing that value
+  // on the next render, same as any other default-vs-override setting.
+  function renderLeagueHandicapChartEditor(league) {
+    var fmt = league.format === "apa9ball" ? "9ball" : "8ball";
+    var system = league.handicapSystem;
+    leagueHandicapChartTitle.textContent =
+      T(league.format === "apa9ball" ? "league.format9Ball" : "league.format8Ball", { system: handicapSystemLabel(system) }) + " " + T("league.handicapChartTitleSuffix");
+    leagueHandicapChartTargetHeader.textContent = T(fmt === "9ball" ? "league.handicapChartTargetPoints" : "league.handicapChartTargetGames");
+
+    var merged = leagueEffectiveHandicapChart(league);
+    var skillLevels = Object.keys(merged)
+      .map(Number)
+      .sort(function (a, b) {
+        return a - b;
+      });
+
+    leagueHandicapChartBody.innerHTML = "";
+    if (!skillLevels.length) {
+      var emptyRow = document.createElement("tr");
+      var emptyCell = document.createElement("td");
+      emptyCell.colSpan = 3;
+      emptyCell.className = "empty-hint";
+      emptyCell.textContent = T("league.handicapChartEmptyHint");
+      emptyRow.appendChild(emptyCell);
+      leagueHandicapChartBody.appendChild(emptyRow);
+    } else {
+      skillLevels.forEach(function (sl) {
+        var tr = document.createElement("tr");
+
+        var slCell = document.createElement("td");
+        slCell.textContent = sl;
+        tr.appendChild(slCell);
+
+        var valueCell = document.createElement("td");
+        var valueInput = document.createElement("input");
+        valueInput.type = "number";
+        valueInput.min = "1";
+        valueInput.max = "999";
+        valueInput.value = merged[sl];
+        valueInput.className = "league-handicap-chart-value-input";
+        valueInput.addEventListener("change", function () {
+          var v = parseInt(valueInput.value, 10);
+          if (!v || v < 1) {
+            valueInput.value = merged[sl];
+            return;
+          }
+          league.customHandicapCharts[system][fmt][sl] = v;
+          saveLeaguesToStorage(LEAGUES);
+          renderLeagueHandicapChartEditor(league);
+        });
+        valueCell.appendChild(valueInput);
+        tr.appendChild(valueCell);
+
+        var removeCell = document.createElement("td");
+        var removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "btn btn-ghost";
+        removeBtn.textContent = "✕";
+        removeBtn.setAttribute("aria-label", T("league.handicapChartRemoveAria", { sl: sl }));
+        removeBtn.addEventListener("click", function () {
+          delete league.customHandicapCharts[system][fmt][sl];
+          saveLeaguesToStorage(LEAGUES);
+          renderLeagueHandicapChartEditor(league);
+        });
+        removeCell.appendChild(removeBtn);
+        tr.appendChild(removeCell);
+
+        leagueHandicapChartBody.appendChild(tr);
+      });
+    }
   }
 
   // A starting-point suggestion only (the organizer can always override) -
@@ -8398,7 +8520,13 @@
       // not one of the four known values falls back to APA.
       useHandicap: true,
       handicapSystem: ["apa", "bca", "vnba", "tap"].indexOf(handicapSystem) !== -1 ? handicapSystem : "apa",
-      handicapBaseGames: defaultHandicapBaseGames(format)
+      handicapBaseGames: defaultHandicapBaseGames(format),
+      // The organizer's own Skill Level chart, per system+format - see
+      // leagueEffectiveHandicapChart/leagueMatchTargetForMember. Plain
+      // league data (not a separate store), so it's saved locally with
+      // everything else and travels with the league on export/import,
+      // same as every other per-league setting.
+      customHandicapCharts: blankHandicapChartsBySystem()
     };
     LEAGUES = LEAGUES.concat([league]);
     saveLeaguesToStorage(LEAGUES);
@@ -10223,6 +10351,12 @@
       leagueUseHandicapCheckbox.checked = league.useHandicap;
       leagueHandicapSystemSelect.value = league.handicapSystem;
       leagueHandicapBaseInput.value = league.handicapBaseGames;
+      // APA already has a real, correct chart built into the app - this
+      // button (and the whole editable-table idea) only matters once
+      // the organizer picks a system that doesn't, so there's nothing
+      // yet to view or edit for it.
+      leagueHandicapChartOpenRow.classList.toggle("hidden", league.handicapSystem === "apa");
+      btnLeagueHandicapChartOpen.textContent = T("league.handicapChartOpenButton", { system: handicapSystemLabel(league.handicapSystem) });
       // A convenience mirror of the top-of-page Open League toggle, right
       // where it matters most (it changes how every table card below
       // renders) - only worth showing before any team exists, since once
@@ -24308,6 +24442,34 @@
     normalizeLeagueDefaults(league);
     saveLeaguesToStorage(LEAGUES);
     renderLeaguePage();
+  });
+  btnLeagueHandicapChartOpen.addEventListener("click", function () {
+    var league = findLeagueById(activeLeagueId);
+    if (!league) return;
+    renderLeagueHandicapChartEditor(league);
+    leagueHandicapChartOverlay.classList.remove("hidden");
+  });
+  btnLeagueHandicapChartClose.addEventListener("click", function () {
+    leagueHandicapChartOverlay.classList.add("hidden");
+  });
+  leagueHandicapChartOverlay.addEventListener("click", function (e) {
+    if (e.target === leagueHandicapChartOverlay) leagueHandicapChartOverlay.classList.add("hidden");
+  });
+  btnLeagueHandicapChartAdd.addEventListener("click", function () {
+    var league = findLeagueById(activeLeagueId);
+    if (!league) return;
+    var sl = parseInt(leagueHandicapChartNewSlInput.value, 10);
+    var value = parseInt(leagueHandicapChartNewValueInput.value, 10);
+    if (!sl || sl < 1 || !value || value < 1) {
+      showToast(T("league.handicapChartInvalidToast"));
+      return;
+    }
+    var fmt = league.format === "apa9ball" ? "9ball" : "8ball";
+    league.customHandicapCharts[league.handicapSystem][fmt][sl] = value;
+    saveLeaguesToStorage(LEAGUES);
+    leagueHandicapChartNewSlInput.value = "";
+    leagueHandicapChartNewValueInput.value = "";
+    renderLeagueHandicapChartEditor(league);
   });
   btnLeagueDelete.addEventListener("click", function () {
     var league = findLeagueById(activeLeagueId);
