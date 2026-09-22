@@ -2071,7 +2071,8 @@
   var btnLeagueExport = document.getElementById("btn-league-export");
   var btnLeagueDelete = document.getElementById("btn-league-delete");
   var leagueOrganizerOnly = document.getElementById("league-organizer-only");
-  var leagueAddMemberSelect = document.getElementById("league-add-member-select");
+  var leagueAddMemberWrap = document.getElementById("league-add-member-wrap");
+  var leagueAddMemberInput = null;
   var btnLeagueAddMember = document.getElementById("btn-league-add-member");
   var leagueStandingsBody = document.getElementById("league-standings-body");
   var leagueColRemoveHeader = document.getElementById("league-col-remove-header");
@@ -9339,17 +9340,18 @@
       list.innerHTML = "";
     }
 
+    // Empty query shows every candidate (a full picklist, same as a
+    // plain select would show up front) - typing narrows it down to an
+    // actual autocomplete. No cap on how many show either way; the list
+    // itself scrolls (see .league-name-autocomplete-list's max-height)
+    // rather than silently hiding candidates past some fixed count.
     function openListFor(query) {
       var q = query.trim().toLowerCase();
-      if (!q) {
-        closeList();
-        return;
-      }
-      var matches = candidates
-        .filter(function (name) {
-          return name.toLowerCase().indexOf(q) !== -1;
-        })
-        .slice(0, 8);
+      var matches = q
+        ? candidates.filter(function (name) {
+            return name.toLowerCase().indexOf(q) !== -1;
+          })
+        : candidates;
       if (!matches.length) {
         closeList();
         return;
@@ -9372,6 +9374,9 @@
     }
 
     input.addEventListener("input", function () {
+      openListFor(input.value);
+    });
+    input.addEventListener("focus", function () {
       openListFor(input.value);
     });
     input.addEventListener("blur", function () {
@@ -9915,21 +9920,26 @@
     leagueColRemoveHeader.classList.toggle("hidden", !league.isOrganizer);
     leagueLiveHostingSection.classList.toggle("hidden", !league.isOrganizer);
 
-    // Add-member candidates: known players not already in the league.
-    leagueAddMemberSelect.innerHTML = "";
+    // Add-member candidates: known players not already in the league -
+    // shown up front as a full picklist (see buildLeagueNameAutocomplete),
+    // narrowing as the organizer types. Typing someone who isn't a known
+    // player at all still works - the click handler below adds them as
+    // a member directly, same as the table queue's and each team's own
+    // add-a-player fields already do.
     var memberNameKeys = league.members.map(function (m) {
       return normalizeNameKey(m.name);
     });
-    var candidates = state.players.filter(function (p) {
-      return memberNameKeys.indexOf(normalizeNameKey(p.name)) === -1;
-    });
-    candidates.forEach(function (p) {
-      var opt = document.createElement("option");
-      opt.value = p.name;
-      opt.textContent = p.name;
-      leagueAddMemberSelect.appendChild(opt);
-    });
-    btnLeagueAddMember.disabled = candidates.length === 0;
+    var candidates = state.players
+      .filter(function (p) {
+        return memberNameKeys.indexOf(normalizeNameKey(p.name)) === -1;
+      })
+      .map(function (p) {
+        return p.name;
+      });
+    leagueAddMemberWrap.innerHTML = "";
+    var addMemberCombo = buildLeagueNameAutocomplete(candidates, T("league.queueAddPlaceholder"), "league-add-member-input");
+    leagueAddMemberInput = addMemberCombo.input;
+    leagueAddMemberWrap.appendChild(addMemberCombo.wrapper);
 
     leagueStandingsBody.innerHTML = "";
     var sorted = leagueStandingsSorted(league);
@@ -24070,8 +24080,9 @@
   });
   btnLeagueAddMember.addEventListener("click", function () {
     var league = findLeagueById(activeLeagueId);
-    if (!league || !leagueAddMemberSelect.value) return;
-    addLeagueMember(league, leagueAddMemberSelect.value);
+    var name = leagueAddMemberInput ? leagueAddMemberInput.value.trim() : "";
+    if (!league || !name) return;
+    addLeagueMember(league, name);
     renderLeaguePage();
   });
   // Switches an existing league between Open (no teams, pure player vs
