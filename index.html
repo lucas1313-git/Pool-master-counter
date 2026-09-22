@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260922f">
+<link rel="stylesheet" href="css/style.css?v=20260922g">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -1851,6 +1851,21 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
             <input type="number" id="league-max-games-input" min="0" max="99" value="0">
           </div>
           <p class="player-stats-note league-max-games-help" data-i18n="league.maxGamesHelp">0 means unlimited. Once a member reaches this many games since the last reset, they're skipped for any new match (manual, queued, or team rotation) until you reset session counts for the next time this league meets — their lifetime stats keep counting either way.</p>
+          <label class="checkbox-row checkbox-row-prominent">
+            <input type="checkbox" id="league-use-handicap-checkbox">
+            <span data-i18n="league.useHandicapLabel">Use handicap to define how many games to win, use</span>
+            <select id="league-handicap-system-select">
+              <option value="apa" data-i18n="league.handicapSystemApa">APA</option>
+              <option value="bca" data-i18n="league.handicapSystemBca">BCA</option>
+              <option value="vnba" data-i18n="league.handicapSystemVnba">VNBA</option>
+              <option value="tap" data-i18n="league.handicapSystemTap">TAP</option>
+            </select>
+          </label>
+          <div class="row league-settings-row" id="league-handicap-base-row">
+            <label for="league-handicap-base-input" data-i18n="league.handicapBaseLabel">Base Games to Win</label>
+            <input type="number" id="league-handicap-base-input" min="1" max="200" value="5">
+          </div>
+          <p class="player-stats-note league-max-games-help" id="league-handicap-help" data-i18n="league.handicapHelp">With handicap on, each player's own Skill Level is looked up in the selected system's chart to set their target — anyone missing from that chart (or every player, for BCA/VNBA/TAP until you add your own league's numbers) uses the base number instead. With handicap off, everyone races to the base number, unhandicapped.</p>
           <div class="row league-settings-row">
             <button type="button" id="btn-league-reset-session-counts" class="btn btn-ghost" data-i18n="league.resetSessionCountsButton">↺ Reset Session Counts</button>
           </div>
@@ -1993,6 +2008,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260922l"></script>
+<script src="js/app.js?v=20260922m"></script>
 </body>
 </html>

@@ -2094,6 +2094,9 @@
   var leagueTeamRotationSelect = document.getElementById("league-team-rotation-select");
   var btnLeagueTeamRotationInfo = document.getElementById("btn-league-team-rotation-info");
   var leagueMaxGamesInput = document.getElementById("league-max-games-input");
+  var leagueUseHandicapCheckbox = document.getElementById("league-use-handicap-checkbox");
+  var leagueHandicapSystemSelect = document.getElementById("league-handicap-system-select");
+  var leagueHandicapBaseInput = document.getElementById("league-handicap-base-input");
   var btnLeagueResetSessionCounts = document.getElementById("btn-league-reset-session-counts");
 
   var btnOpenLeagueWizard = document.getElementById("btn-open-league-wizard");
@@ -8194,6 +8197,11 @@
     // "never configured" from "organizer explicitly checked nobody in yet".
     if (!Array.isArray(l.tonightRoster)) l.tonightRoster = [];
     if (typeof l.tonightRosterConfigured !== "boolean") l.tonightRosterConfigured = false;
+    // A league saved before this setting existed gets the exact behavior
+    // it already had - handicap on, APA, same as createLeague's default.
+    if (typeof l.useHandicap !== "boolean") l.useHandicap = true;
+    if (["apa", "bca", "vnba", "tap"].indexOf(l.handicapSystem) === -1) l.handicapSystem = "apa";
+    if (typeof l.handicapBaseGames !== "number" || l.handicapBaseGames < 1) l.handicapBaseGames = defaultHandicapBaseGames(l.format);
     return l;
   }
 
@@ -8244,10 +8252,73 @@
     return format === "apa9ball" ? { min: APA_9BALL_MIN_SL, max: APA_9BALL_MAX_SL } : { min: APA_8BALL_MIN_SL, max: APA_8BALL_MAX_SL };
   }
 
-  function apaMatchTarget(format, skillLevel) {
-    var chart = format === "apa9ball" ? APA_9BALL_POINTS_TARGET : APA_8BALL_RACE_TO;
-    var range = apaSkillLevelRange(format);
-    return chart[skillLevel] || chart[range.min];
+  // Data-driven handicap charts for league match targets (see
+  // league.useHandicap/handicapSystem/handicapBaseGames below and
+  // leagueMatchTargetForMember). Pre-seeded with APA's real chart (the
+  // only one of the four with one official nationwide table - matches
+  // APA_8BALL_RACE_TO/APA_9BALL_POINTS_TARGET above) so the app works
+  // correctly even before data/handicap-charts.json has loaded, or if it
+  // never does (offline, fetch blocked, etc.) - BCA/VNBA/TAP start empty
+  // either way since none of them publish one universal chart; the
+  // organizer's own league's numbers only ever come from that file.
+  var HANDICAP_CHARTS = {
+    apa: { "8ball": Object.assign({}, APA_8BALL_RACE_TO), "9ball": Object.assign({}, APA_9BALL_POINTS_TARGET) },
+    bca: { "8ball": {}, "9ball": {} },
+    vnba: { "8ball": {}, "9ball": {} },
+    tap: { "8ball": {}, "9ball": {} }
+  };
+
+  // Fetched once at startup (fire-and-forget - see the call near boot).
+  // Editing data/handicap-charts.json and reloading the app is the whole
+  // update flow; no code change needed. A failed/blocked fetch just
+  // leaves the APA-only defaults above in place.
+  function loadHandicapChartsFromServer() {
+    fetch("data/handicap-charts.json")
+      .then(function (res) {
+        return res.ok ? res.json() : null;
+      })
+      .then(function (data) {
+        if (!data) return;
+        ["apa", "bca", "vnba", "tap"].forEach(function (system) {
+          if (!data[system]) return;
+          ["8ball", "9ball"].forEach(function (fmt) {
+            if (data[system][fmt] && typeof data[system][fmt] === "object") {
+              HANDICAP_CHARTS[system][fmt] = data[system][fmt];
+            }
+          });
+        });
+        // A league page already open with stale (pre-fetch) targets
+        // showing gets refreshed once real data is in; harmless no-op
+        // if the League page isn't open.
+        if (typeof renderLeaguePage === "function") renderLeaguePage();
+      })
+      .catch(function () {
+        // Offline/blocked - HANDICAP_CHARTS keeps its APA-only defaults.
+      });
+  }
+
+  // 8-ball's chart keys are games (small numbers); 9-ball's are points
+  // (much larger) - defaulting a fresh league's base to the same number
+  // regardless of format would be a sensible race in one and absurd in
+  // the other, so this picks a plausible "average player" starting point
+  // per format (matching APA's own SL5 entry in each chart above).
+  function defaultHandicapBaseGames(format) {
+    return format === "apa9ball" ? 38 : 5;
+  }
+
+  // The single source of truth for what a member must reach to win a
+  // league match (called at match-start, see startLeagueMatch).
+  // Handicap off: everyone races to the same base number, unhandicapped.
+  // Handicap on: the selected system's chart for this member's own
+  // Skill Level, or the base number if that Skill Level isn't in the
+  // chart (an empty BCA/VNBA/TAP chart before the organizer has added
+  // their own league's numbers means every member falls back to base).
+  function leagueMatchTargetForMember(league, skillLevel) {
+    if (!league.useHandicap) return league.handicapBaseGames;
+    var fmt = league.format === "apa9ball" ? "9ball" : "8ball";
+    var chart = (HANDICAP_CHARTS[league.handicapSystem] || HANDICAP_CHARTS.apa)[fmt] || {};
+    var value = chart[skillLevel];
+    return typeof value === "number" ? value : league.handicapBaseGames;
   }
 
   // A starting-point suggestion only (the organizer can always override) -
@@ -8298,7 +8369,13 @@
       maxGamesPerPlayer: 0,
       sessionGameCounts: {},
       tonightRoster: [],
-      tonightRosterConfigured: false
+      tonightRosterConfigured: false,
+      // On by default (APA) so a fresh league's matches are handicapped
+      // exactly like every league before this setting existed - see
+      // leagueMatchTargetForMember for how these three combine.
+      useHandicap: true,
+      handicapSystem: "apa",
+      handicapBaseGames: defaultHandicapBaseGames(format)
     };
     LEAGUES = LEAGUES.concat([league]);
     saveLeaguesToStorage(LEAGUES);
@@ -8995,8 +9072,8 @@
       nameB: nameB,
       skillLevelA: memberA.skillLevel,
       skillLevelB: memberB.skillLevel,
-      targetA: apaMatchTarget(league.format, memberA.skillLevel),
-      targetB: apaMatchTarget(league.format, memberB.skillLevel),
+      targetA: leagueMatchTargetForMember(league, memberA.skillLevel),
+      targetB: leagueMatchTargetForMember(league, memberB.skillLevel),
       scoreA: 0,
       scoreB: 0,
       startedAt: new Date().toISOString()
@@ -10113,6 +10190,9 @@
       leagueTeamRotationSelect.value = league.teamRotationMode;
       leagueTableCountInput.value = league.tableCount;
       leagueMaxGamesInput.value = league.maxGamesPerPlayer;
+      leagueUseHandicapCheckbox.checked = league.useHandicap;
+      leagueHandicapSystemSelect.value = league.handicapSystem;
+      leagueHandicapBaseInput.value = league.handicapBaseGames;
       renderLeagueTablesGrid(league);
     }
 
@@ -24303,6 +24383,27 @@
       renderLeaguePage();
     });
   });
+  leagueUseHandicapCheckbox.addEventListener("change", function () {
+    var league = findLeagueById(activeLeagueId);
+    if (!league) return;
+    league.useHandicap = leagueUseHandicapCheckbox.checked;
+    saveLeaguesToStorage(LEAGUES);
+    renderLeaguePage();
+  });
+  leagueHandicapSystemSelect.addEventListener("change", function () {
+    var league = findLeagueById(activeLeagueId);
+    if (!league) return;
+    league.handicapSystem = leagueHandicapSystemSelect.value;
+    saveLeaguesToStorage(LEAGUES);
+    renderLeaguePage();
+  });
+  leagueHandicapBaseInput.addEventListener("change", function () {
+    var league = findLeagueById(activeLeagueId);
+    if (!league) return;
+    league.handicapBaseGames = Math.max(1, Math.min(200, parseInt(leagueHandicapBaseInput.value, 10) || defaultHandicapBaseGames(league.format)));
+    saveLeaguesToStorage(LEAGUES);
+    renderLeaguePage();
+  });
 
   btnOpenLeagueWizard.addEventListener("click", openLeagueWizard);
   btnLeagueWizardClose.addEventListener("click", closeLeagueWizard);
@@ -25052,6 +25153,7 @@
   validateNewPlayerNameInput();
   validateWizardNewPlayerNameInput();
   renderAll();
+  loadHandicapChartsFromServer();
 
   if (!hasSeenOnboarding() && isFirstTimeUser()) {
     openOnboarding();
