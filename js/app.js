@@ -9204,6 +9204,14 @@
     focusBtn.addEventListener("click", function () {
       league.focusedTable = isFocused ? "all" : active.table;
       saveLeaguesToStorage(LEAGUES);
+      // Focusing a specific table is meant to leave just that one card
+      // and board on screen - Focus Mode is what hides everything else
+      // around them (Standings, Teams, Members, setup), so turning it
+      // on here too is part of the same action, not a separate step.
+      // Going back to "all" leaves Focus Mode exactly as it was - it's
+      // still useful with every table showing.
+      if (!isFocused) setLeagueFocusMode(true);
+      renderLeagueTablesGrid(league);
       renderLeagueActiveMatches();
     });
     headerRow.appendChild(focusBtn);
@@ -9269,6 +9277,10 @@
       focusSelect.addEventListener("change", function () {
         league.focusedTable = focusSelect.value === "all" ? "all" : parseInt(focusSelect.value, 10);
         saveLeaguesToStorage(LEAGUES);
+        // Same "focusing one table also declutters everything around
+        // it" behavior as each board's own Focus This Table button.
+        if (league.focusedTable !== "all") setLeagueFocusMode(true);
+        renderLeagueTablesGrid(league);
         renderLeagueActiveMatches();
       });
       focusRow.appendChild(focusLabel);
@@ -9719,9 +9731,14 @@
     return card;
   }
 
+  // Mirrors the live board stack's own focusedTable filtering (see
+  // renderLeagueActiveMatches) - focusing one table narrows its card
+  // here too, not just its board, so "Focus This Table" really does
+  // leave just that one table's card and board on screen.
   function renderLeagueTablesGrid(league) {
     leagueTablesGrid.innerHTML = "";
     for (var i = 1; i <= league.tableCount; i++) {
+      if (league.focusedTable !== "all" && league.focusedTable !== i) continue;
       leagueTablesGrid.appendChild(buildLeagueTableSlotCard(league, i));
     }
   }
