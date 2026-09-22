@@ -6980,7 +6980,21 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   font-size: 0.9rem;
 }
 
+/* The League page's panels are otherwise plain .panel - full viewport
+   width like every other full-page view (Tournament, Leaderboard, ...).
+   Capped here to #app's own 900px content width so League reads the
+   same size as the main page's sections instead of sprawling wider -
+   same reasoning and value as #tournament-active-panel's children. */
+#league-setup-panel {
+  max-width: 900px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
 .league-detail {
+  max-width: 900px;
+  margin-left: auto;
+  margin-right: auto;
   margin-top: 14px;
   padding-top: 14px;
   border-top: 1px solid var(--border);
