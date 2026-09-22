@@ -2111,6 +2111,12 @@
   var leagueHandicapChartExplain = document.getElementById("league-handicap-chart-explain");
   var leagueHandicapChartTargetHeader = document.getElementById("league-handicap-chart-target-header");
   var leagueHandicapChartKeyHeader = document.getElementById("league-handicap-chart-key-header");
+  var leagueHandicapChartPlayerRow = document.getElementById("league-handicap-chart-player-row");
+  var leagueHandicapChartPlayerSelect = document.getElementById("league-handicap-chart-player-select");
+  var leagueHandicapChartPlayerTable = document.getElementById("league-handicap-chart-player-table");
+  var leagueHandicapChartPlayerYouHeader = document.getElementById("league-handicap-chart-player-you-header");
+  var leagueHandicapChartPlayerThemHeader = document.getElementById("league-handicap-chart-player-them-header");
+  var leagueHandicapChartPlayerBody = document.getElementById("league-handicap-chart-player-body");
   var leagueHandicapChartBody = document.getElementById("league-handicap-chart-body");
   var leagueHandicapChartAddRow = document.getElementById("league-handicap-chart-add-row");
   var leagueHandicapChartNewSlInput = document.getElementById("league-handicap-chart-new-sl");
@@ -8438,15 +8444,30 @@
   function openLeagueHandicapChartEditor(league) {
     var fmt = league.format === "apa9ball" ? "9ball" : "8ball";
     var system = league.handicapSystem;
-    var readOnly = system === "bca";
+    var isRatio = system === "bca";
+    // APA's chart is real and fixed nationwide - nothing an organizer
+    // could sensibly edit, but still worth seeing, same as BCA's ratio.
+    // VNBA/TAP are the only two with an organizer-editable chart.
+    var isFixed = system === "apa";
+    var readOnly = isRatio || isFixed;
     leagueHandicapChartTitle.textContent =
       T(league.format === "apa9ball" ? "league.format9Ball" : "league.format8Ball", { system: handicapSystemLabel(system) }) +
       " " +
-      T(readOnly ? "league.handicapChartRatioTitleSuffix" : "league.handicapChartTitleSuffix");
+      T(isRatio ? "league.handicapChartRatioTitleSuffix" : "league.handicapChartTitleSuffix");
     leagueHandicapChartAddRow.classList.toggle("hidden", readOnly);
     btnLeagueHandicapChartSave.classList.toggle("hidden", readOnly);
+    // The "See it for <player>" matchup breakdown only makes sense where
+    // one player's own number stays fixed regardless of opponent (APA) -
+    // BCA already IS a per-opponent view (the ratio table), and VNBA/TAP
+    // are edited as an abstract Skill Level chart, not per member.
+    leagueHandicapChartPlayerRow.classList.toggle("hidden", !isFixed);
+    leagueHandicapChartPlayerTable.classList.toggle("hidden", !isFixed);
+    if (isFixed) {
+      populateLeagueHandicapChartPlayerSelect(league);
+      renderLeagueHandicapChartPlayerMatchups(league);
+    }
 
-    if (readOnly) {
+    if (isRatio) {
       // BCA has no organizer-editable chart at all - it's a ratio applied
       // to the rating gap between whoever's actually playing (see
       // leagueBcaMatchTargets), so there's nothing per-player to look up
@@ -8458,6 +8479,11 @@
       leagueHandicapChartKeyHeader.textContent = T("league.handicapChartRatingGap");
       leagueHandicapChartTargetHeader.textContent = T(fmt === "9ball" ? "league.handicapChartExtraPoints" : "league.handicapChartExtraGames");
       renderLeagueHandicapChartRatio(league);
+    } else if (isFixed) {
+      leagueHandicapChartExplain.textContent = T("league.handicapChartExplainFixed");
+      leagueHandicapChartKeyHeader.textContent = T("league.handicapChartSkillLevel");
+      leagueHandicapChartTargetHeader.textContent = T(fmt === "9ball" ? "league.handicapChartTargetPoints" : "league.handicapChartTargetGames");
+      renderLeagueHandicapChartFixed(league);
     } else {
       leagueHandicapChartTargetHeader.textContent = T(fmt === "9ball" ? "league.handicapChartTargetPoints" : "league.handicapChartTargetGames");
       leagueHandicapChartKeyHeader.textContent = T("league.handicapChartSkillLevel");
@@ -8477,6 +8503,98 @@
     }
 
     leagueHandicapChartOverlay.classList.remove("hidden");
+  }
+
+  // APA's plain, real, fixed chart - read-only for the same reason BCA's
+  // ratio view is: there's nothing here an organizer could meaningfully
+  // edit, since it's the one system with a single correct nationwide
+  // answer already built into HANDICAP_CHARTS.apa.
+  function renderLeagueHandicapChartFixed(league) {
+    var fmt = league.format === "apa9ball" ? "9ball" : "8ball";
+    var chart = HANDICAP_CHARTS.apa[fmt] || {};
+    var skillLevels = Object.keys(chart)
+      .map(Number)
+      .sort(function (a, b) {
+        return a - b;
+      });
+    leagueHandicapChartBody.innerHTML = "";
+    skillLevels.forEach(function (sl) {
+      var tr = document.createElement("tr");
+      var slCell = document.createElement("td");
+      slCell.textContent = sl;
+      tr.appendChild(slCell);
+      var valueCell = document.createElement("td");
+      valueCell.textContent = chart[sl];
+      tr.appendChild(valueCell);
+      tr.appendChild(document.createElement("td"));
+      leagueHandicapChartBody.appendChild(tr);
+    });
+  }
+
+  function populateLeagueHandicapChartPlayerSelect(league) {
+    var previous = leagueHandicapChartPlayerSelect.value;
+    leagueHandicapChartPlayerSelect.innerHTML = "";
+    league.members
+      .slice()
+      .sort(function (a, b) {
+        return a.name.localeCompare(b.name);
+      })
+      .forEach(function (m) {
+        var opt = document.createElement("option");
+        opt.value = m.name;
+        opt.textContent = leagueNameWithTeam(league, m.name);
+        leagueHandicapChartPlayerSelect.appendChild(opt);
+      });
+    // Re-opening (or a member list that changed while this was open)
+    // keeps the same player picked when they're still a member, instead
+    // of silently resetting to whoever now sorts first.
+    if (league.members.some(function (m) { return m.name === previous; })) {
+      leagueHandicapChartPlayerSelect.value = previous;
+    }
+  }
+
+  // APA's own chart already gives each player their target independent
+  // of who they're facing - this just looks that up for the picked
+  // player and lines it up against every other member's own number, the
+  // same "race is 2-6" shape APA's real published chart uses, but built
+  // from this league's actual members instead of abstract Skill Levels.
+  function renderLeagueHandicapChartPlayerMatchups(league) {
+    leagueHandicapChartPlayerBody.innerHTML = "";
+    var selected = league.members.filter(function (m) {
+      return m.name === leagueHandicapChartPlayerSelect.value;
+    })[0];
+    if (!selected) return;
+    var myTarget = leagueMatchTargetForMember(league, selected);
+    var opponents = league.members
+      .filter(function (m) {
+        return m.name !== selected.name;
+      })
+      .sort(function (a, b) {
+        return a.name.localeCompare(b.name);
+      });
+    if (!opponents.length) {
+      var emptyRow = document.createElement("tr");
+      var emptyCell = document.createElement("td");
+      emptyCell.colSpan = 3;
+      emptyCell.className = "empty-hint";
+      emptyCell.textContent = T("league.handicapChartNoOpponents");
+      emptyRow.appendChild(emptyCell);
+      leagueHandicapChartPlayerBody.appendChild(emptyRow);
+      return;
+    }
+    opponents.forEach(function (opp) {
+      var tr = document.createElement("tr");
+      var oppCell = document.createElement("td");
+      oppCell.textContent = leagueNameWithTeam(league, opp.name);
+      tr.appendChild(oppCell);
+      var youCell = document.createElement("td");
+      youCell.textContent = myTarget;
+      tr.appendChild(youCell);
+      var themCell = document.createElement("td");
+      themCell.textContent = leagueMatchTargetForMember(league, opp);
+      tr.appendChild(themCell);
+      leagueHandicapChartPlayerBody.appendChild(tr);
+    });
   }
 
   // BCA's read-only view: one row per actual league member (not an
@@ -10306,16 +10424,16 @@
       league.name + " — " + T(league.format === "apa9ball" ? "league.format9Ball" : "league.format8Ball", { system: handicapSystemLabel(league.handicapSystem) });
     // Viewing this (unlike editing it) isn't organizer-only - an imported
     // read-only copy still races real matches, so whoever's watching
-    // standings there has the same reason to want to see it. APA already
-    // has a real, correct chart built into the app, so there's nothing
-    // yet to view for it - only the other three systems get this button.
-    // BCA's own numbers come only from this app's Rating (see
-    // leagueHandicapUsesRating) plus whatever's in the shared
-    // data/handicap-charts.json file - nothing here is organizer-editable
-    // for it, so its button and its view stay read-only ("View", not
-    // "View/Edit"); VNBA/TAP keep the full editable chart.
-    btnLeagueHandicapChartOpen.classList.toggle("hidden", league.handicapSystem === "apa");
-    btnLeagueHandicapChartOpen.textContent = T(league.handicapSystem === "bca" ? "league.handicapChartOpenButtonViewOnly" : "league.handicapChartOpenButton", {
+    // standings there has the same reason to want to see it. Every
+    // system gets this button now: APA and BCA open a read-only view
+    // ("View", not "View/Edit") since neither has anything an organizer
+    // could meaningfully edit here (APA's chart is fixed and correct
+    // already; BCA's is a ratio on the rating gap, not a per-player
+    // lookup - see leagueBcaMatchTargets/leagueHandicapUsesRating).
+    // VNBA/TAP keep the full editable chart.
+    var handicapChartIsReadOnly = league.handicapSystem === "apa" || league.handicapSystem === "bca";
+    btnLeagueHandicapChartOpen.classList.remove("hidden");
+    btnLeagueHandicapChartOpen.textContent = T(handicapChartIsReadOnly ? "league.handicapChartOpenButtonViewOnly" : "league.handicapChartOpenButton", {
       system: handicapSystemLabel(league.handicapSystem)
     });
     leagueDetailOpenToggle.checked = !!league.isOpen;
@@ -24574,6 +24692,11 @@
     var league = findLeagueById(activeLeagueId);
     if (!league) return;
     openLeagueHandicapChartEditor(league);
+  });
+  leagueHandicapChartPlayerSelect.addEventListener("change", function () {
+    var league = findLeagueById(activeLeagueId);
+    if (!league) return;
+    renderLeagueHandicapChartPlayerMatchups(league);
   });
   btnLeagueHandicapChartClose.addEventListener("click", function () {
     leagueHandicapChartOverlay.classList.add("hidden");
