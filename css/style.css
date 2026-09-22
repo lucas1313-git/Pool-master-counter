@@ -7016,6 +7016,13 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   margin: 0;
 }
 
+/* .checkbox-row-prominent's own flex:1 would otherwise stretch this to
+   fill whatever's left of the header row next to a short league name -
+   capped so switching Open/Team mode reads as a control, not a banner. */
+.league-mode-toggle {
+  flex: 0 1 340px;
+}
+
 /* select already gets flex:1 as its own default (see base select rule)
    so it can share a .row evenly with several other fields - fine there,
    but a league/member picker alone next to one button has nothing to

@@ -2066,6 +2066,7 @@
   var leagueDetail = document.getElementById("league-detail");
   var leagueDetailName = document.getElementById("league-detail-name");
   var leagueReadonlyBadge = document.getElementById("league-readonly-badge");
+  var leagueDetailOpenToggle = document.getElementById("league-detail-open-toggle");
   var btnLeagueExport = document.getElementById("btn-league-export");
   var btnLeagueDelete = document.getElementById("btn-league-delete");
   var leagueOrganizerOnly = document.getElementById("league-organizer-only");
@@ -9771,6 +9772,7 @@
     normalizeLeagueDefaults(league);
 
     leagueDetailName.textContent = league.name + " — " + (league.format === "apa9ball" ? T("league.format9Ball") : T("league.format8Ball"));
+    leagueDetailOpenToggle.checked = !!league.isOpen;
     leagueReadonlyBadge.classList.toggle("hidden", !!league.isOrganizer);
     leagueOrganizerOnly.classList.toggle("hidden", !league.isOrganizer);
     leagueColRemoveHeader.classList.toggle("hidden", !league.isOrganizer);
@@ -23933,6 +23935,20 @@
     var league = findLeagueById(activeLeagueId);
     if (!league || !leagueAddMemberSelect.value) return;
     addLeagueMember(league, leagueAddMemberSelect.value);
+    renderLeaguePage();
+  });
+  // Switches an existing league between Open (no teams, pure player vs
+  // player) and Team mode - reversible, non-destructive either way:
+  // switching to Open just hides the Teams section and locks queueMode
+  // to "none" (see normalizeLeagueDefaults), it doesn't delete
+  // league.teams, so switching back to Team mode brings everything the
+  // organizer already built right back.
+  leagueDetailOpenToggle.addEventListener("change", function () {
+    var league = findLeagueById(activeLeagueId);
+    if (!league) return;
+    league.isOpen = leagueDetailOpenToggle.checked;
+    normalizeLeagueDefaults(league);
+    saveLeaguesToStorage(LEAGUES);
     renderLeaguePage();
   });
   btnLeagueExport.addEventListener("click", function () {
