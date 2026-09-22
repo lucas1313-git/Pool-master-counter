@@ -2064,6 +2064,8 @@
   var leagueNewNameInput = document.getElementById("league-new-name");
   var leagueNewFormatRadios = document.getElementsByName("league-new-format");
   var leagueNewHandicapSystemSelect = document.getElementById("league-new-handicap-system");
+  var leagueNewFormat8BallLabel = document.getElementById("league-new-format-8ball-label");
+  var leagueNewFormat9BallLabel = document.getElementById("league-new-format-9ball-label");
   var btnLeagueNewHandicapSystemInfo = document.getElementById("btn-league-new-handicap-system-info");
   var leagueNewOpenModeInput = document.getElementById("league-new-open-mode");
   var btnLeagueCreate = document.getElementById("btn-league-create");
@@ -8310,6 +8312,21 @@
     return format === "apa9ball" ? 38 : 5;
   }
 
+  var HANDICAP_SYSTEM_LABEL_KEYS = { apa: "league.handicapSystemApa", bca: "league.handicapSystemBca", vnba: "league.handicapSystemVnba", tap: "league.handicapSystemTap" };
+  function handicapSystemLabel(system) {
+    return T(HANDICAP_SYSTEM_LABEL_KEYS[system] || HANDICAP_SYSTEM_LABEL_KEYS.apa);
+  }
+
+  // The creation form's Format radios ("APA 8-Ball" etc.) name whichever
+  // Rating System is currently picked in that same form, live as the
+  // organizer changes it - before Create League is even clicked, so
+  // what they see matches what they're about to get.
+  function updateLeagueNewFormatLabels() {
+    var label = handicapSystemLabel(leagueNewHandicapSystemSelect.value);
+    leagueNewFormat8BallLabel.textContent = T("league.format8Ball", { system: label });
+    leagueNewFormat9BallLabel.textContent = T("league.format9Ball", { system: label });
+  }
+
   // The single source of truth for what a member must reach to win a
   // league match (called at match-start, see startLeagueMatch).
   // Handicap off: everyone races to the same base number, unhandicapped.
@@ -10047,7 +10064,8 @@
     if (!league) return;
     normalizeLeagueDefaults(league);
 
-    leagueDetailName.textContent = league.name + " — " + (league.format === "apa9ball" ? T("league.format9Ball") : T("league.format8Ball"));
+    leagueDetailName.textContent =
+      league.name + " — " + T(league.format === "apa9ball" ? "league.format9Ball" : "league.format8Ball", { system: handicapSystemLabel(league.handicapSystem) });
     leagueDetailOpenToggle.checked = !!league.isOpen;
     leagueReadonlyBadge.classList.toggle("hidden", !!league.isOrganizer);
     leagueOrganizerOnly.classList.toggle("hidden", !league.isOrganizer);
@@ -24275,11 +24293,14 @@
     leagueNewNameInput.value = "";
     leagueNewOpenModeInput.checked = false;
     leagueNewHandicapSystemSelect.value = "apa";
+    updateLeagueNewFormatLabels();
     renderLeaguePage();
   });
   btnLeagueNewHandicapSystemInfo.addEventListener("click", function () {
     alertModal(T("league.handicapSystemInfoText"));
   });
+  leagueNewHandicapSystemSelect.addEventListener("change", updateLeagueNewFormatLabels);
+  updateLeagueNewFormatLabels();
   leagueTablesOpenToggle.addEventListener("change", function () {
     var league = findLeagueById(activeLeagueId);
     if (!league) return;
