@@ -3853,7 +3853,16 @@ input[type="number"] {
   align-items: center;
   justify-content: center;
   padding: 20px;
-  z-index: 1000;
+  /* Higher than .wizard-overlay/.confirm-modal-overlay (both 1000) on
+     purpose - Help can be opened from inside any of those (see each
+     screen's own ❓ button), and needs to land on top regardless of
+     which one happens to sit later in the DOM. Before this, the main
+     Game Setup Wizard's own Help button only appeared to work by
+     accident of DOM order (#help-overlay comes after #wizard-overlay in
+     index.html) - the League wizard, later in the document, painted
+     over an equal-z-index Help with nothing visibly wrong until it
+     actually got its own Help button. */
+  z-index: 1100;
 }
 
 .help-card {
@@ -7259,30 +7268,13 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   margin-left: 10px;
 }
 
-/* League Setup Wizard - roomier card (step 4's Team A/B pickers need the
-   width) and a readable font floor throughout; scoped to this overlay
-   only so the main Game Setup Wizard keeps its own sizing. */
+/* League Setup Wizard - same look as the main Game Setup Wizard
+   (mascot, header, footer, type sizing) everywhere except its own
+   card width: step 4's Team A/B pickers genuinely need more room than
+   the main wizard's 520px card gives them, so that alone stays
+   overridden here. */
 #league-wizard-overlay .wizard-card {
   max-width: 720px;
-}
-
-#league-wizard-overlay .wizard-step-explain {
-  font-size: 1rem;
-}
-
-#league-wizard-overlay .row label {
-  font-size: 0.95rem;
-}
-
-#league-wizard-overlay .checkbox-row,
-#league-wizard-overlay select,
-#league-wizard-overlay input {
-  font-size: 1rem;
-}
-
-#league-wizard-overlay .wizard-summary-row .label,
-#league-wizard-overlay .wizard-summary-row .value {
-  font-size: 1rem;
 }
 
 .league-wizard-assign-team-row {
