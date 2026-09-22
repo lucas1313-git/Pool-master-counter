@@ -1259,7 +1259,7 @@
         </thead>
         <tbody id="league-handicap-chart-body"></tbody>
       </table>
-      <div class="row">
+      <div class="row" id="league-handicap-chart-add-row">
         <input type="number" id="league-handicap-chart-new-sl" data-i18n-placeholder="league.handicapChartSkillLevel" placeholder="Skill Level" min="1" max="999">
         <input type="number" id="league-handicap-chart-new-value" data-i18n-placeholder="league.handicapChartTargetGames" placeholder="Games to Win" min="1" max="999">
         <button type="button" id="btn-league-handicap-chart-add" class="btn btn-ghost" data-i18n="league.handicapChartAddButton">+ Add</button>
@@ -1804,6 +1804,7 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
   <section class="panel league-detail hidden" id="league-detail">
     <div class="league-detail-header">
       <h3 id="league-detail-name"></h3>
+      <button type="button" id="btn-league-handicap-chart-open" class="btn btn-ghost hidden">📊 View/Edit Table</button>
       <span id="league-readonly-badge" class="league-readonly-badge hidden" data-i18n="league.readOnlyBadge">Imported — read-only</span>
       <label class="checkbox-row checkbox-row-prominent league-mode-toggle"><input type="checkbox" id="league-detail-open-toggle"> <span data-i18n="league.openModeLabel">Open League (no teams — pure player vs player)</span></label>
     </div>
@@ -1904,9 +1905,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
             <input type="number" id="league-handicap-base-input" min="1" max="200" value="5">
           </div>
           <p class="player-stats-note league-max-games-help" id="league-handicap-help" data-i18n="league.handicapHelp">With handicap on, each player's own Skill Level is looked up in the selected system's chart to set their target — anyone missing from that chart (or every player, for BCA/VNBA/TAP until you add your own league's numbers) uses the base number instead. With handicap off, everyone races to the base number, unhandicapped.</p>
-          <div class="row league-settings-row hidden" id="league-handicap-chart-open-row">
-            <button type="button" id="btn-league-handicap-chart-open" class="btn btn-ghost">📊 View/Edit Table</button>
-          </div>
           <div class="row league-settings-row">
             <button type="button" id="btn-league-reset-session-counts" class="btn btn-ghost" data-i18n="league.resetSessionCountsButton">↺ Reset Session Counts</button>
           </div>
@@ -2053,6 +2051,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260922s"></script>
+<script src="js/app.js?v=20260922t"></script>
 </body>
 </html>
