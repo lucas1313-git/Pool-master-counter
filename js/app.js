@@ -8537,9 +8537,14 @@
   }
 
   // Whether two names are on the same league team - two players sharing a
-  // team never play each other, in any hosting mode. Two names with no
-  // team (or on different teams) are always a valid pairing.
+  // team never play each other in a Team league, regardless of hosting
+  // mode. An Open league ignores team membership entirely here (even if
+  // league.teams still has leftover data from before it was switched to
+  // Open - see the league.isOpen toggle) since "no teams, pure player vs
+  // player" is the whole point of that mode. Two names with no team (or
+  // on different teams) are always a valid pairing either way.
   function leagueSameTeam(league, nameA, nameB) {
+    if (league.isOpen) return false;
     var teamA = leagueTeamForMember(league, nameA);
     var teamB = leagueTeamForMember(league, nameB);
     return !!(teamA && teamB && teamA.id === teamB.id);
