@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260922d">
+<link rel="stylesheet" href="css/style.css?v=20260922e">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -1777,6 +1777,14 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
     <div id="league-standings-section">
       <h4 data-i18n="league.standingsHeading">Standings</h4>
+      <div class="row">
+        <label for="league-standings-sort-select" data-i18n="league.sortByLabel">Sort by</label>
+        <select id="league-standings-sort-select">
+          <option value="points" data-i18n="league.sortByPoints">Points</option>
+          <option value="name" data-i18n="league.sortByName">Name</option>
+          <option value="fargo" data-i18n="league.sortByFargo">Fargo Rating</option>
+        </select>
+      </div>
       <div class="league-standings-table-wrap">
         <table class="league-standings-table" id="league-standings-table">
           <thead>
@@ -1967,6 +1975,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260922f"></script>
+<script src="js/app.js?v=20260922g"></script>
 </body>
 </html>

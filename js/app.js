@@ -2075,6 +2075,7 @@
   var leagueAddMemberInput = null;
   var btnLeagueAddMember = document.getElementById("btn-league-add-member");
   var leagueStandingsBody = document.getElementById("league-standings-body");
+  var leagueStandingsSortSelect = document.getElementById("league-standings-sort-select");
   var leagueColRemoveHeader = document.getElementById("league-col-remove-header");
   var leagueLiveHostingSection = document.getElementById("league-live-hosting-section");
   var leagueTeamsSection = document.getElementById("league-teams-section");
@@ -8431,8 +8432,17 @@
     saveLeaguesToStorage(LEAGUES);
   }
 
+  // A view preference, not league data - deliberately not saved on the
+  // league object (or anywhere persisted), so it doesn't bloat an
+  // exported league file with something that's really just "how I like
+  // to look at this list right now." Resets to the Points default on
+  // reload, same starting point as before this was ever changeable.
+  var leagueStandingsSortMode = "points";
+
   function leagueStandingsSorted(league) {
     return league.members.slice().sort(function (a, b) {
+      if (leagueStandingsSortMode === "name") return a.name.localeCompare(b.name);
+      if (leagueStandingsSortMode === "fargo") return getPlayerRating(b.name) - getPlayerRating(a.name) || a.name.localeCompare(b.name);
       return b.leaguePoints - a.leaguePoints || b.matchesWon - a.matchesWon || a.name.localeCompare(b.name);
     });
   }
@@ -9941,6 +9951,7 @@
     leagueAddMemberInput = addMemberCombo.input;
     leagueAddMemberWrap.appendChild(addMemberCombo.wrapper);
 
+    leagueStandingsSortSelect.value = leagueStandingsSortMode;
     leagueStandingsBody.innerHTML = "";
     var sorted = leagueStandingsSorted(league);
     if (sorted.length === 0) {
@@ -24083,6 +24094,10 @@
     var name = leagueAddMemberInput ? leagueAddMemberInput.value.trim() : "";
     if (!league || !name) return;
     addLeagueMember(league, name);
+    renderLeaguePage();
+  });
+  leagueStandingsSortSelect.addEventListener("change", function () {
+    leagueStandingsSortMode = leagueStandingsSortSelect.value;
     renderLeaguePage();
   });
   // Switches an existing league between Open (no teams, pure player vs

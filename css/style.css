@@ -7044,12 +7044,15 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
 
 /* select already gets flex:1 as its own default (see base select rule)
    so it can share a .row evenly with several other fields - fine there,
-   but a league/member picker alone next to one button has nothing to
-   share with and balloons to fill the entire panel width instead of
-   staying a normal-sized dropdown like the rest of the app's pickers. */
-#league-select,
-#league-add-member-select {
+   but a league picker alone next to one button has nothing to share
+   with and balloons to fill the entire panel width instead of staying
+   a normal-sized dropdown like the rest of the app's pickers. */
+#league-select {
   flex: 0 1 320px;
+}
+
+#league-standings-sort-select {
+  flex: 0 1 200px;
 }
 
 .league-readonly-badge {
