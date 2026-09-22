@@ -9550,7 +9550,7 @@
       var removeBtn = document.createElement("button");
       removeBtn.type = "button";
       removeBtn.className = "btn btn-ghost";
-      removeBtn.textContent = "✕";
+      removeBtn.textContent = T("league.removeTeamButton");
       removeBtn.setAttribute("aria-label", T("league.removeTeamAria", { name: team.name }));
       removeBtn.addEventListener("click", function () {
         removeLeagueTeam(league, team.id);
@@ -9638,7 +9638,7 @@
       var addBtn = document.createElement("button");
       addBtn.type = "button";
       addBtn.className = "btn btn-ghost";
-      addBtn.textContent = T("league.addMemberButton");
+      addBtn.textContent = T("league.addPlayerToTeamButton", { team: team.name });
       addBtn.disabled = candidates.length === 0;
       addBtn.addEventListener("click", function () {
         if (!addSelect.value) return;
@@ -9715,6 +9715,7 @@
         var row = document.createElement("tr");
 
         var nameCell = document.createElement("td");
+        nameCell.className = "league-standings-name-cell";
         nameCell.appendChild(document.createTextNode(leagueNameWithTeam(league, m.name)));
         nameCell.appendChild(buildRatingBadge(m.name));
         row.appendChild(nameCell);
