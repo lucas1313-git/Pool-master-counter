@@ -435,6 +435,8 @@
   "league.handicapChartInvalidToast": "Maglagay ng Skill Level at isang value.",
   "league.handicapChartOpenButton": "📊 Tingnan/I-edit ang Tsart ng {{system}}",
   "league.handicapChartRemoveAria": "Alisin ang Skill Level {{sl}}",
+  "league.handicapChartSaveButton": "💾 I-save",
+  "league.handicapChartSavedToast": "Na-save — ginagamit na ngayon ang mga numerong ito para sa mga laban ng ligang ito.",
   "league.handicapChartSkillLevel": "Skill Level",
   "league.handicapChartTargetGames": "Laro na Dapat Manalo",
   "league.handicapChartTargetPoints": "Puntos na Dapat Abutin",

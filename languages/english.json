@@ -435,6 +435,8 @@
   "league.handicapChartInvalidToast": "Enter both a Skill Level and a value.",
   "league.handicapChartOpenButton": "📊 View/Edit {{system}} Table",
   "league.handicapChartRemoveAria": "Remove Skill Level {{sl}}",
+  "league.handicapChartSaveButton": "💾 Save",
+  "league.handicapChartSavedToast": "Saved — these numbers are now used for this league's matches.",
   "league.handicapChartSkillLevel": "Skill Level",
   "league.handicapChartTargetGames": "Games to Win",
   "league.handicapChartTargetPoints": "Points to Win",
