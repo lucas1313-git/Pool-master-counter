@@ -8438,15 +8438,20 @@
   function openLeagueHandicapChartEditor(league) {
     var fmt = league.format === "apa9ball" ? "9ball" : "8ball";
     var system = league.handicapSystem;
-    var readOnly = system === "bca";
+    var isRatio = system === "bca";
+    // APA's chart is real and fixed nationwide - nothing an organizer
+    // could sensibly edit, but still worth seeing, same as BCA's ratio.
+    // VNBA/TAP are the only two with an organizer-editable chart.
+    var isFixed = system === "apa";
+    var readOnly = isRatio || isFixed;
     leagueHandicapChartTitle.textContent =
       T(league.format === "apa9ball" ? "league.format9Ball" : "league.format8Ball", { system: handicapSystemLabel(system) }) +
       " " +
-      T(readOnly ? "league.handicapChartRatioTitleSuffix" : "league.handicapChartTitleSuffix");
+      T(isRatio ? "league.handicapChartRatioTitleSuffix" : "league.handicapChartTitleSuffix");
     leagueHandicapChartAddRow.classList.toggle("hidden", readOnly);
     btnLeagueHandicapChartSave.classList.toggle("hidden", readOnly);
 
-    if (readOnly) {
+    if (isRatio) {
       // BCA has no organizer-editable chart at all - it's a ratio applied
       // to the rating gap between whoever's actually playing (see
       // leagueBcaMatchTargets), so there's nothing per-player to look up
@@ -8458,6 +8463,11 @@
       leagueHandicapChartKeyHeader.textContent = T("league.handicapChartRatingGap");
       leagueHandicapChartTargetHeader.textContent = T(fmt === "9ball" ? "league.handicapChartExtraPoints" : "league.handicapChartExtraGames");
       renderLeagueHandicapChartRatio(league);
+    } else if (isFixed) {
+      leagueHandicapChartExplain.textContent = T("league.handicapChartExplainFixed");
+      leagueHandicapChartKeyHeader.textContent = T("league.handicapChartSkillLevel");
+      leagueHandicapChartTargetHeader.textContent = T(fmt === "9ball" ? "league.handicapChartTargetPoints" : "league.handicapChartTargetGames");
+      renderLeagueHandicapChartFixed(league);
     } else {
       leagueHandicapChartTargetHeader.textContent = T(fmt === "9ball" ? "league.handicapChartTargetPoints" : "league.handicapChartTargetGames");
       leagueHandicapChartKeyHeader.textContent = T("league.handicapChartSkillLevel");
@@ -8477,6 +8487,32 @@
     }
 
     leagueHandicapChartOverlay.classList.remove("hidden");
+  }
+
+  // APA's plain, real, fixed chart - read-only for the same reason BCA's
+  // ratio view is: there's nothing here an organizer could meaningfully
+  // edit, since it's the one system with a single correct nationwide
+  // answer already built into HANDICAP_CHARTS.apa.
+  function renderLeagueHandicapChartFixed(league) {
+    var fmt = league.format === "apa9ball" ? "9ball" : "8ball";
+    var chart = HANDICAP_CHARTS.apa[fmt] || {};
+    var skillLevels = Object.keys(chart)
+      .map(Number)
+      .sort(function (a, b) {
+        return a - b;
+      });
+    leagueHandicapChartBody.innerHTML = "";
+    skillLevels.forEach(function (sl) {
+      var tr = document.createElement("tr");
+      var slCell = document.createElement("td");
+      slCell.textContent = sl;
+      tr.appendChild(slCell);
+      var valueCell = document.createElement("td");
+      valueCell.textContent = chart[sl];
+      tr.appendChild(valueCell);
+      tr.appendChild(document.createElement("td"));
+      leagueHandicapChartBody.appendChild(tr);
+    });
   }
 
   // BCA's read-only view: one row per actual league member (not an
@@ -10306,16 +10342,16 @@
       league.name + " — " + T(league.format === "apa9ball" ? "league.format9Ball" : "league.format8Ball", { system: handicapSystemLabel(league.handicapSystem) });
     // Viewing this (unlike editing it) isn't organizer-only - an imported
     // read-only copy still races real matches, so whoever's watching
-    // standings there has the same reason to want to see it. APA already
-    // has a real, correct chart built into the app, so there's nothing
-    // yet to view for it - only the other three systems get this button.
-    // BCA's own numbers come only from this app's Rating (see
-    // leagueHandicapUsesRating) plus whatever's in the shared
-    // data/handicap-charts.json file - nothing here is organizer-editable
-    // for it, so its button and its view stay read-only ("View", not
-    // "View/Edit"); VNBA/TAP keep the full editable chart.
-    btnLeagueHandicapChartOpen.classList.toggle("hidden", league.handicapSystem === "apa");
-    btnLeagueHandicapChartOpen.textContent = T(league.handicapSystem === "bca" ? "league.handicapChartOpenButtonViewOnly" : "league.handicapChartOpenButton", {
+    // standings there has the same reason to want to see it. Every
+    // system gets this button now: APA and BCA open a read-only view
+    // ("View", not "View/Edit") since neither has anything an organizer
+    // could meaningfully edit here (APA's chart is fixed and correct
+    // already; BCA's is a ratio on the rating gap, not a per-player
+    // lookup - see leagueBcaMatchTargets/leagueHandicapUsesRating).
+    // VNBA/TAP keep the full editable chart.
+    var handicapChartIsReadOnly = league.handicapSystem === "apa" || league.handicapSystem === "bca";
+    btnLeagueHandicapChartOpen.classList.remove("hidden");
+    btnLeagueHandicapChartOpen.textContent = T(handicapChartIsReadOnly ? "league.handicapChartOpenButtonViewOnly" : "league.handicapChartOpenButton", {
       system: handicapSystemLabel(league.handicapSystem)
     });
     leagueDetailOpenToggle.checked = !!league.isOpen;

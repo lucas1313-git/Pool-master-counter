@@ -432,6 +432,7 @@
   "league.handicapChartAddButton": "+ Idagdag",
   "league.handicapChartEmptyHint": "Wala pang custom na numero — idagdag ang tsart ng Skill Level ng iyong liga sa ibaba, o iwanang blangko para gamitin ang Batayang Bilang ng Laro na Dapat Manalo para sa lahat.",
   "league.handicapChartExplain": "Ang sarili mong mga numero para sa tsart ng Skill Level ng ligang ito, na-save kasama ng liga at isinasama tuwing ie-export mo ito. Ang Skill Level na wala rito ay gagamit na lang ng Batayang Bilang ng Laro na Dapat Manalo.",
+  "league.handicapChartExplainFixed": "Ito ang tunay at fixed na pambansang tsart ng APA — pareho saanman, kaya walang ie-edit dito. Direktang itinatakda ng sariling Skill Level ng bawat manlalaro ang kanilang target.",
   "league.handicapChartExplainReadOnly": "Inikokompara ng BCA ang dalawang manlalarong talagang naglalaban, hindi isang numero kada manlalaro: ang mas mababa ang rating ay laging naglalaro hanggang sa Batayang Bilang ng Laro na Dapat Manalo ({{base}} sa ngayon), at tumataas mula roon ang target ng mas mataas ang rating — 1 dagdag na laro para sa bawat {{ratio}} puntos ng agwat sa pagitan nila. Ipinapakita ng tsart sa ibaba kung ilang dagdag na laro ang idinaragdag ng iba't ibang agwat.",
   "league.handicapChartExtraGames": "Dagdag na Laro",
   "league.handicapChartExtraPoints": "Dagdag na Puntos",

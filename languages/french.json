@@ -432,6 +432,7 @@
   "league.handicapChartAddButton": "+ Ajouter",
   "league.handicapChartEmptyHint": "Pas encore de chiffres personnalisés — ajoutez le barème des Niveaux de Compétence de votre ligue ci-dessous, ou laissez vide pour utiliser le Nombre de Manches de Base à Gagner pour tout le monde.",
   "league.handicapChartExplain": "Vos propres chiffres pour le barème des Niveaux de Compétence de cette ligue, enregistrés avec elle et inclus à chaque export. Un Niveau de Compétence absent d'ici utilise le Nombre de Manches de Base à Gagner.",
+  "league.handicapChartExplainFixed": "Ceci est le vrai barème national fixe de l'APA — le même partout, donc rien à modifier ici. Le Niveau de Compétence de chaque joueur fixe directement son objectif.",
   "league.handicapChartExplainReadOnly": "Le BCA compare les deux joueurs réellement opposés, pas un chiffre par joueur : le joueur le moins bien classé joue toujours jusqu'au Nombre de Manches de Base à Gagner ({{base}} actuellement), et l'objectif du joueur le mieux classé augmente à partir de là — 1 manche de plus tous les {{ratio}} points d'écart entre eux. Le tableau ci-dessous montre exactement combien de manches en plus chaque écart ajoute.",
   "league.handicapChartExtraGames": "Manches en Plus",
   "league.handicapChartExtraPoints": "Points en Plus",

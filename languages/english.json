@@ -432,6 +432,7 @@
   "league.handicapChartAddButton": "+ Add",
   "league.handicapChartEmptyHint": "No custom numbers yet — add your league's Skill Level chart below, or leave blank to use Base Games to Win for everyone.",
   "league.handicapChartExplain": "Your own numbers for this league's Skill Level chart, saved with this league and included whenever you export it. A Skill Level not listed here falls back to Base Games to Win.",
+  "league.handicapChartExplainFixed": "This is APA's real, fixed nationwide chart — the same everywhere, so there's nothing to edit here. Each player's own Skill Level sets their target directly.",
   "league.handicapChartExplainReadOnly": "BCA compares the two players actually matched, not a per-player lookup: the lower-rated player always races to Base Games to Win ({{base}} right now), and the higher-rated player's target climbs from there — 1 extra game for every {{ratio}} rating points of gap between them. The table below shows exactly how many extra games a range of gaps adds.",
   "league.handicapChartExtraGames": "Extra Games",
   "league.handicapChartExtraPoints": "Extra Points",
