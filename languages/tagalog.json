@@ -541,6 +541,7 @@
   "multiTable.downloadDataButton": "💾 1. I-download ang Aking Setup",
   "multiTable.installStepLabel": "🚀 3. I-install at Buksan ang App",
   "multiTable.loadSettingPrompt": "Piliin ang settings file na na-download mo sa kabilang device para magpatuloy mula sa iniwan mo.",
+  "multiTable.mobileHostUnsupportedNotice": "Ang bawat mesa na may sariling device ay nangangailangan ng laptop o desktop computer na magiging host — hindi kaya ito ng phone o tablet na ito. Puwede mo pa ring pangasiwaan ang lahat ng mesa direkta mula sa device na ito.",
   "multiTable.openGroupSessionButton": "🔗 Buksan ang Group Session",
   "multiTable.promptBody": "Kailangan ng bawat table ng sarili nitong device na nakakonekta sa parehong local server. Buksan ang Group Session para ikonekta ang device na ito bilang host, o i-download ang app kung hindi direktang makapag-host ang page na ito.",
   "multiTable.promptTitle": "🖥️ I-host ang Maraming Table",

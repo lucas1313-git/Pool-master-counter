@@ -541,6 +541,7 @@
   "multiTable.downloadDataButton": "💾 1. Download My Setup",
   "multiTable.installStepLabel": "🚀 3. Install & Open the App",
   "multiTable.loadSettingPrompt": "Pick the settings file you downloaded on the other device to pick up right where you left off.",
+  "multiTable.mobileHostUnsupportedNotice": "Each table on its own device needs a laptop or desktop computer running as the host — this phone or tablet can't do that part. You can still run every table right here on this device instead.",
   "multiTable.openGroupSessionButton": "🔗 Open Group Session",
   "multiTable.promptBody": "Each table needs its own device connected to the same local server. Open Group Session to connect this device as the host, or download the app if this page can't host directly.",
   "multiTable.promptTitle": "🖥️ Host Multiple Tables",

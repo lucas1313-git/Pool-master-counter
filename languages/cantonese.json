@@ -541,6 +541,7 @@
   "multiTable.downloadDataButton": "💾 1. 下載我嘅設定",
   "multiTable.installStepLabel": "🚀 3. 安裝並打開App",
   "multiTable.loadSettingPrompt": "揀返你喺另一部裝置下載嗰個設定檔案，就可以由頭先嗰度繼續。",
+  "multiTable.mobileHostUnsupportedNotice": "每張枱用自己部裝置嘅話，需要一部手提電腦或桌面電腦嚟做主機——呢部電話或平板做唔到呢部分。你仍然可以直接喺呢部裝置度管理所有枱。",
   "multiTable.openGroupSessionButton": "🔗 打開羣組時段",
   "multiTable.promptBody": "每張檯都需要自己嘅裝置連接去同一個本機伺服器。打開「羣組時段」將呢部裝置設做主持，或者如果呢版唔可以直接主持就下載個app。",
   "multiTable.promptTitle": "🖥️ 主持多張檯",
