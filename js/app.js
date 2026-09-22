@@ -2076,6 +2076,9 @@
   var leagueAddMemberInput = null;
   var btnLeagueAddMember = document.getElementById("btn-league-add-member");
   var leagueAddMemberContactsCheckbox = document.getElementById("league-add-member-contacts-checkbox");
+  var leagueAddMemberContactFields = document.getElementById("league-add-member-contact-fields");
+  var leagueAddMemberEmailInput = document.getElementById("league-add-member-email-input");
+  var leagueAddMemberPhoneInput = document.getElementById("league-add-member-phone-input");
   var leagueStandingsBody = document.getElementById("league-standings-body");
   var leagueStandingsSortSelect = document.getElementById("league-standings-sort-select");
   var leagueColRemoveHeader = document.getElementById("league-col-remove-header");
@@ -2105,6 +2108,9 @@
   var leagueWizardAddContactInput = null;
   var btnLeagueWizardAddContact = document.getElementById("btn-league-wizard-add-contact");
   var leagueWizardAddContactContactsCheckbox = document.getElementById("league-wizard-add-contact-contacts-checkbox");
+  var leagueWizardAddContactContactFields = document.getElementById("league-wizard-add-contact-contact-fields");
+  var leagueWizardAddContactEmailInput = document.getElementById("league-wizard-add-contact-email-input");
+  var leagueWizardAddContactPhoneInput = document.getElementById("league-wizard-add-contact-phone-input");
   var leagueWizardTeamsList = document.getElementById("league-wizard-teams-list");
   var leagueWizardTableCountInput = document.getElementById("league-wizard-table-count");
   var leagueWizardMultiClientRow = document.getElementById("league-wizard-multi-client-row");
@@ -9403,6 +9409,23 @@
     return { wrapper: wrapper, input: input };
   }
 
+  // Email/phone only make sense for someone actually about to be
+  // registered as a player - shown only once both are true: the
+  // "Add to Contact Sheet if new" checkbox is on, and the typed name
+  // doesn't already match a known player (so there's nowhere for these
+  // to be silently overwriting an existing contact's info).
+  function leagueAddMemberNameIsNewPlayer(name) {
+    var trimmed = (name || "").trim();
+    if (!trimmed) return false;
+    return !state.players.some(function (p) {
+      return normalizeNameKey(p.name) === normalizeNameKey(trimmed);
+    });
+  }
+
+  function updateLeagueNewPlayerContactFieldsVisibility(checkbox, fieldsWrap, nameValue) {
+    fieldsWrap.classList.toggle("hidden", !(checkbox.checked && leagueAddMemberNameIsNewPlayer(nameValue)));
+  }
+
   // One Tables Overview cell: occupied shows a compact score summary plus
   // a jump-to-board shortcut; idle shows an assign form whose shape
   // depends on the league's queueMode (manual pair-picker, or that
@@ -9954,6 +9977,10 @@
     var addMemberCombo = buildLeagueNameAutocomplete(candidates, T("league.queueAddPlaceholder"), "league-add-member-input");
     leagueAddMemberInput = addMemberCombo.input;
     leagueAddMemberWrap.appendChild(addMemberCombo.wrapper);
+    leagueAddMemberInput.addEventListener("input", function () {
+      updateLeagueNewPlayerContactFieldsVisibility(leagueAddMemberContactsCheckbox, leagueAddMemberContactFields, leagueAddMemberInput.value);
+    });
+    updateLeagueNewPlayerContactFieldsVisibility(leagueAddMemberContactsCheckbox, leagueAddMemberContactFields, leagueAddMemberInput.value);
 
     // FLIP-animates rows into their new order on re-sort, instead of an
     // abrupt jump straight to it - a sudden rearrangement reads as
@@ -10208,6 +10235,10 @@
     var wizardAddContactCombo = buildLeagueNameAutocomplete(contactCandidates, T("league.queueAddPlaceholder"), "league-add-member-input");
     leagueWizardAddContactInput = wizardAddContactCombo.input;
     leagueWizardAddContactWrap.appendChild(wizardAddContactCombo.wrapper);
+    leagueWizardAddContactInput.addEventListener("input", function () {
+      updateLeagueNewPlayerContactFieldsVisibility(leagueWizardAddContactContactsCheckbox, leagueWizardAddContactContactFields, leagueWizardAddContactInput.value);
+    });
+    updateLeagueNewPlayerContactFieldsVisibility(leagueWizardAddContactContactsCheckbox, leagueWizardAddContactContactFields, leagueWizardAddContactInput.value);
   }
 
   function renderLeagueWizardTeams() {
@@ -24144,6 +24175,12 @@
       renderLeaguePage();
     });
   });
+  wirePhoneFormatting(leagueAddMemberPhoneInput);
+  var checkLeagueAddMemberEmailValidity = wireFieldValidity(leagueAddMemberEmailInput, isValidEmail);
+  var checkLeagueAddMemberPhoneValidity = wireFieldValidity(leagueAddMemberPhoneInput, isValidPhoneNumber);
+  leagueAddMemberContactsCheckbox.addEventListener("change", function () {
+    updateLeagueNewPlayerContactFieldsVisibility(leagueAddMemberContactsCheckbox, leagueAddMemberContactFields, leagueAddMemberInput ? leagueAddMemberInput.value : "");
+  });
   btnLeagueAddMember.addEventListener("click", function () {
     var league = findLeagueById(activeLeagueId);
     var name = leagueAddMemberInput ? leagueAddMemberInput.value.trim() : "";
@@ -24160,10 +24197,26 @@
     if (existingPlayer) {
       name = existingPlayer.name;
     } else if (leagueAddMemberContactsCheckbox.checked) {
+      if (!checkLeagueAddMemberEmailValidity()) {
+        showToast(T("contactSheet.invalidEmail"));
+        return;
+      }
+      if (!checkLeagueAddMemberPhoneValidity()) {
+        showToast(T("contactSheet.invalidPhone"));
+        return;
+      }
       var newPlayer = addPlayer(name);
-      if (newPlayer) name = newPlayer.name;
+      if (newPlayer) {
+        name = newPlayer.name;
+        var email = leagueAddMemberEmailInput.value.trim();
+        var phone = leagueAddMemberPhoneInput.value.trim();
+        if (email || phone) setPlayerContact(newPlayer.name, { email: email, phone: phone });
+      }
     }
     addLeagueMember(league, name);
+    leagueAddMemberEmailInput.value = "";
+    leagueAddMemberPhoneInput.value = "";
+    leagueAddMemberContactFields.classList.add("hidden");
     renderLeaguePage();
     renderAll();
   });
@@ -24267,6 +24320,12 @@
     markNoLeagueMembersPresentTonight(league);
     renderLeagueWizardRoster();
   });
+  wirePhoneFormatting(leagueWizardAddContactPhoneInput);
+  var checkLeagueWizardAddContactEmailValidity = wireFieldValidity(leagueWizardAddContactEmailInput, isValidEmail);
+  var checkLeagueWizardAddContactPhoneValidity = wireFieldValidity(leagueWizardAddContactPhoneInput, isValidPhoneNumber);
+  leagueWizardAddContactContactsCheckbox.addEventListener("change", function () {
+    updateLeagueNewPlayerContactFieldsVisibility(leagueWizardAddContactContactsCheckbox, leagueWizardAddContactContactFields, leagueWizardAddContactInput ? leagueWizardAddContactInput.value : "");
+  });
   btnLeagueWizardAddContact.addEventListener("click", function () {
     var league = leagueWizardOrganizerLeague();
     var name = leagueWizardAddContactInput ? leagueWizardAddContactInput.value.trim() : "";
@@ -24280,11 +24339,27 @@
     if (existingPlayer) {
       name = existingPlayer.name;
     } else if (leagueWizardAddContactContactsCheckbox.checked) {
+      if (!checkLeagueWizardAddContactEmailValidity()) {
+        showToast(T("contactSheet.invalidEmail"));
+        return;
+      }
+      if (!checkLeagueWizardAddContactPhoneValidity()) {
+        showToast(T("contactSheet.invalidPhone"));
+        return;
+      }
       var newPlayer = addPlayer(name);
-      if (newPlayer) name = newPlayer.name;
+      if (newPlayer) {
+        name = newPlayer.name;
+        var email = leagueWizardAddContactEmailInput.value.trim();
+        var phone = leagueWizardAddContactPhoneInput.value.trim();
+        if (email || phone) setPlayerContact(newPlayer.name, { email: email, phone: phone });
+      }
     }
     addLeagueMember(league, name);
     setLeagueTonightRosterMember(league, name, true);
+    leagueWizardAddContactEmailInput.value = "";
+    leagueWizardAddContactPhoneInput.value = "";
+    leagueWizardAddContactContactFields.classList.add("hidden");
     renderLeagueWizardRoster();
     renderAll();
   });

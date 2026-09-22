@@ -1780,6 +1780,10 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
         <input type="checkbox" id="league-add-member-contacts-checkbox">
         <span data-i18n="league.addToContactsLabel">Add to Contact Sheet if new</span>
       </label>
+      <div class="row league-add-member-contact-fields hidden" id="league-add-member-contact-fields">
+        <input type="email" id="league-add-member-email-input" data-i18n-placeholder="onboarding.emailPlaceholder" placeholder="Email (optional)">
+        <input type="tel" id="league-add-member-phone-input" data-i18n-placeholder="onboarding.phonePlaceholder" placeholder="Phone number, e.g. (415) 555-0123 (optional)">
+      </div>
     </div>
 
     <div id="league-standings-section">
@@ -1917,6 +1921,10 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
           <input type="checkbox" id="league-wizard-add-contact-contacts-checkbox">
           <span data-i18n="league.addToContactsLabel">Add to Contact Sheet if new</span>
         </label>
+        <div class="row league-add-member-contact-fields hidden" id="league-wizard-add-contact-contact-fields">
+          <input type="email" id="league-wizard-add-contact-email-input" data-i18n-placeholder="onboarding.emailPlaceholder" placeholder="Email (optional)">
+          <input type="tel" id="league-wizard-add-contact-phone-input" data-i18n-placeholder="onboarding.phonePlaceholder" placeholder="Phone number, e.g. (415) 555-0123 (optional)">
+        </div>
       </div>
 
       <div class="wizard-step hidden" id="league-wizard-step-2">
@@ -1985,6 +1993,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260922j"></script>
+<script src="js/app.js?v=20260922k"></script>
 </body>
 </html>
