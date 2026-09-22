@@ -435,6 +435,8 @@
   "league.handicapChartInvalidToast": "Entrez un Niveau de Compétence et une valeur.",
   "league.handicapChartOpenButton": "📊 Voir/Modifier le Barème {{system}}",
   "league.handicapChartRemoveAria": "Retirer le Niveau de Compétence {{sl}}",
+  "league.handicapChartSaveButton": "💾 Enregistrer",
+  "league.handicapChartSavedToast": "Enregistré — ces chiffres sont maintenant utilisés pour les matchs de cette ligue.",
   "league.handicapChartSkillLevel": "Niveau de Compétence",
   "league.handicapChartTargetGames": "Manches à Gagner",
   "league.handicapChartTargetPoints": "Points à Atteindre",

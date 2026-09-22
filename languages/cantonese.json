@@ -435,6 +435,8 @@
   "league.handicapChartInvalidToast": "請輸入技術等級同數值。",
   "league.handicapChartOpenButton": "📊 查看/編輯{{system}}對照表",
   "league.handicapChartRemoveAria": "移除技術等級 {{sl}}",
+  "league.handicapChartSaveButton": "💾 儲存",
+  "league.handicapChartSavedToast": "已儲存——呢個聯賽嘅比賽而家會用返呢啲數字。",
   "league.handicapChartSkillLevel": "技術等級",
   "league.handicapChartTargetGames": "勝局數",
   "league.handicapChartTargetPoints": "所需分數",
