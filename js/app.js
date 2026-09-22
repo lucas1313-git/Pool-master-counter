@@ -2111,6 +2111,12 @@
   var leagueHandicapChartExplain = document.getElementById("league-handicap-chart-explain");
   var leagueHandicapChartTargetHeader = document.getElementById("league-handicap-chart-target-header");
   var leagueHandicapChartKeyHeader = document.getElementById("league-handicap-chart-key-header");
+  var leagueHandicapChartPlayerRow = document.getElementById("league-handicap-chart-player-row");
+  var leagueHandicapChartPlayerSelect = document.getElementById("league-handicap-chart-player-select");
+  var leagueHandicapChartPlayerTable = document.getElementById("league-handicap-chart-player-table");
+  var leagueHandicapChartPlayerYouHeader = document.getElementById("league-handicap-chart-player-you-header");
+  var leagueHandicapChartPlayerThemHeader = document.getElementById("league-handicap-chart-player-them-header");
+  var leagueHandicapChartPlayerBody = document.getElementById("league-handicap-chart-player-body");
   var leagueHandicapChartBody = document.getElementById("league-handicap-chart-body");
   var leagueHandicapChartAddRow = document.getElementById("league-handicap-chart-add-row");
   var leagueHandicapChartNewSlInput = document.getElementById("league-handicap-chart-new-sl");
@@ -8450,6 +8456,16 @@
       T(isRatio ? "league.handicapChartRatioTitleSuffix" : "league.handicapChartTitleSuffix");
     leagueHandicapChartAddRow.classList.toggle("hidden", readOnly);
     btnLeagueHandicapChartSave.classList.toggle("hidden", readOnly);
+    // The "See it for <player>" matchup breakdown only makes sense where
+    // one player's own number stays fixed regardless of opponent (APA) -
+    // BCA already IS a per-opponent view (the ratio table), and VNBA/TAP
+    // are edited as an abstract Skill Level chart, not per member.
+    leagueHandicapChartPlayerRow.classList.toggle("hidden", !isFixed);
+    leagueHandicapChartPlayerTable.classList.toggle("hidden", !isFixed);
+    if (isFixed) {
+      populateLeagueHandicapChartPlayerSelect(league);
+      renderLeagueHandicapChartPlayerMatchups(league);
+    }
 
     if (isRatio) {
       // BCA has no organizer-editable chart at all - it's a ratio applied
@@ -8512,6 +8528,72 @@
       tr.appendChild(valueCell);
       tr.appendChild(document.createElement("td"));
       leagueHandicapChartBody.appendChild(tr);
+    });
+  }
+
+  function populateLeagueHandicapChartPlayerSelect(league) {
+    var previous = leagueHandicapChartPlayerSelect.value;
+    leagueHandicapChartPlayerSelect.innerHTML = "";
+    league.members
+      .slice()
+      .sort(function (a, b) {
+        return a.name.localeCompare(b.name);
+      })
+      .forEach(function (m) {
+        var opt = document.createElement("option");
+        opt.value = m.name;
+        opt.textContent = leagueNameWithTeam(league, m.name);
+        leagueHandicapChartPlayerSelect.appendChild(opt);
+      });
+    // Re-opening (or a member list that changed while this was open)
+    // keeps the same player picked when they're still a member, instead
+    // of silently resetting to whoever now sorts first.
+    if (league.members.some(function (m) { return m.name === previous; })) {
+      leagueHandicapChartPlayerSelect.value = previous;
+    }
+  }
+
+  // APA's own chart already gives each player their target independent
+  // of who they're facing - this just looks that up for the picked
+  // player and lines it up against every other member's own number, the
+  // same "race is 2-6" shape APA's real published chart uses, but built
+  // from this league's actual members instead of abstract Skill Levels.
+  function renderLeagueHandicapChartPlayerMatchups(league) {
+    leagueHandicapChartPlayerBody.innerHTML = "";
+    var selected = league.members.filter(function (m) {
+      return m.name === leagueHandicapChartPlayerSelect.value;
+    })[0];
+    if (!selected) return;
+    var myTarget = leagueMatchTargetForMember(league, selected);
+    var opponents = league.members
+      .filter(function (m) {
+        return m.name !== selected.name;
+      })
+      .sort(function (a, b) {
+        return a.name.localeCompare(b.name);
+      });
+    if (!opponents.length) {
+      var emptyRow = document.createElement("tr");
+      var emptyCell = document.createElement("td");
+      emptyCell.colSpan = 3;
+      emptyCell.className = "empty-hint";
+      emptyCell.textContent = T("league.handicapChartNoOpponents");
+      emptyRow.appendChild(emptyCell);
+      leagueHandicapChartPlayerBody.appendChild(emptyRow);
+      return;
+    }
+    opponents.forEach(function (opp) {
+      var tr = document.createElement("tr");
+      var oppCell = document.createElement("td");
+      oppCell.textContent = leagueNameWithTeam(league, opp.name);
+      tr.appendChild(oppCell);
+      var youCell = document.createElement("td");
+      youCell.textContent = myTarget;
+      tr.appendChild(youCell);
+      var themCell = document.createElement("td");
+      themCell.textContent = leagueMatchTargetForMember(league, opp);
+      tr.appendChild(themCell);
+      leagueHandicapChartPlayerBody.appendChild(tr);
     });
   }
 
@@ -24610,6 +24692,11 @@
     var league = findLeagueById(activeLeagueId);
     if (!league) return;
     openLeagueHandicapChartEditor(league);
+  });
+  leagueHandicapChartPlayerSelect.addEventListener("change", function () {
+    var league = findLeagueById(activeLeagueId);
+    if (!league) return;
+    renderLeagueHandicapChartPlayerMatchups(league);
   });
   btnLeagueHandicapChartClose.addEventListener("click", function () {
     leagueHandicapChartOverlay.classList.add("hidden");

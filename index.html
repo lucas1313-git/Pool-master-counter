@@ -1249,6 +1249,20 @@
       <p class="help-intro" id="league-handicap-chart-explain" data-i18n="league.handicapChartExplain">Your own numbers for this league's Skill Level chart, saved with this league and included whenever you export it. A Skill Level not listed here falls back to Base Games to Win.</p>
     </div>
     <div class="help-body">
+      <div class="row hidden" id="league-handicap-chart-player-row">
+        <label for="league-handicap-chart-player-select" data-i18n="league.handicapChartPlayerLabel">See it for</label>
+        <select id="league-handicap-chart-player-select"></select>
+      </div>
+      <table class="league-handicap-chart-table hidden" id="league-handicap-chart-player-table">
+        <thead>
+          <tr>
+            <th data-i18n="league.handicapChartOpponent">Opponent</th>
+            <th id="league-handicap-chart-player-you-header" data-i18n="league.handicapChartYouNeed">You Need</th>
+            <th id="league-handicap-chart-player-them-header" data-i18n="league.handicapChartTheyNeed">They Need</th>
+          </tr>
+        </thead>
+        <tbody id="league-handicap-chart-player-body"></tbody>
+      </table>
       <table class="league-handicap-chart-table">
         <thead>
           <tr>
@@ -2051,6 +2065,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260922v"></script>
+<script src="js/app.js?v=20260922w"></script>
 </body>
 </html>
