@@ -9233,6 +9233,82 @@
     leagueCurrentMatchPanel.appendChild(stack);
   }
 
+  // A free-text name input with its own suggestion dropdown, built by
+  // hand instead of the native <input list>/<datalist> combo - on iPad
+  // (and other WebKit-based browsers) that native popup can render on
+  // top of the input itself, blocking typing entirely. This draws its
+  // suggestions in normal document flow below the field instead, so it
+  // never covers what's being typed. wrapperClassName gets the flex-
+  // sizing rule (the existing .league-queue-add-input/.league-team-add-
+  // player-select CSS already targets a wrapper this way); the input
+  // itself just fills it.
+  function buildLeagueNameAutocomplete(candidates, placeholder, wrapperClassName) {
+    var wrapper = document.createElement("div");
+    wrapper.className = "league-name-autocomplete " + wrapperClassName;
+
+    var input = document.createElement("input");
+    input.type = "text";
+    input.placeholder = placeholder;
+    input.setAttribute("autocomplete", "off");
+    wrapper.appendChild(input);
+
+    var list = document.createElement("ul");
+    list.className = "league-name-autocomplete-list hidden";
+    wrapper.appendChild(list);
+
+    function closeList() {
+      list.classList.add("hidden");
+      list.innerHTML = "";
+    }
+
+    function openListFor(query) {
+      var q = query.trim().toLowerCase();
+      if (!q) {
+        closeList();
+        return;
+      }
+      var matches = candidates
+        .filter(function (name) {
+          return name.toLowerCase().indexOf(q) !== -1;
+        })
+        .slice(0, 8);
+      if (!matches.length) {
+        closeList();
+        return;
+      }
+      list.innerHTML = "";
+      matches.forEach(function (name) {
+        var li = document.createElement("li");
+        li.textContent = name;
+        // mousedown (not click) fires before the input's blur, so the
+        // picked name lands before closeList/blur would otherwise wipe
+        // the list out from under the tap.
+        li.addEventListener("mousedown", function (e) {
+          e.preventDefault();
+          input.value = name;
+          closeList();
+        });
+        list.appendChild(li);
+      });
+      list.classList.remove("hidden");
+    }
+
+    input.addEventListener("input", function () {
+      openListFor(input.value);
+    });
+    input.addEventListener("focus", function () {
+      openListFor(input.value);
+    });
+    input.addEventListener("blur", function () {
+      closeList();
+    });
+    input.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") closeList();
+    });
+
+    return { wrapper: wrapper, input: input };
+  }
+
   // One Tables Overview cell: occupied shows a compact score summary plus
   // a jump-to-board shortcut; idle shows an assign form whose shape
   // depends on the league's queueMode (manual pair-picker, or that
@@ -9522,28 +9598,19 @@
     queue.forEach(function (n) {
       inQueue[n] = true;
     });
-    var addCandidates = league.members.filter(function (m) {
-      return !inQueue[m.name];
-    });
-    // A text input backed by a datalist, not a plain select - lets the
-    // organizer either pick an existing member (autocomplete) or type
-    // someone brand new who just walked in, without leaving this card to
-    // add them as a member first (the Add handler below does that for
-    // them, same as picking them from the Members section would).
-    var addInput = document.createElement("input");
-    addInput.type = "text";
-    addInput.className = "league-queue-add-input";
-    addInput.placeholder = T("league.queueAddPlaceholder");
-    var addDatalistId = "league-table-" + tableNum + "-queue-datalist";
-    addInput.setAttribute("list", addDatalistId);
-    var addDatalist = document.createElement("datalist");
-    addDatalist.id = addDatalistId;
-    addCandidates.forEach(function (m) {
-      var opt = document.createElement("option");
-      opt.value = m.name;
-      opt.label = leagueNameWithTeam(league, m.name);
-      addDatalist.appendChild(opt);
-    });
+    var addCandidates = league.members
+      .filter(function (m) {
+        return !inQueue[m.name];
+      })
+      .map(function (m) {
+        return m.name;
+      });
+    // Free-text input with its own suggestion dropdown (see
+    // buildLeagueNameAutocomplete) - lets the organizer either pick an
+    // existing member or type someone brand new who just walked in; the
+    // Add handler below adds them as a member automatically either way.
+    var addCombo = buildLeagueNameAutocomplete(addCandidates, T("league.queueAddPlaceholder"), "league-queue-add-input");
+    var addInput = addCombo.input;
     var addBtn = document.createElement("button");
     addBtn.type = "button";
     addBtn.className = "btn btn-ghost";
@@ -9558,8 +9625,7 @@
       addNameToQueue(league, tableNum, existingMember ? existingMember.name : name);
       renderLeaguePage();
     });
-    addRow.appendChild(addInput);
-    addRow.appendChild(addDatalist);
+    addRow.appendChild(addCombo.wrapper);
     addRow.appendChild(addBtn);
     card.appendChild(addRow);
 
@@ -9700,27 +9766,19 @@
           already[n] = true;
         });
       });
-      var candidates = league.members.filter(function (m) {
-        return !already[m.name];
-      });
-      // A text input backed by a datalist, not a plain select - lets the
-      // organizer either pick an existing member (autocomplete) or type
-      // someone brand new who isn't a league member yet; the Add handler
-      // below adds them as one automatically, same as the table queue's
-      // own name input does.
-      var addInput = document.createElement("input");
-      addInput.type = "text";
-      addInput.className = "league-team-add-player-select";
-      addInput.placeholder = T("league.queueAddPlaceholder");
-      var addDatalistId = "league-team-" + team.id + "-add-player-datalist";
-      addInput.setAttribute("list", addDatalistId);
-      var addDatalist = document.createElement("datalist");
-      addDatalist.id = addDatalistId;
-      candidates.forEach(function (m) {
-        var opt = document.createElement("option");
-        opt.value = m.name;
-        addDatalist.appendChild(opt);
-      });
+      var candidates = league.members
+        .filter(function (m) {
+          return !already[m.name];
+        })
+        .map(function (m) {
+          return m.name;
+        });
+      // Free-text input with its own suggestion dropdown (see
+      // buildLeagueNameAutocomplete) - lets the organizer either pick an
+      // existing member or type someone brand new who isn't a league
+      // member yet; the Add handler below adds them as one automatically.
+      var addCombo = buildLeagueNameAutocomplete(candidates, T("league.queueAddPlaceholder"), "league-team-add-player-select");
+      var addInput = addCombo.input;
       var addBtn = document.createElement("button");
       addBtn.type = "button";
       addBtn.className = "btn btn-ghost";
@@ -9735,8 +9793,7 @@
         addMemberToTeam(league, team.id, existingMember ? existingMember.name : name);
         renderLeaguePage();
       });
-      addRow.appendChild(addInput);
-      addRow.appendChild(addDatalist);
+      addRow.appendChild(addCombo.wrapper);
       addRow.appendChild(addBtn);
       li.appendChild(addRow);
 

@@ -7342,7 +7342,7 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   flex: 0 1 200px;
 }
 
-/* Team name input and the per-team "add a player" select default to
+/* Team name input and the per-team "add a player" input default to
    the app-wide flex:1/min-width:140px rule, which stretches them the
    full width of the card - way more room than a name or a short roster
    list needs. */
@@ -7359,6 +7359,50 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
    so it gets the same fixed-width treatment. */
 .league-queue-add-input {
   flex: 0 1 220px;
+}
+
+/* Hand-built autocomplete (see buildLeagueNameAutocomplete) - the
+   suggestion list is positioned relative to this wrapper so it drops
+   below the input in normal flow, never over it (the native <input
+   list>/<datalist> popup can cover the field itself on iPad and other
+   WebKit-based browsers, which is exactly what this replaces). The
+   wrapper itself carries whichever flex-sizing class the input used to
+   (.league-queue-add-input / .league-team-add-player-select above). */
+.league-name-autocomplete {
+  position: relative;
+  min-width: 0;
+}
+
+.league-name-autocomplete input {
+  width: 100%;
+}
+
+.league-name-autocomplete-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  margin: 4px 0 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  max-height: 220px;
+  overflow-y: auto;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+}
+
+.league-name-autocomplete-list li {
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+.league-name-autocomplete-list li:hover {
+  background: color-mix(in srgb, var(--accent) 18%, var(--bg-card));
 }
 
 /* League Setup Wizard - same look as the main Game Setup Wizard
