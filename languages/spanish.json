@@ -421,6 +421,7 @@
   "league.deleteConfirm": "¿Eliminar \"{{name}}\"? No se puede deshacer.",
   "league.exportButton": "📤 Exportar liga",
   "league.focusModeButton": "🔎 Modo Enfoque",
+  "league.focusThisTableButton": "🔎 Enfocar esta Mesa",
   "league.format8Ball": "APA 8-Ball",
   "league.format9Ball": "APA 9-Ball",
   "league.heading": "🏆 Liga",

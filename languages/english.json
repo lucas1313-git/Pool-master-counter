@@ -421,6 +421,7 @@
   "league.deleteConfirm": "Delete \"{{name}}\"? This can't be undone.",
   "league.exportButton": "📤 Export League",
   "league.focusModeButton": "🔎 Focus Mode",
+  "league.focusThisTableButton": "🔎 Focus This Table",
   "league.format8Ball": "APA 8-Ball",
   "league.format9Ball": "APA 9-Ball",
   "league.heading": "🏆 League",
