@@ -6480,6 +6480,25 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   opacity: 0.65;
 }
 
+/* Everything above the bracket trees (abandon/print row, champion
+   banner, the live match board(s), ready-to-play list, timeline) is
+   narrow content that only ever looked full-width because .panel
+   itself has no width cap - same issue the setup wizard had. The
+   bracket trees below stay uncapped on purpose (a many-round bracket
+   genuinely needs the room, with its own horizontal scroll). Matches
+   #app's own 900px content width rather than the setup wizard's
+   narrower 720px, since a live two-up scoreboard needs more breathing
+   room than a stack of radio options. */
+#tournament-active-panel > .row,
+#tournament-active-panel > #tournament-champion-banner,
+#tournament-active-panel > #tournament-current-match-panel,
+#tournament-active-panel > #tournament-ready-list,
+#tournament-active-panel > #tournament-timeline {
+  max-width: 900px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
 .tournament-bracket-heading {
   margin: 20px 16px 8px;
 }

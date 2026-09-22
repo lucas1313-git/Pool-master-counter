@@ -1853,6 +1853,7 @@
   var btnLeaderboardShare = document.getElementById("btn-leaderboard-share");
   var leaderboardViewPlayersRadio = document.getElementById("leaderboard-view-players");
   var leaderboardViewTeamsRadio = document.getElementById("leaderboard-view-teams");
+  var leaderboardViewLeagueRadio = document.getElementById("leaderboard-view-league");
   var leaderboardPeriodFilter = document.getElementById("leaderboard-period-filter");
   var leaderboardPeriodButtons = leaderboardPeriodFilter.querySelectorAll(".period-btn");
   var leaderboardList = document.getElementById("leaderboard-list");
@@ -2102,6 +2103,7 @@
   var btnMultiTableOpenGroupSession = document.getElementById("btn-multi-table-open-group-session");
   var btnMultiTableDownloadData = document.getElementById("btn-multi-table-download-data");
   var btnMultiTableDownloadApp = document.getElementById("btn-multi-table-download-app");
+  var btnMultiTableInstallStep = document.getElementById("btn-multi-table-install-step");
   var btnMultiTableClose = document.getElementById("btn-multi-table-close");
   var leagueWizardQueueModeSelect = document.getElementById("league-wizard-queue-mode");
   var leagueWizardRotationRow = document.getElementById("league-wizard-rotation-row");
@@ -8350,11 +8352,12 @@
     var pts = aWon ? leaguePointsForResult(scoreA, targetA, scoreB, targetB) : leaguePointsForResult(scoreB, targetB, scoreA, targetA);
     var leaguePointsA = aWon ? pts.winnerPoints : pts.loserPoints;
     var leaguePointsB = aWon ? pts.loserPoints : pts.winnerPoints;
+    var ts = new Date().toISOString();
 
     league.matches = league.matches.concat([
       {
         id: "match-" + uid(),
-        ts: new Date().toISOString(),
+        ts: ts,
         playerA: nameA,
         playerB: nameB,
         skillLevelA: memberA.skillLevel,
@@ -8377,6 +8380,14 @@
     memberB.leaguePoints += leaguePointsB;
     bumpLeagueSessionGameCount(league, nameA);
     bumpLeagueSessionGameCount(league, nameB);
+
+    // Same pairwise rating update every other pairwise result in the app
+    // gets (a regular game, a tournament match) - league matches are
+    // real games too, so a member's overall rating (shown everywhere
+    // else via buildRatingBadge) should move with their league record
+    // instead of staying frozen at whatever it was before they joined.
+    applyPairwiseRatingResult(aWon ? nameA : nameB, aWon ? nameB : nameA, ts);
+    saveRatingsToStorage(PLAYER_RATINGS);
 
     saveLeaguesToStorage(LEAGUES);
   }
@@ -9703,7 +9714,8 @@
         var row = document.createElement("tr");
 
         var nameCell = document.createElement("td");
-        nameCell.textContent = leagueNameWithTeam(league, m.name);
+        nameCell.appendChild(document.createTextNode(leagueNameWithTeam(league, m.name)));
+        nameCell.appendChild(buildRatingBadge(m.name));
         row.appendChild(nameCell);
 
         var slCell = document.createElement("td");
@@ -10190,6 +10202,7 @@
     multiTableHostLinkNote.textContent = "";
     var os = detectDesktopOS();
     btnMultiTableDownloadApp.classList.toggle("hidden", !os);
+    btnMultiTableInstallStep.classList.toggle("hidden", !os);
     if (os) btnMultiTableDownloadApp.textContent = T("multiTable.downloadAppButton", { os: DESKTOP_OS_LABELS[os] });
     multiTableHostOverlay.classList.remove("hidden");
   }
@@ -10223,6 +10236,15 @@
   }
 
   var PENDING_WIZARD_REOPEN_KEY = "poolMasterCounter.pendingWizardReopen.v1";
+  // ?loadsetting=... is only ever produced by the multi-table hosting
+  // handoff (see downloadMultiTableHostData/consumePendingHandoffStep) -
+  // every device that lands here via that URL was, by definition,
+  // downloaded specifically to become another table's host, so this
+  // flag is unconditionally set alongside the reopen step and consumed
+  // the same way, to start Group Session hosting automatically once the
+  // import/reload has landed instead of leaving the organizer to find
+  // and click "Open Group Session" a second time on the new device.
+  var PENDING_AUTO_HOST_KEY = "poolMasterCounter.pendingAutoHost.v1";
 
   function checkLoadSettingUrlParam() {
     var params;
@@ -10240,6 +10262,7 @@
     confirmModal(T("multiTable.loadSettingPrompt"), function () {
       try {
         localStorage.setItem(PENDING_WIZARD_REOPEN_KEY, settingStep);
+        localStorage.setItem(PENDING_AUTO_HOST_KEY, "1");
       } catch (e) {
         console.warn("Could not save pending wizard reopen.", e);
       }
@@ -10260,6 +10283,27 @@
     } catch (e) {}
     if (settingStep === "wizardLeague") openLeagueWizard();
     else openWizard();
+    checkPendingAutoHost();
+  }
+
+  function checkPendingAutoHost() {
+    var pending;
+    try {
+      pending = localStorage.getItem(PENDING_AUTO_HOST_KEY);
+    } catch (e) {
+      pending = null;
+    }
+    if (!pending) return;
+    try {
+      localStorage.removeItem(PENDING_AUTO_HOST_KEY);
+    } catch (e) {}
+    // Silently does nothing useful (shows the same origin-error state a
+    // manual click would) when this isn't actually running against the
+    // real local server - e.g. someone importing this file on a browser
+    // that isn't the desktop app for some other reason. Only ever called
+    // right after checkPendingWizardReopen re-opens the matching wizard,
+    // so the organizer sees both land together.
+    startHostingSession();
   }
 
   function loadRotationsFromStorage() {
@@ -19137,6 +19181,66 @@
     return entries;
   }
 
+  // Same scoring formula as computeLeaderboardEntries
+  // (computeLeaderboardScoreBreakdown, same minGames-gating), but built
+  // from league.matches/members directly instead of the general
+  // state.gameHistory pipeline - a league match is only ever recorded
+  // there (recordLeagueMatch), not into gameHistory/PLAYER_STATS the way
+  // a regular or tournament game is, so filtering computeLeaderboardEntries's
+  // own output down to league members would show "not enough games" for
+  // everyone regardless of how much they've actually played in the
+  // league. tournamentWins/avgDominanceRatio/skunkWins are always 0 here
+  // (those concepts don't apply to a league's race-format matches) -
+  // rating and bestRun still come from the same shared, cross-cutting
+  // stats every other leaderboard view uses.
+  function computeLeaderboardLeagueEntries(period) {
+    var league = findLeagueById(activeLeagueId);
+    if (!league) {
+      var empty = [];
+      empty.minGames = LEADERBOARD_MIN_GAMES;
+      return empty;
+    }
+    var periodMatches = filterGamesByPeriod(league.matches, period);
+    var rawEntries = league.members.map(function (m) {
+      var played = periodMatches.filter(function (match) {
+        return match.playerA === m.name || match.playerB === m.name;
+      });
+      var wins = played.filter(function (match) {
+        return match.winner === m.name;
+      }).length;
+      return {
+        name: m.name,
+        gamesPlayed: played.length,
+        wins: wins,
+        winPct: played.length ? wins / played.length : 0,
+        rating: getPlayerRating(m.name),
+        tournamentWins: 0,
+        avgDominanceRatio: 0,
+        skunkWins: 0,
+        bestRun: getPlayerBestRun(m.name)
+      };
+    });
+    var minGames = leaderboardMinGamesForPeriod(
+      period,
+      rawEntries.map(function (e) {
+        return e.gamesPlayed;
+      }),
+      leaderboardElapsedDaysInPeriod(period)
+    );
+    var entries = rawEntries.filter(function (e) {
+      return e.gamesPlayed >= minGames;
+    });
+    entries.minGames = minGames;
+    entries.forEach(function (e) {
+      e.scoreBreakdown = computeLeaderboardScoreBreakdown(e, minGames);
+      e.mvpScore = e.scoreBreakdown.total;
+    });
+    entries.sort(function (a, b) {
+      return b.mvpScore - a.mvpScore;
+    });
+    return entries;
+  }
+
   function loadLeaderboardSnapshot() {
     try {
       var raw = localStorage.getItem(LEADERBOARD_SNAPSHOT_KEY);
@@ -19646,16 +19750,32 @@
     return li;
   }
 
+  // "players" | "teams" | "league" - kept as a string rather than the
+  // older isTeamView boolean now that there are three mutually exclusive
+  // views, not two.
+  function leaderboardViewMode() {
+    if (leaderboardViewTeamsRadio.checked) return "teams";
+    if (leaderboardViewLeagueRadio.checked) return "league";
+    return "players";
+  }
+
+  function leaderboardEntriesForView(mode, period) {
+    if (mode === "teams") return computeLeaderboardTeamEntries(period);
+    if (mode === "league") return computeLeaderboardLeagueEntries(period);
+    return computeLeaderboardEntries(period);
+  }
+
   function renderLeaderboardPage() {
-    var isTeamView = leaderboardViewTeamsRadio.checked;
-    var entries = isTeamView ? computeLeaderboardTeamEntries(leaderboardPeriod) : computeLeaderboardEntries(leaderboardPeriod);
+    var mode = leaderboardViewMode();
+    var entries = leaderboardEntriesForView(mode, leaderboardPeriod);
     leaderboardList.innerHTML = "";
     if (entries.length === 0) {
       leaderboardList.classList.add("hidden");
       leaderboardEmptyHint.classList.remove("hidden");
-      leaderboardEmptyHint.textContent = T(isTeamView ? "leaderboard.notEnoughTeamData" : "leaderboard.notEnoughData", {
-        minGames: entries.minGames
-      });
+      leaderboardEmptyHint.textContent = T(
+        mode === "teams" ? "leaderboard.notEnoughTeamData" : mode === "league" ? "leaderboard.notEnoughLeagueData" : "leaderboard.notEnoughData",
+        { minGames: entries.minGames }
+      );
     } else {
       leaderboardList.classList.remove("hidden");
       leaderboardEmptyHint.classList.add("hidden");
@@ -19677,13 +19797,22 @@
   // message, chat app, clipboard) without needing canvas rendering or a
   // file attachment, matching how Copy/Share Report already works for the
   // day report (see shareReportTextOnly).
+  function leaderboardScopeLabelKey(mode) {
+    return mode === "teams" ? "leaderboard.viewTeams" : mode === "league" ? "leaderboard.viewLeague" : "leaderboard.viewPlayers";
+  }
+
   function buildLeaderboardShareText() {
-    var isTeamView = leaderboardViewTeamsRadio.checked;
-    var entries = isTeamView ? computeLeaderboardTeamEntries(leaderboardPeriod) : computeLeaderboardEntries(leaderboardPeriod);
-    var scopeLabel = T(isTeamView ? "leaderboard.viewTeams" : "leaderboard.viewPlayers");
+    var mode = leaderboardViewMode();
+    var isTeamView = mode === "teams";
+    var entries = leaderboardEntriesForView(mode, leaderboardPeriod);
+    var scopeLabel = T(leaderboardScopeLabelKey(mode));
     var lines = [T("leaderboard.shareHeading", { scope: scopeLabel }), ""];
     if (entries.length === 0) {
-      lines.push(T(isTeamView ? "leaderboard.notEnoughTeamData" : "leaderboard.notEnoughData", { minGames: entries.minGames }));
+      lines.push(
+        T(mode === "teams" ? "leaderboard.notEnoughTeamData" : mode === "league" ? "leaderboard.notEnoughLeagueData" : "leaderboard.notEnoughData", {
+          minGames: entries.minGames
+        })
+      );
     } else {
       entries.forEach(function (entry, i) {
         var rank = i + 1;
@@ -19698,7 +19827,7 @@
   function shareLeaderboard() {
     var text = buildLeaderboardShareText();
     if (navigator.share) {
-      navigator.share({ title: T("leaderboard.shareHeading", { scope: T(leaderboardViewTeamsRadio.checked ? "leaderboard.viewTeams" : "leaderboard.viewPlayers") }), text: text }).catch(function (err) {
+      navigator.share({ title: T("leaderboard.shareHeading", { scope: T(leaderboardScopeLabelKey(leaderboardViewMode())) }), text: text }).catch(function (err) {
         if (err && err.name === "AbortError") return;
         copyLeaderboardToClipboard(text);
       });
@@ -24163,7 +24292,7 @@
     closeLeaderboardPage();
   });
   btnLeaderboardShare.addEventListener("click", shareLeaderboard);
-  [leaderboardViewPlayersRadio, leaderboardViewTeamsRadio].forEach(function (radio) {
+  [leaderboardViewPlayersRadio, leaderboardViewTeamsRadio, leaderboardViewLeagueRadio].forEach(function (radio) {
     radio.addEventListener("change", renderLeaderboardPage);
   });
   Array.prototype.forEach.call(leaderboardPeriodButtons, function (btn) {

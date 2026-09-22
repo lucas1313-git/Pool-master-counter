@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260921h">
+<link rel="stylesheet" href="css/style.css?v=20260921i">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -692,9 +692,15 @@
       <!-- .confirm-modal-actions is column-reverse (see style.css) - this
            block reads bottom-to-top visually, so the primary CTA (Open
            Group Session) is listed first here to land at the bottom, and
-           the two numbered download buttons are listed 2-then-1 so they
-           land in 1-then-2 reading order above it. -->
+           the three numbered steps are listed 3-then-2-then-1 so they
+           land in 1-then-2-then-3 reading order above it. Step 3 (install
+           the downloaded app) isn't a click here - it's disabled and
+           shown only alongside step 2's own button, purely so the
+           sequence reads as complete; the app itself does the rest on
+           its own first launch (see installer/standalone-entry.js and
+           checkPendingWizardReopen's auto-host handoff). -->
       <button type="button" id="btn-multi-table-open-group-session" class="btn btn-primary" data-i18n="multiTable.openGroupSessionButton">🔗 Open Group Session</button>
+      <button type="button" id="btn-multi-table-install-step" class="btn btn-ghost hidden" disabled data-i18n="multiTable.installStepLabel">🚀 3. Install &amp; Open the App</button>
       <button type="button" id="btn-multi-table-download-app" class="btn btn-ghost hidden" data-i18n="multiTable.downloadAppButton">⬇️ 2. Download the App</button>
       <button type="button" id="btn-multi-table-download-data" class="btn btn-ghost" data-i18n="multiTable.downloadDataButton">💾 1. Download My Setup</button>
       <button type="button" id="btn-multi-table-close" class="btn btn-ghost" data-i18n="common.close">Close</button>
@@ -1461,6 +1467,10 @@
       <input type="radio" name="leaderboard-view" id="leaderboard-view-teams" value="teams">
       <span data-i18n="leaderboard.viewTeams">Teams</span>
     </label>
+    <label class="leaderboard-view-option">
+      <input type="radio" name="leaderboard-view" id="leaderboard-view-league" value="league">
+      <span data-i18n="leaderboard.viewLeague">🏆 League</span>
+    </label>
   </div>
 
   <ul id="leaderboard-list" class="leaderboard-list"></ul>
@@ -1912,6 +1922,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260921m"></script>
+<script src="js/app.js?v=20260921o"></script>
 </body>
 </html>
