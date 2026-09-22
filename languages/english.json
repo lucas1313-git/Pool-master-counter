@@ -441,6 +441,7 @@
   "league.notPlayingTonight": "That player isn't marked as playing tonight.",
   "league.openModeHelp": "Skips the Teams section entirely — the organizer just picks any two members to play, table by table.",
   "league.openModeLabel": "Open League (no teams — pure player vs player)",
+  "league.queueAddPlaceholder": "Player name",
   "league.queueEmptyHint": "Queue is empty",
   "league.queueModeLabel": "Queue Mode",
   "league.queueModeNone": "Manual (organizer assigns)",
