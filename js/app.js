@@ -8097,11 +8097,13 @@
   // League (APA-style handicap league) - an organizer-managed group of
   // players competing over time, scored with the real APA Skill Level
   // handicap system so a mismatched pairing still plays close. Local-only,
-  // no server: the organizer's device is the single source of truth for a
-  // league (isOrganizer:true there), shared to other devices purely via
-  // exportLeague/importLeagueFile (the same downloadJSON pattern every
-  // other export in this app uses) - an imported copy always renders
-  // read-only, even re-imported back onto the organizer's own device.
+  // no server: leagues move between devices purely via exportLeague/
+  // importLeagueFile (the same downloadJSON pattern every other export in
+  // this app uses), and an imported copy is fully editable on the device
+  // that imports it (isOrganizer:true), not just a read-only view - there's
+  // still no sync between devices, so an import fully replaces whatever
+  // that device already had for the league's id, and independent edits on
+  // two devices only reconcile by re-exporting and re-importing.
   //
   // The two charts below are independently reconstructed from APA's
   // publicly published Skill Level handicap tables, not sourced from
@@ -8120,6 +8122,11 @@
   // trust the fields exist.
   function normalizeLeagueDefaults(l) {
     if (!l) return l;
+    // Imports used to stay read-only forever (isOrganizer:false, never
+    // reset) - forced true here too, not just on new imports, so a league
+    // someone already imported before this change becomes editable the
+    // next time it loads, without needing a fresh re-import.
+    l.isOrganizer = true;
     if (typeof l.isOpen !== "boolean") l.isOpen = false;
     if (typeof l.tableCount !== "number" || l.tableCount < 1) l.tableCount = 1;
     if (!Array.isArray(l.activeMatches)) l.activeMatches = [];
@@ -8429,13 +8436,15 @@
         alertModal(T("league.importInvalidFile"));
         return;
       }
-      // An imported copy is always read-only, even re-importing what was
-      // originally this same device's own export (see the sync model in
-      // the block comment above) - the organizer flag never survives a
-      // round trip through a file. Live-hosting state (activeMatches/
-      // queues/teams) is organizer-only UI, so an imported copy carrying
-      // it is harmless - it just never renders.
-      imported.isOrganizer = false;
+      // An imported copy is fully editable on this device, same as a
+      // locally created league (normalizeLeagueDefaults forces
+      // isOrganizer:true) - whoever imports a league file can actually
+      // run it (members, teams, tables, live hosting), not just view
+      // standings. There's still no sync between devices: each import
+      // fully replaces whatever this device already had for that league
+      // id (see the confirm below), so two devices editing independently
+      // and re-sharing files can diverge - re-exporting and re-importing
+      // is how they reconcile.
       normalizeLeagueDefaults(imported);
       var proceed = function () {
         LEAGUES = LEAGUES.filter(function (l) {
