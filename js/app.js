@@ -9508,7 +9508,6 @@
 
     var addRow = document.createElement("div");
     addRow.className = "row";
-    var addSelect = document.createElement("select");
     var inQueue = {};
     queue.forEach(function (n) {
       inQueue[n] = true;
@@ -9516,23 +9515,41 @@
     var addCandidates = league.members.filter(function (m) {
       return !inQueue[m.name];
     });
+    // A text input backed by a datalist, not a plain select - lets the
+    // organizer either pick an existing member (autocomplete) or type
+    // someone brand new who just walked in, without leaving this card to
+    // add them as a member first (the Add handler below does that for
+    // them, same as picking them from the Members section would).
+    var addInput = document.createElement("input");
+    addInput.type = "text";
+    addInput.className = "league-queue-add-input";
+    addInput.placeholder = T("league.queueAddPlaceholder");
+    var addDatalistId = "league-table-" + tableNum + "-queue-datalist";
+    addInput.setAttribute("list", addDatalistId);
+    var addDatalist = document.createElement("datalist");
+    addDatalist.id = addDatalistId;
     addCandidates.forEach(function (m) {
       var opt = document.createElement("option");
       opt.value = m.name;
-      opt.textContent = leagueNameWithTeam(league, m.name);
-      addSelect.appendChild(opt);
+      opt.label = leagueNameWithTeam(league, m.name);
+      addDatalist.appendChild(opt);
     });
     var addBtn = document.createElement("button");
     addBtn.type = "button";
     addBtn.className = "btn btn-ghost";
     addBtn.textContent = T("league.addToQueueButton");
-    addBtn.disabled = addCandidates.length === 0;
     addBtn.addEventListener("click", function () {
-      if (!addSelect.value) return;
-      addNameToQueue(league, tableNum, addSelect.value);
+      var name = addInput.value.trim();
+      if (!name) return;
+      var existingMember = league.members.filter(function (m) {
+        return normalizeNameKey(m.name) === normalizeNameKey(name);
+      })[0];
+      if (!existingMember) addLeagueMember(league, name);
+      addNameToQueue(league, tableNum, existingMember ? existingMember.name : name);
       renderLeaguePage();
     });
-    addRow.appendChild(addSelect);
+    addRow.appendChild(addInput);
+    addRow.appendChild(addDatalist);
     addRow.appendChild(addBtn);
     card.appendChild(addRow);
 

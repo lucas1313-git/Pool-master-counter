@@ -441,6 +441,7 @@
   "league.notPlayingTonight": "Ese jugador no está marcado como que juega esta noche.",
   "league.openModeHelp": "Omite por completo la sección de Equipos — el organizador simplemente elige a dos miembros para jugar, mesa por mesa.",
   "league.openModeLabel": "Liga Abierta (sin equipos — jugador contra jugador)",
+  "league.queueAddPlaceholder": "Nombre del Jugador",
   "league.queueEmptyHint": "La cola está vacía",
   "league.queueModeLabel": "Modo de Cola",
   "league.queueModeNone": "Manual (el organizador asigna)",

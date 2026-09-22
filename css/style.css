@@ -7347,6 +7347,13 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   flex: 0 1 220px;
 }
 
+/* Same flex:1/min-width:140px default as every text input - the table
+   queue's "add a player" field sits right next to its own Add button,
+   so it gets the same fixed-width treatment. */
+.league-queue-add-input {
+  flex: 0 1 220px;
+}
+
 /* League Setup Wizard - same look as the main Game Setup Wizard
    (mascot, header, footer, type sizing) everywhere except its own
    card width: step 4's Team A/B pickers genuinely need more room than

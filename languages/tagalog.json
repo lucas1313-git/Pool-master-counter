@@ -441,6 +441,7 @@
   "league.notPlayingTonight": "Hindi naka-mark ang player na iyon bilang naglalaro ngayong gabi.",
   "league.openModeHelp": "Nilalaktawan nang buo ang seksyong Teams — pipili lang ang organizer ng dalawang miyembro na maglalaro, bawat mesa.",
   "league.openModeLabel": "Open League (walang teams — manlalaro laban sa manlalaro)",
+  "league.queueAddPlaceholder": "Pangalan ng Manlalaro",
   "league.queueEmptyHint": "Walang laman ang queue",
   "league.queueModeLabel": "Queue Mode",
   "league.queueModeNone": "Manual (ang organizer ang mag-aasign)",
