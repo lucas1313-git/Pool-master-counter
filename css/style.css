@@ -882,6 +882,73 @@ body {
   font-weight: 600;
 }
 
+.fargo-enabled-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  margin: 10px 0 2px;
+}
+
+.fargo-enabled-row input {
+  cursor: pointer;
+}
+
+.contact-sheet-fargo-field {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  grid-column: 1 / -1;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+
+.btn-link-small {
+  border: none;
+  background: none;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 0;
+}
+
+.fargo-search-results-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fargo-search-result-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-panel);
+}
+
+.fargo-search-result-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fargo-search-result-info span {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
 .focus-players-wrap {
   display: none;
 }
@@ -1473,6 +1540,39 @@ input[type="number"] {
   font-weight: 700;
   vertical-align: middle;
   font-variant-numeric: tabular-nums;
+}
+
+/* Local-vs-real-Fargo comparison (see buildFargoComparisonBadge) - a
+   quieter pill than .rating-badge, since this is a secondary detail the
+   player opted into, not the headline number. */
+.fargo-comparison-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 8px 0 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  font-weight: 600;
+  vertical-align: middle;
+  font-variant-numeric: tabular-nums;
+}
+
+.fargo-refresh-btn {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 0;
+  line-height: 1;
+}
+
+.fargo-refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 /* A live "+X / -Y" preview of the rating swing at stake in the current

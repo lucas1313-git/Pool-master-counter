@@ -1907,6 +1907,13 @@
   var contactSheetSelectedSummary = document.getElementById("contact-sheet-selected-summary");
   var contactSheetList = document.getElementById("contact-sheet-list");
   var contactSheetSelected = {};
+  var fargoEnabledCheckbox = document.getElementById("fargo-enabled-checkbox");
+  var fargoSearchOverlay = document.getElementById("fargo-search-overlay");
+  var fargoSearchInput = document.getElementById("fargo-search-input");
+  var btnFargoSearch = document.getElementById("btn-fargo-search");
+  var fargoSearchResults = document.getElementById("fargo-search-results");
+  var fargoSearchStatus = document.getElementById("fargo-search-status");
+  var btnFargoSearchClose = document.getElementById("btn-fargo-search-close");
   var btnContactSheetGraveyard = document.getElementById("btn-contact-sheet-graveyard");
   var graveyardPageView = document.getElementById("view-graveyard-page");
   var btnGraveyardBack = document.getElementById("btn-graveyard-back");
@@ -2912,6 +2919,30 @@
       localStorage.setItem(LEAGUE_FOCUS_MODE_KEY, on ? "1" : "0");
     } catch (e) {
       console.warn("Could not save league focus mode preference.", e);
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // FargoRate integration (optional, off by default). This flag is the
+  // single gate for the whole feature - the search/lookup helpers further
+  // down (searchFargoPlayers/fetchFargoPlayer, near the Drive-import
+  // fetch helpers) refuse to make any network call while it's off, so
+  // toggling this off is a hard guarantee nothing here ever talks to the
+  // internet. No credentials involved: the FargoRate lookup this calls is
+  // an unofficial, unauthenticated public endpoint (see those functions'
+  // own comment for details/risk), so there's nothing to log in with or
+  // save - just this one on/off preference.
+  // ---------------------------------------------------------------------
+
+  var FARGO_ENABLED_KEY = "poolMasterCounter.fargoEnabled.v1";
+  var fargoEnabled = false;
+
+  function setFargoEnabled(on) {
+    fargoEnabled = on;
+    try {
+      localStorage.setItem(FARGO_ENABLED_KEY, on ? "1" : "0");
+    } catch (e) {
+      console.warn("Could not save Fargo preference.", e);
     }
   }
 
@@ -11825,6 +11856,18 @@
       clubTeam: patch.clubTeam !== undefined ? patch.clubTeam : existing.clubTeam || "",
       reportOptIn: patch.reportOptIn !== undefined ? !!patch.reportOptIn : !!existing.reportOptIn,
       notifyMethod: patch.notifyMethod !== undefined ? patch.notifyMethod : existing.notifyMethod || "email",
+      // This player's linked real-world FargoRate identity (see the
+      // FargoRate lookups section above) - "" fargoId means unlinked.
+      // The name/location/rating/robustness are a cache of that player's
+      // last successful lookup, refreshed on demand (fetchFargoPlayer),
+      // so the comparison badge has something to show even offline or
+      // if the lookup endpoint is temporarily down.
+      fargoId: patch.fargoId !== undefined ? patch.fargoId : existing.fargoId || "",
+      fargoName: patch.fargoName !== undefined ? patch.fargoName : existing.fargoName || "",
+      fargoLocation: patch.fargoLocation !== undefined ? patch.fargoLocation : existing.fargoLocation || "",
+      fargoRating: patch.fargoRating !== undefined ? patch.fargoRating : (existing.fargoRating != null ? existing.fargoRating : null),
+      fargoRobustness: patch.fargoRobustness !== undefined ? patch.fargoRobustness : (existing.fargoRobustness != null ? existing.fargoRobustness : null),
+      fargoFetchedAt: patch.fargoFetchedAt !== undefined ? patch.fargoFetchedAt : existing.fargoFetchedAt || 0,
       // Stamped on every write (even one that only touches a single
       // field) so mergeContactsData can tell, per name, which side of an
       // import was actually edited more recently - see its own comment.
@@ -11835,7 +11878,16 @@
 
   function getPlayerContact(name) {
     var key = findContactKey(name);
-    return key ? PLAYER_CONTACTS[key] : { email: "", phone: "", nickname: "", clubTeam: "", reportOptIn: false, notifyMethod: "email" };
+    return key
+      ? PLAYER_CONTACTS[key]
+      : { email: "", phone: "", nickname: "", clubTeam: "", reportOptIn: false, notifyMethod: "email", fargoId: "", fargoName: "", fargoLocation: "", fargoRating: null, fargoRobustness: null, fargoFetchedAt: 0 };
+  }
+
+  // Clears just the Fargo linkage for a player, leaving every other
+  // contact field (email, phone, club team, ...) untouched - the
+  // Contact Sheet's "✕ Unlink" control.
+  function unlinkFargoPlayer(name) {
+    setPlayerContact(name, { fargoId: "", fargoName: "", fargoLocation: "", fargoRating: null, fargoRobustness: null, fargoFetchedAt: 0 });
   }
 
   // Renames a player everywhere their identity is a record key - stats,
@@ -12654,6 +12706,61 @@
     return badge;
   }
 
+  // "Local: X · Fargo: Y" comparison, shown only when Fargo is turned on
+  // and this player has a linked Fargo id (see the FargoRate lookups
+  // section and PLAYER_CONTACTS' fargo* fields). Deliberately only used
+  // on the Player Page and the Contact Sheet row - not injected into
+  // every other spot buildRatingBadge appears (scoreboard cards,
+  // tournament brackets, standings), to keep this a focused comparison
+  // view rather than cluttering every badge in the app. onRefreshed, if
+  // given, is called after a successful manual refresh so the caller can
+  // re-render whatever else depends on the cached values.
+  function buildFargoComparisonBadge(name, onRefreshed) {
+    var frag = document.createDocumentFragment();
+    if (!fargoEnabled) return frag;
+    var contact = getPlayerContact(name);
+    if (!contact.fargoId) return frag;
+
+    var wrap = document.createElement("span");
+    wrap.className = "fargo-comparison-badge";
+
+    var text = document.createElement("span");
+    text.textContent = T("fargo.comparisonText", {
+      local: getPlayerRating(name),
+      fargo: contact.fargoRating != null ? contact.fargoRating : "—"
+    });
+    wrap.appendChild(text);
+
+    var refreshBtn = document.createElement("button");
+    refreshBtn.type = "button";
+    refreshBtn.className = "fargo-refresh-btn";
+    refreshBtn.textContent = "🔄";
+    refreshBtn.title = T("fargo.refreshTooltip");
+    refreshBtn.setAttribute("aria-label", T("fargo.refreshTooltip"));
+    refreshBtn.addEventListener("click", function () {
+      refreshBtn.disabled = true;
+      fetchFargoPlayer(contact.fargoId, true).then(function (data) {
+        refreshBtn.disabled = false;
+        if (!data) {
+          showToast(T("fargo.lookupFailed"));
+          return;
+        }
+        setPlayerContact(name, {
+          fargoName: data.name || contact.fargoName,
+          fargoLocation: data.location || contact.fargoLocation,
+          fargoRating: data.rating,
+          fargoRobustness: data.robustness,
+          fargoFetchedAt: Date.now()
+        });
+        if (onRefreshed) onRefreshed();
+      });
+    });
+    wrap.appendChild(refreshBtn);
+
+    frag.appendChild(wrap);
+    return frag;
+  }
+
   // A small "🏷️ Team Name" tag next to each roster row - a persistent,
   // free-text club/squad affiliation, completely separate from a live
   // tournament's own "Play as Teams" A/B assignment (player.teamId,
@@ -13205,6 +13312,91 @@
     if (m) return m[1];
     if (/^[a-zA-Z0-9_-]{10,}$/.test(trimmed)) return trimmed;
     return null;
+  }
+
+  // ---------------------------------------------------------------------
+  // FargoRate lookups (optional, gated entirely by fargoEnabled above).
+  //
+  // FargoRate has no official, authenticated public developer API. What's
+  // used here instead is an unofficial, unauthenticated read endpoint at
+  // dashboard.fargorate.com that other open-source pool apps already rely
+  // on for the same purpose - confirmed to send Access-Control-Allow-
+  // Origin: * (callable directly from the browser) and to need no login
+  // or key of any kind. Because it's unsanctioned, it could change shape
+  // or start blocking requests with zero notice, so every call here is
+  // strictly best-effort: wrapped in a timeout + catch, and NEVER allowed
+  // to throw into code that matters for actually scoring a game. A
+  // player's real Fargo rating is a nice-to-have comparison, never a
+  // dependency.
+  // ---------------------------------------------------------------------
+
+  var FARGO_API_BASE = "https://dashboard.fargorate.com/api";
+  var FARGO_FETCH_TIMEOUT_MS = 8000;
+  var FARGO_CACHE_TTL_MS = 10 * 60 * 1000;
+  var fargoPlayerCache = {}; // fargoId -> { data, ts }
+
+  function fargoFetch(path) {
+    var controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    var timer = controller ? setTimeout(function () { controller.abort(); }, FARGO_FETCH_TIMEOUT_MS) : null;
+    return fetch(FARGO_API_BASE + path, controller ? { signal: controller.signal } : {})
+      .then(function (res) {
+        if (timer) clearTimeout(timer);
+        if (!res.ok) throw new Error("fargo-" + res.status);
+        return res.json();
+      })
+      .catch(function (e) {
+        if (timer) clearTimeout(timer);
+        throw e;
+      });
+  }
+
+  // Name search - returns a normalized candidate list ([] on any failure
+  // or when Fargo is turned off, never rejects). Common names return many
+  // candidates (a bare "Smith" can return 50+), so every candidate carries
+  // enough to tell people apart: name, location, rating, robustness.
+  function searchFargoPlayers(query) {
+    if (!fargoEnabled || !query || !query.trim()) return Promise.resolve([]);
+    return fargoFetch("/indexsearch?q=" + encodeURIComponent(query.trim()))
+      .then(function (data) {
+        var list = (data && data.value) || [];
+        return list.map(function (p) {
+          return {
+            fargoId: String(p.readableId || ""),
+            name: [p.firstName, p.lastName].filter(Boolean).join(" ").trim(),
+            location: p.location || "",
+            rating: p.effectiveRating != null ? parseInt(p.effectiveRating, 10) : (p.rating != null ? parseInt(p.rating, 10) : null),
+            robustness: p.robustness != null ? parseInt(p.robustness, 10) : null
+          };
+        }).filter(function (p) { return p.fargoId; });
+      })
+      .catch(function () { return []; });
+  }
+
+  // Single-player lookup by Fargo id - cached for FARGO_CACHE_TTL_MS so
+  // re-rendering a player page repeatedly (or opening it again a minute
+  // later) doesn't re-hit the network every time. Pass forceRefresh to
+  // bypass the cache (the player page's own refresh control does this).
+  // Resolves null on any failure or when Fargo is off - callers show
+  // "last saved value" / a toast rather than treating this as fatal.
+  function fetchFargoPlayer(fargoId, forceRefresh) {
+    if (!fargoEnabled || !fargoId) return Promise.resolve(null);
+    var cached = fargoPlayerCache[fargoId];
+    if (!forceRefresh && cached && Date.now() - cached.ts < FARGO_CACHE_TTL_MS) {
+      return Promise.resolve(cached.data);
+    }
+    return fargoFetch("/players/" + encodeURIComponent(fargoId))
+      .then(function (p) {
+        var normalized = {
+          fargoId: String(p.Id || fargoId),
+          name: p.FullName || [p.FirstName, p.LastName].filter(Boolean).join(" ").trim(),
+          location: [p.City, p.State].filter(Boolean).join(" ").trim(),
+          rating: p.FargoRating != null ? parseInt(p.FargoRating, 10) : null,
+          robustness: p.Robustness != null ? parseInt(p.Robustness, 10) : null
+        };
+        fargoPlayerCache[fargoId] = { data: normalized, ts: Date.now() };
+        return normalized;
+      })
+      .catch(function () { return null; });
   }
 
   // Read-only Drive v3 REST calls via a plain API key - no OAuth, no
@@ -17695,6 +17887,33 @@
     playerPageName.innerHTML = "";
     buildPlayerNameLabel(playerPageName, name, true);
     playerPageName.appendChild(buildRatingBadge(name));
+    playerPageName.appendChild(buildFargoComparisonBadge(name, function () {
+      openPlayerStatsPage(name, true);
+    }));
+    // Auto-refresh once on open if the cached Fargo value (if any) is
+    // stale/missing - keeps the comparison reasonably current without
+    // ever polling in the background or refetching on every re-render
+    // (openPlayerStatsPage(name, true) above already re-enters this
+    // function after a refresh, so the freshly-cached value short-
+    // circuits this check on that immediate re-render).
+    (function () {
+      var contact = getPlayerContact(name);
+      if (!fargoEnabled || !contact.fargoId) return;
+      if (Date.now() - contact.fargoFetchedAt < FARGO_CACHE_TTL_MS) return;
+      fetchFargoPlayer(contact.fargoId).then(function (data) {
+        if (!data || currentStatsPlayerName !== name) return;
+        setPlayerContact(name, {
+          fargoName: data.name || contact.fargoName,
+          fargoLocation: data.location || contact.fargoLocation,
+          fargoRating: data.rating,
+          fargoRobustness: data.robustness,
+          fargoFetchedAt: Date.now()
+        });
+        if (!playerPageView.classList.contains("hidden") && currentStatsPlayerName === name) {
+          openPlayerStatsPage(name, true);
+        }
+      });
+    })();
     var addedAt = getPlayerAddedAt(name);
     if (addedAt) {
       playerPageAdded.textContent = T("playerPage.added", { date: formatDateISO(addedAt) });
@@ -19669,6 +19888,162 @@
     return label;
   }
 
+  // The Contact Sheet row's Fargo field - only ever built while
+  // fargoEnabled is true (see contactSheetRow below). Unlinked: a button
+  // that opens the search overlay, plus a manual-ID fallback for anyone
+  // who already knows their Fargo id. Linked: the cached Local/Fargo
+  // comparison (buildFargoComparisonBadge, same as the Player Page) plus
+  // an Unlink control.
+  function buildFargoContactField(name, contact) {
+    var wrap = document.createElement("div");
+    wrap.className = "contact-sheet-fargo-field";
+    var labelSpan = document.createElement("span");
+    labelSpan.textContent = T("fargo.fieldLabel");
+    wrap.appendChild(labelSpan);
+
+    if (!contact.fargoId) {
+      var findBtn = document.createElement("button");
+      findBtn.type = "button";
+      findBtn.className = "btn btn-ghost";
+      findBtn.textContent = T("fargo.findButton");
+      findBtn.addEventListener("click", function () {
+        openFargoSearchOverlay(name);
+      });
+      wrap.appendChild(findBtn);
+
+      var manualLink = document.createElement("button");
+      manualLink.type = "button";
+      manualLink.className = "btn-link-small";
+      manualLink.textContent = T("fargo.enterIdLink");
+      manualLink.addEventListener("click", function () {
+        promptModal(T("fargo.enterIdPrompt"), "", function (value) {
+          var fargoId = (value || "").trim();
+          if (!fargoId) return;
+          fetchFargoPlayer(fargoId, true).then(function (data) {
+            if (!data) {
+              showToast(T("fargo.lookupFailed"));
+              return;
+            }
+            setPlayerContact(name, {
+              fargoId: data.fargoId,
+              fargoName: data.name,
+              fargoLocation: data.location,
+              fargoRating: data.rating,
+              fargoRobustness: data.robustness,
+              fargoFetchedAt: Date.now()
+            });
+            renderContactSheetPage();
+            showToast(T("fargo.linked", { name: data.name || name }));
+          });
+        });
+      });
+      wrap.appendChild(manualLink);
+      return wrap;
+    }
+
+    wrap.appendChild(buildFargoComparisonBadge(name, renderContactSheetPage));
+
+    var unlinkBtn = document.createElement("button");
+    unlinkBtn.type = "button";
+    unlinkBtn.className = "btn-link-small";
+    unlinkBtn.textContent = T("fargo.unlinkButton");
+    unlinkBtn.addEventListener("click", function () {
+      unlinkFargoPlayer(name);
+      renderContactSheetPage();
+    });
+    wrap.appendChild(unlinkBtn);
+
+    return wrap;
+  }
+
+  // The player name currently being linked via the Fargo search overlay
+  // - set on open, read when a result row's "Use this" button is
+  // clicked, so the overlay itself doesn't need to know which row opened
+  // it.
+  var fargoSearchTargetName = null;
+
+  function openFargoSearchOverlay(name) {
+    fargoSearchTargetName = name;
+    fargoSearchInput.value = name;
+    fargoSearchResults.innerHTML = "";
+    fargoSearchStatus.textContent = "";
+    fargoSearchOverlay.classList.remove("hidden");
+    fargoSearchInput.focus({ preventScroll: true });
+  }
+
+  function closeFargoSearchOverlay() {
+    fargoSearchOverlay.classList.add("hidden");
+    fargoSearchTargetName = null;
+  }
+
+  function runFargoSearch() {
+    var query = fargoSearchInput.value.trim();
+    if (!query) return;
+    fargoSearchResults.innerHTML = "";
+    fargoSearchStatus.textContent = T("fargo.searching");
+    searchFargoPlayers(query).then(function (results) {
+      fargoSearchStatus.textContent = "";
+      if (!results.length) {
+        fargoSearchStatus.textContent = T("fargo.noResults");
+        return;
+      }
+      results.forEach(function (candidate) {
+        fargoSearchResults.appendChild(buildFargoSearchResultRow(candidate));
+      });
+    });
+  }
+
+  function buildFargoSearchResultRow(candidate) {
+    var li = document.createElement("li");
+    li.className = "fargo-search-result-row";
+
+    var info = document.createElement("div");
+    info.className = "fargo-search-result-info";
+    var nameLine = document.createElement("strong");
+    nameLine.textContent = candidate.name || ("#" + candidate.fargoId);
+    info.appendChild(nameLine);
+    var detailLine = document.createElement("span");
+    var ratingText = candidate.rating != null ? candidate.rating : "—";
+    detailLine.textContent = [candidate.location, T("fargo.resultRating", { rating: ratingText })].filter(Boolean).join(" · ");
+    info.appendChild(detailLine);
+    li.appendChild(info);
+
+    var useBtn = document.createElement("button");
+    useBtn.type = "button";
+    useBtn.className = "btn btn-primary";
+    useBtn.textContent = T("fargo.useThisButton");
+    useBtn.addEventListener("click", function () {
+      var targetName = fargoSearchTargetName;
+      if (!targetName) return;
+      setPlayerContact(targetName, {
+        fargoId: candidate.fargoId,
+        fargoName: candidate.name,
+        fargoLocation: candidate.location,
+        fargoRating: candidate.rating,
+        fargoRobustness: candidate.robustness,
+        fargoFetchedAt: Date.now()
+      });
+      closeFargoSearchOverlay();
+      renderContactSheetPage();
+      showToast(T("fargo.linked", { name: candidate.name || targetName }));
+    });
+    li.appendChild(useBtn);
+
+    return li;
+  }
+
+  btnFargoSearch.addEventListener("click", runFargoSearch);
+  fargoSearchInput.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      runFargoSearch();
+    }
+  });
+  btnFargoSearchClose.addEventListener("click", closeFargoSearchOverlay);
+  fargoSearchOverlay.addEventListener("click", function (e) {
+    if (e.target === fargoSearchOverlay) closeFargoSearchOverlay();
+  });
+
   function contactSheetRow(name) {
     var li = document.createElement("li");
     li.className = "contact-sheet-row";
@@ -19750,6 +20125,8 @@
       setPlayerContact(name, { phone: phoneInput.value.trim() });
     });
     fields.appendChild(contactSheetFieldWrap("contactSheet.phone", phoneInput));
+
+    if (fargoEnabled) fields.appendChild(buildFargoContactField(name, contact));
 
     li.appendChild(fields);
     li.appendChild(buildPlayerLinkIcon(name));
@@ -25906,6 +26283,22 @@
   setLeagueFocusMode(storedLeagueFocusMode === "1");
   btnLeagueToggleFocus.addEventListener("click", function () {
     setLeagueFocusMode(!leaguePageView.classList.contains("league-focus-mode"));
+  });
+
+  var storedFargoEnabled = "0";
+  try {
+    storedFargoEnabled = localStorage.getItem(FARGO_ENABLED_KEY) || "0";
+  } catch (e) {
+    storedFargoEnabled = "0";
+  }
+  fargoEnabled = storedFargoEnabled === "1";
+  fargoEnabledCheckbox.checked = fargoEnabled;
+  fargoEnabledCheckbox.addEventListener("change", function () {
+    setFargoEnabled(fargoEnabledCheckbox.checked);
+    renderContactSheetPage();
+    if (!playerPageView.classList.contains("hidden") && currentStatsPlayerName) {
+      openPlayerStatsPage(currentStatsPlayerName, true);
+    }
   });
 
   setInterval(updateGameDurationDisplay, 1000);
