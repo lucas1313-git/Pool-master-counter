@@ -5444,10 +5444,19 @@
     gamewinPendingOnClose = onClose;
     gamewinMessage.textContent = summary;
     gamewinDetails.innerHTML = "";
+    // Must be the game type that was actually just won (freshEntry's own
+    // gameType, frozen at win time), not state.currentGame.gameType - a
+    // rotation switch (see applyRotationIfDue, called in recordWin before
+    // this) has often already advanced that to the NEXT game type by the
+    // time this overlay opens, which previously made e.g. an 8-Ball win
+    // that rotates into 9-Ball incorrectly hide the balls-left field (and
+    // the reverse direction wrongly show it) - this dialog is about the
+    // game that just ended, not the one about to start.
+    var wonGameType = freshEntry ? freshEntry.gameType : state.currentGame.gameType;
     // 9-Ball/10-Ball have no well-defined "balls left" concept (see
     // LEADERBOARD_BALLS_LEFT_MAX_BY_GAME_TYPE) - no field to show at
     // all for them, rather than one that's always meaningless to fill in.
-    if (BALLS_LEFT_HIDDEN_GAME_TYPES.indexOf(state.currentGame.gameType) === -1) {
+    if (BALLS_LEFT_HIDDEN_GAME_TYPES.indexOf(wonGameType) === -1) {
       gamewinDetails.appendChild(buildBallsLeftRow());
       if (freshEntry && typeof freshEntry.pointsGapAtWin === "number") {
         var pointsHint = document.createElement("p");
