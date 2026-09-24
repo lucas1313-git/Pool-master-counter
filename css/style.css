@@ -713,7 +713,11 @@ body {
    equally (floored so a busy roster with many rows never gets
    squeezed thinner than a normal-sized card), and each card stretches
    to fill its row rather than sitting top-aligned at its own content
-   height. */
+   height. Note: .player-panel below is container-type:size, so its own
+   content can never feed back into this row's auto-sizing (that's what
+   size containment means) - a variable-height addition to the card (see
+   .run-streak-badge) has to stay out of normal flow entirely rather than
+   relying on the row growing to fit it. */
 #app.focus-mode .scoreboard {
   grid-auto-rows: minmax(340px, 1fr);
   align-items: stretch;
@@ -2036,6 +2040,14 @@ input[type="number"] {
   font-size: 14px;
   color: var(--text-dim);
   text-align: center;
+  /* Meant to stay a single compact line always - in Focus Mode
+     specifically, .player-panel's height is fixed by its grid row (see
+     the comment above #app.focus-mode .scoreboard), not driven by its
+     own content, so an unplanned wrap here (even just from one digit's
+     glyph metrics landing a hair wider than another's at the exact same
+     count of characters) silently eats into the room left for the score
+     buttons below instead of growing the card to fit. */
+  white-space: nowrap;
 }
 
 .stat-mini.stat-mini-tourney {
@@ -2104,11 +2116,21 @@ input[type="number"] {
 
 /* "🔥 N in a row" - shown only for whichever player currently has an
    active run (see buildRunStreakBadge). Bold and warm-colored so it
-   reads at table distance, matching the app's across-the-room sizing. */
+   reads at table distance, matching the app's across-the-room sizing.
+   Positioned absolute (top-right corner, mirroring the keypad-number-
+   badge's own top-left corner) rather than sitting in normal flow: this
+   badge only appears sometimes, and .player-panel below can have a
+   fixed, non-content-driven height in Focus Mode (see the grid-auto-rows
+   comment above it) - a badge in normal flow there would push the score
+   +/- buttons past the card's own bottom edge, out of click range,
+   whenever it appeared. Taking it out of flow entirely means its
+   presence can never displace anything else in the card. */
 .run-streak-badge {
-  display: block;
-  width: max-content;
-  max-width: 100%;
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  max-width: calc(100% - 16px);
   text-align: center;
   font-size: 1.1rem;
   font-weight: 800;
@@ -2116,7 +2138,6 @@ input[type="number"] {
   background: linear-gradient(135deg, #ff9a3c, #ff5e3a);
   border-radius: 999px;
   padding: 6px 16px;
-  margin: 8px auto 0;
   animation: milestone-pop 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
