@@ -409,6 +409,21 @@
         <input type="file" id="import-file-input" accept="application/json" class="hidden">
       </div>
       <p class="player-stats-note" data-i18n="backup.importDataNote">Merges into what's already on this device — nothing here is deleted, same-named players get a conflict check, and history from both sides is combined.</p>
+
+      <h4 class="session-subsection-subheading" data-i18n="backup.driveHeading">☁️ Google Drive Folder</h4>
+      <p class="player-stats-note" data-i18n="backup.driveIntro">Import a backup straight from a shared Drive folder — paste its link below. Works with a folder shared as "Anyone with the link can view"; needs a free, read-only Drive API key (one-time setup, see ❓).</p>
+      <div class="row">
+        <input type="text" id="drive-folder-link-input" data-i18n-placeholder="backup.driveFolderLinkPlaceholder" placeholder="Google Drive folder link">
+        <button type="button" id="btn-drive-folder-open" class="btn btn-ghost" data-i18n="backup.driveOpenFolder">📁 Open Folder</button>
+      </div>
+      <div class="row">
+        <input type="text" id="drive-api-key-input" data-i18n-placeholder="backup.driveApiKeyPlaceholder" placeholder="Drive API key">
+        <button type="button" id="btn-drive-api-key-help" class="format-info-btn" data-i18n-aria-label="backup.driveApiKeyHelpAria" aria-label="How do I get a Drive API key?">❓</button>
+        <button type="button" id="btn-drive-import" class="btn btn-ghost" data-i18n="backup.driveImportButton">☁️ Import from Drive</button>
+      </div>
+      <p class="player-stats-note" data-i18n="backup.driveExportNote">Export still downloads a file below, same as always — Google Drive only allows uploads from a signed-in account, so "Open Folder" is the fast path: it jumps straight to your Drive tab, ready for you to drag the downloaded file in.</p>
+      <div id="drive-file-picker" class="hidden"></div>
+
       <div class="row">
         <button type="button" id="btn-squash-import-data" class="btn btn-danger" data-i18n="backup.squashButton">💀 Import &amp; Replace</button>
         <input type="file" id="squash-import-file-input" accept="application/json" class="hidden">
