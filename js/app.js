@@ -24280,17 +24280,53 @@
     driveFilePicker.classList.remove("hidden");
   }
 
+  // No API key on hand: skip the Drive API entirely and just fetch the
+  // pasted link directly, as whatever it actually is - a Drive "direct
+  // download" link, or any other URL a browser can fetch straight to a
+  // JSON backup (Dropbox, a personal server, anywhere). This is the one
+  // thing a plain fetch can't do a folder's worth of at once, which is
+  // the only reason listDriveJsonFiles/the API key exist at all below.
+  function fetchDirectLinkAndImport(link) {
+    var originalLabel = btnDriveImport.textContent;
+    btnDriveImport.disabled = true;
+    btnDriveImport.textContent = "⏳ " + T("backup.driveLoading");
+    fetch(link)
+      .then(function (res) {
+        if (!res.ok) throw new Error("status-" + res.status);
+        return res.text();
+      })
+      .then(function (text) {
+        try {
+          JSON.parse(text);
+        } catch (e) {
+          throw new Error("not-json");
+        }
+        importAllDataFromText(text);
+      })
+      .catch(function (e) {
+        console.warn("Could not fetch that link directly - falling back to picking a file.", e);
+        showToast(T("backup.driveDirectFetchFailed"));
+        importFileInput.click();
+      })
+      .then(function () {
+        btnDriveImport.disabled = false;
+        btnDriveImport.textContent = originalLabel;
+      });
+  }
+
   btnDriveImport.addEventListener("click", function () {
     var link = driveFolderLinkInput.value.trim();
     var apiKey = driveApiKeyInput.value.trim();
     saveDriveFolderLink(link);
     saveDriveApiKey(apiKey);
+    // Nothing to go on at all - just behave like the plain Import Data
+    // button instead of erroring out over a blank field.
     if (!link) {
-      showToast(T("backup.driveNeedLink"));
+      importFileInput.click();
       return;
     }
     if (!apiKey) {
-      showToast(T("backup.driveNeedApiKey"));
+      fetchDirectLinkAndImport(link);
       return;
     }
     var folderId = extractDriveFolderId(link);
