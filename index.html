@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260924b">
+<link rel="stylesheet" href="css/style.css?v=20260924c">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -1479,9 +1479,27 @@
       <input type="file" id="contact-sheet-import-vcard-file-input" accept=".vcf,text/vcard" class="hidden">
     </div>
     <p class="player-stats-note" data-i18n="contactSheet.importVcardHint">To bring in contacts from your computer: in Contacts, select the people you want and choose File → Export → Export vCard, then import that file here. Existing email/phone/nickname are never overwritten - only blanks get filled in.</p>
+    <label class="fargo-enabled-row">
+      <input type="checkbox" id="fargo-enabled-checkbox">
+      <span data-i18n="fargo.enabledLabel">Use real FargoRate ratings</span>
+    </label>
+    <p class="player-stats-note" data-i18n="fargo.enabledHint">Looks up players on FargoRate.com's public player search (no account needed) so you can link a player's real Fargo ID and compare it to this app's own local rating. This uses an unofficial public lookup, not an official FargoRate service.</p>
   </section>
 
   <ul id="contact-sheet-list" class="contact-sheet-list"></ul>
+
+  <div id="fargo-search-overlay" class="confirm-modal-overlay hidden">
+    <div class="confirm-modal-card">
+      <h2 data-i18n="fargo.searchTitle">Find a Player on FargoRate</h2>
+      <input type="text" id="fargo-search-input" data-i18n-placeholder="fargo.searchPlaceholder" placeholder="Player name">
+      <div class="confirm-modal-actions">
+        <button type="button" id="btn-fargo-search" class="btn btn-primary" data-i18n="fargo.searchButton">🔎 Search</button>
+        <button type="button" id="btn-fargo-search-close" class="btn btn-ghost" data-i18n="common.close">Close</button>
+      </div>
+      <p id="fargo-search-status" class="player-stats-note"></p>
+      <ul id="fargo-search-results" class="fargo-search-results-list"></ul>
+    </div>
+  </div>
 
 </div>
 
@@ -2080,6 +2098,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260924b"></script>
+<script src="js/app.js?v=20260924c"></script>
 </body>
 </html>
