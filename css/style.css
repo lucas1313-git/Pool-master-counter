@@ -4414,6 +4414,22 @@ input[type="number"] {
   text-align: center;
 }
 
+/* The list of matching JSON files a Drive folder listing returns (see
+   renderDriveFilePicker) - one full-width button per file, same look as
+   any other .btn.btn-ghost row, just stacked instead of side by side. */
+#drive-file-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.drive-file-row {
+  width: 100%;
+  text-align: left;
+  white-space: normal;
+}
+
 /* An emphasized callout variant of .player-stats-note - bigger, bordered,
    and tinted so a note that's easy to skim past otherwise (the
    multi-table hosting explanation) reads as unmissable instead. */
