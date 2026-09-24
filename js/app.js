@@ -1664,6 +1664,12 @@
   var btnExportSync = document.getElementById("btn-export-sync");
   var syncStatusLine = document.getElementById("sync-status-line");
   var importFileInput = document.getElementById("import-file-input");
+  var driveFolderLinkInput = document.getElementById("drive-folder-link-input");
+  var driveApiKeyInput = document.getElementById("drive-api-key-input");
+  var btnDriveFolderOpen = document.getElementById("btn-drive-folder-open");
+  var btnDriveApiKeyHelp = document.getElementById("btn-drive-api-key-help");
+  var btnDriveImport = document.getElementById("btn-drive-import");
+  var driveFilePicker = document.getElementById("drive-file-picker");
   var btnSquashImportData = document.getElementById("btn-squash-import-data");
   var squashImportFileInput = document.getElementById("squash-import-file-input");
   var squashWarningOverlay = document.getElementById("squash-warning-overlay");
@@ -13148,6 +13154,90 @@
     }
   }
 
+  var DRIVE_FOLDER_LINK_KEY = "poolMasterCounter.driveFolderLink.v1";
+  var DRIVE_API_KEY_KEY = "poolMasterCounter.driveApiKey.v1";
+
+  function loadDriveFolderLink() {
+    try {
+      return localStorage.getItem(DRIVE_FOLDER_LINK_KEY) || "";
+    } catch (e) {
+      return "";
+    }
+  }
+
+  function saveDriveFolderLink(link) {
+    try {
+      localStorage.setItem(DRIVE_FOLDER_LINK_KEY, link || "");
+    } catch (e) {
+      console.warn("Could not save Drive folder link.", e);
+    }
+  }
+
+  // The API key is a per-device setting, never part of buildBackupPayload -
+  // it's a credential (even though it's read-only and referrer-restricted),
+  // not "pool counter data" the way the folder link is. Each device/person
+  // gets their own from Google Cloud Console; see backup.driveApiKeyHelp.
+  function loadDriveApiKey() {
+    try {
+      return localStorage.getItem(DRIVE_API_KEY_KEY) || "";
+    } catch (e) {
+      return "";
+    }
+  }
+
+  function saveDriveApiKey(key) {
+    try {
+      localStorage.setItem(DRIVE_API_KEY_KEY, key || "");
+    } catch (e) {
+      console.warn("Could not save Drive API key.", e);
+    }
+  }
+
+  // Accepts a full share link (folders/<id>, ?id=<id>) or a bare folder ID
+  // typed/pasted directly - whatever someone actually copies out of Drive's
+  // own "Share" dialog or address bar.
+  function extractDriveFolderId(link) {
+    var trimmed = (link || "").trim();
+    if (!trimmed) return null;
+    var m = trimmed.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+    if (m) return m[1];
+    m = trimmed.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    if (m) return m[1];
+    if (/^[a-zA-Z0-9_-]{10,}$/.test(trimmed)) return trimmed;
+    return null;
+  }
+
+  // Read-only Drive v3 REST calls via a plain API key - no OAuth, no
+  // sign-in. Only works for a folder shared as "Anyone with the link can
+  // view" (a public API key can't authenticate as anyone, so Drive treats
+  // every request as anonymous - exactly the access an anonymous "view"
+  // link grants, and no more). Writing back to Drive would need real OAuth
+  // sign-in instead, which is why Export still just downloads a file
+  // locally - see backup.driveExportNote.
+  function driveApiUrl(path, apiKey) {
+    var sep = path.indexOf("?") === -1 ? "?" : "&";
+    return "https://www.googleapis.com/drive/v3/" + path + sep + "key=" + encodeURIComponent(apiKey);
+  }
+
+  function listDriveJsonFiles(folderId, apiKey) {
+    var q = "'" + folderId + "' in parents and mimeType='application/json' and trashed=false";
+    var url = driveApiUrl(
+      "files?q=" + encodeURIComponent(q) + "&fields=" + encodeURIComponent("files(id,name,modifiedTime)") + "&orderBy=modifiedTime desc&pageSize=25",
+      apiKey
+    );
+    return fetch(url).then(function (res) {
+      if (!res.ok) throw new Error("drive-list-" + res.status);
+      return res.json();
+    });
+  }
+
+  function fetchDriveFileText(fileId, apiKey) {
+    return fetch(driveApiUrl("files/" + encodeURIComponent(fileId) + "?alt=media", apiKey)).then(function (res) {
+      if (!res.ok) throw new Error("drive-fetch-" + res.status);
+      return res.text();
+    });
+  }
+
   function defaultBackupFilename() {
     return "pool-master-counter-backup-" + new Date().toISOString().slice(0, 10) + ".json";
   }
@@ -13214,7 +13304,12 @@
       reportArchive: REPORT_ARCHIVE,
       tournament: TOURNAMENT,
       tournamentResults: TOURNAMENT_RESULTS,
-      leagues: LEAGUES
+      leagues: LEAGUES,
+      // Travels with the backup so a device importing it (see
+      // importAllDataFromText) can pick up the same shared Drive folder
+      // automatically - purely informational, never read as an instruction
+      // to fetch or upload anything on its own.
+      driveFolderLink: loadDriveFolderLink() || null
     };
   }
 
@@ -13922,9 +14017,23 @@
   function importAllData(file) {
     var reader = new FileReader();
     reader.onload = function () {
+      importAllDataFromText(reader.result);
+    };
+    reader.onerror = function () {
+      alertModal(T("alert.couldNotReadFile"));
+    };
+    reader.readAsText(file);
+  }
+
+  // Split out of importAllData so a backup fetched as plain text (e.g. from
+  // a Google Drive folder, see importAllDataFromDrive below) can reuse the
+  // exact same parse/confirm/merge path a locally-picked file goes through,
+  // instead of needing a real File object just to satisfy FileReader.
+  function importAllDataFromText(jsonText) {
+    {
       var data;
       try {
-        data = JSON.parse(reader.result);
+        data = JSON.parse(jsonText);
       } catch (e) {
         alertModal(T("alert.notValidJson"));
         return;
@@ -13932,6 +14041,15 @@
       if (!data || typeof data !== "object" || !data.state) {
         alertModal(describeUnrecognizedBackupFile(data));
         return;
+      }
+
+      // The Drive folder link travels with the backup itself (see
+      // buildBackupPayload) so a device that's never set one up yet - e.g.
+      // a fresh phone restoring from a friend's export - picks up the same
+      // shared folder automatically instead of needing it typed in by hand.
+      // Never overwrites a link already configured on this device.
+      if (data.driveFolderLink && !loadDriveFolderLink()) {
+        saveDriveFolderLink(data.driveFolderLink);
       }
 
       // A device with no players yet has nothing to lose — treat this like
@@ -14311,11 +14429,7 @@
           alertModal(T("alert.couldNotImport", { message: e.message }));
         }
       });
-    };
-    reader.onerror = function () {
-      alertModal(T("alert.couldNotReadFile"));
-    };
-    reader.readAsText(file);
+    }
   }
 
   // ---------------------------------------------------------------------
@@ -24104,6 +24218,103 @@
     importFileInput.value = "";
     if (!file) return;
     importAllData(file);
+  });
+
+  driveFolderLinkInput.value = loadDriveFolderLink();
+  driveApiKeyInput.value = loadDriveApiKey();
+  driveFolderLinkInput.addEventListener("change", function () {
+    saveDriveFolderLink(driveFolderLinkInput.value.trim());
+  });
+  driveApiKeyInput.addEventListener("change", function () {
+    saveDriveApiKey(driveApiKeyInput.value.trim());
+  });
+
+  btnDriveApiKeyHelp.addEventListener("click", function () {
+    alertModal(T("backup.driveApiKeyHelpText"));
+  });
+
+  btnDriveFolderOpen.addEventListener("click", function () {
+    var link = driveFolderLinkInput.value.trim();
+    if (!link) {
+      showToast(T("backup.driveNeedLink"));
+      return;
+    }
+    saveDriveFolderLink(link);
+    window.open(link, "_blank", "noopener");
+  });
+
+  function renderDriveFilePicker(files) {
+    driveFilePicker.innerHTML = "";
+    if (!files.length) {
+      var empty = document.createElement("p");
+      empty.className = "player-stats-note";
+      empty.textContent = T("backup.driveNoFiles");
+      driveFilePicker.appendChild(empty);
+      driveFilePicker.classList.remove("hidden");
+      return;
+    }
+    files.forEach(function (f) {
+      var row = document.createElement("button");
+      row.type = "button";
+      row.className = "btn btn-ghost drive-file-row";
+      row.textContent = "📄 " + f.name + " — " + formatTimestamp(f.modifiedTime, true);
+      row.addEventListener("click", function () {
+        row.disabled = true;
+        var originalLabel = row.textContent;
+        row.textContent = "⏳ " + T("backup.driveLoading");
+        fetchDriveFileText(f.id, driveApiKeyInput.value.trim())
+          .then(function (text) {
+            driveFilePicker.classList.add("hidden");
+            driveFilePicker.innerHTML = "";
+            importAllDataFromText(text);
+          })
+          .catch(function (e) {
+            console.warn("Drive file fetch failed.", e);
+            showToast(T("backup.driveFetchFailed"));
+            row.disabled = false;
+            row.textContent = originalLabel;
+          });
+      });
+      driveFilePicker.appendChild(row);
+    });
+    driveFilePicker.classList.remove("hidden");
+  }
+
+  btnDriveImport.addEventListener("click", function () {
+    var link = driveFolderLinkInput.value.trim();
+    var apiKey = driveApiKeyInput.value.trim();
+    saveDriveFolderLink(link);
+    saveDriveApiKey(apiKey);
+    if (!link) {
+      showToast(T("backup.driveNeedLink"));
+      return;
+    }
+    if (!apiKey) {
+      showToast(T("backup.driveNeedApiKey"));
+      return;
+    }
+    var folderId = extractDriveFolderId(link);
+    if (!folderId) {
+      showToast(T("backup.driveInvalidLink"));
+      return;
+    }
+    var originalLabel = btnDriveImport.textContent;
+    btnDriveImport.disabled = true;
+    btnDriveImport.textContent = "⏳ " + T("backup.driveLoading");
+    driveFilePicker.classList.add("hidden");
+    driveFilePicker.innerHTML = "";
+    listDriveJsonFiles(folderId, apiKey)
+      .then(function (data) {
+        renderDriveFilePicker(data.files || []);
+      })
+      .catch(function (e) {
+        console.warn("Drive folder list failed.", e);
+        showToast(T("backup.driveListFailed"));
+      })
+      .then(function () {
+        btnDriveImport.disabled = false;
+        btnDriveImport.textContent = originalLabel;
+      });
   });
 
   btnSquashImportData.addEventListener("click", function () {
