@@ -905,6 +905,29 @@ body {
   color: var(--text-dim);
 }
 
+/* The direct "does this player have an official FargoRate rating"
+   answer (see buildFargoContactField) - a semantic yes/no pill, not
+   just the comparison badge's quieter styling, since this is the thing
+   being asked at a glance. */
+.fargo-official-status {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+
+.fargo-official-status.is-linked {
+  background: color-mix(in srgb, #2e8b57 22%, var(--bg-panel));
+  color: #2e8b57;
+}
+
+.fargo-official-status.is-none {
+  background: var(--bg-panel);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+}
+
 .btn-link-small {
   border: none;
   background: none;
