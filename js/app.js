@@ -14004,6 +14004,24 @@
     });
   }
 
+  // A freshly created Challonge tournament sits in "pending" state and
+  // has no real match objects yet, even with participants added -
+  // confirmed live: GET .../matches.json comes back empty until the
+  // tournament is explicitly started, which is why every match score
+  // push was failing ("0 pushed, N failed") right after the roster
+  // itself pushed fine. Resolves true on success (including "already
+  // started", which Challonge answers as a 422 - a no-op from this
+  // caller's point of view, not a real failure) or false otherwise.
+  function startChallongeTournament(tournamentId) {
+    return challongeAuthedRequest("PUT", "/tournaments/" + encodeURIComponent(tournamentId) + "/change_state.json", {
+      data: { type: "TournamentState", attributes: { state: "start" } }
+    }).then(function (res) {
+      if (res.ok) return true;
+      var text = challongeErrorTextFromBody(res.body) || "";
+      return /already/i.test(text) || /underway/i.test(text) || /started/i.test(text);
+    });
+  }
+
   // Bulk-adds participants by name. Resolves a map of name -> Challonge
   // participant id for whichever ones were actually created (a name
   // that fails to come back just won't have an entry - callers only
@@ -14039,15 +14057,21 @@
 
   // Reports a final score for one Challonge match. Resolves true/false.
   function reportChallongeMatchScore(tournamentId, matchId, scoreA, scoreB, winnerParticipantId) {
+    // JSON:API type is "match" (lowercase singular) - confirmed from a
+    // real Challonge API response the user shared (GET a match returns
+    // data.type: "match"), not "Match" like this was sending.
     return challongeAuthedRequest("PUT", "/tournaments/" + encodeURIComponent(tournamentId) + "/matches/" + encodeURIComponent(matchId) + ".json", {
       data: {
-        type: "Match",
+        type: "match",
         attributes: {
           scores_csv: scoreA + "-" + scoreB,
           winner_id: winnerParticipantId
         }
       }
-    }).then(function (res) { return !!res.ok; });
+    }).then(function (res) {
+      if (!res.ok) console.warn("Challonge match score report failed.", challongeErrorTextFromBody(res.body) || res.status);
+      return !!res.ok;
+    });
   }
 
   // Read-only Drive v3 REST calls via a plain API key - no OAuth, no
@@ -23635,35 +23659,53 @@
             return;
           }
 
-          return fetchChallongeMatches(tournamentId).then(function (challongeMatches) {
-            var pushed = 0;
-            var failed = 0;
-            var chain = Promise.resolve();
-            pending.forEach(function (match) {
-              chain = chain.then(function () {
-                var idA = t.challongeParticipantIds[match.a];
-                var idB = t.challongeParticipantIds[match.b];
-                if (!idA || !idB) { failed++; return; }
-                var challongeMatch = findChallongeMatchForPair(challongeMatches, idA, idB);
-                if (!challongeMatch) { failed++; return; }
-                var winnerId = match.winner === match.a ? idA : idB;
-                var sA = match.winner === match.a ? match.scoreA : match.scoreB;
-                var sB = match.winner === match.a ? match.scoreB : match.scoreA;
-                return reportChallongeMatchScore(tournamentId, challongeMatch.id, sA, sB, winnerId).then(function (ok) {
-                  if (ok) {
-                    t.challongePushedMatchIds[match.id] = true;
-                    pushed++;
-                  } else {
-                    failed++;
-                  }
+          // See startChallongeTournament's comment - no match objects
+          // exist on Challonge's side until the tournament is started.
+          var startStep = t.challongeTournamentStarted
+            ? Promise.resolve(true)
+            : startChallongeTournament(tournamentId).then(function (started) {
+                if (started) {
+                  t.challongeTournamentStarted = true;
+                  saveTournamentToStorage(t);
+                }
+                return started;
+              });
+
+          return startStep.then(function (started) {
+            if (!started) {
+              showToast(challongePushApiFailedText());
+              return;
+            }
+            return fetchChallongeMatches(tournamentId).then(function (challongeMatches) {
+              var pushed = 0;
+              var failed = 0;
+              var chain = Promise.resolve();
+              pending.forEach(function (match) {
+                chain = chain.then(function () {
+                  var idA = t.challongeParticipantIds[match.a];
+                  var idB = t.challongeParticipantIds[match.b];
+                  if (!idA || !idB) { failed++; return; }
+                  var challongeMatch = findChallongeMatchForPair(challongeMatches, idA, idB);
+                  if (!challongeMatch) { failed++; return; }
+                  var winnerId = match.winner === match.a ? idA : idB;
+                  var sA = match.winner === match.a ? match.scoreA : match.scoreB;
+                  var sB = match.winner === match.a ? match.scoreB : match.scoreA;
+                  return reportChallongeMatchScore(tournamentId, challongeMatch.id, sA, sB, winnerId).then(function (ok) {
+                    if (ok) {
+                      t.challongePushedMatchIds[match.id] = true;
+                      pushed++;
+                    } else {
+                      failed++;
+                    }
+                  });
                 });
               });
-            });
-            return chain.then(function () {
-              saveTournamentToStorage(t);
-              showToast(failed
-                ? T("challonge.pushSummaryWithFailures", { added: addedCount, scores: pushed, failed: failed })
-                : T("challonge.pushSummary", { added: addedCount, scores: pushed }));
+              return chain.then(function () {
+                saveTournamentToStorage(t);
+                showToast(failed
+                  ? T("challonge.pushSummaryWithFailures", { added: addedCount, scores: pushed, failed: failed })
+                  : T("challonge.pushSummary", { added: addedCount, scores: pushed }));
+              });
             });
           });
         });
@@ -23779,33 +23821,52 @@
         });
         if (!pending.length) return { ok: true, addedCount: addedCount, pushed: 0, failed: 0 };
 
-        return fetchChallongeMatches(tournamentId).then(function (challongeMatches) {
-          var pushed = 0;
-          var failed = 0;
-          var chain = Promise.resolve();
-          pending.forEach(function (p) {
-            chain = chain.then(function () {
-              var idA = pushRecord.challongeParticipantIds[p.a];
-              var idB = pushRecord.challongeParticipantIds[p.b];
-              if (!idA || !idB) { failed++; return; }
-              var challongeMatch = findChallongeMatchForPair(challongeMatches, idA, idB);
-              if (!challongeMatch) { failed++; return; }
-              var winnerId = p.winsA > p.winsB ? idA : idB;
-              var sA = p.winsA > p.winsB ? p.winsA : p.winsB;
-              var sB = p.winsA > p.winsB ? p.winsB : p.winsA;
-              return reportChallongeMatchScore(tournamentId, challongeMatch.id, sA, sB, winnerId).then(function (ok) {
-                if (ok) {
-                  pushRecord.challongePushedPairKeys[p.a + "|" + p.b] = true;
-                  pushed++;
-                } else {
-                  failed++;
-                }
+        // Match objects don't exist on Challonge's side until the
+        // tournament is started - see startChallongeTournament's own
+        // comment. Only attempted once per tournament (tracked on the
+        // push record), since re-sending it once already-started is
+        // just a wasted call, not a problem, but no reason to make it
+        // every time either.
+        var startStep = pushRecord.challongeTournamentStarted
+          ? Promise.resolve(true)
+          : startChallongeTournament(tournamentId).then(function (started) {
+              if (started) {
+                pushRecord.challongeTournamentStarted = true;
+                onProgress();
+              }
+              return started;
+            });
+
+        return startStep.then(function (started) {
+          if (!started) return { ok: true, addedCount: addedCount, pushed: 0, failed: pending.length };
+          return fetchChallongeMatches(tournamentId).then(function (challongeMatches) {
+            var pushed = 0;
+            var failed = 0;
+            var chain = Promise.resolve();
+            pending.forEach(function (p) {
+              chain = chain.then(function () {
+                var idA = pushRecord.challongeParticipantIds[p.a];
+                var idB = pushRecord.challongeParticipantIds[p.b];
+                if (!idA || !idB) { failed++; return; }
+                var challongeMatch = findChallongeMatchForPair(challongeMatches, idA, idB);
+                if (!challongeMatch) { failed++; return; }
+                var winnerId = p.winsA > p.winsB ? idA : idB;
+                var sA = p.winsA > p.winsB ? p.winsA : p.winsB;
+                var sB = p.winsA > p.winsB ? p.winsB : p.winsA;
+                return reportChallongeMatchScore(tournamentId, challongeMatch.id, sA, sB, winnerId).then(function (ok) {
+                  if (ok) {
+                    pushRecord.challongePushedPairKeys[p.a + "|" + p.b] = true;
+                    pushed++;
+                  } else {
+                    failed++;
+                  }
+                });
               });
             });
-          });
-          return chain.then(function () {
-            onProgress();
-            return { ok: true, addedCount: addedCount, pushed: pushed, failed: failed };
+            return chain.then(function () {
+              onProgress();
+              return { ok: true, addedCount: addedCount, pushed: pushed, failed: failed };
+            });
           });
         });
       });
@@ -23813,7 +23874,7 @@
   }
 
   function emptyChallongePushRecord() {
-    return { challongeTournamentId: null, challongeParticipantIds: {}, challongePushedPairKeys: {} };
+    return { challongeTournamentId: null, challongeTournamentStarted: false, challongeParticipantIds: {}, challongePushedPairKeys: {} };
   }
 
   function challongePushResultText(result) {
