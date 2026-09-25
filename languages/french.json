@@ -118,6 +118,7 @@
   "challonge.notConnectedSeeMainScreen": "Non connecté — configurez Challonge sur l'écran principal (section ☁️ Challonge).",
   "challonge.pushButton": "☁️ Envoyer vers Challonge",
   "challonge.pushFailed": "Impossible de joindre Challonge — vérifiez votre identifiant client/secret et réessayez.",
+  "challonge.pushFailedApi": "Impossible de terminer l'envoi vers Challonge.",
   "challonge.pushSummary": "Challonge : {{added}} joueurs sur la liste, {{scores}} scores de match envoyés.",
   "challonge.pushSummaryWithFailures": "Challonge : {{added}} joueurs sur la liste, {{scores}} scores de match envoyés, {{failed}} ont échoué et peuvent être réessayés.",
   "challonge.pushing": "Envoi vers Challonge…",

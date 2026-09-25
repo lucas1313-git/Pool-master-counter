@@ -118,6 +118,7 @@
   "challonge.notConnectedSeeMainScreen": "Not connected — configure Challonge on the main screen (☁️ Challonge panel).",
   "challonge.pushButton": "☁️ Push to Challonge",
   "challonge.pushFailed": "Couldn't reach Challonge — check your client ID/secret and try again.",
+  "challonge.pushFailedApi": "Couldn't complete the push to Challonge.",
   "challonge.pushSummary": "Challonge: {{added}} players on the roster, {{scores}} match scores pushed.",
   "challonge.pushSummaryWithFailures": "Challonge: {{added}} players on the roster, {{scores}} match scores pushed, {{failed}} failed and can be retried.",
   "challonge.pushing": "Pushing to Challonge…",
