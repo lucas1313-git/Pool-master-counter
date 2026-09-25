@@ -14056,16 +14056,31 @@
   }
 
   // Reports a final score for one Challonge match. Resolves true/false.
-  function reportChallongeMatchScore(tournamentId, matchId, scoreA, scoreB, winnerParticipantId) {
-    // JSON:API type is "match" (lowercase singular) - confirmed from a
-    // real Challonge API response the user shared (GET a match returns
-    // data.type: "match"), not "Match" like this was sending.
+  // Reports a final score for one Challonge match. Confirmed from
+  // Challonge's own v2.1 API docs code sample (the user shared it
+  // directly) that this bears no resemblance to the v1-style
+  // {scores_csv, winner_id} pair this used to send - the real shape is
+  // an array with one entry PER PARTICIPANT, each carrying that
+  // participant's own score and rank (1 = winner, 2 = loser). This app
+  // only ever reports one aggregate score per pair (see
+  // aggregateGamesByPair) rather than Challonge's own per-set detail,
+  // so each participant's score_set is just their single win count as
+  // a string - Challonge reads that as "one set, this many points."
+  // Resolves true/false.
+  function reportChallongeMatchScore(tournamentId, matchId, idA, scoreA, idB, scoreB, winnerParticipantId) {
+    var aWins = String(idA) === String(winnerParticipantId);
     return challongeAuthedRequest("PUT", "/tournaments/" + encodeURIComponent(tournamentId) + "/matches/" + encodeURIComponent(matchId) + ".json", {
       data: {
         type: "match",
         attributes: {
-          scores_csv: scoreA + "-" + scoreB,
-          winner_id: winnerParticipantId
+          match: [
+            { participant_id: String(idA), score_set: String(scoreA), rank: aWins ? 1 : 2, advancing: aWins },
+            { participant_id: String(idB), score_set: String(scoreB), rank: aWins ? 2 : 1, advancing: !aWins }
+          ],
+          // Always false: callers only ever report a scorablePairs entry
+          // (winsA !== winsB, see pushGamesToChallongeRoundRobin/
+          // pushTournamentToChallonge), a genuine tie is never sent.
+          tie: false
         }
       }
     }).then(function (res) {
@@ -23688,9 +23703,7 @@
                   var challongeMatch = findChallongeMatchForPair(challongeMatches, idA, idB);
                   if (!challongeMatch) { failed++; return; }
                   var winnerId = match.winner === match.a ? idA : idB;
-                  var sA = match.winner === match.a ? match.scoreA : match.scoreB;
-                  var sB = match.winner === match.a ? match.scoreB : match.scoreA;
-                  return reportChallongeMatchScore(tournamentId, challongeMatch.id, sA, sB, winnerId).then(function (ok) {
+                  return reportChallongeMatchScore(tournamentId, challongeMatch.id, idA, match.scoreA, idB, match.scoreB, winnerId).then(function (ok) {
                     if (ok) {
                       t.challongePushedMatchIds[match.id] = true;
                       pushed++;
@@ -23851,9 +23864,7 @@
                 var challongeMatch = findChallongeMatchForPair(challongeMatches, idA, idB);
                 if (!challongeMatch) { failed++; return; }
                 var winnerId = p.winsA > p.winsB ? idA : idB;
-                var sA = p.winsA > p.winsB ? p.winsA : p.winsB;
-                var sB = p.winsA > p.winsB ? p.winsB : p.winsA;
-                return reportChallongeMatchScore(tournamentId, challongeMatch.id, sA, sB, winnerId).then(function (ok) {
+                return reportChallongeMatchScore(tournamentId, challongeMatch.id, idA, p.winsA, idB, p.winsB, winnerId).then(function (ok) {
                   if (ok) {
                     pushRecord.challongePushedPairKeys[p.a + "|" + p.b] = true;
                     pushed++;
