@@ -18711,6 +18711,9 @@
     playerPageName.appendChild(buildFargoComparisonBadge(name, function () {
       openPlayerStatsPage(name, true);
     }));
+    if (fargoEnabled && getPlayerContact(name).fargoId) {
+      playerPageName.appendChild(buildFargoHistoryLink(getPlayerContact(name).fargoId));
+    }
     // Auto-refresh once on open if the cached Fargo value (if any) is
     // stale/missing - keeps the comparison reasonably current without
     // ever polling in the background or refetching on every re-render
@@ -20780,6 +20783,7 @@
     wrap.appendChild(hasOfficialBadge);
 
     wrap.appendChild(buildFargoComparisonBadge(name, renderContactSheetPage));
+    wrap.appendChild(buildFargoHistoryLink(contact.fargoId));
 
     var unlinkBtn = document.createElement("button");
     unlinkBtn.type = "button";
@@ -20792,6 +20796,25 @@
     wrap.appendChild(unlinkBtn);
 
     return wrap;
+  }
+
+  // Links out to this player's real page on FargoRate's own FairMatch
+  // tool, which does show real rating/match history (their own docs
+  // describe a "History" button there). Deliberately NOT reproduced
+  // in-app: the public dashboard.fargorate.com/api this integration
+  // already uses for the current-snapshot lookup has a documented
+  // "ratings" link per player, but it comes back empty even for a
+  // player with 1850 tracked matches - confirmed live, so the real
+  // history genuinely isn't exposed through that API. FairMatch's own
+  // page is the actual source for it.
+  function buildFargoHistoryLink(fargoId) {
+    var link = document.createElement("a");
+    link.className = "btn-link-small";
+    link.href = "https://fairmatch.fargorate.com/players/" + encodeURIComponent(fargoId);
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.textContent = T("fargo.historyLink");
+    return link;
   }
 
   // The player name currently being linked via the Fargo search overlay
