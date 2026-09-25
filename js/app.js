@@ -13890,7 +13890,18 @@
     // others (e.g. an auth rejection on a REST call) - handle both.
     if (Array.isArray(body.errors) && body.errors.length) {
       return body.errors.map(function (e) {
-        return (e && (e.detail || e.title || e.message)) || JSON.stringify(e);
+        if (!e) return JSON.stringify(e);
+        var text = e.detail || e.title || e.message || JSON.stringify(e);
+        // A bare "is missing"/"is invalid" (standard Rails validation
+        // wording) is useless without which field it's about - JSON:API
+        // carries that separately as source.pointer (e.g.
+        // "/data/attributes/name"), so fold it in when the message
+        // itself doesn't already name the field.
+        var pointer = e.source && e.source.pointer;
+        if (pointer && text.toLowerCase().indexOf(pointer.split("/").pop().toLowerCase()) === -1) {
+          text = pointer + " " + text;
+        }
+        return text;
       }).join("; ");
     }
     if (body.errors && typeof body.errors === "object") {
@@ -13959,8 +13970,13 @@
   // tournament id (a string) on success, or null on any failure.
   function createChallongeTournament(name, localFormat) {
     var tournamentType = CHALLONGE_TOURNAMENT_TYPE[localFormat] || "single elimination";
+    // JSON:API type here is "tournament" (singular) - confirmed against
+    // Challonge's own docs. Unlike bulk-adding participants ("Participants",
+    // plural+capitalized - see below), Challonge isn't consistent about
+    // this across endpoints, so each one needs its own confirmed value
+    // rather than assuming a shared convention.
     return challongeAuthedRequest("POST", "/tournaments.json", {
-      data: { type: "tournaments", attributes: { name: name, tournament_type: tournamentType } }
+      data: { type: "tournament", attributes: { name: name, tournament_type: tournamentType } }
     }).then(function (res) {
       var id = res.body && res.body.data && (res.body.data.id || (res.body.data.attributes && res.body.data.attributes.id));
       return res.ok && id ? String(id) : null;
