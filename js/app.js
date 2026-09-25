@@ -23741,17 +23741,30 @@
   }
 
   // Finds the Challonge-generated match pairing these two participant
-  // ids, tolerant of a couple of plausible response shapes (either
-  // flattened attributes or a JSON:API relationships block) since the
-  // exact v2.1 match response hasn't been verified against a live call
-  // yet - see this feature's own verification notes.
+  // ids. Confirmed live: a real GET .../matches.json match object (at
+  // least for an unscored "open" match) has no relationships.player1/
+  // player2 at all - only relationships.attachments - despite that
+  // being exactly what Challonge's own docs example shows. The real
+  // place participant ids actually live is attributes.
+  // points_by_participant[].participant_id (numbers, not strings).
+  // Kept the relationships/flat-attribute checks as fallbacks in case
+  // a match in a different state ever does carry them.
   function findChallongeMatchForPair(challongeMatches, idA, idB) {
+    var targetKey = [String(idA), String(idB)].sort().join("|");
     return challongeMatches.filter(function (m) {
       var attrs = m.attributes || m;
-      var p1 = attrs.player1_id != null ? String(attrs.player1_id) : (m.relationships && m.relationships.player1 && m.relationships.player1.data && String(m.relationships.player1.data.id));
-      var p2 = attrs.player2_id != null ? String(attrs.player2_id) : (m.relationships && m.relationships.player2 && m.relationships.player2.data && String(m.relationships.player2.data.id));
-      var pair = [p1, p2].sort().join("|");
-      return pair === [idA, idB].sort().join("|");
+      var ids = [];
+      if (Array.isArray(attrs.points_by_participant)) {
+        ids = attrs.points_by_participant.map(function (pp) {
+          return String(pp.participant_id);
+        });
+      }
+      if (ids.length < 2) {
+        var p1 = attrs.player1_id != null ? String(attrs.player1_id) : (m.relationships && m.relationships.player1 && m.relationships.player1.data && String(m.relationships.player1.data.id));
+        var p2 = attrs.player2_id != null ? String(attrs.player2_id) : (m.relationships && m.relationships.player2 && m.relationships.player2.data && String(m.relationships.player2.data.id));
+        ids = [p1, p2].filter(Boolean);
+      }
+      return ids.length >= 2 && ids.slice(0, 2).sort().join("|") === targetKey;
     })[0] || null;
   }
 
