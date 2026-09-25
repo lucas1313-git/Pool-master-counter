@@ -1904,6 +1904,7 @@
   var btnContactSheetEmail = document.getElementById("btn-contact-sheet-email");
   var btnContactSheetSms = document.getElementById("btn-contact-sheet-sms");
   var btnContactSheetGraveyardSelected = document.getElementById("btn-contact-sheet-graveyard-selected");
+  var btnContactSheetMergeSelected = document.getElementById("btn-contact-sheet-merge-selected");
   var contactSheetSelectedSummary = document.getElementById("contact-sheet-selected-summary");
   var contactSheetList = document.getElementById("contact-sheet-list");
   var contactSheetSelected = {};
@@ -3686,8 +3687,14 @@
   }
 
   // Commits an inline rename from a Quick Counter name field. Routes
-  // through the same resolvePlayerName/duplicate-check path as adding a
-  // player normally, so casing and uniqueness rules stay identical.
+  // through renamePlayerEverywhere (same as the Contact Sheet's rename
+  // field) rather than assigning player.name directly - a direct
+  // assignment here used to silently orphan every archival record
+  // (stats, rating, contact, best run, date-added) under the old name,
+  // since none of them are keyed by the player's id, only by name. The
+  // player would look renamed on screen while actually splitting into
+  // two separate identities the moment anything archived under the new
+  // name.
   function renamePlayerInline(id, newName) {
     var player = getPlayer(id);
     if (!player) return;
@@ -3696,13 +3703,12 @@
       renderAll();
       return;
     }
-    if (normalizeNameKey(resolved) !== normalizeNameKey(player.name) && isDuplicatePlayerName(resolved)) {
-      showToast(T("toast.alreadyInRoster", { name: resolved }));
+    var error = renamePlayerEverywhere(player.name, resolved);
+    if (error) {
+      showToast(error);
       renderAll();
       return;
     }
-    player.name = resolved;
-    saveState();
     renderAll();
   }
 
@@ -12038,6 +12044,179 @@
     });
     saveState();
 
+    return "";
+  }
+
+  // Combines two names' entire history into one - for repairing a
+  // player who ended up split across two identities (the usual cause:
+  // renamePlayerInline used to assign player.name directly instead of
+  // routing through renamePlayerEverywhere, which orphaned every
+  // archival record under the old name rather than moving it - fixed
+  // above, but this repairs data that already split before that fix
+  // shipped). targetName survives with its own name; sourceName's
+  // records are folded into it - unioned where a list makes sense
+  // (game sessions, rating history), the higher value where only one
+  // can win (best run), the earlier date where "first seen" is the
+  // question (date added), and target-preferred-else-source for plain
+  // fields (contact info) - then sourceName's now-empty records are
+  // removed. Returns "" on success or a user-facing error string.
+  function mergePlayersEverywhere(sourceName, targetName) {
+    var sourceKey = normalizeNameKey(sourceName);
+    var targetKey = normalizeNameKey(targetName);
+    if (!sourceKey || !targetKey) return T("mergePlayers.bothRequired");
+    if (sourceKey === targetKey) return T("mergePlayers.samePlayer");
+
+    // The name text that survives - prefer however the target is
+    // already spelled/cased on file (contacts, then stats), falling
+    // back to exactly what was typed only if this is a genuinely new
+    // name with no existing record at all.
+    var target = findContactKey(targetName) || findPlayerStatsKey(targetName) || resolvePlayerName(targetName) || targetName;
+
+    var sourceStatsKey = findPlayerStatsKey(sourceName);
+    var targetStatsKey = findPlayerStatsKey(target);
+    if (sourceStatsKey || targetStatsKey) {
+      var sourceSessions = sourceStatsKey ? PLAYER_STATS[sourceStatsKey].sessions || [] : [];
+      var targetSessions = targetStatsKey ? PLAYER_STATS[targetStatsKey].sessions || [] : [];
+      if (sourceStatsKey && sourceStatsKey !== target) delete PLAYER_STATS[sourceStatsKey];
+      if (targetStatsKey && targetStatsKey !== target) delete PLAYER_STATS[targetStatsKey];
+      PLAYER_STATS[target] = { name: target, sessions: mergeSessionLists(targetSessions, sourceSessions) };
+      savePlayerStatsToStorage(PLAYER_STATS);
+    }
+
+    var sourceRatingKey = findRatingKey(sourceName);
+    var targetRatingKey = findRatingKey(target);
+    if (sourceRatingKey || targetRatingKey) {
+      var sr = sourceRatingKey ? PLAYER_RATINGS[sourceRatingKey] : null;
+      var tr = targetRatingKey ? PLAYER_RATINGS[targetRatingKey] : null;
+      var combinedHistory = (tr && tr.history ? tr.history : []).concat(sr && sr.history ? sr.history : []).sort(function (a, b) {
+        return (a.ts || "").localeCompare(b.ts || "");
+      });
+      var latest = combinedHistory.length ? combinedHistory[combinedHistory.length - 1] : null;
+      var mergedRating = latest ? latest.rating : tr ? tr.rating : sr ? sr.rating : DEFAULT_RATING;
+      if (sourceRatingKey && sourceRatingKey !== target) delete PLAYER_RATINGS[sourceRatingKey];
+      if (targetRatingKey && targetRatingKey !== target) delete PLAYER_RATINGS[targetRatingKey];
+      PLAYER_RATINGS[target] = {
+        name: target,
+        rating: mergedRating,
+        gamesPlayed: (tr ? tr.gamesPlayed : 0) + (sr ? sr.gamesPlayed : 0),
+        history: combinedHistory
+      };
+      saveRatingsToStorage(PLAYER_RATINGS);
+    }
+
+    var sourceContactKey = findContactKey(sourceName);
+    var targetContactKey = findContactKey(target);
+    if (sourceContactKey || targetContactKey) {
+      var sc = sourceContactKey ? PLAYER_CONTACTS[sourceContactKey] : {};
+      var tc = targetContactKey ? PLAYER_CONTACTS[targetContactKey] : {};
+      var fargoSide = tc.fargoId ? tc : sc.fargoId ? sc : null;
+      if (sourceContactKey && sourceContactKey !== target) delete PLAYER_CONTACTS[sourceContactKey];
+      if (targetContactKey && targetContactKey !== target) delete PLAYER_CONTACTS[targetContactKey];
+      PLAYER_CONTACTS[target] = {
+        email: tc.email || sc.email || "",
+        phone: tc.phone || sc.phone || "",
+        nickname: tc.nickname || sc.nickname || "",
+        clubTeam: tc.clubTeam || sc.clubTeam || "",
+        reportOptIn: !!(tc.reportOptIn || sc.reportOptIn),
+        notifyMethod: tc.notifyMethod || sc.notifyMethod || "email",
+        fargoId: fargoSide ? fargoSide.fargoId : "",
+        fargoName: fargoSide ? fargoSide.fargoName : "",
+        fargoLocation: fargoSide ? fargoSide.fargoLocation : "",
+        fargoRating: fargoSide ? fargoSide.fargoRating : null,
+        fargoRobustness: fargoSide ? fargoSide.fargoRobustness : null,
+        fargoFetchedAt: fargoSide ? fargoSide.fargoFetchedAt || 0 : 0,
+        localId: tc.localId || sc.localId || "",
+        updatedAt: Date.now()
+      };
+      saveContactsToStorage(PLAYER_CONTACTS);
+    }
+
+    var sourceBestRunKey = findPlayerBestRunKey(sourceName);
+    var targetBestRunKey = findPlayerBestRunKey(target);
+    if (sourceBestRunKey || targetBestRunKey) {
+      var sbr = sourceBestRunKey ? PLAYER_BEST_RUNS[sourceBestRunKey] : null;
+      var tbr = targetBestRunKey ? PLAYER_BEST_RUNS[targetBestRunKey] : null;
+      var bestWinner = sbr && (!tbr || sbr.value > tbr.value) ? sbr : tbr;
+      if (sourceBestRunKey && sourceBestRunKey !== target) delete PLAYER_BEST_RUNS[sourceBestRunKey];
+      if (targetBestRunKey && targetBestRunKey !== target) delete PLAYER_BEST_RUNS[targetBestRunKey];
+      if (bestWinner) {
+        PLAYER_BEST_RUNS[target] = { name: target, value: bestWinner.value, ts: bestWinner.ts };
+        savePlayerBestRunsToStorage(PLAYER_BEST_RUNS);
+      }
+    }
+
+    var sourceAddedKey = findPlayerAddedKey(sourceName);
+    var targetAddedKey = findPlayerAddedKey(target);
+    if (sourceAddedKey || targetAddedKey) {
+      var sa = sourceAddedKey ? PLAYER_ADDED[sourceAddedKey] : null;
+      var ta = targetAddedKey ? PLAYER_ADDED[targetAddedKey] : null;
+      if (sourceAddedKey && sourceAddedKey !== target) delete PLAYER_ADDED[sourceAddedKey];
+      if (targetAddedKey && targetAddedKey !== target) delete PLAYER_ADDED[targetAddedKey];
+      PLAYER_ADDED[target] = sa && ta ? (sa < ta ? sa : ta) : sa || ta;
+      savePlayerAddedToStorage(PLAYER_ADDED);
+    }
+
+    var sourceTransKey = findPlayerNameTranslationKey(sourceName);
+    var targetTransKey = findPlayerNameTranslationKey(target);
+    if (sourceTransKey || targetTransKey) {
+      var mergedTranslations = {};
+      if (sourceTransKey) Object.assign(mergedTranslations, PLAYER_NAME_TRANSLATIONS[sourceTransKey]);
+      if (targetTransKey) Object.assign(mergedTranslations, PLAYER_NAME_TRANSLATIONS[targetTransKey]);
+      if (sourceTransKey && sourceTransKey !== target) delete PLAYER_NAME_TRANSLATIONS[sourceTransKey];
+      if (targetTransKey && targetTransKey !== target) delete PLAYER_NAME_TRANSLATIONS[targetTransKey];
+      PLAYER_NAME_TRANSLATIONS[target] = mergedTranslations;
+      savePlayerNameTranslationsToStorage(PLAYER_NAME_TRANSLATIONS);
+    }
+
+    // Live roster: if both names are currently active players (the
+    // source never got removed after the split), fold the source row's
+    // this-session wins into the target row's and drop the source row;
+    // if only the source is active, it's a plain rename of that row.
+    var targetLiveIndex = -1;
+    state.players.forEach(function (p, idx) {
+      if (normalizeNameKey(p.name) === targetKey) targetLiveIndex = idx;
+    });
+    var removedIds = [];
+    state.players.forEach(function (p) {
+      if (normalizeNameKey(p.name) !== sourceKey) return;
+      if (targetLiveIndex !== -1 && state.players[targetLiveIndex].id !== p.id) {
+        var targetId = state.players[targetLiveIndex].id;
+        state.playerWins[targetId] = (state.playerWins[targetId] || 0) + (state.playerWins[p.id] || 0);
+        delete state.playerWins[p.id];
+        removedIds.push(p.id);
+      } else {
+        p.name = target;
+      }
+    });
+    if (removedIds.length) {
+      state.players = state.players.filter(function (p) {
+        return removedIds.indexOf(p.id) === -1;
+      });
+      if (state.rotation && Array.isArray(state.rotation.order)) {
+        state.rotation.order = state.rotation.order.filter(function (id) {
+          return removedIds.indexOf(id) === -1;
+        });
+      }
+    }
+
+    // Today's live game log: any game already recorded under the old
+    // name (before the merge) should read as the survivor going
+    // forward - otherwise today's report/Challonge push would still
+    // see two different names for what's now one merged person.
+    (state.gameHistory || []).forEach(function (g) {
+      if (Array.isArray(g.winnerNames)) {
+        g.winnerNames = g.winnerNames.map(function (n) {
+          return normalizeNameKey(n) === sourceKey ? target : n;
+        });
+      }
+      if (Array.isArray(g.opponentNames)) {
+        g.opponentNames = g.opponentNames.map(function (n) {
+          return normalizeNameKey(n) === sourceKey ? target : n;
+        });
+      }
+    });
+
+    saveState();
     return "";
   }
 
@@ -27035,6 +27214,48 @@
       renderAll();
       showToast(T("toast.playersSentToGraveyard", { count: names.length }));
     });
+  });
+  btnContactSheetMergeSelected.addEventListener("click", function () {
+    var names = Object.keys(contactSheetSelected).filter(function (n) {
+      return contactSheetSelected[n];
+    });
+    if (names.length !== 2) {
+      showToast(T("mergePlayers.selectExactlyTwo"));
+      return;
+    }
+    // Default the prompt to whichever of the two has more games on
+    // file - the more likely "real" identity to keep - but the field
+    // stays free text with both names offered, so the user can always
+    // pick the other one instead.
+    var gameCounts = names.map(function (n) {
+      return getPlayerSessions(n).reduce(function (sum, s) {
+        return sum + ((s.games || []).length);
+      }, 0);
+    });
+    var defaultTarget = gameCounts[0] >= gameCounts[1] ? names[0] : names[1];
+    promptModal(T("mergePlayers.prompt", { nameA: names[0], nameB: names[1] }), defaultTarget, function (typed) {
+      var target = resolvePlayerName(typed);
+      var targetKey = normalizeNameKey(target);
+      var match = names.filter(function (n) {
+        return normalizeNameKey(n) === targetKey;
+      })[0];
+      if (!match) {
+        showToast(T("mergePlayers.mustMatchOneOfTwo"));
+        return;
+      }
+      var source = names.filter(function (n) {
+        return n !== match;
+      })[0];
+      var error = mergePlayersEverywhere(source, match);
+      if (error) {
+        showToast(error);
+        return;
+      }
+      contactSheetSelected = {};
+      renderContactSheetPage();
+      renderAll();
+      showToast(T("mergePlayers.merged", { kept: match, removed: source }));
+    }, null, names);
   });
 
   btnOpenTournament.addEventListener("click", function () {
