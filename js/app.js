@@ -23959,14 +23959,30 @@
   function renderChallongePushReviewList(dateStr) {
     var data = computeDayReportData(dateStr, true);
     var agg = aggregateGamesByPair(data.games);
+    // Only a pair with a clear overall winner (winsA !== winsB) ever
+    // gets pushed - a pair tied across today's games (e.g. split 1-1)
+    // has no unambiguous result to report and is silently skipped by
+    // the actual push regardless of what's checked here. Filtering the
+    // checklist itself to match avoids showing games a checkbox can't
+    // actually affect.
+    var scorableKeys = {};
+    agg.pairs.forEach(function (p) {
+      if (p.winsA !== p.winsB) scorableKeys[[p.a, p.b].sort().join("|")] = true;
+    });
+    var pushableGames = agg.individualGames.filter(function (g) {
+      var winner = (g.winnerNames || [])[0];
+      return (g.opponentNames || []).some(function (o) {
+        return scorableKeys[[winner, o].sort().join("|")];
+      });
+    });
     challongePushReviewGamesList.innerHTML = "";
-    if (!agg.individualGames.length) {
+    if (!pushableGames.length) {
       var hint = document.createElement("li");
       hint.className = "empty-hint";
       hint.textContent = T("challonge.reviewNoGames");
       challongePushReviewGamesList.appendChild(hint);
     } else {
-      agg.individualGames.forEach(function (g) {
+      pushableGames.forEach(function (g) {
         var li = document.createElement("li");
         var label = document.createElement("label");
         var checkbox = document.createElement("input");
@@ -23985,7 +24001,7 @@
         challongePushReviewGamesList.appendChild(li);
       });
     }
-    challongePushReviewSummary.textContent = T("challonge.reviewSummary", { count: agg.individualGames.length, date: dateStr });
+    challongePushReviewSummary.textContent = T("challonge.reviewSummary", { count: pushableGames.length, date: dateStr });
     updateChallongePushReviewMatchups();
   }
 
