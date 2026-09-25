@@ -392,7 +392,7 @@
         <button type="button" id="btn-day-report-csv" class="btn btn-ghost" data-i18n="dayNotes.exportCsv">📊 Export as Excel (CSV)</button>
         <button type="button" id="btn-day-report-print" class="btn btn-ghost" data-i18n="dayNotes.printReport">🖨️ Print Report</button>
         <button type="button" id="btn-day-report-colorful" class="btn btn-ghost" data-i18n="dayNotes.colorfulReport">🎨 Colorful Report</button>
-        <button type="button" id="btn-day-report-push-challonge" class="btn btn-ghost" data-i18n="challonge.pushTodayButton">☁️ Push Today to Challonge</button>
+        <button type="button" id="btn-day-report-push-challonge" class="btn btn-ghost" data-i18n="challonge.pushButton">☁️ Push to Challonge</button>
       </div>
       <p class="player-stats-note" id="day-report-recipients-line"></p>
     </div>
@@ -700,6 +700,26 @@
       <button type="button" id="btn-confirm-modal-ok" class="btn btn-primary" data-i18n="common.ok">OK</button>
       <button type="button" id="btn-confirm-modal-cancel" class="btn btn-ghost hidden" data-i18n="common.cancel">Cancel</button>
     </div>
+  </div>
+</div>
+
+<div id="challonge-push-review-overlay" class="confirm-modal-overlay hidden">
+  <div class="confirm-modal-card">
+    <h2 data-i18n="challonge.reviewTitle">Review Before Pushing to Challonge</h2>
+    <div class="row">
+      <label for="challonge-push-date-input" data-i18n="challonge.reviewDateLabel">Report date</label>
+      <input type="date" id="challonge-push-date-input">
+    </div>
+    <p class="player-stats-note" id="challonge-push-review-summary"></p>
+    <h3 class="tournament-section-heading" data-i18n="challonge.reviewGamesHeading">Games to include</h3>
+    <p class="player-stats-note" data-i18n="challonge.reviewGamesHint">Uncheck any game you don't want counted — matchups recalculate as you do.</p>
+    <ul id="challonge-push-review-games-list" class="recover-games-checklist"></ul>
+    <p class="player-stats-note" id="challonge-push-review-matchups"></p>
+    <div class="confirm-modal-actions">
+      <button type="button" id="btn-challonge-push-confirm" class="btn btn-primary" data-i18n="challonge.reviewConfirmButton">☁️ Push to Challonge</button>
+      <button type="button" id="btn-challonge-push-review-close" class="btn btn-ghost" data-i18n="common.cancel">Cancel</button>
+    </div>
+    <p class="player-stats-note" id="challonge-push-review-status"></p>
   </div>
 </div>
 
@@ -2119,6 +2139,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260925b"></script>
+<script src="js/app.js?v=20260925c"></script>
 </body>
 </html>
