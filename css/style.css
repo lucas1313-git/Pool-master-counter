@@ -1225,7 +1225,7 @@ button:disabled {
   font-size: 0.85rem;
 }
 
-input[type="text"], input[type="number"], input[type="email"], input[type="tel"], select {
+input[type="text"], input[type="number"], input[type="email"], input[type="tel"], input[type="password"], select {
   font: inherit;
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -1235,7 +1235,7 @@ input[type="text"], input[type="number"], input[type="email"], input[type="tel"]
   min-height: 44px;
 }
 
-input[type="text"], input[type="email"], input[type="tel"] {
+input[type="text"], input[type="email"], input[type="tel"], input[type="password"] {
   flex: 1;
   min-width: 140px;
   font-size: 1.05rem;

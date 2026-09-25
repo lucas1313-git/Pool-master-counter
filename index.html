@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260924c">
+<link rel="stylesheet" href="css/style.css?v=20260924d">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -1607,6 +1607,23 @@
     <button type="button" id="btn-open-help-tournament" class="btn btn-ghost" data-i18n="header.help">❓ Help</button>
   </header>
 
+  <section class="panel collapsible-panel collapsed" id="challonge-panel">
+    <button type="button" class="panel-toggle" id="btn-toggle-challonge-panel" aria-expanded="false" aria-controls="challonge-panel-body">
+      <h2 data-i18n="challonge.heading">☁️ Challonge</h2>
+      <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+    </button>
+    <p class="panel-summary" id="challonge-panel-summary" data-i18n="challonge.summaryNotConnected">Not connected</p>
+    <div class="panel-body" id="challonge-panel-body">
+      <p class="player-stats-note" data-i18n="challonge.intro">Push this tournament's roster to Challonge, and match scores too for Round Robin (Single/Double Elimination and Swiss only get their roster pushed — see why in Help). Needs a free Challonge developer app: sign up at connect.challonge.com to get a client ID and secret, no login required from this app.</p>
+      <div class="row">
+        <input type="text" id="challonge-client-id-input" data-i18n-placeholder="challonge.clientIdPlaceholder" placeholder="Challonge client ID" autocomplete="off">
+      </div>
+      <div class="row">
+        <input type="password" id="challonge-client-secret-input" data-i18n-placeholder="challonge.clientSecretPlaceholder" placeholder="Challonge client secret" autocomplete="off">
+      </div>
+    </div>
+  </section>
+
   <section class="panel" id="tournament-setup-panel">
     <h2 data-i18n="tournament.newHeading">New Elimination Tournament</h2>
     <p class="wizard-progress" id="tournament-setup-progress">Step 1 of 4</p>
@@ -1760,6 +1777,7 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
     <div class="row">
       <button type="button" id="btn-tournament-abandon" class="btn btn-danger" data-i18n="tournament.abandon">Abandon Tournament</button>
       <button type="button" id="btn-tournament-print" class="btn btn-ghost" data-i18n="tournament.printBracket">🖨️ Print Bracket</button>
+      <button type="button" id="btn-tournament-push-challonge" class="btn btn-ghost" data-i18n="challonge.pushButton">☁️ Push to Challonge</button>
     </div>
 
     <div id="tournament-champion-banner" class="tournament-winner-banner hidden"></div>
@@ -2098,6 +2116,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260924c"></script>
+<script src="js/app.js?v=20260924d"></script>
 </body>
 </html>
