@@ -118,6 +118,7 @@
   "challonge.notConnectedSeeMainScreen": "Hindi konektado — i-configure ang Challonge sa main screen (seksyong ☁️ Challonge).",
   "challonge.pushButton": "☁️ Itulak sa Challonge",
   "challonge.pushFailed": "Hindi ma-reach ang Challonge — tingnan ang iyong client ID/secret at subukan ulit.",
+  "challonge.pushFailedApi": "Hindi nakumpleto ang pag-push sa Challonge.",
   "challonge.pushSummary": "Challonge: {{added}} manlalaro sa roster, {{scores}} marka ng laban ang naitulak.",
   "challonge.pushSummaryWithFailures": "Challonge: {{added}} manlalaro sa roster, {{scores}} marka ng laban ang naitulak, {{failed}} ang nabigo at puwedeng subukan ulit.",
   "challonge.pushing": "Itinutulak sa Challonge…",

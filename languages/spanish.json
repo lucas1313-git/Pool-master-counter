@@ -118,6 +118,7 @@
   "challonge.notConnectedSeeMainScreen": "No conectado — configura Challonge en la pantalla principal (sección ☁️ Challonge).",
   "challonge.pushButton": "☁️ Enviar a Challonge",
   "challonge.pushFailed": "No se pudo conectar con Challonge — comprueba tu ID de cliente/secreto e inténtalo de nuevo.",
+  "challonge.pushFailedApi": "No se pudo completar el envío a Challonge.",
   "challonge.pushSummary": "Challonge: {{added}} jugadores en la lista, {{scores}} resultados de partidos enviados.",
   "challonge.pushSummaryWithFailures": "Challonge: {{added}} jugadores en la lista, {{scores}} resultados de partidos enviados, {{failed}} fallaron y se pueden reintentar.",
   "challonge.pushing": "Enviando a Challonge…",

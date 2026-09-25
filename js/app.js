@@ -13674,6 +13674,44 @@
     return T("challonge.pushFailed") + challongeAuthErrorSuffix();
   }
 
+  // Set on every failed challongeAuthedRequest() call (i.e. every real
+  // API call AFTER a token was already obtained - create tournament,
+  // add participants, fetch/report matches) with whatever detail
+  // Challonge's own response body gives, so a push failure that isn't
+  // an auth problem doesn't get mislabeled as "check your ID". Null on
+  // success. Distinct from lastChallongeAuthError, which only covers
+  // the OAuth token exchange itself.
+  var lastChallongePushError = null;
+
+  function challongeErrorTextFromBody(body) {
+    if (!body) return null;
+    if (Array.isArray(body.errors) && body.errors.length) {
+      return body.errors.map(function (e) {
+        return (e && (e.detail || e.title || e.message)) || JSON.stringify(e);
+      }).join("; ");
+    }
+    if (body.error && typeof body.error === "object") {
+      return body.error.message || body.error.detail || JSON.stringify(body.error);
+    }
+    if (typeof body.error === "string") return body.error;
+    if (typeof body.error_description === "string") return body.error_description;
+    if (typeof body.message === "string") return body.message;
+    return null;
+  }
+
+  function challongePushErrorSuffix() {
+    return lastChallongePushError ? " (" + lastChallongePushError + ")" : "";
+  }
+
+  // For a failure AFTER a valid token was obtained (create tournament,
+  // add participants, report a match) - deliberately distinct wording
+  // from challongePushFailedText(), which points at credentials. This
+  // failure means the credentials are fine but the request itself was
+  // rejected, so telling the user to "check your ID" would be wrong.
+  function challongePushApiFailedText() {
+    return T("challonge.pushFailedApi") + challongePushErrorSuffix();
+  }
+
   function challongeAuthedRequest(method, path, jsonBody) {
     return getChallongeAccessToken().then(function (token) {
       if (!token) return { ok: false, status: 0, body: null, noToken: true };
@@ -13683,7 +13721,16 @@
         headers["Content-Type"] = "application/vnd.api+json";
         opts.body = JSON.stringify(jsonBody);
       }
-      return challongeFetch(CHALLONGE_API_BASE + path, opts);
+      return challongeFetch(CHALLONGE_API_BASE + path, opts).then(function (res) {
+        if (res.ok) {
+          lastChallongePushError = null;
+        } else {
+          lastChallongePushError = res.status === 0
+            ? "network"
+            : (challongeErrorTextFromBody(res.body) || ("HTTP " + res.status));
+        }
+        return res;
+      });
     });
   }
 
@@ -23303,7 +23350,7 @@
 
       return createStep.then(function (tournamentId) {
         if (!tournamentId) {
-          showToast(T("challonge.pushFailed"));
+          showToast(challongePushApiFailedText());
           return;
         }
 
@@ -23520,7 +23567,7 @@
 
   function challongePushResultText(result) {
     if (result.reason === "no-games") return T("challonge.noGamesToday");
-    if (!result.ok) return T("challonge.pushFailed");
+    if (!result.ok) return challongePushApiFailedText();
     return result.failed
       ? T("challonge.pushSummaryWithFailures", { added: result.addedCount, scores: result.pushed, failed: result.failed })
       : T("challonge.pushSummary", { added: result.addedCount, scores: result.pushed });
