@@ -13617,6 +13617,14 @@
       });
   }
 
+  // Set on every getChallongeAccessToken() failure with whatever detail
+  // is available, so a caller building a user-facing message can show
+  // Challonge's actual reason instead of a generic "check your ID" -
+  // e.g. "The application doesn't exist" (wrong/mistyped client id) vs.
+  // "invalid_client" (id ok, secret wrong) vs. a network/timeout failure.
+  // Null on success or when no credentials were entered at all.
+  var lastChallongeAuthError = null;
+
   // Returns a valid access token, fetching + caching a fresh one if none
   // is cached or the cached one has expired (a day of slack before the
   // real 1-week expiry, so a token doesn't die mid-use). null if no
@@ -13625,7 +13633,10 @@
   function getChallongeAccessToken() {
     var clientId = loadChallongeClientId();
     var clientSecret = loadChallongeClientSecret();
-    if (!clientId || !clientSecret) return Promise.resolve(null);
+    if (!clientId || !clientSecret) {
+      lastChallongeAuthError = null;
+      return Promise.resolve(null);
+    }
     var cached = loadChallongeToken();
     if (cached && cached.access_token && cached.expires_at && Date.now() < cached.expires_at - 24 * 60 * 60 * 1000) {
       return Promise.resolve(cached.access_token);
@@ -13636,11 +13647,25 @@
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: body
     }).then(function (res) {
-      if (!res.ok || !res.body || !res.body.access_token) return null;
+      if (!res.ok || !res.body || !res.body.access_token) {
+        if (res.status === 0) {
+          lastChallongeAuthError = "network";
+        } else if (res.body && (res.body.error || res.body.error_description)) {
+          lastChallongeAuthError = res.body.error || res.body.error_description;
+        } else {
+          lastChallongeAuthError = "HTTP " + res.status;
+        }
+        return null;
+      }
+      lastChallongeAuthError = null;
       var expiresInMs = (res.body.expires_in || 604800) * 1000;
       saveChallongeToken({ access_token: res.body.access_token, expires_at: Date.now() + expiresInMs });
       return res.body.access_token;
     });
+  }
+
+  function challongePushFailedText() {
+    return lastChallongeAuthError ? T("challonge.pushFailed") + " (" + lastChallongeAuthError + ")" : T("challonge.pushFailed");
   }
 
   function challongeAuthedRequest(method, path, jsonBody) {
@@ -23256,7 +23281,7 @@
         // Credentials are present but Challonge rejected them (or the
         // request failed outright) - a different message than "you
         // haven't entered anything yet".
-        showToast(T("challonge.pushFailed"));
+        showToast(challongePushFailedText());
         return;
       }
 
@@ -23598,7 +23623,7 @@
     getChallongeAccessToken().then(function (token) {
       if (!token) {
         btnChallongePushConfirm.disabled = false;
-        challongePushReviewStatus.textContent = T("challonge.pushFailed");
+        challongePushReviewStatus.textContent = challongePushFailedText();
         return;
       }
       var dayPush = CHALLONGE_DAY_PUSHES[dateStr] || emptyChallongePushRecord();
@@ -23635,7 +23660,7 @@
         // Credentials ARE configured (the player opted in) but didn't
         // work - unlike the "never set up" case above, worth a toast so
         // a real problem doesn't fail silently forever, race after race.
-        showToast(T("challonge.pushFailed"));
+        showToast(challongePushFailedText());
         return;
       }
       var raceId = "race-" + Date.now();
