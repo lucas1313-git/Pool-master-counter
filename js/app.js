@@ -13984,11 +13984,17 @@
     // "/data/attributes/round_robin_options is missing" if it's left
     // out. This app doesn't use Challonge's own ranking/points system
     // (match scores are pushed directly, and standings are this app's
-    // own), so these are just the documented defaults - enough to
-    // satisfy the schema, not a real behavior choice.
+    // own), so these are mostly just the documented defaults - enough
+    // to satisfy the schema, not a real behavior choice. iterations is
+    // the one deliberate override: the documented default (2) makes
+    // Challonge generate a home-and-away DOUBLE round robin - two
+    // separate match objects per pair - but this app only ever reports
+    // one aggregate result per pair (see aggregateGamesByPair), so 1
+    // keeps it to a single match per pair, matching what's actually
+    // pushed.
     if (tournamentType === "round robin") {
       attributes.round_robin_options = {
-        iterations: 2,
+        iterations: 1,
         ranking: "match wins",
         pts_for_game_win: 1,
         pts_for_game_tie: 0,
@@ -23699,9 +23705,17 @@
                 chain = chain.then(function () {
                   var idA = t.challongeParticipantIds[match.a];
                   var idB = t.challongeParticipantIds[match.b];
-                  if (!idA || !idB) { failed++; return; }
+                  if (!idA || !idB) {
+                    console.warn("Challonge push: no participant id on file for", !idA ? match.a : match.b);
+                    failed++;
+                    return;
+                  }
                   var challongeMatch = findChallongeMatchForPair(challongeMatches, idA, idB);
-                  if (!challongeMatch) { failed++; return; }
+                  if (!challongeMatch) {
+                    console.warn("Challonge push: no Challonge match found for", match.a, idA, match.b, idB, "- matches on file:", challongeMatches);
+                    failed++;
+                    return;
+                  }
                   var winnerId = match.winner === match.a ? idA : idB;
                   return reportChallongeMatchScore(tournamentId, challongeMatch.id, idA, match.scoreA, idB, match.scoreB, winnerId).then(function (ok) {
                     if (ok) {
@@ -23860,9 +23874,17 @@
               chain = chain.then(function () {
                 var idA = pushRecord.challongeParticipantIds[p.a];
                 var idB = pushRecord.challongeParticipantIds[p.b];
-                if (!idA || !idB) { failed++; return; }
+                if (!idA || !idB) {
+                  console.warn("Challonge push: no participant id on file for", !idA ? p.a : p.b);
+                  failed++;
+                  return;
+                }
                 var challongeMatch = findChallongeMatchForPair(challongeMatches, idA, idB);
-                if (!challongeMatch) { failed++; return; }
+                if (!challongeMatch) {
+                  console.warn("Challonge push: no Challonge match found for", p.a, idA, p.b, idB, "- matches on file:", challongeMatches);
+                  failed++;
+                  return;
+                }
                 var winnerId = p.winsA > p.winsB ? idA : idB;
                 return reportChallongeMatchScore(tournamentId, challongeMatch.id, idA, p.winsA, idB, p.winsB, winnerId).then(function (ok) {
                   if (ok) {
