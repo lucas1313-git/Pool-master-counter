@@ -121,6 +121,7 @@
   "challonge.pushSummary": "Challonge: {{added}} manlalaro sa roster, {{scores}} marka ng laban ang naitulak.",
   "challonge.pushSummaryWithFailures": "Challonge: {{added}} manlalaro sa roster, {{scores}} marka ng laban ang naitulak, {{failed}} ang nabigo at puwedeng subukan ulit.",
   "challonge.pushTodayButton": "☁️ Itulak Ngayong Araw sa Challonge",
+  "challonge.raceTournamentName": "Pool Master Counter — Race to {{target}} ({{names}}, {{date}})",
   "challonge.rosterPushed": "Naitulak sa Challonge: {{count}} manlalaro sa roster.",
   "challonge.summaryConnected": "Konektado",
   "challonge.summaryNotConnected": "Hindi konektado",

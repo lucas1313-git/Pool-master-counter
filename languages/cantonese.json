@@ -121,6 +121,7 @@
   "challonge.pushSummary": "Challonge：名單上有 {{added}} 位球員，推送咗 {{scores}} 個比賽比分。",
   "challonge.pushSummaryWithFailures": "Challonge：名單上有 {{added}} 位球員，推送咗 {{scores}} 個比賽比分，{{failed}} 個失敗咗，可以再試多次。",
   "challonge.pushTodayButton": "☁️ 將今日推送去 Challonge",
+  "challonge.raceTournamentName": "Pool Master Counter — 衝刺到 {{target}} 局（{{names}}，{{date}}）",
   "challonge.rosterPushed": "已推送去 Challonge：名單上有 {{count}} 位球員。",
   "challonge.summaryConnected": "已連接",
   "challonge.summaryNotConnected": "未連接",
