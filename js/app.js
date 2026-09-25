@@ -11891,15 +11891,18 @@
   }
 
   // Renames a player everywhere their identity is a record key - stats,
-  // ratings, contacts, and any saved per-language display name - plus
-  // their entry on the live roster if they're currently on it, so their
-  // whole history stays attached to the new name instead of quietly
-  // starting over under it. Deliberately leaves state.gameHistory (and
-  // saved rosters) alone: a finished game is a record of what happened
-  // at the time, not a live reference, so past entries keep showing the
-  // name as it was then - the same reasoning mergeRosterLists follows
-  // for saved player lists. Returns "" on success, or a translated error
-  // string (empty/duplicate name) the Contact Sheet can show directly.
+  // ratings, contacts (including any linked FargoRate id), any saved
+  // per-language display name, their best-ever run record, and their
+  // "added on" date - plus their entry on the live roster if they're
+  // currently on it, so their whole history stays attached to the new
+  // name instead of quietly starting over under it (or silently losing
+  // a record that only that old name pointed to). Deliberately leaves
+  // state.gameHistory (and saved rosters) alone: a finished game is a
+  // record of what happened at the time, not a live reference, so past
+  // entries keep showing the name as it was then - the same reasoning
+  // mergeRosterLists follows for saved player lists. Returns "" on
+  // success, or a translated error string (empty/duplicate name) the
+  // Contact Sheet can show directly.
   function renamePlayerEverywhere(oldName, newRawName) {
     var newName = resolvePlayerName(newRawName);
     if (!newName) return T("contactSheet.nameRequired");
@@ -11939,6 +11942,21 @@
       PLAYER_NAME_TRANSLATIONS[newName] = PLAYER_NAME_TRANSLATIONS[translationKey];
       if (translationKey !== newName) delete PLAYER_NAME_TRANSLATIONS[translationKey];
       savePlayerNameTranslationsToStorage(PLAYER_NAME_TRANSLATIONS);
+    }
+
+    var bestRunKey = findPlayerBestRunKey(oldName);
+    if (bestRunKey) {
+      PLAYER_BEST_RUNS[newName] = PLAYER_BEST_RUNS[bestRunKey];
+      PLAYER_BEST_RUNS[newName].name = newName;
+      if (bestRunKey !== newName) delete PLAYER_BEST_RUNS[bestRunKey];
+      savePlayerBestRunsToStorage(PLAYER_BEST_RUNS);
+    }
+
+    var addedKey = findPlayerAddedKey(oldName);
+    if (addedKey) {
+      PLAYER_ADDED[newName] = PLAYER_ADDED[addedKey];
+      if (addedKey !== newName) delete PLAYER_ADDED[addedKey];
+      savePlayerAddedToStorage(PLAYER_ADDED);
     }
 
     state.players.forEach(function (p) {
