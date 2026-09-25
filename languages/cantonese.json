@@ -118,6 +118,7 @@
   "challonge.notConnectedSeeMainScreen": "未連接——請喺主畫面（☁️ Challonge 部分）設定 Challonge。",
   "challonge.pushButton": "☁️ 推送去 Challonge",
   "challonge.pushFailed": "連接唔到 Challonge——請檢查你嘅 client ID／secret，然後再試多次。",
+  "challonge.pushFailedApi": "無法完成推送到 Challonge。",
   "challonge.pushSummary": "Challonge：名單上有 {{added}} 位球員，推送咗 {{scores}} 個比賽比分。",
   "challonge.pushSummaryWithFailures": "Challonge：名單上有 {{added}} 位球員，推送咗 {{scores}} 個比賽比分，{{failed}} 個失敗咗，可以再試多次。",
   "challonge.pushing": "推送緊去 Challonge……",
