@@ -13508,7 +13508,15 @@
   var CHALLONGE_CLIENT_ID_KEY = "poolMasterCounter.challongeClientId.v1";
   var CHALLONGE_CLIENT_SECRET_KEY = "poolMasterCounter.challongeClientSecret.v1";
   var CHALLONGE_TOKEN_KEY = "poolMasterCounter.challongeToken.v1";
-  var CHALLONGE_API_BASE = "https://api.challonge.com/v2.1";
+  // Challonge's v2.1 REST API answers the CORS preflight but never
+  // sends Access-Control-Allow-Origin on the actual response (confirmed
+  // live), so a browser blocks reading it no matter the request shape.
+  // This is a small Cloudflare Worker relay (challonge-proxy/ in this
+  // repo) that forwards to the real API server-side and adds the
+  // missing header. Only the REST base is proxied - /oauth/token
+  // already sends proper CORS on its real responses and is called
+  // directly.
+  var CHALLONGE_API_BASE = "https://pool-master-counter-challonge-proxy.poolmastercounter.workers.dev/v2.1";
   var CHALLONGE_OAUTH_TOKEN_URL = "https://api.challonge.com/oauth/token";
   var CHALLONGE_FETCH_TIMEOUT_MS = 10000;
 
@@ -13685,10 +13693,17 @@
 
   function challongeErrorTextFromBody(body) {
     if (!body) return null;
+    // Challonge's v2.1 API isn't consistent about the shape of `errors`:
+    // a JSON:API-style array of {detail/title} objects in some cases
+    // (e.g. creating a tournament), a single {detail, status} object in
+    // others (e.g. an auth rejection on a REST call) - handle both.
     if (Array.isArray(body.errors) && body.errors.length) {
       return body.errors.map(function (e) {
         return (e && (e.detail || e.title || e.message)) || JSON.stringify(e);
       }).join("; ");
+    }
+    if (body.errors && typeof body.errors === "object") {
+      return body.errors.detail || body.errors.title || body.errors.message || JSON.stringify(body.errors);
     }
     if (body.error && typeof body.error === "object") {
       return body.error.message || body.error.detail || JSON.stringify(body.error);
@@ -13715,10 +13730,18 @@
   function challongeAuthedRequest(method, path, jsonBody) {
     return getChallongeAccessToken().then(function (token) {
       if (!token) return { ok: false, status: 0, body: null, noToken: true };
-      var headers = { "Authorization-Type": "v2", "Authorization": "Bearer " + token };
+      // Challonge's v2.1 API rejects every request (even GET) that
+      // doesn't carry both of these exact header values - confirmed
+      // live: a missing/default Accept (*/*) 406s, and a missing/wrong
+      // Content-Type 415s, regardless of whether there's a body.
+      var headers = {
+        "Authorization-Type": "v2",
+        "Authorization": "Bearer " + token,
+        "Accept": "application/json",
+        "Content-Type": "application/vnd.api+json"
+      };
       var opts = { method: method, headers: headers };
       if (jsonBody !== undefined) {
-        headers["Content-Type"] = "application/vnd.api+json";
         opts.body = JSON.stringify(jsonBody);
       }
       return challongeFetch(CHALLONGE_API_BASE + path, opts).then(function (res) {
