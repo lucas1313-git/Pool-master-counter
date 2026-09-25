@@ -14153,6 +14153,26 @@
     });
   }
 
+  // Attempts to close out the tournament once every pair with real
+  // data has had its score reported. Same "start" state-change
+  // endpoint, different target state. Resolves true on success
+  // (including "already complete", a no-op) or false otherwise - a
+  // false here most likely means Challonge is refusing because a pair
+  // on the pushed roster never actually played each other today (so
+  // their auto-scheduled match has nothing to report and stays open),
+  // which no amount of retrying fixes; the caller surfaces this rather
+  // than silently swallowing it.
+  function finalizeChallongeTournament(tournamentId) {
+    return challongeAuthedRequest("PUT", "/tournaments/" + encodeURIComponent(tournamentId) + "/change_state.json", {
+      data: { type: "TournamentState", attributes: { state: "finalize" } }
+    }).then(function (res) {
+      if (res.ok) return true;
+      var text = challongeErrorTextFromBody(res.body) || "";
+      console.warn("Challonge finalize failed.", text);
+      return /already/i.test(text) || /complete/i.test(text);
+    });
+  }
+
   // Bulk-adds participants by name. Resolves a map of name -> Challonge
   // participant id for whichever ones were actually created (a name
   // that fails to come back just won't have an entry - callers only
@@ -14186,7 +14206,6 @@
     });
   }
 
-  // Reports a final score for one Challonge match. Resolves true/false.
   // Reports a final score for one Challonge match. Confirmed from
   // Challonge's own v2.1 API docs code sample (the user shared it
   // directly) that this bears no resemblance to the v1-style
@@ -14197,21 +14216,24 @@
   // aggregateGamesByPair) rather than Challonge's own per-set detail,
   // so each participant's score_set is just their single win count as
   // a string - Challonge reads that as "one set, this many points."
-  // Resolves true/false.
+  // Pass winnerParticipantId as null/undefined for a genuine tie - per
+  // the match schema, that means tie:true with both sides ranked equal
+  // and advancing:false, rather than skipping the match entirely (a
+  // pair that actually played and tied still has a real result to
+  // report, and an unreported match is exactly what stops Challonge
+  // from letting the tournament close). Resolves true/false.
   function reportChallongeMatchScore(tournamentId, matchId, idA, scoreA, idB, scoreB, winnerParticipantId) {
-    var aWins = String(idA) === String(winnerParticipantId);
+    var isTie = !winnerParticipantId;
+    var aWins = !isTie && String(idA) === String(winnerParticipantId);
     return challongeAuthedRequest("PUT", "/tournaments/" + encodeURIComponent(tournamentId) + "/matches/" + encodeURIComponent(matchId) + ".json", {
       data: {
         type: "match",
         attributes: {
           match: [
-            { participant_id: String(idA), score_set: String(scoreA), rank: aWins ? 1 : 2, advancing: aWins },
-            { participant_id: String(idB), score_set: String(scoreB), rank: aWins ? 2 : 1, advancing: !aWins }
+            { participant_id: String(idA), score_set: String(scoreA), rank: isTie || aWins ? 1 : 2, advancing: aWins },
+            { participant_id: String(idB), score_set: String(scoreB), rank: isTie || !aWins ? 1 : 2, advancing: !isTie && !aWins }
           ],
-          // Always false: callers only ever report a scorablePairs entry
-          // (winsA !== winsB, see pushGamesToChallongeRoundRobin/
-          // pushTournamentToChallonge), a genuine tie is never sent.
-          tie: false
+          tie: isTie
         }
       }
     }).then(function (res) {
@@ -23877,9 +23899,23 @@
               });
               return chain.then(function () {
                 saveTournamentToStorage(t);
-                showToast(failed
-                  ? T("challonge.pushSummaryWithFailures", { added: addedCount, scores: pushed, failed: failed })
-                  : T("challonge.pushSummary", { added: addedCount, scores: pushed }));
+                // See pushGamesToChallongeRoundRobin's attemptFinalize
+                // comment - same reasoning applies to the Tournament
+                // page's own Round Robin push.
+                var finalizeStep = t.challongeTournamentClosed
+                  ? Promise.resolve(true)
+                  : finalizeChallongeTournament(tournamentId).then(function (closed) {
+                      if (closed) {
+                        t.challongeTournamentClosed = true;
+                        saveTournamentToStorage(t);
+                      }
+                      return closed;
+                    });
+                finalizeStep.then(function () {
+                  showToast(failed
+                    ? T("challonge.pushSummaryWithFailures", { added: addedCount, scores: pushed, failed: failed })
+                    : T("challonge.pushSummary", { added: addedCount, scores: pushed }));
+                });
               });
             });
           });
@@ -23975,7 +24011,17 @@
     var agg = aggregateGamesByPair(games);
     if (!agg.individualGames.length) return Promise.resolve({ ok: false, reason: "no-games" });
     var roster = agg.roster;
-    var scorablePairs = agg.pairs.filter(function (p) { return p.winsA !== p.winsB; });
+    // A round robin tournament on Challonge schedules every possible
+    // pair once the full roster is added, whether or not that pair
+    // actually played today - and Challonge won't let a tournament
+    // close while any of its matches are still unscored. A tied pair
+    // (winsA === winsB) DOES have a real result (a tie), and
+    // Challonge's match schema supports reporting one explicitly (a
+    // tie:true attribute) - skipping it here, as this used to, left
+    // that match permanently open for no reason. Every pair that
+    // played at all (agg.pairs only ever contains pairs with at least
+    // one game between them - see aggregateGamesByPair) gets pushed.
+    var scorablePairs = agg.pairs;
 
     var createStep = pushRecord.challongeTournamentId
       ? Promise.resolve(pushRecord.challongeTournamentId)
@@ -24007,7 +24053,30 @@
         var pending = scorablePairs.filter(function (p) {
           return !pushRecord.challongePushedPairKeys[p.a + "|" + p.b];
         });
-        if (!pending.length) return { ok: true, addedCount: addedCount, pushed: 0, failed: 0 };
+
+        // Best-effort close, tried whether or not there was anything
+        // new to push - e.g. a second push after every real pair was
+        // already reported on a prior attempt still needs this, since
+        // that prior attempt may never have gotten to try closing at
+        // all. Tracked on the push record so a tournament confirmed
+        // closed once doesn't get a pointless repeat call every time
+        // after. A pair on the pushed roster that never actually
+        // played each other today still has no data to report -
+        // Challonge may refuse to finalize while that leaves its
+        // auto-scheduled match open, in which case this just fails
+        // gracefully and the caller finds out via the toast, same as
+        // any other push step.
+        function attemptFinalize(pushed, failed) {
+          if (pushRecord.challongeTournamentClosed) {
+            return Promise.resolve({ ok: true, addedCount: addedCount, pushed: pushed, failed: failed, closed: true });
+          }
+          return finalizeChallongeTournament(tournamentId).then(function (closed) {
+            if (closed) pushRecord.challongeTournamentClosed = true;
+            return { ok: true, addedCount: addedCount, pushed: pushed, failed: failed, closed: closed };
+          });
+        }
+
+        if (!pending.length) return attemptFinalize(0, 0);
 
         // Match objects don't exist on Challonge's side until the
         // tournament is started - see startChallongeTournament's own
@@ -24026,7 +24095,7 @@
             });
 
         return startStep.then(function (started) {
-          if (!started) return { ok: true, addedCount: addedCount, pushed: 0, failed: pending.length };
+          if (!started) return { ok: true, addedCount: addedCount, pushed: 0, failed: pending.length, closed: false };
           return fetchChallongeMatches(tournamentId).then(function (challongeMatches) {
             var pushed = 0;
             var failed = 0;
@@ -24046,7 +24115,7 @@
                   failed++;
                   return;
                 }
-                var winnerId = p.winsA > p.winsB ? idA : idB;
+                var winnerId = p.winsA === p.winsB ? null : (p.winsA > p.winsB ? idA : idB);
                 return reportChallongeMatchScore(tournamentId, challongeMatch.id, idA, p.winsA, idB, p.winsB, winnerId).then(function (ok) {
                   if (ok) {
                     pushRecord.challongePushedPairKeys[p.a + "|" + p.b] = true;
@@ -24059,7 +24128,7 @@
             });
             return chain.then(function () {
               onProgress();
-              return { ok: true, addedCount: addedCount, pushed: pushed, failed: failed };
+              return attemptFinalize(pushed, failed);
             });
           });
         });
@@ -24068,15 +24137,23 @@
   }
 
   function emptyChallongePushRecord() {
-    return { challongeTournamentId: null, challongeTournamentStarted: false, challongeParticipantIds: {}, challongePushedPairKeys: {} };
+    return { challongeTournamentId: null, challongeTournamentStarted: false, challongeTournamentClosed: false, challongeParticipantIds: {}, challongePushedPairKeys: {} };
   }
 
   function challongePushResultText(result) {
     if (result.reason === "no-games") return T("challonge.noGamesToday");
     if (!result.ok) return challongePushApiFailedText();
-    return result.failed
+    var summary = result.failed
       ? T("challonge.pushSummaryWithFailures", { added: result.addedCount, scores: result.pushed, failed: result.failed })
       : T("challonge.pushSummary", { added: result.addedCount, scores: result.pushed });
+    // closed is only meaningful once a finalize attempt actually ran
+    // (see attemptFinalize) - undefined means this result predates
+    // that (or came from a path that doesn't track it), not "failed
+    // to close", so it's left unmentioned rather than shown as a
+    // false negative.
+    if (result.closed === true) return summary + " " + T("challonge.tournamentClosed");
+    if (result.closed === false) return summary + " " + T("challonge.tournamentNotClosed");
+    return summary;
   }
 
   function showChallongePushResultToast(result) {
@@ -24107,20 +24184,12 @@
   function renderChallongePushReviewList(dateStr) {
     var data = computeDayReportData(dateStr, true);
     var agg = aggregateGamesByPair(data.games);
-    // Only a pair with a clear overall winner (winsA !== winsB) ever
-    // gets pushed - a pair tied across today's games (e.g. split 1-1)
-    // has no unambiguous result to report and is silently skipped by
-    // the actual push regardless of what's checked here. Filtering the
-    // checklist itself to match avoids showing games a checkbox can't
-    // actually affect.
-    var scorableKeys = {};
-    agg.pairs.forEach(function (p) {
-      if (p.winsA !== p.winsB) scorableKeys[[p.a, p.b].sort().join("|")] = true;
-    });
-    // Also only show a game where BOTH sides have a real, official
-    // FargoRate id linked (not just this app's own local rating) -
-    // an unlinked player has no genuine outside rating to attach the
-    // result to.
+    // Every pair that played at all gets pushed now, tied or not (see
+    // pushGamesToChallongeRoundRobin's own comment on why ties are
+    // reported instead of skipped), so the only thing left to filter
+    // the checklist by is: both sides need a real, official FargoRate
+    // id linked (not just this app's own local rating) - an unlinked
+    // player has no genuine outside rating to attach the result to.
     function hasOfficialFargo(name) {
       return !!getPlayerContact(name).fargoId;
     }
@@ -24128,7 +24197,7 @@
       var winner = (g.winnerNames || [])[0];
       if (!hasOfficialFargo(winner)) return false;
       return (g.opponentNames || []).some(function (o) {
-        return scorableKeys[[winner, o].sort().join("|")] && hasOfficialFargo(o);
+        return hasOfficialFargo(o);
       });
     });
     challongePushReviewGamesList.innerHTML = "";
@@ -24174,12 +24243,18 @@
   function updateChallongePushReviewMatchups() {
     var checkedGames = checkedChallongeReviewGames(challongePushDateInput.value);
     var agg = aggregateGamesByPair(checkedGames);
-    var scorable = agg.pairs.filter(function (p) { return p.winsA !== p.winsB; });
-    if (!scorable.length) {
+    // Every pair that played gets reported now, tied or not (Challonge
+    // supports a genuine tie result - see reportChallongeMatchScore),
+    // so the preview shows both kinds of line rather than silently
+    // dropping ties the way it used to.
+    if (!agg.pairs.length) {
       challongePushReviewMatchups.textContent = T("challonge.reviewNoMatchups");
       return;
     }
-    var lines = scorable.map(function (p) {
+    var lines = agg.pairs.map(function (p) {
+      if (p.winsA === p.winsB) {
+        return T("challonge.reviewMatchupTieLine", { a: p.a, b: p.b, wins: p.winsA });
+      }
       var winner = p.winsA > p.winsB ? p.a : p.b;
       var loser = p.winsA > p.winsB ? p.b : p.a;
       var winnerWins = Math.max(p.winsA, p.winsB);
