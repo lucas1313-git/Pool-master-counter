@@ -4699,6 +4699,7 @@
     state.players.push(player);
     saveState();
     recordPlayerAddedIfNew(name);
+    getOrCreatePlayerLocalId(name);
     clearPlayerRemoved(name);
     reactivatePlayerFromGraveyard(name);
     if (typeof startingRating === "number" && !isNaN(startingRating) && !findRatingKey(name)) {
@@ -11868,6 +11869,16 @@
       fargoRating: patch.fargoRating !== undefined ? patch.fargoRating : (existing.fargoRating != null ? existing.fargoRating : null),
       fargoRobustness: patch.fargoRobustness !== undefined ? patch.fargoRobustness : (existing.fargoRobustness != null ? existing.fargoRobustness : null),
       fargoFetchedAt: patch.fargoFetchedAt !== undefined ? patch.fargoFetchedAt : existing.fargoFetchedAt || 0,
+      // A permanent, opaque id for this name - assigned once (see
+      // getOrCreatePlayerLocalId) and never reassigned, unlike
+      // state.players[i].id (uid(), regenerated every time a name is
+      // added to a roster - see uid's own comment) or the display name
+      // itself (which can change via renamePlayerEverywhere while this
+      // stays the same). A stable anchor for anything that needs to
+      // refer to "this exact player" independent of spelling/renames -
+      // e.g. a future export/sync format, or disambiguating this local
+      // record from another one that happens to share a name.
+      localId: patch.localId !== undefined ? patch.localId : existing.localId || "",
       // Stamped on every write (even one that only touches a single
       // field) so mergeContactsData can tell, per name, which side of an
       // import was actually edited more recently - see its own comment.
@@ -11880,8 +11891,48 @@
     var key = findContactKey(name);
     return key
       ? PLAYER_CONTACTS[key]
-      : { email: "", phone: "", nickname: "", clubTeam: "", reportOptIn: false, notifyMethod: "email", fargoId: "", fargoName: "", fargoLocation: "", fargoRating: null, fargoRobustness: null, fargoFetchedAt: 0 };
+      : { email: "", phone: "", nickname: "", clubTeam: "", reportOptIn: false, notifyMethod: "email", fargoId: "", fargoName: "", fargoLocation: "", fargoRating: null, fargoRobustness: null, fargoFetchedAt: 0, localId: "" };
   }
+
+  // A RFC4122-ish v4 UUID. crypto.randomUUID() covers every modern
+  // browser and the Capacitor iOS WebView this app also ships in, but
+  // falls back to a manual version for anything older rather than
+  // leaving a player with no id at all.
+  function generateUuid() {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
+      var r = (Math.random() * 16) | 0;
+      var v = c === "x" ? r : (r & 0x3) | 0x8;
+      return v.toString(16);
+    });
+  }
+
+  // Returns this name's permanent local id, assigning one on first call
+  // if it doesn't have one yet - covers both a brand new player (see
+  // addPlayer) and backfilling anyone who already existed before this
+  // field did (see backfillPlayerLocalIds, run once at boot).
+  function getOrCreatePlayerLocalId(name) {
+    var existing = getPlayerContact(name).localId;
+    if (existing) return existing;
+    var id = generateUuid();
+    setPlayerContact(name, { localId: id });
+    return id;
+  }
+
+  // One-time boot pass (see loadState-adjacent init below) assigning a
+  // localId to every name this device already knows about - anyone
+  // added before this feature shipped, across every name-keyed store,
+  // not just PLAYER_CONTACTS (a player with ratings/stats but who never
+  // got a contact field edited has no PLAYER_CONTACTS entry yet at all).
+  function backfillPlayerLocalIds() {
+    var names = {};
+    Object.keys(PLAYER_STATS).forEach(function (n) { names[n] = true; });
+    Object.keys(PLAYER_RATINGS).forEach(function (n) { names[n] = true; });
+    Object.keys(PLAYER_CONTACTS).forEach(function (n) { names[n] = true; });
+    Object.keys(PLAYER_ADDED).forEach(function (n) { names[n] = true; });
+    Object.keys(names).forEach(function (n) { getOrCreatePlayerLocalId(n); });
+  }
+  backfillPlayerLocalIds();
 
   // Clears just the Fargo linkage for a player, leaving every other
   // contact field (email, phone, club team, ...) untouched - the
