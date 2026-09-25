@@ -23845,7 +23845,16 @@
           var pending = t.matches.filter(function (m) {
             return m.winner && m.b && !t.challongePushedMatchIds[m.id];
           });
-          if (!pending.length) {
+          // A match Challonge scheduled that this bracket never actually
+          // played out (e.g. the tournament was abandoned or pushed
+          // before finishing) has no real result to report - filled
+          // with a neutral 1-1 tie purely so the tournament can close,
+          // same as pushGamesToChallongeRoundRobin does for a roster
+          // pair that never played each other.
+          var unplayed = t.matches.filter(function (m) {
+            return m.b && !m.winner && !t.challongePushedMatchIds[m.id];
+          });
+          if (!pending.length && !unplayed.length) {
             showToast(T("challonge.rosterPushed", { count: addedCount }));
             return;
           }
@@ -23871,7 +23880,7 @@
               var pushed = 0;
               var failed = 0;
               var chain = Promise.resolve();
-              pending.forEach(function (match) {
+              function reportMatch(match, scoreA, scoreB, winnerId) {
                 chain = chain.then(function () {
                   var idA = t.challongeParticipantIds[match.a];
                   var idB = t.challongeParticipantIds[match.b];
@@ -23886,8 +23895,7 @@
                     failed++;
                     return;
                   }
-                  var winnerId = match.winner === match.a ? idA : idB;
-                  return reportChallongeMatchScore(tournamentId, challongeMatch.id, idA, match.scoreA, idB, match.scoreB, winnerId).then(function (ok) {
+                  return reportChallongeMatchScore(tournamentId, challongeMatch.id, idA, scoreA, idB, scoreB, winnerId).then(function (ok) {
                     if (ok) {
                       t.challongePushedMatchIds[match.id] = true;
                       pushed++;
@@ -23896,6 +23904,15 @@
                     }
                   });
                 });
+              }
+              pending.forEach(function (match) {
+                var idA = t.challongeParticipantIds[match.a];
+                var idB = t.challongeParticipantIds[match.b];
+                var winnerId = match.winner === match.a ? idA : idB;
+                reportMatch(match, match.scoreA, match.scoreB, winnerId);
+              });
+              unplayed.forEach(function (match) {
+                reportMatch(match, 1, 1, null);
               });
               return chain.then(function () {
                 saveTournamentToStorage(t);
@@ -24054,18 +24071,34 @@
           return !pushRecord.challongePushedPairKeys[p.a + "|" + p.b];
         });
 
+        // Round robin schedules a match for every roster pair, but a
+        // pair can end up on the roster without ever actually playing
+        // each other today (common once there are 3+ people - each
+        // only crosses paths with some of the others). There's no real
+        // result to report for a match that never happened, so it's
+        // filled with a neutral 1-1 tie purely to let the tournament
+        // close - not a claim the pair actually played.
+        var playedKeys = {};
+        agg.pairs.forEach(function (p) {
+          playedKeys[[p.a, p.b].sort().join("|")] = true;
+        });
+        var missingPairs = [];
+        for (var i = 0; i < roster.length; i++) {
+          for (var j = i + 1; j < roster.length; j++) {
+            var key = [roster[i], roster[j]].sort().join("|");
+            if (!playedKeys[key] && !pushRecord.challongePushedPairKeys[key]) {
+              missingPairs.push({ a: roster[i], b: roster[j] });
+            }
+          }
+        }
+
         // Best-effort close, tried whether or not there was anything
-        // new to push - e.g. a second push after every real pair was
+        // new to push - e.g. a second push after every pair was
         // already reported on a prior attempt still needs this, since
         // that prior attempt may never have gotten to try closing at
         // all. Tracked on the push record so a tournament confirmed
         // closed once doesn't get a pointless repeat call every time
-        // after. A pair on the pushed roster that never actually
-        // played each other today still has no data to report -
-        // Challonge may refuse to finalize while that leaves its
-        // auto-scheduled match open, in which case this just fails
-        // gracefully and the caller finds out via the toast, same as
-        // any other push step.
+        // after.
         function attemptFinalize(pushed, failed) {
           if (pushRecord.challongeTournamentClosed) {
             return Promise.resolve({ ok: true, addedCount: addedCount, pushed: pushed, failed: failed, closed: true });
@@ -24076,7 +24109,7 @@
           });
         }
 
-        if (!pending.length) return attemptFinalize(0, 0);
+        if (!pending.length && !missingPairs.length) return attemptFinalize(0, 0);
 
         // Match objects don't exist on Challonge's side until the
         // tournament is started - see startChallongeTournament's own
@@ -24095,12 +24128,12 @@
             });
 
         return startStep.then(function (started) {
-          if (!started) return { ok: true, addedCount: addedCount, pushed: 0, failed: pending.length, closed: false };
+          if (!started) return { ok: true, addedCount: addedCount, pushed: 0, failed: pending.length + missingPairs.length, closed: false };
           return fetchChallongeMatches(tournamentId).then(function (challongeMatches) {
             var pushed = 0;
             var failed = 0;
             var chain = Promise.resolve();
-            pending.forEach(function (p) {
+            function reportPair(p, scoreA, scoreB, winnerId) {
               chain = chain.then(function () {
                 var idA = pushRecord.challongeParticipantIds[p.a];
                 var idB = pushRecord.challongeParticipantIds[p.b];
@@ -24115,8 +24148,7 @@
                   failed++;
                   return;
                 }
-                var winnerId = p.winsA === p.winsB ? null : (p.winsA > p.winsB ? idA : idB);
-                return reportChallongeMatchScore(tournamentId, challongeMatch.id, idA, p.winsA, idB, p.winsB, winnerId).then(function (ok) {
+                return reportChallongeMatchScore(tournamentId, challongeMatch.id, idA, scoreA, idB, scoreB, winnerId).then(function (ok) {
                   if (ok) {
                     pushRecord.challongePushedPairKeys[p.a + "|" + p.b] = true;
                     pushed++;
@@ -24125,6 +24157,13 @@
                   }
                 });
               });
+            }
+            pending.forEach(function (p) {
+              var winnerId = p.winsA === p.winsB ? null : (p.winsA > p.winsB ? pushRecord.challongeParticipantIds[p.a] : pushRecord.challongeParticipantIds[p.b]);
+              reportPair(p, p.winsA, p.winsB, winnerId);
+            });
+            missingPairs.forEach(function (p) {
+              reportPair(p, 1, 1, null);
             });
             return chain.then(function () {
               onProgress();
@@ -24183,31 +24222,15 @@
 
   function renderChallongePushReviewList(dateStr) {
     var data = computeDayReportData(dateStr, true);
-    var agg = aggregateGamesByPair(data.games);
-    // Every pair that played at all gets pushed now, tied or not (see
-    // pushGamesToChallongeRoundRobin's own comment on why ties are
-    // reported instead of skipped), so the only thing left to filter
-    // the checklist by is: both sides need a real, official FargoRate
-    // id linked (not just this app's own local rating) - an unlinked
-    // player has no genuine outside rating to attach the result to.
-    function hasOfficialFargo(name) {
-      return !!getPlayerContact(name).fargoId;
-    }
-    var pushableGames = agg.individualGames.filter(function (g) {
-      var winner = (g.winnerNames || [])[0];
-      if (!hasOfficialFargo(winner)) return false;
-      return (g.opponentNames || []).some(function (o) {
-        return hasOfficialFargo(o);
-      });
-    });
+    var agg = aggregateGamesByPair(standaloneGamesOnly(data.games));
     challongePushReviewGamesList.innerHTML = "";
-    if (!pushableGames.length) {
+    if (!agg.individualGames.length) {
       var hint = document.createElement("li");
       hint.className = "empty-hint";
       hint.textContent = T("challonge.reviewNoGames");
       challongePushReviewGamesList.appendChild(hint);
     } else {
-      pushableGames.forEach(function (g) {
+      agg.individualGames.forEach(function (g) {
         var li = document.createElement("li");
         var label = document.createElement("label");
         var checkbox = document.createElement("input");
@@ -24226,13 +24249,28 @@
         challongePushReviewGamesList.appendChild(li);
       });
     }
-    challongePushReviewSummary.textContent = T("challonge.reviewSummary", { count: pushableGames.length, date: dateStr });
+    challongePushReviewSummary.textContent = T("challonge.reviewSummary", { count: agg.individualGames.length, date: dateStr });
     updateChallongePushReviewMatchups();
+  }
+
+  // Race-to-N sessions are pushed to Challonge as their own tournament
+  // the moment they complete (see pushRaceToChallonge, hooked into
+  // celebrateTournamentWin) - a game's raceTarget reflects the race
+  // setting active in the session it was played in (1 means "Single
+  // game"/no race was running; > 1 means an active Race to N), so
+  // filtering those out here keeps the daily push to exactly the
+  // informal, free-play games that aren't already covered by their own
+  // race tournament, instead of double-pushing (and double-counting)
+  // the same results under two different Challonge tournaments.
+  function standaloneGamesOnly(games) {
+    return (games || []).filter(function (g) {
+      return !g.raceTarget || g.raceTarget <= 1;
+    });
   }
 
   function checkedChallongeReviewGames(dateStr) {
     var data = computeDayReportData(dateStr, true);
-    var agg = aggregateGamesByPair(data.games);
+    var agg = aggregateGamesByPair(standaloneGamesOnly(data.games));
     var checkedTs = {};
     Array.prototype.forEach.call(challongePushReviewGamesList.querySelectorAll('input[type="checkbox"]'), function (cb) {
       if (cb.checked) checkedTs[cb.value] = true;
