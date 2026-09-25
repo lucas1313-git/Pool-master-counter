@@ -23911,7 +23911,7 @@
       }
       var dayPush = CHALLONGE_DAY_PUSHES[dateStr] || emptyChallongePushRecord();
       CHALLONGE_DAY_PUSHES[dateStr] = dayPush;
-      pushGamesToChallongeRoundRobin(
+      return pushGamesToChallongeRoundRobin(
         checkedGames,
         T("challonge.dayTournamentName", { date: dateStr }),
         dayPush,
@@ -23922,6 +23922,15 @@
         challongePushReviewStatus.textContent = text;
         showToast(text);
       });
+    }).catch(function (e) {
+      // Without this, any unexpected failure anywhere in the chain
+      // above (a thrown exception, not just an HTTP error - those
+      // already resolve to {ok:false} and are handled above) leaves
+      // the button disabled and the status stuck on "Pushing..."
+      // forever, with no way to tell the push actually failed.
+      console.warn("Challonge push failed unexpectedly.", e);
+      btnChallongePushConfirm.disabled = false;
+      challongePushReviewStatus.textContent = T("challonge.pushFailedApi");
     });
   }
 
@@ -23962,6 +23971,8 @@
             : T("challonge.pushSummary", { added: result.addedCount, scores: result.pushed }));
         }
       });
+    }).catch(function (e) {
+      console.warn("Automatic race push to Challonge failed unexpectedly.", e);
     });
   }
 
@@ -25759,6 +25770,10 @@
     btnTournamentPushChallonge.disabled = true;
     pushTournamentToChallonge(TOURNAMENT).then(function () {
       btnTournamentPushChallonge.disabled = false;
+    }).catch(function (e) {
+      console.warn("Challonge tournament push failed unexpectedly.", e);
+      btnTournamentPushChallonge.disabled = false;
+      showToast(T("challonge.pushFailedApi"));
     });
   });
 
