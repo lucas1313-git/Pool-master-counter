@@ -1977,6 +1977,14 @@
   var challongeClientIdInput = document.getElementById("challonge-client-id-input");
   var challongeClientSecretInput = document.getElementById("challonge-client-secret-input");
   var btnDayReportPushChallonge = document.getElementById("btn-day-report-push-challonge");
+  var challongePushReviewOverlay = document.getElementById("challonge-push-review-overlay");
+  var challongePushDateInput = document.getElementById("challonge-push-date-input");
+  var challongePushReviewSummary = document.getElementById("challonge-push-review-summary");
+  var challongePushReviewGamesList = document.getElementById("challonge-push-review-games-list");
+  var challongePushReviewMatchups = document.getElementById("challonge-push-review-matchups");
+  var challongePushReviewStatus = document.getElementById("challonge-push-review-status");
+  var btnChallongePushConfirm = document.getElementById("btn-challonge-push-confirm");
+  var btnChallongePushReviewClose = document.getElementById("btn-challonge-push-review-close");
   var tournamentChampionBanner = document.getElementById("tournament-champion-banner");
   var tournamentCurrentMatchPanel = document.getElementById("tournament-current-match-panel");
   var tournamentReadyList = document.getElementById("tournament-ready-list");
@@ -23372,12 +23380,17 @@
   // changes pushRecord, so the caller can persist it incrementally
   // (matches a network failure partway through don't lose what already
   // succeeded).
-  function pushGamesToChallongeRoundRobin(games, tournamentName, pushRecord, onProgress) {
+  // Pure, side-effect-free grouping of a flat game list into "who's on
+  // the roster" and "every pair who played, with each side's win tally"
+  // - shared by the actual push (pushGamesToChallongeRoundRobin) and the
+  // review modal's live preview (updateChallongePushReviewMatchups), so
+  // what you approve in the modal is exactly what gets computed for the
+  // real push - same filter (individual, non-team, clean 1-vs-1 games
+  // only), same aggregation, same code path either way.
+  function aggregateGamesByPair(games) {
     var individualGames = games.filter(function (g) {
       return !g.isTeam && g.winnerNames && g.winnerNames.length === 1 && g.opponentNames && g.opponentNames.length === 1;
     });
-    if (!individualGames.length) return Promise.resolve({ ok: false, reason: "no-games" });
-
     var rosterSet = {};
     var pairs = {};
     individualGames.forEach(function (g) {
@@ -23391,10 +23404,18 @@
       if (w === pairs[key].a) pairs[key].winsA++;
       else pairs[key].winsB++;
     });
-    var roster = Object.keys(rosterSet);
-    var scorablePairs = Object.keys(pairs)
-      .map(function (k) { return pairs[k]; })
-      .filter(function (p) { return p.winsA !== p.winsB; });
+    return {
+      individualGames: individualGames,
+      roster: Object.keys(rosterSet),
+      pairs: Object.keys(pairs).map(function (k) { return pairs[k]; })
+    };
+  }
+
+  function pushGamesToChallongeRoundRobin(games, tournamentName, pushRecord, onProgress) {
+    var agg = aggregateGamesByPair(games);
+    if (!agg.individualGames.length) return Promise.resolve({ ok: false, reason: "no-games" });
+    var roster = agg.roster;
+    var scorablePairs = agg.pairs.filter(function (p) { return p.winsA !== p.winsB; });
 
     var createStep = pushRecord.challongeTournamentId
       ? Promise.resolve(pushRecord.challongeTournamentId)
@@ -23465,36 +23486,133 @@
     return { challongeTournamentId: null, challongeParticipantIds: {}, challongePushedPairKeys: {} };
   }
 
-  function showChallongePushResultToast(result) {
-    if (result.reason === "no-games") { showToast(T("challonge.noGamesToday")); return; }
-    if (!result.ok) { showToast(T("challonge.pushFailed")); return; }
-    showToast(result.failed
+  function challongePushResultText(result) {
+    if (result.reason === "no-games") return T("challonge.noGamesToday");
+    if (!result.ok) return T("challonge.pushFailed");
+    return result.failed
       ? T("challonge.pushSummaryWithFailures", { added: result.addedCount, scores: result.pushed, failed: result.failed })
-      : T("challonge.pushSummary", { added: result.addedCount, scores: result.pushed }));
+      : T("challonge.pushSummary", { added: result.addedCount, scores: result.pushed });
   }
 
-  // Pushes a whole day's regular (non-tournament) play to Challonge -
-  // see pushGamesToChallongeRoundRobin for the actual push mechanics.
-  function pushDayReportToChallonge(dateStr) {
+  function showChallongePushResultToast(result) {
+    showToast(challongePushResultText(result));
+  }
+
+  // --- Review-before-push modal (Publish Daily Report's "Push to
+  // Challonge" button) ---------------------------------------------
+  //
+  // Opens straight to today by default but the date is a plain editable
+  // field - covers "push an older session, I sometimes do the report
+  // later" without a separate flow. Every individual game for the
+  // chosen date is listed with a checkbox (checked by default);
+  // unchecking one live-recomputes the matchup preview below via the
+  // same aggregateGamesByPair used for the real push, so what's shown
+  // is exactly what would be sent - nothing is pushed until Confirm.
+  function openChallongePushReviewModal() {
+    challongePushDateInput.value = todayDateStr();
+    challongePushReviewStatus.textContent = "";
+    renderChallongePushReviewList(todayDateStr());
+    challongePushReviewOverlay.classList.remove("hidden");
+  }
+
+  function closeChallongePushReviewModal() {
+    challongePushReviewOverlay.classList.add("hidden");
+  }
+
+  function renderChallongePushReviewList(dateStr) {
+    var data = computeDayReportData(dateStr, true);
+    var agg = aggregateGamesByPair(data.games);
+    challongePushReviewGamesList.innerHTML = "";
+    if (!agg.individualGames.length) {
+      var hint = document.createElement("li");
+      hint.className = "empty-hint";
+      hint.textContent = T("challonge.reviewNoGames");
+      challongePushReviewGamesList.appendChild(hint);
+    } else {
+      agg.individualGames.forEach(function (g) {
+        var li = document.createElement("li");
+        var label = document.createElement("label");
+        var checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = true;
+        checkbox.value = g.ts;
+        var span = document.createElement("span");
+        var winners = joinNamesForReport(g.winnerNames || []);
+        var losers = joinNamesForReport(g.opponentNames || []);
+        var time = formatReportGameTime(g.ts);
+        span.textContent = (time ? time + " — " : "") + winners + " won " + g.gameLabel + (losers ? " against " + losers : "");
+        checkbox.addEventListener("change", updateChallongePushReviewMatchups);
+        label.appendChild(checkbox);
+        label.appendChild(span);
+        li.appendChild(label);
+        challongePushReviewGamesList.appendChild(li);
+      });
+    }
+    challongePushReviewSummary.textContent = T("challonge.reviewSummary", { count: agg.individualGames.length, date: dateStr });
+    updateChallongePushReviewMatchups();
+  }
+
+  function checkedChallongeReviewGames(dateStr) {
+    var data = computeDayReportData(dateStr, true);
+    var agg = aggregateGamesByPair(data.games);
+    var checkedTs = {};
+    Array.prototype.forEach.call(challongePushReviewGamesList.querySelectorAll('input[type="checkbox"]'), function (cb) {
+      if (cb.checked) checkedTs[cb.value] = true;
+    });
+    return agg.individualGames.filter(function (g) { return checkedTs[g.ts]; });
+  }
+
+  function updateChallongePushReviewMatchups() {
+    var checkedGames = checkedChallongeReviewGames(challongePushDateInput.value);
+    var agg = aggregateGamesByPair(checkedGames);
+    var scorable = agg.pairs.filter(function (p) { return p.winsA !== p.winsB; });
+    if (!scorable.length) {
+      challongePushReviewMatchups.textContent = T("challonge.reviewNoMatchups");
+      return;
+    }
+    var lines = scorable.map(function (p) {
+      var winner = p.winsA > p.winsB ? p.a : p.b;
+      var loser = p.winsA > p.winsB ? p.b : p.a;
+      var winnerWins = Math.max(p.winsA, p.winsB);
+      var loserWins = Math.min(p.winsA, p.winsB);
+      return T("challonge.reviewMatchupLine", { winner: winner, loser: loser, winnerWins: winnerWins, loserWins: loserWins });
+    });
+    challongePushReviewMatchups.textContent = lines.join(" · ");
+  }
+
+  function confirmChallongePushFromReview() {
+    var dateStr = challongePushDateInput.value;
+    var checkedGames = checkedChallongeReviewGames(dateStr);
+    if (!checkedGames.length) {
+      challongePushReviewStatus.textContent = T("challonge.noGamesToday");
+      return;
+    }
     var hasCredentials = !!(loadChallongeClientId() && loadChallongeClientSecret());
     if (!hasCredentials) {
-      showToast(T("challonge.notConnected"));
-      return Promise.resolve();
+      challongePushReviewStatus.textContent = T("challonge.notConnected");
+      return;
     }
-    return getChallongeAccessToken().then(function (token) {
+    btnChallongePushConfirm.disabled = true;
+    challongePushReviewStatus.textContent = T("challonge.pushing");
+    getChallongeAccessToken().then(function (token) {
       if (!token) {
-        showToast(T("challonge.pushFailed"));
+        btnChallongePushConfirm.disabled = false;
+        challongePushReviewStatus.textContent = T("challonge.pushFailed");
         return;
       }
-      var data = computeDayReportData(dateStr, true);
       var dayPush = CHALLONGE_DAY_PUSHES[dateStr] || emptyChallongePushRecord();
       CHALLONGE_DAY_PUSHES[dateStr] = dayPush;
-      return pushGamesToChallongeRoundRobin(
-        data.games,
+      pushGamesToChallongeRoundRobin(
+        checkedGames,
         T("challonge.dayTournamentName", { date: dateStr }),
         dayPush,
         function () { saveChallongeDayPushes(CHALLONGE_DAY_PUSHES); }
-      ).then(showChallongePushResultToast);
+      ).then(function (result) {
+        btnChallongePushConfirm.disabled = false;
+        var text = challongePushResultText(result);
+        challongePushReviewStatus.textContent = text;
+        showToast(text);
+      });
     });
   }
 
@@ -25314,11 +25432,14 @@
     });
   });
 
-  btnDayReportPushChallonge.addEventListener("click", function () {
-    btnDayReportPushChallonge.disabled = true;
-    pushDayReportToChallonge(todayDateStr()).then(function () {
-      btnDayReportPushChallonge.disabled = false;
-    });
+  btnDayReportPushChallonge.addEventListener("click", openChallongePushReviewModal);
+  challongePushDateInput.addEventListener("change", function () {
+    renderChallongePushReviewList(challongePushDateInput.value);
+  });
+  btnChallongePushConfirm.addEventListener("click", confirmChallongePushFromReview);
+  btnChallongePushReviewClose.addEventListener("click", closeChallongePushReviewModal);
+  challongePushReviewOverlay.addEventListener("click", function (e) {
+    if (e.target === challongePushReviewOverlay) closeChallongePushReviewModal();
   });
 
   btnDriveFolderOpen.addEventListener("click", function () {
