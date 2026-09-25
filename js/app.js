@@ -23969,10 +23969,18 @@
     agg.pairs.forEach(function (p) {
       if (p.winsA !== p.winsB) scorableKeys[[p.a, p.b].sort().join("|")] = true;
     });
+    // Also only show a game where BOTH sides have a real, official
+    // FargoRate id linked (not just this app's own local rating) -
+    // an unlinked player has no genuine outside rating to attach the
+    // result to.
+    function hasOfficialFargo(name) {
+      return !!getPlayerContact(name).fargoId;
+    }
     var pushableGames = agg.individualGames.filter(function (g) {
       var winner = (g.winnerNames || [])[0];
+      if (!hasOfficialFargo(winner)) return false;
       return (g.opponentNames || []).some(function (o) {
-        return scorableKeys[[winner, o].sort().join("|")];
+        return scorableKeys[[winner, o].sort().join("|")] && hasOfficialFargo(o);
       });
     });
     challongePushReviewGamesList.innerHTML = "";
