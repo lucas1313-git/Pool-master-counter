@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260924d">
+<link rel="stylesheet" href="css/style.css?v=20260925a">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -341,6 +341,23 @@
     </div>
   </section>
 
+  <section class="panel collapsible-panel collapsed" id="challonge-panel">
+    <button type="button" class="panel-toggle" id="btn-toggle-challonge-panel" aria-expanded="false" aria-controls="challonge-panel-body">
+      <h2 data-i18n="challonge.heading">☁️ Challonge</h2>
+      <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+    </button>
+    <p class="panel-summary" id="challonge-panel-summary" data-i18n="challonge.summaryNotConnected">Not connected</p>
+    <div class="panel-body" id="challonge-panel-body">
+      <p class="player-stats-note" data-i18n="challonge.introGeneral">Push today's report or a tournament to Challonge — rosters always, and match scores too wherever they can be matched up reliably (Round Robin tournaments, and any pair who played each other today — see why others don't in Help). Needs a free Challonge developer app: sign up at connect.challonge.com to get a client ID and secret, no login required from this app.</p>
+      <div class="row">
+        <input type="text" id="challonge-client-id-input" data-i18n-placeholder="challonge.clientIdPlaceholder" placeholder="Challonge client ID" autocomplete="off">
+      </div>
+      <div class="row">
+        <input type="password" id="challonge-client-secret-input" data-i18n-placeholder="challonge.clientSecretPlaceholder" placeholder="Challonge client secret" autocomplete="off">
+      </div>
+    </div>
+  </section>
+
   <section class="panel collapsible-panel collapsed" id="day-notes-panel">
     <button type="button" class="panel-toggle" id="btn-toggle-day-notes-panel" aria-expanded="false" aria-controls="day-notes-panel-body">
       <h2 data-i18n="dayNotes.heading">Publish Daily Report</h2>
@@ -375,6 +392,7 @@
         <button type="button" id="btn-day-report-csv" class="btn btn-ghost" data-i18n="dayNotes.exportCsv">📊 Export as Excel (CSV)</button>
         <button type="button" id="btn-day-report-print" class="btn btn-ghost" data-i18n="dayNotes.printReport">🖨️ Print Report</button>
         <button type="button" id="btn-day-report-colorful" class="btn btn-ghost" data-i18n="dayNotes.colorfulReport">🎨 Colorful Report</button>
+        <button type="button" id="btn-day-report-push-challonge" class="btn btn-ghost" data-i18n="challonge.pushTodayButton">☁️ Push Today to Challonge</button>
       </div>
       <p class="player-stats-note" id="day-report-recipients-line"></p>
     </div>
@@ -1607,22 +1625,7 @@
     <button type="button" id="btn-open-help-tournament" class="btn btn-ghost" data-i18n="header.help">❓ Help</button>
   </header>
 
-  <section class="panel collapsible-panel collapsed" id="challonge-panel">
-    <button type="button" class="panel-toggle" id="btn-toggle-challonge-panel" aria-expanded="false" aria-controls="challonge-panel-body">
-      <h2 data-i18n="challonge.heading">☁️ Challonge</h2>
-      <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
-    </button>
-    <p class="panel-summary" id="challonge-panel-summary" data-i18n="challonge.summaryNotConnected">Not connected</p>
-    <div class="panel-body" id="challonge-panel-body">
-      <p class="player-stats-note" data-i18n="challonge.intro">Push this tournament's roster to Challonge, and match scores too for Round Robin (Single/Double Elimination and Swiss only get their roster pushed — see why in Help). Needs a free Challonge developer app: sign up at connect.challonge.com to get a client ID and secret, no login required from this app.</p>
-      <div class="row">
-        <input type="text" id="challonge-client-id-input" data-i18n-placeholder="challonge.clientIdPlaceholder" placeholder="Challonge client ID" autocomplete="off">
-      </div>
-      <div class="row">
-        <input type="password" id="challonge-client-secret-input" data-i18n-placeholder="challonge.clientSecretPlaceholder" placeholder="Challonge client secret" autocomplete="off">
-      </div>
-    </div>
-  </section>
+  <p class="player-stats-note tournament-challonge-status-line" id="tournament-challonge-status-line"></p>
 
   <section class="panel" id="tournament-setup-panel">
     <h2 data-i18n="tournament.newHeading">New Elimination Tournament</h2>
@@ -2116,6 +2119,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260924d"></script>
+<script src="js/app.js?v=20260925a"></script>
 </body>
 </html>
