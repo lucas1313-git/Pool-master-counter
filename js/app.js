@@ -12002,6 +12002,33 @@
       savePlayerStatsToStorage(PLAYER_STATS);
     }
 
+    // Every player's archived sessions are their OWN independent
+    // snapshot of games they were involved in (see
+    // exportAllPlayerStats), so the same real game exists as a
+    // separate copy inside every OTHER participant's PLAYER_STATS
+    // entry too - moving oldName's own session list above doesn't
+    // touch what an opponent's history says about who they played.
+    // Without this, a past report/push for an old date keeps citing
+    // the old name as an opponent forever, even after everything else
+    // about this player has been renamed.
+    Object.keys(PLAYER_STATS).forEach(function (key) {
+      (PLAYER_STATS[key].sessions || []).forEach(function (s) {
+        (s.games || []).forEach(function (g) {
+          if (Array.isArray(g.winnerNames)) {
+            g.winnerNames = g.winnerNames.map(function (n) {
+              return normalizeNameKey(n) === oldKey ? newName : n;
+            });
+          }
+          if (Array.isArray(g.opponentNames)) {
+            g.opponentNames = g.opponentNames.map(function (n) {
+              return normalizeNameKey(n) === oldKey ? newName : n;
+            });
+          }
+        });
+      });
+    });
+    savePlayerStatsToStorage(PLAYER_STATS);
+
     var ratingKey = findRatingKey(oldName);
     if (ratingKey) {
       PLAYER_RATINGS[newName] = PLAYER_RATINGS[ratingKey];
@@ -12042,6 +12069,23 @@
     state.players.forEach(function (p) {
       if (normalizeNameKey(p.name) === oldKey) p.name = newName;
     });
+
+    // Today's still-live game log needs the same treatment as the
+    // archived sessions above, or a same-day report/push made right
+    // after a rename would still show the old name as who was played.
+    (state.gameHistory || []).forEach(function (g) {
+      if (Array.isArray(g.winnerNames)) {
+        g.winnerNames = g.winnerNames.map(function (n) {
+          return normalizeNameKey(n) === oldKey ? newName : n;
+        });
+      }
+      if (Array.isArray(g.opponentNames)) {
+        g.opponentNames = g.opponentNames.map(function (n) {
+          return normalizeNameKey(n) === oldKey ? newName : n;
+        });
+      }
+    });
+
     saveState();
 
     return "";
@@ -12082,6 +12126,35 @@
       PLAYER_STATS[target] = { name: target, sessions: mergeSessionLists(targetSessions, sourceSessions) };
       savePlayerStatsToStorage(PLAYER_STATS);
     }
+
+    // Every player's archived sessions are their OWN independent
+    // snapshot of games they were involved in (see
+    // exportAllPlayerStats, which runs computeLiveSessionForPlayer
+    // separately per player) - the same real game exists as a
+    // separate copy inside both participants' PLAYER_STATS entries,
+    // not one shared record. Merging only source's/target's own
+    // sessions above leaves every OTHER opponent's archived history
+    // still citing the old name forever (a past report/push for an
+    // old date keeps reading "Luc" as who they played, even though
+    // "Luc" no longer exists as a player). Walk every player's stored
+    // games and rename there too.
+    Object.keys(PLAYER_STATS).forEach(function (key) {
+      (PLAYER_STATS[key].sessions || []).forEach(function (s) {
+        (s.games || []).forEach(function (g) {
+          if (Array.isArray(g.winnerNames)) {
+            g.winnerNames = g.winnerNames.map(function (n) {
+              return normalizeNameKey(n) === sourceKey ? target : n;
+            });
+          }
+          if (Array.isArray(g.opponentNames)) {
+            g.opponentNames = g.opponentNames.map(function (n) {
+              return normalizeNameKey(n) === sourceKey ? target : n;
+            });
+          }
+        });
+      });
+    });
+    savePlayerStatsToStorage(PLAYER_STATS);
 
     var sourceRatingKey = findRatingKey(sourceName);
     var targetRatingKey = findRatingKey(target);
