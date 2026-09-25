@@ -23389,20 +23389,21 @@
   // only), same aggregation, same code path either way.
   function aggregateGamesByPair(games) {
     var individualGames = games.filter(function (g) {
-      return !g.isTeam && g.winnerNames && g.winnerNames.length === 1 && g.opponentNames && g.opponentNames.length === 1;
+      return !g.isTeam && g.winnerNames && g.winnerNames.length === 1 && g.opponentNames && g.opponentNames.length >= 1;
     });
     var rosterSet = {};
     var pairs = {};
     individualGames.forEach(function (g) {
       var w = g.winnerNames[0];
-      var o = g.opponentNames[0];
       rosterSet[w] = true;
-      rosterSet[o] = true;
-      var sorted = [w, o].sort();
-      var key = sorted.join("|");
-      if (!pairs[key]) pairs[key] = { a: sorted[0], b: sorted[1], winsA: 0, winsB: 0 };
-      if (w === pairs[key].a) pairs[key].winsA++;
-      else pairs[key].winsB++;
+      g.opponentNames.forEach(function (o) {
+        rosterSet[o] = true;
+        var sorted = [w, o].sort();
+        var key = sorted.join("|");
+        if (!pairs[key]) pairs[key] = { a: sorted[0], b: sorted[1], winsA: 0, winsB: 0 };
+        if (w === pairs[key].a) pairs[key].winsA++;
+        else pairs[key].winsB++;
+      });
     });
     return {
       individualGames: individualGames,
