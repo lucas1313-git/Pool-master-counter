@@ -1517,6 +1517,10 @@
     </div>
     <p class="player-stats-note" data-i18n="mergePlayers.hint">Check exactly two players who are really the same person (e.g. after a name got renamed into a new entry by mistake) to combine their games, rating, and contact info into one.</p>
     <div class="row">
+      <button type="button" id="btn-contact-sheet-repair-history" class="btn btn-ghost" data-i18n="mergePlayers.repairButton">🩹 Repair Old Name in History</button>
+    </div>
+    <p class="player-stats-note" data-i18n="mergePlayers.repairHint">If a merge or rename happened before this got fixed, an opponent's own past games can still show the old name. Enter that old name (it doesn't need to exist as a player anymore) and which current player it should become, and every past game mentioning it will be corrected.</p>
+    <div class="row">
       <button type="button" id="btn-contact-sheet-graveyard-selected" class="btn btn-danger" data-i18n="contactSheet.graveyardSelected">🗑️ Send Selected to Graveyard</button>
     </div>
     <div class="row">
@@ -2147,6 +2151,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260925t"></script>
+<script src="js/app.js?v=20260925u"></script>
 </body>
 </html>
