@@ -1971,6 +1971,10 @@
   var btnTournamentStart = document.getElementById("btn-tournament-start");
   var btnTournamentAbandon = document.getElementById("btn-tournament-abandon");
   var btnTournamentPrint = document.getElementById("btn-tournament-print");
+  var btnTournamentPushChallonge = document.getElementById("btn-tournament-push-challonge");
+  var challongePanelSummary = document.getElementById("challonge-panel-summary");
+  var challongeClientIdInput = document.getElementById("challonge-client-id-input");
+  var challongeClientSecretInput = document.getElementById("challonge-client-secret-input");
   var tournamentChampionBanner = document.getElementById("tournament-champion-banner");
   var tournamentCurrentMatchPanel = document.getElementById("tournament-current-match-panel");
   var tournamentReadyList = document.getElementById("tournament-ready-list");
@@ -13468,6 +13472,187 @@
       .catch(function () { return null; });
   }
 
+  // ---------------------------------------------------------------------
+  // Challonge integration (optional) - pushes a tournament's roster
+  // (every format) and match scores (Round Robin and Swiss only - see
+  // pushTournamentToChallonge's own comment) to a real Challonge
+  // tournament. Challonge has a genuine, self-serve REST API
+  // (api.challonge.com/v2.1); the user provides their own client id and
+  // secret from a free developer app registered at connect.challonge.com,
+  // stored locally exactly like the existing Drive API key (see
+  // loadDriveApiKey below) - plain text in localStorage, never sent
+  // anywhere but Challonge's own token endpoint. The OAuth "client
+  // credentials" grant works with no browser/redirect step - a plain
+  // server-to-server token exchange - so this runs entirely from the app.
+  // ---------------------------------------------------------------------
+
+  var CHALLONGE_CLIENT_ID_KEY = "poolMasterCounter.challongeClientId.v1";
+  var CHALLONGE_CLIENT_SECRET_KEY = "poolMasterCounter.challongeClientSecret.v1";
+  var CHALLONGE_TOKEN_KEY = "poolMasterCounter.challongeToken.v1";
+  var CHALLONGE_API_BASE = "https://api.challonge.com/v2.1";
+  var CHALLONGE_OAUTH_TOKEN_URL = "https://api.challonge.com/oauth/token";
+  var CHALLONGE_FETCH_TIMEOUT_MS = 10000;
+
+  function loadChallongeClientId() {
+    try { return localStorage.getItem(CHALLONGE_CLIENT_ID_KEY) || ""; } catch (e) { return ""; }
+  }
+  function saveChallongeClientId(id) {
+    try { localStorage.setItem(CHALLONGE_CLIENT_ID_KEY, id || ""); } catch (e) { console.warn("Could not save Challonge client id.", e); }
+  }
+  function loadChallongeClientSecret() {
+    try { return localStorage.getItem(CHALLONGE_CLIENT_SECRET_KEY) || ""; } catch (e) { return ""; }
+  }
+  function saveChallongeClientSecret(secret) {
+    try { localStorage.setItem(CHALLONGE_CLIENT_SECRET_KEY, secret || ""); } catch (e) { console.warn("Could not save Challonge client secret.", e); }
+  }
+  function loadChallongeToken() {
+    try {
+      var raw = localStorage.getItem(CHALLONGE_TOKEN_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+  function saveChallongeToken(token) {
+    try {
+      localStorage.setItem(CHALLONGE_TOKEN_KEY, JSON.stringify(token));
+    } catch (e) {
+      console.warn("Could not save Challonge token.", e);
+    }
+  }
+
+  // A single fetch wrapper every Challonge call goes through - timeout
+  // guarded, and NEVER throws or rejects: always resolves to
+  // { ok, status, body }, with ok:false/status:0 for a network failure/
+  // timeout (indistinguishable from the caller's point of view from a
+  // real HTTP error - both just mean "didn't work", handled the same
+  // way). This is an unofficial-in-the-sense-of-self-managed integration
+  // the user opted into with their own credentials, but a flaky network
+  // must never be allowed to throw into code that isn't ready for it.
+  function challongeFetch(url, opts) {
+    opts = opts || {};
+    var controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    var timer = controller ? setTimeout(function () { controller.abort(); }, CHALLONGE_FETCH_TIMEOUT_MS) : null;
+    var fetchOpts = { method: opts.method || "GET", headers: opts.headers || {} };
+    if (opts.body !== undefined) fetchOpts.body = opts.body;
+    if (controller) fetchOpts.signal = controller.signal;
+    return fetch(url, fetchOpts)
+      .then(function (res) {
+        if (timer) clearTimeout(timer);
+        return res.json().catch(function () { return null; }).then(function (body) {
+          return { ok: res.ok, status: res.status, body: body };
+        });
+      })
+      .catch(function () {
+        if (timer) clearTimeout(timer);
+        return { ok: false, status: 0, body: null };
+      });
+  }
+
+  // Returns a valid access token, fetching + caching a fresh one if none
+  // is cached or the cached one has expired (a day of slack before the
+  // real 1-week expiry, so a token doesn't die mid-use). null if no
+  // client id/secret is set, or the exchange fails for any reason -
+  // callers treat that as "not connected" (a toast), never a crash.
+  function getChallongeAccessToken() {
+    var clientId = loadChallongeClientId();
+    var clientSecret = loadChallongeClientSecret();
+    if (!clientId || !clientSecret) return Promise.resolve(null);
+    var cached = loadChallongeToken();
+    if (cached && cached.access_token && cached.expires_at && Date.now() < cached.expires_at - 24 * 60 * 60 * 1000) {
+      return Promise.resolve(cached.access_token);
+    }
+    var body = "grant_type=client_credentials&client_id=" + encodeURIComponent(clientId) + "&client_secret=" + encodeURIComponent(clientSecret);
+    return challongeFetch(CHALLONGE_OAUTH_TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: body
+    }).then(function (res) {
+      if (!res.ok || !res.body || !res.body.access_token) return null;
+      var expiresInMs = (res.body.expires_in || 604800) * 1000;
+      saveChallongeToken({ access_token: res.body.access_token, expires_at: Date.now() + expiresInMs });
+      return res.body.access_token;
+    });
+  }
+
+  function challongeAuthedRequest(method, path, jsonBody) {
+    return getChallongeAccessToken().then(function (token) {
+      if (!token) return { ok: false, status: 0, body: null, noToken: true };
+      var headers = { "Authorization-Type": "v2", "Authorization": "Bearer " + token };
+      var opts = { method: method, headers: headers };
+      if (jsonBody !== undefined) {
+        headers["Content-Type"] = "application/vnd.api+json";
+        opts.body = JSON.stringify(jsonBody);
+      }
+      return challongeFetch(CHALLONGE_API_BASE + path, opts);
+    });
+  }
+
+  var CHALLONGE_TOURNAMENT_TYPE = {
+    single: "single elimination",
+    double: "double elimination",
+    roundrobin: "round robin",
+    swiss: "swiss"
+  };
+
+  // Creates the tournament on Challonge. Resolves the new Challonge
+  // tournament id (a string) on success, or null on any failure.
+  function createChallongeTournament(name, localFormat) {
+    var tournamentType = CHALLONGE_TOURNAMENT_TYPE[localFormat] || "single elimination";
+    return challongeAuthedRequest("POST", "/tournaments.json", {
+      data: { type: "tournaments", attributes: { name: name, tournament_type: tournamentType } }
+    }).then(function (res) {
+      var id = res.body && res.body.data && (res.body.data.id || (res.body.data.attributes && res.body.data.attributes.id));
+      return res.ok && id ? String(id) : null;
+    });
+  }
+
+  // Bulk-adds participants by name. Resolves a map of name -> Challonge
+  // participant id for whichever ones were actually created (a name
+  // that fails to come back just won't have an entry - callers only
+  // mark what's confirmed), or {} on total failure.
+  function bulkAddChallongeParticipants(tournamentId, names) {
+    if (!names.length) return Promise.resolve({});
+    return challongeAuthedRequest("POST", "/tournaments/" + encodeURIComponent(tournamentId) + "/participants/bulk_add.json", {
+      data: {
+        type: "Participants",
+        attributes: { participants: names.map(function (n) { return { name: n }; }) }
+      }
+    }).then(function (res) {
+      var map = {};
+      var list = res.body && (res.body.data && (Array.isArray(res.body.data) ? res.body.data : [res.body.data]));
+      (list || []).forEach(function (p) {
+        var attrs = p.attributes || p;
+        var pname = attrs.name;
+        var pid = p.id || attrs.id;
+        if (pname && pid) map[pname] = String(pid);
+      });
+      return map;
+    });
+  }
+
+  // The tournament's own Challonge-generated match list - resolves []
+  // on any failure.
+  function fetchChallongeMatches(tournamentId) {
+    return challongeAuthedRequest("GET", "/tournaments/" + encodeURIComponent(tournamentId) + "/matches.json").then(function (res) {
+      var list = res.body && res.body.data;
+      return res.ok && Array.isArray(list) ? list : [];
+    });
+  }
+
+  // Reports a final score for one Challonge match. Resolves true/false.
+  function reportChallongeMatchScore(tournamentId, matchId, scoreA, scoreB, winnerParticipantId) {
+    return challongeAuthedRequest("PUT", "/tournaments/" + encodeURIComponent(tournamentId) + "/matches/" + encodeURIComponent(matchId) + ".json", {
+      data: {
+        type: "Match",
+        attributes: {
+          scores_csv: scoreA + "-" + scoreB,
+          winner_id: winnerParticipantId
+        }
+      }
+    }).then(function (res) { return !!res.ok; });
+  }
+
   // Read-only Drive v3 REST calls via a plain API key - no OAuth, no
   // sign-in. Only works for a folder shared as "Anyone with the link can
   // view" (a public API key can't authenticate as anyone, so Drive treats
@@ -22243,6 +22428,13 @@
       b: b || null,
       winner: null,
       loser: null,
+      // The final race tally, stamped by reportBracketResult once the
+      // match ends - relative to a/b (not winner/loser), so it stays
+      // meaningful regardless of who won. null until then. This is the
+      // only permanent record of an exact score anywhere in the app -
+      // state.gameHistory logs individual rack wins, not a match total.
+      scoreA: null,
+      scoreB: null,
       tag: tag,
       collected: false,
       feederA: feederA || null,
@@ -22912,14 +23104,20 @@
     t.rounds.push(pairSwissRound(t));
   }
 
+  // Only single/double elimination tournaments ever have a grandFinal
+  // array at all - round robin and swiss can never have a "grand final"
+  // match by definition, so treat a missing grandFinal as "no", not a
+  // crash (this used to throw for every non-elimination format).
   function isGrandFinalMatch(t, match) {
-    return t.grandFinal.indexOf(match) !== -1;
+    return !!t.grandFinal && t.grandFinal.indexOf(match) !== -1;
   }
 
-  function reportBracketResult(t, match, winnerName) {
+  function reportBracketResult(t, match, winnerName, scoreA, scoreB) {
     if (match.a !== winnerName && match.b !== winnerName) return;
     match.winner = winnerName;
     match.loser = match.a === winnerName ? match.b : match.a;
+    if (typeof scoreA === "number") match.scoreA = scoreA;
+    if (typeof scoreB === "number") match.scoreB = scoreB;
     if (t.format === "roundrobin") {
       finalizeRoundRobinIfComplete(t);
       return;
@@ -22944,18 +23142,151 @@
     advanceBracket(t);
   }
 
+  // Pushes this tournament's roster to Challonge (every format), and its
+  // match scores IF it's Round Robin - the only format where "which
+  // Challonge match is this" is unambiguous no matter what order/round
+  // structure Challonge generates on its own: every pair plays exactly
+  // once, so a completed local match matches exactly one Challonge match
+  // by participant pair, full stop. Every other format is skipped for
+  // score push and left roster-only:
+  //  - Single/Double Elimination: two independently-generated brackets
+  //    would have to line up round-for-round with no guarantee they do.
+  //  - Swiss: Challonge computes each round's pairings from the RESULTS
+  //    of the round before, reported to Challonge one round at a time -
+  //    a single batch push at the end can't replay that incrementally,
+  //    so it has the same alignment risk as elimination, not less.
+  // Re-running this later (as more Round Robin matches complete) is
+  // safe: tournament creation and participant add are no-ops once done
+  // (see t.challongeTournamentId/challongeParticipantIds), and only
+  // matches not yet in t.challongePushedMatchIds get reported again.
+  function pushTournamentToChallonge(t) {
+    if (!t) return Promise.resolve();
+    var hasCredentials = !!(loadChallongeClientId() && loadChallongeClientSecret());
+    if (!hasCredentials) {
+      showToast(T("challonge.notConnected"));
+      return Promise.resolve();
+    }
+    return getChallongeAccessToken().then(function (token) {
+      if (!token) {
+        // Credentials are present but Challonge rejected them (or the
+        // request failed outright) - a different message than "you
+        // haven't entered anything yet".
+        showToast(T("challonge.pushFailed"));
+        return;
+      }
+
+      var createStep = t.challongeTournamentId
+        ? Promise.resolve(t.challongeTournamentId)
+        : createChallongeTournament(t.name || T("challonge.defaultTournamentName"), t.format).then(function (id) {
+            if (id) {
+              t.challongeTournamentId = id;
+              saveTournamentToStorage(t);
+            }
+            return id;
+          });
+
+      return createStep.then(function (tournamentId) {
+        if (!tournamentId) {
+          showToast(T("challonge.pushFailed"));
+          return;
+        }
+
+        t.challongeParticipantIds = t.challongeParticipantIds || {};
+        var missingNames = t.players.filter(function (name) {
+          return !t.challongeParticipantIds[name];
+        });
+
+        var participantsStep = missingNames.length
+          ? bulkAddChallongeParticipants(tournamentId, missingNames).then(function (map) {
+              Object.keys(map).forEach(function (name) {
+                t.challongeParticipantIds[name] = map[name];
+              });
+              saveTournamentToStorage(t);
+            })
+          : Promise.resolve();
+
+        return participantsStep.then(function () {
+          var addedCount = Object.keys(t.challongeParticipantIds).length;
+          if (t.format !== "roundrobin") {
+            showToast(T("challonge.rosterPushed", { count: addedCount }));
+            return;
+          }
+
+          t.challongePushedMatchIds = t.challongePushedMatchIds || {};
+          var pending = t.matches.filter(function (m) {
+            return m.winner && m.b && !t.challongePushedMatchIds[m.id];
+          });
+          if (!pending.length) {
+            showToast(T("challonge.rosterPushed", { count: addedCount }));
+            return;
+          }
+
+          return fetchChallongeMatches(tournamentId).then(function (challongeMatches) {
+            var pushed = 0;
+            var failed = 0;
+            var chain = Promise.resolve();
+            pending.forEach(function (match) {
+              chain = chain.then(function () {
+                var idA = t.challongeParticipantIds[match.a];
+                var idB = t.challongeParticipantIds[match.b];
+                if (!idA || !idB) { failed++; return; }
+                var challongeMatch = findChallongeMatchForPair(challongeMatches, idA, idB);
+                if (!challongeMatch) { failed++; return; }
+                var winnerId = match.winner === match.a ? idA : idB;
+                var sA = match.winner === match.a ? match.scoreA : match.scoreB;
+                var sB = match.winner === match.a ? match.scoreB : match.scoreA;
+                return reportChallongeMatchScore(tournamentId, challongeMatch.id, sA, sB, winnerId).then(function (ok) {
+                  if (ok) {
+                    t.challongePushedMatchIds[match.id] = true;
+                    pushed++;
+                  } else {
+                    failed++;
+                  }
+                });
+              });
+            });
+            return chain.then(function () {
+              saveTournamentToStorage(t);
+              showToast(failed
+                ? T("challonge.pushSummaryWithFailures", { added: addedCount, scores: pushed, failed: failed })
+                : T("challonge.pushSummary", { added: addedCount, scores: pushed }));
+            });
+          });
+        });
+      });
+    });
+  }
+
+  // Finds the Challonge-generated match pairing these two participant
+  // ids, tolerant of a couple of plausible response shapes (either
+  // flattened attributes or a JSON:API relationships block) since the
+  // exact v2.1 match response hasn't been verified against a live call
+  // yet - see this feature's own verification notes.
+  function findChallongeMatchForPair(challongeMatches, idA, idB) {
+    return challongeMatches.filter(function (m) {
+      var attrs = m.attributes || m;
+      var p1 = attrs.player1_id != null ? String(attrs.player1_id) : (m.relationships && m.relationships.player1 && m.relationships.player1.data && String(m.relationships.player1.data.id));
+      var p2 = attrs.player2_id != null ? String(attrs.player2_id) : (m.relationships && m.relationships.player2 && m.relationships.player2.data && String(m.relationships.player2.data.id));
+      var pair = [p1, p2].sort().join("|");
+      return pair === [idA, idB].sort().join("|");
+    })[0] || null;
+  }
+
   // A semifinal or final (WB final, or anything in the Grand Final) gets
   // a little extra visual weight in the ready-to-play list - it's a
   // bigger moment than an early round, so it should feel like one.
   function isMarqueeTournamentMatch(t, match) {
     if (isGrandFinalMatch(t, match)) return true;
-    if (!t.wb.length) return false;
+    // Only single/double elimination have a t.wb at all - round robin
+    // and swiss have no "semifinal/final" concept to call out here.
+    if (!t.wb || !t.wb.length) return false;
     var lastRound = t.wb[t.wb.length - 1];
     var semiRound = t.wb.length >= 2 ? t.wb[t.wb.length - 2] : null;
     return lastRound.indexOf(match) !== -1 || (!!semiRound && semiRound.indexOf(match) !== -1);
   }
 
   function findWbPosition(t, match) {
+    if (!t.wb) return null;
     for (var ri = 0; ri < t.wb.length; ri++) {
       var mi = t.wb[ri].indexOf(match);
       if (mi !== -1) return { ri: ri, mi: mi };
@@ -22988,6 +23319,11 @@
   // champion headline instead in that case.
   function describeWhatsNextForWinner(t, justPlayedMatch, winnerName) {
     if (t.champion) return null;
+    // Only single/double elimination chain a match's winner into a
+    // specific next bracket slot (t.wb/t.lbRounds/t.grandFinal) - round
+    // robin and swiss have no such link, so there's nothing more
+    // specific to say than the generic "waiting" line.
+    if (!t.wb) return T("tournament.nextWaitingGeneric");
     function findOpenMatchIn(list) {
       for (var i = 0; i < list.length; i++) {
         var m = list[i];
@@ -23993,7 +24329,7 @@
       var effectiveMatchRaceTo = t.fairRace && active[raceToKey] ? active[raceToKey] : t.raceTo;
       if (active[winsKey] >= effectiveMatchRaceTo) {
         var championAlreadyDecided = !!t.champion;
-        reportBracketResult(t, match, name);
+        reportBracketResult(t, match, name, active.aWins, active.bWins);
         if (!championAlreadyDecided && t.champion) {
           recordTournamentCompletion(t);
           playTournamentChampionSound();
@@ -24677,6 +25013,32 @@
 
   btnDriveApiKeyHelp.addEventListener("click", function () {
     alertModal(T("backup.driveApiKeyHelpText"));
+  });
+
+  function updateChallongePanelSummary() {
+    var connected = !!(loadChallongeClientId() && loadChallongeClientSecret());
+    challongePanelSummary.textContent = T(connected ? "challonge.summaryConnected" : "challonge.summaryNotConnected");
+  }
+  challongeClientIdInput.value = loadChallongeClientId();
+  challongeClientSecretInput.value = loadChallongeClientSecret();
+  challongeClientIdInput.addEventListener("change", function () {
+    saveChallongeClientId(challongeClientIdInput.value.trim());
+    saveChallongeToken(null);
+    updateChallongePanelSummary();
+  });
+  challongeClientSecretInput.addEventListener("change", function () {
+    saveChallongeClientSecret(challongeClientSecretInput.value.trim());
+    saveChallongeToken(null);
+    updateChallongePanelSummary();
+  });
+  updateChallongePanelSummary();
+
+  btnTournamentPushChallonge.addEventListener("click", function () {
+    if (!TOURNAMENT) return;
+    btnTournamentPushChallonge.disabled = true;
+    pushTournamentToChallonge(TOURNAMENT).then(function () {
+      btnTournamentPushChallonge.disabled = false;
+    });
   });
 
   btnDriveFolderOpen.addEventListener("click", function () {
@@ -25772,6 +26134,7 @@
   });
 
   wireCollapsiblePanel("backup-panel", "btn-toggle-backup-panel");
+  wireCollapsiblePanel("challonge-panel", "btn-toggle-challonge-panel");
   wireCollapsiblePanel("rotation-panel", "btn-toggle-rotation-panel");
   wireCollapsiblePanel("game-setup-panel", "btn-toggle-game-setup-panel");
   wireCollapsiblePanel("players-panel", "btn-toggle-players-panel");
