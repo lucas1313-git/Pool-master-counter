@@ -13891,7 +13891,10 @@
     if (Array.isArray(body.errors) && body.errors.length) {
       return body.errors.map(function (e) {
         if (!e) return JSON.stringify(e);
-        var text = e.detail || e.title || e.message || JSON.stringify(e);
+        // detail/title/message are usually strings, but confirmed live:
+        // detail can also be an array of strings (e.g. ["is missing"]).
+        var raw = e.detail || e.title || e.message;
+        var text = Array.isArray(raw) ? raw.join(", ") : raw || JSON.stringify(e);
         // A bare "is missing"/"is invalid" (standard Rails validation
         // wording) is useless without which field it's about - JSON:API
         // carries that separately as source.pointer (e.g.
@@ -13975,8 +13978,26 @@
     // plural+capitalized - see below), Challonge isn't consistent about
     // this across endpoints, so each one needs its own confirmed value
     // rather than assuming a shared convention.
+    var attributes = { name: name, tournament_type: tournamentType };
+    // Confirmed live: despite Challonge's own docs listing this whole
+    // object as optional, a "round robin" tournament_type 422s with
+    // "/data/attributes/round_robin_options is missing" if it's left
+    // out. This app doesn't use Challonge's own ranking/points system
+    // (match scores are pushed directly, and standings are this app's
+    // own), so these are just the documented defaults - enough to
+    // satisfy the schema, not a real behavior choice.
+    if (tournamentType === "round robin") {
+      attributes.round_robin_options = {
+        iterations: 2,
+        ranking: "match wins",
+        pts_for_game_win: 1,
+        pts_for_game_tie: 0,
+        pts_for_match_win: 1,
+        pts_for_match_tie: 0.5
+      };
+    }
     return challongeAuthedRequest("POST", "/tournaments.json", {
-      data: { type: "tournament", attributes: { name: name, tournament_type: tournamentType } }
+      data: { type: "tournament", attributes: attributes }
     }).then(function (res) {
       var id = res.body && res.body.data && (res.body.data.id || (res.body.data.attributes && res.body.data.attributes.id));
       return res.ok && id ? String(id) : null;
