@@ -1972,9 +1972,11 @@
   var btnTournamentAbandon = document.getElementById("btn-tournament-abandon");
   var btnTournamentPrint = document.getElementById("btn-tournament-print");
   var btnTournamentPushChallonge = document.getElementById("btn-tournament-push-challonge");
+  var tournamentChallongeStatusLine = document.getElementById("tournament-challonge-status-line");
   var challongePanelSummary = document.getElementById("challonge-panel-summary");
   var challongeClientIdInput = document.getElementById("challonge-client-id-input");
   var challongeClientSecretInput = document.getElementById("challonge-client-secret-input");
+  var btnDayReportPushChallonge = document.getElementById("btn-day-report-push-challonge");
   var tournamentChampionBanner = document.getElementById("tournament-champion-banner");
   var tournamentCurrentMatchPanel = document.getElementById("tournament-current-match-panel");
   var tournamentReadyList = document.getElementById("tournament-ready-list");
@@ -13521,6 +13523,30 @@
     }
   }
 
+  // Push-tracking for pushDayReportToChallonge, one entry per date -
+  // { "<dateStr>": { challongeTournamentId, challongeParticipantIds:
+  // {name: id}, challongePushedPairKeys: {pairKey: true} } } - the same
+  // shape/purpose as TOURNAMENT's own challonge* fields, just keyed by
+  // date instead of living on a single tournament object, since a day's
+  // regular play has no tournament object of its own.
+  var CHALLONGE_DAY_PUSHES_KEY = "poolMasterCounter.challongeDayPushes.v1";
+  function loadChallongeDayPushes() {
+    try {
+      var raw = localStorage.getItem(CHALLONGE_DAY_PUSHES_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) {
+      return {};
+    }
+  }
+  function saveChallongeDayPushes(data) {
+    try {
+      localStorage.setItem(CHALLONGE_DAY_PUSHES_KEY, JSON.stringify(data));
+    } catch (e) {
+      console.warn("Could not save Challonge day-push tracking.", e);
+    }
+  }
+  var CHALLONGE_DAY_PUSHES = loadChallongeDayPushes();
+
   // A single fetch wrapper every Challonge call goes through - timeout
   // guarded, and NEVER throws or rejects: always resolves to
   // { ok, status, body }, with ok:false/status:0 for a network failure/
@@ -20156,6 +20182,14 @@
     wrap.appendChild(labelSpan);
 
     if (!contact.fargoId) {
+      // Explicit "no" - not just an empty space where a status could be -
+      // so it reads the same at a glance as the "yes, #id" state below,
+      // rather than looking like the field just hasn't loaded yet.
+      var noOfficialBadge = document.createElement("span");
+      noOfficialBadge.className = "fargo-official-status is-none";
+      noOfficialBadge.textContent = T("fargo.noOfficialRating");
+      wrap.appendChild(noOfficialBadge);
+
       var findBtn = document.createElement("button");
       findBtn.type = "button";
       findBtn.className = "btn btn-ghost";
@@ -20194,6 +20228,15 @@
       wrap.appendChild(manualLink);
       return wrap;
     }
+
+    // The direct answer to "does this player have an official FargoRate
+    // rating" - a plain yes + the number, distinct from (and shown
+    // before) the local-vs-Fargo comparison badge below, which is about
+    // comparing two numbers rather than just confirming one exists.
+    var hasOfficialBadge = document.createElement("span");
+    hasOfficialBadge.className = "fargo-official-status is-linked";
+    hasOfficialBadge.textContent = T("fargo.hasOfficialRating", { rating: contact.fargoRating != null ? contact.fargoRating : "—" });
+    wrap.appendChild(hasOfficialBadge);
 
     wrap.appendChild(buildFargoComparisonBadge(name, renderContactSheetPage));
 
@@ -23272,6 +23315,136 @@
     })[0] || null;
   }
 
+  // Pushes a whole day's regular (non-tournament) play to Challonge - a
+  // separate flow from pushTournamentToChallonge since a day's play has
+  // no bracket at all, just a pile of individual games. Every pair who
+  // played each other that day gets folded into ONE aggregate match: if
+  // Alice beat Bob 3 times and lost twice, that's a single "Alice won
+  // 3-2" match reported to Challonge, the same way a single Challonge
+  // match already represents a multi-rack race in the Tournament flow.
+  // A day where a pair split evenly (no more wins either way) has no
+  // real winner to report, so that pair is skipped - same reasoning as
+  // Single/Double Elimination being skipped for auto-score-push: report
+  // something only when it's unambiguous. Team games are skipped
+  // entirely for both roster and scoring - Challonge participants are
+  // individual names, and a team's win here doesn't cleanly attribute a
+  // score to any one of them.
+  function pushDayReportToChallonge(dateStr) {
+    var hasCredentials = !!(loadChallongeClientId() && loadChallongeClientSecret());
+    if (!hasCredentials) {
+      showToast(T("challonge.notConnected"));
+      return Promise.resolve();
+    }
+    return getChallongeAccessToken().then(function (token) {
+      if (!token) {
+        showToast(T("challonge.pushFailed"));
+        return;
+      }
+
+      var data = computeDayReportData(dateStr, true);
+      var individualGames = data.games.filter(function (g) {
+        return !g.isTeam && g.winnerNames && g.winnerNames.length === 1 && g.opponentNames && g.opponentNames.length === 1;
+      });
+      if (!individualGames.length) {
+        showToast(T("challonge.noGamesToday"));
+        return;
+      }
+
+      var rosterSet = {};
+      var pairs = {};
+      individualGames.forEach(function (g) {
+        var w = g.winnerNames[0];
+        var o = g.opponentNames[0];
+        rosterSet[w] = true;
+        rosterSet[o] = true;
+        var sorted = [w, o].sort();
+        var key = sorted.join("|");
+        if (!pairs[key]) pairs[key] = { a: sorted[0], b: sorted[1], winsA: 0, winsB: 0 };
+        if (w === pairs[key].a) pairs[key].winsA++;
+        else pairs[key].winsB++;
+      });
+      var roster = Object.keys(rosterSet);
+      var scorablePairs = Object.keys(pairs)
+        .map(function (k) { return pairs[k]; })
+        .filter(function (p) { return p.winsA !== p.winsB; });
+
+      var dayPush = CHALLONGE_DAY_PUSHES[dateStr] || { challongeTournamentId: null, challongeParticipantIds: {}, challongePushedPairKeys: {} };
+      CHALLONGE_DAY_PUSHES[dateStr] = dayPush;
+
+      var createStep = dayPush.challongeTournamentId
+        ? Promise.resolve(dayPush.challongeTournamentId)
+        : createChallongeTournament(T("challonge.dayTournamentName", { date: dateStr }), "roundrobin").then(function (id) {
+            if (id) {
+              dayPush.challongeTournamentId = id;
+              saveChallongeDayPushes(CHALLONGE_DAY_PUSHES);
+            }
+            return id;
+          });
+
+      return createStep.then(function (tournamentId) {
+        if (!tournamentId) {
+          showToast(T("challonge.pushFailed"));
+          return;
+        }
+
+        var missingNames = roster.filter(function (name) {
+          return !dayPush.challongeParticipantIds[name];
+        });
+        var participantsStep = missingNames.length
+          ? bulkAddChallongeParticipants(tournamentId, missingNames).then(function (map) {
+              Object.keys(map).forEach(function (name) {
+                dayPush.challongeParticipantIds[name] = map[name];
+              });
+              saveChallongeDayPushes(CHALLONGE_DAY_PUSHES);
+            })
+          : Promise.resolve();
+
+        return participantsStep.then(function () {
+          var addedCount = Object.keys(dayPush.challongeParticipantIds).length;
+          var pending = scorablePairs.filter(function (p) {
+            return !dayPush.challongePushedPairKeys[p.a + "|" + p.b];
+          });
+          if (!pending.length) {
+            showToast(T("challonge.rosterPushed", { count: addedCount }));
+            return;
+          }
+
+          return fetchChallongeMatches(tournamentId).then(function (challongeMatches) {
+            var pushed = 0;
+            var failed = 0;
+            var chain = Promise.resolve();
+            pending.forEach(function (p) {
+              chain = chain.then(function () {
+                var idA = dayPush.challongeParticipantIds[p.a];
+                var idB = dayPush.challongeParticipantIds[p.b];
+                if (!idA || !idB) { failed++; return; }
+                var challongeMatch = findChallongeMatchForPair(challongeMatches, idA, idB);
+                if (!challongeMatch) { failed++; return; }
+                var winnerId = p.winsA > p.winsB ? idA : idB;
+                var sA = p.winsA > p.winsB ? p.winsA : p.winsB;
+                var sB = p.winsA > p.winsB ? p.winsB : p.winsA;
+                return reportChallongeMatchScore(tournamentId, challongeMatch.id, sA, sB, winnerId).then(function (ok) {
+                  if (ok) {
+                    dayPush.challongePushedPairKeys[p.a + "|" + p.b] = true;
+                    pushed++;
+                  } else {
+                    failed++;
+                  }
+                });
+              });
+            });
+            return chain.then(function () {
+              saveChallongeDayPushes(CHALLONGE_DAY_PUSHES);
+              showToast(failed
+                ? T("challonge.pushSummaryWithFailures", { added: addedCount, scores: pushed, failed: failed })
+                : T("challonge.pushSummary", { added: addedCount, scores: pushed }));
+            });
+          });
+        });
+      });
+    });
+  }
+
   // A semifinal or final (WB final, or anything in the Grand Final) gets
   // a little extra visual weight in the ready-to-play list - it's a
   // bigger moment than an early round, so it should feel like one.
@@ -25015,9 +25188,16 @@
     alertModal(T("backup.driveApiKeyHelpText"));
   });
 
+  // The main screen's ☁️ Challonge panel is the one place credentials
+  // get entered (see index.html) - the Tournament page just shows a
+  // compact status line (tournamentChallongeStatusLine) pointing back
+  // here, rather than duplicating the input fields on a second screen.
   function updateChallongePanelSummary() {
     var connected = !!(loadChallongeClientId() && loadChallongeClientSecret());
     challongePanelSummary.textContent = T(connected ? "challonge.summaryConnected" : "challonge.summaryNotConnected");
+    if (tournamentChallongeStatusLine) {
+      tournamentChallongeStatusLine.textContent = T(connected ? "challonge.summaryConnected" : "challonge.notConnectedSeeMainScreen");
+    }
   }
   challongeClientIdInput.value = loadChallongeClientId();
   challongeClientSecretInput.value = loadChallongeClientSecret();
@@ -25038,6 +25218,13 @@
     btnTournamentPushChallonge.disabled = true;
     pushTournamentToChallonge(TOURNAMENT).then(function () {
       btnTournamentPushChallonge.disabled = false;
+    });
+  });
+
+  btnDayReportPushChallonge.addEventListener("click", function () {
+    btnDayReportPushChallonge.disabled = true;
+    pushDayReportToChallonge(todayDateStr()).then(function () {
+      btnDayReportPushChallonge.disabled = false;
     });
   });
 
