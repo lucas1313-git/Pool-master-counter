@@ -1905,6 +1905,7 @@
   var btnContactSheetSms = document.getElementById("btn-contact-sheet-sms");
   var btnContactSheetGraveyardSelected = document.getElementById("btn-contact-sheet-graveyard-selected");
   var btnContactSheetMergeSelected = document.getElementById("btn-contact-sheet-merge-selected");
+  var btnContactSheetRepairHistory = document.getElementById("btn-contact-sheet-repair-history");
   var contactSheetSelectedSummary = document.getElementById("contact-sheet-selected-summary");
   var contactSheetList = document.getElementById("contact-sheet-list");
   var contactSheetSelected = {};
@@ -12291,6 +12292,57 @@
 
     saveState();
     return "";
+  }
+
+  // Sweeps every player's archived games (and today's still-live game
+  // log) for a name that no longer exists as a real player - the
+  // "before" half of a merge or rename that happened before
+  // mergePlayersEverywhere/renamePlayerEverywhere were fixed to
+  // propagate into every OTHER player's own archived history (see
+  // their own comments for why that's a separate, independent copy
+  // per player). Unlike a normal merge, oldNameText is deliberately
+  // NOT required to match any current contact/stats key - it's
+  // whatever text is still stuck in old game records, which by
+  // definition no longer corresponds to an actual current player.
+  // Returns how many individual game entries were actually changed.
+  function repairArchivedGameName(oldNameText, newName) {
+    var oldKey = normalizeNameKey(oldNameText);
+    var target = resolvePlayerName(newName);
+    if (!oldKey || !target) return 0;
+    var changed = 0;
+    function sweep(games) {
+      (games || []).forEach(function (g) {
+        var touched = false;
+        if (Array.isArray(g.winnerNames)) {
+          var w2 = g.winnerNames.map(function (n) {
+            return normalizeNameKey(n) === oldKey ? target : n;
+          });
+          if (w2.join("|") !== g.winnerNames.join("|")) {
+            g.winnerNames = w2;
+            touched = true;
+          }
+        }
+        if (Array.isArray(g.opponentNames)) {
+          var o2 = g.opponentNames.map(function (n) {
+            return normalizeNameKey(n) === oldKey ? target : n;
+          });
+          if (o2.join("|") !== g.opponentNames.join("|")) {
+            g.opponentNames = o2;
+            touched = true;
+          }
+        }
+        if (touched) changed++;
+      });
+    }
+    Object.keys(PLAYER_STATS).forEach(function (key) {
+      (PLAYER_STATS[key].sessions || []).forEach(function (s) {
+        sweep(s.games);
+      });
+    });
+    savePlayerStatsToStorage(PLAYER_STATS);
+    sweep(state.gameHistory);
+    saveState();
+    return changed;
   }
 
   // Formats digits-as-typed to match the phone convention of the
@@ -27512,6 +27564,32 @@
       renderAll();
       showToast(T("mergePlayers.merged", { kept: match, removed: source }));
     }, null, names);
+  });
+  btnContactSheetRepairHistory.addEventListener("click", function () {
+    var knownNames = contactSheetAllNames();
+    promptModal(T("mergePlayers.repairOldNamePrompt"), "", function (oldNameTyped) {
+      var oldNameText = (oldNameTyped || "").trim();
+      if (!oldNameText) return;
+      promptModal(T("mergePlayers.repairNewNamePrompt", { oldName: oldNameText }), "", function (newNameTyped) {
+        var target = resolvePlayerName(newNameTyped);
+        var targetKey = normalizeNameKey(target);
+        var match = knownNames.filter(function (n) {
+          return normalizeNameKey(n) === targetKey;
+        })[0];
+        if (!match) {
+          showToast(T("mergePlayers.repairMustBeCurrentPlayer"));
+          return;
+        }
+        if (normalizeNameKey(oldNameText) === normalizeNameKey(match)) {
+          showToast(T("mergePlayers.samePlayer"));
+          return;
+        }
+        var changed = repairArchivedGameName(oldNameText, match);
+        renderContactSheetPage();
+        renderAll();
+        showToast(T("mergePlayers.repaired", { count: changed, oldName: oldNameText, name: match }));
+      }, null, knownNames);
+    }, null);
   });
 
   btnOpenTournament.addEventListener("click", function () {
