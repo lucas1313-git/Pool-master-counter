@@ -13507,7 +13507,13 @@
 
   var CHALLONGE_CLIENT_ID_KEY = "poolMasterCounter.challongeClientId.v1";
   var CHALLONGE_CLIENT_SECRET_KEY = "poolMasterCounter.challongeClientSecret.v1";
-  var CHALLONGE_TOKEN_KEY = "poolMasterCounter.challongeToken.v1";
+  // Bumped to v2: earlier tokens were cached before the OAuth request
+  // asked for any scope, so they're valid but can't write anything -
+  // bumping the storage key makes every existing cached token (which
+  // has no way to self-report "I was granted no scope") get ignored
+  // instead of reused, forcing one fresh exchange with the new request.
+  var CHALLONGE_TOKEN_KEY = "poolMasterCounter.challongeToken.v2";
+  var CHALLONGE_OAUTH_SCOPE = "tournaments:read tournaments:write participants:read participants:write matches:read matches:write";
   // Challonge's v2.1 REST API answers the CORS preflight but never
   // sends Access-Control-Allow-Origin on the actual response (confirmed
   // live), so a browser blocks reading it no matter the request shape.
@@ -13651,7 +13657,13 @@
     if (cached && cached.access_token && cached.expires_at && Date.now() < cached.expires_at - 24 * 60 * 60 * 1000) {
       return Promise.resolve(cached.access_token);
     }
-    var body = "grant_type=client_credentials&client_id=" + encodeURIComponent(clientId) + "&client_secret=" + encodeURIComponent(clientSecret);
+    // Confirmed live: a client_credentials token requested with no scope
+    // comes back valid but rejected on write calls ("Request requires
+    // one of the following scopes: tournaments:write") - the grant
+    // doesn't imply full access, it has to be asked for explicitly,
+    // same as Challonge's browser consent flow does with its own scope
+    // param. Least-privilege: only the scopes this app actually uses.
+    var body = "grant_type=client_credentials&client_id=" + encodeURIComponent(clientId) + "&client_secret=" + encodeURIComponent(clientSecret) + "&scope=" + encodeURIComponent(CHALLONGE_OAUTH_SCOPE);
     return challongeFetch(CHALLONGE_OAUTH_TOKEN_URL, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
