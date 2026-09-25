@@ -1976,6 +1976,8 @@
   var challongePanelSummary = document.getElementById("challonge-panel-summary");
   var challongeClientIdInput = document.getElementById("challonge-client-id-input");
   var challongeClientSecretInput = document.getElementById("challonge-client-secret-input");
+  var btnChallongeTestConnection = document.getElementById("btn-challonge-test-connection");
+  var challongeTestConnectionStatus = document.getElementById("challonge-test-connection-status");
   var btnDayReportPushChallonge = document.getElementById("btn-day-report-push-challonge");
   var challongePushReviewOverlay = document.getElementById("challonge-push-review-overlay");
   var challongePushDateInput = document.getElementById("challonge-push-date-input");
@@ -13664,8 +13666,12 @@
     });
   }
 
+  function challongeAuthErrorSuffix() {
+    return lastChallongeAuthError ? " (" + lastChallongeAuthError + ")" : "";
+  }
+
   function challongePushFailedText() {
-    return lastChallongeAuthError ? T("challonge.pushFailed") + " (" + lastChallongeAuthError + ")" : T("challonge.pushFailed");
+    return T("challonge.pushFailed") + challongeAuthErrorSuffix();
   }
 
   function challongeAuthedRequest(method, path, jsonBody) {
@@ -25449,6 +25455,27 @@
     updateChallongePanelSummary();
   });
   updateChallongePanelSummary();
+
+  btnChallongeTestConnection.addEventListener("click", function () {
+    var clientId = loadChallongeClientId();
+    var clientSecret = loadChallongeClientSecret();
+    if (!clientId || !clientSecret) {
+      challongeTestConnectionStatus.textContent = T("challonge.testConnectionNeedsCredentials");
+      return;
+    }
+    btnChallongeTestConnection.disabled = true;
+    challongeTestConnectionStatus.textContent = T("challonge.testing");
+    // Force a real exchange instead of reusing a cached token, so this
+    // button always reflects the credentials currently in the fields.
+    saveChallongeToken(null);
+    getChallongeAccessToken().then(function (token) {
+      btnChallongeTestConnection.disabled = false;
+      challongeTestConnectionStatus.textContent = token
+        ? T("challonge.testConnectionSuccess")
+        : T("challonge.testConnectionFailed") + challongeAuthErrorSuffix();
+      updateChallongePanelSummary();
+    });
+  });
 
   btnTournamentPushChallonge.addEventListener("click", function () {
     if (!TOURNAMENT) return;
