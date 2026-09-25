@@ -121,6 +121,7 @@
   "challonge.pushSummary": "Challonge: {{added}} players on the roster, {{scores}} match scores pushed.",
   "challonge.pushSummaryWithFailures": "Challonge: {{added}} players on the roster, {{scores}} match scores pushed, {{failed}} failed and can be retried.",
   "challonge.pushTodayButton": "☁️ Push Today to Challonge",
+  "challonge.raceTournamentName": "Pool Master Counter — Race to {{target}} ({{names}}, {{date}})",
   "challonge.rosterPushed": "Pushed to Challonge: {{count}} players on the roster.",
   "challonge.summaryConnected": "Connected",
   "challonge.summaryNotConnected": "Not connected",
