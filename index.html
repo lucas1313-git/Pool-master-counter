@@ -330,17 +330,6 @@
     <div class="scoreboard" id="scoreboard"></div>
   </section>
 
-  <section class="panel collapsible-panel collapsed" id="history-panel">
-    <button type="button" class="panel-toggle" id="btn-toggle-history-panel" aria-expanded="false" aria-controls="history-panel-body">
-      <h2 data-i18n="history.heading">Recent Games</h2>
-      <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
-    </button>
-    <p class="panel-summary" id="history-panel-summary"></p>
-    <div class="panel-body" id="history-panel-body">
-      <ul id="history-list" class="history-list"></ul>
-    </div>
-  </section>
-
   <section class="panel collapsible-panel collapsed" id="day-notes-panel">
     <button type="button" class="panel-toggle" id="btn-toggle-day-notes-panel" aria-expanded="false" aria-controls="day-notes-panel-body">
       <h2 data-i18n="dayNotes.heading">Publish Daily Report</h2>
@@ -389,6 +378,17 @@
     <p class="panel-summary" id="report-archive-panel-summary" data-i18n="reportArchive.summary">Every colorful report you generate is saved here automatically, so you can revisit any day later.</p>
     <div class="panel-body" id="report-archive-panel-body">
       <ul id="report-archive-list" class="recover-data-list"></ul>
+    </div>
+  </section>
+
+  <section class="panel collapsible-panel collapsed" id="history-panel">
+    <button type="button" class="panel-toggle" id="btn-toggle-history-panel" aria-expanded="false" aria-controls="history-panel-body">
+      <h2 data-i18n="history.heading">Recent Games</h2>
+      <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+    </button>
+    <p class="panel-summary" id="history-panel-summary"></p>
+    <div class="panel-body" id="history-panel-body">
+      <ul id="history-list" class="history-list"></ul>
     </div>
   </section>
 
