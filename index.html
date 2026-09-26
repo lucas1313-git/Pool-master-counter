@@ -426,15 +426,16 @@
         <h3 class="backup-subsection-title" data-i18n="backup.exportHeading">⬆️ Export Games</h3>
         <div class="row">
           <button type="button" id="btn-export-all-data" class="btn btn-primary" data-i18n="backup.exportAll">All Data</button>
+          <button type="button" id="btn-export-all-data-help" class="format-info-btn" data-i18n-aria-label="backup.exportAllHelpAria" aria-label="What does All Data export?">❓</button>
           <button type="button" id="btn-export-sync" class="btn btn-primary" data-i18n="backup.syncExport">☁️ iCloud Sync</button>
           <button type="button" id="btn-export-sync-help" class="format-info-btn" data-i18n-aria-label="backup.syncExportHelpAria" aria-label="What is iCloud Sync export for?">❓</button>
         </div>
         <p class="player-stats-note" id="sync-status-line"></p>
         <div class="row">
           <button type="button" id="btn-export-session" class="btn btn-ghost" data-i18n="gameSetup.exportSession">Share Last Session</button>
+          <button type="button" id="btn-export-session-help" class="format-info-btn" data-i18n-aria-label="backup.exportSessionHelpAria" aria-label="What does Share Last Session share?">❓</button>
           <button type="button" id="btn-share" class="btn btn-ghost" data-i18n="gameSetup.shareStandings">Share Standings</button>
         </div>
-        <p class="player-stats-note" data-i18n="backup.exportSessionNote">Just one session (players and wins) as its own JSON file or a text summary to share - today's if any games have been played yet, otherwise the most recent day that has some. Export All Data above covers everything, including career stats, ratings, and saved lists.</p>
       </div>
 
       <div class="backup-subsection">
@@ -2176,6 +2177,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260925z7"></script>
+<script src="js/app.js?v=20260925z8"></script>
 </body>
 </html>

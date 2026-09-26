@@ -1659,6 +1659,7 @@
   // ---------------------------------------------------------------------
 
   var btnExportAllData = document.getElementById("btn-export-all-data");
+  var btnExportAllDataHelp = document.getElementById("btn-export-all-data-help");
   var btnImportAllData = document.getElementById("btn-import-all-data");
   var btnExportSync = document.getElementById("btn-export-sync");
   var btnExportSyncHelp = document.getElementById("btn-export-sync-help");
@@ -2059,6 +2060,7 @@
   var btnResetGame = document.getElementById("btn-reset-game");
   var btnShare = document.getElementById("btn-share");
   var btnExportSession = document.getElementById("btn-export-session");
+  var btnExportSessionHelp = document.getElementById("btn-export-session-help");
 
   var rotationEnabledCheckbox = document.getElementById("rotation-enabled");
   var gameSetupRotationEnabledCheckbox = document.getElementById("game-setup-rotation-enabled");
@@ -26656,6 +26658,9 @@
   btnExportSyncHelp.addEventListener("click", function () {
     alertModal(T("backup.syncHelp"));
   });
+  btnExportAllDataHelp.addEventListener("click", function () {
+    alertModal(T("backup.exportAllHelpText"));
+  });
   renderSyncStatusLine();
 
   btnResetAllPlayerStats.addEventListener("click", resetAllPlayerStats);
@@ -26963,6 +26968,9 @@
   btnResetGame.addEventListener("click", resetCurrentGame);
   btnShare.addEventListener("click", shareStandings);
   btnExportSession.addEventListener("click", shareLastSessionWithData);
+  btnExportSessionHelp.addEventListener("click", function () {
+    alertModal(T("backup.exportSessionHelpText"));
+  });
 
   rotationEnabledCheckbox.addEventListener("change", function () {
     state.rotation.enabled = rotationEnabledCheckbox.checked;
