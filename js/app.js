@@ -1659,7 +1659,6 @@
   // ---------------------------------------------------------------------
 
   var btnExportAllData = document.getElementById("btn-export-all-data");
-  var exportObfuscateCheckbox = document.getElementById("export-obfuscate-checkbox");
   var btnImportAllData = document.getElementById("btn-import-all-data");
   var btnExportSync = document.getElementById("btn-export-sync");
   var btnExportSyncHelp = document.getElementById("btn-export-sync-help");
@@ -2325,6 +2324,8 @@
   var confirmModalInputRow = document.getElementById("confirm-modal-input-row");
   var confirmModalInput = document.getElementById("confirm-modal-input");
   var confirmModalInputOptions = document.getElementById("confirm-modal-input-options");
+  var confirmModalObfuscateRow = document.getElementById("confirm-modal-obfuscate-row");
+  var confirmModalObfuscateCheckbox = document.getElementById("confirm-modal-obfuscate-checkbox");
   var btnConfirmModalOk = document.getElementById("btn-confirm-modal-ok");
   var btnConfirmModalCancel = document.getElementById("btn-confirm-modal-cancel");
 
@@ -2358,7 +2359,7 @@
   // createElement/createTextNode rather than innerHTML - for the rare
   // case some part of the message needs its own styling (see
   // buildMatchupSentence's highlighted names/numbers).
-  function openConfirmModal(message, showCancel, showInput, inputValue) {
+  function openConfirmModal(message, showCancel, showInput, inputValue, showObfuscate) {
     var isNode = message instanceof Node;
     if (isNode) {
       confirmModalMessage.textContent = "";
@@ -2374,6 +2375,8 @@
     confirmModalMessage.classList.toggle("is-long-text", plainText.length > 200 || plainText.indexOf("\n") !== -1);
     confirmModalInputRow.classList.toggle("hidden", !showInput);
     confirmModalInput.value = showInput ? inputValue || "" : "";
+    confirmModalObfuscateRow.classList.toggle("hidden", !showObfuscate);
+    confirmModalObfuscateCheckbox.checked = false;
     btnConfirmModalCancel.classList.toggle("hidden", !showCancel);
     confirmModalOverlay.classList.remove("hidden");
     // preventScroll: true - this overlay is position:fixed and already
@@ -2409,17 +2412,22 @@
   }
 
   // Replaces `prompt(msg, defaultValue)`. onSubmit receives the entered
-  // string; onCancel (optional) runs on Cancel/backdrop-dismiss instead
-  // (there's no null-return case here the way native prompt() has one).
-  // suggestions (optional) fills the input's shared datalist with
-  // existing values to pick from (native browser autocomplete - the
-  // field stays free text, nothing forces picking one) - always reset
-  // on every call, even to empty, so a previous prompt's suggestions
-  // (e.g. team names) never linger into an unrelated one that didn't
-  // ask for any.
-  function promptModal(message, defaultValue, onSubmit, onCancel, suggestions) {
+  // string, plus - only when showObfuscate is true - the obfuscate
+  // checkbox's state as a second argument (every other caller's
+  // onSubmit takes just the one param, so the extra arg is simply
+  // ignored there). onCancel (optional) runs on Cancel/backdrop-dismiss
+  // instead (there's no null-return case here the way native prompt()
+  // has one). suggestions (optional) fills the input's shared datalist
+  // with existing values to pick from (native browser autocomplete -
+  // the field stays free text, nothing forces picking one) - always
+  // reset on every call, even to empty, so a previous prompt's
+  // suggestions (e.g. team names) never linger into an unrelated one
+  // that didn't ask for any. showObfuscate (optional) shows the shared
+  // "omit contact info" checkbox (see the Export Games flows) -
+  // unchecked by default every time, never sticky across calls.
+  function promptModal(message, defaultValue, onSubmit, onCancel, suggestions, showObfuscate) {
     confirmModalOnConfirm = function () {
-      onSubmit(confirmModalInput.value);
+      onSubmit(confirmModalInput.value, confirmModalObfuscateCheckbox.checked);
     };
     confirmModalOnCancel = onCancel || null;
     confirmModalInputOptions.innerHTML = "";
@@ -2428,7 +2436,7 @@
       opt.value = value;
       confirmModalInputOptions.appendChild(opt);
     });
-    openConfirmModal(message, true, true, defaultValue);
+    openConfirmModal(message, true, true, defaultValue, showObfuscate);
   }
 
   btnConfirmModalOk.addEventListener("click", function () {
@@ -8152,6 +8160,81 @@
 
     var filename = "pool-session-" + snapshot.exportedAt.slice(0, 10) + ".json";
     downloadJSON(filename, snapshot);
+  }
+
+  // The most recent calendar date with real games recorded, live or
+  // archived - today if anything's been played yet today, otherwise
+  // the latest past date any player's archived sessions actually have
+  // games for (not just a note or a tournament result with no regular
+  // games). null only if nothing has ever been played on this device.
+  function lastDateWithGameData() {
+    if (state.gameHistory.length > 0) return todayDateStr();
+    var dates = {};
+    Object.keys(PLAYER_STATS).forEach(function (key) {
+      (PLAYER_STATS[key].sessions || []).forEach(function (s) {
+        if (s.date && (s.games || []).length > 0) dates[s.date] = true;
+      });
+    });
+    var sorted = Object.keys(dates).sort();
+    return sorted.length ? sorted[sorted.length - 1] : null;
+  }
+
+  // Same idea as exportSession() above, but for a past date that's no
+  // longer "live" - reconstructed from every player's own archived
+  // sessions (via computeDayReportData, the same aggregation the Day
+  // Report already trusts) instead of the current live state, since
+  // that date's games have long since been archived out of
+  // state.gameHistory.
+  function exportArchivedSessionForDate(dateStr) {
+    var report = computeDayReportData(dateStr, true);
+    var playerWins = report.players
+      .map(function (p) {
+        return { name: p.name, wins: p.wins };
+      })
+      .sort(function (a, b) {
+        return b.wins - a.wins;
+      });
+    var teamWinCounts = {};
+    report.games.forEach(function (g) {
+      if (!g.isTeam || g.result !== "won") return;
+      var members = joinNamesForReport(g.winnerNames || []);
+      teamWinCounts[members] = (teamWinCounts[members] || 0) + 1;
+    });
+    var teamWins = Object.keys(teamWinCounts)
+      .map(function (members) {
+        return { members: members, wins: teamWinCounts[members] };
+      })
+      .sort(function (a, b) {
+        return b.wins - a.wins;
+      });
+    var snapshot = {
+      exportedAt: new Date().toISOString(),
+      date: dateStr,
+      players: report.players.map(function (p) {
+        return { name: p.name };
+      }),
+      playerWins: playerWins,
+      teamWins: teamWins,
+      gameHistory: report.games
+    };
+    downloadJSON("pool-session-" + dateStr + ".json", snapshot);
+  }
+
+  // The "Share Last Session" button's handler - always has something
+  // real to share instead of silently exporting an empty "today" the
+  // moment the app is opened before anyone's played yet.
+  function shareLastSessionWithData() {
+    var dateStr = lastDateWithGameData();
+    if (!dateStr) {
+      showToast(T("backup.noSessionToShare"));
+      return;
+    }
+    if (dateStr === todayDateStr() && state.gameHistory.length > 0) {
+      exportSession();
+    } else {
+      exportArchivedSessionForDate(dateStr);
+    }
+    exportAllPlayerStats();
   }
 
   function downloadJSON(filename, data) {
@@ -14549,19 +14632,27 @@
   // same iCloud Drive folder each land their own distinct file, and a
   // "last synced" timestamp/exporter name so the habit is visible.
   function exportForSync() {
-    promptModal(T("backup.syncExportNamePrompt"), loadLastSyncExporterName(), function (nameInput) {
-      var exporterName = (nameInput || "").trim();
-      saveLastSyncExporterName(exporterName);
-      var payload = buildBackupPayload();
-      payload.exportedBy = exporterName || null;
-      downloadJSON(defaultSyncFilename(exporterName), payload);
-      try {
-        localStorage.setItem(LAST_SYNC_EXPORT_KEY, payload.exportedAt);
-      } catch (e) {
-        console.warn("Could not save last-sync-export timestamp.", e);
-      }
-      renderSyncStatusLine();
-    });
+    promptModal(
+      T("backup.syncExportNamePrompt"),
+      loadLastSyncExporterName(),
+      function (nameInput, obfuscate) {
+        var exporterName = (nameInput || "").trim();
+        saveLastSyncExporterName(exporterName);
+        var payload = buildBackupPayload();
+        if (obfuscate) payload.contacts = {};
+        payload.exportedBy = exporterName || null;
+        downloadJSON(defaultSyncFilename(exporterName), payload);
+        try {
+          localStorage.setItem(LAST_SYNC_EXPORT_KEY, payload.exportedAt);
+        } catch (e) {
+          console.warn("Could not save last-sync-export timestamp.", e);
+        }
+        renderSyncStatusLine();
+      },
+      null,
+      null,
+      true
+    );
   }
 
   function renderSyncStatusLine() {
@@ -26290,10 +26381,16 @@
   }
 
   btnExportAllData.addEventListener("click", function () {
-    var obfuscate = exportObfuscateCheckbox.checked;
-    promptModal(T("backup.exportFilenamePrompt"), defaultBackupFilename(), function (name) {
-      exportAllData(name, obfuscate);
-    });
+    promptModal(
+      T("backup.exportFilenamePrompt"),
+      defaultBackupFilename(),
+      function (name, obfuscate) {
+        exportAllData(name, obfuscate);
+      },
+      null,
+      null,
+      true
+    );
   });
 
   btnImportAllData.addEventListener("click", function () {
@@ -26865,10 +26962,7 @@
 
   btnResetGame.addEventListener("click", resetCurrentGame);
   btnShare.addEventListener("click", shareStandings);
-  btnExportSession.addEventListener("click", function () {
-    exportSession();
-    exportAllPlayerStats();
-  });
+  btnExportSession.addEventListener("click", shareLastSessionWithData);
 
   rotationEnabledCheckbox.addEventListener("change", function () {
     state.rotation.enabled = rotationEnabledCheckbox.checked;

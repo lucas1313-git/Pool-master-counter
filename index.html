@@ -424,10 +424,6 @@
 
       <div class="backup-subsection">
         <h3 class="backup-subsection-title" data-i18n="backup.exportHeading">⬆️ Export Games</h3>
-        <label class="checkbox-row checkbox-row-prominent">
-          <input type="checkbox" id="export-obfuscate-checkbox">
-          <span data-i18n="backup.obfuscateLabel">🕵️ Obfuscate personal information (omit every player's email &amp; phone from this export — names only)</span>
-        </label>
         <div class="row">
           <button type="button" id="btn-export-all-data" class="btn btn-primary" data-i18n="backup.exportAll">All Data</button>
           <button type="button" id="btn-export-sync" class="btn btn-primary" data-i18n="backup.syncExport">☁️ iCloud Sync</button>
@@ -435,10 +431,10 @@
         </div>
         <p class="player-stats-note" id="sync-status-line"></p>
         <div class="row">
-          <button type="button" id="btn-export-session" class="btn btn-ghost" data-i18n="gameSetup.exportSession">Session</button>
+          <button type="button" id="btn-export-session" class="btn btn-ghost" data-i18n="gameSetup.exportSession">Share Last Session</button>
           <button type="button" id="btn-share" class="btn btn-ghost" data-i18n="gameSetup.shareStandings">Share Standings</button>
         </div>
-        <p class="player-stats-note" data-i18n="backup.exportSessionNote">Just the current live session (players and wins) as its own JSON file or a text summary to share - Export All Data above covers everything, including career stats, ratings, and saved lists.</p>
+        <p class="player-stats-note" data-i18n="backup.exportSessionNote">Just one session (players and wins) as its own JSON file or a text summary to share - today's if any games have been played yet, otherwise the most recent day that has some. Export All Data above covers everything, including career stats, ratings, and saved lists.</p>
       </div>
 
       <div class="backup-subsection">
@@ -722,6 +718,10 @@
       <input type="text" id="confirm-modal-input" list="confirm-modal-input-options">
       <datalist id="confirm-modal-input-options"></datalist>
     </div>
+    <label class="checkbox-row checkbox-row-prominent hidden" id="confirm-modal-obfuscate-row">
+      <input type="checkbox" id="confirm-modal-obfuscate-checkbox">
+      <span data-i18n="backup.obfuscateLabel">🕵️ Obfuscate personal information (omit every player's email &amp; phone from this export — names only)</span>
+    </label>
     <div class="confirm-modal-actions">
       <button type="button" id="btn-confirm-modal-ok" class="btn btn-primary" data-i18n="common.ok">OK</button>
       <button type="button" id="btn-confirm-modal-cancel" class="btn btn-ghost hidden" data-i18n="common.cancel">Cancel</button>
@@ -2176,6 +2176,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260925z6"></script>
+<script src="js/app.js?v=20260925z7"></script>
 </body>
 </html>
