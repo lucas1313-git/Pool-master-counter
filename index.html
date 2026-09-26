@@ -721,8 +721,10 @@
     <p class="player-stats-note" id="challonge-push-review-matchups"></p>
     <div class="confirm-modal-actions">
       <button type="button" id="btn-challonge-push-confirm" class="btn btn-primary" data-i18n="challonge.reviewConfirmButton">☁️ Push to Challonge</button>
+      <button type="button" id="btn-challonge-close-tournament" class="btn btn-ghost hidden" data-i18n="challonge.closeTournamentButton">🔒 Close Tournament</button>
       <button type="button" id="btn-challonge-push-review-close" class="btn btn-ghost" data-i18n="common.cancel">Cancel</button>
     </div>
+    <p class="player-stats-note" data-i18n="challonge.closeTournamentHint">Pushing never closes the tournament by itself, so you can keep pushing this date again later if someone new plays. Close it only once you're done adding people for the day — Challonge won't accept new participants after that.</p>
     <p class="player-stats-note" id="challonge-push-review-status"></p>
   </div>
 </div>
@@ -1813,6 +1815,7 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
       <button type="button" id="btn-tournament-abandon" class="btn btn-danger" data-i18n="tournament.abandon">Abandon Tournament</button>
       <button type="button" id="btn-tournament-print" class="btn btn-ghost" data-i18n="tournament.printBracket">🖨️ Print Bracket</button>
       <button type="button" id="btn-tournament-push-challonge" class="btn btn-ghost" data-i18n="challonge.pushButton">☁️ Push to Challonge</button>
+      <button type="button" id="btn-tournament-close-challonge" class="btn btn-ghost" data-i18n="challonge.closeTournamentButton">🔒 Close Tournament</button>
     </div>
 
     <div id="tournament-champion-banner" class="tournament-winner-banner hidden"></div>
@@ -2151,6 +2154,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260925x"></script>
+<script src="js/app.js?v=20260925y"></script>
 </body>
 </html>
