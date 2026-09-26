@@ -11843,6 +11843,18 @@
       changed = true;
       var seen = {};
       var mergedHistory = [];
+      // gamesPlayed is its own authoritative counter (see bumpPlayerRating) -
+      // it can legitimately run ahead of history.length (history caps at
+      // RATING_HISTORY_CAP, and a manual rating override adds a history
+      // entry without counting as a game). Summing each variant's own
+      // gamesPlayed here, the same way mergePlayersEverywhere does for an
+      // explicit two-player merge, keeps a real established player's
+      // K-factor intact when this runs - deriving it from mergedHistory.length
+      // instead used to silently undercount and drop them back to the
+      // provisional K-factor.
+      var gamesPlayed = names.reduce(function (sum, n) {
+        return sum + (ratings[n].gamesPlayed || 0);
+      }, 0);
       names.forEach(function (n) {
         (ratings[n].history || []).forEach(function (h) {
           if (seen[h.ts]) return;
@@ -11857,7 +11869,7 @@
       result[canonical] = {
         name: canonical,
         rating: mergedHistory.length ? mergedHistory[mergedHistory.length - 1].rating : DEFAULT_RATING,
-        gamesPlayed: mergedHistory.length,
+        gamesPlayed: gamesPlayed,
         history: mergedHistory
       };
     });
