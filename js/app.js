@@ -1981,6 +1981,11 @@
   var challongeClientSecretInput = document.getElementById("challonge-client-secret-input");
   var btnChallongeTestConnection = document.getElementById("btn-challonge-test-connection");
   var challongeTestConnectionStatus = document.getElementById("challonge-test-connection-status");
+  var challongePanelSummaryLeague = document.getElementById("challonge-panel-league-summary");
+  var challongeClientIdInputLeague = document.getElementById("challonge-client-id-input-league");
+  var challongeClientSecretInputLeague = document.getElementById("challonge-client-secret-input-league");
+  var btnChallongeTestConnectionLeague = document.getElementById("btn-challonge-test-connection-league");
+  var challongeTestConnectionStatusLeague = document.getElementById("challonge-test-connection-status-league");
   var btnDayReportPushChallonge = document.getElementById("btn-day-report-push-challonge");
   var challongePushReviewOverlay = document.getElementById("challonge-push-review-overlay");
   var challongePushDateInput = document.getElementById("challonge-push-date-input");
@@ -26456,50 +26461,83 @@
     alertModal(T("backup.driveApiKeyHelpText"));
   });
 
-  // The main screen's ☁️ Challonge panel is the one place credentials
-  // get entered (see index.html) - the Tournament page just shows a
-  // compact status line (tournamentChallongeStatusLine) pointing back
-  // here, rather than duplicating the input fields on a second screen.
+  // The main screen's and League page's ☁️ Challonge panels are both
+  // full input forms writing to the exact same stored credentials
+  // (see saveChallongeClientId/saveChallongeClientSecret) - editing in
+  // either place takes effect everywhere immediately, since both are
+  // just separate DOM reflections of the one localStorage source of
+  // truth. The Tournament page instead just shows a compact status
+  // line (tournamentChallongeStatusLine) pointing back to whichever
+  // panel is more convenient, rather than a third full copy of the
+  // input fields.
   function updateChallongePanelSummary() {
     var connected = !!(loadChallongeClientId() && loadChallongeClientSecret());
-    challongePanelSummary.textContent = T(connected ? "challonge.summaryConnected" : "challonge.summaryNotConnected");
+    var summaryKey = connected ? "challonge.summaryConnected" : "challonge.summaryNotConnected";
+    challongePanelSummary.textContent = T(summaryKey);
+    if (challongePanelSummaryLeague) challongePanelSummaryLeague.textContent = T(summaryKey);
     if (tournamentChallongeStatusLine) {
       tournamentChallongeStatusLine.textContent = T(connected ? "challonge.summaryConnected" : "challonge.notConnectedSeeMainScreen");
     }
   }
   challongeClientIdInput.value = loadChallongeClientId();
   challongeClientSecretInput.value = loadChallongeClientSecret();
+  challongeClientIdInputLeague.value = loadChallongeClientId();
+  challongeClientSecretInputLeague.value = loadChallongeClientSecret();
   challongeClientIdInput.addEventListener("change", function () {
     saveChallongeClientId(challongeClientIdInput.value.trim());
+    challongeClientIdInputLeague.value = challongeClientIdInput.value;
     saveChallongeToken(null);
     updateChallongePanelSummary();
   });
   challongeClientSecretInput.addEventListener("change", function () {
     saveChallongeClientSecret(challongeClientSecretInput.value.trim());
+    challongeClientSecretInputLeague.value = challongeClientSecretInput.value;
+    saveChallongeToken(null);
+    updateChallongePanelSummary();
+  });
+  challongeClientIdInputLeague.addEventListener("change", function () {
+    saveChallongeClientId(challongeClientIdInputLeague.value.trim());
+    challongeClientIdInput.value = challongeClientIdInputLeague.value;
+    saveChallongeToken(null);
+    updateChallongePanelSummary();
+  });
+  challongeClientSecretInputLeague.addEventListener("change", function () {
+    saveChallongeClientSecret(challongeClientSecretInputLeague.value.trim());
+    challongeClientSecretInput.value = challongeClientSecretInputLeague.value;
     saveChallongeToken(null);
     updateChallongePanelSummary();
   });
   updateChallongePanelSummary();
 
-  btnChallongeTestConnection.addEventListener("click", function () {
+  // Shared by both Test Connection buttons (main + League panels) -
+  // whichever one was clicked shows its own status/disabled state, but
+  // the underlying check is identical since both read the one stored
+  // credential pair.
+  function testChallongeConnection(button, statusEl) {
     var clientId = loadChallongeClientId();
     var clientSecret = loadChallongeClientSecret();
     if (!clientId || !clientSecret) {
-      challongeTestConnectionStatus.textContent = T("challonge.testConnectionNeedsCredentials");
+      statusEl.textContent = T("challonge.testConnectionNeedsCredentials");
       return;
     }
-    btnChallongeTestConnection.disabled = true;
-    challongeTestConnectionStatus.textContent = T("challonge.testing");
+    button.disabled = true;
+    statusEl.textContent = T("challonge.testing");
     // Force a real exchange instead of reusing a cached token, so this
     // button always reflects the credentials currently in the fields.
     saveChallongeToken(null);
     getChallongeAccessToken().then(function (token) {
-      btnChallongeTestConnection.disabled = false;
-      challongeTestConnectionStatus.textContent = token
+      button.disabled = false;
+      statusEl.textContent = token
         ? T("challonge.testConnectionSuccess")
         : T("challonge.testConnectionFailed") + challongeAuthErrorSuffix();
       updateChallongePanelSummary();
     });
+  }
+  btnChallongeTestConnection.addEventListener("click", function () {
+    testChallongeConnection(btnChallongeTestConnection, challongeTestConnectionStatus);
+  });
+  btnChallongeTestConnectionLeague.addEventListener("click", function () {
+    testChallongeConnection(btnChallongeTestConnectionLeague, challongeTestConnectionStatusLeague);
   });
 
   btnTournamentPushChallonge.addEventListener("click", function () {
@@ -27656,6 +27694,7 @@
   wireCollapsiblePanel("backup-panel", "btn-toggle-backup-panel");
   wireCollapsiblePanel("squash-panel", "btn-toggle-squash-panel");
   wireCollapsiblePanel("challonge-panel", "btn-toggle-challonge-panel");
+  wireCollapsiblePanel("challonge-panel-league", "btn-toggle-challonge-panel-league");
   wireCollapsiblePanel("rotation-panel", "btn-toggle-rotation-panel");
   wireCollapsiblePanel("game-setup-panel", "btn-toggle-game-setup-panel");
   wireCollapsiblePanel("players-panel", "btn-toggle-players-panel");
