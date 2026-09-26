@@ -6541,6 +6541,24 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   color: var(--accent);
 }
 
+/* Inside a .panel-toggle button (the "Replace Everything" sub-panel),
+   the toggle button itself already carries the bottom margin - a
+   second one on the title here would double up the gap before the
+   chevron/summary line. */
+.collapsible-panel .panel-toggle .backup-subsection-title {
+  margin: 0;
+}
+
+/* #backup-panel .row .btn (see above) makes every button in a row
+   grow to fill it, which is right for a lone "All Data" or "iCloud
+   Sync" button but wrong for "Import & Replace" - a full-width danger
+   button reads as far more prominent/urgent than a destructive,
+   rarely-used action should. Two ID selectors to out-specificity
+   that two-class rule regardless of source order. */
+#backup-panel #btn-squash-import-data {
+  flex: none;
+}
+
 .fair-race-explain-row {
   display: flex;
   align-items: center;

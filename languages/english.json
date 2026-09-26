@@ -91,6 +91,7 @@
   "backup.squashHeading": "💀 Replace Everything",
   "backup.squashKeepPlayersLabel": "Keep players (name & contact info only, combined from both sides) — clear everyone's stats, ratings, and history instead of replacing them",
   "backup.squashNote": "Instead of merging, replaces everything on this device with the imported file. A full backup of what's currently here downloads automatically first.",
+  "backup.squashSummary": "Replace everything on this device with an imported file, instead of merging.",
   "backup.squashWarningBody": "This will permanently replace everything on this device — every player, game, stat, and rating — with what's in this file. There's no undo inside the app.",
   "backup.squashWarningBodyDated": "This file was exported {{date}}. Importing it will permanently replace everything on this device — every player, game, stat, and rating — with what's in it. There's no undo inside the app.",
   "backup.summary": "Export or import your data, or reset player stats and saved lists.",

@@ -91,6 +91,7 @@
   "backup.squashHeading": "💀 Reemplazar todo",
   "backup.squashKeepPlayersLabel": "Mantener jugadores (solo nombre e información de contacto, combinados de ambos lados) — borrar las estadísticas, clasificación e historial de todos en vez de reemplazarlos",
   "backup.squashNote": "En lugar de combinar, reemplaza todo en este dispositivo con el archivo importado. Una copia de seguridad completa de lo que hay aquí ahora mismo se descarga automáticamente primero.",
+  "backup.squashSummary": "Reemplaza todo en este dispositivo con un archivo importado, en lugar de fusionar.",
   "backup.squashWarningBody": "Esto reemplazará permanentemente todo en este dispositivo — cada jugador, partida, estadística y clasificación — con lo que hay en este archivo. No hay forma de deshacerlo dentro de la app.",
   "backup.squashWarningBodyDated": "Este archivo se exportó el {{date}}. Importarlo reemplazará permanentemente todo en este dispositivo — cada jugador, partida, estadística y clasificación — con su contenido. No hay forma de deshacerlo dentro de la app.",
   "backup.summary": "Exporta o importa tus datos, o restablece las estadísticas de jugadores y las listas guardadas.",
