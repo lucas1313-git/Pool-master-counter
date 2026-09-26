@@ -2290,6 +2290,7 @@
   var btnRatingEditSave = document.getElementById("btn-rating-edit-save");
   var btnRatingEditCancel = document.getElementById("btn-rating-edit-cancel");
   var btnResetAllRatings = document.getElementById("btn-reset-all-ratings");
+  var btnRecomputeAllRatings = document.getElementById("btn-recompute-all-ratings");
 
   var removedPlayersOverlay = document.getElementById("removed-players-overlay");
   var removedPlayersChecklist = document.getElementById("removed-players-checklist");
@@ -12830,6 +12831,68 @@
         saveRatingsToStorage(PLAYER_RATINGS);
         renderAll();
         showToast(T("toast.allRatingsReset"));
+      });
+    });
+  }
+
+  // Rebuilds every player's rating from an empty slate by replaying
+  // their entire real game history in chronological order - the only
+  // way to guarantee gamesPlayed/K-factor/rating are all consistent
+  // with what actually happened, instead of whatever ended up stored
+  // (which can drift for reasons that have nothing to do with a bad
+  // game result - e.g. the case-variant name auto-merge bug that used
+  // to undercount gamesPlayed and knock an established player back
+  // into the provisional K-factor for their next games). Elo is
+  // relational - a win's delta depends on the opponent's rating at the
+  // time too - so a fully self-consistent fix has to replay everyone
+  // from scratch together, not just patch one player's number; ratings
+  // can shift for players who were never affected by whatever prompted
+  // this, which is why it's gated the same way resetAllPlayersOfficialRating
+  // is (double confirm, pre-wipe snapshot via saveResetSnapshot so it's
+  // undoable from Recover Data). Reuses the exact same game-gathering
+  // and replay logic as backfillMissingRatingsFromHistory, just without
+  // its alreadyRated skip - here every game is meant to be replayed, not
+  // only ones missing from history.
+  function recomputeAllRatingsFromGameHistory() {
+    var byTs = {};
+    getAllKnownPlayerNames().forEach(function (name) {
+      allGamesForPlayerName(name).forEach(function (g) {
+        if (g.result !== "won" || !g.ts || byTs[g.ts]) return;
+        byTs[g.ts] = { ts: g.ts, isTeam: !!g.isTeam, winnerNames: g.winnerNames || [], loserNames: g.opponentNames || [] };
+      });
+    });
+    var toApply = Object.keys(byTs)
+      .map(function (ts) {
+        return byTs[ts];
+      })
+      .sort(function (a, b) {
+        return a.ts.localeCompare(b.ts);
+      });
+
+    PLAYER_RATINGS = {};
+    toApply.forEach(function (g) {
+      if (!g.winnerNames.length || !g.loserNames.length) return;
+      if (g.isTeam) {
+        applyTeamRatingResult(g.winnerNames, g.loserNames, g.ts);
+      } else {
+        g.loserNames.forEach(function (loserName) {
+          applyPairwiseRatingResult(g.winnerNames[0], loserName, g.ts);
+        });
+      }
+    });
+    saveRatingsToStorage(PLAYER_RATINGS);
+    return Object.keys(PLAYER_RATINGS).length;
+  }
+
+  function recomputeAllRatingsFromGameHistoryFlow() {
+    confirmModal(T("confirm.recomputeAllRatingsExplain"), function () {
+      confirmModal(T("confirm.areYouSure"), function () {
+        saveResetSnapshot("allRatings", T("resetSnapshot.allRatingsLabel"), {
+          ratings: JSON.parse(JSON.stringify(PLAYER_RATINGS))
+        });
+        var count = recomputeAllRatingsFromGameHistory();
+        renderAll();
+        showToast(T("toast.allRatingsRecomputed", { count: count }));
       });
     });
   }
@@ -26506,6 +26569,7 @@
   btnResetAllPlayerStats.addEventListener("click", resetAllPlayerStats);
   btnResetRosterLists.addEventListener("click", resetAllRosterLists);
   btnResetAllRatings.addEventListener("click", resetAllPlayersOfficialRating);
+  btnRecomputeAllRatings.addEventListener("click", recomputeAllRatingsFromGameHistoryFlow);
   btnFullReset.addEventListener("click", performFullFactoryReset);
 
   btnFullResetStep2Yes.addEventListener("click", function () {
