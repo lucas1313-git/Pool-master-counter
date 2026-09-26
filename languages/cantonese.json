@@ -163,6 +163,8 @@
   "common.ratingBadgeTitle": "本地 Fargo（呢個應用程式自己嘅 Elo 評分,唔係官方 FargoRate）",
   "common.ratingPronosticTitle": "而家贏或輸嘅話，評分預計會變幾多",
   "common.removeName": "移除 {{name}}",
+  "common.robustness": "🛡️ 可靠度：{{count}}",
+  "common.robustnessTitle": "呢個本地 Fargo 評分係based on幾多場賽事 — 場數越多,個數字就越可靠,同官方 FargoRate 嘅可靠度係同一個概念。",
   "common.save": "儲存",
   "common.seconds": "秒",
   "common.show": "顯示",

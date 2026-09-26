@@ -163,6 +163,8 @@
   "common.ratingBadgeTitle": "Fargo local (classement Elo propre à l'application — pas le FargoRate officiel)",
   "common.ratingPronosticTitle": "Variation de classement projetée selon que ce côté gagne ou perde maintenant",
   "common.removeName": "Retirer {{name}}",
+  "common.robustness": "🛡️ Fiabilité : {{count}}",
+  "common.robustnessTitle": "Le nombre de parties sur lequel repose ce classement Fargo local — plus il y a de parties, plus le chiffre est fiable, comme la fiabilité de FargoRate lui-même.",
   "common.save": "Enregistrer",
   "common.seconds": "secondes",
   "common.show": "Afficher",
