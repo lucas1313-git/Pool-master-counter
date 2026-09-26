@@ -1988,7 +1988,9 @@
   var challongePushReviewMatchups = document.getElementById("challonge-push-review-matchups");
   var challongePushReviewStatus = document.getElementById("challonge-push-review-status");
   var btnChallongePushConfirm = document.getElementById("btn-challonge-push-confirm");
+  var btnChallongeCloseTournament = document.getElementById("btn-challonge-close-tournament");
   var btnChallongePushReviewClose = document.getElementById("btn-challonge-push-review-close");
+  var btnTournamentCloseChallonge = document.getElementById("btn-tournament-close-challonge");
   var tournamentChampionBanner = document.getElementById("tournament-champion-banner");
   var tournamentCurrentMatchPanel = document.getElementById("tournament-current-match-panel");
   var tournamentReadyList = document.getElementById("tournament-ready-list");
@@ -14173,6 +14175,30 @@
     });
   }
 
+  // The explicit "Close Tournament" action (Contact Sheet/Tournament
+  // page buttons) - closing is deliberately NOT automatic after every
+  // push (see pushGamesToChallongeRoundRobin's autoClose comment), so
+  // this is the one place a close actually gets attempted outside of a
+  // completed race. callback receives the same true/false
+  // finalizeChallongeTournament resolves, so the caller can update its
+  // own "closed" bookkeeping only on genuine success.
+  function closeChallongeTournamentFlow(tournamentId, callback) {
+    var hasCredentials = !!(loadChallongeClientId() && loadChallongeClientSecret());
+    if (!hasCredentials) {
+      showToast(T("challonge.notConnected"));
+      callback(false);
+      return;
+    }
+    finalizeChallongeTournament(tournamentId).then(function (closed) {
+      showToast(closed ? T("challonge.tournamentClosed") : challongePushApiFailedText());
+      callback(closed);
+    }).catch(function (e) {
+      console.warn("Challonge close tournament failed unexpectedly.", e);
+      showToast(challongePushApiFailedText());
+      callback(false);
+    });
+  }
+
   // Bulk-adds participants by name. Resolves a map of name -> Challonge
   // participant id for whichever ones were actually created (a name
   // that fails to come back just won't have an entry - callers only
@@ -23916,23 +23942,17 @@
               });
               return chain.then(function () {
                 saveTournamentToStorage(t);
-                // See pushGamesToChallongeRoundRobin's attemptFinalize
-                // comment - same reasoning applies to the Tournament
-                // page's own Round Robin push.
-                var finalizeStep = t.challongeTournamentClosed
-                  ? Promise.resolve(true)
-                  : finalizeChallongeTournament(tournamentId).then(function (closed) {
-                      if (closed) {
-                        t.challongeTournamentClosed = true;
-                        saveTournamentToStorage(t);
-                      }
-                      return closed;
-                    });
-                finalizeStep.then(function () {
-                  showToast(failed
-                    ? T("challonge.pushSummaryWithFailures", { added: addedCount, scores: pushed, failed: failed })
-                    : T("challonge.pushSummary", { added: addedCount, scores: pushed }));
-                });
+                // Deliberately not auto-closed - see
+                // pushGamesToChallongeRoundRobin's own comment on
+                // autoClose. Challonge permanently refuses new
+                // participants on a closed tournament, and this push
+                // can reasonably be run again as the bracket
+                // progresses; closing it is a separate, explicit
+                // action (closeChallongeTournamentButton) once the
+                // organizer is actually done.
+                showToast(failed
+                  ? T("challonge.pushSummaryWithFailures", { added: addedCount, scores: pushed, failed: failed })
+                  : T("challonge.pushSummary", { added: addedCount, scores: pushed }));
               });
             });
           });
@@ -24024,7 +24044,17 @@
     };
   }
 
-  function pushGamesToChallongeRoundRobin(games, tournamentName, pushRecord, onProgress) {
+  // autoClose: only Race to N pushes (pushRaceToChallonge) pass true -
+  // a completed race is inherently one-shot, nothing more will ever be
+  // added to it, so closing it immediately is safe. The daily/general
+  // push leaves this false: Challonge permanently refuses new
+  // participants once a tournament is closed (confirmed live: "Tournament
+  // participants can no longer be added"), but the daily push is
+  // designed to be run again later the same day as more games happen -
+  // auto-closing after the first push would silently lock out anyone
+  // who plays later that day. Closing that one is a separate, explicit
+  // action instead (see closeChallongeDayTournament).
+  function pushGamesToChallongeRoundRobin(games, tournamentName, pushRecord, onProgress, autoClose) {
     var agg = aggregateGamesByPair(games);
     if (!agg.individualGames.length) return Promise.resolve({ ok: false, reason: "no-games" });
     var roster = agg.roster;
@@ -24092,14 +24122,14 @@
           }
         }
 
-        // Best-effort close, tried whether or not there was anything
-        // new to push - e.g. a second push after every pair was
-        // already reported on a prior attempt still needs this, since
-        // that prior attempt may never have gotten to try closing at
-        // all. Tracked on the push record so a tournament confirmed
-        // closed once doesn't get a pointless repeat call every time
-        // after.
+        // Only attempted when autoClose is true (see this function's own
+        // comment) - tried whether or not there was anything new to
+        // push, since a second push after every pair was already
+        // reported on a prior attempt still needs this. Tracked on the
+        // push record so a tournament confirmed closed once doesn't get
+        // a pointless repeat call every time after.
         function attemptFinalize(pushed, failed) {
+          if (!autoClose) return Promise.resolve({ ok: true, addedCount: addedCount, pushed: pushed, failed: failed });
           if (pushRecord.challongeTournamentClosed) {
             return Promise.resolve({ ok: true, addedCount: addedCount, pushed: pushed, failed: failed, closed: true });
           }
@@ -24128,7 +24158,7 @@
             });
 
         return startStep.then(function (started) {
-          if (!started) return { ok: true, addedCount: addedCount, pushed: 0, failed: pending.length + missingPairs.length, closed: false };
+          if (!started) return { ok: true, addedCount: addedCount, pushed: 0, failed: pending.length + missingPairs.length, closed: autoClose ? false : undefined };
           return fetchChallongeMatches(tournamentId).then(function (challongeMatches) {
             var pushed = 0;
             var failed = 0;
@@ -24251,6 +24281,10 @@
     }
     challongePushReviewSummary.textContent = T("challonge.reviewSummary", { count: agg.individualGames.length, date: dateStr });
     updateChallongePushReviewMatchups();
+    // Nothing to close until a push has actually created the
+    // tournament for this date.
+    var dayPush = CHALLONGE_DAY_PUSHES[dateStr];
+    btnChallongeCloseTournament.classList.toggle("hidden", !(dayPush && dayPush.challongeTournamentId));
   }
 
   // Race-to-N sessions are pushed to Challonge as their own tournament
@@ -24376,12 +24410,11 @@
         games,
         T("challonge.raceTournamentName", { names: winnerNamesText, target: target, date: todayDateStr() }),
         racePush,
-        function () { saveChallongeRacePushes(pushes); }
+        function () { saveChallongeRacePushes(pushes); },
+        true
       ).then(function (result) {
         if (result.ok && (result.pushed || result.addedCount)) {
-          showToast(result.failed
-            ? T("challonge.pushSummaryWithFailures", { added: result.addedCount, scores: result.pushed, failed: result.failed })
-            : T("challonge.pushSummary", { added: result.addedCount, scores: result.pushed }));
+          showToast(challongePushResultText(result));
         }
       });
     }).catch(function (e) {
@@ -26189,12 +26222,42 @@
       showToast(T("challonge.pushFailedApi"));
     });
   });
+  btnTournamentCloseChallonge.addEventListener("click", function () {
+    if (!TOURNAMENT || !TOURNAMENT.challongeTournamentId) {
+      showToast(T("challonge.nothingToClose"));
+      return;
+    }
+    btnTournamentCloseChallonge.disabled = true;
+    closeChallongeTournamentFlow(TOURNAMENT.challongeTournamentId, function (closed) {
+      btnTournamentCloseChallonge.disabled = false;
+      if (closed) {
+        TOURNAMENT.challongeTournamentClosed = true;
+        saveTournamentToStorage(TOURNAMENT);
+      }
+    });
+  });
 
   btnDayReportPushChallonge.addEventListener("click", openChallongePushReviewModal);
   challongePushDateInput.addEventListener("change", function () {
     renderChallongePushReviewList(challongePushDateInput.value);
   });
   btnChallongePushConfirm.addEventListener("click", confirmChallongePushFromReview);
+  btnChallongeCloseTournament.addEventListener("click", function () {
+    var dateStr = challongePushDateInput.value;
+    var dayPush = CHALLONGE_DAY_PUSHES[dateStr];
+    if (!dayPush || !dayPush.challongeTournamentId) {
+      showToast(T("challonge.nothingToClose"));
+      return;
+    }
+    btnChallongeCloseTournament.disabled = true;
+    closeChallongeTournamentFlow(dayPush.challongeTournamentId, function (closed) {
+      btnChallongeCloseTournament.disabled = false;
+      if (closed) {
+        dayPush.challongeTournamentClosed = true;
+        saveChallongeDayPushes(CHALLONGE_DAY_PUSHES);
+      }
+    });
+  });
   btnChallongePushReviewClose.addEventListener("click", closeChallongePushReviewModal);
   challongePushReviewOverlay.addEventListener("click", function (e) {
     if (e.target === challongePushReviewOverlay) closeChallongePushReviewModal();
