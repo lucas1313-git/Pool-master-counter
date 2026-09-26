@@ -6559,6 +6559,17 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   flex: none;
 }
 
+/* Only shown when hasNewGamesSince finds games played after the last
+   iCloud Sync export - bigger and accent-colored so a stale export
+   actually catches the eye instead of blending into the two plain
+   timestamp lines above it. */
+.sync-new-data-available {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--accent);
+  margin-top: 4px;
+}
+
 .fair-race-explain-row {
   display: flex;
   align-items: center;

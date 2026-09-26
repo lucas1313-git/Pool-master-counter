@@ -14657,30 +14657,63 @@
     );
   }
 
+  // "Friday, Sep 25 · 6:50 PM" - day name included (unlike
+  // formatTimestamp's plain ISO date), since the sync status line is
+  // specifically about recognizing "was this today, or a while ago"
+  // at a glance.
+  function formatSyncStatusTimestamp(ts) {
+    var d = new Date(ts);
+    if (!ts || isNaN(d.getTime())) return "";
+    var dateText = d.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+    var timeText = d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    return dateText + " · " + timeText;
+  }
+
+  // True if any game - today's still-live ones or already-archived -
+  // happened after sinceIso. Used to flag the iCloud Sync status line
+  // as stale: an export from before your most recent games doesn't
+  // reflect your current data anymore.
+  function hasNewGamesSince(sinceIso) {
+    if (!sinceIso) return false;
+    var foundLive = state.gameHistory.some(function (g) {
+      return g && g.ts && g.ts > sinceIso;
+    });
+    if (foundLive) return true;
+    return Object.keys(PLAYER_STATS).some(function (key) {
+      return (PLAYER_STATS[key].sessions || []).some(function (s) {
+        return (s.games || []).some(function (g) {
+          return g && g.ts && g.ts > sinceIso;
+        });
+      });
+    });
+  }
+
   function renderSyncStatusLine() {
-    var exportedAt, importedAt, exporterName, importedFromName;
+    var exportedAt, importedAt;
     try {
       exportedAt = localStorage.getItem(LAST_SYNC_EXPORT_KEY);
       importedAt = localStorage.getItem(LAST_SYNC_IMPORT_KEY);
-      exporterName = localStorage.getItem(LAST_SYNC_EXPORTER_NAME_KEY);
-      importedFromName = localStorage.getItem(LAST_SYNC_IMPORT_NAME_KEY);
     } catch (e) {
       exportedAt = null;
       importedAt = null;
-      exporterName = null;
-      importedFromName = null;
     }
-    var exportedText = exportedAt ? formatTimestamp(exportedAt, true) : T("backup.syncStatusNever");
-    var importedText = importedAt ? formatTimestamp(importedAt, true) : T("backup.syncStatusNever");
-    var exportedLine =
-      exportedAt && exporterName
-        ? T("backup.syncStatusExportedByName", { when: exportedText, name: exporterName })
-        : T("backup.syncStatusExported", { when: exportedText });
-    var importedLine =
-      importedAt && importedFromName
-        ? T("backup.syncStatusImportedFromName", { when: importedText, name: importedFromName })
-        : T("backup.syncStatusImported", { when: importedText });
-    syncStatusLine.textContent = exportedLine + " · " + importedLine;
+    var importedText = importedAt ? formatSyncStatusTimestamp(importedAt) : T("backup.syncStatusNever");
+    var exportedText = exportedAt ? formatSyncStatusTimestamp(exportedAt) : T("backup.syncStatusNever");
+
+    syncStatusLine.innerHTML = "";
+    var importLine = document.createElement("div");
+    importLine.textContent = T("backup.syncStatusLastImport", { when: importedText });
+    var exportLine = document.createElement("div");
+    exportLine.textContent = T("backup.syncStatusLastExport", { when: exportedText });
+    syncStatusLine.appendChild(importLine);
+    syncStatusLine.appendChild(exportLine);
+
+    if (hasNewGamesSince(exportedAt)) {
+      var newDataLine = document.createElement("div");
+      newDataLine.className = "sync-new-data-available";
+      newDataLine.textContent = T("backup.syncNewDataAvailable");
+      syncStatusLine.appendChild(newDataLine);
+    }
   }
 
   // Shared by the Copy Report button and shareReport()'s no-native-share
