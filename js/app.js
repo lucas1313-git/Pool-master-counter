@@ -1662,6 +1662,7 @@
   var exportObfuscateCheckbox = document.getElementById("export-obfuscate-checkbox");
   var btnImportAllData = document.getElementById("btn-import-all-data");
   var btnExportSync = document.getElementById("btn-export-sync");
+  var btnExportSyncHelp = document.getElementById("btn-export-sync-help");
   var syncStatusLine = document.getElementById("sync-status-line");
   var importFileInput = document.getElementById("import-file-input");
   var driveFolderLinkInput = document.getElementById("drive-folder-link-input");
@@ -26555,6 +26556,9 @@
   });
 
   btnExportSync.addEventListener("click", exportForSync);
+  btnExportSyncHelp.addEventListener("click", function () {
+    alertModal(T("backup.syncHelp"));
+  });
   renderSyncStatusLine();
 
   btnResetAllPlayerStats.addEventListener("click", resetAllPlayerStats);

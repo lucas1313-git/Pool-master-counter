@@ -421,13 +421,27 @@
     <p class="panel-summary" id="backup-panel-summary" data-i18n="backup.summary">Export or import your data, or reset player stats and saved lists.</p>
     <div class="panel-body" id="backup-panel-body">
       <p class="player-stats-note" data-i18n="backup.note">All stats and session data live on this device only. Export a backup file to move everything to another iPhone, iPad, or computer.</p>
+
+      <h4 class="session-subsection-subheading" data-i18n="backup.exportHeading">⬆️ Export</h4>
       <label class="checkbox-row checkbox-row-prominent">
         <input type="checkbox" id="export-obfuscate-checkbox">
         <span data-i18n="backup.obfuscateLabel">🕵️ Obfuscate personal information (omit every player's email &amp; phone from this export — names only)</span>
       </label>
       <div class="row">
-        <button type="button" id="btn-export-all-data" class="btn btn-primary" data-i18n="backup.exportAll">Export All Data</button>
-        <button type="button" id="btn-import-all-data" class="btn btn-ghost" data-i18n="backup.importData">Import Data</button>
+        <button type="button" id="btn-export-all-data" class="btn btn-primary" data-i18n="backup.exportAll">All Data</button>
+        <button type="button" id="btn-export-sync" class="btn btn-primary" data-i18n="backup.syncExport">☁️ iCloud Sync</button>
+        <button type="button" id="btn-export-sync-help" class="format-info-btn" data-i18n-aria-label="backup.syncExportHelpAria" aria-label="What is iCloud Sync export for?">❓</button>
+      </div>
+      <p class="player-stats-note" id="sync-status-line"></p>
+      <div class="row">
+        <button type="button" id="btn-export-session" class="btn btn-ghost" data-i18n="gameSetup.exportSession">Session</button>
+        <button type="button" id="btn-share" class="btn btn-ghost" data-i18n="gameSetup.shareStandings">Share Standings</button>
+      </div>
+      <p class="player-stats-note" data-i18n="backup.exportSessionNote">Just the current live session (players and wins) as its own JSON file or a text summary to share - Export All Data above covers everything, including career stats, ratings, and saved lists.</p>
+
+      <h4 class="session-subsection-subheading" data-i18n="backup.importHeading">⬇️ Import</h4>
+      <div class="row">
+        <button type="button" id="btn-import-all-data" class="btn btn-ghost" data-i18n="backup.importData">All Data</button>
         <input type="file" id="import-file-input" accept="application/json" class="hidden">
       </div>
       <p class="player-stats-note" data-i18n="backup.importDataNote">Merges into what's already on this device — nothing here is deleted, same-named players get a conflict check, and history from both sides is combined.</p>
@@ -467,16 +481,6 @@
           </div>
         </div>
       </div>
-      <div class="row">
-        <button type="button" id="btn-export-session" class="btn btn-ghost" data-i18n="gameSetup.exportSession">Export Session</button>
-        <button type="button" id="btn-share" class="btn btn-ghost" data-i18n="gameSetup.shareStandings">Share Standings</button>
-      </div>
-      <p class="player-stats-note" data-i18n="backup.exportSessionNote">Just the current live session (players and wins) as its own JSON file or a text summary to share - Export All Data above covers everything, including career stats, ratings, and saved lists.</p>
-      <div class="row">
-        <button type="button" id="btn-export-sync" class="btn btn-primary" data-i18n="backup.syncExport">☁️ Export for iCloud Sync</button>
-      </div>
-      <p class="player-stats-note" data-i18n="backup.syncHelp">Downloads to your browser's normal download folder — most browsers save silently there instead of showing a save panel, so it won't land in iCloud Drive unless you've pointed your browser's download location at a folder inside iCloud Drive (a one-time setting). Each export is named with today's date, day of the week, and your name, so several people can share one iCloud Drive folder without colliding — on your other device, use Import Data and pick any of those files.</p>
-      <p class="player-stats-note" id="sync-status-line"></p>
 
       <h2 data-i18n="recoverData.heading">🗄️ Recover Data</h2>
       <p class="player-stats-note" data-i18n="recoverData.note">Every reset below keeps a local copy of what it wiped, newest first. Pick one to selectively restore just the players or games you want back.</p>
@@ -2159,6 +2163,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260925z4"></script>
+<script src="js/app.js?v=20260925z5"></script>
 </body>
 </html>
