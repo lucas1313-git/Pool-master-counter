@@ -5938,6 +5938,65 @@
     }
   }
 
+  // A per-player counterpart to RUN_RECORDS.dailyBest, which only ever
+  // remembers ONE run for the whole app each day (whoever's run
+  // happens to be the single biggest) - useful for "who's on fire
+  // today" bragging rights, but wrong for a specific player's own
+  // stats page: showing them someone ELSE's name under a heading on
+  // their own page reads as a bug even though it's working as
+  // designed. This mirrors that same peak-tracking logic
+  // (stale-if-not-today, else keep the higher value) but keyed per
+  // player, the same case-insensitive way PLAYER_BEST_RUNS already is.
+  var PLAYER_DAILY_BEST_RUNS_KEY = "poolMasterCounter.playerDailyBestRuns.v1";
+
+  function loadPlayerDailyBestRunsFromStorage() {
+    try {
+      var raw = localStorage.getItem(PLAYER_DAILY_BEST_RUNS_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function savePlayerDailyBestRunsToStorage(data) {
+    try {
+      localStorage.setItem(PLAYER_DAILY_BEST_RUNS_KEY, JSON.stringify(data));
+    } catch (e) {
+      console.warn("Could not save player daily best runs.", e);
+    }
+  }
+
+  var PLAYER_DAILY_BEST_RUNS = loadPlayerDailyBestRunsFromStorage();
+
+  function findPlayerDailyBestRunKey(name) {
+    var key = normalizeNameKey(name);
+    var match = Object.keys(PLAYER_DAILY_BEST_RUNS).filter(function (k) {
+      return normalizeNameKey(k) === key;
+    });
+    return match.length ? match[0] : null;
+  }
+
+  // This player's own best run TODAY specifically - null if they
+  // haven't had one worth tracking yet today (either never, or their
+  // last one was on an earlier day and today hasn't produced a new
+  // one yet).
+  function getPlayerTodaysBestRun(name) {
+    var key = findPlayerDailyBestRunKey(name);
+    if (!key) return null;
+    var entry = PLAYER_DAILY_BEST_RUNS[key];
+    return localDateStrFromTs(entry.ts) === todayDateStr() ? entry : null;
+  }
+
+  function recordPlayerDailyBestRunIfHigher(name, value) {
+    var key = findPlayerDailyBestRunKey(name) || name;
+    var existing = PLAYER_DAILY_BEST_RUNS[key];
+    var stale = !existing || localDateStrFromTs(existing.ts) !== todayDateStr();
+    if (stale || value > existing.value) {
+      PLAYER_DAILY_BEST_RUNS[key] = { name: name, value: value, ts: new Date().toISOString() };
+      savePlayerDailyBestRunsToStorage(PLAYER_DAILY_BEST_RUNS);
+    }
+  }
+
   // Checked continuously as a run grows (see bumpRunForPlayer), not just
   // once when it "ends" - a run's final length is its peak, so comparing
   // on every extra ball is exactly equivalent and means there's no
@@ -5945,6 +6004,7 @@
   function checkRunRecords(playerName, value) {
     if (value < RUN_RECORD_MIN_TO_TRACK) return;
     recordPlayerBestRunIfHigher(playerName, value);
+    recordPlayerDailyBestRunIfHigher(playerName, value);
     var changed = false;
     var nowTs = new Date().toISOString();
     if (!RUN_RECORDS.allTimeBest || value > RUN_RECORDS.allTimeBest.value) {
@@ -18158,23 +18218,30 @@
       synopsisStatRow(T("playerPage.winPct"), synopsis.pct === null ? "—" : synopsis.pct + "%")
     );
 
-    // Only shown once the feature actually has data - a device where
-    // nobody's ever run 2+ balls in a row yet has nothing worth showing.
-    var allTimeRun = getAllTimeBestRun();
-    if (allTimeRun) {
+    // This player's OWN best run - NOT getAllTimeBestRun()/
+    // getTodaysBestRun(), which are the single app-wide record across
+    // every player (correctly shown with a name attached in the daily
+    // report/Publish panel, where "who set today's record" is exactly
+    // the question). Showing that same cross-player record here, on
+    // one specific player's own page, meant it could name someone else
+    // entirely - technically correct, but reads as a bug on a page
+    // that's supposed to be about this one person. Only shown once the
+    // feature actually has data for THIS player.
+    var personalBestRun = getPlayerBestRun(currentStatsPlayerName);
+    if (personalBestRun > 0) {
       playerPageSynopsisBody.appendChild(
         synopsisStatRow(
           T("playerPage.allTimeBestRun"),
-          T("playerPage.bestRunValue", { value: allTimeRun.value, name: allTimeRun.name }),
-          allTimeRun.name === currentStatsPlayerName ? "win" : null
+          T("playerPage.personalBestRunValue", { value: personalBestRun }),
+          "win"
         )
       );
-      var todaysRun = getTodaysBestRun();
+      var todaysPersonalRun = getPlayerTodaysBestRun(currentStatsPlayerName);
       playerPageSynopsisBody.appendChild(
         synopsisStatRow(
           T("playerPage.todaysBestRun"),
-          todaysRun ? T("playerPage.bestRunValue", { value: todaysRun.value, name: todaysRun.name }) : T("playerPage.noRunYetToday"),
-          todaysRun && todaysRun.name === currentStatsPlayerName ? "win" : null
+          todaysPersonalRun ? T("playerPage.personalBestRunValue", { value: todaysPersonalRun.value }) : T("playerPage.noRunYetToday"),
+          todaysPersonalRun ? "win" : null
         )
       );
     }
