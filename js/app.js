@@ -27515,6 +27515,7 @@
   });
 
   wireCollapsiblePanel("backup-panel", "btn-toggle-backup-panel");
+  wireCollapsiblePanel("squash-panel", "btn-toggle-squash-panel");
   wireCollapsiblePanel("challonge-panel", "btn-toggle-challonge-panel");
   wireCollapsiblePanel("rotation-panel", "btn-toggle-rotation-panel");
   wireCollapsiblePanel("game-setup-panel", "btn-toggle-game-setup-panel");
