@@ -505,6 +505,10 @@
         <button type="button" id="btn-reset-all-ratings" class="btn btn-danger" data-i18n="players.resetAllRatings">⚠️ Reset All Players' Official Rating</button>
       </div>
       <div class="row">
+        <button type="button" id="btn-recompute-all-ratings" class="btn btn-danger" data-i18n="players.recomputeAllRatings">🔧 Recompute All Ratings From Game History</button>
+      </div>
+      <p class="player-stats-note" data-i18n="resets.recomputeRatingsHint">Rebuilds every player's rating from scratch by replaying their full game history in order - fixes drift (like a wrong K-factor after a name merge) without wiping anyone back to the default rating. Can shift every player's rating, not just one, since ratings depend on who each game was against.</p>
+      <div class="row">
         <button type="button" id="btn-reset-today-stats" class="btn btn-danger" data-i18n="gamewin.resetTodayStats">Reset today's stats</button>
       </div>
       <div class="row">
@@ -2155,6 +2159,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260925z2"></script>
+<script src="js/app.js?v=20260925z3"></script>
 </body>
 </html>
