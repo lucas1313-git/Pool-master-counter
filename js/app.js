@@ -15969,6 +15969,10 @@
       if (TOURNAMENT) localStorage.setItem(TOURNAMENT_KEY, JSON.stringify(TOURNAMENT));
       else localStorage.removeItem(TOURNAMENT_KEY);
       localStorage.setItem(TOURNAMENT_RESULTS_KEY, JSON.stringify(TOURNAMENT_RESULTS));
+      if (data.exportedAt) {
+        localStorage.setItem(LAST_SYNC_IMPORT_KEY, data.exportedAt);
+        if (data.exportedBy) localStorage.setItem(LAST_SYNC_IMPORT_NAME_KEY, data.exportedBy);
+      }
     } catch (e) {
       console.warn("Could not save squashed data.", e);
     }
