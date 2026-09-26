@@ -10664,22 +10664,22 @@
     leagueColRemoveHeader.classList.toggle("hidden", !league.isOrganizer);
     leagueLiveHostingSection.classList.toggle("hidden", !league.isOrganizer);
 
-    // Add-member candidates: known players not already in the league -
-    // shown up front as a full picklist (see buildLeagueNameAutocomplete),
-    // narrowing as the organizer types. Typing someone who isn't a known
-    // player at all still works - the click handler below adds them as
-    // a member directly, same as the table queue's and each team's own
+    // Add-member candidates: anyone known to the app at all - the same
+    // list the Contact Sheet shows (played before, or just has contact
+    // info on file), not limited to today's live scoreboard roster
+    // (see contactSheetAllNames) - a league night often draws people
+    // who haven't shown up in the current session yet. Shown up front
+    // as a full picklist (see buildLeagueNameAutocomplete), narrowing
+    // as the organizer types. Typing someone who isn't a known player
+    // at all still works - the click handler below adds them as a
+    // member directly, same as the table queue's and each team's own
     // add-a-player fields already do.
     var memberNameKeys = league.members.map(function (m) {
       return normalizeNameKey(m.name);
     });
-    var candidates = state.players
-      .filter(function (p) {
-        return memberNameKeys.indexOf(normalizeNameKey(p.name)) === -1;
-      })
-      .map(function (p) {
-        return p.name;
-      });
+    var candidates = contactSheetAllNames().filter(function (n) {
+      return memberNameKeys.indexOf(normalizeNameKey(n)) === -1;
+    });
     leagueAddMemberWrap.innerHTML = "";
     var addMemberCombo = buildLeagueNameAutocomplete(candidates, T("league.queueAddPlaceholder"), "league-add-member-input");
     leagueAddMemberInput = addMemberCombo.input;
