@@ -2046,6 +2046,27 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
     </div>
   </section>
 
+  <section class="panel collapsible-panel collapsed" id="challonge-panel-league">
+    <button type="button" class="panel-toggle" id="btn-toggle-challonge-panel-league" aria-expanded="false" aria-controls="challonge-panel-league-body">
+      <h2 data-i18n="challonge.heading">☁️ Challonge</h2>
+      <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+    </button>
+    <p class="panel-summary" id="challonge-panel-league-summary" data-i18n="challonge.summaryNotConnected">Not connected</p>
+    <div class="panel-body" id="challonge-panel-league-body">
+      <p class="player-stats-note" data-i18n="challonge.introGeneral">Push today's report or a tournament to Challonge — rosters always, and match scores too wherever they can be matched up reliably (Round Robin tournaments, and any pair who played each other today — see why others don't in Help). Needs a free Challonge developer app: sign up at connect.challonge.com to get a client ID and secret, no login required from this app.</p>
+      <div class="row">
+        <input type="text" id="challonge-client-id-input-league" data-i18n-placeholder="challonge.clientIdPlaceholder" placeholder="Challonge client ID" autocomplete="off">
+      </div>
+      <div class="row">
+        <input type="password" id="challonge-client-secret-input-league" data-i18n-placeholder="challonge.clientSecretPlaceholder" placeholder="Challonge client secret" autocomplete="off">
+      </div>
+      <div class="row">
+        <button type="button" id="btn-challonge-test-connection-league" class="btn btn-ghost" data-i18n="challonge.testConnectionButton">🔌 Test Connection</button>
+      </div>
+      <p class="player-stats-note" id="challonge-test-connection-status-league"></p>
+    </div>
+  </section>
+
 </div>
 
 <div id="league-wizard-overlay" class="wizard-overlay hidden">
@@ -2177,6 +2198,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260925za"></script>
+<script src="js/app.js?v=20260925zb"></script>
 </body>
 </html>
