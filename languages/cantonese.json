@@ -91,6 +91,7 @@
   "backup.squashHeading": "💀 取代晒佢",
   "backup.squashKeepPlayersLabel": "保留玩家（淨係得名同聯絡資料，兩邊合併）——將每個人嘅統計、評分、紀錄清空，唔取代佢哋",
   "backup.squashNote": "唔係合併，而係用匯入嘅檔案取代呢部裝置上面嘅所有嘢。而家嘅資料會先自動匯出做完整備份。",
+  "backup.squashSummary": "用匯入嘅檔案取代呢部裝置上面嘅所有嘢，唔係合併。",
   "backup.squashWarningBody": "呢個操作會永久取代呢部裝置上面嘅所有嘢——每一位玩家、對局、統計、評分——變成呢個檔案入面嘅內容。應用程式入面冇得返轉頭。",
   "backup.squashWarningBodyDated": "呢個檔案係 {{date}} 匯出嘅。匯入佢會永久取代呢部裝置上面嘅所有嘢——每一位玩家、對局、統計、評分——變成佢入面嘅內容。應用程式入面冇得返轉頭。",
   "backup.summary": "匯出或匯入你嘅資料，或者重設玩家統計同已儲存嘅名單。",

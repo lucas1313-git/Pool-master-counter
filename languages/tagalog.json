@@ -91,6 +91,7 @@
   "backup.squashHeading": "💀 Palitan Lahat",
   "backup.squashKeepPlayersLabel": "Panatilihin ang mga manlalaro (pangalan at contact info lang, pinagsama mula sa dalawang panig) — burahin ang stats, rating, at history ng lahat sa halip na palitan ang mga ito",
   "backup.squashNote": "Sa halip na pagsamahin, papalitan ang lahat sa device na ito ng na-import na file. Awtomatikong made-download muna ang buong backup ng kasalukuyang nandito.",
+  "backup.squashSummary": "Papalitan ang lahat sa device na ito ng na-import na file, sa halip na i-merge.",
   "backup.squashWarningBody": "Permanenteng papalitan nito ang lahat sa device na ito — bawat manlalaro, laro, stat, at rating — ng nasa file na ito. Walang undo sa loob ng app.",
   "backup.squashWarningBodyDated": "Na-export ang file na ito noong {{date}}. Kapag ini-import ito, permanenteng papalitan ang lahat sa device na ito — bawat manlalaro, laro, stat, at rating — ng laman nito. Walang undo sa loob ng app.",
   "backup.summary": "I-export o i-import ang data mo, o i-reset ang stats ng manlalaro at naka-save na listahan.",
