@@ -341,27 +341,6 @@
     </div>
   </section>
 
-  <section class="panel collapsible-panel collapsed" id="challonge-panel">
-    <button type="button" class="panel-toggle" id="btn-toggle-challonge-panel" aria-expanded="false" aria-controls="challonge-panel-body">
-      <h2 data-i18n="challonge.heading">☁️ Challonge</h2>
-      <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
-    </button>
-    <p class="panel-summary" id="challonge-panel-summary" data-i18n="challonge.summaryNotConnected">Not connected</p>
-    <div class="panel-body" id="challonge-panel-body">
-      <p class="player-stats-note" data-i18n="challonge.introGeneral">Push today's report or a tournament to Challonge — rosters always, and match scores too wherever they can be matched up reliably (Round Robin tournaments, and any pair who played each other today — see why others don't in Help). Needs a free Challonge developer app: sign up at connect.challonge.com to get a client ID and secret, no login required from this app.</p>
-      <div class="row">
-        <input type="text" id="challonge-client-id-input" data-i18n-placeholder="challonge.clientIdPlaceholder" placeholder="Challonge client ID" autocomplete="off">
-      </div>
-      <div class="row">
-        <input type="password" id="challonge-client-secret-input" data-i18n-placeholder="challonge.clientSecretPlaceholder" placeholder="Challonge client secret" autocomplete="off">
-      </div>
-      <div class="row">
-        <button type="button" id="btn-challonge-test-connection" class="btn btn-ghost" data-i18n="challonge.testConnectionButton">🔌 Test Connection</button>
-      </div>
-      <p class="player-stats-note" id="challonge-test-connection-status"></p>
-    </div>
-  </section>
-
   <section class="panel collapsible-panel collapsed" id="day-notes-panel">
     <button type="button" class="panel-toggle" id="btn-toggle-day-notes-panel" aria-expanded="false" aria-controls="day-notes-panel-body">
       <h2 data-i18n="dayNotes.heading">Publish Daily Report</h2>
@@ -536,6 +515,27 @@
           <button type="button" id="btn-full-reset" class="btn btn-danger btn-full-reset" data-i18n="resets.fullReset">💀 Full Reset — Wipe Everything</button>
         </div>
       </div>
+    </div>
+  </section>
+
+  <section class="panel collapsible-panel collapsed" id="challonge-panel">
+    <button type="button" class="panel-toggle" id="btn-toggle-challonge-panel" aria-expanded="false" aria-controls="challonge-panel-body">
+      <h2 data-i18n="challonge.heading">☁️ Challonge</h2>
+      <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+    </button>
+    <p class="panel-summary" id="challonge-panel-summary" data-i18n="challonge.summaryNotConnected">Not connected</p>
+    <div class="panel-body" id="challonge-panel-body">
+      <p class="player-stats-note" data-i18n="challonge.introGeneral">Push today's report or a tournament to Challonge — rosters always, and match scores too wherever they can be matched up reliably (Round Robin tournaments, and any pair who played each other today — see why others don't in Help). Needs a free Challonge developer app: sign up at connect.challonge.com to get a client ID and secret, no login required from this app.</p>
+      <div class="row">
+        <input type="text" id="challonge-client-id-input" data-i18n-placeholder="challonge.clientIdPlaceholder" placeholder="Challonge client ID" autocomplete="off">
+      </div>
+      <div class="row">
+        <input type="password" id="challonge-client-secret-input" data-i18n-placeholder="challonge.clientSecretPlaceholder" placeholder="Challonge client secret" autocomplete="off">
+      </div>
+      <div class="row">
+        <button type="button" id="btn-challonge-test-connection" class="btn btn-ghost" data-i18n="challonge.testConnectionButton">🔌 Test Connection</button>
+      </div>
+      <p class="player-stats-note" id="challonge-test-connection-status"></p>
     </div>
   </section>
 
