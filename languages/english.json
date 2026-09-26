@@ -163,6 +163,8 @@
   "common.ratingBadgeTitle": "Local Fargo (this app's own Elo-style rating — not the official FargoRate)",
   "common.ratingPronosticTitle": "Projected rating change if this side wins or loses right now",
   "common.removeName": "Remove {{name}}",
+  "common.robustness": "🛡️ Robustness: {{count}}",
+  "common.robustnessTitle": "How many games this Local Fargo rating is based on — more games means a more reliable number, the same idea as FargoRate's own robustness.",
   "common.save": "Save",
   "common.seconds": "seconds",
   "common.show": "Show",

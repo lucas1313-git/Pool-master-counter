@@ -2278,6 +2278,7 @@
 
   var ratingEditOverlay = document.getElementById("rating-edit-overlay");
   var ratingEditPlayerName = document.getElementById("rating-edit-player-name");
+  var ratingEditRobustness = document.getElementById("rating-edit-robustness");
   var ratingEditInput = document.getElementById("rating-edit-input");
   var ratingEditEmailInput = document.getElementById("rating-edit-email-input");
   var ratingEditPhoneInput = document.getElementById("rating-edit-phone-input");
@@ -11832,6 +11833,19 @@
     return key ? PLAYER_RATINGS[key] : null;
   }
 
+  // A local counterpart to FargoRate's own robustness figure (see
+  // contact.fargoRobustness) - how many games this rating is actually
+  // based on, so a brand new player's rating isn't read with the same
+  // confidence as one built on hundreds of games. Unlike Fargo's own
+  // formula (proprietary, and weighted by recency/stability, not just
+  // a raw count), this is deliberately just gamesPlayed itself - an
+  // honest, transparent number rather than an invented approximation
+  // of Fargo's real algorithm.
+  function getPlayerRobustness(name) {
+    var entry = getPlayerRatingEntry(name);
+    return entry ? entry.gamesPlayed || 0 : 0;
+  }
+
   var PLAYER_ADDED = loadPlayerAddedFromStorage();
 
   function findPlayerAddedKey(name) {
@@ -12752,6 +12766,7 @@
     ratingEditTargetName = name;
     ratingEditPlayerName.textContent = name;
     ratingEditInput.value = getPlayerRating(name);
+    ratingEditRobustness.textContent = T("common.robustness", { count: getPlayerRobustness(name) });
     var contact = getPlayerContact(name);
     ratingEditEmailInput.value = contact.email || "";
     ratingEditPhoneInput.value = formatPhoneNumberForActiveLanguage(contact.phone || "");
@@ -20011,6 +20026,12 @@
     heading.className = "player-rating-graph-heading";
     heading.textContent = T("common.rating");
     section.appendChild(heading);
+
+    var robustnessLine = document.createElement("p");
+    robustnessLine.className = "player-stats-note";
+    robustnessLine.title = T("common.robustnessTitle");
+    robustnessLine.textContent = T("common.robustness", { count: getPlayerRobustness(name) });
+    section.appendChild(robustnessLine);
 
     var entry = getPlayerRatingEntry(name);
     var pointsInWindow = entry

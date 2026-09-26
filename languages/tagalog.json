@@ -163,6 +163,8 @@
   "common.ratingBadgeTitle": "Local Fargo (sariling Elo-style rating ng app na ito — hindi ang opisyal na FargoRate)",
   "common.ratingPronosticTitle": "Tinatayang pagbabago sa rating kapag nanalo o natalo ang panig na ito ngayon",
   "common.removeName": "Alisin si {{name}}",
+  "common.robustness": "🛡️ Robustness: {{count}}",
+  "common.robustnessTitle": "Ilang laro ang batayan ng Local Fargo rating na ito — mas maraming laro ay nangangahulugan ng mas maaasahang numero, kaparehong ideya ng sariling robustness ng FargoRate.",
   "common.save": "I-save",
   "common.seconds": "segundo",
   "common.show": "Ipakita",
