@@ -6519,6 +6519,28 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   margin-top: 0;
 }
 
+/* A clearly bounded group within a panel (e.g. Backup & Transfer's
+   Export/Import halves) - a real border box, not just a text heading,
+   so the two sides read as distinct at a glance instead of one long
+   run of buttons. */
+.backup-subsection {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin: 14px 0;
+}
+
+.backup-subsection:first-of-type {
+  margin-top: 0;
+}
+
+.backup-subsection-title {
+  margin: 0 0 12px;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--accent);
+}
+
 .fair-race-explain-row {
   display: flex;
   align-items: center;
