@@ -4089,22 +4089,10 @@
       warning.className = "team-needs-opponent-warning";
       warning.textContent = T("scoreboard.teamNeedsOpponent");
       panel.appendChild(warning);
-    } else {
-      // Team mode is always exactly A vs B (see gameSetup.teamA/teamB),
-      // so unlike individual mode's soleActiveOpponent guard, "the
-      // opponent" is never ambiguous here - the other team, whichever
-      // one this one isn't.
-      var opponentTeamMembers = teamMembersLive(teamId === "A" ? "B" : "A").map(function (p) {
-        return p.name;
-      });
-      var teamPronostic = teamRatingPronosticVsOpponent(
-        members.map(function (p) {
-          return p.name;
-        }),
-        opponentTeamMembers
-      );
-      panel.appendChild(buildRatingPronosticEl(teamPronostic));
     }
+    // No rating preview here - Team Mode games don't affect rating at
+    // all (see applyMultiWayRatingResult's comment), so a "+X/-Y"
+    // pronostic would just promise a change that never actually happens.
 
     var wins = state.teamWins[teamId] || 0;
 
@@ -5081,13 +5069,15 @@
       teamCredit: null
     });
     if (state.gameHistory.length > 200) state.gameHistory.length = 200;
-    if (!noStatsMode) {
-      if (isTeam) {
-        applyTeamRatingResult(winnerNames, opponentNames, ts);
+    if (!noStatsMode && !isTeam) {
+      // Team Mode isn't rated at all (see applyMultiWayRatingResult's
+      // comment) - averaging teammates together, or moving every
+      // member the same amount regardless of their own rating, produced
+      // confusing swings unrelated to that player's own performance.
+      if (winnerNames.length > 1 || opponentNames.length > 1) {
+        applyMultiWayRatingResult(winnerNames, opponentNames, ts);
       } else {
-        opponentNames.forEach(function (opponentName) {
-          applyPairwiseRatingResult(winnerNames[0], opponentName, ts);
-        });
+        applyPairwiseRatingResult(winnerNames[0], opponentNames[0], ts);
       }
       saveRatingsToStorage(PLAYER_RATINGS);
     }
@@ -12871,13 +12861,11 @@
 
     PLAYER_RATINGS = {};
     toApply.forEach(function (g) {
-      if (!g.winnerNames.length || !g.loserNames.length) return;
-      if (g.isTeam) {
-        applyTeamRatingResult(g.winnerNames, g.loserNames, g.ts);
+      if (!g.winnerNames.length || !g.loserNames.length || g.isTeam) return;
+      if (g.winnerNames.length > 1 || g.loserNames.length > 1) {
+        applyMultiWayRatingResult(g.winnerNames, g.loserNames, g.ts);
       } else {
-        g.loserNames.forEach(function (loserName) {
-          applyPairwiseRatingResult(g.winnerNames[0], loserName, g.ts);
-        });
+        applyPairwiseRatingResult(g.winnerNames[0], g.loserNames[0], g.ts);
       }
     });
     saveRatingsToStorage(PLAYER_RATINGS);
@@ -13040,21 +13028,6 @@
     return { win: Math.round(k * (1 - expected)), lose: -Math.round(k * expected) };
   }
 
-  // Same idea, but for a team result (see applyTeamRatingResult) - a
-  // flat K-factor and each side's average rating instead of a per-player
-  // K, since that's what actually gets applied to every member of the
-  // team alike. Mirrors ratingPronosticVsOpponent's win/lose split
-  // above, not just "lose = -win": applyTeamRatingResult recomputes
-  // expectedWinner fresh from whichever side actually won, so unless
-  // the match is exactly 50/50 the win and lose swings are genuinely
-  // different sizes (the favorite risks more than it stands to gain).
-  function teamRatingPronosticVsOpponent(teamNames, opponentNames) {
-    var myAvg = averageRating(teamNames);
-    var oppAvg = averageRating(opponentNames);
-    var expected = eloExpectedScore(myAvg, oppAvg);
-    return { win: Math.round(RATING_K_PROVISIONAL * (1 - expected)), lose: -Math.round(RATING_K_PROVISIONAL * expected) };
-  }
-
   // Small "+X / -Y" preview element (see ratingPronosticVsOpponent above)
   // - only meaningful with exactly one well-defined opponent, since with
   // 3+ active players in individual mode a "lose" outcome could mean
@@ -13112,21 +13085,41 @@
     return sum / names.length;
   }
 
-  // Team result: treats each side's average rating as a single "player"
-  // for the win-probability calculation, then applies that same delta to
-  // every member of each side — a common, simple approximation for team
-  // Elo (not as rigorous as e.g. TrueSkill, but transparent and fair).
-  function applyTeamRatingResult(winnerNames, loserNames, ts) {
-    var winnerAvg = averageRating(winnerNames);
-    var loserAvg = averageRating(loserNames);
-    var expectedWinner = eloExpectedScore(winnerAvg, loserAvg);
-    var winnerDelta = Math.round(RATING_K_PROVISIONAL * (1 - expectedWinner));
-    var loserDelta = Math.round(RATING_K_PROVISIONAL * -(1 - expectedWinner));
+  // A 3+-way result (more than one name on either side, but NOT an
+  // official Team Mode game - team play isn't rated at all, see
+  // creditWin/recordTournamentRackWin's isTeam checks). Averaging
+  // everyone together (the old team-style math) hides who actually beat
+  // whom, and crediting one flat bump per opponent (the old individual-
+  // mode fan-out) let a single result move someone's rating several
+  // times over. Instead, each person on each side gets exactly ONE
+  // pairwise-style update, computed against the strongest (highest-
+  // rated) player on the other side - a real, specific opponent to be
+  // measured against, and a real one-result-one-rating-change per
+  // player. Both reference ratings are read before any bump is applied,
+  // so bumping one player never shifts another's "who's the strongest
+  // opponent" calculation mid-game.
+  function applyMultiWayRatingResult(winnerNames, loserNames, ts) {
+    var strongestLoserRating = Math.max.apply(
+      null,
+      loserNames.map(function (n) {
+        return getPlayerRating(n);
+      })
+    );
+    var strongestWinnerRating = Math.max.apply(
+      null,
+      winnerNames.map(function (n) {
+        return getPlayerRating(n);
+      })
+    );
     winnerNames.forEach(function (n) {
-      bumpPlayerRating(n, winnerDelta, ts);
+      var entry = ensureRatingEntry(n);
+      var expected = eloExpectedScore(entry.rating, strongestLoserRating);
+      bumpPlayerRating(n, Math.round(ratingKFor(entry.gamesPlayed) * (1 - expected)), ts);
     });
     loserNames.forEach(function (n) {
-      bumpPlayerRating(n, loserDelta, ts);
+      var entry = ensureRatingEntry(n);
+      var expected = eloExpectedScore(entry.rating, strongestWinnerRating);
+      bumpPlayerRating(n, -Math.round(ratingKFor(entry.gamesPlayed) * expected), ts);
     });
   }
 
@@ -13166,13 +13159,11 @@
     if (!toApply.length) return;
 
     toApply.forEach(function (g) {
-      if (!g.winnerNames.length || !g.loserNames.length) return;
-      if (g.isTeam) {
-        applyTeamRatingResult(g.winnerNames, g.loserNames, g.ts);
+      if (!g.winnerNames.length || !g.loserNames.length || g.isTeam) return;
+      if (g.winnerNames.length > 1 || g.loserNames.length > 1) {
+        applyMultiWayRatingResult(g.winnerNames, g.loserNames, g.ts);
       } else {
-        g.loserNames.forEach(function (loserName) {
-          applyPairwiseRatingResult(g.winnerNames[0], loserName, g.ts);
-        });
+        applyPairwiseRatingResult(g.winnerNames[0], g.loserNames[0], g.ts);
       }
     });
     saveRatingsToStorage(PLAYER_RATINGS);
@@ -24714,12 +24705,12 @@
       summary: winnerLabel + " won " + typeLabel + " (tournament vs " + loserLabel + ")"
     });
     if (state.gameHistory.length > 200) state.gameHistory.length = 200;
-    if (isTeam) {
-      applyTeamRatingResult(winnerMembers, loserMembers, ts);
-    } else {
+    if (!isTeam) {
+      // A doubles-entrant match isn't rated at all - see
+      // applyMultiWayRatingResult's comment on creditWin's isTeam check.
       applyPairwiseRatingResult(winnerMembers[0], loserMembers[0], ts);
+      saveRatingsToStorage(PLAYER_RATINGS);
     }
-    saveRatingsToStorage(PLAYER_RATINGS);
     saveState();
   }
 
