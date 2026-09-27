@@ -208,6 +208,8 @@
   "contactSheet.exportJson": "📤 I-export ang Contacts sa JSON",
   "contactSheet.graveyardSelected": "🗑️ Ipadala ang Napili sa Graveyard",
   "contactSheet.heading": "Listahan ng Contact",
+  "contactSheet.id": "ID",
+  "contactSheet.idAria": "Player ID ni {{name}}",
   "contactSheet.importJson": "📥 I-import ang Contacts mula sa JSON",
   "contactSheet.importRosters": "📥 I-import ang mga Pangalan mula sa Nakaraang Listahan ng Manlalaro",
   "contactSheet.importVcard": "📇 I-import Mula sa vCard",

@@ -21474,6 +21474,18 @@
     });
     fields.appendChild(contactSheetFieldWrap("contactSheet.name", nameInput));
 
+    // The permanent local id (see getOrCreatePlayerLocalId) - shown
+    // read-only, since nothing should ever be able to edit it: it's
+    // the one anchor that stays the same across a rename or a merge,
+    // independent of the display name.
+    var idInput = document.createElement("input");
+    idInput.type = "text";
+    idInput.readOnly = true;
+    idInput.className = "contact-sheet-id-input";
+    idInput.value = getOrCreatePlayerLocalId(name);
+    idInput.setAttribute("aria-label", T("contactSheet.idAria", { name: name }));
+    fields.appendChild(contactSheetFieldWrap("contactSheet.id", idInput));
+
     var nicknameInput = document.createElement("input");
     nicknameInput.type = "text";
     nicknameInput.value = contact.nickname || "";

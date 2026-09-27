@@ -208,6 +208,8 @@
   "contactSheet.exportJson": "📤 Exporter les Contacts en JSON",
   "contactSheet.graveyardSelected": "🗑️ Envoyer la Sélection au Cimetière",
   "contactSheet.heading": "Fiche Contacts",
+  "contactSheet.id": "ID",
+  "contactSheet.idAria": "Identifiant joueur de {{name}}",
   "contactSheet.importJson": "📥 Importer les Contacts Depuis un JSON",
   "contactSheet.importRosters": "📥 Importer les noms des anciennes listes",
   "contactSheet.importVcard": "📇 Importer Depuis une vCard",
