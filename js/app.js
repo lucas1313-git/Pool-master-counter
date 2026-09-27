@@ -3960,6 +3960,28 @@
     return others.length === 1 ? others[0] : null;
   }
 
+  // "Nickname"-style short display for the scoreboard: just the first
+  // name, since that's what people actually call each other at the
+  // table - a full name is just extra noise once you already know who's
+  // who. Falls back to appending the family name's first initial (e.g.
+  // "John W.") only when another currently active player shares the
+  // same first name - without that, two "John"s on screen at once would
+  // be indistinguishable, which defeats the point of a short name.
+  function shortDisplayNameForPlayer(player) {
+    var spaceIdx = player.name.indexOf(" ");
+    if (spaceIdx <= 0) return player.name;
+    var firstName = player.name.slice(0, spaceIdx);
+    var collides = activePlayers().some(function (p) {
+      if (p.id === player.id) return false;
+      var otherSpaceIdx = p.name.indexOf(" ");
+      var otherFirstName = otherSpaceIdx > 0 ? p.name.slice(0, otherSpaceIdx) : p.name;
+      return otherFirstName.toLowerCase() === firstName.toLowerCase();
+    });
+    if (!collides) return firstName;
+    var familyInitial = player.name.slice(spaceIdx + 1).trim().charAt(0).toUpperCase();
+    return familyInitial ? firstName + " " + familyInitial + "." : firstName;
+  }
+
   function buildIndividualPanel(player) {
     var panel = document.createElement("div");
     panel.className = "player-panel";
@@ -3967,23 +3989,14 @@
     var name = document.createElement("div");
     name.className = "player-name";
     buildPlayerNameLabel(name, player.name, false);
-    // When this card becomes the keypad-selected one (see
-    // .is-keypad-selected/keypadSelectedPlayerId - the player about to
-    // receive the next +/-/undo keypress), a long name's family-name
-    // portion is dropped entirely instead of wrapping/clamping, so the
-    // selected card reads at a glance. Only splits it off when there's
-    // a nickname-free plain name long enough to actually need it -
-    // buildPlayerNameLabel's first child is the plain name text node
-    // only in that case (a nickname replaces it with the nickname text
-    // plus a separate real-name span instead).
+    // Swaps the plain full name for its short display (see
+    // shortDisplayNameForPlayer) - only when buildPlayerNameLabel used
+    // the plain-name path (its first child is the plain name text node
+    // only then; a real nickname replaces it with the nickname text
+    // plus a separate real-name span instead, which this leaves alone).
     var firstNameNode = name.firstChild;
-    var familySplitIdx = player.name.indexOf(" ");
-    if (player.name.length > 12 && familySplitIdx > 0 && firstNameNode && firstNameNode.nodeType === Node.TEXT_NODE && firstNameNode.textContent === player.name) {
-      var familySpan = document.createElement("span");
-      familySpan.className = "player-name-family";
-      familySpan.textContent = player.name.slice(familySplitIdx);
-      firstNameNode.textContent = player.name.slice(0, familySplitIdx);
-      name.insertBefore(familySpan, firstNameNode.nextSibling);
+    if (firstNameNode && firstNameNode.nodeType === Node.TEXT_NODE && firstNameNode.textContent === player.name) {
+      firstNameNode.textContent = shortDisplayNameForPlayer(player);
     }
     name.appendChild(buildPlayerLinkIcon(player.name));
     name.appendChild(buildRatingBadge(player.name));
