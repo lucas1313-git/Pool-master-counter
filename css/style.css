@@ -891,9 +891,20 @@ body {
 #app.focus-mode .player-score-row .btn-ball {
   flex: 0 0 auto;
   width: clamp(88px, 18cqw, 128px);
-  min-height: clamp(44px, 9cqh, 64px);
+  min-height: clamp(80px, 16cqh, 120px);
   font-size: clamp(1.3rem, 5cqw, 1.8rem);
   padding: 0;
+}
+
+/* The base .btn-ball.minus border (1px var(--border)) is meant to read
+   as a subtle outline against .bg-card at normal size - too subtle now
+   that Focus Mode's minus button is this much bigger and sitting right
+   next to the solid-filled plus button, so it gets a thicker, higher-
+   contrast border here instead (var(--text-dim), not var(--border) -
+   the latter is deliberately close to --bg-card in every theme). */
+#app.focus-mode .player-score-row .btn-ball.minus {
+  border-width: 2px;
+  border-color: var(--text-dim);
 }
 
 /* The currently keypad-selected player (see keypadSelectedPlayerId) -
