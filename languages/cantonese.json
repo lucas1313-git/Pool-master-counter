@@ -215,7 +215,6 @@
   "contactSheet.importedJsonToast": "由檔案入面加咗 {{count}} 個聯絡人（{{added}} 個新嘅）。",
   "contactSheet.importedToast": "由舊名單加咗 {{count}} 個玩家。",
   "contactSheet.importedVcardToast": "由 vCard 入面加咗 {{count}} 個——加咗 {{added}} 個，更新咗 {{updated}} 個。",
-  "contactSheet.importedVcardToastWithResurrected": "由 vCard 入面加咗 {{count}} 個——加咗 {{added}} 個，更新咗 {{updated}} 個，仲由墳場還原咗 {{resurrected}} 個。",
   "contactSheet.invalidEmail": "呢個電郵地址好似唔啱格式。",
   "contactSheet.invalidPhone": "呢個電話號碼好似未打齊。",
   "contactSheet.name": "名",
