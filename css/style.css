@@ -746,33 +746,34 @@ body {
   container-type: size;
 }
 
-/* A long player-name wrapping to 2+ lines used to have nowhere to go:
-   .player-panel above is size-contained (a fixed box from its grid
-   row - see the comment on it), which is exactly what lets the score
-   read from across the room, but that same containment also means the
-   card's content can never feed back into growing the row to fit a
-   taller name (see the grid-auto-rows comment further up) - the name
-   and the score just silently overlapped instead. Moving the size
-   containment down onto .stat-block specifically, and letting it
-   flex to fill whatever's left after the name (now free to take
-   however many lines it needs, flex-shrink:0 so it's never the one
-   that gets squeezed) takes its share, means .stat-value's cqh below
-   measures .stat-block's own - now variable - height instead of the
-   whole card's: a short name barely changes anything, a long wrapped
-   one just shrinks the score gracefully to make room instead of the
-   two colliding. */
+/* A long player-name wrapping used to have nowhere to go: .player-panel
+   above is size-contained (a fixed box from its grid row - see the
+   comment on it), which is exactly what lets the score read from
+   across the room, but that same containment also means the card's
+   content can never feed back into growing the row to fit a taller
+   name (see the grid-auto-rows comment further up) - the name and the
+   score just silently overlapped instead.
+   Tried letting the score's own box shrink to make room (moving the
+   size containment onto .stat-block, flexed to fill whatever the name
+   left over) - technically sound, but it meant .stat-value's cqh
+   measured a smaller, name-dependent box instead of the whole card,
+   so the score read noticeably smaller than before even for a normal
+   one-line name the moment a second player made the row's other card
+   grow (e.g. its own rating-vs-opponent note appearing). The score's
+   size needs to stay exactly what .player-panel's own cqh already
+   gives it, unconditionally - so instead of growing the card or
+   shrinking the score, the name itself is capped at 2 lines with an
+   ellipsis past that (-webkit-line-clamp, standard multi-line
+   truncation - supported everywhere this app ships to, despite the
+   -webkit- prefix). A reasonable two-line budget for a name still
+   reads fully across the room almost always; the rare longer one
+   truncates instead of ever touching the score. */
 #app.focus-mode .player-panel .player-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
   flex: 0 0 auto;
-}
-
-#app.focus-mode .player-panel .stat-block {
-  flex: 1 1 auto;
-  min-height: 0;
-  min-width: 0;
-  container-type: size;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
 }
 
 /* Scoped to .player-panel specifically (not a bare .stat-value/
