@@ -2164,6 +2164,15 @@ input[type="number"] {
   background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 22%, var(--felt)) 0%, var(--bg-glow) 100%);
 }
 
+/* A long name's family-name part (split off in buildIndividualPanel,
+   above a length threshold) is dropped entirely once this card becomes
+   the keypad-selected one, rather than wrapping/clamping - the selected
+   card is the one about to receive the next +/-/undo keypress, so the
+   first name alone reads faster at a glance. */
+.is-keypad-selected .player-name-family {
+  display: none;
+}
+
 .is-keypad-selected .keypad-number-badge {
   background: var(--accent);
   color: var(--bg);

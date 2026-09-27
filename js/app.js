@@ -3967,6 +3967,24 @@
     var name = document.createElement("div");
     name.className = "player-name";
     buildPlayerNameLabel(name, player.name, false);
+    // When this card becomes the keypad-selected one (see
+    // .is-keypad-selected/keypadSelectedPlayerId - the player about to
+    // receive the next +/-/undo keypress), a long name's family-name
+    // portion is dropped entirely instead of wrapping/clamping, so the
+    // selected card reads at a glance. Only splits it off when there's
+    // a nickname-free plain name long enough to actually need it -
+    // buildPlayerNameLabel's first child is the plain name text node
+    // only in that case (a nickname replaces it with the nickname text
+    // plus a separate real-name span instead).
+    var firstNameNode = name.firstChild;
+    var familySplitIdx = player.name.indexOf(" ");
+    if (player.name.length > 12 && familySplitIdx > 0 && firstNameNode && firstNameNode.nodeType === Node.TEXT_NODE && firstNameNode.textContent === player.name) {
+      var familySpan = document.createElement("span");
+      familySpan.className = "player-name-family";
+      familySpan.textContent = player.name.slice(familySplitIdx);
+      firstNameNode.textContent = player.name.slice(0, familySplitIdx);
+      name.insertBefore(familySpan, firstNameNode.nextSibling);
+    }
     name.appendChild(buildPlayerLinkIcon(player.name));
     name.appendChild(buildRatingBadge(player.name));
     var soleOpponent = soleActiveOpponent(player);
