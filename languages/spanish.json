@@ -215,7 +215,6 @@
   "contactSheet.importedJsonToast": "Se importaron {{count}} contacto(s) del archivo ({{added}} nuevo(s)).",
   "contactSheet.importedToast": "Se añadieron {{count}} jugador(es) de listas anteriores.",
   "contactSheet.importedVcardToast": "Se importaron {{count}} desde vCard — {{added}} añadidos, {{updated}} actualizados.",
-  "contactSheet.importedVcardToastWithResurrected": "Se importaron {{count}} desde vCard — {{added}} añadidos, {{updated}} actualizados, {{resurrected}} restaurados del Cementerio.",
   "contactSheet.invalidEmail": "Esa dirección de correo no parece válida.",
   "contactSheet.invalidPhone": "Ese número de teléfono no parece completo.",
   "contactSheet.name": "Nombre",
