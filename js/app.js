@@ -4007,14 +4007,30 @@
     }
     block.appendChild(label);
     block.appendChild(value);
-    panel.appendChild(block);
+
+    // The +/- buttons flank the score itself (minus/score/plus, one
+    // row) instead of sitting in their own row below it - reuses
+    // buildBallControls' own two buttons (same handlers/disabled
+    // logic, just pulled out of the wrapper it normally returns them
+    // in) so this is purely a layout change, not a behavior one. Saves
+    // real vertical room in Focus Mode, where .player-panel's height
+    // is fixed by its grid row (see the CSS) - a 2-line player name
+    // now already eats into that budget (see the line-clamp comment),
+    // so a separate full-width button row underneath was the next
+    // thing to get squeezed out.
+    var scoreRow = document.createElement("div");
+    scoreRow.className = "player-score-row";
+    var ballControls = buildBallControls(player, false, isSingleRackGame);
+    scoreRow.appendChild(ballControls.firstElementChild);
+    scoreRow.appendChild(block);
+    scoreRow.appendChild(ballControls.lastElementChild);
+    panel.appendChild(scoreRow);
 
     var runBadge = buildRunStreakBadge(player);
     if (runBadge) panel.appendChild(runBadge);
 
     if (state.fairRaceEnabled) panel.appendChild(buildFairRaceNote(effectiveRaceTarget(player.id)));
 
-    panel.appendChild(buildBallControls(player, false, isSingleRackGame));
     markAsKeypadTarget(panel, player);
 
     return panel;

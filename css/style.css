@@ -869,6 +869,33 @@ body {
   font-size: clamp(1.6rem, 3cqw, 2.2rem);
 }
 
+/* In Focus Mode the row above lays out as a single line instead -
+   .stat-block's order resets to its natural DOM position (between the
+   minus/plus buttons, which are appended either side of it in
+   buildIndividualPanel) so the buttons flank the score rather than
+   sitting in their own row underneath it, and are shrunk down (this
+   overrides the generic #app.focus-mode .btn-ball sizing above, which
+   still applies as-is to Team Mode's member cards) to leave the score
+   itself as the main event. */
+#app.focus-mode .player-score-row {
+  flex-wrap: nowrap;
+  align-items: center;
+}
+
+#app.focus-mode .player-score-row .stat-block {
+  order: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+#app.focus-mode .player-score-row .btn-ball {
+  flex: 0 0 auto;
+  width: clamp(44px, 9cqw, 64px);
+  min-height: clamp(44px, 9cqh, 64px);
+  font-size: clamp(1.3rem, 5cqw, 1.8rem);
+  padding: 0;
+}
+
 /* The currently keypad-selected player (see keypadSelectedPlayerId) -
    the one about to receive the next +/-/undo keypress - gets a visibly
    bigger card (box, fonts, and controls all together, since they're all
@@ -2333,6 +2360,32 @@ input[type="number"] {
   background: var(--bg-card);
   color: var(--text);
   border: 1px solid var(--border);
+}
+
+/* Wraps the score (.stat-block) together with its +/- buttons so they
+   can be reordered by CSS without any JS-side layout logic: normal
+   mode keeps the original look (score on top, full-width; buttons in
+   their own row below, side by side) via order:-1 pulling .stat-block
+   above the buttons and wrapping it onto its own row. Focus Mode
+   instead lays this out as a single non-wrapping row with the buttons
+   flanking the score (see the #app.focus-mode override below) - saves
+   the vertical space the buttons' own row used to take, which the
+   fixed-height card there can't grow to accommodate (see the
+   grid-auto-rows comment above #app.focus-mode .scoreboard). */
+.player-score-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  width: 100%;
+}
+
+.player-score-row .stat-block {
+  order: -1;
+  flex: 1 1 100%;
+}
+
+.player-score-row .btn-ball {
+  flex: 1;
 }
 
 /* ---------- Quick Counter mode ---------- */
