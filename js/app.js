@@ -11584,6 +11584,37 @@
     }
   }
 
+  // A permanent record of every merge (see mergePlayersEverywhere):
+  // normalized source name key -> the name that survived. Neither a
+  // merge nor a graveyard entry used to leave anything behind that
+  // survived a re-import - merging just deleted the source's own
+  // records, and graveyarding just set a flag - so importing an older
+  // backup, roster list, or vCard that still remembered a name as its
+  // own separate identity would silently bring it back as a second
+  // copy, undoing the merge. This map is consulted on every import
+  // (see redirectMergedNamesInImportedData) to fold a permanently-
+  // merged name straight into its current target instead.
+  var MERGED_INTO_KEY = "poolMasterCounter.mergedInto.v1";
+
+  function loadMergedIntoFromStorage() {
+    try {
+      var raw = localStorage.getItem(MERGED_INTO_KEY);
+      var parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function saveMergedIntoToStorage(map) {
+    if (noStatsMode) return;
+    try {
+      localStorage.setItem(MERGED_INTO_KEY, JSON.stringify(map));
+    } catch (e) {
+      console.warn("Could not save merged-player records.", e);
+    }
+  }
+
   // Capped local history of what each reset button just wiped, so it can
   // be recovered from the Recover Data panel without hunting for a
   // downloaded backup file. Newest first, oldest dropped once full.
@@ -12461,6 +12492,7 @@
     });
 
     saveState();
+    recordPlayerMerge(sourceName, target);
     return "";
   }
 
@@ -12700,6 +12732,99 @@
   }
 
   var GRAVEYARD_PLAYERS = loadGraveyardPlayersFromStorage();
+  var PLAYER_MERGED_INTO = loadMergedIntoFromStorage();
+
+  // Records that sourceName has been permanently folded into
+  // targetName - called once, right when a merge actually happens
+  // (see mergePlayersEverywhere). Also redirects any earlier merge
+  // that already pointed AT sourceName (a merge chain: A merged into
+  // B, now B merges into C) so every link ends up pointing straight
+  // at today's actual survivor, never an intermediate name that's
+  // itself since been merged away.
+  function recordPlayerMerge(sourceName, targetName) {
+    var sourceKey = normalizeNameKey(sourceName);
+    Object.keys(PLAYER_MERGED_INTO).forEach(function (key) {
+      if (normalizeNameKey(PLAYER_MERGED_INTO[key]) === sourceKey) {
+        PLAYER_MERGED_INTO[key] = targetName;
+      }
+    });
+    PLAYER_MERGED_INTO[sourceKey] = targetName;
+    saveMergedIntoToStorage(PLAYER_MERGED_INTO);
+  }
+
+  // Where a name should actually end up today, if it's ever been
+  // merged away - otherwise just itself, unchanged. seen guards
+  // against an impossible but non-fatal cycle rather than hanging.
+  function resolveMergedName(name) {
+    var seen = {};
+    var current = name;
+    for (;;) {
+      var key = normalizeNameKey(current);
+      if (seen[key]) return current;
+      seen[key] = true;
+      var target = PLAYER_MERGED_INTO[key];
+      if (!target) return current;
+      current = target;
+    }
+  }
+
+  // The three shapes an imported name-keyed store actually comes in -
+  // each redirects every key through resolveMergedName, combining two
+  // keys that land on the same target (an older import that still has
+  // both the pre-merge source and its target as separate entries)
+  // using the same rules mergePlayersEverywhere itself already uses
+  // for that data. Local never needs this same treatment - the source
+  // key simply doesn't exist there anymore the moment a merge runs.
+  function redirectKeyedSessions(obj) {
+    var result = {};
+    Object.keys(obj || {}).forEach(function (key) {
+      var target = resolveMergedName(key);
+      var entry = obj[key] || {};
+      if (!result[target]) {
+        result[target] = { name: target, sessions: (entry.sessions || []).slice() };
+      } else {
+        result[target].sessions = mergeSessionLists(result[target].sessions, entry.sessions || []);
+      }
+    });
+    return result;
+  }
+
+  function redirectKeyedRatings(obj) {
+    var result = {};
+    Object.keys(obj || {}).forEach(function (key) {
+      var target = resolveMergedName(key);
+      var entry = obj[key] || {};
+      var history = entry.history || [];
+      if (!result[target]) {
+        result[target] = { name: target, rating: entry.rating, gamesPlayed: entry.gamesPlayed || 0, history: history.slice() };
+        return;
+      }
+      result[target].history = result[target].history.concat(history).sort(function (a, b) {
+        return (a.ts || "").localeCompare(b.ts || "");
+      });
+      result[target].gamesPlayed = (result[target].gamesPlayed || 0) + (entry.gamesPlayed || 0);
+      var latest = result[target].history.length ? result[target].history[result[target].history.length - 1] : null;
+      if (latest) result[target].rating = latest.rating;
+    });
+    return result;
+  }
+
+  // contacts (target-preferred-else-source, same spirit as
+  // mergePlayersEverywhere's own contact combine) and playerAdded (an
+  // ISO date string, where whichever's already there stays - the real
+  // "earlier wins" comparison still happens once this reaches
+  // mergePlayerAddedData against local) - a first-seen-wins collision
+  // rule is a reasonable simplification for the rare case an import
+  // has both a merge's source and target as separate top-level
+  // entries at once.
+  function redirectKeyedFlatPreferFirst(obj) {
+    var result = {};
+    Object.keys(obj || {}).forEach(function (key) {
+      var target = resolveMergedName(key);
+      if (!result.hasOwnProperty(target)) result[target] = obj[key];
+    });
+    return result;
+  }
 
   function findGraveyardPlayerKey(name) {
     var key = normalizeNameKey(name);
@@ -14593,6 +14718,7 @@
       playerNameTranslations: PLAYER_NAME_TRANSLATIONS,
       removedPlayers: REMOVED_PLAYERS,
       graveyardPlayers: GRAVEYARD_PLAYERS,
+      mergedInto: PLAYER_MERGED_INTO,
       resetSnapshots: RESET_SNAPSHOTS,
       reportArchive: REPORT_ARCHIVE,
       tournament: TOURNAMENT,
@@ -15216,6 +15342,18 @@
         alertModal(T("alert.noValidPlayerLists"));
         return;
       }
+      // Same redirect as importAllDataFromText/importVCardFile - a
+      // saved list from before a merge shouldn't bring the old,
+      // pre-merge name back as a name this list still points at.
+      normalized.forEach(function (r) {
+        var seenNames = {};
+        r.players = r.players.map(resolveMergedName).filter(function (n) {
+          var key = normalizeNameKey(n);
+          if (seenNames[key]) return false;
+          seenNames[key] = true;
+          return true;
+        });
+      });
       var merge = mergeRosterLists(SAVED_ROSTERS, normalized);
       SAVED_ROSTERS = merge.rosters;
       saveRostersToStorage(SAVED_ROSTERS);
@@ -15418,35 +15556,65 @@
           var importedRosters = Array.isArray(data.rosters) ? data.rosters : [];
           var importedTeams = Array.isArray(data.teams) ? data.teams : [];
           var importedPlayerStats = data.playerStats && typeof data.playerStats === "object" ? data.playerStats : {};
-          var extraSessions = summarizeGameHistoryByPlayer(importedState.gameHistory || []);
           var importedRatings = data.ratings && typeof data.ratings === "object" ? data.ratings : {};
           var importedContacts = data.contacts && typeof data.contacts === "object" ? data.contacts : {};
           var importedPlayerAdded = data.playerAdded && typeof data.playerAdded === "object" ? data.playerAdded : {};
           var importedLeagues = Array.isArray(data.leagues) ? data.leagues : [];
           importedLeagues.forEach(normalizeLeagueDefaults);
 
+          // Absorb the imported device's own merge records too (see
+          // buildBackupPayload) - a merge made on a different device,
+          // or restored from an older backup of this same one, should
+          // count here too. Local's own choice wins on an actual
+          // conflict (the same source merged two different ways on
+          // two devices, unlikely but possible) since it reflects
+          // whatever's already been true on this device longer.
+          var importedMergedInto = data.mergedInto && typeof data.mergedInto === "object" ? data.mergedInto : {};
+          Object.keys(importedMergedInto).forEach(function (key) {
+            if (!PLAYER_MERGED_INTO[key]) PLAYER_MERGED_INTO[key] = importedMergedInto[key];
+          });
+          saveMergedIntoToStorage(PLAYER_MERGED_INTO);
+
+          // A name permanently merged away on this device (see
+          // recordPlayerMerge) should never come back as its own
+          // separate identity just because an older backup, roster
+          // list, or vCard still remembers it that way - redirect
+          // every name-keyed piece of the imported payload to its
+          // current target BEFORE any of the merge logic below
+          // combines it with what's already here, so it folds
+          // straight into the survivor instead of undoing the merge.
+          // Local never needs this same treatment: the source key
+          // simply doesn't exist there anymore the moment a merge runs.
+          (importedState.players || []).forEach(function (p) {
+            if (p && p.name) p.name = resolveMergedName(p.name);
+          });
+          (importedState.gameHistory || []).forEach(function (g) {
+            if (!g || typeof g === "string") return;
+            if (Array.isArray(g.winnerNames)) g.winnerNames = g.winnerNames.map(resolveMergedName);
+            if (Array.isArray(g.opponentNames)) g.opponentNames = g.opponentNames.map(resolveMergedName);
+          });
+          importedPlayerStats = redirectKeyedSessions(importedPlayerStats);
+          importedRatings = redirectKeyedRatings(importedRatings);
+          importedContacts = redirectKeyedFlatPreferFirst(importedContacts);
+          importedPlayerAdded = redirectKeyedFlatPreferFirst(importedPlayerAdded);
+          importedRosters.forEach(function (r) {
+            if (!Array.isArray(r.players)) return;
+            var seenNames = {};
+            r.players = r.players.map(resolveMergedName).filter(function (n) {
+              var key = normalizeNameKey(n);
+              if (seenNames[key]) return false;
+              seenNames[key] = true;
+              return true;
+            });
+          });
+
+          var extraSessions = summarizeGameHistoryByPlayer(importedState.gameHistory || []);
+
           var importedRosterPlayerNames = [];
           importedRosters.forEach(function (r) {
             (r.players || []).forEach(function (n) {
               importedRosterPlayerNames.push(n);
             });
-          });
-
-          // Importing a backup that mentions a graveyarded name counts as
-          // "importing them again" - resurrect them so the merge below
-          // (and everything downstream) treats them as a normal player
-          // again, per the Graveyard's stated resurrection path.
-          (importedState.players || []).forEach(function (p) {
-            if (p && p.name) reactivatePlayerFromGraveyard(p.name);
-          });
-          Object.keys(importedPlayerStats).forEach(function (n) {
-            reactivatePlayerFromGraveyard(n);
-          });
-          Object.keys(importedContacts).forEach(function (n) {
-            reactivatePlayerFromGraveyard(n);
-          });
-          importedRosterPlayerNames.forEach(function (n) {
-            reactivatePlayerFromGraveyard(n);
           });
 
           // Finds the actual key in an imported (not-yet-local) store
@@ -15907,6 +16075,7 @@
       SAVED_GAME_SETUPS = [];
       REMOVED_PLAYERS = {};
       GRAVEYARD_PLAYERS = {};
+      PLAYER_MERGED_INTO = {};
       RESET_SNAPSHOTS = [];
       REPORT_ARCHIVE = [];
       TOURNAMENT = null;
@@ -15939,6 +16108,7 @@
       PLAYER_NAME_TRANSLATIONS = data.playerNameTranslations && typeof data.playerNameTranslations === "object" ? data.playerNameTranslations : {};
       REMOVED_PLAYERS = data.removedPlayers && typeof data.removedPlayers === "object" ? data.removedPlayers : {};
       GRAVEYARD_PLAYERS = data.graveyardPlayers && typeof data.graveyardPlayers === "object" ? data.graveyardPlayers : {};
+      PLAYER_MERGED_INTO = data.mergedInto && typeof data.mergedInto === "object" ? data.mergedInto : {};
       RESET_SNAPSHOTS = Array.isArray(data.resetSnapshots) ? data.resetSnapshots : [];
       REPORT_ARCHIVE = Array.isArray(data.reportArchive) ? data.reportArchive : [];
       TOURNAMENT = data.tournament && typeof data.tournament === "object" ? data.tournament : null;
@@ -15969,6 +16139,7 @@
       localStorage.setItem(PLAYER_NAME_TRANSLATIONS_KEY, JSON.stringify(PLAYER_NAME_TRANSLATIONS));
       localStorage.setItem(REMOVED_PLAYERS_KEY, JSON.stringify(REMOVED_PLAYERS));
       localStorage.setItem(GRAVEYARD_PLAYERS_KEY, JSON.stringify(GRAVEYARD_PLAYERS));
+      localStorage.setItem(MERGED_INTO_KEY, JSON.stringify(PLAYER_MERGED_INTO));
       localStorage.setItem(RESET_SNAPSHOTS_KEY, JSON.stringify(RESET_SNAPSHOTS));
       localStorage.setItem(REPORT_ARCHIVE_KEY, JSON.stringify(REPORT_ARCHIVE));
       if (TOURNAMENT) localStorage.setItem(TOURNAMENT_KEY, JSON.stringify(TOURNAMENT));
@@ -23098,12 +23269,13 @@
       }
       var added = 0;
       var updated = 0;
-      var resurrected = 0;
       contacts.forEach(function (c) {
-        if (isPlayerGraveyarded(c.name)) {
-          reactivatePlayerFromGraveyard(c.name);
-          resurrected += 1;
-        }
+        // A permanently-merged name (see recordPlayerMerge) folds into
+        // its current target here too, same reasoning as
+        // importAllDataFromText's own redirect - a phone contact card
+        // still using the old, pre-merge name shouldn't resurrect it
+        // as a second copy.
+        c.name = resolveMergedName(c.name);
         var existingKey = findContactKey(c.name);
         var existing = existingKey ? PLAYER_CONTACTS[existingKey] : null;
         var patch = {};
@@ -23130,11 +23302,10 @@
       });
       renderContactSheetPage();
       showToast(
-        T(resurrected > 0 ? "contactSheet.importedVcardToastWithResurrected" : "contactSheet.importedVcardToast", {
+        T("contactSheet.importedVcardToast", {
           count: contacts.length,
           added: added,
-          updated: updated,
-          resurrected: resurrected
+          updated: updated
         })
       );
     };

@@ -215,7 +215,6 @@
   "contactSheet.importedJsonToast": "Na-import ang {{count}} contact mula sa file ({{added}} bago).",
   "contactSheet.importedToast": "Naidagdag ang {{count}} manlalaro mula sa nakaraang listahan.",
   "contactSheet.importedVcardToast": "Na-import ang {{count}} mula sa vCard — {{added}} idinagdag, {{updated}} na-update.",
-  "contactSheet.importedVcardToastWithResurrected": "Na-import ang {{count}} mula sa vCard — {{added}} idinagdag, {{updated}} na-update, {{resurrected}} na-restore mula sa Graveyard.",
   "contactSheet.invalidEmail": "Mukhang hindi ito valid na email address.",
   "contactSheet.invalidPhone": "Mukhang hindi ito kumpletong numero ng telepono.",
   "contactSheet.name": "Pangalan",
