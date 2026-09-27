@@ -10677,7 +10677,7 @@
     var memberNameKeys = league.members.map(function (m) {
       return normalizeNameKey(m.name);
     });
-    var candidates = contactSheetAllNames().filter(function (n) {
+    var candidates = contactSheetVisibleNames().filter(function (n) {
       return memberNameKeys.indexOf(normalizeNameKey(n)) === -1;
     });
     leagueAddMemberWrap.innerHTML = "";
@@ -10956,7 +10956,7 @@
     var memberNameKeys = league.members.map(function (m) {
       return normalizeNameKey(m.name);
     });
-    var contactCandidates = contactSheetAllNames().filter(function (n) {
+    var contactCandidates = contactSheetVisibleNames().filter(function (n) {
       return memberNameKeys.indexOf(normalizeNameKey(n)) === -1;
     });
     leagueWizardAddContactWrap.innerHTML = "";
@@ -12667,6 +12667,7 @@
       })
       .filter(function (entry) {
         if (!entry.contact || !entry.contact.reportOptIn) return false;
+        if (isPlayerGraveyarded(entry.name)) return false;
         var entryMethod = entry.contact.notifyMethod || "email";
         if (method === "sms") return entryMethod === "sms" && entry.contact.phone;
         return entryMethod !== "sms" && entry.contact.email;
@@ -21167,6 +21168,15 @@
   // roster, and anyone with contact info already on file, so removing a
   // player from the roster doesn't drop their contact details off this
   // page.
+  // Deliberately includes graveyarded names - findPlayerStatsKey/
+  // findContactKey etc. still match them by name too (nothing about
+  // graveyarding deletes their records, just flags them), so a rename
+  // or new-player check that ignored them here could walk someone
+  // straight into a graveyarded name and silently inherit/collide with
+  // that identity's still-existing stats/contact data. Anywhere that
+  // means "show me who's actually active" (the Contact Sheet's own
+  // list, League's add-member pickers) wants
+  // contactSheetVisibleNames below instead.
   function contactSheetAllNames() {
     var map = {};
     getAllKnownPlayerNames().forEach(function (n) {
@@ -21183,6 +21193,17 @@
       .sort(function (a, b) {
         return a.localeCompare(b);
       });
+  }
+
+  // Same full name list, minus anyone currently graveyarded - what the
+  // Contact Sheet itself should actually display (sending someone to
+  // the Graveyard should visibly remove them from here, not just flag
+  // them somewhere nothing else checks), and what any "pick someone to
+  // add" list (League members, etc.) should offer as candidates.
+  function contactSheetVisibleNames() {
+    return contactSheetAllNames().filter(function (n) {
+      return !isPlayerGraveyarded(n);
+    });
   }
 
   // Adds a blank contact record for anyone who only ever shows up in an
@@ -21521,7 +21542,7 @@
   }
 
   function renderContactSheetPage() {
-    var names = contactSheetAllNames();
+    var names = contactSheetVisibleNames();
     // Drop selections for anyone no longer in the list (e.g. after a
     // rename folds two rows into one).
     Object.keys(contactSheetSelected).forEach(function (n) {
@@ -23169,7 +23190,7 @@
     var selected = Object.keys(contactSheetSelected).filter(function (n) {
       return contactSheetSelected[n];
     });
-    var names = (selected.length ? selected : contactSheetAllNames()).filter(function (n) {
+    var names = (selected.length ? selected : contactSheetVisibleNames()).filter(function (n) {
       var c = getPlayerContact(n);
       return !!(c.email || c.phone);
     });
@@ -28176,7 +28197,7 @@
   });
 
   btnContactSheetSelectAll.addEventListener("click", function () {
-    var names = contactSheetAllNames();
+    var names = contactSheetVisibleNames();
     var allSelected = names.length > 0 && names.every(function (n) {
       return !!contactSheetSelected[n];
     });
@@ -28274,7 +28295,7 @@
     }, null, names);
   });
   btnContactSheetRepairHistory.addEventListener("click", function () {
-    var knownNames = contactSheetAllNames();
+    var knownNames = contactSheetVisibleNames();
     promptModal(T("mergePlayers.repairOldNamePrompt"), "", function (oldNameTyped) {
       var oldNameText = (oldNameTyped || "").trim();
       if (!oldNameText) return;
