@@ -890,7 +890,7 @@ body {
 
 #app.focus-mode .player-score-row .btn-ball {
   flex: 0 0 auto;
-  width: clamp(88px, 18cqw, 128px);
+  width: clamp(44px, 9cqw, 64px);
   min-height: clamp(80px, 16cqh, 120px);
   font-size: clamp(1.3rem, 5cqw, 1.8rem);
   padding: 0;
