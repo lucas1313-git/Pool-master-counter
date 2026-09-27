@@ -208,6 +208,8 @@
   "contactSheet.exportJson": "📤 匯出聯絡人做 JSON",
   "contactSheet.graveyardSelected": "🗑️ 將已選送去墳場",
   "contactSheet.heading": "聯絡名單",
+  "contactSheet.id": "ID",
+  "contactSheet.idAria": "{{name}}嘅玩家ID",
   "contactSheet.importJson": "📥 由 JSON 入面加聯絡人",
   "contactSheet.importRosters": "📥 由舊玩家名單入面加名",
   "contactSheet.importVcard": "📇 由 vCard 入面加聯絡人",

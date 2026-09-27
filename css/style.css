@@ -746,6 +746,35 @@ body {
   container-type: size;
 }
 
+/* A long player-name wrapping to 2+ lines used to have nowhere to go:
+   .player-panel above is size-contained (a fixed box from its grid
+   row - see the comment on it), which is exactly what lets the score
+   read from across the room, but that same containment also means the
+   card's content can never feed back into growing the row to fit a
+   taller name (see the grid-auto-rows comment further up) - the name
+   and the score just silently overlapped instead. Moving the size
+   containment down onto .stat-block specifically, and letting it
+   flex to fill whatever's left after the name (now free to take
+   however many lines it needs, flex-shrink:0 so it's never the one
+   that gets squeezed) takes its share, means .stat-value's cqh below
+   measures .stat-block's own - now variable - height instead of the
+   whole card's: a short name barely changes anything, a long wrapped
+   one just shrinks the score gracefully to make room instead of the
+   two colliding. */
+#app.focus-mode .player-panel .player-name {
+  flex: 0 0 auto;
+}
+
+#app.focus-mode .player-panel .stat-block {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  container-type: size;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
 /* Scoped to .player-panel specifically (not a bare .stat-value/
    .player-name rule) - both classes are reused outside it (team score,
    quick-counter panel, tournament bracket side panels) on boxes that
@@ -5196,6 +5225,17 @@ input[type="number"] {
 .contact-sheet-fields input {
   min-width: 0;
   width: 100%;
+}
+
+/* The permanent local id - read-only, so it's styled to look it:
+   smaller/monospace (a UUID is long and isn't meant to be read at a
+   glance, just there to select/copy), dimmer, and a default cursor
+   instead of a text-edit one. */
+.contact-sheet-id-input {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.7rem;
+  opacity: 0.65;
+  cursor: default;
 }
 
 .contact-sheet-row .player-link-icon {
