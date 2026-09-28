@@ -7775,16 +7775,16 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
    WebKit-based browsers, which is exactly what this replaces). The
    wrapper itself carries whichever flex-sizing class the input used to
    (.league-queue-add-input / .league-team-add-player-select above). */
-.league-name-autocomplete {
+.name-autocomplete {
   position: relative;
   min-width: 0;
 }
 
-.league-name-autocomplete input {
+.name-autocomplete input {
   width: 100%;
 }
 
-.league-name-autocomplete-list {
+.name-autocomplete-list {
   position: absolute;
   top: 100%;
   left: 0;
@@ -7801,14 +7801,14 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
 }
 
-.league-name-autocomplete-list li {
+.name-autocomplete-list li {
   padding: 10px 12px;
   border-radius: 8px;
   cursor: pointer;
   font-size: 1rem;
 }
 
-.league-name-autocomplete-list li:hover {
+.name-autocomplete-list li:hover {
   background: color-mix(in srgb, var(--accent) 18%, var(--bg-card));
 }
 
