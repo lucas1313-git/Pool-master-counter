@@ -12577,6 +12577,34 @@
       }
     });
 
+    // Saved Player Lists (SAVED_ROSTERS) are their own independent
+    // snapshots of who was on a given roster, same as every other store
+    // rewritten above - without this, "Load Player List" would keep
+    // handing loadRosterEntry the pre-merge name straight from disk
+    // forever (recordPlayerMerge below only covers a name arriving
+    // through an IMPORT from this point on, not one already saved
+    // locally before the merge happened), silently re-adding the old
+    // name as a brand new player every time that list gets loaded again.
+    var rostersChanged = false;
+    SAVED_ROSTERS.forEach(function (r) {
+      var seenNames = {};
+      var redirected = (r.players || [])
+        .map(function (n) {
+          return normalizeNameKey(n) === sourceKey ? target : n;
+        })
+        .filter(function (n) {
+          var k = normalizeNameKey(n);
+          if (seenNames[k]) return false;
+          seenNames[k] = true;
+          return true;
+        });
+      if (JSON.stringify(redirected) !== JSON.stringify(r.players || [])) {
+        r.players = redirected;
+        rostersChanged = true;
+      }
+    });
+    if (rostersChanged) saveRostersToStorage(SAVED_ROSTERS);
+
     saveState();
     recordPlayerMerge(sourceName, target);
     return "";
@@ -12911,6 +12939,26 @@
       if (!result.hasOwnProperty(target)) result[target] = obj[key];
     });
     return result;
+  }
+
+  // Same redirect-then-dedupe shape as the import-time helpers above,
+  // for a plain array of names rather than a keyed object - used
+  // wherever a saved roster's own player list gets read back (Load
+  // Player List, Group Session) as a safety net alongside the rewrite
+  // mergePlayersEverywhere already does to SAVED_ROSTERS itself at
+  // merge time (a roster restored from an older backup, for instance,
+  // could still carry a name from before that device ever saw the
+  // merge).
+  function redirectMergedRosterNames(names) {
+    var seen = {};
+    return (names || [])
+      .map(resolveMergedName)
+      .filter(function (n) {
+        var key = normalizeNameKey(n);
+        if (seen[key]) return false;
+        seen[key] = true;
+        return true;
+      });
   }
 
   function findGraveyardPlayerKey(name) {
@@ -15433,13 +15481,7 @@
       // saved list from before a merge shouldn't bring the old,
       // pre-merge name back as a name this list still points at.
       normalized.forEach(function (r) {
-        var seenNames = {};
-        r.players = r.players.map(resolveMergedName).filter(function (n) {
-          var key = normalizeNameKey(n);
-          if (seenNames[key]) return false;
-          seenNames[key] = true;
-          return true;
-        });
+        r.players = redirectMergedRosterNames(r.players);
       });
       var merge = mergeRosterLists(SAVED_ROSTERS, normalized);
       SAVED_ROSTERS = merge.rosters;
@@ -15686,13 +15728,7 @@
           importedPlayerAdded = redirectKeyedFlatPreferFirst(importedPlayerAdded);
           importedRosters.forEach(function (r) {
             if (!Array.isArray(r.players)) return;
-            var seenNames = {};
-            r.players = r.players.map(resolveMergedName).filter(function (n) {
-              var key = normalizeNameKey(n);
-              if (seenNames[key]) return false;
-              seenNames[key] = true;
-              return true;
-            });
+            r.players = redirectMergedRosterNames(r.players);
           });
 
           var extraSessions = summarizeGameHistoryByPlayer(importedState.gameHistory || []);
@@ -16645,6 +16681,25 @@
     if (changed) saveRostersToStorage(SAVED_ROSTERS);
   })();
 
+  // One-time catch-up for merges that happened before mergePlayersEverywhere
+  // started rewriting SAVED_ROSTERS itself: without this, a list saved
+  // before that fix shipped would carry a pre-merge name forever, since
+  // nothing else ever revisits an already-saved roster on its own. Cheap
+  // enough (a handful of short arrays, once per boot) to just always run
+  // rather than track whether it's already been done.
+  (function migrateRosterMergedNamesOnBoot() {
+    var changed = false;
+    SAVED_ROSTERS.forEach(function (r) {
+      if (!r || !Array.isArray(r.players)) return;
+      var redirected = redirectMergedRosterNames(r.players);
+      if (JSON.stringify(redirected) !== JSON.stringify(r.players)) {
+        r.players = redirected;
+        changed = true;
+      }
+    });
+    if (changed) saveRostersToStorage(SAVED_ROSTERS);
+  })();
+
   function populateRosterLoadSelect() {
     rosterLoadSelect.innerHTML = "";
     if (SAVED_ROSTERS.length === 0) {
@@ -16678,8 +16733,9 @@
   // how many existing players got benched, so callers can report both.
   function loadRosterEntry(roster) {
     if (!roster) return { added: 0, standby: 0 };
+    var players = redirectMergedRosterNames(roster.players);
     var listKeys = {};
-    roster.players.forEach(function (name) {
+    players.forEach(function (name) {
       listKeys[normalizeNameKey(name)] = true;
     });
     var standby = 0;
@@ -16690,7 +16746,7 @@
       }
     });
     var added = 0;
-    roster.players.forEach(function (name) {
+    players.forEach(function (name) {
       var key = normalizeNameKey(name);
       var existing = state.players.filter(function (p) {
         return normalizeNameKey(p.name) === key;
@@ -16716,14 +16772,15 @@
   function loadPlayerListForQuickCounter(idx) {
     var roster = SAVED_ROSTERS[parseInt(idx, 10)];
     if (!roster || !roster.players || !roster.players.length) return;
+    var players = redirectMergedRosterNames(roster.players);
     var listKeys = {};
-    roster.players.forEach(function (name) {
+    players.forEach(function (name) {
       listKeys[normalizeNameKey(name)] = true;
     });
     state.players.forEach(function (p) {
       if (p.playing && !listKeys[normalizeNameKey(p.name)]) p.playing = false;
     });
-    roster.players.forEach(function (name) {
+    players.forEach(function (name) {
       var key = normalizeNameKey(name);
       var existing = state.players.filter(function (p) {
         return normalizeNameKey(p.name) === key;
@@ -16737,9 +16794,7 @@
     });
     saveState();
     renderAll();
-    showToast(
-      "Loaded \"" + roster.label + "\" — " + roster.players.length + " player" + (roster.players.length === 1 ? "" : "s") + "."
-    );
+    showToast("Loaded \"" + roster.label + "\" — " + players.length + " player" + (players.length === 1 ? "" : "s") + ".");
   }
 
   function loadSelectedRoster() {
