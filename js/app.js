@@ -14079,14 +14079,39 @@
   // files committed to this GitHub repo. The first time this version boots,
   // pull in whatever's still out there so history isn't lost, then never
   // touch the repo again.
+  //
+  // MIGRATED_FROM_REPO_KEY exists specifically so a deliberate Full Reset
+  // stays wiped: the original check here (ROSTERS_KEY/PLAYER_STATS_KEY
+  // both absent) is indistinguishable from "this device has never run the
+  // app before" and "this device just had everything intentionally wiped" -
+  // both look like a totally empty localStorage. Without a marker that
+  // survives the wipe on purpose (see btnFullResetStep2Yes), every reload
+  // after a Full Reset would silently re-import these same repo files
+  // right back in, making the reset look like it never actually happened.
+  var MIGRATED_FROM_REPO_KEY = "poolMasterCounter.migratedFromRepo.v1";
+
+  function markMigratedFromRepo() {
+    try {
+      localStorage.setItem(MIGRATED_FROM_REPO_KEY, "1");
+    } catch (e) {
+      console.warn("Could not save migratedFromRepo flag.", e);
+    }
+  }
+
   function migrateFromRepoIfNeeded() {
     var alreadyMigrated;
     try {
-      alreadyMigrated = localStorage.getItem(ROSTERS_KEY) !== null || localStorage.getItem(PLAYER_STATS_KEY) !== null;
+      alreadyMigrated =
+        localStorage.getItem(MIGRATED_FROM_REPO_KEY) === "1" ||
+        localStorage.getItem(ROSTERS_KEY) !== null ||
+        localStorage.getItem(PLAYER_STATS_KEY) !== null;
     } catch (e) {
       alreadyMigrated = false;
     }
-    if (alreadyMigrated) return Promise.resolve();
+    if (alreadyMigrated) {
+      markMigratedFromRepo();
+      return Promise.resolve();
+    }
 
     return fetchFresh("players/rosters.json")
       .then(function (res) {
@@ -14126,6 +14151,7 @@
           SAVED_ROSTERS = rosters;
           saveRostersToStorage(rosters);
           savePlayerStatsToStorage(PLAYER_STATS);
+          markMigratedFromRepo();
         });
       });
   }
@@ -27100,6 +27126,33 @@
     keysToRemove.forEach(function (key) {
       localStorage.removeItem(key);
     });
+    // Wiping every poolMasterCounter.* key above makes this device look
+    // EXACTLY like one that has never run the app before - which is
+    // exactly the condition migrateFromRepoIfNeeded uses to decide
+    // whether to re-import players/rosters.json and every players/*.json
+    // stat file from this repo. Left alone, the very next boot after a
+    // deliberate Full Reset would silently undo it by re-seeding those
+    // same old files straight back in. Re-marking it here (before the
+    // write-guard below, which would otherwise block this too) is what
+    // makes the wipe actually stick.
+    markMigratedFromRepo();
+    // Belt-and-suspenders against the 400ms gap below: rather than chase
+    // down every possible stray write in that window (a running shot
+    // clock/timed tournament interval ending mid-wipe, some future save
+    // path nobody thought to gate here), just make setItem itself refuse
+    // any further poolMasterCounter.* write for the rest of this page's
+    // life - it's reloading in a moment anyway, so nothing legitimate is
+    // lost by this. Also resets the two in-memory stores most visibly
+    // wrong if something DID slip through before this point (the live
+    // roster, saved Player Lists) so the page reads correctly even in
+    // the instant before reload actually fires.
+    var realSetItem = localStorage.setItem.bind(localStorage);
+    localStorage.setItem = function (key, value) {
+      if (typeof key === "string" && key.indexOf("poolMasterCounter.") === 0) return;
+      return realSetItem(key, value);
+    };
+    state = defaultState();
+    SAVED_ROSTERS = [];
     // The backup download is a same-tick <a>.click(), which some
     // browsers need a beat to actually start before navigation - see
     // downloadJSON/exportAllData above.
