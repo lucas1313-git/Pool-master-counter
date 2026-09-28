@@ -10057,29 +10057,14 @@
   // sizing rule (the existing .league-queue-add-input/.league-team-add-
   // player-select CSS already targets a wrapper this way); the input
   // itself just fills it.
-  function buildLeagueNameAutocomplete(candidates, placeholder, wrapperClassName) {
-    var wrapper = document.createElement("div");
-    wrapper.className = "league-name-autocomplete " + wrapperClassName;
-
-    var input = document.createElement("input");
-    input.type = "text";
-    input.placeholder = placeholder;
-    // iOS Safari (and Chrome/every other iOS browser, all WKWebView
-    // under the hood) is notorious for ignoring a bare autocomplete=off
-    // on fields it heuristically detects as a "name" - the extra
-    // attributes here are the standard workaround to actually suppress
-    // its own QuickType/predictive suggestion bar, a separate overlay
-    // from this dropdown that can also sit over the field.
-    input.setAttribute("autocomplete", "off");
-    input.setAttribute("autocorrect", "off");
-    input.setAttribute("autocapitalize", "off");
-    input.setAttribute("spellcheck", "false");
-    wrapper.appendChild(input);
-
-    var list = document.createElement("ul");
-    list.className = "league-name-autocomplete-list hidden";
-    wrapper.appendChild(list);
-
+  // Shared by buildLeagueNameAutocomplete (builds its own input+wrapper
+  // from scratch) and attachNameAutocomplete (wires this same dropdown
+  // onto an input that already exists in the page) - candidates comes
+  // from a getter rather than a plain array so a picklist tied to
+  // something that changes after the field is built (e.g. the Contact
+  // Sheet) always reflects the current list, not a stale snapshot taken
+  // at page-load.
+  function wireNameAutocomplete(input, list, getCandidates) {
     function closeList() {
       list.classList.add("hidden");
       list.innerHTML = "";
@@ -10088,9 +10073,10 @@
     // Empty query shows every candidate (a full picklist, same as a
     // plain select would show up front) - typing narrows it down to an
     // actual autocomplete. No cap on how many show either way; the list
-    // itself scrolls (see .league-name-autocomplete-list's max-height)
-    // rather than silently hiding candidates past some fixed count.
+    // itself scrolls (see .name-autocomplete-list's max-height) rather
+    // than silently hiding candidates past some fixed count.
     function openListFor(query) {
+      var candidates = getCandidates();
       var q = query.trim().toLowerCase();
       var matches = q
         ? candidates.filter(function (name) {
@@ -10107,10 +10093,17 @@
         li.textContent = name;
         // mousedown (not click) fires before the input's blur, so the
         // picked name lands before closeList/blur would otherwise wipe
-        // the list out from under the tap.
+        // the list out from under the tap. Dispatching a real "input"
+        // event (rather than just setting .value) lets any other
+        // listener already on this field - e.g. Add Player's own
+        // duplicate-name check - react to the picked name exactly as
+        // if it had been typed; the explicit closeList() right after
+        // then overrides this same function's own "input" listener
+        // reopening the list a line above.
         li.addEventListener("mousedown", function (e) {
           e.preventDefault();
           input.value = name;
+          input.dispatchEvent(new Event("input", { bubbles: true }));
           closeList();
         });
         list.appendChild(li);
@@ -10130,8 +10123,54 @@
     input.addEventListener("keydown", function (e) {
       if (e.key === "Escape") closeList();
     });
+  }
+
+  function buildLeagueNameAutocomplete(candidates, placeholder, wrapperClassName) {
+    var wrapper = document.createElement("div");
+    wrapper.className = "name-autocomplete " + wrapperClassName;
+
+    var input = document.createElement("input");
+    input.type = "text";
+    input.placeholder = placeholder;
+    // iOS Safari (and Chrome/every other iOS browser, all WKWebView
+    // under the hood) is notorious for ignoring a bare autocomplete=off
+    // on fields it heuristically detects as a "name" - the extra
+    // attributes here are the standard workaround to actually suppress
+    // its own QuickType/predictive suggestion bar, a separate overlay
+    // from this dropdown that can also sit over the field.
+    input.setAttribute("autocomplete", "off");
+    input.setAttribute("autocorrect", "off");
+    input.setAttribute("autocapitalize", "off");
+    input.setAttribute("spellcheck", "false");
+    wrapper.appendChild(input);
+
+    var list = document.createElement("ul");
+    list.className = "name-autocomplete-list hidden";
+    wrapper.appendChild(list);
+
+    wireNameAutocomplete(input, list, function () {
+      return candidates;
+    });
 
     return { wrapper: wrapper, input: input };
+  }
+
+  // Wires the same dropdown-suggestion behavior onto an input that's
+  // already in the page (e.g. the main Add Player field) instead of
+  // building a new one - wraps it in the positioning wrapper the
+  // dropdown needs in place, leaving the input itself (and every
+  // existing listener/reference tied to its id) untouched.
+  function attachNameAutocomplete(input, getCandidates) {
+    var wrapper = document.createElement("div");
+    wrapper.className = "name-autocomplete";
+    input.parentNode.insertBefore(wrapper, input);
+    wrapper.appendChild(input);
+
+    var list = document.createElement("ul");
+    list.className = "name-autocomplete-list hidden";
+    wrapper.appendChild(list);
+
+    wireNameAutocomplete(input, list, getCandidates);
   }
 
   // Email/phone only make sense for someone actually about to be
@@ -27080,6 +27119,9 @@
   });
 
   newPlayerName.addEventListener("input", validateNewPlayerNameInput);
+  attachNameAutocomplete(newPlayerName, function () {
+    return contactSheetVisibleNames();
+  });
 
   addPlayerForm.addEventListener("submit", function (e) {
     e.preventDefault();
