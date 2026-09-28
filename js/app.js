@@ -12883,6 +12883,35 @@
     }
   }
 
+  // Second half of "same player, different name" detection alongside
+  // resolveMergedName's explicit merge tombstones above: catches the
+  // case where an imported contact record and a local one share the
+  // same permanent localId (see getOrCreatePlayerLocalId) but disagree
+  // on the name itself - almost always because the player was renamed
+  // locally sometime after this backup was taken. Without this, every
+  // merge function below (all keyed by name) would treat the renamed
+  // player as a brand new person and create a duplicate under the old
+  // name instead of folding cleanly into the one that's already here.
+  // Built fresh per import (rather than folded into PLAYER_MERGED_INTO,
+  // which is permanent and used everywhere in the app, not just here)
+  // since it only makes sense in the context of this one payload.
+  function buildLocalIdNameRedirect(importedContacts) {
+    var localIdToLocalName = {};
+    Object.keys(PLAYER_CONTACTS).forEach(function (localName) {
+      var id = PLAYER_CONTACTS[localName] && PLAYER_CONTACTS[localName].localId;
+      if (id) localIdToLocalName[id] = localName;
+    });
+    var redirect = {};
+    Object.keys(importedContacts || {}).forEach(function (importedName) {
+      var id = importedContacts[importedName] && importedContacts[importedName].localId;
+      var localName = id ? localIdToLocalName[id] : null;
+      if (localName && normalizeNameKey(localName) !== normalizeNameKey(importedName)) {
+        redirect[normalizeNameKey(importedName)] = localName;
+      }
+    });
+    return redirect;
+  }
+
   // The three shapes an imported name-keyed store actually comes in -
   // each redirects every key through resolveMergedName, combining two
   // keys that land on the same target (an older import that still has
@@ -12890,10 +12919,11 @@
   // using the same rules mergePlayersEverywhere itself already uses
   // for that data. Local never needs this same treatment - the source
   // key simply doesn't exist there anymore the moment a merge runs.
-  function redirectKeyedSessions(obj) {
+  function redirectKeyedSessions(obj, resolveName) {
+    resolveName = resolveName || resolveMergedName;
     var result = {};
     Object.keys(obj || {}).forEach(function (key) {
-      var target = resolveMergedName(key);
+      var target = resolveName(key);
       var entry = obj[key] || {};
       if (!result[target]) {
         result[target] = { name: target, sessions: (entry.sessions || []).slice() };
@@ -12904,10 +12934,11 @@
     return result;
   }
 
-  function redirectKeyedRatings(obj) {
+  function redirectKeyedRatings(obj, resolveName) {
+    resolveName = resolveName || resolveMergedName;
     var result = {};
     Object.keys(obj || {}).forEach(function (key) {
-      var target = resolveMergedName(key);
+      var target = resolveName(key);
       var entry = obj[key] || {};
       var history = entry.history || [];
       if (!result[target]) {
@@ -12932,10 +12963,11 @@
   // rule is a reasonable simplification for the rare case an import
   // has both a merge's source and target as separate top-level
   // entries at once.
-  function redirectKeyedFlatPreferFirst(obj) {
+  function redirectKeyedFlatPreferFirst(obj, resolveName) {
+    resolveName = resolveName || resolveMergedName;
     var result = {};
     Object.keys(obj || {}).forEach(function (key) {
-      var target = resolveMergedName(key);
+      var target = resolveName(key);
       if (!result.hasOwnProperty(target)) result[target] = obj[key];
     });
     return result;
@@ -12949,10 +12981,11 @@
   // merge time (a roster restored from an older backup, for instance,
   // could still carry a name from before that device ever saw the
   // merge).
-  function redirectMergedRosterNames(names) {
+  function redirectMergedRosterNames(names, resolveName) {
+    resolveName = resolveName || resolveMergedName;
     var seen = {};
     return (names || [])
-      .map(resolveMergedName)
+      .map(resolveName)
       .filter(function (n) {
         var key = normalizeNameKey(n);
         if (seen[key]) return false;
@@ -14817,27 +14850,36 @@
     });
   }
 
-  function defaultBackupFilename() {
-    return "pool-master-counter-backup-" + new Date().toISOString().slice(0, 10) + ".json";
-  }
-
-  // Date + day-of-week (e.g. "2026-09-08-Tuesday") plus, when given, the
-  // exporting person's name - so several people syncing the same iCloud
-  // Drive folder each land a distinct, dated file instead of everyone
-  // colliding on one filename or overwriting each other's export.
-  // Both halves must come from the same local calendar day - toISOString()
-  // is UTC, so pairing it with a locale (local-time) weekday name could
-  // silently mismatch near midnight (e.g. a UTC-behind timezone rolling
-  // into a new UTC date while it's still evening locally): formatDateISO
-  // and toLocaleDateString both read local getFullYear/getMonth/getDate
+  // Shared shape for every user-facing backup filename: a fixed
+  // "pool-master-counter" prefix, the export's type (so several kinds
+  // of export sitting in the same downloads folder read apart from
+  // each other at a glance), the local calendar date + weekday name,
+  // and - when there's a name on file for this device (see
+  // exportForSync/loadLastSyncExporterName) - the exporting person's
+  // own name, so several people syncing the same shared folder each
+  // land a distinct, attributable file instead of colliding on one
+  // name or overwriting each other's export. Both date halves must
+  // come from the same local calendar day - toISOString() is UTC, so
+  // pairing it with a locale (local-time) weekday name could silently
+  // mismatch near midnight (e.g. a UTC-behind timezone rolling into a
+  // new UTC date while it's still evening locally): formatDateISO and
+  // toLocaleDateString both read local getFullYear/getMonth/getDate
   // under the hood, so they always agree.
-  function defaultSyncFilename(exporterName) {
+  function buildExportFilename(typeLabel, exporterName) {
     var now = new Date();
     var dayName = now.toLocaleDateString(undefined, { weekday: "long" });
-    var base = formatDateISO(now) + "-" + dayName;
+    var parts = ["pool-master-counter", typeLabel, formatDateISO(now) + "-" + dayName];
     var trimmedName = (exporterName || "").trim();
-    if (trimmedName) base += "-" + trimmedName;
-    return sanitizeBackupFilename(base);
+    if (trimmedName) parts.push(trimmedName);
+    return sanitizeBackupFilename(parts.join("-"));
+  }
+
+  function defaultBackupFilename() {
+    return buildExportFilename("all-data", loadLastSyncExporterName());
+  }
+
+  function defaultSyncFilename(exporterName) {
+    return buildExportFilename("icloud-sync", exporterName);
   }
 
   // Strips characters a filesystem would reject and appends .json if the
@@ -15740,21 +15782,32 @@
           // straight into the survivor instead of undoing the merge.
           // Local never needs this same treatment: the source key
           // simply doesn't exist there anymore the moment a merge runs.
+          //
+          // Combined with buildLocalIdNameRedirect (built from the
+          // imported payload's own contacts, before anything below
+          // renames them) so a player renamed locally since this
+          // backup was taken - same localId, different name - folds
+          // in the same way instead of showing up as a duplicate.
+          var localIdRedirect = buildLocalIdNameRedirect(importedContacts);
+          function resolveImportedName(name) {
+            var key = normalizeNameKey(name);
+            return resolveMergedName(localIdRedirect[key] || name);
+          }
           (importedState.players || []).forEach(function (p) {
-            if (p && p.name) p.name = resolveMergedName(p.name);
+            if (p && p.name) p.name = resolveImportedName(p.name);
           });
           (importedState.gameHistory || []).forEach(function (g) {
             if (!g || typeof g === "string") return;
-            if (Array.isArray(g.winnerNames)) g.winnerNames = g.winnerNames.map(resolveMergedName);
-            if (Array.isArray(g.opponentNames)) g.opponentNames = g.opponentNames.map(resolveMergedName);
+            if (Array.isArray(g.winnerNames)) g.winnerNames = g.winnerNames.map(resolveImportedName);
+            if (Array.isArray(g.opponentNames)) g.opponentNames = g.opponentNames.map(resolveImportedName);
           });
-          importedPlayerStats = redirectKeyedSessions(importedPlayerStats);
-          importedRatings = redirectKeyedRatings(importedRatings);
-          importedContacts = redirectKeyedFlatPreferFirst(importedContacts);
-          importedPlayerAdded = redirectKeyedFlatPreferFirst(importedPlayerAdded);
+          importedPlayerStats = redirectKeyedSessions(importedPlayerStats, resolveImportedName);
+          importedRatings = redirectKeyedRatings(importedRatings, resolveImportedName);
+          importedContacts = redirectKeyedFlatPreferFirst(importedContacts, resolveImportedName);
+          importedPlayerAdded = redirectKeyedFlatPreferFirst(importedPlayerAdded, resolveImportedName);
           importedRosters.forEach(function (r) {
             if (!Array.isArray(r.players)) return;
-            r.players = redirectMergedRosterNames(r.players);
+            r.players = redirectMergedRosterNames(r.players, resolveImportedName);
           });
 
           var extraSessions = summarizeGameHistoryByPlayer(importedState.gameHistory || []);
@@ -16192,7 +16245,7 @@
 
     // The one non-negotiable part of this feature: back up what's here
     // right now, before any of it is replaced.
-    exportAllData("pool-master-counter-pre-squash-backup-" + new Date().toISOString().slice(0, 10) + "-" + Date.now() + ".json");
+    exportAllData(buildExportFilename("pre-squash-backup", loadLastSyncExporterName()).replace(/\.json$/i, "-" + Date.now() + ".json"));
 
     var importedState = data.state && typeof data.state === "object" ? data.state : defaultState();
     var resultingPlayerCount;
@@ -16229,6 +16282,7 @@
       REPORT_ARCHIVE = [];
       TOURNAMENT = null;
       TOURNAMENT_RESULTS = [];
+      LEAGUES = [];
       // Name translations are the one exception - they're a per-player
       // display preference, closer to contact info than to play history,
       // so they're unioned like contacts rather than wiped.
@@ -16262,6 +16316,8 @@
       REPORT_ARCHIVE = Array.isArray(data.reportArchive) ? data.reportArchive : [];
       TOURNAMENT = data.tournament && typeof data.tournament === "object" ? data.tournament : null;
       TOURNAMENT_RESULTS = Array.isArray(data.tournamentResults) ? data.tournamentResults : [];
+      LEAGUES = Array.isArray(data.leagues) ? data.leagues : [];
+      LEAGUES.forEach(normalizeLeagueDefaults);
       resultingPlayerCount = (importedState.players || []).length;
     }
 
@@ -16294,6 +16350,7 @@
       if (TOURNAMENT) localStorage.setItem(TOURNAMENT_KEY, JSON.stringify(TOURNAMENT));
       else localStorage.removeItem(TOURNAMENT_KEY);
       localStorage.setItem(TOURNAMENT_RESULTS_KEY, JSON.stringify(TOURNAMENT_RESULTS));
+      localStorage.setItem(LEAGUES_KEY, JSON.stringify(LEAGUES));
       if (data.exportedAt) {
         localStorage.setItem(LAST_SYNC_IMPORT_KEY, data.exportedAt);
         if (data.exportedBy) localStorage.setItem(LAST_SYNC_IMPORT_NAME_KEY, data.exportedBy);
