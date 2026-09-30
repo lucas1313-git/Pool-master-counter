@@ -23026,17 +23026,15 @@
   }
 
   // ---------------------------------------------------------------------
-  // Voice Commands (web prototype) - a wake-word gated command set, not a
-  // single fixed sentence:
-  //   1. "Pool Counter" - the wake phrase. Always just beeps (playShot-
-  //      CounterBeep, a plain neutral two-tap tone - no scoring meaning of
-  //      its own) to confirm it was heard, and opens/refreshes an 8-second
-  //      window during which the two commands below are actually acted on.
-  //      Said on its own with nothing else recognized, or combined in the
-  //      same breath ("Pool Counter player 1") - both work, since the wake
-  //      phrase and the two command patterns are matched independently
-  //      against the same transcript rather than requiring an exact
-  //      sentence shape.
+  // Voice Commands (web prototype) - three independent commands, matched
+  // against every recognized utterance, not a gated sequence (an earlier
+  // version required saying "Pool Counter" right before each command,
+  // which just meant player-select/add-points silently missed whenever
+  // that window had lapsed - gone now):
+  //   1. "Pool Counter" - always just beeps (playShotCounterBeep, a plain
+  //      neutral two-tap tone with no scoring meaning of its own) to
+  //      confirm the mic/recognition is actually working - a standalone
+  //      check, not a prerequisite for the other two.
   //   2. "player [x]" - selects that player exactly the way pressing the
   //      same number on the physical keypad does (see
   //      handleKeypadShortcut's own 1-9 branch) - same on-screen numbering
@@ -23048,11 +23046,9 @@
   //      Score already applies an arbitrary delta correctly in one shot
   //      (win-target crossing included), so "add 3 points" is exactly
   //      requestAdjustScore(id, 3), not three separate +1s.
-  // Only #2/#3 require being inside the wake window; #1 always beeps
-  // regardless, so repeating it mid-window is a harmless way to just
-  // extend it. Scoped the same as before: individual mode, points-unit
-  // games only (Straight Pool, 15 Ball Rotation, Custom), not Quick
-  // Counter - checked fresh each time a command is about to apply. Web-only on
+  // Scoped the same as before: individual mode, points-unit games only
+  // (Straight Pool, 15 Ball Rotation, Custom), not Quick Counter -
+  // checked fresh each time a command is about to apply. Web-only on
   // purpose: the Web Speech API isn't reliably available inside the iOS
   // Capacitor build's WKWebView, so the toggle button stays hidden there
   // via the feature-detect below rather than pretending to offer
@@ -23063,16 +23059,17 @@
   var voiceRecognition = null;
   var voiceCommandsActive = false;
   var voiceStoppedDeliberately = false;
-  var voiceAwakeUntil = 0;
-  var VOICE_WAKE_WORD_RE = /\bpool\s*counter\b/i;
-  var VOICE_WAKE_WINDOW_MS = 8000;
+  var VOICE_WAKE_WORD_RE = /\bpool\W*counter\b/i;
 
   var VOICE_NUMBER_WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9 };
-  var VOICE_PLAYER_RE = /\bplayer\s+(\d+|one|two|three|four|five|six|seven|eight|nine)\b/i;
+  // \W* (not \s+) between words - tolerates a comma or other punctuation
+  // a speech API sometimes inserts at a natural pause ("player, one",
+  // "add 3, points"), which a plain \s+ would fail to match.
+  var VOICE_PLAYER_RE = /\bplayer\W*(\d+|one|two|three|four|five|six|seven|eight|nine)\b/i;
   // "add"/"plus" vs "remove"/"subtract"/"minus" - the article/"a"/"one"
   // before "point(s)" is optional since real transcripts vary ("add 3
   // points", "add three points", "add a point").
-  var VOICE_POINTS_RE = /\b(add|remove|plus|minus|subtract)\s+(\d+|a|one|two|three|four|five|six|seven|eight|nine)\s*points?\b/i;
+  var VOICE_POINTS_RE = /\b(add|remove|plus|minus|subtract)\W*(\d+|a|one|two|three|four|five|six|seven|eight|nine)\W*points?\b/i;
 
   function voiceNumberFromToken(token) {
     token = token.toLowerCase();
@@ -23111,23 +23108,17 @@
     var lastResultIdx = event.results.length - 1;
     var transcript = (event.results[lastResultIdx][0].transcript || "").trim();
 
-    var heardWake = VOICE_WAKE_WORD_RE.test(transcript);
-    if (heardWake) {
-      playShotCounterBeep();
-      voiceAwakeUntil = Date.now() + VOICE_WAKE_WINDOW_MS;
-    }
-    if (!heardWake && Date.now() > voiceAwakeUntil) return;
+    // Three independent commands, not a gated sequence - "Pool Counter"
+    // is just a mic-check beep, not a prerequisite for the other two
+    // (an earlier version required saying it right before every command;
+    // that's gone; it did nothing but make player-select/add-points
+    // silently miss whenever that window had lapsed).
+    if (VOICE_WAKE_WORD_RE.test(transcript)) playShotCounterBeep();
 
-    if (!voiceCommandsApplicableNow()) {
-      if (!heardWake) showToast(T("voice.notAvailable"));
-      return;
-    }
+    if (!voiceCommandsApplicableNow()) return;
 
     var playerMatch = VOICE_PLAYER_RE.exec(transcript);
     var pointsMatch = VOICE_POINTS_RE.exec(transcript);
-    if (!playerMatch && !pointsMatch) return;
-
-    voiceAwakeUntil = Date.now() + VOICE_WAKE_WINDOW_MS;
     if (playerMatch) {
       voiceSelectPlayer(voiceNumberFromToken(playerMatch[1]));
     }
