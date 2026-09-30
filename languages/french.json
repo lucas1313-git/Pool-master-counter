@@ -1116,6 +1116,7 @@
   "units.points": "points",
   "units.rack": "rack",
   "units.racks": "racks",
+  "voice.heard": "🎤 Entendu : \"{{heard}}\"",
   "voice.micError": "🎤 Accès au micro refusé — les commandes vocales en ont besoin pour fonctionner.",
   "voice.noPlayerSelected": "🎤 Dites d'abord \"Player [numéro]\" pour choisir le joueur.",
   "voice.notAvailable": "🎤 Les commandes vocales ne fonctionnent que pour les parties à points (Billard américain, 15 Ball Rotation, Personnalisé), mode individuel.",

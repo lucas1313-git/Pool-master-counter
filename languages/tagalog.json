@@ -1116,6 +1116,7 @@
   "units.points": "puntos",
   "units.rack": "rack",
   "units.racks": "racks",
+  "voice.heard": "🎤 Narinig: \"{{heard}}\"",
   "voice.micError": "🎤 Tinanggihan ang access sa mikropono — kailangan ito ng voice commands para gumana.",
   "voice.noPlayerSelected": "🎤 Sabihin muna ang \"Player [numero]\" para piliin ang player.",
   "voice.notAvailable": "🎤 Gumagana lang ang voice commands sa points games (Straight Pool, 15 Ball Rotation, Custom), individual mode.",
