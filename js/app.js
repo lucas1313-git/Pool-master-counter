@@ -23026,74 +23026,116 @@
   }
 
   // ---------------------------------------------------------------------
-  // Voice Commands (web prototype) - "Player 1 add one point" / "Player 1
-  // remove one point", scoped deliberately narrow for now: individual mode,
-  // points-unit games only (state.currentGame.unit === "points" - Straight
-  // Pool, 15 Ball Rotation, Custom), not Quick Counter. Player numbers are
-  // the exact same 1-9 numbering already shown on-screen via the keypad
-  // badges (see refreshKeypadNumbering/keypadOrderedPlayerIds) - no new
-  // numbering scheme to learn. Web-only on purpose: the Web Speech API
-  // isn't reliably available inside the iOS Capacitor build's WKWebView,
-  // so the toggle button stays hidden there via the feature-detect below
-  // rather than pretending to offer something that won't actually work.
+  // Voice Commands (web prototype) - a wake-word gated command set, not a
+  // single fixed sentence:
+  //   1. "Pool Counter" - the wake phrase. Always just beeps (playShot-
+  //      CounterBeep, a plain neutral two-tap tone - no scoring meaning of
+  //      its own) to confirm it was heard, and opens/refreshes an 8-second
+  //      window during which the two commands below are actually acted on.
+  //      Said on its own with nothing else recognized, or combined in the
+  //      same breath ("Pool Counter player 1") - both work, since the wake
+  //      phrase and the two command patterns are matched independently
+  //      against the same transcript rather than requiring an exact
+  //      sentence shape.
+  //   2. "player [x]" - selects that player exactly the way pressing the
+  //      same number on the physical keypad does (see
+  //      handleKeypadShortcut's own 1-9 branch) - same on-screen numbering
+  //      (keypadOrderedPlayerIds), same switch sound/highlight/scroll, by
+  //      calling the exact same selectKeypadPlayer.
+  //   3. "add/remove [x] points" - adjusts whichever player is currently
+  //      keypad-selected (by #2, or already selected before voice mode was
+  //      even turned on) by the full spoken amount in one call - adjust-
+  //      Score already applies an arbitrary delta correctly in one shot
+  //      (win-target crossing included), so "add 3 points" is exactly
+  //      requestAdjustScore(id, 3), not three separate +1s.
+  // Only #2/#3 require being inside the wake window; #1 always beeps
+  // regardless, so repeating it mid-window is a harmless way to just
+  // extend it. Scoped the same as before: individual mode, points-unit
+  // games only (Straight Pool, 15 Ball Rotation, Custom), not Quick
+  // Counter - checked fresh each time a command is about to apply. Web-only on
+  // purpose: the Web Speech API isn't reliably available inside the iOS
+  // Capacitor build's WKWebView, so the toggle button stays hidden there
+  // via the feature-detect below rather than pretending to offer
+  // something that won't actually work.
   // ---------------------------------------------------------------------
 
   var VoiceRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition || null;
   var voiceRecognition = null;
   var voiceCommandsActive = false;
   var voiceStoppedDeliberately = false;
+  var voiceAwakeUntil = 0;
+  var VOICE_WAKE_WORD_RE = /\bpool\s*counter\b/i;
+  var VOICE_WAKE_WINDOW_MS = 8000;
 
   var VOICE_NUMBER_WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9 };
-  // Deliberately loose - real speech-recognition transcripts vary in
-  // exactly how a small number or the word "point" comes through
-  // ("player 1 add one point", "player one add a point", "player 2
-  // remove point"), so every optional piece here (the article/"one"
-  // before "point", the final "s") is optional rather than requiring
-  // one exact phrasing.
-  var VOICE_COMMAND_RE = /player\s+(\d+|one|two|three|four|five|six|seven|eight|nine)\s+(add|remove|plus|minus|subtract)\s+(?:a|one)?\s*points?/i;
+  var VOICE_PLAYER_RE = /\bplayer\s+(\d+|one|two|three|four|five|six|seven|eight|nine)\b/i;
+  // "add"/"plus" vs "remove"/"subtract"/"minus" - the article/"a"/"one"
+  // before "point(s)" is optional since real transcripts vary ("add 3
+  // points", "add three points", "add a point").
+  var VOICE_POINTS_RE = /\b(add|remove|plus|minus|subtract)\s+(\d+|a|one|two|three|four|five|six|seven|eight|nine)\s*points?\b/i;
 
-  function parseVoiceCommand(transcript) {
-    var match = VOICE_COMMAND_RE.exec((transcript || "").trim());
-    if (!match) return null;
-    var numToken = match[1].toLowerCase();
-    var playerNum = /^\d+$/.test(numToken) ? parseInt(numToken, 10) : VOICE_NUMBER_WORDS[numToken];
-    var verb = match[2].toLowerCase();
-    return { playerNum: playerNum, delta: verb === "add" || verb === "plus" ? 1 : -1 };
+  function voiceNumberFromToken(token) {
+    token = token.toLowerCase();
+    if (token === "a") return 1;
+    if (/^\d+$/.test(token)) return parseInt(token, 10);
+    return VOICE_NUMBER_WORDS[token] || null;
   }
 
   // True only for the exact scope this prototype supports - checked at
-  // the moment a command is actually about to apply (not just when
-  // voice mode was turned on), so switching game type mid-session while
-  // still listening degrades to a clear "not available" toast instead
-  // of silently adjusting the wrong thing.
+  // the moment a command is about to apply (not just when voice mode was
+  // turned on), so switching game type mid-session while still listening
+  // degrades to a clear "not available" toast instead of silently
+  // adjusting the wrong thing.
   function voiceCommandsApplicableNow() {
     return !quickCounterMode && state.currentGame.mode === "individual" && state.currentGame.unit === "points";
   }
 
-  function applyVoiceCommand(cmd) {
-    if (!voiceCommandsApplicableNow()) {
-      showToast(T("voice.notAvailable"));
+  function voiceSelectPlayer(playerNum) {
+    var targetId = keypadOrderedPlayerIds[playerNum - 1];
+    if (!targetId) {
+      showToast(T("voice.unknownPlayer", { num: playerNum }));
       return;
     }
-    var playerId = keypadOrderedPlayerIds[cmd.playerNum - 1];
-    var player = playerId ? getPlayer(playerId) : null;
-    if (!player) {
-      showToast(T("voice.unknownPlayer", { num: cmd.playerNum }));
+    selectKeypadPlayer(targetId, playerNum);
+  }
+
+  function voiceAdjustSelectedPlayer(delta) {
+    if (!keypadSelectedPlayerId) {
+      showToast(T("voice.noPlayerSelected"));
       return;
     }
-    requestAdjustScore(playerId, cmd.delta);
-    showToast(T(cmd.delta > 0 ? "voice.pointAdded" : "voice.pointRemoved", { name: player.name }));
+    requestAdjustScore(keypadSelectedPlayerId, delta);
   }
 
   function handleVoiceResult(event) {
     var lastResultIdx = event.results.length - 1;
-    var transcript = event.results[lastResultIdx][0].transcript;
-    var cmd = parseVoiceCommand(transcript);
-    if (!cmd) {
-      showToast(T("voice.notUnderstood", { heard: transcript.trim() }));
+    var transcript = (event.results[lastResultIdx][0].transcript || "").trim();
+
+    var heardWake = VOICE_WAKE_WORD_RE.test(transcript);
+    if (heardWake) {
+      playShotCounterBeep();
+      voiceAwakeUntil = Date.now() + VOICE_WAKE_WINDOW_MS;
+    }
+    if (!heardWake && Date.now() > voiceAwakeUntil) return;
+
+    if (!voiceCommandsApplicableNow()) {
+      if (!heardWake) showToast(T("voice.notAvailable"));
       return;
     }
-    applyVoiceCommand(cmd);
+
+    var playerMatch = VOICE_PLAYER_RE.exec(transcript);
+    var pointsMatch = VOICE_POINTS_RE.exec(transcript);
+    if (!playerMatch && !pointsMatch) return;
+
+    voiceAwakeUntil = Date.now() + VOICE_WAKE_WINDOW_MS;
+    if (playerMatch) {
+      voiceSelectPlayer(voiceNumberFromToken(playerMatch[1]));
+    }
+    if (pointsMatch) {
+      var verb = pointsMatch[1].toLowerCase();
+      var amount = voiceNumberFromToken(pointsMatch[2]);
+      if (amount) voiceAdjustSelectedPlayer((verb === "add" || verb === "plus" ? 1 : -1) * amount);
+    }
   }
 
   function setVoiceCommandsActive(on) {
