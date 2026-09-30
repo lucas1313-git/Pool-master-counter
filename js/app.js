@@ -23108,6 +23108,13 @@
     var lastResultIdx = event.results.length - 1;
     var transcript = (event.results[lastResultIdx][0].transcript || "").trim();
 
+    // Temporary, deliberately loud debug aid while this prototype's
+    // actual recognition accuracy is still unverified - shows exactly
+    // what the browser transcribed for every utterance, since that's
+    // the one thing impossible to check without hearing it happen live.
+    // Remove once the real-world grammar is confirmed working.
+    showToast(T("voice.heard", { heard: transcript }));
+
     // Three independent commands, not a gated sequence - "Pool Counter"
     // is just a mic-check beep, not a prerequisite for the other two
     // (an earlier version required saying it right before every command;
@@ -23115,7 +23122,10 @@
     // silently miss whenever that window had lapsed).
     if (VOICE_WAKE_WORD_RE.test(transcript)) playShotCounterBeep();
 
-    if (!voiceCommandsApplicableNow()) return;
+    if (!voiceCommandsApplicableNow()) {
+      showToast(T("voice.notAvailable"));
+      return;
+    }
 
     var playerMatch = VOICE_PLAYER_RE.exec(transcript);
     var pointsMatch = VOICE_POINTS_RE.exec(transcript);
