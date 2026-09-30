@@ -1119,7 +1119,7 @@
   "voice.heard": "🎤 Entendu : \"{{heard}}\"",
   "voice.micError": "🎤 Accès au micro refusé — les commandes vocales en ont besoin pour fonctionner.",
   "voice.noPlayerSelected": "🎤 Dites d'abord \"Player [numéro]\" pour choisir le joueur.",
-  "voice.notAvailable": "🎤 Les commandes vocales ne fonctionnent que pour les parties à points (Billard américain, 15 Ball Rotation, Personnalisé), mode individuel.",
+  "voice.notAvailable": "🎤 Les commandes vocales ne fonctionnent qu'en mode individuel, pas en Quick Counter ni en mode Équipes.",
   "voice.toggleOff": "🎤 Écoute en cours… (touchez pour arrêter)",
   "voice.toggleOn": "🎤 Commandes vocales",
   "voice.unknownPlayer": "🎤 Aucun joueur {{num}} trouvé à l'écran.",

@@ -23026,7 +23026,7 @@
   }
 
   // ---------------------------------------------------------------------
-  // Voice Commands (web prototype) - three independent commands, matched
+  // Voice Commands (web prototype) - independent commands, matched
   // against every recognized utterance, not a gated sequence (an earlier
   // version required saying "Pool Counter" right before each command,
   // which just meant player-select/add-points silently missed whenever
@@ -23034,25 +23034,36 @@
   //   1. "Pool Counter" - always just beeps (playShotCounterBeep, a plain
   //      neutral two-tap tone with no scoring meaning of its own) to
   //      confirm the mic/recognition is actually working - a standalone
-  //      check, not a prerequisite for the other two.
+  //      check, not a prerequisite for anything else here.
   //   2. "player [x]" - selects that player exactly the way pressing the
   //      same number on the physical keypad does (see
   //      handleKeypadShortcut's own 1-9 branch) - same on-screen numbering
   //      (keypadOrderedPlayerIds), same switch sound/highlight/scroll, by
-  //      calling the exact same selectKeypadPlayer.
-  //   3. "add/remove [x] points" - adjusts whichever player is currently
-  //      keypad-selected (by #2, or already selected before voice mode was
-  //      even turned on) by the full spoken amount in one call - adjust-
+  //      calling the exact same selectKeypadPlayer. Works in both
+  //      points-unit and rack-unit games.
+  //   3. Points-unit games (Straight Pool, 15 Ball Rotation, Custom):
+  //      "add/remove [x] points" adjusts whichever player is currently
+  //      keypad-selected by the full spoken amount in one call - adjust-
   //      Score already applies an arbitrary delta correctly in one shot
   //      (win-target crossing included), so "add 3 points" is exactly
   //      requestAdjustScore(id, 3), not three separate +1s.
-  // Scoped the same as before: individual mode, points-unit games only
-  // (Straight Pool, 15 Ball Rotation, Custom), not Quick Counter -
-  // checked fresh each time a command is about to apply. Web-only on
-  // purpose: the Web Speech API isn't reliably available inside the iOS
-  // Capacitor build's WKWebView, so the toggle button stays hidden there
-  // via the feature-detect below rather than pretending to offer
-  // something that won't actually work.
+  //   4. Rack-unit games (8-Ball, 9-Ball, etc.) - there's no running point
+  //      tally to add to here, winning IS the action, so these get their
+  //      own phrasing instead of reusing #3:
+  //        - "win the rack" credits a win for the keypad-selected player
+  //          (voiceAdjustSelectedPlayer(1), same call #3 makes).
+  //        - "[x] balls left" sets the post-win popup's balls-left-on-
+  //          table stepper (see showGameWinOverlay/voiceSetBallsLeft) -
+  //          a no-op while that popup isn't open.
+  //        - "register game" is the spoken equivalent of tapping the win
+  //          popup's own confirm button (voiceRegisterGame) - also a
+  //          no-op while it isn't open.
+  // Scoped the same either way: individual mode, points-or-rack-unit
+  // games, not Quick Counter - checked fresh each time a command is
+  // about to apply. Web-only on purpose: the Web Speech API isn't
+  // reliably available inside the iOS Capacitor build's WKWebView, so
+  // the toggle button stays hidden there via the feature-detect below
+  // rather than pretending to offer something that won't actually work.
   // ---------------------------------------------------------------------
 
   var VoiceRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition || null;
@@ -23061,7 +23072,7 @@
   var voiceStoppedDeliberately = false;
   var VOICE_WAKE_WORD_RE = /\bpool\W*counter\b/i;
 
-  var VOICE_NUMBER_WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9 };
+  var VOICE_NUMBER_WORDS = { zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9 };
   // \W* (not \s+) between words - tolerates a comma or other punctuation
   // a speech API sometimes inserts at a natural pause ("player, one",
   // "add 3, points"), which a plain \s+ would fail to match.
@@ -23070,21 +23081,37 @@
   // before "point(s)" is optional since real transcripts vary ("add 3
   // points", "add three points", "add a point").
   var VOICE_POINTS_RE = /\b(add|remove|plus|minus|subtract)\W*(\d+|a|one|two|three|four|five|six|seven|eight|nine)\W*points?\b/i;
+  // Rack games (8-Ball, 9-Ball, etc.) don't have a running point tally to
+  // add to - winning IS the action, and the post-win popup (see
+  // showGameWinOverlay) is where the balls-left-on-table detail and the
+  // final confirmation happen, so these three get their own phrasing
+  // instead of reusing "add/remove X points".
+  var VOICE_WIN_RACK_RE = /\bwin\W*the\W*rack\b/i;
+  var VOICE_BALLS_LEFT_RE = /\b(\d+|zero|one|two|three|four|five|six|seven|eight|nine)\W*balls?\W*left\b/i;
+  var VOICE_REGISTER_GAME_RE = /\bregister\W*game\b/i;
 
   function voiceNumberFromToken(token) {
     token = token.toLowerCase();
     if (token === "a") return 1;
     if (/^\d+$/.test(token)) return parseInt(token, 10);
-    return VOICE_NUMBER_WORDS[token] || null;
+    // hasOwnProperty, not `|| null` - "zero" maps to 0, which is falsy
+    // and would otherwise fall through to null.
+    return VOICE_NUMBER_WORDS.hasOwnProperty(token) ? VOICE_NUMBER_WORDS[token] : null;
   }
 
   // True only for the exact scope this prototype supports - checked at
   // the moment a command is about to apply (not just when voice mode was
   // turned on), so switching game type mid-session while still listening
   // degrades to a clear "not available" toast instead of silently
-  // adjusting the wrong thing.
+  // adjusting the wrong thing. Points-unit games (add/remove X points)
+  // and rack-unit games (win the rack, balls left, register game) both
+  // qualify - only Quick Counter and Teams mode don't.
   function voiceCommandsApplicableNow() {
-    return !quickCounterMode && state.currentGame.mode === "individual" && state.currentGame.unit === "points";
+    return (
+      !quickCounterMode &&
+      state.currentGame.mode === "individual" &&
+      (state.currentGame.unit === "points" || state.currentGame.unit === "rack")
+    );
   }
 
   function voiceSelectPlayer(playerNum) {
@@ -23102,6 +23129,31 @@
       return;
     }
     requestAdjustScore(keypadSelectedPlayerId, delta);
+  }
+
+  // Sets the post-win popup's balls-left-on-table stepper (see
+  // buildBallsLeftRow/showGameWinOverlay) exactly the way typing into
+  // its input field does - reuses the same render/persist helpers so
+  // the live patch-back onto state.gameHistory[0] and the skunk-flag
+  // side effect (persistBallsLeftLive) both happen identically. A no-op
+  // (not an error) when the popup isn't open, or - 9-Ball/10-Ball - has
+  // no balls-left field to begin with (see BALLS_LEFT_HIDDEN_GAME_TYPES).
+  function voiceSetBallsLeft(n) {
+    if (gamewinOverlay.classList.contains("hidden")) return;
+    var valueInput = gamewinDetails.querySelector(".balls-left-input");
+    var minusBtn = gamewinDetails.querySelector(".balls-left-btn.minus");
+    if (!valueInput || !minusBtn) return;
+    gamewinBallsLeftValue = Math.max(0, n);
+    renderBallsLeftValue(valueInput, minusBtn);
+    persistBallsLeftLive();
+  }
+
+  // "register game" - the spoken equivalent of tapping the win popup's
+  // own confirm button (btnGamewinClose/"Nice!"). Only acts while that
+  // popup is actually open, same as voiceSetBallsLeft above.
+  function voiceRegisterGame() {
+    if (gamewinOverlay.classList.contains("hidden")) return;
+    closeGameWinOverlay();
   }
 
   function handleVoiceResult(event) {
@@ -23129,6 +23181,7 @@
 
     var playerMatch = VOICE_PLAYER_RE.exec(transcript);
     var pointsMatch = VOICE_POINTS_RE.exec(transcript);
+    var ballsLeftMatch = VOICE_BALLS_LEFT_RE.exec(transcript);
     if (playerMatch) {
       voiceSelectPlayer(voiceNumberFromToken(playerMatch[1]));
     }
@@ -23136,6 +23189,16 @@
       var verb = pointsMatch[1].toLowerCase();
       var amount = voiceNumberFromToken(pointsMatch[2]);
       if (amount) voiceAdjustSelectedPlayer((verb === "add" || verb === "plus" ? 1 : -1) * amount);
+    }
+    if (VOICE_WIN_RACK_RE.test(transcript)) {
+      voiceAdjustSelectedPlayer(1);
+    }
+    if (ballsLeftMatch) {
+      var ballsLeft = voiceNumberFromToken(ballsLeftMatch[1]);
+      if (ballsLeft !== null) voiceSetBallsLeft(ballsLeft);
+    }
+    if (VOICE_REGISTER_GAME_RE.test(transcript)) {
+      voiceRegisterGame();
     }
   }
 

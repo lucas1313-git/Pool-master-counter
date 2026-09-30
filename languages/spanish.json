@@ -1119,7 +1119,7 @@
   "voice.heard": "🎤 Escuché: \"{{heard}}\"",
   "voice.micError": "🎤 Acceso al micrófono denegado — los comandos de voz lo necesitan para funcionar.",
   "voice.noPlayerSelected": "🎤 Di \"Player [número]\" primero para elegir el jugador.",
-  "voice.notAvailable": "🎤 Los comandos de voz solo funcionan en partidas por puntos (Straight Pool, 15 Ball Rotation, Personalizado), modo individual.",
+  "voice.notAvailable": "🎤 Los comandos de voz solo funcionan en modo individual, no en Quick Counter ni en modo Equipos.",
   "voice.toggleOff": "🎤 Escuchando… (toca para detener)",
   "voice.toggleOn": "🎤 Comandos de voz",
   "voice.unknownPlayer": "🎤 No hay ningún jugador {{num}} en pantalla.",
