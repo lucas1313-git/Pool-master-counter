@@ -1797,6 +1797,7 @@
   var onboardingStep = 1;
 
   var btnToggleFocus = document.getElementById("btn-toggle-focus");
+  var btnToggleVoice = document.getElementById("btn-toggle-voice");
   var focusPlayersWrap = document.getElementById("focus-players-wrap");
   var btnToggleFocusPlayers = document.getElementById("btn-toggle-focus-players");
   var focusPlayersSummary = document.getElementById("focus-players-summary");
@@ -23022,6 +23023,134 @@
       return;
     }
     tournamentAdjustScore(active, side, delta);
+  }
+
+  // ---------------------------------------------------------------------
+  // Voice Commands (web prototype) - "Player 1 add one point" / "Player 1
+  // remove one point", scoped deliberately narrow for now: individual mode,
+  // points-unit games only (state.currentGame.unit === "points" - Straight
+  // Pool, 15 Ball Rotation, Custom), not Quick Counter. Player numbers are
+  // the exact same 1-9 numbering already shown on-screen via the keypad
+  // badges (see refreshKeypadNumbering/keypadOrderedPlayerIds) - no new
+  // numbering scheme to learn. Web-only on purpose: the Web Speech API
+  // isn't reliably available inside the iOS Capacitor build's WKWebView,
+  // so the toggle button stays hidden there via the feature-detect below
+  // rather than pretending to offer something that won't actually work.
+  // ---------------------------------------------------------------------
+
+  var VoiceRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+  var voiceRecognition = null;
+  var voiceCommandsActive = false;
+  var voiceStoppedDeliberately = false;
+
+  var VOICE_NUMBER_WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9 };
+  // Deliberately loose - real speech-recognition transcripts vary in
+  // exactly how a small number or the word "point" comes through
+  // ("player 1 add one point", "player one add a point", "player 2
+  // remove point"), so every optional piece here (the article/"one"
+  // before "point", the final "s") is optional rather than requiring
+  // one exact phrasing.
+  var VOICE_COMMAND_RE = /player\s+(\d+|one|two|three|four|five|six|seven|eight|nine)\s+(add|remove|plus|minus|subtract)\s+(?:a|one)?\s*points?/i;
+
+  function parseVoiceCommand(transcript) {
+    var match = VOICE_COMMAND_RE.exec((transcript || "").trim());
+    if (!match) return null;
+    var numToken = match[1].toLowerCase();
+    var playerNum = /^\d+$/.test(numToken) ? parseInt(numToken, 10) : VOICE_NUMBER_WORDS[numToken];
+    var verb = match[2].toLowerCase();
+    return { playerNum: playerNum, delta: verb === "add" || verb === "plus" ? 1 : -1 };
+  }
+
+  // True only for the exact scope this prototype supports - checked at
+  // the moment a command is actually about to apply (not just when
+  // voice mode was turned on), so switching game type mid-session while
+  // still listening degrades to a clear "not available" toast instead
+  // of silently adjusting the wrong thing.
+  function voiceCommandsApplicableNow() {
+    return !quickCounterMode && state.currentGame.mode === "individual" && state.currentGame.unit === "points";
+  }
+
+  function applyVoiceCommand(cmd) {
+    if (!voiceCommandsApplicableNow()) {
+      showToast(T("voice.notAvailable"));
+      return;
+    }
+    var playerId = keypadOrderedPlayerIds[cmd.playerNum - 1];
+    var player = playerId ? getPlayer(playerId) : null;
+    if (!player) {
+      showToast(T("voice.unknownPlayer", { num: cmd.playerNum }));
+      return;
+    }
+    requestAdjustScore(playerId, cmd.delta);
+    showToast(T(cmd.delta > 0 ? "voice.pointAdded" : "voice.pointRemoved", { name: player.name }));
+  }
+
+  function handleVoiceResult(event) {
+    var lastResultIdx = event.results.length - 1;
+    var transcript = event.results[lastResultIdx][0].transcript;
+    var cmd = parseVoiceCommand(transcript);
+    if (!cmd) {
+      showToast(T("voice.notUnderstood", { heard: transcript.trim() }));
+      return;
+    }
+    applyVoiceCommand(cmd);
+  }
+
+  function setVoiceCommandsActive(on) {
+    if (!VoiceRecognitionCtor) return;
+    voiceCommandsActive = on;
+    btnToggleVoice.classList.toggle("is-listening", on);
+    btnToggleVoice.textContent = T(on ? "voice.toggleOff" : "voice.toggleOn");
+    if (on) {
+      if (!voiceCommandsApplicableNow()) {
+        showToast(T("voice.notAvailable"));
+      }
+      voiceStoppedDeliberately = false;
+      if (!voiceRecognition) {
+        voiceRecognition = new VoiceRecognitionCtor();
+        voiceRecognition.continuous = true;
+        voiceRecognition.interimResults = false;
+        voiceRecognition.lang = "en-US";
+        voiceRecognition.addEventListener("result", handleVoiceResult);
+        voiceRecognition.addEventListener("error", function (e) {
+          if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+            showToast(T("voice.micError"));
+            setVoiceCommandsActive(false);
+          }
+          // "no-speech"/"aborted"/etc. are routine while continuously
+          // listening in a noisy room - onend below restarts it, no
+          // toast needed for every one of those.
+        });
+        // The API stops itself after a period of silence even with
+        // continuous:true (browser-dependent) - restart automatically
+        // to approximate always-on listening, unless the toggle was
+        // turned off on purpose in the meantime.
+        voiceRecognition.addEventListener("end", function () {
+          if (voiceCommandsActive && !voiceStoppedDeliberately) {
+            try {
+              voiceRecognition.start();
+            } catch (e) {
+              // Already starting/started - ignore.
+            }
+          }
+        });
+      }
+      try {
+        voiceRecognition.start();
+      } catch (e) {
+        // Already listening - ignore (start() throws if called twice).
+      }
+    } else {
+      voiceStoppedDeliberately = true;
+      if (voiceRecognition) voiceRecognition.stop();
+    }
+  }
+
+  if (VoiceRecognitionCtor) {
+    btnToggleVoice.classList.remove("hidden");
+    btnToggleVoice.addEventListener("click", function () {
+      setVoiceCommandsActive(!voiceCommandsActive);
+    });
   }
 
   // iPadOS 13+ reports navigator.platform as "MacIntel" like a real Mac,

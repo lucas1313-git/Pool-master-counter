@@ -681,6 +681,33 @@ body {
   padding: 8px 14px;
 }
 
+/* Hidden by default (see index.html) - only unhidden by JS when the Web
+   Speech API is actually available, since it isn't reliably present
+   inside the iOS app's WKWebView (see the Voice Commands comment in
+   app.js). */
+.voice-toggle-btn {
+  display: block;
+  margin: 4px auto 12px;
+  font-size: 0.85rem;
+  padding: 8px 14px;
+}
+
+.voice-toggle-btn.is-listening {
+  background: color-mix(in srgb, var(--accent) 20%, var(--bg-card));
+  border-color: var(--accent);
+  color: var(--accent);
+  animation: voice-listening-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes voice-listening-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
+
 #app.focus-mode .panel {
   display: none;
 }
