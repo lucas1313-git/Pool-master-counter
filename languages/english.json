@@ -1116,6 +1116,7 @@
   "units.points": "points",
   "units.rack": "rack",
   "units.racks": "racks",
+  "voice.heard": "🎤 Heard: \"{{heard}}\"",
   "voice.micError": "🎤 Microphone access denied — voice commands need it to work.",
   "voice.noPlayerSelected": "🎤 Say \"Player [number]\" first to pick who this is for.",
   "voice.notAvailable": "🎤 Voice commands only work in points games (Straight Pool, 15 Ball Rotation, Custom), individual mode.",

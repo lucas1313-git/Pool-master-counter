@@ -1116,6 +1116,7 @@
   "units.points": "puntos",
   "units.rack": "rack",
   "units.racks": "racks",
+  "voice.heard": "🎤 Escuché: \"{{heard}}\"",
   "voice.micError": "🎤 Acceso al micrófono denegado — los comandos de voz lo necesitan para funcionar.",
   "voice.noPlayerSelected": "🎤 Di \"Player [número]\" primero para elegir el jugador.",
   "voice.notAvailable": "🎤 Los comandos de voz solo funcionan en partidas por puntos (Straight Pool, 15 Ball Rotation, Personalizado), modo individual.",

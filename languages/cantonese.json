@@ -1116,6 +1116,7 @@
   "units.points": "分",
   "units.rack": "局",
   "units.racks": "局",
+  "voice.heard": "🎤 聽到：「{{heard}}」",
   "voice.micError": "🎤 麥克風權限被拒絕 — 語音指令需要用到麥克風先用得。",
   "voice.noPlayerSelected": "🎤 先講「Player [號碼]」揀返邊個球員。",
   "voice.notAvailable": "🎤 語音指令淨係喺計分制比賽（花式撞球、15 Ball Rotation、自訂）嘅個人模式先用得。",
