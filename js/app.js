@@ -23455,7 +23455,14 @@
       }
     } else {
       voiceStoppedDeliberately = true;
-      if (voiceRecognition) voiceRecognition.stop();
+      // abort(), not stop() - per spec, stop() finishes processing
+      // whatever audio it already captured (so the mic can stay
+      // allocated until that wraps up), while abort() halts capture
+      // immediately. Chrome in particular can otherwise leave the
+      // mic showing as active in its own UI/settings for a while
+      // after a plain stop() - abort() releases it right away, which
+      // is what turning this toggle off should do.
+      if (voiceRecognition) voiceRecognition.abort();
     }
   }
 
