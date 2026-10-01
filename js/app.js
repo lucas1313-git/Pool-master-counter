@@ -23134,21 +23134,22 @@
   //      neutral two-tap tone with no scoring meaning of its own) to
   //      confirm the mic/recognition is actually working - a standalone
   //      check, not a prerequisite for anything else here.
-  //   2. "player [x]" - selects that player exactly the way pressing the
+  //   2. "player [x]" (or the shorter "play [x]" - same thing, less to
+  //      say/mishear) - selects that player exactly the way pressing the
   //      same number on the physical keypad does (see
   //      handleKeypadShortcut's own 1-9 branch) - same on-screen numbering
   //      (keypadOrderedPlayerIds), same switch sound/highlight/scroll, by
   //      calling the exact same selectKeypadPlayer. Works in both
   //      points-unit and rack-unit games. [x] can also be a player's
-  //      first name as written on their score card ("player Alice")
-  //      instead of a number - matched live against
+  //      first name as written on their score card ("player Alice"/"play
+  //      Alice") instead of a number - matched live against
   //      keypadOrderedPlayerIds/getPlayer each time (see
   //      voiceSelectPlayerByName), never a fixed list, so renaming or
   //      adding/removing players is picked up automatically with no code
   //      change. Only the first word of the stored name is used (so
   //      "Mary Jane Smith" is said/matched as just "Mary") - keeps the
   //      spoken grammar to one word and sidesteps speech recognition
-  //      mangling a longer name. Requires the "player" prefix
+  //      mangling a longer name. Requires the "player"/"play" prefix
   //      specifically (not the bare name alone) since the mic listens
   //      continuously with no wake word - saying just "Alice" would also
   //      fire on ordinary table talk that happens to mention her.
@@ -23186,14 +23187,16 @@
   var VOICE_NUMBER_WORDS = { zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9 };
   // \W* (not \s+) between words - tolerates a comma or other punctuation
   // a speech API sometimes inserts at a natural pause ("player, one",
-  // "add 3, points"), which a plain \s+ would fail to match.
-  var VOICE_PLAYER_RE = /\bplayer\W*(\d+|one|two|three|four|five|six|seven|eight|nine)\b/i;
-  // Fallback for "player [name]" once VOICE_PLAYER_RE's number match
-  // fails - captures just the single word right after "player" (only
-  // the first name on a score card is ever matched - see
+  // "add 3, points"), which a plain \s+ would fail to match. "play" is
+  // accepted as a shorter alternative to "player" (e.g. "play 1",
+  // "play Alice") - same meaning, just less to say/mishear.
+  var VOICE_PLAYER_RE = /\b(?:player|play)\W*(\d+|one|two|three|four|five|six|seven|eight|nine)\b/i;
+  // Fallback for "player/play [name]" once VOICE_PLAYER_RE's number
+  // match fails - captures just the single word right after "player"/
+  // "play" (only the first name on a score card is ever matched - see
   // voiceSelectPlayerByName), not a fixed list, since the set of valid
   // names changes as players are added/renamed.
-  var VOICE_PLAYER_NAME_RE = /\bplayer\W+([a-z']+)/i;
+  var VOICE_PLAYER_NAME_RE = /\b(?:player|play)\W+([a-z']+)/i;
   // "next player" - cycles keypad selection forward, same as the Enter
   // keypad shortcut (see advanceToNextKeypadPlayer/voiceNextPlayer).
   var VOICE_NEXT_PLAYER_RE = /\bnext\W*player\b/i;
