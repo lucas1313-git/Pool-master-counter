@@ -2725,6 +2725,17 @@
     }
   }
 
+  // Advances keypad selection to whoever's next in keypadOrderedPlayerIds
+  // (wrapping past the end), starting at #1 if nobody's selected yet -
+  // shared by the Enter keypad shortcut and the "next player" voice
+  // command (see voiceNextPlayer) so both mean exactly the same thing.
+  function advanceToNextKeypadPlayer() {
+    if (keypadOrderedPlayerIds.length === 0) return;
+    var currentIdx = keypadSelectedPlayerId ? keypadOrderedPlayerIds.indexOf(keypadSelectedPlayerId) : -1;
+    var nextIdx = (currentIdx + 1) % keypadOrderedPlayerIds.length;
+    selectKeypadPlayer(keypadOrderedPlayerIds[nextIdx], nextIdx + 1);
+  }
+
   function handleKeypadShortcut(e) {
     if (isTypingIntoField(document.activeElement)) return;
     if (isAnyOverlayOpen()) return;
@@ -2797,9 +2808,7 @@
       if (scoreEntryGame && keypadEntryMode && keypadEntryBuffer) finalizeKeypadEntry();
       if (keypadOrderedPlayerIds.length === 0) return;
       e.preventDefault();
-      var currentIdx = keypadSelectedPlayerId ? keypadOrderedPlayerIds.indexOf(keypadSelectedPlayerId) : -1;
-      var nextIdx = (currentIdx + 1) % keypadOrderedPlayerIds.length;
-      selectKeypadPlayer(keypadOrderedPlayerIds[nextIdx], nextIdx + 1);
+      advanceToNextKeypadPlayer();
       return;
     }
 
@@ -4310,6 +4319,33 @@
     } else {
       shotCounterRunningSince = Date.now();
     }
+    tickShotCounter();
+  }
+
+  // Unconditional pause (not a toggle) - shared by the widget's own
+  // reset button, "reset shot counter"/"pause shot counter"/"stop shot
+  // counter" (see the Voice Commands section), and anywhere else that
+  // specifically means "stop", not "flip whatever it's doing right
+  // now". A no-op if already paused.
+  function pauseShotCounter() {
+    if (!shotCounterActive() || !shotCounterRunningSince) return;
+    shotCounterAccumulatedMs += Date.now() - shotCounterRunningSince;
+    shotCounterRunningSince = null;
+    tickShotCounter();
+  }
+
+  // Zeroes the elapsed time back to 0:00 without otherwise touching
+  // whether it's running or paused right now (unlike startShotCounter,
+  // which always leaves it paused at 0:00 - this is "restart the clock
+  // mid-shot", not "set the feature up fresh") - the widget's own reset
+  // button and the "reset shot counter" voice command both just mean
+  // "back to zero, keep doing whatever it was doing".
+  function resetShotCounterToZero() {
+    if (!shotCounterActive()) return;
+    shotCounterAccumulatedMs = 0;
+    shotCounterLastBeepMs = 0;
+    shotCounterLastTickCountdown = null;
+    if (shotCounterRunningSince) shotCounterRunningSince = Date.now();
     tickShotCounter();
   }
 
@@ -23140,6 +23176,9 @@
   // a speech API sometimes inserts at a natural pause ("player, one",
   // "add 3, points"), which a plain \s+ would fail to match.
   var VOICE_PLAYER_RE = /\bplayer\W*(\d+|one|two|three|four|five|six|seven|eight|nine)\b/i;
+  // "next player" - cycles keypad selection forward, same as the Enter
+  // keypad shortcut (see advanceToNextKeypadPlayer/voiceNextPlayer).
+  var VOICE_NEXT_PLAYER_RE = /\bnext\W*player\b/i;
   // "add"/"at"/"plus" vs "remove"/"subtract"/"minus" - "at" is in here
   // specifically because speech recognition frequently mishears "add"
   // as "at" (near-identical sound) - the article/"a"/"one" before
@@ -23159,6 +23198,18 @@
   // win exactly the same as a rack win, so it needs a phrase that makes
   // sense in a points-game context too.
   var VOICE_REGISTER_GAME_RE = /\b(register\W*game|nice\W*game)\b/i;
+  // "good game" also confirms/closes the win popup (see voiceGoodGame),
+  // but only once balls-left-on-table actually has a value set - an
+  // extra safety check register/nice game don't make.
+  var VOICE_GOOD_GAME_RE = /\bgood\W*game\b/i;
+  // Independent of every command above - the Shot Counter is its own
+  // feature, available in more game-type/unit combinations (e.g. One
+  // Pocket's "balls" unit) than voiceCommandsApplicableNow's own scope
+  // covers, so these two are checked separately in handleVoiceResult,
+  // before that gate, and no-op via shotCounterActive() on their own
+  // instead of sharing it.
+  var VOICE_RESET_SHOT_COUNTER_RE = /\breset\W*shot\W*counter\b/i;
+  var VOICE_PAUSE_SHOT_COUNTER_RE = /\b(stop|pause)\W*shot\W*counter\b/i;
 
   function voiceNumberFromToken(token) {
     token = token.toLowerCase();
@@ -23175,13 +23226,12 @@
   // degrades to a clear "not available" toast instead of silently
   // adjusting the wrong thing. Points-unit games (add/remove X points)
   // and rack-unit games (win the rack, balls left, register game) both
-  // qualify - only Quick Counter and Teams mode don't.
+  // qualify, Teams included - selectKeypadPlayer/adjustScore/creditWin
+  // all already handle a team member exactly like a solo player (see
+  // buildMemberCard's own keypad numbering, and adjustScore's team-
+  // aggregate win check) - only Quick Counter doesn't.
   function voiceCommandsApplicableNow() {
-    return (
-      !quickCounterMode &&
-      state.currentGame.mode === "individual" &&
-      (state.currentGame.unit === "points" || state.currentGame.unit === "rack")
-    );
+    return !quickCounterMode && (state.currentGame.unit === "points" || state.currentGame.unit === "rack");
   }
 
   function voiceSelectPlayer(playerNum) {
@@ -23191,6 +23241,13 @@
       return;
     }
     selectKeypadPlayer(targetId, playerNum);
+  }
+
+  // "next player" - the spoken equivalent of the Enter keypad shortcut
+  // (see advanceToNextKeypadPlayer) - same wrap-around, same "starts at
+  // #1 if nobody's selected yet" behavior.
+  function voiceNextPlayer() {
+    advanceToNextKeypadPlayer();
   }
 
   function voiceAdjustSelectedPlayer(delta) {
@@ -23226,6 +23283,20 @@
     closeGameWinOverlay();
   }
 
+  // "good game" - also confirms/closes the win popup, but only once the
+  // balls-left-on-table stepper actually has a value (gamewinBallsLeftValue
+  // starts null, same as leaving the field at "Not Set" by hand) - an
+  // extra safety check "register game"/"nice game" don't make, for
+  // whoever wants to be sure that detail got recorded before confirming.
+  // Silently does nothing (not an error toast) if it isn't set yet or
+  // the popup isn't open - same low-key no-op as every other command
+  // here when its precondition isn't met.
+  function voiceGoodGame() {
+    if (gamewinOverlay.classList.contains("hidden")) return;
+    if (gamewinBallsLeftValue === null) return;
+    closeGameWinOverlay();
+  }
+
   function handleVoiceResult(event) {
     var lastResultIdx = event.results.length - 1;
     var transcript = (event.results[lastResultIdx][0].transcript || "").trim();
@@ -23244,6 +23315,14 @@
     // silently miss whenever that window had lapsed).
     if (VOICE_WAKE_WORD_RE.test(transcript)) playShotCounterBeep();
 
+    // Shot Counter commands are independent of everything below (see
+    // VOICE_RESET_SHOT_COUNTER_RE's comment) - checked here, before the
+    // voiceCommandsApplicableNow() gate that scopes the rest of this
+    // function, and self-guarded via shotCounterActive() rather than
+    // sharing it.
+    if (VOICE_RESET_SHOT_COUNTER_RE.test(transcript)) resetShotCounterToZero();
+    if (VOICE_PAUSE_SHOT_COUNTER_RE.test(transcript)) pauseShotCounter();
+
     if (!voiceCommandsApplicableNow()) {
       showToast(T("voice.notAvailable"));
       return;
@@ -23254,6 +23333,9 @@
     var ballsLeftMatch = VOICE_BALLS_LEFT_RE.exec(transcript);
     if (playerMatch) {
       voiceSelectPlayer(voiceNumberFromToken(playerMatch[1]));
+    }
+    if (VOICE_NEXT_PLAYER_RE.test(transcript)) {
+      voiceNextPlayer();
     }
     if (pointsMatch) {
       var verb = pointsMatch[1].toLowerCase();
@@ -23269,6 +23351,9 @@
     }
     if (VOICE_REGISTER_GAME_RE.test(transcript)) {
       voiceRegisterGame();
+    }
+    if (VOICE_GOOD_GAME_RE.test(transcript)) {
+      voiceGoodGame();
     }
   }
 
@@ -27669,6 +27754,10 @@
   });
 
   document.getElementById("shot-counter-widget").addEventListener("click", toggleShotCounterPause);
+  document.getElementById("shot-counter-reset").addEventListener("click", function (e) {
+    e.stopPropagation();
+    resetShotCounterToZero();
+  });
 
   btnShotCounterToggleVisibility.addEventListener("click", toggleShotCounterVisibility);
   document.getElementById("shot-counter-visibility-toggle").addEventListener("click", toggleShotCounterVisibility);
