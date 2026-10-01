@@ -1905,7 +1905,9 @@ input[type="number"] {
    a way back). Sized with clamp() so it stays legible without
    overflowing a phone-width viewport. */
 .shot-counter-widget {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 12px;
   width: fit-content;
   margin: 4px auto 14px;
   background: rgba(0, 0, 0, 0.6);
@@ -1919,6 +1921,26 @@ input[type="number"] {
   letter-spacing: 0.03em;
   text-align: center;
   cursor: pointer;
+}
+
+/* Resets the elapsed time to 0:00 without pausing/unpausing (see
+   resetShotCounterToZero) - stopPropagation'd against the widget's own
+   click-to-pause handler, same pattern as .timed-tournament-pause-toggle
+   nested inside its own clickable widget. */
+.shot-counter-reset-btn {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 999px;
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.shot-counter-reset-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 /* Quick-access companion to the widget above - unlike it, this stays
