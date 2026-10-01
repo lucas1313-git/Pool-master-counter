@@ -23140,14 +23140,18 @@
   //      (keypadOrderedPlayerIds), same switch sound/highlight/scroll, by
   //      calling the exact same selectKeypadPlayer. Works in both
   //      points-unit and rack-unit games. [x] can also be a player's
-  //      actual name ("player Alice") instead of a number - matched live
-  //      against keypadOrderedPlayerIds/getPlayer each time (see
+  //      first name as written on their score card ("player Alice")
+  //      instead of a number - matched live against
+  //      keypadOrderedPlayerIds/getPlayer each time (see
   //      voiceSelectPlayerByName), never a fixed list, so renaming or
   //      adding/removing players is picked up automatically with no code
-  //      change. Requires the "player" prefix specifically (not the bare
-  //      name alone) since the mic listens continuously with no wake
-  //      word - saying just "Alice" would also fire on ordinary table
-  //      talk that happens to mention her.
+  //      change. Only the first word of the stored name is used (so
+  //      "Mary Jane Smith" is said/matched as just "Mary") - keeps the
+  //      spoken grammar to one word and sidesteps speech recognition
+  //      mangling a longer name. Requires the "player" prefix
+  //      specifically (not the bare name alone) since the mic listens
+  //      continuously with no wake word - saying just "Alice" would also
+  //      fire on ordinary table talk that happens to mention her.
   //   3. Points-unit games (Straight Pool, 15 Ball Rotation, Custom):
   //      "add/remove [x] points" adjusts whichever player is currently
   //      keypad-selected by the full spoken amount in one call - adjust-
@@ -23185,11 +23189,11 @@
   // "add 3, points"), which a plain \s+ would fail to match.
   var VOICE_PLAYER_RE = /\bplayer\W*(\d+|one|two|three|four|five|six|seven|eight|nine)\b/i;
   // Fallback for "player [name]" once VOICE_PLAYER_RE's number match
-  // fails - captures everything after "player" and the actual player-
-  // name matching (prefix match against live roster names, longest
-  // candidate wins) happens in voiceSelectPlayerByName, not here, since
-  // the set of valid names changes as players are added/renamed.
-  var VOICE_PLAYER_NAME_RE = /\bplayer\W+([a-z].*)/i;
+  // fails - captures just the single word right after "player" (only
+  // the first name on a score card is ever matched - see
+  // voiceSelectPlayerByName), not a fixed list, since the set of valid
+  // names changes as players are added/renamed.
+  var VOICE_PLAYER_NAME_RE = /\bplayer\W+([a-z']+)/i;
   // "next player" - cycles keypad selection forward, same as the Enter
   // keypad shortcut (see advanceToNextKeypadPlayer/voiceNextPlayer).
   var VOICE_NEXT_PLAYER_RE = /\bnext\W*player\b/i;
@@ -23257,35 +23261,36 @@
     selectKeypadPlayer(targetId, playerNum);
   }
 
+  // Only the first word of however a name is written on the score card
+  // ("Mary Jane Smith" -> "mary") - what voiceSelectPlayerByName matches
+  // against, and (via the help text) what the player is told to say.
+  function voicePlayerFirstName(name) {
+    return normalizeNameKey((name || "").trim().split(/\s+/)[0] || "");
+  }
+
   // "player [name]" - reads the live roster (keypadOrderedPlayerIds +
   // getPlayer, the same source the number-based version and the on-
   // screen keypad badges use) fresh on every call rather than any
   // precomputed list, so a name added, edited, or removed mid-session is
   // matched correctly on the very next utterance with no extra wiring.
-  // Matches by normalized-name PREFIX against what was said (not full
-  // equality) so trailing words the speech API tacks on from the rest of
-  // the sentence ("player alice add ten points") don't break the match,
-  // and picks the longest candidate that fits so "Mary Jane" beats
-  // "Mary" when both are on the roster. Silently does nothing on no
-  // match, same low-key no-op as every other command here.
+  // Exact match against each player's first name only (see
+  // voicePlayerFirstName) - first match in keypad order wins on a tie,
+  // same as two players would collide on the physical keypad's own
+  // numbering. Silently does nothing on no match, same low-key no-op as
+  // every other command here.
   function voiceSelectPlayerByName(transcript) {
     var m = VOICE_PLAYER_NAME_RE.exec(transcript);
     if (!m) return;
-    var remainder = normalizeNameKey(m[1]);
-    if (!remainder) return;
-    var bestIdx = -1;
-    var bestLen = 0;
+    var spoken = normalizeNameKey(m[1]);
+    if (!spoken) return;
+    var targetIdx = -1;
     keypadOrderedPlayerIds.forEach(function (id, idx) {
+      if (targetIdx !== -1) return;
       var p = getPlayer(id);
-      if (!p) return;
-      var nameKey = normalizeNameKey(p.name);
-      if (nameKey && remainder.indexOf(nameKey) === 0 && nameKey.length > bestLen) {
-        bestIdx = idx;
-        bestLen = nameKey.length;
-      }
+      if (p && voicePlayerFirstName(p.name) === spoken) targetIdx = idx;
     });
-    if (bestIdx === -1) return;
-    selectKeypadPlayer(keypadOrderedPlayerIds[bestIdx], bestIdx + 1);
+    if (targetIdx === -1) return;
+    selectKeypadPlayer(keypadOrderedPlayerIds[targetIdx], targetIdx + 1);
   }
 
   // "next player" - the spoken equivalent of the Enter keypad shortcut
