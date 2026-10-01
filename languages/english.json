@@ -956,6 +956,8 @@
   "scoreboard.teamNeedsOpponent": "⚠️ Waiting for the other team — a team can't play alone.",
   "scoreboard.tourneyWin": "Tourney Victories",
   "skunk.indicator": "🦨 Skunk!",
+  "snooker.finishFrame": "🏁 Finish Snooker Frame",
+  "snooker.tie": "🏁 It's a tie — adjust a score before finishing the frame.",
   "standings.buchholz": "Buchholz {{count}}",
   "standings.heading": "Standings",
   "standings.individual": "Individual",

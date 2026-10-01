@@ -708,6 +708,16 @@ body {
   }
 }
 
+/* Hidden by default (see index.html) - only unhidden by JS while
+   playing Snooker (see renderScoreboard), the one game type whose
+   frame has no automatic end - see finishSnookerFrame. */
+.finish-snooker-btn {
+  display: block;
+  margin: 4px auto 12px;
+  font-size: 0.85rem;
+  padding: 8px 14px;
+}
+
 #app.focus-mode .panel {
   display: none;
 }

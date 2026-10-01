@@ -956,6 +956,8 @@
   "scoreboard.teamNeedsOpponent": "⚠️ Hinihintay ang kabilang team — hindi puwedeng maglaro mag-isa ang isang team.",
   "scoreboard.tourneyWin": "Panalo sa Tourney",
   "skunk.indicator": "🦨 Skunk!",
+  "snooker.finishFrame": "🏁 Tapusin ang Snooker Frame",
+  "snooker.tie": "🏁 Patas — ayusin muna ang isang score bago tapusin ang frame.",
   "standings.buchholz": "Buchholz {{count}}",
   "standings.heading": "Standings",
   "standings.individual": "Indibidwal",

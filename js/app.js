@@ -35,7 +35,18 @@
     { id: "15ballrotation", label: "15 Ball Rotation", defaultTarget: 61, unit: "points" },
     { id: "straight", label: "Straight Pool", defaultTarget: 100, unit: "points" },
     { id: "onepocket", label: "One Pocket", defaultTarget: 8, unit: "balls" },
-    { id: "custom", label: "Custom", defaultTarget: 1, unit: "points" }
+    { id: "custom", label: "Custom", defaultTarget: 1, unit: "points" },
+    // No predetermined target - real Snooker frames end whenever the
+    // balls run out or the trailing player can no longer catch up, not
+    // at a fixed score (unlike Straight Pool's race-to-100 etc.). 999
+    // is a plain placeholder "effectively unreachable" target, well
+    // above even a maximum 147 break, that keeps every existing
+    // numeric-target code path (progress displays, fair-race handicap
+    // math) working unmodified - the real way a Snooker game ends is
+    // the "Finish Snooker Frame" button (see finishSnookerFrame),
+    // which credits whoever has the higher score right now rather than
+    // waiting for anyone to reach this number.
+    { id: "snooker", label: "Snooker", defaultTarget: 999, unit: "points" }
   ];
 
   // "Rack" games (target 1, one click = one whole win) have no per-ball
@@ -49,11 +60,11 @@
   // Rotation games where the balls are shot in shared numerical order
   // rather than each player having their own object-ball group (the
   // 8-ball family) or a points total to fall short of (Straight Pool,
-  // 15 Ball Rotation, Custom) - there's no well-defined "balls left"
-  // quantity for either player here, so the win popup's field is
+  // 15 Ball Rotation, Custom, Snooker) - there's no well-defined "balls
+  // left" quantity for either player here, so the win popup's field is
   // hidden entirely for these instead of showing a control that can
   // never mean anything (see showGameWinOverlay).
-  var BALLS_LEFT_HIDDEN_GAME_TYPES = ["9ball", "10ball"];
+  var BALLS_LEFT_HIDDEN_GAME_TYPES = ["9ball", "10ball", "snooker"];
 
   // ---------------------------------------------------------------------
   // State
@@ -1798,6 +1809,7 @@
 
   var btnToggleFocus = document.getElementById("btn-toggle-focus");
   var btnToggleVoice = document.getElementById("btn-toggle-voice");
+  var btnFinishSnooker = document.getElementById("btn-finish-snooker");
   var focusPlayersWrap = document.getElementById("focus-players-wrap");
   var btnToggleFocusPlayers = document.getElementById("btn-toggle-focus-players");
   var focusPlayersSummary = document.getElementById("focus-players-summary");
@@ -4529,6 +4541,8 @@
   function renderScoreboard() {
     var active = activePlayers();
 
+    btnFinishSnooker.classList.toggle("hidden", quickCounterMode || state.currentGame.gameType !== "snooker");
+
     if (quickCounterMode) {
       nowPlayingBanner.innerHTML = "";
       rotationPositionRow.classList.add("hidden");
@@ -5051,13 +5065,25 @@
     // points behind, ≈3 balls") - see showGameWinOverlay/
     // buildBallsLeftRow. null for every other unit.
     var pointsGapPrefill = null;
+    // Same games showGameWinOverlay hides the "balls left" field for
+    // (see BALLS_LEFT_HIDDEN_GAME_TYPES) - there's no well-defined
+    // balls-left/points-gap quantity for either player in these, so
+    // the prefill computation below is skipped entirely for them too,
+    // not just its own display. Snooker in particular has no fixed
+    // target to measure a "gap" against at all (see DEFAULT_GAME_TYPES'
+    // comment on its placeholder target) - without this guard, a
+    // Snooker win would silently compute and store a meaningless
+    // "964 points behind 999" style number nothing ever shows, but
+    // other surfaces that don't know to hide it (a player's own game
+    // log, the leaderboard) would have displayed anyway.
+    var ballsLeftConceptApplies = BALLS_LEFT_HIDDEN_GAME_TYPES.indexOf(state.currentGame.gameType) === -1;
     if (state.currentGame.unit !== "rack") {
       if (isTeam) {
         var opponentTeamBalls = sumTeamBalls(otherTeamId);
         skunk = opponentTeamBalls === 0;
-        if (state.currentGame.gameType === "onepocket") {
+        if (ballsLeftConceptApplies && state.currentGame.gameType === "onepocket") {
           ballsLeftPrefill = Math.max(0, 15 - sumTeamBalls(key) - opponentTeamBalls);
-        } else if (state.currentGame.unit === "points") {
+        } else if (ballsLeftConceptApplies && state.currentGame.unit === "points") {
           // Exactly 2 teams ever exist (see otherTeamId above), so
           // there's only ever one "loser" to average here.
           pointsGapPrefill = Math.max(0, state.currentGame.target - opponentTeamBalls);
@@ -5065,7 +5091,7 @@
         }
       } else if (skunkOpponentBalls !== null) {
         skunk = skunkOpponentBalls === 0;
-        if (state.currentGame.gameType === "onepocket") {
+        if (ballsLeftConceptApplies && state.currentGame.gameType === "onepocket") {
           ballsLeftPrefill = Math.max(0, 15 - winnerBallsAtWin - skunkOpponentBalls);
         }
       }
@@ -5077,7 +5103,7 @@
       // count first and then averaging - avoids compounding rounding
       // error). Deliberately not folded into the skunkOpponentBalls
       // branch above, which only ever looks at a single opponent.
-      if (!isTeam && state.currentGame.unit === "points") {
+      if (ballsLeftConceptApplies && !isTeam && state.currentGame.unit === "points") {
         var loserGaps = activePlayers()
           .filter(function (p) {
             return p.id !== key;
@@ -6293,6 +6319,42 @@
     }
     renderAll();
     lastScoredPlayerId = null;
+  }
+
+  // Snooker (see DEFAULT_GAME_TYPES's comment on why its target is a
+  // plain placeholder) never reaches its target on its own the way
+  // every other game here does - this is the actual "a frame just
+  // ended" action for it, crediting whoever currently has the higher
+  // score exactly the way reaching a real target would (same creditWin
+  // call adjustScore makes), rather than waiting for a number that was
+  // never meant to be reached. A tie refuses to guess - the organizer
+  // adjusts a score first (there's always a next shot's worth of
+  // difference in a real frame) rather than this picking arbitrarily.
+  function finishSnookerFrame() {
+    var isTeamMode = !quickCounterMode && state.currentGame.mode === "teams";
+    if (isTeamMode) {
+      var teamAMembers = teamMembersLive("A");
+      var teamBMembers = teamMembersLive("B");
+      if (!teamAMembers.length || !teamBMembers.length) return;
+      var scoreA = sumTeamBalls("A");
+      var scoreB = sumTeamBalls("B");
+      if (scoreA === scoreB) {
+        showToast(T("snooker.tie"));
+        return;
+      }
+      creditWin(true, scoreA > scoreB ? "A" : "B", null);
+    } else {
+      var active = activePlayers();
+      if (active.length < 2) return;
+      var sorted = active.slice().sort(function (a, b) {
+        return (b.balls || 0) - (a.balls || 0);
+      });
+      if ((sorted[0].balls || 0) === (sorted[1].balls || 0)) {
+        showToast(T("snooker.tie"));
+        return;
+      }
+      creditWin(false, sorted[0].id, sorted[0].voice);
+    }
   }
 
   function resetCurrentGame() {
@@ -23077,10 +23139,12 @@
   // a speech API sometimes inserts at a natural pause ("player, one",
   // "add 3, points"), which a plain \s+ would fail to match.
   var VOICE_PLAYER_RE = /\bplayer\W*(\d+|one|two|three|four|five|six|seven|eight|nine)\b/i;
-  // "add"/"plus" vs "remove"/"subtract"/"minus" - the article/"a"/"one"
-  // before "point(s)" is optional since real transcripts vary ("add 3
-  // points", "add three points", "add a point").
-  var VOICE_POINTS_RE = /\b(add|remove|plus|minus|subtract)\W*(\d+|a|one|two|three|four|five|six|seven|eight|nine)\W*points?\b/i;
+  // "add"/"at"/"plus" vs "remove"/"subtract"/"minus" - "at" is in here
+  // specifically because speech recognition frequently mishears "add"
+  // as "at" (near-identical sound) - the article/"a"/"one" before
+  // "point(s)" is optional since real transcripts vary ("add 3 points",
+  // "add three points", "add a point", "at 3 points").
+  var VOICE_POINTS_RE = /\b(add|at|plus|remove|minus|subtract)\W*(\d+|a|one|two|three|four|five|six|seven|eight|nine)\W*points?\b/i;
   // Rack games (8-Ball, 9-Ball, etc.) don't have a running point tally to
   // add to - winning IS the action, and the post-win popup (see
   // showGameWinOverlay) is where the balls-left-on-table detail and the
@@ -23088,7 +23152,12 @@
   // instead of reusing "add/remove X points".
   var VOICE_WIN_RACK_RE = /\bwin\W*the\W*rack\b/i;
   var VOICE_BALLS_LEFT_RE = /\b(\d+|zero|one|two|three|four|five|six|seven|eight|nine)\W*balls?\W*left\b/i;
-  var VOICE_REGISTER_GAME_RE = /\bregister\W*game\b/i;
+  // "Register game" and "nice game" both just confirm/close the win
+  // popup (see voiceRegisterGame) - "nice game" mirrors the popup's own
+  // "Nice!" button text, and this popup shows for a points-unit race
+  // win exactly the same as a rack win, so it needs a phrase that makes
+  // sense in a points-game context too.
+  var VOICE_REGISTER_GAME_RE = /\b(register\W*game|nice\W*game)\b/i;
 
   function voiceNumberFromToken(token) {
     token = token.toLowerCase();
@@ -23188,7 +23257,7 @@
     if (pointsMatch) {
       var verb = pointsMatch[1].toLowerCase();
       var amount = voiceNumberFromToken(pointsMatch[2]);
-      if (amount) voiceAdjustSelectedPlayer((verb === "add" || verb === "plus" ? 1 : -1) * amount);
+      if (amount) voiceAdjustSelectedPlayer((verb === "add" || verb === "at" || verb === "plus" ? 1 : -1) * amount);
     }
     if (VOICE_WIN_RACK_RE.test(transcript)) {
       voiceAdjustSelectedPlayer(1);
@@ -27734,6 +27803,7 @@
   });
 
   btnResetGame.addEventListener("click", resetCurrentGame);
+  btnFinishSnooker.addEventListener("click", finishSnookerFrame);
   btnShare.addEventListener("click", shareStandings);
   btnExportSession.addEventListener("click", shareLastSessionWithData);
   btnExportSessionHelp.addEventListener("click", function () {
