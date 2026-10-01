@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260925o">
+<link rel="stylesheet" href="css/style.css?v=20260925p">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -296,7 +296,10 @@
 
   <section id="scoreboard-panel">
     <button type="button" id="btn-toggle-focus" class="btn btn-primary focus-toggle-btn" data-i18n="scoreboard.focusMode">Focus Mode</button>
-    <button type="button" id="btn-toggle-voice" class="btn btn-ghost voice-toggle-btn hidden" data-i18n="voice.toggleOn">🎤 Voice Commands</button>
+    <div class="row voice-toggle-row">
+      <button type="button" id="btn-toggle-voice" class="btn btn-ghost voice-toggle-btn hidden" data-i18n="voice.toggleOn">🎤 Voice Commands</button>
+      <button type="button" id="btn-voice-help" class="format-info-btn hidden" data-i18n-aria-label="voice.helpAria" aria-label="What do the voice commands do?">❓</button>
+    </div>
     <button type="button" id="btn-finish-snooker" class="btn btn-primary finish-snooker-btn hidden" data-i18n="snooker.finishFrame">🏁 Finish Snooker Frame</button>
     <label class="no-stats-row-inline">
       <input type="checkbox" id="no-stats-checkbox">
@@ -2200,6 +2203,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260925zs"></script>
+<script src="js/app.js?v=20260925zt"></script>
 </body>
 </html>

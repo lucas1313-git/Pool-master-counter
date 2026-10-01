@@ -681,13 +681,17 @@ body {
   padding: 8px 14px;
 }
 
-/* Hidden by default (see index.html) - only unhidden by JS when the Web
-   Speech API is actually available, since it isn't reliably present
+/* The row itself (not the button) centers - the ❓ help button sits
+   beside it, both hidden by JS together (see index.html) until the Web
+   Speech API is confirmed available, since it isn't reliably present
    inside the iOS app's WKWebView (see the Voice Commands comment in
    app.js). */
+.voice-toggle-row {
+  justify-content: center;
+  margin: 4px 0 12px;
+}
+
 .voice-toggle-btn {
-  display: block;
-  margin: 4px auto 12px;
   font-size: 0.85rem;
   padding: 8px 14px;
 }

@@ -1119,6 +1119,8 @@
   "units.rack": "rack",
   "units.racks": "racks",
   "voice.heard": "🎤 Narinig: \"{{heard}}\"",
+  "voice.helpAria": "Ano ang ginagawa ng voice commands?",
+  "voice.helpText": "🎤 Ano ang sasabihin:\n\n\"Pool Counter\" — tutunog lang, para malaman kung nakikinig.\n\n\"Player [numero]\" — pipiliin ang player na iyon (hal. \"Player 1\").\n\n\"Add/At/Plus [numero] points\" — magdaragdag ng points sa napiling player. Points games lang.\n\n\"Remove/Minus/Subtract [numero] points\" — magtatanggal ng points. Points games lang.\n\n\"Win the rack\" — ibibigay sa napiling player ang panalo sa rack. Rack games lang (8-Ball, 9-Ball, atbp.).\n\n\"[numero] balls left\" — itatakda kung ilang bola ang natira sa mesa, sa win popup.\n\n\"Register game\" / \"Nice game\" — kukumpirma at isasara ang win popup.\n\nGumagana lang sa individual mode, hindi sa Quick Counter o Teams.",
   "voice.micError": "🎤 Tinanggihan ang access sa mikropono — kailangan ito ng voice commands para gumana.",
   "voice.noPlayerSelected": "🎤 Sabihin muna ang \"Player [numero]\" para piliin ang player.",
   "voice.notAvailable": "🎤 Gumagana lang ang voice commands sa individual mode, hindi sa Quick Counter o Teams.",

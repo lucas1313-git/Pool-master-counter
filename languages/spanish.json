@@ -1119,6 +1119,8 @@
   "units.rack": "rack",
   "units.racks": "racks",
   "voice.heard": "🎤 Escuché: \"{{heard}}\"",
+  "voice.helpAria": "¿Qué hacen los comandos de voz?",
+  "voice.helpText": "🎤 Qué decir:\n\n\"Pool Counter\" — solo suena un pitido, para comprobar que está escuchando.\n\n\"Player [número]\" — selecciona a ese jugador (ej. \"Player 1\").\n\n\"Add/At/Plus [número] points\" — suma puntos al jugador seleccionado. Solo en partidas por puntos.\n\n\"Remove/Minus/Subtract [número] points\" — resta puntos. Solo en partidas por puntos.\n\n\"Win the rack\" — acredita al jugador seleccionado la victoria de la mesa. Solo en partidas por racks (8-Ball, 9-Ball, etc.).\n\n\"[número] balls left\" — fija cuántas bolas quedaron en la mesa, en la ventana de victoria.\n\n\"Register game\" / \"Nice game\" — confirma y cierra la ventana de victoria.\n\nSolo funciona en modo individual, no en Quick Counter ni en modo Equipos.",
   "voice.micError": "🎤 Acceso al micrófono denegado — los comandos de voz lo necesitan para funcionar.",
   "voice.noPlayerSelected": "🎤 Di \"Player [número]\" primero para elegir el jugador.",
   "voice.notAvailable": "🎤 Los comandos de voz solo funcionan en modo individual, no en Quick Counter ni en modo Equipos.",

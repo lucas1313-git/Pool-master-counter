@@ -1119,6 +1119,8 @@
   "units.rack": "rack",
   "units.racks": "racks",
   "voice.heard": "🎤 Heard: \"{{heard}}\"",
+  "voice.helpAria": "What do the voice commands do?",
+  "voice.helpText": "🎤 What to say:\n\n\"Pool Counter\" — just beeps, to check it's listening.\n\n\"Player [number]\" — selects that player (e.g. \"Player 1\").\n\n\"Add/At/Plus [number] points\" — adds points to the selected player. Points games only.\n\n\"Remove/Minus/Subtract [number] points\" — removes points. Points games only.\n\n\"Win the rack\" — credits the selected player with the rack win. Rack games only (8-Ball, 9-Ball, etc.).\n\n\"[number] balls left\" — sets balls left on the table, in the win popup.\n\n\"Register game\" / \"Nice game\" — confirms and closes the win popup.\n\nWorks in individual mode only, not Quick Counter or Teams.",
   "voice.micError": "🎤 Microphone access denied — voice commands need it to work.",
   "voice.noPlayerSelected": "🎤 Say \"Player [number]\" first to pick who this is for.",
   "voice.notAvailable": "🎤 Voice commands only work in individual-mode games, not Quick Counter or Teams.",
