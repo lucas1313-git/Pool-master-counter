@@ -956,6 +956,8 @@
   "scoreboard.teamNeedsOpponent": "⚠️ 等緊對方隊伍——一隊唔可以自己玩。",
   "scoreboard.tourneyWin": "錦標賽勝利",
   "skunk.indicator": "🦨 剃光頭！",
+  "snooker.finishFrame": "🏁 完成士碌架局",
+  "snooker.tie": "🏁 打和 — 完成局之前要調整返分數。",
   "standings.buchholz": "巴霍賀分 {{count}}",
   "standings.heading": "排名",
   "standings.individual": "個人賽",
