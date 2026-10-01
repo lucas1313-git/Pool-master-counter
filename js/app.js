@@ -1809,6 +1809,7 @@
 
   var btnToggleFocus = document.getElementById("btn-toggle-focus");
   var btnToggleVoice = document.getElementById("btn-toggle-voice");
+  var btnVoiceHelp = document.getElementById("btn-voice-help");
   var btnFinishSnooker = document.getElementById("btn-finish-snooker");
   var focusPlayersWrap = document.getElementById("focus-players-wrap");
   var btnToggleFocusPlayers = document.getElementById("btn-toggle-focus-players");
@@ -23325,6 +23326,10 @@
     btnToggleVoice.classList.remove("hidden");
     btnToggleVoice.addEventListener("click", function () {
       setVoiceCommandsActive(!voiceCommandsActive);
+    });
+    btnVoiceHelp.classList.remove("hidden");
+    btnVoiceHelp.addEventListener("click", function () {
+      alertModal(T("voice.helpText"));
     });
   }
 
