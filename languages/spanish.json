@@ -956,6 +956,8 @@
   "scoreboard.teamNeedsOpponent": "⚠️ Esperando al otro equipo — un equipo no puede jugar solo.",
   "scoreboard.tourneyWin": "Victorias de torneo",
   "skunk.indicator": "🦨 ¡Blanqueada!",
+  "snooker.finishFrame": "🏁 Terminar manga de snooker",
+  "snooker.tie": "🏁 Empate — ajusta un puntaje antes de terminar la manga.",
   "standings.buchholz": "Buchholz {{count}}",
   "standings.heading": "Clasificación",
   "standings.individual": "Individual",
