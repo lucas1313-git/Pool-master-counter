@@ -1121,7 +1121,7 @@
   "units.racks": "局",
   "voice.heard": "🎤 聽到：「{{heard}}」",
   "voice.helpAria": "語音指令可以做咩？",
-  "voice.helpText": "🎤 要講咩：\n\n「Pool Counter」— 淨係嗶一聲，確認佢喺度聽緊。\n\n「Player [號碼]」— 揀返嗰個球員（例如「Player 1」）。\n\n「Next player」— 揀返下一個球員，同撳 Enter 一樣。\n\n「Add/At/Plus [號碼] points」— 幫揀咗嘅球員加分。淨係計分制比賽先得。\n\n「Remove/Minus/Subtract [號碼] points」— 減分。淨係計分制比賽先得。\n\n「Win the rack」— 畀揀咗嘅球員贏局。淨係局制比賽先得（8-Ball、9-Ball 等）。\n\n「[號碼] balls left」— 喺贏局彈出視窗度設定檯面剩低幾多個波。\n\n「Register game」/「Nice game」— 確認同關閉贏局彈出視窗。\n\n「Good game」— 都係確認同關閉贏局彈出視窗，但要設定咗剩低幾多個波先得。\n\n「Reset shot counter」— 將計時器歸零返 0:00。\n\n「Stop shot counter」/「Pause shot counter」— 暫停計時器。\n\n個人模式同隊制都用得，Quick Counter 唔得。",
+  "voice.helpText": "🎤 要講咩：\n\n「Pool Counter」— 淨係嗶一聲，確認佢喺度聽緊。\n\n「Player [號碼]」— 揀返嗰個球員（例如「Player 1」），或者講返個名代替號碼（例如「Player Alice」）。\n\n「Next player」— 揀返下一個球員，同撳 Enter 一樣。\n\n「Add/At/Plus [號碼] points」— 幫揀咗嘅球員加分。淨係計分制比賽先得。\n\n「Remove/Minus/Subtract [號碼] points」— 減分。淨係計分制比賽先得。\n\n「Win the rack」— 畀揀咗嘅球員贏局。淨係局制比賽先得（8-Ball、9-Ball 等）。\n\n「[號碼] balls left」— 喺贏局彈出視窗度設定檯面剩低幾多個波。\n\n「Register game」/「Nice game」— 確認同關閉贏局彈出視窗。\n\n「Good game」— 都係確認同關閉贏局彈出視窗，但要設定咗剩低幾多個波先得。\n\n「Reset shot counter」— 將計時器歸零返 0:00。\n\n「Stop shot counter」/「Pause shot counter」— 暫停計時器。\n\n個人模式同隊制都用得，Quick Counter 唔得。",
   "voice.micError": "🎤 麥克風權限被拒絕 — 語音指令需要用到麥克風先用得。",
   "voice.noPlayerSelected": "🎤 先講「Player [號碼]」揀返邊個球員。",
   "voice.notAvailable": "🎤 語音指令喺 Quick Counter 用唔到。",
