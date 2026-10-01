@@ -2284,7 +2284,7 @@ input[type="number"] {
 }
 
 .player-name {
-  font-size: 1.15rem;
+  font-size: 1.4rem;
   font-weight: 700;
   text-align: center;
   word-break: break-word;
@@ -2683,7 +2683,7 @@ input[type="number"] {
 }
 
 .member-name {
-  font-size: 1.3rem;
+  font-size: 1.5rem;
   font-weight: 700;
   text-align: center;
 }
