@@ -3591,10 +3591,26 @@
       return;
     }
     var showTeamToggle = state.currentGame.mode === "teams";
+    var canReorder = state.players.length > 1;
 
     state.players.forEach(function (p) {
       var row = document.createElement("li");
       row.className = "roster-row" + (p.playing ? " is-playing" : "");
+      row.dataset.playerId = p.id;
+
+      // Reordering state.players here is what actually reorders the
+      // keypad (1-9) and scoreboard card layout too - both just follow
+      // activePlayers()'s own filter over this same array, in this same
+      // order, nothing else to keep in sync.
+      if (canReorder) {
+        var dragHandle = document.createElement("button");
+        dragHandle.type = "button";
+        dragHandle.className = "roster-drag-handle";
+        dragHandle.setAttribute("aria-label", T("players.dragToReorder", { name: p.name }));
+        dragHandle.textContent = "⠿";
+        row.appendChild(dragHandle);
+        wireRosterDragHandle(dragHandle, row);
+      }
 
       var name = document.createElement("span");
       name.className = "roster-name";
@@ -3668,6 +3684,134 @@
     }).length;
     focusPlayersSummary.textContent = T("players.playingOfTotal", { playing: playingCount, total: state.players.length });
     renderQueueList();
+  }
+
+  // ---------------------------------------------------------------------
+  // Roster drag-to-reorder - pointer events (not the HTML5 drag-and-drop
+  // API, which has poor-to-no touch support on mobile Safari/Chrome, the
+  // primary way this app actually gets used at the table) on a dedicated
+  // handle per row. The dragged row follows the pointer via a CSS
+  // transform; every move recomputes its transform against its own
+  // CURRENT, untransformed layout position (naturalTop below) rather
+  // than accumulating a raw pointer delta, so re-inserting it into the
+  // DOM mid-drag (the actual reordering) never produces a visual jump -
+  // the next frame's transform is just however far it still needs to
+  // go from wherever it now natively sits.
+  // ---------------------------------------------------------------------
+
+  var rosterDrag = null;
+
+  function rosterRows() {
+    return Array.prototype.slice.call(rosterList.querySelectorAll(".roster-row"));
+  }
+
+  // The row's own top position with any drag transform set aside -
+  // getBoundingClientRect() otherwise reports the TRANSFORMED position,
+  // which would make every subsequent calculation chase its own tail.
+  function rosterRowNaturalTop(row) {
+    var prevTransform = row.style.transform;
+    row.style.transform = "";
+    var top = row.getBoundingClientRect().top;
+    row.style.transform = prevTransform;
+    return top;
+  }
+
+  // move/end listen on document, not the handle - the handle's own row
+  // gets physically relocated in the DOM mid-drag (that's the actual
+  // reordering, via insertBefore below), and Chrome silently releases
+  // an active setPointerCapture the moment its captured element moves
+  // in the tree, which would otherwise end the drag (no more pointerup
+  // on the handle at all) the first time a swap happens. document-level
+  // listeners don't depend on any particular element staying put, so
+  // they keep receiving events for this pointerId for the rest of the
+  // drag regardless of how many times the row gets relocated.
+  function rosterDragMove(e) {
+    if (!rosterDrag || rosterDrag.pointerId !== e.pointerId) return;
+    e.preventDefault();
+    var drag = rosterDrag;
+    var targetTop = e.clientY - drag.grabOffsetY;
+    drag.row.style.transform = "translateY(" + (targetTop - rosterRowNaturalTop(drag.row)) + "px)";
+
+    // Keep swapping with whichever neighbor the dragged row's current
+    // (transformed) center has crossed, one step at a time, until it
+    // settles - a loop rather than a single check so a fast drag that
+    // jumps past more than one row in a single pointermove still ends
+    // up in the right place instead of lagging a step behind.
+    var moved = true;
+    while (moved) {
+      moved = false;
+      var rows = rosterRows();
+      var idx = rows.indexOf(drag.row);
+      var rect = drag.row.getBoundingClientRect();
+      var centerY = rect.top + rect.height / 2;
+
+      if (idx > 0) {
+        var prevRect = rows[idx - 1].getBoundingClientRect();
+        if (centerY < prevRect.top + prevRect.height / 2) {
+          rosterList.insertBefore(drag.row, rows[idx - 1]);
+          moved = true;
+        }
+      }
+      if (!moved && idx < rows.length - 1) {
+        var nextRect = rows[idx + 1].getBoundingClientRect();
+        if (centerY > nextRect.top + nextRect.height / 2) {
+          rosterList.insertBefore(drag.row, rows[idx + 1].nextSibling);
+          moved = true;
+        }
+      }
+      if (moved) {
+        drag.row.style.transform = "translateY(" + (targetTop - rosterRowNaturalTop(drag.row)) + "px)";
+      }
+    }
+  }
+
+  function rosterDragEnd(e) {
+    if (!rosterDrag || rosterDrag.pointerId !== e.pointerId) return;
+    document.removeEventListener("pointermove", rosterDragMove);
+    document.removeEventListener("pointerup", rosterDragEnd);
+    document.removeEventListener("pointercancel", rosterDragEnd);
+    var row = rosterDrag.row;
+    row.classList.remove("is-dragging");
+    row.style.transform = "";
+    rosterDrag = null;
+    commitRosterOrderFromDom();
+  }
+
+  function wireRosterDragHandle(handle, row) {
+    handle.addEventListener("pointerdown", function (e) {
+      if (e.button !== 0 && e.pointerType === "mouse") return;
+      e.preventDefault();
+      rosterDrag = {
+        pointerId: e.pointerId,
+        row: row,
+        grabOffsetY: e.clientY - row.getBoundingClientRect().top
+      };
+      row.classList.add("is-dragging");
+      document.addEventListener("pointermove", rosterDragMove);
+      document.addEventListener("pointerup", rosterDragEnd);
+      document.addEventListener("pointercancel", rosterDragEnd);
+    });
+  }
+
+  // Reads the roster's current DOM order (post-drag) back into
+  // state.players - the single source every other ordering (keypad
+  // numbers, scoreboard card layout) already follows, so nothing else
+  // needs to be told about the new order separately.
+  function commitRosterOrderFromDom() {
+    var orderedIds = rosterRows().map(function (row) {
+      return row.dataset.playerId;
+    });
+    var byId = {};
+    state.players.forEach(function (p) {
+      byId[p.id] = p;
+    });
+    var reordered = orderedIds.map(function (id) {
+      return byId[id];
+    }).filter(Boolean);
+    if (reordered.length !== state.players.length) return;
+    state.players = reordered;
+    saveState();
+    renderAll();
   }
 
   function buildFlagSpan() {

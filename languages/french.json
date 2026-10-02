@@ -1170,5 +1170,6 @@
   "keypad.speakPreviousTotal": "{{name}}, total {{count}} points",
   "keypad.speakPlayingScore": "{{name}} joue, {{count}} points",
   "keypad.speakPlayingScoreLeader": "{{name}} joue, {{count}} points, en tête",
-  "keypad.speakNowLeader": "{{name}}, prend la tête"
+  "keypad.speakNowLeader": "{{name}}, prend la tête",
+  "players.dragToReorder": "Glisser pour réordonner {{name}}"
 }
