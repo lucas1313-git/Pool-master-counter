@@ -1177,5 +1177,7 @@
   "gameSetup.shotCounterHideAria": "Ocultar el cronómetro",
   "keypad.voicePresetBritish": "🇬🇧 Británica",
   "keypad.voicePresetGolf": "⛳ Susurro (Golf)",
-  "keypad.voicePresetCheerful": "😊 Alegre (Femenina)"
+  "keypad.voicePresetCheerful": "😊 Alegre (Femenina)",
+  "scoreboard.racingToLabel": "→ Carrera a: {{count}} partidas",
+  "scoreboard.racingToAria": "Carrera a cuántas victorias"
 }

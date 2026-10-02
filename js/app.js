@@ -66,6 +66,16 @@
   // never mean anything (see showGameWinOverlay).
   var BALLS_LEFT_HIDDEN_GAME_TYPES = ["9ball", "10ball", "snooker"];
 
+  // "Target 1 rack" (or One Pocket's own "Target 8 balls") is a useless
+  // restatement for these - a single rack IS the whole game for the
+  // 8-ball family and 9-ball, and One Pocket's ball target is always
+  // the same fixed number everyone already knows - so it's dropped
+  // from both the "Now Playing" banner (renderNowPlayingBanner) and
+  // rotation labels (rotationEntryLabel, used by both the rotation
+  // status note and the Rotation Position line) for these specific
+  // types, per explicit request.
+  var ROTATION_LABEL_NO_TARGET_TYPES = ["8ball", "8ballrotation", "8ballpunishment", "9ball", "onepocket"];
+
   // ---------------------------------------------------------------------
   // State
   // ---------------------------------------------------------------------
@@ -3064,6 +3074,7 @@
   function rotationEntryLabel(entry) {
     var type = GAME_TYPES[entry.gameType];
     var label = type ? type.label : entry.gameType;
+    if (ROTATION_LABEL_NO_TARGET_TYPES.indexOf(entry.gameType) !== -1) return label;
     var rawUnit = entry.unit || (type ? type.unit : "rack");
     var unit = rawUnit === "rack" && entry.target !== 1 ? T("units.racks") : unitLabel(rawUnit);
     return label + " — " + entry.target + " " + unit;
@@ -4450,11 +4461,14 @@
   function renderNowPlayingBanner() {
     var type = GAME_TYPES[state.currentGame.gameType];
     nowPlayingBanner.innerHTML = "";
-    nowPlayingBanner.appendChild(document.createTextNode(T("scoreboard.nowPlayingBanner", { label: type.label }) + " — "));
-    var note = document.createElement("span");
-    note.className = "target-note";
-    note.textContent = T("gameSetup.targetNote", { target: state.currentGame.target, unit: state.currentGame.unit });
-    nowPlayingBanner.appendChild(note);
+    nowPlayingBanner.appendChild(document.createTextNode(T("scoreboard.nowPlayingBanner", { label: type.label })));
+    if (ROTATION_LABEL_NO_TARGET_TYPES.indexOf(state.currentGame.gameType) === -1) {
+      nowPlayingBanner.appendChild(document.createTextNode(" — "));
+      var note = document.createElement("span");
+      note.className = "target-note";
+      note.textContent = T("gameSetup.targetNote", { target: state.currentGame.target, unit: state.currentGame.unit });
+      nowPlayingBanner.appendChild(note);
+    }
 
     var rotationInfo = rotationStatusInfo();
     if (rotationInfo) {
@@ -4468,10 +4482,61 @@
     }
     renderRotationPositionControl();
 
+    var durationRow = document.createElement("div");
+    durationRow.className = "now-playing-duration-row";
+
     var duration = document.createElement("span");
     duration.className = "game-duration-live";
     duration.id = "game-duration-live";
-    nowPlayingBanner.appendChild(duration);
+    durationRow.appendChild(duration);
+
+    // Only while actually racing (raceToWinsTarget === 1 is "single
+    // game", no race at all - see raceModeSingleRadio) - editable right
+    // here, same inline-<input>-via-marker-split technique as the
+    // Rotation Position line's "every" field, so the word order still
+    // comes from the active translation rather than being hardcoded.
+    if (state.raceToWinsTarget > 1) {
+      var racingToWrap = document.createElement("span");
+      racingToWrap.className = "racing-to-live";
+      var raceMarker = "\u0000";
+      var raceTemplated = T("scoreboard.racingToLabel", { count: raceMarker });
+      var raceParts = raceTemplated.split(raceMarker);
+      racingToWrap.appendChild(document.createTextNode(raceParts[0] || ""));
+      var racingToInput = document.createElement("input");
+      racingToInput.type = "number";
+      racingToInput.min = "1";
+      racingToInput.inputMode = "numeric";
+      racingToInput.className = "racing-to-input";
+      racingToInput.value = state.raceToWinsTarget;
+      racingToInput.setAttribute("aria-label", T("scoreboard.racingToAria"));
+      racingToInput.addEventListener("click", function (e) {
+        e.stopPropagation();
+      });
+      racingToInput.addEventListener("change", function () {
+        var v = parseInt(racingToInput.value, 10);
+        if (!v || v < 1) {
+          racingToInput.value = state.raceToWinsTarget;
+          return;
+        }
+        state.raceToWinsTarget = v;
+        lastRaceToWinsTarget = v;
+        // The anchor value just changed - drop the cached fair targets
+        // so they're recomputed against it, same as raceToWinsInput's
+        // own listener already does.
+        state.fairRaceTargets = null;
+        saveState();
+        syncRaceModeRadios();
+        raceToWinsInput.value = v;
+        renderScoreboard();
+        renderStandings();
+        updateCurrentGameSummary();
+      });
+      racingToWrap.appendChild(racingToInput);
+      racingToWrap.appendChild(document.createTextNode(raceParts[1] || ""));
+      durationRow.appendChild(racingToWrap);
+    }
+
+    nowPlayingBanner.appendChild(durationRow);
     updateGameDurationDisplay();
   }
 

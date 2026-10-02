@@ -1177,5 +1177,7 @@
   "gameSetup.shotCounterHideAria": "Itago ang timer",
   "keypad.voicePresetBritish": "🇬🇧 British",
   "keypad.voicePresetGolf": "⛳ Bulong (Golf)",
-  "keypad.voicePresetCheerful": "😊 Masayahin (Babae)"
+  "keypad.voicePresetCheerful": "😊 Masayahin (Babae)",
+  "scoreboard.racingToLabel": "→ Unahan hanggang: {{count}} laro",
+  "scoreboard.racingToAria": "Unahan hanggang ilang panalo"
 }
