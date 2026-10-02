@@ -1162,5 +1162,14 @@
   "wizard.summaryRotationOnOne": "{{label}} (chaque partie)",
   "wizard.summaryTournamentElimination": "Tournoi à élimination",
   "wizard.tempCounterLabel": "⏱️ Juste un compteur temporaire — aucune statistique ni donnée enregistrée",
-  "wizard.title": "Assistant de configuration de la partie"
+  "wizard.title": "Assistant de configuration de la partie",
+  "keypad.speechToggleOn": "🔊 Annoncer le pavé",
+  "keypad.speechToggleOff": "🔊 Annonce en cours… (appuyer pour arrêter)",
+  "keypad.speechHelpAria": "Que fait l'annonce du pavé ?",
+  "keypad.speechHelpText": "🔊 Quand c'est activé, l'appli annonce à voix haute chaque fois que vous utilisez le pavé (touches 1-9, Entrée, +/-) pour sélectionner un joueur ou changer son score — pratique pour jouer sans regarder l'écran.\n\nAppuyer sur un chiffre (ou Entrée) pour sélectionner un joueur : « [Nom] joue ».\n\nAppuyer sur + ou - pour marquer : « [Nom], un point » ou « [Nom], moins un point » (et le bon nombre pour une saisie de 15 Ball Rotation).\n\nCeci ne parle que pour le pavé — toucher la carte d'un joueur ou ses boutons +/- directement, ou utiliser les commandes vocales, reste silencieux.",
+  "keypad.speakPlaying": "{{name}} joue",
+  "keypad.speakAddOne": "{{name}}, un point",
+  "keypad.speakAddMany": "{{name}}, {{count}} points",
+  "keypad.speakRemoveOne": "{{name}}, moins un point",
+  "keypad.speakRemoveMany": "{{name}}, moins {{count}} points"
 }

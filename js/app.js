@@ -1810,6 +1810,8 @@
   var btnToggleFocus = document.getElementById("btn-toggle-focus");
   var btnToggleVoice = document.getElementById("btn-toggle-voice");
   var btnVoiceHelp = document.getElementById("btn-voice-help");
+  var btnToggleKeypadSpeech = document.getElementById("btn-toggle-keypad-speech");
+  var btnKeypadSpeechHelp = document.getElementById("btn-keypad-speech-help");
   var btnFinishSnooker = document.getElementById("btn-finish-snooker");
   var focusPlayersWrap = document.getElementById("focus-players-wrap");
   var btnToggleFocusPlayers = document.getElementById("btn-toggle-focus-players");
@@ -2689,12 +2691,18 @@
     }
     if (!isNaN(amount) && amount !== 0 && targetId) {
       requestAdjustScore(targetId, amount * sign);
+      speakKeypadScoreChange(targetId, amount * sign);
     } else {
       renderScoreboard();
     }
   }
 
-  function selectKeypadPlayer(targetId, keypadNum) {
+  // announce (see Keypad Speech, further down this file): true only
+  // when this selection came from the physical/on-screen KEYPAD itself
+  // (a digit press, or Enter's "next player") - never set by the Voice
+  // Commands call sites (voiceSelectPlayer/voiceSelectPlayerByName),
+  // which are a separate feature with their own existing audio cue.
+  function selectKeypadPlayer(targetId, keypadNum, announce) {
     if (!targetId) return;
     cancelKeypadEntry();
     // "The counter should stop when we select the next player" - an
@@ -2712,6 +2720,7 @@
     if (!quickCounterMode) {
       var switchedTo = getPlayer(targetId);
       if (switchedTo) playPlayerSwitchSound(switchedTo.voice, keypadNum);
+      if (announce && switchedTo) speakKeypadPlayerSelected(switchedTo);
     }
     // Focus Mode's across-the-room card sizes mean a big roster (team
     // play especially) can run well past one screen - the shortcut
@@ -2729,11 +2738,11 @@
   // (wrapping past the end), starting at #1 if nobody's selected yet -
   // shared by the Enter keypad shortcut and the "next player" voice
   // command (see voiceNextPlayer) so both mean exactly the same thing.
-  function advanceToNextKeypadPlayer() {
+  function advanceToNextKeypadPlayer(announce) {
     if (keypadOrderedPlayerIds.length === 0) return;
     var currentIdx = keypadSelectedPlayerId ? keypadOrderedPlayerIds.indexOf(keypadSelectedPlayerId) : -1;
     var nextIdx = (currentIdx + 1) % keypadOrderedPlayerIds.length;
-    selectKeypadPlayer(keypadOrderedPlayerIds[nextIdx], nextIdx + 1);
+    selectKeypadPlayer(keypadOrderedPlayerIds[nextIdx], nextIdx + 1, announce);
   }
 
   function handleKeypadShortcut(e) {
@@ -2789,7 +2798,7 @@
       var targetId = keypadOrderedPlayerIds[keypadNum - 1];
       if (!targetId) return;
       e.preventDefault();
-      selectKeypadPlayer(targetId, keypadNum);
+      selectKeypadPlayer(targetId, keypadNum, true);
       return;
     }
 
@@ -2808,7 +2817,7 @@
       if (scoreEntryGame && keypadEntryMode && keypadEntryBuffer) finalizeKeypadEntry();
       if (keypadOrderedPlayerIds.length === 0) return;
       e.preventDefault();
-      advanceToNextKeypadPlayer();
+      advanceToNextKeypadPlayer(true);
       return;
     }
 
@@ -2849,7 +2858,9 @@
       if (e.key === "-" && isSingleRackGame) {
         requestUndoLastWin(keypadSelectedPlayerId);
       } else {
-        requestAdjustScore(keypadSelectedPlayerId, e.key === "+" ? 1 : -1);
+        var delta = e.key === "+" ? 1 : -1;
+        requestAdjustScore(keypadSelectedPlayerId, delta);
+        speakKeypadScoreChange(keypadSelectedPlayerId, delta);
       }
       return;
     }
@@ -23491,6 +23502,103 @@
     btnVoiceHelp.classList.remove("hidden");
     btnVoiceHelp.addEventListener("click", function () {
       alertModal(T("voice.helpText"));
+    });
+  }
+
+  // ---------------------------------------------------------------------
+  // Keypad Speech - speaks the player's name back out loud when the
+  // physical/on-screen keypad (handleKeypadShortcut - a digit key or
+  // Enter to select, "+"/"-" or a typed 15 Ball Rotation entry to score)
+  // is used to select a player or change their score, so the table can
+  // be played without needing to look at the screen to confirm who got
+  // selected or how much they were just credited. Deliberately
+  // independent of Voice Commands above - this reads back what the
+  // KEYPAD did, nothing to do with the microphone, so it has its own
+  // toggle and works whether or not voice recognition is even
+  // available. Uses the standard SpeechSynthesisUtterance API (not the
+  // Web Speech *recognition* API Voice Commands needs), which is much
+  // more broadly supported - including inside the iOS Capacitor
+  // WKWebView - so this isn't gated to web-only the way Voice Commands
+  // is further up this file.
+  // ---------------------------------------------------------------------
+
+  var KEYPAD_SPEECH_KEY = "poolMasterCounter.keypadSpeechEnabled.v1";
+  var keypadSpeechEnabled = false;
+  try {
+    keypadSpeechEnabled = localStorage.getItem(KEYPAD_SPEECH_KEY) === "1";
+  } catch (e) {
+    keypadSpeechEnabled = false;
+  }
+
+  // BCP-47 tags for SpeechSynthesisUtterance.lang, keyed by this app's
+  // own language codes (see activeLanguageCode) - picks a matching
+  // installed voice when the device has one; falls back to the system
+  // default voice gracefully otherwise (never an error, just an accent
+  // mismatch).
+  var KEYPAD_SPEECH_LANG_BY_CODE = {
+    english: "en-US",
+    french: "fr-FR",
+    spanish: "es-ES",
+    cantonese: "zh-HK",
+    tagalog: "fil-PH"
+  };
+
+  function speakKeypadText(text) {
+    if (!keypadSpeechEnabled || !window.speechSynthesis || !text) return;
+    try {
+      var utter = new SpeechSynthesisUtterance(text);
+      utter.lang = KEYPAD_SPEECH_LANG_BY_CODE[activeLanguageCode] || "en-US";
+      window.speechSynthesis.speak(utter);
+    } catch (e) {
+      // Speech synthesis isn't available/working on this device -
+      // silently skip, same as every other best-effort audio cue here.
+    }
+  }
+
+  // Speaks the same short name the on-screen card shows (see
+  // shortDisplayNameForPlayer), not necessarily the player's full
+  // stored name - spoken feedback should match what's visible.
+  function speakKeypadPlayerSelected(player) {
+    speakKeypadText(T("keypad.speakPlaying", { name: shortDisplayNameForPlayer(player) }));
+  }
+
+  function speakKeypadScoreChange(playerId, delta) {
+    if (!delta) return;
+    var player = getPlayer(playerId);
+    if (!player) return;
+    var name = shortDisplayNameForPlayer(player);
+    var amount = Math.abs(delta);
+    var key;
+    if (delta > 0) {
+      key = amount === 1 ? "keypad.speakAddOne" : "keypad.speakAddMany";
+    } else {
+      key = amount === 1 ? "keypad.speakRemoveOne" : "keypad.speakRemoveMany";
+    }
+    speakKeypadText(T(key, { name: name, count: amount }));
+  }
+
+  function setKeypadSpeechEnabled(on) {
+    keypadSpeechEnabled = on;
+    try {
+      localStorage.setItem(KEYPAD_SPEECH_KEY, on ? "1" : "0");
+    } catch (e) {
+      console.warn("Could not save keypad speech setting.", e);
+    }
+    btnToggleKeypadSpeech.classList.toggle("is-listening", on);
+    btnToggleKeypadSpeech.textContent = T(on ? "keypad.speechToggleOff" : "keypad.speechToggleOn");
+    if (!on && window.speechSynthesis) window.speechSynthesis.cancel();
+  }
+
+  if (window.speechSynthesis && typeof SpeechSynthesisUtterance !== "undefined") {
+    btnToggleKeypadSpeech.classList.remove("hidden");
+    btnToggleKeypadSpeech.textContent = T(keypadSpeechEnabled ? "keypad.speechToggleOff" : "keypad.speechToggleOn");
+    btnToggleKeypadSpeech.classList.toggle("is-listening", keypadSpeechEnabled);
+    btnToggleKeypadSpeech.addEventListener("click", function () {
+      setKeypadSpeechEnabled(!keypadSpeechEnabled);
+    });
+    btnKeypadSpeechHelp.classList.remove("hidden");
+    btnKeypadSpeechHelp.addEventListener("click", function () {
+      alertModal(T("keypad.speechHelpText"));
     });
   }
 

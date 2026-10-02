@@ -1162,5 +1162,14 @@
   "wizard.summaryRotationOnOne": "{{label}} (every {{count}} game)",
   "wizard.summaryTournamentElimination": "Tournament Elimination",
   "wizard.tempCounterLabel": "⏱️ Only a temporary counter — no stats or data saved",
-  "wizard.title": "Game Setup Wizard"
+  "wizard.title": "Game Setup Wizard",
+  "keypad.speechToggleOn": "🔊 Speak Keypad",
+  "keypad.speechToggleOff": "🔊 Speaking… (tap to stop)",
+  "keypad.speechHelpAria": "What does speak keypad do?",
+  "keypad.speechHelpText": "🔊 When this is on, the app speaks back out loud whenever you use the keypad (number keys 1-9, Enter, +/-) to select a player or change their score — handy for playing without having to look at the screen.\n\nPressing a number (or Enter) to select a player: \"[Name] Playing\".\n\nPressing + or - to score: \"[Name], one point\" or \"[Name], minus one point\" (and the right count for a typed 15 Ball Rotation entry).\n\nThis only speaks for the keypad — tapping a player's card or +/- buttons directly, or using Voice Commands, stays silent.",
+  "keypad.speakPlaying": "{{name}} Playing",
+  "keypad.speakAddOne": "{{name}}, one point",
+  "keypad.speakAddMany": "{{name}}, {{count}} points",
+  "keypad.speakRemoveOne": "{{name}}, minus one point",
+  "keypad.speakRemoveMany": "{{name}}, minus {{count}} points"
 }

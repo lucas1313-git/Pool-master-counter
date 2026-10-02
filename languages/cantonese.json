@@ -1162,5 +1162,14 @@
   "wizard.summaryRotationOnOne": "{{label}}（每局都換）",
   "wizard.summaryTournamentElimination": "淘汰錦標賽",
   "wizard.tempCounterLabel": "⏱️ 淨係一個臨時計數器——唔會儲存統計或者資料",
-  "wizard.title": "對局設定精靈"
+  "wizard.title": "對局設定精靈",
+  "keypad.speechToggleOn": "🔊 讀出鍵盤操作",
+  "keypad.speechToggleOff": "🔊 讀緊緊…（撳一下停止）",
+  "keypad.speechHelpAria": "讀出鍵盤操作係乜嘢嚟？",
+  "keypad.speechHelpText": "🔊 開咗之後，每次你用鍵盤（1-9數字鍵、Enter、+/-）揀球員或者改分數，個app都會出聲讀出嚟——唔使望住個螢幕都打得到。\n\n撳數字（或者Enter）揀球員：「[名] 上場」。\n\n撳 + 或 - 計分：「[名]，一分」或者「[名]，減一分」（15 Ball Rotation打字入分都會讀出啱嘅數目）。\n\n呢個淨係讀鍵盤嘅操作——直接撳球員卡或者佢嘅+/-掣，或者用語音指令，都唔會出聲。",
+  "keypad.speakPlaying": "{{name}} 上場",
+  "keypad.speakAddOne": "{{name}}，一分",
+  "keypad.speakAddMany": "{{name}}，{{count}}分",
+  "keypad.speakRemoveOne": "{{name}}，減一分",
+  "keypad.speakRemoveMany": "{{name}}，減{{count}}分"
 }
