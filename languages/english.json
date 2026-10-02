@@ -1177,5 +1177,7 @@
   "gameSetup.shotCounterHideAria": "Hide the shot timer",
   "keypad.voicePresetBritish": "🇬🇧 British",
   "keypad.voicePresetGolf": "⛳ Whisper (Golf)",
-  "keypad.voicePresetCheerful": "😊 Cheerful (Female)"
+  "keypad.voicePresetCheerful": "😊 Cheerful (Female)",
+  "scoreboard.racingToLabel": "→ Racing to: {{count}} games",
+  "scoreboard.racingToAria": "Race to how many wins"
 }

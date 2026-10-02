@@ -4807,7 +4807,7 @@ input[type="number"] {
   margin-top: 4px;
   text-align: center;
   font-weight: 700;
-  font-size: 0.92rem;
+  font-size: 1.08rem;
   color: var(--text);
 }
 
@@ -4816,9 +4816,10 @@ input[type="number"] {
    surrounding text instead of looking like a stray form control, with
    the spinner arrows dropped since there's no room for them at this
    size and the +/- aren't needed (the Games Rotations panel's own
-   #rotation-every already covers that). */
+   #rotation-every already covers that). Just wide enough for 2 digits -
+   this is a "switch every N games" count, not expected to ever need 3. */
 .rotation-position-every-input {
-  width: 2.4em;
+  width: 1.8em;
   font: inherit;
   font-weight: 700;
   text-align: center;
@@ -6627,14 +6628,47 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   display: inline;
 }
 
-.now-playing-banner .game-duration-live {
-  display: block;
+/* Duration and (while actually racing - see renderNowPlayingBanner)
+   "Racing to: [n] games" sit side by side in one row instead of each
+   being its own separate line. */
+.now-playing-duration-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 6px;
+}
+
+.now-playing-banner .game-duration-live,
+.now-playing-banner .racing-to-live {
   font-size: 1.1rem;
   font-weight: 800;
   color: var(--accent);
   letter-spacing: normal;
   font-variant-numeric: tabular-nums;
-  margin-top: 6px;
+}
+
+/* Matches .rotation-position-every-input's treatment (inline, sized to
+   the surrounding text, no spinner arrows) - see that rule's own
+   comment for why. */
+.racing-to-input {
+  width: 1.8em;
+  font: inherit;
+  font-weight: inherit;
+  text-align: center;
+  color: inherit;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1px 2px;
+  -moz-appearance: textfield;
+}
+
+.racing-to-input::-webkit-outer-spin-button,
+.racing-to-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 /* ---------- Header nav row ---------- */

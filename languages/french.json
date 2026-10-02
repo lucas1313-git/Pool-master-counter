@@ -1177,5 +1177,7 @@
   "gameSetup.shotCounterHideAria": "Masquer le chrono",
   "keypad.voicePresetBritish": "🇬🇧 Britannique",
   "keypad.voicePresetGolf": "⛳ Chuchotement (Golf)",
-  "keypad.voicePresetCheerful": "😊 Enjouée (Féminine)"
+  "keypad.voicePresetCheerful": "😊 Enjouée (Féminine)",
+  "scoreboard.racingToLabel": "→ En course jusqu'à : {{count}} parties",
+  "scoreboard.racingToAria": "Course jusqu'à combien de victoires"
 }

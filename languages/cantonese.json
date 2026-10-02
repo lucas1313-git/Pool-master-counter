@@ -1177,5 +1177,7 @@
   "gameSetup.shotCounterHideAria": "收埋個計時器",
   "keypad.voicePresetBritish": "🇬🇧 英式",
   "keypad.voicePresetGolf": "⛳ 細聲（高爾夫球風）",
-  "keypad.voicePresetCheerful": "😊 開朗（女聲）"
+  "keypad.voicePresetCheerful": "😊 開朗（女聲）",
+  "scoreboard.racingToLabel": "→ 爭先：{{count}} 局",
+  "scoreboard.racingToAria": "爭先要贏幾多局"
 }
