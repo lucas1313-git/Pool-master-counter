@@ -1625,6 +1625,48 @@ input[type="number"] {
   border-color: var(--felt-light);
 }
 
+/* Dragged above its siblings (z-index) with a lifted-off-the-list look
+   (shadow + faint scale) so it's visually clear which row is moving -
+   the actual movement itself is a JS-applied translateY, not this
+   rule's job (see wireRosterDragHandle). */
+.roster-row.is-dragging {
+  position: relative;
+  z-index: 5;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+  transform: scale(1.02);
+  transition: none;
+}
+
+/* touch-action:none so a touch drag starting here moves the row
+   instead of scrolling the page - scoped to just the handle, not the
+   whole row, so the rest of each row still scrolls normally. 40px+ hit
+   target since this is meant to be grabbed by a thumb at the table. */
+.roster-drag-handle {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  line-height: 1;
+  color: var(--text-dim);
+  background: transparent;
+  border: none;
+  cursor: grab;
+  touch-action: none;
+  border-radius: 8px;
+}
+
+.roster-drag-handle:hover {
+  background: var(--bg-panel);
+  color: var(--text);
+}
+
+.roster-row.is-dragging .roster-drag-handle {
+  cursor: grabbing;
+}
+
 .roster-name {
   flex: 1;
   min-width: 90px;

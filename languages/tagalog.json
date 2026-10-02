@@ -1170,5 +1170,6 @@
   "keypad.speakPreviousTotal": "{{name}}, total {{count}} na puntos",
   "keypad.speakPlayingScore": "Si {{name}} ang naglalaro, {{count}} na puntos",
   "keypad.speakPlayingScoreLeader": "Si {{name}} ang naglalaro, {{count}} na puntos, Nangunguna",
-  "keypad.speakNowLeader": "{{name}}, Nangunguna Na"
+  "keypad.speakNowLeader": "{{name}}, Nangunguna Na",
+  "players.dragToReorder": "I-drag para ayusin ang pagkakasunod-sunod ni {{name}}"
 }
