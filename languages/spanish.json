@@ -1166,10 +1166,7 @@
   "keypad.speechToggleOn": "🔊 Anunciar teclado",
   "keypad.speechToggleOff": "🔊 Anunciando… (toca para detener)",
   "keypad.speechHelpAria": "¿Qué hace anunciar teclado?",
-  "keypad.speechHelpText": "🔊 Cuando está activado, la app anuncia en voz alta cada vez que usas el teclado (teclas 1-9, Intro, +/-) para elegir un jugador o cambiar su puntuación — útil para jugar sin mirar la pantalla.\n\nPulsar un número (o Intro) para elegir un jugador: «[Nombre] juega».\n\nPulsar + o - para puntuar: «[Nombre], un punto» o «[Nombre], menos un punto» (y el número correcto para una entrada escrita en 15 Ball Rotation).\n\nEsto solo anuncia lo que hace el teclado — tocar la tarjeta de un jugador o sus botones +/- directamente, o usar los comandos de voz, se mantiene en silencio.",
+  "keypad.speechHelpText": "🔊 Cuando está activado, la app anuncia en voz alta cada vez que usas el teclado (teclas 1-9, Intro) para cambiar de jugador — útil para jugar sin mirar la pantalla. Puntuar con + o - sigue reproduciendo solo el pitido habitual.\n\nAl cambiar a un nuevo jugador: «[Jugador anterior], total [número] puntos» (si ya había alguien seleccionado), y luego «Juega [Nuevo jugador]».\n\nEsto solo anuncia lo que hace el teclado — tocar la tarjeta de un jugador o sus botones +/- directamente, o usar los comandos de voz, se mantiene en silencio.",
   "keypad.speakPlaying": "Juega {{name}}",
-  "keypad.speakAddOne": "{{name}}, un punto",
-  "keypad.speakAddMany": "{{name}}, {{count}} puntos",
-  "keypad.speakRemoveOne": "{{name}}, menos un punto",
-  "keypad.speakRemoveMany": "{{name}}, menos {{count}} puntos"
+  "keypad.speakPreviousTotal": "{{name}}, total {{count}} puntos"
 }

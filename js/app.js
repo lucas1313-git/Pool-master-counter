@@ -2691,7 +2691,6 @@
     }
     if (!isNaN(amount) && amount !== 0 && targetId) {
       requestAdjustScore(targetId, amount * sign);
-      speakKeypadScoreChange(targetId, amount * sign);
     } else {
       renderScoreboard();
     }
@@ -2705,6 +2704,10 @@
   function selectKeypadPlayer(targetId, keypadNum, announce) {
     if (!targetId) return;
     cancelKeypadEntry();
+    // Captured before keypadSelectedPlayerId is overwritten below - see
+    // speakKeypadPlayerSelected, which announces this outgoing player's
+    // final total before the incoming one.
+    var previousPlayerId = keypadSelectedPlayerId;
     // "The counter should stop when we select the next player" - an
     // explicit keypad switch away from whoever's on a run stops it
     // right here, even before the newly-selected player has scored
@@ -2720,7 +2723,10 @@
     if (!quickCounterMode) {
       var switchedTo = getPlayer(targetId);
       if (switchedTo) playPlayerSwitchSound(switchedTo.voice, keypadNum);
-      if (announce && switchedTo) speakKeypadPlayerSelected(switchedTo);
+      if (announce && switchedTo) {
+        var previousPlayer = previousPlayerId && previousPlayerId !== targetId ? getPlayer(previousPlayerId) : null;
+        speakKeypadPlayerSelected(switchedTo, previousPlayer);
+      }
     }
     // Focus Mode's across-the-room card sizes mean a big roster (team
     // play especially) can run well past one screen - the shortcut
@@ -2858,9 +2864,7 @@
       if (e.key === "-" && isSingleRackGame) {
         requestUndoLastWin(keypadSelectedPlayerId);
       } else {
-        var delta = e.key === "+" ? 1 : -1;
-        requestAdjustScore(keypadSelectedPlayerId, delta);
-        speakKeypadScoreChange(keypadSelectedPlayerId, delta);
+        requestAdjustScore(keypadSelectedPlayerId, e.key === "+" ? 1 : -1);
       }
       return;
     }
@@ -23557,24 +23561,22 @@
 
   // Speaks the same short name the on-screen card shows (see
   // shortDisplayNameForPlayer), not necessarily the player's full
-  // stored name - spoken feedback should match what's visible.
-  function speakKeypadPlayerSelected(player) {
-    speakKeypadText(T("keypad.speakPlaying", { name: shortDisplayNameForPlayer(player) }));
-  }
-
-  function speakKeypadScoreChange(playerId, delta) {
-    if (!delta) return;
-    var player = getPlayer(playerId);
-    if (!player) return;
-    var name = shortDisplayNameForPlayer(player);
-    var amount = Math.abs(delta);
-    var key;
-    if (delta > 0) {
-      key = amount === 1 ? "keypad.speakAddOne" : "keypad.speakAddMany";
-    } else {
-      key = amount === 1 ? "keypad.speakRemoveOne" : "keypad.speakRemoveMany";
+  // stored name - spoken feedback should match what's visible. Scoring
+  // itself (+/-) only gets the existing plain beep (playPositiveSound/
+  // playNegativeSound in adjustScore) - no longer announced by name
+  // here, per feedback that it was too chatty on every single tap.
+  // Switching players is the one moment still worth a recap: the
+  // outgoing player's final total (if there was one), then who's up
+  // next - two queued utterances (speechSynthesis plays consecutive
+  // speak() calls back to back on its own, no manual sequencing
+  // needed), so a player can hear their running score the moment
+  // someone switches away from them without that total being spoken
+  // after every single point.
+  function speakKeypadPlayerSelected(player, previousPlayer) {
+    if (previousPlayer) {
+      speakKeypadText(T("keypad.speakPreviousTotal", { name: shortDisplayNameForPlayer(previousPlayer), count: previousPlayer.balls || 0 }));
     }
-    speakKeypadText(T(key, { name: name, count: amount }));
+    speakKeypadText(T("keypad.speakPlaying", { name: shortDisplayNameForPlayer(player) }));
   }
 
   function setKeypadSpeechEnabled(on) {
