@@ -23657,42 +23657,53 @@
   // order - the first one that matches anything installed wins) rather
   // than storing a specific voiceURI, since the exact voice found is
   // allowed to differ by device/browser as long as the character
-  // (British / hushed golf-whisper / bright female) comes through -
+  // (British / calm golf announcer / bright female) comes through -
   // falls back to pickKeypadVoice's plain lang-match when no hint
   // matches anything installed. pitch/rate carry the rest of each
   // preset's character even when the fallback voice is the same one
   // for two different presets.
+  //
+  // The first several hints in each list name specific "Enhanced"/
+  // "Premium" quality system voices (confirmed installed and good-
+  // sounding on a real device, not guessed) - matching is a plain
+  // case-insensitive substring check against the voice's own name, so
+  // a hint like "ava" matches "Ava", "Ava (Enhanced)", or "Ava
+  // (Premium)" equally, whichever quality tier is actually installed.
+  // The older names after them are what's left over from before these
+  // were confirmed, kept as fallbacks for a device that doesn't have
+  // any of the preferred ones installed.
   var KEYPAD_SPEECH_VOICE_KEY = "poolMasterCounter.keypadSpeechVoicePreset.v1";
   var KEYPAD_SPEECH_PRESETS = {
     british: {
       lang: "en-GB",
       pitch: 1.0,
       rate: 1.0,
-      nameHints: ["daniel", "oliver", "arthur", "uk english male", "google uk english male"]
+      nameHints: ["reed", "nathan", "evan", "daniel", "oliver", "arthur", "uk english male", "google uk english male"]
     },
     golf: {
       lang: "en-GB",
       pitch: 0.82,
       rate: 0.8,
-      nameHints: ["whisper"]
+      nameHints: ["rocko", "reed", "whisper"]
     },
     cheerful: {
       lang: "en-GB",
       pitch: 1.2,
       rate: 1.08,
       nameHints: [
-        "kate",
+        "ava",
+        "allison",
+        "samantha",
+        "zoe",
         "serena",
+        "kate",
         "fiona",
         "moira",
         "tessa",
         "karen",
-        "samantha",
         "victoria",
         "zira",
         "susan",
-        "allison",
-        "ava",
         "female",
         "uk english female",
         "google uk english female"
@@ -23734,6 +23745,25 @@
     return sameFamily.length ? sameFamily[0] : null;
   }
 
+  // Many of these same base names also ship as multiple quality tiers
+  // on the same device (e.g. macOS's plain "Ava", "Ava (Enhanced)", and
+  // "Ava (Premium)" all for en-US) - a hint matching the base name
+  // would otherwise happily grab whichever tier enumerates first,
+  // which is often the lowest-quality plain/compact one. Prefers
+  // Premium, then Enhanced, over a plain match within a given list.
+  function preferHigherQualityTier(list) {
+    if (list.length <= 1) return list[0] || null;
+    var premium = list.filter(function (v) {
+      return /premium/i.test(v.name);
+    });
+    if (premium.length) return premium[0];
+    var enhanced = list.filter(function (v) {
+      return /enhanced/i.test(v.name);
+    });
+    if (enhanced.length) return enhanced[0];
+    return list[0];
+  }
+
   // Tries each of the preset's nameHints in order against every
   // installed voice's own name (case-insensitive substring); null if
   // nothing installed matches any hint, so the caller can fall back to
@@ -23744,7 +23774,9 @@
   // first, silently swapping in the wrong accent. Among every voice
   // that matches a given hint, this prefers one whose own lang is an
   // exact match for the preset's requested lang, then same-language-
-  // family, before just taking the first name match as a last resort.
+  // family, before just taking the first name match as a last resort -
+  // and within whichever of those groups actually gets used, prefers
+  // the highest quality tier installed (see preferHigherQualityTier).
   function pickPresetVoiceByName(preset) {
     if (!window.speechSynthesis || typeof window.speechSynthesis.getVoices !== "function") return null;
     var voices = window.speechSynthesis.getVoices() || [];
@@ -23759,14 +23791,14 @@
       var exactLang = matches.filter(function (v) {
         return v.lang === preset.lang;
       });
-      if (exactLang.length) return exactLang[0];
+      if (exactLang.length) return preferHigherQualityTier(exactLang);
       var sameFamily = family
         ? matches.filter(function (v) {
             return v.lang && v.lang.indexOf(family) === 0;
           })
         : [];
-      if (sameFamily.length) return sameFamily[0];
-      return matches[0];
+      if (sameFamily.length) return preferHigherQualityTier(sameFamily);
+      return preferHigherQualityTier(matches);
     }
     return null;
   }
