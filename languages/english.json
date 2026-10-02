@@ -1173,5 +1173,6 @@
   "keypad.speakNowLeader": "{{name}}, Now Leader",
   "players.dragToReorder": "Drag to reorder {{name}}",
   "keypad.voiceLabel": "Voice",
-  "keypad.voiceAutomatic": "Automatic"
+  "keypad.voiceAutomatic": "Automatic",
+  "keypad.voiceSampleText": "Hello, this is your selected voice."
 }
