@@ -304,6 +304,10 @@
       <button type="button" id="btn-toggle-keypad-speech" class="btn btn-ghost voice-toggle-btn hidden" data-i18n="keypad.speechToggleOn">🔊 Speak Keypad</button>
       <button type="button" id="btn-keypad-speech-help" class="format-info-btn hidden" data-i18n-aria-label="keypad.speechHelpAria" aria-label="What does speak keypad do?">❓</button>
     </div>
+    <div class="row voice-toggle-row">
+      <label for="keypad-speech-voice-select" id="keypad-speech-voice-label" class="hidden" data-i18n="keypad.voiceLabel">Voice</label>
+      <select id="keypad-speech-voice-select" class="hidden" data-i18n-aria-label="keypad.voiceLabel" aria-label="Voice"></select>
+    </div>
     <button type="button" id="btn-finish-snooker" class="btn btn-primary finish-snooker-btn hidden" data-i18n="snooker.finishFrame">🏁 Finish Snooker Frame</button>
     <label class="no-stats-row-inline">
       <input type="checkbox" id="no-stats-checkbox">
@@ -2208,6 +2212,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260926f"></script>
+<script src="js/app.js?v=20260927a"></script>
 </body>
 </html>
