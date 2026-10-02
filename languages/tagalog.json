@@ -1166,7 +1166,9 @@
   "keypad.speechToggleOn": "🔊 Sabihin ang Keypad",
   "keypad.speechToggleOff": "🔊 Sinasabi… (i-tap para itigil)",
   "keypad.speechHelpAria": "Ano ang ginagawa ng sabihin ang keypad?",
-  "keypad.speechHelpText": "🔊 Kapag naka-on ito, sasabihin nang malakas ng app sa tuwing gagamitin mo ang keypad (mga numerong 1-9, Enter) para lumipat ng player — kapaki-pakinabang para makalaro nang hindi kailangang tumingin sa screen. Ang pag-score gamit ang + o - ay tutunog pa rin lang ng regular na beep.\n\nSa paglipat sa bagong player: \"[Dating player], total [bilang] na puntos\" (kung may napili na bago nito), tapos \"[Bagong player] Naglalaro\".\n\nSasabihin lang ito para sa keypad — ang pag-tap sa card ng player o sa mga +/- button nito nang direkta, o ang paggamit ng Voice Commands, ay mananatiling tahimik.",
-  "keypad.speakPlaying": "Si {{name}} ang naglalaro",
-  "keypad.speakPreviousTotal": "{{name}}, total {{count}} na puntos"
+  "keypad.speechHelpText": "🔊 Kapag naka-on ito, sasabihin nang malakas ng app sa tuwing gagamitin mo ang keypad (mga numerong 1-9, Enter) para lumipat ng player, at kapag ang + o - ay nagbigay lang sa isang tao ng lead — kapaki-pakinabang para makalaro nang hindi kailangang tumingin sa screen. Ang pag-score sa ibang pagkakataon ay tutunog pa rin lang ng regular na beep.\n\nSa paglipat sa bagong player: \"[Dating player], total [bilang] na puntos\" (kung may napili na bago nito), tapos \"[Bagong player] Naglalaro, [bilang] na puntos\" — idinaragdag ang \", Nangunguna\" kung nangunguna na ang player na iyon.\n\nKung may puntos na kadadaan pa lang na nagbigay sa isang tao ng lead: \"[Pangalan], Nangunguna Na\" — sa transition lang na ito, hindi sa bawat puntos habang nangunguna pa rin.\n\nSasabihin lang ito para sa keypad — ang pag-tap sa card ng player o sa mga +/- button nito nang direkta, o ang paggamit ng Voice Commands, ay mananatiling tahimik.",
+  "keypad.speakPreviousTotal": "{{name}}, total {{count}} na puntos",
+  "keypad.speakPlayingScore": "Si {{name}} ang naglalaro, {{count}} na puntos",
+  "keypad.speakPlayingScoreLeader": "Si {{name}} ang naglalaro, {{count}} na puntos, Nangunguna",
+  "keypad.speakNowLeader": "{{name}}, Nangunguna Na"
 }

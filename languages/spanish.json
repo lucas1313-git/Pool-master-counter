@@ -1166,7 +1166,9 @@
   "keypad.speechToggleOn": "🔊 Anunciar teclado",
   "keypad.speechToggleOff": "🔊 Anunciando… (toca para detener)",
   "keypad.speechHelpAria": "¿Qué hace anunciar teclado?",
-  "keypad.speechHelpText": "🔊 Cuando está activado, la app anuncia en voz alta cada vez que usas el teclado (teclas 1-9, Intro) para cambiar de jugador — útil para jugar sin mirar la pantalla. Puntuar con + o - sigue reproduciendo solo el pitido habitual.\n\nAl cambiar a un nuevo jugador: «[Jugador anterior], total [número] puntos» (si ya había alguien seleccionado), y luego «Juega [Nuevo jugador]».\n\nEsto solo anuncia lo que hace el teclado — tocar la tarjeta de un jugador o sus botones +/- directamente, o usar los comandos de voz, se mantiene en silencio.",
-  "keypad.speakPlaying": "Juega {{name}}",
-  "keypad.speakPreviousTotal": "{{name}}, total {{count}} puntos"
+  "keypad.speechHelpText": "🔊 Cuando está activado, la app anuncia en voz alta cada vez que usas el teclado (teclas 1-9, Intro) para cambiar de jugador, y cuando un + o - pone a alguien en cabeza — útil para jugar sin mirar la pantalla. Puntuar sigue reproduciendo solo el pitido habitual en los demás casos.\n\nAl cambiar a un nuevo jugador: «[Jugador anterior], total [número] puntos» (si ya había alguien seleccionado), y luego «Juega [Nuevo jugador], [número] puntos» — añadiendo «, en cabeza» si ese jugador ya va por delante.\n\nSi un punto acaba de poner a alguien en cabeza: «[Nombre], toma la delantera» — solo en ese cambio, no en cada punto mientras siga por delante.\n\nEsto solo anuncia lo que hace el teclado — tocar la tarjeta de un jugador o sus botones +/- directamente, o usar los comandos de voz, se mantiene en silencio.",
+  "keypad.speakPreviousTotal": "{{name}}, total {{count}} puntos",
+  "keypad.speakPlayingScore": "Juega {{name}}, {{count}} puntos",
+  "keypad.speakPlayingScoreLeader": "Juega {{name}}, {{count}} puntos, en cabeza",
+  "keypad.speakNowLeader": "{{name}}, toma la delantera"
 }

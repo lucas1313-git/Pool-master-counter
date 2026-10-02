@@ -1166,7 +1166,9 @@
   "keypad.speechToggleOn": "🔊 Annoncer le pavé",
   "keypad.speechToggleOff": "🔊 Annonce en cours… (appuyer pour arrêter)",
   "keypad.speechHelpAria": "Que fait l'annonce du pavé ?",
-  "keypad.speechHelpText": "🔊 Quand c'est activé, l'appli annonce à voix haute chaque fois que vous utilisez le pavé (touches 1-9, Entrée) pour changer de joueur — pratique pour jouer sans regarder l'écran. Marquer avec + ou - continue de simplement jouer le bip habituel.\n\nEn passant à un nouveau joueur : « [Joueur précédent], total [nombre] points » (si quelqu'un était déjà sélectionné), puis « [Nouveau joueur] joue ».\n\nCeci ne parle que pour le pavé — toucher la carte d'un joueur ou ses boutons +/- directement, ou utiliser les commandes vocales, reste silencieux.",
-  "keypad.speakPlaying": "{{name}} joue",
-  "keypad.speakPreviousTotal": "{{name}}, total {{count}} points"
+  "keypad.speechHelpText": "🔊 Quand c'est activé, l'appli annonce à voix haute chaque fois que vous utilisez le pavé (touches 1-9, Entrée) pour changer de joueur, et quand un + ou - fait juste prendre la tête à quelqu'un — pratique pour jouer sans regarder l'écran. Marquer continue sinon de simplement jouer le bip habituel.\n\nEn passant à un nouveau joueur : « [Joueur précédent], total [nombre] points » (si quelqu'un était déjà sélectionné), puis « [Nouveau joueur] joue, [nombre] points » — en ajoutant « , en tête » si ce joueur est déjà devant.\n\nSi un point vient de mettre quelqu'un en tête : « [Nom], prend la tête » — seulement sur ce changement, pas à chaque point tant qu'il reste devant.\n\nCeci ne parle que pour le pavé — toucher la carte d'un joueur ou ses boutons +/- directement, ou utiliser les commandes vocales, reste silencieux.",
+  "keypad.speakPreviousTotal": "{{name}}, total {{count}} points",
+  "keypad.speakPlayingScore": "{{name}} joue, {{count}} points",
+  "keypad.speakPlayingScoreLeader": "{{name}} joue, {{count}} points, en tête",
+  "keypad.speakNowLeader": "{{name}}, prend la tête"
 }
