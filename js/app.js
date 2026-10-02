@@ -28314,6 +28314,13 @@
     e.stopPropagation();
     resetShotCounterToZero();
   });
+  // Right on the widget itself, not just the floating 👁️ elsewhere on
+  // the scoreboard - toggleShotCounterVisibility is the same function
+  // either way, so the 👁️ still works as the way back once hidden.
+  document.getElementById("shot-counter-hide").addEventListener("click", function (e) {
+    e.stopPropagation();
+    toggleShotCounterVisibility();
+  });
 
   btnShotCounterToggleVisibility.addEventListener("click", toggleShotCounterVisibility);
   document.getElementById("shot-counter-visibility-toggle").addEventListener("click", toggleShotCounterVisibility);

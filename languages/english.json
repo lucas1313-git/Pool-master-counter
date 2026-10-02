@@ -1174,5 +1174,6 @@
   "players.dragToReorder": "Drag to reorder {{name}}",
   "keypad.voiceLabel": "Voice",
   "keypad.voiceAutomatic": "Automatic",
-  "keypad.voiceSampleText": "Hello, this is your selected voice."
+  "keypad.voiceSampleText": "Hello, this is your selected voice.",
+  "gameSetup.shotCounterHideAria": "Hide the shot timer"
 }
