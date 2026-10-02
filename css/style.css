@@ -603,7 +603,14 @@ body {
 }
 
 #app {
-  max-width: 900px;
+  /* Wide enough that the scoreboard grid (.scoreboard, further down)
+     can actually fit 4+ player cards side by side at a reasonable size
+     on a desktop-width window instead of being squeezed down to 2-3
+     columns inside a narrow, centered strip - other sections (modals,
+     the setup wizard, League/Tournament panels) keep their own,
+     independently-set 900px caps for readability, so this only widens
+     things that benefit from the extra room. */
+  max-width: 1400px;
   margin: 0 auto;
   min-height: 100vh;
   display: flex;
