@@ -698,6 +698,15 @@ body {
   margin: 4px 0 12px;
 }
 
+/* Keeps each toggle+help (or label+select) pair together as one unit
+   when the row wraps on a narrow screen, instead of a pair splitting
+   across two lines with its help button stranded on its own. */
+.voice-control-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .voice-toggle-btn {
   font-size: 0.85rem;
   padding: 8px 14px;
@@ -6544,13 +6553,11 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   padding: 4px 16px 14px;
 }
 
+/* Inline, not its own line - reads as one continuous "Now Playing: X —
+   Target Y" line in the same font as the title, rather than a smaller,
+   dimmer line underneath it. */
 .now-playing-banner .target-note {
-  display: block;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--text-dim);
-  letter-spacing: normal;
-  margin-top: 2px;
+  display: inline;
 }
 
 .now-playing-banner .rotation-note {

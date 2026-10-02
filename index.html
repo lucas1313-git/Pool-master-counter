@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260927a">
+<link rel="stylesheet" href="css/style.css?v=20260927b">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -295,18 +295,20 @@
   </section>
 
   <section id="scoreboard-panel">
-    <button type="button" id="btn-toggle-focus" class="btn btn-primary focus-toggle-btn" data-i18n="scoreboard.focusMode">Focus Mode</button>
     <div class="row voice-toggle-row">
-      <button type="button" id="btn-toggle-voice" class="btn btn-ghost voice-toggle-btn hidden" data-i18n="voice.toggleOn">🎤 Voice Commands</button>
-      <button type="button" id="btn-voice-help" class="format-info-btn hidden" data-i18n-aria-label="voice.helpAria" aria-label="What do the voice commands do?">❓</button>
-    </div>
-    <div class="row voice-toggle-row">
-      <button type="button" id="btn-toggle-keypad-speech" class="btn btn-ghost voice-toggle-btn hidden" data-i18n="keypad.speechToggleOn">🔊 Speak Keypad</button>
-      <button type="button" id="btn-keypad-speech-help" class="format-info-btn hidden" data-i18n-aria-label="keypad.speechHelpAria" aria-label="What does speak keypad do?">❓</button>
-    </div>
-    <div class="row voice-toggle-row">
-      <label for="keypad-speech-voice-select" id="keypad-speech-voice-label" class="hidden" data-i18n="keypad.voiceLabel">Voice</label>
-      <select id="keypad-speech-voice-select" class="hidden" data-i18n-aria-label="keypad.voiceLabel" aria-label="Voice"></select>
+      <button type="button" id="btn-toggle-focus" class="btn btn-primary focus-toggle-btn" data-i18n="scoreboard.focusMode">Focus Mode</button>
+      <span class="voice-control-group">
+        <button type="button" id="btn-toggle-voice" class="btn btn-ghost voice-toggle-btn hidden" data-i18n="voice.toggleOn">🎤 Voice Commands</button>
+        <button type="button" id="btn-voice-help" class="format-info-btn hidden" data-i18n-aria-label="voice.helpAria" aria-label="What do the voice commands do?">❓</button>
+      </span>
+      <span class="voice-control-group">
+        <button type="button" id="btn-toggle-keypad-speech" class="btn btn-ghost voice-toggle-btn hidden" data-i18n="keypad.speechToggleOn">🔊 Speak Keypad</button>
+        <button type="button" id="btn-keypad-speech-help" class="format-info-btn hidden" data-i18n-aria-label="keypad.speechHelpAria" aria-label="What does speak keypad do?">❓</button>
+      </span>
+      <span class="voice-control-group">
+        <label for="keypad-speech-voice-select" id="keypad-speech-voice-label" class="hidden" data-i18n="keypad.voiceLabel">Voice</label>
+        <select id="keypad-speech-voice-select" class="hidden" data-i18n-aria-label="keypad.voiceLabel" aria-label="Voice"></select>
+      </span>
     </div>
     <button type="button" id="btn-finish-snooker" class="btn btn-primary finish-snooker-btn hidden" data-i18n="snooker.finishFrame">🏁 Finish Snooker Frame</button>
     <label class="no-stats-row-inline">
@@ -2212,6 +2214,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260927a"></script>
+<script src="js/app.js?v=20260927b"></script>
 </body>
 </html>
