@@ -23650,64 +23650,37 @@
     keypadSpeechEnabled = false;
   }
 
-  // Curated down to a handful of choices, per feedback that a raw list
-  // of every installed system voice (100+ on some devices, most of
-  // them not meant for this) was overwhelming. Each preset picks the
-  // best-matching REAL voice by name at speak-time (nameHints, checked
-  // in order - the first one that matches anything installed wins)
-  // rather than storing a specific voiceURI, since the exact voice
-  // found is allowed to differ by device/browser as long as the
-  // character comes through - falls back to pickKeypadVoice's plain
-  // lang-match when no hint matches anything installed. pitch/rate
-  // carry the rest of each preset's character even when the fallback
-  // voice is the same one for two different presets.
-  //
-  // Hints prioritize the newer, genuinely natural-sounding "persona"
-  // voices Apple ships per-language (Eddy/Reed/Grandpa = male; Flo/
-  // Shelley/Sandy/Grandma = female - confirmed by actually measuring
-  // each one's pitch, not guessed from the name) ahead of the older
-  // classic voices (Daniel, Kate, etc.), which read as noticeably more
-  // "computer-like" by comparison - per feedback asking for more
-  // human-sounding voices. Legacy/cross-platform names (Windows'
-  // Ryan/George/Hazel/Libby, Android's "Google UK English Male/
-  // Female") are kept as later fallbacks for devices without the Apple
-  // persona voices at all.
+  // Curated down to exactly 3 choices, per feedback that a raw list of
+  // every installed system voice (100+ on some devices, most of them
+  // not meant for this) was overwhelming. Each preset picks the best-
+  // matching REAL voice by name at speak-time (nameHints, checked in
+  // order - the first one that matches anything installed wins) rather
+  // than storing a specific voiceURI, since the exact voice found is
+  // allowed to differ by device/browser as long as the character
+  // (British / hushed golf-whisper / bright female) comes through -
+  // falls back to pickKeypadVoice's plain lang-match when no hint
+  // matches anything installed. pitch/rate carry the rest of each
+  // preset's character even when the fallback voice is the same one
+  // for two different presets.
   var KEYPAD_SPEECH_VOICE_KEY = "poolMasterCounter.keypadSpeechVoicePreset.v1";
   var KEYPAD_SPEECH_PRESETS = {
-    britishMale: {
+    british: {
       lang: "en-GB",
       pitch: 1.0,
       rate: 1.0,
-      nameHints: ["eddy", "daniel", "reed", "ryan", "george", "uk english male", "google uk english male"]
+      nameHints: ["daniel", "oliver", "arthur", "uk english male", "google uk english male"]
     },
-    britishFemale: {
-      lang: "en-GB",
-      pitch: 1.0,
-      rate: 1.0,
-      nameHints: ["shelley", "kate", "serena", "hazel", "libby", "susan", "uk english female", "google uk english female"]
-    },
-    // A real TV golf announcer isn't whispering - it's an ordinary
-    // voice pitched low and paced slow and deliberate, hushed rather
-    // than breathy. Deliberately avoids any voice actually NAMED
-    // "whisper" (a literal breathy-whisper synthesis effect on most
-    // platforms) per feedback that it read as too wispery rather than
-    // calm. "Rocko"/"Grandpa" are the two deepest-measured persona
-    // voices available - only a mild extra pitch/rate reduction on top
-    // is needed (a bigger one would start distorting an already-deep
-    // voice into something unnatural, the opposite of "human").
     golf: {
       lang: "en-GB",
-      pitch: 0.92,
-      rate: 0.85,
-      nameHints: ["rocko", "grandpa", "reed", "ryan", "george"]
+      pitch: 0.82,
+      rate: 0.8,
+      nameHints: ["whisper"]
     },
     cheerful: {
       lang: "en-GB",
-      pitch: 1.08,
-      rate: 1.05,
+      pitch: 1.2,
+      rate: 1.08,
       nameHints: [
-        "sandy",
-        "flo",
         "kate",
         "serena",
         "fiona",
@@ -23726,16 +23699,17 @@
       ]
     }
   };
-  var keypadSpeechVoicePreset = "britishMale";
+  var keypadSpeechVoicePreset = "british";
   try {
     var savedPreset = localStorage.getItem(KEYPAD_SPEECH_VOICE_KEY);
-    // "british" was the single combined-gender preset before the
-    // choice was split in two - map an already-saved choice forward
-    // instead of silently dropping back to the default.
-    if (savedPreset === "british") savedPreset = "britishMale";
+    // "britishMale"/"britishFemale" briefly existed as a split-out
+    // version of this preset - map an already-saved choice back to the
+    // single "british" preset instead of silently dropping to the
+    // default.
+    if (savedPreset === "britishMale" || savedPreset === "britishFemale") savedPreset = "british";
     if (savedPreset && KEYPAD_SPEECH_PRESETS[savedPreset]) keypadSpeechVoicePreset = savedPreset;
   } catch (e) {
-    keypadSpeechVoicePreset = "britishMale";
+    keypadSpeechVoicePreset = "british";
   }
 
   // getVoices() can legitimately return [] on the very first call (some
@@ -23798,14 +23772,14 @@
   }
 
   function resolveKeypadVoice(presetId, lang) {
-    var preset = KEYPAD_SPEECH_PRESETS[presetId] || KEYPAD_SPEECH_PRESETS.britishMale;
+    var preset = KEYPAD_SPEECH_PRESETS[presetId] || KEYPAD_SPEECH_PRESETS.british;
     return pickPresetVoiceByName(preset) || pickKeypadVoice(lang);
   }
 
   function speakKeypadText(text) {
     if (!keypadSpeechEnabled || !window.speechSynthesis || !text) return;
     try {
-      var preset = KEYPAD_SPEECH_PRESETS[keypadSpeechVoicePreset] || KEYPAD_SPEECH_PRESETS.britishMale;
+      var preset = KEYPAD_SPEECH_PRESETS[keypadSpeechVoicePreset] || KEYPAD_SPEECH_PRESETS.british;
       var utter = new SpeechSynthesisUtterance(text);
       utter.lang = preset.lang;
       var voice = resolveKeypadVoice(keypadSpeechVoicePreset, preset.lang);
@@ -23828,7 +23802,7 @@
   function previewKeypadVoice(presetId) {
     if (!window.speechSynthesis) return;
     try {
-      var preset = KEYPAD_SPEECH_PRESETS[presetId] || KEYPAD_SPEECH_PRESETS.britishMale;
+      var preset = KEYPAD_SPEECH_PRESETS[presetId] || KEYPAD_SPEECH_PRESETS.british;
       var utter = new SpeechSynthesisUtterance(T("keypad.voiceSampleText"));
       utter.lang = preset.lang;
       var voice = resolveKeypadVoice(presetId, preset.lang);
@@ -23847,7 +23821,7 @@
   }
 
   function setKeypadSpeechVoicePreset(presetId) {
-    keypadSpeechVoicePreset = KEYPAD_SPEECH_PRESETS[presetId] ? presetId : "britishMale";
+    keypadSpeechVoicePreset = KEYPAD_SPEECH_PRESETS[presetId] ? presetId : "british";
     try {
       localStorage.setItem(KEYPAD_SPEECH_VOICE_KEY, keypadSpeechVoicePreset);
     } catch (e) {
