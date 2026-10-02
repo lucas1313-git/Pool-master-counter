@@ -917,29 +917,29 @@ body {
   font-size: clamp(1.6rem, 3cqw, 2.2rem);
 }
 
-/* In Focus Mode the row above lays out as a single line instead -
-   .stat-block's order resets to its natural DOM position (between the
-   minus/plus buttons, which are appended either side of it in
-   buildIndividualPanel) so the buttons flank the score rather than
-   sitting in their own row underneath it, and are shrunk down (this
-   overrides the generic #app.focus-mode .btn-ball sizing above, which
-   still applies as-is to Team Mode's member cards) to leave the score
-   itself as the main event. */
+/* Focus Mode now matches the regular scoreboard's layout - buttons in
+   their own row above the score (order:1 on .stat-block pushes it
+   after the order:0 buttons and wraps it full-width below them, same
+   trick as the base .player-score-row rule), not flanking it, per
+   feedback that the two should look the same. Buttons stay sized for
+   across-the-room tapping (this overrides the generic
+   #app.focus-mode .btn-ball sizing above, which still applies as-is
+   to Team Mode's member cards) rather than shrinking to the tighter
+   base .btn-ball size - Focus Mode's whole point is readability from
+   a distance. */
 #app.focus-mode .player-score-row {
-  flex-wrap: nowrap;
-  align-items: center;
+  flex-wrap: wrap;
 }
 
 #app.focus-mode .player-score-row .stat-block {
-  order: 0;
-  flex: 1 1 auto;
+  order: 1;
+  flex: 1 1 100%;
   min-width: 0;
 }
 
 #app.focus-mode .player-score-row .btn-ball {
-  flex: 0 0 auto;
-  width: clamp(44px, 9cqw, 64px);
-  min-height: clamp(80px, 16cqh, 120px);
+  flex: 1 1 0;
+  min-height: clamp(56px, 11cqh, 90px);
   font-size: clamp(1.3rem, 5cqw, 1.8rem);
   padding: 0;
 }
