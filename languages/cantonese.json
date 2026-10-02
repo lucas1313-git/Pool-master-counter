@@ -388,6 +388,7 @@
   "header.language": "🌐 語言",
   "header.leaderboard": "🏆 排行榜",
   "header.league": "🏆 聯賽",
+  "header.quickGame": "⚡ 快速對局",
   "header.startWizard": "🧙 開始精靈",
   "header.theme": "🎨 主題",
   "header.themeGroupBright": "淺色",
@@ -1180,5 +1181,13 @@
   "keypad.voicePresetGolf": "⛳ 細聲（高爾夫球風）",
   "keypad.voicePresetCheerful": "😊 開朗（女聲）",
   "scoreboard.racingToLabel": "→ 爭先：{{count}} 局",
-  "scoreboard.racingToAria": "爭先要贏幾多局"
+  "scoreboard.racingToAria": "爭先要贏幾多局",
+  "gameSetup.shotCounterKillAria": "完全閂咗個射球計時器",
+  "scoreboard.changeGameTypeAria": "轉局種",
+  "quickGame.title": "⚡ 快速對局",
+  "quickGame.explain": "直接開始一場 8 Ball、單局、個人賽，仲會自動開埋專注模式。開始咗之後都可以喺計分卡嗰度轉局種。",
+  "quickGame.player1Placeholder": "玩家 1",
+  "quickGame.player2Placeholder": "你同邊個打？",
+  "quickGame.startButton": "▶️ 開始",
+  "quickGame.sameNameHint": "請輸入兩個唔同嘅名。"
 }
