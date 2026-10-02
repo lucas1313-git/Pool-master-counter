@@ -1818,8 +1818,6 @@
   var onboardingStep = 1;
 
   var btnToggleFocus = document.getElementById("btn-toggle-focus");
-  var btnToggleVoice = document.getElementById("btn-toggle-voice");
-  var btnVoiceHelp = document.getElementById("btn-voice-help");
   var btnToggleKeypadSpeech = document.getElementById("btn-toggle-keypad-speech");
   var btnKeypadSpeechHelp = document.getElementById("btn-keypad-speech-help");
   var keypadSpeechVoiceLabel = document.getElementById("keypad-speech-voice-label");
@@ -2727,9 +2725,8 @@
 
   // announce (see Keypad Speech, further down this file): true only
   // when this selection came from the physical/on-screen KEYPAD itself
-  // (a digit press, or Enter's "next player") - never set by the Voice
-  // Commands call sites (voiceSelectPlayer/voiceSelectPlayerByName),
-  // which are a separate feature with their own existing audio cue.
+  // (a digit press, or Enter's "next player"), or a direct tap on a
+  // player's name/score (see buildIndividualPanel/buildMemberCard).
   function selectKeypadPlayer(targetId, keypadNum, announce) {
     if (!targetId) return;
     cancelKeypadEntry();
@@ -4690,24 +4687,11 @@
     tickShotCounter();
   }
 
-  // Unconditional pause (not a toggle) - shared by the widget's own
-  // reset button, "reset shot counter"/"pause shot counter"/"stop shot
-  // counter" (see the Voice Commands section), and anywhere else that
-  // specifically means "stop", not "flip whatever it's doing right
-  // now". A no-op if already paused.
-  function pauseShotCounter() {
-    if (!shotCounterActive() || !shotCounterRunningSince) return;
-    shotCounterAccumulatedMs += Date.now() - shotCounterRunningSince;
-    shotCounterRunningSince = null;
-    tickShotCounter();
-  }
-
   // Zeroes the elapsed time back to 0:00 without otherwise touching
   // whether it's running or paused right now (unlike startShotCounter,
   // which always leaves it paused at 0:00 - this is "restart the clock
-  // mid-shot", not "set the feature up fresh") - the widget's own reset
-  // button and the "reset shot counter" voice command both just mean
-  // "back to zero, keep doing whatever it was doing".
+  // mid-shot", not "set the feature up fresh") - just means "back to
+  // zero, keep doing whatever it was doing".
   function resetShotCounterToZero() {
     if (!shotCounterActive()) return;
     shotCounterAccumulatedMs = 0;
@@ -23648,376 +23632,14 @@
   }
 
   // ---------------------------------------------------------------------
-  // Voice Commands (web prototype) - independent commands, matched
-  // against every recognized utterance, not a gated sequence (an earlier
-  // version required saying "Pool Counter" right before each command,
-  // which just meant player-select/add-points silently missed whenever
-  // that window had lapsed - gone now):
-  //   1. "Pool Counter" - always just beeps (playShotCounterBeep, a plain
-  //      neutral two-tap tone with no scoring meaning of its own) to
-  //      confirm the mic/recognition is actually working - a standalone
-  //      check, not a prerequisite for anything else here.
-  //   2. "player [x]" (or the shorter "play [x]" - same thing, less to
-  //      say/mishear) - selects that player exactly the way pressing the
-  //      same number on the physical keypad does (see
-  //      handleKeypadShortcut's own 1-9 branch) - same on-screen numbering
-  //      (keypadOrderedPlayerIds), same switch sound/highlight/scroll, by
-  //      calling the exact same selectKeypadPlayer. Works in both
-  //      points-unit and rack-unit games. [x] can also be a player's
-  //      first name as written on their score card ("player Alice"/"play
-  //      Alice") instead of a number - matched live against
-  //      keypadOrderedPlayerIds/getPlayer each time (see
-  //      voiceSelectPlayerByName), never a fixed list, so renaming or
-  //      adding/removing players is picked up automatically with no code
-  //      change. Only the first word of the stored name is used (so
-  //      "Mary Jane Smith" is said/matched as just "Mary") - keeps the
-  //      spoken grammar to one word and sidesteps speech recognition
-  //      mangling a longer name. Requires the "player"/"play" prefix
-  //      specifically (not the bare name alone) since the mic listens
-  //      continuously with no wake word - saying just "Alice" would also
-  //      fire on ordinary table talk that happens to mention her.
-  //   3. Points-unit games (Straight Pool, 15 Ball Rotation, Custom):
-  //      "add/remove [x] points" adjusts whichever player is currently
-  //      keypad-selected by the full spoken amount in one call - adjust-
-  //      Score already applies an arbitrary delta correctly in one shot
-  //      (win-target crossing included), so "add 3 points" is exactly
-  //      requestAdjustScore(id, 3), not three separate +1s.
-  //   4. Rack-unit games (8-Ball, 9-Ball, etc.) - there's no running point
-  //      tally to add to here, winning IS the action, so these get their
-  //      own phrasing instead of reusing #3:
-  //        - "win the rack" credits a win for the keypad-selected player
-  //          (voiceAdjustSelectedPlayer(1), same call #3 makes).
-  //        - "[x] balls left" sets the post-win popup's balls-left-on-
-  //          table stepper (see showGameWinOverlay/voiceSetBallsLeft) -
-  //          a no-op while that popup isn't open.
-  //        - "register game" is the spoken equivalent of tapping the win
-  //          popup's own confirm button (voiceRegisterGame) - also a
-  //          no-op while it isn't open.
-  // Scoped the same either way: individual mode, points-or-rack-unit
-  // games, not Quick Counter - checked fresh each time a command is
-  // about to apply. Web-only on purpose: the Web Speech API isn't
-  // reliably available inside the iOS Capacitor build's WKWebView, so
-  // the toggle button stays hidden there via the feature-detect below
-  // rather than pretending to offer something that won't actually work.
-  // ---------------------------------------------------------------------
-
-  var VoiceRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition || null;
-  var voiceRecognition = null;
-  var voiceCommandsActive = false;
-  var voiceStoppedDeliberately = false;
-  var VOICE_WAKE_WORD_RE = /\bpool\W*counter\b/i;
-
-  var VOICE_NUMBER_WORDS = { zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9 };
-  // \W* (not \s+) between words - tolerates a comma or other punctuation
-  // a speech API sometimes inserts at a natural pause ("player, one",
-  // "add 3, points"), which a plain \s+ would fail to match. "play" is
-  // accepted as a shorter alternative to "player" (e.g. "play 1",
-  // "play Alice") - same meaning, just less to say/mishear.
-  var VOICE_PLAYER_RE = /\b(?:player|play)\W*(\d+|one|two|three|four|five|six|seven|eight|nine)\b/i;
-  // Fallback for "player/play [name]" once VOICE_PLAYER_RE's number
-  // match fails - captures just the single word right after "player"/
-  // "play" (only the first name on a score card is ever matched - see
-  // voiceSelectPlayerByName), not a fixed list, since the set of valid
-  // names changes as players are added/renamed.
-  var VOICE_PLAYER_NAME_RE = /\b(?:player|play)\W+([a-z']+)/i;
-  // "next player" - cycles keypad selection forward, same as the Enter
-  // keypad shortcut (see advanceToNextKeypadPlayer/voiceNextPlayer).
-  var VOICE_NEXT_PLAYER_RE = /\bnext\W*player\b/i;
-  // "add"/"at"/"plus" vs "remove"/"subtract"/"minus" - "at" is in here
-  // specifically because speech recognition frequently mishears "add"
-  // as "at" (near-identical sound) - the article/"a"/"one" before
-  // "point(s)" is optional since real transcripts vary ("add 3 points",
-  // "add three points", "add a point", "at 3 points").
-  var VOICE_POINTS_RE = /\b(add|at|plus|remove|minus|subtract)\W*(\d+|a|one|two|three|four|five|six|seven|eight|nine)\W*points?\b/i;
-  // Rack games (8-Ball, 9-Ball, etc.) don't have a running point tally to
-  // add to - winning IS the action, and the post-win popup (see
-  // showGameWinOverlay) is where the balls-left-on-table detail and the
-  // final confirmation happen, so these three get their own phrasing
-  // instead of reusing "add/remove X points".
-  var VOICE_WIN_RACK_RE = /\bwin\W*the\W*rack\b/i;
-  var VOICE_BALLS_LEFT_RE = /\b(\d+|zero|one|two|three|four|five|six|seven|eight|nine)\W*balls?\W*left\b/i;
-  // "Register game" and "nice game" both just confirm/close the win
-  // popup (see voiceRegisterGame) - "nice game" mirrors the popup's own
-  // "Nice!" button text, and this popup shows for a points-unit race
-  // win exactly the same as a rack win, so it needs a phrase that makes
-  // sense in a points-game context too.
-  var VOICE_REGISTER_GAME_RE = /\b(register\W*game|nice\W*game)\b/i;
-  // "good game" also confirms/closes the win popup (see voiceGoodGame),
-  // but only once balls-left-on-table actually has a value set - an
-  // extra safety check register/nice game don't make.
-  var VOICE_GOOD_GAME_RE = /\bgood\W*game\b/i;
-  // Independent of every command above - the Shot Counter is its own
-  // feature, available in more game-type/unit combinations (e.g. One
-  // Pocket's "balls" unit) than voiceCommandsApplicableNow's own scope
-  // covers, so these two are checked separately in handleVoiceResult,
-  // before that gate, and no-op via shotCounterActive() on their own
-  // instead of sharing it.
-  var VOICE_RESET_SHOT_COUNTER_RE = /\breset\W*shot\W*counter\b/i;
-  var VOICE_PAUSE_SHOT_COUNTER_RE = /\b(stop|pause)\W*shot\W*counter\b/i;
-
-  function voiceNumberFromToken(token) {
-    token = token.toLowerCase();
-    if (token === "a") return 1;
-    if (/^\d+$/.test(token)) return parseInt(token, 10);
-    // hasOwnProperty, not `|| null` - "zero" maps to 0, which is falsy
-    // and would otherwise fall through to null.
-    return VOICE_NUMBER_WORDS.hasOwnProperty(token) ? VOICE_NUMBER_WORDS[token] : null;
-  }
-
-  // True only for the exact scope this prototype supports - checked at
-  // the moment a command is about to apply (not just when voice mode was
-  // turned on), so switching game type mid-session while still listening
-  // degrades to a clear "not available" toast instead of silently
-  // adjusting the wrong thing. Points-unit games (add/remove X points)
-  // and rack-unit games (win the rack, balls left, register game) both
-  // qualify, Teams included - selectKeypadPlayer/adjustScore/creditWin
-  // all already handle a team member exactly like a solo player (see
-  // buildMemberCard's own keypad numbering, and adjustScore's team-
-  // aggregate win check) - only Quick Counter doesn't.
-  function voiceCommandsApplicableNow() {
-    return !quickCounterMode && (state.currentGame.unit === "points" || state.currentGame.unit === "rack");
-  }
-
-  function voiceSelectPlayer(playerNum) {
-    var targetId = keypadOrderedPlayerIds[playerNum - 1];
-    if (!targetId) {
-      showToast(T("voice.unknownPlayer", { num: playerNum }));
-      return;
-    }
-    selectKeypadPlayer(targetId, playerNum);
-  }
-
-  // Only the first word of however a name is written on the score card
-  // ("Mary Jane Smith" -> "mary") - what voiceSelectPlayerByName matches
-  // against, and (via the help text) what the player is told to say.
-  function voicePlayerFirstName(name) {
-    return normalizeNameKey((name || "").trim().split(/\s+/)[0] || "");
-  }
-
-  // "player [name]" - reads the live roster (keypadOrderedPlayerIds +
-  // getPlayer, the same source the number-based version and the on-
-  // screen keypad badges use) fresh on every call rather than any
-  // precomputed list, so a name added, edited, or removed mid-session is
-  // matched correctly on the very next utterance with no extra wiring.
-  // Exact match against each player's first name only (see
-  // voicePlayerFirstName) - first match in keypad order wins on a tie,
-  // same as two players would collide on the physical keypad's own
-  // numbering. Silently does nothing on no match, same low-key no-op as
-  // every other command here.
-  function voiceSelectPlayerByName(transcript) {
-    var m = VOICE_PLAYER_NAME_RE.exec(transcript);
-    if (!m) return;
-    var spoken = normalizeNameKey(m[1]);
-    if (!spoken) return;
-    var targetIdx = -1;
-    keypadOrderedPlayerIds.forEach(function (id, idx) {
-      if (targetIdx !== -1) return;
-      var p = getPlayer(id);
-      if (p && voicePlayerFirstName(p.name) === spoken) targetIdx = idx;
-    });
-    if (targetIdx === -1) return;
-    selectKeypadPlayer(keypadOrderedPlayerIds[targetIdx], targetIdx + 1);
-  }
-
-  // "next player" - the spoken equivalent of the Enter keypad shortcut
-  // (see advanceToNextKeypadPlayer) - same wrap-around, same "starts at
-  // #1 if nobody's selected yet" behavior.
-  function voiceNextPlayer() {
-    advanceToNextKeypadPlayer();
-  }
-
-  function voiceAdjustSelectedPlayer(delta) {
-    if (!keypadSelectedPlayerId) {
-      showToast(T("voice.noPlayerSelected"));
-      return;
-    }
-    requestAdjustScore(keypadSelectedPlayerId, delta);
-  }
-
-  // Sets the post-win popup's balls-left-on-table stepper (see
-  // buildBallsLeftRow/showGameWinOverlay) exactly the way typing into
-  // its input field does - reuses the same render/persist helpers so
-  // the live patch-back onto state.gameHistory[0] and the skunk-flag
-  // side effect (persistBallsLeftLive) both happen identically. A no-op
-  // (not an error) when the popup isn't open, or - 9-Ball/10-Ball - has
-  // no balls-left field to begin with (see BALLS_LEFT_HIDDEN_GAME_TYPES).
-  function voiceSetBallsLeft(n) {
-    if (gamewinOverlay.classList.contains("hidden")) return;
-    var valueInput = gamewinDetails.querySelector(".balls-left-input");
-    var minusBtn = gamewinDetails.querySelector(".balls-left-btn.minus");
-    if (!valueInput || !minusBtn) return;
-    gamewinBallsLeftValue = Math.max(0, n);
-    renderBallsLeftValue(valueInput, minusBtn);
-    persistBallsLeftLive();
-  }
-
-  // "register game" - the spoken equivalent of tapping the win popup's
-  // own confirm button (btnGamewinClose/"Nice!"). Only acts while that
-  // popup is actually open, same as voiceSetBallsLeft above.
-  function voiceRegisterGame() {
-    if (gamewinOverlay.classList.contains("hidden")) return;
-    closeGameWinOverlay();
-  }
-
-  // "good game" - also confirms/closes the win popup, but only once the
-  // balls-left-on-table stepper actually has a value (gamewinBallsLeftValue
-  // starts null, same as leaving the field at "Not Set" by hand) - an
-  // extra safety check "register game"/"nice game" don't make, for
-  // whoever wants to be sure that detail got recorded before confirming.
-  // Silently does nothing (not an error toast) if it isn't set yet or
-  // the popup isn't open - same low-key no-op as every other command
-  // here when its precondition isn't met.
-  function voiceGoodGame() {
-    if (gamewinOverlay.classList.contains("hidden")) return;
-    if (gamewinBallsLeftValue === null) return;
-    closeGameWinOverlay();
-  }
-
-  function handleVoiceResult(event) {
-    var lastResultIdx = event.results.length - 1;
-    var transcript = (event.results[lastResultIdx][0].transcript || "").trim();
-
-    // Temporary, deliberately loud debug aid while this prototype's
-    // actual recognition accuracy is still unverified - shows exactly
-    // what the browser transcribed for every utterance, since that's
-    // the one thing impossible to check without hearing it happen live.
-    // Remove once the real-world grammar is confirmed working.
-    showToast(T("voice.heard", { heard: transcript }));
-
-    // Three independent commands, not a gated sequence - "Pool Counter"
-    // is just a mic-check beep, not a prerequisite for the other two
-    // (an earlier version required saying it right before every command;
-    // that's gone; it did nothing but make player-select/add-points
-    // silently miss whenever that window had lapsed).
-    if (VOICE_WAKE_WORD_RE.test(transcript)) playShotCounterBeep();
-
-    // Shot Counter commands are independent of everything below (see
-    // VOICE_RESET_SHOT_COUNTER_RE's comment) - checked here, before the
-    // voiceCommandsApplicableNow() gate that scopes the rest of this
-    // function, and self-guarded via shotCounterActive() rather than
-    // sharing it.
-    if (VOICE_RESET_SHOT_COUNTER_RE.test(transcript)) resetShotCounterToZero();
-    if (VOICE_PAUSE_SHOT_COUNTER_RE.test(transcript)) pauseShotCounter();
-
-    if (!voiceCommandsApplicableNow()) {
-      showToast(T("voice.notAvailable"));
-      return;
-    }
-
-    var playerMatch = VOICE_PLAYER_RE.exec(transcript);
-    var pointsMatch = VOICE_POINTS_RE.exec(transcript);
-    var ballsLeftMatch = VOICE_BALLS_LEFT_RE.exec(transcript);
-    if (playerMatch) {
-      voiceSelectPlayer(voiceNumberFromToken(playerMatch[1]));
-    } else {
-      voiceSelectPlayerByName(transcript);
-    }
-    if (VOICE_NEXT_PLAYER_RE.test(transcript)) {
-      voiceNextPlayer();
-    }
-    if (pointsMatch) {
-      var verb = pointsMatch[1].toLowerCase();
-      var amount = voiceNumberFromToken(pointsMatch[2]);
-      if (amount) voiceAdjustSelectedPlayer((verb === "add" || verb === "at" || verb === "plus" ? 1 : -1) * amount);
-    }
-    if (VOICE_WIN_RACK_RE.test(transcript)) {
-      voiceAdjustSelectedPlayer(1);
-    }
-    if (ballsLeftMatch) {
-      var ballsLeft = voiceNumberFromToken(ballsLeftMatch[1]);
-      if (ballsLeft !== null) voiceSetBallsLeft(ballsLeft);
-    }
-    if (VOICE_REGISTER_GAME_RE.test(transcript)) {
-      voiceRegisterGame();
-    }
-    if (VOICE_GOOD_GAME_RE.test(transcript)) {
-      voiceGoodGame();
-    }
-  }
-
-  function setVoiceCommandsActive(on) {
-    if (!VoiceRecognitionCtor) return;
-    voiceCommandsActive = on;
-    btnToggleVoice.classList.toggle("is-listening", on);
-    btnToggleVoice.textContent = T(on ? "voice.toggleOff" : "voice.toggleOn");
-    if (on) {
-      if (!voiceCommandsApplicableNow()) {
-        showToast(T("voice.notAvailable"));
-      }
-      voiceStoppedDeliberately = false;
-      if (!voiceRecognition) {
-        voiceRecognition = new VoiceRecognitionCtor();
-        voiceRecognition.continuous = true;
-        voiceRecognition.interimResults = false;
-        voiceRecognition.lang = "en-US";
-        voiceRecognition.addEventListener("result", handleVoiceResult);
-        voiceRecognition.addEventListener("error", function (e) {
-          if (e.error === "not-allowed" || e.error === "service-not-allowed") {
-            showToast(T("voice.micError"));
-            setVoiceCommandsActive(false);
-          }
-          // "no-speech"/"aborted"/etc. are routine while continuously
-          // listening in a noisy room - onend below restarts it, no
-          // toast needed for every one of those.
-        });
-        // The API stops itself after a period of silence even with
-        // continuous:true (browser-dependent) - restart automatically
-        // to approximate always-on listening, unless the toggle was
-        // turned off on purpose in the meantime.
-        voiceRecognition.addEventListener("end", function () {
-          if (voiceCommandsActive && !voiceStoppedDeliberately) {
-            try {
-              voiceRecognition.start();
-            } catch (e) {
-              // Already starting/started - ignore.
-            }
-          }
-        });
-      }
-      try {
-        voiceRecognition.start();
-      } catch (e) {
-        // Already listening - ignore (start() throws if called twice).
-      }
-    } else {
-      voiceStoppedDeliberately = true;
-      // abort(), not stop() - per spec, stop() finishes processing
-      // whatever audio it already captured (so the mic can stay
-      // allocated until that wraps up), while abort() halts capture
-      // immediately. Chrome in particular can otherwise leave the
-      // mic showing as active in its own UI/settings for a while
-      // after a plain stop() - abort() releases it right away, which
-      // is what turning this toggle off should do.
-      if (voiceRecognition) voiceRecognition.abort();
-    }
-  }
-
-  if (VoiceRecognitionCtor) {
-    btnToggleVoice.classList.remove("hidden");
-    btnToggleVoice.addEventListener("click", function () {
-      setVoiceCommandsActive(!voiceCommandsActive);
-    });
-    btnVoiceHelp.classList.remove("hidden");
-    btnVoiceHelp.addEventListener("click", function () {
-      alertModal(T("voice.helpText"));
-    });
-  }
-
-  // ---------------------------------------------------------------------
   // Keypad Speech - speaks the player's name back out loud when the
   // physical/on-screen keypad (handleKeypadShortcut - a digit key or
   // Enter to select, "+"/"-" or a typed 15 Ball Rotation entry to score)
   // is used to select a player or change their score, so the table can
   // be played without needing to look at the screen to confirm who got
-  // selected or how much they were just credited. Deliberately
-  // independent of Voice Commands above - this reads back what the
-  // KEYPAD did, nothing to do with the microphone, so it has its own
-  // toggle and works whether or not voice recognition is even
-  // available. Uses the standard SpeechSynthesisUtterance API (not the
-  // Web Speech *recognition* API Voice Commands needs), which is much
-  // more broadly supported - including inside the iOS Capacitor
-  // WKWebView - so this isn't gated to web-only the way Voice Commands
-  // is further up this file.
+  // selected or how much they were just credited. Uses the standard
+  // SpeechSynthesisUtterance API, which is broadly supported - including
+  // inside the iOS Capacitor WKWebView.
   // ---------------------------------------------------------------------
 
   var KEYPAD_SPEECH_KEY = "poolMasterCounter.keypadSpeechEnabled.v1";
