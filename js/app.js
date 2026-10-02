@@ -962,6 +962,27 @@
     if (until > keypadAudioBusyUntilMs) keypadAudioBusyUntilMs = until;
   }
 
+  // The defer-until-the-beep-finishes wait above only actually works
+  // on browsers whose speechSynthesis.speak() tolerates being called
+  // outside the original user gesture (confirmed fine on desktop
+  // Chrome). iOS Safari enforces the opposite rule - speak() silently
+  // does nothing at all unless it's called synchronously within that
+  // same gesture - confirmed on a real iPad: the sounds kept playing
+  // exactly as before, but every announcement went completely silent
+  // the moment the setTimeout-based wait above shipped. "Chrome for
+  // iOS" (CriOS) doesn't escape this either - every browser on iOS is
+  // Safari's WebKit engine underneath regardless of its own UI, per
+  // Apple's platform policy - so this checks for iOS itself (including
+  // iPadOS 13+, which reports navigator.platform as a plain Mac - see
+  // detectDesktopOS's own comment on telling those apart via touch
+  // support), not for any particular browser name.
+  var keypadSpeechCanDeferForBeep = (function () {
+    var ua = navigator.userAgent || "";
+    if (/iPhone|iPad|iPod/.test(ua)) return false;
+    if (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) return false;
+    return true;
+  })();
+
   // A short, physical "click" - a band-passed noise burst (the actual
   // contact transient) plus a quick pitched knock underneath for body -
   // standing in for a real cue-ball/rack sound instead of a plain
@@ -23833,8 +23854,12 @@
     }
     // Don't talk over whichever scoring sound just started (see
     // markKeypadAudioBusy) - wait for it to actually finish first,
-    // per explicit request, instead of overlapping it.
-    var waitMs = keypadAudioBusyUntilMs - performance.now();
+    // per explicit request, instead of overlapping it. Only where
+    // that's actually safe, though (see keypadSpeechCanDeferForBeep) -
+    // on iOS, deferring this even by a few hundred ms is enough to
+    // silence every announcement outright, which is strictly worse
+    // than the overlap it would have avoided.
+    var waitMs = keypadSpeechCanDeferForBeep ? keypadAudioBusyUntilMs - performance.now() : 0;
     if (waitMs > 0) setTimeout(speakNow, waitMs);
     else speakNow();
   }
