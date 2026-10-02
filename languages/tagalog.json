@@ -388,6 +388,7 @@
   "header.language": "🌐 Wika",
   "header.leaderboard": "🏆 Leaderboard",
   "header.league": "🏆 League",
+  "header.quickGame": "⚡ Mabilisang Laro",
   "header.startWizard": "🧙 Simulan ang Wizard",
   "header.theme": "🎨 Tema",
   "header.themeGroupBright": "Maliwanag",
@@ -1180,5 +1181,13 @@
   "keypad.voicePresetGolf": "⛳ Bulong (Golf)",
   "keypad.voicePresetCheerful": "😊 Masayahin (Babae)",
   "scoreboard.racingToLabel": "→ Unahan hanggang: {{count}} laro",
-  "scoreboard.racingToAria": "Unahan hanggang ilang panalo"
+  "scoreboard.racingToAria": "Unahan hanggang ilang panalo",
+  "gameSetup.shotCounterKillAria": "Patayin nang buo ang shot timer",
+  "scoreboard.changeGameTypeAria": "Palitan ang uri ng laro",
+  "quickGame.title": "⚡ Mabilisang Laro",
+  "quickGame.explain": "Diretso sa isang 8-Ball, single game, individual match sa Focus Mode. Puwede mo pa ring palitan ang uri ng laro mula sa mga scorecard once nagsimula na.",
+  "quickGame.player1Placeholder": "Player 1",
+  "quickGame.player2Placeholder": "Kanino ka laban?",
+  "quickGame.startButton": "▶️ Simulan",
+  "quickGame.sameNameHint": "Maglagay ng dalawang magkaibang pangalan."
 }
