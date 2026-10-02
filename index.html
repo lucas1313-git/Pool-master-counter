@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260927d">
+<link rel="stylesheet" href="css/style.css?v=20260927e">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -307,7 +307,11 @@
       </span>
       <span class="voice-control-group">
         <label for="keypad-speech-voice-select" id="keypad-speech-voice-label" class="hidden" data-i18n="keypad.voiceLabel">Voice</label>
-        <select id="keypad-speech-voice-select" class="hidden" data-i18n-aria-label="keypad.voiceLabel" aria-label="Voice"></select>
+        <select id="keypad-speech-voice-select" class="hidden" data-i18n-aria-label="keypad.voiceLabel" aria-label="Voice">
+          <option value="british" data-i18n="keypad.voicePresetBritish">🇬🇧 British</option>
+          <option value="golf" data-i18n="keypad.voicePresetGolf">⛳ Whisper (Golf)</option>
+          <option value="cheerful" data-i18n="keypad.voicePresetCheerful">😊 Cheerful (Female)</option>
+        </select>
       </span>
     </div>
     <button type="button" id="btn-finish-snooker" class="btn btn-primary finish-snooker-btn hidden" data-i18n="snooker.finishFrame">🏁 Finish Snooker Frame</button>
@@ -2215,6 +2219,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260927d"></script>
+<script src="js/app.js?v=20260927e"></script>
 </body>
 </html>

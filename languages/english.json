@@ -1166,14 +1166,16 @@
   "keypad.speechToggleOn": "🔊 Speak Keypad",
   "keypad.speechToggleOff": "🔊 Speaking… (tap to stop)",
   "keypad.speechHelpAria": "What does speak keypad do?",
-  "keypad.speechHelpText": "🔊 When this is on, the app speaks back out loud whenever you use the keypad (number keys 1-9, Enter) to switch players, and when + or - just gives someone the lead — handy for playing without having to look at the screen. Scoring otherwise still just plays the regular beep.\n\nSwitching to a new player: \"[Previous player], total [count] points\" (if someone was already selected), then \"[New player] Playing, [count] points\" — adding \", Leader\" if that player is already ahead.\n\nIf a point just put someone in the lead: \"[Name], Now Leader\" — only on that transition, not on every point while already ahead.\n\nThis only speaks for the keypad — tapping a player's card or +/- buttons directly, or using Voice Commands, stays silent.\n\nPick a specific voice from the \"Voice\" dropdown if you'd rather not use the automatic choice (a British English voice by default).",
+  "keypad.speechHelpText": "🔊 When this is on, the app speaks back out loud whenever you use the keypad (number keys 1-9, Enter) to switch players, and when + or - just gives someone the lead — handy for playing without having to look at the screen. Scoring otherwise still just plays the regular beep.\n\nSwitching to a new player: \"[Previous player], total [count] points\" (if someone was already selected), then \"[New player] Playing, [count] points\" — adding \", Leader\" if that player is already ahead.\n\nIf a point just put someone in the lead: \"[Name], Now Leader\" — only on that transition, not on every point while already ahead.\n\nThis only speaks for the keypad — tapping a player's card or +/- buttons directly, or using Voice Commands, stays silent.\n\nPick one of 3 voices from the \"Voice\" dropdown: 🇬🇧 British (the default), ⛳ Whisper (a hushed, golf-broadcast style), or 😊 Cheerful (a brighter female voice).",
   "keypad.speakPreviousTotal": "{{name}}, total {{count}} points",
   "keypad.speakPlayingScore": "{{name}} Playing, {{count}} points",
   "keypad.speakPlayingScoreLeader": "{{name}} Playing, {{count}} points, Leader",
   "keypad.speakNowLeader": "{{name}}, Now Leader",
   "players.dragToReorder": "Drag to reorder {{name}}",
   "keypad.voiceLabel": "Voice",
-  "keypad.voiceAutomatic": "Automatic",
   "keypad.voiceSampleText": "Hello, this is your selected voice.",
-  "gameSetup.shotCounterHideAria": "Hide the shot timer"
+  "gameSetup.shotCounterHideAria": "Hide the shot timer",
+  "keypad.voicePresetBritish": "🇬🇧 British",
+  "keypad.voicePresetGolf": "⛳ Whisper (Golf)",
+  "keypad.voicePresetCheerful": "😊 Cheerful (Female)"
 }

@@ -2370,9 +2370,23 @@ input[type="number"] {
   padding-top: 10px;
 }
 
+/* Big and bold at the top of the card, per request - sized off the
+   card's own width (.player-panel is container-type:inline-size) so
+   it scales down on its own on a narrower card (more players sharing
+   the row) the same way Focus Mode's own name/score already do,
+   rather than a single fixed size that's either too small on a wide
+   card or cramped on a narrow one. Capped at 2 lines with an ellipsis
+   past that (-webkit-line-clamp, the same proven technique Focus
+   Mode's name uses) so a long name wraps and shrinks to fit instead
+   of blowing up the card's height or overflowing - "keeping
+   proportions" even for a name much longer than a short one-word one. */
 .player-name {
-  font-size: 1.4rem;
-  font-weight: 700;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: clamp(1.8rem, 16cqw, 3.6rem);
+  font-weight: 800;
   text-align: center;
   word-break: break-word;
 }
