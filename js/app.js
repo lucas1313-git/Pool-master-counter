@@ -3263,6 +3263,19 @@
       target: target > 0 ? target : (type ? type.defaultTarget : 1),
       unit: unit || (type ? type.unit : "rack")
     });
+    // First time the rotation actually becomes usable (2+ entries) -
+    // prefill "switch every" from the race target instead of leaving it
+    // at the plain default of 1, but only if it's still that untouched
+    // default; a value the user already set (here or on the Rotation
+    // Position line - see renderRotationPositionControl) is never
+    // overwritten. Confirmed formula (race-to 5, 2 players -> every 4;
+    // race-to 5, 3 players -> every 4 again - "every" tracks race-to
+    // only, not player count, by the user's own worked examples): every
+    // = race-to - 1, so the very last game of a full rotation cycle
+    // lands exactly on the race target and settles things.
+    if (state.rotation.order.length === 2 && state.rotation.every === 1) {
+      state.rotation.every = Math.max(1, (state.raceToWinsTarget || 1) - 1);
+    }
     saveState();
     saveRotationSnapshotIfNew(true);
     applyRotationIfDue();
@@ -3567,16 +3580,47 @@
   // right under the "Now Playing" banner - see moveRotationPosition.
   // Hidden whenever rotation isn't actually running (off, or fewer
   // than 2 game types to rotate through).
+  // "every" is edited right here, not just in the Games Rotations panel
+  // (#rotation-every, further down the page) - a NUL-byte marker
+  // stands in for {{every}} so the surrounding before/after text keeps
+  // whatever word order the active translation actually uses (number
+  // placement varies by language), then gets split back out around a
+  // real <input> once T() has filled in the rest.
   function renderRotationPositionControl() {
     var info = rotationStatusInfo();
     rotationPositionRow.classList.toggle("hidden", !info);
     if (!info) return;
     renderRotationPositionTrack(info);
-    rotationPositionText.textContent = T("players.rotationPosition", {
-      label: info.currentLabel,
-      played: info.playedInLeg,
-      every: info.every
+
+    var marker = "\u0000";
+    var templated = T("players.rotationPosition", { label: info.currentLabel, played: info.playedInLeg, every: marker });
+    var parts = templated.split(marker);
+    rotationPositionText.innerHTML = "";
+    rotationPositionText.appendChild(document.createTextNode(parts[0] || ""));
+    var everyInput = document.createElement("input");
+    everyInput.type = "number";
+    everyInput.min = "1";
+    everyInput.inputMode = "numeric";
+    everyInput.className = "rotation-position-every-input";
+    everyInput.value = info.every;
+    everyInput.setAttribute("aria-label", T("rotation.switchEvery"));
+    everyInput.addEventListener("click", function (e) {
+      e.stopPropagation();
     });
+    everyInput.addEventListener("change", function () {
+      var v = parseInt(everyInput.value, 10);
+      if (!v || v < 1) {
+        everyInput.value = state.rotation.every;
+        return;
+      }
+      state.rotation.every = v;
+      saveState();
+      applyRotationIfDue();
+      renderRotation();
+      renderScoreboard();
+    });
+    rotationPositionText.appendChild(everyInput);
+    rotationPositionText.appendChild(document.createTextNode(parts[1] || ""));
   }
 
   function renderRoster() {

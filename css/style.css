@@ -4797,6 +4797,31 @@ input[type="number"] {
   color: var(--text);
 }
 
+/* The "every" number sits inline in that sentence (see
+   renderRotationPositionControl) - sized/weighted to match the
+   surrounding text instead of looking like a stray form control, with
+   the spinner arrows dropped since there's no room for them at this
+   size and the +/- aren't needed (the Games Rotations panel's own
+   #rotation-every already covers that). */
+.rotation-position-every-input {
+  width: 2.4em;
+  font: inherit;
+  font-weight: 700;
+  text-align: center;
+  color: var(--accent);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1px 2px;
+  -moz-appearance: textfield;
+}
+
+.rotation-position-every-input::-webkit-outer-spin-button,
+.rotation-position-every-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
 .player-stats-note {
   color: var(--text-dim);
   font-size: 0.85rem;
