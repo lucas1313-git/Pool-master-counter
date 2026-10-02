@@ -945,6 +945,23 @@
     return buffer;
   }
 
+  // Keypad Speech shouldn't talk over whichever scoring sound (the
+  // plain beep, the player-switch pips, the win fanfare) just started -
+  // per explicit request, it should wait for that sound to actually
+  // finish first rather than overlapping it. Each of those sound
+  // functions calls markKeypadAudioBusy with its own real duration
+  // right as it starts playing; speakKeypadText (every Keypad Speech
+  // announcement funnels through it) checks this and defers via
+  // setTimeout instead of speaking immediately when something's still
+  // audibly playing. Wall-clock (performance.now()), not the Web Audio
+  // AudioContext's own clock - setTimeout needs a real-world delay,
+  // and the two clocks aren't interchangeable.
+  var keypadAudioBusyUntilMs = 0;
+  function markKeypadAudioBusy(durationMs) {
+    var until = performance.now() + durationMs;
+    if (until > keypadAudioBusyUntilMs) keypadAudioBusyUntilMs = until;
+  }
+
   // A short, physical "click" - a band-passed noise burst (the actual
   // contact transient) plus a quick pitched knock underneath for body -
   // standing in for a real cue-ball/rack sound instead of a plain
@@ -1045,6 +1062,10 @@
     for (var i = 0; i < pips; i++) {
       clickSound(now + i * 0.4, 260 * mult, 0.4, true);
     }
+    // Last pip starts at (pips-1)*0.4s and is itself audible for
+    // ~0.09s (see clickSound's own stop times) - a little extra margin
+    // on top so the announcement doesn't clip its tail.
+    markKeypadAudioBusy((pips - 1) * 400 + 150);
   }
 
   // A flute-like "victory" rise: a sine fundamental (plus a quiet 2nd
@@ -1064,6 +1085,7 @@
     var ctx = getAudioCtx();
     var now = ctx.currentTime;
     var duration = 0.5;
+    markKeypadAudioBusy(duration * 1000 + 100);
     var attack = 0.08;
     var sustainEnd = now + duration * 0.6;
     var end = now + duration;
@@ -1144,6 +1166,7 @@
     var ctx = getAudioCtx();
     var now = ctx.currentTime;
     var duration = 0.5;
+    markKeypadAudioBusy(duration * 1000 + 100);
     var attack = 0.08;
     var sustainEnd = now + duration * 0.6;
     var end = now + duration;
@@ -1224,6 +1247,9 @@
     var mult = voicePitch(voice);
     var ctx = getAudioCtx();
     var now = ctx.currentTime;
+    // Longer of the two songs below (playChampionsSong, ending at
+    // 1.76+0.9=2.66s) plus the reverb tail's own margin.
+    markKeypadAudioBusy(2900);
 
     var convolver = ctx.createConvolver();
     convolver.buffer = buildReverbImpulse(ctx, 2.4, 2.2);
@@ -23791,18 +23817,26 @@
 
   function speakKeypadText(text) {
     if (!keypadSpeechEnabled || !window.speechSynthesis || !text) return;
-    try {
-      var utter = new SpeechSynthesisUtterance(text);
-      utter.lang = "en-GB";
-      var voice = resolveKeypadVoice(keypadSpeechVoicePreset);
-      if (voice) utter.voice = voice;
-      utter.pitch = 1.0;
-      utter.rate = 1.0;
-      window.speechSynthesis.speak(utter);
-    } catch (e) {
-      // Speech synthesis isn't available/working on this device -
-      // silently skip, same as every other best-effort audio cue here.
+    function speakNow() {
+      try {
+        var utter = new SpeechSynthesisUtterance(text);
+        utter.lang = "en-GB";
+        var voice = resolveKeypadVoice(keypadSpeechVoicePreset);
+        if (voice) utter.voice = voice;
+        utter.pitch = 1.0;
+        utter.rate = 1.0;
+        window.speechSynthesis.speak(utter);
+      } catch (e) {
+        // Speech synthesis isn't available/working on this device -
+        // silently skip, same as every other best-effort audio cue here.
+      }
     }
+    // Don't talk over whichever scoring sound just started (see
+    // markKeypadAudioBusy) - wait for it to actually finish first,
+    // per explicit request, instead of overlapping it.
+    var waitMs = keypadAudioBusyUntilMs - performance.now();
+    if (waitMs > 0) setTimeout(speakNow, waitMs);
+    else speakNow();
   }
 
   // Plays a short sample in whichever voice was just picked in the
