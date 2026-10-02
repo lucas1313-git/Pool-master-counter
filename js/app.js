@@ -23713,16 +23713,44 @@
   }
 
   // Rather than guessing which named voices might exist on a given
-  // device, this lists exactly the ones confirmed good (checked in
-  // System Settings > Accessibility > Spoken Content, "Enhanced"/
-  // "Premium" quality) and only ever offers whichever of THESE are
-  // actually installed, detected live via getVoices() - explicit
-  // request: "show only the ones in the list I gave you if available,
-  // if none use siri". SIRI_FALLBACK_ID is the dropdown's only option
-  // when none of these are installed at all, resolving to the best
-  // plain system default instead (see resolveKeypadVoice).
+  // device, this lists exactly the ones confirmed good and only ever
+  // offers whichever of THESE are actually installed, detected live
+  // via getVoices() - explicit request: "show only the ones in the
+  // list I gave you if available, if none use siri". SIRI_FALLBACK_ID
+  // is the dropdown's only option when none of these are installed at
+  // all, resolving to the best plain system default instead (see
+  // resolveKeypadVoice).
+  //
+  // Two different sets, since neither one alone turned out to be
+  // reliably available: ava/allison/evan/nathan/samantha/zoe/serena
+  // are the classic "Enhanced"/"Premium" VoiceOver-quality voices
+  // (checked in System Settings > Accessibility > Spoken Content) -
+  // Safari exposes whichever of these are downloaded there, but
+  // confirmed on a real Mac that Chrome's own Web Speech API doesn't
+  // surface most of them at all even once downloaded, leaving only
+  // whichever happen to overlap with the set below. eddy/flo/grandma/
+  // grandpa/sandy/shelley are the newer "persona" voices Apple ships
+  // built in (no download needed) - confirmed present in both Chrome
+  // and Safari, and already measured for pitch - a reliable fallback
+  // set regardless of which browser or macOS version this runs on.
   var KEYPAD_SPEECH_VOICE_KEY = "poolMasterCounter.keypadSpeechVoicePreset.v1";
-  var KEYPAD_SPEECH_VOICE_NAMES = ["ava", "allison", "reed", "rocko", "evan", "nathan", "samantha", "zoe", "serena"];
+  var KEYPAD_SPEECH_VOICE_NAMES = [
+    "ava",
+    "allison",
+    "reed",
+    "rocko",
+    "evan",
+    "nathan",
+    "samantha",
+    "zoe",
+    "serena",
+    "eddy",
+    "flo",
+    "grandma",
+    "grandpa",
+    "sandy",
+    "shelley"
+  ];
   var KEYPAD_SPEECH_SIRI_FALLBACK_ID = "siri";
   var keypadSpeechVoicePreset = KEYPAD_SPEECH_SIRI_FALLBACK_ID;
   try {
@@ -23923,7 +23951,12 @@
     } else {
       var fallbackOpt = document.createElement("option");
       fallbackOpt.value = KEYPAD_SPEECH_SIRI_FALLBACK_ID;
-      fallbackOpt.textContent = T("keypad.voicePresetSiriFallback");
+      // Same empty-LANG_DICT_EN race as syncKeypadSpeechToggleButtonText -
+      // skip T() on the very first, pre-language-load call (this runs
+      // from the top-level feature-detect block too) and use a plain
+      // placeholder instead; the later re-run after languages finish
+      // loading replaces it with the real label.
+      fallbackOpt.textContent = Object.keys(LANG_DICT_EN).length ? T("keypad.voicePresetSiriFallback") : "Siri";
       keypadSpeechVoiceSelect.appendChild(fallbackOpt);
     }
 
@@ -24055,13 +24088,32 @@
       console.warn("Could not save keypad speech setting.", e);
     }
     btnToggleKeypadSpeech.classList.toggle("is-listening", on);
-    btnToggleKeypadSpeech.textContent = T(on ? "keypad.speechToggleOff" : "keypad.speechToggleOn");
+    syncKeypadSpeechToggleButtonText();
     if (!on && window.speechSynthesis) window.speechSynthesis.cancel();
+  }
+
+  // Pulled out of both the top-level feature-detect block below and
+  // setKeypadSpeechEnabled so it can be called a second time once
+  // languages actually finish loading (see the Promise.all(...).then()
+  // near the end of this file) - this file's top-level code (including
+  // the feature-detect block right below) runs synchronously before
+  // that async language fetch resolves, so a T() call made from there
+  // would always miss on the very first page load (LANG_DICT_EN is
+  // still empty then) and permanently log a false "missing translation
+  // key" warning for it (see T's own missingTranslationKeysWarned guard
+  // - it only warns once per key, but "once" still happens here on
+  // literally every load). Skipping the call entirely while that's
+  // still true avoids the warning; the button's static data-i18n label
+  // (see applyDomTranslations) covers it visually until the real call
+  // below runs once languages are actually ready.
+  function syncKeypadSpeechToggleButtonText() {
+    if (!Object.keys(LANG_DICT_EN).length) return;
+    btnToggleKeypadSpeech.textContent = T(keypadSpeechEnabled ? "keypad.speechToggleOff" : "keypad.speechToggleOn");
   }
 
   if (window.speechSynthesis && typeof SpeechSynthesisUtterance !== "undefined") {
     btnToggleKeypadSpeech.classList.remove("hidden");
-    btnToggleKeypadSpeech.textContent = T(keypadSpeechEnabled ? "keypad.speechToggleOff" : "keypad.speechToggleOn");
+    syncKeypadSpeechToggleButtonText();
     btnToggleKeypadSpeech.classList.toggle("is-listening", keypadSpeechEnabled);
     btnToggleKeypadSpeech.addEventListener("click", function () {
       setKeypadSpeechEnabled(!keypadSpeechEnabled);
@@ -29951,6 +30003,15 @@
       trio[2].value = type.unit;
     });
     applyDomTranslations(document);
+    // Re-run now that languages have actually finished loading (see
+    // syncKeypadSpeechToggleButtonText's own comment on why the very
+    // first, top-level call - made before this point - can't rely on
+    // T() yet). populateKeypadVoiceSelect's "Siri" fallback label has
+    // the exact same issue, for the same reason.
+    if (!btnToggleKeypadSpeech.classList.contains("hidden")) {
+      syncKeypadSpeechToggleButtonText();
+      populateKeypadVoiceSelect();
+    }
     boot();
     consumePendingArchiveDates();
 
