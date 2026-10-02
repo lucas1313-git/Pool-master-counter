@@ -1307,7 +1307,7 @@
       <h3 data-i18n="help.nav.playerPage">Player Stats Page</h3>
       <p data-i18n="help.playerPage.intro">Opened by tapping a player's name anywhere in the app.</p>
       <ul>
-        <li data-i18n-html="help.playerPage.synopsis"><strong>Stats Synopsis</strong> — Rating (current number) and "Rating this period" (how much it's moved), Wins, Losses, and Win % for Today, This Week, This Month, This Year, or All Time.</li>
+        <li data-i18n-html="help.playerPage.synopsis"><strong>Stats Synopsis</strong> — Rating (current number) and "Rating this period" (how much it's moved), Wins, Losses, and Win % for Today, Last 7 Days, Last 30 Days, This Year, or All Time.</li>
         <li data-i18n-html="help.playerPage.h2h"><strong>Head-to-Head</strong> — Its own collapsed panel (tap to expand) with a win/loss record against every opponent faced in the selected period; the collapsed summary line lists who they've played without needing to open it.</li>
         <li data-i18n-html="help.playerPage.graph"><strong>Graph</strong> — The same cumulative games chart as All Players, scoped to this one player, plus the standalone Rating chart underneath.</li>
         <li data-i18n-html="help.playerPage.liveSession"><strong>This Session (Live)</strong> — What they've done in the game currently in progress.</li>
@@ -1407,8 +1407,8 @@
     <div class="panel-body" id="player-page-synopsis-panel-body">
       <div class="row period-filter-row" id="player-page-period-filter">
         <button type="button" class="btn btn-ghost period-btn" data-period="today" data-i18n="period.today">Today</button>
-        <button type="button" class="btn btn-ghost period-btn" data-period="week" data-i18n="period.thisWeek">This Week</button>
-        <button type="button" class="btn btn-ghost period-btn" data-period="month" data-i18n="period.thisMonth">This Month</button>
+        <button type="button" class="btn btn-ghost period-btn" data-period="week" data-i18n="period.thisWeek">Last 7 Days</button>
+        <button type="button" class="btn btn-ghost period-btn" data-period="month" data-i18n="period.thisMonth">Last 30 Days</button>
         <button type="button" class="btn btn-ghost period-btn" data-period="year" data-i18n="period.thisYear">This Year</button>
         <button type="button" class="btn btn-ghost period-btn is-active" data-period="all" data-i18n="period.allTime">All Time</button>
       </div>
@@ -1627,8 +1627,8 @@
   <button type="button" id="btn-leaderboard-play-top" class="btn btn-primary leaderboard-play-btn" data-i18n="leaderboard.playButton">▶️ Back to the Game</button>
 
   <div class="row period-filter-row" id="leaderboard-period-filter">
-    <button type="button" class="btn btn-ghost period-btn" data-period="last7" data-i18n="period.thisWeek">This Week</button>
-    <button type="button" class="btn btn-ghost period-btn" data-period="month" data-i18n="period.thisMonth">This Month</button>
+    <button type="button" class="btn btn-ghost period-btn" data-period="week" data-i18n="period.thisWeek">Last 7 Days</button>
+    <button type="button" class="btn btn-ghost period-btn" data-period="month" data-i18n="period.thisMonth">Last 30 Days</button>
     <button type="button" class="btn btn-ghost period-btn is-active" data-period="all" data-i18n="period.allTime">All Time</button>
   </div>
 
@@ -2219,6 +2219,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20261002a"></script>
+<script src="js/app.js?v=20261002b"></script>
 </body>
 </html>
