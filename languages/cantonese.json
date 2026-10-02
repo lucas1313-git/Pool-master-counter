@@ -1174,5 +1174,6 @@
   "players.dragToReorder": "拖曳嚟調返 {{name}} 嘅次序",
   "keypad.voiceLabel": "聲線",
   "keypad.voiceAutomatic": "自動",
-  "keypad.voiceSampleText": "你好，呢個就係你揀嘅聲。"
+  "keypad.voiceSampleText": "你好，呢個就係你揀嘅聲。",
+  "gameSetup.shotCounterHideAria": "收埋個計時器"
 }

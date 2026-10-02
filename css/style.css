@@ -2010,6 +2010,26 @@ input[type="number"] {
   background: rgba(255, 255, 255, 0.2);
 }
 
+/* Hides the widget without pausing/resetting it (see
+   toggleShotCounterVisibility) - same stopPropagation'd, round-button
+   pattern as .shot-counter-reset-btn right next to it; the floating
+   👁️ (.shot-counter-visibility-toggle) is the way back once hidden. */
+.shot-counter-hide-btn {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 999px;
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.shot-counter-hide-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
 /* Quick-access companion to the widget above - unlike it, this stays
    visible whenever the shot counter is enabled at all, regardless of
    the widget's own hidden state, so there's always a one-tap way back
@@ -6560,13 +6580,12 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   display: inline;
 }
 
+/* Inline, same font as the rest of the banner - same treatment as
+   .target-note above, so the whole banner (title, target, and the
+   rotation status) reads as one continuous line instead of wrapping
+   into its own smaller/dimmer one underneath. */
 .now-playing-banner .rotation-note {
-  display: block;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--text-dim);
-  letter-spacing: normal;
-  margin-top: 2px;
+  display: inline;
 }
 
 .now-playing-banner .game-duration-live {
