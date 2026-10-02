@@ -388,6 +388,7 @@
   "header.language": "🌐 Language",
   "header.leaderboard": "🏆 Leaderboard",
   "header.league": "🏆 League",
+  "header.quickGame": "⚡ Quick Game",
   "header.startWizard": "🧙 Start Wizard",
   "header.theme": "🎨 Theme",
   "header.themeGroupBright": "Bright",
@@ -1180,5 +1181,13 @@
   "keypad.voicePresetGolf": "⛳ Whisper (Golf)",
   "keypad.voicePresetCheerful": "😊 Cheerful (Female)",
   "scoreboard.racingToLabel": "→ Racing to: {{count}} games",
-  "scoreboard.racingToAria": "Race to how many wins"
+  "scoreboard.racingToAria": "Race to how many wins",
+  "gameSetup.shotCounterKillAria": "Turn off the shot timer completely",
+  "scoreboard.changeGameTypeAria": "Change game type",
+  "quickGame.title": "⚡ Quick Game",
+  "quickGame.explain": "Jumps straight into an 8-Ball, single game, individual match in Focus Mode. You can still change the game type from the scorecards once it starts.",
+  "quickGame.player1Placeholder": "Player 1",
+  "quickGame.player2Placeholder": "Who are you playing against?",
+  "quickGame.startButton": "▶️ Start",
+  "quickGame.sameNameHint": "Enter two different names."
 }

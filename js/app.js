@@ -2090,6 +2090,14 @@
   var timedTournamentMinutesInput = document.getElementById("timed-tournament-minutes-input");
   var timedTournamentPauseToggle = document.getElementById("timed-tournament-pause-toggle");
 
+  var btnQuickGame = document.getElementById("btn-quick-game");
+  var quickGameOverlay = document.getElementById("quick-game-overlay");
+  var quickGamePlayer1Input = document.getElementById("quick-game-player1");
+  var quickGamePlayer2Input = document.getElementById("quick-game-player2");
+  var quickGameRequirement = document.getElementById("quick-game-requirement");
+  var btnQuickGameStart = document.getElementById("btn-quick-game-start");
+  var btnQuickGameCancel = document.getElementById("btn-quick-game-cancel");
+
   var btnResetGame = document.getElementById("btn-reset-game");
   var btnShare = document.getElementById("btn-share");
   var btnExportSession = document.getElementById("btn-export-session");
@@ -2630,6 +2638,7 @@
       helpOverlay,
       wizardOverlay,
       onboardingOverlay,
+      quickGameOverlay,
       milestoneOverlay,
       gamewinOverlay,
       forceResetOverlay,
@@ -2935,6 +2944,7 @@
   // inputs (add-player, etc.) with their own Enter-submits-the-form
   // behavior, which must win over advancing the wizard step.
   var OVERLAY_KEY_TARGETS = [
+    [quickGameOverlay, btnQuickGameStart, btnQuickGameCancel],
     [saveSessionOverlay, btnSaveSessionSave, btnSaveSessionCancel],
     [ratingEditOverlay, btnRatingEditSave, btnRatingEditCancel],
     [removedPlayersOverlay, btnRemovedPlayersContinue, btnRemovedPlayersContinue],
@@ -3347,6 +3357,25 @@
     gameTargetInput.value = state.currentGame.target;
     gameTargetUnitSelect.value = state.currentGame.unit;
     updateCurrentGameSummary();
+  }
+
+  // Switches the active game type to its default target/unit - shared
+  // by the Game Setup panel's own <select> (gameTypeSelect) and the
+  // inline one on the Now Playing banner (see renderNowPlayingBanner),
+  // so changing it from either place stays in lockstep. Not offered at
+  // all while a Rotation is running (see renderNowPlayingBanner) -
+  // applyRotationIfDue would just overwrite a manual change back on the
+  // next win anyway, which would be confusing rather than useful there.
+  function setCurrentGameType(typeId) {
+    var type = GAME_TYPES[typeId];
+    if (!type) return;
+    state.currentGame.gameType = typeId;
+    state.currentGame.target = type.defaultTarget;
+    state.currentGame.unit = type.unit;
+    syncGameTypeUI();
+    saveState();
+    renderScoreboard();
+    tickShotCounter();
   }
 
   function updateCurrentGameSummary() {
@@ -4488,6 +4517,34 @@
       nowPlayingBanner.appendChild(note);
     }
 
+    // A quick way to change the game type right from the scoreboard,
+    // with no trip to the (collapsed) Game Setup panel - added for
+    // Quick Game, where there's no rotation lineup dictating the type
+    // automatically. Hidden whenever a Rotation IS running
+    // (applyRotationIfDue would just overwrite a manual pick back on
+    // the next win anyway, which would be confusing rather than useful
+    // there - the Games Rotation panel is the right place to manage
+    // game type in that case).
+    if (!state.rotation.enabled) {
+      var typeSelect = document.createElement("select");
+      typeSelect.className = "now-playing-type-select";
+      GAME_TYPE_LIST.forEach(function (t) {
+        var opt = document.createElement("option");
+        opt.value = t.id;
+        opt.textContent = t.label;
+        typeSelect.appendChild(opt);
+      });
+      typeSelect.value = state.currentGame.gameType;
+      typeSelect.setAttribute("aria-label", T("scoreboard.changeGameTypeAria"));
+      typeSelect.addEventListener("click", function (e) {
+        e.stopPropagation();
+      });
+      typeSelect.addEventListener("change", function () {
+        setCurrentGameType(typeSelect.value);
+      });
+      nowPlayingBanner.appendChild(typeSelect);
+    }
+
     var rotationInfo = rotationStatusInfo();
     if (rotationInfo) {
       var rotationNote = document.createElement("span");
@@ -4669,6 +4726,22 @@
     state.currentGame.shotCounterHidden = shotCounterHidden;
     saveState();
     tickShotCounter();
+  }
+
+  // Turns the feature off outright - unlike toggleShotCounterVisibility
+  // (which only hides the WIDGET while it keeps ticking/beeping
+  // underneath), this is the same as unchecking the Game Setup
+  // checkbox: the widget's own ⏹ button, for whenever it's showing up
+  // unexpectedly (e.g. left on from an earlier game/session - the
+  // setting persists across games on purpose, so this is the fast way
+  // back rather than hunting down the checkbox in Game Setup).
+  function killShotCounter() {
+    if (!shotCounterActive()) return;
+    state.currentGame.shotCounterEnabled = false;
+    shotCounterEnabledCheckbox.checked = false;
+    shotCounterBeepRow.classList.add("hidden");
+    saveState();
+    stopShotCounter();
   }
 
   // Runs every second (see the setInterval near boot) and also called
@@ -18561,6 +18634,130 @@
     enterQuickCounterMode(T("toast.quickCounterTip"));
   }
 
+  // ---------------------------------------------------------------------
+  // Quick Game - the header's single most-visible button. Skips the
+  // whole Setup Wizard (game type/race mode/rotation/player-adding
+  // steps) for the one question that actually changes every time:
+  // who's playing. Everything else is a fixed, opinionated default -
+  // 8-Ball, single game (no race), individual, no rotation, Focus Mode -
+  // picked as the fastest path from "I want to play right now" to an
+  // actual scoreboard. The game type can still be changed afterward
+  // right from the Now Playing banner (see renderNowPlayingBanner's
+  // inline select), since locking it in forever would defeat the point
+  // of "quick".
+  // ---------------------------------------------------------------------
+
+  var QUICK_GAME_SETUP = {
+    gameType: "8ball",
+    target: 1,
+    unit: "rack",
+    mode: "individual",
+    shotCounterEnabled: false,
+    shotCounterBeepSec: 30,
+    timedTournamentEnabled: false,
+    timedTournamentMinutes: 60,
+    raceToWinsTarget: 1,
+    rotation: { enabled: false, order: [], every: 1 },
+    fairRaceEnabled: false
+  };
+
+  // Reuses an existing roster player (any case/nickname match, via the
+  // same resolvePlayerName the Add Player field uses) instead of
+  // creating a duplicate - addPlayer already reactivates a graveyarded
+  // name gracefully, so a past player's name just works here too.
+  function resolveOrCreateQuickGamePlayer(rawName) {
+    var resolved = resolvePlayerName(rawName);
+    if (!resolved) return null;
+    var key = normalizeNameKey(resolved);
+    var existing = state.players.filter(function (p) {
+      return normalizeNameKey(p.name) === key;
+    })[0];
+    return existing || addPlayer(resolved);
+  }
+
+  // Both names required, and not the same person twice - the only
+  // validation Quick Game needs, since everything else about the setup
+  // is fixed. Mirrors validateNewPlayerNameInput's live-update pattern.
+  function validateQuickGameInputs() {
+    var name1 = quickGamePlayer1Input.value.trim();
+    var name2 = quickGamePlayer2Input.value.trim();
+    var bothGiven = !!name1 && !!name2;
+    var same = bothGiven && normalizeNameKey(resolvePlayerName(name1)) === normalizeNameKey(resolvePlayerName(name2));
+    btnQuickGameStart.disabled = !bothGiven || same;
+    if (bothGiven && same) {
+      quickGameRequirement.textContent = T("quickGame.sameNameHint");
+      quickGameRequirement.classList.remove("hidden");
+    } else {
+      quickGameRequirement.classList.add("hidden");
+    }
+  }
+
+  function openQuickGameModal() {
+    quickGamePlayer1Input.value = "";
+    quickGamePlayer2Input.value = "";
+    quickGameRequirement.classList.add("hidden");
+    btnQuickGameStart.disabled = true;
+    quickGameOverlay.classList.remove("hidden");
+    quickGamePlayer1Input.focus();
+  }
+
+  function closeQuickGameModal() {
+    quickGameOverlay.classList.add("hidden");
+  }
+
+  // Applies QUICK_GAME_SETUP and syncs every control it touches - the
+  // same fields applyGameSetupAndSyncUI's sync half covers, just
+  // without that function's own "Loaded game setup" toast (startNewSession,
+  // called right after, shows its own "Let's play!" one instead - two
+  // toasts stacking on top of each other would just mean the first
+  // flashes and is immediately replaced, not actually useful).
+  function applyQuickGameSetup() {
+    var leavingQuickCounter = quickCounterMode;
+    quickCounterMode = false;
+    if (leavingQuickCounter) {
+      noStatsMode = false;
+      noStatsCheckbox.checked = false;
+    }
+
+    loadGameSetupEntry(QUICK_GAME_SETUP);
+    syncGameTypeUI();
+    raceToWinsInput.value = state.raceToWinsTarget;
+    syncRaceModeRadios();
+    raceToWinsRow.classList.toggle("hidden", state.raceToWinsTarget === 1);
+    Array.prototype.forEach.call(modeRadios, function (r) {
+      r.checked = r.value === "individual";
+    });
+    shotCounterEnabledCheckbox.checked = false;
+    shotCounterBeepRow.classList.add("hidden");
+    stopShotCounter();
+    timedTournamentEnabledCheckbox.checked = false;
+    timedTournamentMinutesRow.classList.add("hidden");
+    stopTimedTournament();
+    fairRaceEnabledCheckbox.checked = false;
+    state.currentGame.queueEnabled = false;
+    queueModeCheckbox.checked = false;
+  }
+
+  function startQuickGame() {
+    var p1 = resolveOrCreateQuickGamePlayer(quickGamePlayer1Input.value);
+    var p2 = resolveOrCreateQuickGamePlayer(quickGamePlayer2Input.value);
+    if (!p1 || !p2 || p1.id === p2.id) return;
+
+    // Exactly these two, individual, nobody else seated - a fresh 1v1,
+    // not an addition to whatever roster happened to be playing before.
+    state.players.forEach(function (p) {
+      p.playing = p.id === p1.id || p.id === p2.id;
+    });
+    p1.teamId = null;
+    p2.teamId = null;
+
+    applyQuickGameSetup();
+    closeQuickGameModal();
+    startNewSession(true);
+    setFocusMode(true);
+    showToast(T("toast.letsPlay"));
+  }
+
   // Smallest "Player N" not already taken by an existing roster name (any
   // case) - used below so an auto-named opponent never collides with a
   // real player someone already added.
@@ -28415,16 +28612,7 @@
   });
 
   gameTypeSelect.addEventListener("change", function () {
-    var type = GAME_TYPES[gameTypeSelect.value];
-    state.currentGame.gameType = gameTypeSelect.value;
-    state.currentGame.target = type.defaultTarget;
-    state.currentGame.unit = type.unit;
-    gameTargetInput.value = type.defaultTarget;
-    gameTargetUnitSelect.value = type.unit;
-    saveState();
-    renderScoreboard();
-    updateCurrentGameSummary();
-    tickShotCounter();
+    setCurrentGameType(gameTypeSelect.value);
   });
 
   gameTargetInput.addEventListener("input", function () {
@@ -28467,6 +28655,10 @@
   document.getElementById("shot-counter-reset").addEventListener("click", function (e) {
     e.stopPropagation();
     resetShotCounterToZero();
+  });
+  document.getElementById("shot-counter-kill").addEventListener("click", function (e) {
+    e.stopPropagation();
+    killShotCounter();
   });
   // Right on the widget itself, not just the floating 👁️ elsewhere on
   // the scoreboard - toggleShotCounterVisibility is the same function
@@ -29170,6 +29362,21 @@
 
   btnTestOnboarding.addEventListener("click", openOnboarding);
   btnOpenWizard.addEventListener("click", openWizard);
+
+  btnQuickGame.addEventListener("click", openQuickGameModal);
+  btnQuickGameCancel.addEventListener("click", closeQuickGameModal);
+  btnQuickGameStart.addEventListener("click", startQuickGame);
+  quickGameOverlay.addEventListener("click", function (e) {
+    if (e.target === quickGameOverlay) closeQuickGameModal();
+  });
+  quickGamePlayer1Input.addEventListener("input", validateQuickGameInputs);
+  quickGamePlayer2Input.addEventListener("input", validateQuickGameInputs);
+  attachNameAutocomplete(quickGamePlayer1Input, function () {
+    return contactSheetVisibleNames();
+  });
+  attachNameAutocomplete(quickGamePlayer2Input, function () {
+    return contactSheetVisibleNames();
+  });
   btnWizardClose.addEventListener("click", closeWizard);
   btnWizardCancel.addEventListener("click", closeWizard);
   wizardOverlay.addEventListener("click", function (e) {

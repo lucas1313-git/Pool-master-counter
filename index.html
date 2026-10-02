@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261002a">
+<link rel="stylesheet" href="css/style.css?v=20261002c">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -65,6 +65,7 @@
       </div>
     </div>
     <div class="header-nav-row">
+      <button type="button" id="btn-quick-game" class="btn btn-primary all-players-nav-btn quick-game-btn" data-i18n="header.quickGame">⚡ Quick Game</button>
       <button type="button" id="btn-test-onboarding" class="btn btn-ghost all-players-nav-btn" data-i18n="header.welcomeNewPlayer">👋 Welcome New Player</button>
       <button type="button" id="btn-open-wizard" class="btn btn-primary all-players-nav-btn" data-i18n="header.startWizard">🧙 Start Wizard</button>
       <button type="button" id="btn-open-tournament" class="btn btn-ghost all-players-nav-btn" data-i18n="header.tournament">🏆 Tournament</button>
@@ -341,6 +342,7 @@
     <div id="shot-counter-widget" class="shot-counter-widget hidden">
       <span id="shot-counter-time">0:00</span>
       <button type="button" id="shot-counter-reset" class="shot-counter-reset-btn" data-i18n-aria-label="gameSetup.shotCounterResetAria" aria-label="Reset the shot timer to 0:00">🔄</button>
+      <button type="button" id="shot-counter-kill" class="shot-counter-kill-btn" data-i18n-aria-label="gameSetup.shotCounterKillAria" aria-label="Turn off the shot timer completely">⏹</button>
       <button type="button" id="shot-counter-hide" class="shot-counter-hide-btn" data-i18n-aria-label="gameSetup.shotCounterHideAria" aria-label="Hide the shot timer">✕</button>
     </div>
     <button type="button" id="shot-counter-visibility-toggle" class="shot-counter-visibility-toggle hidden" data-i18n-aria-label="gameSetup.shotCounterToggleVisibility" aria-label="Show/Hide Timer">👁️</button>
@@ -747,6 +749,24 @@
     <div class="confirm-modal-actions">
       <button type="button" id="btn-confirm-modal-ok" class="btn btn-primary" data-i18n="common.ok">OK</button>
       <button type="button" id="btn-confirm-modal-cancel" class="btn btn-ghost hidden" data-i18n="common.cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="quick-game-overlay" class="confirm-modal-overlay hidden">
+  <div class="confirm-modal-card">
+    <h3 class="confirm-modal-title" data-i18n="quickGame.title">⚡ Quick Game</h3>
+    <p class="player-stats-note" data-i18n="quickGame.explain">Jumps straight into an 8-Ball, single game, individual match in Focus Mode. You can still change the game type from the scorecards once it starts.</p>
+    <p id="quick-game-requirement" class="new-player-name-requirement hidden"></p>
+    <div class="row">
+      <input type="text" id="quick-game-player1" data-i18n-placeholder="quickGame.player1Placeholder" placeholder="Player 1" autocomplete="off">
+    </div>
+    <div class="row">
+      <input type="text" id="quick-game-player2" data-i18n-placeholder="quickGame.player2Placeholder" placeholder="Who are you playing against?" autocomplete="off">
+    </div>
+    <div class="confirm-modal-actions">
+      <button type="button" id="btn-quick-game-start" class="btn btn-primary" disabled data-i18n="quickGame.startButton">▶️ Start</button>
+      <button type="button" id="btn-quick-game-cancel" class="btn btn-ghost" data-i18n="common.cancel">Cancel</button>
     </div>
   </div>
 </div>
@@ -2219,6 +2239,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20261002b"></script>
+<script src="js/app.js?v=20261002c"></script>
 </body>
 </html>

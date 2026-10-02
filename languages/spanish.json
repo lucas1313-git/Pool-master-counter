@@ -388,6 +388,7 @@
   "header.language": "🌐 Idioma",
   "header.leaderboard": "🏆 Clasificación",
   "header.league": "🏆 Liga",
+  "header.quickGame": "⚡ Partida rápida",
   "header.startWizard": "🧙 Iniciar asistente",
   "header.theme": "🎨 Tema",
   "header.themeGroupBright": "Claro",
@@ -1180,5 +1181,13 @@
   "keypad.voicePresetGolf": "⛳ Susurro (Golf)",
   "keypad.voicePresetCheerful": "😊 Alegre (Femenina)",
   "scoreboard.racingToLabel": "→ Carrera a: {{count}} partidas",
-  "scoreboard.racingToAria": "Carrera a cuántas victorias"
+  "scoreboard.racingToAria": "Carrera a cuántas victorias",
+  "gameSetup.shotCounterKillAria": "Apagar completamente el cronómetro de tiro",
+  "scoreboard.changeGameTypeAria": "Cambiar tipo de juego",
+  "quickGame.title": "⚡ Partida rápida",
+  "quickGame.explain": "Empieza directamente una partida de 8-Ball, partida única, individual, en Modo Enfoque. Podrás cambiar el tipo de juego desde las tarjetas de puntuación una vez iniciada.",
+  "quickGame.player1Placeholder": "Jugador 1",
+  "quickGame.player2Placeholder": "¿Contra quién juegas?",
+  "quickGame.startButton": "▶️ Empezar",
+  "quickGame.sameNameHint": "Ingresa dos nombres diferentes."
 }

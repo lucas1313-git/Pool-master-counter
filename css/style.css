@@ -675,6 +675,21 @@ body {
   padding: 8px 14px;
 }
 
+/* The main page's primary call to action - meant to stand out from
+   every other header button at a glance (bigger, bolder, a glowing
+   accent ring) rather than blending into the same ghost-button row,
+   per explicit "very visible" request. */
+.quick-game-btn {
+  font-size: 1.05rem;
+  font-weight: 800;
+  padding: 10px 20px;
+  box-shadow: 0 0 0 2px var(--accent), 0 4px 10px rgba(0, 0, 0, 0.35);
+}
+
+.quick-game-btn:hover {
+  filter: brightness(1.12);
+}
+
 .app-header h1 {
   margin: 0;
   font-size: 1.6rem;
@@ -2028,6 +2043,28 @@ input[type="number"] {
 
 .shot-counter-hide-btn:hover {
   background: rgba(255, 255, 255, 0.2);
+}
+
+/* Fully turns the counter off (killShotCounter) - unlike
+   .shot-counter-hide-btn, which only hides the widget while it keeps
+   ticking/beeping underneath, this actually unchecks the Game Setup
+   checkbox so nothing is running anymore. Same round-button treatment,
+   just with a warning tint so it reads as the more final action of
+   the two. */
+.shot-counter-kill-btn {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  background: rgba(220, 60, 50, 0.25);
+  border: 1px solid rgba(255, 120, 110, 0.5);
+  border-radius: 999px;
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.shot-counter-kill-btn:hover {
+  background: rgba(220, 60, 50, 0.4);
 }
 
 /* Quick-access companion to the widget above - unlike it, this stays
@@ -5832,6 +5869,7 @@ body.network-guest-mode #report-archive-panel,
 body.network-guest-mode #backup-panel,
 body.network-guest-mode #resets-panel,
 body.network-guest-mode #tournament-setup-panel,
+body.network-guest-mode .header-nav-row #btn-quick-game,
 body.network-guest-mode .header-nav-row #btn-test-onboarding,
 body.network-guest-mode .header-nav-row #btn-open-wizard,
 body.network-guest-mode .header-nav-row #btn-open-tournament,
@@ -6636,6 +6674,24 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
    into its own smaller/dimmer one underneath. */
 .now-playing-banner .rotation-note {
   display: inline;
+}
+
+/* The inline "change game type" control added for Quick Game (see
+   renderNowPlayingBanner) - sized/weighted to sit on the same line as
+   the rest of the banner instead of looking like a stray form control,
+   same idea as .racing-to-input/.rotation-position-every-input. */
+.now-playing-type-select {
+  display: inline-block;
+  margin-left: 8px;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px 6px;
+  vertical-align: middle;
 }
 
 /* Duration and (while actually racing - see renderNowPlayingBanner)
