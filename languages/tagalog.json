@@ -1174,5 +1174,6 @@
   "players.dragToReorder": "I-drag para ayusin ang pagkakasunod-sunod ni {{name}}",
   "keypad.voiceLabel": "Boses",
   "keypad.voiceAutomatic": "Awtomatiko",
-  "keypad.voiceSampleText": "Kumusta, ito ang napili mong boses."
+  "keypad.voiceSampleText": "Kumusta, ito ang napili mong boses.",
+  "gameSetup.shotCounterHideAria": "Itago ang timer"
 }

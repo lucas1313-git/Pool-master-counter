@@ -1174,5 +1174,6 @@
   "players.dragToReorder": "Arrastra para reordenar a {{name}}",
   "keypad.voiceLabel": "Voz",
   "keypad.voiceAutomatic": "Automática",
-  "keypad.voiceSampleText": "Hola, esta es la voz que has elegido."
+  "keypad.voiceSampleText": "Hola, esta es la voz que has elegido.",
+  "gameSetup.shotCounterHideAria": "Ocultar el cronómetro"
 }
