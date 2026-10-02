@@ -2706,8 +2706,11 @@
       var delta = amount * sign;
       var wasLeading = target ? keypadPlayerIsLeading(target) : false;
       var willLead = target ? keypadScoreWouldLead(target, (target.balls || 0) + delta) : false;
+      var wasOnHill = target ? keypadPlayerIsOnHill(target) : false;
+      var willBeOnHill = target ? keypadScoreWouldBeOnHill(target, (target.balls || 0) + delta) : false;
       requestAdjustScore(targetId, delta);
       if (target) speakKeypadLeadChange(target, wasLeading, willLead);
+      if (target) speakKeypadOnHillChange(target, wasOnHill, willBeOnHill);
     } else {
       renderScoreboard();
     }
@@ -2885,8 +2888,11 @@
         var target = getPlayer(keypadSelectedPlayerId);
         var wasLeading = target ? keypadPlayerIsLeading(target) : false;
         var willLead = target ? keypadScoreWouldLead(target, (target.balls || 0) + delta) : false;
+        var wasOnHill = target ? keypadPlayerIsOnHill(target) : false;
+        var willBeOnHill = target ? keypadScoreWouldBeOnHill(target, (target.balls || 0) + delta) : false;
         requestAdjustScore(keypadSelectedPlayerId, delta);
         if (target) speakKeypadLeadChange(target, wasLeading, willLead);
+        if (target) speakKeypadOnHillChange(target, wasOnHill, willBeOnHill);
       }
       return;
     }
@@ -4236,7 +4242,10 @@
     panel.className = "player-panel";
 
     var name = document.createElement("div");
-    name.className = "player-name";
+    name.className = "player-name keypad-select-trigger";
+    name.addEventListener("click", function () {
+      selectKeypadPlayer(player.id, null, true);
+    });
     buildPlayerNameLabel(name, player.name, false);
     // Swaps the plain full name for its short display (see
     // shortDisplayNameForPlayer) - only when buildPlayerNameLabel used
@@ -4273,7 +4282,10 @@
     var block = document.createElement("div");
     block.className = "stat-block";
     var value = document.createElement("div");
-    value.className = "stat-value";
+    value.className = "stat-value keypad-select-trigger";
+    value.addEventListener("click", function () {
+      selectKeypadPlayer(player.id, null, true);
+    });
     if (isSingleRackGame) {
       // Still needs a label here - without it this number reads as an
       // ambiguous score when it's actually the session win count.
@@ -4325,7 +4337,10 @@
     card.className = "member-card";
 
     var name = document.createElement("div");
-    name.className = "member-name";
+    name.className = "member-name keypad-select-trigger";
+    name.addEventListener("click", function () {
+      selectKeypadPlayer(player.id, null, true);
+    });
     buildPlayerNameLabel(name, player.name, false);
     name.appendChild(buildPlayerLinkIcon(player.name));
     card.appendChild(name);
@@ -4341,7 +4356,10 @@
     card.appendChild(buildBallControls(player, disabled, undoOnMinus));
 
     var value = document.createElement("div");
-    value.className = "stat-value small";
+    value.className = "stat-value small keypad-select-trigger";
+    value.addEventListener("click", function () {
+      selectKeypadPlayer(player.id, null, true);
+    });
     value.textContent = player.balls || 0;
     applyScoreFlash(value, player);
     card.appendChild(value);
@@ -24032,6 +24050,49 @@
   function speakKeypadLeadChange(player, wasLeading, willLead) {
     if (wasLeading || !willLead) return;
     speakKeypadText(T("keypad.speakNowLeader", { name: shortDisplayNameForPlayer(player) }));
+  }
+
+  // "On the hill" (one point from winning the current rack) only means
+  // anything for a running points total with a real target to fall
+  // short of - Straight Pool/15 Ball Rotation/Custom/Snooker (unit
+  // "points"), never the 8-Ball/9-Ball family's "target 1 rack" (every
+  // rack there IS the win, there's no point short of it to be "on the
+  // hill" at) - per explicit request ("at points games"). Returns the
+  // target to compare against, or 0 when it doesn't apply (Quick
+  // Counter has no target either).
+  function keypadOnHillTarget() {
+    if (quickCounterMode) return 0;
+    if (state.currentGame.unit !== "points") return 0;
+    var target = state.currentGame.target;
+    return target > 1 ? target : 0;
+  }
+
+  // Same shape as keypadScoreWouldLead - checks a hypothetical score
+  // (myScore) against the target, team-aware the same way (a Teams
+  // member is "on the hill" once their TEAM's total is one point from
+  // winning, same quantity adjustScore itself checks for the real win).
+  function keypadScoreWouldBeOnHill(player, myScore) {
+    var target = keypadOnHillTarget();
+    if (!target) return false;
+    if (!quickCounterMode && state.currentGame.mode === "teams" && player.teamId) {
+      var restOfMyTeam = sumTeamBalls(player.teamId) - (player.balls || 0);
+      return restOfMyTeam + myScore === target - 1;
+    }
+    return myScore === target - 1;
+  }
+
+  function keypadPlayerIsOnHill(player) {
+    return keypadScoreWouldBeOnHill(player, player.balls || 0);
+  }
+
+  // Same transition-only pattern as speakKeypadLeadChange (and for the
+  // same reason - landing exactly on target-1 should announce once,
+  // not re-announce on every later point while still one away, and a
+  // delta that jumps straight past target-1 to the win itself never
+  // fires this at all, which is correct - they already won).
+  function speakKeypadOnHillChange(player, wasOnHill, willBeOnHill) {
+    if (wasOnHill || !willBeOnHill) return;
+    speakKeypadText(T("keypad.speakOnHill", { name: shortDisplayNameForPlayer(player) }));
   }
 
   function setKeypadSpeechEnabled(on) {

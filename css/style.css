@@ -2469,6 +2469,16 @@ input[type="number"] {
   margin-top: 2px;
 }
 
+/* Name/score-number elements that switch keypad focus to this player on
+   click (and announce it, when Keypad Speech is on) - see
+   selectKeypadPlayer's call sites in buildIndividualPanel/buildMemberCard.
+   A plain cursor hint is enough; the existing keypad-selected highlight
+   (#app.focus-mode .player-panel.is-keypad-selected etc.) already shows
+   the result. */
+.keypad-select-trigger {
+  cursor: pointer;
+}
+
 /* "🔥 N in a row" - shown only for whichever player currently has an
    active run (see buildRunStreakBadge). Bold and warm-colored so it
    reads at table distance, matching the app's across-the-room sizing.
@@ -4816,10 +4826,10 @@ input[type="number"] {
    surrounding text instead of looking like a stray form control, with
    the spinner arrows dropped since there's no room for them at this
    size and the +/- aren't needed (the Games Rotations panel's own
-   #rotation-every already covers that). Just wide enough for 2 digits -
-   this is a "switch every N games" count, not expected to ever need 3. */
+   #rotation-every already covers that). Capped at 3 digits wide, per
+   explicit request. */
 .rotation-position-every-input {
-  width: 1.8em;
+  width: 3ch;
   font: inherit;
   font-weight: 700;
   text-align: center;
@@ -6650,10 +6660,10 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
 }
 
 /* Matches .rotation-position-every-input's treatment (inline, sized to
-   the surrounding text, no spinner arrows) - see that rule's own
-   comment for why. */
+   the surrounding text, no spinner arrows, capped at 3 digits wide) -
+   see that rule's own comment for why. */
 .racing-to-input {
-  width: 1.8em;
+  width: 3ch;
   font: inherit;
   font-weight: inherit;
   text-align: center;

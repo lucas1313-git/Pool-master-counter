@@ -1171,6 +1171,7 @@
   "keypad.speakPlayingScore": "Juega {{name}}, {{count}} puntos",
   "keypad.speakPlayingScoreLeader": "Juega {{name}}, {{count}} puntos, en cabeza",
   "keypad.speakNowLeader": "{{name}}, toma la delantera",
+  "keypad.speakOnHill": "{{name}} está en la cima",
   "players.dragToReorder": "Arrastra para reordenar a {{name}}",
   "keypad.voiceLabel": "Voz",
   "keypad.voiceSampleText": "Hola, esta es la voz que has elegido.",
