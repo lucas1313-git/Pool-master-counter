@@ -18828,22 +18828,17 @@
     if (period === "today") {
       return new Date(now.getFullYear(), now.getMonth(), now.getDate());
     }
+    // Rolling windows, not calendar Monday/1st-of-month - "This Week"/
+    // "This Month" (Player Stats, Leaderboard, All Players alike) mean
+    // the last 7/30 days INCLUDING today, regardless of what day of the
+    // week or month it currently is - so the window never shrinks to
+    // almost nothing right after a Monday or the 1st. The "-6"/"-29" (not
+    // "-7"/"-30") is what makes today count as one of the 7/30 days.
     if (period === "week") {
-      var day = now.getDay();
-      var diffToMonday = day === 0 ? 6 : day - 1;
-      return new Date(now.getFullYear(), now.getMonth(), now.getDate() - diffToMonday);
-    }
-    // A rolling 7-day window ending today, not "since Monday" - used
-    // only by the Leaderboard's "This Week" (see leaderboardPeriod),
-    // which needs the last full week of activity regardless of what day
-    // of the week it currently is. Calendar-week "week" above stays as
-    // it was for Player Stats/All Players, which this deliberately
-    // doesn't touch.
-    if (period === "last7") {
-      return new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
     }
     if (period === "month") {
-      return new Date(now.getFullYear(), now.getMonth(), 1);
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29);
     }
     if (period === "6month") {
       return new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
@@ -22490,13 +22485,14 @@
     var avgPerDay = total / active.length / Math.max(1, periodDays);
     // Project that per-day rate out to a full LEADERBOARD_MIN_GAMES_REFERENCE_DAYS
     // window - but capped at periodDays itself, never further than the
-    // period has actually run. Without the cap, a period that just
-    // started (periodDays small - "This Month" on the 1st, or any period
-    // on its first day) would extrapolate one day's activity ×7 into a
-    // bar nobody could realistically clear yet: a player who played a
-    // perfectly normal handful of games today could fail to qualify for
-    // "This Month" purely because the 1st of the month hasn't had 7 days
-    // to average over. Capping the projection at periodDays makes the
+    // period has actually run. "This Week"/"This Month" are now fixed-
+    // length rolling windows (always ~7/~30 elapsed days - see
+    // periodStartDate), so this cap is permanently a no-op for them; it
+    // still protects any period whose window can start small (a brand
+    // new period type added later, say). Without the cap, a period that
+    // just started would extrapolate one day's activity ×7 into a bar
+    // nobody could realistically clear yet. Capping the projection at
+    // periodDays makes the
     // bar "keep pace with the group's average so far" while the period
     // is still young, then smoothly becomes the full ×7 projection once
     // periodDays reaches it - identical output to before for any period
