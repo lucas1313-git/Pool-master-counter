@@ -1173,5 +1173,6 @@
   "keypad.speakNowLeader": "{{name}}，而家領先",
   "players.dragToReorder": "拖曳嚟調返 {{name}} 嘅次序",
   "keypad.voiceLabel": "聲線",
-  "keypad.voiceAutomatic": "自動"
+  "keypad.voiceAutomatic": "自動",
+  "keypad.voiceSampleText": "你好，呢個就係你揀嘅聲。"
 }

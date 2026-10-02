@@ -1173,5 +1173,6 @@
   "keypad.speakNowLeader": "{{name}}, toma la delantera",
   "players.dragToReorder": "Arrastra para reordenar a {{name}}",
   "keypad.voiceLabel": "Voz",
-  "keypad.voiceAutomatic": "Automática"
+  "keypad.voiceAutomatic": "Automática",
+  "keypad.voiceSampleText": "Hola, esta es la voz que has elegido."
 }

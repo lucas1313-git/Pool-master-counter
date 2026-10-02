@@ -4406,7 +4406,7 @@
   function renderNowPlayingBanner() {
     var type = GAME_TYPES[state.currentGame.gameType];
     nowPlayingBanner.innerHTML = "";
-    nowPlayingBanner.appendChild(document.createTextNode(T("scoreboard.nowPlayingBanner", { label: type.label })));
+    nowPlayingBanner.appendChild(document.createTextNode(T("scoreboard.nowPlayingBanner", { label: type.label }) + " — "));
     var note = document.createElement("span");
     note.className = "target-note";
     note.textContent = T("gameSetup.targetNote", { target: state.currentGame.target, unit: state.currentGame.unit });
@@ -4437,9 +4437,13 @@
     // Timed Tournament replaces the plain elapsed-time readout with its
     // own countdown in this exact spot while it's on, per request -
     // same #game-duration-live element either way, just a different
-    // source/direction for the number.
+    // source/direction for the number. Except when the Shot Counter is
+    // ALSO on: its own widget (see shotCounterActive) already shows a
+    // prominent running clock of its own, so a second "Time Left"
+    // readout up here is redundant clutter rather than useful
+    // information - left blank in that combination instead.
     if (timedTournamentActive()) {
-      el.textContent = T("timedTournament.remainingLive", { time: formatDuration(timedTournamentRemainingMs()) });
+      el.textContent = shotCounterActive() ? "" : T("timedTournament.remainingLive", { time: formatDuration(timedTournamentRemainingMs()) });
       return;
     }
     if (!state.currentGame.startedAt) return;
@@ -4730,7 +4734,12 @@
     if (!widget) return;
     var active = timedTournamentActive();
     var overlayOrAppHidden = isAnyOverlayOpen() || appRoot.classList.contains("hidden");
-    widget.classList.toggle("hidden", !(active && !overlayOrAppHidden));
+    // The Shot Counter widget already occupies the same "a timer is
+    // showing" spot on screen - with both features on at once, showing
+    // this one too is redundant clutter, not useful information, so it
+    // stays hidden (the countdown itself keeps running underneath,
+    // unaffected - this only ever hides the display, never below).
+    widget.classList.toggle("hidden", !(active && !overlayOrAppHidden) || shotCounterActive());
     if (!active) return;
 
     var remaining = timedTournamentRemainingMs();
@@ -23784,6 +23793,39 @@
     }
   }
 
+  // Plays a short sample in whichever voice was just picked in the
+  // dropdown (voiceURI, possibly "" for Automatic) - deliberately NOT
+  // gated on keypadSpeechEnabled like speakKeypadText is, so auditioning
+  // voices works even while the feature itself is still toggled off.
+  // Shares the same lang/pitch/rate as the real thing so what's heard
+  // here is exactly what a real announcement will sound like.
+  function previewKeypadVoice(voiceURI) {
+    if (!window.speechSynthesis) return;
+    try {
+      var lang = KEYPAD_SPEECH_LANG_BY_CODE[activeLanguageCode] || "en-GB";
+      var utter = new SpeechSynthesisUtterance(T("keypad.voiceSampleText"));
+      utter.lang = lang;
+      var voices = window.speechSynthesis.getVoices() || [];
+      var chosen = voiceURI
+        ? voices.filter(function (v) {
+            return v.voiceURI === voiceURI;
+          })
+        : [];
+      var voice = chosen.length ? chosen[0] : pickKeypadVoice(lang);
+      if (voice) utter.voice = voice;
+      utter.pitch = 0.9;
+      utter.rate = 0.92;
+      // Cancels any sample (or real announcement) still playing first,
+      // so switching through options quickly plays each new sample
+      // right away instead of queuing them all up one after another.
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utter);
+    } catch (e) {
+      // Speech synthesis isn't available/working on this device -
+      // silently skip, same as every other best-effort audio cue here.
+    }
+  }
+
   function setKeypadSpeechVoiceURI(uri) {
     keypadSpeechVoiceURI = uri || "";
     try {
@@ -23928,6 +23970,7 @@
     }
     keypadSpeechVoiceSelect.addEventListener("change", function () {
       setKeypadSpeechVoiceURI(keypadSpeechVoiceSelect.value);
+      previewKeypadVoice(keypadSpeechVoiceSelect.value);
     });
   }
 
