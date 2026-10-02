@@ -3980,7 +3980,22 @@
     plusBtn.setAttribute("aria-label", "Add point for " + player.name);
     plusBtn.disabled = disabled || networkBlocked;
     plusBtn.addEventListener("click", function () {
+      // Tapping a card's own + button is a direct tap, not a keypad
+      // action - normally silent (see speakKeypadText's gating
+      // elsewhere), except for this one case: scoring someone who
+      // ISN'T the currently keypad-selected player with a direct tap
+      // means whoever's watching the keypad/selected player's card
+      // might not be looking at this one, so there'd otherwise be no
+      // audible sign anything happened to them at all. "Won the game"
+      // for rack-unit games (8-Ball, 9-Ball, etc.) - a single + there
+      // already IS the win, there's no separate "added a point" to
+      // report - "added a point" everywhere else.
+      var shouldAnnounceDirectTap = !quickCounterMode && keypadSelectedPlayerId !== player.id;
       requestAdjustScore(player.id, 1);
+      if (shouldAnnounceDirectTap) {
+        var key = state.currentGame.unit === "rack" ? "keypad.speakWonGameDirectTap" : "keypad.speakAddedPointDirectTap";
+        speakKeypadText(T(key, { name: shortDisplayNameForPlayer(player) }));
+      }
     });
 
     controls.appendChild(minusBtn);
