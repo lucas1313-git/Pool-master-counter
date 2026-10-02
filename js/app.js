@@ -23752,32 +23752,62 @@
     keypadSpeechEnabled = false;
   }
 
-  // The user's own explicit voice pick (see keypad-speech-voice-select),
-  // stored by voiceURI - a SpeechSynthesisVoice's own stable identifier
-  // for exactly this purpose, unlike `name` which isn't guaranteed
-  // unique. "" (the default) means no explicit pick - fall back to
-  // pickKeypadVoice's automatic en-GB-preferring choice below.
-  var KEYPAD_SPEECH_VOICE_KEY = "poolMasterCounter.keypadSpeechVoiceURI.v1";
-  var keypadSpeechVoiceURI = "";
-  try {
-    keypadSpeechVoiceURI = localStorage.getItem(KEYPAD_SPEECH_VOICE_KEY) || "";
-  } catch (e) {
-    keypadSpeechVoiceURI = "";
-  }
-
-  // BCP-47 tags for SpeechSynthesisUtterance.lang, keyed by this app's
-  // own language codes (see activeLanguageCode) - picks a matching
-  // installed voice when the device has one; falls back to the system
-  // default voice gracefully otherwise (never an error, just an accent
-  // mismatch). English specifically requested as en-GB (British) rather
-  // than en-US, per feedback.
-  var KEYPAD_SPEECH_LANG_BY_CODE = {
-    english: "en-GB",
-    french: "fr-FR",
-    spanish: "es-ES",
-    cantonese: "zh-HK",
-    tagalog: "fil-PH"
+  // Curated down to exactly 3 choices, per feedback that a raw list of
+  // every installed system voice (100+ on some devices, most of them
+  // not meant for this) was overwhelming. Each preset picks the best-
+  // matching REAL voice by name at speak-time (nameHints, checked in
+  // order - the first one that matches anything installed wins) rather
+  // than storing a specific voiceURI, since the exact voice found is
+  // allowed to differ by device/browser as long as the character
+  // (British / hushed golf-whisper / bright female) comes through -
+  // falls back to pickKeypadVoice's plain lang-match when no hint
+  // matches anything installed. pitch/rate carry the rest of each
+  // preset's character even when the fallback voice is the same one
+  // for two different presets.
+  var KEYPAD_SPEECH_VOICE_KEY = "poolMasterCounter.keypadSpeechVoicePreset.v1";
+  var KEYPAD_SPEECH_PRESETS = {
+    british: {
+      lang: "en-GB",
+      pitch: 1.0,
+      rate: 1.0,
+      nameHints: ["daniel", "oliver", "arthur", "uk english male", "google uk english male"]
+    },
+    golf: {
+      lang: "en-GB",
+      pitch: 0.82,
+      rate: 0.8,
+      nameHints: ["whisper"]
+    },
+    cheerful: {
+      lang: "en-GB",
+      pitch: 1.2,
+      rate: 1.08,
+      nameHints: [
+        "kate",
+        "serena",
+        "fiona",
+        "moira",
+        "tessa",
+        "karen",
+        "samantha",
+        "victoria",
+        "zira",
+        "susan",
+        "allison",
+        "ava",
+        "female",
+        "uk english female",
+        "google uk english female"
+      ]
+    }
   };
+  var keypadSpeechVoicePreset = "british";
+  try {
+    var savedPreset = localStorage.getItem(KEYPAD_SPEECH_VOICE_KEY);
+    if (savedPreset && KEYPAD_SPEECH_PRESETS[savedPreset]) keypadSpeechVoicePreset = savedPreset;
+  } catch (e) {
+    keypadSpeechVoicePreset = "british";
+  }
 
   // getVoices() can legitimately return [] on the very first call (some
   // browsers, Chrome included, only populate the list asynchronously
@@ -23801,35 +23831,38 @@
     return sameFamily.length ? sameFamily[0] : null;
   }
 
-  // The explicit pick (if its voice is still actually installed/listed)
-  // wins outright, regardless of lang - a deliberate choice overrides
-  // the lang-matching heuristic entirely. Falls back to pickKeypadVoice
-  // when there's no pick, or the picked voice has vanished (e.g. a
-  // different device/browser that doesn't have it).
-  function pickKeypadVoiceForSpeech(lang) {
-    if (keypadSpeechVoiceURI && window.speechSynthesis && typeof window.speechSynthesis.getVoices === "function") {
-      var voices = window.speechSynthesis.getVoices() || [];
-      var chosen = voices.filter(function (v) {
-        return v.voiceURI === keypadSpeechVoiceURI;
-      });
-      if (chosen.length) return chosen[0];
+  // Tries each of the preset's nameHints in order against every
+  // installed voice's own name (case-insensitive substring) and
+  // returns the first match; null if nothing installed matches any
+  // hint, so the caller can fall back to pickKeypadVoice.
+  function pickPresetVoiceByName(preset) {
+    if (!window.speechSynthesis || typeof window.speechSynthesis.getVoices !== "function") return null;
+    var voices = window.speechSynthesis.getVoices() || [];
+    if (!voices.length) return null;
+    for (var i = 0; i < preset.nameHints.length; i++) {
+      var hint = preset.nameHints[i];
+      for (var j = 0; j < voices.length; j++) {
+        if (voices[j].name && voices[j].name.toLowerCase().indexOf(hint) !== -1) return voices[j];
+      }
     }
-    return pickKeypadVoice(lang);
+    return null;
+  }
+
+  function resolveKeypadVoice(presetId, lang) {
+    var preset = KEYPAD_SPEECH_PRESETS[presetId] || KEYPAD_SPEECH_PRESETS.british;
+    return pickPresetVoiceByName(preset) || pickKeypadVoice(lang);
   }
 
   function speakKeypadText(text) {
     if (!keypadSpeechEnabled || !window.speechSynthesis || !text) return;
     try {
+      var preset = KEYPAD_SPEECH_PRESETS[keypadSpeechVoicePreset] || KEYPAD_SPEECH_PRESETS.british;
       var utter = new SpeechSynthesisUtterance(text);
-      var lang = KEYPAD_SPEECH_LANG_BY_CODE[activeLanguageCode] || "en-GB";
-      utter.lang = lang;
-      var voice = pickKeypadVoiceForSpeech(lang);
+      utter.lang = preset.lang;
+      var voice = resolveKeypadVoice(keypadSpeechVoicePreset, preset.lang);
       if (voice) utter.voice = voice;
-      // Hushed and measured - a golf-broadcast register - rather than
-      // the brighter/quicker (1.15/1.05) tuning this started with: a
-      // touch lower and a touch slower than the flat 1.0/1.0 default.
-      utter.pitch = 0.9;
-      utter.rate = 0.92;
+      utter.pitch = preset.pitch;
+      utter.rate = preset.rate;
       window.speechSynthesis.speak(utter);
     } catch (e) {
       // Speech synthesis isn't available/working on this device -
@@ -23837,28 +23870,22 @@
     }
   }
 
-  // Plays a short sample in whichever voice was just picked in the
-  // dropdown (voiceURI, possibly "" for Automatic) - deliberately NOT
-  // gated on keypadSpeechEnabled like speakKeypadText is, so auditioning
-  // voices works even while the feature itself is still toggled off.
-  // Shares the same lang/pitch/rate as the real thing so what's heard
-  // here is exactly what a real announcement will sound like.
-  function previewKeypadVoice(voiceURI) {
+  // Plays a short sample in whichever preset was just picked in the
+  // dropdown - deliberately NOT gated on keypadSpeechEnabled like
+  // speakKeypadText is, so auditioning presets works even while the
+  // feature itself is still toggled off. Shares the same lang/pitch/
+  // rate as the real thing so what's heard here is exactly what a real
+  // announcement will sound like.
+  function previewKeypadVoice(presetId) {
     if (!window.speechSynthesis) return;
     try {
-      var lang = KEYPAD_SPEECH_LANG_BY_CODE[activeLanguageCode] || "en-GB";
+      var preset = KEYPAD_SPEECH_PRESETS[presetId] || KEYPAD_SPEECH_PRESETS.british;
       var utter = new SpeechSynthesisUtterance(T("keypad.voiceSampleText"));
-      utter.lang = lang;
-      var voices = window.speechSynthesis.getVoices() || [];
-      var chosen = voiceURI
-        ? voices.filter(function (v) {
-            return v.voiceURI === voiceURI;
-          })
-        : [];
-      var voice = chosen.length ? chosen[0] : pickKeypadVoice(lang);
+      utter.lang = preset.lang;
+      var voice = resolveKeypadVoice(presetId, preset.lang);
       if (voice) utter.voice = voice;
-      utter.pitch = 0.9;
-      utter.rate = 0.92;
+      utter.pitch = preset.pitch;
+      utter.rate = preset.rate;
       // Cancels any sample (or real announcement) still playing first,
       // so switching through options quickly plays each new sample
       // right away instead of queuing them all up one after another.
@@ -23870,44 +23897,13 @@
     }
   }
 
-  function setKeypadSpeechVoiceURI(uri) {
-    keypadSpeechVoiceURI = uri || "";
+  function setKeypadSpeechVoicePreset(presetId) {
+    keypadSpeechVoicePreset = KEYPAD_SPEECH_PRESETS[presetId] ? presetId : "british";
     try {
-      localStorage.setItem(KEYPAD_SPEECH_VOICE_KEY, keypadSpeechVoiceURI);
+      localStorage.setItem(KEYPAD_SPEECH_VOICE_KEY, keypadSpeechVoicePreset);
     } catch (e) {
       console.warn("Could not save keypad speech voice choice.", e);
     }
-  }
-
-  // Rebuilds the <select>'s own option list from whatever
-  // getVoices() currently has - called once at startup (best-effort,
-  // may still be empty then) and again every time the browser's own
-  // "voiceschanged" event fires, since several browsers (Chrome
-  // included) only populate the real list asynchronously after that.
-  // Preserves the saved pick across a rebuild as long as that voice is
-  // still actually in the new list.
-  function populateKeypadVoiceSelect() {
-    if (!window.speechSynthesis || typeof window.speechSynthesis.getVoices !== "function") return;
-    var voices = (window.speechSynthesis.getVoices() || []).slice();
-    if (!voices.length) return;
-    voices.sort(function (a, b) {
-      return a.name.localeCompare(b.name);
-    });
-    keypadSpeechVoiceSelect.innerHTML = "";
-    var autoOption = document.createElement("option");
-    autoOption.value = "";
-    autoOption.textContent = T("keypad.voiceAutomatic");
-    keypadSpeechVoiceSelect.appendChild(autoOption);
-    voices.forEach(function (v) {
-      var opt = document.createElement("option");
-      opt.value = v.voiceURI;
-      opt.textContent = v.name + " (" + v.lang + ")";
-      keypadSpeechVoiceSelect.appendChild(opt);
-    });
-    var stillInstalled = voices.some(function (v) {
-      return v.voiceURI === keypadSpeechVoiceURI;
-    });
-    keypadSpeechVoiceSelect.value = stillInstalled ? keypadSpeechVoiceURI : "";
   }
 
   // Speaks the same short name the on-screen card shows (see
@@ -23999,21 +23995,13 @@
 
     keypadSpeechVoiceLabel.classList.remove("hidden");
     keypadSpeechVoiceSelect.classList.remove("hidden");
-    // Not populated here yet - this block runs synchronously at
-    // script-eval time, before languagePromise has resolved, which
-    // would show the untranslated "keypad.voiceAutomatic" key instead
-    // of "Automatic" for that option. boot() (guaranteed to run after
-    // language loads - see its own call site) does the first real
-    // populate; voiceschanged below covers the list loading later too.
-    if (typeof window.speechSynthesis.addEventListener === "function") {
-      window.speechSynthesis.addEventListener("voiceschanged", populateKeypadVoiceSelect);
-    } else {
-      // Older/alternate implementations only expose this as a plain
-      // event-handler property, not addEventListener support.
-      window.speechSynthesis.onvoiceschanged = populateKeypadVoiceSelect;
-    }
+    // The 3 presets are plain static <option>s in index.html (with
+    // their own data-i18n, same as any other static UI text) - nothing
+    // to populate dynamically from getVoices() any more, just set the
+    // select to whatever was already saved/defaulted.
+    keypadSpeechVoiceSelect.value = keypadSpeechVoicePreset;
     keypadSpeechVoiceSelect.addEventListener("change", function () {
-      setKeypadSpeechVoiceURI(keypadSpeechVoiceSelect.value);
+      setKeypadSpeechVoicePreset(keypadSpeechVoiceSelect.value);
       previewKeypadVoice(keypadSpeechVoiceSelect.value);
     });
   }
@@ -29836,16 +29824,6 @@
 
   checkPendingWizardReopen();
   checkLoadSettingUrlParam();
-
-  // Keypad Speech's voice <option> text is built with T() directly
-  // (not data-i18n, which applyDomTranslations already re-applies once
-  // language loading finishes) - its own feature-detect block runs
-  // synchronously at script-eval time, well before languagePromise
-  // resolves, so a first pass there would always show the raw
-  // "keypad.voiceAutomatic" key instead of "Automatic". boot() only
-  // ever runs after that promise has resolved (see its own call site),
-  // so a (re)populate here is guaranteed to use the right language.
-  populateKeypadVoiceSelect();
   }
 
   // ---------------------------------------------------------------------
