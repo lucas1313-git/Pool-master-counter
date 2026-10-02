@@ -4061,20 +4061,24 @@
 
     var block = document.createElement("div");
     block.className = "stat-block";
-    var label = document.createElement("div");
-    label.className = "stat-label";
     var value = document.createElement("div");
     value.className = "stat-value";
     if (isSingleRackGame) {
+      // Still needs a label here - without it this number reads as an
+      // ambiguous score when it's actually the session win count.
+      var label = document.createElement("div");
+      label.className = "stat-label";
       label.textContent = T("scoreboard.tourneyWin");
+      block.appendChild(label);
       value.textContent = wins;
       if (wins >= effectiveRaceTarget(player.id)) value.appendChild(buildFlagSpan());
     } else {
-      label.textContent = T("scoreboard.gameTargetLabel", { game: GAME_TYPES[state.currentGame.gameType].label, target: state.currentGame.target });
+      // No "[game] · target [n]" label here anymore - the "Now Playing"
+      // banner above the scoreboard (renderNowPlayingBanner) already
+      // says both, so repeating it on every single card was redundant.
       value.textContent = player.balls || 0;
       applyScoreFlash(value, player);
     }
-    block.appendChild(label);
     block.appendChild(value);
 
     // The +/- buttons flank the score itself (minus/score/plus, one
@@ -4121,6 +4125,10 @@
     var mvpWins = state.teamMvpWins[player.id] || 0;
     card.appendChild(buildStatMini(T("scoreboard.tourneyWin"), mvpWins, mvpWins >= effectiveRaceTarget(player.teamId), "stat-mini-tourney"));
 
+    // Buttons sit above the score (between the name/badges and the
+    // number itself), same order as buildIndividualPanel's own card.
+    card.appendChild(buildBallControls(player, disabled, undoOnMinus));
+
     var value = document.createElement("div");
     value.className = "stat-value small";
     value.textContent = player.balls || 0;
@@ -4129,8 +4137,6 @@
 
     var runBadge = buildRunStreakBadge(player);
     if (runBadge) card.appendChild(runBadge);
-
-    card.appendChild(buildBallControls(player, disabled, undoOnMinus));
     markAsKeypadTarget(card, player);
 
     return card;
@@ -4210,19 +4216,22 @@
 
     var block = document.createElement("div");
     block.className = "stat-block";
-    var label = document.createElement("div");
-    label.className = "stat-label";
     var value = document.createElement("div");
     value.className = "stat-value";
     if (isSingleRackGame) {
+      // Still needs a label here - without it this number reads as an
+      // ambiguous score when it's actually the session win count.
+      var label = document.createElement("div");
+      label.className = "stat-label";
       label.textContent = T("scoreboard.pairedSessionWinScore");
+      block.appendChild(label);
       value.textContent = wins;
       if (wins >= effectiveRaceTarget(teamId)) value.appendChild(buildFlagSpan());
     } else {
-      label.textContent = T("scoreboard.gameTargetLabel", { game: GAME_TYPES[state.currentGame.gameType].label, target: state.currentGame.target });
+      // No "[game] · target [n]" label here anymore - the "Now Playing"
+      // banner above the scoreboard already says both.
       value.textContent = sumTeamBalls(teamId);
     }
-    block.appendChild(label);
     block.appendChild(value);
     panel.appendChild(block);
 
