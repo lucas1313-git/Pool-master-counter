@@ -22172,7 +22172,21 @@
       return sum + n;
     }, 0);
     var avgPerDay = total / active.length / Math.max(1, periodDays);
-    return Math.max(LEADERBOARD_PERIOD_MIN_GAMES_FLOOR, Math.round(avgPerDay * LEADERBOARD_MIN_GAMES_REFERENCE_DAYS));
+    // Project that per-day rate out to a full LEADERBOARD_MIN_GAMES_REFERENCE_DAYS
+    // window - but capped at periodDays itself, never further than the
+    // period has actually run. Without the cap, a period that just
+    // started (periodDays small - "This Month" on the 1st, or any period
+    // on its first day) would extrapolate one day's activity ×7 into a
+    // bar nobody could realistically clear yet: a player who played a
+    // perfectly normal handful of games today could fail to qualify for
+    // "This Month" purely because the 1st of the month hasn't had 7 days
+    // to average over. Capping the projection at periodDays makes the
+    // bar "keep pace with the group's average so far" while the period
+    // is still young, then smoothly becomes the full ×7 projection once
+    // periodDays reaches it - identical output to before for any period
+    // that's been running a week or more.
+    var projectionDays = Math.min(LEADERBOARD_MIN_GAMES_REFERENCE_DAYS, Math.max(1, periodDays));
+    return Math.max(LEADERBOARD_PERIOD_MIN_GAMES_FLOOR, Math.round(avgPerDay * projectionDays));
   }
 
   // Whole days elapsed so far within the given period (>= 1, so "today
