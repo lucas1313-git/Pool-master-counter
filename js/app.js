@@ -2690,7 +2690,12 @@
       cancelKeypadEntry();
     }
     if (!isNaN(amount) && amount !== 0 && targetId) {
-      requestAdjustScore(targetId, amount * sign);
+      var target = getPlayer(targetId);
+      var delta = amount * sign;
+      var wasLeading = target ? keypadPlayerIsLeading(target) : false;
+      var willLead = target ? keypadScoreWouldLead(target, (target.balls || 0) + delta) : false;
+      requestAdjustScore(targetId, delta);
+      if (target) speakKeypadLeadChange(target, wasLeading, willLead);
     } else {
       renderScoreboard();
     }
@@ -2864,7 +2869,12 @@
       if (e.key === "-" && isSingleRackGame) {
         requestUndoLastWin(keypadSelectedPlayerId);
       } else {
-        requestAdjustScore(keypadSelectedPlayerId, e.key === "+" ? 1 : -1);
+        var delta = e.key === "+" ? 1 : -1;
+        var target = getPlayer(keypadSelectedPlayerId);
+        var wasLeading = target ? keypadPlayerIsLeading(target) : false;
+        var willLead = target ? keypadScoreWouldLead(target, (target.balls || 0) + delta) : false;
+        requestAdjustScore(keypadSelectedPlayerId, delta);
+        if (target) speakKeypadLeadChange(target, wasLeading, willLead);
       }
       return;
     }
@@ -23581,11 +23591,54 @@
   // needed), so a player can hear their running score the moment
   // someone switches away from them without that total being spoken
   // after every single point.
+  // True if player, AT the given score (myScore - either their actual
+  // current balls, or a hypothetical one, see keypadScoreWouldLead
+  // below), is STRICTLY ahead of every relevant competitor right now:
+  // the other team's total in Teams mode, every other active player's
+  // own score in Individual mode. A tie (or being the only one
+  // playing, with nobody to have taken the lead FROM) never counts as
+  // "leading".
+  function keypadScoreWouldLead(player, myScore) {
+    if (!quickCounterMode && state.currentGame.mode === "teams" && player.teamId) {
+      var otherTeamId = player.teamId === "A" ? "B" : "A";
+      if (!teamMembersLive(otherTeamId).length) return false;
+      var restOfMyTeam = sumTeamBalls(player.teamId) - (player.balls || 0);
+      return restOfMyTeam + myScore > sumTeamBalls(otherTeamId);
+    }
+    var others = activePlayers().filter(function (p) {
+      return p.id !== player.id;
+    });
+    if (!others.length) return false;
+    return others.every(function (p) {
+      return myScore > (p.balls || 0);
+    });
+  }
+
+  function keypadPlayerIsLeading(player) {
+    return keypadScoreWouldLead(player, player.balls || 0);
+  }
+
   function speakKeypadPlayerSelected(player, previousPlayer) {
     if (previousPlayer) {
       speakKeypadText(T("keypad.speakPreviousTotal", { name: shortDisplayNameForPlayer(previousPlayer), count: previousPlayer.balls || 0 }));
     }
-    speakKeypadText(T("keypad.speakPlaying", { name: shortDisplayNameForPlayer(player) }));
+    var vars = { name: shortDisplayNameForPlayer(player), count: player.balls || 0 };
+    speakKeypadText(T(keypadPlayerIsLeading(player) ? "keypad.speakPlayingScoreLeader" : "keypad.speakPlayingScore", vars));
+  }
+
+  // Announced right after a keypad +/- (or a typed 15 Ball Rotation
+  // entry) actually lands, but only on the TRANSITION into the lead -
+  // not on every point scored while already ahead, which would be as
+  // chatty as the per-point announcements this feature deliberately
+  // dropped. wasLeading/willLead are computed from state BEFORE the
+  // real mutation (requestAdjustScore) runs, using the same
+  // keypadScoreWouldLead math against the predicted post-delta score,
+  // so a game-ending win's own reset logic (creditWin) racing the
+  // real mutation can't confuse this - it never reads state back out
+  // after the fact.
+  function speakKeypadLeadChange(player, wasLeading, willLead) {
+    if (wasLeading || !willLead) return;
+    speakKeypadText(T("keypad.speakNowLeader", { name: shortDisplayNameForPlayer(player) }));
   }
 
   function setKeypadSpeechEnabled(on) {

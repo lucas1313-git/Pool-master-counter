@@ -1166,7 +1166,9 @@
   "keypad.speechToggleOn": "🔊 讀出鍵盤操作",
   "keypad.speechToggleOff": "🔊 讀緊緊…（撳一下停止）",
   "keypad.speechHelpAria": "讀出鍵盤操作係乜嘢嚟？",
-  "keypad.speechHelpText": "🔊 開咗之後，每次你用鍵盤（1-9數字鍵、Enter）轉球員，個app都會出聲讀出嚟——唔使望住個螢幕都打得到。用 + 或 - 計分，淨係會照舊「嗶」一聲。\n\n轉去新球員嗰陣：「[上一個球員]，總共[數目]分」（如果之前有揀咗人嘅話），跟住「[新球員] 上場」。\n\n呢個淨係讀鍵盤嘅操作——直接撳球員卡或者佢嘅+/-掣，或者用語音指令，都唔會出聲。",
-  "keypad.speakPlaying": "{{name}} 上場",
-  "keypad.speakPreviousTotal": "{{name}}，總共{{count}}分"
+  "keypad.speechHelpText": "🔊 開咗之後，每次你用鍵盤（1-9數字鍵、Enter）轉球員，個app都會出聲讀出嚟；如果 + 或 - 令某人變成領先，都會讀——唔使望住個螢幕都打得到。其他計分情況淨係會照舊「嗶」一聲。\n\n轉去新球員嗰陣：「[上一個球員]，總共[數目]分」（如果之前有揀咗人嘅話），跟住「[新球員] 上場，[數目]分」——如果嗰個球員已經領先，仲會加多句「，領先」。\n\n如果有一分令某人變成領先：「[名]，而家領先」——淨係呢個轉變先讀，唔係一直領先嗰陣每一分都讀。\n\n呢個淨係讀鍵盤嘅操作——直接撳球員卡或者佢嘅+/-掣，或者用語音指令，都唔會出聲。",
+  "keypad.speakPreviousTotal": "{{name}}，總共{{count}}分",
+  "keypad.speakPlayingScore": "{{name}} 上場，{{count}}分",
+  "keypad.speakPlayingScoreLeader": "{{name}} 上場，{{count}}分，領先",
+  "keypad.speakNowLeader": "{{name}}，而家領先"
 }
