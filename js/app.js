@@ -23650,77 +23650,29 @@
     keypadSpeechEnabled = false;
   }
 
-  // Curated down to exactly 3 choices, per feedback that a raw list of
-  // every installed system voice (100+ on some devices, most of them
-  // not meant for this) was overwhelming. Each preset picks the best-
-  // matching REAL voice by name at speak-time (nameHints, checked in
-  // order - the first one that matches anything installed wins) rather
-  // than storing a specific voiceURI, since the exact voice found is
-  // allowed to differ by device/browser as long as the character
-  // (British / calm golf announcer / bright female) comes through -
-  // falls back to pickKeypadVoice's plain lang-match when no hint
-  // matches anything installed. pitch/rate carry the rest of each
-  // preset's character even when the fallback voice is the same one
-  // for two different presets.
-  //
-  // The first several hints in each list name specific "Enhanced"/
-  // "Premium" quality system voices (confirmed installed and good-
-  // sounding on a real device, not guessed) - matching is a plain
-  // case-insensitive substring check against the voice's own name, so
-  // a hint like "ava" matches "Ava", "Ava (Enhanced)", or "Ava
-  // (Premium)" equally, whichever quality tier is actually installed.
-  // The older names after them are what's left over from before these
-  // were confirmed, kept as fallbacks for a device that doesn't have
-  // any of the preferred ones installed.
+  // Rather than guessing which named voices might exist on a given
+  // device, this lists exactly the ones confirmed good (checked in
+  // System Settings > Accessibility > Spoken Content, "Enhanced"/
+  // "Premium" quality) and only ever offers whichever of THESE are
+  // actually installed, detected live via getVoices() - explicit
+  // request: "show only the ones in the list I gave you if available,
+  // if none use siri". SIRI_FALLBACK_ID is the dropdown's only option
+  // when none of these are installed at all, resolving to the best
+  // plain system default instead (see resolveKeypadVoice).
   var KEYPAD_SPEECH_VOICE_KEY = "poolMasterCounter.keypadSpeechVoicePreset.v1";
-  var KEYPAD_SPEECH_PRESETS = {
-    british: {
-      lang: "en-GB",
-      pitch: 1.0,
-      rate: 1.0,
-      nameHints: ["reed", "nathan", "evan", "daniel", "oliver", "arthur", "uk english male", "google uk english male"]
-    },
-    golf: {
-      lang: "en-GB",
-      pitch: 0.82,
-      rate: 0.8,
-      nameHints: ["rocko", "reed", "whisper"]
-    },
-    cheerful: {
-      lang: "en-GB",
-      pitch: 1.2,
-      rate: 1.08,
-      nameHints: [
-        "ava",
-        "allison",
-        "samantha",
-        "zoe",
-        "serena",
-        "kate",
-        "fiona",
-        "moira",
-        "tessa",
-        "karen",
-        "victoria",
-        "zira",
-        "susan",
-        "female",
-        "uk english female",
-        "google uk english female"
-      ]
-    }
-  };
-  var keypadSpeechVoicePreset = "british";
+  var KEYPAD_SPEECH_VOICE_NAMES = ["ava", "allison", "reed", "rocko", "evan", "nathan", "samantha", "zoe", "serena"];
+  var KEYPAD_SPEECH_SIRI_FALLBACK_ID = "siri";
+  var keypadSpeechVoicePreset = KEYPAD_SPEECH_SIRI_FALLBACK_ID;
   try {
     var savedPreset = localStorage.getItem(KEYPAD_SPEECH_VOICE_KEY);
-    // "britishMale"/"britishFemale" briefly existed as a split-out
-    // version of this preset - map an already-saved choice back to the
-    // single "british" preset instead of silently dropping to the
-    // default.
-    if (savedPreset === "britishMale" || savedPreset === "britishFemale") savedPreset = "british";
-    if (savedPreset && KEYPAD_SPEECH_PRESETS[savedPreset]) keypadSpeechVoicePreset = savedPreset;
+    // "british"/"golf"/"cheerful"/"britishMale"/"britishFemale" are
+    // leftovers from the theme-preset system this replaced - none of
+    // them are valid ids any more, so they just fall through to the
+    // siri fallback like any other now-invalid saved value, same as
+    // never having a saved choice at all.
+    if (savedPreset) keypadSpeechVoicePreset = savedPreset;
   } catch (e) {
-    keypadSpeechVoicePreset = "british";
+    keypadSpeechVoicePreset = KEYPAD_SPEECH_SIRI_FALLBACK_ID;
   }
 
   // getVoices() can legitimately return [] on the very first call (some
@@ -23747,10 +23699,10 @@
 
   // Many of these same base names also ship as multiple quality tiers
   // on the same device (e.g. macOS's plain "Ava", "Ava (Enhanced)", and
-  // "Ava (Premium)" all for en-US) - a hint matching the base name
-  // would otherwise happily grab whichever tier enumerates first,
-  // which is often the lowest-quality plain/compact one. Prefers
-  // Premium, then Enhanced, over a plain match within a given list.
+  // "Ava (Premium)" all for en-US) - matching the base name alone
+  // would happily grab whichever tier enumerates first, which is often
+  // the lowest-quality plain/compact one. Prefers Premium, then
+  // Enhanced, over a plain match within a given list.
   function preferHigherQualityTier(list) {
     if (list.length <= 1) return list[0] || null;
     var premium = list.filter(function (v) {
@@ -23764,60 +23716,73 @@
     return list[0];
   }
 
-  // Tries each of the preset's nameHints in order against every
-  // installed voice's own name (case-insensitive substring); null if
-  // nothing installed matches any hint, so the caller can fall back to
-  // pickKeypadVoice. Several platforms ship ONE persona name across
-  // many languages (e.g. macOS's "Reed (English (United States))" vs
-  // "Reed (English (United Kingdom))" vs "Reed (German (Germany))") -
-  // matching by name alone would happily grab whichever locale enumerates
-  // first, silently swapping in the wrong accent. Among every voice
-  // that matches a given hint, this prefers one whose own lang is an
-  // exact match for the preset's requested lang, then same-language-
+  // Finds the best installed match for one specific name (case-
+  // insensitive substring against the voice's own name). Several
+  // platforms ship ONE persona name across many languages (e.g.
+  // macOS's "Reed (English (United States))" vs "Reed (English
+  // (United Kingdom))" vs "Reed (German (Germany))") - matching by
+  // name alone would happily grab whichever locale enumerates first,
+  // silently swapping in the wrong accent. Prefers a voice whose own
+  // lang is an exact match for preferredLang, then same-language-
   // family, before just taking the first name match as a last resort -
   // and within whichever of those groups actually gets used, prefers
   // the highest quality tier installed (see preferHigherQualityTier).
-  function pickPresetVoiceByName(preset) {
+  function findVoiceByName(name, preferredLang) {
     if (!window.speechSynthesis || typeof window.speechSynthesis.getVoices !== "function") return null;
     var voices = window.speechSynthesis.getVoices() || [];
     if (!voices.length) return null;
-    var family = preset.lang ? preset.lang.split("-")[0] : null;
-    for (var i = 0; i < preset.nameHints.length; i++) {
-      var hint = preset.nameHints[i];
-      var matches = voices.filter(function (v) {
-        return v.name && v.name.toLowerCase().indexOf(hint) !== -1;
-      });
-      if (!matches.length) continue;
-      var exactLang = matches.filter(function (v) {
-        return v.lang === preset.lang;
-      });
-      if (exactLang.length) return preferHigherQualityTier(exactLang);
-      var sameFamily = family
-        ? matches.filter(function (v) {
-            return v.lang && v.lang.indexOf(family) === 0;
-          })
-        : [];
-      if (sameFamily.length) return preferHigherQualityTier(sameFamily);
-      return preferHigherQualityTier(matches);
-    }
-    return null;
+    var matches = voices.filter(function (v) {
+      return v.name && v.name.toLowerCase().indexOf(name) !== -1;
+    });
+    if (!matches.length) return null;
+    var exactLang = matches.filter(function (v) {
+      return v.lang === preferredLang;
+    });
+    if (exactLang.length) return preferHigherQualityTier(exactLang);
+    var family = preferredLang ? preferredLang.split("-")[0] : null;
+    var sameFamily = family
+      ? matches.filter(function (v) {
+          return v.lang && v.lang.indexOf(family) === 0;
+        })
+      : [];
+    if (sameFamily.length) return preferHigherQualityTier(sameFamily);
+    return preferHigherQualityTier(matches);
   }
 
-  function resolveKeypadVoice(presetId, lang) {
-    var preset = KEYPAD_SPEECH_PRESETS[presetId] || KEYPAD_SPEECH_PRESETS.british;
-    return pickPresetVoiceByName(preset) || pickKeypadVoice(lang);
+  // Which of KEYPAD_SPEECH_VOICE_NAMES are actually installed on this
+  // device right now, each already resolved to its best installed
+  // voice object - the dropdown (see populateKeypadVoiceSelect) is
+  // built from exactly this list and nothing else.
+  function detectAvailableKeypadVoices() {
+    var found = [];
+    KEYPAD_SPEECH_VOICE_NAMES.forEach(function (name) {
+      var voice = findVoiceByName(name, "en-GB");
+      if (voice) found.push({ id: name, voice: voice });
+    });
+    return found;
+  }
+
+  // presetId is either one of KEYPAD_SPEECH_VOICE_NAMES, or the siri-
+  // fallback id (or any no-longer-valid saved value) - either way,
+  // anything that doesn't resolve to one of the named voices falls
+  // through to pickKeypadVoice's plain best-available-default lookup.
+  function resolveKeypadVoice(presetId) {
+    if (presetId && KEYPAD_SPEECH_VOICE_NAMES.indexOf(presetId) !== -1) {
+      var named = findVoiceByName(presetId, "en-GB");
+      if (named) return named;
+    }
+    return pickKeypadVoice("en-GB");
   }
 
   function speakKeypadText(text) {
     if (!keypadSpeechEnabled || !window.speechSynthesis || !text) return;
     try {
-      var preset = KEYPAD_SPEECH_PRESETS[keypadSpeechVoicePreset] || KEYPAD_SPEECH_PRESETS.british;
       var utter = new SpeechSynthesisUtterance(text);
-      utter.lang = preset.lang;
-      var voice = resolveKeypadVoice(keypadSpeechVoicePreset, preset.lang);
+      utter.lang = "en-GB";
+      var voice = resolveKeypadVoice(keypadSpeechVoicePreset);
       if (voice) utter.voice = voice;
-      utter.pitch = preset.pitch;
-      utter.rate = preset.rate;
+      utter.pitch = 1.0;
+      utter.rate = 1.0;
       window.speechSynthesis.speak(utter);
     } catch (e) {
       // Speech synthesis isn't available/working on this device -
@@ -23825,22 +23790,19 @@
     }
   }
 
-  // Plays a short sample in whichever preset was just picked in the
+  // Plays a short sample in whichever voice was just picked in the
   // dropdown - deliberately NOT gated on keypadSpeechEnabled like
-  // speakKeypadText is, so auditioning presets works even while the
-  // feature itself is still toggled off. Shares the same lang/pitch/
-  // rate as the real thing so what's heard here is exactly what a real
-  // announcement will sound like.
+  // speakKeypadText is, so auditioning a choice works even while the
+  // feature itself is still toggled off.
   function previewKeypadVoice(presetId) {
     if (!window.speechSynthesis) return;
     try {
-      var preset = KEYPAD_SPEECH_PRESETS[presetId] || KEYPAD_SPEECH_PRESETS.british;
       var utter = new SpeechSynthesisUtterance(T("keypad.voiceSampleText"));
-      utter.lang = preset.lang;
-      var voice = resolveKeypadVoice(presetId, preset.lang);
+      utter.lang = "en-GB";
+      var voice = resolveKeypadVoice(presetId);
       if (voice) utter.voice = voice;
-      utter.pitch = preset.pitch;
-      utter.rate = preset.rate;
+      utter.pitch = 1.0;
+      utter.rate = 1.0;
       // Cancels any sample (or real announcement) still playing first,
       // so switching through options quickly plays each new sample
       // right away instead of queuing them all up one after another.
@@ -23853,12 +23815,56 @@
   }
 
   function setKeypadSpeechVoicePreset(presetId) {
-    keypadSpeechVoicePreset = KEYPAD_SPEECH_PRESETS[presetId] ? presetId : "british";
+    keypadSpeechVoicePreset = presetId || KEYPAD_SPEECH_SIRI_FALLBACK_ID;
     try {
       localStorage.setItem(KEYPAD_SPEECH_VOICE_KEY, keypadSpeechVoicePreset);
     } catch (e) {
       console.warn("Could not save keypad speech voice choice.", e);
     }
+  }
+
+  // Rebuilds the dropdown from exactly what's detected installed right
+  // now (see detectAvailableKeypadVoices) - a single "Siri" fallback
+  // option when none of the named voices are found at all. Re-run
+  // whenever "voiceschanged" fires (see the wiring below), since the
+  // very first getVoices() call can legitimately come back empty
+  // before the browser's voice list has actually loaded. Proper names
+  // aren't translated (same as the game type dropdown's own labels) -
+  // just capitalized for display.
+  function populateKeypadVoiceSelect() {
+    var available = detectAvailableKeypadVoices();
+    var validIds = available.map(function (entry) {
+      return entry.id;
+    });
+    if (!validIds.length) validIds.push(KEYPAD_SPEECH_SIRI_FALLBACK_ID);
+
+    keypadSpeechVoiceSelect.innerHTML = "";
+    if (available.length) {
+      available.forEach(function (entry) {
+        var opt = document.createElement("option");
+        opt.value = entry.id;
+        opt.textContent = entry.id.charAt(0).toUpperCase() + entry.id.slice(1);
+        keypadSpeechVoiceSelect.appendChild(opt);
+      });
+    } else {
+      var fallbackOpt = document.createElement("option");
+      fallbackOpt.value = KEYPAD_SPEECH_SIRI_FALLBACK_ID;
+      fallbackOpt.textContent = T("keypad.voicePresetSiriFallback");
+      keypadSpeechVoiceSelect.appendChild(fallbackOpt);
+    }
+
+    // Only correct (and persist) an invalid saved choice once the
+    // voice list has actually finished loading - getVoices() can
+    // legitimately still be empty on this very first call, and
+    // "correcting" a perfectly valid saved choice during that brief
+    // window would permanently overwrite it in storage before the
+    // real list ever gets a chance to confirm it's still there. Until
+    // then, just show it as selected without persisting anything.
+    var voicesLoaded = window.speechSynthesis.getVoices().length > 0;
+    if (voicesLoaded && validIds.indexOf(keypadSpeechVoicePreset) === -1) {
+      setKeypadSpeechVoicePreset(validIds[0]);
+    }
+    keypadSpeechVoiceSelect.value = validIds.indexOf(keypadSpeechVoicePreset) !== -1 ? keypadSpeechVoicePreset : validIds[0];
   }
 
   // Speaks the same short name the on-screen card shows (see
@@ -23993,11 +23999,16 @@
 
     keypadSpeechVoiceLabel.classList.remove("hidden");
     keypadSpeechVoiceSelect.classList.remove("hidden");
-    // The 3 presets are plain static <option>s in index.html (with
-    // their own data-i18n, same as any other static UI text) - nothing
-    // to populate dynamically from getVoices() any more, just set the
-    // select to whatever was already saved/defaulted.
-    keypadSpeechVoiceSelect.value = keypadSpeechVoicePreset;
+    populateKeypadVoiceSelect();
+    // getVoices() can come back empty on this very first call - rerun
+    // once the browser actually finishes loading its voice list (see
+    // populateKeypadVoiceSelect's own comment). Harmless to leave
+    // attached indefinitely - a later "voiceschanged" (some browsers
+    // fire it more than once) just rebuilds the same dropdown, keeping
+    // whatever choice is still valid.
+    if (window.speechSynthesis.getVoices().length === 0) {
+      window.speechSynthesis.addEventListener("voiceschanged", populateKeypadVoiceSelect);
+    }
     keypadSpeechVoiceSelect.addEventListener("change", function () {
       setKeypadSpeechVoicePreset(keypadSpeechVoiceSelect.value);
       previewKeypadVoice(keypadSpeechVoiceSelect.value);
