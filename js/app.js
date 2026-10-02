@@ -23557,20 +23557,51 @@
   // own language codes (see activeLanguageCode) - picks a matching
   // installed voice when the device has one; falls back to the system
   // default voice gracefully otherwise (never an error, just an accent
-  // mismatch).
+  // mismatch). English specifically requested as en-GB (British) rather
+  // than en-US, per feedback.
   var KEYPAD_SPEECH_LANG_BY_CODE = {
-    english: "en-US",
+    english: "en-GB",
     french: "fr-FR",
     spanish: "es-ES",
     cantonese: "zh-HK",
     tagalog: "fil-PH"
   };
 
+  // getVoices() can legitimately return [] on the very first call (some
+  // browsers, Chrome included, only populate the list asynchronously
+  // after a "voiceschanged" event fires post-load) - this just quietly
+  // falls back to the browser's own default voice for utter.lang that
+  // call, same as if no matching voice were installed at all. Prefers
+  // an exact lang match (e.g. "en-GB") over a same-language-family one
+  // (any "en-*") so a British voice isn't silently swapped for an
+  // American one just because it loaded first in the list.
+  function pickKeypadVoice(lang) {
+    if (!window.speechSynthesis || typeof window.speechSynthesis.getVoices !== "function") return null;
+    var voices = window.speechSynthesis.getVoices() || [];
+    var exact = voices.filter(function (v) {
+      return v.lang === lang;
+    });
+    if (exact.length) return exact[0];
+    var family = lang.split("-")[0];
+    var sameFamily = voices.filter(function (v) {
+      return v.lang && v.lang.indexOf(family) === 0;
+    });
+    return sameFamily.length ? sameFamily[0] : null;
+  }
+
   function speakKeypadText(text) {
     if (!keypadSpeechEnabled || !window.speechSynthesis || !text) return;
     try {
       var utter = new SpeechSynthesisUtterance(text);
-      utter.lang = KEYPAD_SPEECH_LANG_BY_CODE[activeLanguageCode] || "en-US";
+      var lang = KEYPAD_SPEECH_LANG_BY_CODE[activeLanguageCode] || "en-GB";
+      utter.lang = lang;
+      var voice = pickKeypadVoice(lang);
+      if (voice) utter.voice = voice;
+      // A touch brighter/quicker than the flat 1.0/1.0 default reads as
+      // more cheerful/upbeat - per feedback. There's no single API knob
+      // for "sound cheerful", so this is the closest controllable lever.
+      utter.pitch = 1.15;
+      utter.rate = 1.05;
       window.speechSynthesis.speak(utter);
     } catch (e) {
       // Speech synthesis isn't available/working on this device -
