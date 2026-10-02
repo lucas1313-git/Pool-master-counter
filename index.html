@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20260921g">
+<link rel="stylesheet" href="css/style.css?v=20261002c">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -65,6 +65,7 @@
       </div>
     </div>
     <div class="header-nav-row">
+      <button type="button" id="btn-quick-game" class="btn btn-primary all-players-nav-btn quick-game-btn" data-i18n="header.quickGame">⚡ Quick Game</button>
       <button type="button" id="btn-test-onboarding" class="btn btn-ghost all-players-nav-btn" data-i18n="header.welcomeNewPlayer">👋 Welcome New Player</button>
       <button type="button" id="btn-open-wizard" class="btn btn-primary all-players-nav-btn" data-i18n="header.startWizard">🧙 Start Wizard</button>
       <button type="button" id="btn-open-tournament" class="btn btn-ghost all-players-nav-btn" data-i18n="header.tournament">🏆 Tournament</button>
@@ -295,7 +296,23 @@
   </section>
 
   <section id="scoreboard-panel">
-    <button type="button" id="btn-toggle-focus" class="btn btn-primary focus-toggle-btn" data-i18n="scoreboard.focusMode">Focus Mode</button>
+    <div class="row voice-toggle-row">
+      <button type="button" id="btn-toggle-focus" class="btn btn-primary focus-toggle-btn" data-i18n="scoreboard.focusMode">Focus Mode</button>
+      <span class="voice-control-group">
+        <button type="button" id="btn-toggle-keypad-speech" class="btn btn-ghost voice-toggle-btn hidden" data-i18n="keypad.speechToggleOn">🔊 Speak Keypad</button>
+        <button type="button" id="btn-keypad-speech-help" class="format-info-btn hidden" data-i18n-aria-label="keypad.speechHelpAria" aria-label="What does speak keypad do?">❓</button>
+      </span>
+      <span class="voice-control-group">
+        <label for="keypad-speech-voice-select" id="keypad-speech-voice-label" class="hidden" data-i18n="keypad.voiceLabel">Voice</label>
+        <select id="keypad-speech-voice-select" class="hidden" data-i18n-aria-label="keypad.voiceLabel" aria-label="Voice">
+          <option value="britishMale" data-i18n="keypad.voicePresetBritishMale">🇬🇧 British (Male)</option>
+          <option value="britishFemale" data-i18n="keypad.voicePresetBritishFemale">🇬🇧 British (Female)</option>
+          <option value="golf" data-i18n="keypad.voicePresetGolf">⛳ Golf (Calm)</option>
+          <option value="cheerful" data-i18n="keypad.voicePresetCheerful">😊 Cheerful (Female)</option>
+        </select>
+      </span>
+    </div>
+    <button type="button" id="btn-finish-snooker" class="btn btn-primary finish-snooker-btn hidden" data-i18n="snooker.finishFrame">🏁 Finish Snooker Frame</button>
     <label class="no-stats-row-inline">
       <input type="checkbox" id="no-stats-checkbox">
       <span data-i18n="scoreboard.noStatsMode">Do not record games statistics and players data</span>
@@ -321,6 +338,9 @@
     </div>
     <div id="shot-counter-widget" class="shot-counter-widget hidden">
       <span id="shot-counter-time">0:00</span>
+      <button type="button" id="shot-counter-reset" class="shot-counter-reset-btn" data-i18n-aria-label="gameSetup.shotCounterResetAria" aria-label="Reset the shot timer to 0:00">🔄</button>
+      <button type="button" id="shot-counter-kill" class="shot-counter-kill-btn" data-i18n-aria-label="gameSetup.shotCounterKillAria" aria-label="Turn off the shot timer completely">⏹</button>
+      <button type="button" id="shot-counter-hide" class="shot-counter-hide-btn" data-i18n-aria-label="gameSetup.shotCounterHideAria" aria-label="Hide the shot timer">✕</button>
     </div>
     <button type="button" id="shot-counter-visibility-toggle" class="shot-counter-visibility-toggle hidden" data-i18n-aria-label="gameSetup.shotCounterToggleVisibility" aria-label="Show/Hide Timer">👁️</button>
     <div id="timed-tournament-widget" class="timed-tournament-widget hidden">
@@ -328,17 +348,6 @@
       <button type="button" id="timed-tournament-pause-toggle" class="timed-tournament-pause-toggle" data-i18n-aria-label="gameSetup.timedTournamentPauseAria" aria-label="Pause the tournament timer">⏸️</button>
     </div>
     <div class="scoreboard" id="scoreboard"></div>
-  </section>
-
-  <section class="panel collapsible-panel collapsed" id="history-panel">
-    <button type="button" class="panel-toggle" id="btn-toggle-history-panel" aria-expanded="false" aria-controls="history-panel-body">
-      <h2 data-i18n="history.heading">Recent Games</h2>
-      <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
-    </button>
-    <p class="panel-summary" id="history-panel-summary"></p>
-    <div class="panel-body" id="history-panel-body">
-      <ul id="history-list" class="history-list"></ul>
-    </div>
   </section>
 
   <section class="panel collapsible-panel collapsed" id="day-notes-panel">
@@ -375,6 +384,7 @@
         <button type="button" id="btn-day-report-csv" class="btn btn-ghost" data-i18n="dayNotes.exportCsv">📊 Export as Excel (CSV)</button>
         <button type="button" id="btn-day-report-print" class="btn btn-ghost" data-i18n="dayNotes.printReport">🖨️ Print Report</button>
         <button type="button" id="btn-day-report-colorful" class="btn btn-ghost" data-i18n="dayNotes.colorfulReport">🎨 Colorful Report</button>
+        <button type="button" id="btn-day-report-push-challonge" class="btn btn-ghost" data-i18n="challonge.pushButton">☁️ Push to Challonge</button>
       </div>
       <p class="player-stats-note" id="day-report-recipients-line"></p>
     </div>
@@ -391,6 +401,17 @@
     </div>
   </section>
 
+  <section class="panel collapsible-panel collapsed" id="history-panel">
+    <button type="button" class="panel-toggle" id="btn-toggle-history-panel" aria-expanded="false" aria-controls="history-panel-body">
+      <h2 data-i18n="history.heading">Recent Games</h2>
+      <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+    </button>
+    <p class="panel-summary" id="history-panel-summary"></p>
+    <div class="panel-body" id="history-panel-body">
+      <ul id="history-list" class="history-list"></ul>
+    </div>
+  </section>
+
   <section class="panel collapsible-panel collapsed" id="backup-panel">
     <button type="button" class="panel-toggle" id="btn-toggle-backup-panel" aria-expanded="false" aria-controls="backup-panel-body">
       <h2 data-i18n="backup.heading">Backup &amp; Transfer</h2>
@@ -399,21 +420,60 @@
     <p class="panel-summary" id="backup-panel-summary" data-i18n="backup.summary">Export or import your data, or reset player stats and saved lists.</p>
     <div class="panel-body" id="backup-panel-body">
       <p class="player-stats-note" data-i18n="backup.note">All stats and session data live on this device only. Export a backup file to move everything to another iPhone, iPad, or computer.</p>
-      <label class="checkbox-row checkbox-row-prominent">
-        <input type="checkbox" id="export-obfuscate-checkbox">
-        <span data-i18n="backup.obfuscateLabel">🕵️ Obfuscate personal information (omit every player's email &amp; phone from this export — names only)</span>
-      </label>
-      <div class="row">
-        <button type="button" id="btn-export-all-data" class="btn btn-primary" data-i18n="backup.exportAll">Export All Data</button>
-        <button type="button" id="btn-import-all-data" class="btn btn-ghost" data-i18n="backup.importData">Import Data</button>
-        <input type="file" id="import-file-input" accept="application/json" class="hidden">
+
+      <div class="backup-subsection">
+        <h3 class="backup-subsection-title" data-i18n="backup.exportHeading">⬆️ Export Games</h3>
+        <div class="row">
+          <button type="button" id="btn-export-all-data" class="btn btn-primary" data-i18n="backup.exportAll">All Data</button>
+          <button type="button" id="btn-export-all-data-help" class="format-info-btn" data-i18n-aria-label="backup.exportAllHelpAria" aria-label="What does All Data export?">❓</button>
+          <button type="button" id="btn-export-sync" class="btn btn-primary" data-i18n="backup.syncExport">☁️ iCloud Sync</button>
+          <button type="button" id="btn-export-sync-help" class="format-info-btn" data-i18n-aria-label="backup.syncExportHelpAria" aria-label="What is iCloud Sync export for?">❓</button>
+        </div>
+        <div class="player-stats-note" id="sync-status-line"></div>
+        <div class="row">
+          <button type="button" id="btn-export-session" class="btn btn-ghost" data-i18n="gameSetup.exportSession">Share Last Session</button>
+          <button type="button" id="btn-export-session-help" class="format-info-btn" data-i18n-aria-label="backup.exportSessionHelpAria" aria-label="What does Share Last Session share?">❓</button>
+          <button type="button" id="btn-share" class="btn btn-ghost" data-i18n="gameSetup.shareStandings">Share Standings</button>
+        </div>
       </div>
-      <p class="player-stats-note" data-i18n="backup.importDataNote">Merges into what's already on this device — nothing here is deleted, same-named players get a conflict check, and history from both sides is combined.</p>
-      <div class="row">
-        <button type="button" id="btn-squash-import-data" class="btn btn-danger" data-i18n="backup.squashButton">💀 Import &amp; Replace</button>
-        <input type="file" id="squash-import-file-input" accept="application/json" class="hidden">
+
+      <div class="backup-subsection">
+        <h3 class="backup-subsection-title" data-i18n="backup.importHeading">⬇️ Import Games</h3>
+        <div class="row">
+          <button type="button" id="btn-import-all-data" class="btn btn-ghost" data-i18n="backup.importData">All Data</button>
+          <input type="file" id="import-file-input" accept="application/json" class="hidden">
+        </div>
+        <p class="player-stats-note" data-i18n="backup.importDataNote">Merges into what's already on this device — nothing here is deleted, same-named players get a conflict check, and history from both sides is combined.</p>
+
+        <h4 class="session-subsection-subheading" data-i18n="backup.driveHeading">☁️ Import from a Link</h4>
+        <p class="player-stats-note" data-i18n="backup.driveIntro">Paste a link to a backup file, and Import pulls it straight from there — works with any direct link, no setup needed. To instead browse every backup inside a whole Google Drive folder, add a free read-only Drive API key too (one-time setup, see ❓).</p>
+        <div class="row">
+          <input type="text" id="drive-folder-link-input" data-i18n-placeholder="backup.driveFolderLinkPlaceholder" placeholder="Backup file link, or a Drive folder link">
+          <button type="button" id="btn-drive-folder-open" class="btn btn-ghost" data-i18n="backup.driveOpenFolder">📁 Open Folder</button>
+        </div>
+        <div class="row">
+          <input type="text" id="drive-api-key-input" data-i18n-placeholder="backup.driveApiKeyPlaceholder" placeholder="Drive API key (optional — only to browse a folder)">
+          <button type="button" id="btn-drive-api-key-help" class="format-info-btn" data-i18n-aria-label="backup.driveApiKeyHelpAria" aria-label="How do I get a Drive API key?">❓</button>
+          <button type="button" id="btn-drive-import" class="btn btn-ghost" data-i18n="backup.driveImportButton">☁️ Import from Link</button>
+        </div>
+        <p class="player-stats-note" data-i18n="backup.driveExportNote">Export still downloads a file below, same as always — Google Drive only allows uploads from a signed-in account, so "Open Folder" is the fast path: it jumps straight to your Drive tab, ready for you to drag the downloaded file in.</p>
+        <div id="drive-file-picker" class="hidden"></div>
+
+        <div class="backup-subsection collapsible-panel collapsed" id="squash-panel">
+          <button type="button" class="panel-toggle" id="btn-toggle-squash-panel" aria-expanded="false" aria-controls="squash-panel-body">
+            <h4 class="backup-subsection-title" data-i18n="backup.squashHeading">💀 Replace Everything</h4>
+            <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+          </button>
+          <p class="panel-summary" id="squash-panel-summary" data-i18n="backup.squashSummary">Replace everything on this device with an imported file, instead of merging.</p>
+          <div class="panel-body" id="squash-panel-body">
+            <div class="row">
+              <button type="button" id="btn-squash-import-data" class="btn btn-danger" data-i18n="backup.squashButton">Import &amp; Replace</button>
+              <input type="file" id="squash-import-file-input" accept="application/json" class="hidden">
+            </div>
+            <p class="player-stats-note" data-i18n="backup.squashNote">Instead of merging, replaces everything on this device with the imported file. A full backup of what's currently here downloads automatically first.</p>
+          </div>
+        </div>
       </div>
-      <p class="player-stats-note" data-i18n="backup.squashNote">Instead of merging, replaces everything on this device with the imported file. A full backup of what's currently here downloads automatically first.</p>
       <div id="squash-warning-overlay" class="squash-warning-overlay hidden">
         <div class="squash-warning-card">
           <div class="squash-warning-icon" aria-hidden="true">💀</div>
@@ -430,16 +490,6 @@
           </div>
         </div>
       </div>
-      <div class="row">
-        <button type="button" id="btn-export-session" class="btn btn-ghost" data-i18n="gameSetup.exportSession">Export Session</button>
-        <button type="button" id="btn-share" class="btn btn-ghost" data-i18n="gameSetup.shareStandings">Share Standings</button>
-      </div>
-      <p class="player-stats-note" data-i18n="backup.exportSessionNote">Just the current live session (players and wins) as its own JSON file or a text summary to share - Export All Data above covers everything, including career stats, ratings, and saved lists.</p>
-      <div class="row">
-        <button type="button" id="btn-export-sync" class="btn btn-primary" data-i18n="backup.syncExport">☁️ Export for iCloud Sync</button>
-      </div>
-      <p class="player-stats-note" data-i18n="backup.syncHelp">Downloads to your browser's normal download folder — most browsers save silently there instead of showing a save panel, so it won't land in iCloud Drive unless you've pointed your browser's download location at a folder inside iCloud Drive (a one-time setting). Each export is named with today's date, day of the week, and your name, so several people can share one iCloud Drive folder without colliding — on your other device, use Import Data and pick any of those files.</p>
-      <p class="player-stats-note" id="sync-status-line"></p>
 
       <h2 data-i18n="recoverData.heading">🗄️ Recover Data</h2>
       <p class="player-stats-note" data-i18n="recoverData.note">Every reset below keeps a local copy of what it wiped, newest first. Pick one to selectively restore just the players or games you want back.</p>
@@ -468,6 +518,10 @@
         <button type="button" id="btn-reset-all-ratings" class="btn btn-danger" data-i18n="players.resetAllRatings">⚠️ Reset All Players' Official Rating</button>
       </div>
       <div class="row">
+        <button type="button" id="btn-recompute-all-ratings" class="btn btn-danger" data-i18n="players.recomputeAllRatings">🔧 Recompute All Ratings From Game History</button>
+      </div>
+      <p class="player-stats-note" data-i18n="resets.recomputeRatingsHint">Rebuilds every player's rating from scratch by replaying their full game history in order - fixes drift (like a wrong K-factor after a name merge) without wiping anyone back to the default rating. Can shift every player's rating, not just one, since ratings depend on who each game was against.</p>
+      <div class="row">
         <button type="button" id="btn-reset-today-stats" class="btn btn-danger" data-i18n="gamewin.resetTodayStats">Reset today's stats</button>
       </div>
       <div class="row">
@@ -481,6 +535,27 @@
           <button type="button" id="btn-full-reset" class="btn btn-danger btn-full-reset" data-i18n="resets.fullReset">💀 Full Reset — Wipe Everything</button>
         </div>
       </div>
+    </div>
+  </section>
+
+  <section class="panel collapsible-panel collapsed" id="challonge-panel">
+    <button type="button" class="panel-toggle" id="btn-toggle-challonge-panel" aria-expanded="false" aria-controls="challonge-panel-body">
+      <h2 data-i18n="challonge.heading">☁️ Challonge</h2>
+      <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+    </button>
+    <p class="panel-summary" id="challonge-panel-summary" data-i18n="challonge.summaryNotConnected">Not connected</p>
+    <div class="panel-body" id="challonge-panel-body">
+      <p class="player-stats-note" data-i18n="challonge.introGeneral">Push today's report or a tournament to Challonge — rosters always, and match scores too wherever they can be matched up reliably (Round Robin tournaments, and any pair who played each other today — see why others don't in Help). Needs a free Challonge developer app: sign up at connect.challonge.com to get a client ID and secret, no login required from this app.</p>
+      <div class="row">
+        <input type="text" id="challonge-client-id-input" data-i18n-placeholder="challonge.clientIdPlaceholder" placeholder="Challonge client ID" autocomplete="off">
+      </div>
+      <div class="row">
+        <input type="password" id="challonge-client-secret-input" data-i18n-placeholder="challonge.clientSecretPlaceholder" placeholder="Challonge client secret" autocomplete="off">
+      </div>
+      <div class="row">
+        <button type="button" id="btn-challonge-test-connection" class="btn btn-ghost" data-i18n="challonge.testConnectionButton">🔌 Test Connection</button>
+      </div>
+      <p class="player-stats-note" id="challonge-test-connection-status"></p>
     </div>
   </section>
 
@@ -577,6 +652,7 @@
     <div class="rating-edit-emoji">🎯</div>
     <h2 data-i18n="ratingEdit.title">Adjust Rating</h2>
     <p id="rating-edit-player-name" class="rating-edit-player-name"></p>
+    <p class="player-stats-note" id="rating-edit-robustness"></p>
     <p class="rating-edit-warning" data-i18n="ratingEdit.warning">⚠️ This rating is the result of an ongoing calculation based on match results. Changing it by hand overrides that calculation and won't reflect actual skill level going forward.</p>
     <div class="row rating-edit-row">
       <label for="rating-edit-input" data-i18n="ratingEdit.newRating">New rating</label>
@@ -663,10 +739,54 @@
       <input type="text" id="confirm-modal-input" list="confirm-modal-input-options">
       <datalist id="confirm-modal-input-options"></datalist>
     </div>
+    <label class="checkbox-row checkbox-row-prominent hidden" id="confirm-modal-obfuscate-row">
+      <input type="checkbox" id="confirm-modal-obfuscate-checkbox">
+      <span data-i18n="backup.obfuscateLabel">🕵️ Obfuscate personal information (omit every player's email &amp; phone from this export — names only)</span>
+    </label>
     <div class="confirm-modal-actions">
       <button type="button" id="btn-confirm-modal-ok" class="btn btn-primary" data-i18n="common.ok">OK</button>
       <button type="button" id="btn-confirm-modal-cancel" class="btn btn-ghost hidden" data-i18n="common.cancel">Cancel</button>
     </div>
+  </div>
+</div>
+
+<div id="quick-game-overlay" class="confirm-modal-overlay hidden">
+  <div class="confirm-modal-card">
+    <h3 class="confirm-modal-title" data-i18n="quickGame.title">⚡ Quick Game</h3>
+    <p class="player-stats-note" data-i18n="quickGame.explain">Jumps straight into an 8-Ball, single game, individual match in Focus Mode. You can still change the game type from the scorecards once it starts.</p>
+    <p id="quick-game-requirement" class="new-player-name-requirement hidden"></p>
+    <div class="row">
+      <input type="text" id="quick-game-player1" data-i18n-placeholder="quickGame.player1Placeholder" placeholder="Player 1" autocomplete="off">
+    </div>
+    <div class="row">
+      <input type="text" id="quick-game-player2" data-i18n-placeholder="quickGame.player2Placeholder" placeholder="Who are you playing against?" autocomplete="off">
+    </div>
+    <div class="confirm-modal-actions">
+      <button type="button" id="btn-quick-game-start" class="btn btn-primary" disabled data-i18n="quickGame.startButton">▶️ Start</button>
+      <button type="button" id="btn-quick-game-cancel" class="btn btn-ghost" data-i18n="common.cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="challonge-push-review-overlay" class="confirm-modal-overlay hidden">
+  <div class="confirm-modal-card">
+    <h2 data-i18n="challonge.reviewTitle">Review Before Pushing to Challonge</h2>
+    <div class="row">
+      <label for="challonge-push-date-input" data-i18n="challonge.reviewDateLabel">Report date</label>
+      <input type="date" id="challonge-push-date-input">
+    </div>
+    <p class="player-stats-note" id="challonge-push-review-summary"></p>
+    <h3 class="tournament-section-heading" data-i18n="challonge.reviewGamesHeading">Games to include</h3>
+    <p class="player-stats-note" data-i18n="challonge.reviewGamesHint">Uncheck any game you don't want counted — matchups recalculate as you do.</p>
+    <ul id="challonge-push-review-games-list" class="recover-games-checklist"></ul>
+    <p class="player-stats-note" id="challonge-push-review-matchups"></p>
+    <div class="confirm-modal-actions">
+      <button type="button" id="btn-challonge-push-confirm" class="btn btn-primary" data-i18n="challonge.reviewConfirmButton">☁️ Push to Challonge</button>
+      <button type="button" id="btn-challonge-close-tournament" class="btn btn-ghost hidden" data-i18n="challonge.closeTournamentButton">🔒 Close Tournament</button>
+      <button type="button" id="btn-challonge-push-review-close" class="btn btn-ghost" data-i18n="common.cancel">Cancel</button>
+    </div>
+    <p class="player-stats-note" data-i18n="challonge.closeTournamentHint">Pushing never closes the tournament by itself, so you can keep pushing this date again later if someone new plays. Close it only once you're done adding people for the day — Challonge won't accept new participants after that.</p>
+    <p class="player-stats-note" id="challonge-push-review-status"></p>
   </div>
 </div>
 
@@ -692,9 +812,15 @@
       <!-- .confirm-modal-actions is column-reverse (see style.css) - this
            block reads bottom-to-top visually, so the primary CTA (Open
            Group Session) is listed first here to land at the bottom, and
-           the two numbered download buttons are listed 2-then-1 so they
-           land in 1-then-2 reading order above it. -->
+           the three numbered steps are listed 3-then-2-then-1 so they
+           land in 1-then-2-then-3 reading order above it. Step 3 (install
+           the downloaded app) isn't a click here - it's disabled and
+           shown only alongside step 2's own button, purely so the
+           sequence reads as complete; the app itself does the rest on
+           its own first launch (see installer/standalone-entry.js and
+           checkPendingWizardReopen's auto-host handoff). -->
       <button type="button" id="btn-multi-table-open-group-session" class="btn btn-primary" data-i18n="multiTable.openGroupSessionButton">🔗 Open Group Session</button>
+      <button type="button" id="btn-multi-table-install-step" class="btn btn-ghost hidden" disabled data-i18n="multiTable.installStepLabel">🚀 3. Install &amp; Open the App</button>
       <button type="button" id="btn-multi-table-download-app" class="btn btn-ghost hidden" data-i18n="multiTable.downloadAppButton">⬇️ 2. Download the App</button>
       <button type="button" id="btn-multi-table-download-data" class="btn btn-ghost" data-i18n="multiTable.downloadDataButton">💾 1. Download My Setup</button>
       <button type="button" id="btn-multi-table-close" class="btn btn-ghost" data-i18n="common.close">Close</button>
@@ -1198,7 +1324,7 @@
       <h3 data-i18n="help.nav.playerPage">Player Stats Page</h3>
       <p data-i18n="help.playerPage.intro">Opened by tapping a player's name anywhere in the app.</p>
       <ul>
-        <li data-i18n-html="help.playerPage.synopsis"><strong>Stats Synopsis</strong> — Rating (current number) and "Rating this period" (how much it's moved), Wins, Losses, and Win % for Today, This Week, This Month, This Year, or All Time.</li>
+        <li data-i18n-html="help.playerPage.synopsis"><strong>Stats Synopsis</strong> — Rating (current number) and "Rating this period" (how much it's moved), Wins, Losses, and Win % for Today, Last 7 Days, Last 30 Days, This Year, or All Time.</li>
         <li data-i18n-html="help.playerPage.h2h"><strong>Head-to-Head</strong> — Its own collapsed panel (tap to expand) with a win/loss record against every opponent faced in the selected period; the collapsed summary line lists who they've played without needing to open it.</li>
         <li data-i18n-html="help.playerPage.graph"><strong>Graph</strong> — The same cumulative games chart as All Players, scoped to this one player, plus the standalone Rating chart underneath.</li>
         <li data-i18n-html="help.playerPage.liveSession"><strong>This Session (Live)</strong> — What they've done in the game currently in progress.</li>
@@ -1235,6 +1361,48 @@
   </div>
 </div>
 
+<div id="league-handicap-chart-overlay" class="help-overlay hidden">
+  <div class="help-card">
+    <div class="help-header">
+      <button type="button" id="btn-league-handicap-chart-close" class="wizard-close-btn" aria-label="Close" data-i18n-aria-label="common.close">×</button>
+      <h2 class="help-title" id="league-handicap-chart-title">BCA 8-Ball Chart</h2>
+      <p class="help-intro" id="league-handicap-chart-explain" data-i18n="league.handicapChartExplain">Your own numbers for this league's Skill Level chart, saved with this league and included whenever you export it. A Skill Level not listed here falls back to Base Games to Win.</p>
+    </div>
+    <div class="help-body">
+      <div class="row hidden" id="league-handicap-chart-player-row">
+        <label for="league-handicap-chart-player-select" data-i18n="league.handicapChartPlayerLabel">See it for</label>
+        <select id="league-handicap-chart-player-select"></select>
+      </div>
+      <table class="league-handicap-chart-table hidden" id="league-handicap-chart-player-table">
+        <thead>
+          <tr>
+            <th data-i18n="league.handicapChartOpponent">Opponent</th>
+            <th id="league-handicap-chart-player-you-header" data-i18n="league.handicapChartYouNeed">You Need</th>
+            <th id="league-handicap-chart-player-them-header" data-i18n="league.handicapChartTheyNeed">They Need</th>
+          </tr>
+        </thead>
+        <tbody id="league-handicap-chart-player-body"></tbody>
+      </table>
+      <table class="league-handicap-chart-table">
+        <thead>
+          <tr>
+            <th id="league-handicap-chart-key-header" data-i18n="league.handicapChartSkillLevel">Skill Level</th>
+            <th id="league-handicap-chart-target-header" data-i18n="league.handicapChartTargetGames">Games to Win</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="league-handicap-chart-body"></tbody>
+      </table>
+      <div class="row" id="league-handicap-chart-add-row">
+        <input type="number" id="league-handicap-chart-new-sl" data-i18n-placeholder="league.handicapChartSkillLevel" placeholder="Skill Level" min="1" max="999">
+        <input type="number" id="league-handicap-chart-new-value" data-i18n-placeholder="league.handicapChartTargetGames" placeholder="Games to Win" min="1" max="999">
+        <button type="button" id="btn-league-handicap-chart-add" class="btn btn-ghost" data-i18n="league.handicapChartAddButton">+ Add</button>
+      </div>
+      <button type="button" id="btn-league-handicap-chart-save" class="btn btn-primary" data-i18n="league.handicapChartSaveButton">💾 Save</button>
+    </div>
+  </div>
+</div>
+
 <div id="view-player-page" class="hidden">
 
   <header class="app-header player-page-header">
@@ -1256,8 +1424,8 @@
     <div class="panel-body" id="player-page-synopsis-panel-body">
       <div class="row period-filter-row" id="player-page-period-filter">
         <button type="button" class="btn btn-ghost period-btn" data-period="today" data-i18n="period.today">Today</button>
-        <button type="button" class="btn btn-ghost period-btn" data-period="week" data-i18n="period.thisWeek">This Week</button>
-        <button type="button" class="btn btn-ghost period-btn" data-period="month" data-i18n="period.thisMonth">This Month</button>
+        <button type="button" class="btn btn-ghost period-btn" data-period="week" data-i18n="period.thisWeek">Last 7 Days</button>
+        <button type="button" class="btn btn-ghost period-btn" data-period="month" data-i18n="period.thisMonth">Last 30 Days</button>
         <button type="button" class="btn btn-ghost period-btn" data-period="year" data-i18n="period.thisYear">This Year</button>
         <button type="button" class="btn btn-ghost period-btn is-active" data-period="all" data-i18n="period.allTime">All Time</button>
       </div>
@@ -1408,14 +1576,43 @@
       <button type="button" id="btn-contact-sheet-sms" class="btn btn-primary" data-i18n="contactSheet.smsSelected">💬 Text Selected</button>
     </div>
     <div class="row">
+      <button type="button" id="btn-contact-sheet-merge-selected" class="btn btn-ghost" data-i18n="mergePlayers.mergeSelectedButton">🔀 Merge Selected (2)</button>
+    </div>
+    <p class="player-stats-note" data-i18n="mergePlayers.hint">Check exactly two players who are really the same person (e.g. after a name got renamed into a new entry by mistake) to combine their games, rating, and contact info into one.</p>
+    <div class="row">
+      <button type="button" id="btn-contact-sheet-repair-history" class="btn btn-ghost" data-i18n="mergePlayers.repairButton">🩹 Repair Old Name in History</button>
+    </div>
+    <p class="player-stats-note" data-i18n="mergePlayers.repairHint">If a merge or rename happened before this got fixed, an opponent's own past games can still show the old name. Enter that old name (it doesn't need to exist as a player anymore) and which current player it should become, and every past game mentioning it will be corrected.</p>
+    <div class="row">
+      <button type="button" id="btn-contact-sheet-graveyard-selected" class="btn btn-danger" data-i18n="contactSheet.graveyardSelected">🗑️ Send Selected to Graveyard</button>
+    </div>
+    <div class="row">
       <button type="button" id="btn-contact-sheet-vcard" class="btn btn-primary" data-i18n="contactSheet.exportAddressBook">📇 Export to Address Book</button>
       <button type="button" id="btn-contact-sheet-import-vcard" class="btn btn-ghost" data-i18n="contactSheet.importVcard">📇 Import From vCard</button>
       <input type="file" id="contact-sheet-import-vcard-file-input" accept=".vcf,text/vcard" class="hidden">
     </div>
     <p class="player-stats-note" data-i18n="contactSheet.importVcardHint">To bring in contacts from your computer: in Contacts, select the people you want and choose File → Export → Export vCard, then import that file here. Existing email/phone/nickname are never overwritten - only blanks get filled in.</p>
+    <label class="fargo-enabled-row">
+      <input type="checkbox" id="fargo-enabled-checkbox">
+      <span data-i18n="fargo.enabledLabel">Use real FargoRate ratings</span>
+    </label>
+    <p class="player-stats-note" data-i18n="fargo.enabledHint">Looks up players on FargoRate.com's public player search (no account needed) so you can link a player's real Fargo ID and compare it to this app's own local rating. This uses an unofficial public lookup, not an official FargoRate service.</p>
   </section>
 
   <ul id="contact-sheet-list" class="contact-sheet-list"></ul>
+
+  <div id="fargo-search-overlay" class="confirm-modal-overlay hidden">
+    <div class="confirm-modal-card">
+      <h2 data-i18n="fargo.searchTitle">Find a Player on FargoRate</h2>
+      <input type="text" id="fargo-search-input" data-i18n-placeholder="fargo.searchPlaceholder" placeholder="Player name">
+      <div class="confirm-modal-actions">
+        <button type="button" id="btn-fargo-search" class="btn btn-primary" data-i18n="fargo.searchButton">🔎 Search</button>
+        <button type="button" id="btn-fargo-search-close" class="btn btn-ghost" data-i18n="common.close">Close</button>
+      </div>
+      <p id="fargo-search-status" class="player-stats-note"></p>
+      <ul id="fargo-search-results" class="fargo-search-results-list"></ul>
+    </div>
+  </div>
 
 </div>
 
@@ -1447,8 +1644,8 @@
   <button type="button" id="btn-leaderboard-play-top" class="btn btn-primary leaderboard-play-btn" data-i18n="leaderboard.playButton">▶️ Back to the Game</button>
 
   <div class="row period-filter-row" id="leaderboard-period-filter">
-    <button type="button" class="btn btn-ghost period-btn" data-period="last7" data-i18n="period.thisWeek">This Week</button>
-    <button type="button" class="btn btn-ghost period-btn" data-period="month" data-i18n="period.thisMonth">This Month</button>
+    <button type="button" class="btn btn-ghost period-btn" data-period="week" data-i18n="period.thisWeek">Last 7 Days</button>
+    <button type="button" class="btn btn-ghost period-btn" data-period="month" data-i18n="period.thisMonth">Last 30 Days</button>
     <button type="button" class="btn btn-ghost period-btn is-active" data-period="all" data-i18n="period.allTime">All Time</button>
   </div>
 
@@ -1460,6 +1657,10 @@
     <label class="leaderboard-view-option">
       <input type="radio" name="leaderboard-view" id="leaderboard-view-teams" value="teams">
       <span data-i18n="leaderboard.viewTeams">Teams</span>
+    </label>
+    <label class="leaderboard-view-option">
+      <input type="radio" name="leaderboard-view" id="leaderboard-view-league" value="league">
+      <span data-i18n="leaderboard.viewLeague">🏆 League</span>
     </label>
   </div>
 
@@ -1518,6 +1719,8 @@
     <h1 data-i18n="header.tournament">Tournament</h1>
     <button type="button" id="btn-open-help-tournament" class="btn btn-ghost" data-i18n="header.help">❓ Help</button>
   </header>
+
+  <p class="player-stats-note tournament-challonge-status-line" id="tournament-challonge-status-line"></p>
 
   <section class="panel" id="tournament-setup-panel">
     <h2 data-i18n="tournament.newHeading">New Elimination Tournament</h2>
@@ -1672,6 +1875,8 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
     <div class="row">
       <button type="button" id="btn-tournament-abandon" class="btn btn-danger" data-i18n="tournament.abandon">Abandon Tournament</button>
       <button type="button" id="btn-tournament-print" class="btn btn-ghost" data-i18n="tournament.printBracket">🖨️ Print Bracket</button>
+      <button type="button" id="btn-tournament-push-challonge" class="btn btn-ghost" data-i18n="challonge.pushButton">☁️ Push to Challonge</button>
+      <button type="button" id="btn-tournament-close-challonge" class="btn btn-ghost" data-i18n="challonge.closeTournamentButton">🔒 Close Tournament</button>
     </div>
 
     <div id="tournament-champion-banner" class="tournament-winner-banner hidden"></div>
@@ -1718,6 +1923,7 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
     <button type="button" id="btn-league-back" class="btn btn-ghost screen-back-btn" aria-label="Back" data-i18n-aria-label="common.back"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
     <h1 data-i18n="header.league">League</h1>
     <button type="button" id="btn-open-league-wizard" class="btn btn-primary" data-i18n="league.wizard.openButton">🧙 Setup Tonight</button>
+    <button type="button" id="btn-league-toggle-focus" class="btn btn-primary" data-i18n="league.focusModeButton">🔎 Focus Mode</button>
     <button type="button" id="btn-open-help-league" class="btn btn-ghost" data-i18n="header.help">❓ Help</button>
   </header>
 
@@ -1727,6 +1933,8 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
     <div class="row">
       <select id="league-select"></select>
       <button type="button" id="btn-league-import" class="btn btn-ghost" data-i18n="league.importButton">📥 Import League</button>
+      <button type="button" id="btn-league-export" class="btn btn-ghost hidden" data-i18n="league.exportButton">📤 Export League</button>
+      <button type="button" id="btn-league-delete" class="btn btn-danger hidden" data-i18n="league.deleteButton">🗑️ Delete League</button>
       <input type="file" id="league-import-file-input" accept="application/json" class="hidden">
     </div>
 
@@ -1736,9 +1944,23 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
         <input type="text" id="league-new-name" maxlength="60">
       </div>
       <div class="row league-format-row">
-        <label><input type="radio" name="league-new-format" value="apa8ball" checked> <span data-i18n="league.format8Ball">APA 8-Ball</span></label>
-        <label><input type="radio" name="league-new-format" value="apa9ball"> <span data-i18n="league.format9Ball">APA 9-Ball</span></label>
+        <label><input type="radio" name="league-new-format" value="apa8ball" checked> <span id="league-new-format-8ball-label">APA 8-Ball</span></label>
+        <label><input type="radio" name="league-new-format" value="apa9ball"> <span id="league-new-format-9ball-label">APA 9-Ball</span></label>
       </div>
+      <div class="row">
+        <label for="league-new-handicap-system" data-i18n="league.newHandicapSystemLabel">Rating System</label>
+        <select id="league-new-handicap-system">
+          <option value="apa" data-i18n="league.handicapSystemApa">APA</option>
+          <option value="bca" data-i18n="league.handicapSystemBca">BCA</option>
+          <option value="vnba" data-i18n="league.handicapSystemVnba">VNBA</option>
+          <option value="tap" data-i18n="league.handicapSystemTap">TAP</option>
+        </select>
+        <button type="button" id="btn-league-new-handicap-system-info" class="format-info-btn" data-i18n-aria-label="league.handicapSystemInfoAria" aria-label="What's the difference?">❓</button>
+      </div>
+      <div class="row">
+        <label><input type="checkbox" id="league-new-open-mode"> <span data-i18n="league.openModeLabel">Open League (no teams — pure player vs player)</span></label>
+      </div>
+      <p class="player-stats-note league-max-games-help" data-i18n="league.openModeHelp">Skips the Teams section entirely — the organizer just picks any two members to play, table by table.</p>
       <button type="button" id="btn-league-create" class="btn btn-primary" data-i18n="league.createButton">Create League</button>
     </div>
   </section>
@@ -1746,34 +1968,52 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
   <section class="panel league-detail hidden" id="league-detail">
     <div class="league-detail-header">
       <h3 id="league-detail-name"></h3>
+      <button type="button" id="btn-league-handicap-chart-open" class="btn btn-ghost hidden">📊 View/Edit Table</button>
       <span id="league-readonly-badge" class="league-readonly-badge hidden" data-i18n="league.readOnlyBadge">Imported — read-only</span>
-      <button type="button" id="btn-league-export" class="btn btn-ghost" data-i18n="league.exportButton">📤 Export League</button>
-      <button type="button" id="btn-league-delete" class="btn btn-danger" data-i18n="league.deleteButton">🗑️ Delete League</button>
+      <label class="checkbox-row checkbox-row-prominent league-mode-toggle"><input type="checkbox" id="league-detail-open-toggle"> <span data-i18n="league.openModeLabel">Open League (no teams — pure player vs player)</span></label>
     </div>
 
     <div id="league-organizer-only">
       <h4 data-i18n="league.membersHeading">Members</h4>
       <div class="row">
-        <select id="league-add-member-select"></select>
+        <div id="league-add-member-wrap"></div>
         <button type="button" id="btn-league-add-member" class="btn btn-ghost" data-i18n="league.addMemberButton">+ Add</button>
+      </div>
+      <label class="checkbox-row">
+        <input type="checkbox" id="league-add-member-contacts-checkbox">
+        <span data-i18n="league.addToContactsLabel">Add to Contact Sheet if new</span>
+      </label>
+      <div class="row league-add-member-contact-fields hidden" id="league-add-member-contact-fields">
+        <input type="email" id="league-add-member-email-input" data-i18n-placeholder="onboarding.emailPlaceholder" placeholder="Email (optional)">
+        <input type="tel" id="league-add-member-phone-input" data-i18n-placeholder="onboarding.phonePlaceholder" placeholder="Phone number, e.g. (415) 555-0123 (optional)">
       </div>
     </div>
 
-    <h4 data-i18n="league.standingsHeading">Standings</h4>
-    <div class="league-standings-table-wrap">
-      <table class="league-standings-table" id="league-standings-table">
-        <thead>
-          <tr>
-            <th data-i18n="league.colMember">Member</th>
-            <th data-i18n="league.colSkillLevel">SL</th>
-            <th data-i18n="league.colPoints">Points</th>
-            <th data-i18n="league.colRecord">W-L</th>
-            <th data-i18n="league.colSession">Session</th>
-            <th id="league-col-remove-header" class="hidden"></th>
-          </tr>
-        </thead>
-        <tbody id="league-standings-body"></tbody>
-      </table>
+    <div id="league-standings-section">
+      <h4 data-i18n="league.standingsHeading">Standings</h4>
+      <div class="row">
+        <label for="league-standings-sort-select" data-i18n="league.sortByLabel">Sort by</label>
+        <select id="league-standings-sort-select">
+          <option value="points" data-i18n="league.sortByPoints">Points</option>
+          <option value="name" data-i18n="league.sortByName">Name</option>
+          <option value="fargo" data-i18n="league.sortByFargo">Fargo Rating</option>
+        </select>
+      </div>
+      <div class="league-standings-table-wrap">
+        <table class="league-standings-table" id="league-standings-table">
+          <thead>
+            <tr>
+              <th data-i18n="league.colMember">Member</th>
+              <th data-i18n="league.colSkillLevel">SL</th>
+              <th id="league-col-points-header" data-i18n="league.colPoints">Points</th>
+              <th data-i18n="league.colRecord">W-L</th>
+              <th data-i18n="league.colSession">Session</th>
+              <th id="league-col-remove-header" class="hidden"></th>
+            </tr>
+          </thead>
+          <tbody id="league-standings-body"></tbody>
+        </table>
+      </div>
     </div>
 
     <div id="league-live-hosting-section">
@@ -1787,27 +2027,56 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
       </div>
 
       <div id="league-tables-section">
-        <div class="row league-tables-header-row">
-          <h4 data-i18n="league.tablesHeading">Tables</h4>
-          <label for="league-table-count" data-i18n="league.tableCountLabel">🎱 Number of Tables</label>
-          <input type="number" id="league-table-count" min="1" max="20" value="1">
-          <label for="league-queue-mode-select" data-i18n="league.queueModeLabel">Queue Mode</label>
-          <select id="league-queue-mode-select">
-            <option value="none" data-i18n="league.queueModeNone">Manual (organizer assigns)</option>
-            <option value="perTable" data-i18n="league.queueModePerTable">Per-Table Queue</option>
-            <option value="perRoom" data-i18n="league.queueModePerRoom">Per-Room Queue</option>
-          </select>
-          <label for="league-team-rotation-select" data-i18n="league.teamRotationLabel">Team Rotation</label>
-          <select id="league-team-rotation-select">
-            <option value="rotatingLines" data-i18n="league.teamRotationRotatingLines">Rotating Lines (next pair auto-cycles)</option>
-            <option value="roundRobin" data-i18n="league.teamRotationRoundRobin">Round-Robin (everyone plays everyone)</option>
-          </select>
-          <button type="button" id="btn-league-team-rotation-info" class="format-info-btn" data-i18n-aria-label="league.teamRotationInfoAria" aria-label="What do these mean?">❓</button>
-          <label for="league-max-games-input" data-i18n="league.maxGamesLabel">🎯 Max Games / Player (Session)</label>
-          <input type="number" id="league-max-games-input" min="0" max="99" value="0">
-          <button type="button" id="btn-league-reset-session-counts" class="btn btn-ghost" data-i18n="league.resetSessionCountsButton">↺ Reset Session Counts</button>
+        <h4 data-i18n="league.tablesHeading">Tables</h4>
+        <div id="league-tables-config">
+          <div class="row league-settings-row">
+            <label for="league-table-count" data-i18n="league.tableCountLabel">🎱 Number of Tables</label>
+            <input type="number" id="league-table-count" min="1" max="20" value="1">
+          </div>
+          <div class="row league-settings-row" id="league-queue-mode-row">
+            <label for="league-queue-mode-select" data-i18n="league.queueModeLabel">Queue Mode</label>
+            <select id="league-queue-mode-select">
+              <option value="none" data-i18n="league.queueModeNone">Manual (organizer assigns)</option>
+              <option value="perTable" data-i18n="league.queueModePerTable">Per-Table Queue</option>
+              <option value="perRoom" data-i18n="league.queueModePerRoom">Per-Room Queue</option>
+            </select>
+          </div>
+          <div class="row league-settings-row" id="league-team-rotation-row">
+            <label for="league-team-rotation-select" data-i18n="league.teamRotationLabel">Team Rotation</label>
+            <select id="league-team-rotation-select">
+              <option value="rotatingLines" data-i18n="league.teamRotationRotatingLines">Rotating Lines (next pair auto-cycles)</option>
+              <option value="roundRobin" data-i18n="league.teamRotationRoundRobin">Round-Robin (everyone plays everyone)</option>
+            </select>
+            <button type="button" id="btn-league-team-rotation-info" class="format-info-btn" data-i18n-aria-label="league.teamRotationInfoAria" aria-label="What do these mean?">❓</button>
+          </div>
+          <div class="row league-settings-row">
+            <label for="league-max-games-input" data-i18n="league.maxGamesLabel">🎯 Max Games / Player (Session)</label>
+            <input type="number" id="league-max-games-input" min="0" max="99" value="0">
+          </div>
+          <p class="player-stats-note league-max-games-help" data-i18n="league.maxGamesHelp">0 means unlimited. Once a member reaches this many games since the last reset, they're skipped for any new match (manual, queued, or team rotation) until you reset session counts for the next time this league meets — their lifetime stats keep counting either way.</p>
+          <label class="checkbox-row checkbox-row-prominent">
+            <input type="checkbox" id="league-use-handicap-checkbox">
+            <span data-i18n="league.useHandicapLabel">Use handicap to define how many games to win, use</span>
+            <select id="league-handicap-system-select">
+              <option value="apa" data-i18n="league.handicapSystemApa">APA</option>
+              <option value="bca" data-i18n="league.handicapSystemBca">BCA</option>
+              <option value="vnba" data-i18n="league.handicapSystemVnba">VNBA</option>
+              <option value="tap" data-i18n="league.handicapSystemTap">TAP</option>
+            </select>
+          </label>
+          <div class="row league-settings-row" id="league-handicap-base-row">
+            <label for="league-handicap-base-input" data-i18n="league.handicapBaseLabel">Base Games to Win</label>
+            <input type="number" id="league-handicap-base-input" min="1" max="200" value="5">
+          </div>
+          <p class="player-stats-note league-max-games-help" id="league-handicap-help" data-i18n="league.handicapHelp">With handicap on, each player's own Skill Level is looked up in the selected system's chart to set their target — anyone missing from that chart (or every player, for BCA/VNBA/TAP until you add your own league's numbers) uses the base number instead. With handicap off, everyone races to the base number, unhandicapped.</p>
+          <div class="row league-settings-row">
+            <button type="button" id="btn-league-reset-session-counts" class="btn btn-ghost" data-i18n="league.resetSessionCountsButton">↺ Reset Session Counts</button>
+          </div>
         </div>
-        <p class="player-stats-note" data-i18n="league.maxGamesHelp">0 means unlimited. Once a member reaches this many games since the last reset, they're skipped for any new match (manual, queued, or team rotation) until you reset session counts for the next time this league meets — their lifetime stats keep counting either way.</p>
+        <label class="checkbox-row checkbox-row-prominent league-mode-toggle hidden" id="league-tables-open-toggle-row">
+          <input type="checkbox" id="league-tables-open-toggle">
+          <span data-i18n="league.openModeLabel">Open League (no teams — pure player vs player)</span>
+        </label>
         <div id="league-tables-grid" class="league-tables-grid"></div>
       </div>
 
@@ -1815,13 +2084,61 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
     </div>
   </section>
 
+  <section class="panel collapsible-panel collapsed" id="challonge-panel-league">
+    <button type="button" class="panel-toggle" id="btn-toggle-challonge-panel-league" aria-expanded="false" aria-controls="challonge-panel-league-body">
+      <h2 data-i18n="challonge.heading">☁️ Challonge</h2>
+      <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+    </button>
+    <p class="panel-summary" id="challonge-panel-league-summary" data-i18n="challonge.summaryNotConnected">Not connected</p>
+    <div class="panel-body" id="challonge-panel-league-body">
+      <p class="player-stats-note" data-i18n="challonge.introGeneral">Push today's report or a tournament to Challonge — rosters always, and match scores too wherever they can be matched up reliably (Round Robin tournaments, and any pair who played each other today — see why others don't in Help). Needs a free Challonge developer app: sign up at connect.challonge.com to get a client ID and secret, no login required from this app.</p>
+      <div class="row">
+        <input type="text" id="challonge-client-id-input-league" data-i18n-placeholder="challonge.clientIdPlaceholder" placeholder="Challonge client ID" autocomplete="off">
+      </div>
+      <div class="row">
+        <input type="password" id="challonge-client-secret-input-league" data-i18n-placeholder="challonge.clientSecretPlaceholder" placeholder="Challonge client secret" autocomplete="off">
+      </div>
+      <div class="row">
+        <button type="button" id="btn-challonge-test-connection-league" class="btn btn-ghost" data-i18n="challonge.testConnectionButton">🔌 Test Connection</button>
+      </div>
+      <p class="player-stats-note" id="challonge-test-connection-status-league"></p>
+    </div>
+  </section>
+
 </div>
 
 <div id="league-wizard-overlay" class="wizard-overlay hidden">
   <div class="wizard-card">
+    <button type="button" id="btn-open-help-league-wizard" class="wizard-close-btn wizard-help-btn" aria-label="Help" data-i18n-aria-label="common.help">❓</button>
     <button type="button" id="btn-league-wizard-close" class="wizard-close-btn" aria-label="Close wizard" data-i18n-aria-label="wizard.closeAriaLabel">×</button>
 
     <div class="wizard-header">
+      <svg class="wizard-mascot" viewBox="0 0 120 150" role="img" aria-label="Cartoon wizard mascot">
+        <defs>
+          <radialGradient id="leagueWizardOrbGlow" cx="50%" cy="50%" r="60%">
+            <stop offset="0%" stop-color="#fff3c4" />
+            <stop offset="100%" stop-color="#d9a441" />
+          </radialGradient>
+        </defs>
+        <line x1="97" y1="60" x2="108" y2="128" stroke="#7a5230" stroke-width="4" stroke-linecap="round" />
+        <circle cx="97" cy="55" r="9" fill="url(#leagueWizardOrbGlow)" />
+        <path d="M60,18 L88,72 Q60,84 32,72 Z" fill="#3d2b6b" />
+        <path d="M60,18 L88,72 Q60,80 55,70 Z" fill="#4d3684" />
+        <ellipse cx="60" cy="73" rx="30" ry="7" fill="#3d2b6b" />
+        <path d="M50,26 l6,-14 l6,14 l-6,5 z" fill="#e8c25a" />
+        <path d="M60,74 Q60,110 40,138 L80,138 Q60,110 60,74 Z" fill="#4d3684" />
+        <path d="M60,74 Q60,110 40,138 L52,138 Q56,106 60,74 Z" fill="#5b41a0" />
+        <circle cx="46" cy="98" r="1.6" fill="#f4e6b8" />
+        <circle cx="66" cy="112" r="1.6" fill="#f4e6b8" />
+        <circle cx="54" cy="124" r="1.6" fill="#f4e6b8" />
+        <circle cx="72" cy="94" r="1.6" fill="#f4e6b8" />
+        <circle cx="60" cy="58" r="19" fill="#e7b98c" />
+        <path d="M41,58 Q40,84 60,90 Q80,84 79,58 Q79,74 60,80 Q41,74 41,58 Z" fill="#f2f2f2" />
+        <path d="M46,52 Q60,44 74,52 Q74,44 60,40 Q46,44 46,52 Z" fill="#f2f2f2" />
+        <circle cx="52" cy="56" r="2.2" fill="#2a2a2a" />
+        <circle cx="68" cy="56" r="2.2" fill="#2a2a2a" />
+        <path d="M56,64 Q60,67 64,64" stroke="#c98f5e" stroke-width="1.6" fill="none" stroke-linecap="round" />
+      </svg>
       <div class="wizard-header-text">
         <h2 data-i18n="league.wizard.title">🧙 Setup Tonight's League Games</h2>
         <p class="wizard-progress" id="league-wizard-progress">Step 1 of 6</p>
@@ -1840,9 +2157,16 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
         </div>
         <ul id="league-wizard-roster-list" class="league-wizard-roster-list"></ul>
         <div class="row league-wizard-add-contact-row">
-          <label for="league-wizard-add-contact-select" data-i18n="league.wizard.addFromContactsLabel">+ Add from Contacts</label>
-          <select id="league-wizard-add-contact-select"></select>
+          <div id="league-wizard-add-contact-wrap"></div>
           <button type="button" id="btn-league-wizard-add-contact" class="btn btn-ghost" data-i18n="league.wizard.addFromContactsButton">+ Add &amp; Mark Present</button>
+        </div>
+        <label class="checkbox-row">
+          <input type="checkbox" id="league-wizard-add-contact-contacts-checkbox">
+          <span data-i18n="league.addToContactsLabel">Add to Contact Sheet if new</span>
+        </label>
+        <div class="row league-add-member-contact-fields hidden" id="league-wizard-add-contact-contact-fields">
+          <input type="email" id="league-wizard-add-contact-email-input" data-i18n-placeholder="onboarding.emailPlaceholder" placeholder="Email (optional)">
+          <input type="tel" id="league-wizard-add-contact-phone-input" data-i18n-placeholder="onboarding.phonePlaceholder" placeholder="Phone number, e.g. (415) 555-0123 (optional)">
         </div>
       </div>
 
@@ -1877,7 +2201,7 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
           <input type="checkbox" id="league-wizard-multi-client-checkbox">
           <span data-i18n="multiTable.checkboxLabel">🖥️ Each table runs its own device</span>
         </label>
-        <p class="player-stats-note callout-note hidden" id="league-wizard-multi-client-note" data-i18n="multiTable.wizardNotice">Hosting separate devices per table needs the local server running — you'll get a link to connect them, or to download the app, right after you start.</p>
+        <p class="player-stats-note callout-note hidden" id="league-wizard-multi-client-note">Hosting separate devices per table needs the local server running — you'll get a link to connect them, or to download the app, right after you start.</p>
       </div>
 
       <div class="wizard-step hidden" id="league-wizard-step-4">
@@ -1912,6 +2236,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20260921m"></script>
+<script src="js/app.js?v=20261002e"></script>
 </body>
 </html>

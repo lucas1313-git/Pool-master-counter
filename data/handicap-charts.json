@@ -1,0 +1,19 @@
+{
+  "_comment": "League handicap charts, keyed by system then game format (8ball = games needed to win, 9ball = points needed to win). Edit freely - the app fetches this file at runtime, so changes take effect on next reload with no code changes needed. A Skill Level missing from a chart (or an empty chart, like bca/vnba/tap start with below) falls back to the league's own 'Base Games to Win' setting. APA's numbers are the real, published nationwide chart; BCA, VNBA and TAP don't publish one universal chart (each local league/operator sets its own), so those start empty for you to fill in with your own league's posted numbers.",
+  "apa": {
+    "8ball": { "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9 },
+    "9ball": { "1": 14, "2": 19, "3": 25, "4": 31, "5": 38, "6": 46, "7": 55, "8": 65, "9": 75 }
+  },
+  "bca": {
+    "8ball": {},
+    "9ball": {}
+  },
+  "vnba": {
+    "8ball": {},
+    "9ball": {}
+  },
+  "tap": {
+    "8ball": {},
+    "9ball": {}
+  }
+}

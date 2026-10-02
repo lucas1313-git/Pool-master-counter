@@ -35,7 +35,18 @@
     { id: "15ballrotation", label: "15 Ball Rotation", defaultTarget: 61, unit: "points" },
     { id: "straight", label: "Straight Pool", defaultTarget: 100, unit: "points" },
     { id: "onepocket", label: "One Pocket", defaultTarget: 8, unit: "balls" },
-    { id: "custom", label: "Custom", defaultTarget: 1, unit: "points" }
+    { id: "custom", label: "Custom", defaultTarget: 1, unit: "points" },
+    // No predetermined target - real Snooker frames end whenever the
+    // balls run out or the trailing player can no longer catch up, not
+    // at a fixed score (unlike Straight Pool's race-to-100 etc.). 999
+    // is a plain placeholder "effectively unreachable" target, well
+    // above even a maximum 147 break, that keeps every existing
+    // numeric-target code path (progress displays, fair-race handicap
+    // math) working unmodified - the real way a Snooker game ends is
+    // the "Finish Snooker Frame" button (see finishSnookerFrame),
+    // which credits whoever has the higher score right now rather than
+    // waiting for anyone to reach this number.
+    { id: "snooker", label: "Snooker", defaultTarget: 999, unit: "points" }
   ];
 
   // "Rack" games (target 1, one click = one whole win) have no per-ball
@@ -49,11 +60,21 @@
   // Rotation games where the balls are shot in shared numerical order
   // rather than each player having their own object-ball group (the
   // 8-ball family) or a points total to fall short of (Straight Pool,
-  // 15 Ball Rotation, Custom) - there's no well-defined "balls left"
-  // quantity for either player here, so the win popup's field is
+  // 15 Ball Rotation, Custom, Snooker) - there's no well-defined "balls
+  // left" quantity for either player here, so the win popup's field is
   // hidden entirely for these instead of showing a control that can
   // never mean anything (see showGameWinOverlay).
-  var BALLS_LEFT_HIDDEN_GAME_TYPES = ["9ball", "10ball"];
+  var BALLS_LEFT_HIDDEN_GAME_TYPES = ["9ball", "10ball", "snooker"];
+
+  // "Target 1 rack" (or One Pocket's own "Target 8 balls") is a useless
+  // restatement for these - a single rack IS the whole game for the
+  // 8-ball family and 9-ball, and One Pocket's ball target is always
+  // the same fixed number everyone already knows - so it's dropped
+  // from both the "Now Playing" banner (renderNowPlayingBanner) and
+  // rotation labels (rotationEntryLabel, used by both the rotation
+  // status note and the Rotation Position line) for these specific
+  // types, per explicit request.
+  var ROTATION_LABEL_NO_TARGET_TYPES = ["8ball", "8ballrotation", "8ballpunishment", "9ball", "onepocket"];
 
   // ---------------------------------------------------------------------
   // State
@@ -1659,11 +1680,18 @@
   // ---------------------------------------------------------------------
 
   var btnExportAllData = document.getElementById("btn-export-all-data");
-  var exportObfuscateCheckbox = document.getElementById("export-obfuscate-checkbox");
+  var btnExportAllDataHelp = document.getElementById("btn-export-all-data-help");
   var btnImportAllData = document.getElementById("btn-import-all-data");
   var btnExportSync = document.getElementById("btn-export-sync");
+  var btnExportSyncHelp = document.getElementById("btn-export-sync-help");
   var syncStatusLine = document.getElementById("sync-status-line");
   var importFileInput = document.getElementById("import-file-input");
+  var driveFolderLinkInput = document.getElementById("drive-folder-link-input");
+  var driveApiKeyInput = document.getElementById("drive-api-key-input");
+  var btnDriveFolderOpen = document.getElementById("btn-drive-folder-open");
+  var btnDriveApiKeyHelp = document.getElementById("btn-drive-api-key-help");
+  var btnDriveImport = document.getElementById("btn-drive-import");
+  var driveFilePicker = document.getElementById("drive-file-picker");
   var btnSquashImportData = document.getElementById("btn-squash-import-data");
   var squashImportFileInput = document.getElementById("squash-import-file-input");
   var squashWarningOverlay = document.getElementById("squash-warning-overlay");
@@ -1715,7 +1743,8 @@
     document.getElementById("btn-open-help-tournament"),
     document.getElementById("btn-open-help-league"),
     document.getElementById("btn-open-help-player-page"),
-    document.getElementById("btn-open-help-wizard")
+    document.getElementById("btn-open-help-wizard"),
+    document.getElementById("btn-open-help-league-wizard")
   ];
 
   var btnGameRulesInfo = document.getElementById("btn-game-rules-info");
@@ -1789,6 +1818,11 @@
   var onboardingStep = 1;
 
   var btnToggleFocus = document.getElementById("btn-toggle-focus");
+  var btnToggleKeypadSpeech = document.getElementById("btn-toggle-keypad-speech");
+  var btnKeypadSpeechHelp = document.getElementById("btn-keypad-speech-help");
+  var keypadSpeechVoiceLabel = document.getElementById("keypad-speech-voice-label");
+  var keypadSpeechVoiceSelect = document.getElementById("keypad-speech-voice-select");
+  var btnFinishSnooker = document.getElementById("btn-finish-snooker");
   var focusPlayersWrap = document.getElementById("focus-players-wrap");
   var btnToggleFocusPlayers = document.getElementById("btn-toggle-focus-players");
   var focusPlayersSummary = document.getElementById("focus-players-summary");
@@ -1853,6 +1887,7 @@
   var btnLeaderboardShare = document.getElementById("btn-leaderboard-share");
   var leaderboardViewPlayersRadio = document.getElementById("leaderboard-view-players");
   var leaderboardViewTeamsRadio = document.getElementById("leaderboard-view-teams");
+  var leaderboardViewLeagueRadio = document.getElementById("leaderboard-view-league");
   var leaderboardPeriodFilter = document.getElementById("leaderboard-period-filter");
   var leaderboardPeriodButtons = leaderboardPeriodFilter.querySelectorAll(".period-btn");
   var leaderboardList = document.getElementById("leaderboard-list");
@@ -1895,9 +1930,19 @@
   var contactSheetImportVcardFileInput = document.getElementById("contact-sheet-import-vcard-file-input");
   var btnContactSheetEmail = document.getElementById("btn-contact-sheet-email");
   var btnContactSheetSms = document.getElementById("btn-contact-sheet-sms");
+  var btnContactSheetGraveyardSelected = document.getElementById("btn-contact-sheet-graveyard-selected");
+  var btnContactSheetMergeSelected = document.getElementById("btn-contact-sheet-merge-selected");
+  var btnContactSheetRepairHistory = document.getElementById("btn-contact-sheet-repair-history");
   var contactSheetSelectedSummary = document.getElementById("contact-sheet-selected-summary");
   var contactSheetList = document.getElementById("contact-sheet-list");
   var contactSheetSelected = {};
+  var fargoEnabledCheckbox = document.getElementById("fargo-enabled-checkbox");
+  var fargoSearchOverlay = document.getElementById("fargo-search-overlay");
+  var fargoSearchInput = document.getElementById("fargo-search-input");
+  var btnFargoSearch = document.getElementById("btn-fargo-search");
+  var fargoSearchResults = document.getElementById("fargo-search-results");
+  var fargoSearchStatus = document.getElementById("fargo-search-status");
+  var btnFargoSearchClose = document.getElementById("btn-fargo-search-close");
   var btnContactSheetGraveyard = document.getElementById("btn-contact-sheet-graveyard");
   var graveyardPageView = document.getElementById("view-graveyard-page");
   var btnGraveyardBack = document.getElementById("btn-graveyard-back");
@@ -1955,6 +2000,29 @@
   var btnTournamentStart = document.getElementById("btn-tournament-start");
   var btnTournamentAbandon = document.getElementById("btn-tournament-abandon");
   var btnTournamentPrint = document.getElementById("btn-tournament-print");
+  var btnTournamentPushChallonge = document.getElementById("btn-tournament-push-challonge");
+  var tournamentChallongeStatusLine = document.getElementById("tournament-challonge-status-line");
+  var challongePanelSummary = document.getElementById("challonge-panel-summary");
+  var challongeClientIdInput = document.getElementById("challonge-client-id-input");
+  var challongeClientSecretInput = document.getElementById("challonge-client-secret-input");
+  var btnChallongeTestConnection = document.getElementById("btn-challonge-test-connection");
+  var challongeTestConnectionStatus = document.getElementById("challonge-test-connection-status");
+  var challongePanelSummaryLeague = document.getElementById("challonge-panel-league-summary");
+  var challongeClientIdInputLeague = document.getElementById("challonge-client-id-input-league");
+  var challongeClientSecretInputLeague = document.getElementById("challonge-client-secret-input-league");
+  var btnChallongeTestConnectionLeague = document.getElementById("btn-challonge-test-connection-league");
+  var challongeTestConnectionStatusLeague = document.getElementById("challonge-test-connection-status-league");
+  var btnDayReportPushChallonge = document.getElementById("btn-day-report-push-challonge");
+  var challongePushReviewOverlay = document.getElementById("challonge-push-review-overlay");
+  var challongePushDateInput = document.getElementById("challonge-push-date-input");
+  var challongePushReviewSummary = document.getElementById("challonge-push-review-summary");
+  var challongePushReviewGamesList = document.getElementById("challonge-push-review-games-list");
+  var challongePushReviewMatchups = document.getElementById("challonge-push-review-matchups");
+  var challongePushReviewStatus = document.getElementById("challonge-push-review-status");
+  var btnChallongePushConfirm = document.getElementById("btn-challonge-push-confirm");
+  var btnChallongeCloseTournament = document.getElementById("btn-challonge-close-tournament");
+  var btnChallongePushReviewClose = document.getElementById("btn-challonge-push-review-close");
+  var btnTournamentCloseChallonge = document.getElementById("btn-tournament-close-challonge");
   var tournamentChampionBanner = document.getElementById("tournament-champion-banner");
   var tournamentCurrentMatchPanel = document.getElementById("tournament-current-match-panel");
   var tournamentReadyList = document.getElementById("tournament-ready-list");
@@ -2020,9 +2088,18 @@
   var timedTournamentMinutesInput = document.getElementById("timed-tournament-minutes-input");
   var timedTournamentPauseToggle = document.getElementById("timed-tournament-pause-toggle");
 
+  var btnQuickGame = document.getElementById("btn-quick-game");
+  var quickGameOverlay = document.getElementById("quick-game-overlay");
+  var quickGamePlayer1Input = document.getElementById("quick-game-player1");
+  var quickGamePlayer2Input = document.getElementById("quick-game-player2");
+  var quickGameRequirement = document.getElementById("quick-game-requirement");
+  var btnQuickGameStart = document.getElementById("btn-quick-game-start");
+  var btnQuickGameCancel = document.getElementById("btn-quick-game-cancel");
+
   var btnResetGame = document.getElementById("btn-reset-game");
   var btnShare = document.getElementById("btn-share");
   var btnExportSession = document.getElementById("btn-export-session");
+  var btnExportSessionHelp = document.getElementById("btn-export-session-help");
 
   var rotationEnabledCheckbox = document.getElementById("rotation-enabled");
   var gameSetupRotationEnabledCheckbox = document.getElementById("game-setup-rotation-enabled");
@@ -2052,6 +2129,7 @@
   var leaguePageView = document.getElementById("view-league-page");
   var btnOpenLeague = document.getElementById("btn-open-league");
   var btnLeagueBack = document.getElementById("btn-league-back");
+  var btnLeagueToggleFocus = document.getElementById("btn-league-toggle-focus");
   var btnOpenHelpLeague = document.getElementById("btn-open-help-league");
   var leagueSelect = document.getElementById("league-select");
   var btnLeagueImport = document.getElementById("btn-league-import");
@@ -2059,26 +2137,66 @@
   var leagueNewForm = document.getElementById("league-new-form");
   var leagueNewNameInput = document.getElementById("league-new-name");
   var leagueNewFormatRadios = document.getElementsByName("league-new-format");
+  var leagueNewHandicapSystemSelect = document.getElementById("league-new-handicap-system");
+  var leagueNewFormat8BallLabel = document.getElementById("league-new-format-8ball-label");
+  var leagueNewFormat9BallLabel = document.getElementById("league-new-format-9ball-label");
+  var btnLeagueNewHandicapSystemInfo = document.getElementById("btn-league-new-handicap-system-info");
+  var leagueNewOpenModeInput = document.getElementById("league-new-open-mode");
   var btnLeagueCreate = document.getElementById("btn-league-create");
   var leagueDetail = document.getElementById("league-detail");
   var leagueDetailName = document.getElementById("league-detail-name");
   var leagueReadonlyBadge = document.getElementById("league-readonly-badge");
+  var leagueDetailOpenToggle = document.getElementById("league-detail-open-toggle");
   var btnLeagueExport = document.getElementById("btn-league-export");
   var btnLeagueDelete = document.getElementById("btn-league-delete");
   var leagueOrganizerOnly = document.getElementById("league-organizer-only");
-  var leagueAddMemberSelect = document.getElementById("league-add-member-select");
+  var leagueAddMemberWrap = document.getElementById("league-add-member-wrap");
+  var leagueAddMemberInput = null;
   var btnLeagueAddMember = document.getElementById("btn-league-add-member");
+  var leagueAddMemberContactsCheckbox = document.getElementById("league-add-member-contacts-checkbox");
+  var leagueAddMemberContactFields = document.getElementById("league-add-member-contact-fields");
+  var leagueAddMemberEmailInput = document.getElementById("league-add-member-email-input");
+  var leagueAddMemberPhoneInput = document.getElementById("league-add-member-phone-input");
   var leagueStandingsBody = document.getElementById("league-standings-body");
+  var leagueStandingsSortSelect = document.getElementById("league-standings-sort-select");
   var leagueColRemoveHeader = document.getElementById("league-col-remove-header");
+  var leagueColPointsHeader = document.getElementById("league-col-points-header");
   var leagueLiveHostingSection = document.getElementById("league-live-hosting-section");
+  var leagueTeamsSection = document.getElementById("league-teams-section");
   var leagueTeamsList = document.getElementById("league-teams-list");
   var leagueNewTeamNameInput = document.getElementById("league-new-team-name");
   var btnLeagueCreateTeam = document.getElementById("btn-league-create-team");
   var leagueTableCountInput = document.getElementById("league-table-count");
+  var leagueQueueModeRow = document.getElementById("league-queue-mode-row");
   var leagueQueueModeSelect = document.getElementById("league-queue-mode-select");
+  var leagueTeamRotationRow = document.getElementById("league-team-rotation-row");
   var leagueTeamRotationSelect = document.getElementById("league-team-rotation-select");
   var btnLeagueTeamRotationInfo = document.getElementById("btn-league-team-rotation-info");
   var leagueMaxGamesInput = document.getElementById("league-max-games-input");
+  var leagueUseHandicapCheckbox = document.getElementById("league-use-handicap-checkbox");
+  var leagueHandicapSystemSelect = document.getElementById("league-handicap-system-select");
+  var leagueHandicapBaseInput = document.getElementById("league-handicap-base-input");
+  var leagueTablesOpenToggleRow = document.getElementById("league-tables-open-toggle-row");
+  var leagueTablesOpenToggle = document.getElementById("league-tables-open-toggle");
+  var btnLeagueHandicapChartOpen = document.getElementById("btn-league-handicap-chart-open");
+  var leagueHandicapChartOverlay = document.getElementById("league-handicap-chart-overlay");
+  var btnLeagueHandicapChartClose = document.getElementById("btn-league-handicap-chart-close");
+  var leagueHandicapChartTitle = document.getElementById("league-handicap-chart-title");
+  var leagueHandicapChartExplain = document.getElementById("league-handicap-chart-explain");
+  var leagueHandicapChartTargetHeader = document.getElementById("league-handicap-chart-target-header");
+  var leagueHandicapChartKeyHeader = document.getElementById("league-handicap-chart-key-header");
+  var leagueHandicapChartPlayerRow = document.getElementById("league-handicap-chart-player-row");
+  var leagueHandicapChartPlayerSelect = document.getElementById("league-handicap-chart-player-select");
+  var leagueHandicapChartPlayerTable = document.getElementById("league-handicap-chart-player-table");
+  var leagueHandicapChartPlayerYouHeader = document.getElementById("league-handicap-chart-player-you-header");
+  var leagueHandicapChartPlayerThemHeader = document.getElementById("league-handicap-chart-player-them-header");
+  var leagueHandicapChartPlayerBody = document.getElementById("league-handicap-chart-player-body");
+  var leagueHandicapChartBody = document.getElementById("league-handicap-chart-body");
+  var leagueHandicapChartAddRow = document.getElementById("league-handicap-chart-add-row");
+  var leagueHandicapChartNewSlInput = document.getElementById("league-handicap-chart-new-sl");
+  var leagueHandicapChartNewValueInput = document.getElementById("league-handicap-chart-new-value");
+  var btnLeagueHandicapChartAdd = document.getElementById("btn-league-handicap-chart-add");
+  var btnLeagueHandicapChartSave = document.getElementById("btn-league-handicap-chart-save");
   var btnLeagueResetSessionCounts = document.getElementById("btn-league-reset-session-counts");
 
   var btnOpenLeagueWizard = document.getElementById("btn-open-league-wizard");
@@ -2089,8 +2207,13 @@
   var leagueWizardRosterList = document.getElementById("league-wizard-roster-list");
   var btnLeagueWizardMarkAll = document.getElementById("btn-league-wizard-mark-all");
   var btnLeagueWizardMarkNone = document.getElementById("btn-league-wizard-mark-none");
-  var leagueWizardAddContactSelect = document.getElementById("league-wizard-add-contact-select");
+  var leagueWizardAddContactWrap = document.getElementById("league-wizard-add-contact-wrap");
+  var leagueWizardAddContactInput = null;
   var btnLeagueWizardAddContact = document.getElementById("btn-league-wizard-add-contact");
+  var leagueWizardAddContactContactsCheckbox = document.getElementById("league-wizard-add-contact-contacts-checkbox");
+  var leagueWizardAddContactContactFields = document.getElementById("league-wizard-add-contact-contact-fields");
+  var leagueWizardAddContactEmailInput = document.getElementById("league-wizard-add-contact-email-input");
+  var leagueWizardAddContactPhoneInput = document.getElementById("league-wizard-add-contact-phone-input");
   var leagueWizardTeamsList = document.getElementById("league-wizard-teams-list");
   var leagueWizardTableCountInput = document.getElementById("league-wizard-table-count");
   var leagueWizardMultiClientRow = document.getElementById("league-wizard-multi-client-row");
@@ -2102,6 +2225,7 @@
   var btnMultiTableOpenGroupSession = document.getElementById("btn-multi-table-open-group-session");
   var btnMultiTableDownloadData = document.getElementById("btn-multi-table-download-data");
   var btnMultiTableDownloadApp = document.getElementById("btn-multi-table-download-app");
+  var btnMultiTableInstallStep = document.getElementById("btn-multi-table-install-step");
   var btnMultiTableClose = document.getElementById("btn-multi-table-close");
   var leagueWizardQueueModeSelect = document.getElementById("league-wizard-queue-mode");
   var leagueWizardRotationRow = document.getElementById("league-wizard-rotation-row");
@@ -2195,6 +2319,7 @@
 
   var ratingEditOverlay = document.getElementById("rating-edit-overlay");
   var ratingEditPlayerName = document.getElementById("rating-edit-player-name");
+  var ratingEditRobustness = document.getElementById("rating-edit-robustness");
   var ratingEditInput = document.getElementById("rating-edit-input");
   var ratingEditEmailInput = document.getElementById("rating-edit-email-input");
   var ratingEditPhoneInput = document.getElementById("rating-edit-phone-input");
@@ -2206,6 +2331,7 @@
   var btnRatingEditSave = document.getElementById("btn-rating-edit-save");
   var btnRatingEditCancel = document.getElementById("btn-rating-edit-cancel");
   var btnResetAllRatings = document.getElementById("btn-reset-all-ratings");
+  var btnRecomputeAllRatings = document.getElementById("btn-recompute-all-ratings");
 
   var removedPlayersOverlay = document.getElementById("removed-players-overlay");
   var removedPlayersChecklist = document.getElementById("removed-players-checklist");
@@ -2239,6 +2365,8 @@
   var confirmModalInputRow = document.getElementById("confirm-modal-input-row");
   var confirmModalInput = document.getElementById("confirm-modal-input");
   var confirmModalInputOptions = document.getElementById("confirm-modal-input-options");
+  var confirmModalObfuscateRow = document.getElementById("confirm-modal-obfuscate-row");
+  var confirmModalObfuscateCheckbox = document.getElementById("confirm-modal-obfuscate-checkbox");
   var btnConfirmModalOk = document.getElementById("btn-confirm-modal-ok");
   var btnConfirmModalCancel = document.getElementById("btn-confirm-modal-cancel");
 
@@ -2272,7 +2400,7 @@
   // createElement/createTextNode rather than innerHTML - for the rare
   // case some part of the message needs its own styling (see
   // buildMatchupSentence's highlighted names/numbers).
-  function openConfirmModal(message, showCancel, showInput, inputValue) {
+  function openConfirmModal(message, showCancel, showInput, inputValue, showObfuscate) {
     var isNode = message instanceof Node;
     if (isNode) {
       confirmModalMessage.textContent = "";
@@ -2288,6 +2416,8 @@
     confirmModalMessage.classList.toggle("is-long-text", plainText.length > 200 || plainText.indexOf("\n") !== -1);
     confirmModalInputRow.classList.toggle("hidden", !showInput);
     confirmModalInput.value = showInput ? inputValue || "" : "";
+    confirmModalObfuscateRow.classList.toggle("hidden", !showObfuscate);
+    confirmModalObfuscateCheckbox.checked = false;
     btnConfirmModalCancel.classList.toggle("hidden", !showCancel);
     confirmModalOverlay.classList.remove("hidden");
     // preventScroll: true - this overlay is position:fixed and already
@@ -2323,17 +2453,22 @@
   }
 
   // Replaces `prompt(msg, defaultValue)`. onSubmit receives the entered
-  // string; onCancel (optional) runs on Cancel/backdrop-dismiss instead
-  // (there's no null-return case here the way native prompt() has one).
-  // suggestions (optional) fills the input's shared datalist with
-  // existing values to pick from (native browser autocomplete - the
-  // field stays free text, nothing forces picking one) - always reset
-  // on every call, even to empty, so a previous prompt's suggestions
-  // (e.g. team names) never linger into an unrelated one that didn't
-  // ask for any.
-  function promptModal(message, defaultValue, onSubmit, onCancel, suggestions) {
+  // string, plus - only when showObfuscate is true - the obfuscate
+  // checkbox's state as a second argument (every other caller's
+  // onSubmit takes just the one param, so the extra arg is simply
+  // ignored there). onCancel (optional) runs on Cancel/backdrop-dismiss
+  // instead (there's no null-return case here the way native prompt()
+  // has one). suggestions (optional) fills the input's shared datalist
+  // with existing values to pick from (native browser autocomplete -
+  // the field stays free text, nothing forces picking one) - always
+  // reset on every call, even to empty, so a previous prompt's
+  // suggestions (e.g. team names) never linger into an unrelated one
+  // that didn't ask for any. showObfuscate (optional) shows the shared
+  // "omit contact info" checkbox (see the Export Games flows) -
+  // unchecked by default every time, never sticky across calls.
+  function promptModal(message, defaultValue, onSubmit, onCancel, suggestions, showObfuscate) {
     confirmModalOnConfirm = function () {
-      onSubmit(confirmModalInput.value);
+      onSubmit(confirmModalInput.value, confirmModalObfuscateCheckbox.checked);
     };
     confirmModalOnCancel = onCancel || null;
     confirmModalInputOptions.innerHTML = "";
@@ -2342,7 +2477,7 @@
       opt.value = value;
       confirmModalInputOptions.appendChild(opt);
     });
-    openConfirmModal(message, true, true, defaultValue);
+    openConfirmModal(message, true, true, defaultValue, showObfuscate);
   }
 
   btnConfirmModalOk.addEventListener("click", function () {
@@ -2501,6 +2636,7 @@
       helpOverlay,
       wizardOverlay,
       onboardingOverlay,
+      quickGameOverlay,
       milestoneOverlay,
       gamewinOverlay,
       forceResetOverlay,
@@ -2573,15 +2709,31 @@
       cancelKeypadEntry();
     }
     if (!isNaN(amount) && amount !== 0 && targetId) {
-      requestAdjustScore(targetId, amount * sign);
+      var target = getPlayer(targetId);
+      var delta = amount * sign;
+      var wasLeading = target ? keypadPlayerIsLeading(target) : false;
+      var willLead = target ? keypadScoreWouldLead(target, (target.balls || 0) + delta) : false;
+      var wasOnHill = target ? keypadPlayerIsOnHill(target) : false;
+      var willBeOnHill = target ? keypadScoreWouldBeOnHill(target, (target.balls || 0) + delta) : false;
+      requestAdjustScore(targetId, delta);
+      if (target) speakKeypadLeadChange(target, wasLeading, willLead);
+      if (target) speakKeypadOnHillChange(target, wasOnHill, willBeOnHill);
     } else {
       renderScoreboard();
     }
   }
 
-  function selectKeypadPlayer(targetId, keypadNum) {
+  // announce (see Keypad Speech, further down this file): true only
+  // when this selection came from the physical/on-screen KEYPAD itself
+  // (a digit press, or Enter's "next player"), or a direct tap on a
+  // player's name/score (see buildIndividualPanel/buildMemberCard).
+  function selectKeypadPlayer(targetId, keypadNum, announce) {
     if (!targetId) return;
     cancelKeypadEntry();
+    // Captured before keypadSelectedPlayerId is overwritten below - see
+    // speakKeypadPlayerSelected, which announces this outgoing player's
+    // final total before the incoming one.
+    var previousPlayerId = keypadSelectedPlayerId;
     // "The counter should stop when we select the next player" - an
     // explicit keypad switch away from whoever's on a run stops it
     // right here, even before the newly-selected player has scored
@@ -2597,6 +2749,10 @@
     if (!quickCounterMode) {
       var switchedTo = getPlayer(targetId);
       if (switchedTo) playPlayerSwitchSound(switchedTo.voice, keypadNum);
+      if (announce && switchedTo) {
+        var previousPlayer = previousPlayerId && previousPlayerId !== targetId ? getPlayer(previousPlayerId) : null;
+        speakKeypadPlayerSelected(switchedTo, previousPlayer);
+      }
     }
     // Focus Mode's across-the-room card sizes mean a big roster (team
     // play especially) can run well past one screen - the shortcut
@@ -2608,6 +2764,17 @@
     if (appRoot.classList.contains("focus-mode")) {
       window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
     }
+  }
+
+  // Advances keypad selection to whoever's next in keypadOrderedPlayerIds
+  // (wrapping past the end), starting at #1 if nobody's selected yet -
+  // shared by the Enter keypad shortcut and the "next player" voice
+  // command (see voiceNextPlayer) so both mean exactly the same thing.
+  function advanceToNextKeypadPlayer(announce) {
+    if (keypadOrderedPlayerIds.length === 0) return;
+    var currentIdx = keypadSelectedPlayerId ? keypadOrderedPlayerIds.indexOf(keypadSelectedPlayerId) : -1;
+    var nextIdx = (currentIdx + 1) % keypadOrderedPlayerIds.length;
+    selectKeypadPlayer(keypadOrderedPlayerIds[nextIdx], nextIdx + 1, announce);
   }
 
   function handleKeypadShortcut(e) {
@@ -2663,7 +2830,7 @@
       var targetId = keypadOrderedPlayerIds[keypadNum - 1];
       if (!targetId) return;
       e.preventDefault();
-      selectKeypadPlayer(targetId, keypadNum);
+      selectKeypadPlayer(targetId, keypadNum, true);
       return;
     }
 
@@ -2682,9 +2849,7 @@
       if (scoreEntryGame && keypadEntryMode && keypadEntryBuffer) finalizeKeypadEntry();
       if (keypadOrderedPlayerIds.length === 0) return;
       e.preventDefault();
-      var currentIdx = keypadSelectedPlayerId ? keypadOrderedPlayerIds.indexOf(keypadSelectedPlayerId) : -1;
-      var nextIdx = (currentIdx + 1) % keypadOrderedPlayerIds.length;
-      selectKeypadPlayer(keypadOrderedPlayerIds[nextIdx], nextIdx + 1);
+      advanceToNextKeypadPlayer(true);
       return;
     }
 
@@ -2725,7 +2890,15 @@
       if (e.key === "-" && isSingleRackGame) {
         requestUndoLastWin(keypadSelectedPlayerId);
       } else {
-        requestAdjustScore(keypadSelectedPlayerId, e.key === "+" ? 1 : -1);
+        var delta = e.key === "+" ? 1 : -1;
+        var target = getPlayer(keypadSelectedPlayerId);
+        var wasLeading = target ? keypadPlayerIsLeading(target) : false;
+        var willLead = target ? keypadScoreWouldLead(target, (target.balls || 0) + delta) : false;
+        var wasOnHill = target ? keypadPlayerIsOnHill(target) : false;
+        var willBeOnHill = target ? keypadScoreWouldBeOnHill(target, (target.balls || 0) + delta) : false;
+        requestAdjustScore(keypadSelectedPlayerId, delta);
+        if (target) speakKeypadLeadChange(target, wasLeading, willLead);
+        if (target) speakKeypadOnHillChange(target, wasOnHill, willBeOnHill);
       }
       return;
     }
@@ -2768,6 +2941,7 @@
   // inputs (add-player, etc.) with their own Enter-submits-the-form
   // behavior, which must win over advancing the wizard step.
   var OVERLAY_KEY_TARGETS = [
+    [quickGameOverlay, btnQuickGameStart, btnQuickGameCancel],
     [saveSessionOverlay, btnSaveSessionSave, btnSaveSessionCancel],
     [ratingEditOverlay, btnRatingEditSave, btnRatingEditCancel],
     [removedPlayersOverlay, btnRemovedPlayersContinue, btnRemovedPlayersContinue],
@@ -2838,6 +3012,51 @@
     }
   }
 
+  // Same idea as the main scoreboard's Focus Mode, scoped to the League
+  // page instead: hides the picker/setup/admin sections (new-league form,
+  // Members, Standings, Teams roster editor, Tables config rows) but
+  // keeps the Tables Overview grid and the live boards themselves - a
+  // league can have several tables running at once, so "focus" here
+  // means decluttering around them, not narrowing down to just one.
+  // Per-table zoom (See All Tables vs one specific table) is the
+  // existing focusedTable selector in renderLeagueActiveMatches, which
+  // still works the same whether this is on or off.
+  var LEAGUE_FOCUS_MODE_KEY = "poolMasterCounter.leagueFocusMode";
+
+  function setLeagueFocusMode(on) {
+    leaguePageView.classList.toggle("league-focus-mode", on);
+    btnLeagueToggleFocus.textContent = T(on ? "scoreboard.showAll" : "league.focusModeButton");
+    try {
+      localStorage.setItem(LEAGUE_FOCUS_MODE_KEY, on ? "1" : "0");
+    } catch (e) {
+      console.warn("Could not save league focus mode preference.", e);
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // FargoRate integration (optional, off by default). This flag is the
+  // single gate for the whole feature - the search/lookup helpers further
+  // down (searchFargoPlayers/fetchFargoPlayer, near the Drive-import
+  // fetch helpers) refuse to make any network call while it's off, so
+  // toggling this off is a hard guarantee nothing here ever talks to the
+  // internet. No credentials involved: the FargoRate lookup this calls is
+  // an unofficial, unauthenticated public endpoint (see those functions'
+  // own comment for details/risk), so there's nothing to log in with or
+  // save - just this one on/off preference.
+  // ---------------------------------------------------------------------
+
+  var FARGO_ENABLED_KEY = "poolMasterCounter.fargoEnabled.v1";
+  var fargoEnabled = false;
+
+  function setFargoEnabled(on) {
+    fargoEnabled = on;
+    try {
+      localStorage.setItem(FARGO_ENABLED_KEY, on ? "1" : "0");
+    } catch (e) {
+      console.warn("Could not save Fargo preference.", e);
+    }
+  }
+
   // ---------------------------------------------------------------------
   // Rendering
   // ---------------------------------------------------------------------
@@ -2868,6 +3087,7 @@
   function rotationEntryLabel(entry) {
     var type = GAME_TYPES[entry.gameType];
     var label = type ? type.label : entry.gameType;
+    if (ROTATION_LABEL_NO_TARGET_TYPES.indexOf(entry.gameType) !== -1) return label;
     var rawUnit = entry.unit || (type ? type.unit : "rack");
     var unit = rawUnit === "rack" && entry.target !== 1 ? T("units.racks") : unitLabel(rawUnit);
     return label + " — " + entry.target + " " + unit;
@@ -3067,6 +3287,19 @@
       target: target > 0 ? target : (type ? type.defaultTarget : 1),
       unit: unit || (type ? type.unit : "rack")
     });
+    // First time the rotation actually becomes usable (2+ entries) -
+    // prefill "switch every" from the race target instead of leaving it
+    // at the plain default of 1, but only if it's still that untouched
+    // default; a value the user already set (here or on the Rotation
+    // Position line - see renderRotationPositionControl) is never
+    // overwritten. Confirmed formula (race-to 5, 2 players -> every 4;
+    // race-to 5, 3 players -> every 4 again - "every" tracks race-to
+    // only, not player count, by the user's own worked examples): every
+    // = race-to - 1, so the very last game of a full rotation cycle
+    // lands exactly on the race target and settles things.
+    if (state.rotation.order.length === 2 && state.rotation.every === 1) {
+      state.rotation.every = Math.max(1, (state.raceToWinsTarget || 1) - 1);
+    }
     saveState();
     saveRotationSnapshotIfNew(true);
     applyRotationIfDue();
@@ -3121,6 +3354,25 @@
     gameTargetInput.value = state.currentGame.target;
     gameTargetUnitSelect.value = state.currentGame.unit;
     updateCurrentGameSummary();
+  }
+
+  // Switches the active game type to its default target/unit - shared
+  // by the Game Setup panel's own <select> (gameTypeSelect) and the
+  // inline one on the Now Playing banner (see renderNowPlayingBanner),
+  // so changing it from either place stays in lockstep. Not offered at
+  // all while a Rotation is running (see renderNowPlayingBanner) -
+  // applyRotationIfDue would just overwrite a manual change back on the
+  // next win anyway, which would be confusing rather than useful there.
+  function setCurrentGameType(typeId) {
+    var type = GAME_TYPES[typeId];
+    if (!type) return;
+    state.currentGame.gameType = typeId;
+    state.currentGame.target = type.defaultTarget;
+    state.currentGame.unit = type.unit;
+    syncGameTypeUI();
+    saveState();
+    renderScoreboard();
+    tickShotCounter();
   }
 
   function updateCurrentGameSummary() {
@@ -3371,16 +3623,47 @@
   // right under the "Now Playing" banner - see moveRotationPosition.
   // Hidden whenever rotation isn't actually running (off, or fewer
   // than 2 game types to rotate through).
+  // "every" is edited right here, not just in the Games Rotations panel
+  // (#rotation-every, further down the page) - a NUL-byte marker
+  // stands in for {{every}} so the surrounding before/after text keeps
+  // whatever word order the active translation actually uses (number
+  // placement varies by language), then gets split back out around a
+  // real <input> once T() has filled in the rest.
   function renderRotationPositionControl() {
     var info = rotationStatusInfo();
     rotationPositionRow.classList.toggle("hidden", !info);
     if (!info) return;
     renderRotationPositionTrack(info);
-    rotationPositionText.textContent = T("players.rotationPosition", {
-      label: info.currentLabel,
-      played: info.playedInLeg,
-      every: info.every
+
+    var marker = "\u0000";
+    var templated = T("players.rotationPosition", { label: info.currentLabel, played: info.playedInLeg, every: marker });
+    var parts = templated.split(marker);
+    rotationPositionText.innerHTML = "";
+    rotationPositionText.appendChild(document.createTextNode(parts[0] || ""));
+    var everyInput = document.createElement("input");
+    everyInput.type = "number";
+    everyInput.min = "1";
+    everyInput.inputMode = "numeric";
+    everyInput.className = "rotation-position-every-input";
+    everyInput.value = info.every;
+    everyInput.setAttribute("aria-label", T("rotation.switchEvery"));
+    everyInput.addEventListener("click", function (e) {
+      e.stopPropagation();
     });
+    everyInput.addEventListener("change", function () {
+      var v = parseInt(everyInput.value, 10);
+      if (!v || v < 1) {
+        everyInput.value = state.rotation.every;
+        return;
+      }
+      state.rotation.every = v;
+      saveState();
+      applyRotationIfDue();
+      renderRotation();
+      renderScoreboard();
+    });
+    rotationPositionText.appendChild(everyInput);
+    rotationPositionText.appendChild(document.createTextNode(parts[1] || ""));
   }
 
   function renderRoster() {
@@ -3397,10 +3680,26 @@
       return;
     }
     var showTeamToggle = state.currentGame.mode === "teams";
+    var canReorder = state.players.length > 1;
 
     state.players.forEach(function (p) {
       var row = document.createElement("li");
       row.className = "roster-row" + (p.playing ? " is-playing" : "");
+      row.dataset.playerId = p.id;
+
+      // Reordering state.players here is what actually reorders the
+      // keypad (1-9) and scoreboard card layout too - both just follow
+      // activePlayers()'s own filter over this same array, in this same
+      // order, nothing else to keep in sync.
+      if (canReorder) {
+        var dragHandle = document.createElement("button");
+        dragHandle.type = "button";
+        dragHandle.className = "roster-drag-handle";
+        dragHandle.setAttribute("aria-label", T("players.dragToReorder", { name: p.name }));
+        dragHandle.textContent = "⠿";
+        row.appendChild(dragHandle);
+        wireRosterDragHandle(dragHandle, row);
+      }
 
       var name = document.createElement("span");
       name.className = "roster-name";
@@ -3474,6 +3773,134 @@
     }).length;
     focusPlayersSummary.textContent = T("players.playingOfTotal", { playing: playingCount, total: state.players.length });
     renderQueueList();
+  }
+
+  // ---------------------------------------------------------------------
+  // Roster drag-to-reorder - pointer events (not the HTML5 drag-and-drop
+  // API, which has poor-to-no touch support on mobile Safari/Chrome, the
+  // primary way this app actually gets used at the table) on a dedicated
+  // handle per row. The dragged row follows the pointer via a CSS
+  // transform; every move recomputes its transform against its own
+  // CURRENT, untransformed layout position (naturalTop below) rather
+  // than accumulating a raw pointer delta, so re-inserting it into the
+  // DOM mid-drag (the actual reordering) never produces a visual jump -
+  // the next frame's transform is just however far it still needs to
+  // go from wherever it now natively sits.
+  // ---------------------------------------------------------------------
+
+  var rosterDrag = null;
+
+  function rosterRows() {
+    return Array.prototype.slice.call(rosterList.querySelectorAll(".roster-row"));
+  }
+
+  // The row's own top position with any drag transform set aside -
+  // getBoundingClientRect() otherwise reports the TRANSFORMED position,
+  // which would make every subsequent calculation chase its own tail.
+  function rosterRowNaturalTop(row) {
+    var prevTransform = row.style.transform;
+    row.style.transform = "";
+    var top = row.getBoundingClientRect().top;
+    row.style.transform = prevTransform;
+    return top;
+  }
+
+  // move/end listen on document, not the handle - the handle's own row
+  // gets physically relocated in the DOM mid-drag (that's the actual
+  // reordering, via insertBefore below), and Chrome silently releases
+  // an active setPointerCapture the moment its captured element moves
+  // in the tree, which would otherwise end the drag (no more pointerup
+  // on the handle at all) the first time a swap happens. document-level
+  // listeners don't depend on any particular element staying put, so
+  // they keep receiving events for this pointerId for the rest of the
+  // drag regardless of how many times the row gets relocated.
+  function rosterDragMove(e) {
+    if (!rosterDrag || rosterDrag.pointerId !== e.pointerId) return;
+    e.preventDefault();
+    var drag = rosterDrag;
+    var targetTop = e.clientY - drag.grabOffsetY;
+    drag.row.style.transform = "translateY(" + (targetTop - rosterRowNaturalTop(drag.row)) + "px)";
+
+    // Keep swapping with whichever neighbor the dragged row's current
+    // (transformed) center has crossed, one step at a time, until it
+    // settles - a loop rather than a single check so a fast drag that
+    // jumps past more than one row in a single pointermove still ends
+    // up in the right place instead of lagging a step behind.
+    var moved = true;
+    while (moved) {
+      moved = false;
+      var rows = rosterRows();
+      var idx = rows.indexOf(drag.row);
+      var rect = drag.row.getBoundingClientRect();
+      var centerY = rect.top + rect.height / 2;
+
+      if (idx > 0) {
+        var prevRect = rows[idx - 1].getBoundingClientRect();
+        if (centerY < prevRect.top + prevRect.height / 2) {
+          rosterList.insertBefore(drag.row, rows[idx - 1]);
+          moved = true;
+        }
+      }
+      if (!moved && idx < rows.length - 1) {
+        var nextRect = rows[idx + 1].getBoundingClientRect();
+        if (centerY > nextRect.top + nextRect.height / 2) {
+          rosterList.insertBefore(drag.row, rows[idx + 1].nextSibling);
+          moved = true;
+        }
+      }
+      if (moved) {
+        drag.row.style.transform = "translateY(" + (targetTop - rosterRowNaturalTop(drag.row)) + "px)";
+      }
+    }
+  }
+
+  function rosterDragEnd(e) {
+    if (!rosterDrag || rosterDrag.pointerId !== e.pointerId) return;
+    document.removeEventListener("pointermove", rosterDragMove);
+    document.removeEventListener("pointerup", rosterDragEnd);
+    document.removeEventListener("pointercancel", rosterDragEnd);
+    var row = rosterDrag.row;
+    row.classList.remove("is-dragging");
+    row.style.transform = "";
+    rosterDrag = null;
+    commitRosterOrderFromDom();
+  }
+
+  function wireRosterDragHandle(handle, row) {
+    handle.addEventListener("pointerdown", function (e) {
+      if (e.button !== 0 && e.pointerType === "mouse") return;
+      e.preventDefault();
+      rosterDrag = {
+        pointerId: e.pointerId,
+        row: row,
+        grabOffsetY: e.clientY - row.getBoundingClientRect().top
+      };
+      row.classList.add("is-dragging");
+      document.addEventListener("pointermove", rosterDragMove);
+      document.addEventListener("pointerup", rosterDragEnd);
+      document.addEventListener("pointercancel", rosterDragEnd);
+    });
+  }
+
+  // Reads the roster's current DOM order (post-drag) back into
+  // state.players - the single source every other ordering (keypad
+  // numbers, scoreboard card layout) already follows, so nothing else
+  // needs to be told about the new order separately.
+  function commitRosterOrderFromDom() {
+    var orderedIds = rosterRows().map(function (row) {
+      return row.dataset.playerId;
+    });
+    var byId = {};
+    state.players.forEach(function (p) {
+      byId[p.id] = p;
+    });
+    var reordered = orderedIds.map(function (id) {
+      return byId[id];
+    }).filter(Boolean);
+    if (reordered.length !== state.players.length) return;
+    state.players = reordered;
+    saveState();
+    renderAll();
   }
 
   function buildFlagSpan() {
@@ -3562,8 +3989,14 @@
   }
 
   // Commits an inline rename from a Quick Counter name field. Routes
-  // through the same resolvePlayerName/duplicate-check path as adding a
-  // player normally, so casing and uniqueness rules stay identical.
+  // through renamePlayerEverywhere (same as the Contact Sheet's rename
+  // field) rather than assigning player.name directly - a direct
+  // assignment here used to silently orphan every archival record
+  // (stats, rating, contact, best run, date-added) under the old name,
+  // since none of them are keyed by the player's id, only by name. The
+  // player would look renamed on screen while actually splitting into
+  // two separate identities the moment anything archived under the new
+  // name.
   function renamePlayerInline(id, newName) {
     var player = getPlayer(id);
     if (!player) return;
@@ -3572,13 +4005,12 @@
       renderAll();
       return;
     }
-    if (normalizeNameKey(resolved) !== normalizeNameKey(player.name) && isDuplicatePlayerName(resolved)) {
-      showToast(T("toast.alreadyInRoster", { name: resolved }));
+    var error = renamePlayerEverywhere(player.name, resolved);
+    if (error) {
+      showToast(error);
       renderAll();
       return;
     }
-    player.name = resolved;
-    saveState();
     renderAll();
   }
 
@@ -3809,13 +4241,47 @@
     return others.length === 1 ? others[0] : null;
   }
 
+  // "Nickname"-style short display for the scoreboard: just the first
+  // name, since that's what people actually call each other at the
+  // table - a full name is just extra noise once you already know who's
+  // who. Falls back to appending the family name's first initial (e.g.
+  // "John W.") only when another currently active player shares the
+  // same first name - without that, two "John"s on screen at once would
+  // be indistinguishable, which defeats the point of a short name.
+  function shortDisplayNameForPlayer(player) {
+    var spaceIdx = player.name.indexOf(" ");
+    if (spaceIdx <= 0) return player.name;
+    var firstName = player.name.slice(0, spaceIdx);
+    var collides = activePlayers().some(function (p) {
+      if (p.id === player.id) return false;
+      var otherSpaceIdx = p.name.indexOf(" ");
+      var otherFirstName = otherSpaceIdx > 0 ? p.name.slice(0, otherSpaceIdx) : p.name;
+      return otherFirstName.toLowerCase() === firstName.toLowerCase();
+    });
+    if (!collides) return firstName;
+    var familyInitial = player.name.slice(spaceIdx + 1).trim().charAt(0).toUpperCase();
+    return familyInitial ? firstName + " " + familyInitial + "." : firstName;
+  }
+
   function buildIndividualPanel(player) {
     var panel = document.createElement("div");
     panel.className = "player-panel";
 
     var name = document.createElement("div");
-    name.className = "player-name";
+    name.className = "player-name keypad-select-trigger";
+    name.addEventListener("click", function () {
+      selectKeypadPlayer(player.id, null, true);
+    });
     buildPlayerNameLabel(name, player.name, false);
+    // Swaps the plain full name for its short display (see
+    // shortDisplayNameForPlayer) - only when buildPlayerNameLabel used
+    // the plain-name path (its first child is the plain name text node
+    // only then; a real nickname replaces it with the nickname text
+    // plus a separate real-name span instead, which this leaves alone).
+    var firstNameNode = name.firstChild;
+    if (firstNameNode && firstNameNode.nodeType === Node.TEXT_NODE && firstNameNode.textContent === player.name) {
+      firstNameNode.textContent = shortDisplayNameForPlayer(player);
+    }
     name.appendChild(buildPlayerLinkIcon(player.name));
     name.appendChild(buildRatingBadge(player.name));
     var soleOpponent = soleActiveOpponent(player);
@@ -3841,29 +4307,52 @@
 
     var block = document.createElement("div");
     block.className = "stat-block";
-    var label = document.createElement("div");
-    label.className = "stat-label";
     var value = document.createElement("div");
-    value.className = "stat-value";
+    value.className = "stat-value keypad-select-trigger";
+    value.addEventListener("click", function () {
+      selectKeypadPlayer(player.id, null, true);
+    });
     if (isSingleRackGame) {
+      // Still needs a label here - without it this number reads as an
+      // ambiguous score when it's actually the session win count.
+      var label = document.createElement("div");
+      label.className = "stat-label";
       label.textContent = T("scoreboard.tourneyWin");
+      block.appendChild(label);
       value.textContent = wins;
       if (wins >= effectiveRaceTarget(player.id)) value.appendChild(buildFlagSpan());
     } else {
-      label.textContent = T("scoreboard.gameTargetLabel", { game: GAME_TYPES[state.currentGame.gameType].label, target: state.currentGame.target });
+      // No "[game] · target [n]" label here anymore - the "Now Playing"
+      // banner above the scoreboard (renderNowPlayingBanner) already
+      // says both, so repeating it on every single card was redundant.
       value.textContent = player.balls || 0;
       applyScoreFlash(value, player);
     }
-    block.appendChild(label);
     block.appendChild(value);
-    panel.appendChild(block);
+
+    // The +/- buttons flank the score itself (minus/score/plus, one
+    // row) instead of sitting in their own row below it - reuses
+    // buildBallControls' own two buttons (same handlers/disabled
+    // logic, just pulled out of the wrapper it normally returns them
+    // in) so this is purely a layout change, not a behavior one. Saves
+    // real vertical room in Focus Mode, where .player-panel's height
+    // is fixed by its grid row (see the CSS) - a 2-line player name
+    // now already eats into that budget (see the line-clamp comment),
+    // so a separate full-width button row underneath was the next
+    // thing to get squeezed out.
+    var scoreRow = document.createElement("div");
+    scoreRow.className = "player-score-row";
+    var ballControls = buildBallControls(player, false, isSingleRackGame);
+    scoreRow.appendChild(ballControls.firstElementChild);
+    scoreRow.appendChild(block);
+    scoreRow.appendChild(ballControls.lastElementChild);
+    panel.appendChild(scoreRow);
 
     var runBadge = buildRunStreakBadge(player);
     if (runBadge) panel.appendChild(runBadge);
 
     if (state.fairRaceEnabled) panel.appendChild(buildFairRaceNote(effectiveRaceTarget(player.id)));
 
-    panel.appendChild(buildBallControls(player, false, isSingleRackGame));
     markAsKeypadTarget(panel, player);
 
     return panel;
@@ -3874,7 +4363,10 @@
     card.className = "member-card";
 
     var name = document.createElement("div");
-    name.className = "member-name";
+    name.className = "member-name keypad-select-trigger";
+    name.addEventListener("click", function () {
+      selectKeypadPlayer(player.id, null, true);
+    });
     buildPlayerNameLabel(name, player.name, false);
     name.appendChild(buildPlayerLinkIcon(player.name));
     card.appendChild(name);
@@ -3885,16 +4377,21 @@
     var mvpWins = state.teamMvpWins[player.id] || 0;
     card.appendChild(buildStatMini(T("scoreboard.tourneyWin"), mvpWins, mvpWins >= effectiveRaceTarget(player.teamId), "stat-mini-tourney"));
 
+    // Buttons sit above the score (between the name/badges and the
+    // number itself), same order as buildIndividualPanel's own card.
+    card.appendChild(buildBallControls(player, disabled, undoOnMinus));
+
     var value = document.createElement("div");
-    value.className = "stat-value small";
+    value.className = "stat-value small keypad-select-trigger";
+    value.addEventListener("click", function () {
+      selectKeypadPlayer(player.id, null, true);
+    });
     value.textContent = player.balls || 0;
     applyScoreFlash(value, player);
     card.appendChild(value);
 
     var runBadge = buildRunStreakBadge(player);
     if (runBadge) card.appendChild(runBadge);
-
-    card.appendChild(buildBallControls(player, disabled, undoOnMinus));
     markAsKeypadTarget(card, player);
 
     return card;
@@ -3954,22 +4451,10 @@
       warning.className = "team-needs-opponent-warning";
       warning.textContent = T("scoreboard.teamNeedsOpponent");
       panel.appendChild(warning);
-    } else {
-      // Team mode is always exactly A vs B (see gameSetup.teamA/teamB),
-      // so unlike individual mode's soleActiveOpponent guard, "the
-      // opponent" is never ambiguous here - the other team, whichever
-      // one this one isn't.
-      var opponentTeamMembers = teamMembersLive(teamId === "A" ? "B" : "A").map(function (p) {
-        return p.name;
-      });
-      var teamPronostic = teamRatingPronosticVsOpponent(
-        members.map(function (p) {
-          return p.name;
-        }),
-        opponentTeamMembers
-      );
-      panel.appendChild(buildRatingPronosticEl(teamPronostic));
     }
+    // No rating preview here - Team Mode games don't affect rating at
+    // all (see applyMultiWayRatingResult's comment), so a "+X/-Y"
+    // pronostic would just promise a change that never actually happens.
 
     var wins = state.teamWins[teamId] || 0;
 
@@ -3986,19 +4471,22 @@
 
     var block = document.createElement("div");
     block.className = "stat-block";
-    var label = document.createElement("div");
-    label.className = "stat-label";
     var value = document.createElement("div");
     value.className = "stat-value";
     if (isSingleRackGame) {
+      // Still needs a label here - without it this number reads as an
+      // ambiguous score when it's actually the session win count.
+      var label = document.createElement("div");
+      label.className = "stat-label";
       label.textContent = T("scoreboard.pairedSessionWinScore");
+      block.appendChild(label);
       value.textContent = wins;
       if (wins >= effectiveRaceTarget(teamId)) value.appendChild(buildFlagSpan());
     } else {
-      label.textContent = T("scoreboard.gameTargetLabel", { game: GAME_TYPES[state.currentGame.gameType].label, target: state.currentGame.target });
+      // No "[game] · target [n]" label here anymore - the "Now Playing"
+      // banner above the scoreboard already says both.
       value.textContent = sumTeamBalls(teamId);
     }
-    block.appendChild(label);
     block.appendChild(value);
     panel.appendChild(block);
 
@@ -4018,10 +4506,41 @@
     var type = GAME_TYPES[state.currentGame.gameType];
     nowPlayingBanner.innerHTML = "";
     nowPlayingBanner.appendChild(document.createTextNode(T("scoreboard.nowPlayingBanner", { label: type.label })));
-    var note = document.createElement("span");
-    note.className = "target-note";
-    note.textContent = T("gameSetup.targetNote", { target: state.currentGame.target, unit: state.currentGame.unit });
-    nowPlayingBanner.appendChild(note);
+    if (ROTATION_LABEL_NO_TARGET_TYPES.indexOf(state.currentGame.gameType) === -1) {
+      nowPlayingBanner.appendChild(document.createTextNode(" — "));
+      var note = document.createElement("span");
+      note.className = "target-note";
+      note.textContent = T("gameSetup.targetNote", { target: state.currentGame.target, unit: state.currentGame.unit });
+      nowPlayingBanner.appendChild(note);
+    }
+
+    // A quick way to change the game type right from the scoreboard,
+    // with no trip to the (collapsed) Game Setup panel - added for
+    // Quick Game, where there's no rotation lineup dictating the type
+    // automatically. Hidden whenever a Rotation IS running
+    // (applyRotationIfDue would just overwrite a manual pick back on
+    // the next win anyway, which would be confusing rather than useful
+    // there - the Games Rotation panel is the right place to manage
+    // game type in that case).
+    if (!state.rotation.enabled) {
+      var typeSelect = document.createElement("select");
+      typeSelect.className = "now-playing-type-select";
+      GAME_TYPE_LIST.forEach(function (t) {
+        var opt = document.createElement("option");
+        opt.value = t.id;
+        opt.textContent = t.label;
+        typeSelect.appendChild(opt);
+      });
+      typeSelect.value = state.currentGame.gameType;
+      typeSelect.setAttribute("aria-label", T("scoreboard.changeGameTypeAria"));
+      typeSelect.addEventListener("click", function (e) {
+        e.stopPropagation();
+      });
+      typeSelect.addEventListener("change", function () {
+        setCurrentGameType(typeSelect.value);
+      });
+      nowPlayingBanner.appendChild(typeSelect);
+    }
 
     var rotationInfo = rotationStatusInfo();
     if (rotationInfo) {
@@ -4035,10 +4554,61 @@
     }
     renderRotationPositionControl();
 
+    var durationRow = document.createElement("div");
+    durationRow.className = "now-playing-duration-row";
+
     var duration = document.createElement("span");
     duration.className = "game-duration-live";
     duration.id = "game-duration-live";
-    nowPlayingBanner.appendChild(duration);
+    durationRow.appendChild(duration);
+
+    // Only while actually racing (raceToWinsTarget === 1 is "single
+    // game", no race at all - see raceModeSingleRadio) - editable right
+    // here, same inline-<input>-via-marker-split technique as the
+    // Rotation Position line's "every" field, so the word order still
+    // comes from the active translation rather than being hardcoded.
+    if (state.raceToWinsTarget > 1) {
+      var racingToWrap = document.createElement("span");
+      racingToWrap.className = "racing-to-live";
+      var raceMarker = "\u0000";
+      var raceTemplated = T("scoreboard.racingToLabel", { count: raceMarker });
+      var raceParts = raceTemplated.split(raceMarker);
+      racingToWrap.appendChild(document.createTextNode(raceParts[0] || ""));
+      var racingToInput = document.createElement("input");
+      racingToInput.type = "number";
+      racingToInput.min = "1";
+      racingToInput.inputMode = "numeric";
+      racingToInput.className = "racing-to-input";
+      racingToInput.value = state.raceToWinsTarget;
+      racingToInput.setAttribute("aria-label", T("scoreboard.racingToAria"));
+      racingToInput.addEventListener("click", function (e) {
+        e.stopPropagation();
+      });
+      racingToInput.addEventListener("change", function () {
+        var v = parseInt(racingToInput.value, 10);
+        if (!v || v < 1) {
+          racingToInput.value = state.raceToWinsTarget;
+          return;
+        }
+        state.raceToWinsTarget = v;
+        lastRaceToWinsTarget = v;
+        // The anchor value just changed - drop the cached fair targets
+        // so they're recomputed against it, same as raceToWinsInput's
+        // own listener already does.
+        state.fairRaceTargets = null;
+        saveState();
+        syncRaceModeRadios();
+        raceToWinsInput.value = v;
+        renderScoreboard();
+        renderStandings();
+        updateCurrentGameSummary();
+      });
+      racingToWrap.appendChild(racingToInput);
+      racingToWrap.appendChild(document.createTextNode(raceParts[1] || ""));
+      durationRow.appendChild(racingToWrap);
+    }
+
+    nowPlayingBanner.appendChild(durationRow);
     updateGameDurationDisplay();
   }
 
@@ -4048,9 +4618,13 @@
     // Timed Tournament replaces the plain elapsed-time readout with its
     // own countdown in this exact spot while it's on, per request -
     // same #game-duration-live element either way, just a different
-    // source/direction for the number.
+    // source/direction for the number. Except when the Shot Counter is
+    // ALSO on: its own widget (see shotCounterActive) already shows a
+    // prominent running clock of its own, so a second "Time Left"
+    // readout up here is redundant clutter rather than useful
+    // information - left blank in that combination instead.
     if (timedTournamentActive()) {
-      el.textContent = T("timedTournament.remainingLive", { time: formatDuration(timedTournamentRemainingMs()) });
+      el.textContent = shotCounterActive() ? "" : T("timedTournament.remainingLive", { time: formatDuration(timedTournamentRemainingMs()) });
       return;
     }
     if (!state.currentGame.startedAt) return;
@@ -4113,6 +4687,20 @@
     tickShotCounter();
   }
 
+  // Zeroes the elapsed time back to 0:00 without otherwise touching
+  // whether it's running or paused right now (unlike startShotCounter,
+  // which always leaves it paused at 0:00 - this is "restart the clock
+  // mid-shot", not "set the feature up fresh") - just means "back to
+  // zero, keep doing whatever it was doing".
+  function resetShotCounterToZero() {
+    if (!shotCounterActive()) return;
+    shotCounterAccumulatedMs = 0;
+    shotCounterLastBeepMs = 0;
+    shotCounterLastTickCountdown = null;
+    if (shotCounterRunningSince) shotCounterRunningSince = Date.now();
+    tickShotCounter();
+  }
+
   // Flips show/hide - shared by the "*" keypad shortcut and the Game
   // Setup panel's Show/Hide Timer button. Persisted so the widget stays
   // hidden across a reload instead of popping back up (see startShotCounter).
@@ -4122,6 +4710,22 @@
     state.currentGame.shotCounterHidden = shotCounterHidden;
     saveState();
     tickShotCounter();
+  }
+
+  // Turns the feature off outright - unlike toggleShotCounterVisibility
+  // (which only hides the WIDGET while it keeps ticking/beeping
+  // underneath), this is the same as unchecking the Game Setup
+  // checkbox: the widget's own ⏹ button, for whenever it's showing up
+  // unexpectedly (e.g. left on from an earlier game/session - the
+  // setting persists across games on purpose, so this is the fast way
+  // back rather than hunting down the checkbox in Game Setup).
+  function killShotCounter() {
+    if (!shotCounterActive()) return;
+    state.currentGame.shotCounterEnabled = false;
+    shotCounterEnabledCheckbox.checked = false;
+    shotCounterBeepRow.classList.add("hidden");
+    saveState();
+    stopShotCounter();
   }
 
   // Runs every second (see the setInterval near boot) and also called
@@ -4314,7 +4918,12 @@
     if (!widget) return;
     var active = timedTournamentActive();
     var overlayOrAppHidden = isAnyOverlayOpen() || appRoot.classList.contains("hidden");
-    widget.classList.toggle("hidden", !(active && !overlayOrAppHidden));
+    // The Shot Counter widget already occupies the same "a timer is
+    // showing" spot on screen - with both features on at once, showing
+    // this one too is redundant clutter, not useful information, so it
+    // stays hidden (the countdown itself keeps running underneath,
+    // unaffected - this only ever hides the display, never below).
+    widget.classList.toggle("hidden", !(active && !overlayOrAppHidden) || shotCounterActive());
     if (!active) return;
 
     var remaining = timedTournamentRemainingMs();
@@ -4341,6 +4950,8 @@
 
   function renderScoreboard() {
     var active = activePlayers();
+
+    btnFinishSnooker.classList.toggle("hidden", quickCounterMode || state.currentGame.gameType !== "snooker");
 
     if (quickCounterMode) {
       nowPlayingBanner.innerHTML = "";
@@ -4591,6 +5202,7 @@
     state.players.push(player);
     saveState();
     recordPlayerAddedIfNew(name);
+    getOrCreatePlayerLocalId(name);
     clearPlayerRemoved(name);
     reactivatePlayerFromGraveyard(name);
     if (typeof startingRating === "number" && !isNaN(startingRating) && !findRatingKey(name)) {
@@ -4863,13 +5475,25 @@
     // points behind, ≈3 balls") - see showGameWinOverlay/
     // buildBallsLeftRow. null for every other unit.
     var pointsGapPrefill = null;
+    // Same games showGameWinOverlay hides the "balls left" field for
+    // (see BALLS_LEFT_HIDDEN_GAME_TYPES) - there's no well-defined
+    // balls-left/points-gap quantity for either player in these, so
+    // the prefill computation below is skipped entirely for them too,
+    // not just its own display. Snooker in particular has no fixed
+    // target to measure a "gap" against at all (see DEFAULT_GAME_TYPES'
+    // comment on its placeholder target) - without this guard, a
+    // Snooker win would silently compute and store a meaningless
+    // "964 points behind 999" style number nothing ever shows, but
+    // other surfaces that don't know to hide it (a player's own game
+    // log, the leaderboard) would have displayed anyway.
+    var ballsLeftConceptApplies = BALLS_LEFT_HIDDEN_GAME_TYPES.indexOf(state.currentGame.gameType) === -1;
     if (state.currentGame.unit !== "rack") {
       if (isTeam) {
         var opponentTeamBalls = sumTeamBalls(otherTeamId);
         skunk = opponentTeamBalls === 0;
-        if (state.currentGame.gameType === "onepocket") {
+        if (ballsLeftConceptApplies && state.currentGame.gameType === "onepocket") {
           ballsLeftPrefill = Math.max(0, 15 - sumTeamBalls(key) - opponentTeamBalls);
-        } else if (state.currentGame.unit === "points") {
+        } else if (ballsLeftConceptApplies && state.currentGame.unit === "points") {
           // Exactly 2 teams ever exist (see otherTeamId above), so
           // there's only ever one "loser" to average here.
           pointsGapPrefill = Math.max(0, state.currentGame.target - opponentTeamBalls);
@@ -4877,7 +5501,7 @@
         }
       } else if (skunkOpponentBalls !== null) {
         skunk = skunkOpponentBalls === 0;
-        if (state.currentGame.gameType === "onepocket") {
+        if (ballsLeftConceptApplies && state.currentGame.gameType === "onepocket") {
           ballsLeftPrefill = Math.max(0, 15 - winnerBallsAtWin - skunkOpponentBalls);
         }
       }
@@ -4889,7 +5513,7 @@
       // count first and then averaging - avoids compounding rounding
       // error). Deliberately not folded into the skunkOpponentBalls
       // branch above, which only ever looks at a single opponent.
-      if (!isTeam && state.currentGame.unit === "points") {
+      if (ballsLeftConceptApplies && !isTeam && state.currentGame.unit === "points") {
         var loserGaps = activePlayers()
           .filter(function (p) {
             return p.id !== key;
@@ -4945,13 +5569,15 @@
       teamCredit: null
     });
     if (state.gameHistory.length > 200) state.gameHistory.length = 200;
-    if (!noStatsMode) {
-      if (isTeam) {
-        applyTeamRatingResult(winnerNames, opponentNames, ts);
+    if (!noStatsMode && !isTeam) {
+      // Team Mode isn't rated at all (see applyMultiWayRatingResult's
+      // comment) - averaging teammates together, or moving every
+      // member the same amount regardless of their own rating, produced
+      // confusing swings unrelated to that player's own performance.
+      if (winnerNames.length > 1 || opponentNames.length > 1) {
+        applyMultiWayRatingResult(winnerNames, opponentNames, ts);
       } else {
-        opponentNames.forEach(function (opponentName) {
-          applyPairwiseRatingResult(winnerNames[0], opponentName, ts);
-        });
+        applyPairwiseRatingResult(winnerNames[0], opponentNames[0], ts);
       }
       saveRatingsToStorage(PLAYER_RATINGS);
     }
@@ -5373,10 +5999,19 @@
     gamewinPendingOnClose = onClose;
     gamewinMessage.textContent = summary;
     gamewinDetails.innerHTML = "";
+    // Must be the game type that was actually just won (freshEntry's own
+    // gameType, frozen at win time), not state.currentGame.gameType - a
+    // rotation switch (see applyRotationIfDue, called in recordWin before
+    // this) has often already advanced that to the NEXT game type by the
+    // time this overlay opens, which previously made e.g. an 8-Ball win
+    // that rotates into 9-Ball incorrectly hide the balls-left field (and
+    // the reverse direction wrongly show it) - this dialog is about the
+    // game that just ended, not the one about to start.
+    var wonGameType = freshEntry ? freshEntry.gameType : state.currentGame.gameType;
     // 9-Ball/10-Ball have no well-defined "balls left" concept (see
     // LEADERBOARD_BALLS_LEFT_MAX_BY_GAME_TYPE) - no field to show at
     // all for them, rather than one that's always meaningless to fill in.
-    if (BALLS_LEFT_HIDDEN_GAME_TYPES.indexOf(state.currentGame.gameType) === -1) {
+    if (BALLS_LEFT_HIDDEN_GAME_TYPES.indexOf(wonGameType) === -1) {
       gamewinDetails.appendChild(buildBallsLeftRow());
       if (freshEntry && typeof freshEntry.pointsGapAtWin === "number") {
         var pointsHint = document.createElement("p");
@@ -5605,6 +6240,13 @@
       playerStats: JSON.parse(JSON.stringify(PLAYER_STATS))
     };
 
+    // A completed race counts as a Tournament too (see
+    // sessionRaceTournamentGames) - push it to Challonge now, while
+    // this race's own games are still the live gameHistory, right
+    // before the reset below clears it for the next one. Silent no-op
+    // if Challonge isn't connected.
+    pushRaceToChallonge(lastTournamentWinSnapshot.gameHistory, names, target);
+
     // Save this tournament's game history to per-player stats before the
     // reset below wipes state.gameHistory, then start the next one fresh.
     exportAllPlayerStats();
@@ -5787,6 +6429,65 @@
     }
   }
 
+  // A per-player counterpart to RUN_RECORDS.dailyBest, which only ever
+  // remembers ONE run for the whole app each day (whoever's run
+  // happens to be the single biggest) - useful for "who's on fire
+  // today" bragging rights, but wrong for a specific player's own
+  // stats page: showing them someone ELSE's name under a heading on
+  // their own page reads as a bug even though it's working as
+  // designed. This mirrors that same peak-tracking logic
+  // (stale-if-not-today, else keep the higher value) but keyed per
+  // player, the same case-insensitive way PLAYER_BEST_RUNS already is.
+  var PLAYER_DAILY_BEST_RUNS_KEY = "poolMasterCounter.playerDailyBestRuns.v1";
+
+  function loadPlayerDailyBestRunsFromStorage() {
+    try {
+      var raw = localStorage.getItem(PLAYER_DAILY_BEST_RUNS_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function savePlayerDailyBestRunsToStorage(data) {
+    try {
+      localStorage.setItem(PLAYER_DAILY_BEST_RUNS_KEY, JSON.stringify(data));
+    } catch (e) {
+      console.warn("Could not save player daily best runs.", e);
+    }
+  }
+
+  var PLAYER_DAILY_BEST_RUNS = loadPlayerDailyBestRunsFromStorage();
+
+  function findPlayerDailyBestRunKey(name) {
+    var key = normalizeNameKey(name);
+    var match = Object.keys(PLAYER_DAILY_BEST_RUNS).filter(function (k) {
+      return normalizeNameKey(k) === key;
+    });
+    return match.length ? match[0] : null;
+  }
+
+  // This player's own best run TODAY specifically - null if they
+  // haven't had one worth tracking yet today (either never, or their
+  // last one was on an earlier day and today hasn't produced a new
+  // one yet).
+  function getPlayerTodaysBestRun(name) {
+    var key = findPlayerDailyBestRunKey(name);
+    if (!key) return null;
+    var entry = PLAYER_DAILY_BEST_RUNS[key];
+    return localDateStrFromTs(entry.ts) === todayDateStr() ? entry : null;
+  }
+
+  function recordPlayerDailyBestRunIfHigher(name, value) {
+    var key = findPlayerDailyBestRunKey(name) || name;
+    var existing = PLAYER_DAILY_BEST_RUNS[key];
+    var stale = !existing || localDateStrFromTs(existing.ts) !== todayDateStr();
+    if (stale || value > existing.value) {
+      PLAYER_DAILY_BEST_RUNS[key] = { name: name, value: value, ts: new Date().toISOString() };
+      savePlayerDailyBestRunsToStorage(PLAYER_DAILY_BEST_RUNS);
+    }
+  }
+
   // Checked continuously as a run grows (see bumpRunForPlayer), not just
   // once when it "ends" - a run's final length is its peak, so comparing
   // on every extra ball is exactly equivalent and means there's no
@@ -5794,6 +6495,7 @@
   function checkRunRecords(playerName, value) {
     if (value < RUN_RECORD_MIN_TO_TRACK) return;
     recordPlayerBestRunIfHigher(playerName, value);
+    recordPlayerDailyBestRunIfHigher(playerName, value);
     var changed = false;
     var nowTs = new Date().toISOString();
     if (!RUN_RECORDS.allTimeBest || value > RUN_RECORDS.allTimeBest.value) {
@@ -6027,6 +6729,42 @@
     }
     renderAll();
     lastScoredPlayerId = null;
+  }
+
+  // Snooker (see DEFAULT_GAME_TYPES's comment on why its target is a
+  // plain placeholder) never reaches its target on its own the way
+  // every other game here does - this is the actual "a frame just
+  // ended" action for it, crediting whoever currently has the higher
+  // score exactly the way reaching a real target would (same creditWin
+  // call adjustScore makes), rather than waiting for a number that was
+  // never meant to be reached. A tie refuses to guess - the organizer
+  // adjusts a score first (there's always a next shot's worth of
+  // difference in a real frame) rather than this picking arbitrarily.
+  function finishSnookerFrame() {
+    var isTeamMode = !quickCounterMode && state.currentGame.mode === "teams";
+    if (isTeamMode) {
+      var teamAMembers = teamMembersLive("A");
+      var teamBMembers = teamMembersLive("B");
+      if (!teamAMembers.length || !teamBMembers.length) return;
+      var scoreA = sumTeamBalls("A");
+      var scoreB = sumTeamBalls("B");
+      if (scoreA === scoreB) {
+        showToast(T("snooker.tie"));
+        return;
+      }
+      creditWin(true, scoreA > scoreB ? "A" : "B", null);
+    } else {
+      var active = activePlayers();
+      if (active.length < 2) return;
+      var sorted = active.slice().sort(function (a, b) {
+        return (b.balls || 0) - (a.balls || 0);
+      });
+      if ((sorted[0].balls || 0) === (sorted[1].balls || 0)) {
+        showToast(T("snooker.tie"));
+        return;
+      }
+      creditWin(false, sorted[0].id, sorted[0].voice);
+    }
   }
 
   function resetCurrentGame() {
@@ -7951,6 +8689,81 @@
     downloadJSON(filename, snapshot);
   }
 
+  // The most recent calendar date with real games recorded, live or
+  // archived - today if anything's been played yet today, otherwise
+  // the latest past date any player's archived sessions actually have
+  // games for (not just a note or a tournament result with no regular
+  // games). null only if nothing has ever been played on this device.
+  function lastDateWithGameData() {
+    if (state.gameHistory.length > 0) return todayDateStr();
+    var dates = {};
+    Object.keys(PLAYER_STATS).forEach(function (key) {
+      (PLAYER_STATS[key].sessions || []).forEach(function (s) {
+        if (s.date && (s.games || []).length > 0) dates[s.date] = true;
+      });
+    });
+    var sorted = Object.keys(dates).sort();
+    return sorted.length ? sorted[sorted.length - 1] : null;
+  }
+
+  // Same idea as exportSession() above, but for a past date that's no
+  // longer "live" - reconstructed from every player's own archived
+  // sessions (via computeDayReportData, the same aggregation the Day
+  // Report already trusts) instead of the current live state, since
+  // that date's games have long since been archived out of
+  // state.gameHistory.
+  function exportArchivedSessionForDate(dateStr) {
+    var report = computeDayReportData(dateStr, true);
+    var playerWins = report.players
+      .map(function (p) {
+        return { name: p.name, wins: p.wins };
+      })
+      .sort(function (a, b) {
+        return b.wins - a.wins;
+      });
+    var teamWinCounts = {};
+    report.games.forEach(function (g) {
+      if (!g.isTeam || g.result !== "won") return;
+      var members = joinNamesForReport(g.winnerNames || []);
+      teamWinCounts[members] = (teamWinCounts[members] || 0) + 1;
+    });
+    var teamWins = Object.keys(teamWinCounts)
+      .map(function (members) {
+        return { members: members, wins: teamWinCounts[members] };
+      })
+      .sort(function (a, b) {
+        return b.wins - a.wins;
+      });
+    var snapshot = {
+      exportedAt: new Date().toISOString(),
+      date: dateStr,
+      players: report.players.map(function (p) {
+        return { name: p.name };
+      }),
+      playerWins: playerWins,
+      teamWins: teamWins,
+      gameHistory: report.games
+    };
+    downloadJSON("pool-session-" + dateStr + ".json", snapshot);
+  }
+
+  // The "Share Last Session" button's handler - always has something
+  // real to share instead of silently exporting an empty "today" the
+  // moment the app is opened before anyone's played yet.
+  function shareLastSessionWithData() {
+    var dateStr = lastDateWithGameData();
+    if (!dateStr) {
+      showToast(T("backup.noSessionToShare"));
+      return;
+    }
+    if (dateStr === todayDateStr() && state.gameHistory.length > 0) {
+      exportSession();
+    } else {
+      exportArchivedSessionForDate(dateStr);
+    }
+    exportAllPlayerStats();
+  }
+
   function downloadJSON(filename, data) {
     var json = JSON.stringify(data, null, 2);
     var blob = new Blob([json], { type: "application/json" });
@@ -8090,11 +8903,13 @@
   // League (APA-style handicap league) - an organizer-managed group of
   // players competing over time, scored with the real APA Skill Level
   // handicap system so a mismatched pairing still plays close. Local-only,
-  // no server: the organizer's device is the single source of truth for a
-  // league (isOrganizer:true there), shared to other devices purely via
-  // exportLeague/importLeagueFile (the same downloadJSON pattern every
-  // other export in this app uses) - an imported copy always renders
-  // read-only, even re-imported back onto the organizer's own device.
+  // no server: leagues move between devices purely via exportLeague/
+  // importLeagueFile (the same downloadJSON pattern every other export in
+  // this app uses), and an imported copy is fully editable on the device
+  // that imports it (isOrganizer:true), not just a read-only view - there's
+  // still no sync between devices, so an import fully replaces whatever
+  // that device already had for the league's id, and independent edits on
+  // two devices only reconcile by re-exporting and re-importing.
   //
   // The two charts below are independently reconstructed from APA's
   // publicly published Skill Level handicap tables, not sourced from
@@ -8113,10 +8928,17 @@
   // trust the fields exist.
   function normalizeLeagueDefaults(l) {
     if (!l) return l;
+    // Imports used to stay read-only forever (isOrganizer:false, never
+    // reset) - forced true here too, not just on new imports, so a league
+    // someone already imported before this change becomes editable the
+    // next time it loads, without needing a fresh re-import.
+    l.isOrganizer = true;
+    if (typeof l.isOpen !== "boolean") l.isOpen = false;
     if (typeof l.tableCount !== "number" || l.tableCount < 1) l.tableCount = 1;
     if (!Array.isArray(l.activeMatches)) l.activeMatches = [];
     if (typeof l.focusedTable === "undefined" || l.focusedTable === null) l.focusedTable = "all";
     if (l.queueMode !== "perTable" && l.queueMode !== "perRoom") l.queueMode = "none";
+    if (l.isOpen) l.queueMode = "none";
     if (!Array.isArray(l.roomQueue)) l.roomQueue = [];
     if (!l.tableQueues || typeof l.tableQueues !== "object") l.tableQueues = {};
     if (!l.tableTeamAssignment || typeof l.tableTeamAssignment !== "object") l.tableTeamAssignment = {};
@@ -8143,6 +8965,18 @@
     // "never configured" from "organizer explicitly checked nobody in yet".
     if (!Array.isArray(l.tonightRoster)) l.tonightRoster = [];
     if (typeof l.tonightRosterConfigured !== "boolean") l.tonightRosterConfigured = false;
+    // A league saved before this setting existed gets the exact behavior
+    // it already had - handicap on, APA, same as createLeague's default.
+    if (typeof l.useHandicap !== "boolean") l.useHandicap = true;
+    if (["apa", "bca", "vnba", "tap"].indexOf(l.handicapSystem) === -1) l.handicapSystem = "apa";
+    if (typeof l.handicapBaseGames !== "number" || l.handicapBaseGames < 1) l.handicapBaseGames = defaultHandicapBaseGames(l.format);
+    if (!l.customHandicapCharts || typeof l.customHandicapCharts !== "object") l.customHandicapCharts = blankHandicapChartsBySystem();
+    ["apa", "bca", "vnba", "tap"].forEach(function (system) {
+      if (!l.customHandicapCharts[system] || typeof l.customHandicapCharts[system] !== "object") l.customHandicapCharts[system] = {};
+      ["8ball", "9ball"].forEach(function (fmt) {
+        if (!l.customHandicapCharts[system][fmt] || typeof l.customHandicapCharts[system][fmt] !== "object") l.customHandicapCharts[system][fmt] = {};
+      });
+    });
     return l;
   }
 
@@ -8193,10 +9027,407 @@
     return format === "apa9ball" ? { min: APA_9BALL_MIN_SL, max: APA_9BALL_MAX_SL } : { min: APA_8BALL_MIN_SL, max: APA_8BALL_MAX_SL };
   }
 
-  function apaMatchTarget(format, skillLevel) {
-    var chart = format === "apa9ball" ? APA_9BALL_POINTS_TARGET : APA_8BALL_RACE_TO;
-    var range = apaSkillLevelRange(format);
-    return chart[skillLevel] || chart[range.min];
+  // Data-driven handicap charts for league match targets (see
+  // league.useHandicap/handicapSystem/handicapBaseGames below and
+  // leagueMatchTargetForMember). Pre-seeded with APA's real chart (the
+  // only one of the four with one official nationwide table - matches
+  // APA_8BALL_RACE_TO/APA_9BALL_POINTS_TARGET above) so the app works
+  // correctly even before data/handicap-charts.json has loaded, or if it
+  // never does (offline, fetch blocked, etc.) - BCA/VNBA/TAP start empty
+  // either way since none of them publish one universal chart. This is
+  // the shared, app-wide fallback only; each league's own numbers live
+  // on the league itself (customHandicapCharts, edited via "View/Edit
+  // Table") and take priority over this when present - see
+  // leagueEffectiveHandicapChart.
+  var HANDICAP_CHARTS = {
+    apa: { "8ball": Object.assign({}, APA_8BALL_RACE_TO), "9ball": Object.assign({}, APA_9BALL_POINTS_TARGET) },
+    bca: { "8ball": {}, "9ball": {} },
+    vnba: { "8ball": {}, "9ball": {} },
+    tap: { "8ball": {}, "9ball": {} }
+  };
+
+  function blankHandicapChartsBySystem() {
+    return {
+      apa: { "8ball": {}, "9ball": {} },
+      bca: { "8ball": {}, "9ball": {} },
+      vnba: { "8ball": {}, "9ball": {} },
+      tap: { "8ball": {}, "9ball": {} }
+    };
+  }
+
+  // Fetched once at startup (fire-and-forget - see the call near boot).
+  // Editing data/handicap-charts.json and reloading the app is the whole
+  // update flow; no code change needed. A failed/blocked fetch just
+  // leaves the APA-only defaults above in place.
+  function loadHandicapChartsFromServer() {
+    fetch("data/handicap-charts.json")
+      .then(function (res) {
+        return res.ok ? res.json() : null;
+      })
+      .then(function (data) {
+        if (!data) return;
+        ["apa", "bca", "vnba", "tap"].forEach(function (system) {
+          if (!data[system]) return;
+          ["8ball", "9ball"].forEach(function (fmt) {
+            if (data[system][fmt] && typeof data[system][fmt] === "object") {
+              HANDICAP_CHARTS[system][fmt] = data[system][fmt];
+            }
+          });
+        });
+        // A league page already open with stale (pre-fetch) targets
+        // showing gets refreshed once real data is in; harmless no-op
+        // if the League page isn't open.
+        if (typeof renderLeaguePage === "function") renderLeaguePage();
+      })
+      .catch(function () {
+        // Offline/blocked - HANDICAP_CHARTS keeps its APA-only defaults.
+      });
+  }
+
+  // 8-ball's chart keys are games (small numbers); 9-ball's are points
+  // (much larger) - defaulting a fresh league's base to the same number
+  // regardless of format would be a sensible race in one and absurd in
+  // the other, so this picks a plausible "average player" starting point
+  // per format (matching APA's own SL5 entry in each chart above).
+  function defaultHandicapBaseGames(format) {
+    return format === "apa9ball" ? 38 : 5;
+  }
+
+  var HANDICAP_SYSTEM_LABEL_KEYS = { apa: "league.handicapSystemApa", bca: "league.handicapSystemBca", vnba: "league.handicapSystemVnba", tap: "league.handicapSystemTap" };
+  function handicapSystemLabel(system) {
+    return T(HANDICAP_SYSTEM_LABEL_KEYS[system] || HANDICAP_SYSTEM_LABEL_KEYS.apa);
+  }
+
+  // The creation form's Format radios ("APA 8-Ball" etc.) name whichever
+  // Rating System is currently picked in that same form, live as the
+  // organizer changes it - before Create League is even clicked, so
+  // what they see matches what they're about to get.
+  function updateLeagueNewFormatLabels() {
+    var label = handicapSystemLabel(leagueNewHandicapSystemSelect.value);
+    leagueNewFormat8BallLabel.textContent = T("league.format8Ball", { system: label });
+    leagueNewFormat9BallLabel.textContent = T("league.format9Ball", { system: label });
+  }
+
+  // The single source of truth for what a member must reach to win a
+  // league match (called at match-start, see startLeagueMatch).
+  // Handicap off: everyone races to the same base number, unhandicapped.
+  // Handicap on: the selected system's chart for this member's own
+  // Skill Level, or the base number if that Skill Level isn't in the
+  // chart (an empty BCA/VNBA/TAP chart before the organizer has added
+  // their own league's numbers means every member falls back to base).
+  // BCA defaults to this app's own Elo-style rating (see buildRatingBadge/
+  // getPlayerRating - already described to players as "FargoRate-inspired")
+  // as its handicap key instead of the manually-set Skill Level field,
+  // since BCAPL leagues commonly handicap off FargoRate in practice (see
+  // the BCA/BCAPL section of the handicap research this feature is built
+  // from) and this app has no separate Fargo integration to pull a real
+  // FargoRate number from - every other system keys off Skill Level.
+  function leagueHandicapUsesRating(system) {
+    return system === "bca";
+  }
+
+  function leagueMatchTargetForMember(league, member) {
+    if (!league.useHandicap) return league.handicapBaseGames;
+    var fmt = league.format === "apa9ball" ? "9ball" : "8ball";
+    var custom = ((league.customHandicapCharts || {})[league.handicapSystem] || {})[fmt] || {};
+    if (typeof custom[member.skillLevel] === "number") return custom[member.skillLevel];
+    var shared = (HANDICAP_CHARTS[league.handicapSystem] || HANDICAP_CHARTS.apa)[fmt] || {};
+    var value = shared[member.skillLevel];
+    return typeof value === "number" ? value : league.handicapBaseGames;
+  }
+
+  // BCA's handicap isn't a per-player lookup at all - it's a ratio
+  // applied to the RATING GAP between the two players actually being
+  // matched (real rating-based handicapping compares two opponents, not
+  // one player's number in isolation). The lower-rated player always
+  // races to Base Games to Win; the higher-rated player's target climbs
+  // from there, one extra game for every BCA_RATING_POINTS_PER_GAME of
+  // gap - equal ratings mean an equal, unhandicapped race. See
+  // renderLeagueHandicapChartRatio for the same math shown as a table.
+  var BCA_RATING_POINTS_PER_GAME = 4;
+
+  function bcaExtraGamesForRatingGap(gap) {
+    return Math.round(Math.abs(gap) / BCA_RATING_POINTS_PER_GAME);
+  }
+
+  function leagueBcaMatchTargets(league, memberA, memberB) {
+    var base = league.handicapBaseGames;
+    if (!league.useHandicap) return { targetA: base, targetB: base };
+    var ratingA = getPlayerRating(memberA.name);
+    var ratingB = getPlayerRating(memberB.name);
+    var extra = bcaExtraGamesForRatingGap(ratingA - ratingB);
+    return {
+      targetA: ratingA >= ratingB ? base + extra : base,
+      targetB: ratingB >= ratingA ? base + extra : base
+    };
+  }
+
+  // What the "View/Edit Table" editor shows: this league's own numbers
+  // (customHandicapCharts) layered over the shared app-wide chart
+  // (HANDICAP_CHARTS, from data/handicap-charts.json) for whichever
+  // Skill Levels the league hasn't overridden itself yet - exactly the
+  // same priority leagueMatchTargetForMember uses to pick a target.
+  function leagueEffectiveHandicapChart(league) {
+    var fmt = league.format === "apa9ball" ? "9ball" : "8ball";
+    var shared = (HANDICAP_CHARTS[league.handicapSystem] || {})[fmt] || {};
+    var custom = ((league.customHandicapCharts || {})[league.handicapSystem] || {})[fmt] || {};
+    return Object.assign({}, shared, custom);
+  }
+
+  // The table editor works on a draft (Skill Level -> value, flat since
+  // it's always scoped to whichever one system+format is currently open)
+  // instead of writing straight into the league on every keystroke -
+  // add/edit/remove all just update this and re-render; nothing reaches
+  // league.customHandicapCharts (or gets saved) until Save is clicked.
+  // Reopening the editor discards any unsaved draft and starts fresh
+  // from what's actually saved.
+  var leagueHandicapChartDraft = null;
+
+  function openLeagueHandicapChartEditor(league) {
+    var fmt = league.format === "apa9ball" ? "9ball" : "8ball";
+    var system = league.handicapSystem;
+    var isRatio = system === "bca";
+    // APA's chart is real and fixed nationwide - nothing an organizer
+    // could sensibly edit, but still worth seeing, same as BCA's ratio.
+    // VNBA/TAP are the only two with an organizer-editable chart.
+    var isFixed = system === "apa";
+    var readOnly = isRatio || isFixed;
+    leagueHandicapChartTitle.textContent =
+      T(league.format === "apa9ball" ? "league.format9Ball" : "league.format8Ball", { system: handicapSystemLabel(system) }) +
+      " " +
+      T(isRatio ? "league.handicapChartRatioTitleSuffix" : "league.handicapChartTitleSuffix");
+    leagueHandicapChartAddRow.classList.toggle("hidden", readOnly);
+    btnLeagueHandicapChartSave.classList.toggle("hidden", readOnly);
+    // The "See it for <player>" matchup breakdown only makes sense where
+    // one player's own number stays fixed regardless of opponent (APA) -
+    // BCA already IS a per-opponent view (the ratio table), and VNBA/TAP
+    // are edited as an abstract Skill Level chart, not per member.
+    leagueHandicapChartPlayerRow.classList.toggle("hidden", !isFixed);
+    leagueHandicapChartPlayerTable.classList.toggle("hidden", !isFixed);
+    if (isFixed) {
+      populateLeagueHandicapChartPlayerSelect(league);
+      renderLeagueHandicapChartPlayerMatchups(league);
+    }
+
+    if (isRatio) {
+      // BCA has no organizer-editable chart at all - it's a ratio applied
+      // to the rating gap between whoever's actually playing (see
+      // leagueBcaMatchTargets), so there's nothing per-player to look up
+      // or edit here, just the ratio itself worked out at sample gaps.
+      leagueHandicapChartExplain.textContent = T("league.handicapChartExplainReadOnly", {
+        base: league.handicapBaseGames,
+        ratio: BCA_RATING_POINTS_PER_GAME
+      });
+      leagueHandicapChartKeyHeader.textContent = T("league.handicapChartRatingGap");
+      leagueHandicapChartTargetHeader.textContent = T(fmt === "9ball" ? "league.handicapChartExtraPoints" : "league.handicapChartExtraGames");
+      renderLeagueHandicapChartRatio(league);
+    } else if (isFixed) {
+      leagueHandicapChartExplain.textContent = T("league.handicapChartExplainFixed");
+      leagueHandicapChartKeyHeader.textContent = T("league.handicapChartSkillLevel");
+      leagueHandicapChartTargetHeader.textContent = T(fmt === "9ball" ? "league.handicapChartTargetPoints" : "league.handicapChartTargetGames");
+      renderLeagueHandicapChartFixed(league);
+    } else {
+      leagueHandicapChartTargetHeader.textContent = T(fmt === "9ball" ? "league.handicapChartTargetPoints" : "league.handicapChartTargetGames");
+      leagueHandicapChartKeyHeader.textContent = T("league.handicapChartSkillLevel");
+      leagueHandicapChartNewSlInput.placeholder = T("league.handicapChartSkillLevel");
+      leagueHandicapChartExplain.textContent = T("league.handicapChartExplain");
+
+      var merged = leagueEffectiveHandicapChart(league);
+      // Nothing saved or shared yet for this system (true for VNBA/TAP
+      // until the organizer has entered their own numbers at least once) -
+      // pre-fill the draft with APA's real chart as a concrete starting
+      // point to edit from rather than an empty table, since it's the
+      // only actual published chart this app has; nothing is written to
+      // the league until Save, so this alone never claims to BE that
+      // league's official numbers.
+      leagueHandicapChartDraft = Object.keys(merged).length ? Object.assign({}, merged) : Object.assign({}, HANDICAP_CHARTS.apa[fmt]);
+      renderLeagueHandicapChartEditorRows(league);
+    }
+
+    leagueHandicapChartOverlay.classList.remove("hidden");
+  }
+
+  // APA's plain, real, fixed chart - read-only for the same reason BCA's
+  // ratio view is: there's nothing here an organizer could meaningfully
+  // edit, since it's the one system with a single correct nationwide
+  // answer already built into HANDICAP_CHARTS.apa.
+  function renderLeagueHandicapChartFixed(league) {
+    var fmt = league.format === "apa9ball" ? "9ball" : "8ball";
+    var chart = HANDICAP_CHARTS.apa[fmt] || {};
+    var skillLevels = Object.keys(chart)
+      .map(Number)
+      .sort(function (a, b) {
+        return a - b;
+      });
+    leagueHandicapChartBody.innerHTML = "";
+    skillLevels.forEach(function (sl) {
+      var tr = document.createElement("tr");
+      var slCell = document.createElement("td");
+      slCell.textContent = sl;
+      tr.appendChild(slCell);
+      var valueCell = document.createElement("td");
+      valueCell.textContent = chart[sl];
+      tr.appendChild(valueCell);
+      tr.appendChild(document.createElement("td"));
+      leagueHandicapChartBody.appendChild(tr);
+    });
+  }
+
+  function populateLeagueHandicapChartPlayerSelect(league) {
+    var previous = leagueHandicapChartPlayerSelect.value;
+    leagueHandicapChartPlayerSelect.innerHTML = "";
+    league.members
+      .slice()
+      .sort(function (a, b) {
+        return a.name.localeCompare(b.name);
+      })
+      .forEach(function (m) {
+        var opt = document.createElement("option");
+        opt.value = m.name;
+        opt.textContent = leagueNameWithTeam(league, m.name);
+        leagueHandicapChartPlayerSelect.appendChild(opt);
+      });
+    // Re-opening (or a member list that changed while this was open)
+    // keeps the same player picked when they're still a member, instead
+    // of silently resetting to whoever now sorts first.
+    if (league.members.some(function (m) { return m.name === previous; })) {
+      leagueHandicapChartPlayerSelect.value = previous;
+    }
+  }
+
+  // APA's own chart already gives each player their target independent
+  // of who they're facing - this just looks that up for the picked
+  // player and lines it up against every other member's own number, the
+  // same "race is 2-6" shape APA's real published chart uses, but built
+  // from this league's actual members instead of abstract Skill Levels.
+  function renderLeagueHandicapChartPlayerMatchups(league) {
+    leagueHandicapChartPlayerBody.innerHTML = "";
+    var selected = league.members.filter(function (m) {
+      return m.name === leagueHandicapChartPlayerSelect.value;
+    })[0];
+    if (!selected) return;
+    var myTarget = leagueMatchTargetForMember(league, selected);
+    var opponents = league.members
+      .filter(function (m) {
+        return m.name !== selected.name;
+      })
+      .sort(function (a, b) {
+        return a.name.localeCompare(b.name);
+      });
+    if (!opponents.length) {
+      var emptyRow = document.createElement("tr");
+      var emptyCell = document.createElement("td");
+      emptyCell.colSpan = 3;
+      emptyCell.className = "empty-hint";
+      emptyCell.textContent = T("league.handicapChartNoOpponents");
+      emptyRow.appendChild(emptyCell);
+      leagueHandicapChartPlayerBody.appendChild(emptyRow);
+      return;
+    }
+    opponents.forEach(function (opp) {
+      var tr = document.createElement("tr");
+      var oppCell = document.createElement("td");
+      oppCell.textContent = leagueNameWithTeam(league, opp.name);
+      tr.appendChild(oppCell);
+      var youCell = document.createElement("td");
+      youCell.textContent = myTarget;
+      tr.appendChild(youCell);
+      var themCell = document.createElement("td");
+      themCell.textContent = leagueMatchTargetForMember(league, opp);
+      tr.appendChild(themCell);
+      leagueHandicapChartPlayerBody.appendChild(tr);
+    });
+  }
+
+  // BCA's read-only view: one row per actual league member (not an
+  // abstract Rating bracket), showing their live app Rating alongside
+  // the Games/Points to Win that would actually be used right now - the
+  // exact value leagueMatchTargetForMember would compute for them, so
+  // "no editing" still means "see what the handicap will be" in
+  // practice, not a guess.
+  // BCA's target is relative (see leagueBcaMatchTargets), so a per-member
+  // row showing one absolute number would be meaningless without knowing
+  // who they're playing - this shows the actual ratio instead, worked
+  // out at a spread of sample rating gaps, so the organizer can see
+  // exactly how many extra games any given gap adds.
+  var BCA_RATIO_SAMPLE_GAPS = [4, 8, 12, 16, 20, 24, 28, 32, 40, 60, 80];
+
+  function renderLeagueHandicapChartRatio(league) {
+    leagueHandicapChartBody.innerHTML = "";
+    BCA_RATIO_SAMPLE_GAPS.forEach(function (gap) {
+      var tr = document.createElement("tr");
+      var gapCell = document.createElement("td");
+      gapCell.textContent = gap;
+      tr.appendChild(gapCell);
+      var extraCell = document.createElement("td");
+      extraCell.textContent = "+" + bcaExtraGamesForRatingGap(gap);
+      tr.appendChild(extraCell);
+      tr.appendChild(document.createElement("td"));
+      leagueHandicapChartBody.appendChild(tr);
+    });
+  }
+
+  // Draws the table from the current draft - called on open and after
+  // every add/remove (a plain value edit updates the draft in place
+  // without needing to redraw the row it's already showing).
+  function renderLeagueHandicapChartEditorRows(league) {
+    var skillLevels = Object.keys(leagueHandicapChartDraft)
+      .map(Number)
+      .sort(function (a, b) {
+        return a - b;
+      });
+
+    leagueHandicapChartBody.innerHTML = "";
+    if (!skillLevels.length) {
+      var emptyRow = document.createElement("tr");
+      var emptyCell = document.createElement("td");
+      emptyCell.colSpan = 3;
+      emptyCell.className = "empty-hint";
+      emptyCell.textContent = T("league.handicapChartEmptyHint");
+      emptyRow.appendChild(emptyCell);
+      leagueHandicapChartBody.appendChild(emptyRow);
+    } else {
+      skillLevels.forEach(function (sl) {
+        var tr = document.createElement("tr");
+
+        var slCell = document.createElement("td");
+        slCell.textContent = sl;
+        tr.appendChild(slCell);
+
+        var valueCell = document.createElement("td");
+        var valueInput = document.createElement("input");
+        valueInput.type = "number";
+        valueInput.min = "1";
+        valueInput.max = "999";
+        valueInput.value = leagueHandicapChartDraft[sl];
+        valueInput.className = "league-handicap-chart-value-input";
+        valueInput.addEventListener("change", function () {
+          var v = parseInt(valueInput.value, 10);
+          if (!v || v < 1) {
+            valueInput.value = leagueHandicapChartDraft[sl];
+            return;
+          }
+          leagueHandicapChartDraft[sl] = v;
+        });
+        valueCell.appendChild(valueInput);
+        tr.appendChild(valueCell);
+
+        var removeCell = document.createElement("td");
+        var removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "btn btn-ghost";
+        removeBtn.textContent = "✕";
+        removeBtn.setAttribute("aria-label", T("league.handicapChartRemoveAria", { sl: sl }));
+        removeBtn.addEventListener("click", function () {
+          delete leagueHandicapChartDraft[sl];
+          renderLeagueHandicapChartEditorRows(league);
+        });
+        removeCell.appendChild(removeBtn);
+        tr.appendChild(removeCell);
+
+        leagueHandicapChartBody.appendChild(tr);
+      });
+    }
   }
 
   // A starting-point suggestion only (the organizer can always override) -
@@ -8222,12 +9453,13 @@
     return match.length ? match[0] : null;
   }
 
-  function createLeague(name, format) {
+  function createLeague(name, format, isOpen, handicapSystem) {
     var league = {
       id: "league-" + uid(),
       name: name,
       format: format,
       isOrganizer: true,
+      isOpen: !!isOpen,
       createdAt: new Date().toISOString(),
       exportedAt: null,
       members: [],
@@ -8246,7 +9478,21 @@
       maxGamesPerPlayer: 0,
       sessionGameCounts: {},
       tonightRoster: [],
-      tonightRosterConfigured: false
+      tonightRosterConfigured: false,
+      // On by default (APA) so a fresh league's matches are handicapped
+      // exactly like every league before this setting existed - see
+      // leagueMatchTargetForMember for how these three combine. The
+      // Rating System picked on the creation form seeds this; anything
+      // not one of the four known values falls back to APA.
+      useHandicap: true,
+      handicapSystem: ["apa", "bca", "vnba", "tap"].indexOf(handicapSystem) !== -1 ? handicapSystem : "apa",
+      handicapBaseGames: defaultHandicapBaseGames(format),
+      // The organizer's own Skill Level chart, per system+format - see
+      // leagueEffectiveHandicapChart/leagueMatchTargetForMember. Plain
+      // league data (not a separate store), so it's saved locally with
+      // everything else and travels with the league on export/import,
+      // same as every other per-league setting.
+      customHandicapCharts: blankHandicapChartsBySystem()
     };
     LEAGUES = LEAGUES.concat([league]);
     saveLeaguesToStorage(LEAGUES);
@@ -8350,11 +9596,12 @@
     var pts = aWon ? leaguePointsForResult(scoreA, targetA, scoreB, targetB) : leaguePointsForResult(scoreB, targetB, scoreA, targetA);
     var leaguePointsA = aWon ? pts.winnerPoints : pts.loserPoints;
     var leaguePointsB = aWon ? pts.loserPoints : pts.winnerPoints;
+    var ts = new Date().toISOString();
 
     league.matches = league.matches.concat([
       {
         id: "match-" + uid(),
-        ts: new Date().toISOString(),
+        ts: ts,
         playerA: nameA,
         playerB: nameB,
         skillLevelA: memberA.skillLevel,
@@ -8378,11 +9625,28 @@
     bumpLeagueSessionGameCount(league, nameA);
     bumpLeagueSessionGameCount(league, nameB);
 
+    // Same pairwise rating update every other pairwise result in the app
+    // gets (a regular game, a tournament match) - league matches are
+    // real games too, so a member's overall rating (shown everywhere
+    // else via buildRatingBadge) should move with their league record
+    // instead of staying frozen at whatever it was before they joined.
+    applyPairwiseRatingResult(aWon ? nameA : nameB, aWon ? nameB : nameA, ts);
+    saveRatingsToStorage(PLAYER_RATINGS);
+
     saveLeaguesToStorage(LEAGUES);
   }
 
+  // A view preference, not league data - deliberately not saved on the
+  // league object (or anywhere persisted), so it doesn't bloat an
+  // exported league file with something that's really just "how I like
+  // to look at this list right now." Resets to the Points default on
+  // reload, same starting point as before this was ever changeable.
+  var leagueStandingsSortMode = "points";
+
   function leagueStandingsSorted(league) {
     return league.members.slice().sort(function (a, b) {
+      if (leagueStandingsSortMode === "name") return a.name.localeCompare(b.name);
+      if (leagueStandingsSortMode === "fargo") return getPlayerRating(b.name) - getPlayerRating(a.name) || a.name.localeCompare(b.name);
       return b.leaguePoints - a.leaguePoints || b.matchesWon - a.matchesWon || a.name.localeCompare(b.name);
     });
   }
@@ -8410,13 +9674,15 @@
         alertModal(T("league.importInvalidFile"));
         return;
       }
-      // An imported copy is always read-only, even re-importing what was
-      // originally this same device's own export (see the sync model in
-      // the block comment above) - the organizer flag never survives a
-      // round trip through a file. Live-hosting state (activeMatches/
-      // queues/teams) is organizer-only UI, so an imported copy carrying
-      // it is harmless - it just never renders.
-      imported.isOrganizer = false;
+      // An imported copy is fully editable on this device, same as a
+      // locally created league (normalizeLeagueDefaults forces
+      // isOrganizer:true) - whoever imports a league file can actually
+      // run it (members, teams, tables, live hosting), not just view
+      // standings. There's still no sync between devices: each import
+      // fully replaces whatever this device already had for that league
+      // id (see the confirm below), so two devices editing independently
+      // and re-sharing files can diverge - re-exporting and re-importing
+      // is how they reconcile.
       normalizeLeagueDefaults(imported);
       var proceed = function () {
         LEAGUES = LEAGUES.filter(function (l) {
@@ -8508,9 +9774,14 @@
   }
 
   // Whether two names are on the same league team - two players sharing a
-  // team never play each other, in any hosting mode. Two names with no
-  // team (or on different teams) are always a valid pairing.
+  // team never play each other in a Team league, regardless of hosting
+  // mode. An Open league ignores team membership entirely here (even if
+  // league.teams still has leftover data from before it was switched to
+  // Open - see the league.isOpen toggle) since "no teams, pure player vs
+  // player" is the whole point of that mode. Two names with no team (or
+  // on different teams) are always a valid pairing either way.
   function leagueSameTeam(league, nameA, nameB) {
+    if (league.isOpen) return false;
     var teamA = leagueTeamForMember(league, nameA);
     var teamB = leagueTeamForMember(league, nameB);
     return !!(teamA && teamB && teamA.id === teamB.id);
@@ -8723,6 +9994,26 @@
   // Assigns one side (Team A or Team B) of a table to a league team. Once
   // both sides are set, the table switches from its plain shared queue to
   // dedicated team-vs-team hosting per the league's rotation style.
+  // True if teamId is already hosting on some OTHER table/side than the
+  // one being asked about here - a roster can only be assigned to one
+  // match at a time, so it must disappear from every other table's Team
+  // A/B dropdown the moment it's picked anywhere. The (table, side) pair
+  // is excluded from its own check so re-selecting a team's own current
+  // slot never counts as a conflict with itself.
+  function leagueTeamAssignedElsewhere(league, teamId, table, side) {
+    var here = tableQueueKey(table);
+    var assignments = league.tableTeamAssignment || {};
+    return Object.keys(assignments).some(function (key) {
+      var a = assignments[key];
+      if (!a) return false;
+      if (key === here) {
+        var otherSide = side === "a" ? "b" : "a";
+        return a[otherSide] === teamId;
+      }
+      return a.a === teamId || a.b === teamId;
+    });
+  }
+
   function assignTeamToTable(league, table, side, teamId) {
     if (!findLeagueTeamById(league, teamId)) return;
     var key = tableQueueKey(table);
@@ -8732,6 +10023,12 @@
       // Same team on both sides would pit teammates against each other -
       // the whole point of team-vs-team hosting is two DIFFERENT rosters.
       showToast(T("league.sameTeamNotAllowed"));
+      return;
+    }
+    if (leagueTeamAssignedElsewhere(league, teamId, table, side)) {
+      // Defense in depth - the dropdown itself already excludes these,
+      // but this guards any other future caller of assignTeamToTable.
+      showToast(T("league.teamAlreadyHostingElsewhere"));
       return;
     }
     league.tableTeamAssignment[key][side] = teamId;
@@ -8885,6 +10182,10 @@
       return m.name === nameB;
     })[0];
     if (!memberA || !memberB) return false;
+    var targets =
+      league.handicapSystem === "bca"
+        ? leagueBcaMatchTargets(league, memberA, memberB)
+        : { targetA: leagueMatchTargetForMember(league, memberA), targetB: leagueMatchTargetForMember(league, memberB) };
     var active = {
       id: "active-" + uid(),
       table: table,
@@ -8892,8 +10193,8 @@
       nameB: nameB,
       skillLevelA: memberA.skillLevel,
       skillLevelB: memberB.skillLevel,
-      targetA: apaMatchTarget(league.format, memberA.skillLevel),
-      targetB: apaMatchTarget(league.format, memberB.skillLevel),
+      targetA: targets.targetA,
+      targetB: targets.targetB,
       scoreA: 0,
       scoreB: 0,
       startedAt: new Date().toISOString()
@@ -9007,6 +10308,13 @@
     var player = getPlayer(getPlayerIdByName(name));
     var voice = player ? player.voice : undefined;
 
+    // Every tap rebuilds the live board (see renderLeagueActiveMatches),
+    // which removes the +/- button that was just tapped from the DOM -
+    // losing focus on a still-focused element makes some browsers reset
+    // scroll to the top, so every point scored reads as the page jumping.
+    // Restoring the exact position right after the rebuild is the fix.
+    var scrollY = window.scrollY;
+
     if (delta > 0 && next >= active[targetKey]) {
       playWinSound(voice);
       recordLeagueMatch(league, active.nameA, active.targetA, active.scoreA, active.nameB, active.targetB, active.scoreB);
@@ -9027,6 +10335,7 @@
       }
       saveLeaguesToStorage(LEAGUES);
       renderLeaguePage();
+      window.scrollTo(0, scrollY);
       if (league.queueMode !== "none") proposeNextMatchIfQueued(league, table);
       return;
     } else if (delta > 0) {
@@ -9036,6 +10345,7 @@
     }
     saveLeaguesToStorage(LEAGUES);
     renderLeagueActiveMatches();
+    window.scrollTo(0, scrollY);
   }
 
   function buildLeagueSidePanel(active, side, league) {
@@ -9098,6 +10408,34 @@
     cardWrap.className = "tournament-floating-board";
     cardWrap.style.setProperty("--stack-index", String(stackIndex));
 
+    // A dedicated button, not a tap-anywhere-on-the-card gesture - a
+    // stray tap on a live board still can't jump to a different table's
+    // score mid-game, only this specific control can. Same effect as
+    // picking this table from the focus dropdown below (or "all" again,
+    // toggling back), just reachable right from the board itself.
+    var headerRow = document.createElement("div");
+    headerRow.className = "league-board-header-row";
+    var isFocused = league.focusedTable === active.table;
+    var focusBtn = document.createElement("button");
+    focusBtn.type = "button";
+    focusBtn.className = "btn btn-ghost league-board-focus-btn";
+    focusBtn.textContent = isFocused ? T("league.seeAllTables") : T("league.focusThisTableButton");
+    focusBtn.addEventListener("click", function () {
+      league.focusedTable = isFocused ? "all" : active.table;
+      saveLeaguesToStorage(LEAGUES);
+      // Focusing a specific table is meant to leave just that one card
+      // and board on screen - Focus Mode is what hides everything else
+      // around them (Standings, Teams, Members, setup), so turning it
+      // on here too is part of the same action, not a separate step.
+      // Going back to "all" leaves Focus Mode exactly as it was - it's
+      // still useful with every table showing.
+      if (!isFocused) setLeagueFocusMode(true);
+      renderLeagueTablesGrid(league);
+      renderLeagueActiveMatches();
+    });
+    headerRow.appendChild(focusBtn);
+    cardWrap.appendChild(headerRow);
+
     var banner = document.createElement("div");
     banner.className = "now-playing-banner tournament-now-playing";
     var headerParts = [];
@@ -9114,10 +10452,11 @@
     return cardWrap;
   }
 
-  // Same "stack of floating boards" pattern as
-  // renderTournamentActiveMatch, deliberately no click-to-focus - only the
-  // dropdown switches which table's board is interactive, so a stray tap
-  // can't jump to a different table's live score mid-game.
+  // Same "stack of floating boards" pattern as renderTournamentActiveMatch.
+  // Focusing one table is only ever a deliberate action - either the
+  // dropdown below or each board's own focus button (see
+  // buildLeagueFloatingBoard) - never a tap on the board itself, so a
+  // stray tap can't jump to a different table's live score mid-game.
   function renderLeagueActiveMatches() {
     var league = activeLeagueId ? findLeagueById(activeLeagueId) : null;
     leagueCurrentMatchPanel.innerHTML = "";
@@ -9157,6 +10496,10 @@
       focusSelect.addEventListener("change", function () {
         league.focusedTable = focusSelect.value === "all" ? "all" : parseInt(focusSelect.value, 10);
         saveLeaguesToStorage(LEAGUES);
+        // Same "focusing one table also declutters everything around
+        // it" behavior as each board's own Focus This Table button.
+        if (league.focusedTable !== "all") setLeagueFocusMode(true);
+        renderLeagueTablesGrid(league);
         renderLeagueActiveMatches();
       });
       focusRow.appendChild(focusLabel);
@@ -9176,6 +10519,148 @@
       stack.appendChild(buildLeagueFloatingBoard(active, league, idx));
     });
     leagueCurrentMatchPanel.appendChild(stack);
+  }
+
+  // A free-text name input with its own suggestion dropdown, built by
+  // hand instead of the native <input list>/<datalist> combo - on iPad
+  // (and other WebKit-based browsers) that native popup can render on
+  // top of the input itself, blocking typing entirely. This draws its
+  // suggestions in normal document flow below the field instead, so it
+  // never covers what's being typed. wrapperClassName gets the flex-
+  // sizing rule (the existing .league-queue-add-input/.league-team-add-
+  // player-select CSS already targets a wrapper this way); the input
+  // itself just fills it.
+  // Shared by buildLeagueNameAutocomplete (builds its own input+wrapper
+  // from scratch) and attachNameAutocomplete (wires this same dropdown
+  // onto an input that already exists in the page) - candidates comes
+  // from a getter rather than a plain array so a picklist tied to
+  // something that changes after the field is built (e.g. the Contact
+  // Sheet) always reflects the current list, not a stale snapshot taken
+  // at page-load.
+  function wireNameAutocomplete(input, list, getCandidates) {
+    function closeList() {
+      list.classList.add("hidden");
+      list.innerHTML = "";
+    }
+
+    // Empty query shows every candidate (a full picklist, same as a
+    // plain select would show up front) - typing narrows it down to an
+    // actual autocomplete. No cap on how many show either way; the list
+    // itself scrolls (see .name-autocomplete-list's max-height) rather
+    // than silently hiding candidates past some fixed count.
+    function openListFor(query) {
+      var candidates = getCandidates();
+      var q = query.trim().toLowerCase();
+      var matches = q
+        ? candidates.filter(function (name) {
+            return name.toLowerCase().indexOf(q) !== -1;
+          })
+        : candidates;
+      if (!matches.length) {
+        closeList();
+        return;
+      }
+      list.innerHTML = "";
+      matches.forEach(function (name) {
+        var li = document.createElement("li");
+        li.textContent = name;
+        // mousedown (not click) fires before the input's blur, so the
+        // picked name lands before closeList/blur would otherwise wipe
+        // the list out from under the tap. Dispatching a real "input"
+        // event (rather than just setting .value) lets any other
+        // listener already on this field - e.g. Add Player's own
+        // duplicate-name check - react to the picked name exactly as
+        // if it had been typed; the explicit closeList() right after
+        // then overrides this same function's own "input" listener
+        // reopening the list a line above.
+        li.addEventListener("mousedown", function (e) {
+          e.preventDefault();
+          input.value = name;
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+          closeList();
+        });
+        list.appendChild(li);
+      });
+      list.classList.remove("hidden");
+    }
+
+    input.addEventListener("input", function () {
+      openListFor(input.value);
+    });
+    input.addEventListener("focus", function () {
+      openListFor(input.value);
+    });
+    input.addEventListener("blur", function () {
+      closeList();
+    });
+    input.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") closeList();
+    });
+  }
+
+  function buildLeagueNameAutocomplete(candidates, placeholder, wrapperClassName) {
+    var wrapper = document.createElement("div");
+    wrapper.className = "name-autocomplete " + wrapperClassName;
+
+    var input = document.createElement("input");
+    input.type = "text";
+    input.placeholder = placeholder;
+    // iOS Safari (and Chrome/every other iOS browser, all WKWebView
+    // under the hood) is notorious for ignoring a bare autocomplete=off
+    // on fields it heuristically detects as a "name" - the extra
+    // attributes here are the standard workaround to actually suppress
+    // its own QuickType/predictive suggestion bar, a separate overlay
+    // from this dropdown that can also sit over the field.
+    input.setAttribute("autocomplete", "off");
+    input.setAttribute("autocorrect", "off");
+    input.setAttribute("autocapitalize", "off");
+    input.setAttribute("spellcheck", "false");
+    wrapper.appendChild(input);
+
+    var list = document.createElement("ul");
+    list.className = "name-autocomplete-list hidden";
+    wrapper.appendChild(list);
+
+    wireNameAutocomplete(input, list, function () {
+      return candidates;
+    });
+
+    return { wrapper: wrapper, input: input };
+  }
+
+  // Wires the same dropdown-suggestion behavior onto an input that's
+  // already in the page (e.g. the main Add Player field) instead of
+  // building a new one - wraps it in the positioning wrapper the
+  // dropdown needs in place, leaving the input itself (and every
+  // existing listener/reference tied to its id) untouched.
+  function attachNameAutocomplete(input, getCandidates) {
+    var wrapper = document.createElement("div");
+    wrapper.className = "name-autocomplete";
+    input.parentNode.insertBefore(wrapper, input);
+    wrapper.appendChild(input);
+
+    var list = document.createElement("ul");
+    list.className = "name-autocomplete-list hidden";
+    wrapper.appendChild(list);
+
+    wireNameAutocomplete(input, list, getCandidates);
+  }
+
+  // Email/phone only make sense for someone actually about to be
+  // registered as a player - shown only once both are true: the
+  // "Add to Contact Sheet if new" checkbox is on, and the typed name
+  // doesn't already match a known player (so there's nowhere for these
+  // to be silently overwriting an existing contact's info).
+  function leagueAddMemberNameIsNewPlayer(name) {
+    var trimmed = (name || "").trim();
+    if (!trimmed) return false;
+    return !state.players.some(function (p) {
+      return normalizeNameKey(p.name) === normalizeNameKey(trimmed);
+    });
+  }
+
+  function updateLeagueNewPlayerContactFieldsVisibility(checkbox, fieldsWrap, nameValue) {
+    fieldsWrap.classList.toggle("hidden", !(checkbox.checked && leagueAddMemberNameIsNewPlayer(nameValue)));
   }
 
   // One Tables Overview cell: occupied shows a compact score summary plus
@@ -9281,9 +10766,16 @@
         var sel = document.createElement("select");
         var noneOpt = document.createElement("option");
         noneOpt.value = "";
-        noneOpt.textContent = T("league.teamSlotNoneOption");
+        noneOpt.textContent = T("league.tableTeamSlotPrompt");
         sel.appendChild(noneOpt);
         league.teams.forEach(function (t) {
+          // A team with nobody on its roster has nothing to seed a queue
+          // with, and a team already hosting on another table/side can't
+          // also host here - both stay hidden until that changes, except
+          // this exact side's own current pick, which must stay listed
+          // so re-rendering the same choice doesn't make it vanish.
+          if (!t.memberNames.length && t.id !== assignment[side]) return;
+          if (leagueTeamAssignedElsewhere(league, t.id, tableNum, side)) return;
           var opt = document.createElement("option");
           opt.value = t.id;
           opt.textContent = t.name;
@@ -9421,10 +10913,17 @@
     }
 
     var queue = queueForTable(league, tableNum);
+    // Boxed together (see .league-table-slot-queue-box) so "who's
+    // waiting" reads as one self-contained unit within the card, the
+    // same way each team's own line already does in team-vs-team mode
+    // (.league-team-line) - mirrors that existing pattern.
+    var queueBox = document.createElement("div");
+    queueBox.className = "league-table-slot-queue-box";
+
     var queueLabel = document.createElement("div");
     queueLabel.className = "league-table-slot-queue-label";
     queueLabel.textContent = league.queueMode === "perRoom" ? T("league.roomQueueHeading") : T("league.tableQueueHeading", { table: tableNum });
-    card.appendChild(queueLabel);
+    queueBox.appendChild(queueLabel);
 
     var list = document.createElement("ol");
     list.className = "league-queue-list";
@@ -9452,37 +10951,45 @@
         list.appendChild(li);
       });
     }
-    card.appendChild(list);
+    queueBox.appendChild(list);
 
     var addRow = document.createElement("div");
     addRow.className = "row";
-    var addSelect = document.createElement("select");
     var inQueue = {};
     queue.forEach(function (n) {
       inQueue[n] = true;
     });
-    var addCandidates = league.members.filter(function (m) {
-      return !inQueue[m.name];
-    });
-    addCandidates.forEach(function (m) {
-      var opt = document.createElement("option");
-      opt.value = m.name;
-      opt.textContent = leagueNameWithTeam(league, m.name);
-      addSelect.appendChild(opt);
-    });
+    var addCandidates = league.members
+      .filter(function (m) {
+        return !inQueue[m.name];
+      })
+      .map(function (m) {
+        return m.name;
+      });
+    // Free-text input with its own suggestion dropdown (see
+    // buildLeagueNameAutocomplete) - lets the organizer either pick an
+    // existing member or type someone brand new who just walked in; the
+    // Add handler below adds them as a member automatically either way.
+    var addCombo = buildLeagueNameAutocomplete(addCandidates, T("league.queueAddPlaceholder"), "league-queue-add-input");
+    var addInput = addCombo.input;
     var addBtn = document.createElement("button");
     addBtn.type = "button";
     addBtn.className = "btn btn-ghost";
     addBtn.textContent = T("league.addToQueueButton");
-    addBtn.disabled = addCandidates.length === 0;
     addBtn.addEventListener("click", function () {
-      if (!addSelect.value) return;
-      addNameToQueue(league, tableNum, addSelect.value);
+      var name = addInput.value.trim();
+      if (!name) return;
+      var existingMember = league.members.filter(function (m) {
+        return normalizeNameKey(m.name) === normalizeNameKey(name);
+      })[0];
+      if (!existingMember) addLeagueMember(league, name);
+      addNameToQueue(league, tableNum, existingMember ? existingMember.name : name);
       renderLeaguePage();
     });
-    addRow.appendChild(addSelect);
+    addRow.appendChild(addCombo.wrapper);
     addRow.appendChild(addBtn);
-    card.appendChild(addRow);
+    queueBox.appendChild(addRow);
+    card.appendChild(queueBox);
 
     if (league.queueMode === "perTable") {
       var soloAssignment = league.tableTeamAssignment[tableQueueKey(tableNum)];
@@ -9511,9 +11018,14 @@
     return card;
   }
 
+  // Mirrors the live board stack's own focusedTable filtering (see
+  // renderLeagueActiveMatches) - focusing one table narrows its card
+  // here too, not just its board, so "Focus This Table" really does
+  // leave just that one table's card and board on screen.
   function renderLeagueTablesGrid(league) {
     leagueTablesGrid.innerHTML = "";
     for (var i = 1; i <= league.tableCount; i++) {
+      if (league.focusedTable !== "all" && league.focusedTable !== i) continue;
       leagueTablesGrid.appendChild(buildLeagueTableSlotCard(league, i));
     }
   }
@@ -9530,22 +11042,30 @@
       var li = document.createElement("li");
       li.className = "league-team-row";
 
+      // Team name and its captain are the team's identity - grouped into
+      // their own bordered block so they read as one unit, separate from
+      // the roster chips and add-player controls below.
+      var identityBlock = document.createElement("div");
+      identityBlock.className = "league-team-identity";
+      li.appendChild(identityBlock);
+
       var header = document.createElement("div");
       header.className = "league-team-row-header";
       var nameEl = document.createElement("span");
+      nameEl.className = "league-team-name";
       nameEl.textContent = team.name;
       header.appendChild(nameEl);
       var removeBtn = document.createElement("button");
       removeBtn.type = "button";
       removeBtn.className = "btn btn-ghost";
-      removeBtn.textContent = "✕";
+      removeBtn.textContent = T("league.removeTeamButton");
       removeBtn.setAttribute("aria-label", T("league.removeTeamAria", { name: team.name }));
       removeBtn.addEventListener("click", function () {
         removeLeagueTeam(league, team.id);
         renderLeaguePage();
       });
       header.appendChild(removeBtn);
-      li.appendChild(header);
+      identityBlock.appendChild(header);
 
       var membersRow = document.createElement("div");
       membersRow.className = "league-team-members";
@@ -9598,12 +11118,11 @@
         });
         captainLabel.appendChild(captainSelect);
         captainRow.appendChild(captainLabel);
-        li.appendChild(captainRow);
+        identityBlock.appendChild(captainRow);
       }
 
       var addRow = document.createElement("div");
       addRow.className = "row";
-      var addSelect = document.createElement("select");
       // Excludes anyone already on ANY team in this league (not just this
       // one) - a member belongs to at most one team, so moving someone
       // between teams means removing them from their current team first,
@@ -9614,26 +11133,34 @@
           already[n] = true;
         });
       });
-      var candidates = league.members.filter(function (m) {
-        return !already[m.name];
-      });
-      candidates.forEach(function (m) {
-        var opt = document.createElement("option");
-        opt.value = m.name;
-        opt.textContent = m.name;
-        addSelect.appendChild(opt);
-      });
+      var candidates = league.members
+        .filter(function (m) {
+          return !already[m.name];
+        })
+        .map(function (m) {
+          return m.name;
+        });
+      // Free-text input with its own suggestion dropdown (see
+      // buildLeagueNameAutocomplete) - lets the organizer either pick an
+      // existing member or type someone brand new who isn't a league
+      // member yet; the Add handler below adds them as one automatically.
+      var addCombo = buildLeagueNameAutocomplete(candidates, T("league.queueAddPlaceholder"), "league-team-add-player-select");
+      var addInput = addCombo.input;
       var addBtn = document.createElement("button");
       addBtn.type = "button";
       addBtn.className = "btn btn-ghost";
-      addBtn.textContent = T("league.addMemberButton");
-      addBtn.disabled = candidates.length === 0;
+      addBtn.textContent = T("league.addPlayerToTeamButton", { team: team.name });
       addBtn.addEventListener("click", function () {
-        if (!addSelect.value) return;
-        addMemberToTeam(league, team.id, addSelect.value);
+        var name = addInput.value.trim();
+        if (!name) return;
+        var existingMember = league.members.filter(function (m) {
+          return normalizeNameKey(m.name) === normalizeNameKey(name);
+        })[0];
+        if (!existingMember) addLeagueMember(league, name);
+        addMemberToTeam(league, team.id, existingMember ? existingMember.name : name);
         renderLeaguePage();
       });
-      addRow.appendChild(addSelect);
+      addRow.appendChild(addCombo.wrapper);
       addRow.appendChild(addBtn);
       li.appendChild(addRow);
 
@@ -9654,7 +11181,13 @@
     newOpt.textContent = T("league.newLeagueOption");
     leagueSelect.appendChild(newOpt);
 
-    if (!activeLeagueId || !findLeagueById(activeLeagueId)) {
+    // Only fall back to the first league for a genuinely dangling
+    // reference (e.g. the active league got deleted) - activeLeagueId
+    // is also null right after picking "+ New League" with other
+    // leagues still around, and that's not a fallback case, it's the
+    // point of that option; falling back there made "+ New League"
+    // impossible to actually reach whenever any league already existed.
+    if (activeLeagueId && !findLeagueById(activeLeagueId)) {
       activeLeagueId = LEAGUES.length ? LEAGUES[0].id : null;
     }
     leagueSelect.value = activeLeagueId || "__new__";
@@ -9662,32 +11195,80 @@
     var league = activeLeagueId ? findLeagueById(activeLeagueId) : null;
     leagueNewForm.classList.toggle("hidden", !!league);
     leagueDetail.classList.toggle("hidden", !league);
+    btnLeagueExport.classList.toggle("hidden", !league);
+    btnLeagueDelete.classList.toggle("hidden", !league);
 
     if (!league) return;
     normalizeLeagueDefaults(league);
 
-    leagueDetailName.textContent = league.name + " — " + (league.format === "apa9ball" ? T("league.format9Ball") : T("league.format8Ball"));
+    leagueDetailName.textContent =
+      league.name + " — " + T(league.format === "apa9ball" ? "league.format9Ball" : "league.format8Ball", { system: handicapSystemLabel(league.handicapSystem) });
+    // Viewing this (unlike editing it) isn't organizer-only - an imported
+    // read-only copy still races real matches, so whoever's watching
+    // standings there has the same reason to want to see it. Every
+    // system gets this button now: APA and BCA open a read-only view
+    // ("View", not "View/Edit") since neither has anything an organizer
+    // could meaningfully edit here (APA's chart is fixed and correct
+    // already; BCA's is a ratio on the rating gap, not a per-player
+    // lookup - see leagueBcaMatchTargets/leagueHandicapUsesRating).
+    // VNBA/TAP keep the full editable chart.
+    var handicapChartIsReadOnly = league.handicapSystem === "apa" || league.handicapSystem === "bca";
+    btnLeagueHandicapChartOpen.classList.remove("hidden");
+    btnLeagueHandicapChartOpen.textContent = T(handicapChartIsReadOnly ? "league.handicapChartOpenButtonViewOnly" : "league.handicapChartOpenButton", {
+      system: handicapSystemLabel(league.handicapSystem)
+    });
+    leagueDetailOpenToggle.checked = !!league.isOpen;
     leagueReadonlyBadge.classList.toggle("hidden", !!league.isOrganizer);
     leagueOrganizerOnly.classList.toggle("hidden", !league.isOrganizer);
     leagueColRemoveHeader.classList.toggle("hidden", !league.isOrganizer);
     leagueLiveHostingSection.classList.toggle("hidden", !league.isOrganizer);
 
-    // Add-member candidates: known players not already in the league.
-    leagueAddMemberSelect.innerHTML = "";
+    // Add-member candidates: anyone known to the app at all - the same
+    // list the Contact Sheet shows (played before, or just has contact
+    // info on file), not limited to today's live scoreboard roster
+    // (see contactSheetAllNames) - a league night often draws people
+    // who haven't shown up in the current session yet. Shown up front
+    // as a full picklist (see buildLeagueNameAutocomplete), narrowing
+    // as the organizer types. Typing someone who isn't a known player
+    // at all still works - the click handler below adds them as a
+    // member directly, same as the table queue's and each team's own
+    // add-a-player fields already do.
     var memberNameKeys = league.members.map(function (m) {
       return normalizeNameKey(m.name);
     });
-    var candidates = state.players.filter(function (p) {
-      return memberNameKeys.indexOf(normalizeNameKey(p.name)) === -1;
+    var candidates = contactSheetVisibleNames().filter(function (n) {
+      return memberNameKeys.indexOf(normalizeNameKey(n)) === -1;
     });
-    candidates.forEach(function (p) {
-      var opt = document.createElement("option");
-      opt.value = p.name;
-      opt.textContent = p.name;
-      leagueAddMemberSelect.appendChild(opt);
+    leagueAddMemberWrap.innerHTML = "";
+    var addMemberCombo = buildLeagueNameAutocomplete(candidates, T("league.queueAddPlaceholder"), "league-add-member-input");
+    leagueAddMemberInput = addMemberCombo.input;
+    leagueAddMemberWrap.appendChild(addMemberCombo.wrapper);
+    leagueAddMemberInput.addEventListener("input", function () {
+      updateLeagueNewPlayerContactFieldsVisibility(leagueAddMemberContactsCheckbox, leagueAddMemberContactFields, leagueAddMemberInput.value);
     });
-    btnLeagueAddMember.disabled = candidates.length === 0;
+    updateLeagueNewPlayerContactFieldsVisibility(leagueAddMemberContactsCheckbox, leagueAddMemberContactFields, leagueAddMemberInput.value);
 
+    // FLIP-animates rows into their new order on re-sort, instead of an
+    // abrupt jump straight to it - a sudden rearrangement reads as
+    // unrelated new content rather than the same people moving, an
+    // effect called "change blindness". Recorded by member name (not
+    // row index) since names change position; one with no prior
+    // position (e.g. a brand new member) just appears in place.
+    var previousRowTops = {};
+    Array.prototype.forEach.call(leagueStandingsBody.children, function (tr) {
+      if (tr.dataset.memberName) previousRowTops[tr.dataset.memberName] = tr.getBoundingClientRect().top;
+    });
+
+    leagueStandingsSortSelect.value = leagueStandingsSortMode;
+    // BCA hands off its handicap key to this app's own Rating (see
+    // leagueHandicapUsesRating) - the Points column shows that same
+    // number there instead of league points, since league points aren't
+    // what's actually deciding anyone's target in that league. Every
+    // other system keeps showing league points as always. Either way
+    // the name badge (see buildRatingBadge above) keeps showing Rating
+    // too, so it's never hidden just because a league isn't on BCA.
+    var pointsColShowsRating = leagueHandicapUsesRating(league.handicapSystem);
+    leagueColPointsHeader.textContent = T(pointsColShowsRating ? "common.rating" : "league.colPoints");
     leagueStandingsBody.innerHTML = "";
     var sorted = leagueStandingsSorted(league);
     if (sorted.length === 0) {
@@ -9701,9 +11282,12 @@
     } else {
       sorted.forEach(function (m) {
         var row = document.createElement("tr");
+        row.dataset.memberName = m.name;
 
         var nameCell = document.createElement("td");
-        nameCell.textContent = leagueNameWithTeam(league, m.name);
+        nameCell.className = "league-standings-name-cell";
+        nameCell.appendChild(document.createTextNode(leagueNameWithTeam(league, m.name)));
+        nameCell.appendChild(buildRatingBadge(m.name));
         row.appendChild(nameCell);
 
         var slCell = document.createElement("td");
@@ -9727,7 +11311,7 @@
         row.appendChild(slCell);
 
         var ptsCell = document.createElement("td");
-        ptsCell.textContent = m.leaguePoints;
+        ptsCell.textContent = pointsColShowsRating ? getPlayerRating(m.name) : m.leaguePoints;
         row.appendChild(ptsCell);
 
         var recordCell = document.createElement("td");
@@ -9759,12 +11343,55 @@
       });
     }
 
+    var rowsToFlipAnimate = [];
+    Array.prototype.forEach.call(leagueStandingsBody.children, function (tr) {
+      var oldTop = previousRowTops[tr.dataset.memberName];
+      if (oldTop == null) return;
+      var delta = oldTop - tr.getBoundingClientRect().top;
+      if (!delta) return;
+      tr.style.transition = "none";
+      tr.style.transform = "translateY(" + delta + "px)";
+      rowsToFlipAnimate.push(tr);
+    });
+    if (rowsToFlipAnimate.length) {
+      // Forces the browser to commit the instant, transition-less jump
+      // to each row's old position (set above) before the next frame
+      // animates away from it - without this the two style writes can
+      // get coalesced into one frame and the transition never plays.
+      leagueStandingsBody.offsetHeight;
+      requestAnimationFrame(function () {
+        rowsToFlipAnimate.forEach(function (tr) {
+          tr.style.transition = "transform 320ms ease";
+          tr.style.transform = "";
+        });
+      });
+    }
+
     if (league.isOrganizer) {
-      renderLeagueTeams(league);
+      // Open leagues skip team-vs-team hosting entirely (no rosters to
+      // build, so no queue-mode or rotation-style choice to make) - the
+      // Tables Overview grid's own "none" queueMode branch already plays
+      // plain player-vs-player, unchanged.
+      leagueTeamsSection.classList.toggle("hidden", league.isOpen);
+      leagueQueueModeRow.classList.toggle("hidden", league.isOpen);
+      leagueTeamRotationRow.classList.toggle("hidden", league.isOpen);
+      if (!league.isOpen) renderLeagueTeams(league);
       leagueQueueModeSelect.value = league.queueMode;
       leagueTeamRotationSelect.value = league.teamRotationMode;
       leagueTableCountInput.value = league.tableCount;
       leagueMaxGamesInput.value = league.maxGamesPerPlayer;
+      leagueUseHandicapCheckbox.checked = league.useHandicap;
+      leagueHandicapSystemSelect.value = league.handicapSystem;
+      leagueHandicapBaseInput.value = league.handicapBaseGames;
+      // A convenience mirror of the top-of-page Open League toggle, right
+      // where it matters most (it changes how every table card below
+      // renders) - only worth showing before any team exists, since once
+      // one does, switching modes is a bigger decision than a stray tap
+      // down here should trigger. Both toggles read/write the same
+      // league.isOpen, so they always agree - see leagueTablesOpenToggle's
+      // own change handler and leagueDetailOpenToggle's above.
+      leagueTablesOpenToggleRow.classList.toggle("hidden", league.teams.length > 0);
+      leagueTablesOpenToggle.checked = league.isOpen;
       renderLeagueTablesGrid(league);
     }
 
@@ -9888,17 +11515,17 @@
     var memberNameKeys = league.members.map(function (m) {
       return normalizeNameKey(m.name);
     });
-    var contactCandidates = contactSheetAllNames().filter(function (n) {
+    var contactCandidates = contactSheetVisibleNames().filter(function (n) {
       return memberNameKeys.indexOf(normalizeNameKey(n)) === -1;
     });
-    leagueWizardAddContactSelect.innerHTML = "";
-    contactCandidates.forEach(function (n) {
-      var opt = document.createElement("option");
-      opt.value = n;
-      opt.textContent = n;
-      leagueWizardAddContactSelect.appendChild(opt);
+    leagueWizardAddContactWrap.innerHTML = "";
+    var wizardAddContactCombo = buildLeagueNameAutocomplete(contactCandidates, T("league.queueAddPlaceholder"), "league-add-member-input");
+    leagueWizardAddContactInput = wizardAddContactCombo.input;
+    leagueWizardAddContactWrap.appendChild(wizardAddContactCombo.wrapper);
+    leagueWizardAddContactInput.addEventListener("input", function () {
+      updateLeagueNewPlayerContactFieldsVisibility(leagueWizardAddContactContactsCheckbox, leagueWizardAddContactContactFields, leagueWizardAddContactInput.value);
     });
-    btnLeagueWizardAddContact.disabled = contactCandidates.length === 0;
+    updateLeagueNewPlayerContactFieldsVisibility(leagueWizardAddContactContactsCheckbox, leagueWizardAddContactContactFields, leagueWizardAddContactInput.value);
   }
 
   function renderLeagueWizardTeams() {
@@ -10022,6 +11649,7 @@
       noneOpt.textContent = T("league.teamSlotNoneOption");
       sel.appendChild(noneOpt);
       teamsWithPresentMembers.forEach(function (t) {
+        if (t.id !== assignment[side] && leagueTeamAssignedElsewhere(league, t.id, tableNum, side)) return;
         var opt = document.createElement("option");
         opt.value = t.id;
         opt.textContent = t.name;
@@ -10138,7 +11766,19 @@
     var wantsMultiClient = leagueWizardMultiClientCheckbox.checked;
     leagueWizardOverlay.classList.add("hidden");
     renderLeaguePage();
-    if (wantsMultiClient) openMultiTableHostPrompt("wizardLeague");
+    if (wantsMultiClient) {
+      // A phone or tablet can never itself run the local relay server
+      // separate per-table devices would connect to (see
+      // toggleLeagueWizardMultiClientVisibility) - the wizard's own note
+      // already said so while the box was checked, so this doesn't
+      // redirect into that flow at all on one, just reinforces it and
+      // lets the organizer carry on managing every table from right here.
+      if (detectDesktopOS()) {
+        openMultiTableHostPrompt("wizardLeague");
+      } else {
+        showToast(T("multiTable.mobileHostUnsupportedNotice"));
+      }
+    }
   }
 
   // ---------------------------------------------------------------------
@@ -10168,12 +11808,19 @@
     tournamentMultiClientNote.classList.toggle("hidden", !eligible || !tournamentMultiClientCheckbox.checked);
   }
 
+  // On a phone or tablet (detectDesktopOS() null - see below), this
+  // device can never be the one running the local relay server that
+  // separate per-table devices connect to, so checking this box here
+  // says so up front instead of the normal "here's how hosting works"
+  // note - closeLeagueWizard skips the actual hosting prompt/redirect
+  // for the same reason once the wizard finishes.
   function toggleLeagueWizardMultiClientVisibility() {
     var count = parseInt(leagueWizardTableCountInput.value, 10) || 1;
     var eligible = count > 1;
     leagueWizardMultiClientRow.classList.toggle("hidden", !eligible);
     if (!eligible) leagueWizardMultiClientCheckbox.checked = false;
     leagueWizardMultiClientNote.classList.toggle("hidden", !eligible || !leagueWizardMultiClientCheckbox.checked);
+    leagueWizardMultiClientNote.textContent = T(detectDesktopOS() ? "multiTable.wizardNotice" : "multiTable.mobileHostUnsupportedNotice");
   }
 
   var multiTableHostSettingStep = null;
@@ -10190,6 +11837,7 @@
     multiTableHostLinkNote.textContent = "";
     var os = detectDesktopOS();
     btnMultiTableDownloadApp.classList.toggle("hidden", !os);
+    btnMultiTableInstallStep.classList.toggle("hidden", !os);
     if (os) btnMultiTableDownloadApp.textContent = T("multiTable.downloadAppButton", { os: DESKTOP_OS_LABELS[os] });
     multiTableHostOverlay.classList.remove("hidden");
   }
@@ -10223,6 +11871,15 @@
   }
 
   var PENDING_WIZARD_REOPEN_KEY = "poolMasterCounter.pendingWizardReopen.v1";
+  // ?loadsetting=... is only ever produced by the multi-table hosting
+  // handoff (see downloadMultiTableHostData/consumePendingHandoffStep) -
+  // every device that lands here via that URL was, by definition,
+  // downloaded specifically to become another table's host, so this
+  // flag is unconditionally set alongside the reopen step and consumed
+  // the same way, to start Group Session hosting automatically once the
+  // import/reload has landed instead of leaving the organizer to find
+  // and click "Open Group Session" a second time on the new device.
+  var PENDING_AUTO_HOST_KEY = "poolMasterCounter.pendingAutoHost.v1";
 
   function checkLoadSettingUrlParam() {
     var params;
@@ -10240,6 +11897,7 @@
     confirmModal(T("multiTable.loadSettingPrompt"), function () {
       try {
         localStorage.setItem(PENDING_WIZARD_REOPEN_KEY, settingStep);
+        localStorage.setItem(PENDING_AUTO_HOST_KEY, "1");
       } catch (e) {
         console.warn("Could not save pending wizard reopen.", e);
       }
@@ -10260,6 +11918,27 @@
     } catch (e) {}
     if (settingStep === "wizardLeague") openLeagueWizard();
     else openWizard();
+    checkPendingAutoHost();
+  }
+
+  function checkPendingAutoHost() {
+    var pending;
+    try {
+      pending = localStorage.getItem(PENDING_AUTO_HOST_KEY);
+    } catch (e) {
+      pending = null;
+    }
+    if (!pending) return;
+    try {
+      localStorage.removeItem(PENDING_AUTO_HOST_KEY);
+    } catch (e) {}
+    // Silently does nothing useful (shows the same origin-error state a
+    // manual click would) when this isn't actually running against the
+    // real local server - e.g. someone importing this file on a browser
+    // that isn't the desktop app for some other reason. Only ever called
+    // right after checkPendingWizardReopen re-opens the matching wizard,
+    // so the organizer sees both land together.
+    startHostingSession();
   }
 
   function loadRotationsFromStorage() {
@@ -10461,6 +12140,37 @@
       localStorage.setItem(GRAVEYARD_PLAYERS_KEY, JSON.stringify(graveyard));
     } catch (e) {
       console.warn("Could not save graveyard players.", e);
+    }
+  }
+
+  // A permanent record of every merge (see mergePlayersEverywhere):
+  // normalized source name key -> the name that survived. Neither a
+  // merge nor a graveyard entry used to leave anything behind that
+  // survived a re-import - merging just deleted the source's own
+  // records, and graveyarding just set a flag - so importing an older
+  // backup, roster list, or vCard that still remembered a name as its
+  // own separate identity would silently bring it back as a second
+  // copy, undoing the merge. This map is consulted on every import
+  // (see redirectMergedNamesInImportedData) to fold a permanently-
+  // merged name straight into its current target instead.
+  var MERGED_INTO_KEY = "poolMasterCounter.mergedInto.v1";
+
+  function loadMergedIntoFromStorage() {
+    try {
+      var raw = localStorage.getItem(MERGED_INTO_KEY);
+      var parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function saveMergedIntoToStorage(map) {
+    if (noStatsMode) return;
+    try {
+      localStorage.setItem(MERGED_INTO_KEY, JSON.stringify(map));
+    } catch (e) {
+      console.warn("Could not save merged-player records.", e);
     }
   }
 
@@ -10805,6 +12515,18 @@
       changed = true;
       var seen = {};
       var mergedHistory = [];
+      // gamesPlayed is its own authoritative counter (see bumpPlayerRating) -
+      // it can legitimately run ahead of history.length (history caps at
+      // RATING_HISTORY_CAP, and a manual rating override adds a history
+      // entry without counting as a game). Summing each variant's own
+      // gamesPlayed here, the same way mergePlayersEverywhere does for an
+      // explicit two-player merge, keeps a real established player's
+      // K-factor intact when this runs - deriving it from mergedHistory.length
+      // instead used to silently undercount and drop them back to the
+      // provisional K-factor.
+      var gamesPlayed = names.reduce(function (sum, n) {
+        return sum + (ratings[n].gamesPlayed || 0);
+      }, 0);
       names.forEach(function (n) {
         (ratings[n].history || []).forEach(function (h) {
           if (seen[h.ts]) return;
@@ -10819,7 +12541,7 @@
       result[canonical] = {
         name: canonical,
         rating: mergedHistory.length ? mergedHistory[mergedHistory.length - 1].rating : DEFAULT_RATING,
-        gamesPlayed: mergedHistory.length,
+        gamesPlayed: gamesPlayed,
         history: mergedHistory
       };
     });
@@ -10853,6 +12575,19 @@
   function getPlayerRatingEntry(name) {
     var key = findRatingKey(name);
     return key ? PLAYER_RATINGS[key] : null;
+  }
+
+  // A local counterpart to FargoRate's own robustness figure (see
+  // contact.fargoRobustness) - how many games this rating is actually
+  // based on, so a brand new player's rating isn't read with the same
+  // confidence as one built on hundreds of games. Unlike Fargo's own
+  // formula (proprietary, and weighted by recency/stability, not just
+  // a raw count), this is deliberately just gamesPlayed itself - an
+  // honest, transparent number rather than an invented approximation
+  // of Fargo's real algorithm.
+  function getPlayerRobustness(name) {
+    var entry = getPlayerRatingEntry(name);
+    return entry ? entry.gamesPlayed || 0 : 0;
   }
 
   var PLAYER_ADDED = loadPlayerAddedFromStorage();
@@ -10912,6 +12647,28 @@
       clubTeam: patch.clubTeam !== undefined ? patch.clubTeam : existing.clubTeam || "",
       reportOptIn: patch.reportOptIn !== undefined ? !!patch.reportOptIn : !!existing.reportOptIn,
       notifyMethod: patch.notifyMethod !== undefined ? patch.notifyMethod : existing.notifyMethod || "email",
+      // This player's linked real-world FargoRate identity (see the
+      // FargoRate lookups section above) - "" fargoId means unlinked.
+      // The name/location/rating/robustness are a cache of that player's
+      // last successful lookup, refreshed on demand (fetchFargoPlayer),
+      // so the comparison badge has something to show even offline or
+      // if the lookup endpoint is temporarily down.
+      fargoId: patch.fargoId !== undefined ? patch.fargoId : existing.fargoId || "",
+      fargoName: patch.fargoName !== undefined ? patch.fargoName : existing.fargoName || "",
+      fargoLocation: patch.fargoLocation !== undefined ? patch.fargoLocation : existing.fargoLocation || "",
+      fargoRating: patch.fargoRating !== undefined ? patch.fargoRating : (existing.fargoRating != null ? existing.fargoRating : null),
+      fargoRobustness: patch.fargoRobustness !== undefined ? patch.fargoRobustness : (existing.fargoRobustness != null ? existing.fargoRobustness : null),
+      fargoFetchedAt: patch.fargoFetchedAt !== undefined ? patch.fargoFetchedAt : existing.fargoFetchedAt || 0,
+      // A permanent, opaque id for this name - assigned once (see
+      // getOrCreatePlayerLocalId) and never reassigned, unlike
+      // state.players[i].id (uid(), regenerated every time a name is
+      // added to a roster - see uid's own comment) or the display name
+      // itself (which can change via renamePlayerEverywhere while this
+      // stays the same). A stable anchor for anything that needs to
+      // refer to "this exact player" independent of spelling/renames -
+      // e.g. a future export/sync format, or disambiguating this local
+      // record from another one that happens to share a name.
+      localId: patch.localId !== undefined ? patch.localId : existing.localId || "",
       // Stamped on every write (even one that only touches a single
       // field) so mergeContactsData can tell, per name, which side of an
       // import was actually edited more recently - see its own comment.
@@ -10922,19 +12679,71 @@
 
   function getPlayerContact(name) {
     var key = findContactKey(name);
-    return key ? PLAYER_CONTACTS[key] : { email: "", phone: "", nickname: "", clubTeam: "", reportOptIn: false, notifyMethod: "email" };
+    return key
+      ? PLAYER_CONTACTS[key]
+      : { email: "", phone: "", nickname: "", clubTeam: "", reportOptIn: false, notifyMethod: "email", fargoId: "", fargoName: "", fargoLocation: "", fargoRating: null, fargoRobustness: null, fargoFetchedAt: 0, localId: "" };
+  }
+
+  // A RFC4122-ish v4 UUID. crypto.randomUUID() covers every modern
+  // browser and the Capacitor iOS WebView this app also ships in, but
+  // falls back to a manual version for anything older rather than
+  // leaving a player with no id at all.
+  function generateUuid() {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
+      var r = (Math.random() * 16) | 0;
+      var v = c === "x" ? r : (r & 0x3) | 0x8;
+      return v.toString(16);
+    });
+  }
+
+  // Returns this name's permanent local id, assigning one on first call
+  // if it doesn't have one yet - covers both a brand new player (see
+  // addPlayer) and backfilling anyone who already existed before this
+  // field did (see backfillPlayerLocalIds, run once at boot).
+  function getOrCreatePlayerLocalId(name) {
+    var existing = getPlayerContact(name).localId;
+    if (existing) return existing;
+    var id = generateUuid();
+    setPlayerContact(name, { localId: id });
+    return id;
+  }
+
+  // One-time boot pass (see loadState-adjacent init below) assigning a
+  // localId to every name this device already knows about - anyone
+  // added before this feature shipped, across every name-keyed store,
+  // not just PLAYER_CONTACTS (a player with ratings/stats but who never
+  // got a contact field edited has no PLAYER_CONTACTS entry yet at all).
+  function backfillPlayerLocalIds() {
+    var names = {};
+    Object.keys(PLAYER_STATS).forEach(function (n) { names[n] = true; });
+    Object.keys(PLAYER_RATINGS).forEach(function (n) { names[n] = true; });
+    Object.keys(PLAYER_CONTACTS).forEach(function (n) { names[n] = true; });
+    Object.keys(PLAYER_ADDED).forEach(function (n) { names[n] = true; });
+    Object.keys(names).forEach(function (n) { getOrCreatePlayerLocalId(n); });
+  }
+  backfillPlayerLocalIds();
+
+  // Clears just the Fargo linkage for a player, leaving every other
+  // contact field (email, phone, club team, ...) untouched - the
+  // Contact Sheet's "✕ Unlink" control.
+  function unlinkFargoPlayer(name) {
+    setPlayerContact(name, { fargoId: "", fargoName: "", fargoLocation: "", fargoRating: null, fargoRobustness: null, fargoFetchedAt: 0 });
   }
 
   // Renames a player everywhere their identity is a record key - stats,
-  // ratings, contacts, and any saved per-language display name - plus
-  // their entry on the live roster if they're currently on it, so their
-  // whole history stays attached to the new name instead of quietly
-  // starting over under it. Deliberately leaves state.gameHistory (and
-  // saved rosters) alone: a finished game is a record of what happened
-  // at the time, not a live reference, so past entries keep showing the
-  // name as it was then - the same reasoning mergeRosterLists follows
-  // for saved player lists. Returns "" on success, or a translated error
-  // string (empty/duplicate name) the Contact Sheet can show directly.
+  // ratings, contacts (including any linked FargoRate id), any saved
+  // per-language display name, their best-ever run record, and their
+  // "added on" date - plus their entry on the live roster if they're
+  // currently on it, so their whole history stays attached to the new
+  // name instead of quietly starting over under it (or silently losing
+  // a record that only that old name pointed to). Deliberately leaves
+  // state.gameHistory (and saved rosters) alone: a finished game is a
+  // record of what happened at the time, not a live reference, so past
+  // entries keep showing the name as it was then - the same reasoning
+  // mergeRosterLists follows for saved player lists. Returns "" on
+  // success, or a translated error string (empty/duplicate name) the
+  // Contact Sheet can show directly.
   function renamePlayerEverywhere(oldName, newRawName) {
     var newName = resolvePlayerName(newRawName);
     if (!newName) return T("contactSheet.nameRequired");
@@ -10953,6 +12762,33 @@
       if (statsKey !== newName) delete PLAYER_STATS[statsKey];
       savePlayerStatsToStorage(PLAYER_STATS);
     }
+
+    // Every player's archived sessions are their OWN independent
+    // snapshot of games they were involved in (see
+    // exportAllPlayerStats), so the same real game exists as a
+    // separate copy inside every OTHER participant's PLAYER_STATS
+    // entry too - moving oldName's own session list above doesn't
+    // touch what an opponent's history says about who they played.
+    // Without this, a past report/push for an old date keeps citing
+    // the old name as an opponent forever, even after everything else
+    // about this player has been renamed.
+    Object.keys(PLAYER_STATS).forEach(function (key) {
+      (PLAYER_STATS[key].sessions || []).forEach(function (s) {
+        (s.games || []).forEach(function (g) {
+          if (Array.isArray(g.winnerNames)) {
+            g.winnerNames = g.winnerNames.map(function (n) {
+              return normalizeNameKey(n) === oldKey ? newName : n;
+            });
+          }
+          if (Array.isArray(g.opponentNames)) {
+            g.opponentNames = g.opponentNames.map(function (n) {
+              return normalizeNameKey(n) === oldKey ? newName : n;
+            });
+          }
+        });
+      });
+    });
+    savePlayerStatsToStorage(PLAYER_STATS);
 
     var ratingKey = findRatingKey(oldName);
     if (ratingKey) {
@@ -10976,12 +12812,326 @@
       savePlayerNameTranslationsToStorage(PLAYER_NAME_TRANSLATIONS);
     }
 
+    var bestRunKey = findPlayerBestRunKey(oldName);
+    if (bestRunKey) {
+      PLAYER_BEST_RUNS[newName] = PLAYER_BEST_RUNS[bestRunKey];
+      PLAYER_BEST_RUNS[newName].name = newName;
+      if (bestRunKey !== newName) delete PLAYER_BEST_RUNS[bestRunKey];
+      savePlayerBestRunsToStorage(PLAYER_BEST_RUNS);
+    }
+
+    var addedKey = findPlayerAddedKey(oldName);
+    if (addedKey) {
+      PLAYER_ADDED[newName] = PLAYER_ADDED[addedKey];
+      if (addedKey !== newName) delete PLAYER_ADDED[addedKey];
+      savePlayerAddedToStorage(PLAYER_ADDED);
+    }
+
     state.players.forEach(function (p) {
       if (normalizeNameKey(p.name) === oldKey) p.name = newName;
     });
+
+    // Today's still-live game log needs the same treatment as the
+    // archived sessions above, or a same-day report/push made right
+    // after a rename would still show the old name as who was played.
+    (state.gameHistory || []).forEach(function (g) {
+      if (Array.isArray(g.winnerNames)) {
+        g.winnerNames = g.winnerNames.map(function (n) {
+          return normalizeNameKey(n) === oldKey ? newName : n;
+        });
+      }
+      if (Array.isArray(g.opponentNames)) {
+        g.opponentNames = g.opponentNames.map(function (n) {
+          return normalizeNameKey(n) === oldKey ? newName : n;
+        });
+      }
+    });
+
     saveState();
 
     return "";
+  }
+
+  // Combines two names' entire history into one - for repairing a
+  // player who ended up split across two identities (the usual cause:
+  // renamePlayerInline used to assign player.name directly instead of
+  // routing through renamePlayerEverywhere, which orphaned every
+  // archival record under the old name rather than moving it - fixed
+  // above, but this repairs data that already split before that fix
+  // shipped). targetName survives with its own name; sourceName's
+  // records are folded into it - unioned where a list makes sense
+  // (game sessions, rating history), the higher value where only one
+  // can win (best run), the earlier date where "first seen" is the
+  // question (date added), and target-preferred-else-source for plain
+  // fields (contact info) - then sourceName's now-empty records are
+  // removed. Returns "" on success or a user-facing error string.
+  function mergePlayersEverywhere(sourceName, targetName) {
+    var sourceKey = normalizeNameKey(sourceName);
+    var targetKey = normalizeNameKey(targetName);
+    if (!sourceKey || !targetKey) return T("mergePlayers.bothRequired");
+    if (sourceKey === targetKey) return T("mergePlayers.samePlayer");
+
+    // The name text that survives - prefer however the target is
+    // already spelled/cased on file (contacts, then stats), falling
+    // back to exactly what was typed only if this is a genuinely new
+    // name with no existing record at all.
+    var target = findContactKey(targetName) || findPlayerStatsKey(targetName) || resolvePlayerName(targetName) || targetName;
+
+    var sourceStatsKey = findPlayerStatsKey(sourceName);
+    var targetStatsKey = findPlayerStatsKey(target);
+    if (sourceStatsKey || targetStatsKey) {
+      var sourceSessions = sourceStatsKey ? PLAYER_STATS[sourceStatsKey].sessions || [] : [];
+      var targetSessions = targetStatsKey ? PLAYER_STATS[targetStatsKey].sessions || [] : [];
+      if (sourceStatsKey && sourceStatsKey !== target) delete PLAYER_STATS[sourceStatsKey];
+      if (targetStatsKey && targetStatsKey !== target) delete PLAYER_STATS[targetStatsKey];
+      PLAYER_STATS[target] = { name: target, sessions: mergeSessionLists(targetSessions, sourceSessions) };
+      savePlayerStatsToStorage(PLAYER_STATS);
+    }
+
+    // Every player's archived sessions are their OWN independent
+    // snapshot of games they were involved in (see
+    // exportAllPlayerStats, which runs computeLiveSessionForPlayer
+    // separately per player) - the same real game exists as a
+    // separate copy inside both participants' PLAYER_STATS entries,
+    // not one shared record. Merging only source's/target's own
+    // sessions above leaves every OTHER opponent's archived history
+    // still citing the old name forever (a past report/push for an
+    // old date keeps reading "Luc" as who they played, even though
+    // "Luc" no longer exists as a player). Walk every player's stored
+    // games and rename there too.
+    Object.keys(PLAYER_STATS).forEach(function (key) {
+      (PLAYER_STATS[key].sessions || []).forEach(function (s) {
+        (s.games || []).forEach(function (g) {
+          if (Array.isArray(g.winnerNames)) {
+            g.winnerNames = g.winnerNames.map(function (n) {
+              return normalizeNameKey(n) === sourceKey ? target : n;
+            });
+          }
+          if (Array.isArray(g.opponentNames)) {
+            g.opponentNames = g.opponentNames.map(function (n) {
+              return normalizeNameKey(n) === sourceKey ? target : n;
+            });
+          }
+        });
+      });
+    });
+    savePlayerStatsToStorage(PLAYER_STATS);
+
+    var sourceRatingKey = findRatingKey(sourceName);
+    var targetRatingKey = findRatingKey(target);
+    if (sourceRatingKey || targetRatingKey) {
+      var sr = sourceRatingKey ? PLAYER_RATINGS[sourceRatingKey] : null;
+      var tr = targetRatingKey ? PLAYER_RATINGS[targetRatingKey] : null;
+      var combinedHistory = (tr && tr.history ? tr.history : []).concat(sr && sr.history ? sr.history : []).sort(function (a, b) {
+        return (a.ts || "").localeCompare(b.ts || "");
+      });
+      var latest = combinedHistory.length ? combinedHistory[combinedHistory.length - 1] : null;
+      var mergedRating = latest ? latest.rating : tr ? tr.rating : sr ? sr.rating : DEFAULT_RATING;
+      if (sourceRatingKey && sourceRatingKey !== target) delete PLAYER_RATINGS[sourceRatingKey];
+      if (targetRatingKey && targetRatingKey !== target) delete PLAYER_RATINGS[targetRatingKey];
+      PLAYER_RATINGS[target] = {
+        name: target,
+        rating: mergedRating,
+        gamesPlayed: (tr ? tr.gamesPlayed : 0) + (sr ? sr.gamesPlayed : 0),
+        history: combinedHistory
+      };
+      saveRatingsToStorage(PLAYER_RATINGS);
+    }
+
+    var sourceContactKey = findContactKey(sourceName);
+    var targetContactKey = findContactKey(target);
+    if (sourceContactKey || targetContactKey) {
+      var sc = sourceContactKey ? PLAYER_CONTACTS[sourceContactKey] : {};
+      var tc = targetContactKey ? PLAYER_CONTACTS[targetContactKey] : {};
+      var fargoSide = tc.fargoId ? tc : sc.fargoId ? sc : null;
+      if (sourceContactKey && sourceContactKey !== target) delete PLAYER_CONTACTS[sourceContactKey];
+      if (targetContactKey && targetContactKey !== target) delete PLAYER_CONTACTS[targetContactKey];
+      PLAYER_CONTACTS[target] = {
+        email: tc.email || sc.email || "",
+        phone: tc.phone || sc.phone || "",
+        nickname: tc.nickname || sc.nickname || "",
+        clubTeam: tc.clubTeam || sc.clubTeam || "",
+        reportOptIn: !!(tc.reportOptIn || sc.reportOptIn),
+        notifyMethod: tc.notifyMethod || sc.notifyMethod || "email",
+        fargoId: fargoSide ? fargoSide.fargoId : "",
+        fargoName: fargoSide ? fargoSide.fargoName : "",
+        fargoLocation: fargoSide ? fargoSide.fargoLocation : "",
+        fargoRating: fargoSide ? fargoSide.fargoRating : null,
+        fargoRobustness: fargoSide ? fargoSide.fargoRobustness : null,
+        fargoFetchedAt: fargoSide ? fargoSide.fargoFetchedAt || 0 : 0,
+        localId: tc.localId || sc.localId || "",
+        updatedAt: Date.now()
+      };
+      saveContactsToStorage(PLAYER_CONTACTS);
+    }
+
+    var sourceBestRunKey = findPlayerBestRunKey(sourceName);
+    var targetBestRunKey = findPlayerBestRunKey(target);
+    if (sourceBestRunKey || targetBestRunKey) {
+      var sbr = sourceBestRunKey ? PLAYER_BEST_RUNS[sourceBestRunKey] : null;
+      var tbr = targetBestRunKey ? PLAYER_BEST_RUNS[targetBestRunKey] : null;
+      var bestWinner = sbr && (!tbr || sbr.value > tbr.value) ? sbr : tbr;
+      if (sourceBestRunKey && sourceBestRunKey !== target) delete PLAYER_BEST_RUNS[sourceBestRunKey];
+      if (targetBestRunKey && targetBestRunKey !== target) delete PLAYER_BEST_RUNS[targetBestRunKey];
+      if (bestWinner) {
+        PLAYER_BEST_RUNS[target] = { name: target, value: bestWinner.value, ts: bestWinner.ts };
+        savePlayerBestRunsToStorage(PLAYER_BEST_RUNS);
+      }
+    }
+
+    var sourceAddedKey = findPlayerAddedKey(sourceName);
+    var targetAddedKey = findPlayerAddedKey(target);
+    if (sourceAddedKey || targetAddedKey) {
+      var sa = sourceAddedKey ? PLAYER_ADDED[sourceAddedKey] : null;
+      var ta = targetAddedKey ? PLAYER_ADDED[targetAddedKey] : null;
+      if (sourceAddedKey && sourceAddedKey !== target) delete PLAYER_ADDED[sourceAddedKey];
+      if (targetAddedKey && targetAddedKey !== target) delete PLAYER_ADDED[targetAddedKey];
+      PLAYER_ADDED[target] = sa && ta ? (sa < ta ? sa : ta) : sa || ta;
+      savePlayerAddedToStorage(PLAYER_ADDED);
+    }
+
+    var sourceTransKey = findPlayerNameTranslationKey(sourceName);
+    var targetTransKey = findPlayerNameTranslationKey(target);
+    if (sourceTransKey || targetTransKey) {
+      var mergedTranslations = {};
+      if (sourceTransKey) Object.assign(mergedTranslations, PLAYER_NAME_TRANSLATIONS[sourceTransKey]);
+      if (targetTransKey) Object.assign(mergedTranslations, PLAYER_NAME_TRANSLATIONS[targetTransKey]);
+      if (sourceTransKey && sourceTransKey !== target) delete PLAYER_NAME_TRANSLATIONS[sourceTransKey];
+      if (targetTransKey && targetTransKey !== target) delete PLAYER_NAME_TRANSLATIONS[targetTransKey];
+      PLAYER_NAME_TRANSLATIONS[target] = mergedTranslations;
+      savePlayerNameTranslationsToStorage(PLAYER_NAME_TRANSLATIONS);
+    }
+
+    // Live roster: if both names are currently active players (the
+    // source never got removed after the split), fold the source row's
+    // this-session wins into the target row's and drop the source row;
+    // if only the source is active, it's a plain rename of that row.
+    var targetLiveIndex = -1;
+    state.players.forEach(function (p, idx) {
+      if (normalizeNameKey(p.name) === targetKey) targetLiveIndex = idx;
+    });
+    var removedIds = [];
+    state.players.forEach(function (p) {
+      if (normalizeNameKey(p.name) !== sourceKey) return;
+      if (targetLiveIndex !== -1 && state.players[targetLiveIndex].id !== p.id) {
+        var targetId = state.players[targetLiveIndex].id;
+        state.playerWins[targetId] = (state.playerWins[targetId] || 0) + (state.playerWins[p.id] || 0);
+        delete state.playerWins[p.id];
+        removedIds.push(p.id);
+      } else {
+        p.name = target;
+      }
+    });
+    if (removedIds.length) {
+      state.players = state.players.filter(function (p) {
+        return removedIds.indexOf(p.id) === -1;
+      });
+      if (state.rotation && Array.isArray(state.rotation.order)) {
+        state.rotation.order = state.rotation.order.filter(function (id) {
+          return removedIds.indexOf(id) === -1;
+        });
+      }
+    }
+
+    // Today's live game log: any game already recorded under the old
+    // name (before the merge) should read as the survivor going
+    // forward - otherwise today's report/Challonge push would still
+    // see two different names for what's now one merged person.
+    (state.gameHistory || []).forEach(function (g) {
+      if (Array.isArray(g.winnerNames)) {
+        g.winnerNames = g.winnerNames.map(function (n) {
+          return normalizeNameKey(n) === sourceKey ? target : n;
+        });
+      }
+      if (Array.isArray(g.opponentNames)) {
+        g.opponentNames = g.opponentNames.map(function (n) {
+          return normalizeNameKey(n) === sourceKey ? target : n;
+        });
+      }
+    });
+
+    // Saved Player Lists (SAVED_ROSTERS) are their own independent
+    // snapshots of who was on a given roster, same as every other store
+    // rewritten above - without this, "Load Player List" would keep
+    // handing loadRosterEntry the pre-merge name straight from disk
+    // forever (recordPlayerMerge below only covers a name arriving
+    // through an IMPORT from this point on, not one already saved
+    // locally before the merge happened), silently re-adding the old
+    // name as a brand new player every time that list gets loaded again.
+    var rostersChanged = false;
+    SAVED_ROSTERS.forEach(function (r) {
+      var seenNames = {};
+      var redirected = (r.players || [])
+        .map(function (n) {
+          return normalizeNameKey(n) === sourceKey ? target : n;
+        })
+        .filter(function (n) {
+          var k = normalizeNameKey(n);
+          if (seenNames[k]) return false;
+          seenNames[k] = true;
+          return true;
+        });
+      if (JSON.stringify(redirected) !== JSON.stringify(r.players || [])) {
+        r.players = redirected;
+        rostersChanged = true;
+      }
+    });
+    if (rostersChanged) saveRostersToStorage(SAVED_ROSTERS);
+
+    saveState();
+    recordPlayerMerge(sourceName, target);
+    return "";
+  }
+
+  // Sweeps every player's archived games (and today's still-live game
+  // log) for a name that no longer exists as a real player - the
+  // "before" half of a merge or rename that happened before
+  // mergePlayersEverywhere/renamePlayerEverywhere were fixed to
+  // propagate into every OTHER player's own archived history (see
+  // their own comments for why that's a separate, independent copy
+  // per player). Unlike a normal merge, oldNameText is deliberately
+  // NOT required to match any current contact/stats key - it's
+  // whatever text is still stuck in old game records, which by
+  // definition no longer corresponds to an actual current player.
+  // Returns how many individual game entries were actually changed.
+  function repairArchivedGameName(oldNameText, newName) {
+    var oldKey = normalizeNameKey(oldNameText);
+    var target = resolvePlayerName(newName);
+    if (!oldKey || !target) return 0;
+    var changed = 0;
+    function sweep(games) {
+      (games || []).forEach(function (g) {
+        var touched = false;
+        if (Array.isArray(g.winnerNames)) {
+          var w2 = g.winnerNames.map(function (n) {
+            return normalizeNameKey(n) === oldKey ? target : n;
+          });
+          if (w2.join("|") !== g.winnerNames.join("|")) {
+            g.winnerNames = w2;
+            touched = true;
+          }
+        }
+        if (Array.isArray(g.opponentNames)) {
+          var o2 = g.opponentNames.map(function (n) {
+            return normalizeNameKey(n) === oldKey ? target : n;
+          });
+          if (o2.join("|") !== g.opponentNames.join("|")) {
+            g.opponentNames = o2;
+            touched = true;
+          }
+        }
+        if (touched) changed++;
+      });
+    }
+    Object.keys(PLAYER_STATS).forEach(function (key) {
+      (PLAYER_STATS[key].sessions || []).forEach(function (s) {
+        sweep(s.games);
+      });
+    });
+    savePlayerStatsToStorage(PLAYER_STATS);
+    sweep(state.gameHistory);
+    saveState();
+    return changed;
   }
 
   // Formats digits-as-typed to match the phone convention of the
@@ -11104,6 +13254,7 @@
       })
       .filter(function (entry) {
         if (!entry.contact || !entry.contact.reportOptIn) return false;
+        if (isPlayerGraveyarded(entry.name)) return false;
         var entryMethod = entry.contact.notifyMethod || "email";
         if (method === "sms") return entryMethod === "sms" && entry.contact.phone;
         return entryMethod !== "sms" && entry.contact.email;
@@ -11169,6 +13320,152 @@
   }
 
   var GRAVEYARD_PLAYERS = loadGraveyardPlayersFromStorage();
+  var PLAYER_MERGED_INTO = loadMergedIntoFromStorage();
+
+  // Records that sourceName has been permanently folded into
+  // targetName - called once, right when a merge actually happens
+  // (see mergePlayersEverywhere). Also redirects any earlier merge
+  // that already pointed AT sourceName (a merge chain: A merged into
+  // B, now B merges into C) so every link ends up pointing straight
+  // at today's actual survivor, never an intermediate name that's
+  // itself since been merged away.
+  function recordPlayerMerge(sourceName, targetName) {
+    var sourceKey = normalizeNameKey(sourceName);
+    Object.keys(PLAYER_MERGED_INTO).forEach(function (key) {
+      if (normalizeNameKey(PLAYER_MERGED_INTO[key]) === sourceKey) {
+        PLAYER_MERGED_INTO[key] = targetName;
+      }
+    });
+    PLAYER_MERGED_INTO[sourceKey] = targetName;
+    saveMergedIntoToStorage(PLAYER_MERGED_INTO);
+  }
+
+  // Where a name should actually end up today, if it's ever been
+  // merged away - otherwise just itself, unchanged. seen guards
+  // against an impossible but non-fatal cycle rather than hanging.
+  function resolveMergedName(name) {
+    var seen = {};
+    var current = name;
+    for (;;) {
+      var key = normalizeNameKey(current);
+      if (seen[key]) return current;
+      seen[key] = true;
+      var target = PLAYER_MERGED_INTO[key];
+      if (!target) return current;
+      current = target;
+    }
+  }
+
+  // Second half of "same player, different name" detection alongside
+  // resolveMergedName's explicit merge tombstones above: catches the
+  // case where an imported contact record and a local one share the
+  // same permanent localId (see getOrCreatePlayerLocalId) but disagree
+  // on the name itself - almost always because the player was renamed
+  // locally sometime after this backup was taken. Without this, every
+  // merge function below (all keyed by name) would treat the renamed
+  // player as a brand new person and create a duplicate under the old
+  // name instead of folding cleanly into the one that's already here.
+  // Built fresh per import (rather than folded into PLAYER_MERGED_INTO,
+  // which is permanent and used everywhere in the app, not just here)
+  // since it only makes sense in the context of this one payload.
+  function buildLocalIdNameRedirect(importedContacts) {
+    var localIdToLocalName = {};
+    Object.keys(PLAYER_CONTACTS).forEach(function (localName) {
+      var id = PLAYER_CONTACTS[localName] && PLAYER_CONTACTS[localName].localId;
+      if (id) localIdToLocalName[id] = localName;
+    });
+    var redirect = {};
+    Object.keys(importedContacts || {}).forEach(function (importedName) {
+      var id = importedContacts[importedName] && importedContacts[importedName].localId;
+      var localName = id ? localIdToLocalName[id] : null;
+      if (localName && normalizeNameKey(localName) !== normalizeNameKey(importedName)) {
+        redirect[normalizeNameKey(importedName)] = localName;
+      }
+    });
+    return redirect;
+  }
+
+  // The three shapes an imported name-keyed store actually comes in -
+  // each redirects every key through resolveMergedName, combining two
+  // keys that land on the same target (an older import that still has
+  // both the pre-merge source and its target as separate entries)
+  // using the same rules mergePlayersEverywhere itself already uses
+  // for that data. Local never needs this same treatment - the source
+  // key simply doesn't exist there anymore the moment a merge runs.
+  function redirectKeyedSessions(obj, resolveName) {
+    resolveName = resolveName || resolveMergedName;
+    var result = {};
+    Object.keys(obj || {}).forEach(function (key) {
+      var target = resolveName(key);
+      var entry = obj[key] || {};
+      if (!result[target]) {
+        result[target] = { name: target, sessions: (entry.sessions || []).slice() };
+      } else {
+        result[target].sessions = mergeSessionLists(result[target].sessions, entry.sessions || []);
+      }
+    });
+    return result;
+  }
+
+  function redirectKeyedRatings(obj, resolveName) {
+    resolveName = resolveName || resolveMergedName;
+    var result = {};
+    Object.keys(obj || {}).forEach(function (key) {
+      var target = resolveName(key);
+      var entry = obj[key] || {};
+      var history = entry.history || [];
+      if (!result[target]) {
+        result[target] = { name: target, rating: entry.rating, gamesPlayed: entry.gamesPlayed || 0, history: history.slice() };
+        return;
+      }
+      result[target].history = result[target].history.concat(history).sort(function (a, b) {
+        return (a.ts || "").localeCompare(b.ts || "");
+      });
+      result[target].gamesPlayed = (result[target].gamesPlayed || 0) + (entry.gamesPlayed || 0);
+      var latest = result[target].history.length ? result[target].history[result[target].history.length - 1] : null;
+      if (latest) result[target].rating = latest.rating;
+    });
+    return result;
+  }
+
+  // contacts (target-preferred-else-source, same spirit as
+  // mergePlayersEverywhere's own contact combine) and playerAdded (an
+  // ISO date string, where whichever's already there stays - the real
+  // "earlier wins" comparison still happens once this reaches
+  // mergePlayerAddedData against local) - a first-seen-wins collision
+  // rule is a reasonable simplification for the rare case an import
+  // has both a merge's source and target as separate top-level
+  // entries at once.
+  function redirectKeyedFlatPreferFirst(obj, resolveName) {
+    resolveName = resolveName || resolveMergedName;
+    var result = {};
+    Object.keys(obj || {}).forEach(function (key) {
+      var target = resolveName(key);
+      if (!result.hasOwnProperty(target)) result[target] = obj[key];
+    });
+    return result;
+  }
+
+  // Same redirect-then-dedupe shape as the import-time helpers above,
+  // for a plain array of names rather than a keyed object - used
+  // wherever a saved roster's own player list gets read back (Load
+  // Player List, Group Session) as a safety net alongside the rewrite
+  // mergePlayersEverywhere already does to SAVED_ROSTERS itself at
+  // merge time (a roster restored from an older backup, for instance,
+  // could still carry a name from before that device ever saw the
+  // merge).
+  function redirectMergedRosterNames(names, resolveName) {
+    resolveName = resolveName || resolveMergedName;
+    var seen = {};
+    return (names || [])
+      .map(resolveName)
+      .filter(function (n) {
+        var key = normalizeNameKey(n);
+        if (seen[key]) return false;
+        seen[key] = true;
+        return true;
+      });
+  }
 
   function findGraveyardPlayerKey(name) {
     var key = normalizeNameKey(name);
@@ -11385,10 +13682,71 @@
     });
   }
 
+  // Rebuilds every player's rating from an empty slate by replaying
+  // their entire real game history in chronological order - the only
+  // way to guarantee gamesPlayed/K-factor/rating are all consistent
+  // with what actually happened, instead of whatever ended up stored
+  // (which can drift for reasons that have nothing to do with a bad
+  // game result - e.g. the case-variant name auto-merge bug that used
+  // to undercount gamesPlayed and knock an established player back
+  // into the provisional K-factor for their next games). Elo is
+  // relational - a win's delta depends on the opponent's rating at the
+  // time too - so a fully self-consistent fix has to replay everyone
+  // from scratch together, not just patch one player's number; ratings
+  // can shift for players who were never affected by whatever prompted
+  // this, which is why it's gated the same way resetAllPlayersOfficialRating
+  // is (double confirm, pre-wipe snapshot via saveResetSnapshot so it's
+  // undoable from Recover Data). Reuses the exact same game-gathering
+  // and replay logic as backfillMissingRatingsFromHistory, just without
+  // its alreadyRated skip - here every game is meant to be replayed, not
+  // only ones missing from history.
+  function recomputeAllRatingsFromGameHistory() {
+    var byTs = {};
+    getAllKnownPlayerNames().forEach(function (name) {
+      allGamesForPlayerName(name).forEach(function (g) {
+        if (g.result !== "won" || !g.ts || byTs[g.ts]) return;
+        byTs[g.ts] = { ts: g.ts, isTeam: !!g.isTeam, winnerNames: g.winnerNames || [], loserNames: g.opponentNames || [] };
+      });
+    });
+    var toApply = Object.keys(byTs)
+      .map(function (ts) {
+        return byTs[ts];
+      })
+      .sort(function (a, b) {
+        return a.ts.localeCompare(b.ts);
+      });
+
+    PLAYER_RATINGS = {};
+    toApply.forEach(function (g) {
+      if (!g.winnerNames.length || !g.loserNames.length || g.isTeam) return;
+      if (g.winnerNames.length > 1 || g.loserNames.length > 1) {
+        applyMultiWayRatingResult(g.winnerNames, g.loserNames, g.ts);
+      } else {
+        applyPairwiseRatingResult(g.winnerNames[0], g.loserNames[0], g.ts);
+      }
+    });
+    saveRatingsToStorage(PLAYER_RATINGS);
+    return Object.keys(PLAYER_RATINGS).length;
+  }
+
+  function recomputeAllRatingsFromGameHistoryFlow() {
+    confirmModal(T("confirm.recomputeAllRatingsExplain"), function () {
+      confirmModal(T("confirm.areYouSure"), function () {
+        saveResetSnapshot("allRatings", T("resetSnapshot.allRatingsLabel"), {
+          ratings: JSON.parse(JSON.stringify(PLAYER_RATINGS))
+        });
+        var count = recomputeAllRatingsFromGameHistory();
+        renderAll();
+        showToast(T("toast.allRatingsRecomputed", { count: count }));
+      });
+    });
+  }
+
   function openRatingEditPopup(name) {
     ratingEditTargetName = name;
     ratingEditPlayerName.textContent = name;
     ratingEditInput.value = getPlayerRating(name);
+    ratingEditRobustness.textContent = T("common.robustness", { count: getPlayerRobustness(name) });
     var contact = getPlayerContact(name);
     ratingEditEmailInput.value = contact.email || "";
     ratingEditPhoneInput.value = formatPhoneNumberForActiveLanguage(contact.phone || "");
@@ -11527,21 +13885,6 @@
     return { win: Math.round(k * (1 - expected)), lose: -Math.round(k * expected) };
   }
 
-  // Same idea, but for a team result (see applyTeamRatingResult) - a
-  // flat K-factor and each side's average rating instead of a per-player
-  // K, since that's what actually gets applied to every member of the
-  // team alike. Mirrors ratingPronosticVsOpponent's win/lose split
-  // above, not just "lose = -win": applyTeamRatingResult recomputes
-  // expectedWinner fresh from whichever side actually won, so unless
-  // the match is exactly 50/50 the win and lose swings are genuinely
-  // different sizes (the favorite risks more than it stands to gain).
-  function teamRatingPronosticVsOpponent(teamNames, opponentNames) {
-    var myAvg = averageRating(teamNames);
-    var oppAvg = averageRating(opponentNames);
-    var expected = eloExpectedScore(myAvg, oppAvg);
-    return { win: Math.round(RATING_K_PROVISIONAL * (1 - expected)), lose: -Math.round(RATING_K_PROVISIONAL * expected) };
-  }
-
   // Small "+X / -Y" preview element (see ratingPronosticVsOpponent above)
   // - only meaningful with exactly one well-defined opponent, since with
   // 3+ active players in individual mode a "lose" outcome could mean
@@ -11599,21 +13942,41 @@
     return sum / names.length;
   }
 
-  // Team result: treats each side's average rating as a single "player"
-  // for the win-probability calculation, then applies that same delta to
-  // every member of each side — a common, simple approximation for team
-  // Elo (not as rigorous as e.g. TrueSkill, but transparent and fair).
-  function applyTeamRatingResult(winnerNames, loserNames, ts) {
-    var winnerAvg = averageRating(winnerNames);
-    var loserAvg = averageRating(loserNames);
-    var expectedWinner = eloExpectedScore(winnerAvg, loserAvg);
-    var winnerDelta = Math.round(RATING_K_PROVISIONAL * (1 - expectedWinner));
-    var loserDelta = Math.round(RATING_K_PROVISIONAL * -(1 - expectedWinner));
+  // A 3+-way result (more than one name on either side, but NOT an
+  // official Team Mode game - team play isn't rated at all, see
+  // creditWin/recordTournamentRackWin's isTeam checks). Averaging
+  // everyone together (the old team-style math) hides who actually beat
+  // whom, and crediting one flat bump per opponent (the old individual-
+  // mode fan-out) let a single result move someone's rating several
+  // times over. Instead, each person on each side gets exactly ONE
+  // pairwise-style update, computed against the strongest (highest-
+  // rated) player on the other side - a real, specific opponent to be
+  // measured against, and a real one-result-one-rating-change per
+  // player. Both reference ratings are read before any bump is applied,
+  // so bumping one player never shifts another's "who's the strongest
+  // opponent" calculation mid-game.
+  function applyMultiWayRatingResult(winnerNames, loserNames, ts) {
+    var strongestLoserRating = Math.max.apply(
+      null,
+      loserNames.map(function (n) {
+        return getPlayerRating(n);
+      })
+    );
+    var strongestWinnerRating = Math.max.apply(
+      null,
+      winnerNames.map(function (n) {
+        return getPlayerRating(n);
+      })
+    );
     winnerNames.forEach(function (n) {
-      bumpPlayerRating(n, winnerDelta, ts);
+      var entry = ensureRatingEntry(n);
+      var expected = eloExpectedScore(entry.rating, strongestLoserRating);
+      bumpPlayerRating(n, Math.round(ratingKFor(entry.gamesPlayed) * (1 - expected)), ts);
     });
     loserNames.forEach(function (n) {
-      bumpPlayerRating(n, loserDelta, ts);
+      var entry = ensureRatingEntry(n);
+      var expected = eloExpectedScore(entry.rating, strongestWinnerRating);
+      bumpPlayerRating(n, -Math.round(ratingKFor(entry.gamesPlayed) * expected), ts);
     });
   }
 
@@ -11653,13 +14016,11 @@
     if (!toApply.length) return;
 
     toApply.forEach(function (g) {
-      if (!g.winnerNames.length || !g.loserNames.length) return;
-      if (g.isTeam) {
-        applyTeamRatingResult(g.winnerNames, g.loserNames, g.ts);
+      if (!g.winnerNames.length || !g.loserNames.length || g.isTeam) return;
+      if (g.winnerNames.length > 1 || g.loserNames.length > 1) {
+        applyMultiWayRatingResult(g.winnerNames, g.loserNames, g.ts);
       } else {
-        g.loserNames.forEach(function (loserName) {
-          applyPairwiseRatingResult(g.winnerNames[0], loserName, g.ts);
-        });
+        applyPairwiseRatingResult(g.winnerNames[0], g.loserNames[0], g.ts);
       }
     });
     saveRatingsToStorage(PLAYER_RATINGS);
@@ -11739,6 +14100,61 @@
     badge.textContent = getPlayerRating(name);
     badge.title = T("common.ratingBadgeTitle");
     return badge;
+  }
+
+  // "Local: X · Fargo: Y" comparison, shown only when Fargo is turned on
+  // and this player has a linked Fargo id (see the FargoRate lookups
+  // section and PLAYER_CONTACTS' fargo* fields). Deliberately only used
+  // on the Player Page and the Contact Sheet row - not injected into
+  // every other spot buildRatingBadge appears (scoreboard cards,
+  // tournament brackets, standings), to keep this a focused comparison
+  // view rather than cluttering every badge in the app. onRefreshed, if
+  // given, is called after a successful manual refresh so the caller can
+  // re-render whatever else depends on the cached values.
+  function buildFargoComparisonBadge(name, onRefreshed) {
+    var frag = document.createDocumentFragment();
+    if (!fargoEnabled) return frag;
+    var contact = getPlayerContact(name);
+    if (!contact.fargoId) return frag;
+
+    var wrap = document.createElement("span");
+    wrap.className = "fargo-comparison-badge";
+
+    var text = document.createElement("span");
+    text.textContent = T("fargo.comparisonText", {
+      local: getPlayerRating(name),
+      fargo: contact.fargoRating != null ? contact.fargoRating : "—"
+    });
+    wrap.appendChild(text);
+
+    var refreshBtn = document.createElement("button");
+    refreshBtn.type = "button";
+    refreshBtn.className = "fargo-refresh-btn";
+    refreshBtn.textContent = "🔄";
+    refreshBtn.title = T("fargo.refreshTooltip");
+    refreshBtn.setAttribute("aria-label", T("fargo.refreshTooltip"));
+    refreshBtn.addEventListener("click", function () {
+      refreshBtn.disabled = true;
+      fetchFargoPlayer(contact.fargoId, true).then(function (data) {
+        refreshBtn.disabled = false;
+        if (!data) {
+          showToast(T("fargo.lookupFailed"));
+          return;
+        }
+        setPlayerContact(name, {
+          fargoName: data.name || contact.fargoName,
+          fargoLocation: data.location || contact.fargoLocation,
+          fargoRating: data.rating,
+          fargoRobustness: data.robustness,
+          fargoFetchedAt: Date.now()
+        });
+        if (onRefreshed) onRefreshed();
+      });
+    });
+    wrap.appendChild(refreshBtn);
+
+    frag.appendChild(wrap);
+    return frag;
   }
 
   // A small "🏷️ Team Name" tag next to each roster row - a persistent,
@@ -12169,14 +14585,39 @@
   // files committed to this GitHub repo. The first time this version boots,
   // pull in whatever's still out there so history isn't lost, then never
   // touch the repo again.
+  //
+  // MIGRATED_FROM_REPO_KEY exists specifically so a deliberate Full Reset
+  // stays wiped: the original check here (ROSTERS_KEY/PLAYER_STATS_KEY
+  // both absent) is indistinguishable from "this device has never run the
+  // app before" and "this device just had everything intentionally wiped" -
+  // both look like a totally empty localStorage. Without a marker that
+  // survives the wipe on purpose (see btnFullResetStep2Yes), every reload
+  // after a Full Reset would silently re-import these same repo files
+  // right back in, making the reset look like it never actually happened.
+  var MIGRATED_FROM_REPO_KEY = "poolMasterCounter.migratedFromRepo.v1";
+
+  function markMigratedFromRepo() {
+    try {
+      localStorage.setItem(MIGRATED_FROM_REPO_KEY, "1");
+    } catch (e) {
+      console.warn("Could not save migratedFromRepo flag.", e);
+    }
+  }
+
   function migrateFromRepoIfNeeded() {
     var alreadyMigrated;
     try {
-      alreadyMigrated = localStorage.getItem(ROSTERS_KEY) !== null || localStorage.getItem(PLAYER_STATS_KEY) !== null;
+      alreadyMigrated =
+        localStorage.getItem(MIGRATED_FROM_REPO_KEY) === "1" ||
+        localStorage.getItem(ROSTERS_KEY) !== null ||
+        localStorage.getItem(PLAYER_STATS_KEY) !== null;
     } catch (e) {
       alreadyMigrated = false;
     }
-    if (alreadyMigrated) return Promise.resolve();
+    if (alreadyMigrated) {
+      markMigratedFromRepo();
+      return Promise.resolve();
+    }
 
     return fetchFresh("players/rosters.json")
       .then(function (res) {
@@ -12216,6 +14657,7 @@
           SAVED_ROSTERS = rosters;
           saveRostersToStorage(rosters);
           savePlayerStatsToStorage(PLAYER_STATS);
+          markMigratedFromRepo();
         });
       });
   }
@@ -12241,27 +14683,676 @@
     }
   }
 
-  function defaultBackupFilename() {
-    return "pool-master-counter-backup-" + new Date().toISOString().slice(0, 10) + ".json";
+  var DRIVE_FOLDER_LINK_KEY = "poolMasterCounter.driveFolderLink.v1";
+  var DRIVE_API_KEY_KEY = "poolMasterCounter.driveApiKey.v1";
+
+  function loadDriveFolderLink() {
+    try {
+      return localStorage.getItem(DRIVE_FOLDER_LINK_KEY) || "";
+    } catch (e) {
+      return "";
+    }
   }
 
-  // Date + day-of-week (e.g. "2026-09-08-Tuesday") plus, when given, the
-  // exporting person's name - so several people syncing the same iCloud
-  // Drive folder each land a distinct, dated file instead of everyone
-  // colliding on one filename or overwriting each other's export.
-  // Both halves must come from the same local calendar day - toISOString()
-  // is UTC, so pairing it with a locale (local-time) weekday name could
-  // silently mismatch near midnight (e.g. a UTC-behind timezone rolling
-  // into a new UTC date while it's still evening locally): formatDateISO
-  // and toLocaleDateString both read local getFullYear/getMonth/getDate
+  function saveDriveFolderLink(link) {
+    try {
+      localStorage.setItem(DRIVE_FOLDER_LINK_KEY, link || "");
+    } catch (e) {
+      console.warn("Could not save Drive folder link.", e);
+    }
+  }
+
+  // The API key is a per-device setting, never part of buildBackupPayload -
+  // it's a credential (even though it's read-only and referrer-restricted),
+  // not "pool counter data" the way the folder link is. Each device/person
+  // gets their own from Google Cloud Console; see backup.driveApiKeyHelp.
+  function loadDriveApiKey() {
+    try {
+      return localStorage.getItem(DRIVE_API_KEY_KEY) || "";
+    } catch (e) {
+      return "";
+    }
+  }
+
+  function saveDriveApiKey(key) {
+    try {
+      localStorage.setItem(DRIVE_API_KEY_KEY, key || "");
+    } catch (e) {
+      console.warn("Could not save Drive API key.", e);
+    }
+  }
+
+  // Accepts a full share link (folders/<id>, ?id=<id>) or a bare folder ID
+  // typed/pasted directly - whatever someone actually copies out of Drive's
+  // own "Share" dialog or address bar.
+  function extractDriveFolderId(link) {
+    var trimmed = (link || "").trim();
+    if (!trimmed) return null;
+    var m = trimmed.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+    if (m) return m[1];
+    m = trimmed.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    if (m) return m[1];
+    if (/^[a-zA-Z0-9_-]{10,}$/.test(trimmed)) return trimmed;
+    return null;
+  }
+
+  // ---------------------------------------------------------------------
+  // FargoRate lookups (optional, gated entirely by fargoEnabled above).
+  //
+  // FargoRate has no official, authenticated public developer API. What's
+  // used here instead is an unofficial, unauthenticated read endpoint at
+  // dashboard.fargorate.com that other open-source pool apps already rely
+  // on for the same purpose - confirmed to send Access-Control-Allow-
+  // Origin: * (callable directly from the browser) and to need no login
+  // or key of any kind. Because it's unsanctioned, it could change shape
+  // or start blocking requests with zero notice, so every call here is
+  // strictly best-effort: wrapped in a timeout + catch, and NEVER allowed
+  // to throw into code that matters for actually scoring a game. A
+  // player's real Fargo rating is a nice-to-have comparison, never a
+  // dependency.
+  // ---------------------------------------------------------------------
+
+  var FARGO_API_BASE = "https://dashboard.fargorate.com/api";
+  var FARGO_FETCH_TIMEOUT_MS = 8000;
+  var FARGO_CACHE_TTL_MS = 10 * 60 * 1000;
+  var fargoPlayerCache = {}; // fargoId -> { data, ts }
+
+  function fargoFetch(path) {
+    var controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    var timer = controller ? setTimeout(function () { controller.abort(); }, FARGO_FETCH_TIMEOUT_MS) : null;
+    return fetch(FARGO_API_BASE + path, controller ? { signal: controller.signal } : {})
+      .then(function (res) {
+        if (timer) clearTimeout(timer);
+        if (!res.ok) throw new Error("fargo-" + res.status);
+        return res.json();
+      })
+      .catch(function (e) {
+        if (timer) clearTimeout(timer);
+        throw e;
+      });
+  }
+
+  // Name search - returns a normalized candidate list ([] on any failure
+  // or when Fargo is turned off, never rejects). Common names return many
+  // candidates (a bare "Smith" can return 50+), so every candidate carries
+  // enough to tell people apart: name, location, rating, robustness.
+  function searchFargoPlayers(query) {
+    if (!fargoEnabled || !query || !query.trim()) return Promise.resolve([]);
+    return fargoFetch("/indexsearch?q=" + encodeURIComponent(query.trim()))
+      .then(function (data) {
+        var list = (data && data.value) || [];
+        return list.map(function (p) {
+          return {
+            fargoId: String(p.readableId || ""),
+            name: [p.firstName, p.lastName].filter(Boolean).join(" ").trim(),
+            location: p.location || "",
+            rating: p.effectiveRating != null ? parseInt(p.effectiveRating, 10) : (p.rating != null ? parseInt(p.rating, 10) : null),
+            robustness: p.robustness != null ? parseInt(p.robustness, 10) : null
+          };
+        }).filter(function (p) { return p.fargoId; });
+      })
+      .catch(function () { return []; });
+  }
+
+  // Single-player lookup by Fargo id - cached for FARGO_CACHE_TTL_MS so
+  // re-rendering a player page repeatedly (or opening it again a minute
+  // later) doesn't re-hit the network every time. Pass forceRefresh to
+  // bypass the cache (the player page's own refresh control does this).
+  // Resolves null on any failure or when Fargo is off - callers show
+  // "last saved value" / a toast rather than treating this as fatal.
+  function fetchFargoPlayer(fargoId, forceRefresh) {
+    if (!fargoEnabled || !fargoId) return Promise.resolve(null);
+    var cached = fargoPlayerCache[fargoId];
+    if (!forceRefresh && cached && Date.now() - cached.ts < FARGO_CACHE_TTL_MS) {
+      return Promise.resolve(cached.data);
+    }
+    return fargoFetch("/players/" + encodeURIComponent(fargoId))
+      .then(function (p) {
+        var normalized = {
+          fargoId: String(p.Id || fargoId),
+          name: p.FullName || [p.FirstName, p.LastName].filter(Boolean).join(" ").trim(),
+          location: [p.City, p.State].filter(Boolean).join(" ").trim(),
+          rating: p.FargoRating != null ? parseInt(p.FargoRating, 10) : null,
+          robustness: p.Robustness != null ? parseInt(p.Robustness, 10) : null
+        };
+        fargoPlayerCache[fargoId] = { data: normalized, ts: Date.now() };
+        return normalized;
+      })
+      .catch(function () { return null; });
+  }
+
+  // ---------------------------------------------------------------------
+  // Challonge integration (optional) - pushes a tournament's roster
+  // (every format) and match scores (Round Robin and Swiss only - see
+  // pushTournamentToChallonge's own comment) to a real Challonge
+  // tournament. Challonge has a genuine, self-serve REST API
+  // (api.challonge.com/v2.1); the user provides their own client id and
+  // secret from a free developer app registered at connect.challonge.com,
+  // stored locally exactly like the existing Drive API key (see
+  // loadDriveApiKey below) - plain text in localStorage, never sent
+  // anywhere but Challonge's own token endpoint. The OAuth "client
+  // credentials" grant works with no browser/redirect step - a plain
+  // server-to-server token exchange - so this runs entirely from the app.
+  // ---------------------------------------------------------------------
+
+  var CHALLONGE_CLIENT_ID_KEY = "poolMasterCounter.challongeClientId.v1";
+  var CHALLONGE_CLIENT_SECRET_KEY = "poolMasterCounter.challongeClientSecret.v1";
+  // Bumped to v2: earlier tokens were cached before the OAuth request
+  // asked for any scope, so they're valid but can't write anything -
+  // bumping the storage key makes every existing cached token (which
+  // has no way to self-report "I was granted no scope") get ignored
+  // instead of reused, forcing one fresh exchange with the new request.
+  var CHALLONGE_TOKEN_KEY = "poolMasterCounter.challongeToken.v2";
+  var CHALLONGE_OAUTH_SCOPE = "tournaments:read tournaments:write participants:read participants:write matches:read matches:write";
+  // Challonge's v2.1 REST API answers the CORS preflight but never
+  // sends Access-Control-Allow-Origin on the actual response (confirmed
+  // live), so a browser blocks reading it no matter the request shape.
+  // This is a small Cloudflare Worker relay (challonge-proxy/ in this
+  // repo) that forwards to the real API server-side and adds the
+  // missing header. Only the REST base is proxied - /oauth/token
+  // already sends proper CORS on its real responses and is called
+  // directly.
+  var CHALLONGE_API_BASE = "https://pool-master-counter-challonge-proxy.poolmastercounter.workers.dev/v2.1";
+  var CHALLONGE_OAUTH_TOKEN_URL = "https://api.challonge.com/oauth/token";
+  var CHALLONGE_FETCH_TIMEOUT_MS = 10000;
+
+  function loadChallongeClientId() {
+    try { return localStorage.getItem(CHALLONGE_CLIENT_ID_KEY) || ""; } catch (e) { return ""; }
+  }
+  function saveChallongeClientId(id) {
+    try { localStorage.setItem(CHALLONGE_CLIENT_ID_KEY, id || ""); } catch (e) { console.warn("Could not save Challonge client id.", e); }
+  }
+  function loadChallongeClientSecret() {
+    try { return localStorage.getItem(CHALLONGE_CLIENT_SECRET_KEY) || ""; } catch (e) { return ""; }
+  }
+  function saveChallongeClientSecret(secret) {
+    try { localStorage.setItem(CHALLONGE_CLIENT_SECRET_KEY, secret || ""); } catch (e) { console.warn("Could not save Challonge client secret.", e); }
+  }
+  function loadChallongeToken() {
+    try {
+      var raw = localStorage.getItem(CHALLONGE_TOKEN_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+  function saveChallongeToken(token) {
+    try {
+      localStorage.setItem(CHALLONGE_TOKEN_KEY, JSON.stringify(token));
+    } catch (e) {
+      console.warn("Could not save Challonge token.", e);
+    }
+  }
+
+  // Push-tracking for pushDayReportToChallonge, one entry per date -
+  // { "<dateStr>": { challongeTournamentId, challongeParticipantIds:
+  // {name: id}, challongePushedPairKeys: {pairKey: true} } } - the same
+  // shape/purpose as TOURNAMENT's own challonge* fields, just keyed by
+  // date instead of living on a single tournament object, since a day's
+  // regular play has no tournament object of its own.
+  var CHALLONGE_DAY_PUSHES_KEY = "poolMasterCounter.challongeDayPushes.v1";
+  function loadChallongeDayPushes() {
+    try {
+      var raw = localStorage.getItem(CHALLONGE_DAY_PUSHES_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) {
+      return {};
+    }
+  }
+  function saveChallongeDayPushes(data) {
+    try {
+      localStorage.setItem(CHALLONGE_DAY_PUSHES_KEY, JSON.stringify(data));
+    } catch (e) {
+      console.warn("Could not save Challonge day-push tracking.", e);
+    }
+  }
+  var CHALLONGE_DAY_PUSHES = loadChallongeDayPushes();
+
+  // Same idea as CHALLONGE_DAY_PUSHES, for pushRaceToChallonge - one
+  // entry per completed "Race to N" session, keyed by a fresh id minted
+  // at push time (a race has no stable id of its own the way a date or
+  // a bracket Tournament object does). Kept capped so this can't grow
+  // unbounded over months of daily play.
+  var CHALLONGE_RACE_PUSHES_KEY = "poolMasterCounter.challongeRacePushes.v1";
+  var CHALLONGE_RACE_PUSHES_MAX = 200;
+  function loadChallongeRacePushes() {
+    try {
+      var raw = localStorage.getItem(CHALLONGE_RACE_PUSHES_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) {
+      return {};
+    }
+  }
+  function saveChallongeRacePushes(data) {
+    var keys = Object.keys(data);
+    if (keys.length > CHALLONGE_RACE_PUSHES_MAX) {
+      keys.sort().slice(0, keys.length - CHALLONGE_RACE_PUSHES_MAX).forEach(function (k) { delete data[k]; });
+    }
+    try {
+      localStorage.setItem(CHALLONGE_RACE_PUSHES_KEY, JSON.stringify(data));
+    } catch (e) {
+      console.warn("Could not save Challonge race-push tracking.", e);
+    }
+  }
+
+  // A single fetch wrapper every Challonge call goes through - timeout
+  // guarded, and NEVER throws or rejects: always resolves to
+  // { ok, status, body }, with ok:false/status:0 for a network failure/
+  // timeout (indistinguishable from the caller's point of view from a
+  // real HTTP error - both just mean "didn't work", handled the same
+  // way). This is an unofficial-in-the-sense-of-self-managed integration
+  // the user opted into with their own credentials, but a flaky network
+  // must never be allowed to throw into code that isn't ready for it.
+  function challongeFetch(url, opts) {
+    opts = opts || {};
+    var controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    var timer = controller ? setTimeout(function () { controller.abort(); }, CHALLONGE_FETCH_TIMEOUT_MS) : null;
+    var fetchOpts = { method: opts.method || "GET", headers: opts.headers || {} };
+    if (opts.body !== undefined) fetchOpts.body = opts.body;
+    if (controller) fetchOpts.signal = controller.signal;
+    return fetch(url, fetchOpts)
+      .then(function (res) {
+        if (timer) clearTimeout(timer);
+        return res.json().catch(function () { return null; }).then(function (body) {
+          return { ok: res.ok, status: res.status, body: body };
+        });
+      })
+      .catch(function () {
+        if (timer) clearTimeout(timer);
+        return { ok: false, status: 0, body: null };
+      });
+  }
+
+  // Set on every getChallongeAccessToken() failure with whatever detail
+  // is available, so a caller building a user-facing message can show
+  // Challonge's actual reason instead of a generic "check your ID" -
+  // e.g. "The application doesn't exist" (wrong/mistyped client id) vs.
+  // "invalid_client" (id ok, secret wrong) vs. a network/timeout failure.
+  // Null on success or when no credentials were entered at all.
+  var lastChallongeAuthError = null;
+
+  // Returns a valid access token, fetching + caching a fresh one if none
+  // is cached or the cached one has expired (a day of slack before the
+  // real 1-week expiry, so a token doesn't die mid-use). null if no
+  // client id/secret is set, or the exchange fails for any reason -
+  // callers treat that as "not connected" (a toast), never a crash.
+  function getChallongeAccessToken() {
+    var clientId = loadChallongeClientId();
+    var clientSecret = loadChallongeClientSecret();
+    if (!clientId || !clientSecret) {
+      lastChallongeAuthError = null;
+      return Promise.resolve(null);
+    }
+    var cached = loadChallongeToken();
+    if (cached && cached.access_token && cached.expires_at && Date.now() < cached.expires_at - 24 * 60 * 60 * 1000) {
+      return Promise.resolve(cached.access_token);
+    }
+    // Confirmed live: a client_credentials token requested with no scope
+    // comes back valid but rejected on write calls ("Request requires
+    // one of the following scopes: tournaments:write") - the grant
+    // doesn't imply full access, it has to be asked for explicitly,
+    // same as Challonge's browser consent flow does with its own scope
+    // param. Least-privilege: only the scopes this app actually uses.
+    var body = "grant_type=client_credentials&client_id=" + encodeURIComponent(clientId) + "&client_secret=" + encodeURIComponent(clientSecret) + "&scope=" + encodeURIComponent(CHALLONGE_OAUTH_SCOPE);
+    return challongeFetch(CHALLONGE_OAUTH_TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: body
+    }).then(function (res) {
+      if (!res.ok || !res.body || !res.body.access_token) {
+        if (res.status === 0) {
+          lastChallongeAuthError = "network";
+        } else if (res.body && (res.body.error || res.body.error_description)) {
+          lastChallongeAuthError = res.body.error || res.body.error_description;
+        } else {
+          lastChallongeAuthError = "HTTP " + res.status;
+        }
+        return null;
+      }
+      lastChallongeAuthError = null;
+      var expiresInMs = (res.body.expires_in || 604800) * 1000;
+      saveChallongeToken({ access_token: res.body.access_token, expires_at: Date.now() + expiresInMs });
+      return res.body.access_token;
+    });
+  }
+
+  function challongeAuthErrorSuffix() {
+    return lastChallongeAuthError ? " (" + lastChallongeAuthError + ")" : "";
+  }
+
+  function challongePushFailedText() {
+    return T("challonge.pushFailed") + challongeAuthErrorSuffix();
+  }
+
+  // Set on every failed challongeAuthedRequest() call (i.e. every real
+  // API call AFTER a token was already obtained - create tournament,
+  // add participants, fetch/report matches) with whatever detail
+  // Challonge's own response body gives, so a push failure that isn't
+  // an auth problem doesn't get mislabeled as "check your ID". Null on
+  // success. Distinct from lastChallongeAuthError, which only covers
+  // the OAuth token exchange itself.
+  var lastChallongePushError = null;
+
+  function challongeErrorTextFromBody(body) {
+    if (!body) return null;
+    // Challonge's v2.1 API isn't consistent about the shape of `errors`:
+    // a JSON:API-style array of {detail/title} objects in some cases
+    // (e.g. creating a tournament), a single {detail, status} object in
+    // others (e.g. an auth rejection on a REST call) - handle both.
+    if (Array.isArray(body.errors) && body.errors.length) {
+      return body.errors.map(function (e) {
+        if (!e) return JSON.stringify(e);
+        // detail/title/message are usually strings, but confirmed live:
+        // detail can also be an array of strings (e.g. ["is missing"]).
+        var raw = e.detail || e.title || e.message;
+        var text = Array.isArray(raw) ? raw.join(", ") : raw || JSON.stringify(e);
+        // A bare "is missing"/"is invalid" (standard Rails validation
+        // wording) is useless without which field it's about - JSON:API
+        // carries that separately as source.pointer (e.g.
+        // "/data/attributes/name"), so fold it in when the message
+        // itself doesn't already name the field.
+        var pointer = e.source && e.source.pointer;
+        if (pointer && text.toLowerCase().indexOf(pointer.split("/").pop().toLowerCase()) === -1) {
+          text = pointer + " " + text;
+        }
+        return text;
+      }).join("; ");
+    }
+    if (body.errors && typeof body.errors === "object") {
+      return body.errors.detail || body.errors.title || body.errors.message || JSON.stringify(body.errors);
+    }
+    if (body.error && typeof body.error === "object") {
+      return body.error.message || body.error.detail || JSON.stringify(body.error);
+    }
+    if (typeof body.error === "string") return body.error;
+    if (typeof body.error_description === "string") return body.error_description;
+    if (typeof body.message === "string") return body.message;
+    return null;
+  }
+
+  function challongePushErrorSuffix() {
+    return lastChallongePushError ? " (" + lastChallongePushError + ")" : "";
+  }
+
+  // For a failure AFTER a valid token was obtained (create tournament,
+  // add participants, report a match) - deliberately distinct wording
+  // from challongePushFailedText(), which points at credentials. This
+  // failure means the credentials are fine but the request itself was
+  // rejected, so telling the user to "check your ID" would be wrong.
+  function challongePushApiFailedText() {
+    return T("challonge.pushFailedApi") + challongePushErrorSuffix();
+  }
+
+  function challongeAuthedRequest(method, path, jsonBody) {
+    return getChallongeAccessToken().then(function (token) {
+      if (!token) return { ok: false, status: 0, body: null, noToken: true };
+      // Challonge's v2.1 API rejects every request (even GET) that
+      // doesn't carry both of these exact header values - confirmed
+      // live: a missing/default Accept (*/*) 406s, and a missing/wrong
+      // Content-Type 415s, regardless of whether there's a body.
+      var headers = {
+        "Authorization-Type": "v2",
+        "Authorization": "Bearer " + token,
+        "Accept": "application/json",
+        "Content-Type": "application/vnd.api+json"
+      };
+      var opts = { method: method, headers: headers };
+      if (jsonBody !== undefined) {
+        opts.body = JSON.stringify(jsonBody);
+      }
+      return challongeFetch(CHALLONGE_API_BASE + path, opts).then(function (res) {
+        if (res.ok) {
+          lastChallongePushError = null;
+        } else {
+          lastChallongePushError = res.status === 0
+            ? "network"
+            : (challongeErrorTextFromBody(res.body) || ("HTTP " + res.status));
+        }
+        return res;
+      });
+    });
+  }
+
+  var CHALLONGE_TOURNAMENT_TYPE = {
+    single: "single elimination",
+    double: "double elimination",
+    roundrobin: "round robin",
+    swiss: "swiss"
+  };
+
+  // Creates the tournament on Challonge. Resolves the new Challonge
+  // tournament id (a string) on success, or null on any failure.
+  function createChallongeTournament(name, localFormat) {
+    var tournamentType = CHALLONGE_TOURNAMENT_TYPE[localFormat] || "single elimination";
+    // JSON:API type here is "tournament" (singular) - confirmed against
+    // Challonge's own docs. Unlike bulk-adding participants ("Participants",
+    // plural+capitalized - see below), Challonge isn't consistent about
+    // this across endpoints, so each one needs its own confirmed value
+    // rather than assuming a shared convention.
+    var attributes = { name: name, tournament_type: tournamentType };
+    // Confirmed live: despite Challonge's own docs listing this whole
+    // object as optional, a "round robin" tournament_type 422s with
+    // "/data/attributes/round_robin_options is missing" if it's left
+    // out. This app doesn't use Challonge's own ranking/points system
+    // (match scores are pushed directly, and standings are this app's
+    // own), so these are mostly just the documented defaults - enough
+    // to satisfy the schema, not a real behavior choice. iterations is
+    // the one deliberate override: the documented default (2) makes
+    // Challonge generate a home-and-away DOUBLE round robin - two
+    // separate match objects per pair - but this app only ever reports
+    // one aggregate result per pair (see aggregateGamesByPair), so 1
+    // keeps it to a single match per pair, matching what's actually
+    // pushed.
+    if (tournamentType === "round robin") {
+      attributes.round_robin_options = {
+        iterations: 1,
+        ranking: "match wins",
+        pts_for_game_win: 1,
+        pts_for_game_tie: 0,
+        pts_for_match_win: 1,
+        pts_for_match_tie: 0.5
+      };
+    }
+    return challongeAuthedRequest("POST", "/tournaments.json", {
+      data: { type: "tournament", attributes: attributes }
+    }).then(function (res) {
+      var id = res.body && res.body.data && (res.body.data.id || (res.body.data.attributes && res.body.data.attributes.id));
+      return res.ok && id ? String(id) : null;
+    });
+  }
+
+  // A freshly created Challonge tournament sits in "pending" state and
+  // has no real match objects yet, even with participants added -
+  // confirmed live: GET .../matches.json comes back empty until the
+  // tournament is explicitly started, which is why every match score
+  // push was failing ("0 pushed, N failed") right after the roster
+  // itself pushed fine. Resolves true on success (including "already
+  // started", which Challonge answers as a 422 - a no-op from this
+  // caller's point of view, not a real failure) or false otherwise.
+  function startChallongeTournament(tournamentId) {
+    return challongeAuthedRequest("PUT", "/tournaments/" + encodeURIComponent(tournamentId) + "/change_state.json", {
+      data: { type: "TournamentState", attributes: { state: "start" } }
+    }).then(function (res) {
+      if (res.ok) return true;
+      var text = challongeErrorTextFromBody(res.body) || "";
+      return /already/i.test(text) || /underway/i.test(text) || /started/i.test(text);
+    });
+  }
+
+  // Attempts to close out the tournament once every pair with real
+  // data has had its score reported. Same "start" state-change
+  // endpoint, different target state. Resolves true on success
+  // (including "already complete", a no-op) or false otherwise - a
+  // false here most likely means Challonge is refusing because a pair
+  // on the pushed roster never actually played each other today (so
+  // their auto-scheduled match has nothing to report and stays open),
+  // which no amount of retrying fixes; the caller surfaces this rather
+  // than silently swallowing it.
+  function finalizeChallongeTournament(tournamentId) {
+    return challongeAuthedRequest("PUT", "/tournaments/" + encodeURIComponent(tournamentId) + "/change_state.json", {
+      data: { type: "TournamentState", attributes: { state: "finalize" } }
+    }).then(function (res) {
+      if (res.ok) return true;
+      var text = challongeErrorTextFromBody(res.body) || "";
+      console.warn("Challonge finalize failed.", text);
+      return /already/i.test(text) || /complete/i.test(text);
+    });
+  }
+
+  // The explicit "Close Tournament" action (Contact Sheet/Tournament
+  // page buttons) - closing is deliberately NOT automatic after every
+  // push (see pushGamesToChallongeRoundRobin's autoClose comment), so
+  // this is the one place a close actually gets attempted outside of a
+  // completed race. callback receives the same true/false
+  // finalizeChallongeTournament resolves, so the caller can update its
+  // own "closed" bookkeeping only on genuine success.
+  function closeChallongeTournamentFlow(tournamentId, callback) {
+    var hasCredentials = !!(loadChallongeClientId() && loadChallongeClientSecret());
+    if (!hasCredentials) {
+      showToast(T("challonge.notConnected"));
+      callback(false);
+      return;
+    }
+    finalizeChallongeTournament(tournamentId).then(function (closed) {
+      showToast(closed ? T("challonge.tournamentClosed") : challongePushApiFailedText());
+      callback(closed);
+    }).catch(function (e) {
+      console.warn("Challonge close tournament failed unexpectedly.", e);
+      showToast(challongePushApiFailedText());
+      callback(false);
+    });
+  }
+
+  // Bulk-adds participants by name. Resolves a map of name -> Challonge
+  // participant id for whichever ones were actually created (a name
+  // that fails to come back just won't have an entry - callers only
+  // mark what's confirmed), or {} on total failure.
+  function bulkAddChallongeParticipants(tournamentId, names) {
+    if (!names.length) return Promise.resolve({});
+    return challongeAuthedRequest("POST", "/tournaments/" + encodeURIComponent(tournamentId) + "/participants/bulk_add.json", {
+      data: {
+        type: "Participants",
+        attributes: { participants: names.map(function (n) { return { name: n }; }) }
+      }
+    }).then(function (res) {
+      var map = {};
+      var list = res.body && (res.body.data && (Array.isArray(res.body.data) ? res.body.data : [res.body.data]));
+      (list || []).forEach(function (p) {
+        var attrs = p.attributes || p;
+        var pname = attrs.name;
+        var pid = p.id || attrs.id;
+        if (pname && pid) map[pname] = String(pid);
+      });
+      return map;
+    });
+  }
+
+  // The tournament's own Challonge-generated match list - resolves []
+  // on any failure.
+  function fetchChallongeMatches(tournamentId) {
+    return challongeAuthedRequest("GET", "/tournaments/" + encodeURIComponent(tournamentId) + "/matches.json").then(function (res) {
+      var list = res.body && res.body.data;
+      return res.ok && Array.isArray(list) ? list : [];
+    });
+  }
+
+  // Reports a final score for one Challonge match. Confirmed from
+  // Challonge's own v2.1 API docs code sample (the user shared it
+  // directly) that this bears no resemblance to the v1-style
+  // {scores_csv, winner_id} pair this used to send - the real shape is
+  // an array with one entry PER PARTICIPANT, each carrying that
+  // participant's own score and rank (1 = winner, 2 = loser). This app
+  // only ever reports one aggregate score per pair (see
+  // aggregateGamesByPair) rather than Challonge's own per-set detail,
+  // so each participant's score_set is just their single win count as
+  // a string - Challonge reads that as "one set, this many points."
+  // Pass winnerParticipantId as null/undefined for a genuine tie - per
+  // the match schema, that means tie:true with both sides ranked equal
+  // and advancing:false, rather than skipping the match entirely (a
+  // pair that actually played and tied still has a real result to
+  // report, and an unreported match is exactly what stops Challonge
+  // from letting the tournament close). Resolves true/false.
+  function reportChallongeMatchScore(tournamentId, matchId, idA, scoreA, idB, scoreB, winnerParticipantId) {
+    var isTie = !winnerParticipantId;
+    var aWins = !isTie && String(idA) === String(winnerParticipantId);
+    return challongeAuthedRequest("PUT", "/tournaments/" + encodeURIComponent(tournamentId) + "/matches/" + encodeURIComponent(matchId) + ".json", {
+      data: {
+        type: "match",
+        attributes: {
+          match: [
+            { participant_id: String(idA), score_set: String(scoreA), rank: isTie || aWins ? 1 : 2, advancing: aWins },
+            { participant_id: String(idB), score_set: String(scoreB), rank: isTie || !aWins ? 1 : 2, advancing: !isTie && !aWins }
+          ],
+          tie: isTie
+        }
+      }
+    }).then(function (res) {
+      if (!res.ok) console.warn("Challonge match score report failed.", challongeErrorTextFromBody(res.body) || res.status);
+      return !!res.ok;
+    });
+  }
+
+  // Read-only Drive v3 REST calls via a plain API key - no OAuth, no
+  // sign-in. Only works for a folder shared as "Anyone with the link can
+  // view" (a public API key can't authenticate as anyone, so Drive treats
+  // every request as anonymous - exactly the access an anonymous "view"
+  // link grants, and no more). Writing back to Drive would need real OAuth
+  // sign-in instead, which is why Export still just downloads a file
+  // locally - see backup.driveExportNote.
+  function driveApiUrl(path, apiKey) {
+    var sep = path.indexOf("?") === -1 ? "?" : "&";
+    return "https://www.googleapis.com/drive/v3/" + path + sep + "key=" + encodeURIComponent(apiKey);
+  }
+
+  function listDriveJsonFiles(folderId, apiKey) {
+    var q = "'" + folderId + "' in parents and mimeType='application/json' and trashed=false";
+    var url = driveApiUrl(
+      "files?q=" + encodeURIComponent(q) + "&fields=" + encodeURIComponent("files(id,name,modifiedTime)") + "&orderBy=modifiedTime desc&pageSize=25",
+      apiKey
+    );
+    return fetch(url).then(function (res) {
+      if (!res.ok) throw new Error("drive-list-" + res.status);
+      return res.json();
+    });
+  }
+
+  function fetchDriveFileText(fileId, apiKey) {
+    return fetch(driveApiUrl("files/" + encodeURIComponent(fileId) + "?alt=media", apiKey)).then(function (res) {
+      if (!res.ok) throw new Error("drive-fetch-" + res.status);
+      return res.text();
+    });
+  }
+
+  // Shared shape for every user-facing backup filename: a fixed
+  // "pool-master-counter" prefix, the export's type (so several kinds
+  // of export sitting in the same downloads folder read apart from
+  // each other at a glance), the local calendar date + weekday name,
+  // and - when there's a name on file for this device (see
+  // exportForSync/loadLastSyncExporterName) - the exporting person's
+  // own name, so several people syncing the same shared folder each
+  // land a distinct, attributable file instead of colliding on one
+  // name or overwriting each other's export. Both date halves must
+  // come from the same local calendar day - toISOString() is UTC, so
+  // pairing it with a locale (local-time) weekday name could silently
+  // mismatch near midnight (e.g. a UTC-behind timezone rolling into a
+  // new UTC date while it's still evening locally): formatDateISO and
+  // toLocaleDateString both read local getFullYear/getMonth/getDate
   // under the hood, so they always agree.
-  function defaultSyncFilename(exporterName) {
+  function buildExportFilename(typeLabel, exporterName) {
     var now = new Date();
     var dayName = now.toLocaleDateString(undefined, { weekday: "long" });
-    var base = formatDateISO(now) + "-" + dayName;
+    var parts = ["pool-master-counter", typeLabel, formatDateISO(now) + "-" + dayName];
     var trimmedName = (exporterName || "").trim();
-    if (trimmedName) base += "-" + trimmedName;
-    return sanitizeBackupFilename(base);
+    if (trimmedName) parts.push(trimmedName);
+    return sanitizeBackupFilename(parts.join("-"));
+  }
+
+  function defaultBackupFilename() {
+    return buildExportFilename("all-data", loadLastSyncExporterName());
+  }
+
+  function defaultSyncFilename(exporterName) {
+    return buildExportFilename("icloud-sync", exporterName);
   }
 
   // Strips characters a filesystem would reject and appends .json if the
@@ -12303,11 +15394,17 @@
       playerNameTranslations: PLAYER_NAME_TRANSLATIONS,
       removedPlayers: REMOVED_PLAYERS,
       graveyardPlayers: GRAVEYARD_PLAYERS,
+      mergedInto: PLAYER_MERGED_INTO,
       resetSnapshots: RESET_SNAPSHOTS,
       reportArchive: REPORT_ARCHIVE,
       tournament: TOURNAMENT,
       tournamentResults: TOURNAMENT_RESULTS,
-      leagues: LEAGUES
+      leagues: LEAGUES,
+      // Travels with the backup so a device importing it (see
+      // importAllDataFromText) can pick up the same shared Drive folder
+      // automatically - purely informational, never read as an instruction
+      // to fetch or upload anything on its own.
+      driveFolderLink: loadDriveFolderLink() || null
     };
   }
 
@@ -12344,45 +15441,86 @@
   // same iCloud Drive folder each land their own distinct file, and a
   // "last synced" timestamp/exporter name so the habit is visible.
   function exportForSync() {
-    promptModal(T("backup.syncExportNamePrompt"), loadLastSyncExporterName(), function (nameInput) {
-      var exporterName = (nameInput || "").trim();
-      saveLastSyncExporterName(exporterName);
-      var payload = buildBackupPayload();
-      payload.exportedBy = exporterName || null;
-      downloadJSON(defaultSyncFilename(exporterName), payload);
-      try {
-        localStorage.setItem(LAST_SYNC_EXPORT_KEY, payload.exportedAt);
-      } catch (e) {
-        console.warn("Could not save last-sync-export timestamp.", e);
-      }
-      renderSyncStatusLine();
+    promptModal(
+      T("backup.syncExportNamePrompt"),
+      loadLastSyncExporterName(),
+      function (nameInput, obfuscate) {
+        var exporterName = (nameInput || "").trim();
+        saveLastSyncExporterName(exporterName);
+        var payload = buildBackupPayload();
+        if (obfuscate) payload.contacts = {};
+        payload.exportedBy = exporterName || null;
+        downloadJSON(defaultSyncFilename(exporterName), payload);
+        try {
+          localStorage.setItem(LAST_SYNC_EXPORT_KEY, payload.exportedAt);
+        } catch (e) {
+          console.warn("Could not save last-sync-export timestamp.", e);
+        }
+        renderSyncStatusLine();
+      },
+      null,
+      null,
+      true
+    );
+  }
+
+  // "Friday, Sep 25 · 6:50 PM" - day name included (unlike
+  // formatTimestamp's plain ISO date), since the sync status line is
+  // specifically about recognizing "was this today, or a while ago"
+  // at a glance.
+  function formatSyncStatusTimestamp(ts) {
+    var d = new Date(ts);
+    if (!ts || isNaN(d.getTime())) return "";
+    var dateText = d.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+    var timeText = d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    return dateText + " · " + timeText;
+  }
+
+  // True if any game - today's still-live ones or already-archived -
+  // happened after sinceIso. Used to flag the iCloud Sync status line
+  // as stale: an export from before your most recent games doesn't
+  // reflect your current data anymore.
+  function hasNewGamesSince(sinceIso) {
+    if (!sinceIso) return false;
+    var foundLive = state.gameHistory.some(function (g) {
+      return g && g.ts && g.ts > sinceIso;
+    });
+    if (foundLive) return true;
+    return Object.keys(PLAYER_STATS).some(function (key) {
+      return (PLAYER_STATS[key].sessions || []).some(function (s) {
+        return (s.games || []).some(function (g) {
+          return g && g.ts && g.ts > sinceIso;
+        });
+      });
     });
   }
 
   function renderSyncStatusLine() {
-    var exportedAt, importedAt, exporterName, importedFromName;
+    var exportedAt, importedAt;
     try {
       exportedAt = localStorage.getItem(LAST_SYNC_EXPORT_KEY);
       importedAt = localStorage.getItem(LAST_SYNC_IMPORT_KEY);
-      exporterName = localStorage.getItem(LAST_SYNC_EXPORTER_NAME_KEY);
-      importedFromName = localStorage.getItem(LAST_SYNC_IMPORT_NAME_KEY);
     } catch (e) {
       exportedAt = null;
       importedAt = null;
-      exporterName = null;
-      importedFromName = null;
     }
-    var exportedText = exportedAt ? formatTimestamp(exportedAt, true) : T("backup.syncStatusNever");
-    var importedText = importedAt ? formatTimestamp(importedAt, true) : T("backup.syncStatusNever");
-    var exportedLine =
-      exportedAt && exporterName
-        ? T("backup.syncStatusExportedByName", { when: exportedText, name: exporterName })
-        : T("backup.syncStatusExported", { when: exportedText });
-    var importedLine =
-      importedAt && importedFromName
-        ? T("backup.syncStatusImportedFromName", { when: importedText, name: importedFromName })
-        : T("backup.syncStatusImported", { when: importedText });
-    syncStatusLine.textContent = exportedLine + " · " + importedLine;
+    var importedText = importedAt ? formatSyncStatusTimestamp(importedAt) : T("backup.syncStatusNever");
+    var exportedText = exportedAt ? formatSyncStatusTimestamp(exportedAt) : T("backup.syncStatusNever");
+
+    syncStatusLine.innerHTML = "";
+    var importLine = document.createElement("div");
+    importLine.textContent = T("backup.syncStatusLastImport", { when: importedText });
+    var exportLine = document.createElement("div");
+    exportLine.textContent = T("backup.syncStatusLastExport", { when: exportedText });
+    syncStatusLine.appendChild(importLine);
+    syncStatusLine.appendChild(exportLine);
+
+    if (hasNewGamesSince(exportedAt)) {
+      var newDataLine = document.createElement("div");
+      newDataLine.className = "sync-new-data-available";
+      newDataLine.textContent = T("backup.syncNewDataAvailable");
+      syncStatusLine.appendChild(newDataLine);
+    }
   }
 
   // Shared by the Copy Report button and shareReport()'s no-native-share
@@ -12880,6 +16018,12 @@
         alertModal(T("alert.noValidPlayerLists"));
         return;
       }
+      // Same redirect as importAllDataFromText/importVCardFile - a
+      // saved list from before a merge shouldn't bring the old,
+      // pre-merge name back as a name this list still points at.
+      normalized.forEach(function (r) {
+        r.players = redirectMergedRosterNames(r.players);
+      });
       var merge = mergeRosterLists(SAVED_ROSTERS, normalized);
       SAVED_ROSTERS = merge.rosters;
       saveRostersToStorage(SAVED_ROSTERS);
@@ -13015,9 +16159,23 @@
   function importAllData(file) {
     var reader = new FileReader();
     reader.onload = function () {
+      importAllDataFromText(reader.result);
+    };
+    reader.onerror = function () {
+      alertModal(T("alert.couldNotReadFile"));
+    };
+    reader.readAsText(file);
+  }
+
+  // Split out of importAllData so a backup fetched as plain text (e.g. from
+  // a Google Drive folder, see importAllDataFromDrive below) can reuse the
+  // exact same parse/confirm/merge path a locally-picked file goes through,
+  // instead of needing a real File object just to satisfy FileReader.
+  function importAllDataFromText(jsonText) {
+    {
       var data;
       try {
-        data = JSON.parse(reader.result);
+        data = JSON.parse(jsonText);
       } catch (e) {
         alertModal(T("alert.notValidJson"));
         return;
@@ -13025,6 +16183,15 @@
       if (!data || typeof data !== "object" || !data.state) {
         alertModal(describeUnrecognizedBackupFile(data));
         return;
+      }
+
+      // The Drive folder link travels with the backup itself (see
+      // buildBackupPayload) so a device that's never set one up yet - e.g.
+      // a fresh phone restoring from a friend's export - picks up the same
+      // shared folder automatically instead of needing it typed in by hand.
+      // Never overwrites a link already configured on this device.
+      if (data.driveFolderLink && !loadDriveFolderLink()) {
+        saveDriveFolderLink(data.driveFolderLink);
       }
 
       // A device with no players yet has nothing to lose — treat this like
@@ -13059,35 +16226,70 @@
           var importedRosters = Array.isArray(data.rosters) ? data.rosters : [];
           var importedTeams = Array.isArray(data.teams) ? data.teams : [];
           var importedPlayerStats = data.playerStats && typeof data.playerStats === "object" ? data.playerStats : {};
-          var extraSessions = summarizeGameHistoryByPlayer(importedState.gameHistory || []);
           var importedRatings = data.ratings && typeof data.ratings === "object" ? data.ratings : {};
           var importedContacts = data.contacts && typeof data.contacts === "object" ? data.contacts : {};
           var importedPlayerAdded = data.playerAdded && typeof data.playerAdded === "object" ? data.playerAdded : {};
           var importedLeagues = Array.isArray(data.leagues) ? data.leagues : [];
           importedLeagues.forEach(normalizeLeagueDefaults);
 
+          // Absorb the imported device's own merge records too (see
+          // buildBackupPayload) - a merge made on a different device,
+          // or restored from an older backup of this same one, should
+          // count here too. Local's own choice wins on an actual
+          // conflict (the same source merged two different ways on
+          // two devices, unlikely but possible) since it reflects
+          // whatever's already been true on this device longer.
+          var importedMergedInto = data.mergedInto && typeof data.mergedInto === "object" ? data.mergedInto : {};
+          Object.keys(importedMergedInto).forEach(function (key) {
+            if (!PLAYER_MERGED_INTO[key]) PLAYER_MERGED_INTO[key] = importedMergedInto[key];
+          });
+          saveMergedIntoToStorage(PLAYER_MERGED_INTO);
+
+          // A name permanently merged away on this device (see
+          // recordPlayerMerge) should never come back as its own
+          // separate identity just because an older backup, roster
+          // list, or vCard still remembers it that way - redirect
+          // every name-keyed piece of the imported payload to its
+          // current target BEFORE any of the merge logic below
+          // combines it with what's already here, so it folds
+          // straight into the survivor instead of undoing the merge.
+          // Local never needs this same treatment: the source key
+          // simply doesn't exist there anymore the moment a merge runs.
+          //
+          // Combined with buildLocalIdNameRedirect (built from the
+          // imported payload's own contacts, before anything below
+          // renames them) so a player renamed locally since this
+          // backup was taken - same localId, different name - folds
+          // in the same way instead of showing up as a duplicate.
+          var localIdRedirect = buildLocalIdNameRedirect(importedContacts);
+          function resolveImportedName(name) {
+            var key = normalizeNameKey(name);
+            return resolveMergedName(localIdRedirect[key] || name);
+          }
+          (importedState.players || []).forEach(function (p) {
+            if (p && p.name) p.name = resolveImportedName(p.name);
+          });
+          (importedState.gameHistory || []).forEach(function (g) {
+            if (!g || typeof g === "string") return;
+            if (Array.isArray(g.winnerNames)) g.winnerNames = g.winnerNames.map(resolveImportedName);
+            if (Array.isArray(g.opponentNames)) g.opponentNames = g.opponentNames.map(resolveImportedName);
+          });
+          importedPlayerStats = redirectKeyedSessions(importedPlayerStats, resolveImportedName);
+          importedRatings = redirectKeyedRatings(importedRatings, resolveImportedName);
+          importedContacts = redirectKeyedFlatPreferFirst(importedContacts, resolveImportedName);
+          importedPlayerAdded = redirectKeyedFlatPreferFirst(importedPlayerAdded, resolveImportedName);
+          importedRosters.forEach(function (r) {
+            if (!Array.isArray(r.players)) return;
+            r.players = redirectMergedRosterNames(r.players, resolveImportedName);
+          });
+
+          var extraSessions = summarizeGameHistoryByPlayer(importedState.gameHistory || []);
+
           var importedRosterPlayerNames = [];
           importedRosters.forEach(function (r) {
             (r.players || []).forEach(function (n) {
               importedRosterPlayerNames.push(n);
             });
-          });
-
-          // Importing a backup that mentions a graveyarded name counts as
-          // "importing them again" - resurrect them so the merge below
-          // (and everything downstream) treats them as a normal player
-          // again, per the Graveyard's stated resurrection path.
-          (importedState.players || []).forEach(function (p) {
-            if (p && p.name) reactivatePlayerFromGraveyard(p.name);
-          });
-          Object.keys(importedPlayerStats).forEach(function (n) {
-            reactivatePlayerFromGraveyard(n);
-          });
-          Object.keys(importedContacts).forEach(function (n) {
-            reactivatePlayerFromGraveyard(n);
-          });
-          importedRosterPlayerNames.forEach(function (n) {
-            reactivatePlayerFromGraveyard(n);
           });
 
           // Finds the actual key in an imported (not-yet-local) store
@@ -13404,11 +16606,7 @@
           alertModal(T("alert.couldNotImport", { message: e.message }));
         }
       });
-    };
-    reader.onerror = function () {
-      alertModal(T("alert.couldNotReadFile"));
-    };
-    reader.readAsText(file);
+    }
   }
 
   // ---------------------------------------------------------------------
@@ -13520,7 +16718,7 @@
 
     // The one non-negotiable part of this feature: back up what's here
     // right now, before any of it is replaced.
-    exportAllData("pool-master-counter-pre-squash-backup-" + new Date().toISOString().slice(0, 10) + "-" + Date.now() + ".json");
+    exportAllData(buildExportFilename("pre-squash-backup", loadLastSyncExporterName()).replace(/\.json$/i, "-" + Date.now() + ".json"));
 
     var importedState = data.state && typeof data.state === "object" ? data.state : defaultState();
     var resultingPlayerCount;
@@ -13552,10 +16750,12 @@
       SAVED_GAME_SETUPS = [];
       REMOVED_PLAYERS = {};
       GRAVEYARD_PLAYERS = {};
+      PLAYER_MERGED_INTO = {};
       RESET_SNAPSHOTS = [];
       REPORT_ARCHIVE = [];
       TOURNAMENT = null;
       TOURNAMENT_RESULTS = [];
+      LEAGUES = [];
       // Name translations are the one exception - they're a per-player
       // display preference, closer to contact info than to play history,
       // so they're unioned like contacts rather than wiped.
@@ -13584,10 +16784,13 @@
       PLAYER_NAME_TRANSLATIONS = data.playerNameTranslations && typeof data.playerNameTranslations === "object" ? data.playerNameTranslations : {};
       REMOVED_PLAYERS = data.removedPlayers && typeof data.removedPlayers === "object" ? data.removedPlayers : {};
       GRAVEYARD_PLAYERS = data.graveyardPlayers && typeof data.graveyardPlayers === "object" ? data.graveyardPlayers : {};
+      PLAYER_MERGED_INTO = data.mergedInto && typeof data.mergedInto === "object" ? data.mergedInto : {};
       RESET_SNAPSHOTS = Array.isArray(data.resetSnapshots) ? data.resetSnapshots : [];
       REPORT_ARCHIVE = Array.isArray(data.reportArchive) ? data.reportArchive : [];
       TOURNAMENT = data.tournament && typeof data.tournament === "object" ? data.tournament : null;
       TOURNAMENT_RESULTS = Array.isArray(data.tournamentResults) ? data.tournamentResults : [];
+      LEAGUES = Array.isArray(data.leagues) ? data.leagues : [];
+      LEAGUES.forEach(normalizeLeagueDefaults);
       resultingPlayerCount = (importedState.players || []).length;
     }
 
@@ -13614,11 +16817,17 @@
       localStorage.setItem(PLAYER_NAME_TRANSLATIONS_KEY, JSON.stringify(PLAYER_NAME_TRANSLATIONS));
       localStorage.setItem(REMOVED_PLAYERS_KEY, JSON.stringify(REMOVED_PLAYERS));
       localStorage.setItem(GRAVEYARD_PLAYERS_KEY, JSON.stringify(GRAVEYARD_PLAYERS));
+      localStorage.setItem(MERGED_INTO_KEY, JSON.stringify(PLAYER_MERGED_INTO));
       localStorage.setItem(RESET_SNAPSHOTS_KEY, JSON.stringify(RESET_SNAPSHOTS));
       localStorage.setItem(REPORT_ARCHIVE_KEY, JSON.stringify(REPORT_ARCHIVE));
       if (TOURNAMENT) localStorage.setItem(TOURNAMENT_KEY, JSON.stringify(TOURNAMENT));
       else localStorage.removeItem(TOURNAMENT_KEY);
       localStorage.setItem(TOURNAMENT_RESULTS_KEY, JSON.stringify(TOURNAMENT_RESULTS));
+      localStorage.setItem(LEAGUES_KEY, JSON.stringify(LEAGUES));
+      if (data.exportedAt) {
+        localStorage.setItem(LAST_SYNC_IMPORT_KEY, data.exportedAt);
+        if (data.exportedBy) localStorage.setItem(LAST_SYNC_IMPORT_NAME_KEY, data.exportedBy);
+      }
     } catch (e) {
       console.warn("Could not save squashed data.", e);
     }
@@ -14028,6 +17237,25 @@
     if (changed) saveRostersToStorage(SAVED_ROSTERS);
   })();
 
+  // One-time catch-up for merges that happened before mergePlayersEverywhere
+  // started rewriting SAVED_ROSTERS itself: without this, a list saved
+  // before that fix shipped would carry a pre-merge name forever, since
+  // nothing else ever revisits an already-saved roster on its own. Cheap
+  // enough (a handful of short arrays, once per boot) to just always run
+  // rather than track whether it's already been done.
+  (function migrateRosterMergedNamesOnBoot() {
+    var changed = false;
+    SAVED_ROSTERS.forEach(function (r) {
+      if (!r || !Array.isArray(r.players)) return;
+      var redirected = redirectMergedRosterNames(r.players);
+      if (JSON.stringify(redirected) !== JSON.stringify(r.players)) {
+        r.players = redirected;
+        changed = true;
+      }
+    });
+    if (changed) saveRostersToStorage(SAVED_ROSTERS);
+  })();
+
   function populateRosterLoadSelect() {
     rosterLoadSelect.innerHTML = "";
     if (SAVED_ROSTERS.length === 0) {
@@ -14061,8 +17289,9 @@
   // how many existing players got benched, so callers can report both.
   function loadRosterEntry(roster) {
     if (!roster) return { added: 0, standby: 0 };
+    var players = redirectMergedRosterNames(roster.players);
     var listKeys = {};
-    roster.players.forEach(function (name) {
+    players.forEach(function (name) {
       listKeys[normalizeNameKey(name)] = true;
     });
     var standby = 0;
@@ -14073,7 +17302,7 @@
       }
     });
     var added = 0;
-    roster.players.forEach(function (name) {
+    players.forEach(function (name) {
       var key = normalizeNameKey(name);
       var existing = state.players.filter(function (p) {
         return normalizeNameKey(p.name) === key;
@@ -14099,14 +17328,15 @@
   function loadPlayerListForQuickCounter(idx) {
     var roster = SAVED_ROSTERS[parseInt(idx, 10)];
     if (!roster || !roster.players || !roster.players.length) return;
+    var players = redirectMergedRosterNames(roster.players);
     var listKeys = {};
-    roster.players.forEach(function (name) {
+    players.forEach(function (name) {
       listKeys[normalizeNameKey(name)] = true;
     });
     state.players.forEach(function (p) {
       if (p.playing && !listKeys[normalizeNameKey(p.name)]) p.playing = false;
     });
-    roster.players.forEach(function (name) {
+    players.forEach(function (name) {
       var key = normalizeNameKey(name);
       var existing = state.players.filter(function (p) {
         return normalizeNameKey(p.name) === key;
@@ -14120,9 +17350,7 @@
     });
     saveState();
     renderAll();
-    showToast(
-      "Loaded \"" + roster.label + "\" — " + roster.players.length + " player" + (roster.players.length === 1 ? "" : "s") + "."
-    );
+    showToast("Loaded \"" + roster.label + "\" — " + players.length + " player" + (players.length === 1 ? "" : "s") + ".");
   }
 
   function loadSelectedRoster() {
@@ -15390,6 +18618,130 @@
     enterQuickCounterMode(T("toast.quickCounterTip"));
   }
 
+  // ---------------------------------------------------------------------
+  // Quick Game - the header's single most-visible button. Skips the
+  // whole Setup Wizard (game type/race mode/rotation/player-adding
+  // steps) for the one question that actually changes every time:
+  // who's playing. Everything else is a fixed, opinionated default -
+  // 8-Ball, single game (no race), individual, no rotation, Focus Mode -
+  // picked as the fastest path from "I want to play right now" to an
+  // actual scoreboard. The game type can still be changed afterward
+  // right from the Now Playing banner (see renderNowPlayingBanner's
+  // inline select), since locking it in forever would defeat the point
+  // of "quick".
+  // ---------------------------------------------------------------------
+
+  var QUICK_GAME_SETUP = {
+    gameType: "8ball",
+    target: 1,
+    unit: "rack",
+    mode: "individual",
+    shotCounterEnabled: false,
+    shotCounterBeepSec: 30,
+    timedTournamentEnabled: false,
+    timedTournamentMinutes: 60,
+    raceToWinsTarget: 1,
+    rotation: { enabled: false, order: [], every: 1 },
+    fairRaceEnabled: false
+  };
+
+  // Reuses an existing roster player (any case/nickname match, via the
+  // same resolvePlayerName the Add Player field uses) instead of
+  // creating a duplicate - addPlayer already reactivates a graveyarded
+  // name gracefully, so a past player's name just works here too.
+  function resolveOrCreateQuickGamePlayer(rawName) {
+    var resolved = resolvePlayerName(rawName);
+    if (!resolved) return null;
+    var key = normalizeNameKey(resolved);
+    var existing = state.players.filter(function (p) {
+      return normalizeNameKey(p.name) === key;
+    })[0];
+    return existing || addPlayer(resolved);
+  }
+
+  // Both names required, and not the same person twice - the only
+  // validation Quick Game needs, since everything else about the setup
+  // is fixed. Mirrors validateNewPlayerNameInput's live-update pattern.
+  function validateQuickGameInputs() {
+    var name1 = quickGamePlayer1Input.value.trim();
+    var name2 = quickGamePlayer2Input.value.trim();
+    var bothGiven = !!name1 && !!name2;
+    var same = bothGiven && normalizeNameKey(resolvePlayerName(name1)) === normalizeNameKey(resolvePlayerName(name2));
+    btnQuickGameStart.disabled = !bothGiven || same;
+    if (bothGiven && same) {
+      quickGameRequirement.textContent = T("quickGame.sameNameHint");
+      quickGameRequirement.classList.remove("hidden");
+    } else {
+      quickGameRequirement.classList.add("hidden");
+    }
+  }
+
+  function openQuickGameModal() {
+    quickGamePlayer1Input.value = "";
+    quickGamePlayer2Input.value = "";
+    quickGameRequirement.classList.add("hidden");
+    btnQuickGameStart.disabled = true;
+    quickGameOverlay.classList.remove("hidden");
+    quickGamePlayer1Input.focus();
+  }
+
+  function closeQuickGameModal() {
+    quickGameOverlay.classList.add("hidden");
+  }
+
+  // Applies QUICK_GAME_SETUP and syncs every control it touches - the
+  // same fields applyGameSetupAndSyncUI's sync half covers, just
+  // without that function's own "Loaded game setup" toast (startNewSession,
+  // called right after, shows its own "Let's play!" one instead - two
+  // toasts stacking on top of each other would just mean the first
+  // flashes and is immediately replaced, not actually useful).
+  function applyQuickGameSetup() {
+    var leavingQuickCounter = quickCounterMode;
+    quickCounterMode = false;
+    if (leavingQuickCounter) {
+      noStatsMode = false;
+      noStatsCheckbox.checked = false;
+    }
+
+    loadGameSetupEntry(QUICK_GAME_SETUP);
+    syncGameTypeUI();
+    raceToWinsInput.value = state.raceToWinsTarget;
+    syncRaceModeRadios();
+    raceToWinsRow.classList.toggle("hidden", state.raceToWinsTarget === 1);
+    Array.prototype.forEach.call(modeRadios, function (r) {
+      r.checked = r.value === "individual";
+    });
+    shotCounterEnabledCheckbox.checked = false;
+    shotCounterBeepRow.classList.add("hidden");
+    stopShotCounter();
+    timedTournamentEnabledCheckbox.checked = false;
+    timedTournamentMinutesRow.classList.add("hidden");
+    stopTimedTournament();
+    fairRaceEnabledCheckbox.checked = false;
+    state.currentGame.queueEnabled = false;
+    queueModeCheckbox.checked = false;
+  }
+
+  function startQuickGame() {
+    var p1 = resolveOrCreateQuickGamePlayer(quickGamePlayer1Input.value);
+    var p2 = resolveOrCreateQuickGamePlayer(quickGamePlayer2Input.value);
+    if (!p1 || !p2 || p1.id === p2.id) return;
+
+    // Exactly these two, individual, nobody else seated - a fresh 1v1,
+    // not an addition to whatever roster happened to be playing before.
+    state.players.forEach(function (p) {
+      p.playing = p.id === p1.id || p.id === p2.id;
+    });
+    p1.teamId = null;
+    p2.teamId = null;
+
+    applyQuickGameSetup();
+    closeQuickGameModal();
+    startNewSession(true);
+    setFocusMode(true);
+    showToast(T("toast.letsPlay"));
+  }
+
   // Smallest "Player N" not already taken by an existing roster name (any
   // case) - used below so an auto-named opponent never collides with a
   // real player someone already added.
@@ -15657,22 +19009,17 @@
     if (period === "today") {
       return new Date(now.getFullYear(), now.getMonth(), now.getDate());
     }
+    // Rolling windows, not calendar Monday/1st-of-month - "This Week"/
+    // "This Month" (Player Stats, Leaderboard, All Players alike) mean
+    // the last 7/30 days INCLUDING today, regardless of what day of the
+    // week or month it currently is - so the window never shrinks to
+    // almost nothing right after a Monday or the 1st. The "-6"/"-29" (not
+    // "-7"/"-30") is what makes today count as one of the 7/30 days.
     if (period === "week") {
-      var day = now.getDay();
-      var diffToMonday = day === 0 ? 6 : day - 1;
-      return new Date(now.getFullYear(), now.getMonth(), now.getDate() - diffToMonday);
-    }
-    // A rolling 7-day window ending today, not "since Monday" - used
-    // only by the Leaderboard's "This Week" (see leaderboardPeriod),
-    // which needs the last full week of activity regardless of what day
-    // of the week it currently is. Calendar-week "week" above stays as
-    // it was for Player Stats/All Players, which this deliberately
-    // doesn't touch.
-    if (period === "last7") {
-      return new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
     }
     if (period === "month") {
-      return new Date(now.getFullYear(), now.getMonth(), 1);
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29);
     }
     if (period === "6month") {
       return new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
@@ -16061,23 +19408,30 @@
       synopsisStatRow(T("playerPage.winPct"), synopsis.pct === null ? "—" : synopsis.pct + "%")
     );
 
-    // Only shown once the feature actually has data - a device where
-    // nobody's ever run 2+ balls in a row yet has nothing worth showing.
-    var allTimeRun = getAllTimeBestRun();
-    if (allTimeRun) {
+    // This player's OWN best run - NOT getAllTimeBestRun()/
+    // getTodaysBestRun(), which are the single app-wide record across
+    // every player (correctly shown with a name attached in the daily
+    // report/Publish panel, where "who set today's record" is exactly
+    // the question). Showing that same cross-player record here, on
+    // one specific player's own page, meant it could name someone else
+    // entirely - technically correct, but reads as a bug on a page
+    // that's supposed to be about this one person. Only shown once the
+    // feature actually has data for THIS player.
+    var personalBestRun = getPlayerBestRun(currentStatsPlayerName);
+    if (personalBestRun > 0) {
       playerPageSynopsisBody.appendChild(
         synopsisStatRow(
           T("playerPage.allTimeBestRun"),
-          T("playerPage.bestRunValue", { value: allTimeRun.value, name: allTimeRun.name }),
-          allTimeRun.name === currentStatsPlayerName ? "win" : null
+          T("playerPage.personalBestRunValue", { value: personalBestRun }),
+          "win"
         )
       );
-      var todaysRun = getTodaysBestRun();
+      var todaysPersonalRun = getPlayerTodaysBestRun(currentStatsPlayerName);
       playerPageSynopsisBody.appendChild(
         synopsisStatRow(
           T("playerPage.todaysBestRun"),
-          todaysRun ? T("playerPage.bestRunValue", { value: todaysRun.value, name: todaysRun.name }) : T("playerPage.noRunYetToday"),
-          todaysRun && todaysRun.name === currentStatsPlayerName ? "win" : null
+          todaysPersonalRun ? T("playerPage.personalBestRunValue", { value: todaysPersonalRun.value }) : T("playerPage.noRunYetToday"),
+          todaysPersonalRun ? "win" : null
         )
       );
     }
@@ -16674,6 +20028,36 @@
     playerPageName.innerHTML = "";
     buildPlayerNameLabel(playerPageName, name, true);
     playerPageName.appendChild(buildRatingBadge(name));
+    playerPageName.appendChild(buildFargoComparisonBadge(name, function () {
+      openPlayerStatsPage(name, true);
+    }));
+    if (fargoEnabled && getPlayerContact(name).fargoId) {
+      playerPageName.appendChild(buildFargoHistoryLink(getPlayerContact(name).fargoId));
+    }
+    // Auto-refresh once on open if the cached Fargo value (if any) is
+    // stale/missing - keeps the comparison reasonably current without
+    // ever polling in the background or refetching on every re-render
+    // (openPlayerStatsPage(name, true) above already re-enters this
+    // function after a refresh, so the freshly-cached value short-
+    // circuits this check on that immediate re-render).
+    (function () {
+      var contact = getPlayerContact(name);
+      if (!fargoEnabled || !contact.fargoId) return;
+      if (Date.now() - contact.fargoFetchedAt < FARGO_CACHE_TTL_MS) return;
+      fetchFargoPlayer(contact.fargoId).then(function (data) {
+        if (!data || currentStatsPlayerName !== name) return;
+        setPlayerContact(name, {
+          fargoName: data.name || contact.fargoName,
+          fargoLocation: data.location || contact.fargoLocation,
+          fargoRating: data.rating,
+          fargoRobustness: data.robustness,
+          fargoFetchedAt: Date.now()
+        });
+        if (!playerPageView.classList.contains("hidden") && currentStatsPlayerName === name) {
+          openPlayerStatsPage(name, true);
+        }
+      });
+    })();
     var addedAt = getPlayerAddedAt(name);
     if (addedAt) {
       playerPageAdded.textContent = T("playerPage.added", { date: formatDateISO(addedAt) });
@@ -17900,6 +21284,12 @@
     heading.textContent = T("common.rating");
     section.appendChild(heading);
 
+    var robustnessLine = document.createElement("p");
+    robustnessLine.className = "player-stats-note";
+    robustnessLine.title = T("common.robustnessTitle");
+    robustnessLine.textContent = T("common.robustness", { count: getPlayerRobustness(name) });
+    section.appendChild(robustnessLine);
+
     var entry = getPlayerRatingEntry(name);
     var pointsInWindow = entry
       ? entry.history.filter(function (h) {
@@ -18594,6 +21984,15 @@
   // roster, and anyone with contact info already on file, so removing a
   // player from the roster doesn't drop their contact details off this
   // page.
+  // Deliberately includes graveyarded names - findPlayerStatsKey/
+  // findContactKey etc. still match them by name too (nothing about
+  // graveyarding deletes their records, just flags them), so a rename
+  // or new-player check that ignored them here could walk someone
+  // straight into a graveyarded name and silently inherit/collide with
+  // that identity's still-existing stats/contact data. Anywhere that
+  // means "show me who's actually active" (the Contact Sheet's own
+  // list, League's add-member pickers) wants
+  // contactSheetVisibleNames below instead.
   function contactSheetAllNames() {
     var map = {};
     getAllKnownPlayerNames().forEach(function (n) {
@@ -18610,6 +22009,17 @@
       .sort(function (a, b) {
         return a.localeCompare(b);
       });
+  }
+
+  // Same full name list, minus anyone currently graveyarded - what the
+  // Contact Sheet itself should actually display (sending someone to
+  // the Graveyard should visibly remove them from here, not just flag
+  // them somewhere nothing else checks), and what any "pick someone to
+  // add" list (League members, etc.) should offer as candidates.
+  function contactSheetVisibleNames() {
+    return contactSheetAllNames().filter(function (n) {
+      return !isPlayerGraveyarded(n);
+    });
   }
 
   // Adds a blank contact record for anyone who only ever shows up in an
@@ -18647,6 +22057,199 @@
     label.appendChild(input);
     return label;
   }
+
+  // The Contact Sheet row's Fargo field - only ever built while
+  // fargoEnabled is true (see contactSheetRow below). Unlinked: a button
+  // that opens the search overlay, plus a manual-ID fallback for anyone
+  // who already knows their Fargo id. Linked: the cached Local/Fargo
+  // comparison (buildFargoComparisonBadge, same as the Player Page) plus
+  // an Unlink control.
+  function buildFargoContactField(name, contact) {
+    var wrap = document.createElement("div");
+    wrap.className = "contact-sheet-fargo-field";
+    var labelSpan = document.createElement("span");
+    labelSpan.textContent = T("fargo.fieldLabel");
+    wrap.appendChild(labelSpan);
+
+    if (!contact.fargoId) {
+      // Explicit "no" - not just an empty space where a status could be -
+      // so it reads the same at a glance as the "yes, #id" state below,
+      // rather than looking like the field just hasn't loaded yet.
+      var noOfficialBadge = document.createElement("span");
+      noOfficialBadge.className = "fargo-official-status is-none";
+      noOfficialBadge.textContent = T("fargo.noOfficialRating");
+      wrap.appendChild(noOfficialBadge);
+
+      var findBtn = document.createElement("button");
+      findBtn.type = "button";
+      findBtn.className = "btn btn-ghost";
+      findBtn.textContent = T("fargo.findButton");
+      findBtn.addEventListener("click", function () {
+        openFargoSearchOverlay(name);
+      });
+      wrap.appendChild(findBtn);
+
+      var manualLink = document.createElement("button");
+      manualLink.type = "button";
+      manualLink.className = "btn-link-small";
+      manualLink.textContent = T("fargo.enterIdLink");
+      manualLink.addEventListener("click", function () {
+        promptModal(T("fargo.enterIdPrompt"), "", function (value) {
+          var fargoId = (value || "").trim();
+          if (!fargoId) return;
+          fetchFargoPlayer(fargoId, true).then(function (data) {
+            if (!data) {
+              showToast(T("fargo.lookupFailed"));
+              return;
+            }
+            setPlayerContact(name, {
+              fargoId: data.fargoId,
+              fargoName: data.name,
+              fargoLocation: data.location,
+              fargoRating: data.rating,
+              fargoRobustness: data.robustness,
+              fargoFetchedAt: Date.now()
+            });
+            renderContactSheetPage();
+            showToast(T("fargo.linked", { name: data.name || name }));
+          });
+        });
+      });
+      wrap.appendChild(manualLink);
+      return wrap;
+    }
+
+    // The direct answer to "does this player have an official FargoRate
+    // rating" - a plain yes + the number, distinct from (and shown
+    // before) the local-vs-Fargo comparison badge below, which is about
+    // comparing two numbers rather than just confirming one exists.
+    var hasOfficialBadge = document.createElement("span");
+    hasOfficialBadge.className = "fargo-official-status is-linked";
+    hasOfficialBadge.textContent = T("fargo.hasOfficialRating", { rating: contact.fargoRating != null ? contact.fargoRating : "—" });
+    wrap.appendChild(hasOfficialBadge);
+
+    wrap.appendChild(buildFargoComparisonBadge(name, renderContactSheetPage));
+    wrap.appendChild(buildFargoHistoryLink(contact.fargoId));
+
+    var unlinkBtn = document.createElement("button");
+    unlinkBtn.type = "button";
+    unlinkBtn.className = "btn-link-small";
+    unlinkBtn.textContent = T("fargo.unlinkButton");
+    unlinkBtn.addEventListener("click", function () {
+      unlinkFargoPlayer(name);
+      renderContactSheetPage();
+    });
+    wrap.appendChild(unlinkBtn);
+
+    return wrap;
+  }
+
+  // Links out to this player's real page on FargoRate's own FairMatch
+  // tool, which does show real rating/match history (their own docs
+  // describe a "History" button there). Deliberately NOT reproduced
+  // in-app: the public dashboard.fargorate.com/api this integration
+  // already uses for the current-snapshot lookup has a documented
+  // "ratings" link per player, but it comes back empty even for a
+  // player with 1850 tracked matches - confirmed live, so the real
+  // history genuinely isn't exposed through that API. FairMatch's own
+  // page is the actual source for it.
+  function buildFargoHistoryLink(fargoId) {
+    var link = document.createElement("a");
+    link.className = "btn-link-small";
+    link.href = "https://fairmatch.fargorate.com/players/" + encodeURIComponent(fargoId);
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.textContent = T("fargo.historyLink");
+    return link;
+  }
+
+  // The player name currently being linked via the Fargo search overlay
+  // - set on open, read when a result row's "Use this" button is
+  // clicked, so the overlay itself doesn't need to know which row opened
+  // it.
+  var fargoSearchTargetName = null;
+
+  function openFargoSearchOverlay(name) {
+    fargoSearchTargetName = name;
+    fargoSearchInput.value = name;
+    fargoSearchResults.innerHTML = "";
+    fargoSearchStatus.textContent = "";
+    fargoSearchOverlay.classList.remove("hidden");
+    fargoSearchInput.focus({ preventScroll: true });
+  }
+
+  function closeFargoSearchOverlay() {
+    fargoSearchOverlay.classList.add("hidden");
+    fargoSearchTargetName = null;
+  }
+
+  function runFargoSearch() {
+    var query = fargoSearchInput.value.trim();
+    if (!query) return;
+    fargoSearchResults.innerHTML = "";
+    fargoSearchStatus.textContent = T("fargo.searching");
+    searchFargoPlayers(query).then(function (results) {
+      fargoSearchStatus.textContent = "";
+      if (!results.length) {
+        fargoSearchStatus.textContent = T("fargo.noResults");
+        return;
+      }
+      results.forEach(function (candidate) {
+        fargoSearchResults.appendChild(buildFargoSearchResultRow(candidate));
+      });
+    });
+  }
+
+  function buildFargoSearchResultRow(candidate) {
+    var li = document.createElement("li");
+    li.className = "fargo-search-result-row";
+
+    var info = document.createElement("div");
+    info.className = "fargo-search-result-info";
+    var nameLine = document.createElement("strong");
+    nameLine.textContent = candidate.name || ("#" + candidate.fargoId);
+    info.appendChild(nameLine);
+    var detailLine = document.createElement("span");
+    var ratingText = candidate.rating != null ? candidate.rating : "—";
+    detailLine.textContent = [candidate.location, T("fargo.resultRating", { rating: ratingText })].filter(Boolean).join(" · ");
+    info.appendChild(detailLine);
+    li.appendChild(info);
+
+    var useBtn = document.createElement("button");
+    useBtn.type = "button";
+    useBtn.className = "btn btn-primary";
+    useBtn.textContent = T("fargo.useThisButton");
+    useBtn.addEventListener("click", function () {
+      var targetName = fargoSearchTargetName;
+      if (!targetName) return;
+      setPlayerContact(targetName, {
+        fargoId: candidate.fargoId,
+        fargoName: candidate.name,
+        fargoLocation: candidate.location,
+        fargoRating: candidate.rating,
+        fargoRobustness: candidate.robustness,
+        fargoFetchedAt: Date.now()
+      });
+      closeFargoSearchOverlay();
+      renderContactSheetPage();
+      showToast(T("fargo.linked", { name: candidate.name || targetName }));
+    });
+    li.appendChild(useBtn);
+
+    return li;
+  }
+
+  btnFargoSearch.addEventListener("click", runFargoSearch);
+  fargoSearchInput.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      runFargoSearch();
+    }
+  });
+  btnFargoSearchClose.addEventListener("click", closeFargoSearchOverlay);
+  fargoSearchOverlay.addEventListener("click", function (e) {
+    if (e.target === fargoSearchOverlay) closeFargoSearchOverlay();
+  });
 
   function contactSheetRow(name) {
     var li = document.createElement("li");
@@ -18686,6 +22289,18 @@
       renderAll();
     });
     fields.appendChild(contactSheetFieldWrap("contactSheet.name", nameInput));
+
+    // The permanent local id (see getOrCreatePlayerLocalId) - shown
+    // read-only, since nothing should ever be able to edit it: it's
+    // the one anchor that stays the same across a rename or a merge,
+    // independent of the display name.
+    var idInput = document.createElement("input");
+    idInput.type = "text";
+    idInput.readOnly = true;
+    idInput.className = "contact-sheet-id-input";
+    idInput.value = getOrCreatePlayerLocalId(name);
+    idInput.setAttribute("aria-label", T("contactSheet.idAria", { name: name }));
+    fields.appendChild(contactSheetFieldWrap("contactSheet.id", idInput));
 
     var nicknameInput = document.createElement("input");
     nicknameInput.type = "text";
@@ -18730,6 +22345,8 @@
     });
     fields.appendChild(contactSheetFieldWrap("contactSheet.phone", phoneInput));
 
+    if (fargoEnabled) fields.appendChild(buildFargoContactField(name, contact));
+
     li.appendChild(fields);
     li.appendChild(buildPlayerLinkIcon(name));
 
@@ -18753,7 +22370,7 @@
   }
 
   function renderContactSheetPage() {
-    var names = contactSheetAllNames();
+    var names = contactSheetVisibleNames();
     // Drop selections for anyone no longer in the list (e.g. after a
     // rename folds two rows into one).
     Object.keys(contactSheetSelected).forEach(function (n) {
@@ -19047,7 +22664,22 @@
       return sum + n;
     }, 0);
     var avgPerDay = total / active.length / Math.max(1, periodDays);
-    return Math.max(LEADERBOARD_PERIOD_MIN_GAMES_FLOOR, Math.round(avgPerDay * LEADERBOARD_MIN_GAMES_REFERENCE_DAYS));
+    // Project that per-day rate out to a full LEADERBOARD_MIN_GAMES_REFERENCE_DAYS
+    // window - but capped at periodDays itself, never further than the
+    // period has actually run. "This Week"/"This Month" are now fixed-
+    // length rolling windows (always ~7/~30 elapsed days - see
+    // periodStartDate), so this cap is permanently a no-op for them; it
+    // still protects any period whose window can start small (a brand
+    // new period type added later, say). Without the cap, a period that
+    // just started would extrapolate one day's activity ×7 into a bar
+    // nobody could realistically clear yet. Capping the projection at
+    // periodDays makes the
+    // bar "keep pace with the group's average so far" while the period
+    // is still young, then smoothly becomes the full ×7 projection once
+    // periodDays reaches it - identical output to before for any period
+    // that's been running a week or more.
+    var projectionDays = Math.min(LEADERBOARD_MIN_GAMES_REFERENCE_DAYS, Math.max(1, periodDays));
+    return Math.max(LEADERBOARD_PERIOD_MIN_GAMES_FLOOR, Math.round(avgPerDay * projectionDays));
   }
 
   // Whole days elapsed so far within the given period (>= 1, so "today
@@ -19114,6 +22746,66 @@
         avgDominanceRatio: averageDominanceRatio(stats.games.concat(stats.tournamentGames)),
         skunkWins: countSkunkWins(stats.games.concat(stats.tournamentGames)),
         bestRun: getPlayerBestRun(name)
+      };
+    });
+    var minGames = leaderboardMinGamesForPeriod(
+      period,
+      rawEntries.map(function (e) {
+        return e.gamesPlayed;
+      }),
+      leaderboardElapsedDaysInPeriod(period)
+    );
+    var entries = rawEntries.filter(function (e) {
+      return e.gamesPlayed >= minGames;
+    });
+    entries.minGames = minGames;
+    entries.forEach(function (e) {
+      e.scoreBreakdown = computeLeaderboardScoreBreakdown(e, minGames);
+      e.mvpScore = e.scoreBreakdown.total;
+    });
+    entries.sort(function (a, b) {
+      return b.mvpScore - a.mvpScore;
+    });
+    return entries;
+  }
+
+  // Same scoring formula as computeLeaderboardEntries
+  // (computeLeaderboardScoreBreakdown, same minGames-gating), but built
+  // from league.matches/members directly instead of the general
+  // state.gameHistory pipeline - a league match is only ever recorded
+  // there (recordLeagueMatch), not into gameHistory/PLAYER_STATS the way
+  // a regular or tournament game is, so filtering computeLeaderboardEntries's
+  // own output down to league members would show "not enough games" for
+  // everyone regardless of how much they've actually played in the
+  // league. tournamentWins/avgDominanceRatio/skunkWins are always 0 here
+  // (those concepts don't apply to a league's race-format matches) -
+  // rating and bestRun still come from the same shared, cross-cutting
+  // stats every other leaderboard view uses.
+  function computeLeaderboardLeagueEntries(period) {
+    var league = findLeagueById(activeLeagueId);
+    if (!league) {
+      var empty = [];
+      empty.minGames = LEADERBOARD_MIN_GAMES;
+      return empty;
+    }
+    var periodMatches = filterGamesByPeriod(league.matches, period);
+    var rawEntries = league.members.map(function (m) {
+      var played = periodMatches.filter(function (match) {
+        return match.playerA === m.name || match.playerB === m.name;
+      });
+      var wins = played.filter(function (match) {
+        return match.winner === m.name;
+      }).length;
+      return {
+        name: m.name,
+        gamesPlayed: played.length,
+        wins: wins,
+        winPct: played.length ? wins / played.length : 0,
+        rating: getPlayerRating(m.name),
+        tournamentWins: 0,
+        avgDominanceRatio: 0,
+        skunkWins: 0,
+        bestRun: getPlayerBestRun(m.name)
       };
     });
     var minGames = leaderboardMinGamesForPeriod(
@@ -19646,16 +23338,32 @@
     return li;
   }
 
+  // "players" | "teams" | "league" - kept as a string rather than the
+  // older isTeamView boolean now that there are three mutually exclusive
+  // views, not two.
+  function leaderboardViewMode() {
+    if (leaderboardViewTeamsRadio.checked) return "teams";
+    if (leaderboardViewLeagueRadio.checked) return "league";
+    return "players";
+  }
+
+  function leaderboardEntriesForView(mode, period) {
+    if (mode === "teams") return computeLeaderboardTeamEntries(period);
+    if (mode === "league") return computeLeaderboardLeagueEntries(period);
+    return computeLeaderboardEntries(period);
+  }
+
   function renderLeaderboardPage() {
-    var isTeamView = leaderboardViewTeamsRadio.checked;
-    var entries = isTeamView ? computeLeaderboardTeamEntries(leaderboardPeriod) : computeLeaderboardEntries(leaderboardPeriod);
+    var mode = leaderboardViewMode();
+    var entries = leaderboardEntriesForView(mode, leaderboardPeriod);
     leaderboardList.innerHTML = "";
     if (entries.length === 0) {
       leaderboardList.classList.add("hidden");
       leaderboardEmptyHint.classList.remove("hidden");
-      leaderboardEmptyHint.textContent = T(isTeamView ? "leaderboard.notEnoughTeamData" : "leaderboard.notEnoughData", {
-        minGames: entries.minGames
-      });
+      leaderboardEmptyHint.textContent = T(
+        mode === "teams" ? "leaderboard.notEnoughTeamData" : mode === "league" ? "leaderboard.notEnoughLeagueData" : "leaderboard.notEnoughData",
+        { minGames: entries.minGames }
+      );
     } else {
       leaderboardList.classList.remove("hidden");
       leaderboardEmptyHint.classList.add("hidden");
@@ -19677,13 +23385,22 @@
   // message, chat app, clipboard) without needing canvas rendering or a
   // file attachment, matching how Copy/Share Report already works for the
   // day report (see shareReportTextOnly).
+  function leaderboardScopeLabelKey(mode) {
+    return mode === "teams" ? "leaderboard.viewTeams" : mode === "league" ? "leaderboard.viewLeague" : "leaderboard.viewPlayers";
+  }
+
   function buildLeaderboardShareText() {
-    var isTeamView = leaderboardViewTeamsRadio.checked;
-    var entries = isTeamView ? computeLeaderboardTeamEntries(leaderboardPeriod) : computeLeaderboardEntries(leaderboardPeriod);
-    var scopeLabel = T(isTeamView ? "leaderboard.viewTeams" : "leaderboard.viewPlayers");
+    var mode = leaderboardViewMode();
+    var isTeamView = mode === "teams";
+    var entries = leaderboardEntriesForView(mode, leaderboardPeriod);
+    var scopeLabel = T(leaderboardScopeLabelKey(mode));
     var lines = [T("leaderboard.shareHeading", { scope: scopeLabel }), ""];
     if (entries.length === 0) {
-      lines.push(T(isTeamView ? "leaderboard.notEnoughTeamData" : "leaderboard.notEnoughData", { minGames: entries.minGames }));
+      lines.push(
+        T(mode === "teams" ? "leaderboard.notEnoughTeamData" : mode === "league" ? "leaderboard.notEnoughLeagueData" : "leaderboard.notEnoughData", {
+          minGames: entries.minGames
+        })
+      );
     } else {
       entries.forEach(function (entry, i) {
         var rank = i + 1;
@@ -19698,7 +23415,7 @@
   function shareLeaderboard() {
     var text = buildLeaderboardShareText();
     if (navigator.share) {
-      navigator.share({ title: T("leaderboard.shareHeading", { scope: T(leaderboardViewTeamsRadio.checked ? "leaderboard.viewTeams" : "leaderboard.viewPlayers") }), text: text }).catch(function (err) {
+      navigator.share({ title: T("leaderboard.shareHeading", { scope: T(leaderboardScopeLabelKey(leaderboardViewMode())) }), text: text }).catch(function (err) {
         if (err && err.name === "AbortError") return;
         copyLeaderboardToClipboard(text);
       });
@@ -19912,6 +23629,373 @@
       return;
     }
     tournamentAdjustScore(active, side, delta);
+  }
+
+  // ---------------------------------------------------------------------
+  // Keypad Speech - speaks the player's name back out loud when the
+  // physical/on-screen keypad (handleKeypadShortcut - a digit key or
+  // Enter to select, "+"/"-" or a typed 15 Ball Rotation entry to score)
+  // is used to select a player or change their score, so the table can
+  // be played without needing to look at the screen to confirm who got
+  // selected or how much they were just credited. Uses the standard
+  // SpeechSynthesisUtterance API, which is broadly supported - including
+  // inside the iOS Capacitor WKWebView.
+  // ---------------------------------------------------------------------
+
+  var KEYPAD_SPEECH_KEY = "poolMasterCounter.keypadSpeechEnabled.v1";
+  var keypadSpeechEnabled = false;
+  try {
+    keypadSpeechEnabled = localStorage.getItem(KEYPAD_SPEECH_KEY) === "1";
+  } catch (e) {
+    keypadSpeechEnabled = false;
+  }
+
+  // Curated down to a handful of choices, per feedback that a raw list
+  // of every installed system voice (100+ on some devices, most of
+  // them not meant for this) was overwhelming. Each preset picks the
+  // best-matching REAL voice by name at speak-time (nameHints, checked
+  // in order - the first one that matches anything installed wins)
+  // rather than storing a specific voiceURI, since the exact voice
+  // found is allowed to differ by device/browser as long as the
+  // character comes through - falls back to pickKeypadVoice's plain
+  // lang-match when no hint matches anything installed. pitch/rate
+  // carry the rest of each preset's character even when the fallback
+  // voice is the same one for two different presets.
+  //
+  // Hints prioritize the newer, genuinely natural-sounding "persona"
+  // voices Apple ships per-language (Eddy/Reed/Grandpa = male; Flo/
+  // Shelley/Sandy/Grandma = female - confirmed by actually measuring
+  // each one's pitch, not guessed from the name) ahead of the older
+  // classic voices (Daniel, Kate, etc.), which read as noticeably more
+  // "computer-like" by comparison - per feedback asking for more
+  // human-sounding voices. Legacy/cross-platform names (Windows'
+  // Ryan/George/Hazel/Libby, Android's "Google UK English Male/
+  // Female") are kept as later fallbacks for devices without the Apple
+  // persona voices at all.
+  var KEYPAD_SPEECH_VOICE_KEY = "poolMasterCounter.keypadSpeechVoicePreset.v1";
+  var KEYPAD_SPEECH_PRESETS = {
+    britishMale: {
+      lang: "en-GB",
+      pitch: 1.0,
+      rate: 1.0,
+      nameHints: ["eddy", "daniel", "reed", "ryan", "george", "uk english male", "google uk english male"]
+    },
+    britishFemale: {
+      lang: "en-GB",
+      pitch: 1.0,
+      rate: 1.0,
+      nameHints: ["shelley", "kate", "serena", "hazel", "libby", "susan", "uk english female", "google uk english female"]
+    },
+    // A real TV golf announcer isn't whispering - it's an ordinary
+    // voice pitched low and paced slow and deliberate, hushed rather
+    // than breathy. Deliberately avoids any voice actually NAMED
+    // "whisper" (a literal breathy-whisper synthesis effect on most
+    // platforms) per feedback that it read as too wispery rather than
+    // calm. "Rocko"/"Grandpa" are the two deepest-measured persona
+    // voices available - only a mild extra pitch/rate reduction on top
+    // is needed (a bigger one would start distorting an already-deep
+    // voice into something unnatural, the opposite of "human").
+    golf: {
+      lang: "en-GB",
+      pitch: 0.92,
+      rate: 0.85,
+      nameHints: ["rocko", "grandpa", "reed", "ryan", "george"]
+    },
+    cheerful: {
+      lang: "en-GB",
+      pitch: 1.08,
+      rate: 1.05,
+      nameHints: [
+        "sandy",
+        "flo",
+        "kate",
+        "serena",
+        "fiona",
+        "moira",
+        "tessa",
+        "karen",
+        "samantha",
+        "victoria",
+        "zira",
+        "susan",
+        "allison",
+        "ava",
+        "female",
+        "uk english female",
+        "google uk english female"
+      ]
+    }
+  };
+  var keypadSpeechVoicePreset = "britishMale";
+  try {
+    var savedPreset = localStorage.getItem(KEYPAD_SPEECH_VOICE_KEY);
+    // "british" was the single combined-gender preset before the
+    // choice was split in two - map an already-saved choice forward
+    // instead of silently dropping back to the default.
+    if (savedPreset === "british") savedPreset = "britishMale";
+    if (savedPreset && KEYPAD_SPEECH_PRESETS[savedPreset]) keypadSpeechVoicePreset = savedPreset;
+  } catch (e) {
+    keypadSpeechVoicePreset = "britishMale";
+  }
+
+  // getVoices() can legitimately return [] on the very first call (some
+  // browsers, Chrome included, only populate the list asynchronously
+  // after a "voiceschanged" event fires post-load) - this just quietly
+  // falls back to the browser's own default voice for utter.lang that
+  // call, same as if no matching voice were installed at all. Prefers
+  // an exact lang match (e.g. "en-GB") over a same-language-family one
+  // (any "en-*") so a British voice isn't silently swapped for an
+  // American one just because it loaded first in the list.
+  function pickKeypadVoice(lang) {
+    if (!window.speechSynthesis || typeof window.speechSynthesis.getVoices !== "function") return null;
+    var voices = window.speechSynthesis.getVoices() || [];
+    var exact = voices.filter(function (v) {
+      return v.lang === lang;
+    });
+    if (exact.length) return exact[0];
+    var family = lang.split("-")[0];
+    var sameFamily = voices.filter(function (v) {
+      return v.lang && v.lang.indexOf(family) === 0;
+    });
+    return sameFamily.length ? sameFamily[0] : null;
+  }
+
+  // Tries each of the preset's nameHints in order against every
+  // installed voice's own name (case-insensitive substring); null if
+  // nothing installed matches any hint, so the caller can fall back to
+  // pickKeypadVoice. Several platforms ship ONE persona name across
+  // many languages (e.g. macOS's "Reed (English (United States))" vs
+  // "Reed (English (United Kingdom))" vs "Reed (German (Germany))") -
+  // matching by name alone would happily grab whichever locale enumerates
+  // first, silently swapping in the wrong accent. Among every voice
+  // that matches a given hint, this prefers one whose own lang is an
+  // exact match for the preset's requested lang, then same-language-
+  // family, before just taking the first name match as a last resort.
+  function pickPresetVoiceByName(preset) {
+    if (!window.speechSynthesis || typeof window.speechSynthesis.getVoices !== "function") return null;
+    var voices = window.speechSynthesis.getVoices() || [];
+    if (!voices.length) return null;
+    var family = preset.lang ? preset.lang.split("-")[0] : null;
+    for (var i = 0; i < preset.nameHints.length; i++) {
+      var hint = preset.nameHints[i];
+      var matches = voices.filter(function (v) {
+        return v.name && v.name.toLowerCase().indexOf(hint) !== -1;
+      });
+      if (!matches.length) continue;
+      var exactLang = matches.filter(function (v) {
+        return v.lang === preset.lang;
+      });
+      if (exactLang.length) return exactLang[0];
+      var sameFamily = family
+        ? matches.filter(function (v) {
+            return v.lang && v.lang.indexOf(family) === 0;
+          })
+        : [];
+      if (sameFamily.length) return sameFamily[0];
+      return matches[0];
+    }
+    return null;
+  }
+
+  function resolveKeypadVoice(presetId, lang) {
+    var preset = KEYPAD_SPEECH_PRESETS[presetId] || KEYPAD_SPEECH_PRESETS.britishMale;
+    return pickPresetVoiceByName(preset) || pickKeypadVoice(lang);
+  }
+
+  function speakKeypadText(text) {
+    if (!keypadSpeechEnabled || !window.speechSynthesis || !text) return;
+    try {
+      var preset = KEYPAD_SPEECH_PRESETS[keypadSpeechVoicePreset] || KEYPAD_SPEECH_PRESETS.britishMale;
+      var utter = new SpeechSynthesisUtterance(text);
+      utter.lang = preset.lang;
+      var voice = resolveKeypadVoice(keypadSpeechVoicePreset, preset.lang);
+      if (voice) utter.voice = voice;
+      utter.pitch = preset.pitch;
+      utter.rate = preset.rate;
+      window.speechSynthesis.speak(utter);
+    } catch (e) {
+      // Speech synthesis isn't available/working on this device -
+      // silently skip, same as every other best-effort audio cue here.
+    }
+  }
+
+  // Plays a short sample in whichever preset was just picked in the
+  // dropdown - deliberately NOT gated on keypadSpeechEnabled like
+  // speakKeypadText is, so auditioning presets works even while the
+  // feature itself is still toggled off. Shares the same lang/pitch/
+  // rate as the real thing so what's heard here is exactly what a real
+  // announcement will sound like.
+  function previewKeypadVoice(presetId) {
+    if (!window.speechSynthesis) return;
+    try {
+      var preset = KEYPAD_SPEECH_PRESETS[presetId] || KEYPAD_SPEECH_PRESETS.britishMale;
+      var utter = new SpeechSynthesisUtterance(T("keypad.voiceSampleText"));
+      utter.lang = preset.lang;
+      var voice = resolveKeypadVoice(presetId, preset.lang);
+      if (voice) utter.voice = voice;
+      utter.pitch = preset.pitch;
+      utter.rate = preset.rate;
+      // Cancels any sample (or real announcement) still playing first,
+      // so switching through options quickly plays each new sample
+      // right away instead of queuing them all up one after another.
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utter);
+    } catch (e) {
+      // Speech synthesis isn't available/working on this device -
+      // silently skip, same as every other best-effort audio cue here.
+    }
+  }
+
+  function setKeypadSpeechVoicePreset(presetId) {
+    keypadSpeechVoicePreset = KEYPAD_SPEECH_PRESETS[presetId] ? presetId : "britishMale";
+    try {
+      localStorage.setItem(KEYPAD_SPEECH_VOICE_KEY, keypadSpeechVoicePreset);
+    } catch (e) {
+      console.warn("Could not save keypad speech voice choice.", e);
+    }
+  }
+
+  // Speaks the same short name the on-screen card shows (see
+  // shortDisplayNameForPlayer), not necessarily the player's full
+  // stored name - spoken feedback should match what's visible. Scoring
+  // itself (+/-) only gets the existing plain beep (playPositiveSound/
+  // playNegativeSound in adjustScore) - no longer announced by name
+  // here, per feedback that it was too chatty on every single tap.
+  // Switching players is the one moment still worth a recap: the
+  // outgoing player's final total (if there was one), then who's up
+  // next - two queued utterances (speechSynthesis plays consecutive
+  // speak() calls back to back on its own, no manual sequencing
+  // needed), so a player can hear their running score the moment
+  // someone switches away from them without that total being spoken
+  // after every single point.
+  // True if player, AT the given score (myScore - either their actual
+  // current balls, or a hypothetical one, see keypadScoreWouldLead
+  // below), is STRICTLY ahead of every relevant competitor right now:
+  // the other team's total in Teams mode, every other active player's
+  // own score in Individual mode. A tie (or being the only one
+  // playing, with nobody to have taken the lead FROM) never counts as
+  // "leading".
+  function keypadScoreWouldLead(player, myScore) {
+    if (!quickCounterMode && state.currentGame.mode === "teams" && player.teamId) {
+      var otherTeamId = player.teamId === "A" ? "B" : "A";
+      if (!teamMembersLive(otherTeamId).length) return false;
+      var restOfMyTeam = sumTeamBalls(player.teamId) - (player.balls || 0);
+      return restOfMyTeam + myScore > sumTeamBalls(otherTeamId);
+    }
+    var others = activePlayers().filter(function (p) {
+      return p.id !== player.id;
+    });
+    if (!others.length) return false;
+    return others.every(function (p) {
+      return myScore > (p.balls || 0);
+    });
+  }
+
+  function keypadPlayerIsLeading(player) {
+    return keypadScoreWouldLead(player, player.balls || 0);
+  }
+
+  function speakKeypadPlayerSelected(player, previousPlayer) {
+    if (previousPlayer) {
+      speakKeypadText(T("keypad.speakPreviousTotal", { name: shortDisplayNameForPlayer(previousPlayer), count: previousPlayer.balls || 0 }));
+    }
+    var vars = { name: shortDisplayNameForPlayer(player), count: player.balls || 0 };
+    speakKeypadText(T(keypadPlayerIsLeading(player) ? "keypad.speakPlayingScoreLeader" : "keypad.speakPlayingScore", vars));
+  }
+
+  // Announced right after a keypad +/- (or a typed 15 Ball Rotation
+  // entry) actually lands, but only on the TRANSITION into the lead -
+  // not on every point scored while already ahead, which would be as
+  // chatty as the per-point announcements this feature deliberately
+  // dropped. wasLeading/willLead are computed from state BEFORE the
+  // real mutation (requestAdjustScore) runs, using the same
+  // keypadScoreWouldLead math against the predicted post-delta score,
+  // so a game-ending win's own reset logic (creditWin) racing the
+  // real mutation can't confuse this - it never reads state back out
+  // after the fact.
+  function speakKeypadLeadChange(player, wasLeading, willLead) {
+    if (wasLeading || !willLead) return;
+    speakKeypadText(T("keypad.speakNowLeader", { name: shortDisplayNameForPlayer(player) }));
+  }
+
+  // "On the hill" (one point from winning the current rack) only means
+  // anything for a running points total with a real target to fall
+  // short of - Straight Pool/15 Ball Rotation/Custom/Snooker (unit
+  // "points"), never the 8-Ball/9-Ball family's "target 1 rack" (every
+  // rack there IS the win, there's no point short of it to be "on the
+  // hill" at) - per explicit request ("at points games"). Returns the
+  // target to compare against, or 0 when it doesn't apply (Quick
+  // Counter has no target either).
+  function keypadOnHillTarget() {
+    if (quickCounterMode) return 0;
+    if (state.currentGame.unit !== "points") return 0;
+    var target = state.currentGame.target;
+    return target > 1 ? target : 0;
+  }
+
+  // Same shape as keypadScoreWouldLead - checks a hypothetical score
+  // (myScore) against the target, team-aware the same way (a Teams
+  // member is "on the hill" once their TEAM's total is one point from
+  // winning, same quantity adjustScore itself checks for the real win).
+  function keypadScoreWouldBeOnHill(player, myScore) {
+    var target = keypadOnHillTarget();
+    if (!target) return false;
+    if (!quickCounterMode && state.currentGame.mode === "teams" && player.teamId) {
+      var restOfMyTeam = sumTeamBalls(player.teamId) - (player.balls || 0);
+      return restOfMyTeam + myScore === target - 1;
+    }
+    return myScore === target - 1;
+  }
+
+  function keypadPlayerIsOnHill(player) {
+    return keypadScoreWouldBeOnHill(player, player.balls || 0);
+  }
+
+  // Same transition-only pattern as speakKeypadLeadChange (and for the
+  // same reason - landing exactly on target-1 should announce once,
+  // not re-announce on every later point while still one away, and a
+  // delta that jumps straight past target-1 to the win itself never
+  // fires this at all, which is correct - they already won).
+  function speakKeypadOnHillChange(player, wasOnHill, willBeOnHill) {
+    if (wasOnHill || !willBeOnHill) return;
+    speakKeypadText(T("keypad.speakOnHill", { name: shortDisplayNameForPlayer(player) }));
+  }
+
+  function setKeypadSpeechEnabled(on) {
+    keypadSpeechEnabled = on;
+    try {
+      localStorage.setItem(KEYPAD_SPEECH_KEY, on ? "1" : "0");
+    } catch (e) {
+      console.warn("Could not save keypad speech setting.", e);
+    }
+    btnToggleKeypadSpeech.classList.toggle("is-listening", on);
+    btnToggleKeypadSpeech.textContent = T(on ? "keypad.speechToggleOff" : "keypad.speechToggleOn");
+    if (!on && window.speechSynthesis) window.speechSynthesis.cancel();
+  }
+
+  if (window.speechSynthesis && typeof SpeechSynthesisUtterance !== "undefined") {
+    btnToggleKeypadSpeech.classList.remove("hidden");
+    btnToggleKeypadSpeech.textContent = T(keypadSpeechEnabled ? "keypad.speechToggleOff" : "keypad.speechToggleOn");
+    btnToggleKeypadSpeech.classList.toggle("is-listening", keypadSpeechEnabled);
+    btnToggleKeypadSpeech.addEventListener("click", function () {
+      setKeypadSpeechEnabled(!keypadSpeechEnabled);
+    });
+    btnKeypadSpeechHelp.classList.remove("hidden");
+    btnKeypadSpeechHelp.addEventListener("click", function () {
+      alertModal(T("keypad.speechHelpText"));
+    });
+
+    keypadSpeechVoiceLabel.classList.remove("hidden");
+    keypadSpeechVoiceSelect.classList.remove("hidden");
+    // The 3 presets are plain static <option>s in index.html (with
+    // their own data-i18n, same as any other static UI text) - nothing
+    // to populate dynamically from getVoices() any more, just set the
+    // select to whatever was already saved/defaulted.
+    keypadSpeechVoiceSelect.value = keypadSpeechVoicePreset;
+    keypadSpeechVoiceSelect.addEventListener("change", function () {
+      setKeypadSpeechVoicePreset(keypadSpeechVoiceSelect.value);
+      previewKeypadVoice(keypadSpeechVoiceSelect.value);
+    });
   }
 
   // iPadOS 13+ reports navigator.platform as "MacIntel" like a real Mac,
@@ -20316,7 +24400,7 @@
     var selected = Object.keys(contactSheetSelected).filter(function (n) {
       return contactSheetSelected[n];
     });
-    var names = (selected.length ? selected : contactSheetAllNames()).filter(function (n) {
+    var names = (selected.length ? selected : contactSheetVisibleNames()).filter(function (n) {
       var c = getPlayerContact(n);
       return !!(c.email || c.phone);
     });
@@ -20416,12 +24500,13 @@
       }
       var added = 0;
       var updated = 0;
-      var resurrected = 0;
       contacts.forEach(function (c) {
-        if (isPlayerGraveyarded(c.name)) {
-          reactivatePlayerFromGraveyard(c.name);
-          resurrected += 1;
-        }
+        // A permanently-merged name (see recordPlayerMerge) folds into
+        // its current target here too, same reasoning as
+        // importAllDataFromText's own redirect - a phone contact card
+        // still using the old, pre-merge name shouldn't resurrect it
+        // as a second copy.
+        c.name = resolveMergedName(c.name);
         var existingKey = findContactKey(c.name);
         var existing = existingKey ? PLAYER_CONTACTS[existingKey] : null;
         var patch = {};
@@ -20448,11 +24533,10 @@
       });
       renderContactSheetPage();
       showToast(
-        T(resurrected > 0 ? "contactSheet.importedVcardToastWithResurrected" : "contactSheet.importedVcardToast", {
+        T("contactSheet.importedVcardToast", {
           count: contacts.length,
           added: added,
-          updated: updated,
-          resurrected: resurrected
+          updated: updated
         })
       );
     };
@@ -20691,6 +24775,13 @@
       b: b || null,
       winner: null,
       loser: null,
+      // The final race tally, stamped by reportBracketResult once the
+      // match ends - relative to a/b (not winner/loser), so it stays
+      // meaningful regardless of who won. null until then. This is the
+      // only permanent record of an exact score anywhere in the app -
+      // state.gameHistory logs individual rack wins, not a match total.
+      scoreA: null,
+      scoreB: null,
       tag: tag,
       collected: false,
       feederA: feederA || null,
@@ -21360,14 +25451,20 @@
     t.rounds.push(pairSwissRound(t));
   }
 
+  // Only single/double elimination tournaments ever have a grandFinal
+  // array at all - round robin and swiss can never have a "grand final"
+  // match by definition, so treat a missing grandFinal as "no", not a
+  // crash (this used to throw for every non-elimination format).
   function isGrandFinalMatch(t, match) {
-    return t.grandFinal.indexOf(match) !== -1;
+    return !!t.grandFinal && t.grandFinal.indexOf(match) !== -1;
   }
 
-  function reportBracketResult(t, match, winnerName) {
+  function reportBracketResult(t, match, winnerName, scoreA, scoreB) {
     if (match.a !== winnerName && match.b !== winnerName) return;
     match.winner = winnerName;
     match.loser = match.a === winnerName ? match.b : match.a;
+    if (typeof scoreA === "number") match.scoreA = scoreA;
+    if (typeof scoreB === "number") match.scoreB = scoreB;
     if (t.format === "roundrobin") {
       finalizeRoundRobinIfComplete(t);
       return;
@@ -21392,18 +25489,646 @@
     advanceBracket(t);
   }
 
+  // Pushes this tournament's roster to Challonge (every format), and its
+  // match scores IF it's Round Robin - the only format where "which
+  // Challonge match is this" is unambiguous no matter what order/round
+  // structure Challonge generates on its own: every pair plays exactly
+  // once, so a completed local match matches exactly one Challonge match
+  // by participant pair, full stop. Every other format is skipped for
+  // score push and left roster-only:
+  //  - Single/Double Elimination: two independently-generated brackets
+  //    would have to line up round-for-round with no guarantee they do.
+  //  - Swiss: Challonge computes each round's pairings from the RESULTS
+  //    of the round before, reported to Challonge one round at a time -
+  //    a single batch push at the end can't replay that incrementally,
+  //    so it has the same alignment risk as elimination, not less.
+  // Re-running this later (as more Round Robin matches complete) is
+  // safe: tournament creation and participant add are no-ops once done
+  // (see t.challongeTournamentId/challongeParticipantIds), and only
+  // matches not yet in t.challongePushedMatchIds get reported again.
+  function pushTournamentToChallonge(t) {
+    if (!t) return Promise.resolve();
+    var hasCredentials = !!(loadChallongeClientId() && loadChallongeClientSecret());
+    if (!hasCredentials) {
+      showToast(T("challonge.notConnected"));
+      return Promise.resolve();
+    }
+    return getChallongeAccessToken().then(function (token) {
+      if (!token) {
+        // Credentials are present but Challonge rejected them (or the
+        // request failed outright) - a different message than "you
+        // haven't entered anything yet".
+        showToast(challongePushFailedText());
+        return;
+      }
+
+      var createStep = t.challongeTournamentId
+        ? Promise.resolve(t.challongeTournamentId)
+        : createChallongeTournament(t.name || T("challonge.defaultTournamentName"), t.format).then(function (id) {
+            if (id) {
+              t.challongeTournamentId = id;
+              saveTournamentToStorage(t);
+            }
+            return id;
+          });
+
+      return createStep.then(function (tournamentId) {
+        if (!tournamentId) {
+          showToast(challongePushApiFailedText());
+          return;
+        }
+
+        t.challongeParticipantIds = t.challongeParticipantIds || {};
+        var missingNames = t.players.filter(function (name) {
+          return !t.challongeParticipantIds[name];
+        });
+
+        var participantsStep = missingNames.length
+          ? bulkAddChallongeParticipants(tournamentId, missingNames).then(function (map) {
+              Object.keys(map).forEach(function (name) {
+                t.challongeParticipantIds[name] = map[name];
+              });
+              saveTournamentToStorage(t);
+            })
+          : Promise.resolve();
+
+        return participantsStep.then(function () {
+          var addedCount = Object.keys(t.challongeParticipantIds).length;
+          if (t.format !== "roundrobin") {
+            showToast(T("challonge.rosterPushed", { count: addedCount }));
+            return;
+          }
+
+          t.challongePushedMatchIds = t.challongePushedMatchIds || {};
+          var pending = t.matches.filter(function (m) {
+            return m.winner && m.b && !t.challongePushedMatchIds[m.id];
+          });
+          // A match Challonge scheduled that this bracket never actually
+          // played out (e.g. the tournament was abandoned or pushed
+          // before finishing) has no real result to report - filled
+          // with a neutral 1-1 tie purely so the tournament can close,
+          // same as pushGamesToChallongeRoundRobin does for a roster
+          // pair that never played each other.
+          var unplayed = t.matches.filter(function (m) {
+            return m.b && !m.winner && !t.challongePushedMatchIds[m.id];
+          });
+          if (!pending.length && !unplayed.length) {
+            showToast(T("challonge.rosterPushed", { count: addedCount }));
+            return;
+          }
+
+          // See startChallongeTournament's comment - no match objects
+          // exist on Challonge's side until the tournament is started.
+          var startStep = t.challongeTournamentStarted
+            ? Promise.resolve(true)
+            : startChallongeTournament(tournamentId).then(function (started) {
+                if (started) {
+                  t.challongeTournamentStarted = true;
+                  saveTournamentToStorage(t);
+                }
+                return started;
+              });
+
+          return startStep.then(function (started) {
+            if (!started) {
+              showToast(challongePushApiFailedText());
+              return;
+            }
+            return fetchChallongeMatches(tournamentId).then(function (challongeMatches) {
+              var pushed = 0;
+              var failed = 0;
+              var chain = Promise.resolve();
+              function reportMatch(match, scoreA, scoreB, winnerId) {
+                chain = chain.then(function () {
+                  var idA = t.challongeParticipantIds[match.a];
+                  var idB = t.challongeParticipantIds[match.b];
+                  if (!idA || !idB) {
+                    console.warn("Challonge push: no participant id on file for", !idA ? match.a : match.b);
+                    failed++;
+                    return;
+                  }
+                  var challongeMatch = findChallongeMatchForPair(challongeMatches, idA, idB);
+                  if (!challongeMatch) {
+                    console.warn("Challonge push: no Challonge match found for", match.a, idA, match.b, idB, "- matches on file:", challongeMatches);
+                    failed++;
+                    return;
+                  }
+                  return reportChallongeMatchScore(tournamentId, challongeMatch.id, idA, scoreA, idB, scoreB, winnerId).then(function (ok) {
+                    if (ok) {
+                      t.challongePushedMatchIds[match.id] = true;
+                      pushed++;
+                    } else {
+                      failed++;
+                    }
+                  });
+                });
+              }
+              pending.forEach(function (match) {
+                var idA = t.challongeParticipantIds[match.a];
+                var idB = t.challongeParticipantIds[match.b];
+                var winnerId = match.winner === match.a ? idA : idB;
+                reportMatch(match, match.scoreA, match.scoreB, winnerId);
+              });
+              unplayed.forEach(function (match) {
+                reportMatch(match, 1, 1, null);
+              });
+              return chain.then(function () {
+                saveTournamentToStorage(t);
+                // Deliberately not auto-closed - see
+                // pushGamesToChallongeRoundRobin's own comment on
+                // autoClose. Challonge permanently refuses new
+                // participants on a closed tournament, and this push
+                // can reasonably be run again as the bracket
+                // progresses; closing it is a separate, explicit
+                // action (closeChallongeTournamentButton) once the
+                // organizer is actually done.
+                showToast(failed
+                  ? T("challonge.pushSummaryWithFailures", { added: addedCount, scores: pushed, failed: failed })
+                  : T("challonge.pushSummary", { added: addedCount, scores: pushed }));
+              });
+            });
+          });
+        });
+      });
+    });
+  }
+
+  // Finds the Challonge-generated match pairing these two participant
+  // ids. Confirmed live: a real GET .../matches.json match object (at
+  // least for an unscored "open" match) has no relationships.player1/
+  // player2 at all - only relationships.attachments - despite that
+  // being exactly what Challonge's own docs example shows. The real
+  // place participant ids actually live is attributes.
+  // points_by_participant[].participant_id (numbers, not strings).
+  // Kept the relationships/flat-attribute checks as fallbacks in case
+  // a match in a different state ever does carry them.
+  function findChallongeMatchForPair(challongeMatches, idA, idB) {
+    var targetKey = [String(idA), String(idB)].sort().join("|");
+    return challongeMatches.filter(function (m) {
+      var attrs = m.attributes || m;
+      var ids = [];
+      if (Array.isArray(attrs.points_by_participant)) {
+        ids = attrs.points_by_participant.map(function (pp) {
+          return String(pp.participant_id);
+        });
+      }
+      if (ids.length < 2) {
+        var p1 = attrs.player1_id != null ? String(attrs.player1_id) : (m.relationships && m.relationships.player1 && m.relationships.player1.data && String(m.relationships.player1.data.id));
+        var p2 = attrs.player2_id != null ? String(attrs.player2_id) : (m.relationships && m.relationships.player2 && m.relationships.player2.data && String(m.relationships.player2.data.id));
+        ids = [p1, p2].filter(Boolean);
+      }
+      return ids.length >= 2 && ids.slice(0, 2).sort().join("|") === targetKey;
+    })[0] || null;
+  }
+
+  // Shared core for both pushDayReportToChallonge and pushRaceToChallonge
+  // (and reused conceptually by pushTournamentToChallonge's own Round
+  // Robin branch) - takes a flat list of game-history-shaped entries
+  // (winnerNames/opponentNames/isTeam), folds every pair who played each
+  // other into ONE aggregate match (Alice beat Bob 3 times and lost
+  // twice -> a single "Alice won 3-2"), and pushes roster + those
+  // aggregate scores to Challonge as a round-robin tournament. A pair
+  // that split evenly has no real winner to report, so it's skipped -
+  // same reasoning as Single/Double Elimination skipping auto-score-
+  // push: report something only when it's unambiguous. Team games are
+  // skipped entirely, for roster and scoring both - Challonge
+  // participants are individual names, and a team's win doesn't cleanly
+  // attribute a score to any one of them.
+  //
+  // pushRecord is the mutable {challongeTournamentId,
+  // challongeParticipantIds, challongePushedPairKeys} tracking object
+  // for wherever this specific push lives (a day, a completed race,
+  // ...) - the caller owns creating/persisting it so this function stays
+  // agnostic to what it's tracking against. Resolves a result object;
+  // never throws. onProgress(patch) is called after each step that
+  // changes pushRecord, so the caller can persist it incrementally
+  // (matches a network failure partway through don't lose what already
+  // succeeded).
+  // Pure, side-effect-free grouping of a flat game list into "who's on
+  // the roster" and "every pair who played, with each side's win tally"
+  // - shared by the actual push (pushGamesToChallongeRoundRobin) and the
+  // review modal's live preview (updateChallongePushReviewMatchups), so
+  // what you approve in the modal is exactly what gets computed for the
+  // real push - same filter (individual, non-team, clean 1-vs-1 games
+  // only), same aggregation, same code path either way.
+  function aggregateGamesByPair(games) {
+    var individualGames = games.filter(function (g) {
+      return !g.isTeam && g.winnerNames && g.winnerNames.length === 1 && g.opponentNames && g.opponentNames.length >= 1;
+    });
+    var rosterSet = {};
+    var pairs = {};
+    individualGames.forEach(function (g) {
+      var w = g.winnerNames[0];
+      rosterSet[w] = true;
+      g.opponentNames.forEach(function (o) {
+        rosterSet[o] = true;
+        var sorted = [w, o].sort();
+        var key = sorted.join("|");
+        if (!pairs[key]) pairs[key] = { a: sorted[0], b: sorted[1], winsA: 0, winsB: 0 };
+        if (w === pairs[key].a) pairs[key].winsA++;
+        else pairs[key].winsB++;
+      });
+    });
+    return {
+      individualGames: individualGames,
+      roster: Object.keys(rosterSet),
+      pairs: Object.keys(pairs).map(function (k) { return pairs[k]; })
+    };
+  }
+
+  // autoClose: only Race to N pushes (pushRaceToChallonge) pass true -
+  // a completed race is inherently one-shot, nothing more will ever be
+  // added to it, so closing it immediately is safe. The daily/general
+  // push leaves this false: Challonge permanently refuses new
+  // participants once a tournament is closed (confirmed live: "Tournament
+  // participants can no longer be added"), but the daily push is
+  // designed to be run again later the same day as more games happen -
+  // auto-closing after the first push would silently lock out anyone
+  // who plays later that day. Closing that one is a separate, explicit
+  // action instead (see closeChallongeDayTournament).
+  function pushGamesToChallongeRoundRobin(games, tournamentName, pushRecord, onProgress, autoClose) {
+    var agg = aggregateGamesByPair(games);
+    if (!agg.individualGames.length) return Promise.resolve({ ok: false, reason: "no-games" });
+    var roster = agg.roster;
+    // A round robin tournament on Challonge schedules every possible
+    // pair once the full roster is added, whether or not that pair
+    // actually played today - and Challonge won't let a tournament
+    // close while any of its matches are still unscored. A tied pair
+    // (winsA === winsB) DOES have a real result (a tie), and
+    // Challonge's match schema supports reporting one explicitly (a
+    // tie:true attribute) - skipping it here, as this used to, left
+    // that match permanently open for no reason. Every pair that
+    // played at all (agg.pairs only ever contains pairs with at least
+    // one game between them - see aggregateGamesByPair) gets pushed.
+    var scorablePairs = agg.pairs;
+
+    var createStep = pushRecord.challongeTournamentId
+      ? Promise.resolve(pushRecord.challongeTournamentId)
+      : createChallongeTournament(tournamentName, "roundrobin").then(function (id) {
+          if (id) {
+            pushRecord.challongeTournamentId = id;
+            onProgress();
+          }
+          return id;
+        });
+
+    return createStep.then(function (tournamentId) {
+      if (!tournamentId) return { ok: false, reason: "push-failed" };
+
+      var missingNames = roster.filter(function (name) {
+        return !pushRecord.challongeParticipantIds[name];
+      });
+      var participantsStep = missingNames.length
+        ? bulkAddChallongeParticipants(tournamentId, missingNames).then(function (map) {
+            Object.keys(map).forEach(function (name) {
+              pushRecord.challongeParticipantIds[name] = map[name];
+            });
+            onProgress();
+          })
+        : Promise.resolve();
+
+      return participantsStep.then(function () {
+        var addedCount = Object.keys(pushRecord.challongeParticipantIds).length;
+        var pending = scorablePairs.filter(function (p) {
+          return !pushRecord.challongePushedPairKeys[p.a + "|" + p.b];
+        });
+
+        // Round robin schedules a match for every roster pair, but a
+        // pair can end up on the roster without ever actually playing
+        // each other today (common once there are 3+ people - each
+        // only crosses paths with some of the others). There's no real
+        // result to report for a match that never happened, so it's
+        // filled with a neutral 1-1 tie purely to let the tournament
+        // close - not a claim the pair actually played.
+        var playedKeys = {};
+        agg.pairs.forEach(function (p) {
+          playedKeys[[p.a, p.b].sort().join("|")] = true;
+        });
+        var missingPairs = [];
+        for (var i = 0; i < roster.length; i++) {
+          for (var j = i + 1; j < roster.length; j++) {
+            var key = [roster[i], roster[j]].sort().join("|");
+            if (!playedKeys[key] && !pushRecord.challongePushedPairKeys[key]) {
+              missingPairs.push({ a: roster[i], b: roster[j] });
+            }
+          }
+        }
+
+        // Only attempted when autoClose is true (see this function's own
+        // comment) - tried whether or not there was anything new to
+        // push, since a second push after every pair was already
+        // reported on a prior attempt still needs this. Tracked on the
+        // push record so a tournament confirmed closed once doesn't get
+        // a pointless repeat call every time after.
+        function attemptFinalize(pushed, failed) {
+          if (!autoClose) return Promise.resolve({ ok: true, addedCount: addedCount, pushed: pushed, failed: failed });
+          if (pushRecord.challongeTournamentClosed) {
+            return Promise.resolve({ ok: true, addedCount: addedCount, pushed: pushed, failed: failed, closed: true });
+          }
+          return finalizeChallongeTournament(tournamentId).then(function (closed) {
+            if (closed) pushRecord.challongeTournamentClosed = true;
+            return { ok: true, addedCount: addedCount, pushed: pushed, failed: failed, closed: closed };
+          });
+        }
+
+        if (!pending.length && !missingPairs.length) return attemptFinalize(0, 0);
+
+        // Match objects don't exist on Challonge's side until the
+        // tournament is started - see startChallongeTournament's own
+        // comment. Only attempted once per tournament (tracked on the
+        // push record), since re-sending it once already-started is
+        // just a wasted call, not a problem, but no reason to make it
+        // every time either.
+        var startStep = pushRecord.challongeTournamentStarted
+          ? Promise.resolve(true)
+          : startChallongeTournament(tournamentId).then(function (started) {
+              if (started) {
+                pushRecord.challongeTournamentStarted = true;
+                onProgress();
+              }
+              return started;
+            });
+
+        return startStep.then(function (started) {
+          if (!started) return { ok: true, addedCount: addedCount, pushed: 0, failed: pending.length + missingPairs.length, closed: autoClose ? false : undefined };
+          return fetchChallongeMatches(tournamentId).then(function (challongeMatches) {
+            var pushed = 0;
+            var failed = 0;
+            var chain = Promise.resolve();
+            function reportPair(p, scoreA, scoreB, winnerId) {
+              chain = chain.then(function () {
+                var idA = pushRecord.challongeParticipantIds[p.a];
+                var idB = pushRecord.challongeParticipantIds[p.b];
+                if (!idA || !idB) {
+                  console.warn("Challonge push: no participant id on file for", !idA ? p.a : p.b);
+                  failed++;
+                  return;
+                }
+                var challongeMatch = findChallongeMatchForPair(challongeMatches, idA, idB);
+                if (!challongeMatch) {
+                  console.warn("Challonge push: no Challonge match found for", p.a, idA, p.b, idB, "- matches on file:", challongeMatches);
+                  failed++;
+                  return;
+                }
+                return reportChallongeMatchScore(tournamentId, challongeMatch.id, idA, scoreA, idB, scoreB, winnerId).then(function (ok) {
+                  if (ok) {
+                    pushRecord.challongePushedPairKeys[p.a + "|" + p.b] = true;
+                    pushed++;
+                  } else {
+                    failed++;
+                  }
+                });
+              });
+            }
+            pending.forEach(function (p) {
+              var winnerId = p.winsA === p.winsB ? null : (p.winsA > p.winsB ? pushRecord.challongeParticipantIds[p.a] : pushRecord.challongeParticipantIds[p.b]);
+              reportPair(p, p.winsA, p.winsB, winnerId);
+            });
+            missingPairs.forEach(function (p) {
+              reportPair(p, 1, 1, null);
+            });
+            return chain.then(function () {
+              onProgress();
+              return attemptFinalize(pushed, failed);
+            });
+          });
+        });
+      });
+    });
+  }
+
+  function emptyChallongePushRecord() {
+    return { challongeTournamentId: null, challongeTournamentStarted: false, challongeTournamentClosed: false, challongeParticipantIds: {}, challongePushedPairKeys: {} };
+  }
+
+  function challongePushResultText(result) {
+    if (result.reason === "no-games") return T("challonge.noGamesToday");
+    if (!result.ok) return challongePushApiFailedText();
+    var summary = result.failed
+      ? T("challonge.pushSummaryWithFailures", { added: result.addedCount, scores: result.pushed, failed: result.failed })
+      : T("challonge.pushSummary", { added: result.addedCount, scores: result.pushed });
+    // closed is only meaningful once a finalize attempt actually ran
+    // (see attemptFinalize) - undefined means this result predates
+    // that (or came from a path that doesn't track it), not "failed
+    // to close", so it's left unmentioned rather than shown as a
+    // false negative.
+    if (result.closed === true) return summary + " " + T("challonge.tournamentClosed");
+    if (result.closed === false) return summary + " " + T("challonge.tournamentNotClosed");
+    return summary;
+  }
+
+  function showChallongePushResultToast(result) {
+    showToast(challongePushResultText(result));
+  }
+
+  // --- Review-before-push modal (Publish Daily Report's "Push to
+  // Challonge" button) ---------------------------------------------
+  //
+  // Opens straight to today by default but the date is a plain editable
+  // field - covers "push an older session, I sometimes do the report
+  // later" without a separate flow. Every individual game for the
+  // chosen date is listed with a checkbox (checked by default);
+  // unchecking one live-recomputes the matchup preview below via the
+  // same aggregateGamesByPair used for the real push, so what's shown
+  // is exactly what would be sent - nothing is pushed until Confirm.
+  function openChallongePushReviewModal() {
+    challongePushDateInput.value = todayDateStr();
+    challongePushReviewStatus.textContent = "";
+    renderChallongePushReviewList(todayDateStr());
+    challongePushReviewOverlay.classList.remove("hidden");
+  }
+
+  function closeChallongePushReviewModal() {
+    challongePushReviewOverlay.classList.add("hidden");
+  }
+
+  function renderChallongePushReviewList(dateStr) {
+    var data = computeDayReportData(dateStr, true);
+    var agg = aggregateGamesByPair(standaloneGamesOnly(data.games));
+    challongePushReviewGamesList.innerHTML = "";
+    if (!agg.individualGames.length) {
+      var hint = document.createElement("li");
+      hint.className = "empty-hint";
+      hint.textContent = T("challonge.reviewNoGames");
+      challongePushReviewGamesList.appendChild(hint);
+    } else {
+      agg.individualGames.forEach(function (g) {
+        var li = document.createElement("li");
+        var label = document.createElement("label");
+        var checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = true;
+        checkbox.value = g.ts;
+        var span = document.createElement("span");
+        var winners = joinNamesForReport(g.winnerNames || []);
+        var losers = joinNamesForReport(g.opponentNames || []);
+        var time = formatReportGameTime(g.ts);
+        span.textContent = (time ? time + " — " : "") + winners + " won " + g.gameLabel + (losers ? " against " + losers : "");
+        checkbox.addEventListener("change", updateChallongePushReviewMatchups);
+        label.appendChild(checkbox);
+        label.appendChild(span);
+        li.appendChild(label);
+        challongePushReviewGamesList.appendChild(li);
+      });
+    }
+    challongePushReviewSummary.textContent = T("challonge.reviewSummary", { count: agg.individualGames.length, date: dateStr });
+    updateChallongePushReviewMatchups();
+    // Nothing to close until a push has actually created the
+    // tournament for this date.
+    var dayPush = CHALLONGE_DAY_PUSHES[dateStr];
+    btnChallongeCloseTournament.classList.toggle("hidden", !(dayPush && dayPush.challongeTournamentId));
+  }
+
+  // Race-to-N sessions are pushed to Challonge as their own tournament
+  // the moment they complete (see pushRaceToChallonge, hooked into
+  // celebrateTournamentWin) - a game's raceTarget reflects the race
+  // setting active in the session it was played in (1 means "Single
+  // game"/no race was running; > 1 means an active Race to N), so
+  // filtering those out here keeps the daily push to exactly the
+  // informal, free-play games that aren't already covered by their own
+  // race tournament, instead of double-pushing (and double-counting)
+  // the same results under two different Challonge tournaments.
+  function standaloneGamesOnly(games) {
+    return (games || []).filter(function (g) {
+      return !g.raceTarget || g.raceTarget <= 1;
+    });
+  }
+
+  function checkedChallongeReviewGames(dateStr) {
+    var data = computeDayReportData(dateStr, true);
+    var agg = aggregateGamesByPair(standaloneGamesOnly(data.games));
+    var checkedTs = {};
+    Array.prototype.forEach.call(challongePushReviewGamesList.querySelectorAll('input[type="checkbox"]'), function (cb) {
+      if (cb.checked) checkedTs[cb.value] = true;
+    });
+    return agg.individualGames.filter(function (g) { return checkedTs[g.ts]; });
+  }
+
+  function updateChallongePushReviewMatchups() {
+    var checkedGames = checkedChallongeReviewGames(challongePushDateInput.value);
+    var agg = aggregateGamesByPair(checkedGames);
+    // Every pair that played gets reported now, tied or not (Challonge
+    // supports a genuine tie result - see reportChallongeMatchScore),
+    // so the preview shows both kinds of line rather than silently
+    // dropping ties the way it used to.
+    if (!agg.pairs.length) {
+      challongePushReviewMatchups.textContent = T("challonge.reviewNoMatchups");
+      return;
+    }
+    var lines = agg.pairs.map(function (p) {
+      if (p.winsA === p.winsB) {
+        return T("challonge.reviewMatchupTieLine", { a: p.a, b: p.b, wins: p.winsA });
+      }
+      var winner = p.winsA > p.winsB ? p.a : p.b;
+      var loser = p.winsA > p.winsB ? p.b : p.a;
+      var winnerWins = Math.max(p.winsA, p.winsB);
+      var loserWins = Math.min(p.winsA, p.winsB);
+      return T("challonge.reviewMatchupLine", { winner: winner, loser: loser, winnerWins: winnerWins, loserWins: loserWins });
+    });
+    challongePushReviewMatchups.textContent = lines.join(" · ");
+  }
+
+  function confirmChallongePushFromReview() {
+    var dateStr = challongePushDateInput.value;
+    var checkedGames = checkedChallongeReviewGames(dateStr);
+    if (!checkedGames.length) {
+      challongePushReviewStatus.textContent = T("challonge.noGamesToday");
+      return;
+    }
+    var hasCredentials = !!(loadChallongeClientId() && loadChallongeClientSecret());
+    if (!hasCredentials) {
+      challongePushReviewStatus.textContent = T("challonge.notConnected");
+      return;
+    }
+    btnChallongePushConfirm.disabled = true;
+    challongePushReviewStatus.textContent = T("challonge.pushing");
+    getChallongeAccessToken().then(function (token) {
+      if (!token) {
+        btnChallongePushConfirm.disabled = false;
+        challongePushReviewStatus.textContent = challongePushFailedText();
+        return;
+      }
+      var dayPush = CHALLONGE_DAY_PUSHES[dateStr] || emptyChallongePushRecord();
+      CHALLONGE_DAY_PUSHES[dateStr] = dayPush;
+      return pushGamesToChallongeRoundRobin(
+        checkedGames,
+        T("challonge.dayTournamentName", { date: dateStr }),
+        dayPush,
+        function () { saveChallongeDayPushes(CHALLONGE_DAY_PUSHES); }
+      ).then(function (result) {
+        btnChallongePushConfirm.disabled = false;
+        var text = challongePushResultText(result);
+        challongePushReviewStatus.textContent = text;
+        showToast(text);
+      });
+    }).catch(function (e) {
+      // Without this, any unexpected failure anywhere in the chain
+      // above (a thrown exception, not just an HTTP error - those
+      // already resolve to {ok:false} and are handled above) leaves
+      // the button disabled and the status stuck on "Pushing..."
+      // forever, with no way to tell the push actually failed.
+      console.warn("Challonge push failed unexpectedly.", e);
+      btnChallongePushConfirm.disabled = false;
+      challongePushReviewStatus.textContent = T("challonge.pushFailedApi");
+    });
+  }
+
+  // A completed "Race to N wins" session counts as a Tournament too (see
+  // sessionRaceTournamentGames's own comment - "per how this app's
+  // players use the term"), so it gets pushed to Challonge the moment it
+  // finishes, same as a formal bracket Tournament does when you tap
+  // Push - just automatic, since there's no separate "Tournament" screen
+  // for a plain race to remember to visit. Called from
+  // celebrateTournamentWin with the race's own games (captured before
+  // startNewSession wipes state.gameHistory for the next one) - entirely
+  // silent (no toast) when Challonge isn't connected, since most players
+  // completing a race have never touched this feature at all.
+  function pushRaceToChallonge(games, winnerNamesText, target) {
+    var hasCredentials = !!(loadChallongeClientId() && loadChallongeClientSecret());
+    if (!hasCredentials) return;
+    getChallongeAccessToken().then(function (token) {
+      if (!token) {
+        // Credentials ARE configured (the player opted in) but didn't
+        // work - unlike the "never set up" case above, worth a toast so
+        // a real problem doesn't fail silently forever, race after race.
+        showToast(challongePushFailedText());
+        return;
+      }
+      var raceId = "race-" + Date.now();
+      var racePush = emptyChallongePushRecord();
+      var pushes = loadChallongeRacePushes();
+      pushes[raceId] = racePush;
+      pushGamesToChallongeRoundRobin(
+        games,
+        T("challonge.raceTournamentName", { names: winnerNamesText, target: target, date: todayDateStr() }),
+        racePush,
+        function () { saveChallongeRacePushes(pushes); },
+        true
+      ).then(function (result) {
+        if (result.ok && (result.pushed || result.addedCount)) {
+          showToast(challongePushResultText(result));
+        }
+      });
+    }).catch(function (e) {
+      console.warn("Automatic race push to Challonge failed unexpectedly.", e);
+    });
+  }
+
   // A semifinal or final (WB final, or anything in the Grand Final) gets
   // a little extra visual weight in the ready-to-play list - it's a
   // bigger moment than an early round, so it should feel like one.
   function isMarqueeTournamentMatch(t, match) {
     if (isGrandFinalMatch(t, match)) return true;
-    if (!t.wb.length) return false;
+    // Only single/double elimination have a t.wb at all - round robin
+    // and swiss have no "semifinal/final" concept to call out here.
+    if (!t.wb || !t.wb.length) return false;
     var lastRound = t.wb[t.wb.length - 1];
     var semiRound = t.wb.length >= 2 ? t.wb[t.wb.length - 2] : null;
     return lastRound.indexOf(match) !== -1 || (!!semiRound && semiRound.indexOf(match) !== -1);
   }
 
   function findWbPosition(t, match) {
+    if (!t.wb) return null;
     for (var ri = 0; ri < t.wb.length; ri++) {
       var mi = t.wb[ri].indexOf(match);
       if (mi !== -1) return { ri: ri, mi: mi };
@@ -21436,6 +26161,11 @@
   // champion headline instead in that case.
   function describeWhatsNextForWinner(t, justPlayedMatch, winnerName) {
     if (t.champion) return null;
+    // Only single/double elimination chain a match's winner into a
+    // specific next bracket slot (t.wb/t.lbRounds/t.grandFinal) - round
+    // robin and swiss have no such link, so there's nothing more
+    // specific to say than the generic "waiting" line.
+    if (!t.wb) return T("tournament.nextWaitingGeneric");
     function findOpenMatchIn(list) {
       for (var i = 0; i < list.length; i++) {
         var m = list[i];
@@ -21513,12 +26243,12 @@
       summary: winnerLabel + " won " + typeLabel + " (tournament vs " + loserLabel + ")"
     });
     if (state.gameHistory.length > 200) state.gameHistory.length = 200;
-    if (isTeam) {
-      applyTeamRatingResult(winnerMembers, loserMembers, ts);
-    } else {
+    if (!isTeam) {
+      // A doubles-entrant match isn't rated at all - see
+      // applyMultiWayRatingResult's comment on creditWin's isTeam check.
       applyPairwiseRatingResult(winnerMembers[0], loserMembers[0], ts);
+      saveRatingsToStorage(PLAYER_RATINGS);
     }
-    saveRatingsToStorage(PLAYER_RATINGS);
     saveState();
   }
 
@@ -22441,7 +27171,7 @@
       var effectiveMatchRaceTo = t.fairRace && active[raceToKey] ? active[raceToKey] : t.raceTo;
       if (active[winsKey] >= effectiveMatchRaceTo) {
         var championAlreadyDecided = !!t.champion;
-        reportBracketResult(t, match, name);
+        reportBracketResult(t, match, name, active.aWins, active.bWins);
         if (!championAlreadyDecided && t.champion) {
           recordTournamentCompletion(t);
           playTournamentChampionSound();
@@ -23097,10 +27827,16 @@
   }
 
   btnExportAllData.addEventListener("click", function () {
-    var obfuscate = exportObfuscateCheckbox.checked;
-    promptModal(T("backup.exportFilenamePrompt"), defaultBackupFilename(), function (name) {
-      exportAllData(name, obfuscate);
-    });
+    promptModal(
+      T("backup.exportFilenamePrompt"),
+      defaultBackupFilename(),
+      function (name, obfuscate) {
+        exportAllData(name, obfuscate);
+      },
+      null,
+      null,
+      true
+    );
   });
 
   btnImportAllData.addEventListener("click", function () {
@@ -23112,6 +27848,270 @@
     importFileInput.value = "";
     if (!file) return;
     importAllData(file);
+  });
+
+  driveFolderLinkInput.value = loadDriveFolderLink();
+  driveApiKeyInput.value = loadDriveApiKey();
+  driveFolderLinkInput.addEventListener("change", function () {
+    saveDriveFolderLink(driveFolderLinkInput.value.trim());
+  });
+  driveApiKeyInput.addEventListener("change", function () {
+    saveDriveApiKey(driveApiKeyInput.value.trim());
+  });
+
+  btnDriveApiKeyHelp.addEventListener("click", function () {
+    alertModal(T("backup.driveApiKeyHelpText"));
+  });
+
+  // The main screen's and League page's ☁️ Challonge panels are both
+  // full input forms writing to the exact same stored credentials
+  // (see saveChallongeClientId/saveChallongeClientSecret) - editing in
+  // either place takes effect everywhere immediately, since both are
+  // just separate DOM reflections of the one localStorage source of
+  // truth. The Tournament page instead just shows a compact status
+  // line (tournamentChallongeStatusLine) pointing back to whichever
+  // panel is more convenient, rather than a third full copy of the
+  // input fields.
+  function updateChallongePanelSummary() {
+    var connected = !!(loadChallongeClientId() && loadChallongeClientSecret());
+    var summaryKey = connected ? "challonge.summaryConnected" : "challonge.summaryNotConnected";
+    challongePanelSummary.textContent = T(summaryKey);
+    if (challongePanelSummaryLeague) challongePanelSummaryLeague.textContent = T(summaryKey);
+    if (tournamentChallongeStatusLine) {
+      tournamentChallongeStatusLine.textContent = T(connected ? "challonge.summaryConnected" : "challonge.notConnectedSeeMainScreen");
+    }
+  }
+  challongeClientIdInput.value = loadChallongeClientId();
+  challongeClientSecretInput.value = loadChallongeClientSecret();
+  challongeClientIdInputLeague.value = loadChallongeClientId();
+  challongeClientSecretInputLeague.value = loadChallongeClientSecret();
+  challongeClientIdInput.addEventListener("change", function () {
+    saveChallongeClientId(challongeClientIdInput.value.trim());
+    challongeClientIdInputLeague.value = challongeClientIdInput.value;
+    saveChallongeToken(null);
+    updateChallongePanelSummary();
+  });
+  challongeClientSecretInput.addEventListener("change", function () {
+    saveChallongeClientSecret(challongeClientSecretInput.value.trim());
+    challongeClientSecretInputLeague.value = challongeClientSecretInput.value;
+    saveChallongeToken(null);
+    updateChallongePanelSummary();
+  });
+  challongeClientIdInputLeague.addEventListener("change", function () {
+    saveChallongeClientId(challongeClientIdInputLeague.value.trim());
+    challongeClientIdInput.value = challongeClientIdInputLeague.value;
+    saveChallongeToken(null);
+    updateChallongePanelSummary();
+  });
+  challongeClientSecretInputLeague.addEventListener("change", function () {
+    saveChallongeClientSecret(challongeClientSecretInputLeague.value.trim());
+    challongeClientSecretInput.value = challongeClientSecretInputLeague.value;
+    saveChallongeToken(null);
+    updateChallongePanelSummary();
+  });
+  updateChallongePanelSummary();
+
+  // Shared by both Test Connection buttons (main + League panels) -
+  // whichever one was clicked shows its own status/disabled state, but
+  // the underlying check is identical since both read the one stored
+  // credential pair.
+  function testChallongeConnection(button, statusEl) {
+    var clientId = loadChallongeClientId();
+    var clientSecret = loadChallongeClientSecret();
+    if (!clientId || !clientSecret) {
+      statusEl.textContent = T("challonge.testConnectionNeedsCredentials");
+      return;
+    }
+    button.disabled = true;
+    statusEl.textContent = T("challonge.testing");
+    // Force a real exchange instead of reusing a cached token, so this
+    // button always reflects the credentials currently in the fields.
+    saveChallongeToken(null);
+    getChallongeAccessToken().then(function (token) {
+      button.disabled = false;
+      statusEl.textContent = token
+        ? T("challonge.testConnectionSuccess")
+        : T("challonge.testConnectionFailed") + challongeAuthErrorSuffix();
+      updateChallongePanelSummary();
+    });
+  }
+  btnChallongeTestConnection.addEventListener("click", function () {
+    testChallongeConnection(btnChallongeTestConnection, challongeTestConnectionStatus);
+  });
+  btnChallongeTestConnectionLeague.addEventListener("click", function () {
+    testChallongeConnection(btnChallongeTestConnectionLeague, challongeTestConnectionStatusLeague);
+  });
+
+  btnTournamentPushChallonge.addEventListener("click", function () {
+    if (!TOURNAMENT) return;
+    btnTournamentPushChallonge.disabled = true;
+    pushTournamentToChallonge(TOURNAMENT).then(function () {
+      btnTournamentPushChallonge.disabled = false;
+    }).catch(function (e) {
+      console.warn("Challonge tournament push failed unexpectedly.", e);
+      btnTournamentPushChallonge.disabled = false;
+      showToast(T("challonge.pushFailedApi"));
+    });
+  });
+  btnTournamentCloseChallonge.addEventListener("click", function () {
+    if (!TOURNAMENT || !TOURNAMENT.challongeTournamentId) {
+      showToast(T("challonge.nothingToClose"));
+      return;
+    }
+    btnTournamentCloseChallonge.disabled = true;
+    closeChallongeTournamentFlow(TOURNAMENT.challongeTournamentId, function (closed) {
+      btnTournamentCloseChallonge.disabled = false;
+      if (closed) {
+        TOURNAMENT.challongeTournamentClosed = true;
+        saveTournamentToStorage(TOURNAMENT);
+      }
+    });
+  });
+
+  btnDayReportPushChallonge.addEventListener("click", openChallongePushReviewModal);
+  challongePushDateInput.addEventListener("change", function () {
+    renderChallongePushReviewList(challongePushDateInput.value);
+  });
+  btnChallongePushConfirm.addEventListener("click", confirmChallongePushFromReview);
+  btnChallongeCloseTournament.addEventListener("click", function () {
+    var dateStr = challongePushDateInput.value;
+    var dayPush = CHALLONGE_DAY_PUSHES[dateStr];
+    if (!dayPush || !dayPush.challongeTournamentId) {
+      showToast(T("challonge.nothingToClose"));
+      return;
+    }
+    btnChallongeCloseTournament.disabled = true;
+    closeChallongeTournamentFlow(dayPush.challongeTournamentId, function (closed) {
+      btnChallongeCloseTournament.disabled = false;
+      if (closed) {
+        dayPush.challongeTournamentClosed = true;
+        saveChallongeDayPushes(CHALLONGE_DAY_PUSHES);
+      }
+    });
+  });
+  btnChallongePushReviewClose.addEventListener("click", closeChallongePushReviewModal);
+  challongePushReviewOverlay.addEventListener("click", function (e) {
+    if (e.target === challongePushReviewOverlay) closeChallongePushReviewModal();
+  });
+
+  btnDriveFolderOpen.addEventListener("click", function () {
+    var link = driveFolderLinkInput.value.trim();
+    if (!link) {
+      showToast(T("backup.driveNeedLink"));
+      return;
+    }
+    saveDriveFolderLink(link);
+    window.open(link, "_blank", "noopener");
+  });
+
+  function renderDriveFilePicker(files) {
+    driveFilePicker.innerHTML = "";
+    if (!files.length) {
+      var empty = document.createElement("p");
+      empty.className = "player-stats-note";
+      empty.textContent = T("backup.driveNoFiles");
+      driveFilePicker.appendChild(empty);
+      driveFilePicker.classList.remove("hidden");
+      return;
+    }
+    files.forEach(function (f) {
+      var row = document.createElement("button");
+      row.type = "button";
+      row.className = "btn btn-ghost drive-file-row";
+      row.textContent = "📄 " + f.name + " — " + formatTimestamp(f.modifiedTime, true);
+      row.addEventListener("click", function () {
+        row.disabled = true;
+        var originalLabel = row.textContent;
+        row.textContent = "⏳ " + T("backup.driveLoading");
+        fetchDriveFileText(f.id, driveApiKeyInput.value.trim())
+          .then(function (text) {
+            driveFilePicker.classList.add("hidden");
+            driveFilePicker.innerHTML = "";
+            importAllDataFromText(text);
+          })
+          .catch(function (e) {
+            console.warn("Drive file fetch failed.", e);
+            showToast(T("backup.driveFetchFailed"));
+            row.disabled = false;
+            row.textContent = originalLabel;
+          });
+      });
+      driveFilePicker.appendChild(row);
+    });
+    driveFilePicker.classList.remove("hidden");
+  }
+
+  // No API key on hand: skip the Drive API entirely and just fetch the
+  // pasted link directly, as whatever it actually is - a Drive "direct
+  // download" link, or any other URL a browser can fetch straight to a
+  // JSON backup (Dropbox, a personal server, anywhere). This is the one
+  // thing a plain fetch can't do a folder's worth of at once, which is
+  // the only reason listDriveJsonFiles/the API key exist at all below.
+  function fetchDirectLinkAndImport(link) {
+    var originalLabel = btnDriveImport.textContent;
+    btnDriveImport.disabled = true;
+    btnDriveImport.textContent = "⏳ " + T("backup.driveLoading");
+    fetch(link)
+      .then(function (res) {
+        if (!res.ok) throw new Error("status-" + res.status);
+        return res.text();
+      })
+      .then(function (text) {
+        try {
+          JSON.parse(text);
+        } catch (e) {
+          throw new Error("not-json");
+        }
+        importAllDataFromText(text);
+      })
+      .catch(function (e) {
+        console.warn("Could not fetch that link directly - falling back to picking a file.", e);
+        showToast(T("backup.driveDirectFetchFailed"));
+        importFileInput.click();
+      })
+      .then(function () {
+        btnDriveImport.disabled = false;
+        btnDriveImport.textContent = originalLabel;
+      });
+  }
+
+  btnDriveImport.addEventListener("click", function () {
+    var link = driveFolderLinkInput.value.trim();
+    var apiKey = driveApiKeyInput.value.trim();
+    saveDriveFolderLink(link);
+    saveDriveApiKey(apiKey);
+    // Nothing to go on at all - just behave like the plain Import Data
+    // button instead of erroring out over a blank field.
+    if (!link) {
+      importFileInput.click();
+      return;
+    }
+    if (!apiKey) {
+      fetchDirectLinkAndImport(link);
+      return;
+    }
+    var folderId = extractDriveFolderId(link);
+    if (!folderId) {
+      showToast(T("backup.driveInvalidLink"));
+      return;
+    }
+    var originalLabel = btnDriveImport.textContent;
+    btnDriveImport.disabled = true;
+    btnDriveImport.textContent = "⏳ " + T("backup.driveLoading");
+    driveFilePicker.classList.add("hidden");
+    driveFilePicker.innerHTML = "";
+    listDriveJsonFiles(folderId, apiKey)
+      .then(function (data) {
+        renderDriveFilePicker(data.files || []);
+      })
+      .catch(function (e) {
+        console.warn("Drive folder list failed.", e);
+        showToast(T("backup.driveListFailed"));
+      })
+      .then(function () {
+        btnDriveImport.disabled = false;
+        btnDriveImport.textContent = originalLabel;
+      });
   });
 
   btnSquashImportData.addEventListener("click", function () {
@@ -23132,11 +28132,18 @@
   });
 
   btnExportSync.addEventListener("click", exportForSync);
+  btnExportSyncHelp.addEventListener("click", function () {
+    alertModal(T("backup.syncHelp"));
+  });
+  btnExportAllDataHelp.addEventListener("click", function () {
+    alertModal(T("backup.exportAllHelpText"));
+  });
   renderSyncStatusLine();
 
   btnResetAllPlayerStats.addEventListener("click", resetAllPlayerStats);
   btnResetRosterLists.addEventListener("click", resetAllRosterLists);
   btnResetAllRatings.addEventListener("click", resetAllPlayersOfficialRating);
+  btnRecomputeAllRatings.addEventListener("click", recomputeAllRatingsFromGameHistoryFlow);
   btnFullReset.addEventListener("click", performFullFactoryReset);
 
   btnFullResetStep2Yes.addEventListener("click", function () {
@@ -23150,6 +28157,33 @@
     keysToRemove.forEach(function (key) {
       localStorage.removeItem(key);
     });
+    // Wiping every poolMasterCounter.* key above makes this device look
+    // EXACTLY like one that has never run the app before - which is
+    // exactly the condition migrateFromRepoIfNeeded uses to decide
+    // whether to re-import players/rosters.json and every players/*.json
+    // stat file from this repo. Left alone, the very next boot after a
+    // deliberate Full Reset would silently undo it by re-seeding those
+    // same old files straight back in. Re-marking it here (before the
+    // write-guard below, which would otherwise block this too) is what
+    // makes the wipe actually stick.
+    markMigratedFromRepo();
+    // Belt-and-suspenders against the 400ms gap below: rather than chase
+    // down every possible stray write in that window (a running shot
+    // clock/timed tournament interval ending mid-wipe, some future save
+    // path nobody thought to gate here), just make setItem itself refuse
+    // any further poolMasterCounter.* write for the rest of this page's
+    // life - it's reloading in a moment anyway, so nothing legitimate is
+    // lost by this. Also resets the two in-memory stores most visibly
+    // wrong if something DID slip through before this point (the live
+    // roster, saved Player Lists) so the page reads correctly even in
+    // the instant before reload actually fires.
+    var realSetItem = localStorage.setItem.bind(localStorage);
+    localStorage.setItem = function (key, value) {
+      if (typeof key === "string" && key.indexOf("poolMasterCounter.") === 0) return;
+      return realSetItem(key, value);
+    };
+    state = defaultState();
+    SAVED_ROSTERS = [];
     // The backup download is a same-tick <a>.click(), which some
     // browsers need a beat to actually start before navigation - see
     // downloadJSON/exportAllData above.
@@ -23224,6 +28258,9 @@
   });
 
   newPlayerName.addEventListener("input", validateNewPlayerNameInput);
+  attachNameAutocomplete(newPlayerName, function () {
+    return contactSheetVisibleNames();
+  });
 
   addPlayerForm.addEventListener("submit", function (e) {
     e.preventDefault();
@@ -23248,16 +28285,7 @@
   });
 
   gameTypeSelect.addEventListener("change", function () {
-    var type = GAME_TYPES[gameTypeSelect.value];
-    state.currentGame.gameType = gameTypeSelect.value;
-    state.currentGame.target = type.defaultTarget;
-    state.currentGame.unit = type.unit;
-    gameTargetInput.value = type.defaultTarget;
-    gameTargetUnitSelect.value = type.unit;
-    saveState();
-    renderScoreboard();
-    updateCurrentGameSummary();
-    tickShotCounter();
+    setCurrentGameType(gameTypeSelect.value);
   });
 
   gameTargetInput.addEventListener("input", function () {
@@ -23297,6 +28325,21 @@
   });
 
   document.getElementById("shot-counter-widget").addEventListener("click", toggleShotCounterPause);
+  document.getElementById("shot-counter-reset").addEventListener("click", function (e) {
+    e.stopPropagation();
+    resetShotCounterToZero();
+  });
+  document.getElementById("shot-counter-kill").addEventListener("click", function (e) {
+    e.stopPropagation();
+    killShotCounter();
+  });
+  // Right on the widget itself, not just the floating 👁️ elsewhere on
+  // the scoreboard - toggleShotCounterVisibility is the same function
+  // either way, so the 👁️ still works as the way back once hidden.
+  document.getElementById("shot-counter-hide").addEventListener("click", function (e) {
+    e.stopPropagation();
+    toggleShotCounterVisibility();
+  });
 
   btnShotCounterToggleVisibility.addEventListener("click", toggleShotCounterVisibility);
   document.getElementById("shot-counter-visibility-toggle").addEventListener("click", toggleShotCounterVisibility);
@@ -23436,10 +28479,11 @@
   });
 
   btnResetGame.addEventListener("click", resetCurrentGame);
+  btnFinishSnooker.addEventListener("click", finishSnookerFrame);
   btnShare.addEventListener("click", shareStandings);
-  btnExportSession.addEventListener("click", function () {
-    exportSession();
-    exportAllPlayerStats();
+  btnExportSession.addEventListener("click", shareLastSessionWithData);
+  btnExportSessionHelp.addEventListener("click", function () {
+    alertModal(T("backup.exportSessionHelpText"));
   });
 
   rotationEnabledCheckbox.addEventListener("change", function () {
@@ -23685,9 +28729,63 @@
     Array.prototype.forEach.call(leagueNewFormatRadios, function (r) {
       if (r.checked) format = r.value;
     });
-    createLeague(name, format);
+    createLeague(name, format, leagueNewOpenModeInput.checked, leagueNewHandicapSystemSelect.value);
     leagueNewNameInput.value = "";
+    leagueNewOpenModeInput.checked = false;
+    leagueNewHandicapSystemSelect.value = "apa";
+    updateLeagueNewFormatLabels();
     renderLeaguePage();
+  });
+  btnLeagueNewHandicapSystemInfo.addEventListener("click", function () {
+    alertModal(T("league.handicapSystemInfoText"));
+  });
+  leagueNewHandicapSystemSelect.addEventListener("change", updateLeagueNewFormatLabels);
+  updateLeagueNewFormatLabels();
+  leagueTablesOpenToggle.addEventListener("change", function () {
+    var league = findLeagueById(activeLeagueId);
+    if (!league) return;
+    league.isOpen = leagueTablesOpenToggle.checked;
+    normalizeLeagueDefaults(league);
+    saveLeaguesToStorage(LEAGUES);
+    renderLeaguePage();
+  });
+  btnLeagueHandicapChartOpen.addEventListener("click", function () {
+    var league = findLeagueById(activeLeagueId);
+    if (!league) return;
+    openLeagueHandicapChartEditor(league);
+  });
+  leagueHandicapChartPlayerSelect.addEventListener("change", function () {
+    var league = findLeagueById(activeLeagueId);
+    if (!league) return;
+    renderLeagueHandicapChartPlayerMatchups(league);
+  });
+  btnLeagueHandicapChartClose.addEventListener("click", function () {
+    leagueHandicapChartOverlay.classList.add("hidden");
+  });
+  leagueHandicapChartOverlay.addEventListener("click", function (e) {
+    if (e.target === leagueHandicapChartOverlay) leagueHandicapChartOverlay.classList.add("hidden");
+  });
+  btnLeagueHandicapChartAdd.addEventListener("click", function () {
+    var league = findLeagueById(activeLeagueId);
+    if (!league) return;
+    var sl = parseInt(leagueHandicapChartNewSlInput.value, 10);
+    var value = parseInt(leagueHandicapChartNewValueInput.value, 10);
+    if (!sl || sl < 1 || !value || value < 1) {
+      showToast(T("league.handicapChartInvalidToast"));
+      return;
+    }
+    leagueHandicapChartDraft[sl] = value;
+    leagueHandicapChartNewSlInput.value = "";
+    leagueHandicapChartNewValueInput.value = "";
+    renderLeagueHandicapChartEditorRows(league);
+  });
+  btnLeagueHandicapChartSave.addEventListener("click", function () {
+    var league = findLeagueById(activeLeagueId);
+    if (!league) return;
+    var fmt = league.format === "apa9ball" ? "9ball" : "8ball";
+    league.customHandicapCharts[league.handicapSystem][fmt] = Object.assign({}, leagueHandicapChartDraft);
+    saveLeaguesToStorage(LEAGUES);
+    showToast(T("league.handicapChartSavedToast"));
   });
   btnLeagueDelete.addEventListener("click", function () {
     var league = findLeagueById(activeLeagueId);
@@ -23697,10 +28795,67 @@
       renderLeaguePage();
     });
   });
+  wirePhoneFormatting(leagueAddMemberPhoneInput);
+  var checkLeagueAddMemberEmailValidity = wireFieldValidity(leagueAddMemberEmailInput, isValidEmail);
+  var checkLeagueAddMemberPhoneValidity = wireFieldValidity(leagueAddMemberPhoneInput, isValidPhoneNumber);
+  leagueAddMemberContactsCheckbox.addEventListener("change", function () {
+    updateLeagueNewPlayerContactFieldsVisibility(leagueAddMemberContactsCheckbox, leagueAddMemberContactFields, leagueAddMemberInput ? leagueAddMemberInput.value : "");
+  });
   btnLeagueAddMember.addEventListener("click", function () {
     var league = findLeagueById(activeLeagueId);
-    if (!league || !leagueAddMemberSelect.value) return;
-    addLeagueMember(league, leagueAddMemberSelect.value);
+    var name = leagueAddMemberInput ? leagueAddMemberInput.value.trim() : "";
+    if (!league || !name) return;
+    // A brand new name (not already in the Contact Sheet) only gets
+    // registered there too if the checkbox is on - otherwise they're
+    // added to this league alone, same as before this checkbox existed.
+    // An existing contact's own canonical name/casing is used either
+    // way, so the league roster and Contact Sheet never end up with two
+    // differently-cased entries for the same person.
+    var existingPlayer = state.players.filter(function (p) {
+      return normalizeNameKey(p.name) === normalizeNameKey(name);
+    })[0];
+    if (existingPlayer) {
+      name = existingPlayer.name;
+    } else if (leagueAddMemberContactsCheckbox.checked) {
+      if (!checkLeagueAddMemberEmailValidity()) {
+        showToast(T("contactSheet.invalidEmail"));
+        return;
+      }
+      if (!checkLeagueAddMemberPhoneValidity()) {
+        showToast(T("contactSheet.invalidPhone"));
+        return;
+      }
+      var newPlayer = addPlayer(name);
+      if (newPlayer) {
+        name = newPlayer.name;
+        var email = leagueAddMemberEmailInput.value.trim();
+        var phone = leagueAddMemberPhoneInput.value.trim();
+        if (email || phone) setPlayerContact(newPlayer.name, { email: email, phone: phone });
+      }
+    }
+    addLeagueMember(league, name);
+    leagueAddMemberEmailInput.value = "";
+    leagueAddMemberPhoneInput.value = "";
+    leagueAddMemberContactFields.classList.add("hidden");
+    renderLeaguePage();
+    renderAll();
+  });
+  leagueStandingsSortSelect.addEventListener("change", function () {
+    leagueStandingsSortMode = leagueStandingsSortSelect.value;
+    renderLeaguePage();
+  });
+  // Switches an existing league between Open (no teams, pure player vs
+  // player) and Team mode - reversible, non-destructive either way:
+  // switching to Open just hides the Teams section and locks queueMode
+  // to "none" (see normalizeLeagueDefaults), it doesn't delete
+  // league.teams, so switching back to Team mode brings everything the
+  // organizer already built right back.
+  leagueDetailOpenToggle.addEventListener("change", function () {
+    var league = findLeagueById(activeLeagueId);
+    if (!league) return;
+    league.isOpen = leagueDetailOpenToggle.checked;
+    normalizeLeagueDefaults(league);
+    saveLeaguesToStorage(LEAGUES);
     renderLeaguePage();
   });
   btnLeagueExport.addEventListener("click", function () {
@@ -23760,6 +28915,27 @@
       renderLeaguePage();
     });
   });
+  leagueUseHandicapCheckbox.addEventListener("change", function () {
+    var league = findLeagueById(activeLeagueId);
+    if (!league) return;
+    league.useHandicap = leagueUseHandicapCheckbox.checked;
+    saveLeaguesToStorage(LEAGUES);
+    renderLeaguePage();
+  });
+  leagueHandicapSystemSelect.addEventListener("change", function () {
+    var league = findLeagueById(activeLeagueId);
+    if (!league) return;
+    league.handicapSystem = leagueHandicapSystemSelect.value;
+    saveLeaguesToStorage(LEAGUES);
+    renderLeaguePage();
+  });
+  leagueHandicapBaseInput.addEventListener("change", function () {
+    var league = findLeagueById(activeLeagueId);
+    if (!league) return;
+    league.handicapBaseGames = Math.max(1, Math.min(200, parseInt(leagueHandicapBaseInput.value, 10) || defaultHandicapBaseGames(league.format)));
+    saveLeaguesToStorage(LEAGUES);
+    renderLeaguePage();
+  });
 
   btnOpenLeagueWizard.addEventListener("click", openLeagueWizard);
   btnLeagueWizardClose.addEventListener("click", closeLeagueWizard);
@@ -23785,13 +28961,48 @@
     markNoLeagueMembersPresentTonight(league);
     renderLeagueWizardRoster();
   });
+  wirePhoneFormatting(leagueWizardAddContactPhoneInput);
+  var checkLeagueWizardAddContactEmailValidity = wireFieldValidity(leagueWizardAddContactEmailInput, isValidEmail);
+  var checkLeagueWizardAddContactPhoneValidity = wireFieldValidity(leagueWizardAddContactPhoneInput, isValidPhoneNumber);
+  leagueWizardAddContactContactsCheckbox.addEventListener("change", function () {
+    updateLeagueNewPlayerContactFieldsVisibility(leagueWizardAddContactContactsCheckbox, leagueWizardAddContactContactFields, leagueWizardAddContactInput ? leagueWizardAddContactInput.value : "");
+  });
   btnLeagueWizardAddContact.addEventListener("click", function () {
     var league = leagueWizardOrganizerLeague();
-    if (!league || !leagueWizardAddContactSelect.value) return;
-    var name = leagueWizardAddContactSelect.value;
+    var name = leagueWizardAddContactInput ? leagueWizardAddContactInput.value.trim() : "";
+    if (!league || !name) return;
+    // Same "only register a brand new name in the Contact Sheet if the
+    // checkbox is on" behavior as the League page's own Add Member
+    // field - see its click handler for the full reasoning.
+    var existingPlayer = state.players.filter(function (p) {
+      return normalizeNameKey(p.name) === normalizeNameKey(name);
+    })[0];
+    if (existingPlayer) {
+      name = existingPlayer.name;
+    } else if (leagueWizardAddContactContactsCheckbox.checked) {
+      if (!checkLeagueWizardAddContactEmailValidity()) {
+        showToast(T("contactSheet.invalidEmail"));
+        return;
+      }
+      if (!checkLeagueWizardAddContactPhoneValidity()) {
+        showToast(T("contactSheet.invalidPhone"));
+        return;
+      }
+      var newPlayer = addPlayer(name);
+      if (newPlayer) {
+        name = newPlayer.name;
+        var email = leagueWizardAddContactEmailInput.value.trim();
+        var phone = leagueWizardAddContactPhoneInput.value.trim();
+        if (email || phone) setPlayerContact(newPlayer.name, { email: email, phone: phone });
+      }
+    }
     addLeagueMember(league, name);
     setLeagueTonightRosterMember(league, name, true);
+    leagueWizardAddContactEmailInput.value = "";
+    leagueWizardAddContactPhoneInput.value = "";
+    leagueWizardAddContactContactFields.classList.add("hidden");
     renderLeagueWizardRoster();
+    renderAll();
   });
   leagueWizardTableCountInput.addEventListener("change", function () {
     var league = leagueWizardOrganizerLeague();
@@ -23824,6 +29035,21 @@
 
   btnTestOnboarding.addEventListener("click", openOnboarding);
   btnOpenWizard.addEventListener("click", openWizard);
+
+  btnQuickGame.addEventListener("click", openQuickGameModal);
+  btnQuickGameCancel.addEventListener("click", closeQuickGameModal);
+  btnQuickGameStart.addEventListener("click", startQuickGame);
+  quickGameOverlay.addEventListener("click", function (e) {
+    if (e.target === quickGameOverlay) closeQuickGameModal();
+  });
+  quickGamePlayer1Input.addEventListener("input", validateQuickGameInputs);
+  quickGamePlayer2Input.addEventListener("input", validateQuickGameInputs);
+  attachNameAutocomplete(quickGamePlayer1Input, function () {
+    return contactSheetVisibleNames();
+  });
+  attachNameAutocomplete(quickGamePlayer2Input, function () {
+    return contactSheetVisibleNames();
+  });
   btnWizardClose.addEventListener("click", closeWizard);
   btnWizardCancel.addEventListener("click", closeWizard);
   wizardOverlay.addEventListener("click", function (e) {
@@ -23920,6 +29146,9 @@
   });
 
   wireCollapsiblePanel("backup-panel", "btn-toggle-backup-panel");
+  wireCollapsiblePanel("squash-panel", "btn-toggle-squash-panel");
+  wireCollapsiblePanel("challonge-panel", "btn-toggle-challonge-panel");
+  wireCollapsiblePanel("challonge-panel-league", "btn-toggle-challonge-panel-league");
   wireCollapsiblePanel("rotation-panel", "btn-toggle-rotation-panel");
   wireCollapsiblePanel("game-setup-panel", "btn-toggle-game-setup-panel");
   wireCollapsiblePanel("players-panel", "btn-toggle-players-panel");
@@ -24163,7 +29392,7 @@
     closeLeaderboardPage();
   });
   btnLeaderboardShare.addEventListener("click", shareLeaderboard);
-  [leaderboardViewPlayersRadio, leaderboardViewTeamsRadio].forEach(function (radio) {
+  [leaderboardViewPlayersRadio, leaderboardViewTeamsRadio, leaderboardViewLeagueRadio].forEach(function (radio) {
     radio.addEventListener("change", renderLeaderboardPage);
   });
   Array.prototype.forEach.call(leaderboardPeriodButtons, function (btn) {
@@ -24230,7 +29459,7 @@
   });
 
   btnContactSheetSelectAll.addEventListener("click", function () {
-    var names = contactSheetAllNames();
+    var names = contactSheetVisibleNames();
     var allSelected = names.length > 0 && names.every(function (n) {
       return !!contactSheetSelected[n];
     });
@@ -24266,6 +29495,92 @@
   });
   btnContactSheetSms.addEventListener("click", function () {
     composeToSelectedContacts("sms");
+  });
+  btnContactSheetGraveyardSelected.addEventListener("click", function () {
+    var names = Object.keys(contactSheetSelected).filter(function (n) {
+      return contactSheetSelected[n];
+    });
+    if (!names.length) {
+      showToast(T("contactSheet.noneSelectedForGraveyard"));
+      return;
+    }
+    confirmModal(T("confirm.sendSelectedPlayersToGraveyard", { count: names.length }), function () {
+      names.forEach(function (n) {
+        sendPlayerToGraveyard(n);
+      });
+      contactSheetSelected = {};
+      renderContactSheetPage();
+      renderAll();
+      showToast(T("toast.playersSentToGraveyard", { count: names.length }));
+    });
+  });
+  btnContactSheetMergeSelected.addEventListener("click", function () {
+    var names = Object.keys(contactSheetSelected).filter(function (n) {
+      return contactSheetSelected[n];
+    });
+    if (names.length !== 2) {
+      showToast(T("mergePlayers.selectExactlyTwo"));
+      return;
+    }
+    // Default the prompt to whichever of the two has more games on
+    // file - the more likely "real" identity to keep - but the field
+    // stays free text with both names offered, so the user can always
+    // pick the other one instead.
+    var gameCounts = names.map(function (n) {
+      return getPlayerSessions(n).reduce(function (sum, s) {
+        return sum + ((s.games || []).length);
+      }, 0);
+    });
+    var defaultTarget = gameCounts[0] >= gameCounts[1] ? names[0] : names[1];
+    promptModal(T("mergePlayers.prompt", { nameA: names[0], nameB: names[1] }), defaultTarget, function (typed) {
+      var target = resolvePlayerName(typed);
+      var targetKey = normalizeNameKey(target);
+      var match = names.filter(function (n) {
+        return normalizeNameKey(n) === targetKey;
+      })[0];
+      if (!match) {
+        showToast(T("mergePlayers.mustMatchOneOfTwo"));
+        return;
+      }
+      var source = names.filter(function (n) {
+        return n !== match;
+      })[0];
+      var error = mergePlayersEverywhere(source, match);
+      if (error) {
+        showToast(error);
+        return;
+      }
+      contactSheetSelected = {};
+      renderContactSheetPage();
+      renderAll();
+      showToast(T("mergePlayers.merged", { kept: match, removed: source }));
+    }, null, names);
+  });
+  btnContactSheetRepairHistory.addEventListener("click", function () {
+    var knownNames = contactSheetVisibleNames();
+    promptModal(T("mergePlayers.repairOldNamePrompt"), "", function (oldNameTyped) {
+      var oldNameText = (oldNameTyped || "").trim();
+      if (!oldNameText) return;
+      promptModal(T("mergePlayers.repairNewNamePrompt", { oldName: oldNameText }), "", function (newNameTyped) {
+        var target = resolvePlayerName(newNameTyped);
+        var targetKey = normalizeNameKey(target);
+        var match = knownNames.filter(function (n) {
+          return normalizeNameKey(n) === targetKey;
+        })[0];
+        if (!match) {
+          showToast(T("mergePlayers.repairMustBeCurrentPlayer"));
+          return;
+        }
+        if (normalizeNameKey(oldNameText) === normalizeNameKey(match)) {
+          showToast(T("mergePlayers.samePlayer"));
+          return;
+        }
+        var changed = repairArchivedGameName(oldNameText, match);
+        renderContactSheetPage();
+        renderAll();
+        showToast(T("mergePlayers.repaired", { count: changed, oldName: oldNameText, name: match }));
+      }, null, knownNames);
+    }, null);
   });
 
   btnOpenTournament.addEventListener("click", function () {
@@ -24456,6 +29771,7 @@
   validateNewPlayerNameInput();
   validateWizardNewPlayerNameInput();
   renderAll();
+  loadHandicapChartsFromServer();
 
   if (!hasSeenOnboarding() && isFirstTimeUser()) {
     openOnboarding();
@@ -24470,6 +29786,33 @@
   setFocusMode(storedFocusMode === "1");
   btnToggleFocus.addEventListener("click", function () {
     setFocusMode(!appRoot.classList.contains("focus-mode"));
+  });
+
+  var storedLeagueFocusMode = "0";
+  try {
+    storedLeagueFocusMode = localStorage.getItem(LEAGUE_FOCUS_MODE_KEY) || "0";
+  } catch (e) {
+    storedLeagueFocusMode = "0";
+  }
+  setLeagueFocusMode(storedLeagueFocusMode === "1");
+  btnLeagueToggleFocus.addEventListener("click", function () {
+    setLeagueFocusMode(!leaguePageView.classList.contains("league-focus-mode"));
+  });
+
+  var storedFargoEnabled = "0";
+  try {
+    storedFargoEnabled = localStorage.getItem(FARGO_ENABLED_KEY) || "0";
+  } catch (e) {
+    storedFargoEnabled = "0";
+  }
+  fargoEnabled = storedFargoEnabled === "1";
+  fargoEnabledCheckbox.checked = fargoEnabled;
+  fargoEnabledCheckbox.addEventListener("change", function () {
+    setFargoEnabled(fargoEnabledCheckbox.checked);
+    renderContactSheetPage();
+    if (!playerPageView.classList.contains("hidden") && currentStatsPlayerName) {
+      openPlayerStatsPage(currentStatsPlayerName, true);
+    }
   });
 
   setInterval(updateGameDurationDisplay, 1000);

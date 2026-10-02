@@ -603,7 +603,14 @@ body {
 }
 
 #app {
-  max-width: 900px;
+  /* Wide enough that the scoreboard grid (.scoreboard, further down)
+     can actually fit 4+ player cards side by side at a reasonable size
+     on a desktop-width window instead of being squeezed down to 2-3
+     columns inside a narrow, centered strip - other sections (modals,
+     the setup wizard, League/Tournament panels) keep their own,
+     independently-set 900px caps for readability, so this only widens
+     things that benefit from the extra room. */
+  max-width: 1400px;
   margin: 0 auto;
   min-height: 100vh;
   display: flex;
@@ -668,6 +675,21 @@ body {
   padding: 8px 14px;
 }
 
+/* The main page's primary call to action - meant to stand out from
+   every other header button at a glance (bigger, bolder, a glowing
+   accent ring) rather than blending into the same ghost-button row,
+   per explicit "very visible" request. */
+.quick-game-btn {
+  font-size: 1.05rem;
+  font-weight: 800;
+  padding: 10px 20px;
+  box-shadow: 0 0 0 2px var(--accent), 0 4px 10px rgba(0, 0, 0, 0.35);
+}
+
+.quick-game-btn:hover {
+  filter: brightness(1.12);
+}
+
 .app-header h1 {
   margin: 0;
   font-size: 1.6rem;
@@ -675,6 +697,56 @@ body {
 }
 
 .focus-toggle-btn {
+  display: block;
+  margin: 4px auto 12px;
+  font-size: 0.85rem;
+  padding: 8px 14px;
+}
+
+/* The row itself (not the button) centers - the ❓ help button sits
+   beside it, both hidden by JS together (see index.html) until the Web
+   Speech API is confirmed available, since it isn't reliably present
+   inside the iOS app's WKWebView (see the Voice Commands comment in
+   app.js). */
+.voice-toggle-row {
+  justify-content: center;
+  margin: 4px 0 12px;
+}
+
+/* Keeps each toggle+help (or label+select) pair together as one unit
+   when the row wraps on a narrow screen, instead of a pair splitting
+   across two lines with its help button stranded on its own. */
+.voice-control-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.voice-toggle-btn {
+  font-size: 0.85rem;
+  padding: 8px 14px;
+}
+
+.voice-toggle-btn.is-listening {
+  background: color-mix(in srgb, var(--accent) 20%, var(--bg-card));
+  border-color: var(--accent);
+  color: var(--accent);
+  animation: voice-listening-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes voice-listening-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
+
+/* Hidden by default (see index.html) - only unhidden by JS while
+   playing Snooker (see renderScoreboard), the one game type whose
+   frame has no automatic end - see finishSnookerFrame. */
+.finish-snooker-btn {
   display: block;
   margin: 4px auto 12px;
   font-size: 0.85rem;
@@ -713,7 +785,11 @@ body {
    equally (floored so a busy roster with many rows never gets
    squeezed thinner than a normal-sized card), and each card stretches
    to fill its row rather than sitting top-aligned at its own content
-   height. */
+   height. Note: .player-panel below is container-type:size, so its own
+   content can never feed back into this row's auto-sizing (that's what
+   size containment means) - a variable-height addition to the card (see
+   .run-streak-badge) has to stay out of normal flow entirely rather than
+   relying on the row growing to fit it. */
 #app.focus-mode .scoreboard {
   grid-auto-rows: minmax(340px, 1fr);
   align-items: stretch;
@@ -740,6 +816,36 @@ body {
    collapses to and make the card's own content overflow it. */
 #app.focus-mode .player-panel {
   container-type: size;
+}
+
+/* A long player-name wrapping used to have nowhere to go: .player-panel
+   above is size-contained (a fixed box from its grid row - see the
+   comment on it), which is exactly what lets the score read from
+   across the room, but that same containment also means the card's
+   content can never feed back into growing the row to fit a taller
+   name (see the grid-auto-rows comment further up) - the name and the
+   score just silently overlapped instead.
+   Tried letting the score's own box shrink to make room (moving the
+   size containment onto .stat-block, flexed to fill whatever the name
+   left over) - technically sound, but it meant .stat-value's cqh
+   measured a smaller, name-dependent box instead of the whole card,
+   so the score read noticeably smaller than before even for a normal
+   one-line name the moment a second player made the row's other card
+   grow (e.g. its own rating-vs-opponent note appearing). The score's
+   size needs to stay exactly what .player-panel's own cqh already
+   gives it, unconditionally - so instead of growing the card or
+   shrinking the score, the name itself is capped at 2 lines with an
+   ellipsis past that (-webkit-line-clamp, standard multi-line
+   truncation - supported everywhere this app ships to, despite the
+   -webkit- prefix). A reasonable two-line budget for a name still
+   reads fully across the room almost always; the rare longer one
+   truncates instead of ever touching the score. */
+#app.focus-mode .player-panel .player-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  flex: 0 0 auto;
 }
 
 /* Scoped to .player-panel specifically (not a bare .stat-value/
@@ -835,27 +941,74 @@ body {
   font-size: clamp(1.6rem, 3cqw, 2.2rem);
 }
 
-/* The currently keypad-selected player (see keypadSelectedPlayerId) -
-   the one about to receive the next +/-/undo keypress - gets a visibly
-   bigger card (box, fonts, and controls all together, since they're all
-   inside it) in Focus Mode, per request. zoom rather than
-   transform:scale, since zoom's footprint counts in normal layout flow
-   - the grid/flex container around it reflows to make room instead of
-   letting it overlap a neighbor, which is what keeps this "grows if
-   there's space, less if there isn't" with no JS layout math needed.
-   (grid-column:span was tried first so a selected card could claim a
-   second column outright, but it fed back into the cqw-based font
-   sizing above in a circular way - the bigger font made the column
-   demand more space, which warped every other column's width too - so
-   plain zoom on the whole card, letting normal grid/flex reflow handle
-   the rest, is both simpler and the one that's actually stable.) */
-#app.focus-mode .player-panel.is-keypad-selected,
-#app.focus-mode .member-card.is-keypad-selected {
-  zoom: 1.3;
+/* Focus Mode now matches the regular scoreboard's layout - buttons in
+   their own row above the score (order:1 on .stat-block pushes it
+   after the order:0 buttons and wraps it full-width below them, same
+   trick as the base .player-score-row rule), not flanking it, per
+   feedback that the two should look the same. Buttons stay sized for
+   across-the-room tapping (this overrides the generic
+   #app.focus-mode .btn-ball sizing above, which still applies as-is
+   to Team Mode's member cards) rather than shrinking to the tighter
+   base .btn-ball size - Focus Mode's whole point is readability from
+   a distance. */
+#app.focus-mode .player-score-row {
+  flex-wrap: wrap;
 }
 
-#app.focus-mode .member-card.is-keypad-selected {
-  zoom: 1.3;
+#app.focus-mode .player-score-row .stat-block {
+  order: 1;
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+#app.focus-mode .player-score-row .btn-ball {
+  flex: 1 1 0;
+  min-height: clamp(56px, 11cqh, 90px);
+  font-size: clamp(1.3rem, 5cqw, 1.8rem);
+  padding: 0;
+}
+
+/* The base .btn-ball.minus border (1px var(--border)) is meant to read
+   as a subtle outline against .bg-card at normal size - too subtle now
+   that Focus Mode's minus button is this much bigger and sitting right
+   next to the solid-filled plus button, so it gets a thicker, higher-
+   contrast border here instead (var(--text-dim), not var(--border) -
+   the latter is deliberately close to --bg-card in every theme). */
+#app.focus-mode .player-score-row .btn-ball.minus {
+  border-width: 2px;
+  border-color: var(--text-dim);
+}
+
+/* The currently keypad-selected player (see keypadSelectedPlayerId) -
+   the one about to receive the next +/-/undo keypress - reads bigger
+   in Focus Mode, per request. Used to do this with zoom:1.3 on the
+   whole card; dropped it (see the git history for that rule) once
+   testing with 4 players on screen showed it was never actually safe:
+   CSS Grid's default stretch sizing allocates every item in a row the
+   SAME track width regardless of one item's zoomed intrinsic size, so
+   the card's own box stayed exactly the same size as its neighbors
+   while zoom still PAINTED its content 1.3x bigger inside that
+   unchanged box - the name/score/buttons just overflowed past the
+   card's own edges and bled into the next one. Bumping the cqw/cqh-
+   based font-size clamps directly instead (same unit basis the un-
+   selected cards already use, just a bigger multiplier/ceiling) scales
+   relative to that same, real, un-enlarged box - there's no longer
+   anything to overflow, by construction, no matter how many players
+   are sharing the row or how long a name/how wide a score gets. */
+#app.focus-mode .player-panel.is-keypad-selected .player-name {
+  font-size: clamp(2.2rem, min(18cqw, 18cqh), 6rem);
+}
+
+#app.focus-mode .player-panel.is-keypad-selected .stat-value {
+  font-size: clamp(3.6rem, min(48cqw, 54cqh), 16rem);
+}
+
+#app.focus-mode .member-card.is-keypad-selected .member-name {
+  font-size: clamp(1.6rem, 11cqw, 3.6rem);
+}
+
+#app.focus-mode .member-card.is-keypad-selected .stat-value.small {
+  font-size: clamp(2.2rem, 17cqw, 6.5rem);
 }
 
 .no-stats-row-inline {
@@ -876,6 +1029,96 @@ body {
 .no-stats-row-inline:has(input:checked) {
   color: var(--accent);
   font-weight: 600;
+}
+
+.fargo-enabled-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  margin: 10px 0 2px;
+}
+
+.fargo-enabled-row input {
+  cursor: pointer;
+}
+
+.contact-sheet-fargo-field {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  grid-column: 1 / -1;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+
+/* The direct "does this player have an official FargoRate rating"
+   answer (see buildFargoContactField) - a semantic yes/no pill, not
+   just the comparison badge's quieter styling, since this is the thing
+   being asked at a glance. */
+.fargo-official-status {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+
+.fargo-official-status.is-linked {
+  background: color-mix(in srgb, #2e8b57 22%, var(--bg-panel));
+  color: #2e8b57;
+}
+
+.fargo-official-status.is-none {
+  background: var(--bg-panel);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+}
+
+.btn-link-small {
+  border: none;
+  background: none;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 0;
+}
+
+.fargo-search-results-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fargo-search-result-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-panel);
+}
+
+.fargo-search-result-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fargo-search-result-info span {
+  font-size: 0.8rem;
+  color: var(--text-dim);
 }
 
 .focus-players-wrap {
@@ -1154,7 +1397,7 @@ button:disabled {
   font-size: 0.85rem;
 }
 
-input[type="text"], input[type="number"], input[type="email"], input[type="tel"], select {
+input[type="text"], input[type="number"], input[type="email"], input[type="tel"], input[type="password"], select {
   font: inherit;
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -1164,7 +1407,7 @@ input[type="text"], input[type="number"], input[type="email"], input[type="tel"]
   min-height: 44px;
 }
 
-input[type="text"], input[type="email"], input[type="tel"] {
+input[type="text"], input[type="email"], input[type="tel"], input[type="password"] {
   flex: 1;
   min-width: 140px;
   font-size: 1.05rem;
@@ -1301,6 +1544,16 @@ input[type="number"] {
   height: 24px;
 }
 
+/* A <select> dropped inline into a prominent checkbox row (the league
+   handicap-system picker) would otherwise inherit the app-wide bare
+   select rule's flex:1/min-width:140px and stretch to dominate the row
+   - this keeps it sized to its own short option text instead. */
+.checkbox-row.checkbox-row-prominent select {
+  flex: 0 1 auto;
+  min-width: 0;
+  font: inherit;
+}
+
 /* ---------- Game rotation ---------- */
 
 .rotation-list {
@@ -1405,6 +1658,48 @@ input[type="number"] {
   border-color: var(--felt-light);
 }
 
+/* Dragged above its siblings (z-index) with a lifted-off-the-list look
+   (shadow + faint scale) so it's visually clear which row is moving -
+   the actual movement itself is a JS-applied translateY, not this
+   rule's job (see wireRosterDragHandle). */
+.roster-row.is-dragging {
+  position: relative;
+  z-index: 5;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+  transform: scale(1.02);
+  transition: none;
+}
+
+/* touch-action:none so a touch drag starting here moves the row
+   instead of scrolling the page - scoped to just the handle, not the
+   whole row, so the rest of each row still scrolls normally. 40px+ hit
+   target since this is meant to be grabbed by a thumb at the table. */
+.roster-drag-handle {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  line-height: 1;
+  color: var(--text-dim);
+  background: transparent;
+  border: none;
+  cursor: grab;
+  touch-action: none;
+  border-radius: 8px;
+}
+
+.roster-drag-handle:hover {
+  background: var(--bg-panel);
+  color: var(--text);
+}
+
+.roster-row.is-dragging .roster-drag-handle {
+  cursor: grabbing;
+}
+
 .roster-name {
   flex: 1;
   min-width: 90px;
@@ -1459,6 +1754,39 @@ input[type="number"] {
   font-weight: 700;
   vertical-align: middle;
   font-variant-numeric: tabular-nums;
+}
+
+/* Local-vs-real-Fargo comparison (see buildFargoComparisonBadge) - a
+   quieter pill than .rating-badge, since this is a secondary detail the
+   player opted into, not the headline number. */
+.fargo-comparison-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 8px 0 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  font-weight: 600;
+  vertical-align: middle;
+  font-variant-numeric: tabular-nums;
+}
+
+.fargo-refresh-btn {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 0;
+  line-height: 1;
+}
+
+.fargo-refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 /* A live "+X / -Y" preview of the rating swing at stake in the current
@@ -1659,7 +1987,9 @@ input[type="number"] {
    a way back). Sized with clamp() so it stays legible without
    overflowing a phone-width viewport. */
 .shot-counter-widget {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 12px;
   width: fit-content;
   margin: 4px auto 14px;
   background: rgba(0, 0, 0, 0.6);
@@ -1673,6 +2003,68 @@ input[type="number"] {
   letter-spacing: 0.03em;
   text-align: center;
   cursor: pointer;
+}
+
+/* Resets the elapsed time to 0:00 without pausing/unpausing (see
+   resetShotCounterToZero) - stopPropagation'd against the widget's own
+   click-to-pause handler, same pattern as .timed-tournament-pause-toggle
+   nested inside its own clickable widget. */
+.shot-counter-reset-btn {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 999px;
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.shot-counter-reset-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Hides the widget without pausing/resetting it (see
+   toggleShotCounterVisibility) - same stopPropagation'd, round-button
+   pattern as .shot-counter-reset-btn right next to it; the floating
+   👁️ (.shot-counter-visibility-toggle) is the way back once hidden. */
+.shot-counter-hide-btn {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 999px;
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.shot-counter-hide-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Fully turns the counter off (killShotCounter) - unlike
+   .shot-counter-hide-btn, which only hides the widget while it keeps
+   ticking/beeping underneath, this actually unchecks the Game Setup
+   checkbox so nothing is running anymore. Same round-button treatment,
+   just with a warning tint so it reads as the more final action of
+   the two. */
+.shot-counter-kill-btn {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  background: rgba(220, 60, 50, 0.25);
+  border: 1px solid rgba(255, 120, 110, 0.5);
+  border-radius: 999px;
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.shot-counter-kill-btn:hover {
+  background: rgba(220, 60, 50, 0.4);
 }
 
 /* Quick-access companion to the widget above - unlike it, this stays
@@ -2015,9 +2407,23 @@ input[type="number"] {
   padding-top: 10px;
 }
 
+/* Big and bold at the top of the card, per request - sized off the
+   card's own width (.player-panel is container-type:inline-size) so
+   it scales down on its own on a narrower card (more players sharing
+   the row) the same way Focus Mode's own name/score already do,
+   rather than a single fixed size that's either too small on a wide
+   card or cramped on a narrow one. Capped at 2 lines with an ellipsis
+   past that (-webkit-line-clamp, the same proven technique Focus
+   Mode's name uses) so a long name wraps and shrinks to fit instead
+   of blowing up the card's height or overflowing - "keeping
+   proportions" even for a name much longer than a short one-word one. */
 .player-name {
-  font-size: 1.15rem;
-  font-weight: 700;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: clamp(1.8rem, 16cqw, 3.6rem);
+  font-weight: 800;
   text-align: center;
   word-break: break-word;
 }
@@ -2026,6 +2432,14 @@ input[type="number"] {
   font-size: 14px;
   color: var(--text-dim);
   text-align: center;
+  /* Meant to stay a single compact line always - in Focus Mode
+     specifically, .player-panel's height is fixed by its grid row (see
+     the comment above #app.focus-mode .scoreboard), not driven by its
+     own content, so an unplanned wrap here (even just from one digit's
+     glyph metrics landing a hair wider than another's at the exact same
+     count of characters) silently eats into the room left for the score
+     buttons below instead of growing the card to fit. */
+  white-space: nowrap;
 }
 
 .stat-mini.stat-mini-tourney {
@@ -2092,13 +2506,33 @@ input[type="number"] {
   margin-top: 2px;
 }
 
+/* Name/score-number elements that switch keypad focus to this player on
+   click (and announce it, when Keypad Speech is on) - see
+   selectKeypadPlayer's call sites in buildIndividualPanel/buildMemberCard.
+   A plain cursor hint is enough; the existing keypad-selected highlight
+   (#app.focus-mode .player-panel.is-keypad-selected etc.) already shows
+   the result. */
+.keypad-select-trigger {
+  cursor: pointer;
+}
+
 /* "🔥 N in a row" - shown only for whichever player currently has an
    active run (see buildRunStreakBadge). Bold and warm-colored so it
-   reads at table distance, matching the app's across-the-room sizing. */
+   reads at table distance, matching the app's across-the-room sizing.
+   Positioned absolute (top-right corner, mirroring the keypad-number-
+   badge's own top-left corner) rather than sitting in normal flow: this
+   badge only appears sometimes, and .player-panel below can have a
+   fixed, non-content-driven height in Focus Mode (see the grid-auto-rows
+   comment above it) - a badge in normal flow there would push the score
+   +/- buttons past the card's own bottom edge, out of click range,
+   whenever it appeared. Taking it out of flow entirely means its
+   presence can never displace anything else in the card. */
 .run-streak-badge {
-  display: block;
-  width: max-content;
-  max-width: 100%;
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  max-width: calc(100% - 16px);
   text-align: center;
   font-size: 1.1rem;
   font-weight: 800;
@@ -2106,7 +2540,6 @@ input[type="number"] {
   background: linear-gradient(135deg, #ff9a3c, #ff5e3a);
   border-radius: 999px;
   padding: 6px 16px;
-  margin: 8px auto 0;
   animation: milestone-pop 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
@@ -2134,8 +2567,8 @@ input[type="number"] {
 
 .btn-ball {
   flex: 1;
-  min-height: 64px;
-  font-size: 1.6rem;
+  min-height: 46px;
+  font-size: 1.4rem;
   font-weight: 800;
   border-radius: 12px;
 }
@@ -2149,6 +2582,33 @@ input[type="number"] {
   background: var(--bg-card);
   color: var(--text);
   border: 1px solid var(--border);
+}
+
+/* Wraps the score (.stat-block) together with its +/- buttons so they
+   can be reordered by CSS without any JS-side layout logic: normal
+   mode puts the buttons in their own row ABOVE the score (between the
+   player name/badges and the number itself) via .stat-block's
+   order:1 pushing it after the (order:0) buttons and wrapping it onto
+   its own full-width row below them. Focus Mode instead lays this out
+   as a single non-wrapping row with the buttons flanking the score
+   (see the #app.focus-mode override below) - saves the vertical space
+   the buttons' own row used to take, which the fixed-height card there
+   can't grow to accommodate (see the grid-auto-rows comment above
+   #app.focus-mode .scoreboard). */
+.player-score-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  width: 100%;
+}
+
+.player-score-row .stat-block {
+  order: 1;
+  flex: 1 1 100%;
+}
+
+.player-score-row .btn-ball {
+  flex: 1;
 }
 
 /* ---------- Quick Counter mode ---------- */
@@ -2372,7 +2832,7 @@ input[type="number"] {
 }
 
 .member-name {
-  font-size: 1.3rem;
+  font-size: 1.5rem;
   font-weight: 700;
   text-align: center;
 }
@@ -3853,7 +4313,16 @@ input[type="number"] {
   align-items: center;
   justify-content: center;
   padding: 20px;
-  z-index: 1000;
+  /* Higher than .wizard-overlay/.confirm-modal-overlay (both 1000) on
+     purpose - Help can be opened from inside any of those (see each
+     screen's own ❓ button), and needs to land on top regardless of
+     which one happens to sit later in the DOM. Before this, the main
+     Game Setup Wizard's own Help button only appeared to work by
+     accident of DOM order (#help-overlay comes after #wizard-overlay in
+     index.html) - the League wizard, later in the document, painted
+     over an equal-z-index Help with nothing visibly wrong until it
+     actually got its own Help button. */
+  z-index: 1100;
 }
 
 .help-card {
@@ -4385,14 +4854,56 @@ input[type="number"] {
   margin-top: 4px;
   text-align: center;
   font-weight: 700;
-  font-size: 0.92rem;
+  font-size: 1.08rem;
   color: var(--text);
+}
+
+/* The "every" number sits inline in that sentence (see
+   renderRotationPositionControl) - sized/weighted to match the
+   surrounding text instead of looking like a stray form control, with
+   the spinner arrows dropped since there's no room for them at this
+   size and the +/- aren't needed (the Games Rotations panel's own
+   #rotation-every already covers that). Capped at 3 digits wide, per
+   explicit request. */
+.rotation-position-every-input {
+  width: 3ch;
+  font: inherit;
+  font-weight: 700;
+  text-align: center;
+  color: var(--accent);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1px 2px;
+  -moz-appearance: textfield;
+}
+
+.rotation-position-every-input::-webkit-outer-spin-button,
+.rotation-position-every-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .player-stats-note {
   color: var(--text-dim);
   font-size: 0.85rem;
   text-align: center;
+}
+
+/* The list of matching JSON files a Drive folder listing returns (see
+   renderDriveFilePicker) - one full-width button per file, same look as
+   any other .btn.btn-ghost row, just stacked instead of side by side. */
+#drive-file-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.drive-file-row {
+  width: 100%;
+  text-align: left;
+  white-space: normal;
 }
 
 /* An emphasized callout variant of .player-stats-note - bigger, bordered,
@@ -5019,6 +5530,17 @@ input[type="number"] {
   width: 100%;
 }
 
+/* The permanent local id - read-only, so it's styled to look it:
+   smaller/monospace (a UUID is long and isn't meant to be read at a
+   glance, just there to select/copy), dimmer, and a default cursor
+   instead of a text-edit one. */
+.contact-sheet-id-input {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.7rem;
+  opacity: 0.65;
+  cursor: default;
+}
+
 .contact-sheet-row .player-link-icon {
   margin-top: 4px;
   flex-shrink: 0;
@@ -5347,6 +5869,7 @@ body.network-guest-mode #report-archive-panel,
 body.network-guest-mode #backup-panel,
 body.network-guest-mode #resets-panel,
 body.network-guest-mode #tournament-setup-panel,
+body.network-guest-mode .header-nav-row #btn-quick-game,
 body.network-guest-mode .header-nav-row #btn-test-onboarding,
 body.network-guest-mode .header-nav-row #btn-open-wizard,
 body.network-guest-mode .header-nav-row #btn-open-tournament,
@@ -6138,32 +6661,80 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   padding: 4px 16px 14px;
 }
 
+/* Inline, not its own line - reads as one continuous "Now Playing: X —
+   Target Y" line in the same font as the title, rather than a smaller,
+   dimmer line underneath it. */
 .now-playing-banner .target-note {
-  display: block;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--text-dim);
-  letter-spacing: normal;
-  margin-top: 2px;
+  display: inline;
 }
 
+/* Inline, same font as the rest of the banner - same treatment as
+   .target-note above, so the whole banner (title, target, and the
+   rotation status) reads as one continuous line instead of wrapping
+   into its own smaller/dimmer one underneath. */
 .now-playing-banner .rotation-note {
-  display: block;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--text-dim);
-  letter-spacing: normal;
-  margin-top: 2px;
+  display: inline;
 }
 
-.now-playing-banner .game-duration-live {
-  display: block;
+/* The inline "change game type" control added for Quick Game (see
+   renderNowPlayingBanner) - sized/weighted to sit on the same line as
+   the rest of the banner instead of looking like a stray form control,
+   same idea as .racing-to-input/.rotation-position-every-input. */
+.now-playing-type-select {
+  display: inline-block;
+  margin-left: 8px;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px 6px;
+  vertical-align: middle;
+}
+
+/* Duration and (while actually racing - see renderNowPlayingBanner)
+   "Racing to: [n] games" sit side by side in one row instead of each
+   being its own separate line. */
+.now-playing-duration-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 6px;
+}
+
+.now-playing-banner .game-duration-live,
+.now-playing-banner .racing-to-live {
   font-size: 1.1rem;
   font-weight: 800;
   color: var(--accent);
   letter-spacing: normal;
   font-variant-numeric: tabular-nums;
-  margin-top: 6px;
+}
+
+/* Matches .rotation-position-every-input's treatment (inline, sized to
+   the surrounding text, no spinner arrows, capped at 3 digits wide) -
+   see that rule's own comment for why. */
+.racing-to-input {
+  width: 3ch;
+  font: inherit;
+  font-weight: inherit;
+  text-align: center;
+  color: inherit;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1px 2px;
+  -moz-appearance: textfield;
+}
+
+.racing-to-input::-webkit-outer-spin-button,
+.racing-to-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 /* ---------- Header nav row ---------- */
@@ -6190,12 +6761,21 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
    is the part that was actually broken. Players is deliberately its own
    section below this one - it needs room for up to 4 player cards
    across, which is routinely wider than 40vw. */
-.tournament-setup-narrow-sections {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 14px;
-  margin-bottom: 14px;
+/* The panel itself (progress header, dots, each step, and the footer's
+   Back/Next/Start buttons) is otherwise a plain .panel - full viewport
+   width like every other full-page view. That reads fine for content
+   that wants the width (a bracket, a wide table), but this wizard's
+   own content is already narrow and centered per step - left unconstrained,
+   the panel just wraps a small centered card in a huge expanse of
+   card background, and .wizard-footer's buttons/.wizard-progress-dots
+   (both flex-fill their container) stretch to match that oversized
+   width instead of sizing like every other button/progress bar in the
+   app. Capping the panel itself fixes both at once. Matches the League
+   wizard modal's own width (#league-wizard-overlay .wizard-card) so the
+   app's step-by-step wizards feel consistent with each other. */
+#tournament-setup-panel {
+  max-width: 720px;
+  margin: 8px auto;
 }
 
 .tournament-setup-section {
@@ -6329,6 +6909,57 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
 
 .session-subsection-subheading:first-child {
   margin-top: 0;
+}
+
+/* A clearly bounded group within a panel (e.g. Backup & Transfer's
+   Export/Import halves) - a real border box, not just a text heading,
+   so the two sides read as distinct at a glance instead of one long
+   run of buttons. */
+.backup-subsection {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin: 14px 0;
+}
+
+.backup-subsection:first-of-type {
+  margin-top: 0;
+}
+
+.backup-subsection-title {
+  margin: 0 0 12px;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--accent);
+}
+
+/* Inside a .panel-toggle button (the "Replace Everything" sub-panel),
+   the toggle button itself already carries the bottom margin - a
+   second one on the title here would double up the gap before the
+   chevron/summary line. */
+.collapsible-panel .panel-toggle .backup-subsection-title {
+  margin: 0;
+}
+
+/* #backup-panel .row .btn (see above) makes every button in a row
+   grow to fill it, which is right for a lone "All Data" or "iCloud
+   Sync" button but wrong for "Import & Replace" - a full-width danger
+   button reads as far more prominent/urgent than a destructive,
+   rarely-used action should. Two ID selectors to out-specificity
+   that two-class rule regardless of source order. */
+#backup-panel #btn-squash-import-data {
+  flex: none;
+}
+
+/* Only shown when hasNewGamesSince finds games played after the last
+   iCloud Sync export - bigger and accent-colored so a stale export
+   actually catches the eye instead of blending into the two plain
+   timestamp lines above it. */
+.sync-new-data-available {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--accent);
+  margin-top: 4px;
 }
 
 .fair-race-explain-row {
@@ -6469,6 +7100,25 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   font-size: 0.76rem;
   font-weight: 700;
   opacity: 0.65;
+}
+
+/* Everything above the bracket trees (abandon/print row, champion
+   banner, the live match board(s), ready-to-play list, timeline) is
+   narrow content that only ever looked full-width because .panel
+   itself has no width cap - same issue the setup wizard had. The
+   bracket trees below stay uncapped on purpose (a many-round bracket
+   genuinely needs the room, with its own horizontal scroll). Matches
+   #app's own 900px content width rather than the setup wizard's
+   narrower 720px, since a live two-up scoreboard needs more breathing
+   room than a stack of radio options. */
+#tournament-active-panel > .row,
+#tournament-active-panel > #tournament-champion-banner,
+#tournament-active-panel > #tournament-current-match-panel,
+#tournament-active-panel > #tournament-ready-list,
+#tournament-active-panel > #tournament-timeline {
+  max-width: 900px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .tournament-bracket-heading {
@@ -6851,6 +7501,25 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   margin-bottom: 0;
 }
 
+/* League-only: a small focus button at the top of each live board (see
+   buildLeagueFloatingBoard) - .tournament-floating-board itself stays
+   untouched since Tournament reuses that class as-is. */
+.league-board-header-row {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 16px 6px;
+}
+
+.league-board-focus-btn {
+  font-size: 0.9rem;
+  padding: 6px 12px;
+}
+
+#view-league-page.league-focus-mode .league-board-focus-btn {
+  font-size: 1.05rem;
+  padding: 10px 16px;
+}
+
 /* ---------- Round Robin: standings list + a wrapping grid of every
    match (no bracket tree — every match is visible from the start). ---------- */
 
@@ -6925,11 +7594,39 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   border-radius: var(--radius);
 }
 
+/* League page text minimum: the app-wide .row label default (0.85rem,
+   under 14px) reads too small on a page meant to be legible at a glance -
+   every label in the new-league form gets bumped here. */
+.league-new-form label {
+  font-size: 0.9rem;
+}
+
 .league-format-row {
   gap: 16px;
 }
 
+/* Same 14px-minimum reasoning as .league-new-form label above, for the
+   page's own intro copy specifically (the ">" keeps this off the
+   already-larger .league-max-games-help paragraphs nested deeper in). */
+#league-setup-panel > .player-stats-note {
+  font-size: 0.9rem;
+}
+
+/* The League page's panels are otherwise plain .panel - full viewport
+   width like every other full-page view (Tournament, Leaderboard, ...).
+   Capped here to #app's own 900px content width so League reads the
+   same size as the main page's sections instead of sprawling wider -
+   same reasoning and value as #tournament-active-panel's children. */
+#league-setup-panel {
+  max-width: 900px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
 .league-detail {
+  max-width: 900px;
+  margin-left: auto;
+  margin-right: auto;
   margin-top: 14px;
   padding-top: 14px;
   border-top: 1px solid var(--border);
@@ -6943,10 +7640,32 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   margin-bottom: 10px;
 }
 
+/* No flex:1 here on purpose - a short league name stretching to fill
+   the whole row is what made this header read as "way too wide" next
+   to the rest of the app's plain left-to-right button rows. Sized to
+   its own text, same as every other heading. */
 .league-detail-header h3 {
   margin: 0;
-  flex: 1;
-  min-width: 120px;
+}
+
+/* .checkbox-row-prominent's own flex:1 would otherwise stretch this to
+   fill whatever's left of the header row next to a short league name -
+   capped so switching Open/Team mode reads as a control, not a banner. */
+.league-mode-toggle {
+  flex: 0 1 340px;
+}
+
+/* select already gets flex:1 as its own default (see base select rule)
+   so it can share a .row evenly with several other fields - fine there,
+   but a league picker alone next to one button has nothing to share
+   with and balloons to fill the entire panel width instead of staying
+   a normal-sized dropdown like the rest of the app's pickers. */
+#league-select {
+  flex: 0 1 320px;
+}
+
+#league-standings-sort-select {
+  flex: 0 1 200px;
 }
 
 .league-readonly-badge {
@@ -6956,7 +7675,7 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   background: color-mix(in srgb, var(--accent) 18%, var(--bg-panel));
   border: 1px solid var(--border);
   color: var(--text-dim);
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   font-weight: 700;
 }
 
@@ -6965,29 +7684,41 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   margin-bottom: 14px;
 }
 
+/* No width:100% on purpose - table-layout stays the browser default
+   (auto), which sizes each column to its own widest cell (mostly the
+   Member column's names) instead of stretching every column evenly
+   across the whole panel. That's what made this unreadable at a
+   glance: a one-character "W-L" column and a long member name got the
+   same width, so most rows were mostly empty space. */
 .league-standings-table {
-  width: 100%;
   border-collapse: collapse;
   font-variant-numeric: tabular-nums;
 }
 
 .league-standings-table th,
 .league-standings-table td {
-  padding: 8px 10px;
+  padding: 12px 20px;
   text-align: left;
   border-bottom: 1px solid var(--border);
-  font-size: 0.9rem;
+  font-size: 1.05rem;
 }
 
 .league-standings-table th {
   color: var(--text-dim);
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
 
 .league-standings-table tbody tr:last-child td {
   border-bottom: none;
+}
+
+/* Member names read first and matter most at a glance from across the
+   table - bigger and bolder than the rest of the row's stats. */
+.league-standings-name-cell {
+  font-size: 1.3rem;
+  font-weight: 700;
 }
 
 .league-session-cap-reached {
@@ -7006,15 +7737,20 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   margin-bottom: 18px;
 }
 
-.league-tables-header-row {
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px 16px;
+/* Number of Tables / Queue Mode / Team Rotation / Max Games, each its
+   own label+control row stacked into one column instead of all
+   wrapping together in a single crowded row - matches how every other
+   settings list in the app (e.g. the League wizard's own steps) reads
+   top to bottom, one decision at a time. */
+.league-settings-row label {
+  min-width: 200px;
+  font-size: 0.9rem;
 }
 
-.league-tables-header-row h4 {
-  margin: 0;
-  flex: 1 0 100%;
+.league-max-games-help {
+  font-size: 1rem;
+  text-align: left;
+  margin: 0 0 12px;
 }
 
 #league-table-count {
@@ -7029,7 +7765,7 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
    scrolling down to the full live boards. */
 .league-tables-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
   gap: 14px;
   margin-top: 10px;
 }
@@ -7037,9 +7773,9 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
 .league-table-slot {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-  background: var(--bg-panel);
+  gap: 10px;
+  padding: 18px;
+  background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   /* A grid item's default min-width is "auto" (its content's natural
@@ -7078,6 +7814,56 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   color: var(--text-dim);
 }
 
+/* Boxes the "who's waiting" queue (label + list + add row) as its own
+   distinct unit within a table card - the card itself already popped a
+   shade lighter than its panel (see .league-table-slot), so this goes
+   one step further with color-mix rather than reusing --bg-card verbatim,
+   or it'd read as flush with the card instead of nested inside it. */
+/* The organizer's own editable Skill Level chart for a non-APA system
+   (see btn-league-handicap-chart-open / leagueMatchTargetForMember) -
+   same look as .league-standings-table, just its own class since it
+   lives in a different overlay entirely. */
+.league-handicap-chart-table {
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+  width: 100%;
+  margin-bottom: 14px;
+}
+
+.league-handicap-chart-table th,
+.league-handicap-chart-table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  font-size: 1.05rem;
+}
+
+.league-handicap-chart-table th {
+  color: var(--text-dim);
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.league-handicap-chart-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.league-handicap-chart-value-input {
+  width: 100%;
+  min-width: 0;
+}
+
+.league-table-slot-queue-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: color-mix(in srgb, var(--bg-card) 80%, var(--border));
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
 .league-queue-list {
   list-style: decimal;
   margin: 0;
@@ -7103,19 +7889,26 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
    depending on the league's teamRotationMode. */
 .league-team-slots-row {
   flex-wrap: wrap;
-  gap: 10px 16px;
+  gap: 14px 20px;
+  margin: 4px 0;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
 }
 
 .league-team-slots-row label {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   font-size: 0.9rem;
   color: var(--text-dim);
   text-transform: uppercase;
   letter-spacing: 0.03em;
   flex: 1;
-  min-width: 110px;
+  min-width: 170px;
+}
+
+.league-team-slots-row select {
+  width: 100%;
 }
 
 .league-team-vs-label {
@@ -7127,9 +7920,12 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
 .league-team-line {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 8px;
-  background: var(--bg-card);
+  gap: 8px;
+  padding: 14px;
+  /* Same nested-a-shade-further reasoning as .league-table-slot-queue-box
+     - this sits inside a table card that's --bg-card itself now, so a
+     bare --bg-card here would no longer read as its own boxed unit. */
+  background: color-mix(in srgb, var(--bg-card) 80%, var(--border));
   border: 1px solid var(--border);
   border-radius: 10px;
 }
@@ -7145,7 +7941,7 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   flex-direction: column;
   gap: 4px;
   padding: 8px;
-  background: var(--bg-card);
+  background: color-mix(in srgb, var(--bg-card) 80%, var(--border));
   border: 1px solid var(--border);
   border-radius: 10px;
   max-height: 180px;
@@ -7170,13 +7966,17 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   font-weight: 700;
 }
 
+/* At least 2 team cards fit side by side on a computer screen, more if
+   there's room - same auto-fill grid pattern as the Tables Overview
+   grid, at a narrower minimum since a team card holds less than a
+   table slot does. */
 .league-teams-list {
   list-style: none;
   margin: 10px 0 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 14px;
 }
 
 /* Setup Wizard: "Who's Playing Tonight" checklist and the Teams &
@@ -7229,32 +8029,83 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
 
 .league-captain-row select {
   margin-left: 10px;
+  flex: 0 1 200px;
 }
 
-/* League Setup Wizard - roomier card (step 4's Team A/B pickers need the
-   width) and a readable font floor throughout; scoped to this overlay
-   only so the main Game Setup Wizard keeps its own sizing. */
+/* Team name input and the per-team "add a player" input default to
+   the app-wide flex:1/min-width:140px rule, which stretches them the
+   full width of the card - way more room than a name or a short roster
+   list needs. */
+#league-new-team-name {
+  flex: 0 1 240px;
+}
+
+.league-team-add-player-select {
+  flex: 0 1 220px;
+}
+
+/* Same flex:1/min-width:140px default as every text input - the table
+   queue's "add a player" field sits right next to its own Add button,
+   so it gets the same fixed-width treatment. */
+.league-queue-add-input {
+  flex: 0 1 220px;
+}
+
+.league-add-member-input {
+  flex: 0 1 260px;
+}
+
+/* Hand-built autocomplete (see buildLeagueNameAutocomplete) - the
+   suggestion list is positioned relative to this wrapper so it drops
+   below the input in normal flow, never over it (the native <input
+   list>/<datalist> popup can cover the field itself on iPad and other
+   WebKit-based browsers, which is exactly what this replaces). The
+   wrapper itself carries whichever flex-sizing class the input used to
+   (.league-queue-add-input / .league-team-add-player-select above). */
+.name-autocomplete {
+  position: relative;
+  min-width: 0;
+}
+
+.name-autocomplete input {
+  width: 100%;
+}
+
+.name-autocomplete-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 500;
+  margin: 4px 0 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  max-height: 220px;
+  overflow-y: auto;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+}
+
+.name-autocomplete-list li {
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+.name-autocomplete-list li:hover {
+  background: color-mix(in srgb, var(--accent) 18%, var(--bg-card));
+}
+
+/* League Setup Wizard - same look as the main Game Setup Wizard
+   (mascot, header, footer, type sizing) everywhere except its own
+   card width: step 4's Team A/B pickers genuinely need more room than
+   the main wizard's 520px card gives them, so that alone stays
+   overridden here. */
 #league-wizard-overlay .wizard-card {
   max-width: 720px;
-}
-
-#league-wizard-overlay .wizard-step-explain {
-  font-size: 1rem;
-}
-
-#league-wizard-overlay .row label {
-  font-size: 0.95rem;
-}
-
-#league-wizard-overlay .checkbox-row,
-#league-wizard-overlay select,
-#league-wizard-overlay input {
-  font-size: 1rem;
-}
-
-#league-wizard-overlay .wizard-summary-row .label,
-#league-wizard-overlay .wizard-summary-row .value {
-  font-size: 1rem;
 }
 
 .league-wizard-assign-team-row {
@@ -7278,7 +8129,25 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   border-radius: var(--radius);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+  /* Grid item default min-width is "auto" (its content's own width) -
+     see the identical note on .league-table-slot - this lets the card
+     shrink to its grid column instead of forcing the whole row wider. */
+  min-width: 0;
+}
+
+/* Team name and captain are this team's identity - one bordered block
+   spanning the card's own width (the card's padding is what keeps it
+   off the card's outer edge, same margin every other row in the card
+   respects). */
+.league-team-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
 }
 
 .league-team-row-header {
@@ -7289,21 +8158,31 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   font-weight: 700;
 }
 
+/* A bit bigger than the row's own remove button - the name is what an
+   organizer scans this identity block for. */
+.league-team-name {
+  font-size: 1.15rem;
+}
+
 .league-team-members {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
 
+/* Roster names are what an organizer scans this card for - sized well
+   past the page's 14px floor so they actually stand out from the chip's
+   own remove button and the smaller controls around it. */
 .league-team-member-chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 3px 8px;
+  gap: 8px;
+  padding: 6px 12px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--accent) 14%, var(--bg-panel));
   border: 1px solid var(--border);
-  font-size: 0.82rem;
+  font-size: 1.05rem;
+  font-weight: 600;
 }
 
 .league-team-member-chip button {
@@ -7312,12 +8191,53 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   color: inherit;
   cursor: pointer;
   padding: 0;
-  font-size: 0.8rem;
+  font-size: 0.95rem;
   opacity: 0.7;
 }
 
 .league-team-member-chip button:hover {
   opacity: 1;
+}
+
+/* League's own Focus Mode - same "declutter, don't just hide everyone
+   but one" spirit as the main scoreboard's #app.focus-mode, but scoped
+   here since the League page (#view-league-page) is a separate view
+   from #app, not a descendant of it. Hides the picker/setup, Members,
+   Standings, Teams roster editor, and Tables config rows; keeps the
+   header (so Back and the toggle itself stay reachable), the Tables
+   Overview grid, and the live boards - several tables can be running
+   at once, so this stays about legibility, not narrowing to one.
+   Only the live boards themselves get the bigger read-from-across-
+   the-room treatment below - the Tables Overview cards are a compact
+   management UI (idle-table pickers, queues, Start Match), not
+   something meant to be read at a distance, so they stay their normal
+   size even while this is on. */
+#view-league-page.league-focus-mode #league-setup-panel,
+#view-league-page.league-focus-mode #league-organizer-only,
+#view-league-page.league-focus-mode #league-standings-section,
+#view-league-page.league-focus-mode #league-teams-section,
+#view-league-page.league-focus-mode #league-tables-config,
+#view-league-page.league-focus-mode .league-mode-toggle {
+  display: none;
+}
+
+/* League's live boards reuse the main scoreboard's own .player-panel/
+   .stat-value/.btn-ball classes (see buildLeagueSidePanel) - scaled up
+   here the same way #app.focus-mode scales the main scoreboard, just
+   with a fixed bump rather than that system's container-query sizing,
+   since League's board stack (one-to-several boards, not a fixed grid)
+   doesn't have the same fully-known layout to size off of. */
+#view-league-page.league-focus-mode .player-name {
+  font-size: 1.3rem;
+}
+
+#view-league-page.league-focus-mode .stat-value {
+  font-size: 3rem;
+}
+
+#view-league-page.league-focus-mode .btn-ball {
+  min-height: 64px;
+  font-size: 1.4rem;
 }
 
 /* ---------------------------------------------------------------------
