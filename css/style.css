@@ -956,26 +956,35 @@ body {
 }
 
 /* The currently keypad-selected player (see keypadSelectedPlayerId) -
-   the one about to receive the next +/-/undo keypress - gets a visibly
-   bigger card (box, fonts, and controls all together, since they're all
-   inside it) in Focus Mode, per request. zoom rather than
-   transform:scale, since zoom's footprint counts in normal layout flow
-   - the grid/flex container around it reflows to make room instead of
-   letting it overlap a neighbor, which is what keeps this "grows if
-   there's space, less if there isn't" with no JS layout math needed.
-   (grid-column:span was tried first so a selected card could claim a
-   second column outright, but it fed back into the cqw-based font
-   sizing above in a circular way - the bigger font made the column
-   demand more space, which warped every other column's width too - so
-   plain zoom on the whole card, letting normal grid/flex reflow handle
-   the rest, is both simpler and the one that's actually stable.) */
-#app.focus-mode .player-panel.is-keypad-selected,
-#app.focus-mode .member-card.is-keypad-selected {
-  zoom: 1.3;
+   the one about to receive the next +/-/undo keypress - reads bigger
+   in Focus Mode, per request. Used to do this with zoom:1.3 on the
+   whole card; dropped it (see the git history for that rule) once
+   testing with 4 players on screen showed it was never actually safe:
+   CSS Grid's default stretch sizing allocates every item in a row the
+   SAME track width regardless of one item's zoomed intrinsic size, so
+   the card's own box stayed exactly the same size as its neighbors
+   while zoom still PAINTED its content 1.3x bigger inside that
+   unchanged box - the name/score/buttons just overflowed past the
+   card's own edges and bled into the next one. Bumping the cqw/cqh-
+   based font-size clamps directly instead (same unit basis the un-
+   selected cards already use, just a bigger multiplier/ceiling) scales
+   relative to that same, real, un-enlarged box - there's no longer
+   anything to overflow, by construction, no matter how many players
+   are sharing the row or how long a name/how wide a score gets. */
+#app.focus-mode .player-panel.is-keypad-selected .player-name {
+  font-size: clamp(2.2rem, min(18cqw, 18cqh), 6rem);
 }
 
-#app.focus-mode .member-card.is-keypad-selected {
-  zoom: 1.3;
+#app.focus-mode .player-panel.is-keypad-selected .stat-value {
+  font-size: clamp(3.6rem, min(48cqw, 54cqh), 16rem);
+}
+
+#app.focus-mode .member-card.is-keypad-selected .member-name {
+  font-size: clamp(1.6rem, 11cqw, 3.6rem);
+}
+
+#app.focus-mode .member-card.is-keypad-selected .stat-value.small {
+  font-size: clamp(2.2rem, 17cqw, 6.5rem);
 }
 
 .no-stats-row-inline {
