@@ -1162,5 +1162,14 @@
   "wizard.summaryRotationOnOne": "{{label}} (cada partida)",
   "wizard.summaryTournamentElimination": "Torneo de eliminación",
   "wizard.tempCounterLabel": "⏱️ Solo un contador temporal — no se guardan estadísticas ni datos",
-  "wizard.title": "Asistente de configuración de partida"
+  "wizard.title": "Asistente de configuración de partida",
+  "keypad.speechToggleOn": "🔊 Anunciar teclado",
+  "keypad.speechToggleOff": "🔊 Anunciando… (toca para detener)",
+  "keypad.speechHelpAria": "¿Qué hace anunciar teclado?",
+  "keypad.speechHelpText": "🔊 Cuando está activado, la app anuncia en voz alta cada vez que usas el teclado (teclas 1-9, Intro, +/-) para elegir un jugador o cambiar su puntuación — útil para jugar sin mirar la pantalla.\n\nPulsar un número (o Intro) para elegir un jugador: «[Nombre] juega».\n\nPulsar + o - para puntuar: «[Nombre], un punto» o «[Nombre], menos un punto» (y el número correcto para una entrada escrita en 15 Ball Rotation).\n\nEsto solo anuncia lo que hace el teclado — tocar la tarjeta de un jugador o sus botones +/- directamente, o usar los comandos de voz, se mantiene en silencio.",
+  "keypad.speakPlaying": "Juega {{name}}",
+  "keypad.speakAddOne": "{{name}}, un punto",
+  "keypad.speakAddMany": "{{name}}, {{count}} puntos",
+  "keypad.speakRemoveOne": "{{name}}, menos un punto",
+  "keypad.speakRemoveMany": "{{name}}, menos {{count}} puntos"
 }

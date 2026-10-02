@@ -1162,5 +1162,14 @@
   "wizard.summaryRotationOnOne": "{{label}} (kada {{count}} laro)",
   "wizard.summaryTournamentElimination": "Tournament Elimination",
   "wizard.tempCounterLabel": "⏱️ Pansamantalang counter lang — walang na-save na stats o datos",
-  "wizard.title": "Game Setup Wizard"
+  "wizard.title": "Game Setup Wizard",
+  "keypad.speechToggleOn": "🔊 Sabihin ang Keypad",
+  "keypad.speechToggleOff": "🔊 Sinasabi… (i-tap para itigil)",
+  "keypad.speechHelpAria": "Ano ang ginagawa ng sabihin ang keypad?",
+  "keypad.speechHelpText": "🔊 Kapag naka-on ito, sasabihin nang malakas ng app sa tuwing gagamitin mo ang keypad (mga numerong 1-9, Enter, +/-) para pumili ng player o baguhin ang score nila — kapaki-pakinabang para makalaro nang hindi kailangang tumingin sa screen.\n\nPagpindot ng numero (o Enter) para pumili ng player: \"[Pangalan] Naglalaro\".\n\nPagpindot ng + o - para mag-score: \"[Pangalan], isang puntos\" o \"[Pangalan], minus isang puntos\" (at ang tamang bilang para sa isang type-in na entry sa 15 Ball Rotation).\n\nSasabihin lang ito para sa keypad — ang pag-tap sa card ng player o sa mga +/- button nito nang direkta, o ang paggamit ng Voice Commands, ay mananatiling tahimik.",
+  "keypad.speakPlaying": "Si {{name}} ang naglalaro",
+  "keypad.speakAddOne": "{{name}}, isang puntos",
+  "keypad.speakAddMany": "{{name}}, {{count}} na puntos",
+  "keypad.speakRemoveOne": "{{name}}, minus isang puntos",
+  "keypad.speakRemoveMany": "{{name}}, minus {{count}} na puntos"
 }
