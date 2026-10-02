@@ -1171,6 +1171,7 @@
   "keypad.speakPlayingScore": "{{name}} joue, {{count}} points",
   "keypad.speakPlayingScoreLeader": "{{name}} joue, {{count}} points, en tête",
   "keypad.speakNowLeader": "{{name}}, prend la tête",
+  "keypad.speakOnHill": "{{name}} est sur la colline",
   "players.dragToReorder": "Glisser pour réordonner {{name}}",
   "keypad.voiceLabel": "Voix",
   "keypad.voiceSampleText": "Bonjour, voici la voix que vous avez choisie.",
