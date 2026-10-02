@@ -2426,8 +2426,8 @@ input[type="number"] {
 
 .btn-ball {
   flex: 1;
-  min-height: 64px;
-  font-size: 1.6rem;
+  min-height: 46px;
+  font-size: 1.4rem;
   font-weight: 800;
   border-radius: 12px;
 }
@@ -2445,14 +2445,15 @@ input[type="number"] {
 
 /* Wraps the score (.stat-block) together with its +/- buttons so they
    can be reordered by CSS without any JS-side layout logic: normal
-   mode keeps the original look (score on top, full-width; buttons in
-   their own row below, side by side) via order:-1 pulling .stat-block
-   above the buttons and wrapping it onto its own row. Focus Mode
-   instead lays this out as a single non-wrapping row with the buttons
-   flanking the score (see the #app.focus-mode override below) - saves
-   the vertical space the buttons' own row used to take, which the
-   fixed-height card there can't grow to accommodate (see the
-   grid-auto-rows comment above #app.focus-mode .scoreboard). */
+   mode puts the buttons in their own row ABOVE the score (between the
+   player name/badges and the number itself) via .stat-block's
+   order:1 pushing it after the (order:0) buttons and wrapping it onto
+   its own full-width row below them. Focus Mode instead lays this out
+   as a single non-wrapping row with the buttons flanking the score
+   (see the #app.focus-mode override below) - saves the vertical space
+   the buttons' own row used to take, which the fixed-height card there
+   can't grow to accommodate (see the grid-auto-rows comment above
+   #app.focus-mode .scoreboard). */
 .player-score-row {
   display: flex;
   flex-wrap: wrap;
@@ -2461,7 +2462,7 @@ input[type="number"] {
 }
 
 .player-score-row .stat-block {
-  order: -1;
+  order: 1;
   flex: 1 1 100%;
 }
 
