@@ -855,7 +855,7 @@ body {
    would measure a meaningless/zero block size instead of falling back
    to the old cqw-only behavior those places still rely on. */
 #app.focus-mode .player-panel .stat-value {
-  font-size: clamp(3rem, min(40cqw, 45cqh), 14rem);
+  font-size: clamp(8rem, min(40cqw, 45cqh), 14rem);
 }
 
 #app.focus-mode .stat-value.small {
@@ -2888,13 +2888,14 @@ input[type="number"] {
 /* The team's own running total (sumTeamBalls, in buildTeamPanel) is a
    plain .stat-value sitting directly in .team-panel, not inside
    .player-panel - so unlike the individual score above, it never got
-   any Focus Mode size boost at all. 3x the base 3rem (9rem) per
-   explicit request, scaled by the panel's own width via the
+   any Focus Mode size boost at all. Same 8rem floor as the individual
+   score per explicit request, scaled by the panel's own width via the
    container-type above rather than applied as a flat value, so it
-   still shrinks back down on a narrow single-column phone view
-   instead of overflowing. */
+   still shrinks back down toward that floor on a narrow single-column
+   phone view instead of overflowing - same 14rem ceiling too, for the
+   same genuine room to grow bigger on a wide panel. */
 #app.focus-mode .team-panel .stat-value {
-  font-size: clamp(3rem, 24cqw, 9rem);
+  font-size: clamp(8rem, 36cqw, 14rem);
 }
 
 .team-name {
