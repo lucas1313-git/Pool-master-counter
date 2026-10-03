@@ -764,11 +764,11 @@
   // Recomputes which number (1-9) each currently-playing player's card
   // shows, and refreshes every card's highlight state. Individual mode's
   // grid can wrap into any number of columns depending on viewport width,
-  // so numbering follows actual rendered position, boustrophedon-style -
-  // row 1 left to right, row 2 right to left, row 3 left to right, and
-  // so on - so the reading direction always continues smoothly into the
-  // next row instead of jumping back across the screen. Team mode
-  // interleaves instead (A1, B1, A2, B2, ...) per explicit request, so
+  // so numbering follows actual rendered position - plain row-major per
+  // explicit request (every row left to right, top row to bottom row),
+  // not the boustrophedon/snake order this used to alternate into on
+  // every other row. Team mode interleaves instead (A1, B1, A2, B2,
+  // ...) per explicit request, so
   // Enter's "next player" (see advanceToNextKeypadPlayer) alternates
   // team to team every press rather than working through all of one
   // team first - a team with more members than the other just gets its
@@ -812,9 +812,9 @@
         return a.top - b.top;
       });
       ordered = [];
-      rows.forEach(function (row, i) {
+      rows.forEach(function (row) {
         row.items.sort(function (a, b) {
-          return i % 2 === 0 ? a.left - b.left : b.left - a.left;
+          return a.left - b.left;
         });
         row.items.forEach(function (item) {
           ordered.push(item.el);
