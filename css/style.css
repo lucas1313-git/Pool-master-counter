@@ -855,7 +855,7 @@ body {
    would measure a meaningless/zero block size instead of falling back
    to the old cqw-only behavior those places still rely on. */
 #app.focus-mode .player-panel .stat-value {
-  font-size: clamp(8rem, min(40cqw, 45cqh), 14rem);
+  font-size: clamp(5rem, min(40cqw, 45cqh), 14rem);
 }
 
 #app.focus-mode .stat-value.small {
@@ -1045,7 +1045,7 @@ body {
 }
 
 #app.focus-mode .player-panel.is-keypad-selected .stat-value {
-  font-size: clamp(8rem, min(48cqw, 54cqh), 16rem);
+  font-size: clamp(5rem, min(48cqw, 54cqh), 16rem);
 }
 
 #app.focus-mode .member-card.is-keypad-selected .member-name {
@@ -1053,7 +1053,7 @@ body {
 }
 
 #app.focus-mode .member-card.is-keypad-selected .stat-value.small {
-  font-size: clamp(2.2rem, 17cqw, 6.5rem);
+  font-size: clamp(2.2rem, 17cqw, 6rem);
 }
 
 .no-stats-row-inline {
@@ -2888,13 +2888,23 @@ input[type="number"] {
 /* The team's own running total (sumTeamBalls, in buildTeamPanel) is a
    plain .stat-value sitting directly in .team-panel, not inside
    .player-panel - so unlike the individual score above, it never got
-   any Focus Mode size boost at all. Same 8rem floor as the individual
-   score per explicit request, scaled by the panel's own width via the
-   container-type above rather than applied as a flat value, so it
-   still shrinks back down toward that floor on a narrow single-column
-   phone view instead of overflowing - same 14rem ceiling too, for the
-   same genuine room to grow bigger on a wide panel. */
-#app.focus-mode .team-panel .stat-value {
+   any Focus Mode size boost at all. 8rem floor per explicit request,
+   scaled by the panel's own width via the container-type above rather
+   than applied as a flat value, so it still shrinks back down toward
+   that floor on a narrow single-column phone view instead of
+   overflowing - 14rem ceiling too, for genuine room to grow bigger on
+   a wide panel.
+   Child combinators (> .stat-block > .stat-value), not a bare
+   descendant selector, deliberately - a loose .team-panel .stat-value
+   also matches each team MEMBER's own .stat-value.small several levels
+   deeper in (.team-panel > .team-members > .member-card > .stat-value.
+   small, which carries the same base .stat-value class too) - equal
+   specificity to that element's own #app.focus-mode .stat-value.small
+   rule above, and this one sits later in the file, so without scoping
+   it to the team score's actual direct DOM path it was winning there
+   by source order alone and forcing every member's own number up to
+   8rem+ as well. */
+#app.focus-mode .team-panel > .stat-block > .stat-value {
   font-size: clamp(8rem, 36cqw, 14rem);
 }
 
