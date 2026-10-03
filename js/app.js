@@ -3950,6 +3950,150 @@
     renderAll();
   }
 
+  // ---------------------------------------------------------------------
+  // Scoreboard card drag-to-reorder - same pointer-events technique as
+  // the Roster list above (see wireRosterDragHandle), but 2D instead of
+  // one vertical axis: .scoreboard is a responsive CSS grid (any number
+  // of columns depending on viewport width), not a single column, so a
+  // dragged card can need to swap with a neighbor to its side as well
+  // as above/below. elementFromPoint (with the dragged card's own
+  // pointer-events turned off for the duration, so it can't shadow
+  // whatever's actually underneath it) finds whichever other card the
+  // pointer is currently over; crossing into it swaps it into that
+  // card's slot via insertBefore, recomputed against each card's own
+  // untransformed natural position (scoreCardNaturalRect) exactly like
+  // the roster drag, so a mid-drag DOM move never produces a jump.
+  // `container` scopes which cards count as swap targets at all - the
+  // whole scoreboard in Individual/Quick Counter mode, but just one
+  // team's own .team-members list in Teams mode, per explicit request
+  // ("we only can switch the order within the team") - a drag that
+  // strays outside its own container's bounds simply finds no valid
+  // swap target there and does nothing until it's back inside.
+  // ---------------------------------------------------------------------
+
+  var scoreCardDrag = null;
+
+  function scoreCardNaturalRect(card) {
+    var prevTransform = card.style.transform;
+    card.style.transform = "";
+    var rect = card.getBoundingClientRect();
+    card.style.transform = prevTransform;
+    return rect;
+  }
+
+  function scoreCardsIn(container) {
+    return Array.prototype.slice.call(container.querySelectorAll("[data-keypad-player-id]"));
+  }
+
+  function scoreCardDragMove(e) {
+    if (!scoreCardDrag || scoreCardDrag.pointerId !== e.pointerId) return;
+    e.preventDefault();
+    var drag = scoreCardDrag;
+    var natural = scoreCardNaturalRect(drag.card);
+    var targetLeft = e.clientX - drag.grabOffsetX;
+    var targetTop = e.clientY - drag.grabOffsetY;
+    drag.card.style.transform = "translate(" + (targetLeft - natural.left) + "px, " + (targetTop - natural.top) + "px) scale(1.03)";
+
+    var overEl = document.elementFromPoint(e.clientX, e.clientY);
+    var overCard = overEl ? overEl.closest("[data-keypad-player-id]") : null;
+    if (overCard && overCard !== drag.card && drag.container.contains(overCard)) {
+      var cards = scoreCardsIn(drag.container);
+      var dragIdx = cards.indexOf(drag.card);
+      var overIdx = cards.indexOf(overCard);
+      if (dragIdx === -1 || overIdx === -1) return;
+      if (overIdx < dragIdx) drag.container.insertBefore(drag.card, overCard);
+      else drag.container.insertBefore(drag.card, overCard.nextSibling);
+      var renatured = scoreCardNaturalRect(drag.card);
+      drag.card.style.transform = "translate(" + (targetLeft - renatured.left) + "px, " + (targetTop - renatured.top) + "px) scale(1.03)";
+    }
+  }
+
+  function scoreCardDragEnd(e) {
+    if (!scoreCardDrag || scoreCardDrag.pointerId !== e.pointerId) return;
+    document.removeEventListener("pointermove", scoreCardDragMove);
+    document.removeEventListener("pointerup", scoreCardDragEnd);
+    document.removeEventListener("pointercancel", scoreCardDragEnd);
+    var card = scoreCardDrag.card;
+    var container = scoreCardDrag.container;
+    card.classList.remove("is-dragging");
+    card.style.transform = "";
+    card.style.pointerEvents = "";
+    scoreCardDrag = null;
+    commitScoreCardOrderFromDom(container);
+  }
+
+  function wireScoreCardDragHandle(handle, card, container) {
+    handle.addEventListener("pointerdown", function (e) {
+      if (e.button !== 0 && e.pointerType === "mouse") return;
+      e.preventDefault();
+      var rect = card.getBoundingClientRect();
+      scoreCardDrag = {
+        pointerId: e.pointerId,
+        card: card,
+        container: container,
+        grabOffsetX: e.clientX - rect.left,
+        grabOffsetY: e.clientY - rect.top
+      };
+      card.classList.add("is-dragging");
+      // So elementFromPoint (see scoreCardDragMove) sees whatever's
+      // actually underneath it instead of always finding the dragged
+      // card itself sitting right under the pointer.
+      card.style.pointerEvents = "none";
+      document.addEventListener("pointermove", scoreCardDragMove);
+      document.addEventListener("pointerup", scoreCardDragEnd);
+      document.addEventListener("pointercancel", scoreCardDragEnd);
+    });
+  }
+
+  // Reads one container's post-drag DOM order back into state.players -
+  // same idea as commitRosterOrderFromDom, but only reassigning the
+  // SLOTS those particular cards' players already occupied (walked in
+  // original array order): any player not shown in this container right
+  // now - benched, or on the other team, for a Teams-mode drag scoped to
+  // just one team's .team-members list - keeps its exact original
+  // position untouched. This is also what actually updates the keypad
+  // (1-9) numbering after a drag - refreshKeypadNumbering (called by
+  // renderAll below) just recomputes fresh off this same array/order,
+  // nothing else to keep in sync separately.
+  function commitScoreCardOrderFromDom(container) {
+    var orderedIds = scoreCardsIn(container).map(function (el) {
+      return el.dataset.keypadPlayerId;
+    });
+    var byId = {};
+    state.players.forEach(function (p) {
+      byId[p.id] = p;
+    });
+    var queue = orderedIds.map(function (id) {
+      return byId[id];
+    }).filter(Boolean);
+    if (queue.length !== orderedIds.length) return;
+    var idSet = {};
+    orderedIds.forEach(function (id) {
+      idSet[id] = true;
+    });
+    var qi = 0;
+    state.players = state.players.map(function (p) {
+      return idSet[p.id] ? queue[qi++] : p;
+    });
+    saveState();
+    renderAll();
+  }
+
+  // Appends the small grab handle (see markAsKeypadTarget, right next
+  // to the card's own number badge) and wires it up - shared by every
+  // card type (buildIndividualPanel/buildMemberCard/
+  // buildQuickCounterPanel) that can show one. `container` is whichever
+  // element bounds this particular drag (see the block comment above).
+  function appendScoreCardDragHandle(card, player, container) {
+    var handle = document.createElement("button");
+    handle.type = "button";
+    handle.className = "score-card-drag-handle";
+    handle.setAttribute("aria-label", T("players.dragToReorder", { name: player.name }));
+    handle.textContent = "⠿";
+    card.appendChild(handle);
+    wireScoreCardDragHandle(handle, card, container);
+  }
+
   function buildFlagSpan() {
     var flag = document.createElement("span");
     flag.className = "flag";
@@ -4016,7 +4160,19 @@
       var minusAllowNegative = quickCounterMode || state.currentGame.unit !== "rack";
       minusBtn.disabled = disabled || (!minusAllowNegative && (player.balls || 0) <= 0) || networkBlocked;
       minusBtn.addEventListener("click", function () {
+        // See the + handler's own comment below - same direct-tap
+        // selection + point-delta speech, mirrored for minus (there's
+        // no "won the game" equivalent to special-case on this side).
+        var wasSelected = keypadSelectedPlayerId === player.id;
+        var wasLeading = keypadPlayerIsLeading(player);
+        var willLead = keypadScoreWouldLead(player, (player.balls || 0) - 1);
+        if (!quickCounterMode) keypadSelectedPlayerId = player.id;
         requestAdjustScore(player.id, -1);
+        if (!quickCounterMode) {
+          var key = wasSelected ? "keypad.speakPointDeltaSelected" : "keypad.speakPointDeltaUnselected";
+          speakKeypadText(T(key, { name: shortDisplayNameForPlayer(player), direction: T("keypad.directionMinus"), count: 1 }));
+          speakKeypadLeadChange(player, wasLeading, willLead);
+        }
       });
     }
 
@@ -4027,21 +4183,32 @@
     plusBtn.setAttribute("aria-label", "Add point for " + player.name);
     plusBtn.disabled = disabled || networkBlocked;
     plusBtn.addEventListener("click", function () {
-      // Tapping a card's own + button is a direct tap, not a keypad
-      // action - normally silent (see speakKeypadText's gating
-      // elsewhere), except for this one case: scoring someone who
-      // ISN'T the currently keypad-selected player with a direct tap
-      // means whoever's watching the keypad/selected player's card
-      // might not be looking at this one, so there'd otherwise be no
-      // audible sign anything happened to them at all. "Won the game"
-      // for rack-unit games (8-Ball, 9-Ball, etc.) - a single + there
-      // already IS the win, there's no separate "added a point" to
-      // report - "added a point" everywhere else.
-      var shouldAnnounceDirectTap = !quickCounterMode && keypadSelectedPlayerId !== player.id;
+      // A direct tap on a card's own +/- (not the keypad) now also
+      // selects that player - same as tapping their name/score - and
+      // always speaks the change, per explicit request. Only the
+      // WORDING depends on whether they were already selected: just
+      // "plus/minus [count] point" if so (no need to repeat a name
+      // you're already looking at/hearing about), or "[Name] plus/
+      // minus [count] point" if this tap is what just switched the
+      // selection to them - captured BEFORE the switch below, same as
+      // wasLeading/willLead. "Won the game" for rack-unit games
+      // (8-Ball, 9-Ball, etc.) keeps its own older rule unchanged - only
+      // announced on that same switch, staying silent (not "plus 1
+      // point" - that would be a strange thing to say about a win)
+      // when the winner was already the one selected.
+      var wasSelected = keypadSelectedPlayerId === player.id;
+      var wasLeading = keypadPlayerIsLeading(player);
+      var willLead = keypadScoreWouldLead(player, (player.balls || 0) + 1);
+      if (!quickCounterMode) keypadSelectedPlayerId = player.id;
       requestAdjustScore(player.id, 1);
-      if (shouldAnnounceDirectTap) {
-        var key = state.currentGame.unit === "rack" ? "keypad.speakWonGameDirectTap" : "keypad.speakAddedPointDirectTap";
-        speakKeypadText(T(key, { name: shortDisplayNameForPlayer(player) }));
+      if (!quickCounterMode) {
+        if (state.currentGame.unit === "rack") {
+          if (!wasSelected) speakKeypadText(T("keypad.speakWonGameDirectTap", { name: shortDisplayNameForPlayer(player) }));
+        } else {
+          var key = wasSelected ? "keypad.speakPointDeltaSelected" : "keypad.speakPointDeltaUnselected";
+          speakKeypadText(T(key, { name: shortDisplayNameForPlayer(player), direction: T("keypad.directionPlus"), count: 1 }));
+          speakKeypadLeadChange(player, wasLeading, willLead);
+        }
       }
     });
 
@@ -4125,6 +4292,7 @@
 
     panel.appendChild(buildBallControls(player, false));
     markAsKeypadTarget(panel, player);
+    if (activePlayers().length > 1) appendScoreCardDragHandle(panel, player, scoreboard);
 
     return panel;
   }
@@ -4416,11 +4584,12 @@
     if (state.fairRaceEnabled) panel.appendChild(buildFairRaceNote(effectiveRaceTarget(player.id)));
 
     markAsKeypadTarget(panel, player);
+    if (activePlayers().length > 1) appendScoreCardDragHandle(panel, player, scoreboard);
 
     return panel;
   }
 
-  function buildMemberCard(player, disabled, undoOnMinus) {
+  function buildMemberCard(player, disabled, undoOnMinus, dragContainer, teamMemberCount) {
     var card = document.createElement("div");
     card.className = "member-card";
 
@@ -4455,6 +4624,7 @@
     var runBadge = buildRunStreakBadge(player);
     if (runBadge) card.appendChild(runBadge);
     markAsKeypadTarget(card, player);
+    if (dragContainer && teamMemberCount > 1) appendScoreCardDragHandle(card, player, dragContainer);
 
     return card;
   }
@@ -4557,7 +4727,10 @@
     var memberWrap = document.createElement("div");
     memberWrap.className = "team-members";
     members.forEach(function (p) {
-      memberWrap.appendChild(buildMemberCard(p, opponentEmpty, isSingleRackGame));
+      // Scoped to this team's own memberWrap, not the whole scoreboard -
+      // per explicit request, reordering can only ever swap a member
+      // with a teammate, never across into the other team's cards.
+      memberWrap.appendChild(buildMemberCard(p, opponentEmpty, isSingleRackGame, memberWrap, members.length));
     });
     panel.appendChild(memberWrap);
 
