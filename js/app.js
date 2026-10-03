@@ -23964,17 +23964,26 @@
     "tessa"
   ];
   var KEYPAD_SPEECH_SIRI_FALLBACK_ID = "siri";
-  var keypadSpeechVoicePreset = KEYPAD_SPEECH_SIRI_FALLBACK_ID;
+  // "daniel" (the default UK English voice - present on every device,
+  // same as Samantha/Karen/etc. per its own comment above) is the
+  // default choice when nothing's been explicitly picked yet, per
+  // explicit request - populateKeypadVoiceSelect's own existing
+  // correction logic already falls through to whatever actually IS
+  // installed (and ultimately the Siri fallback) on the rare device
+  // where even that isn't detected, so this never needs its own
+  // special-case handling beyond just being the starting value here.
+  var KEYPAD_SPEECH_DEFAULT_VOICE_ID = "daniel";
+  var keypadSpeechVoicePreset = KEYPAD_SPEECH_DEFAULT_VOICE_ID;
   try {
     var savedPreset = localStorage.getItem(KEYPAD_SPEECH_VOICE_KEY);
     // "british"/"golf"/"cheerful"/"britishMale"/"britishFemale" are
     // leftovers from the theme-preset system this replaced - none of
     // them are valid ids any more, so they just fall through to the
-    // siri fallback like any other now-invalid saved value, same as
+    // default voice like any other now-invalid saved value, same as
     // never having a saved choice at all.
     if (savedPreset) keypadSpeechVoicePreset = savedPreset;
   } catch (e) {
-    keypadSpeechVoicePreset = KEYPAD_SPEECH_SIRI_FALLBACK_ID;
+    keypadSpeechVoicePreset = KEYPAD_SPEECH_DEFAULT_VOICE_ID;
   }
 
   // getVoices() can legitimately return [] on the very first call (some
