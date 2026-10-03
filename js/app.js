@@ -767,15 +767,31 @@
   // so numbering follows actual rendered position, boustrophedon-style -
   // row 1 left to right, row 2 right to left, row 3 left to right, and
   // so on - so the reading direction always continues smoothly into the
-  // next row instead of jumping back across the screen. Team mode's
-  // two-column-of-vertically-stacked-members layout doesn't break into
-  // "rows" the same way, so it just keeps DOM order there (team A top to
-  // bottom, then team B top to bottom).
+  // next row instead of jumping back across the screen. Team mode
+  // interleaves instead (A1, B1, A2, B2, ...) per explicit request, so
+  // Enter's "next player" (see advanceToNextKeypadPlayer) alternates
+  // team to team every press rather than working through all of one
+  // team first - a team with more members than the other just gets its
+  // extras appended at the end, once the shorter team runs out to pair
+  // against.
   function refreshKeypadNumbering() {
     var cards = Array.prototype.slice.call(scoreboard.querySelectorAll("[data-keypad-player-id]"));
     var ordered;
-    if (state.currentGame.mode === "teams" || cards.length === 0) {
+    if (cards.length === 0) {
       ordered = cards;
+    } else if (state.currentGame.mode === "teams") {
+      var byTeam = { A: [], B: [] };
+      cards.forEach(function (el) {
+        var p = getPlayer(el.dataset.keypadPlayerId);
+        var teamId = p && p.teamId;
+        if (byTeam[teamId]) byTeam[teamId].push(el);
+      });
+      ordered = [];
+      var maxLen = Math.max(byTeam.A.length, byTeam.B.length);
+      for (var ti = 0; ti < maxLen; ti++) {
+        if (byTeam.A[ti]) ordered.push(byTeam.A[ti]);
+        if (byTeam.B[ti]) ordered.push(byTeam.B[ti]);
+      }
     } else {
       var withRects = cards.map(function (el) {
         var r = el.getBoundingClientRect();
@@ -4166,12 +4182,15 @@
         var wasSelected = keypadSelectedPlayerId === player.id;
         var wasLeading = keypadPlayerIsLeading(player);
         var willLead = keypadScoreWouldLead(player, (player.balls || 0) - 1);
+        var wasOnHill = keypadPlayerIsOnHill(player);
+        var willBeOnHill = keypadScoreWouldBeOnHill(player, (player.balls || 0) - 1);
         if (!quickCounterMode) keypadSelectedPlayerId = player.id;
         requestAdjustScore(player.id, -1);
         if (!quickCounterMode) {
           var key = wasSelected ? "keypad.speakPointDeltaSelected" : "keypad.speakPointDeltaUnselected";
           speakKeypadText(T(key, { name: shortDisplayNameForPlayer(player), direction: T("keypad.directionMinus"), count: 1 }));
           speakKeypadLeadChange(player, wasLeading, willLead);
+          speakKeypadOnHillChange(player, wasOnHill, willBeOnHill);
         }
       });
     }
@@ -4199,6 +4218,8 @@
       var wasSelected = keypadSelectedPlayerId === player.id;
       var wasLeading = keypadPlayerIsLeading(player);
       var willLead = keypadScoreWouldLead(player, (player.balls || 0) + 1);
+      var wasOnHill = keypadPlayerIsOnHill(player);
+      var willBeOnHill = keypadScoreWouldBeOnHill(player, (player.balls || 0) + 1);
       if (!quickCounterMode) keypadSelectedPlayerId = player.id;
       requestAdjustScore(player.id, 1);
       if (!quickCounterMode) {
@@ -4208,6 +4229,7 @@
           var key = wasSelected ? "keypad.speakPointDeltaSelected" : "keypad.speakPointDeltaUnselected";
           speakKeypadText(T(key, { name: shortDisplayNameForPlayer(player), direction: T("keypad.directionPlus"), count: 1 }));
           speakKeypadLeadChange(player, wasLeading, willLead);
+          speakKeypadOnHillChange(player, wasOnHill, willBeOnHill);
         }
       }
     });
@@ -24265,9 +24287,19 @@
   // not re-announce on every later point while still one away, and a
   // delta that jumps straight past target-1 to the win itself never
   // fires this at all, which is correct - they already won).
+  // The hill itself is already team-aware (see keypadScoreWouldBeOnHill
+  // above - a Teams member is on the hill once their TEAM is one point
+  // out), but per explicit request the announcement itself should name
+  // the TEAM there too ("Team A is on the hill"), not just whichever
+  // member happened to be the one who scored - "Team A" is a lot more
+  // useful to a room of people than one teammate's own name.
   function speakKeypadOnHillChange(player, wasOnHill, willBeOnHill) {
     if (wasOnHill || !willBeOnHill) return;
-    speakKeypadText(T("keypad.speakOnHill", { name: shortDisplayNameForPlayer(player) }));
+    var name =
+      !quickCounterMode && state.currentGame.mode === "teams" && player.teamId
+        ? T(player.teamId === "A" ? "gameSetup.teamA" : "gameSetup.teamB")
+        : shortDisplayNameForPlayer(player);
+    speakKeypadText(T("keypad.speakOnHill", { name: name }));
   }
 
   function setKeypadSpeechEnabled(on) {
