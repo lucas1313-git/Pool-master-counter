@@ -2290,6 +2290,16 @@ input[type="number"] {
     font-size: 1.25rem;
     border-radius: 8px;
   }
+
+  /* Narrower cards (142px min) can't spare 54px before the handle and
+     still fit it before the right edge - tucked in closer and shrunk a
+     touch instead. */
+  .score-card-drag-handle {
+    left: 46px;
+    width: 30px;
+    height: 30px;
+    font-size: 1rem;
+  }
 }
 
 .player-panel {
@@ -2401,6 +2411,66 @@ input[type="number"] {
    showing. */
 .player-panel:has(.keypad-number-badge.is-entry-buffer) {
   padding-top: 16px;
+}
+
+/* ---------- Scoreboard card drag-to-reorder (see wireScoreCardDragHandle) ---------- */
+
+/* Lifted off the grid (z-index + shadow) so it's visually clear which
+   card is moving - the drag itself (both the 2D follow and this scale)
+   is a JS-applied transform, not this rule's job, since an inline
+   style.transform set during the drag would otherwise just override a
+   transform declared here. */
+.player-panel.is-dragging,
+.member-card.is-dragging {
+  z-index: 5;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+  transition: none;
+}
+
+/* Sits right beside the keypad-number-badge (left:8/width:42) at the
+   card's own top-left corner - both fit within the 52px top padding
+   .player-panel/.member-card reserve once either one needs room (see
+   the :has() rule just below). touch-action:none so a touch drag
+   starting here moves the card instead of scrolling the page - same
+   convention as .roster-drag-handle. */
+.score-card-drag-handle {
+  position: absolute;
+  top: 8px;
+  left: 54px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  line-height: 1;
+  color: var(--text-dim);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: grab;
+  touch-action: none;
+  z-index: 2;
+}
+
+.score-card-drag-handle:hover {
+  background: rgba(0, 0, 0, 0.5);
+  color: var(--text);
+}
+
+.is-dragging .score-card-drag-handle {
+  cursor: grabbing;
+}
+
+/* Same reasoning as the .keypad-number-badge:not(:empty) rule above,
+   generalized to also reserve the space whenever a drag handle is
+   showing - a card with 2+ playing teammates/opponents always gets a
+   handle (see appendScoreCardDragHandle's callers), even on the rare
+   render where the badge itself is still empty (more active players
+   than there are keypad digits to number them). */
+.player-panel:has(.score-card-drag-handle),
+.member-card:has(.score-card-drag-handle) {
+  padding-top: 52px;
 }
 
 .member-card:has(.keypad-number-badge.is-entry-buffer) {
