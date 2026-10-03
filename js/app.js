@@ -23721,8 +23721,8 @@
   // all, resolving to the best plain system default instead (see
   // resolveKeypadVoice).
   //
-  // Two different sets, since neither one alone turned out to be
-  // reliably available: ava/allison/evan/nathan/samantha/zoe/serena
+  // Three different sets, since none alone turned out to be reliably
+  // available everywhere: ava/allison/evan/nathan/samantha/zoe/serena
   // are the classic "Enhanced"/"Premium" VoiceOver-quality voices
   // (checked in System Settings > Accessibility > Spoken Content) -
   // Safari exposes whichever of these are downloaded there, but
@@ -23730,9 +23730,21 @@
   // surface most of them at all even once downloaded, leaving only
   // whichever happen to overlap with the set below. eddy/flo/grandma/
   // grandpa/sandy/shelley are the newer "persona" voices Apple ships
-  // built in (no download needed) - confirmed present in both Chrome
-  // and Safari, and already measured for pitch - a reliable fallback
-  // set regardless of which browser or macOS version this runs on.
+  // built in on macOS (no download needed) - confirmed present in
+  // both Chrome and Safari there, and already measured for pitch.
+  //
+  // Neither set is actually exposed to web content on iOS/iPadOS at
+  // all, confirmed live on a real iPad (via Safari's remote Web
+  // Inspector) even after downloading Reed/Rocko in Settings and
+  // restarting the device - iOS only hands third-party web pages the
+  // single default voice per language (e.g. Samantha for English US)
+  // plus the old novelty voices (Fred, Zarvox, etc.), reserving the
+  // higher-quality named voices for Apple's own accessibility features.
+  // daniel/moira/karen/rishi/tessa are that same "one default per
+  // locale" tier for the other main English regions (UK, Ireland,
+  // Australia, India, South Africa) - confirmed present in that same
+  // iPad voice dump, so they're the one way to offer real variety on
+  // iOS without relying on anything download-gated.
   var KEYPAD_SPEECH_VOICE_KEY = "poolMasterCounter.keypadSpeechVoicePreset.v1";
   var KEYPAD_SPEECH_VOICE_NAMES = [
     "ava",
@@ -23749,7 +23761,12 @@
     "grandma",
     "grandpa",
     "sandy",
-    "shelley"
+    "shelley",
+    "daniel",
+    "moira",
+    "karen",
+    "rishi",
+    "tessa"
   ];
   var KEYPAD_SPEECH_SIRI_FALLBACK_ID = "siri";
   var keypadSpeechVoicePreset = KEYPAD_SPEECH_SIRI_FALLBACK_ID;
