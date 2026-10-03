@@ -864,9 +864,25 @@ body {
 
 /* Names need to read from across the room same as the score itself -
    same container-query scaling as .stat-value above, just a smaller
-   share of the card's box since the score is still the main event. */
+   share of the card's box since the score is still the main event.
+   Bumped up a full step on explicit request - the Q-Score badge/
+   pronostic/stats-link-arrow hidden just below are what used to share
+   this row, so the extra size has the room it needs now that they're
+   gone. */
 #app.focus-mode .player-panel .player-name {
-  font-size: clamp(1.8rem, min(15cqw, 15cqh), 5rem);
+  font-size: clamp(2.4rem, min(22cqw, 22cqh), 7rem);
+}
+
+/* Per explicit request: Focus Mode is read from across the room, where
+   the Q-Score rating badge, its win/loss pronostic, and the small
+   stats-page link arrow are too fine-grained to matter - hidden here so
+   the name above has the full row to itself, in both Individual
+   (.player-name) and Teams (.member-name) mode. */
+#app.focus-mode .player-name .rating-badge,
+#app.focus-mode .player-name .rating-pronostic,
+#app.focus-mode .player-name .player-link-icon,
+#app.focus-mode .member-name .player-link-icon {
+  display: none;
 }
 
 #app.focus-mode .member-name {
@@ -899,6 +915,23 @@ body {
 #app.focus-mode .player-panel:has(.keypad-number-badge:not(:empty)),
 #app.focus-mode .member-card:has(.keypad-number-badge:not(:empty)) {
   padding-top: 76px;
+}
+
+/* The badge above sizes off width (cqw) alone, which is fine for
+   .member-card (inline-size containment only, so cqh wouldn't measure
+   anything meaningful there anyway - see the big comment on
+   .player-panel's own container-type further up) but not for
+   .player-panel: with 4 players on screen (a 2x2 grid) the row height
+   can end up the tighter dimension, especially once a selected card's
+   badge scales up another 10% (.is-keypad-selected) - sizing off
+   width alone then let it grow tall enough to spill past the card's
+   own bottom edge. min(cqw, cqh), same idea as .stat-value's own
+   sizing above, shrinks the badge back down whenever height is what's
+   actually tight instead of just width. */
+#app.focus-mode .player-panel .keypad-number-badge {
+  width: clamp(42px, min(12cqw, 12cqh), 64px);
+  height: clamp(42px, min(12cqw, 12cqh), 64px);
+  font-size: clamp(24px, min(8cqw, 8cqh), 40px);
 }
 
 /* The normal-mode .score-card-drag-handle (further down this file)
@@ -2841,6 +2874,27 @@ input[type="number"] {
   flex-direction: column;
   align-items: center;
   gap: 10px;
+}
+
+/* Scoped to Focus Mode only - .team-panel doesn't need a cqw sizing
+   context otherwise, and containment can affect how a box's own
+   intrinsic size is measured, so it's safest left off everywhere this
+   isn't actually used. Lets the team score below size itself off the
+   panel's own width instead of the viewport. */
+#app.focus-mode .team-panel {
+  container-type: inline-size;
+}
+
+/* The team's own running total (sumTeamBalls, in buildTeamPanel) is a
+   plain .stat-value sitting directly in .team-panel, not inside
+   .player-panel - so unlike the individual score above, it never got
+   any Focus Mode size boost at all. 3x the base 3rem (9rem) per
+   explicit request, scaled by the panel's own width via the
+   container-type above rather than applied as a flat value, so it
+   still shrinks back down on a narrow single-column phone view
+   instead of overflowing. */
+#app.focus-mode .team-panel .stat-value {
+  font-size: clamp(3rem, 24cqw, 9rem);
 }
 
 .team-name {
