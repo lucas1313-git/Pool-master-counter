@@ -901,6 +901,18 @@ body {
   padding-top: 76px;
 }
 
+/* The normal-mode .score-card-drag-handle (further down this file)
+   assumes the plain 8px/42px badge and would overlap this larger,
+   differently-positioned Focus Mode one (clamp(42px, 12cqw, 64px) at
+   top/left:10px, same container-query sizing as the badge itself) -
+   tracks its right edge exactly instead of a fixed offset, so it never
+   overlaps regardless of how wide the badge scales on a given card. */
+#app.focus-mode .score-card-drag-handle {
+  top: 10px;
+  left: calc(10px + clamp(42px, 12cqw, 64px) + 6px);
+  height: clamp(42px, 12cqw, 64px);
+}
+
 /* The plain circular badge override above (width/height fixed at
    42-64px) has higher specificity than the rectangle's own
    .keypad-number-badge.is-entry-buffer rule further down this file (ID
@@ -2290,16 +2302,6 @@ input[type="number"] {
     font-size: 1.25rem;
     border-radius: 8px;
   }
-
-  /* Narrower cards (142px min) still clear the number (left:8/
-     width:42, right edge 50px) the same way, just with a tighter gap
-     and shorter height to leave more of the card's own padding here. */
-  .score-card-drag-handle {
-    left: 48px;
-    right: 6px;
-    height: 30px;
-    font-size: 1rem;
-  }
 }
 
 .player-panel {
@@ -2474,6 +2476,22 @@ input[type="number"] {
 .player-panel:has(.score-card-drag-handle),
 .member-card:has(.score-card-drag-handle) {
   padding-top: 52px;
+}
+
+/* Placed here (after the plain rule above, not inside the earlier
+   480px block with every other narrow-width override) deliberately -
+   same selector/specificity as that plain rule means source order
+   alone decides the winner, and a copy sitting earlier in the file
+   would always lose to it regardless of viewport width. 54px (not
+   less) is load-bearing here too: anything under 50px overlaps the
+   badge's own right edge (left:8/width:42). */
+@media (max-width: 480px) {
+  .score-card-drag-handle {
+    left: 54px;
+    right: 6px;
+    height: 30px;
+    font-size: 1rem;
+  }
 }
 
 .member-card:has(.keypad-number-badge.is-entry-buffer) {
