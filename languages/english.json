@@ -1183,5 +1183,6 @@
   "quickGame.player1Placeholder": "Player 1",
   "quickGame.player2Placeholder": "Who are you playing against?",
   "quickGame.startButton": "▶️ Start",
+  "quickGame.startWithoutNames": "👤 Play Without Names",
   "quickGame.sameNameHint": "Enter two different names."
 }
