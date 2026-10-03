@@ -1183,5 +1183,6 @@
   "quickGame.player1Placeholder": "Player 1",
   "quickGame.player2Placeholder": "Kanino ka laban?",
   "quickGame.startButton": "▶️ Simulan",
+  "quickGame.startWithoutNames": "👤 Maglaro Nang Walang Pangalan",
   "quickGame.sameNameHint": "Maglagay ng dalawang magkaibang pangalan."
 }
