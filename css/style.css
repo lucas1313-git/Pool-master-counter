@@ -1045,7 +1045,7 @@ body {
 }
 
 #app.focus-mode .player-panel.is-keypad-selected .stat-value {
-  font-size: clamp(3.6rem, min(48cqw, 54cqh), 16rem);
+  font-size: clamp(8rem, min(48cqw, 54cqh), 16rem);
 }
 
 #app.focus-mode .member-card.is-keypad-selected .member-name {
