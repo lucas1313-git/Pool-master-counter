@@ -2291,12 +2291,12 @@ input[type="number"] {
     border-radius: 8px;
   }
 
-  /* Narrower cards (142px min) can't spare 54px before the handle and
-     still fit it before the right edge - tucked in closer and shrunk a
-     touch instead. */
+  /* Narrower cards (142px min) still clear the number (left:8/
+     width:42, right edge 50px) the same way, just with a tighter gap
+     and shorter height to leave more of the card's own padding here. */
   .score-card-drag-handle {
-    left: 46px;
-    width: 30px;
+    left: 48px;
+    right: 6px;
     height: 30px;
     font-size: 1rem;
   }
@@ -2427,18 +2427,21 @@ input[type="number"] {
   transition: none;
 }
 
-/* Sits right beside the keypad-number-badge (left:8/width:42) at the
-   card's own top-left corner - both fit within the 52px top padding
-   .player-panel/.member-card reserve once either one needs room (see
-   the :has() rule just below). touch-action:none so a touch drag
-   starting here moves the card instead of scrolling the page - same
-   convention as .roster-drag-handle. */
+/* Spans the rest of the card's top row - from just clear of the
+   keypad-number-badge (left:8/width:42, so right edge sits at 50px)
+   over to the card's own right edge - rather than a small square, so
+   it never overlaps the number and is as big a target as the layout
+   allows. Both fit within the 52px top padding .player-panel/
+   .member-card reserve once either one needs room (see the :has()
+   rule just below). touch-action:none so a touch drag starting here
+   moves the card instead of scrolling the page - same convention as
+   .roster-drag-handle. */
 .score-card-drag-handle {
   position: absolute;
   top: 8px;
-  left: 54px;
-  width: 36px;
-  height: 36px;
+  left: 56px;
+  right: 8px;
+  height: 42px;
   display: flex;
   align-items: center;
   justify-content: center;
