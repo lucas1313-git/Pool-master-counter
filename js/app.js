@@ -24250,16 +24250,25 @@
   }
 
   // "On the hill" (one point from winning the current rack) only means
-  // anything for a running points total with a real target to fall
-  // short of - Straight Pool/15 Ball Rotation/Custom/Snooker (unit
-  // "points"), never the 8-Ball/9-Ball family's "target 1 rack" (every
+  // anything for a running total with a real, reachable target to fall
+  // short of - Straight Pool/15 Ball Rotation/Custom (unit "points")
+  // and One Pocket (unit "balls", same idea - 1 ball short of its
+  // target), never the 8-Ball/9-Ball family's "target 1 rack" (every
   // rack there IS the win, there's no point short of it to be "on the
-  // hill" at) - per explicit request ("at points games"). Returns the
-  // target to compare against, or 0 when it doesn't apply (Quick
-  // Counter has no target either).
+  // hill" at) - per explicit request ("at points games"). Snooker is
+  // also "points" but deliberately excluded here even though it'd pass
+  // that check - its target (999, see DEFAULT_GAME_TYPES) is an
+  // intentionally unreachable placeholder, since a real frame ends by
+  // the trailing player running out of ability to catch up, not by
+  // hitting a fixed score; this app doesn't track remaining points on
+  // the table, so there's no real number to call someone "on the hill"
+  // at under Snooker's actual rules. Returns the target to compare
+  // against, or 0 when it doesn't apply (Quick Counter has no target
+  // either).
   function keypadOnHillTarget() {
     if (quickCounterMode) return 0;
-    if (state.currentGame.unit !== "points") return 0;
+    if (state.currentGame.unit !== "points" && state.currentGame.unit !== "balls") return 0;
+    if (state.currentGame.gameType === "snooker") return 0;
     var target = state.currentGame.target;
     return target > 1 ? target : 0;
   }
