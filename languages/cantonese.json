@@ -1183,5 +1183,6 @@
   "quickGame.player1Placeholder": "玩家 1",
   "quickGame.player2Placeholder": "你同邊個打？",
   "quickGame.startButton": "▶️ 開始",
+  "quickGame.startWithoutNames": "👤 唔使改名直接玩",
   "quickGame.sameNameHint": "請輸入兩個唔同嘅名。"
 }

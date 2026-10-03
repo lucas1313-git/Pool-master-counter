@@ -2157,6 +2157,7 @@
   var quickGamePlayer2Input = document.getElementById("quick-game-player2");
   var quickGameRequirement = document.getElementById("quick-game-requirement");
   var btnQuickGameStart = document.getElementById("btn-quick-game-start");
+  var btnQuickGameNoNames = document.getElementById("btn-quick-game-no-names");
   var btnQuickGameCancel = document.getElementById("btn-quick-game-cancel");
 
   var btnResetGame = document.getElementById("btn-reset-game");
@@ -18983,7 +18984,35 @@
     var p1 = resolveOrCreateQuickGamePlayer(quickGamePlayer1Input.value);
     var p2 = resolveOrCreateQuickGamePlayer(quickGamePlayer2Input.value);
     if (!p1 || !p2 || p1.id === p2.id) return;
+    // A real, named match - make sure it actually records stats even if
+    // a previous no-names quick game (see startQuickGameWithoutNames)
+    // left noStatsMode on; applyQuickGameSetup below only clears that
+    // itself when leaving Quick Counter mode, not generally.
+    noStatsMode = false;
+    noStatsCheckbox.checked = false;
+    finishStartingQuickGame(p1, p2);
+  }
 
+  // Per explicit request: play without typing any name at all - two
+  // fresh "Player N"s (same auto-naming as startJustACounter, so they
+  // never collide with a real roster name), with stats recording
+  // turned off for the session (same noStatsMode/checkbox the "Do not
+  // record..." toggle in Game Setup uses) since there's no real
+  // identity here worth tracking history for. Still a genuine Quick
+  // Game otherwise - real game type/win-crediting/Focus Mode, just
+  // skipping the naming step and the stats it would otherwise save.
+  function startQuickGameWithoutNames() {
+    var p1 = addPlayer("Player " + nextAvailablePlayerNumber());
+    var p2 = addPlayer("Player " + nextAvailablePlayerNumber());
+    noStatsMode = true;
+    noStatsCheckbox.checked = true;
+    finishStartingQuickGame(p1, p2);
+  }
+
+  // Shared tail for both Quick Game entry points above - everything
+  // past "which two players" is identical regardless of how they were
+  // obtained.
+  function finishStartingQuickGame(p1, p2) {
     // Exactly these two, individual, nobody else seated - a fresh 1v1,
     // not an addition to whatever roster happened to be playing before.
     state.players.forEach(function (p) {
@@ -29422,6 +29451,7 @@
   btnQuickGame.addEventListener("click", openQuickGameModal);
   btnQuickGameCancel.addEventListener("click", closeQuickGameModal);
   btnQuickGameStart.addEventListener("click", startQuickGame);
+  btnQuickGameNoNames.addEventListener("click", startQuickGameWithoutNames);
   quickGameOverlay.addEventListener("click", function (e) {
     if (e.target === quickGameOverlay) closeQuickGameModal();
   });
