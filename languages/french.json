@@ -1183,5 +1183,6 @@
   "quickGame.player1Placeholder": "Joueur 1",
   "quickGame.player2Placeholder": "Contre qui jouez-vous ?",
   "quickGame.startButton": "▶️ Démarrer",
+  "quickGame.startWithoutNames": "👤 Jouer sans noms",
   "quickGame.sameNameHint": "Entrez deux noms différents."
 }
