@@ -297,6 +297,7 @@
   "gameSetup.currentGameSubheading": "Current Game",
   "gameSetup.exportSession": "Share Last Session",
   "gameSetup.fairRaceEnable": "⚖️ Use Q-Score to balance the race",
+  "gameSetup.rotatingTeamsEnable": "🔁 Rotating Teams (Q-Score uses each team's average rating; wins tracked per player)",
   "gameSetup.fairRaceShortExplain": "Shortens the underdog's target based on the rating gap, so the match is closer to a coin flip.",
   "gameSetup.game": "Game",
   "gameSetup.gamesRotationHeading": "Games Rotation",

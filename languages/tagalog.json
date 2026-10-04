@@ -297,6 +297,7 @@
   "gameSetup.currentGameSubheading": "Kasalukuyang Laro",
   "gameSetup.exportSession": "Ibahagi ang Huling Session",
   "gameSetup.fairRaceEnable": "⚖️ Gamitin ang Q-Score para i-balanse ang race",
+  "gameSetup.rotatingTeamsEnable": "🔁 Umiikot na mga Koponan (ang Q-Score ay gagamit ng average rating ng bawat koponan; bilang ng panalo kada player)",
   "gameSetup.fairRaceShortExplain": "Pinaiikli ang target ng mas mahinang manlalaro base sa pagkakaiba ng rating, para mas malapit sa 50-50 ang laban.",
   "gameSetup.game": "Laro",
   "gameSetup.gamesRotationHeading": "Rotation ng mga Laro",

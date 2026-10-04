@@ -297,6 +297,7 @@
   "gameSetup.currentGameSubheading": "Partida Actual",
   "gameSetup.exportSession": "Compartir la última sesión",
   "gameSetup.fairRaceEnable": "⚖️ Usar el Q-Score para equilibrar la carrera",
+  "gameSetup.rotatingTeamsEnable": "🔁 Equipos rotativos (el Q-Score usa el promedio de cada equipo; victorias registradas por jugador)",
   "gameSetup.fairRaceShortExplain": "Acorta la meta del más débil según la diferencia de clasificación, para que el partido esté más cerca de un empate.",
   "gameSetup.game": "Partida",
   "gameSetup.gamesRotationHeading": "Rotación de Partidas",

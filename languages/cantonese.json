@@ -297,6 +297,7 @@
   "gameSetup.currentGameSubheading": "目前對局",
   "gameSetup.exportSession": "分享上次場次",
   "gameSetup.fairRaceEnable": "⚖️ 用 Q-Score 嚟平衡賽制",
+  "gameSetup.rotatingTeamsEnable": "🔁 輪流組隊（Q-Score 用兩隊平均分計算；每個球員分別計勝場）",
   "gameSetup.fairRaceShortExplain": "按評分差距縮短弱方嘅目標，等場波更接近五五波。",
   "gameSetup.game": "對局",
   "gameSetup.gamesRotationHeading": "對局輪換",
