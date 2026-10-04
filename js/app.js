@@ -4735,39 +4735,47 @@
       if (pronostic) panel.appendChild(buildRatingPronosticEl(pronostic));
     }
 
-    var wins = state.teamWins[teamId] || 0;
+    // The team-level score/session-win-count below is skipped entirely
+    // under Rotating Teams per explicit request - teamWins[teamId] is a
+    // running total for a persistent "Team A", which stops meaning much
+    // once whoever's actually on Team A changes game to game, and the
+    // current-game total is already visible as the sum of each member's
+    // own score on their own card just below.
+    if (!state.rotatingTeamsEnabled) {
+      var wins = state.teamWins[teamId] || 0;
 
-    // A single-rack game (the common case - standard 8-Ball etc.) has no
-    // meaningful "current rack progress" number to show (it's just 0 until
-    // the rack is won, then resets) - show the session win count big and
-    // prominent instead. Anything else (multiple racks to win one game, or
-    // a balls/points game) still shows the team's current-game total.
-    var isSingleRackGame = state.currentGame.unit === "rack" && state.currentGame.target === 1;
+      // A single-rack game (the common case - standard 8-Ball etc.) has no
+      // meaningful "current rack progress" number to show (it's just 0 until
+      // the rack is won, then resets) - show the session win count big and
+      // prominent instead. Anything else (multiple racks to win one game, or
+      // a balls/points game) still shows the team's current-game total.
+      var isSingleRackGame = state.currentGame.unit === "rack" && state.currentGame.target === 1;
 
-    if (!isSingleRackGame) {
-      panel.appendChild(buildStatMini(T("scoreboard.pairedSessionWin"), wins, wins >= effectiveRaceTarget(teamId)));
+      if (!isSingleRackGame) {
+        panel.appendChild(buildStatMini(T("scoreboard.pairedSessionWin"), wins, wins >= effectiveRaceTarget(teamId)));
+      }
+
+      var block = document.createElement("div");
+      block.className = "stat-block";
+      var value = document.createElement("div");
+      value.className = "stat-value";
+      if (isSingleRackGame) {
+        // Still needs a label here - without it this number reads as an
+        // ambiguous score when it's actually the session win count.
+        var label = document.createElement("div");
+        label.className = "stat-label";
+        label.textContent = T("scoreboard.pairedSessionWinScore");
+        block.appendChild(label);
+        value.textContent = wins;
+        if (wins >= effectiveRaceTarget(teamId)) value.appendChild(buildFlagSpan());
+      } else {
+        // No "[game] · target [n]" label here anymore - the "Now Playing"
+        // banner above the scoreboard already says both.
+        value.textContent = sumTeamBalls(teamId);
+      }
+      block.appendChild(value);
+      panel.appendChild(block);
     }
-
-    var block = document.createElement("div");
-    block.className = "stat-block";
-    var value = document.createElement("div");
-    value.className = "stat-value";
-    if (isSingleRackGame) {
-      // Still needs a label here - without it this number reads as an
-      // ambiguous score when it's actually the session win count.
-      var label = document.createElement("div");
-      label.className = "stat-label";
-      label.textContent = T("scoreboard.pairedSessionWinScore");
-      block.appendChild(label);
-      value.textContent = wins;
-      if (wins >= effectiveRaceTarget(teamId)) value.appendChild(buildFlagSpan());
-    } else {
-      // No "[game] · target [n]" label here anymore - the "Now Playing"
-      // banner above the scoreboard already says both.
-      value.textContent = sumTeamBalls(teamId);
-    }
-    block.appendChild(value);
-    panel.appendChild(block);
 
     if (state.fairRaceEnabled) panel.appendChild(buildFairRaceNote(effectiveRaceTarget(teamId)));
 
