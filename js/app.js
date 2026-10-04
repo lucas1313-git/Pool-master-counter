@@ -358,6 +358,7 @@
       raceToWinsTarget: 5,
       fairRaceEnabled: false,
       fairRaceTargets: null,
+      rotatingTeamsEnabled: false,
       currentGame: { gameType: "8ball", target: 1, unit: "rack", mode: "individual", startedAt: new Date().toISOString(), shotCounterEnabled: false, shotCounterBeepSec: 30, shotCounterHidden: false, queueEnabled: false, timedTournamentEnabled: false, timedTournamentMinutes: 60 },
       gameHistory: [],
       rotation: { enabled: false, order: [], every: 1 },
@@ -431,6 +432,7 @@
           if (typeof parsed.raceToWinsTarget !== "number") parsed.raceToWinsTarget = 5;
           if (typeof parsed.fairRaceEnabled !== "boolean") parsed.fairRaceEnabled = false;
           if (typeof parsed.fairRaceTargets !== "object") parsed.fairRaceTargets = null;
+          if (typeof parsed.rotatingTeamsEnabled !== "boolean") parsed.rotatingTeamsEnabled = false;
           if (!parsed.currentGame) parsed.currentGame = { gameType: "8ball", target: 1, mode: "individual" };
           if (!parsed.currentGame.startedAt) parsed.currentGame.startedAt = new Date().toISOString();
           if (typeof parsed.currentGame.unit !== "string" || !parsed.currentGame.unit) parsed.currentGame.unit = null;
@@ -661,6 +663,13 @@
     var individualMode = !quickCounterMode && state.currentGame.mode === "individual";
     queueModeRow.classList.toggle("hidden", !individualMode);
     queueModeCheckbox.checked = state.currentGame.queueEnabled;
+    // Teams-only (the opposite condition from the queue row above) -
+    // partners rotating game to game is what makes the team-average
+    // Q-Score and per-player session win tracking below meaningful;
+    // neither applies to Individual mode at all.
+    var teamsMode = !quickCounterMode && state.currentGame.mode === "teams";
+    rotatingTeamsRow.classList.toggle("hidden", !teamsMode);
+    rotatingTeamsCheckbox.checked = state.rotatingTeamsEnabled;
     var queueActive = individualMode && state.currentGame.queueEnabled;
     queueSwapStickyRow.classList.toggle("hidden", !queueActive);
     queueSwapStickyCheckbox.checked = loadQueueSwapSticky();
@@ -1788,6 +1797,8 @@
   var rosterList = document.getElementById("roster-list");
   var queueModeRow = document.getElementById("queue-mode-row");
   var queueModeCheckbox = document.getElementById("queue-mode-checkbox");
+  var rotatingTeamsRow = document.getElementById("rotating-teams-row");
+  var rotatingTeamsCheckbox = document.getElementById("rotating-teams-checkbox");
   var queueSection = document.getElementById("queue-section");
   var queueList = document.getElementById("queue-list");
   var rosterLoadSelect = document.getElementById("roster-load-select");
@@ -4625,10 +4636,16 @@
     name.appendChild(buildPlayerLinkIcon(player.name));
     card.appendChild(name);
 
-    // Not the team's win count (that's the team panel's own badge) - this
-    // tracks how many times THIS member specifically potted the winning
-    // ball for the team (see the mvp selection in creditWin).
-    var mvpWins = state.teamMvpWins[player.id] || 0;
+    // Not the team's win count (that's the team panel's own badge).
+    // Normally how many times THIS member specifically potted the
+    // winning ball for the team (see the mvp selection in creditWin) -
+    // under Rotating Teams, shows this player's own running session
+    // win total instead (state.playerWins, the exact same counter/badge
+    // Individual mode's own card already uses) since per-player wins,
+    // not who happened to pot the last ball, is the whole point once
+    // partners change game to game.
+    var showSessionWins = state.rotatingTeamsEnabled;
+    var mvpWins = showSessionWins ? state.playerWins[player.id] || 0 : state.teamMvpWins[player.id] || 0;
     card.appendChild(buildStatMini(T("scoreboard.tourneyWin"), mvpWins, mvpWins >= effectiveRaceTarget(player.teamId), "stat-mini-tourney"));
 
     // Buttons sit above the score (between the name/badges and the
@@ -4707,9 +4724,16 @@
       warning.textContent = T("scoreboard.teamNeedsOpponent");
       panel.appendChild(warning);
     }
-    // No rating preview here - Team Mode games don't affect rating at
-    // all (see applyMultiWayRatingResult's comment), so a "+X/-Y"
-    // pronostic would just promise a change that never actually happens.
+    // Team Mode otherwise skips rating entirely (see
+    // applyMultiWayRatingResult's comment) - Rotating Teams is the one
+    // explicit exception (see applyRotatingTeamsRatingResult), so this
+    // preview only shows up then, same team-average math that result
+    // actually applies when the game ends.
+    if (!quickCounterMode && state.rotatingTeamsEnabled && !opponentEmpty) {
+      var otherTeamId = teamId === "A" ? "B" : "A";
+      var pronostic = teamRatingPronostic(teamId, otherTeamId);
+      if (pronostic) panel.appendChild(buildRatingPronosticEl(pronostic));
+    }
 
     var wins = state.teamWins[teamId] || 0;
 
@@ -5837,6 +5861,11 @@
       } else {
         applyPairwiseRatingResult(winnerNames[0], opponentNames[0], ts);
       }
+      saveRatingsToStorage(PLAYER_RATINGS);
+    } else if (!noStatsMode && isTeam && state.rotatingTeamsEnabled) {
+      // The one explicit exception to "Team Mode isn't rated" above -
+      // see applyRotatingTeamsRatingResult's own comment.
+      applyRotatingTeamsRatingResult(winnerNames, opponentNames, ts);
       saveRatingsToStorage(PLAYER_RATINGS);
     }
     state.gamesPlayedCount += 1;
@@ -14236,6 +14265,62 @@
       var expected = eloExpectedScore(entry.rating, strongestWinnerRating);
       bumpPlayerRating(n, -Math.round(ratingKFor(entry.gamesPlayed) * expected), ts);
     });
+  }
+
+  // Only ever called for a Team Mode win with Rotating Teams enabled
+  // (see creditWin's isTeam branch, gated on state.rotatingTeamsEnabled)
+  // - an explicit exception to Team Mode normally skipping rating
+  // entirely (see applyMultiWayRatingResult's own comment on why
+  // "averaging teammates together" was rejected there). Here that's
+  // exactly the point, per explicit request: each side's effective
+  // rating is the average of its own two members, and the expected-
+  // score term (what counts as a fair result) comes from the gap
+  // between those two averages - so both teammates on a side get the
+  // same "how surprising was this result" input. What's NOT shared is
+  // how fast it moves either of them: each player's own games-played
+  // still picks their own K-factor, same as every other rating path,
+  // so a provisional teammate still moves faster than an established
+  // one even off the identical expected-score term.
+  function applyRotatingTeamsRatingResult(winnerNames, loserNames, ts) {
+    var winnerAvg = averageRating(winnerNames);
+    var loserAvg = averageRating(loserNames);
+    var expectedWinner = eloExpectedScore(winnerAvg, loserAvg);
+    winnerNames.forEach(function (n) {
+      var entry = ensureRatingEntry(n);
+      bumpPlayerRating(n, Math.round(ratingKFor(entry.gamesPlayed) * (1 - expectedWinner)), ts);
+    });
+    loserNames.forEach(function (n) {
+      var entry = ensureRatingEntry(n);
+      bumpPlayerRating(n, -Math.round(ratingKFor(entry.gamesPlayed) * expectedWinner), ts);
+    });
+  }
+
+  // Live "+X/-Y" preview of applyRotatingTeamsRatingResult above, same
+  // read-only relationship to it that ratingPronosticVsOpponent has to
+  // applyPairwiseRatingResult - shown on the team card (see
+  // buildTeamPanel) instead of the individual one. Uses each member's
+  // own K-factor averaged together for the preview's single number,
+  // since the two teammates can each have a different real K (one
+  // provisional, one established) - the actual applied update above
+  // still computes each of theirs exactly, this is just one
+  // representative number to show ahead of time.
+  function teamRatingPronostic(myTeamId, opponentTeamId) {
+    var myNames = teamMembersLive(myTeamId).map(function (p) {
+      return p.name;
+    });
+    var opponentNames = teamMembersLive(opponentTeamId).map(function (p) {
+      return p.name;
+    });
+    if (!myNames.length || !opponentNames.length) return null;
+    var myAvg = averageRating(myNames);
+    var opponentAvg = averageRating(opponentNames);
+    var avgK =
+      myNames.reduce(function (sum, n) {
+        var entry = getPlayerRatingEntry(n);
+        return sum + ratingKFor(entry ? entry.gamesPlayed : 0);
+      }, 0) / myNames.length;
+    var expected = eloExpectedScore(myAvg, opponentAvg);
+    return { win: Math.round(avgK * (1 - expected)), lose: -Math.round(avgK * expected) };
   }
 
   // Ratings only ever update live, at the moment a game is credited — a
@@ -28810,6 +28895,12 @@
       }
       saveQueue(queue);
     }
+    saveState();
+    renderAll();
+  });
+
+  rotatingTeamsCheckbox.addEventListener("change", function () {
+    state.rotatingTeamsEnabled = rotatingTeamsCheckbox.checked;
     saveState();
     renderAll();
   });

@@ -271,6 +271,10 @@
         <input type="checkbox" id="queue-swap-sticky-checkbox">
         <span data-i18n="players.queueSwapStickyLabel">📌 Keep the new-player notice on screen until dismissed (for busy rooms)</span>
       </label>
+      <label class="checkbox-row hidden" id="rotating-teams-row">
+        <input type="checkbox" id="rotating-teams-checkbox">
+        <span data-i18n="gameSetup.rotatingTeamsEnable">🔁 Rotating Teams (Q-Score uses each team's average rating; wins tracked per player)</span>
+      </label>
       <ul id="roster-list" class="roster-list"></ul>
       <div id="queue-section" class="hidden">
         <h3 data-i18n="players.queueHeading">Standby Queue</h3>
@@ -2232,6 +2236,6 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20261002s"></script>
+<script src="js/app.js?v=20261004a"></script>
 </body>
 </html>
