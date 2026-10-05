@@ -1937,6 +1937,7 @@
   var cameraWizardQr = document.getElementById("camera-wizard-qr");
   var cameraWizardHttpsMissing = document.getElementById("camera-wizard-https-missing");
   var cameraWizardNoRelay = document.getElementById("camera-wizard-no-relay");
+  var cameraWizardInstallPrompt = document.getElementById("camera-wizard-install-prompt");
   var cameraWizardInstallLink = document.getElementById("camera-wizard-install-link");
   var cameraWizardInstallUnsupported = document.getElementById("camera-wizard-install-unsupported");
   var cameraWizardInstallSecurityNote = document.getElementById("camera-wizard-install-security-note");
@@ -29108,6 +29109,12 @@
     cameraWizardLinkBlock.classList.toggle("hidden", state !== "ok");
     cameraWizardHttpsMissing.classList.toggle("hidden", state !== "https-missing");
     cameraWizardNoRelay.classList.toggle("hidden", state !== "no-relay");
+    // Both "https-missing" (relay's running but with no cert) and
+    // "no-relay" (no relay at all) share the same fix - download and run
+    // the desktop app, which always sets up HTTPS itself (see
+    // installer/standalone-entry.js's unconditional tlsCert.getOrCreateCert
+    // call) with zero certificate setup either way.
+    cameraWizardInstallPrompt.classList.toggle("hidden", state !== "https-missing" && state !== "no-relay");
   }
 
   // Mirrors renderInstallPrompt() (Group Session's own desktop-app
@@ -29153,6 +29160,7 @@
         var addr = info.addresses && info.addresses[0];
         if (!addr || !info.httpsPort) {
           showCameraWizardLinkState("https-missing");
+          renderCameraWizardInstallPrompt();
           return;
         }
         var url = "https://" + addr + ":" + info.httpsPort + "/camera.html";

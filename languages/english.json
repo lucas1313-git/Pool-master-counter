@@ -863,7 +863,7 @@
   "cameraWizard.step1Heading": "Set Up Camera Recognition",
   "cameraWizard.step1Explain": "A phone mounted over the table watches for players and tells this tablet who's up. It needs to run on a different phone or tablet from this one - open the link below in its browser, or scan the QR code with its camera.",
   "cameraWizard.qrHint": "Scan with the camera phone",
-  "cameraWizard.httpsMissing": "This device isn't serving HTTPS yet, so the camera page can't run on another phone. If you're using the desktop app, give it a moment and reopen this wizard. If you're running the server from a terminal, see server/README.md's HTTPS setup section.",
+  "cameraWizard.httpsMissing": "This device isn't serving HTTPS yet, so the camera page can't run on another phone. If you're already using the desktop app, give it a moment and reopen this wizard. Otherwise, download and run it below - it sets up HTTPS automatically, no certificates to configure. (Running from a terminal instead? See server/README.md's HTTPS setup section.)",
   "cameraWizard.step2Heading": "Enable It Here",
   "cameraWizard.step2Explain": "Once the camera phone is set up (it has its own guided setup), turn this on here so the tablet actually listens for it.",
   "cameraWizard.finish": "Finish ✓",

@@ -863,7 +863,7 @@
   "cameraWizard.step1Heading": "Configurer la reconnaissance par caméra",
   "cameraWizard.step1Explain": "Un téléphone installé au-dessus de la table surveille les joueurs et indique à cette tablette qui doit jouer. Il doit être utilisé sur un téléphone ou une tablette différent de celui-ci - ouvrez le lien ci-dessous dans son navigateur, ou scannez le code QR avec son appareil photo.",
   "cameraWizard.qrHint": "Scannez avec le téléphone caméra",
-  "cameraWizard.httpsMissing": "Cet appareil ne diffuse pas encore en HTTPS, donc la page caméra ne peut pas fonctionner sur un autre téléphone. Si vous utilisez l'application de bureau, patientez un instant puis rouvrez cet assistant. Si vous exécutez le serveur depuis un terminal, consultez la section configuration HTTPS de server/README.md.",
+  "cameraWizard.httpsMissing": "Cet appareil ne diffuse pas encore en HTTPS, donc la page caméra ne peut pas fonctionner sur un autre téléphone. Si vous utilisez déjà l'application de bureau, patientez un instant puis rouvrez cet assistant. Sinon, téléchargez-la et lancez-la ci-dessous - elle configure HTTPS automatiquement, aucun certificat à configurer. (Vous utilisez plutôt un terminal ? Consultez la section configuration HTTPS de server/README.md.)",
   "cameraWizard.step2Heading": "Activer ici",
   "cameraWizard.step2Explain": "Une fois le téléphone caméra configuré (il a son propre assistant guidé), activez-le ici pour que la tablette l'écoute réellement.",
   "cameraWizard.finish": "Terminer ✓",
