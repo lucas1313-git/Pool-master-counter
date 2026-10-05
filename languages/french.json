@@ -320,6 +320,7 @@
   "gameSetup.raceModeRaceTo": "🏁 Course aux Victoires",
   "gameSetup.raceModeSingle": "🎯 Partie Unique",
   "gameSetup.raceToMilestone": "Objectif de victoires",
+  "gameSetup.raceToPrompt": "Course à combien de parties ?",
   "gameSetup.resetGame": "Réinitialiser la partie en cours",
   "gameSetup.shareStandings": "Partager le classement",
   "gameSetup.shotCounterBeepEvery": "Bip toutes les",
