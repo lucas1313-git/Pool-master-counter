@@ -1267,13 +1267,20 @@ button:active {
 
 .btn-primary:hover { filter: brightness(1.08); }
 
+/* A flat `transparent` background here used to mean "whatever's behind
+   it" - on some themes/surfaces (a felt-gradient card, a bright panel)
+   that landed close enough to --text-dim/--border to make the whole
+   button nearly invisible. color-mix against --text-dim guarantees a
+   tint that's never the same color as the surface it sits on, in every
+   theme, without needing a dedicated token for each one. */
 .btn-ghost {
-  background: transparent;
+  background: color-mix(in srgb, var(--text-dim) 14%, transparent);
   color: var(--text-dim);
   border: 1px solid var(--border);
 }
 
 .btn-ghost:hover {
+  background: color-mix(in srgb, var(--text-dim) 22%, transparent);
   color: var(--text);
   border-color: var(--text-dim);
 }
@@ -4427,6 +4434,32 @@ input[type="number"] {
 
 .camera-wizard-path-btn {
   flex: 1 1 auto;
+}
+
+.camera-wizard-install-steps {
+  display: flex;
+  gap: 8px;
+  margin: 14px 0;
+}
+
+.camera-wizard-install-step {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+  padding: 12px 6px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+.camera-wizard-install-step-icon {
+  font-size: 1.8rem;
+  line-height: 1;
 }
 
 /* Near-fullscreen, deliberately its own card - NOT .wizard-card, which is
