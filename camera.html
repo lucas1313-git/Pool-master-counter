@@ -499,6 +499,15 @@
 
   var MODEL_URL = "camera/models/movenet-lightning/model.json";
   var WS_PATH = "/ws-camera";
+  // Set only when opened as an <iframe src="camera.html?embedded=1"> from
+  // index.html (the same-device mode) - see the "Relay connection" section
+  // below for how this swaps the transport from a WebSocket relay to
+  // window.parent postMessage + a local enrollment store, with zero
+  // changes to any of the detection/calibration/enrollment UI code, since
+  // all of it only ever touches send()/the enrollments variable, never the
+  // transport directly.
+  var isEmbedded = new URLSearchParams(location.search).get("embedded") === "1";
+  var LOCAL_ENROLLMENTS_KEY = "pmc-camera-local-enrollments";
   var RECONNECT_DELAY_MS = 3000;
   var DETECTION_INTERVAL_MS = 280; // ~3.5 fps, within the 3-5fps target
   var ENROLL_TARGET_SAMPLES = 8;
@@ -820,20 +829,116 @@
     if (document.visibilityState === "visible" && !wakeLock) requestWakeLock();
   });
 
-  // ---- Relay connection (role: camera) ----
+  // ---- Relay connection (role: camera) - or, when isEmbedded, a local
+  // transport talking to the parent window instead of a server. Every
+  // outbound message goes through send() and every inbound one through
+  // handleIncomingMessage() regardless of which transport is active, so
+  // none of the detection/calibration/enrollment UI code below needs to
+  // know or care which mode it's running in. ----
   var ws = null;
   var reconnectTimer = null;
-  var enrollments = {}; // normalized-name-key -> { displayName, descriptors: [[...numbers]] }
+  var enrollments = {}; // normalized-name-key -> { displayName, descriptors: [[...numbers]], sides: [...] }
+  var MAX_DESCRIPTORS_PER_PLAYER = 50;
 
   function wsUrl() {
     var proto = location.protocol === "https:" ? "wss:" : "ws:";
     return proto + "//" + location.host + WS_PATH;
   }
-  function wsSend(msg) {
+
+  // ---- Local enrollment store (embedded mode only) - a near-verbatim
+  // port of server/camera-relay.js's own enroll-save/enroll-add/enroll-get/
+  // enroll-delete logic (same normalizeNameKey, same addSide, same
+  // MAX_DESCRIPTORS_PER_PLAYER cap, same full-replace-resets-sides
+  // semantics), just backed by localStorage instead of a server-side JSON
+  // file + WebSocket round trip. ----
+  function normalizeNameKey(name) {
+    return (name || "").trim().toLowerCase();
+  }
+  function addSide(entry, side) {
+    if (typeof side !== "number" || side < 0 || side > 3) return;
+    entry.sides = entry.sides || [];
+    if (entry.sides.indexOf(side) === -1) entry.sides.push(side);
+  }
+  function loadLocalEnrollments() {
+    try {
+      return JSON.parse(localStorage.getItem(LOCAL_ENROLLMENTS_KEY)) || {};
+    } catch (e) {
+      return {};
+    }
+  }
+  function saveLocalEnrollments(data) {
+    try { localStorage.setItem(LOCAL_ENROLLMENTS_KEY, JSON.stringify(data)); } catch (e) {}
+  }
+  function handleLocalMessage(msg) {
+    var localEnrollments = loadLocalEnrollments();
+    if (msg.type === "enroll-save" && msg.player_name) {
+      var saveKey = normalizeNameKey(msg.player_name);
+      if (!saveKey) return;
+      var saveEntry = { displayName: String(msg.player_name).trim(), descriptors: (msg.descriptors || []).slice(-MAX_DESCRIPTORS_PER_PLAYER) };
+      addSide(saveEntry, msg.side);
+      localEnrollments[saveKey] = saveEntry;
+      saveLocalEnrollments(localEnrollments);
+      handleIncomingMessage({ type: "enrollments", data: localEnrollments });
+      return;
+    }
+    if (msg.type === "enroll-add" && msg.player_name && msg.descriptor) {
+      var addKey = normalizeNameKey(msg.player_name);
+      if (!addKey) return;
+      var entry = localEnrollments[addKey] || { displayName: String(msg.player_name).trim(), descriptors: [] };
+      entry.descriptors.push(msg.descriptor);
+      if (entry.descriptors.length > MAX_DESCRIPTORS_PER_PLAYER) {
+        entry.descriptors = entry.descriptors.slice(entry.descriptors.length - MAX_DESCRIPTORS_PER_PLAYER);
+      }
+      addSide(entry, msg.side);
+      localEnrollments[addKey] = entry;
+      saveLocalEnrollments(localEnrollments);
+      handleIncomingMessage({ type: "enrollments", data: localEnrollments });
+      return;
+    }
+    if (msg.type === "enroll-get") {
+      handleIncomingMessage({ type: "enrollments", data: localEnrollments });
+      return;
+    }
+    if (msg.type === "enroll-delete" && msg.player_name) {
+      delete localEnrollments[normalizeNameKey(msg.player_name)];
+      saveLocalEnrollments(localEnrollments);
+      handleIncomingMessage({ type: "enrollments", data: localEnrollments });
+      return;
+    }
+  }
+
+  function send(msg) {
+    if (isEmbedded) {
+      if (msg.type === "hello") return; // nothing to greet in this mode
+      if (msg.type === "enroll-save" || msg.type === "enroll-add" || msg.type === "enroll-get" || msg.type === "enroll-delete") {
+        handleLocalMessage(msg);
+        return;
+      }
+      // player_up, settings-request
+      try { window.parent.postMessage(msg, location.origin); } catch (e) {}
+      return;
+    }
     if (ws && ws.readyState === WebSocket.OPEN) {
       try { ws.send(JSON.stringify(msg)); } catch (e) {}
     }
   }
+
+  function handleIncomingMessage(msg) {
+    if (msg.type === "enrollments") {
+      enrollments = msg.data || {};
+      renderPlayerList();
+    } else if (msg.type === "settings" && !hasLocalSettingsOverride) {
+      if (typeof msg.matchThreshold === "number") settings.matchThreshold = msg.matchThreshold;
+      if (typeof msg.debounceSec === "number") settings.debounceSec = msg.debounceSec;
+      applySettingsToInputs();
+    } else if (msg.type === "turn_confirmed" && msg.player_name) {
+      handleTurnConfirmed(msg.player_name);
+    } else if (msg.type === "stop-camera") {
+      stopCurrentStream();
+      if (wakeLock) { try { wakeLock.release(); } catch (e) {} wakeLock = null; }
+    }
+  }
+
   function scheduleReconnect() {
     if (reconnectTimer) return;
     reconnectTimer = setTimeout(function () { reconnectTimer = null; connectRelay(); }, RECONNECT_DELAY_MS);
@@ -844,29 +949,30 @@
     try { ws = new WebSocket(wsUrl()); } catch (e) { ws = null; scheduleReconnect(); return; }
     ws.addEventListener("open", function () {
       setStatus(dotRelay, labelRelay, "ok", "Relay: connected");
-      wsSend({ type: "hello", role: "camera" });
-      wsSend({ type: "enroll-get" });
-      if (!hasLocalSettingsOverride) wsSend({ type: "settings-request" });
+      send({ type: "hello", role: "camera" });
+      send({ type: "enroll-get" });
+      if (!hasLocalSettingsOverride) send({ type: "settings-request" });
     });
     ws.addEventListener("message", function (event) {
       var msg;
       try { msg = JSON.parse(event.data); } catch (e) { return; }
-      if (msg.type === "enrollments") {
-        enrollments = msg.data || {};
-        renderPlayerList();
-      } else if (msg.type === "settings" && !hasLocalSettingsOverride) {
-        if (typeof msg.matchThreshold === "number") settings.matchThreshold = msg.matchThreshold;
-        if (typeof msg.debounceSec === "number") settings.debounceSec = msg.debounceSec;
-        applySettingsToInputs();
-      } else if (msg.type === "turn_confirmed" && msg.player_name) {
-        handleTurnConfirmed(msg.player_name);
-      }
+      handleIncomingMessage(msg);
     });
     ws.addEventListener("close", function () {
       ws = null;
       setStatus(dotRelay, labelRelay, "bad", "Relay: disconnected");
       scheduleReconnect();
     });
+  }
+
+  function initEmbeddedMode() {
+    setStatus(dotRelay, labelRelay, "ok", "Same-device mode");
+    window.addEventListener("message", function (e) {
+      if (e.origin !== location.origin || e.source !== window.parent) return;
+      handleIncomingMessage(e.data);
+    });
+    send({ type: "enroll-get" });
+    if (!hasLocalSettingsOverride) send({ type: "settings-request" });
   }
 
   // ---- Enrolled player list ----
@@ -920,7 +1026,7 @@
       deleteBtn.type = "button";
       deleteBtn.addEventListener("click", function () {
         if (deleteBtn.dataset.confirm === "1") {
-          wsSend({ type: "enroll-delete", player_name: entry.displayName || key });
+          send({ type: "enroll-delete", player_name: entry.displayName || key });
         } else {
           deleteBtn.dataset.confirm = "1";
           deleteBtn.textContent = "Tap again to confirm";
@@ -938,7 +1044,7 @@
   clearAllBtn.addEventListener("click", function () {
     if (clearAllBtn.dataset.confirm === "1") {
       Object.keys(enrollments).forEach(function (key) {
-        wsSend({ type: "enroll-delete", player_name: enrollments[key].displayName || key });
+        send({ type: "enroll-delete", player_name: enrollments[key].displayName || key });
       });
       clearAllBtn.dataset.confirm = "0";
       clearAllBtn.textContent = "Clear all (new session)";
@@ -1473,7 +1579,7 @@
       setTimeout(function () { captureProgress.hidden = true; }, 3000);
       return;
     }
-    wsSend({ type: "enroll-save", player_name: enrollTargetName, descriptors: enrollSamples });
+    send({ type: "enroll-save", player_name: enrollTargetName, descriptors: enrollSamples });
     captureProgress.textContent = "Saved " + enrollSamples.length + " samples for " + enrollTargetName + ".";
     setTimeout(function () { captureProgress.hidden = true; }, 3000);
   }
@@ -1519,10 +1625,10 @@
     if (now - last < settings.debounceSec * 1000) return;
     lastEmittedAt[name] = now;
     var confidence = Math.max(0, Math.min(1, 1 - matchDistance / MAX_EXPECTED_DISTANCE));
-    wsSend({ type: "player_up", player_name: name, confidence: confidence, ts: now });
+    send({ type: "player_up", player_name: name, confidence: confidence, ts: now });
     logActivity(name + " shooting (match distance " + matchDistance.toFixed(2) + ")");
     if (matchDistance <= settings.matchThreshold * 0.7) {
-      wsSend({ type: "enroll-add", player_name: name, descriptor: descriptor, side: side });
+      send({ type: "enroll-add", player_name: name, descriptor: descriptor, side: side });
     }
   }
 
@@ -1538,9 +1644,9 @@
       return (enrollments[key].displayName || key).toLowerCase() === name.toLowerCase();
     });
     if (isFirstSample) {
-      wsSend({ type: "enroll-save", player_name: name, descriptors: [candidate.descriptor], side: candidate.side });
+      send({ type: "enroll-save", player_name: name, descriptors: [candidate.descriptor], side: candidate.side });
     } else {
-      wsSend({ type: "enroll-add", player_name: name, descriptor: candidate.descriptor, side: candidate.side });
+      send({ type: "enroll-add", player_name: name, descriptor: candidate.descriptor, side: candidate.side });
     }
     logActivity(name + " confirmed by scoring (side " + (candidate.side === undefined ? "?" : candidate.side + 1) + ")");
   }
@@ -1861,7 +1967,8 @@
 
   // ---- Boot ----
   showTab("recognize");
-  connectRelay();
+  if (isEmbedded) initEmbeddedMode();
+  else connectRelay();
   loadModels();
   startCamera(null);
   requestWakeLock();

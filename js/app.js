@@ -1816,9 +1816,11 @@
   var cameraInputSettingsRow = document.getElementById("camera-input-settings-row");
   var cameraMatchThresholdInput = document.getElementById("camera-match-threshold");
   var cameraDebounceSecInput = document.getElementById("camera-debounce-sec");
-  // Set via PMCCameraBridge.onTurnConfirmed - see adjustScore and the
-  // bridge's own comment on why this is a single slot, not a list.
-  var cameraTurnConfirmedCallback = null;
+  // Set via PMCCameraBridge.onTurnConfirmed - a list now, not a single
+  // slot, since js/camera-client.js (the relay path) and the same-device
+  // camera overlay's postMessage listener each register their own
+  // callback independently, with neither needing to know the other exists.
+  var cameraTurnConfirmedCallbacks = [];
   var queueSection = document.getElementById("queue-section");
   var queueList = document.getElementById("queue-list");
   var rosterLoadSelect = document.getElementById("roster-load-select");
@@ -1928,6 +1930,18 @@
   var btnCameraWizardCancel = document.getElementById("btn-camera-wizard-cancel");
   var btnCameraWizardGo = document.getElementById("btn-camera-wizard-go");
   var cameraWizardStep = 1;
+  var btnCameraWizardPathPhone = document.getElementById("camera-wizard-path-phone");
+  var btnCameraWizardPathSameDevice = document.getElementById("camera-wizard-path-same-device");
+  var cameraWizardPhonePath = document.getElementById("camera-wizard-phone-path");
+  var cameraWizardSameDevicePath = document.getElementById("camera-wizard-same-device-path");
+  var cameraWizardInsecureContext = document.getElementById("camera-wizard-insecure-context");
+  var btnCameraWizardStartSameDevice = document.getElementById("btn-camera-wizard-start-same-device");
+  var cameraWizardPath = "phone";
+  var cameraWizardPathUserChosen = false;
+
+  var sameDeviceCameraOverlay = document.getElementById("same-device-camera-overlay");
+  var sameDeviceCameraIframe = document.getElementById("same-device-camera-iframe");
+  var btnCloseSameDeviceCamera = document.getElementById("btn-close-same-device-camera");
 
   var btnToggleFocus = document.getElementById("btn-toggle-focus");
   var btnToggleKeypadSpeech = document.getElementById("btn-toggle-keypad-speech");
@@ -7045,10 +7059,12 @@
     // seeing. Note this never fires for tournamentAdjustScore, a
     // deliberately separate function - tournament mode is out of scope
     // for this pass.
-    if (delta > 0 && cameraTurnConfirmedCallback) {
-      try {
-        cameraTurnConfirmedCallback(player.name);
-      } catch (e) {}
+    if (delta > 0 && cameraTurnConfirmedCallbacks.length) {
+      cameraTurnConfirmedCallbacks.forEach(function (cb) {
+        try {
+          cb(player.name);
+        } catch (e) {}
+      });
     }
 
     // Quick Counter: just tally, never check a target or credit a win.
@@ -29088,11 +29104,46 @@
       .catch(function (e) {
         console.error("[CameraWizard] /api/lan-info unreachable - this page is probably not being served by the local relay server:", e);
         showCameraWizardLinkState("no-relay");
+        // No relay at all (e.g. a GitHub Pages copy) means the "separate
+        // phone" path can never work here - lead with the same-device
+        // option instead of leaving the user stuck on a dead-end error,
+        // unless they'd already explicitly picked a path themselves.
+        if (!cameraWizardPathUserChosen) selectCameraWizardPath("same-device");
       });
+  }
+
+  // Step 1 is a choice between two independent transports for the exact
+  // same underlying feature (see camera.html's own isEmbedded branch) -
+  // "phone" is the original, unchanged cross-device/relay flow; "same
+  // device" embeds camera.html directly in this page instead. Defaults to
+  // "phone" optimistically (today's default experience when a relay is
+  // reachable); loadCameraWizardLinkInfo overrides that default to
+  // "same-device" only in the no-relay case, and only if the user hasn't
+  // already clicked a path themselves.
+  function selectCameraWizardPath(path) {
+    cameraWizardPath = path;
+    cameraWizardPhonePath.classList.toggle("hidden", path !== "phone");
+    cameraWizardSameDevicePath.classList.toggle("hidden", path !== "same-device");
+    btnCameraWizardPathPhone.classList.toggle("is-active", path === "phone");
+    btnCameraWizardPathSameDevice.classList.toggle("is-active", path === "same-device");
+    // The footer's "Go →" only makes sense for the phone path (it advances
+    // to step 2's enable checkbox); the same-device path has its own
+    // "Start this tablet's camera" button that skips step 2 entirely,
+    // since camera.html's own 5-step wizard takes over from there.
+    btnCameraWizardGo.classList.toggle("hidden", path === "same-device");
+  }
+
+  function updateSameDeviceSecureContextWarning() {
+    var secure = window.isSecureContext;
+    cameraWizardInsecureContext.classList.toggle("hidden", secure);
+    btnCameraWizardStartSameDevice.disabled = !secure;
   }
 
   function openCameraWizard() {
     cameraWizardStep = 1;
+    cameraWizardPathUserChosen = false;
+    selectCameraWizardPath("phone");
+    updateSameDeviceSecureContextWarning();
     showCameraWizardLinkState(null);
     cameraWizardEnableCheckbox.checked = state.cameraInputEnabled;
     cameraWizardSettingsRow.classList.toggle("hidden", !state.cameraInputEnabled);
@@ -29146,6 +29197,86 @@
     if (!(value > 0)) return;
     state.cameraDebounceSec = value;
     saveState();
+  });
+
+  btnCameraWizardPathPhone.addEventListener("click", function () {
+    cameraWizardPathUserChosen = true;
+    selectCameraWizardPath("phone");
+  });
+
+  btnCameraWizardPathSameDevice.addEventListener("click", function () {
+    cameraWizardPathUserChosen = true;
+    selectCameraWizardPath("same-device");
+  });
+
+  // Same-device mode needs no step 2 (no separate "enable" checkbox step -
+  // see selectCameraWizardPath's own comment) - starting it enables camera
+  // input directly, closes this wizard, and hands off entirely to
+  // camera.html's own guided setup, embedded in the new overlay below.
+  btnCameraWizardStartSameDevice.addEventListener("click", function () {
+    if (!window.isSecureContext) return;
+    state.cameraInputEnabled = true;
+    saveState();
+    renderAll();
+    closeCameraWizard();
+    openSameDeviceCameraOverlay();
+  });
+
+  // Same-device camera overlay - embeds camera.html directly in this page
+  // via <iframe src="camera.html?embedded=1">, so the camera and the
+  // scoreboard can be the very same device with no relay/server involved.
+  // Deliberately NOT added to isAnyOverlayOpen()'s list above - this
+  // overlay stays open for the entire time embedded player_up events are
+  // expected, so including it there would self-block every same-device
+  // recognition event, always.
+  function openSameDeviceCameraOverlay() {
+    sameDeviceCameraIframe.src = "camera.html?embedded=1";
+    sameDeviceCameraOverlay.classList.remove("hidden");
+  }
+
+  function closeSameDeviceCameraOverlay() {
+    // postMessage first so camera.html can stop its own MediaStreamTracks
+    // and release the wake lock - clearing src alone isn't a reliable
+    // teardown signal (timing varies across Safari/Chrome). postMessage
+    // delivery is always asynchronous, even same-process - clearing src
+    // in the very same tick risks the navigation tearing the iframe's
+    // document down before it ever gets to process the message (confirmed
+    // empirically: a same-tick src clear reliably wins the race in
+    // headless Chrome, dropping the message). A trip through setTimeout
+    // guarantees camera.html's own message handler has already run first.
+    try {
+      sameDeviceCameraIframe.contentWindow.postMessage({ type: "stop-camera" }, location.origin);
+    } catch (e) {}
+    sameDeviceCameraOverlay.classList.add("hidden");
+    setTimeout(function () {
+      sameDeviceCameraIframe.src = "";
+    }, 0);
+  }
+
+  btnCloseSameDeviceCamera.addEventListener("click", closeSameDeviceCameraOverlay);
+
+  // Same-device mode's own transport counterpart to js/camera-client.js's
+  // WebSocket listener - receives the exact same message shapes
+  // (player_up/settings-request) via postMessage instead of a relay
+  // socket, and dispatches them through the same PMCCameraBridge methods,
+  // so nothing downstream needs to know or care which transport is live.
+  // Checks both origin and source (matching camera.html's own check on
+  // its side of this same channel), not origin alone.
+  window.addEventListener("message", function (event) {
+    if (event.origin !== location.origin || event.source !== sameDeviceCameraIframe.contentWindow) return;
+    var msg = event.data;
+    if (!msg || typeof msg !== "object") return;
+    if (msg.type === "player_up") {
+      if (!window.PMCCameraBridge.isEnabled() || window.PMCCameraBridge.isAnyOverlayOpen()) return;
+      var id = window.PMCCameraBridge.resolvePlayerIdByName(msg.player_name);
+      if (!id || id === window.PMCCameraBridge.getSelectedPlayerId()) return;
+      window.PMCCameraBridge.selectPlayer(id);
+    } else if (msg.type === "settings-request") {
+      var settings = window.PMCCameraBridge.getSettings();
+      try {
+        sameDeviceCameraIframe.contentWindow.postMessage({ type: "settings", matchThreshold: settings.matchThreshold, debounceSec: settings.debounceSec }, location.origin);
+      } catch (e) {}
+    }
   });
 
   noStatsCheckbox.addEventListener("change", function () {
@@ -30692,15 +30823,30 @@
       return match ? match.id : null;
     },
     // Gameplay-driven auto-enrollment (camera.html's "turn_confirmed"
-    // handling) - registers camera-client.js's own callback, invoked from
-    // adjustScore on every real (+1 or more) score change. A single slot,
-    // not a list: there's only ever one consumer. camera-client.js must
-    // call this through its own retry loop, not a bare one-time call -
-    // script load order between the two files isn't guaranteed, so this
-    // object may not exist yet the instant camera-client.js's own script
-    // runs.
+    // handling) - registers a callback, invoked from adjustScore on every
+    // real (+1 or more) score change. A list, not a single slot: both
+    // js/camera-client.js (the relay path) and the same-device camera
+    // overlay's postMessage listener register their own callback here,
+    // independently. camera-client.js must call this through its own
+    // retry loop, not a bare one-time call - script load order between
+    // the two files isn't guaranteed, so this object may not exist yet
+    // the instant camera-client.js's own script runs.
     onTurnConfirmed: function (callback) {
-      cameraTurnConfirmedCallback = callback;
+      cameraTurnConfirmedCallbacks.push(callback);
     }
   };
+
+  // Same-device mode's own counterpart to js/camera-client.js's
+  // sendTurnConfirmed - forwards the exact same "turn_confirmed" message
+  // shape to the embedded camera.html via postMessage instead of a relay
+  // socket, so gameplay-driven auto-enrollment works identically on both
+  // transports. Registered directly (not through a retry-poll loop like
+  // camera-client.js needs) since this runs in the same IIFE, after
+  // PMCCameraBridge above is already defined - no load-order uncertainty.
+  window.PMCCameraBridge.onTurnConfirmed(function (playerName) {
+    if (sameDeviceCameraOverlay.classList.contains("hidden")) return;
+    try {
+      sameDeviceCameraIframe.contentWindow.postMessage({ type: "turn_confirmed", player_name: playerName }, location.origin);
+    } catch (e) {}
+  });
 })();
