@@ -29,9 +29,23 @@
 
   var ws = null;
   var reconnectTimer = null;
+  var turnConfirmedRegistered = false;
 
   function bridgeReady() {
     return !!window.PMCCameraBridge;
+  }
+
+  // Gameplay-driven auto-enrollment: forwards a human-confirmed score
+  // change (see js/app.js's adjustScore) to the camera as stronger ground
+  // truth than its own self-match. Registered through the poll loop below
+  // rather than a bare one-time call at load, since script load order
+  // between this file and js/app.js's IIFE isn't guaranteed - the bridge
+  // may not exist yet the instant this file runs.
+  function sendTurnConfirmed(playerName) {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    try {
+      ws.send(JSON.stringify({ type: "turn_confirmed", player_name: playerName }));
+    } catch (e) {}
   }
 
   function wsUrl() {
@@ -120,6 +134,10 @@
 
   function pollEnabled() {
     if (!bridgeReady()) return;
+    if (!turnConfirmedRegistered) {
+      window.PMCCameraBridge.onTurnConfirmed(sendTurnConfirmed);
+      turnConfirmedRegistered = true;
+    }
     var enabled = window.PMCCameraBridge.isEnabled();
     if (enabled && !ws) connect();
     else if (!enabled && ws) disconnect();

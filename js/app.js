@@ -1816,6 +1816,9 @@
   var cameraInputSettingsRow = document.getElementById("camera-input-settings-row");
   var cameraMatchThresholdInput = document.getElementById("camera-match-threshold");
   var cameraDebounceSecInput = document.getElementById("camera-debounce-sec");
+  // Set via PMCCameraBridge.onTurnConfirmed - see adjustScore and the
+  // bridge's own comment on why this is a single slot, not a list.
+  var cameraTurnConfirmedCallback = null;
   var queueSection = document.getElementById("queue-section");
   var queueList = document.getElementById("queue-list");
   var rosterLoadSelect = document.getElementById("roster-load-select");
@@ -7013,6 +7016,20 @@
     if (!quickCounterMode && state.currentGame.mode === "individual" && state.currentGame.queueEnabled && activePlayers().length < 2) {
       showToast(T("toast.queueNeedsPlayer"));
       return;
+    }
+
+    // Gameplay-driven camera auto-enrollment (see PMCCameraBridge's own
+    // comment) - a real, accepted +1 is the strongest "a human just
+    // confirmed who's at the table" signal available, stronger than the
+    // camera's own self-match. A negative delta is excluded - it could be
+    // a foul/undo/correction unrelated to who the camera is currently
+    // seeing. Note this never fires for tournamentAdjustScore, a
+    // deliberately separate function - tournament mode is out of scope
+    // for this pass.
+    if (delta > 0 && cameraTurnConfirmedCallback) {
+      try {
+        cameraTurnConfirmedCallback(player.name);
+      } catch (e) {}
     }
 
     // Quick Counter: just tally, never check a target or credit a win.
@@ -30529,6 +30546,17 @@
         return normalizeNameKey(p.name) === key;
       });
       return match ? match.id : null;
+    },
+    // Gameplay-driven auto-enrollment (camera.html's "turn_confirmed"
+    // handling) - registers camera-client.js's own callback, invoked from
+    // adjustScore on every real (+1 or more) score change. A single slot,
+    // not a list: there's only ever one consumer. camera-client.js must
+    // call this through its own retry loop, not a bare one-time call -
+    // script load order between the two files isn't guaranteed, so this
+    // object may not exist yet the instant camera-client.js's own script
+    // runs.
+    onTurnConfirmed: function (callback) {
+      cameraTurnConfirmedCallback = callback;
     }
   };
 })();

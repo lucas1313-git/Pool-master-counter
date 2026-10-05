@@ -217,11 +217,18 @@
     <h2>Enroll a player (today's outfit)</h2>
     <label for="enrollName">Player name (must match the tablet exactly)</label>
     <input type="text" id="enrollName" placeholder="e.g. Alice">
-    <div class="hint">Stand normally, facing the camera, where players usually approach from.</div>
+    <div class="hint">Stand normally, facing the camera, where players usually approach from. Or skip this - just play normally and scoring a real shot teaches the camera too (see below).</div>
     <button id="captureBtn" type="button">Capture 8 samples</button>
     <div class="progress-text" id="captureProgress" hidden></div>
+    <p class="fine">
+      Scoring a real shot on the tablet also labels the camera's current
+      candidate automatically - no separate step needed once play starts.
+      Have each player take their first few shots from different sides of
+      the table so their profile isn't just one angle.
+    </p>
 
     <h2 style="margin-top:16px">Enrolled today</h2>
+    <div id="bootstrapStatus" class="hint"></div>
     <div id="playerList"><div class="hint">No players enrolled yet.</div></div>
     <button id="clearAllBtn" class="danger" type="button" style="margin-top:10px">Clear all (new session)</button>
     <div class="hint" style="margin-top:6px">Appearance only matches today's clothes - clear and re-enroll everyone at the start of each new session.</div>
@@ -242,24 +249,34 @@
         <option value="7">7-foot (78" x 39")</option>
         <option value="8" selected>8-foot (88" x 44")</option>
         <option value="9">9-foot / regulation (100" x 50")</option>
+        <option value="10">10-foot (112" x 56")</option>
+        <option value="snooker">Snooker (140" x 70")</option>
         <option value="custom">Custom</option>
       </select>
       <div id="customSizeRow" class="row" hidden>
         <div>
           <label for="customLength">Length (in)</label>
-          <input type="number" id="customLength" min="30" max="150" value="88">
+          <input type="number" id="customLength" min="30" max="170" value="88">
         </div>
         <div>
           <label for="customWidth">Width (in)</label>
-          <input type="number" id="customWidth" min="15" max="80" value="44">
+          <input type="number" id="customWidth" min="15" max="90" value="44">
         </div>
       </div>
+      <button id="detectTableBtn" type="button">Detect table automatically</button>
+      <div class="hint">Point the camera at the whole table, empty - no balls, rack, or cue - for the best result.</div>
+      <div class="progress-text" id="detectStatusText" hidden></div>
+      <button id="showManualCalibrationBtn" class="secondary" type="button">Calibrate manually instead</button>
+    </div>
+
+    <div id="manualCalibrateSetup" hidden>
       <label for="firstEdgeSelect">Your first tap-to-second-tap edge will be the table's:</label>
       <select id="firstEdgeSelect">
         <option value="width">Short end (width)</option>
         <option value="length">Long side (length)</option>
       </select>
-      <button id="startCalibrationBtn" type="button">Start calibration</button>
+      <button id="startCalibrationBtn" type="button">Start manual calibration</button>
+      <button id="backToAutoBtn" class="secondary" type="button">Back</button>
     </div>
 
     <div id="calibrateTapping" hidden>
@@ -316,17 +333,46 @@
   var CALIBRATION_STORAGE_KEY = "pmc-camera-calibration";
   var KEYPOINT_CONF_FLOOR = 0.3;
   var CANDIDATE_GRACE_MS = 3000; // how long a resolved identity survives a gap in pose detection
+  // Separate from CANDIDATE_GRACE_MS on purpose - that one is tuned for
+  // frame-to-frame continuity (sub-second gaps), this one for the real
+  // gap between "shot happens" and "operator reaches the keypad and taps
+  // a score," which routinely exceeds a few seconds.
+  var TURN_CONFIRM_GRACE_MS = 12000;
   var NO_POSE_GRACE_MS = 1200; // brief occlusion tolerance before resetting stance state
   var MAX_EXPECTED_DISTANCE = 8; // for scaling the player_up confidence field
   var HUE_BINS = 12;
   var SAT_BINS = 4;
   var ASPECT_RATIO_WEIGHT = 0.3;
+  var SIDES_TARGET = 4;
+  var DETECT_CANVAS_WIDTH = 160; // downsampled resolution for one-shot table detection
+  var DETECT_MIN_BLOB_FRACTION = 0.1; // reject a detected "table" smaller than this fraction of the frame
+  // Reject a match that fills nearly the whole frame with no surrounding
+  // context - a real table-mounted view should show some floor/room
+  // around the table, not edge-to-edge felt. Without this, pointing the
+  // camera at a large flat matching-colored surface (a green wall, say)
+  // would "succeed" and silently calibrate against the wrong thing.
+  var DETECT_MAX_BLOB_FRACTION = 0.92;
 
   var TABLE_SIZES = {
     "7": { length: 78, width: 39 },
     "8": { length: 88, width: 44 },
-    "9": { length: 100, width: 50 }
+    "9": { length: 100, width: 50 },
+    "10": { length: 112, width: 56 },
+    "snooker": { length: 140, width: 70 }
   };
+
+  // Candidate felt hues to test, in HSV degrees - whichever produces the
+  // largest connected region wins. "wrap" ranges cross the 0/360 seam
+  // (e.g. burgundy/red). Not exhaustive - an unusual felt color (or an
+  // unusually lit one) will simply fail detection, falling back to
+  // manual calibration - see the plan's own note on this being the most
+  // fragile piece of the whole feature.
+  var FELT_HUE_RANGES = [
+    { hueMin: 70, hueMax: 170 }, // green
+    { hueMin: 170, hueMax: 260 }, // blue
+    { hueMin: 330, hueMax: 30, wrap: true }, // burgundy/red
+    { satMax: 0.18 } // grey/neutral
+  ];
 
   var videoEl = document.getElementById("video");
   var overlayEl = document.getElementById("overlay");
@@ -363,12 +409,18 @@
   var customSizeRow = document.getElementById("customSizeRow");
   var customLength = document.getElementById("customLength");
   var customWidth = document.getElementById("customWidth");
+  var detectTableBtn = document.getElementById("detectTableBtn");
+  var detectStatusText = document.getElementById("detectStatusText");
+  var showManualCalibrationBtn = document.getElementById("showManualCalibrationBtn");
+  var manualCalibrateSetupEl = document.getElementById("manualCalibrateSetup");
   var firstEdgeSelect = document.getElementById("firstEdgeSelect");
   var startCalibrationBtn = document.getElementById("startCalibrationBtn");
+  var backToAutoBtn = document.getElementById("backToAutoBtn");
   var calibrateTappingEl = document.getElementById("calibrateTapping");
   var calibrationStepText = document.getElementById("calibrationStepText");
   var cancelCalibrationBtn = document.getElementById("cancelCalibrationBtn");
   var recalibrateBtn = document.getElementById("recalibrateBtn");
+  var bootstrapStatusEl = document.getElementById("bootstrapStatus");
 
   var cameraSelect = document.getElementById("cameraSelect");
   var thresholdInput = document.getElementById("thresholdInput");
@@ -609,6 +661,8 @@
         if (typeof msg.matchThreshold === "number") settings.matchThreshold = msg.matchThreshold;
         if (typeof msg.debounceSec === "number") settings.debounceSec = msg.debounceSec;
         applySettingsToInputs();
+      } else if (msg.type === "turn_confirmed" && msg.player_name) {
+        handleTurnConfirmed(msg.player_name);
       }
     });
     ws.addEventListener("close", function () {
@@ -619,8 +673,24 @@
   }
 
   // ---- Enrolled player list ----
+  function renderBootstrapStatus(keys) {
+    if (!calibration) {
+      bootstrapStatusEl.textContent = "Calibrate the table (Table tab) to enable side-coverage tracking.";
+      return;
+    }
+    if (keys.length === 0) {
+      bootstrapStatusEl.textContent = "";
+      return;
+    }
+    var allReady = keys.every(function (key) { return ((enrollments[key].sides || []).length) >= SIDES_TARGET; });
+    bootstrapStatusEl.textContent = allReady
+      ? "All enrolled players have been seen from " + SIDES_TARGET + " sides - ready to rely on recognition."
+      : "Still bootstrapping - have each player shoot from a few different sides of the table.";
+  }
+
   function renderPlayerList() {
     var keys = Object.keys(enrollments);
+    renderBootstrapStatus(keys);
     if (keys.length === 0) {
       playerListEl.innerHTML = '<div class="hint">No players enrolled yet.</div>';
       return;
@@ -632,9 +702,11 @@
       var entry = enrollments[key];
       var row = document.createElement("div");
       row.className = "player-row";
+      var sideCount = (entry.sides || []).length;
+      var sideText = calibration ? (", " + sideCount + "/" + SIDES_TARGET + " sides") : "";
       var meta = document.createElement("div");
       meta.innerHTML = "<div>" + escapeHtml(entry.displayName || key) + "</div><div class=\"meta\">" +
-        ((entry.descriptors || []).length) + " samples</div>";
+        ((entry.descriptors || []).length) + " samples" + sideText + "</div>";
       var actions = document.createElement("div");
       actions.className = "actions";
       var reEnrollBtn = document.createElement("button");
@@ -869,6 +941,7 @@
       calibrationStatusEl.textContent = "Not calibrated - the \"close enough to the table\" check is skipped (always passes) until you calibrate.";
       recalibrateBtn.hidden = true;
     }
+    renderPlayerList();
   }
 
   function solveLinearSystem(A, b) {
@@ -919,9 +992,21 @@
   // Perpendicular distance (inches) from a real-world table-relative point
   // to the nearest of the table's 4 rails - 0 or negative means the point
   // projects onto/over the table bed itself (a strong shooting-position signal).
-  function distanceToNearestRail(realPoint, tableLength, tableWidth) {
+  // Side indices: 0 = y=0 rail, 1 = y=tableLength rail, 2 = x=0 rail,
+  // 3 = x=tableWidth rail - tied to calibration corner order (see
+  // finishCalibration/detectTableAuto), not camera-relative "near/far" -
+  // those don't mean anything consistent once the camera is mounted at
+  // an angle, since this is a rectangle-relative coordinate system.
+  function nearestRailSide(realPoint, tableLength, tableWidth) {
     var distances = [realPoint.y, tableLength - realPoint.y, realPoint.x, tableWidth - realPoint.x];
-    return Math.min.apply(null, distances);
+    var bestIdx = 0;
+    for (var i = 1; i < distances.length; i++) {
+      if (distances[i] < distances[bestIdx]) bestIdx = i;
+    }
+    return { side: bestIdx, distance: distances[bestIdx] };
+  }
+  function distanceToNearestRail(realPoint, tableLength, tableWidth) {
+    return nearestRailSide(realPoint, tableLength, tableWidth).distance;
   }
 
   function currentTableSize() {
@@ -935,27 +1020,34 @@
     customSizeRow.hidden = tableSizeSelect.value !== "custom";
   });
 
+  function showCalibrateSetup() {
+    calibrateSetupEl.hidden = false;
+    manualCalibrateSetupEl.hidden = true;
+    calibrateTappingEl.hidden = true;
+    calibrating = false;
+    calibrationTaps = [];
+    overlayEl.classList.remove("tappable");
+  }
+  showManualCalibrationBtn.addEventListener("click", function () {
+    calibrateSetupEl.hidden = true;
+    manualCalibrateSetupEl.hidden = false;
+  });
+  backToAutoBtn.addEventListener("click", showCalibrateSetup);
+  recalibrateBtn.addEventListener("click", showCalibrateSetup);
+
   function startCalibration() {
     calibrating = true;
     calibrationTaps = [];
-    calibrateSetupEl.hidden = true;
+    manualCalibrateSetupEl.hidden = true;
     calibrateTappingEl.hidden = false;
     calibrationStepText.textContent = "Tap corner 1 of 4";
     overlayEl.classList.add("tappable");
   }
   function cancelCalibration() {
-    calibrating = false;
-    calibrationTaps = [];
-    calibrateSetupEl.hidden = false;
-    calibrateTappingEl.hidden = true;
-    overlayEl.classList.remove("tappable");
+    showCalibrateSetup();
   }
   startCalibrationBtn.addEventListener("click", startCalibration);
   cancelCalibrationBtn.addEventListener("click", cancelCalibration);
-  recalibrateBtn.addEventListener("click", function () {
-    calibrateSetupEl.hidden = false;
-    startCalibration();
-  });
 
   overlayEl.addEventListener("click", function (evt) {
     if (!calibrating) return;
@@ -968,30 +1060,191 @@
     if (calibrationTaps.length < 4) {
       calibrationStepText.textContent = "Tap corner " + (calibrationTaps.length + 1) + " of 4";
     } else {
-      finishCalibration();
+      finishManualCalibration();
     }
   });
 
-  function finishCalibration() {
-    var size = currentTableSize();
-    var isWidthFirst = firstEdgeSelect.value === "width";
-    var d1 = isWidthFirst ? size.width : size.length;
-    var d2 = isWidthFirst ? size.length : size.width;
-    // Tap order: corner1 -> corner2 is the first edge (length d1), then
-    // corner2 -> corner3 is the perpendicular edge (length d2), going
-    // around the rectangle - this fully determines the real-world
-    // rectangle regardless of which physical edge the operator started on.
+  // Shared by both the manual-tap flow and auto-detection: given 4 pixel
+  // points in consistent cyclic order around the rectangle and which
+  // real-world dimension the corner1->corner2 edge represents, computes
+  // and stores the homography.
+  function applyCalibrationFromCorners(pixelPoints, edge1IsWidth, size) {
+    var d1 = edge1IsWidth ? size.width : size.length;
+    var d2 = edge1IsWidth ? size.length : size.width;
     var realPoints = [[0, 0], [d1, 0], [d1, d2], [0, d2]];
-    var H = computeHomography(calibrationTaps, realPoints);
-    cancelCalibration();
-    if (!H) {
-      calibrationStatusEl.textContent = "Calibration failed (corners too close together or in a line) - try again with 4 clearly separated corners.";
-      return;
-    }
-    calibration = { tableLength: isWidthFirst ? d2 : d1, tableWidth: isWidthFirst ? d1 : d2, h: H };
+    var H = computeHomography(pixelPoints, realPoints);
+    if (!H) return null;
+    calibration = { tableLength: edge1IsWidth ? d2 : d1, tableWidth: edge1IsWidth ? d1 : d2, h: H };
     saveCalibration();
     renderCalibrationStatus();
+    return calibration;
   }
+
+  function finishManualCalibration() {
+    var size = currentTableSize();
+    var isWidthFirst = firstEdgeSelect.value === "width";
+    // Tap order: corner1 -> corner2 is the first edge, then corner2 ->
+    // corner3 is the perpendicular edge, going around the rectangle -
+    // this fully determines the real-world rectangle regardless of which
+    // physical edge the operator started on.
+    var result = applyCalibrationFromCorners(calibrationTaps, isWidthFirst, size);
+    showCalibrateSetup();
+    if (!result) {
+      calibrationStatusEl.textContent = "Calibration failed (corners too close together or in a line) - try again with 4 clearly separated corners.";
+    }
+  }
+
+  // ---- Automatic table detection (no tapping) ----
+  // Runs once on a downsampled still frame - the table doesn't move once
+  // mounted, so there's no need to repeat this per-frame. See the plan's
+  // own note: this is the most fragile piece of the whole feature (felt
+  // color, lighting, anything sitting on the table) and a real on-site
+  // test is the only genuine verification - the hue ranges/thresholds may
+  // need adjusting after seeing it run against the real table.
+  var detectCanvas = document.createElement("canvas");
+  var detectCtx = detectCanvas.getContext("2d", { willReadFrequently: true });
+
+  function hueMatchesRange(hsv, range) {
+    if (range.satMax !== undefined) return hsv.s <= range.satMax;
+    if (range.wrap) return hsv.h >= range.hueMin || hsv.h <= range.hueMax;
+    return hsv.h >= range.hueMin && hsv.h <= range.hueMax;
+  }
+
+  function largestConnectedComponent(mask, w, h) {
+    var visited = new Uint8Array(w * h);
+    var best = null, bestSize = 0;
+    for (var start = 0; start < w * h; start++) {
+      if (!mask[start] || visited[start]) continue;
+      var stack = [start];
+      visited[start] = 1;
+      var members = [start];
+      while (stack.length) {
+        var idx = stack.pop();
+        var x = idx % w, y = (idx / w) | 0;
+        if (x > 0 && mask[idx - 1] && !visited[idx - 1]) { visited[idx - 1] = 1; stack.push(idx - 1); members.push(idx - 1); }
+        if (x < w - 1 && mask[idx + 1] && !visited[idx + 1]) { visited[idx + 1] = 1; stack.push(idx + 1); members.push(idx + 1); }
+        if (y > 0 && mask[idx - w] && !visited[idx - w]) { visited[idx - w] = 1; stack.push(idx - w); members.push(idx - w); }
+        if (y < h - 1 && mask[idx + w] && !visited[idx + w]) { visited[idx + w] = 1; stack.push(idx + w); members.push(idx + w); }
+      }
+      if (members.length > bestSize) { bestSize = members.length; best = members; }
+    }
+    if (!best) return null;
+    return best.map(function (idx) { return { x: idx % w, y: (idx / w) | 0 }; });
+  }
+
+  // Andrew's monotone chain.
+  function convexHull(points) {
+    var pts = points.slice().sort(function (a, b) { return a.x - b.x || a.y - b.y; });
+    function cross(o, a, b) { return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x); }
+    var lower = [];
+    for (var i = 0; i < pts.length; i++) {
+      while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], pts[i]) <= 0) lower.pop();
+      lower.push(pts[i]);
+    }
+    var upper = [];
+    for (var j = pts.length - 1; j >= 0; j--) {
+      while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], pts[j]) <= 0) upper.pop();
+      upper.push(pts[j]);
+    }
+    lower.pop(); upper.pop();
+    return lower.concat(upper);
+  }
+
+  // The 4 hull points that maximize/minimize x+y and x-y - the extreme-
+  // point heuristic (not a min-area rotated-rectangle fit, which would
+  // systematically misplace corners under real camera keystoning).
+  // Returns [topLeft, topRight, bottomRight, bottomLeft] in image space.
+  function extractQuadCorners(hull) {
+    var maxSum = -Infinity, minSum = Infinity, maxDiff = -Infinity, minDiff = Infinity;
+    var cMaxSum, cMinSum, cMaxDiff, cMinDiff;
+    hull.forEach(function (p) {
+      var sum = p.x + p.y, diff = p.x - p.y;
+      if (sum > maxSum) { maxSum = sum; cMaxSum = p; }
+      if (sum < minSum) { minSum = sum; cMinSum = p; }
+      if (diff > maxDiff) { maxDiff = diff; cMaxDiff = p; }
+      if (diff < minDiff) { minDiff = diff; cMinDiff = p; }
+    });
+    return [cMinSum, cMaxDiff, cMaxSum, cMinDiff];
+  }
+
+  function pointDist(a, b) { return Math.sqrt((b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y)); }
+
+  function detectTableAuto() {
+    detectStatusText.hidden = false;
+    detectStatusText.textContent = "Detecting...";
+    var vw = videoEl.videoWidth, vh = videoEl.videoHeight;
+    if (!vw || !vh) {
+      detectStatusText.textContent = "Camera not ready yet - try again in a moment.";
+      return;
+    }
+    var dw = DETECT_CANVAS_WIDTH;
+    var dh = Math.max(1, Math.round(dw * vh / vw));
+    detectCanvas.width = dw;
+    detectCanvas.height = dh;
+    detectCtx.drawImage(videoEl, 0, 0, dw, dh);
+    var data;
+    try {
+      data = detectCtx.getImageData(0, 0, dw, dh).data;
+    } catch (e) {
+      detectStatusText.textContent = "Could not read the camera frame - try again.";
+      return;
+    }
+
+    var bestComponent = null, bestSize = 0;
+    FELT_HUE_RANGES.forEach(function (range) {
+      var mask = new Uint8Array(dw * dh);
+      for (var i = 0, p = 0; i < dw * dh; i++, p += 4) {
+        var hsv = rgbToHsv(data[p], data[p + 1], data[p + 2]);
+        if (hueMatchesRange(hsv, range)) mask[i] = 1;
+      }
+      var component = largestConnectedComponent(mask, dw, dh);
+      if (component && component.length > bestSize) { bestSize = component.length; bestComponent = component; }
+    });
+
+    if (!bestComponent || bestSize < dw * dh * DETECT_MIN_BLOB_FRACTION) {
+      detectStatusText.textContent = "Couldn't find a clear table-colored region. Make sure the whole table is visible and empty, then try again - or calibrate manually.";
+      return;
+    }
+    if (bestSize > dw * dh * DETECT_MAX_BLOB_FRACTION) {
+      detectStatusText.textContent = "The matched region fills almost the whole frame, which doesn't look like just the table - aim the camera so some floor/room is visible around the table, or calibrate manually.";
+      return;
+    }
+
+    var hull = convexHull(bestComponent);
+    if (hull.length < 4) {
+      detectStatusText.textContent = "Detected region doesn't look like a table (too irregular). Try again or calibrate manually.";
+      return;
+    }
+    var corners = extractQuadCorners(hull); // [TL, TR, BR, BL] in detect-canvas pixels
+    var edge1 = pointDist(corners[0], corners[1]); // TL-TR
+    var edge2 = pointDist(corners[1], corners[2]); // TR-BR
+    var edge3 = pointDist(corners[2], corners[3]); // BR-BL
+    var edge4 = pointDist(corners[3], corners[0]); // BL-TL
+    if (Math.min(edge1, edge2, edge3, edge4) < 2) {
+      detectStatusText.textContent = "Detected corners are too close together - try again or calibrate manually.";
+      return;
+    }
+    // Opposite edges should be roughly equal in a real rectangle; the
+    // longer pair is assumed to be the table's length - this assumption
+    // breaks under extreme camera angles (another reason the manual
+    // fallback exists).
+    var pairA = (edge1 + edge3) / 2; // TL-TR / BR-BL
+    var pairB = (edge2 + edge4) / 2; // TR-BR / BL-TL
+    var edge1IsLength = pairA >= pairB;
+
+    var scaleX = vw / dw, scaleY = vh / dh;
+    var pixelPoints = corners.map(function (p) { return [p.x * scaleX, p.y * scaleY]; });
+    var size = currentTableSize();
+    var result = applyCalibrationFromCorners(pixelPoints, !edge1IsLength, size);
+    if (!result) {
+      detectStatusText.textContent = "Detection found a region but the math didn't work out - try again or calibrate manually.";
+      return;
+    }
+    detectStatusText.textContent = "Table detected and calibrated.";
+    setTimeout(function () { detectStatusText.hidden = true; }, 4000);
+  }
+
+  detectTableBtn.addEventListener("click", detectTableAuto);
 
   loadCalibration();
 
@@ -1034,6 +1287,8 @@
   var candidate = null; // { name, descriptor, lastSeenAt }
   var uprightMatchName = null;
   var uprightConsecutive = 0;
+  var lastUprightDescriptor = null;
+  var uprightStabilityCount = 0;
   var bentConsecutive = 0;
   var lastEmittedAt = {}; // name -> timestamp ms
 
@@ -1052,7 +1307,16 @@
     return dist <= settings.railDistanceInches;
   }
 
-  function fireEvent(name, descriptor, matchDistance) {
+  // undefined (not null) when uncalibrated or no ankle keypoints - matches
+  // what addSide on the relay expects to see "no side given."
+  function currentSideForAnalysis(analysis) {
+    if (!calibration || !analysis || !analysis.ankleMid) return undefined;
+    var real = applyHomography(calibration.h, analysis.ankleMid.x, analysis.ankleMid.y);
+    if (!real) return undefined;
+    return nearestRailSide(real, calibration.tableLength, calibration.tableWidth).side;
+  }
+
+  function fireEvent(name, descriptor, matchDistance, side) {
     var now = Date.now();
     var last = lastEmittedAt[name] || 0;
     if (now - last < settings.debounceSec * 1000) return;
@@ -1061,8 +1325,27 @@
     wsSend({ type: "player_up", player_name: name, confidence: confidence, ts: now });
     logActivity(name + " shooting (match distance " + matchDistance.toFixed(2) + ")");
     if (matchDistance <= settings.matchThreshold * 0.7) {
-      wsSend({ type: "enroll-add", player_name: name, descriptor: descriptor });
+      wsSend({ type: "enroll-add", player_name: name, descriptor: descriptor, side: side });
     }
+  }
+
+  // Gameplay-driven auto-enrollment: a human just confirmed a real score
+  // for `name` - stronger ground truth than the camera's own self-match,
+  // so this labels (or relabels, if the camera's own candidate guessed a
+  // different name) the current candidate appearance, independent of
+  // fireEvent/player_up/the debounce timer - this must never call
+  // fireEvent, to avoid an accidental double broadcast.
+  function handleTurnConfirmed(name) {
+    if (!candidate || Date.now() - candidate.lastSeenAt > TURN_CONFIRM_GRACE_MS) return;
+    var isFirstSample = !Object.keys(enrollments).some(function (key) {
+      return (enrollments[key].displayName || key).toLowerCase() === name.toLowerCase();
+    });
+    if (isFirstSample) {
+      wsSend({ type: "enroll-save", player_name: name, descriptors: [candidate.descriptor], side: candidate.side });
+    } else {
+      wsSend({ type: "enroll-add", player_name: name, descriptor: candidate.descriptor, side: candidate.side });
+    }
+    logActivity(name + " confirmed by scoring (side " + (candidate.side === undefined ? "?" : candidate.side + 1) + ")");
   }
 
   function handleRecognitionFrame(analysis) {
@@ -1096,31 +1379,53 @@
         uprightMatchName = null;
         uprightConsecutive = 0;
       }
-      if (withinThreshold && uprightConsecutive >= settings.consecutiveFrames) {
-        candidate = { name: match.name, descriptor: analysis.descriptor, lastSeenAt: Date.now() };
-      } else if (candidate && candidate.name === uprightMatchName) {
+
+      // Stability is tracked independent of whether a name match exists -
+      // this is what lets a completely unenrolled player still become a
+      // labelable "candidate" (name: null) for turn_confirmed to name,
+      // not just already-recognized ones. Without this, bootstrapping a
+      // brand-new player from a confirmed score alone would never work,
+      // since there would never be a match to form a candidate from.
+      if (lastUprightDescriptor && histogramDistance(analysis.descriptor, lastUprightDescriptor) <= settings.matchThreshold) {
+        uprightStabilityCount++;
+      } else {
+        uprightStabilityCount = 1;
+      }
+      lastUprightDescriptor = analysis.descriptor;
+
+      if (uprightStabilityCount >= settings.consecutiveFrames) {
+        candidate = {
+          name: withinThreshold && uprightConsecutive >= settings.consecutiveFrames ? match.name : null,
+          descriptor: analysis.descriptor,
+          side: currentSideForAnalysis(analysis),
+          lastSeenAt: Date.now()
+        };
+      } else if (candidate) {
         candidate.lastSeenAt = Date.now();
       }
       bentConsecutive = 0;
     } else if (stance === "bent") {
       uprightMatchName = null;
       uprightConsecutive = 0;
+      lastUprightDescriptor = null;
+      uprightStabilityCount = 0;
       bentConsecutive++;
       if (bentConsecutive >= settings.consecutiveFrames && closeEnough) {
-        if (candidate && Date.now() - candidate.lastSeenAt <= CANDIDATE_GRACE_MS) {
-          fireEvent(candidate.name, candidate.descriptor, 0);
+        if (candidate && candidate.name && Date.now() - candidate.lastSeenAt <= CANDIDATE_GRACE_MS) {
+          fireEvent(candidate.name, candidate.descriptor, 0, candidate.side);
         } else {
-          // Fallback: no fresh upright identification - try matching the
-          // bent-over frame itself, at a stricter threshold since the crop
-          // geometry/occlusion is known to be noisier here.
+          // Fallback: no fresh *named* upright identification (either
+          // nothing stable was seen, or it was stable but unmatched) -
+          // try matching the bent-over frame itself, at a stricter
+          // threshold since the crop geometry/occlusion is known to be
+          // noisier here.
           var bentMatch = findBestMatch(analysis.descriptor);
           if (bentMatch && bentMatch.distance <= settings.matchThreshold * 0.6) {
-            fireEvent(bentMatch.name, analysis.descriptor, bentMatch.distance);
+            fireEvent(bentMatch.name, analysis.descriptor, bentMatch.distance, currentSideForAnalysis(analysis));
           }
         }
       }
     }
-    if (candidate) candidate.lastSeenAt = Math.max(candidate.lastSeenAt, stance === "upright" ? Date.now() : candidate.lastSeenAt);
   }
 
   // ---- Debug overlay ----

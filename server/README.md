@@ -128,18 +128,31 @@ Two gotchas worth knowing before you rely on this at a real table:
 
 ### Calibrating the table (optional, do this first)
 
-Tap the "Table" tab, pick your table size (7/8/9-foot, or custom inches),
-tell it whether your first-to-second tap will trace the table's short end
-or its long side, then tap "Start calibration" and tap the table's 4
-playing-surface corners on the live feed, in order going around the
-rectangle (either direction, just don't skip a corner). This gives the
-camera real measurements, so "is this person close enough to the table to
-be shooting" becomes an actual calibrated distance from the rails rather
-than a guessed pixel threshold - and it works correctly from any angle,
-not just the side closest to the camera. Saved to this phone's own
-storage; survives "Clear all enrollments" below. Skipping this is fine -
+Tap the "Table" tab, pick your table size (7/8/9/10-foot, snooker, or
+custom inches), then tap "Detect table automatically" with the **whole
+table visible and empty** - no balls, rack, or cue on it. It finds the
+felt by color and works out the 4 corners itself; no tapping needed.
+
+This is the most fragile part of the whole feature - it's looking for the
+largest region of a plausible felt color (green, blue, burgundy/red, or
+grey) filling a sensible but not overwhelming portion of the frame.
+Expect it to fail outright on an unusual felt color, bad lighting, glare,
+or anything left sitting on the table, rather than silently calibrating
+against the wrong thing - if it can't find a clear match, or the match
+looks suspiciously like it ate the whole frame (a wall, say), it says so
+instead of guessing. If it won't cooperate, tap "Calibrate manually
+instead" and tap the table's 4 playing-surface corners on the live feed
+yourself, in order around the rectangle, after confirming whether your
+first-to-second tap traces the short end or the long side.
+
+Either way, this gives the camera real measurements, so "is this person
+close enough to the table to be shooting" becomes an actual calibrated
+distance from the rails rather than a guessed pixel threshold - and it
+works correctly from every side of the table, not just whichever one is
+closest to the camera. Saved to this phone's own storage; survives
+"Clear all enrollments" below. Skipping this entirely is fine too -
 recognition still runs, just without that distance check (it always
-passes).
+passes) and without side-coverage tracking (see below).
 
 ### Enrolling and recognizing players
 
@@ -147,20 +160,32 @@ Once HTTPS is running, open `https://<lan-ip>:<port>/camera.html` in
 Safari **on the phone that will watch the table** (not the tablet
 running the scoreboard). It needs camera permission the first time.
 
-- **Enroll a player, at the start of each session**: tap the "Enroll"
-  tab, type the player's name **exactly as it appears on the tablet**
-  (matched case-insensitively, so "Alice"/"alice" are the same person -
-  but two *different* players sharing one name will collide, and two
-  players in very similar clothing may be confused for each other, since
-  this identifies clothing, not faces), then tap "Capture 8 samples" and
-  stand normally facing the camera for a few seconds. Re-running capture
+- **Enroll a player, at the start of each session**: either tap the
+  "Enroll" tab, type the player's name **exactly as it appears on the
+  tablet** (matched case-insensitively, so "Alice"/"alice" are the same
+  person - but two *different* players sharing one name will collide,
+  and two players in very similar clothing may be confused for each
+  other, since this identifies clothing, not faces), then tap "Capture 8
+  samples" and stand normally facing the camera for a few seconds - *or
+  just skip straight to playing*, see the next point. Re-running capture
   for the same name replaces their enrollment from scratch; deleting is a
   tap-twice-to-confirm button next to their name in the same list.
+- **Or let normal play enroll players for you**: every time the operator
+  scores a real point on the tablet (not a foul/undo/correction - only a
+  genuine +1 counts), that confirms who the camera's current candidate
+  appearance belongs to, automatically - no separate enrollment ritual
+  needed at all. This only works for individual/teams games, not
+  tournament mode, in this version. **Have each player take their first
+  few shots from a different side of the table** - the Enroll tab shows
+  "N/4 sides" per player (once the Table tab is calibrated) and an overall
+  "still bootstrapping" vs. "ready" status, so you can see when everyone
+  has enough coverage to rely on. This supplements manual enrollment, it
+  doesn't replace it - do either, or both.
 - **Start a new session**: tap "Clear all (new session)" at the bottom of
-  the Enroll tab before re-enrolling everyone. Do this every time players'
-  clothes have changed since the last time this was set up - typically
-  every day - since a color-based appearance match from yesterday's
-  outfit won't match today's.
+  the Enroll tab before re-enrolling everyone (manually or by play). Do
+  this every time players' clothes have changed since the last time this
+  was set up - typically every day - since a color-based appearance match
+  from yesterday's outfit won't match today's.
 - **Recognize**: switch to the "Recognize" tab (the default) and mount
   the phone - see below. It identifies a player while they're upright and
   approaching, then confirms the actual event only once they're also bent
@@ -188,7 +213,9 @@ running the scoreboard). It needs camera permission the first time.
   upright identification before someone bends over (bad lighting, standing
   side-on), it falls back to matching the bent-over frame itself at a
   stricter threshold rather than guessing wildly - expect this fallback
-  path to be the least reliable one.
+  path to be the least reliable one. Auto-enrollment-from-scoring never
+  fires during tournament mode (it hooks the regular scoring function,
+  which tournament mode doesn't use) - enroll those players manually.
 - Nothing recognized here ever auto-confirms blindly on the tablet: a
   camera match only switches the keypad's selected player (same
   feedback as pressing their number on the physical keypad) when no
