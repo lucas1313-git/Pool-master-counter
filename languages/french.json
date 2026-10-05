@@ -857,7 +857,7 @@
   "players.cameraInputEnable": "📷 Reconnaissance des joueurs par caméra (réseau local uniquement - confirme/corrige automatiquement le joueur actuel du pavé)",
   "players.cameraMatchThreshold": "Sensibilité de correspondance",
   "players.cameraDebounceSec": "Réannoncer après (sec)",
-  "cameraWizard.openButton": "🧙 Configurer la caméra",
+  "cameraWizard.openButton": "📷 Configurer la caméra",
   "cameraWizard.step1Heading": "Configurer la reconnaissance par caméra",
   "cameraWizard.step1Explain": "Un téléphone installé au-dessus de la table surveille les joueurs et indique à cette tablette qui doit jouer. Il doit être utilisé sur un téléphone ou une tablette différent de celui-ci - ouvrez le lien ci-dessous dans son navigateur, ou scannez le code QR avec son appareil photo.",
   "cameraWizard.qrHint": "Scannez avec le téléphone caméra",

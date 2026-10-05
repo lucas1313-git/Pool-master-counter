@@ -857,7 +857,7 @@
   "players.cameraInputEnable": "📷 Camera player recognition (LAN only - confirms/corrects the keypad's current player automatically)",
   "players.cameraMatchThreshold": "Match sensitivity",
   "players.cameraDebounceSec": "Re-announce after (sec)",
-  "cameraWizard.openButton": "🧙 Set Up Camera",
+  "cameraWizard.openButton": "📷 Set Up Camera",
   "cameraWizard.step1Heading": "Set Up Camera Recognition",
   "cameraWizard.step1Explain": "A phone mounted over the table watches for players and tells this tablet who's up. It needs to run on a different phone or tablet from this one - open the link below in its browser, or scan the QR code with its camera.",
   "cameraWizard.qrHint": "Scan with the camera phone",

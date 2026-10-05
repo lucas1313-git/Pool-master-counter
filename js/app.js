@@ -1914,6 +1914,7 @@
   var onboardingStep = 1;
 
   var btnOpenCameraWizard = document.getElementById("btn-open-camera-wizard");
+  var btnOpenCameraWizardHeader = document.getElementById("btn-open-camera-wizard-header");
   var cameraWizardOverlay = document.getElementById("camera-wizard-overlay");
   var cameraWizardHeading = document.getElementById("camera-wizard-heading");
   var cameraWizardProgress = document.getElementById("camera-wizard-progress");
@@ -29170,6 +29171,10 @@
   }
 
   btnOpenCameraWizard.addEventListener("click", openCameraWizard);
+  // Same wizard, a second entry point - up in the header nav row beside
+  // the main "Start Wizard" button, for discoverability without having
+  // to expand the (often-collapsed) Players panel first.
+  btnOpenCameraWizardHeader.addEventListener("click", openCameraWizard);
   btnCameraWizardCancel.addEventListener("click", closeCameraWizard);
   btnCameraWizardGo.addEventListener("click", advanceCameraWizard);
 
@@ -29204,23 +29209,31 @@
     selectCameraWizardPath("phone");
   });
 
-  btnCameraWizardPathSameDevice.addEventListener("click", function () {
-    cameraWizardPathUserChosen = true;
-    selectCameraWizardPath("same-device");
-  });
-
   // Same-device mode needs no step 2 (no separate "enable" checkbox step -
   // see selectCameraWizardPath's own comment) - starting it enables camera
   // input directly, closes this wizard, and hands off entirely to
   // camera.html's own guided setup, embedded in the new overlay below.
-  btnCameraWizardStartSameDevice.addEventListener("click", function () {
+  function startSameDeviceCamera() {
     if (!window.isSecureContext) return;
     state.cameraInputEnabled = true;
     saveState();
     renderAll();
     closeCameraWizard();
     openSameDeviceCameraOverlay();
+  }
+
+  btnCameraWizardPathSameDevice.addEventListener("click", function () {
+    cameraWizardPathUserChosen = true;
+    selectCameraWizardPath("same-device");
+    // Secure context already holds (the common case) - proceed straight
+    // to the camera overlay instead of making the user click twice. When
+    // it doesn't, there's nothing to proceed to yet - stay on this step
+    // so the insecure-context warning (toggled by selectCameraWizardPath)
+    // is actually visible.
+    if (window.isSecureContext) startSameDeviceCamera();
   });
+
+  btnCameraWizardStartSameDevice.addEventListener("click", startSameDeviceCamera);
 
   // Same-device camera overlay - embeds camera.html directly in this page
   // via <iframe src="camera.html?embedded=1">, so the camera and the
@@ -29275,6 +29288,10 @@
       var settings = window.PMCCameraBridge.getSettings();
       try {
         sameDeviceCameraIframe.contentWindow.postMessage({ type: "settings", matchThreshold: settings.matchThreshold, debounceSec: settings.debounceSec }, location.origin);
+      } catch (e) {}
+    } else if (msg.type === "roster-request") {
+      try {
+        sameDeviceCameraIframe.contentWindow.postMessage({ type: "roster", names: window.PMCCameraBridge.getPlayerNames() }, location.origin);
       } catch (e) {}
     }
   });
@@ -30808,6 +30825,13 @@
     // whatever the recognizer already decided to send.
     getSettings: function () {
       return { matchThreshold: state.cameraMatchThreshold, debounceSec: state.cameraDebounceSec };
+    },
+    // camera.html's enroll picker uses this instead of free-text entry,
+    // so a captured sample can never be mislabeled by a typo.
+    getPlayerNames: function () {
+      return state.players.map(function (p) {
+        return p.name;
+      });
     },
     // camera.html (a separate device/page - see camera-relay.js's own
     // comment) only ever knows players by name, never this session's

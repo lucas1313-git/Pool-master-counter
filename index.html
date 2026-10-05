@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261005b">
+<link rel="stylesheet" href="css/style.css?v=20261005d">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -68,6 +68,7 @@
       <button type="button" id="btn-quick-game" class="btn btn-primary all-players-nav-btn quick-game-btn" data-i18n="header.quickGame">⚡ Quick Game</button>
       <button type="button" id="btn-test-onboarding" class="btn btn-ghost all-players-nav-btn" data-i18n="header.welcomeNewPlayer">👋 Welcome New Player</button>
       <button type="button" id="btn-open-wizard" class="btn btn-primary all-players-nav-btn" data-i18n="header.startWizard">🧙 Start Wizard</button>
+      <button type="button" id="btn-open-camera-wizard-header" class="btn btn-ghost all-players-nav-btn" data-i18n="cameraWizard.openButton">📷 Set Up Camera</button>
       <button type="button" id="btn-open-tournament" class="btn btn-ghost all-players-nav-btn" data-i18n="header.tournament">🏆 Tournament</button>
       <button type="button" id="btn-open-league" class="btn btn-ghost all-players-nav-btn" data-i18n="header.league">🏆 League</button>
       <button type="button" id="btn-open-global-stats" class="btn btn-ghost all-players-nav-btn" data-i18n="header.globalStats">🌐 Global Stats</button>
@@ -121,7 +122,7 @@
     <div class="panel-body" id="players-panel-body">
       <div class="row">
         <button type="button" id="btn-open-all-players" class="btn btn-ghost" data-i18n="header.allStats">📊 View All Players Stats</button>
-        <button type="button" id="btn-open-camera-wizard" class="btn btn-ghost" data-i18n="cameraWizard.openButton">🧙 Set Up Camera</button>
+        <button type="button" id="btn-open-camera-wizard" class="btn btn-ghost" data-i18n="cameraWizard.openButton">📷 Set Up Camera</button>
       </div>
       <p id="new-player-name-requirement" class="new-player-name-requirement hidden"></p>
       <form id="add-player-form" class="row">
@@ -2322,7 +2323,7 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20261005b"></script>
+<script src="js/app.js?v=20261005d"></script>
 <script src="js/camera-client.js?v=20261004a"></script>
 </body>
 </html>

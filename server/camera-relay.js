@@ -58,6 +58,11 @@
 //     { type: "settings-request" } (camera -> relay -> every "listener")
 //     { type: "settings", matchThreshold, debounceSec } (listener -> relay
 //       -> every "camera")
+//   Roster handoff (camera.html's enroll picker needs the tablet's real
+//   player names instead of free text - same request/reply shape as
+//   settings above):
+//     { type: "roster-request" } (camera -> relay -> every "listener")
+//     { type: "roster", names: [...] } (listener -> relay -> every "camera")
 //   Gameplay-driven auto-enrollment (js/app.js's adjustScore hook, via
 //   js/camera-client.js - see its own comment on why this is safe from
 //   feedback loops): a human confirming a real score for a player is
@@ -226,6 +231,20 @@ function createCameraRelay(WebSocket) {
 
         if (msg.type === "settings" && ws.role === "listener") {
           broadcastToCameras({ type: "settings", matchThreshold: msg.matchThreshold, debounceSec: msg.debounceSec });
+          return;
+        }
+
+        // Same request/reply shape as settings-request/settings - lets
+        // camera.html's enroll picker offer the tablet's real player
+        // roster instead of free text (see js/camera-client.js's own
+        // handleRosterRequest).
+        if (msg.type === "roster-request" && ws.role === "camera") {
+          broadcastToListeners({ type: "roster-request" });
+          return;
+        }
+
+        if (msg.type === "roster" && ws.role === "listener" && Array.isArray(msg.names)) {
+          broadcastToCameras({ type: "roster", names: msg.names });
           return;
         }
 
