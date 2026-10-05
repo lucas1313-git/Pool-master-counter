@@ -6864,11 +6864,21 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
 
 .now-playing-banner .game-duration-live,
 .now-playing-banner .racing-to-live {
-  font-size: 1.1rem;
   font-weight: 800;
   color: var(--accent);
   letter-spacing: normal;
   font-variant-numeric: tabular-nums;
+}
+
+.now-playing-banner .game-duration-live {
+  font-size: 1.1rem;
+}
+
+/* Bigger than .game-duration-live on purpose - the race target is the
+   more consequential of the two live numbers in this row (it's also an
+   editable input, not just a readout), so it gets more visual weight. */
+.now-playing-banner .racing-to-live {
+  font-size: 1.5rem;
 }
 
 /* Matches .rotation-position-every-input's treatment (inline, sized to
