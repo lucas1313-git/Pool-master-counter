@@ -1937,6 +1937,9 @@
   var cameraWizardQr = document.getElementById("camera-wizard-qr");
   var cameraWizardHttpsMissing = document.getElementById("camera-wizard-https-missing");
   var cameraWizardNoRelay = document.getElementById("camera-wizard-no-relay");
+  var cameraWizardInstallLink = document.getElementById("camera-wizard-install-link");
+  var cameraWizardInstallUnsupported = document.getElementById("camera-wizard-install-unsupported");
+  var cameraWizardInstallSecurityNote = document.getElementById("camera-wizard-install-security-note");
   var cameraWizardEnableCheckbox = document.getElementById("camera-wizard-enable-checkbox");
   var cameraWizardSettingsRow = document.getElementById("camera-wizard-settings-row");
   var cameraWizardMatchThresholdInput = document.getElementById("camera-wizard-match-threshold");
@@ -29107,6 +29110,32 @@
     cameraWizardNoRelay.classList.toggle("hidden", state !== "no-relay");
   }
 
+  // Mirrors renderInstallPrompt() (Group Session's own desktop-app
+  // install prompt) for the exact same reason it exists there: a phone
+  // can only ever reach the relay if some computer on the LAN is
+  // actually running it, and a GitHub Pages (or any other static) copy
+  // never is - so the fix is installing and running the real desktop
+  // app, not re-reading an error message.
+  function renderCameraWizardInstallPrompt() {
+    var os = detectDesktopOS();
+    cameraWizardInstallUnsupported.classList.toggle("hidden", !!os);
+    cameraWizardInstallLink.classList.toggle("hidden", !os);
+    if (!os) {
+      cameraWizardInstallSecurityNote.textContent = "";
+      return;
+    }
+    var osLabel = os === "mac" ? "Mac (Apple Silicon)" : os === "windows" ? "Windows" : "Linux";
+    cameraWizardInstallLink.href = DESKTOP_DOWNLOAD_URLS[os];
+    cameraWizardInstallLink.textContent = T("cameraWizard.installButton", { os: osLabel });
+    cameraWizardInstallSecurityNote.textContent = T(
+      os === "mac"
+        ? "groupSession.installSecurityNoteMac"
+        : os === "windows"
+        ? "groupSession.installSecurityNoteWindows"
+        : "groupSession.installSecurityNoteLinux"
+    );
+  }
+
   function loadCameraWizardLinkInfo() {
     // /api/lan-info only exists on the local relay server (server.js or
     // the desktop app) - on a GitHub Pages copy (or any other static
@@ -29134,6 +29163,7 @@
       .catch(function (e) {
         console.error("[CameraWizard] /api/lan-info unreachable - this page is probably not being served by the local relay server:", e);
         showCameraWizardLinkState("no-relay");
+        renderCameraWizardInstallPrompt();
         // No relay at all (e.g. a GitHub Pages copy) means the "separate
         // phone" path can never work here - lead with the same-device
         // option instead of leaving the user stuck on a dead-end error,
