@@ -878,6 +878,7 @@
   "cameraWizard.installStepInstall": "2. Install",
   "cameraWizard.installStepRun": "3. Run",
   "cameraWizard.installButton": "⬇️ Download for {{os}}",
+  "cameraWizard.installQrHint": "Scan to open this download link on another device",
   "cameraWizard.installUnsupportedOs": "This needs a desktop computer - it won't run on a phone or tablet.",
   "players.ratingPlaceholder": "Starting rating (optional)",
   "players.recomputeAllRatings": "🔧 Recompute All Ratings From Game History",
