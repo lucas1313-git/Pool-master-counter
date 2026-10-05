@@ -1939,8 +1939,6 @@
   var cameraWizardNoRelay = document.getElementById("camera-wizard-no-relay");
   var cameraWizardInstallPrompt = document.getElementById("camera-wizard-install-prompt");
   var cameraWizardInstallLink = document.getElementById("camera-wizard-install-link");
-  var cameraWizardInstallQr = document.getElementById("camera-wizard-install-qr");
-  var cameraWizardInstallQrHint = document.getElementById("camera-wizard-install-qr-hint");
   var cameraWizardInstallUnsupported = document.getElementById("camera-wizard-install-unsupported");
   var cameraWizardInstallSecurityNote = document.getElementById("camera-wizard-install-security-note");
   var cameraWizardEnableCheckbox = document.getElementById("camera-wizard-enable-checkbox");
@@ -24651,14 +24649,6 @@
     linux: "https://github.com/lucas1313-git/Pool-master-counter-releases/releases/download/desktop-latest/PoolMasterCounter-linux-x64.tar.gz",
   };
 
-  // The release page, not a direct asset link - scanning the camera
-  // wizard's install QR with a phone should open a normal webpage, not
-  // silently fire off a .dmg/.exe binary download with no context (which
-  // a phone can't even do anything useful with). The "Download for X"
-  // button still points straight at the right asset - that's correct on
-  // the desktop this wizard is trying to get installed onto.
-  var DESKTOP_RELEASES_PAGE_URL = "https://github.com/lucas1313-git/Pool-master-counter-releases/releases/tag/desktop-latest";
-
   var DESKTOP_OS_LABELS = { mac: "Mac", windows: "Windows", linux: "Linux" };
 
   // Used by the multi-table hosting handoff (downloadSetupForMultiTableHost)
@@ -29120,12 +29110,13 @@
     cameraWizardLinkBlock.classList.toggle("hidden", state !== "ok");
     cameraWizardHttpsMissing.classList.toggle("hidden", state !== "https-missing");
     cameraWizardNoRelay.classList.toggle("hidden", state !== "no-relay");
-    // Both "https-missing" (relay's running but with no cert) and
-    // "no-relay" (no relay at all) share the same fix - download and run
-    // the desktop app, which always sets up HTTPS itself (see
-    // installer/standalone-entry.js's unconditional tlsCert.getOrCreateCert
-    // call) with zero certificate setup either way.
-    cameraWizardInstallPrompt.classList.toggle("hidden", state !== "https-missing" && state !== "no-relay");
+    // Only "no-relay" (nothing running at all - e.g. a GitHub Pages copy)
+    // offers the install prompt. "https-missing" means a server is
+    // *already* reachable right here - something to download and run is
+    // nonsensical when the thing you'd download is clearly already
+    // running; that case just needs HTTPS turned on (auto-poll catches
+    // the desktop app finishing its own startup, see loadCameraWizardLinkInfo).
+    cameraWizardInstallPrompt.classList.toggle("hidden", state !== "no-relay");
   }
 
   // Mirrors renderInstallPrompt() (Group Session's own desktop-app
@@ -29133,20 +29124,13 @@
   // can only ever reach the relay if some computer on the LAN is
   // actually running it, and a GitHub Pages (or any other static) copy
   // never is - so the fix is installing and running the real desktop
-  // app, not re-reading an error message.
-  // relayReachable tells it whether /api/qr.png (served by this same
-  // relay) can actually be called - true for the https-missing state
-  // (the relay itself answered just fine, it's only missing a cert),
-  // false for no-relay (there's no server here at all, so there's
-  // nothing to generate the QR image - a GitHub Pages copy can't serve
-  // /api/qr.png any more than it could /api/lan-info).
-  function renderCameraWizardInstallPrompt(relayReachable) {
+  // app, not re-reading an error message. Only ever called for the
+  // no-relay state - see showCameraWizardLinkState's own comment on why
+  // https-missing doesn't get this (a server's already running there).
+  function renderCameraWizardInstallPrompt() {
     var os = detectDesktopOS();
     cameraWizardInstallUnsupported.classList.toggle("hidden", !!os);
     cameraWizardInstallLink.classList.toggle("hidden", !os);
-    var showQr = !!os && relayReachable;
-    cameraWizardInstallQr.classList.toggle("hidden", !showQr);
-    cameraWizardInstallQrHint.classList.toggle("hidden", !showQr);
     if (!os) {
       cameraWizardInstallSecurityNote.textContent = "";
       return;
@@ -29154,7 +29138,6 @@
     var osLabel = os === "mac" ? "Mac (Apple Silicon)" : os === "windows" ? "Windows" : "Linux";
     cameraWizardInstallLink.href = DESKTOP_DOWNLOAD_URLS[os];
     cameraWizardInstallLink.textContent = T("cameraWizard.installButton", { os: osLabel });
-    if (showQr) cameraWizardInstallQr.src = "/api/qr.png?url=" + encodeURIComponent(DESKTOP_RELEASES_PAGE_URL);
     cameraWizardInstallSecurityNote.textContent = T(
       os === "mac"
         ? "groupSession.installSecurityNoteMac"
@@ -29189,7 +29172,6 @@
         var addr = info.addresses && info.addresses[0];
         if (!addr || !info.httpsPort) {
           showCameraWizardLinkState("https-missing");
-          renderCameraWizardInstallPrompt(true);
           // The desktop app finishing its own startup (generating a
           // self-signed cert, bringing up the HTTPS listener) is the
           // single most common reason to land here - keep re-checking on
@@ -29208,7 +29190,7 @@
       .catch(function (e) {
         console.error("[CameraWizard] /api/lan-info unreachable - this page is probably not being served by the local relay server:", e);
         showCameraWizardLinkState("no-relay");
-        renderCameraWizardInstallPrompt(false);
+        renderCameraWizardInstallPrompt();
         // No relay at all (e.g. a GitHub Pages copy) means the "separate
         // phone" path can never work here - lead with the same-device
         // option instead of leaving the user stuck on a dead-end error,
