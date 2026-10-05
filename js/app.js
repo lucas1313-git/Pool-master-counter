@@ -360,6 +360,12 @@
       fairRaceTargets: null,
       rotatingTeamsEnabled: false,
       cameraInputEnabled: false,
+      // Set true the first time either camera wizard path actually
+      // finishes (phone-path step 2's enable checkbox, or the
+      // same-device "Start" button) - lets the main checkbox tell "never
+      // configured" apart from "configured, just switched off" so it
+      // knows when to redirect into the wizard instead of just toggling.
+      cameraWizardCompleted: false,
       cameraMatchThreshold: 1.2,
       cameraDebounceSec: 10,
       currentGame: { gameType: "8ball", target: 1, unit: "rack", mode: "individual", startedAt: new Date().toISOString(), shotCounterEnabled: false, shotCounterBeepSec: 30, shotCounterHidden: false, queueEnabled: false, timedTournamentEnabled: false, timedTournamentMinutes: 60 },
@@ -437,6 +443,12 @@
           if (typeof parsed.fairRaceTargets !== "object") parsed.fairRaceTargets = null;
           if (typeof parsed.rotatingTeamsEnabled !== "boolean") parsed.rotatingTeamsEnabled = false;
           if (typeof parsed.cameraInputEnabled !== "boolean") parsed.cameraInputEnabled = false;
+          // Existing users who already had this on before cameraWizardCompleted
+          // existed clearly already went through setup under the old
+          // flow (checking the box WAS the whole flow back then) -
+          // default them to "completed" too, so they don't get bounced
+          // into the wizard the next time they flip this checkbox off/on.
+          if (typeof parsed.cameraWizardCompleted !== "boolean") parsed.cameraWizardCompleted = !!parsed.cameraInputEnabled;
           if (typeof parsed.cameraMatchThreshold !== "number") parsed.cameraMatchThreshold = 1.2;
           if (typeof parsed.cameraDebounceSec !== "number") parsed.cameraDebounceSec = 10;
           if (!parsed.currentGame) parsed.currentGame = { gameType: "8ball", target: 1, mode: "individual" };
@@ -1813,6 +1825,7 @@
   var rotatingTeamsRow = document.getElementById("rotating-teams-row");
   var rotatingTeamsCheckbox = document.getElementById("rotating-teams-checkbox");
   var cameraInputCheckbox = document.getElementById("camera-input-checkbox");
+  var btnCameraInputHelp = document.getElementById("btn-camera-input-help");
   var cameraInputSettingsRow = document.getElementById("camera-input-settings-row");
   var cameraMatchThresholdInput = document.getElementById("camera-match-threshold");
   var cameraDebounceSecInput = document.getElementById("camera-debounce-sec");
@@ -29020,10 +29033,26 @@
   // state and re-render like any other setting here; the actual
   // connect/disconnect happens on that file's own schedule, within a
   // few seconds.
+  //
+  // Checking it for the first time ever (no camera set up yet, via
+  // either wizard path) opens the wizard instead of just flipping the
+  // switch - there's nothing for it to actually turn on otherwise. The
+  // checkbox itself stays off until one of the wizard's own paths
+  // actually finishes (see cameraWizardEnableCheckbox/
+  // startSameDeviceCamera, both of which set cameraWizardCompleted).
   cameraInputCheckbox.addEventListener("change", function () {
+    if (cameraInputCheckbox.checked && !state.cameraWizardCompleted) {
+      cameraInputCheckbox.checked = false;
+      openCameraWizard();
+      return;
+    }
     state.cameraInputEnabled = cameraInputCheckbox.checked;
     saveState();
     renderAll();
+  });
+
+  btnCameraInputHelp.addEventListener("click", function () {
+    alertModal(T("players.cameraInputHelpText"));
   });
 
   cameraMatchThresholdInput.addEventListener("input", function () {
@@ -29185,6 +29214,7 @@
   // there's no need to also write back into the real controls directly here.
   cameraWizardEnableCheckbox.addEventListener("change", function () {
     state.cameraInputEnabled = cameraWizardEnableCheckbox.checked;
+    if (state.cameraInputEnabled) state.cameraWizardCompleted = true;
     cameraWizardSettingsRow.classList.toggle("hidden", !state.cameraInputEnabled);
     saveState();
     renderAll();
@@ -29216,6 +29246,7 @@
   function startSameDeviceCamera() {
     if (!window.isSecureContext) return;
     state.cameraInputEnabled = true;
+    state.cameraWizardCompleted = true;
     saveState();
     renderAll();
     closeCameraWizard();
