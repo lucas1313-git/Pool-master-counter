@@ -1,0 +1,1521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pool Master Counter - Camera Recognition</title>
+<style>
+  :root {
+    --bg: #1a0a0a;
+    --panel: #241010;
+    --card: #2e1414;
+    --accent: #e8b923;
+    --accent-dark: #b8890f;
+    --danger: #ff5252;
+    --good: #5ec98a;
+    --info: #5aa9e6;
+    --text: #f6efe9;
+    --text-dim: #c9a2a2;
+    --border: #4a1e1e;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  header {
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: var(--accent);
+  }
+  main {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 12px 12px 40px;
+  }
+  .status-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+    font-size: 0.78rem;
+  }
+  .pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 4px 10px;
+  }
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    flex-shrink: 0;
+  }
+  .dot.ok { background: var(--good); }
+  .dot.bad { background: var(--danger); }
+  .dot.busy { background: var(--accent); }
+  .video-wrap {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    background: #000;
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  video, canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  canvas { touch-action: none; }
+  canvas.tappable { pointer-events: auto; cursor: crosshair; }
+  canvas:not(.tappable) { pointer-events: none; }
+  .warning-banner {
+    margin-top: 10px;
+    padding: 10px 12px;
+    background: #3a1414;
+    border: 1px solid var(--danger);
+    border-radius: 10px;
+    color: var(--danger);
+    font-size: 0.85rem;
+  }
+  .warning-banner button { margin-top: 8px; display: block; }
+  .tabs { display: flex; gap: 8px; margin: 14px 0 10px; }
+  .tab-btn {
+    flex: 1;
+    padding: 10px 4px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--text-dim);
+    border-radius: 10px;
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+  .tab-btn.active { background: var(--accent); color: #241a00; border-color: var(--accent); }
+  section.panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  section.panel h2 {
+    margin: 0 0 10px;
+    font-size: 0.95rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  label { font-size: 0.85rem; color: var(--text-dim); }
+  input[type="text"], input[type="number"], select {
+    width: 100%;
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 0.95rem;
+    margin: 4px 0 10px;
+  }
+  button {
+    background: var(--accent);
+    color: #241a00;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button.secondary { background: var(--card); color: var(--text); border: 1px solid var(--border); }
+  button.danger { background: var(--danger); color: #2a0505; }
+  button:disabled { opacity: 0.5; cursor: default; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .row > * { flex: 1; }
+  .player-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .player-row:last-child { border-bottom: none; }
+  .player-row .meta { font-size: 0.75rem; color: var(--text-dim); }
+  .player-row .actions { display: flex; gap: 6px; }
+  .player-row .actions button { padding: 6px 10px; font-size: 0.8rem; }
+  .log {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    max-height: 140px;
+    overflow-y: auto;
+  }
+  .log div { padding: 3px 0; border-bottom: 1px solid var(--border); }
+  .log div:last-child { border-bottom: none; }
+  .progress-text { font-size: 0.85rem; color: var(--accent); margin: 6px 0; }
+  details > summary { cursor: pointer; color: var(--text-dim); font-size: 0.85rem; padding: 4px 0; }
+  .hint { font-size: 0.75rem; color: var(--text-dim); margin-top: -4px; margin-bottom: 10px; }
+  .fine { font-size: 0.72rem; color: var(--text-dim); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Pool Master Counter - Camera Recognition</h1>
+</header>
+<main>
+  <div class="status-row">
+    <span class="pill"><span class="dot" id="dotRelay"></span><span id="labelRelay">Relay: connecting...</span></span>
+    <span class="pill"><span class="dot" id="dotModels"></span><span id="labelModels">Models: loading...</span></span>
+    <span class="pill"><span class="dot" id="dotCamera"></span><span id="labelCamera">Camera: starting...</span></span>
+  </div>
+
+  <div class="video-wrap">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="overlay"></canvas>
+  </div>
+
+  <div class="warning-banner" id="cameraWarning" hidden>
+    <div id="cameraWarningText"></div>
+    <button id="restartCameraBtn" class="secondary">Restart camera</button>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" id="tabRecognize" type="button">Recognize</button>
+    <button class="tab-btn" id="tabEnroll" type="button">Enroll</button>
+    <button class="tab-btn" id="tabCalibrate" type="button">Table</button>
+  </div>
+
+  <section class="panel" id="recognizePanel">
+    <h2>Recent activity</h2>
+    <div class="log" id="recognizeLog"><div>Waiting for a recognized player...</div></div>
+    <p class="fine" style="margin-top:8px">
+      This identifies people by clothing/body appearance, not faces - a coarse
+      signal that only lasts one day's outfit. Two players in very similar clothes
+      may be confused. Tune the settings below against the debug overlay.
+    </p>
+  </section>
+
+  <section class="panel" id="enrollPanel" hidden>
+    <h2>Enroll a player (today's outfit)</h2>
+    <label for="enrollName">Player name (must match the tablet exactly)</label>
+    <input type="text" id="enrollName" placeholder="e.g. Alice">
+    <div class="hint">Stand normally, facing the camera, where players usually approach from. Or skip this - just play normally and scoring a real shot teaches the camera too (see below).</div>
+    <button id="captureBtn" type="button">Capture 8 samples</button>
+    <div class="progress-text" id="captureProgress" hidden></div>
+    <p class="fine">
+      Scoring a real shot on the tablet also labels the camera's current
+      candidate automatically - no separate step needed once play starts.
+      Have each player take their first few shots from different sides of
+      the table so their profile isn't just one angle.
+    </p>
+
+    <h2 style="margin-top:16px">Enrolled today</h2>
+    <div id="bootstrapStatus" class="hint"></div>
+    <div id="playerList"><div class="hint">No players enrolled yet.</div></div>
+    <button id="clearAllBtn" class="danger" type="button" style="margin-top:10px">Clear all (new session)</button>
+    <div class="hint" style="margin-top:6px">Appearance only matches today's clothes - clear and re-enroll everyone at the start of each new session.</div>
+  </section>
+
+  <section class="panel" id="calibratePanel" hidden>
+    <h2>Table calibration (optional, improves accuracy)</h2>
+    <p class="fine">
+      Lets the camera know real table measurements, so "close enough to be
+      shooting" is a real calibrated distance instead of a guess. Works from
+      any camera angle; only needs doing once per mounting.
+    </p>
+    <div id="calibrationStatus" class="hint">Not calibrated yet.</div>
+
+    <div id="calibrateSetup">
+      <label for="tableSizeSelect">Table size</label>
+      <select id="tableSizeSelect">
+        <option value="7">7-foot (78" x 39")</option>
+        <option value="8" selected>8-foot (88" x 44")</option>
+        <option value="9">9-foot / regulation (100" x 50")</option>
+        <option value="10">10-foot (112" x 56")</option>
+        <option value="snooker">Snooker (140" x 70")</option>
+        <option value="custom">Custom</option>
+      </select>
+      <div id="customSizeRow" class="row" hidden>
+        <div>
+          <label for="customLength">Length (in)</label>
+          <input type="number" id="customLength" min="30" max="170" value="88">
+        </div>
+        <div>
+          <label for="customWidth">Width (in)</label>
+          <input type="number" id="customWidth" min="15" max="90" value="44">
+        </div>
+      </div>
+      <button id="detectTableBtn" type="button">Detect table automatically</button>
+      <div class="hint">Point the camera at the whole table, empty - no balls, rack, or cue - for the best result.</div>
+      <div class="progress-text" id="detectStatusText" hidden></div>
+      <button id="showManualCalibrationBtn" class="secondary" type="button">Calibrate manually instead</button>
+    </div>
+
+    <div id="manualCalibrateSetup" hidden>
+      <label for="firstEdgeSelect">Your first tap-to-second-tap edge will be the table's:</label>
+      <select id="firstEdgeSelect">
+        <option value="width">Short end (width)</option>
+        <option value="length">Long side (length)</option>
+      </select>
+      <button id="startCalibrationBtn" type="button">Start manual calibration</button>
+      <button id="backToAutoBtn" class="secondary" type="button">Back</button>
+    </div>
+
+    <div id="calibrateTapping" hidden>
+      <div class="progress-text" id="calibrationStepText">Tap corner 1 of 4</div>
+      <button id="cancelCalibrationBtn" class="secondary" type="button">Cancel</button>
+    </div>
+    <button id="recalibrateBtn" class="secondary" type="button" hidden>Re-calibrate</button>
+  </section>
+
+  <details class="panel" id="settingsPanel">
+    <summary>Settings (needs on-site tuning)</summary>
+    <div style="margin-top:10px">
+      <label for="cameraSelect">Camera</label>
+      <select id="cameraSelect"></select>
+
+      <label for="thresholdInput">Appearance match distance (lower = stricter)</label>
+      <input type="number" id="thresholdInput" min="0.1" max="4" step="0.1" value="1.2">
+
+      <label for="consecutiveInput">Consecutive frames required</label>
+      <input type="number" id="consecutiveInput" min="1" max="10" step="1" value="3">
+
+      <label for="debounceInput">Re-announce same player after (sec)</label>
+      <input type="number" id="debounceInput" min="1" max="120" step="1" value="10">
+
+      <label for="bendEnterInput">Bent-over angle - enter (degrees from upright)</label>
+      <input type="number" id="bendEnterInput" min="10" max="85" step="1" value="45">
+
+      <label for="bendExitInput">Bent-over angle - exit back to upright (degrees)</label>
+      <input type="number" id="bendExitInput" min="5" max="80" step="1" value="35">
+
+      <label for="railDistanceInput">Max distance from rail to count as "at the table" (inches, needs calibration)</label>
+      <input type="number" id="railDistanceInput" min="6" max="72" step="1" value="30">
+
+      <div class="row" style="margin-top:4px">
+        <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="debugToggle" style="width:auto;margin:0"> Show debug overlay</label>
+      </div>
+    </div>
+  </details>
+</main>
+
+<script src="camera/tfjs.js"></script>
+<script src="camera/pose-detection.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  var MODEL_URL = "camera/models/movenet-lightning/model.json";
+  var WS_PATH = "/ws-camera";
+  var RECONNECT_DELAY_MS = 3000;
+  var DETECTION_INTERVAL_MS = 280; // ~3.5 fps, within the 3-5fps target
+  var ENROLL_TARGET_SAMPLES = 8;
+  var ENROLL_CAPTURE_TIMEOUT_MS = 15000;
+  var SETTINGS_STORAGE_KEY = "pmc-camera-settings";
+  var CALIBRATION_STORAGE_KEY = "pmc-camera-calibration";
+  var KEYPOINT_CONF_FLOOR = 0.3;
+  var CANDIDATE_GRACE_MS = 3000; // how long a resolved identity survives a gap in pose detection
+  // Separate from CANDIDATE_GRACE_MS on purpose - that one is tuned for
+  // frame-to-frame continuity (sub-second gaps), this one for the real
+  // gap between "shot happens" and "operator reaches the keypad and taps
+  // a score," which routinely exceeds a few seconds.
+  var TURN_CONFIRM_GRACE_MS = 12000;
+  var NO_POSE_GRACE_MS = 1200; // brief occlusion tolerance before resetting stance state
+  var MAX_EXPECTED_DISTANCE = 8; // for scaling the player_up confidence field
+  var HUE_BINS = 12;
+  var SAT_BINS = 4;
+  var ASPECT_RATIO_WEIGHT = 0.3;
+  var SIDES_TARGET = 4;
+  var DETECT_CANVAS_WIDTH = 160; // downsampled resolution for one-shot table detection
+  var DETECT_MIN_BLOB_FRACTION = 0.1; // reject a detected "table" smaller than this fraction of the frame
+  // Reject a match that fills nearly the whole frame with no surrounding
+  // context - a real table-mounted view should show some floor/room
+  // around the table, not edge-to-edge felt. Without this, pointing the
+  // camera at a large flat matching-colored surface (a green wall, say)
+  // would "succeed" and silently calibrate against the wrong thing.
+  var DETECT_MAX_BLOB_FRACTION = 0.92;
+
+  var TABLE_SIZES = {
+    "7": { length: 78, width: 39 },
+    "8": { length: 88, width: 44 },
+    "9": { length: 100, width: 50 },
+    "10": { length: 112, width: 56 },
+    "snooker": { length: 140, width: 70 }
+  };
+
+  // Candidate felt hues to test, in HSV degrees - whichever produces the
+  // largest connected region wins. "wrap" ranges cross the 0/360 seam
+  // (e.g. burgundy/red). Not exhaustive - an unusual felt color (or an
+  // unusually lit one) will simply fail detection, falling back to
+  // manual calibration - see the plan's own note on this being the most
+  // fragile piece of the whole feature.
+  var FELT_HUE_RANGES = [
+    { hueMin: 70, hueMax: 170 }, // green
+    { hueMin: 170, hueMax: 260 }, // blue
+    { hueMin: 330, hueMax: 30, wrap: true }, // burgundy/red
+    { satMax: 0.18 } // grey/neutral
+  ];
+
+  var videoEl = document.getElementById("video");
+  var overlayEl = document.getElementById("overlay");
+  var overlayCtx = overlayEl.getContext("2d");
+
+  var dotRelay = document.getElementById("dotRelay");
+  var labelRelay = document.getElementById("labelRelay");
+  var dotModels = document.getElementById("dotModels");
+  var labelModels = document.getElementById("labelModels");
+  var dotCamera = document.getElementById("dotCamera");
+  var labelCamera = document.getElementById("labelCamera");
+
+  var cameraWarning = document.getElementById("cameraWarning");
+  var cameraWarningText = document.getElementById("cameraWarningText");
+  var restartCameraBtn = document.getElementById("restartCameraBtn");
+
+  var tabRecognize = document.getElementById("tabRecognize");
+  var tabEnroll = document.getElementById("tabEnroll");
+  var tabCalibrate = document.getElementById("tabCalibrate");
+  var recognizePanel = document.getElementById("recognizePanel");
+  var enrollPanel = document.getElementById("enrollPanel");
+  var calibratePanel = document.getElementById("calibratePanel");
+  var recognizeLog = document.getElementById("recognizeLog");
+
+  var enrollNameInput = document.getElementById("enrollName");
+  var captureBtn = document.getElementById("captureBtn");
+  var captureProgress = document.getElementById("captureProgress");
+  var playerListEl = document.getElementById("playerList");
+  var clearAllBtn = document.getElementById("clearAllBtn");
+
+  var calibrationStatusEl = document.getElementById("calibrationStatus");
+  var calibrateSetupEl = document.getElementById("calibrateSetup");
+  var tableSizeSelect = document.getElementById("tableSizeSelect");
+  var customSizeRow = document.getElementById("customSizeRow");
+  var customLength = document.getElementById("customLength");
+  var customWidth = document.getElementById("customWidth");
+  var detectTableBtn = document.getElementById("detectTableBtn");
+  var detectStatusText = document.getElementById("detectStatusText");
+  var showManualCalibrationBtn = document.getElementById("showManualCalibrationBtn");
+  var manualCalibrateSetupEl = document.getElementById("manualCalibrateSetup");
+  var firstEdgeSelect = document.getElementById("firstEdgeSelect");
+  var startCalibrationBtn = document.getElementById("startCalibrationBtn");
+  var backToAutoBtn = document.getElementById("backToAutoBtn");
+  var calibrateTappingEl = document.getElementById("calibrateTapping");
+  var calibrationStepText = document.getElementById("calibrationStepText");
+  var cancelCalibrationBtn = document.getElementById("cancelCalibrationBtn");
+  var recalibrateBtn = document.getElementById("recalibrateBtn");
+  var bootstrapStatusEl = document.getElementById("bootstrapStatus");
+
+  var cameraSelect = document.getElementById("cameraSelect");
+  var thresholdInput = document.getElementById("thresholdInput");
+  var consecutiveInput = document.getElementById("consecutiveInput");
+  var debounceInput = document.getElementById("debounceInput");
+  var bendEnterInput = document.getElementById("bendEnterInput");
+  var bendExitInput = document.getElementById("bendExitInput");
+  var railDistanceInput = document.getElementById("railDistanceInput");
+  var debugToggle = document.getElementById("debugToggle");
+
+  // ---- Settings ----
+  var settings = {
+    matchThreshold: 1.2,
+    consecutiveFrames: 3,
+    debounceSec: 10,
+    bendEnterAngle: 45,
+    bendExitAngle: 35,
+    railDistanceInches: 30,
+    debugOverlay: false
+  };
+  var hasLocalSettingsOverride = false;
+
+  function loadStoredSettings() {
+    try {
+      var raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
+      if (!raw) return;
+      var parsed = JSON.parse(raw);
+      hasLocalSettingsOverride = true;
+      Object.keys(settings).forEach(function (key) {
+        if (typeof parsed[key] === typeof settings[key]) settings[key] = parsed[key];
+      });
+    } catch (e) {}
+  }
+  function persistSettings() {
+    hasLocalSettingsOverride = true;
+    try { localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings)); } catch (e) {}
+  }
+  function applySettingsToInputs() {
+    thresholdInput.value = settings.matchThreshold;
+    consecutiveInput.value = settings.consecutiveFrames;
+    debounceInput.value = settings.debounceSec;
+    bendEnterInput.value = settings.bendEnterAngle;
+    bendExitInput.value = settings.bendExitAngle;
+    railDistanceInput.value = settings.railDistanceInches;
+    debugToggle.checked = settings.debugOverlay;
+  }
+  function wireNumberSetting(input, key) {
+    input.addEventListener("input", function () {
+      var v = parseFloat(input.value);
+      if (!(v > 0) && v !== 0) return;
+      settings[key] = v;
+      persistSettings();
+    });
+  }
+  wireNumberSetting(thresholdInput, "matchThreshold");
+  wireNumberSetting(consecutiveInput, "consecutiveFrames");
+  wireNumberSetting(debounceInput, "debounceSec");
+  wireNumberSetting(bendEnterInput, "bendEnterAngle");
+  wireNumberSetting(bendExitInput, "bendExitAngle");
+  wireNumberSetting(railDistanceInput, "railDistanceInches");
+  debugToggle.addEventListener("change", function () {
+    settings.debugOverlay = debugToggle.checked;
+    persistSettings();
+  });
+
+  loadStoredSettings();
+  applySettingsToInputs();
+
+  // ---- Tabs ----
+  function showTab(which) {
+    tabRecognize.classList.toggle("active", which === "recognize");
+    tabEnroll.classList.toggle("active", which === "enroll");
+    tabCalibrate.classList.toggle("active", which === "calibrate");
+    recognizePanel.hidden = which !== "recognize";
+    enrollPanel.hidden = which !== "enroll";
+    calibratePanel.hidden = which !== "calibrate";
+    overlayEl.classList.toggle("tappable", which === "calibrate" && calibrating);
+  }
+  tabRecognize.addEventListener("click", function () { showTab("recognize"); });
+  tabEnroll.addEventListener("click", function () { showTab("enroll"); });
+  tabCalibrate.addEventListener("click", function () { showTab("calibrate"); });
+
+  function setStatus(dotEl, labelEl, state, text) {
+    dotEl.className = "dot" + (state ? " " + state : "");
+    labelEl.textContent = text;
+  }
+
+  // ---- Model loading (tfjs + MoveNet pose-detection, vendored - no CDN) ----
+  var modelsReady = false;
+  var detector = null;
+
+  function loadModels() {
+    setStatus(dotModels, labelModels, "busy", "Models: loading...");
+    return tf.setBackend("webgl").then(function () {
+      return tf.ready();
+    }).then(function () {
+      return poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
+        modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
+        modelUrl: MODEL_URL
+      });
+    }).then(function (d) {
+      detector = d;
+      modelsReady = true;
+      setStatus(dotModels, labelModels, "ok", "Models: ready");
+    }).catch(function (e) {
+      setStatus(dotModels, labelModels, "bad", "Models: failed to load");
+      console.error("[camera] model load failed:", e);
+    });
+  }
+
+  // Inference-pipeline watchdog - separate from the camera-stream watchdog
+  // below. A lost WebGL context or a stalled tfjs op can leave the video
+  // playing fine while pose detection silently stops producing results -
+  // unlike a dead camera stream, nothing else would ever surface this on
+  // a phone running unattended as a mounted fixture.
+  var lastPoseResultAt = Date.now();
+  var WATCHDOG_STALL_MS = 10000;
+  setInterval(function () {
+    if (!modelsReady) return;
+    if (Date.now() - lastPoseResultAt > WATCHDOG_STALL_MS) {
+      setStatus(dotModels, labelModels, "bad", "Models: stalled, reloading...");
+      modelsReady = false;
+      lastPoseResultAt = Date.now();
+      loadModels();
+    }
+  }, 5000);
+
+  // ---- Camera ----
+  var currentStream = null;
+  var devicesPopulated = false;
+
+  function stopCurrentStream() {
+    if (currentStream) {
+      currentStream.getTracks().forEach(function (t) { t.stop(); });
+      currentStream = null;
+    }
+  }
+  function showCameraWarning(text) {
+    cameraWarningText.textContent = text;
+    cameraWarning.hidden = false;
+  }
+  function hideCameraWarning() { cameraWarning.hidden = true; }
+
+  function populateCameraList(selectedDeviceId) {
+    navigator.mediaDevices.enumerateDevices().then(function (devices) {
+      var cams = devices.filter(function (d) { return d.kind === "videoinput"; });
+      cameraSelect.innerHTML = "";
+      cams.forEach(function (d, i) {
+        var opt = document.createElement("option");
+        opt.value = d.deviceId;
+        opt.textContent = d.label || ("Camera " + (i + 1));
+        if (d.deviceId === selectedDeviceId) opt.selected = true;
+        cameraSelect.appendChild(opt);
+      });
+      devicesPopulated = true;
+    }).catch(function () {});
+  }
+
+  function startCamera(deviceId) {
+    setStatus(dotCamera, labelCamera, "busy", "Camera: starting...");
+    var constraints = {
+      audio: false,
+      video: deviceId
+        ? { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } }
+        : { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }
+    };
+    return navigator.mediaDevices.getUserMedia(constraints).then(function (stream) {
+      stopCurrentStream();
+      currentStream = stream;
+      videoEl.srcObject = stream;
+      hideCameraWarning();
+      setStatus(dotCamera, labelCamera, "ok", "Camera: active");
+      var track = stream.getVideoTracks()[0];
+      if (track) {
+        track.addEventListener("ended", function () {
+          setStatus(dotCamera, labelCamera, "bad", "Camera: stopped");
+          showCameraWarning("The camera stream stopped unexpectedly (locked phone, another app took the camera, or a cable/mount issue). Tap below to restart it.");
+        });
+      }
+      if (!devicesPopulated) populateCameraList(track && track.getSettings ? track.getSettings().deviceId : null);
+    }).catch(function (e) {
+      setStatus(dotCamera, labelCamera, "bad", "Camera: error");
+      var httpsNote = location.protocol !== "https:" && location.hostname !== "localhost"
+        ? " This page is being served over plain HTTP - iOS Safari blocks camera access entirely without HTTPS. See server/README.md for how to enable it."
+        : "";
+      showCameraWarning("Could not access the camera (" + e.message + ")." + httpsNote);
+      console.error("[camera] getUserMedia failed:", e);
+    });
+  }
+  restartCameraBtn.addEventListener("click", function () { startCamera(cameraSelect.value || null); });
+  cameraSelect.addEventListener("change", function () { startCamera(cameraSelect.value || null); });
+
+  // ---- Wake Lock ----
+  var wakeLock = null;
+  function requestWakeLock() {
+    if (!("wakeLock" in navigator)) return;
+    navigator.wakeLock.request("screen").then(function (lock) { wakeLock = lock; }).catch(function () {});
+  }
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible" && !wakeLock) requestWakeLock();
+  });
+
+  // ---- Relay connection (role: camera) ----
+  var ws = null;
+  var reconnectTimer = null;
+  var enrollments = {}; // normalized-name-key -> { displayName, descriptors: [[...numbers]] }
+
+  function wsUrl() {
+    var proto = location.protocol === "https:" ? "wss:" : "ws:";
+    return proto + "//" + location.host + WS_PATH;
+  }
+  function wsSend(msg) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      try { ws.send(JSON.stringify(msg)); } catch (e) {}
+    }
+  }
+  function scheduleReconnect() {
+    if (reconnectTimer) return;
+    reconnectTimer = setTimeout(function () { reconnectTimer = null; connectRelay(); }, RECONNECT_DELAY_MS);
+  }
+  function connectRelay() {
+    if (ws) return;
+    setStatus(dotRelay, labelRelay, "busy", "Relay: connecting...");
+    try { ws = new WebSocket(wsUrl()); } catch (e) { ws = null; scheduleReconnect(); return; }
+    ws.addEventListener("open", function () {
+      setStatus(dotRelay, labelRelay, "ok", "Relay: connected");
+      wsSend({ type: "hello", role: "camera" });
+      wsSend({ type: "enroll-get" });
+      if (!hasLocalSettingsOverride) wsSend({ type: "settings-request" });
+    });
+    ws.addEventListener("message", function (event) {
+      var msg;
+      try { msg = JSON.parse(event.data); } catch (e) { return; }
+      if (msg.type === "enrollments") {
+        enrollments = msg.data || {};
+        renderPlayerList();
+      } else if (msg.type === "settings" && !hasLocalSettingsOverride) {
+        if (typeof msg.matchThreshold === "number") settings.matchThreshold = msg.matchThreshold;
+        if (typeof msg.debounceSec === "number") settings.debounceSec = msg.debounceSec;
+        applySettingsToInputs();
+      } else if (msg.type === "turn_confirmed" && msg.player_name) {
+        handleTurnConfirmed(msg.player_name);
+      }
+    });
+    ws.addEventListener("close", function () {
+      ws = null;
+      setStatus(dotRelay, labelRelay, "bad", "Relay: disconnected");
+      scheduleReconnect();
+    });
+  }
+
+  // ---- Enrolled player list ----
+  function renderBootstrapStatus(keys) {
+    if (!calibration) {
+      bootstrapStatusEl.textContent = "Calibrate the table (Table tab) to enable side-coverage tracking.";
+      return;
+    }
+    if (keys.length === 0) {
+      bootstrapStatusEl.textContent = "";
+      return;
+    }
+    var allReady = keys.every(function (key) { return ((enrollments[key].sides || []).length) >= SIDES_TARGET; });
+    bootstrapStatusEl.textContent = allReady
+      ? "All enrolled players have been seen from " + SIDES_TARGET + " sides - ready to rely on recognition."
+      : "Still bootstrapping - have each player shoot from a few different sides of the table.";
+  }
+
+  function renderPlayerList() {
+    var keys = Object.keys(enrollments);
+    renderBootstrapStatus(keys);
+    if (keys.length === 0) {
+      playerListEl.innerHTML = '<div class="hint">No players enrolled yet.</div>';
+      return;
+    }
+    playerListEl.innerHTML = "";
+    keys.sort(function (a, b) {
+      return (enrollments[a].displayName || "").localeCompare(enrollments[b].displayName || "");
+    }).forEach(function (key) {
+      var entry = enrollments[key];
+      var row = document.createElement("div");
+      row.className = "player-row";
+      var sideCount = (entry.sides || []).length;
+      var sideText = calibration ? (", " + sideCount + "/" + SIDES_TARGET + " sides") : "";
+      var meta = document.createElement("div");
+      meta.innerHTML = "<div>" + escapeHtml(entry.displayName || key) + "</div><div class=\"meta\">" +
+        ((entry.descriptors || []).length) + " samples" + sideText + "</div>";
+      var actions = document.createElement("div");
+      actions.className = "actions";
+      var reEnrollBtn = document.createElement("button");
+      reEnrollBtn.className = "secondary";
+      reEnrollBtn.textContent = "Re-enroll";
+      reEnrollBtn.type = "button";
+      reEnrollBtn.addEventListener("click", function () {
+        enrollNameInput.value = entry.displayName || key;
+        enrollNameInput.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+      var deleteBtn = document.createElement("button");
+      deleteBtn.className = "danger";
+      deleteBtn.textContent = "Delete";
+      deleteBtn.type = "button";
+      deleteBtn.addEventListener("click", function () {
+        if (deleteBtn.dataset.confirm === "1") {
+          wsSend({ type: "enroll-delete", player_name: entry.displayName || key });
+        } else {
+          deleteBtn.dataset.confirm = "1";
+          deleteBtn.textContent = "Tap again to confirm";
+          setTimeout(function () { deleteBtn.dataset.confirm = "0"; deleteBtn.textContent = "Delete"; }, 3000);
+        }
+      });
+      actions.appendChild(reEnrollBtn);
+      actions.appendChild(deleteBtn);
+      row.appendChild(meta);
+      row.appendChild(actions);
+      playerListEl.appendChild(row);
+    });
+  }
+
+  clearAllBtn.addEventListener("click", function () {
+    if (clearAllBtn.dataset.confirm === "1") {
+      Object.keys(enrollments).forEach(function (key) {
+        wsSend({ type: "enroll-delete", player_name: enrollments[key].displayName || key });
+      });
+      clearAllBtn.dataset.confirm = "0";
+      clearAllBtn.textContent = "Clear all (new session)";
+    } else {
+      clearAllBtn.dataset.confirm = "1";
+      clearAllBtn.textContent = "Tap again to clear everyone";
+      setTimeout(function () { clearAllBtn.dataset.confirm = "0"; clearAllBtn.textContent = "Clear all (new session)"; }, 3000);
+    }
+  });
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  // ---- Pose keypoint helpers ----
+  function kp(keypoints, name) {
+    for (var i = 0; i < keypoints.length; i++) {
+      if (keypoints[i].name === name) return keypoints[i];
+    }
+    return null;
+  }
+  function midpoint(a, b) { return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; }
+  function avgScore() {
+    var vals = Array.prototype.slice.call(arguments).filter(function (p) { return p; }).map(function (p) { return p.score || 0; });
+    if (vals.length === 0) return 0;
+    return vals.reduce(function (a, b) { return a + b; }, 0) / vals.length;
+  }
+
+  // ---- Appearance descriptor: HSV histograms over 4 body regions ----
+  var sampleCanvas = document.createElement("canvas");
+  var sampleCtx = sampleCanvas.getContext("2d", { willReadFrequently: true });
+
+  function rgbToHsv(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    var max = Math.max(r, g, b), min = Math.min(r, g, b);
+    var d = max - min, h = 0;
+    if (d !== 0) {
+      if (max === r) h = ((g - b) / d) % 6;
+      else if (max === g) h = (b - r) / d + 2;
+      else h = (r - g) / d + 4;
+      h *= 60;
+      if (h < 0) h += 360;
+    }
+    var s = max === 0 ? 0 : d / max;
+    return { h: h, s: s, v: max };
+  }
+
+  function regionHistogram(box) {
+    // box: {x0,y0,x1,y1} in video pixel coords. Returns a normalized
+    // HUE_BINS*SAT_BINS histogram, or null if the box is degenerate.
+    var w = Math.max(1, Math.round(box.x1 - box.x0));
+    var h = Math.max(1, Math.round(box.y1 - box.y0));
+    if (w < 2 || h < 2) return null;
+    var sw = Math.min(24, w);
+    var sh = Math.min(24, h);
+    sampleCanvas.width = sw;
+    sampleCanvas.height = sh;
+    try {
+      sampleCtx.drawImage(videoEl, box.x0, box.y0, w, h, 0, 0, sw, sh);
+    } catch (e) {
+      return null;
+    }
+    var data;
+    try {
+      data = sampleCtx.getImageData(0, 0, sw, sh).data;
+    } catch (e) {
+      return null;
+    }
+    var hist = new Array(HUE_BINS * SAT_BINS).fill(0);
+    var count = 0;
+    for (var i = 0; i < data.length; i += 4) {
+      var hsv = rgbToHsv(data[i], data[i + 1], data[i + 2]);
+      // Low-saturation (near-grey/black/white) pixels carry little hue
+      // information and would otherwise dump noise into whichever hue bin
+      // happens to win ties - skip them for hue binning purposes.
+      if (hsv.s < 0.12) continue;
+      var hueBin = Math.min(HUE_BINS - 1, Math.floor((hsv.h / 360) * HUE_BINS));
+      var satBin = Math.min(SAT_BINS - 1, Math.floor(hsv.s * SAT_BINS));
+      hist[hueBin * SAT_BINS + satBin]++;
+      count++;
+    }
+    if (count === 0) return hist; // all-neutral region (e.g. white/grey shirt) - valid, just flat
+    for (var j = 0; j < hist.length; j++) hist[j] /= count;
+    return hist;
+  }
+
+  function boxFromPoints(points, padRatio) {
+    var xs = points.map(function (p) { return p.x; });
+    var ys = points.map(function (p) { return p.y; });
+    var x0 = Math.min.apply(null, xs), x1 = Math.max.apply(null, xs);
+    var y0 = Math.min.apply(null, ys), y1 = Math.max.apply(null, ys);
+    var padX = (x1 - x0) * (padRatio || 0);
+    var padY = (y1 - y0) * (padRatio || 0);
+    return { x0: x0 - padX, y0: y0 - padY, x1: x1 + padX, y1: y1 + padY };
+  }
+
+  // Returns { descriptor: [...], torsoAngleDeg, shoulderMid, hipMid, ankleMid,
+  // confidenceOk } or null if the core keypoints needed for identity AND
+  // stance (shoulders+hips) aren't confidently visible this frame.
+  function analyzePose(keypoints) {
+    var ls = kp(keypoints, "left_shoulder"), rs = kp(keypoints, "right_shoulder");
+    var lh = kp(keypoints, "left_hip"), rh = kp(keypoints, "right_hip");
+    if (!ls || !rs || !lh || !rh) return null;
+    if (avgScore(ls, rs, lh, rh) < KEYPOINT_CONF_FLOOR) return null;
+
+    var shoulderMid = midpoint(ls, rs);
+    var hipMid = midpoint(lh, rh);
+    var dx = hipMid.x - shoulderMid.x, dy = hipMid.y - shoulderMid.y;
+    var torsoAngleDeg = Math.atan2(Math.abs(dx), Math.abs(dy)) * 180 / Math.PI;
+    var shoulderWidth = Math.max(1, Math.abs(rs.x - ls.x));
+
+    var torsoHist = regionHistogram(boxFromPoints([ls, rs, lh, rh], 0.08)) || new Array(HUE_BINS * SAT_BINS).fill(0);
+
+    var lk = kp(keypoints, "left_knee"), rk = kp(keypoints, "right_knee");
+    var la = kp(keypoints, "left_ankle"), ra = kp(keypoints, "right_ankle");
+    var legsHist = new Array(HUE_BINS * SAT_BINS).fill(0);
+    var ankleMid = null;
+    if (la && ra && avgScore(lh, rh, la, ra) >= KEYPOINT_CONF_FLOOR) {
+      var legPoints = [lh, rh, la, ra].concat(lk && rk ? [lk, rk] : []);
+      legsHist = regionHistogram(boxFromPoints(legPoints, 0.05)) || legsHist;
+      ankleMid = midpoint(la, ra);
+    }
+
+    var le = kp(keypoints, "left_elbow"), re = kp(keypoints, "right_elbow");
+    var lw = kp(keypoints, "left_wrist"), rw = kp(keypoints, "right_wrist");
+    var sleeveHist = new Array(HUE_BINS * SAT_BINS).fill(0);
+    if (le && re && lw && rw && avgScore(le, re, lw, rw) >= KEYPOINT_CONF_FLOOR) {
+      sleeveHist = regionHistogram(boxFromPoints([le, re, lw, rw], 0.1)) || sleeveHist;
+    }
+
+    var nose = kp(keypoints, "nose"), leye = kp(keypoints, "left_eye"), reye = kp(keypoints, "right_eye");
+    var capHist = new Array(HUE_BINS * SAT_BINS).fill(0);
+    if (nose && leye && reye && avgScore(nose, leye, reye) >= KEYPOINT_CONF_FLOOR) {
+      var eyeY = Math.min(leye.y, reye.y);
+      var headSpan = Math.max(12, Math.abs(reye.x - leye.x) * 2.2);
+      capHist = regionHistogram({ x0: nose.x - headSpan / 2, y0: eyeY - headSpan * 0.9, x1: nose.x + headSpan / 2, y1: eyeY }) || capHist;
+    }
+
+    var torsoHeight = Math.max(1, hipMid.y - shoulderMid.y);
+    var aspectRatio = (torsoHeight / shoulderWidth) * ASPECT_RATIO_WEIGHT;
+
+    var descriptor = torsoHist.concat(legsHist, sleeveHist, capHist, [aspectRatio]);
+
+    return {
+      descriptor: descriptor,
+      torsoAngleDeg: torsoAngleDeg,
+      shoulderMid: shoulderMid,
+      hipMid: hipMid,
+      ankleMid: ankleMid,
+      shoulderWidth: shoulderWidth,
+      box: boxFromPoints([ls, rs, lh, rh].concat(la && ra ? [la, ra] : []), 0.05)
+    };
+  }
+
+  function histogramDistance(a, b) {
+    var sum = 0;
+    var n = Math.min(a.length, b.length);
+    for (var i = 0; i < n; i++) sum += Math.abs(a[i] - b[i]);
+    return sum;
+  }
+
+  function findBestMatch(descriptor) {
+    var bestName = null, bestDistance = Infinity;
+    Object.keys(enrollments).forEach(function (key) {
+      var entry = enrollments[key];
+      (entry.descriptors || []).forEach(function (stored) {
+        var d = histogramDistance(descriptor, stored);
+        if (d < bestDistance) { bestDistance = d; bestName = entry.displayName || key; }
+      });
+    });
+    if (bestName === null) return null;
+    return { name: bestName, distance: bestDistance };
+  }
+
+  // ---- Table calibration (pixel <-> real-inches homography) ----
+  var calibration = null; // { tableLength, tableWidth, h: {h11..h32} }
+  var calibrating = false;
+  var calibrationTaps = [];
+
+  function loadCalibration() {
+    try {
+      var raw = localStorage.getItem(CALIBRATION_STORAGE_KEY);
+      if (raw) calibration = JSON.parse(raw);
+    } catch (e) {}
+    renderCalibrationStatus();
+  }
+  function saveCalibration() {
+    try { localStorage.setItem(CALIBRATION_STORAGE_KEY, JSON.stringify(calibration)); } catch (e) {}
+  }
+  function renderCalibrationStatus() {
+    if (calibration) {
+      calibrationStatusEl.textContent = "Calibrated (" + calibration.tableLength + "\" x " + calibration.tableWidth + "\" table). Distance-to-rail checks are active.";
+      recalibrateBtn.hidden = false;
+    } else {
+      calibrationStatusEl.textContent = "Not calibrated - the \"close enough to the table\" check is skipped (always passes) until you calibrate.";
+      recalibrateBtn.hidden = true;
+    }
+    renderPlayerList();
+  }
+
+  function solveLinearSystem(A, b) {
+    var n = b.length;
+    var M = A.map(function (row, i) { return row.concat([b[i]]); });
+    for (var col = 0; col < n; col++) {
+      var maxRow = col;
+      for (var r = col + 1; r < n; r++) {
+        if (Math.abs(M[r][col]) > Math.abs(M[maxRow][col])) maxRow = r;
+      }
+      var tmp = M[col]; M[col] = M[maxRow]; M[maxRow] = tmp;
+      var pivot = M[col][col];
+      if (Math.abs(pivot) < 1e-9) return null;
+      for (var r2 = 0; r2 < n; r2++) {
+        if (r2 === col) continue;
+        var factor = M[r2][col] / pivot;
+        for (var c = col; c <= n; c++) M[r2][c] -= factor * M[col][c];
+      }
+    }
+    var x = [];
+    for (var i2 = 0; i2 < n; i2++) x.push(M[i2][n] / M[i2][i2]);
+    return x;
+  }
+
+  // Solves directly for the PIXEL -> REAL-INCHES homography (not the
+  // forward direction) since that's the only direction ever evaluated at
+  // runtime - see the plan's note on this being a standard 4-point DLT.
+  function computeHomography(pixelPoints, realPoints) {
+    var A = [], b = [];
+    for (var i = 0; i < 4; i++) {
+      var pX = pixelPoints[i][0], pY = pixelPoints[i][1];
+      var rX = realPoints[i][0], rY = realPoints[i][1];
+      A.push([pX, pY, 1, 0, 0, 0, -pX * rX, -pY * rX]);
+      b.push(rX);
+      A.push([0, 0, 0, pX, pY, 1, -pX * rY, -pY * rY]);
+      b.push(rY);
+    }
+    var h = solveLinearSystem(A, b);
+    if (!h) return null;
+    return { h11: h[0], h12: h[1], h13: h[2], h21: h[3], h22: h[4], h23: h[5], h31: h[6], h32: h[7] };
+  }
+  function applyHomography(H, pX, pY) {
+    var denom = H.h31 * pX + H.h32 * pY + 1;
+    if (Math.abs(denom) < 1e-9) return null;
+    return { x: (H.h11 * pX + H.h12 * pY + H.h13) / denom, y: (H.h21 * pX + H.h22 * pY + H.h23) / denom };
+  }
+
+  // Perpendicular distance (inches) from a real-world table-relative point
+  // to the nearest of the table's 4 rails - 0 or negative means the point
+  // projects onto/over the table bed itself (a strong shooting-position signal).
+  // Side indices: 0 = y=0 rail, 1 = y=tableLength rail, 2 = x=0 rail,
+  // 3 = x=tableWidth rail - tied to calibration corner order (see
+  // finishCalibration/detectTableAuto), not camera-relative "near/far" -
+  // those don't mean anything consistent once the camera is mounted at
+  // an angle, since this is a rectangle-relative coordinate system.
+  function nearestRailSide(realPoint, tableLength, tableWidth) {
+    var distances = [realPoint.y, tableLength - realPoint.y, realPoint.x, tableWidth - realPoint.x];
+    var bestIdx = 0;
+    for (var i = 1; i < distances.length; i++) {
+      if (distances[i] < distances[bestIdx]) bestIdx = i;
+    }
+    return { side: bestIdx, distance: distances[bestIdx] };
+  }
+  function distanceToNearestRail(realPoint, tableLength, tableWidth) {
+    return nearestRailSide(realPoint, tableLength, tableWidth).distance;
+  }
+
+  function currentTableSize() {
+    if (tableSizeSelect.value === "custom") {
+      return { length: parseFloat(customLength.value) || 88, width: parseFloat(customWidth.value) || 44 };
+    }
+    return TABLE_SIZES[tableSizeSelect.value];
+  }
+
+  tableSizeSelect.addEventListener("change", function () {
+    customSizeRow.hidden = tableSizeSelect.value !== "custom";
+  });
+
+  function showCalibrateSetup() {
+    calibrateSetupEl.hidden = false;
+    manualCalibrateSetupEl.hidden = true;
+    calibrateTappingEl.hidden = true;
+    calibrating = false;
+    calibrationTaps = [];
+    overlayEl.classList.remove("tappable");
+  }
+  showManualCalibrationBtn.addEventListener("click", function () {
+    calibrateSetupEl.hidden = true;
+    manualCalibrateSetupEl.hidden = false;
+  });
+  backToAutoBtn.addEventListener("click", showCalibrateSetup);
+  recalibrateBtn.addEventListener("click", showCalibrateSetup);
+
+  function startCalibration() {
+    calibrating = true;
+    calibrationTaps = [];
+    manualCalibrateSetupEl.hidden = true;
+    calibrateTappingEl.hidden = false;
+    calibrationStepText.textContent = "Tap corner 1 of 4";
+    overlayEl.classList.add("tappable");
+  }
+  function cancelCalibration() {
+    showCalibrateSetup();
+  }
+  startCalibrationBtn.addEventListener("click", startCalibration);
+  cancelCalibrationBtn.addEventListener("click", cancelCalibration);
+
+  overlayEl.addEventListener("click", function (evt) {
+    if (!calibrating) return;
+    var rect = overlayEl.getBoundingClientRect();
+    var scaleX = videoEl.videoWidth / rect.width;
+    var scaleY = videoEl.videoHeight / rect.height;
+    var px = (evt.clientX - rect.left) * scaleX;
+    var py = (evt.clientY - rect.top) * scaleY;
+    calibrationTaps.push([px, py]);
+    if (calibrationTaps.length < 4) {
+      calibrationStepText.textContent = "Tap corner " + (calibrationTaps.length + 1) + " of 4";
+    } else {
+      finishManualCalibration();
+    }
+  });
+
+  // Shared by both the manual-tap flow and auto-detection: given 4 pixel
+  // points in consistent cyclic order around the rectangle and which
+  // real-world dimension the corner1->corner2 edge represents, computes
+  // and stores the homography.
+  function applyCalibrationFromCorners(pixelPoints, edge1IsWidth, size) {
+    var d1 = edge1IsWidth ? size.width : size.length;
+    var d2 = edge1IsWidth ? size.length : size.width;
+    var realPoints = [[0, 0], [d1, 0], [d1, d2], [0, d2]];
+    var H = computeHomography(pixelPoints, realPoints);
+    if (!H) return null;
+    calibration = { tableLength: edge1IsWidth ? d2 : d1, tableWidth: edge1IsWidth ? d1 : d2, h: H };
+    saveCalibration();
+    renderCalibrationStatus();
+    return calibration;
+  }
+
+  function finishManualCalibration() {
+    var size = currentTableSize();
+    var isWidthFirst = firstEdgeSelect.value === "width";
+    // Tap order: corner1 -> corner2 is the first edge, then corner2 ->
+    // corner3 is the perpendicular edge, going around the rectangle -
+    // this fully determines the real-world rectangle regardless of which
+    // physical edge the operator started on.
+    var result = applyCalibrationFromCorners(calibrationTaps, isWidthFirst, size);
+    showCalibrateSetup();
+    if (!result) {
+      calibrationStatusEl.textContent = "Calibration failed (corners too close together or in a line) - try again with 4 clearly separated corners.";
+    }
+  }
+
+  // ---- Automatic table detection (no tapping) ----
+  // Runs once on a downsampled still frame - the table doesn't move once
+  // mounted, so there's no need to repeat this per-frame. See the plan's
+  // own note: this is the most fragile piece of the whole feature (felt
+  // color, lighting, anything sitting on the table) and a real on-site
+  // test is the only genuine verification - the hue ranges/thresholds may
+  // need adjusting after seeing it run against the real table.
+  var detectCanvas = document.createElement("canvas");
+  var detectCtx = detectCanvas.getContext("2d", { willReadFrequently: true });
+
+  function hueMatchesRange(hsv, range) {
+    if (range.satMax !== undefined) return hsv.s <= range.satMax;
+    if (range.wrap) return hsv.h >= range.hueMin || hsv.h <= range.hueMax;
+    return hsv.h >= range.hueMin && hsv.h <= range.hueMax;
+  }
+
+  function largestConnectedComponent(mask, w, h) {
+    var visited = new Uint8Array(w * h);
+    var best = null, bestSize = 0;
+    for (var start = 0; start < w * h; start++) {
+      if (!mask[start] || visited[start]) continue;
+      var stack = [start];
+      visited[start] = 1;
+      var members = [start];
+      while (stack.length) {
+        var idx = stack.pop();
+        var x = idx % w, y = (idx / w) | 0;
+        if (x > 0 && mask[idx - 1] && !visited[idx - 1]) { visited[idx - 1] = 1; stack.push(idx - 1); members.push(idx - 1); }
+        if (x < w - 1 && mask[idx + 1] && !visited[idx + 1]) { visited[idx + 1] = 1; stack.push(idx + 1); members.push(idx + 1); }
+        if (y > 0 && mask[idx - w] && !visited[idx - w]) { visited[idx - w] = 1; stack.push(idx - w); members.push(idx - w); }
+        if (y < h - 1 && mask[idx + w] && !visited[idx + w]) { visited[idx + w] = 1; stack.push(idx + w); members.push(idx + w); }
+      }
+      if (members.length > bestSize) { bestSize = members.length; best = members; }
+    }
+    if (!best) return null;
+    return best.map(function (idx) { return { x: idx % w, y: (idx / w) | 0 }; });
+  }
+
+  // Andrew's monotone chain.
+  function convexHull(points) {
+    var pts = points.slice().sort(function (a, b) { return a.x - b.x || a.y - b.y; });
+    function cross(o, a, b) { return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x); }
+    var lower = [];
+    for (var i = 0; i < pts.length; i++) {
+      while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], pts[i]) <= 0) lower.pop();
+      lower.push(pts[i]);
+    }
+    var upper = [];
+    for (var j = pts.length - 1; j >= 0; j--) {
+      while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], pts[j]) <= 0) upper.pop();
+      upper.push(pts[j]);
+    }
+    lower.pop(); upper.pop();
+    return lower.concat(upper);
+  }
+
+  // The 4 hull points that maximize/minimize x+y and x-y - the extreme-
+  // point heuristic (not a min-area rotated-rectangle fit, which would
+  // systematically misplace corners under real camera keystoning).
+  // Returns [topLeft, topRight, bottomRight, bottomLeft] in image space.
+  function extractQuadCorners(hull) {
+    var maxSum = -Infinity, minSum = Infinity, maxDiff = -Infinity, minDiff = Infinity;
+    var cMaxSum, cMinSum, cMaxDiff, cMinDiff;
+    hull.forEach(function (p) {
+      var sum = p.x + p.y, diff = p.x - p.y;
+      if (sum > maxSum) { maxSum = sum; cMaxSum = p; }
+      if (sum < minSum) { minSum = sum; cMinSum = p; }
+      if (diff > maxDiff) { maxDiff = diff; cMaxDiff = p; }
+      if (diff < minDiff) { minDiff = diff; cMinDiff = p; }
+    });
+    return [cMinSum, cMaxDiff, cMaxSum, cMinDiff];
+  }
+
+  function pointDist(a, b) { return Math.sqrt((b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y)); }
+
+  function detectTableAuto() {
+    detectStatusText.hidden = false;
+    detectStatusText.textContent = "Detecting...";
+    var vw = videoEl.videoWidth, vh = videoEl.videoHeight;
+    if (!vw || !vh) {
+      detectStatusText.textContent = "Camera not ready yet - try again in a moment.";
+      return;
+    }
+    var dw = DETECT_CANVAS_WIDTH;
+    var dh = Math.max(1, Math.round(dw * vh / vw));
+    detectCanvas.width = dw;
+    detectCanvas.height = dh;
+    detectCtx.drawImage(videoEl, 0, 0, dw, dh);
+    var data;
+    try {
+      data = detectCtx.getImageData(0, 0, dw, dh).data;
+    } catch (e) {
+      detectStatusText.textContent = "Could not read the camera frame - try again.";
+      return;
+    }
+
+    var bestComponent = null, bestSize = 0;
+    FELT_HUE_RANGES.forEach(function (range) {
+      var mask = new Uint8Array(dw * dh);
+      for (var i = 0, p = 0; i < dw * dh; i++, p += 4) {
+        var hsv = rgbToHsv(data[p], data[p + 1], data[p + 2]);
+        if (hueMatchesRange(hsv, range)) mask[i] = 1;
+      }
+      var component = largestConnectedComponent(mask, dw, dh);
+      if (component && component.length > bestSize) { bestSize = component.length; bestComponent = component; }
+    });
+
+    if (!bestComponent || bestSize < dw * dh * DETECT_MIN_BLOB_FRACTION) {
+      detectStatusText.textContent = "Couldn't find a clear table-colored region. Make sure the whole table is visible and empty, then try again - or calibrate manually.";
+      return;
+    }
+    if (bestSize > dw * dh * DETECT_MAX_BLOB_FRACTION) {
+      detectStatusText.textContent = "The matched region fills almost the whole frame, which doesn't look like just the table - aim the camera so some floor/room is visible around the table, or calibrate manually.";
+      return;
+    }
+
+    var hull = convexHull(bestComponent);
+    if (hull.length < 4) {
+      detectStatusText.textContent = "Detected region doesn't look like a table (too irregular). Try again or calibrate manually.";
+      return;
+    }
+    var corners = extractQuadCorners(hull); // [TL, TR, BR, BL] in detect-canvas pixels
+    var edge1 = pointDist(corners[0], corners[1]); // TL-TR
+    var edge2 = pointDist(corners[1], corners[2]); // TR-BR
+    var edge3 = pointDist(corners[2], corners[3]); // BR-BL
+    var edge4 = pointDist(corners[3], corners[0]); // BL-TL
+    if (Math.min(edge1, edge2, edge3, edge4) < 2) {
+      detectStatusText.textContent = "Detected corners are too close together - try again or calibrate manually.";
+      return;
+    }
+    // Opposite edges should be roughly equal in a real rectangle; the
+    // longer pair is assumed to be the table's length - this assumption
+    // breaks under extreme camera angles (another reason the manual
+    // fallback exists).
+    var pairA = (edge1 + edge3) / 2; // TL-TR / BR-BL
+    var pairB = (edge2 + edge4) / 2; // TR-BR / BL-TL
+    var edge1IsLength = pairA >= pairB;
+
+    var scaleX = vw / dw, scaleY = vh / dh;
+    var pixelPoints = corners.map(function (p) { return [p.x * scaleX, p.y * scaleY]; });
+    var size = currentTableSize();
+    var result = applyCalibrationFromCorners(pixelPoints, !edge1IsLength, size);
+    if (!result) {
+      detectStatusText.textContent = "Detection found a region but the math didn't work out - try again or calibrate manually.";
+      return;
+    }
+    detectStatusText.textContent = "Table detected and calibrated.";
+    setTimeout(function () { detectStatusText.hidden = true; }, 4000);
+  }
+
+  detectTableBtn.addEventListener("click", detectTableAuto);
+
+  loadCalibration();
+
+  // ---- Enrollment capture ----
+  var enrollCapturing = false;
+  var enrollSamples = [];
+  var enrollTargetName = "";
+  var enrollTimeoutTimer = null;
+
+  captureBtn.addEventListener("click", function () {
+    var name = enrollNameInput.value.trim();
+    if (!name) { enrollNameInput.focus(); return; }
+    enrollTargetName = name;
+    enrollSamples = [];
+    enrollCapturing = true;
+    captureBtn.disabled = true;
+    captureProgress.hidden = false;
+    captureProgress.textContent = "Capturing... (0/" + ENROLL_TARGET_SAMPLES + ")";
+    enrollTimeoutTimer = setTimeout(finishEnrollCapture, ENROLL_CAPTURE_TIMEOUT_MS);
+  });
+
+  function finishEnrollCapture() {
+    if (!enrollCapturing) return;
+    enrollCapturing = false;
+    if (enrollTimeoutTimer) { clearTimeout(enrollTimeoutTimer); enrollTimeoutTimer = null; }
+    captureBtn.disabled = false;
+    if (enrollSamples.length === 0) {
+      captureProgress.textContent = "No clear pose detected - try again with better lighting/framing.";
+      setTimeout(function () { captureProgress.hidden = true; }, 3000);
+      return;
+    }
+    wsSend({ type: "enroll-save", player_name: enrollTargetName, descriptors: enrollSamples });
+    captureProgress.textContent = "Saved " + enrollSamples.length + " samples for " + enrollTargetName + ".";
+    setTimeout(function () { captureProgress.hidden = true; }, 3000);
+  }
+
+  // ---- Two-phase recognition state machine ----
+  var stance = "unknown"; // 'upright' | 'bent' | 'unknown'
+  var lastConfidentPoseAt = Date.now();
+  var candidate = null; // { name, descriptor, lastSeenAt }
+  var uprightMatchName = null;
+  var uprightConsecutive = 0;
+  var lastUprightDescriptor = null;
+  var uprightStabilityCount = 0;
+  var bentConsecutive = 0;
+  var lastEmittedAt = {}; // name -> timestamp ms
+
+  function logActivity(text) {
+    var line = document.createElement("div");
+    line.textContent = new Date().toLocaleTimeString() + " - " + text;
+    recognizeLog.insertBefore(line, recognizeLog.firstChild);
+    while (recognizeLog.childNodes.length > 20) recognizeLog.removeChild(recognizeLog.lastChild);
+  }
+
+  function withinRailDistance(analysis) {
+    if (!calibration || !analysis.ankleMid) return true; // uncalibrated - don't gate on it
+    var real = applyHomography(calibration.h, analysis.ankleMid.x, analysis.ankleMid.y);
+    if (!real) return true;
+    var dist = distanceToNearestRail(real, calibration.tableLength, calibration.tableWidth);
+    return dist <= settings.railDistanceInches;
+  }
+
+  // undefined (not null) when uncalibrated or no ankle keypoints - matches
+  // what addSide on the relay expects to see "no side given."
+  function currentSideForAnalysis(analysis) {
+    if (!calibration || !analysis || !analysis.ankleMid) return undefined;
+    var real = applyHomography(calibration.h, analysis.ankleMid.x, analysis.ankleMid.y);
+    if (!real) return undefined;
+    return nearestRailSide(real, calibration.tableLength, calibration.tableWidth).side;
+  }
+
+  function fireEvent(name, descriptor, matchDistance, side) {
+    var now = Date.now();
+    var last = lastEmittedAt[name] || 0;
+    if (now - last < settings.debounceSec * 1000) return;
+    lastEmittedAt[name] = now;
+    var confidence = Math.max(0, Math.min(1, 1 - matchDistance / MAX_EXPECTED_DISTANCE));
+    wsSend({ type: "player_up", player_name: name, confidence: confidence, ts: now });
+    logActivity(name + " shooting (match distance " + matchDistance.toFixed(2) + ")");
+    if (matchDistance <= settings.matchThreshold * 0.7) {
+      wsSend({ type: "enroll-add", player_name: name, descriptor: descriptor, side: side });
+    }
+  }
+
+  // Gameplay-driven auto-enrollment: a human just confirmed a real score
+  // for `name` - stronger ground truth than the camera's own self-match,
+  // so this labels (or relabels, if the camera's own candidate guessed a
+  // different name) the current candidate appearance, independent of
+  // fireEvent/player_up/the debounce timer - this must never call
+  // fireEvent, to avoid an accidental double broadcast.
+  function handleTurnConfirmed(name) {
+    if (!candidate || Date.now() - candidate.lastSeenAt > TURN_CONFIRM_GRACE_MS) return;
+    var isFirstSample = !Object.keys(enrollments).some(function (key) {
+      return (enrollments[key].displayName || key).toLowerCase() === name.toLowerCase();
+    });
+    if (isFirstSample) {
+      wsSend({ type: "enroll-save", player_name: name, descriptors: [candidate.descriptor], side: candidate.side });
+    } else {
+      wsSend({ type: "enroll-add", player_name: name, descriptor: candidate.descriptor, side: candidate.side });
+    }
+    logActivity(name + " confirmed by scoring (side " + (candidate.side === undefined ? "?" : candidate.side + 1) + ")");
+  }
+
+  function handleRecognitionFrame(analysis) {
+    if (!analysis) {
+      if (Date.now() - lastConfidentPoseAt > NO_POSE_GRACE_MS) {
+        stance = "unknown";
+        uprightMatchName = null;
+        uprightConsecutive = 0;
+        bentConsecutive = 0;
+      }
+      if (candidate && Date.now() - candidate.lastSeenAt > CANDIDATE_GRACE_MS) candidate = null;
+      return;
+    }
+    lastConfidentPoseAt = Date.now();
+
+    if (analysis.torsoAngleDeg >= settings.bendEnterAngle) stance = "bent";
+    else if (analysis.torsoAngleDeg <= settings.bendExitAngle) stance = "upright";
+    // else: stays in whatever it already was (hysteresis band)
+
+    var closeEnough = withinRailDistance(analysis);
+
+    if (stance === "upright" && closeEnough) {
+      var match = findBestMatch(analysis.descriptor);
+      var withinThreshold = match && match.distance <= settings.matchThreshold;
+      if (withinThreshold && uprightMatchName === match.name) {
+        uprightConsecutive++;
+      } else if (withinThreshold) {
+        uprightMatchName = match.name;
+        uprightConsecutive = 1;
+      } else {
+        uprightMatchName = null;
+        uprightConsecutive = 0;
+      }
+
+      // Stability is tracked independent of whether a name match exists -
+      // this is what lets a completely unenrolled player still become a
+      // labelable "candidate" (name: null) for turn_confirmed to name,
+      // not just already-recognized ones. Without this, bootstrapping a
+      // brand-new player from a confirmed score alone would never work,
+      // since there would never be a match to form a candidate from.
+      if (lastUprightDescriptor && histogramDistance(analysis.descriptor, lastUprightDescriptor) <= settings.matchThreshold) {
+        uprightStabilityCount++;
+      } else {
+        uprightStabilityCount = 1;
+      }
+      lastUprightDescriptor = analysis.descriptor;
+
+      if (uprightStabilityCount >= settings.consecutiveFrames) {
+        candidate = {
+          name: withinThreshold && uprightConsecutive >= settings.consecutiveFrames ? match.name : null,
+          descriptor: analysis.descriptor,
+          side: currentSideForAnalysis(analysis),
+          lastSeenAt: Date.now()
+        };
+      } else if (candidate) {
+        candidate.lastSeenAt = Date.now();
+      }
+      bentConsecutive = 0;
+    } else if (stance === "bent") {
+      uprightMatchName = null;
+      uprightConsecutive = 0;
+      lastUprightDescriptor = null;
+      uprightStabilityCount = 0;
+      bentConsecutive++;
+      if (bentConsecutive >= settings.consecutiveFrames && closeEnough) {
+        if (candidate && candidate.name && Date.now() - candidate.lastSeenAt <= CANDIDATE_GRACE_MS) {
+          fireEvent(candidate.name, candidate.descriptor, 0, candidate.side);
+        } else {
+          // Fallback: no fresh *named* upright identification (either
+          // nothing stable was seen, or it was stable but unmatched) -
+          // try matching the bent-over frame itself, at a stricter
+          // threshold since the crop geometry/occlusion is known to be
+          // noisier here.
+          var bentMatch = findBestMatch(analysis.descriptor);
+          if (bentMatch && bentMatch.distance <= settings.matchThreshold * 0.6) {
+            fireEvent(bentMatch.name, analysis.descriptor, bentMatch.distance, currentSideForAnalysis(analysis));
+          }
+        }
+      }
+    }
+  }
+
+  // ---- Debug overlay ----
+  function syncOverlaySize() {
+    overlayEl.width = overlayEl.clientWidth;
+    overlayEl.height = overlayEl.clientHeight;
+  }
+  window.addEventListener("resize", syncOverlaySize);
+  videoEl.addEventListener("loadedmetadata", syncOverlaySize);
+
+  function videoToOverlay(x, y) {
+    var vw = videoEl.videoWidth || 1, vh = videoEl.videoHeight || 1;
+    var scale = Math.max(overlayEl.width / vw, overlayEl.height / vh);
+    var offsetX = (overlayEl.width - vw * scale) / 2;
+    var offsetY = (overlayEl.height - vh * scale) / 2;
+    return { x: x * scale + offsetX, y: y * scale + offsetY };
+  }
+
+  function drawCalibrationTaps() {
+    overlayCtx.fillStyle = "#e8b923";
+    calibrationTaps.forEach(function (pt, i) {
+      var p = videoToOverlay(pt[0], pt[1]);
+      overlayCtx.beginPath();
+      overlayCtx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+      overlayCtx.fill();
+      overlayCtx.fillText(String(i + 1), p.x + 8, p.y - 8);
+    });
+  }
+
+  function drawOverlay(keypoints, analysis, matchLabel) {
+    overlayCtx.clearRect(0, 0, overlayEl.width, overlayEl.height);
+    if (calibrating) drawCalibrationTaps();
+    if (!settings.debugOverlay || !analysis) return;
+    var box = analysis.box;
+    var p0 = videoToOverlay(box.x0, box.y0);
+    var p1 = videoToOverlay(box.x1, box.y1);
+    overlayCtx.strokeStyle = stance === "bent" ? "#5ec98a" : "#5aa9e6";
+    overlayCtx.lineWidth = 2;
+    overlayCtx.strokeRect(p0.x, p0.y, p1.x - p0.x, p1.y - p0.y);
+
+    var label = stance + " " + analysis.torsoAngleDeg.toFixed(0) + "deg" + (matchLabel ? " - " + matchLabel : "");
+    overlayCtx.font = "13px sans-serif";
+    var tw = overlayCtx.measureText(label).width;
+    overlayCtx.fillStyle = "rgba(0,0,0,0.6)";
+    overlayCtx.fillRect(p0.x, Math.max(0, p0.y - 18), tw + 8, 18);
+    overlayCtx.fillStyle = "#f6efe9";
+    overlayCtx.fillText(label, p0.x + 4, Math.max(13, p0.y - 4));
+  }
+
+  // ---- Main detection loop ----
+  var detectionBusy = false;
+
+  function runDetectionLoop() {
+    if (detectionBusy || !modelsReady || !currentStream) return;
+    detectionBusy = true;
+    detector.estimatePoses(videoEl)
+      .then(function (poses) {
+        lastPoseResultAt = Date.now();
+        var pose = poses && poses[0];
+        var analysis = pose ? analyzePose(pose.keypoints) : null;
+
+        if (enrollCapturing) {
+          if (analysis) {
+            enrollSamples.push(analysis.descriptor);
+            captureProgress.textContent = "Capturing... (" + enrollSamples.length + "/" + ENROLL_TARGET_SAMPLES + ")";
+          }
+          if (enrollSamples.length >= ENROLL_TARGET_SAMPLES) finishEnrollCapture();
+          drawOverlay(pose ? pose.keypoints : null, analysis, null);
+        } else {
+          var matchLabel = null;
+          if (analysis && settings.debugOverlay) {
+            var m = findBestMatch(analysis.descriptor);
+            if (m) matchLabel = m.name + " " + m.distance.toFixed(2);
+          }
+          handleRecognitionFrame(analysis);
+          drawOverlay(pose ? pose.keypoints : null, analysis, matchLabel);
+        }
+      })
+      .catch(function (e) { console.error("[camera] detection error:", e); })
+      .then(function () { detectionBusy = false; });
+  }
+
+  // ---- Boot ----
+  showTab("recognize");
+  connectRelay();
+  loadModels();
+  startCamera(null);
+  requestWakeLock();
+  setInterval(runDetectionLoop, DETECTION_INTERVAL_MS);
+})();
+</script>
+</body>
+</html>
