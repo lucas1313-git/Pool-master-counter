@@ -24650,6 +24650,14 @@
     linux: "https://github.com/lucas1313-git/Pool-master-counter-releases/releases/download/desktop-latest/PoolMasterCounter-linux-x64.tar.gz",
   };
 
+  // The release page, not a direct asset link - scanning the camera
+  // wizard's install QR with a phone should open a normal webpage, not
+  // silently fire off a .dmg/.exe binary download with no context (which
+  // a phone can't even do anything useful with). The "Download for X"
+  // button still points straight at the right asset - that's correct on
+  // the desktop this wizard is trying to get installed onto.
+  var DESKTOP_RELEASES_PAGE_URL = "https://github.com/lucas1313-git/Pool-master-counter-releases/releases/tag/desktop-latest";
+
   var DESKTOP_OS_LABELS = { mac: "Mac", windows: "Windows", linux: "Linux" };
 
   // Used by the multi-table hosting handoff (downloadSetupForMultiTableHost)
@@ -29145,7 +29153,7 @@
     var osLabel = os === "mac" ? "Mac (Apple Silicon)" : os === "windows" ? "Windows" : "Linux";
     cameraWizardInstallLink.href = DESKTOP_DOWNLOAD_URLS[os];
     cameraWizardInstallLink.textContent = T("cameraWizard.installButton", { os: osLabel });
-    if (showQr) cameraWizardInstallQr.src = "/api/qr.png?url=" + encodeURIComponent(DESKTOP_DOWNLOAD_URLS[os]);
+    if (showQr) cameraWizardInstallQr.src = "/api/qr.png?url=" + encodeURIComponent(DESKTOP_RELEASES_PAGE_URL);
     cameraWizardInstallSecurityNote.textContent = T(
       os === "mac"
         ? "groupSession.installSecurityNoteMac"

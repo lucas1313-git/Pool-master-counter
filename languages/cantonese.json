@@ -877,7 +877,7 @@
   "cameraWizard.installStepInstall": "2. 安裝",
   "cameraWizard.installStepRun": "3. 開啟",
   "cameraWizard.installButton": "⬇️ 下載 {{os}} 版",
-  "cameraWizard.installQrHint": "掃描喺另一部機度開呢個下載連結",
+  "cameraWizard.installQrHint": "用電話掃描去睇下載頁面",
   "cameraWizard.installUnsupportedOs": "呢個要用桌面電腦先得 - 電話或者平板用唔到。",
   "cameraWizard.sameDeviceOverlayHeading": "呢部平板嘅鏡頭",
   "players.ratingPlaceholder": "起始評分（選填）",
