@@ -21,6 +21,7 @@ var sea = require("node:sea");
 var deps = require("../server/deps.js");
 var routes = require("../server/routes.js");
 var relay = require("../server/relay.js");
+var cameraRelay = require("../server/camera-relay.js");
 
 var PORT = process.env.PORT || 4173;
 var app = deps.express();
@@ -41,6 +42,24 @@ routes.attachApiRoutes(app, PORT, deps.QRCode);
 
 var httpServer = http.createServer(app);
 var wss = relay.attachRelay(httpServer, deps.WebSocket);
+var cameraWss = cameraRelay.attachCameraRelay(httpServer, deps.WebSocket);
+
+// Both relays are built with { noServer: true } - see relay.js's own
+// comment on why - so dispatch "upgrade" by path ourselves, same as
+// server.js.
+httpServer.on("upgrade", function (req, socket, head) {
+  if (req.url === "/ws") {
+    wss.handleUpgrade(req, socket, head, function (ws) {
+      wss.emit("connection", ws, req);
+    });
+  } else if (req.url === "/ws-camera") {
+    cameraWss.handleUpgrade(req, socket, head, function (ws) {
+      cameraWss.emit("connection", ws, req);
+    });
+  } else {
+    socket.destroy();
+  }
+});
 
 function openBrowser(url) {
   var cmd = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
@@ -91,7 +110,9 @@ function startUrl() {
   return "http://localhost:" + PORT + "/" + (pendingStep ? "?loadsetting=true&settingStep=" + pendingStep : "");
 }
 
-wss.on("error", function (err) {
+// { noServer: true } means wss no longer forwards httpServer's own
+// "error" event to itself - listen on httpServer directly instead.
+httpServer.on("error", function (err) {
   if (err.code === "EADDRINUSE") {
     // Already running (e.g. this app was double-clicked twice) - just open
     // the browser to the existing instance instead of showing an error.

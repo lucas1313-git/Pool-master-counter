@@ -275,6 +275,16 @@
         <input type="checkbox" id="rotating-teams-checkbox">
         <span data-i18n="gameSetup.rotatingTeamsEnable">🔁 Rotating Teams (Q-Score uses each team's average rating; wins tracked per player)</span>
       </label>
+      <label class="checkbox-row" id="camera-input-row">
+        <input type="checkbox" id="camera-input-checkbox">
+        <span data-i18n="players.cameraInputEnable">📷 Camera player recognition (LAN only - confirms/corrects the keypad's current player automatically)</span>
+      </label>
+      <div class="row hidden" id="camera-input-settings-row">
+        <label for="camera-match-threshold" data-i18n="players.cameraMatchThreshold">Match sensitivity</label>
+        <input type="number" id="camera-match-threshold" min="0.1" max="1" step="0.05" value="0.5">
+        <label for="camera-debounce-sec" data-i18n="players.cameraDebounceSec">Re-announce after (sec)</label>
+        <input type="number" id="camera-debounce-sec" min="1" max="120" value="10">
+      </div>
       <ul id="roster-list" class="roster-list"></ul>
       <div id="queue-section" class="hidden">
         <h3 data-i18n="players.queueHeading">Standby Queue</h3>
@@ -2236,6 +2246,7 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20261004c"></script>
+<script src="js/app.js?v=20261004d"></script>
+<script src="js/camera-client.js?v=20261004a"></script>
 </body>
 </html>

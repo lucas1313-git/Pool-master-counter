@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pool Master Counter - Camera Recognition</title>
+<style>
+  :root {
+    --bg: #1a0a0a;
+    --panel: #241010;
+    --card: #2e1414;
+    --accent: #e8b923;
+    --accent-dark: #b8890f;
+    --danger: #ff5252;
+    --good: #5ec98a;
+    --info: #5aa9e6;
+    --text: #f6efe9;
+    --text-dim: #c9a2a2;
+    --border: #4a1e1e;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  header {
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: var(--accent);
+  }
+  main {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 12px 12px 40px;
+  }
+  .status-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+    font-size: 0.8rem;
+  }
+  .pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 4px 10px;
+  }
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-dim);
+  }
+  .dot.ok { background: var(--good); }
+  .dot.bad { background: var(--danger); }
+  .dot.busy { background: var(--accent); }
+  .video-wrap {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    background: #000;
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  video, canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  canvas { pointer-events: none; }
+  .warning-banner {
+    margin-top: 10px;
+    padding: 10px 12px;
+    background: #3a1414;
+    border: 1px solid var(--danger);
+    border-radius: 10px;
+    color: var(--danger);
+    font-size: 0.85rem;
+  }
+  .warning-banner button {
+    margin-top: 8px;
+    display: block;
+  }
+  .tabs {
+    display: flex;
+    gap: 8px;
+    margin: 14px 0 10px;
+  }
+  .tab-btn {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--text-dim);
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+  .tab-btn.active {
+    background: var(--accent);
+    color: #241a00;
+    border-color: var(--accent);
+  }
+  section.panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  section.panel h2 {
+    margin: 0 0 10px;
+    font-size: 0.95rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  label { font-size: 0.85rem; color: var(--text-dim); }
+  input[type="text"], input[type="number"], select {
+    width: 100%;
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 0.95rem;
+    margin: 4px 0 10px;
+  }
+  button {
+    background: var(--accent);
+    color: #241a00;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button.secondary {
+    background: var(--card);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  button.danger {
+    background: var(--danger);
+    color: #2a0505;
+  }
+  button:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .row > * { flex: 1; }
+  .player-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .player-row:last-child { border-bottom: none; }
+  .player-row .meta { font-size: 0.75rem; color: var(--text-dim); }
+  .player-row .actions { display: flex; gap: 6px; }
+  .player-row .actions button { padding: 6px 10px; font-size: 0.8rem; }
+  .log {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    max-height: 140px;
+    overflow-y: auto;
+  }
+  .log div { padding: 3px 0; border-bottom: 1px solid var(--border); }
+  .log div:last-child { border-bottom: none; }
+  .progress-text { font-size: 0.85rem; color: var(--accent); margin: 6px 0; }
+  details > summary { cursor: pointer; color: var(--text-dim); font-size: 0.85rem; padding: 4px 0; }
+  .hint { font-size: 0.75rem; color: var(--text-dim); margin-top: -4px; margin-bottom: 10px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Pool Master Counter - Camera Recognition</h1>
+</header>
+<main>
+  <div class="status-row">
+    <span class="pill"><span class="dot" id="dotRelay"></span><span id="labelRelay">Relay: connecting...</span></span>
+    <span class="pill"><span class="dot" id="dotModels"></span><span id="labelModels">Models: loading...</span></span>
+    <span class="pill"><span class="dot" id="dotCamera"></span><span id="labelCamera">Camera: starting...</span></span>
+  </div>
+
+  <div class="video-wrap">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="overlay"></canvas>
+  </div>
+
+  <div class="warning-banner" id="cameraWarning" hidden>
+    <div id="cameraWarningText"></div>
+    <button id="restartCameraBtn" class="secondary">Restart camera</button>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" id="tabRecognize" type="button">Recognize</button>
+    <button class="tab-btn" id="tabEnroll" type="button">Enroll players</button>
+  </div>
+
+  <section class="panel" id="recognizePanel">
+    <h2>Recent activity</h2>
+    <div class="log" id="recognizeLog"><div>Waiting for a recognized player...</div></div>
+  </section>
+
+  <section class="panel" id="enrollPanel" hidden>
+    <h2>Enroll a player</h2>
+    <label for="enrollName">Player name (must match the tablet exactly)</label>
+    <input type="text" id="enrollName" placeholder="e.g. Alice">
+    <div class="hint">Look at the camera, one face in frame. Capture takes a few seconds.</div>
+    <button id="captureBtn" type="button">Capture 8 frames</button>
+    <div class="progress-text" id="captureProgress" hidden></div>
+
+    <h2 style="margin-top:16px">Enrolled players</h2>
+    <div id="playerList"><div class="hint">No players enrolled yet.</div></div>
+  </section>
+
+  <details class="panel" id="settingsPanel">
+    <summary>Settings</summary>
+    <div style="margin-top:10px">
+      <label for="cameraSelect">Camera</label>
+      <select id="cameraSelect"></select>
+
+      <label for="thresholdInput">Match sensitivity (lower = stricter)</label>
+      <input type="number" id="thresholdInput" min="0.1" max="1" step="0.05" value="0.5">
+
+      <label for="consecutiveInput">Consecutive frames required</label>
+      <input type="number" id="consecutiveInput" min="1" max="10" step="1" value="3">
+
+      <label for="debounceInput">Re-announce same player after (sec)</label>
+      <input type="number" id="debounceInput" min="1" max="120" step="1" value="10">
+
+      <div class="row" style="margin-top:4px">
+        <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="debugToggle" style="width:auto;margin:0"> Show debug overlay</label>
+      </div>
+    </div>
+  </details>
+</main>
+
+<script src="camera/face-api.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  var MODELS_URL = "camera/models";
+  var WS_PATH = "/ws-camera";
+  var RECONNECT_DELAY_MS = 3000;
+  var DETECTION_INTERVAL_MS = 280; // ~3.5 fps, within the 3-5fps target
+  var STRICT_RATIO = 0.7; // enroll-add only fires on a notably confident match
+  var ENROLL_TARGET_SAMPLES = 8;
+  var ENROLL_CAPTURE_TIMEOUT_MS = 15000;
+  var SETTINGS_STORAGE_KEY = "pmc-camera-settings";
+
+  var videoEl = document.getElementById("video");
+  var overlayEl = document.getElementById("overlay");
+  var overlayCtx = overlayEl.getContext("2d");
+
+  var dotRelay = document.getElementById("dotRelay");
+  var labelRelay = document.getElementById("labelRelay");
+  var dotModels = document.getElementById("dotModels");
+  var labelModels = document.getElementById("labelModels");
+  var dotCamera = document.getElementById("dotCamera");
+  var labelCamera = document.getElementById("labelCamera");
+
+  var cameraWarning = document.getElementById("cameraWarning");
+  var cameraWarningText = document.getElementById("cameraWarningText");
+  var restartCameraBtn = document.getElementById("restartCameraBtn");
+
+  var tabRecognize = document.getElementById("tabRecognize");
+  var tabEnroll = document.getElementById("tabEnroll");
+  var recognizePanel = document.getElementById("recognizePanel");
+  var enrollPanel = document.getElementById("enrollPanel");
+  var recognizeLog = document.getElementById("recognizeLog");
+
+  var enrollNameInput = document.getElementById("enrollName");
+  var captureBtn = document.getElementById("captureBtn");
+  var captureProgress = document.getElementById("captureProgress");
+  var playerListEl = document.getElementById("playerList");
+
+  var cameraSelect = document.getElementById("cameraSelect");
+  var thresholdInput = document.getElementById("thresholdInput");
+  var consecutiveInput = document.getElementById("consecutiveInput");
+  var debounceInput = document.getElementById("debounceInput");
+  var debugToggle = document.getElementById("debugToggle");
+
+  // ---- Settings (local overrides win once the operator has set any;
+  // otherwise pre-filled once from the tablet's own settings, read over
+  // the relay - see camera-relay.js's settings-request/settings) ----
+  var settings = { matchThreshold: 0.5, consecutiveFrames: 3, debounceSec: 10, debugOverlay: false };
+  var hasLocalSettingsOverride = false;
+
+  function loadStoredSettings() {
+    try {
+      var raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
+      if (!raw) return;
+      var parsed = JSON.parse(raw);
+      hasLocalSettingsOverride = true;
+      if (typeof parsed.matchThreshold === "number") settings.matchThreshold = parsed.matchThreshold;
+      if (typeof parsed.consecutiveFrames === "number") settings.consecutiveFrames = parsed.consecutiveFrames;
+      if (typeof parsed.debounceSec === "number") settings.debounceSec = parsed.debounceSec;
+      if (typeof parsed.debugOverlay === "boolean") settings.debugOverlay = parsed.debugOverlay;
+    } catch (e) {}
+  }
+
+  function persistSettings() {
+    hasLocalSettingsOverride = true;
+    try {
+      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+    } catch (e) {}
+  }
+
+  function applySettingsToInputs() {
+    thresholdInput.value = settings.matchThreshold;
+    consecutiveInput.value = settings.consecutiveFrames;
+    debounceInput.value = settings.debounceSec;
+    debugToggle.checked = settings.debugOverlay;
+  }
+
+  thresholdInput.addEventListener("input", function () {
+    var v = parseFloat(thresholdInput.value);
+    if (!(v > 0)) return;
+    settings.matchThreshold = v;
+    persistSettings();
+  });
+  consecutiveInput.addEventListener("input", function () {
+    var v = parseInt(consecutiveInput.value, 10);
+    if (!(v > 0)) return;
+    settings.consecutiveFrames = v;
+    persistSettings();
+  });
+  debounceInput.addEventListener("input", function () {
+    var v = parseInt(debounceInput.value, 10);
+    if (!(v > 0)) return;
+    settings.debounceSec = v;
+    persistSettings();
+  });
+  debugToggle.addEventListener("change", function () {
+    settings.debugOverlay = debugToggle.checked;
+    persistSettings();
+  });
+
+  loadStoredSettings();
+  applySettingsToInputs();
+
+  // ---- Tabs ----
+  function showTab(which) {
+    var recognizing = which === "recognize";
+    tabRecognize.classList.toggle("active", recognizing);
+    tabEnroll.classList.toggle("active", !recognizing);
+    recognizePanel.hidden = !recognizing;
+    enrollPanel.hidden = recognizing;
+  }
+  tabRecognize.addEventListener("click", function () { showTab("recognize"); });
+  tabEnroll.addEventListener("click", function () { showTab("enroll"); });
+
+  // ---- Status pills ----
+  function setStatus(dotEl, labelEl, state, text) {
+    dotEl.className = "dot" + (state ? " " + state : "");
+    labelEl.textContent = text;
+  }
+
+  // ---- Model loading ----
+  var modelsReady = false;
+  function loadModels() {
+    setStatus(dotModels, labelModels, "busy", "Models: loading...");
+    return Promise.all([
+      faceapi.nets.tinyFaceDetector.loadFromUri(MODELS_URL),
+      faceapi.nets.faceLandmark68Net.loadFromUri(MODELS_URL),
+      faceapi.nets.faceRecognitionNet.loadFromUri(MODELS_URL)
+    ]).then(function () {
+      modelsReady = true;
+      setStatus(dotModels, labelModels, "ok", "Models: ready");
+    }).catch(function (e) {
+      setStatus(dotModels, labelModels, "bad", "Models: failed to load");
+      console.error("[camera] model load failed:", e);
+    });
+  }
+
+  // ---- Camera ----
+  var currentStream = null;
+  var devicesPopulated = false;
+
+  function stopCurrentStream() {
+    if (currentStream) {
+      currentStream.getTracks().forEach(function (t) { t.stop(); });
+      currentStream = null;
+    }
+  }
+
+  function showCameraWarning(text) {
+    cameraWarningText.textContent = text;
+    cameraWarning.hidden = false;
+  }
+  function hideCameraWarning() {
+    cameraWarning.hidden = true;
+  }
+
+  function populateCameraList(selectedDeviceId) {
+    navigator.mediaDevices.enumerateDevices().then(function (devices) {
+      var cams = devices.filter(function (d) { return d.kind === "videoinput"; });
+      cameraSelect.innerHTML = "";
+      cams.forEach(function (d, i) {
+        var opt = document.createElement("option");
+        opt.value = d.deviceId;
+        opt.textContent = d.label || ("Camera " + (i + 1));
+        if (d.deviceId === selectedDeviceId) opt.selected = true;
+        cameraSelect.appendChild(opt);
+      });
+      devicesPopulated = true;
+    }).catch(function () {});
+  }
+
+  function startCamera(deviceId) {
+    setStatus(dotCamera, labelCamera, "busy", "Camera: starting...");
+    var constraints = {
+      audio: false,
+      video: deviceId
+        ? { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } }
+        : { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }
+    };
+    return navigator.mediaDevices.getUserMedia(constraints).then(function (stream) {
+      stopCurrentStream();
+      currentStream = stream;
+      videoEl.srcObject = stream;
+      hideCameraWarning();
+      setStatus(dotCamera, labelCamera, "ok", "Camera: active");
+      var track = stream.getVideoTracks()[0];
+      if (track) {
+        track.addEventListener("ended", function () {
+          setStatus(dotCamera, labelCamera, "bad", "Camera: stopped");
+          showCameraWarning("The camera stream stopped unexpectedly (locked phone, another app took the camera, or a cable/mount issue). Tap below to restart it.");
+        });
+      }
+      if (!devicesPopulated) populateCameraList(track && track.getSettings ? track.getSettings().deviceId : null);
+    }).catch(function (e) {
+      setStatus(dotCamera, labelCamera, "bad", "Camera: error");
+      var httpsNote = location.protocol !== "https:" && location.hostname !== "localhost"
+        ? " This page is being served over plain HTTP - iOS Safari blocks camera access entirely without HTTPS. See server/README.md for how to enable it."
+        : "";
+      showCameraWarning("Could not access the camera (" + e.message + ")." + httpsNote);
+      console.error("[camera] getUserMedia failed:", e);
+    });
+  }
+
+  restartCameraBtn.addEventListener("click", function () {
+    startCamera(cameraSelect.value || null);
+  });
+  cameraSelect.addEventListener("change", function () {
+    startCamera(cameraSelect.value || null);
+  });
+
+  // ---- Wake Lock ----
+  var wakeLock = null;
+  function requestWakeLock() {
+    if (!("wakeLock" in navigator)) return;
+    navigator.wakeLock.request("screen").then(function (lock) {
+      wakeLock = lock;
+    }).catch(function () {});
+  }
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible" && !wakeLock) requestWakeLock();
+  });
+
+  // ---- Relay connection (role: camera) ----
+  var ws = null;
+  var reconnectTimer = null;
+  var enrollments = {}; // normalized-name-key -> { displayName, descriptors: [[...128 floats], ...] }
+
+  function wsUrl() {
+    var proto = location.protocol === "https:" ? "wss:" : "ws:";
+    return proto + "//" + location.host + WS_PATH;
+  }
+
+  function wsSend(msg) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      try { ws.send(JSON.stringify(msg)); } catch (e) {}
+    }
+  }
+
+  function scheduleReconnect() {
+    if (reconnectTimer) return;
+    reconnectTimer = setTimeout(function () {
+      reconnectTimer = null;
+      connectRelay();
+    }, RECONNECT_DELAY_MS);
+  }
+
+  function connectRelay() {
+    if (ws) return;
+    setStatus(dotRelay, labelRelay, "busy", "Relay: connecting...");
+    try {
+      ws = new WebSocket(wsUrl());
+    } catch (e) {
+      ws = null;
+      scheduleReconnect();
+      return;
+    }
+    ws.addEventListener("open", function () {
+      setStatus(dotRelay, labelRelay, "ok", "Relay: connected");
+      wsSend({ type: "hello", role: "camera" });
+      wsSend({ type: "enroll-get" });
+      // Pre-fill threshold/debounce from the tablet's own settings, but
+      // only the first time this device has never been configured here -
+      // a local override the operator already made always wins.
+      if (!hasLocalSettingsOverride) wsSend({ type: "settings-request" });
+    });
+    ws.addEventListener("message", function (event) {
+      var msg;
+      try { msg = JSON.parse(event.data); } catch (e) { return; }
+      if (msg.type === "enrollments") {
+        enrollments = msg.data || {};
+        renderPlayerList();
+      } else if (msg.type === "settings" && !hasLocalSettingsOverride) {
+        if (typeof msg.matchThreshold === "number") settings.matchThreshold = msg.matchThreshold;
+        if (typeof msg.debounceSec === "number") settings.debounceSec = msg.debounceSec;
+        applySettingsToInputs();
+      }
+    });
+    ws.addEventListener("close", function () {
+      ws = null;
+      setStatus(dotRelay, labelRelay, "bad", "Relay: disconnected");
+      scheduleReconnect();
+    });
+  }
+
+  // ---- Enrolled player list (enroll tab) ----
+  function renderPlayerList() {
+    var keys = Object.keys(enrollments);
+    if (keys.length === 0) {
+      playerListEl.innerHTML = '<div class="hint">No players enrolled yet.</div>';
+      return;
+    }
+    playerListEl.innerHTML = "";
+    keys.sort(function (a, b) {
+      return (enrollments[a].displayName || "").localeCompare(enrollments[b].displayName || "");
+    }).forEach(function (key) {
+      var entry = enrollments[key];
+      var row = document.createElement("div");
+      row.className = "player-row";
+      var meta = document.createElement("div");
+      meta.innerHTML = "<div>" + escapeHtml(entry.displayName || key) + "</div><div class=\"meta\">" +
+        ((entry.descriptors || []).length) + " samples</div>";
+      var actions = document.createElement("div");
+      actions.className = "actions";
+      var reEnrollBtn = document.createElement("button");
+      reEnrollBtn.className = "secondary";
+      reEnrollBtn.textContent = "Re-enroll";
+      reEnrollBtn.type = "button";
+      reEnrollBtn.addEventListener("click", function () {
+        enrollNameInput.value = entry.displayName || key;
+        enrollNameInput.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+      var deleteBtn = document.createElement("button");
+      deleteBtn.className = "danger";
+      deleteBtn.textContent = "Delete";
+      deleteBtn.type = "button";
+      deleteBtn.addEventListener("click", function () {
+        if (deleteBtn.dataset.confirm === "1") {
+          wsSend({ type: "enroll-delete", player_name: entry.displayName || key });
+        } else {
+          deleteBtn.dataset.confirm = "1";
+          deleteBtn.textContent = "Tap again to confirm";
+          setTimeout(function () {
+            deleteBtn.dataset.confirm = "0";
+            deleteBtn.textContent = "Delete";
+          }, 3000);
+        }
+      });
+      actions.appendChild(reEnrollBtn);
+      actions.appendChild(deleteBtn);
+      row.appendChild(meta);
+      row.appendChild(actions);
+      playerListEl.appendChild(row);
+    });
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  // ---- Enrollment capture ----
+  var enrollCapturing = false;
+  var enrollSamples = [];
+  var enrollTargetName = "";
+  var enrollTimeoutTimer = null;
+
+  captureBtn.addEventListener("click", function () {
+    var name = enrollNameInput.value.trim();
+    if (!name) {
+      enrollNameInput.focus();
+      return;
+    }
+    enrollTargetName = name;
+    enrollSamples = [];
+    enrollCapturing = true;
+    captureBtn.disabled = true;
+    captureProgress.hidden = false;
+    captureProgress.textContent = "Capturing... (0/" + ENROLL_TARGET_SAMPLES + ")";
+    // No face / a bad angle for the whole window must not strand the
+    // button disabled forever - fall through to the same "0 samples"
+    // message finishEnrollCapture already shows.
+    enrollTimeoutTimer = setTimeout(finishEnrollCapture, ENROLL_CAPTURE_TIMEOUT_MS);
+  });
+
+  function finishEnrollCapture() {
+    if (!enrollCapturing) return;
+    enrollCapturing = false;
+    if (enrollTimeoutTimer) {
+      clearTimeout(enrollTimeoutTimer);
+      enrollTimeoutTimer = null;
+    }
+    captureBtn.disabled = false;
+    if (enrollSamples.length === 0) {
+      captureProgress.textContent = "No face detected - try again with better lighting.";
+      setTimeout(function () { captureProgress.hidden = true; }, 3000);
+      return;
+    }
+    wsSend({
+      type: "enroll-save",
+      player_name: enrollTargetName,
+      descriptors: enrollSamples.map(function (d) { return Array.from(d); })
+    });
+    captureProgress.textContent = "Saved " + enrollSamples.length + " samples for " + enrollTargetName + ".";
+    setTimeout(function () { captureProgress.hidden = true; }, 3000);
+  }
+
+  // ---- Recognition matching ----
+  function findBestMatch(descriptor) {
+    var bestName = null;
+    var bestDistance = Infinity;
+    Object.keys(enrollments).forEach(function (key) {
+      var entry = enrollments[key];
+      (entry.descriptors || []).forEach(function (stored) {
+        var distance = faceapi.euclideanDistance(descriptor, stored);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          bestName = entry.displayName || key;
+        }
+      });
+    });
+    if (bestName === null) return null;
+    return { name: bestName, distance: bestDistance };
+  }
+
+  var currentCandidateName = null;
+  var consecutiveCount = 0;
+  var lastEmittedAt = {}; // name -> timestamp ms
+
+  function logActivity(text) {
+    var line = document.createElement("div");
+    line.textContent = new Date().toLocaleTimeString() + " - " + text;
+    recognizeLog.insertBefore(line, recognizeLog.firstChild);
+    while (recognizeLog.childNodes.length > 20) {
+      recognizeLog.removeChild(recognizeLog.lastChild);
+    }
+  }
+
+  function handleRecognitionFrame(detection) {
+    if (!detection) {
+      currentCandidateName = null;
+      consecutiveCount = 0;
+      return;
+    }
+    var match = findBestMatch(detection.descriptor);
+    if (!match || match.distance > settings.matchThreshold) {
+      currentCandidateName = null;
+      consecutiveCount = 0;
+      return;
+    }
+
+    if (currentCandidateName === match.name) {
+      consecutiveCount++;
+    } else {
+      currentCandidateName = match.name;
+      consecutiveCount = 1;
+    }
+
+    if (consecutiveCount < settings.consecutiveFrames) return;
+
+    var now = Date.now();
+    var last = lastEmittedAt[match.name] || 0;
+    if (now - last < settings.debounceSec * 1000) return;
+    lastEmittedAt[match.name] = now;
+
+    var confidence = Math.max(0, Math.min(1, 1 - match.distance));
+    wsSend({ type: "player_up", player_name: match.name, confidence: confidence, ts: now });
+    logActivity(match.name + " recognized (distance " + match.distance.toFixed(2) + ")");
+
+    // Additive learning, per explicit request: only on a notably
+    // confident match (stricter than the base threshold), so a
+    // borderline/uncertain recognition never reinforces itself.
+    if (match.distance <= settings.matchThreshold * STRICT_RATIO) {
+      wsSend({ type: "enroll-add", player_name: match.name, descriptor: Array.from(detection.descriptor) });
+    }
+  }
+
+  // ---- Debug overlay drawing ----
+  function syncOverlaySize() {
+    overlayEl.width = overlayEl.clientWidth;
+    overlayEl.height = overlayEl.clientHeight;
+  }
+  window.addEventListener("resize", syncOverlaySize);
+  videoEl.addEventListener("loadedmetadata", syncOverlaySize);
+
+  function drawOverlay(detection, match) {
+    overlayCtx.clearRect(0, 0, overlayEl.width, overlayEl.height);
+    if (!settings.debugOverlay || !detection) return;
+    var vw = videoEl.videoWidth || 1;
+    var vh = videoEl.videoHeight || 1;
+    // object-fit: cover means the video is scaled uniformly to fill the
+    // box and cropped - the scale is the larger of the two per-axis
+    // ratios, with the overflow centered.
+    var scale = Math.max(overlayEl.width / vw, overlayEl.height / vh);
+    var offsetX = (overlayEl.width - vw * scale) / 2;
+    var offsetY = (overlayEl.height - vh * scale) / 2;
+    var box = detection.detection.box;
+    var x = box.x * scale + offsetX;
+    var y = box.y * scale + offsetY;
+    var w = box.width * scale;
+    var h = box.height * scale;
+
+    overlayCtx.strokeStyle = match ? "#5ec98a" : "#e8b923";
+    overlayCtx.lineWidth = 2;
+    overlayCtx.strokeRect(x, y, w, h);
+
+    var label = match ? (match.name + " (" + match.distance.toFixed(2) + ")") : "unmatched";
+    overlayCtx.font = "14px sans-serif";
+    var textWidth = overlayCtx.measureText(label).width;
+    overlayCtx.fillStyle = "rgba(0,0,0,0.6)";
+    overlayCtx.fillRect(x, Math.max(0, y - 20), textWidth + 8, 20);
+    overlayCtx.fillStyle = "#f6efe9";
+    overlayCtx.fillText(label, x + 4, Math.max(14, y - 5));
+  }
+
+  // ---- Main detection loop (shared by recognize + enroll tabs) ----
+  var detectionBusy = false;
+  var tinyOptions = null;
+
+  function runDetectionLoop() {
+    if (detectionBusy || !modelsReady || !currentStream) return;
+    detectionBusy = true;
+    if (!tinyOptions) tinyOptions = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 });
+    faceapi.detectSingleFace(videoEl, tinyOptions).withFaceLandmarks().withFaceDescriptor()
+      .then(function (detection) {
+        if (enrollCapturing) {
+          if (detection) {
+            enrollSamples.push(detection.descriptor);
+            captureProgress.textContent = "Capturing... (" + enrollSamples.length + "/" + ENROLL_TARGET_SAMPLES + ")";
+          }
+          if (enrollSamples.length >= ENROLL_TARGET_SAMPLES) finishEnrollCapture();
+          drawOverlay(detection, null);
+        } else {
+          var match = detection ? findBestMatch(detection.descriptor) : null;
+          var withinThreshold = match && match.distance <= settings.matchThreshold ? match : null;
+          drawOverlay(detection, withinThreshold);
+          handleRecognitionFrame(detection);
+        }
+      })
+      .catch(function (e) {
+        console.error("[camera] detection error:", e);
+      })
+      .then(function () {
+        detectionBusy = false;
+      });
+  }
+
+  // ---- Boot ----
+  showTab("recognize");
+  connectRelay();
+  loadModels();
+  startCamera(null);
+  requestWakeLock();
+  setInterval(runDetectionLoop, DETECTION_INTERVAL_MS);
+})();
+</script>
+</body>
+</html>
