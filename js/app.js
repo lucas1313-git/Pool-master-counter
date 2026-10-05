@@ -3355,6 +3355,23 @@
     });
   }
 
+  // Per explicit request: when switching the race mode radio to "Race
+  // to" (see raceModeRaceToRadio's own listener), suggest a race-to
+  // count that runs through every entry of an already-configured
+  // rotation exactly once - the inverse of addRotationItem's own
+  // "every = race-to - 1" heuristic above (that one derives "every"
+  // FROM an existing race-to; this derives race-to FROM an existing
+  // "every"). Total wins to complete one full pass through the
+  // rotation is simply entries × wins-per-entry. Falls back to
+  // whatever race-to was last used (or 5, same as before this prompt
+  // existed) when there's no real rotation to size against.
+  function computeRotationAwareRaceToSuggestion() {
+    if (state.rotation.enabled && state.rotation.order.length >= 2) {
+      return state.rotation.order.length * Math.max(1, state.rotation.every || 1);
+    }
+    return lastRaceToWinsTarget || 5;
+  }
+
   function addRotationItem(gameType, target, unit) {
     var type = GAME_TYPES[gameType];
     state.rotation.order.push({
@@ -28968,16 +28985,38 @@
     updateCurrentGameSummary();
   });
 
+  // Per explicit request: asks instead of silently defaulting to
+  // lastRaceToWinsTarget/5 - the prompt's own default value is already
+  // that same rotation-aware suggestion (see
+  // computeRotationAwareRaceToSuggestion above), so just hitting Enter
+  // reproduces the old silent behavior exactly when there's no
+  // rotation to size against, or the full-rotation total when there
+  // is one. Backing out (Cancel, or dismissing the overlay) reverts
+  // the radio back to Single Game rather than leaving "Race to"
+  // selected with no real target chosen.
   raceModeRaceToRadio.addEventListener("change", function () {
     if (!raceModeRaceToRadio.checked) return;
-    state.raceToWinsTarget = lastRaceToWinsTarget || 5;
-    raceToWinsInput.value = state.raceToWinsTarget;
-    state.fairRaceTargets = null;
-    saveState();
-    renderRaceMode();
-    renderScoreboard();
-    renderStandings();
-    updateCurrentGameSummary();
+    var suggested = computeRotationAwareRaceToSuggestion();
+    promptModal(
+      T("gameSetup.raceToPrompt"),
+      String(suggested),
+      function (value) {
+        var target = parseInt(value, 10);
+        if (!(target >= 1)) target = suggested;
+        state.raceToWinsTarget = target;
+        raceToWinsInput.value = target;
+        if (target !== 1) lastRaceToWinsTarget = target;
+        state.fairRaceTargets = null;
+        saveState();
+        renderRaceMode();
+        renderScoreboard();
+        renderStandings();
+        updateCurrentGameSummary();
+      },
+      function () {
+        raceModeSingleRadio.checked = true;
+      }
+    );
   });
 
   fairRaceEnabledCheckbox.addEventListener("change", function () {
