@@ -39,8 +39,6 @@ var REPO_ROOT = path.resolve(__dirname, "..");
 var app = express();
 app.use(express.static(REPO_ROOT, { extensions: ["html"] }));
 
-routes.attachApiRoutes(app, PORT, QRCode);
-
 // HTTPS is a hard precondition for the camera-recognition page, not
 // polish - iOS Safari refuses getUserMedia() entirely over plain HTTP on
 // anything but localhost. Off by default (Group Session itself doesn't
@@ -70,6 +68,15 @@ if (SSL_CERT_PATH && SSL_KEY_PATH) {
   console.warn("to use the camera on iOS Safari. Set SSL_CERT_PATH and SSL_KEY_PATH to an");
   console.warn("mkcert-issued cert/key to enable it. See server/README.md.");
 }
+
+// Called after usingHttps is settled (not before, like a stray earlier
+// placement of this call would be) - the camera setup wizard's /api/lan-info
+// read needs this to reflect real state, not a value captured before it was
+// known.
+routes.attachApiRoutes(app, PORT, QRCode, function () {
+  return usingHttps ? PORT : null;
+});
+
 var wss = relay.attachRelay(httpServer, WebSocket);
 // Independent of the Group Session relay above - see camera-relay.js's
 // own comment on why this is a second WebSocket.Server on its own path
