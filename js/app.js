@@ -359,6 +359,9 @@
       fairRaceEnabled: false,
       fairRaceTargets: null,
       rotatingTeamsEnabled: false,
+      cameraInputEnabled: false,
+      cameraMatchThreshold: 1.2,
+      cameraDebounceSec: 10,
       currentGame: { gameType: "8ball", target: 1, unit: "rack", mode: "individual", startedAt: new Date().toISOString(), shotCounterEnabled: false, shotCounterBeepSec: 30, shotCounterHidden: false, queueEnabled: false, timedTournamentEnabled: false, timedTournamentMinutes: 60 },
       gameHistory: [],
       rotation: { enabled: false, order: [], every: 1 },
@@ -433,6 +436,9 @@
           if (typeof parsed.fairRaceEnabled !== "boolean") parsed.fairRaceEnabled = false;
           if (typeof parsed.fairRaceTargets !== "object") parsed.fairRaceTargets = null;
           if (typeof parsed.rotatingTeamsEnabled !== "boolean") parsed.rotatingTeamsEnabled = false;
+          if (typeof parsed.cameraInputEnabled !== "boolean") parsed.cameraInputEnabled = false;
+          if (typeof parsed.cameraMatchThreshold !== "number") parsed.cameraMatchThreshold = 1.2;
+          if (typeof parsed.cameraDebounceSec !== "number") parsed.cameraDebounceSec = 10;
           if (!parsed.currentGame) parsed.currentGame = { gameType: "8ball", target: 1, mode: "individual" };
           if (!parsed.currentGame.startedAt) parsed.currentGame.startedAt = new Date().toISOString();
           if (typeof parsed.currentGame.unit !== "string" || !parsed.currentGame.unit) parsed.currentGame.unit = null;
@@ -670,6 +676,13 @@
     var teamsMode = !quickCounterMode && state.currentGame.mode === "teams";
     rotatingTeamsRow.classList.toggle("hidden", !teamsMode);
     rotatingTeamsCheckbox.checked = state.rotatingTeamsEnabled;
+    // Not mode-specific (unlike the two rows above) - always shown;
+    // only the threshold/debounce fields hide while the feature itself
+    // is off.
+    cameraInputCheckbox.checked = state.cameraInputEnabled;
+    cameraInputSettingsRow.classList.toggle("hidden", !state.cameraInputEnabled);
+    cameraMatchThresholdInput.value = state.cameraMatchThreshold;
+    cameraDebounceSecInput.value = state.cameraDebounceSec;
     var queueActive = individualMode && state.currentGame.queueEnabled;
     queueSwapStickyRow.classList.toggle("hidden", !queueActive);
     queueSwapStickyCheckbox.checked = loadQueueSwapSticky();
@@ -1799,6 +1812,13 @@
   var queueModeCheckbox = document.getElementById("queue-mode-checkbox");
   var rotatingTeamsRow = document.getElementById("rotating-teams-row");
   var rotatingTeamsCheckbox = document.getElementById("rotating-teams-checkbox");
+  var cameraInputCheckbox = document.getElementById("camera-input-checkbox");
+  var cameraInputSettingsRow = document.getElementById("camera-input-settings-row");
+  var cameraMatchThresholdInput = document.getElementById("camera-match-threshold");
+  var cameraDebounceSecInput = document.getElementById("camera-debounce-sec");
+  // Set via PMCCameraBridge.onTurnConfirmed - see adjustScore and the
+  // bridge's own comment on why this is a single slot, not a list.
+  var cameraTurnConfirmedCallback = null;
   var queueSection = document.getElementById("queue-section");
   var queueList = document.getElementById("queue-list");
   var rosterLoadSelect = document.getElementById("roster-load-select");
@@ -6998,6 +7018,20 @@
       return;
     }
 
+    // Gameplay-driven camera auto-enrollment (see PMCCameraBridge's own
+    // comment) - a real, accepted +1 is the strongest "a human just
+    // confirmed who's at the table" signal available, stronger than the
+    // camera's own self-match. A negative delta is excluded - it could be
+    // a foul/undo/correction unrelated to who the camera is currently
+    // seeing. Note this never fires for tournamentAdjustScore, a
+    // deliberately separate function - tournament mode is out of scope
+    // for this pass.
+    if (delta > 0 && cameraTurnConfirmedCallback) {
+      try {
+        cameraTurnConfirmedCallback(player.name);
+      } catch (e) {}
+    }
+
     // Quick Counter: just tally, never check a target or credit a win.
     // Free-form point counter — negative scores are allowed (e.g. golf-
     // style games, point penalties), so no clamping to 0 here.
@@ -8015,6 +8049,20 @@
       longDate: longDate,
       generatedAt: formatTimestamp(new Date().toISOString(), true),
       tokens: tokens,
+      // The next six fields are what let a completely different report
+      // (see computeLeagueReportImageData) reuse buildDayReportColorfulHtmlFromData/
+      // buildReportCanvasFromData/buildColorfulReportShareScript unchanged
+      // below instead of forking ~500 lines of HTML/canvas drawing code -
+      // every hardcoded string those three builders used to have is now
+      // read from here, with the day report's own original copy as the
+      // default so this call site's behavior is unchanged.
+      appTitle: "🎱 Pool Master Counter",
+      tagline: "Don't get cocky!",
+      emptyText: "No games recorded today.",
+      leaderboardLabel: "Leaderboard",
+      gamesLabel: "Game Log",
+      pageTitle: "Pool Master Counter — " + formatReportDateHeading(dateStr),
+      imageFilename: "pool-master-counter-report-" + dateStr + ".png",
       players: players,
       highlights: highlights,
       games: games,
@@ -8082,7 +8130,7 @@
     return (
       "<!DOCTYPE html>\n" +
       '<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">' +
-      "<title>Pool Master Counter — " + escapeHtmlForReport(formatReportDateHeading(reportImageData.dateStr)) + "</title>" +
+      "<title>" + escapeHtmlForReport(reportImageData.pageTitle) + "</title>" +
       "<style>" +
       ":root { " + rootVars + " }" +
       "* { box-sizing: border-box; }" +
@@ -8125,14 +8173,14 @@
       "@media print { .toolbar { display: none; } }" +
       "</style></head><body><div class=\"wrap\">" +
       '<div class="toolbar"><button type="button" class="share-btn" id="shareReportBtn">📤 Share</button></div>' +
-      '<div class="hero"><h1>🎱 Pool Master Counter</h1><div class="date">' +
+      '<div class="hero"><h1>' + escapeHtmlForReport(reportImageData.appTitle) + '</h1><div class="date">' +
       escapeHtmlForReport(reportImageData.longDate) +
-      '</div><div class="tagline">Don\'t get cocky!</div></div>' +
+      '</div><div class="tagline">' + escapeHtmlForReport(reportImageData.tagline) + '</div></div>' +
       (reportImageData.players.length
-        ? '<div class="section"><h2>Leaderboard</h2><div class="leaderboard">' + leaderboardHtml + "</div></div>"
-        : '<div class="section"><p class="empty-note">No games recorded today.</p></div>') +
+        ? '<div class="section"><h2>' + escapeHtmlForReport(reportImageData.leaderboardLabel) + '</h2><div class="leaderboard">' + leaderboardHtml + "</div></div>"
+        : '<div class="section"><p class="empty-note">' + escapeHtmlForReport(reportImageData.emptyText) + "</p></div>") +
       (highlightsHtml ? '<div class="section"><h2>Highlights</h2>' + highlightsHtml + "</div>" : "") +
-      (gamesHtml ? '<div class="section"><h2>Game Log</h2><div class="game-log">' + gamesHtml + "</div></div>" : "") +
+      (gamesHtml ? '<div class="section"><h2>' + escapeHtmlForReport(reportImageData.gamesLabel) + '</h2><div class="game-log">' + gamesHtml + "</div></div>" : "") +
       notesHtml +
       "<footer>Generated " + escapeHtmlForReport(reportImageData.generatedAt) + " · Pool Master Counter</footer>" +
       "</div>" +
@@ -8252,13 +8300,13 @@
     ctx.fillStyle = tok("--text", "#f6efe9");
     ctx.textAlign = "center";
     ctx.font = "bold 24px " + font;
-    ctx.fillText("🎱 Pool Master Counter", W / 2, 48);
+    ctx.fillText(reportData.appTitle, W / 2, 48);
     ctx.font = "16px " + font;
     ctx.globalAlpha = 0.9;
     ctx.fillText(reportData.longDate, W / 2, 76);
     ctx.globalAlpha = 0.65;
     ctx.font = "italic 13px " + font;
-    ctx.fillText("Don’t get cocky!", W / 2, 100);
+    ctx.fillText(reportData.tagline, W / 2, 100);
     ctx.globalAlpha = 1;
     ctx.textAlign = "left";
 
@@ -8272,7 +8320,7 @@
     }
 
     if (hasPlayers) {
-      drawLabel("Leaderboard");
+      drawLabel(reportData.leaderboardLabel);
       reportData.players.forEach(function (p) {
         var cardY = cy,
           cardH = PLAYER_ROW_H - PLAYER_GAP;
@@ -8332,7 +8380,7 @@
     } else {
       ctx.fillStyle = tok("--text-dim", "#c9a2a2");
       ctx.font = "italic 14px " + font;
-      ctx.fillText("No games recorded today.", PAD, cy + 14);
+      ctx.fillText(reportData.emptyText, PAD, cy + 14);
       cy += 30;
     }
 
@@ -8355,7 +8403,7 @@
 
     if (reportData.games.length) {
       cy += SECTION_GAP - HIGHLIGHT_GAP;
-      drawLabel("Game Log");
+      drawLabel(reportData.gamesLabel);
       ctx.fillStyle = tok("--bg-card", "#2e1414");
       reportCanvasRoundRect(ctx, PAD, cy, CW, logH, 12);
       ctx.fill();
@@ -8446,7 +8494,7 @@
   // builds for the HTML view, embedded here as JSON so this canvas
   // renderer needs no access back to the app's own data functions.
   function buildColorfulReportShareScript(reportData) {
-    var filename = "pool-master-counter-report-" + reportData.dateStr + ".png";
+    var filename = reportData.imageFilename;
     // Escaping "<" (not just "</script>") is the standard safe way to embed
     // JSON inside a <script> block - covers a player name that happens to
     // contain "</script>" verbatim, and any other "<..." sequence an HTML
@@ -8521,13 +8569,13 @@
       'ctx.fillStyle=tok("--text","#f6efe9");',
       'ctx.textAlign="center";',
       'ctx.font="bold 24px "+font;',
-      'ctx.fillText("🎱 Pool Master Counter",W/2,48);',
+      'ctx.fillText(DATA.appTitle,W/2,48);',
       'ctx.font="16px "+font;',
       "ctx.globalAlpha=0.9;",
       "ctx.fillText(DATA.longDate,W/2,76);",
       "ctx.globalAlpha=0.65;",
       'ctx.font="italic 13px "+font;',
-      'ctx.fillText("Don’t get cocky!",W/2,100);',
+      'ctx.fillText(DATA.tagline,W/2,100);',
       "ctx.globalAlpha=1;",
       'ctx.textAlign="left";',
       "var cy=HERO_H+SECTION_GAP;",
@@ -8538,7 +8586,7 @@
       "cy+=LABEL_H;",
       "}",
       "if(hasPlayers){",
-      'drawLabel("Leaderboard");',
+      "drawLabel(DATA.leaderboardLabel);",
       "DATA.players.forEach(function(p){",
       "var cardY=cy,cardH=PLAYER_ROW_H-PLAYER_GAP;",
       'ctx.fillStyle=tok("--bg-card","#2e1414");',
@@ -8582,7 +8630,7 @@
       "}else{",
       'ctx.fillStyle=tok("--text-dim","#c9a2a2");',
       'ctx.font="italic 14px "+font;',
-      'ctx.fillText("No games recorded today.",PAD,cy+14);',
+      "ctx.fillText(DATA.emptyText,PAD,cy+14);",
       "cy+=30;",
       "}",
       "if(DATA.highlights.length){",
@@ -8602,7 +8650,7 @@
       "}",
       "if(DATA.games.length){",
       "cy+=SECTION_GAP-HIGHLIGHT_GAP;",
-      'drawLabel("Game Log");',
+      "drawLabel(DATA.gamesLabel);",
       'ctx.fillStyle=tok("--bg-card","#2e1414");',
       "roundRect(ctx,PAD,cy,CW,logH,12);ctx.fill();",
       'ctx.strokeStyle=tok("--border","#4a1e1e");',
@@ -28930,6 +28978,32 @@
     renderAll();
   });
 
+  // js/camera-client.js polls PMCCameraBridge.isEnabled() (see its own
+  // comment on why - the two files share no event bus) rather than
+  // reading this checkbox directly, so toggling it just needs to update
+  // state and re-render like any other setting here; the actual
+  // connect/disconnect happens on that file's own schedule, within a
+  // few seconds.
+  cameraInputCheckbox.addEventListener("change", function () {
+    state.cameraInputEnabled = cameraInputCheckbox.checked;
+    saveState();
+    renderAll();
+  });
+
+  cameraMatchThresholdInput.addEventListener("input", function () {
+    var value = parseFloat(cameraMatchThresholdInput.value);
+    if (!(value > 0)) return;
+    state.cameraMatchThreshold = value;
+    saveState();
+  });
+
+  cameraDebounceSecInput.addEventListener("input", function () {
+    var value = parseInt(cameraDebounceSecInput.value, 10);
+    if (!(value > 0)) return;
+    state.cameraDebounceSec = value;
+    saveState();
+  });
+
   noStatsCheckbox.addEventListener("change", function () {
     noStatsMode = noStatsCheckbox.checked;
 
@@ -30433,4 +30507,56 @@
       openRelayConnection("guest");
     }
   });
+
+  // The one deliberate touchpoint for js/camera-client.js (a separate,
+  // independently-versioned file per explicit request, so the camera
+  // recognition feature can be updated on its own without going through
+  // this file's own ship pipeline) - this whole file is one closed-over
+  // IIFE with nothing exported, so a sibling script can't reach
+  // selectKeypadPlayer/keypadSelectedPlayerId/isAnyOverlayOpen/state any
+  // other way. camera-client.js only ever touches this object, never
+  // anything else in this file.
+  window.PMCCameraBridge = {
+    isEnabled: function () {
+      return !!state.cameraInputEnabled;
+    },
+    isAnyOverlayOpen: isAnyOverlayOpen,
+    getSelectedPlayerId: function () {
+      return keypadSelectedPlayerId;
+    },
+    selectPlayer: function (id) {
+      selectKeypadPlayer(id, null, true);
+    },
+    // Read by camera-client.js so it can hand these to the recognizer
+    // page over the relay (see Step 3 of the camera feature) - not used
+    // by camera-client.js's own player_up handling, which just reacts to
+    // whatever the recognizer already decided to send.
+    getSettings: function () {
+      return { matchThreshold: state.cameraMatchThreshold, debounceSec: state.cameraDebounceSec };
+    },
+    // camera.html (a separate device/page - see camera-relay.js's own
+    // comment) only ever knows players by name, never this session's
+    // real id (uid() is explicitly not meant to survive across devices).
+    // Reuses normalizeNameKey so this resolves exactly the way every
+    // other name lookup in this app already does.
+    resolvePlayerIdByName: function (name) {
+      var key = normalizeNameKey(name);
+      if (!key) return null;
+      var match = state.players.find(function (p) {
+        return normalizeNameKey(p.name) === key;
+      });
+      return match ? match.id : null;
+    },
+    // Gameplay-driven auto-enrollment (camera.html's "turn_confirmed"
+    // handling) - registers camera-client.js's own callback, invoked from
+    // adjustScore on every real (+1 or more) score change. A single slot,
+    // not a list: there's only ever one consumer. camera-client.js must
+    // call this through its own retry loop, not a bare one-time call -
+    // script load order between the two files isn't guaranteed, so this
+    // object may not exist yet the instant camera-client.js's own script
+    // runs.
+    onTurnConfirmed: function (callback) {
+      cameraTurnConfirmedCallback = callback;
+    }
+  };
 })();

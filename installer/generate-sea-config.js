@@ -9,8 +9,8 @@ var fs = require("fs");
 var path = require("path");
 
 var REPO_ROOT = path.resolve(__dirname, "..");
-var STATIC_ROOTS = ["css", "js", "languages", "icons"];
-var STATIC_FILES = ["index.html", "manifest.json"];
+var STATIC_ROOTS = ["css", "js", "languages", "icons", "camera"];
+var STATIC_FILES = ["index.html", "manifest.json", "camera.html"];
 
 var assets = {};
 

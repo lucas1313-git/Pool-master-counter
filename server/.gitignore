@@ -1,1 +1,5 @@
 node_modules/
+
+# mkcert output, if generated here per server/README.md's HTTPS setup -
+# a private key has no business in version control.
+*.pem
