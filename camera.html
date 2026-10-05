@@ -289,7 +289,7 @@
     <span class="pill"><span class="dot" id="dotCamera"></span><span id="labelCamera">Camera: starting...</span></span>
   </div>
 
-  <div class="video-wrap">
+  <div class="video-wrap" id="videoWrap">
     <video id="video" autoplay playsinline muted></video>
     <canvas id="overlay"></canvas>
   </div>
@@ -317,8 +317,10 @@
 
   <section class="panel" id="enrollPanel" hidden>
     <h2>Enroll a player (today's outfit)</h2>
-    <label for="enrollName">Player name (must match the tablet exactly)</label>
-    <input type="text" id="enrollName" placeholder="e.g. Alice">
+    <label for="enrollName">Player</label>
+    <select id="enrollName">
+      <option value="" disabled selected>No players found yet</option>
+    </select>
     <div class="hint">Stand normally, facing the camera, where players usually approach from. Or skip this - just play normally and scoring a real shot teaches the camera too (see below).</div>
     <button id="captureBtn" type="button">Capture 8 samples</button>
     <div class="progress-text" id="captureProgress" hidden></div>
@@ -443,6 +445,7 @@
 
     <div class="wizard-step" id="wizardStep2" hidden>
       <p class="wizard-step-explain">Grant camera access, and pick the right camera if this device has more than one.</p>
+      <div id="wizardVideoHome"></div>
       <div class="wizard-status-line" id="wizardCameraStatusLine">Camera: starting...</div>
       <div id="wizardCameraSelectHome"></div>
     </div>
@@ -557,6 +560,7 @@
     { satMax: 0.18 } // grey/neutral
   ];
 
+  var videoWrap = document.getElementById("videoWrap");
   var videoEl = document.getElementById("video");
   var overlayEl = document.getElementById("overlay");
   var overlayCtx = overlayEl.getContext("2d");
@@ -620,6 +624,7 @@
   var wizardProgress = document.getElementById("wizardProgress");
   var wizardProgressDots = document.getElementById("wizardProgressDots");
   var wizardCameraStatusLine = document.getElementById("wizardCameraStatusLine");
+  var wizardVideoHome = document.getElementById("wizardVideoHome");
   var wizardCameraSelectHome = document.getElementById("wizardCameraSelectHome");
   var wizardCalibrationStatusLine = document.getElementById("wizardCalibrationStatusLine");
   var wizardGoCalibrateBtn = document.getElementById("wizardGoCalibrateBtn");
@@ -839,6 +844,7 @@
   var reconnectTimer = null;
   var enrollments = {}; // normalized-name-key -> { displayName, descriptors: [[...numbers]], sides: [...] }
   var MAX_DESCRIPTORS_PER_PLAYER = 50;
+  var rosterNames = []; // the scoreboard's own current player roster, kept in sync via "roster"
 
   function wsUrl() {
     var proto = location.protocol === "https:" ? "wss:" : "ws:";
@@ -914,7 +920,7 @@
         handleLocalMessage(msg);
         return;
       }
-      // player_up, settings-request
+      // player_up, settings-request, roster-request
       try { window.parent.postMessage(msg, location.origin); } catch (e) {}
       return;
     }
@@ -931,6 +937,9 @@
       if (typeof msg.matchThreshold === "number") settings.matchThreshold = msg.matchThreshold;
       if (typeof msg.debounceSec === "number") settings.debounceSec = msg.debounceSec;
       applySettingsToInputs();
+    } else if (msg.type === "roster" && Array.isArray(msg.names)) {
+      rosterNames = msg.names;
+      populateEnrollNameSelect();
     } else if (msg.type === "turn_confirmed" && msg.player_name) {
       handleTurnConfirmed(msg.player_name);
     } else if (msg.type === "stop-camera") {
@@ -952,6 +961,7 @@
       send({ type: "hello", role: "camera" });
       send({ type: "enroll-get" });
       if (!hasLocalSettingsOverride) send({ type: "settings-request" });
+      send({ type: "roster-request" });
     });
     ws.addEventListener("message", function (event) {
       var msg;
@@ -973,6 +983,7 @@
     });
     send({ type: "enroll-get" });
     if (!hasLocalSettingsOverride) send({ type: "settings-request" });
+    send({ type: "roster-request" });
   }
 
   // ---- Enrolled player list ----
@@ -991,8 +1002,43 @@
       : "Still bootstrapping - have each player shoot from a few different sides of the table.";
   }
 
+  // The enroll picker offers the scoreboard's own live roster (rosterNames,
+  // kept in sync via "roster-request"/"roster" - see connectRelay/
+  // initEmbeddedMode and handleIncomingMessage below) rather than free
+  // text, so a captured sample can never be mislabeled by a typo. Also
+  // folds in any name that already has local enrollments, even if it's
+  // fallen off the live roster since (removed/renamed player) - otherwise
+  // "Re-enroll" on an existing entry would silently fail to select it.
+  function populateEnrollNameSelect() {
+    var previousValue = enrollNameInput.value;
+    var names = rosterNames.slice();
+    Object.keys(enrollments).forEach(function (key) {
+      var displayName = enrollments[key].displayName || key;
+      if (names.indexOf(displayName) === -1) names.push(displayName);
+    });
+    names.sort(function (a, b) { return a.localeCompare(b); });
+    enrollNameInput.innerHTML = "";
+    if (names.length === 0) {
+      var placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.disabled = true;
+      placeholder.selected = true;
+      placeholder.textContent = "No players found yet";
+      enrollNameInput.appendChild(placeholder);
+      return;
+    }
+    names.forEach(function (name) {
+      var opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name;
+      enrollNameInput.appendChild(opt);
+    });
+    if (names.indexOf(previousValue) !== -1) enrollNameInput.value = previousValue;
+  }
+
   function renderPlayerList() {
     var keys = Object.keys(enrollments);
+    populateEnrollNameSelect();
     renderBootstrapStatus(keys);
     if (keys.length === 0) {
       playerListEl.innerHTML = '<div class="hint">No players enrolled yet.</div>';
@@ -1829,8 +1875,10 @@
   var wizardResumeTarget = null;
   var wizardCameraPollTimer = null;
   // Captured once, before any reparenting ever happens, so the real
-  // <select> always has a well-defined home to return to.
+  // <select> (and the live video preview, moved alongside it below) always
+  // have a well-defined home to return to.
   var cameraSelectHomeParent = cameraSelect.parentNode;
+  var videoWrapHomeParent = videoWrap.parentNode;
 
   function cameraIsActive() {
     return dotCamera.classList.contains("ok");
@@ -1877,14 +1925,28 @@
       wizardProgressDots.appendChild(dot);
     }
 
-    wizardNextBtn.hidden = setupWizardStep === 5;
+    // Steps 3 and 4 already have their own pair of forward-progress
+    // buttons (wizardGoCalibrateBtn/wizardSkipCalibrateBtn,
+    // wizardGoEnrollBtn/wizardSkipEnrollBtn - both advance the wizard
+    // themselves, see their own click handlers below) - showing the
+    // generic "Next ->" alongside them meant 3 buttons on one screen for
+    // what's supposed to be a linear, one-action-at-a-time wizard. Only
+    // steps 1-2 (plain explain text / camera picker, no actions of their
+    // own) still need it.
+    wizardNextBtn.hidden = setupWizardStep >= 3;
     wizardFinishBtn.hidden = setupWizardStep !== 5;
 
     if (setupWizardStep === 2) {
+      // The live preview moves in right alongside the picker (not just a
+      // status line) so picking a camera and seeing its feed happen in
+      // the same place, instead of making the user peek behind the modal
+      // at the real .video-wrap to check which camera is actually live.
+      if (videoWrap.parentNode !== wizardVideoHome) wizardVideoHome.appendChild(videoWrap);
       if (cameraSelect.parentNode !== wizardCameraSelectHome) wizardCameraSelectHome.appendChild(cameraSelect);
       startWizardCameraPoll();
     } else {
       stopWizardCameraPoll();
+      if (videoWrap.parentNode === wizardVideoHome) videoWrapHomeParent.appendChild(videoWrap);
       if (cameraSelect.parentNode === wizardCameraSelectHome) cameraSelectHomeParent.appendChild(cameraSelect);
       wizardNextBtn.disabled = false;
     }
@@ -1903,6 +1965,7 @@
   function closeSetupWizard() {
     setupWizardOverlay.hidden = true;
     stopWizardCameraPoll();
+    if (videoWrap.parentNode === wizardVideoHome) videoWrapHomeParent.appendChild(videoWrap);
     if (cameraSelect.parentNode === wizardCameraSelectHome) cameraSelectHomeParent.appendChild(cameraSelect);
     try { localStorage.setItem(WIZARD_DONE_KEY, "1"); } catch (e) {}
   }
