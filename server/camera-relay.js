@@ -119,8 +119,16 @@ function saveEnrollments(data) {
   }
 }
 
-function attachCameraRelay(httpServer, WebSocket) {
-  var wss = new WebSocket.Server({ noServer: true });
+// Builds the relay's state and message handling ONCE, independent of any
+// particular http(s).Server - attachToServer(httpServer) can then be
+// called more than once (e.g. the standalone build's plain-HTTP server
+// for the tablet's own ws:// connection, and a second, HTTPS-only server
+// for camera.html's wss:// connection - a secure context is required for
+// getUserMedia, so that side can never just reuse the plain HTTP one).
+// Without this split, each attachCameraRelay() call would create its own
+// disconnected listenerSockets/cameraSockets/enrollments, and a camera on
+// the HTTPS server could never reach a tablet listening on the HTTP one.
+function createCameraRelay(WebSocket) {
   var listenerSockets = new Set();
   var cameraSockets = new Set();
   var enrollments = loadEnrollments();
@@ -143,94 +151,109 @@ function attachCameraRelay(httpServer, WebSocket) {
     });
   }
 
-  wss.on("connection", function (ws) {
-    ws.role = null;
+  function attachToServer(httpServer) {
+    var wss = new WebSocket.Server({ noServer: true });
 
-    ws.on("message", function (raw) {
-      var msg;
-      try {
-        msg = JSON.parse(raw);
-      } catch (e) {
-        return;
-      }
+    wss.on("connection", function (ws) {
+      ws.role = null;
 
-      if (msg.type === "hello") {
-        ws.role = msg.role === "camera" ? "camera" : msg.role === "listener" ? "listener" : null;
-        if (ws.role === "listener") listenerSockets.add(ws);
-        if (ws.role === "camera") cameraSockets.add(ws);
-        return;
-      }
-
-      if (msg.type === "player_up" && ws.role === "camera") {
-        broadcastToListeners({ type: "player_up", player_name: msg.player_name, confidence: msg.confidence, ts: msg.ts });
-        return;
-      }
-
-      if (msg.type === "enroll-save" && msg.player_name) {
-        var saveKey = normalizeNameKey(msg.player_name);
-        if (!saveKey) return;
-        // A full replace, matching "re-running capture replaces their
-        // enrollment from scratch" - sides resets too (not carried over
-        // from whatever entry existed before), since it describes
-        // coverage of the descriptors being replaced, not of the player
-        // in the abstract.
-        var saveEntry = { displayName: String(msg.player_name).trim(), descriptors: (msg.descriptors || []).slice(-MAX_DESCRIPTORS_PER_PLAYER) };
-        addSide(saveEntry, msg.side);
-        enrollments[saveKey] = saveEntry;
-        saveEnrollments(enrollments);
-        send(ws, { type: "enrollments", data: enrollments });
-        return;
-      }
-
-      if (msg.type === "enroll-add" && msg.player_name && msg.descriptor) {
-        var addKey = normalizeNameKey(msg.player_name);
-        if (!addKey) return;
-        var entry = enrollments[addKey] || { displayName: String(msg.player_name).trim(), descriptors: [] };
-        entry.descriptors.push(msg.descriptor);
-        if (entry.descriptors.length > MAX_DESCRIPTORS_PER_PLAYER) {
-          entry.descriptors = entry.descriptors.slice(entry.descriptors.length - MAX_DESCRIPTORS_PER_PLAYER);
+      ws.on("message", function (raw) {
+        var msg;
+        try {
+          msg = JSON.parse(raw);
+        } catch (e) {
+          return;
         }
-        addSide(entry, msg.side);
-        enrollments[addKey] = entry;
-        saveEnrollments(enrollments);
-        return;
-      }
 
-      if (msg.type === "enroll-get") {
-        send(ws, { type: "enrollments", data: enrollments });
-        return;
-      }
+        if (msg.type === "hello") {
+          ws.role = msg.role === "camera" ? "camera" : msg.role === "listener" ? "listener" : null;
+          if (ws.role === "listener") listenerSockets.add(ws);
+          if (ws.role === "camera") cameraSockets.add(ws);
+          return;
+        }
 
-      if (msg.type === "enroll-delete" && msg.player_name) {
-        delete enrollments[normalizeNameKey(msg.player_name)];
-        saveEnrollments(enrollments);
-        send(ws, { type: "enrollments", data: enrollments });
-        return;
-      }
+        if (msg.type === "player_up" && ws.role === "camera") {
+          broadcastToListeners({ type: "player_up", player_name: msg.player_name, confidence: msg.confidence, ts: msg.ts });
+          return;
+        }
 
-      if (msg.type === "settings-request" && ws.role === "camera") {
-        broadcastToListeners({ type: "settings-request" });
-        return;
-      }
+        if (msg.type === "enroll-save" && msg.player_name) {
+          var saveKey = normalizeNameKey(msg.player_name);
+          if (!saveKey) return;
+          // A full replace, matching "re-running capture replaces their
+          // enrollment from scratch" - sides resets too (not carried over
+          // from whatever entry existed before), since it describes
+          // coverage of the descriptors being replaced, not of the player
+          // in the abstract.
+          var saveEntry = { displayName: String(msg.player_name).trim(), descriptors: (msg.descriptors || []).slice(-MAX_DESCRIPTORS_PER_PLAYER) };
+          addSide(saveEntry, msg.side);
+          enrollments[saveKey] = saveEntry;
+          saveEnrollments(enrollments);
+          send(ws, { type: "enrollments", data: enrollments });
+          return;
+        }
 
-      if (msg.type === "settings" && ws.role === "listener") {
-        broadcastToCameras({ type: "settings", matchThreshold: msg.matchThreshold, debounceSec: msg.debounceSec });
-        return;
-      }
+        if (msg.type === "enroll-add" && msg.player_name && msg.descriptor) {
+          var addKey = normalizeNameKey(msg.player_name);
+          if (!addKey) return;
+          var entry = enrollments[addKey] || { displayName: String(msg.player_name).trim(), descriptors: [] };
+          entry.descriptors.push(msg.descriptor);
+          if (entry.descriptors.length > MAX_DESCRIPTORS_PER_PLAYER) {
+            entry.descriptors = entry.descriptors.slice(entry.descriptors.length - MAX_DESCRIPTORS_PER_PLAYER);
+          }
+          addSide(entry, msg.side);
+          enrollments[addKey] = entry;
+          saveEnrollments(enrollments);
+          return;
+        }
 
-      if (msg.type === "turn_confirmed" && ws.role === "listener" && msg.player_name) {
-        broadcastToCameras({ type: "turn_confirmed", player_name: msg.player_name });
-        return;
-      }
+        if (msg.type === "enroll-get") {
+          send(ws, { type: "enrollments", data: enrollments });
+          return;
+        }
+
+        if (msg.type === "enroll-delete" && msg.player_name) {
+          delete enrollments[normalizeNameKey(msg.player_name)];
+          saveEnrollments(enrollments);
+          send(ws, { type: "enrollments", data: enrollments });
+          return;
+        }
+
+        if (msg.type === "settings-request" && ws.role === "camera") {
+          broadcastToListeners({ type: "settings-request" });
+          return;
+        }
+
+        if (msg.type === "settings" && ws.role === "listener") {
+          broadcastToCameras({ type: "settings", matchThreshold: msg.matchThreshold, debounceSec: msg.debounceSec });
+          return;
+        }
+
+        if (msg.type === "turn_confirmed" && ws.role === "listener" && msg.player_name) {
+          broadcastToCameras({ type: "turn_confirmed", player_name: msg.player_name });
+          return;
+        }
+      });
+
+      ws.on("close", function () {
+        listenerSockets.delete(ws);
+        cameraSockets.delete(ws);
+      });
     });
 
-    ws.on("close", function () {
-      listenerSockets.delete(ws);
-      cameraSockets.delete(ws);
-    });
-  });
+    return wss;
+  }
 
-  return wss;
+  return { attachToServer: attachToServer };
 }
 
-module.exports = { attachCameraRelay: attachCameraRelay };
+// Single-server convenience wrapper - what server/server.js uses (it only
+// ever has one httpServer, so there's no shared-state need). The
+// standalone build calls createCameraRelay() directly instead, so it can
+// attach the one shared relay to two servers - see that function's own
+// comment on why.
+function attachCameraRelay(httpServer, WebSocket) {
+  return createCameraRelay(WebSocket).attachToServer(httpServer);
+}
+
+module.exports = { attachCameraRelay: attachCameraRelay, createCameraRelay: createCameraRelay };

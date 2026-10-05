@@ -84,8 +84,26 @@ been usable here.
 iOS Safari refuses `getUserMedia()` (camera access) entirely over plain
 HTTP, except on `localhost` - and the phone running the camera page is a
 *different device* from the one running this server, so `localhost`
-doesn't apply. You need a real TLS cert for the LAN address the camera
-phone will use, via [mkcert](https://github.com/FiloSottile/mkcert):
+doesn't apply. There are two ways to get HTTPS, depending on which way
+you're running the relay:
+
+**Using the desktop app** (see "Prefer not to use the command line?"
+above): nothing to do. It generates its own self-signed certificate
+automatically on first launch and serves the camera page over HTTPS on
+its own port (one more than the port it prints for everything else - the
+startup log prints the exact URL to use). The one unavoidable step: the
+first time a phone visits that URL, Safari shows a "This Connection Is
+Not Private" warning, since nobody vouches for a self-signed cert - tap
+"Show Details" → "visit this website" once, and from then on it behaves
+like any other HTTPS page. No mkcert, no terminal, no root CA to export.
+Local/LAN use of everything else (Group Session, just scoring on this
+machine) is completely unaffected - still plain HTTP on the original port,
+exactly as before.
+
+**Using `server/server.js` from a terminal**: since you're already past
+needing a GUI-only path, use a real CA-backed cert via
+[mkcert](https://github.com/FiloSottile/mkcert) instead - no "untrusted
+certificate" warning on the phone at all, at the cost of a bit more setup:
 
 ```
 brew install mkcert          # macOS; see mkcert's own README for other OSes

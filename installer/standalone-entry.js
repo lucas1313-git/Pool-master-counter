@@ -13,6 +13,7 @@
 // index.html; an exact asset-key match (with "/" mapped to "index.html")
 // is the whole story, same as what express.static effectively does today.
 var http = require("http");
+var https = require("https");
 var path = require("path");
 var fs = require("fs");
 var os = require("os");
@@ -22,8 +23,22 @@ var deps = require("../server/deps.js");
 var routes = require("../server/routes.js");
 var relay = require("../server/relay.js");
 var cameraRelay = require("../server/camera-relay.js");
+var lan = require("../server/lan.js");
+var tlsCert = require("../server/tls-cert.js");
 
-var PORT = process.env.PORT || 4173;
+// Number(), not just `|| 4173` - process.env.PORT is a string, and
+// HTTPS_PORT below does real arithmetic on this (PORT + 1), which would
+// silently string-concatenate ("4190" + 1 === "41901") instead of adding
+// if PORT were left as a string - confirmed by actually hitting this bug
+// in a real build before this line was added.
+var PORT = Number(process.env.PORT) || 4173;
+// Separate port for the HTTPS-only listener (camera.html needs a secure
+// context for getUserMedia - see tls-cert.js's own comment). Kept apart
+// from PORT entirely, rather than switching PORT itself to HTTPS, so
+// ordinary local/LAN use (Group Session, just scoring on this machine)
+// never changes at all - no new certificate warning for the vast
+// majority of users who never touch the camera feature.
+var HTTPS_PORT = PORT + 1;
 var app = deps.express();
 
 var ASSET_KEYS = sea.getAssetKeys();
@@ -40,25 +55,60 @@ app.get("*", function (req, res, next) {
 
 routes.attachApiRoutes(app, PORT, deps.QRCode);
 
+// One shared camera-relay instance, attached to BOTH servers below, so a
+// camera connected via HTTPS and a tablet listener connected via plain
+// HTTP land in the same listenerSockets/cameraSockets/enrollments state -
+// see camera-relay.js's own comment on why two independent
+// attachCameraRelay() calls would otherwise leave them unable to reach
+// each other at all.
+var cameraRelayShared = cameraRelay.createCameraRelay(deps.WebSocket);
+
 var httpServer = http.createServer(app);
 var wss = relay.attachRelay(httpServer, deps.WebSocket);
-var cameraWss = cameraRelay.attachCameraRelay(httpServer, deps.WebSocket);
+var cameraWssHttp = cameraRelayShared.attachToServer(httpServer);
 
-// Both relays are built with { noServer: true } - see relay.js's own
-// comment on why - so dispatch "upgrade" by path ourselves, same as
-// server.js.
+// Both are built with { noServer: true } - see relay.js's own comment on
+// why - so dispatch "upgrade" by path ourselves, same as server.js.
 httpServer.on("upgrade", function (req, socket, head) {
   if (req.url === "/ws") {
     wss.handleUpgrade(req, socket, head, function (ws) {
       wss.emit("connection", ws, req);
     });
   } else if (req.url === "/ws-camera") {
-    cameraWss.handleUpgrade(req, socket, head, function (ws) {
-      cameraWss.emit("connection", ws, req);
+    cameraWssHttp.handleUpgrade(req, socket, head, function (ws) {
+      cameraWssHttp.emit("connection", ws, req);
     });
   } else {
     socket.destroy();
   }
+});
+
+attachListeners(httpServer, false);
+
+// HTTPS with an auto-generated self-signed cert (see tls-cert.js's own
+// comment on why this build gets a self-signed cert while server/server.js
+// uses SSL_CERT_PATH/SSL_KEY_PATH instead), on its own port - this is what
+// lets the camera recognition page work from this build with zero setup.
+// Cert generation is async, so this listener starts up a beat after the
+// primary one above, which doesn't depend on it at all.
+tlsCert.getOrCreateCert(deps.selfsigned, lan.lanAddresses()).then(function (pems) {
+  var httpsServer = https.createServer({ cert: pems.cert, key: pems.key }, app);
+  // Only /ws-camera needs to exist here - Group Session guests/hosts
+  // always use the plain HTTP server above, never this one.
+  var cameraWssHttps = cameraRelayShared.attachToServer(httpsServer);
+  httpsServer.on("upgrade", function (req, socket, head) {
+    if (req.url === "/ws-camera") {
+      cameraWssHttps.handleUpgrade(req, socket, head, function (ws) {
+        cameraWssHttps.emit("connection", ws, req);
+      });
+    } else {
+      socket.destroy();
+    }
+  });
+  attachListeners(httpsServer, true);
+}).catch(function (err) {
+  console.error("Could not generate a local HTTPS certificate:", err.message);
+  console.error("The camera recognition page will not work this run.");
 });
 
 function openBrowser(url) {
@@ -110,22 +160,48 @@ function startUrl() {
   return "http://localhost:" + PORT + "/" + (pendingStep ? "?loadsetting=true&settingStep=" + pendingStep : "");
 }
 
-// { noServer: true } means wss no longer forwards httpServer's own
-// "error" event to itself - listen on httpServer directly instead.
-httpServer.on("error", function (err) {
-  if (err.code === "EADDRINUSE") {
-    // Already running (e.g. this app was double-clicked twice) - just open
-    // the browser to the existing instance instead of showing an error.
-    console.log("Pool Master Counter is already running - opening your browser...");
-    openBrowser(startUrl());
+// isHttps: the primary plain-HTTP server (false) is "is the app already
+// running" and opens the operator's browser on success; the HTTPS one
+// (true) is a quieter second listener - its own EADDRINUSE isn't "the
+// app is already running" (that's already been established by the
+// primary server above), just a port conflict worth logging.
+function attachListeners(httpServer, isHttps) {
+  // { noServer: true } means wss no longer forwards httpServer's own
+  // "error" event to itself - listen on httpServer directly instead.
+  httpServer.on("error", function (err) {
+    if (!isHttps && err.code === "EADDRINUSE") {
+      // Already running (e.g. this app was double-clicked twice) - just open
+      // the browser to the existing instance instead of showing an error.
+      console.log("Pool Master Counter is already running - opening your browser...");
+      openBrowser(startUrl());
+      return;
+    }
+    if (isHttps) {
+      console.error("Could not start the HTTPS listener (camera recognition page won't work):", err.message);
+      return;
+    }
+    console.error("Could not start Pool Master Counter:", err.message);
+    process.exit(1);
+  });
+
+  if (isHttps) {
+    httpServer.listen(HTTPS_PORT, function () {
+      var addresses = lan.lanAddresses();
+      if (addresses.length > 0) {
+        console.log("For the camera recognition page, open this on the phone watching the table:");
+        addresses.forEach(function (addr) {
+          console.log("  https://" + addr + ":" + HTTPS_PORT + "/camera.html");
+        });
+        console.log("(Safari will warn the certificate isn't trusted - that's expected for a");
+        console.log("self-signed cert generated just for this machine; tap through it once.)");
+      }
+    });
     return;
   }
-  console.error("Could not start Pool Master Counter:", err.message);
-  process.exit(1);
-});
 
-httpServer.listen(PORT, function () {
-  console.log("Pool Master Counter is running at http://localhost:" + PORT + "/");
-  console.log("Keep this window open while hosting a Group Session.");
-  openBrowser(startUrl());
-});
+  httpServer.listen(PORT, function () {
+    console.log("Pool Master Counter is running at http://localhost:" + PORT + "/");
+    console.log("Keep this window open while hosting a Group Session.");
+    openBrowser(startUrl());
+  });
+}
