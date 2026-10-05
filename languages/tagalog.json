@@ -863,7 +863,7 @@
   "cameraWizard.step1Heading": "I-set Up ang Pagkilala sa Manlalaro Gamit ang Camera",
   "cameraWizard.step1Explain": "May telepono na naka-mount sa ibabaw ng mesa na nagbabantay sa mga manlalaro at nagsasabi sa tablet na ito kung sino ang susunod. Kailangan itong tumakbo sa ibang telepono o tablet, hindi dito - buksan ang link sa ibaba gamit ang browser nito, o i-scan ang QR code gamit ang camera nito.",
   "cameraWizard.qrHint": "I-scan gamit ang camera phone",
-  "cameraWizard.httpsMissing": "Wala pang HTTPS ang device na ito, kaya hindi gagana ang camera page sa ibang telepono. Kung ginagamit mo ang desktop app, maghintay saglit at buksan ulit ang wizard na ito. Kung pinapatakbo mo ang server mula sa terminal, tingnan ang HTTPS setup section ng server/README.md.",
+  "cameraWizard.httpsMissing": "Wala pang HTTPS ang device na ito, kaya hindi gagana ang camera page sa ibang telepono. Kung ginagamit mo na ang desktop app, maghintay saglit at buksan ulit ang wizard na ito. Kung hindi, i-download at patakbuhin ito sa baba - awtomatiko nitong ise-set up ang HTTPS, walang certificate na kailangang i-configure. (Gumagamit ka ba ng terminal sa halip? Tingnan ang HTTPS setup section ng server/README.md.)",
   "cameraWizard.step2Heading": "I-enable Dito",
   "cameraWizard.step2Explain": "Kapag naka-set up na ang camera phone (mayroon itong sariling guided setup), i-on ito dito para talagang makinig ang tablet.",
   "cameraWizard.finish": "Tapos na ✓",
