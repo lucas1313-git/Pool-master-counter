@@ -877,6 +877,7 @@
   "cameraWizard.installStepInstall": "2. Instalar",
   "cameraWizard.installStepRun": "3. Ejecutar",
   "cameraWizard.installButton": "⬇️ Descargar para {{os}}",
+  "cameraWizard.installQrHint": "Escanea para abrir este enlace de descarga en otro dispositivo",
   "cameraWizard.installUnsupportedOs": "Esto necesita una computadora de escritorio - no funcionará en un teléfono o tablet.",
   "cameraWizard.sameDeviceOverlayHeading": "Cámara de esta tablet",
   "players.ratingPlaceholder": "Clasificación inicial (opcional)",

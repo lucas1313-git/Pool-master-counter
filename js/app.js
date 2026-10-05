@@ -1939,6 +1939,8 @@
   var cameraWizardNoRelay = document.getElementById("camera-wizard-no-relay");
   var cameraWizardInstallPrompt = document.getElementById("camera-wizard-install-prompt");
   var cameraWizardInstallLink = document.getElementById("camera-wizard-install-link");
+  var cameraWizardInstallQr = document.getElementById("camera-wizard-install-qr");
+  var cameraWizardInstallQrHint = document.getElementById("camera-wizard-install-qr-hint");
   var cameraWizardInstallUnsupported = document.getElementById("camera-wizard-install-unsupported");
   var cameraWizardInstallSecurityNote = document.getElementById("camera-wizard-install-security-note");
   var cameraWizardEnableCheckbox = document.getElementById("camera-wizard-enable-checkbox");
@@ -29123,10 +29125,19 @@
   // actually running it, and a GitHub Pages (or any other static) copy
   // never is - so the fix is installing and running the real desktop
   // app, not re-reading an error message.
-  function renderCameraWizardInstallPrompt() {
+  // relayReachable tells it whether /api/qr.png (served by this same
+  // relay) can actually be called - true for the https-missing state
+  // (the relay itself answered just fine, it's only missing a cert),
+  // false for no-relay (there's no server here at all, so there's
+  // nothing to generate the QR image - a GitHub Pages copy can't serve
+  // /api/qr.png any more than it could /api/lan-info).
+  function renderCameraWizardInstallPrompt(relayReachable) {
     var os = detectDesktopOS();
     cameraWizardInstallUnsupported.classList.toggle("hidden", !!os);
     cameraWizardInstallLink.classList.toggle("hidden", !os);
+    var showQr = !!os && relayReachable;
+    cameraWizardInstallQr.classList.toggle("hidden", !showQr);
+    cameraWizardInstallQrHint.classList.toggle("hidden", !showQr);
     if (!os) {
       cameraWizardInstallSecurityNote.textContent = "";
       return;
@@ -29134,6 +29145,7 @@
     var osLabel = os === "mac" ? "Mac (Apple Silicon)" : os === "windows" ? "Windows" : "Linux";
     cameraWizardInstallLink.href = DESKTOP_DOWNLOAD_URLS[os];
     cameraWizardInstallLink.textContent = T("cameraWizard.installButton", { os: osLabel });
+    if (showQr) cameraWizardInstallQr.src = "/api/qr.png?url=" + encodeURIComponent(DESKTOP_DOWNLOAD_URLS[os]);
     cameraWizardInstallSecurityNote.textContent = T(
       os === "mac"
         ? "groupSession.installSecurityNoteMac"
@@ -29160,7 +29172,7 @@
         var addr = info.addresses && info.addresses[0];
         if (!addr || !info.httpsPort) {
           showCameraWizardLinkState("https-missing");
-          renderCameraWizardInstallPrompt();
+          renderCameraWizardInstallPrompt(true);
           return;
         }
         var url = "https://" + addr + ":" + info.httpsPort + "/camera.html";
@@ -29171,7 +29183,7 @@
       .catch(function (e) {
         console.error("[CameraWizard] /api/lan-info unreachable - this page is probably not being served by the local relay server:", e);
         showCameraWizardLinkState("no-relay");
-        renderCameraWizardInstallPrompt();
+        renderCameraWizardInstallPrompt(false);
         // No relay at all (e.g. a GitHub Pages copy) means the "separate
         // phone" path can never work here - lead with the same-device
         // option instead of leaving the user stuck on a dead-end error,
