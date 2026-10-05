@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261005a">
+<link rel="stylesheet" href="css/style.css?v=20261005b">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -1259,17 +1259,33 @@
     <div class="wizard-body">
 
       <div class="wizard-step" id="camera-wizard-step-1">
-        <p class="wizard-step-explain" data-i18n="cameraWizard.step1Explain">A phone mounted over the table watches for players and tells this tablet who's up. It needs to run on a <strong>different</strong> phone or tablet from this one - open the link below in its browser, or scan the QR code with its camera.</p>
-        <div id="camera-wizard-link-block" class="hidden">
-          <p class="group-session-join-url" id="camera-wizard-url"></p>
-          <img id="camera-wizard-qr" class="group-session-qr" alt="" data-i18n-aria-label="cameraWizard.qrHint" aria-label="Scan with the camera phone to open the setup page">
-          <p class="group-session-qr-hint" data-i18n="cameraWizard.qrHint">Scan with the camera phone</p>
+        <div class="camera-wizard-path-choice" id="camera-wizard-path-choice">
+          <button type="button" id="camera-wizard-path-phone" class="btn btn-ghost camera-wizard-path-btn" data-i18n="cameraWizard.pathPhone">📱 Use a separate phone</button>
+          <button type="button" id="camera-wizard-path-same-device" class="btn btn-ghost camera-wizard-path-btn" data-i18n="cameraWizard.pathSameDevice">📷 Use this tablet's own camera</button>
         </div>
-        <div id="camera-wizard-https-missing" class="hidden">
-          <p class="group-session-error" data-i18n="cameraWizard.httpsMissing">This device isn't serving HTTPS yet, so the camera page can't run on another phone. If you're using the desktop app, give it a moment and reopen this wizard. If you're running the server from a terminal, see server/README.md's HTTPS setup section.</p>
+
+        <div class="wizard-step-sub hidden" id="camera-wizard-phone-path">
+          <p class="wizard-step-explain" data-i18n="cameraWizard.step1Explain">A phone mounted over the table watches for players and tells this tablet who's up. It needs to run on a <strong>different</strong> phone or tablet from this one - open the link below in its browser, or scan the QR code with its camera.</p>
+          <div id="camera-wizard-link-block" class="hidden">
+            <p class="group-session-join-url" id="camera-wizard-url"></p>
+            <img id="camera-wizard-qr" class="group-session-qr" alt="" data-i18n-aria-label="cameraWizard.qrHint" aria-label="Scan with the camera phone to open the setup page">
+            <p class="group-session-qr-hint" data-i18n="cameraWizard.qrHint">Scan with the camera phone</p>
+          </div>
+          <div id="camera-wizard-https-missing" class="hidden">
+            <p class="group-session-error" data-i18n="cameraWizard.httpsMissing">This device isn't serving HTTPS yet, so the camera page can't run on another phone. If you're using the desktop app, give it a moment and reopen this wizard. If you're running the server from a terminal, see server/README.md's HTTPS setup section.</p>
+          </div>
+          <div id="camera-wizard-no-relay" class="hidden">
+            <p class="group-session-error" data-i18n="groupSession.originError">Couldn't reach the local server. Open this app at your computer's local address (shown when you run the server) — hosting doesn't work from a GitHub-hosted copy of the app.</p>
+            <p class="group-session-qr-hint" data-i18n="cameraWizard.noRelayHint">No camera server found on this network - try this tablet's own camera instead.</p>
+          </div>
         </div>
-        <div id="camera-wizard-no-relay" class="hidden">
-          <p class="group-session-error" data-i18n="groupSession.originError">Couldn't reach the local server. Open this app at your computer's local address (shown when you run the server) — hosting doesn't work from a GitHub-hosted copy of the app.</p>
+
+        <div class="wizard-step-sub hidden" id="camera-wizard-same-device-path">
+          <p class="wizard-step-explain" data-i18n="cameraWizard.sameDeviceExplain">This tablet's own camera (built-in or a plugged-in USB camera) watches the table directly - no second device or server needed. Point it at the table, then follow the setup steps that open.</p>
+          <div id="camera-wizard-insecure-context" class="hidden">
+            <p class="group-session-error" data-i18n="cameraWizard.insecureContext">Camera access needs this page loaded over HTTPS (or at localhost). See server/README.md's HTTPS setup section, or use the desktop app.</p>
+          </div>
+          <button type="button" id="btn-camera-wizard-start-same-device" class="btn btn-primary" data-i18n="cameraWizard.startSameDevice">Start this tablet's camera →</button>
         </div>
       </div>
 
@@ -1293,6 +1309,16 @@
       <button type="button" id="btn-camera-wizard-cancel" class="btn btn-ghost" data-i18n="common.cancel">Cancel</button>
       <button type="button" id="btn-camera-wizard-go" class="btn btn-primary" data-i18n="common.go">Go →</button>
     </div>
+  </div>
+</div>
+
+<div id="same-device-camera-overlay" class="same-device-camera-overlay hidden">
+  <div class="same-device-camera-card">
+    <div class="same-device-camera-header">
+      <h2 data-i18n="cameraWizard.sameDeviceOverlayHeading">This Tablet's Camera</h2>
+      <button type="button" id="btn-close-same-device-camera" class="wizard-close-btn" aria-label="Close" data-i18n-aria-label="common.close">×</button>
+    </div>
+    <iframe id="same-device-camera-iframe" class="same-device-camera-iframe" src="" allow="camera" title="Camera recognition"></iframe>
   </div>
 </div>
 
@@ -2296,7 +2322,7 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20261005a"></script>
+<script src="js/app.js?v=20261005b"></script>
 <script src="js/camera-client.js?v=20261004a"></script>
 </body>
 </html>
