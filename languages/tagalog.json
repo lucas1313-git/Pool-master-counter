@@ -877,7 +877,7 @@
   "cameraWizard.installStepInstall": "2. I-install",
   "cameraWizard.installStepRun": "3. Patakbuhin",
   "cameraWizard.installButton": "⬇️ I-download para sa {{os}}",
-  "cameraWizard.installQrHint": "I-scan para buksan ang download link na ito sa ibang device",
+  "cameraWizard.installQrHint": "I-scan gamit ang telepono para makita ang download page",
   "cameraWizard.installUnsupportedOs": "Kailangan nito ng desktop computer - hindi ito tatakbo sa telepono o tablet.",
   "cameraWizard.sameDeviceOverlayHeading": "Camera ng Tablet na Ito",
   "players.ratingPlaceholder": "Starting rating (opsyonal)",
