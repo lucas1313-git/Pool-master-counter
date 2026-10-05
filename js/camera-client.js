@@ -78,6 +78,15 @@
     } catch (e) {}
   }
 
+  // camera.html's enroll picker uses this instead of free-text entry, so
+  // a captured sample can never be mislabeled by a typo.
+  function handleRosterRequest() {
+    if (!bridgeReady() || !ws) return;
+    try {
+      ws.send(JSON.stringify({ type: "roster", names: window.PMCCameraBridge.getPlayerNames() }));
+    } catch (e) {}
+  }
+
   function scheduleReconnect() {
     if (reconnectTimer) return;
     reconnectTimer = setTimeout(function () {
@@ -109,6 +118,7 @@
       }
       if (msg.type === "player_up") handlePlayerUp(msg);
       else if (msg.type === "settings-request") handleSettingsRequest();
+      else if (msg.type === "roster-request") handleRosterRequest();
     });
     ws.addEventListener("close", function () {
       ws = null;
