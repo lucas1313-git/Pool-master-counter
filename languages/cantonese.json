@@ -863,7 +863,7 @@
   "cameraWizard.step1Heading": "設定鏡頭球員辨識",
   "cameraWizard.step1Explain": "裝喺枱上面嘅電話會留意邊個球員埋枱,同埋話畀呢部平板知而家輪到邊個。要用另一部電話或者平板嚟開,唔可以用返呢部 - 用個電話嘅瀏覽器打開下面個連結,或者用佢嘅鏡頭掃描QR code。",
   "cameraWizard.qrHint": "用鏡頭電話掃描",
-  "cameraWizard.httpsMissing": "呢部機而家未有HTTPS,所以鏡頭頁面喺第二部電話度用唔到。如果你用緊桌面版App,等一陣再開返呢個精靈。如果你用緊終端機行緊個server,可以睇 server/README.md 入面HTTPS設定嗰段。",
+  "cameraWizard.httpsMissing": "呢部機而家未有HTTPS,所以鏡頭頁面喺第二部電話度用唔到。如果你已經用緊桌面版App,等一陣再開返呢個精靈。如果未有,落面下載同埋開呢個App啦 - 佢會自動設定HTTPS,唔使自己整證書。(用緊終端機嘅?可以睇 server/README.md 入面HTTPS設定嗰段。)",
   "cameraWizard.step2Heading": "喺呢度開啟",
   "cameraWizard.step2Explain": "鏡頭電話設定好之後(佢有自己嘅設定精靈),喺呢度開啟先可以畀平板真正接收到。",
   "cameraWizard.finish": "完成 ✓",
