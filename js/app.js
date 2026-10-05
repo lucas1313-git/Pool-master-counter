@@ -1920,6 +1920,7 @@
   var cameraWizardUrl = document.getElementById("camera-wizard-url");
   var cameraWizardQr = document.getElementById("camera-wizard-qr");
   var cameraWizardHttpsMissing = document.getElementById("camera-wizard-https-missing");
+  var cameraWizardNoRelay = document.getElementById("camera-wizard-no-relay");
   var cameraWizardEnableCheckbox = document.getElementById("camera-wizard-enable-checkbox");
   var cameraWizardSettingsRow = document.getElementById("camera-wizard-settings-row");
   var cameraWizardMatchThresholdInput = document.getElementById("camera-wizard-match-threshold");
@@ -29052,32 +29053,47 @@
   // happens to be loaded over (e.g. the standalone build: this page is
   // plain http://localhost:PORT/, camera.html must be
   // https://<lan-ip>:(PORT+1)/camera.html).
+  function showCameraWizardLinkState(state) {
+    // Exactly one of these three is ever shown - a fresh fetch always
+    // starts by hiding all three, then reveals the one that applies.
+    cameraWizardLinkBlock.classList.toggle("hidden", state !== "ok");
+    cameraWizardHttpsMissing.classList.toggle("hidden", state !== "https-missing");
+    cameraWizardNoRelay.classList.toggle("hidden", state !== "no-relay");
+  }
+
   function loadCameraWizardLinkInfo() {
+    // /api/lan-info only exists on the local relay server (server.js or
+    // the desktop app) - on a GitHub Pages copy (or any other static
+    // host) this 404s, same reasoning Group Session's own origin-error
+    // check already relies on (see startHostingSession's own comment) -
+    // that's a fundamentally different problem ("no relay server at all")
+    // from "relay running but HTTPS not configured", and needs its own
+    // message rather than falling through to the HTTPS one.
     fetch("/api/lan-info")
-      .then(function (res) { return res.json(); })
+      .then(function (res) {
+        if (!res.ok) throw new Error("bad status " + res.status);
+        return res.json();
+      })
       .then(function (info) {
         var addr = info.addresses && info.addresses[0];
         if (!addr || !info.httpsPort) {
-          cameraWizardLinkBlock.classList.add("hidden");
-          cameraWizardHttpsMissing.classList.remove("hidden");
+          showCameraWizardLinkState("https-missing");
           return;
         }
         var url = "https://" + addr + ":" + info.httpsPort + "/camera.html";
         cameraWizardUrl.textContent = url;
         cameraWizardQr.src = "/api/qr.png?url=" + encodeURIComponent(url);
-        cameraWizardHttpsMissing.classList.add("hidden");
-        cameraWizardLinkBlock.classList.remove("hidden");
+        showCameraWizardLinkState("ok");
       })
-      .catch(function () {
-        cameraWizardLinkBlock.classList.add("hidden");
-        cameraWizardHttpsMissing.classList.remove("hidden");
+      .catch(function (e) {
+        console.error("[CameraWizard] /api/lan-info unreachable - this page is probably not being served by the local relay server:", e);
+        showCameraWizardLinkState("no-relay");
       });
   }
 
   function openCameraWizard() {
     cameraWizardStep = 1;
-    cameraWizardLinkBlock.classList.add("hidden");
-    cameraWizardHttpsMissing.classList.add("hidden");
+    showCameraWizardLinkState(null);
     cameraWizardEnableCheckbox.checked = state.cameraInputEnabled;
     cameraWizardSettingsRow.classList.toggle("hidden", !state.cameraInputEnabled);
     cameraWizardMatchThresholdInput.value = state.cameraMatchThreshold;
