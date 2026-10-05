@@ -1911,6 +1911,23 @@
   var btnOnboardingManual = document.getElementById("btn-onboarding-manual");
   var onboardingStep = 1;
 
+  var btnOpenCameraWizard = document.getElementById("btn-open-camera-wizard");
+  var cameraWizardOverlay = document.getElementById("camera-wizard-overlay");
+  var cameraWizardHeading = document.getElementById("camera-wizard-heading");
+  var cameraWizardProgress = document.getElementById("camera-wizard-progress");
+  var cameraWizardProgressDots = document.getElementById("camera-wizard-progress-dots");
+  var cameraWizardLinkBlock = document.getElementById("camera-wizard-link-block");
+  var cameraWizardUrl = document.getElementById("camera-wizard-url");
+  var cameraWizardQr = document.getElementById("camera-wizard-qr");
+  var cameraWizardHttpsMissing = document.getElementById("camera-wizard-https-missing");
+  var cameraWizardEnableCheckbox = document.getElementById("camera-wizard-enable-checkbox");
+  var cameraWizardSettingsRow = document.getElementById("camera-wizard-settings-row");
+  var cameraWizardMatchThresholdInput = document.getElementById("camera-wizard-match-threshold");
+  var cameraWizardDebounceSecInput = document.getElementById("camera-wizard-debounce-sec");
+  var btnCameraWizardCancel = document.getElementById("btn-camera-wizard-cancel");
+  var btnCameraWizardGo = document.getElementById("btn-camera-wizard-go");
+  var cameraWizardStep = 1;
+
   var btnToggleFocus = document.getElementById("btn-toggle-focus");
   var btnToggleKeypadSpeech = document.getElementById("btn-toggle-keypad-speech");
   var btnKeypadSpeechHelp = document.getElementById("btn-keypad-speech-help");
@@ -2731,6 +2748,7 @@
       helpOverlay,
       wizardOverlay,
       onboardingOverlay,
+      cameraWizardOverlay,
       quickGameOverlay,
       milestoneOverlay,
       gamewinOverlay,
@@ -28999,6 +29017,116 @@
 
   cameraDebounceSecInput.addEventListener("input", function () {
     var value = parseInt(cameraDebounceSecInput.value, 10);
+    if (!(value > 0)) return;
+    state.cameraDebounceSec = value;
+    saveState();
+  });
+
+  // Camera setup wizard - tablet side. Short (2-step), since almost all
+  // the real setup work happens on the separate camera phone, which has
+  // its own guided wizard (see camera.html) this one can only point at,
+  // never drive directly - two different devices, two different wizards.
+  function renderCameraWizardStep() {
+    [1, 2].forEach(function (n) {
+      document.getElementById("camera-wizard-step-" + n).classList.toggle("hidden", n !== cameraWizardStep);
+    });
+    cameraWizardHeading.textContent = T("cameraWizard.step" + cameraWizardStep + "Heading");
+    cameraWizardProgress.textContent = T("wizard.stepOf", { step: cameraWizardStep, total: 2 });
+
+    cameraWizardProgressDots.innerHTML = "";
+    for (var i = 0; i < 2; i++) {
+      var dot = document.createElement("span");
+      dot.className = "wizard-dot" + (i < cameraWizardStep - 1 ? " is-done" : i === cameraWizardStep - 1 ? " is-active" : "");
+      cameraWizardProgressDots.appendChild(dot);
+    }
+
+    btnCameraWizardGo.textContent = cameraWizardStep === 2 ? T("cameraWizard.finish") : T("common.go");
+  }
+
+  // Independent of Group Session's own /api/lan-info fetch (networkLanBase,
+  // only populated once Group Session's own UI has been opened) - a user
+  // reaching for this wizard may never have touched Group Session at all.
+  // Unlike that fetch, this one must NOT use location.protocol/location.host
+  // - camera.html needs a real https:// URL on its own port, which is very
+  // often different from whatever scheme/port this tablet's own page
+  // happens to be loaded over (e.g. the standalone build: this page is
+  // plain http://localhost:PORT/, camera.html must be
+  // https://<lan-ip>:(PORT+1)/camera.html).
+  function loadCameraWizardLinkInfo() {
+    fetch("/api/lan-info")
+      .then(function (res) { return res.json(); })
+      .then(function (info) {
+        var addr = info.addresses && info.addresses[0];
+        if (!addr || !info.httpsPort) {
+          cameraWizardLinkBlock.classList.add("hidden");
+          cameraWizardHttpsMissing.classList.remove("hidden");
+          return;
+        }
+        var url = "https://" + addr + ":" + info.httpsPort + "/camera.html";
+        cameraWizardUrl.textContent = url;
+        cameraWizardQr.src = "/api/qr.png?url=" + encodeURIComponent(url);
+        cameraWizardHttpsMissing.classList.add("hidden");
+        cameraWizardLinkBlock.classList.remove("hidden");
+      })
+      .catch(function () {
+        cameraWizardLinkBlock.classList.add("hidden");
+        cameraWizardHttpsMissing.classList.remove("hidden");
+      });
+  }
+
+  function openCameraWizard() {
+    cameraWizardStep = 1;
+    cameraWizardLinkBlock.classList.add("hidden");
+    cameraWizardHttpsMissing.classList.add("hidden");
+    cameraWizardEnableCheckbox.checked = state.cameraInputEnabled;
+    cameraWizardSettingsRow.classList.toggle("hidden", !state.cameraInputEnabled);
+    cameraWizardMatchThresholdInput.value = state.cameraMatchThreshold;
+    cameraWizardDebounceSecInput.value = state.cameraDebounceSec;
+    renderCameraWizardStep();
+    cameraWizardOverlay.classList.remove("hidden");
+    loadCameraWizardLinkInfo();
+  }
+
+  function closeCameraWizard() {
+    cameraWizardOverlay.classList.add("hidden");
+  }
+
+  // Forward-only, same shape as advanceOnboarding - step 2 is the last
+  // step, so Go there just finishes.
+  function advanceCameraWizard() {
+    if (cameraWizardStep === 1) {
+      cameraWizardStep = 2;
+      renderCameraWizardStep();
+      return;
+    }
+    closeCameraWizard();
+  }
+
+  btnOpenCameraWizard.addEventListener("click", openCameraWizard);
+  btnCameraWizardCancel.addEventListener("click", closeCameraWizard);
+  btnCameraWizardGo.addEventListener("click", advanceCameraWizard);
+
+  // Mirrors cameraInputCheckbox/cameraMatchThresholdInput/cameraDebounceSecInput's
+  // own handlers exactly (same state fields, same saveState/renderAll) -
+  // renderQueueList's existing refresh of those real controls from state
+  // (js/app.js ~682-685) keeps them in sync once this wizard closes, so
+  // there's no need to also write back into the real controls directly here.
+  cameraWizardEnableCheckbox.addEventListener("change", function () {
+    state.cameraInputEnabled = cameraWizardEnableCheckbox.checked;
+    cameraWizardSettingsRow.classList.toggle("hidden", !state.cameraInputEnabled);
+    saveState();
+    renderAll();
+  });
+
+  cameraWizardMatchThresholdInput.addEventListener("input", function () {
+    var value = parseFloat(cameraWizardMatchThresholdInput.value);
+    if (!(value > 0)) return;
+    state.cameraMatchThreshold = value;
+    saveState();
+  });
+
+  cameraWizardDebounceSecInput.addEventListener("input", function () {
+    var value = parseInt(cameraWizardDebounceSecInput.value, 10);
     if (!(value > 0)) return;
     state.cameraDebounceSec = value;
     saveState();

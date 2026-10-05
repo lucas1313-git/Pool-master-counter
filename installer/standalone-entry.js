@@ -53,7 +53,16 @@ app.get("*", function (req, res, next) {
   res.send(Buffer.from(sea.getAsset(key)));
 });
 
-routes.attachApiRoutes(app, PORT, deps.QRCode);
+// Single assignment site (the HTTPS listener's own listen() success
+// callback, below) - no reset path needed, this process never restarts
+// that listener once up. Read lazily by getHttpsInfo below, not captured
+// now - attachApiRoutes() runs synchronously here, long before cert
+// generation (async) even starts.
+var httpsListenerReady = false;
+
+routes.attachApiRoutes(app, PORT, deps.QRCode, function () {
+  return httpsListenerReady ? HTTPS_PORT : null;
+});
 
 // One shared camera-relay instance, attached to BOTH servers below, so a
 // camera connected via HTTPS and a tablet listener connected via plain
@@ -186,6 +195,7 @@ function attachListeners(httpServer, isHttps) {
 
   if (isHttps) {
     httpServer.listen(HTTPS_PORT, function () {
+      httpsListenerReady = true;
       var addresses = lan.lanAddresses();
       if (addresses.length > 0) {
         console.log("For the camera recognition page, open this on the phone watching the table:");

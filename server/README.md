@@ -59,6 +59,16 @@ An optional add-on: a phone mounted over the table watches for players
 approaching and tells the scoreboard who's up, via the same relay server.
 Group Session works fine without any of this.
 
+**The easiest way to set this up is the in-app wizards, not the manual
+steps below** - once the relay is running, tap "🧙 Set Up Camera" in the
+tablet's Settings → Players panel for a guided link/QR code to the second
+phone, and that phone's own `camera.html` walks through the rest (camera
+permission, table calibration, enrollment, mounting) on its own first
+visit, or anytime via "🧙 Re-run Setup Wizard" in its Settings panel. The
+rest of this section is the manual/reference version of the same steps,
+useful if you want to understand what the wizards are actually doing or
+need to do one of them outside the guided flow.
+
 **This identifies players by clothing/body appearance and a "bent over the
 table" stance, not faces** - at a real table, a player's face usually
 isn't visible to a camera mounted to watch the table, even on approach.
