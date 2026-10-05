@@ -360,7 +360,7 @@
       fairRaceTargets: null,
       rotatingTeamsEnabled: false,
       cameraInputEnabled: false,
-      cameraMatchThreshold: 0.5,
+      cameraMatchThreshold: 1.2,
       cameraDebounceSec: 10,
       currentGame: { gameType: "8ball", target: 1, unit: "rack", mode: "individual", startedAt: new Date().toISOString(), shotCounterEnabled: false, shotCounterBeepSec: 30, shotCounterHidden: false, queueEnabled: false, timedTournamentEnabled: false, timedTournamentMinutes: 60 },
       gameHistory: [],
@@ -437,7 +437,7 @@
           if (typeof parsed.fairRaceTargets !== "object") parsed.fairRaceTargets = null;
           if (typeof parsed.rotatingTeamsEnabled !== "boolean") parsed.rotatingTeamsEnabled = false;
           if (typeof parsed.cameraInputEnabled !== "boolean") parsed.cameraInputEnabled = false;
-          if (typeof parsed.cameraMatchThreshold !== "number") parsed.cameraMatchThreshold = 0.5;
+          if (typeof parsed.cameraMatchThreshold !== "number") parsed.cameraMatchThreshold = 1.2;
           if (typeof parsed.cameraDebounceSec !== "number") parsed.cameraDebounceSec = 10;
           if (!parsed.currentGame) parsed.currentGame = { gameType: "8ball", target: 1, mode: "individual" };
           if (!parsed.currentGame.startedAt) parsed.currentGame.startedAt = new Date().toISOString();

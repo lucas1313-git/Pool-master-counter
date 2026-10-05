@@ -59,12 +59,25 @@ An optional add-on: a phone mounted over the table watches for players
 approaching and tells the scoreboard who's up, via the same relay server.
 Group Session works fine without any of this.
 
-Face detection/recognition runs entirely in the phone's browser via
-[`@vladmandic/face-api`](https://github.com/vladmandic/face-api) (MIT
-license, vendored under `camera/` - see `camera/face-api.LICENSE.txt`),
-loading its own model weights from `camera/models/`. Nothing about a
-player's face ever leaves the LAN - the relay only ever sees 128-number
-face descriptors, not images.
+**This identifies players by clothing/body appearance and a "bent over the
+table" stance, not faces** - at a real table, a player's face usually
+isn't visible to a camera mounted to watch the table, even on approach.
+Pose detection runs entirely in the phone's browser via
+[`@tensorflow-models/pose-detection`](https://github.com/tensorflow/tfjs-models/tree/master/pose-detection)
+(MoveNet) and [`@tensorflow/tfjs`](https://github.com/tensorflow/tfjs)
+(Apache 2.0, vendored under `camera/` - see `camera/tfjs.LICENSE.txt`),
+loading its own model weights from `camera/models/`. Nothing leaves the
+LAN - the relay only ever sees small arrays of numbers (color-histogram
+"descriptors"), never images.
+
+**Be realistic about what this is**: a coarse heuristic, not a precise
+system. It confuses two players in very similar clothing, it only
+recognizes *today's* outfit (clothing isn't a stable identity signal the
+way a face would be - re-enrollment is a normal start-of-session step, not
+a bug), and several thresholds need tuning on-site against the debug
+overlay before it's reliable at your actual table and lighting. It will
+never be as reliable as face recognition would have been if that had
+been usable here.
 
 ### HTTPS setup (required for the camera page)
 
@@ -113,35 +126,69 @@ Two gotchas worth knowing before you rely on this at a real table:
   accept it. Needed once per iPhone; re-do it only if you regenerate the
   CA itself (not needed when you just re-issue a cert for a new IP).
 
+### Calibrating the table (optional, do this first)
+
+Tap the "Table" tab, pick your table size (7/8/9-foot, or custom inches),
+tell it whether your first-to-second tap will trace the table's short end
+or its long side, then tap "Start calibration" and tap the table's 4
+playing-surface corners on the live feed, in order going around the
+rectangle (either direction, just don't skip a corner). This gives the
+camera real measurements, so "is this person close enough to the table to
+be shooting" becomes an actual calibrated distance from the rails rather
+than a guessed pixel threshold - and it works correctly from any angle,
+not just the side closest to the camera. Saved to this phone's own
+storage; survives "Clear all enrollments" below. Skipping this is fine -
+recognition still runs, just without that distance check (it always
+passes).
+
 ### Enrolling and recognizing players
 
 Once HTTPS is running, open `https://<lan-ip>:<port>/camera.html` in
 Safari **on the phone that will watch the table** (not the tablet
 running the scoreboard). It needs camera permission the first time.
 
-- **Enroll a player**: tap the "Enroll players" tab, type the player's
-  name **exactly as it appears on the tablet** (matched case-
-  insensitively, so "Alice"/"alice" are the same person - but two
-  *different* players sharing one name will collide, since this feature
-  identifies everyone by name, not the tablet's internal player id),
-  then tap "Capture 8 frames" and look at the camera for a few seconds.
-  Re-running capture for the same name replaces their enrollment from
-  scratch; deleting is a tap-twice-to-confirm button next to their name
-  in the same list.
+- **Enroll a player, at the start of each session**: tap the "Enroll"
+  tab, type the player's name **exactly as it appears on the tablet**
+  (matched case-insensitively, so "Alice"/"alice" are the same person -
+  but two *different* players sharing one name will collide, and two
+  players in very similar clothing may be confused for each other, since
+  this identifies clothing, not faces), then tap "Capture 8 samples" and
+  stand normally facing the camera for a few seconds. Re-running capture
+  for the same name replaces their enrollment from scratch; deleting is a
+  tap-twice-to-confirm button next to their name in the same list.
+- **Start a new session**: tap "Clear all (new session)" at the bottom of
+  the Enroll tab before re-enrolling everyone. Do this every time players'
+  clothes have changed since the last time this was set up - typically
+  every day - since a color-based appearance match from yesterday's
+  outfit won't match today's.
 - **Recognize**: switch to the "Recognize" tab (the default) and mount
-  the phone - see below. Every confident recognition also quietly adds
-  that frame to the player's stored samples, so accuracy keeps improving
-  the more the table gets used; nothing further to do.
-- **Settings** (gear panel at the bottom): match sensitivity, how many
-  consecutive frames must agree before announcing someone, and how long
-  to wait before re-announcing the same player. These live in *this
-  phone's own browser storage* - first launch pre-fills sensitivity/
-  debounce from whatever the tablet has configured in its own Group
-  Session/camera settings (fetched once over the relay), but any change
-  you make here afterwards takes over and the tablet's value is no
-  longer consulted. The debug overlay toggle draws the detected face box,
-  matched name, and distance on screen - useful for aiming/adjusting the
-  phone, noisy to leave on otherwise.
+  the phone - see below. It identifies a player while they're upright and
+  approaching, then confirms the actual event only once they're also bent
+  over in a shooting stance (not just standing nearby) - both signals
+  come from the same on-device pose detection. Every confident recognition
+  also quietly adds that frame to the player's stored samples, so accuracy
+  keeps improving over the course of a session; nothing further to do.
+- **Settings** (gear panel at the bottom): appearance match distance, the
+  bent-over angle thresholds (two values, for stability - stance has to
+  clearly commit to bending before it counts, and clearly commit back to
+  upright before it resets), consecutive-frame and debounce timing, and
+  the max distance from the rail (needs the Table tab calibrated to mean
+  anything). All of this needs **on-site tuning** - watch the debug
+  overlay (draws the detected body box, stance, angle, and best-guess
+  match/distance) while adjusting, don't trust the shipped defaults as
+  final. These live in *this phone's own browser storage* - first launch
+  pre-fills match distance/debounce from whatever the tablet has
+  configured in its own camera settings (fetched once over the relay),
+  but any change you make here afterwards takes over.
+- **Known rough edges**: with only one person tracked at a time, the
+  moment players swap turns (the outgoing player still near the table
+  while the incoming one approaches) is the single most likely time for a
+  mismatch - there's no fix for this short of tracking multiple people at
+  once, which this doesn't do yet. If the camera never gets a confident
+  upright identification before someone bends over (bad lighting, standing
+  side-on), it falls back to matching the bent-over frame itself at a
+  stricter threshold rather than guessing wildly - expect this fallback
+  path to be the least reliable one.
 - Nothing recognized here ever auto-confirms blindly on the tablet: a
   camera match only switches the keypad's selected player (same
   feedback as pressing their number on the physical keypad) when no
