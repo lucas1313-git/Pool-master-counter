@@ -1958,6 +1958,7 @@
   var btnCameraWizardStartSameDevice = document.getElementById("btn-camera-wizard-start-same-device");
   var cameraWizardPath = "phone";
   var cameraWizardPathUserChosen = false;
+  var cameraWizardLinkPollTimer = null;
 
   var sameDeviceCameraOverlay = document.getElementById("same-device-camera-overlay");
   var sameDeviceCameraIframe = document.getElementById("same-device-camera-iframe");
@@ -29163,6 +29164,13 @@
     );
   }
 
+  function stopCameraWizardLinkPoll() {
+    if (cameraWizardLinkPollTimer) {
+      clearTimeout(cameraWizardLinkPollTimer);
+      cameraWizardLinkPollTimer = null;
+    }
+  }
+
   function loadCameraWizardLinkInfo() {
     // /api/lan-info only exists on the local relay server (server.js or
     // the desktop app) - on a GitHub Pages copy (or any other static
@@ -29171,6 +29179,7 @@
     // that's a fundamentally different problem ("no relay server at all")
     // from "relay running but HTTPS not configured", and needs its own
     // message rather than falling through to the HTTPS one.
+    stopCameraWizardLinkPoll();
     fetch("/api/lan-info")
       .then(function (res) {
         if (!res.ok) throw new Error("bad status " + res.status);
@@ -29181,6 +29190,14 @@
         if (!addr || !info.httpsPort) {
           showCameraWizardLinkState("https-missing");
           renderCameraWizardInstallPrompt(true);
+          // The desktop app finishing its own startup (generating a
+          // self-signed cert, bringing up the HTTPS listener) is the
+          // single most common reason to land here - keep re-checking on
+          // its own instead of making "give it a moment and reopen this
+          // wizard" something the user actually has to go do by hand.
+          // Swaps straight to the real camera.html link/QR the moment
+          // HTTPS actually comes up, with no manual retry needed.
+          cameraWizardLinkPollTimer = setTimeout(loadCameraWizardLinkInfo, 3000);
           return;
         }
         var url = "https://" + addr + ":" + info.httpsPort + "/camera.html";
@@ -29197,6 +29214,11 @@
         // option instead of leaving the user stuck on a dead-end error,
         // unless they'd already explicitly picked a path themselves.
         if (!cameraWizardPathUserChosen) selectCameraWizardPath("same-device");
+        // Same reasoning as the https-missing branch above - keep
+        // checking in case the desktop app gets installed and started
+        // while this wizard is still open, rather than requiring a
+        // manual reopen once it's up.
+        cameraWizardLinkPollTimer = setTimeout(loadCameraWizardLinkInfo, 3000);
       });
   }
 
@@ -29244,6 +29266,7 @@
 
   function closeCameraWizard() {
     cameraWizardOverlay.classList.add("hidden");
+    stopCameraWizardLinkPoll();
   }
 
   // Forward-only, same shape as advanceOnboarding - step 2 is the last
