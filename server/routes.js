@@ -7,9 +7,19 @@ var lan = require("./lan");
 // this server), a join link built from that would tell every guest's phone
 // to connect to its own localhost, which silently fails with no useful
 // error. So the app fetches this instead of trusting its own origin.
-function attachApiRoutes(app, port, QRCode) {
+//
+// getHttpsInfo is optional and, when given, is called fresh on every
+// request rather than read once at startup - the camera setup wizard needs
+// to know whether HTTPS is *currently* up and on which port, and on the
+// standalone build that only becomes true sometime after this route is
+// registered (cert generation is async) - a value captured once at
+// attachApiRoutes() call time would be permanently stale. Returns the
+// HTTPS port number, or null/undefined if HTTPS isn't available (or not
+// up yet).
+function attachApiRoutes(app, port, QRCode, getHttpsInfo) {
   app.get("/api/lan-info", function (req, res) {
-    res.json({ addresses: lan.lanAddresses(), port: port });
+    var httpsPort = getHttpsInfo ? getHttpsInfo() : null;
+    res.json({ addresses: lan.lanAddresses(), port: port, httpsPort: httpsPort || null });
   });
 
   app.get("/api/qr.png", function (req, res) {
