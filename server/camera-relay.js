@@ -37,10 +37,14 @@
 //   { type: "hello", role: "camera" | "listener" }
 //   camera -> relay -> broadcast to every "listener":
 //     { type: "player_up", player_name, confidence, ts }
-//     { type: "candidate", player_name, stance, angle } - live "who's
-//       currently seen" plus the current upright/bent reading, sent every
-//       frame (not just on change), independent of player_up (which only
-//       fires on an actual confirmed shot)
+//     { type: "candidate", player_name, stance, angle, closestName,
+//       closestDistance, matchThreshold } - live "who's currently seen"
+//       plus the current upright/bent reading and the nearest enrolled
+//       player regardless of whether that distance actually clears the
+//       threshold (so "detecting fine but just over threshold" can be
+//       told apart from "not detecting anyone"), sent every frame (not
+//       just on change), independent of player_up (which only fires on
+//       an actual confirmed shot)
 //   Enrollment (per explicit request: additive, improves with use - each
 //   player's enrollment is a growing LIST of descriptors, not one frozen
 //   average):
@@ -189,11 +193,20 @@ function createCameraRelay(WebSocket) {
         // Live "who does the camera currently see" - distinct from
         // player_up, which only fires on an actual confirmed shot. Lets
         // a listener (the tablet) show this without waiting for a shot.
-        // stance/angle pass through unchanged (undefined if the sending
-        // camera.html predates them) - they're a diagnostic extra, not
-        // required for the listener's own fallback name-only rendering.
+        // Every field past player_name passes through unchanged
+        // (undefined if the sending camera.html predates them) - they're
+        // diagnostic extras, not required for a listener's own fallback
+        // name-only rendering.
         if (msg.type === "candidate" && ws.role === "camera") {
-          broadcastToListeners({ type: "candidate", player_name: msg.player_name || null, stance: msg.stance, angle: msg.angle });
+          broadcastToListeners({
+            type: "candidate",
+            player_name: msg.player_name || null,
+            stance: msg.stance,
+            angle: msg.angle,
+            closestName: msg.closestName,
+            closestDistance: msg.closestDistance,
+            matchThreshold: msg.matchThreshold
+          });
           return;
         }
 

@@ -94,7 +94,7 @@
   // independently.
   function handleCandidateSeen(msg) {
     if (!bridgeReady()) return;
-    window.PMCCameraBridge.reportCandidateSeen(msg.player_name || null, msg.stance, msg.angle);
+    window.PMCCameraBridge.reportCandidateSeen(msg.player_name || null, msg.stance, msg.angle, msg.closestName, msg.closestDistance, msg.matchThreshold);
   }
 
   function scheduleReconnect() {
