@@ -59,9 +59,17 @@ app.get("*", function (req, res, next) {
 // now - attachApiRoutes() runs synchronously here, long before cert
 // generation (async) even starts.
 var httpsListenerReady = false;
+// Set once, by whichever of the two async failure points (cert
+// generation, or the listener's own listen() call) actually fails - see
+// each one's own comment below. A packaged desktop build has no visible
+// console for most users, so without this the camera wizard would just
+// poll forever with no way to tell "still starting up" apart from
+// "failed, and here's why" - see routes.js's own comment on the shape
+// this becomes in the /api/lan-info response.
+var httpsError = null;
 
 routes.attachApiRoutes(app, PORT, deps.QRCode, function () {
-  return httpsListenerReady ? HTTPS_PORT : null;
+  return { port: httpsListenerReady ? HTTPS_PORT : null, error: httpsError };
 });
 
 // One shared camera-relay instance, attached to BOTH servers below, so a
@@ -118,6 +126,7 @@ tlsCert.getOrCreateCert(deps.selfsigned, lan.lanAddresses()).then(function (pems
 }).catch(function (err) {
   console.error("Could not generate a local HTTPS certificate:", err.message);
   console.error("The camera recognition page will not work this run.");
+  httpsError = "cert-failed";
 });
 
 function openBrowser(url) {
@@ -187,6 +196,7 @@ function attachListeners(httpServer, isHttps) {
     }
     if (isHttps) {
       console.error("Could not start the HTTPS listener (camera recognition page won't work):", err.message);
+      httpsError = err.code === "EADDRINUSE" ? "port-in-use" : err.code || "listen-failed";
       return;
     }
     console.error("Could not start Pool Master Counter:", err.message);
