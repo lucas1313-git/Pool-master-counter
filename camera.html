@@ -76,7 +76,7 @@
     overflow: hidden;
     border: 1px solid var(--border);
   }
-  video, canvas {
+  video, canvas, #viewerLiveImg {
     position: absolute;
     top: 0;
     left: 0;
@@ -87,6 +87,7 @@
   canvas { touch-action: none; }
   canvas.tappable { pointer-events: auto; cursor: crosshair; }
   canvas:not(.tappable) { pointer-events: none; }
+  #viewerLiveImg { cursor: crosshair; background: #000; }
   .warning-banner {
     margin-top: 10px;
     padding: 10px 12px;
@@ -367,6 +368,7 @@
   <div class="video-wrap" id="videoWrap">
     <video id="video" autoplay playsinline muted></video>
     <canvas id="overlay"></canvas>
+    <img id="viewerLiveImg" alt="Live view from the camera device" hidden>
   </div>
 
   <div class="warning-banner" id="cameraWarning" hidden>
@@ -604,6 +606,19 @@
   // all of it only ever touches send()/the enrollments variable, never the
   // transport directly.
   var isEmbedded = new URLSearchParams(location.search).get("embedded") === "1";
+  // Remote viewer mode - a SECOND device (the scoreboard, not the camera
+  // phone) loads this exact same page to drive it without touching the
+  // phone. Reuses 100% of the real UI instead of a hand-built parallel
+  // one: every interactive element's click/change gets intercepted (see
+  // the capture-phase listener near the bottom of this file) and
+  // forwarded to the real camera device instead of running locally -
+  // this page has no camera of its own in this mode, no model loaded, no
+  // detection loop running. The real camera.html instance executes the
+  // forwarded action on ITS OWN identical DOM (same ids), so every
+  // existing handler (startCalibration, finishEnrollCapture, the
+  // cameraSelect change listener, etc.) runs completely unchanged - this
+  // mode adds a transport, not new camera-side logic.
+  var isViewer = new URLSearchParams(location.search).get("viewer") === "1";
   var LOCAL_ENROLLMENTS_KEY = "pmc-camera-local-enrollments";
   var RECONNECT_DELAY_MS = 3000;
   var DETECTION_INTERVAL_MS = 280; // ~3.5 fps, within the 3-5fps target
@@ -675,6 +690,7 @@
   var videoWrap = document.getElementById("videoWrap");
   var videoEl = document.getElementById("video");
   var overlayEl = document.getElementById("overlay");
+  var viewerLiveImg = document.getElementById("viewerLiveImg");
   var overlayCtx = overlayEl.getContext("2d");
 
   var dotRelay = document.getElementById("dotRelay");
@@ -1204,7 +1220,96 @@
       sendRemoteCameraList();
     } else if (msg.type === "remote-camera-select" && msg.deviceId) {
       selectRemoteCamera(msg.deviceId);
+    } else if (msg.type === "viewer-click" && msg.id) {
+      var clickEl = document.getElementById(msg.id);
+      if (clickEl) clickEl.click();
+    } else if (msg.type === "viewer-change" && msg.id) {
+      var changeEl = document.getElementById(msg.id);
+      if (changeEl) {
+        changeEl.value = msg.value;
+        changeEl.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    } else if (msg.type === "viewer-canvas-tap" && typeof msg.fx === "number" && typeof msg.fy === "number") {
+      applyRemoteTap(msg.fx, msg.fy);
+    } else if (msg.type === "hello-viewer-connected") {
+      hasViewerConnected = true;
+      startViewerFrameStream();
+    } else if (msg.type === "hello-viewer-disconnected") {
+      hasViewerConnected = false;
+    } else if (msg.type === "viewer-frame") {
+      applyViewerFrame(msg);
     }
+  }
+
+  // Runs only on the viewer instance (camera.html?viewer=1) - applies a
+  // received frame + element snapshot from the real camera to this page's
+  // own identical DOM, so it visually mirrors the camera's current state
+  // between forwarded actions, not just immediately after one.
+  function applyViewerFrame(msg) {
+    if (msg.dataUrl) {
+      viewerLiveImg.src = msg.dataUrl;
+      viewerLiveImg.hidden = false;
+    }
+    var elements = msg.elements || {};
+    Object.keys(elements).forEach(function (id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      var snap = elements[id];
+      if (snap === null) return;
+      if (id === "dotCamera" || id === "dotRelay" || id === "dotModels") {
+        if (typeof snap.cls === "string") el.className = snap.cls;
+      } else {
+        if (typeof snap.text === "string") el.textContent = snap.text;
+        if (typeof snap.hidden === "boolean") el.hidden = snap.hidden;
+      }
+    });
+  }
+
+  // ---- Viewer mode boot: no local camera, no model, no detection loop -
+  // every interactive element's click/change is forwarded to the real
+  // camera device instead (see server/camera-relay.js's protocol comment
+  // for the viewer-* message shapes). Tab switching stays purely local
+  // (just shows/hides a panel, nothing for the real camera to do), and
+  // elements with no id (the "?" help buttons) are left alone too, since
+  // they only ever show static local text - everything else with an id
+  // forwards.
+  var VIEWER_LOCAL_ONLY_IDS = { tabRecognize: true, tabCalibrate: true, tabEnroll: true, btnCloseSettingsHelp: true };
+  function initViewerMode() {
+    videoEl.hidden = true;
+    overlayEl.hidden = true;
+    relaunchWizardBtn.style.display = "none";
+
+    viewerLiveImg.addEventListener("click", function (evt) {
+      var rect = viewerLiveImg.getBoundingClientRect();
+      var fx = (evt.clientX - rect.left) / rect.width;
+      var fy = (evt.clientY - rect.top) / rect.height;
+      send({ type: "viewer-canvas-tap", fx: fx, fy: fy });
+    });
+
+    document.addEventListener(
+      "click",
+      function (evt) {
+        var el = evt.target.closest("button");
+        if (!el || !el.id || VIEWER_LOCAL_ONLY_IDS[el.id]) return;
+        evt.preventDefault();
+        evt.stopImmediatePropagation();
+        send({ type: "viewer-click", id: el.id });
+      },
+      true
+    );
+    document.addEventListener(
+      "change",
+      function (evt) {
+        var el = evt.target;
+        if (!el.id || VIEWER_LOCAL_ONLY_IDS[el.id]) return;
+        evt.preventDefault();
+        evt.stopImmediatePropagation();
+        send({ type: "viewer-change", id: el.id, value: el.value });
+      },
+      true
+    );
+
+    connectRelay();
   }
 
   // Lets the listener (scoreboard device) see and pick between this
@@ -1318,6 +1423,51 @@
     }
   }
 
+  // ---- Generic remote viewer streaming ----
+  // Unlike sendCalibFrameUpdate above (narrow: fires per calibration tap,
+  // only while a calibration session is explicitly active), this is the
+  // general-purpose feed for a full remote-viewer instance of this page
+  // (camera.html?viewer=1) - sends a composited still plus a snapshot of
+  // every element a viewer needs to mirror (status dots, progress text),
+  // on a fixed interval, for as long as a viewer is connected, covering
+  // whichever tab the viewer currently has open rather than one specific
+  // feature.
+  var hasViewerConnected = false;
+  var viewerFrameTimer = null;
+  var VIEWER_FRAME_INTERVAL_MS = 700;
+  var VIEWER_SYNCED_IDS = [
+    "calibrationStepText", "calibrationStatus", "captureProgress",
+    "labelCamera", "labelRelay", "labelModels"
+  ];
+  function snapshotViewerSyncedElements() {
+    var out = {};
+    VIEWER_SYNCED_IDS.forEach(function (id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      out[id] = { text: el.textContent, hidden: el.hidden };
+    });
+    var camDot = document.getElementById("dotCamera");
+    var relayDot = document.getElementById("dotRelay");
+    var modelsDot = document.getElementById("dotModels");
+    out.dotCamera = camDot ? { cls: camDot.className } : null;
+    out.dotRelay = relayDot ? { cls: relayDot.className } : null;
+    out.dotModels = modelsDot ? { cls: modelsDot.className } : null;
+    return out;
+  }
+  function startViewerFrameStream() {
+    if (viewerFrameTimer) return;
+    viewerFrameTimer = setInterval(function () {
+      if (!hasViewerConnected) {
+        clearInterval(viewerFrameTimer);
+        viewerFrameTimer = null;
+        return;
+      }
+      var dataUrl = captureCalibFrame();
+      if (!dataUrl) return;
+      send({ type: "viewer-frame", dataUrl: dataUrl, elements: snapshotViewerSyncedElements() });
+    }, VIEWER_FRAME_INTERVAL_MS);
+  }
+
   // Jumps straight to the Enroll tab with a specific player pre-selected
   // and ready to capture - triggered by the Players panel's own "Enroll"
   // button (same-device mode only; see js/app.js's startCameraEnrollFor).
@@ -1350,10 +1500,10 @@
     setStatus(dotRelay, labelRelay, "busy", "Relay: connecting...");
     try { ws = new WebSocket(wsUrl()); } catch (e) { ws = null; scheduleReconnect(); return; }
     ws.addEventListener("open", function () {
-      setStatus(dotRelay, labelRelay, "ok", "Relay: connected");
-      send({ type: "hello", role: "camera" });
+      setStatus(dotRelay, labelRelay, "ok", isViewer ? "Remote viewer: connected" : "Relay: connected");
+      send({ type: "hello", role: isViewer ? "viewer" : "camera" });
       send({ type: "enroll-get" });
-      if (!hasLocalSettingsOverride) send({ type: "settings-request" });
+      if (!isViewer && !hasLocalSettingsOverride) send({ type: "settings-request" });
       send({ type: "roster-request" });
     });
     ws.addEventListener("message", function (event) {
@@ -1363,7 +1513,7 @@
     });
     ws.addEventListener("close", function () {
       ws = null;
-      setStatus(dotRelay, labelRelay, "bad", "Relay: disconnected");
+      setStatus(dotRelay, labelRelay, "bad", isViewer ? "Remote viewer: disconnected" : "Relay: disconnected");
       scheduleReconnect();
     });
   }
@@ -3347,12 +3497,15 @@
   // ---- Boot ----
   showTab("recognize");
   if (isEmbedded) initEmbeddedMode();
+  else if (isViewer) initViewerMode();
   else connectRelay();
-  loadModels();
-  startCamera(loadStoredCameraDeviceId(), true);
-  requestWakeLock();
-  setInterval(runDetectionLoop, DETECTION_INTERVAL_MS);
-  if (!hasSeenSetupWizard()) openSetupWizard();
+  if (!isViewer) {
+    loadModels();
+    startCamera(loadStoredCameraDeviceId(), true);
+    requestWakeLock();
+    setInterval(runDetectionLoop, DETECTION_INTERVAL_MS);
+    if (!hasSeenSetupWizard()) openSetupWizard();
+  }
 })();
 </script>
 </body>
