@@ -2420,6 +2420,65 @@
       activeManualAttribution = null;
     }
   }
+
+  // ---- Idle/seated person tracking (lightweight, throttled) ----
+  // Lets an already-enrolled player show as "recognized" on the
+  // scorecard even while seated waiting for their turn - deliberately
+  // NOT full-rate matching (that stays reserved for the one active/
+  // standing candidate), per explicit request: "cache the sitting
+  // people so they don't take too much processing power." Relies on
+  // MultiPose's own built-in cross-frame tracking (on by default for
+  // MultiPose Lightning - see loadModels), which gives every detected
+  // person a stable .id for as long as they stay in frame, so a given
+  // idle person only gets the expensive appearance-match work roughly
+  // once every IDLE_RECHECK_INTERVAL_MS, reusing the cached result every
+  // other frame in between.
+  var IDLE_RECHECK_INTERVAL_MS = 3000;
+  var IDLE_TRACK_STALE_MS = 15000; // forget a track's cached identity if its id hasn't reappeared this long
+  var idleTrackCache = {}; // trackId -> { lastCheckAt, lastMatchedName, lastSeenAt }
+
+  // Returns [{ name, trackId }, ...] for every currently-recognized idle
+  // person - called AFTER the active candidate's own analyzePose call
+  // each frame, never before, since analyzePose mutates the shared
+  // lastRejectedAsStatic flag the active candidate's own diagnostics
+  // still need to read first.
+  function processIdlePoses(poses, selectedPose) {
+    var now = Date.now();
+    var seenTrackIds = {};
+    var idleStates = [];
+    poses.forEach(function (pose) {
+      if (pose === selectedPose) return;
+      var trackId = pose.id;
+      if (trackId === undefined || trackId === null) return; // no tracking id - nothing to cache against
+      seenTrackIds[trackId] = true;
+      var cached = idleTrackCache[trackId];
+      if (!cached) {
+        cached = { lastCheckAt: 0, lastMatchedName: null, lastSeenAt: now };
+        idleTrackCache[trackId] = cached;
+      }
+      cached.lastSeenAt = now;
+      if (now - cached.lastCheckAt >= IDLE_RECHECK_INTERVAL_MS) {
+        cached.lastCheckAt = now;
+        var liteAnalysis = analyzePose(pose.keypoints);
+        if (liteAnalysis) {
+          var match = findBestMatch(liteAnalysis.descriptor);
+          cached.lastMatchedName = match && match.distance <= settings.matchThreshold ? match.name : null;
+        }
+        // Left as whatever it already was when this cycle's frame can't
+        // be confidently analyzed - a brief look-away shouldn't flicker
+        // the "idle, recognized" badge off and immediately back on.
+      }
+      if (cached.lastMatchedName) idleStates.push({ name: cached.lastMatchedName, trackId: trackId });
+    });
+    // A track that's genuinely left frame (not just unmatched this
+    // round) stops being returned by MultiPose entirely - drop its cache
+    // entry once it's been gone a while, rather than showing a stale
+    // "idle, recognized" badge for someone who actually walked away.
+    Object.keys(idleTrackCache).forEach(function (id) {
+      if (!seenTrackIds[id] && now - idleTrackCache[id].lastSeenAt > IDLE_TRACK_STALE_MS) delete idleTrackCache[id];
+    });
+    return idleStates;
+  }
   var lastConfidentPoseAt = Date.now();
   var candidate = null; // { name, descriptor, lastSeenAt }
   var uprightMatchName = null;
@@ -2439,9 +2498,18 @@
   // as a result. The parent page speaks instead for that case - see its
   // "candidate" postMessage handler in js/app.js, which reliably keeps
   // getting user-gesture activation from ordinary gameplay taps.
+  // Set to the name a shot was just confirmed for, so the scorecard's
+  // camera icon knows to stop flashing - "flashing" means "being watched
+  // live, not yet confirmed this round" per explicit request, so it has
+  // to stop the instant fireEvent succeeds for this same name, and only
+  // resume on the NEXT genuinely new "became the seen candidate"
+  // transition (not just any later frame). Cleared below exactly where
+  // lastAnnouncedSeenName itself changes, nowhere else.
+  var shotConfirmedForSeenName = null;
   function updateSeenCandidate(name) {
     if (name === lastAnnouncedSeenName) return;
     lastAnnouncedSeenName = name;
+    shotConfirmedForSeenName = null;
     if (name && settings.voiceStatusEnabled && !isEmbedded) speak(name + " seen.");
   }
 
@@ -2491,7 +2559,16 @@
       // problem (a miscalibrated table rejects legitimate positions,
       // especially the far/compressed end of the perspective view, where
       // small tap errors turn into large real-world ones).
-      tooFarFromRail: analysis && closeEnough === false ? true : false
+      tooFarFromRail: analysis && closeEnough === false ? true : false,
+      // Scorecard icon state - see shotConfirmedForSeenName's own comment
+      // for why flashing stops exactly when it does. needsConfirmationName
+      // reuses the same "closest enrolled guess" this message already
+      // computes above, shown as a "?" on that specific player's card
+      // (not just the generic banner) whenever someone's bent over and
+      // unmatched - a concrete best-guess target to tap, not a blind
+      // prompt.
+      flashingName: lastAnnouncedSeenName && shotConfirmedForSeenName !== lastAnnouncedSeenName ? lastAnnouncedSeenName : null,
+      needsConfirmationName: !(candidate && candidate.name) && stance === "bent" && closest ? closest.name : null
     });
   }
 
@@ -2588,12 +2665,27 @@
     var confidence = Math.max(0, Math.min(1, 1 - matchDistance / MAX_EXPECTED_DISTANCE));
     send({ type: "player_up", player_name: name, confidence: confidence, ts: now });
     logActivity(name + " shooting (match distance " + matchDistance.toFixed(2) + ")");
+    // Stops the scorecard's camera icon flashing for this name - see
+    // shotConfirmedForSeenName's own comment.
+    if (name === lastAnnouncedSeenName) shotConfirmedForSeenName = name;
     // Not spoken here in embedded mode - see updateSeenCandidate's comment
     // above; the parent page's own player_up handler speaks instead.
     if (settings.voiceStatusEnabled && !isEmbedded) speak(name + " shooting.");
     if (matchDistance <= settings.matchThreshold * 0.7) {
       send({ type: "enroll-add", player_name: name, descriptor: descriptor, side: side });
+      notifyEnrollmentUpdated(name);
     }
+  }
+
+  // Scorecard "+" badge - a brief, self-expiring signal (the parent page
+  // owns the actual timing) that fresh enrollment data just landed for
+  // this player, separate from the "is this player currently enrolled at
+  // all" icon state. Only called from the two gameplay-driven paths
+  // (here, and handleTurnConfirmed below) - not from the manual Enroll
+  // tab's own capture flow, since that overlay is already front-and-
+  // center when it happens and doesn't need a scorecard badge too.
+  function notifyEnrollmentUpdated(name) {
+    send({ type: "enrollment-updated", player_name: name });
   }
 
   // Gameplay-driven auto-enrollment: a human just confirmed a real score
@@ -2612,6 +2704,7 @@
     } else {
       send({ type: "enroll-add", player_name: name, descriptor: candidate.descriptor, side: candidate.side });
     }
+    notifyEnrollmentUpdated(name);
     logActivity(name + " confirmed by scoring (side " + (candidate.side === undefined ? "?" : candidate.side + 1) + ")");
   }
 
@@ -2936,6 +3029,16 @@
           }
           handleRecognitionFrame(analysis);
           drawOverlay(pose ? pose.keypoints : null, analysis, matchLabel);
+          // Must run AFTER handleRecognitionFrame/analyzePose above, not
+          // before - processIdlePoses calls analyzePose too, which would
+          // otherwise overwrite lastRejectedAsStatic before the active
+          // candidate's own diagnostics (already read by this point) got
+          // to see it. Suspended during enrollCapturing - the operator's
+          // and the camera's attention is already on one specific target
+          // then, nothing to usefully report about everyone else.
+          if (poses && poses.length) {
+            send({ type: "idle-states", idle: processIdlePoses(poses, pose) });
+          }
         }
       })
       .catch(function (e) { console.error("[camera] detection error:", e); })

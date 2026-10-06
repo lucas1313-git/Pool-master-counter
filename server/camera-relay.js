@@ -208,8 +208,23 @@ function createCameraRelay(WebSocket) {
             matchThreshold: msg.matchThreshold,
             rawPoseConfidence: msg.rawPoseConfidence,
             keypointConfFloor: msg.keypointConfFloor,
-            tooFarFromRail: msg.tooFarFromRail
+            tooFarFromRail: msg.tooFarFromRail,
+            flashingName: msg.flashingName,
+            needsConfirmationName: msg.needsConfirmationName
           });
+          return;
+        }
+
+        // Scorecard icon state, same "camera -> relay -> every listener"
+        // shape as "candidate" above, just a different payload shape -
+        // see camera.html's own processIdlePoses/notifyEnrollmentUpdated
+        // comments for what each carries.
+        if (msg.type === "idle-states" && ws.role === "camera") {
+          broadcastToListeners({ type: "idle-states", idle: Array.isArray(msg.idle) ? msg.idle : [] });
+          return;
+        }
+        if (msg.type === "enrollment-updated" && ws.role === "camera" && msg.player_name) {
+          broadcastToListeners({ type: "enrollment-updated", player_name: msg.player_name });
           return;
         }
 

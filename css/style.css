@@ -2424,6 +2424,50 @@ input[type="number"] {
   container-type: inline-size;
 }
 
+/* ---------- Scorecard camera-recognition badge ---------- */
+/* Built once per card (see buildIndividualPanel), visibility/state
+   toggled live on every camera event (see updateCameraIconsOnScorecard)
+   - stacks above the player name via the panel's own flex-column flow,
+   not absolutely positioned, per explicit request ("flash above the
+   player name"). */
+.scorecard-camera-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--accent);
+}
+.scorecard-camera-badge-icon { width: 20px; height: 20px; display: block; }
+.scorecard-camera-badge-icon svg { width: 20px; height: 20px; display: block; }
+
+/* "Being watched live, not yet confirmed this round" - a color swap
+   once a second, not a fade/pulse, so it reads clearly even glanced at
+   from across the table. */
+.scorecard-camera-badge.flashing .scorecard-camera-badge-icon {
+  animation: scorecard-camera-flash 1s step-start infinite;
+}
+@keyframes scorecard-camera-flash {
+  0%, 49% { color: var(--accent); }
+  50%, 100% { color: var(--danger); }
+}
+
+/* Recognized via the lightweight seated/idle check (see
+   processIdlePoses) - static, not flashing, specifically to read as
+   "cached, not live" at a glance. */
+.scorecard-camera-badge-clock { display: none; font-size: 0.9rem; }
+.scorecard-camera-badge.idle .scorecard-camera-badge-icon { color: var(--text-dim); }
+.scorecard-camera-badge.idle .scorecard-camera-badge-clock { display: inline; }
+
+/* A fresh sample just landed for this player - self-clears on its own
+   after a few seconds (see SCORECARD_CAMERA_PLUS_MS), nothing to click. */
+.scorecard-camera-badge-plus { display: none; font-weight: 800; color: var(--accent); }
+.scorecard-camera-badge.show-plus .scorecard-camera-badge-plus { display: inline; }
+
+/* The camera's best (unconfirmed) guess for who's bent over right now -
+   tap this player on the keypad to confirm, same action the
+   "unmatched shooter" scorecard banner above already prompts for. */
+.scorecard-camera-badge-question { display: none; font-weight: 800; color: var(--danger); }
+.scorecard-camera-badge.show-question .scorecard-camera-badge-question { display: inline; }
+
 /* ---------- Keyboard/keypad scoring shortcut ---------- */
 
 .keypad-number-badge {

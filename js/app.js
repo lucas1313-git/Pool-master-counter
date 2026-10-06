@@ -4657,6 +4657,22 @@
     var panel = document.createElement("div");
     panel.className = "player-panel";
 
+    // Built once per render, visibility/state toggled live by
+    // updateCameraIconsOnScorecard on every camera event rather than
+    // forcing a full re-render ~3.5 times a second - see that function's
+    // own comment for what each sub-icon means.
+    if (state.cameraInputEnabled && state.sameDeviceCameraSetUp) {
+      var camBadge = document.createElement("div");
+      camBadge.className = "scorecard-camera-badge hidden";
+      camBadge.dataset.playerId = player.id;
+      camBadge.innerHTML =
+        '<span class="scorecard-camera-badge-icon">' + CAMERA_ICON_SVG + "</span>" +
+        '<span class="scorecard-camera-badge-clock" aria-hidden="true">🕐</span>' +
+        '<span class="scorecard-camera-badge-plus" aria-hidden="true">+</span>' +
+        '<span class="scorecard-camera-badge-question" aria-hidden="true">?</span>';
+      panel.appendChild(camBadge);
+    }
+
     var name = document.createElement("div");
     name.className = "player-name keypad-select-trigger";
     name.addEventListener("click", function () {
@@ -5420,6 +5436,14 @@
       });
     }
     refreshKeypadNumbering();
+    // Every badge buildIndividualPanel just created starts hidden - sync
+    // them to the current known camera state immediately, or they'd all
+    // flash hidden until the next camera frame arrives (~280ms later)
+    // every time the scoreboard re-renders for an unrelated reason (a
+    // score change, say). Guarded since PMCCameraBridge's camera-icon
+    // methods are attached from inside boot(), which may not have run
+    // yet on the very first render.
+    if (window.PMCCameraBridge && window.PMCCameraBridge.syncScorecardCameraIcons) window.PMCCameraBridge.syncScorecardCameraIcons();
   }
 
   function formatTimestamp(ts, includeDate) {
@@ -29691,6 +29715,48 @@
     unmatchedShooterBanner.classList.add("hidden");
   });
 
+  // ---- Scorecard camera-recognition icons ----
+  // State only - the actual badge elements are built once per player by
+  // buildIndividualPanel (one per scorecard, each tagged with its own
+  // player id) and just have their classes toggled here on every camera
+  // event, rather than forcing a full renderScoreboard() ~3.5 times a
+  // second (expensive, and would disrupt any in-progress keypad
+  // interaction). flashing = "being watched live, not yet confirmed this
+  // round" (see camera.html's shotConfirmedForSeenName comment); idle =
+  // recognized via the lightweight seated/idle check, shown only when
+  // NOT also flashing (flashing already implies "camera sees them,"
+  // showing both would be redundant); needsConfirmation = this is the
+  // camera's best (unconfirmed) guess for who's currently bent over
+  // unmatched - tap them on the keypad to confirm, same action
+  // resolveUnmatchedShooterPrompt already wires into every manual
+  // selection site; recentlyUpdated = a sample was just captured for
+  // them, shown for a few seconds then auto-clears.
+  var scorecardCameraFlashingName = null;
+  var scorecardCameraNeedsConfirmName = null;
+  var scorecardCameraIdleNames = {};
+  var scorecardCameraRecentlyUpdatedTimers = {};
+  var SCORECARD_CAMERA_PLUS_MS = 4000;
+
+  function updateCameraIconsOnScorecard() {
+    Array.prototype.forEach.call(document.querySelectorAll(".scorecard-camera-badge"), function (badge) {
+      var player = state.players.filter(function (p) { return p.id === badge.dataset.playerId; })[0];
+      if (!player) {
+        badge.classList.add("hidden");
+        return;
+      }
+      var name = player.name;
+      var flashing = scorecardCameraFlashingName === name;
+      var needsConfirm = scorecardCameraNeedsConfirmName === name;
+      var idle = !flashing && !!scorecardCameraIdleNames[name];
+      var plus = !!scorecardCameraRecentlyUpdatedTimers[name];
+      badge.classList.toggle("hidden", !(flashing || needsConfirm || idle || plus));
+      badge.classList.toggle("flashing", flashing);
+      badge.classList.toggle("idle", idle);
+      badge.classList.toggle("show-plus", plus);
+      badge.classList.toggle("show-question", needsConfirm);
+    });
+  }
+
   // Attached here (inside boot(), where renderCameraCandidateStatus and
   // speakCameraStatus actually live) rather than as plain properties of
   // the window.PMCCameraBridge literal below, which is assigned outside
@@ -29698,10 +29764,13 @@
   // before any real "candidate"/player_up message can arrive, so these
   // are in place well before js/camera-client.js or the same-device
   // postMessage listener would ever call them.
-  window.PMCCameraBridge.reportCandidateSeen = function (name, stance, angle, closestName, closestDistance, matchThreshold, rawPoseConfidence, keypointConfFloor, tooFarFromRail) {
+  window.PMCCameraBridge.reportCandidateSeen = function (name, stance, angle, closestName, closestDistance, matchThreshold, rawPoseConfidence, keypointConfFloor, tooFarFromRail, flashingName, needsConfirmationName) {
     renderCameraCandidateStatus(name || null, true, stance, angle);
     logCameraDiagnostic(name || null, stance, angle, closestName, closestDistance, matchThreshold, rawPoseConfidence, keypointConfFloor, tooFarFromRail);
     updateUnmatchedShooterBanner(name || null, stance);
+    scorecardCameraFlashingName = flashingName || null;
+    scorecardCameraNeedsConfirmName = needsConfirmationName || null;
+    updateCameraIconsOnScorecard();
     // Voice-announces a *change of matched name* only - per explicit
     // request, never for an unmatched sighting (no "seeing someone..."),
     // and never re-announced just because stance changed while the same
@@ -29720,6 +29789,34 @@
   window.PMCCameraBridge.announceShotFired = function (name) {
     if (name) speakCameraStatus(name + " shooting.");
   };
+  // Replaces the whole idle set every call (camera.html/camera-client.js
+  // already send the complete current list each time, not a delta) -
+  // see processIdlePoses's own comment for how rarely each entry in it
+  // actually got re-checked.
+  window.PMCCameraBridge.reportIdleStates = function (idleList) {
+    scorecardCameraIdleNames = {};
+    (idleList || []).forEach(function (entry) {
+      if (entry && entry.name) scorecardCameraIdleNames[entry.name] = true;
+    });
+    updateCameraIconsOnScorecard();
+  };
+  // The "+" badge - self-clearing after SCORECARD_CAMERA_PLUS_MS, timer
+  // restarted (not stacked) if more samples land for the same player
+  // before the previous one expired.
+  window.PMCCameraBridge.reportEnrollmentUpdated = function (name) {
+    if (!name) return;
+    if (scorecardCameraRecentlyUpdatedTimers[name]) clearTimeout(scorecardCameraRecentlyUpdatedTimers[name]);
+    scorecardCameraRecentlyUpdatedTimers[name] = setTimeout(function () {
+      delete scorecardCameraRecentlyUpdatedTimers[name];
+      updateCameraIconsOnScorecard();
+    }, SCORECARD_CAMERA_PLUS_MS);
+    updateCameraIconsOnScorecard();
+  };
+  // Lets renderScoreboard (outside boot(), has no direct access to
+  // updateCameraIconsOnScorecard) re-sync freshly-built badge elements to
+  // the current known state right after creating them - see its own
+  // comment on why that matters.
+  window.PMCCameraBridge.syncScorecardCameraIcons = updateCameraIconsOnScorecard;
 
   function openSameDeviceCameraOverlay() {
     if (!sameDeviceCameraRunning) {
@@ -29914,7 +30011,11 @@
         sameDeviceCameraIframe.contentWindow.postMessage({ type: "roster", names: window.PMCCameraBridge.getPlayerNames() }, location.origin);
       } catch (e) {}
     } else if (msg.type === "candidate") {
-      window.PMCCameraBridge.reportCandidateSeen(msg.player_name || null, msg.stance, msg.angle, msg.closestName, msg.closestDistance, msg.matchThreshold, msg.rawPoseConfidence, msg.keypointConfFloor, msg.tooFarFromRail);
+      window.PMCCameraBridge.reportCandidateSeen(msg.player_name || null, msg.stance, msg.angle, msg.closestName, msg.closestDistance, msg.matchThreshold, msg.rawPoseConfidence, msg.keypointConfFloor, msg.tooFarFromRail, msg.flashingName, msg.needsConfirmationName);
+    } else if (msg.type === "idle-states") {
+      window.PMCCameraBridge.reportIdleStates(msg.idle);
+    } else if (msg.type === "enrollment-updated") {
+      window.PMCCameraBridge.reportEnrollmentUpdated(msg.player_name);
     }
   });
 
