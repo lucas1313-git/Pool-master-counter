@@ -2493,6 +2493,37 @@
     overlayCtx.fillRect(p0.x, Math.max(0, p0.y - 18), tw + 8, 18);
     overlayCtx.fillStyle = "#f6efe9";
     overlayCtx.fillText(label, p0.x + 4, Math.max(13, p0.y - 4));
+
+    drawRailDistanceMarker(analysis);
+  }
+
+  // The actual number withinRailDistance's accept/reject decision is
+  // based on - drawn right at the ankle point it's measured from, in its
+  // own color (amber) distinct from the stance box and the table-edge/
+  // Auto-Detect overlays, so it reads as its own independent signal, not
+  // a label on top of something else. Green text when this position
+  // would currently be accepted as "at the table," red when it's what's
+  // rejecting a real shot (the exact scenario the "too far from any
+  // calibrated rail" diagnostic log line is about).
+  function drawRailDistanceMarker(analysis) {
+    if (!calibration || !analysis.ankleMid) return;
+    var real = applyHomography(calibration.h, analysis.ankleMid.x, analysis.ankleMid.y);
+    if (!real) return;
+    var dist = distanceToNearestRail(real, calibration.tableLength, calibration.tableWidth);
+    var within = dist <= settings.railDistanceInches;
+    var p = videoToOverlay(analysis.ankleMid.x, analysis.ankleMid.y);
+    overlayCtx.strokeStyle = "#ffa500";
+    overlayCtx.lineWidth = 2;
+    overlayCtx.beginPath();
+    overlayCtx.arc(p.x, p.y, 8, 0, Math.PI * 2);
+    overlayCtx.stroke();
+    var text = dist.toFixed(1) + "in from rail (limit " + settings.railDistanceInches + "in)";
+    overlayCtx.font = "13px sans-serif";
+    var tw = overlayCtx.measureText(text).width;
+    overlayCtx.fillStyle = "rgba(0,0,0,0.6)";
+    overlayCtx.fillRect(p.x + 10, p.y - 9, tw + 8, 18);
+    overlayCtx.fillStyle = within ? "#5ec98a" : "#e05a5a";
+    overlayCtx.fillText(text, p.x + 14, p.y + 5);
   }
 
   // ---- Main detection loop ----
