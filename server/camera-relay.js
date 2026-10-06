@@ -77,6 +77,15 @@
 //   stronger ground truth than the camera's own self-match, so camera.html
 //   uses this to label (or relabel) its current candidate appearance:
 //     { type: "turn_confirmed", player_name } (listener -> relay -> every "camera")
+//   Remote calibration (listener drives camera.html's manual-tap table
+//   calibration without touching the camera device itself):
+//     { type: "remote-calib-start" } (listener -> relay -> every "camera")
+//     { type: "remote-calib-cancel" } (listener -> relay -> every "camera")
+//     { type: "remote-calib-tap", fx, fy } (listener -> relay -> every "camera") -
+//       fx/fy are 0-1 fractions of the streamed frame image
+//     { type: "calib-frame", dataUrl, step, done, failed } (camera -> relay
+//       -> every "listener") - one downsampled JPEG still per tap, not a
+//       live video stream
 //
 // No auth, LAN-only, same trust model as relay.js.
 
@@ -296,6 +305,34 @@ function createCameraRelay(WebSocket) {
 
         if (msg.type === "turn_confirmed" && ws.role === "listener" && msg.player_name) {
           broadcastToCameras({ type: "turn_confirmed", player_name: msg.player_name });
+          return;
+        }
+
+        // Remote calibration: lets the listener (the scoreboard device)
+        // drive camera.html's manual table-calibration flow without
+        // anyone touching the camera device itself - built specifically
+        // because getUserMedia and the calibration canvas both only
+        // exist on the camera device, so there was previously no way to
+        // do this except standing at the camera and tapping its screen.
+        // camera.html streams a downsampled still of its own calibration
+        // view back after each tap (see its own startRemoteCalibration
+        // comment); the listener never gets live video, just a frame
+        // per step, which keeps this cheap enough for the relay's plain
+        // JSON-over-WebSocket transport.
+        if (msg.type === "remote-calib-start" && ws.role === "listener") {
+          broadcastToCameras({ type: "remote-calib-start" });
+          return;
+        }
+        if (msg.type === "remote-calib-cancel" && ws.role === "listener") {
+          broadcastToCameras({ type: "remote-calib-cancel" });
+          return;
+        }
+        if (msg.type === "remote-calib-tap" && ws.role === "listener") {
+          broadcastToCameras({ type: "remote-calib-tap", fx: msg.fx, fy: msg.fy });
+          return;
+        }
+        if (msg.type === "calib-frame" && ws.role === "camera") {
+          broadcastToListeners({ type: "calib-frame", dataUrl: msg.dataUrl, step: msg.step, done: !!msg.done, failed: msg.failed || null });
           return;
         }
       });

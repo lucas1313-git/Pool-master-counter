@@ -711,6 +711,10 @@
     cameraInputSettingsRow.classList.toggle("hidden", !state.cameraInputEnabled);
     cameraMatchThresholdInput.value = state.cameraMatchThreshold;
     cameraDebounceSecInput.value = state.cameraDebounceSec;
+    // Cross-device only - same-device mode already shows the camera's
+    // own calibration UI live in its embedded iframe, so there's nothing
+    // for this button to usefully do there.
+    cameraRemoteCalibrateRow.classList.toggle("hidden", !state.cameraInputEnabled || state.sameDeviceCameraSetUp);
     var queueActive = individualMode && state.currentGame.queueEnabled;
     queueSwapStickyRow.classList.toggle("hidden", !queueActive);
     queueSwapStickyCheckbox.checked = loadQueueSwapSticky();
@@ -1850,6 +1854,17 @@
   var cameraDiagnosticLogEl = document.getElementById("camera-diagnostic-log");
   var unmatchedShooterBanner = document.getElementById("unmatched-shooter-banner");
   var btnDismissUnmatchedShooterBanner = document.getElementById("btn-dismiss-unmatched-shooter-banner");
+  var cameraRemoteCalibrateRow = document.getElementById("camera-remote-calibrate-row");
+  var btnStartRemoteCalibration = document.getElementById("btn-start-remote-calibration");
+  var btnCameraRemoteCalibrateHelp = document.getElementById("btn-camera-remote-calibrate-help");
+  var remoteCalibrateOverlay = document.getElementById("remote-calibrate-overlay");
+  var btnCloseRemoteCalibrate = document.getElementById("btn-close-remote-calibrate");
+  var remoteCalibrateStepEl = document.getElementById("remote-calibrate-step");
+  var remoteCalibrateFrameEl = document.getElementById("remote-calibrate-frame");
+  var remoteCalibratePlaceholderEl = document.getElementById("remote-calibrate-placeholder");
+  var btnRemoteCalibrateCancel = document.getElementById("btn-remote-calibrate-cancel");
+  var btnRemoteCalibrateRetry = document.getElementById("btn-remote-calibrate-retry");
+  var btnRemoteCalibrateDone = document.getElementById("btn-remote-calibrate-done");
   var cameraInputSettingsRow = document.getElementById("camera-input-settings-row");
   var cameraMatchThresholdInput = document.getElementById("camera-match-threshold");
   var cameraDebounceSecInput = document.getElementById("camera-debounce-sec");
@@ -2827,7 +2842,8 @@
       saveSessionOverlay,
       ratingEditOverlay,
       confirmModalOverlay,
-      playerConflictOverlay
+      playerConflictOverlay,
+      remoteCalibrateOverlay
     ].some(function (el) {
       return el && !el.classList.contains("hidden");
     });
@@ -29239,6 +29255,9 @@
   btnCameraVoiceHelp.addEventListener("click", function () {
     alertModal(T("players.cameraVoiceEnableHelpText"));
   });
+  btnCameraRemoteCalibrateHelp.addEventListener("click", function () {
+    alertModal(T("players.cameraRemoteCalibrateHelpText"));
+  });
 
   cameraMatchThresholdInput.addEventListener("input", function () {
     var value = parseFloat(cameraMatchThresholdInput.value);
@@ -29714,6 +29733,92 @@
     unmatchedShooterBannerDismissed = true;
     unmatchedShooterBanner.classList.add("hidden");
   });
+
+  // ---- Remote table calibration ----
+  // Lets the operator tap the table's 4 corners from THIS device's
+  // screen, cross-device mode only - camera.html streams back a still
+  // image after each tap (see its own startRemoteCalibration comment);
+  // a tap on that image here is converted to a 0-1 fraction and sent
+  // back over the same relay connection. See server/camera-relay.js's
+  // protocol comment for the message shapes.
+  function openRemoteCalibrateOverlay() {
+    // .hidden (not the native `hidden` attribute) - .remote-calibrate-frame
+    // and .remote-calibrate-placeholder both set their own `display` in
+    // css/style.css, which (as author styles) beats the UA's `[hidden]`
+    // default regardless of the attribute's value. Using the same
+    // `.hidden { display: none !important }` utility class the rest of
+    // this app relies on is what actually hides them - the native
+    // attribute looked like it worked (nothing visibly changed either
+    // way, so it was never obviously wrong) but silently left the
+    // placeholder sitting on top of the image the whole time, eating
+    // every click meant for the image underneath it.
+    remoteCalibrateFrameEl.classList.add("hidden");
+    remoteCalibrateFrameEl.removeAttribute("src");
+    remoteCalibratePlaceholderEl.classList.remove("hidden");
+    remoteCalibrateStepEl.textContent = T("cameraWizard.remoteCalibrateWaiting");
+    btnRemoteCalibrateRetry.classList.add("hidden");
+    btnRemoteCalibrateDone.classList.add("hidden");
+    btnRemoteCalibrateCancel.classList.remove("hidden");
+    remoteCalibrateOverlay.classList.remove("hidden");
+    if (window.PMCCameraBridge && window.PMCCameraBridge.startRemoteCalibration) {
+      window.PMCCameraBridge.startRemoteCalibration();
+    }
+  }
+  function closeRemoteCalibrateOverlay(sendCancel) {
+    if (sendCancel && window.PMCCameraBridge && window.PMCCameraBridge.cancelRemoteCalibration) {
+      window.PMCCameraBridge.cancelRemoteCalibration();
+    }
+    remoteCalibrateOverlay.classList.add("hidden");
+  }
+  btnStartRemoteCalibration.addEventListener("click", openRemoteCalibrateOverlay);
+  btnCloseRemoteCalibrate.addEventListener("click", function () { closeRemoteCalibrateOverlay(true); });
+  btnRemoteCalibrateCancel.addEventListener("click", function () { closeRemoteCalibrateOverlay(true); });
+  btnRemoteCalibrateDone.addEventListener("click", function () { closeRemoteCalibrateOverlay(false); });
+  btnRemoteCalibrateRetry.addEventListener("click", openRemoteCalibrateOverlay);
+
+  // object-fit:contain means the image rarely fills its box exactly on
+  // one axis - a click's fraction has to be measured against the
+  // rendered image's own on-screen box, not the wrapper's, or every tap
+  // lands off by however much letterboxing there is.
+  remoteCalibrateFrameEl.addEventListener("click", function (evt) {
+    if (remoteCalibrateFrameEl.classList.contains("hidden")) return;
+    var rect = remoteCalibrateFrameEl.getBoundingClientRect();
+    var naturalW = remoteCalibrateFrameEl.naturalWidth || 1;
+    var naturalH = remoteCalibrateFrameEl.naturalHeight || 1;
+    var scale = Math.min(rect.width / naturalW, rect.height / naturalH);
+    var renderedW = naturalW * scale;
+    var renderedH = naturalH * scale;
+    var offsetX = (rect.width - renderedW) / 2;
+    var offsetY = (rect.height - renderedH) / 2;
+    var x = evt.clientX - rect.left - offsetX;
+    var y = evt.clientY - rect.top - offsetY;
+    if (x < 0 || y < 0 || x > renderedW || y > renderedH) return; // tapped the letterbox, not the image
+    var fx = x / renderedW;
+    var fy = y / renderedH;
+    if (window.PMCCameraBridge && window.PMCCameraBridge.sendRemoteCalibTap) {
+      window.PMCCameraBridge.sendRemoteCalibTap(fx, fy);
+    }
+  });
+
+  window.PMCCameraBridge.reportCalibFrame = function (frame) {
+    if (remoteCalibrateOverlay.classList.contains("hidden")) return;
+    if (frame.dataUrl) {
+      remoteCalibrateFrameEl.src = frame.dataUrl;
+      remoteCalibrateFrameEl.classList.remove("hidden");
+      remoteCalibratePlaceholderEl.classList.add("hidden");
+    }
+    if (frame.done) {
+      remoteCalibrateStepEl.textContent = T("cameraWizard.remoteCalibrateDone");
+      btnRemoteCalibrateCancel.classList.add("hidden");
+      btnRemoteCalibrateDone.classList.remove("hidden");
+    } else if (frame.failed) {
+      remoteCalibrateStepEl.textContent =
+        frame.failed === "cancelled" ? T("cameraWizard.remoteCalibrateCancelledRemotely") : frame.failed;
+      btnRemoteCalibrateRetry.classList.remove("hidden");
+    } else if (frame.step) {
+      remoteCalibrateStepEl.textContent = frame.step;
+    }
+  };
 
   // ---- Scorecard camera-recognition icons ----
   // State only - the actual badge elements are built once per player by
