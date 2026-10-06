@@ -33,11 +33,11 @@
   }
   header h1 {
     margin: 0;
-    font-size: 1.1rem;
+    font-size: 1.4rem;
     color: var(--accent);
   }
   main {
-    max-width: 480px;
+    max-width: 640px;
     margin: 0 auto;
     padding: 12px 12px 40px;
   }
@@ -46,7 +46,7 @@
     gap: 10px;
     flex-wrap: wrap;
     margin-bottom: 10px;
-    font-size: 0.78rem;
+    font-size: 1rem;
   }
   .pill {
     display: flex;
@@ -94,18 +94,18 @@
     border: 1px solid var(--danger);
     border-radius: 10px;
     color: var(--danger);
-    font-size: 0.85rem;
+    font-size: 1.05rem;
   }
   .warning-banner button { margin-top: 8px; display: block; }
   .tabs { display: flex; gap: 8px; margin: 14px 0 10px; }
   .tab-btn {
     flex: 1;
-    padding: 10px 4px;
+    padding: 14px 6px;
     border: 1px solid var(--border);
     background: var(--panel);
     color: var(--text-dim);
     border-radius: 10px;
-    font-size: 0.85rem;
+    font-size: 1.05rem;
     font-weight: 600;
   }
   .tab-btn.active { background: var(--accent); color: #241a00; border-color: var(--accent); }
@@ -113,25 +113,25 @@
     background: var(--panel);
     border: 1px solid var(--border);
     border-radius: 12px;
-    padding: 12px;
+    padding: 16px;
     margin-bottom: 12px;
   }
   section.panel h2 {
-    margin: 0 0 10px;
-    font-size: 0.95rem;
+    margin: 0 0 12px;
+    font-size: 1.25rem;
     color: var(--text-dim);
     text-transform: uppercase;
     letter-spacing: 0.04em;
   }
-  label { font-size: 0.85rem; color: var(--text-dim); }
+  label { font-size: 1.05rem; color: var(--text-dim); }
   input[type="text"], input[type="number"], select {
     width: 100%;
     background: var(--card);
     border: 1px solid var(--border);
     color: var(--text);
     border-radius: 8px;
-    padding: 8px 10px;
-    font-size: 0.95rem;
+    padding: 12px 14px;
+    font-size: 1.15rem;
     margin: 4px 0 10px;
   }
   button {
@@ -139,8 +139,8 @@
     color: #241a00;
     border: none;
     border-radius: 8px;
-    padding: 10px 14px;
-    font-size: 0.9rem;
+    padding: 14px 18px;
+    font-size: 1.1rem;
     font-weight: 600;
     cursor: pointer;
   }
@@ -154,25 +154,33 @@
     justify-content: space-between;
     align-items: center;
     gap: 8px;
-    padding: 8px 0;
+    padding: 10px 0;
     border-bottom: 1px solid var(--border);
   }
   .player-row:last-child { border-bottom: none; }
-  .player-row .meta { font-size: 0.75rem; color: var(--text-dim); }
+  .player-row .meta { font-size: 0.95rem; color: var(--text-dim); }
   .player-row .actions { display: flex; gap: 6px; }
-  .player-row .actions button { padding: 6px 10px; font-size: 0.8rem; }
+  .player-row .actions button { padding: 8px 12px; font-size: 0.95rem; }
   .log {
-    font-size: 0.8rem;
+    font-size: 1rem;
     color: var(--text-dim);
-    max-height: 140px;
+    max-height: 160px;
     overflow-y: auto;
   }
-  .log div { padding: 3px 0; border-bottom: 1px solid var(--border); }
+  .log div { padding: 4px 0; border-bottom: 1px solid var(--border); }
   .log div:last-child { border-bottom: none; }
-  .progress-text { font-size: 0.85rem; color: var(--accent); margin: 6px 0; }
-  details > summary { cursor: pointer; color: var(--text-dim); font-size: 0.85rem; padding: 4px 0; }
-  .hint { font-size: 0.75rem; color: var(--text-dim); margin-top: -4px; margin-bottom: 10px; }
-  .fine { font-size: 0.72rem; color: var(--text-dim); }
+  .progress-text { font-size: 1.1rem; color: var(--accent); margin: 10px 0; font-weight: 600; }
+  details > summary { cursor: pointer; color: var(--text-dim); font-size: 1.05rem; padding: 6px 0; }
+  /* Positive, not the -4px this used to be - that pull was tuned for a
+     hint sitting right under an input/select, but the same rule also
+     applies right after a <button> (e.g. detectTableBtn), where it was
+     dragging the hint up into the button above it instead. Margins
+     between block siblings collapse to the larger value, so this doesn't
+     add unwanted extra gap after an input/select (which already carries
+     its own 10px bottom margin) - it only fixes the cases, like a
+     button, that had no bottom margin of their own to collapse against. */
+  .hint { font-size: 0.95rem; color: var(--text-dim); margin-top: 6px; margin-bottom: 10px; }
+  .fine { font-size: 0.9rem; color: var(--text-dim); }
   [hidden] { display: none !important; }
 
   /* ---------- Setup wizard - mirrors index.html's own .wizard-overlay
@@ -289,8 +297,8 @@
     color: #241a00;
     border: none;
     border-radius: 999px;
-    padding: 10px 18px;
-    font-size: 0.85rem;
+    padding: 12px 22px;
+    font-size: 1.05rem;
     font-weight: 700;
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
   }
@@ -405,7 +413,7 @@
     <div id="bootstrapStatus" class="hint"></div>
     <div id="playerList"><div class="hint">No players enrolled yet.</div></div>
     <button id="clearAllBtn" class="danger" type="button" style="margin-top:10px">Clear all (new session)</button>
-    <div class="hint" style="margin-top:6px">Appearance only matches today's clothes - clear and re-enroll everyone at the start of each new session.</div>
+    <div class="hint">Appearance only matches today's clothes - clear and re-enroll everyone at the start of each new session.</div>
   </section>
 
   <details class="panel" id="settingsPanel">
@@ -426,10 +434,10 @@
       <input type="number" id="debounceInput" min="1" max="120" step="1" value="10">
 
       <label for="bendEnterInput">Bent-over angle - enter (degrees from upright)</label>
-      <input type="number" id="bendEnterInput" min="10" max="85" step="1" value="45">
+      <input type="number" id="bendEnterInput" min="10" max="85" step="1" value="30">
 
       <label for="bendExitInput">Bent-over angle - exit back to upright (degrees)</label>
-      <input type="number" id="bendExitInput" min="5" max="80" step="1" value="35">
+      <input type="number" id="bendExitInput" min="5" max="80" step="1" value="20">
 
       <label for="railDistanceInput">Max distance from rail to count as "at the table" (inches, needs calibration)</label>
       <input type="number" id="railDistanceInput" min="6" max="72" step="1" value="30">
@@ -655,12 +663,20 @@
   var resumeSetupPill = document.getElementById("resumeSetupPill");
 
   // ---- Settings ----
+  // bendEnterAngle/bendExitAngle lowered from their original 45/35 -
+  // torsoAngleDeg is measured from an overhead/elevated mount, which
+  // foreshortens a real shooting bend far less than the 45 degrees that
+  // default assumed; real reports were of shots never registering as
+  // "bent" at all. Still needs on-site tuning per camera angle (that's
+  // why this is exposed as a setting) - see the live angle readout shown
+  // during Enroll capture for a direct way to see what a real shot
+  // actually measures here before adjusting further.
   var settings = {
     matchThreshold: 1.2,
     consecutiveFrames: 3,
     debounceSec: 10,
-    bendEnterAngle: 45,
-    bendExitAngle: 35,
+    bendEnterAngle: 30,
+    bendExitAngle: 20,
     railDistanceInches: 30,
     debugOverlay: false
   };
@@ -1792,6 +1808,23 @@
     setTimeout(function () { captureProgress.hidden = true; }, 3000);
   }
 
+  // Live, continuously-updated readout (not just a static "waiting..."
+  // message) specifically so a mismatched bend threshold is immediately
+  // visible and self-diagnosable on screen - without this, "not
+  // detecting" and "detecting fine but the angle never crosses the
+  // threshold" look identical to the operator.
+  function updateEnrollLiveStatus(analysis) {
+    var base = enrollSamples.length + "/" + ENROLL_TARGET_SAMPLES + " shots for " + enrollTargetName;
+    if (!analysis) {
+      captureProgress.textContent = base + " - no one in view";
+      return;
+    }
+    var angle = Math.round(analysis.torsoAngleDeg);
+    var stanceLabel =
+      stance === "bent" ? "bent (" + angle + "°)" : stance === "upright" ? "upright (" + angle + "°, need " + settings.bendEnterAngle + "°+)" : angle + "°";
+    captureProgress.textContent = base + " - currently " + stanceLabel;
+  }
+
   // Called from runDetectionLoop while enrollCapturing is true, in place
   // of handleRecognitionFrame - edge-triggered on bent stance the same
   // way fireEvent is for live recognition, but captures a sample instead
@@ -1802,6 +1835,7 @@
     if (!analysis) {
       enrollBentConsecutive = 0;
       if (enrollPresent && Date.now() - enrollLastPresentAt > ENROLL_PRESENCE_GRACE_MS) enrollPresent = false;
+      updateEnrollLiveStatus(null);
       return;
     }
     enrollLastPresentAt = Date.now();
@@ -1817,20 +1851,24 @@
 
     if (analysis.torsoAngleDeg >= settings.bendEnterAngle) stance = "bent";
     else if (analysis.torsoAngleDeg <= settings.bendExitAngle) stance = "upright";
+
     if (stance === "upright") {
       enrollBentConsecutive = 0;
       enrollShotCaptured = false; // back upright - re-armed for the next shot
-      return;
+    } else if (stance === "bent") {
+      enrollBentConsecutive++;
+      if (!enrollShotCaptured && enrollBentConsecutive >= settings.consecutiveFrames) {
+        enrollShotCaptured = true;
+        enrollSamples.push(analysis.descriptor);
+        var side = currentSideForAnalysis(analysis);
+        announceShotCaptured(enrollTargetName, side);
+        if (enrollSamples.length >= ENROLL_TARGET_SAMPLES) {
+          finishEnrollCapture(); // sets its own final message - don't overwrite it below
+          return;
+        }
+      }
     }
-    if (stance !== "bent") return; // hysteresis band
-    enrollBentConsecutive++;
-    if (enrollShotCaptured || enrollBentConsecutive < settings.consecutiveFrames) return;
-    enrollShotCaptured = true;
-    enrollSamples.push(analysis.descriptor);
-    var side = currentSideForAnalysis(analysis);
-    announceShotCaptured(enrollTargetName, side);
-    captureProgress.textContent = enrollSamples.length + "/" + ENROLL_TARGET_SAMPLES + " shots captured for " + enrollTargetName + "...";
-    if (enrollSamples.length >= ENROLL_TARGET_SAMPLES) finishEnrollCapture();
+    updateEnrollLiveStatus(analysis);
   }
 
   // ---- Two-phase recognition state machine ----
