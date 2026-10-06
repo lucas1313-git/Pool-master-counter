@@ -1843,6 +1843,7 @@
   var cameraInputCheckbox = document.getElementById("camera-input-checkbox");
   var btnCameraInputHelp = document.getElementById("btn-camera-input-help");
   var cameraCandidateStatus = document.getElementById("camera-candidate-status");
+  var cameraDiagnosticLogEl = document.getElementById("camera-diagnostic-log");
   var cameraInputSettingsRow = document.getElementById("camera-input-settings-row");
   var cameraMatchThresholdInput = document.getElementById("camera-match-threshold");
   var cameraDebounceSecInput = document.getElementById("camera-debounce-sec");
@@ -29443,6 +29444,45 @@
     }
   }
 
+  // Running history of camera recognition events (stance/match changes) -
+  // unlike renderCameraCandidateStatus above, which only ever shows the
+  // current instant, this persists so it can be checked between shots or
+  // after a game, without having to watch the live line continuously.
+  // Logged unconditionally, regardless of the debug checkbox, so turning
+  // debug on mid-session immediately shows the backlog since the camera
+  // started - only the element's *visibility* is gated by that checkbox.
+  // Keyed on name+stance (not angle, which changes every frame) so this
+  // only grows on an actual transition, not 3-4 times a second.
+  var cameraDiagnosticLog = [];
+  var CAMERA_DIAGNOSTIC_LOG_MAX = 60;
+  var lastLoggedCameraSignature = null;
+  function logCameraDiagnostic(name, stance, angle) {
+    var signature = (name || "") + "|" + (stance || "unknown");
+    if (signature === lastLoggedCameraSignature) return;
+    lastLoggedCameraSignature = signature;
+    var text;
+    if (name) text = "Matched: " + name;
+    else if (stance === "bent" && typeof angle === "number") text = "Bent over (" + angle + "°) - no match";
+    else if (stance === "upright" && typeof angle === "number") text = "Upright (" + angle + "°) - no match";
+    else text = "No one in view";
+    cameraDiagnosticLog.push({ ts: Date.now(), text: text });
+    if (cameraDiagnosticLog.length > CAMERA_DIAGNOSTIC_LOG_MAX) cameraDiagnosticLog.shift();
+    renderCameraDiagnosticLog();
+  }
+
+  function renderCameraDiagnosticLog() {
+    var show = cameraDebugCheckbox.checked && cameraDiagnosticLog.length > 0;
+    cameraDiagnosticLogEl.classList.toggle("hidden", !show);
+    if (!show) return;
+    cameraDiagnosticLogEl.innerHTML = "";
+    for (var i = cameraDiagnosticLog.length - 1; i >= 0; i--) {
+      var entry = cameraDiagnosticLog[i];
+      var row = document.createElement("div");
+      row.textContent = new Date(entry.ts).toLocaleTimeString() + " - " + entry.text;
+      cameraDiagnosticLogEl.appendChild(row);
+    }
+  }
+
   // Speaks a live camera event from the PARENT page rather than from
   // camera.html's own iframe document - deliberate, not a stylistic
   // choice. Once the embedded camera is minimized into the Players panel,
@@ -29474,6 +29514,7 @@
   // postMessage listener would ever call them.
   window.PMCCameraBridge.reportCandidateSeen = function (name, stance, angle) {
     renderCameraCandidateStatus(name || null, true, stance, angle);
+    logCameraDiagnostic(name || null, stance, angle);
     // Voice-announces a *change* only - not every frame someone's merely
     // still standing there, which would be constant chatter. Shared by
     // both transports since this is the one place that implements it,
@@ -29595,6 +29636,7 @@
   cameraDebugCheckbox.addEventListener("change", function () {
     sendCameraDebugSettingsToIframe();
     updateCameraInlinePreviewVisibility();
+    renderCameraDiagnosticLog(); // show/hide the backlog immediately, not just future entries
   });
   cameraVoiceCheckbox.addEventListener("change", function () {
     sendCameraDebugSettingsToIframe();
