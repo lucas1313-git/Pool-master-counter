@@ -2220,7 +2220,13 @@
           var matchLabel = null;
           if (analysis && settings.debugOverlay) {
             var m = findBestMatch(analysis.descriptor);
-            if (m) matchLabel = m.name + " " + m.distance.toFixed(2);
+            // "(too far)" is the whole point of showing this at all - the
+            // closest enrolled player is shown even when nowhere near a
+            // real match (that's what makes this useful for tuning), but
+            // without this suffix it reads exactly like a confirmed match,
+            // which is the single most common point of confusion reported
+            // against this overlay.
+            if (m) matchLabel = m.name + " " + m.distance.toFixed(2) + (m.distance <= settings.matchThreshold ? "" : " (too far)");
           }
           handleRecognitionFrame(analysis);
           drawOverlay(pose ? pose.keypoints : null, analysis, matchLabel);
