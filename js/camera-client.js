@@ -66,8 +66,14 @@
     // name (player removed from the roster, or a typo during enrollment)
     // is silently ignored rather than guessed at.
     var id = window.PMCCameraBridge.resolvePlayerIdByName(msg.player_name);
-    if (!id || id === window.PMCCameraBridge.getSelectedPlayerId()) return;
-    window.PMCCameraBridge.selectPlayer(id);
+    if (!id) return;
+    // Selecting is skipped when this player is already selected, but
+    // announcing is NOT behind that same check - see js/app.js's own
+    // same-device listener for why: camera.html's debounceSec already
+    // spaces out repeat player_up events for one name, so every one that
+    // arrives here is a deliberate, legitimate shot that deserves its
+    // own announcement, same player or not.
+    if (id !== window.PMCCameraBridge.getSelectedPlayerId()) window.PMCCameraBridge.selectPlayer(id);
     window.PMCCameraBridge.announceShotFired(msg.player_name);
   }
 

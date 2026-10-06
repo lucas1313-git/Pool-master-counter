@@ -548,6 +548,15 @@
   var CALIBRATION_STORAGE_KEY = "pmc-camera-calibration";
   var CAMERA_DEVICE_STORAGE_KEY = "pmc-camera-selected-device";
   var KEYPOINT_CONF_FLOOR = 0.3;
+  var BACKGROUND_REF_STORAGE_KEY = "pmc-camera-background-ref";
+  // How much a region's average grayscale luminance (0-255 scale) has to
+  // have changed since the background snapshot for it to count as "a
+  // real moving person," not furniture that was already sitting there
+  // when the table was calibrated. Real camera noise/lighting flicker
+  // between frames is a few units at most - a person's clothing/skin
+  // against the recorded empty-table background is reliably far larger
+  // than that, so this doesn't need to be tuned precisely.
+  var STATIC_REGION_LUMINANCE_THRESHOLD = 18;
   var CANDIDATE_GRACE_MS = 3000; // how long a resolved identity survives a gap in pose detection
   // Separate from CANDIDATE_GRACE_MS on purpose - that one is tuned for
   // frame-to-frame continuity (sub-second gaps), this one for the real
@@ -1279,6 +1288,86 @@
     return hist;
   }
 
+  // ---- Background reference (is this region actually moving, or is it
+  // furniture that was already there when the table was calibrated?) ----
+  // A small, cheap downsample - enough resolution to localize a chair-
+  // sized region without the cost of diffing a full-resolution frame
+  // every detection cycle.
+  var BG_REF_W = 64, BG_REF_H = 48;
+  var bgRefCanvas = document.createElement("canvas");
+  bgRefCanvas.width = BG_REF_W;
+  bgRefCanvas.height = BG_REF_H;
+  var bgRefCtx = bgRefCanvas.getContext("2d", { willReadFrequently: true });
+  var backgroundReference = null; // { w, h, videoW, videoH, gray: [...] } or null
+
+  function sampleGrayscaleFrame() {
+    try {
+      bgRefCtx.drawImage(videoEl, 0, 0, BG_REF_W, BG_REF_H);
+      var data = bgRefCtx.getImageData(0, 0, BG_REF_W, BG_REF_H).data;
+      var gray = new Array(BG_REF_W * BG_REF_H);
+      for (var i = 0, p = 0; i < data.length; i += 4, p++) {
+        gray[p] = (data[i] + data[i + 1] + data[i + 2]) / 3;
+      }
+      return gray;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Called right when calibration finishes (see applyCalibrationFromCorners)
+  // - that's the one moment the operator is guaranteed to be standing
+  // away from the table (mid-tap-calibration, nobody's bent over it), so
+  // it's the natural point to snapshot "what does an empty table look
+  // like," including whatever furniture happens to be in frame.
+  function captureBackgroundReference() {
+    var gray = sampleGrayscaleFrame();
+    if (!gray) return;
+    backgroundReference = { w: BG_REF_W, h: BG_REF_H, videoW: videoEl.videoWidth, videoH: videoEl.videoHeight, gray: gray };
+    try {
+      localStorage.setItem(BACKGROUND_REF_STORAGE_KEY, JSON.stringify(backgroundReference));
+    } catch (e) {}
+  }
+
+  function loadBackgroundReference() {
+    try {
+      var raw = localStorage.getItem(BACKGROUND_REF_STORAGE_KEY);
+      if (raw) backgroundReference = JSON.parse(raw);
+    } catch (e) {}
+  }
+
+  // True when the pixels under a detected pose's bounding box are
+  // essentially unchanged from the empty-table snapshot - i.e. this is
+  // furniture sitting exactly where it was at calibration time, not an
+  // actual person. A chair that gets moved into frame *after*
+  // calibration won't be caught by this (it wasn't part of the recorded
+  // baseline, so it looks like "something changed in" the same way a
+  // real person arriving does) - only furniture already in frame when
+  // the table was calibrated is covered. Returns false (never rejects
+  // anything) until a background reference actually exists.
+  function regionLooksStatic(box) {
+    if (!backgroundReference) return false;
+    var vw = videoEl.videoWidth || backgroundReference.videoW || 1;
+    var vh = videoEl.videoHeight || backgroundReference.videoH || 1;
+    var gray = sampleGrayscaleFrame();
+    if (!gray) return false;
+    var bw = backgroundReference.w, bh = backgroundReference.h;
+    var x0 = Math.max(0, Math.floor((box.x0 / vw) * bw));
+    var x1 = Math.min(bw, Math.ceil((box.x1 / vw) * bw));
+    var y0 = Math.max(0, Math.floor((box.y0 / vh) * bh));
+    var y1 = Math.min(bh, Math.ceil((box.y1 / vh) * bh));
+    if (x1 <= x0 || y1 <= y0) return false;
+    var total = 0, count = 0;
+    for (var y = y0; y < y1; y++) {
+      for (var x = x0; x < x1; x++) {
+        var idx = y * bw + x;
+        total += Math.abs(gray[idx] - backgroundReference.gray[idx]);
+        count++;
+      }
+    }
+    if (count === 0) return false;
+    return total / count < STATIC_REGION_LUMINANCE_THRESHOLD;
+  }
+
   function boxFromPoints(points, padRatio) {
     var xs = points.map(function (p) { return p.x; });
     var ys = points.map(function (p) { return p.y; });
@@ -1335,6 +1424,13 @@
     var aspectRatio = (torsoHeight / shoulderWidth) * ASPECT_RATIO_WEIGHT;
 
     var descriptor = torsoHist.concat(legsHist, sleeveHist, capHist, [aspectRatio]);
+    var box = boxFromPoints([ls, rs, lh, rh].concat(la && ra ? [la, ra] : []), 0.05);
+
+    // Rejects furniture that was already sitting in frame when the table
+    // was calibrated - see regionLooksStatic's own comment. Checked last,
+    // after everything else about this pose already looked plausible,
+    // since it's the most expensive check here (another canvas read).
+    if (regionLooksStatic(box)) return null;
 
     return {
       descriptor: descriptor,
@@ -1343,7 +1439,7 @@
       hipMid: hipMid,
       ankleMid: ankleMid,
       shoulderWidth: shoulderWidth,
-      box: boxFromPoints([ls, rs, lh, rh].concat(la && ra ? [la, ra] : []), 0.05)
+      box: box
     };
   }
 
@@ -1469,6 +1565,38 @@
     return { x: (H.h11 * pX + H.h12 * pY + H.h13) / denom, y: (H.h21 * pX + H.h22 * pY + H.h23) / denom };
   }
 
+  // Inverts the pixel->real homography above so the table's own 4 real-
+  // world corners can be projected back onto the video as a drawable
+  // overlay - lets calibration actually be *seen* on screen (is the
+  // detected rail where the real rail is? is a chair inside or outside
+  // the zone?) instead of only trusted from a status line. H's implicit
+  // h33 is always 1 (see computeHomography/applyHomography above), so
+  // this is a plain 3x3 inverse with that one substitution baked in.
+  function invertHomography(H) {
+    var a = H.h11, b = H.h12, c = H.h13;
+    var d = H.h21, e = H.h22, f = H.h23;
+    var g = H.h31, h = H.h32;
+    var det = a * (e - f * h) - b * (d - f * g) + c * (d * h - e * g);
+    if (Math.abs(det) < 1e-12) return null;
+    var inv = 1 / det;
+    return {
+      i11: (e - f * h) * inv,
+      i12: (c * h - b) * inv,
+      i13: (b * f - c * e) * inv,
+      i21: (f * g - d) * inv,
+      i22: (a - c * g) * inv,
+      i23: (c * d - a * f) * inv,
+      i31: (d * h - e * g) * inv,
+      i32: (b * g - a * h) * inv,
+      i33: (a * e - b * d) * inv
+    };
+  }
+  function applyInverseHomography(invH, rX, rY) {
+    var w = invH.i31 * rX + invH.i32 * rY + invH.i33;
+    if (Math.abs(w) < 1e-9) return null;
+    return { x: (invH.i11 * rX + invH.i12 * rY + invH.i13) / w, y: (invH.i21 * rX + invH.i22 * rY + invH.i23) / w };
+  }
+
   // Perpendicular distance (inches) from a real-world table-relative point
   // to the nearest of the table's 4 rails - 0 or negative means the point
   // projects onto/over the table bed itself (a strong shooting-position signal).
@@ -1576,6 +1704,10 @@
     if (!H) return null;
     calibration = { tableLength: edge1IsWidth ? d2 : d1, tableWidth: edge1IsWidth ? d1 : d2, h: H };
     saveCalibration();
+    // The one moment guaranteed to show an empty table - nobody's bent
+    // over it mid-calibration-tap - so this is also when the background
+    // reference gets (re-)captured. See regionLooksStatic's own comment.
+    captureBackgroundReference();
     renderCalibrationStatus();
     announceCalibratedSize();
     return calibration;
@@ -1748,6 +1880,7 @@
   detectTableBtn.addEventListener("click", detectTableAuto);
 
   loadCalibration();
+  loadBackgroundReference();
 
   // ---- Enrollment capture ----
   // Fully automatic, shot-triggered (per explicit request) - picking a
@@ -1917,7 +2050,16 @@
       enrollShotCaptured = false; // back upright - re-armed for the next shot
     } else if (stance === "bent") {
       enrollBentConsecutive++;
-      if (!enrollShotCaptured && enrollBentConsecutive >= settings.consecutiveFrames) {
+      // withinRailDistance is what live recognition already uses to
+      // reject anything bent-shaped that isn't actually near the table -
+      // enrollment capture had no equivalent check at all, so once
+      // calibrated, anything bent-pose-shaped ANYWHERE in frame (a chair
+      // across the room, say) could get captured as a real sample under
+      // whichever name enrollment was running for. Uncalibrated, this
+      // still can't help (withinRailDistance returns true unconditionally
+      // then, same as it does for live recognition) - calibrating the
+      // table is what actually closes this gap.
+      if (!enrollShotCaptured && enrollBentConsecutive >= settings.consecutiveFrames && withinRailDistance(analysis)) {
         enrollShotCaptured = true;
         enrollSamples.push(analysis.descriptor);
         var side = currentSideForAnalysis(analysis);
@@ -2181,10 +2323,47 @@
     });
   }
 
+  // Draws the calibrated table's own rectangle on top of the video by
+  // projecting its 4 real-world corners back through the inverse
+  // homography - the direct answer to "what does it think the table
+  // limits are," and exactly what's needed to see at a glance whether
+  // something near the edge of frame (a chair, say) falls inside or
+  // outside the zone withinRailDistance actually gates on. Drawn
+  // regardless of whether a pose is detected this frame - the table
+  // doesn't disappear just because no one's currently in view.
+  function drawTableBoundary() {
+    if (!calibration) return;
+    var invH = invertHomography(calibration.h);
+    if (!invH) return;
+    var corners = [
+      [0, 0],
+      [calibration.tableWidth, 0],
+      [calibration.tableWidth, calibration.tableLength],
+      [0, calibration.tableLength]
+    ];
+    var pixelCorners = corners.map(function (c) {
+      var real = applyInverseHomography(invH, c[0], c[1]);
+      return real ? videoToOverlay(real.x, real.y) : null;
+    });
+    if (pixelCorners.some(function (p) { return !p; })) return;
+    overlayCtx.strokeStyle = "#ff2fd6";
+    overlayCtx.lineWidth = 3;
+    overlayCtx.beginPath();
+    overlayCtx.moveTo(pixelCorners[0].x, pixelCorners[0].y);
+    for (var i = 1; i < pixelCorners.length; i++) overlayCtx.lineTo(pixelCorners[i].x, pixelCorners[i].y);
+    overlayCtx.closePath();
+    overlayCtx.stroke();
+    overlayCtx.fillStyle = "#ff2fd6";
+    overlayCtx.font = "13px sans-serif";
+    overlayCtx.fillText("detected table edge", pixelCorners[0].x + 4, pixelCorners[0].y - 6);
+  }
+
   function drawOverlay(keypoints, analysis, matchLabel) {
     overlayCtx.clearRect(0, 0, overlayEl.width, overlayEl.height);
     if (calibrating) drawCalibrationTaps();
-    if (!settings.debugOverlay || !analysis) return;
+    if (!settings.debugOverlay) return;
+    drawTableBoundary();
+    if (!analysis) return;
     var box = analysis.box;
     var p0 = videoToOverlay(box.x0, box.y0);
     var p1 = videoToOverlay(box.x1, box.y1);

@@ -29699,8 +29699,18 @@
     if (msg.type === "player_up") {
       if (!window.PMCCameraBridge.isEnabled() || window.PMCCameraBridge.isAnyOverlayOpen()) return;
       var id = window.PMCCameraBridge.resolvePlayerIdByName(msg.player_name);
-      if (!id || id === window.PMCCameraBridge.getSelectedPlayerId()) return;
-      window.PMCCameraBridge.selectPlayer(id);
+      if (!id) return;
+      // Selecting is skipped when this player is already selected (no
+      // point re-selecting what's already active), but announcing is
+      // NOT behind that same check - camera.html's own debounceSec
+      // already spaces out repeat player_up events for one name, so by
+      // the time one arrives here it's a deliberate, legitimate event
+      // that deserves its own announcement, same player or not. Tying
+      // the voice to the selection-changed check too meant the second
+      // and every later shot by whoever's still selected (very common -
+      // solo practice, or several turns in a row) never got announced at
+      // all, which is exactly what "only the first shot" was.
+      if (id !== window.PMCCameraBridge.getSelectedPlayerId()) window.PMCCameraBridge.selectPlayer(id);
       window.PMCCameraBridge.announceShotFired(msg.player_name);
     } else if (msg.type === "settings-request") {
       var settings = window.PMCCameraBridge.getSettings();
