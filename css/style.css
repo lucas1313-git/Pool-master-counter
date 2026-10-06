@@ -5200,6 +5200,13 @@ input[type="number"] {
   margin: 0 0 8px;
 }
 
+.camera-candidate-status {
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin: -4px 0 10px;
+}
+
 .tournament-winner-banner {
   margin: 10px 0 4px;
   padding: 12px 14px;

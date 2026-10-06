@@ -87,6 +87,15 @@
     } catch (e) {}
   }
 
+  // Live "who does the camera currently see" - distinct from
+  // handlePlayerUp, which only reacts to an actual confirmed shot. Just
+  // forwards straight into the bridge; nothing here needs to react to it
+  // independently.
+  function handleCandidateSeen(msg) {
+    if (!bridgeReady()) return;
+    window.PMCCameraBridge.reportCandidateSeen(msg.player_name || null);
+  }
+
   function scheduleReconnect() {
     if (reconnectTimer) return;
     reconnectTimer = setTimeout(function () {
@@ -119,6 +128,7 @@
       if (msg.type === "player_up") handlePlayerUp(msg);
       else if (msg.type === "settings-request") handleSettingsRequest();
       else if (msg.type === "roster-request") handleRosterRequest();
+      else if (msg.type === "candidate") handleCandidateSeen(msg);
     });
     ws.addEventListener("close", function () {
       ws = null;

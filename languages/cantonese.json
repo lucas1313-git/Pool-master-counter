@@ -861,6 +861,8 @@
   "players.cameraDebounceSec": "幾耐先再讀出(秒)",
   "players.cameraDebugEnable": "👁️ 打波嗰陣顯示鏡頭除錯資訊",
   "players.cameraVoiceEnable": "🔊 讀出球員狀態(見到/開波)",
+  "players.cameraCandidateSeen": "📷 鏡頭而家見到:{{name}}",
+  "players.cameraCandidateNone": "📷 鏡頭行緊 - 而家未識到邊個",
   "cameraWizard.openButton": "📷 設定鏡頭",
   "cameraWizard.expandButton": "⛶ 全螢幕",
   "cameraWizard.step1Heading": "設定鏡頭球員辨識",

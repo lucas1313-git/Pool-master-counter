@@ -861,6 +861,8 @@
   "players.cameraDebounceSec": "Re-announce after (sec)",
   "players.cameraDebugEnable": "👁️ Show camera debug info during play",
   "players.cameraVoiceEnable": "🔊 Speak player status (seen / shooting)",
+  "players.cameraCandidateSeen": "📷 Camera currently sees: {{name}}",
+  "players.cameraCandidateNone": "📷 Camera running - no one identified right now",
   "cameraWizard.openButton": "📷 Set Up Camera",
   "cameraWizard.expandButton": "⛶ Full Screen",
   "cameraWizard.step1Heading": "Set Up Camera Recognition",
