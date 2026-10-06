@@ -1306,10 +1306,41 @@
   function saveCalibration() {
     try { localStorage.setItem(CALIBRATION_STORAGE_KEY, JSON.stringify(calibration)); } catch (e) {}
   }
+  // A single camera with no size reference can't actually measure a
+  // table's real-world dimensions from pixels alone - every standard
+  // size in TABLE_SIZES shares the same 2:1 length:width ratio (a 7-foot
+  // and a 9-foot table look identical in shape, only the absolute scale
+  // differs), so auto-detection can find the table's corners but never
+  // its size - that still has to come from whatever's picked here before
+  // detecting. What this DOES fix: the dropdown now actually reflects
+  // whatever size a stored calibration was really done at (exact match
+  // against TABLE_SIZES, or "custom" with the real numbers filled in)
+  // instead of silently sitting on its HTML default regardless of what's
+  // actually calibrated - previously true even right after loading a
+  // saved calibration from a past session.
+  function syncTableSizeSelectToCalibration() {
+    if (!calibration) return;
+    var matchedKey = null;
+    Object.keys(TABLE_SIZES).forEach(function (key) {
+      var preset = TABLE_SIZES[key];
+      if (preset.length === calibration.tableLength && preset.width === calibration.tableWidth) matchedKey = key;
+    });
+    if (matchedKey) {
+      tableSizeSelect.value = matchedKey;
+      customSizeRow.hidden = true;
+    } else {
+      tableSizeSelect.value = "custom";
+      customLength.value = calibration.tableLength;
+      customWidth.value = calibration.tableWidth;
+      customSizeRow.hidden = false;
+    }
+  }
+
   function renderCalibrationStatus() {
     if (calibration) {
       calibrationStatusEl.textContent = "Calibrated (" + calibration.tableLength + "\" x " + calibration.tableWidth + "\" table). Distance-to-rail checks are active.";
       recalibrateBtn.hidden = false;
+      syncTableSizeSelectToCalibration();
     } else {
       calibrationStatusEl.textContent = "Not calibrated - the \"close enough to the table\" check is skipped (always passes) until you calibrate.";
       recalibrateBtn.hidden = true;
@@ -1437,6 +1468,26 @@
     }
   });
 
+  // Says the table size using the common trade name (tableSizeSelect's
+  // own "7"/"8"/"9"/"10"/"snooker" value) rather than converting the
+  // stored playing-surface inches to feet - an "8-foot table" is
+  // actually an ~88"x44" (7.3ft) playing surface, named for its outside
+  // rail-to-rail length, so a literal inches/12 conversion would say a
+  // number no pool player actually uses for it.
+  function announceCalibratedSize() {
+    var sel = tableSizeSelect.value;
+    var label;
+    if (sel === "custom") {
+      var size = currentTableSize();
+      label = Math.round(size.length / 12) + " by " + Math.round(size.width / 12) + " foot";
+    } else if (sel === "snooker") {
+      label = "snooker";
+    } else {
+      label = sel + "-foot";
+    }
+    speak("Calibrated for a " + label + " table.");
+  }
+
   // Shared by both the manual-tap flow and auto-detection: given 4 pixel
   // points in consistent cyclic order around the rectangle and which
   // real-world dimension the corner1->corner2 edge represents, computes
@@ -1450,6 +1501,7 @@
     calibration = { tableLength: edge1IsWidth ? d2 : d1, tableWidth: edge1IsWidth ? d1 : d2, h: H };
     saveCalibration();
     renderCalibrationStatus();
+    announceCalibratedSize();
     return calibration;
   }
 
@@ -1630,7 +1682,20 @@
   // sample per distinct shot, edge-triggered on the upright-to-bent
   // transition rather than every frame of one continuous bend (which
   // would otherwise grab several near-duplicate samples from a single
-  // shot instead of varied real ones) - a beep confirms each capture.
+  // shot instead of varied real ones).
+  //
+  // Three distinct audio cues, deliberately different from each other so
+  // the operator can tell them apart without looking at the screen:
+  //   - First presence detected while armed: SPOKEN once - "<name>
+  //     detected, please shoot from a side of the table." Confirms the
+  //     camera actually sees someone before they waste a shot on nothing.
+  //   - Presence detected again after a real gap (walked away and back,
+  //     not just a momentary tracking blip): a single short BEEP only -
+  //     saying the full sentence again every time they step away would
+  //     get old fast.
+  //   - A shot is captured: SPOKEN twice - "<name> registered, side
+  //     <n>." Said twice (not once) specifically so it's still
+  //     intelligible from across the room over table noise/conversation.
   // Auto-saves and disarms once ENROLL_TARGET_SAMPLES is reached; no
   // fixed time limit, since real shots happen on their own schedule, not
   // a clock's.
@@ -1639,12 +1704,23 @@
   var enrollTargetName = "";
   var enrollBentConsecutive = 0;
   var enrollShotCaptured = false; // true while still bent from the shot just captured - blocks a second capture until upright again
+  var enrollPresent = false; // true while a pose is currently being seen
+  var enrollPresenceAnnounced = false; // the full "<name> detected..." sentence only ever plays once per arm
+  var enrollLastPresentAt = 0;
+  // Longer than NO_POSE_GRACE_MS (1.2s, tuned for live recognition's
+  // brief-occlusion tolerance) - this one specifically needs to ignore
+  // momentary pose-estimation hiccups and only fire the re-detect beep
+  // for an actual walk-away-and-back, not a single dropped frame.
+  var ENROLL_PRESENCE_GRACE_MS = 2500;
 
   var enrollAudioCtx = null;
+  function getEnrollAudioCtx() {
+    if (!enrollAudioCtx) enrollAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    return enrollAudioCtx;
+  }
   function playBeep() {
     try {
-      if (!enrollAudioCtx) enrollAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      var ctx = enrollAudioCtx;
+      var ctx = getEnrollAudioCtx();
       var osc = ctx.createOscillator();
       var gain = ctx.createGain();
       osc.type = "sine";
@@ -1659,11 +1735,32 @@
     } catch (e) {}
   }
 
+  // Queued (not cancelled/interrupted) on purpose - the default
+  // SpeechSynthesis queue just plays utterances back to back, which is
+  // the right behavior here: a presence announcement immediately
+  // followed by a shot (plausible - someone steps up and shoots right
+  // away) should both finish playing, not cut each other off.
+  function speak(text) {
+    try {
+      if (!window.speechSynthesis) return;
+      window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+    } catch (e) {}
+  }
+
+  function announceShotCaptured(name, side) {
+    var phrase = side === undefined || side === null ? name + " registered." : name + " registered, side " + (side + 1) + ".";
+    speak(phrase);
+    setTimeout(function () { speak(phrase); }, 1600);
+  }
+
   function startEnrollCapture(name) {
     enrollTargetName = name;
     enrollSamples = [];
     enrollBentConsecutive = 0;
     enrollShotCaptured = false;
+    enrollPresent = false;
+    enrollPresenceAnnounced = false;
+    enrollLastPresentAt = 0;
     enrollCapturing = true;
     stopCaptureBtn.hidden = false;
     captureProgress.hidden = false;
@@ -1702,7 +1799,22 @@
   // the debug overlay's bent/upright border color stays meaningful during
   // capture too, not frozen on whatever it last was.
   function handleEnrollCaptureFrame(analysis) {
-    if (!analysis) { enrollBentConsecutive = 0; return; }
+    if (!analysis) {
+      enrollBentConsecutive = 0;
+      if (enrollPresent && Date.now() - enrollLastPresentAt > ENROLL_PRESENCE_GRACE_MS) enrollPresent = false;
+      return;
+    }
+    enrollLastPresentAt = Date.now();
+    if (!enrollPresent) {
+      enrollPresent = true;
+      if (!enrollPresenceAnnounced) {
+        enrollPresenceAnnounced = true;
+        speak(enrollTargetName + " detected. Please shoot from a side of the table.");
+      } else {
+        playBeep();
+      }
+    }
+
     if (analysis.torsoAngleDeg >= settings.bendEnterAngle) stance = "bent";
     else if (analysis.torsoAngleDeg <= settings.bendExitAngle) stance = "upright";
     if (stance === "upright") {
@@ -1715,7 +1827,8 @@
     if (enrollShotCaptured || enrollBentConsecutive < settings.consecutiveFrames) return;
     enrollShotCaptured = true;
     enrollSamples.push(analysis.descriptor);
-    playBeep();
+    var side = currentSideForAnalysis(analysis);
+    announceShotCaptured(enrollTargetName, side);
     captureProgress.textContent = enrollSamples.length + "/" + ENROLL_TARGET_SAMPLES + " shots captured for " + enrollTargetName + "...";
     if (enrollSamples.length >= ENROLL_TARGET_SAMPLES) finishEnrollCapture();
   }
