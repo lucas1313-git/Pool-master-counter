@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261006c">
+<link rel="stylesheet" href="css/style.css?v=20261006d">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -171,6 +171,10 @@
         <label for="camera-debounce-sec" data-i18n="players.cameraDebounceSec">Re-announce after (sec)</label>
         <input type="number" id="camera-debounce-sec" min="1" max="120" value="10">
         <button type="button" id="btn-camera-debounce-sec-help" class="format-info-btn" data-i18n-aria-label="players.cameraDebounceSecHelpAria" aria-label="What does Re-announce after do?">❓</button>
+      </div>
+      <div class="row hidden" id="camera-remote-calibrate-row">
+        <button type="button" id="btn-start-remote-calibration" class="btn btn-ghost" data-i18n="players.cameraRemoteCalibrateButton">📐 Calibrate Table Remotely</button>
+        <button type="button" id="btn-camera-remote-calibrate-help" class="format-info-btn" data-i18n-aria-label="players.cameraRemoteCalibrateHelpAria" aria-label="What does Calibrate Table Remotely do?">❓</button>
       </div>
       <div class="row hidden" id="camera-debug-options-row">
         <label class="checkbox-row">
@@ -1373,6 +1377,26 @@
   </div>
 </div>
 
+<div id="remote-calibrate-overlay" class="same-device-camera-overlay hidden">
+  <div class="same-device-camera-card remote-calibrate-card">
+    <div class="same-device-camera-header">
+      <h2 data-i18n="cameraWizard.remoteCalibrateHeading">Calibrate the Table</h2>
+      <button type="button" id="btn-close-remote-calibrate" class="wizard-close-btn" aria-label="Close" data-i18n-aria-label="common.close">×</button>
+    </div>
+    <p class="remote-calibrate-step" id="remote-calibrate-step" data-i18n="cameraWizard.remoteCalibrateWaiting">Connecting to the camera...</p>
+    <div class="remote-calibrate-frame-wrap">
+      <img id="remote-calibrate-frame" class="remote-calibrate-frame hidden" alt="Live view from the camera phone">
+      <div class="remote-calibrate-placeholder" id="remote-calibrate-placeholder" data-i18n="cameraWizard.remoteCalibrateWaitingLong">Waiting for the camera phone to respond...</div>
+    </div>
+    <p class="remote-calibrate-hint" data-i18n="cameraWizard.remoteCalibrateHint">Tap each corner of the table in the image above, going around in order.</p>
+    <div class="same-device-camera-header remote-calibrate-footer">
+      <button type="button" id="btn-remote-calibrate-cancel" class="btn btn-ghost" data-i18n="common.cancel">Cancel</button>
+      <button type="button" id="btn-remote-calibrate-retry" class="btn btn-primary hidden" data-i18n="cameraWizard.remoteCalibrateRetry">Try Again</button>
+      <button type="button" id="btn-remote-calibrate-done" class="btn btn-primary hidden" data-i18n="common.ok">OK</button>
+    </div>
+  </div>
+</div>
+
 <div id="help-overlay" class="help-overlay hidden">
   <div class="help-card">
     <div class="help-header">
@@ -2388,7 +2412,7 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20261006c"></script>
-<script src="js/camera-client.js?v=20261006a"></script>
+<script src="js/app.js?v=20261006d"></script>
+<script src="js/camera-client.js?v=20261006b"></script>
 </body>
 </html>
