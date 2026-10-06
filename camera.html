@@ -1200,7 +1200,47 @@
       cancelCalibration();
     } else if (msg.type === "remote-calib-tap" && typeof msg.fx === "number" && typeof msg.fy === "number") {
       applyRemoteTap(msg.fx, msg.fy);
+    } else if (msg.type === "remote-camera-list-request") {
+      sendRemoteCameraList();
+    } else if (msg.type === "remote-camera-select" && msg.deviceId) {
+      selectRemoteCamera(msg.deviceId);
     }
+  }
+
+  // Lets the listener (scoreboard device) see and pick between this
+  // phone's own camera lenses (e.g. "Back Camera" vs "Back Ultra Wide
+  // Camera" on iPhones that expose them as separate enumerateDevices
+  // entries) without touching the phone - same motivation as remote
+  // calibration above, and deliberately kept independent of whether a
+  // calibration session is active, since picking the right lens is
+  // naturally done before framing/calibrating the table, not only during
+  // it.
+  function sendRemoteCameraList() {
+    navigator.mediaDevices.enumerateDevices().then(function (devices) {
+      var cams = devices
+        .filter(function (d) { return d.kind === "videoinput"; })
+        .map(function (d, i) { return { deviceId: d.deviceId, label: d.label || "Camera " + (i + 1) }; });
+      var active = currentStream && currentStream.getVideoTracks()[0];
+      var activeDeviceId = active && active.getSettings ? active.getSettings().deviceId : null;
+      send({ type: "remote-camera-list", devices: cams, currentDeviceId: activeDeviceId || null });
+    }).catch(function () {});
+  }
+
+  function selectRemoteCamera(deviceId) {
+    cameraSelect.value = deviceId;
+    saveCameraDeviceId(deviceId);
+    startCamera(deviceId).then(function () {
+      // A lens switch changes the field of view/distortion entirely -
+      // any corners already tapped this session were measured against
+      // the OLD lens and no longer mean anything, so a calibration in
+      // progress restarts rather than silently keeping stale taps.
+      if (calibrating) {
+        calibrationTaps = [];
+        calibrationStepText.textContent = "Tap corner 1 of 4";
+      }
+      sendRemoteCameraList();
+      if (remoteCalibrationActive) sendCalibFrameUpdate();
+    });
   }
 
   // ---- Remote calibration: the listener (scoreboard device) drives this

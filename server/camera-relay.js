@@ -86,6 +86,12 @@
 //     { type: "calib-frame", dataUrl, step, done, failed } (camera -> relay
 //       -> every "listener") - one downsampled JPEG still per tap, not a
 //       live video stream
+//   Remote camera (lens) selection - independent of remote calibration,
+//   so a wide-angle lens (say) can be picked before framing/calibrating:
+//     { type: "remote-camera-list-request" } (listener -> relay -> every "camera")
+//     { type: "remote-camera-list", devices: [{deviceId, label}], currentDeviceId }
+//       (camera -> relay -> every "listener")
+//     { type: "remote-camera-select", deviceId } (listener -> relay -> every "camera")
 //
 // No auth, LAN-only, same trust model as relay.js.
 
@@ -333,6 +339,23 @@ function createCameraRelay(WebSocket) {
         }
         if (msg.type === "calib-frame" && ws.role === "camera") {
           broadcastToListeners({ type: "calib-frame", dataUrl: msg.dataUrl, step: msg.step, done: !!msg.done, failed: msg.failed || null });
+          return;
+        }
+
+        // Remote camera (lens) selection - same request/reply plus
+        // listener-initiated-action shape as the pairs above. Kept
+        // independent of remote-calib-start/cancel since picking a lens
+        // is useful even when not actively calibrating.
+        if (msg.type === "remote-camera-list-request" && ws.role === "listener") {
+          broadcastToCameras({ type: "remote-camera-list-request" });
+          return;
+        }
+        if (msg.type === "remote-camera-list" && ws.role === "camera") {
+          broadcastToListeners({ type: "remote-camera-list", devices: Array.isArray(msg.devices) ? msg.devices : [], currentDeviceId: msg.currentDeviceId || null });
+          return;
+        }
+        if (msg.type === "remote-camera-select" && ws.role === "listener" && msg.deviceId) {
+          broadcastToCameras({ type: "remote-camera-select", deviceId: msg.deviceId });
           return;
         }
       });

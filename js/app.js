@@ -1860,6 +1860,8 @@
   var remoteCalibrateOverlay = document.getElementById("remote-calibrate-overlay");
   var btnCloseRemoteCalibrate = document.getElementById("btn-close-remote-calibrate");
   var remoteCalibrateStepEl = document.getElementById("remote-calibrate-step");
+  var remoteCalibrateCameraRow = document.getElementById("remote-calibrate-camera-row");
+  var remoteCalibrateCameraSelect = document.getElementById("remote-calibrate-camera-select");
   var remoteCalibrateFrameEl = document.getElementById("remote-calibrate-frame");
   var remoteCalibratePlaceholderEl = document.getElementById("remote-calibrate-placeholder");
   var btnRemoteCalibrateCancel = document.getElementById("btn-remote-calibrate-cancel");
@@ -29760,8 +29762,13 @@
     btnRemoteCalibrateDone.classList.add("hidden");
     btnRemoteCalibrateCancel.classList.remove("hidden");
     remoteCalibrateOverlay.classList.remove("hidden");
+    remoteCalibrateCameraRow.classList.add("hidden");
+    remoteCalibrateCameraSelect.innerHTML = "";
     if (window.PMCCameraBridge && window.PMCCameraBridge.startRemoteCalibration) {
       window.PMCCameraBridge.startRemoteCalibration();
+    }
+    if (window.PMCCameraBridge && window.PMCCameraBridge.requestRemoteCameraList) {
+      window.PMCCameraBridge.requestRemoteCameraList();
     }
   }
   function closeRemoteCalibrateOverlay(sendCancel) {
@@ -29818,6 +29825,34 @@
     } else if (frame.step) {
       remoteCalibrateStepEl.textContent = frame.step;
     }
+  };
+
+  remoteCalibrateCameraSelect.addEventListener("change", function () {
+    if (!remoteCalibrateCameraSelect.value) return;
+    if (window.PMCCameraBridge && window.PMCCameraBridge.selectRemoteCamera) {
+      window.PMCCameraBridge.selectRemoteCamera(remoteCalibrateCameraSelect.value);
+    }
+  });
+
+  window.PMCCameraBridge.reportRemoteCameraList = function (data) {
+    if (remoteCalibrateOverlay.classList.contains("hidden")) return;
+    var devices = data.devices || [];
+    // Only worth showing when there's an actual choice - a phone with
+    // one camera (no separate wide/ultra-wide entries) would just show
+    // a single-option dropdown that does nothing useful.
+    if (devices.length < 2) {
+      remoteCalibrateCameraRow.classList.add("hidden");
+      return;
+    }
+    remoteCalibrateCameraSelect.innerHTML = "";
+    devices.forEach(function (d) {
+      var opt = document.createElement("option");
+      opt.value = d.deviceId;
+      opt.textContent = d.label;
+      if (d.deviceId === data.currentDeviceId) opt.selected = true;
+      remoteCalibrateCameraSelect.appendChild(opt);
+    });
+    remoteCalibrateCameraRow.classList.remove("hidden");
   };
 
   // ---- Scorecard camera-recognition icons ----

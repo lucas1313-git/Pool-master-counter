@@ -915,6 +915,7 @@
   "cameraWizard.installUnsupportedOs": "呢個要用桌面電腦先得 - 電話或者平板用唔到。",
   "cameraWizard.sameDeviceOverlayHeading": "呢部平板嘅鏡頭",
   "cameraWizard.remoteCalibrateHeading": "校準球桌",
+  "cameraWizard.remoteCameraLabel": "鏡頭",
   "cameraWizard.remoteCalibrateWaiting": "連緊接攝影機...",
   "cameraWizard.remoteCalibrateWaitingLong": "等緊攝影機電話回應...",
   "cameraWizard.remoteCalibrateHint": "跟住次序，喺上面幅圖度逐個掂一下球桌嘅角。",
