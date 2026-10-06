@@ -1842,6 +1842,10 @@
   var rotatingTeamsCheckbox = document.getElementById("rotating-teams-checkbox");
   var cameraInputCheckbox = document.getElementById("camera-input-checkbox");
   var btnCameraInputHelp = document.getElementById("btn-camera-input-help");
+  var btnCameraMatchThresholdHelp = document.getElementById("btn-camera-match-threshold-help");
+  var btnCameraDebounceSecHelp = document.getElementById("btn-camera-debounce-sec-help");
+  var btnCameraDebugHelp = document.getElementById("btn-camera-debug-help");
+  var btnCameraVoiceHelp = document.getElementById("btn-camera-voice-help");
   var cameraCandidateStatus = document.getElementById("camera-candidate-status");
   var cameraDiagnosticLogEl = document.getElementById("camera-diagnostic-log");
   var cameraInputSettingsRow = document.getElementById("camera-input-settings-row");
@@ -29095,6 +29099,18 @@
 
   btnCameraInputHelp.addEventListener("click", function () {
     alertModal(T("players.cameraInputHelpText"));
+  });
+  btnCameraMatchThresholdHelp.addEventListener("click", function () {
+    alertModal(T("players.cameraMatchThresholdHelpText"));
+  });
+  btnCameraDebounceSecHelp.addEventListener("click", function () {
+    alertModal(T("players.cameraDebounceSecHelpText"));
+  });
+  btnCameraDebugHelp.addEventListener("click", function () {
+    alertModal(T("players.cameraDebugEnableHelpText"));
+  });
+  btnCameraVoiceHelp.addEventListener("click", function () {
+    alertModal(T("players.cameraVoiceEnableHelpText"));
   });
 
   cameraMatchThresholdInput.addEventListener("input", function () {
