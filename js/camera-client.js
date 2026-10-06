@@ -68,6 +68,7 @@
     var id = window.PMCCameraBridge.resolvePlayerIdByName(msg.player_name);
     if (!id || id === window.PMCCameraBridge.getSelectedPlayerId()) return;
     window.PMCCameraBridge.selectPlayer(id);
+    window.PMCCameraBridge.announceShotFired(msg.player_name);
   }
 
   function handleSettingsRequest() {
@@ -93,7 +94,7 @@
   // independently.
   function handleCandidateSeen(msg) {
     if (!bridgeReady()) return;
-    window.PMCCameraBridge.reportCandidateSeen(msg.player_name || null);
+    window.PMCCameraBridge.reportCandidateSeen(msg.player_name || null, msg.stance, msg.angle);
   }
 
   function scheduleReconnect() {

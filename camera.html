@@ -1943,17 +1943,36 @@
   var lastEmittedAt = {}; // name -> timestamp ms
   var lastAnnouncedSeenName = null; // voice-announces (and reports to the parent page) a *change* of who's seen, not every frame
 
-  // Tells whoever's listening (the parent page in same-device mode via
-  // postMessage, or a tablet's js/camera-client.js over the relay in
-  // cross-device mode) who the camera currently thinks is at the table -
-  // separate from player_up, which only fires on an actual confirmed
-  // shot. This is the live "who does the camera see right now" signal
-  // the Players panel's own status line is built from.
+  // Voice-announces a *change* of who's seen - separate from
+  // reportLiveStatus below, which reports to the parent every frame
+  // regardless. Not spoken here at all in embedded (same-device) mode:
+  // speechSynthesis runs on THIS iframe's own document, which stops
+  // receiving direct user gestures once minimized into the Players panel
+  // and silently refuses to speak on many browsers (notably Safari/iOS)
+  // as a result. The parent page speaks instead for that case - see its
+  // "candidate" postMessage handler in js/app.js, which reliably keeps
+  // getting user-gesture activation from ordinary gameplay taps.
   function updateSeenCandidate(name) {
     if (name === lastAnnouncedSeenName) return;
     lastAnnouncedSeenName = name;
-    send({ type: "candidate", player_name: name || null });
-    if (name && settings.voiceStatusEnabled) speak(name + " seen.");
+    if (name && settings.voiceStatusEnabled && !isEmbedded) speak(name + " seen.");
+  }
+
+  // Tells whoever's listening (the parent page in same-device mode via
+  // postMessage, or a tablet's js/camera-client.js over the relay in
+  // cross-device mode) what the camera currently sees - separate from
+  // player_up, which only fires on an actual confirmed shot. Sent every
+  // frame, not just when the candidate name changes, so the Players
+  // panel's status line is a trustworthy live diagnostic: a change-only
+  // signal would look identical whether detection had stalled entirely or
+  // was just still watching the same person in the same stance.
+  function reportLiveStatus(analysis) {
+    send({
+      type: "candidate",
+      player_name: (candidate && candidate.name) || null,
+      stance: analysis ? stance : "unknown",
+      angle: analysis ? Math.round(analysis.torsoAngleDeg) : null
+    });
   }
 
   function logActivity(text) {
@@ -2004,7 +2023,9 @@
     var confidence = Math.max(0, Math.min(1, 1 - matchDistance / MAX_EXPECTED_DISTANCE));
     send({ type: "player_up", player_name: name, confidence: confidence, ts: now });
     logActivity(name + " shooting (match distance " + matchDistance.toFixed(2) + ")");
-    if (settings.voiceStatusEnabled) speak(name + " shooting.");
+    // Not spoken here in embedded mode - see updateSeenCandidate's comment
+    // above; the parent page's own player_up handler speaks instead.
+    if (settings.voiceStatusEnabled && !isEmbedded) speak(name + " shooting.");
     if (matchDistance <= settings.matchThreshold * 0.7) {
       send({ type: "enroll-add", player_name: name, descriptor: descriptor, side: side });
     }
@@ -2042,6 +2063,7 @@
         updateSeenCandidate(null); // gone long enough that re-seeing anyone (even the same name) is a fresh "seen" event
       }
       updateRecognizeLiveStatus(null);
+      reportLiveStatus(null);
       return;
     }
     lastConfidentPoseAt = Date.now();
@@ -2115,6 +2137,7 @@
       }
     }
     updateRecognizeLiveStatus(analysis);
+    reportLiveStatus(analysis);
   }
 
   // ---- Debug overlay ----

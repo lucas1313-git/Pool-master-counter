@@ -863,6 +863,8 @@
   "players.cameraVoiceEnable": "🔊 Sabihin ang status ng manlalaro (nakita / nag-shoot)",
   "players.cameraCandidateSeen": "📷 Nakikita ngayon ng camera: {{name}}",
   "players.cameraCandidateNone": "📷 Tumatakbo ang camera - wala pang nakikilala ngayon",
+  "players.cameraCandidateUpright": "📷 Nakikita ng camera ang isang nakatayo ({{angle}}°) - wala pang itinutugmang player",
+  "players.cameraCandidateBent": "📷 Nakikita ng camera ang isang yumuko ({{angle}}°) - wala pang itinutugmang player",
   "cameraWizard.openButton": "📷 I-set Up ang Camera",
   "cameraWizard.expandButton": "⛶ Full Screen",
   "cameraWizard.step1Heading": "I-set Up ang Pagkilala sa Manlalaro Gamit ang Camera",
