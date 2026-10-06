@@ -715,6 +715,7 @@
     // own calibration UI live in its embedded iframe, so there's nothing
     // for this button to usefully do there.
     cameraRemoteCalibrateRow.classList.toggle("hidden", !state.cameraInputEnabled || state.sameDeviceCameraSetUp);
+    cameraRemoteViewerRow.classList.toggle("hidden", !state.cameraInputEnabled || state.sameDeviceCameraSetUp);
     var queueActive = individualMode && state.currentGame.queueEnabled;
     queueSwapStickyRow.classList.toggle("hidden", !queueActive);
     queueSwapStickyCheckbox.checked = loadQueueSwapSticky();
@@ -1867,6 +1868,12 @@
   var btnRemoteCalibrateCancel = document.getElementById("btn-remote-calibrate-cancel");
   var btnRemoteCalibrateRetry = document.getElementById("btn-remote-calibrate-retry");
   var btnRemoteCalibrateDone = document.getElementById("btn-remote-calibrate-done");
+  var cameraRemoteViewerRow = document.getElementById("camera-remote-viewer-row");
+  var btnOpenRemoteViewer = document.getElementById("btn-open-remote-viewer");
+  var btnCameraRemoteViewerHelp = document.getElementById("btn-camera-remote-viewer-help");
+  var remoteViewerOverlay = document.getElementById("remote-viewer-overlay");
+  var remoteViewerIframe = document.getElementById("remote-viewer-iframe");
+  var btnCloseRemoteViewer = document.getElementById("btn-close-remote-viewer");
   var cameraInputSettingsRow = document.getElementById("camera-input-settings-row");
   var cameraMatchThresholdInput = document.getElementById("camera-match-threshold");
   var cameraDebounceSecInput = document.getElementById("camera-debounce-sec");
@@ -2845,7 +2852,8 @@
       ratingEditOverlay,
       confirmModalOverlay,
       playerConflictOverlay,
-      remoteCalibrateOverlay
+      remoteCalibrateOverlay,
+      remoteViewerOverlay
     ].some(function (el) {
       return el && !el.classList.contains("hidden");
     });
@@ -29782,6 +29790,24 @@
   btnRemoteCalibrateCancel.addEventListener("click", function () { closeRemoteCalibrateOverlay(true); });
   btnRemoteCalibrateDone.addEventListener("click", function () { closeRemoteCalibrateOverlay(false); });
   btnRemoteCalibrateRetry.addEventListener("click", openRemoteCalibrateOverlay);
+
+  // Full remote viewer - loads camera.html?viewer=1 itself in an iframe
+  // (see that file's own isViewer comment), reusing its real UI entirely
+  // instead of a hand-built parallel one. A fresh src on every open (not
+  // left pointed at a stale about:blank/prior load) and cleared on close
+  // so its WebSocket actually disconnects rather than sitting open in a
+  // hidden iframe.
+  btnOpenRemoteViewer.addEventListener("click", function () {
+    remoteViewerIframe.src = "camera.html?viewer=1";
+    remoteViewerOverlay.classList.remove("hidden");
+  });
+  btnCloseRemoteViewer.addEventListener("click", function () {
+    remoteViewerOverlay.classList.add("hidden");
+    remoteViewerIframe.src = "";
+  });
+  btnCameraRemoteViewerHelp.addEventListener("click", function () {
+    alertModal(T("players.cameraRemoteViewerHelpText"));
+  });
 
   // object-fit:contain means the image rarely fills its box exactly on
   // one axis - a click's fraction has to be measured against the

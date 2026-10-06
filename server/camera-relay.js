@@ -69,8 +69,8 @@
 //   Roster handoff (camera.html's enroll picker needs the tablet's real
 //   player names instead of free text - same request/reply shape as
 //   settings above):
-//     { type: "roster-request" } (camera -> relay -> every "listener")
-//     { type: "roster", names: [...] } (listener -> relay -> every "camera")
+//     { type: "roster-request" } (camera or viewer -> relay -> every "listener")
+//     { type: "roster", names: [...] } (listener -> relay -> every "camera" and every "viewer")
 //   Gameplay-driven auto-enrollment (js/app.js's adjustScore hook, via
 //   js/camera-client.js - see its own comment on why this is safe from
 //   feedback loops): a human confirming a real score for a player is
@@ -92,6 +92,22 @@
 //     { type: "remote-camera-list", devices: [{deviceId, label}], currentDeviceId }
 //       (camera -> relay -> every "listener")
 //     { type: "remote-camera-select", deviceId } (listener -> relay -> every "camera")
+//   Remote viewer (a THIRD role, "viewer" - see createCameraRelay's own
+//   comment): a camera.html?viewer=1 instance forwards every click/change/
+//   canvas-tap it isn't handling locally by element id; the real camera
+//   executes it on its own identical DOM, so none of this needs per-
+//   feature camera-side logic, just the passthrough below:
+//     { type: "hello", role: "viewer" }
+//     { type: "viewer-click", id } (viewer -> relay -> every "camera")
+//     { type: "viewer-change", id, value } (viewer -> relay -> every "camera")
+//     { type: "viewer-canvas-tap", fx, fy } (viewer -> relay -> every "camera")
+//     { type: "viewer-frame", dataUrl, elements } (camera -> relay -> every
+//       "viewer") - a composited still plus a snapshot of status
+//       text/classes to mirror, sent on a fixed interval while any viewer
+//       is connected
+//     { type: "hello-viewer-connected" } / { type: "hello-viewer-disconnected" }
+//       (relay -> every "camera") - told once when the first viewer joins
+//       / the last one leaves, so a camera only streams while watched
 //
 // No auth, LAN-only, same trust model as relay.js.
 
@@ -159,6 +175,16 @@ function saveEnrollments(data) {
 function createCameraRelay(WebSocket) {
   var listenerSockets = new Set();
   var cameraSockets = new Set();
+  // A THIRD role, distinct from "listener" - a listener gets the normal
+  // candidate/player_up/idle-states broadcasts meant for driving the
+  // scoreboard during real play; a viewer is a full remote-control
+  // instance of camera.html itself (camera.html?viewer=1), forwarding
+  // clicks/changes to the real camera and receiving its own
+  // "viewer-frame" stream back. Kept separate so a viewer connecting or
+  // disconnecting doesn't affect (or get affected by) the scoreboard's
+  // own listener connection, and so cameras only pay the cost of
+  // streaming viewer-frame while someone's actually watching.
+  var viewerSockets = new Set();
   var enrollments = loadEnrollments();
 
   function send(ws, msg) {
@@ -179,6 +205,12 @@ function createCameraRelay(WebSocket) {
     });
   }
 
+  function broadcastToViewers(msg) {
+    viewerSockets.forEach(function (ws) {
+      send(ws, msg);
+    });
+  }
+
   function attachToServer(httpServer) {
     var wss = new WebSocket.Server({ noServer: true });
 
@@ -194,9 +226,14 @@ function createCameraRelay(WebSocket) {
         }
 
         if (msg.type === "hello") {
-          ws.role = msg.role === "camera" ? "camera" : msg.role === "listener" ? "listener" : null;
+          ws.role = msg.role === "camera" ? "camera" : msg.role === "listener" ? "listener" : msg.role === "viewer" ? "viewer" : null;
           if (ws.role === "listener") listenerSockets.add(ws);
           if (ws.role === "camera") cameraSockets.add(ws);
+          if (ws.role === "viewer") {
+            var wasEmpty = viewerSockets.size === 0;
+            viewerSockets.add(ws);
+            if (wasEmpty) broadcastToCameras({ type: "hello-viewer-connected" });
+          }
           return;
         }
 
@@ -299,13 +336,18 @@ function createCameraRelay(WebSocket) {
         // camera.html's enroll picker offer the tablet's real player
         // roster instead of free text (see js/camera-client.js's own
         // handleRosterRequest).
-        if (msg.type === "roster-request" && ws.role === "camera") {
+        if (msg.type === "roster-request" && (ws.role === "camera" || ws.role === "viewer")) {
           broadcastToListeners({ type: "roster-request" });
           return;
         }
 
         if (msg.type === "roster" && ws.role === "listener" && Array.isArray(msg.names)) {
           broadcastToCameras({ type: "roster", names: msg.names });
+          // A viewer (camera.html?viewer=1) runs the exact same
+          // populateEnrollNameSelect() on receiving this - it needs the
+          // real roster for its own Enroll tab dropdown too, independent
+          // of whatever the real camera already has cached.
+          broadcastToViewers({ type: "roster", names: msg.names });
           return;
         }
 
@@ -358,11 +400,38 @@ function createCameraRelay(WebSocket) {
           broadcastToCameras({ type: "remote-camera-select", deviceId: msg.deviceId });
           return;
         }
+
+        // Generic remote-viewer transport - a camera.html?viewer=1
+        // instance forwards every click/change/canvas-tap it isn't
+        // handling locally (tab switches, help popups) verbatim by
+        // element id; the real camera executes it on its own identical
+        // DOM, so no camera-side logic needed per feature, just this
+        // passthrough. viewer-frame is the matching one-way stream back.
+        if (msg.type === "viewer-click" && ws.role === "viewer" && msg.id) {
+          broadcastToCameras({ type: "viewer-click", id: msg.id });
+          return;
+        }
+        if (msg.type === "viewer-change" && ws.role === "viewer" && msg.id) {
+          broadcastToCameras({ type: "viewer-change", id: msg.id, value: msg.value });
+          return;
+        }
+        if (msg.type === "viewer-canvas-tap" && ws.role === "viewer" && typeof msg.fx === "number" && typeof msg.fy === "number") {
+          broadcastToCameras({ type: "viewer-canvas-tap", fx: msg.fx, fy: msg.fy });
+          return;
+        }
+        if (msg.type === "viewer-frame" && ws.role === "camera") {
+          broadcastToViewers({ type: "viewer-frame", dataUrl: msg.dataUrl, elements: msg.elements || {} });
+          return;
+        }
       });
 
       ws.on("close", function () {
         listenerSockets.delete(ws);
         cameraSockets.delete(ws);
+        if (ws.role === "viewer") {
+          viewerSockets.delete(ws);
+          if (viewerSockets.size === 0) broadcastToCameras({ type: "hello-viewer-disconnected" });
+        }
       });
     });
 

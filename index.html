@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261006e">
+<link rel="stylesheet" href="css/style.css?v=20261006f">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -175,6 +175,10 @@
       <div class="row hidden" id="camera-remote-calibrate-row">
         <button type="button" id="btn-start-remote-calibration" class="btn btn-ghost" data-i18n="players.cameraRemoteCalibrateButton">📐 Calibrate Table Remotely</button>
         <button type="button" id="btn-camera-remote-calibrate-help" class="format-info-btn" data-i18n-aria-label="players.cameraRemoteCalibrateHelpAria" aria-label="What does Calibrate Table Remotely do?">❓</button>
+      </div>
+      <div class="row hidden" id="camera-remote-viewer-row">
+        <button type="button" id="btn-open-remote-viewer" class="btn btn-ghost" data-i18n="players.cameraRemoteViewerButton">📷 Full Camera Setup (Remote)</button>
+        <button type="button" id="btn-camera-remote-viewer-help" class="format-info-btn" data-i18n-aria-label="players.cameraRemoteViewerHelpAria" aria-label="What does Full Camera Setup (Remote) do?">❓</button>
       </div>
       <div class="row hidden" id="camera-debug-options-row">
         <label class="checkbox-row">
@@ -1401,6 +1405,16 @@
   </div>
 </div>
 
+<div id="remote-viewer-overlay" class="same-device-camera-overlay hidden">
+  <div class="same-device-camera-card">
+    <div class="same-device-camera-header">
+      <h2 data-i18n="cameraWizard.remoteViewerHeading">Camera Setup (Remote)</h2>
+      <button type="button" id="btn-close-remote-viewer" class="wizard-close-btn" aria-label="Close" data-i18n-aria-label="common.close">×</button>
+    </div>
+    <iframe id="remote-viewer-iframe" class="same-device-camera-iframe" src="" title="Remote camera setup"></iframe>
+  </div>
+</div>
+
 <div id="help-overlay" class="help-overlay hidden">
   <div class="help-card">
     <div class="help-header">
@@ -2416,7 +2430,7 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20261006e"></script>
-<script src="js/camera-client.js?v=20261006c"></script>
+<script src="js/app.js?v=20261006f"></script>
+<script src="js/camera-client.js?v=20261006d"></script>
 </body>
 </html>
