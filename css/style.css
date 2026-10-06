@@ -5207,6 +5207,29 @@ input[type="number"] {
   margin: -4px 0 10px;
 }
 
+/* A running history of camera recognition events (stance/match changes),
+   not just the current instant - so it can be checked between shots or
+   after a game, instead of needing to watch the live status line the
+   whole time. */
+.camera-diagnostic-log {
+  max-height: 160px;
+  overflow-y: auto;
+  margin: -4px 0 10px;
+  padding: 6px 8px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+.camera-diagnostic-log div {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .tournament-winner-banner {
   margin: 10px 0 4px;
   padding: 12px 14px;
