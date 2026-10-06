@@ -915,6 +915,7 @@
   "cameraWizard.installUnsupportedOs": "Esto necesita una computadora de escritorio - no funcionará en un teléfono o tablet.",
   "cameraWizard.sameDeviceOverlayHeading": "Cámara de esta tablet",
   "cameraWizard.remoteCalibrateHeading": "Calibrar la mesa",
+  "cameraWizard.remoteCameraLabel": "Lente",
   "cameraWizard.remoteCalibrateWaiting": "Conectando con la cámara...",
   "cameraWizard.remoteCalibrateWaitingLong": "Esperando respuesta del teléfono-cámara...",
   "cameraWizard.remoteCalibrateHint": "Toca cada esquina de la mesa en la imagen de arriba, en orden.",

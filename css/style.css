@@ -4625,6 +4625,10 @@ input[type="number"] {
   color: var(--accent);
 }
 
+.remote-calibrate-camera-row {
+  margin: 0 16px 10px;
+}
+
 .remote-calibrate-frame-wrap {
   position: relative;
   margin: 0 16px;
