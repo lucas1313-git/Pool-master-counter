@@ -29417,17 +29417,81 @@
   // "Who does the camera currently see" - distinct from the player
   // actually selected on the keypad (which only updates on a confirmed
   // shot) - driven by camera.html's own "candidate" postMessage, sent
-  // every time its live recognition's candidate name changes. Visible
-  // whenever the camera is actually running, right under the master
-  // checkbox in the Players panel.
+  // every single frame (not just on a name change) so this line is a
+  // trustworthy live diagnostic for "is detection even running at all" -
+  // a change-only signal would look identical whether the camera was dead
+  // or simply still watching the same person. Visible whenever the camera
+  // is actually running, right under the master checkbox in the Players
+  // panel.
   // visible is explicit (not inferred from sameDeviceCameraRunning) so
   // this same function also works for cross-device mode, driven by
   // js/camera-client.js's own onCandidateSeen registration below -
   // that path has no equivalent "iframe running" flag to check here.
-  function renderCameraCandidateStatus(name, visible) {
+  // stance/angle are only ever shown when the debug checkbox is on - the
+  // plain "no one identified" copy is what everyone else sees, since the
+  // raw angle reading is meaningless to a non-technical user.
+  function renderCameraCandidateStatus(name, visible, stance, angle) {
     cameraCandidateStatus.classList.toggle("hidden", !visible);
-    cameraCandidateStatus.textContent = name ? T("players.cameraCandidateSeen", { name: name }) : T("players.cameraCandidateNone");
+    if (name) {
+      cameraCandidateStatus.textContent = T("players.cameraCandidateSeen", { name: name });
+    } else if (cameraDebugCheckbox.checked && stance === "upright" && typeof angle === "number") {
+      cameraCandidateStatus.textContent = T("players.cameraCandidateUpright", { angle: angle });
+    } else if (cameraDebugCheckbox.checked && stance === "bent" && typeof angle === "number") {
+      cameraCandidateStatus.textContent = T("players.cameraCandidateBent", { angle: angle });
+    } else {
+      cameraCandidateStatus.textContent = T("players.cameraCandidateNone");
+    }
   }
+
+  // Speaks a live camera event from the PARENT page rather than from
+  // camera.html's own iframe document - deliberate, not a stylistic
+  // choice. Once the embedded camera is minimized into the Players panel,
+  // the user interacts almost entirely with THIS page's own checkboxes
+  // and keypad, never tapping directly inside the iframe again - on
+  // browsers that require a document to receive its own direct user
+  // gesture before speechSynthesis.speak() will actually produce sound
+  // (notably Safari/iOS), that silently blocks every voice announcement
+  // camera.html tries to make on its own. This page keeps getting real
+  // taps throughout ordinary gameplay, so speaking from here instead is
+  // far more likely to actually be audible. See camera.html's own
+  // updateSeenCandidate/fireEvent, which deliberately skip speaking when
+  // isEmbedded is true, leaving this as the sole voice for same-device
+  // mode specifically.
+  var lastSpokenCandidateName = null;
+  function speakCameraStatus(text) {
+    if (!cameraVoiceCheckbox.checked || !window.speechSynthesis) return;
+    try {
+      window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+    } catch (e) {}
+  }
+
+  // Attached here (inside boot(), where renderCameraCandidateStatus and
+  // speakCameraStatus actually live) rather than as plain properties of
+  // the window.PMCCameraBridge literal below, which is assigned outside
+  // boot() and has no access to either. boot() always runs to completion
+  // before any real "candidate"/player_up message can arrive, so these
+  // are in place well before js/camera-client.js or the same-device
+  // postMessage listener would ever call them.
+  window.PMCCameraBridge.reportCandidateSeen = function (name, stance, angle) {
+    renderCameraCandidateStatus(name || null, true, stance, angle);
+    // Voice-announces a *change* only - not every frame someone's merely
+    // still standing there, which would be constant chatter. Shared by
+    // both transports since this is the one place that implements it,
+    // rather than duplicating the dedup state per path.
+    var seen = name || null;
+    if (seen !== lastSpokenCandidateName) {
+      lastSpokenCandidateName = seen;
+      if (seen) speakCameraStatus(seen + " seen.");
+    }
+  };
+  // Counterpart to reportCandidateSeen above, for the distinct "shot
+  // confirmed" voice line - called by both the same-device postMessage
+  // listener and js/camera-client.js's own handlePlayerUp, right after
+  // each one calls selectPlayer, so both transports get identical
+  // parent-page voice feedback through one implementation.
+  window.PMCCameraBridge.announceShotFired = function (name) {
+    if (name) speakCameraStatus(name + " shooting.");
+  };
 
   function openSameDeviceCameraOverlay() {
     if (!sameDeviceCameraRunning) {
@@ -29553,6 +29617,7 @@
       var id = window.PMCCameraBridge.resolvePlayerIdByName(msg.player_name);
       if (!id || id === window.PMCCameraBridge.getSelectedPlayerId()) return;
       window.PMCCameraBridge.selectPlayer(id);
+      window.PMCCameraBridge.announceShotFired(msg.player_name);
     } else if (msg.type === "settings-request") {
       var settings = window.PMCCameraBridge.getSettings();
       try {
@@ -29563,7 +29628,7 @@
         sameDeviceCameraIframe.contentWindow.postMessage({ type: "roster", names: window.PMCCameraBridge.getPlayerNames() }, location.origin);
       } catch (e) {}
     } else if (msg.type === "candidate") {
-      renderCameraCandidateStatus(msg.player_name || null, true);
+      window.PMCCameraBridge.reportCandidateSeen(msg.player_name || null, msg.stance, msg.angle);
     }
   });
 
@@ -31128,16 +31193,15 @@
     // the instant camera-client.js's own script runs.
     onTurnConfirmed: function (callback) {
       cameraTurnConfirmedCallbacks.push(callback);
-    },
-    // Cross-device counterpart to the same-device postMessage listener's
-    // own direct call - js/camera-client.js calls this straight away
-    // (not a registration like onTurnConfirmed above; the direction here
-    // is camera -> relay -> tablet, nothing on this side needs to react
-    // independently) whenever a "candidate" message arrives over the
-    // relay, driving the same live status line in the Players panel.
-    reportCandidateSeen: function (name) {
-      renderCameraCandidateStatus(name || null, true);
     }
+    // reportCandidateSeen and announceShotFired are attached below, from
+    // inside boot(), not as plain properties of this literal -
+    // renderCameraCandidateStatus/speakCameraStatus/lastSpokenCandidateName
+    // all live in boot()'s own closure (where the camera overlay's DOM
+    // refs are set up), which this object literal - assigned outside
+    // boot() - has no access to. boot() always finishes before any real
+    // "candidate"/player_up message can arrive, so the gap is never
+    // observed.
   };
 
   // Same-device mode's own counterpart to js/camera-client.js's
