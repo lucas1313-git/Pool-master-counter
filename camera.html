@@ -1186,6 +1186,13 @@
       applySettingsToInputs();
     } else if (msg.type === "enroll-select" && msg.player_name) {
       selectPlayerForEnroll(msg.player_name);
+    } else if (msg.type === "enroll-select-attribute" && msg.player_name) {
+      // Lightweight background version of enroll-select above - no tab
+      // switch, no UI takeover, just starts attributing the next several
+      // unmatched bent-over frames to this name (see
+      // activeManualAttribution's own comment). Triggered by the
+      // Players panel's "unmatched shooter" prompt, not the Enroll tab.
+      activeManualAttribution = { name: msg.player_name, startedAt: Date.now(), firesSinceStart: 0 };
     }
   }
 
@@ -2392,6 +2399,27 @@
   // shoulder/hip keypoints are harder for the model to place confidently).
   // null whenever no pose at all was found this frame.
   var lastRawPoseConfidence = null;
+  // Set when the operator manually resolves an "unmatched shooter"
+  // prompt in the Players panel (see js/app.js's
+  // resolveUnmatchedShooterPrompt, which sends "enroll-select-attribute"
+  // over this same channel) - while active, every bent-over frame that
+  // doesn't otherwise match anyone on its own gets attributed to this
+  // name instead, both firing player_up (so the keypad selection stays
+  // correct without needing to re-tap them) and - via fireEvent's own
+  // existing confident-match auto-add - adding a fresh, human-confirmed
+  // sample. Cleared the instant a genuinely different name matches on
+  // its own ("until another player shoots" per explicit request), or
+  // after a bounded number of fires/time as a safety valve in case the
+  // operator's pick turns out to be wrong and nobody ever corrects it.
+  var activeManualAttribution = null; // { name, startedAt, firesSinceStart } or null
+  var MANUAL_ATTRIBUTION_MAX_FIRES = 12;
+  var MANUAL_ATTRIBUTION_MAX_MS = 5 * 60 * 1000;
+  function clearManualAttributionIfStale() {
+    if (!activeManualAttribution) return;
+    if (activeManualAttribution.firesSinceStart >= MANUAL_ATTRIBUTION_MAX_FIRES || Date.now() - activeManualAttribution.startedAt > MANUAL_ATTRIBUTION_MAX_MS) {
+      activeManualAttribution = null;
+    }
+  }
   var lastConfidentPoseAt = Date.now();
   var candidate = null; // { name, descriptor, lastSeenAt }
   var uprightMatchName = null;
@@ -2658,8 +2686,12 @@
       lastUprightDescriptor = null;
       uprightStabilityCount = 0;
       bentConsecutive++;
+      clearManualAttributionIfStale();
       if (bentConsecutive >= settings.consecutiveFrames && closeEnough && isFacingTable(analysis)) {
         if (candidate && candidate.name && Date.now() - candidate.lastSeenAt <= CANDIDATE_GRACE_MS) {
+          // A genuinely different name just matched on its own - "until
+          // another player shoots" per explicit request.
+          if (activeManualAttribution && candidate.name !== activeManualAttribution.name) activeManualAttribution = null;
           fireEvent(candidate.name, candidate.descriptor, 0, candidate.side);
         } else {
           // Fallback: no fresh *named* upright identification (either
@@ -2669,7 +2701,16 @@
           // noisier here.
           var bentMatch = findBestMatch(analysis.descriptor);
           if (bentMatch && bentMatch.distance <= settings.matchThreshold * 0.6) {
+            if (activeManualAttribution && bentMatch.name !== activeManualAttribution.name) activeManualAttribution = null;
             fireEvent(bentMatch.name, analysis.descriptor, bentMatch.distance, currentSideForAnalysis(analysis));
+          } else if (activeManualAttribution) {
+            // Nothing matched on appearance at all - the exact "shooting
+            // but not recognized" situation the operator already resolved
+            // manually. fireEvent's own distance<=threshold*0.7 check
+            // (always true at distance 0) is what actually adds this as
+            // an enrollment sample - no separate enroll-add needed here.
+            fireEvent(activeManualAttribution.name, analysis.descriptor, 0, currentSideForAnalysis(analysis));
+            activeManualAttribution.firesSinceStart++;
           }
         }
       }
