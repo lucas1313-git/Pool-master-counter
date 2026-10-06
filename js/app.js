@@ -29539,7 +29539,7 @@
   // updateSeenCandidate/fireEvent, which deliberately skip speaking when
   // isEmbedded is true, leaving this as the sole voice for same-device
   // mode specifically.
-  var lastSpokenCandidateName = null;
+  var lastSpokenCandidateSignature = null;
   function speakCameraStatus(text) {
     if (!cameraVoiceCheckbox.checked || !window.speechSynthesis) return;
     try {
@@ -29557,14 +29557,30 @@
   window.PMCCameraBridge.reportCandidateSeen = function (name, stance, angle, closestName, closestDistance, matchThreshold) {
     renderCameraCandidateStatus(name || null, true, stance, angle);
     logCameraDiagnostic(name || null, stance, angle, closestName, closestDistance, matchThreshold);
-    // Voice-announces a *change* only - not every frame someone's merely
-    // still standing there, which would be constant chatter. Shared by
-    // both transports since this is the one place that implements it,
-    // rather than duplicating the dedup state per path.
+    // Voice-announces a *change* only (matched name, or an unmatched
+    // person newly appearing/changing stance) - not every frame someone's
+    // merely still standing there, which would be constant chatter. Keyed
+    // on name+stance, same transition logic logCameraDiagnostic already
+    // uses, so this doesn't re-announce on every frame's flickering
+    // closest-guess either. Shared by both transports since this is the
+    // one place that implements it, rather than duplicating the dedup
+    // state per path.
     var seen = name || null;
-    if (seen !== lastSpokenCandidateName) {
-      lastSpokenCandidateName = seen;
-      if (seen) speakCameraStatus(seen + " seen.");
+    var signature = (seen || "") + "|" + (stance || "unknown");
+    if (signature === lastSpokenCandidateSignature) return;
+    lastSpokenCandidateSignature = signature;
+    if (seen) {
+      speakCameraStatus("Seeing " + seen + ".");
+    } else if (stance === "upright" || stance === "bent") {
+      // Someone's there but nothing matched close enough - say so AND
+      // read the actual numbers (closest distance vs. the threshold it
+      // needs to clear), so this is still useful purely by ear, without
+      // ever needing to look at the debug log for the same information.
+      if (closestName && typeof closestDistance === "number") {
+        speakCameraStatus("Seeing someone. " + closestDistance.toFixed(2) + ", need " + (typeof matchThreshold === "number" ? matchThreshold.toFixed(2) : "unknown") + ".");
+      } else {
+        speakCameraStatus("Seeing someone.");
+      }
     }
   };
   // Counterpart to reportCandidateSeen above, for the distinct "shot
@@ -31290,7 +31306,7 @@
     }
     // reportCandidateSeen and announceShotFired are attached below, from
     // inside boot(), not as plain properties of this literal -
-    // renderCameraCandidateStatus/speakCameraStatus/lastSpokenCandidateName
+    // renderCameraCandidateStatus/speakCameraStatus/lastSpokenCandidateSignature
     // all live in boot()'s own closure (where the camera overlay's DOM
     // refs are set up), which this object literal - assigned outside
     // boot() - has no access to. boot() always finishes before any real
