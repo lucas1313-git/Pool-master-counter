@@ -3903,6 +3903,7 @@
       row.appendChild(name);
       row.appendChild(buildRatingBadge(p.name));
       row.appendChild(buildClubTeamBadge(p.name));
+      if (state.cameraInputEnabled && state.sameDeviceCameraSetUp) row.appendChild(buildCameraEnrollBadge(p.name));
 
       var editRatingBtn = document.createElement("button");
       editRatingBtn.type = "button";
@@ -12490,6 +12491,67 @@
   // nickname rather than anything automatic - see buildPlayerNameLabel.
   var PLAYER_NAME_TRANSLATIONS_KEY = "poolMasterCounter.playerNameTranslations.v1";
 
+  // Same-device camera recognition's own enrollment store - written by
+  // camera.html directly (see its own LOCAL_ENROLLMENTS_KEY), read here
+  // only for two purposes: showing the enrolled-camera icon vs. an
+  // Enroll button in the roster, and folding it into Export All Data /
+  // merge-import so re-enrolling after a restore isn't needed. Never
+  // written to directly from this file outside of import/squash - during
+  // normal play camera.html owns this key exclusively.
+  var CAMERA_ENROLLMENTS_KEY = "pmc-camera-local-enrollments";
+  function loadCameraEnrollmentsFromStorage() {
+    try {
+      var raw = localStorage.getItem(CAMERA_ENROLLMENTS_KEY);
+      var parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (e) {
+      return {};
+    }
+  }
+  // True only when at least one real sample was actually captured -
+  // camera.html can leave a stub entry with an empty descriptors array in
+  // edge cases (e.g. a save interrupted after the name was picked but
+  // before a shot was captured), which shouldn't count as "enrolled."
+  function isPlayerCameraEnrolled(name) {
+    var entry = loadCameraEnrollmentsFromStorage()[normalizeNameKey(name)];
+    return !!(entry && Array.isArray(entry.descriptors) && entry.descriptors.length > 0);
+  }
+
+  // Minimal inline camera glyph (not an emoji) so the fixed 18x18 sizing
+  // requested is exact across platforms/fonts rather than approximate.
+  var CAMERA_ICON_SVG =
+    '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+    '<path d="M9.2 4.5c.3-.5.8-.8 1.4-.8h2.8c.6 0 1.1.3 1.4.8l.9 1.5H19a3 3 0 0 1 3 3V17a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3V9a3 3 0 0 1 3-3h3.3l.9-1.5Z" fill="currentColor"/>' +
+    '<circle cx="12" cy="13" r="3.4" fill="none" stroke="#fff" stroke-width="1.5"/>' +
+    "</svg>";
+
+  // Shows a fixed 18x18 camera icon when this player has real camera-
+  // enrollment samples saved, or a small "Enroll" button when they don't
+  // - clicking it jumps straight to the embedded camera's Enroll tab with
+  // this player pre-selected. Same-device mode only (state.cameraInputEnabled
+  // + state.sameDeviceCameraSetUp) - cross-device enrollment lives on the
+  // relay server, not in this browser's localStorage, so there's nothing
+  // here to check for that path; the caller gates on this before calling.
+  function buildCameraEnrollBadge(name) {
+    if (isPlayerCameraEnrolled(name)) {
+      var icon = document.createElement("span");
+      icon.className = "roster-camera-enrolled";
+      icon.title = T("players.cameraEnrolledTitle");
+      icon.setAttribute("aria-label", T("players.cameraEnrolledTitle"));
+      icon.innerHTML = CAMERA_ICON_SVG;
+      return icon;
+    }
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "roster-camera-enroll-btn";
+    btn.textContent = T("players.cameraEnrollButton");
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      window.PMCCameraBridge.startCameraEnrollFor(name);
+    });
+    return btn;
+  }
+
   function loadPlayerNameTranslationsFromStorage() {
     try {
       var raw = localStorage.getItem(PLAYER_NAME_TRANSLATIONS_KEY);
@@ -15906,7 +15968,12 @@
       // importAllDataFromText) can pick up the same shared Drive folder
       // automatically - purely informational, never read as an instruction
       // to fetch or upload anything on its own.
-      driveFolderLink: loadDriveFolderLink() || null
+      driveFolderLink: loadDriveFolderLink() || null,
+      // Same-device camera recognition's enrollment samples - see
+      // CAMERA_ENROLLMENTS_KEY's own comment. Lets a restore (or a fresh
+      // install from a backup) skip re-enrolling every player from
+      // scratch.
+      cameraEnrollments: loadCameraEnrollmentsFromStorage()
     };
   }
 
@@ -16889,6 +16956,10 @@
               return s.id;
             });
             var mergedPlayerNameTranslations = mergeMapPreferLocal(PLAYER_NAME_TRANSLATIONS, data.playerNameTranslations);
+            // Local wins per-player (this device's own camera/lighting is
+            // more relevant than an imported one), import fills in anyone
+            // missing locally - same treatment as name translations above.
+            var mergedCameraEnrollments = mergeMapPreferLocal(loadCameraEnrollmentsFromStorage(), data.cameraEnrollments);
             var mergedRemovedPlayers = mergeFlagMapUnion(REMOVED_PLAYERS, data.removedPlayers);
             var mergedGraveyardPlayers = mergeFlagMapUnion(GRAVEYARD_PLAYERS, data.graveyardPlayers);
             var mergedResetSnapshots = mergeArrayByKey(RESET_SNAPSHOTS, data.resetSnapshots, function (s) {
@@ -16990,6 +17061,7 @@
             localStorage.setItem(ROTATIONS_KEY, JSON.stringify(mergedRotations));
             localStorage.setItem(GAME_SETUPS_KEY, JSON.stringify(mergedGameSetups));
             localStorage.setItem(PLAYER_NAME_TRANSLATIONS_KEY, JSON.stringify(mergedPlayerNameTranslations));
+            localStorage.setItem(CAMERA_ENROLLMENTS_KEY, JSON.stringify(mergedCameraEnrollments));
             localStorage.setItem(REMOVED_PLAYERS_KEY, JSON.stringify(mergedRemovedPlayers));
             localStorage.setItem(GRAVEYARD_PLAYERS_KEY, JSON.stringify(mergedGraveyardPlayers));
             localStorage.setItem(RESET_SNAPSHOTS_KEY, JSON.stringify(mergedResetSnapshots));
@@ -17224,6 +17296,11 @@
 
     var importedState = data.state && typeof data.state === "object" ? data.state : defaultState();
     var resultingPlayerCount;
+    // Treated like PLAYER_NAME_TRANSLATIONS below (merged, never wiped,
+    // in either squash variant) - camera enrollment is per-player setup
+    // data, not game history, so "squash the game data" shouldn't touch
+    // it, and a full squash shouldn't force re-enrolling everyone either.
+    var mergedCameraEnrollmentsForSquash = mergeMapPreferLocal(loadCameraEnrollmentsFromStorage(), data.cameraEnrollments);
 
     if (keepPlayersOnly) {
       var built = buildUnionedPlayersAndContacts(state.players, importedState.players, data.contacts && typeof data.contacts === "object" ? data.contacts : {});
@@ -17317,6 +17394,7 @@
       localStorage.setItem(ROTATIONS_KEY, JSON.stringify(SAVED_ROTATIONS));
       localStorage.setItem(GAME_SETUPS_KEY, JSON.stringify(SAVED_GAME_SETUPS));
       localStorage.setItem(PLAYER_NAME_TRANSLATIONS_KEY, JSON.stringify(PLAYER_NAME_TRANSLATIONS));
+      localStorage.setItem(CAMERA_ENROLLMENTS_KEY, JSON.stringify(mergedCameraEnrollmentsForSquash));
       localStorage.setItem(REMOVED_PLAYERS_KEY, JSON.stringify(REMOVED_PLAYERS));
       localStorage.setItem(GRAVEYARD_PLAYERS_KEY, JSON.stringify(GRAVEYARD_PLAYERS));
       localStorage.setItem(MERGED_INTO_KEY, JSON.stringify(PLAYER_MERGED_INTO));
@@ -29626,6 +29704,29 @@
     openSameDeviceCameraOverlay();
     minimizeSameDeviceCameraOverlay();
   }
+
+  // Triggered by the roster's own "Enroll" button (see buildCameraEnrollBadge)
+  // - starts the camera if it isn't already running, opens the full-screen
+  // overlay (the tiny minimized preview isn't usable for actually tapping
+  // through enrollment), then tells camera.html to jump to its Enroll tab
+  // with this player pre-selected. Attached here (inside boot(), same
+  // reasoning as reportCandidateSeen/announceShotFired above) rather than
+  // as a plain property of the PMCCameraBridge literal, which has no
+  // access to openSameDeviceCameraOverlay/sameDeviceCameraIframe.
+  window.PMCCameraBridge.startCameraEnrollFor = function (name) {
+    resumeSameDeviceCameraIfNeeded();
+    openSameDeviceCameraOverlay();
+    // The iframe may still be mid-boot on a cold start (model loading,
+    // relay/roster handshake) - postMessage itself delivers fine the
+    // instant contentWindow exists, but camera.html's own message
+    // listener needs to have registered first. A short delay covers the
+    // common case; worst case the operator just taps Enroll again.
+    setTimeout(function () {
+      try {
+        sameDeviceCameraIframe.contentWindow.postMessage({ type: "enroll-select", player_name: name }, location.origin);
+      } catch (e) {}
+    }, 400);
+  };
 
   function stopSameDeviceCamera() {
     if (!sameDeviceCameraRunning) return; // never started this session - nothing to stop

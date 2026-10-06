@@ -869,6 +869,8 @@
   "players.cameraVoiceEnable": "🔊 Speak player status (seen / shooting)",
   "players.cameraVoiceEnableHelpAria": "What does Speak player status do?",
   "players.cameraVoiceEnableHelpText": "Reads status out loud from this device - \"[Name] seen\" when the camera recognizes someone standing at the table, and \"[Name] shooting\" once a shot is confirmed. Useful if you're not looking at the screen. If matching isn't succeeding yet (check the debug log), there's nothing for this to announce, since both phrases only ever fire after a real match.",
+  "players.cameraEnrolledTitle": "📷 Enrolled for camera recognition",
+  "players.cameraEnrollButton": "Enroll",
   "players.cameraCandidateSeen": "📷 Camera currently sees: {{name}}",
   "players.cameraCandidateNone": "📷 Camera running - no one identified right now",
   "players.cameraCandidateUpright": "📷 Camera sees someone upright ({{angle}}°) - not matched to a player yet",

@@ -869,6 +869,8 @@
   "players.cameraVoiceEnable": "🔊 Annoncer le statut du joueur (vu / tire)",
   "players.cameraVoiceEnableHelpAria": "Que fait « Annoncer le statut du joueur » ?",
   "players.cameraVoiceEnableHelpText": "Lit le statut à voix haute depuis cet appareil - « [Nom] vu » quand la caméra reconnaît quelqu'un debout à la table, et « [Nom] tire » une fois un coup confirmé. Utile si vous ne regardez pas l'écran. Si la correspondance ne réussit pas encore (voir le journal de débogage), il n'y a rien à annoncer, car les deux phrases ne se déclenchent qu'après une vraie correspondance.",
+  "players.cameraEnrolledTitle": "📷 Inscrit pour la reconnaissance caméra",
+  "players.cameraEnrollButton": "Inscrire",
   "players.cameraCandidateSeen": "📷 La caméra voit actuellement : {{name}}",
   "players.cameraCandidateNone": "📷 Caméra active - personne identifié pour le moment",
   "players.cameraCandidateUpright": "📷 La caméra voit quelqu'un debout ({{angle}}°) - pas encore associé à un joueur",

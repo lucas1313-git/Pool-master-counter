@@ -869,6 +869,8 @@
   "players.cameraVoiceEnable": "🔊 Sabihin ang status ng manlalaro (nakita / nag-shoot)",
   "players.cameraVoiceEnableHelpAria": "Ano ang gawa ng Speak player status?",
   "players.cameraVoiceEnableHelpText": "Binabasa nang malakas ang status mula sa device na ito - \"[Pangalan] seen\" kapag nakilala ng camera na may nakatayo sa mesa, at \"[Pangalan] shooting\" kapag na-confirm ang isang tira. Kapaki-pakinabang kung hindi mo tinitingnan ang screen. Kung hindi pa nagtatagumpay ang pagtutugma (tingnan ang debug log), walang ipapahayag dito, dahil ang dalawang parirala ay tumatakbo lang pagkatapos ng totoong match.",
+  "players.cameraEnrolledTitle": "📷 Naka-enroll na para sa pagkilala ng camera",
+  "players.cameraEnrollButton": "I-enroll",
   "players.cameraCandidateSeen": "📷 Nakikita ngayon ng camera: {{name}}",
   "players.cameraCandidateNone": "📷 Tumatakbo ang camera - wala pang nakikilala ngayon",
   "players.cameraCandidateUpright": "📷 Nakikita ng camera ang isang nakatayo ({{angle}}°) - wala pang itinutugmang player",

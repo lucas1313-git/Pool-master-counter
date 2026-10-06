@@ -1184,7 +1184,32 @@
       // no polling loop for settings here otherwise).
       loadStoredSettings();
       applySettingsToInputs();
+    } else if (msg.type === "enroll-select" && msg.player_name) {
+      selectPlayerForEnroll(msg.player_name);
     }
+  }
+
+  // Jumps straight to the Enroll tab with a specific player pre-selected
+  // and ready to capture - triggered by the Players panel's own "Enroll"
+  // button (same-device mode only; see js/app.js's startCameraEnrollFor).
+  // Doesn't wait on the roster-request round trip (rosterNames) to
+  // populate the name dropdown first - the parent page already knows
+  // this name is valid, so it's added directly as an option if the
+  // dropdown doesn't have it yet, rather than risking the request
+  // silently landing before that round trip completes.
+  function selectPlayerForEnroll(name) {
+    if (enrollCapturing) finishEnrollCapture();
+    var alreadyOption = Array.prototype.some.call(enrollNameInput.options, function (o) { return o.value === name; });
+    if (!alreadyOption) {
+      var opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name;
+      enrollNameInput.appendChild(opt);
+    }
+    enrollNameInput.value = name;
+    startEnrollCapture(name);
+    showTab("enroll");
+    enrollNameInput.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
   function scheduleReconnect() {
