@@ -333,6 +333,9 @@
 
   <section class="panel" id="recognizePanel">
     <h2>Recent activity</h2>
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><input type="checkbox" id="recognizeDebugToggle" style="width:auto;margin:0"> Show debug info (angle, match distance)</label>
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><input type="checkbox" id="recognizeVoiceToggle" style="width:auto;margin:0"> Speak player status changes (seen / shooting)</label>
+    <div class="progress-text" id="recognizeLiveStatus" hidden></div>
     <div class="log" id="recognizeLog"><div>Waiting for a recognized player...</div></div>
     <p class="fine" style="margin-top:8px">
       This identifies people by clothing/body appearance, not faces - a coarse
@@ -609,6 +612,9 @@
   var enrollPanel = document.getElementById("enrollPanel");
   var calibratePanel = document.getElementById("calibratePanel");
   var recognizeLog = document.getElementById("recognizeLog");
+  var recognizeDebugToggle = document.getElementById("recognizeDebugToggle");
+  var recognizeVoiceToggle = document.getElementById("recognizeVoiceToggle");
+  var recognizeLiveStatus = document.getElementById("recognizeLiveStatus");
 
   var enrollNameInput = document.getElementById("enrollName");
   var stopCaptureBtn = document.getElementById("stopCaptureBtn");
@@ -678,7 +684,8 @@
     bendEnterAngle: 30,
     bendExitAngle: 20,
     railDistanceInches: 30,
-    debugOverlay: false
+    debugOverlay: false,
+    voiceStatusEnabled: false
   };
   var hasLocalSettingsOverride = false;
 
@@ -705,6 +712,9 @@
     bendExitInput.value = settings.bendExitAngle;
     railDistanceInput.value = settings.railDistanceInches;
     debugToggle.checked = settings.debugOverlay;
+    recognizeDebugToggle.checked = settings.debugOverlay;
+    recognizeVoiceToggle.checked = settings.voiceStatusEnabled;
+    recognizeLiveStatus.hidden = !settings.debugOverlay;
   }
   function wireNumberSetting(input, key) {
     input.addEventListener("input", function () {
@@ -720,8 +730,22 @@
   wireNumberSetting(bendEnterInput, "bendEnterAngle");
   wireNumberSetting(bendExitInput, "bendExitAngle");
   wireNumberSetting(railDistanceInput, "railDistanceInches");
-  debugToggle.addEventListener("change", function () {
-    settings.debugOverlay = debugToggle.checked;
+  // Same underlying setting shown in two places - the Settings panel's
+  // own checkbox (easy to miss, collapsed under a <details>) and a second
+  // one right on the Recognize panel itself, for exactly the situation
+  // this exists for: wanting to see live debug info without first having
+  // to go dig through Settings. Kept in sync both directions.
+  function setDebugOverlay(on) {
+    settings.debugOverlay = on;
+    debugToggle.checked = on;
+    recognizeDebugToggle.checked = on;
+    recognizeLiveStatus.hidden = !on;
+    persistSettings();
+  }
+  debugToggle.addEventListener("change", function () { setDebugOverlay(debugToggle.checked); });
+  recognizeDebugToggle.addEventListener("change", function () { setDebugOverlay(recognizeDebugToggle.checked); });
+  recognizeVoiceToggle.addEventListener("change", function () {
+    settings.voiceStatusEnabled = recognizeVoiceToggle.checked;
     persistSettings();
   });
 
@@ -979,6 +1003,16 @@
     } else if (msg.type === "stop-camera") {
       stopCurrentStream();
       if (wakeLock) { try { wakeLock.release(); } catch (e) {} wakeLock = null; }
+    } else if (msg.type === "reload-settings") {
+      // Same-device mode only - the debug/voice checkboxes live on the
+      // parent page (index.html's Players panel, so they're visible
+      // during actual gameplay, not buried in here) and write straight
+      // into this same origin's localStorage (see js/app.js's own
+      // comment on why that's safe) - this is just the nudge to pick up
+      // that change immediately instead of waiting on nothing (there's
+      // no polling loop for settings here otherwise).
+      loadStoredSettings();
+      applySettingsToInputs();
     }
   }
 
@@ -1881,12 +1915,29 @@
   var uprightStabilityCount = 0;
   var bentConsecutive = 0;
   var lastEmittedAt = {}; // name -> timestamp ms
+  var lastAnnouncedSeenName = null; // voice-announces a *change* of who's seen, not every frame
 
   function logActivity(text) {
     var line = document.createElement("div");
     line.textContent = new Date().toLocaleTimeString() + " - " + text;
     recognizeLog.insertBefore(line, recognizeLog.firstChild);
     while (recognizeLog.childNodes.length > 20) recognizeLog.removeChild(recognizeLog.lastChild);
+  }
+
+  // Mirrors Enroll's own live status line (same reasoning: a readable,
+  // on-page readout of what the camera currently sees, not just the tiny
+  // debug-overlay text drawn on the video itself) - shown only when the
+  // debug checkbox (either copy of it) is on.
+  function updateRecognizeLiveStatus(analysis) {
+    if (!settings.debugOverlay) return;
+    if (!analysis) {
+      recognizeLiveStatus.textContent = "No one in view.";
+      return;
+    }
+    var angle = Math.round(analysis.torsoAngleDeg);
+    var stanceLabel = stance === "bent" ? "bent (" + angle + "°)" : stance === "upright" ? "upright (" + angle + "°)" : angle + "°";
+    var who = candidate && candidate.name ? candidate.name : "unmatched";
+    recognizeLiveStatus.textContent = "Currently " + stanceLabel + " - candidate: " + who;
   }
 
   function withinRailDistance(analysis) {
@@ -1914,6 +1965,7 @@
     var confidence = Math.max(0, Math.min(1, 1 - matchDistance / MAX_EXPECTED_DISTANCE));
     send({ type: "player_up", player_name: name, confidence: confidence, ts: now });
     logActivity(name + " shooting (match distance " + matchDistance.toFixed(2) + ")");
+    if (settings.voiceStatusEnabled) speak(name + " shooting.");
     if (matchDistance <= settings.matchThreshold * 0.7) {
       send({ type: "enroll-add", player_name: name, descriptor: descriptor, side: side });
     }
@@ -1946,7 +1998,11 @@
         uprightConsecutive = 0;
         bentConsecutive = 0;
       }
-      if (candidate && Date.now() - candidate.lastSeenAt > CANDIDATE_GRACE_MS) candidate = null;
+      if (candidate && Date.now() - candidate.lastSeenAt > CANDIDATE_GRACE_MS) {
+        candidate = null;
+        lastAnnouncedSeenName = null; // gone long enough that re-seeing anyone (even the same name) is a fresh "seen" event
+      }
+      updateRecognizeLiveStatus(null);
       return;
     }
     lastConfidentPoseAt = Date.now();
@@ -1990,6 +2046,12 @@
           side: currentSideForAnalysis(analysis),
           lastSeenAt: Date.now()
         };
+        // Announces a *change* only - not every frame someone's merely
+        // still standing there, which would be constant chatter.
+        if (candidate.name && candidate.name !== lastAnnouncedSeenName) {
+          lastAnnouncedSeenName = candidate.name;
+          if (settings.voiceStatusEnabled) speak(candidate.name + " seen.");
+        }
       } else if (candidate) {
         candidate.lastSeenAt = Date.now();
       }
@@ -2016,6 +2078,7 @@
         }
       }
     }
+    updateRecognizeLiveStatus(analysis);
   }
 
   // ---- Debug overlay ----
