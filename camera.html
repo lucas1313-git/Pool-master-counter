@@ -193,70 +193,88 @@
     background: linear-gradient(180deg, var(--card) 0%, var(--panel) 60%, var(--bg) 100%);
     border: 2px solid var(--accent);
     border-radius: 14px;
-    padding: 20px 18px 16px;
-    max-width: 440px;
+    padding: 30px 28px 24px;
+    max-width: 640px;
     width: 100%;
-    max-height: 90vh;
+    max-height: 92vh;
     overflow-y: auto;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+    font-size: 1.1rem;
   }
   .wizard-close-btn {
     position: absolute;
-    top: 6px;
-    right: 10px;
+    top: 8px;
+    right: 12px;
     background: none;
     border: none;
     color: var(--text-dim);
-    font-size: 1.5rem;
+    font-size: 2.1rem;
     line-height: 1;
-    padding: 4px 8px;
+    padding: 4px 10px;
   }
   .wizard-header h2 {
-    margin: 0 0 4px;
+    margin: 0 0 6px;
     color: var(--accent);
-    font-size: 1.1rem;
+    font-size: 1.7rem;
   }
   .wizard-progress {
     margin: 0;
-    font-size: 0.8rem;
+    font-size: 1.05rem;
     color: var(--text-dim);
   }
   .wizard-progress-dots {
     display: flex;
-    gap: 6px;
-    margin: 10px 0 14px;
+    gap: 8px;
+    margin: 14px 0 18px;
   }
   .wizard-dot {
-    width: 8px;
-    height: 8px;
+    width: 11px;
+    height: 11px;
     border-radius: 50%;
     background: var(--border);
   }
   .wizard-dot.is-active { background: var(--accent); }
   .wizard-dot.is-done { background: var(--good); }
   .wizard-step-explain {
-    font-size: 0.9rem;
-    line-height: 1.4;
+    font-size: 1.15rem;
+    line-height: 1.55;
     color: var(--text);
-    margin: 0 0 14px;
+    margin: 0 0 18px;
   }
   .wizard-footer {
     display: flex;
     justify-content: flex-end;
-    gap: 8px;
-    margin-top: 16px;
+    gap: 10px;
+    margin-top: 20px;
   }
   .wizard-status-line {
-    font-size: 0.85rem;
+    font-size: 1.05rem;
     color: var(--text-dim);
-    margin: 10px 0;
+    margin: 12px 0;
   }
   .wizard-status-line.ok { color: var(--good); }
   .wizard-step-actions {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    margin: 10px 0;
+    gap: 10px;
+    margin: 12px 0;
+  }
+  /* Buttons/labels/inputs inside the wizard read noticeably bigger than
+     the rest of this page - it's meant to be legible from across a room
+     while someone's setting up a mounted phone, not held up close. The
+     close button keeps its own smaller, borderless treatment above. */
+  .wizard-card button:not(.wizard-close-btn) {
+    font-size: 1.1rem;
+    padding: 14px 20px;
+  }
+  .wizard-card label {
+    font-size: 1.05rem;
+  }
+  .wizard-card select,
+  .wizard-card input[type="text"],
+  .wizard-card input[type="number"] {
+    font-size: 1.1rem;
+    padding: 12px 14px;
   }
 
   /* Floating pill shown while a wizard step has handed off to a real tab
@@ -301,8 +319,8 @@
 
   <div class="tabs">
     <button class="tab-btn active" id="tabRecognize" type="button">Recognize</button>
-    <button class="tab-btn" id="tabEnroll" type="button">Enroll</button>
     <button class="tab-btn" id="tabCalibrate" type="button">Table</button>
+    <button class="tab-btn" id="tabEnroll" type="button">Enroll</button>
   </div>
 
   <section class="panel" id="recognizePanel">
@@ -313,29 +331,6 @@
       signal that only lasts one day's outfit. Two players in very similar clothes
       may be confused. Tune the settings below against the debug overlay.
     </p>
-  </section>
-
-  <section class="panel" id="enrollPanel" hidden>
-    <h2>Enroll a player (today's outfit)</h2>
-    <label for="enrollName">Player</label>
-    <select id="enrollName">
-      <option value="" disabled selected>No players found yet</option>
-    </select>
-    <div class="hint">Stand normally, facing the camera, where players usually approach from. Or skip this - just play normally and scoring a real shot teaches the camera too (see below).</div>
-    <button id="captureBtn" type="button">Capture 8 samples</button>
-    <div class="progress-text" id="captureProgress" hidden></div>
-    <p class="fine">
-      Scoring a real shot on the tablet also labels the camera's current
-      candidate automatically - no separate step needed once play starts.
-      Have each player take their first few shots from different sides of
-      the table so their profile isn't just one angle.
-    </p>
-
-    <h2 style="margin-top:16px">Enrolled today</h2>
-    <div id="bootstrapStatus" class="hint"></div>
-    <div id="playerList"><div class="hint">No players enrolled yet.</div></div>
-    <button id="clearAllBtn" class="danger" type="button" style="margin-top:10px">Clear all (new session)</button>
-    <div class="hint" style="margin-top:6px">Appearance only matches today's clothes - clear and re-enroll everyone at the start of each new session.</div>
   </section>
 
   <section class="panel" id="calibratePanel" hidden>
@@ -388,6 +383,29 @@
       <button id="cancelCalibrationBtn" class="secondary" type="button">Cancel</button>
     </div>
     <button id="recalibrateBtn" class="secondary" type="button" hidden>Re-calibrate</button>
+  </section>
+
+  <section class="panel" id="enrollPanel" hidden>
+    <h2>Enroll a player (today's outfit)</h2>
+    <label for="enrollName">Player</label>
+    <select id="enrollName">
+      <option value="" disabled selected>No players found yet</option>
+    </select>
+    <div class="hint">Pick a player, then have them bend over and take a shot at the table - each shot captures a sample automatically, with a beep, no button to press.</div>
+    <div class="progress-text" id="captureProgress" hidden></div>
+    <button id="stopCaptureBtn" class="secondary" type="button" hidden>Stop &amp; Save</button>
+    <p class="fine">
+      Scoring a real shot on the tablet also labels the camera's current
+      candidate automatically - no separate step needed once play starts.
+      Have each player take their first few shots from different sides of
+      the table so their profile isn't just one angle.
+    </p>
+
+    <h2 style="margin-top:16px">Enrolled today</h2>
+    <div id="bootstrapStatus" class="hint"></div>
+    <div id="playerList"><div class="hint">No players enrolled yet.</div></div>
+    <button id="clearAllBtn" class="danger" type="button" style="margin-top:10px">Clear all (new session)</button>
+    <div class="hint" style="margin-top:6px">Appearance only matches today's clothes - clear and re-enroll everyone at the start of each new session.</div>
   </section>
 
   <details class="panel" id="settingsPanel">
@@ -465,10 +483,11 @@
 
     <div class="wizard-step" id="wizardStep4" hidden>
       <p class="wizard-step-explain">
-        Two ways to teach it your players: enroll someone now (stand in frame, capture
-        a few samples), or just start playing - scoring a real shot on the tablet
-        teaches the camera too. Either way, appearance only lasts one day's outfit, so
-        this happens fresh each session.
+        Two ways to teach it your players: enroll someone now (pick their name, then
+        they just bend over and take a few real shots - it captures and beeps on its
+        own), or just start playing - scoring a real shot on the tablet teaches the
+        camera too. Either way, appearance only lasts one day's outfit, so this
+        happens fresh each session.
       </p>
       <div class="wizard-step-actions">
         <button id="wizardGoEnrollBtn" type="button">Enroll a Player Now</button>
@@ -514,7 +533,6 @@
   var RECONNECT_DELAY_MS = 3000;
   var DETECTION_INTERVAL_MS = 280; // ~3.5 fps, within the 3-5fps target
   var ENROLL_TARGET_SAMPLES = 8;
-  var ENROLL_CAPTURE_TIMEOUT_MS = 15000;
   var SETTINGS_STORAGE_KEY = "pmc-camera-settings";
   var CALIBRATION_STORAGE_KEY = "pmc-camera-calibration";
   var KEYPOINT_CONF_FLOOR = 0.3;
@@ -585,7 +603,7 @@
   var recognizeLog = document.getElementById("recognizeLog");
 
   var enrollNameInput = document.getElementById("enrollName");
-  var captureBtn = document.getElementById("captureBtn");
+  var stopCaptureBtn = document.getElementById("stopCaptureBtn");
   var captureProgress = document.getElementById("captureProgress");
   var playerListEl = document.getElementById("playerList");
   var clearAllBtn = document.getElementById("clearAllBtn");
@@ -1063,8 +1081,14 @@
       reEnrollBtn.textContent = "Re-enroll";
       reEnrollBtn.type = "button";
       reEnrollBtn.addEventListener("click", function () {
-        enrollNameInput.value = entry.displayName || key;
+        var reEnrollName = entry.displayName || key;
+        enrollNameInput.value = reEnrollName;
         enrollNameInput.scrollIntoView({ behavior: "smooth", block: "center" });
+        // Setting .value programmatically doesn't fire "change" - capture
+        // has to be armed explicitly here too, the same as picking a name
+        // from the dropdown directly does.
+        if (enrollCapturing) finishEnrollCapture();
+        startEnrollCapture(reEnrollName);
       });
       var deleteBtn = document.createElement("button");
       deleteBtn.className = "danger";
@@ -1598,36 +1622,102 @@
   loadCalibration();
 
   // ---- Enrollment capture ----
+  // Fully automatic, shot-triggered (per explicit request) - picking a
+  // player arms capture immediately, no button press starts it. Each
+  // player only has to bend over and take a real shot at the table - the
+  // exact same "bent" stance signal the live recognition loop already
+  // tracks (see handleRecognitionFrame/settings.bendEnterAngle). One
+  // sample per distinct shot, edge-triggered on the upright-to-bent
+  // transition rather than every frame of one continuous bend (which
+  // would otherwise grab several near-duplicate samples from a single
+  // shot instead of varied real ones) - a beep confirms each capture.
+  // Auto-saves and disarms once ENROLL_TARGET_SAMPLES is reached; no
+  // fixed time limit, since real shots happen on their own schedule, not
+  // a clock's.
   var enrollCapturing = false;
   var enrollSamples = [];
   var enrollTargetName = "";
-  var enrollTimeoutTimer = null;
+  var enrollBentConsecutive = 0;
+  var enrollShotCaptured = false; // true while still bent from the shot just captured - blocks a second capture until upright again
 
-  captureBtn.addEventListener("click", function () {
-    var name = enrollNameInput.value.trim();
-    if (!name) { enrollNameInput.focus(); return; }
+  var enrollAudioCtx = null;
+  function playBeep() {
+    try {
+      if (!enrollAudioCtx) enrollAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      var ctx = enrollAudioCtx;
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.3, ctx.currentTime + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.15);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.16);
+    } catch (e) {}
+  }
+
+  function startEnrollCapture(name) {
     enrollTargetName = name;
     enrollSamples = [];
+    enrollBentConsecutive = 0;
+    enrollShotCaptured = false;
     enrollCapturing = true;
-    captureBtn.disabled = true;
+    stopCaptureBtn.hidden = false;
     captureProgress.hidden = false;
-    captureProgress.textContent = "Capturing... (0/" + ENROLL_TARGET_SAMPLES + ")";
-    enrollTimeoutTimer = setTimeout(finishEnrollCapture, ENROLL_CAPTURE_TIMEOUT_MS);
+    captureProgress.textContent = "Waiting for " + name + " to bend over and shoot... (0/" + ENROLL_TARGET_SAMPLES + ")";
+  }
+
+  enrollNameInput.addEventListener("change", function () {
+    var name = enrollNameInput.value.trim();
+    if (!name) return;
+    // Switching players mid-capture saves whatever was already captured
+    // for the previous one rather than silently discarding it.
+    if (enrollCapturing) finishEnrollCapture();
+    startEnrollCapture(name);
   });
+
+  stopCaptureBtn.addEventListener("click", finishEnrollCapture);
 
   function finishEnrollCapture() {
     if (!enrollCapturing) return;
     enrollCapturing = false;
-    if (enrollTimeoutTimer) { clearTimeout(enrollTimeoutTimer); enrollTimeoutTimer = null; }
-    captureBtn.disabled = false;
+    stopCaptureBtn.hidden = true;
     if (enrollSamples.length === 0) {
-      captureProgress.textContent = "No clear pose detected - try again with better lighting/framing.";
+      captureProgress.textContent = "No shots captured - pick the player again to try once more.";
       setTimeout(function () { captureProgress.hidden = true; }, 3000);
       return;
     }
     send({ type: "enroll-save", player_name: enrollTargetName, descriptors: enrollSamples });
-    captureProgress.textContent = "Saved " + enrollSamples.length + " samples for " + enrollTargetName + ".";
+    captureProgress.textContent = "Saved " + enrollSamples.length + " shot" + (enrollSamples.length === 1 ? "" : "s") + " for " + enrollTargetName + ".";
     setTimeout(function () { captureProgress.hidden = true; }, 3000);
+  }
+
+  // Called from runDetectionLoop while enrollCapturing is true, in place
+  // of handleRecognitionFrame - edge-triggered on bent stance the same
+  // way fireEvent is for live recognition, but captures a sample instead
+  // of broadcasting a player_up. Also updates the shared `stance` var so
+  // the debug overlay's bent/upright border color stays meaningful during
+  // capture too, not frozen on whatever it last was.
+  function handleEnrollCaptureFrame(analysis) {
+    if (!analysis) { enrollBentConsecutive = 0; return; }
+    if (analysis.torsoAngleDeg >= settings.bendEnterAngle) stance = "bent";
+    else if (analysis.torsoAngleDeg <= settings.bendExitAngle) stance = "upright";
+    if (stance === "upright") {
+      enrollBentConsecutive = 0;
+      enrollShotCaptured = false; // back upright - re-armed for the next shot
+      return;
+    }
+    if (stance !== "bent") return; // hysteresis band
+    enrollBentConsecutive++;
+    if (enrollShotCaptured || enrollBentConsecutive < settings.consecutiveFrames) return;
+    enrollShotCaptured = true;
+    enrollSamples.push(analysis.descriptor);
+    playBeep();
+    captureProgress.textContent = enrollSamples.length + "/" + ENROLL_TARGET_SAMPLES + " shots captured for " + enrollTargetName + "...";
+    if (enrollSamples.length >= ENROLL_TARGET_SAMPLES) finishEnrollCapture();
   }
 
   // ---- Two-phase recognition state machine ----
@@ -1837,11 +1927,7 @@
         var analysis = pose ? analyzePose(pose.keypoints) : null;
 
         if (enrollCapturing) {
-          if (analysis) {
-            enrollSamples.push(analysis.descriptor);
-            captureProgress.textContent = "Capturing... (" + enrollSamples.length + "/" + ENROLL_TARGET_SAMPLES + ")";
-          }
-          if (enrollSamples.length >= ENROLL_TARGET_SAMPLES) finishEnrollCapture();
+          handleEnrollCaptureFrame(analysis);
           drawOverlay(pose ? pose.keypoints : null, analysis, null);
         } else {
           var matchLabel = null;
