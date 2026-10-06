@@ -1962,8 +1962,15 @@
   var cameraWizardLinkPollTimer = null;
 
   var sameDeviceCameraOverlay = document.getElementById("same-device-camera-overlay");
+  var sameDeviceCameraCard = document.querySelector("#same-device-camera-overlay .same-device-camera-card");
   var sameDeviceCameraIframe = document.getElementById("same-device-camera-iframe");
   var btnCloseSameDeviceCamera = document.getElementById("btn-close-same-device-camera");
+  var cameraDebugOptionsRow = document.getElementById("camera-debug-options-row");
+  var cameraDebugCheckbox = document.getElementById("camera-debug-checkbox");
+  var cameraVoiceCheckbox = document.getElementById("camera-voice-checkbox");
+  var cameraInlinePreviewWrap = document.getElementById("camera-inline-preview-wrap");
+  var cameraInlinePreviewHome = document.getElementById("camera-inline-preview-home");
+  var btnExpandSameDeviceCamera = document.getElementById("btn-expand-same-device-camera");
 
   var btnToggleFocus = document.getElementById("btn-toggle-focus");
   var btnToggleKeypadSpeech = document.getElementById("btn-toggle-keypad-speech");
@@ -29055,6 +29062,11 @@
       return;
     }
     state.cameraInputEnabled = cameraInputCheckbox.checked;
+    // This is the one real "stop" action for same-device mode - closing
+    // the camera overlay/preview on its own only minimizes it (keeps
+    // recognition running during gameplay), see stopSameDeviceCamera's
+    // own comment.
+    if (!cameraInputCheckbox.checked) stopSameDeviceCamera();
     saveState();
     renderAll();
   });
@@ -29359,15 +29371,48 @@
   // via <iframe src="camera.html?embedded=1">, so the camera and the
   // scoreboard can be the very same device with no relay/server involved.
   // Deliberately NOT added to isAnyOverlayOpen()'s list above - this
-  // overlay stays open for the entire time embedded player_up events are
+  // overlay stays open (or, once minimized, the inline preview below
+  // stays live) for the entire time embedded player_up events are
   // expected, so including it there would self-block every same-device
   // recognition event, always.
+  //
+  // Minimize (the X button) and stop (unchecking "Camera player
+  // recognition") are deliberately different actions on the SAME
+  // iframe, not a close/reopen pair - closing used to tear the camera
+  // down entirely via stop-camera, which meant recognition only ever
+  // worked while this full-screen view was open and blocking the whole
+  // screen, useless during actual gameplay. Minimizing instead reparents
+  // the still-running iframe into a small inline preview in the Players
+  // panel (never calling stop-camera), so detection keeps going; only
+  // the master checkbox actually stops it.
+  // iframe.src as a DOM property never reads back empty - even with the
+  // src *attribute* unset, the property resolves against the page's own
+  // URL - so truthiness checks against sameDeviceCameraIframe.src itself
+  // would always be true. This tracks "actually started this session"
+  // explicitly instead.
+  var sameDeviceCameraRunning = false;
+
   function openSameDeviceCameraOverlay() {
-    sameDeviceCameraIframe.src = "camera.html?embedded=1";
+    if (!sameDeviceCameraRunning) {
+      sameDeviceCameraRunning = true;
+      sameDeviceCameraIframe.src = "camera.html?embedded=1";
+    }
+    if (sameDeviceCameraIframe.parentNode !== sameDeviceCameraCard) sameDeviceCameraCard.appendChild(sameDeviceCameraIframe);
+    cameraInlinePreviewWrap.classList.add("hidden");
     sameDeviceCameraOverlay.classList.remove("hidden");
   }
 
-  function closeSameDeviceCameraOverlay() {
+  function minimizeSameDeviceCameraOverlay() {
+    sameDeviceCameraOverlay.classList.add("hidden");
+    if (sameDeviceCameraIframe.parentNode !== cameraInlinePreviewHome) cameraInlinePreviewHome.appendChild(sameDeviceCameraIframe);
+    cameraDebugOptionsRow.classList.remove("hidden");
+    cameraInlinePreviewWrap.classList.remove("hidden");
+    syncCameraDebugCheckboxesFromStorage();
+  }
+
+  function stopSameDeviceCamera() {
+    if (!sameDeviceCameraRunning) return; // never started this session - nothing to stop
+    sameDeviceCameraRunning = false;
     // postMessage first so camera.html can stop its own MediaStreamTracks
     // and release the wake lock - clearing src alone isn't a reliable
     // teardown signal (timing varies across Safari/Chrome). postMessage
@@ -29381,12 +29426,62 @@
       sameDeviceCameraIframe.contentWindow.postMessage({ type: "stop-camera" }, location.origin);
     } catch (e) {}
     sameDeviceCameraOverlay.classList.add("hidden");
+    cameraInlinePreviewWrap.classList.add("hidden");
+    cameraDebugOptionsRow.classList.add("hidden");
     setTimeout(function () {
       sameDeviceCameraIframe.src = "";
     }, 0);
   }
 
-  btnCloseSameDeviceCamera.addEventListener("click", closeSameDeviceCameraOverlay);
+  btnCloseSameDeviceCamera.addEventListener("click", minimizeSameDeviceCameraOverlay);
+  btnExpandSameDeviceCamera.addEventListener("click", openSameDeviceCameraOverlay);
+
+  // The debug/voice checkboxes live on this page (not inside the iframe),
+  // but the settings they control are camera.html's own - same-device
+  // mode means the exact same origin, so its localStorage IS this page's
+  // localStorage, making direct read/write the simplest sync mechanism;
+  // a lightweight postMessage just tells an already-running iframe to
+  // reload from it immediately rather than waiting for its own next poll.
+  var CAMERA_SETTINGS_STORAGE_KEY = "pmc-camera-settings"; // must match camera.html's own SETTINGS_STORAGE_KEY
+
+  function updateCameraInlinePreviewVisibility() {
+    var show = cameraDebugCheckbox.checked || cameraVoiceCheckbox.checked;
+    cameraInlinePreviewHome.classList.toggle("hidden", !show);
+  }
+
+  function sendCameraDebugSettingsToIframe() {
+    try {
+      var raw = localStorage.getItem(CAMERA_SETTINGS_STORAGE_KEY);
+      var parsed = raw ? JSON.parse(raw) : {};
+      parsed.debugOverlay = cameraDebugCheckbox.checked;
+      parsed.voiceStatusEnabled = cameraVoiceCheckbox.checked;
+      localStorage.setItem(CAMERA_SETTINGS_STORAGE_KEY, JSON.stringify(parsed));
+    } catch (e) {}
+    if (sameDeviceCameraRunning) {
+      try {
+        sameDeviceCameraIframe.contentWindow.postMessage({ type: "reload-settings" }, location.origin);
+      } catch (e) {}
+    }
+  }
+
+  function syncCameraDebugCheckboxesFromStorage() {
+    try {
+      var raw = localStorage.getItem(CAMERA_SETTINGS_STORAGE_KEY);
+      var parsed = raw ? JSON.parse(raw) : {};
+      cameraDebugCheckbox.checked = !!parsed.debugOverlay;
+      cameraVoiceCheckbox.checked = !!parsed.voiceStatusEnabled;
+    } catch (e) {}
+    updateCameraInlinePreviewVisibility();
+  }
+
+  cameraDebugCheckbox.addEventListener("change", function () {
+    sendCameraDebugSettingsToIframe();
+    updateCameraInlinePreviewVisibility();
+  });
+  cameraVoiceCheckbox.addEventListener("change", function () {
+    sendCameraDebugSettingsToIframe();
+    updateCameraInlinePreviewVisibility();
+  });
 
   // Same-device mode's own transport counterpart to js/camera-client.js's
   // WebSocket listener - receives the exact same message shapes

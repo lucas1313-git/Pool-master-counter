@@ -4507,6 +4507,30 @@ input[type="number"] {
   background: #000;
 }
 
+/* Same <iframe> as .same-device-camera-overlay above - reparented in
+   here (not cloned - a second live camera/detection loop would be
+   wasteful and would lose the first one's enrollment-capture state)
+   whenever that overlay is minimized rather than closed, so recognition
+   keeps running during actual gameplay instead of stopping the moment
+   the full-screen setup view is dismissed. Outside that overlay's own
+   flex column, the iframe's flex:1 1 auto no longer does anything, so
+   height has to come from here instead. */
+.camera-inline-preview {
+  margin-top: 10px;
+  height: 480px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.camera-inline-preview .same-device-camera-iframe {
+  height: 100%;
+}
+
+#camera-inline-preview-wrap #btn-expand-same-device-camera {
+  margin-top: 10px;
+}
+
 .onboarding-card {
   max-width: 460px;
   text-align: center;
