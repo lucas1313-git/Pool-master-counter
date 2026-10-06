@@ -100,7 +100,20 @@
   // independently.
   function handleCandidateSeen(msg) {
     if (!bridgeReady()) return;
-    window.PMCCameraBridge.reportCandidateSeen(msg.player_name || null, msg.stance, msg.angle, msg.closestName, msg.closestDistance, msg.matchThreshold, msg.rawPoseConfidence, msg.keypointConfFloor, msg.tooFarFromRail);
+    window.PMCCameraBridge.reportCandidateSeen(msg.player_name || null, msg.stance, msg.angle, msg.closestName, msg.closestDistance, msg.matchThreshold, msg.rawPoseConfidence, msg.keypointConfFloor, msg.tooFarFromRail, msg.flashingName, msg.needsConfirmationName);
+  }
+
+  // Scorecard icon state (flashing/idle/+) for cross-device mode - same
+  // messages same-device mode gets directly from the iframe, just over
+  // the relay instead. See camera.html's own processIdlePoses/
+  // notifyEnrollmentUpdated comments for what each payload carries.
+  function handleIdleStates(msg) {
+    if (!bridgeReady() || !window.PMCCameraBridge.reportIdleStates) return;
+    window.PMCCameraBridge.reportIdleStates(Array.isArray(msg.idle) ? msg.idle : []);
+  }
+  function handleEnrollmentUpdated(msg) {
+    if (!bridgeReady() || !window.PMCCameraBridge.reportEnrollmentUpdated || !msg.player_name) return;
+    window.PMCCameraBridge.reportEnrollmentUpdated(msg.player_name);
   }
 
   function scheduleReconnect() {
@@ -136,6 +149,8 @@
       else if (msg.type === "settings-request") handleSettingsRequest();
       else if (msg.type === "roster-request") handleRosterRequest();
       else if (msg.type === "candidate") handleCandidateSeen(msg);
+      else if (msg.type === "idle-states") handleIdleStates(msg);
+      else if (msg.type === "enrollment-updated") handleEnrollmentUpdated(msg);
     });
     ws.addEventListener("close", function () {
       ws = null;
