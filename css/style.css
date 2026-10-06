@@ -1981,6 +1981,32 @@ input[type="number"] {
   border-color: var(--accent);
 }
 
+/* Fixed 18x18 per explicit request - a roster-row badge, not meant to
+   draw the eye the way the rating/team badges do. */
+.roster-camera-enrolled {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: var(--accent);
+  flex: none;
+}
+.roster-camera-enrolled svg { width: 18px; height: 18px; display: block; }
+
+.roster-camera-enroll-btn {
+  background: var(--bg-panel);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  font-size: 0.78rem;
+  padding: 6px 10px;
+  flex: none;
+}
+.roster-camera-enroll-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
 .empty-hint {
   color: var(--text-dim);
   font-size: 0.9rem;
