@@ -1936,6 +1936,9 @@
   var cameraWizardUrl = document.getElementById("camera-wizard-url");
   var cameraWizardQr = document.getElementById("camera-wizard-qr");
   var cameraWizardHttpsMissing = document.getElementById("camera-wizard-https-missing");
+  var cameraWizardHttpsFailed = document.getElementById("camera-wizard-https-failed");
+  var cameraWizardHttpsFailedText = document.getElementById("camera-wizard-https-failed-text");
+  var btnCameraWizardRetryHttps = document.getElementById("btn-camera-wizard-retry-https");
   var cameraWizardNoRelay = document.getElementById("camera-wizard-no-relay");
   var cameraWizardInstallPrompt = document.getElementById("camera-wizard-install-prompt");
   var cameraWizardInstallLink = document.getElementById("camera-wizard-install-link");
@@ -29105,10 +29108,16 @@
   // plain http://localhost:PORT/, camera.html must be
   // https://<lan-ip>:(PORT+1)/camera.html).
   function showCameraWizardLinkState(state) {
-    // Exactly one of these three is ever shown - a fresh fetch always
-    // starts by hiding all three, then reveals the one that applies.
+    // Exactly one of these is ever shown - a fresh fetch always starts by
+    // hiding all of them, then reveals the one that applies.
+    // "https-missing" (still starting up, silently retried - see
+    // loadCameraWizardLinkInfo) and "https-failed" (actually broken, a
+    // specific reason to show and a manual retry) look similar but mean
+    // very different things to the user, so they're kept as separate
+    // states rather than folded into one.
     cameraWizardLinkBlock.classList.toggle("hidden", state !== "ok");
     cameraWizardHttpsMissing.classList.toggle("hidden", state !== "https-missing");
+    cameraWizardHttpsFailed.classList.toggle("hidden", state !== "https-failed");
     cameraWizardNoRelay.classList.toggle("hidden", state !== "no-relay");
     // Only "no-relay" (nothing running at all - e.g. a GitHub Pages copy)
     // offers the install prompt. "https-missing" means a server is
@@ -29171,6 +29180,22 @@
       .then(function (info) {
         var addr = info.addresses && info.addresses[0];
         if (!addr || !info.httpsPort) {
+          // Distinguish "still starting up" (silently keep checking - the
+          // common case, resolves itself within a few seconds) from
+          // "actually failed, with a specific reason" (standalone-entry.js
+          // sets httpsError once either cert generation or the HTTPS
+          // listener's own listen() call fails - see its own comments) -
+          // retrying forever when it's genuinely broken just wastes
+          // requests and leaves the user staring at a spinner-equivalent
+          // with no explanation.
+          if (info.httpsError) {
+            cameraWizardHttpsFailedText.textContent =
+              info.httpsError === "port-in-use"
+                ? T("cameraWizard.httpsFailedPortInUse")
+                : T("cameraWizard.httpsFailedGeneric", { error: info.httpsError });
+            showCameraWizardLinkState("https-failed");
+            return;
+          }
           showCameraWizardLinkState("https-missing");
           // The desktop app finishing its own startup (generating a
           // self-signed cert, bringing up the HTTPS listener) is the
@@ -29268,6 +29293,7 @@
   // to expand the (often-collapsed) Players panel first.
   btnOpenCameraWizardHeader.addEventListener("click", openCameraWizard);
   btnCameraWizardCancel.addEventListener("click", closeCameraWizard);
+  btnCameraWizardRetryHttps.addEventListener("click", loadCameraWizardLinkInfo);
   btnCameraWizardGo.addEventListener("click", advanceCameraWizard);
 
   // Mirrors cameraInputCheckbox/cameraMatchThresholdInput/cameraDebounceSecInput's

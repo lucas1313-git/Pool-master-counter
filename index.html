@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261005k">
+<link rel="stylesheet" href="css/style.css?v=20261005l">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -1278,6 +1278,10 @@
           <div id="camera-wizard-https-missing" class="hidden">
             <p class="group-session-error" data-i18n="cameraWizard.httpsMissing">This computer's local server is running, but it doesn't have HTTPS set up yet, so the camera page can't run on another phone. If you're using the desktop app, give it a moment - this updates automatically once it's ready. If you're running the server from a terminal, see server/README.md's HTTPS setup section.</p>
           </div>
+          <div id="camera-wizard-https-failed" class="hidden">
+            <p class="group-session-error" id="camera-wizard-https-failed-text"></p>
+            <button type="button" id="btn-camera-wizard-retry-https" class="btn btn-ghost" data-i18n="cameraWizard.retryButton">↻ Check Again</button>
+          </div>
           <div id="camera-wizard-no-relay" class="hidden">
             <p class="wizard-step-explain" data-i18n="cameraWizard.noRelayExplain">To run a phone as a camera, you need to install and run this app from your local computer.</p>
           </div>
@@ -2344,7 +2348,7 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20261005k"></script>
+<script src="js/app.js?v=20261005l"></script>
 <script src="js/camera-client.js?v=20261004a"></script>
 </body>
 </html>
