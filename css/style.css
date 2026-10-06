@@ -2007,6 +2007,40 @@ input[type="number"] {
   border-color: var(--accent);
 }
 
+/* Shown only while the camera sees someone bent over at the table it
+   can't put a name to - "non-disturbing" per explicit request: small,
+   doesn't block the scoreboard underneath, self-clears the moment the
+   situation resolves (matched, or they stand up) without needing to be
+   dismissed, though a close button is still offered for "that's not
+   actually someone shooting" cases. */
+.unmatched-shooter-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: fit-content;
+  max-width: 92%;
+  margin: 0 auto 10px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 2px solid var(--accent);
+  color: var(--text);
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+.unmatched-shooter-banner-icon { font-size: 1.1rem; line-height: 1; }
+.unmatched-shooter-banner-dismiss {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 1.3rem;
+  line-height: 1;
+  padding: 0 0 0 4px;
+  cursor: pointer;
+}
+.unmatched-shooter-banner-dismiss:hover { color: var(--accent); }
+
 .empty-hint {
   color: var(--text-dim);
   font-size: 0.9rem;
