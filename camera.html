@@ -530,7 +530,14 @@
 (function () {
   "use strict";
 
-  var MODEL_URL = "camera/models/movenet-lightning/model.json";
+  // MultiPose (not Singlepose) - detects up to 6 people in one pass, which
+  // is the prerequisite for telling a standing shooter apart from people
+  // sitting around the table at all. Singlepose can only ever track the
+  // model's own single "best" detection, which has no way to prefer the
+  // shooter over someone sitting closer to the camera. Vendored the same
+  // way as the old singlepose model (no CDN) - weights captured directly
+  // from a loaded TFHub model instance, not hand-converted.
+  var MODEL_URL = "camera/models/movenet-multipose-lightning/model.json";
   var WS_PATH = "/ws-camera";
   // Set only when opened as an <iframe src="camera.html?embedded=1"> from
   // index.html (the same-device mode) - see the "Relay connection" section
@@ -548,6 +555,15 @@
   var CALIBRATION_STORAGE_KEY = "pmc-camera-calibration";
   var CAMERA_DEVICE_STORAGE_KEY = "pmc-camera-selected-device";
   var KEYPOINT_CONF_FLOOR = 0.3;
+  // Hip->knee angle from vertical, in degrees, above which a detected
+  // person is treated as seated rather than standing (see
+  // quickStancePeek). Standing keeps the thigh close to vertical even
+  // with a wide stance (roughly 0-30 deg); sitting in a normal chair lifts
+  // the knee to about hip height, putting the thigh closer to horizontal
+  // (roughly 70-90 deg). 55 sits with margin on both sides - not tuned
+  // against real seated footage, so it's a starting point, not a
+  // validated constant.
+  var SEATED_HIP_KNEE_ANGLE_DEG = 55;
   var BACKGROUND_REF_STORAGE_KEY = "pmc-camera-background-ref";
   // How much a region's average grayscale luminance (0-255 scale) has to
   // have changed since the background snapshot for it to count as "a
@@ -797,7 +813,7 @@
       return tf.ready();
     }).then(function () {
       return poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
-        modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
+        modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING,
         modelUrl: MODEL_URL
       });
     }).then(function (d) {
@@ -1378,6 +1394,81 @@
     return { x0: x0 - padX, y0: y0 - padY, x1: x1 + padX, y1: y1 + padY };
   }
 
+  // ---- Multi-person selection (MultiPose returns up to 6 people) ----
+  // Cheap per-pose check used to pick which of several detected people is
+  // the one to actually track this frame - deliberately does none of
+  // analyzePose's expensive work (no canvas reads for appearance
+  // histograms, no regionLooksStatic check) since this runs once per
+  // DETECTED PERSON, not once per frame. That's the whole point: with up
+  // to 6 people in frame (several just sitting around the table), running
+  // the full appearance-extraction pipeline on all of them every frame
+  // would waste most of that work on people never relevant to anything -
+  // only the one person selectActivePose actually picks gets the full,
+  // expensive treatment via analyzePose below.
+  function quickStancePeek(keypoints) {
+    var ls = kp(keypoints, "left_shoulder"), rs = kp(keypoints, "right_shoulder");
+    var lh = kp(keypoints, "left_hip"), rh = kp(keypoints, "right_hip");
+    if (!ls || !rs || !lh || !rh) return null;
+    if (avgScore(ls, rs, lh, rh) < KEYPOINT_CONF_FLOOR) return null;
+
+    var shoulderMid = midpoint(ls, rs);
+    var hipMid = midpoint(lh, rh);
+    var torsoAngleDeg = Math.atan2(Math.abs(hipMid.x - shoulderMid.x), Math.abs(hipMid.y - shoulderMid.y)) * 180 / Math.PI;
+
+    // Standing vs seated - see SEATED_HIP_KNEE_ANGLE_DEG's own comment.
+    // Defaults permissive (standing) when knees aren't confidently
+    // visible, rather than excluding a real shooter just because their
+    // knees are occluded by the table.
+    var standing = true;
+    var lk = kp(keypoints, "left_knee"), rk = kp(keypoints, "right_knee");
+    if (lk && rk && avgScore(lh, rh, lk, rk) >= KEYPOINT_CONF_FLOOR) {
+      var kneeMid = midpoint(lk, rk);
+      var hipKneeAngleDeg = Math.atan2(Math.abs(kneeMid.x - hipMid.x), Math.abs(kneeMid.y - hipMid.y)) * 180 / Math.PI;
+      standing = hipKneeAngleDeg < SEATED_HIP_KNEE_ANGLE_DEG;
+    }
+
+    var la = kp(keypoints, "left_ankle"), ra = kp(keypoints, "right_ankle");
+    var ankleMid = null, legAngleDeg = null;
+    if (la && ra && avgScore(lh, rh, la, ra) >= KEYPOINT_CONF_FLOOR) {
+      ankleMid = midpoint(la, ra);
+      legAngleDeg = Math.atan2(Math.abs(ankleMid.x - hipMid.x), Math.abs(ankleMid.y - hipMid.y)) * 180 / Math.PI;
+    }
+
+    return { standing: standing, ankleMid: ankleMid, torsoAngleDeg: torsoAngleDeg, legAngleDeg: legAngleDeg };
+  }
+
+  // Picks which detected person (if any) to actually track this frame -
+  // must be standing (not seated - see quickStancePeek) AND, when
+  // calibrated, within railDistanceInches of the table (so someone
+  // standing but walking past, or chatting away from the table, isn't
+  // picked over - or instead of - the person actually at it). Among
+  // everyone who qualifies, prefers whoever's most bent over (actively
+  // mid-shot), tie-broken by distance to the table - this is what makes
+  // switching to a new shooter fast: the moment they bend over, they
+  // immediately outrank anyone else just standing upright nearby.
+  function selectActivePose(poses) {
+    var best = null, bestBendSignal = -Infinity, bestRailDist = Infinity;
+    poses.forEach(function (pose) {
+      var peek = quickStancePeek(pose.keypoints);
+      if (!peek || !peek.standing) return;
+      var railDist = 0;
+      if (calibration && peek.ankleMid) {
+        var real = applyHomography(calibration.h, peek.ankleMid.x, peek.ankleMid.y);
+        if (real) {
+          railDist = distanceToNearestRail(real, calibration.tableLength, calibration.tableWidth);
+          if (railDist > settings.railDistanceInches) return; // standing, but not at the table
+        }
+      }
+      var bendSignal = peek.legAngleDeg === null ? peek.torsoAngleDeg : peek.torsoAngleDeg - peek.legAngleDeg;
+      if (bendSignal > bestBendSignal || (bendSignal === bestBendSignal && railDist < bestRailDist)) {
+        best = pose;
+        bestBendSignal = bendSignal;
+        bestRailDist = railDist;
+      }
+    });
+    return best;
+  }
+
   // Returns { descriptor: [...], torsoAngleDeg, shoulderMid, hipMid, ankleMid,
   // confidenceOk } or null if the core keypoints needed for identity AND
   // stance (shoulders+hips) aren't confidently visible this frame.
@@ -1402,16 +1493,38 @@
     var torsoAngleDeg = Math.atan2(Math.abs(dx), Math.abs(dy)) * 180 / Math.PI;
     var shoulderWidth = Math.max(1, Math.abs(rs.x - ls.x));
 
+    // The shoulder LINE's own orientation (left shoulder to right shoulder,
+    // kept as two separate points rather than collapsed into shoulderMid) -
+    // near 0 deg when shoulders are level and spread wide (facing/backing
+    // the camera), approaching 90 deg when they're nearly stacked (standing
+    // edge-on/sideways). Orientation info the midpoint-only calc above
+    // discards entirely. Used downstream for standing/seated
+    // classification when picking which of several detected people to
+    // track, not just a diagnostic value.
+    var shoulderLineAngleDeg = Math.atan2(Math.abs(rs.y - ls.y), Math.abs(rs.x - ls.x)) * 180 / Math.PI;
+
     var torsoHist = regionHistogram(boxFromPoints([ls, rs, lh, rh], 0.08)) || new Array(HUE_BINS * SAT_BINS).fill(0);
 
     var lk = kp(keypoints, "left_knee"), rk = kp(keypoints, "right_knee");
     var la = kp(keypoints, "left_ankle"), ra = kp(keypoints, "right_ankle");
     var legsHist = new Array(HUE_BINS * SAT_BINS).fill(0);
     var ankleMid = null;
+    // Angle of the hip->ankle vector from vertical, when ankles are
+    // confidently visible - null otherwise (legs occluded by the table,
+    // out of frame, etc. - common enough that nothing downstream should
+    // require this). A genuine bend-over-to-shoot keeps the legs close to
+    // vertical while the torso tips forward; the whole body tilting
+    // together (camera-angle artifact, someone just walking past at an
+    // angle) moves torso and legs by similar amounts. Comparing the two
+    // is a much more distinctive signature for "this is really a shooting
+    // stance" than torso angle alone.
+    var legAngleDeg = null;
     if (la && ra && avgScore(lh, rh, la, ra) >= KEYPOINT_CONF_FLOOR) {
       var legPoints = [lh, rh, la, ra].concat(lk && rk ? [lk, rk] : []);
       legsHist = regionHistogram(boxFromPoints(legPoints, 0.05)) || legsHist;
       ankleMid = midpoint(la, ra);
+      var ldx = ankleMid.x - hipMid.x, ldy = ankleMid.y - hipMid.y;
+      legAngleDeg = Math.atan2(Math.abs(ldx), Math.abs(ldy)) * 180 / Math.PI;
     }
 
     var le = kp(keypoints, "left_elbow"), re = kp(keypoints, "right_elbow");
@@ -1447,12 +1560,27 @@
     return {
       descriptor: descriptor,
       torsoAngleDeg: torsoAngleDeg,
+      shoulderLineAngleDeg: shoulderLineAngleDeg,
+      legAngleDeg: legAngleDeg,
       shoulderMid: shoulderMid,
       hipMid: hipMid,
       ankleMid: ankleMid,
       shoulderWidth: shoulderWidth,
       box: box
     };
+  }
+
+  // A genuine bend-to-shoot keeps the legs close to vertical while the
+  // torso tips forward; the whole body tilting together (a camera-angle
+  // artifact, someone just walking past at an angle) moves torso and legs
+  // by similar amounts. Subtracting legAngleDeg from torsoAngleDeg
+  // suppresses the latter case without weakening real bend detection at
+  // all - legs stay near 0 deg during a genuine bend, so this is close to
+  // a no-op then. Falls back to torso angle alone when ankles aren't
+  // confidently visible (occluded by the table, out of frame - common
+  // enough that nothing should block on it).
+  function effectiveBendAngle(analysis) {
+    return analysis.legAngleDeg === null ? analysis.torsoAngleDeg : analysis.torsoAngleDeg - analysis.legAngleDeg;
   }
 
   function histogramDistance(a, b) {
@@ -2077,8 +2205,9 @@
       }
     }
 
-    if (analysis.torsoAngleDeg >= settings.bendEnterAngle) stance = "bent";
-    else if (analysis.torsoAngleDeg <= settings.bendExitAngle) stance = "upright";
+    var enrollBendSignal = effectiveBendAngle(analysis);
+    if (enrollBendSignal >= settings.bendEnterAngle) stance = "bent";
+    else if (enrollBendSignal <= settings.bendExitAngle) stance = "upright";
 
     if (stance === "upright") {
       enrollBentConsecutive = 0;
@@ -2286,8 +2415,9 @@
     }
     lastConfidentPoseAt = Date.now();
 
-    if (analysis.torsoAngleDeg >= settings.bendEnterAngle) stance = "bent";
-    else if (analysis.torsoAngleDeg <= settings.bendExitAngle) stance = "upright";
+    var bendSignal = effectiveBendAngle(analysis);
+    if (bendSignal >= settings.bendEnterAngle) stance = "bent";
+    else if (bendSignal <= settings.bendExitAngle) stance = "upright";
     // else: stays in whatever it already was (hysteresis band)
 
     var closeEnough = withinRailDistance(analysis);
@@ -2535,14 +2665,24 @@
     detector.estimatePoses(videoEl)
       .then(function (poses) {
         lastPoseResultAt = Date.now();
-        var pose = poses && poses[0];
+        // selectActivePose does the cheap per-person filtering (standing,
+        // near the table, most-bent-over-wins) across everyone MultiPose
+        // found - analyzePose's expensive appearance-extraction work
+        // below only ever runs on this one selection, never on the other
+        // up-to-5 people also in frame.
+        var pose = poses && poses.length ? selectActivePose(poses) : null;
         var analysis = pose ? analyzePose(pose.keypoints) : null;
         // Computed independently of analyzePose's own gating, specifically
         // so a rejected-for-low-confidence pose is still visible as a
         // number somewhere - see lastRawPoseConfidence's own comment.
-        if (pose && !analysis && !lastRejectedAsStatic) {
-          var rawLs = kp(pose.keypoints, "left_shoulder"), rawRs = kp(pose.keypoints, "right_shoulder");
-          var rawLh = kp(pose.keypoints, "left_hip"), rawRh = kp(pose.keypoints, "right_hip");
+        // Falls back to the model's own top pose when nobody was selected
+        // (e.g. everyone in frame is seated) so this still reflects
+        // *something*, rather than going blank just because no one
+        // qualified as the active shooter.
+        var rawPose = pose || (poses && poses[0]);
+        if (rawPose && !analysis && !lastRejectedAsStatic) {
+          var rawLs = kp(rawPose.keypoints, "left_shoulder"), rawRs = kp(rawPose.keypoints, "right_shoulder");
+          var rawLh = kp(rawPose.keypoints, "left_hip"), rawRh = kp(rawPose.keypoints, "right_hip");
           lastRawPoseConfidence = rawLs || rawRs || rawLh || rawRh ? avgScore(rawLs, rawRs, rawLh, rawRh) : null;
         } else {
           lastRawPoseConfidence = null;
