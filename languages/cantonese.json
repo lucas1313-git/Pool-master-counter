@@ -869,6 +869,8 @@
   "players.cameraVoiceEnable": "🔊 讀出球員狀態(見到/開波)",
   "players.cameraVoiceEnableHelpAria": "「讀出玩家狀態」係做咩嘅?",
   "players.cameraVoiceEnableHelpText": "呢部機會讀出聲 - 鏡頭見到有人企喺枱邊就講「[名]見到」,確認咗打波就講「[名]打波」。如果你冇望住螢幕就幾有用。如果配對仲未成功(睇吓除錯紀錄),就冇咩可以讀,因為呢兩句都係要真係配對到先會講。",
+  "players.cameraEnrolledTitle": "📷 已經登記咗鏡頭認人",
+  "players.cameraEnrollButton": "登記",
   "players.cameraCandidateSeen": "📷 鏡頭而家見到:{{name}}",
   "players.cameraCandidateNone": "📷 鏡頭行緊 - 而家未識到邊個",
   "players.cameraCandidateUpright": "📷 鏡頭見到有人站直 ({{angle}}°) - 仲未同任何玩家對應到",
