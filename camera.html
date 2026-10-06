@@ -1967,11 +1967,25 @@
   // signal would look identical whether detection had stalled entirely or
   // was just still watching the same person in the same stance.
   function reportLiveStatus(analysis) {
+    // closestName/closestDistance are the nearest enrolled player
+    // regardless of whether that distance actually clears
+    // settings.matchThreshold - exactly what the on-video debug overlay's
+    // own label already shows (see drawOverlay's matchLabel in
+    // runDetectionLoop), which is why that overlay can show a real name
+    // while player_name here stays null: the overlay is "who you're
+    // closest to," this is "who actually matched." Sending both is what
+    // lets a listener tell "not detecting anyone" apart from "detecting
+    // fine, but distance is just over threshold" - the latter means the
+    // match sensitivity setting needs loosening, not a code bug.
+    var closest = analysis ? findBestMatch(analysis.descriptor) : null;
     send({
       type: "candidate",
       player_name: (candidate && candidate.name) || null,
       stance: analysis ? stance : "unknown",
-      angle: analysis ? Math.round(analysis.torsoAngleDeg) : null
+      angle: analysis ? Math.round(analysis.torsoAngleDeg) : null,
+      closestName: closest ? closest.name : null,
+      closestDistance: closest ? Math.round(closest.distance * 100) / 100 : null,
+      matchThreshold: settings.matchThreshold
     });
   }
 

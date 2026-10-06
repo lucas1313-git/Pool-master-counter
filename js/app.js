@@ -29451,20 +29451,40 @@
   // Logged unconditionally, regardless of the debug checkbox, so turning
   // debug on mid-session immediately shows the backlog since the camera
   // started - only the element's *visibility* is gated by that checkbox.
-  // Keyed on name+stance (not angle, which changes every frame) so this
-  // only grows on an actual transition, not 3-4 times a second.
+  // Keyed on name+stance+closestName (not angle/closestDistance, which
+  // change every frame) so this only grows on an actual transition, not
+  // 3-4 times a second.
   var cameraDiagnosticLog = [];
   var CAMERA_DIAGNOSTIC_LOG_MAX = 60;
   var lastLoggedCameraSignature = null;
-  function logCameraDiagnostic(name, stance, angle) {
-    var signature = (name || "") + "|" + (stance || "unknown");
+  // closestName/closestDistance/matchThreshold: the nearest enrolled
+  // player even when that distance doesn't clear matchThreshold - the
+  // exact same number the on-video debug overlay's own label shows (see
+  // camera.html's drawOverlay). Surfacing it here is what turns "no
+  // match" from a dead end into an actionable number: if it's hovering
+  // just above matchThreshold, that's a sensitivity-setting problem, not
+  // a detection problem - loosen "Match sensitivity" in camera settings
+  // rather than assuming something's broken.
+  function logCameraDiagnostic(name, stance, angle, closestName, closestDistance, matchThreshold) {
+    var signature = (name || "") + "|" + (stance || "unknown") + "|" + (closestName || "");
     if (signature === lastLoggedCameraSignature) return;
     lastLoggedCameraSignature = signature;
     var text;
-    if (name) text = "Matched: " + name;
-    else if (stance === "bent" && typeof angle === "number") text = "Bent over (" + angle + "°) - no match";
-    else if (stance === "upright" && typeof angle === "number") text = "Upright (" + angle + "°) - no match";
-    else text = "No one in view";
+    if (name) {
+      text = "Matched: " + name;
+    } else {
+      var base =
+        stance === "bent" && typeof angle === "number"
+          ? "Bent over (" + angle + "°)"
+          : stance === "upright" && typeof angle === "number"
+            ? "Upright (" + angle + "°)"
+            : "No one in view";
+      if (closestName && typeof closestDistance === "number") {
+        text = base + " - closest: " + closestName + " (" + closestDistance.toFixed(2) + ", need ≤" + (typeof matchThreshold === "number" ? matchThreshold.toFixed(2) : "?") + ")";
+      } else {
+        text = base + (stance === "unknown" ? "" : " - no enrolled match close enough");
+      }
+    }
     cameraDiagnosticLog.push({ ts: Date.now(), text: text });
     if (cameraDiagnosticLog.length > CAMERA_DIAGNOSTIC_LOG_MAX) cameraDiagnosticLog.shift();
     renderCameraDiagnosticLog();
@@ -29512,9 +29532,9 @@
   // before any real "candidate"/player_up message can arrive, so these
   // are in place well before js/camera-client.js or the same-device
   // postMessage listener would ever call them.
-  window.PMCCameraBridge.reportCandidateSeen = function (name, stance, angle) {
+  window.PMCCameraBridge.reportCandidateSeen = function (name, stance, angle, closestName, closestDistance, matchThreshold) {
     renderCameraCandidateStatus(name || null, true, stance, angle);
-    logCameraDiagnostic(name || null, stance, angle);
+    logCameraDiagnostic(name || null, stance, angle, closestName, closestDistance, matchThreshold);
     // Voice-announces a *change* only - not every frame someone's merely
     // still standing there, which would be constant chatter. Shared by
     // both transports since this is the one place that implements it,
@@ -29670,7 +29690,7 @@
         sameDeviceCameraIframe.contentWindow.postMessage({ type: "roster", names: window.PMCCameraBridge.getPlayerNames() }, location.origin);
       } catch (e) {}
     } else if (msg.type === "candidate") {
-      window.PMCCameraBridge.reportCandidateSeen(msg.player_name || null, msg.stance, msg.angle);
+      window.PMCCameraBridge.reportCandidateSeen(msg.player_name || null, msg.stance, msg.angle, msg.closestName, msg.closestDistance, msg.matchThreshold);
     }
   });
 
