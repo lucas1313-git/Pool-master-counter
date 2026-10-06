@@ -116,6 +116,42 @@
     window.PMCCameraBridge.reportEnrollmentUpdated(msg.player_name);
   }
 
+  // Remote calibration: lets the Players panel drive camera.html's own
+  // manual-tap calibration from this (listener) device instead of
+  // requiring anyone to touch the camera device - see
+  // server/camera-relay.js's protocol comment for the message shapes.
+  // Outbound sends are exposed as plain PMCCameraBridge methods (assigned
+  // once bridgeReady, same guarded-registration pattern pollEnabled
+  // already uses for onTurnConfirmed) rather than routed through a
+  // registered callback, since - unlike turn_confirmed - nothing in
+  // js/app.js needs to originate these on its own; they only ever fire
+  // in direct response to a person interacting with the remote-calibration
+  // overlay, so a plain callable is simpler than a registration slot.
+  var remoteCalibMethodsRegistered = false;
+  function registerRemoteCalibMethods() {
+    window.PMCCameraBridge.startRemoteCalibration = function () {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      try { ws.send(JSON.stringify({ type: "remote-calib-start" })); } catch (e) {}
+    };
+    window.PMCCameraBridge.cancelRemoteCalibration = function () {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      try { ws.send(JSON.stringify({ type: "remote-calib-cancel" })); } catch (e) {}
+    };
+    window.PMCCameraBridge.sendRemoteCalibTap = function (fx, fy) {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      try { ws.send(JSON.stringify({ type: "remote-calib-tap", fx: fx, fy: fy })); } catch (e) {}
+    };
+  }
+  function handleCalibFrame(msg) {
+    if (!bridgeReady() || !window.PMCCameraBridge.reportCalibFrame) return;
+    window.PMCCameraBridge.reportCalibFrame({
+      dataUrl: msg.dataUrl || null,
+      step: msg.step || null,
+      done: !!msg.done,
+      failed: msg.failed || null
+    });
+  }
+
   function scheduleReconnect() {
     if (reconnectTimer) return;
     reconnectTimer = setTimeout(function () {
@@ -151,6 +187,7 @@
       else if (msg.type === "candidate") handleCandidateSeen(msg);
       else if (msg.type === "idle-states") handleIdleStates(msg);
       else if (msg.type === "enrollment-updated") handleEnrollmentUpdated(msg);
+      else if (msg.type === "calib-frame") handleCalibFrame(msg);
     });
     ws.addEventListener("close", function () {
       ws = null;
@@ -179,6 +216,10 @@
     if (!turnConfirmedRegistered) {
       window.PMCCameraBridge.onTurnConfirmed(sendTurnConfirmed);
       turnConfirmedRegistered = true;
+    }
+    if (!remoteCalibMethodsRegistered) {
+      registerRemoteCalibMethods();
+      remoteCalibMethodsRegistered = true;
     }
     var enabled = window.PMCCameraBridge.isEnabled();
     if (enabled && !ws) connect();

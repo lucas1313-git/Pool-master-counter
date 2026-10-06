@@ -1193,6 +1193,88 @@
       // activeManualAttribution's own comment). Triggered by the
       // Players panel's "unmatched shooter" prompt, not the Enroll tab.
       activeManualAttribution = { name: msg.player_name, startedAt: Date.now(), firesSinceStart: 0 };
+    } else if (msg.type === "remote-calib-start") {
+      startRemoteCalibration();
+    } else if (msg.type === "remote-calib-cancel") {
+      remoteCalibrationActive = false;
+      cancelCalibration();
+    } else if (msg.type === "remote-calib-tap" && typeof msg.fx === "number" && typeof msg.fy === "number") {
+      applyRemoteTap(msg.fx, msg.fy);
+    }
+  }
+
+  // ---- Remote calibration: the listener (scoreboard device) drives this
+  // page's own manual-tap calibration flow without anyone touching the
+  // camera device - see server/camera-relay.js's protocol comment for the
+  // message shapes. Reuses every existing piece (startCalibration,
+  // overlayToVideo, calibrationTaps, finishManualCalibration) - the only
+  // new logic is capturing what the local operator would see and letting
+  // a tap arrive as a normalized fraction instead of a real click event.
+  var remoteCalibrationActive = false;
+
+  function startRemoteCalibration() {
+    remoteCalibrationActive = true;
+    showTab("calibrate");
+    calibrateSetupEl.hidden = true;
+    manualCalibrateSetupEl.hidden = true;
+    startCalibration();
+    sendCalibFrameUpdate();
+  }
+
+  // Composites the same two layers the local operator sees - the video
+  // (drawn with the identical "cover" scale/offset videoToOverlay uses,
+  // so the image lines up with the tap markers) and the overlay canvas
+  // on top of it (which already has the current tap dots / detected
+  // table outline drawn on it each frame by drawOverlay) - into one
+  // still image. A fraction tapped on THIS image maps 1:1 onto
+  // overlayEl's own pixel space, so applyRemoteTap below needs no
+  // separate transform of its own.
+  function captureCalibFrame() {
+    var w = overlayEl.width, h = overlayEl.height;
+    if (!w || !h) return null;
+    var vw = videoEl.videoWidth || 1, vh = videoEl.videoHeight || 1;
+    var scale = Math.max(w / vw, h / vh);
+    var offsetX = (w - vw * scale) / 2;
+    var offsetY = (h - vh * scale) / 2;
+    var tmp = document.createElement("canvas");
+    tmp.width = w;
+    tmp.height = h;
+    var ctx = tmp.getContext("2d");
+    try {
+      ctx.drawImage(videoEl, offsetX, offsetY, vw * scale, vh * scale);
+      ctx.drawImage(overlayEl, 0, 0);
+      return tmp.toDataURL("image/jpeg", 0.6);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function sendCalibFrameUpdate(doneOrFailed) {
+    if (!remoteCalibrationActive) return;
+    var dataUrl = captureCalibFrame();
+    if (!dataUrl) return;
+    send({
+      type: "calib-frame",
+      dataUrl: dataUrl,
+      step: calibrationStepText.textContent,
+      done: doneOrFailed === "done",
+      failed: doneOrFailed === "failed" ? calibrationStatusEl.textContent : null
+    });
+    if (doneOrFailed) remoteCalibrationActive = false;
+  }
+
+  function applyRemoteTap(fx, fy) {
+    if (!calibrating) return;
+    var overlayX = fx * overlayEl.width;
+    var overlayY = fy * overlayEl.height;
+    var v = overlayToVideo(overlayX, overlayY);
+    calibrationTaps.push([v.x, v.y]);
+    if (calibrationTaps.length < 4) {
+      calibrationStepText.textContent = "Tap corner " + (calibrationTaps.length + 1) + " of 4";
+      sendCalibFrameUpdate();
+    } else {
+      var hadResult = finishManualCalibration();
+      sendCalibFrameUpdate(hadResult ? "done" : "failed");
     }
   }
 
@@ -1945,6 +2027,16 @@
     overlayEl.classList.add("tappable");
   }
   function cancelCalibration() {
+    // Covers both directions: the listener cancelling remotely (handled
+    // in handleIncomingMessage, which already set remoteCalibrationActive
+    // = false before calling this) and the phone operator tapping Cancel
+    // locally while a remote session happens to be active - either way
+    // the listener's overlay shouldn't keep waiting on a session that's
+    // actually stopped.
+    if (remoteCalibrationActive) {
+      remoteCalibrationActive = false;
+      send({ type: "calib-frame", dataUrl: null, step: null, done: false, failed: "cancelled" });
+    }
     showCalibrateSetup();
   }
   startCalibrationBtn.addEventListener("click", startCalibration);
@@ -1953,20 +2045,15 @@
   overlayEl.addEventListener("click", function (evt) {
     if (!calibrating) return;
     var rect = overlayEl.getBoundingClientRect();
-    // overlayEl.width/height (the canvas's own pixel buffer, set by
-    // syncOverlaySize to match its displayed CSS size) is the same space
-    // videoToOverlay/overlayToVideo both operate in - this scales a
-    // click's CSS-pixel position into that space before inverting it,
-    // rather than assuming rect.width/height already equal it exactly.
-    var overlayX = (evt.clientX - rect.left) * (overlayEl.width / rect.width);
-    var overlayY = (evt.clientY - rect.top) * (overlayEl.height / rect.height);
-    var v = overlayToVideo(overlayX, overlayY);
-    calibrationTaps.push([v.x, v.y]);
-    if (calibrationTaps.length < 4) {
-      calibrationStepText.textContent = "Tap corner " + (calibrationTaps.length + 1) + " of 4";
-    } else {
-      finishManualCalibration();
-    }
+    // Expressed as 0-1 fractions of the displayed canvas, then handed to
+    // applyRemoteTap - the exact same conversion a remote tap's fx/fy
+    // already arrives in, so a real local tap and a tap relayed from the
+    // listener go through one single code path (and a local tap during
+    // an active remote-calibration session still reports its own
+    // calib-frame update, same as a remote one would).
+    var fx = (evt.clientX - rect.left) / rect.width;
+    var fy = (evt.clientY - rect.top) / rect.height;
+    applyRemoteTap(fx, fy);
   });
 
   // Says the table size using the common trade name (tableSizeSelect's
@@ -2022,6 +2109,7 @@
     if (!result) {
       calibrationStatusEl.textContent = "Calibration failed (corners too close together or in a line) - try again with 4 clearly separated corners.";
     }
+    return result;
   }
 
   // ---- Automatic table detection (no tapping) ----
