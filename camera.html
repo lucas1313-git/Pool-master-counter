@@ -1658,6 +1658,7 @@
   function startCalibration() {
     calibrating = true;
     calibrationTaps = [];
+    lastAutoDetectDebug = null; // avoid a stale Auto-Detect outline overlapping fresh manual taps
     manualCalibrateSetupEl.hidden = true;
     calibrateTappingEl.hidden = false;
     calibrationStepText.textContent = "Tap corner 1 of 4";
@@ -1818,7 +1819,20 @@
 
   function pointDist(a, b) { return Math.sqrt((b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y)); }
 
+  // Lets the operator actually SEE what Auto-Detect found - the felt-
+  // colored region's outline and the 4 corners it fed into the
+  // homography - instead of just a pass/fail message. A mis-detected
+  // region (lighting, felt wear/reflections, a chair the same color as
+  // the felt) produces a perfectly valid-looking *transform* from
+  // computeHomography's point of view - the math can't tell a bad
+  // correspondence from a good one, only this visual can. Drawn by
+  // drawOverlay every frame (like drawTableBoundary) for as long as this
+  // is set, cleared when a new detect attempt runs or manual calibration
+  // starts. null until the first Auto-Detect attempt.
+  var lastAutoDetectDebug = null; // { hullVideo: [[x,y],...], cornersVideo: [[x,y],...] | null }
+
   function detectTableAuto() {
+    lastAutoDetectDebug = null;
     detectStatusText.hidden = false;
     detectStatusText.textContent = "Detecting...";
     var vw = videoEl.videoWidth, vh = videoEl.videoHeight;
@@ -1828,6 +1842,7 @@
     }
     var dw = DETECT_CANVAS_WIDTH;
     var dh = Math.max(1, Math.round(dw * vh / vw));
+    var scaleX = vw / dw, scaleY = vh / dh;
     detectCanvas.width = dw;
     detectCanvas.height = dh;
     detectCtx.drawImage(videoEl, 0, 0, dw, dh);
@@ -1860,11 +1875,16 @@
     }
 
     var hull = convexHull(bestComponent);
+    // Stored as soon as it exists, even if a later check bails out below -
+    // a failed detection's hull is exactly what's needed to see WHY it
+    // failed (wrong region entirely, too irregular, etc.).
+    lastAutoDetectDebug = { hullVideo: hull.map(function (p) { return [p.x * scaleX, p.y * scaleY]; }), cornersVideo: null };
     if (hull.length < 4) {
       detectStatusText.textContent = "Detected region doesn't look like a table (too irregular). Try again or calibrate manually.";
       return;
     }
     var corners = extractQuadCorners(hull); // [TL, TR, BR, BL] in detect-canvas pixels
+    lastAutoDetectDebug.cornersVideo = corners.map(function (p) { return [p.x * scaleX, p.y * scaleY]; });
     var edge1 = pointDist(corners[0], corners[1]); // TL-TR
     var edge2 = pointDist(corners[1], corners[2]); // TR-BR
     var edge3 = pointDist(corners[2], corners[3]); // BR-BL
@@ -1881,7 +1901,6 @@
     var pairB = (edge2 + edge4) / 2; // TR-BR / BL-TL
     var edge1IsLength = pairA >= pairB;
 
-    var scaleX = vw / dw, scaleY = vh / dh;
     var pixelPoints = corners.map(function (p) { return [p.x * scaleX, p.y * scaleY]; });
     var size = currentTableSize();
     var result = applyCalibrationFromCorners(pixelPoints, !edge1IsLength, size);
@@ -1889,8 +1908,8 @@
       detectStatusText.textContent = "Detection found a region but the math didn't work out - try again or calibrate manually.";
       return;
     }
-    detectStatusText.textContent = "Table detected and calibrated.";
-    setTimeout(function () { detectStatusText.hidden = true; }, 4000);
+    detectStatusText.textContent = "Table detected and calibrated. Check the cyan outline/corners against the real table below before trusting it.";
+    setTimeout(function () { detectStatusText.hidden = true; }, 6000);
   }
 
   detectTableBtn.addEventListener("click", detectTableAuto);
@@ -2132,7 +2151,7 @@
   // panel's status line is a trustworthy live diagnostic: a change-only
   // signal would look identical whether detection had stalled entirely or
   // was just still watching the same person in the same stance.
-  function reportLiveStatus(analysis) {
+  function reportLiveStatus(analysis, closeEnough) {
     // closestName/closestDistance are the nearest enrolled player
     // regardless of whether that distance actually clears
     // settings.matchThreshold - exactly what the on-video debug overlay's
@@ -2161,7 +2180,16 @@
       rawPoseConfidence: analysis ? null : (lastRawPoseConfidence === null ? null : Math.round(lastRawPoseConfidence * 100) / 100),
       // Sent alongside rawPoseConfidence rather than assumed/duplicated on
       // the listening side, same reasoning as matchThreshold above.
-      keypointConfFloor: KEYPOINT_CONF_FLOOR
+      keypointConfFloor: KEYPOINT_CONF_FLOOR,
+      // Only meaningful when stance is "upright"/"bent" - a real pose WAS
+      // read confidently, but withinRailDistance rejected it as too far
+      // from any calibrated rail to be a real shooting position. Without
+      // this, that case looked identical to "detected fine, just no
+      // enrolled match" - when it's actually a calibration-accuracy
+      // problem (a miscalibrated table rejects legitimate positions,
+      // especially the far/compressed end of the perspective view, where
+      // small tap errors turn into large real-world ones).
+      tooFarFromRail: analysis && closeEnough === false ? true : false
     });
   }
 
@@ -2327,7 +2355,7 @@
       }
     }
     updateRecognizeLiveStatus(analysis);
-    reportLiveStatus(analysis);
+    reportLiveStatus(analysis, closeEnough);
   }
 
   // ---- Debug overlay ----
@@ -2409,11 +2437,47 @@
     overlayCtx.fillText("detected table edge", pixelCorners[0].x + 4, pixelCorners[0].y - 6);
   }
 
+  // Shows exactly what Auto-Detect found - the felt-colored region's own
+  // outline (cyan) plus the 4 corners it actually fed into the
+  // homography (yellow, labeled) - see lastAutoDetectDebug's own
+  // comment on why this matters: a bad region produces a perfectly
+  // valid-looking rectangle from computeHomography's point of view, so
+  // only seeing the INPUT reveals the real problem.
+  function drawAutoDetectDebug() {
+    if (!lastAutoDetectDebug) return;
+    var hullOverlay = lastAutoDetectDebug.hullVideo.map(function (p) { return videoToOverlay(p[0], p[1]); });
+    if (hullOverlay.length >= 2) {
+      overlayCtx.strokeStyle = "#00e5ff";
+      overlayCtx.fillStyle = "rgba(0,229,255,0.15)";
+      overlayCtx.lineWidth = 2;
+      overlayCtx.beginPath();
+      overlayCtx.moveTo(hullOverlay[0].x, hullOverlay[0].y);
+      for (var i = 1; i < hullOverlay.length; i++) overlayCtx.lineTo(hullOverlay[i].x, hullOverlay[i].y);
+      overlayCtx.closePath();
+      overlayCtx.fill();
+      overlayCtx.stroke();
+    }
+    if (lastAutoDetectDebug.cornersVideo) {
+      var labels = ["TL", "TR", "BR", "BL"];
+      overlayCtx.font = "12px sans-serif";
+      lastAutoDetectDebug.cornersVideo.forEach(function (p, idx) {
+        var op = videoToOverlay(p[0], p[1]);
+        overlayCtx.fillStyle = "#ffee00";
+        overlayCtx.beginPath();
+        overlayCtx.arc(op.x, op.y, 7, 0, Math.PI * 2);
+        overlayCtx.fill();
+        overlayCtx.fillStyle = "#000";
+        overlayCtx.fillText(labels[idx], op.x - 7, op.y - 10);
+      });
+    }
+  }
+
   function drawOverlay(keypoints, analysis, matchLabel) {
     overlayCtx.clearRect(0, 0, overlayEl.width, overlayEl.height);
     if (calibrating) drawCalibrationTaps();
     if (!settings.debugOverlay) return;
     drawTableBoundary();
+    drawAutoDetectDebug();
     if (!analysis) return;
     var box = analysis.box;
     var p0 = videoToOverlay(box.x0, box.y0);

@@ -29494,27 +29494,35 @@
   // unsure to read" - e.g. standing close with your back to the camera,
   // where shoulder/hip keypoints are harder for the model to place
   // confidently. See camera.html's own lastRawPoseConfidence comment.
-  function logCameraDiagnostic(name, stance, angle, closestName, closestDistance, matchThreshold, rawPoseConfidence, keypointConfFloor) {
-    var signature = (name || "") + "|" + (stance || "unknown");
+  // tooFarFromRail: a real pose WAS read confidently, but
+  // withinRailDistance rejected it as too far from any calibrated rail to
+  // be a real shooting position - told apart from "no enrolled match"
+  // because matching was never even attempted in this case. If this shows
+  // up for a position that's genuinely at the table (especially the far
+  // end of the camera's view), that's a calibration-accuracy problem, not
+  // a detection or matching one - recalibrate rather than loosening Match
+  // sensitivity, which wouldn't help here at all.
+  function logCameraDiagnostic(name, stance, angle, closestName, closestDistance, matchThreshold, rawPoseConfidence, keypointConfFloor, tooFarFromRail) {
+    var signature = (name || "") + "|" + (stance || "unknown") + "|" + (tooFarFromRail ? "far" : "");
     if (signature === lastLoggedCameraSignature) return;
     lastLoggedCameraSignature = signature;
     var text;
+    var base =
+      stance === "bent" && typeof angle === "number"
+        ? "Bent over (" + angle + "°)"
+        : stance === "upright" && typeof angle === "number"
+          ? "Upright (" + angle + "°)"
+          : "No one in view";
     if (name) {
       text = "Matched: " + name;
     } else if (stance === "unknown" && typeof rawPoseConfidence === "number") {
       text = "Pose barely visible (confidence " + rawPoseConfidence.toFixed(2) + ", need ≥" + (typeof keypointConfFloor === "number" ? keypointConfFloor.toFixed(2) : "?") + ") - try stepping back or facing the camera more";
+    } else if (tooFarFromRail) {
+      text = base + " - too far from any calibrated rail (check/redo table calibration if this is a real shooting position)";
+    } else if (closestName && typeof closestDistance === "number") {
+      text = base + " - closest: " + closestName + " (" + closestDistance.toFixed(2) + ", need ≤" + (typeof matchThreshold === "number" ? matchThreshold.toFixed(2) : "?") + ")";
     } else {
-      var base =
-        stance === "bent" && typeof angle === "number"
-          ? "Bent over (" + angle + "°)"
-          : stance === "upright" && typeof angle === "number"
-            ? "Upright (" + angle + "°)"
-            : "No one in view";
-      if (closestName && typeof closestDistance === "number") {
-        text = base + " - closest: " + closestName + " (" + closestDistance.toFixed(2) + ", need ≤" + (typeof matchThreshold === "number" ? matchThreshold.toFixed(2) : "?") + ")";
-      } else {
-        text = base + (stance === "unknown" ? "" : " - no enrolled match close enough");
-      }
+      text = base + (stance === "unknown" ? "" : " - no enrolled match close enough");
     }
     cameraDiagnosticLog.push({ ts: Date.now(), text: text });
     if (cameraDiagnosticLog.length > CAMERA_DIAGNOSTIC_LOG_MAX) cameraDiagnosticLog.shift();
@@ -29563,9 +29571,9 @@
   // before any real "candidate"/player_up message can arrive, so these
   // are in place well before js/camera-client.js or the same-device
   // postMessage listener would ever call them.
-  window.PMCCameraBridge.reportCandidateSeen = function (name, stance, angle, closestName, closestDistance, matchThreshold, rawPoseConfidence, keypointConfFloor) {
+  window.PMCCameraBridge.reportCandidateSeen = function (name, stance, angle, closestName, closestDistance, matchThreshold, rawPoseConfidence, keypointConfFloor, tooFarFromRail) {
     renderCameraCandidateStatus(name || null, true, stance, angle);
-    logCameraDiagnostic(name || null, stance, angle, closestName, closestDistance, matchThreshold, rawPoseConfidence, keypointConfFloor);
+    logCameraDiagnostic(name || null, stance, angle, closestName, closestDistance, matchThreshold, rawPoseConfidence, keypointConfFloor, tooFarFromRail);
     // Voice-announces a *change of matched name* only - per explicit
     // request, never for an unmatched sighting (no "seeing someone..."),
     // and never re-announced just because stance changed while the same
@@ -29731,7 +29739,7 @@
         sameDeviceCameraIframe.contentWindow.postMessage({ type: "roster", names: window.PMCCameraBridge.getPlayerNames() }, location.origin);
       } catch (e) {}
     } else if (msg.type === "candidate") {
-      window.PMCCameraBridge.reportCandidateSeen(msg.player_name || null, msg.stance, msg.angle, msg.closestName, msg.closestDistance, msg.matchThreshold, msg.rawPoseConfidence, msg.keypointConfFloor);
+      window.PMCCameraBridge.reportCandidateSeen(msg.player_name || null, msg.stance, msg.angle, msg.closestName, msg.closestDistance, msg.matchThreshold, msg.rawPoseConfidence, msg.keypointConfFloor, msg.tooFarFromRail);
     }
   });
 
