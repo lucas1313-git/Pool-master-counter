@@ -205,7 +205,9 @@ function createCameraRelay(WebSocket) {
             angle: msg.angle,
             closestName: msg.closestName,
             closestDistance: msg.closestDistance,
-            matchThreshold: msg.matchThreshold
+            matchThreshold: msg.matchThreshold,
+            rawPoseConfidence: msg.rawPoseConfidence,
+            keypointConfFloor: msg.keypointConfFloor
           });
           return;
         }

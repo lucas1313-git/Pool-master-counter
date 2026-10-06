@@ -1381,7 +1381,16 @@
   // Returns { descriptor: [...], torsoAngleDeg, shoulderMid, hipMid, ankleMid,
   // confidenceOk } or null if the core keypoints needed for identity AND
   // stance (shoulders+hips) aren't confidently visible this frame.
+  // Set true only when regionLooksStatic is what rejected the most recent
+  // call - read by runDetectionLoop so a rejected-for-being-furniture
+  // pose isn't confused with a rejected-for-low-confidence one (the
+  // former would otherwise show a perfectly good confidence number,
+  // mislabeled as "barely visible," when the real reason was something
+  // else entirely). Reset at the top of every call so it only ever
+  // reflects the outcome of the call that just ran.
+  var lastRejectedAsStatic = false;
   function analyzePose(keypoints) {
+    lastRejectedAsStatic = false;
     var ls = kp(keypoints, "left_shoulder"), rs = kp(keypoints, "right_shoulder");
     var lh = kp(keypoints, "left_hip"), rh = kp(keypoints, "right_hip");
     if (!ls || !rs || !lh || !rh) return null;
@@ -1430,7 +1439,10 @@
     // was calibrated - see regionLooksStatic's own comment. Checked last,
     // after everything else about this pose already looked plausible,
     // since it's the most expensive check here (another canvas read).
-    if (regionLooksStatic(box)) return null;
+    if (regionLooksStatic(box)) {
+      lastRejectedAsStatic = true;
+      return null;
+    }
 
     return {
       descriptor: descriptor,
@@ -1660,11 +1672,15 @@
   overlayEl.addEventListener("click", function (evt) {
     if (!calibrating) return;
     var rect = overlayEl.getBoundingClientRect();
-    var scaleX = videoEl.videoWidth / rect.width;
-    var scaleY = videoEl.videoHeight / rect.height;
-    var px = (evt.clientX - rect.left) * scaleX;
-    var py = (evt.clientY - rect.top) * scaleY;
-    calibrationTaps.push([px, py]);
+    // overlayEl.width/height (the canvas's own pixel buffer, set by
+    // syncOverlaySize to match its displayed CSS size) is the same space
+    // videoToOverlay/overlayToVideo both operate in - this scales a
+    // click's CSS-pixel position into that space before inverting it,
+    // rather than assuming rect.width/height already equal it exactly.
+    var overlayX = (evt.clientX - rect.left) * (overlayEl.width / rect.width);
+    var overlayY = (evt.clientY - rect.top) * (overlayEl.height / rect.height);
+    var v = overlayToVideo(overlayX, overlayY);
+    calibrationTaps.push([v.x, v.y]);
     if (calibrationTaps.length < 4) {
       calibrationStepText.textContent = "Tap corner " + (calibrationTaps.length + 1) + " of 4";
     } else {
@@ -2075,6 +2091,14 @@
 
   // ---- Two-phase recognition state machine ----
   var stance = "unknown"; // 'upright' | 'bent' | 'unknown'
+  // Set by runDetectionLoop whenever the pose model DID return something
+  // but analyzePose rejected it for low confidence (not for missing
+  // keypoints entirely) - this is what lets "nothing in view at all" be
+  // told apart from "something's there, but too unsure to read" (e.g.
+  // someone standing close with their back to the camera, where
+  // shoulder/hip keypoints are harder for the model to place confidently).
+  // null whenever no pose at all was found this frame.
+  var lastRawPoseConfidence = null;
   var lastConfidentPoseAt = Date.now();
   var candidate = null; // { name, descriptor, lastSeenAt }
   var uprightMatchName = null;
@@ -2127,7 +2151,17 @@
       angle: analysis ? Math.round(analysis.torsoAngleDeg) : null,
       closestName: closest ? closest.name : null,
       closestDistance: closest ? Math.round(closest.distance * 100) / 100 : null,
-      matchThreshold: settings.matchThreshold
+      matchThreshold: settings.matchThreshold,
+      // Only meaningful when stance is "unknown" - a pose WAS found this
+      // frame but analyzePose rejected it for low confidence (not for
+      // being static furniture, and not for missing keypoints outright).
+      // Tells "nothing in view at all" apart from "something's there but
+      // too unsure to read" (e.g. someone standing close with their back
+      // to the camera) - see lastRawPoseConfidence's own comment.
+      rawPoseConfidence: analysis ? null : (lastRawPoseConfidence === null ? null : Math.round(lastRawPoseConfidence * 100) / 100),
+      // Sent alongside rawPoseConfidence rather than assumed/duplicated on
+      // the listening side, same reasoning as matchThreshold above.
+      keypointConfFloor: KEYPOINT_CONF_FLOOR
     });
   }
 
@@ -2312,6 +2346,23 @@
     return { x: x * scale + offsetX, y: y * scale + offsetY };
   }
 
+  // The exact inverse of videoToOverlay above - the video is displayed
+  // "cover"-style (uniform scale, centered, cropped on one axis), not
+  // stretched independently per axis. A calibration tap needs this same
+  // transform run backwards to land on the right video pixel; using
+  // separate x/y scale factors instead (as the old click handler did)
+  // is only correct when the overlay and video happen to share the exact
+  // same aspect ratio, and silently places every tapped corner in the
+  // wrong spot whenever they don't - which is most of the time.
+  function overlayToVideo(overlayX, overlayY) {
+    var vw = videoEl.videoWidth || 1, vh = videoEl.videoHeight || 1;
+    var scale = Math.max(overlayEl.width / vw, overlayEl.height / vh);
+    if (!scale) return { x: 0, y: 0 };
+    var offsetX = (overlayEl.width - vw * scale) / 2;
+    var offsetY = (overlayEl.height - vh * scale) / 2;
+    return { x: (overlayX - offsetX) / scale, y: (overlayY - offsetY) / scale };
+  }
+
   function drawCalibrationTaps() {
     overlayCtx.fillStyle = "#e8b923";
     calibrationTaps.forEach(function (pt, i) {
@@ -2391,6 +2442,16 @@
         lastPoseResultAt = Date.now();
         var pose = poses && poses[0];
         var analysis = pose ? analyzePose(pose.keypoints) : null;
+        // Computed independently of analyzePose's own gating, specifically
+        // so a rejected-for-low-confidence pose is still visible as a
+        // number somewhere - see lastRawPoseConfidence's own comment.
+        if (pose && !analysis && !lastRejectedAsStatic) {
+          var rawLs = kp(pose.keypoints, "left_shoulder"), rawRs = kp(pose.keypoints, "right_shoulder");
+          var rawLh = kp(pose.keypoints, "left_hip"), rawRh = kp(pose.keypoints, "right_hip");
+          lastRawPoseConfidence = rawLs || rawRs || rawLh || rawRh ? avgScore(rawLs, rawRs, rawLh, rawRh) : null;
+        } else {
+          lastRawPoseConfidence = null;
+        }
 
         if (enrollCapturing) {
           handleEnrollCaptureFrame(analysis);

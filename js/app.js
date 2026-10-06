@@ -29487,13 +29487,22 @@
   // just above matchThreshold, that's a sensitivity-setting problem, not
   // a detection problem - loosen "Match sensitivity" in camera settings
   // rather than assuming something's broken.
-  function logCameraDiagnostic(name, stance, angle, closestName, closestDistance, matchThreshold) {
+  // rawPoseConfidence: only meaningful when stance is "unknown" - a pose
+  // WAS found that frame but rejected for low confidence (not for being
+  // static furniture, and not for missing keypoints outright). Tells
+  // "nothing in view at all" apart from "something's there but too
+  // unsure to read" - e.g. standing close with your back to the camera,
+  // where shoulder/hip keypoints are harder for the model to place
+  // confidently. See camera.html's own lastRawPoseConfidence comment.
+  function logCameraDiagnostic(name, stance, angle, closestName, closestDistance, matchThreshold, rawPoseConfidence, keypointConfFloor) {
     var signature = (name || "") + "|" + (stance || "unknown");
     if (signature === lastLoggedCameraSignature) return;
     lastLoggedCameraSignature = signature;
     var text;
     if (name) {
       text = "Matched: " + name;
+    } else if (stance === "unknown" && typeof rawPoseConfidence === "number") {
+      text = "Pose barely visible (confidence " + rawPoseConfidence.toFixed(2) + ", need ≥" + (typeof keypointConfFloor === "number" ? keypointConfFloor.toFixed(2) : "?") + ") - try stepping back or facing the camera more";
     } else {
       var base =
         stance === "bent" && typeof angle === "number"
@@ -29539,7 +29548,7 @@
   // updateSeenCandidate/fireEvent, which deliberately skip speaking when
   // isEmbedded is true, leaving this as the sole voice for same-device
   // mode specifically.
-  var lastSpokenCandidateSignature = null;
+  var lastSpokenCandidateName = null;
   function speakCameraStatus(text) {
     if (!cameraVoiceCheckbox.checked || !window.speechSynthesis) return;
     try {
@@ -29554,34 +29563,18 @@
   // before any real "candidate"/player_up message can arrive, so these
   // are in place well before js/camera-client.js or the same-device
   // postMessage listener would ever call them.
-  window.PMCCameraBridge.reportCandidateSeen = function (name, stance, angle, closestName, closestDistance, matchThreshold) {
+  window.PMCCameraBridge.reportCandidateSeen = function (name, stance, angle, closestName, closestDistance, matchThreshold, rawPoseConfidence, keypointConfFloor) {
     renderCameraCandidateStatus(name || null, true, stance, angle);
-    logCameraDiagnostic(name || null, stance, angle, closestName, closestDistance, matchThreshold);
-    // Voice-announces a *change* only (matched name, or an unmatched
-    // person newly appearing/changing stance) - not every frame someone's
-    // merely still standing there, which would be constant chatter. Keyed
-    // on name+stance, same transition logic logCameraDiagnostic already
-    // uses, so this doesn't re-announce on every frame's flickering
-    // closest-guess either. Shared by both transports since this is the
-    // one place that implements it, rather than duplicating the dedup
-    // state per path.
+    logCameraDiagnostic(name || null, stance, angle, closestName, closestDistance, matchThreshold, rawPoseConfidence, keypointConfFloor);
+    // Voice-announces a *change of matched name* only - per explicit
+    // request, never for an unmatched sighting (no "seeing someone..."),
+    // and never re-announced just because stance changed while the same
+    // name stays matched (bent -> upright -> bent while still the same
+    // player doesn't repeat "Seeing X." each time).
     var seen = name || null;
-    var signature = (seen || "") + "|" + (stance || "unknown");
-    if (signature === lastSpokenCandidateSignature) return;
-    lastSpokenCandidateSignature = signature;
-    if (seen) {
-      speakCameraStatus("Seeing " + seen + ".");
-    } else if (stance === "upright" || stance === "bent") {
-      // Someone's there but nothing matched close enough - say so AND
-      // read the actual numbers (closest distance vs. the threshold it
-      // needs to clear), so this is still useful purely by ear, without
-      // ever needing to look at the debug log for the same information.
-      if (closestName && typeof closestDistance === "number") {
-        speakCameraStatus("Seeing someone. " + closestDistance.toFixed(2) + ", need " + (typeof matchThreshold === "number" ? matchThreshold.toFixed(2) : "unknown") + ".");
-      } else {
-        speakCameraStatus("Seeing someone.");
-      }
-    }
+    if (seen === lastSpokenCandidateName) return;
+    lastSpokenCandidateName = seen;
+    if (seen) speakCameraStatus("Seeing " + seen + ".");
   };
   // Counterpart to reportCandidateSeen above, for the distinct "shot
   // confirmed" voice line - called by both the same-device postMessage
@@ -29738,7 +29731,7 @@
         sameDeviceCameraIframe.contentWindow.postMessage({ type: "roster", names: window.PMCCameraBridge.getPlayerNames() }, location.origin);
       } catch (e) {}
     } else if (msg.type === "candidate") {
-      window.PMCCameraBridge.reportCandidateSeen(msg.player_name || null, msg.stance, msg.angle, msg.closestName, msg.closestDistance, msg.matchThreshold);
+      window.PMCCameraBridge.reportCandidateSeen(msg.player_name || null, msg.stance, msg.angle, msg.closestName, msg.closestDistance, msg.matchThreshold, msg.rawPoseConfidence, msg.keypointConfFloor);
     }
   });
 
@@ -31306,7 +31299,7 @@
     }
     // reportCandidateSeen and announceShotFired are attached below, from
     // inside boot(), not as plain properties of this literal -
-    // renderCameraCandidateStatus/speakCameraStatus/lastSpokenCandidateSignature
+    // renderCameraCandidateStatus/speakCameraStatus/lastSpokenCandidateName
     // all live in boot()'s own closure (where the camera overlay's DOM
     // refs are set up), which this object literal - assigned outside
     // boot() - has no access to. boot() always finishes before any real
