@@ -29467,9 +29467,15 @@
   // Logged unconditionally, regardless of the debug checkbox, so turning
   // debug on mid-session immediately shows the backlog since the camera
   // started - only the element's *visibility* is gated by that checkbox.
-  // Keyed on name+stance+closestName (not angle/closestDistance, which
-  // change every frame) so this only grows on an actual transition, not
-  // 3-4 times a second.
+  // Keyed on name+stance ONLY (not angle/closestName/closestDistance,
+  // which all fluctuate frame to frame even while the person hasn't
+  // actually changed stance) so this only grows on a real transition -
+  // recognized -> bent over -> stood back up - and nothing in between.
+  // closestName flickering between different unenrolled "nearest" guesses
+  // while someone just stands there bent over is exactly the kind of
+  // intermediary noise this must stay silent on; it's still shown *inside*
+  // the one logged line for that transition, just not used to trigger a
+  // new one by itself.
   var cameraDiagnosticLog = [];
   var CAMERA_DIAGNOSTIC_LOG_MAX = 60;
   var lastLoggedCameraSignature = null;
@@ -29482,7 +29488,7 @@
   // a detection problem - loosen "Match sensitivity" in camera settings
   // rather than assuming something's broken.
   function logCameraDiagnostic(name, stance, angle, closestName, closestDistance, matchThreshold) {
-    var signature = (name || "") + "|" + (stance || "unknown") + "|" + (closestName || "");
+    var signature = (name || "") + "|" + (stance || "unknown");
     if (signature === lastLoggedCameraSignature) return;
     lastLoggedCameraSignature = signature;
     var text;
