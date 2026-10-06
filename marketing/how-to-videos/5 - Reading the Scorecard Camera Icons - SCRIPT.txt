@@ -1,0 +1,23 @@
+Video 5: Reading the Scorecard Camera Icons
+===========================================
+
+[0:00 - 0:09]
+While playing, a small camera icon can appear above a player's name. Here's what each state means.
+
+[0:09 - 0:16]
+A flashing icon means the camera currently sees this player, standing near the table.
+
+[0:16 - 0:23]
+The moment that player takes their shot, the icon stops flashing.
+
+[0:23 - 0:30]
+If a new sample gets added to their profile, a small plus sign appears.
+
+[0:30 - 0:40]
+If the camera isn't sure who's shooting, a question mark appears. Tap that player on the keypad to confirm.
+
+[0:40 - 0:49]
+And while a player sits waiting their turn, a small clock icon shows they're still being tracked.
+
+[0:49 - 1:00]
+Flashing, a plus, a question mark, or a clock - four small icons that keep you posted at a glance.

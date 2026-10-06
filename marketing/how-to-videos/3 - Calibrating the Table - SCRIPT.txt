@@ -1,0 +1,38 @@
+Video 3: Calibrating the Table
+==============================
+
+[0:00 - 0:09]
+Calibration teaches the camera your table's real size, so close-enough-to-shoot becomes a real measurement, not a guess.
+
+[0:09 - 0:16]
+First, pick your table size from this list. We'll use the standard eight-foot table.
+
+[0:16 - 0:25]
+You can try automatic detection first. If it can't find your rails, tap the corners yourself.
+
+[0:25 - 0:31]
+Click 'Calibrate manually instead' to switch to corner tapping.
+
+[0:31 - 0:39]
+Your first two taps trace one edge. We'll use the short end, which is already selected.
+
+[0:39 - 0:46]
+Click Start manual calibration.
+
+[0:46 - 0:53]
+Now tap corner one of the table, on the live camera view.
+
+[0:53 - 0:58]
+Tap corner two, going around the table.
+
+[0:58 - 1:04]
+Then corner three.
+
+[1:04 - 1:10]
+And corner four, to close the loop.
+
+[1:10 - 1:17]
+And the table is calibrated. Distance checks are now accurate for this mounting.
+
+[1:17 - 1:25]
+That's table calibration. You only need to do it once per camera position.

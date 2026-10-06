@@ -1,0 +1,35 @@
+Video 2: Setting Up Camera Recognition
+======================================
+
+[0:00 - 0:12]
+Pool Master Counter can tell who's shooting using a camera, so nobody has to tap the keypad mid game. Here's how to set it up.
+
+[0:12 - 0:18]
+Open the menu, and click Set Up Camera.
+
+[0:18 - 0:28]
+You can use a separate phone mounted over the table, or this tablet's own camera. We'll use this tablet's camera.
+
+[0:28 - 0:35]
+A short wizard walks through permission, calibration, and enrollment. Click Next.
+
+[0:35 - 0:41]
+Camera access is already granted, and shown here as active.
+
+[0:41 - 0:49]
+Calibration measures your real table, covered in its own video. We'll skip it here.
+
+[0:49 - 0:58]
+Enrolling teaches the camera what each player looks like, also its own video. We'll start playing instead.
+
+[0:58 - 1:10]
+Last, a few mounting tips: keep it powered, keep the screen awake, and aim it at players approaching the table, not just the felt.
+
+[1:10 - 1:16]
+Click Finish Setup to land on the live Recognize view.
+
+[1:16 - 1:23]
+This view shows the live camera feed, and who it currently sees.
+
+[1:23 - 1:30]
+That's camera setup. Next, the videos on table calibration and player enrollment.

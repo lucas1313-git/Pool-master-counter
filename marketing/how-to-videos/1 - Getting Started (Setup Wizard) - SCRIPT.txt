@@ -1,0 +1,35 @@
+Video 1: Getting Started (Setup Wizard)
+=======================================
+
+[0:00 - 0:08]
+Welcome to Pool Master Counter. This guide covers the basics: adding players, and starting a game.
+
+[0:08 - 0:17]
+The first time you open the app, a short welcome wizard appears. Click Go to begin.
+
+[0:17 - 0:23]
+Type your name. This becomes your first player on the roster.
+
+[0:23 - 0:31]
+We'll run the full Setup Wizard, which walks through every option step by step.
+
+[0:31 - 0:39]
+Step one picks the game. We'll keep Eight Ball and casual Individual play. Click Next.
+
+[0:39 - 0:54]
+Step two is where you add players. Type a name, click Add, and repeat for everyone playing today.
+
+[0:54 - 1:06]
+Step three asks who is actually playing right now. Switch each player from Standby to Playing, then click Next.
+
+[1:06 - 1:17]
+Step four offers an automatic game-type rotation. We don't need that today, so we'll leave it on No, and click Next.
+
+[1:17 - 1:26]
+Step five shows a summary of everything you picked. Hit Start Game to jump into the scoreboard.
+
+[1:26 - 1:38]
+And that's it - the scoreboard is live. Tap the plus button under a player's score to record a rack win for them.
+
+[1:38 - 1:47]
+That covers the basics. For camera-based player recognition, table calibration, and player enrollment, check the other how-to videos.

@@ -1,0 +1,23 @@
+Video 4: Enrolling a Player
+===========================
+
+[0:00 - 0:10]
+Enrollment teaches the camera what a player looks like today - their outfit, not their face. It only lasts one session.
+
+[0:10 - 0:17]
+Pick a player from this list to start enrolling them.
+
+[0:17 - 0:30]
+Then have them bend over and take a real shot at the table. Each shot captures a sample automatically - a beep, no button to press.
+
+[0:30 - 0:43]
+You don't have to enroll everyone up front. Scoring a real shot on the tablet also labels the camera's current guess, so normal play keeps teaching it.
+
+[0:43 - 0:51]
+Here's Riley, already enrolled today with several samples from different sides of the table.
+
+[0:51 - 1:00]
+Enrollment only remembers today's clothes. Starting a new session? Use Clear All, then enroll everyone again.
+
+[1:00 - 1:08]
+That's enrollment. The more each player plays, the better the camera gets at recognizing them.
