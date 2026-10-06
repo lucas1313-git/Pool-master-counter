@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261005l">
+<link rel="stylesheet" href="css/style.css?v=20261005m">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -168,6 +168,20 @@
         <input type="number" id="camera-match-threshold" min="0.1" max="4" step="0.1" value="1.2">
         <label for="camera-debounce-sec" data-i18n="players.cameraDebounceSec">Re-announce after (sec)</label>
         <input type="number" id="camera-debounce-sec" min="1" max="120" value="10">
+      </div>
+      <div class="row hidden" id="camera-debug-options-row">
+        <label class="checkbox-row">
+          <input type="checkbox" id="camera-debug-checkbox">
+          <span data-i18n="players.cameraDebugEnable">👁️ Show camera debug info during play</span>
+        </label>
+        <label class="checkbox-row">
+          <input type="checkbox" id="camera-voice-checkbox">
+          <span data-i18n="players.cameraVoiceEnable">🔊 Speak player status (seen / shooting)</span>
+        </label>
+      </div>
+      <div id="camera-inline-preview-wrap" class="hidden">
+        <button type="button" id="btn-expand-same-device-camera" class="btn btn-ghost" data-i18n="cameraWizard.expandButton">⛶ Full Screen</button>
+        <div id="camera-inline-preview-home" class="camera-inline-preview hidden"></div>
       </div>
       <ul id="roster-list" class="roster-list"></ul>
       <div id="queue-section" class="hidden">
@@ -2348,7 +2362,7 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20261005l"></script>
+<script src="js/app.js?v=20261005m"></script>
 <script src="js/camera-client.js?v=20261004a"></script>
 </body>
 </html>
