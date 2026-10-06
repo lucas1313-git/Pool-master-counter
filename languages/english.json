@@ -909,6 +909,7 @@
   "cameraWizard.startSameDevice": "Start this tablet's camera →",
   "cameraWizard.sameDeviceOverlayHeading": "This Tablet's Camera",
   "cameraWizard.remoteCalibrateHeading": "Calibrate the Table",
+  "cameraWizard.remoteCameraLabel": "Lens",
   "cameraWizard.remoteCalibrateWaiting": "Connecting to the camera...",
   "cameraWizard.remoteCalibrateWaitingLong": "Waiting for the camera phone to respond...",
   "cameraWizard.remoteCalibrateHint": "Tap each corner of the table in the image above, going around in order.",

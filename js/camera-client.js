@@ -141,6 +141,18 @@
       if (!ws || ws.readyState !== WebSocket.OPEN) return;
       try { ws.send(JSON.stringify({ type: "remote-calib-tap", fx: fx, fy: fy })); } catch (e) {}
     };
+    // Remote camera (lens) selection - independent of the calibration
+    // start/cancel/tap trio above, same reasoning as camera-relay.js's
+    // own comment: picking a lens is useful before framing/calibrating,
+    // not only during it.
+    window.PMCCameraBridge.requestRemoteCameraList = function () {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      try { ws.send(JSON.stringify({ type: "remote-camera-list-request" })); } catch (e) {}
+    };
+    window.PMCCameraBridge.selectRemoteCamera = function (deviceId) {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      try { ws.send(JSON.stringify({ type: "remote-camera-select", deviceId: deviceId })); } catch (e) {}
+    };
   }
   function handleCalibFrame(msg) {
     if (!bridgeReady() || !window.PMCCameraBridge.reportCalibFrame) return;
@@ -149,6 +161,13 @@
       step: msg.step || null,
       done: !!msg.done,
       failed: msg.failed || null
+    });
+  }
+  function handleRemoteCameraList(msg) {
+    if (!bridgeReady() || !window.PMCCameraBridge.reportRemoteCameraList) return;
+    window.PMCCameraBridge.reportRemoteCameraList({
+      devices: Array.isArray(msg.devices) ? msg.devices : [],
+      currentDeviceId: msg.currentDeviceId || null
     });
   }
 
@@ -188,6 +207,7 @@
       else if (msg.type === "idle-states") handleIdleStates(msg);
       else if (msg.type === "enrollment-updated") handleEnrollmentUpdated(msg);
       else if (msg.type === "calib-frame") handleCalibFrame(msg);
+      else if (msg.type === "remote-camera-list") handleRemoteCameraList(msg);
     });
     ws.addEventListener("close", function () {
       ws = null;

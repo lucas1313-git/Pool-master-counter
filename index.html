@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261006d">
+<link rel="stylesheet" href="css/style.css?v=20261006e">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -1384,6 +1384,10 @@
       <button type="button" id="btn-close-remote-calibrate" class="wizard-close-btn" aria-label="Close" data-i18n-aria-label="common.close">×</button>
     </div>
     <p class="remote-calibrate-step" id="remote-calibrate-step" data-i18n="cameraWizard.remoteCalibrateWaiting">Connecting to the camera...</p>
+    <div class="row remote-calibrate-camera-row hidden" id="remote-calibrate-camera-row">
+      <label for="remote-calibrate-camera-select" data-i18n="cameraWizard.remoteCameraLabel">Lens</label>
+      <select id="remote-calibrate-camera-select"></select>
+    </div>
     <div class="remote-calibrate-frame-wrap">
       <img id="remote-calibrate-frame" class="remote-calibrate-frame hidden" alt="Live view from the camera phone">
       <div class="remote-calibrate-placeholder" id="remote-calibrate-placeholder" data-i18n="cameraWizard.remoteCalibrateWaitingLong">Waiting for the camera phone to respond...</div>
@@ -2412,7 +2416,7 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20261006d"></script>
-<script src="js/camera-client.js?v=20261006b"></script>
+<script src="js/app.js?v=20261006e"></script>
+<script src="js/camera-client.js?v=20261006c"></script>
 </body>
 </html>

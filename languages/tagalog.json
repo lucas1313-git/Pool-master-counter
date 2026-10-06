@@ -915,6 +915,7 @@
   "cameraWizard.installUnsupportedOs": "Kailangan nito ng desktop computer - hindi ito tatakbo sa telepono o tablet.",
   "cameraWizard.sameDeviceOverlayHeading": "Camera ng Tablet na Ito",
   "cameraWizard.remoteCalibrateHeading": "I-calibrate ang Mesa",
+  "cameraWizard.remoteCameraLabel": "Lente",
   "cameraWizard.remoteCalibrateWaiting": "Kumokonekta sa camera...",
   "cameraWizard.remoteCalibrateWaitingLong": "Hinihintay ang sagot ng camera phone...",
   "cameraWizard.remoteCalibrateHint": "Pindutin ang bawat sulok ng mesa sa larawan sa itaas, ayon sa pagkakasunod-sunod.",
