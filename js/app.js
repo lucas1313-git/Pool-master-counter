@@ -366,6 +366,15 @@
       // configured" apart from "configured, just switched off" so it
       // knows when to redirect into the wizard instead of just toggling.
       cameraWizardCompleted: false,
+      // Specifically the same-device path (not cross-device/phone, which
+      // also sets cameraWizardCompleted) - the signal boot() needs to
+      // know whether to auto-resume the embedded iframe on a fresh page
+      // load. Without this, cameraInputEnabled showing checked after a
+      // reload was a lie - nothing was actually running, since the
+      // iframe only ever started via an explicit wizard/overlay click,
+      // never automatically - so recognition silently did nothing the
+      // moment the page was reloaded mid-session.
+      sameDeviceCameraSetUp: false,
       cameraMatchThreshold: 1.2,
       cameraDebounceSec: 10,
       currentGame: { gameType: "8ball", target: 1, unit: "rack", mode: "individual", startedAt: new Date().toISOString(), shotCounterEnabled: false, shotCounterBeepSec: 30, shotCounterHidden: false, queueEnabled: false, timedTournamentEnabled: false, timedTournamentMinutes: 60 },
@@ -449,6 +458,13 @@
           // default them to "completed" too, so they don't get bounced
           // into the wizard the next time they flip this checkbox off/on.
           if (typeof parsed.cameraWizardCompleted !== "boolean") parsed.cameraWizardCompleted = !!parsed.cameraInputEnabled;
+          // Unlike cameraWizardCompleted above, no inference here - an
+          // existing cameraInputEnabled:true could mean either path, and
+          // wrongly auto-starting a camera stream (unexpected permission
+          // prompt) for someone who actually uses a separate phone is a
+          // worse first impression than just needing one more click to
+          // re-arm same-device mode for someone who does use it.
+          if (typeof parsed.sameDeviceCameraSetUp !== "boolean") parsed.sameDeviceCameraSetUp = false;
           if (typeof parsed.cameraMatchThreshold !== "number") parsed.cameraMatchThreshold = 1.2;
           if (typeof parsed.cameraDebounceSec !== "number") parsed.cameraDebounceSec = 10;
           if (!parsed.currentGame) parsed.currentGame = { gameType: "8ball", target: 1, mode: "individual" };
@@ -1826,6 +1842,7 @@
   var rotatingTeamsCheckbox = document.getElementById("rotating-teams-checkbox");
   var cameraInputCheckbox = document.getElementById("camera-input-checkbox");
   var btnCameraInputHelp = document.getElementById("btn-camera-input-help");
+  var cameraCandidateStatus = document.getElementById("camera-candidate-status");
   var cameraInputSettingsRow = document.getElementById("camera-input-settings-row");
   var cameraMatchThresholdInput = document.getElementById("camera-match-threshold");
   var cameraDebounceSecInput = document.getElementById("camera-debounce-sec");
@@ -28447,6 +28464,7 @@
   backfillMissingRatingsFromHistory();
   backfillMissingAddedDates();
   fixCorruptedRunRecords();
+  resumeSameDeviceCameraIfNeeded();
 
   if (Purchases) {
     Purchases.isProUnlocked()
@@ -29065,8 +29083,11 @@
     // This is the one real "stop" action for same-device mode - closing
     // the camera overlay/preview on its own only minimizes it (keeps
     // recognition running during gameplay), see stopSameDeviceCamera's
-    // own comment.
+    // own comment. Re-checking it after that needs its own resume call
+    // too - this handler otherwise only ever flipped the state flag,
+    // never actually restarted anything.
     if (!cameraInputCheckbox.checked) stopSameDeviceCamera();
+    else resumeSameDeviceCameraIfNeeded();
     saveState();
     renderAll();
   });
@@ -29348,6 +29369,7 @@
     if (!window.isSecureContext) return;
     state.cameraInputEnabled = true;
     state.cameraWizardCompleted = true;
+    state.sameDeviceCameraSetUp = true;
     saveState();
     renderAll();
     closeCameraWizard();
@@ -29392,10 +29414,26 @@
   // explicitly instead.
   var sameDeviceCameraRunning = false;
 
+  // "Who does the camera currently see" - distinct from the player
+  // actually selected on the keypad (which only updates on a confirmed
+  // shot) - driven by camera.html's own "candidate" postMessage, sent
+  // every time its live recognition's candidate name changes. Visible
+  // whenever the camera is actually running, right under the master
+  // checkbox in the Players panel.
+  // visible is explicit (not inferred from sameDeviceCameraRunning) so
+  // this same function also works for cross-device mode, driven by
+  // js/camera-client.js's own onCandidateSeen registration below -
+  // that path has no equivalent "iframe running" flag to check here.
+  function renderCameraCandidateStatus(name, visible) {
+    cameraCandidateStatus.classList.toggle("hidden", !visible);
+    cameraCandidateStatus.textContent = name ? T("players.cameraCandidateSeen", { name: name }) : T("players.cameraCandidateNone");
+  }
+
   function openSameDeviceCameraOverlay() {
     if (!sameDeviceCameraRunning) {
       sameDeviceCameraRunning = true;
       sameDeviceCameraIframe.src = "camera.html?embedded=1";
+      renderCameraCandidateStatus(null, true);
     }
     if (sameDeviceCameraIframe.parentNode !== sameDeviceCameraCard) sameDeviceCameraCard.appendChild(sameDeviceCameraIframe);
     cameraInlinePreviewWrap.classList.add("hidden");
@@ -29410,9 +29448,25 @@
     syncCameraDebugCheckboxesFromStorage();
   }
 
+  // Starts the embedded iframe straight into its minimized/inline form
+  // (never the full-screen view) whenever this device is both enabled
+  // and actually configured for same-device mode - called once from
+  // boot() (a fresh page load otherwise never started the iframe at
+  // all, despite the checkbox showing checked) and again whenever the
+  // checkbox is re-checked after having been off, since neither of
+  // those previously did anything beyond flipping the state flag.
+  function resumeSameDeviceCameraIfNeeded() {
+    if (sameDeviceCameraRunning) return;
+    if (!state.cameraInputEnabled || !state.sameDeviceCameraSetUp) return;
+    if (!window.isSecureContext) return;
+    openSameDeviceCameraOverlay();
+    minimizeSameDeviceCameraOverlay();
+  }
+
   function stopSameDeviceCamera() {
     if (!sameDeviceCameraRunning) return; // never started this session - nothing to stop
     sameDeviceCameraRunning = false;
+    renderCameraCandidateStatus(null, false);
     // postMessage first so camera.html can stop its own MediaStreamTracks
     // and release the wake lock - clearing src alone isn't a reliable
     // teardown signal (timing varies across Safari/Chrome). postMessage
@@ -29508,6 +29562,8 @@
       try {
         sameDeviceCameraIframe.contentWindow.postMessage({ type: "roster", names: window.PMCCameraBridge.getPlayerNames() }, location.origin);
       } catch (e) {}
+    } else if (msg.type === "candidate") {
+      renderCameraCandidateStatus(msg.player_name || null, true);
     }
   });
 
@@ -31072,6 +31128,15 @@
     // the instant camera-client.js's own script runs.
     onTurnConfirmed: function (callback) {
       cameraTurnConfirmedCallbacks.push(callback);
+    },
+    // Cross-device counterpart to the same-device postMessage listener's
+    // own direct call - js/camera-client.js calls this straight away
+    // (not a registration like onTurnConfirmed above; the direction here
+    // is camera -> relay -> tablet, nothing on this side needs to react
+    // independently) whenever a "candidate" message arrives over the
+    // relay, driving the same live status line in the Players panel.
+    reportCandidateSeen: function (name) {
+      renderCameraCandidateStatus(name || null, true);
     }
   };
 

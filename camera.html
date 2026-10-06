@@ -546,6 +546,7 @@
   var ENROLL_TARGET_SAMPLES = 8;
   var SETTINGS_STORAGE_KEY = "pmc-camera-settings";
   var CALIBRATION_STORAGE_KEY = "pmc-camera-calibration";
+  var CAMERA_DEVICE_STORAGE_KEY = "pmc-camera-selected-device";
   var KEYPOINT_CONF_FLOOR = 0.3;
   var CANDIDATE_GRACE_MS = 3000; // how long a resolved identity survives a gap in pose detection
   // Separate from CANDIDATE_GRACE_MS on purpose - that one is tuned for
@@ -848,7 +849,23 @@
     }).catch(function () {});
   }
 
-  function startCamera(deviceId) {
+  function loadStoredCameraDeviceId() {
+    try { return localStorage.getItem(CAMERA_DEVICE_STORAGE_KEY) || null; } catch (e) { return null; }
+  }
+  function saveCameraDeviceId(deviceId) {
+    try {
+      if (deviceId) localStorage.setItem(CAMERA_DEVICE_STORAGE_KEY, deviceId);
+      else localStorage.removeItem(CAMERA_DEVICE_STORAGE_KEY);
+    } catch (e) {}
+  }
+
+  // isBootAttempt marks a call using a *remembered* device from a past
+  // session, not one the operator just picked right now - only then does
+  // a failure fall back to the default camera silently instead of
+  // showing an error, since "the USB camera I used last time isn't
+  // plugged in yet" is an expected, ordinary situation at startup, not a
+  // real problem to alarm about.
+  function startCamera(deviceId, isBootAttempt) {
     setStatus(dotCamera, labelCamera, "busy", "Camera: starting...");
     var constraints = {
       audio: false,
@@ -869,8 +886,14 @@
           showCameraWarning("The camera stream stopped unexpectedly (locked phone, another app took the camera, or a cable/mount issue). Tap below to restart it.");
         });
       }
-      if (!devicesPopulated) populateCameraList(track && track.getSettings ? track.getSettings().deviceId : null);
+      var activeDeviceId = track && track.getSettings ? track.getSettings().deviceId : null;
+      if (!devicesPopulated) populateCameraList(activeDeviceId);
     }).catch(function (e) {
+      if (isBootAttempt && deviceId) {
+        console.warn("[camera] remembered camera unavailable at startup, falling back to the default camera:", e.message);
+        startCamera(null, false);
+        return;
+      }
       setStatus(dotCamera, labelCamera, "bad", "Camera: error");
       var httpsNote = location.protocol !== "https:" && location.hostname !== "localhost"
         ? " This page is being served over plain HTTP - iOS Safari blocks camera access entirely without HTTPS. See server/README.md for how to enable it."
@@ -880,7 +903,10 @@
     });
   }
   restartCameraBtn.addEventListener("click", function () { startCamera(cameraSelect.value || null); });
-  cameraSelect.addEventListener("change", function () { startCamera(cameraSelect.value || null); });
+  cameraSelect.addEventListener("change", function () {
+    saveCameraDeviceId(cameraSelect.value || null);
+    startCamera(cameraSelect.value || null);
+  });
 
   // ---- Wake Lock ----
   var wakeLock = null;
@@ -978,7 +1004,7 @@
         handleLocalMessage(msg);
         return;
       }
-      // player_up, settings-request, roster-request
+      // player_up, settings-request, roster-request, candidate
       try { window.parent.postMessage(msg, location.origin); } catch (e) {}
       return;
     }
@@ -1915,7 +1941,20 @@
   var uprightStabilityCount = 0;
   var bentConsecutive = 0;
   var lastEmittedAt = {}; // name -> timestamp ms
-  var lastAnnouncedSeenName = null; // voice-announces a *change* of who's seen, not every frame
+  var lastAnnouncedSeenName = null; // voice-announces (and reports to the parent page) a *change* of who's seen, not every frame
+
+  // Tells whoever's listening (the parent page in same-device mode via
+  // postMessage, or a tablet's js/camera-client.js over the relay in
+  // cross-device mode) who the camera currently thinks is at the table -
+  // separate from player_up, which only fires on an actual confirmed
+  // shot. This is the live "who does the camera see right now" signal
+  // the Players panel's own status line is built from.
+  function updateSeenCandidate(name) {
+    if (name === lastAnnouncedSeenName) return;
+    lastAnnouncedSeenName = name;
+    send({ type: "candidate", player_name: name || null });
+    if (name && settings.voiceStatusEnabled) speak(name + " seen.");
+  }
 
   function logActivity(text) {
     var line = document.createElement("div");
@@ -2000,7 +2039,7 @@
       }
       if (candidate && Date.now() - candidate.lastSeenAt > CANDIDATE_GRACE_MS) {
         candidate = null;
-        lastAnnouncedSeenName = null; // gone long enough that re-seeing anyone (even the same name) is a fresh "seen" event
+        updateSeenCandidate(null); // gone long enough that re-seeing anyone (even the same name) is a fresh "seen" event
       }
       updateRecognizeLiveStatus(null);
       return;
@@ -2048,10 +2087,7 @@
         };
         // Announces a *change* only - not every frame someone's merely
         // still standing there, which would be constant chatter.
-        if (candidate.name && candidate.name !== lastAnnouncedSeenName) {
-          lastAnnouncedSeenName = candidate.name;
-          if (settings.voiceStatusEnabled) speak(candidate.name + " seen.");
-        }
+        if (candidate.name) updateSeenCandidate(candidate.name);
       } else if (candidate) {
         candidate.lastSeenAt = Date.now();
       }
@@ -2333,7 +2369,7 @@
   if (isEmbedded) initEmbeddedMode();
   else connectRelay();
   loadModels();
-  startCamera(null);
+  startCamera(loadStoredCameraDeviceId(), true);
   requestWakeLock();
   setInterval(runDetectionLoop, DETECTION_INTERVAL_MS);
   if (!hasSeenSetupWizard()) openSetupWizard();

@@ -861,6 +861,8 @@
   "players.cameraDebounceSec": "Ulitin ang abiso pagkatapos ng (sec)",
   "players.cameraDebugEnable": "👁️ Ipakita ang camera debug info habang naglalaro",
   "players.cameraVoiceEnable": "🔊 Sabihin ang status ng manlalaro (nakita / nag-shoot)",
+  "players.cameraCandidateSeen": "📷 Nakikita ngayon ng camera: {{name}}",
+  "players.cameraCandidateNone": "📷 Tumatakbo ang camera - wala pang nakikilala ngayon",
   "cameraWizard.openButton": "📷 I-set Up ang Camera",
   "cameraWizard.expandButton": "⛶ Full Screen",
   "cameraWizard.step1Heading": "I-set Up ang Pagkilala sa Manlalaro Gamit ang Camera",
