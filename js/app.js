@@ -1848,6 +1848,8 @@
   var btnCameraVoiceHelp = document.getElementById("btn-camera-voice-help");
   var cameraCandidateStatus = document.getElementById("camera-candidate-status");
   var cameraDiagnosticLogEl = document.getElementById("camera-diagnostic-log");
+  var unmatchedShooterBanner = document.getElementById("unmatched-shooter-banner");
+  var btnDismissUnmatchedShooterBanner = document.getElementById("btn-dismiss-unmatched-shooter-banner");
   var cameraInputSettingsRow = document.getElementById("camera-input-settings-row");
   var cameraMatchThresholdInput = document.getElementById("camera-match-threshold");
   var cameraDebounceSecInput = document.getElementById("camera-debounce-sec");
@@ -2954,6 +2956,7 @@
     var currentIdx = keypadSelectedPlayerId ? keypadOrderedPlayerIds.indexOf(keypadSelectedPlayerId) : -1;
     var nextIdx = (currentIdx + 1) % keypadOrderedPlayerIds.length;
     selectKeypadPlayer(keypadOrderedPlayerIds[nextIdx], nextIdx + 1, announce);
+    window.PMCCameraBridge.resolveUnmatchedShooterPrompt(keypadOrderedPlayerIds[nextIdx]);
   }
 
   function handleKeypadShortcut(e) {
@@ -3010,6 +3013,7 @@
       if (!targetId) return;
       e.preventDefault();
       selectKeypadPlayer(targetId, keypadNum, true);
+      window.PMCCameraBridge.resolveUnmatchedShooterPrompt(targetId);
       return;
     }
 
@@ -4657,6 +4661,7 @@
     name.className = "player-name keypad-select-trigger";
     name.addEventListener("click", function () {
       selectKeypadPlayer(player.id, null, true);
+      window.PMCCameraBridge.resolveUnmatchedShooterPrompt(player.id);
     });
     buildPlayerNameLabel(name, player.name, false);
     // Swaps the plain full name for its short display (see
@@ -4697,6 +4702,7 @@
     value.className = "stat-value keypad-select-trigger";
     value.addEventListener("click", function () {
       selectKeypadPlayer(player.id, null, true);
+      window.PMCCameraBridge.resolveUnmatchedShooterPrompt(player.id);
     });
     if (isSingleRackGame) {
       // Still needs a label here - without it this number reads as an
@@ -4753,6 +4759,7 @@
     name.className = "member-name keypad-select-trigger";
     name.addEventListener("click", function () {
       selectKeypadPlayer(player.id, null, true);
+      window.PMCCameraBridge.resolveUnmatchedShooterPrompt(player.id);
     });
     buildPlayerNameLabel(name, player.name, false);
     name.appendChild(buildPlayerLinkIcon(player.name));
@@ -4778,6 +4785,7 @@
     value.className = "stat-value small keypad-select-trigger";
     value.addEventListener("click", function () {
       selectKeypadPlayer(player.id, null, true);
+      window.PMCCameraBridge.resolveUnmatchedShooterPrompt(player.id);
     });
     value.textContent = player.balls || 0;
     applyScoreFlash(value, player);
@@ -12532,24 +12540,41 @@
   // + state.sameDeviceCameraSetUp) - cross-device enrollment lives on the
   // relay server, not in this browser's localStorage, so there's nothing
   // here to check for that path; the caller gates on this before calling.
+  function buildCameraEnrollHelpBtn() {
+    var help = document.createElement("button");
+    help.type = "button";
+    help.className = "format-info-btn";
+    help.setAttribute("aria-label", T("players.cameraEnrollHelpTitle"));
+    help.textContent = "❓";
+    help.addEventListener("click", function (e) {
+      e.stopPropagation();
+      alertModal(T("players.cameraEnrollHelpText"));
+    });
+    return help;
+  }
+
   function buildCameraEnrollBadge(name) {
+    var wrap = document.createDocumentFragment();
     if (isPlayerCameraEnrolled(name)) {
       var icon = document.createElement("span");
       icon.className = "roster-camera-enrolled";
       icon.title = T("players.cameraEnrolledTitle");
       icon.setAttribute("aria-label", T("players.cameraEnrolledTitle"));
       icon.innerHTML = CAMERA_ICON_SVG;
-      return icon;
+      wrap.appendChild(icon);
+    } else {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "roster-camera-enroll-btn";
+      btn.textContent = T("players.cameraEnrollButton");
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        window.PMCCameraBridge.startCameraEnrollFor(name);
+      });
+      wrap.appendChild(btn);
     }
-    var btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "roster-camera-enroll-btn";
-    btn.textContent = T("players.cameraEnrollButton");
-    btn.addEventListener("click", function (e) {
-      e.stopPropagation();
-      window.PMCCameraBridge.startCameraEnrollFor(name);
-    });
-    return btn;
+    wrap.appendChild(buildCameraEnrollHelpBtn());
+    return wrap;
   }
 
   function loadPlayerNameTranslationsFromStorage() {
@@ -29642,6 +29667,30 @@
     } catch (e) {}
   }
 
+  // Shown whenever the camera sees someone bent over at the table it
+  // can't put a name to - deliberately NOT gated on the debug checkbox
+  // (unlike the diagnostic log/status line), since this is a practical
+  // operator prompt for actual gameplay, not a tuning aid. Self-clears
+  // the moment the situation resolves - matched, or they're no longer
+  // bent - without needing to be dismissed; the close button only covers
+  // "that's not actually someone shooting" (a spectator leaning on the
+  // rail, say), and only for the rest of this one continuous streak -
+  // the next genuinely new occurrence shows again.
+  var unmatchedShooterBannerDismissed = false;
+  function updateUnmatchedShooterBanner(name, stance) {
+    var showing = !name && stance === "bent";
+    if (!showing) {
+      unmatchedShooterBannerDismissed = false;
+      unmatchedShooterBanner.classList.add("hidden");
+      return;
+    }
+    unmatchedShooterBanner.classList.toggle("hidden", unmatchedShooterBannerDismissed);
+  }
+  btnDismissUnmatchedShooterBanner.addEventListener("click", function () {
+    unmatchedShooterBannerDismissed = true;
+    unmatchedShooterBanner.classList.add("hidden");
+  });
+
   // Attached here (inside boot(), where renderCameraCandidateStatus and
   // speakCameraStatus actually live) rather than as plain properties of
   // the window.PMCCameraBridge literal below, which is assigned outside
@@ -29652,6 +29701,7 @@
   window.PMCCameraBridge.reportCandidateSeen = function (name, stance, angle, closestName, closestDistance, matchThreshold, rawPoseConfidence, keypointConfFloor, tooFarFromRail) {
     renderCameraCandidateStatus(name || null, true, stance, angle);
     logCameraDiagnostic(name || null, stance, angle, closestName, closestDistance, matchThreshold, rawPoseConfidence, keypointConfFloor, tooFarFromRail);
+    updateUnmatchedShooterBanner(name || null, stance);
     // Voice-announces a *change of matched name* only - per explicit
     // request, never for an unmatched sighting (no "seeing someone..."),
     // and never re-announced just because stance changed while the same
@@ -29726,6 +29776,30 @@
         sameDeviceCameraIframe.contentWindow.postMessage({ type: "enroll-select", player_name: name }, location.origin);
       } catch (e) {}
     }, 400);
+  };
+
+  // Called from every genuine MANUAL player-selection site (scorecard
+  // taps, physical 1-9 key press) - deliberately NOT called from
+  // PMCCameraBridge.selectPlayer itself, the camera's own auto-select
+  // path, since reaching that path already means a real match just
+  // succeeded, leaving nothing to resolve. A no-op whenever the
+  // "unmatched shooter" banner isn't actually showing, so this is safe
+  // to call unconditionally from every selection site. When it IS
+  // showing: hides it (the operator just acted on it) and - same-device
+  // mode only, since cross-device enrollment has no iframe to message -
+  // tells camera.html to start attributing the ongoing bent-over
+  // sequence to this player (see activeManualAttribution's own comment
+  // there for how and when that stops).
+  window.PMCCameraBridge.resolveUnmatchedShooterPrompt = function (playerId) {
+    if (unmatchedShooterBanner.classList.contains("hidden")) return;
+    unmatchedShooterBanner.classList.add("hidden");
+    unmatchedShooterBannerDismissed = false;
+    if (!sameDeviceCameraRunning) return;
+    var player = state.players.filter(function (p) { return p.id === playerId; })[0];
+    if (!player) return;
+    try {
+      sameDeviceCameraIframe.contentWindow.postMessage({ type: "enroll-select-attribute", player_name: player.name }, location.origin);
+    } catch (e) {}
   };
 
   function stopSameDeviceCamera() {
