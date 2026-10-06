@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261005m">
+<link rel="stylesheet" href="css/style.css?v=20261005n">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -163,6 +163,7 @@
         </label>
         <button type="button" id="btn-camera-input-help" class="format-info-btn" data-i18n-aria-label="players.cameraInputHelpAria" aria-label="What does camera player recognition do?">❓</button>
       </div>
+      <p class="camera-candidate-status hidden" id="camera-candidate-status"></p>
       <div class="row hidden" id="camera-input-settings-row">
         <label for="camera-match-threshold" data-i18n="players.cameraMatchThreshold">Match sensitivity</label>
         <input type="number" id="camera-match-threshold" min="0.1" max="4" step="0.1" value="1.2">
@@ -2362,7 +2363,7 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20261005m"></script>
+<script src="js/app.js?v=20261005n"></script>
 <script src="js/camera-client.js?v=20261004a"></script>
 </body>
 </html>
