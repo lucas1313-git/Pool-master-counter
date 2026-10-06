@@ -220,6 +220,55 @@
     line-height: 1;
     padding: 4px 10px;
   }
+
+  /* ---------- Plain-language "?" help for each tunable setting ---------- */
+  .row > .help-btn { flex: none; }
+  .help-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+    margin-left: 6px;
+    padding: 0;
+    background: var(--card);
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    font-size: 0.85rem;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    vertical-align: middle;
+  }
+  .help-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.72);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    z-index: 3000;
+  }
+  .help-overlay.hidden { display: none; }
+  .help-card {
+    position: relative;
+    background: linear-gradient(180deg, var(--card) 0%, var(--panel) 60%, var(--bg) 100%);
+    border: 2px solid var(--accent);
+    border-radius: 14px;
+    padding: 26px 22px 20px;
+    max-width: 480px;
+    width: 100%;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+    font-size: 1.05rem;
+    line-height: 1.55;
+  }
+  .help-card h3 { margin: 0 0 10px; color: var(--accent); font-size: 1.3rem; }
+  .help-card p { margin: 0; white-space: pre-line; color: var(--text); }
   .wizard-header h2 {
     margin: 0 0 6px;
     color: var(--accent);
@@ -333,8 +382,8 @@
 
   <section class="panel" id="recognizePanel">
     <h2>Recent activity</h2>
-    <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><input type="checkbox" id="recognizeDebugToggle" style="width:auto;margin:0"> Show debug info (angle, match distance)</label>
-    <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><input type="checkbox" id="recognizeVoiceToggle" style="width:auto;margin:0"> Speak player status changes (seen / shooting)</label>
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><input type="checkbox" id="recognizeDebugToggle" style="width:auto;margin:0"> Show debug info (angle, match distance)<button type="button" class="help-btn" data-help="debugOverlay" aria-label="What does this do?">?</button></label>
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><input type="checkbox" id="recognizeVoiceToggle" style="width:auto;margin:0"> Speak player status changes (seen / shooting)<button type="button" class="help-btn" data-help="voiceStatus" aria-label="What does this do?">?</button></label>
     <div class="progress-text" id="recognizeLiveStatus" hidden></div>
     <div class="log" id="recognizeLog"><div>Waiting for a recognized player...</div></div>
     <p class="fine" style="margin-top:8px">
@@ -427,30 +476,38 @@
       <label for="cameraSelect">Camera</label>
       <select id="cameraSelect"></select>
 
-      <label for="thresholdInput">Appearance match distance (lower = stricter)</label>
+      <label for="thresholdInput">Appearance match distance (lower = stricter)</label><button type="button" class="help-btn" data-help="threshold" aria-label="What does this do?">?</button>
       <input type="number" id="thresholdInput" min="0.1" max="4" step="0.1" value="1.2">
 
-      <label for="consecutiveInput">Consecutive frames required</label>
+      <label for="consecutiveInput">Consecutive frames required</label><button type="button" class="help-btn" data-help="consecutive" aria-label="What does this do?">?</button>
       <input type="number" id="consecutiveInput" min="1" max="10" step="1" value="3">
 
-      <label for="debounceInput">Re-announce same player after (sec)</label>
+      <label for="debounceInput">Re-announce same player after (sec)</label><button type="button" class="help-btn" data-help="debounce" aria-label="What does this do?">?</button>
       <input type="number" id="debounceInput" min="1" max="120" step="1" value="10">
 
-      <label for="bendEnterInput">Bent-over angle - enter (degrees from upright)</label>
+      <label for="bendEnterInput">Bent-over angle - enter (degrees from upright)</label><button type="button" class="help-btn" data-help="bendEnter" aria-label="What does this do?">?</button>
       <input type="number" id="bendEnterInput" min="10" max="85" step="1" value="30">
 
-      <label for="bendExitInput">Bent-over angle - exit back to upright (degrees)</label>
+      <label for="bendExitInput">Bent-over angle - exit back to upright (degrees)</label><button type="button" class="help-btn" data-help="bendExit" aria-label="What does this do?">?</button>
       <input type="number" id="bendExitInput" min="5" max="80" step="1" value="20">
 
-      <label for="railDistanceInput">Max distance from rail to count as "at the table" (inches, needs calibration)</label>
+      <label for="railDistanceInput">Max distance from rail to count as "at the table" (inches, needs calibration)</label><button type="button" class="help-btn" data-help="railDistance" aria-label="What does this do?">?</button>
       <input type="number" id="railDistanceInput" min="6" max="72" step="1" value="30">
 
       <div class="row" style="margin-top:4px">
-        <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="debugToggle" style="width:auto;margin:0"> Show debug overlay</label>
+        <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="debugToggle" style="width:auto;margin:0"> Show debug overlay</label><button type="button" class="help-btn" data-help="debugOverlay" aria-label="What does this do?">?</button>
       </div>
     </div>
   </details>
 </main>
+
+<div class="help-overlay hidden" id="settingsHelpOverlay">
+  <div class="help-card">
+    <button type="button" class="wizard-close-btn" id="btnCloseSettingsHelp" aria-label="Close">×</button>
+    <h3 id="settingsHelpTitle"></h3>
+    <p id="settingsHelpBody"></p>
+  </div>
+</div>
 
 <button id="resumeSetupPill" class="resume-setup-pill" type="button" hidden>Resume Setup →</button>
 
@@ -676,6 +733,69 @@
   var railDistanceInput = document.getElementById("railDistanceInput");
   var debugToggle = document.getElementById("debugToggle");
   var relaunchWizardBtn = document.getElementById("relaunchWizardBtn");
+
+  // ---- Plain-language "?" help for each tunable setting ----
+  // One shared lookup, not inline per-button text, so the Recognize tab's
+  // debug checkbox (a second copy of the same debugOverlay setting shown
+  // in Settings) reuses the exact same explanation rather than risking
+  // two slightly different descriptions of one setting drifting apart.
+  var SETTINGS_HELP = {
+    threshold: {
+      title: "Match sensitivity",
+      body: "How close a person's look has to match an enrolled player to count as them.\n\nLower = stricter: fewer wrong matches, but a real match can get rejected if lighting or clothing looks a bit different than when they were enrolled.\n\nHigher = looser: catches real matches more easily, but can start confusing different players for each other.\n\nIf the debug log shows someone's real distance is just a little over this number, raise it slightly. If it's way over (3x or more), the real problem is usually stale enrollment data, not this setting - re-enroll that player instead."
+    },
+    consecutive: {
+      title: "How many frames before it believes you",
+      body: "How many detection frames in a row have to agree before the camera trusts what it's seeing - a stance change, a stable match, etc.\n\nLower = reacts faster, but more likely to be fooled by one bad or blurry frame.\n\nHigher = slower to react, but steadier and less prone to false triggers.\n\nIf switches feel laggy, lower it a bit. If it's randomly firing from brief glitches, raise it."
+    },
+    debounce: {
+      title: "Cooldown before re-confirming the same player",
+      body: "Once the camera confirms someone's shooting, it won't send another confirmation for that same person again until this many seconds pass - so several shots in a row by the same player don't keep re-selecting them over and over.\n\nLower = reacts faster to a genuinely new turn by the same player.\n\nHigher = less repeat chatter when one visit to the table involves a lot of shots."
+    },
+    bendEnter: {
+      title: "How far over counts as \"bent\" (starting point)",
+      body: "How many degrees your torso has to tip forward from straight-up before the camera decides you're bending over to shoot.\n\nLower = triggers on a smaller lean - catches a short, subtle bend faster, but can be set off by just leaning in without actually shooting.\n\nHigher = requires a deeper, more obvious bend before it counts - fewer false triggers, but might miss a quick, shallow shot."
+    },
+    bendExit: {
+      title: "How far up counts as \"standing again\"",
+      body: "How many degrees you have to straighten back up before the camera considers you upright again, after being bent over.\n\nThis is deliberately a SMALLER number than the \"enter\" angle - that gap is what stops the reading from flickering back and forth if you're holding roughly the same lean.\n\nRaising it (closer to the enter angle) notices you standing back up sooner, but flickers more easily. Lowering it is steadier, but slower to notice you've stood up."
+    },
+    railDistance: {
+      title: "How far from the table still counts as \"at it\"",
+      body: "How many inches from the nearest table edge someone can stand and still count as being \"at the table\" - only has any effect once the table is calibrated; with no calibration, it isn't used at all.\n\nLower = stricter - only someone right up against the rail counts, but can reject a real shot if you stand back a little to line it up.\n\nHigher = more forgiving of standing back from the rail, but increases the chance of counting someone who's just walking nearby, not actually shooting."
+    },
+    debugOverlay: {
+      title: "Show debug overlay / debug info",
+      body: "Shows live numbers on screen - stance, bend angle, match distance - so you can watch exactly what the camera is seeing while tuning these settings, instead of guessing.\n\nIt doesn't change any detection behavior itself, just makes it visible. Turn it off for normal play once things are tuned - the extra text/overlay isn't needed day to day."
+    },
+    voiceStatus: {
+      title: "Speak player status out loud",
+      body: "Reads status out loud from this device - who the camera currently sees, and when a shot is confirmed.\n\nUseful if you're not looking at the screen. Purely audio feedback - it doesn't affect detection at all."
+    }
+  };
+  var settingsHelpOverlay = document.getElementById("settingsHelpOverlay");
+  var settingsHelpTitle = document.getElementById("settingsHelpTitle");
+  var settingsHelpBody = document.getElementById("settingsHelpBody");
+  var btnCloseSettingsHelp = document.getElementById("btnCloseSettingsHelp");
+  function showSettingsHelp(key) {
+    var entry = SETTINGS_HELP[key];
+    if (!entry) return;
+    settingsHelpTitle.textContent = entry.title;
+    settingsHelpBody.textContent = entry.body;
+    settingsHelpOverlay.classList.remove("hidden");
+  }
+  function closeSettingsHelp() {
+    settingsHelpOverlay.classList.add("hidden");
+  }
+  // One delegated listener for every ".help-btn" rather than wiring each
+  // individually - new help buttons just need a matching data-help key
+  // added to SETTINGS_HELP above, nothing else.
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest ? e.target.closest(".help-btn") : null;
+    if (btn) { showSettingsHelp(btn.getAttribute("data-help")); return; }
+    if (e.target === settingsHelpOverlay) closeSettingsHelp();
+  });
+  btnCloseSettingsHelp.addEventListener("click", closeSettingsHelp);
 
   var setupWizardOverlay = document.getElementById("setupWizardOverlay");
   var wizardHeading = document.getElementById("wizardHeading");
@@ -2353,6 +2473,51 @@
     return dist <= settings.railDistanceInches;
   }
 
+  // Best-effort check that a bend is actually directed toward the table,
+  // not away from it or off to the side (someone bending to pick
+  // something up off the floor, tie a shoe, etc. near the rail) - "if
+  // possible" per explicit request, since true facing direction can't be
+  // read directly from 2D keypoints. Approximates it by comparing the
+  // torso's actual lean direction (shoulder->hip, NOT the absolute-valued
+  // angle used elsewhere for the bend magnitude) against the real-world
+  // direction toward the nearest rail. Generous tolerance (rejects only
+  // leaning more than ~107 deg off "toward the table") and defaults to
+  // true - uncalibrated, no ankle data, or degenerate vectors all pass
+  // through unblocked - since this is a secondary signal refining a bend
+  // that's already confirmed close to the table, not a replacement for
+  // that check, and a real shot can still involve reaching sideways.
+  var FACING_TABLE_COS_THRESHOLD = -0.3;
+  function isFacingTable(analysis) {
+    if (!calibration || !analysis.ankleMid) return true;
+    var real = applyHomography(calibration.h, analysis.ankleMid.x, analysis.ankleMid.y);
+    if (!real) return true;
+    var nearest = nearestRailSide(real, calibration.tableLength, calibration.tableWidth);
+    var towardReal = { x: real.x, y: real.y };
+    if (nearest.side === 0) towardReal.y -= 1;
+    else if (nearest.side === 1) towardReal.y += 1;
+    else if (nearest.side === 2) towardReal.x -= 1;
+    else towardReal.x += 1;
+
+    var invH = invertHomography(calibration.h);
+    if (!invH) return true;
+    var p0 = applyInverseHomography(invH, real.x, real.y);
+    var p1 = applyInverseHomography(invH, towardReal.x, towardReal.y);
+    if (!p0 || !p1) return true;
+    var towardDx = p1.x - p0.x, towardDy = p1.y - p0.y;
+
+    // Direction from hip (the pivot a bend swings around) to shoulder -
+    // where the upper body actually moved TO, not hip-minus-shoulder
+    // (which points the opposite way and would invert this whole check).
+    var leanDx = analysis.shoulderMid.x - analysis.hipMid.x;
+    var leanDy = analysis.shoulderMid.y - analysis.hipMid.y;
+    var leanMag = Math.sqrt(leanDx * leanDx + leanDy * leanDy);
+    var towardMag = Math.sqrt(towardDx * towardDx + towardDy * towardDy);
+    if (leanMag < 1e-6 || towardMag < 1e-6) return true;
+
+    var cosAngle = (leanDx * towardDx + leanDy * towardDy) / (leanMag * towardMag);
+    return cosAngle > FACING_TABLE_COS_THRESHOLD;
+  }
+
   // undefined (not null) when uncalibrated or no ankle keypoints - matches
   // what addSide on the relay expects to see "no side given."
   function currentSideForAnalysis(analysis) {
@@ -2468,7 +2633,7 @@
       lastUprightDescriptor = null;
       uprightStabilityCount = 0;
       bentConsecutive++;
-      if (bentConsecutive >= settings.consecutiveFrames && closeEnough) {
+      if (bentConsecutive >= settings.consecutiveFrames && closeEnough && isFacingTable(analysis)) {
         if (candidate && candidate.name && Date.now() - candidate.lastSeenAt <= CANDIDATE_GRACE_MS) {
           fireEvent(candidate.name, candidate.descriptor, 0, candidate.side);
         } else {
