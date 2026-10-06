@@ -37,8 +37,9 @@
 //   { type: "hello", role: "camera" | "listener" }
 //   camera -> relay -> broadcast to every "listener":
 //     { type: "player_up", player_name, confidence, ts }
-//     { type: "candidate", player_name } - live "who's currently seen",
-//       sent on every change, independent of player_up (which only
+//     { type: "candidate", player_name, stance, angle } - live "who's
+//       currently seen" plus the current upright/bent reading, sent every
+//       frame (not just on change), independent of player_up (which only
 //       fires on an actual confirmed shot)
 //   Enrollment (per explicit request: additive, improves with use - each
 //   player's enrollment is a growing LIST of descriptors, not one frozen
@@ -188,8 +189,11 @@ function createCameraRelay(WebSocket) {
         // Live "who does the camera currently see" - distinct from
         // player_up, which only fires on an actual confirmed shot. Lets
         // a listener (the tablet) show this without waiting for a shot.
+        // stance/angle pass through unchanged (undefined if the sending
+        // camera.html predates them) - they're a diagnostic extra, not
+        // required for the listener's own fallback name-only rendering.
         if (msg.type === "candidate" && ws.role === "camera") {
-          broadcastToListeners({ type: "candidate", player_name: msg.player_name || null });
+          broadcastToListeners({ type: "candidate", player_name: msg.player_name || null, stance: msg.stance, angle: msg.angle });
           return;
         }
 

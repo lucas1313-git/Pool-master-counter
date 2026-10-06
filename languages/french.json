@@ -863,6 +863,8 @@
   "players.cameraVoiceEnable": "🔊 Annoncer le statut du joueur (vu / tire)",
   "players.cameraCandidateSeen": "📷 La caméra voit actuellement : {{name}}",
   "players.cameraCandidateNone": "📷 Caméra active - personne identifié pour le moment",
+  "players.cameraCandidateUpright": "📷 La caméra voit quelqu'un debout ({{angle}}°) - pas encore associé à un joueur",
+  "players.cameraCandidateBent": "📷 La caméra voit quelqu'un penché ({{angle}}°) - pas encore associé à un joueur",
   "cameraWizard.openButton": "📷 Configurer la caméra",
   "cameraWizard.expandButton": "⛶ Plein écran",
   "cameraWizard.step1Heading": "Configurer la reconnaissance par caméra",

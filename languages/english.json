@@ -863,6 +863,8 @@
   "players.cameraVoiceEnable": "🔊 Speak player status (seen / shooting)",
   "players.cameraCandidateSeen": "📷 Camera currently sees: {{name}}",
   "players.cameraCandidateNone": "📷 Camera running - no one identified right now",
+  "players.cameraCandidateUpright": "📷 Camera sees someone upright ({{angle}}°) - not matched to a player yet",
+  "players.cameraCandidateBent": "📷 Camera sees someone bent over ({{angle}}°) - not matched to a player yet",
   "cameraWizard.openButton": "📷 Set Up Camera",
   "cameraWizard.expandButton": "⛶ Full Screen",
   "cameraWizard.step1Heading": "Set Up Camera Recognition",
