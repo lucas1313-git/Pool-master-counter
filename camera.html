@@ -2023,6 +2023,11 @@
   var BALL_FELT_HUE_TOLERANCE_DEG = 22;
   var BALL_MIN_SAT_FOR_FELT = 0.22;
   var BALL_DARK_V_RATIO = 0.28;
+  // The search area is the calibrated felt pulled in by this much on every
+  // side (real inches), so the cushion nose / rail edge right on the
+  // calibration line can never read as a ball. A ball frozen against the
+  // cushion still has its centre 1.125in inside, well within this.
+  var BALL_EDGE_INSET_IN = 0.5;
   var ballCanvas = document.createElement("canvas");
   var ballCtx = ballCanvas.getContext("2d", { willReadFrequently: true });
 
@@ -2135,7 +2140,7 @@
   function detectBallsInFrame() {
     var box = calibratedTableBoxVideo();
     if (!box) return null;
-    var invH = box.invH, xMax = box.xMax, cornersPx = box.cornersPx;
+    var invH = box.invH, xMax = box.xMax, yMax = box.yMax, cornersPx = box.cornersPx;
     var bx0 = box.bx0, by0 = box.by0, bw = box.bx1 - box.bx0, bh = box.by1 - box.by0;
     var scale = Math.min(2, BALL_CANVAS_LONG_SIDE / Math.max(bw, bh));
     var w = Math.max(1, Math.round(bw * scale)), h = Math.max(1, Math.round(bh * scale));
@@ -2148,7 +2153,16 @@
 
     function toCanvas(p) { return { x: (p.x - bx0) * scale, y: (p.y - by0) * scale }; }
     function toVideo(x, y) { return { x: bx0 + x / scale, y: by0 + y / scale }; }
-    var quad = cornersPx.map(toCanvas);
+    // Mask = the felt inset by BALL_EDGE_INSET_IN (in real inches, through
+    // the homography), not the raw calibration outline.
+    var inset = BALL_EDGE_INSET_IN;
+    var insetReal = [[inset, inset], [xMax - inset, inset], [xMax - inset, yMax - inset], [inset, yMax - inset]];
+    var quad = [];
+    for (var q = 0; q < 4; q++) {
+      var qp = applyInverseHomography(invH, insetReal[q][0], insetReal[q][1]);
+      if (!qp) return null;
+      quad.push(toCanvas(qp));
+    }
 
     // Pocket openings, as canvas-space discs - the exclusion radius is
     // measured through the homography too, so a far corner pocket is
@@ -2216,6 +2230,9 @@
       var vp = toVideo(blob.cx, blob.cy);
       var real = applyHomography(calibration.h, vp.x, vp.y);
       if (!real) return;
+      // Belt and braces on top of the mask: the blob's centre must sit on
+      // the table in real-world terms, never on a rail or beyond.
+      if (real.x < 0 || real.x > xMax || real.y < 0 || real.y > yMax) return;
       var here = applyInverseHomography(invH, real.x, real.y);
       var alongX = applyInverseHomography(invH, real.x + BALL_DIAMETER_IN, real.y);
       var alongY = applyInverseHomography(invH, real.x, real.y + BALL_DIAMETER_IN);
@@ -2506,6 +2523,20 @@
   function drawBallDebug() {
     if (!settings.ballTrackingEnabled || !ballTrack.lastInventory) return;
     var inv = ballTrack.lastInventory;
+    // Everything per-ball is clipped to the calibrated table outline, so
+    // a big "foreign" blob (a cue lying across the cloth) can't paint
+    // outside the table.
+    var tbox = calibratedTableBoxVideo();
+    overlayCtx.save();
+    if (tbox) {
+      overlayCtx.beginPath();
+      tbox.cornersPx.forEach(function (c, i) {
+        var o = videoToOverlay(c.x, c.y);
+        if (i === 0) overlayCtx.moveTo(o.x, o.y); else overlayCtx.lineTo(o.x, o.y);
+      });
+      overlayCtx.closePath();
+      overlayCtx.clip();
+    }
     overlayCtx.lineWidth = 2;
     overlayCtx.font = "11px sans-serif";
     inv.balls.forEach(function (b) {
@@ -2522,6 +2553,7 @@
         overlayCtx.fillText(label, p.x + r + 2, p.y + 4);
       }
     });
+    overlayCtx.restore();
     // Big, readable count at the top (also survives the remote viewer's
     // downscaled snapshot) - the small status line below is for tuning.
     var seen = inv.objectCount + " ball" + (inv.objectCount === 1 ? "" : "s") + " seen" +
