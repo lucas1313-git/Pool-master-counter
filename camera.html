@@ -2269,8 +2269,8 @@
   // the operator's own correction would double-subtract. The keypad is
   // the only correction channel; the scoreboard just gets told to check.
   var BALL_PASS_EVERY_N_TICKS = 3;
-  var BALL_MOTION_CANVAS_W = 80;
-  var BALL_STILL_DIFF_THRESHOLD = 6;
+  var BALL_MOTION_CANVAS_W = 160;
+  var BALL_STILL_DIFF_THRESHOLD = 8; // max 8x8-block mean change, see measureTableMotion
   var BALL_SETTLE_PASSES = 2;
   var BALL_RERACK_JUMP = 8;
   var BALL_CONFIRM_PASSES_MIN = 2;
@@ -2319,11 +2319,27 @@
     } catch (e) { return Infinity; }
     var gray = new Uint8Array(mw * mh);
     for (var i = 0, p = 0; i < gray.length; i++, p += 4) gray[i] = (data[p] * 299 + data[p + 1] * 587 + data[p + 2] * 114) / 1000;
+    // Block-wise: the largest mean change in any 8x8 block, not the mean
+    // over the whole table - a single rolling ball only touches a few
+    // blocks, and averaging it over the entire cloth hid it completely
+    // (only a player or a cue sweeping across registered as motion).
     var diff = Infinity;
     if (ballPrevMotionFrame && ballPrevMotionFrame.length === gray.length) {
-      var sum = 0;
-      for (var j = 0; j < gray.length; j++) sum += Math.abs(gray[j] - ballPrevMotionFrame[j]);
-      diff = sum / gray.length;
+      var B = 8, maxBlock = 0;
+      for (var by = 0; by < mh; by += B) {
+        for (var bx = 0; bx < mw; bx += B) {
+          var sum = 0, count = 0;
+          for (var y = by; y < Math.min(mh, by + B); y++) {
+            for (var x = bx; x < Math.min(mw, bx + B); x++) {
+              var k = y * mw + x;
+              sum += Math.abs(gray[k] - ballPrevMotionFrame[k]);
+              count++;
+            }
+          }
+          if (count && sum / count > maxBlock) maxBlock = sum / count;
+        }
+      }
+      diff = maxBlock;
     }
     ballPrevMotionFrame = gray;
     return diff;
@@ -2378,7 +2394,13 @@
     updateBallTracks(inv);
 
     var still = motion < BALL_STILL_DIFF_THRESHOLD;
+    var stateBefore = ballTrack.state;
     if (!still || stance === "bent" || inv.foreignPresent) {
+      if (stateBefore !== "MOVING") {
+        console.log("[PMC balls] " + (!still
+          ? "BALL MOVEMENT DETECTED (motion " + (isFinite(motion) ? motion.toFixed(1) : "n/a") + ", threshold " + BALL_STILL_DIFF_THRESHOLD + ")"
+          : stance === "bent" ? "player bent over - inventory paused" : "cue or arm over the cloth - inventory paused"));
+      }
       ballTrack.state = "MOVING";
       ballTrack.stillPasses = 0;
       ballTrack.pending = null;
@@ -2391,6 +2413,7 @@
       return;
     }
     ballTrack.state = "STABLE";
+    if (stateBefore !== "STABLE") console.log("[PMC balls] table still - " + inv.objectCount + " object balls, cue ball " + (inv.cuePresent ? "present" : "missing") + " (motion " + motion.toFixed(1) + ")");
     ballTrack.lastStable = snapshotInventory(inv);
 
     if (!ballTrack.baseline) {
@@ -3658,9 +3681,13 @@
   function fireEvent(name, descriptor, matchDistance, side) {
     var now = Date.now();
     var last = lastEmittedAt[name] || 0;
-    if (now - last < settings.debounceSec * 1000) return;
+    if (now - last < settings.debounceSec * 1000) {
+      console.log("[PMC shooting] " + name + " shooting detected again within the " + settings.debounceSec + "s cooldown - not re-sent");
+      return;
+    }
     lastEmittedAt[name] = now;
     var confidence = Math.max(0, Math.min(1, 1 - matchDistance / MAX_EXPECTED_DISTANCE));
+    console.log("[PMC shooting] SHOOTING DETECTED: " + name + " (match distance " + matchDistance.toFixed(2) + ", confidence " + confidence.toFixed(2) + ")");
     send({ type: "player_up", player_name: name, confidence: confidence, ts: now });
     logActivity(name + " shooting (match distance " + matchDistance.toFixed(2) + ")");
     // Stops the scorecard's camera icon flashing for this name - see
@@ -3725,9 +3752,14 @@
     lastConfidentPoseAt = Date.now();
 
     var bendSignal = effectiveBendAngle(analysis);
+    var stanceBefore = stance;
     if (bendSignal >= settings.bendEnterAngle) stance = "bent";
     else if (bendSignal <= settings.bendExitAngle) stance = "upright";
     // else: stays in whatever it already was (hysteresis band)
+    if (stance !== stanceBefore) {
+      console.log("[PMC stance] " + stanceBefore + " -> " + stance + (stance === "bent" ? " (shooting posture detected)" : "") +
+        " - bend " + bendSignal.toFixed(1) + "°, enter at " + settings.bendEnterAngle + "°, exit at " + settings.bendExitAngle + "°");
+    }
 
     var closeEnough = withinRailDistance(analysis);
 
