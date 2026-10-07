@@ -30,6 +30,7 @@
   var ws = null;
   var reconnectTimer = null;
   var turnConfirmedRegistered = false;
+  var ballFeedbackRegistered = false;
 
   function bridgeReady() {
     return !!window.PMCCameraBridge;
@@ -45,6 +46,20 @@
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
     try {
       ws.send(JSON.stringify({ type: "turn_confirmed", player_name: playerName }));
+    } catch (e) {}
+  }
+
+  // Ball tracking (Straight Pool): the camera's between-shots inventory
+  // events go to the bridge, and the keypad's corrections come back the
+  // same way turn_confirmed does.
+  function handleBallEvent(msg) {
+    if (!bridgeReady() || typeof window.PMCCameraBridge.reportBallEvent !== "function") return;
+    window.PMCCameraBridge.reportBallEvent(msg);
+  }
+  function sendBallFeedback(feedback) {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    try {
+      ws.send(JSON.stringify({ type: "ball_feedback", kind: feedback.kind, delta: feedback.delta, ts: feedback.ts }));
     } catch (e) {}
   }
 
@@ -209,6 +224,7 @@
       else if (msg.type === "enrollment-updated") handleEnrollmentUpdated(msg);
       else if (msg.type === "calib-frame") handleCalibFrame(msg);
       else if (msg.type === "remote-camera-list") handleRemoteCameraList(msg);
+      else if (msg.type === "ball_pocketed" || msg.type === "ball_rerack" || msg.type === "ball_reappeared") handleBallEvent(msg);
     });
     ws.addEventListener("close", function () {
       ws = null;
@@ -237,6 +253,10 @@
     if (!turnConfirmedRegistered) {
       window.PMCCameraBridge.onTurnConfirmed(sendTurnConfirmed);
       turnConfirmedRegistered = true;
+    }
+    if (!ballFeedbackRegistered && typeof window.PMCCameraBridge.onBallFeedback === "function") {
+      window.PMCCameraBridge.onBallFeedback(sendBallFeedback);
+      ballFeedbackRegistered = true;
     }
     if (!remoteCalibMethodsRegistered) {
       registerRemoteCalibMethods();

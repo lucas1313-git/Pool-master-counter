@@ -377,6 +377,9 @@
       sameDeviceCameraSetUp: false,
       cameraMatchThreshold: 1.2,
       cameraDebounceSec: 10,
+      // Straight Pool only - lets a camera-reported pocketed ball credit
+      // the selected shooter automatically (see reportBallEvent).
+      cameraBallTrackingEnabled: false,
       currentGame: { gameType: "8ball", target: 1, unit: "rack", mode: "individual", startedAt: new Date().toISOString(), shotCounterEnabled: false, shotCounterBeepSec: 30, shotCounterHidden: false, queueEnabled: false, timedTournamentEnabled: false, timedTournamentMinutes: 60 },
       gameHistory: [],
       rotation: { enabled: false, order: [], every: 1 },
@@ -467,6 +470,7 @@
           if (typeof parsed.sameDeviceCameraSetUp !== "boolean") parsed.sameDeviceCameraSetUp = false;
           if (typeof parsed.cameraMatchThreshold !== "number") parsed.cameraMatchThreshold = 1.2;
           if (typeof parsed.cameraDebounceSec !== "number") parsed.cameraDebounceSec = 10;
+          if (typeof parsed.cameraBallTrackingEnabled !== "boolean") parsed.cameraBallTrackingEnabled = false;
           if (!parsed.currentGame) parsed.currentGame = { gameType: "8ball", target: 1, mode: "individual" };
           if (!parsed.currentGame.startedAt) parsed.currentGame.startedAt = new Date().toISOString();
           if (typeof parsed.currentGame.unit !== "string" || !parsed.currentGame.unit) parsed.currentGame.unit = null;
@@ -716,6 +720,8 @@
     // for this button to usefully do there.
     cameraRemoteCalibrateRow.classList.toggle("hidden", !state.cameraInputEnabled || state.sameDeviceCameraSetUp);
     cameraRemoteViewerRow.classList.toggle("hidden", !state.cameraInputEnabled || state.sameDeviceCameraSetUp);
+    cameraBallTrackingRow.classList.toggle("hidden", !state.cameraInputEnabled);
+    cameraBallTrackingCheckbox.checked = state.cameraBallTrackingEnabled;
     var queueActive = individualMode && state.currentGame.queueEnabled;
     queueSwapStickyRow.classList.toggle("hidden", !queueActive);
     queueSwapStickyCheckbox.checked = loadQueueSwapSticky();
@@ -1871,6 +1877,9 @@
   var cameraRemoteViewerRow = document.getElementById("camera-remote-viewer-row");
   var btnOpenRemoteViewer = document.getElementById("btn-open-remote-viewer");
   var btnCameraRemoteViewerHelp = document.getElementById("btn-camera-remote-viewer-help");
+  var cameraBallTrackingRow = document.getElementById("camera-ball-tracking-row");
+  var cameraBallTrackingCheckbox = document.getElementById("camera-ball-tracking-checkbox");
+  var btnCameraBallTrackingHelp = document.getElementById("btn-camera-ball-tracking-help");
   var remoteViewerOverlay = document.getElementById("remote-viewer-overlay");
   var remoteViewerIframe = document.getElementById("remote-viewer-iframe");
   var btnCloseRemoteViewer = document.getElementById("btn-close-remote-viewer");
@@ -1882,6 +1891,12 @@
   // camera overlay's postMessage listener each register their own
   // callback independently, with neither needing to know the other exists.
   var cameraTurnConfirmedCallbacks = [];
+  // Ball tracking: transports register here to carry a keypad correction
+  // back to the camera (see adjustScore); lastAutoBallCredit is what
+  // tells a correction apart from an ordinary score change.
+  var cameraBallFeedbackCallbacks = [];
+  var lastAutoBallCredit = null;
+  var CAMERA_BALL_CORRECTION_WINDOW_MS = 15000;
   var queueSection = document.getElementById("queue-section");
   var queueList = document.getElementById("queue-list");
   var rosterLoadSelect = document.getElementById("roster-load-select");
@@ -4689,7 +4704,7 @@
     // own comment for what each sub-icon means.
     if (state.cameraInputEnabled && state.sameDeviceCameraSetUp) {
       var camBadge = document.createElement("div");
-      camBadge.className = "scorecard-camera-badge hidden";
+      camBadge.className = "scorecard-camera-badge";
       camBadge.dataset.playerId = player.id;
       camBadge.innerHTML =
         '<span class="scorecard-camera-badge-icon">' + CAMERA_ICON_SVG + "</span>" +
@@ -5778,10 +5793,13 @@
   // that's the case, so every showToast() call stays visible no matter
   // which screen is open.
   function showToast(message) {
-    var onMain = !appRoot.classList.contains("hidden");
+    // #win-toast no longer exists in index.html (dropped when the main
+    // page sections were reordered), so without this guard every toast
+    // on the main screen threw before showing anything.
+    var onMain = !appRoot.classList.contains("hidden") && !!winToast;
     var target = onMain ? winToast : pageToast;
     var other = onMain ? pageToast : winToast;
-    other.classList.add("hidden");
+    if (other) other.classList.add("hidden");
     target.textContent = "🏆 " + message;
     target.classList.remove("hidden");
     clearTimeout(toastTimer);
@@ -7136,9 +7154,10 @@
     }
   }
 
-  function adjustScore(playerId, delta) {
+  function adjustScore(playerId, delta, opts) {
     var player = getPlayer(playerId);
     if (!player || !player.playing) return;
+    var fromCamera = !!(opts && opts.fromCamera);
 
     // A team can't play (or score) against nobody - blocks both +/- here,
     // not just the win-credit at target, and is the authoritative check
@@ -7169,12 +7188,35 @@
     // seeing. Note this never fires for tournamentAdjustScore, a
     // deliberately separate function - tournament mode is out of scope
     // for this pass.
-    if (delta > 0 && cameraTurnConfirmedCallbacks.length) {
+    // A camera-originated ball credit is excluded too - it is the
+    // camera's own guess, not a human confirming who's at the table.
+    if (delta > 0 && !fromCamera && cameraTurnConfirmedCallbacks.length) {
       cameraTurnConfirmedCallbacks.forEach(function (cb) {
         try {
           cb(player.name);
         } catch (e) {}
       });
+    }
+
+    // Ball tracking's correction channel: a human "-" shortly after an
+    // automatic credit means the camera counted a ball that wasn't
+    // pocketed; a human "+" with no recent automatic credit means it
+    // missed one. Hooked here (not in the keypad handler) so on-screen
+    // buttons and host-dispatched guest taps count as corrections too.
+    if (!fromCamera && !quickCounterMode && state.cameraBallTrackingEnabled && state.currentGame.gameType === "straight") {
+      var sinceAuto = lastAutoBallCredit ? Date.now() - lastAutoBallCredit.ts : Infinity;
+      var kind = null;
+      if (delta < 0 && sinceAuto <= CAMERA_BALL_CORRECTION_WINDOW_MS && lastAutoBallCredit.playerId === playerId) kind = "false_positive";
+      else if (delta > 0 && sinceAuto > CAMERA_BALL_CORRECTION_WINDOW_MS) kind = "missed";
+      if (kind) {
+        var feedback = { kind: kind, delta: delta, ts: Date.now() };
+        if (kind === "false_positive") lastAutoBallCredit = null;
+        cameraBallFeedbackCallbacks.forEach(function (cb) {
+          try {
+            cb(feedback);
+          } catch (e) {}
+        });
+      }
     }
 
     // Quick Counter: just tally, never check a target or credit a win.
@@ -28619,6 +28661,14 @@
   // ---------------------------------------------------------------------
 
   function boot() {
+  // Declared here, at the top of boot(), on purpose: resumeSameDeviceCameraIfNeeded()
+  // below sets this to true, and a `var ... = false` placed further down
+  // in this same function (next to the rest of the same-device camera
+  // code, where it used to live) would run its initializer AFTER that
+  // and silently reset it - leaving "stop" a no-op after a page-load
+  // resume, and every reload-settings/feedback post to the iframe gated
+  // off. See the comment block by the same-device camera overlay code.
+  var sameDeviceCameraRunning = false;
   backfillMissingRatingsFromHistory();
   backfillMissingAddedDates();
   fixCorruptedRunRecords();
@@ -29583,9 +29633,9 @@
   // iframe.src as a DOM property never reads back empty - even with the
   // src *attribute* unset, the property resolves against the page's own
   // URL - so truthiness checks against sameDeviceCameraIframe.src itself
-  // would always be true. This tracks "actually started this session"
-  // explicitly instead.
-  var sameDeviceCameraRunning = false;
+  // would always be true. sameDeviceCameraRunning (declared at the very
+  // top of boot() - see the comment there for why it can't live here)
+  // tracks "actually started this session" explicitly instead.
 
   // "Who does the camera currently see" - distinct from the player
   // actually selected on the keypad (which only updates on a confirmed
@@ -29793,20 +29843,49 @@
 
   // Full remote viewer - loads camera.html?viewer=1 itself in an iframe
   // (see that file's own isViewer comment), reusing its real UI entirely
-  // instead of a hand-built parallel one. A fresh src on every open (not
-  // left pointed at a stale about:blank/prior load) and cleared on close
-  // so its WebSocket actually disconnects rather than sitting open in a
-  // hidden iframe.
+  // instead of a hand-built parallel one. Setting iframe.src to "" is NOT
+  // a reliable unload in all browsers (can be a no-op), and re-setting the
+  // SAME src string on reopen can also be a no-op (no navigation happens
+  // if the URL is unchanged) - leaving the OLD page/JS instance running
+  // forever behind a hidden iframe. Force a real unload via about:blank on
+  // close, and a cache-busted, always-unique src on open, so every open
+  // guarantees a fresh load (and therefore a fresh WebSocket + fresh code).
   btnOpenRemoteViewer.addEventListener("click", function () {
-    remoteViewerIframe.src = "camera.html?viewer=1";
+    remoteViewerIframe.src = "camera.html?viewer=1&t=" + Date.now();
     remoteViewerOverlay.classList.remove("hidden");
   });
   btnCloseRemoteViewer.addEventListener("click", function () {
     remoteViewerOverlay.classList.add("hidden");
-    remoteViewerIframe.src = "";
+    remoteViewerIframe.src = "about:blank";
   });
   btnCameraRemoteViewerHelp.addEventListener("click", function () {
     alertModal(T("players.cameraRemoteViewerHelpText"));
+  });
+
+  btnCameraBallTrackingHelp.addEventListener("click", function () {
+    alertModal(T("players.cameraBallTrackingHelpText"));
+  });
+  // This checkbox is what allows the automatic credit on the scoreboard.
+  // In same-device mode it also flips the camera's own "ball tracking"
+  // setting (same localStorage origin, same nudge as the debug/voice
+  // flags - see sendCameraDebugSettingsToIframe); a separate camera phone
+  // keeps its own checkbox, which has to be turned on there.
+  cameraBallTrackingCheckbox.addEventListener("change", function () {
+    state.cameraBallTrackingEnabled = cameraBallTrackingCheckbox.checked;
+    saveState();
+    if (state.sameDeviceCameraSetUp) {
+      try {
+        var raw = localStorage.getItem(CAMERA_SETTINGS_STORAGE_KEY);
+        var parsed = raw ? JSON.parse(raw) : {};
+        parsed.ballTrackingEnabled = cameraBallTrackingCheckbox.checked;
+        localStorage.setItem(CAMERA_SETTINGS_STORAGE_KEY, JSON.stringify(parsed));
+      } catch (e) {}
+      if (sameDeviceCameraRunning) {
+        try {
+          sameDeviceCameraIframe.contentWindow.postMessage({ type: "reload-settings" }, location.origin);
+        } catch (e) {}
+      }
+    }
   });
 
   // object-fit:contain means the image rarely fills its box exactly on
@@ -29906,16 +29985,12 @@
   function updateCameraIconsOnScorecard() {
     Array.prototype.forEach.call(document.querySelectorAll(".scorecard-camera-badge"), function (badge) {
       var player = state.players.filter(function (p) { return p.id === badge.dataset.playerId; })[0];
-      if (!player) {
-        badge.classList.add("hidden");
-        return;
-      }
+      if (!player) return;
       var name = player.name;
       var flashing = scorecardCameraFlashingName === name;
       var needsConfirm = scorecardCameraNeedsConfirmName === name;
       var idle = !flashing && !!scorecardCameraIdleNames[name];
       var plus = !!scorecardCameraRecentlyUpdatedTimers[name];
-      badge.classList.toggle("hidden", !(flashing || needsConfirm || idle || plus));
       badge.classList.toggle("flashing", flashing);
       badge.classList.toggle("idle", idle);
       badge.classList.toggle("show-plus", plus);
@@ -29965,6 +30040,41 @@
       if (entry && entry.name) scorecardCameraIdleNames[entry.name] = true;
     });
     updateCameraIconsOnScorecard();
+  };
+  // Ball tracking (Straight Pool): the camera's between-shots inventory
+  // events. Only ball_pocketed ever touches the score, and only when
+  // everything lines up - the feature is on at both ends, it's a
+  // Straight Pool game, someone is selected on the keypad, this device
+  // is the one keeping score (a guest only forwards taps to the host),
+  // and no overlay has the table's attention. Re-racks and reappeared
+  // balls are announced so the operator can check, never auto-corrected
+  // (see camera.html's ball tracking comment for why).
+  window.PMCCameraBridge.reportBallEvent = function (msg) {
+    if (!msg || !state.cameraInputEnabled || !state.cameraBallTrackingEnabled) return;
+    if (quickCounterMode || state.currentGame.gameType !== "straight") return;
+    if (msg.type === "ball_rerack") {
+      showToast(T("toast.cameraRerack"));
+      speakCameraStatus(T("toast.cameraRerack"));
+      return;
+    }
+    if (msg.type === "ball_reappeared") {
+      showToast(T("toast.cameraBallReappeared"));
+      speakCameraStatus(T("toast.cameraBallReappeared"));
+      return;
+    }
+    if (msg.type !== "ball_pocketed") return;
+    if (networkMode === "guest" || isAnyOverlayOpen()) return;
+    var player = keypadSelectedPlayerId ? getPlayer(keypadSelectedPlayerId) : null;
+    if (!player || !player.playing) return;
+    var delta = msg.scratch ? -1 : Math.max(0, parseInt(msg.count, 10) || 0);
+    if (delta === 0) return;
+    lastAutoBallCredit = { ts: Date.now(), delta: delta, playerId: player.id };
+    adjustScore(player.id, delta, { fromCamera: true });
+    var text = msg.scratch
+      ? T("toast.cameraScratch").replace("{name}", player.name)
+      : T("toast.cameraBallPocketed").replace("{name}", player.name).replace("{count}", String(delta));
+    showToast(text);
+    speakCameraStatus(text);
   };
   // The "+" badge - self-clearing after SCORECARD_CAMERA_PLUS_MS, timer
   // restarted (not stacked) if more samples land for the same player
@@ -30120,6 +30230,16 @@
     }
   }
 
+  // Same-device counterpart of js/camera-client.js's sendBallFeedback -
+  // gated on the camera actually running, not on the overlay being
+  // visible (recognition keeps going while the overlay is minimized).
+  window.PMCCameraBridge.onBallFeedback(function (feedback) {
+    if (!sameDeviceCameraRunning) return;
+    try {
+      sameDeviceCameraIframe.contentWindow.postMessage({ type: "ball_feedback", kind: feedback.kind, delta: feedback.delta, ts: feedback.ts }, location.origin);
+    } catch (e) {}
+  });
+
   function syncCameraDebugCheckboxesFromStorage() {
     try {
       var raw = localStorage.getItem(CAMERA_SETTINGS_STORAGE_KEY);
@@ -30182,6 +30302,8 @@
       window.PMCCameraBridge.reportIdleStates(msg.idle);
     } else if (msg.type === "enrollment-updated") {
       window.PMCCameraBridge.reportEnrollmentUpdated(msg.player_name);
+    } else if (msg.type === "ball_pocketed" || msg.type === "ball_rerack" || msg.type === "ball_reappeared") {
+      window.PMCCameraBridge.reportBallEvent(msg);
     }
   });
 
@@ -31746,6 +31868,12 @@
     // the instant camera-client.js's own script runs.
     onTurnConfirmed: function (callback) {
       cameraTurnConfirmedCallbacks.push(callback);
+    },
+    // Ball tracking's counterpart - invoked from adjustScore with
+    // { kind: "false_positive" | "missed", delta, ts } when a human
+    // score change looks like a correction of (or a miss by) the camera.
+    onBallFeedback: function (callback) {
+      cameraBallFeedbackCallbacks.push(callback);
     }
     // reportCandidateSeen and announceShotFired are attached below, from
     // inside boot(), not as plain properties of this literal -

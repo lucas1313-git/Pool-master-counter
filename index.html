@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261006f">
+<link rel="stylesheet" href="css/style.css?v=20261007a">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -179,6 +179,13 @@
       <div class="row hidden" id="camera-remote-viewer-row">
         <button type="button" id="btn-open-remote-viewer" class="btn btn-ghost" data-i18n="players.cameraRemoteViewerButton">📷 Full Camera Setup (Remote)</button>
         <button type="button" id="btn-camera-remote-viewer-help" class="format-info-btn" data-i18n-aria-label="players.cameraRemoteViewerHelpAria" aria-label="What does Full Camera Setup (Remote) do?">❓</button>
+      </div>
+      <div class="row hidden" id="camera-ball-tracking-row">
+        <label class="checkbox-row">
+          <input type="checkbox" id="camera-ball-tracking-checkbox">
+          <span data-i18n="players.cameraBallTrackingEnable">🎱 Ball tracking (Straight Pool): auto-credit pocketed balls</span>
+        </label>
+        <button type="button" id="btn-camera-ball-tracking-help" class="format-info-btn" data-i18n-aria-label="players.cameraBallTrackingHelpAria" aria-label="What does ball tracking do?">❓</button>
       </div>
       <div class="row hidden" id="camera-debug-options-row">
         <label class="checkbox-row">
@@ -2430,7 +2437,7 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20261006f"></script>
-<script src="js/camera-client.js?v=20261006d"></script>
+<script src="js/app.js?v=20261007a"></script>
+<script src="js/camera-client.js?v=20261007a"></script>
 </body>
 </html>

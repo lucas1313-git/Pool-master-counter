@@ -497,6 +497,12 @@
       <input type="number" id="railDistanceInput" min="6" max="72" step="1" value="30">
 
       <div class="row" style="margin-top:4px">
+        <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="ballTrackingToggle" style="width:auto;margin:0"> Ball tracking (Straight Pool, needs calibration)</label><button type="button" class="help-btn" data-help="ballTracking" aria-label="What does this do?">?</button>
+      </div>
+      <label for="ballConfirmInput">Still passes before a pocketed ball counts</label><button type="button" class="help-btn" data-help="ballConfirm" aria-label="What does this do?">?</button>
+      <input type="number" id="ballConfirmInput" min="2" max="6" step="1" value="3">
+
+      <div class="row" style="margin-top:4px">
         <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="debugToggle" style="width:auto;margin:0"> Show debug overlay</label><button type="button" class="help-btn" data-help="debugOverlay" aria-label="What does this do?">?</button>
       </div>
     </div>
@@ -597,6 +603,15 @@
   // way as the old singlepose model (no CDN) - weights captured directly
   // from a loaded TFHub model instance, not hand-converted.
   var MODEL_URL = "camera/models/movenet-multipose-lightning/model.json";
+  // TEMPORARY DIAGNOSTIC - SinglePose Thunder is a bigger, more accurate
+  // network than MultiPose Lightning, at the cost of only ever tracking one
+  // person (loses the "prefer the real shooter over someone sitting closer
+  // to the camera" selection above). Only wired in for same-device mode
+  // right now, to test whether the Lightning model's accuracy (not camera
+  // framing) is why a deep bend-over sometimes drops pose detection to zero
+  // entirely. Remove this and the model files under
+  // camera/models/movenet-singlepose-thunder/ once that's answered either way.
+  var MODEL_URL_THUNDER_DIAGNOSTIC = "camera/models/movenet-singlepose-thunder/model.json";
   var WS_PATH = "/ws-camera";
   // Set only when opened as an <iframe src="camera.html?embedded=1"> from
   // index.html (the same-device mode) - see the "Relay connection" section
@@ -747,6 +762,8 @@
   var bendEnterInput = document.getElementById("bendEnterInput");
   var bendExitInput = document.getElementById("bendExitInput");
   var railDistanceInput = document.getElementById("railDistanceInput");
+  var ballTrackingToggle = document.getElementById("ballTrackingToggle");
+  var ballConfirmInput = document.getElementById("ballConfirmInput");
   var debugToggle = document.getElementById("debugToggle");
   var relaunchWizardBtn = document.getElementById("relaunchWizardBtn");
 
@@ -783,6 +800,14 @@
     debugOverlay: {
       title: "Show debug overlay / debug info",
       body: "Shows live numbers on screen - stance, bend angle, match distance - so you can watch exactly what the camera is seeing while tuning these settings, instead of guessing.\n\nIt doesn't change any detection behavior itself, just makes it visible. Turn it off for normal play once things are tuned - the extra text/overlay isn't needed day to day."
+    },
+    ballTracking: {
+      title: "Ball tracking (Straight Pool)",
+      body: "Watches the calibrated table between shots and counts the balls on it. When the count drops and stays dropped, the scoreboard gives the selected shooter the points; a missing cue ball is announced as a scratch.\n\nOnly used in Straight Pool, and only once the table is calibrated (the pocket positions come from the calibration). The scoreboard's own \"ball tracking\" checkbox has to be on as well - this one runs the camera side, that one allows the automatic credit.\n\nNothing is counted while a ball is moving, a player is bent over, or a cue/arm is lying across the cloth. If it credits a ball that wasn't pocketed, press - on the keypad; if it misses one, press +. Both corrections teach it to be more or less patient."
+    },
+    ballConfirm: {
+      title: "How long a dropped count has to hold",
+      body: "How many consecutive still looks at the table (about one per second) have to agree that a ball is gone before it's credited.\n\nLower = credits faster, but a ball briefly hidden under a hand or glare is more likely to be counted as pocketed.\n\nHigher = slower, steadier. The keypad adjusts this on its own: a - right after an automatic credit raises it, a + the camera missed lowers it."
     },
     voiceStatus: {
       title: "Speak player status out loud",
@@ -847,7 +872,9 @@
     bendExitAngle: 20,
     railDistanceInches: 30,
     debugOverlay: false,
-    voiceStatusEnabled: false
+    voiceStatusEnabled: false,
+    ballTrackingEnabled: false,
+    ballConfirmPasses: 3
   };
   var hasLocalSettingsOverride = false;
 
@@ -873,6 +900,8 @@
     bendEnterInput.value = settings.bendEnterAngle;
     bendExitInput.value = settings.bendExitAngle;
     railDistanceInput.value = settings.railDistanceInches;
+    ballTrackingToggle.checked = settings.ballTrackingEnabled;
+    ballConfirmInput.value = settings.ballConfirmPasses;
     debugToggle.checked = settings.debugOverlay;
     recognizeDebugToggle.checked = settings.debugOverlay;
     recognizeVoiceToggle.checked = settings.voiceStatusEnabled;
@@ -892,6 +921,12 @@
   wireNumberSetting(bendEnterInput, "bendEnterAngle");
   wireNumberSetting(bendExitInput, "bendExitAngle");
   wireNumberSetting(railDistanceInput, "railDistanceInches");
+  wireNumberSetting(ballConfirmInput, "ballConfirmPasses");
+  ballTrackingToggle.addEventListener("change", function () {
+    settings.ballTrackingEnabled = ballTrackingToggle.checked;
+    persistSettings();
+    resetBallTracking(settings.ballTrackingEnabled ? "enabled" : "disabled");
+  });
   // Same underlying setting shown in two places - the Settings panel's
   // own checkbox (easy to miss, collapsed under a <details>) and a second
   // one right on the Recognize panel itself, for exactly the situation
@@ -948,10 +983,15 @@
     return tf.setBackend("webgl").then(function () {
       return tf.ready();
     }).then(function () {
-      return poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
-        modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING,
-        modelUrl: MODEL_URL
-      });
+      return isEmbedded
+        ? poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
+            modelType: poseDetection.movenet.modelType.SINGLEPOSE_THUNDER,
+            modelUrl: MODEL_URL_THUNDER_DIAGNOSTIC
+          })
+        : poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
+            modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING,
+            modelUrl: MODEL_URL
+          });
     }).then(function (d) {
       detector = d;
       modelsReady = true;
@@ -1174,6 +1214,15 @@
     }
   }
 
+  // TEMPORARY DIAGNOSTIC - logs directly to this page's own console (visible
+  // via DevTools regardless of relay/embedded mode) AND still relays via
+  // client-debug when a relay connection exists, so the same call site works
+  // for both the remote-viewer (server log) and same-device (console) setups.
+  function debugLog(text) {
+    try { console.log("[PMC-DEBUG] " + text); } catch (e) {}
+    try { send({ type: "client-debug", text: text }); } catch (e) {}
+  }
+
   function handleIncomingMessage(msg) {
     if (msg.type === "enrollments") {
       enrollments = msg.data || {};
@@ -1187,6 +1236,8 @@
       populateEnrollNameSelect();
     } else if (msg.type === "turn_confirmed" && msg.player_name) {
       handleTurnConfirmed(msg.player_name);
+    } else if (msg.type === "ball_feedback" && msg.kind) {
+      handleBallFeedback(msg.kind);
     } else if (msg.type === "stop-camera") {
       stopCurrentStream();
       if (wakeLock) { try { wakeLock.release(); } catch (e) {} wakeLock = null; }
@@ -1198,8 +1249,10 @@
       // comment on why that's safe) - this is just the nudge to pick up
       // that change immediately instead of waiting on nothing (there's
       // no polling loop for settings here otherwise).
+      var wasTrackingBalls = settings.ballTrackingEnabled;
       loadStoredSettings();
       applySettingsToInputs();
+      if (wasTrackingBalls !== settings.ballTrackingEnabled) resetBallTracking(settings.ballTrackingEnabled ? "enabled" : "disabled");
     } else if (msg.type === "enroll-select" && msg.player_name) {
       selectPlayerForEnroll(msg.player_name);
     } else if (msg.type === "enroll-select-attribute" && msg.player_name) {
@@ -1226,16 +1279,19 @@
     } else if (msg.type === "viewer-change" && msg.id) {
       var changeEl = document.getElementById(msg.id);
       if (changeEl) {
-        changeEl.value = msg.value;
+        if (changeEl.type === "checkbox") changeEl.checked = !!msg.checked;
+        else changeEl.value = msg.value;
         changeEl.dispatchEvent(new Event("change", { bubbles: true }));
       }
     } else if (msg.type === "viewer-canvas-tap" && typeof msg.fx === "number" && typeof msg.fy === "number") {
       applyRemoteTap(msg.fx, msg.fy);
     } else if (msg.type === "hello-viewer-connected") {
       hasViewerConnected = true;
+      try { send({ type: "client-debug", text: "hello-viewer-connected received, starting stream. dotModels=" + document.getElementById("dotModels").className + " dotCamera=" + document.getElementById("dotCamera").className }); } catch (e) {}
       startViewerFrameStream();
     } else if (msg.type === "hello-viewer-disconnected") {
       hasViewerConnected = false;
+      try { send({ type: "client-debug", text: "hello-viewer-disconnected received, stopping stream" }); } catch (e) {}
     } else if (msg.type === "viewer-frame") {
       applyViewerFrame(msg);
     }
@@ -1252,18 +1308,59 @@
     }
     var elements = msg.elements || {};
     Object.keys(elements).forEach(function (id) {
-      var el = document.getElementById(id);
-      if (!el) return;
-      var snap = elements[id];
-      if (snap === null) return;
-      if (id === "dotCamera" || id === "dotRelay" || id === "dotModels") {
-        if (typeof snap.cls === "string") el.className = snap.cls;
-      } else {
-        if (typeof snap.text === "string") el.textContent = snap.text;
-        if (typeof snap.hidden === "boolean") el.hidden = snap.hidden;
+      try {
+        var el = document.getElementById(id);
+        if (!el) return;
+        var snap = elements[id];
+        if (!snap) return;
+        if (snap.kind === "class") {
+          el.className = snap.cls;
+        } else if (snap.kind === "checkbox") {
+          el.checked = !!snap.checked;
+          if (typeof snap.hidden === "boolean") el.hidden = snap.hidden;
+        } else if (snap.kind === "select") {
+          // Rebuild the option list first (this device never ran its own
+          // enumerateDevices() to produce one), then re-apply which one
+          // is selected - setting .innerHTML alone can silently lose the
+          // selection, since an option picked via el.selected = true in
+          // JS doesn't necessarily serialize a `selected` HTML attribute.
+          el.innerHTML = snap.html;
+          el.value = snap.value;
+        } else if (snap.kind === "value") {
+          el.value = snap.value;
+          if (typeof snap.hidden === "boolean") el.hidden = snap.hidden;
+        } else if (snap.kind === "html") {
+          el.innerHTML = snap.html;
+        } else {
+          el.textContent = snap.text;
+          if (typeof snap.hidden === "boolean") el.hidden = snap.hidden;
+        }
+      } catch (e) {
+        // TEMPORARY DIAGNOSTIC: an exception applying one element used
+        // to silently abort the whole forEach, leaving every id after
+        // it (including the status dots, inserted last) stuck at
+        // whatever they were before.
+        try { send({ type: "client-debug", text: "applyViewerFrame EXCEPTION on id=" + id + ": " + e.message }); } catch (e2) {}
       }
     });
+    // TEMPORARY DIAGNOSTIC: report what this page's OWN dots look like
+    // right after applying an incoming frame, throttled to roughly once
+    // every ~5s (viewerFrameApplyCount is only ever incremented here, on
+    // the viewer instance).
+    viewerFrameApplyCount++;
+    if (viewerFrameApplyCount === 1 || viewerFrameApplyCount % 3 === 0) {
+      try {
+        send({
+          type: "client-debug",
+          text: "applyViewerFrame #" + viewerFrameApplyCount + " - AFTER apply: dotModels=" + document.getElementById("dotModels").className +
+            " dotCamera=" + document.getElementById("dotCamera").className +
+            " | sent in payload: dotModels=" + (elements.dotModels ? elements.dotModels.cls : "MISSING") +
+            " dotCamera=" + (elements.dotCamera ? elements.dotCamera.cls : "MISSING")
+        });
+      } catch (e) {}
+    }
   }
+  var viewerFrameApplyCount = 0;
 
   // ---- Viewer mode boot: no local camera, no model, no detection loop -
   // every interactive element's click/change is forwarded to the real
@@ -1304,7 +1401,16 @@
         if (!el.id || VIEWER_LOCAL_ONLY_IDS[el.id]) return;
         evt.preventDefault();
         evt.stopImmediatePropagation();
-        send({ type: "viewer-change", id: el.id, value: el.value });
+        // A checkbox's .value is always the fixed string "on" regardless
+        // of whether it's actually checked - .checked is the real state,
+        // sent instead (not in addition - a stray value: "on" is harmless
+        // noise either way, but keeping this one unambiguous per element
+        // type avoids ever reading the wrong field on the receiving end).
+        if (el.type === "checkbox") {
+          send({ type: "viewer-change", id: el.id, checked: el.checked });
+        } else {
+          send({ type: "viewer-change", id: el.id, value: el.value });
+        }
       },
       true
     );
@@ -1374,21 +1480,38 @@
   // still image. A fraction tapped on THIS image maps 1:1 onto
   // overlayEl's own pixel space, so applyRemoteTap below needs no
   // separate transform of its own.
-  function captureCalibFrame() {
+  // maxW/maxH cap the exported image regardless of the overlay's own
+  // (device-dependent) pixel size - a real phone-to-Mac WiFi link is not
+  // the zero-cost loopback this was first tested over, and repeatedly
+  // sending a large, full-resolution JPEG every fraction of a second
+  // turned out to be enough to make the viewer's WebSocket itself drop
+  // and reconnect (see server/camera-relay.js's own comment on
+  // VIEWER_FRAME_INTERVAL_MS) - every symptom that looked like a sync
+  // bug (dots never going green, enrollment progress text "vanishing")
+  // was actually this connection repeatedly resetting the viewer's own
+  // DOM back to its empty defaults.
+  function captureCalibFrame(maxW, maxH) {
     var w = overlayEl.width, h = overlayEl.height;
     if (!w || !h) return null;
     var vw = videoEl.videoWidth || 1, vh = videoEl.videoHeight || 1;
     var scale = Math.max(w / vw, h / vh);
     var offsetX = (w - vw * scale) / 2;
     var offsetY = (h - vh * scale) / 2;
+    var outW = w, outH = h;
+    if (maxW && maxH) {
+      var downscale = Math.min(1, maxW / w, maxH / h);
+      outW = Math.round(w * downscale);
+      outH = Math.round(h * downscale);
+    }
     var tmp = document.createElement("canvas");
-    tmp.width = w;
-    tmp.height = h;
+    tmp.width = outW;
+    tmp.height = outH;
     var ctx = tmp.getContext("2d");
     try {
-      ctx.drawImage(videoEl, offsetX, offsetY, vw * scale, vh * scale);
-      ctx.drawImage(overlayEl, 0, 0);
-      return tmp.toDataURL("image/jpeg", 0.6);
+      var drawScale = outW / w;
+      ctx.drawImage(videoEl, offsetX * drawScale, offsetY * drawScale, vw * scale * drawScale, vh * scale * drawScale);
+      ctx.drawImage(overlayEl, 0, 0, w, h, 0, 0, outW, outH);
+      return tmp.toDataURL("image/jpeg", maxW ? 0.5 : 0.6);
     } catch (e) {
       return null;
     }
@@ -1434,24 +1557,66 @@
   // feature.
   var hasViewerConnected = false;
   var viewerFrameTimer = null;
-  var VIEWER_FRAME_INTERVAL_MS = 700;
+  var VIEWER_FRAME_INTERVAL_MS = 1500;
+  var VIEWER_FRAME_MAX_W = 480;
+  var VIEWER_FRAME_MAX_H = 360;
+  // Every element a viewer needs to actually see what's going on, not
+  // just the calibration/enrollment status - the whole point of "I need
+  // all the debug options too" is that diagnosing why recognition isn't
+  // working needs the live angle/stance/distance readout and the running
+  // log, same as standing at the camera would show. Kind is inferred
+  // automatically below (checkbox vs. text-input/select vs. plain text),
+  // except recognizeLog, which is read as innerHTML (a scrolling list of
+  // child <div>s, not a single text value).
   var VIEWER_SYNCED_IDS = [
     "calibrationStepText", "calibrationStatus", "captureProgress",
-    "labelCamera", "labelRelay", "labelModels"
+    "labelCamera", "labelRelay", "labelModels",
+    "recognizeLiveStatus", "recognizeDebugToggle", "recognizeVoiceToggle",
+    "debugToggle", "thresholdInput", "consecutiveInput", "debounceInput",
+    "bendEnterInput", "bendExitInput", "railDistanceInput",
+    "ballTrackingToggle", "ballConfirmInput",
+    "tableSizeSelect", "firstEdgeSelect", "enrollName"
   ];
+  var VIEWER_SYNCED_HTML_IDS = ["recognizeLog"];
+  // cameraSelect's <option>s are populated at runtime from this device's
+  // own enumerateDevices() (see populateCameraList) - the viewer has no
+  // camera of its own to enumerate, so its copy of this dropdown starts
+  // (and stays) empty unless the actual option list is synced too, not
+  // just which one is selected.
+  var VIEWER_SYNCED_SELECT_IDS = ["cameraSelect"];
   function snapshotViewerSyncedElements() {
     var out = {};
     VIEWER_SYNCED_IDS.forEach(function (id) {
       var el = document.getElementById(id);
       if (!el) return;
-      out[id] = { text: el.textContent, hidden: el.hidden };
+      if (el.tagName === "INPUT" && el.type === "checkbox") {
+        out[id] = { kind: "checkbox", checked: el.checked, hidden: el.hidden };
+      } else if (el.tagName === "INPUT" || el.tagName === "SELECT") {
+        out[id] = { kind: "value", value: el.value, hidden: el.hidden };
+      } else {
+        out[id] = { kind: "text", text: el.textContent, hidden: el.hidden };
+      }
     });
-    var camDot = document.getElementById("dotCamera");
-    var relayDot = document.getElementById("dotRelay");
-    var modelsDot = document.getElementById("dotModels");
-    out.dotCamera = camDot ? { cls: camDot.className } : null;
-    out.dotRelay = relayDot ? { cls: relayDot.className } : null;
-    out.dotModels = modelsDot ? { cls: modelsDot.className } : null;
+    VIEWER_SYNCED_HTML_IDS.forEach(function (id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      // Only the most recent few entries - recognizeLog can hold up to
+      // 20, and the full innerHTML of all of them on every tick is
+      // exactly the kind of avoidable weight that was overloading the
+      // connection (see captureCalibFrame's own comment).
+      var recent = Array.prototype.slice.call(el.children, 0, 5);
+      var wrap = document.createElement("div");
+      recent.forEach(function (child) { wrap.appendChild(child.cloneNode(true)); });
+      out[id] = { kind: "html", html: wrap.innerHTML };
+    });
+    VIEWER_SYNCED_SELECT_IDS.forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) out[id] = { kind: "select", html: el.innerHTML, value: el.value };
+    });
+    ["dotCamera", "dotRelay", "dotModels"].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) out[id] = { kind: "class", cls: el.className };
+    });
     return out;
   }
   function startViewerFrameStream() {
@@ -1462,7 +1627,7 @@
         viewerFrameTimer = null;
         return;
       }
-      var dataUrl = captureCalibFrame();
+      var dataUrl = captureCalibFrame(VIEWER_FRAME_MAX_W, VIEWER_FRAME_MAX_H);
       if (!dataUrl) return;
       send({ type: "viewer-frame", dataUrl: dataUrl, elements: snapshotViewerSyncedElements() });
     }, VIEWER_FRAME_INTERVAL_MS);
@@ -1501,7 +1666,12 @@
     try { ws = new WebSocket(wsUrl()); } catch (e) { ws = null; scheduleReconnect(); return; }
     ws.addEventListener("open", function () {
       setStatus(dotRelay, labelRelay, "ok", isViewer ? "Remote viewer: connected" : "Relay: connected");
-      send({ type: "hello", role: isViewer ? "viewer" : "camera" });
+      // TEMPORARY DIAGNOSTIC: reports the previous connection's close
+      // code/reason (if any) on the reconnect that follows it, so an
+      // unexpected disconnect shows up in the server's own log even
+      // though nobody can see this browser's console directly.
+      send({ type: "hello", role: isViewer ? "viewer" : "camera", lastCloseDebug: lastCloseDebugInfo });
+      lastCloseDebugInfo = null;
       send({ type: "enroll-get" });
       if (!isViewer && !hasLocalSettingsOverride) send({ type: "settings-request" });
       send({ type: "roster-request" });
@@ -1511,12 +1681,14 @@
       try { msg = JSON.parse(event.data); } catch (e) { return; }
       handleIncomingMessage(msg);
     });
-    ws.addEventListener("close", function () {
+    ws.addEventListener("close", function (evt) {
       ws = null;
+      lastCloseDebugInfo = "code=" + evt.code + " reason=" + JSON.stringify(evt.reason) + " clean=" + evt.wasClean;
       setStatus(dotRelay, labelRelay, "bad", isViewer ? "Remote viewer: disconnected" : "Relay: disconnected");
       scheduleReconnect();
     });
   }
+  var lastCloseDebugInfo = null;
 
   function initEmbeddedMode() {
     setStatus(dotRelay, labelRelay, "ok", "Same-device mode");
@@ -1818,6 +1990,519 @@
     return { x0: x0 - padX, y0: y0 - padY, x1: x1 + padX, y1: y1 + padY };
   }
 
+  // ---- Ball detection (Straight Pool ball tracking) ----
+  // Classical pixel work only, no model: the calibrated table quad is
+  // drawn into its own canvas, everything that isn't felt-coloured is a
+  // candidate, and candidates are sized against what a real 2.25in ball
+  // should measure at that exact spot (through the homography, so the
+  // expected size shrinks with perspective towards the far rail instead
+  // of being one fixed pixel size for the whole table). The felt colour
+  // is re-measured on every pass rather than stored at calibration time -
+  // balls cover a small fraction of the cloth, and lighting drifts over
+  // an evening in a way a stored reference wouldn't follow.
+  var BALL_DIAMETER_IN = 2.25;
+  var BALL_CANVAS_LONG_SIDE = 640;
+  var BALL_FELT_HUE_TOLERANCE_DEG = 22;
+  var BALL_MIN_SAT_FOR_FELT = 0.22;
+  var BALL_DARK_V_RATIO = 0.28;
+  var ballCanvas = document.createElement("canvas");
+  var ballCtx = ballCanvas.getContext("2d", { willReadFrequently: true });
+
+  function hueDistance(a, b) {
+    var d = Math.abs(a - b) % 360;
+    return d > 180 ? 360 - d : d;
+  }
+
+  // Ray-casting point-in-polygon for the 4-corner table quad.
+  function pointInQuad(px, py, quad) {
+    var inside = false;
+    for (var i = 0, j = 3; i < 4; j = i++) {
+      var xi = quad[i].x, yi = quad[i].y, xj = quad[j].x, yj = quad[j].y;
+      var intersect = ((yi > py) !== (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi);
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+
+  // 3x3 open (erode then dilate) - strips the one-pixel slivers that the
+  // rail/felt boundary and ball shadows leave behind without eating a
+  // real ball, which is many pixels across at this resolution.
+  function morphOpen(mask, w, h) {
+    var eroded = new Uint8Array(w * h);
+    var y, x, idx;
+    for (y = 1; y < h - 1; y++) {
+      for (x = 1; x < w - 1; x++) {
+        idx = y * w + x;
+        if (mask[idx] && mask[idx - 1] && mask[idx + 1] && mask[idx - w] && mask[idx + w] &&
+            mask[idx - w - 1] && mask[idx - w + 1] && mask[idx + w - 1] && mask[idx + w + 1]) eroded[idx] = 1;
+      }
+    }
+    var out = new Uint8Array(w * h);
+    for (y = 1; y < h - 1; y++) {
+      for (x = 1; x < w - 1; x++) {
+        idx = y * w + x;
+        if (eroded[idx] || eroded[idx - 1] || eroded[idx + 1] || eroded[idx - w] || eroded[idx + w] ||
+            eroded[idx - w - 1] || eroded[idx - w + 1] || eroded[idx + w - 1] || eroded[idx + w + 1]) out[idx] = 1;
+      }
+    }
+    return out;
+  }
+
+  // Every connected blob in the mask with the stats the classifier
+  // needs - unlike largestConnectedComponent above, which only ever
+  // keeps the single biggest one (fine for finding the felt, useless
+  // for counting balls). whiteCount uses the per-pixel s/v arrays so the
+  // cue ball can be told apart afterwards.
+  function labelComponents(mask, w, h, sArr, vArr, minArea) {
+    var visited = new Uint8Array(w * h);
+    var blobs = [];
+    for (var start = 0; start < w * h; start++) {
+      if (!mask[start] || visited[start]) continue;
+      var stack = [start];
+      visited[start] = 1;
+      var area = 0, sumX = 0, sumY = 0, whiteCount = 0, sumV = 0;
+      var minX = w, maxX = -1, minY = h, maxY = -1;
+      while (stack.length) {
+        var idx = stack.pop();
+        var x = idx % w, y = (idx / w) | 0;
+        area++; sumX += x; sumY += y; sumV += vArr[idx];
+        if (sArr[idx] < 0.25 && vArr[idx] > 0.7) whiteCount++;
+        if (x < minX) minX = x; if (x > maxX) maxX = x;
+        if (y < minY) minY = y; if (y > maxY) maxY = y;
+        if (x > 0 && mask[idx - 1] && !visited[idx - 1]) { visited[idx - 1] = 1; stack.push(idx - 1); }
+        if (x < w - 1 && mask[idx + 1] && !visited[idx + 1]) { visited[idx + 1] = 1; stack.push(idx + 1); }
+        if (y > 0 && mask[idx - w] && !visited[idx - w]) { visited[idx - w] = 1; stack.push(idx - w); }
+        if (y < h - 1 && mask[idx + w] && !visited[idx + w]) { visited[idx + w] = 1; stack.push(idx + w); }
+      }
+      if (area < minArea) continue;
+      blobs.push({
+        area: area, cx: sumX / area, cy: sumY / area,
+        bw: maxX - minX + 1, bh: maxY - minY + 1,
+        whiteFraction: whiteCount / area, meanV: sumV / area
+      });
+    }
+    return blobs;
+  }
+
+  // Returns { objectCount, cuePresent, balls, foreignPresent, feltHsv,
+  // canvasW, canvasH } or null when there's nothing to measure yet (no
+  // calibration, no video). balls[] positions/radii are in native video
+  // pixels so the overlay can draw them with videoToOverlay like
+  // everything else.
+  // The calibrated table's 4 corners in video pixels plus their bounding
+  // box (clamped to the frame) - shared by the ball pass and the motion
+  // check so both always look at exactly the same patch of video.
+  function calibratedTableBoxVideo() {
+    if (!calibration) return null;
+    var vw = videoEl.videoWidth, vh = videoEl.videoHeight;
+    if (!vw || !vh) return null;
+    var invH = invertHomography(calibration.h);
+    if (!invH) return null;
+    var xMax = calibXExtent(), yMax = calibYExtent();
+    var cornersReal = [[0, 0], [xMax, 0], [xMax, yMax], [0, yMax]];
+    var cornersPx = [];
+    for (var c = 0; c < 4; c++) {
+      var cp = applyInverseHomography(invH, cornersReal[c][0], cornersReal[c][1]);
+      if (!cp) return null;
+      cornersPx.push(cp);
+    }
+    var bx0 = Math.max(0, Math.floor(Math.min(cornersPx[0].x, cornersPx[1].x, cornersPx[2].x, cornersPx[3].x)));
+    var by0 = Math.max(0, Math.floor(Math.min(cornersPx[0].y, cornersPx[1].y, cornersPx[2].y, cornersPx[3].y)));
+    var bx1 = Math.min(vw, Math.ceil(Math.max(cornersPx[0].x, cornersPx[1].x, cornersPx[2].x, cornersPx[3].x)));
+    var by1 = Math.min(vh, Math.ceil(Math.max(cornersPx[0].y, cornersPx[1].y, cornersPx[2].y, cornersPx[3].y)));
+    if (bx1 - bx0 < 8 || by1 - by0 < 8) return null;
+    return { invH: invH, xMax: xMax, yMax: yMax, cornersPx: cornersPx, bx0: bx0, by0: by0, bx1: bx1, by1: by1 };
+  }
+
+  function detectBallsInFrame() {
+    var box = calibratedTableBoxVideo();
+    if (!box) return null;
+    var invH = box.invH, xMax = box.xMax, cornersPx = box.cornersPx;
+    var bx0 = box.bx0, by0 = box.by0, bw = box.bx1 - box.bx0, bh = box.by1 - box.by0;
+    var scale = Math.min(2, BALL_CANVAS_LONG_SIDE / Math.max(bw, bh));
+    var w = Math.max(1, Math.round(bw * scale)), h = Math.max(1, Math.round(bh * scale));
+    ballCanvas.width = w; ballCanvas.height = h;
+    var data;
+    try {
+      ballCtx.drawImage(videoEl, bx0, by0, bw, bh, 0, 0, w, h);
+      data = ballCtx.getImageData(0, 0, w, h).data;
+    } catch (e) { return null; }
+
+    function toCanvas(p) { return { x: (p.x - bx0) * scale, y: (p.y - by0) * scale }; }
+    function toVideo(x, y) { return { x: bx0 + x / scale, y: by0 + y / scale }; }
+    var quad = cornersPx.map(toCanvas);
+
+    // Pocket openings, as canvas-space discs - the exclusion radius is
+    // measured through the homography too, so a far corner pocket is
+    // excluded by a smaller disc than a near one.
+    var pockets = pocketCentersReal().map(function (pc) {
+      var centre = applyInverseHomography(invH, pc[0], pc[1]);
+      var towards = applyInverseHomography(invH, pc[0] + (pc[0] < xMax / 2 ? 1 : -1) * POCKET_EXCLUSION_RADIUS_IN, pc[1]);
+      if (!centre || !towards) return null;
+      var cc = toCanvas(centre), tc = toCanvas(towards);
+      return { x: cc.x, y: cc.y, r2: (tc.x - cc.x) * (tc.x - cc.x) + (tc.y - cc.y) * (tc.y - cc.y) };
+    }).filter(function (p) { return p; });
+
+    var n = w * h;
+    var inside = new Uint8Array(n);
+    var hArr = new Float32Array(n), sArr = new Float32Array(n), vArr = new Float32Array(n);
+    var HUE_BIN_DEG = 2, hueBins = new Float64Array(360 / HUE_BIN_DEG);
+    var i, p, x, y;
+    for (y = 0; y < h; y++) {
+      for (x = 0; x < w; x++) {
+        i = y * w + x;
+        if (!pointInQuad(x, y, quad)) continue;
+        var inPocket = false;
+        for (var k = 0; k < pockets.length; k++) {
+          var dx = x - pockets[k].x, dy = y - pockets[k].y;
+          if (dx * dx + dy * dy <= pockets[k].r2) { inPocket = true; break; }
+        }
+        if (inPocket) continue;
+        inside[i] = 1;
+        p = i * 4;
+        var r = data[p] / 255, g = data[p + 1] / 255, b = data[p + 2] / 255;
+        var max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min, hue = 0;
+        if (d !== 0) {
+          if (max === r) hue = ((g - b) / d) % 6;
+          else if (max === g) hue = (b - r) / d + 2;
+          else hue = (r - g) / d + 4;
+          hue *= 60;
+          if (hue < 0) hue += 360;
+        }
+        var sat = max === 0 ? 0 : d / max;
+        hArr[i] = hue; sArr[i] = sat; vArr[i] = max;
+        if (sat >= 0.15 && ((x + y) & 3) === 0) hueBins[(hue / HUE_BIN_DEG) | 0] += 1;
+      }
+    }
+    var bestBin = 0;
+    for (i = 1; i < hueBins.length; i++) if (hueBins[i] > hueBins[bestBin]) bestBin = i;
+    var feltH = bestBin * HUE_BIN_DEG + HUE_BIN_DEG / 2;
+    var feltSSum = 0, feltVSum = 0, feltCount = 0;
+    for (i = 0; i < n; i += 4) {
+      if (inside[i] && hueDistance(hArr[i], feltH) <= 15 && sArr[i] >= 0.15) { feltSSum += sArr[i]; feltVSum += vArr[i]; feltCount++; }
+    }
+    if (!feltCount) return null;
+    var feltS = feltSSum / feltCount, feltV = feltVSum / feltCount;
+
+    var foreign = new Uint8Array(n);
+    for (i = 0; i < n; i++) {
+      if (!inside[i]) continue;
+      if (hueDistance(hArr[i], feltH) > BALL_FELT_HUE_TOLERANCE_DEG || sArr[i] < BALL_MIN_SAT_FOR_FELT || vArr[i] < BALL_DARK_V_RATIO * feltV) foreign[i] = 1;
+    }
+    foreign = morphOpen(foreign, w, h);
+
+    var blobs = labelComponents(foreign, w, h, sArr, vArr, 6);
+    var balls = [], foreignPresent = false, objectCount = 0;
+    var singles = [];
+    blobs.forEach(function (blob) {
+      var vp = toVideo(blob.cx, blob.cy);
+      var real = applyHomography(calibration.h, vp.x, vp.y);
+      if (!real) return;
+      var here = applyInverseHomography(invH, real.x, real.y);
+      var alongX = applyInverseHomography(invH, real.x + BALL_DIAMETER_IN, real.y);
+      var alongY = applyInverseHomography(invH, real.x, real.y + BALL_DIAMETER_IN);
+      if (!here || !alongX || !alongY) return;
+      var dPx = (pointDist(here, alongX) + pointDist(here, alongY)) / 2;
+      var dCanvas = dPx * scale;
+      if (dCanvas < 3) return;
+      var ballArea = Math.PI * (dCanvas / 2) * (dCanvas / 2);
+      var aspect = Math.max(blob.bw, blob.bh) / Math.max(1, Math.min(blob.bw, blob.bh));
+      var fill = blob.area / (blob.bw * blob.bh);
+      var entry = { x: vp.x, y: vp.y, r: dPx / 2, kind: "object", count: 1, whiteFraction: blob.whiteFraction, meanV: blob.meanV };
+      if (blob.area < 0.4 * ballArea) return;
+      if (aspect > 3 || (blob.area > 2 * ballArea && fill < 0.45)) {
+        entry.kind = "foreign";
+        entry.r = Math.max(blob.bw, blob.bh) / scale / 2;
+        foreignPresent = true;
+        balls.push(entry);
+        return;
+      }
+      if (blob.area <= 1.7 * ballArea && aspect <= 1.6) {
+        singles.push(entry);
+        return;
+      }
+      if (blob.area <= 16 * ballArea && fill > 0.45) {
+        entry.kind = "cluster";
+        entry.count = Math.max(2, Math.round(blob.area / ballArea));
+        entry.r = Math.max(blob.bw, blob.bh) / scale / 2;
+        objectCount += entry.count;
+        balls.push(entry);
+        return;
+      }
+      entry.kind = "foreign";
+      entry.r = Math.max(blob.bw, blob.bh) / scale / 2;
+      foreignPresent = true;
+      balls.push(entry);
+    });
+    // At most one cue ball: the whitest single candidate, and only if it
+    // is convincingly white - a plain object ball never gets close to
+    // half of its pixels reading as white, glare included.
+    var cue = null;
+    singles.forEach(function (s) {
+      if (s.whiteFraction >= 0.5 && (!cue || s.whiteFraction > cue.whiteFraction)) cue = s;
+    });
+    singles.forEach(function (s) {
+      if (s === cue) s.kind = "cue";
+      else objectCount += 1;
+      balls.push(s);
+    });
+    return {
+      objectCount: objectCount,
+      cuePresent: !!cue,
+      balls: balls,
+      foreignPresent: foreignPresent,
+      feltHsv: { h: feltH, s: feltS, v: feltV },
+      canvasW: w,
+      canvasH: h
+    };
+  }
+
+  // ---- Ball tracking state machine ----
+  // Inventories are only ever compared between shots, never during one:
+  // balls in motion, a bent-over shooter, or a cue/arm lying across the
+  // cloth all mean "don't trust this frame". A count that drops and then
+  // STAYS dropped for ballConfirmPasses consecutive still passes is a
+  // pocketed ball; a count that climbs is either a 14.1 re-rack (big
+  // jump) or a ball that had been hidden under something (small) - never
+  // an automatic un-credit, because a reappearing blob is just as likely
+  // glare or a hand as a real ball, and an automatic -1 colliding with
+  // the operator's own correction would double-subtract. The keypad is
+  // the only correction channel; the scoreboard just gets told to check.
+  var BALL_PASS_EVERY_N_TICKS = 3;
+  var BALL_MOTION_CANVAS_W = 80;
+  var BALL_STILL_DIFF_THRESHOLD = 6;
+  var BALL_SETTLE_PASSES = 2;
+  var BALL_RERACK_JUMP = 8;
+  var BALL_CONFIRM_PASSES_MIN = 2;
+  var BALL_CONFIRM_PASSES_MAX = 6;
+  var BALL_TRACK_MATCH_RADIUS_FACTOR = 1.5;
+  var ballTickCounter = 0;
+  var ballMotionCanvas = document.createElement("canvas");
+  var ballMotionCtx = ballMotionCanvas.getContext("2d", { willReadFrequently: true });
+  var ballPrevMotionFrame = null;
+  var ballTrack = {
+    state: "MOVING",
+    stillPasses: 0,
+    baseline: null,
+    pending: null,
+    cueMissingPasses: 0,
+    lastInventory: null,
+    lastStable: null,
+    motionDiff: null,
+    tracks: [],
+    nextTrackId: 1
+  };
+
+  function resetBallTracking(reason) {
+    ballTrack.state = "MOVING";
+    ballTrack.stillPasses = 0;
+    ballTrack.baseline = null;
+    ballTrack.pending = null;
+    ballTrack.cueMissingPasses = 0;
+    ballTrack.lastStable = null;
+    ballTrack.tracks = [];
+    ballPrevMotionFrame = null;
+    if (reason) logActivity("Ball tracking reset (" + reason + ")");
+  }
+
+  // Mean absolute luminance change of the table patch since the previous
+  // pass, on a tiny grayscale copy - cheap, and insensitive to the
+  // sensor noise a full-resolution diff would flag as motion.
+  function measureTableMotion(box) {
+    var bw = box.bx1 - box.bx0, bh = box.by1 - box.by0;
+    var mw = BALL_MOTION_CANVAS_W, mh = Math.max(1, Math.round(mw * bh / bw));
+    ballMotionCanvas.width = mw; ballMotionCanvas.height = mh;
+    var data;
+    try {
+      ballMotionCtx.drawImage(videoEl, box.bx0, box.by0, bw, bh, 0, 0, mw, mh);
+      data = ballMotionCtx.getImageData(0, 0, mw, mh).data;
+    } catch (e) { return Infinity; }
+    var gray = new Uint8Array(mw * mh);
+    for (var i = 0, p = 0; i < gray.length; i++, p += 4) gray[i] = (data[p] * 299 + data[p + 1] * 587 + data[p + 2] * 114) / 1000;
+    var diff = Infinity;
+    if (ballPrevMotionFrame && ballPrevMotionFrame.length === gray.length) {
+      var sum = 0;
+      for (var j = 0; j < gray.length; j++) sum += Math.abs(gray[j] - ballPrevMotionFrame[j]);
+      diff = sum / gray.length;
+    }
+    ballPrevMotionFrame = gray;
+    return diff;
+  }
+
+  // Greedy nearest-neighbour matching so each ball keeps an id between
+  // passes - purely for the debug overlay (and the activity log), the
+  // crediting logic only ever compares counts.
+  function updateBallTracks(inv) {
+    var unmatched = inv.balls.filter(function (b) { return b.kind !== "foreign"; });
+    var kept = [];
+    ballTrack.tracks.forEach(function (t) {
+      var best = null, bestDist = Infinity;
+      unmatched.forEach(function (b) {
+        var d = pointDist(t, b);
+        if (d < bestDist && d <= BALL_TRACK_MATCH_RADIUS_FACTOR * Math.max(b.r, t.r) * 2) { best = b; bestDist = d; }
+      });
+      if (best) {
+        t.x = best.x; t.y = best.y; t.r = best.r; t.kind = best.kind; t.missed = 0;
+        best.trackId = t.id;
+        unmatched.splice(unmatched.indexOf(best), 1);
+        kept.push(t);
+      } else if (++t.missed < 4) {
+        kept.push(t);
+      }
+    });
+    unmatched.forEach(function (b) {
+      var t = { id: ballTrack.nextTrackId++, x: b.x, y: b.y, r: b.r, kind: b.kind, missed: 0 };
+      b.trackId = t.id;
+      kept.push(t);
+    });
+    ballTrack.tracks = kept;
+  }
+
+  function snapshotInventory(inv) {
+    return { objectCount: inv.objectCount, cuePresent: inv.cuePresent };
+  }
+
+  function sendBallEvent(msg) {
+    msg.ts = Date.now();
+    send(msg);
+  }
+
+  function runBallPass() {
+    var box = calibratedTableBoxVideo();
+    if (!box) return;
+    var motion = measureTableMotion(box);
+    var inv = detectBallsInFrame();
+    if (!inv) return;
+    ballTrack.lastInventory = inv;
+    ballTrack.motionDiff = motion;
+    updateBallTracks(inv);
+
+    var still = motion < BALL_STILL_DIFF_THRESHOLD;
+    if (!still || stance === "bent" || inv.foreignPresent) {
+      ballTrack.state = "MOVING";
+      ballTrack.stillPasses = 0;
+      ballTrack.pending = null;
+      ballTrack.cueMissingPasses = 0;
+      return;
+    }
+    ballTrack.stillPasses++;
+    if (ballTrack.stillPasses < BALL_SETTLE_PASSES) {
+      ballTrack.state = "SETTLING";
+      return;
+    }
+    ballTrack.state = "STABLE";
+    ballTrack.lastStable = snapshotInventory(inv);
+
+    if (!ballTrack.baseline) {
+      ballTrack.baseline = snapshotInventory(inv);
+      logActivity("Ball tracking: " + inv.objectCount + " object balls on the table" + (inv.cuePresent ? ", cue ball present" : ", no cue ball seen"));
+      return;
+    }
+
+    var baseline = ballTrack.baseline;
+    var confirmPasses = settings.ballConfirmPasses;
+    if (inv.objectCount !== baseline.objectCount) {
+      if (ballTrack.pending && ballTrack.pending.objectCount === inv.objectCount) {
+        ballTrack.pending.passes++;
+      } else {
+        ballTrack.pending = { objectCount: inv.objectCount, passes: 1 };
+      }
+      if (ballTrack.pending.passes >= confirmPasses) {
+        var delta = inv.objectCount - baseline.objectCount;
+        if (delta < 0) {
+          logActivity((-delta) + " ball" + (delta === -1 ? "" : "s") + " pocketed (" + inv.objectCount + " left)");
+          sendBallEvent({ type: "ball_pocketed", count: -delta, scratch: false, objectRemaining: inv.objectCount });
+        } else if (delta >= BALL_RERACK_JUMP || (baseline.objectCount <= 1 && inv.objectCount >= 13)) {
+          logActivity("Re-rack detected (" + inv.objectCount + " object balls)");
+          sendBallEvent({ type: "ball_rerack", objectRemaining: inv.objectCount });
+        } else {
+          logActivity(delta + " ball" + (delta === 1 ? "" : "s") + " reappeared (" + inv.objectCount + " on the table) - check the score");
+          sendBallEvent({ type: "ball_reappeared", count: delta, objectRemaining: inv.objectCount });
+        }
+        baseline.objectCount = inv.objectCount;
+        ballTrack.pending = null;
+      }
+    } else {
+      ballTrack.pending = null;
+    }
+
+    if (baseline.cuePresent && !inv.cuePresent) {
+      ballTrack.cueMissingPasses++;
+      if (ballTrack.cueMissingPasses >= 2 * confirmPasses) {
+        logActivity("Scratch - cue ball pocketed");
+        sendBallEvent({ type: "ball_pocketed", count: 0, scratch: true, objectRemaining: inv.objectCount });
+        baseline.cuePresent = false;
+        ballTrack.cueMissingPasses = 0;
+      }
+    } else {
+      ballTrack.cueMissingPasses = 0;
+      if (!baseline.cuePresent && inv.cuePresent) baseline.cuePresent = true;
+    }
+  }
+
+  // Keypad corrections from the scoreboard (see js/app.js adjustScore):
+  // a manual "-" right after an auto credit means the camera jumped the
+  // gun, so it has to see the next drop for longer; a manual "+" the
+  // camera never saw means it was too cautious. Both re-baseline to what
+  // the table shows right now, so the ball the operator just corrected
+  // can't be credited a second time on the next stable pass.
+  function handleBallFeedback(kind) {
+    if (kind === "false_positive") {
+      settings.ballConfirmPasses = Math.min(BALL_CONFIRM_PASSES_MAX, settings.ballConfirmPasses + 1);
+    } else if (kind === "missed") {
+      settings.ballConfirmPasses = Math.max(BALL_CONFIRM_PASSES_MIN, settings.ballConfirmPasses - 1);
+    } else {
+      return;
+    }
+    if (ballTrack.lastStable) ballTrack.baseline = { objectCount: ballTrack.lastStable.objectCount, cuePresent: ballTrack.lastStable.cuePresent };
+    ballTrack.pending = null;
+    ballTrack.cueMissingPasses = 0;
+    persistSettings();
+    applySettingsToInputs();
+    logActivity("Keypad correction (" + kind.replace("_", " ") + ") - confirm passes now " + settings.ballConfirmPasses);
+  }
+
+  function drawBallDebug() {
+    if (!settings.ballTrackingEnabled || !ballTrack.lastInventory) return;
+    var inv = ballTrack.lastInventory;
+    overlayCtx.lineWidth = 2;
+    overlayCtx.font = "11px sans-serif";
+    inv.balls.forEach(function (b) {
+      var p = videoToOverlay(b.x, b.y);
+      var rScale = overlayEl.width / Math.max(1, videoEl.videoWidth || 1);
+      var r = Math.max(4, b.r * Math.max(rScale, overlayEl.height / Math.max(1, videoEl.videoHeight || 1)));
+      overlayCtx.strokeStyle = b.kind === "cue" ? "#ffffff" : b.kind === "foreign" ? "#e05a5a" : b.kind === "cluster" ? "#ffd166" : "#ffa500";
+      overlayCtx.beginPath();
+      overlayCtx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      overlayCtx.stroke();
+      var label = b.kind === "cluster" ? "x" + b.count : b.kind === "cue" ? "cue" : b.kind === "foreign" ? "?" : (b.trackId ? "#" + b.trackId : "");
+      if (label) {
+        overlayCtx.fillStyle = overlayCtx.strokeStyle;
+        overlayCtx.fillText(label, p.x + r + 2, p.y + 4);
+      }
+    });
+    var text = "balls: " + inv.objectCount + "  cue: " + (inv.cuePresent ? "yes" : "no") + "  " + ballTrack.state +
+      (ballTrack.baseline ? "  baseline: " + ballTrack.baseline.objectCount : "") +
+      (ballTrack.pending ? "  pending: " + ballTrack.pending.objectCount + " (" + ballTrack.pending.passes + "/" + settings.ballConfirmPasses + ")" : "") +
+      (ballTrack.motionDiff !== null && isFinite(ballTrack.motionDiff) ? "  motion: " + ballTrack.motionDiff.toFixed(1) : "");
+    overlayCtx.font = "13px sans-serif";
+    var tw = overlayCtx.measureText(text).width;
+    overlayCtx.fillStyle = "rgba(0,0,0,0.6)";
+    overlayCtx.fillRect(6, overlayEl.height - 24, tw + 8, 18);
+    overlayCtx.fillStyle = "#ffd166";
+    overlayCtx.fillText(text, 10, overlayEl.height - 10);
+  }
+
+  // Test/diagnostic hook - lets a Puppeteer harness (or a console) read
+  // the tracker's state and run the detector on demand.
+  window.PMCBallDebug = {
+    track: ballTrack,
+    detect: detectBallsInFrame,
+    runPass: runBallPass,
+    reset: resetBallTracking,
+    settings: settings
+  };
+
   // ---- Multi-person selection (MultiPose returns up to 6 people) ----
   // Cheap per-pose check used to pick which of several detected people is
   // the one to actually track this frame - deliberately does none of
@@ -2042,6 +2727,31 @@
   function saveCalibration() {
     try { localStorage.setItem(CALIBRATION_STORAGE_KEY, JSON.stringify(calibration)); } catch (e) {}
   }
+  // The homography's x axis runs along the FIRST calibration edge
+  // (corner1->corner2), which is the long side whenever the table is
+  // framed landscape - so x spans tableLength then, not tableWidth. The
+  // rail-distance and boundary code used to assume x always spanned the
+  // width, which silently misplaced every rail by the length/width
+  // difference in that framing. Calibrations stored before xExtent
+  // existed were all width-first, so that's the fallback.
+  function calibXExtent() {
+    return calibration && typeof calibration.xExtent === "number" ? calibration.xExtent : calibration.tableWidth;
+  }
+  function calibYExtent() {
+    return calibration && typeof calibration.yExtent === "number" ? calibration.yExtent : calibration.tableLength;
+  }
+  // The 6 pocket centres in real table coordinates (inches): the 4
+  // corners plus the middle of each LONG rail. Used to keep the dark
+  // pocket openings out of ball detection - a pocket hole is round,
+  // ball-sized and black, i.e. exactly what a ball blob looks like.
+  var POCKET_EXCLUSION_RADIUS_IN = 4.5;
+  function pocketCentersReal() {
+    var xMax = calibXExtent(), yMax = calibYExtent();
+    var centers = [[0, 0], [xMax, 0], [xMax, yMax], [0, yMax]];
+    if (xMax > yMax) centers.push([xMax / 2, 0], [xMax / 2, yMax]);
+    else centers.push([0, yMax / 2], [xMax, yMax / 2]);
+    return centers;
+  }
   // A single camera with no size reference can't actually measure a
   // table's real-world dimensions from pixels alone - every standard
   // size in TABLE_SIZES shares the same 2:1 length:width ratio (a 7-foot
@@ -2164,13 +2874,17 @@
   // Perpendicular distance (inches) from a real-world table-relative point
   // to the nearest of the table's 4 rails - 0 or negative means the point
   // projects onto/over the table bed itself (a strong shooting-position signal).
-  // Side indices: 0 = y=0 rail, 1 = y=tableLength rail, 2 = x=0 rail,
-  // 3 = x=tableWidth rail - tied to calibration corner order (see
-  // finishCalibration/detectTableAuto), not camera-relative "near/far" -
-  // those don't mean anything consistent once the camera is mounted at
-  // an angle, since this is a rectangle-relative coordinate system.
+  // Side indices: 0 = y=0 rail, 1 = y=max rail, 2 = x=0 rail, 3 = x=max
+  // rail - tied to calibration corner order (see finishCalibration/
+  // detectTableAuto), not camera-relative "near/far" - those don't mean
+  // anything consistent once the camera is mounted at an angle, since
+  // this is a rectangle-relative coordinate system. The axis extents
+  // come from the calibration itself when one is loaded (see
+  // calibXExtent); the dimension arguments are only the fallback.
   function nearestRailSide(realPoint, tableLength, tableWidth) {
-    var distances = [realPoint.y, tableLength - realPoint.y, realPoint.x, tableWidth - realPoint.x];
+    var xMax = calibration ? calibXExtent() : tableWidth;
+    var yMax = calibration ? calibYExtent() : tableLength;
+    var distances = [realPoint.y, yMax - realPoint.y, realPoint.x, xMax - realPoint.x];
     var bestIdx = 0;
     for (var i = 1; i < distances.length; i++) {
       if (distances[i] < distances[bestIdx]) bestIdx = i;
@@ -2276,8 +2990,13 @@
     var realPoints = [[0, 0], [d1, 0], [d1, d2], [0, d2]];
     var H = computeHomography(pixelPoints, realPoints);
     if (!H) return null;
-    calibration = { tableLength: edge1IsWidth ? d2 : d1, tableWidth: edge1IsWidth ? d1 : d2, h: H };
+    // xExtent/yExtent record which real dimension each homography axis
+    // actually spans (x runs along the corner1->corner2 edge, whichever
+    // one that was) - tableLength/tableWidth alone lose that, see
+    // calibXExtent's own comment.
+    calibration = { tableLength: edge1IsWidth ? d2 : d1, tableWidth: edge1IsWidth ? d1 : d2, xExtent: d1, yExtent: d2, h: H };
     saveCalibration();
+    resetBallTracking("recalibrated");
     // The one moment guaranteed to show an empty table - nobody's bent
     // over it mid-calibration-tap - so this is also when the background
     // reference gets (re-)captured. See regionLooksStatic's own comment.
@@ -2582,6 +3301,7 @@
 
   function finishEnrollCapture() {
     if (!enrollCapturing) return;
+    try { send({ type: "client-debug", text: "finishEnrollCapture called, samples=" + enrollSamples.length + " stack=" + new Error().stack.split("\n").slice(1, 4).join(" | ") }); } catch (e) {}
     enrollCapturing = false;
     stopCaptureBtn.hidden = true;
     if (enrollSamples.length === 0) {
@@ -3058,11 +3778,13 @@
       uprightStabilityCount = 0;
       bentConsecutive++;
       clearManualAttributionIfStale();
-      if (bentConsecutive >= settings.consecutiveFrames && closeEnough && isFacingTable(analysis)) {
+      var facingOk = isFacingTable(analysis);
+      if (bentConsecutive >= settings.consecutiveFrames && closeEnough && facingOk) {
         if (candidate && candidate.name && Date.now() - candidate.lastSeenAt <= CANDIDATE_GRACE_MS) {
           // A genuinely different name just matched on its own - "until
           // another player shoots" per explicit request.
           if (activeManualAttribution && candidate.name !== activeManualAttribution.name) activeManualAttribution = null;
+          debugLog("FIRE via upright-candidate name=" + candidate.name);
           fireEvent(candidate.name, candidate.descriptor, 0, candidate.side);
         } else {
           // Fallback: no fresh *named* upright identification (either
@@ -3071,6 +3793,10 @@
           // threshold since the crop geometry/occlusion is known to be
           // noisier here.
           var bentMatch = findBestMatch(analysis.descriptor);
+          debugLog("no upright candidate (candidate=" + (candidate ? candidate.name || "unnamed" : "null") + ") - bent-frame match=" +
+            (bentMatch ? bentMatch.name + " dist=" + bentMatch.distance.toFixed(2) : "none") +
+            " strictLimit=" + (settings.matchThreshold * 0.6).toFixed(2) +
+            " activeManualAttribution=" + (activeManualAttribution ? activeManualAttribution.name : "null"));
           if (bentMatch && bentMatch.distance <= settings.matchThreshold * 0.6) {
             if (activeManualAttribution && bentMatch.name !== activeManualAttribution.name) activeManualAttribution = null;
             fireEvent(bentMatch.name, analysis.descriptor, bentMatch.distance, currentSideForAnalysis(analysis));
@@ -3084,6 +3810,8 @@
             activeManualAttribution.firesSinceStart++;
           }
         }
+      } else if (bentConsecutive === settings.consecutiveFrames) {
+        debugLog("bent-confirm gate blocked: bentConsecutive=" + bentConsecutive + " closeEnough=" + closeEnough + " facingOk=" + facingOk);
       }
     }
     updateRecognizeLiveStatus(analysis);
@@ -3148,9 +3876,9 @@
     if (!invH) return;
     var corners = [
       [0, 0],
-      [calibration.tableWidth, 0],
-      [calibration.tableWidth, calibration.tableLength],
-      [0, calibration.tableLength]
+      [calibXExtent(), 0],
+      [calibXExtent(), calibYExtent()],
+      [0, calibYExtent()]
     ];
     var pixelCorners = corners.map(function (c) {
       var real = applyInverseHomography(invH, c[0], c[1]);
@@ -3210,6 +3938,7 @@
     if (!settings.debugOverlay) return;
     drawTableBoundary();
     drawAutoDetectDebug();
+    drawBallDebug();
     if (!analysis) return;
     var box = analysis.box;
     var p0 = videoToOverlay(box.x0, box.y0);
@@ -3290,6 +4019,19 @@
           lastRawPoseConfidence = null;
         }
 
+        debugLog("detect posesFound=" + (poses ? poses.length : 0) +
+          " activePoseSelected=" + !!pose +
+          " analysisOk=" + !!analysis +
+          " rejectedAsStatic=" + lastRejectedAsStatic +
+          " rawPoseConf=" + (lastRawPoseConfidence === null ? "null" : lastRawPoseConfidence.toFixed(2)) +
+          (analysis ? " torsoAngle=" + analysis.torsoAngleDeg.toFixed(1) + " legAngle=" + (analysis.legAngleDeg === null ? "null" : analysis.legAngleDeg.toFixed(1)) + " effBend=" + effectiveBendAngle(analysis).toFixed(1) : "") +
+          (analysis && calibration && analysis.ankleMid ? (function () {
+            var real = applyHomography(calibration.h, analysis.ankleMid.x, analysis.ankleMid.y);
+            if (!real) return " railDist=noHomography";
+            var dist = distanceToNearestRail(real, calibration.tableLength, calibration.tableWidth);
+            return " railDist=" + dist.toFixed(1) + "in limit=" + settings.railDistanceInches + "in within=" + (dist <= settings.railDistanceInches);
+          })() : (analysis ? " railDist=noAnkles(freePass)" : "")));
+
         if (enrollCapturing) {
           handleEnrollCaptureFrame(analysis);
           drawOverlay(pose ? pose.keypoints : null, analysis, null);
@@ -3306,6 +4048,10 @@
             if (m) matchLabel = m.name + " " + m.distance.toFixed(2) + (m.distance <= settings.matchThreshold ? "" : " (too far)");
           }
           handleRecognitionFrame(analysis);
+          // After handleRecognitionFrame so this pass sees the freshly
+          // updated stance, before drawOverlay so the overlay shows this
+          // pass's inventory rather than the previous one's.
+          if (settings.ballTrackingEnabled && calibration && !isViewer && (++ballTickCounter % BALL_PASS_EVERY_N_TICKS === 0)) runBallPass();
           drawOverlay(pose ? pose.keypoints : null, analysis, matchLabel);
           // Must run AFTER handleRecognitionFrame/analyzePose above, not
           // before - processIdlePoses calls analyzePose too, which would
