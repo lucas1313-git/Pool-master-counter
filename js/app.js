@@ -4689,7 +4689,7 @@
     // own comment for what each sub-icon means.
     if (state.cameraInputEnabled && state.sameDeviceCameraSetUp) {
       var camBadge = document.createElement("div");
-      camBadge.className = "scorecard-camera-badge hidden";
+      camBadge.className = "scorecard-camera-badge";
       camBadge.dataset.playerId = player.id;
       camBadge.innerHTML =
         '<span class="scorecard-camera-badge-icon">' + CAMERA_ICON_SVG + "</span>" +
@@ -29793,17 +29793,20 @@
 
   // Full remote viewer - loads camera.html?viewer=1 itself in an iframe
   // (see that file's own isViewer comment), reusing its real UI entirely
-  // instead of a hand-built parallel one. A fresh src on every open (not
-  // left pointed at a stale about:blank/prior load) and cleared on close
-  // so its WebSocket actually disconnects rather than sitting open in a
-  // hidden iframe.
+  // instead of a hand-built parallel one. Setting iframe.src to "" is NOT
+  // a reliable unload in all browsers (can be a no-op), and re-setting the
+  // SAME src string on reopen can also be a no-op (no navigation happens
+  // if the URL is unchanged) - leaving the OLD page/JS instance running
+  // forever behind a hidden iframe. Force a real unload via about:blank on
+  // close, and a cache-busted, always-unique src on open, so every open
+  // guarantees a fresh load (and therefore a fresh WebSocket + fresh code).
   btnOpenRemoteViewer.addEventListener("click", function () {
-    remoteViewerIframe.src = "camera.html?viewer=1";
+    remoteViewerIframe.src = "camera.html?viewer=1&t=" + Date.now();
     remoteViewerOverlay.classList.remove("hidden");
   });
   btnCloseRemoteViewer.addEventListener("click", function () {
     remoteViewerOverlay.classList.add("hidden");
-    remoteViewerIframe.src = "";
+    remoteViewerIframe.src = "about:blank";
   });
   btnCameraRemoteViewerHelp.addEventListener("click", function () {
     alertModal(T("players.cameraRemoteViewerHelpText"));
@@ -29906,16 +29909,12 @@
   function updateCameraIconsOnScorecard() {
     Array.prototype.forEach.call(document.querySelectorAll(".scorecard-camera-badge"), function (badge) {
       var player = state.players.filter(function (p) { return p.id === badge.dataset.playerId; })[0];
-      if (!player) {
-        badge.classList.add("hidden");
-        return;
-      }
+      if (!player) return;
       var name = player.name;
       var flashing = scorecardCameraFlashingName === name;
       var needsConfirm = scorecardCameraNeedsConfirmName === name;
       var idle = !flashing && !!scorecardCameraIdleNames[name];
       var plus = !!scorecardCameraRecentlyUpdatedTimers[name];
-      badge.classList.toggle("hidden", !(flashing || needsConfirm || idle || plus));
       badge.classList.toggle("flashing", flashing);
       badge.classList.toggle("idle", idle);
       badge.classList.toggle("show-plus", plus);

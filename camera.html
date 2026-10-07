@@ -597,6 +597,15 @@
   // way as the old singlepose model (no CDN) - weights captured directly
   // from a loaded TFHub model instance, not hand-converted.
   var MODEL_URL = "camera/models/movenet-multipose-lightning/model.json";
+  // TEMPORARY DIAGNOSTIC - SinglePose Thunder is a bigger, more accurate
+  // network than MultiPose Lightning, at the cost of only ever tracking one
+  // person (loses the "prefer the real shooter over someone sitting closer
+  // to the camera" selection above). Only wired in for same-device mode
+  // right now, to test whether the Lightning model's accuracy (not camera
+  // framing) is why a deep bend-over sometimes drops pose detection to zero
+  // entirely. Remove this and the model files under
+  // camera/models/movenet-singlepose-thunder/ once that's answered either way.
+  var MODEL_URL_THUNDER_DIAGNOSTIC = "camera/models/movenet-singlepose-thunder/model.json";
   var WS_PATH = "/ws-camera";
   // Set only when opened as an <iframe src="camera.html?embedded=1"> from
   // index.html (the same-device mode) - see the "Relay connection" section
@@ -948,10 +957,15 @@
     return tf.setBackend("webgl").then(function () {
       return tf.ready();
     }).then(function () {
-      return poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
-        modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING,
-        modelUrl: MODEL_URL
-      });
+      return isEmbedded
+        ? poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
+            modelType: poseDetection.movenet.modelType.SINGLEPOSE_THUNDER,
+            modelUrl: MODEL_URL_THUNDER_DIAGNOSTIC
+          })
+        : poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
+            modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING,
+            modelUrl: MODEL_URL
+          });
     }).then(function (d) {
       detector = d;
       modelsReady = true;
@@ -1174,6 +1188,15 @@
     }
   }
 
+  // TEMPORARY DIAGNOSTIC - logs directly to this page's own console (visible
+  // via DevTools regardless of relay/embedded mode) AND still relays via
+  // client-debug when a relay connection exists, so the same call site works
+  // for both the remote-viewer (server log) and same-device (console) setups.
+  function debugLog(text) {
+    try { console.log("[PMC-DEBUG] " + text); } catch (e) {}
+    try { send({ type: "client-debug", text: text }); } catch (e) {}
+  }
+
   function handleIncomingMessage(msg) {
     if (msg.type === "enrollments") {
       enrollments = msg.data || {};
@@ -1226,16 +1249,19 @@
     } else if (msg.type === "viewer-change" && msg.id) {
       var changeEl = document.getElementById(msg.id);
       if (changeEl) {
-        changeEl.value = msg.value;
+        if (changeEl.type === "checkbox") changeEl.checked = !!msg.checked;
+        else changeEl.value = msg.value;
         changeEl.dispatchEvent(new Event("change", { bubbles: true }));
       }
     } else if (msg.type === "viewer-canvas-tap" && typeof msg.fx === "number" && typeof msg.fy === "number") {
       applyRemoteTap(msg.fx, msg.fy);
     } else if (msg.type === "hello-viewer-connected") {
       hasViewerConnected = true;
+      try { send({ type: "client-debug", text: "hello-viewer-connected received, starting stream. dotModels=" + document.getElementById("dotModels").className + " dotCamera=" + document.getElementById("dotCamera").className }); } catch (e) {}
       startViewerFrameStream();
     } else if (msg.type === "hello-viewer-disconnected") {
       hasViewerConnected = false;
+      try { send({ type: "client-debug", text: "hello-viewer-disconnected received, stopping stream" }); } catch (e) {}
     } else if (msg.type === "viewer-frame") {
       applyViewerFrame(msg);
     }
@@ -1252,18 +1278,59 @@
     }
     var elements = msg.elements || {};
     Object.keys(elements).forEach(function (id) {
-      var el = document.getElementById(id);
-      if (!el) return;
-      var snap = elements[id];
-      if (snap === null) return;
-      if (id === "dotCamera" || id === "dotRelay" || id === "dotModels") {
-        if (typeof snap.cls === "string") el.className = snap.cls;
-      } else {
-        if (typeof snap.text === "string") el.textContent = snap.text;
-        if (typeof snap.hidden === "boolean") el.hidden = snap.hidden;
+      try {
+        var el = document.getElementById(id);
+        if (!el) return;
+        var snap = elements[id];
+        if (!snap) return;
+        if (snap.kind === "class") {
+          el.className = snap.cls;
+        } else if (snap.kind === "checkbox") {
+          el.checked = !!snap.checked;
+          if (typeof snap.hidden === "boolean") el.hidden = snap.hidden;
+        } else if (snap.kind === "select") {
+          // Rebuild the option list first (this device never ran its own
+          // enumerateDevices() to produce one), then re-apply which one
+          // is selected - setting .innerHTML alone can silently lose the
+          // selection, since an option picked via el.selected = true in
+          // JS doesn't necessarily serialize a `selected` HTML attribute.
+          el.innerHTML = snap.html;
+          el.value = snap.value;
+        } else if (snap.kind === "value") {
+          el.value = snap.value;
+          if (typeof snap.hidden === "boolean") el.hidden = snap.hidden;
+        } else if (snap.kind === "html") {
+          el.innerHTML = snap.html;
+        } else {
+          el.textContent = snap.text;
+          if (typeof snap.hidden === "boolean") el.hidden = snap.hidden;
+        }
+      } catch (e) {
+        // TEMPORARY DIAGNOSTIC: an exception applying one element used
+        // to silently abort the whole forEach, leaving every id after
+        // it (including the status dots, inserted last) stuck at
+        // whatever they were before.
+        try { send({ type: "client-debug", text: "applyViewerFrame EXCEPTION on id=" + id + ": " + e.message }); } catch (e2) {}
       }
     });
+    // TEMPORARY DIAGNOSTIC: report what this page's OWN dots look like
+    // right after applying an incoming frame, throttled to roughly once
+    // every ~5s (viewerFrameApplyCount is only ever incremented here, on
+    // the viewer instance).
+    viewerFrameApplyCount++;
+    if (viewerFrameApplyCount === 1 || viewerFrameApplyCount % 3 === 0) {
+      try {
+        send({
+          type: "client-debug",
+          text: "applyViewerFrame #" + viewerFrameApplyCount + " - AFTER apply: dotModels=" + document.getElementById("dotModels").className +
+            " dotCamera=" + document.getElementById("dotCamera").className +
+            " | sent in payload: dotModels=" + (elements.dotModels ? elements.dotModels.cls : "MISSING") +
+            " dotCamera=" + (elements.dotCamera ? elements.dotCamera.cls : "MISSING")
+        });
+      } catch (e) {}
+    }
   }
+  var viewerFrameApplyCount = 0;
 
   // ---- Viewer mode boot: no local camera, no model, no detection loop -
   // every interactive element's click/change is forwarded to the real
@@ -1304,7 +1371,16 @@
         if (!el.id || VIEWER_LOCAL_ONLY_IDS[el.id]) return;
         evt.preventDefault();
         evt.stopImmediatePropagation();
-        send({ type: "viewer-change", id: el.id, value: el.value });
+        // A checkbox's .value is always the fixed string "on" regardless
+        // of whether it's actually checked - .checked is the real state,
+        // sent instead (not in addition - a stray value: "on" is harmless
+        // noise either way, but keeping this one unambiguous per element
+        // type avoids ever reading the wrong field on the receiving end).
+        if (el.type === "checkbox") {
+          send({ type: "viewer-change", id: el.id, checked: el.checked });
+        } else {
+          send({ type: "viewer-change", id: el.id, value: el.value });
+        }
       },
       true
     );
@@ -1374,21 +1450,38 @@
   // still image. A fraction tapped on THIS image maps 1:1 onto
   // overlayEl's own pixel space, so applyRemoteTap below needs no
   // separate transform of its own.
-  function captureCalibFrame() {
+  // maxW/maxH cap the exported image regardless of the overlay's own
+  // (device-dependent) pixel size - a real phone-to-Mac WiFi link is not
+  // the zero-cost loopback this was first tested over, and repeatedly
+  // sending a large, full-resolution JPEG every fraction of a second
+  // turned out to be enough to make the viewer's WebSocket itself drop
+  // and reconnect (see server/camera-relay.js's own comment on
+  // VIEWER_FRAME_INTERVAL_MS) - every symptom that looked like a sync
+  // bug (dots never going green, enrollment progress text "vanishing")
+  // was actually this connection repeatedly resetting the viewer's own
+  // DOM back to its empty defaults.
+  function captureCalibFrame(maxW, maxH) {
     var w = overlayEl.width, h = overlayEl.height;
     if (!w || !h) return null;
     var vw = videoEl.videoWidth || 1, vh = videoEl.videoHeight || 1;
     var scale = Math.max(w / vw, h / vh);
     var offsetX = (w - vw * scale) / 2;
     var offsetY = (h - vh * scale) / 2;
+    var outW = w, outH = h;
+    if (maxW && maxH) {
+      var downscale = Math.min(1, maxW / w, maxH / h);
+      outW = Math.round(w * downscale);
+      outH = Math.round(h * downscale);
+    }
     var tmp = document.createElement("canvas");
-    tmp.width = w;
-    tmp.height = h;
+    tmp.width = outW;
+    tmp.height = outH;
     var ctx = tmp.getContext("2d");
     try {
-      ctx.drawImage(videoEl, offsetX, offsetY, vw * scale, vh * scale);
-      ctx.drawImage(overlayEl, 0, 0);
-      return tmp.toDataURL("image/jpeg", 0.6);
+      var drawScale = outW / w;
+      ctx.drawImage(videoEl, offsetX * drawScale, offsetY * drawScale, vw * scale * drawScale, vh * scale * drawScale);
+      ctx.drawImage(overlayEl, 0, 0, w, h, 0, 0, outW, outH);
+      return tmp.toDataURL("image/jpeg", maxW ? 0.5 : 0.6);
     } catch (e) {
       return null;
     }
@@ -1434,24 +1527,65 @@
   // feature.
   var hasViewerConnected = false;
   var viewerFrameTimer = null;
-  var VIEWER_FRAME_INTERVAL_MS = 700;
+  var VIEWER_FRAME_INTERVAL_MS = 1500;
+  var VIEWER_FRAME_MAX_W = 480;
+  var VIEWER_FRAME_MAX_H = 360;
+  // Every element a viewer needs to actually see what's going on, not
+  // just the calibration/enrollment status - the whole point of "I need
+  // all the debug options too" is that diagnosing why recognition isn't
+  // working needs the live angle/stance/distance readout and the running
+  // log, same as standing at the camera would show. Kind is inferred
+  // automatically below (checkbox vs. text-input/select vs. plain text),
+  // except recognizeLog, which is read as innerHTML (a scrolling list of
+  // child <div>s, not a single text value).
   var VIEWER_SYNCED_IDS = [
     "calibrationStepText", "calibrationStatus", "captureProgress",
-    "labelCamera", "labelRelay", "labelModels"
+    "labelCamera", "labelRelay", "labelModels",
+    "recognizeLiveStatus", "recognizeDebugToggle", "recognizeVoiceToggle",
+    "debugToggle", "thresholdInput", "consecutiveInput", "debounceInput",
+    "bendEnterInput", "bendExitInput", "railDistanceInput",
+    "tableSizeSelect", "firstEdgeSelect", "enrollName"
   ];
+  var VIEWER_SYNCED_HTML_IDS = ["recognizeLog"];
+  // cameraSelect's <option>s are populated at runtime from this device's
+  // own enumerateDevices() (see populateCameraList) - the viewer has no
+  // camera of its own to enumerate, so its copy of this dropdown starts
+  // (and stays) empty unless the actual option list is synced too, not
+  // just which one is selected.
+  var VIEWER_SYNCED_SELECT_IDS = ["cameraSelect"];
   function snapshotViewerSyncedElements() {
     var out = {};
     VIEWER_SYNCED_IDS.forEach(function (id) {
       var el = document.getElementById(id);
       if (!el) return;
-      out[id] = { text: el.textContent, hidden: el.hidden };
+      if (el.tagName === "INPUT" && el.type === "checkbox") {
+        out[id] = { kind: "checkbox", checked: el.checked, hidden: el.hidden };
+      } else if (el.tagName === "INPUT" || el.tagName === "SELECT") {
+        out[id] = { kind: "value", value: el.value, hidden: el.hidden };
+      } else {
+        out[id] = { kind: "text", text: el.textContent, hidden: el.hidden };
+      }
     });
-    var camDot = document.getElementById("dotCamera");
-    var relayDot = document.getElementById("dotRelay");
-    var modelsDot = document.getElementById("dotModels");
-    out.dotCamera = camDot ? { cls: camDot.className } : null;
-    out.dotRelay = relayDot ? { cls: relayDot.className } : null;
-    out.dotModels = modelsDot ? { cls: modelsDot.className } : null;
+    VIEWER_SYNCED_HTML_IDS.forEach(function (id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      // Only the most recent few entries - recognizeLog can hold up to
+      // 20, and the full innerHTML of all of them on every tick is
+      // exactly the kind of avoidable weight that was overloading the
+      // connection (see captureCalibFrame's own comment).
+      var recent = Array.prototype.slice.call(el.children, 0, 5);
+      var wrap = document.createElement("div");
+      recent.forEach(function (child) { wrap.appendChild(child.cloneNode(true)); });
+      out[id] = { kind: "html", html: wrap.innerHTML };
+    });
+    VIEWER_SYNCED_SELECT_IDS.forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) out[id] = { kind: "select", html: el.innerHTML, value: el.value };
+    });
+    ["dotCamera", "dotRelay", "dotModels"].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) out[id] = { kind: "class", cls: el.className };
+    });
     return out;
   }
   function startViewerFrameStream() {
@@ -1462,7 +1596,7 @@
         viewerFrameTimer = null;
         return;
       }
-      var dataUrl = captureCalibFrame();
+      var dataUrl = captureCalibFrame(VIEWER_FRAME_MAX_W, VIEWER_FRAME_MAX_H);
       if (!dataUrl) return;
       send({ type: "viewer-frame", dataUrl: dataUrl, elements: snapshotViewerSyncedElements() });
     }, VIEWER_FRAME_INTERVAL_MS);
@@ -1501,7 +1635,12 @@
     try { ws = new WebSocket(wsUrl()); } catch (e) { ws = null; scheduleReconnect(); return; }
     ws.addEventListener("open", function () {
       setStatus(dotRelay, labelRelay, "ok", isViewer ? "Remote viewer: connected" : "Relay: connected");
-      send({ type: "hello", role: isViewer ? "viewer" : "camera" });
+      // TEMPORARY DIAGNOSTIC: reports the previous connection's close
+      // code/reason (if any) on the reconnect that follows it, so an
+      // unexpected disconnect shows up in the server's own log even
+      // though nobody can see this browser's console directly.
+      send({ type: "hello", role: isViewer ? "viewer" : "camera", lastCloseDebug: lastCloseDebugInfo });
+      lastCloseDebugInfo = null;
       send({ type: "enroll-get" });
       if (!isViewer && !hasLocalSettingsOverride) send({ type: "settings-request" });
       send({ type: "roster-request" });
@@ -1511,12 +1650,14 @@
       try { msg = JSON.parse(event.data); } catch (e) { return; }
       handleIncomingMessage(msg);
     });
-    ws.addEventListener("close", function () {
+    ws.addEventListener("close", function (evt) {
       ws = null;
+      lastCloseDebugInfo = "code=" + evt.code + " reason=" + JSON.stringify(evt.reason) + " clean=" + evt.wasClean;
       setStatus(dotRelay, labelRelay, "bad", isViewer ? "Remote viewer: disconnected" : "Relay: disconnected");
       scheduleReconnect();
     });
   }
+  var lastCloseDebugInfo = null;
 
   function initEmbeddedMode() {
     setStatus(dotRelay, labelRelay, "ok", "Same-device mode");
@@ -2042,6 +2183,31 @@
   function saveCalibration() {
     try { localStorage.setItem(CALIBRATION_STORAGE_KEY, JSON.stringify(calibration)); } catch (e) {}
   }
+  // The homography's x axis runs along the FIRST calibration edge
+  // (corner1->corner2), which is the long side whenever the table is
+  // framed landscape - so x spans tableLength then, not tableWidth. The
+  // rail-distance and boundary code used to assume x always spanned the
+  // width, which silently misplaced every rail by the length/width
+  // difference in that framing. Calibrations stored before xExtent
+  // existed were all width-first, so that's the fallback.
+  function calibXExtent() {
+    return calibration && typeof calibration.xExtent === "number" ? calibration.xExtent : calibration.tableWidth;
+  }
+  function calibYExtent() {
+    return calibration && typeof calibration.yExtent === "number" ? calibration.yExtent : calibration.tableLength;
+  }
+  // The 6 pocket centres in real table coordinates (inches): the 4
+  // corners plus the middle of each LONG rail. Used to keep the dark
+  // pocket openings out of ball detection - a pocket hole is round,
+  // ball-sized and black, i.e. exactly what a ball blob looks like.
+  var POCKET_EXCLUSION_RADIUS_IN = 4.5;
+  function pocketCentersReal() {
+    var xMax = calibXExtent(), yMax = calibYExtent();
+    var centers = [[0, 0], [xMax, 0], [xMax, yMax], [0, yMax]];
+    if (xMax > yMax) centers.push([xMax / 2, 0], [xMax / 2, yMax]);
+    else centers.push([0, yMax / 2], [xMax, yMax / 2]);
+    return centers;
+  }
   // A single camera with no size reference can't actually measure a
   // table's real-world dimensions from pixels alone - every standard
   // size in TABLE_SIZES shares the same 2:1 length:width ratio (a 7-foot
@@ -2164,13 +2330,17 @@
   // Perpendicular distance (inches) from a real-world table-relative point
   // to the nearest of the table's 4 rails - 0 or negative means the point
   // projects onto/over the table bed itself (a strong shooting-position signal).
-  // Side indices: 0 = y=0 rail, 1 = y=tableLength rail, 2 = x=0 rail,
-  // 3 = x=tableWidth rail - tied to calibration corner order (see
-  // finishCalibration/detectTableAuto), not camera-relative "near/far" -
-  // those don't mean anything consistent once the camera is mounted at
-  // an angle, since this is a rectangle-relative coordinate system.
+  // Side indices: 0 = y=0 rail, 1 = y=max rail, 2 = x=0 rail, 3 = x=max
+  // rail - tied to calibration corner order (see finishCalibration/
+  // detectTableAuto), not camera-relative "near/far" - those don't mean
+  // anything consistent once the camera is mounted at an angle, since
+  // this is a rectangle-relative coordinate system. The axis extents
+  // come from the calibration itself when one is loaded (see
+  // calibXExtent); the dimension arguments are only the fallback.
   function nearestRailSide(realPoint, tableLength, tableWidth) {
-    var distances = [realPoint.y, tableLength - realPoint.y, realPoint.x, tableWidth - realPoint.x];
+    var xMax = calibration ? calibXExtent() : tableWidth;
+    var yMax = calibration ? calibYExtent() : tableLength;
+    var distances = [realPoint.y, yMax - realPoint.y, realPoint.x, xMax - realPoint.x];
     var bestIdx = 0;
     for (var i = 1; i < distances.length; i++) {
       if (distances[i] < distances[bestIdx]) bestIdx = i;
@@ -2276,7 +2446,11 @@
     var realPoints = [[0, 0], [d1, 0], [d1, d2], [0, d2]];
     var H = computeHomography(pixelPoints, realPoints);
     if (!H) return null;
-    calibration = { tableLength: edge1IsWidth ? d2 : d1, tableWidth: edge1IsWidth ? d1 : d2, h: H };
+    // xExtent/yExtent record which real dimension each homography axis
+    // actually spans (x runs along the corner1->corner2 edge, whichever
+    // one that was) - tableLength/tableWidth alone lose that, see
+    // calibXExtent's own comment.
+    calibration = { tableLength: edge1IsWidth ? d2 : d1, tableWidth: edge1IsWidth ? d1 : d2, xExtent: d1, yExtent: d2, h: H };
     saveCalibration();
     // The one moment guaranteed to show an empty table - nobody's bent
     // over it mid-calibration-tap - so this is also when the background
@@ -2582,6 +2756,7 @@
 
   function finishEnrollCapture() {
     if (!enrollCapturing) return;
+    try { send({ type: "client-debug", text: "finishEnrollCapture called, samples=" + enrollSamples.length + " stack=" + new Error().stack.split("\n").slice(1, 4).join(" | ") }); } catch (e) {}
     enrollCapturing = false;
     stopCaptureBtn.hidden = true;
     if (enrollSamples.length === 0) {
@@ -3058,11 +3233,13 @@
       uprightStabilityCount = 0;
       bentConsecutive++;
       clearManualAttributionIfStale();
-      if (bentConsecutive >= settings.consecutiveFrames && closeEnough && isFacingTable(analysis)) {
+      var facingOk = isFacingTable(analysis);
+      if (bentConsecutive >= settings.consecutiveFrames && closeEnough && facingOk) {
         if (candidate && candidate.name && Date.now() - candidate.lastSeenAt <= CANDIDATE_GRACE_MS) {
           // A genuinely different name just matched on its own - "until
           // another player shoots" per explicit request.
           if (activeManualAttribution && candidate.name !== activeManualAttribution.name) activeManualAttribution = null;
+          debugLog("FIRE via upright-candidate name=" + candidate.name);
           fireEvent(candidate.name, candidate.descriptor, 0, candidate.side);
         } else {
           // Fallback: no fresh *named* upright identification (either
@@ -3071,6 +3248,10 @@
           // threshold since the crop geometry/occlusion is known to be
           // noisier here.
           var bentMatch = findBestMatch(analysis.descriptor);
+          debugLog("no upright candidate (candidate=" + (candidate ? candidate.name || "unnamed" : "null") + ") - bent-frame match=" +
+            (bentMatch ? bentMatch.name + " dist=" + bentMatch.distance.toFixed(2) : "none") +
+            " strictLimit=" + (settings.matchThreshold * 0.6).toFixed(2) +
+            " activeManualAttribution=" + (activeManualAttribution ? activeManualAttribution.name : "null"));
           if (bentMatch && bentMatch.distance <= settings.matchThreshold * 0.6) {
             if (activeManualAttribution && bentMatch.name !== activeManualAttribution.name) activeManualAttribution = null;
             fireEvent(bentMatch.name, analysis.descriptor, bentMatch.distance, currentSideForAnalysis(analysis));
@@ -3084,6 +3265,8 @@
             activeManualAttribution.firesSinceStart++;
           }
         }
+      } else if (bentConsecutive === settings.consecutiveFrames) {
+        debugLog("bent-confirm gate blocked: bentConsecutive=" + bentConsecutive + " closeEnough=" + closeEnough + " facingOk=" + facingOk);
       }
     }
     updateRecognizeLiveStatus(analysis);
@@ -3148,9 +3331,9 @@
     if (!invH) return;
     var corners = [
       [0, 0],
-      [calibration.tableWidth, 0],
-      [calibration.tableWidth, calibration.tableLength],
-      [0, calibration.tableLength]
+      [calibXExtent(), 0],
+      [calibXExtent(), calibYExtent()],
+      [0, calibYExtent()]
     ];
     var pixelCorners = corners.map(function (c) {
       var real = applyInverseHomography(invH, c[0], c[1]);
@@ -3289,6 +3472,19 @@
         } else {
           lastRawPoseConfidence = null;
         }
+
+        debugLog("detect posesFound=" + (poses ? poses.length : 0) +
+          " activePoseSelected=" + !!pose +
+          " analysisOk=" + !!analysis +
+          " rejectedAsStatic=" + lastRejectedAsStatic +
+          " rawPoseConf=" + (lastRawPoseConfidence === null ? "null" : lastRawPoseConfidence.toFixed(2)) +
+          (analysis ? " torsoAngle=" + analysis.torsoAngleDeg.toFixed(1) + " legAngle=" + (analysis.legAngleDeg === null ? "null" : analysis.legAngleDeg.toFixed(1)) + " effBend=" + effectiveBendAngle(analysis).toFixed(1) : "") +
+          (analysis && calibration && analysis.ankleMid ? (function () {
+            var real = applyHomography(calibration.h, analysis.ankleMid.x, analysis.ankleMid.y);
+            if (!real) return " railDist=noHomography";
+            var dist = distanceToNearestRail(real, calibration.tableLength, calibration.tableWidth);
+            return " railDist=" + dist.toFixed(1) + "in limit=" + settings.railDistanceInches + "in within=" + (dist <= settings.railDistanceInches);
+          })() : (analysis ? " railDist=noAnkles(freePass)" : "")));
 
         if (enrollCapturing) {
           handleEnrollCaptureFrame(analysis);

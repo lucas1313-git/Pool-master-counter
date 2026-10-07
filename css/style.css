@@ -2425,16 +2425,24 @@ input[type="number"] {
 }
 
 /* ---------- Scorecard camera-recognition badge ---------- */
-/* Built once per card (see buildIndividualPanel), visibility/state
-   toggled live on every camera event (see updateCameraIconsOnScorecard)
-   - stacks above the player name via the panel's own flex-column flow,
-   not absolutely positioned, per explicit request ("flash above the
-   player name"). */
+/* Built once per card (see buildIndividualPanel), always present and
+   absolutely positioned against the card - its state (see
+   updateCameraIconsOnScorecard) only ever recolors it, never toggles
+   its presence, so it can never push the player name/score stack up or
+   down. The panel reserves room for it via padding-top below, set once
+   per card build rather than live per camera event. */
+.player-panel:has(.scorecard-camera-badge) {
+  padding-top: 40px;
+}
 .scorecard-camera-badge {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
   gap: 4px;
-  color: var(--accent);
+  color: var(--text-dim);
 }
 .scorecard-camera-badge-icon { width: 20px; height: 20px; display: block; }
 .scorecard-camera-badge-icon svg { width: 20px; height: 20px; display: block; }

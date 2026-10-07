@@ -99,7 +99,10 @@
 //   feature camera-side logic, just the passthrough below:
 //     { type: "hello", role: "viewer" }
 //     { type: "viewer-click", id } (viewer -> relay -> every "camera")
-//     { type: "viewer-change", id, value } (viewer -> relay -> every "camera")
+//     { type: "viewer-change", id, value, checked } (viewer -> relay -> every
+//       "camera") - checked is only meaningful (and only sent) for a
+//       checkbox; a checkbox's .value is always the fixed string "on"
+//       regardless of its checked state, so that alone can't drive one
 //     { type: "viewer-canvas-tap", fx, fy } (viewer -> relay -> every "camera")
 //     { type: "viewer-frame", dataUrl, elements } (camera -> relay -> every
 //       "viewer") - a composited still plus a snapshot of status
@@ -185,6 +188,7 @@ function createCameraRelay(WebSocket) {
   // own listener connection, and so cameras only pay the cost of
   // streaming viewer-frame while someone's actually watching.
   var viewerSockets = new Set();
+  var viewerFrameCount = 0; // TEMPORARY DIAGNOSTIC
   var enrollments = loadEnrollments();
 
   function send(ws, msg) {
@@ -228,12 +232,23 @@ function createCameraRelay(WebSocket) {
         if (msg.type === "hello") {
           ws.role = msg.role === "camera" ? "camera" : msg.role === "listener" ? "listener" : msg.role === "viewer" ? "viewer" : null;
           if (ws.role === "listener") listenerSockets.add(ws);
-          if (ws.role === "camera") cameraSockets.add(ws);
+          if (ws.role === "camera") {
+            cameraSockets.add(ws);
+            // A camera connecting (or reconnecting) AFTER a viewer is
+            // already watching previously never learned that - the
+            // viewer-connected notice only fired at the moment the
+            // viewer *count* went 0->1, which this camera could easily
+            // have missed (a phone reconnect, or the viewer simply
+            // opening first). Tell this one camera directly instead of
+            // only ever broadcasting on the viewer's own arrival.
+            if (viewerSockets.size > 0) send(ws, { type: "hello-viewer-connected" });
+          }
           if (ws.role === "viewer") {
             var wasEmpty = viewerSockets.size === 0;
             viewerSockets.add(ws);
             if (wasEmpty) broadcastToCameras({ type: "hello-viewer-connected" });
           }
+          console.log("[DEBUG] hello role=" + ws.role + " | cameras=" + cameraSockets.size + " listeners=" + listenerSockets.size + " viewers=" + viewerSockets.size + (msg.lastCloseDebug ? " | PREV CLOSE: " + msg.lastCloseDebug : ""));
           return;
         }
 
@@ -408,19 +423,33 @@ function createCameraRelay(WebSocket) {
         // DOM, so no camera-side logic needed per feature, just this
         // passthrough. viewer-frame is the matching one-way stream back.
         if (msg.type === "viewer-click" && ws.role === "viewer" && msg.id) {
+          console.log("[DEBUG] viewer-click id=" + msg.id + " -> " + cameraSockets.size + " camera(s)");
           broadcastToCameras({ type: "viewer-click", id: msg.id });
           return;
         }
         if (msg.type === "viewer-change" && ws.role === "viewer" && msg.id) {
-          broadcastToCameras({ type: "viewer-change", id: msg.id, value: msg.value });
+          console.log("[DEBUG] viewer-change id=" + msg.id + " value=" + msg.value + " checked=" + msg.checked + " -> " + cameraSockets.size + " camera(s)");
+          broadcastToCameras({ type: "viewer-change", id: msg.id, value: msg.value, checked: msg.checked });
           return;
         }
         if (msg.type === "viewer-canvas-tap" && ws.role === "viewer" && typeof msg.fx === "number" && typeof msg.fy === "number") {
+          console.log("[DEBUG] viewer-canvas-tap fx=" + msg.fx + " fy=" + msg.fy + " -> " + cameraSockets.size + " camera(s)");
           broadcastToCameras({ type: "viewer-canvas-tap", fx: msg.fx, fy: msg.fy });
           return;
         }
         if (msg.type === "viewer-frame" && ws.role === "camera") {
+          viewerFrameCount++;
+          if (viewerFrameCount === 1 || viewerFrameCount % 5 === 0) {
+            console.log("[DEBUG] viewer-frame #" + viewerFrameCount + " dataUrl bytes=" + (msg.dataUrl ? msg.dataUrl.length : 0) + " -> " + viewerSockets.size + " viewer(s) | dotModels=" + (msg.elements && msg.elements.dotModels ? msg.elements.dotModels.cls : "?") + " dotCamera=" + (msg.elements && msg.elements.dotCamera ? msg.elements.dotCamera.cls : "?"));
+          }
           broadcastToViewers({ type: "viewer-frame", dataUrl: msg.dataUrl, elements: msg.elements || {} });
+          return;
+        }
+
+        // TEMPORARY DIAGNOSTIC: free-form client-side debug text, logged
+        // server-side only - never broadcast anywhere.
+        if (msg.type === "client-debug") {
+          console.log("[CLIENT-DEBUG, role=" + ws.role + "] " + msg.text);
           return;
         }
       });
