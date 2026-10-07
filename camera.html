@@ -1130,6 +1130,12 @@
   var enrollments = {}; // normalized-name-key -> { displayName, descriptors: [[...numbers]], sides: [...] }
   var MAX_DESCRIPTORS_PER_PLAYER = 50;
   var rosterNames = []; // the scoreboard's own current player roster, kept in sync via "roster"
+  // Also from "roster": who is actually Playing right now (null until the
+  // first roster arrives - recognition is limited to these names once
+  // known), and every contact-sheet name (enrollments for anyone else are
+  // stale - a graveyarded or renamed player - and get deleted).
+  var playingNames = null;
+  var knownNames = null;
 
   function wsUrl() {
     var proto = location.protocol === "https:" ? "wss:" : "ws:";
@@ -1233,7 +1239,19 @@
       applySettingsToInputs();
     } else if (msg.type === "roster" && Array.isArray(msg.names)) {
       rosterNames = msg.names;
+      if (Array.isArray(msg.playing)) {
+        var playingBefore = JSON.stringify(playingNames);
+        playingNames = msg.playing;
+        if (JSON.stringify(playingNames) !== playingBefore) console.log("[PMC roster] playing now: " + (playingNames.length ? playingNames.join(", ") : "(nobody)") + " - only these players can be recognized");
+      }
+      if (Array.isArray(msg.known)) {
+        knownNames = msg.known;
+        pruneEnrollmentsNotKnown();
+      }
       populateEnrollNameSelect();
+    } else if (msg.type === "enroll-delete" && msg.player_name && isEmbedded) {
+      // The scoreboard graveyarded a player - drop them from the local store.
+      handleLocalMessage(msg);
     } else if (msg.type === "turn_confirmed" && msg.player_name) {
       handleTurnConfirmed(msg.player_name);
     } else if (msg.type === "ball_feedback" && msg.kind) {
@@ -2525,6 +2543,15 @@
     reset: resetBallTracking,
     settings: settings
   };
+  // Same idea for recognition: lets a test (or the console) see who the
+  // camera currently considers eligible and what it has stored.
+  window.PMCCameraDebug = {
+    isEligibleForRecognition: isEligibleForRecognition,
+    findBestMatch: findBestMatch,
+    getEnrollments: function () { return enrollments; },
+    getPlayingNames: function () { return playingNames; },
+    getKnownNames: function () { return knownNames; }
+  };
 
   // ---- Multi-person selection (MultiPose returns up to 6 people) ----
   // Cheap per-pose check used to pick which of several detected people is
@@ -2722,10 +2749,39 @@
     return sum;
   }
 
+  // Once the scoreboard has told us who is Playing, only those players
+  // can match - an enrolled player on Standby, or someone just watching,
+  // is never named, announced, or selected. Before the first roster
+  // arrives everyone enrolled is eligible (old behaviour).
+  function isEligibleForRecognition(name) {
+    if (playingNames === null) return true;
+    var key = normalizeNameKey(name);
+    return playingNames.some(function (n) { return normalizeNameKey(n) === key; });
+  }
+
+  // Enrollments for names the scoreboard no longer knows (graveyarded,
+  // renamed) are deleted so the stored camera data always matches the
+  // contact sheet. Goes through send() so both stores are covered: the
+  // same-device local store, or the relay's file (which then re-broadcasts
+  // the trimmed list).
+  function pruneEnrollmentsNotKnown() {
+    if (isViewer || !Array.isArray(knownNames) || !knownNames.length) return;
+    var knownKeys = {};
+    knownNames.forEach(function (n) { var k = normalizeNameKey(n); if (k) knownKeys[k] = true; });
+    Object.keys(enrollments).forEach(function (key) {
+      if (knownKeys[key]) return;
+      var label = enrollments[key].displayName || key;
+      console.log("[PMC roster] deleting camera data for " + label + " - no longer on the scoreboard's contact sheet");
+      logActivity("Removed camera data for " + label + " (not on the contact sheet)");
+      send({ type: "enroll-delete", player_name: label });
+    });
+  }
+
   function findBestMatch(descriptor) {
     var bestName = null, bestDistance = Infinity;
     Object.keys(enrollments).forEach(function (key) {
       var entry = enrollments[key];
+      if (!isEligibleForRecognition(entry.displayName || key)) return;
       (entry.descriptors || []).forEach(function (stored) {
         var d = histogramDistance(descriptor, stored);
         if (d < bestDistance) { bestDistance = d; bestName = entry.displayName || key; }

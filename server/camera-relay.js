@@ -356,6 +356,10 @@ function createCameraRelay(WebSocket) {
           delete enrollments[normalizeNameKey(msg.player_name)];
           saveEnrollments(enrollments);
           send(ws, { type: "enrollments", data: enrollments });
+          // A deletion can come from the scoreboard (player sent to the
+          // graveyard) - every camera has to drop that player too, not
+          // just whoever asked.
+          if (ws.role !== "camera") broadcastToCameras({ type: "enrollments", data: enrollments });
           return;
         }
 
@@ -379,12 +383,16 @@ function createCameraRelay(WebSocket) {
         }
 
         if (msg.type === "roster" && ws.role === "listener" && Array.isArray(msg.names)) {
-          broadcastToCameras({ type: "roster", names: msg.names });
+          // playing = who is in the game right now (recognition is limited
+          // to them), known = every player on the scoreboard's contact
+          // sheet (enrollments for anyone else get pruned by the camera).
+          var rosterMsg = { type: "roster", names: msg.names, playing: Array.isArray(msg.playing) ? msg.playing : null, known: Array.isArray(msg.known) ? msg.known : null };
+          broadcastToCameras(rosterMsg);
           // A viewer (camera.html?viewer=1) runs the exact same
           // populateEnrollNameSelect() on receiving this - it needs the
           // real roster for its own Enroll tab dropdown too, independent
           // of whatever the real camera already has cached.
-          broadcastToViewers({ type: "roster", names: msg.names });
+          broadcastToViewers(rosterMsg);
           return;
         }
 

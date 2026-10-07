@@ -31,6 +31,7 @@
   var reconnectTimer = null;
   var turnConfirmedRegistered = false;
   var ballFeedbackRegistered = false;
+  var rosterSyncRegistered = false;
 
   function bridgeReady() {
     return !!window.PMCCameraBridge;
@@ -82,6 +83,9 @@
     // is silently ignored rather than guessed at.
     var id = window.PMCCameraBridge.resolvePlayerIdByName(msg.player_name);
     if (!id) return;
+    // Only players actually in the game - someone enrolled but on Standby
+    // (or just watching) must never grab the keypad or get announced.
+    if (!window.PMCCameraBridge.isPlayerPlayingByName(msg.player_name)) return;
     // Selecting is skipped when this player is already selected, but
     // announcing is NOT behind that same check - see js/app.js's own
     // same-device listener for why: camera.html's debounceSec already
@@ -102,10 +106,22 @@
 
   // camera.html's enroll picker uses this instead of free-text entry, so
   // a captured sample can never be mislabeled by a typo.
+  function sendRoster(roster) {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    try {
+      ws.send(JSON.stringify(roster || window.PMCCameraBridge.buildCameraRoster()));
+    } catch (e) {}
+  }
   function handleRosterRequest() {
     if (!bridgeReady() || !ws) return;
+    sendRoster();
+  }
+  // A player sent to the graveyard - the relay drops their enrollment and
+  // tells every camera.
+  function sendEnrollDelete(playerName) {
+    if (!ws || ws.readyState !== WebSocket.OPEN || !playerName) return;
     try {
-      ws.send(JSON.stringify({ type: "roster", names: window.PMCCameraBridge.getPlayerNames() }));
+      ws.send(JSON.stringify({ type: "enroll-delete", player_name: playerName }));
     } catch (e) {}
   }
 
@@ -257,6 +273,11 @@
     if (!ballFeedbackRegistered && typeof window.PMCCameraBridge.onBallFeedback === "function") {
       window.PMCCameraBridge.onBallFeedback(sendBallFeedback);
       ballFeedbackRegistered = true;
+    }
+    if (!rosterSyncRegistered && typeof window.PMCCameraBridge.onRosterChanged === "function") {
+      window.PMCCameraBridge.onRosterChanged(sendRoster);
+      window.PMCCameraBridge.onEnrollDelete(sendEnrollDelete);
+      rosterSyncRegistered = true;
     }
     if (!remoteCalibMethodsRegistered) {
       registerRemoteCalibMethods();

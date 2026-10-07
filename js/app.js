@@ -534,6 +534,7 @@
     // device's own history stays unsaved, exactly as that mode already
     // promises elsewhere.
     broadcastStateIfNetworked();
+    notifyCameraRosterChanged();
     if (noStatsMode) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -1895,6 +1896,37 @@
   // back to the camera (see adjustScore); lastAutoBallCredit is what
   // tells a correction apart from an ordinary score change.
   var cameraBallFeedbackCallbacks = [];
+  // Roster sync to the camera: who is on today's roster, who is actually
+  // Playing (recognition is limited to them), and every known contact-sheet
+  // name (the camera prunes enrollments for anyone else). Pushed whenever
+  // that set changes (see saveState), not only when the camera asks.
+  var cameraRosterCallbacks = [];
+  var cameraEnrollDeleteCallbacks = [];
+  var lastCameraRosterSignature = null;
+  var cameraRosterPushTimer = null;
+  function notifyCameraRosterChanged() {
+    if (!window.PMCCameraBridge || !cameraRosterCallbacks.length) return;
+    clearTimeout(cameraRosterPushTimer);
+    cameraRosterPushTimer = setTimeout(function () {
+      var roster = window.PMCCameraBridge.buildCameraRoster();
+      var signature = JSON.stringify([roster.names, roster.playing, roster.known]);
+      if (signature === lastCameraRosterSignature) return;
+      lastCameraRosterSignature = signature;
+      cameraRosterCallbacks.forEach(function (cb) {
+        try {
+          cb(roster);
+        } catch (e) {}
+      });
+    }, 300);
+  }
+  function notifyCameraEnrollDelete(name) {
+    if (!name) return;
+    cameraEnrollDeleteCallbacks.forEach(function (cb) {
+      try {
+        cb(name);
+      } catch (e) {}
+    });
+  }
   var lastAutoBallCredit = null;
   var CAMERA_BALL_CORRECTION_WINDOW_MS = 15000;
   var queueSection = document.getElementById("queue-section");
@@ -14126,6 +14158,10 @@
     var key = findGraveyardPlayerKey(name) || name;
     GRAVEYARD_PLAYERS[key] = { removedAt: new Date().toISOString() };
     saveGraveyardPlayersToStorage(GRAVEYARD_PLAYERS);
+    // Their camera enrollment goes with them (same-device local store or
+    // the relay's file) - a graveyarded player must not be recognized.
+    notifyCameraEnrollDelete(name);
+    notifyCameraRosterChanged();
   }
 
   // Called from the Graveyard page's Reactivate button, or automatically
@@ -30017,7 +30053,7 @@
     // and never re-announced just because stance changed while the same
     // name stays matched (bent -> upright -> bent while still the same
     // player doesn't repeat "Seeing X." each time).
-    var seen = name || null;
+    var seen = name && window.PMCCameraBridge.isPlayerPlayingByName(name) ? name : null;
     if (seen === lastSpokenCandidateName) return;
     lastSpokenCandidateName = seen;
     if (seen) speakCameraStatus("Seeing " + seen + ".");
@@ -30239,6 +30275,20 @@
       sameDeviceCameraIframe.contentWindow.postMessage({ type: "ball_feedback", kind: feedback.kind, delta: feedback.delta, ts: feedback.ts }, location.origin);
     } catch (e) {}
   });
+  // Roster pushes (who's Playing / who's known) and graveyard deletions,
+  // same-device counterparts of camera-client.js's sendRoster/sendEnrollDelete.
+  window.PMCCameraBridge.onRosterChanged(function (roster) {
+    if (!sameDeviceCameraRunning) return;
+    try {
+      sameDeviceCameraIframe.contentWindow.postMessage(roster, location.origin);
+    } catch (e) {}
+  });
+  window.PMCCameraBridge.onEnrollDelete(function (name) {
+    if (!sameDeviceCameraRunning) return;
+    try {
+      sameDeviceCameraIframe.contentWindow.postMessage({ type: "enroll-delete", player_name: name }, location.origin);
+    } catch (e) {}
+  });
 
   function syncCameraDebugCheckboxesFromStorage() {
     try {
@@ -30275,6 +30325,10 @@
       if (!window.PMCCameraBridge.isEnabled() || window.PMCCameraBridge.isAnyOverlayOpen()) return;
       var id = window.PMCCameraBridge.resolvePlayerIdByName(msg.player_name);
       if (!id) return;
+      // Only players actually in the game - someone enrolled but on
+      // Standby (or just watching) must never grab the keypad or get
+      // announced.
+      if (!window.PMCCameraBridge.isPlayerPlayingByName(msg.player_name)) return;
       // Selecting is skipped when this player is already selected (no
       // point re-selecting what's already active), but announcing is
       // NOT behind that same check - camera.html's own debounceSec
@@ -30294,7 +30348,7 @@
       } catch (e) {}
     } else if (msg.type === "roster-request") {
       try {
-        sameDeviceCameraIframe.contentWindow.postMessage({ type: "roster", names: window.PMCCameraBridge.getPlayerNames() }, location.origin);
+        sameDeviceCameraIframe.contentWindow.postMessage(window.PMCCameraBridge.buildCameraRoster(), location.origin);
       } catch (e) {}
     } else if (msg.type === "candidate") {
       window.PMCCameraBridge.reportCandidateSeen(msg.player_name || null, msg.stance, msg.angle, msg.closestName, msg.closestDistance, msg.matchThreshold, msg.rawPoseConfidence, msg.keypointConfFloor, msg.tooFarFromRail, msg.flashingName, msg.needsConfirmationName);
@@ -31874,6 +31928,31 @@
     // score change looks like a correction of (or a miss by) the camera.
     onBallFeedback: function (callback) {
       cameraBallFeedbackCallbacks.push(callback);
+    },
+    getPlayingNames: function () {
+      return state.players.filter(function (p) { return p.playing; }).map(function (p) { return p.name; });
+    },
+    isPlayerPlayingByName: function (name) {
+      var key = normalizeNameKey(name);
+      if (!key) return false;
+      return state.players.some(function (p) { return p.playing && normalizeNameKey(p.name) === key; });
+    },
+    // The full roster message both transports send to camera.html: names =
+    // today's roster (its Enroll picker), playing = who recognition may
+    // match, known = every contact-sheet player (anyone else's enrollment
+    // is stale and gets deleted on the camera side).
+    buildCameraRoster: function () {
+      var known = typeof contactSheetVisibleNames === "function" ? contactSheetVisibleNames() : [];
+      state.players.forEach(function (p) {
+        if (known.indexOf(p.name) === -1) known.push(p.name);
+      });
+      return { type: "roster", names: window.PMCCameraBridge.getPlayerNames(), playing: window.PMCCameraBridge.getPlayingNames(), known: known };
+    },
+    onRosterChanged: function (callback) {
+      cameraRosterCallbacks.push(callback);
+    },
+    onEnrollDelete: function (callback) {
+      cameraEnrollDeleteCallbacks.push(callback);
     }
     // reportCandidateSeen and announceShotFired are attached below, from
     // inside boot(), not as plain properties of this literal -
