@@ -2522,6 +2522,22 @@
         overlayCtx.fillText(label, p.x + r + 2, p.y + 4);
       }
     });
+    // Big, readable count at the top (also survives the remote viewer's
+    // downscaled snapshot) - the small status line below is for tuning.
+    var seen = inv.objectCount + " ball" + (inv.objectCount === 1 ? "" : "s") + " seen" +
+      (inv.cuePresent ? " + cue" : ", no cue") +
+      (ballTrack.state === "STABLE" ? "" : ballTrack.state === "SETTLING" ? " (settling)" : " (moving)");
+    overlayCtx.font = "bold " + Math.max(18, Math.round(overlayEl.width / 32)) + "px sans-serif";
+    var sw = overlayCtx.measureText(seen).width;
+    var sh = Math.max(26, Math.round(overlayEl.width / 22));
+    var sx = Math.round((overlayEl.width - sw) / 2);
+    overlayCtx.fillStyle = "rgba(0,0,0,0.65)";
+    overlayCtx.fillRect(sx - 12, 8, sw + 24, sh);
+    overlayCtx.fillStyle = ballTrack.state === "STABLE" ? "#ffd166" : "#f6efe9";
+    overlayCtx.textBaseline = "middle";
+    overlayCtx.fillText(seen, sx, 8 + sh / 2);
+    overlayCtx.textBaseline = "alphabetic";
+
     var text = "balls: " + inv.objectCount + "  cue: " + (inv.cuePresent ? "yes" : "no") + "  " + ballTrack.state +
       (ballTrack.baseline ? "  baseline: " + ballTrack.baseline.objectCount : "") +
       (ballTrack.pending ? "  pending: " + ballTrack.pending.objectCount + " (" + ballTrack.pending.passes + "/" + settings.ballConfirmPasses + ")" : "") +
