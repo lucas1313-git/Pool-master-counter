@@ -2932,6 +2932,14 @@
   var CUE_MIN_LENGTH_IN = 10; // tip to where it leaves the felt or meets the bridge hand
   var CUE_MIN_COVERED_IN = 7; // of that span, actually seen as cue (not hand/pocket gaps)
   var CUE_MIN_CORE_IN = 4; // the longest single unbroken piece
+  // A shorter piece still counts when it LEAVES the table view - runs off
+  // an edge or into a pocket, or disappears behind a player: a player at
+  // the rail lining up a shot often has only the front of the cue over
+  // the cloth (and their own arm hides where it crosses the rail).
+  var CUE_SHORT_MIN_IN = 5;
+  var CUE_SHORT_MIN_CORE_IN = 3;
+  var CUE_SHORT_MIN_COVERED = 0.7; // of its span actually seen
+  var CUE_SHORT_MIN_RAIL_ANGLE_DEG = 12; // vs the rail it leaves by - flatter is a cushion sliver
   var CUE_MERGE_ANGLE_DEG = 7;
   var CUE_MERGE_GAP_IN = 10; // a bridge hand is ~4in, a pocket's exclusion disc ~9in
   // A thin line hugging a rail (both ends this close to it) is a
@@ -3040,23 +3048,50 @@
     if (!(e1 > 0)) return null;
     var theta = 0.5 * Math.atan2(2 * blob.cxy, blob.cxx - blob.cyy);
     var ux = Math.cos(theta), uy = Math.sin(theta), w = sample.w;
-    var tMin = Infinity, tMax = -Infinity;
-    var across = new Float32Array(blob.pixels.length);
-    for (var i = 0; i < blob.pixels.length; i++) {
+    var tMin = Infinity, tMax = -Infinity, n = blob.pixels.length;
+    var along = new Float32Array(n), across = new Float32Array(n);
+    for (var i = 0; i < n; i++) {
       var idx = blob.pixels[i];
       var px = (idx % w) - blob.cx, py = ((idx / w) | 0) - blob.cy;
       var t = px * ux + py * uy;
+      along[i] = t;
       if (t < tMin) tMin = t;
       if (t > tMax) tMax = t;
       across[i] = Math.abs(py * ux - px * uy);
     }
+    // A ball resting against the tip (the normal way a cue is held for a
+    // shot) or a hand round one end is part of the same blob, and on a
+    // short piece of cue it's a big share of it. So a bulge at either end
+    // is trimmed off first: the stick's width is its typical width along
+    // its length, and an end more than about twice that is something else.
+    var bins = Math.max(1, Math.floor(tMax - tMin) + 1), binW = new Float32Array(bins);
+    for (i = 0; i < n; i++) {
+      var bi = Math.min(bins - 1, Math.floor(along[i] - tMin));
+      if (across[i] > binW[bi]) binW[bi] = across[i];
+    }
+    var widths = [];
+    for (var bw = 0; bw < bins; bw++) if (binW[bw] > 0) widths.push(binW[bw]);
+    widths.sort(function (a, b) { return a - b; });
+    var typical = widths.length ? widths[Math.floor(widths.length / 2)] : 0;
+    // Through the last bulge (2+ bins, not a lone speck) within the outer
+    // 40% at each end - a tip can poke out a little past the ball it's
+    // resting against.
+    var bulge = Math.max(2.2 * typical, typical + 2.5), edge = Math.floor(bins * 0.4);
+    var isBulge = function (b) { return binW[b] > bulge && ((b > 0 && binW[b - 1] > bulge) || (b < bins - 1 && binW[b + 1] > bulge)); };
+    var lo = 0, hi = bins - 1;
+    for (var bl = 0; bl < edge; bl++) if (isBulge(bl)) lo = bl + 1;
+    for (var bh = bins - 1; bh > bins - 1 - edge; bh--) if (isBulge(bh)) hi = bh - 1;
+    var keepMin = tMin + lo, keepMax = tMin + hi + 1;
+    var kept = [];
+    for (i = 0; i < n; i++) if (along[i] >= keepMin && along[i] <= keepMax) kept.push(across[i]);
+    if (lo || hi < bins - 1) { tMin = keepMin; tMax = Math.min(tMax, keepMax); }
     // Width from the 75th percentile of distance-from-the-axis, not the
-    // variance: the cue ball (or a fingertip) touching the tip is part of
-    // the same blob, and a variance would let those few pixels fatten
+    // variance: a fingertip or a stray speck touching the stick is part
+    // of the same blob, and a variance would let those few pixels fatten
     // the whole stick. For a bar of width t that distance is spread
     // evenly over 0..t/2, so t = p75 / 0.375.
-    across.sort();
-    var p75 = across[Math.min(across.length - 1, Math.floor(0.75 * across.length))];
+    kept.sort(function (a, b) { return a - b; });
+    var p75 = kept.length ? kept[Math.min(kept.length - 1, Math.floor(0.75 * kept.length))] : 0;
     var seg = {
       ax: blob.cx + ux * tMin, ay: blob.cy + uy * tMin,
       bx: blob.cx + ux * tMax, by: blob.cy + uy * tMax,
@@ -3074,9 +3109,15 @@
     return seg;
   }
 
-  // Fraction of the line's on-cue sample points with felt (or the table
+  // Fraction of the line's on-cue sample points with CLOTH (or the table
   // edge) on BOTH sides just past its width - a free-standing stick, not
-  // the ragged fringe along the edge of an arm, a body or a rack.
+  // the ragged fringe along the edge of an arm, a body or a rack, nor a
+  // strand of hair or the arm of someone's glasses where their head comes
+  // between the camera and the table. "Cloth" is loose on purpose - the
+  // cloth's hue give or take 45 degrees (a lamp's tinted hotspots, the
+  // cue's own shadow), not washed out, not near-black - but skin, hair
+  // and clothes are well outside it.
+  var CUE_SIDE_CLOTH_HUE_DEG = 45;
   function cueSideClearance(group, sample, mask) {
     var w = sample.w, h = sample.h, nx = -group.uy, ny = group.ux;
     var d = group.thickPx / 2 + Math.max(2, 0.8 / Math.max(0.01, group.inPerPxAcross));
@@ -3085,7 +3126,10 @@
       x = Math.round(x); y = Math.round(y);
       if (x < 0 || y < 0 || x >= w || y >= h) return true;
       var i = y * w + x;
-      return !sample.inside[i] || !mask[i];
+      if (!sample.inside[i]) return true;
+      if (mask[i]) return false;
+      return hueDistance(sample.hArr[i], sample.feltH) <= CUE_SIDE_CLOTH_HUE_DEG &&
+        sample.sArr[i] >= 0.5 * sample.feltS && sample.vArr[i] >= 0.3 * sample.feltV;
     }
     for (var s = 0; s <= 24; s++) {
       var t = group.tMin + (group.tMax - group.tMin) * s / 24;
@@ -3212,6 +3256,48 @@
     return line;
   }
 
+  // Everyone the pose model found on the latest frame, as their body's
+  // shape in video pixels: the head as a disc and the torso and limbs as
+  // thick strokes between body points (a bounding box would take in
+  // half the table around someone standing at it). A cue piece ending on
+  // one goes on behind that player; one lying mostly on one is part of
+  // them (hair, glasses, a sleeve), not a stick on the cloth.
+  var cuePersonBoxes = [];
+  var CUE_BODY_LIMBS = [["left_shoulder", "right_shoulder"], ["left_shoulder", "left_hip"], ["right_shoulder", "right_hip"],
+    ["left_hip", "right_hip"], ["left_shoulder", "right_hip"], ["right_shoulder", "left_hip"],
+    ["left_shoulder", "left_elbow"], ["left_elbow", "left_wrist"], ["right_shoulder", "right_elbow"], ["right_elbow", "right_wrist"],
+    ["left_hip", "left_knee"], ["left_knee", "left_ankle"], ["right_hip", "right_knee"], ["right_knee", "right_ankle"]];
+  function cueBodyShape(pose) {
+    var kps = pose.keypoints, scale = bodyScalePx(kps);
+    var sure = function (n) { return keypointIfSure(kps, n); };
+    var head = ["nose", "left_eye", "right_eye", "left_ear", "right_ear"].map(sure).filter(function (p) { return p; });
+    if (!scale) {
+      // No shoulders/hips to size from (a head close to the camera, say):
+      // the head points' own spread, with a floor.
+      if (!head.length) return null;
+      var spread = 0;
+      head.forEach(function (a) { head.forEach(function (b) { spread = Math.max(spread, pointDist(a, b)); }); });
+      scale = Math.max(40, spread * 2);
+    }
+    var segs = [];
+    CUE_BODY_LIMBS.forEach(function (l) { var a = sure(l[0]), b = sure(l[1]); if (a && b) segs.push([a, b]); });
+    var headC = null;
+    if (head.length) headC = { x: head.reduce(function (t, p) { return t + p.x; }, 0) / head.length, y: head.reduce(function (t, p) { return t + p.y; }, 0) / head.length };
+    if (!segs.length && !headC) return null;
+    return { segs: segs, limbR: 0.35 * scale, head: headC, headR: 0.7 * scale };
+  }
+  function distToSegment(p, a, b) {
+    var dx = b.x - a.x, dy = b.y - a.y, len2 = dx * dx + dy * dy;
+    var t = len2 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2)) : 0;
+    return Math.sqrt((p.x - a.x - t * dx) * (p.x - a.x - t * dx) + (p.y - a.y - t * dy) * (p.y - a.y - t * dy));
+  }
+  function behindPlayer(v) {
+    return cuePersonBoxes.some(function (b) {
+      if (b.head && pointDist(v, b.head) <= b.headR) return true;
+      return b.segs.some(function (s) { return distToSegment(v, s[0], s[1]) <= b.limbR; });
+    });
+  }
+
   // Returns { cue, cues, rejected, pieces, ms } - cues is every stick
   // that passed (longest first), cue the longest, null when nothing
   // cue-like is over the felt. All positions in the result are native
@@ -3296,29 +3382,8 @@
       });
       var va = sample.toVideo(ea.x, ea.y), vb = sample.toVideo(eb.x, eb.y);
       var entry = { a: va, b: vb, lengthIn: spanIn, coveredIn: coveredIn, widthIn: widthIn, pieces: g.segs.length };
-      var reason = null;
-      if (spanIn < CUE_MIN_LENGTH_IN) reason = "too short (" + spanIn.toFixed(0) + "in)";
-      else if (coveredIn < CUE_MIN_COVERED_IN) reason = "mostly gaps (" + coveredIn.toFixed(0) + "in seen)";
-      else if (coreIn < CUE_MIN_CORE_IN) reason = "only small pieces";
-      else {
-        var edgeA = [ra.y, yMax - ra.y, ra.x, xMax - ra.x], edgeB = [rb.y, yMax - rb.y, rb.x, xMax - rb.x];
-        for (var e = 0; e < 4; e++) {
-          if (edgeA[e] <= CUE_RAIL_PARALLEL_IN && edgeB[e] <= CUE_RAIL_PARALLEL_IN) { reason = "along the rail"; break; }
-        }
-        if (!reason) {
-          var clearance = cueSideClearance(g, sample, thin);
-          entry.clearance = clearance.fraction;
-          if (clearance.onCue < 4 || clearance.fraction < 0.5) reason = "edge of something wider";
-        }
-      }
-      if (reason) {
-        // Only the ones long enough to be worth explaining on the overlay.
-        if (spanIn >= 6) { entry.reason = reason; rejected.push(entry); }
-        continue;
-      }
-      // Which end is the butt: the one nearer an edge (where the cue
-      // carries on off the table towards the shooter's back hand), or
-      // into a pocket's cut-out of the mask.
+      // Where each end goes: off an edge (or into a pocket's cut-out of
+      // the mask), or behind a player at the table.
       var exitDist = function (r) {
         var d = Math.min(r.x, xMax - r.x, r.y, yMax - r.y);
         pocketCentersReal().forEach(function (pc) {
@@ -3328,12 +3393,59 @@
         return Math.max(0, d);
       };
       var exitA = exitDist(ra), exitB = exitDist(rb);
-      var aIsButt = exitA <= exitB;
+      var hiddenA = behindPlayer(va), hiddenB = behindPlayer(vb);
+      var leavesA = exitA <= CUE_EXIT_MARGIN_IN || hiddenA, leavesB = exitB <= CUE_EXIT_MARGIN_IN || hiddenB;
+      var reason = null;
+      if (spanIn < CUE_MIN_LENGTH_IN) {
+        if (spanIn < CUE_SHORT_MIN_IN || !(leavesA || leavesB)) reason = "too short (" + spanIn.toFixed(0) + "in)";
+        else if (coveredIn < CUE_SHORT_MIN_COVERED * spanIn) reason = "mostly gaps (" + coveredIn.toFixed(0) + "in seen)";
+        else if (coreIn < CUE_SHORT_MIN_CORE_IN) reason = "only small pieces";
+        else {
+          // Not lying flat along the rail it runs off by (a cushion's
+          // shadow, a calibration sliver near a corner).
+          var off = exitA <= exitB ? ra : rb;
+          var dists = [off.y, yMax - off.y, off.x, xMax - off.x], nearest = 0;
+          for (var ne = 1; ne < 4; ne++) if (dists[ne] < dists[nearest]) nearest = ne;
+          var ddx = Math.abs(rb.x - ra.x), ddy = Math.abs(rb.y - ra.y);
+          var railAngle = Math.atan2(nearest < 2 ? ddy : ddx, nearest < 2 ? ddx : ddy) * 180 / Math.PI;
+          if (!(hiddenA || hiddenB) && railAngle < CUE_SHORT_MIN_RAIL_ANGLE_DEG) reason = "along the rail";
+        }
+      } else if (coveredIn < CUE_MIN_COVERED_IN) reason = "mostly gaps (" + coveredIn.toFixed(0) + "in seen)";
+      else if (coreIn < CUE_MIN_CORE_IN) reason = "only small pieces";
+      // Mostly lying over someone (their head or body between the camera
+      // and the cloth): part of that person, not a stick on the table.
+      if (!reason && cuePersonBoxes.length) {
+        var onPlayer = 0;
+        for (var op = 0; op <= 10; op++) if (behindPlayer({ x: va.x + (vb.x - va.x) * op / 10, y: va.y + (vb.y - va.y) * op / 10 })) onPlayer++;
+        if (onPlayer > 5) reason = "on a player";
+      }
+      if (!reason) {
+        var edgeA = [ra.y, yMax - ra.y, ra.x, xMax - ra.x], edgeB = [rb.y, yMax - rb.y, rb.x, xMax - rb.x];
+        for (var e = 0; e < 4; e++) {
+          if (edgeA[e] <= CUE_RAIL_PARALLEL_IN && edgeB[e] <= CUE_RAIL_PARALLEL_IN) { reason = "along the rail"; break; }
+        }
+        if (!reason) {
+          var clearance = cueSideClearance(g, sample, thin);
+          entry.clearance = clearance.fraction;
+          if (clearance.onCue < 4 || clearance.fraction < (spanIn < CUE_MIN_LENGTH_IN ? 0.75 : 0.5)) reason = "edge of something wider";
+        }
+      }
+      if (reason) {
+        // Only the ones long enough to be worth explaining on the overlay.
+        if (spanIn >= 6) { entry.reason = reason; rejected.push(entry); }
+        continue;
+      }
+      // Which end is the butt: the one going behind a player (who's
+      // holding it), else the one nearer an edge (where the cue carries
+      // on off the table towards the shooter's back hand), or into a
+      // pocket's cut-out of the mask.
+      var aIsButt = hiddenA !== hiddenB ? hiddenA : exitA <= exitB;
       entry.butt = aIsButt ? va : vb;
       entry.tip = aIsButt ? vb : va;
       entry.buttReal = aIsButt ? ra : rb;
-      entry.exitsTable = Math.min(exitA, exitB) <= CUE_EXIT_MARGIN_IN;
-      entry.bothEndsExit = Math.max(exitA, exitB) <= CUE_EXIT_MARGIN_IN;
+      entry.exitsTable = leavesA || leavesB;
+      entry.bothEndsExit = leavesA && leavesB;
+      entry.short = spanIn < CUE_MIN_LENGTH_IN;
       entry.segments = g.segs.map(function (sg) { return { a: sample.toVideo(sg.ax, sg.ay), b: sample.toVideo(sg.bx, sg.by), lengthIn: sg.lengthIn, widthIn: sg.widthIn }; });
       accepted.push(entry);
     }
@@ -5489,6 +5601,7 @@
         // below only ever runs on this one selection, never on the other
         // up-to-5 people also in frame.
         var pose = poses && poses.length ? selectActivePose(poses) : null;
+        cuePersonBoxes = (poses || []).map(cueBodyShape).filter(function (b) { return b; });
         // A cue over the table overrides that pick: whoever is holding it
         // is the one shooting (see findCueHolder).
         var cueCtx = null;
