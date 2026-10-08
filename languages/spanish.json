@@ -897,7 +897,7 @@
   "players.cameraCueDebugHelpAria": "¿Qué hace el modo depuración del taco?",
   "players.cameraCueDebugHelpText": "Muestra exactamente qué está haciendo la detección de taco de la cámara. Cada vez que un taco aparece sobre la mesa, se retira, o se asigna a un jugador, se añade una línea al registro bajo estas casillas; el video de la cámara muestra el taco dibujado en rosa con su longitud y a quién se asignó; y - cuando «Anunciar el estado del jugador» está activado - se oye «Taco detectado sobre la mesa». Cuando aparece un taco y nadie a la vista lo sostiene, el último jugador que vio la cámara queda como el que tira, y el registro lo indica. No cambia lo que se detecta - desactívalo para jugar normalmente.",
   "toast.cameraCueDetected": "Taco detectado sobre la mesa",
-  "visualScoring.usbCameraHint": "Una cámara USB conectada a este dispositivo daría muy buenos resultados. Recomendamos un gran angular colocado en alto, mirando la mesa desde arriba y cerca de 1 metro a su alrededor.",
+  "visualScoring.usbCameraHint": "Una cámara USB conectada a este dispositivo con un cable USB largo de alta velocidad daría muy buenos resultados. Recomendamos un gran angular colocado en alto, mirando la mesa desde arriba y cerca de 1 metro a su alrededor.",
   "visualScoring.enrollPlayersButton": "👤 Inscribir jugadores",
   "visualScoring.tableCalibrationButton": "📐 Calibrar la mesa",
   "visualScoring.enrolledCount": "{{enrolled}} de {{total}} jugadores inscritos",

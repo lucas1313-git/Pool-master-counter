@@ -897,7 +897,7 @@
   "players.cameraCueDebugHelpAria": "Ano ang ginagawa ng Cue debug mode?",
   "players.cameraCueDebugHelpText": "Ipinapakita kung ano talaga ang ginagawa ng cue stick detection ng camera. Tuwing may cue stick na lumabas sa ibabaw ng mesa, itinabi, o itinalaga sa isang manlalaro, may linyang madadagdag sa log sa ilalim ng mga checkbox na ito; ipinapakita ng video ng camera ang cue stick na iginuhit nang pink kasama ang haba nito at kung kanino ito itinalaga; at - kapag naka-on ang \"Sabihin ang status ng manlalaro\" - maririnig mo ang \"May cue stick sa mesa\". Kapag may lumabas na cue stick at walang nakikitang may hawak nito, ang huling manlalarong nakita ng camera ang itatakdang nag-shoot, at sasabihin ito ng log. Hindi nito binabago kung ano ang natutukoy - i-off ito para sa normal na laro.",
   "toast.cameraCueDetected": "May cue stick sa mesa",
-  "visualScoring.usbCameraHint": "Napakaganda ng magiging resulta kung may USB camera na nakakonekta sa device na ito. Inirerekomenda namin ang wide angle na nakalagay nang mataas, nakatingin pababa sa mesa at mga 3 talampakan sa paligid nito.",
+  "visualScoring.usbCameraHint": "Napakaganda ng magiging resulta kung may USB camera na nakakonekta sa device na ito gamit ang mahaba at high-speed na USB cable. Inirerekomenda namin ang wide angle na nakalagay nang mataas, nakatingin pababa sa mesa at mga 3 talampakan sa paligid nito.",
   "visualScoring.enrollPlayersButton": "👤 I-enroll ang mga manlalaro",
   "visualScoring.tableCalibrationButton": "📐 I-calibrate ang mesa",
   "visualScoring.enrolledCount": "{{enrolled}} sa {{total}} manlalaro ang naka-enroll",

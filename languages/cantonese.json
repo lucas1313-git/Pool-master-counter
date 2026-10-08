@@ -897,7 +897,7 @@
   "players.cameraCueDebugHelpAria": "球桿除錯模式有咩用?",
   "players.cameraCueDebugHelpText": "顯示鏡頭偵測球桿實際上做緊乜。每次有球桿伸出檯面、收返埋、或者算咗係某個球員嘅時候,呢幾個格仔下面嘅紀錄都會加一行;鏡頭畫面會用粉紅色畫出支球桿,連埋佢有幾長同算咗係邊個;如果開咗「讀出球員狀態」,仲會聽到「見到檯面有球桿」。有球桿伸出嚟但係畫面入面冇人揸住佢嘅話,鏡頭最後見到嘅球員就會當係開緊波,紀錄都會寫出嚟。佢唔會改變偵測到啲乜 - 正常打波嗰陣熄咗佢。",
   "toast.cameraCueDetected": "見到檯面有球桿",
-  "visualScoring.usbCameraHint": "喺呢部機駁一個 USB 鏡頭,效果會非常好。建議用廣角鏡頭,裝喺高處向下望住張檯,同埋影埋檯邊大約 3 呎嘅範圍。",
+  "visualScoring.usbCameraHint": "用一條長身、高速嘅 USB 線,喺呢部機駁一個 USB 鏡頭,效果會非常好。建議用廣角鏡頭,裝喺高處向下望住張檯,同埋影埋檯邊大約 3 呎嘅範圍。",
   "visualScoring.enrollPlayersButton": "👤 登記球員",
   "visualScoring.tableCalibrationButton": "📐 校準檯面",
   "visualScoring.enrolledCount": "{{total}} 個球員入面登記咗 {{enrolled}} 個",
