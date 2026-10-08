@@ -617,6 +617,15 @@ body {
   flex-direction: column;
 }
 
+/* Every section of the page keeps at least its own content's height,
+   whatever the flex column around it does: opening a section, a long
+   log, the camera preview or a tall row of score cards always pushes
+   everything below it down - nothing is ever squeezed so its content
+   spills over the next section. */
+#app > * {
+  flex-shrink: 0;
+}
+
 .hidden {
   display: none !important;
 }
@@ -774,7 +783,9 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  flex: 1;
+  /* Grows into the rest of the screen, never shrinks below its cards
+     (see #app > * above). */
+  flex: 1 0 auto;
 }
 
 /* With only a couple of players on screen, .scoreboard's existing
