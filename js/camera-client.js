@@ -90,6 +90,13 @@
   }
 
   function handlePlayerUp(msg) {
+    // The scoreboard's own handler does all of it (and says why when it
+    // can't select anyone) - the code below is the fallback for an older
+    // app.js without it.
+    if (bridgeReady() && typeof window.PMCCameraBridge.handleCameraShot === "function") {
+      window.PMCCameraBridge.handleCameraShot(msg.player_name);
+      return;
+    }
     if (!bridgeReady() || !window.PMCCameraBridge.isEnabled()) return;
     // selectPlayer (selectKeypadPlayer under the hood) has no overlay
     // guard of its own - without this, a camera event mid win-celebration

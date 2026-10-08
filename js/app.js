@@ -30049,6 +30049,66 @@
     lastShotAnnounced = { name: name, at: Date.now() };
     speakCameraStatus(name + " shooting.");
   };
+
+  // A shot the camera recognized (player_up), from either transport:
+  // select that player on the keypad and announce it. When it can't be
+  // acted on, it used to vanish without a trace - the camera view said
+  // "X shooting" and the scoreboard did nothing - so now the reason is
+  // shown (a toast, at most once per reason every 20s) and logged under
+  // Debugging visual matching. An open dialog/overlay only logs: holding
+  // the selection still while one is up is on purpose.
+  var cameraShotIgnoredAt = {};
+  function noteCameraShot(text, toastKey, toastParams) {
+    cameraDiagnosticLog.push({ ts: Date.now(), text: text, shot: true });
+    if (cameraDiagnosticLog.length > CAMERA_DIAGNOSTIC_LOG_MAX) cameraDiagnosticLog.shift();
+    renderCameraDiagnosticLog();
+    if (!toastKey) return;
+    var now = Date.now();
+    if (cameraShotIgnoredAt[toastKey] && now - cameraShotIgnoredAt[toastKey] < 20000) return;
+    cameraShotIgnoredAt[toastKey] = now;
+    showToast(T(toastKey, toastParams));
+  }
+  window.PMCCameraBridge.handleCameraShot = function (name) {
+    if (!name) return;
+    if (!window.PMCCameraBridge.isEnabled()) {
+      noteCameraShot("Shot: " + name + " - not selected, Camera player recognition is off", "toast.cameraShotRecognitionOff", { name: name });
+      return;
+    }
+    // selectPlayer has no overlay guard of its own - without this, a
+    // camera event mid win-celebration overlay would yank the selection
+    // and, in Focus Mode, smooth-scroll the page out from under it.
+    if (window.PMCCameraBridge.isAnyOverlayOpen()) {
+      noteCameraShot("Shot: " + name + " - not selected while a window is open on the scoreboard");
+      return;
+    }
+    // camera.html only ever knows players by name - resolve that back to
+    // this session's real, currently-live player id first.
+    var id = window.PMCCameraBridge.resolvePlayerIdByName(name);
+    if (!id) {
+      noteCameraShot("Shot: " + name + " - no player called that on the score cards", "toast.cameraShotNoSuchPlayer", { name: name });
+      return;
+    }
+    // Only players actually in the game - someone enrolled but on
+    // Standby (or just watching) must never grab the keypad.
+    if (!window.PMCCameraBridge.isPlayerPlayingByName(name)) {
+      noteCameraShot("Shot: " + name + " - not selected, they're not marked Playing", "toast.cameraShotNotPlaying", { name: name });
+      return;
+    }
+    // Selecting is skipped when this player is already selected (no
+    // point re-selecting what's already active), but announcing is
+    // NOT behind that same check - camera.html's own debounceSec
+    // already spaces out repeat player_up events for one name, so by
+    // the time one arrives here it's a deliberate, legitimate event
+    // that deserves its own announcement, same player or not. Tying
+    // the voice to the selection-changed check too meant the second
+    // and every later shot by whoever's still selected (very common -
+    // solo practice, or several turns in a row) never got announced at
+    // all, which is exactly what "only the first shot" was.
+    var already = id === window.PMCCameraBridge.getSelectedPlayerId();
+    if (!already) window.PMCCameraBridge.selectPlayer(id);
+    window.PMCCameraBridge.announceShotFired(name);
+    noteCameraShot("Shot: " + name + (already ? " - already selected" : " - selected"));
+  };
   // Cue stick over the table (camera.html's cue tracking) - "detected" /
   // "gone" as the cue comes out over the cloth and is put away ("fewer"
   // when one of several is put away; "detected" carries how many are out), and
@@ -30806,25 +30866,7 @@
     sameDeviceCameraBecameReady(); // its first message means its own listener is up
 
     if (msg.type === "player_up") {
-      if (!window.PMCCameraBridge.isEnabled() || window.PMCCameraBridge.isAnyOverlayOpen()) return;
-      var id = window.PMCCameraBridge.resolvePlayerIdByName(msg.player_name);
-      if (!id) return;
-      // Only players actually in the game - someone enrolled but on
-      // Standby (or just watching) must never grab the keypad or get
-      // announced.
-      if (!window.PMCCameraBridge.isPlayerPlayingByName(msg.player_name)) return;
-      // Selecting is skipped when this player is already selected (no
-      // point re-selecting what's already active), but announcing is
-      // NOT behind that same check - camera.html's own debounceSec
-      // already spaces out repeat player_up events for one name, so by
-      // the time one arrives here it's a deliberate, legitimate event
-      // that deserves its own announcement, same player or not. Tying
-      // the voice to the selection-changed check too meant the second
-      // and every later shot by whoever's still selected (very common -
-      // solo practice, or several turns in a row) never got announced at
-      // all, which is exactly what "only the first shot" was.
-      if (id !== window.PMCCameraBridge.getSelectedPlayerId()) window.PMCCameraBridge.selectPlayer(id);
-      window.PMCCameraBridge.announceShotFired(msg.player_name);
+      window.PMCCameraBridge.handleCameraShot(msg.player_name);
     } else if (msg.type === "settings-request") {
       var settings = window.PMCCameraBridge.getSettings();
       try {
