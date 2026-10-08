@@ -719,6 +719,7 @@
     cameraRemoteCalibrateRow.classList.toggle("hidden", !state.cameraInputEnabled || state.sameDeviceCameraSetUp);
     cameraRemoteViewerRow.classList.toggle("hidden", !state.cameraInputEnabled || state.sameDeviceCameraSetUp);
     cameraBallTrackingCheckbox.checked = state.cameraBallTrackingEnabled;
+    if (window.PMCCameraBridge && window.PMCCameraBridge.renderEnrollmentStatus) window.PMCCameraBridge.renderEnrollmentStatus();
     // Debug/voice/cue-debug apply to either transport (the log and the
     // voice are this page's own), so they show whenever the camera is on.
     cameraDebugOptionsRow.classList.toggle("hidden", !state.cameraInputEnabled);
@@ -30121,6 +30122,7 @@
   // before the previous one expired.
   window.PMCCameraBridge.reportEnrollmentUpdated = function (name) {
     if (!name) return;
+    if (window.PMCCameraBridge.renderEnrollmentStatus) window.PMCCameraBridge.renderEnrollmentStatus();
     if (scorecardCameraRecentlyUpdatedTimers[name]) clearTimeout(scorecardCameraRecentlyUpdatedTimers[name]);
     scorecardCameraRecentlyUpdatedTimers[name] = setTimeout(function () {
       delete scorecardCameraRecentlyUpdatedTimers[name];
@@ -30134,21 +30136,39 @@
   // comment on why that matters.
   window.PMCCameraBridge.syncScorecardCameraIcons = updateCameraIconsOnScorecard;
 
+  // Moves the running camera between the full-screen view and the small
+  // preview. A plain appendChild reloads an iframe (the camera restarts
+  // and anything sent to it meanwhile is lost); moveBefore, where the
+  // browser has it, moves it with its page still running. Otherwise it's
+  // treated as reloading: messages wait until it talks again.
+  function moveSameDeviceCameraTo(parent) {
+    if (sameDeviceCameraIframe.parentNode === parent) return;
+    if (typeof parent.moveBefore === "function" && sameDeviceCameraIframe.isConnected) {
+      try {
+        parent.moveBefore(sameDeviceCameraIframe, null);
+        return;
+      } catch (e) {}
+    }
+    parent.appendChild(sameDeviceCameraIframe);
+    sameDeviceCameraReady = false;
+  }
+
   function openSameDeviceCameraOverlay() {
     if (!sameDeviceCameraRunning) {
       sameDeviceCameraRunning = true;
+      sameDeviceCameraReady = false;
       sameDeviceCameraIframe.src = "camera.html?embedded=1";
       renderCameraCandidateStatus(null, true);
       if (window.PMCCameraBridge.renderCameraStatusLights) window.PMCCameraBridge.renderCameraStatusLights();
     }
-    if (sameDeviceCameraIframe.parentNode !== sameDeviceCameraCard) sameDeviceCameraCard.appendChild(sameDeviceCameraIframe);
+    moveSameDeviceCameraTo(sameDeviceCameraCard);
     cameraInlinePreviewWrap.classList.add("hidden");
     sameDeviceCameraOverlay.classList.remove("hidden");
   }
 
   function minimizeSameDeviceCameraOverlay() {
     sameDeviceCameraOverlay.classList.add("hidden");
-    if (sameDeviceCameraIframe.parentNode !== cameraInlinePreviewHome) cameraInlinePreviewHome.appendChild(sameDeviceCameraIframe);
+    moveSameDeviceCameraTo(cameraInlinePreviewHome);
     cameraDebugOptionsRow.classList.remove("hidden");
     cameraInlinePreviewWrap.classList.remove("hidden");
     syncCameraDebugCheckboxesFromStorage();
@@ -30180,16 +30200,9 @@
   window.PMCCameraBridge.startCameraEnrollFor = function (name) {
     resumeSameDeviceCameraIfNeeded();
     openSameDeviceCameraOverlay();
-    // The iframe may still be mid-boot on a cold start (model loading,
-    // relay/roster handshake) - postMessage itself delivers fine the
-    // instant contentWindow exists, but camera.html's own message
-    // listener needs to have registered first. A short delay covers the
-    // common case; worst case the operator just taps Enroll again.
-    setTimeout(function () {
-      try {
-        sameDeviceCameraIframe.contentWindow.postMessage({ type: "enroll-select", player_name: name }, location.origin);
-      } catch (e) {}
-    }, 400);
+    // Waits for the camera page to be listening if it's still loading
+    // (see sendToSameDeviceCamera) - no guessed delay.
+    sendToSameDeviceCamera({ type: "enroll-select", player_name: name });
   };
 
   // Called from every genuine MANUAL player-selection site (scorecard
@@ -30219,8 +30232,10 @@
   function stopSameDeviceCamera() {
     if (!sameDeviceCameraRunning) return; // never started this session - nothing to stop
     sameDeviceCameraRunning = false;
+    sameDeviceCameraReady = false;
+    sameDeviceCameraQueue = [];
     renderCameraCandidateStatus(null, false);
-    if (window.PMCCameraBridge.reportCameraStatus) window.PMCCameraBridge.reportCameraStatus({});
+    if (window.PMCCameraBridge.reportCameraStatus) window.PMCCameraBridge.reportCameraStatus({}, false);
     // postMessage first so camera.html can stop its own MediaStreamTracks
     // and release the wake lock - clearing src alone isn't a reliable
     // teardown signal (timing varies across Safari/Chrome). postMessage
@@ -30446,8 +30461,8 @@
 
   // What the camera is actually using - from the same-device camera
   // page (postMessage) or a separate phone (relay, js/camera-client.js).
-  window.PMCCameraBridge.reportCameraSettings = function (values) {
-    if (!values || typeof values !== "object") return;
+  window.PMCCameraBridge.reportCameraSettings = function (values, fromRelay) {
+    if (!values || typeof values !== "object" || !cameraMessageCounts(fromRelay)) return;
     if (!state.sameDeviceCameraSetUp) phoneCaptureSettingsKnown = true;
     renderCaptureSettings(values);
     refreshCaptureSettingsAvailability();
@@ -30461,7 +30476,9 @@
     phoneCaptureSettingsKnown = false;
     refreshCaptureSettingsAvailability();
     cameraPhonesConnected = null;
-    clearCameraStatusCodes();
+    relayEnrolledNames = null;
+    if (!state.sameDeviceCameraSetUp) clearCameraStatusCodes();
+    renderEnrollmentStatus();
   };
 
   // ---- Camera status lights (Select Camera + Capture Settings) ----
@@ -30513,18 +30530,117 @@
       });
     });
   }
-  window.PMCCameraBridge.reportCameraStatus = function (status) {
-    if (!status || typeof status !== "object") return;
+  // fromRelay: sent by js/camera-client.js (a separate phone over the
+  // relay) rather than this tablet's own camera page. Each only counts in
+  // its own mode - the tablet stays connected to the relay as a listener
+  // in same-device mode too, and the relay's "no camera phones" must not
+  // wipe the same-device camera's lights (or the reverse).
+  function cameraMessageCounts(fromRelay) {
+    return !!fromRelay === !state.sameDeviceCameraSetUp;
+  }
+  window.PMCCameraBridge.reportCameraStatus = function (status, fromRelay) {
+    if (!status || typeof status !== "object" || !cameraMessageCounts(fromRelay)) return;
     cameraStatusCodes = { link: status.link || null, models: status.models || null, camera: status.camera || null };
     renderCameraStatusLights();
   };
   window.PMCCameraBridge.reportCameraPresence = function (count) {
     cameraPhonesConnected = typeof count === "number" ? count : null;
-    if (!cameraPhonesConnected) cameraStatusCodes = { link: null, models: null, camera: null };
+    if (!cameraPhonesConnected && !state.sameDeviceCameraSetUp) cameraStatusCodes = { link: null, models: null, camera: null };
     renderCameraStatusLights();
   };
   window.PMCCameraBridge.renderCameraStatusLights = renderCameraStatusLights;
   renderCameraStatusLights();
+
+  // ---- Capture Settings: Enroll players / Table calibration ----
+  // This tablet's camera: the full-screen camera view, on its Enroll tab
+  // or its own setup wizard's Table Calibration step. A separate phone:
+  // the remote view on its Enroll tab, or remote table calibration (the
+  // phone's wizard is its own - see camera.html's viewer mode). Nothing
+  // set up yet: Select Camera first.
+  // Messages for a same-device camera that's still loading wait until it
+  // has said something (its listener is up by then) instead of a guessed
+  // delay.
+  var sameDeviceCameraReady = false;
+  var sameDeviceCameraQueue = [];
+  function sendToSameDeviceCamera(msg) {
+    if (!sameDeviceCameraReady) {
+      sameDeviceCameraQueue.push(msg);
+      return;
+    }
+    try {
+      sameDeviceCameraIframe.contentWindow.postMessage(msg, location.origin);
+    } catch (e) {}
+  }
+  function sameDeviceCameraBecameReady() {
+    if (sameDeviceCameraReady || !sameDeviceCameraRunning) return;
+    sameDeviceCameraReady = true;
+    var queued = sameDeviceCameraQueue;
+    sameDeviceCameraQueue = [];
+    queued.forEach(sendToSameDeviceCamera);
+  }
+  function openCameraFor(sameDeviceMsg, phoneAction) {
+    if (state.sameDeviceCameraSetUp && window.isSecureContext) {
+      openSameDeviceCameraOverlay();
+      sendToSameDeviceCamera(sameDeviceMsg);
+    } else if (state.cameraInputEnabled && !state.sameDeviceCameraSetUp) {
+      phoneAction();
+    } else {
+      openCameraSetup();
+    }
+  }
+  document.getElementById("btn-capture-enroll-players").addEventListener("click", function () {
+    openCameraFor({ type: "show-tab", tab: "enroll" }, function () {
+      remoteViewerIframe.src = "camera.html?viewer=1&tab=enroll&t=" + Date.now();
+      remoteViewerOverlay.classList.remove("hidden");
+    });
+  });
+  document.getElementById("btn-capture-table-calibration").addEventListener("click", function () {
+    openCameraFor({ type: "open-wizard", step: 3 }, openRemoteCalibrateOverlay);
+  });
+
+  // "N of M players enrolled" - everyone on today's roster, playing or
+  // standby. Green light: all of them; red: someone's missing (named in
+  // the tooltip). Same-device enrollments are in this browser's storage
+  // (the camera page writes them - its storage event reaches this page);
+  // a separate phone's are on the relay, which sends who's enrolled.
+  var relayEnrolledNames = null;
+  function renderEnrollmentStatus() {
+    var line = document.getElementById("camera-enrollment-status");
+    var dot = document.getElementById("camera-enrollment-dot");
+    var text = document.getElementById("camera-enrollment-text");
+    var roster = state.players.map(function (p) { return p.name; });
+    line.title = "";
+    if (!roster.length) {
+      dot.className = "camera-light-dot";
+      text.textContent = T("visualScoring.enrolledNoPlayers");
+      return;
+    }
+    var isEnrolled;
+    if (state.sameDeviceCameraSetUp) {
+      isEnrolled = isPlayerCameraEnrolled;
+    } else if (relayEnrolledNames) {
+      var keys = {};
+      relayEnrolledNames.forEach(function (n) { keys[normalizeNameKey(n)] = true; });
+      isEnrolled = function (name) { return !!keys[normalizeNameKey(name)]; };
+    } else {
+      dot.className = "camera-light-dot";
+      text.textContent = T("visualScoring.enrolledUnknown");
+      return;
+    }
+    var missing = roster.filter(function (name) { return !isEnrolled(name); });
+    dot.className = "camera-light-dot " + (missing.length ? "bad" : "ok");
+    text.textContent = T("visualScoring.enrolledCount", { enrolled: roster.length - missing.length, total: roster.length });
+    if (missing.length) line.title = T("visualScoring.enrolledMissing", { names: missing.join(", ") });
+  }
+  window.PMCCameraBridge.renderEnrollmentStatus = renderEnrollmentStatus;
+  window.PMCCameraBridge.reportEnrollmentNames = function (names) {
+    relayEnrolledNames = Array.isArray(names) ? names : null;
+    renderEnrollmentStatus();
+  };
+  window.addEventListener("storage", function (e) {
+    if (e.key === CAMERA_ENROLLMENTS_KEY) renderEnrollmentStatus();
+  });
+  renderEnrollmentStatus();
   // Until camera recognition has been turned on, Capture Settings starts
   // open - its Tracking block holds the switch.
   if (!state.cameraInputEnabled) {
@@ -30578,6 +30694,8 @@
     if (event.origin !== location.origin || event.source !== sameDeviceCameraIframe.contentWindow) return;
     var msg = event.data;
     if (!msg || typeof msg !== "object") return;
+    sameDeviceCameraBecameReady(); // its first message means its own listener is up
+
     if (msg.type === "player_up") {
       if (!window.PMCCameraBridge.isEnabled() || window.PMCCameraBridge.isAnyOverlayOpen()) return;
       var id = window.PMCCameraBridge.resolvePlayerIdByName(msg.player_name);

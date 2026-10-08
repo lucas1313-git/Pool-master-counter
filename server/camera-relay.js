@@ -96,6 +96,9 @@
 //       (camera -> listeners; what the camera is actually using)
 //     { type: "camera-status", status: { link, models, camera } }
 //       (camera -> listeners; its status lights, as codes)
+//     { type: "enrollment-names", names: [...] }
+//       (relay -> listeners; who has at least one enrollment sample - on
+//       a listener's hello and after every enrollment change)
 //     { type: "camera-presence", cameras: N }
 //       (relay -> listeners; on a listener's hello, and whenever a
 //       camera connects or drops)
@@ -229,6 +232,19 @@ function createCameraRelay(WebSocket) {
     });
   }
 
+  // Who has a real enrollment (at least one sample) - the tablet's
+  // Visual Scoring shows "N of M players enrolled" from this. Sent to a
+  // listener when it connects and to every listener after any change.
+  function enrolledNames() {
+    return Object.keys(enrollments).filter(function (key) {
+      var e = enrollments[key];
+      return e && Array.isArray(e.descriptors) && e.descriptors.length > 0;
+    }).map(function (key) { return enrollments[key].displayName || key; });
+  }
+  function broadcastEnrolledNames() {
+    broadcastToListeners({ type: "enrollment-names", names: enrolledNames() });
+  }
+
   function broadcastToCameras(msg) {
     cameraSockets.forEach(function (ws) {
       send(ws, msg);
@@ -262,6 +278,7 @@ function createCameraRelay(WebSocket) {
             // How many camera phones are connected right now - the
             // tablet's camera status lights start from this.
             send(ws, { type: "camera-presence", cameras: cameraSockets.size });
+            send(ws, { type: "enrollment-names", names: enrolledNames() });
           }
           if (ws.role === "camera") {
             cameraSockets.add(ws);
@@ -358,6 +375,7 @@ function createCameraRelay(WebSocket) {
           enrollments[saveKey] = saveEntry;
           saveEnrollments(enrollments);
           send(ws, { type: "enrollments", data: enrollments });
+          broadcastEnrolledNames();
           return;
         }
 
@@ -369,9 +387,11 @@ function createCameraRelay(WebSocket) {
           if (entry.descriptors.length > MAX_DESCRIPTORS_PER_PLAYER) {
             entry.descriptors = entry.descriptors.slice(entry.descriptors.length - MAX_DESCRIPTORS_PER_PLAYER);
           }
+          var wasEnrolled = entry.descriptors.length > 1;
           addSide(entry, msg.side);
           enrollments[addKey] = entry;
           saveEnrollments(enrollments);
+          if (!wasEnrolled) broadcastEnrolledNames(); // only a first sample changes who's enrolled
           return;
         }
 
@@ -384,6 +404,7 @@ function createCameraRelay(WebSocket) {
           delete enrollments[normalizeNameKey(msg.player_name)];
           saveEnrollments(enrollments);
           send(ws, { type: "enrollments", data: enrollments });
+          broadcastEnrolledNames();
           // A deletion can come from the scoreboard (player sent to the
           // graveyard) - every camera has to drop that player too, not
           // just whoever asked.

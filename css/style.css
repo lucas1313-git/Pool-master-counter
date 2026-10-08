@@ -7502,6 +7502,22 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   background: var(--accent);
 }
 
+/* Capture Settings: Enroll players / Table calibration, and under them
+   how many of the roster are enrolled - its light (green: everyone,
+   red: someone missing) in front of the text. */
+.camera-capture-actions {
+  margin: 4px 0 6px;
+}
+
+.camera-enrollment-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
 /* A short note under a setting's own label (Tracking's "Enhance player
    recognition" under Cue stick detection). */
 .setting-comment {

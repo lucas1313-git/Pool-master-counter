@@ -62,7 +62,7 @@
   // what it's using, and the tablet's changes go back to it.
   function handleCameraSettingsState(msg) {
     if (!bridgeReady() || typeof window.PMCCameraBridge.reportCameraSettings !== "function") return;
-    window.PMCCameraBridge.reportCameraSettings(msg.settings);
+    window.PMCCameraBridge.reportCameraSettings(msg.settings, true);
   }
   function sendCaptureSettings(patch) {
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
@@ -264,7 +264,8 @@
       else if (msg.type === "ball_pocketed" || msg.type === "ball_rerack" || msg.type === "ball_reappeared") handleBallEvent(msg);
       else if (msg.type === "cue_event") handleCueEvent(msg);
       else if (msg.type === "camera-settings-state") handleCameraSettingsState(msg);
-      else if (msg.type === "camera-status" && bridgeReady() && typeof window.PMCCameraBridge.reportCameraStatus === "function") window.PMCCameraBridge.reportCameraStatus(msg.status);
+      else if (msg.type === "camera-status" && bridgeReady() && typeof window.PMCCameraBridge.reportCameraStatus === "function") window.PMCCameraBridge.reportCameraStatus(msg.status, true);
+      else if (msg.type === "enrollment-names" && bridgeReady() && typeof window.PMCCameraBridge.reportEnrollmentNames === "function") window.PMCCameraBridge.reportEnrollmentNames(msg.names);
       else if (msg.type === "camera-presence" && bridgeReady() && typeof window.PMCCameraBridge.reportCameraPresence === "function") window.PMCCameraBridge.reportCameraPresence(msg.cameras);
     });
     ws.addEventListener("close", function () {

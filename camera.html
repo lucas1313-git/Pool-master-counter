@@ -1373,6 +1373,14 @@
       sendRemoteCameraList();
     } else if (msg.type === "remote-camera-select" && msg.deviceId) {
       selectRemoteCamera(msg.deviceId);
+    } else if (msg.type === "open-wizard" && typeof msg.step === "number") {
+      // The scoreboard's Visual Scoring > Capture Settings > Table
+      // calibration button: this page's own setup wizard, at that step.
+      openSetupWizardAt(msg.step);
+    } else if (msg.type === "show-tab" && (msg.tab === "enroll" || msg.tab === "calibrate" || msg.tab === "recognize")) {
+      // ...and its Enroll players button.
+      if (!setupWizardOverlay.hidden) closeSetupWizard();
+      showTab(msg.tab);
     } else if (msg.type === "camera-settings") {
       applyCaptureSettings(msg.settings);
     } else if (msg.type === "camera-settings-request") {
@@ -5459,7 +5467,10 @@
   }
 
   function openSetupWizard() {
-    setupWizardStep = 1;
+    openSetupWizardAt(1);
+  }
+  function openSetupWizardAt(step) {
+    setupWizardStep = Math.max(1, Math.min(WIZARD_TOTAL_STEPS, Math.round(step)));
     resumeSetupPill.hidden = true;
     wizardResumeTarget = null;
     renderWizardStep();
@@ -5533,7 +5544,10 @@
   }
 
   // ---- Boot ----
-  showTab("recognize");
+  // ?tab=enroll|calibrate opens on that tab (the scoreboard's remote
+  // view uses it for its Enroll players button).
+  var startTab = new URLSearchParams(location.search).get("tab");
+  showTab(startTab === "enroll" || startTab === "calibrate" ? startTab : "recognize");
   if (isEmbedded) initEmbeddedMode();
   else if (isViewer) initViewerMode();
   else connectRelay();
