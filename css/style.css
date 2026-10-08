@@ -7453,6 +7453,64 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   margin-bottom: 6px;
 }
 
+/* The camera's three status lights (connection, models, camera),
+   mirrored from the camera page into Select Camera and Capture
+   Settings - same pill-and-dot look as on the camera page itself. */
+.camera-status-lights {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 2px 0 12px;
+}
+
+.camera-light {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.camera-light-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  opacity: 0.6;
+  flex: 0 0 auto;
+}
+
+.camera-light-dot.ok,
+.camera-light-dot.bad,
+.camera-light-dot.busy {
+  opacity: 1;
+}
+
+.camera-light-dot.ok {
+  background: #4cc47a;
+}
+
+.camera-light-dot.bad {
+  background: var(--danger);
+}
+
+.camera-light-dot.busy {
+  background: var(--accent);
+}
+
+/* A short note under a setting's own label (Tracking's "Enhance player
+   recognition" under Cue stick detection). */
+.setting-comment {
+  display: block;
+  font-size: 0.8rem;
+  opacity: 0.8;
+  margin-top: 2px;
+}
+
 /* Matching sensitivity slider, 0-6, with the numbers (and what 0, 3 and
    6 mean) right under their stops. The thumb size is fixed so the scale
    can line up with where the thumb actually sits: stop i is at

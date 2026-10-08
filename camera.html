@@ -1036,9 +1036,22 @@
   tabEnroll.addEventListener("click", function () { showTab("enroll"); });
   tabCalibrate.addEventListener("click", function () { showTab("calibrate"); });
 
-  function setStatus(dotEl, labelEl, state, text) {
+  // code: what the light means, independent of its English text - the
+  // scoreboard shows the same three lights (Visual Scoring) in its own
+  // language from these (see reportCameraStatus).
+  var statusCodes = { link: null, models: null, camera: null };
+  function setStatus(dotEl, labelEl, state, text, code) {
     dotEl.className = "dot" + (state ? " " + state : "");
     labelEl.textContent = text;
+    var key = dotEl.id === "dotRelay" ? "link" : dotEl.id === "dotModels" ? "models" : dotEl.id === "dotCamera" ? "camera" : null;
+    if (key && code && statusCodes[key] !== code) {
+      statusCodes[key] = code;
+      reportCameraStatus();
+    }
+  }
+  function reportCameraStatus() {
+    if (isViewer) return;
+    send({ type: "camera-status", status: { link: statusCodes.link, models: statusCodes.models, camera: statusCodes.camera } });
   }
 
   // ---- Model loading (tfjs + MoveNet pose-detection, vendored - no CDN) ----
@@ -1046,7 +1059,7 @@
   var detector = null;
 
   function loadModels() {
-    setStatus(dotModels, labelModels, "busy", "Models: loading...");
+    setStatus(dotModels, labelModels, "busy", "Models: loading...", "loading");
     return tf.setBackend("webgl").then(function () {
       return tf.ready();
     }).then(function () {
@@ -1062,9 +1075,9 @@
     }).then(function (d) {
       detector = d;
       modelsReady = true;
-      setStatus(dotModels, labelModels, "ok", "Models: ready");
+      setStatus(dotModels, labelModels, "ok", "Models: ready", "ready");
     }).catch(function (e) {
-      setStatus(dotModels, labelModels, "bad", "Models: failed to load");
+      setStatus(dotModels, labelModels, "bad", "Models: failed to load", "failed");
       console.error("[camera] model load failed:", e);
     });
   }
@@ -1079,7 +1092,7 @@
   setInterval(function () {
     if (!modelsReady) return;
     if (Date.now() - lastPoseResultAt > WATCHDOG_STALL_MS) {
-      setStatus(dotModels, labelModels, "bad", "Models: stalled, reloading...");
+      setStatus(dotModels, labelModels, "bad", "Models: stalled, reloading...", "loading");
       modelsReady = false;
       lastPoseResultAt = Date.now();
       loadModels();
@@ -1134,7 +1147,7 @@
   // plugged in yet" is an expected, ordinary situation at startup, not a
   // real problem to alarm about.
   function startCamera(deviceId, isBootAttempt) {
-    setStatus(dotCamera, labelCamera, "busy", "Camera: starting...");
+    setStatus(dotCamera, labelCamera, "busy", "Camera: starting...", "starting");
     var constraints = {
       audio: false,
       video: deviceId
@@ -1146,11 +1159,11 @@
       currentStream = stream;
       videoEl.srcObject = stream;
       hideCameraWarning();
-      setStatus(dotCamera, labelCamera, "ok", "Camera: active");
+      setStatus(dotCamera, labelCamera, "ok", "Camera: active", "active");
       var track = stream.getVideoTracks()[0];
       if (track) {
         track.addEventListener("ended", function () {
-          setStatus(dotCamera, labelCamera, "bad", "Camera: stopped");
+          setStatus(dotCamera, labelCamera, "bad", "Camera: stopped", "stopped");
           showCameraWarning("The camera stream stopped unexpectedly (locked phone, another app took the camera, or a cable/mount issue). Tap below to restart it.");
         });
       }
@@ -1162,7 +1175,7 @@
         startCamera(null, false);
         return;
       }
-      setStatus(dotCamera, labelCamera, "bad", "Camera: error");
+      setStatus(dotCamera, labelCamera, "bad", "Camera: error", "error");
       var httpsNote = location.protocol !== "https:" && location.hostname !== "localhost"
         ? " This page is being served over plain HTTP - iOS Safari blocks camera access entirely without HTTPS. See server/README.md for how to enable it."
         : "";
@@ -1364,6 +1377,7 @@
       applyCaptureSettings(msg.settings);
     } else if (msg.type === "camera-settings-request") {
       reportCaptureSettings();
+      reportCameraStatus();
     } else if (msg.type === "viewer-click" && msg.id) {
       var clickEl = document.getElementById(msg.id);
       if (clickEl) clickEl.click();
@@ -1753,16 +1767,17 @@
   }
   function connectRelay() {
     if (ws) return;
-    setStatus(dotRelay, labelRelay, "busy", "Relay: connecting...");
+    setStatus(dotRelay, labelRelay, "busy", "Relay: connecting...", "connecting");
     try { ws = new WebSocket(wsUrl()); } catch (e) { ws = null; scheduleReconnect(); return; }
     ws.addEventListener("open", function () {
-      setStatus(dotRelay, labelRelay, "ok", isViewer ? "Remote viewer: connected" : "Relay: connected");
+      setStatus(dotRelay, labelRelay, "ok", isViewer ? "Remote viewer: connected" : "Relay: connected", "connected");
       // TEMPORARY DIAGNOSTIC: reports the previous connection's close
       // code/reason (if any) on the reconnect that follows it, so an
       // unexpected disconnect shows up in the server's own log even
       // though nobody can see this browser's console directly.
       send({ type: "hello", role: isViewer ? "viewer" : "camera", lastCloseDebug: lastCloseDebugInfo });
       reportCaptureSettings();
+      reportCameraStatus();
       lastCloseDebugInfo = null;
       send({ type: "enroll-get" });
       if (!isViewer && !hasLocalSettingsOverride) send({ type: "settings-request" });
@@ -1776,14 +1791,14 @@
     ws.addEventListener("close", function (evt) {
       ws = null;
       lastCloseDebugInfo = "code=" + evt.code + " reason=" + JSON.stringify(evt.reason) + " clean=" + evt.wasClean;
-      setStatus(dotRelay, labelRelay, "bad", isViewer ? "Remote viewer: disconnected" : "Relay: disconnected");
+      setStatus(dotRelay, labelRelay, "bad", isViewer ? "Remote viewer: disconnected" : "Relay: disconnected", "disconnected");
       scheduleReconnect();
     });
   }
   var lastCloseDebugInfo = null;
 
   function initEmbeddedMode() {
-    setStatus(dotRelay, labelRelay, "ok", "Same-device mode");
+    setStatus(dotRelay, labelRelay, "ok", "Same-device mode", "same-device");
     window.addEventListener("message", function (e) {
       if (e.origin !== location.origin || e.source !== window.parent) return;
       handleIncomingMessage(e.data);
@@ -1792,6 +1807,7 @@
     if (!hasLocalSettingsOverride) send({ type: "settings-request" });
     send({ type: "roster-request" });
     reportCaptureSettings();
+    reportCameraStatus();
   }
 
   // ---- Enrolled player list ----

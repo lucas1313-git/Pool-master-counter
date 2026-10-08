@@ -718,7 +718,6 @@
     // for this button to usefully do there.
     cameraRemoteCalibrateRow.classList.toggle("hidden", !state.cameraInputEnabled || state.sameDeviceCameraSetUp);
     cameraRemoteViewerRow.classList.toggle("hidden", !state.cameraInputEnabled || state.sameDeviceCameraSetUp);
-    cameraBallTrackingRow.classList.toggle("hidden", !state.cameraInputEnabled);
     cameraBallTrackingCheckbox.checked = state.cameraBallTrackingEnabled;
     // Debug/voice/cue-debug apply to either transport (the log and the
     // voice are this page's own), so they show whenever the camera is on.
@@ -29338,6 +29337,7 @@
     else resumeSameDeviceCameraIfNeeded();
     saveState();
     renderAll();
+    window.PMCCameraBridge.renderCameraStatusLights();
   });
 
   btnCameraInputHelp.addEventListener("click", function () {
@@ -30139,6 +30139,7 @@
       sameDeviceCameraRunning = true;
       sameDeviceCameraIframe.src = "camera.html?embedded=1";
       renderCameraCandidateStatus(null, true);
+      if (window.PMCCameraBridge.renderCameraStatusLights) window.PMCCameraBridge.renderCameraStatusLights();
     }
     if (sameDeviceCameraIframe.parentNode !== sameDeviceCameraCard) sameDeviceCameraCard.appendChild(sameDeviceCameraIframe);
     cameraInlinePreviewWrap.classList.add("hidden");
@@ -30219,6 +30220,7 @@
     if (!sameDeviceCameraRunning) return; // never started this session - nothing to stop
     sameDeviceCameraRunning = false;
     renderCameraCandidateStatus(null, false);
+    if (window.PMCCameraBridge.reportCameraStatus) window.PMCCameraBridge.reportCameraStatus({});
     // postMessage first so camera.html can stop its own MediaStreamTracks
     // and release the wake lock - clearing src alone isn't a reliable
     // teardown signal (timing varies across Safari/Chrome). postMessage
@@ -30347,6 +30349,9 @@
     var waiting = phone && !phoneCaptureSettingsKnown;
     captureSettingsWaiting.classList.toggle("hidden", !waiting);
     captureSettingsFields.disabled = waiting;
+    // (Tracking's cue checkbox lives outside that fieldset, beside the
+    // recognition switch, which must never be disabled.)
+    document.getElementById("capture-cue-detection").disabled = waiting;
     if (!phone) renderCaptureSettings(readStoredCameraSettings());
   }
 
@@ -30455,7 +30460,77 @@
   window.PMCCameraBridge.reportCameraDisconnected = function () {
     phoneCaptureSettingsKnown = false;
     refreshCaptureSettingsAvailability();
+    cameraPhonesConnected = null;
+    clearCameraStatusCodes();
   };
+
+  // ---- Camera status lights (Select Camera + Capture Settings) ----
+  // The camera page's own three lights - its connection, the pose
+  // models, the camera itself - shown here too, in this page's language.
+  // The camera reports what each light means as a code (camera-status);
+  // the first light is this page's own view of the connection: this
+  // tablet's camera running, or how many camera phones the relay has.
+  var cameraStatusCodes = { link: null, models: null, camera: null };
+  var cameraPhonesConnected = null; // separate phone: from the relay's camera-presence; null = not connected to the relay
+  var CAMERA_LIGHT_MODELS = { ready: ["ok", "visualScoring.lightModelsReady"], loading: ["busy", "visualScoring.lightModelsLoading"], failed: ["bad", "visualScoring.lightModelsFailed"] };
+  var CAMERA_LIGHT_CAMERA = { active: ["ok", "visualScoring.lightCameraActive"], starting: ["busy", "visualScoring.lightCameraStarting"], stopped: ["bad", "visualScoring.lightCameraStopped"], error: ["bad", "visualScoring.lightCameraError"] };
+  function clearCameraStatusCodes() {
+    cameraStatusCodes = { link: null, models: null, camera: null };
+    renderCameraStatusLights();
+  }
+  function cameraStatusLights() {
+    var link, live = false;
+    if (!state.cameraInputEnabled) {
+      link = ["", "visualScoring.lightRecognitionOff"];
+    } else if (state.sameDeviceCameraSetUp) {
+      live = sameDeviceCameraRunning;
+      link = live ? ["ok", "visualScoring.lightSameDevice"] : ["", "visualScoring.lightSameDeviceOff"];
+    } else if (cameraPhonesConnected === null) {
+      link = ["busy", "visualScoring.lightPhoneConnecting"];
+    } else {
+      live = cameraPhonesConnected > 0;
+      link = live ? ["ok", "visualScoring.lightPhoneConnected"] : ["bad", "visualScoring.lightPhoneNotConnected"];
+    }
+    var models = (live && CAMERA_LIGHT_MODELS[cameraStatusCodes.models]) || ["", "visualScoring.lightModelsUnknown"];
+    var camera = (live && CAMERA_LIGHT_CAMERA[cameraStatusCodes.camera]) || ["", "visualScoring.lightCameraUnknown"];
+    return [link, models, camera];
+  }
+  function renderCameraStatusLights() {
+    var lights = cameraStatusLights();
+    ["setup-status-lights", "capture-status-lights"].forEach(function (id) {
+      var host = document.getElementById(id);
+      host.innerHTML = "";
+      lights.forEach(function (light) {
+        var pill = document.createElement("span");
+        pill.className = "camera-light";
+        var dot = document.createElement("span");
+        dot.className = "camera-light-dot" + (light[0] ? " " + light[0] : "");
+        var label = document.createElement("span");
+        label.textContent = T(light[1]);
+        pill.appendChild(dot);
+        pill.appendChild(label);
+        host.appendChild(pill);
+      });
+    });
+  }
+  window.PMCCameraBridge.reportCameraStatus = function (status) {
+    if (!status || typeof status !== "object") return;
+    cameraStatusCodes = { link: status.link || null, models: status.models || null, camera: status.camera || null };
+    renderCameraStatusLights();
+  };
+  window.PMCCameraBridge.reportCameraPresence = function (count) {
+    cameraPhonesConnected = typeof count === "number" ? count : null;
+    if (!cameraPhonesConnected) cameraStatusCodes = { link: null, models: null, camera: null };
+    renderCameraStatusLights();
+  };
+  window.PMCCameraBridge.renderCameraStatusLights = renderCameraStatusLights;
+  renderCameraStatusLights();
+  // Until camera recognition has been turned on, Capture Settings starts
+  // open - its Tracking block holds the switch.
+  if (!state.cameraInputEnabled) {
+    document.getElementById("capture-settings-panel").classList.remove("collapsed");
+    document.getElementById("btn-toggle-capture-settings-panel").setAttribute("aria-expanded", "true");
+  }
   renderCaptureSettings({ matchThreshold: state.cameraMatchThreshold, debounceSec: state.cameraDebounceSec });
   refreshCaptureSettingsAvailability();
 
@@ -30544,6 +30619,8 @@
       window.PMCCameraBridge.reportCueEvent(msg);
     } else if (msg.type === "camera-settings-state") {
       window.PMCCameraBridge.reportCameraSettings(msg.settings);
+    } else if (msg.type === "camera-status") {
+      window.PMCCameraBridge.reportCameraStatus(msg.status);
     }
   });
 

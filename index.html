@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261008e">
+<link rel="stylesheet" href="css/style.css?v=20261008f">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -352,6 +352,7 @@
           <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
         </button>
         <div class="panel-body" id="camera-setup-panel-body">
+          <div class="camera-status-lights" id="setup-status-lights" aria-live="polite"></div>
           <div class="camera-wizard-path-choice" id="camera-wizard-path-choice">
             <button type="button" id="camera-wizard-path-phone" class="btn btn-ghost camera-wizard-path-btn" data-i18n="cameraWizard.pathPhone">📱 Use a separate phone</button>
             <button type="button" id="camera-wizard-path-same-device" class="btn btn-ghost camera-wizard-path-btn" data-i18n="cameraWizard.pathSameDevice">📷 Use this tablet's own camera</button>
@@ -411,6 +412,33 @@
         </button>
         <p class="panel-summary" id="capture-settings-panel-summary" data-i18n="visualScoring.captureSettingsSummary">How the camera decides who's shooting: match sensitivity, timing, bend angles and distance from the table.</p>
         <div class="panel-body" id="capture-settings-panel-body">
+          <p class="camera-candidate-status hidden" id="camera-candidate-status"></p>
+          <div class="camera-status-lights" id="capture-status-lights" aria-live="polite"></div>
+          <div class="settings-frame" id="tracking-frame">
+            <h5 class="settings-frame-title" data-i18n="visualScoring.trackingTitle">Tracking</h5>
+            <p class="wizard-step-explain" id="camera-enable-hint" data-i18n="cameraWizard.step2Explain">Once the camera phone is set up (it has its own guided setup), turn this on here so the tablet actually listens for it.</p>
+            <div class="row">
+              <label class="checkbox-row" id="camera-input-row">
+                <input type="checkbox" id="camera-input-checkbox">
+                <span data-i18n="players.cameraInputEnable">📷 Camera player recognition</span>
+              </label>
+              <button type="button" id="btn-camera-input-help" class="format-info-btn" data-i18n-aria-label="players.cameraInputHelpAria" aria-label="What does camera player recognition do?">❓</button>
+            </div>
+            <div class="row capture-setting-row">
+              <label class="checkbox-row">
+                <input type="checkbox" id="capture-cue-detection" checked>
+                <span><span data-i18n="players.cameraCueDetection">🎯 Cue stick detection</span><small class="setting-comment" data-i18n="visualScoring.cueDetectionComment">Enhance player recognition</small></span>
+              </label>
+              <button type="button" id="btn-capture-cue-detection-help" class="format-info-btn" data-i18n-aria-label="players.cameraCueDetectionHelpAria" aria-label="What does Cue stick detection do?">❓</button>
+            </div>
+            <div class="row" id="camera-ball-tracking-row">
+              <label class="checkbox-row">
+                <input type="checkbox" id="camera-ball-tracking-checkbox">
+                <span data-i18n="players.cameraBallTrackingEnable">🎱 Ball tracking (Straight Pool): auto-credit pocketed balls</span>
+              </label>
+              <button type="button" id="btn-camera-ball-tracking-help" class="format-info-btn" data-i18n-aria-label="players.cameraBallTrackingHelpAria" aria-label="What does ball tracking do?">❓</button>
+            </div>
+          </div>
           <p class="wizard-step-explain hidden" id="capture-settings-waiting" data-i18n="visualScoring.captureWaiting">Turn on Camera player recognition and connect the camera phone - its settings show up here once it's connected.</p>
           <fieldset class="capture-settings-fields" id="capture-settings-fields">
             <div class="settings-frame" id="matching-players-frame">
@@ -463,25 +491,9 @@
               <input type="number" id="capture-ball-confirm" min="2" max="6" step="1" value="3">
               <button type="button" id="btn-capture-ball-confirm-help" class="format-info-btn" data-i18n-aria-label="players.cameraBallConfirmHelpAria" aria-label="What does Still passes before a pocketed ball counts do?">❓</button>
             </div>
-            <div class="row capture-setting-row">
-              <label class="checkbox-row">
-                <input type="checkbox" id="capture-cue-detection" checked>
-                <span data-i18n="players.cameraCueDetection">🎯 Cue stick detection</span>
-              </label>
-              <button type="button" id="btn-capture-cue-detection-help" class="format-info-btn" data-i18n-aria-label="players.cameraCueDetectionHelpAria" aria-label="What does Cue stick detection do?">❓</button>
-            </div>
           </fieldset>
         </div>
       </div>
-      <p class="wizard-step-explain" id="camera-enable-hint" data-i18n="cameraWizard.step2Explain">Once the camera phone is set up (it has its own guided setup), turn this on here so the tablet actually listens for it.</p>
-      <div class="row">
-        <label class="checkbox-row" id="camera-input-row">
-          <input type="checkbox" id="camera-input-checkbox">
-          <span data-i18n="players.cameraInputEnable">📷 Camera player recognition</span>
-        </label>
-        <button type="button" id="btn-camera-input-help" class="format-info-btn" data-i18n-aria-label="players.cameraInputHelpAria" aria-label="What does camera player recognition do?">❓</button>
-      </div>
-      <p class="camera-candidate-status hidden" id="camera-candidate-status"></p>
       <div class="row hidden" id="camera-remote-calibrate-row">
         <button type="button" id="btn-start-remote-calibration" class="btn btn-ghost" data-i18n="players.cameraRemoteCalibrateButton">📐 Calibrate Table Remotely</button>
         <button type="button" id="btn-camera-remote-calibrate-help" class="format-info-btn" data-i18n-aria-label="players.cameraRemoteCalibrateHelpAria" aria-label="What does Calibrate Table Remotely do?">❓</button>
@@ -489,13 +501,6 @@
       <div class="row hidden" id="camera-remote-viewer-row">
         <button type="button" id="btn-open-remote-viewer" class="btn btn-ghost" data-i18n="players.cameraRemoteViewerButton">📷 Full Camera Setup (Remote)</button>
         <button type="button" id="btn-camera-remote-viewer-help" class="format-info-btn" data-i18n-aria-label="players.cameraRemoteViewerHelpAria" aria-label="What does Full Camera Setup (Remote) do?">❓</button>
-      </div>
-      <div class="row hidden" id="camera-ball-tracking-row">
-        <label class="checkbox-row">
-          <input type="checkbox" id="camera-ball-tracking-checkbox">
-          <span data-i18n="players.cameraBallTrackingEnable">🎱 Ball tracking (Straight Pool): auto-credit pocketed balls</span>
-        </label>
-        <button type="button" id="btn-camera-ball-tracking-help" class="format-info-btn" data-i18n-aria-label="players.cameraBallTrackingHelpAria" aria-label="What does ball tracking do?">❓</button>
       </div>
       <div class="settings-frame hidden" id="camera-debug-options-row">
         <h4 class="settings-frame-title" data-i18n="visualScoring.debugFrameTitle">Debugging visual matching</h4>
@@ -2489,7 +2494,7 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20261008e"></script>
-<script src="js/camera-client.js?v=20261008e"></script>
+<script src="js/app.js?v=20261008f"></script>
+<script src="js/camera-client.js?v=20261008f"></script>
 </body>
 </html>

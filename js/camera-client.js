@@ -264,6 +264,8 @@
       else if (msg.type === "ball_pocketed" || msg.type === "ball_rerack" || msg.type === "ball_reappeared") handleBallEvent(msg);
       else if (msg.type === "cue_event") handleCueEvent(msg);
       else if (msg.type === "camera-settings-state") handleCameraSettingsState(msg);
+      else if (msg.type === "camera-status" && bridgeReady() && typeof window.PMCCameraBridge.reportCameraStatus === "function") window.PMCCameraBridge.reportCameraStatus(msg.status);
+      else if (msg.type === "camera-presence" && bridgeReady() && typeof window.PMCCameraBridge.reportCameraPresence === "function") window.PMCCameraBridge.reportCameraPresence(msg.cameras);
     });
     ws.addEventListener("close", function () {
       ws = null;

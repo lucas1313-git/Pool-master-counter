@@ -94,6 +94,11 @@
 //     { type: "camera-settings-request" } (listener -> cameras)
 //     { type: "camera-settings-state", settings: {...} }
 //       (camera -> listeners; what the camera is actually using)
+//     { type: "camera-status", status: { link, models, camera } }
+//       (camera -> listeners; its status lights, as codes)
+//     { type: "camera-presence", cameras: N }
+//       (relay -> listeners; on a listener's hello, and whenever a
+//       camera connects or drops)
 //   Cue stick over the table (camera.html's cue tracking):
 //     { type: "cue_event", event: "detected" | "gone" | "shooter" |
 //       "no-shooter", lengthIn?, player_name?, via?, resent?, ts }
@@ -252,9 +257,15 @@ function createCameraRelay(WebSocket) {
 
         if (msg.type === "hello") {
           ws.role = msg.role === "camera" ? "camera" : msg.role === "listener" ? "listener" : msg.role === "viewer" ? "viewer" : null;
-          if (ws.role === "listener") listenerSockets.add(ws);
+          if (ws.role === "listener") {
+            listenerSockets.add(ws);
+            // How many camera phones are connected right now - the
+            // tablet's camera status lights start from this.
+            send(ws, { type: "camera-presence", cameras: cameraSockets.size });
+          }
           if (ws.role === "camera") {
             cameraSockets.add(ws);
+            broadcastToListeners({ type: "camera-presence", cameras: cameraSockets.size });
             // A camera connecting (or reconnecting) AFTER a viewer is
             // already watching previously never learned that - the
             // viewer-connected notice only fired at the moment the
@@ -407,6 +418,12 @@ function createCameraRelay(WebSocket) {
           broadcastToListeners({ type: "camera-settings-state", settings: msg.settings });
           return;
         }
+        // The camera's three status lights (connection, models, camera),
+        // as codes - the tablet shows the same lights in Visual Scoring.
+        if (msg.type === "camera-status" && ws.role === "camera" && msg.status && typeof msg.status === "object") {
+          broadcastToListeners({ type: "camera-status", status: { link: msg.status.link, models: msg.status.models, camera: msg.status.camera } });
+          return;
+        }
 
         // Same request/reply shape as settings-request/settings - lets
         // camera.html's enroll picker offer the tablet's real player
@@ -528,7 +545,8 @@ function createCameraRelay(WebSocket) {
 
       ws.on("close", function () {
         listenerSockets.delete(ws);
-        cameraSockets.delete(ws);
+        var wasCamera = cameraSockets.delete(ws);
+        if (wasCamera) broadcastToListeners({ type: "camera-presence", cameras: cameraSockets.size });
         if (ws.role === "viewer") {
           viewerSockets.delete(ws);
           if (viewerSockets.size === 0) broadcastToCameras({ type: "hello-viewer-disconnected" });
