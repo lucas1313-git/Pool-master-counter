@@ -4604,6 +4604,28 @@ input[type="number"] {
   font-size: 1rem;
 }
 
+/* Where to put this device's camera: a drawing of the room (camera high
+   in a ceiling corner, the table, the area about 3 ft around it). Its
+   labels are translated like any other text; white with a dark outline
+   so they read on the light walls and on the page. */
+.camera-placement-diagram {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: 12px;
+}
+
+.camera-placement-diagram .cp-label {
+  font-family: inherit;
+  font-size: 24px;
+  font-weight: 800;
+  fill: #ffffff;
+  stroke: #141414;
+  stroke-width: 5px;
+  stroke-linejoin: round;
+  paint-order: stroke;
+}
+
 .camera-path-card .wizard-step-sub {
   margin-top: 10px;
 }
