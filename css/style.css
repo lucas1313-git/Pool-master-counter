@@ -4622,6 +4622,11 @@ input[type="number"] {
   font-size: 1rem;
 }
 
+#camera-wizard-install-unsupported {
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
 /* Where to put this device's camera: a drawing of the room (camera high
    in a ceiling corner, the table, the area about 3 ft around it). Its
    labels are translated like any other text; white with a dark outline

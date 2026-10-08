@@ -996,7 +996,7 @@
   "cameraWizard.installStepInstall": "2. Install",
   "cameraWizard.installStepRun": "3. Run",
   "cameraWizard.installButton": "⬇️ Download for {{os}}",
-  "cameraWizard.installUnsupportedOs": "This needs a desktop computer - it won't run on a phone or tablet.",
+  "cameraWizard.installUnsupportedOs": "This option needs a desktop computer that will automatically set a hub for your phone - it won't run on a phone or tablet.",
   "players.ratingPlaceholder": "Starting rating (optional)",
   "players.recomputeAllRatings": "🔧 Recompute All Ratings From Game History",
   "players.resetAllRatings": "⚠️ Reset All Players' Official Rating",
