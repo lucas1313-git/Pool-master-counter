@@ -1885,7 +1885,8 @@
   var remoteViewerOverlay = document.getElementById("remote-viewer-overlay");
   var remoteViewerIframe = document.getElementById("remote-viewer-iframe");
   var btnCloseRemoteViewer = document.getElementById("btn-close-remote-viewer");
-  var cameraMatchThresholdInput = document.getElementById("camera-match-threshold");
+  var cameraMatchSlider = document.getElementById("camera-match-slider");
+  var cameraMatchLevelInput = document.getElementById("camera-match-level");
   var cameraDebounceSecInput = document.getElementById("camera-debounce-sec");
   var captureSettingsWaiting = document.getElementById("capture-settings-waiting");
   var captureSettingsFields = document.getElementById("capture-settings-fields");
@@ -29343,7 +29344,7 @@
     alertModal(T("players.cameraInputHelpText"));
   });
   btnCameraMatchThresholdHelp.addEventListener("click", function () {
-    alertModal(T("players.cameraMatchThresholdHelpText"));
+    alertModal(T("players.cameraMatchSliderHelpText"));
   });
   btnCameraDebounceSecHelp.addEventListener("click", function () {
     alertModal(T("players.cameraDebounceSecHelpText"));
@@ -29358,15 +29359,9 @@
     alertModal(T("players.cameraRemoteCalibrateHelpText"));
   });
 
-  // Match sensitivity / Re-announce after are two of the Capture
-  // Settings below - kept in state too, since the camera's own
-  // settings-request is still answered from there.
-  cameraMatchThresholdInput.addEventListener("input", function () {
-    var value = parseFloat(cameraMatchThresholdInput.value);
-    if (!(value > 0)) return;
-    state.cameraMatchThreshold = value;
-    saveState();
-  });
+  // Re-announce after (and matching sensitivity, see the Matching
+  // players slider) are Capture Settings too - kept in state as well,
+  // since the camera's own settings-request is still answered from there.
 
   cameraDebounceSecInput.addEventListener("input", function () {
     var value = parseInt(cameraDebounceSecInput.value, 10);
@@ -30310,7 +30305,7 @@
   // fields stay disabled - there's nowhere for a change to go.
   // Defaults mirror camera.html's own settings object.
   var CAPTURE_SETTINGS = [
-    { key: "matchThreshold", el: cameraMatchThresholdInput, kind: "float", def: 1.2, help: "players.cameraMatchThresholdHelpText" },
+    { key: "matchThreshold", el: cameraMatchLevelInput, kind: "match", def: 1.2 },
     { key: "debounceSec", el: cameraDebounceSecInput, kind: "int", def: 10, help: "players.cameraDebounceSecHelpText" },
     { key: "consecutiveFrames", id: "capture-consecutive-frames", kind: "int", def: 3, help: "players.cameraConsecutiveFramesHelpText" },
     { key: "bendEnterAngle", id: "capture-bend-enter", kind: "float", def: 30, help: "players.cameraBendEnterHelpText" },
@@ -30338,7 +30333,11 @@
     CAPTURE_SETTINGS.forEach(function (c) {
       var v = values && typeof values[c.key] === typeof c.def ? values[c.key] : c.def;
       if (document.activeElement === c.el) return; // don't fight someone mid-edit
-      if (c.kind === "bool") c.el.checked = !!v;
+      if (c.kind === "match") {
+        var level = matchThresholdToLevel(v);
+        c.el.value = level;
+        if (document.activeElement !== cameraMatchSlider) cameraMatchSlider.value = level;
+      } else if (c.kind === "bool") c.el.checked = !!v;
       else c.el.value = v;
     });
   }
@@ -30381,7 +30380,52 @@
     }
   }
 
+  // "Matching players": a 0-6 level, 3 = the default, converted to the
+  // camera's match threshold (an appearance distance - lower is
+  // stricter). 0 can never match anyone (threshold 0); 6 matches anyone
+  // to their closest enrolled player (9 is past the largest distance two
+  // appearances can be apart - four normalized histograms, at most 2
+  // each, plus the build term). Linear on each side of the default.
+  var MATCH_DEFAULT_THRESHOLD = 1.2, MATCH_EVERYTHING_THRESHOLD = 9;
+  function matchLevelToThreshold(level) {
+    level = Math.max(0, Math.min(6, level));
+    var t = level <= 3 ? level / 3 * MATCH_DEFAULT_THRESHOLD : MATCH_DEFAULT_THRESHOLD + (level - 3) / 3 * (MATCH_EVERYTHING_THRESHOLD - MATCH_DEFAULT_THRESHOLD);
+    return Math.round(t * 100) / 100;
+  }
+  function matchThresholdToLevel(t) {
+    t = Math.max(0, t);
+    var level = t <= MATCH_DEFAULT_THRESHOLD ? t / MATCH_DEFAULT_THRESHOLD * 3 : 3 + (t - MATCH_DEFAULT_THRESHOLD) / (MATCH_EVERYTHING_THRESHOLD - MATCH_DEFAULT_THRESHOLD) * 3;
+    return Math.round(Math.min(6, level) * 10) / 10;
+  }
+  function readMatchLevel(el) {
+    var v = parseFloat(el.value);
+    if (isNaN(v)) return null;
+    return Math.round(Math.max(0, Math.min(6, v)) * 10) / 10;
+  }
+  // The slider and the number box mirror each other while either moves;
+  // letting go of either one (change) applies it.
+  cameraMatchSlider.addEventListener("input", function () {
+    cameraMatchLevelInput.value = cameraMatchSlider.value;
+  });
+  cameraMatchLevelInput.addEventListener("input", function () {
+    var level = readMatchLevel(cameraMatchLevelInput);
+    if (level !== null) cameraMatchSlider.value = level;
+  });
+  [cameraMatchSlider, cameraMatchLevelInput].forEach(function (el) {
+    el.addEventListener("change", function () {
+      var level = readMatchLevel(el);
+      if (level === null) return;
+      cameraMatchSlider.value = level;
+      cameraMatchLevelInput.value = level;
+      var threshold = matchLevelToThreshold(level);
+      state.cameraMatchThreshold = threshold;
+      saveState();
+      pushCaptureSetting("matchThreshold", threshold);
+    });
+  });
+
   CAPTURE_SETTINGS.forEach(function (c) {
+    if (c.kind === "match") return; // the slider above
     c.el.addEventListener("change", function () {
       var v = readCaptureInput(c);
       if (v === null) return;

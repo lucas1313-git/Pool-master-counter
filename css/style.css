@@ -7432,6 +7432,123 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   margin-top: 0;
 }
 
+/* A titled, bordered group inside a section (Visual Scoring's
+   "Debugging visual matching" and "Matching players"): its items stack
+   one under the other, and it grows with them like any section. */
+.settings-frame {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin: 12px 0;
+}
+
+.settings-frame-title {
+  margin: 0 0 10px;
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--accent);
+}
+
+.settings-frame-item {
+  margin-bottom: 6px;
+}
+
+/* Matching sensitivity slider, 0-6, with the numbers (and what 0, 3 and
+   6 mean) right under their stops. The thumb size is fixed so the scale
+   can line up with where the thumb actually sits: stop i is at
+   thumb/2 + (width - thumb) * i/6. */
+.match-slider {
+  --match-thumb: 22px;
+  margin: 4px 0 2px;
+}
+
+.match-slider input[type="range"] {
+  width: 100%;
+  margin: 0;
+  accent-color: var(--accent);
+  height: var(--match-thumb);
+}
+
+.match-slider input[type="range"]::-webkit-slider-thumb {
+  width: var(--match-thumb);
+  height: var(--match-thumb);
+}
+
+.match-slider-scale {
+  position: relative;
+  height: 4.1em;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+.match-tick {
+  position: absolute;
+  top: 0;
+  left: calc(var(--match-thumb) / 2 + (100% - var(--match-thumb)) * var(--i) / 6);
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* At most about a third of the slider each, so on a narrow screen a
+     long label wraps onto a second line instead of running into the
+     next one ("Default" sits in the middle third). */
+  max-width: 32%;
+  text-align: center;
+  line-height: 1.3;
+}
+
+/* The end labels hug their edge instead of centring past it. */
+.match-tick[style*="--i:0"] {
+  left: 0;
+  transform: none;
+  align-items: flex-start;
+  padding-left: calc(var(--match-thumb) / 2 - 0.3em);
+}
+
+.match-tick[style*="--i:6"] {
+  left: auto;
+  right: 0;
+  transform: none;
+  align-items: flex-end;
+  padding-right: calc(var(--match-thumb) / 2 - 0.3em);
+}
+
+.match-tick[style*="--i:0"] > span {
+  text-align: left;
+}
+
+.match-tick[style*="--i:6"] > span {
+  text-align: right;
+}
+
+.match-tick b {
+  color: var(--text);
+}
+
+/* Visual Scoring: a checkbox, its text and its "?" stay on one line -
+   long text wraps beside its checkbox instead of the checkbox (or the
+   "?") wrapping away onto a line of its own on a narrow screen. */
+#visual-scoring-panel .row:has(> .checkbox-row) {
+  flex-wrap: nowrap;
+  align-items: flex-start;
+}
+
+#visual-scoring-panel .row > .checkbox-row {
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+}
+
+#visual-scoring-panel .row > .checkbox-row > span {
+  min-width: 0;
+  padding-top: 1px;
+}
+
+#visual-scoring-panel .row > .format-info-btn {
+  flex: 0 0 auto;
+}
+
 /* Visual Scoring > Capture Settings: one setting per row (label, input,
    "?"), in a fieldset only so the whole group can be disabled at once
    while a separate camera phone hasn't reported its values yet. */

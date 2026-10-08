@@ -479,7 +479,7 @@
       <select id="cameraSelect"></select>
 
       <label for="thresholdInput">Appearance match distance (lower = stricter)</label><button type="button" class="help-btn" data-help="threshold" aria-label="What does this do?">?</button>
-      <input type="number" id="thresholdInput" min="0.1" max="4" step="0.1" value="1.2">
+      <input type="number" id="thresholdInput" min="0" max="9" step="0.1" value="1.2">
 
       <label for="consecutiveInput">Consecutive frames required</label><button type="button" class="help-btn" data-help="consecutive" aria-label="What does this do?">?</button>
       <input type="number" id="consecutiveInput" min="1" max="10" step="1" value="3">
@@ -934,7 +934,9 @@
     CAPTURE_SETTING_KEYS.forEach(function (k) {
       var v = incoming[k];
       if (typeof v !== typeof settings[k] || v === settings[k]) return;
-      if (typeof v === "number" && !(v > 0)) return;
+      // 0 is a real choice for the match threshold ("No matching" on the
+      // scoreboard's slider); every other number has to be positive.
+      if (typeof v === "number" && !(v > 0) && !(k === "matchThreshold" && v === 0)) return;
       settings[k] = v;
       changed.push(k + " " + v);
     });

@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261008d">
+<link rel="stylesheet" href="css/style.css?v=20261008e">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -348,7 +348,7 @@
     <div class="panel-body" id="visual-scoring-panel-body">
       <div class="backup-subsection collapsible-panel collapsed" id="camera-setup-panel">
         <button type="button" class="panel-toggle" id="btn-toggle-camera-setup-panel" aria-expanded="false" aria-controls="camera-setup-panel-body">
-          <h4 class="backup-subsection-title" data-i18n="cameraWizard.step1Heading">Set Up Camera Recognition</h4>
+          <h4 class="backup-subsection-title" data-i18n="visualScoring.selectCameraHeading">Select Camera</h4>
           <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
         </button>
         <div class="panel-body" id="camera-setup-panel-body">
@@ -413,10 +413,25 @@
         <div class="panel-body" id="capture-settings-panel-body">
           <p class="wizard-step-explain hidden" id="capture-settings-waiting" data-i18n="visualScoring.captureWaiting">Turn on Camera player recognition and connect the camera phone - its settings show up here once it's connected.</p>
           <fieldset class="capture-settings-fields" id="capture-settings-fields">
-            <div class="row capture-setting-row">
-              <label for="camera-match-threshold" data-i18n="players.cameraMatchThreshold">Match sensitivity</label>
-              <input type="number" id="camera-match-threshold" min="0.1" max="4" step="0.1" value="1.2">
-              <button type="button" id="btn-camera-match-threshold-help" class="format-info-btn" data-i18n-aria-label="players.cameraMatchThresholdHelpAria" aria-label="What does Match sensitivity do?">❓</button>
+            <div class="settings-frame" id="matching-players-frame">
+              <h5 class="settings-frame-title" data-i18n="visualScoring.matchingPlayersTitle">Matching players</h5>
+              <div class="row capture-setting-row">
+                <label for="camera-match-level" data-i18n="visualScoring.matchSliderLabel">Set matching sensitivity</label>
+                <input type="number" id="camera-match-level" min="0" max="6" step="0.1" value="3">
+                <button type="button" id="btn-camera-match-threshold-help" class="format-info-btn" data-i18n-aria-label="players.cameraMatchThresholdHelpAria" aria-label="What does Match sensitivity do?">❓</button>
+              </div>
+              <div class="match-slider">
+                <input type="range" id="camera-match-slider" min="0" max="6" step="0.1" value="3" data-i18n-aria-label="visualScoring.matchSliderLabel" aria-label="Set matching sensitivity">
+                <div class="match-slider-scale" aria-hidden="true">
+                  <span class="match-tick" style="--i:0"><b>0</b><span data-i18n="visualScoring.matchNone">No matching</span></span>
+                  <span class="match-tick" style="--i:1"><b>1</b></span>
+                  <span class="match-tick" style="--i:2"><b>2</b></span>
+                  <span class="match-tick" style="--i:3"><b>3</b><span data-i18n="visualScoring.matchDefault">Default</span></span>
+                  <span class="match-tick" style="--i:4"><b>4</b></span>
+                  <span class="match-tick" style="--i:5"><b>5</b></span>
+                  <span class="match-tick" style="--i:6"><b>6</b><span data-i18n="visualScoring.matchEverything">Match everything</span></span>
+                </div>
+              </div>
             </div>
             <div class="row capture-setting-row">
               <label for="camera-debounce-sec" data-i18n="players.cameraDebounceSec">Re-announce after (sec)</label>
@@ -482,24 +497,31 @@
         </label>
         <button type="button" id="btn-camera-ball-tracking-help" class="format-info-btn" data-i18n-aria-label="players.cameraBallTrackingHelpAria" aria-label="What does ball tracking do?">❓</button>
       </div>
-      <div class="row hidden" id="camera-debug-options-row">
-        <label class="checkbox-row">
-          <input type="checkbox" id="camera-debug-checkbox">
-          <span data-i18n="players.cameraDebugEnable">👁️ Show camera debug info during play</span>
-        </label>
-        <button type="button" id="btn-camera-debug-help" class="format-info-btn" data-i18n-aria-label="players.cameraDebugEnableHelpAria" aria-label="What does Show camera debug info do?">❓</button>
-        <label class="checkbox-row">
-          <input type="checkbox" id="camera-voice-checkbox">
-          <span data-i18n="players.cameraVoiceEnable">🔊 Speak player status (seen / shooting)</span>
-        </label>
-        <button type="button" id="btn-camera-voice-help" class="format-info-btn" data-i18n-aria-label="players.cameraVoiceEnableHelpAria" aria-label="What does Speak player status do?">❓</button>
-        <label class="checkbox-row">
-          <input type="checkbox" id="camera-cue-debug-checkbox">
-          <span data-i18n="players.cameraCueDebugEnable">🎯 Cue debug mode (log, overlay and voice when a cue is over the table)</span>
-        </label>
-        <button type="button" id="btn-camera-cue-debug-help" class="format-info-btn" data-i18n-aria-label="players.cameraCueDebugHelpAria" aria-label="What does Cue debug mode do?">❓</button>
+      <div class="settings-frame hidden" id="camera-debug-options-row">
+        <h4 class="settings-frame-title" data-i18n="visualScoring.debugFrameTitle">Debugging visual matching</h4>
+        <div class="row settings-frame-item">
+          <label class="checkbox-row">
+            <input type="checkbox" id="camera-debug-checkbox">
+            <span data-i18n="players.cameraDebugEnable">👁️ Show camera debug info during play</span>
+          </label>
+          <button type="button" id="btn-camera-debug-help" class="format-info-btn" data-i18n-aria-label="players.cameraDebugEnableHelpAria" aria-label="What does Show camera debug info do?">❓</button>
+        </div>
+        <div class="row settings-frame-item">
+          <label class="checkbox-row">
+            <input type="checkbox" id="camera-voice-checkbox">
+            <span data-i18n="players.cameraVoiceEnable">🔊 Speak player status (seen / shooting)</span>
+          </label>
+          <button type="button" id="btn-camera-voice-help" class="format-info-btn" data-i18n-aria-label="players.cameraVoiceEnableHelpAria" aria-label="What does Speak player status do?">❓</button>
+        </div>
+        <div class="row settings-frame-item">
+          <label class="checkbox-row">
+            <input type="checkbox" id="camera-cue-debug-checkbox">
+            <span data-i18n="players.cameraCueDebugEnable">🎯 Cue debug mode (log, overlay and voice when a cue is over the table)</span>
+          </label>
+          <button type="button" id="btn-camera-cue-debug-help" class="format-info-btn" data-i18n-aria-label="players.cameraCueDebugHelpAria" aria-label="What does Cue debug mode do?">❓</button>
+        </div>
+        <div class="camera-diagnostic-log hidden" id="camera-diagnostic-log"></div>
       </div>
-      <div class="camera-diagnostic-log hidden" id="camera-diagnostic-log"></div>
       <div id="camera-inline-preview-wrap" class="hidden">
         <button type="button" id="btn-expand-same-device-camera" class="btn btn-ghost" data-i18n="cameraWizard.expandButton">⛶ Full Screen</button>
         <div id="camera-inline-preview-home" class="camera-inline-preview hidden"></div>
@@ -2467,7 +2489,7 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20261008d"></script>
-<script src="js/camera-client.js?v=20261008d"></script>
+<script src="js/app.js?v=20261008e"></script>
+<script src="js/camera-client.js?v=20261008e"></script>
 </body>
 </html>
