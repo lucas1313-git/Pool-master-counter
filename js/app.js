@@ -30678,6 +30678,7 @@
     var text = document.getElementById("camera-enrollment-text");
     var roster = state.players.map(function (p) { return p.name; });
     line.title = "";
+    if (typeof refreshClearEnrollmentsButton === "function") refreshClearEnrollmentsButton();
     if (!roster.length) {
       dot.className = "camera-light-dot";
       text.textContent = T("visualScoring.enrolledNoPlayers");
@@ -30696,11 +30697,51 @@
       return;
     }
     var missing = roster.filter(function (name) { return !isEnrolled(name); });
+    if (typeof refreshClearEnrollmentsButton === "function") refreshClearEnrollmentsButton();
     dot.className = "camera-light-dot " + (missing.length ? "bad" : "ok");
     text.textContent = T("visualScoring.enrolledCount", { enrolled: roster.length - missing.length, total: roster.length });
     if (missing.length) line.title = T("visualScoring.enrolledMissing", { names: missing.join(", ") });
   }
   window.PMCCameraBridge.renderEnrollmentStatus = renderEnrollmentStatus;
+
+  // Capture Settings > Remove all enrollments: wipes what the camera has
+  // learned about every player (a new session, new outfits). Only the
+  // camera in use is touched - this tablet's own camera, or the camera
+  // phone's store on the relay - never the other one's.
+  var clearEnrollmentsBtn = document.getElementById("btn-capture-clear-enrollments");
+  function enrolledNamesNow() {
+    if (state.sameDeviceCameraSetUp) {
+      var stored = loadCameraEnrollmentsFromStorage();
+      return Object.keys(stored).filter(function (key) {
+        return stored[key] && Array.isArray(stored[key].descriptors) && stored[key].descriptors.length > 0;
+      }).map(function (key) { return stored[key].displayName || key; });
+    }
+    return relayEnrolledNames ? relayEnrolledNames.slice() : [];
+  }
+  function refreshClearEnrollmentsButton() {
+    if (clearEnrollmentsBtn) clearEnrollmentsBtn.disabled = !enrolledNamesNow().length;
+  }
+  clearEnrollmentsBtn.addEventListener("click", function () {
+    var names = enrolledNamesNow();
+    if (!names.length) return;
+    confirmModal(T("visualScoring.clearEnrollmentsConfirm", { count: names.length }), function () {
+      if (state.sameDeviceCameraSetUp) {
+        if (sameDeviceCameraRunning) {
+          // The camera page keeps its own copy and saves it back - it has
+          // to do the deleting, or it would write everyone back.
+          names.forEach(function (name) { sendToSameDeviceCamera({ type: "enroll-delete", player_name: name }); });
+        } else {
+          try { localStorage.setItem(CAMERA_ENROLLMENTS_KEY, "{}"); } catch (e) {}
+        }
+      } else {
+        // The relay deletes each one, tells every camera, and sends the
+        // new enrolled list back (enrollment-names).
+        names.forEach(function (name) { notifyCameraEnrollDelete(name); });
+      }
+      setTimeout(function () { renderEnrollmentStatus(); updateCameraIconsOnScorecard(); }, 600);
+      showToast(T("visualScoring.clearEnrollmentsDone"));
+    });
+  });
   window.PMCCameraBridge.reportEnrollmentNames = function (names) {
     relayEnrolledNames = Array.isArray(names) ? names : null;
     renderEnrollmentStatus();
