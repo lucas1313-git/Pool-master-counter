@@ -29516,9 +29516,12 @@
   // reachable); loadCameraWizardLinkInfo overrides that default to
   // "same-device" only in the no-relay case, and only if the user hasn't
   // already clicked a path themselves.
+  // The phone card always shows its own details - the link/QR, or (no
+  // local server, e.g. running from the website) why it needs the
+  // installed app and where to download it - whichever card is picked.
+  // Only this device's start button / HTTPS warning wait for its pick.
   function selectCameraWizardPath(path) {
     cameraWizardPath = path;
-    cameraWizardPhonePath.classList.toggle("hidden", path !== "phone");
     cameraWizardSameDevicePath.classList.toggle("hidden", path !== "same-device");
     btnCameraWizardPathPhone.classList.toggle("is-active", path === "phone");
     btnCameraWizardPathSameDevice.classList.toggle("is-active", path === "same-device");
