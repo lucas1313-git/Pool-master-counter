@@ -2023,6 +2023,7 @@
   var BALL_FELT_HUE_TOLERANCE_DEG = 22;
   var BALL_MIN_SAT_FOR_FELT = 0.22;
   var BALL_DARK_V_RATIO = 0.28;
+  var BALL_BRIGHT_V_RATIO = 1.45; // brighter than this x the felt's own brightness = not felt
   // The search area is the calibrated felt pulled in by this much on every
   // side (real inches), so the cushion nose / rail edge right on the
   // calibration line can never read as a ball. A ball frozen against the
@@ -2093,9 +2094,11 @@
       var area = 0, sumX = 0, sumY = 0, whiteCount = 0, sumV = 0;
       var sumXX = 0, sumYY = 0, sumXY = 0; // second moments - see roundness below
       var minX = w, maxX = -1, minY = h, maxY = -1;
+      var pixels = [];
       while (stack.length) {
         var idx = stack.pop();
         var x = idx % w, y = (idx / w) | 0;
+        pixels.push(idx);
         area++; sumX += x; sumY += y; sumV += vArr[idx];
         sumXX += x * x; sumYY += y * y; sumXY += x * y;
         if (sArr[idx] < 0.25 && vArr[idx] > 0.7) whiteCount++;
@@ -2110,6 +2113,7 @@
       blobs.push({
         area: area, cx: sumX / area, cy: sumY / area,
         bw: maxX - minX + 1, bh: maxY - minY + 1,
+        minX: minX, minY: minY, pixels: pixels,
         whiteFraction: whiteCount / area, meanV: sumV / area,
         // Covariance of the pixel positions about the centroid. For a
         // filled disc of radius r both diagonal terms are r^2/4 and the
@@ -2120,6 +2124,61 @@
       });
     }
     return blobs;
+  }
+
+  // How many ball-sized solid cores a blob contains: erode it by ~45% of
+  // a ball radius and count what survives as separate pieces. Two
+  // touching balls leave two cores; a ball with its shadow, a reflection
+  // or a chalk mark stuck to it leaves one (the attachment is thinner
+  // than a ball and erodes away); a streak or sliver leaves none. This
+  // is what tells "one ball + junk" apart from "two balls" - the area
+  // alone can't.
+  function countBallCores(blob, w, radiusCanvas) {
+    // 0.55 of a radius: deep enough to cut the neck between two touching
+    // balls even when their silhouettes overlap by a pixel or two, while
+    // a real ball (radius r) always keeps a solid core of radius ~0.45r.
+    var e = Math.max(1, Math.round(0.55 * radiusCanvas));
+    var lw = blob.bw, lh = blob.bh, ox = blob.minX, oy = blob.minY;
+    var local = new Uint8Array(lw * lh);
+    blob.pixels.forEach(function (idx) {
+      local[(((idx / w) | 0) - oy) * lw + (idx % w) - ox] = 1;
+    });
+    var eroded = new Uint8Array(lw * lh);
+    var e2 = e * e;
+    for (var y = 0; y < lh; y++) {
+      for (var x = 0; x < lw; x++) {
+        if (!local[y * lw + x]) continue;
+        var keep = true;
+        for (var dy = -e; dy <= e && keep; dy++) {
+          for (var dx = -e; dx <= e; dx++) {
+            if (dx * dx + dy * dy > e2) continue;
+            var xx = x + dx, yy = y + dy;
+            if (xx < 0 || yy < 0 || xx >= lw || yy >= lh || !local[yy * lw + xx]) { keep = false; break; }
+          }
+        }
+        if (keep) eroded[y * lw + x] = 1;
+      }
+    }
+    var seen = new Uint8Array(lw * lh), cores = [];
+    for (var s = 0; s < lw * lh; s++) {
+      if (!eroded[s] || seen[s]) continue;
+      var stack = [s], count = 0;
+      seen[s] = 1;
+      while (stack.length) {
+        var i = stack.pop(), cx = i % lw, cy = (i / lw) | 0;
+        count++;
+        if (cx > 0 && eroded[i - 1] && !seen[i - 1]) { seen[i - 1] = 1; stack.push(i - 1); }
+        if (cx < lw - 1 && eroded[i + 1] && !seen[i + 1]) { seen[i + 1] = 1; stack.push(i + 1); }
+        if (cy > 0 && eroded[i - lw] && !seen[i - lw]) { seen[i - lw] = 1; stack.push(i - lw); }
+        if (cy < lh - 1 && eroded[i + lw] && !seen[i + lw]) { seen[i + lw] = 1; stack.push(i + lw); }
+      }
+      cores.push(count);
+    }
+    // A real ball keeps a core of radius (r - e); anything well under
+    // half that core's area is a leftover sliver, not a ball.
+    var coreR = Math.max(1, radiusCanvas - e);
+    var minCore = 0.5 * Math.PI * coreR * coreR;
+    return cores.filter(function (a) { return a >= minCore; }).length;
   }
 
   // Returns { objectCount, cuePresent, balls, foreignPresent, feltHsv,
@@ -2234,11 +2293,16 @@
     var foreign = new Uint8Array(n);
     for (i = 0; i < n; i++) {
       if (!inside[i]) continue;
-      if (hueDistance(hArr[i], feltH) > BALL_FELT_HUE_TOLERANCE_DEG || sArr[i] < BALL_MIN_SAT_FOR_FELT || vArr[i] < BALL_DARK_V_RATIO * feltV) foreign[i] = 1;
+      // Bright pixels are never felt, whatever their hue: the white parts
+      // of a glossy ball (stripes, the cue ball) reflect the green cloth
+      // and can take on its hue, which used to leave only a striped
+      // ball's coloured band as the detected shape - "not round".
+      if (hueDistance(hArr[i], feltH) > BALL_FELT_HUE_TOLERANCE_DEG || sArr[i] < BALL_MIN_SAT_FOR_FELT || vArr[i] < BALL_DARK_V_RATIO * feltV || vArr[i] > BALL_BRIGHT_V_RATIO * feltV) foreign[i] = 1;
     }
     foreign = morphOpen(foreign, w, h);
 
     var blobs = labelComponents(foreign, w, h, sArr, vArr, 6);
+    if (window.PMCBallDebug) window.PMCBallDebug.lastBlobs = { blobs: blobs, w: w, h: h, scale: scale };
     var balls = [], foreignPresent = false, objectCount = 0;
     var singles = [], rejected = [];
     blobs.forEach(function (blob) {
@@ -2252,13 +2316,33 @@
       var alongX = applyInverseHomography(invH, real.x + BALL_DIAMETER_IN, real.y);
       var alongY = applyInverseHomography(invH, real.x, real.y + BALL_DIAMETER_IN);
       if (!here || !alongX || !alongY) return;
-      var dPx = (pointDist(here, alongX) + pointDist(here, alongY)) / 2;
-      var dCanvas = dPx * scale;
-      if (dCanvas < 3) return;
-      var ballArea = Math.PI * (dCanvas / 2) * (dCanvas / 2);
+      // Under perspective a ball's silhouette is an ellipse: its expected
+      // semi-axes here are the pixel lengths of 1.125in along each table
+      // axis (they differ a lot in an oblique view). Every size/shape
+      // test below is relative to that ellipse, not to a mean circle.
+      var dxPx = pointDist(here, alongX), dyPx = pointDist(here, alongY);
+      var dPx = (dxPx + dyPx) / 2;
+      var rxC = dxPx * scale / 2, ryC = dyPx * scale / 2;
+      var rMinC = Math.min(rxC, ryC);
+      if (rMinC < 1.5) return;
+      var ballArea = Math.PI * rxC * ryC;
       var aspect = Math.max(blob.bw, blob.bh) / Math.max(1, Math.min(blob.bw, blob.bh));
       var fill = blob.area / (blob.bw * blob.bh);
       var entry = { x: vp.x, y: vp.y, r: dPx / 2, kind: "object", count: 1, whiteFraction: blob.whiteFraction, meanV: blob.meanV };
+      // Shape, relative to the expected ellipse (so a true ball scores like
+      // a unit disc whatever the viewing angle):
+      //  roundness: ratio of the two principal spreads - 1 for a disc, ~0.2
+      //    for two balls side by side, in between for a ball with a shadow;
+      //  radiusRatio: the spread's implied radius in units of the expected
+      //    ball radius - 1 for a ball, ~1.7 for a touching pair.
+      var nxx = blob.cxx / (rxC * rxC), nyy = blob.cyy / (ryC * ryC), nxy = blob.cxy / (rxC * ryC);
+      var tr = nxx + nyy;
+      var det = nxx * nyy - nxy * nxy;
+      var disc = Math.sqrt(Math.max(0, tr * tr / 4 - det));
+      var e1 = tr / 2 + disc, e2 = tr / 2 - disc;
+      var roundness = e1 > 0 ? Math.max(0, e2) / e1 : 0;
+      var radiusRatio = 2 * Math.sqrt(Math.max(0, tr / 2));
+      entry.roundness = roundness; entry.fill = fill; entry.radiusRatio = radiusRatio;
       if (blob.area < 0.4 * ballArea) return;
       if (aspect > 3 || (blob.area > 2 * ballArea && fill < 0.45)) {
         entry.kind = "foreign";
@@ -2276,19 +2360,20 @@
         //    a thin diagonal much less),
         //  radius: the spread implies a radius (r = 2*sqrt(mean spread)
         //    for a disc) that has to agree with the expected ball size.
-        var tr = blob.cxx + blob.cyy;
-        var det = blob.cxx * blob.cyy - blob.cxy * blob.cxy;
-        var disc = Math.sqrt(Math.max(0, tr * tr / 4 - det));
-        var e1 = tr / 2 + disc, e2 = tr / 2 - disc;
-        var roundness = e1 > 0 ? Math.max(0, e2) / e1 : 0;
-        var momentRadius = 2 * Math.sqrt(Math.max(0, tr / 2));
-        var radiusRatio = momentRadius / (dCanvas / 2);
-        entry.roundness = roundness; entry.fill = fill; entry.radiusRatio = radiusRatio;
         var reason = null;
         if (roundness < BALL_MIN_ROUNDNESS) reason = "not round (" + roundness.toFixed(2) + ")";
         else if (fill < BALL_MIN_FILL || fill > BALL_MAX_FILL) reason = "not disc-shaped (fill " + fill.toFixed(2) + ")";
         else if (radiusRatio < 0.6 || radiusRatio > 1.4) reason = "wrong size (" + radiusRatio.toFixed(2) + "x)";
         if (reason) {
+          // Not round as a whole - but a ball with a shadow or a mark stuck
+          // to it still has exactly one ball-sized core inside. Rescue
+          // that case (the fill test above already threw out solid
+          // squares, which would also erode to one core).
+          if (fill <= BALL_MAX_FILL && countBallCores(blob, w, rMinC) === 1) {
+            entry.note = "core";
+            singles.push(entry);
+            return;
+          }
           entry.kind = "rejected";
           entry.reason = reason;
           rejected.push(entry);
@@ -2303,10 +2388,37 @@
         // A solid object (chalk cube, a hand, a glare patch) fills ~100%
         // and is NOT a pile of balls, however ball-sized it is.
         if (fill >= 0.45 && fill <= BALL_CLUSTER_MAX_FILL && aspect <= 4) {
-          entry.kind = "cluster";
-          entry.count = Math.max(2, Math.round(blob.area / ballArea));
+          // How many balls is this? The area says roughly N. Touching
+          // balls in real video merge into one solid blob (the felt gap
+          // between them is narrower than a pixel), so eroding to count
+          // cores only works when the balls are loosely grouped - it is
+          // trusted only when it roughly agrees with the area, never to
+          // turn a tight 15-ball rack into "3". The special case that
+          // matters most is N=2: a genuine pair is a dumbbell (strongly
+          // elongated, spread ~1.7x a ball); a ball with its shadow or a
+          // mark stuck to it is not - it counts as ONE ball.
+          var cores = countBallCores(blob, w, rMinC);
+          var areaCount = Math.max(2, Math.round(blob.area / ballArea));
           entry.r = Math.max(blob.bw, blob.bh) / scale / 2;
-          objectCount += entry.count;
+          entry.cores = cores;
+          var count;
+          if (cores === 0) {
+            entry.kind = "rejected";
+            entry.reason = "no ball-sized core";
+            rejected.push(entry);
+            return;
+          }
+          if (areaCount === 2) count = (roundness <= 0.3 && radiusRatio >= 1.4) ? 2 : 1;
+          else count = cores >= areaCount - 1 ? cores : areaCount;
+          if (count === 1) {
+            entry.r = dPx / 2;
+            entry.note = "core";
+            singles.push(entry);
+            return;
+          }
+          entry.kind = "cluster";
+          entry.count = count;
+          objectCount += count;
           balls.push(entry);
           return;
         }
@@ -2648,7 +2760,8 @@
     detect: detectBallsInFrame,
     runPass: runBallPass,
     reset: resetBallTracking,
-    settings: settings
+    settings: settings,
+    countBallCores: countBallCores
   };
   // Same idea for recognition: lets a test (or the console) see who the
   // camera currently considers eligible and what it has stored.
