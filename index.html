@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261008g">
+<link rel="stylesheet" href="css/style.css?v=20261008h">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -354,54 +354,57 @@
         <div class="panel-body" id="camera-setup-panel-body">
           <div class="camera-status-lights" id="setup-status-lights" aria-live="polite"></div>
           <div class="camera-wizard-path-choice" id="camera-wizard-path-choice">
-            <button type="button" id="camera-wizard-path-phone" class="btn btn-ghost camera-wizard-path-btn" data-i18n="cameraWizard.pathPhone">📱 Use a separate phone</button>
-            <button type="button" id="camera-wizard-path-same-device" class="btn btn-ghost camera-wizard-path-btn" data-i18n="cameraWizard.pathSameDevice">📷 Use this tablet's own camera</button>
-          </div>
-
-          <div class="wizard-step-sub hidden" id="camera-wizard-phone-path">
-            <p class="wizard-step-explain" data-i18n="cameraWizard.step1Explain">A phone mounted over the table watches for players and tells this tablet who's up. It needs to run on a <strong>different</strong> phone or tablet from this one - open the link below in its browser, or scan the QR code with its camera.</p>
-            <div id="camera-wizard-link-block" class="hidden">
-              <p class="group-session-join-url" id="camera-wizard-url"></p>
-              <img id="camera-wizard-qr" class="group-session-qr" alt="" data-i18n-aria-label="cameraWizard.qrHint" aria-label="Scan with the camera phone to open the setup page">
-              <p class="group-session-qr-hint" data-i18n="cameraWizard.qrHint">Scan with the camera phone</p>
-            </div>
-            <div id="camera-wizard-https-missing" class="hidden">
-              <p class="group-session-error" data-i18n="cameraWizard.httpsMissing">This computer's local server is running, but it doesn't have HTTPS set up yet, so the camera page can't run on another phone. If you're using the desktop app, give it a moment - this updates automatically once it's ready. If you're running the server from a terminal, see server/README.md's HTTPS setup section.</p>
-            </div>
-            <div id="camera-wizard-https-failed" class="hidden">
-              <p class="group-session-error" id="camera-wizard-https-failed-text"></p>
-              <button type="button" id="btn-camera-wizard-retry-https" class="btn btn-ghost" data-i18n="cameraWizard.retryButton">↻ Check Again</button>
-            </div>
-            <div id="camera-wizard-no-relay" class="hidden">
-              <p class="wizard-step-explain" data-i18n="cameraWizard.noRelayExplain">To run a phone as a camera, you need to install and run this app from your local computer.</p>
-            </div>
-            <div id="camera-wizard-install-prompt" class="hidden">
-              <div class="camera-wizard-install-steps">
-                <div class="camera-wizard-install-step">
-                  <span class="camera-wizard-install-step-icon" aria-hidden="true">⬇️</span>
-                  <span data-i18n="cameraWizard.installStepDownload">1. Download</span>
+            <div class="camera-path-card" id="camera-path-card-phone">
+              <button type="button" id="camera-wizard-path-phone" class="btn btn-ghost camera-wizard-path-btn" data-i18n="cameraWizard.pathPhone">📱 Use a separate phone</button>
+              <p class="wizard-step-explain camera-path-hint" data-i18n="cameraWizard.step1Explain">A phone mounted over the table watches for players and tells this tablet who's up. It needs to run on a <strong>different</strong> phone or tablet from this one - open the link below in its browser, or scan the QR code with its camera.</p>
+              <div class="wizard-step-sub hidden" id="camera-wizard-phone-path">
+                <div id="camera-wizard-link-block" class="hidden">
+                  <p class="group-session-join-url" id="camera-wizard-url"></p>
+                  <img id="camera-wizard-qr" class="group-session-qr" alt="" data-i18n-aria-label="cameraWizard.qrHint" aria-label="Scan with the camera phone to open the setup page">
+                  <p class="group-session-qr-hint" data-i18n="cameraWizard.qrHint">Scan with the camera phone</p>
                 </div>
-                <div class="camera-wizard-install-step">
-                  <span class="camera-wizard-install-step-icon" aria-hidden="true">📦</span>
-                  <span data-i18n="cameraWizard.installStepInstall">2. Install</span>
+                <div id="camera-wizard-https-missing" class="hidden">
+                  <p class="group-session-error" data-i18n="cameraWizard.httpsMissing">This computer's local server is running, but it doesn't have HTTPS set up yet, so the camera page can't run on another phone. If you're using the desktop app, give it a moment - this updates automatically once it's ready. If you're running the server from a terminal, see server/README.md's HTTPS setup section.</p>
                 </div>
-                <div class="camera-wizard-install-step">
-                  <span class="camera-wizard-install-step-icon" aria-hidden="true">▶️</span>
-                  <span data-i18n="cameraWizard.installStepRun">3. Run</span>
+                <div id="camera-wizard-https-failed" class="hidden">
+                  <p class="group-session-error" id="camera-wizard-https-failed-text"></p>
+                  <button type="button" id="btn-camera-wizard-retry-https" class="btn btn-ghost" data-i18n="cameraWizard.retryButton">↻ Check Again</button>
+                </div>
+                <div id="camera-wizard-no-relay" class="hidden">
+                  <p class="wizard-step-explain" data-i18n="cameraWizard.noRelayExplain">To run a phone as a camera, you need to install and run this app from your local computer.</p>
+                </div>
+                <div id="camera-wizard-install-prompt" class="hidden">
+                  <div class="camera-wizard-install-steps">
+                    <div class="camera-wizard-install-step">
+                      <span class="camera-wizard-install-step-icon" aria-hidden="true">⬇️</span>
+                      <span data-i18n="cameraWizard.installStepDownload">1. Download</span>
+                    </div>
+                    <div class="camera-wizard-install-step">
+                      <span class="camera-wizard-install-step-icon" aria-hidden="true">📦</span>
+                      <span data-i18n="cameraWizard.installStepInstall">2. Install</span>
+                    </div>
+                    <div class="camera-wizard-install-step">
+                      <span class="camera-wizard-install-step-icon" aria-hidden="true">▶️</span>
+                      <span data-i18n="cameraWizard.installStepRun">3. Run</span>
+                    </div>
+                  </div>
+                  <a id="camera-wizard-install-link" class="group-session-install-link hidden" href="#" target="_blank" rel="noopener"></a>
+                  <p id="camera-wizard-install-unsupported" class="group-session-qr-hint hidden" data-i18n="cameraWizard.installUnsupportedOs">This needs a desktop computer - it won't run on a phone or tablet.</p>
+                  <p id="camera-wizard-install-security-note" class="group-session-security-note"></p>
                 </div>
               </div>
-              <a id="camera-wizard-install-link" class="group-session-install-link hidden" href="#" target="_blank" rel="noopener"></a>
-              <p id="camera-wizard-install-unsupported" class="group-session-qr-hint hidden" data-i18n="cameraWizard.installUnsupportedOs">This needs a desktop computer - it won't run on a phone or tablet.</p>
-              <p id="camera-wizard-install-security-note" class="group-session-security-note"></p>
             </div>
-          </div>
-
-          <div class="wizard-step-sub hidden" id="camera-wizard-same-device-path">
-            <p class="wizard-step-explain" data-i18n="cameraWizard.sameDeviceExplain">This tablet's own camera (built-in or a plugged-in USB camera) watches the table directly - no second device or server needed. Point it at the table, then follow the setup steps that open.</p>
-            <div id="camera-wizard-insecure-context" class="hidden">
-              <p class="group-session-error" data-i18n="cameraWizard.insecureContext">Camera access needs this page loaded over HTTPS (or at localhost). See server/README.md's HTTPS setup section, or use the desktop app.</p>
+            <div class="camera-path-card" id="camera-path-card-device">
+              <button type="button" id="camera-wizard-path-same-device" class="btn btn-ghost camera-wizard-path-btn" data-i18n="cameraWizard.pathSameDevice">📷 Use this device's own camera</button>
+              <p class="wizard-step-explain camera-path-hint" data-i18n="visualScoring.usbCameraHint">A USB camera connected to this device would give very good results.</p>
+              <div class="wizard-step-sub hidden" id="camera-wizard-same-device-path">
+                <p class="wizard-step-explain" data-i18n="cameraWizard.sameDeviceExplain">This tablet's own camera (built-in or a plugged-in USB camera) watches the table directly - no second device or server needed. Point it at the table, then follow the setup steps that open.</p>
+                <div id="camera-wizard-insecure-context" class="hidden">
+                  <p class="group-session-error" data-i18n="cameraWizard.insecureContext">Camera access needs this page loaded over HTTPS (or at localhost). See server/README.md's HTTPS setup section, or use the desktop app.</p>
+                </div>
+                <button type="button" id="btn-camera-wizard-start-same-device" class="btn btn-primary" data-i18n="cameraWizard.startSameDevice">Start this tablet's camera →</button>
+              </div>
             </div>
-            <button type="button" id="btn-camera-wizard-start-same-device" class="btn btn-primary" data-i18n="cameraWizard.startSameDevice">Start this tablet's camera →</button>
           </div>
         </div>
       </div>
@@ -2499,7 +2502,7 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20261008g"></script>
-<script src="js/camera-client.js?v=20261008g"></script>
+<script src="js/app.js?v=20261008h"></script>
+<script src="js/camera-client.js?v=20261008h"></script>
 </body>
 </html>

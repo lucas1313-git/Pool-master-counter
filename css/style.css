@@ -4561,15 +4561,39 @@ input[type="number"] {
   animation: milestone-pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
+/* Select Camera: one bordered card per choice - its button, what it
+   means right under it, and (once picked) that path's own details (the
+   phone link/QR, or starting this device's camera). Side by side when
+   there's room, stacked on a narrow screen; the picked one is outlined. */
 .camera-wizard-path-choice {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  align-items: start;
   margin-bottom: 14px;
 }
 
-.camera-wizard-path-btn {
-  flex: 1 1 auto;
+.camera-path-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  min-width: 0;
+}
+
+.camera-path-card:has(.camera-wizard-path-btn.is-active) {
+  border-color: var(--accent);
+}
+
+.camera-path-card .camera-wizard-path-btn {
+  width: 100%;
+}
+
+.camera-path-card .camera-path-hint {
+  margin: 10px 0 0;
+}
+
+.camera-path-card .wizard-step-sub {
+  margin-top: 10px;
 }
 
 .camera-wizard-install-steps {
