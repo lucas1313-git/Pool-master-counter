@@ -723,6 +723,10 @@
     cameraRemoteViewerRow.classList.toggle("hidden", !state.cameraInputEnabled || state.sameDeviceCameraSetUp);
     cameraBallTrackingRow.classList.toggle("hidden", !state.cameraInputEnabled);
     cameraBallTrackingCheckbox.checked = state.cameraBallTrackingEnabled;
+    // Debug/voice/cue-debug apply to either transport (the log and the
+    // voice are this page's own), so they show whenever the camera is on.
+    cameraDebugOptionsRow.classList.toggle("hidden", !state.cameraInputEnabled);
+    cameraEnableHint.classList.toggle("hidden", state.cameraInputEnabled);
     var queueActive = individualMode && state.currentGame.queueEnabled;
     queueSwapStickyRow.classList.toggle("hidden", !queueActive);
     queueSwapStickyCheckbox.checked = loadQueueSwapSticky();
@@ -2021,12 +2025,12 @@
   var btnOnboardingManual = document.getElementById("btn-onboarding-manual");
   var onboardingStep = 1;
 
-  var btnOpenCameraWizard = document.getElementById("btn-open-camera-wizard");
   var btnOpenCameraWizardHeader = document.getElementById("btn-open-camera-wizard-header");
-  var cameraWizardOverlay = document.getElementById("camera-wizard-overlay");
-  var cameraWizardHeading = document.getElementById("camera-wizard-heading");
-  var cameraWizardProgress = document.getElementById("camera-wizard-progress");
-  var cameraWizardProgressDots = document.getElementById("camera-wizard-progress-dots");
+  var visualScoringPanel = document.getElementById("visual-scoring-panel");
+  var btnToggleVisualScoringPanel = document.getElementById("btn-toggle-visual-scoring-panel");
+  var cameraSetupPanel = document.getElementById("camera-setup-panel");
+  var btnToggleCameraSetupPanel = document.getElementById("btn-toggle-camera-setup-panel");
+  var cameraEnableHint = document.getElementById("camera-enable-hint");
   var cameraWizardLinkBlock = document.getElementById("camera-wizard-link-block");
   var cameraWizardUrl = document.getElementById("camera-wizard-url");
   var cameraWizardQr = document.getElementById("camera-wizard-qr");
@@ -2039,13 +2043,6 @@
   var cameraWizardInstallLink = document.getElementById("camera-wizard-install-link");
   var cameraWizardInstallUnsupported = document.getElementById("camera-wizard-install-unsupported");
   var cameraWizardInstallSecurityNote = document.getElementById("camera-wizard-install-security-note");
-  var cameraWizardEnableCheckbox = document.getElementById("camera-wizard-enable-checkbox");
-  var cameraWizardSettingsRow = document.getElementById("camera-wizard-settings-row");
-  var cameraWizardMatchThresholdInput = document.getElementById("camera-wizard-match-threshold");
-  var cameraWizardDebounceSecInput = document.getElementById("camera-wizard-debounce-sec");
-  var btnCameraWizardCancel = document.getElementById("btn-camera-wizard-cancel");
-  var btnCameraWizardGo = document.getElementById("btn-camera-wizard-go");
-  var cameraWizardStep = 1;
   var btnCameraWizardPathPhone = document.getElementById("camera-wizard-path-phone");
   var btnCameraWizardPathSameDevice = document.getElementById("camera-wizard-path-same-device");
   var cameraWizardPhonePath = document.getElementById("camera-wizard-phone-path");
@@ -2063,6 +2060,8 @@
   var cameraDebugOptionsRow = document.getElementById("camera-debug-options-row");
   var cameraDebugCheckbox = document.getElementById("camera-debug-checkbox");
   var cameraVoiceCheckbox = document.getElementById("camera-voice-checkbox");
+  var cameraCueDebugCheckbox = document.getElementById("camera-cue-debug-checkbox");
+  var btnCameraCueDebugHelp = document.getElementById("btn-camera-cue-debug-help");
   var cameraInlinePreviewWrap = document.getElementById("camera-inline-preview-wrap");
   var cameraInlinePreviewHome = document.getElementById("camera-inline-preview-home");
   var btnExpandSameDeviceCamera = document.getElementById("btn-expand-same-device-camera");
@@ -2887,7 +2886,6 @@
       helpOverlay,
       wizardOverlay,
       onboardingOverlay,
-      cameraWizardOverlay,
       quickGameOverlay,
       milestoneOverlay,
       gamewinOverlay,
@@ -29311,17 +29309,21 @@
   // connect/disconnect happens on that file's own schedule, within a
   // few seconds.
   //
-  // Checking it for the first time ever (no camera set up yet, via
-  // either wizard path) opens the wizard instead of just flipping the
-  // switch - there's nothing for it to actually turn on otherwise. The
-  // checkbox itself stays off until one of the wizard's own paths
-  // actually finishes (see cameraWizardEnableCheckbox/
-  // startSameDeviceCamera, both of which set cameraWizardCompleted).
+  // Checking it for the first time ever (no camera set up yet) needs the
+  // setup steps first - they sit right above this checkbox, in the
+  // Visual Scoring section. With the "separate phone" path open there
+  // (link/QR showing), checking this IS that path's last step; otherwise
+  // there's nothing set up for it to turn on, so the setup block opens
+  // instead and the checkbox stays off. The same-device path sets
+  // cameraWizardCompleted itself (see startSameDeviceCamera).
   cameraInputCheckbox.addEventListener("change", function () {
     if (cameraInputCheckbox.checked && !state.cameraWizardCompleted) {
-      cameraInputCheckbox.checked = false;
-      openCameraWizard();
-      return;
+      if (!cameraSetupVisible() || cameraWizardPath !== "phone") {
+        cameraInputCheckbox.checked = false;
+        openCameraSetup();
+        return;
+      }
+      state.cameraWizardCompleted = true;
     }
     state.cameraInputEnabled = cameraInputCheckbox.checked;
     // This is the one real "stop" action for same-device mode - closing
@@ -29369,26 +29371,11 @@
     saveState();
   });
 
-  // Camera setup wizard - tablet side. Short (2-step), since almost all
-  // the real setup work happens on the separate camera phone, which has
-  // its own guided wizard (see camera.html) this one can only point at,
-  // never drive directly - two different devices, two different wizards.
-  function renderCameraWizardStep() {
-    [1, 2].forEach(function (n) {
-      document.getElementById("camera-wizard-step-" + n).classList.toggle("hidden", n !== cameraWizardStep);
-    });
-    cameraWizardHeading.textContent = T("cameraWizard.step" + cameraWizardStep + "Heading");
-    cameraWizardProgress.textContent = T("wizard.stepOf", { step: cameraWizardStep, total: 2 });
-
-    cameraWizardProgressDots.innerHTML = "";
-    for (var i = 0; i < 2; i++) {
-      var dot = document.createElement("span");
-      dot.className = "wizard-dot" + (i < cameraWizardStep - 1 ? " is-done" : i === cameraWizardStep - 1 ? " is-active" : "");
-      cameraWizardProgressDots.appendChild(dot);
-    }
-
-    btnCameraWizardGo.textContent = cameraWizardStep === 2 ? T("cameraWizard.finish") : T("common.go");
-  }
+  // Camera setup - tablet side, inline in the Visual Scoring section.
+  // Short, since almost all the real setup work happens on the camera
+  // itself (a separate phone, or this tablet's own camera page), which has
+  // its own guided wizard (see camera.html) this block can only point at,
+  // never drive directly.
 
   // Independent of Group Session's own /api/lan-info fetch (networkLanBase,
   // only populated once Group Session's own UI has been opened) - a user
@@ -29521,7 +29508,7 @@
       });
   }
 
-  // Step 1 is a choice between two independent transports for the exact
+  // The setup is a choice between two independent transports for the exact
   // same underlying feature (see camera.html's own isEmbedded branch) -
   // "phone" is the original, unchanged cross-device/relay flow; "same
   // device" embeds camera.html directly in this page instead. Defaults to
@@ -29535,11 +29522,6 @@
     cameraWizardSameDevicePath.classList.toggle("hidden", path !== "same-device");
     btnCameraWizardPathPhone.classList.toggle("is-active", path === "phone");
     btnCameraWizardPathSameDevice.classList.toggle("is-active", path === "same-device");
-    // The footer's "Go →" only makes sense for the phone path (it advances
-    // to step 2's enable checkbox); the same-device path has its own
-    // "Start this tablet's camera" button that skips step 2 entirely,
-    // since camera.html's own 5-step wizard takes over from there.
-    btnCameraWizardGo.classList.toggle("hidden", path === "same-device");
   }
 
   function updateSameDeviceSecureContextWarning() {
@@ -29548,72 +29530,57 @@
     btnCameraWizardStartSameDevice.disabled = !secure;
   }
 
-  function openCameraWizard() {
-    cameraWizardStep = 1;
-    cameraWizardPathUserChosen = false;
-    selectCameraWizardPath("phone");
+  // The setup steps live in the Visual Scoring section's "Set Up Camera
+  // Recognition" block - the header's "📷 Set Up Camera" button just
+  // opens that section and that block and scrolls to it. The phone
+  // path's link/QR is fetched whenever the block comes into view, and its
+  // "still starting up" re-check stops once the block is folded away.
+  function cameraSetupVisible() {
+    return !visualScoringPanel.classList.contains("collapsed") && !cameraSetupPanel.classList.contains("collapsed");
+  }
+  var cameraSetupRefreshPending = false;
+  function refreshCameraSetup() {
+    cameraSetupRefreshPending = false;
+    if (!cameraSetupVisible()) {
+      stopCameraWizardLinkPoll();
+      return;
+    }
+    if (!cameraWizardPathUserChosen) selectCameraWizardPath("phone");
     updateSameDeviceSecureContextWarning();
     showCameraWizardLinkState(null);
-    cameraWizardEnableCheckbox.checked = state.cameraInputEnabled;
-    cameraWizardSettingsRow.classList.toggle("hidden", !state.cameraInputEnabled);
-    cameraWizardMatchThresholdInput.value = state.cameraMatchThreshold;
-    cameraWizardDebounceSecInput.value = state.cameraDebounceSec;
-    renderCameraWizardStep();
-    cameraWizardOverlay.classList.remove("hidden");
     loadCameraWizardLinkInfo();
   }
-
-  function closeCameraWizard() {
-    cameraWizardOverlay.classList.add("hidden");
+  // Deferred a tick, and collapsed to one refresh: wireCollapsiblePanel's
+  // own click handler toggles the panel class after this one runs, and
+  // opening both panels at once fires several clicks in a row.
+  function scheduleCameraSetupRefresh() {
+    if (cameraSetupRefreshPending) return;
+    cameraSetupRefreshPending = true;
+    setTimeout(refreshCameraSetup, 0);
+  }
+  function openCameraSetup() {
+    cameraWizardPathUserChosen = false;
+    if (cameraSetupPanel.classList.contains("collapsed")) btnToggleCameraSetupPanel.click();
+    expandAndScrollToPanel("visual-scoring-panel", "btn-toggle-visual-scoring-panel");
+    scheduleCameraSetupRefresh();
+  }
+  function collapseCameraSetup() {
+    if (!cameraSetupPanel.classList.contains("collapsed")) btnToggleCameraSetupPanel.click();
     stopCameraWizardLinkPoll();
   }
 
-  // Forward-only, same shape as advanceOnboarding - step 2 is the last
-  // step, so Go there just finishes.
-  function advanceCameraWizard() {
-    if (cameraWizardStep === 1) {
-      cameraWizardStep = 2;
-      renderCameraWizardStep();
-      return;
-    }
-    closeCameraWizard();
-  }
-
-  btnOpenCameraWizard.addEventListener("click", openCameraWizard);
-  // Same wizard, a second entry point - up in the header nav row beside
-  // the main "Start Wizard" button, for discoverability without having
-  // to expand the (often-collapsed) Players panel first.
-  btnOpenCameraWizardHeader.addEventListener("click", openCameraWizard);
-  btnCameraWizardCancel.addEventListener("click", closeCameraWizard);
+  // Up in the header nav row beside the main "Start Wizard" button.
+  btnOpenCameraWizardHeader.addEventListener("click", openCameraSetup);
   btnCameraWizardRetryHttps.addEventListener("click", loadCameraWizardLinkInfo);
-  btnCameraWizardGo.addEventListener("click", advanceCameraWizard);
-
-  // Mirrors cameraInputCheckbox/cameraMatchThresholdInput/cameraDebounceSecInput's
-  // own handlers exactly (same state fields, same saveState/renderAll) -
-  // renderQueueList's existing refresh of those real controls from state
-  // (js/app.js ~682-685) keeps them in sync once this wizard closes, so
-  // there's no need to also write back into the real controls directly here.
-  cameraWizardEnableCheckbox.addEventListener("change", function () {
-    state.cameraInputEnabled = cameraWizardEnableCheckbox.checked;
-    if (state.cameraInputEnabled) state.cameraWizardCompleted = true;
-    cameraWizardSettingsRow.classList.toggle("hidden", !state.cameraInputEnabled);
-    saveState();
-    renderAll();
+  [btnToggleVisualScoringPanel, btnToggleCameraSetupPanel, document.getElementById("visual-scoring-panel-summary")].forEach(function (el) {
+    el.addEventListener("click", scheduleCameraSetupRefresh);
   });
-
-  cameraWizardMatchThresholdInput.addEventListener("input", function () {
-    var value = parseFloat(cameraWizardMatchThresholdInput.value);
-    if (!(value > 0)) return;
-    state.cameraMatchThreshold = value;
-    saveState();
-  });
-
-  cameraWizardDebounceSecInput.addEventListener("input", function () {
-    var value = parseInt(cameraWizardDebounceSecInput.value, 10);
-    if (!(value > 0)) return;
-    state.cameraDebounceSec = value;
-    saveState();
-  });
+  // Until a camera has been set up, the setup steps start unfolded, so
+  // opening Visual Scoring shows them first.
+  if (!state.cameraWizardCompleted) {
+    cameraSetupPanel.classList.remove("collapsed");
+    btnToggleCameraSetupPanel.setAttribute("aria-expanded", "true");
+  }
 
   btnCameraWizardPathPhone.addEventListener("click", function () {
     cameraWizardPathUserChosen = true;
@@ -29631,7 +29598,7 @@
     state.sameDeviceCameraSetUp = true;
     saveState();
     renderAll();
-    closeCameraWizard();
+    collapseCameraSetup();
     openSameDeviceCameraOverlay();
   }
 
@@ -29771,13 +29738,18 @@
     renderCameraDiagnosticLog();
   }
 
+  // Cue entries (see reportCueEvent) show with either the main debug
+  // checkbox or Cue debug mode; everything else only with the main one.
   function renderCameraDiagnosticLog() {
-    var show = cameraDebugCheckbox.checked && cameraDiagnosticLog.length > 0;
+    var visible = cameraDiagnosticLog.filter(function (entry) {
+      return cameraDebugCheckbox.checked || (entry.cue && cameraCueDebugCheckbox.checked);
+    });
+    var show = visible.length > 0;
     cameraDiagnosticLogEl.classList.toggle("hidden", !show);
     if (!show) return;
     cameraDiagnosticLogEl.innerHTML = "";
-    for (var i = cameraDiagnosticLog.length - 1; i >= 0; i--) {
-      var entry = cameraDiagnosticLog[i];
+    for (var i = visible.length - 1; i >= 0; i--) {
+      var entry = visible[i];
       var row = document.createElement("div");
       row.textContent = new Date(entry.ts).toLocaleTimeString() + " - " + entry.text;
       cameraDiagnosticLogEl.appendChild(row);
@@ -30056,6 +30028,9 @@
     var seen = name && window.PMCCameraBridge.isPlayerPlayingByName(name) ? name : null;
     if (seen === lastSpokenCandidateName) return;
     lastSpokenCandidateName = seen;
+    // "X shooting." a moment ago already said who it is - a cue shot by
+    // someone out of view names them as the seen player right after.
+    if (seen && lastShotAnnounced && lastShotAnnounced.name === seen && Date.now() - lastShotAnnounced.at < 10000) return;
     if (seen) speakCameraStatus("Seeing " + seen + ".");
   };
   // Counterpart to reportCandidateSeen above, for the distinct "shot
@@ -30063,8 +30038,37 @@
   // listener and js/camera-client.js's own handlePlayerUp, right after
   // each one calls selectPlayer, so both transports get identical
   // parent-page voice feedback through one implementation.
+  var lastShotAnnounced = null; // { name, at }
   window.PMCCameraBridge.announceShotFired = function (name) {
-    if (name) speakCameraStatus(name + " shooting.");
+    if (!name) return;
+    lastShotAnnounced = { name: name, at: Date.now() };
+    speakCameraStatus(name + " shooting.");
+  };
+  // Cue stick over the table (camera.html's cue tracking) - "detected" /
+  // "gone" as the cue comes out over the cloth and is put away, and
+  // "shooter" when that cue was put down to someone (resent: already
+  // selected, inside the camera's re-announce cooldown). Only Cue debug
+  // mode does anything with them here: a running log under the
+  // checkboxes, and "Cue detected on table" out loud when voice is on.
+  // The shooter's own "X shooting." still comes from player_up.
+  window.PMCCameraBridge.reportCueEvent = function (msg) {
+    if (!msg || !cameraCueDebugCheckbox.checked) return;
+    var text;
+    if (msg.event === "detected") {
+      text = "Cue detected on the table" + (typeof msg.lengthIn === "number" ? " (" + Math.round(msg.lengthIn) + " in of cue seen)" : "");
+      speakCameraStatus(T("toast.cameraCueDetected"));
+    } else if (msg.event === "gone") {
+      text = "Cue no longer over the table";
+    } else if (msg.event === "shooter" && msg.player_name) {
+      text = "Cue: " + msg.player_name + " set as shooting (" + (msg.via || "cue over the table") + ")" + (msg.resent ? " - already selected" : "");
+    } else if (msg.event === "no-shooter") {
+      text = "Cue over the table, but no player to set as shooting - select one on the keypad";
+    } else {
+      return;
+    }
+    cameraDiagnosticLog.push({ ts: Date.now(), text: text, cue: true });
+    if (cameraDiagnosticLog.length > CAMERA_DIAGNOSTIC_LOG_MAX) cameraDiagnosticLog.shift();
+    renderCameraDiagnosticLog();
   };
   // Replaces the whole idle set every call (camera.html/camera-client.js
   // already send the complete current list each time, not a delta) -
@@ -30229,7 +30233,6 @@
     } catch (e) {}
     sameDeviceCameraOverlay.classList.add("hidden");
     cameraInlinePreviewWrap.classList.add("hidden");
-    cameraDebugOptionsRow.classList.add("hidden");
     setTimeout(function () {
       sameDeviceCameraIframe.src = "";
     }, 0);
@@ -30247,7 +30250,7 @@
   var CAMERA_SETTINGS_STORAGE_KEY = "pmc-camera-settings"; // must match camera.html's own SETTINGS_STORAGE_KEY
 
   function updateCameraInlinePreviewVisibility() {
-    var show = cameraDebugCheckbox.checked || cameraVoiceCheckbox.checked;
+    var show = cameraDebugCheckbox.checked || cameraVoiceCheckbox.checked || cameraCueDebugCheckbox.checked;
     cameraInlinePreviewHome.classList.toggle("hidden", !show);
   }
 
@@ -30257,6 +30260,7 @@
       var parsed = raw ? JSON.parse(raw) : {};
       parsed.debugOverlay = cameraDebugCheckbox.checked;
       parsed.voiceStatusEnabled = cameraVoiceCheckbox.checked;
+      parsed.cueDebugEnabled = cameraCueDebugCheckbox.checked;
       localStorage.setItem(CAMERA_SETTINGS_STORAGE_KEY, JSON.stringify(parsed));
     } catch (e) {}
     if (sameDeviceCameraRunning) {
@@ -30296,9 +30300,14 @@
       var parsed = raw ? JSON.parse(raw) : {};
       cameraDebugCheckbox.checked = !!parsed.debugOverlay;
       cameraVoiceCheckbox.checked = !!parsed.voiceStatusEnabled;
+      cameraCueDebugCheckbox.checked = !!parsed.cueDebugEnabled;
     } catch (e) {}
     updateCameraInlinePreviewVisibility();
   }
+  // At load too, not only when the same-device preview minimizes - the
+  // checkboxes now show for a separate camera phone as well, and should
+  // come back the way they were left.
+  syncCameraDebugCheckboxesFromStorage();
 
   cameraDebugCheckbox.addEventListener("change", function () {
     sendCameraDebugSettingsToIframe();
@@ -30308,6 +30317,14 @@
   cameraVoiceCheckbox.addEventListener("change", function () {
     sendCameraDebugSettingsToIframe();
     updateCameraInlinePreviewVisibility();
+  });
+  cameraCueDebugCheckbox.addEventListener("change", function () {
+    sendCameraDebugSettingsToIframe();
+    updateCameraInlinePreviewVisibility();
+    renderCameraDiagnosticLog();
+  });
+  btnCameraCueDebugHelp.addEventListener("click", function () {
+    alertModal(T("players.cameraCueDebugHelpText"));
   });
 
   // Same-device mode's own transport counterpart to js/camera-client.js's
@@ -30358,6 +30375,8 @@
       window.PMCCameraBridge.reportEnrollmentUpdated(msg.player_name);
     } else if (msg.type === "ball_pocketed" || msg.type === "ball_rerack" || msg.type === "ball_reappeared") {
       window.PMCCameraBridge.reportBallEvent(msg);
+    } else if (msg.type === "cue_event") {
+      window.PMCCameraBridge.reportCueEvent(msg);
     }
   });
 
@@ -31134,6 +31153,8 @@
   wireCollapsiblePanel("rotation-panel", "btn-toggle-rotation-panel");
   wireCollapsiblePanel("game-setup-panel", "btn-toggle-game-setup-panel");
   wireCollapsiblePanel("players-panel", "btn-toggle-players-panel");
+  wireCollapsiblePanel("visual-scoring-panel", "btn-toggle-visual-scoring-panel");
+  wireCollapsiblePanel("camera-setup-panel", "btn-toggle-camera-setup-panel");
   wireCollapsiblePanel("standings-panel", "btn-toggle-standings-panel");
   wireCollapsiblePanel("history-panel", "btn-toggle-history-panel");
   wireCollapsiblePanel("day-notes-panel", "btn-toggle-day-notes-panel");

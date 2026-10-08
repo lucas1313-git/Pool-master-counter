@@ -88,6 +88,10 @@
 //     { type: "ball_feedback", kind: "false_positive" | "missed", delta, ts }
 //       (listener -> relay -> every "camera"; a keypad correction right
 //       after, or in place of, an automatic credit)
+//   Cue stick over the table (camera.html's cue tracking):
+//     { type: "cue_event", event: "detected" | "gone" | "shooter" |
+//       "no-shooter", lengthIn?, player_name?, via?, resent?, ts }
+//       (camera -> listeners; drives the tablet's Cue debug mode log/voice)
 //   Remote calibration (listener drives camera.html's manual-tap table
 //   calibration without touching the camera device itself):
 //     { type: "remote-calib-start" } (listener -> relay -> every "camera")
@@ -276,6 +280,13 @@ function createCameraRelay(WebSocket) {
         }
         if ((msg.type === "ball_rerack" || msg.type === "ball_reappeared") && ws.role === "camera") {
           broadcastToListeners({ type: msg.type, count: msg.count, objectRemaining: msg.objectRemaining, ts: msg.ts });
+          return;
+        }
+
+        // Cue stick over the table: came out over the cloth ("detected"),
+        // put away ("gone"), or put down to a shooter ("shooter").
+        if (msg.type === "cue_event" && ws.role === "camera") {
+          broadcastToListeners({ type: "cue_event", event: msg.event, lengthIn: msg.lengthIn, player_name: msg.player_name || null, via: msg.via, resent: !!msg.resent, ts: msg.ts });
           return;
         }
 

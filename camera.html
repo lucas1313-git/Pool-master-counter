@@ -505,6 +505,9 @@
       <div class="row" style="margin-top:4px">
         <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="cueDetectionToggle" style="width:auto;margin:0" checked> Cue stick detection (needs calibration)</label><button type="button" class="help-btn" data-help="cueDetection" aria-label="What does this do?">?</button>
       </div>
+      <div class="row" style="margin-top:4px">
+        <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="cueDebugToggle" style="width:auto;margin:0"> Cue debug mode (log, overlay, voice)</label><button type="button" class="help-btn" data-help="cueDebug" aria-label="What does this do?">?</button>
+      </div>
 
       <div class="row" style="margin-top:4px">
         <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="debugToggle" style="width:auto;margin:0"> Show debug overlay</label><button type="button" class="help-btn" data-help="debugOverlay" aria-label="What does this do?">?</button>
@@ -769,6 +772,7 @@
   var ballTrackingToggle = document.getElementById("ballTrackingToggle");
   var ballConfirmInput = document.getElementById("ballConfirmInput");
   var cueDetectionToggle = document.getElementById("cueDetectionToggle");
+  var cueDebugToggle = document.getElementById("cueDebugToggle");
   var debugToggle = document.getElementById("debugToggle");
   var relaunchWizardBtn = document.getElementById("relaunchWizardBtn");
 
@@ -817,6 +821,10 @@
     cueDetection: {
       title: "Cue stick detection",
       body: "Looks for a cue stick held out over the calibrated table. A player at the table with their cue over the cloth is taking a shot - this counts as shooting even when the camera can't see them bend over (a far, level camera barely sees a bend at all).\n\nIf a player walks around the table and then drops out of view right next to it, the camera assumes they're still there: the next cue that comes out over the table is credited to them, for up to 45 seconds after they were last seen (each shot they take re-arms it, up to 3 minutes).\n\nOnly works once the table is calibrated. Turn on the debug overlay to see the cue drawn in pink, with how long it is and who it was matched to - long thin lines it turned down are drawn grey with the reason."
+    },
+    cueDebug: {
+      title: "Cue debug mode",
+      body: "Shows exactly what the cue detection is doing, without the rest of the debug overlay.\n\nThe cue is drawn on the video in pink (with how long it is and who it was matched to), the activity log gets a line each time a cue comes out over the table, is put away, or is put down to a player, and - when \"Speak player status\" is on - the camera says \"Cue detected on table\" each time one comes out.\n\nWhen a cue comes out and nobody in view is holding it, the last player the camera saw is set as shooting.\n\nIt doesn't change what gets detected - turn it off for normal play."
     },
     voiceStatus: {
       title: "Speak player status out loud",
@@ -884,7 +892,8 @@
     voiceStatusEnabled: false,
     ballTrackingEnabled: false,
     ballConfirmPasses: 3,
-    cueDetectionEnabled: true
+    cueDetectionEnabled: true,
+    cueDebugEnabled: false
   };
   var hasLocalSettingsOverride = false;
 
@@ -913,6 +922,7 @@
     ballTrackingToggle.checked = settings.ballTrackingEnabled;
     ballConfirmInput.value = settings.ballConfirmPasses;
     cueDetectionToggle.checked = settings.cueDetectionEnabled;
+    cueDebugToggle.checked = settings.cueDebugEnabled;
     debugToggle.checked = settings.debugOverlay;
     recognizeDebugToggle.checked = settings.debugOverlay;
     recognizeVoiceToggle.checked = settings.voiceStatusEnabled;
@@ -942,6 +952,10 @@
     settings.cueDetectionEnabled = cueDetectionToggle.checked;
     persistSettings();
     resetCueTracking(settings.cueDetectionEnabled ? "enabled" : "disabled");
+  });
+  cueDebugToggle.addEventListener("change", function () {
+    settings.cueDebugEnabled = cueDebugToggle.checked;
+    persistSettings();
   });
   // Same underlying setting shown in two places - the Settings panel's
   // own checkbox (easy to miss, collapsed under a <details>) and a second
@@ -1284,6 +1298,7 @@
       // that change immediately instead of waiting on nothing (there's
       // no polling loop for settings here otherwise).
       var wasTrackingBalls = settings.ballTrackingEnabled, wasDetectingCue = settings.cueDetectionEnabled;
+      // (cueDebugEnabled needs no reset - it only changes what's shown)
       loadStoredSettings();
       applySettingsToInputs();
       if (wasTrackingBalls !== settings.ballTrackingEnabled) resetBallTracking(settings.ballTrackingEnabled ? "enabled" : "disabled");
@@ -1609,7 +1624,7 @@
     "recognizeLiveStatus", "recognizeDebugToggle", "recognizeVoiceToggle",
     "debugToggle", "thresholdInput", "consecutiveInput", "debounceInput",
     "bendEnterInput", "bendExitInput", "railDistanceInput",
-    "ballTrackingToggle", "ballConfirmInput", "cueDetectionToggle",
+    "ballTrackingToggle", "ballConfirmInput", "cueDetectionToggle", "cueDebugToggle",
     "tableSizeSelect", "firstEdgeSelect", "enrollName"
   ];
   var VIEWER_SYNCED_HTML_IDS = ["recognizeLog"];
@@ -3119,7 +3134,7 @@
   // separate times a cue has come out over the table - one appearance is
   // one shot being lined up.
   var cueTickCounter = 0;
-  var cueTrack = { present: false, seenPasses: 0, missedPasses: 0, cue: null, lastResult: null, appearanceId: 0, lastSeenAt: 0, holder: null };
+  var cueTrack = { present: false, seenPasses: 0, missedPasses: 0, cue: null, lastResult: null, appearanceId: 0, lastSeenAt: 0, holder: null, shooterName: null };
 
   function resetCueTracking(reason) {
     cueTrack.present = false;
@@ -3128,6 +3143,7 @@
     cueTrack.cue = null;
     cueTrack.lastResult = null;
     cueTrack.holder = null;
+    cueTrack.shooterName = null;
     if (reason) logActivity("Cue stick detection " + reason);
   }
 
@@ -3148,6 +3164,13 @@
       if (!cueTrack.present && cueTrack.seenPasses >= CUE_CONFIRM_PASSES) {
         cueTrack.present = true;
         cueTrack.appearanceId++;
+        cueTrack.shooterName = null;
+        send({ type: "cue_event", event: "detected", lengthIn: Math.round(result.cue.lengthIn), ts: Date.now() });
+        if (settings.cueDebugEnabled) {
+          logActivity("Cue detected on table (" + Math.round(result.cue.lengthIn) + "in of cue seen)");
+          // The tablet speaks instead in embedded mode - see updateSeenCandidate.
+          if (settings.voiceStatusEnabled && !isEmbedded) speak("Cue detected on table.");
+        }
         var side = result.cue.exitsTable ? nearestRailSide(result.cue.buttReal, calibration.tableLength, calibration.tableWidth).side : -1;
         console.log("[PMC cue] CUE STICK OVER THE TABLE - " + Math.round(result.cue.lengthIn) + "in of cue seen" +
           (side >= 0 ? ", butt end off the " + RAIL_NAMES[side] + " rail (camera view)" : ", lying inside the table"));
@@ -3159,7 +3182,10 @@
         cueTrack.present = false;
         cueTrack.cue = null;
         cueTrack.holder = null;
+        cueTrack.shooterName = null;
         console.log("[PMC cue] cue stick no longer over the table");
+        send({ type: "cue_event", event: "gone", ts: Date.now() });
+        if (settings.cueDebugEnabled) logActivity("Cue no longer over the table");
       }
     }
   }
@@ -3240,6 +3266,26 @@
     if (best) return best;
     if (eligible.length === 1 && !hiddenPresence) return { pose: eligible[0].pose, score: Infinity, how: "only player at the table" };
     return null;
+  }
+
+  // Cue debug mode's one-line state, bottom left (above the ball status
+  // line): is a cue over the table, and who it was put down to.
+  function drawCueBadge() {
+    if (!cueDetectionActive()) return;
+    var text = cueTrack.present
+      ? "CUE ON THE TABLE" + (cueTrack.cue ? " (" + Math.round(cueTrack.cue.lengthIn) + "in)" : "") + (cueTrack.shooterName ? " - " + cueTrack.shooterName + " shooting" : "")
+      : "Cue: none over the table";
+    overlayCtx.save();
+    overlayCtx.font = "bold " + Math.max(14, Math.round(overlayEl.width / 45)) + "px sans-serif";
+    var tw = overlayCtx.measureText(text).width;
+    var h = Math.max(22, Math.round(overlayEl.width / 34));
+    var y = overlayEl.height - 30 - h;
+    overlayCtx.fillStyle = "rgba(0,0,0,0.65)";
+    overlayCtx.fillRect(6, y, tw + 16, h);
+    overlayCtx.fillStyle = cueTrack.present ? "#ff4fd8" : "#f6efe9";
+    overlayCtx.textBaseline = "middle";
+    overlayCtx.fillText(text, 14, y + h / 2);
+    overlayCtx.restore();
   }
 
   function drawCueDebug() {
@@ -3327,6 +3373,7 @@
     getPresence: function () { return tablePresence; },
     setPresence: function (p) { tablePresence = p; },
     getHiddenPresence: function () { return hiddenPresence; },
+    noteSeenPlayer: function (name) { noteSeenPlayer(name); },
     // Test hook: when set, replaces the pose model's output for each
     // frame (fn(poses) -> poses), so a harness can walk synthetic people
     // around a synthetic table through the real detection loop.
@@ -4366,6 +4413,7 @@
   // lastAnnouncedSeenName itself changes, nowhere else.
   var shotConfirmedForSeenName = null;
   function updateSeenCandidate(name) {
+    noteSeenPlayer(name);
     if (name === lastAnnouncedSeenName) return;
     lastAnnouncedSeenName = name;
     shotConfirmedForSeenName = null;
@@ -4546,10 +4594,14 @@
     via = via || "bent over";
     var now = Date.now();
     var last = lastEmittedAt[name] || 0;
+    var cueShot = via.indexOf("cue") === 0;
     if (now - last < settings.debounceSec * 1000) {
       console.log("[PMC shooting] " + name + " shooting detected again (" + via + ") within the " + settings.debounceSec + "s cooldown - not re-sent");
+      if (cueShot) reportCueShooter(name, via, true);
       return;
     }
+    if (cueShot) reportCueShooter(name, via, false);
+    noteSeenPlayer(name);
     lastEmittedAt[name] = now;
     var confidence = Math.max(0, Math.min(1, 1 - matchDistance / MAX_EXPECTED_DISTANCE));
     var detail = via + (descriptor ? ", match distance " + matchDistance.toFixed(2) : "");
@@ -4628,6 +4680,35 @@
   // shooter out of view or unreadable).
   var shootingVia = null;
 
+  // The last player the camera put a name to (at the table, as the
+  // upright candidate, or as a shooter). When a cue comes out over the
+  // table and nothing better says whose it is - nobody in view holding
+  // it, nobody held as out of view - that player is set as shooting.
+  var LAST_SEEN_PLAYER_MAX_MS = 5 * 60 * 1000;
+  var lastSeenPlayer = null; // { name, at }
+  function noteSeenPlayer(name) {
+    if (name) lastSeenPlayer = { name: name, at: Date.now() };
+  }
+  function lastSeenPlayerName(now) {
+    return lastSeenPlayer && now - lastSeenPlayer.at <= LAST_SEEN_PLAYER_MAX_MS ? lastSeenPlayer.name : null;
+  }
+
+  // Who a cue was put down to (or that nobody could be), once per cue
+  // appearance and name - for Cue debug mode's log here and on the
+  // tablet. resent: already selected, inside the re-announce cooldown
+  // (fireEvent's own log line covers a real send).
+  var cueShooterReportKey = null;
+  function reportCueShooter(name, via, resent) {
+    var key = cueTrack.appearanceId + "|" + (name || "");
+    if (key === cueShooterReportKey) return;
+    cueShooterReportKey = key;
+    if (name) cueTrack.shooterName = name;
+    send({ type: "cue_event", event: name ? "shooter" : "no-shooter", player_name: name || null, via: via, resent: !!resent, ts: Date.now() });
+    if (!settings.cueDebugEnabled) return;
+    if (!name) logActivity("Cue over the table, but no player to set as shooting - select one on the keypad");
+    else if (resent) logActivity("Cue: " + name + " set as shooting (" + via + ") - already selected");
+  }
+
   function heldTablePresence(now) {
     if (!tablePresence) return null;
     return now - tablePresence.lastSeenAt <= PRESENCE_HOLD_MS ? tablePresence : null;
@@ -4677,6 +4758,7 @@
       console.log("[PMC presence] " + (hiddenPresence.name || "player") + " back in view");
       hiddenPresence = null;
     }
+    noteSeenPlayer(name);
     tablePresence = {
       name: name,
       side: currentSideForAnalysis(analysis),
@@ -4716,9 +4798,15 @@
       name = activeManualAttribution.name;
       via = "cue over the table, picked on the scoreboard";
       manual = true;
+    } else if (lastSeenPlayerName(now)) {
+      name = lastSeenPlayerName(now);
+      via = "cue over the table, last seen player";
     }
     debugLog("cue shot out of view: holder=" + (cueCtx.holder ? cueCtx.holder.how : "none") + " held=" + (held ? held.name || "unnamed" : "none") + " -> " + (name || "nobody to credit"));
-    if (!name) return;
+    if (!name) {
+      reportCueShooter(null, "cue over the table");
+      return;
+    }
     cueHiddenShooterName = name;
     cueHiddenFiredAppearanceId = cueCtx.appearanceId;
     if (activeManualAttribution && name !== activeManualAttribution.name) activeManualAttribution = null;
@@ -4744,7 +4832,7 @@
       var target = held || heldHiddenPresence(now);
       // An out-of-view shooter's cue runs off the table at the butt end,
       // into their hands - one lying wholly inside the table was put down.
-      if (cuePresent && (cueCtx.holder || (target && cueCtx.exitsTable))) {
+      if (cuePresent && (cueCtx.holder || (cueCtx.exitsTable && (target || lastSeenPlayerName(now))))) {
         handleCueShotOutOfView(target, cueCtx, now, hiddenStreak);
         updateRecognizeLiveStatus(null);
         reportLiveStatus(null);
@@ -4881,6 +4969,13 @@
             // an enrollment sample - no separate enroll-add needed here.
             fireEvent(activeManualAttribution.name, analysis.descriptor, 0, currentSideForAnalysis(analysis), via);
             activeManualAttribution.firesSinceStart++;
+          } else if (cueHeld && lastSeenPlayerName(now)) {
+            // Someone's holding the cue out over the table and can't be
+            // named from how they look right now (bent over, turned away)
+            // - the last player seen is the best bet.
+            fireEvent(lastSeenPlayerName(now), null, settings.matchThreshold, currentSideForAnalysis(analysis), via + ", last seen player");
+          } else if (cueHeld) {
+            reportCueShooter(null, via);
           }
         }
       } else if (bentConsecutive === settings.consecutiveFrames) {
@@ -5016,12 +5111,21 @@
   function drawOverlay(keypoints, analysis, matchLabel) {
     overlayCtx.clearRect(0, 0, overlayEl.width, overlayEl.height);
     if (calibrating) drawCalibrationTaps();
-    if (!settings.debugOverlay) return;
+    if (!settings.debugOverlay) {
+      // Cue debug mode on its own: just the cue, without the rest.
+      if (settings.cueDebugEnabled) {
+        drawCueDebug();
+        drawHiddenPresence();
+        drawCueBadge();
+      }
+      return;
+    }
     drawTableBoundary();
     drawAutoDetectDebug();
     drawBallDebug();
     drawCueDebug();
     drawHiddenPresence();
+    if (settings.cueDebugEnabled) drawCueBadge();
     if (!analysis) return;
     var box = analysis.box;
     var p0 = videoToOverlay(box.x0, box.y0);

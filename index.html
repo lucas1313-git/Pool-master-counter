@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261007c">
+<link rel="stylesheet" href="css/style.css?v=20261008a">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -122,7 +122,6 @@
     <div class="panel-body" id="players-panel-body">
       <div class="row">
         <button type="button" id="btn-open-all-players" class="btn btn-ghost" data-i18n="header.allStats">📊 View All Players Stats</button>
-        <button type="button" id="btn-open-camera-wizard" class="btn btn-ghost" data-i18n="cameraWizard.openButton">📷 Set Up Camera</button>
       </div>
       <p id="new-player-name-requirement" class="new-player-name-requirement hidden"></p>
       <form id="add-player-form" class="row">
@@ -156,54 +155,6 @@
         <input type="checkbox" id="rotating-teams-checkbox">
         <span data-i18n="gameSetup.rotatingTeamsEnable">🔁 Rotating Teams (Q-Score uses each team's average rating; wins tracked per player)</span>
       </label>
-      <div class="row">
-        <label class="checkbox-row" id="camera-input-row">
-          <input type="checkbox" id="camera-input-checkbox">
-          <span data-i18n="players.cameraInputEnable">📷 Camera player recognition</span>
-        </label>
-        <button type="button" id="btn-camera-input-help" class="format-info-btn" data-i18n-aria-label="players.cameraInputHelpAria" aria-label="What does camera player recognition do?">❓</button>
-      </div>
-      <p class="camera-candidate-status hidden" id="camera-candidate-status"></p>
-      <div class="row hidden" id="camera-input-settings-row">
-        <label for="camera-match-threshold" data-i18n="players.cameraMatchThreshold">Match sensitivity</label>
-        <input type="number" id="camera-match-threshold" min="0.1" max="4" step="0.1" value="1.2">
-        <button type="button" id="btn-camera-match-threshold-help" class="format-info-btn" data-i18n-aria-label="players.cameraMatchThresholdHelpAria" aria-label="What does Match sensitivity do?">❓</button>
-        <label for="camera-debounce-sec" data-i18n="players.cameraDebounceSec">Re-announce after (sec)</label>
-        <input type="number" id="camera-debounce-sec" min="1" max="120" value="10">
-        <button type="button" id="btn-camera-debounce-sec-help" class="format-info-btn" data-i18n-aria-label="players.cameraDebounceSecHelpAria" aria-label="What does Re-announce after do?">❓</button>
-      </div>
-      <div class="row hidden" id="camera-remote-calibrate-row">
-        <button type="button" id="btn-start-remote-calibration" class="btn btn-ghost" data-i18n="players.cameraRemoteCalibrateButton">📐 Calibrate Table Remotely</button>
-        <button type="button" id="btn-camera-remote-calibrate-help" class="format-info-btn" data-i18n-aria-label="players.cameraRemoteCalibrateHelpAria" aria-label="What does Calibrate Table Remotely do?">❓</button>
-      </div>
-      <div class="row hidden" id="camera-remote-viewer-row">
-        <button type="button" id="btn-open-remote-viewer" class="btn btn-ghost" data-i18n="players.cameraRemoteViewerButton">📷 Full Camera Setup (Remote)</button>
-        <button type="button" id="btn-camera-remote-viewer-help" class="format-info-btn" data-i18n-aria-label="players.cameraRemoteViewerHelpAria" aria-label="What does Full Camera Setup (Remote) do?">❓</button>
-      </div>
-      <div class="row hidden" id="camera-ball-tracking-row">
-        <label class="checkbox-row">
-          <input type="checkbox" id="camera-ball-tracking-checkbox">
-          <span data-i18n="players.cameraBallTrackingEnable">🎱 Ball tracking (Straight Pool): auto-credit pocketed balls</span>
-        </label>
-        <button type="button" id="btn-camera-ball-tracking-help" class="format-info-btn" data-i18n-aria-label="players.cameraBallTrackingHelpAria" aria-label="What does ball tracking do?">❓</button>
-      </div>
-      <div class="row hidden" id="camera-debug-options-row">
-        <label class="checkbox-row">
-          <input type="checkbox" id="camera-debug-checkbox">
-          <span data-i18n="players.cameraDebugEnable">👁️ Show camera debug info during play</span>
-        </label>
-        <button type="button" id="btn-camera-debug-help" class="format-info-btn" data-i18n-aria-label="players.cameraDebugEnableHelpAria" aria-label="What does Show camera debug info do?">❓</button>
-        <label class="checkbox-row">
-          <input type="checkbox" id="camera-voice-checkbox">
-          <span data-i18n="players.cameraVoiceEnable">🔊 Speak player status (seen / shooting)</span>
-        </label>
-        <button type="button" id="btn-camera-voice-help" class="format-info-btn" data-i18n-aria-label="players.cameraVoiceEnableHelpAria" aria-label="What does Speak player status do?">❓</button>
-      </div>
-      <div class="camera-diagnostic-log hidden" id="camera-diagnostic-log"></div>
-      <div id="camera-inline-preview-wrap" class="hidden">
-        <button type="button" id="btn-expand-same-device-camera" class="btn btn-ghost" data-i18n="cameraWizard.expandButton">⛶ Full Screen</button>
-        <div id="camera-inline-preview-home" class="camera-inline-preview hidden"></div>
-      </div>
       <ul id="roster-list" class="roster-list"></ul>
       <div id="queue-section" class="hidden">
         <h3 data-i18n="players.queueHeading">Standby Queue</h3>
@@ -385,6 +336,128 @@
       <span class="unmatched-shooter-banner-icon" aria-hidden="true">📷</span>
       <span data-i18n="players.unmatchedShooterPrompt">❓ Select player from keypad</span>
       <button type="button" id="btn-dismiss-unmatched-shooter-banner" class="unmatched-shooter-banner-dismiss" data-i18n-aria-label="common.close" aria-label="Close">×</button>
+    </div>
+  </section>
+
+  <section class="panel collapsible-panel collapsed" id="visual-scoring-panel">
+    <button type="button" class="panel-toggle" id="btn-toggle-visual-scoring-panel" aria-expanded="false" aria-controls="visual-scoring-panel-body">
+      <h2 data-i18n="visualScoring.heading">Visual Scoring</h2>
+      <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+    </button>
+    <p class="panel-summary" id="visual-scoring-panel-summary" data-i18n="visualScoring.summary">Camera setup, player recognition, ball tracking and the camera's debug tools.</p>
+    <div class="panel-body" id="visual-scoring-panel-body">
+      <div class="backup-subsection collapsible-panel collapsed" id="camera-setup-panel">
+        <button type="button" class="panel-toggle" id="btn-toggle-camera-setup-panel" aria-expanded="false" aria-controls="camera-setup-panel-body">
+          <h4 class="backup-subsection-title" data-i18n="cameraWizard.step1Heading">Set Up Camera Recognition</h4>
+          <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+        </button>
+        <div class="panel-body" id="camera-setup-panel-body">
+          <div class="camera-wizard-path-choice" id="camera-wizard-path-choice">
+            <button type="button" id="camera-wizard-path-phone" class="btn btn-ghost camera-wizard-path-btn" data-i18n="cameraWizard.pathPhone">📱 Use a separate phone</button>
+            <button type="button" id="camera-wizard-path-same-device" class="btn btn-ghost camera-wizard-path-btn" data-i18n="cameraWizard.pathSameDevice">📷 Use this tablet's own camera</button>
+          </div>
+
+          <div class="wizard-step-sub hidden" id="camera-wizard-phone-path">
+            <p class="wizard-step-explain" data-i18n="cameraWizard.step1Explain">A phone mounted over the table watches for players and tells this tablet who's up. It needs to run on a <strong>different</strong> phone or tablet from this one - open the link below in its browser, or scan the QR code with its camera.</p>
+            <div id="camera-wizard-link-block" class="hidden">
+              <p class="group-session-join-url" id="camera-wizard-url"></p>
+              <img id="camera-wizard-qr" class="group-session-qr" alt="" data-i18n-aria-label="cameraWizard.qrHint" aria-label="Scan with the camera phone to open the setup page">
+              <p class="group-session-qr-hint" data-i18n="cameraWizard.qrHint">Scan with the camera phone</p>
+            </div>
+            <div id="camera-wizard-https-missing" class="hidden">
+              <p class="group-session-error" data-i18n="cameraWizard.httpsMissing">This computer's local server is running, but it doesn't have HTTPS set up yet, so the camera page can't run on another phone. If you're using the desktop app, give it a moment - this updates automatically once it's ready. If you're running the server from a terminal, see server/README.md's HTTPS setup section.</p>
+            </div>
+            <div id="camera-wizard-https-failed" class="hidden">
+              <p class="group-session-error" id="camera-wizard-https-failed-text"></p>
+              <button type="button" id="btn-camera-wizard-retry-https" class="btn btn-ghost" data-i18n="cameraWizard.retryButton">↻ Check Again</button>
+            </div>
+            <div id="camera-wizard-no-relay" class="hidden">
+              <p class="wizard-step-explain" data-i18n="cameraWizard.noRelayExplain">To run a phone as a camera, you need to install and run this app from your local computer.</p>
+            </div>
+            <div id="camera-wizard-install-prompt" class="hidden">
+              <div class="camera-wizard-install-steps">
+                <div class="camera-wizard-install-step">
+                  <span class="camera-wizard-install-step-icon" aria-hidden="true">⬇️</span>
+                  <span data-i18n="cameraWizard.installStepDownload">1. Download</span>
+                </div>
+                <div class="camera-wizard-install-step">
+                  <span class="camera-wizard-install-step-icon" aria-hidden="true">📦</span>
+                  <span data-i18n="cameraWizard.installStepInstall">2. Install</span>
+                </div>
+                <div class="camera-wizard-install-step">
+                  <span class="camera-wizard-install-step-icon" aria-hidden="true">▶️</span>
+                  <span data-i18n="cameraWizard.installStepRun">3. Run</span>
+                </div>
+              </div>
+              <a id="camera-wizard-install-link" class="group-session-install-link hidden" href="#" target="_blank" rel="noopener"></a>
+              <p id="camera-wizard-install-unsupported" class="group-session-qr-hint hidden" data-i18n="cameraWizard.installUnsupportedOs">This needs a desktop computer - it won't run on a phone or tablet.</p>
+              <p id="camera-wizard-install-security-note" class="group-session-security-note"></p>
+            </div>
+          </div>
+
+          <div class="wizard-step-sub hidden" id="camera-wizard-same-device-path">
+            <p class="wizard-step-explain" data-i18n="cameraWizard.sameDeviceExplain">This tablet's own camera (built-in or a plugged-in USB camera) watches the table directly - no second device or server needed. Point it at the table, then follow the setup steps that open.</p>
+            <div id="camera-wizard-insecure-context" class="hidden">
+              <p class="group-session-error" data-i18n="cameraWizard.insecureContext">Camera access needs this page loaded over HTTPS (or at localhost). See server/README.md's HTTPS setup section, or use the desktop app.</p>
+            </div>
+            <button type="button" id="btn-camera-wizard-start-same-device" class="btn btn-primary" data-i18n="cameraWizard.startSameDevice">Start this tablet's camera →</button>
+          </div>
+        </div>
+      </div>
+      <p class="wizard-step-explain" id="camera-enable-hint" data-i18n="cameraWizard.step2Explain">Once the camera phone is set up (it has its own guided setup), turn this on here so the tablet actually listens for it.</p>
+      <div class="row">
+        <label class="checkbox-row" id="camera-input-row">
+          <input type="checkbox" id="camera-input-checkbox">
+          <span data-i18n="players.cameraInputEnable">📷 Camera player recognition</span>
+        </label>
+        <button type="button" id="btn-camera-input-help" class="format-info-btn" data-i18n-aria-label="players.cameraInputHelpAria" aria-label="What does camera player recognition do?">❓</button>
+      </div>
+      <p class="camera-candidate-status hidden" id="camera-candidate-status"></p>
+      <div class="row hidden" id="camera-input-settings-row">
+        <label for="camera-match-threshold" data-i18n="players.cameraMatchThreshold">Match sensitivity</label>
+        <input type="number" id="camera-match-threshold" min="0.1" max="4" step="0.1" value="1.2">
+        <button type="button" id="btn-camera-match-threshold-help" class="format-info-btn" data-i18n-aria-label="players.cameraMatchThresholdHelpAria" aria-label="What does Match sensitivity do?">❓</button>
+        <label for="camera-debounce-sec" data-i18n="players.cameraDebounceSec">Re-announce after (sec)</label>
+        <input type="number" id="camera-debounce-sec" min="1" max="120" value="10">
+        <button type="button" id="btn-camera-debounce-sec-help" class="format-info-btn" data-i18n-aria-label="players.cameraDebounceSecHelpAria" aria-label="What does Re-announce after do?">❓</button>
+      </div>
+      <div class="row hidden" id="camera-remote-calibrate-row">
+        <button type="button" id="btn-start-remote-calibration" class="btn btn-ghost" data-i18n="players.cameraRemoteCalibrateButton">📐 Calibrate Table Remotely</button>
+        <button type="button" id="btn-camera-remote-calibrate-help" class="format-info-btn" data-i18n-aria-label="players.cameraRemoteCalibrateHelpAria" aria-label="What does Calibrate Table Remotely do?">❓</button>
+      </div>
+      <div class="row hidden" id="camera-remote-viewer-row">
+        <button type="button" id="btn-open-remote-viewer" class="btn btn-ghost" data-i18n="players.cameraRemoteViewerButton">📷 Full Camera Setup (Remote)</button>
+        <button type="button" id="btn-camera-remote-viewer-help" class="format-info-btn" data-i18n-aria-label="players.cameraRemoteViewerHelpAria" aria-label="What does Full Camera Setup (Remote) do?">❓</button>
+      </div>
+      <div class="row hidden" id="camera-ball-tracking-row">
+        <label class="checkbox-row">
+          <input type="checkbox" id="camera-ball-tracking-checkbox">
+          <span data-i18n="players.cameraBallTrackingEnable">🎱 Ball tracking (Straight Pool): auto-credit pocketed balls</span>
+        </label>
+        <button type="button" id="btn-camera-ball-tracking-help" class="format-info-btn" data-i18n-aria-label="players.cameraBallTrackingHelpAria" aria-label="What does ball tracking do?">❓</button>
+      </div>
+      <div class="row hidden" id="camera-debug-options-row">
+        <label class="checkbox-row">
+          <input type="checkbox" id="camera-debug-checkbox">
+          <span data-i18n="players.cameraDebugEnable">👁️ Show camera debug info during play</span>
+        </label>
+        <button type="button" id="btn-camera-debug-help" class="format-info-btn" data-i18n-aria-label="players.cameraDebugEnableHelpAria" aria-label="What does Show camera debug info do?">❓</button>
+        <label class="checkbox-row">
+          <input type="checkbox" id="camera-voice-checkbox">
+          <span data-i18n="players.cameraVoiceEnable">🔊 Speak player status (seen / shooting)</span>
+        </label>
+        <button type="button" id="btn-camera-voice-help" class="format-info-btn" data-i18n-aria-label="players.cameraVoiceEnableHelpAria" aria-label="What does Speak player status do?">❓</button>
+        <label class="checkbox-row">
+          <input type="checkbox" id="camera-cue-debug-checkbox">
+          <span data-i18n="players.cameraCueDebugEnable">🎯 Cue debug mode (log, overlay and voice when a cue is over the table)</span>
+        </label>
+        <button type="button" id="btn-camera-cue-debug-help" class="format-info-btn" data-i18n-aria-label="players.cameraCueDebugHelpAria" aria-label="What does Cue debug mode do?">❓</button>
+      </div>
+      <div class="camera-diagnostic-log hidden" id="camera-diagnostic-log"></div>
+      <div id="camera-inline-preview-wrap" class="hidden">
+        <button type="button" id="btn-expand-same-device-camera" class="btn btn-ghost" data-i18n="cameraWizard.expandButton">⛶ Full Screen</button>
+        <div id="camera-inline-preview-home" class="camera-inline-preview hidden"></div>
+      </div>
     </div>
   </section>
 
@@ -1285,95 +1358,6 @@
     <div class="wizard-footer" id="onboarding-standard-footer">
       <button type="button" id="btn-onboarding-cancel" class="btn btn-ghost" data-i18n="common.cancel">Cancel</button>
       <button type="button" id="btn-onboarding-go" class="btn btn-primary" data-i18n="common.go">Go →</button>
-    </div>
-  </div>
-</div>
-
-<div id="camera-wizard-overlay" class="wizard-overlay hidden">
-  <div class="wizard-card">
-    <div class="wizard-header">
-      <div class="wizard-header-text">
-        <h2 id="camera-wizard-heading" data-i18n="cameraWizard.step1Heading">Set Up Camera Recognition</h2>
-        <p class="wizard-progress" id="camera-wizard-progress">Step 1 of 2</p>
-      </div>
-    </div>
-
-    <div class="wizard-progress-dots" id="camera-wizard-progress-dots"></div>
-
-    <div class="wizard-body">
-
-      <div class="wizard-step" id="camera-wizard-step-1">
-        <div class="camera-wizard-path-choice" id="camera-wizard-path-choice">
-          <button type="button" id="camera-wizard-path-phone" class="btn btn-ghost camera-wizard-path-btn" data-i18n="cameraWizard.pathPhone">📱 Use a separate phone</button>
-          <button type="button" id="camera-wizard-path-same-device" class="btn btn-ghost camera-wizard-path-btn" data-i18n="cameraWizard.pathSameDevice">📷 Use this tablet's own camera</button>
-        </div>
-
-        <div class="wizard-step-sub hidden" id="camera-wizard-phone-path">
-          <p class="wizard-step-explain" data-i18n="cameraWizard.step1Explain">A phone mounted over the table watches for players and tells this tablet who's up. It needs to run on a <strong>different</strong> phone or tablet from this one - open the link below in its browser, or scan the QR code with its camera.</p>
-          <div id="camera-wizard-link-block" class="hidden">
-            <p class="group-session-join-url" id="camera-wizard-url"></p>
-            <img id="camera-wizard-qr" class="group-session-qr" alt="" data-i18n-aria-label="cameraWizard.qrHint" aria-label="Scan with the camera phone to open the setup page">
-            <p class="group-session-qr-hint" data-i18n="cameraWizard.qrHint">Scan with the camera phone</p>
-          </div>
-          <div id="camera-wizard-https-missing" class="hidden">
-            <p class="group-session-error" data-i18n="cameraWizard.httpsMissing">This computer's local server is running, but it doesn't have HTTPS set up yet, so the camera page can't run on another phone. If you're using the desktop app, give it a moment - this updates automatically once it's ready. If you're running the server from a terminal, see server/README.md's HTTPS setup section.</p>
-          </div>
-          <div id="camera-wizard-https-failed" class="hidden">
-            <p class="group-session-error" id="camera-wizard-https-failed-text"></p>
-            <button type="button" id="btn-camera-wizard-retry-https" class="btn btn-ghost" data-i18n="cameraWizard.retryButton">↻ Check Again</button>
-          </div>
-          <div id="camera-wizard-no-relay" class="hidden">
-            <p class="wizard-step-explain" data-i18n="cameraWizard.noRelayExplain">To run a phone as a camera, you need to install and run this app from your local computer.</p>
-          </div>
-          <div id="camera-wizard-install-prompt" class="hidden">
-            <div class="camera-wizard-install-steps">
-              <div class="camera-wizard-install-step">
-                <span class="camera-wizard-install-step-icon" aria-hidden="true">⬇️</span>
-                <span data-i18n="cameraWizard.installStepDownload">1. Download</span>
-              </div>
-              <div class="camera-wizard-install-step">
-                <span class="camera-wizard-install-step-icon" aria-hidden="true">📦</span>
-                <span data-i18n="cameraWizard.installStepInstall">2. Install</span>
-              </div>
-              <div class="camera-wizard-install-step">
-                <span class="camera-wizard-install-step-icon" aria-hidden="true">▶️</span>
-                <span data-i18n="cameraWizard.installStepRun">3. Run</span>
-              </div>
-            </div>
-            <a id="camera-wizard-install-link" class="group-session-install-link hidden" href="#" target="_blank" rel="noopener"></a>
-            <p id="camera-wizard-install-unsupported" class="group-session-qr-hint hidden" data-i18n="cameraWizard.installUnsupportedOs">This needs a desktop computer - it won't run on a phone or tablet.</p>
-            <p id="camera-wizard-install-security-note" class="group-session-security-note"></p>
-          </div>
-        </div>
-
-        <div class="wizard-step-sub hidden" id="camera-wizard-same-device-path">
-          <p class="wizard-step-explain" data-i18n="cameraWizard.sameDeviceExplain">This tablet's own camera (built-in or a plugged-in USB camera) watches the table directly - no second device or server needed. Point it at the table, then follow the setup steps that open.</p>
-          <div id="camera-wizard-insecure-context" class="hidden">
-            <p class="group-session-error" data-i18n="cameraWizard.insecureContext">Camera access needs this page loaded over HTTPS (or at localhost). See server/README.md's HTTPS setup section, or use the desktop app.</p>
-          </div>
-          <button type="button" id="btn-camera-wizard-start-same-device" class="btn btn-primary" data-i18n="cameraWizard.startSameDevice">Start this tablet's camera →</button>
-        </div>
-      </div>
-
-      <div class="wizard-step hidden" id="camera-wizard-step-2">
-        <p class="wizard-step-explain" data-i18n="cameraWizard.step2Explain">Once the camera phone is set up (it has its own guided setup), turn this on here so the tablet actually listens for it.</p>
-        <label class="checkbox-row checkbox-row-prominent">
-          <input type="checkbox" id="camera-wizard-enable-checkbox">
-          <span data-i18n="players.cameraInputEnable">📷 Camera player recognition (LAN only - confirms/corrects the keypad's current player automatically)</span>
-        </label>
-        <div class="row hidden" id="camera-wizard-settings-row">
-          <label for="camera-wizard-match-threshold" data-i18n="players.cameraMatchThreshold">Match sensitivity</label>
-          <input type="number" id="camera-wizard-match-threshold" min="0.1" max="4" step="0.1" value="1.2">
-          <label for="camera-wizard-debounce-sec" data-i18n="players.cameraDebounceSec">Re-announce after (sec)</label>
-          <input type="number" id="camera-wizard-debounce-sec" min="1" max="120" value="10">
-        </div>
-      </div>
-
-    </div>
-
-    <div class="wizard-footer" id="camera-wizard-footer">
-      <button type="button" id="btn-camera-wizard-cancel" class="btn btn-ghost" data-i18n="common.cancel">Cancel</button>
-      <button type="button" id="btn-camera-wizard-go" class="btn btn-primary" data-i18n="common.go">Go →</button>
     </div>
   </div>
 </div>
@@ -2437,7 +2421,7 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20261007c"></script>
-<script src="js/camera-client.js?v=20261007c"></script>
+<script src="js/app.js?v=20261008a"></script>
+<script src="js/camera-client.js?v=20261008a"></script>
 </body>
 </html>

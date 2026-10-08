@@ -57,6 +57,12 @@
     if (!bridgeReady() || typeof window.PMCCameraBridge.reportBallEvent !== "function") return;
     window.PMCCameraBridge.reportBallEvent(msg);
   }
+  // Cue stick over the table - only Cue debug mode does anything with
+  // these (see PMCCameraBridge.reportCueEvent).
+  function handleCueEvent(msg) {
+    if (!bridgeReady() || typeof window.PMCCameraBridge.reportCueEvent !== "function") return;
+    window.PMCCameraBridge.reportCueEvent(msg);
+  }
   function sendBallFeedback(feedback) {
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
     try {
@@ -241,6 +247,7 @@
       else if (msg.type === "calib-frame") handleCalibFrame(msg);
       else if (msg.type === "remote-camera-list") handleRemoteCameraList(msg);
       else if (msg.type === "ball_pocketed" || msg.type === "ball_rerack" || msg.type === "ball_reappeared") handleBallEvent(msg);
+      else if (msg.type === "cue_event") handleCueEvent(msg);
     });
     ws.addEventListener("close", function () {
       ws = null;
