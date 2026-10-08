@@ -2474,20 +2474,48 @@ input[type="number"] {
    down. The panel reserves room for it via padding-top below, set once
    per card build rather than live per camera event. */
 .player-panel:has(.scorecard-camera-badge) {
-  padding-top: 40px;
+  padding-top: 52px;
 }
+/* Sits in the same top band as the card's drag handle (top:8px,
+   42px tall - see .score-card-drag-handle) and is centered in it
+   vertically, drawn above the handle's translucent bar. It's only a
+   status icon, never a control: pointer-events:none lets a press on it
+   reach the drag handle underneath, so the handle still drags from
+   anywhere along its length. The camera icon itself stays on the
+   card's centre line (shifted back by half its own width, not half the
+   whole row) - its clock/+/? marks extend to its right without pushing
+   it off centre. */
 .scorecard-camera-badge {
   position: absolute;
-  top: 10px;
+  top: 8px;
+  height: 42px;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translateX(-15px);
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   color: var(--text-dim);
+  z-index: 3;
+  pointer-events: none;
 }
-.scorecard-camera-badge-icon { width: 20px; height: 20px; display: block; }
-.scorecard-camera-badge-icon svg { width: 20px; height: 20px; display: block; }
+.scorecard-camera-badge-icon { width: 30px; height: 30px; display: block; }
+.scorecard-camera-badge-icon svg { width: 30px; height: 30px; display: block; }
+/* The handle's grip moves to its right end on a card showing the camera
+   icon, so the icon (and its clock/+/? marks) never runs into it. */
+.player-panel:has(.scorecard-camera-badge) .score-card-drag-handle {
+  justify-content: flex-end;
+  padding-right: 14px;
+}
+#app.focus-mode .scorecard-camera-badge {
+  top: 10px;
+  height: clamp(42px, 12cqw, 64px);
+  transform: translateX(calc(clamp(30px, 8cqw, 44px) / -2));
+}
+#app.focus-mode .scorecard-camera-badge-icon,
+#app.focus-mode .scorecard-camera-badge-icon svg {
+  width: clamp(30px, 8cqw, 44px);
+  height: clamp(30px, 8cqw, 44px);
+}
 
 /* "Being watched live, not yet confirmed this round" - a color swap
    once a second, not a fade/pulse, so it reads clearly even glanced at
@@ -2503,19 +2531,19 @@ input[type="number"] {
 /* Recognized via the lightweight seated/idle check (see
    processIdlePoses) - static, not flashing, specifically to read as
    "cached, not live" at a glance. */
-.scorecard-camera-badge-clock { display: none; font-size: 0.9rem; }
+.scorecard-camera-badge-clock { display: none; font-size: 1.2rem; }
 .scorecard-camera-badge.idle .scorecard-camera-badge-icon { color: var(--text-dim); }
 .scorecard-camera-badge.idle .scorecard-camera-badge-clock { display: inline; }
 
 /* A fresh sample just landed for this player - self-clears on its own
    after a few seconds (see SCORECARD_CAMERA_PLUS_MS), nothing to click. */
-.scorecard-camera-badge-plus { display: none; font-weight: 800; color: var(--accent); }
+.scorecard-camera-badge-plus { display: none; font-size: 1.4rem; font-weight: 800; color: var(--accent); }
 .scorecard-camera-badge.show-plus .scorecard-camera-badge-plus { display: inline; }
 
 /* The camera's best (unconfirmed) guess for who's bent over right now -
    tap this player on the keypad to confirm, same action the
    "unmatched shooter" scorecard banner above already prompts for. */
-.scorecard-camera-badge-question { display: none; font-weight: 800; color: var(--danger); }
+.scorecard-camera-badge-question { display: none; font-size: 1.4rem; font-weight: 800; color: var(--danger); }
 .scorecard-camera-badge.show-question .scorecard-camera-badge-question { display: inline; }
 
 /* ---------- Keyboard/keypad scoring shortcut ---------- */
@@ -2685,6 +2713,19 @@ input[type="number"] {
     right: 6px;
     height: 30px;
     font-size: 1rem;
+  }
+  .scorecard-camera-badge { height: 30px; gap: 3px; transform: translateX(-12px); }
+  .scorecard-camera-badge-icon,
+  .scorecard-camera-badge-icon svg { width: 24px; height: 24px; }
+  .scorecard-camera-badge-clock { font-size: 0.95rem; }
+  .scorecard-camera-badge-plus,
+  .scorecard-camera-badge-question { font-size: 1.1rem; }
+  /* No room for the grip next to the camera's marks on a phone-width
+     card - the glyph steps aside while they show (the bar still drags). */
+  .player-panel:has(.scorecard-camera-badge.idle) .score-card-drag-handle,
+  .player-panel:has(.scorecard-camera-badge.show-plus) .score-card-drag-handle,
+  .player-panel:has(.scorecard-camera-badge.show-question) .score-card-drag-handle {
+    color: transparent;
   }
 }
 
