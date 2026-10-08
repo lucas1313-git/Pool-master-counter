@@ -4592,6 +4592,18 @@ input[type="number"] {
   margin: 10px 0 0;
 }
 
+/* Read at arm's length from a tablet propped by the table - bigger and
+   in the normal text colour, not the dimmed small print used elsewhere. */
+.camera-path-card .wizard-step-explain {
+  font-size: 1.1rem;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.camera-path-card .group-session-qr-hint {
+  font-size: 1rem;
+}
+
 .camera-path-card .wizard-step-sub {
   margin-top: 10px;
 }
