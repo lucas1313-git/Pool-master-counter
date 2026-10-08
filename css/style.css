@@ -617,13 +617,24 @@ body {
   flex-direction: column;
 }
 
-/* Every section of the page keeps at least its own content's height,
-   whatever the flex column around it does: opening a section, a long
-   log, the camera preview or a tall row of score cards always pushes
-   everything below it down - nothing is ever squeezed so its content
-   spills over the next section. */
-#app > * {
+/* Every section, on the main page and on every other screen, is its own
+   container: never squeezed below the height of what's inside it
+   (flex-shrink), never height-capped (max-height), and holding its own
+   contents - margins and anything positioned stay inside its box
+   (flow-root, relative). Opening a section, a long log, the camera
+   preview or a tall run of score cards therefore always grows that
+   section and pushes every section after it down; sections never
+   overlap. The display/position half is wrapped in :where() (zero
+   specificity), so a section's own layout rules - Focus Mode's flex
+   scoreboard, grids - still apply. */
+#app > *,
+body > [id^="view-"] > * {
   flex-shrink: 0;
+  max-height: none;
+}
+:where(#app, body > [id^="view-"]) > :where(section) {
+  display: flow-root;
+  position: relative;
 }
 
 .hidden {

@@ -4684,7 +4684,7 @@
   // upright candidate, or as a shooter). When a cue comes out over the
   // table and nothing better says whose it is - nobody in view holding
   // it, nobody held as out of view - that player is set as shooting.
-  var LAST_SEEN_PLAYER_MAX_MS = 5 * 60 * 1000;
+  var LAST_SEEN_PLAYER_MAX_MS = 2 * 60 * 1000;
   var lastSeenPlayer = null; // { name, at }
   function noteSeenPlayer(name) {
     if (name) lastSeenPlayer = { name: name, at: Date.now() };
