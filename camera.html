@@ -503,6 +503,10 @@
       <input type="number" id="ballConfirmInput" min="2" max="6" step="1" value="3">
 
       <div class="row" style="margin-top:4px">
+        <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="cueDetectionToggle" style="width:auto;margin:0" checked> Cue stick detection (needs calibration)</label><button type="button" class="help-btn" data-help="cueDetection" aria-label="What does this do?">?</button>
+      </div>
+
+      <div class="row" style="margin-top:4px">
         <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="debugToggle" style="width:auto;margin:0"> Show debug overlay</label><button type="button" class="help-btn" data-help="debugOverlay" aria-label="What does this do?">?</button>
       </div>
     </div>
@@ -764,6 +768,7 @@
   var railDistanceInput = document.getElementById("railDistanceInput");
   var ballTrackingToggle = document.getElementById("ballTrackingToggle");
   var ballConfirmInput = document.getElementById("ballConfirmInput");
+  var cueDetectionToggle = document.getElementById("cueDetectionToggle");
   var debugToggle = document.getElementById("debugToggle");
   var relaunchWizardBtn = document.getElementById("relaunchWizardBtn");
 
@@ -808,6 +813,10 @@
     ballConfirm: {
       title: "How long a dropped count has to hold",
       body: "How many consecutive still looks at the table (about one per second) have to agree that a ball is gone before it's credited.\n\nLower = credits faster, but a ball briefly hidden under a hand or glare is more likely to be counted as pocketed.\n\nHigher = slower, steadier. The keypad adjusts this on its own: a - right after an automatic credit raises it, a + the camera missed lowers it."
+    },
+    cueDetection: {
+      title: "Cue stick detection",
+      body: "Looks for a cue stick held out over the calibrated table. A player at the table with their cue over the cloth is taking a shot - this counts as shooting even when the camera can't see them bend over (a far, level camera barely sees a bend at all).\n\nIf a player walks around the table and then drops out of view right next to it, the camera assumes they're still there: the next cue that comes out over the table is credited to them, for up to 45 seconds after they were last seen (each shot they take re-arms it, up to 3 minutes).\n\nOnly works once the table is calibrated. Turn on the debug overlay to see the cue drawn in pink, with how long it is and who it was matched to - long thin lines it turned down are drawn grey with the reason."
     },
     voiceStatus: {
       title: "Speak player status out loud",
@@ -874,7 +883,8 @@
     debugOverlay: false,
     voiceStatusEnabled: false,
     ballTrackingEnabled: false,
-    ballConfirmPasses: 3
+    ballConfirmPasses: 3,
+    cueDetectionEnabled: true
   };
   var hasLocalSettingsOverride = false;
 
@@ -902,6 +912,7 @@
     railDistanceInput.value = settings.railDistanceInches;
     ballTrackingToggle.checked = settings.ballTrackingEnabled;
     ballConfirmInput.value = settings.ballConfirmPasses;
+    cueDetectionToggle.checked = settings.cueDetectionEnabled;
     debugToggle.checked = settings.debugOverlay;
     recognizeDebugToggle.checked = settings.debugOverlay;
     recognizeVoiceToggle.checked = settings.voiceStatusEnabled;
@@ -926,6 +937,11 @@
     settings.ballTrackingEnabled = ballTrackingToggle.checked;
     persistSettings();
     resetBallTracking(settings.ballTrackingEnabled ? "enabled" : "disabled");
+  });
+  cueDetectionToggle.addEventListener("change", function () {
+    settings.cueDetectionEnabled = cueDetectionToggle.checked;
+    persistSettings();
+    resetCueTracking(settings.cueDetectionEnabled ? "enabled" : "disabled");
   });
   // Same underlying setting shown in two places - the Settings panel's
   // own checkbox (easy to miss, collapsed under a <details>) and a second
@@ -1267,10 +1283,11 @@
       // comment on why that's safe) - this is just the nudge to pick up
       // that change immediately instead of waiting on nothing (there's
       // no polling loop for settings here otherwise).
-      var wasTrackingBalls = settings.ballTrackingEnabled;
+      var wasTrackingBalls = settings.ballTrackingEnabled, wasDetectingCue = settings.cueDetectionEnabled;
       loadStoredSettings();
       applySettingsToInputs();
       if (wasTrackingBalls !== settings.ballTrackingEnabled) resetBallTracking(settings.ballTrackingEnabled ? "enabled" : "disabled");
+      if (wasDetectingCue !== settings.cueDetectionEnabled) resetCueTracking(settings.cueDetectionEnabled ? "enabled" : "disabled");
     } else if (msg.type === "enroll-select" && msg.player_name) {
       selectPlayerForEnroll(msg.player_name);
     } else if (msg.type === "enroll-select-attribute" && msg.player_name) {
@@ -1592,7 +1609,7 @@
     "recognizeLiveStatus", "recognizeDebugToggle", "recognizeVoiceToggle",
     "debugToggle", "thresholdInput", "consecutiveInput", "debounceInput",
     "bendEnterInput", "bendExitInput", "railDistanceInput",
-    "ballTrackingToggle", "ballConfirmInput",
+    "ballTrackingToggle", "ballConfirmInput", "cueDetectionToggle",
     "tableSizeSelect", "firstEdgeSelect", "enrollName"
   ];
   var VIEWER_SYNCED_HTML_IDS = ["recognizeLog"];
@@ -2211,10 +2228,25 @@
     return { invH: invH, xMax: xMax, yMax: yMax, cornersPx: cornersPx, bx0: bx0, by0: by0, bx1: bx1, by1: by1 };
   }
 
-  function detectBallsInFrame() {
+  // The table patch as HSV pixels plus the felt model and the raw
+  // "not felt" mask - everything the ball pass and the cue pass both
+  // start from. Cached per detection tick (see detectTick), so when both
+  // passes run on the same tick they share one canvas read instead of
+  // two. Returns null when there's nothing to measure yet (no
+  // calibration, no video, no felt found).
+  var detectTick = 0;
+  var tableSampleCache = { tick: -1, sample: null };
+  function sampleTablePixels() {
+    if (detectTick > 0 && tableSampleCache.tick === detectTick && tableSampleCache.sample) return tableSampleCache.sample;
+    var sample = sampleTablePixelsFresh();
+    tableSampleCache = { tick: detectTick, sample: sample };
+    return sample;
+  }
+
+  function sampleTablePixelsFresh() {
     var box = calibratedTableBoxVideo();
     if (!box) return null;
-    var invH = box.invH, xMax = box.xMax, yMax = box.yMax, cornersPx = box.cornersPx;
+    var invH = box.invH, xMax = box.xMax, yMax = box.yMax;
     var bx0 = box.bx0, by0 = box.by0, bw = box.bx1 - box.bx0, bh = box.by1 - box.by0;
     var scale = Math.min(2, BALL_CANVAS_LONG_SIDE / Math.max(bw, bh));
     var w = Math.max(1, Math.round(bw * scale)), h = Math.max(1, Math.round(bh * scale));
@@ -2299,7 +2331,23 @@
       // ball's coloured band as the detected shape - "not round".
       if (hueDistance(hArr[i], feltH) > BALL_FELT_HUE_TOLERANCE_DEG || sArr[i] < BALL_MIN_SAT_FOR_FELT || vArr[i] < BALL_DARK_V_RATIO * feltV || vArr[i] > BALL_BRIGHT_V_RATIO * feltV) foreign[i] = 1;
     }
-    foreign = morphOpen(foreign, w, h);
+    return {
+      box: box, w: w, h: h, scale: scale, bx0: bx0, by0: by0,
+      inside: inside, hArr: hArr, sArr: sArr, vArr: vArr, foreign: foreign,
+      feltH: feltH, feltS: feltS, feltV: feltV,
+      toCanvas: toCanvas, toVideo: toVideo
+    };
+  }
+
+  function detectBallsInFrame(sample) {
+    sample = sample || sampleTablePixelsFresh();
+    if (!sample) return null;
+    var invH = sample.box.invH, xMax = sample.box.xMax, yMax = sample.box.yMax;
+    var w = sample.w, h = sample.h, scale = sample.scale, toVideo = sample.toVideo;
+    var sArr = sample.sArr, vArr = sample.vArr, feltH = sample.feltH, feltS = sample.feltS, feltV = sample.feltV;
+    // Opened copy - the raw mask stays intact for the cue pass, which
+    // needs exactly the thin lines this opening strips out.
+    var foreign = morphOpen(sample.foreign, w, h);
 
     var blobs = labelComponents(foreign, w, h, sArr, vArr, 6);
     if (window.PMCBallDebug) window.PMCBallDebug.lastBlobs = { blobs: blobs, w: w, h: h, scale: scale };
@@ -2591,7 +2639,7 @@
     var box = calibratedTableBoxVideo();
     if (!box) return;
     var motion = measureTableMotion(box);
-    var inv = detectBallsInFrame();
+    var inv = detectBallsInFrame(sampleTablePixels());
     if (!inv) return;
     ballTrack.lastInventory = inv;
     ballTrack.motionDiff = motion;
@@ -2599,11 +2647,13 @@
 
     var still = motion < BALL_STILL_DIFF_THRESHOLD;
     var stateBefore = ballTrack.state;
-    if (!still || stance === "bent" || inv.foreignPresent) {
+    var cueOver = cueDetectionActive() && cueTrack.present;
+    if (!still || effectiveStance() === "bent" || inv.foreignPresent || cueOver) {
       if (stateBefore !== "MOVING") {
         console.log("[PMC balls] " + (!still
           ? "BALL MOVEMENT DETECTED (motion " + (isFinite(motion) ? motion.toFixed(1) : "n/a") + ", threshold " + BALL_STILL_DIFF_THRESHOLD + ")"
-          : stance === "bent" ? "player bent over - inventory paused" : "cue or arm over the cloth - inventory paused"));
+          : cueOver ? "cue stick over the table - inventory paused"
+          : effectiveStance() === "bent" ? "player bent over - inventory paused" : "cue or arm over the cloth - inventory paused"));
       }
       ballTrack.state = "MOVING";
       ballTrack.stillPasses = 0;
@@ -2753,6 +2803,500 @@
     overlayCtx.fillText(text, 10, overlayEl.height - 10);
   }
 
+  // ---- Cue stick over the table ----
+  // A cue lying out over the cloth while someone stands at the table is
+  // the clearest "this player is taking a shot" signal there is - clearer
+  // than the hip/shoulder bend, which a far, nearly level camera barely
+  // sees (a full bend reads as ~1 degree from 20 ft). Same classical
+  // pixel work as the ball pass, from the same felt mask: keep only the
+  // THIN not-felt shapes - an opening with a ~1.2in square wipes out
+  // balls, hands, arms and bodies, while a half-inch cue shaft is exactly
+  // what it leaves behind - then look for long straight runs among them.
+  // Pieces of one cue that a bridge hand, a ball or a pocket cut apart
+  // are joined back up when they line up.
+  var CUE_PASS_EVERY_N_TICKS = 2; // ~0.55s
+  var CUE_OPEN_IN = 1.2; // thinner than this (at the near rail) can be a cue
+  var CUE_MAX_WIDTH_IN = 2.0; // shaft ~0.5in, butt ~1.2in, plus blur/stroke smear
+  var CUE_SEGMENT_MIN_IN = 2.5; // shorter thin pieces are fingers, chalk, noise
+  var CUE_MIN_LENGTH_IN = 10; // tip to where it leaves the felt or meets the bridge hand
+  var CUE_MIN_COVERED_IN = 7; // of that span, actually seen as cue (not hand/pocket gaps)
+  var CUE_MIN_CORE_IN = 4; // the longest single unbroken piece
+  var CUE_MERGE_ANGLE_DEG = 7;
+  var CUE_MERGE_GAP_IN = 10; // a bridge hand is ~4in, a pocket's exclusion disc ~9in
+  var CUE_RAIL_PARALLEL_IN = 2.5; // a thin line hugging a rail is a calibration sliver
+  var CUE_EXIT_MARGIN_IN = 4; // an end this close to an edge = the cue carries on off the table
+  var CUE_CONFIRM_PASSES = 2;
+  var CUE_LOST_PASSES = 3;
+  var CUE_HOLDER_MAX_PERP = 0.6; // hand-to-cue-line distance, in shoulder widths
+  var CUE_HOLDER_MAX_BUTT_DIST = 2.5; // nearest body point to the butt end, in shoulder widths
+  var CUE_HOLDER_ARM_KEYPOINTS = ["left_wrist", "right_wrist", "left_elbow", "right_elbow"];
+  var CUE_HOLDER_BODY_KEYPOINTS = CUE_HOLDER_ARM_KEYPOINTS.concat(["left_shoulder", "right_shoulder", "left_hip", "right_hip"]);
+  var CUE_KEYPOINT_MIN_SCORE = 0.2;
+
+  // Binary erosion/dilation with a k x k square (k odd), separable: one
+  // sliding-window sum along rows, then one along columns. Outside the
+  // canvas counts as empty, so erosion eats in from the edges.
+  function morphSquare(mask, w, h, k, erode) {
+    var r = (k - 1) >> 1;
+    function pass(src, horizontal) {
+      var out = new Uint8Array(w * h);
+      var outer = horizontal ? h : w, inner = horizontal ? w : h;
+      var stride = horizontal ? 1 : w;
+      for (var o = 0; o < outer; o++) {
+        var base = horizontal ? o * w : o;
+        var sum = 0;
+        for (var j = 0; j < r && j < inner; j++) sum += src[base + j * stride];
+        for (var c = 0; c < inner; c++) {
+          if (c + r < inner) sum += src[base + (c + r) * stride];
+          if (c - r - 1 >= 0) sum -= src[base + (c - r - 1) * stride];
+          if (erode ? sum === k : sum > 0) out[base + c * stride] = 1;
+        }
+      }
+      return out;
+    }
+    return pass(pass(mask, true), false);
+  }
+
+  // 8-connected (unlike labelComponents, which is 4-connected - right for
+  // solid balls, but a one-pixel diagonal step in a thin shaft would cut
+  // it into dozens of specks).
+  function labelThinComponents(mask, w, h, minArea) {
+    var visited = new Uint8Array(w * h);
+    var blobs = [];
+    for (var start = 0; start < w * h; start++) {
+      if (!mask[start] || visited[start]) continue;
+      var stack = [start];
+      visited[start] = 1;
+      var area = 0, sumX = 0, sumY = 0, sumXX = 0, sumYY = 0, sumXY = 0;
+      var pixels = [];
+      while (stack.length) {
+        var idx = stack.pop();
+        var x = idx % w, y = (idx / w) | 0;
+        pixels.push(idx);
+        area++; sumX += x; sumY += y; sumXX += x * x; sumYY += y * y; sumXY += x * y;
+        for (var dy = -1; dy <= 1; dy++) {
+          var yy = y + dy;
+          if (yy < 0 || yy >= h) continue;
+          for (var dx = -1; dx <= 1; dx++) {
+            var xx = x + dx;
+            if ((dx || dy) && xx >= 0 && xx < w) {
+              var n = yy * w + xx;
+              if (mask[n] && !visited[n]) { visited[n] = 1; stack.push(n); }
+            }
+          }
+        }
+      }
+      if (area < minArea) continue;
+      var cx = sumX / area, cy = sumY / area;
+      blobs.push({
+        area: area, cx: cx, cy: cy, pixels: pixels,
+        cxx: sumXX / area - cx * cx, cyy: sumYY / area - cy * cy, cxy: sumXY / area - cx * cy
+      });
+    }
+    return blobs;
+  }
+
+  // Canvas pixel -> real table inches (through the video frame).
+  function cueCanvasToReal(sample, x, y) {
+    var v = sample.toVideo(x, y);
+    return applyHomography(calibration.h, v.x, v.y);
+  }
+  function realDist(a, b) { return Math.sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y)); }
+
+  // One thin blob as a straight bar: principal direction, end points
+  // (extreme projections onto that direction), length and thickness in
+  // canvas pixels, and real-inch length/width through the homography.
+  function cueSegmentFromBlob(blob, sample) {
+    var tr = blob.cxx + blob.cyy, det = blob.cxx * blob.cyy - blob.cxy * blob.cxy;
+    var disc = Math.sqrt(Math.max(0, tr * tr / 4 - det));
+    var e1 = tr / 2 + disc;
+    if (!(e1 > 0)) return null;
+    var theta = 0.5 * Math.atan2(2 * blob.cxy, blob.cxx - blob.cyy);
+    var ux = Math.cos(theta), uy = Math.sin(theta), w = sample.w;
+    var tMin = Infinity, tMax = -Infinity;
+    var across = new Float32Array(blob.pixels.length);
+    for (var i = 0; i < blob.pixels.length; i++) {
+      var idx = blob.pixels[i];
+      var px = (idx % w) - blob.cx, py = ((idx / w) | 0) - blob.cy;
+      var t = px * ux + py * uy;
+      if (t < tMin) tMin = t;
+      if (t > tMax) tMax = t;
+      across[i] = Math.abs(py * ux - px * uy);
+    }
+    // Width from the 75th percentile of distance-from-the-axis, not the
+    // variance: the cue ball (or a fingertip) touching the tip is part of
+    // the same blob, and a variance would let those few pixels fatten
+    // the whole stick. For a bar of width t that distance is spread
+    // evenly over 0..t/2, so t = p75 / 0.375.
+    across.sort();
+    var p75 = across[Math.min(across.length - 1, Math.floor(0.75 * across.length))];
+    var seg = {
+      ax: blob.cx + ux * tMin, ay: blob.cy + uy * tMin,
+      bx: blob.cx + ux * tMax, by: blob.cy + uy * tMax,
+      cx: blob.cx, cy: blob.cy, ux: ux, uy: uy,
+      lenPx: tMax - tMin + 1,
+      thickPx: Math.max(1, p75 / 0.375),
+      blob: blob
+    };
+    var ra = cueCanvasToReal(sample, seg.ax, seg.ay), rb = cueCanvasToReal(sample, seg.bx, seg.by);
+    var rc = cueCanvasToReal(sample, seg.cx, seg.cy), rp = cueCanvasToReal(sample, seg.cx - uy, seg.cy + ux);
+    if (!ra || !rb || !rc || !rp) return null;
+    seg.lengthIn = realDist(ra, rb);
+    seg.inPerPxAcross = realDist(rc, rp);
+    seg.widthIn = seg.thickPx * seg.inPerPxAcross;
+    return seg;
+  }
+
+  // Fraction of the line's on-cue sample points with felt (or the table
+  // edge) on BOTH sides just past its width - a free-standing stick, not
+  // the ragged fringe along the edge of an arm, a body or a rack.
+  function cueSideClearance(group, sample, mask) {
+    var w = sample.w, h = sample.h, nx = -group.uy, ny = group.ux;
+    var d = group.thickPx / 2 + Math.max(2, 0.8 / Math.max(0.01, group.inPerPxAcross));
+    var onCue = 0, clear = 0;
+    function free(x, y) {
+      x = Math.round(x); y = Math.round(y);
+      if (x < 0 || y < 0 || x >= w || y >= h) return true;
+      var i = y * w + x;
+      return !sample.inside[i] || !mask[i];
+    }
+    for (var s = 0; s <= 24; s++) {
+      var t = group.tMin + (group.tMax - group.tMin) * s / 24;
+      var px = group.cx + group.ux * t, py = group.cy + group.uy * t;
+      var ix = Math.round(px), iy = Math.round(py);
+      if (ix < 0 || iy < 0 || ix >= w || iy >= h || !mask[iy * w + ix]) continue;
+      onCue++;
+      if (free(px + nx * d, py + ny * d) && free(px - nx * d, py - ny * d)) clear++;
+    }
+    return { onCue: onCue, fraction: onCue ? clear / onCue : 0 };
+  }
+
+  // Returns { cue, rejected, pieces, ms } - cue is null when nothing
+  // cue-like is over the felt. All positions in the result are native
+  // video pixels (like the ball inventory), so the overlay and the
+  // holder search can use them directly.
+  function detectCueInFrame(sample) {
+    sample = sample || sampleTablePixelsFresh();
+    if (!sample) return null;
+    var t0 = Date.now();
+    var w = sample.w, h = sample.h, xMax = sample.box.xMax, yMax = sample.box.yMax;
+    // Opening size in canvas pixels: CUE_OPEN_IN at the table's most
+    // magnified (nearest) edge, so it's wider than a shaft everywhere.
+    var pxPerInMax = 0;
+    var inv = sample.box.invH;
+    [[0, 0], [xMax, 0], [xMax, yMax], [0, yMax]].forEach(function (c) {
+      var p0 = applyInverseHomography(inv, c[0], c[1]);
+      var px = applyInverseHomography(inv, c[0] + (c[0] ? -1 : 1), c[1]);
+      var py = applyInverseHomography(inv, c[0], c[1] + (c[1] ? -1 : 1));
+      if (!p0 || !px || !py) return;
+      pxPerInMax = Math.max(pxPerInMax, pointDist(p0, px) * sample.scale, pointDist(p0, py) * sample.scale);
+    });
+    var k = Math.max(5, Math.min(21, Math.round(CUE_OPEN_IN * pxPerInMax) | 1));
+    // A 3x3 closing first bridges the one-pixel breaks a thin shaft gets
+    // where it blends into the cloth.
+    var closed = morphSquare(morphSquare(sample.foreign, w, h, 3, false), w, h, 3, true);
+    var opened = morphSquare(morphSquare(closed, w, h, k, true), w, h, k, false);
+    // What the opening shaves off a thick shape's rounded edge (a bridge
+    // hand, a ball) is a thin crescent too, and it would stick to the
+    // shaft and fatten it - so thin pixels touching anything thick (within
+    // 2px) don't count.
+    var nearThick = morphSquare(opened, w, h, 5, false);
+    var thin = new Uint8Array(w * h);
+    for (var i = 0; i < w * h; i++) if (closed[i] && !nearThick[i]) thin[i] = 1;
+
+    var segs = [];
+    labelThinComponents(thin, w, h, 6).forEach(function (blob) {
+      var seg = cueSegmentFromBlob(blob, sample);
+      if (!seg) return;
+      if (seg.lengthIn < CUE_SEGMENT_MIN_IN || seg.lenPx < 4 * seg.thickPx || seg.widthIn > CUE_MAX_WIDTH_IN) return;
+      segs.push(seg);
+    });
+    segs.sort(function (a, b) { return b.lengthIn - a.lengthIn; });
+
+    var cosMerge = Math.cos(CUE_MERGE_ANGLE_DEG * Math.PI / 180);
+    var used = new Array(segs.length);
+    var accepted = [], rejected = [];
+    for (var s = 0; s < segs.length; s++) {
+      if (used[s]) continue;
+      used[s] = true;
+      var seed = segs[s];
+      var g = { ux: seed.ux, uy: seed.uy, cx: seed.cx, cy: seed.cy, thickPx: seed.thickPx, inPerPxAcross: seed.inPerPxAcross, segs: [seed] };
+      g.tMin = (seed.ax - g.cx) * g.ux + (seed.ay - g.cy) * g.uy;
+      g.tMax = (seed.bx - g.cx) * g.ux + (seed.by - g.cy) * g.uy;
+      if (g.tMin > g.tMax) { var sw = g.tMin; g.tMin = g.tMax; g.tMax = sw; }
+      var grew = true;
+      while (grew) {
+        grew = false;
+        for (var j = 0; j < segs.length; j++) {
+          if (used[j]) continue;
+          var o = segs[j];
+          if (Math.abs(o.ux * g.ux + o.uy * g.uy) < cosMerge) continue;
+          var tol = Math.max(3, 0.8 / Math.max(0.01, o.inPerPxAcross));
+          var perpA = Math.abs((o.ax - g.cx) * -g.uy + (o.ay - g.cy) * g.ux);
+          var perpB = Math.abs((o.bx - g.cx) * -g.uy + (o.by - g.cy) * g.ux);
+          if (perpA > tol || perpB > tol) continue;
+          var ta = (o.ax - g.cx) * g.ux + (o.ay - g.cy) * g.uy, tb = (o.bx - g.cx) * g.ux + (o.by - g.cy) * g.uy;
+          var oMin = Math.min(ta, tb), oMax = Math.max(ta, tb);
+          var gapFrom = null, gapTo = null;
+          if (oMin > g.tMax) { gapFrom = g.tMax; gapTo = oMin; } else if (oMax < g.tMin) { gapFrom = oMax; gapTo = g.tMin; }
+          if (gapFrom !== null) {
+            var r1 = cueCanvasToReal(sample, g.cx + g.ux * gapFrom, g.cy + g.uy * gapFrom);
+            var r2 = cueCanvasToReal(sample, g.cx + g.ux * gapTo, g.cy + g.uy * gapTo);
+            if (!r1 || !r2 || realDist(r1, r2) > CUE_MERGE_GAP_IN) continue;
+          }
+          used[j] = true;
+          g.segs.push(o);
+          g.tMin = Math.min(g.tMin, oMin);
+          g.tMax = Math.max(g.tMax, oMax);
+          g.thickPx = Math.max(g.thickPx, o.thickPx);
+          grew = true;
+        }
+      }
+
+      var ea = { x: g.cx + g.ux * g.tMin, y: g.cy + g.uy * g.tMin };
+      var eb = { x: g.cx + g.ux * g.tMax, y: g.cy + g.uy * g.tMax };
+      var ra = cueCanvasToReal(sample, ea.x, ea.y), rb = cueCanvasToReal(sample, eb.x, eb.y);
+      if (!ra || !rb) continue;
+      var spanIn = realDist(ra, rb);
+      var coveredIn = 0, coreIn = 0, widthIn = 0;
+      g.segs.forEach(function (sg) {
+        coveredIn += sg.lengthIn;
+        coreIn = Math.max(coreIn, sg.lengthIn);
+        widthIn = Math.max(widthIn, sg.widthIn);
+      });
+      var va = sample.toVideo(ea.x, ea.y), vb = sample.toVideo(eb.x, eb.y);
+      var entry = { a: va, b: vb, lengthIn: spanIn, coveredIn: coveredIn, widthIn: widthIn, pieces: g.segs.length };
+      var reason = null;
+      if (spanIn < CUE_MIN_LENGTH_IN) reason = "too short (" + spanIn.toFixed(0) + "in)";
+      else if (coveredIn < CUE_MIN_COVERED_IN) reason = "mostly gaps (" + coveredIn.toFixed(0) + "in seen)";
+      else if (coreIn < CUE_MIN_CORE_IN) reason = "only small pieces";
+      else {
+        var edgeA = [ra.y, yMax - ra.y, ra.x, xMax - ra.x], edgeB = [rb.y, yMax - rb.y, rb.x, xMax - rb.x];
+        for (var e = 0; e < 4; e++) {
+          if (edgeA[e] <= CUE_RAIL_PARALLEL_IN && edgeB[e] <= CUE_RAIL_PARALLEL_IN) { reason = "along the rail"; break; }
+        }
+        if (!reason) {
+          var clearance = cueSideClearance(g, sample, closed);
+          entry.clearance = clearance.fraction;
+          if (clearance.onCue < 4 || clearance.fraction < 0.5) reason = "edge of something wider";
+        }
+      }
+      if (reason) {
+        // Only the ones long enough to be worth explaining on the overlay.
+        if (spanIn >= 6) { entry.reason = reason; rejected.push(entry); }
+        continue;
+      }
+      // Which end is the butt: the one nearer an edge (where the cue
+      // carries on off the table towards the shooter's back hand), or
+      // into a pocket's cut-out of the mask.
+      var exitDist = function (r) {
+        var d = Math.min(r.x, xMax - r.x, r.y, yMax - r.y);
+        pocketCentersReal().forEach(function (pc) {
+          var dp = Math.sqrt((r.x - pc[0]) * (r.x - pc[0]) + (r.y - pc[1]) * (r.y - pc[1])) - POCKET_EXCLUSION_RADIUS_IN;
+          if (dp < d) d = dp;
+        });
+        return Math.max(0, d);
+      };
+      var exitA = exitDist(ra), exitB = exitDist(rb);
+      var aIsButt = exitA <= exitB;
+      entry.butt = aIsButt ? va : vb;
+      entry.tip = aIsButt ? vb : va;
+      entry.buttReal = aIsButt ? ra : rb;
+      entry.exitsTable = Math.min(exitA, exitB) <= CUE_EXIT_MARGIN_IN;
+      entry.bothEndsExit = Math.max(exitA, exitB) <= CUE_EXIT_MARGIN_IN;
+      entry.segments = g.segs.map(function (sg) { return { a: sample.toVideo(sg.ax, sg.ay), b: sample.toVideo(sg.bx, sg.by), lengthIn: sg.lengthIn, widthIn: sg.widthIn }; });
+      accepted.push(entry);
+    }
+    accepted.sort(function (a, b) { return b.lengthIn - a.lengthIn; });
+    return { cue: accepted[0] || null, rejected: rejected, pieces: segs.length, openSizePx: k, ms: Date.now() - t0 };
+  }
+
+  // ---- Cue tracking across passes ----
+  // One sighting is never trusted (a passing arm can line up for a frame):
+  // CUE_CONFIRM_PASSES in a row make the cue "present", and it takes
+  // CUE_LOST_PASSES misses in a row to clear it again, so a frame of
+  // stroke blur mid-aim doesn't drop it. appearanceId counts how many
+  // separate times a cue has come out over the table - one appearance is
+  // one shot being lined up.
+  var cueTickCounter = 0;
+  var cueTrack = { present: false, seenPasses: 0, missedPasses: 0, cue: null, lastResult: null, appearanceId: 0, lastSeenAt: 0, holder: null };
+
+  function resetCueTracking(reason) {
+    cueTrack.present = false;
+    cueTrack.seenPasses = 0;
+    cueTrack.missedPasses = 0;
+    cueTrack.cue = null;
+    cueTrack.lastResult = null;
+    cueTrack.holder = null;
+    if (reason) logActivity("Cue stick detection " + reason);
+  }
+
+  function cueDetectionActive() {
+    return settings.cueDetectionEnabled && !!calibration && !isViewer;
+  }
+
+  var RAIL_NAMES = ["top", "bottom", "left", "right"];
+  function runCuePass() {
+    var sample = sampleTablePixels();
+    var result = sample ? detectCueInFrame(sample) : null;
+    cueTrack.lastResult = result;
+    if (result && result.cue) {
+      cueTrack.cue = result.cue;
+      cueTrack.lastSeenAt = Date.now();
+      cueTrack.seenPasses++;
+      cueTrack.missedPasses = 0;
+      if (!cueTrack.present && cueTrack.seenPasses >= CUE_CONFIRM_PASSES) {
+        cueTrack.present = true;
+        cueTrack.appearanceId++;
+        var side = result.cue.exitsTable ? nearestRailSide(result.cue.buttReal, calibration.tableLength, calibration.tableWidth).side : -1;
+        console.log("[PMC cue] CUE STICK OVER THE TABLE - " + Math.round(result.cue.lengthIn) + "in of cue seen" +
+          (side >= 0 ? ", butt end off the " + RAIL_NAMES[side] + " rail (camera view)" : ", lying inside the table"));
+      }
+    } else {
+      cueTrack.seenPasses = 0;
+      cueTrack.missedPasses++;
+      if (cueTrack.present && cueTrack.missedPasses >= CUE_LOST_PASSES) {
+        cueTrack.present = false;
+        cueTrack.cue = null;
+        cueTrack.holder = null;
+        console.log("[PMC cue] cue stick no longer over the table");
+      }
+    }
+  }
+
+  function keypointIfSure(keypoints, name) {
+    var p = kp(keypoints, name);
+    return p && (p.score || 0) >= CUE_KEYPOINT_MIN_SCORE ? p : null;
+  }
+  // A person's size in pixels, for distances that have to mean the same
+  // thing near and far from the camera: shoulder width, or 60% of the
+  // shoulder-to-hip length when the shoulders are stacked edge-on.
+  function bodyScalePx(keypoints) {
+    var ls = keypointIfSure(keypoints, "left_shoulder"), rs = keypointIfSure(keypoints, "right_shoulder");
+    var lh = keypointIfSure(keypoints, "left_hip"), rh = keypointIfSure(keypoints, "right_hip");
+    var s = 0;
+    if (ls && rs) s = pointDist(ls, rs);
+    if (ls && rs && lh && rh) s = Math.max(s, 0.6 * pointDist(midpoint(ls, rs), midpoint(lh, rh)));
+    return s;
+  }
+
+  // Who's holding the cue? Only standing people at the table qualify
+  // (same filters as selectActivePose - nobody seated holds a cue out
+  // over the cloth). In order of how sure it is:
+  //  1. a wrist or elbow lying on the cue's line, behind the tip - the
+  //     bridge hand and the back hand both sit on that line;
+  //  2. for a cue that runs off the table, the person nearest the end it
+  //     runs off at (the butt, where their back hand is);
+  //  3. the only person at the table - unless someone who just went out
+  //     of view is being held as still there (see tablePresence), since
+  //     then the shooter may well be the hidden one, not this one.
+  // Returns { pose, how, score } or null.
+  function findCueHolder(poses, cue, hiddenPresence) {
+    if (!cue || !poses || !poses.length) return null;
+    var eligible = [];
+    poses.forEach(function (pose) {
+      var peek = quickStancePeek(pose.keypoints);
+      if (!peek || !peek.standing) return;
+      if (calibration && peek.ankleMid) {
+        var real = applyHomography(calibration.h, peek.ankleMid.x, peek.ankleMid.y);
+        if (real && distanceToNearestRail(real, calibration.tableLength, calibration.tableWidth) > settings.railDistanceInches) return;
+      }
+      var scale = bodyScalePx(pose.keypoints);
+      if (scale > 0) eligible.push({ pose: pose, scale: scale });
+    });
+    if (!eligible.length) return null;
+    var best = null;
+    // When both ends run off the table it can't tell the butt from the
+    // tip by position alone - try it both ways round.
+    var orientations = cue.bothEndsExit ? [[cue.tip, cue.butt], [cue.butt, cue.tip]] : [[cue.tip, cue.butt]];
+    eligible.forEach(function (e) {
+      orientations.forEach(function (o) {
+        var tip = o[0], butt = o[1];
+        var dx = butt.x - tip.x, dy = butt.y - tip.y, len = Math.sqrt(dx * dx + dy * dy);
+        if (len < 1) return;
+        var ux = dx / len, uy = dy / len;
+        CUE_HOLDER_ARM_KEYPOINTS.forEach(function (name) {
+          var p = keypointIfSure(e.pose.keypoints, name);
+          if (!p) return;
+          var t = (p.x - tip.x) * ux + (p.y - tip.y) * uy;
+          if (t < 0.2 * len) return; // at or past the tip - not holding it
+          var score = Math.abs((p.x - tip.x) * -uy + (p.y - tip.y) * ux) / e.scale;
+          if (score <= CUE_HOLDER_MAX_PERP && (!best || score < best.score)) best = { pose: e.pose, score: score, how: "hands on the cue" };
+        });
+      });
+    });
+    if (best) return best;
+    // A cue lying wholly inside the table with nobody's hands on it is a
+    // cue put down, not a shot.
+    if (!cue.exitsTable) return null;
+    eligible.forEach(function (e) {
+      CUE_HOLDER_BODY_KEYPOINTS.forEach(function (name) {
+        var p = keypointIfSure(e.pose.keypoints, name);
+        if (!p) return;
+        var score = pointDist(p, cue.butt) / e.scale;
+        if (score <= CUE_HOLDER_MAX_BUTT_DIST && (!best || score < best.score)) best = { pose: e.pose, score: score, how: "nearest the butt end" };
+      });
+    });
+    if (best) return best;
+    if (eligible.length === 1 && !hiddenPresence) return { pose: eligible[0].pose, score: Infinity, how: "only player at the table" };
+    return null;
+  }
+
+  function drawCueDebug() {
+    if (!cueDetectionActive() || !cueTrack.lastResult) return;
+    var result = cueTrack.lastResult;
+    overlayCtx.save();
+    overlayCtx.font = "12px sans-serif";
+    // Long thin lines that were looked at and turned down, and why.
+    result.rejected.forEach(function (r) {
+      var a = videoToOverlay(r.a.x, r.a.y), b = videoToOverlay(r.b.x, r.b.y);
+      overlayCtx.strokeStyle = "#9a9a9a";
+      overlayCtx.lineWidth = 2;
+      overlayCtx.setLineDash([4, 4]);
+      overlayCtx.beginPath(); overlayCtx.moveTo(a.x, a.y); overlayCtx.lineTo(b.x, b.y); overlayCtx.stroke();
+      overlayCtx.setLineDash([]);
+      overlayCtx.fillStyle = "#9a9a9a";
+      overlayCtx.fillText("✕ " + r.reason, (a.x + b.x) / 2 + 6, (a.y + b.y) / 2 - 6);
+    });
+    var cue = cueTrack.present ? cueTrack.cue : result.cue;
+    if (cue) {
+      var colour = cueTrack.present ? "#ff4fd8" : "#c58ab8"; // bright once confirmed
+      var tip = videoToOverlay(cue.tip.x, cue.tip.y), butt = videoToOverlay(cue.butt.x, cue.butt.y);
+      overlayCtx.strokeStyle = colour;
+      overlayCtx.lineWidth = 5;
+      overlayCtx.lineCap = "round";
+      cue.segments.forEach(function (sg) {
+        var a = videoToOverlay(sg.a.x, sg.a.y), b = videoToOverlay(sg.b.x, sg.b.y);
+        overlayCtx.beginPath(); overlayCtx.moveTo(a.x, a.y); overlayCtx.lineTo(b.x, b.y); overlayCtx.stroke();
+      });
+      overlayCtx.lineWidth = 2;
+      overlayCtx.setLineDash([6, 5]);
+      overlayCtx.beginPath(); overlayCtx.moveTo(tip.x, tip.y); overlayCtx.lineTo(butt.x, butt.y); overlayCtx.stroke();
+      overlayCtx.setLineDash([]);
+      overlayCtx.beginPath(); overlayCtx.arc(tip.x, tip.y, 6, 0, Math.PI * 2); overlayCtx.stroke();
+      // Who it was matched to: a line from the butt end to them.
+      if (cueTrack.present && cueTrack.holder) {
+        var hb = boxFromPoints(cueTrack.holder.pose.keypoints.filter(function (p) { return (p.score || 0) >= CUE_KEYPOINT_MIN_SCORE; }), 0.05);
+        if (isFinite(hb.x0)) {
+          var hc = videoToOverlay((hb.x0 + hb.x1) / 2, (hb.y0 + hb.y1) / 2);
+          overlayCtx.setLineDash([2, 4]);
+          overlayCtx.beginPath(); overlayCtx.moveTo(butt.x, butt.y); overlayCtx.lineTo(hc.x, hc.y); overlayCtx.stroke();
+          overlayCtx.setLineDash([]);
+        }
+      }
+      var label = "CUE " + Math.round(cue.lengthIn) + "in" + (cueTrack.present ? "" : " (confirming)") +
+        (cueTrack.present && cueTrack.holder ? " - " + cueTrack.holder.how : "");
+      overlayCtx.font = "bold 14px sans-serif";
+      var lw = overlayCtx.measureText(label).width;
+      var lx = (tip.x + butt.x) / 2 + 8, ly = (tip.y + butt.y) / 2 - 10;
+      overlayCtx.fillStyle = "rgba(0,0,0,0.65)";
+      overlayCtx.fillRect(lx - 4, ly - 14, lw + 8, 19);
+      overlayCtx.fillStyle = colour;
+      overlayCtx.fillText(label, lx, ly);
+    }
+    overlayCtx.restore();
+  }
+
   // Test/diagnostic hook - lets a Puppeteer harness (or a console) read
   // the tracker's state and run the detector on demand.
   window.PMCBallDebug = {
@@ -2771,6 +3315,24 @@
     getEnrollments: function () { return enrollments; },
     getPlayingNames: function () { return playingNames; },
     getKnownNames: function () { return knownNames; }
+  };
+  // Same idea for the cue: the tracker, the detector on demand, and the
+  // "player out of view at the table" hold, readable and seedable.
+  window.PMCCueDebug = {
+    track: cueTrack,
+    detect: function () { return detectCueInFrame(sampleTablePixelsFresh()); },
+    runPass: function () { runCuePass(); },
+    reset: function () { resetCueTracking(); },
+    findHolder: function (poses) { return findCueHolder(poses, cueTrack.cue, heldHiddenPresence(Date.now())); },
+    getPresence: function () { return tablePresence; },
+    setPresence: function (p) { tablePresence = p; },
+    getHiddenPresence: function () { return hiddenPresence; },
+    // Test hook: when set, replaces the pose model's output for each
+    // frame (fn(poses) -> poses), so a harness can walk synthetic people
+    // around a synthetic table through the real detection loop.
+    posesOverride: null,
+    getStance: function () { return effectiveStance(); },
+    getShootingVia: function () { return shootingVia; }
   };
 
   // ---- Multi-person selection (MultiPose returns up to 6 people) ----
@@ -3832,9 +4394,16 @@
     var closest = analysis ? findBestMatch(analysis.descriptor) : null;
     send({
       type: "candidate",
-      player_name: (candidate && candidate.name) || null,
-      stance: analysis ? stance : "unknown",
+      // An out-of-view shooter is named from the presence hold (not the
+      // candidate, who may be a bystander still in view), so the
+      // scoreboard doesn't flag them as an unrecognized shooter.
+      player_name: shootingVia === "cue-hidden" ? cueHiddenShooterName : (candidate && candidate.name) || null,
+      stance: analysis || shootingVia ? effectiveStance() : "unknown",
       angle: analysis ? Math.round(analysis.torsoAngleDeg) : null,
+      // What the camera is going on beyond the bend angle: a cue over the
+      // table, and whether the shooter is out of view (shootingVia).
+      cue: cueTrack.present,
+      shootingVia: shootingVia,
       closestName: closest ? closest.name : null,
       closestDistance: closest ? Math.round(closest.distance * 100) / 100 : null,
       matchThreshold: settings.matchThreshold,
@@ -3865,7 +4434,7 @@
       // unmatched - a concrete best-guess target to tap, not a blind
       // prompt.
       flashingName: lastAnnouncedSeenName && shotConfirmedForSeenName !== lastAnnouncedSeenName ? lastAnnouncedSeenName : null,
-      needsConfirmationName: !(candidate && candidate.name) && stance === "bent" && closest ? closest.name : null
+      needsConfirmationName: !(candidate && candidate.name) && effectiveStance() === "bent" && closest ? closest.name : null
     });
   }
 
@@ -3882,14 +4451,29 @@
   // debug checkbox (either copy of it) is on.
   function updateRecognizeLiveStatus(analysis) {
     if (!settings.debugOverlay) return;
+    var held = heldHiddenPresence(Date.now()) || heldTablePresence(Date.now());
+    var hiddenShot = "Cue over the table - shooter out of view" + (cueHiddenShooterName ? " (" + cueHiddenShooterName + ")" : held ? " (" + (held.name || "unrecognized player") + ")" : "") + ".";
     if (!analysis) {
-      recognizeLiveStatus.textContent = "No one in view.";
+      if (shootingVia === "cue-hidden") {
+        recognizeLiveStatus.textContent = hiddenShot;
+      } else if (held && held.hidden) {
+        recognizeLiveStatus.textContent = (held.name || "A player") + " is out of view next to the table - assumed still there." + (cueTrack.present ? " Cue over the table." : "");
+      } else {
+        recognizeLiveStatus.textContent = "No one in view." + (cueTrack.present ? " Cue over the table, but no player at it." : "");
+      }
       return;
     }
     var angle = Math.round(analysis.torsoAngleDeg);
-    var stanceLabel = stance === "bent" ? "bent (" + angle + "°)" : stance === "upright" ? "upright (" + angle + "°)" : angle + "°";
+    if (shootingVia === "cue-hidden") {
+      // Someone else is in view; the shot is the hidden player's.
+      recognizeLiveStatus.textContent = hiddenShot + " In view: " + (candidate && candidate.name ? candidate.name : "unmatched") + ", " + stance + " (" + angle + "°).";
+      return;
+    }
+    var shown = effectiveStance();
+    var stanceLabel = shootingVia === "cue" ? "shooting - cue over the table (bend " + angle + "°)" :
+      shown === "bent" ? "bent (" + angle + "°)" : shown === "upright" ? "upright (" + angle + "°)" : angle + "°";
     var who = candidate && candidate.name ? candidate.name : "unmatched";
-    recognizeLiveStatus.textContent = "Currently " + stanceLabel + " - candidate: " + who;
+    recognizeLiveStatus.textContent = "Currently " + stanceLabel + " - candidate: " + who + (cueTrack.present && shootingVia !== "cue" ? " - cue over the table, not in this player's hands" : "");
   }
 
   function withinRailDistance(analysis) {
@@ -3954,25 +4538,31 @@
     return nearestRailSide(real, calibration.tableLength, calibration.tableWidth).side;
   }
 
-  function fireEvent(name, descriptor, matchDistance, side) {
+  // via says what gave the shot away ("bent over", "cue over the table",
+  // ...) - logs only. descriptor is null when there's no fresh look at
+  // the shooter to learn from (out of view, or named from an earlier
+  // recognition), and then nothing is added to their enrollment.
+  function fireEvent(name, descriptor, matchDistance, side, via) {
+    via = via || "bent over";
     var now = Date.now();
     var last = lastEmittedAt[name] || 0;
     if (now - last < settings.debounceSec * 1000) {
-      console.log("[PMC shooting] " + name + " shooting detected again within the " + settings.debounceSec + "s cooldown - not re-sent");
+      console.log("[PMC shooting] " + name + " shooting detected again (" + via + ") within the " + settings.debounceSec + "s cooldown - not re-sent");
       return;
     }
     lastEmittedAt[name] = now;
     var confidence = Math.max(0, Math.min(1, 1 - matchDistance / MAX_EXPECTED_DISTANCE));
-    console.log("[PMC shooting] SHOOTING DETECTED: " + name + " (match distance " + matchDistance.toFixed(2) + ", confidence " + confidence.toFixed(2) + ")");
+    var detail = via + (descriptor ? ", match distance " + matchDistance.toFixed(2) : "");
+    console.log("[PMC shooting] SHOOTING DETECTED: " + name + " (" + detail + ", confidence " + confidence.toFixed(2) + ")");
     send({ type: "player_up", player_name: name, confidence: confidence, ts: now });
-    logActivity(name + " shooting (match distance " + matchDistance.toFixed(2) + ")");
+    logActivity(name + " shooting (" + detail + ")");
     // Stops the scorecard's camera icon flashing for this name - see
     // shotConfirmedForSeenName's own comment.
     if (name === lastAnnouncedSeenName) shotConfirmedForSeenName = name;
     // Not spoken here in embedded mode - see updateSeenCandidate's comment
     // above; the parent page's own player_up handler speaks instead.
     if (settings.voiceStatusEnabled && !isEmbedded) speak(name + " shooting.");
-    if (matchDistance <= settings.matchThreshold * 0.7) {
+    if (descriptor && matchDistance <= settings.matchThreshold * 0.7) {
       send({ type: "enroll-add", player_name: name, descriptor: descriptor, side: side });
       notifyEnrollmentUpdated(name);
     }
@@ -4009,23 +4599,184 @@
     logActivity(name + " confirmed by scoring (side " + (candidate.side === undefined ? "?" : candidate.side + 1) + ")");
   }
 
-  function handleRecognitionFrame(analysis) {
+  // ---- Player out of view at the table ----
+  // Someone seen moving around the table who then vanishes right next to
+  // it (behind another player, below the camera's view of the rail,
+  // turned so the pose model loses them) hasn't left - they're still
+  // there, and the next thing they'll do is put their cue out over the
+  // table to shoot. tablePresence is the last person seen close to the
+  // table (the same at-the-table test shots use); for PRESENCE_HOLD_MS
+  // after they drop out of view their identity is kept alive, and a cue
+  // coming out over the table in that time, with nobody in view holding
+  // it, is credited to them. Each cue they shoot with re-arms the hold,
+  // for up to PRESENCE_MAX_HIDDEN_MS after they were last actually seen -
+  // past that, someone has to be seen again first.
+  var PRESENCE_HOLD_MS = 45000;
+  var PRESENCE_MAX_HIDDEN_MS = 3 * 60 * 1000;
+  var tablePresence = null; // { name, side, trackId, box, seenAt, lastSeenAt, hidden }
+  // Someone who dropped out of view at the table while another person
+  // stayed in view there (the opponent standing by the rail, say) - kept
+  // apart from tablePresence, which that other person now fills.
+  var hiddenPresence = null;
+  var currentPoseIds = {}; // pose track ids in this frame - set by runDetectionLoop
+  var cueHiddenFiredAppearanceId = -1;
+  var cueHiddenConsecutive = 0; // its own streak: a visible bystander's upright frames reset the bend one
+  var cueHiddenShooterName = null;
+  // How this frame's shooting stance was decided: null (the bend alone,
+  // or not shooting), "cue" (cue over the table in the hands of the
+  // person being looked at), or "cue-hidden" (cue over the table, the
+  // shooter out of view or unreadable).
+  var shootingVia = null;
+
+  function heldTablePresence(now) {
+    if (!tablePresence) return null;
+    return now - tablePresence.lastSeenAt <= PRESENCE_HOLD_MS ? tablePresence : null;
+  }
+  // The player currently assumed to be out of view at the table, if any.
+  function heldHiddenPresence(now) {
+    var held = heldTablePresence(now);
+    if (held && held.hidden) return held;
+    return hiddenPresence && now - hiddenPresence.lastSeenAt <= PRESENCE_HOLD_MS ? hiddenPresence : null;
+  }
+
+  // The stance everything downstream acts on: the bend reading,
+  // overridden to "bent" (shooting) whenever the cue says so. The bend's
+  // own hysteresis state (stance) is never touched by the cue, so it
+  // carries on exactly where it was once the cue is put away.
+  function effectiveStance() {
+    return shootingVia ? "bent" : stance;
+  }
+
+  function idleNameForTrack(trackId) {
+    if (trackId === undefined || trackId === null || !idleTrackCache[trackId]) return null;
+    return idleTrackCache[trackId].lastMatchedName || null;
+  }
+  function hasTrackId(x) { return !!x && x.trackId !== undefined && x.trackId !== null; }
+
+  function updateTablePresence(analysis, now) {
+    var fresh = candidate && now - candidate.lastSeenAt <= CANDIDATE_GRACE_MS ? candidate : null;
+    var ids = hasTrackId(analysis) && hasTrackId(tablePresence);
+    // Still the same person as last frame: the same pose track, or (no
+    // track ids) seen continuously - so a name learned while they stood
+    // upright survives a long bend over a shot.
+    var samePerson = tablePresence && !tablePresence.hidden &&
+      (ids ? tablePresence.trackId === analysis.trackId : now - tablePresence.lastSeenAt <= 2 * NO_POSE_GRACE_MS);
+    // A different person is now the one at the table. If the previous
+    // one's pose track is gone from the frame altogether (not merely
+    // outranked by this one), they dropped out of view right here.
+    if (tablePresence && ids && tablePresence.trackId !== analysis.trackId && !currentPoseIds[tablePresence.trackId] &&
+        now - tablePresence.lastSeenAt <= PRESENCE_HOLD_MS) {
+      hiddenPresence = tablePresence;
+      if (!hiddenPresence.hidden) console.log("[PMC presence] " + (hiddenPresence.name || "unrecognized player") + " went out of view next to the table (someone else is at it) - assuming they're still there");
+      hiddenPresence.hidden = true;
+    } else if (tablePresence && tablePresence.hidden) {
+      console.log("[PMC presence] a player is back in view at the table");
+    }
+    var name = fresh && fresh.name ? fresh.name : samePerson ? tablePresence.name : null;
+    if (hiddenPresence && ((hasTrackId(analysis) && hiddenPresence.trackId === analysis.trackId) || (name && hiddenPresence.name === name))) {
+      console.log("[PMC presence] " + (hiddenPresence.name || "player") + " back in view");
+      hiddenPresence = null;
+    }
+    tablePresence = {
+      name: name,
+      side: currentSideForAnalysis(analysis),
+      trackId: analysis.trackId,
+      box: analysis.box,
+      seenAt: now,
+      lastSeenAt: now,
+      hidden: false
+    };
+  }
+
+  // Cue over the table and nobody readable holding it: either a player
+  // held as out of view at the table, or a pose that was matched to the
+  // cue but whose shoulders/hips couldn't be read this frame. streak is
+  // the previous frame's cueHiddenConsecutive.
+  function handleCueShotOutOfView(held, cueCtx, now, streak) {
+    shootingVia = "cue-hidden";
+    cueHiddenConsecutive = streak + 1;
+    cueHiddenShooterName = held ? held.name : null;
+    clearManualAttributionIfStale();
+    if (held && now - held.seenAt <= PRESENCE_MAX_HIDDEN_MS) held.lastSeenAt = now;
+    if (candidate && held && candidate.name === held.name) candidate.lastSeenAt = now;
+    if (cueHiddenConsecutive < settings.consecutiveFrames) return;
+    // One credit per cue appearance - a cue left lying with its butt over
+    // a rail must not keep re-crediting someone nobody can see.
+    if (cueCtx.appearanceId === cueHiddenFiredAppearanceId) return;
+    var holderName = cueCtx.holder ? idleNameForTrack(cueCtx.holder.pose.id) : null;
+    var name = null, side, via, manual = false;
+    if (holderName) {
+      name = holderName;
+      via = "cue over the table, recognized earlier";
+    } else if (held && held.name) {
+      name = held.name;
+      side = held.side;
+      via = "cue over the table, " + held.name + " out of view";
+    } else if (activeManualAttribution) {
+      name = activeManualAttribution.name;
+      via = "cue over the table, picked on the scoreboard";
+      manual = true;
+    }
+    debugLog("cue shot out of view: holder=" + (cueCtx.holder ? cueCtx.holder.how : "none") + " held=" + (held ? held.name || "unnamed" : "none") + " -> " + (name || "nobody to credit"));
+    if (!name) return;
+    cueHiddenShooterName = name;
+    cueHiddenFiredAppearanceId = cueCtx.appearanceId;
+    if (activeManualAttribution && name !== activeManualAttribution.name) activeManualAttribution = null;
+    fireEvent(name, null, settings.matchThreshold, side, via);
+    if (manual) activeManualAttribution.firesSinceStart++;
+  }
+
+  // cueCtx (null when no cue is over the table): { present, holder,
+  // exitsTable, holderIsAnalyzed, appearanceId } - see runDetectionLoop.
+  function handleRecognitionFrame(analysis, cueCtx) {
+    var now = Date.now();
+    var cuePresent = !!(cueCtx && cueCtx.present);
+    var hiddenStreak = cueHiddenConsecutive;
+    cueHiddenConsecutive = 0;
+    cueHiddenShooterName = null;
+    shootingVia = null;
     if (!analysis) {
-      if (Date.now() - lastConfidentPoseAt > NO_POSE_GRACE_MS) {
+      var held = heldTablePresence(now);
+      if (held && !held.hidden && now - held.lastSeenAt > NO_POSE_GRACE_MS) {
+        held.hidden = true;
+        console.log("[PMC presence] " + (held.name || "unrecognized player") + " went out of view next to the table - assuming they're still there");
+      }
+      var target = held || heldHiddenPresence(now);
+      // An out-of-view shooter's cue runs off the table at the butt end,
+      // into their hands - one lying wholly inside the table was put down.
+      if (cuePresent && (cueCtx.holder || (target && cueCtx.exitsTable))) {
+        handleCueShotOutOfView(target, cueCtx, now, hiddenStreak);
+        updateRecognizeLiveStatus(null);
+        reportLiveStatus(null);
+        return;
+      }
+      if (now - lastConfidentPoseAt > NO_POSE_GRACE_MS) {
         stance = "unknown";
         uprightMatchName = null;
         uprightConsecutive = 0;
         bentConsecutive = 0;
       }
-      if (candidate && Date.now() - candidate.lastSeenAt > CANDIDATE_GRACE_MS) {
+      // While someone's held as out of view at the table, their identity
+      // outlives the usual few-second grace.
+      if (candidate && now - candidate.lastSeenAt > CANDIDATE_GRACE_MS && !target) {
         candidate = null;
         updateSeenCandidate(null); // gone long enough that re-seeing anyone (even the same name) is a fresh "seen" event
       }
+      if (tablePresence && !held) {
+        console.log("[PMC presence] " + (tablePresence.name || "unrecognized player") + " not seen for " + Math.round(PRESENCE_HOLD_MS / 1000) + "s - no longer assumed at the table");
+        tablePresence = null;
+      }
+      if (hiddenPresence && !heldHiddenPresence(now)) hiddenPresence = null;
       updateRecognizeLiveStatus(null);
       reportLiveStatus(null);
       return;
     }
-    lastConfidentPoseAt = Date.now();
+    lastConfidentPoseAt = now;
+    // The cue over the table is in this person's hands - they're
+    // shooting, whatever the bend angle reads (a far, level camera barely
+    // sees a bend at all).
+    var cueHeld = cuePresent && cueCtx.holderIsAnalyzed;
+    if (cueHeld) shootingVia = "cue";
 
     var bendSignal = effectiveBendAngle(analysis);
     var stanceBefore = stance;
@@ -4039,7 +4790,7 @@
 
     var closeEnough = withinRailDistance(analysis);
 
-    if (stance === "upright" && closeEnough) {
+    if (effectiveStance() === "upright" && closeEnough) {
       var match = findBestMatch(analysis.descriptor);
       var withinThreshold = match && match.distance <= settings.matchThreshold;
       if (withinThreshold && uprightMatchName === match.name) {
@@ -4070,30 +4821,44 @@
           name: withinThreshold && uprightConsecutive >= settings.consecutiveFrames ? match.name : null,
           descriptor: analysis.descriptor,
           side: currentSideForAnalysis(analysis),
-          lastSeenAt: Date.now()
+          trackId: analysis.trackId,
+          lastSeenAt: now
         };
         // Announces a *change* only - not every frame someone's merely
         // still standing there, which would be constant chatter.
         if (candidate.name) updateSeenCandidate(candidate.name);
       } else if (candidate) {
-        candidate.lastSeenAt = Date.now();
+        candidate.lastSeenAt = now;
       }
       bentConsecutive = 0;
-    } else if (stance === "bent") {
+    } else if (effectiveStance() === "bent") {
       uprightMatchName = null;
       uprightConsecutive = 0;
       lastUprightDescriptor = null;
       uprightStabilityCount = 0;
       bentConsecutive++;
       clearManualAttributionIfStale();
-      var facingOk = isFacingTable(analysis);
-      if (bentConsecutive >= settings.consecutiveFrames && closeEnough && facingOk) {
-        if (candidate && candidate.name && Date.now() - candidate.lastSeenAt <= CANDIDATE_GRACE_MS) {
+      // A cue over the table in their hands already proves they're at
+      // the table and facing it.
+      var facingOk = cueHeld || isFacingTable(analysis);
+      var via = cueHeld ? "cue over the table" + (stance === "bent" ? " + bent over" : "") : "bent over";
+      // When the cue holder isn't the person the upright candidate was
+      // formed from (a different pose track) but was recognized earlier
+      // while idle, that earlier recognition is the better name.
+      var holderIdleName = cueHeld ? idleNameForTrack(analysis.trackId) : null;
+      var candidateIsOtherTrack = candidate && candidate.trackId !== undefined && candidate.trackId !== null &&
+        analysis.trackId !== undefined && analysis.trackId !== null && candidate.trackId !== analysis.trackId;
+      if (bentConsecutive >= settings.consecutiveFrames && (closeEnough || cueHeld) && facingOk) {
+        if (holderIdleName && (!candidate || !candidate.name || (candidateIsOtherTrack && candidate.name !== holderIdleName))) {
+          if (activeManualAttribution && holderIdleName !== activeManualAttribution.name) activeManualAttribution = null;
+          debugLog("FIRE via cue holder's earlier recognition name=" + holderIdleName);
+          fireEvent(holderIdleName, null, settings.matchThreshold, currentSideForAnalysis(analysis), via + ", recognized earlier");
+        } else if (candidate && candidate.name && now - candidate.lastSeenAt <= CANDIDATE_GRACE_MS) {
           // A genuinely different name just matched on its own - "until
           // another player shoots" per explicit request.
           if (activeManualAttribution && candidate.name !== activeManualAttribution.name) activeManualAttribution = null;
-          debugLog("FIRE via upright-candidate name=" + candidate.name);
-          fireEvent(candidate.name, candidate.descriptor, 0, candidate.side);
+          debugLog("FIRE via upright-candidate name=" + candidate.name + " (" + via + ")");
+          fireEvent(candidate.name, candidate.descriptor, 0, candidate.side, via);
         } else {
           // Fallback: no fresh *named* upright identification (either
           // nothing stable was seen, or it was stable but unmatched) -
@@ -4107,20 +4872,28 @@
             " activeManualAttribution=" + (activeManualAttribution ? activeManualAttribution.name : "null"));
           if (bentMatch && bentMatch.distance <= settings.matchThreshold * 0.6) {
             if (activeManualAttribution && bentMatch.name !== activeManualAttribution.name) activeManualAttribution = null;
-            fireEvent(bentMatch.name, analysis.descriptor, bentMatch.distance, currentSideForAnalysis(analysis));
+            fireEvent(bentMatch.name, analysis.descriptor, bentMatch.distance, currentSideForAnalysis(analysis), via);
           } else if (activeManualAttribution) {
             // Nothing matched on appearance at all - the exact "shooting
             // but not recognized" situation the operator already resolved
             // manually. fireEvent's own distance<=threshold*0.7 check
             // (always true at distance 0) is what actually adds this as
             // an enrollment sample - no separate enroll-add needed here.
-            fireEvent(activeManualAttribution.name, analysis.descriptor, 0, currentSideForAnalysis(analysis));
+            fireEvent(activeManualAttribution.name, analysis.descriptor, 0, currentSideForAnalysis(analysis), via);
             activeManualAttribution.firesSinceStart++;
           }
         }
       } else if (bentConsecutive === settings.consecutiveFrames) {
         debugLog("bent-confirm gate blocked: bentConsecutive=" + bentConsecutive + " closeEnough=" + closeEnough + " facingOk=" + facingOk);
       }
+    }
+    // Remember who's at the table, for when they drop out of view.
+    if (closeEnough) updateTablePresence(analysis, now);
+    // A cue out over the table that nobody in view is holding, while a
+    // player is held as out of view at the table: they're the one shooting.
+    if (cuePresent && !cueHeld && !cueCtx.holder && cueCtx.exitsTable) {
+      var hidden = heldHiddenPresence(now);
+      if (hidden) handleCueShotOutOfView(hidden, cueCtx, now, hiddenStreak);
     }
     updateRecognizeLiveStatus(analysis);
     reportLiveStatus(analysis, closeEnough);
@@ -4247,15 +5020,20 @@
     drawTableBoundary();
     drawAutoDetectDebug();
     drawBallDebug();
+    drawCueDebug();
+    drawHiddenPresence();
     if (!analysis) return;
     var box = analysis.box;
     var p0 = videoToOverlay(box.x0, box.y0);
     var p1 = videoToOverlay(box.x1, box.y1);
-    overlayCtx.strokeStyle = stance === "bent" ? "#5ec98a" : "#5aa9e6";
+    // During a hidden player's cue shot the person in view isn't the
+    // shooter - their box keeps their own bend reading.
+    var shown = shootingVia === "cue-hidden" ? stance : effectiveStance();
+    overlayCtx.strokeStyle = shootingVia === "cue" ? "#ff4fd8" : shown === "bent" ? "#5ec98a" : "#5aa9e6";
     overlayCtx.lineWidth = 2;
     overlayCtx.strokeRect(p0.x, p0.y, p1.x - p0.x, p1.y - p0.y);
 
-    var label = stance + " " + analysis.torsoAngleDeg.toFixed(0) + "deg" + (matchLabel ? " - " + matchLabel : "");
+    var label = (shootingVia === "cue" ? "shooting (cue)" : shown) + " " + analysis.torsoAngleDeg.toFixed(0) + "deg" + (matchLabel ? " - " + matchLabel : "");
     overlayCtx.font = "13px sans-serif";
     var tw = overlayCtx.measureText(label).width;
     overlayCtx.fillStyle = "rgba(0,0,0,0.6)";
@@ -4295,6 +5073,29 @@
     overlayCtx.fillText(text, p.x + 14, p.y + 5);
   }
 
+  // Dashed box where a player went out of view at the table, while
+  // they're being assumed still there (see tablePresence).
+  function drawHiddenPresence() {
+    var held = heldHiddenPresence(Date.now());
+    if (!held || !held.box) return;
+    var p0 = videoToOverlay(held.box.x0, held.box.y0);
+    var p1 = videoToOverlay(held.box.x1, held.box.y1);
+    overlayCtx.save();
+    overlayCtx.strokeStyle = shootingVia === "cue-hidden" ? "#ff4fd8" : "#5aa9e6";
+    overlayCtx.lineWidth = 2;
+    overlayCtx.setLineDash([6, 6]);
+    overlayCtx.strokeRect(p0.x, p0.y, p1.x - p0.x, p1.y - p0.y);
+    overlayCtx.setLineDash([]);
+    var label = (held.name || "player") + " - out of view" + (shootingVia === "cue-hidden" ? ", shooting (cue)" : ", assumed at the table");
+    overlayCtx.font = "13px sans-serif";
+    var tw = overlayCtx.measureText(label).width;
+    overlayCtx.fillStyle = "rgba(0,0,0,0.6)";
+    overlayCtx.fillRect(p0.x, Math.max(0, p0.y - 18), tw + 8, 18);
+    overlayCtx.fillStyle = "#f6efe9";
+    overlayCtx.fillText(label, p0.x + 4, Math.max(13, p0.y - 4));
+    overlayCtx.restore();
+  }
+
   // ---- Main detection loop ----
   var detectionBusy = false;
 
@@ -4304,13 +5105,32 @@
     detector.estimatePoses(videoEl)
       .then(function (poses) {
         lastPoseResultAt = Date.now();
+        detectTick++;
+        if (window.PMCCueDebug.posesOverride) poses = window.PMCCueDebug.posesOverride(poses);
+        currentPoseIds = {};
+        (poses || []).forEach(function (p) { if (p.id !== undefined && p.id !== null) currentPoseIds[p.id] = true; });
         // selectActivePose does the cheap per-person filtering (standing,
         // near the table, most-bent-over-wins) across everyone MultiPose
         // found - analyzePose's expensive appearance-extraction work
         // below only ever runs on this one selection, never on the other
         // up-to-5 people also in frame.
         var pose = poses && poses.length ? selectActivePose(poses) : null;
+        // A cue over the table overrides that pick: whoever is holding it
+        // is the one shooting (see findCueHolder).
+        var cueCtx = null;
+        if (enrollCapturing) {
+          shootingVia = null;
+        } else if (cueDetectionActive()) {
+          if (++cueTickCounter % CUE_PASS_EVERY_N_TICKS === 0) runCuePass();
+          if (cueTrack.present) {
+            cueTrack.holder = findCueHolder(poses, cueTrack.cue, heldHiddenPresence(Date.now()));
+            if (cueTrack.holder) pose = cueTrack.holder.pose;
+            cueCtx = { present: true, holder: cueTrack.holder, exitsTable: !!(cueTrack.cue && cueTrack.cue.exitsTable), appearanceId: cueTrack.appearanceId, holderIsAnalyzed: false };
+          }
+        }
         var analysis = pose ? analyzePose(pose.keypoints) : null;
+        if (analysis) analysis.trackId = pose.id;
+        if (cueCtx) cueCtx.holderIsAnalyzed = !!(analysis && cueTrack.holder && cueTrack.holder.pose === pose);
         // Computed independently of analyzePose's own gating, specifically
         // so a rejected-for-low-confidence pose is still visible as a
         // number somewhere - see lastRawPoseConfidence's own comment.
@@ -4332,6 +5152,7 @@
           " analysisOk=" + !!analysis +
           " rejectedAsStatic=" + lastRejectedAsStatic +
           " rawPoseConf=" + (lastRawPoseConfidence === null ? "null" : lastRawPoseConfidence.toFixed(2)) +
+          (cueCtx ? " cue=" + Math.round(cueTrack.cue ? cueTrack.cue.lengthIn : 0) + "in holder=" + (cueTrack.holder ? cueTrack.holder.how : "none") : "") +
           (analysis ? " torsoAngle=" + analysis.torsoAngleDeg.toFixed(1) + " legAngle=" + (analysis.legAngleDeg === null ? "null" : analysis.legAngleDeg.toFixed(1)) + " effBend=" + effectiveBendAngle(analysis).toFixed(1) : "") +
           (analysis && calibration && analysis.ankleMid ? (function () {
             var real = applyHomography(calibration.h, analysis.ankleMid.x, analysis.ankleMid.y);
@@ -4355,7 +5176,7 @@
             // against this overlay.
             if (m) matchLabel = m.name + " " + m.distance.toFixed(2) + (m.distance <= settings.matchThreshold ? "" : " (too far)");
           }
-          handleRecognitionFrame(analysis);
+          handleRecognitionFrame(analysis, cueCtx);
           // After handleRecognitionFrame so this pass sees the freshly
           // updated stance, before drawOverlay so the overlay shows this
           // pass's inventory rather than the previous one's.
