@@ -2035,23 +2035,41 @@ input[type="number"] {
    situation resolves (matched, or they stand up) without needing to be
    dismissed, though a close button is still offered for "that's not
    actually someone shooting" cases. */
+/* The banner floats where it appears - just under the scorecards - over
+   whatever is there, instead of taking room (it comes and goes with the
+   camera, and used to push every section below it up and down). The
+   anchor is the only part in the page flow, and it's zero height. */
+.unmatched-shooter-banner-anchor {
+  position: relative;
+  height: 0;
+  z-index: 30;
+}
 .unmatched-shooter-banner {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  width: fit-content;
+  width: max-content;
   max-width: 92%;
-  /* Sits under the scorecards (per explicit request), so the gap goes
-     above it, not below. */
-  margin: 10px auto 0;
-  background: rgba(0, 0, 0, 0.55);
+  margin: 0;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  background: rgba(0, 0, 0, 0.85);
   border: 2px solid var(--accent);
   color: var(--text);
   padding: 8px 14px;
   border-radius: 999px;
   font-size: 0.95rem;
   font-weight: 600;
+}
+/* Focus Mode: the cards reach the bottom of the screen and nothing is
+   under them, so it floats just above their bottom edge instead. */
+#app.focus-mode .unmatched-shooter-banner {
+  top: auto;
+  bottom: 10px;
 }
 .unmatched-shooter-banner-icon { font-size: 1.1rem; line-height: 1; }
 .unmatched-shooter-banner-dismiss {
