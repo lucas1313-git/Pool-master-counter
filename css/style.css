@@ -4633,12 +4633,53 @@ input[type="number"] {
   margin-top: 12px;
 }
 
+/* Its colours come from the active theme: the room in the theme's own
+   surface tones (shaded from its text and card colours, so it sits
+   naturally on dark and light themes alike), the table felt in the
+   theme's felt colour on wooden rails, and the camera's view and the
+   covered area in the accent colour - the one thing that has to stand
+   out. Labels and their lines in the text colour, outlined in the
+   background colour. */
+.camera-placement-diagram {
+  --cp-floor: color-mix(in srgb, var(--text) 24%, var(--bg-card));
+  --cp-wall-l: color-mix(in srgb, var(--text) 11%, var(--bg-card));
+  --cp-wall-r: color-mix(in srgb, var(--text) 16%, var(--bg-card));
+  --cp-edge: color-mix(in srgb, var(--text) 38%, var(--bg-card));
+  --cp-ink: color-mix(in srgb, var(--text) 72%, var(--bg));
+}
+.camera-placement-diagram .cp-floor { fill: var(--cp-floor); }
+.camera-placement-diagram .cp-plank { fill: none; stroke: color-mix(in srgb, var(--cp-floor) 78%, var(--bg)); stroke-width: 1; }
+.camera-placement-diagram .cp-slab-l { fill: color-mix(in srgb, var(--cp-floor) 70%, var(--bg)); }
+.camera-placement-diagram .cp-slab-r { fill: color-mix(in srgb, var(--cp-floor) 55%, var(--bg)); }
+.camera-placement-diagram .cp-wall-l { fill: var(--cp-wall-l); }
+.camera-placement-diagram .cp-wall-r { fill: var(--cp-wall-r); }
+.camera-placement-diagram .cp-wall-top { fill: var(--cp-edge); }
+.camera-placement-diagram .cp-wall-cap { fill: color-mix(in srgb, var(--cp-wall-l) 70%, var(--bg)); }
+.camera-placement-diagram .cp-corner { stroke: var(--cp-edge); stroke-width: 1.5; }
+.camera-placement-diagram .cp-cone { fill: var(--accent); fill-opacity: 0.13; }
+.camera-placement-diagram .cp-cone-edge { stroke: var(--accent); stroke-opacity: 0.6; stroke-width: 1.4; }
+.camera-placement-diagram .cp-area-glow { fill: var(--accent); fill-opacity: 0.09; stroke: var(--accent); stroke-opacity: 0.6; stroke-width: 7; }
+.camera-placement-diagram .cp-area { fill: none; stroke: var(--accent); stroke-width: 2.6; }
+.camera-placement-diagram .cp-shadow { fill: #000; fill-opacity: 0.22; }
+.camera-placement-diagram .cp-wood-l { fill: #8b5526; }
+.camera-placement-diagram .cp-wood-r { fill: #6b3f1b; }
+.camera-placement-diagram .cp-rail { fill: #b0703a; stroke: #5a3214; stroke-width: 1; }
+.camera-placement-diagram .cp-felt { fill: var(--felt-light); stroke: color-mix(in srgb, var(--felt-light) 60%, #000); stroke-width: 1; }
+.camera-placement-diagram .cp-pocket { fill: color-mix(in srgb, var(--felt-light) 20%, #000); stroke: color-mix(in srgb, var(--text) 45%, var(--felt-light)); stroke-width: 1.2; }
+.camera-placement-diagram .cp-cam-mount { stroke: var(--cp-ink); stroke-width: 3; }
+.camera-placement-diagram .cp-cam-body { fill: var(--cp-ink); stroke: color-mix(in srgb, var(--cp-ink) 55%, var(--bg)); stroke-width: 1.5; }
+.camera-placement-diagram .cp-cam-top { fill: color-mix(in srgb, var(--cp-ink) 70%, var(--bg)); }
+.camera-placement-diagram .cp-lens { fill: var(--accent); }
+.camera-placement-diagram .cp-glint { fill: #fff; }
+.camera-placement-diagram .cp-leader-halo { fill: none; stroke: var(--bg); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+.camera-placement-diagram .cp-leader { fill: none; stroke: var(--text); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
 .camera-placement-diagram .cp-label {
   font-family: inherit;
   font-size: 24px;
   font-weight: 800;
-  fill: #ffffff;
-  stroke: #141414;
+  fill: var(--text);
+  stroke: var(--bg);
   stroke-width: 5px;
   stroke-linejoin: round;
   paint-order: stroke;
