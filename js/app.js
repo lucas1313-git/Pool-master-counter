@@ -30144,8 +30144,20 @@
   // and anything sent to it meanwhile is lost); moveBefore, where the
   // browser has it, moves it with its page still running. Otherwise it's
   // treated as reloading: messages wait until it talks again.
+  // In the Visual Scoring preview the frame is exactly as tall as the
+  // camera page says it needs (its "frame-height" message), so nothing
+  // scrolls inside it; full screen, it fills the overlay as before.
+  var sameDeviceCameraFrameHeight = null;
+  function fitSameDeviceCameraFrame() {
+    var inline = sameDeviceCameraIframe.parentNode === cameraInlinePreviewHome;
+    sameDeviceCameraIframe.style.height = inline && sameDeviceCameraFrameHeight ? sameDeviceCameraFrameHeight + "px" : "";
+  }
   function moveSameDeviceCameraTo(parent) {
     if (sameDeviceCameraIframe.parentNode === parent) return;
+    moveSameDeviceCameraToNow(parent);
+    fitSameDeviceCameraFrame();
+  }
+  function moveSameDeviceCameraToNow(parent) {
     if (typeof parent.moveBefore === "function" && sameDeviceCameraIframe.isConnected) {
       try {
         parent.moveBefore(sameDeviceCameraIframe, null);
@@ -30742,6 +30754,9 @@
       window.PMCCameraBridge.reportCameraSettings(msg.settings);
     } else if (msg.type === "camera-status") {
       window.PMCCameraBridge.reportCameraStatus(msg.status);
+    } else if (msg.type === "frame-height" && typeof msg.height === "number" && msg.height > 0) {
+      sameDeviceCameraFrameHeight = Math.min(6000, Math.round(msg.height));
+      fitSameDeviceCameraFrame();
     }
   });
 

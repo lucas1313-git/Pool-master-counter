@@ -184,6 +184,22 @@
   .fine { font-size: 0.9rem; color: var(--text-dim); }
   [hidden] { display: none !important; }
 
+  /* Embedded in the scoreboard (same-device): the scoreboard sizes this
+     frame to fit everything here - the setup wizard and the "?" cards
+     included (see reportFrameHeight) - so they're laid out at full
+     height from the top instead of being capped to the frame and
+     scrolling inside it. */
+  html.embedded .wizard-overlay,
+  html.embedded .help-overlay {
+    align-items: flex-start;
+    overflow-y: auto;
+  }
+  html.embedded .wizard-card,
+  html.embedded .help-card {
+    max-height: none;
+    overflow: visible;
+  }
+
   /* ---------- Setup wizard - mirrors index.html's own .wizard-overlay
      visual language (progress dots, step-explain text, felt-to-dark card),
      reimplemented here since camera.html shares no CSS with that file. ---------- */
@@ -5541,6 +5557,40 @@
     } catch (e) {
       return false;
     }
+  }
+
+  // ---- Same-device: fit the scoreboard's frame to this page ----
+  // Reports how tall this page needs to be - its own content, or an
+  // open setup wizard / "?" card if that's taller - whenever it changes,
+  // so the scoreboard can make its preview frame exactly that tall and
+  // nothing ever scrolls inside it.
+  if (isEmbedded) {
+    document.documentElement.classList.add("embedded");
+    var lastFrameHeight = 0;
+    var frameOverlays = [setupWizardOverlay, settingsHelpOverlay];
+    var reportFrameHeight = function () {
+      var h = document.body.scrollHeight;
+      frameOverlays.forEach(function (ov) {
+        if (ov.hidden || ov.classList.contains("hidden")) return;
+        var card = ov.firstElementChild;
+        var pad = parseFloat(getComputedStyle(ov).paddingTop) + parseFloat(getComputedStyle(ov).paddingBottom);
+        if (card) h = Math.max(h, card.offsetHeight + pad);
+      });
+      h = Math.ceil(h);
+      if (Math.abs(h - lastFrameHeight) < 2) return;
+      lastFrameHeight = h;
+      send({ type: "frame-height", height: h });
+    };
+    if (window.ResizeObserver) {
+      var frameResizeObserver = new ResizeObserver(reportFrameHeight);
+      frameResizeObserver.observe(document.body);
+      frameOverlays.forEach(function (ov) { if (ov.firstElementChild) frameResizeObserver.observe(ov.firstElementChild); });
+    }
+    frameOverlays.forEach(function (ov) {
+      new MutationObserver(reportFrameHeight).observe(ov, { attributes: true, attributeFilter: ["hidden", "class"] });
+    });
+    setInterval(reportFrameHeight, 1500); // belt and braces (fonts, images)
+    reportFrameHeight();
   }
 
   // ---- Boot ----

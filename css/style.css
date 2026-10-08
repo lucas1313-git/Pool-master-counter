@@ -4829,14 +4829,17 @@ input[type="number"] {
    height has to come from here instead. */
 .camera-inline-preview {
   margin-top: 10px;
-  height: 480px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
 }
 
+/* As tall as the camera page needs (set from its "frame-height"
+   message, see fitSameDeviceCameraFrame) - this is the starting height
+   until it has said. */
 .camera-inline-preview .same-device-camera-iframe {
-  height: 100%;
+  display: block;
+  height: 480px;
 }
 
 #camera-inline-preview-wrap #btn-expand-same-device-camera {
