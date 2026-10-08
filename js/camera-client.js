@@ -31,6 +31,7 @@
   var reconnectTimer = null;
   var turnConfirmedRegistered = false;
   var ballFeedbackRegistered = false;
+  var captureSettingsRegistered = false;
   var rosterSyncRegistered = false;
 
   function bridgeReady() {
@@ -57,6 +58,19 @@
     if (!bridgeReady() || typeof window.PMCCameraBridge.reportBallEvent !== "function") return;
     window.PMCCameraBridge.reportBallEvent(msg);
   }
+  // Capture settings (Visual Scoring > Capture Settings): the phone says
+  // what it's using, and the tablet's changes go back to it.
+  function handleCameraSettingsState(msg) {
+    if (!bridgeReady() || typeof window.PMCCameraBridge.reportCameraSettings !== "function") return;
+    window.PMCCameraBridge.reportCameraSettings(msg.settings);
+  }
+  function sendCaptureSettings(patch) {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    try {
+      ws.send(JSON.stringify({ type: "camera-settings", settings: patch }));
+    } catch (e) {}
+  }
+
   // Cue stick over the table - only Cue debug mode does anything with
   // these (see PMCCameraBridge.reportCueEvent).
   function handleCueEvent(msg) {
@@ -229,6 +243,7 @@
     ws.addEventListener("open", function () {
       try {
         ws.send(JSON.stringify({ type: "hello", role: "listener" }));
+        ws.send(JSON.stringify({ type: "camera-settings-request" }));
       } catch (e) {}
     });
     ws.addEventListener("message", function (event) {
@@ -248,9 +263,11 @@
       else if (msg.type === "remote-camera-list") handleRemoteCameraList(msg);
       else if (msg.type === "ball_pocketed" || msg.type === "ball_rerack" || msg.type === "ball_reappeared") handleBallEvent(msg);
       else if (msg.type === "cue_event") handleCueEvent(msg);
+      else if (msg.type === "camera-settings-state") handleCameraSettingsState(msg);
     });
     ws.addEventListener("close", function () {
       ws = null;
+      if (bridgeReady() && typeof window.PMCCameraBridge.reportCameraDisconnected === "function") window.PMCCameraBridge.reportCameraDisconnected();
       scheduleReconnect();
     });
     // No separate "error" handling needed - a WebSocket always fires
@@ -285,6 +302,10 @@
       window.PMCCameraBridge.onRosterChanged(sendRoster);
       window.PMCCameraBridge.onEnrollDelete(sendEnrollDelete);
       rosterSyncRegistered = true;
+    }
+    if (!captureSettingsRegistered && typeof window.PMCCameraBridge.onCaptureSettingsChange === "function") {
+      window.PMCCameraBridge.onCaptureSettingsChange(sendCaptureSettings);
+      captureSettingsRegistered = true;
     }
     if (!remoteCalibMethodsRegistered) {
       registerRemoteCalibMethods();

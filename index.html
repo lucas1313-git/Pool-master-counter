@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261008c">
+<link rel="stylesheet" href="css/style.css?v=20261008d">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -404,6 +404,60 @@
           </div>
         </div>
       </div>
+      <div class="backup-subsection collapsible-panel collapsed" id="capture-settings-panel">
+        <button type="button" class="panel-toggle" id="btn-toggle-capture-settings-panel" aria-expanded="false" aria-controls="capture-settings-panel-body">
+          <h4 class="backup-subsection-title" data-i18n="visualScoring.captureSettingsHeading">⚙️ Capture Settings</h4>
+          <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+        </button>
+        <p class="panel-summary" id="capture-settings-panel-summary" data-i18n="visualScoring.captureSettingsSummary">How the camera decides who's shooting: match sensitivity, timing, bend angles and distance from the table.</p>
+        <div class="panel-body" id="capture-settings-panel-body">
+          <p class="wizard-step-explain hidden" id="capture-settings-waiting" data-i18n="visualScoring.captureWaiting">Turn on Camera player recognition and connect the camera phone - its settings show up here once it's connected.</p>
+          <fieldset class="capture-settings-fields" id="capture-settings-fields">
+            <div class="row capture-setting-row">
+              <label for="camera-match-threshold" data-i18n="players.cameraMatchThreshold">Match sensitivity</label>
+              <input type="number" id="camera-match-threshold" min="0.1" max="4" step="0.1" value="1.2">
+              <button type="button" id="btn-camera-match-threshold-help" class="format-info-btn" data-i18n-aria-label="players.cameraMatchThresholdHelpAria" aria-label="What does Match sensitivity do?">❓</button>
+            </div>
+            <div class="row capture-setting-row">
+              <label for="camera-debounce-sec" data-i18n="players.cameraDebounceSec">Re-announce after (sec)</label>
+              <input type="number" id="camera-debounce-sec" min="1" max="120" step="1" value="10">
+              <button type="button" id="btn-camera-debounce-sec-help" class="format-info-btn" data-i18n-aria-label="players.cameraDebounceSecHelpAria" aria-label="What does Re-announce after do?">❓</button>
+            </div>
+            <div class="row capture-setting-row">
+              <label for="capture-consecutive-frames" data-i18n="players.cameraConsecutiveFrames">Consecutive frames required</label>
+              <input type="number" id="capture-consecutive-frames" min="1" max="10" step="1" value="3">
+              <button type="button" id="btn-capture-consecutive-frames-help" class="format-info-btn" data-i18n-aria-label="players.cameraConsecutiveFramesHelpAria" aria-label="What does Consecutive frames required do?">❓</button>
+            </div>
+            <div class="row capture-setting-row">
+              <label for="capture-bend-enter" data-i18n="players.cameraBendEnter">Bent-over angle - enter (degrees)</label>
+              <input type="number" id="capture-bend-enter" min="10" max="85" step="1" value="30">
+              <button type="button" id="btn-capture-bend-enter-help" class="format-info-btn" data-i18n-aria-label="players.cameraBendEnterHelpAria" aria-label="What does the bent-over enter angle do?">❓</button>
+            </div>
+            <div class="row capture-setting-row">
+              <label for="capture-bend-exit" data-i18n="players.cameraBendExit">Bent-over angle - back to upright (degrees)</label>
+              <input type="number" id="capture-bend-exit" min="5" max="80" step="1" value="20">
+              <button type="button" id="btn-capture-bend-exit-help" class="format-info-btn" data-i18n-aria-label="players.cameraBendExitHelpAria" aria-label="What does the back-to-upright angle do?">❓</button>
+            </div>
+            <div class="row capture-setting-row">
+              <label for="capture-rail-distance" data-i18n="players.cameraRailDistance">Max distance from the rail (inches)</label>
+              <input type="number" id="capture-rail-distance" min="6" max="72" step="1" value="30">
+              <button type="button" id="btn-capture-rail-distance-help" class="format-info-btn" data-i18n-aria-label="players.cameraRailDistanceHelpAria" aria-label="What does Max distance from the rail do?">❓</button>
+            </div>
+            <div class="row capture-setting-row">
+              <label for="capture-ball-confirm" data-i18n="players.cameraBallConfirm">Still passes before a pocketed ball counts</label>
+              <input type="number" id="capture-ball-confirm" min="2" max="6" step="1" value="3">
+              <button type="button" id="btn-capture-ball-confirm-help" class="format-info-btn" data-i18n-aria-label="players.cameraBallConfirmHelpAria" aria-label="What does Still passes before a pocketed ball counts do?">❓</button>
+            </div>
+            <div class="row capture-setting-row">
+              <label class="checkbox-row">
+                <input type="checkbox" id="capture-cue-detection" checked>
+                <span data-i18n="players.cameraCueDetection">🎯 Cue stick detection</span>
+              </label>
+              <button type="button" id="btn-capture-cue-detection-help" class="format-info-btn" data-i18n-aria-label="players.cameraCueDetectionHelpAria" aria-label="What does Cue stick detection do?">❓</button>
+            </div>
+          </fieldset>
+        </div>
+      </div>
       <p class="wizard-step-explain" id="camera-enable-hint" data-i18n="cameraWizard.step2Explain">Once the camera phone is set up (it has its own guided setup), turn this on here so the tablet actually listens for it.</p>
       <div class="row">
         <label class="checkbox-row" id="camera-input-row">
@@ -413,14 +467,6 @@
         <button type="button" id="btn-camera-input-help" class="format-info-btn" data-i18n-aria-label="players.cameraInputHelpAria" aria-label="What does camera player recognition do?">❓</button>
       </div>
       <p class="camera-candidate-status hidden" id="camera-candidate-status"></p>
-      <div class="row hidden" id="camera-input-settings-row">
-        <label for="camera-match-threshold" data-i18n="players.cameraMatchThreshold">Match sensitivity</label>
-        <input type="number" id="camera-match-threshold" min="0.1" max="4" step="0.1" value="1.2">
-        <button type="button" id="btn-camera-match-threshold-help" class="format-info-btn" data-i18n-aria-label="players.cameraMatchThresholdHelpAria" aria-label="What does Match sensitivity do?">❓</button>
-        <label for="camera-debounce-sec" data-i18n="players.cameraDebounceSec">Re-announce after (sec)</label>
-        <input type="number" id="camera-debounce-sec" min="1" max="120" value="10">
-        <button type="button" id="btn-camera-debounce-sec-help" class="format-info-btn" data-i18n-aria-label="players.cameraDebounceSecHelpAria" aria-label="What does Re-announce after do?">❓</button>
-      </div>
       <div class="row hidden" id="camera-remote-calibrate-row">
         <button type="button" id="btn-start-remote-calibration" class="btn btn-ghost" data-i18n="players.cameraRemoteCalibrateButton">📐 Calibrate Table Remotely</button>
         <button type="button" id="btn-camera-remote-calibrate-help" class="format-info-btn" data-i18n-aria-label="players.cameraRemoteCalibrateHelpAria" aria-label="What does Calibrate Table Remotely do?">❓</button>
@@ -2421,7 +2467,7 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20261008c"></script>
-<script src="js/camera-client.js?v=20261008c"></script>
+<script src="js/app.js?v=20261008d"></script>
+<script src="js/camera-client.js?v=20261008d"></script>
 </body>
 </html>

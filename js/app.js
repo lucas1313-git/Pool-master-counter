@@ -713,9 +713,6 @@
     // only the threshold/debounce fields hide while the feature itself
     // is off.
     cameraInputCheckbox.checked = state.cameraInputEnabled;
-    cameraInputSettingsRow.classList.toggle("hidden", !state.cameraInputEnabled);
-    cameraMatchThresholdInput.value = state.cameraMatchThreshold;
-    cameraDebounceSecInput.value = state.cameraDebounceSec;
     // Cross-device only - same-device mode already shows the camera's
     // own calibration UI live in its embedded iframe, so there's nothing
     // for this button to usefully do there.
@@ -1888,9 +1885,10 @@
   var remoteViewerOverlay = document.getElementById("remote-viewer-overlay");
   var remoteViewerIframe = document.getElementById("remote-viewer-iframe");
   var btnCloseRemoteViewer = document.getElementById("btn-close-remote-viewer");
-  var cameraInputSettingsRow = document.getElementById("camera-input-settings-row");
   var cameraMatchThresholdInput = document.getElementById("camera-match-threshold");
   var cameraDebounceSecInput = document.getElementById("camera-debounce-sec");
+  var captureSettingsWaiting = document.getElementById("capture-settings-waiting");
+  var captureSettingsFields = document.getElementById("capture-settings-fields");
   // Set via PMCCameraBridge.onTurnConfirmed - a list now, not a single
   // slot, since js/camera-client.js (the relay path) and the same-device
   // camera overlay's postMessage listener each register their own
@@ -1906,6 +1904,9 @@
   // that set changes (see saveState), not only when the camera asks.
   var cameraRosterCallbacks = [];
   var cameraEnrollDeleteCallbacks = [];
+  // Capture settings pushed from the Visual Scoring section to a separate
+  // camera phone (js/camera-client.js registers the relay sender here).
+  var cameraCaptureSettingsCallbacks = [];
   var lastCameraRosterSignature = null;
   var cameraRosterPushTimer = null;
   function notifyCameraRosterChanged() {
@@ -29357,6 +29358,9 @@
     alertModal(T("players.cameraRemoteCalibrateHelpText"));
   });
 
+  // Match sensitivity / Re-announce after are two of the Capture
+  // Settings below - kept in state too, since the camera's own
+  // settings-request is still answered from there.
   cameraMatchThresholdInput.addEventListener("input", function () {
     var value = parseFloat(cameraMatchThresholdInput.value);
     if (!(value > 0)) return;
@@ -29598,6 +29602,7 @@
     state.sameDeviceCameraSetUp = true;
     saveState();
     renderAll();
+    refreshCaptureSettingsAvailability();
     collapseCameraSetup();
     openSameDeviceCameraOverlay();
   }
@@ -30294,6 +30299,122 @@
     } catch (e) {}
   });
 
+  // ---- Capture settings (Visual Scoring > Capture Settings) ----
+  // The camera's own detection settings, edited right here instead of
+  // inside the camera page. Same-device: the camera page shares this
+  // origin's storage, so values are read from it and changes go to the
+  // running camera as a camera-settings message (or straight into
+  // storage when it isn't running). Separate phone: the phone reports
+  // what it's actually using (camera-settings-state over the relay) and
+  // changes are sent to it the same way; until it has reported, the
+  // fields stay disabled - there's nowhere for a change to go.
+  // Defaults mirror camera.html's own settings object.
+  var CAPTURE_SETTINGS = [
+    { key: "matchThreshold", el: cameraMatchThresholdInput, kind: "float", def: 1.2, help: "players.cameraMatchThresholdHelpText" },
+    { key: "debounceSec", el: cameraDebounceSecInput, kind: "int", def: 10, help: "players.cameraDebounceSecHelpText" },
+    { key: "consecutiveFrames", id: "capture-consecutive-frames", kind: "int", def: 3, help: "players.cameraConsecutiveFramesHelpText" },
+    { key: "bendEnterAngle", id: "capture-bend-enter", kind: "float", def: 30, help: "players.cameraBendEnterHelpText" },
+    { key: "bendExitAngle", id: "capture-bend-exit", kind: "float", def: 20, help: "players.cameraBendExitHelpText" },
+    { key: "railDistanceInches", id: "capture-rail-distance", kind: "float", def: 30, help: "players.cameraRailDistanceHelpText" },
+    { key: "ballConfirmPasses", id: "capture-ball-confirm", kind: "int", def: 3, help: "players.cameraBallConfirmHelpText" },
+    { key: "cueDetectionEnabled", id: "capture-cue-detection", kind: "bool", def: true, help: "players.cameraCueDetectionHelpText" }
+  ];
+  CAPTURE_SETTINGS.forEach(function (c) {
+    if (!c.el) c.el = document.getElementById(c.id);
+    c.helpBtn = document.getElementById(c.id ? "btn-" + c.id + "-help" : null);
+  });
+  var phoneCaptureSettingsKnown = false;
+
+  function readStoredCameraSettings() {
+    try {
+      var raw = localStorage.getItem(CAMERA_SETTINGS_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function renderCaptureSettings(values) {
+    CAPTURE_SETTINGS.forEach(function (c) {
+      var v = values && typeof values[c.key] === typeof c.def ? values[c.key] : c.def;
+      if (document.activeElement === c.el) return; // don't fight someone mid-edit
+      if (c.kind === "bool") c.el.checked = !!v;
+      else c.el.value = v;
+    });
+  }
+
+  function refreshCaptureSettingsAvailability() {
+    var phone = !state.sameDeviceCameraSetUp;
+    var waiting = phone && !phoneCaptureSettingsKnown;
+    captureSettingsWaiting.classList.toggle("hidden", !waiting);
+    captureSettingsFields.disabled = waiting;
+    if (!phone) renderCaptureSettings(readStoredCameraSettings());
+  }
+
+  function readCaptureInput(c) {
+    if (c.kind === "bool") return c.el.checked;
+    var v = c.kind === "int" ? parseInt(c.el.value, 10) : parseFloat(c.el.value);
+    var min = parseFloat(c.el.min), max = parseFloat(c.el.max);
+    if (!(v > 0)) return null;
+    if (!isNaN(min) && v < min) v = min;
+    if (!isNaN(max) && v > max) v = max;
+    return v;
+  }
+
+  function pushCaptureSetting(key, value) {
+    var patch = {};
+    patch[key] = value;
+    if (state.sameDeviceCameraSetUp) {
+      if (sameDeviceCameraRunning) {
+        try {
+          sameDeviceCameraIframe.contentWindow.postMessage({ type: "camera-settings", settings: patch }, location.origin);
+        } catch (e) {}
+      } else {
+        var stored = readStoredCameraSettings();
+        stored[key] = value;
+        try { localStorage.setItem(CAMERA_SETTINGS_STORAGE_KEY, JSON.stringify(stored)); } catch (e) {}
+      }
+    } else {
+      cameraCaptureSettingsCallbacks.forEach(function (cb) {
+        try { cb(patch); } catch (e) {}
+      });
+    }
+  }
+
+  CAPTURE_SETTINGS.forEach(function (c) {
+    c.el.addEventListener("change", function () {
+      var v = readCaptureInput(c);
+      if (v === null) return;
+      if (c.kind !== "bool") c.el.value = v;
+      pushCaptureSetting(c.key, v);
+    });
+    if (c.helpBtn) {
+      c.helpBtn.addEventListener("click", function () {
+        alertModal(T(c.help));
+      });
+    }
+  });
+
+  // What the camera is actually using - from the same-device camera
+  // page (postMessage) or a separate phone (relay, js/camera-client.js).
+  window.PMCCameraBridge.reportCameraSettings = function (values) {
+    if (!values || typeof values !== "object") return;
+    if (!state.sameDeviceCameraSetUp) phoneCaptureSettingsKnown = true;
+    renderCaptureSettings(values);
+    refreshCaptureSettingsAvailability();
+    var changed = false;
+    if (typeof values.matchThreshold === "number" && values.matchThreshold !== state.cameraMatchThreshold) { state.cameraMatchThreshold = values.matchThreshold; changed = true; }
+    if (typeof values.debounceSec === "number" && values.debounceSec !== state.cameraDebounceSec) { state.cameraDebounceSec = values.debounceSec; changed = true; }
+    if (changed) saveState();
+  };
+  // A separate phone that disconnects can't take changes any more.
+  window.PMCCameraBridge.reportCameraDisconnected = function () {
+    phoneCaptureSettingsKnown = false;
+    refreshCaptureSettingsAvailability();
+  };
+  renderCaptureSettings({ matchThreshold: state.cameraMatchThreshold, debounceSec: state.cameraDebounceSec });
+  refreshCaptureSettingsAvailability();
+
   function syncCameraDebugCheckboxesFromStorage() {
     try {
       var raw = localStorage.getItem(CAMERA_SETTINGS_STORAGE_KEY);
@@ -30377,6 +30498,8 @@
       window.PMCCameraBridge.reportBallEvent(msg);
     } else if (msg.type === "cue_event") {
       window.PMCCameraBridge.reportCueEvent(msg);
+    } else if (msg.type === "camera-settings-state") {
+      window.PMCCameraBridge.reportCameraSettings(msg.settings);
     }
   });
 
@@ -31155,6 +31278,7 @@
   wireCollapsiblePanel("players-panel", "btn-toggle-players-panel");
   wireCollapsiblePanel("visual-scoring-panel", "btn-toggle-visual-scoring-panel");
   wireCollapsiblePanel("camera-setup-panel", "btn-toggle-camera-setup-panel");
+  wireCollapsiblePanel("capture-settings-panel", "btn-toggle-capture-settings-panel");
   wireCollapsiblePanel("standings-panel", "btn-toggle-standings-panel");
   wireCollapsiblePanel("history-panel", "btn-toggle-history-panel");
   wireCollapsiblePanel("day-notes-panel", "btn-toggle-day-notes-panel");
@@ -31974,6 +32098,11 @@
     },
     onEnrollDelete: function (callback) {
       cameraEnrollDeleteCallbacks.push(callback);
+    },
+    // A Capture Settings change on this tablet, as { key: value } - the
+    // relay transport forwards it to the camera phone.
+    onCaptureSettingsChange: function (callback) {
+      cameraCaptureSettingsCallbacks.push(callback);
     }
     // reportCandidateSeen and announceShotFired are attached below, from
     // inside boot(), not as plain properties of this literal -

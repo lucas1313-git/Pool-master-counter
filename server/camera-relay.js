@@ -88,6 +88,12 @@
 //     { type: "ball_feedback", kind: "false_positive" | "missed", delta, ts }
 //       (listener -> relay -> every "camera"; a keypad correction right
 //       after, or in place of, an automatic credit)
+//   Capture settings (the tablet's Visual Scoring > Capture Settings):
+//     { type: "camera-settings", settings: { key: value, ... } }
+//       (listener -> cameras; camera.html applies and saves them)
+//     { type: "camera-settings-request" } (listener -> cameras)
+//     { type: "camera-settings-state", settings: {...} }
+//       (camera -> listeners; what the camera is actually using)
 //   Cue stick over the table (camera.html's cue tracking):
 //     { type: "cue_event", event: "detected" | "gone" | "shooter" |
 //       "no-shooter", lengthIn?, player_name?, via?, resent?, ts }
@@ -381,6 +387,24 @@ function createCameraRelay(WebSocket) {
 
         if (msg.type === "settings" && ws.role === "listener") {
           broadcastToCameras({ type: "settings", matchThreshold: msg.matchThreshold, debounceSec: msg.debounceSec });
+          return;
+        }
+
+        // Capture settings, both ways: the tablet's Visual Scoring section
+        // changes them (camera-settings, listener -> cameras) and asks what
+        // they are (camera-settings-request); the camera reports what it's
+        // actually using (camera-settings-state, camera -> listeners), on
+        // connect and after every change.
+        if (msg.type === "camera-settings" && ws.role === "listener" && msg.settings && typeof msg.settings === "object") {
+          broadcastToCameras({ type: "camera-settings", settings: msg.settings });
+          return;
+        }
+        if (msg.type === "camera-settings-request" && ws.role === "listener") {
+          broadcastToCameras({ type: "camera-settings-request" });
+          return;
+        }
+        if (msg.type === "camera-settings-state" && ws.role === "camera" && msg.settings && typeof msg.settings === "object") {
+          broadcastToListeners({ type: "camera-settings-state", settings: msg.settings });
           return;
         }
 

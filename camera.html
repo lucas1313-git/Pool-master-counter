@@ -911,6 +911,41 @@
   function persistSettings() {
     hasLocalSettingsOverride = true;
     try { localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings)); } catch (e) {}
+    reportCaptureSettings();
+  }
+
+  // ---- Capture settings, shared with the scoreboard ----
+  // The scoreboard's Visual Scoring > Capture Settings shows and edits
+  // these same values: this page reports what it's using (on connect and
+  // after every change, wherever the change came from) and applies what
+  // the scoreboard sends - postMessage in same-device mode, the relay for
+  // a separate phone.
+  var CAPTURE_SETTING_KEYS = ["matchThreshold", "debounceSec", "consecutiveFrames", "bendEnterAngle", "bendExitAngle", "railDistanceInches", "ballConfirmPasses", "cueDetectionEnabled"];
+  function reportCaptureSettings() {
+    if (isViewer || !CAPTURE_SETTING_KEYS) return; // (a save during page load, before this section ran)
+    var out = {};
+    CAPTURE_SETTING_KEYS.forEach(function (k) { out[k] = settings[k]; });
+    send({ type: "camera-settings-state", settings: out });
+  }
+  function applyCaptureSettings(incoming) {
+    if (!incoming || typeof incoming !== "object" || isViewer) return;
+    var changed = [];
+    var wasDetectingCue = settings.cueDetectionEnabled;
+    CAPTURE_SETTING_KEYS.forEach(function (k) {
+      var v = incoming[k];
+      if (typeof v !== typeof settings[k] || v === settings[k]) return;
+      if (typeof v === "number" && !(v > 0)) return;
+      settings[k] = v;
+      changed.push(k + " " + v);
+    });
+    if (changed.length) {
+      persistSettings(); // also reports the new values back
+      applySettingsToInputs();
+      if (wasDetectingCue !== settings.cueDetectionEnabled) resetCueTracking(settings.cueDetectionEnabled ? "enabled" : "disabled");
+      logActivity("Settings changed from the scoreboard: " + changed.join(", "));
+    } else {
+      reportCaptureSettings();
+    }
   }
   function applySettingsToInputs() {
     thresholdInput.value = settings.matchThreshold;
@@ -1323,6 +1358,10 @@
       sendRemoteCameraList();
     } else if (msg.type === "remote-camera-select" && msg.deviceId) {
       selectRemoteCamera(msg.deviceId);
+    } else if (msg.type === "camera-settings") {
+      applyCaptureSettings(msg.settings);
+    } else if (msg.type === "camera-settings-request") {
+      reportCaptureSettings();
     } else if (msg.type === "viewer-click" && msg.id) {
       var clickEl = document.getElementById(msg.id);
       if (clickEl) clickEl.click();
@@ -1721,6 +1760,7 @@
       // unexpected disconnect shows up in the server's own log even
       // though nobody can see this browser's console directly.
       send({ type: "hello", role: isViewer ? "viewer" : "camera", lastCloseDebug: lastCloseDebugInfo });
+      reportCaptureSettings();
       lastCloseDebugInfo = null;
       send({ type: "enroll-get" });
       if (!isViewer && !hasLocalSettingsOverride) send({ type: "settings-request" });
@@ -1749,6 +1789,7 @@
     send({ type: "enroll-get" });
     if (!hasLocalSettingsOverride) send({ type: "settings-request" });
     send({ type: "roster-request" });
+    reportCaptureSettings();
   }
 
   // ---- Enrolled player list ----

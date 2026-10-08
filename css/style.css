@@ -7432,6 +7432,29 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   margin-top: 0;
 }
 
+/* Visual Scoring > Capture Settings: one setting per row (label, input,
+   "?"), in a fieldset only so the whole group can be disabled at once
+   while a separate camera phone hasn't reported its values yet. */
+.capture-settings-fields {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.capture-settings-fields:disabled {
+  opacity: 0.55;
+}
+
+.capture-setting-row > label:not(.checkbox-row) {
+  flex: 1 1 14em;
+}
+
+.capture-setting-row input[type="number"] {
+  width: 6em;
+  flex: 0 0 auto;
+}
+
 .backup-subsection-title {
   margin: 0 0 12px;
   font-size: 1.25rem;
