@@ -4918,7 +4918,11 @@
   // read directly from 2D keypoints. Approximates it by comparing the
   // torso's actual lean direction (shoulder->hip, NOT the absolute-valued
   // angle used elsewhere for the bend magnitude) against the real-world
-  // direction toward the nearest rail. Generous tolerance (rejects only
+  // direction INTO the table from the nearest rail (its inward normal).
+  // It used to step from the feet towards that rail - i.e. outwards, away
+  // from the table, for someone standing at it - so a player leaning
+  // straight over the cloth read as facing away (cos ~ -0.9) and the shot
+  // was dropped unless a cue was seen in their hands. Generous tolerance (rejects only
   // leaning more than ~107 deg off "toward the table") and defaults to
   // true - uncalibrated, no ankle data, or degenerate vectors all pass
   // through unblocked - since this is a secondary signal refining a bend
@@ -4930,11 +4934,15 @@
     var real = applyHomography(calibration.h, analysis.ankleMid.x, analysis.ankleMid.y);
     if (!real) return true;
     var nearest = nearestRailSide(real, calibration.tableLength, calibration.tableWidth);
+    // Side 0 is the y=0 rail (the table is at +y from it), 1 the y=max
+    // rail, 2 the x=0 rail, 3 the x=max rail - whether the feet project
+    // just outside the rail (players on the camera's side) or just inside
+    // it (the far sides, seen past the rail), into the table is the same way.
     var towardReal = { x: real.x, y: real.y };
-    if (nearest.side === 0) towardReal.y -= 1;
-    else if (nearest.side === 1) towardReal.y += 1;
-    else if (nearest.side === 2) towardReal.x -= 1;
-    else towardReal.x += 1;
+    if (nearest.side === 0) towardReal.y += 1;
+    else if (nearest.side === 1) towardReal.y -= 1;
+    else if (nearest.side === 2) towardReal.x += 1;
+    else towardReal.x -= 1;
 
     var invH = invertHomography(calibration.h);
     if (!invH) return true;
