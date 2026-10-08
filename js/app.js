@@ -29952,6 +29952,7 @@
   });
 
   window.PMCCameraBridge.reportRemoteCameraList = function (data) {
+    window.PMCCameraBridge.reportCameraDeviceList(data, true);
     if (remoteCalibrateOverlay.classList.contains("hidden")) return;
     var devices = data.devices || [];
     // Only worth showing when there's an actual choice - a phone with
@@ -30049,7 +30050,8 @@
     speakCameraStatus(name + " shooting.");
   };
   // Cue stick over the table (camera.html's cue tracking) - "detected" /
-  // "gone" as the cue comes out over the cloth and is put away, and
+  // "gone" as the cue comes out over the cloth and is put away ("fewer"
+  // when one of several is put away; "detected" carries how many are out), and
   // "shooter" when that cue was put down to someone (resent: already
   // selected, inside the camera's re-announce cooldown). Only Cue debug
   // mode does anything with them here: a running log under the
@@ -30059,10 +30061,13 @@
     if (!msg || !cameraCueDebugCheckbox.checked) return;
     var text;
     if (msg.event === "detected") {
-      text = "Cue detected on the table" + (typeof msg.lengthIn === "number" ? " (" + Math.round(msg.lengthIn) + " in of cue seen)" : "");
+      text = "Cue detected on the table" + (typeof msg.lengthIn === "number" ? " (" + Math.round(msg.lengthIn) + " in of cue seen)" : "") +
+        (msg.count > 1 ? " - " + msg.count + " cues on the table" : "");
       speakCameraStatus(T("toast.cameraCueDetected"));
     } else if (msg.event === "gone") {
       text = "Cue no longer over the table";
+    } else if (msg.event === "fewer" && msg.count > 0) {
+      text = "A cue was put away - " + msg.count + (msg.count === 1 ? " cue" : " cues") + " still on the table";
     } else if (msg.event === "shooter" && msg.player_name) {
       text = "Cue: " + msg.player_name + " set as shooting (" + (msg.via || "cue over the table") + ")" + (msg.resent ? " - already selected" : "");
     } else if (msg.event === "no-shooter") {
@@ -30250,6 +30255,7 @@
     sameDeviceCameraReady = false;
     sameDeviceCameraQueue = [];
     renderCameraCandidateStatus(null, false);
+    renderCameraDeviceChoice();
     if (window.PMCCameraBridge.reportCameraStatus) window.PMCCameraBridge.reportCameraStatus({}, false);
     // postMessage first so camera.html can stop its own MediaStreamTracks
     // and release the wake lock - clearing src alone isn't a reliable
@@ -30494,6 +30500,7 @@
     relayEnrolledNames = null;
     if (!state.sameDeviceCameraSetUp) clearCameraStatusCodes();
     renderEnrollmentStatus();
+    renderCameraDeviceChoice();
   };
 
   // ---- Camera status lights (Select Camera + Capture Settings) ----
@@ -30562,9 +30569,55 @@
     cameraPhonesConnected = typeof count === "number" ? count : null;
     if (!cameraPhonesConnected && !state.sameDeviceCameraSetUp) cameraStatusCodes = { link: null, models: null, camera: null };
     renderCameraStatusLights();
+    if (typeof renderCameraDeviceChoice === "function") renderCameraDeviceChoice();
   };
   window.PMCCameraBridge.renderCameraStatusLights = renderCameraStatusLights;
   renderCameraStatusLights();
+
+  // ---- Select Camera > Camera: which of the camera's cameras/lenses ----
+  // Only shown when there's a real choice: this computer with a USB
+  // camera plus its built-in one, or a phone whose wide/ultra-wide lenses
+  // show up as separate cameras. The camera page sends its list (and
+  // which one is live) whenever its camera starts; picking one here
+  // switches it there and it remembers the pick. Same transports as the
+  // status lights: postMessage for this device's camera, the relay for
+  // a separate phone (the same messages remote calibration's Lens picker
+  // uses).
+  var cameraDeviceList = null; // { devices: [{deviceId, label}], currentDeviceId, fromRelay }
+  var cameraDeviceFrame = document.getElementById("camera-device-frame");
+  var cameraDeviceSelect = document.getElementById("camera-device-select");
+  function renderCameraDeviceChoice() {
+    var list = cameraDeviceList && cameraMessageCounts(cameraDeviceList.fromRelay) ? cameraDeviceList : null;
+    var live = list && (state.sameDeviceCameraSetUp ? sameDeviceCameraRunning : !!cameraPhonesConnected);
+    if (!live || list.devices.length < 2) {
+      cameraDeviceFrame.classList.add("hidden");
+      return;
+    }
+    cameraDeviceSelect.innerHTML = "";
+    list.devices.forEach(function (d) {
+      var opt = document.createElement("option");
+      opt.value = d.deviceId;
+      opt.textContent = d.label;
+      if (d.deviceId === list.currentDeviceId) opt.selected = true;
+      cameraDeviceSelect.appendChild(opt);
+    });
+    cameraDeviceFrame.classList.remove("hidden");
+  }
+  window.PMCCameraBridge.reportCameraDeviceList = function (data, fromRelay) {
+    if (!data || !Array.isArray(data.devices)) return;
+    var devices = data.devices.filter(function (d) { return d && typeof d.deviceId === "string" && d.deviceId; }).map(function (d) {
+      return { deviceId: d.deviceId, label: String(d.label || d.deviceId) };
+    });
+    cameraDeviceList = { devices: devices, currentDeviceId: data.currentDeviceId || null, fromRelay: !!fromRelay };
+    renderCameraDeviceChoice();
+  };
+  cameraDeviceSelect.addEventListener("change", function () {
+    var deviceId = cameraDeviceSelect.value;
+    if (!deviceId) return;
+    if (cameraDeviceList) cameraDeviceList.currentDeviceId = deviceId;
+    if (state.sameDeviceCameraSetUp) sendToSameDeviceCamera({ type: "remote-camera-select", deviceId: deviceId });
+    else if (window.PMCCameraBridge.selectRemoteCamera) window.PMCCameraBridge.selectRemoteCamera(deviceId);
+  });
 
   // ---- Capture Settings: Enroll players / Table calibration ----
   // This tablet's camera: the full-screen camera view, on its Enroll tab
@@ -30754,6 +30807,8 @@
       window.PMCCameraBridge.reportCameraSettings(msg.settings);
     } else if (msg.type === "camera-status") {
       window.PMCCameraBridge.reportCameraStatus(msg.status);
+    } else if (msg.type === "remote-camera-list") {
+      window.PMCCameraBridge.reportCameraDeviceList({ devices: Array.isArray(msg.devices) ? msg.devices : [], currentDeviceId: msg.currentDeviceId || null }, false);
     } else if (msg.type === "frame-height" && typeof msg.height === "number" && msg.height > 0) {
       sameDeviceCameraFrameHeight = Math.min(6000, Math.round(msg.height));
       fitSameDeviceCameraFrame();

@@ -103,8 +103,8 @@
 //       (relay -> listeners; on a listener's hello, and whenever a
 //       camera connects or drops)
 //   Cue stick over the table (camera.html's cue tracking):
-//     { type: "cue_event", event: "detected" | "gone" | "shooter" |
-//       "no-shooter", lengthIn?, player_name?, via?, resent?, ts }
+//     { type: "cue_event", event: "detected" | "gone" | "fewer" | "shooter" |
+//       "no-shooter", lengthIn?, count? (sticks over the table), player_name?, via?, resent?, ts }
 //       (camera -> listeners; drives the tablet's Cue debug mode log/voice)
 //   Remote calibration (listener drives camera.html's manual-tap table
 //   calibration without touching the camera device itself):
@@ -119,6 +119,8 @@
 //   so a wide-angle lens (say) can be picked before framing/calibrating:
 //     { type: "remote-camera-list-request" } (listener -> relay -> every "camera")
 //     { type: "remote-camera-list", devices: [{deviceId, label}], currentDeviceId }
+//       (also sent unasked whenever the camera starts - the tablet's
+//       Visual Scoring > Select Camera > Camera picker shows it)
 //       (camera -> relay -> every "listener")
 //     { type: "remote-camera-select", deviceId } (listener -> relay -> every "camera")
 //   Remote viewer (a THIRD role, "viewer" - see createCameraRelay's own
@@ -320,7 +322,7 @@ function createCameraRelay(WebSocket) {
         // Cue stick over the table: came out over the cloth ("detected"),
         // put away ("gone"), or put down to a shooter ("shooter").
         if (msg.type === "cue_event" && ws.role === "camera") {
-          broadcastToListeners({ type: "cue_event", event: msg.event, lengthIn: msg.lengthIn, player_name: msg.player_name || null, via: msg.via, resent: !!msg.resent, ts: msg.ts });
+          broadcastToListeners({ type: "cue_event", event: msg.event, lengthIn: msg.lengthIn, count: msg.count, player_name: msg.player_name || null, via: msg.via, resent: !!msg.resent, ts: msg.ts });
           return;
         }
 

@@ -897,6 +897,8 @@
   "players.cameraCueDebugHelpAria": "Que fait le mode débogage queue ?",
   "players.cameraCueDebugHelpText": "Montre exactement ce que fait la détection de queue de la caméra. Chaque fois qu'une queue apparaît au-dessus de la table, est rangée, ou est attribuée à un joueur, une ligne s'ajoute au journal sous ces cases ; la vidéo de la caméra montre la queue tracée en rose avec sa longueur et le joueur associé ; et - quand « Annoncer le statut du joueur » est activé - vous entendez « Queue détectée sur la table ». Quand une queue apparaît et que personne en vue ne la tient, le dernier joueur vu par la caméra est indiqué comme tireur, et le journal le signale. Cela ne change rien à ce qui est détecté - désactivez-le pour jouer normalement.",
   "toast.cameraCueDetected": "Queue détectée sur la table",
+  "visualScoring.cameraChoiceTitle": "Caméra",
+  "visualScoring.cameraChoiceHint": "Plusieurs caméras ou objectifs sont disponibles. Choisissez celui qui regarde la table - un objectif grand-angle en voit généralement le plus.",
   "visualScoring.placementCamera": "CAMÉRA",
   "visualScoring.placementTable": "TABLE DE BILLARD",
   "visualScoring.placementArea": "ZONE COUVERTE",

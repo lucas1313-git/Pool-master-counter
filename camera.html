@@ -1155,6 +1155,16 @@
       else localStorage.removeItem(CAMERA_DEVICE_STORAGE_KEY);
     } catch (e) {}
   }
+  // A USB camera plugged in (or out) while this page is open: refresh the
+  // picker here and the scoreboard's Select Camera > Camera list.
+  if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+    navigator.mediaDevices.addEventListener("devicechange", function () {
+      if (!currentStream) return;
+      var live = currentStream.getVideoTracks()[0];
+      populateCameraList(live && live.getSettings ? live.getSettings().deviceId : null);
+      sendRemoteCameraList();
+    });
+  }
 
   // isBootAttempt marks a call using a *remembered* device from a past
   // session, not one the operator just picked right now - only then does
@@ -1185,6 +1195,9 @@
       }
       var activeDeviceId = track && track.getSettings ? track.getSettings().deviceId : null;
       if (!devicesPopulated) populateCameraList(activeDeviceId);
+      // The scoreboard's Select Camera > Camera picker shows this list
+      // (only when there's more than one camera or lens to pick from).
+      sendRemoteCameraList();
     }).catch(function (e) {
       if (isBootAttempt && deviceId) {
         console.warn("[camera] remembered camera unavailable at startup, falling back to the default camera:", e.message);
@@ -1402,6 +1415,7 @@
     } else if (msg.type === "camera-settings-request") {
       reportCaptureSettings();
       reportCameraStatus();
+      if (currentStream) sendRemoteCameraList();
     } else if (msg.type === "viewer-click" && msg.id) {
       var clickEl = document.getElementById(msg.id);
       if (clickEl) clickEl.click();
@@ -2433,7 +2447,7 @@
       box: box, w: w, h: h, scale: scale, bx0: bx0, by0: by0,
       inside: inside, hArr: hArr, sArr: sArr, vArr: vArr, foreign: foreign,
       feltH: feltH, feltS: feltS, feltV: feltV,
-      toCanvas: toCanvas, toVideo: toVideo
+      toCanvas: toCanvas, toVideo: toVideo, rgb: data
     };
   }
 
@@ -2913,7 +2927,6 @@
   // Pieces of one cue that a bridge hand, a ball or a pocket cut apart
   // are joined back up when they line up.
   var CUE_PASS_EVERY_N_TICKS = 2; // ~0.55s
-  var CUE_OPEN_IN = 1.2; // thinner than this (at the near rail) can be a cue
   var CUE_MAX_WIDTH_IN = 2.0; // shaft ~0.5in, butt ~1.2in, plus blur/stroke smear
   var CUE_SEGMENT_MIN_IN = 2.5; // shorter thin pieces are fingers, chalk, noise
   var CUE_MIN_LENGTH_IN = 10; // tip to where it leaves the felt or meets the bridge hand
@@ -2921,7 +2934,23 @@
   var CUE_MIN_CORE_IN = 4; // the longest single unbroken piece
   var CUE_MERGE_ANGLE_DEG = 7;
   var CUE_MERGE_GAP_IN = 10; // a bridge hand is ~4in, a pocket's exclusion disc ~9in
-  var CUE_RAIL_PARALLEL_IN = 2.5; // a thin line hugging a rail is a calibration sliver
+  // A thin line hugging a rail (both ends this close to it) is a
+  // calibration sliver, not a cue. The shadow under a cushion's nose is
+  // NOT caught here: corners get tapped anywhere from the nose out to the
+  // wood, so it sits 2-4in in from the calibrated edge - exactly where a
+  // cue lying along the rail sits too (measured on a real table: both
+  // 1.7-3.8in, within 5 deg of parallel). That shadow is told apart by
+  // what it looks like instead (see cueLineMask).
+  var CUE_RAIL_PARALLEL_IN = 1.5;
+  var CUE_LINE_SIDE_IN = 0.8; // where a line pixel's two sides are sampled: just past a butt's half-width
+  var CUE_LINE_MIN_CONTRAST = 40; // RGB L1 distance (0-765) from the cloth on each side
+  var CUE_LINE_SIDES_ALIKE = 0.5; // the two sides may differ by at most this x the line's own contrast
+  var CUE_SHADOW_HUE_DEG = 50; // a line this close in hue to the cloth (the table's or beside it),
+  var CUE_SHADOW_SAT_RATIO = 0.8; // at least about as saturated, and darker, is a shadow on it -
+  var CUE_SOLID_DARK_RATIO = 0.2; // unless darker than this x the cloth: no shade on lit cloth is that black
+  var CUE_CLOTH_HUE_DEG = 15; // a pixel this close to the cloth's hue,
+  var CUE_CLOTH_SAT_TOL = 0.35; // saturation (fraction of the cloth's)
+  var CUE_CLOTH_VAL_TOL = 0.25; // and brightness IS cloth, whatever its shape
   var CUE_EXIT_MARGIN_IN = 4; // an end this close to an edge = the cue carries on off the table
   var CUE_CONFIRM_PASSES = 2;
   var CUE_LOST_PASSES = 3;
@@ -3069,7 +3098,101 @@
     return { onCue: onCue, fraction: onCue ? clear / onCue : 0 };
   }
 
-  // Returns { cue, rejected, pieces, ms } - cue is null when nothing
+  // The cue's own pixels, found as a LINE rather than as "not cloth":
+  // a pixel counts when the cloth CUE_LINE_SIDE_IN to either side of it
+  // (across one of 4 directions) differs from it by CUE_LINE_MIN_CONTRAST
+  // while those two sides look alike. Matching against the cloth right
+  // beside it, not one colour for the whole table, is what keeps it
+  // working under a real lamp: the bright, colour-shifted hotspots it
+  // throws on the cloth are smooth patches whose edges are one-sided
+  // steps, never lines, so the cue is still found running straight
+  // through them - the global "not felt" mask turned those patches into
+  // big blobs that swallowed the shaft. The edges of anything thick (a
+  // ball, an arm, a hand on the cloth) are steps too, so they don't
+  // stick to the cue either.
+  // Two kinds of line aren't a cue by themselves:
+  //  - plain cloth: where a cue blocks part of the lamp's light, the band
+  //    it shades is the cloth's own colour inside a tinted hotspot;
+  //  - a shadow ON the cloth (the stripe under a cushion's nose, a cue's
+  //    own shadow): darker, about as saturated, and roughly the cloth's
+  //    hue - the shade is lit only by the room (daylight from a window
+  //    under a warm lamp), which can swing its hue a good 45 degrees.
+  // But the dark side of a thin cue looks exactly like that: the camera
+  // keeps colour at half resolution, so a 2px-wide black shaft takes the
+  // cloth's colour from around it, and only its brightness is its own.
+  // What a real stick always has is something that is clearly cue - the
+  // bright highlight along its top, grey shaft, wood, a near-black butt -
+  // so shadow-like pixels count when they touch one of those.
+  function cueLineMask(sample) {
+    var w = sample.w, h = sample.h, rgb = sample.rgb, inside = sample.inside, invH = sample.box.invH;
+    var hArr = sample.hArr, sArr = sample.sArr, vArr = sample.vArr;
+    var feltH = sample.feltH, feltS = sample.feltS, feltV = sample.feltV;
+    // Side offset per 8x8 cell, from the local pixels-per-inch (the larger
+    // of the two table axes, so it clears a butt seen side-on anywhere).
+    var CELL = 8, cw = Math.ceil(w / CELL), ch = Math.ceil(h / CELL);
+    var side = new Uint8Array(cw * ch);
+    for (var cy = 0; cy < ch; cy++) {
+      for (var cx = 0; cx < cw; cx++) {
+        var v = sample.toVideo(Math.min(w - 1, cx * CELL + CELL / 2), Math.min(h - 1, cy * CELL + CELL / 2));
+        var r = applyHomography(calibration.h, v.x, v.y);
+        var d = 3;
+        if (r) {
+          var p0 = applyInverseHomography(invH, r.x, r.y), p1 = applyInverseHomography(invH, r.x + 1, r.y), p2 = applyInverseHomography(invH, r.x, r.y + 1);
+          if (p0 && p1 && p2) d = Math.round(CUE_LINE_SIDE_IN * Math.max(pointDist(p0, p1), pointDist(p0, p2)) * sample.scale);
+        }
+        side[cy * cw + cx] = Math.max(2, Math.min(16, d));
+      }
+    }
+    var line = new Uint8Array(w * h); // clearly cue
+    var shade = new Uint8Array(w * h); // line-shaped but shadow-like
+    for (var y = 0; y < h; y++) {
+      var rowCell = ((y / CELL) | 0) * cw;
+      for (var x = 0; x < w; x++) {
+        var i = y * w + x;
+        if (!inside[i]) continue;
+        if (hueDistance(hArr[i], feltH) <= CUE_CLOTH_HUE_DEG && Math.abs(sArr[i] - feltS) <= CUE_CLOTH_SAT_TOL * feltS &&
+            Math.abs(vArr[i] - feltV) <= CUE_CLOTH_VAL_TOL * feltV) continue;
+        var dd = side[rowCell + ((x / CELL) | 0)], dg = Math.round(dd * 0.7071);
+        var p = i * 4, R = rgb[p], G = rgb[p + 1], B = rgb[p + 2];
+        for (var dir = 0; dir < 4; dir++) {
+          var ox = dir === 0 ? dd : dir === 1 ? 0 : dg;
+          var oy = dir === 0 ? 0 : dir === 1 ? dd : dir === 2 ? dg : -dg;
+          var x1 = x + ox, y1 = y + oy, x2 = x - ox, y2 = y - oy;
+          if (x1 < 0 || x1 >= w || x2 < 0 || x2 >= w || y1 < 0 || y1 >= h || y2 < 0 || y2 >= h) continue;
+          var j1 = y1 * w + x1, j2 = y2 * w + x2;
+          if (!inside[j1] || !inside[j2]) continue;
+          var q1 = j1 * 4, q2 = j2 * 4;
+          var a = Math.abs(R - rgb[q1]) + Math.abs(G - rgb[q1 + 1]) + Math.abs(B - rgb[q1 + 2]);
+          if (a < CUE_LINE_MIN_CONTRAST) continue;
+          var b = Math.abs(R - rgb[q2]) + Math.abs(G - rgb[q2 + 1]) + Math.abs(B - rgb[q2 + 2]);
+          if (b < CUE_LINE_MIN_CONTRAST) continue;
+          var sides = Math.abs(rgb[q1] - rgb[q2]) + Math.abs(rgb[q1 + 1] - rgb[q2 + 1]) + Math.abs(rgb[q1 + 2] - rgb[q2 + 2]);
+          if (sides > CUE_LINE_SIDES_ALIKE * Math.min(a, b)) continue;
+          if (vArr[i] < Math.min(vArr[j1], vArr[j2]) && vArr[i] >= CUE_SOLID_DARK_RATIO * feltV &&
+              sArr[i] >= CUE_SHADOW_SAT_RATIO * Math.min(sArr[j1], sArr[j2], feltS) &&
+              (hueDistance(hArr[i], feltH) <= CUE_SHADOW_HUE_DEG ||
+               (hueDistance(hArr[i], hArr[j1]) <= CUE_SHADOW_HUE_DEG && hueDistance(hArr[i], hArr[j2]) <= CUE_SHADOW_HUE_DEG))) {
+            shade[i] = 1; // keep looking: another direction may show it's the cue
+            continue;
+          }
+          line[i] = 1;
+          break;
+        }
+      }
+    }
+    // Shadow-like pixels join when they touch the cue (two 3x3 steps, so
+    // a 2-3px dark underside beside a 1px highlight comes along whole).
+    for (var step = 0; step < 2; step++) {
+      var near = morphSquare(line, w, h, 3, false);
+      var grew = false;
+      for (var k = 0; k < w * h; k++) if (shade[k] && near[k] && !line[k]) { line[k] = 1; grew = true; }
+      if (!grew) break;
+    }
+    return line;
+  }
+
+  // Returns { cue, cues, rejected, pieces, ms } - cues is every stick
+  // that passed (longest first), cue the longest, null when nothing
   // cue-like is over the felt. All positions in the result are native
   // video pixels (like the ball inventory), so the overlay and the
   // holder search can use them directly.
@@ -3078,29 +3201,11 @@
     if (!sample) return null;
     var t0 = Date.now();
     var w = sample.w, h = sample.h, xMax = sample.box.xMax, yMax = sample.box.yMax;
-    // Opening size in canvas pixels: CUE_OPEN_IN at the table's most
-    // magnified (nearest) edge, so it's wider than a shaft everywhere.
-    var pxPerInMax = 0;
-    var inv = sample.box.invH;
-    [[0, 0], [xMax, 0], [xMax, yMax], [0, yMax]].forEach(function (c) {
-      var p0 = applyInverseHomography(inv, c[0], c[1]);
-      var px = applyInverseHomography(inv, c[0] + (c[0] ? -1 : 1), c[1]);
-      var py = applyInverseHomography(inv, c[0], c[1] + (c[1] ? -1 : 1));
-      if (!p0 || !px || !py) return;
-      pxPerInMax = Math.max(pxPerInMax, pointDist(p0, px) * sample.scale, pointDist(p0, py) * sample.scale);
-    });
-    var k = Math.max(5, Math.min(21, Math.round(CUE_OPEN_IN * pxPerInMax) | 1));
-    // A 3x3 closing first bridges the one-pixel breaks a thin shaft gets
-    // where it blends into the cloth.
-    var closed = morphSquare(morphSquare(sample.foreign, w, h, 3, false), w, h, 3, true);
-    var opened = morphSquare(morphSquare(closed, w, h, k, true), w, h, k, false);
-    // What the opening shaves off a thick shape's rounded edge (a bridge
-    // hand, a ball) is a thin crescent too, and it would stick to the
-    // shaft and fatten it - so thin pixels touching anything thick (within
-    // 2px) don't count.
-    var nearThick = morphSquare(opened, w, h, 5, false);
-    var thin = new Uint8Array(w * h);
-    for (var i = 0; i < w * h; i++) if (closed[i] && !nearThick[i]) thin[i] = 1;
+    // Pixels on a thin line: unlike the cloth on BOTH sides, with the two
+    // sides alike (see cueLineMask). A 3x3 closing bridges the one-pixel
+    // breaks a shaft gets where it blends into the cloth.
+    var line = cueLineMask(sample);
+    var thin = morphSquare(morphSquare(line, w, h, 3, false), w, h, 3, true);
 
     var segs = [];
     labelThinComponents(thin, w, h, 6).forEach(function (blob) {
@@ -3174,7 +3279,7 @@
           if (edgeA[e] <= CUE_RAIL_PARALLEL_IN && edgeB[e] <= CUE_RAIL_PARALLEL_IN) { reason = "along the rail"; break; }
         }
         if (!reason) {
-          var clearance = cueSideClearance(g, sample, closed);
+          var clearance = cueSideClearance(g, sample, thin);
           entry.clearance = clearance.fraction;
           if (clearance.onCue < 4 || clearance.fraction < 0.5) reason = "edge of something wider";
         }
@@ -3206,7 +3311,8 @@
       accepted.push(entry);
     }
     accepted.sort(function (a, b) { return b.lengthIn - a.lengthIn; });
-    return { cue: accepted[0] || null, rejected: rejected, pieces: segs.length, openSizePx: k, ms: Date.now() - t0 };
+    if (window.PMCCueDebug && window.PMCCueDebug.keepMasks) window.PMCCueDebug.lastMasks = { w: w, h: h, sample: sample, line: line, thin: thin, segs: segs };
+    return { cue: accepted[0] || null, cues: accepted, rejected: rejected, pieces: segs.length, ms: Date.now() - t0 };
   }
 
   // ---- Cue tracking across passes ----
@@ -3215,15 +3321,24 @@
   // CUE_LOST_PASSES misses in a row to clear it again, so a frame of
   // stroke blur mid-aim doesn't drop it. appearanceId counts how many
   // separate times a cue has come out over the table - one appearance is
-  // one shot being lined up.
+  // one shot being lined up. More than one stick can be out at once (one
+  // left lying across the table, another being used): count is how many
+  // are confirmed, and a confirmed RISE in that count is a new appearance
+  // too, so a cue left on the cloth doesn't hide the next one coming out.
+  // cues is every stick from the last pass; cue is the one that counts -
+  // the one somebody is holding (see findCueHolderAmong), else the longest.
   var cueTickCounter = 0;
-  var cueTrack = { present: false, seenPasses: 0, missedPasses: 0, cue: null, lastResult: null, appearanceId: 0, lastSeenAt: 0, holder: null, shooterName: null };
+  var cueTrack = { present: false, seenPasses: 0, missedPasses: 0, count: 0, morePasses: 0, fewerPasses: 0, cue: null, cues: [], lastResult: null, appearanceId: 0, lastSeenAt: 0, holder: null, shooterName: null };
 
   function resetCueTracking(reason) {
     cueTrack.present = false;
     cueTrack.seenPasses = 0;
     cueTrack.missedPasses = 0;
+    cueTrack.count = 0;
+    cueTrack.morePasses = 0;
+    cueTrack.fewerPasses = 0;
     cueTrack.cue = null;
+    cueTrack.cues = [];
     cueTrack.lastResult = null;
     cueTrack.holder = null;
     cueTrack.shooterName = null;
@@ -3235,40 +3350,62 @@
   }
 
   var RAIL_NAMES = ["top", "bottom", "left", "right"];
+  function cueLengthsText(cues) {
+    return cues.map(function (c) { return Math.round(c.lengthIn) + "in"; }).join(", ");
+  }
   function runCuePass() {
     var sample = sampleTablePixels();
     var result = sample ? detectCueInFrame(sample) : null;
     cueTrack.lastResult = result;
-    if (result && result.cue) {
+    var cues = result && result.cues ? result.cues : [];
+    var n = cues.length;
+    if (n) {
+      cueTrack.cues = cues;
       cueTrack.cue = result.cue;
       cueTrack.lastSeenAt = Date.now();
       cueTrack.seenPasses++;
       cueTrack.missedPasses = 0;
-      if (!cueTrack.present && cueTrack.seenPasses >= CUE_CONFIRM_PASSES) {
-        cueTrack.present = true;
-        cueTrack.appearanceId++;
-        cueTrack.shooterName = null;
-        send({ type: "cue_event", event: "detected", lengthIn: Math.round(result.cue.lengthIn), ts: Date.now() });
-        if (settings.cueDebugEnabled) {
-          logActivity("Cue detected on table (" + Math.round(result.cue.lengthIn) + "in of cue seen)");
-          // The tablet speaks instead in embedded mode - see updateSeenCandidate.
-          if (settings.voiceStatusEnabled && !isEmbedded) speak("Cue detected on table.");
-        }
-        var side = result.cue.exitsTable ? nearestRailSide(result.cue.buttReal, calibration.tableLength, calibration.tableWidth).side : -1;
-        console.log("[PMC cue] CUE STICK OVER THE TABLE - " + Math.round(result.cue.lengthIn) + "in of cue seen" +
-          (side >= 0 ? ", butt end off the " + RAIL_NAMES[side] + " rail (camera view)" : ", lying inside the table"));
-      }
     } else {
       cueTrack.seenPasses = 0;
       cueTrack.missedPasses++;
-      if (cueTrack.present && cueTrack.missedPasses >= CUE_LOST_PASSES) {
+    }
+    if (n > cueTrack.count) { cueTrack.morePasses++; cueTrack.fewerPasses = 0; }
+    else if (n < cueTrack.count) { cueTrack.fewerPasses++; cueTrack.morePasses = 0; }
+    else { cueTrack.morePasses = 0; cueTrack.fewerPasses = 0; }
+
+    if (cueTrack.morePasses >= CUE_CONFIRM_PASSES) {
+      cueTrack.morePasses = 0;
+      cueTrack.count = n;
+      cueTrack.present = true;
+      cueTrack.appearanceId++;
+      cueTrack.shooterName = null;
+      send({ type: "cue_event", event: "detected", lengthIn: Math.round(result.cue.lengthIn), count: n, ts: Date.now() });
+      if (settings.cueDebugEnabled) {
+        logActivity("Cue detected on table (" + Math.round(result.cue.lengthIn) + "in of cue seen)" + (n > 1 ? " - " + n + " cues on the table: " + cueLengthsText(cues) : ""));
+        // The tablet speaks instead in embedded mode - see updateSeenCandidate.
+        if (settings.voiceStatusEnabled && !isEmbedded) speak("Cue detected on table.");
+      }
+      cues.forEach(function (cue) {
+        var side = cue.exitsTable ? nearestRailSide(cue.buttReal, calibration.tableLength, calibration.tableWidth).side : -1;
+        console.log("[PMC cue] CUE STICK OVER THE TABLE - " + Math.round(cue.lengthIn) + "in of cue seen" +
+          (side >= 0 ? ", butt end off the " + RAIL_NAMES[side] + " rail (camera view)" : ", lying inside the table"));
+      });
+    } else if (cueTrack.fewerPasses >= CUE_LOST_PASSES) {
+      cueTrack.fewerPasses = 0;
+      cueTrack.count = n;
+      if (!n) {
         cueTrack.present = false;
         cueTrack.cue = null;
+        cueTrack.cues = [];
         cueTrack.holder = null;
         cueTrack.shooterName = null;
         console.log("[PMC cue] cue stick no longer over the table");
         send({ type: "cue_event", event: "gone", ts: Date.now() });
         if (settings.cueDebugEnabled) logActivity("Cue no longer over the table");
+      } else {
+        console.log("[PMC cue] " + n + " cue stick(s) still over the table");
+        send({ type: "cue_event", event: "fewer", count: n, ts: Date.now() });
+        if (settings.cueDebugEnabled) logActivity("A cue was put away - " + n + (n === 1 ? " cue" : " cues") + " still on the table");
       }
     }
   }
@@ -3351,12 +3488,27 @@
     return null;
   }
 
+  // With more than one stick out, the one somebody is holding is the one
+  // that counts: the surest holder found on any of them (hands on a cue
+  // beats nearest a butt end beats the only player), with that cue.
+  var CUE_HOLDER_RANK = { "hands on the cue": 0, "nearest the butt end": 1, "only player at the table": 2 };
+  function findCueHolderAmong(poses, cues, hiddenPresence) {
+    var best = null;
+    (cues || []).forEach(function (cue) {
+      var holder = findCueHolder(poses, cue, hiddenPresence);
+      if (!holder) return;
+      if (!best || CUE_HOLDER_RANK[holder.how] < CUE_HOLDER_RANK[best.holder.how] ||
+          (CUE_HOLDER_RANK[holder.how] === CUE_HOLDER_RANK[best.holder.how] && holder.score < best.holder.score)) best = { holder: holder, cue: cue };
+    });
+    return best;
+  }
+
   // Cue debug mode's one-line state, bottom left (above the ball status
   // line): is a cue over the table, and who it was put down to.
   function drawCueBadge() {
     if (!cueDetectionActive()) return;
     var text = cueTrack.present
-      ? "CUE ON THE TABLE" + (cueTrack.cue ? " (" + Math.round(cueTrack.cue.lengthIn) + "in)" : "") + (cueTrack.shooterName ? " - " + cueTrack.shooterName + " shooting" : "")
+      ? (cueTrack.count > 1 ? cueTrack.count + " CUES ON THE TABLE (" + cueLengthsText(cueTrack.cues) + ")" : "CUE ON THE TABLE" + (cueTrack.cue ? " (" + Math.round(cueTrack.cue.lengthIn) + "in)" : "")) + (cueTrack.shooterName ? " - " + cueTrack.shooterName + " shooting" : "")
       : "Cue: none over the table";
     overlayCtx.save();
     overlayCtx.font = "bold " + Math.max(14, Math.round(overlayEl.width / 45)) + "px sans-serif";
@@ -3387,9 +3539,12 @@
       overlayCtx.fillStyle = "#9a9a9a";
       overlayCtx.fillText("✕ " + r.reason, (a.x + b.x) / 2 + 6, (a.y + b.y) / 2 - 6);
     });
-    var cue = cueTrack.present ? cueTrack.cue : result.cue;
-    if (cue) {
-      var colour = cueTrack.present ? "#ff4fd8" : "#c58ab8"; // bright once confirmed
+    // Every stick over the table; the one put down to someone also gets
+    // the line to them and how they were matched.
+    var cues = cueTrack.present ? cueTrack.cues : (result.cues || []);
+    var colour = cueTrack.present ? "#ff4fd8" : "#c58ab8"; // bright once confirmed
+    cues.forEach(function (cue) {
+      var held = cueTrack.present && cueTrack.holder && cue === cueTrack.cue;
       var tip = videoToOverlay(cue.tip.x, cue.tip.y), butt = videoToOverlay(cue.butt.x, cue.butt.y);
       overlayCtx.strokeStyle = colour;
       overlayCtx.lineWidth = 5;
@@ -3404,7 +3559,7 @@
       overlayCtx.setLineDash([]);
       overlayCtx.beginPath(); overlayCtx.arc(tip.x, tip.y, 6, 0, Math.PI * 2); overlayCtx.stroke();
       // Who it was matched to: a line from the butt end to them.
-      if (cueTrack.present && cueTrack.holder) {
+      if (held) {
         var hb = boxFromPoints(cueTrack.holder.pose.keypoints.filter(function (p) { return (p.score || 0) >= CUE_KEYPOINT_MIN_SCORE; }), 0.05);
         if (isFinite(hb.x0)) {
           var hc = videoToOverlay((hb.x0 + hb.x1) / 2, (hb.y0 + hb.y1) / 2);
@@ -3414,7 +3569,7 @@
         }
       }
       var label = "CUE " + Math.round(cue.lengthIn) + "in" + (cueTrack.present ? "" : " (confirming)") +
-        (cueTrack.present && cueTrack.holder ? " - " + cueTrack.holder.how : "");
+        (held ? " - " + cueTrack.holder.how : "");
       overlayCtx.font = "bold 14px sans-serif";
       var lw = overlayCtx.measureText(label).width;
       var lx = (tip.x + butt.x) / 2 + 8, ly = (tip.y + butt.y) / 2 - 10;
@@ -3422,7 +3577,7 @@
       overlayCtx.fillRect(lx - 4, ly - 14, lw + 8, 19);
       overlayCtx.fillStyle = colour;
       overlayCtx.fillText(label, lx, ly);
-    }
+    });
     overlayCtx.restore();
   }
 
@@ -3450,9 +3605,11 @@
   window.PMCCueDebug = {
     track: cueTrack,
     detect: function () { return detectCueInFrame(sampleTablePixelsFresh()); },
+    keepMasks: false,
+    lastMasks: null,
     runPass: function () { runCuePass(); },
     reset: function () { resetCueTracking(); },
-    findHolder: function (poses) { return findCueHolder(poses, cueTrack.cue, heldHiddenPresence(Date.now())); },
+    findHolder: function (poses) { var held = findCueHolderAmong(poses, cueTrack.cues.length ? cueTrack.cues : [cueTrack.cue], heldHiddenPresence(Date.now())); return held ? held.holder : null; },
     getPresence: function () { return tablePresence; },
     setPresence: function (p) { tablePresence = p; },
     getHiddenPresence: function () { return hiddenPresence; },
@@ -5310,8 +5467,9 @@
         } else if (cueDetectionActive()) {
           if (++cueTickCounter % CUE_PASS_EVERY_N_TICKS === 0) runCuePass();
           if (cueTrack.present) {
-            cueTrack.holder = findCueHolder(poses, cueTrack.cue, heldHiddenPresence(Date.now()));
-            if (cueTrack.holder) pose = cueTrack.holder.pose;
+            var held = findCueHolderAmong(poses, cueTrack.cues, heldHiddenPresence(Date.now()));
+            cueTrack.holder = held ? held.holder : null;
+            if (held) { cueTrack.cue = held.cue; pose = held.holder.pose; }
             cueCtx = { present: true, holder: cueTrack.holder, exitsTable: !!(cueTrack.cue && cueTrack.cue.exitsTable), appearanceId: cueTrack.appearanceId, holderIsAnalyzed: false };
           }
         }

@@ -7573,6 +7573,21 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   margin-bottom: 6px;
 }
 
+/* Select Camera > Camera: which of the camera's cameras/lenses (only
+   shown when there's more than one) - big enough to read and tap from
+   across the room, like the path cards' text. */
+.camera-device-frame .camera-device-hint {
+  font-size: 1.1rem;
+  margin: 0 0 10px;
+}
+
+.camera-device-select {
+  width: 100%;
+  max-width: 520px;
+  min-height: 44px;
+  font-size: 1.1rem;
+}
+
 /* The camera's three status lights (connection, models, camera),
    mirrored from the camera page into Select Camera and Capture
    Settings - same pill-and-dot look as on the camera page itself. */

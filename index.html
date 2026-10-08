@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261008n">
+<link rel="stylesheet" href="css/style.css?v=20261008o">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -355,6 +355,11 @@
         </button>
         <div class="panel-body" id="camera-setup-panel-body">
           <div class="camera-status-lights" id="setup-status-lights" aria-live="polite"></div>
+          <div class="settings-frame camera-device-frame hidden" id="camera-device-frame">
+            <h5 class="settings-frame-title" data-i18n="visualScoring.cameraChoiceTitle">Camera</h5>
+            <p class="wizard-step-explain camera-device-hint" data-i18n="visualScoring.cameraChoiceHint">More than one camera or lens is available. Pick the one that looks at the table - a wide-angle lens usually sees the most.</p>
+            <select id="camera-device-select" class="camera-device-select" data-i18n-aria-label="visualScoring.cameraChoiceTitle" aria-label="Camera"></select>
+          </div>
           <div class="camera-wizard-path-choice" id="camera-wizard-path-choice">
             <div class="camera-path-card" id="camera-path-card-phone">
               <button type="button" id="camera-wizard-path-phone" class="btn btn-ghost camera-wizard-path-btn" data-i18n="cameraWizard.pathPhone">📱 Use a separate phone</button>
@@ -2505,7 +2510,7 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20261008n"></script>
-<script src="js/camera-client.js?v=20261008n"></script>
+<script src="js/app.js?v=20261008o"></script>
+<script src="js/camera-client.js?v=20261008o"></script>
 </body>
 </html>
