@@ -3101,7 +3101,11 @@
   // The cue's own pixels, found as a LINE rather than as "not cloth":
   // a pixel counts when the cloth CUE_LINE_SIDE_IN to either side of it
   // (across one of 4 directions) differs from it by CUE_LINE_MIN_CONTRAST
-  // while those two sides look alike. Matching against the cloth right
+  // while those two sides look alike. A cue lying on the cloth casts its
+  // own shadow along one side, so there one side is lit cloth and the
+  // other shaded - then it looks twice as far out, past the shadow, where
+  // both sides are lit cloth again (the stripe under a cushion's nose
+  // still has cushion on one side and bed on the other). Matching against the cloth right
   // beside it, not one colour for the whole table, is what keeps it
   // working under a real lamp: the bright, colour-shifted hotspots it
   // throws on the cloth are smooth patches whose edges are one-sided
@@ -3143,6 +3147,9 @@
         side[cy * cw + cx] = Math.max(2, Math.min(16, d));
       }
     }
+    function shadeOf(n, f) {
+      return vArr[n] < 0.9 * vArr[f] && sArr[n] >= CUE_SHADOW_SAT_RATIO * sArr[f] && hueDistance(hArr[n], hArr[f]) <= CUE_SHADOW_HUE_DEG;
+    }
     var line = new Uint8Array(w * h); // clearly cue
     var shade = new Uint8Array(w * h); // line-shaped but shadow-like
     for (var y = 0; y < h; y++) {
@@ -3152,9 +3159,15 @@
         if (!inside[i]) continue;
         if (hueDistance(hArr[i], feltH) <= CUE_CLOTH_HUE_DEG && Math.abs(sArr[i] - feltS) <= CUE_CLOTH_SAT_TOL * feltS &&
             Math.abs(vArr[i] - feltV) <= CUE_CLOTH_VAL_TOL * feltV) continue;
-        var dd = side[rowCell + ((x / CELL) | 0)], dg = Math.round(dd * 0.7071);
+        var d1 = side[rowCell + ((x / CELL) | 0)];
         var p = i * 4, R = rgb[p], G = rgb[p + 1], B = rgb[p + 2];
-        for (var dir = 0; dir < 4; dir++) {
+        var lopsided = 0; // directions where both near sides differ from it, but also from each other
+        var nearA = [0, 0, 0, 0], nearB = [0, 0, 0, 0];
+        for (var probe = 0; probe < 8; probe++) {
+          var dir = probe & 3, far = probe >= 4, dd = far ? 2 * d1 : d1, dg = Math.round(dd * 0.7071);
+          // Further out only where the near look failed for that one
+          // reason - and see below: only past a shadow.
+          if (far && !(lopsided & (1 << dir))) continue;
           var ox = dir === 0 ? dd : dir === 1 ? 0 : dg;
           var oy = dir === 0 ? 0 : dir === 1 ? dd : dir === 2 ? dg : -dg;
           var x1 = x + ox, y1 = y + oy, x2 = x - ox, y2 = y - oy;
@@ -3167,7 +3180,15 @@
           var b = Math.abs(R - rgb[q2]) + Math.abs(G - rgb[q2 + 1]) + Math.abs(B - rgb[q2 + 2]);
           if (b < CUE_LINE_MIN_CONTRAST) continue;
           var sides = Math.abs(rgb[q1] - rgb[q2]) + Math.abs(rgb[q1 + 1] - rgb[q2 + 1]) + Math.abs(rgb[q1 + 2] - rgb[q2 + 2]);
-          if (sides > CUE_LINE_SIDES_ALIKE * Math.min(a, b)) continue;
+          if (sides > CUE_LINE_SIDES_ALIKE * Math.min(a, b)) {
+            if (!far) { lopsided |= 1 << dir; nearA[dir] = j1; nearB[dir] = j2; }
+            continue;
+          }
+          // ...where what made the near sides differ is the cloth in shade
+          // on one side (darker than the cloth further out on that side,
+          // about as saturated, its hue) - not the rest of a ball or a
+          // hand, which this far out would otherwise pass for a stick.
+          if (far && !shadeOf(nearA[dir], j1) && !shadeOf(nearB[dir], j2)) continue;
           if (vArr[i] < Math.min(vArr[j1], vArr[j2]) && vArr[i] >= CUE_SOLID_DARK_RATIO * feltV &&
               sArr[i] >= CUE_SHADOW_SAT_RATIO * Math.min(sArr[j1], sArr[j2], feltS) &&
               (hueDistance(hArr[i], feltH) <= CUE_SHADOW_HUE_DEG ||
@@ -3207,11 +3228,17 @@
     var line = cueLineMask(sample);
     var thin = morphSquare(morphSquare(line, w, h, 3, false), w, h, 3, true);
 
-    var segs = [];
+    var segs = [], droppedSegs = [];
     labelThinComponents(thin, w, h, 6).forEach(function (blob) {
       var seg = cueSegmentFromBlob(blob, sample);
       if (!seg) return;
-      if (seg.lengthIn < CUE_SEGMENT_MIN_IN || seg.lenPx < 4 * seg.thickPx || seg.widthIn > CUE_MAX_WIDTH_IN) return;
+      // Width allows 2px of blur on top of CUE_MAX_WIDTH_IN: at the far
+      // end of the table a pixel is ~0.4in, so a real stick measured
+      // there comes out just over 2in.
+      if (seg.lengthIn < CUE_SEGMENT_MIN_IN || seg.lenPx < 4 * seg.thickPx || seg.widthIn > CUE_MAX_WIDTH_IN + 2 * seg.inPerPxAcross) {
+        if (seg.lengthIn >= 5) droppedSegs.push(seg);
+        return;
+      }
       segs.push(seg);
     });
     segs.sort(function (a, b) { return b.lengthIn - a.lengthIn; });
@@ -3311,7 +3338,7 @@
       accepted.push(entry);
     }
     accepted.sort(function (a, b) { return b.lengthIn - a.lengthIn; });
-    if (window.PMCCueDebug && window.PMCCueDebug.keepMasks) window.PMCCueDebug.lastMasks = { w: w, h: h, sample: sample, line: line, thin: thin, segs: segs };
+    if (window.PMCCueDebug && window.PMCCueDebug.keepMasks) window.PMCCueDebug.lastMasks = { w: w, h: h, sample: sample, line: line, thin: thin, segs: segs, droppedSegs: droppedSegs };
     return { cue: accepted[0] || null, cues: accepted, rejected: rejected, pieces: segs.length, ms: Date.now() - t0 };
   }
 
@@ -5352,6 +5379,9 @@
     overlayCtx.clearRect(0, 0, overlayEl.width, overlayEl.height);
     if (calibrating) drawCalibrationTaps();
     if (!settings.debugOverlay) {
+      // The Table tab always shows what the calibration came out as, so
+      // it can be checked against the real table right after tapping.
+      if (!calibrating && !calibratePanel.hidden) drawTableBoundary();
       // Cue debug mode on its own: just the cue, without the rest.
       if (settings.cueDebugEnabled) {
         drawCueDebug();
@@ -5562,9 +5592,19 @@
   var wizardCameraPollTimer = null;
   // Captured once, before any reparenting ever happens, so the real
   // <select> (and the live video preview, moved alongside it below) always
-  // have a well-defined home to return to.
-  var cameraSelectHomeParent = cameraSelect.parentNode;
-  var videoWrapHomeParent = videoWrap.parentNode;
+  // have a well-defined home to return to - a placeholder right where
+  // each one sits, not just its parent: appending to the parent put the
+  // video back at the very bottom of the page (under Settings), so the
+  // Table and Enroll tabs the wizard hands off to had no picture on
+  // screen to tap corners on or watch a player enroll in.
+  var cameraSelectHomeAnchor = document.createComment("cameraSelect home");
+  cameraSelect.parentNode.insertBefore(cameraSelectHomeAnchor, cameraSelect);
+  var videoWrapHomeAnchor = document.createComment("videoWrap home");
+  videoWrap.parentNode.insertBefore(videoWrapHomeAnchor, videoWrap);
+  function returnVideoAndPickerHome() {
+    if (videoWrap.parentNode === wizardVideoHome) videoWrapHomeAnchor.parentNode.insertBefore(videoWrap, videoWrapHomeAnchor.nextSibling);
+    if (cameraSelect.parentNode === wizardCameraSelectHome) cameraSelectHomeAnchor.parentNode.insertBefore(cameraSelect, cameraSelectHomeAnchor.nextSibling);
+  }
 
   function cameraIsActive() {
     return dotCamera.classList.contains("ok");
@@ -5595,6 +5635,22 @@
     // things.
     wizardCalibrationStatusLine.textContent = calibrationStatusEl.textContent;
     wizardCalibrationStatusLine.classList.toggle("ok", !!calibration);
+  }
+
+  // Back from the Table or Enroll tab (Resume Setup), the step's job is
+  // done - so its way forward reads "Next", not "Skip for now", and is
+  // the main button; the other one offers to do it again.
+  function updateWizardStepButtons() {
+    var calibrated = !!calibration;
+    wizardGoCalibrateBtn.textContent = calibrated ? "Re-calibrate" : "Open Table Calibration";
+    wizardSkipCalibrateBtn.textContent = calibrated ? "Next →" : "Skip for now";
+    wizardGoCalibrateBtn.classList.toggle("secondary", calibrated);
+    wizardSkipCalibrateBtn.classList.toggle("secondary", !calibrated);
+    var enrolledCount = Object.keys(enrollments).length;
+    wizardGoEnrollBtn.textContent = enrolledCount ? "Enroll Another Player" : "Enroll a Player Now";
+    wizardSkipEnrollBtn.textContent = enrolledCount ? "Next →" : "I'll Just Start Playing";
+    wizardGoEnrollBtn.classList.toggle("secondary", !!enrolledCount);
+    wizardSkipEnrollBtn.classList.toggle("secondary", !enrolledCount);
   }
 
   function renderWizardStep() {
@@ -5632,12 +5688,12 @@
       startWizardCameraPoll();
     } else {
       stopWizardCameraPoll();
-      if (videoWrap.parentNode === wizardVideoHome) videoWrapHomeParent.appendChild(videoWrap);
-      if (cameraSelect.parentNode === wizardCameraSelectHome) cameraSelectHomeParent.appendChild(cameraSelect);
+      returnVideoAndPickerHome();
       wizardNextBtn.disabled = false;
     }
 
     if (setupWizardStep === 3) updateWizardCalibrationStatusLine();
+    updateWizardStepButtons();
   }
 
   function openSetupWizard() {
@@ -5654,8 +5710,7 @@
   function closeSetupWizard() {
     setupWizardOverlay.hidden = true;
     stopWizardCameraPoll();
-    if (videoWrap.parentNode === wizardVideoHome) videoWrapHomeParent.appendChild(videoWrap);
-    if (cameraSelect.parentNode === wizardCameraSelectHome) cameraSelectHomeParent.appendChild(cameraSelect);
+    returnVideoAndPickerHome();
     try { localStorage.setItem(WIZARD_DONE_KEY, "1"); } catch (e) {}
   }
 
