@@ -500,6 +500,13 @@
       <label for="cameraSelect">Camera</label>
       <select id="cameraSelect"></select>
 
+      <label for="recognitionMethodSelect">Recognize players by</label><button type="button" class="help-btn" data-help="recognitionMethod" aria-label="What does this do?">?</button>
+      <select id="recognitionMethodSelect">
+        <option value="auto">Whichever recognizes them better (self-check)</option>
+        <option value="model">Appearance model</option>
+        <option value="colour">Clothing colours</option>
+      </select>
+
       <label for="thresholdInput">Appearance match distance (lower = stricter)</label><button type="button" class="help-btn" data-help="threshold" aria-label="What does this do?">?</button>
       <input type="number" id="thresholdInput" min="0" max="9" step="0.1" value="1.2">
 
@@ -621,6 +628,7 @@
 
 <script src="camera/tfjs.js"></script>
 <script src="camera/pose-detection.js"></script>
+<script src="camera/osnet.js"></script>
 <script>
 (function () {
   "use strict";
@@ -789,6 +797,7 @@
   var bendEnterInput = document.getElementById("bendEnterInput");
   var bendExitInput = document.getElementById("bendExitInput");
   var railDistanceInput = document.getElementById("railDistanceInput");
+  var recognitionMethodSelect = document.getElementById("recognitionMethodSelect");
   var ballTrackingToggle = document.getElementById("ballTrackingToggle");
   var ballConfirmInput = document.getElementById("ballConfirmInput");
   var cueDetectionToggle = document.getElementById("cueDetectionToggle");
@@ -805,6 +814,10 @@
     threshold: {
       title: "Match sensitivity",
       body: "How close a person's look has to match an enrolled player to count as them.\n\nLower = stricter: fewer wrong matches, but a real match can get rejected if lighting or clothing looks a bit different than when they were enrolled.\n\nHigher = looser: catches real matches more easily, but can start confusing different players for each other.\n\nIf the debug log shows someone's real distance is just a little over this number, raise it slightly. If it's way over (3x or more), the real problem is usually stale enrollment data, not this setting - press Shooting for that player on a few more shots instead.\n\nTwo players dressed alike: when the next-closest player is nearly as close, the camera names neither rather than guess - the Enroll tab's self-check says who it mixes up."
+    },
+    recognitionMethod: {
+      title: "Recognize players by",
+      body: "Two ways of telling players apart:\n\nClothing colours - counts the colours of each player's shirt, trousers, sleeves and cap. Quick, but can't tell apart two players in similar colours, and is thrown by lighting changes.\n\nAppearance model - a model trained on thousands of people (OSNet) that sees light vs dark, patterns and logos, and the same person from another angle. A small classifier learns tonight's players from your samples, so more samples keep improving it.\n\nEvery sample keeps both, and the Enroll tab's self-check scores both. \"Whichever recognizes them better\" uses the appearance model once the self-check says it does at least as well (95%+) or clearly better - otherwise colours."
     },
     consecutive: {
       title: "How many frames before it believes you",
@@ -913,7 +926,9 @@
     ballTrackingEnabled: false,
     ballConfirmPasses: 3,
     cueDetectionEnabled: true,
-    cueDebugEnabled: false
+    cueDebugEnabled: false,
+    // "auto" (whichever the self-check scores higher), "colour" or "model"
+    recognitionMethod: "auto"
   };
   var hasLocalSettingsOverride = false;
 
@@ -970,6 +985,7 @@
     }
   }
   function applySettingsToInputs() {
+    recognitionMethodSelect.value = settings.recognitionMethod;
     thresholdInput.value = settings.matchThreshold;
     consecutiveInput.value = settings.consecutiveFrames;
     debounceInput.value = settings.debounceSec;
@@ -994,6 +1010,12 @@
     });
   }
   wireNumberSetting(thresholdInput, "matchThreshold");
+  recognitionMethodSelect.addEventListener("change", function () {
+    settings.recognitionMethod = recognitionMethodSelect.value;
+    persistSettings();
+    forgetLastMatch();
+    finishEnrollCheck();
+  });
   wireNumberSetting(consecutiveInput, "consecutiveFrames");
   wireNumberSetting(debounceInput, "debounceSec");
   wireNumberSetting(bendEnterInput, "bendEnterAngle");
@@ -1097,6 +1119,7 @@
       detector = d;
       modelsReady = true;
       setStatus(dotModels, labelModels, "ok", "Models: ready", "ready");
+      loadAppearanceModel();
     }).catch(function (e) {
       setStatus(dotModels, labelModels, "bad", "Models: failed to load", "failed");
       console.error("[camera] model load failed:", e);
@@ -1251,7 +1274,8 @@
   var MAX_AUTO_SAMPLES = 30;
   // The Enroll tab's self-check results (see runEnrollCheck) - up here
   // since the list can render before that part of the page has run.
-  var enrollCheck = {}; // key -> { tested, right, mixups: { name: count }, doubtful: [{ descriptor, like }] }
+  var enrollCheck = {}; // key -> { tested, right, mixups: { name: count }, doubtful: [{ descriptor, like }], method, colour, model }
+  var colourCheck = {}; // the colour counts' own results, same shape (the model's: modelCheck)
   var SELF_CHECK_MIN_SAMPLES = 3;
   var enrollCheckTimer = null, enrollCheckRun = 0, enrollCheckPending = false;
   var rosterNames = []; // the scoreboard's own current player roster, kept in sync via "roster"
@@ -1767,7 +1791,7 @@
     "labelCamera", "labelRelay", "labelModels",
     "recognizeLiveStatus", "recognizeDebugToggle", "recognizeVoiceToggle",
     "debugToggle", "thresholdInput", "consecutiveInput", "debounceInput",
-    "bendEnterInput", "bendExitInput", "railDistanceInput",
+    "bendEnterInput", "bendExitInput", "railDistanceInput", "recognitionMethodSelect",
     "ballTrackingToggle", "ballConfirmInput", "cueDetectionToggle", "cueDebugToggle",
     "tableSizeSelect", "firstEdgeSelect"
   ];
@@ -1951,7 +1975,10 @@
         var mixedWith = Object.keys(check.mixups).sort(function (a, b) { return check.mixups[b] - check.mixups[a]; });
         var checkLine = document.createElement("div");
         checkLine.className = "meta check " + (pct >= 90 ? "good" : pct < 70 ? "poor" : "");
+        var other = check.method === "model" ? check.colour : check.model;
+        var otherText = other && other.tested >= SELF_CHECK_MIN_SAMPLES ? ", " + (check.method === "model" ? "colours " : "appearance model ") + Math.round(other.right / other.tested * 100) + "%" : "";
         checkLine.textContent = "Self-check: recognized " + pct + "% (" + check.right + " of " + check.tested + ")" +
+          (check.model || check.method === "model" ? (check.method === "model" ? " by the appearance model" : " by colours") + otherText : "") +
           (mixedWith.length ? " - mixed up with " + mixedWith.join(", ") : "");
         meta.appendChild(checkLine);
       }
@@ -2067,9 +2094,31 @@
     return { h: h, s: s, v: max };
   }
 
+  // The table felt isn't part of anyone's clothes: a player bent over a
+  // shot has the table inside their body boxes, which used to make their
+  // Shooting samples largely green. Pixels inside the calibrated table that
+  // look like the felt (its hue, about its saturation and brightness -
+  // measured off the table every FELT_REFRESH_MS) are left out.
+  var FELT_REFRESH_MS = 10000;
+  var personFelt = null; // { at, h, s, v, quad: table corners in video px } - h null until measured
+  function refreshPersonFelt(now) {
+    if (!calibration) { personFelt = null; return; }
+    if (personFelt && now - personFelt.at < FELT_REFRESH_MS) return;
+    personFelt = { at: now, h: null };
+    var sample = sampleTablePixels();
+    if (sample) personFelt = { at: now, h: sample.feltH, s: sample.feltS, v: sample.feltV, quad: sample.box.cornersPx };
+  }
+  function looksLikeFelt(x, y, hsv) {
+    var f = personFelt;
+    if (hueDistance(hsv.h, f.h) > 15 || hsv.s < f.s * 0.5 || hsv.v < f.v * 0.5 || hsv.v > f.v * 1.45) return false;
+    return pointInQuad(x, y, f.quad);
+  }
+
   function regionHistogram(box) {
-    // box: {x0,y0,x1,y1} in video pixel coords. Returns a normalized
-    // HUE_BINS*SAT_BINS histogram, or null if the box is degenerate.
+    // box: {x0,y0,x1,y1} in video pixel coords. Returns { hist, tone }:
+    // a normalized HUE_BINS*SAT_BINS histogram of the coloured pixels, and
+    // how the region splits into dark / mid / light (null when every pixel
+    // was felt) - or null if the box is degenerate.
     var w = Math.max(1, Math.round(box.x1 - box.x0));
     var h = Math.max(1, Math.round(box.y1 - box.y0));
     if (w < 2 || h < 2) return null;
@@ -2089,9 +2138,19 @@
       return null;
     }
     var hist = new Array(HUE_BINS * SAT_BINS).fill(0);
-    var count = 0;
+    var tone = [0, 0, 0];
+    var count = 0, counted = 0;
+    var skipFelt = !!(personFelt && personFelt.h !== null);
     for (var i = 0; i < data.length; i += 4) {
       var hsv = rgbToHsv(data[i], data[i + 1], data[i + 2]);
+      if (skipFelt) {
+        var k = i / 4;
+        if (looksLikeFelt(box.x0 + ((k % sw) + 0.5) * w / sw, box.y0 + (Math.floor(k / sw) + 0.5) * h / sh, hsv)) continue;
+      }
+      // Dark / mid / light, whatever the colour - the only thing that
+      // tells a black shirt from a white one (neither has any hue).
+      tone[hsv.v < 0.3 ? 0 : hsv.v < 0.7 ? 1 : 2]++;
+      counted++;
       // Low-saturation (near-grey/black/white) pixels carry little hue
       // information and would otherwise dump noise into whichever hue bin
       // happens to win ties - skip them for hue binning purposes.
@@ -2101,9 +2160,9 @@
       hist[hueBin * SAT_BINS + satBin]++;
       count++;
     }
-    if (count === 0) return hist; // all-neutral region (e.g. white/grey shirt) - valid, just flat
-    for (var j = 0; j < hist.length; j++) hist[j] /= count;
-    return hist;
+    // (count 0: an all-neutral region, e.g. a white/grey shirt - valid, just flat)
+    if (count) for (var j = 0; j < hist.length; j++) hist[j] /= count;
+    return { hist: hist, tone: counted ? tone.map(function (t) { return t / counted; }) : null };
   }
 
   // ---- Background reference (is this region actually moving, or is it
@@ -3797,6 +3856,24 @@
     getEnrollments: function () { return enrollments; },
     getEnrollCheck: function () { return enrollCheck; },
     histogramDistance: histogramDistance,
+    appearance: function () {
+      return { state: appearanceModelState, method: activeRecognitionMethod(), modelBeatsColours: modelBeatsColours, modelThreshold: modelThreshold,
+        classifierPlayers: classifier ? classifier.names.slice() : null, colourCheck: colourCheck, modelCheck: modelCheck, embeddings: Object.keys(trackEmbeddings).length };
+    },
+    visitIdentity: function (trackId) { return visitIdentity(trackId, Date.now()); },
+    // median milliseconds for one run of the appearance model on the last person's picture
+    timeAppearanceModel: function (n) {
+      if (!appearanceModel) return Promise.resolve(null);
+      var crop = cropCtx.getImageData(0, 0, CROP_W, CROP_H), times = [];
+      var next = function (left) {
+        if (!left) { times.sort(function (a, b) { return a - b; }); return times[Math.floor(times.length / 2)]; }
+        var t0 = performance.now();
+        return appearanceModel.embed(crop).then(function () { times.push(performance.now() - t0); return next(left - 1); });
+      };
+      return next(n || 10);
+    },
+    getDetectTick: function () { return detectTick; },
+    getLastShot: function () { return lastShot; },
     getPlayingNames: function () { return playingNames; },
     getKnownNames: function () { return knownNames; }
   };
@@ -3931,7 +4008,9 @@
     // track, not just a diagnostic value.
     var shoulderLineAngleDeg = Math.atan2(Math.abs(rs.y - ls.y), Math.abs(rs.x - ls.x)) * 180 / Math.PI;
 
-    var torsoHist = regionHistogram(boxFromPoints([ls, rs, lh, rh], 0.08)) || new Array(HUE_BINS * SAT_BINS).fill(0);
+    var torsoRegion = regionHistogram(boxFromPoints([ls, rs, lh, rh], 0.08));
+    var torsoHist = torsoRegion ? torsoRegion.hist : new Array(HUE_BINS * SAT_BINS).fill(0);
+    var noTone = [0, 0, 0], tones = [torsoRegion && torsoRegion.tone || noTone, noTone, noTone, noTone];
 
     var lk = kp(keypoints, "left_knee"), rk = kp(keypoints, "right_knee");
     var la = kp(keypoints, "left_ankle"), ra = kp(keypoints, "right_ankle");
@@ -3951,7 +4030,7 @@
     if (la && ra && avgScore(lh, rh, la, ra) >= KEYPOINT_CONF_FLOOR) {
       var legPoints = [lh, rh, la, ra].concat(lk && rk ? [lk, rk] : []);
       var legsRegion = regionHistogram(boxFromPoints(legPoints, 0.05));
-      if (legsRegion) { legsHist = legsRegion; legsSeen = true; }
+      if (legsRegion) { legsHist = legsRegion.hist; tones[1] = legsRegion.tone || noTone; legsSeen = true; }
       ankleMid = midpoint(la, ra);
       var ldx = ankleMid.x - hipMid.x, ldy = ankleMid.y - hipMid.y;
       legAngleDeg = Math.atan2(Math.abs(ldx), Math.abs(ldy)) * 180 / Math.PI;
@@ -3962,7 +4041,7 @@
     var sleeveHist = new Array(HUE_BINS * SAT_BINS).fill(0);
     if (le && re && lw && rw && avgScore(le, re, lw, rw) >= KEYPOINT_CONF_FLOOR) {
       var sleeveRegion = regionHistogram(boxFromPoints([le, re, lw, rw], 0.1));
-      if (sleeveRegion) { sleeveHist = sleeveRegion; sleevesSeen = true; }
+      if (sleeveRegion) { sleeveHist = sleeveRegion.hist; tones[2] = sleeveRegion.tone || noTone; sleevesSeen = true; }
     }
 
     var nose = kp(keypoints, "nose"), leye = kp(keypoints, "left_eye"), reye = kp(keypoints, "right_eye");
@@ -3971,17 +4050,18 @@
       var eyeY = Math.min(leye.y, reye.y);
       var headSpan = Math.max(12, Math.abs(reye.x - leye.x) * 2.2);
       var capRegion = regionHistogram({ x0: nose.x - headSpan / 2, y0: eyeY - headSpan * 0.9, x1: nose.x + headSpan / 2, y1: eyeY });
-      if (capRegion) { capHist = capRegion; capSeen = true; }
+      if (capRegion) { capHist = capRegion.hist; tones[3] = capRegion.tone || noTone; capSeen = true; }
     }
 
     var torsoHeight = Math.max(1, hipMid.y - shoulderMid.y);
     var aspectRatio = (torsoHeight / shoulderWidth) * ASPECT_RATIO_WEIGHT;
 
     // Then which of legs/sleeves/cap were actually in view (an all-zero
-    // histogram can also be plain black/white/grey clothes) - see
-    // histogramDistance. Rounded: a player can keep a couple of hundred
-    // samples, and full float precision would only bloat the store.
-    var descriptor = torsoHist.concat(legsHist, sleeveHist, capHist, [aspectRatio, legsSeen ? 1 : 0, sleevesSeen ? 1 : 0, capSeen ? 1 : 0])
+    // histogram can also be plain black/white/grey clothes) and each
+    // region's dark/mid/light split - see histogramDistance. Rounded: a
+    // player can keep a couple of hundred samples, and full float
+    // precision would only bloat the store.
+    var descriptor = torsoHist.concat(legsHist, sleeveHist, capHist, [aspectRatio, legsSeen ? 1 : 0, sleevesSeen ? 1 : 0, capSeen ? 1 : 0], tones[0], tones[1], tones[2], tones[3])
       .map(function (v) { return Math.round(v * 10000) / 10000; });
     var box = boxFromPoints([ls, rs, lh, rh].concat(la && ra ? [la, ra] : []), 0.05);
 
@@ -4022,11 +4102,15 @@
 
   // Descriptor layout (analyzePose): four colour histograms - torso,
   // legs, sleeves, cap/head - then the torso's aspect ratio, then (newer
-  // samples only) whether legs, sleeves and cap were in view.
+  // samples only) whether legs, sleeves and cap were in view, then (newer
+  // still) each region's dark/mid/light split.
   var HIST_LEN = HUE_BINS * SAT_BINS;
   var REGION_COUNT = 4;
   var ASPECT_INDEX = REGION_COUNT * HIST_LEN;
   var SEEN_INDEX = ASPECT_INDEX + 1;
+  var TONE_INDEX = SEEN_INDEX + 3;
+  // A region's dark/mid/light split counts half as much as its colours.
+  var TONE_WEIGHT = 0.5;
   function regionSeen(d, r) {
     if (r === 0) return true; // the torso's always there (no pose without it)
     if (d.length > SEEN_INDEX + r - 1) return d[SEEN_INDEX + r - 1] > 0;
@@ -4041,12 +4125,19 @@
   // parts in view doesn't come out closer just for having less to compare.
   function histogramDistance(a, b) {
     var sum = 0, compared = 0, either = 0;
+    var tones = a.length >= TONE_INDEX + 3 * REGION_COUNT && b.length >= TONE_INDEX + 3 * REGION_COUNT;
     for (var r = 0; r < REGION_COUNT; r++) {
       var seenA = regionSeen(a, r), seenB = regionSeen(b, r);
       if (seenA || seenB) either++;
       if (!seenA || !seenB) continue;
       compared++;
       for (var i = r * HIST_LEN, end = i + HIST_LEN; i < end; i++) sum += Math.abs(a[i] - b[i]);
+      if (tones) {
+        var t = TONE_INDEX + 3 * r;
+        if (a[t] + a[t + 1] + a[t + 2] > 0 && b[t] + b[t + 1] + b[t + 2] > 0) {
+          sum += TONE_WEIGHT * (Math.abs(a[t] - b[t]) + Math.abs(a[t + 1] - b[t + 1]) + Math.abs(a[t + 2] - b[t + 2]));
+        }
+      }
     }
     if (either > compared) sum *= either / compared;
     return sum + Math.abs((a[ASPECT_INDEX] || 0) - (b[ASPECT_INDEX] || 0));
@@ -4116,19 +4207,33 @@
   // switching between them.
   var MATCH_MARGIN_FRACTION = 0.12;
 
-  // Every listed player's distance from `descriptor`, closest first:
-  // `distance` against their samples in this posture (`exact` of them).
-  // skip(key, i) leaves single samples out (the self-check's).
-  function rankPlayers(descriptor, pose, keys, skip) {
+  // A sample as the given method sees it: its colour counts, or the
+  // appearance model's numbers (null for a sample taken without them).
+  function sampleVector(method, entry, info, i) {
+    return method === "model" ? sampleEmbedding(info[i]) : entry.descriptors[i];
+  }
+  function vectorDistance(method, a, b) {
+    return method === "model" ? cosineDistance(a, b) : histogramDistance(a, b);
+  }
+
+  // Every listed player's distance from `query` (colour counts, or the
+  // model's numbers - `method`), closest first: `distance` against their
+  // samples in this posture (`exact` of them). skip(key, i) leaves single
+  // samples out (the self-check's).
+  function rankPlayers(query, pose, keys, skip, method) {
+    method = method || "colour";
     var ranked = [];
     keys.forEach(function (key) {
       var entry = enrollments[key];
       var descriptors = (entry && entry.descriptors) || [];
       if (!descriptors.length) return;
       var info = alignedInfo(entry);
-      var all = [], samePose = [], exact = 0;
+      var all = [], samePose = [], exact = 0, vectors = {};
       for (var i = 0; i < descriptors.length; i++) {
         if (skip && skip(key, i)) continue;
+        var v = sampleVector(method, entry, info, i);
+        if (!v) continue;
+        vectors[i] = v;
         all.push(i);
         var p = pose ? samplePose(info[i]) : null;
         if (p === pose) exact++;
@@ -4136,7 +4241,7 @@
       }
       var pool = pose && exact >= MIN_SAME_POSE_SAMPLES ? samePose : all;
       if (!pool.length) return;
-      var distances = pool.map(function (i) { return histogramDistance(descriptor, descriptors[i]); }).sort(function (a, b) { return a - b; });
+      var distances = pool.map(function (i) { return vectorDistance(method, query, vectors[i]); }).sort(function (a, b) { return a - b; });
       ranked.push({
         key: key,
         name: entry.displayName || key,
@@ -4152,20 +4257,29 @@
   // look-alikes, and only one has pressed Shooting), a bent-over frame is
   // naturally closest to those whoever it is - so the two also have to
   // look apart in the samples they both have, or it's still a tie.
-  function matchFromRanking(ranked, pose) {
+  // { name, distance, threshold, method, clear, runnerUp,
+  // runnerUpDistance, scaled } - scaled being the distance in colour-count
+  // units (distance/threshold x the colour threshold), for what still
+  // thinks in those (fireEvent, the scoreboard's diagnostics).
+  function matchFromRanking(ranked, pose, method) {
     if (!ranked.length) return null;
+    method = method || "colour";
+    var threshold = methodThreshold(method);
     var best = ranked[0], rival = null, rivalGap = Infinity;
     for (var i = 1; i < ranked.length; i++) {
       var r = ranked[i], gap = r.distance - best.distance;
-      if (pose && r.exact < MIN_SAME_POSE_SAMPLES && best.exact > r.exact && !playersLookApart(best.key, r.key, pose)) gap = Math.min(gap, 0);
+      if (pose && r.exact < MIN_SAME_POSE_SAMPLES && best.exact > r.exact && !playersLookApart(best.key, r.key, pose, method)) gap = Math.min(gap, 0);
       if (gap < rivalGap) { rivalGap = gap; rival = r; }
     }
     return {
       name: best.name,
       distance: best.distance,
+      threshold: threshold,
+      method: method,
       runnerUp: rival ? rival.name : null,
       runnerUpDistance: rival ? rival.distance : null,
-      clear: !rival || rivalGap >= settings.matchThreshold * MATCH_MARGIN_FRACTION
+      clear: !rival || rivalGap >= threshold * MATCH_MARGIN_FRACTION,
+      scaled: best.distance / threshold * settings.matchThreshold
     };
   }
   // Whether B's samples outside `pose` are clearly further from A's than
@@ -4175,24 +4289,28 @@
   // kept until they change (forgetLastMatch).
   var APART_MAX_SAMPLES = 40;
   var apartCache = {};
-  function playersLookApart(keyA, keyB, pose) {
-    var cacheKey = keyA + "\n" + keyB + "\n" + pose;
+  function playersLookApart(keyA, keyB, pose, method) {
+    method = method || "colour";
+    var cacheKey = keyA + "\n" + keyB + "\n" + pose + "\n" + method;
     if (apartCache.hasOwnProperty(cacheKey)) return apartCache[cacheKey];
     var pick = function (key) {
       var entry = enrollments[key], info = alignedInfo(entry), out = [];
-      (entry.descriptors || []).forEach(function (d, i) { if (samplePose(info[i]) !== pose) out.push(d); });
+      (entry.descriptors || []).forEach(function (d, i) {
+        var v = sampleVector(method, entry, info, i);
+        if (v && samplePose(info[i]) !== pose) out.push(v);
+      });
       return out.slice(-APART_MAX_SAMPLES);
     };
     var nearest = function (d, list) {
       var closest = Infinity;
-      list.forEach(function (o) { if (o !== d) closest = Math.min(closest, histogramDistance(d, o)); });
+      list.forEach(function (o) { if (o !== d) closest = Math.min(closest, vectorDistance(method, d, o)); });
       return closest;
     };
     var median = function (xs) { xs.sort(function (x, y) { return x - y; }); return xs[Math.floor(xs.length / 2)]; };
     var a = pick(keyA), b = pick(keyB), apart = true;
     if (a.length && b.length) {
       var within = a.length >= 2 ? median(a.map(function (d) { return nearest(d, a); })) : 0;
-      apart = median(b.map(function (d) { return nearest(d, a); })) - within >= settings.matchThreshold * MATCH_MARGIN_FRACTION;
+      apart = median(b.map(function (d) { return nearest(d, a); })) - within >= methodThreshold(method) * MATCH_MARGIN_FRACTION;
     }
     apartCache[cacheKey] = apart;
     return apart;
@@ -4200,28 +4318,382 @@
 
   // Close enough, and clearly closer than anyone else.
   function isConfidentMatch(m) {
-    return !!m && m.distance <= settings.matchThreshold && m.clear;
+    return !!m && m.distance <= m.threshold && m.clear;
   }
 
   // The closest player who can be recognized right now (see
   // isEligibleForRecognition) - { name, distance, runnerUp,
   // runnerUpDistance, clear }, or null with nobody enrolled. Several
   // callers look at the same frame, so the last frame's answers are kept.
-  var lastMatchQuery = { descriptor: null, results: {} };
+  var lastMatchQuery = { query: null, results: {} };
   function findBestMatch(descriptor, pose) {
+    return findBestMatchBy("colour", descriptor, pose);
+  }
+  // With the appearance model, the classifier (when it covers everyone
+  // who could be named) says who it is and how sure; the samples still
+  // say whether it's anyone known at all (the distance).
+  function findBestMatchBy(method, query, pose) {
     pose = pose || null;
-    if (lastMatchQuery.descriptor !== descriptor) lastMatchQuery = { descriptor: descriptor, results: {} };
-    var cacheKey = String(pose);
+    if (lastMatchQuery.query !== query) lastMatchQuery = { query: query, results: {} };
+    var cacheKey = method + "\n" + pose;
     if (lastMatchQuery.results.hasOwnProperty(cacheKey)) return lastMatchQuery.results[cacheKey];
     var keys = Object.keys(enrollments).filter(function (key) { return isEligibleForRecognition(enrollments[key].displayName || key); });
-    var result = matchFromRanking(rankPlayers(descriptor, pose, keys), pose);
+    var ranked = rankPlayers(query, pose, keys, null, method);
+    var result = matchFromRanking(ranked, pose, method);
+    if (result && method === "model" && classifier && ranked.length >= 2 && ranked.every(function (r) { return classifier.keys.indexOf(r.key) !== -1; })) {
+      var c = classifyEmbedding(query, ranked.map(function (r) { return r.key; }));
+      var mine = ranked.filter(function (r) { return r.key === c.key; })[0];
+      var theirs = ranked.filter(function (r) { return r.name === c.runnerUp; })[0];
+      // Not when the samples themselves clearly say someone else, nor when
+      // the classifier has only ever seen this player in this posture and
+      // a look-alike never (see matchFromRanking).
+      var unseenPosture = !!pose && ranked.some(function (r) {
+        return r.key !== c.key && r.exact < MIN_SAME_POSE_SAMPLES && mine.exact > r.exact && !playersLookApart(c.key, r.key, pose, method);
+      });
+      result = Object.assign({}, result, {
+        name: c.name, distance: mine.distance, clear: c.margin >= CLASSIFIER_MARGIN && !unseenPosture && !(result.clear && result.name !== c.name), runnerUp: c.runnerUp,
+        runnerUpDistance: theirs ? theirs.distance : null, scaled: mine.distance / result.threshold * settings.matchThreshold, classifierMargin: c.margin
+      });
+    }
     lastMatchQuery.results[cacheKey] = result;
     return result;
   }
   // When the samples or who's Playing change mid-frame.
   function forgetLastMatch() {
-    lastMatchQuery = { descriptor: null, results: {} };
+    lastMatchQuery = { query: null, results: {} };
     apartCache = {};
+    everyoneHasEmbeddingsCache = null;
+  }
+
+  // ---- Appearance model (OSNet - see camera/osnet.js) ----
+  // Learned from thousands of people, unlike the colour counts above: it
+  // sees light vs dark, patterns and logos, and the same person from
+  // another angle or in other light. It runs alongside the colour counts -
+  // every new sample keeps both, the self-check scores both on tonight's
+  // players, and recognition uses whichever does better
+  // (settings.recognitionMethod can force one).
+  var APPEARANCE_MODEL_URL = "camera/models/osnet/";
+  var appearanceModel = null;
+  var appearanceModelState = "off"; // "loading" | "ready" | "failed"
+  function loadAppearanceModel() {
+    if (appearanceModelState === "loading" || !window.PMCOsnet) return;
+    if (appearanceModel) { appearanceModel.dispose(); appearanceModel = null; } // (a pose-model reload: start clean)
+    appearanceModelState = "loading";
+    var startedAt = Date.now();
+    PMCOsnet.load(APPEARANCE_MODEL_URL).then(function (model) {
+      appearanceModel = model;
+      appearanceModelState = "ready";
+      console.log("[PMC appearance] model ready in " + (Date.now() - startedAt) + "ms");
+      scheduleEnrollCheck();
+    }, function (e) {
+      appearanceModelState = "failed";
+      console.warn("[PMC appearance] model failed to load - colours only:", e);
+    });
+  }
+
+  // The person's picture for the model: the box round every body point the
+  // pose model is sure of, with a margin (more above, for the top of the
+  // head), scaled into 128x256 without stretching - a player bent over a
+  // shot is wider than tall - on the model's own mean grey.
+  var CROP_W = 128, CROP_H = 256;
+  var cropCanvas = document.createElement("canvas");
+  cropCanvas.width = CROP_W;
+  cropCanvas.height = CROP_H;
+  var cropCtx = cropCanvas.getContext("2d", { willReadFrequently: true });
+  function personCrop(keypoints) {
+    var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, n = 0;
+    keypoints.forEach(function (k) {
+      if (k.score < KEYPOINT_CONF_FLOOR) return;
+      x0 = Math.min(x0, k.x); x1 = Math.max(x1, k.x); y0 = Math.min(y0, k.y); y1 = Math.max(y1, k.y); n++;
+    });
+    if (n < 5) return null;
+    var pad = 0.12 * Math.max(x1 - x0, y1 - y0, 20);
+    x0 = Math.max(0, x0 - pad); x1 = Math.min(videoEl.videoWidth, x1 + pad);
+    y0 = Math.max(0, y0 - pad - 0.1 * (y1 - y0)); y1 = Math.min(videoEl.videoHeight, y1 + pad);
+    var bw = x1 - x0, bh = y1 - y0;
+    if (bw < 8 || bh < 8) return null;
+    var scale = Math.min(CROP_W / bw, CROP_H / bh), dw = bw * scale, dh = bh * scale;
+    cropCtx.fillStyle = "rgb(124,116,104)";
+    cropCtx.fillRect(0, 0, CROP_W, CROP_H);
+    try {
+      cropCtx.drawImage(videoEl, x0, y0, bw, bh, (CROP_W - dw) / 2, (CROP_H - dh) / 2, dw, dh);
+      return cropCtx.getImageData(0, 0, CROP_W, CROP_H);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // The model runs at most every EMBED_INTERVAL_MS, in the background (the
+  // detection loop never waits for it), on whoever is being followed; the
+  // answer is kept per pose track and used while it's fresh.
+  var EMBED_INTERVAL_MS = 200;
+  var EMBED_FRESH_MS = 700;
+  var embedInFlight = false, lastEmbedStartAt = 0;
+  var trackEmbeddings = {}; // String(trackId) -> { emb: Float32Array(512), at }
+  function noteAppearance(analysis, keypoints, now) {
+    if (!appearanceModel || !analysis) return;
+    analysis.crop = personCrop(keypoints);
+    var trackKey = String(analysis.trackId);
+    var known = trackEmbeddings[trackKey];
+    analysis.emb = known && now - known.at <= EMBED_FRESH_MS ? known.emb : null;
+    if (!analysis.crop || embedInFlight || now - lastEmbedStartAt < EMBED_INTERVAL_MS) return;
+    embedInFlight = true;
+    lastEmbedStartAt = now;
+    appearanceModel.embed(analysis.crop).then(function (emb) {
+      trackEmbeddings[trackKey] = { emb: emb, at: Date.now() };
+      Object.keys(trackEmbeddings).forEach(function (k) { if (Date.now() - trackEmbeddings[k].at > 10000) delete trackEmbeddings[k]; });
+    }, function (e) {
+      console.warn("[PMC appearance] embedding failed:", e);
+    }).then(function () { embedInFlight = false; });
+  }
+
+  // Kept with each sample as info.emb: the 512 numbers (never negative -
+  // the model's last step is a ReLU) as bytes, base64 - about 700
+  // characters. Decoded once and remembered.
+  function encodeEmbedding(emb) {
+    var max = 0, i;
+    for (i = 0; i < emb.length; i++) if (emb[i] > max) max = emb[i];
+    var bin = "";
+    for (i = 0; i < emb.length; i++) bin += String.fromCharCode(max > 0 ? Math.round(emb[i] / max * 255) : 0);
+    return btoa(bin);
+  }
+  var decodedEmbeddings = new Map();
+  function sampleEmbedding(info) {
+    if (!info || typeof info.emb !== "string") return null;
+    var v = decodedEmbeddings.get(info.emb);
+    if (v) return v;
+    var bin = atob(info.emb), norm = 0, i;
+    v = new Float32Array(bin.length);
+    for (i = 0; i < bin.length; i++) { v[i] = bin.charCodeAt(i); norm += v[i] * v[i]; }
+    norm = Math.sqrt(norm) || 1;
+    for (i = 0; i < v.length; i++) v[i] /= norm;
+    if (decodedEmbeddings.size > 6000) decodedEmbeddings.clear();
+    decodedEmbeddings.set(info.emb, v);
+    return v;
+  }
+  function cosineDistance(a, b) {
+    var dot = 0;
+    for (var i = 0; i < a.length; i++) dot += a[i] * b[i];
+    return 1 - dot;
+  }
+
+  // How far apart (cosine distance) the model's numbers for one person can
+  // be and still count as them - worked out from tonight's samples by the
+  // self-check (between how far a player's samples are from each other and
+  // how far from everyone else's), this until it has enough to go on.
+  var DEFAULT_MODEL_THRESHOLD = 0.35;
+  var modelThreshold = DEFAULT_MODEL_THRESHOLD;
+  function methodThreshold(method) {
+    return method === "model" ? modelThreshold : settings.matchThreshold;
+  }
+
+  // Which way recognition goes right now: the colour counts until the
+  // model is loaded and the self-check says it does better (or the setting
+  // says otherwise). A frame the model hasn't looked at yet (someone who
+  // just stepped up) still goes by colours.
+  var modelBeatsColours = false;
+  function activeRecognitionMethod() {
+    if (appearanceModelState !== "ready" || settings.recognitionMethod === "colour") return "colour";
+    if (settings.recognitionMethod === "model") return "model";
+    return modelBeatsColours ? "model" : "colour";
+  }
+  function matchAppearance(analysis, pose) {
+    if (analysis && analysis.emb && activeRecognitionMethod() === "model" && everyoneHasEmbeddings()) return findBestMatchBy("model", analysis.emb, pose);
+    return findBestMatch(analysis.descriptor, pose);
+  }
+  // (a player whose samples all predate the model can't be named by it -
+  // colours until everyone who can be recognized has some)
+  var everyoneHasEmbeddingsCache = null;
+  function everyoneHasEmbeddings() {
+    if (everyoneHasEmbeddingsCache === null) {
+      everyoneHasEmbeddingsCache = Object.keys(enrollments).every(function (key) {
+        var entry = enrollments[key];
+        return !isEligibleForRecognition(entry.displayName || key) || alignedInfo(entry).some(function (i) { return i && typeof i.emb === "string"; });
+      });
+    }
+    return everyoneHasEmbeddingsCache;
+  }
+
+  // ---- Step 3: a classifier trained on tonight's samples ----
+  // With the model's numbers, a small classifier (ridge regression, one
+  // score per player) learns which of the 512 tell tonight's players apart
+  // - so more samples keep paying off. Trained in a background worker
+  // whenever the samples change, a fraction of a second per run; scoring a
+  // frame is a few hundred multiplications. The same worker scores every
+  // sample against classifiers trained without it (5 rounds, samples from
+  // the same moment kept together) for the self-check, and works out the
+  // model's match threshold.
+  var CLASSIFIER_MARGIN = 0.15; // top score at least this far above the next
+  var MODEL_CHECK_MAX_PER_PLAYER = 80; // newest samples per player the worker looks at
+  var classifier = null; // { keys: [player keys], names, W: Float32Array(P*(D+1)), D }
+  var modelCheck = {}; // key -> { tested, right, mixups, doubtful } (filled in by the worker)
+  var modelCheckWorker = null, modelCheckRun = 0;
+
+  function classifyEmbedding(emb, keys) {
+    if (!classifier) return null;
+    var D = classifier.D, best = null, next = null;
+    classifier.keys.forEach(function (key, p) {
+      if (keys.indexOf(key) === -1) return;
+      var s = classifier.W[p * (D + 1) + D];
+      for (var i = 0; i < D; i++) s += classifier.W[p * (D + 1) + i] * emb[i];
+      var c = { key: key, name: classifier.names[p], score: s };
+      if (!best || s > best.score) { next = best; best = c; } else if (!next || s > next.score) next = c;
+    });
+    return best ? { key: best.key, name: best.name, margin: next ? best.score - next.score : Infinity, runnerUp: next ? next.name : null } : null;
+  }
+
+  function modelCheckWorkerSource() {
+    // (runs in the worker - no access to the page)
+    self.onmessage = function (ev) {
+      var m = ev.data, n = m.n, D = m.D, X = m.X, y = m.y, t = m.t, P = m.P;
+      var i, j, k, p;
+      function dist(a, b) { var s = 0, oa = a * D, ob = b * D; for (var q = 0; q < D; q++) s += X[oa + q] * X[ob + q]; return 1 - s; }
+      // nearest sample of each player (not the sample itself, nor its own player's from the same moment)
+      var near = new Float32Array(n * P).fill(Infinity);
+      for (i = 0; i < n; i++) for (j = i + 1; j < n; j++) {
+        if (y[i] === y[j] && t[i] && t[j] && Math.abs(t[i] - t[j]) < m.neighbourMs) continue;
+        var d = dist(i, j);
+        if (d < near[i * P + y[j]]) near[i * P + y[j]] = d;
+        if (d < near[j * P + y[i]]) near[j * P + y[i]] = d;
+      }
+      // the threshold: between how far a player's samples are from each other and from everyone else's
+      var same = [], other = [];
+      for (i = 0; i < n; i++) {
+        if (near[i * P + y[i]] < Infinity) same.push(near[i * P + y[i]]);
+        var o = Infinity;
+        for (p = 0; p < P; p++) if (p !== y[i]) o = Math.min(o, near[i * P + p]);
+        if (o < Infinity) other.push(o);
+      }
+      var pct = function (xs, q) { xs = xs.slice().sort(function (a, b) { return a - b; }); return xs[Math.min(xs.length - 1, Math.floor(q * xs.length))]; };
+      var thr = m.defaultThreshold;
+      if (same.length >= 5 && other.length >= 5) thr = Math.max(0.15, Math.min(0.55, (pct(same, 0.9) + pct(other, 0.1)) / 2));
+      else if (same.length >= 5) thr = Math.max(0.15, Math.min(0.55, pct(same, 0.9) * 1.3));
+      // ridge regression, one-vs-rest, bias as an extra input - every
+      // player's samples weighted equally in all, so two players who look
+      // alike get equal scores (unsure) rather than the one with more
+      // samples winning
+      var E = D + 1, lambda = m.lambda, perPlayer = new Float64Array(P), weight = new Float64Array(n);
+      for (i = 0; i < n; i++) perPlayer[y[i]]++;
+      for (i = 0; i < n; i++) weight[i] = n / (P * perPlayer[y[i]]);
+      function addOuter(A, B, s, sign) {
+        var off = s * D, ws = sign * weight[s];
+        for (var a = 0; a < E; a++) {
+          var xa = a < D ? X[off + a] : 1;
+          if (!xa) continue;
+          var row = a * E;
+          for (var b = a; b < E; b++) A[row + b] += ws * xa * (b < D ? X[off + b] : 1);
+          B[a * P + y[s]] += ws * xa;
+        }
+      }
+      function solve(A0, B0) {
+        // Cholesky on the symmetric (upper-filled) A + lambda I, then two triangular solves per column
+        var A = new Float64Array(E * E), a, b, c, s;
+        for (a = 0; a < E; a++) for (b = a; b < E; b++) { A[a * E + b] = A[b * E + a] = A0[a * E + b]; }
+        for (a = 0; a < E; a++) A[a * E + a] += lambda;
+        for (a = 0; a < E; a++) {
+          for (b = 0; b <= a; b++) {
+            s = A[a * E + b];
+            for (c = 0; c < b; c++) s -= A[a * E + c] * A[b * E + c];
+            A[a * E + b] = a === b ? Math.sqrt(Math.max(s, 1e-12)) : s / A[b * E + b];
+          }
+        }
+        var W = new Float32Array(P * E), z = new Float64Array(E);
+        for (var col = 0; col < P; col++) {
+          for (a = 0; a < E; a++) { s = B0[a * P + col]; for (c = 0; c < a; c++) s -= A[a * E + c] * z[c]; z[a] = s / A[a * E + a]; }
+          for (a = E - 1; a >= 0; a--) { s = z[a]; for (c = a + 1; c < E; c++) s -= A[c * E + a] * W[col * E + c]; W[col * E + a] = s / A[a * E + a]; }
+        }
+        return W;
+      }
+      function score(W, s) {
+        var out = new Float64Array(P), off = s * D;
+        for (var q = 0; q < P; q++) { var v = W[q * E + D]; for (var r = 0; r < D; r++) v += W[q * E + r] * X[off + r]; out[q] = v; }
+        return out;
+      }
+      var A = new Float64Array(E * E), B = new Float64Array(E * P);
+      for (i = 0; i < n; i++) addOuter(A, B, i, 1);
+      var W = P >= 2 ? solve(A, B) : null;
+      // 5 rounds, samples from the same moment in the same round
+      var order = []; for (i = 0; i < n; i++) order.push(i);
+      order.sort(function (a, b) { return (t[a] || 0) - (t[b] || 0); });
+      var fold = new Int32Array(n), group = -1, lastT = -Infinity;
+      order.forEach(function (s) { if (!t[s] || t[s] - lastT > m.neighbourMs) group++; lastT = t[s] || lastT; fold[s] = group % 5; });
+      var outcomes = new Array(n);
+      for (var f = 0; f < 5; f++) {
+        var members = []; for (i = 0; i < n; i++) if (fold[i] === f) members.push(i);
+        if (!members.length) continue;
+        var Wf = null;
+        if (P >= 2) {
+          var Af = A.slice(), Bf = B.slice();
+          members.forEach(function (s) { addOuter(Af, Bf, s, -1); });
+          Wf = solve(Af, Bf);
+        }
+        members.forEach(function (s) {
+          var own = near[s * P + y[s]];
+          if (own === Infinity) { outcomes[s] = null; return; } // nothing else of theirs to test against
+          var pred = y[s], margin = Infinity, runnerUp = -1;
+          if (Wf) {
+            var sc = score(Wf, s), b1 = -1, b2 = -1;
+            for (p = 0; p < P; p++) { if (b1 < 0 || sc[p] > sc[b1]) { b2 = b1; b1 = p; } else if (b2 < 0 || sc[p] > sc[b2]) b2 = p; }
+            pred = b1; margin = sc[b1] - sc[b2]; runnerUp = b2;
+          }
+          var dPred = near[s * P + pred];
+          var confident = margin >= m.margin && dPred <= thr;
+          outcomes[s] = { pred: pred, runnerUp: runnerUp, result: confident ? (pred === y[s] ? "right" : "wrong") : "unsure", dRunnerUp: runnerUp >= 0 ? near[s * P + runnerUp] : Infinity };
+        });
+      }
+      self.postMessage({ run: m.run, thr: thr, W: W, outcomes: outcomes });
+    };
+  }
+  function startModelCheck() {
+    var run = ++modelCheckRun;
+    var keys = [], names = [], rows = [], labels = [], times = [], descriptors = [];
+    Object.keys(enrollments).forEach(function (key) {
+      var entry = enrollments[key], info = alignedInfo(entry), picked = [];
+      (entry.descriptors || []).forEach(function (d, i) { var e = sampleEmbedding(info[i]); if (e) picked.push({ e: e, t: info[i].at || 0, d: d }); });
+      picked = picked.slice(-MODEL_CHECK_MAX_PER_PLAYER);
+      if (!picked.length) return;
+      var p = keys.length;
+      keys.push(key);
+      names.push(entry.displayName || key);
+      picked.forEach(function (s) { rows.push(s.e); labels.push(p); times.push(s.t); descriptors.push(s.d); });
+    });
+    if (!rows.length) { classifier = null; modelCheck = {}; return; }
+    var D = rows[0].length, n = rows.length, X = new Float32Array(n * D);
+    rows.forEach(function (r, i) { X.set(r, i * D); });
+    if (!modelCheckWorker) {
+      try {
+        modelCheckWorker = new Worker(URL.createObjectURL(new Blob(["(" + modelCheckWorkerSource.toString() + ")()"], { type: "text/javascript" })));
+      } catch (e) {
+        console.warn("[PMC appearance] no worker - no classifier:", e);
+        return;
+      }
+    }
+    modelCheckWorker.onmessage = function (ev) {
+      var r = ev.data;
+      if (r.run !== modelCheckRun) return; // the samples changed again meanwhile
+      modelThreshold = r.thr;
+      classifier = r.W ? { keys: keys, names: names, W: r.W, D: D } : null;
+      var check = {};
+      keys.forEach(function (key) { check[key] = { tested: 0, right: 0, mixups: {}, doubtful: [] }; });
+      r.outcomes.forEach(function (o, i) {
+        if (!o) return;
+        var c = check[keys[labels[i]]];
+        c.tested++;
+        if (o.result === "right") c.right++;
+        else if (o.result === "wrong") c.doubtful.push({ descriptor: descriptors[i], like: names[o.pred] });
+        else {
+          var other = o.pred !== labels[i] ? o.pred : o.runnerUp;
+          if (other >= 0 && (o.pred !== labels[i] || o.dRunnerUp <= r.thr)) c.mixups[names[other]] = (c.mixups[names[other]] || 0) + 1;
+        }
+      });
+      modelCheck = check;
+      forgetLastMatch();
+      finishEnrollCheck();
+    };
+    modelCheckWorker.postMessage({
+      run: run, n: n, D: D, X: X, y: Int32Array.from(labels), t: Float64Array.from(times), P: keys.length,
+      neighbourMs: SELF_CHECK_NEIGHBOUR_MS, margin: CLASSIFIER_MARGIN, lambda: 0.5, defaultThreshold: DEFAULT_MODEL_THRESHOLD
+    }, [X.buffer]);
   }
 
   // ---- Table calibration (pixel <-> real-inches homography) ----
@@ -4780,7 +5252,8 @@
       frame = {
         at: now, descriptor: analysis.descriptor, trackId: analysis.trackId,
         bend: effectiveBendAngle(analysis), torso: analysis.torsoAngleDeg, leg: analysis.legAngleDeg,
-        pos: tablePositionFor(analysis), shooting: shooting, used: false
+        pos: tablePositionFor(analysis), shooting: shooting, used: false,
+        crop: analysis.crop || null, emb: analysis.emb || null
       };
       enrollFrames.push(frame);
     }
@@ -4828,24 +5301,35 @@
       });
     }
     enrollPending.push(p);
-    tellScoreboardShooting(name);
+    tellScoreboardShooting(name, p.trackId);
     setEnrollShotStatus(name + " shooting - learning how they look and shoot...");
   }
 
   // The press is the operator saying who's shooting: the scoreboard
   // switches to them like it does for a recognized shot (and recognition
   // won't announce the same shot again right after).
-  function tellScoreboardShooting(name) {
+  function tellScoreboardShooting(name, trackId) {
     var now = Date.now();
     lastEmittedAt[name] = now;
+    noteLastShot(name, trackId);
     send({ type: "player_up", player_name: name, confidence: 1, ts: now });
     logActivity(name + " shooting (Shooting button)");
   }
 
   function commitEnrollSample(p, frame) {
     frame.used = true;
+    // The appearance model's numbers for exactly this frame (it may not
+    // have looked at this one itself yet) - a few milliseconds.
+    if (appearanceModel && frame.crop) {
+      appearanceModel.embed(frame.crop).then(function (emb) { finishEnrollSample(p, frame, emb); }, function () { finishEnrollSample(p, frame, frame.emb); });
+    } else {
+      finishEnrollSample(p, frame, frame.emb);
+    }
+  }
+  function finishEnrollSample(p, frame, emb) {
     var key = normalizeNameKey(p.name);
     var info = { kind: p.kind, at: p.at, bend: Math.round(frame.bend), torso: Math.round(frame.torso), leg: frame.leg === null ? null : Math.round(frame.leg), pos: frame.pos };
+    if (emb) info.emb = encodeEmbedding(emb);
     lastEnrollAdd = { name: p.name, key: key, descriptor: frame.descriptor };
     send({ type: "enroll-add", player_name: p.name, descriptor: frame.descriptor, info: info });
     var after = enrollments[key];
@@ -4917,13 +5401,15 @@
   // ---- Self-check: how well the samples tell the players apart ----
   // Every sample is matched against all the others, the way a live frame
   // would be (leaving out that player's samples from the same few
-  // seconds, which would match it trivially). Each Enroll row shows how
-  // often its player comes out right and which of their samples look
-  // more like someone else; the line above the list names players the
-  // camera mixes up. Recomputed a moment after the samples change, one
-  // player at a time so the camera keeps up, and only while someone's
-  // looking at the tab (here or on a remote view).
+  // seconds, which would match it trivially) - by the colour counts here,
+  // one player at a time so the camera keeps up, and by the appearance
+  // model in its worker (startModelCheck). Each Enroll row shows how often
+  // its player comes out right and which of their samples look more like
+  // someone else; the line above the list names players the camera mixes
+  // up; and recognition goes by whichever method scores better
+  // (finishEnrollCheck). Rerun a moment after the samples change.
   var SELF_CHECK_NEIGHBOUR_MS = 5000;
+  var SELF_CHECK_MAX_PER_PLAYER = 80; // newest samples per player tested
   var LOOK_ALIKE_FRACTION = 0.2;
   function scheduleEnrollCheck(delayMs) {
     enrollCheckPending = true;
@@ -4933,23 +5419,17 @@
   }
   function runEnrollCheck() {
     enrollCheckTimer = null;
-    if (enrollPanel.hidden && !hasViewerConnected) return; // (showTab / a viewer joining runs it then)
     enrollCheckPending = false;
     var run = ++enrollCheckRun;
+    startModelCheck();
     var keys = Object.keys(enrollments);
     var competing = keys.filter(function (key) { return isEligibleForRecognition(enrollments[key].displayName || key); });
     var results = {};
     (function next(i) {
       if (run !== enrollCheckRun) return; // the samples changed again - a newer run takes over
       if (i >= keys.length) {
-        enrollCheck = results;
-        var pairs = lookAlikePairs();
-        Object.keys(results).forEach(function (key) {
-          var own = normalizeNameKey(enrollments[key] ? enrollments[key].displayName || key : key);
-          results[key].doubtful = results[key].doubtful.filter(function (x) { return !pairs.keys[own + "\n" + normalizeNameKey(x.like)]; });
-        });
-        renderPlayerList();
-        renderLookAlikes(pairs.names);
+        colourCheck = results;
+        finishEnrollCheck();
         return;
       }
       if (enrollments[keys[i]]) results[keys[i]] = checkPlayerSamples(keys[i], competing);
@@ -4963,23 +5443,57 @@
     var result = { tested: 0, right: 0, mixups: {}, doubtful: [] };
     if (descriptors.length < SELF_CHECK_MIN_SAMPLES) return result;
     var keys = competing.indexOf(key) === -1 ? competing.concat([key]) : competing;
+    var colourThreshold = methodThreshold("colour");
     descriptors.forEach(function (descriptor, i) {
+      if (i < descriptors.length - SELF_CHECK_MAX_PER_PLAYER) return;
       var at = info[i] && info[i].at;
       var ranked = rankPlayers(descriptor, samplePose(info[i]), keys, function (k, j) {
         if (k !== key) return false;
         if (j === i) return true;
         var when = info[j] && info[j].at;
         return !!at && !!when && Math.abs(when - at) < SELF_CHECK_NEIGHBOUR_MS;
-      });
+      }, "colour");
       if (!ranked.some(function (r) { return r.key === key; })) return; // nothing else of theirs to test against
       result.tested++;
-      var m = matchFromRanking(ranked, samplePose(info[i]));
+      var m = matchFromRanking(ranked, samplePose(info[i]), "colour");
       if (ranked[0].key === key && isConfidentMatch(m)) { result.right++; return; }
       if (ranked[0].key !== key && isConfidentMatch(m)) { result.doubtful.push({ descriptor: descriptor, like: ranked[0].name }); return; }
       var other = ranked[0].key === key ? (m.runnerUp && { name: m.runnerUp, distance: m.runnerUpDistance }) : ranked[0];
-      if (other && other.distance <= settings.matchThreshold) result.mixups[other.name] = (result.mixups[other.name] || 0) + 1;
+      if (other && other.distance <= colourThreshold) result.mixups[other.name] = (result.mixups[other.name] || 0) + 1;
     });
     return result;
+  }
+  // Both methods' results in: pick the one recognition uses (see
+  // activeRecognitionMethod), and show its results.
+  function finishEnrollCheck() {
+    var totals = function (check) {
+      var t = 0, r = 0;
+      Object.keys(check).forEach(function (k) { t += check[k].tested; r += check[k].right; });
+      return { tested: t, rate: t ? r / t : 0 };
+    };
+    var c = totals(colourCheck), m = totals(modelCheck);
+    var beats = appearanceModelState === "ready" && m.tested >= 10 && (m.rate > c.rate + 0.02 || (m.rate >= 0.95 && m.rate >= c.rate));
+    if (beats !== modelBeatsColours) {
+      modelBeatsColours = beats;
+      forgetLastMatch();
+      logActivity("Self-check: appearance model " + Math.round(m.rate * 100) + "%, colours " + Math.round(c.rate * 100) + "%" +
+        (settings.recognitionMethod === "auto" ? " - recognizing by " + (beats ? "the appearance model" : "colours") : ""));
+    }
+    var method = activeRecognitionMethod();
+    var active = method === "model" ? modelCheck : colourCheck;
+    var results = {};
+    Object.keys(enrollments).forEach(function (key) {
+      var a = active[key] || { tested: 0, right: 0, mixups: {}, doubtful: [] };
+      results[key] = { tested: a.tested, right: a.right, mixups: a.mixups, doubtful: a.doubtful.slice(), method: method, colour: colourCheck[key] || null, model: modelCheck[key] || null };
+    });
+    enrollCheck = results;
+    var pairs = lookAlikePairs();
+    Object.keys(results).forEach(function (key) {
+      var own = normalizeNameKey(enrollments[key].displayName || key);
+      results[key].doubtful = results[key].doubtful.filter(function (x) { return !pairs.keys[own + "\n" + normalizeNameKey(x.like)]; });
+    });
+    renderPlayerList();
+    renderLookAlikes(pairs.names);
   }
   // Players the self-check mixes up often (either way round): names for
   // the warning, and keys "a\nb" (both orders) to look pairs up by.
@@ -5036,15 +5550,16 @@
     if (!analysis) {
       text = "Nobody at the table in view.";
     } else {
-      var m = findBestMatch(analysis.descriptor, poseForAnalysis(analysis));
+      var m = matchAppearance(analysis, poseForAnalysis(analysis));
       var doing = shooting ? "bent over" : "at the table";
+      var how = m ? (m.method === "model" ? "appearance model, " : "colours, ") : "";
       if (isConfidentMatch(m)) {
         key = normalizeNameKey(m.name);
-        text = "Camera sees " + m.name + ", " + doing + " (distance " + m.distance.toFixed(2) + ").";
-      } else if (m && m.distance <= settings.matchThreshold) {
-        text = "Camera sees someone " + doing + " but isn't sure: " + m.name + " (" + m.distance.toFixed(2) + ") or " + m.runnerUp + " (" + m.runnerUpDistance.toFixed(2) + ").";
+        text = "Camera sees " + m.name + ", " + doing + " (" + how + "distance " + m.distance.toFixed(2) + ").";
+      } else if (m && m.distance <= m.threshold) {
+        text = "Camera sees someone " + doing + " but isn't sure: " + m.name + " or " + m.runnerUp + " (" + how.slice(0, -2) + ").";
       } else {
-        text = "Camera sees someone " + doing + " it doesn't know yet" + (m ? " (closest: " + m.name + ", " + m.distance.toFixed(2) + ")" : "") + ".";
+        text = "Camera sees someone " + doing + " it doesn't know yet" + (m ? " (closest: " + m.name + ", " + how + "distance " + m.distance.toFixed(2) + ")" : "") + ".";
       }
     }
     enrollLiveStatus.textContent = text;
@@ -5200,7 +5715,7 @@
     // lets a listener tell "not detecting anyone" apart from "detecting
     // fine, but distance is just over threshold" - the latter means the
     // match sensitivity setting needs loosening, not a code bug.
-    var closest = analysis ? findBestMatch(analysis.descriptor, poseForAnalysis(analysis)) : null;
+    var closest = analysis ? matchAppearance(analysis, poseForAnalysis(analysis)) : null;
     send({
       type: "candidate",
       // An out-of-view shooter is named from the presence hold (not the
@@ -5214,7 +5729,7 @@
       cue: cueTrack.present,
       shootingVia: shootingVia,
       closestName: closest ? closest.name : null,
-      closestDistance: closest ? Math.round(closest.distance * 100) / 100 : null,
+      closestDistance: closest ? Math.round(closest.scaled * 100) / 100 : null,
       matchThreshold: settings.matchThreshold,
       // Only meaningful when stance is "unknown" - a pose WAS found this
       // frame but analyzePose rejected it for low confidence (not for
@@ -5358,12 +5873,14 @@
   // ...) - logs only. descriptor is null when there's no fresh look at
   // the shooter to learn from (out of view, or named from an earlier
   // recognition), and then nothing is added to their enrollment;
-  // descriptorPose is the posture it shows ("bent" | "upright").
-  function fireEvent(name, descriptor, matchDistance, via, descriptorPose) {
+  // descriptorPose is the posture it shows ("bent" | "upright"), emb the
+  // appearance model's numbers for the same look (if it had them).
+  function fireEvent(name, descriptor, matchDistance, via, descriptorPose, emb) {
     via = via || "bent over";
     var now = Date.now();
     var last = lastEmittedAt[name] || 0;
     var cueShot = via.indexOf("cue") === 0;
+    noteLastShot(name, lastFrameTrackId);
     if (now - last < settings.debounceSec * 1000) {
       console.log("[PMC shooting] " + name + " shooting detected again (" + via + ") within the " + settings.debounceSec + "s cooldown - not re-sent");
       if (cueShot) reportCueShooter(name, via, true);
@@ -5384,7 +5901,9 @@
     // above; the parent page's own player_up handler speaks instead.
     if (settings.voiceStatusEnabled && !isEmbedded) speak(name + " shooting.");
     if (descriptor && matchDistance <= settings.matchThreshold * 0.7 && !hasPlentyPressedSamples(name)) {
-      send({ type: "enroll-add", player_name: name, descriptor: descriptor, info: { kind: "recognized", at: now, pose: descriptorPose || null } });
+      var info = { kind: "recognized", at: now, pose: descriptorPose || null };
+      if (emb) info.emb = encodeEmbedding(emb);
+      send({ type: "enroll-add", player_name: name, descriptor: descriptor, info: info });
       notifyEnrollmentUpdated(name);
     }
   }
@@ -5423,6 +5942,7 @@
     });
     if (!isFirstSample && hasPlentyPressedSamples(name)) return;
     var info = { kind: "scored", at: Date.now(), pose: "upright" }; // (the candidate's formed while upright)
+    if (candidate.emb) info.emb = encodeEmbedding(candidate.emb);
     if (isFirstSample) {
       send({ type: "enroll-save", player_name: name, descriptors: [candidate.descriptor], info: [info] });
     } else {
@@ -5589,14 +6109,66 @@
     cueHiddenShooterName = name;
     cueHiddenFiredAppearanceId = cueCtx.appearanceId;
     if (activeManualAttribution && name !== activeManualAttribution.name) activeManualAttribution = null;
+    lastFrameTrackId = null; // (whoever's in view isn't the shooter - see noteLastShot)
     fireEvent(name, null, settings.matchThreshold, via);
     if (manual) activeManualAttribution.firesSinceStart++;
   }
 
   // cueCtx (null when no cue is over the table): { present, holder,
   // exitsTable, holderIsAnalyzed, appearanceId } - see runDetectionLoop.
+  // ---- Who's at the table, over the whole visit ----
+  // Every clear look at the followed person adds to their pose track's
+  // tally (fading over VISIT_FADE_MS, so a different person picked up by
+  // the same track takes over within a few seconds). Someone clearly seen
+  // while walking up and chalking is still named once they're down on the
+  // shot and harder to tell apart - not just from the last few frames.
+  var VISIT_FADE_MS = 4000;
+  var VISIT_MIN_WEIGHT = 2.5; // about three clear looks
+  var VISIT_LEAD = 2; // and twice anyone else's
+  var visitTallies = {}; // String(trackId) -> { at, scores: { name: weight } }
+  function noteVisit(analysis, m, now) {
+    if (!analysis || analysis.trackId === undefined || analysis.trackId === null) return;
+    var key = String(analysis.trackId), tally = visitTallies[key];
+    if (!tally) tally = visitTallies[key] = { at: now, scores: {} };
+    var fade = Math.exp(-(now - tally.at) / VISIT_FADE_MS);
+    Object.keys(tally.scores).forEach(function (n) { tally.scores[n] *= fade; if (tally.scores[n] < 0.05) delete tally.scores[n]; });
+    tally.at = now;
+    if (isConfidentMatch(m)) tally.scores[m.name] = (tally.scores[m.name] || 0) + 1;
+    Object.keys(visitTallies).forEach(function (k) { if (now - visitTallies[k].at > 30000) delete visitTallies[k]; });
+  }
+  function visitIdentity(trackId, now) {
+    var tally = trackId === undefined || trackId === null ? null : visitTallies[String(trackId)];
+    if (!tally || now - tally.at > 3000) return null;
+    var names = Object.keys(tally.scores).sort(function (a, b) { return tally.scores[b] - tally.scores[a]; });
+    if (!names.length) return null;
+    var best = tally.scores[names[0]], second = names.length > 1 ? tally.scores[names[1]] : 0;
+    return best >= VISIT_MIN_WEIGHT && best >= second * VISIT_LEAD ? names[0] : null;
+  }
+
+  // ---- 1-on-1: whose turn it is ----
+  // With exactly two players and a shooter who looks like one of them but
+  // not clearly which: players take turns at the table, so a different
+  // person (pose track) from the last shot's is the other player, the
+  // same one the same player.
+  var lastShot = null; // { name, trackId, at }
+  var lastFrameTrackId = null;
+  function noteLastShot(name, trackId) {
+    lastShot = { name: name, trackId: trackId === undefined ? null : trackId, at: Date.now() };
+  }
+  function oneOnOneGuess(analysis, m) {
+    if (!lastShot || !m || m.distance > m.threshold) return null;
+    if (lastShot.trackId === null || analysis.trackId === undefined || analysis.trackId === null) return null;
+    var names = Object.keys(enrollments).map(function (key) { return enrollments[key].displayName || key; }).filter(isEligibleForRecognition);
+    if (names.length !== 2) return null;
+    var last = normalizeNameKey(lastShot.name);
+    var other = names.filter(function (n) { return normalizeNameKey(n) !== last; });
+    if (other.length !== 1) return null; // (the last shooter isn't one of the two)
+    return analysis.trackId === lastShot.trackId ? lastShot.name : other[0];
+  }
+
   function handleRecognitionFrame(analysis, cueCtx) {
     var now = Date.now();
+    lastFrameTrackId = analysis ? analysis.trackId : null;
     var cuePresent = !!(cueCtx && cueCtx.present);
     var hiddenStreak = cueHiddenConsecutive;
     cueHiddenConsecutive = 0;
@@ -5648,7 +6220,9 @@
     var bendSignal = effectiveBendAngle(analysis);
     // Whoever this looks like: their own shooting posture, when the
     // Shooting button has taught the camera one.
-    var looksLike = findBestMatch(analysis.descriptor, poseForAnalysis(analysis));
+    var looksLike = matchAppearance(analysis, poseForAnalysis(analysis));
+    noteVisit(analysis, looksLike, now);
+    var visitName = visitIdentity(analysis.trackId, now);
     var limits = personalBendThresholds(isConfidentMatch(looksLike) ? looksLike.name : null);
     var stanceBefore = stance;
     if (bendSignal >= limits.enter) stance = "bent";
@@ -5663,7 +6237,7 @@
     var closeEnough = withinRailDistance(analysis);
 
     if (effectiveStance() === "upright" && closeEnough) {
-      var match = findBestMatch(analysis.descriptor, "upright");
+      var match = matchAppearance(analysis, "upright");
       // (not when someone else is nearly as close - see MATCH_MARGIN_FRACTION)
       var withinThreshold = isConfidentMatch(match);
       if (withinThreshold && uprightMatchName === match.name) {
@@ -5691,8 +6265,9 @@
 
       if (uprightStabilityCount >= settings.consecutiveFrames) {
         candidate = {
-          name: withinThreshold && uprightConsecutive >= settings.consecutiveFrames ? match.name : null,
+          name: visitName || (withinThreshold && uprightConsecutive >= settings.consecutiveFrames ? match.name : null),
           descriptor: analysis.descriptor,
+          emb: analysis.emb || null,
           trackId: analysis.trackId,
           lastSeenAt: now
         };
@@ -5725,34 +6300,43 @@
           if (activeManualAttribution && holderIdleName !== activeManualAttribution.name) activeManualAttribution = null;
           debugLog("FIRE via cue holder's earlier recognition name=" + holderIdleName);
           fireEvent(holderIdleName, null, settings.matchThreshold, via + ", recognized earlier");
+        } else if (visitName && !(candidate && candidate.name === visitName && now - candidate.lastSeenAt <= CANDIDATE_GRACE_MS)) {
+          // Clearly seen over this visit to the table (and the standing
+          // candidate, if any, isn't already saying the same).
+          if (activeManualAttribution && visitName !== activeManualAttribution.name) activeManualAttribution = null;
+          debugLog("FIRE via this visit's tally name=" + visitName + " (" + via + ")");
+          fireEvent(visitName, null, settings.matchThreshold, via + ", recognized over this visit");
         } else if (candidate && candidate.name && now - candidate.lastSeenAt <= CANDIDATE_GRACE_MS) {
           // A genuinely different name just matched on its own - "until
           // another player shoots" per explicit request.
           if (activeManualAttribution && candidate.name !== activeManualAttribution.name) activeManualAttribution = null;
           debugLog("FIRE via upright-candidate name=" + candidate.name + " (" + via + ")");
-          fireEvent(candidate.name, candidate.descriptor, 0, via, "upright");
+          fireEvent(candidate.name, candidate.descriptor, 0, via, "upright", candidate.emb);
         } else {
           // Fallback: no fresh *named* upright identification (either
           // nothing stable was seen, or it was stable but unmatched) -
           // try matching the bent-over frame itself, at a stricter
           // threshold since the crop geometry/occlusion is known to be
           // noisier here.
-          var bentMatch = findBestMatch(analysis.descriptor, "bent");
+          var bentMatch = matchAppearance(analysis, "bent");
           debugLog("no upright candidate (candidate=" + (candidate ? candidate.name || "unnamed" : "null") + ") - bent-frame match=" +
-            (bentMatch ? bentMatch.name + " dist=" + bentMatch.distance.toFixed(2) + (bentMatch.clear ? "" : " (unsure: " + bentMatch.runnerUp + " " + bentMatch.runnerUpDistance.toFixed(2) + ")") : "none") +
-            " strictLimit=" + (settings.matchThreshold * 0.6).toFixed(2) +
+            (bentMatch ? bentMatch.name + " dist=" + bentMatch.distance.toFixed(2) + " (" + bentMatch.method + ")" + (bentMatch.clear ? "" : " (unsure: " + bentMatch.runnerUp + ")") : "none") +
+            " strictLimit=" + (bentMatch ? bentMatch.threshold * 0.6 : settings.matchThreshold * 0.6).toFixed(2) +
             " activeManualAttribution=" + (activeManualAttribution ? activeManualAttribution.name : "null"));
-          if (bentMatch && bentMatch.distance <= settings.matchThreshold * 0.6 && bentMatch.clear) {
+          if (bentMatch && bentMatch.distance <= bentMatch.threshold * 0.6 && bentMatch.clear) {
             if (activeManualAttribution && bentMatch.name !== activeManualAttribution.name) activeManualAttribution = null;
-            fireEvent(bentMatch.name, analysis.descriptor, bentMatch.distance, via, "bent");
+            fireEvent(bentMatch.name, analysis.descriptor, bentMatch.scaled, via, "bent", analysis.emb);
           } else if (activeManualAttribution) {
             // Nothing matched on appearance at all - the exact "shooting
             // but not recognized" situation the operator already resolved
             // manually. fireEvent's own distance<=threshold*0.7 check
             // (always true at distance 0) is what actually adds this as
             // an enrollment sample - no separate enroll-add needed here.
-            fireEvent(activeManualAttribution.name, analysis.descriptor, 0, via, "bent");
+            fireEvent(activeManualAttribution.name, analysis.descriptor, 0, via, "bent", analysis.emb);
             activeManualAttribution.firesSinceStart++;
+          } else if (oneOnOneGuess(analysis, bentMatch)) {
+            var turnName = oneOnOneGuess(analysis, bentMatch);
+            fireEvent(turnName, null, settings.matchThreshold, via + ", 1-on-1: " + (normalizeNameKey(turnName) === normalizeNameKey(lastShot.name) ? "same player as the last shot" : "the other player's turn"));
           } else if (cueHeld && lastSeenPlayerName(now)) {
             // Someone's holding the cue out over the table and can't be
             // named from how they look right now (bent over, turned away)
@@ -6019,8 +6603,10 @@
             cueCtx = { present: true, holder: cueTrack.holder, exitsTable: !!(cueTrack.cue && cueTrack.cue.exitsTable), appearanceId: cueTrack.appearanceId, holderIsAnalyzed: false };
           }
         }
+        if (pose) refreshPersonFelt(Date.now());
         var analysis = pose ? analyzePose(pose.keypoints) : null;
         if (analysis) analysis.trackId = pose.id;
+        noteAppearance(analysis, pose ? pose.keypoints : null, Date.now());
         if (cueCtx) cueCtx.holderIsAnalyzed = !!(analysis && cueTrack.holder && cueTrack.holder.pose === pose);
         // Computed independently of analyzePose's own gating, specifically
         // so a rejected-for-low-confidence pose is still visible as a
@@ -6054,14 +6640,14 @@
 
         var matchLabel = null;
         if (analysis && settings.debugOverlay) {
-          var m = findBestMatch(analysis.descriptor, poseForAnalysis(analysis));
+          var m = matchAppearance(analysis, poseForAnalysis(analysis));
           // "(too far)" is the whole point of showing this at all - the
           // closest enrolled player is shown even when nowhere near a
           // real match (that's what makes this useful for tuning), but
           // without this suffix it reads exactly like a confirmed match,
           // which is the single most common point of confusion reported
           // against this overlay.
-          if (m) matchLabel = m.name + " " + m.distance.toFixed(2) + (m.distance > settings.matchThreshold ? " (too far)" : m.clear ? "" : " (or " + m.runnerUp + "?)");
+          if (m) matchLabel = m.name + " " + m.distance.toFixed(2) + (m.method === "model" ? " model" : "") + (m.distance > m.threshold ? " (too far)" : m.clear ? "" : " (or " + m.runnerUp + "?)");
         }
         handleRecognitionFrame(analysis, cueCtx);
         // After recognition has updated the stance for this same person:
