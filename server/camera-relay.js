@@ -76,6 +76,13 @@
 //   stronger ground truth than the camera's own self-match, so camera.html
 //   uses this to label (or relabel) its current candidate appearance:
 //     { type: "turn_confirmed", player_name } (listener -> relay -> every "camera")
+//   The scoreboard's number pad during play (7 = the selected player is
+//   seen, 8 = shooting, 0 = take back the last one) - the same as the
+//   camera's own Identify/Shooting/Undo buttons - and how it went:
+//     { type: "enroll-press", player_name, kind: "identify" | "shooting" }
+//     { type: "enroll-undo" } (listener -> relay -> every "camera")
+//     { type: "enroll-result", ok, reason?, undone?, player_name?, kind?, total? }
+//       (camera -> relay -> every "listener")
 //   Ball tracking (Straight Pool - camera.html counts balls on the
 //   calibrated table between shots):
 //     { type: "ball_pocketed", count, scratch, objectRemaining, ts }
@@ -483,6 +490,23 @@ function createCameraRelay(WebSocket) {
 
         if (msg.type === "turn_confirmed" && ws.role === "listener" && msg.player_name) {
           broadcastToCameras({ type: "turn_confirmed", player_name: msg.player_name });
+          return;
+        }
+
+        if (msg.type === "enroll-press" && ws.role === "listener" && msg.player_name && (msg.kind === "identify" || msg.kind === "shooting")) {
+          broadcastToCameras({ type: "enroll-press", player_name: String(msg.player_name), kind: msg.kind });
+          return;
+        }
+        if (msg.type === "enroll-undo" && ws.role === "listener") {
+          broadcastToCameras({ type: "enroll-undo" });
+          return;
+        }
+        if (msg.type === "enroll-result" && ws.role === "camera") {
+          broadcastToListeners({
+            type: "enroll-result", ok: !!msg.ok, reason: typeof msg.reason === "string" ? msg.reason : null, undone: !!msg.undone,
+            player_name: typeof msg.player_name === "string" ? msg.player_name : null, kind: msg.kind === "shooting" ? "shooting" : msg.kind === "identify" ? "identify" : null,
+            total: typeof msg.total === "number" ? msg.total : null
+          });
           return;
         }
 

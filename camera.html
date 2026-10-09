@@ -178,6 +178,13 @@
   .player-row .doubt { font-size: 0.9rem; color: var(--accent); margin-top: 4px; }
   .player-row .doubt button { padding: 4px 10px; font-size: 0.9rem; margin-left: 6px; }
   .enroll-check { font-size: 0.95rem; color: var(--accent); margin: 8px 0; }
+  /* Each row's keypad number - pressing it (or tapping it) = that player
+     is seen; + = they're shooting; - = take back the last one. */
+  .player-row .row-number {
+    min-width: 2.2em; padding: 6px 8px; margin-right: 8px; font-size: 1.05rem; font-weight: 700;
+    border-radius: 8px; vertical-align: middle;
+  }
+  .player-row.keypad-selected { outline: 3px solid var(--good); outline-offset: 2px; border-radius: 6px; }
   .log {
     font-size: 1rem;
     color: var(--text-dim);
@@ -482,6 +489,7 @@
   <section class="panel" id="enrollPanel" hidden>
     <h2>Enroll players (today's outfits)</h2>
     <div class="hint"><strong>Identify</strong>: press while the player is at the table (the only one there, or the one bent over) - the camera learns what they look like. <strong>Shooting</strong>: press while they're down on a shot - it also learns how they shoot, and the scoreboard switches to them. Every press adds a sample; nothing is replaced. Press as often as you like, any time, even mid-game.</div>
+    <div class="hint">With a number pad: a player's <strong>number</strong> = seen (Identify), <strong>+</strong> = that player shooting, <strong>-</strong> = take back the last one.</div>
     <div class="enroll-live" id="enrollLiveStatus">Nobody at the table yet.</div>
     <div class="progress-text" id="enrollShotStatus" hidden></div>
     <button id="enrollUndoBtn" class="secondary" type="button" hidden>Undo last press</button>
@@ -1456,6 +1464,12 @@
       if (wasDetectingCue !== settings.cueDetectionEnabled) resetCueTracking(settings.cueDetectionEnabled ? "enabled" : "disabled");
     } else if (msg.type === "enroll-select" && msg.player_name) {
       selectPlayerForEnroll(msg.player_name);
+    } else if (msg.type === "enroll-press" && msg.player_name && (msg.kind === "identify" || msg.kind === "shooting")) {
+      // The scoreboard's number pad during play: 7 = the selected player
+      // is seen, 8 = they're shooting - same as this page's own buttons.
+      if (!isViewer) enrollButtonPressed(msg.player_name, msg.kind, true);
+    } else if (msg.type === "enroll-undo") {
+      if (!isViewer) undoLastEnrollPress(true);
     } else if (msg.type === "enroll-select-attribute" && msg.player_name) {
       // Lightweight background version of enroll-select above - no tab
       // switch, no UI takeover, just starts attributing the next several
@@ -1956,8 +1970,9 @@
       return;
     }
     playerListEl.innerHTML = "";
-    names.forEach(function (name) {
+    names.forEach(function (name, index) {
       var key = normalizeNameKey(name);
+      var rowNumber = index + 1;
       var entry = enrollments[key];
       var count = entry ? (entry.descriptors || []).length : 0;
       var row = document.createElement("div");
@@ -1965,9 +1980,10 @@
       row.id = enrollRowId("enrollRow-", name);
       if (pickedEnrollName && normalizeNameKey(pickedEnrollName) === key) row.classList.add("picked");
       if (seenNowKey === key) row.classList.add("seen-now");
+      if (keypadEnrollKey === key) row.classList.add("keypad-selected");
       var shots = count ? shootingSampleCount(entry) : 0;
       var meta = document.createElement("div");
-      meta.innerHTML = '<div class="name">' + escapeHtml(name) + '</div><div class="meta">' +
+      meta.innerHTML = '<div class="name"><button type="button" class="secondary row-number" id="' + enrollRowId("enrollNum-", name) + '">' + rowNumber + '</button>' + escapeHtml(name) + '</div><div class="meta">' +
         (count ? count + " sample" + (count === 1 ? "" : "s") + ", " + shots + " shooting" : "Not enrolled yet") + "</div>";
       var check = count ? enrollCheck[key] : null;
       if (check && check.tested >= SELF_CHECK_MIN_SAMPLES) {
@@ -2004,6 +2020,7 @@
         doubt.appendChild(removeBtn);
         meta.appendChild(doubt);
       }
+      meta.querySelector(".row-number").addEventListener("click", function () { keypadSelectEnrollRow(name); });
       var actions = document.createElement("div");
       actions.className = "actions";
       [["identify", "enrollIdentify-", "Identify", "secondary shoot-btn"], ["shooting", "enrollShoot-", "Shooting", "shoot-btn"]].forEach(function (b) {
@@ -5265,6 +5282,7 @@
       if (p.kind === "shooting" && p.best && now >= p.at + ENROLL_SHOT_WINDOW_MS) { commitEnrollSample(p, p.best); return false; }
       if (now > p.until) {
         setEnrollShotStatus("Nobody at the table in view - press " + (p.kind === "shooting" ? "Shooting" : "Identify") + " again while " + p.name + " is there.");
+        if (p.fromKeypad) send({ type: "enroll-result", ok: false, reason: "nobody", player_name: p.name, kind: p.kind });
         return false;
       }
       return true;
@@ -5272,14 +5290,17 @@
     updateEnrollLiveStatus(analysis, shooting);
   }
 
-  function enrollButtonPressed(name, kind) {
+  // fromKeypad: pressed on the scoreboard's number pad, which is then told
+  // how it went ("enroll-result" - it has no Enroll tab to look at).
+  function enrollButtonPressed(name, kind, fromKeypad) {
     if (!currentStream || !modelsReady) {
       setEnrollShotStatus("The camera isn't running yet - nothing to learn from.");
+      if (fromKeypad) send({ type: "enroll-result", ok: false, reason: "not-running", player_name: name, kind: kind });
       return;
     }
     var now = Date.now();
     enrollPending = enrollPending.filter(function (p) { return normalizeNameKey(p.name) !== normalizeNameKey(name) || p.kind !== kind; });
-    var p = { name: name, kind: kind, at: now, until: now + ENROLL_WAIT_MS, trackId: undefined, best: null };
+    var p = { name: name, kind: kind, at: now, until: now + ENROLL_WAIT_MS, trackId: undefined, best: null, fromKeypad: !!fromKeypad };
     var latest = enrollFrames.length ? enrollFrames[enrollFrames.length - 1] : null;
     if (kind === "identify") {
       if (latest && !latest.used && now - latest.at <= ENROLL_IDENTIFY_FRESH_MS) { commitEnrollSample(p, latest); return; }
@@ -5336,7 +5357,8 @@
     var count = after ? (after.descriptors || []).length : 1;
     var what = p.kind === "shooting" ? "shooting sample (bent " + info.bend + "°)" : "identity sample";
     playBeep();
-    logActivity(p.name + ": " + what + " added by the button (" + count + " in total)");
+    if (p.fromKeypad) send({ type: "enroll-result", ok: true, player_name: p.name, kind: p.kind, total: count });
+    logActivity(p.name + ": " + what + " added by the " + (p.fromKeypad ? "scoreboard's number pad" : "button") + " (" + count + " in total)");
     setEnrollShotStatus(p.name + ": " + what + " added - " + count + " in total.");
     var row = findEnrollRow(p.name);
     if (row) {
@@ -5354,10 +5376,14 @@
     return true;
   }
 
-  enrollUndoBtn.addEventListener("click", function () {
+  // fromKeypad: the scoreboard's 0 key - it's told how it went.
+  function undoLastEnrollPress(fromKeypad) {
     var undo = lastEnrollAdd;
     lastEnrollAdd = null;
-    if (!undo) return;
+    if (!undo) {
+      if (fromKeypad) send({ type: "enroll-result", ok: false, reason: "nothing-to-undo" });
+      return;
+    }
     var entry = enrollments[undo.key];
     if (entry) {
       var descriptors = (entry.descriptors || []).slice();
@@ -5371,6 +5397,53 @@
     }
     logActivity(undo.name + ": last button press taken back");
     setEnrollShotStatus("Took back the last sample for " + undo.name + ".");
+    if (fromKeypad) send({ type: "enroll-result", ok: true, undone: true, player_name: undo.name });
+  }
+  enrollUndoBtn.addEventListener("click", function () { undoLastEnrollPress(false); });
+
+  // ---- Number-pad keys on the Enroll tab ----
+  // A player's number = they're seen (an Identify press, and they become
+  // the keypad's player); + = that player shooting; - = take back the
+  // last press. Keys come from this page's own keyboard, or from the
+  // scoreboard, which forwards them ("keypad-key") while this page is open
+  // full screen there. Every key becomes a press of the matching button,
+  // so a remote view - whose buttons forward their taps to the camera -
+  // works exactly the same.
+  var keypadEnrollKey = null; // the player + applies to (normalized name)
+  function keypadSelectEnrollRow(name) {
+    keypadEnrollKey = normalizeNameKey(name);
+    Array.prototype.forEach.call(playerListEl.querySelectorAll(".player-row"), function (row) {
+      row.classList.toggle("keypad-selected", row.id === enrollRowId("enrollRow-", name));
+    });
+    enrollButtonPressed(name, "identify");
+  }
+  function handleEnrollKey(key) {
+    if (enrollPanel.hidden) return false;
+    var press = function (el) {
+      if (!el || el.hidden) return false;
+      el.click();
+      return true;
+    };
+    if (/^[1-9]$/.test(key)) {
+      var row = playerListEl.querySelectorAll(".player-row")[parseInt(key, 10) - 1];
+      return press(row && row.querySelector(".row-number"));
+    }
+    if (key === "+") {
+      var selected = playerListEl.querySelector(".player-row.keypad-selected");
+      return press(selected && selected.querySelector("[id^='enrollShoot-']"));
+    }
+    if (key === "-") return press(enrollUndoBtn);
+    return false;
+  }
+  document.addEventListener("keydown", function (e) {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    var t = e.target;
+    if (t && (t.tagName === "INPUT" || t.tagName === "SELECT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+    if (handleEnrollKey(e.key)) e.preventDefault();
+  });
+  window.addEventListener("message", function (event) {
+    if (event.origin !== location.origin || event.source !== window.parent || !event.data || event.data.type !== "keypad-key") return;
+    handleEnrollKey(String(event.data.key));
   });
 
   // A player's own shooting posture, from their Shooting samples: the bend

@@ -1895,6 +1895,9 @@
   // camera overlay's postMessage listener each register their own
   // callback independently, with neither needing to know the other exists.
   var cameraTurnConfirmedCallbacks = [];
+  // The number pad's camera keys (see handleCameraKey) - same two
+  // transports, each registering how it reaches its camera.
+  var cameraCommandCallbacks = [];
   // Ball tracking: transports register here to carry a keypad correction
   // back to the camera (see adjustScore); lastAutoBallCredit is what
   // tells a correction apart from an ordinary score change.
@@ -3035,8 +3038,52 @@
     window.PMCCameraBridge.resolveUnmatchedShooterPrompt(keypadOrderedPlayerIds[nextIdx]);
   }
 
+  // ---- Number pad + camera ----
+  // Enroll mode - the camera page open full screen (this device's own
+  // camera, or a phone's through the remote view): digits and +/- belong
+  // to it - each player's number = seen, + = shooting, - = take back the
+  // last one (see camera.html's handleEnrollKey; it ignores them off its
+  // Enroll tab).
+  function fullScreenCameraFrame() {
+    if (!sameDeviceCameraOverlay.classList.contains("hidden")) return sameDeviceCameraIframe.contentWindow;
+    if (remoteViewerOverlay && !remoteViewerOverlay.classList.contains("hidden")) return remoteViewerIframe.contentWindow;
+    return null;
+  }
+  // Play mode, with a camera connected: 7 = the selected player is in view
+  // ("seen" - an Identify sample), 8 = they're shooting (a Shooting
+  // sample), 0 = take back the last one. Only while at most
+  // CAMERA_KEY_MAX_PLAYERS players are numbered - 7 and 8 select players 7
+  // and 8 otherwise. The camera answers with how it went (see
+  // PMCCameraBridge.reportEnrollResult).
+  var CAMERA_KEY_MAX_PLAYERS = 6;
+  function cameraKeysActive() {
+    return typeof window.PMCCameraBridge.isCameraLive === "function" && window.PMCCameraBridge.isCameraLive() &&
+      keypadOrderedPlayerIds.length <= CAMERA_KEY_MAX_PLAYERS;
+  }
+  function handleCameraKey(key) {
+    if (key === "0") {
+      window.PMCCameraBridge.sendCameraCommand({ type: "enroll-undo" });
+      showToast(T("cameraKeys.undoing"), "📷 ");
+      return;
+    }
+    var player = keypadSelectedPlayerId ? getPlayer(keypadSelectedPlayerId) : null;
+    if (!player) {
+      showToast(T("cameraKeys.selectFirst"), "📷 ");
+      return;
+    }
+    var kind = key === "7" ? "identify" : "shooting";
+    window.PMCCameraBridge.sendCameraCommand({ type: "enroll-press", player_name: player.name, kind: kind });
+    showToast(T(kind === "identify" ? "cameraKeys.seenPressed" : "cameraKeys.shootingPressed", { name: player.name }), "📷 ");
+  }
+
   function handleKeypadShortcut(e) {
     if (isTypingIntoField(document.activeElement)) return;
+    var cameraFrame = fullScreenCameraFrame();
+    if (cameraFrame && /^[0-9+\-]$/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      try { cameraFrame.postMessage({ type: "keypad-key", key: e.key }, location.origin); } catch (err) {}
+      return;
+    }
     if (isAnyOverlayOpen()) return;
     if (appRoot.classList.contains("hidden")) return;
 
@@ -3077,6 +3124,12 @@
       e.preventDefault();
       keypadEntryBuffer += e.key;
       renderScoreboard();
+      return;
+    }
+
+    if ((e.key === "7" || e.key === "8" || e.key === "0") && cameraKeysActive()) {
+      e.preventDefault();
+      handleCameraKey(e.key);
       return;
     }
 
@@ -5827,7 +5880,8 @@
   // itself. Route to .page-toast, a fixed overlay, instead whenever
   // that's the case, so every showToast() call stays visible no matter
   // which screen is open.
-  function showToast(message) {
+  // icon: what goes in front (a trophy unless given).
+  function showToast(message, icon) {
     // #win-toast no longer exists in index.html (dropped when the main
     // page sections were reordered), so without this guard every toast
     // on the main screen threw before showing anything.
@@ -5835,7 +5889,7 @@
     var target = onMain ? winToast : pageToast;
     var other = onMain ? pageToast : winToast;
     if (other) other.classList.add("hidden");
-    target.textContent = "🏆 " + message;
+    target.textContent = (icon === undefined ? "🏆 " : icon) + message;
     target.classList.remove("hidden");
     clearTimeout(toastTimer);
     toastTimer = setTimeout(function () {
@@ -30702,6 +30756,19 @@
       sameDeviceCameraIframe.contentWindow.postMessage(msg, location.origin);
     } catch (e) {}
   }
+
+  // (Here inside boot(), next to what they use - see the boot() scope
+  // note on PMCCameraBridge.startCameraEnrollFor.) The number pad's camera keys reach this device's own camera whether
+  // it's full screen or the small preview.
+  window.PMCCameraBridge.onCameraCommand(function (msg) {
+    if (sameDeviceCameraRunning) sendToSameDeviceCamera(msg);
+  });
+  // Whether a camera is actually there to take them - the same test the
+  // status lights use (see cameraStatusLights).
+  window.PMCCameraBridge.isCameraLive = function () {
+    if (!state.cameraInputEnabled) return false;
+    return state.sameDeviceCameraSetUp ? sameDeviceCameraRunning : cameraPhonesConnected > 0;
+  };
   function sameDeviceCameraBecameReady() {
     if (sameDeviceCameraReady || !sameDeviceCameraRunning) return;
     sameDeviceCameraReady = true;
@@ -30885,6 +30952,8 @@
       window.PMCCameraBridge.reportIdleStates(msg.idle);
     } else if (msg.type === "enrollment-updated") {
       window.PMCCameraBridge.reportEnrollmentUpdated(msg.player_name);
+    } else if (msg.type === "enroll-result") {
+      window.PMCCameraBridge.reportEnrollResult(msg);
     } else if (msg.type === "ball_pocketed" || msg.type === "ball_rerack" || msg.type === "ball_reappeared") {
       window.PMCCameraBridge.reportBallEvent(msg);
     } else if (msg.type === "cue_event") {
@@ -32465,6 +32534,24 @@
     // the instant camera-client.js's own script runs.
     onTurnConfirmed: function (callback) {
       cameraTurnConfirmedCallbacks.push(callback);
+    },
+    onCameraCommand: function (callback) {
+      cameraCommandCallbacks.push(callback);
+    },
+    sendCameraCommand: function (msg) {
+      cameraCommandCallbacks.forEach(function (cb) { try { cb(msg); } catch (e) {} });
+    },
+    // How a number-pad camera key went, from the camera - see handleCameraKey.
+    reportEnrollResult: function (msg) {
+      if (!msg) return;
+      var name = msg.player_name || "";
+      var text;
+      if (msg.undone) text = T("cameraKeys.undone", { name: name });
+      else if (msg.ok) text = T(msg.kind === "shooting" ? "cameraKeys.shootingAdded" : "cameraKeys.seenAdded", { name: name, total: msg.total || 1 });
+      else if (msg.reason === "nobody") text = T("cameraKeys.nobody", { name: name });
+      else if (msg.reason === "nothing-to-undo") text = T("cameraKeys.nothingToUndo");
+      else text = T("cameraKeys.notRunning");
+      showToast(text, "📷 ");
     },
     // Ball tracking's counterpart - invoked from adjustScore with
     // { kind: "false_positive" | "missed", delta, ts } when a human

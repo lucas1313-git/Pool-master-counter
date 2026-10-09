@@ -31,6 +31,7 @@
   var reconnectTimer = null;
   var turnConfirmedRegistered = false;
   var ballFeedbackRegistered = false;
+  var cameraCommandRegistered = false;
   var captureSettingsRegistered = false;
   var rosterSyncRegistered = false;
 
@@ -48,6 +49,16 @@
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
     try {
       ws.send(JSON.stringify({ type: "turn_confirmed", player_name: playerName }));
+    } catch (e) {}
+  }
+
+  // The number pad during play (7 seen / 8 shooting / 0 take back - see
+  // js/app.js's handleCameraKey): { type: "enroll-press" | "enroll-undo" }
+  // to the camera phone; its "enroll-result" comes back below.
+  function sendCameraCommand(msg) {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    try {
+      ws.send(JSON.stringify(msg));
     } catch (e) {}
   }
 
@@ -270,6 +281,7 @@
       else if (msg.type === "remote-camera-list") handleRemoteCameraList(msg);
       else if (msg.type === "ball_pocketed" || msg.type === "ball_rerack" || msg.type === "ball_reappeared") handleBallEvent(msg);
       else if (msg.type === "cue_event") handleCueEvent(msg);
+      else if (msg.type === "enroll-result" && bridgeReady() && typeof window.PMCCameraBridge.reportEnrollResult === "function") window.PMCCameraBridge.reportEnrollResult(msg);
       else if (msg.type === "camera-settings-state") handleCameraSettingsState(msg);
       else if (msg.type === "camera-status" && bridgeReady() && typeof window.PMCCameraBridge.reportCameraStatus === "function") window.PMCCameraBridge.reportCameraStatus(msg.status, true);
       else if (msg.type === "enrollment-names" && bridgeReady() && typeof window.PMCCameraBridge.reportEnrollmentNames === "function") window.PMCCameraBridge.reportEnrollmentNames(msg.names);
@@ -303,6 +315,10 @@
     if (!turnConfirmedRegistered) {
       window.PMCCameraBridge.onTurnConfirmed(sendTurnConfirmed);
       turnConfirmedRegistered = true;
+    }
+    if (!cameraCommandRegistered && typeof window.PMCCameraBridge.onCameraCommand === "function") {
+      window.PMCCameraBridge.onCameraCommand(sendCameraCommand);
+      cameraCommandRegistered = true;
     }
     if (!ballFeedbackRegistered && typeof window.PMCCameraBridge.onBallFeedback === "function") {
       window.PMCCameraBridge.onBallFeedback(sendBallFeedback);
