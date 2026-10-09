@@ -48,19 +48,17 @@
 //   Enrollment (per explicit request: additive, improves with use - each
 //   player's enrollment is a growing LIST of descriptors, not one frozen
 //   average):
-//     { type: "enroll-save", player_name, descriptors: [...], side? }  - replaces
-//     { type: "enroll-add", player_name, descriptor, side? }           - appends
+//     { type: "enroll-save", player_name, descriptors: [...], info?: [...] }  - replaces
+//     { type: "enroll-add", player_name, descriptor, info? }                - appends
 //     { type: "enroll-get" }                                           - request
 //     -> relay replies: { type: "enrollments", data: {...} }
 //     { type: "enroll-delete", player_name }
-//   The optional `side` (0-3) is which of the 4 calibrated table rails the
-//   sample came from - see camera.html's own comment on why sides are
-//   numbered by calibration tap order rather than camera-relative
-//   near/far/left/right. Tracked per enrollment entry as `sides` (a list
-//   of distinct side indices seen) purely so camera.html's "how many of
-//   the 4 sides has this player been seen from" bootstrapping progress
-//   survives a page reload - this relay still doesn't interpret what a
-//   descriptor or a side number actually means.
+//   `info` is what the camera knows about each sample, kept at the same
+//   index as its descriptor in the entry's own `info` list (null when
+//   none): { kind: "identify" | "shooting" | "recognized" | "scored", at,
+//   bend, torso, leg, pos } - see camera.html's alignedInfo. This relay
+//   only keeps the two lists in step. (Older entries may still carry a
+//   `sides` list from before; it's dropped on the next add.)
 //   Settings handoff (camera.html has no other way to learn the tablet's
 //   configured threshold/debounce - see js/app.js's PMCCameraBridge.getSettings()):
 //     { type: "settings-request" } (camera -> relay -> every "listener")
@@ -168,12 +166,11 @@ function normalizeNameKey(name) {
   return (name || "").trim().toLowerCase();
 }
 
-// Appends `side` (0-3) to entry.sides if given and not already present -
-// never double-counts the same side twice.
-function addSide(entry, side) {
-  if (typeof side !== "number" || side < 0 || side > 3) return;
-  entry.sides = entry.sides || [];
-  if (entry.sides.indexOf(side) === -1) entry.sides.push(side);
+function alignedInfo(entry) {
+  var n = (entry.descriptors || []).length;
+  var info = (Array.isArray(entry.info) ? entry.info : []).slice(-n);
+  while (info.length < n) info.unshift(null);
+  return info;
 }
 
 function loadEnrollments() {
@@ -367,13 +364,10 @@ function createCameraRelay(WebSocket) {
         if (msg.type === "enroll-save" && msg.player_name) {
           var saveKey = normalizeNameKey(msg.player_name);
           if (!saveKey) return;
-          // A full replace, matching "re-running capture replaces their
-          // enrollment from scratch" - sides resets too (not carried over
-          // from whatever entry existed before), since it describes
-          // coverage of the descriptors being replaced, not of the player
-          // in the abstract.
+          // A full replace (the camera's Undo re-saves a player's samples
+          // minus the one taken back).
           var saveEntry = { displayName: String(msg.player_name).trim(), descriptors: (msg.descriptors || []).slice(-MAX_DESCRIPTORS_PER_PLAYER) };
-          addSide(saveEntry, msg.side);
+          saveEntry.info = alignedInfo({ descriptors: saveEntry.descriptors, info: msg.info });
           enrollments[saveKey] = saveEntry;
           saveEnrollments(enrollments);
           send(ws, { type: "enrollments", data: enrollments });
@@ -385,12 +379,11 @@ function createCameraRelay(WebSocket) {
           var addKey = normalizeNameKey(msg.player_name);
           if (!addKey) return;
           var entry = enrollments[addKey] || { displayName: String(msg.player_name).trim(), descriptors: [] };
-          entry.descriptors.push(msg.descriptor);
-          if (entry.descriptors.length > MAX_DESCRIPTORS_PER_PLAYER) {
-            entry.descriptors = entry.descriptors.slice(entry.descriptors.length - MAX_DESCRIPTORS_PER_PLAYER);
-          }
+          var info = alignedInfo(entry);
+          entry.descriptors = entry.descriptors.concat([msg.descriptor]).slice(-MAX_DESCRIPTORS_PER_PLAYER);
+          entry.info = info.concat([msg.info && typeof msg.info === "object" ? msg.info : null]).slice(-MAX_DESCRIPTORS_PER_PLAYER);
+          delete entry.sides;
           var wasEnrolled = entry.descriptors.length > 1;
-          addSide(entry, msg.side);
           enrollments[addKey] = entry;
           saveEnrollments(enrollments);
           if (!wasEnrolled) broadcastEnrolledNames(); // only a first sample changes who's enrolled

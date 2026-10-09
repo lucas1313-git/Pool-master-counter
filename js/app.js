@@ -2883,7 +2883,10 @@
     return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
   }
 
-  function isAnyOverlayOpen() {
+  // exceptCameraView: the camera's own remote view (its Enroll tab's
+  // Shooting button is used mid-game) doesn't count - the same-device
+  // camera's full-screen view never did (see its own comment below).
+  function isAnyOverlayOpen(exceptCameraView) {
     return [
       helpOverlay,
       wizardOverlay,
@@ -2900,7 +2903,7 @@
       confirmModalOverlay,
       playerConflictOverlay,
       remoteCalibrateOverlay,
-      remoteViewerOverlay
+      exceptCameraView ? null : remoteViewerOverlay
     ].some(function (el) {
       return el && !el.classList.contains("hidden");
     });
@@ -30077,7 +30080,7 @@
     // selectPlayer has no overlay guard of its own - without this, a
     // camera event mid win-celebration overlay would yank the selection
     // and, in Focus Mode, smooth-scroll the page out from under it.
-    if (window.PMCCameraBridge.isAnyOverlayOpen()) {
+    if (window.PMCCameraBridge.isAnyOverlayOpen(true)) {
       noteCameraShot("Shot: " + name + " - not selected while a window is open on the scoreboard");
       return;
     }

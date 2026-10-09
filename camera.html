@@ -162,6 +162,16 @@
   .player-row .meta { font-size: 0.95rem; color: var(--text-dim); }
   .player-row .actions { display: flex; gap: 6px; }
   .player-row .actions button { padding: 8px 12px; font-size: 0.95rem; }
+  .player-row .actions button.shoot-btn { padding: 12px 16px; font-size: 1.05rem; }
+  /* Name on the left, buttons on the right - or, when that doesn't fit
+     (a phone), the buttons as one row under the name. */
+  #playerList .player-row { flex-wrap: wrap; }
+  #playerList .player-row > div:first-child { flex: 1 1 140px; }
+  #playerList .player-row .actions { margin-left: auto; }
+  .player-row.just-added { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+  .player-row.seen-now .name::after { content: " \2190  camera sees them now"; color: var(--accent); font-size: 0.85rem; font-weight: 600; }
+  .player-row.picked { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+  .enroll-live { font-size: 1rem; color: var(--text); margin: 8px 0; }
   .log {
     font-size: 1rem;
     color: var(--text-dim);
@@ -464,26 +474,14 @@
   </section>
 
   <section class="panel" id="enrollPanel" hidden>
-    <h2>Enroll a player (today's outfit)</h2>
-    <label for="enrollName">Player</label>
-    <select id="enrollName">
-      <option value="" disabled selected>No players found yet</option>
-    </select>
-    <div class="hint">Pick a player, then have them bend over and take a shot at the table - each shot captures a sample automatically, with a beep, no button to press.</div>
-    <div class="progress-text" id="captureProgress" hidden></div>
-    <button id="stopCaptureBtn" class="secondary" type="button" hidden>Stop &amp; Save</button>
-    <p class="fine">
-      Scoring a real shot on the tablet also labels the camera's current
-      candidate automatically - no separate step needed once play starts.
-      Have each player take their first few shots from different sides of
-      the table so their profile isn't just one angle.
-    </p>
-
-    <h2 style="margin-top:16px">Enrolled today</h2>
-    <div id="bootstrapStatus" class="hint"></div>
-    <div id="playerList"><div class="hint">No players enrolled yet.</div></div>
+    <h2>Enroll players (today's outfits)</h2>
+    <div class="hint"><strong>Identify</strong>: press while the player is at the table (the only one there, or the one bent over) - the camera learns what they look like. <strong>Shooting</strong>: press while they're down on a shot - it also learns how they shoot, and the scoreboard switches to them. Every press adds a sample; nothing is replaced. Press as often as you like, any time, even mid-game.</div>
+    <div class="enroll-live" id="enrollLiveStatus">Nobody at the table yet.</div>
+    <div class="progress-text" id="enrollShotStatus" hidden></div>
+    <button id="enrollUndoBtn" class="secondary" type="button" hidden>Undo last press</button>
+    <div id="playerList"><div class="hint">No players yet - add them on the scoreboard.</div></div>
     <button id="clearAllBtn" class="danger" type="button" style="margin-top:10px">Clear all (new session)</button>
-    <div class="hint">Appearance only matches today's clothes - clear and re-enroll everyone at the start of each new session.</div>
+    <div class="hint">Appearance only matches today's clothes - at the start of a new session, Clear all, then add new samples for everyone.</div>
   </section>
 
   <details class="panel" id="settingsPanel">
@@ -571,7 +569,7 @@
       <p class="wizard-step-explain">
         Calibrating the table gives real measurements, so "close enough to be
         shooting" is an actual distance from the rails instead of a guess - and it
-        tracks which side of the table a player was seen from, for better accuracy.
+        tracks where at the table each player stands, for better accuracy.
       </p>
       <div class="wizard-status-line" id="wizardCalibrationStatusLine">Not calibrated yet.</div>
       <div class="wizard-step-actions">
@@ -582,14 +580,15 @@
 
     <div class="wizard-step" id="wizardStep4" hidden>
       <p class="wizard-step-explain">
-        Two ways to teach it your players: enroll someone now (pick their name, then
-        they just bend over and take a few real shots - it captures and beeps on its
-        own), or just start playing - scoring a real shot on the tablet teaches the
-        camera too. Either way, appearance only lasts one day's outfit, so this
-        happens fresh each session.
+        Two ways to teach it your players: on the Enroll tab, press Shooting beside
+        a player's name while they're bent over a shot - every press adds to what
+        the camera knows about them, as often as you like, even mid-game - or just
+        start playing: scoring a real shot on the tablet teaches the camera too.
+        Either way, appearance only lasts one day's outfit, so this happens fresh
+        each session.
       </p>
       <div class="wizard-step-actions">
-        <button id="wizardGoEnrollBtn" type="button">Enroll a Player Now</button>
+        <button id="wizardGoEnrollBtn" type="button">Enroll Players Now</button>
         <button id="wizardSkipEnrollBtn" class="secondary" type="button">I'll Just Start Playing</button>
       </div>
     </div>
@@ -653,14 +652,13 @@
   // this page has no camera of its own in this mode, no model loaded, no
   // detection loop running. The real camera.html instance executes the
   // forwarded action on ITS OWN identical DOM (same ids), so every
-  // existing handler (startCalibration, finishEnrollCapture, the
+  // existing handler (startCalibration, the Shooting buttons, the
   // cameraSelect change listener, etc.) runs completely unchanged - this
   // mode adds a transport, not new camera-side logic.
   var isViewer = new URLSearchParams(location.search).get("viewer") === "1";
   var LOCAL_ENROLLMENTS_KEY = "pmc-camera-local-enrollments";
   var RECONNECT_DELAY_MS = 3000;
   var DETECTION_INTERVAL_MS = 280; // ~3.5 fps, within the 3-5fps target
-  var ENROLL_TARGET_SAMPLES = 8;
   var SETTINGS_STORAGE_KEY = "pmc-camera-settings";
   var CALIBRATION_STORAGE_KEY = "pmc-camera-calibration";
   var CAMERA_DEVICE_STORAGE_KEY = "pmc-camera-selected-device";
@@ -694,7 +692,6 @@
   var HUE_BINS = 12;
   var SAT_BINS = 4;
   var ASPECT_RATIO_WEIGHT = 0.3;
-  var SIDES_TARGET = 4;
   var DETECT_CANVAS_WIDTH = 160; // downsampled resolution for one-shot table detection
   var DETECT_MIN_BLOB_FRACTION = 0.1; // reject a detected "table" smaller than this fraction of the frame
   // Reject a match that fills nearly the whole frame with no surrounding
@@ -753,9 +750,9 @@
   var recognizeVoiceToggle = document.getElementById("recognizeVoiceToggle");
   var recognizeLiveStatus = document.getElementById("recognizeLiveStatus");
 
-  var enrollNameInput = document.getElementById("enrollName");
-  var stopCaptureBtn = document.getElementById("stopCaptureBtn");
-  var captureProgress = document.getElementById("captureProgress");
+  var enrollLiveStatus = document.getElementById("enrollLiveStatus");
+  var enrollShotStatus = document.getElementById("enrollShotStatus");
+  var enrollUndoBtn = document.getElementById("enrollUndoBtn");
   var playerListEl = document.getElementById("playerList");
   var clearAllBtn = document.getElementById("clearAllBtn");
 
@@ -776,7 +773,6 @@
   var calibrationStepText = document.getElementById("calibrationStepText");
   var cancelCalibrationBtn = document.getElementById("cancelCalibrationBtn");
   var recalibrateBtn = document.getElementById("recalibrateBtn");
-  var bootstrapStatusEl = document.getElementById("bootstrapStatus");
 
   var cameraSelect = document.getElementById("cameraSelect");
   var thresholdInput = document.getElementById("thresholdInput");
@@ -800,7 +796,7 @@
   var SETTINGS_HELP = {
     threshold: {
       title: "Match sensitivity",
-      body: "How close a person's look has to match an enrolled player to count as them.\n\nLower = stricter: fewer wrong matches, but a real match can get rejected if lighting or clothing looks a bit different than when they were enrolled.\n\nHigher = looser: catches real matches more easily, but can start confusing different players for each other.\n\nIf the debug log shows someone's real distance is just a little over this number, raise it slightly. If it's way over (3x or more), the real problem is usually stale enrollment data, not this setting - re-enroll that player instead."
+      body: "How close a person's look has to match an enrolled player to count as them.\n\nLower = stricter: fewer wrong matches, but a real match can get rejected if lighting or clothing looks a bit different than when they were enrolled.\n\nHigher = looser: catches real matches more easily, but can start confusing different players for each other.\n\nIf the debug log shows someone's real distance is just a little over this number, raise it slightly. If it's way over (3x or more), the real problem is usually stale enrollment data, not this setting - press Shooting for that player on a few more shots instead."
     },
     consecutive: {
       title: "How many frames before it believes you",
@@ -1253,17 +1249,22 @@
 
   // ---- Local enrollment store (embedded mode only) - a near-verbatim
   // port of server/camera-relay.js's own enroll-save/enroll-add/enroll-get/
-  // enroll-delete logic (same normalizeNameKey, same addSide, same
-  // MAX_DESCRIPTORS_PER_PLAYER cap, same full-replace-resets-sides
-  // semantics), just backed by localStorage instead of a server-side JSON
-  // file + WebSocket round trip. ----
+  // enroll-delete logic (same normalizeNameKey, same sample records,
+  // same MAX_DESCRIPTORS_PER_PLAYER cap), just backed by localStorage
+  // instead of a server-side JSON file + WebSocket round trip. ----
   function normalizeNameKey(name) {
     return (name || "").trim().toLowerCase();
   }
-  function addSide(entry, side) {
-    if (typeof side !== "number" || side < 0 || side > 3) return;
-    entry.sides = entry.sides || [];
-    if (entry.sides.indexOf(side) === -1) entry.sides.push(side);
+  // A sample is a descriptor (what the player looks like) plus, at the
+  // same index in `info`, what's known about it: { kind: "identify" |
+  // "shooting" | "recognized" | "scored", at, bend, torso, leg, pos }
+  // (bend/torso/leg in degrees, pos = feet on the table in inches, null
+  // uncalibrated). Older samples have none (null). Capped together.
+  function alignedInfo(entry) {
+    var n = (entry.descriptors || []).length;
+    var info = (Array.isArray(entry.info) ? entry.info : []).slice(-n);
+    while (info.length < n) info.unshift(null);
+    return info;
   }
   function loadLocalEnrollments() {
     try {
@@ -1275,28 +1276,31 @@
   function saveLocalEnrollments(data) {
     try { localStorage.setItem(LOCAL_ENROLLMENTS_KEY, JSON.stringify(data)); } catch (e) {}
   }
+  function applyEnrollAdd(store, msg) {
+    var addKey = normalizeNameKey(msg.player_name);
+    if (!addKey) return false;
+    var entry = store[addKey] || { displayName: String(msg.player_name).trim(), descriptors: [] };
+    var info = alignedInfo(entry);
+    entry.descriptors = (entry.descriptors || []).concat([msg.descriptor]).slice(-MAX_DESCRIPTORS_PER_PLAYER);
+    entry.info = info.concat([msg.info || null]).slice(-MAX_DESCRIPTORS_PER_PLAYER);
+    delete entry.sides; // (old per-rail tracking, no longer used)
+    store[addKey] = entry;
+    return true;
+  }
   function handleLocalMessage(msg) {
     var localEnrollments = loadLocalEnrollments();
     if (msg.type === "enroll-save" && msg.player_name) {
       var saveKey = normalizeNameKey(msg.player_name);
       if (!saveKey) return;
       var saveEntry = { displayName: String(msg.player_name).trim(), descriptors: (msg.descriptors || []).slice(-MAX_DESCRIPTORS_PER_PLAYER) };
-      addSide(saveEntry, msg.side);
+      saveEntry.info = alignedInfo({ descriptors: saveEntry.descriptors, info: msg.info });
       localEnrollments[saveKey] = saveEntry;
       saveLocalEnrollments(localEnrollments);
       handleIncomingMessage({ type: "enrollments", data: localEnrollments });
       return;
     }
     if (msg.type === "enroll-add" && msg.player_name && msg.descriptor) {
-      var addKey = normalizeNameKey(msg.player_name);
-      if (!addKey) return;
-      var entry = localEnrollments[addKey] || { displayName: String(msg.player_name).trim(), descriptors: [] };
-      entry.descriptors.push(msg.descriptor);
-      if (entry.descriptors.length > MAX_DESCRIPTORS_PER_PLAYER) {
-        entry.descriptors = entry.descriptors.slice(entry.descriptors.length - MAX_DESCRIPTORS_PER_PLAYER);
-      }
-      addSide(entry, msg.side);
-      localEnrollments[addKey] = entry;
+      if (!applyEnrollAdd(localEnrollments, msg)) return;
       saveLocalEnrollments(localEnrollments);
       handleIncomingMessage({ type: "enrollments", data: localEnrollments });
       return;
@@ -1326,6 +1330,10 @@
     }
     if (ws && ws.readyState === WebSocket.OPEN) {
       try { ws.send(JSON.stringify(msg)); } catch (e) {}
+      // The relay doesn't send the list back after an add - keep this
+      // device's copy (what recognition matches against, and the Enroll
+      // tab's counts) up to date the same way it stores it.
+      if (msg.type === "enroll-add" && msg.player_name && msg.descriptor && !isViewer && applyEnrollAdd(enrollments, msg)) renderPlayerList();
     }
   }
 
@@ -1357,7 +1365,7 @@
         knownNames = msg.known;
         pruneEnrollmentsNotKnown();
       }
-      populateEnrollNameSelect();
+      renderPlayerList();
     } else if (msg.type === "enroll-delete" && msg.player_name && isEmbedded) {
       // The scoreboard graveyarded a player - drop them from the local store.
       handleLocalMessage(msg);
@@ -1473,7 +1481,9 @@
           el.value = snap.value;
           if (typeof snap.hidden === "boolean") el.hidden = snap.hidden;
         } else if (snap.kind === "html") {
-          el.innerHTML = snap.html;
+          // Unchanged lists are left alone, so a button isn't swapped out
+          // from under a finger mid-tap.
+          if (el.innerHTML !== snap.html) el.innerHTML = snap.html;
         } else {
           el.textContent = snap.text;
           if (typeof snap.hidden === "boolean") el.hidden = snap.hidden;
@@ -1712,15 +1722,19 @@
   // except recognizeLog, which is read as innerHTML (a scrolling list of
   // child <div>s, not a single text value).
   var VIEWER_SYNCED_IDS = [
-    "calibrationStepText", "calibrationStatus", "captureProgress",
+    "calibrationStepText", "calibrationStatus", "enrollLiveStatus", "enrollShotStatus", "enrollUndoBtn",
     "labelCamera", "labelRelay", "labelModels",
     "recognizeLiveStatus", "recognizeDebugToggle", "recognizeVoiceToggle",
     "debugToggle", "thresholdInput", "consecutiveInput", "debounceInput",
     "bendEnterInput", "bendExitInput", "railDistanceInput",
     "ballTrackingToggle", "ballConfirmInput", "cueDetectionToggle", "cueDebugToggle",
-    "tableSizeSelect", "firstEdgeSelect", "enrollName"
+    "tableSizeSelect", "firstEdgeSelect"
   ];
   var VIEWER_SYNCED_HTML_IDS = ["recognizeLog"];
+  // The Enroll tab's player list, whole: its sample counts change on this
+  // device (the relay doesn't send the viewer every added sample), and
+  // its buttons carry ids, so a tap on the viewer's copy runs here.
+  var VIEWER_SYNCED_FULL_HTML_IDS = ["playerList"];
   // cameraSelect's <option>s are populated at runtime from this device's
   // own enumerateDevices() (see populateCameraList) - the viewer has no
   // camera of its own to enumerate, so its copy of this dropdown starts
@@ -1752,6 +1766,10 @@
       recent.forEach(function (child) { wrap.appendChild(child.cloneNode(true)); });
       out[id] = { kind: "html", html: wrap.innerHTML };
     });
+    VIEWER_SYNCED_FULL_HTML_IDS.forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) out[id] = { kind: "html", html: el.innerHTML };
+    });
     VIEWER_SYNCED_SELECT_IDS.forEach(function (id) {
       var el = document.getElementById(id);
       if (el) out[id] = { kind: "select", html: el.innerHTML, value: el.value };
@@ -1776,27 +1794,20 @@
     }, VIEWER_FRAME_INTERVAL_MS);
   }
 
-  // Jumps straight to the Enroll tab with a specific player pre-selected
-  // and ready to capture - triggered by the Players panel's own "Enroll"
-  // button (same-device mode only; see js/app.js's startCameraEnrollFor).
-  // Doesn't wait on the roster-request round trip (rosterNames) to
-  // populate the name dropdown first - the parent page already knows
-  // this name is valid, so it's added directly as an option if the
-  // dropdown doesn't have it yet, rather than risking the request
-  // silently landing before that round trip completes.
+  // Jumps straight to the Enroll tab with this player's row marked -
+  // triggered by the Players panel's own "Enroll" button (same-device
+  // mode only; see js/app.js's startCameraEnrollFor). The parent page
+  // already knows this name is valid, so it gets a row even if the
+  // roster-request round trip hasn't landed yet.
+  var pickedEnrollName = null;
   function selectPlayerForEnroll(name) {
-    if (enrollCapturing) finishEnrollCapture();
-    var alreadyOption = Array.prototype.some.call(enrollNameInput.options, function (o) { return o.value === name; });
-    if (!alreadyOption) {
-      var opt = document.createElement("option");
-      opt.value = name;
-      opt.textContent = name;
-      enrollNameInput.appendChild(opt);
-    }
-    enrollNameInput.value = name;
-    startEnrollCapture(name);
+    pickedEnrollName = name;
+    if (rosterNames.indexOf(name) === -1) rosterNames = rosterNames.concat([name]);
+    renderPlayerList();
     showTab("enroll");
-    enrollNameInput.scrollIntoView({ behavior: "smooth", block: "center" });
+    setEnrollShotStatus("Press Shooting beside " + name + " when they bend over to shoot.");
+    var row = findEnrollRow(name);
+    if (row) row.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
   function scheduleReconnect() {
@@ -1849,106 +1860,79 @@
   }
 
   // ---- Enrolled player list ----
-  function renderBootstrapStatus(keys) {
-    if (!calibration) {
-      bootstrapStatusEl.textContent = "Calibrate the table (Table tab) to enable side-coverage tracking.";
-      return;
-    }
-    if (keys.length === 0) {
-      bootstrapStatusEl.textContent = "";
-      return;
-    }
-    var allReady = keys.every(function (key) { return ((enrollments[key].sides || []).length) >= SIDES_TARGET; });
-    bootstrapStatusEl.textContent = allReady
-      ? "All enrolled players have been seen from " + SIDES_TARGET + " sides - ready to rely on recognition."
-      : "Still bootstrapping - have each player shoot from a few different sides of the table.";
-  }
-
-  // The enroll picker offers the scoreboard's own live roster (rosterNames,
-  // kept in sync via "roster-request"/"roster" - see connectRelay/
-  // initEmbeddedMode and handleIncomingMessage below) rather than free
-  // text, so a captured sample can never be mislabeled by a typo. Also
-  // folds in any name that already has local enrollments, even if it's
-  // fallen off the live roster since (removed/renamed player) - otherwise
-  // "Re-enroll" on an existing entry would silently fail to select it.
-  function populateEnrollNameSelect() {
-    var previousValue = enrollNameInput.value;
+  // Every player on the scoreboard's roster (rosterNames, kept in sync via
+  // "roster-request"/"roster" - see connectRelay/initEmbeddedMode and
+  // handleIncomingMessage), in its order, so a sample can never be
+  // mislabeled by a typo. Anyone who still has enrollments here but has
+  // left the roster (removed/renamed) follows, so they can be deleted.
+  function enrollListNames() {
     var names = rosterNames.slice();
+    var extra = [];
     Object.keys(enrollments).forEach(function (key) {
-      var displayName = enrollments[key].displayName || key;
-      if (names.indexOf(displayName) === -1) names.push(displayName);
+      var onRoster = names.some(function (n) { return normalizeNameKey(n) === key; });
+      if (!onRoster) extra.push(enrollments[key].displayName || key);
     });
-    names.sort(function (a, b) { return a.localeCompare(b); });
-    enrollNameInput.innerHTML = "";
-    if (names.length === 0) {
-      var placeholder = document.createElement("option");
-      placeholder.value = "";
-      placeholder.disabled = true;
-      placeholder.selected = true;
-      placeholder.textContent = "No players found yet";
-      enrollNameInput.appendChild(placeholder);
-      return;
-    }
-    names.forEach(function (name) {
-      var opt = document.createElement("option");
-      opt.value = name;
-      opt.textContent = name;
-      enrollNameInput.appendChild(opt);
-    });
-    if (names.indexOf(previousValue) !== -1) enrollNameInput.value = previousValue;
+    extra.sort(function (a, b) { return a.localeCompare(b); });
+    return names.concat(extra);
+  }
+  // Ids from the name, the same on the camera and on a remote viewer's
+  // copy of this list - the viewer forwards a tap by the button's id.
+  function enrollRowId(prefix, name) {
+    return prefix + encodeURIComponent(normalizeNameKey(name));
+  }
+  function findEnrollRow(name) {
+    return document.getElementById(enrollRowId("enrollRow-", name));
   }
 
   function renderPlayerList() {
-    var keys = Object.keys(enrollments);
-    populateEnrollNameSelect();
-    renderBootstrapStatus(keys);
-    if (keys.length === 0) {
-      playerListEl.innerHTML = '<div class="hint">No players enrolled yet.</div>';
+    var names = enrollListNames();
+    if (names.length === 0) {
+      playerListEl.innerHTML = '<div class="hint">No players yet - add them on the scoreboard.</div>';
       return;
     }
     playerListEl.innerHTML = "";
-    keys.sort(function (a, b) {
-      return (enrollments[a].displayName || "").localeCompare(enrollments[b].displayName || "");
-    }).forEach(function (key) {
+    names.forEach(function (name) {
+      var key = normalizeNameKey(name);
       var entry = enrollments[key];
+      var count = entry ? (entry.descriptors || []).length : 0;
       var row = document.createElement("div");
       row.className = "player-row";
-      var sideCount = (entry.sides || []).length;
-      var sideText = calibration ? (", " + sideCount + "/" + SIDES_TARGET + " sides") : "";
+      row.id = enrollRowId("enrollRow-", name);
+      if (pickedEnrollName && normalizeNameKey(pickedEnrollName) === key) row.classList.add("picked");
+      if (seenNowKey === key) row.classList.add("seen-now");
+      var shots = count ? shootingSampleCount(entry) : 0;
       var meta = document.createElement("div");
-      meta.innerHTML = "<div>" + escapeHtml(entry.displayName || key) + "</div><div class=\"meta\">" +
-        ((entry.descriptors || []).length) + " samples" + sideText + "</div>";
+      meta.innerHTML = '<div class="name">' + escapeHtml(name) + '</div><div class="meta">' +
+        (count ? count + " sample" + (count === 1 ? "" : "s") + ", " + shots + " shooting" : "Not enrolled yet") + "</div>";
       var actions = document.createElement("div");
       actions.className = "actions";
-      var reEnrollBtn = document.createElement("button");
-      reEnrollBtn.className = "secondary";
-      reEnrollBtn.textContent = "Re-enroll";
-      reEnrollBtn.type = "button";
-      reEnrollBtn.addEventListener("click", function () {
-        var reEnrollName = entry.displayName || key;
-        enrollNameInput.value = reEnrollName;
-        enrollNameInput.scrollIntoView({ behavior: "smooth", block: "center" });
-        // Setting .value programmatically doesn't fire "change" - capture
-        // has to be armed explicitly here too, the same as picking a name
-        // from the dropdown directly does.
-        if (enrollCapturing) finishEnrollCapture();
-        startEnrollCapture(reEnrollName);
+      [["identify", "enrollIdentify-", "Identify", "secondary shoot-btn"], ["shooting", "enrollShoot-", "Shooting", "shoot-btn"]].forEach(function (b) {
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = b[3];
+        btn.id = enrollRowId(b[1], name);
+        btn.textContent = b[2];
+        btn.addEventListener("click", function () { enrollButtonPressed(name, b[0]); });
+        actions.appendChild(btn);
       });
-      var deleteBtn = document.createElement("button");
-      deleteBtn.className = "danger";
-      deleteBtn.textContent = "Delete";
-      deleteBtn.type = "button";
-      deleteBtn.addEventListener("click", function () {
-        if (deleteBtn.dataset.confirm === "1") {
-          send({ type: "enroll-delete", player_name: entry.displayName || key });
-        } else {
-          deleteBtn.dataset.confirm = "1";
-          deleteBtn.textContent = "Tap again to confirm";
-          setTimeout(function () { deleteBtn.dataset.confirm = "0"; deleteBtn.textContent = "Delete"; }, 3000);
-        }
-      });
-      actions.appendChild(reEnrollBtn);
-      actions.appendChild(deleteBtn);
+      if (count) {
+        var deleteBtn = document.createElement("button");
+        deleteBtn.type = "button";
+        deleteBtn.className = "danger";
+        deleteBtn.id = enrollRowId("enrollDelete-", name);
+        deleteBtn.textContent = "Delete";
+        deleteBtn.addEventListener("click", function () {
+          if (deleteBtn.dataset.confirm === "1") {
+            if (lastEnrollAdd && lastEnrollAdd.key === key) lastEnrollAdd = null;
+            send({ type: "enroll-delete", player_name: entry.displayName || name });
+          } else {
+            deleteBtn.dataset.confirm = "1";
+            deleteBtn.textContent = "Tap again to confirm";
+            setTimeout(function () { deleteBtn.dataset.confirm = "0"; deleteBtn.textContent = "Delete"; }, 3000);
+          }
+        });
+        actions.appendChild(deleteBtn);
+      }
       row.appendChild(meta);
       row.appendChild(actions);
       playerListEl.appendChild(row);
@@ -1957,6 +1941,8 @@
 
   clearAllBtn.addEventListener("click", function () {
     if (clearAllBtn.dataset.confirm === "1") {
+      lastEnrollAdd = null;
+      enrollUndoBtn.hidden = true;
       Object.keys(enrollments).forEach(function (key) {
         send({ type: "enroll-delete", player_name: enrollments[key].displayName || key });
       });
@@ -4481,45 +4467,27 @@
   loadCalibration();
   loadBackgroundReference();
 
-  // ---- Enrollment capture ----
-  // Fully automatic, shot-triggered (per explicit request) - picking a
-  // player arms capture immediately, no button press starts it. Each
-  // player only has to bend over and take a real shot at the table - the
-  // exact same "bent" stance signal the live recognition loop already
-  // tracks (see handleRecognitionFrame/settings.bendEnterAngle). One
-  // sample per distinct shot, edge-triggered on the upright-to-bent
-  // transition rather than every frame of one continuous bend (which
-  // would otherwise grab several near-duplicate samples from a single
-  // shot instead of varied real ones).
-  //
-  // Three distinct audio cues, deliberately different from each other so
-  // the operator can tell them apart without looking at the screen:
-  //   - First presence detected while armed: SPOKEN once - "<name>
-  //     detected, please shoot from a side of the table." Confirms the
-  //     camera actually sees someone before they waste a shot on nothing.
-  //   - Presence detected again after a real gap (walked away and back,
-  //     not just a momentary tracking blip): a single short BEEP only -
-  //     saying the full sentence again every time they step away would
-  //     get old fast.
-  //   - A shot is captured: SPOKEN twice - "<name> registered, side
-  //     <n>." Said twice (not once) specifically so it's still
-  //     intelligible from across the room over table noise/conversation.
-  // Auto-saves and disarms once ENROLL_TARGET_SAMPLES is reached; no
-  // fixed time limit, since real shots happen on their own schedule, not
-  // a clock's.
-  var enrollCapturing = false;
-  var enrollSamples = [];
-  var enrollTargetName = "";
-  var enrollBentConsecutive = 0;
-  var enrollShotCaptured = false; // true while still bent from the shot just captured - blocks a second capture until upright again
-  var enrollPresent = false; // true while a pose is currently being seen
-  var enrollPresenceAnnounced = false; // the full "<name> detected..." sentence only ever plays once per arm
-  var enrollLastPresentAt = 0;
-  // Longer than NO_POSE_GRACE_MS (1.2s, tuned for live recognition's
-  // brief-occlusion tolerance) - this one specifically needs to ignore
-  // momentary pose-estimation hiccups and only fire the re-detect beep
-  // for an actual walk-away-and-back, not a single dropped frame.
-  var ENROLL_PRESENCE_GRACE_MS = 2500;
+  // ---- Enroll tab: Identify and Shooting buttons ----
+  // Every player on the scoreboard has two buttons, and every press adds
+  // one sample to that player - nothing is ever replaced, and there's
+  // nothing to start or finish: recognition keeps running and presses
+  // work at any time.
+  //   Identify - "this is them": what the person the camera is following
+  //     looks like right now, and where they stand at the table.
+  //   Shooting - "they're shooting now": the same, taken at the deepest
+  //     point of their bend around the press, plus that bend - their own
+  //     shooting posture (see personalBendThresholds). Also tells the
+  //     scoreboard they're the shooter.
+  // The person followed is the one recognition follows: whoever holds the
+  // cue over the table, else the most bent-over player at the table.
+  var ENROLL_LOOKBACK_MS = 3000; // a press comes after what it's about
+  var ENROLL_SHOT_WINDOW_MS = 1500; // ...or just before the deepest bend
+  var ENROLL_IDENTIFY_FRESH_MS = 1500;
+  var ENROLL_WAIT_MS = 8000; // nobody in view yet: wait this long for them
+  var enrollFrames = []; // { at, descriptor, trackId, bend, torso, leg, pos, shooting, used } - the followed person
+  var enrollPending = []; // { name, kind, at, until, trackId, best }
+  var lastEnrollAdd = null; // { name, key, descriptor } - what Undo takes back
+  var seenNowKey = null;
 
   var enrollAudioCtx = null;
   function getEnrollAudioCtx() {
@@ -4544,10 +4512,7 @@
   }
 
   // Queued (not cancelled/interrupted) on purpose - the default
-  // SpeechSynthesis queue just plays utterances back to back, which is
-  // the right behavior here: a presence announcement immediately
-  // followed by a shot (plausible - someone steps up and shoots right
-  // away) should both finish playing, not cut each other off.
+  // SpeechSynthesis queue just plays utterances back to back.
   function speak(text) {
     try {
       if (!window.speechSynthesis) return;
@@ -4555,123 +4520,183 @@
     } catch (e) {}
   }
 
-  function announceShotCaptured(name, side) {
-    var phrase = side === undefined || side === null ? name + " registered." : name + " registered, side " + (side + 1) + ".";
-    speak(phrase);
-    setTimeout(function () { speak(phrase); }, 1600);
+  function setEnrollShotStatus(text) {
+    enrollShotStatus.textContent = text;
+    enrollShotStatus.hidden = false;
+    enrollUndoBtn.hidden = !lastEnrollAdd;
+    if (lastEnrollAdd) enrollUndoBtn.textContent = "Undo last press (" + lastEnrollAdd.name + ")";
   }
 
-  function startEnrollCapture(name) {
-    enrollTargetName = name;
-    enrollSamples = [];
-    enrollBentConsecutive = 0;
-    enrollShotCaptured = false;
-    enrollPresent = false;
-    enrollPresenceAnnounced = false;
-    enrollLastPresentAt = 0;
-    enrollCapturing = true;
-    stopCaptureBtn.hidden = false;
-    captureProgress.hidden = false;
-    captureProgress.textContent = "Waiting for " + name + " to bend over and shoot... (0/" + ENROLL_TARGET_SAMPLES + ")";
+  function sameTrack(a, b) {
+    return !hasTrackId(a) || !hasTrackId(b) || a.trackId === b.trackId;
   }
 
-  enrollNameInput.addEventListener("change", function () {
-    var name = enrollNameInput.value.trim();
-    if (!name) return;
-    // Switching players mid-capture saves whatever was already captured
-    // for the previous one rather than silently discarding it.
-    if (enrollCapturing) finishEnrollCapture();
-    startEnrollCapture(name);
+  // Called from runDetectionLoop on every pass, after recognition has
+  // looked at the same person.
+  function noteEnrollFrame(analysis, cueHeld, now) {
+    while (enrollFrames.length && now - enrollFrames[0].at > ENROLL_LOOKBACK_MS) enrollFrames.shift();
+    var shooting = !!analysis && (stance === "bent" || cueHeld) && withinRailDistance(analysis);
+    var frame = null;
+    if (analysis) {
+      frame = {
+        at: now, descriptor: analysis.descriptor, trackId: analysis.trackId,
+        bend: effectiveBendAngle(analysis), torso: analysis.torsoAngleDeg, leg: analysis.legAngleDeg,
+        pos: tablePositionFor(analysis), shooting: shooting, used: false
+      };
+      enrollFrames.push(frame);
+    }
+    enrollPending = enrollPending.filter(function (p) {
+      if (frame && !frame.used && sameTrack(p, frame)) {
+        if (p.kind === "identify") { commitEnrollSample(p, frame); return false; }
+        if (!p.best || frame.bend > p.best.bend) { p.best = frame; if (!hasTrackId(p)) p.trackId = frame.trackId; }
+      }
+      if (p.kind === "shooting" && p.best && now >= p.at + ENROLL_SHOT_WINDOW_MS) { commitEnrollSample(p, p.best); return false; }
+      if (now > p.until) {
+        setEnrollShotStatus("Nobody at the table in view - press " + (p.kind === "shooting" ? "Shooting" : "Identify") + " again while " + p.name + " is there.");
+        return false;
+      }
+      return true;
+    });
+    updateEnrollLiveStatus(analysis, shooting);
+  }
+
+  function enrollButtonPressed(name, kind) {
+    if (!currentStream || !modelsReady) {
+      setEnrollShotStatus("The camera isn't running yet - nothing to learn from.");
+      return;
+    }
+    var now = Date.now();
+    enrollPending = enrollPending.filter(function (p) { return normalizeNameKey(p.name) !== normalizeNameKey(name) || p.kind !== kind; });
+    var p = { name: name, kind: kind, at: now, until: now + ENROLL_WAIT_MS, trackId: undefined, best: null };
+    var latest = enrollFrames.length ? enrollFrames[enrollFrames.length - 1] : null;
+    if (kind === "identify") {
+      if (latest && !latest.used && now - latest.at <= ENROLL_IDENTIFY_FRESH_MS) { commitEnrollSample(p, latest); return; }
+      if (latest && now - latest.at <= ENROLL_IDENTIFY_FRESH_MS) p.trackId = latest.trackId; // same person, next frame
+      enrollPending.push(p);
+      setEnrollShotStatus("Looking for " + name + " at the table...");
+      return;
+    }
+    // Shooting: the person who was last down on a shot (else the one in
+    // view now), at their deepest bend so far - and the next moment's,
+    // if they're still going down.
+    var shooter = null;
+    for (var i = enrollFrames.length - 1; i >= 0 && !shooter; i--) if (enrollFrames[i].shooting) shooter = enrollFrames[i];
+    shooter = shooter || latest;
+    if (shooter) {
+      p.trackId = shooter.trackId;
+      enrollFrames.forEach(function (f) {
+        if (!f.used && sameTrack(p, f) && (!p.best || f.bend > p.best.bend)) p.best = f;
+      });
+    }
+    enrollPending.push(p);
+    tellScoreboardShooting(name);
+    setEnrollShotStatus(name + " shooting - learning how they look and shoot...");
+  }
+
+  // The press is the operator saying who's shooting: the scoreboard
+  // switches to them like it does for a recognized shot (and recognition
+  // won't announce the same shot again right after).
+  function tellScoreboardShooting(name) {
+    var now = Date.now();
+    lastEmittedAt[name] = now;
+    send({ type: "player_up", player_name: name, confidence: 1, ts: now });
+    logActivity(name + " shooting (Shooting button)");
+  }
+
+  function commitEnrollSample(p, frame) {
+    frame.used = true;
+    var key = normalizeNameKey(p.name);
+    var info = { kind: p.kind, at: p.at, bend: Math.round(frame.bend), torso: Math.round(frame.torso), leg: frame.leg === null ? null : Math.round(frame.leg), pos: frame.pos };
+    lastEnrollAdd = { name: p.name, key: key, descriptor: frame.descriptor };
+    send({ type: "enroll-add", player_name: p.name, descriptor: frame.descriptor, info: info });
+    var after = enrollments[key];
+    var count = after ? (after.descriptors || []).length : 1;
+    var what = p.kind === "shooting" ? "shooting sample (bent " + info.bend + "°)" : "identity sample";
+    playBeep();
+    logActivity(p.name + ": " + what + " added by the button (" + count + " in total)");
+    setEnrollShotStatus(p.name + ": " + what + " added - " + count + " in total.");
+    var row = findEnrollRow(p.name);
+    if (row) {
+      row.classList.add("just-added");
+      setTimeout(function () {
+        var again = findEnrollRow(p.name);
+        if (again) again.classList.remove("just-added");
+      }, 1500);
+    }
+  }
+
+  function sameDescriptor(a, b) {
+    return !!a && !!b && a.length === b.length && histogramDistance(a, b) === 0;
+  }
+
+  enrollUndoBtn.addEventListener("click", function () {
+    var undo = lastEnrollAdd;
+    lastEnrollAdd = null;
+    if (!undo) return;
+    var entry = enrollments[undo.key];
+    if (entry) {
+      var descriptors = (entry.descriptors || []).slice();
+      var info = alignedInfo(entry);
+      for (var i = descriptors.length - 1; i >= 0; i--) {
+        if (sameDescriptor(descriptors[i], undo.descriptor)) { descriptors.splice(i, 1); info.splice(i, 1); break; }
+      }
+      var label = entry.displayName || undo.name;
+      if (descriptors.length) send({ type: "enroll-save", player_name: label, descriptors: descriptors, info: info });
+      else send({ type: "enroll-delete", player_name: label });
+    }
+    logActivity(undo.name + ": last button press taken back");
+    setEnrollShotStatus("Took back the last sample for " + undo.name + ".");
   });
 
-  stopCaptureBtn.addEventListener("click", finishEnrollCapture);
-
-  function finishEnrollCapture() {
-    if (!enrollCapturing) return;
-    try { send({ type: "client-debug", text: "finishEnrollCapture called, samples=" + enrollSamples.length + " stack=" + new Error().stack.split("\n").slice(1, 4).join(" | ") }); } catch (e) {}
-    enrollCapturing = false;
-    stopCaptureBtn.hidden = true;
-    if (enrollSamples.length === 0) {
-      captureProgress.textContent = "No shots captured - pick the player again to try once more.";
-      setTimeout(function () { captureProgress.hidden = true; }, 3000);
-      return;
-    }
-    send({ type: "enroll-save", player_name: enrollTargetName, descriptors: enrollSamples });
-    captureProgress.textContent = "Saved " + enrollSamples.length + " shot" + (enrollSamples.length === 1 ? "" : "s") + " for " + enrollTargetName + ".";
-    setTimeout(function () { captureProgress.hidden = true; }, 3000);
+  // A player's own shooting posture, from their Shooting samples: the bend
+  // that counts as "down on a shot" for them. Someone who shoots with a
+  // shallow bend gets a lower threshold than the global setting; it's
+  // never raised above it, and never below MIN_PERSONAL_BEND_DEG (standing
+  // and chalking). Takes the lower quartile of their bends, so one early
+  // press doesn't set it, and needs at least 2 of them.
+  var MIN_PERSONAL_BEND_DEG = 15;
+  function personalBendThresholds(name) {
+    var limits = { enter: settings.bendEnterAngle, exit: settings.bendExitAngle, own: false };
+    var entry = name && enrollments[normalizeNameKey(name)];
+    if (!entry) return limits;
+    var bends = alignedInfo(entry)
+      .filter(function (i) { return i && i.kind === "shooting" && typeof i.bend === "number"; })
+      .map(function (i) { return i.bend; })
+      .sort(function (a, b) { return a - b; });
+    if (bends.length < 2) return limits;
+    var enter = Math.max(MIN_PERSONAL_BEND_DEG, bends[Math.floor(bends.length / 4)] * 0.8);
+    if (enter >= limits.enter) return limits;
+    return { enter: enter, exit: Math.min(limits.exit, enter * 0.6), own: true };
   }
 
-  // Live, continuously-updated readout (not just a static "waiting..."
-  // message) specifically so a mismatched bend threshold is immediately
-  // visible and self-diagnosable on screen - without this, "not
-  // detecting" and "detecting fine but the angle never crosses the
-  // threshold" look identical to the operator.
-  function updateEnrollLiveStatus(analysis) {
-    var base = enrollSamples.length + "/" + ENROLL_TARGET_SAMPLES + " shots for " + enrollTargetName;
-    if (!analysis) {
-      captureProgress.textContent = base + " - no one in view";
-      return;
-    }
-    var angle = Math.round(analysis.torsoAngleDeg);
-    var stanceLabel =
-      stance === "bent" ? "bent (" + angle + "°)" : stance === "upright" ? "upright (" + angle + "°, need " + settings.bendEnterAngle + "°+)" : angle + "°";
-    captureProgress.textContent = base + " - currently " + stanceLabel;
+  function shootingSampleCount(entry) {
+    return alignedInfo(entry).filter(function (i) { return i && i.kind === "shooting"; }).length;
   }
 
-  // Called from runDetectionLoop while enrollCapturing is true, in place
-  // of handleRecognitionFrame - edge-triggered on bent stance the same
-  // way fireEvent is for live recognition, but captures a sample instead
-  // of broadcasting a player_up. Also updates the shared `stance` var so
-  // the debug overlay's bent/upright border color stays meaningful during
-  // capture too, not frozen on whatever it last was.
-  function handleEnrollCaptureFrame(analysis) {
+  // Who the camera would name right now, so the operator can watch it
+  // learn: a line on the tab, and a mark on that player's row.
+  function updateEnrollLiveStatus(analysis, shooting) {
+    if (enrollPanel.hidden && !hasViewerConnected) return;
+    var text, key = null;
     if (!analysis) {
-      enrollBentConsecutive = 0;
-      if (enrollPresent && Date.now() - enrollLastPresentAt > ENROLL_PRESENCE_GRACE_MS) enrollPresent = false;
-      updateEnrollLiveStatus(null);
-      return;
-    }
-    enrollLastPresentAt = Date.now();
-    if (!enrollPresent) {
-      enrollPresent = true;
-      if (!enrollPresenceAnnounced) {
-        enrollPresenceAnnounced = true;
-        speak(enrollTargetName + " detected. Please shoot from a side of the table.");
+      text = "Nobody at the table in view.";
+    } else {
+      var m = findBestMatch(analysis.descriptor);
+      var doing = shooting ? "bent over" : "at the table";
+      if (m && m.distance <= settings.matchThreshold) {
+        key = normalizeNameKey(m.name);
+        text = "Camera sees " + m.name + ", " + doing + " (distance " + m.distance.toFixed(2) + ").";
       } else {
-        playBeep();
+        text = "Camera sees someone " + doing + " it doesn't know yet" + (m ? " (closest: " + m.name + ", " + m.distance.toFixed(2) + ")" : "") + ".";
       }
     }
-
-    var enrollBendSignal = effectiveBendAngle(analysis);
-    if (enrollBendSignal >= settings.bendEnterAngle) stance = "bent";
-    else if (enrollBendSignal <= settings.bendExitAngle) stance = "upright";
-
-    if (stance === "upright") {
-      enrollBentConsecutive = 0;
-      enrollShotCaptured = false; // back upright - re-armed for the next shot
-    } else if (stance === "bent") {
-      enrollBentConsecutive++;
-      // withinRailDistance is what live recognition already uses to
-      // reject anything bent-shaped that isn't actually near the table -
-      // enrollment capture had no equivalent check at all, so once
-      // calibrated, anything bent-pose-shaped ANYWHERE in frame (a chair
-      // across the room, say) could get captured as a real sample under
-      // whichever name enrollment was running for. Uncalibrated, this
-      // still can't help (withinRailDistance returns true unconditionally
-      // then, same as it does for live recognition) - calibrating the
-      // table is what actually closes this gap.
-      if (!enrollShotCaptured && enrollBentConsecutive >= settings.consecutiveFrames && withinRailDistance(analysis)) {
-        enrollShotCaptured = true;
-        enrollSamples.push(analysis.descriptor);
-        var side = currentSideForAnalysis(analysis);
-        announceShotCaptured(enrollTargetName, side);
-        if (enrollSamples.length >= ENROLL_TARGET_SAMPLES) {
-          finishEnrollCapture(); // sets its own final message - don't overwrite it below
-          return;
-        }
-      }
-    }
-    updateEnrollLiveStatus(analysis);
+    enrollLiveStatus.textContent = text;
+    if (key === seenNowKey) return;
+    var oldRow = seenNowKey && document.getElementById(enrollRowId("enrollRow-", seenNowKey));
+    if (oldRow) oldRow.classList.remove("seen-now");
+    seenNowKey = key;
+    var newRow = key && document.getElementById(enrollRowId("enrollRow-", key));
+    if (newRow) newRow.classList.add("seen-now");
   }
 
   // ---- Two-phase recognition state machine ----
@@ -4964,20 +4989,19 @@
     return cosAngle > FACING_TABLE_COS_THRESHOLD;
   }
 
-  // undefined (not null) when uncalibrated or no ankle keypoints - matches
-  // what addSide on the relay expects to see "no side given."
-  function currentSideForAnalysis(analysis) {
-    if (!calibration || !analysis || !analysis.ankleMid) return undefined;
+  // Where the player's feet are, in inches on the table's own axes (see
+  // calibration), or null when uncalibrated or the feet aren't visible.
+  function tablePositionFor(analysis) {
+    if (!calibration || !analysis || !analysis.ankleMid) return null;
     var real = applyHomography(calibration.h, analysis.ankleMid.x, analysis.ankleMid.y);
-    if (!real) return undefined;
-    return nearestRailSide(real, calibration.tableLength, calibration.tableWidth).side;
+    return real ? { x: Math.round(real.x), y: Math.round(real.y) } : null;
   }
 
   // via says what gave the shot away ("bent over", "cue over the table",
   // ...) - logs only. descriptor is null when there's no fresh look at
   // the shooter to learn from (out of view, or named from an earlier
   // recognition), and then nothing is added to their enrollment.
-  function fireEvent(name, descriptor, matchDistance, side, via) {
+  function fireEvent(name, descriptor, matchDistance, via) {
     via = via || "bent over";
     var now = Date.now();
     var last = lastEmittedAt[name] || 0;
@@ -5002,7 +5026,7 @@
     // above; the parent page's own player_up handler speaks instead.
     if (settings.voiceStatusEnabled && !isEmbedded) speak(name + " shooting.");
     if (descriptor && matchDistance <= settings.matchThreshold * 0.7) {
-      send({ type: "enroll-add", player_name: name, descriptor: descriptor, side: side });
+      send({ type: "enroll-add", player_name: name, descriptor: descriptor, info: { kind: "recognized", at: now } });
       notifyEnrollmentUpdated(name);
     }
   }
@@ -5029,13 +5053,14 @@
     var isFirstSample = !Object.keys(enrollments).some(function (key) {
       return (enrollments[key].displayName || key).toLowerCase() === name.toLowerCase();
     });
+    var info = { kind: "scored", at: Date.now() };
     if (isFirstSample) {
-      send({ type: "enroll-save", player_name: name, descriptors: [candidate.descriptor], side: candidate.side });
+      send({ type: "enroll-save", player_name: name, descriptors: [candidate.descriptor], info: [info] });
     } else {
-      send({ type: "enroll-add", player_name: name, descriptor: candidate.descriptor, side: candidate.side });
+      send({ type: "enroll-add", player_name: name, descriptor: candidate.descriptor, info: info });
     }
     notifyEnrollmentUpdated(name);
-    logActivity(name + " confirmed by scoring (side " + (candidate.side === undefined ? "?" : candidate.side + 1) + ")");
+    logActivity(name + " confirmed by scoring");
   }
 
   // ---- Player out of view at the table ----
@@ -5148,7 +5173,6 @@
     noteSeenPlayer(name);
     tablePresence = {
       name: name,
-      side: currentSideForAnalysis(analysis),
       trackId: analysis.trackId,
       box: analysis.box,
       seenAt: now,
@@ -5173,13 +5197,12 @@
     // a rail must not keep re-crediting someone nobody can see.
     if (cueCtx.appearanceId === cueHiddenFiredAppearanceId) return;
     var holderName = cueCtx.holder ? idleNameForTrack(cueCtx.holder.pose.id) : null;
-    var name = null, side, via, manual = false;
+    var name = null, via, manual = false;
     if (holderName) {
       name = holderName;
       via = "cue over the table, recognized earlier";
     } else if (held && held.name) {
       name = held.name;
-      side = held.side;
       via = "cue over the table, " + held.name + " out of view";
     } else if (activeManualAttribution) {
       name = activeManualAttribution.name;
@@ -5197,7 +5220,7 @@
     cueHiddenShooterName = name;
     cueHiddenFiredAppearanceId = cueCtx.appearanceId;
     if (activeManualAttribution && name !== activeManualAttribution.name) activeManualAttribution = null;
-    fireEvent(name, null, settings.matchThreshold, side, via);
+    fireEvent(name, null, settings.matchThreshold, via);
     if (manual) activeManualAttribution.firesSinceStart++;
   }
 
@@ -5254,13 +5277,18 @@
     if (cueHeld) shootingVia = "cue";
 
     var bendSignal = effectiveBendAngle(analysis);
+    // Whoever this looks like: their own shooting posture, when the
+    // Shooting button has taught the camera one.
+    var looksLike = findBestMatch(analysis.descriptor);
+    var limits = personalBendThresholds(looksLike && looksLike.distance <= settings.matchThreshold ? looksLike.name : null);
     var stanceBefore = stance;
-    if (bendSignal >= settings.bendEnterAngle) stance = "bent";
-    else if (bendSignal <= settings.bendExitAngle) stance = "upright";
+    if (bendSignal >= limits.enter) stance = "bent";
+    else if (bendSignal <= limits.exit) stance = "upright";
     // else: stays in whatever it already was (hysteresis band)
     if (stance !== stanceBefore) {
       console.log("[PMC stance] " + stanceBefore + " -> " + stance + (stance === "bent" ? " (shooting posture detected)" : "") +
-        " - bend " + bendSignal.toFixed(1) + "°, enter at " + settings.bendEnterAngle + "°, exit at " + settings.bendExitAngle + "°");
+        " - bend " + bendSignal.toFixed(1) + "°, enter at " + limits.enter.toFixed(0) + "°, exit at " + limits.exit.toFixed(0) + "°" +
+        (limits.own ? " (" + looksLike.name + "'s own shooting posture)" : ""));
     }
 
     var closeEnough = withinRailDistance(analysis);
@@ -5295,7 +5323,6 @@
         candidate = {
           name: withinThreshold && uprightConsecutive >= settings.consecutiveFrames ? match.name : null,
           descriptor: analysis.descriptor,
-          side: currentSideForAnalysis(analysis),
           trackId: analysis.trackId,
           lastSeenAt: now
         };
@@ -5327,13 +5354,13 @@
         if (holderIdleName && (!candidate || !candidate.name || (candidateIsOtherTrack && candidate.name !== holderIdleName))) {
           if (activeManualAttribution && holderIdleName !== activeManualAttribution.name) activeManualAttribution = null;
           debugLog("FIRE via cue holder's earlier recognition name=" + holderIdleName);
-          fireEvent(holderIdleName, null, settings.matchThreshold, currentSideForAnalysis(analysis), via + ", recognized earlier");
+          fireEvent(holderIdleName, null, settings.matchThreshold, via + ", recognized earlier");
         } else if (candidate && candidate.name && now - candidate.lastSeenAt <= CANDIDATE_GRACE_MS) {
           // A genuinely different name just matched on its own - "until
           // another player shoots" per explicit request.
           if (activeManualAttribution && candidate.name !== activeManualAttribution.name) activeManualAttribution = null;
           debugLog("FIRE via upright-candidate name=" + candidate.name + " (" + via + ")");
-          fireEvent(candidate.name, candidate.descriptor, 0, candidate.side, via);
+          fireEvent(candidate.name, candidate.descriptor, 0, via);
         } else {
           // Fallback: no fresh *named* upright identification (either
           // nothing stable was seen, or it was stable but unmatched) -
@@ -5347,20 +5374,20 @@
             " activeManualAttribution=" + (activeManualAttribution ? activeManualAttribution.name : "null"));
           if (bentMatch && bentMatch.distance <= settings.matchThreshold * 0.6) {
             if (activeManualAttribution && bentMatch.name !== activeManualAttribution.name) activeManualAttribution = null;
-            fireEvent(bentMatch.name, analysis.descriptor, bentMatch.distance, currentSideForAnalysis(analysis), via);
+            fireEvent(bentMatch.name, analysis.descriptor, bentMatch.distance, via);
           } else if (activeManualAttribution) {
             // Nothing matched on appearance at all - the exact "shooting
             // but not recognized" situation the operator already resolved
             // manually. fireEvent's own distance<=threshold*0.7 check
             // (always true at distance 0) is what actually adds this as
             // an enrollment sample - no separate enroll-add needed here.
-            fireEvent(activeManualAttribution.name, analysis.descriptor, 0, currentSideForAnalysis(analysis), via);
+            fireEvent(activeManualAttribution.name, analysis.descriptor, 0, via);
             activeManualAttribution.firesSinceStart++;
           } else if (cueHeld && lastSeenPlayerName(now)) {
             // Someone's holding the cue out over the table and can't be
             // named from how they look right now (bent over, turned away)
             // - the last player seen is the best bet.
-            fireEvent(lastSeenPlayerName(now), null, settings.matchThreshold, currentSideForAnalysis(analysis), via + ", last seen player");
+            fireEvent(lastSeenPlayerName(now), null, settings.matchThreshold, via + ", last seen player");
           } else if (cueHeld) {
             reportCueShooter(null, via);
           }
@@ -5613,9 +5640,7 @@
         // A cue over the table overrides that pick: whoever is holding it
         // is the one shooting (see findCueHolder).
         var cueCtx = null;
-        if (enrollCapturing) {
-          shootingVia = null;
-        } else if (cueDetectionActive()) {
+        if (cueDetectionActive()) {
           if (++cueTickCounter % CUE_PASS_EVERY_N_TICKS === 0) runCuePass();
           if (cueTrack.present) {
             var held = findCueHolderAmong(poses, cueTrack.cues, heldHiddenPresence(Date.now()));
@@ -5657,37 +5682,33 @@
             return " railDist=" + dist.toFixed(1) + "in limit=" + settings.railDistanceInches + "in within=" + (dist <= settings.railDistanceInches);
           })() : (analysis ? " railDist=noAnkles(freePass)" : "")));
 
-        if (enrollCapturing) {
-          handleEnrollCaptureFrame(analysis);
-          drawOverlay(pose ? pose.keypoints : null, analysis, null);
-        } else {
-          var matchLabel = null;
-          if (analysis && settings.debugOverlay) {
-            var m = findBestMatch(analysis.descriptor);
-            // "(too far)" is the whole point of showing this at all - the
-            // closest enrolled player is shown even when nowhere near a
-            // real match (that's what makes this useful for tuning), but
-            // without this suffix it reads exactly like a confirmed match,
-            // which is the single most common point of confusion reported
-            // against this overlay.
-            if (m) matchLabel = m.name + " " + m.distance.toFixed(2) + (m.distance <= settings.matchThreshold ? "" : " (too far)");
-          }
-          handleRecognitionFrame(analysis, cueCtx);
-          // After handleRecognitionFrame so this pass sees the freshly
-          // updated stance, before drawOverlay so the overlay shows this
-          // pass's inventory rather than the previous one's.
-          if (settings.ballTrackingEnabled && calibration && !isViewer && (++ballTickCounter % BALL_PASS_EVERY_N_TICKS === 0)) runBallPass();
-          drawOverlay(pose ? pose.keypoints : null, analysis, matchLabel);
-          // Must run AFTER handleRecognitionFrame/analyzePose above, not
-          // before - processIdlePoses calls analyzePose too, which would
-          // otherwise overwrite lastRejectedAsStatic before the active
-          // candidate's own diagnostics (already read by this point) got
-          // to see it. Suspended during enrollCapturing - the operator's
-          // and the camera's attention is already on one specific target
-          // then, nothing to usefully report about everyone else.
-          if (poses && poses.length) {
-            send({ type: "idle-states", idle: processIdlePoses(poses, pose) });
-          }
+        var matchLabel = null;
+        if (analysis && settings.debugOverlay) {
+          var m = findBestMatch(analysis.descriptor);
+          // "(too far)" is the whole point of showing this at all - the
+          // closest enrolled player is shown even when nowhere near a
+          // real match (that's what makes this useful for tuning), but
+          // without this suffix it reads exactly like a confirmed match,
+          // which is the single most common point of confusion reported
+          // against this overlay.
+          if (m) matchLabel = m.name + " " + m.distance.toFixed(2) + (m.distance <= settings.matchThreshold ? "" : " (too far)");
+        }
+        handleRecognitionFrame(analysis, cueCtx);
+        // After recognition has updated the stance for this same person:
+        // what the Enroll tab's Shooting buttons take a sample from.
+        noteEnrollFrame(analysis, !!(cueCtx && cueCtx.holderIsAnalyzed), Date.now());
+        // After handleRecognitionFrame so this pass sees the freshly
+        // updated stance, before drawOverlay so the overlay shows this
+        // pass's inventory rather than the previous one's.
+        if (settings.ballTrackingEnabled && calibration && !isViewer && (++ballTickCounter % BALL_PASS_EVERY_N_TICKS === 0)) runBallPass();
+        drawOverlay(pose ? pose.keypoints : null, analysis, matchLabel);
+        // Must run AFTER handleRecognitionFrame/analyzePose above, not
+        // before - processIdlePoses calls analyzePose too, which would
+        // otherwise overwrite lastRejectedAsStatic before the active
+        // candidate's own diagnostics (already read by this point) got
+        // to see it.
+        if (poses && poses.length) {
+          send({ type: "idle-states", idle: processIdlePoses(poses, pose) });
         }
       })
       .catch(function (e) { console.error("[camera] detection error:", e); })
@@ -5697,7 +5718,7 @@
   // ---- Setup wizard ----
   // Guidance/sequencing layer over the tabs above - reuses every existing
   // function and piece of state (startCamera, detectTableAuto via the
-  // Table tab, the Enroll tab's capture flow, renderCalibrationStatus) and
+  // Table tab, the Enroll tab's Shooting buttons, renderCalibrationStatus) and
   // introduces no parallel functionality of its own.
   var WIZARD_DONE_KEY = "pmc-camera-wizard-done";
   var WIZARD_TOTAL_STEPS = 5;
@@ -5768,7 +5789,7 @@
     wizardGoCalibrateBtn.classList.toggle("secondary", calibrated);
     wizardSkipCalibrateBtn.classList.toggle("secondary", !calibrated);
     var enrolledCount = Object.keys(enrollments).length;
-    wizardGoEnrollBtn.textContent = enrolledCount ? "Enroll Another Player" : "Enroll a Player Now";
+    wizardGoEnrollBtn.textContent = enrolledCount ? "Add More Samples" : "Enroll Players Now";
     wizardSkipEnrollBtn.textContent = enrolledCount ? "Next →" : "I'll Just Start Playing";
     wizardGoEnrollBtn.classList.toggle("secondary", !!enrolledCount);
     wizardSkipEnrollBtn.classList.toggle("secondary", !enrolledCount);
