@@ -56,8 +56,9 @@
 //   `info` is what the camera knows about each sample, kept at the same
 //   index as its descriptor in the entry's own `info` list (null when
 //   none): { kind: "identify" | "shooting" | "recognized" | "scored", at,
-//   bend, torso, leg, pos } - see camera.html's alignedInfo. This relay
-//   only keeps the two lists in step. (Older entries may still carry a
+//   bend, torso, leg, pos, pose } - see camera.html's alignedInfo. This
+//   relay only keeps the two lists in step, and trims them the same way
+//   the camera does (trimSamples). (Older entries may still carry a
 //   `sides` list from before; it's dropped on the next add.)
 //   Settings handoff (camera.html has no other way to learn the tablet's
 //   configured threshold/debounce - see js/app.js's PMCCameraBridge.getSettings()):
@@ -148,9 +149,13 @@ var os = require("os");
 var path = require("path");
 
 // Capped per player so storage/compute stay bounded as "enroll-add"
-// accumulates real-world samples over time - oldest sample drops first
-// (FIFO), same idea as RATING_HISTORY_CAP elsewhere in this app.
-var MAX_DESCRIPTORS_PER_PLAYER = 50;
+// accumulates real-world samples over time - oldest sample drops first,
+// same idea as RATING_HISTORY_CAP elsewhere in this app. Samples pressed
+// on the camera's Enroll tab (Identify/Shooting) get their own, larger
+// allowance, so the camera's automatic ones never push them out - the
+// same limits as camera.html's own store.
+var MAX_PRESSED_SAMPLES = 200;
+var MAX_AUTO_SAMPLES = 30;
 
 // Not next to the binary/repo - installer/standalone-entry.js has no
 // repo checkout on the end user's machine at all (see its own comment on
@@ -171,6 +176,19 @@ function alignedInfo(entry) {
   var info = (Array.isArray(entry.info) ? entry.info : []).slice(-n);
   while (info.length < n) info.unshift(null);
   return info;
+}
+function isPressedSample(info) {
+  return !!info && (info.kind === "identify" || info.kind === "shooting");
+}
+function trimSamples(entry) {
+  var descriptors = entry.descriptors || [], info = alignedInfo(entry);
+  var pressed = 0, auto = 0, keep = [];
+  for (var i = descriptors.length - 1; i >= 0; i--) {
+    if (isPressedSample(info[i]) ? ++pressed <= MAX_PRESSED_SAMPLES : ++auto <= MAX_AUTO_SAMPLES) keep.unshift(i);
+  }
+  entry.descriptors = keep.map(function (i) { return descriptors[i]; });
+  entry.info = keep.map(function (i) { return info[i]; });
+  return entry;
 }
 
 function loadEnrollments() {
@@ -366,9 +384,7 @@ function createCameraRelay(WebSocket) {
           if (!saveKey) return;
           // A full replace (the camera's Undo re-saves a player's samples
           // minus the one taken back).
-          var saveEntry = { displayName: String(msg.player_name).trim(), descriptors: (msg.descriptors || []).slice(-MAX_DESCRIPTORS_PER_PLAYER) };
-          saveEntry.info = alignedInfo({ descriptors: saveEntry.descriptors, info: msg.info });
-          enrollments[saveKey] = saveEntry;
+          enrollments[saveKey] = trimSamples({ displayName: String(msg.player_name).trim(), descriptors: Array.isArray(msg.descriptors) ? msg.descriptors : [], info: msg.info });
           saveEnrollments(enrollments);
           send(ws, { type: "enrollments", data: enrollments });
           broadcastEnrolledNames();
@@ -380,8 +396,9 @@ function createCameraRelay(WebSocket) {
           if (!addKey) return;
           var entry = enrollments[addKey] || { displayName: String(msg.player_name).trim(), descriptors: [] };
           var info = alignedInfo(entry);
-          entry.descriptors = entry.descriptors.concat([msg.descriptor]).slice(-MAX_DESCRIPTORS_PER_PLAYER);
-          entry.info = info.concat([msg.info && typeof msg.info === "object" ? msg.info : null]).slice(-MAX_DESCRIPTORS_PER_PLAYER);
+          entry.descriptors = entry.descriptors.concat([msg.descriptor]);
+          entry.info = info.concat([msg.info && typeof msg.info === "object" ? msg.info : null]);
+          trimSamples(entry);
           delete entry.sides;
           var wasEnrolled = entry.descriptors.length > 1;
           enrollments[addKey] = entry;

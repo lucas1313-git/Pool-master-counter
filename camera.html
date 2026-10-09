@@ -172,6 +172,12 @@
   .player-row.seen-now .name::after { content: " \2190  camera sees them now"; color: var(--accent); font-size: 0.85rem; font-weight: 600; }
   .player-row.picked { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
   .enroll-live { font-size: 1rem; color: var(--text); margin: 8px 0; }
+  .player-row .check { font-size: 0.9rem; }
+  .player-row .check.good { color: var(--good); }
+  .player-row .check.poor { color: var(--danger); }
+  .player-row .doubt { font-size: 0.9rem; color: var(--accent); margin-top: 4px; }
+  .player-row .doubt button { padding: 4px 10px; font-size: 0.9rem; margin-left: 6px; }
+  .enroll-check { font-size: 0.95rem; color: var(--accent); margin: 8px 0; }
   .log {
     font-size: 1rem;
     color: var(--text-dim);
@@ -479,8 +485,10 @@
     <div class="enroll-live" id="enrollLiveStatus">Nobody at the table yet.</div>
     <div class="progress-text" id="enrollShotStatus" hidden></div>
     <button id="enrollUndoBtn" class="secondary" type="button" hidden>Undo last press</button>
+    <div class="enroll-check" id="enrollCheckStatus" hidden></div>
     <div id="playerList"><div class="hint">No players yet - add them on the scoreboard.</div></div>
     <button id="clearAllBtn" class="danger" type="button" style="margin-top:10px">Clear all (new session)</button>
+    <div class="hint"><strong>Self-check</strong>: the camera tests every sample against the others, as if it had just seen that player - the percentage is how often it named them right. Low? Press more for that player, and remove samples it says look like someone else.</div>
     <div class="hint">Appearance only matches today's clothes - at the start of a new session, Clear all, then add new samples for everyone.</div>
   </section>
 
@@ -796,7 +804,7 @@
   var SETTINGS_HELP = {
     threshold: {
       title: "Match sensitivity",
-      body: "How close a person's look has to match an enrolled player to count as them.\n\nLower = stricter: fewer wrong matches, but a real match can get rejected if lighting or clothing looks a bit different than when they were enrolled.\n\nHigher = looser: catches real matches more easily, but can start confusing different players for each other.\n\nIf the debug log shows someone's real distance is just a little over this number, raise it slightly. If it's way over (3x or more), the real problem is usually stale enrollment data, not this setting - press Shooting for that player on a few more shots instead."
+      body: "How close a person's look has to match an enrolled player to count as them.\n\nLower = stricter: fewer wrong matches, but a real match can get rejected if lighting or clothing looks a bit different than when they were enrolled.\n\nHigher = looser: catches real matches more easily, but can start confusing different players for each other.\n\nIf the debug log shows someone's real distance is just a little over this number, raise it slightly. If it's way over (3x or more), the real problem is usually stale enrollment data, not this setting - press Shooting for that player on a few more shots instead.\n\nTwo players dressed alike: when the next-closest player is nearly as close, the camera names neither rather than guess - the Enroll tab's self-check says who it mixes up."
     },
     consecutive: {
       title: "How many frames before it believes you",
@@ -1042,6 +1050,7 @@
     recognizePanel.hidden = which !== "recognize";
     enrollPanel.hidden = which !== "enroll";
     calibratePanel.hidden = which !== "calibrate";
+    if (which === "enroll" && enrollCheckPending) scheduleEnrollCheck(0);
     overlayEl.classList.toggle("tappable", which === "calibrate" && calibrating);
   }
   tabRecognize.addEventListener("click", function () { showTab("recognize"); });
@@ -1232,8 +1241,19 @@
   // know or care which mode it's running in. ----
   var ws = null;
   var reconnectTimer = null;
-  var enrollments = {}; // normalized-name-key -> { displayName, descriptors: [[...numbers]], sides: [...] }
-  var MAX_DESCRIPTORS_PER_PLAYER = 50;
+  var enrollments = {}; // normalized-name-key -> { displayName, descriptors: [[...numbers]], info: [...] }
+  // Samples pressed on the Enroll tab are kept longest - up to
+  // MAX_PRESSED_SAMPLES per player - and the camera's own (recognized,
+  // scored, older unlabelled ones) only up to MAX_AUTO_SAMPLES, so a long
+  // evening of play never pushes out what the operator taught it. Oldest
+  // first within each group.
+  var MAX_PRESSED_SAMPLES = 200;
+  var MAX_AUTO_SAMPLES = 30;
+  // The Enroll tab's self-check results (see runEnrollCheck) - up here
+  // since the list can render before that part of the page has run.
+  var enrollCheck = {}; // key -> { tested, right, mixups: { name: count }, doubtful: [{ descriptor, like }] }
+  var SELF_CHECK_MIN_SAMPLES = 3;
+  var enrollCheckTimer = null, enrollCheckRun = 0, enrollCheckPending = false;
   var rosterNames = []; // the scoreboard's own current player roster, kept in sync via "roster"
   // Also from "roster": who is actually Playing right now (null until the
   // first roster arrives - recognition is limited to these names once
@@ -1250,7 +1270,7 @@
   // ---- Local enrollment store (embedded mode only) - a near-verbatim
   // port of server/camera-relay.js's own enroll-save/enroll-add/enroll-get/
   // enroll-delete logic (same normalizeNameKey, same sample records,
-  // same MAX_DESCRIPTORS_PER_PLAYER cap), just backed by localStorage
+  // same trimSamples limits), just backed by localStorage
   // instead of a server-side JSON file + WebSocket round trip. ----
   function normalizeNameKey(name) {
     return (name || "").trim().toLowerCase();
@@ -1259,12 +1279,26 @@
   // same index in `info`, what's known about it: { kind: "identify" |
   // "shooting" | "recognized" | "scored", at, bend, torso, leg, pos }
   // (bend/torso/leg in degrees, pos = feet on the table in inches, null
-  // uncalibrated). Older samples have none (null). Capped together.
+  // uncalibrated; pose "bent" | "upright" on the camera's own samples).
+  // Older samples have none (null). Trimmed together - see trimSamples.
   function alignedInfo(entry) {
     var n = (entry.descriptors || []).length;
     var info = (Array.isArray(entry.info) ? entry.info : []).slice(-n);
     while (info.length < n) info.unshift(null);
     return info;
+  }
+  function isPressedSample(info) {
+    return !!info && (info.kind === "identify" || info.kind === "shooting");
+  }
+  function trimSamples(entry) {
+    var descriptors = entry.descriptors || [], info = alignedInfo(entry);
+    var pressed = 0, auto = 0, keep = [];
+    for (var i = descriptors.length - 1; i >= 0; i--) {
+      if (isPressedSample(info[i]) ? ++pressed <= MAX_PRESSED_SAMPLES : ++auto <= MAX_AUTO_SAMPLES) keep.unshift(i);
+    }
+    entry.descriptors = keep.map(function (i) { return descriptors[i]; });
+    entry.info = keep.map(function (i) { return info[i]; });
+    return entry;
   }
   function loadLocalEnrollments() {
     try {
@@ -1281,8 +1315,9 @@
     if (!addKey) return false;
     var entry = store[addKey] || { displayName: String(msg.player_name).trim(), descriptors: [] };
     var info = alignedInfo(entry);
-    entry.descriptors = (entry.descriptors || []).concat([msg.descriptor]).slice(-MAX_DESCRIPTORS_PER_PLAYER);
-    entry.info = info.concat([msg.info || null]).slice(-MAX_DESCRIPTORS_PER_PLAYER);
+    entry.descriptors = (entry.descriptors || []).concat([msg.descriptor]);
+    entry.info = info.concat([msg.info || null]);
+    trimSamples(entry);
     delete entry.sides; // (old per-rail tracking, no longer used)
     store[addKey] = entry;
     return true;
@@ -1292,9 +1327,7 @@
     if (msg.type === "enroll-save" && msg.player_name) {
       var saveKey = normalizeNameKey(msg.player_name);
       if (!saveKey) return;
-      var saveEntry = { displayName: String(msg.player_name).trim(), descriptors: (msg.descriptors || []).slice(-MAX_DESCRIPTORS_PER_PLAYER) };
-      saveEntry.info = alignedInfo({ descriptors: saveEntry.descriptors, info: msg.info });
-      localEnrollments[saveKey] = saveEntry;
+      localEnrollments[saveKey] = trimSamples({ displayName: String(msg.player_name).trim(), descriptors: msg.descriptors || [], info: msg.info });
       saveLocalEnrollments(localEnrollments);
       handleIncomingMessage({ type: "enrollments", data: localEnrollments });
       return;
@@ -1333,7 +1366,11 @@
       // The relay doesn't send the list back after an add - keep this
       // device's copy (what recognition matches against, and the Enroll
       // tab's counts) up to date the same way it stores it.
-      if (msg.type === "enroll-add" && msg.player_name && msg.descriptor && !isViewer && applyEnrollAdd(enrollments, msg)) renderPlayerList();
+      if (msg.type === "enroll-add" && msg.player_name && msg.descriptor && !isViewer && applyEnrollAdd(enrollments, msg)) {
+        forgetLastMatch();
+        renderPlayerList();
+        scheduleEnrollCheck();
+      }
     }
   }
 
@@ -1349,7 +1386,9 @@
   function handleIncomingMessage(msg) {
     if (msg.type === "enrollments") {
       enrollments = msg.data || {};
+      forgetLastMatch();
       renderPlayerList();
+      scheduleEnrollCheck();
     } else if (msg.type === "settings" && !hasLocalSettingsOverride) {
       if (typeof msg.matchThreshold === "number") settings.matchThreshold = msg.matchThreshold;
       if (typeof msg.debounceSec === "number") settings.debounceSec = msg.debounceSec;
@@ -1359,6 +1398,7 @@
       if (Array.isArray(msg.playing)) {
         var playingBefore = JSON.stringify(playingNames);
         playingNames = msg.playing;
+        if (JSON.stringify(playingNames) !== playingBefore) { forgetLastMatch(); scheduleEnrollCheck(); }
         if (JSON.stringify(playingNames) !== playingBefore) console.log("[PMC roster] playing now: " + (playingNames.length ? playingNames.join(", ") : "(nobody)") + " - only these players can be recognized");
       }
       if (Array.isArray(msg.known)) {
@@ -1438,6 +1478,7 @@
       applyRemoteTap(msg.fx, msg.fy);
     } else if (msg.type === "hello-viewer-connected") {
       hasViewerConnected = true;
+      if (enrollCheckPending) scheduleEnrollCheck(0);
       try { send({ type: "client-debug", text: "hello-viewer-connected received, starting stream. dotModels=" + document.getElementById("dotModels").className + " dotCamera=" + document.getElementById("dotCamera").className }); } catch (e) {}
       startViewerFrameStream();
     } else if (msg.type === "hello-viewer-disconnected") {
@@ -1722,7 +1763,7 @@
   // except recognizeLog, which is read as innerHTML (a scrolling list of
   // child <div>s, not a single text value).
   var VIEWER_SYNCED_IDS = [
-    "calibrationStepText", "calibrationStatus", "enrollLiveStatus", "enrollShotStatus", "enrollUndoBtn",
+    "calibrationStepText", "calibrationStatus", "enrollLiveStatus", "enrollShotStatus", "enrollUndoBtn", "enrollCheckStatus",
     "labelCamera", "labelRelay", "labelModels",
     "recognizeLiveStatus", "recognizeDebugToggle", "recognizeVoiceToggle",
     "debugToggle", "thresholdInput", "consecutiveInput", "debounceInput",
@@ -1904,6 +1945,38 @@
       var meta = document.createElement("div");
       meta.innerHTML = '<div class="name">' + escapeHtml(name) + '</div><div class="meta">' +
         (count ? count + " sample" + (count === 1 ? "" : "s") + ", " + shots + " shooting" : "Not enrolled yet") + "</div>";
+      var check = count ? enrollCheck[key] : null;
+      if (check && check.tested >= SELF_CHECK_MIN_SAMPLES) {
+        var pct = Math.round(check.right / check.tested * 100);
+        var mixedWith = Object.keys(check.mixups).sort(function (a, b) { return check.mixups[b] - check.mixups[a]; });
+        var checkLine = document.createElement("div");
+        checkLine.className = "meta check " + (pct >= 90 ? "good" : pct < 70 ? "poor" : "");
+        checkLine.textContent = "Self-check: recognized " + pct + "% (" + check.right + " of " + check.tested + ")" +
+          (mixedWith.length ? " - mixed up with " + mixedWith.join(", ") : "");
+        meta.appendChild(checkLine);
+      }
+      if (check && check.doubtful.length) {
+        var like = check.doubtful.map(function (x) { return x.like; }).filter(function (n, i, all) { return all.indexOf(n) === i; });
+        var doubt = document.createElement("div");
+        doubt.className = "doubt";
+        doubt.textContent = check.doubtful.length + " sample" + (check.doubtful.length === 1 ? " looks" : "s look") + " more like " + like.join(", ");
+        var removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "secondary";
+        removeBtn.id = enrollRowId("enrollDoubt-", name);
+        removeBtn.textContent = check.doubtful.length === 1 ? "Remove it" : "Remove them";
+        removeBtn.addEventListener("click", function () {
+          if (removeBtn.dataset.confirm === "1") {
+            removeDoubtfulSamples(name);
+          } else {
+            removeBtn.dataset.confirm = "1";
+            removeBtn.textContent = "Tap again to remove";
+            setTimeout(function () { removeBtn.dataset.confirm = "0"; removeBtn.textContent = check.doubtful.length === 1 ? "Remove it" : "Remove them"; }, 3000);
+          }
+        });
+        doubt.appendChild(removeBtn);
+        meta.appendChild(doubt);
+      }
       var actions = document.createElement("div");
       actions.className = "actions";
       [["identify", "enrollIdentify-", "Identify", "secondary shoot-btn"], ["shooting", "enrollShoot-", "Shooting", "shoot-btn"]].forEach(function (b) {
@@ -3722,6 +3795,8 @@
     isEligibleForRecognition: isEligibleForRecognition,
     findBestMatch: findBestMatch,
     getEnrollments: function () { return enrollments; },
+    getEnrollCheck: function () { return enrollCheck; },
+    histogramDistance: histogramDistance,
     getPlayingNames: function () { return playingNames; },
     getKnownNames: function () { return knownNames; }
   };
@@ -3872,9 +3947,11 @@
     // is a much more distinctive signature for "this is really a shooting
     // stance" than torso angle alone.
     var legAngleDeg = null;
+    var legsSeen = false, sleevesSeen = false, capSeen = false;
     if (la && ra && avgScore(lh, rh, la, ra) >= KEYPOINT_CONF_FLOOR) {
       var legPoints = [lh, rh, la, ra].concat(lk && rk ? [lk, rk] : []);
-      legsHist = regionHistogram(boxFromPoints(legPoints, 0.05)) || legsHist;
+      var legsRegion = regionHistogram(boxFromPoints(legPoints, 0.05));
+      if (legsRegion) { legsHist = legsRegion; legsSeen = true; }
       ankleMid = midpoint(la, ra);
       var ldx = ankleMid.x - hipMid.x, ldy = ankleMid.y - hipMid.y;
       legAngleDeg = Math.atan2(Math.abs(ldx), Math.abs(ldy)) * 180 / Math.PI;
@@ -3884,7 +3961,8 @@
     var lw = kp(keypoints, "left_wrist"), rw = kp(keypoints, "right_wrist");
     var sleeveHist = new Array(HUE_BINS * SAT_BINS).fill(0);
     if (le && re && lw && rw && avgScore(le, re, lw, rw) >= KEYPOINT_CONF_FLOOR) {
-      sleeveHist = regionHistogram(boxFromPoints([le, re, lw, rw], 0.1)) || sleeveHist;
+      var sleeveRegion = regionHistogram(boxFromPoints([le, re, lw, rw], 0.1));
+      if (sleeveRegion) { sleeveHist = sleeveRegion; sleevesSeen = true; }
     }
 
     var nose = kp(keypoints, "nose"), leye = kp(keypoints, "left_eye"), reye = kp(keypoints, "right_eye");
@@ -3892,13 +3970,19 @@
     if (nose && leye && reye && avgScore(nose, leye, reye) >= KEYPOINT_CONF_FLOOR) {
       var eyeY = Math.min(leye.y, reye.y);
       var headSpan = Math.max(12, Math.abs(reye.x - leye.x) * 2.2);
-      capHist = regionHistogram({ x0: nose.x - headSpan / 2, y0: eyeY - headSpan * 0.9, x1: nose.x + headSpan / 2, y1: eyeY }) || capHist;
+      var capRegion = regionHistogram({ x0: nose.x - headSpan / 2, y0: eyeY - headSpan * 0.9, x1: nose.x + headSpan / 2, y1: eyeY });
+      if (capRegion) { capHist = capRegion; capSeen = true; }
     }
 
     var torsoHeight = Math.max(1, hipMid.y - shoulderMid.y);
     var aspectRatio = (torsoHeight / shoulderWidth) * ASPECT_RATIO_WEIGHT;
 
-    var descriptor = torsoHist.concat(legsHist, sleeveHist, capHist, [aspectRatio]);
+    // Then which of legs/sleeves/cap were actually in view (an all-zero
+    // histogram can also be plain black/white/grey clothes) - see
+    // histogramDistance. Rounded: a player can keep a couple of hundred
+    // samples, and full float precision would only bloat the store.
+    var descriptor = torsoHist.concat(legsHist, sleeveHist, capHist, [aspectRatio, legsSeen ? 1 : 0, sleevesSeen ? 1 : 0, capSeen ? 1 : 0])
+      .map(function (v) { return Math.round(v * 10000) / 10000; });
     var box = boxFromPoints([ls, rs, lh, rh].concat(la && ra ? [la, ra] : []), 0.05);
 
     // Rejects furniture that was already sitting in frame when the table
@@ -3936,11 +4020,36 @@
     return analysis.legAngleDeg === null ? analysis.torsoAngleDeg : analysis.torsoAngleDeg - analysis.legAngleDeg;
   }
 
+  // Descriptor layout (analyzePose): four colour histograms - torso,
+  // legs, sleeves, cap/head - then the torso's aspect ratio, then (newer
+  // samples only) whether legs, sleeves and cap were in view.
+  var HIST_LEN = HUE_BINS * SAT_BINS;
+  var REGION_COUNT = 4;
+  var ASPECT_INDEX = REGION_COUNT * HIST_LEN;
+  var SEEN_INDEX = ASPECT_INDEX + 1;
+  function regionSeen(d, r) {
+    if (r === 0) return true; // the torso's always there (no pose without it)
+    if (d.length > SEEN_INDEX + r - 1) return d[SEEN_INDEX + r - 1] > 0;
+    // older samples don't say - an all-zero histogram was usually a part out of view
+    for (var i = r * HIST_LEN, end = i + HIST_LEN; i < end; i++) if (d[i]) return true;
+    return false;
+  }
+  // Compares only the body parts in view in both: legs hidden behind the
+  // table (or a face turned away) used to count as a big difference all
+  // on its own. A part seen in only one of the two is assumed to differ
+  // as much as the parts compared do on average, so a sample with fewer
+  // parts in view doesn't come out closer just for having less to compare.
   function histogramDistance(a, b) {
-    var sum = 0;
-    var n = Math.min(a.length, b.length);
-    for (var i = 0; i < n; i++) sum += Math.abs(a[i] - b[i]);
-    return sum;
+    var sum = 0, compared = 0, either = 0;
+    for (var r = 0; r < REGION_COUNT; r++) {
+      var seenA = regionSeen(a, r), seenB = regionSeen(b, r);
+      if (seenA || seenB) either++;
+      if (!seenA || !seenB) continue;
+      compared++;
+      for (var i = r * HIST_LEN, end = i + HIST_LEN; i < end; i++) sum += Math.abs(a[i] - b[i]);
+    }
+    if (either > compared) sum *= either / compared;
+    return sum + Math.abs((a[ASPECT_INDEX] || 0) - (b[ASPECT_INDEX] || 0));
   }
 
   // Once the scoreboard has told us who is Playing, only those players
@@ -3971,18 +4080,148 @@
     });
   }
 
-  function findBestMatch(descriptor) {
-    var bestName = null, bestDistance = Infinity;
-    Object.keys(enrollments).forEach(function (key) {
+  // ---- Matching against the samples ----
+  // Which posture a sample shows. Shooting samples are bent over (unless
+  // the press caught them barely bent at all - too early or late);
+  // Identify ones by their own bend; the camera's own samples say so
+  // themselves (null: unknown - older samples).
+  function samplePose(info) {
+    if (!info) return null;
+    if (info.pose === "bent" || info.pose === "upright") return info.pose;
+    if (info.kind === "shooting") return typeof info.bend === "number" && info.bend < MIN_PERSONAL_BEND_DEG ? "upright" : "bent";
+    if (info.kind === "identify" && typeof info.bend === "number") return info.bend >= settings.bendEnterAngle ? "bent" : "upright";
+    return null;
+  }
+  // The posture a frame shows, by the global angles (null in between).
+  function poseForAnalysis(analysis) {
+    var bend = effectiveBendAngle(analysis);
+    return bend >= settings.bendEnterAngle ? "bent" : bend <= settings.bendExitAngle ? "upright" : null;
+  }
+  // A player bent over a shot looks different from one standing (back
+  // and cap instead of front, legs behind the table), so a frame is
+  // compared with that player's samples in the same posture once there
+  // are MIN_SAME_POSE_SAMPLES of them (plus any whose posture isn't
+  // known) - all of them until then.
+  var MIN_SAME_POSE_SAMPLES = 3;
+  // How many of a player's closest samples have to agree: their distance
+  // is that many-th closest sample's, so one bad sample (pressed while
+  // someone else was in front) can't name them on its own once there are
+  // enough of the others to outvote it.
+  function agreeingSamples(n) {
+    return n >= 20 ? 3 : n >= 5 ? 2 : 1;
+  }
+  // The closest player only counts as recognized when everyone else is at
+  // least this much (a fraction of the match threshold) further away -
+  // two players dressed alike leave the camera unsure instead of
+  // switching between them.
+  var MATCH_MARGIN_FRACTION = 0.12;
+
+  // Every listed player's distance from `descriptor`, closest first:
+  // `distance` against their samples in this posture (`exact` of them).
+  // skip(key, i) leaves single samples out (the self-check's).
+  function rankPlayers(descriptor, pose, keys, skip) {
+    var ranked = [];
+    keys.forEach(function (key) {
       var entry = enrollments[key];
-      if (!isEligibleForRecognition(entry.displayName || key)) return;
-      (entry.descriptors || []).forEach(function (stored) {
-        var d = histogramDistance(descriptor, stored);
-        if (d < bestDistance) { bestDistance = d; bestName = entry.displayName || key; }
+      var descriptors = (entry && entry.descriptors) || [];
+      if (!descriptors.length) return;
+      var info = alignedInfo(entry);
+      var all = [], samePose = [], exact = 0;
+      for (var i = 0; i < descriptors.length; i++) {
+        if (skip && skip(key, i)) continue;
+        all.push(i);
+        var p = pose ? samplePose(info[i]) : null;
+        if (p === pose) exact++;
+        if (p === pose || p === null) samePose.push(i);
+      }
+      var pool = pose && exact >= MIN_SAME_POSE_SAMPLES ? samePose : all;
+      if (!pool.length) return;
+      var distances = pool.map(function (i) { return histogramDistance(descriptor, descriptors[i]); }).sort(function (a, b) { return a - b; });
+      ranked.push({
+        key: key,
+        name: entry.displayName || key,
+        // (counted among the samples in this posture: with only one
+        // bent-over sample, the next-closest would be a standing one)
+        distance: distances[agreeingSamples(samePose.length) - 1],
+        exact: exact
       });
     });
-    if (bestName === null) return null;
-    return { name: bestName, distance: bestDistance };
+    return ranked.sort(function (a, b) { return a.distance - b.distance; });
+  }
+  // When only the closest player has samples in this posture (say, two
+  // look-alikes, and only one has pressed Shooting), a bent-over frame is
+  // naturally closest to those whoever it is - so the two also have to
+  // look apart in the samples they both have, or it's still a tie.
+  function matchFromRanking(ranked, pose) {
+    if (!ranked.length) return null;
+    var best = ranked[0], rival = null, rivalGap = Infinity;
+    for (var i = 1; i < ranked.length; i++) {
+      var r = ranked[i], gap = r.distance - best.distance;
+      if (pose && r.exact < MIN_SAME_POSE_SAMPLES && best.exact > r.exact && !playersLookApart(best.key, r.key, pose)) gap = Math.min(gap, 0);
+      if (gap < rivalGap) { rivalGap = gap; rival = r; }
+    }
+    return {
+      name: best.name,
+      distance: best.distance,
+      runnerUp: rival ? rival.name : null,
+      runnerUpDistance: rival ? rival.distance : null,
+      clear: !rival || rivalGap >= settings.matchThreshold * MATCH_MARGIN_FRACTION
+    };
+  }
+  // Whether B's samples outside `pose` are clearly further from A's than
+  // A's are from each other (the median nearest distance, so one odd
+  // sample doesn't decide it) - i.e. the camera can tell them apart in a
+  // posture both have samples in. Depends on the samples alone, so it's
+  // kept until they change (forgetLastMatch).
+  var APART_MAX_SAMPLES = 40;
+  var apartCache = {};
+  function playersLookApart(keyA, keyB, pose) {
+    var cacheKey = keyA + "\n" + keyB + "\n" + pose;
+    if (apartCache.hasOwnProperty(cacheKey)) return apartCache[cacheKey];
+    var pick = function (key) {
+      var entry = enrollments[key], info = alignedInfo(entry), out = [];
+      (entry.descriptors || []).forEach(function (d, i) { if (samplePose(info[i]) !== pose) out.push(d); });
+      return out.slice(-APART_MAX_SAMPLES);
+    };
+    var nearest = function (d, list) {
+      var closest = Infinity;
+      list.forEach(function (o) { if (o !== d) closest = Math.min(closest, histogramDistance(d, o)); });
+      return closest;
+    };
+    var median = function (xs) { xs.sort(function (x, y) { return x - y; }); return xs[Math.floor(xs.length / 2)]; };
+    var a = pick(keyA), b = pick(keyB), apart = true;
+    if (a.length && b.length) {
+      var within = a.length >= 2 ? median(a.map(function (d) { return nearest(d, a); })) : 0;
+      apart = median(b.map(function (d) { return nearest(d, a); })) - within >= settings.matchThreshold * MATCH_MARGIN_FRACTION;
+    }
+    apartCache[cacheKey] = apart;
+    return apart;
+  }
+
+  // Close enough, and clearly closer than anyone else.
+  function isConfidentMatch(m) {
+    return !!m && m.distance <= settings.matchThreshold && m.clear;
+  }
+
+  // The closest player who can be recognized right now (see
+  // isEligibleForRecognition) - { name, distance, runnerUp,
+  // runnerUpDistance, clear }, or null with nobody enrolled. Several
+  // callers look at the same frame, so the last frame's answers are kept.
+  var lastMatchQuery = { descriptor: null, results: {} };
+  function findBestMatch(descriptor, pose) {
+    pose = pose || null;
+    if (lastMatchQuery.descriptor !== descriptor) lastMatchQuery = { descriptor: descriptor, results: {} };
+    var cacheKey = String(pose);
+    if (lastMatchQuery.results.hasOwnProperty(cacheKey)) return lastMatchQuery.results[cacheKey];
+    var keys = Object.keys(enrollments).filter(function (key) { return isEligibleForRecognition(enrollments[key].displayName || key); });
+    var result = matchFromRanking(rankPlayers(descriptor, pose, keys), pose);
+    lastMatchQuery.results[cacheKey] = result;
+    return result;
+  }
+  // When the samples or who's Playing change mid-frame.
+  function forgetLastMatch() {
+    lastMatchQuery = { descriptor: null, results: {} };
+    apartCache = {};
   }
 
   // ---- Table calibration (pixel <-> real-inches homography) ----
@@ -4626,7 +4865,9 @@
   }
 
   function sameDescriptor(a, b) {
-    return !!a && !!b && a.length === b.length && histogramDistance(a, b) === 0;
+    if (!a || !b || a.length !== b.length) return false;
+    for (var i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+    return true;
   }
 
   enrollUndoBtn.addEventListener("click", function () {
@@ -4673,6 +4914,120 @@
     return alignedInfo(entry).filter(function (i) { return i && i.kind === "shooting"; }).length;
   }
 
+  // ---- Self-check: how well the samples tell the players apart ----
+  // Every sample is matched against all the others, the way a live frame
+  // would be (leaving out that player's samples from the same few
+  // seconds, which would match it trivially). Each Enroll row shows how
+  // often its player comes out right and which of their samples look
+  // more like someone else; the line above the list names players the
+  // camera mixes up. Recomputed a moment after the samples change, one
+  // player at a time so the camera keeps up, and only while someone's
+  // looking at the tab (here or on a remote view).
+  var SELF_CHECK_NEIGHBOUR_MS = 5000;
+  var LOOK_ALIKE_FRACTION = 0.2;
+  function scheduleEnrollCheck(delayMs) {
+    enrollCheckPending = true;
+    if (isViewer) return;
+    if (enrollCheckTimer) clearTimeout(enrollCheckTimer);
+    enrollCheckTimer = setTimeout(runEnrollCheck, delayMs === undefined ? 1000 : delayMs);
+  }
+  function runEnrollCheck() {
+    enrollCheckTimer = null;
+    if (enrollPanel.hidden && !hasViewerConnected) return; // (showTab / a viewer joining runs it then)
+    enrollCheckPending = false;
+    var run = ++enrollCheckRun;
+    var keys = Object.keys(enrollments);
+    var competing = keys.filter(function (key) { return isEligibleForRecognition(enrollments[key].displayName || key); });
+    var results = {};
+    (function next(i) {
+      if (run !== enrollCheckRun) return; // the samples changed again - a newer run takes over
+      if (i >= keys.length) {
+        enrollCheck = results;
+        var pairs = lookAlikePairs();
+        Object.keys(results).forEach(function (key) {
+          var own = normalizeNameKey(enrollments[key] ? enrollments[key].displayName || key : key);
+          results[key].doubtful = results[key].doubtful.filter(function (x) { return !pairs.keys[own + "\n" + normalizeNameKey(x.like)]; });
+        });
+        renderPlayerList();
+        renderLookAlikes(pairs.names);
+        return;
+      }
+      if (enrollments[keys[i]]) results[keys[i]] = checkPlayerSamples(keys[i], competing);
+      setTimeout(function () { next(i + 1); }, 0);
+    })(0);
+  }
+  function checkPlayerSamples(key, competing) {
+    var entry = enrollments[key];
+    var descriptors = entry.descriptors || [];
+    var info = alignedInfo(entry);
+    var result = { tested: 0, right: 0, mixups: {}, doubtful: [] };
+    if (descriptors.length < SELF_CHECK_MIN_SAMPLES) return result;
+    var keys = competing.indexOf(key) === -1 ? competing.concat([key]) : competing;
+    descriptors.forEach(function (descriptor, i) {
+      var at = info[i] && info[i].at;
+      var ranked = rankPlayers(descriptor, samplePose(info[i]), keys, function (k, j) {
+        if (k !== key) return false;
+        if (j === i) return true;
+        var when = info[j] && info[j].at;
+        return !!at && !!when && Math.abs(when - at) < SELF_CHECK_NEIGHBOUR_MS;
+      });
+      if (!ranked.some(function (r) { return r.key === key; })) return; // nothing else of theirs to test against
+      result.tested++;
+      var m = matchFromRanking(ranked, samplePose(info[i]));
+      if (ranked[0].key === key && isConfidentMatch(m)) { result.right++; return; }
+      if (ranked[0].key !== key && isConfidentMatch(m)) { result.doubtful.push({ descriptor: descriptor, like: ranked[0].name }); return; }
+      var other = ranked[0].key === key ? (m.runnerUp && { name: m.runnerUp, distance: m.runnerUpDistance }) : ranked[0];
+      if (other && other.distance <= settings.matchThreshold) result.mixups[other.name] = (result.mixups[other.name] || 0) + 1;
+    });
+    return result;
+  }
+  // Players the self-check mixes up often (either way round): names for
+  // the warning, and keys "a\nb" (both orders) to look pairs up by.
+  function lookAlikePairs() {
+    var names = [], keys = {};
+    Object.keys(enrollCheck).forEach(function (key) {
+      var check = enrollCheck[key], entry = enrollments[key];
+      if (!entry || check.tested < 5) return;
+      var own = entry.displayName || key;
+      Object.keys(check.mixups).forEach(function (other) {
+        if (check.mixups[other] / check.tested < LOOK_ALIKE_FRACTION) return;
+        var a = normalizeNameKey(own), b = normalizeNameKey(other);
+        if (keys[a + "\n" + b]) return;
+        keys[a + "\n" + b] = keys[b + "\n" + a] = true;
+        names.push([own, other].sort().join(" and "));
+      });
+    });
+    return { names: names, keys: keys };
+  }
+  function renderLookAlikes(pairs) {
+    var el = document.getElementById("enrollCheckStatus");
+    el.hidden = !pairs.length;
+    el.textContent = pairs.length ? pairs.join("; ") + " look alike to the camera - it won't name " + (pairs.length === 1 ? "either" : "them") +
+      " unless it's sure. More Shooting presses for both help; so does a different-coloured shirt or a cap." : "";
+  }
+  function removeDoubtfulSamples(name) {
+    var key = normalizeNameKey(name);
+    var entry = enrollments[key], check = enrollCheck[key];
+    if (!entry || !check || !check.doubtful.length) return;
+    var doubtful = check.doubtful;
+    var isDoubtful = function (d) { return doubtful.some(function (x) { return sameDescriptor(x.descriptor, d); }); };
+    var allInfo = alignedInfo(entry), descriptors = [], info = [], removed = 0;
+    (entry.descriptors || []).forEach(function (d, i) {
+      if (isDoubtful(d)) { removed++; return; }
+      descriptors.push(d);
+      info.push(allInfo[i]);
+    });
+    check.doubtful = []; // until the next self-check
+    if (!removed) { renderPlayerList(); return; }
+    if (lastEnrollAdd && lastEnrollAdd.key === key && isDoubtful(lastEnrollAdd.descriptor)) lastEnrollAdd = null;
+    var label = entry.displayName || name;
+    var like = doubtful.map(function (x) { return x.like; }).filter(function (n, i, all) { return all.indexOf(n) === i; });
+    if (descriptors.length) send({ type: "enroll-save", player_name: label, descriptors: descriptors, info: info });
+    else send({ type: "enroll-delete", player_name: label });
+    logActivity(label + ": removed " + removed + " sample" + (removed === 1 ? "" : "s") + " that looked like " + like.join(", "));
+    setEnrollShotStatus("Removed " + removed + " of " + label + "'s samples that looked more like " + like.join(", ") + ".");
+  }
+
   // Who the camera would name right now, so the operator can watch it
   // learn: a line on the tab, and a mark on that player's row.
   function updateEnrollLiveStatus(analysis, shooting) {
@@ -4681,11 +5036,13 @@
     if (!analysis) {
       text = "Nobody at the table in view.";
     } else {
-      var m = findBestMatch(analysis.descriptor);
+      var m = findBestMatch(analysis.descriptor, poseForAnalysis(analysis));
       var doing = shooting ? "bent over" : "at the table";
-      if (m && m.distance <= settings.matchThreshold) {
+      if (isConfidentMatch(m)) {
         key = normalizeNameKey(m.name);
         text = "Camera sees " + m.name + ", " + doing + " (distance " + m.distance.toFixed(2) + ").";
+      } else if (m && m.distance <= settings.matchThreshold) {
+        text = "Camera sees someone " + doing + " but isn't sure: " + m.name + " (" + m.distance.toFixed(2) + ") or " + m.runnerUp + " (" + m.runnerUpDistance.toFixed(2) + ").";
       } else {
         text = "Camera sees someone " + doing + " it doesn't know yet" + (m ? " (closest: " + m.name + ", " + m.distance.toFixed(2) + ")" : "") + ".";
       }
@@ -4771,8 +5128,8 @@
         cached.lastCheckAt = now;
         var liteAnalysis = analyzePose(pose.keypoints);
         if (liteAnalysis) {
-          var match = findBestMatch(liteAnalysis.descriptor);
-          cached.lastMatchedName = match && match.distance <= settings.matchThreshold ? match.name : null;
+          var match = findBestMatch(liteAnalysis.descriptor, poseForAnalysis(liteAnalysis));
+          cached.lastMatchedName = isConfidentMatch(match) ? match.name : null;
         }
         // Left as whatever it already was when this cycle's frame can't
         // be confidently analyzed - a brief look-away shouldn't flicker
@@ -4843,7 +5200,7 @@
     // lets a listener tell "not detecting anyone" apart from "detecting
     // fine, but distance is just over threshold" - the latter means the
     // match sensitivity setting needs loosening, not a code bug.
-    var closest = analysis ? findBestMatch(analysis.descriptor) : null;
+    var closest = analysis ? findBestMatch(analysis.descriptor, poseForAnalysis(analysis)) : null;
     send({
       type: "candidate",
       // An out-of-view shooter is named from the presence hold (not the
@@ -5000,8 +5357,9 @@
   // via says what gave the shot away ("bent over", "cue over the table",
   // ...) - logs only. descriptor is null when there's no fresh look at
   // the shooter to learn from (out of view, or named from an earlier
-  // recognition), and then nothing is added to their enrollment.
-  function fireEvent(name, descriptor, matchDistance, via) {
+  // recognition), and then nothing is added to their enrollment;
+  // descriptorPose is the posture it shows ("bent" | "upright").
+  function fireEvent(name, descriptor, matchDistance, via, descriptorPose) {
     via = via || "bent over";
     var now = Date.now();
     var last = lastEmittedAt[name] || 0;
@@ -5025,8 +5383,8 @@
     // Not spoken here in embedded mode - see updateSeenCandidate's comment
     // above; the parent page's own player_up handler speaks instead.
     if (settings.voiceStatusEnabled && !isEmbedded) speak(name + " shooting.");
-    if (descriptor && matchDistance <= settings.matchThreshold * 0.7) {
-      send({ type: "enroll-add", player_name: name, descriptor: descriptor, info: { kind: "recognized", at: now } });
+    if (descriptor && matchDistance <= settings.matchThreshold * 0.7 && !hasPlentyPressedSamples(name)) {
+      send({ type: "enroll-add", player_name: name, descriptor: descriptor, info: { kind: "recognized", at: now, pose: descriptorPose || null } });
       notifyEnrollmentUpdated(name);
     }
   }
@@ -5042,6 +5400,16 @@
     send({ type: "enrollment-updated", player_name: name });
   }
 
+  // The camera adds samples of its own (a recognized shot, a confirmed
+  // score) only until the operator has pressed plenty for that player -
+  // after that its own guesses would mostly just risk teaching it a
+  // mistake (someone else in front at the time).
+  var PLENTY_PRESSED_SAMPLES = 20;
+  function hasPlentyPressedSamples(name) {
+    var entry = enrollments[normalizeNameKey(name)];
+    return !!entry && alignedInfo(entry).filter(isPressedSample).length >= PLENTY_PRESSED_SAMPLES;
+  }
+
   // Gameplay-driven auto-enrollment: a human just confirmed a real score
   // for `name` - stronger ground truth than the camera's own self-match,
   // so this labels (or relabels, if the camera's own candidate guessed a
@@ -5053,7 +5421,8 @@
     var isFirstSample = !Object.keys(enrollments).some(function (key) {
       return (enrollments[key].displayName || key).toLowerCase() === name.toLowerCase();
     });
-    var info = { kind: "scored", at: Date.now() };
+    if (!isFirstSample && hasPlentyPressedSamples(name)) return;
+    var info = { kind: "scored", at: Date.now(), pose: "upright" }; // (the candidate's formed while upright)
     if (isFirstSample) {
       send({ type: "enroll-save", player_name: name, descriptors: [candidate.descriptor], info: [info] });
     } else {
@@ -5279,8 +5648,8 @@
     var bendSignal = effectiveBendAngle(analysis);
     // Whoever this looks like: their own shooting posture, when the
     // Shooting button has taught the camera one.
-    var looksLike = findBestMatch(analysis.descriptor);
-    var limits = personalBendThresholds(looksLike && looksLike.distance <= settings.matchThreshold ? looksLike.name : null);
+    var looksLike = findBestMatch(analysis.descriptor, poseForAnalysis(analysis));
+    var limits = personalBendThresholds(isConfidentMatch(looksLike) ? looksLike.name : null);
     var stanceBefore = stance;
     if (bendSignal >= limits.enter) stance = "bent";
     else if (bendSignal <= limits.exit) stance = "upright";
@@ -5294,8 +5663,9 @@
     var closeEnough = withinRailDistance(analysis);
 
     if (effectiveStance() === "upright" && closeEnough) {
-      var match = findBestMatch(analysis.descriptor);
-      var withinThreshold = match && match.distance <= settings.matchThreshold;
+      var match = findBestMatch(analysis.descriptor, "upright");
+      // (not when someone else is nearly as close - see MATCH_MARGIN_FRACTION)
+      var withinThreshold = isConfidentMatch(match);
       if (withinThreshold && uprightMatchName === match.name) {
         uprightConsecutive++;
       } else if (withinThreshold) {
@@ -5360,28 +5730,28 @@
           // another player shoots" per explicit request.
           if (activeManualAttribution && candidate.name !== activeManualAttribution.name) activeManualAttribution = null;
           debugLog("FIRE via upright-candidate name=" + candidate.name + " (" + via + ")");
-          fireEvent(candidate.name, candidate.descriptor, 0, via);
+          fireEvent(candidate.name, candidate.descriptor, 0, via, "upright");
         } else {
           // Fallback: no fresh *named* upright identification (either
           // nothing stable was seen, or it was stable but unmatched) -
           // try matching the bent-over frame itself, at a stricter
           // threshold since the crop geometry/occlusion is known to be
           // noisier here.
-          var bentMatch = findBestMatch(analysis.descriptor);
+          var bentMatch = findBestMatch(analysis.descriptor, "bent");
           debugLog("no upright candidate (candidate=" + (candidate ? candidate.name || "unnamed" : "null") + ") - bent-frame match=" +
-            (bentMatch ? bentMatch.name + " dist=" + bentMatch.distance.toFixed(2) : "none") +
+            (bentMatch ? bentMatch.name + " dist=" + bentMatch.distance.toFixed(2) + (bentMatch.clear ? "" : " (unsure: " + bentMatch.runnerUp + " " + bentMatch.runnerUpDistance.toFixed(2) + ")") : "none") +
             " strictLimit=" + (settings.matchThreshold * 0.6).toFixed(2) +
             " activeManualAttribution=" + (activeManualAttribution ? activeManualAttribution.name : "null"));
-          if (bentMatch && bentMatch.distance <= settings.matchThreshold * 0.6) {
+          if (bentMatch && bentMatch.distance <= settings.matchThreshold * 0.6 && bentMatch.clear) {
             if (activeManualAttribution && bentMatch.name !== activeManualAttribution.name) activeManualAttribution = null;
-            fireEvent(bentMatch.name, analysis.descriptor, bentMatch.distance, via);
+            fireEvent(bentMatch.name, analysis.descriptor, bentMatch.distance, via, "bent");
           } else if (activeManualAttribution) {
             // Nothing matched on appearance at all - the exact "shooting
             // but not recognized" situation the operator already resolved
             // manually. fireEvent's own distance<=threshold*0.7 check
             // (always true at distance 0) is what actually adds this as
             // an enrollment sample - no separate enroll-add needed here.
-            fireEvent(activeManualAttribution.name, analysis.descriptor, 0, via);
+            fireEvent(activeManualAttribution.name, analysis.descriptor, 0, via, "bent");
             activeManualAttribution.firesSinceStart++;
           } else if (cueHeld && lastSeenPlayerName(now)) {
             // Someone's holding the cue out over the table and can't be
@@ -5684,14 +6054,14 @@
 
         var matchLabel = null;
         if (analysis && settings.debugOverlay) {
-          var m = findBestMatch(analysis.descriptor);
+          var m = findBestMatch(analysis.descriptor, poseForAnalysis(analysis));
           // "(too far)" is the whole point of showing this at all - the
           // closest enrolled player is shown even when nowhere near a
           // real match (that's what makes this useful for tuning), but
           // without this suffix it reads exactly like a confirmed match,
           // which is the single most common point of confusion reported
           // against this overlay.
-          if (m) matchLabel = m.name + " " + m.distance.toFixed(2) + (m.distance <= settings.matchThreshold ? "" : " (too far)");
+          if (m) matchLabel = m.name + " " + m.distance.toFixed(2) + (m.distance > settings.matchThreshold ? " (too far)" : m.clear ? "" : " (or " + m.runnerUp + "?)");
         }
         handleRecognitionFrame(analysis, cueCtx);
         // After recognition has updated the stance for this same person:
