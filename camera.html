@@ -76,6 +76,38 @@
     overflow: hidden;
     border: 1px solid var(--border);
   }
+  /* Enroll tab: a 20px frame round the picture - gray, yellow while an
+     Identify press is being taken, green for a Shooting one - and whose
+     sample it is (see renderEnrollLight). */
+  .enroll-light {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    border: 20px solid rgba(150, 150, 150, 0.55);
+    border-radius: 14px;
+    pointer-events: none;
+    transition: border-color 0.12s, box-shadow 0.12s;
+  }
+  .enroll-light.identify { border-color: #facc15; box-shadow: inset 0 0 26px 6px rgba(250, 204, 21, 0.75); }
+  .enroll-light.shooting { border-color: #22c55e; box-shadow: inset 0 0 26px 6px rgba(34, 197, 94, 0.75); }
+  .enroll-light-name {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: calc(100% - 40px);
+    padding: 6px 18px;
+    border-radius: 999px;
+    background: rgba(40, 40, 40, 0.8);
+    color: #fff;
+    font-size: 1.5rem;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .enroll-light.identify .enroll-light-name { background: #facc15; color: #1c1917; }
+  .enroll-light.shooting .enroll-light-name { background: #22c55e; color: #052e16; }
   video, canvas, #viewerLiveImg {
     position: absolute;
     top: 0;
@@ -408,6 +440,7 @@
     <video id="video" autoplay playsinline muted></video>
     <canvas id="overlay"></canvas>
     <img id="viewerLiveImg" alt="Live view from the camera device" hidden>
+    <div class="enroll-light" id="enrollLight" hidden><div class="enroll-light-name" id="enrollLightName" hidden></div></div>
   </div>
 
   <div class="warning-banner" id="cameraWarning" hidden>
@@ -490,9 +523,10 @@
     <h2>Enroll players (today's outfits)</h2>
     <div class="hint"><strong>Identify</strong>: press while the player is at the table (the only one there, or the one bent over) - the camera learns what they look like. <strong>Shooting</strong>: press while they're down on a shot - it also learns how they shoot, and the scoreboard switches to them. Every press adds a sample; nothing is replaced. Press as often as you like, any time, even mid-game.</div>
     <div class="hint">With a number pad: a player's <strong>number</strong> = seen (Identify), <strong>+</strong> = that player shooting, <strong>-</strong> = take back the last one.</div>
+    <div class="hint">The frame round the picture lights <strong>yellow</strong> while a seen sample is taken and <strong>green</strong> for a shooting one, with whose it is - gray otherwise.</div>
     <div class="enroll-live" id="enrollLiveStatus">Nobody at the table yet.</div>
-    <div class="progress-text" id="enrollShotStatus" hidden></div>
-    <button id="enrollUndoBtn" class="secondary" type="button" hidden>Undo last press</button>
+    <div class="progress-text" id="enrollShotStatus">Press Identify or Shooting beside a player.</div>
+    <button id="enrollUndoBtn" class="secondary" type="button">Undo last press</button>
     <div class="enroll-check" id="enrollCheckStatus" hidden></div>
     <div id="playerList"><div class="hint">No players yet - add them on the scoreboard.</div></div>
     <button id="clearAllBtn" class="danger" type="button" style="margin-top:10px">Clear all (new session)</button>
@@ -777,6 +811,8 @@
   var enrollLiveStatus = document.getElementById("enrollLiveStatus");
   var enrollShotStatus = document.getElementById("enrollShotStatus");
   var enrollUndoBtn = document.getElementById("enrollUndoBtn");
+  var enrollLight = document.getElementById("enrollLight");
+  var enrollLightName = document.getElementById("enrollLightName");
   var playerListEl = document.getElementById("playerList");
   var clearAllBtn = document.getElementById("clearAllBtn");
 
@@ -1082,6 +1118,7 @@
     calibratePanel.hidden = which !== "calibrate";
     if (which === "enroll" && enrollCheckPending) scheduleEnrollCheck(0);
     overlayEl.classList.toggle("tappable", which === "calibrate" && calibrating);
+    renderEnrollLight();
   }
   tabRecognize.addEventListener("click", function () { showTab("recognize"); });
   tabEnroll.addEventListener("click", function () { showTab("enroll"); });
@@ -1543,8 +1580,10 @@
         if (!el) return;
         var snap = elements[id];
         if (!snap) return;
+        if ((id === "enrollLight" || id === "enrollLightName") && Date.now() < viewerLocalLightUntil) return;
         if (snap.kind === "class") {
           el.className = snap.cls;
+          if (id === "enrollLight") el.hidden = enrollPanel.hidden;
         } else if (snap.kind === "checkbox") {
           el.checked = !!snap.checked;
           if (typeof snap.hidden === "boolean") el.hidden = snap.hidden;
@@ -1623,6 +1662,13 @@
         evt.preventDefault();
         evt.stopImmediatePropagation();
         send({ type: "viewer-click", id: el.id });
+        var pressed = /^enroll(Identify|Shoot|Num)-/.exec(el.id), pressedRow = el.closest(".player-row");
+        if (pressed && pressedRow && pressedRow.dataset.name) {
+          var shooting = pressed[1] === "Shoot";
+          viewerLocalLightUntil = Date.now() + (shooting ? 2200 : 1100);
+          lightEnroll(shooting ? "shooting" : "identify", pressedRow.dataset.name, viewerLocalLightUntil);
+          anchorEnrollRow(pressedRow);
+        }
       },
       true
     );
@@ -1853,10 +1899,11 @@
       var el = document.getElementById(id);
       if (el) out[id] = { kind: "select", html: el.innerHTML, value: el.value };
     });
-    ["dotCamera", "dotRelay", "dotModels"].forEach(function (id) {
+    ["dotCamera", "dotRelay", "dotModels", "enrollLight"].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) out[id] = { kind: "class", cls: el.className };
     });
+    out.enrollLightName = { kind: "text", text: enrollLightName.textContent, hidden: enrollLightName.hidden };
     return out;
   }
   function startViewerFrameStream() {
@@ -1978,6 +2025,7 @@
       var row = document.createElement("div");
       row.className = "player-row";
       row.id = enrollRowId("enrollRow-", name);
+      row.dataset.name = name;
       if (pickedEnrollName && normalizeNameKey(pickedEnrollName) === key) row.classList.add("picked");
       if (seenNowKey === key) row.classList.add("seen-now");
       if (keypadEnrollKey === key) row.classList.add("keypad-selected");
@@ -2054,12 +2102,14 @@
       row.appendChild(actions);
       playerListEl.appendChild(row);
     });
+    renderEnrollLight();
+    keepEnrollAnchor();
   }
 
   clearAllBtn.addEventListener("click", function () {
     if (clearAllBtn.dataset.confirm === "1") {
       lastEnrollAdd = null;
-      enrollUndoBtn.hidden = true;
+      enrollUndoBtn.textContent = "Undo last press";
       Object.keys(enrollments).forEach(function (key) {
         send({ type: "enroll-delete", player_name: enrollments[key].displayName || key });
       });
@@ -5250,10 +5300,103 @@
 
   function setEnrollShotStatus(text) {
     enrollShotStatus.textContent = text;
-    enrollShotStatus.hidden = false;
-    enrollUndoBtn.hidden = !lastEnrollAdd;
-    if (lastEnrollAdd) enrollUndoBtn.textContent = "Undo last press (" + lastEnrollAdd.name + ")";
+    enrollUndoBtn.textContent = lastEnrollAdd ? "Undo last press (" + lastEnrollAdd.name + ")" : "Undo last press";
+    keepEnrollAnchor();
   }
+
+  // ---- The Enroll light: the frame round the picture ----
+  // Gray; yellow from an Identify press until its sample is in, green for
+  // a Shooting one, then ENROLL_LIGHT_HOLD_MS more - with whose sample it
+  // is. Idle, the name is the number pad's player (the one + adds a
+  // shooting sample to). Shown on the Enroll tab only. The remote viewer
+  // gets this device's light with every frame, and lights its own copy
+  // the moment it's tapped (frames are 1.5s apart).
+  var ENROLL_LIGHT_HOLD_MS = 600;
+  var enrollLightState = null; // { kind, name, until } - until is null while the press waits
+  var enrollLightTimer = null;
+  var viewerLocalLightUntil = 0;
+  function lightEnroll(kind, name, until) {
+    enrollLightState = { kind: kind, name: name, until: until || null };
+    renderEnrollLight();
+  }
+  // The press is over: its sample is in (a moment more of light), or
+  // nobody turned up (straight back to gray).
+  function enrollLightDone(name, kind, worked) {
+    var st = enrollLightState;
+    if (!st || st.until !== null || st.kind !== kind || normalizeNameKey(st.name) !== normalizeNameKey(name)) return;
+    st.until = Date.now() + (worked ? ENROLL_LIGHT_HOLD_MS : 0);
+    renderEnrollLight();
+  }
+  function keypadEnrollName() {
+    var key = keypadEnrollKey || (pickedEnrollName ? normalizeNameKey(pickedEnrollName) : null);
+    if (!key) return null;
+    return enrollListNames().filter(function (n) { return normalizeNameKey(n) === key; })[0] || null;
+  }
+  function renderEnrollLight() {
+    clearTimeout(enrollLightTimer);
+    enrollLight.hidden = enrollPanel.hidden;
+    var now = Date.now();
+    var active = enrollLightState && (enrollLightState.until === null || now < enrollLightState.until) ? enrollLightState : null;
+    if (isViewer && !active) { enrollLight.classList.remove("identify", "shooting"); return; }
+    enrollLight.className = "enroll-light" + (active ? " " + active.kind : "");
+    var name = active ? active.name : keypadEnrollName();
+    enrollLightName.textContent = !name ? "" : active ? name + (active.kind === "shooting" ? " - shooting" : " - seen") : name;
+    enrollLightName.hidden = !name;
+    if (active && active.until !== null) enrollLightTimer = setTimeout(renderEnrollLight, active.until - now + 20);
+  }
+
+  // ---- Keep the pressed button where it was ----
+  // A press changes the page round it (the status line, the list redrawn
+  // with new counts, the scoreboard's frame resized to fit): the row
+  // pressed stays at the same height on the screen for a few seconds -
+  // inside this page, or the scoreboard's when this page is its preview -
+  // unless you scroll or touch the page yourself.
+  var ENROLL_ANCHOR_MS = 10000;
+  var enrollAnchor = null; // { rowId, top, until }
+  var enrollAnchorTimer = null;
+  function screenTop(el) {
+    var top = el.getBoundingClientRect().top;
+    try { if (window.frameElement) top += window.frameElement.getBoundingClientRect().top; } catch (e) {}
+    return top;
+  }
+  function anchorEnrollRow(row) {
+    if (!row || !row.id) return;
+    enrollAnchor = { rowId: row.id, top: screenTop(row), until: Date.now() + ENROLL_ANCHOR_MS };
+    clearInterval(enrollAnchorTimer);
+    enrollAnchorTimer = setInterval(keepEnrollAnchor, 100);
+  }
+  function dropEnrollAnchor() {
+    enrollAnchor = null;
+    clearInterval(enrollAnchorTimer);
+  }
+  function keepEnrollAnchor() {
+    if (!enrollAnchor) return;
+    if (Date.now() > enrollAnchor.until || enrollPanel.hidden) { dropEnrollAnchor(); return; }
+    var row = document.getElementById(enrollAnchor.rowId);
+    if (!row) return;
+    var off = screenTop(row) - enrollAnchor.top;
+    if (Math.abs(off) < 2) return;
+    window.scrollBy(0, off);
+    off = screenTop(row) - enrollAnchor.top;
+    if (Math.abs(off) >= 2 && window.frameElement) {
+      try { window.parent.scrollBy(0, off); } catch (e) {}
+    }
+  }
+  playerListEl.addEventListener("click", function (evt) {
+    var btn = evt.target.closest("button");
+    if (btn) anchorEnrollRow(btn.closest(".player-row"));
+  }, true);
+  window.addEventListener("resize", keepEnrollAnchor);
+  (function () {
+    var docs = [document];
+    try { if (window.frameElement) docs.push(window.parent.document); } catch (e) {}
+    docs.forEach(function (doc) {
+      ["wheel", "touchstart", "pointerdown"].forEach(function (type) { doc.addEventListener(type, dropEnrollAnchor, { capture: true, passive: true }); });
+      doc.addEventListener("keydown", function (e) {
+        if (/^(Arrow|Page|Home|End| )/.test(e.key) || e.key === " ") dropEnrollAnchor();
+      }, true);
+    });
+  })();
 
   function sameTrack(a, b) {
     return !hasTrackId(a) || !hasTrackId(b) || a.trackId === b.trackId;
@@ -5283,6 +5426,7 @@
       if (now > p.until) {
         setEnrollShotStatus("Nobody at the table in view - press " + (p.kind === "shooting" ? "Shooting" : "Identify") + " again while " + p.name + " is there.");
         if (p.fromKeypad) send({ type: "enroll-result", ok: false, reason: "nobody", player_name: p.name, kind: p.kind });
+        enrollLightDone(p.name, p.kind, false);
         return false;
       }
       return true;
@@ -5299,6 +5443,8 @@
       return;
     }
     var now = Date.now();
+    lightEnroll(kind, name);
+    send({ type: "enroll-pressed", player_name: name, kind: kind });
     enrollPending = enrollPending.filter(function (p) { return normalizeNameKey(p.name) !== normalizeNameKey(name) || p.kind !== kind; });
     var p = { name: name, kind: kind, at: now, until: now + ENROLL_WAIT_MS, trackId: undefined, best: null, fromKeypad: !!fromKeypad };
     var latest = enrollFrames.length ? enrollFrames[enrollFrames.length - 1] : null;
@@ -5333,7 +5479,7 @@
     var now = Date.now();
     lastEmittedAt[name] = now;
     noteLastShot(name, trackId);
-    send({ type: "player_up", player_name: name, confidence: 1, ts: now });
+    send({ type: "player_up", player_name: name, confidence: 1, certainty: 1, ts: now });
     logActivity(name + " shooting (Shooting button)");
   }
 
@@ -5360,6 +5506,7 @@
     if (p.fromKeypad) send({ type: "enroll-result", ok: true, player_name: p.name, kind: p.kind, total: count });
     logActivity(p.name + ": " + what + " added by the " + (p.fromKeypad ? "scoreboard's number pad" : "button") + " (" + count + " in total)");
     setEnrollShotStatus(p.name + ": " + what + " added - " + count + " in total.");
+    enrollLightDone(p.name, p.kind, true);
     var row = findEnrollRow(p.name);
     if (row) {
       row.classList.add("just-added");
@@ -5381,6 +5528,7 @@
     var undo = lastEnrollAdd;
     lastEnrollAdd = null;
     if (!undo) {
+      setEnrollShotStatus("Nothing to take back.");
       if (fromKeypad) send({ type: "enroll-result", ok: false, reason: "nothing-to-undo" });
       return;
     }
@@ -5948,8 +6096,9 @@
   // recognition), and then nothing is added to their enrollment;
   // descriptorPose is the posture it shows ("bent" | "upright"), emb the
   // appearance model's numbers for the same look (if it had them).
-  function fireEvent(name, descriptor, matchDistance, via, descriptorPose, emb) {
+  function fireEvent(name, descriptor, matchDistance, via, descriptorPose, emb, certainty) {
     via = via || "bent over";
+    certainty = typeof certainty === "number" ? certainty : GUESS_CERTAINTY;
     var now = Date.now();
     var last = lastEmittedAt[name] || 0;
     var cueShot = via.indexOf("cue") === 0;
@@ -5963,9 +6112,9 @@
     noteSeenPlayer(name);
     lastEmittedAt[name] = now;
     var confidence = Math.max(0, Math.min(1, 1 - matchDistance / MAX_EXPECTED_DISTANCE));
-    var detail = via + (descriptor ? ", match distance " + matchDistance.toFixed(2) : "");
+    var detail = via + (descriptor ? ", match distance " + matchDistance.toFixed(2) : "") + ", " + Math.round(certainty * 100) + "% sure";
     console.log("[PMC shooting] SHOOTING DETECTED: " + name + " (" + detail + ", confidence " + confidence.toFixed(2) + ")");
-    send({ type: "player_up", player_name: name, confidence: confidence, ts: now });
+    send({ type: "player_up", player_name: name, confidence: confidence, certainty: certainty, ts: now });
     logActivity(name + " shooting (" + detail + ")");
     // Stops the scorecard's camera icon flashing for this name - see
     // shotConfirmedForSeenName's own comment.
@@ -6218,6 +6367,31 @@
     return best >= VISIT_MIN_WEIGHT && best >= second * VISIT_LEAD ? names[0] : null;
   }
 
+  // ---- How sure a recognized shot is (0..1) ----
+  // Sent with every shot: the scoreboard only speaks a recognized shot in
+  // Straight Pool from 80% (see js/app.js's cameraShotVoiceAllowed).
+  // A match: halfway how far inside its limit it is (0 at the limit, 1
+  // identical), halfway how far ahead of the next-closest player - and
+  // one that isn't clear never gets past GUESS_CERTAINTY. A name from the
+  // visit's tally: its share of the clear looks, a little less while
+  // there have only been a few. Guesses (1-on-1, last seen, picked
+  // earlier) are GUESS_CERTAINTY; a Shooting press is 1.
+  var GUESS_CERTAINTY = 0.5;
+  function matchCertainty(m) {
+    if (!m || !(m.threshold > 0)) return 0;
+    var inside = Math.max(0, Math.min(1, 1 - m.distance / m.threshold));
+    var ahead = m.runnerUpDistance > 0 ? Math.max(0, Math.min(1, (m.runnerUpDistance - m.distance) / m.runnerUpDistance)) : 1;
+    var c = (inside + ahead) / 2;
+    return m.clear ? c : Math.min(c, GUESS_CERTAINTY);
+  }
+  function visitCertainty(trackId, now) {
+    var tally = trackId === undefined || trackId === null ? null : visitTallies[String(trackId)];
+    if (!tally || now - tally.at > 3000) return GUESS_CERTAINTY;
+    var total = 0, best = 0;
+    Object.keys(tally.scores).forEach(function (n) { total += tally.scores[n]; best = Math.max(best, tally.scores[n]); });
+    return total > 0 ? best / total * Math.min(1, 0.7 + 0.06 * best) : GUESS_CERTAINTY;
+  }
+
   // ---- 1-on-1: whose turn it is ----
   // With exactly two players and a shooter who looks like one of them but
   // not clearly which: players take turns at the table, so a different
@@ -6337,8 +6511,10 @@
       lastUprightDescriptor = analysis.descriptor;
 
       if (uprightStabilityCount >= settings.consecutiveFrames) {
+        var candidateName = visitName || (withinThreshold && uprightConsecutive >= settings.consecutiveFrames ? match.name : null);
         candidate = {
-          name: visitName || (withinThreshold && uprightConsecutive >= settings.consecutiveFrames ? match.name : null),
+          name: candidateName,
+          certainty: visitName ? visitCertainty(analysis.trackId, now) : candidateName ? matchCertainty(match) : 0,
           descriptor: analysis.descriptor,
           emb: analysis.emb || null,
           trackId: analysis.trackId,
@@ -6378,13 +6554,13 @@
           // candidate, if any, isn't already saying the same).
           if (activeManualAttribution && visitName !== activeManualAttribution.name) activeManualAttribution = null;
           debugLog("FIRE via this visit's tally name=" + visitName + " (" + via + ")");
-          fireEvent(visitName, null, settings.matchThreshold, via + ", recognized over this visit");
+          fireEvent(visitName, null, settings.matchThreshold, via + ", recognized over this visit", null, null, visitCertainty(analysis.trackId, now));
         } else if (candidate && candidate.name && now - candidate.lastSeenAt <= CANDIDATE_GRACE_MS) {
           // A genuinely different name just matched on its own - "until
           // another player shoots" per explicit request.
           if (activeManualAttribution && candidate.name !== activeManualAttribution.name) activeManualAttribution = null;
           debugLog("FIRE via upright-candidate name=" + candidate.name + " (" + via + ")");
-          fireEvent(candidate.name, candidate.descriptor, 0, via, "upright", candidate.emb);
+          fireEvent(candidate.name, candidate.descriptor, 0, via, "upright", candidate.emb, candidate.certainty);
         } else {
           // Fallback: no fresh *named* upright identification (either
           // nothing stable was seen, or it was stable but unmatched) -
@@ -6398,7 +6574,7 @@
             " activeManualAttribution=" + (activeManualAttribution ? activeManualAttribution.name : "null"));
           if (bentMatch && bentMatch.distance <= bentMatch.threshold * 0.6 && bentMatch.clear) {
             if (activeManualAttribution && bentMatch.name !== activeManualAttribution.name) activeManualAttribution = null;
-            fireEvent(bentMatch.name, analysis.descriptor, bentMatch.scaled, via, "bent", analysis.emb);
+            fireEvent(bentMatch.name, analysis.descriptor, bentMatch.scaled, via, "bent", analysis.emb, matchCertainty(bentMatch));
           } else if (activeManualAttribution) {
             // Nothing matched on appearance at all - the exact "shooting
             // but not recognized" situation the operator already resolved

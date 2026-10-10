@@ -105,7 +105,7 @@
     // can't select anyone) - the code below is the fallback for an older
     // app.js without it.
     if (bridgeReady() && typeof window.PMCCameraBridge.handleCameraShot === "function") {
-      window.PMCCameraBridge.handleCameraShot(msg.player_name);
+      window.PMCCameraBridge.handleCameraShot(msg.player_name, msg.certainty);
       return;
     }
     if (!bridgeReady() || !window.PMCCameraBridge.isEnabled()) return;
@@ -282,6 +282,7 @@
       else if (msg.type === "ball_pocketed" || msg.type === "ball_rerack" || msg.type === "ball_reappeared") handleBallEvent(msg);
       else if (msg.type === "cue_event") handleCueEvent(msg);
       else if (msg.type === "enroll-result" && bridgeReady() && typeof window.PMCCameraBridge.reportEnrollResult === "function") window.PMCCameraBridge.reportEnrollResult(msg);
+      else if (msg.type === "enroll-pressed" && bridgeReady() && typeof window.PMCCameraBridge.reportEnrollPressed === "function") window.PMCCameraBridge.reportEnrollPressed(msg);
       else if (msg.type === "camera-settings-state") handleCameraSettingsState(msg);
       else if (msg.type === "camera-status" && bridgeReady() && typeof window.PMCCameraBridge.reportCameraStatus === "function") window.PMCCameraBridge.reportCameraStatus(msg.status, true);
       else if (msg.type === "enrollment-names" && bridgeReady() && typeof window.PMCCameraBridge.reportEnrollmentNames === "function") window.PMCCameraBridge.reportEnrollmentNames(msg.names);

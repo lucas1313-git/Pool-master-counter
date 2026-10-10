@@ -2585,6 +2585,15 @@ input[type="number"] {
   background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 22%, var(--felt)) 0%, var(--bg-glow) 100%);
 }
 
+/* A camera sample press for this player (see flashScoreCardForCameraPress):
+   the border, in the complementary colour of the normal one. */
+.player-panel.camera-ack-flash,
+.member-card.camera-ack-flash,
+.camera-ack-flash {
+  border-color: var(--camera-ack-color) !important;
+  box-shadow: 0 0 0 6px var(--camera-ack-color) inset, 0 0 18px 2px var(--camera-ack-color) !important;
+}
+
 .is-keypad-selected .keypad-number-badge {
   background: var(--accent);
   color: var(--bg);

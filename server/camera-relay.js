@@ -36,7 +36,7 @@
 // Protocol:
 //   { type: "hello", role: "camera" | "listener" }
 //   camera -> relay -> broadcast to every "listener":
-//     { type: "player_up", player_name, confidence, ts }
+//     { type: "player_up", player_name, confidence, certainty, ts } (certainty: how sure, 0..1)
 //     { type: "candidate", player_name, stance, angle, closestName,
 //       closestDistance, matchThreshold } - live "who's currently seen"
 //       plus the current upright/bent reading and the nearest enrolled
@@ -83,6 +83,9 @@
 //     { type: "enroll-undo" } (listener -> relay -> every "camera")
 //     { type: "enroll-result", ok, reason?, undone?, player_name?, kind?, total? }
 //       (camera -> relay -> every "listener")
+//     { type: "enroll-pressed", player_name, kind } - any Identify/Shooting
+//       press, however made: the scoreboard flashes that player's score
+//       card (camera -> relay -> every "listener")
 //   Ball tracking (Straight Pool - camera.html counts balls on the
 //   calibrated table between shots):
 //     { type: "ball_pocketed", count, scratch, objectRemaining, ts }
@@ -326,7 +329,7 @@ function createCameraRelay(WebSocket) {
         }
 
         if (msg.type === "player_up" && ws.role === "camera") {
-          broadcastToListeners({ type: "player_up", player_name: msg.player_name, confidence: msg.confidence, ts: msg.ts });
+          broadcastToListeners({ type: "player_up", player_name: msg.player_name, confidence: msg.confidence, certainty: typeof msg.certainty === "number" ? msg.certainty : null, ts: msg.ts });
           return;
         }
 
@@ -499,6 +502,10 @@ function createCameraRelay(WebSocket) {
         }
         if (msg.type === "enroll-undo" && ws.role === "listener") {
           broadcastToCameras({ type: "enroll-undo" });
+          return;
+        }
+        if (msg.type === "enroll-pressed" && ws.role === "camera" && typeof msg.player_name === "string") {
+          broadcastToListeners({ type: "enroll-pressed", player_name: msg.player_name, kind: msg.kind === "shooting" ? "shooting" : "identify" });
           return;
         }
         if (msg.type === "enroll-result" && ws.role === "camera") {

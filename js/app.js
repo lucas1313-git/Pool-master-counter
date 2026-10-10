@@ -380,7 +380,7 @@
       // Straight Pool only - lets a camera-reported pocketed ball credit
       // the selected shooter automatically (see reportBallEvent).
       cameraBallTrackingEnabled: false,
-      currentGame: { gameType: "8ball", target: 1, unit: "rack", mode: "individual", startedAt: new Date().toISOString(), shotCounterEnabled: false, shotCounterBeepSec: 30, shotCounterHidden: false, queueEnabled: false, timedTournamentEnabled: false, timedTournamentMinutes: 60 },
+      currentGame: { gameType: "8ball", target: 1, unit: "rack", mode: "individual", startedAt: null, shotCounterEnabled: false, shotCounterBeepSec: 30, shotCounterHidden: false, queueEnabled: false, timedTournamentEnabled: false, timedTournamentMinutes: 60 },
       gameHistory: [],
       rotation: { enabled: false, order: [], every: 1 },
       gamesPlayedCount: 0,
@@ -472,7 +472,7 @@
           if (typeof parsed.cameraDebounceSec !== "number") parsed.cameraDebounceSec = 10;
           if (typeof parsed.cameraBallTrackingEnabled !== "boolean") parsed.cameraBallTrackingEnabled = false;
           if (!parsed.currentGame) parsed.currentGame = { gameType: "8ball", target: 1, mode: "individual" };
-          if (!parsed.currentGame.startedAt) parsed.currentGame.startedAt = new Date().toISOString();
+          if (!parsed.currentGame.startedAt) parsed.currentGame.startedAt = null; // (not started yet - see markFirstShot)
           if (typeof parsed.currentGame.unit !== "string" || !parsed.currentGame.unit) parsed.currentGame.unit = null;
           if (typeof parsed.currentGame.shotCounterEnabled !== "boolean") parsed.currentGame.shotCounterEnabled = false;
           if (typeof parsed.currentGame.shotCounterBeepSec !== "number") parsed.currentGame.shotCounterBeepSec = 30;
@@ -822,6 +822,78 @@
     var badge = document.createElement("span");
     badge.className = "keypad-number-badge";
     el.appendChild(badge);
+  }
+
+  // ---- A camera sample press, acknowledged on the score card ----
+  // Pressing Identify or Shooting for a player (the camera's Enroll tab,
+  // the remote view, or the number pad's 7 / 8 - the camera says so with
+  // "enroll-pressed") flashes their card's border in the complementary
+  // colour of its normal one: once for half a second for "seen", twice
+  // for a quarter second for "shooting". Kept across a re-render (a
+  // Shooting press also selects them).
+  var CAMERA_ACK_STEPS = { identify: [500], shooting: [250, 150, 250] }; // on, off, on... (ms)
+  var cameraAckFlash = null; // { playerId, color, on }
+  var cameraAckTimers = [];
+  function cssColorToRgb(color) {
+    var ctx = cssColorToRgb.ctx || (cssColorToRgb.ctx = document.createElement("canvas").getContext("2d"));
+    ctx.fillStyle = "#000";
+    ctx.fillStyle = String(color || "").trim() || "#000";
+    var v = ctx.fillStyle, m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(v);
+    if (m) return [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)];
+    m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(v);
+    return m ? [+m[1], +m[2], +m[3]] : null;
+  }
+  // The opposite hue - null for a grey, which has no hue to turn round.
+  // Made at least this vivid and bright: the cards' own border is often a
+  // dark, muted shade, whose exact opposite wouldn't show from across
+  // the room.
+  function complementaryColor(rgb) {
+    if (!rgb) return null;
+    var r = rgb[0] / 255, g = rgb[1] / 255, b = rgb[2] / 255;
+    var max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2, d = max - min;
+    var s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+    if (s < 0.15) return null;
+    var h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    h = (h * 60 + 180 + 360) % 360;
+    return "hsl(" + Math.round(h) + ", " + Math.round(Math.max(s, 0.75) * 100) + "%, " + Math.round(Math.min(0.65, Math.max(l, 0.55)) * 100) + "%)";
+  }
+  // The card's normal border: the selection ring (the theme's accent)
+  // when it's the keypad's player, else its plain border - a grey one
+  // takes the accent's complement instead.
+  function cameraAckColor(card) {
+    var cs = getComputedStyle(card), accent = cs.getPropertyValue("--accent");
+    var normal = card.classList.contains("is-keypad-selected") ? accent : cs.borderTopColor;
+    return complementaryColor(cssColorToRgb(normal)) || complementaryColor(cssColorToRgb(accent)) || "#ff3fd2";
+  }
+  function applyCameraAckFlash() {
+    Array.prototype.forEach.call(document.querySelectorAll("[data-keypad-player-id]"), function (el) {
+      var on = !!cameraAckFlash && cameraAckFlash.on && el.dataset.keypadPlayerId === cameraAckFlash.playerId;
+      if (on) {
+        if (!cameraAckFlash.color) cameraAckFlash.color = cameraAckColor(el);
+        el.style.setProperty("--camera-ack-color", cameraAckFlash.color);
+      }
+      el.classList.toggle("camera-ack-flash", on);
+    });
+  }
+  function flashScoreCardForCameraPress(name, kind) {
+    var key = normalizeNameKey(name);
+    var player = key ? state.players.filter(function (p) { return normalizeNameKey(p.name) === key; })[0] : null;
+    if (!player) return;
+    cameraAckTimers.forEach(clearTimeout);
+    cameraAckTimers = [];
+    cameraAckFlash = null;
+    applyCameraAckFlash(); // (a flash still going for someone else ends here, and the colour is read off the plain card)
+    cameraAckFlash = { playerId: player.id, color: null, on: true };
+    applyCameraAckFlash();
+    var steps = CAMERA_ACK_STEPS[kind] || CAMERA_ACK_STEPS.identify, at = 0;
+    steps.forEach(function (ms, i) {
+      at += ms;
+      cameraAckTimers.push(setTimeout(function () {
+        if (i === steps.length - 1) cameraAckFlash = null;
+        else if (cameraAckFlash) cameraAckFlash.on = i % 2 === 1;
+        applyCameraAckFlash();
+      }, at));
+    });
   }
 
   // Recomputes which number (1-9) each currently-playing player's card
@@ -3002,6 +3074,7 @@
       resetCurrentRun();
     }
     keypadSelectedPlayerId = targetId;
+    markFirstShot();
     renderScoreboard();
     // Only during an actual points/ball game - Quick Counter is a
     // plain running tally with no target/win to track, so there's no
@@ -5192,10 +5265,21 @@
       el.textContent = shotCounterActive() ? "" : T("timedTournament.remainingLive", { time: formatDuration(timedTournamentRemainingMs()) });
       return;
     }
-    if (!state.currentGame.startedAt) return;
-    var startedAt = new Date(state.currentGame.startedAt).getTime();
-    if (isNaN(startedAt)) return;
-    el.textContent = T("scoreboard.durationLive", { time: formatDuration(Date.now() - startedAt) });
+    var startedAt = state.currentGame.startedAt ? new Date(state.currentGame.startedAt).getTime() : NaN;
+    el.textContent = isNaN(startedAt) ? T("scoreboard.durationWaiting") : T("scoreboard.durationLive", { time: formatDuration(Date.now() - startedAt) });
+  }
+
+  // The game's clock (the score card's "Duration") starts at its first
+  // shot, not when the game was set up or the last one ended: the first
+  // shot the camera recognizes (a Shooting press included), the first
+  // score, or a player picked on the keypad / their card as the one
+  // shooting. Until then startedAt is null and the card says it's
+  // waiting.
+  function markFirstShot() {
+    if (state.currentGame.startedAt) return;
+    state.currentGame.startedAt = new Date().toISOString();
+    saveState();
+    updateGameDurationDisplay();
   }
 
   // Shot counter (see handleKeypadShortcut and the shotCounter* module
@@ -5573,6 +5657,7 @@
     // methods are attached from inside boot(), which may not have run
     // yet on the very first render.
     if (window.PMCCameraBridge && window.PMCCameraBridge.syncScorecardCameraIcons) window.PMCCameraBridge.syncScorecardCameraIcons();
+    if (cameraAckFlash) applyCameraAckFlash();
   }
 
   function formatTimestamp(ts, includeDate) {
@@ -6110,6 +6195,8 @@
 
     var startedAt = state.currentGame.startedAt ? new Date(state.currentGame.startedAt).getTime() : null;
     var durationMs = startedAt ? Math.max(0, Date.now() - startedAt) : null;
+    // (no shot before the winning point itself - no real duration to keep)
+    if (durationMs !== null && durationMs < 1000) durationMs = null;
     var ts = new Date().toISOString();
     state.gameHistory.unshift({
       ts: ts,
@@ -6904,7 +6991,7 @@
     state.players.forEach(function (p) {
       p.balls = 0;
     });
-    state.currentGame.startedAt = new Date().toISOString();
+    state.currentGame.startedAt = null; // the clock starts at its first shot - see markFirstShot
     // A new game/rack means a fresh shot clock too - startShotCounter()
     // already zeroes elapsed/beep/tick and starts it running without
     // touching the persisted hidden flag.
@@ -7307,6 +7394,8 @@
         });
       }
     }
+
+    markFirstShot();
 
     // Quick Counter: just tally, never check a target or credit a win.
     // Free-form point counter — negative scores are allowed (e.g. golf-
@@ -30090,6 +30179,9 @@
     var seen = name && window.PMCCameraBridge.isPlayerPlayingByName(name) ? name : null;
     if (seen === lastSpokenCandidateName) return;
     lastSpokenCandidateName = seen;
+    // Said only while debugging - in play, who's at the table changing
+    // all the time was just chatter (see cameraShotVoiceAllowed).
+    if (!cameraDebugVoiceOn()) return;
     // "X shooting." a moment ago already said who it is - a cue shot by
     // someone out of view names them as the seen player right after.
     if (seen && lastShotAnnounced && lastShotAnnounced.name === seen && Date.now() - lastShotAnnounced.at < 10000) return;
@@ -30101,11 +30193,27 @@
   // each one calls selectPlayer, so both transports get identical
   // parent-page voice feedback through one implementation.
   var lastShotAnnounced = null; // { name, at }
-  window.PMCCameraBridge.announceShotFired = function (name) {
+  window.PMCCameraBridge.announceShotFired = function (name, certainty) {
     if (!name) return;
     lastShotAnnounced = { name: name, at: Date.now() };
+    if (!cameraShotVoiceAllowed(certainty)) return;
     speakCameraStatus(name + " shooting.");
   };
+  // A shot the camera recognized switches the player without a word (no
+  // "X shooting", no keypad announcement) - in play, the voice on every
+  // change was annoying - except: while debugging (either debug box
+  // ticked), as before; and in Straight Pool, when the camera is at least
+  // CAMERA_VOICE_MIN_CERTAINTY sure who it is (certainty comes with each
+  // shot - see camera.html's matchCertainty; a Shooting press is 1).
+  var CAMERA_VOICE_MIN_CERTAINTY = 0.8;
+  function cameraDebugVoiceOn() {
+    return cameraDebugCheckbox.checked || cameraCueDebugCheckbox.checked;
+  }
+  function cameraShotVoiceAllowed(certainty) {
+    if (cameraDebugVoiceOn()) return true;
+    if (quickCounterMode || state.currentGame.gameType !== "straight") return false;
+    return typeof certainty === "number" && certainty >= CAMERA_VOICE_MIN_CERTAINTY;
+  }
 
   // A shot the camera recognized (player_up), from either transport:
   // select that player on the keypad and announce it. When it can't be
@@ -30125,7 +30233,7 @@
     cameraShotIgnoredAt[toastKey] = now;
     showToast(T(toastKey, toastParams));
   }
-  window.PMCCameraBridge.handleCameraShot = function (name) {
+  window.PMCCameraBridge.handleCameraShot = function (name, certainty) {
     if (!name) return;
     if (!window.PMCCameraBridge.isEnabled()) {
       noteCameraShot("Shot: " + name + " - not selected, Camera player recognition is off", "toast.cameraShotRecognitionOff", { name: name });
@@ -30161,10 +30269,13 @@
     // and every later shot by whoever's still selected (very common -
     // solo practice, or several turns in a row) never got announced at
     // all, which is exactly what "only the first shot" was.
+    markFirstShot();
     var already = id === window.PMCCameraBridge.getSelectedPlayerId();
-    if (!already) window.PMCCameraBridge.selectPlayer(id);
-    window.PMCCameraBridge.announceShotFired(name);
-    noteCameraShot("Shot: " + name + (already ? " - already selected" : " - selected"));
+    var voice = cameraShotVoiceAllowed(certainty);
+    if (!already) window.PMCCameraBridge.selectPlayer(id, voice);
+    window.PMCCameraBridge.announceShotFired(name, certainty);
+    noteCameraShot("Shot: " + name + (already ? " - already selected" : " - selected") +
+      (typeof certainty === "number" ? " (" + Math.round(certainty * 100) + "% sure" + (voice ? ")" : ", not spoken)") : ""));
   };
   // Cue stick over the table (camera.html's cue tracking) - "detected" /
   // "gone" as the cue comes out over the cloth and is put away ("fewer"
@@ -30936,7 +31047,7 @@
     sameDeviceCameraBecameReady(); // its first message means its own listener is up
 
     if (msg.type === "player_up") {
-      window.PMCCameraBridge.handleCameraShot(msg.player_name);
+      window.PMCCameraBridge.handleCameraShot(msg.player_name, msg.certainty);
     } else if (msg.type === "settings-request") {
       var settings = window.PMCCameraBridge.getSettings();
       try {
@@ -30954,6 +31065,8 @@
       window.PMCCameraBridge.reportEnrollmentUpdated(msg.player_name);
     } else if (msg.type === "enroll-result") {
       window.PMCCameraBridge.reportEnrollResult(msg);
+    } else if (msg.type === "enroll-pressed") {
+      window.PMCCameraBridge.reportEnrollPressed(msg);
     } else if (msg.type === "ball_pocketed" || msg.type === "ball_rerack" || msg.type === "ball_reappeared") {
       window.PMCCameraBridge.reportBallEvent(msg);
     } else if (msg.type === "cue_event") {
@@ -32493,8 +32606,10 @@
     getSelectedPlayerId: function () {
       return keypadSelectedPlayerId;
     },
-    selectPlayer: function (id) {
-      selectKeypadPlayer(id, null, true);
+    // announce false: no spoken "X playing" (a camera switch that
+    // shouldn't be spoken - see cameraShotVoiceAllowed).
+    selectPlayer: function (id, announce) {
+      selectKeypadPlayer(id, null, announce !== false);
     },
     // Read by camera-client.js so it can hand these to the recognizer
     // page over the relay (see Step 3 of the camera feature) - not used
@@ -32552,6 +32667,11 @@
       else if (msg.reason === "nothing-to-undo") text = T("cameraKeys.nothingToUndo");
       else text = T("cameraKeys.notRunning");
       showToast(text, "📷 ");
+    },
+    // Any Identify/Shooting press on the camera, however made: flash
+    // that player's score card - see flashScoreCardForCameraPress.
+    reportEnrollPressed: function (msg) {
+      if (msg && msg.player_name) flashScoreCardForCameraPress(msg.player_name, msg.kind === "shooting" ? "shooting" : "identify");
     },
     // Ball tracking's counterpart - invoked from adjustScore with
     // { kind: "false_positive" | "missed", delta, ts } when a human
