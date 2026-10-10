@@ -203,7 +203,16 @@
   .player-row.just-added { background: color-mix(in srgb, var(--accent) 18%, transparent); }
   .player-row.seen-now .name::after { content: " \2190  camera sees them now"; color: var(--accent); font-size: 0.85rem; font-weight: 600; }
   .player-row.picked { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
-  .enroll-live { font-size: 1rem; color: var(--text); margin: 8px 0; }
+  /* Always two lines tall, whatever it says - it changes several times a
+     second ("Nobody at the table in view." / "...isn't sure: Alex or
+     Sam"), and everything below used to jump with it. */
+  .enroll-live {
+    font-size: 1rem; color: var(--text); margin: 8px 0;
+    line-height: 1.4; height: 2.8em; overflow: hidden;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  }
+  /* The press status below it: two lines kept too. */
+  #enrollShotStatus { line-height: 1.35; min-height: 2.7em; }
   .player-row .check { font-size: 0.9rem; }
   .player-row .check.good { color: var(--good); }
   .player-row .check.poor { color: var(--danger); }
