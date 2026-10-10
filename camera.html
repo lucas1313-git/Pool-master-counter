@@ -350,6 +350,27 @@
   }
   .help-card h3 { margin: 0 0 10px; color: var(--accent); font-size: 1.3rem; }
   .help-card p { margin: 0; white-space: pre-line; color: var(--text); }
+  .help-card .help-body { white-space: pre-line; color: var(--text); }
+  /* The key map (SETTINGS_HELP.keys): tables, so a wider card. */
+  .help-card.wide { max-width: 640px; }
+  .help-card .help-body.rich { white-space: normal; }
+  .help-body.rich h4 { margin: 16px 0 6px; color: var(--accent); font-size: 1.1rem; }
+  .help-body.rich h4:first-child { margin-top: 0; }
+  .help-body.rich table { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
+  .help-body.rich td { padding: 5px 6px; border-top: 1px solid var(--border); vertical-align: top; }
+  .help-body.rich td:first-child { width: 5.5em; white-space: nowrap; }
+  .help-body.rich kbd {
+    display: inline-block; min-width: 1.6em; padding: 1px 6px; margin: 1px 1px;
+    border: 1px solid var(--border); border-bottom-width: 3px; border-radius: 6px;
+    background: var(--card); color: var(--text); font-family: inherit; font-weight: 700; font-size: 0.95rem; line-height: 1.4; text-align: center;
+  }
+  .help-body.rich .note { color: var(--text-dim); font-size: 0.95rem; margin: 4px 0 0; }
+  /* The Enroll tab's "?" for it: bigger than the settings ones. */
+  .help-btn.help-btn-keys {
+    width: 34px; height: 34px; min-width: 34px; margin-left: 10px;
+    font-size: 1.15rem; color: var(--accent); border-color: var(--accent);
+  }
+  h2.with-keys-help { display: flex; align-items: center; }
   .wizard-header h2 {
     margin: 0 0 6px;
     color: var(--accent);
@@ -529,7 +550,7 @@
   </section>
 
   <section class="panel" id="enrollPanel" hidden>
-    <h2>Enroll players (today's outfits)</h2>
+    <h2 class="with-keys-help">Enroll players (today's outfits) <button type="button" class="help-btn help-btn-keys" data-help="keys" aria-label="Number pad and score card keys" title="Number pad and score card keys">?</button></h2>
     <div class="hint"><strong>Identify</strong>: press while the player is at the table (the only one there, or the one bent over) - the camera learns what they look like. <strong>Shooting</strong>: press while they're down on a shot - it also learns how they shoot, and the scoreboard switches to them. Every press adds a sample; nothing is replaced. Press as often as you like, any time, even mid-game.</div>
     <div class="hint">With a number pad: a player's <strong>number</strong> = seen (Identify), <strong>+</strong> = that player shooting, <strong>-</strong> = take back the last one.</div>
     <div class="hint">The frame round the picture lights <strong>yellow</strong> while a seen sample is taken and <strong>green</strong> for a shooting one, with whose it is - gray otherwise.</div>
@@ -600,7 +621,7 @@
   <div class="help-card">
     <button type="button" class="wizard-close-btn" id="btnCloseSettingsHelp" aria-label="Close">×</button>
     <h3 id="settingsHelpTitle"></h3>
-    <p id="settingsHelpBody"></p>
+    <div class="help-body" id="settingsHelpBody"></div>
   </div>
 </div>
 
@@ -912,6 +933,39 @@
       title: "Cue debug mode",
       body: "Shows exactly what the cue detection is doing, without the rest of the debug overlay.\n\nThe cue is drawn on the video in pink (with how long it is and who it was matched to), the activity log gets a line each time a cue comes out over the table, is put away, or is put down to a player, and - when \"Speak player status\" is on - the camera says \"Cue detected on table\" each time one comes out.\n\nWhen a cue comes out and nobody in view is holding it, the last player the camera saw is set as shooting.\n\nIt doesn't change what gets detected - turn it off for normal play."
     },
+    // The Enroll tab's key map - html (static, written here), shown as tables.
+    keys: {
+      title: "Number pad and score cards",
+      wide: true,
+      html:
+        "<h4>Here, on the Enroll tab (the camera full screen)</h4>" +
+        "<table>" +
+        "<tr><td><kbd>1</kbd>-<kbd>9</kbd></td><td>That row's player is <b>seen</b>: a seen sample (like Identify), and they become the player <kbd>+</kbd> is for.</td></tr>" +
+        "<tr><td><kbd>+</kbd></td><td>That player is <b>shooting</b>: a shooting sample, taken at their deepest bend - the scoreboard switches to them.</td></tr>" +
+        "<tr><td><kbd>-</kbd></td><td><b>Take back</b> the last sample.</td></tr>" +
+        "</table>" +
+        "<p class=\"note\">The frame round the picture lights yellow while a seen sample is taken, green for a shooting one, with whose it is. Their score card flashes: once for seen, twice for shooting.</p>" +
+        "<h4>While playing (the camera small, or on a phone)</h4>" +
+        "<table>" +
+        "<tr><td><kbd>1</kbd>-<kbd>6</kbd></td><td><b>Select</b> that player - the number on their score card.</td></tr>" +
+        "<tr><td><kbd>7</kbd></td><td>The selected player is <b>seen</b> - a seen sample.</td></tr>" +
+        "<tr><td><kbd>8</kbd></td><td>The selected player is <b>shooting</b> - a shooting sample.</td></tr>" +
+        "<tr><td><kbd>0</kbd></td><td><b>Take back</b> the last camera sample.</td></tr>" +
+        "</table>" +
+        "<p class=\"note\">Only while the camera is on and at most 6 players are numbered - with 7 or more, <kbd>7</kbd> and <kbd>8</kbd> select players 7 and 8. A message on the scoreboard says how each one went.</p>" +
+        "<h4>Scoring on the score cards</h4>" +
+        "<table>" +
+        "<tr><td><kbd>1</kbd>-<kbd>9</kbd></td><td><b>Select</b> that player.</td></tr>" +
+        "<tr><td><kbd>Enter</kbd></td><td>Select the <b>next</b> player.</td></tr>" +
+        "<tr><td><kbd>+</kbd></td><td><b>One more</b> point, ball or rack for the selected player.</td></tr>" +
+        "<tr><td><kbd>-</kbd></td><td><b>One less</b> (in a race to 1 rack: takes back the last win).</td></tr>" +
+        "<tr><td><kbd>Esc</kbd></td><td>Nobody selected.</td></tr>" +
+        "<tr><td>Touch</td><td>Tap a player's name to select them; tap the <b>+</b> / <b>-</b> on their card.</td></tr>" +
+        "</table>" +
+        "<p class=\"note\"><b>15 Ball Rotation:</b> <kbd>+</kbd> (or <kbd>-</kbd>), type the points, then <kbd>Enter</kbd> (adds them and selects the next player) or <kbd>+</kbd> / <kbd>-</kbd> (adds them and starts another entry). <kbd>Esc</kbd> or <kbd>Clear</kbd> cancels. Numbers don't select players in this game - use <kbd>Enter</kbd> or tap.</p>" +
+        "<p class=\"note\"><b>Shot clock</b> (when it's on): <kbd>/</kbd> pause / go on, <kbd>*</kbd> show / hide, <kbd>Clear</kbd> back to zero.</p>" +
+        "<p class=\"note\">Num Lock must be on - otherwise the number pad sends arrows and Home/End instead of numbers.</p>"
+    },
     voiceStatus: {
       title: "Speak player status out loud",
       body: "Reads status out loud from this device - who the camera currently sees, and when a shot is confirmed.\n\nUseful if you're not looking at the screen. Purely audio feedback - it doesn't affect detection at all."
@@ -925,7 +979,10 @@
     var entry = SETTINGS_HELP[key];
     if (!entry) return;
     settingsHelpTitle.textContent = entry.title;
-    settingsHelpBody.textContent = entry.body;
+    if (entry.html) settingsHelpBody.innerHTML = entry.html;
+    else settingsHelpBody.textContent = entry.body;
+    settingsHelpBody.classList.toggle("rich", !!entry.html);
+    settingsHelpOverlay.firstElementChild.classList.toggle("wide", !!entry.wide);
     settingsHelpOverlay.classList.remove("hidden");
   }
   function closeSettingsHelp() {
@@ -940,6 +997,9 @@
     if (e.target === settingsHelpOverlay) closeSettingsHelp();
   });
   btnCloseSettingsHelp.addEventListener("click", closeSettingsHelp);
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && !settingsHelpOverlay.classList.contains("hidden")) closeSettingsHelp();
+  });
 
   var setupWizardOverlay = document.getElementById("setupWizardOverlay");
   var wizardHeading = document.getElementById("wizardHeading");
