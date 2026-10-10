@@ -936,6 +936,7 @@
   "visualScoring.lightCameraUnknown": "Camera: -",
   "visualScoring.selectCameraHeading": "Select Camera",
   "visualScoring.debugFrameTitle": "Debugging visual matching",
+  "visualScoring.debugSummary": "Debug info on the screen during play, the camera speaking who it sees, and the cue debug mode.",
   "visualScoring.matchingPlayersTitle": "Players identification settings",
   "visualScoring.matchSliderLabel": "Set matching sensitivity",
   "visualScoring.matchNone": "No matching",

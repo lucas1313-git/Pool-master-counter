@@ -31014,6 +31014,12 @@
   // checkboxes now show for a separate camera phone as well, and should
   // come back the way they were left.
   syncCameraDebugCheckboxesFromStorage();
+  // Debugging visual matching starts folded away - open while a debug mode
+  // is on, so its live log (inside it) is in view.
+  if (cameraDebugCheckbox.checked || cameraCueDebugCheckbox.checked) {
+    document.getElementById("camera-debug-options-row").classList.remove("collapsed");
+    document.getElementById("btn-toggle-camera-debug-options").setAttribute("aria-expanded", "true");
+  }
 
   cameraDebugCheckbox.addEventListener("change", function () {
     sendCameraDebugSettingsToIframe();
@@ -31859,6 +31865,7 @@
   wireCollapsiblePanel("visual-scoring-panel", "btn-toggle-visual-scoring-panel");
   wireCollapsiblePanel("camera-setup-panel", "btn-toggle-camera-setup-panel");
   wireCollapsiblePanel("capture-settings-panel", "btn-toggle-capture-settings-panel");
+  wireCollapsiblePanel("camera-debug-options-row", "btn-toggle-camera-debug-options");
   wireCollapsiblePanel("standings-panel", "btn-toggle-standings-panel");
   wireCollapsiblePanel("history-panel", "btn-toggle-history-panel");
   wireCollapsiblePanel("day-notes-panel", "btn-toggle-day-notes-panel");

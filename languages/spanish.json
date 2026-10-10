@@ -936,6 +936,7 @@
   "visualScoring.lightCameraUnknown": "Cámara: -",
   "visualScoring.selectCameraHeading": "Elegir cámara",
   "visualScoring.debugFrameTitle": "Depuración del reconocimiento visual",
+  "visualScoring.debugSummary": "Información de depuración en pantalla durante el juego, la cámara diciendo a quién ve y el modo de depuración del taco.",
   "visualScoring.matchingPlayersTitle": "Ajustes de identificación de jugadores",
   "visualScoring.matchSliderLabel": "Ajustar la sensibilidad de coincidencia",
   "visualScoring.matchNone": "Sin coincidencias",

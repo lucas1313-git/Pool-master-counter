@@ -936,6 +936,7 @@
   "visualScoring.lightCameraUnknown": "Camera: -",
   "visualScoring.selectCameraHeading": "Pumili ng Camera",
   "visualScoring.debugFrameTitle": "Pag-debug ng visual matching",
+  "visualScoring.debugSummary": "Debug info sa screen habang naglalaro, ang camera na nagsasabi kung sino ang nakikita nito, at ang cue debug mode.",
   "visualScoring.matchingPlayersTitle": "Mga setting ng pagkilala sa manlalaro",
   "visualScoring.matchSliderLabel": "Itakda ang sensitivity ng pagtutugma",
   "visualScoring.matchNone": "Walang pagtutugma",

@@ -936,6 +936,7 @@
   "visualScoring.lightCameraUnknown": "鏡頭:-",
   "visualScoring.selectCameraHeading": "揀鏡頭",
   "visualScoring.debugFrameTitle": "除錯:視覺配對",
+  "visualScoring.debugSummary": "打波時喺畫面顯示除錯資料、鏡頭讀出佢見到邊個,同埋球桿除錯模式。",
   "visualScoring.matchingPlayersTitle": "球員辨識設定",
   "visualScoring.matchSliderLabel": "設定配對靈敏度",
   "visualScoring.matchNone": "唔配對",

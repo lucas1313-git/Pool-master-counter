@@ -936,6 +936,7 @@
   "visualScoring.lightCameraUnknown": "Caméra : -",
   "visualScoring.selectCameraHeading": "Choisir la caméra",
   "visualScoring.debugFrameTitle": "Débogage de la reconnaissance visuelle",
+  "visualScoring.debugSummary": "Infos de débogage à l'écran pendant le jeu, la caméra qui annonce qui elle voit, et le mode débogage de la queue.",
   "visualScoring.matchingPlayersTitle": "Réglages d'identification des joueurs",
   "visualScoring.matchSliderLabel": "Régler la sensibilité de correspondance",
   "visualScoring.matchNone": "Aucune correspondance",
