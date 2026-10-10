@@ -4,8 +4,15 @@
 // differently per entry point (server.js: print a friendly CLI message
 // and exit; the standalone desktop build: just open the browser to the
 // already-running instance instead of crashing).
+//
+// Built with { noServer: true } rather than { server: httpServer, path }
+// because ws's own path-matching "upgrade" listener aborts (HTTP 400) any
+// request whose path doesn't match it, instead of leaving it for a sibling
+// WebSocketServer on the same httpServer (e.g. camera-relay.js's /ws-camera)
+// - so the caller registers exactly one shared "upgrade" listener that
+// dispatches by path and calls handleUpgrade() on only the matching server.
 function attachRelay(httpServer, WebSocket) {
-  var wss = new WebSocket.Server({ server: httpServer, path: "/ws" });
+  var wss = new WebSocket.Server({ noServer: true });
 
   // Single global session per running process - one room, no auth. Good
   // enough for "one table, one relay" - running a second table just means

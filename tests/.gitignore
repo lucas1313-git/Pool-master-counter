@@ -1,0 +1,5 @@
+# Generated or machine-local - rebuilt by the scripts here
+publicbuild/site/
+tmphome/
+*.log
+*.png

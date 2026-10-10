@@ -359,7 +359,28 @@
       fairRaceEnabled: false,
       fairRaceTargets: null,
       rotatingTeamsEnabled: false,
-      currentGame: { gameType: "8ball", target: 1, unit: "rack", mode: "individual", startedAt: new Date().toISOString(), shotCounterEnabled: false, shotCounterBeepSec: 30, shotCounterHidden: false, queueEnabled: false, timedTournamentEnabled: false, timedTournamentMinutes: 60 },
+      cameraInputEnabled: false,
+      // Set true the first time either camera wizard path actually
+      // finishes (phone-path step 2's enable checkbox, or the
+      // same-device "Start" button) - lets the main checkbox tell "never
+      // configured" apart from "configured, just switched off" so it
+      // knows when to redirect into the wizard instead of just toggling.
+      cameraWizardCompleted: false,
+      // Specifically the same-device path (not cross-device/phone, which
+      // also sets cameraWizardCompleted) - the signal boot() needs to
+      // know whether to auto-resume the embedded iframe on a fresh page
+      // load. Without this, cameraInputEnabled showing checked after a
+      // reload was a lie - nothing was actually running, since the
+      // iframe only ever started via an explicit wizard/overlay click,
+      // never automatically - so recognition silently did nothing the
+      // moment the page was reloaded mid-session.
+      sameDeviceCameraSetUp: false,
+      cameraMatchThreshold: 1.2,
+      cameraDebounceSec: 10,
+      // Straight Pool only - lets a camera-reported pocketed ball credit
+      // the selected shooter automatically (see reportBallEvent).
+      cameraBallTrackingEnabled: false,
+      currentGame: { gameType: "8ball", target: 1, unit: "rack", mode: "individual", startedAt: null, shotCounterEnabled: false, shotCounterBeepSec: 30, shotCounterHidden: false, queueEnabled: false, timedTournamentEnabled: false, timedTournamentMinutes: 60 },
       gameHistory: [],
       rotation: { enabled: false, order: [], every: 1 },
       gamesPlayedCount: 0,
@@ -433,8 +454,25 @@
           if (typeof parsed.fairRaceEnabled !== "boolean") parsed.fairRaceEnabled = false;
           if (typeof parsed.fairRaceTargets !== "object") parsed.fairRaceTargets = null;
           if (typeof parsed.rotatingTeamsEnabled !== "boolean") parsed.rotatingTeamsEnabled = false;
+          if (typeof parsed.cameraInputEnabled !== "boolean") parsed.cameraInputEnabled = false;
+          // Existing users who already had this on before cameraWizardCompleted
+          // existed clearly already went through setup under the old
+          // flow (checking the box WAS the whole flow back then) -
+          // default them to "completed" too, so they don't get bounced
+          // into the wizard the next time they flip this checkbox off/on.
+          if (typeof parsed.cameraWizardCompleted !== "boolean") parsed.cameraWizardCompleted = !!parsed.cameraInputEnabled;
+          // Unlike cameraWizardCompleted above, no inference here - an
+          // existing cameraInputEnabled:true could mean either path, and
+          // wrongly auto-starting a camera stream (unexpected permission
+          // prompt) for someone who actually uses a separate phone is a
+          // worse first impression than just needing one more click to
+          // re-arm same-device mode for someone who does use it.
+          if (typeof parsed.sameDeviceCameraSetUp !== "boolean") parsed.sameDeviceCameraSetUp = false;
+          if (typeof parsed.cameraMatchThreshold !== "number") parsed.cameraMatchThreshold = 1.2;
+          if (typeof parsed.cameraDebounceSec !== "number") parsed.cameraDebounceSec = 10;
+          if (typeof parsed.cameraBallTrackingEnabled !== "boolean") parsed.cameraBallTrackingEnabled = false;
           if (!parsed.currentGame) parsed.currentGame = { gameType: "8ball", target: 1, mode: "individual" };
-          if (!parsed.currentGame.startedAt) parsed.currentGame.startedAt = new Date().toISOString();
+          if (!parsed.currentGame.startedAt) parsed.currentGame.startedAt = null; // (not started yet - see markFirstShot)
           if (typeof parsed.currentGame.unit !== "string" || !parsed.currentGame.unit) parsed.currentGame.unit = null;
           if (typeof parsed.currentGame.shotCounterEnabled !== "boolean") parsed.currentGame.shotCounterEnabled = false;
           if (typeof parsed.currentGame.shotCounterBeepSec !== "number") parsed.currentGame.shotCounterBeepSec = 30;
@@ -496,6 +534,7 @@
     // device's own history stays unsaved, exactly as that mode already
     // promises elsewhere.
     broadcastStateIfNetworked();
+    notifyCameraRosterChanged();
     if (noStatsMode) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -670,6 +709,21 @@
     var teamsMode = !quickCounterMode && state.currentGame.mode === "teams";
     rotatingTeamsRow.classList.toggle("hidden", !teamsMode);
     rotatingTeamsCheckbox.checked = state.rotatingTeamsEnabled;
+    // Not mode-specific (unlike the two rows above) - always shown;
+    // only the threshold/debounce fields hide while the feature itself
+    // is off.
+    cameraInputCheckbox.checked = state.cameraInputEnabled;
+    // Cross-device only - same-device mode already shows the camera's
+    // own calibration UI live in its embedded iframe, so there's nothing
+    // for this button to usefully do there.
+    cameraRemoteCalibrateRow.classList.toggle("hidden", !state.cameraInputEnabled || state.sameDeviceCameraSetUp);
+    cameraRemoteViewerRow.classList.toggle("hidden", !state.cameraInputEnabled || state.sameDeviceCameraSetUp);
+    cameraBallTrackingCheckbox.checked = state.cameraBallTrackingEnabled;
+    if (window.PMCCameraBridge && window.PMCCameraBridge.renderEnrollmentStatus) window.PMCCameraBridge.renderEnrollmentStatus();
+    // Debug/voice/cue-debug apply to either transport (the log and the
+    // voice are this page's own), so they show whenever the camera is on.
+    cameraDebugOptionsRow.classList.toggle("hidden", !state.cameraInputEnabled);
+    cameraEnableHint.classList.toggle("hidden", state.cameraInputEnabled);
     var queueActive = individualMode && state.currentGame.queueEnabled;
     queueSwapStickyRow.classList.toggle("hidden", !queueActive);
     queueSwapStickyCheckbox.checked = loadQueueSwapSticky();
@@ -768,6 +822,78 @@
     var badge = document.createElement("span");
     badge.className = "keypad-number-badge";
     el.appendChild(badge);
+  }
+
+  // ---- A camera sample press, acknowledged on the score card ----
+  // Pressing Identify or Shooting for a player (the camera's Enroll tab,
+  // the remote view, or the number pad's 7 / 8 - the camera says so with
+  // "enroll-pressed") flashes their card's border in the complementary
+  // colour of its normal one: once for half a second for "seen", twice
+  // for a quarter second for "shooting". Kept across a re-render (a
+  // Shooting press also selects them).
+  var CAMERA_ACK_STEPS = { identify: [500], shooting: [250, 150, 250] }; // on, off, on... (ms)
+  var cameraAckFlash = null; // { playerId, color, on }
+  var cameraAckTimers = [];
+  function cssColorToRgb(color) {
+    var ctx = cssColorToRgb.ctx || (cssColorToRgb.ctx = document.createElement("canvas").getContext("2d"));
+    ctx.fillStyle = "#000";
+    ctx.fillStyle = String(color || "").trim() || "#000";
+    var v = ctx.fillStyle, m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(v);
+    if (m) return [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)];
+    m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(v);
+    return m ? [+m[1], +m[2], +m[3]] : null;
+  }
+  // The opposite hue - null for a grey, which has no hue to turn round.
+  // Made at least this vivid and bright: the cards' own border is often a
+  // dark, muted shade, whose exact opposite wouldn't show from across
+  // the room.
+  function complementaryColor(rgb) {
+    if (!rgb) return null;
+    var r = rgb[0] / 255, g = rgb[1] / 255, b = rgb[2] / 255;
+    var max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2, d = max - min;
+    var s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+    if (s < 0.15) return null;
+    var h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    h = (h * 60 + 180 + 360) % 360;
+    return "hsl(" + Math.round(h) + ", " + Math.round(Math.max(s, 0.75) * 100) + "%, " + Math.round(Math.min(0.65, Math.max(l, 0.55)) * 100) + "%)";
+  }
+  // The card's normal border: the selection ring (the theme's accent)
+  // when it's the keypad's player, else its plain border - a grey one
+  // takes the accent's complement instead.
+  function cameraAckColor(card) {
+    var cs = getComputedStyle(card), accent = cs.getPropertyValue("--accent");
+    var normal = card.classList.contains("is-keypad-selected") ? accent : cs.borderTopColor;
+    return complementaryColor(cssColorToRgb(normal)) || complementaryColor(cssColorToRgb(accent)) || "#ff3fd2";
+  }
+  function applyCameraAckFlash() {
+    Array.prototype.forEach.call(document.querySelectorAll("[data-keypad-player-id]"), function (el) {
+      var on = !!cameraAckFlash && cameraAckFlash.on && el.dataset.keypadPlayerId === cameraAckFlash.playerId;
+      if (on) {
+        if (!cameraAckFlash.color) cameraAckFlash.color = cameraAckColor(el);
+        el.style.setProperty("--camera-ack-color", cameraAckFlash.color);
+      }
+      el.classList.toggle("camera-ack-flash", on);
+    });
+  }
+  function flashScoreCardForCameraPress(name, kind) {
+    var key = normalizeNameKey(name);
+    var player = key ? state.players.filter(function (p) { return normalizeNameKey(p.name) === key; })[0] : null;
+    if (!player) return;
+    cameraAckTimers.forEach(clearTimeout);
+    cameraAckTimers = [];
+    cameraAckFlash = null;
+    applyCameraAckFlash(); // (a flash still going for someone else ends here, and the colour is read off the plain card)
+    cameraAckFlash = { playerId: player.id, color: null, on: true };
+    applyCameraAckFlash();
+    var steps = CAMERA_ACK_STEPS[kind] || CAMERA_ACK_STEPS.identify, at = 0;
+    steps.forEach(function (ms, i) {
+      at += ms;
+      cameraAckTimers.push(setTimeout(function () {
+        if (i === steps.length - 1) cameraAckFlash = null;
+        else if (cameraAckFlash) cameraAckFlash.on = i % 2 === 1;
+        applyCameraAckFlash();
+      }, at));
+    });
   }
 
   // Recomputes which number (1-9) each currently-playing player's card
@@ -1799,6 +1925,91 @@
   var queueModeCheckbox = document.getElementById("queue-mode-checkbox");
   var rotatingTeamsRow = document.getElementById("rotating-teams-row");
   var rotatingTeamsCheckbox = document.getElementById("rotating-teams-checkbox");
+  var cameraInputCheckbox = document.getElementById("camera-input-checkbox");
+  var btnCameraInputHelp = document.getElementById("btn-camera-input-help");
+  var btnCameraMatchThresholdHelp = document.getElementById("btn-camera-match-threshold-help");
+  var btnCameraDebounceSecHelp = document.getElementById("btn-camera-debounce-sec-help");
+  var btnCameraDebugHelp = document.getElementById("btn-camera-debug-help");
+  var btnCameraVoiceHelp = document.getElementById("btn-camera-voice-help");
+  var cameraCandidateStatus = document.getElementById("camera-candidate-status");
+  var cameraDiagnosticLogEl = document.getElementById("camera-diagnostic-log");
+  var unmatchedShooterBanner = document.getElementById("unmatched-shooter-banner");
+  var btnDismissUnmatchedShooterBanner = document.getElementById("btn-dismiss-unmatched-shooter-banner");
+  var cameraRemoteCalibrateRow = document.getElementById("camera-remote-calibrate-row");
+  var btnStartRemoteCalibration = document.getElementById("btn-start-remote-calibration");
+  var btnCameraRemoteCalibrateHelp = document.getElementById("btn-camera-remote-calibrate-help");
+  var remoteCalibrateOverlay = document.getElementById("remote-calibrate-overlay");
+  var btnCloseRemoteCalibrate = document.getElementById("btn-close-remote-calibrate");
+  var remoteCalibrateStepEl = document.getElementById("remote-calibrate-step");
+  var remoteCalibrateCameraRow = document.getElementById("remote-calibrate-camera-row");
+  var remoteCalibrateCameraSelect = document.getElementById("remote-calibrate-camera-select");
+  var remoteCalibrateFrameEl = document.getElementById("remote-calibrate-frame");
+  var remoteCalibratePlaceholderEl = document.getElementById("remote-calibrate-placeholder");
+  var btnRemoteCalibrateCancel = document.getElementById("btn-remote-calibrate-cancel");
+  var btnRemoteCalibrateRetry = document.getElementById("btn-remote-calibrate-retry");
+  var btnRemoteCalibrateDone = document.getElementById("btn-remote-calibrate-done");
+  var cameraRemoteViewerRow = document.getElementById("camera-remote-viewer-row");
+  var btnOpenRemoteViewer = document.getElementById("btn-open-remote-viewer");
+  var btnCameraRemoteViewerHelp = document.getElementById("btn-camera-remote-viewer-help");
+  var cameraBallTrackingRow = document.getElementById("camera-ball-tracking-row");
+  var cameraBallTrackingCheckbox = document.getElementById("camera-ball-tracking-checkbox");
+  var btnCameraBallTrackingHelp = document.getElementById("btn-camera-ball-tracking-help");
+  var remoteViewerOverlay = document.getElementById("remote-viewer-overlay");
+  var remoteViewerIframe = document.getElementById("remote-viewer-iframe");
+  var btnCloseRemoteViewer = document.getElementById("btn-close-remote-viewer");
+  var cameraMatchSlider = document.getElementById("camera-match-slider");
+  var cameraMatchLevelInput = document.getElementById("camera-match-level");
+  var cameraDebounceSecInput = document.getElementById("camera-debounce-sec");
+  var captureSettingsWaiting = document.getElementById("capture-settings-waiting");
+  var captureSettingsFields = document.getElementById("capture-settings-fields");
+  // Set via PMCCameraBridge.onTurnConfirmed - a list now, not a single
+  // slot, since js/camera-client.js (the relay path) and the same-device
+  // camera overlay's postMessage listener each register their own
+  // callback independently, with neither needing to know the other exists.
+  var cameraTurnConfirmedCallbacks = [];
+  // The number pad's camera keys (see handleCameraKey) - same two
+  // transports, each registering how it reaches its camera.
+  var cameraCommandCallbacks = [];
+  // Ball tracking: transports register here to carry a keypad correction
+  // back to the camera (see adjustScore); lastAutoBallCredit is what
+  // tells a correction apart from an ordinary score change.
+  var cameraBallFeedbackCallbacks = [];
+  // Roster sync to the camera: who is on today's roster, who is actually
+  // Playing (recognition is limited to them), and every known contact-sheet
+  // name (the camera prunes enrollments for anyone else). Pushed whenever
+  // that set changes (see saveState), not only when the camera asks.
+  var cameraRosterCallbacks = [];
+  var cameraEnrollDeleteCallbacks = [];
+  // Capture settings pushed from the Visual Scoring section to a separate
+  // camera phone (js/camera-client.js registers the relay sender here).
+  var cameraCaptureSettingsCallbacks = [];
+  var lastCameraRosterSignature = null;
+  var cameraRosterPushTimer = null;
+  function notifyCameraRosterChanged() {
+    if (!window.PMCCameraBridge || !cameraRosterCallbacks.length) return;
+    clearTimeout(cameraRosterPushTimer);
+    cameraRosterPushTimer = setTimeout(function () {
+      var roster = window.PMCCameraBridge.buildCameraRoster();
+      var signature = JSON.stringify([roster.names, roster.playing, roster.known]);
+      if (signature === lastCameraRosterSignature) return;
+      lastCameraRosterSignature = signature;
+      cameraRosterCallbacks.forEach(function (cb) {
+        try {
+          cb(roster);
+        } catch (e) {}
+      });
+    }, 300);
+  }
+  function notifyCameraEnrollDelete(name) {
+    if (!name) return;
+    cameraEnrollDeleteCallbacks.forEach(function (cb) {
+      try {
+        cb(name);
+      } catch (e) {}
+    });
+  }
+  var lastAutoBallCredit = null;
+  var CAMERA_BALL_CORRECTION_WINDOW_MS = 15000;
   var queueSection = document.getElementById("queue-section");
   var queueList = document.getElementById("queue-list");
   var rosterLoadSelect = document.getElementById("roster-load-select");
@@ -1890,6 +2101,47 @@
   var btnOnboardingRunWizard = document.getElementById("btn-onboarding-run-wizard");
   var btnOnboardingManual = document.getElementById("btn-onboarding-manual");
   var onboardingStep = 1;
+
+  var btnOpenCameraWizardHeader = document.getElementById("btn-open-camera-wizard-header");
+  var visualScoringPanel = document.getElementById("visual-scoring-panel");
+  var btnToggleVisualScoringPanel = document.getElementById("btn-toggle-visual-scoring-panel");
+  var cameraSetupPanel = document.getElementById("camera-setup-panel");
+  var btnToggleCameraSetupPanel = document.getElementById("btn-toggle-camera-setup-panel");
+  var cameraEnableHint = document.getElementById("camera-enable-hint");
+  var cameraWizardLinkBlock = document.getElementById("camera-wizard-link-block");
+  var cameraWizardUrl = document.getElementById("camera-wizard-url");
+  var cameraWizardQr = document.getElementById("camera-wizard-qr");
+  var cameraWizardHttpsMissing = document.getElementById("camera-wizard-https-missing");
+  var cameraWizardHttpsFailed = document.getElementById("camera-wizard-https-failed");
+  var cameraWizardHttpsFailedText = document.getElementById("camera-wizard-https-failed-text");
+  var btnCameraWizardRetryHttps = document.getElementById("btn-camera-wizard-retry-https");
+  var cameraWizardNoRelay = document.getElementById("camera-wizard-no-relay");
+  var cameraWizardInstallPrompt = document.getElementById("camera-wizard-install-prompt");
+  var cameraWizardInstallLink = document.getElementById("camera-wizard-install-link");
+  var cameraWizardInstallUnsupported = document.getElementById("camera-wizard-install-unsupported");
+  var cameraWizardInstallSecurityNote = document.getElementById("camera-wizard-install-security-note");
+  var btnCameraWizardPathPhone = document.getElementById("camera-wizard-path-phone");
+  var btnCameraWizardPathSameDevice = document.getElementById("camera-wizard-path-same-device");
+  var cameraWizardPhonePath = document.getElementById("camera-wizard-phone-path");
+  var cameraWizardSameDevicePath = document.getElementById("camera-wizard-same-device-path");
+  var cameraWizardInsecureContext = document.getElementById("camera-wizard-insecure-context");
+  var btnCameraWizardStartSameDevice = document.getElementById("btn-camera-wizard-start-same-device");
+  var cameraWizardPath = "phone";
+  var cameraWizardPathUserChosen = false;
+  var cameraWizardLinkPollTimer = null;
+
+  var sameDeviceCameraOverlay = document.getElementById("same-device-camera-overlay");
+  var sameDeviceCameraCard = document.querySelector("#same-device-camera-overlay .same-device-camera-card");
+  var sameDeviceCameraIframe = document.getElementById("same-device-camera-iframe");
+  var btnCloseSameDeviceCamera = document.getElementById("btn-close-same-device-camera");
+  var cameraDebugOptionsRow = document.getElementById("camera-debug-options-row");
+  var cameraDebugCheckbox = document.getElementById("camera-debug-checkbox");
+  var cameraVoiceCheckbox = document.getElementById("camera-voice-checkbox");
+  var cameraCueDebugCheckbox = document.getElementById("camera-cue-debug-checkbox");
+  var btnCameraCueDebugHelp = document.getElementById("btn-camera-cue-debug-help");
+  var cameraInlinePreviewWrap = document.getElementById("camera-inline-preview-wrap");
+  var cameraInlinePreviewHome = document.getElementById("camera-inline-preview-home");
+  var btnExpandSameDeviceCamera = document.getElementById("btn-expand-same-device-camera");
 
   var btnToggleFocus = document.getElementById("btn-toggle-focus");
   var btnToggleKeypadSpeech = document.getElementById("btn-toggle-keypad-speech");
@@ -2706,7 +2958,10 @@
     return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
   }
 
-  function isAnyOverlayOpen() {
+  // exceptCameraView: the camera's own remote view (its Enroll tab's
+  // Shooting button is used mid-game) doesn't count - the same-device
+  // camera's full-screen view never did (see its own comment below).
+  function isAnyOverlayOpen(exceptCameraView) {
     return [
       helpOverlay,
       wizardOverlay,
@@ -2721,7 +2976,9 @@
       saveSessionOverlay,
       ratingEditOverlay,
       confirmModalOverlay,
-      playerConflictOverlay
+      playerConflictOverlay,
+      remoteCalibrateOverlay,
+      exceptCameraView ? null : remoteViewerOverlay
     ].some(function (el) {
       return el && !el.classList.contains("hidden");
     });
@@ -2817,6 +3074,7 @@
       resetCurrentRun();
     }
     keypadSelectedPlayerId = targetId;
+    markFirstShot();
     renderScoreboard();
     // Only during an actual points/ball game - Quick Counter is a
     // plain running tally with no target/win to track, so there's no
@@ -2850,10 +3108,55 @@
     var currentIdx = keypadSelectedPlayerId ? keypadOrderedPlayerIds.indexOf(keypadSelectedPlayerId) : -1;
     var nextIdx = (currentIdx + 1) % keypadOrderedPlayerIds.length;
     selectKeypadPlayer(keypadOrderedPlayerIds[nextIdx], nextIdx + 1, announce);
+    window.PMCCameraBridge.resolveUnmatchedShooterPrompt(keypadOrderedPlayerIds[nextIdx]);
+  }
+
+  // ---- Number pad + camera ----
+  // Enroll mode - the camera page open full screen (this device's own
+  // camera, or a phone's through the remote view): digits and +/- belong
+  // to it - each player's number = seen, + = shooting, - = take back the
+  // last one (see camera.html's handleEnrollKey; it ignores them off its
+  // Enroll tab).
+  function fullScreenCameraFrame() {
+    if (!sameDeviceCameraOverlay.classList.contains("hidden")) return sameDeviceCameraIframe.contentWindow;
+    if (remoteViewerOverlay && !remoteViewerOverlay.classList.contains("hidden")) return remoteViewerIframe.contentWindow;
+    return null;
+  }
+  // Play mode, with a camera connected: 7 = the selected player is in view
+  // ("seen" - an Identify sample), 8 = they're shooting (a Shooting
+  // sample), 0 = take back the last one. Only while at most
+  // CAMERA_KEY_MAX_PLAYERS players are numbered - 7 and 8 select players 7
+  // and 8 otherwise. The camera answers with how it went (see
+  // PMCCameraBridge.reportEnrollResult).
+  var CAMERA_KEY_MAX_PLAYERS = 6;
+  function cameraKeysActive() {
+    return typeof window.PMCCameraBridge.isCameraLive === "function" && window.PMCCameraBridge.isCameraLive() &&
+      keypadOrderedPlayerIds.length <= CAMERA_KEY_MAX_PLAYERS;
+  }
+  function handleCameraKey(key) {
+    if (key === "0") {
+      window.PMCCameraBridge.sendCameraCommand({ type: "enroll-undo" });
+      showToast(T("cameraKeys.undoing"), "📷 ");
+      return;
+    }
+    var player = keypadSelectedPlayerId ? getPlayer(keypadSelectedPlayerId) : null;
+    if (!player) {
+      showToast(T("cameraKeys.selectFirst"), "📷 ");
+      return;
+    }
+    var kind = key === "7" ? "identify" : "shooting";
+    window.PMCCameraBridge.sendCameraCommand({ type: "enroll-press", player_name: player.name, kind: kind });
+    showToast(T(kind === "identify" ? "cameraKeys.seenPressed" : "cameraKeys.shootingPressed", { name: player.name }), "📷 ");
   }
 
   function handleKeypadShortcut(e) {
     if (isTypingIntoField(document.activeElement)) return;
+    var cameraFrame = fullScreenCameraFrame();
+    if (cameraFrame && /^[0-9+\-]$/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      try { cameraFrame.postMessage({ type: "keypad-key", key: e.key }, location.origin); } catch (err) {}
+      return;
+    }
     if (isAnyOverlayOpen()) return;
     if (appRoot.classList.contains("hidden")) return;
 
@@ -2897,6 +3200,12 @@
       return;
     }
 
+    if ((e.key === "7" || e.key === "8" || e.key === "0") && cameraKeysActive()) {
+      e.preventDefault();
+      handleCameraKey(e.key);
+      return;
+    }
+
     if (/^[1-9]$/.test(e.key)) {
       // Selecting a player by number is exactly what 15 Ball Rotation's
       // score-entry mode repurposes digits for - see above.
@@ -2906,6 +3215,7 @@
       if (!targetId) return;
       e.preventDefault();
       selectKeypadPlayer(targetId, keypadNum, true);
+      window.PMCCameraBridge.resolveUnmatchedShooterPrompt(targetId);
       return;
     }
 
@@ -3799,6 +4109,7 @@
       row.appendChild(name);
       row.appendChild(buildRatingBadge(p.name));
       row.appendChild(buildClubTeamBadge(p.name));
+      if (state.cameraInputEnabled && state.sameDeviceCameraSetUp) row.appendChild(buildCameraEnrollBadge(p.name));
 
       var editRatingBtn = document.createElement("button");
       editRatingBtn.type = "button";
@@ -4548,10 +4859,27 @@
     var panel = document.createElement("div");
     panel.className = "player-panel";
 
+    // Built once per render, visibility/state toggled live by
+    // updateCameraIconsOnScorecard on every camera event rather than
+    // forcing a full re-render ~3.5 times a second - see that function's
+    // own comment for what each sub-icon means.
+    if (state.cameraInputEnabled && state.sameDeviceCameraSetUp) {
+      var camBadge = document.createElement("div");
+      camBadge.className = "scorecard-camera-badge";
+      camBadge.dataset.playerId = player.id;
+      camBadge.innerHTML =
+        '<span class="scorecard-camera-badge-icon">' + CAMERA_ICON_SVG + "</span>" +
+        '<span class="scorecard-camera-badge-clock" aria-hidden="true">🕐</span>' +
+        '<span class="scorecard-camera-badge-plus" aria-hidden="true">+</span>' +
+        '<span class="scorecard-camera-badge-question" aria-hidden="true">?</span>';
+      panel.appendChild(camBadge);
+    }
+
     var name = document.createElement("div");
     name.className = "player-name keypad-select-trigger";
     name.addEventListener("click", function () {
       selectKeypadPlayer(player.id, null, true);
+      window.PMCCameraBridge.resolveUnmatchedShooterPrompt(player.id);
     });
     buildPlayerNameLabel(name, player.name, false);
     // Swaps the plain full name for its short display (see
@@ -4592,6 +4920,7 @@
     value.className = "stat-value keypad-select-trigger";
     value.addEventListener("click", function () {
       selectKeypadPlayer(player.id, null, true);
+      window.PMCCameraBridge.resolveUnmatchedShooterPrompt(player.id);
     });
     if (isSingleRackGame) {
       // Still needs a label here - without it this number reads as an
@@ -4648,6 +4977,7 @@
     name.className = "member-name keypad-select-trigger";
     name.addEventListener("click", function () {
       selectKeypadPlayer(player.id, null, true);
+      window.PMCCameraBridge.resolveUnmatchedShooterPrompt(player.id);
     });
     buildPlayerNameLabel(name, player.name, false);
     name.appendChild(buildPlayerLinkIcon(player.name));
@@ -4673,6 +5003,7 @@
     value.className = "stat-value small keypad-select-trigger";
     value.addEventListener("click", function () {
       selectKeypadPlayer(player.id, null, true);
+      window.PMCCameraBridge.resolveUnmatchedShooterPrompt(player.id);
     });
     value.textContent = player.balls || 0;
     applyScoreFlash(value, player);
@@ -4934,10 +5265,21 @@
       el.textContent = shotCounterActive() ? "" : T("timedTournament.remainingLive", { time: formatDuration(timedTournamentRemainingMs()) });
       return;
     }
-    if (!state.currentGame.startedAt) return;
-    var startedAt = new Date(state.currentGame.startedAt).getTime();
-    if (isNaN(startedAt)) return;
-    el.textContent = T("scoreboard.durationLive", { time: formatDuration(Date.now() - startedAt) });
+    var startedAt = state.currentGame.startedAt ? new Date(state.currentGame.startedAt).getTime() : NaN;
+    el.textContent = isNaN(startedAt) ? T("scoreboard.durationWaiting") : T("scoreboard.durationLive", { time: formatDuration(Date.now() - startedAt) });
+  }
+
+  // The game's clock (the score card's "Duration") starts at its first
+  // shot, not when the game was set up or the last one ended: the first
+  // shot the camera recognizes (a Shooting press included), the first
+  // score, or a player picked on the keypad / their card as the one
+  // shooting. Until then startedAt is null and the card says it's
+  // waiting.
+  function markFirstShot() {
+    if (state.currentGame.startedAt) return;
+    state.currentGame.startedAt = new Date().toISOString();
+    saveState();
+    updateGameDurationDisplay();
   }
 
   // Shot counter (see handleKeypadShortcut and the shotCounter* module
@@ -5307,6 +5649,15 @@
       });
     }
     refreshKeypadNumbering();
+    // Every badge buildIndividualPanel just created starts hidden - sync
+    // them to the current known camera state immediately, or they'd all
+    // flash hidden until the next camera frame arrives (~280ms later)
+    // every time the scoreboard re-renders for an unrelated reason (a
+    // score change, say). Guarded since PMCCameraBridge's camera-icon
+    // methods are attached from inside boot(), which may not have run
+    // yet on the very first render.
+    if (window.PMCCameraBridge && window.PMCCameraBridge.syncScorecardCameraIcons) window.PMCCameraBridge.syncScorecardCameraIcons();
+    if (cameraAckFlash) applyCameraAckFlash();
   }
 
   function formatTimestamp(ts, includeDate) {
@@ -5614,12 +5965,16 @@
   // itself. Route to .page-toast, a fixed overlay, instead whenever
   // that's the case, so every showToast() call stays visible no matter
   // which screen is open.
-  function showToast(message) {
-    var onMain = !appRoot.classList.contains("hidden");
+  // icon: what goes in front (a trophy unless given).
+  function showToast(message, icon) {
+    // #win-toast no longer exists in index.html (dropped when the main
+    // page sections were reordered), so without this guard every toast
+    // on the main screen threw before showing anything.
+    var onMain = !appRoot.classList.contains("hidden") && !!winToast;
     var target = onMain ? winToast : pageToast;
     var other = onMain ? pageToast : winToast;
-    other.classList.add("hidden");
-    target.textContent = "🏆 " + message;
+    if (other) other.classList.add("hidden");
+    target.textContent = (icon === undefined ? "🏆 " : icon) + message;
     target.classList.remove("hidden");
     clearTimeout(toastTimer);
     toastTimer = setTimeout(function () {
@@ -5840,6 +6195,8 @@
 
     var startedAt = state.currentGame.startedAt ? new Date(state.currentGame.startedAt).getTime() : null;
     var durationMs = startedAt ? Math.max(0, Date.now() - startedAt) : null;
+    // (no shot before the winning point itself - no real duration to keep)
+    if (durationMs !== null && durationMs < 1000) durationMs = null;
     var ts = new Date().toISOString();
     state.gameHistory.unshift({
       ts: ts,
@@ -6634,7 +6991,7 @@
     state.players.forEach(function (p) {
       p.balls = 0;
     });
-    state.currentGame.startedAt = new Date().toISOString();
+    state.currentGame.startedAt = null; // the clock starts at its first shot - see markFirstShot
     // A new game/rack means a fresh shot clock too - startShotCounter()
     // already zeroes elapsed/beep/tick and starts it running without
     // touching the persisted hidden flag.
@@ -6973,9 +7330,10 @@
     }
   }
 
-  function adjustScore(playerId, delta) {
+  function adjustScore(playerId, delta, opts) {
     var player = getPlayer(playerId);
     if (!player || !player.playing) return;
+    var fromCamera = !!(opts && opts.fromCamera);
 
     // A team can't play (or score) against nobody - blocks both +/- here,
     // not just the win-credit at target, and is the authoritative check
@@ -6997,6 +7355,47 @@
       showToast(T("toast.queueNeedsPlayer"));
       return;
     }
+
+    // Gameplay-driven camera auto-enrollment (see PMCCameraBridge's own
+    // comment) - a real, accepted +1 is the strongest "a human just
+    // confirmed who's at the table" signal available, stronger than the
+    // camera's own self-match. A negative delta is excluded - it could be
+    // a foul/undo/correction unrelated to who the camera is currently
+    // seeing. Note this never fires for tournamentAdjustScore, a
+    // deliberately separate function - tournament mode is out of scope
+    // for this pass.
+    // A camera-originated ball credit is excluded too - it is the
+    // camera's own guess, not a human confirming who's at the table.
+    if (delta > 0 && !fromCamera && cameraTurnConfirmedCallbacks.length) {
+      cameraTurnConfirmedCallbacks.forEach(function (cb) {
+        try {
+          cb(player.name);
+        } catch (e) {}
+      });
+    }
+
+    // Ball tracking's correction channel: a human "-" shortly after an
+    // automatic credit means the camera counted a ball that wasn't
+    // pocketed; a human "+" with no recent automatic credit means it
+    // missed one. Hooked here (not in the keypad handler) so on-screen
+    // buttons and host-dispatched guest taps count as corrections too.
+    if (!fromCamera && !quickCounterMode && state.cameraBallTrackingEnabled && state.currentGame.gameType === "straight") {
+      var sinceAuto = lastAutoBallCredit ? Date.now() - lastAutoBallCredit.ts : Infinity;
+      var kind = null;
+      if (delta < 0 && sinceAuto <= CAMERA_BALL_CORRECTION_WINDOW_MS && lastAutoBallCredit.playerId === playerId) kind = "false_positive";
+      else if (delta > 0 && sinceAuto > CAMERA_BALL_CORRECTION_WINDOW_MS) kind = "missed";
+      if (kind) {
+        var feedback = { kind: kind, delta: delta, ts: Date.now() };
+        if (kind === "false_positive") lastAutoBallCredit = null;
+        cameraBallFeedbackCallbacks.forEach(function (cb) {
+          try {
+            cb(feedback);
+          } catch (e) {}
+        });
+      }
+    }
+
+    markFirstShot();
 
     // Quick Counter: just tally, never check a target or credit a win.
     // Free-form point counter — negative scores are allowed (e.g. golf-
@@ -8015,6 +8414,20 @@
       longDate: longDate,
       generatedAt: formatTimestamp(new Date().toISOString(), true),
       tokens: tokens,
+      // The next six fields are what let a completely different report
+      // (see computeLeagueReportImageData) reuse buildDayReportColorfulHtmlFromData/
+      // buildReportCanvasFromData/buildColorfulReportShareScript unchanged
+      // below instead of forking ~500 lines of HTML/canvas drawing code -
+      // every hardcoded string those three builders used to have is now
+      // read from here, with the day report's own original copy as the
+      // default so this call site's behavior is unchanged.
+      appTitle: "🎱 Pool Master Counter",
+      tagline: "Don't get cocky!",
+      emptyText: "No games recorded today.",
+      leaderboardLabel: "Leaderboard",
+      gamesLabel: "Game Log",
+      pageTitle: "Pool Master Counter — " + formatReportDateHeading(dateStr),
+      imageFilename: "pool-master-counter-report-" + dateStr + ".png",
       players: players,
       highlights: highlights,
       games: games,
@@ -8082,7 +8495,7 @@
     return (
       "<!DOCTYPE html>\n" +
       '<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">' +
-      "<title>Pool Master Counter — " + escapeHtmlForReport(formatReportDateHeading(reportImageData.dateStr)) + "</title>" +
+      "<title>" + escapeHtmlForReport(reportImageData.pageTitle) + "</title>" +
       "<style>" +
       ":root { " + rootVars + " }" +
       "* { box-sizing: border-box; }" +
@@ -8125,14 +8538,14 @@
       "@media print { .toolbar { display: none; } }" +
       "</style></head><body><div class=\"wrap\">" +
       '<div class="toolbar"><button type="button" class="share-btn" id="shareReportBtn">📤 Share</button></div>' +
-      '<div class="hero"><h1>🎱 Pool Master Counter</h1><div class="date">' +
+      '<div class="hero"><h1>' + escapeHtmlForReport(reportImageData.appTitle) + '</h1><div class="date">' +
       escapeHtmlForReport(reportImageData.longDate) +
-      '</div><div class="tagline">Don\'t get cocky!</div></div>' +
+      '</div><div class="tagline">' + escapeHtmlForReport(reportImageData.tagline) + '</div></div>' +
       (reportImageData.players.length
-        ? '<div class="section"><h2>Leaderboard</h2><div class="leaderboard">' + leaderboardHtml + "</div></div>"
-        : '<div class="section"><p class="empty-note">No games recorded today.</p></div>') +
+        ? '<div class="section"><h2>' + escapeHtmlForReport(reportImageData.leaderboardLabel) + '</h2><div class="leaderboard">' + leaderboardHtml + "</div></div>"
+        : '<div class="section"><p class="empty-note">' + escapeHtmlForReport(reportImageData.emptyText) + "</p></div>") +
       (highlightsHtml ? '<div class="section"><h2>Highlights</h2>' + highlightsHtml + "</div>" : "") +
-      (gamesHtml ? '<div class="section"><h2>Game Log</h2><div class="game-log">' + gamesHtml + "</div></div>" : "") +
+      (gamesHtml ? '<div class="section"><h2>' + escapeHtmlForReport(reportImageData.gamesLabel) + '</h2><div class="game-log">' + gamesHtml + "</div></div>" : "") +
       notesHtml +
       "<footer>Generated " + escapeHtmlForReport(reportImageData.generatedAt) + " · Pool Master Counter</footer>" +
       "</div>" +
@@ -8252,13 +8665,13 @@
     ctx.fillStyle = tok("--text", "#f6efe9");
     ctx.textAlign = "center";
     ctx.font = "bold 24px " + font;
-    ctx.fillText("🎱 Pool Master Counter", W / 2, 48);
+    ctx.fillText(reportData.appTitle, W / 2, 48);
     ctx.font = "16px " + font;
     ctx.globalAlpha = 0.9;
     ctx.fillText(reportData.longDate, W / 2, 76);
     ctx.globalAlpha = 0.65;
     ctx.font = "italic 13px " + font;
-    ctx.fillText("Don’t get cocky!", W / 2, 100);
+    ctx.fillText(reportData.tagline, W / 2, 100);
     ctx.globalAlpha = 1;
     ctx.textAlign = "left";
 
@@ -8272,7 +8685,7 @@
     }
 
     if (hasPlayers) {
-      drawLabel("Leaderboard");
+      drawLabel(reportData.leaderboardLabel);
       reportData.players.forEach(function (p) {
         var cardY = cy,
           cardH = PLAYER_ROW_H - PLAYER_GAP;
@@ -8332,7 +8745,7 @@
     } else {
       ctx.fillStyle = tok("--text-dim", "#c9a2a2");
       ctx.font = "italic 14px " + font;
-      ctx.fillText("No games recorded today.", PAD, cy + 14);
+      ctx.fillText(reportData.emptyText, PAD, cy + 14);
       cy += 30;
     }
 
@@ -8355,7 +8768,7 @@
 
     if (reportData.games.length) {
       cy += SECTION_GAP - HIGHLIGHT_GAP;
-      drawLabel("Game Log");
+      drawLabel(reportData.gamesLabel);
       ctx.fillStyle = tok("--bg-card", "#2e1414");
       reportCanvasRoundRect(ctx, PAD, cy, CW, logH, 12);
       ctx.fill();
@@ -8446,7 +8859,7 @@
   // builds for the HTML view, embedded here as JSON so this canvas
   // renderer needs no access back to the app's own data functions.
   function buildColorfulReportShareScript(reportData) {
-    var filename = "pool-master-counter-report-" + reportData.dateStr + ".png";
+    var filename = reportData.imageFilename;
     // Escaping "<" (not just "</script>") is the standard safe way to embed
     // JSON inside a <script> block - covers a player name that happens to
     // contain "</script>" verbatim, and any other "<..." sequence an HTML
@@ -8521,13 +8934,13 @@
       'ctx.fillStyle=tok("--text","#f6efe9");',
       'ctx.textAlign="center";',
       'ctx.font="bold 24px "+font;',
-      'ctx.fillText("🎱 Pool Master Counter",W/2,48);',
+      'ctx.fillText(DATA.appTitle,W/2,48);',
       'ctx.font="16px "+font;',
       "ctx.globalAlpha=0.9;",
       "ctx.fillText(DATA.longDate,W/2,76);",
       "ctx.globalAlpha=0.65;",
       'ctx.font="italic 13px "+font;',
-      'ctx.fillText("Don’t get cocky!",W/2,100);',
+      'ctx.fillText(DATA.tagline,W/2,100);',
       "ctx.globalAlpha=1;",
       'ctx.textAlign="left";',
       "var cy=HERO_H+SECTION_GAP;",
@@ -8538,7 +8951,7 @@
       "cy+=LABEL_H;",
       "}",
       "if(hasPlayers){",
-      'drawLabel("Leaderboard");',
+      "drawLabel(DATA.leaderboardLabel);",
       "DATA.players.forEach(function(p){",
       "var cardY=cy,cardH=PLAYER_ROW_H-PLAYER_GAP;",
       'ctx.fillStyle=tok("--bg-card","#2e1414");',
@@ -8582,7 +8995,7 @@
       "}else{",
       'ctx.fillStyle=tok("--text-dim","#c9a2a2");',
       'ctx.font="italic 14px "+font;',
-      'ctx.fillText("No games recorded today.",PAD,cy+14);',
+      "ctx.fillText(DATA.emptyText,PAD,cy+14);",
       "cy+=30;",
       "}",
       "if(DATA.highlights.length){",
@@ -8602,7 +9015,7 @@
       "}",
       "if(DATA.games.length){",
       "cy+=SECTION_GAP-HIGHLIGHT_GAP;",
-      'drawLabel("Game Log");',
+      "drawLabel(DATA.gamesLabel);",
       'ctx.fillStyle=tok("--bg-card","#2e1414");',
       "roundRect(ctx,PAD,cy,CW,logH,12);ctx.fill();",
       'ctx.strokeStyle=tok("--border","#4a1e1e");',
@@ -12356,6 +12769,84 @@
   // nickname rather than anything automatic - see buildPlayerNameLabel.
   var PLAYER_NAME_TRANSLATIONS_KEY = "poolMasterCounter.playerNameTranslations.v1";
 
+  // Same-device camera recognition's own enrollment store - written by
+  // camera.html directly (see its own LOCAL_ENROLLMENTS_KEY), read here
+  // only for two purposes: showing the enrolled-camera icon vs. an
+  // Enroll button in the roster, and folding it into Export All Data /
+  // merge-import so re-enrolling after a restore isn't needed. Never
+  // written to directly from this file outside of import/squash - during
+  // normal play camera.html owns this key exclusively.
+  var CAMERA_ENROLLMENTS_KEY = "pmc-camera-local-enrollments";
+  function loadCameraEnrollmentsFromStorage() {
+    try {
+      var raw = localStorage.getItem(CAMERA_ENROLLMENTS_KEY);
+      var parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (e) {
+      return {};
+    }
+  }
+  // True only when at least one real sample was actually captured -
+  // camera.html can leave a stub entry with an empty descriptors array in
+  // edge cases (e.g. a save interrupted after the name was picked but
+  // before a shot was captured), which shouldn't count as "enrolled."
+  function isPlayerCameraEnrolled(name) {
+    var entry = loadCameraEnrollmentsFromStorage()[normalizeNameKey(name)];
+    return !!(entry && Array.isArray(entry.descriptors) && entry.descriptors.length > 0);
+  }
+
+  // Minimal inline camera glyph (not an emoji) so the fixed 18x18 sizing
+  // requested is exact across platforms/fonts rather than approximate.
+  var CAMERA_ICON_SVG =
+    '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+    '<path d="M9.2 4.5c.3-.5.8-.8 1.4-.8h2.8c.6 0 1.1.3 1.4.8l.9 1.5H19a3 3 0 0 1 3 3V17a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3V9a3 3 0 0 1 3-3h3.3l.9-1.5Z" fill="currentColor"/>' +
+    '<circle cx="12" cy="13" r="3.4" fill="none" stroke="#fff" stroke-width="1.5"/>' +
+    "</svg>";
+
+  // Shows a fixed 18x18 camera icon when this player has real camera-
+  // enrollment samples saved, or a small "Enroll" button when they don't
+  // - clicking it jumps straight to the embedded camera's Enroll tab with
+  // this player pre-selected. Same-device mode only (state.cameraInputEnabled
+  // + state.sameDeviceCameraSetUp) - cross-device enrollment lives on the
+  // relay server, not in this browser's localStorage, so there's nothing
+  // here to check for that path; the caller gates on this before calling.
+  function buildCameraEnrollHelpBtn() {
+    var help = document.createElement("button");
+    help.type = "button";
+    help.className = "format-info-btn";
+    help.setAttribute("aria-label", T("players.cameraEnrollHelpTitle"));
+    help.textContent = "❓";
+    help.addEventListener("click", function (e) {
+      e.stopPropagation();
+      alertModal(T("players.cameraEnrollHelpText"));
+    });
+    return help;
+  }
+
+  function buildCameraEnrollBadge(name) {
+    var wrap = document.createDocumentFragment();
+    if (isPlayerCameraEnrolled(name)) {
+      var icon = document.createElement("span");
+      icon.className = "roster-camera-enrolled";
+      icon.title = T("players.cameraEnrolledTitle");
+      icon.setAttribute("aria-label", T("players.cameraEnrolledTitle"));
+      icon.innerHTML = CAMERA_ICON_SVG;
+      wrap.appendChild(icon);
+    } else {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "roster-camera-enroll-btn";
+      btn.textContent = T("players.cameraEnrollButton");
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        window.PMCCameraBridge.startCameraEnrollFor(name);
+      });
+      wrap.appendChild(btn);
+    }
+    wrap.appendChild(buildCameraEnrollHelpBtn());
+    return wrap;
+  }
+
   function loadPlayerNameTranslationsFromStorage() {
     try {
       var raw = localStorage.getItem(PLAYER_NAME_TRANSLATIONS_KEY);
@@ -13813,6 +14304,10 @@
     var key = findGraveyardPlayerKey(name) || name;
     GRAVEYARD_PLAYERS[key] = { removedAt: new Date().toISOString() };
     saveGraveyardPlayersToStorage(GRAVEYARD_PLAYERS);
+    // Their camera enrollment goes with them (same-device local store or
+    // the relay's file) - a graveyarded player must not be recognized.
+    notifyCameraEnrollDelete(name);
+    notifyCameraRosterChanged();
   }
 
   // Called from the Graveyard page's Reactivate button, or automatically
@@ -15772,7 +16267,12 @@
       // importAllDataFromText) can pick up the same shared Drive folder
       // automatically - purely informational, never read as an instruction
       // to fetch or upload anything on its own.
-      driveFolderLink: loadDriveFolderLink() || null
+      driveFolderLink: loadDriveFolderLink() || null,
+      // Same-device camera recognition's enrollment samples - see
+      // CAMERA_ENROLLMENTS_KEY's own comment. Lets a restore (or a fresh
+      // install from a backup) skip re-enrolling every player from
+      // scratch.
+      cameraEnrollments: loadCameraEnrollmentsFromStorage()
     };
   }
 
@@ -16755,6 +17255,10 @@
               return s.id;
             });
             var mergedPlayerNameTranslations = mergeMapPreferLocal(PLAYER_NAME_TRANSLATIONS, data.playerNameTranslations);
+            // Local wins per-player (this device's own camera/lighting is
+            // more relevant than an imported one), import fills in anyone
+            // missing locally - same treatment as name translations above.
+            var mergedCameraEnrollments = mergeMapPreferLocal(loadCameraEnrollmentsFromStorage(), data.cameraEnrollments);
             var mergedRemovedPlayers = mergeFlagMapUnion(REMOVED_PLAYERS, data.removedPlayers);
             var mergedGraveyardPlayers = mergeFlagMapUnion(GRAVEYARD_PLAYERS, data.graveyardPlayers);
             var mergedResetSnapshots = mergeArrayByKey(RESET_SNAPSHOTS, data.resetSnapshots, function (s) {
@@ -16856,6 +17360,7 @@
             localStorage.setItem(ROTATIONS_KEY, JSON.stringify(mergedRotations));
             localStorage.setItem(GAME_SETUPS_KEY, JSON.stringify(mergedGameSetups));
             localStorage.setItem(PLAYER_NAME_TRANSLATIONS_KEY, JSON.stringify(mergedPlayerNameTranslations));
+            localStorage.setItem(CAMERA_ENROLLMENTS_KEY, JSON.stringify(mergedCameraEnrollments));
             localStorage.setItem(REMOVED_PLAYERS_KEY, JSON.stringify(mergedRemovedPlayers));
             localStorage.setItem(GRAVEYARD_PLAYERS_KEY, JSON.stringify(mergedGraveyardPlayers));
             localStorage.setItem(RESET_SNAPSHOTS_KEY, JSON.stringify(mergedResetSnapshots));
@@ -17090,6 +17595,11 @@
 
     var importedState = data.state && typeof data.state === "object" ? data.state : defaultState();
     var resultingPlayerCount;
+    // Treated like PLAYER_NAME_TRANSLATIONS below (merged, never wiped,
+    // in either squash variant) - camera enrollment is per-player setup
+    // data, not game history, so "squash the game data" shouldn't touch
+    // it, and a full squash shouldn't force re-enrolling everyone either.
+    var mergedCameraEnrollmentsForSquash = mergeMapPreferLocal(loadCameraEnrollmentsFromStorage(), data.cameraEnrollments);
 
     if (keepPlayersOnly) {
       var built = buildUnionedPlayersAndContacts(state.players, importedState.players, data.contacts && typeof data.contacts === "object" ? data.contacts : {});
@@ -17183,6 +17693,7 @@
       localStorage.setItem(ROTATIONS_KEY, JSON.stringify(SAVED_ROTATIONS));
       localStorage.setItem(GAME_SETUPS_KEY, JSON.stringify(SAVED_GAME_SETUPS));
       localStorage.setItem(PLAYER_NAME_TRANSLATIONS_KEY, JSON.stringify(PLAYER_NAME_TRANSLATIONS));
+      localStorage.setItem(CAMERA_ENROLLMENTS_KEY, JSON.stringify(mergedCameraEnrollmentsForSquash));
       localStorage.setItem(REMOVED_PLAYERS_KEY, JSON.stringify(REMOVED_PLAYERS));
       localStorage.setItem(GRAVEYARD_PLAYERS_KEY, JSON.stringify(GRAVEYARD_PLAYERS));
       localStorage.setItem(MERGED_INTO_KEY, JSON.stringify(PLAYER_MERGED_INTO));
@@ -28332,9 +28843,18 @@
   // ---------------------------------------------------------------------
 
   function boot() {
+  // Declared here, at the top of boot(), on purpose: resumeSameDeviceCameraIfNeeded()
+  // below sets this to true, and a `var ... = false` placed further down
+  // in this same function (next to the rest of the same-device camera
+  // code, where it used to live) would run its initializer AFTER that
+  // and silently reset it - leaving "stop" a no-op after a page-load
+  // resume, and every reload-settings/feedback post to the iframe gated
+  // off. See the comment block by the same-device camera overlay code.
+  var sameDeviceCameraRunning = false;
   backfillMissingRatingsFromHistory();
   backfillMissingAddedDates();
   fixCorruptedRunRecords();
+  resumeSameDeviceCameraIfNeeded();
 
   if (Purchases) {
     Purchases.isProUnlocked()
@@ -28928,6 +29448,1645 @@
     state.rotatingTeamsEnabled = rotatingTeamsCheckbox.checked;
     saveState();
     renderAll();
+  });
+
+  // js/camera-client.js polls PMCCameraBridge.isEnabled() (see its own
+  // comment on why - the two files share no event bus) rather than
+  // reading this checkbox directly, so toggling it just needs to update
+  // state and re-render like any other setting here; the actual
+  // connect/disconnect happens on that file's own schedule, within a
+  // few seconds.
+  //
+  // Checking it for the first time ever (no camera set up yet) needs the
+  // setup steps first - they sit right above this checkbox, in the
+  // Visual Scoring section. With the "separate phone" path open there
+  // (link/QR showing), checking this IS that path's last step; otherwise
+  // there's nothing set up for it to turn on, so the setup block opens
+  // instead and the checkbox stays off. The same-device path sets
+  // cameraWizardCompleted itself (see startSameDeviceCamera).
+  cameraInputCheckbox.addEventListener("change", function () {
+    if (cameraInputCheckbox.checked && !state.cameraWizardCompleted) {
+      if (!cameraSetupVisible() || cameraWizardPath !== "phone") {
+        cameraInputCheckbox.checked = false;
+        openCameraSetup();
+        return;
+      }
+      state.cameraWizardCompleted = true;
+    }
+    state.cameraInputEnabled = cameraInputCheckbox.checked;
+    // This is the one real "stop" action for same-device mode - closing
+    // the camera overlay/preview on its own only minimizes it (keeps
+    // recognition running during gameplay), see stopSameDeviceCamera's
+    // own comment. Re-checking it after that needs its own resume call
+    // too - this handler otherwise only ever flipped the state flag,
+    // never actually restarted anything.
+    if (!cameraInputCheckbox.checked) stopSameDeviceCamera();
+    else resumeSameDeviceCameraIfNeeded();
+    saveState();
+    renderAll();
+    window.PMCCameraBridge.renderCameraStatusLights();
+  });
+
+  btnCameraInputHelp.addEventListener("click", function () {
+    alertModal(T("players.cameraInputHelpText"));
+  });
+  btnCameraMatchThresholdHelp.addEventListener("click", function () {
+    alertModal(T("players.cameraMatchSliderHelpText"));
+  });
+  btnCameraDebounceSecHelp.addEventListener("click", function () {
+    alertModal(T("players.cameraDebounceSecHelpText"));
+  });
+  btnCameraDebugHelp.addEventListener("click", function () {
+    alertModal(T("players.cameraDebugEnableHelpText"));
+  });
+  btnCameraVoiceHelp.addEventListener("click", function () {
+    alertModal(T("players.cameraVoiceEnableHelpText"));
+  });
+  btnCameraRemoteCalibrateHelp.addEventListener("click", function () {
+    alertModal(T("players.cameraRemoteCalibrateHelpText"));
+  });
+
+  // Re-announce after (and matching sensitivity, see the Matching
+  // players slider) are Capture Settings too - kept in state as well,
+  // since the camera's own settings-request is still answered from there.
+
+  cameraDebounceSecInput.addEventListener("input", function () {
+    var value = parseInt(cameraDebounceSecInput.value, 10);
+    if (!(value > 0)) return;
+    state.cameraDebounceSec = value;
+    saveState();
+  });
+
+  // Camera setup - tablet side, inline in the Visual Scoring section.
+  // Short, since almost all the real setup work happens on the camera
+  // itself (a separate phone, or this tablet's own camera page), which has
+  // its own guided wizard (see camera.html) this block can only point at,
+  // never drive directly.
+
+  // Independent of Group Session's own /api/lan-info fetch (networkLanBase,
+  // only populated once Group Session's own UI has been opened) - a user
+  // reaching for this wizard may never have touched Group Session at all.
+  // Unlike that fetch, this one must NOT use location.protocol/location.host
+  // - camera.html needs a real https:// URL on its own port, which is very
+  // often different from whatever scheme/port this tablet's own page
+  // happens to be loaded over (e.g. the standalone build: this page is
+  // plain http://localhost:PORT/, camera.html must be
+  // https://<lan-ip>:(PORT+1)/camera.html).
+  function showCameraWizardLinkState(state) {
+    // Exactly one of these is ever shown - a fresh fetch always starts by
+    // hiding all of them, then reveals the one that applies.
+    // "https-missing" (still starting up, silently retried - see
+    // loadCameraWizardLinkInfo) and "https-failed" (actually broken, a
+    // specific reason to show and a manual retry) look similar but mean
+    // very different things to the user, so they're kept as separate
+    // states rather than folded into one.
+    cameraWizardLinkBlock.classList.toggle("hidden", state !== "ok");
+    cameraWizardHttpsMissing.classList.toggle("hidden", state !== "https-missing");
+    cameraWizardHttpsFailed.classList.toggle("hidden", state !== "https-failed");
+    cameraWizardNoRelay.classList.toggle("hidden", state !== "no-relay");
+    // Only "no-relay" (nothing running at all - e.g. a GitHub Pages copy)
+    // offers the install prompt. "https-missing" means a server is
+    // *already* reachable right here - something to download and run is
+    // nonsensical when the thing you'd download is clearly already
+    // running; that case just needs HTTPS turned on (auto-poll catches
+    // the desktop app finishing its own startup, see loadCameraWizardLinkInfo).
+    cameraWizardInstallPrompt.classList.toggle("hidden", state !== "no-relay");
+  }
+
+  // Mirrors renderInstallPrompt() (Group Session's own desktop-app
+  // install prompt) for the exact same reason it exists there: a phone
+  // can only ever reach the relay if some computer on the LAN is
+  // actually running it, and a GitHub Pages (or any other static) copy
+  // never is - so the fix is installing and running the real desktop
+  // app, not re-reading an error message. Only ever called for the
+  // no-relay state - see showCameraWizardLinkState's own comment on why
+  // https-missing doesn't get this (a server's already running there).
+  function renderCameraWizardInstallPrompt() {
+    var os = detectDesktopOS();
+    cameraWizardInstallUnsupported.classList.toggle("hidden", !!os);
+    cameraWizardInstallLink.classList.toggle("hidden", !os);
+    if (!os) {
+      cameraWizardInstallSecurityNote.textContent = "";
+      return;
+    }
+    var osLabel = os === "mac" ? "Mac (Apple Silicon)" : os === "windows" ? "Windows" : "Linux";
+    cameraWizardInstallLink.href = DESKTOP_DOWNLOAD_URLS[os];
+    cameraWizardInstallLink.textContent = T("cameraWizard.installButton", { os: osLabel });
+    cameraWizardInstallSecurityNote.textContent = T(
+      os === "mac"
+        ? "groupSession.installSecurityNoteMac"
+        : os === "windows"
+        ? "groupSession.installSecurityNoteWindows"
+        : "groupSession.installSecurityNoteLinux"
+    );
+  }
+
+  function stopCameraWizardLinkPoll() {
+    if (cameraWizardLinkPollTimer) {
+      clearTimeout(cameraWizardLinkPollTimer);
+      cameraWizardLinkPollTimer = null;
+    }
+  }
+
+  function loadCameraWizardLinkInfo() {
+    // /api/lan-info only exists on the local relay server (server.js or
+    // the desktop app) - on a GitHub Pages copy (or any other static
+    // host) this 404s, same reasoning Group Session's own origin-error
+    // check already relies on (see startHostingSession's own comment) -
+    // that's a fundamentally different problem ("no relay server at all")
+    // from "relay running but HTTPS not configured", and needs its own
+    // message rather than falling through to the HTTPS one.
+    stopCameraWizardLinkPoll();
+    fetch("/api/lan-info")
+      .then(function (res) {
+        if (!res.ok) throw new Error("bad status " + res.status);
+        return res.json();
+      })
+      .then(function (info) {
+        var addr = info.addresses && info.addresses[0];
+        if (!addr || !info.httpsPort) {
+          // Distinguish "still starting up" (silently keep checking - the
+          // common case, resolves itself within a few seconds) from
+          // "actually failed, with a specific reason" (standalone-entry.js
+          // sets httpsError once either cert generation or the HTTPS
+          // listener's own listen() call fails - see its own comments) -
+          // retrying forever when it's genuinely broken just wastes
+          // requests and leaves the user staring at a spinner-equivalent
+          // with no explanation.
+          if (info.httpsError) {
+            cameraWizardHttpsFailedText.textContent =
+              info.httpsError === "port-in-use"
+                ? T("cameraWizard.httpsFailedPortInUse")
+                : T("cameraWizard.httpsFailedGeneric", { error: info.httpsError });
+            showCameraWizardLinkState("https-failed");
+            return;
+          }
+          showCameraWizardLinkState("https-missing");
+          // The desktop app finishing its own startup (generating a
+          // self-signed cert, bringing up the HTTPS listener) is the
+          // single most common reason to land here - keep re-checking on
+          // its own instead of making "give it a moment and reopen this
+          // wizard" something the user actually has to go do by hand.
+          // Swaps straight to the real camera.html link/QR the moment
+          // HTTPS actually comes up, with no manual retry needed.
+          cameraWizardLinkPollTimer = setTimeout(loadCameraWizardLinkInfo, 3000);
+          return;
+        }
+        var url = "https://" + addr + ":" + info.httpsPort + "/camera.html";
+        cameraWizardUrl.textContent = url;
+        cameraWizardQr.src = "/api/qr.png?url=" + encodeURIComponent(url);
+        showCameraWizardLinkState("ok");
+      })
+      .catch(function (e) {
+        console.error("[CameraWizard] /api/lan-info unreachable - this page is probably not being served by the local relay server:", e);
+        showCameraWizardLinkState("no-relay");
+        renderCameraWizardInstallPrompt();
+        // No relay at all (e.g. a GitHub Pages copy) means the "separate
+        // phone" path can never work here - lead with the same-device
+        // option instead of leaving the user stuck on a dead-end error,
+        // unless they'd already explicitly picked a path themselves.
+        if (!cameraWizardPathUserChosen) selectCameraWizardPath("same-device");
+        // Same reasoning as the https-missing branch above - keep
+        // checking in case the desktop app gets installed and started
+        // while this wizard is still open, rather than requiring a
+        // manual reopen once it's up.
+        cameraWizardLinkPollTimer = setTimeout(loadCameraWizardLinkInfo, 3000);
+      });
+  }
+
+  // The setup is a choice between two independent transports for the exact
+  // same underlying feature (see camera.html's own isEmbedded branch) -
+  // "phone" is the original, unchanged cross-device/relay flow; "same
+  // device" embeds camera.html directly in this page instead. Defaults to
+  // "phone" optimistically (today's default experience when a relay is
+  // reachable); loadCameraWizardLinkInfo overrides that default to
+  // "same-device" only in the no-relay case, and only if the user hasn't
+  // already clicked a path themselves.
+  // The phone card always shows its own details - the link/QR, or (no
+  // local server, e.g. running from the website) why it needs the
+  // installed app and where to download it - whichever card is picked.
+  // Only this device's start button / HTTPS warning wait for its pick.
+  function selectCameraWizardPath(path) {
+    cameraWizardPath = path;
+    cameraWizardSameDevicePath.classList.toggle("hidden", path !== "same-device");
+    btnCameraWizardPathPhone.classList.toggle("is-active", path === "phone");
+    btnCameraWizardPathSameDevice.classList.toggle("is-active", path === "same-device");
+  }
+
+  function updateSameDeviceSecureContextWarning() {
+    var secure = window.isSecureContext;
+    cameraWizardInsecureContext.classList.toggle("hidden", secure);
+    btnCameraWizardStartSameDevice.disabled = !secure;
+  }
+
+  // The setup steps live in the Visual Scoring section's "Set Up Camera
+  // Recognition" block - the header's "📷 Set Up Camera" button just
+  // opens that section and that block and scrolls to it. The phone
+  // path's link/QR is fetched whenever the block comes into view, and its
+  // "still starting up" re-check stops once the block is folded away.
+  function cameraSetupVisible() {
+    return !visualScoringPanel.classList.contains("collapsed") && !cameraSetupPanel.classList.contains("collapsed");
+  }
+  var cameraSetupRefreshPending = false;
+  function refreshCameraSetup() {
+    cameraSetupRefreshPending = false;
+    if (!cameraSetupVisible()) {
+      stopCameraWizardLinkPoll();
+      return;
+    }
+    if (!cameraWizardPathUserChosen) selectCameraWizardPath("phone");
+    updateSameDeviceSecureContextWarning();
+    showCameraWizardLinkState(null);
+    loadCameraWizardLinkInfo();
+  }
+  // Deferred a tick, and collapsed to one refresh: wireCollapsiblePanel's
+  // own click handler toggles the panel class after this one runs, and
+  // opening both panels at once fires several clicks in a row.
+  function scheduleCameraSetupRefresh() {
+    if (cameraSetupRefreshPending) return;
+    cameraSetupRefreshPending = true;
+    setTimeout(refreshCameraSetup, 0);
+  }
+  function openCameraSetup() {
+    cameraWizardPathUserChosen = false;
+    if (cameraSetupPanel.classList.contains("collapsed")) btnToggleCameraSetupPanel.click();
+    expandAndScrollToPanel("visual-scoring-panel", "btn-toggle-visual-scoring-panel");
+    scheduleCameraSetupRefresh();
+  }
+  function collapseCameraSetup() {
+    if (!cameraSetupPanel.classList.contains("collapsed")) btnToggleCameraSetupPanel.click();
+    stopCameraWizardLinkPoll();
+  }
+
+  // Up in the header nav row beside the main "Start Wizard" button.
+  btnOpenCameraWizardHeader.addEventListener("click", openCameraSetup);
+  btnCameraWizardRetryHttps.addEventListener("click", loadCameraWizardLinkInfo);
+  [btnToggleVisualScoringPanel, btnToggleCameraSetupPanel, document.getElementById("visual-scoring-panel-summary")].forEach(function (el) {
+    el.addEventListener("click", scheduleCameraSetupRefresh);
+  });
+  // Until a camera has been set up, the setup steps start unfolded, so
+  // opening Visual Scoring shows them first.
+  if (!state.cameraWizardCompleted) {
+    cameraSetupPanel.classList.remove("collapsed");
+    btnToggleCameraSetupPanel.setAttribute("aria-expanded", "true");
+  }
+
+  btnCameraWizardPathPhone.addEventListener("click", function () {
+    cameraWizardPathUserChosen = true;
+    selectCameraWizardPath("phone");
+  });
+
+  // Same-device mode needs no step 2 (no separate "enable" checkbox step -
+  // see selectCameraWizardPath's own comment) - starting it enables camera
+  // input directly, closes this wizard, and hands off entirely to
+  // camera.html's own guided setup, embedded in the new overlay below.
+  function startSameDeviceCamera() {
+    if (!window.isSecureContext) return;
+    state.cameraInputEnabled = true;
+    state.cameraWizardCompleted = true;
+    state.sameDeviceCameraSetUp = true;
+    saveState();
+    renderAll();
+    refreshCaptureSettingsAvailability();
+    collapseCameraSetup();
+    openSameDeviceCameraOverlay();
+  }
+
+  btnCameraWizardPathSameDevice.addEventListener("click", function () {
+    cameraWizardPathUserChosen = true;
+    selectCameraWizardPath("same-device");
+    // Secure context already holds (the common case) - proceed straight
+    // to the camera overlay instead of making the user click twice. When
+    // it doesn't, there's nothing to proceed to yet - stay on this step
+    // so the insecure-context warning (toggled by selectCameraWizardPath)
+    // is actually visible.
+    if (window.isSecureContext) startSameDeviceCamera();
+  });
+
+  btnCameraWizardStartSameDevice.addEventListener("click", startSameDeviceCamera);
+
+  // Same-device camera overlay - embeds camera.html directly in this page
+  // via <iframe src="camera.html?embedded=1">, so the camera and the
+  // scoreboard can be the very same device with no relay/server involved.
+  // Deliberately NOT added to isAnyOverlayOpen()'s list above - this
+  // overlay stays open (or, once minimized, the inline preview below
+  // stays live) for the entire time embedded player_up events are
+  // expected, so including it there would self-block every same-device
+  // recognition event, always.
+  //
+  // Minimize (the X button) and stop (unchecking "Camera player
+  // recognition") are deliberately different actions on the SAME
+  // iframe, not a close/reopen pair - closing used to tear the camera
+  // down entirely via stop-camera, which meant recognition only ever
+  // worked while this full-screen view was open and blocking the whole
+  // screen, useless during actual gameplay. Minimizing instead reparents
+  // the still-running iframe into a small inline preview in the Players
+  // panel (never calling stop-camera), so detection keeps going; only
+  // the master checkbox actually stops it.
+  // iframe.src as a DOM property never reads back empty - even with the
+  // src *attribute* unset, the property resolves against the page's own
+  // URL - so truthiness checks against sameDeviceCameraIframe.src itself
+  // would always be true. sameDeviceCameraRunning (declared at the very
+  // top of boot() - see the comment there for why it can't live here)
+  // tracks "actually started this session" explicitly instead.
+
+  // "Who does the camera currently see" - distinct from the player
+  // actually selected on the keypad (which only updates on a confirmed
+  // shot) - driven by camera.html's own "candidate" postMessage, sent
+  // every single frame (not just on a name change) so this line is a
+  // trustworthy live diagnostic for "is detection even running at all" -
+  // a change-only signal would look identical whether the camera was dead
+  // or simply still watching the same person. Visible whenever the camera
+  // is actually running, right under the master checkbox in the Players
+  // panel.
+  // visible is explicit (not inferred from sameDeviceCameraRunning) so
+  // this same function also works for cross-device mode, driven by
+  // js/camera-client.js's own onCandidateSeen registration below -
+  // that path has no equivalent "iframe running" flag to check here.
+  // stance/angle are only ever shown when the debug checkbox is on - the
+  // plain "no one identified" copy is what everyone else sees, since the
+  // raw angle reading is meaningless to a non-technical user.
+  function renderCameraCandidateStatus(name, visible, stance, angle) {
+    cameraCandidateStatus.classList.toggle("hidden", !visible);
+    if (name) {
+      cameraCandidateStatus.textContent = T("players.cameraCandidateSeen", { name: name });
+    } else if (cameraDebugCheckbox.checked && stance === "upright" && typeof angle === "number") {
+      cameraCandidateStatus.textContent = T("players.cameraCandidateUpright", { angle: angle });
+    } else if (cameraDebugCheckbox.checked && stance === "bent" && typeof angle === "number") {
+      cameraCandidateStatus.textContent = T("players.cameraCandidateBent", { angle: angle });
+    } else {
+      cameraCandidateStatus.textContent = T("players.cameraCandidateNone");
+    }
+  }
+
+  // Running history of camera recognition events (stance/match changes) -
+  // unlike renderCameraCandidateStatus above, which only ever shows the
+  // current instant, this persists so it can be checked between shots or
+  // after a game, without having to watch the live line continuously.
+  // Logged unconditionally, regardless of the debug checkbox, so turning
+  // debug on mid-session immediately shows the backlog since the camera
+  // started - only the element's *visibility* is gated by that checkbox.
+  // Keyed on name+stance ONLY (not angle/closestName/closestDistance,
+  // which all fluctuate frame to frame even while the person hasn't
+  // actually changed stance) so this only grows on a real transition -
+  // recognized -> bent over -> stood back up - and nothing in between.
+  // closestName flickering between different unenrolled "nearest" guesses
+  // while someone just stands there bent over is exactly the kind of
+  // intermediary noise this must stay silent on; it's still shown *inside*
+  // the one logged line for that transition, just not used to trigger a
+  // new one by itself.
+  var cameraDiagnosticLog = [];
+  var CAMERA_DIAGNOSTIC_LOG_MAX = 60;
+  var lastLoggedCameraSignature = null;
+  // closestName/closestDistance/matchThreshold: the nearest enrolled
+  // player even when that distance doesn't clear matchThreshold - the
+  // exact same number the on-video debug overlay's own label shows (see
+  // camera.html's drawOverlay). Surfacing it here is what turns "no
+  // match" from a dead end into an actionable number: if it's hovering
+  // just above matchThreshold, that's a sensitivity-setting problem, not
+  // a detection problem - loosen "Match sensitivity" in camera settings
+  // rather than assuming something's broken.
+  // rawPoseConfidence: only meaningful when stance is "unknown" - a pose
+  // WAS found that frame but rejected for low confidence (not for being
+  // static furniture, and not for missing keypoints outright). Tells
+  // "nothing in view at all" apart from "something's there but too
+  // unsure to read" - e.g. standing close with your back to the camera,
+  // where shoulder/hip keypoints are harder for the model to place
+  // confidently. See camera.html's own lastRawPoseConfidence comment.
+  // tooFarFromRail: a real pose WAS read confidently, but
+  // withinRailDistance rejected it as too far from any calibrated rail to
+  // be a real shooting position - told apart from "no enrolled match"
+  // because matching was never even attempted in this case. If this shows
+  // up for a position that's genuinely at the table (especially the far
+  // end of the camera's view), that's a calibration-accuracy problem, not
+  // a detection or matching one - recalibrate rather than loosening Match
+  // sensitivity, which wouldn't help here at all.
+  function logCameraDiagnostic(name, stance, angle, closestName, closestDistance, matchThreshold, rawPoseConfidence, keypointConfFloor, tooFarFromRail) {
+    var signature = (name || "") + "|" + (stance || "unknown") + "|" + (tooFarFromRail ? "far" : "");
+    if (signature === lastLoggedCameraSignature) return;
+    lastLoggedCameraSignature = signature;
+    var text;
+    var base =
+      stance === "bent" && typeof angle === "number"
+        ? "Bent over (" + angle + "°)"
+        : stance === "upright" && typeof angle === "number"
+          ? "Upright (" + angle + "°)"
+          : "No one in view";
+    if (name) {
+      text = "Matched: " + name;
+    } else if (stance === "unknown" && typeof rawPoseConfidence === "number") {
+      text = "Pose barely visible (confidence " + rawPoseConfidence.toFixed(2) + ", need ≥" + (typeof keypointConfFloor === "number" ? keypointConfFloor.toFixed(2) : "?") + ") - try stepping back or facing the camera more";
+    } else if (tooFarFromRail) {
+      text = base + " - too far from any calibrated rail (check/redo table calibration if this is a real shooting position)";
+    } else if (closestName && typeof closestDistance === "number") {
+      text = base + " - closest: " + closestName + " (" + closestDistance.toFixed(2) + ", need ≤" + (typeof matchThreshold === "number" ? matchThreshold.toFixed(2) : "?") + ")";
+    } else {
+      text = base + (stance === "unknown" ? "" : " - no enrolled match close enough");
+    }
+    cameraDiagnosticLog.push({ ts: Date.now(), text: text });
+    if (cameraDiagnosticLog.length > CAMERA_DIAGNOSTIC_LOG_MAX) cameraDiagnosticLog.shift();
+    renderCameraDiagnosticLog();
+  }
+
+  // Cue entries (see reportCueEvent) show with either the main debug
+  // checkbox or Cue debug mode; everything else only with the main one.
+  function renderCameraDiagnosticLog() {
+    var visible = cameraDiagnosticLog.filter(function (entry) {
+      return cameraDebugCheckbox.checked || (entry.cue && cameraCueDebugCheckbox.checked);
+    });
+    var show = visible.length > 0;
+    cameraDiagnosticLogEl.classList.toggle("hidden", !show);
+    if (!show) return;
+    cameraDiagnosticLogEl.innerHTML = "";
+    for (var i = visible.length - 1; i >= 0; i--) {
+      var entry = visible[i];
+      var row = document.createElement("div");
+      row.textContent = new Date(entry.ts).toLocaleTimeString() + " - " + entry.text;
+      cameraDiagnosticLogEl.appendChild(row);
+    }
+  }
+
+  // Speaks a live camera event from the PARENT page rather than from
+  // camera.html's own iframe document - deliberate, not a stylistic
+  // choice. Once the embedded camera is minimized into the Players panel,
+  // the user interacts almost entirely with THIS page's own checkboxes
+  // and keypad, never tapping directly inside the iframe again - on
+  // browsers that require a document to receive its own direct user
+  // gesture before speechSynthesis.speak() will actually produce sound
+  // (notably Safari/iOS), that silently blocks every voice announcement
+  // camera.html tries to make on its own. This page keeps getting real
+  // taps throughout ordinary gameplay, so speaking from here instead is
+  // far more likely to actually be audible. See camera.html's own
+  // updateSeenCandidate/fireEvent, which deliberately skip speaking when
+  // isEmbedded is true, leaving this as the sole voice for same-device
+  // mode specifically.
+  var lastSpokenCandidateName = null;
+  function speakCameraStatus(text) {
+    if (!cameraVoiceCheckbox.checked || !window.speechSynthesis) return;
+    try {
+      window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+    } catch (e) {}
+  }
+
+  // Shown whenever the camera sees someone bent over at the table it
+  // can't put a name to - deliberately NOT gated on the debug checkbox
+  // (unlike the diagnostic log/status line), since this is a practical
+  // operator prompt for actual gameplay, not a tuning aid. Self-clears
+  // the moment the situation resolves - matched, or they're no longer
+  // bent - without needing to be dismissed; the close button only covers
+  // "that's not actually someone shooting" (a spectator leaning on the
+  // rail, say), and only for the rest of this one continuous streak -
+  // the next genuinely new occurrence shows again.
+  var unmatchedShooterBannerDismissed = false;
+  function updateUnmatchedShooterBanner(name, stance) {
+    var showing = !name && stance === "bent";
+    if (!showing) {
+      unmatchedShooterBannerDismissed = false;
+      unmatchedShooterBanner.classList.add("hidden");
+      return;
+    }
+    unmatchedShooterBanner.classList.toggle("hidden", unmatchedShooterBannerDismissed);
+  }
+  btnDismissUnmatchedShooterBanner.addEventListener("click", function () {
+    unmatchedShooterBannerDismissed = true;
+    unmatchedShooterBanner.classList.add("hidden");
+  });
+
+  // ---- Remote table calibration ----
+  // Lets the operator tap the table's 4 corners from THIS device's
+  // screen, cross-device mode only - camera.html streams back a still
+  // image after each tap (see its own startRemoteCalibration comment);
+  // a tap on that image here is converted to a 0-1 fraction and sent
+  // back over the same relay connection. See server/camera-relay.js's
+  // protocol comment for the message shapes.
+  function openRemoteCalibrateOverlay() {
+    // .hidden (not the native `hidden` attribute) - .remote-calibrate-frame
+    // and .remote-calibrate-placeholder both set their own `display` in
+    // css/style.css, which (as author styles) beats the UA's `[hidden]`
+    // default regardless of the attribute's value. Using the same
+    // `.hidden { display: none !important }` utility class the rest of
+    // this app relies on is what actually hides them - the native
+    // attribute looked like it worked (nothing visibly changed either
+    // way, so it was never obviously wrong) but silently left the
+    // placeholder sitting on top of the image the whole time, eating
+    // every click meant for the image underneath it.
+    remoteCalibrateFrameEl.classList.add("hidden");
+    remoteCalibrateFrameEl.removeAttribute("src");
+    remoteCalibratePlaceholderEl.classList.remove("hidden");
+    remoteCalibrateStepEl.textContent = T("cameraWizard.remoteCalibrateWaiting");
+    btnRemoteCalibrateRetry.classList.add("hidden");
+    btnRemoteCalibrateDone.classList.add("hidden");
+    btnRemoteCalibrateCancel.classList.remove("hidden");
+    remoteCalibrateOverlay.classList.remove("hidden");
+    remoteCalibrateCameraRow.classList.add("hidden");
+    remoteCalibrateCameraSelect.innerHTML = "";
+    if (window.PMCCameraBridge && window.PMCCameraBridge.startRemoteCalibration) {
+      window.PMCCameraBridge.startRemoteCalibration();
+    }
+    if (window.PMCCameraBridge && window.PMCCameraBridge.requestRemoteCameraList) {
+      window.PMCCameraBridge.requestRemoteCameraList();
+    }
+  }
+  function closeRemoteCalibrateOverlay(sendCancel) {
+    if (sendCancel && window.PMCCameraBridge && window.PMCCameraBridge.cancelRemoteCalibration) {
+      window.PMCCameraBridge.cancelRemoteCalibration();
+    }
+    remoteCalibrateOverlay.classList.add("hidden");
+  }
+  btnStartRemoteCalibration.addEventListener("click", openRemoteCalibrateOverlay);
+  btnCloseRemoteCalibrate.addEventListener("click", function () { closeRemoteCalibrateOverlay(true); });
+  btnRemoteCalibrateCancel.addEventListener("click", function () { closeRemoteCalibrateOverlay(true); });
+  btnRemoteCalibrateDone.addEventListener("click", function () { closeRemoteCalibrateOverlay(false); });
+  btnRemoteCalibrateRetry.addEventListener("click", openRemoteCalibrateOverlay);
+
+  // Full remote viewer - loads camera.html?viewer=1 itself in an iframe
+  // (see that file's own isViewer comment), reusing its real UI entirely
+  // instead of a hand-built parallel one. Setting iframe.src to "" is NOT
+  // a reliable unload in all browsers (can be a no-op), and re-setting the
+  // SAME src string on reopen can also be a no-op (no navigation happens
+  // if the URL is unchanged) - leaving the OLD page/JS instance running
+  // forever behind a hidden iframe. Force a real unload via about:blank on
+  // close, and a cache-busted, always-unique src on open, so every open
+  // guarantees a fresh load (and therefore a fresh WebSocket + fresh code).
+  btnOpenRemoteViewer.addEventListener("click", function () {
+    remoteViewerIframe.src = "camera.html?viewer=1&t=" + Date.now();
+    remoteViewerOverlay.classList.remove("hidden");
+  });
+  btnCloseRemoteViewer.addEventListener("click", function () {
+    remoteViewerOverlay.classList.add("hidden");
+    remoteViewerIframe.src = "about:blank";
+  });
+  btnCameraRemoteViewerHelp.addEventListener("click", function () {
+    alertModal(T("players.cameraRemoteViewerHelpText"));
+  });
+
+  btnCameraBallTrackingHelp.addEventListener("click", function () {
+    alertModal(T("players.cameraBallTrackingHelpText"));
+  });
+  // This checkbox is what allows the automatic credit on the scoreboard.
+  // In same-device mode it also flips the camera's own "ball tracking"
+  // setting (same localStorage origin, same nudge as the debug/voice
+  // flags - see sendCameraDebugSettingsToIframe); a separate camera phone
+  // keeps its own checkbox, which has to be turned on there.
+  cameraBallTrackingCheckbox.addEventListener("change", function () {
+    state.cameraBallTrackingEnabled = cameraBallTrackingCheckbox.checked;
+    saveState();
+    if (state.sameDeviceCameraSetUp) {
+      try {
+        var raw = localStorage.getItem(CAMERA_SETTINGS_STORAGE_KEY);
+        var parsed = raw ? JSON.parse(raw) : {};
+        parsed.ballTrackingEnabled = cameraBallTrackingCheckbox.checked;
+        localStorage.setItem(CAMERA_SETTINGS_STORAGE_KEY, JSON.stringify(parsed));
+      } catch (e) {}
+      if (sameDeviceCameraRunning) {
+        try {
+          sameDeviceCameraIframe.contentWindow.postMessage({ type: "reload-settings" }, location.origin);
+        } catch (e) {}
+      }
+    }
+  });
+
+  // object-fit:contain means the image rarely fills its box exactly on
+  // one axis - a click's fraction has to be measured against the
+  // rendered image's own on-screen box, not the wrapper's, or every tap
+  // lands off by however much letterboxing there is.
+  remoteCalibrateFrameEl.addEventListener("click", function (evt) {
+    if (remoteCalibrateFrameEl.classList.contains("hidden")) return;
+    var rect = remoteCalibrateFrameEl.getBoundingClientRect();
+    var naturalW = remoteCalibrateFrameEl.naturalWidth || 1;
+    var naturalH = remoteCalibrateFrameEl.naturalHeight || 1;
+    var scale = Math.min(rect.width / naturalW, rect.height / naturalH);
+    var renderedW = naturalW * scale;
+    var renderedH = naturalH * scale;
+    var offsetX = (rect.width - renderedW) / 2;
+    var offsetY = (rect.height - renderedH) / 2;
+    var x = evt.clientX - rect.left - offsetX;
+    var y = evt.clientY - rect.top - offsetY;
+    if (x < 0 || y < 0 || x > renderedW || y > renderedH) return; // tapped the letterbox, not the image
+    var fx = x / renderedW;
+    var fy = y / renderedH;
+    if (window.PMCCameraBridge && window.PMCCameraBridge.sendRemoteCalibTap) {
+      window.PMCCameraBridge.sendRemoteCalibTap(fx, fy);
+    }
+  });
+
+  window.PMCCameraBridge.reportCalibFrame = function (frame) {
+    if (remoteCalibrateOverlay.classList.contains("hidden")) return;
+    if (frame.dataUrl) {
+      remoteCalibrateFrameEl.src = frame.dataUrl;
+      remoteCalibrateFrameEl.classList.remove("hidden");
+      remoteCalibratePlaceholderEl.classList.add("hidden");
+    }
+    if (frame.done) {
+      remoteCalibrateStepEl.textContent = T("cameraWizard.remoteCalibrateDone");
+      btnRemoteCalibrateCancel.classList.add("hidden");
+      btnRemoteCalibrateDone.classList.remove("hidden");
+    } else if (frame.failed) {
+      remoteCalibrateStepEl.textContent =
+        frame.failed === "cancelled" ? T("cameraWizard.remoteCalibrateCancelledRemotely") : frame.failed;
+      btnRemoteCalibrateRetry.classList.remove("hidden");
+    } else if (frame.step) {
+      remoteCalibrateStepEl.textContent = frame.step;
+    }
+  };
+
+  remoteCalibrateCameraSelect.addEventListener("change", function () {
+    if (!remoteCalibrateCameraSelect.value) return;
+    if (window.PMCCameraBridge && window.PMCCameraBridge.selectRemoteCamera) {
+      window.PMCCameraBridge.selectRemoteCamera(remoteCalibrateCameraSelect.value);
+    }
+  });
+
+  window.PMCCameraBridge.reportRemoteCameraList = function (data) {
+    window.PMCCameraBridge.reportCameraDeviceList(data, true);
+    if (remoteCalibrateOverlay.classList.contains("hidden")) return;
+    var devices = data.devices || [];
+    // Only worth showing when there's an actual choice - a phone with
+    // one camera (no separate wide/ultra-wide entries) would just show
+    // a single-option dropdown that does nothing useful.
+    if (devices.length < 2) {
+      remoteCalibrateCameraRow.classList.add("hidden");
+      return;
+    }
+    remoteCalibrateCameraSelect.innerHTML = "";
+    devices.forEach(function (d) {
+      var opt = document.createElement("option");
+      opt.value = d.deviceId;
+      opt.textContent = d.label;
+      if (d.deviceId === data.currentDeviceId) opt.selected = true;
+      remoteCalibrateCameraSelect.appendChild(opt);
+    });
+    remoteCalibrateCameraRow.classList.remove("hidden");
+  };
+
+  // ---- Scorecard camera-recognition icons ----
+  // State only - the actual badge elements are built once per player by
+  // buildIndividualPanel (one per scorecard, each tagged with its own
+  // player id) and just have their classes toggled here on every camera
+  // event, rather than forcing a full renderScoreboard() ~3.5 times a
+  // second (expensive, and would disrupt any in-progress keypad
+  // interaction). flashing = "being watched live, not yet confirmed this
+  // round" (see camera.html's shotConfirmedForSeenName comment); idle =
+  // recognized via the lightweight seated/idle check, shown only when
+  // NOT also flashing (flashing already implies "camera sees them,"
+  // showing both would be redundant); needsConfirmation = this is the
+  // camera's best (unconfirmed) guess for who's currently bent over
+  // unmatched - tap them on the keypad to confirm, same action
+  // resolveUnmatchedShooterPrompt already wires into every manual
+  // selection site; recentlyUpdated = a sample was just captured for
+  // them, shown for a few seconds then auto-clears.
+  var scorecardCameraFlashingName = null;
+  var scorecardCameraNeedsConfirmName = null;
+  var scorecardCameraIdleNames = {};
+  var scorecardCameraRecentlyUpdatedTimers = {};
+  var SCORECARD_CAMERA_PLUS_MS = 4000;
+
+  function updateCameraIconsOnScorecard() {
+    Array.prototype.forEach.call(document.querySelectorAll(".scorecard-camera-badge"), function (badge) {
+      var player = state.players.filter(function (p) { return p.id === badge.dataset.playerId; })[0];
+      if (!player) return;
+      var name = player.name;
+      var flashing = scorecardCameraFlashingName === name;
+      var needsConfirm = scorecardCameraNeedsConfirmName === name;
+      var idle = !flashing && !!scorecardCameraIdleNames[name];
+      var plus = !!scorecardCameraRecentlyUpdatedTimers[name];
+      badge.classList.toggle("flashing", flashing);
+      badge.classList.toggle("idle", idle);
+      badge.classList.toggle("show-plus", plus);
+      badge.classList.toggle("show-question", needsConfirm);
+    });
+  }
+
+  // Attached here (inside boot(), where renderCameraCandidateStatus and
+  // speakCameraStatus actually live) rather than as plain properties of
+  // the window.PMCCameraBridge literal below, which is assigned outside
+  // boot() and has no access to either. boot() always runs to completion
+  // before any real "candidate"/player_up message can arrive, so these
+  // are in place well before js/camera-client.js or the same-device
+  // postMessage listener would ever call them.
+  window.PMCCameraBridge.reportCandidateSeen = function (name, stance, angle, closestName, closestDistance, matchThreshold, rawPoseConfidence, keypointConfFloor, tooFarFromRail, flashingName, needsConfirmationName) {
+    renderCameraCandidateStatus(name || null, true, stance, angle);
+    logCameraDiagnostic(name || null, stance, angle, closestName, closestDistance, matchThreshold, rawPoseConfidence, keypointConfFloor, tooFarFromRail);
+    updateUnmatchedShooterBanner(name || null, stance);
+    scorecardCameraFlashingName = flashingName || null;
+    scorecardCameraNeedsConfirmName = needsConfirmationName || null;
+    updateCameraIconsOnScorecard();
+    // Voice-announces a *change of matched name* only - per explicit
+    // request, never for an unmatched sighting (no "seeing someone..."),
+    // and never re-announced just because stance changed while the same
+    // name stays matched (bent -> upright -> bent while still the same
+    // player doesn't repeat "Seeing X." each time).
+    var seen = name && window.PMCCameraBridge.isPlayerPlayingByName(name) ? name : null;
+    if (seen === lastSpokenCandidateName) return;
+    lastSpokenCandidateName = seen;
+    // Said only while debugging - in play, who's at the table changing
+    // all the time was just chatter (see cameraShotVoiceAllowed).
+    if (!cameraDebugVoiceOn()) return;
+    // "X shooting." a moment ago already said who it is - a cue shot by
+    // someone out of view names them as the seen player right after.
+    if (seen && lastShotAnnounced && lastShotAnnounced.name === seen && Date.now() - lastShotAnnounced.at < 10000) return;
+    if (seen) speakCameraStatus("Seeing " + seen + ".");
+  };
+  // Counterpart to reportCandidateSeen above, for the distinct "shot
+  // confirmed" voice line - called by both the same-device postMessage
+  // listener and js/camera-client.js's own handlePlayerUp, right after
+  // each one calls selectPlayer, so both transports get identical
+  // parent-page voice feedback through one implementation.
+  var lastShotAnnounced = null; // { name, at }
+  window.PMCCameraBridge.announceShotFired = function (name, certainty) {
+    if (!name) return;
+    lastShotAnnounced = { name: name, at: Date.now() };
+    if (!cameraShotVoiceAllowed(certainty)) return;
+    speakCameraStatus(name + " shooting.");
+  };
+  // A shot the camera recognized switches the player without a word (no
+  // "X shooting", no keypad announcement) - in play, the voice on every
+  // change was annoying - except: while debugging (either debug box
+  // ticked), as before; and in Straight Pool, when the camera is at least
+  // CAMERA_VOICE_MIN_CERTAINTY sure who it is (certainty comes with each
+  // shot - see camera.html's matchCertainty; a Shooting press is 1).
+  var CAMERA_VOICE_MIN_CERTAINTY = 0.8;
+  function cameraDebugVoiceOn() {
+    return cameraDebugCheckbox.checked || cameraCueDebugCheckbox.checked;
+  }
+  function cameraShotVoiceAllowed(certainty) {
+    if (cameraDebugVoiceOn()) return true;
+    if (quickCounterMode || state.currentGame.gameType !== "straight") return false;
+    return typeof certainty === "number" && certainty >= CAMERA_VOICE_MIN_CERTAINTY;
+  }
+
+  // A shot the camera recognized (player_up), from either transport:
+  // select that player on the keypad and announce it. When it can't be
+  // acted on, it used to vanish without a trace - the camera view said
+  // "X shooting" and the scoreboard did nothing - so now the reason is
+  // shown (a toast, at most once per reason every 20s) and logged under
+  // Debugging visual matching. An open dialog/overlay only logs: holding
+  // the selection still while one is up is on purpose.
+  var cameraShotIgnoredAt = {};
+  function noteCameraShot(text, toastKey, toastParams) {
+    cameraDiagnosticLog.push({ ts: Date.now(), text: text, shot: true });
+    if (cameraDiagnosticLog.length > CAMERA_DIAGNOSTIC_LOG_MAX) cameraDiagnosticLog.shift();
+    renderCameraDiagnosticLog();
+    if (!toastKey) return;
+    var now = Date.now();
+    if (cameraShotIgnoredAt[toastKey] && now - cameraShotIgnoredAt[toastKey] < 20000) return;
+    cameraShotIgnoredAt[toastKey] = now;
+    showToast(T(toastKey, toastParams));
+  }
+  window.PMCCameraBridge.handleCameraShot = function (name, certainty) {
+    if (!name) return;
+    if (!window.PMCCameraBridge.isEnabled()) {
+      noteCameraShot("Shot: " + name + " - not selected, Camera player recognition is off", "toast.cameraShotRecognitionOff", { name: name });
+      return;
+    }
+    // selectPlayer has no overlay guard of its own - without this, a
+    // camera event mid win-celebration overlay would yank the selection
+    // and, in Focus Mode, smooth-scroll the page out from under it.
+    if (window.PMCCameraBridge.isAnyOverlayOpen(true)) {
+      noteCameraShot("Shot: " + name + " - not selected while a window is open on the scoreboard");
+      return;
+    }
+    // camera.html only ever knows players by name - resolve that back to
+    // this session's real, currently-live player id first.
+    var id = window.PMCCameraBridge.resolvePlayerIdByName(name);
+    if (!id) {
+      noteCameraShot("Shot: " + name + " - no player called that on the score cards", "toast.cameraShotNoSuchPlayer", { name: name });
+      return;
+    }
+    // Only players actually in the game - someone enrolled but on
+    // Standby (or just watching) must never grab the keypad.
+    if (!window.PMCCameraBridge.isPlayerPlayingByName(name)) {
+      noteCameraShot("Shot: " + name + " - not selected, they're not marked Playing", "toast.cameraShotNotPlaying", { name: name });
+      return;
+    }
+    // Selecting is skipped when this player is already selected (no
+    // point re-selecting what's already active), but announcing is
+    // NOT behind that same check - camera.html's own debounceSec
+    // already spaces out repeat player_up events for one name, so by
+    // the time one arrives here it's a deliberate, legitimate event
+    // that deserves its own announcement, same player or not. Tying
+    // the voice to the selection-changed check too meant the second
+    // and every later shot by whoever's still selected (very common -
+    // solo practice, or several turns in a row) never got announced at
+    // all, which is exactly what "only the first shot" was.
+    markFirstShot();
+    var already = id === window.PMCCameraBridge.getSelectedPlayerId();
+    var voice = cameraShotVoiceAllowed(certainty);
+    if (!already) window.PMCCameraBridge.selectPlayer(id, voice);
+    window.PMCCameraBridge.announceShotFired(name, certainty);
+    noteCameraShot("Shot: " + name + (already ? " - already selected" : " - selected") +
+      (typeof certainty === "number" ? " (" + Math.round(certainty * 100) + "% sure" + (voice ? ")" : ", not spoken)") : ""));
+  };
+  // Cue stick over the table (camera.html's cue tracking) - "detected" /
+  // "gone" as the cue comes out over the cloth and is put away ("fewer"
+  // when one of several is put away; "detected" carries how many are out), and
+  // "shooter" when that cue was put down to someone (resent: already
+  // selected, inside the camera's re-announce cooldown). Only Cue debug
+  // mode does anything with them here: a running log under the
+  // checkboxes, and "Cue detected on table" out loud when voice is on.
+  // The shooter's own "X shooting." still comes from player_up.
+  window.PMCCameraBridge.reportCueEvent = function (msg) {
+    if (!msg || !cameraCueDebugCheckbox.checked) return;
+    var text;
+    if (msg.event === "detected") {
+      text = "Cue detected on the table" + (typeof msg.lengthIn === "number" ? " (" + Math.round(msg.lengthIn) + " in of cue seen)" : "") +
+        (msg.count > 1 ? " - " + msg.count + " cues on the table" : "");
+      speakCameraStatus(T("toast.cameraCueDetected"));
+    } else if (msg.event === "gone") {
+      text = "Cue no longer over the table";
+    } else if (msg.event === "fewer" && msg.count > 0) {
+      text = "A cue was put away - " + msg.count + (msg.count === 1 ? " cue" : " cues") + " still on the table";
+    } else if (msg.event === "shooter" && msg.player_name) {
+      text = "Cue: " + msg.player_name + " set as shooting (" + (msg.via || "cue over the table") + ")" + (msg.resent ? " - already selected" : "");
+    } else if (msg.event === "no-shooter") {
+      text = "Cue over the table, but no player to set as shooting - select one on the keypad";
+    } else {
+      return;
+    }
+    cameraDiagnosticLog.push({ ts: Date.now(), text: text, cue: true });
+    if (cameraDiagnosticLog.length > CAMERA_DIAGNOSTIC_LOG_MAX) cameraDiagnosticLog.shift();
+    renderCameraDiagnosticLog();
+  };
+  // Replaces the whole idle set every call (camera.html/camera-client.js
+  // already send the complete current list each time, not a delta) -
+  // see processIdlePoses's own comment for how rarely each entry in it
+  // actually got re-checked.
+  window.PMCCameraBridge.reportIdleStates = function (idleList) {
+    scorecardCameraIdleNames = {};
+    (idleList || []).forEach(function (entry) {
+      if (entry && entry.name) scorecardCameraIdleNames[entry.name] = true;
+    });
+    updateCameraIconsOnScorecard();
+  };
+  // Ball tracking (Straight Pool): the camera's between-shots inventory
+  // events. Only ball_pocketed ever touches the score, and only when
+  // everything lines up - the feature is on at both ends, it's a
+  // Straight Pool game, someone is selected on the keypad, this device
+  // is the one keeping score (a guest only forwards taps to the host),
+  // and no overlay has the table's attention. Re-racks and reappeared
+  // balls are announced so the operator can check, never auto-corrected
+  // (see camera.html's ball tracking comment for why).
+  window.PMCCameraBridge.reportBallEvent = function (msg) {
+    if (!msg || !state.cameraInputEnabled || !state.cameraBallTrackingEnabled) return;
+    if (quickCounterMode || state.currentGame.gameType !== "straight") return;
+    if (msg.type === "ball_rerack") {
+      showToast(T("toast.cameraRerack"));
+      speakCameraStatus(T("toast.cameraRerack"));
+      return;
+    }
+    if (msg.type === "ball_reappeared") {
+      showToast(T("toast.cameraBallReappeared"));
+      speakCameraStatus(T("toast.cameraBallReappeared"));
+      return;
+    }
+    if (msg.type !== "ball_pocketed") return;
+    if (networkMode === "guest" || isAnyOverlayOpen()) return;
+    var player = keypadSelectedPlayerId ? getPlayer(keypadSelectedPlayerId) : null;
+    if (!player || !player.playing) return;
+    var delta = msg.scratch ? -1 : Math.max(0, parseInt(msg.count, 10) || 0);
+    if (delta === 0) return;
+    lastAutoBallCredit = { ts: Date.now(), delta: delta, playerId: player.id };
+    adjustScore(player.id, delta, { fromCamera: true });
+    var text = msg.scratch
+      ? T("toast.cameraScratch").replace("{name}", player.name)
+      : T("toast.cameraBallPocketed").replace("{name}", player.name).replace("{count}", String(delta));
+    showToast(text);
+    speakCameraStatus(text);
+  };
+  // The "+" badge - self-clearing after SCORECARD_CAMERA_PLUS_MS, timer
+  // restarted (not stacked) if more samples land for the same player
+  // before the previous one expired.
+  window.PMCCameraBridge.reportEnrollmentUpdated = function (name) {
+    if (!name) return;
+    if (window.PMCCameraBridge.renderEnrollmentStatus) window.PMCCameraBridge.renderEnrollmentStatus();
+    if (scorecardCameraRecentlyUpdatedTimers[name]) clearTimeout(scorecardCameraRecentlyUpdatedTimers[name]);
+    scorecardCameraRecentlyUpdatedTimers[name] = setTimeout(function () {
+      delete scorecardCameraRecentlyUpdatedTimers[name];
+      updateCameraIconsOnScorecard();
+    }, SCORECARD_CAMERA_PLUS_MS);
+    updateCameraIconsOnScorecard();
+  };
+  // Lets renderScoreboard (outside boot(), has no direct access to
+  // updateCameraIconsOnScorecard) re-sync freshly-built badge elements to
+  // the current known state right after creating them - see its own
+  // comment on why that matters.
+  window.PMCCameraBridge.syncScorecardCameraIcons = updateCameraIconsOnScorecard;
+
+  // Moves the running camera between the full-screen view and the small
+  // preview. A plain appendChild reloads an iframe (the camera restarts
+  // and anything sent to it meanwhile is lost); moveBefore, where the
+  // browser has it, moves it with its page still running. Otherwise it's
+  // treated as reloading: messages wait until it talks again.
+  // In the Visual Scoring preview the frame is exactly as tall as the
+  // camera page says it needs (its "frame-height" message), so nothing
+  // scrolls inside it; full screen, it fills the overlay as before.
+  var sameDeviceCameraFrameHeight = null;
+  function fitSameDeviceCameraFrame() {
+    var inline = sameDeviceCameraIframe.parentNode === cameraInlinePreviewHome;
+    sameDeviceCameraIframe.style.height = inline && sameDeviceCameraFrameHeight ? sameDeviceCameraFrameHeight + "px" : "";
+  }
+  function moveSameDeviceCameraTo(parent) {
+    if (sameDeviceCameraIframe.parentNode === parent) return;
+    moveSameDeviceCameraToNow(parent);
+    fitSameDeviceCameraFrame();
+  }
+  function moveSameDeviceCameraToNow(parent) {
+    if (typeof parent.moveBefore === "function" && sameDeviceCameraIframe.isConnected) {
+      try {
+        parent.moveBefore(sameDeviceCameraIframe, null);
+        return;
+      } catch (e) {}
+    }
+    parent.appendChild(sameDeviceCameraIframe);
+    sameDeviceCameraReady = false;
+  }
+
+  function openSameDeviceCameraOverlay() {
+    if (!sameDeviceCameraRunning) {
+      sameDeviceCameraRunning = true;
+      sameDeviceCameraReady = false;
+      sameDeviceCameraIframe.src = "camera.html?embedded=1";
+      renderCameraCandidateStatus(null, true);
+      if (window.PMCCameraBridge.renderCameraStatusLights) window.PMCCameraBridge.renderCameraStatusLights();
+    }
+    moveSameDeviceCameraTo(sameDeviceCameraCard);
+    cameraInlinePreviewWrap.classList.add("hidden");
+    sameDeviceCameraOverlay.classList.remove("hidden");
+  }
+
+  function minimizeSameDeviceCameraOverlay() {
+    sameDeviceCameraOverlay.classList.add("hidden");
+    moveSameDeviceCameraTo(cameraInlinePreviewHome);
+    cameraDebugOptionsRow.classList.remove("hidden");
+    cameraInlinePreviewWrap.classList.remove("hidden");
+    syncCameraDebugCheckboxesFromStorage();
+  }
+
+  // Starts the embedded iframe straight into its minimized/inline form
+  // (never the full-screen view) whenever this device is both enabled
+  // and actually configured for same-device mode - called once from
+  // boot() (a fresh page load otherwise never started the iframe at
+  // all, despite the checkbox showing checked) and again whenever the
+  // checkbox is re-checked after having been off, since neither of
+  // those previously did anything beyond flipping the state flag.
+  function resumeSameDeviceCameraIfNeeded() {
+    if (sameDeviceCameraRunning) return;
+    if (!state.cameraInputEnabled || !state.sameDeviceCameraSetUp) return;
+    if (!window.isSecureContext) return;
+    openSameDeviceCameraOverlay();
+    minimizeSameDeviceCameraOverlay();
+  }
+
+  // Triggered by the roster's own "Enroll" button (see buildCameraEnrollBadge)
+  // - starts the camera if it isn't already running, opens the full-screen
+  // overlay (the tiny minimized preview isn't usable for actually tapping
+  // through enrollment), then tells camera.html to jump to its Enroll tab
+  // with this player pre-selected. Attached here (inside boot(), same
+  // reasoning as reportCandidateSeen/announceShotFired above) rather than
+  // as a plain property of the PMCCameraBridge literal, which has no
+  // access to openSameDeviceCameraOverlay/sameDeviceCameraIframe.
+  window.PMCCameraBridge.startCameraEnrollFor = function (name) {
+    resumeSameDeviceCameraIfNeeded();
+    openSameDeviceCameraOverlay();
+    // Waits for the camera page to be listening if it's still loading
+    // (see sendToSameDeviceCamera) - no guessed delay.
+    sendToSameDeviceCamera({ type: "enroll-select", player_name: name });
+  };
+
+  // Called from every genuine MANUAL player-selection site (scorecard
+  // taps, physical 1-9 key press) - deliberately NOT called from
+  // PMCCameraBridge.selectPlayer itself, the camera's own auto-select
+  // path, since reaching that path already means a real match just
+  // succeeded, leaving nothing to resolve. A no-op whenever the
+  // "unmatched shooter" banner isn't actually showing, so this is safe
+  // to call unconditionally from every selection site. When it IS
+  // showing: hides it (the operator just acted on it) and - same-device
+  // mode only, since cross-device enrollment has no iframe to message -
+  // tells camera.html to start attributing the ongoing bent-over
+  // sequence to this player (see activeManualAttribution's own comment
+  // there for how and when that stops).
+  window.PMCCameraBridge.resolveUnmatchedShooterPrompt = function (playerId) {
+    if (unmatchedShooterBanner.classList.contains("hidden")) return;
+    unmatchedShooterBanner.classList.add("hidden");
+    unmatchedShooterBannerDismissed = false;
+    if (!sameDeviceCameraRunning) return;
+    var player = state.players.filter(function (p) { return p.id === playerId; })[0];
+    if (!player) return;
+    try {
+      sameDeviceCameraIframe.contentWindow.postMessage({ type: "enroll-select-attribute", player_name: player.name }, location.origin);
+    } catch (e) {}
+  };
+
+  function stopSameDeviceCamera() {
+    if (!sameDeviceCameraRunning) return; // never started this session - nothing to stop
+    sameDeviceCameraRunning = false;
+    sameDeviceCameraReady = false;
+    sameDeviceCameraQueue = [];
+    renderCameraCandidateStatus(null, false);
+    renderCameraDeviceChoice();
+    if (window.PMCCameraBridge.reportCameraStatus) window.PMCCameraBridge.reportCameraStatus({}, false);
+    // postMessage first so camera.html can stop its own MediaStreamTracks
+    // and release the wake lock - clearing src alone isn't a reliable
+    // teardown signal (timing varies across Safari/Chrome). postMessage
+    // delivery is always asynchronous, even same-process - clearing src
+    // in the very same tick risks the navigation tearing the iframe's
+    // document down before it ever gets to process the message (confirmed
+    // empirically: a same-tick src clear reliably wins the race in
+    // headless Chrome, dropping the message). A trip through setTimeout
+    // guarantees camera.html's own message handler has already run first.
+    try {
+      sameDeviceCameraIframe.contentWindow.postMessage({ type: "stop-camera" }, location.origin);
+    } catch (e) {}
+    sameDeviceCameraOverlay.classList.add("hidden");
+    cameraInlinePreviewWrap.classList.add("hidden");
+    setTimeout(function () {
+      sameDeviceCameraIframe.src = "";
+    }, 0);
+  }
+
+  btnCloseSameDeviceCamera.addEventListener("click", minimizeSameDeviceCameraOverlay);
+  btnExpandSameDeviceCamera.addEventListener("click", openSameDeviceCameraOverlay);
+
+  // The debug/voice checkboxes live on this page (not inside the iframe),
+  // but the settings they control are camera.html's own - same-device
+  // mode means the exact same origin, so its localStorage IS this page's
+  // localStorage, making direct read/write the simplest sync mechanism;
+  // a lightweight postMessage just tells an already-running iframe to
+  // reload from it immediately rather than waiting for its own next poll.
+  var CAMERA_SETTINGS_STORAGE_KEY = "pmc-camera-settings"; // must match camera.html's own SETTINGS_STORAGE_KEY
+
+  function updateCameraInlinePreviewVisibility() {
+    var show = cameraDebugCheckbox.checked || cameraVoiceCheckbox.checked || cameraCueDebugCheckbox.checked;
+    cameraInlinePreviewHome.classList.toggle("hidden", !show);
+  }
+
+  function sendCameraDebugSettingsToIframe() {
+    try {
+      var raw = localStorage.getItem(CAMERA_SETTINGS_STORAGE_KEY);
+      var parsed = raw ? JSON.parse(raw) : {};
+      parsed.debugOverlay = cameraDebugCheckbox.checked;
+      parsed.voiceStatusEnabled = cameraVoiceCheckbox.checked;
+      parsed.cueDebugEnabled = cameraCueDebugCheckbox.checked;
+      localStorage.setItem(CAMERA_SETTINGS_STORAGE_KEY, JSON.stringify(parsed));
+    } catch (e) {}
+    if (sameDeviceCameraRunning) {
+      try {
+        sameDeviceCameraIframe.contentWindow.postMessage({ type: "reload-settings" }, location.origin);
+      } catch (e) {}
+    }
+  }
+
+  // Same-device counterpart of js/camera-client.js's sendBallFeedback -
+  // gated on the camera actually running, not on the overlay being
+  // visible (recognition keeps going while the overlay is minimized).
+  window.PMCCameraBridge.onBallFeedback(function (feedback) {
+    if (!sameDeviceCameraRunning) return;
+    try {
+      sameDeviceCameraIframe.contentWindow.postMessage({ type: "ball_feedback", kind: feedback.kind, delta: feedback.delta, ts: feedback.ts }, location.origin);
+    } catch (e) {}
+  });
+  // Roster pushes (who's Playing / who's known) and graveyard deletions,
+  // same-device counterparts of camera-client.js's sendRoster/sendEnrollDelete.
+  window.PMCCameraBridge.onRosterChanged(function (roster) {
+    if (!sameDeviceCameraRunning) return;
+    try {
+      sameDeviceCameraIframe.contentWindow.postMessage(roster, location.origin);
+    } catch (e) {}
+  });
+  window.PMCCameraBridge.onEnrollDelete(function (name) {
+    if (!sameDeviceCameraRunning) return;
+    try {
+      sameDeviceCameraIframe.contentWindow.postMessage({ type: "enroll-delete", player_name: name }, location.origin);
+    } catch (e) {}
+  });
+
+  // ---- Capture settings (Visual Scoring > Capture Settings) ----
+  // The camera's own detection settings, edited right here instead of
+  // inside the camera page. Same-device: the camera page shares this
+  // origin's storage, so values are read from it and changes go to the
+  // running camera as a camera-settings message (or straight into
+  // storage when it isn't running). Separate phone: the phone reports
+  // what it's actually using (camera-settings-state over the relay) and
+  // changes are sent to it the same way; until it has reported, the
+  // fields stay disabled - there's nowhere for a change to go.
+  // Defaults mirror camera.html's own settings object.
+  var CAPTURE_SETTINGS = [
+    { key: "matchThreshold", el: cameraMatchLevelInput, kind: "match", def: 1.2 },
+    { key: "debounceSec", el: cameraDebounceSecInput, kind: "int", def: 10, help: "players.cameraDebounceSecHelpText" },
+    { key: "consecutiveFrames", id: "capture-consecutive-frames", kind: "int", def: 3, help: "players.cameraConsecutiveFramesHelpText" },
+    { key: "bendEnterAngle", id: "capture-bend-enter", kind: "float", def: 30, help: "players.cameraBendEnterHelpText" },
+    { key: "bendExitAngle", id: "capture-bend-exit", kind: "float", def: 20, help: "players.cameraBendExitHelpText" },
+    { key: "railDistanceInches", id: "capture-rail-distance", kind: "float", def: 30, help: "players.cameraRailDistanceHelpText" },
+    { key: "ballConfirmPasses", id: "capture-ball-confirm", kind: "int", def: 3, help: "players.cameraBallConfirmHelpText" },
+    { key: "cueDetectionEnabled", id: "capture-cue-detection", kind: "bool", def: true, help: "players.cameraCueDetectionHelpText" }
+  ];
+  CAPTURE_SETTINGS.forEach(function (c) {
+    if (!c.el) c.el = document.getElementById(c.id);
+    c.helpBtn = document.getElementById(c.id ? "btn-" + c.id + "-help" : null);
+  });
+  var phoneCaptureSettingsKnown = false;
+
+  function readStoredCameraSettings() {
+    try {
+      var raw = localStorage.getItem(CAMERA_SETTINGS_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function renderCaptureSettings(values) {
+    CAPTURE_SETTINGS.forEach(function (c) {
+      var v = values && typeof values[c.key] === typeof c.def ? values[c.key] : c.def;
+      if (document.activeElement === c.el) return; // don't fight someone mid-edit
+      if (c.kind === "match") {
+        var level = matchThresholdToLevel(v);
+        c.el.value = level;
+        if (document.activeElement !== cameraMatchSlider) cameraMatchSlider.value = level;
+      } else if (c.kind === "bool") c.el.checked = !!v;
+      else c.el.value = v;
+    });
+  }
+
+  function refreshCaptureSettingsAvailability() {
+    var phone = !state.sameDeviceCameraSetUp;
+    var waiting = phone && !phoneCaptureSettingsKnown;
+    captureSettingsWaiting.classList.toggle("hidden", !waiting);
+    captureSettingsFields.disabled = waiting;
+    // (Tracking's cue checkbox lives outside that fieldset, beside the
+    // recognition switch, which must never be disabled.)
+    document.getElementById("capture-cue-detection").disabled = waiting;
+    if (!phone) renderCaptureSettings(readStoredCameraSettings());
+  }
+
+  function readCaptureInput(c) {
+    if (c.kind === "bool") return c.el.checked;
+    var v = c.kind === "int" ? parseInt(c.el.value, 10) : parseFloat(c.el.value);
+    var min = parseFloat(c.el.min), max = parseFloat(c.el.max);
+    if (!(v > 0)) return null;
+    if (!isNaN(min) && v < min) v = min;
+    if (!isNaN(max) && v > max) v = max;
+    return v;
+  }
+
+  function pushCaptureSetting(key, value) {
+    var patch = {};
+    patch[key] = value;
+    if (state.sameDeviceCameraSetUp) {
+      if (sameDeviceCameraRunning) {
+        try {
+          sameDeviceCameraIframe.contentWindow.postMessage({ type: "camera-settings", settings: patch }, location.origin);
+        } catch (e) {}
+      } else {
+        var stored = readStoredCameraSettings();
+        stored[key] = value;
+        try { localStorage.setItem(CAMERA_SETTINGS_STORAGE_KEY, JSON.stringify(stored)); } catch (e) {}
+      }
+    } else {
+      cameraCaptureSettingsCallbacks.forEach(function (cb) {
+        try { cb(patch); } catch (e) {}
+      });
+    }
+  }
+
+  // "Matching players": a 0-6 level, 3 = the default, converted to the
+  // camera's match threshold (an appearance distance - lower is
+  // stricter). 0 can never match anyone (threshold 0); 6 matches anyone
+  // to their closest enrolled player (9 is past the largest distance two
+  // appearances can be apart - four normalized histograms, at most 2
+  // each, plus the build term). Linear on each side of the default.
+  var MATCH_DEFAULT_THRESHOLD = 1.2, MATCH_EVERYTHING_THRESHOLD = 9;
+  function matchLevelToThreshold(level) {
+    level = Math.max(0, Math.min(6, level));
+    var t = level <= 3 ? level / 3 * MATCH_DEFAULT_THRESHOLD : MATCH_DEFAULT_THRESHOLD + (level - 3) / 3 * (MATCH_EVERYTHING_THRESHOLD - MATCH_DEFAULT_THRESHOLD);
+    return Math.round(t * 100) / 100;
+  }
+  function matchThresholdToLevel(t) {
+    t = Math.max(0, t);
+    var level = t <= MATCH_DEFAULT_THRESHOLD ? t / MATCH_DEFAULT_THRESHOLD * 3 : 3 + (t - MATCH_DEFAULT_THRESHOLD) / (MATCH_EVERYTHING_THRESHOLD - MATCH_DEFAULT_THRESHOLD) * 3;
+    return Math.round(Math.min(6, level) * 10) / 10;
+  }
+  function readMatchLevel(el) {
+    var v = parseFloat(el.value);
+    if (isNaN(v)) return null;
+    return Math.round(Math.max(0, Math.min(6, v)) * 10) / 10;
+  }
+  // The slider and the number box mirror each other while either moves;
+  // letting go of either one (change) applies it.
+  cameraMatchSlider.addEventListener("input", function () {
+    cameraMatchLevelInput.value = cameraMatchSlider.value;
+  });
+  cameraMatchLevelInput.addEventListener("input", function () {
+    var level = readMatchLevel(cameraMatchLevelInput);
+    if (level !== null) cameraMatchSlider.value = level;
+  });
+  [cameraMatchSlider, cameraMatchLevelInput].forEach(function (el) {
+    el.addEventListener("change", function () {
+      var level = readMatchLevel(el);
+      if (level === null) return;
+      cameraMatchSlider.value = level;
+      cameraMatchLevelInput.value = level;
+      var threshold = matchLevelToThreshold(level);
+      state.cameraMatchThreshold = threshold;
+      saveState();
+      pushCaptureSetting("matchThreshold", threshold);
+    });
+  });
+
+  CAPTURE_SETTINGS.forEach(function (c) {
+    if (c.kind === "match") return; // the slider above
+    c.el.addEventListener("change", function () {
+      var v = readCaptureInput(c);
+      if (v === null) return;
+      if (c.kind !== "bool") c.el.value = v;
+      pushCaptureSetting(c.key, v);
+    });
+    if (c.helpBtn) {
+      c.helpBtn.addEventListener("click", function () {
+        alertModal(T(c.help));
+      });
+    }
+  });
+
+  // What the camera is actually using - from the same-device camera
+  // page (postMessage) or a separate phone (relay, js/camera-client.js).
+  window.PMCCameraBridge.reportCameraSettings = function (values, fromRelay) {
+    if (!values || typeof values !== "object" || !cameraMessageCounts(fromRelay)) return;
+    if (!state.sameDeviceCameraSetUp) phoneCaptureSettingsKnown = true;
+    renderCaptureSettings(values);
+    refreshCaptureSettingsAvailability();
+    var changed = false;
+    if (typeof values.matchThreshold === "number" && values.matchThreshold !== state.cameraMatchThreshold) { state.cameraMatchThreshold = values.matchThreshold; changed = true; }
+    if (typeof values.debounceSec === "number" && values.debounceSec !== state.cameraDebounceSec) { state.cameraDebounceSec = values.debounceSec; changed = true; }
+    if (changed) saveState();
+  };
+  // A separate phone that disconnects can't take changes any more.
+  window.PMCCameraBridge.reportCameraDisconnected = function () {
+    phoneCaptureSettingsKnown = false;
+    refreshCaptureSettingsAvailability();
+    cameraPhonesConnected = null;
+    relayEnrolledNames = null;
+    if (!state.sameDeviceCameraSetUp) clearCameraStatusCodes();
+    renderEnrollmentStatus();
+    renderCameraDeviceChoice();
+  };
+
+  // ---- Camera status lights (Select Camera + Capture Settings) ----
+  // The camera page's own three lights - its connection, the pose
+  // models, the camera itself - shown here too, in this page's language.
+  // The camera reports what each light means as a code (camera-status);
+  // the first light is this page's own view of the connection: this
+  // tablet's camera running, or how many camera phones the relay has.
+  var cameraStatusCodes = { link: null, models: null, camera: null };
+  var cameraPhonesConnected = null; // separate phone: from the relay's camera-presence; null = not connected to the relay
+  var CAMERA_LIGHT_MODELS = { ready: ["ok", "visualScoring.lightModelsReady"], loading: ["busy", "visualScoring.lightModelsLoading"], failed: ["bad", "visualScoring.lightModelsFailed"] };
+  var CAMERA_LIGHT_CAMERA = { active: ["ok", "visualScoring.lightCameraActive"], starting: ["busy", "visualScoring.lightCameraStarting"], stopped: ["bad", "visualScoring.lightCameraStopped"], error: ["bad", "visualScoring.lightCameraError"] };
+  function clearCameraStatusCodes() {
+    cameraStatusCodes = { link: null, models: null, camera: null };
+    renderCameraStatusLights();
+  }
+  function cameraStatusLights() {
+    var link, live = false;
+    if (!state.cameraInputEnabled) {
+      link = ["", "visualScoring.lightRecognitionOff"];
+    } else if (state.sameDeviceCameraSetUp) {
+      live = sameDeviceCameraRunning;
+      link = live ? ["ok", "visualScoring.lightSameDevice"] : ["", "visualScoring.lightSameDeviceOff"];
+    } else if (cameraPhonesConnected === null) {
+      link = ["busy", "visualScoring.lightPhoneConnecting"];
+    } else {
+      live = cameraPhonesConnected > 0;
+      link = live ? ["ok", "visualScoring.lightPhoneConnected"] : ["bad", "visualScoring.lightPhoneNotConnected"];
+    }
+    var models = (live && CAMERA_LIGHT_MODELS[cameraStatusCodes.models]) || ["", "visualScoring.lightModelsUnknown"];
+    var camera = (live && CAMERA_LIGHT_CAMERA[cameraStatusCodes.camera]) || ["", "visualScoring.lightCameraUnknown"];
+    return [link, models, camera];
+  }
+  function renderCameraStatusLights() {
+    var lights = cameraStatusLights();
+    ["setup-status-lights", "capture-status-lights"].forEach(function (id) {
+      var host = document.getElementById(id);
+      host.innerHTML = "";
+      lights.forEach(function (light) {
+        var pill = document.createElement("span");
+        pill.className = "camera-light";
+        var dot = document.createElement("span");
+        dot.className = "camera-light-dot" + (light[0] ? " " + light[0] : "");
+        var label = document.createElement("span");
+        label.textContent = T(light[1]);
+        pill.appendChild(dot);
+        pill.appendChild(label);
+        host.appendChild(pill);
+      });
+    });
+  }
+  // fromRelay: sent by js/camera-client.js (a separate phone over the
+  // relay) rather than this tablet's own camera page. Each only counts in
+  // its own mode - the tablet stays connected to the relay as a listener
+  // in same-device mode too, and the relay's "no camera phones" must not
+  // wipe the same-device camera's lights (or the reverse).
+  function cameraMessageCounts(fromRelay) {
+    return !!fromRelay === !state.sameDeviceCameraSetUp;
+  }
+  window.PMCCameraBridge.reportCameraStatus = function (status, fromRelay) {
+    if (!status || typeof status !== "object" || !cameraMessageCounts(fromRelay)) return;
+    cameraStatusCodes = { link: status.link || null, models: status.models || null, camera: status.camera || null };
+    renderCameraStatusLights();
+  };
+  window.PMCCameraBridge.reportCameraPresence = function (count) {
+    cameraPhonesConnected = typeof count === "number" ? count : null;
+    if (!cameraPhonesConnected && !state.sameDeviceCameraSetUp) cameraStatusCodes = { link: null, models: null, camera: null };
+    renderCameraStatusLights();
+    if (typeof renderCameraDeviceChoice === "function") renderCameraDeviceChoice();
+  };
+  window.PMCCameraBridge.renderCameraStatusLights = renderCameraStatusLights;
+  renderCameraStatusLights();
+
+  // ---- Select Camera > Camera: which of the camera's cameras/lenses ----
+  // Only shown when there's a real choice: this computer with a USB
+  // camera plus its built-in one, or a phone whose wide/ultra-wide lenses
+  // show up as separate cameras. The camera page sends its list (and
+  // which one is live) whenever its camera starts; picking one here
+  // switches it there and it remembers the pick. Same transports as the
+  // status lights: postMessage for this device's camera, the relay for
+  // a separate phone (the same messages remote calibration's Lens picker
+  // uses).
+  var cameraDeviceList = null; // { devices: [{deviceId, label}], currentDeviceId, fromRelay }
+  var cameraDeviceFrame = document.getElementById("camera-device-frame");
+  var cameraDeviceSelect = document.getElementById("camera-device-select");
+  function renderCameraDeviceChoice() {
+    var list = cameraDeviceList && cameraMessageCounts(cameraDeviceList.fromRelay) ? cameraDeviceList : null;
+    var live = list && (state.sameDeviceCameraSetUp ? sameDeviceCameraRunning : !!cameraPhonesConnected);
+    if (!live || list.devices.length < 2) {
+      cameraDeviceFrame.classList.add("hidden");
+      return;
+    }
+    cameraDeviceSelect.innerHTML = "";
+    list.devices.forEach(function (d) {
+      var opt = document.createElement("option");
+      opt.value = d.deviceId;
+      opt.textContent = d.label;
+      if (d.deviceId === list.currentDeviceId) opt.selected = true;
+      cameraDeviceSelect.appendChild(opt);
+    });
+    cameraDeviceFrame.classList.remove("hidden");
+  }
+  window.PMCCameraBridge.reportCameraDeviceList = function (data, fromRelay) {
+    if (!data || !Array.isArray(data.devices)) return;
+    var devices = data.devices.filter(function (d) { return d && typeof d.deviceId === "string" && d.deviceId; }).map(function (d) {
+      return { deviceId: d.deviceId, label: String(d.label || d.deviceId) };
+    });
+    cameraDeviceList = { devices: devices, currentDeviceId: data.currentDeviceId || null, fromRelay: !!fromRelay };
+    renderCameraDeviceChoice();
+  };
+  cameraDeviceSelect.addEventListener("change", function () {
+    var deviceId = cameraDeviceSelect.value;
+    if (!deviceId) return;
+    if (cameraDeviceList) cameraDeviceList.currentDeviceId = deviceId;
+    if (state.sameDeviceCameraSetUp) sendToSameDeviceCamera({ type: "remote-camera-select", deviceId: deviceId });
+    else if (window.PMCCameraBridge.selectRemoteCamera) window.PMCCameraBridge.selectRemoteCamera(deviceId);
+  });
+
+  // ---- Capture Settings: Enroll players / Table calibration ----
+  // This tablet's camera: the full-screen camera view, on its Enroll tab
+  // or its own setup wizard's Table Calibration step. A separate phone:
+  // the remote view on its Enroll tab, or remote table calibration (the
+  // phone's wizard is its own - see camera.html's viewer mode). Nothing
+  // set up yet: Select Camera first.
+  // Messages for a same-device camera that's still loading wait until it
+  // has said something (its listener is up by then) instead of a guessed
+  // delay.
+  var sameDeviceCameraReady = false;
+  var sameDeviceCameraQueue = [];
+  function sendToSameDeviceCamera(msg) {
+    if (!sameDeviceCameraReady) {
+      sameDeviceCameraQueue.push(msg);
+      return;
+    }
+    try {
+      sameDeviceCameraIframe.contentWindow.postMessage(msg, location.origin);
+    } catch (e) {}
+  }
+
+  // (Here inside boot(), next to what they use - see the boot() scope
+  // note on PMCCameraBridge.startCameraEnrollFor.) The number pad's camera keys reach this device's own camera whether
+  // it's full screen or the small preview.
+  window.PMCCameraBridge.onCameraCommand(function (msg) {
+    if (sameDeviceCameraRunning) sendToSameDeviceCamera(msg);
+  });
+  // Whether a camera is actually there to take them - the same test the
+  // status lights use (see cameraStatusLights).
+  window.PMCCameraBridge.isCameraLive = function () {
+    if (!state.cameraInputEnabled) return false;
+    return state.sameDeviceCameraSetUp ? sameDeviceCameraRunning : cameraPhonesConnected > 0;
+  };
+  function sameDeviceCameraBecameReady() {
+    if (sameDeviceCameraReady || !sameDeviceCameraRunning) return;
+    sameDeviceCameraReady = true;
+    var queued = sameDeviceCameraQueue;
+    sameDeviceCameraQueue = [];
+    queued.forEach(sendToSameDeviceCamera);
+  }
+  function openCameraFor(sameDeviceMsg, phoneAction) {
+    if (state.sameDeviceCameraSetUp && window.isSecureContext) {
+      openSameDeviceCameraOverlay();
+      sendToSameDeviceCamera(sameDeviceMsg);
+    } else if (state.cameraInputEnabled && !state.sameDeviceCameraSetUp) {
+      phoneAction();
+    } else {
+      openCameraSetup();
+    }
+  }
+  document.getElementById("btn-capture-enroll-players").addEventListener("click", function () {
+    openCameraFor({ type: "show-tab", tab: "enroll" }, function () {
+      remoteViewerIframe.src = "camera.html?viewer=1&tab=enroll&t=" + Date.now();
+      remoteViewerOverlay.classList.remove("hidden");
+    });
+  });
+  document.getElementById("btn-capture-table-calibration").addEventListener("click", function () {
+    openCameraFor({ type: "open-wizard", step: 3 }, openRemoteCalibrateOverlay);
+  });
+
+  // "N of M players enrolled" - everyone on today's roster, playing or
+  // standby. Green light: all of them; red: someone's missing (named in
+  // the tooltip). Same-device enrollments are in this browser's storage
+  // (the camera page writes them - its storage event reaches this page);
+  // a separate phone's are on the relay, which sends who's enrolled.
+  var relayEnrolledNames = null;
+  function renderEnrollmentStatus() {
+    var line = document.getElementById("camera-enrollment-status");
+    var dot = document.getElementById("camera-enrollment-dot");
+    var text = document.getElementById("camera-enrollment-text");
+    var roster = state.players.map(function (p) { return p.name; });
+    line.title = "";
+    if (typeof refreshClearEnrollmentsButton === "function") refreshClearEnrollmentsButton();
+    if (!roster.length) {
+      dot.className = "camera-light-dot";
+      text.textContent = T("visualScoring.enrolledNoPlayers");
+      return;
+    }
+    var isEnrolled;
+    if (state.sameDeviceCameraSetUp) {
+      isEnrolled = isPlayerCameraEnrolled;
+    } else if (relayEnrolledNames) {
+      var keys = {};
+      relayEnrolledNames.forEach(function (n) { keys[normalizeNameKey(n)] = true; });
+      isEnrolled = function (name) { return !!keys[normalizeNameKey(name)]; };
+    } else {
+      dot.className = "camera-light-dot";
+      text.textContent = T("visualScoring.enrolledUnknown");
+      return;
+    }
+    var missing = roster.filter(function (name) { return !isEnrolled(name); });
+    if (typeof refreshClearEnrollmentsButton === "function") refreshClearEnrollmentsButton();
+    dot.className = "camera-light-dot " + (missing.length ? "bad" : "ok");
+    text.textContent = T("visualScoring.enrolledCount", { enrolled: roster.length - missing.length, total: roster.length });
+    if (missing.length) line.title = T("visualScoring.enrolledMissing", { names: missing.join(", ") });
+  }
+  window.PMCCameraBridge.renderEnrollmentStatus = renderEnrollmentStatus;
+
+  // Capture Settings > Remove all enrollments: wipes what the camera has
+  // learned about every player (a new session, new outfits). Only the
+  // camera in use is touched - this tablet's own camera, or the camera
+  // phone's store on the relay - never the other one's.
+  var clearEnrollmentsBtn = document.getElementById("btn-capture-clear-enrollments");
+  function enrolledNamesNow() {
+    if (state.sameDeviceCameraSetUp) {
+      var stored = loadCameraEnrollmentsFromStorage();
+      return Object.keys(stored).filter(function (key) {
+        return stored[key] && Array.isArray(stored[key].descriptors) && stored[key].descriptors.length > 0;
+      }).map(function (key) { return stored[key].displayName || key; });
+    }
+    return relayEnrolledNames ? relayEnrolledNames.slice() : [];
+  }
+  function refreshClearEnrollmentsButton() {
+    if (clearEnrollmentsBtn) clearEnrollmentsBtn.disabled = !enrolledNamesNow().length;
+  }
+  clearEnrollmentsBtn.addEventListener("click", function () {
+    var names = enrolledNamesNow();
+    if (!names.length) return;
+    confirmModal(T("visualScoring.clearEnrollmentsConfirm", { count: names.length }), function () {
+      if (state.sameDeviceCameraSetUp) {
+        if (sameDeviceCameraRunning) {
+          // The camera page keeps its own copy and saves it back - it has
+          // to do the deleting, or it would write everyone back.
+          names.forEach(function (name) { sendToSameDeviceCamera({ type: "enroll-delete", player_name: name }); });
+        } else {
+          try { localStorage.setItem(CAMERA_ENROLLMENTS_KEY, "{}"); } catch (e) {}
+        }
+      } else {
+        // The relay deletes each one, tells every camera, and sends the
+        // new enrolled list back (enrollment-names).
+        names.forEach(function (name) { notifyCameraEnrollDelete(name); });
+      }
+      setTimeout(function () { renderEnrollmentStatus(); updateCameraIconsOnScorecard(); }, 600);
+      showToast(T("visualScoring.clearEnrollmentsDone"));
+    });
+  });
+  window.PMCCameraBridge.reportEnrollmentNames = function (names) {
+    relayEnrolledNames = Array.isArray(names) ? names : null;
+    renderEnrollmentStatus();
+  };
+  window.addEventListener("storage", function (e) {
+    if (e.key === CAMERA_ENROLLMENTS_KEY) renderEnrollmentStatus();
+  });
+  renderEnrollmentStatus();
+  // Until camera recognition has been turned on, Capture Settings starts
+  // open - its Tracking block holds the switch.
+  if (!state.cameraInputEnabled) {
+    document.getElementById("capture-settings-panel").classList.remove("collapsed");
+    document.getElementById("btn-toggle-capture-settings-panel").setAttribute("aria-expanded", "true");
+  }
+  renderCaptureSettings({ matchThreshold: state.cameraMatchThreshold, debounceSec: state.cameraDebounceSec });
+  refreshCaptureSettingsAvailability();
+
+  function syncCameraDebugCheckboxesFromStorage() {
+    try {
+      var raw = localStorage.getItem(CAMERA_SETTINGS_STORAGE_KEY);
+      var parsed = raw ? JSON.parse(raw) : {};
+      cameraDebugCheckbox.checked = !!parsed.debugOverlay;
+      cameraVoiceCheckbox.checked = !!parsed.voiceStatusEnabled;
+      cameraCueDebugCheckbox.checked = !!parsed.cueDebugEnabled;
+    } catch (e) {}
+    updateCameraInlinePreviewVisibility();
+  }
+  // At load too, not only when the same-device preview minimizes - the
+  // checkboxes now show for a separate camera phone as well, and should
+  // come back the way they were left.
+  syncCameraDebugCheckboxesFromStorage();
+  // Debugging visual matching starts folded away - open while a debug mode
+  // is on, so its live log (inside it) is in view.
+  if (cameraDebugCheckbox.checked || cameraCueDebugCheckbox.checked) {
+    document.getElementById("camera-debug-options-row").classList.remove("collapsed");
+    document.getElementById("btn-toggle-camera-debug-options").setAttribute("aria-expanded", "true");
+  }
+
+  cameraDebugCheckbox.addEventListener("change", function () {
+    sendCameraDebugSettingsToIframe();
+    updateCameraInlinePreviewVisibility();
+    renderCameraDiagnosticLog(); // show/hide the backlog immediately, not just future entries
+  });
+  cameraVoiceCheckbox.addEventListener("change", function () {
+    sendCameraDebugSettingsToIframe();
+    updateCameraInlinePreviewVisibility();
+  });
+  cameraCueDebugCheckbox.addEventListener("change", function () {
+    sendCameraDebugSettingsToIframe();
+    updateCameraInlinePreviewVisibility();
+    renderCameraDiagnosticLog();
+  });
+  btnCameraCueDebugHelp.addEventListener("click", function () {
+    alertModal(T("players.cameraCueDebugHelpText"));
+  });
+
+  // Same-device mode's own transport counterpart to js/camera-client.js's
+  // WebSocket listener - receives the exact same message shapes
+  // (player_up/settings-request) via postMessage instead of a relay
+  // socket, and dispatches them through the same PMCCameraBridge methods,
+  // so nothing downstream needs to know or care which transport is live.
+  // Checks both origin and source (matching camera.html's own check on
+  // its side of this same channel), not origin alone.
+  window.addEventListener("message", function (event) {
+    if (event.origin !== location.origin || event.source !== sameDeviceCameraIframe.contentWindow) return;
+    var msg = event.data;
+    if (!msg || typeof msg !== "object") return;
+    sameDeviceCameraBecameReady(); // its first message means its own listener is up
+
+    if (msg.type === "player_up") {
+      window.PMCCameraBridge.handleCameraShot(msg.player_name, msg.certainty);
+    } else if (msg.type === "settings-request") {
+      var settings = window.PMCCameraBridge.getSettings();
+      try {
+        sameDeviceCameraIframe.contentWindow.postMessage({ type: "settings", matchThreshold: settings.matchThreshold, debounceSec: settings.debounceSec }, location.origin);
+      } catch (e) {}
+    } else if (msg.type === "roster-request") {
+      try {
+        sameDeviceCameraIframe.contentWindow.postMessage(window.PMCCameraBridge.buildCameraRoster(), location.origin);
+      } catch (e) {}
+    } else if (msg.type === "candidate") {
+      window.PMCCameraBridge.reportCandidateSeen(msg.player_name || null, msg.stance, msg.angle, msg.closestName, msg.closestDistance, msg.matchThreshold, msg.rawPoseConfidence, msg.keypointConfFloor, msg.tooFarFromRail, msg.flashingName, msg.needsConfirmationName);
+    } else if (msg.type === "idle-states") {
+      window.PMCCameraBridge.reportIdleStates(msg.idle);
+    } else if (msg.type === "enrollment-updated") {
+      window.PMCCameraBridge.reportEnrollmentUpdated(msg.player_name);
+    } else if (msg.type === "enroll-result") {
+      window.PMCCameraBridge.reportEnrollResult(msg);
+    } else if (msg.type === "enroll-pressed") {
+      window.PMCCameraBridge.reportEnrollPressed(msg);
+    } else if (msg.type === "ball_pocketed" || msg.type === "ball_rerack" || msg.type === "ball_reappeared") {
+      window.PMCCameraBridge.reportBallEvent(msg);
+    } else if (msg.type === "cue_event") {
+      window.PMCCameraBridge.reportCueEvent(msg);
+    } else if (msg.type === "camera-settings-state") {
+      window.PMCCameraBridge.reportCameraSettings(msg.settings);
+    } else if (msg.type === "camera-status") {
+      window.PMCCameraBridge.reportCameraStatus(msg.status);
+    } else if (msg.type === "remote-camera-list") {
+      window.PMCCameraBridge.reportCameraDeviceList({ devices: Array.isArray(msg.devices) ? msg.devices : [], currentDeviceId: msg.currentDeviceId || null }, false);
+    } else if (msg.type === "frame-height" && typeof msg.height === "number" && msg.height > 0) {
+      sameDeviceCameraFrameHeight = Math.min(6000, Math.round(msg.height));
+      fitSameDeviceCameraFrame();
+    }
   });
 
   noStatsCheckbox.addEventListener("change", function () {
@@ -29703,6 +31862,10 @@
   wireCollapsiblePanel("rotation-panel", "btn-toggle-rotation-panel");
   wireCollapsiblePanel("game-setup-panel", "btn-toggle-game-setup-panel");
   wireCollapsiblePanel("players-panel", "btn-toggle-players-panel");
+  wireCollapsiblePanel("visual-scoring-panel", "btn-toggle-visual-scoring-panel");
+  wireCollapsiblePanel("camera-setup-panel", "btn-toggle-camera-setup-panel");
+  wireCollapsiblePanel("capture-settings-panel", "btn-toggle-capture-settings-panel");
+  wireCollapsiblePanel("camera-debug-options-row", "btn-toggle-camera-debug-options");
   wireCollapsiblePanel("standings-panel", "btn-toggle-standings-panel");
   wireCollapsiblePanel("history-panel", "btn-toggle-history-panel");
   wireCollapsiblePanel("day-notes-panel", "btn-toggle-day-notes-panel");
@@ -30432,5 +32595,148 @@
       document.body.classList.add("network-guest-mode");
       openRelayConnection("guest");
     }
+  });
+
+  // The one deliberate touchpoint for js/camera-client.js (a separate,
+  // independently-versioned file per explicit request, so the camera
+  // recognition feature can be updated on its own without going through
+  // this file's own ship pipeline) - this whole file is one closed-over
+  // IIFE with nothing exported, so a sibling script can't reach
+  // selectKeypadPlayer/keypadSelectedPlayerId/isAnyOverlayOpen/state any
+  // other way. camera-client.js only ever touches this object, never
+  // anything else in this file.
+  window.PMCCameraBridge = {
+    isEnabled: function () {
+      return !!state.cameraInputEnabled;
+    },
+    isAnyOverlayOpen: isAnyOverlayOpen,
+    getSelectedPlayerId: function () {
+      return keypadSelectedPlayerId;
+    },
+    // announce false: no spoken "X playing" (a camera switch that
+    // shouldn't be spoken - see cameraShotVoiceAllowed).
+    selectPlayer: function (id, announce) {
+      selectKeypadPlayer(id, null, announce !== false);
+    },
+    // Read by camera-client.js so it can hand these to the recognizer
+    // page over the relay (see Step 3 of the camera feature) - not used
+    // by camera-client.js's own player_up handling, which just reacts to
+    // whatever the recognizer already decided to send.
+    getSettings: function () {
+      return { matchThreshold: state.cameraMatchThreshold, debounceSec: state.cameraDebounceSec };
+    },
+    // camera.html's enroll picker uses this instead of free-text entry,
+    // so a captured sample can never be mislabeled by a typo.
+    getPlayerNames: function () {
+      return state.players.map(function (p) {
+        return p.name;
+      });
+    },
+    // camera.html (a separate device/page - see camera-relay.js's own
+    // comment) only ever knows players by name, never this session's
+    // real id (uid() is explicitly not meant to survive across devices).
+    // Reuses normalizeNameKey so this resolves exactly the way every
+    // other name lookup in this app already does.
+    resolvePlayerIdByName: function (name) {
+      var key = normalizeNameKey(name);
+      if (!key) return null;
+      var match = state.players.find(function (p) {
+        return normalizeNameKey(p.name) === key;
+      });
+      return match ? match.id : null;
+    },
+    // Gameplay-driven auto-enrollment (camera.html's "turn_confirmed"
+    // handling) - registers a callback, invoked from adjustScore on every
+    // real (+1 or more) score change. A list, not a single slot: both
+    // js/camera-client.js (the relay path) and the same-device camera
+    // overlay's postMessage listener register their own callback here,
+    // independently. camera-client.js must call this through its own
+    // retry loop, not a bare one-time call - script load order between
+    // the two files isn't guaranteed, so this object may not exist yet
+    // the instant camera-client.js's own script runs.
+    onTurnConfirmed: function (callback) {
+      cameraTurnConfirmedCallbacks.push(callback);
+    },
+    onCameraCommand: function (callback) {
+      cameraCommandCallbacks.push(callback);
+    },
+    sendCameraCommand: function (msg) {
+      cameraCommandCallbacks.forEach(function (cb) { try { cb(msg); } catch (e) {} });
+    },
+    // How a number-pad camera key went, from the camera - see handleCameraKey.
+    reportEnrollResult: function (msg) {
+      if (!msg) return;
+      var name = msg.player_name || "";
+      var text;
+      if (msg.undone) text = T("cameraKeys.undone", { name: name });
+      else if (msg.ok) text = T(msg.kind === "shooting" ? "cameraKeys.shootingAdded" : "cameraKeys.seenAdded", { name: name, total: msg.total || 1 });
+      else if (msg.reason === "nobody") text = T("cameraKeys.nobody", { name: name });
+      else if (msg.reason === "nothing-to-undo") text = T("cameraKeys.nothingToUndo");
+      else text = T("cameraKeys.notRunning");
+      showToast(text, "📷 ");
+    },
+    // Any Identify/Shooting press on the camera, however made: flash
+    // that player's score card - see flashScoreCardForCameraPress.
+    reportEnrollPressed: function (msg) {
+      if (msg && msg.player_name) flashScoreCardForCameraPress(msg.player_name, msg.kind === "shooting" ? "shooting" : "identify");
+    },
+    // Ball tracking's counterpart - invoked from adjustScore with
+    // { kind: "false_positive" | "missed", delta, ts } when a human
+    // score change looks like a correction of (or a miss by) the camera.
+    onBallFeedback: function (callback) {
+      cameraBallFeedbackCallbacks.push(callback);
+    },
+    getPlayingNames: function () {
+      return state.players.filter(function (p) { return p.playing; }).map(function (p) { return p.name; });
+    },
+    isPlayerPlayingByName: function (name) {
+      var key = normalizeNameKey(name);
+      if (!key) return false;
+      return state.players.some(function (p) { return p.playing && normalizeNameKey(p.name) === key; });
+    },
+    // The full roster message both transports send to camera.html: names =
+    // today's roster (its Enroll picker), playing = who recognition may
+    // match, known = every contact-sheet player (anyone else's enrollment
+    // is stale and gets deleted on the camera side).
+    buildCameraRoster: function () {
+      var known = typeof contactSheetVisibleNames === "function" ? contactSheetVisibleNames() : [];
+      state.players.forEach(function (p) {
+        if (known.indexOf(p.name) === -1) known.push(p.name);
+      });
+      return { type: "roster", names: window.PMCCameraBridge.getPlayerNames(), playing: window.PMCCameraBridge.getPlayingNames(), known: known };
+    },
+    onRosterChanged: function (callback) {
+      cameraRosterCallbacks.push(callback);
+    },
+    onEnrollDelete: function (callback) {
+      cameraEnrollDeleteCallbacks.push(callback);
+    },
+    // A Capture Settings change on this tablet, as { key: value } - the
+    // relay transport forwards it to the camera phone.
+    onCaptureSettingsChange: function (callback) {
+      cameraCaptureSettingsCallbacks.push(callback);
+    }
+    // reportCandidateSeen and announceShotFired are attached below, from
+    // inside boot(), not as plain properties of this literal -
+    // renderCameraCandidateStatus/speakCameraStatus/lastSpokenCandidateName
+    // all live in boot()'s own closure (where the camera overlay's DOM
+    // refs are set up), which this object literal - assigned outside
+    // boot() - has no access to. boot() always finishes before any real
+    // "candidate"/player_up message can arrive, so the gap is never
+    // observed.
+  };
+
+  // Same-device mode's own counterpart to js/camera-client.js's
+  // sendTurnConfirmed - forwards the exact same "turn_confirmed" message
+  // shape to the embedded camera.html via postMessage instead of a relay
+  // socket, so gameplay-driven auto-enrollment works identically on both
+  // transports. Registered directly (not through a retry-poll loop like
+  // camera-client.js needs) since this runs in the same IIFE, after
+  // PMCCameraBridge above is already defined - no load-order uncertainty.
+  window.PMCCameraBridge.onTurnConfirmed(function (playerName) {
+    if (sameDeviceCameraOverlay.classList.contains("hidden")) return;
+    try {
+      sameDeviceCameraIframe.contentWindow.postMessage({ type: "turn_confirmed", player_name: playerName }, location.origin);
+    } catch (e) {}
   });
 })();

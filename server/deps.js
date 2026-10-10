@@ -13,4 +13,5 @@ module.exports = {
   express: require("express"),
   WebSocket: require("ws"),
   QRCode: require("qrcode"),
+  selfsigned: require("selfsigned"),
 };

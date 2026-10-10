@@ -617,6 +617,26 @@ body {
   flex-direction: column;
 }
 
+/* Every section, on the main page and on every other screen, is its own
+   container: never squeezed below the height of what's inside it
+   (flex-shrink), never height-capped (max-height), and holding its own
+   contents - margins and anything positioned stay inside its box
+   (flow-root, relative). Opening a section, a long log, the camera
+   preview or a tall run of score cards therefore always grows that
+   section and pushes every section after it down; sections never
+   overlap. The display/position half is wrapped in :where() (zero
+   specificity), so a section's own layout rules - Focus Mode's flex
+   scoreboard, grids - still apply. */
+#app > *,
+body > [id^="view-"] > * {
+  flex-shrink: 0;
+  max-height: none;
+}
+:where(#app, body > [id^="view-"]) > :where(section) {
+  display: flow-root;
+  position: relative;
+}
+
 .hidden {
   display: none !important;
 }
@@ -774,7 +794,9 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  flex: 1;
+  /* Grows into the rest of the screen, never shrinks below its cards
+     (see #app > * above). */
+  flex: 1 0 auto;
 }
 
 /* With only a couple of players on screen, .scoreboard's existing
@@ -1267,13 +1289,20 @@ button:active {
 
 .btn-primary:hover { filter: brightness(1.08); }
 
+/* A flat `transparent` background here used to mean "whatever's behind
+   it" - on some themes/surfaces (a felt-gradient card, a bright panel)
+   that landed close enough to --text-dim/--border to make the whole
+   button nearly invisible. color-mix against --text-dim guarantees a
+   tint that's never the same color as the surface it sits on, in every
+   theme, without needing a dedicated token for each one. */
 .btn-ghost {
-  background: transparent;
+  background: color-mix(in srgb, var(--text-dim) 14%, transparent);
   color: var(--text-dim);
   border: 1px solid var(--border);
 }
 
 .btn-ghost:hover {
+  background: color-mix(in srgb, var(--text-dim) 22%, transparent);
   color: var(--text);
   border-color: var(--text-dim);
 }
@@ -1974,6 +2003,86 @@ input[type="number"] {
   border-color: var(--accent);
 }
 
+/* Fixed 18x18 per explicit request - a roster-row badge, not meant to
+   draw the eye the way the rating/team badges do. */
+.roster-camera-enrolled {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: var(--accent);
+  flex: none;
+}
+.roster-camera-enrolled svg { width: 18px; height: 18px; display: block; }
+
+.roster-camera-enroll-btn {
+  background: var(--bg-panel);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  font-size: 0.78rem;
+  padding: 6px 10px;
+  flex: none;
+}
+.roster-camera-enroll-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* Shown only while the camera sees someone bent over at the table it
+   can't put a name to - "non-disturbing" per explicit request: small,
+   doesn't block the scoreboard underneath, self-clears the moment the
+   situation resolves (matched, or they stand up) without needing to be
+   dismissed, though a close button is still offered for "that's not
+   actually someone shooting" cases. */
+/* The banner floats where it appears - just under the scorecards - over
+   whatever is there, instead of taking room (it comes and goes with the
+   camera, and used to push every section below it up and down). The
+   anchor is the only part in the page flow, and it's zero height. */
+.unmatched-shooter-banner-anchor {
+  position: relative;
+  height: 0;
+  z-index: 30;
+}
+.unmatched-shooter-banner {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: max-content;
+  max-width: 92%;
+  margin: 0;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  background: rgba(0, 0, 0, 0.85);
+  border: 2px solid var(--accent);
+  color: var(--text);
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+/* Focus Mode: the cards reach the bottom of the screen and nothing is
+   under them, so it floats just above their bottom edge instead. */
+#app.focus-mode .unmatched-shooter-banner {
+  top: auto;
+  bottom: 10px;
+}
+.unmatched-shooter-banner-icon { font-size: 1.1rem; line-height: 1; }
+.unmatched-shooter-banner-dismiss {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 1.3rem;
+  line-height: 1;
+  padding: 0 0 0 4px;
+  cursor: pointer;
+}
+.unmatched-shooter-banner-dismiss:hover { color: var(--accent); }
+
 .empty-hint {
   color: var(--text-dim);
   font-size: 0.9rem;
@@ -2357,6 +2466,86 @@ input[type="number"] {
   container-type: inline-size;
 }
 
+/* ---------- Scorecard camera-recognition badge ---------- */
+/* Built once per card (see buildIndividualPanel), always present and
+   absolutely positioned against the card - its state (see
+   updateCameraIconsOnScorecard) only ever recolors it, never toggles
+   its presence, so it can never push the player name/score stack up or
+   down. The panel reserves room for it via padding-top below, set once
+   per card build rather than live per camera event. */
+.player-panel:has(.scorecard-camera-badge) {
+  padding-top: 52px;
+}
+/* Sits in the same top band as the card's drag handle (top:8px,
+   42px tall - see .score-card-drag-handle) and is centered in it
+   vertically, drawn above the handle's translucent bar. It's only a
+   status icon, never a control: pointer-events:none lets a press on it
+   reach the drag handle underneath, so the handle still drags from
+   anywhere along its length. The camera icon itself stays on the
+   card's centre line (shifted back by half its own width, not half the
+   whole row) - its clock/+/? marks extend to its right without pushing
+   it off centre. */
+.scorecard-camera-badge {
+  position: absolute;
+  top: 8px;
+  height: 42px;
+  left: 50%;
+  transform: translateX(-15px);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-dim);
+  z-index: 3;
+  pointer-events: none;
+}
+.scorecard-camera-badge-icon { width: 30px; height: 30px; display: block; }
+.scorecard-camera-badge-icon svg { width: 30px; height: 30px; display: block; }
+/* The handle's grip moves to its right end on a card showing the camera
+   icon, so the icon (and its clock/+/? marks) never runs into it. */
+.player-panel:has(.scorecard-camera-badge) .score-card-drag-handle {
+  justify-content: flex-end;
+  padding-right: 14px;
+}
+#app.focus-mode .scorecard-camera-badge {
+  top: 10px;
+  height: clamp(42px, 12cqw, 64px);
+  transform: translateX(calc(clamp(30px, 8cqw, 44px) / -2));
+}
+#app.focus-mode .scorecard-camera-badge-icon,
+#app.focus-mode .scorecard-camera-badge-icon svg {
+  width: clamp(30px, 8cqw, 44px);
+  height: clamp(30px, 8cqw, 44px);
+}
+
+/* "Being watched live, not yet confirmed this round" - a color swap
+   once a second, not a fade/pulse, so it reads clearly even glanced at
+   from across the table. */
+.scorecard-camera-badge.flashing .scorecard-camera-badge-icon {
+  animation: scorecard-camera-flash 1s step-start infinite;
+}
+@keyframes scorecard-camera-flash {
+  0%, 49% { color: var(--accent); }
+  50%, 100% { color: var(--danger); }
+}
+
+/* Recognized via the lightweight seated/idle check (see
+   processIdlePoses) - static, not flashing, specifically to read as
+   "cached, not live" at a glance. */
+.scorecard-camera-badge-clock { display: none; font-size: 1.2rem; }
+.scorecard-camera-badge.idle .scorecard-camera-badge-icon { color: var(--text-dim); }
+.scorecard-camera-badge.idle .scorecard-camera-badge-clock { display: inline; }
+
+/* A fresh sample just landed for this player - self-clears on its own
+   after a few seconds (see SCORECARD_CAMERA_PLUS_MS), nothing to click. */
+.scorecard-camera-badge-plus { display: none; font-size: 1.4rem; font-weight: 800; color: var(--accent); }
+.scorecard-camera-badge.show-plus .scorecard-camera-badge-plus { display: inline; }
+
+/* The camera's best (unconfirmed) guess for who's bent over right now -
+   tap this player on the keypad to confirm, same action the
+   "unmatched shooter" scorecard banner above already prompts for. */
+.scorecard-camera-badge-question { display: none; font-size: 1.4rem; font-weight: 800; color: var(--danger); }
+.scorecard-camera-badge.show-question .scorecard-camera-badge-question { display: inline; }
+
 /* ---------- Keyboard/keypad scoring shortcut ---------- */
 
 .keypad-number-badge {
@@ -2394,6 +2583,15 @@ input[type="number"] {
 .is-keypad-selected {
   box-shadow: 0 0 0 4px var(--accent) inset;
   background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 22%, var(--felt)) 0%, var(--bg-glow) 100%);
+}
+
+/* A camera sample press for this player (see flashScoreCardForCameraPress):
+   the border, in the complementary colour of the normal one. */
+.player-panel.camera-ack-flash,
+.member-card.camera-ack-flash,
+.camera-ack-flash {
+  border-color: var(--camera-ack-color) !important;
+  box-shadow: 0 0 0 6px var(--camera-ack-color) inset, 0 0 18px 2px var(--camera-ack-color) !important;
 }
 
 .is-keypad-selected .keypad-number-badge {
@@ -2524,6 +2722,19 @@ input[type="number"] {
     right: 6px;
     height: 30px;
     font-size: 1rem;
+  }
+  .scorecard-camera-badge { height: 30px; gap: 3px; transform: translateX(-12px); }
+  .scorecard-camera-badge-icon,
+  .scorecard-camera-badge-icon svg { width: 24px; height: 24px; }
+  .scorecard-camera-badge-clock { font-size: 0.95rem; }
+  .scorecard-camera-badge-plus,
+  .scorecard-camera-badge-question { font-size: 1.1rem; }
+  /* No room for the grip next to the camera's marks on a phone-width
+     card - the glyph steps aside while they show (the bar still drags). */
+  .player-panel:has(.scorecard-camera-badge.idle) .score-card-drag-handle,
+  .player-panel:has(.scorecard-camera-badge.show-plus) .score-card-drag-handle,
+  .player-panel:has(.scorecard-camera-badge.show-question) .score-card-drag-handle {
+    color: transparent;
   }
 }
 
@@ -4418,6 +4629,273 @@ input[type="number"] {
   animation: milestone-pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
+/* Select Camera: one bordered card per choice - its button, what it
+   means right under it, and (once picked) that path's own details (the
+   phone link/QR, or starting this device's camera). Side by side when
+   there's room, stacked on a narrow screen; the picked one is outlined. */
+.camera-wizard-path-choice {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  align-items: start;
+  margin-bottom: 14px;
+}
+
+.camera-path-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  min-width: 0;
+}
+
+.camera-path-card:has(.camera-wizard-path-btn.is-active) {
+  border-color: var(--accent);
+}
+
+.camera-path-card .camera-wizard-path-btn {
+  width: 100%;
+}
+
+.camera-path-card .camera-path-hint {
+  margin: 10px 0 0;
+}
+
+/* Read at arm's length from a tablet propped by the table - bigger and
+   in the normal text colour, not the dimmed small print used elsewhere. */
+.camera-path-card .wizard-step-explain {
+  font-size: 1.1rem;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.camera-path-card .group-session-qr-hint {
+  font-size: 1rem;
+}
+
+/* Where to put this device's camera: a drawing of the room (camera high
+   in a ceiling corner, the table, the area about 3 ft around it). Its
+   labels are translated like any other text; white with a dark outline
+   so they read on the light walls and on the page. */
+.camera-placement-diagram {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: 12px;
+}
+
+/* Its colours come from the active theme: the room in the theme's own
+   surface tones (shaded from its text and card colours, so it sits
+   naturally on dark and light themes alike), the table felt in the
+   theme's felt colour on wooden rails, and the camera's view and the
+   covered area in the accent colour - the one thing that has to stand
+   out. Labels and their lines in the text colour, outlined in the
+   background colour. */
+.camera-placement-diagram {
+  --cp-floor: color-mix(in srgb, var(--text) 24%, var(--bg-card));
+  --cp-wall-l: color-mix(in srgb, var(--text) 11%, var(--bg-card));
+  --cp-wall-r: color-mix(in srgb, var(--text) 16%, var(--bg-card));
+  --cp-edge: color-mix(in srgb, var(--text) 38%, var(--bg-card));
+  --cp-ink: color-mix(in srgb, var(--text) 72%, var(--bg));
+}
+.camera-placement-diagram .cp-floor { fill: var(--cp-floor); }
+.camera-placement-diagram .cp-plank { fill: none; stroke: color-mix(in srgb, var(--cp-floor) 78%, var(--bg)); stroke-width: 1; }
+.camera-placement-diagram .cp-slab-l { fill: color-mix(in srgb, var(--cp-floor) 70%, var(--bg)); }
+.camera-placement-diagram .cp-slab-r { fill: color-mix(in srgb, var(--cp-floor) 55%, var(--bg)); }
+.camera-placement-diagram .cp-wall-l { fill: var(--cp-wall-l); }
+.camera-placement-diagram .cp-wall-r { fill: var(--cp-wall-r); }
+.camera-placement-diagram .cp-wall-top { fill: var(--cp-edge); }
+.camera-placement-diagram .cp-wall-cap { fill: color-mix(in srgb, var(--cp-wall-l) 70%, var(--bg)); }
+.camera-placement-diagram .cp-corner { stroke: var(--cp-edge); stroke-width: 1.5; }
+.camera-placement-diagram .cp-cone { fill: var(--accent); fill-opacity: 0.13; }
+.camera-placement-diagram .cp-cone-edge { stroke: var(--accent); stroke-opacity: 0.6; stroke-width: 1.4; }
+.camera-placement-diagram .cp-area-glow { fill: var(--accent); fill-opacity: 0.09; stroke: var(--accent); stroke-opacity: 0.6; stroke-width: 7; }
+.camera-placement-diagram .cp-area { fill: none; stroke: var(--accent); stroke-width: 2.6; }
+.camera-placement-diagram .cp-shadow { fill: #000; fill-opacity: 0.22; }
+.camera-placement-diagram .cp-wood-l { fill: #8b5526; }
+.camera-placement-diagram .cp-wood-r { fill: #6b3f1b; }
+.camera-placement-diagram .cp-rail { fill: #b0703a; stroke: #5a3214; stroke-width: 1; }
+.camera-placement-diagram .cp-felt { fill: var(--felt-light); stroke: color-mix(in srgb, var(--felt-light) 60%, #000); stroke-width: 1; }
+.camera-placement-diagram .cp-pocket { fill: color-mix(in srgb, var(--felt-light) 20%, #000); stroke: color-mix(in srgb, var(--text) 45%, var(--felt-light)); stroke-width: 1.2; }
+.camera-placement-diagram .cp-cam-mount { stroke: var(--cp-ink); stroke-width: 3; }
+.camera-placement-diagram .cp-cam-body { fill: var(--cp-ink); stroke: color-mix(in srgb, var(--cp-ink) 55%, var(--bg)); stroke-width: 1.5; }
+.camera-placement-diagram .cp-cam-top { fill: color-mix(in srgb, var(--cp-ink) 70%, var(--bg)); }
+.camera-placement-diagram .cp-lens { fill: var(--accent); }
+.camera-placement-diagram .cp-glint { fill: #fff; }
+.camera-placement-diagram .cp-leader-halo { fill: none; stroke: var(--bg); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+.camera-placement-diagram .cp-leader { fill: none; stroke: var(--text); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+.camera-placement-diagram .cp-label {
+  font-family: inherit;
+  font-size: 24px;
+  font-weight: 800;
+  fill: var(--text);
+  stroke: var(--bg);
+  stroke-width: 5px;
+  stroke-linejoin: round;
+  paint-order: stroke;
+}
+
+.camera-path-card .wizard-step-sub {
+  margin-top: 10px;
+}
+
+.camera-wizard-install-steps {
+  display: flex;
+  gap: 8px;
+  margin: 14px 0;
+}
+
+.camera-wizard-install-step {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+  padding: 12px 6px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+.camera-wizard-install-step-icon {
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+/* Near-fullscreen, deliberately its own card - NOT .wizard-card, which is
+   capped at 520px/90vh for a small modal, too cramped for a usable camera
+   view with calibration/enrollment/recognize-log controls. */
+.same-device-camera-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.82);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  z-index: 1000;
+}
+
+.same-device-camera-card {
+  position: relative;
+  background: var(--modal-surface);
+  border: 2px solid var(--accent);
+  border-radius: var(--radius);
+  width: 100%;
+  height: 100%;
+  max-width: 1100px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+}
+
+.same-device-camera-header {
+  padding: 10px 46px 10px 16px;
+  flex: 0 0 auto;
+}
+
+.same-device-camera-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.same-device-camera-iframe {
+  flex: 1 1 auto;
+  width: 100%;
+  border: 0;
+  background: #000;
+}
+
+.remote-calibrate-card {
+  max-width: 700px;
+  height: auto;
+  max-height: 92vh;
+  padding: 0 0 16px;
+}
+
+.remote-calibrate-step {
+  margin: 0;
+  padding: 0 16px 10px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.remote-calibrate-camera-row {
+  margin: 0 16px 10px;
+}
+
+.remote-calibrate-frame-wrap {
+  position: relative;
+  margin: 0 16px;
+  background: #000;
+  border-radius: var(--radius);
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+}
+
+.remote-calibrate-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  cursor: crosshair;
+}
+
+.remote-calibrate-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 20px;
+  color: var(--text-dim, #999);
+}
+
+.remote-calibrate-hint {
+  margin: 10px 16px 0;
+  font-size: 0.9rem;
+  opacity: 0.85;
+}
+
+.remote-calibrate-footer {
+  padding: 14px 16px 0;
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+/* Same <iframe> as .same-device-camera-overlay above - reparented in
+   here (not cloned - a second live camera/detection loop would be
+   wasteful and would lose the first one's enrollment-capture state)
+   whenever that overlay is minimized rather than closed, so recognition
+   keeps running during actual gameplay instead of stopping the moment
+   the full-screen setup view is dismissed. Outside that overlay's own
+   flex column, the iframe's flex:1 1 auto no longer does anything, so
+   height has to come from here instead. */
+.camera-inline-preview {
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+/* As tall as the camera page needs (set from its "frame-height"
+   message, see fitSameDeviceCameraFrame) - this is the starting height
+   until it has said. */
+.camera-inline-preview .same-device-camera-iframe {
+  display: block;
+  height: 480px;
+}
+
+#camera-inline-preview-wrap #btn-expand-same-device-camera {
+  margin-top: 10px;
+}
+
 .onboarding-card {
   max-width: 460px;
   text-align: center;
@@ -5085,6 +5563,36 @@ input[type="number"] {
   color: var(--danger);
   font-size: 14px;
   margin: 0 0 8px;
+}
+
+.camera-candidate-status {
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin: -4px 0 10px;
+}
+
+/* A running history of camera recognition events (stance/match changes),
+   not just the current instant - so it can be checked between shots or
+   after a game, instead of needing to watch the live status line the
+   whole time. */
+.camera-diagnostic-log {
+  max-height: 160px;
+  overflow-y: auto;
+  margin: -4px 0 10px;
+  padding: 6px 8px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+.camera-diagnostic-log div {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tournament-winner-banner {
@@ -6019,6 +6527,7 @@ input[type="number"] {
 body.network-guest-mode #rotation-panel,
 body.network-guest-mode #game-setup-panel,
 body.network-guest-mode #players-panel,
+body.network-guest-mode #visual-scoring-panel,
 body.network-guest-mode #history-panel,
 body.network-guest-mode #day-notes-panel,
 body.network-guest-mode #report-archive-panel,
@@ -6028,6 +6537,7 @@ body.network-guest-mode #tournament-setup-panel,
 body.network-guest-mode .header-nav-row #btn-quick-game,
 body.network-guest-mode .header-nav-row #btn-test-onboarding,
 body.network-guest-mode .header-nav-row #btn-open-wizard,
+body.network-guest-mode .header-nav-row #btn-open-camera-wizard-header,
 body.network-guest-mode .header-nav-row #btn-open-tournament,
 body.network-guest-mode .header-nav-row #btn-open-global-stats,
 body.network-guest-mode .header-nav-row #btn-open-contact-sheet,
@@ -6864,11 +7374,21 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
 
 .now-playing-banner .game-duration-live,
 .now-playing-banner .racing-to-live {
-  font-size: 1.1rem;
   font-weight: 800;
   color: var(--accent);
   letter-spacing: normal;
   font-variant-numeric: tabular-nums;
+}
+
+.now-playing-banner .game-duration-live {
+  font-size: 1.1rem;
+}
+
+/* Bigger than .game-duration-live on purpose - the race target is the
+   more consequential of the two live numbers in this row (it's also an
+   editable input, not just a readout), so it gets more visual weight. */
+.now-playing-banner .racing-to-live {
+  font-size: 1.5rem;
 }
 
 /* Matches .rotation-position-every-input's treatment (inline, sized to
@@ -7080,6 +7600,235 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
 
 .backup-subsection:first-of-type {
   margin-top: 0;
+}
+
+/* A titled, bordered group inside a section (Visual Scoring's
+   "Debugging visual matching" and "Matching players"): its items stack
+   one under the other, and it grows with them like any section. */
+.settings-frame {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin: 12px 0;
+}
+
+.settings-frame-title {
+  margin: 0 0 10px;
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--accent);
+}
+
+.settings-frame-item {
+  margin-bottom: 6px;
+}
+
+/* Select Camera > Camera: which of the camera's cameras/lenses (only
+   shown when there's more than one) - big enough to read and tap from
+   across the room, like the path cards' text. */
+.camera-device-frame .camera-device-hint {
+  font-size: 1.1rem;
+  margin: 0 0 10px;
+}
+
+.camera-device-select {
+  width: 100%;
+  max-width: 520px;
+  min-height: 44px;
+  font-size: 1.1rem;
+}
+
+/* The camera's three status lights (connection, models, camera),
+   mirrored from the camera page into Select Camera and Capture
+   Settings - same pill-and-dot look as on the camera page itself. */
+.camera-status-lights {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 2px 0 12px;
+}
+
+.camera-light {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.camera-light-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  opacity: 0.6;
+  flex: 0 0 auto;
+}
+
+.camera-light-dot.ok,
+.camera-light-dot.bad,
+.camera-light-dot.busy {
+  opacity: 1;
+}
+
+.camera-light-dot.ok {
+  background: #4cc47a;
+}
+
+.camera-light-dot.bad {
+  background: var(--danger);
+}
+
+.camera-light-dot.busy {
+  background: var(--accent);
+}
+
+/* Capture Settings: Enroll players / Table calibration, and under them
+   how many of the roster are enrolled - its light (green: everyone,
+   red: someone missing) in front of the text. */
+.camera-capture-actions {
+  margin: 4px 0 6px;
+}
+
+.camera-enrollment-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+/* A short note under a setting's own label (Tracking's "Enhance player
+   recognition" under Cue stick detection). */
+.setting-comment {
+  display: block;
+  font-size: 0.8rem;
+  opacity: 0.8;
+  margin-top: 2px;
+}
+
+/* Matching sensitivity slider, 0-6, with the numbers (and what 0, 3 and
+   6 mean) right under their stops. The thumb size is fixed so the scale
+   can line up with where the thumb actually sits: stop i is at
+   thumb/2 + (width - thumb) * i/6. */
+.match-slider {
+  --match-thumb: 22px;
+  margin: 4px 0 2px;
+}
+
+.match-slider input[type="range"] {
+  width: 100%;
+  margin: 0;
+  accent-color: var(--accent);
+  height: var(--match-thumb);
+}
+
+.match-slider input[type="range"]::-webkit-slider-thumb {
+  width: var(--match-thumb);
+  height: var(--match-thumb);
+}
+
+.match-slider-scale {
+  position: relative;
+  height: 4.1em;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+.match-tick {
+  position: absolute;
+  top: 0;
+  left: calc(var(--match-thumb) / 2 + (100% - var(--match-thumb)) * var(--i) / 6);
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* At most about a third of the slider each, so on a narrow screen a
+     long label wraps onto a second line instead of running into the
+     next one ("Default" sits in the middle third). */
+  max-width: 32%;
+  text-align: center;
+  line-height: 1.3;
+}
+
+/* The end labels hug their edge instead of centring past it. */
+.match-tick[style*="--i:0"] {
+  left: 0;
+  transform: none;
+  align-items: flex-start;
+  padding-left: calc(var(--match-thumb) / 2 - 0.3em);
+}
+
+.match-tick[style*="--i:6"] {
+  left: auto;
+  right: 0;
+  transform: none;
+  align-items: flex-end;
+  padding-right: calc(var(--match-thumb) / 2 - 0.3em);
+}
+
+.match-tick[style*="--i:0"] > span {
+  text-align: left;
+}
+
+.match-tick[style*="--i:6"] > span {
+  text-align: right;
+}
+
+.match-tick b {
+  color: var(--text);
+}
+
+/* Visual Scoring: a checkbox, its text and its "?" stay on one line -
+   long text wraps beside its checkbox instead of the checkbox (or the
+   "?") wrapping away onto a line of its own on a narrow screen. */
+#visual-scoring-panel .row:has(> .checkbox-row) {
+  flex-wrap: nowrap;
+  align-items: flex-start;
+}
+
+#visual-scoring-panel .row > .checkbox-row {
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+}
+
+#visual-scoring-panel .row > .checkbox-row > span {
+  min-width: 0;
+  padding-top: 1px;
+}
+
+#visual-scoring-panel .row > .format-info-btn {
+  flex: 0 0 auto;
+}
+
+/* Visual Scoring > Capture Settings: one setting per row (label, input,
+   "?"), in a fieldset only so the whole group can be disabled at once
+   while a separate camera phone hasn't reported its values yet. */
+.capture-settings-fields {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.capture-settings-fields:disabled {
+  opacity: 0.55;
+}
+
+.capture-setting-row > label:not(.checkbox-row) {
+  flex: 1 1 14em;
+}
+
+.capture-setting-row input[type="number"] {
+  width: 6em;
+  flex: 0 0 auto;
 }
 
 .backup-subsection-title {

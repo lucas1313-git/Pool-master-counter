@@ -16,6 +16,7 @@ on:
     branches: [release]
     paths:
       - "index.html"
+      - "camera.html"
       - "manifest.json"
       - "css/**"
       - "js/**"
