@@ -228,6 +228,12 @@
   .model-toggles input { width: auto; margin: 0; }
   .model-toggles .help-btn { margin-left: auto; }
   .model-box-title { font-weight: 700; color: var(--text); }
+  .empty-room-box { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin: 14px 0 6px; }
+  .empty-room-title { font-weight: 700; color: var(--text); display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .empty-room-thumb { display: block; width: 100%; max-width: 320px; border-radius: 6px; margin: 6px 0; }
+  .empty-room-option { display: flex; align-items: center; gap: 6px; margin: 8px 0; font-size: 1rem; color: var(--text); }
+  .empty-room-option input { width: auto; margin: 0; }
+  #emptyRoomStatus { line-height: 1.35; min-height: 2.7em; }
   .model-scores { font-size: 0.9rem; color: var(--text-dim); margin-top: 6px; line-height: 1.35; min-height: 4.05em; white-space: pre-line; }
   /* Each row's keypad number - pressing it (or tapping it) = that player
      is seen; + = they're shooting; - = take back the last one. */
@@ -557,6 +563,16 @@
       <button id="cancelCalibrationBtn" class="secondary" type="button">Cancel</button>
     </div>
     <button id="recalibrateBtn" class="secondary" type="button" hidden>Re-calibrate</button>
+
+    <div class="empty-room-box">
+      <div class="empty-room-title">Empty-room snapshot <button type="button" class="help-btn" data-help="emptyRoom" aria-label="What does this do?">?</button></div>
+      <div class="hint">Take every ball and cue off the table, then press the button and step out of view: the camera remembers the room and the empty table, so it can tell balls from the cloth's lights and shadows, and players from the furniture behind them. It follows the daylight by itself; take it again if the camera is moved.</div>
+      <button id="emptyRoomBtn" type="button">📸 Take empty-room snapshot</button>
+      <div class="progress-text" id="emptyRoomStatus">No snapshot yet.</div>
+      <img id="emptyRoomThumb" class="empty-room-thumb" alt="The empty-room snapshot" hidden>
+      <label class="empty-room-option"><input type="checkbox" id="roomCutoutToggle" checked> Cut the room out of players' pictures</label>
+      <button id="emptyRoomClearBtn" class="secondary" type="button" hidden>Forget the snapshot</button>
+    </div>
   </section>
 
   <section class="panel" id="enrollPanel" hidden>
@@ -916,6 +932,10 @@
       title: "Recognize players by",
       body: "Two ways of telling players apart:\n\nClothing colours - counts the colours of each player's shirt, trousers, sleeves and cap. Quick, but can't tell apart two players in similar colours, and is thrown by lighting changes.\n\nAppearance models - models that learned from a great many pictures (OSNet, DINOv2 - switch each on or off on the Enroll tab) see light vs dark, patterns and logos, and the same person from another angle. A small classifier learns tonight's players from your samples, so more samples keep improving it. With both models on, their numbers are used side by side.\n\nEvery sample keeps all of them, and the Enroll tab's self-check scores the colours, each model and both together. \"Whichever recognizes them better\" uses the models that are switched on once the self-check says they do at least as well (95%+) or clearly better - otherwise colours."
     },
+    emptyRoom: {
+      title: "Empty-room snapshot",
+      body: "A picture of the room with nobody in view and nothing on the table. The camera keeps it and compares with it:\n\nBalls - every spot of the cloth is checked against the same spot on the empty table, instead of against one colour for the whole cloth. A lamp's bright patch, the shaded far end, the cushions and the light from a window then all count as cloth, and a ball whose colour is close to the cloth's - a green 6 or 14 in the shade - still stands out.\n\nPlayers - whatever looks just like the empty room is cut out of a player's picture (unless it's right on their body) before the camera measures their colours or the appearance models look at it, so the bookcase behind someone isn't taken for part of how they look. The box below the button turns this off.\n\nThe camera follows slow changes - daylight, a lamp warming up - by itself. If the camera is moved or the lights change a lot, the tab says the view doesn't match any more: take it again. Samples taken before the snapshot were measured with the room in them - for the best self-check, take new ones after it.\n\nThe picture stays on this device (in this browser's storage)."
+    },
     appearanceModels: {
       title: "Appearance models",
       body: "Two models that turn a player's picture into numbers describing how they look - clothes, patterns, logos, build - so the camera can tell tonight's players apart. Both run on this device; nothing leaves it.\n\nOSNet - trained on photos of people (the Market-1501 collection), so it's built for exactly this. Its licence is for research and non-commercial use: fine while the app isn't sold.\n\nDINOv2 - Meta's model, trained on pictures of everything, not people in particular. Apache-2.0 licence: free for any use, a sold app included. About twice OSNet's work per look, and a 22 MB download the first time.\n\nWith both on, recognition uses their numbers side by side; switch one off and it carries on with the other, at once. Colours always run underneath.\n\nThe self-check line scores every choice on tonight's samples - colours, each model alone, both together - so you can see which does best and set the boxes to match. Each sample keeps the numbers of every model that was loaded when it was taken, so a model switched on later needs a few new samples of each player first (it says so)."
@@ -1071,7 +1091,9 @@
     recognitionMethod: "auto",
     // which appearance models "model" combines (the Enroll tab's boxes)
     useOsnet: true,
-    useDino: true
+    useDino: true,
+    // with an empty-room snapshot, cut the room out of players' pictures
+    roomCutout: true
   };
   var hasLocalSettingsOverride = false;
 
@@ -1131,6 +1153,7 @@
     recognitionMethodSelect.value = settings.recognitionMethod;
     useOsnetToggle.checked = settings.useOsnet;
     useDinoToggle.checked = settings.useDino;
+    document.getElementById("roomCutoutToggle").checked = settings.roomCutout;
     thresholdInput.value = settings.matchThreshold;
     consecutiveInput.value = settings.consecutiveFrames;
     debounceInput.value = settings.debounceSec;
@@ -1969,7 +1992,8 @@
     "debugToggle", "thresholdInput", "consecutiveInput", "debounceInput",
     "bendEnterInput", "bendExitInput", "railDistanceInput", "recognitionMethodSelect",
     "ballTrackingToggle", "ballConfirmInput", "cueDetectionToggle", "cueDebugToggle",
-    "tableSizeSelect", "firstEdgeSelect", "useOsnetToggle", "useDinoToggle", "modelScores"
+    "tableSizeSelect", "firstEdgeSelect", "useOsnetToggle", "useDinoToggle", "modelScores",
+    "emptyRoomBtn", "emptyRoomStatus", "emptyRoomClearBtn", "roomCutoutToggle"
   ];
   var VIEWER_SYNCED_HTML_IDS = ["recognizeLog"];
   // The Enroll tab's player list, whole: its sample counts change on this
@@ -2324,8 +2348,21 @@
     var tone = [0, 0, 0];
     var count = 0, counted = 0;
     var skipFelt = !!(personFelt && personFelt.h !== null);
+    // With an empty-room snapshot, what looks just like the room behind
+    // them is left out as well - unless that's most of the region, which
+    // means they're dressed like the wall, not that they aren't there.
+    var room = null;
+    if (roomCutoutActive()) {
+      room = new Uint8Array(sw * sh);
+      var roomCount = 0;
+      for (var r = 0; r < room.length; r++) {
+        if (looksLikeRoom(box.x0 + ((r % sw) + 0.5) * w / sw, box.y0 + (Math.floor(r / sw) + 0.5) * h / sh)) { room[r] = 1; roomCount++; }
+      }
+      if (roomCount > 0.6 * room.length) room = null;
+    }
     for (var i = 0; i < data.length; i += 4) {
       var hsv = rgbToHsv(data[i], data[i + 1], data[i + 2]);
+      if (room && room[i / 4]) continue;
       if (skipFelt) {
         var k = i / 4;
         if (looksLikeFelt(box.x0 + ((k % sw) + 0.5) * w / sw, box.y0 + (Math.floor(k / sw) + 0.5) * h / sh, hsv)) continue;
@@ -2437,6 +2474,365 @@
     var padY = (y1 - y0) * (padRatio || 0);
     return { x0: x0 - padX, y0: y0 - padY, x1: x1 + padX, y1: y1 + padY };
   }
+
+  // ---- Empty-room snapshot ----
+  // A picture of the room with nobody in view and nothing on the table,
+  // taken when the operator asks (Calibrate tab). Two uses:
+  // - balls: every spot of the cloth is compared with the same spot on the
+  //   empty table instead of with one colour for the whole table - a lamp's
+  //   hotspot, the shaded far end, the cushions and the window's light all
+  //   match themselves there, while a green ball in the shade doesn't (see
+  //   sampleTablePixelsFresh);
+  // - players: whatever looks just like the empty room is cut out of a
+  //   player's picture before it's measured (colours) or shown to the
+  //   appearance models, so the bookshelf behind someone isn't taken for
+  //   part of how they look (settings.roomCutout).
+  // Both follow slow changes (daylight, a lamp warming up): wherever nothing
+  // is in the way, the remembered picture drifts towards the live one a
+  // little every pass. A moved camera, or lights changed a lot, leaves a
+  // picture that matches nowhere - then it's left aside and the tab says to
+  // take it again.
+  var EMPTY_ROOM_STORAGE_KEY = "pmc-camera-empty-room";
+  var emptyRoom = null; // { at, videoW, videoH, saved, jpeg }
+  var emptyRoomCanvas = document.createElement("canvas");
+  var emptyRoomCtx = emptyRoomCanvas.getContext("2d", { willReadFrequently: true });
+
+  // The room at a quarter of the width - plenty to tell a player from the
+  // wall behind them, and cheap enough to compare every pass.
+  var ROOM_W = 320;
+  var ROOM_BG_TOLERANCE = 24; // 0-255, any channel, after the brightness drift is taken out
+  var ROOM_ADAPT_RATE = 0.01; // per pass, where the live picture matches
+  var ROOM_ADAPT_RATE_CHANGED = 0.002; // ...and where it doesn't (a chair moved for good: minutes)
+  var ROOM_MIN_MATCH = 0.5; // share of the room (outside people) that has to match for the picture to count
+  var roomCanvas = document.createElement("canvas");
+  var roomCtx = roomCanvas.getContext("2d", { willReadFrequently: true });
+  var roomRef = null; // Float32Array(ROOM_W * roomH * 3), drifting with the light
+  var roomH = 0;
+  var roomNow = { tick: -1, data: null, gain: 1, usable: false, match: 0 };
+  var roomMismatchPasses = 0, tableRefMismatchPasses = 0;
+  var EMPTY_ROOM_MISMATCH_PASSES = 30; // about 8 seconds of passes that don't match: say so
+
+  function emptyRoomFits() {
+    return !!emptyRoom && videoEl.videoWidth === emptyRoom.videoW && videoEl.videoHeight === emptyRoom.videoH;
+  }
+  function buildRoomReference() {
+    roomRef = null;
+    if (!emptyRoom) return;
+    roomH = Math.max(1, Math.round(ROOM_W * emptyRoom.videoH / emptyRoom.videoW));
+    roomCanvas.width = ROOM_W;
+    roomCanvas.height = roomH;
+    roomCtx.drawImage(emptyRoomCanvas, 0, 0, ROOM_W, roomH);
+    var data = roomCtx.getImageData(0, 0, ROOM_W, roomH).data;
+    roomRef = new Float32Array(ROOM_W * roomH * 3);
+    for (var i = 0, p = 0; i < data.length; i += 4, p += 3) { roomRef[p] = data[i]; roomRef[p + 1] = data[i + 1]; roomRef[p + 2] = data[i + 2]; }
+    roomMismatchPasses = 0;
+  }
+
+  // Once per detection pass, before anyone's picture is measured: the live
+  // room at the same small size, how much brighter or darker it is overall
+  // than the snapshot, whether it still matches it - and the snapshot
+  // drifting towards it wherever no one is.
+  function noteRoomFrame(poses) {
+    roomNow = { tick: detectTick, data: null, gain: 1, usable: false, match: 0 };
+    if (!roomRef || !emptyRoomFits()) return;
+    var vw = videoEl.videoWidth, vh = videoEl.videoHeight, sx = ROOM_W / vw, sy = roomH / vh;
+    var data;
+    try {
+      roomCtx.drawImage(videoEl, 0, 0, ROOM_W, roomH);
+      data = roomCtx.getImageData(0, 0, ROOM_W, roomH).data;
+    } catch (e) { return; }
+    // where people are (their body points' box, generously padded - more
+    // above, for the head) - neither compared nor learned from
+    var person = new Uint8Array(ROOM_W * roomH);
+    (poses || []).forEach(function (pose) {
+      var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, n = 0;
+      (pose.keypoints || []).forEach(function (k) {
+        if (k.score < 0.2) return;
+        x0 = Math.min(x0, k.x); x1 = Math.max(x1, k.x); y0 = Math.min(y0, k.y); y1 = Math.max(y1, k.y); n++;
+      });
+      if (n < 3) return;
+      var pad = 0.25 * Math.max(x1 - x0, y1 - y0, 40);
+      var bx0 = Math.max(0, Math.floor((x0 - pad) * sx)), bx1 = Math.min(ROOM_W - 1, Math.ceil((x1 + pad) * sx));
+      var by0 = Math.max(0, Math.floor((y0 - 1.6 * pad) * sy)), by1 = Math.min(roomH - 1, Math.ceil((y1 + pad) * sy));
+      for (var y = by0; y <= by1; y++) for (var x = bx0; x <= bx1; x++) person[y * ROOM_W + x] = 1;
+    });
+    // the overall brightness drift (camera exposure), from the room around people
+    var ratios = [];
+    for (var i = 0; i < person.length; i += 5) {
+      if (person[i]) continue;
+      var r = roomRef[i * 3] + roomRef[i * 3 + 1] + roomRef[i * 3 + 2];
+      if (r > 30) ratios.push((data[i * 4] + data[i * 4 + 1] + data[i * 4 + 2]) / r);
+    }
+    if (ratios.length < 50) return; // someone fills the view
+    ratios.sort(function (a, b) { return a - b; });
+    var gain = ratios[ratios.length >> 1], matched = 0, counted = 0;
+    for (i = 0; i < person.length; i += 3) {
+      if (person[i]) continue;
+      counted++;
+      if (roomPixelMatches(data, i, gain)) matched++;
+    }
+    var match = counted ? matched / counted : 0;
+    roomNow = { tick: detectTick, data: data, gain: gain, usable: match >= ROOM_MIN_MATCH, match: match };
+    roomMismatchPasses = roomNow.usable ? 0 : roomMismatchPasses + 1;
+    if (roomMismatchPasses === EMPTY_ROOM_MISMATCH_PASSES) renderEmptyRoomStatus();
+    if (!roomNow.usable) return;
+    for (i = 0; i < person.length; i++) {
+      if (person[i]) continue;
+      var rate = roomPixelMatches(data, i, gain) ? ROOM_ADAPT_RATE : ROOM_ADAPT_RATE_CHANGED;
+      for (var c = 0; c < 3; c++) roomRef[i * 3 + c] += rate * (data[i * 4 + c] - roomRef[i * 3 + c]);
+    }
+  }
+  function roomPixelMatches(data, i, gain) {
+    return Math.abs(data[i * 4] - gain * roomRef[i * 3]) < ROOM_BG_TOLERANCE &&
+      Math.abs(data[i * 4 + 1] - gain * roomRef[i * 3 + 1]) < ROOM_BG_TOLERANCE &&
+      Math.abs(data[i * 4 + 2] - gain * roomRef[i * 3 + 2]) < ROOM_BG_TOLERANCE;
+  }
+  function roomCutoutActive() {
+    return settings.roomCutout && roomNow.usable && roomNow.tick === detectTick;
+  }
+  // (x, y in video pixels) Does this spot look just like the empty room?
+  function looksLikeRoom(x, y) {
+    var rx = Math.floor(x * ROOM_W / videoEl.videoWidth), ry = Math.floor(y * roomH / videoEl.videoHeight);
+    if (rx < 0 || ry < 0 || rx >= ROOM_W || ry >= roomH) return false;
+    return roomPixelMatches(roomNow.data, ry * ROOM_W + rx, roomNow.gain);
+  }
+
+  // A player's picture (personCrop's 128x256) with the room cut out: what
+  // matches the empty room becomes the crop's plain grey - except close to
+  // the body's own lines (shoulders to hips, the arms, the legs, the head),
+  // which stay whatever they look like: a dark shirt in front of a dark
+  // bookcase is still the shirt. Returns how many pixels went grey.
+  var CUTOUT_KEEP_FRACTION = 0.05; // of the picture's height, round the body's lines
+  var BODY_LINES = [["left_shoulder", "right_shoulder"], ["left_hip", "right_hip"], ["left_shoulder", "left_hip"], ["right_shoulder", "right_hip"],
+    ["left_shoulder", "left_elbow"], ["left_elbow", "left_wrist"], ["right_shoulder", "right_elbow"], ["right_elbow", "right_wrist"],
+    ["left_hip", "left_knee"], ["left_knee", "left_ankle"], ["right_hip", "right_knee"], ["right_knee", "right_ankle"],
+    ["nose", "left_shoulder"], ["nose", "right_shoulder"], ["left_ear", "right_ear"]];
+  function cutRoomOutOfCrop(img, keypoints, toCrop, toVideo) {
+    var named = {};
+    keypoints.forEach(function (k) { if (k.score >= KEYPOINT_CONF_FLOOR && k.name) named[k.name] = toCrop(k.x, k.y); });
+    var lines = BODY_LINES.filter(function (l) { return named[l[0]] && named[l[1]]; }).map(function (l) { return [named[l[0]], named[l[1]]]; });
+    if (!lines.length) return 0;
+    var keep = CUTOUT_KEEP_FRACTION * img.height, keep2 = keep * keep, d = img.data, cut = 0;
+    for (var y = 0; y < img.height; y++) {
+      for (var x = 0; x < img.width; x++) {
+        var near = false;
+        for (var s = 0; s < lines.length && !near; s++) {
+          var a = lines[s][0], b = lines[s][1], ex = b.x - a.x, ey = b.y - a.y, len2 = ex * ex + ey * ey;
+          var t = len2 ? Math.max(0, Math.min(1, ((x - a.x) * ex + (y - a.y) * ey) / len2)) : 0;
+          var px = a.x + t * ex - x, py = a.y + t * ey - y;
+          near = px * px + py * py <= keep2;
+        }
+        if (near) continue;
+        var v = toVideo(x + 0.5, y + 0.5);
+        if (!v || !looksLikeRoom(v.x, v.y)) continue;
+        var p = (y * img.width + x) * 4;
+        d[p] = 124; d[p + 1] = 116; d[p + 2] = 104;
+        cut++;
+      }
+    }
+    return cut;
+  }
+
+  // The empty table, for the ball pass: the snapshot cut to exactly the
+  // patch and size the pass reads the live picture at, as hue / saturation
+  // / brightness per pixel - rebuilt whenever that patch changes (a new
+  // calibration), drifting with the light like the room (sampleTablePixelsFresh).
+  var TABLE_REF_HUE_TOLERANCE_DEG = 12;
+  var TABLE_REF_SAT_TOLERANCE = 0.16;
+  var TABLE_REF_DARK_RATIO = 0.55; // darker than this x the empty cloth there: not cloth (a ball shadow's lighter)
+  var TABLE_REF_BRIGHT_RATIO = 1.35;
+  var TABLE_REF_MAX_FOREIGN = 0.35; // more of the table than this "not cloth": the snapshot doesn't match
+  var TABLE_REF_ADAPT_RATE = 0.02;
+  var tableRefCanvas = document.createElement("canvas");
+  var tableRefCtx = tableRefCanvas.getContext("2d", { willReadFrequently: true });
+  var tableRef = null; // { key, h, s, v: Float32Array }
+  function tableReferenceFor(bx0, by0, bw, bh, w, h) {
+    if (!emptyRoom || !emptyRoomFits()) return null;
+    var key = [bx0, by0, bw, bh, w, h, emptyRoom.at].join(",");
+    if (tableRef && tableRef.key === key) return tableRef;
+    tableRefCanvas.width = w;
+    tableRefCanvas.height = h;
+    var data;
+    try {
+      tableRefCtx.drawImage(emptyRoomCanvas, bx0, by0, bw, bh, 0, 0, w, h);
+      data = tableRefCtx.getImageData(0, 0, w, h).data;
+    } catch (e) { return null; }
+    var n = w * h, H = new Float32Array(n), S = new Float32Array(n), V = new Float32Array(n);
+    for (var i = 0; i < n; i++) {
+      var hsv = rgbToHsv(data[i * 4], data[i * 4 + 1], data[i * 4 + 2]);
+      H[i] = hsv.h; S[i] = hsv.s; V[i] = hsv.v;
+    }
+    tableRef = { key: key, h: H, s: S, v: V };
+    tableRefMismatchPasses = 0;
+    return tableRef;
+  }
+  // The "not cloth" mask by the empty table: a pixel that differs from the
+  // same spot on the empty cloth - in hue, saturation, or clearly in
+  // brightness - after the whole table's drift in brightness and hue
+  // (exposure, white balance) is taken out. Null when the snapshot doesn't
+  // match the table any more. The snapshot learns from what's cloth.
+  function foreignByEmptyTable(ref, inside, hArr, sArr, vArr) {
+    var n = inside.length, ratios = [], shifts = [], i;
+    for (i = 0; i < n; i += 7) {
+      if (!inside[i] || ref.v[i] < 0.05) continue;
+      ratios.push(vArr[i] / ref.v[i]);
+      if (sArr[i] >= 0.15 && ref.s[i] >= 0.15) { var dh = (hArr[i] - ref.h[i] + 540) % 360 - 180; shifts.push(dh); }
+    }
+    if (ratios.length < 50) return null;
+    var median = function (xs) { xs.sort(function (a, b) { return a - b; }); return xs[xs.length >> 1]; };
+    var gain = median(ratios), shift = shifts.length ? median(shifts) : 0;
+    var foreign = new Uint8Array(n), count = 0, total = 0;
+    for (i = 0; i < n; i++) {
+      if (!inside[i]) continue;
+      total++;
+      var ratio = vArr[i] / Math.max(0.02, ref.v[i] * gain);
+      if ((sArr[i] >= 0.15 && ref.s[i] >= 0.15 && hueDistance(hArr[i], ref.h[i] + shift) > TABLE_REF_HUE_TOLERANCE_DEG) ||
+        Math.abs(sArr[i] - ref.s[i]) > TABLE_REF_SAT_TOLERANCE || ratio < TABLE_REF_DARK_RATIO || ratio > TABLE_REF_BRIGHT_RATIO) {
+        foreign[i] = 1;
+        count++;
+      }
+    }
+    if (!total || count / total > TABLE_REF_MAX_FOREIGN) {
+      tableRefMismatchPasses++;
+      if (tableRefMismatchPasses === EMPTY_ROOM_MISMATCH_PASSES) renderEmptyRoomStatus();
+      return null;
+    }
+    if (tableRefMismatchPasses >= EMPTY_ROOM_MISMATCH_PASSES) { tableRefMismatchPasses = 0; renderEmptyRoomStatus(); }
+    tableRefMismatchPasses = 0;
+    for (i = 0; i < n; i++) {
+      if (!inside[i] || foreign[i]) continue;
+      ref.h[i] = (ref.h[i] + TABLE_REF_ADAPT_RATE * ((hArr[i] - shift - ref.h[i] + 540) % 360 - 180) + 360) % 360;
+      ref.s[i] += TABLE_REF_ADAPT_RATE * (sArr[i] - ref.s[i]);
+      ref.v[i] += TABLE_REF_ADAPT_RATE * (vArr[i] / gain - ref.v[i]);
+    }
+    return foreign;
+  }
+
+  // ---- Taking it ----
+  // The button counts down so the operator can step out of view (and
+  // waits while anyone's still in it), then keeps the picture.
+  var EMPTY_ROOM_COUNTDOWN_S = 5;
+  var EMPTY_ROOM_WAIT_MS = 10000;
+  var emptyRoomTimer = null;
+  var lastPoseCount = 0;
+  var emptyRoomBtn = document.getElementById("emptyRoomBtn");
+  var emptyRoomClearBtn = document.getElementById("emptyRoomClearBtn");
+  var emptyRoomStatusEl = document.getElementById("emptyRoomStatus");
+  var emptyRoomThumb = document.getElementById("emptyRoomThumb");
+  var roomCutoutToggle = document.getElementById("roomCutoutToggle");
+  function cancelEmptyRoomCountdown(text) {
+    if (emptyRoomTimer) clearTimeout(emptyRoomTimer);
+    emptyRoomTimer = null;
+    emptyRoomBtn.textContent = "📸 Take empty-room snapshot";
+    if (text) emptyRoomStatusEl.textContent = text;
+    else renderEmptyRoomStatus();
+  }
+  function startEmptyRoomCountdown() {
+    if (emptyRoomTimer) { cancelEmptyRoomCountdown(); return; }
+    if (!currentStream || !videoEl.videoWidth) { emptyRoomStatusEl.textContent = "The camera isn't on yet."; return; }
+    var left = EMPTY_ROOM_COUNTDOWN_S, waitedFrom = null;
+    emptyRoomBtn.textContent = "Cancel";
+    var tick = function () {
+      if (left > 0) {
+        emptyRoomStatusEl.textContent = "Clear the table and step out of view - taking it in " + left + "...";
+        left--;
+        emptyRoomTimer = setTimeout(tick, 1000);
+        return;
+      }
+      if (lastPoseCount > 0) {
+        if (waitedFrom === null) waitedFrom = Date.now();
+        if (Date.now() - waitedFrom > EMPTY_ROOM_WAIT_MS) { cancelEmptyRoomCountdown("Someone stayed in view - press the button to try again."); return; }
+        emptyRoomStatusEl.textContent = "Someone's still in view - waiting for them to step out...";
+        emptyRoomTimer = setTimeout(tick, 500);
+        return;
+      }
+      emptyRoomTimer = null;
+      emptyRoomBtn.textContent = "📸 Take empty-room snapshot";
+      captureEmptyRoom(videoEl);
+    };
+    tick();
+  }
+  // source: the video, or (tests) any picture the video's size
+  function captureEmptyRoom(source) {
+    var vw = videoEl.videoWidth, vh = videoEl.videoHeight;
+    if (!vw || !vh) return null;
+    emptyRoomCanvas.width = vw;
+    emptyRoomCanvas.height = vh;
+    try { emptyRoomCtx.drawImage(source, 0, 0, vw, vh); } catch (e) { return null; }
+    var jpeg = null;
+    try { jpeg = emptyRoomCanvas.toDataURL("image/jpeg", 0.9); } catch (e) {}
+    emptyRoom = { at: Date.now(), videoW: vw, videoH: vh, saved: false, jpeg: jpeg };
+    try {
+      localStorage.setItem(EMPTY_ROOM_STORAGE_KEY, JSON.stringify({ at: emptyRoom.at, videoW: vw, videoH: vh, jpeg: jpeg }));
+      emptyRoom.saved = true;
+    } catch (e) {
+      console.warn("[PMC empty room] couldn't save the snapshot (storage full?) - kept until the page reloads:", e);
+    }
+    tableRef = null;
+    tableRefMismatchPasses = 0;
+    buildRoomReference();
+    if (source === videoEl) captureBackgroundReference(); // (regionLooksStatic's still-furniture check, from the same moment)
+    logActivity("Empty-room snapshot taken");
+    forgetLastMatch();
+    renderEmptyRoomStatus();
+    return { at: emptyRoom.at, saved: emptyRoom.saved, size: jpeg ? jpeg.length : 0 };
+  }
+  function loadEmptyRoom() {
+    var stored = null;
+    try { stored = JSON.parse(localStorage.getItem(EMPTY_ROOM_STORAGE_KEY) || "null"); } catch (e) {}
+    if (!stored || !stored.jpeg) { renderEmptyRoomStatus(); return; }
+    var img = new Image();
+    img.onload = function () {
+      emptyRoomCanvas.width = stored.videoW;
+      emptyRoomCanvas.height = stored.videoH;
+      emptyRoomCtx.drawImage(img, 0, 0, stored.videoW, stored.videoH);
+      emptyRoom = { at: stored.at, videoW: stored.videoW, videoH: stored.videoH, saved: true, jpeg: stored.jpeg };
+      tableRef = null;
+      buildRoomReference();
+      renderEmptyRoomStatus();
+    };
+    img.src = stored.jpeg;
+  }
+  function forgetEmptyRoom() {
+    cancelEmptyRoomCountdown();
+    emptyRoom = null;
+    roomRef = null;
+    tableRef = null;
+    roomNow = { tick: -1, data: null, gain: 1, usable: false, match: 0 };
+    try { localStorage.removeItem(EMPTY_ROOM_STORAGE_KEY); } catch (e) {}
+    logActivity("Empty-room snapshot forgotten");
+    forgetLastMatch();
+    renderEmptyRoomStatus();
+  }
+  function renderEmptyRoomStatus() {
+    if (isViewer || emptyRoomTimer) return;
+    emptyRoomClearBtn.hidden = !emptyRoom;
+    emptyRoomThumb.hidden = !(emptyRoom && emptyRoom.jpeg);
+    if (emptyRoom && emptyRoom.jpeg && emptyRoomThumb.getAttribute("src") !== emptyRoom.jpeg) emptyRoomThumb.src = emptyRoom.jpeg;
+    if (!emptyRoom) {
+      emptyRoomStatusEl.textContent = "No snapshot yet: balls are told from the cloth by its colour alone, and players' pictures include the room behind them.";
+      return;
+    }
+    var when = new Date(emptyRoom.at);
+    var taken = "Taken " + (Date.now() - emptyRoom.at < 20 * 3600 * 1000 ? "at " + when.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "on " + when.toLocaleDateString()) + (emptyRoom.saved ? "" : " (couldn't be saved - kept until the page reloads)") + ". ";
+    if (videoEl.videoWidth && !emptyRoomFits()) {
+      emptyRoomStatusEl.textContent = taken + "It was taken with a different camera picture size - take it again.";
+    } else if (roomMismatchPasses >= EMPTY_ROOM_MISMATCH_PASSES || tableRefMismatchPasses >= EMPTY_ROOM_MISMATCH_PASSES) {
+      emptyRoomStatusEl.textContent = taken + "The view doesn't match it any more (the camera moved, or the lights changed a lot) - take it again.";
+    } else {
+      emptyRoomStatusEl.textContent = taken + "Balls are compared with the empty table" + (settings.roomCutout ? ", and the room is cut out of players' pictures." : "; players' pictures keep the room (the box below is off).");
+    }
+  }
+  emptyRoomBtn.addEventListener("click", startEmptyRoomCountdown);
+  emptyRoomClearBtn.addEventListener("click", forgetEmptyRoom);
+  roomCutoutToggle.addEventListener("change", function () {
+    settings.roomCutout = roomCutoutToggle.checked;
+    persistSettings();
+    if (isViewer) return;
+    logActivity("Cutting the room out of players' pictures " + (settings.roomCutout ? "on" : "off"));
+    forgetLastMatch();
+    renderEmptyRoomStatus();
+  });
 
   // ---- Ball detection (Straight Pool ball tracking) ----
   // Classical pixel work only, no model: the calibrated table quad is
@@ -2735,17 +3131,25 @@
     if (!feltCount) return null;
     var feltS = feltSSum / feltCount, feltV = feltVSum / feltCount;
 
-    var foreign = new Uint8Array(n);
-    for (i = 0; i < n; i++) {
-      if (!inside[i]) continue;
-      // Bright pixels are never felt, whatever their hue: the white parts
-      // of a glossy ball (stripes, the cue ball) reflect the green cloth
-      // and can take on its hue, which used to leave only a striped
-      // ball's coloured band as the detected shape - "not round".
-      if (hueDistance(hArr[i], feltH) > BALL_FELT_HUE_TOLERANCE_DEG || sArr[i] < BALL_MIN_SAT_FOR_FELT || vArr[i] < BALL_DARK_V_RATIO * feltV || vArr[i] > BALL_BRIGHT_V_RATIO * feltV) foreign[i] = 1;
+    // With an empty-room snapshot, each pixel against the same spot on the
+    // empty cloth (see foreignByEmptyTable); without one - or when it no
+    // longer matches - against the felt's one colour.
+    var ref = tableReferenceFor(bx0, by0, bw, bh, w, h);
+    var foreign = ref ? foreignByEmptyTable(ref, inside, hArr, sArr, vArr) : null;
+    var usedSnapshot = !!foreign;
+    if (!foreign) {
+      foreign = new Uint8Array(n);
+      for (i = 0; i < n; i++) {
+        if (!inside[i]) continue;
+        // Bright pixels are never felt, whatever their hue: the white parts
+        // of a glossy ball (stripes, the cue ball) reflect the green cloth
+        // and can take on its hue, which used to leave only a striped
+        // ball's coloured band as the detected shape - "not round".
+        if (hueDistance(hArr[i], feltH) > BALL_FELT_HUE_TOLERANCE_DEG || sArr[i] < BALL_MIN_SAT_FOR_FELT || vArr[i] < BALL_DARK_V_RATIO * feltV || vArr[i] > BALL_BRIGHT_V_RATIO * feltV) foreign[i] = 1;
+      }
     }
     return {
-      box: box, w: w, h: h, scale: scale, bx0: bx0, by0: by0,
+      box: box, w: w, h: h, scale: scale, bx0: bx0, by0: by0, usedSnapshot: usedSnapshot,
       inside: inside, hArr: hArr, sArr: sArr, vArr: vArr, foreign: foreign,
       feltH: feltH, feltS: feltS, feltV: feltV,
       toCanvas: toCanvas, toVideo: toVideo, rgb: data
@@ -2917,6 +3321,7 @@
       balls: balls,
       foreignPresent: foreignPresent,
       feltHsv: { h: feltH, s: feltS, v: feltV },
+      usedSnapshot: !!sample.usedSnapshot,
       canvasW: w,
       canvasH: h
     };
@@ -4028,6 +4433,7 @@
     detect: detectBallsInFrame,
     runPass: runBallPass,
     reset: resetBallTracking,
+    takeEmptySnapshot: function (source) { return captureEmptyRoom(source || videoEl); },
     settings: settings,
     countBallCores: countBallCores
   };
@@ -4049,6 +4455,15 @@
     visitIdentity: function (trackId) { return visitIdentity(trackId, Date.now()); },
     // median milliseconds for one run of an appearance model (OSNet unless
     // given) on the last person's picture
+    // the empty-room snapshot: take it from the video (or a test picture), and how it's doing
+    takeEmptySnapshot: function (source) { return captureEmptyRoom(source || videoEl); },
+    emptyRoom: function () { return { taken: !!emptyRoom, saved: !!(emptyRoom && emptyRoom.saved), room: { usable: roomNow.usable, match: roomNow.match, gain: roomNow.gain }, roomMismatchPasses: roomMismatchPasses, tableRefMismatchPasses: tableRefMismatchPasses, lastCropCut: lastCropCut }; },
+    lastCropDataUrl: function () {
+      if (!lastCrop) return null;
+      var c = document.createElement("canvas"); c.width = lastCrop.width; c.height = lastCrop.height;
+      c.getContext("2d").putImageData(lastCrop, 0, 0);
+      return c.toDataURL("image/png");
+    },
     timeAppearanceModel: function (n, id) {
       var model = appearanceModels[id || "osnet"] && appearanceModels[id || "osnet"].model;
       if (!model) return Promise.resolve(null);
@@ -4666,13 +5081,21 @@
     var scale = Math.min(CROP_W / bw, CROP_H / bh), dw = bw * scale, dh = bh * scale;
     cropCtx.fillStyle = "rgb(124,116,104)";
     cropCtx.fillRect(0, 0, CROP_W, CROP_H);
+    var ox = (CROP_W - dw) / 2, oy = (CROP_H - dh) / 2, img;
     try {
-      cropCtx.drawImage(videoEl, x0, y0, bw, bh, (CROP_W - dw) / 2, (CROP_H - dh) / 2, dw, dh);
-      return cropCtx.getImageData(0, 0, CROP_W, CROP_H);
+      cropCtx.drawImage(videoEl, x0, y0, bw, bh, ox, oy, dw, dh);
+      img = cropCtx.getImageData(0, 0, CROP_W, CROP_H);
     } catch (e) {
       return null;
     }
+    // (the room behind them cut out, with an empty-room snapshot - see cutRoomOutOfCrop)
+    lastCropCut = roomCutoutActive() ? cutRoomOutOfCrop(img, keypoints,
+      function (vx, vy) { return { x: (vx - x0) * scale + ox, y: (vy - y0) * scale + oy }; },
+      function (cx, cy) { return cx < ox || cy < oy || cx > ox + dw || cy > oy + dh ? null : { x: x0 + (cx - ox) / scale, y: y0 + (cy - oy) / scale }; }) : 0;
+    lastCrop = img;
+    return img;
   }
+  var lastCrop = null, lastCropCut = 0; // (tests: what the models were last shown)
 
   // The models run at most every EMBED_INTERVAL_MS, in the background (the
   // detection loop never waits for them), on whoever is being followed; the
@@ -5608,6 +6031,7 @@
 
   loadCalibration();
   loadBackgroundReference();
+  if (!isViewer) loadEmptyRoom();
 
   // ---- Enroll tab: Identify and Shooting buttons ----
   // Every player on the scoreboard has two buttons, and every press adds
@@ -7247,6 +7671,8 @@
         lastPoseResultAt = Date.now();
         detectTick++;
         if (window.PMCCueDebug.posesOverride) poses = window.PMCCueDebug.posesOverride(poses);
+        lastPoseCount = (poses || []).length;
+        noteRoomFrame(poses);
         currentPoseIds = {};
         (poses || []).forEach(function (p) { if (p.id !== undefined && p.id !== null) currentPoseIds[p.id] = true; });
         // selectActivePose does the cheap per-person filtering (standing,
