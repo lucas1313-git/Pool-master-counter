@@ -219,6 +219,16 @@
   .player-row .doubt { font-size: 0.9rem; color: var(--accent); margin-top: 4px; }
   .player-row .doubt button { padding: 4px 10px; font-size: 0.9rem; margin-left: 6px; }
   .enroll-check { font-size: 0.95rem; color: var(--accent); margin: 8px 0; }
+  /* The appearance models on/off, and how each choice does on tonight's
+     samples - three lines kept, so the list below doesn't move when they
+     change. */
+  .model-box { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin: 8px 0 10px; }
+  .model-toggles { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; }
+  .model-toggles label { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 1rem; color: var(--text); }
+  .model-toggles input { width: auto; margin: 0; }
+  .model-toggles .help-btn { margin-left: auto; }
+  .model-box-title { font-weight: 700; color: var(--text); }
+  .model-scores { font-size: 0.9rem; color: var(--text-dim); margin-top: 6px; line-height: 1.35; min-height: 4.05em; white-space: pre-line; }
   /* Each row's keypad number - pressing it (or tapping it) = that player
      is seen; + = they're shooting; - = take back the last one. */
   .player-row .row-number {
@@ -558,6 +568,15 @@
     <div class="progress-text" id="enrollShotStatus">Press Identify or Shooting beside a player.</div>
     <button id="enrollUndoBtn" class="secondary" type="button">Undo last press</button>
     <div class="enroll-check" id="enrollCheckStatus" hidden></div>
+    <div class="model-box">
+      <div class="model-toggles">
+        <span class="model-box-title">Appearance models</span>
+        <label><input type="checkbox" id="useOsnetToggle" checked> OSNet</label>
+        <label><input type="checkbox" id="useDinoToggle" checked> DINOv2</label>
+        <button type="button" class="help-btn" data-help="appearanceModels" aria-label="What does this do?">?</button>
+      </div>
+      <div class="model-scores" id="modelScores">Self-check: waiting for samples.</div>
+    </div>
     <div id="playerList"><div class="hint">No players yet - add them on the scoreboard.</div></div>
     <button id="clearAllBtn" class="danger" type="button" style="margin-top:10px">Clear all (new session)</button>
     <div class="hint"><strong>Self-check</strong>: the camera tests every sample against the others, as if it had just seen that player - the percentage is how often it named them right. Low? Press more for that player, and remove samples it says look like someone else.</div>
@@ -575,7 +594,7 @@
       <label for="recognitionMethodSelect">Recognize players by</label><button type="button" class="help-btn" data-help="recognitionMethod" aria-label="What does this do?">?</button>
       <select id="recognitionMethodSelect">
         <option value="auto">Whichever recognizes them better (self-check)</option>
-        <option value="model">Appearance model</option>
+        <option value="model">Appearance models (Enroll tab)</option>
         <option value="colour">Clothing colours</option>
       </select>
 
@@ -701,6 +720,7 @@
 <script src="camera/tfjs.js"></script>
 <script src="camera/pose-detection.js"></script>
 <script src="camera/osnet.js"></script>
+<script src="camera/dino.js"></script>
 <script>
 (function () {
   "use strict";
@@ -872,6 +892,9 @@
   var bendExitInput = document.getElementById("bendExitInput");
   var railDistanceInput = document.getElementById("railDistanceInput");
   var recognitionMethodSelect = document.getElementById("recognitionMethodSelect");
+  var useOsnetToggle = document.getElementById("useOsnetToggle");
+  var useDinoToggle = document.getElementById("useDinoToggle");
+  var modelScoresEl = document.getElementById("modelScores");
   var ballTrackingToggle = document.getElementById("ballTrackingToggle");
   var ballConfirmInput = document.getElementById("ballConfirmInput");
   var cueDetectionToggle = document.getElementById("cueDetectionToggle");
@@ -891,7 +914,11 @@
     },
     recognitionMethod: {
       title: "Recognize players by",
-      body: "Two ways of telling players apart:\n\nClothing colours - counts the colours of each player's shirt, trousers, sleeves and cap. Quick, but can't tell apart two players in similar colours, and is thrown by lighting changes.\n\nAppearance model - a model trained on thousands of people (OSNet) that sees light vs dark, patterns and logos, and the same person from another angle. A small classifier learns tonight's players from your samples, so more samples keep improving it.\n\nEvery sample keeps both, and the Enroll tab's self-check scores both. \"Whichever recognizes them better\" uses the appearance model once the self-check says it does at least as well (95%+) or clearly better - otherwise colours."
+      body: "Two ways of telling players apart:\n\nClothing colours - counts the colours of each player's shirt, trousers, sleeves and cap. Quick, but can't tell apart two players in similar colours, and is thrown by lighting changes.\n\nAppearance models - models that learned from a great many pictures (OSNet, DINOv2 - switch each on or off on the Enroll tab) see light vs dark, patterns and logos, and the same person from another angle. A small classifier learns tonight's players from your samples, so more samples keep improving it. With both models on, their numbers are used side by side.\n\nEvery sample keeps all of them, and the Enroll tab's self-check scores the colours, each model and both together. \"Whichever recognizes them better\" uses the models that are switched on once the self-check says they do at least as well (95%+) or clearly better - otherwise colours."
+    },
+    appearanceModels: {
+      title: "Appearance models",
+      body: "Two models that turn a player's picture into numbers describing how they look - clothes, patterns, logos, build - so the camera can tell tonight's players apart. Both run on this device; nothing leaves it.\n\nOSNet - trained on photos of people (the Market-1501 collection), so it's built for exactly this. Its licence is for research and non-commercial use: fine while the app isn't sold.\n\nDINOv2 - Meta's model, trained on pictures of everything, not people in particular. Apache-2.0 licence: free for any use, a sold app included. About twice OSNet's work per look, and a 22 MB download the first time.\n\nWith both on, recognition uses their numbers side by side; switch one off and it carries on with the other, at once. Colours always run underneath.\n\nThe self-check line scores every choice on tonight's samples - colours, each model alone, both together - so you can see which does best and set the boxes to match. Each sample keeps the numbers of every model that was loaded when it was taken, so a model switched on later needs a few new samples of each player first (it says so)."
     },
     consecutive: {
       title: "How many frames before it believes you",
@@ -1041,7 +1068,10 @@
     cueDetectionEnabled: true,
     cueDebugEnabled: false,
     // "auto" (whichever the self-check scores higher), "colour" or "model"
-    recognitionMethod: "auto"
+    recognitionMethod: "auto",
+    // which appearance models "model" combines (the Enroll tab's boxes)
+    useOsnet: true,
+    useDino: true
   };
   var hasLocalSettingsOverride = false;
 
@@ -1099,6 +1129,8 @@
   }
   function applySettingsToInputs() {
     recognitionMethodSelect.value = settings.recognitionMethod;
+    useOsnetToggle.checked = settings.useOsnet;
+    useDinoToggle.checked = settings.useDino;
     thresholdInput.value = settings.matchThreshold;
     consecutiveInput.value = settings.consecutiveFrames;
     debounceInput.value = settings.debounceSec;
@@ -1128,6 +1160,21 @@
     persistSettings();
     forgetLastMatch();
     finishEnrollCheck();
+  });
+  // An appearance model on or off takes effect at once: the self-check has
+  // already scored every combination, so recognition just switches over
+  // (a model switched on for the first time loads first).
+  [[useOsnetToggle, "useOsnet"], [useDinoToggle, "useDino"]].forEach(function (pair) {
+    pair[0].addEventListener("change", function () {
+      settings[pair[1]] = pair[0].checked;
+      persistSettings();
+      if (isViewer) return;
+      var m = appearanceModelFor(pair[1]);
+      logActivity(m.label + " " + (pair[0].checked ? "on" : "off"));
+      if (pair[0].checked && modelsReady) loadAppearanceModel(m);
+      forgetLastMatch();
+      finishEnrollCheck();
+    });
   });
   wireNumberSetting(consecutiveInput, "consecutiveFrames");
   wireNumberSetting(debounceInput, "debounceSec");
@@ -1233,7 +1280,7 @@
       detector = d;
       modelsReady = true;
       setStatus(dotModels, labelModels, "ok", "Models: ready", "ready");
-      loadAppearanceModel();
+      loadAppearanceModels();
     }).catch(function (e) {
       setStatus(dotModels, labelModels, "bad", "Models: failed to load", "failed");
       console.error("[camera] model load failed:", e);
@@ -1922,7 +1969,7 @@
     "debugToggle", "thresholdInput", "consecutiveInput", "debounceInput",
     "bendEnterInput", "bendExitInput", "railDistanceInput", "recognitionMethodSelect",
     "ballTrackingToggle", "ballConfirmInput", "cueDetectionToggle", "cueDebugToggle",
-    "tableSizeSelect", "firstEdgeSelect"
+    "tableSizeSelect", "firstEdgeSelect", "useOsnetToggle", "useDinoToggle", "modelScores"
   ];
   var VIEWER_SYNCED_HTML_IDS = ["recognizeLog"];
   // The Enroll tab's player list, whole: its sample counts change on this
@@ -2109,9 +2156,9 @@
         var checkLine = document.createElement("div");
         checkLine.className = "meta check " + (pct >= 90 ? "good" : pct < 70 ? "poor" : "");
         var other = check.method === "model" ? check.colour : check.model;
-        var otherText = other && other.tested >= SELF_CHECK_MIN_SAMPLES ? ", " + (check.method === "model" ? "colours " : "appearance model ") + Math.round(other.right / other.tested * 100) + "%" : "";
+        var otherText = other && other.tested >= SELF_CHECK_MIN_SAMPLES ? ", " + (check.method === "model" ? "colours " : check.modelLabel + " ") + Math.round(other.right / other.tested * 100) + "%" : "";
         checkLine.textContent = "Self-check: recognized " + pct + "% (" + check.right + " of " + check.tested + ")" +
-          (check.model || check.method === "model" ? (check.method === "model" ? " by the appearance model" : " by colours") + otherText : "") +
+          (check.model || check.method === "model" ? (check.method === "model" ? " by " + check.modelLabel : " by colours") + otherText : "") +
           (mixedWith.length ? " - mixed up with " + mixedWith.join(", ") : "");
         meta.appendChild(checkLine);
       }
@@ -3993,18 +4040,23 @@
     getEnrollCheck: function () { return enrollCheck; },
     histogramDistance: histogramDistance,
     appearance: function () {
-      return { state: appearanceModelState, method: activeRecognitionMethod(), modelBeatsColours: modelBeatsColours, modelThreshold: modelThreshold,
-        classifierPlayers: classifier ? classifier.names.slice() : null, colourCheck: colourCheck, modelCheck: modelCheck, embeddings: Object.keys(trackEmbeddings).length };
+      var r = activeModelResult(), models = {}, combos = {};
+      APPEARANCE_MODELS.forEach(function (m) { models[m.id] = { state: appearanceModels[m.id].state, on: settings[m.setting], ms: appearanceModels[m.id].ms }; });
+      Object.keys(modelChecks).forEach(function (k) { combos[k] = { tested: modelChecks[k].tested, right: modelChecks[k].right, thr: modelChecks[k].thr, D: modelChecks[k].classifier ? modelChecks[k].classifier.D : null }; });
+      return { state: appearanceModels.osnet.state, models: models, combo: activeModelCombo().slice(), combos: combos, method: activeRecognitionMethod(), modelBeatsColours: modelBeatsColours, modelThreshold: methodThreshold("model"),
+        classifierPlayers: r && r.classifier ? r.classifier.names.slice() : null, colourCheck: colourCheck, modelCheck: r ? r.check : {}, embeddings: Object.keys(trackEmbeddings).length };
     },
     visitIdentity: function (trackId) { return visitIdentity(trackId, Date.now()); },
-    // median milliseconds for one run of the appearance model on the last person's picture
-    timeAppearanceModel: function (n) {
-      if (!appearanceModel) return Promise.resolve(null);
+    // median milliseconds for one run of an appearance model (OSNet unless
+    // given) on the last person's picture
+    timeAppearanceModel: function (n, id) {
+      var model = appearanceModels[id || "osnet"] && appearanceModels[id || "osnet"].model;
+      if (!model) return Promise.resolve(null);
       var crop = cropCtx.getImageData(0, 0, CROP_W, CROP_H), times = [];
       var next = function (left) {
         if (!left) { times.sort(function (a, b) { return a - b; }); return times[Math.floor(times.length / 2)]; }
         var t0 = performance.now();
-        return appearanceModel.embed(crop).then(function () { times.push(performance.now() - t0); return next(left - 1); });
+        return model.embed(crop).then(function () { times.push(performance.now() - t0); return next(left - 1); });
       };
       return next(n || 10);
     },
@@ -4344,9 +4396,10 @@
   var MATCH_MARGIN_FRACTION = 0.12;
 
   // A sample as the given method sees it: its colour counts, or the
-  // appearance model's numbers (null for a sample taken without them).
+  // appearance models' numbers - those switched on, side by side (null for
+  // a sample taken without them).
   function sampleVector(method, entry, info, i) {
-    return method === "model" ? sampleEmbedding(info[i]) : entry.descriptors[i];
+    return method === "model" ? sampleComboVector(info[i], activeModelCombo()) : entry.descriptors[i];
   }
   function vectorDistance(method, a, b) {
     return method === "model" ? cosineDistance(a, b) : histogramDistance(a, b);
@@ -4476,8 +4529,9 @@
     var keys = Object.keys(enrollments).filter(function (key) { return isEligibleForRecognition(enrollments[key].displayName || key); });
     var ranked = rankPlayers(query, pose, keys, null, method);
     var result = matchFromRanking(ranked, pose, method);
-    if (result && method === "model" && classifier && ranked.length >= 2 && ranked.every(function (r) { return classifier.keys.indexOf(r.key) !== -1; })) {
-      var c = classifyEmbedding(query, ranked.map(function (r) { return r.key; }));
+    var modelResult = method === "model" ? activeModelResult() : null, cls = modelResult && modelResult.classifier;
+    if (result && cls && cls.D === query.length && ranked.length >= 2 && ranked.every(function (r) { return cls.keys.indexOf(r.key) !== -1; })) {
+      var c = classifyEmbedding(cls, query, ranked.map(function (r) { return r.key; }));
       var mine = ranked.filter(function (r) { return r.key === c.key; })[0];
       var theirs = ranked.filter(function (r) { return r.name === c.runnerUp; })[0];
       // Not when the samples themselves clearly say someone else, nor when
@@ -4498,39 +4552,100 @@
   function forgetLastMatch() {
     lastMatchQuery = { query: null, results: {} };
     apartCache = {};
-    everyoneHasEmbeddingsCache = null;
+    everyoneHasCache = {};
+    activeComboCache = null;
   }
 
-  // ---- Appearance model (OSNet - see camera/osnet.js) ----
-  // Learned from thousands of people, unlike the colour counts above: it
-  // sees light vs dark, patterns and logos, and the same person from
-  // another angle or in other light. It runs alongside the colour counts -
-  // every new sample keeps both, the self-check scores both on tonight's
-  // players, and recognition uses whichever does better
-  // (settings.recognitionMethod can force one).
-  var APPEARANCE_MODEL_URL = "camera/models/osnet/";
-  var appearanceModel = null;
-  var appearanceModelState = "off"; // "loading" | "ready" | "failed"
-  function loadAppearanceModel() {
-    if (appearanceModelState === "loading" || !window.PMCOsnet) return;
-    if (appearanceModel) { appearanceModel.dispose(); appearanceModel = null; } // (a pose-model reload: start clean)
-    appearanceModelState = "loading";
-    var startedAt = Date.now();
-    PMCOsnet.load(APPEARANCE_MODEL_URL).then(function (model) {
-      appearanceModel = model;
-      appearanceModelState = "ready";
-      console.log("[PMC appearance] model ready in " + (Date.now() - startedAt) + "ms");
-      scheduleEnrollCheck();
-    }, function (e) {
-      appearanceModelState = "failed";
-      console.warn("[PMC appearance] model failed to load - colours only:", e);
+  // ---- Appearance models (OSNet, DINOv2 - see camera/osnet.js, camera/dino.js) ----
+  // Learned from a great many pictures, unlike the colour counts above:
+  // they see light vs dark, patterns and logos, and the same person from
+  // another angle or in other light. Two of them, each switched on or off
+  // on the Enroll tab: OSNet, trained on photos of people (research-only
+  // licence), and DINOv2, trained on pictures of everything (Apache-2.0).
+  // They run alongside the colour counts - every new sample keeps the
+  // numbers of every model that's loaded, the self-check scores the
+  // colours, each model and both together on tonight's players, and
+  // recognition uses the models that are switched on (side by side when
+  // both are) whenever they do better than colours (settings.
+  // recognitionMethod can force one way).
+  var APPEARANCE_MODELS = [
+    { id: "osnet", label: "OSNet", url: "camera/models/osnet/", lib: "PMCOsnet", setting: "useOsnet", infoKey: "emb", signed: false },
+    { id: "dino", label: "DINOv2", url: "camera/models/dinov2/", lib: "PMCDino", setting: "useDino", infoKey: "embDino", signed: true }
+  ];
+  // id -> { model, state: "off" | "loading" | "ready" | "failed", gen, ms: one look, on average }
+  var appearanceModels = {};
+  APPEARANCE_MODELS.forEach(function (m) { appearanceModels[m.id] = { model: null, state: "off", gen: 0, ms: null }; });
+  function appearanceModelFor(idOrSetting) {
+    return APPEARANCE_MODELS.filter(function (m) { return m.id === idOrSetting || m.setting === idOrSetting; })[0];
+  }
+  // After the pose model (re)loads: a lost GPU context takes every model's
+  // weights with it, so whatever was loaded is loaded again.
+  function loadAppearanceModels() {
+    APPEARANCE_MODELS.forEach(function (m) {
+      var s = appearanceModels[m.id];
+      if (s.model) { try { s.model.dispose(); } catch (e) {} }
+      s.model = null;
+      s.state = "off";
+      s.gen++;
+      if (settings[m.setting]) loadAppearanceModel(m);
     });
   }
+  function loadAppearanceModel(m) {
+    var s = appearanceModels[m.id];
+    if (s.state === "loading" || s.state === "ready" || !window[m.lib]) return;
+    s.state = "loading";
+    var gen = ++s.gen, startedAt = Date.now();
+    renderModelBox();
+    window[m.lib].load(m.url).then(function (model) {
+      if (gen !== s.gen) { model.dispose(); return; }
+      s.model = model;
+      s.state = "ready";
+      console.log("[PMC appearance] " + m.label + " ready in " + (Date.now() - startedAt) + "ms");
+      forgetLastMatch();
+      scheduleEnrollCheck();
+      finishEnrollCheck();
+    }, function (e) {
+      if (gen !== s.gen) return;
+      s.state = "failed";
+      console.warn("[PMC appearance] " + m.label + " failed to load - recognizing without it:", e);
+      logActivity(m.label + " failed to load - recognizing without it");
+      forgetLastMatch();
+      finishEnrollCheck();
+    });
+  }
+  function readyModelIds() {
+    return APPEARANCE_MODELS.filter(function (m) { return appearanceModels[m.id].state === "ready"; }).map(function (m) { return m.id; });
+  }
+  // The models that look at live frames: switched on and loaded.
+  function liveModelIds() {
+    return readyModelIds().filter(function (id) { return settings[appearanceModelFor(id).setting]; });
+  }
+  // Runs the given models on one picture, one after the other (they share
+  // the GPU anyway): { osnet: Float32Array, dino: Float32Array }, each unit
+  // length - a model that fails is left out.
+  function embedPicture(picture, ids) {
+    var out = {};
+    return ids.reduce(function (chain, id) {
+      return chain.then(function () {
+        var s = appearanceModels[id];
+        if (!s.model) return;
+        var t0 = performance.now();
+        return s.model.embed(picture).then(function (v) {
+          out[id] = v;
+          var ms = performance.now() - t0;
+          s.ms = s.ms === null ? ms : s.ms * 0.9 + ms * 0.1;
+        }, function (e) {
+          console.warn("[PMC appearance] " + appearanceModelFor(id).label + " failed on a picture:", e);
+        });
+      });
+    }, Promise.resolve()).then(function () { return out; });
+  }
 
-  // The person's picture for the model: the box round every body point the
+  // The person's picture for the models: the box round every body point the
   // pose model is sure of, with a margin (more above, for the top of the
   // head), scaled into 128x256 without stretching - a player bent over a
-  // shot is wider than tall - on the model's own mean grey.
+  // shot is wider than tall - on OSNet's own mean grey (DINOv2's too, near
+  // enough; it resizes it to 112x224 itself).
   var CROP_W = 128, CROP_H = 256;
   var cropCanvas = document.createElement("canvas");
   cropCanvas.width = CROP_W;
@@ -4559,53 +4674,106 @@
     }
   }
 
-  // The model runs at most every EMBED_INTERVAL_MS, in the background (the
-  // detection loop never waits for it), on whoever is being followed; the
-  // answer is kept per pose track and used while it's fresh.
+  // The models run at most every EMBED_INTERVAL_MS, in the background (the
+  // detection loop never waits for them), on whoever is being followed; the
+  // answer is kept per pose track and used while it's fresh. The picture is
+  // cut out whenever any model is loaded - a sample keeps every loaded
+  // model's numbers, switched on or not, so the self-check can still
+  // compare them.
   var EMBED_INTERVAL_MS = 200;
   var EMBED_FRESH_MS = 700;
   var embedInFlight = false, lastEmbedStartAt = 0;
-  var trackEmbeddings = {}; // String(trackId) -> { emb: Float32Array(512), at }
+  var trackEmbeddings = {}; // String(trackId) -> { embs: { osnet, dino }, at }
   function noteAppearance(analysis, keypoints, now) {
-    if (!appearanceModel || !analysis) return;
+    if (!analysis || !readyModelIds().length) return;
     analysis.crop = personCrop(keypoints);
     var trackKey = String(analysis.trackId);
     var known = trackEmbeddings[trackKey];
-    analysis.emb = known && now - known.at <= EMBED_FRESH_MS ? known.emb : null;
-    if (!analysis.crop || embedInFlight || now - lastEmbedStartAt < EMBED_INTERVAL_MS) return;
+    analysis.emb = known && now - known.at <= EMBED_FRESH_MS ? known.embs : null;
+    var ids = liveModelIds();
+    if (!ids.length || !analysis.crop || embedInFlight || now - lastEmbedStartAt < EMBED_INTERVAL_MS) return;
     embedInFlight = true;
     lastEmbedStartAt = now;
-    appearanceModel.embed(analysis.crop).then(function (emb) {
-      trackEmbeddings[trackKey] = { emb: emb, at: Date.now() };
+    embedPicture(analysis.crop, ids).then(function (embs) {
+      if (Object.keys(embs).length) trackEmbeddings[trackKey] = { embs: embs, at: Date.now() };
       Object.keys(trackEmbeddings).forEach(function (k) { if (Date.now() - trackEmbeddings[k].at > 10000) delete trackEmbeddings[k]; });
-    }, function (e) {
-      console.warn("[PMC appearance] embedding failed:", e);
-    }).then(function () { embedInFlight = false; });
+    }).then(function () { embedInFlight = false; }, function () { embedInFlight = false; });
   }
 
-  // Kept with each sample as info.emb: the 512 numbers (never negative -
-  // the model's last step is a ReLU) as bytes, base64 - about 700
-  // characters. Decoded once and remembered.
-  function encodeEmbedding(emb) {
+  // Kept with each sample, as bytes in base64: OSNet's 512 numbers as
+  // info.emb (never negative - its last step is a ReLU - so 0-255, about
+  // 700 characters), DINOv2's 384 as info.embDino (either sign: 1-255
+  // round 128, about 500). Decoded once and remembered.
+  function encodeEmbedding(emb, signed) {
     var max = 0, i;
-    for (i = 0; i < emb.length; i++) if (emb[i] > max) max = emb[i];
+    for (i = 0; i < emb.length; i++) max = Math.max(max, signed ? Math.abs(emb[i]) : emb[i]);
     var bin = "";
-    for (i = 0; i < emb.length; i++) bin += String.fromCharCode(max > 0 ? Math.round(emb[i] / max * 255) : 0);
+    for (i = 0; i < emb.length; i++) {
+      bin += String.fromCharCode(max > 0 ? (signed ? 128 + Math.round(emb[i] / max * 127) : Math.round(emb[i] / max * 255)) : signed ? 128 : 0);
+    }
     return btoa(bin);
   }
+  // embs: { osnet, dino } as embedPicture gives them (or null)
+  function addEmbeddingsToInfo(info, embs) {
+    if (!embs) return info;
+    APPEARANCE_MODELS.forEach(function (m) { if (embs[m.id]) info[m.infoKey] = encodeEmbedding(embs[m.id], m.signed); });
+    return info;
+  }
   var decodedEmbeddings = new Map();
-  function sampleEmbedding(info) {
-    if (!info || typeof info.emb !== "string") return null;
-    var v = decodedEmbeddings.get(info.emb);
+  // One model's numbers for a sample, unit length (null: none).
+  function sampleModelEmbedding(info, m) {
+    var code = info && info[m.infoKey];
+    if (typeof code !== "string") return null;
+    var v = decodedEmbeddings.get(code);
     if (v) return v;
-    var bin = atob(info.emb), norm = 0, i;
+    var bin = atob(code), norm = 0, i, zero = m.signed ? 128 : 0;
     v = new Float32Array(bin.length);
-    for (i = 0; i < bin.length; i++) { v[i] = bin.charCodeAt(i); norm += v[i] * v[i]; }
+    for (i = 0; i < bin.length; i++) { v[i] = bin.charCodeAt(i) - zero; norm += v[i] * v[i]; }
     norm = Math.sqrt(norm) || 1;
     for (i = 0; i < v.length; i++) v[i] /= norm;
-    if (decodedEmbeddings.size > 6000) decodedEmbeddings.clear();
-    decodedEmbeddings.set(info.emb, v);
+    if (decodedEmbeddings.size > 12000) decodedEmbeddings.clear();
+    decodedEmbeddings.set(code, v);
     return v;
+  }
+  // Several models together: their numbers side by side, each scaled by
+  // 1/sqrt(how many) - still unit length, and the cosine distance comes out
+  // as the average of the models' own. One model: just its numbers. A
+  // sample (or frame) missing one of them has none for that combination.
+  var comboVectors = new WeakMap(); // sample info / a frame's numbers -> { "osnet+dino": Float32Array | null }
+  function comboKey(ids) {
+    return ids.join("+");
+  }
+  function comboLabel(ids) {
+    return ids.map(function (id) { return appearanceModelFor(id).label; }).join(" + ");
+  }
+  function comboVector(holder, ids, part) {
+    if (!holder || !ids.length) return null;
+    var cache = comboVectors.get(holder), key = comboKey(ids);
+    if (!cache) { cache = {}; comboVectors.set(holder, cache); }
+    if (cache.hasOwnProperty(key)) return cache[key];
+    var parts = [], total = 0;
+    for (var i = 0; i < ids.length; i++) {
+      var p = part(ids[i]);
+      if (!p) return (cache[key] = null);
+      parts.push(p);
+      total += p.length;
+    }
+    if (parts.length === 1) return (cache[key] = parts[0]);
+    var out = new Float32Array(total), k = 1 / Math.sqrt(parts.length), o = 0;
+    parts.forEach(function (p) { for (var j = 0; j < p.length; j++) out[o + j] = p[j] * k; o += p.length; });
+    return (cache[key] = out);
+  }
+  function sampleComboVector(info, ids) {
+    return comboVector(info, ids, function (id) { return sampleModelEmbedding(info, appearanceModelFor(id)); });
+  }
+  function frameComboVector(embs, ids) {
+    return comboVector(embs, ids, function (id) { return embs[id] || null; });
+  }
+  // Every combination of the given models, the biggest first.
+  function modelSubsets(ids) {
+    var out = [];
+    for (var mask = 1; mask < (1 << ids.length); mask++) out.push(ids.filter(function (id, i) { return mask & (1 << i); }));
+    return out.sort(function (a, b) { return b.length - a.length; });
   }
   function cosineDistance(a, b) {
     var dot = 0;
@@ -4613,66 +4781,97 @@
     return 1 - dot;
   }
 
-  // How far apart (cosine distance) the model's numbers for one person can
+  // How far apart (cosine distance) the models' numbers for one person can
   // be and still count as them - worked out from tonight's samples by the
-  // self-check (between how far a player's samples are from each other and
-  // how far from everyone else's), this until it has enough to go on.
+  // self-check, for each combination (between how far a player's samples
+  // are from each other and how far from everyone else's), this until it
+  // has enough to go on.
   var DEFAULT_MODEL_THRESHOLD = 0.35;
-  var modelThreshold = DEFAULT_MODEL_THRESHOLD;
   function methodThreshold(method) {
-    return method === "model" ? modelThreshold : settings.matchThreshold;
+    if (method !== "model") return settings.matchThreshold;
+    var r = activeModelResult();
+    return r ? r.thr : DEFAULT_MODEL_THRESHOLD;
   }
 
-  // Which way recognition goes right now: the colour counts until the
-  // model is loaded and the self-check says it does better (or the setting
-  // says otherwise). A frame the model hasn't looked at yet (someone who
-  // just stepped up) still goes by colours.
+  // The models recognition combines right now: switched on, loaded, and in
+  // the samples of everyone who can be recognized - a player whose samples
+  // all predate a model can't be named by it, so the others carry on
+  // without it until everyone has some.
+  var activeComboCache = null;
+  var everyoneHasCache = {};
+  function everyoneHasCombo(ids) {
+    var key = comboKey(ids);
+    if (!everyoneHasCache.hasOwnProperty(key)) {
+      everyoneHasCache[key] = Object.keys(enrollments).every(function (k) {
+        var entry = enrollments[k];
+        return !isEligibleForRecognition(entry.displayName || k) || alignedInfo(entry).some(function (i) { return !!sampleComboVector(i, ids); });
+      });
+    }
+    return everyoneHasCache[key];
+  }
+  function activeModelCombo() {
+    if (!activeComboCache) {
+      activeComboCache = modelSubsets(liveModelIds()).filter(everyoneHasCombo)[0] || [];
+    }
+    return activeComboCache;
+  }
+  // Eligible players with no samples a model has looked at (for the Enroll
+  // tab's note).
+  function playersWithoutModel(m) {
+    var names = [];
+    Object.keys(enrollments).forEach(function (k) {
+      var entry = enrollments[k], name = entry.displayName || k;
+      if (isEligibleForRecognition(name) && !alignedInfo(entry).some(function (i) { return i && typeof i[m.infoKey] === "string"; })) names.push(name);
+    });
+    return names;
+  }
+
+  // Which way recognition goes right now: the colour counts until a model
+  // is on and loaded and the self-check says the models do better (or the
+  // setting says otherwise). A frame the models haven't looked at yet
+  // (someone who just stepped up) still goes by colours.
   var modelBeatsColours = false;
   function activeRecognitionMethod() {
-    if (appearanceModelState !== "ready" || settings.recognitionMethod === "colour") return "colour";
+    if (settings.recognitionMethod === "colour" || !activeModelCombo().length) return "colour";
     if (settings.recognitionMethod === "model") return "model";
     return modelBeatsColours ? "model" : "colour";
   }
   function matchAppearance(analysis, pose) {
-    if (analysis && analysis.emb && activeRecognitionMethod() === "model" && everyoneHasEmbeddings()) return findBestMatchBy("model", analysis.emb, pose);
-    return findBestMatch(analysis.descriptor, pose);
-  }
-  // (a player whose samples all predate the model can't be named by it -
-  // colours until everyone who can be recognized has some)
-  var everyoneHasEmbeddingsCache = null;
-  function everyoneHasEmbeddings() {
-    if (everyoneHasEmbeddingsCache === null) {
-      everyoneHasEmbeddingsCache = Object.keys(enrollments).every(function (key) {
-        var entry = enrollments[key];
-        return !isEligibleForRecognition(entry.displayName || key) || alignedInfo(entry).some(function (i) { return i && typeof i.emb === "string"; });
-      });
+    if (analysis && analysis.emb && activeRecognitionMethod() === "model") {
+      var query = frameComboVector(analysis.emb, activeModelCombo());
+      if (query) return findBestMatchBy("model", query, pose);
     }
-    return everyoneHasEmbeddingsCache;
+    return findBestMatch(analysis.descriptor, pose);
   }
 
   // ---- Step 3: a classifier trained on tonight's samples ----
-  // With the model's numbers, a small classifier (ridge regression, one
-  // score per player) learns which of the 512 tell tonight's players apart
-  // - so more samples keep paying off. Trained in a background worker
-  // whenever the samples change, a fraction of a second per run; scoring a
-  // frame is a few hundred multiplications. The same worker scores every
-  // sample against classifiers trained without it (5 rounds, samples from
-  // the same moment kept together) for the self-check, and works out the
-  // model's match threshold.
+  // With the models' numbers, a small classifier (ridge regression, one
+  // score per player) learns which of them tell tonight's players apart -
+  // so more samples keep paying off. Trained in a background worker
+  // whenever the samples change, for every combination of the models (each
+  // alone, both together), a fraction of a second each; scoring a frame is
+  // a few hundred multiplications. The same worker scores every sample
+  // against classifiers trained without it (5 rounds, samples from the same
+  // moment kept together) for the self-check, and works out each
+  // combination's match threshold.
   var CLASSIFIER_MARGIN = 0.15; // top score at least this far above the next
   var MODEL_CHECK_MAX_PER_PLAYER = 80; // newest samples per player the worker looks at
-  var classifier = null; // { keys: [player keys], names, W: Float32Array(P*(D+1)), D }
-  var modelCheck = {}; // key -> { tested, right, mixups, doubtful } (filled in by the worker)
-  var modelCheckWorker = null, modelCheckRun = 0;
+  // combination ("osnet", "dino", "osnet+dino") -> { ids, thr, tested, right,
+  // check: key -> { tested, right, mixups, doubtful },
+  // classifier: { keys: [player keys], names, W: Float32Array(P*(D+1)), D } | null }
+  var modelChecks = {};
+  var modelCheckWorker = null, modelCheckRun = 0, modelCheckBusy = false, modelCheckAgain = false;
+  function activeModelResult() {
+    return modelChecks[comboKey(activeModelCombo())] || null;
+  }
 
-  function classifyEmbedding(emb, keys) {
-    if (!classifier) return null;
-    var D = classifier.D, best = null, next = null;
-    classifier.keys.forEach(function (key, p) {
+  function classifyEmbedding(cls, emb, keys) {
+    var D = cls.D, best = null, next = null;
+    cls.keys.forEach(function (key, p) {
       if (keys.indexOf(key) === -1) return;
-      var s = classifier.W[p * (D + 1) + D];
-      for (var i = 0; i < D; i++) s += classifier.W[p * (D + 1) + i] * emb[i];
-      var c = { key: key, name: classifier.names[p], score: s };
+      var s = cls.W[p * (D + 1) + D];
+      for (var i = 0; i < D; i++) s += cls.W[p * (D + 1) + i] * emb[i];
+      var c = { key: key, name: cls.names[p], score: s };
       if (!best || s > best.score) { next = best; best = c; } else if (!next || s > next.score) next = c;
     });
     return best ? { key: best.key, name: best.name, margin: next ? best.score - next.score : Infinity, runnerUp: next ? next.name : null } : null;
@@ -4682,13 +4881,22 @@
     // (runs in the worker - no access to the page)
     self.onmessage = function (ev) {
       var m = ev.data, n = m.n, D = m.D, X = m.X, y = m.y, t = m.t, P = m.P;
-      var i, j, k, p;
-      function dist(a, b) { var s = 0, oa = a * D, ob = b * D; for (var q = 0; q < D; q++) s += X[oa + q] * X[ob + q]; return 1 - s; }
+      var i, j, p, a, b, c, s;
+      // every pair's dot product (the numbers are unit length: the cosine distance is 1 - dot)
+      var dot = new Float64Array(n * n);
+      for (i = 0; i < n; i++) {
+        for (j = i; j < n; j++) {
+          var oi = i * D, oj = j * D;
+          s = 0;
+          for (var q = 0; q < D; q++) s += X[oi + q] * X[oj + q];
+          dot[i * n + j] = dot[j * n + i] = s;
+        }
+      }
       // nearest sample of each player (not the sample itself, nor its own player's from the same moment)
       var near = new Float32Array(n * P).fill(Infinity);
       for (i = 0; i < n; i++) for (j = i + 1; j < n; j++) {
         if (y[i] === y[j] && t[i] && t[j] && Math.abs(t[i] - t[j]) < m.neighbourMs) continue;
-        var d = dist(i, j);
+        var d = 1 - dot[i * n + j];
         if (d < near[i * P + y[j]]) near[i * P + y[j]] = d;
         if (d < near[j * P + y[i]]) near[j * P + y[i]] = d;
       }
@@ -4700,10 +4908,11 @@
         for (p = 0; p < P; p++) if (p !== y[i]) o = Math.min(o, near[i * P + p]);
         if (o < Infinity) other.push(o);
       }
-      var pct = function (xs, q) { xs = xs.slice().sort(function (a, b) { return a - b; }); return xs[Math.min(xs.length - 1, Math.floor(q * xs.length))]; };
+      var pct = function (xs, f) { xs = xs.slice().sort(function (u, v) { return u - v; }); return xs[Math.min(xs.length - 1, Math.floor(f * xs.length))]; };
+      var clampThr = function (v) { return Math.max(m.minThreshold, Math.min(m.maxThreshold, v)); };
       var thr = m.defaultThreshold;
-      if (same.length >= 5 && other.length >= 5) thr = Math.max(0.15, Math.min(0.55, (pct(same, 0.9) + pct(other, 0.1)) / 2));
-      else if (same.length >= 5) thr = Math.max(0.15, Math.min(0.55, pct(same, 0.9) * 1.3));
+      if (same.length >= 5 && other.length >= 5) thr = clampThr((pct(same, 0.9) + pct(other, 0.1)) / 2);
+      else if (same.length >= 5) thr = clampThr(pct(same, 0.9) * 1.3);
       // ridge regression, one-vs-rest, bias as an extra input - every
       // player's samples weighted equally in all, so two players who look
       // alike get equal scores (unsure) rather than the one with more
@@ -4711,91 +4920,150 @@
       var E = D + 1, lambda = m.lambda, perPlayer = new Float64Array(P), weight = new Float64Array(n);
       for (i = 0; i < n; i++) perPlayer[y[i]]++;
       for (i = 0; i < n; i++) weight[i] = n / (P * perPlayer[y[i]]);
-      function addOuter(A, B, s, sign) {
-        var off = s * D, ws = sign * weight[s];
-        for (var a = 0; a < E; a++) {
-          var xa = a < D ? X[off + a] : 1;
-          if (!xa) continue;
-          var row = a * E;
-          for (var b = a; b < E; b++) A[row + b] += ws * xa * (b < D ? X[off + b] : 1);
-          B[a * P + y[s]] += ws * xa;
-        }
-      }
-      function solve(A0, B0) {
-        // Cholesky on the symmetric (upper-filled) A + lambda I, then two triangular solves per column
-        var A = new Float64Array(E * E), a, b, c, s;
-        for (a = 0; a < E; a++) for (b = a; b < E; b++) { A[a * E + b] = A[b * E + a] = A0[a * E + b]; }
-        for (a = 0; a < E; a++) A[a * E + a] += lambda;
-        for (a = 0; a < E; a++) {
-          for (b = 0; b <= a; b++) {
-            s = A[a * E + b];
-            for (c = 0; c < b; c++) s -= A[a * E + c] * A[b * E + c];
-            A[a * E + b] = a === b ? Math.sqrt(Math.max(s, 1e-12)) : s / A[b * E + b];
+      var W = null, fitWithout = null, scoreWith = null;
+      if (P >= 2 && n < E) {
+        // Fewer samples than numbers (two models side by side: 896): the
+        // same regression solved the other way round - an n x n system on
+        // the samples' dot products instead of E x E, same answer.
+        var root = new Float64Array(n);
+        for (i = 0; i < n; i++) root[i] = Math.sqrt(weight[i]);
+        var dualSolve = function (idx) {
+          var a, b, c, s, k = idx.length, A = new Float64Array(k * k), alpha = new Float64Array(k * P), z = new Float64Array(k);
+          for (a = 0; a < k; a++) {
+            for (b = 0; b <= a; b++) A[a * k + b] = root[idx[a]] * root[idx[b]] * (dot[idx[a] * n + idx[b]] + 1);
+            A[a * k + a] += lambda;
+          }
+          for (a = 0; a < k; a++) {
+            for (b = 0; b <= a; b++) {
+              s = A[a * k + b];
+              for (c = 0; c < b; c++) s -= A[a * k + c] * A[b * k + c];
+              A[a * k + b] = a === b ? Math.sqrt(Math.max(s, 1e-12)) : s / A[b * k + b];
+            }
+          }
+          for (var col = 0; col < P; col++) {
+            for (a = 0; a < k; a++) { s = y[idx[a]] === col ? root[idx[a]] : 0; for (c = 0; c < a; c++) s -= A[a * k + c] * z[c]; z[a] = s / A[a * k + a]; }
+            for (a = k - 1; a >= 0; a--) { s = z[a]; for (c = a + 1; c < k; c++) s -= A[c * k + a] * alpha[c * P + col]; alpha[a * P + col] = s / A[a * k + a]; }
+          }
+          return { idx: idx, alpha: alpha };
+        };
+        scoreWith = function (fit, smp) {
+          var a, out = new Float64Array(P);
+          for (a = 0; a < fit.idx.length; a++) {
+            var kv = (dot[smp * n + fit.idx[a]] + 1) * root[fit.idx[a]];
+            for (var col = 0; col < P; col++) out[col] += kv * fit.alpha[a * P + col];
+          }
+          return out;
+        };
+        var everyone = [];
+        for (i = 0; i < n; i++) everyone.push(i);
+        var full = dualSolve(everyone);
+        W = new Float32Array(P * E);
+        for (a = 0; a < n; a++) {
+          for (var col = 0; col < P; col++) {
+            var cw = root[a] * full.alpha[a * P + col];
+            if (!cw) continue;
+            for (var r = 0; r < D; r++) W[col * E + r] += cw * X[a * D + r];
+            W[col * E + D] += cw;
           }
         }
-        var W = new Float32Array(P * E), z = new Float64Array(E);
-        for (var col = 0; col < P; col++) {
-          for (a = 0; a < E; a++) { s = B0[a * P + col]; for (c = 0; c < a; c++) s -= A[a * E + c] * z[c]; z[a] = s / A[a * E + a]; }
-          for (a = E - 1; a >= 0; a--) { s = z[a]; for (c = a + 1; c < E; c++) s -= A[c * E + a] * W[col * E + c]; W[col * E + a] = s / A[a * E + a]; }
-        }
-        return W;
+        fitWithout = function (members) {
+          var i, out = new Uint8Array(n), keep = [];
+          members.forEach(function (smp) { out[smp] = 1; });
+          for (i = 0; i < n; i++) if (!out[i]) keep.push(i);
+          return dualSolve(keep);
+        };
+      } else if (P >= 2) {
+        var addOuter = function (A, B, smp, sign) {
+          var off = smp * D, ws = sign * weight[smp];
+          for (var u = 0; u < E; u++) {
+            var xa = u < D ? X[off + u] : 1;
+            if (!xa) continue;
+            var row = u * E;
+            for (var v = u; v < E; v++) A[row + v] += ws * xa * (v < D ? X[off + v] : 1);
+            B[u * P + y[smp]] += ws * xa;
+          }
+        };
+        var solve = function (A0, B0) {
+          // Cholesky on the symmetric (upper-filled) A + lambda I, then two triangular solves per column
+          var a, b, c, s, A = new Float64Array(E * E), Wout = new Float32Array(P * E), z = new Float64Array(E);
+          for (a = 0; a < E; a++) for (b = a; b < E; b++) { A[a * E + b] = A[b * E + a] = A0[a * E + b]; }
+          for (a = 0; a < E; a++) A[a * E + a] += lambda;
+          for (a = 0; a < E; a++) {
+            for (b = 0; b <= a; b++) {
+              s = A[a * E + b];
+              for (c = 0; c < b; c++) s -= A[a * E + c] * A[b * E + c];
+              A[a * E + b] = a === b ? Math.sqrt(Math.max(s, 1e-12)) : s / A[b * E + b];
+            }
+          }
+          for (var col = 0; col < P; col++) {
+            for (a = 0; a < E; a++) { s = B0[a * P + col]; for (c = 0; c < a; c++) s -= A[a * E + c] * z[c]; z[a] = s / A[a * E + a]; }
+            for (a = E - 1; a >= 0; a--) { s = z[a]; for (c = a + 1; c < E; c++) s -= A[c * E + a] * Wout[col * E + c]; Wout[col * E + a] = s / A[a * E + a]; }
+          }
+          return Wout;
+        };
+        scoreWith = function (Wf, smp) {
+          var out = new Float64Array(P), off = smp * D;
+          for (var col = 0; col < P; col++) { var v = Wf[col * E + D]; for (var r = 0; r < D; r++) v += Wf[col * E + r] * X[off + r]; out[col] = v; }
+          return out;
+        };
+        var A = new Float64Array(E * E), B = new Float64Array(E * P);
+        for (i = 0; i < n; i++) addOuter(A, B, i, 1);
+        W = solve(A, B);
+        fitWithout = function (members) {
+          var Af = A.slice(), Bf = B.slice();
+          members.forEach(function (smp) { addOuter(Af, Bf, smp, -1); });
+          return solve(Af, Bf);
+        };
       }
-      function score(W, s) {
-        var out = new Float64Array(P), off = s * D;
-        for (var q = 0; q < P; q++) { var v = W[q * E + D]; for (var r = 0; r < D; r++) v += W[q * E + r] * X[off + r]; out[q] = v; }
-        return out;
-      }
-      var A = new Float64Array(E * E), B = new Float64Array(E * P);
-      for (i = 0; i < n; i++) addOuter(A, B, i, 1);
-      var W = P >= 2 ? solve(A, B) : null;
       // 5 rounds, samples from the same moment in the same round
       var order = []; for (i = 0; i < n; i++) order.push(i);
-      order.sort(function (a, b) { return (t[a] || 0) - (t[b] || 0); });
+      order.sort(function (u, v) { return (t[u] || 0) - (t[v] || 0); });
       var fold = new Int32Array(n), group = -1, lastT = -Infinity;
-      order.forEach(function (s) { if (!t[s] || t[s] - lastT > m.neighbourMs) group++; lastT = t[s] || lastT; fold[s] = group % 5; });
+      order.forEach(function (smp) { if (!t[smp] || t[smp] - lastT > m.neighbourMs) group++; lastT = t[smp] || lastT; fold[smp] = group % 5; });
       var outcomes = new Array(n);
       for (var f = 0; f < 5; f++) {
         var members = []; for (i = 0; i < n; i++) if (fold[i] === f) members.push(i);
         if (!members.length) continue;
-        var Wf = null;
-        if (P >= 2) {
-          var Af = A.slice(), Bf = B.slice();
-          members.forEach(function (s) { addOuter(Af, Bf, s, -1); });
-          Wf = solve(Af, Bf);
-        }
-        members.forEach(function (s) {
-          var own = near[s * P + y[s]];
-          if (own === Infinity) { outcomes[s] = null; return; } // nothing else of theirs to test against
-          var pred = y[s], margin = Infinity, runnerUp = -1;
-          if (Wf) {
-            var sc = score(Wf, s), b1 = -1, b2 = -1;
+        var fit = fitWithout ? fitWithout(members) : null;
+        members.forEach(function (smp) {
+          var own = near[smp * P + y[smp]];
+          if (own === Infinity) { outcomes[smp] = null; return; } // nothing else of theirs to test against
+          var pred = y[smp], margin = Infinity, runnerUp = -1;
+          if (fit) {
+            var sc = scoreWith(fit, smp), b1 = -1, b2 = -1;
             for (p = 0; p < P; p++) { if (b1 < 0 || sc[p] > sc[b1]) { b2 = b1; b1 = p; } else if (b2 < 0 || sc[p] > sc[b2]) b2 = p; }
             pred = b1; margin = sc[b1] - sc[b2]; runnerUp = b2;
           }
-          var dPred = near[s * P + pred];
+          var dPred = near[smp * P + pred];
           var confident = margin >= m.margin && dPred <= thr;
-          outcomes[s] = { pred: pred, runnerUp: runnerUp, result: confident ? (pred === y[s] ? "right" : "wrong") : "unsure", dRunnerUp: runnerUp >= 0 ? near[s * P + runnerUp] : Infinity };
+          outcomes[smp] = { pred: pred, runnerUp: runnerUp, result: confident ? (pred === y[smp] ? "right" : "wrong") : "unsure", dRunnerUp: runnerUp >= 0 ? near[smp * P + runnerUp] : Infinity };
         });
       }
-      self.postMessage({ run: m.run, thr: thr, W: W, outcomes: outcomes });
+      self.postMessage({ run: m.run, job: m.job, thr: thr, W: W, outcomes: outcomes });
     };
   }
+  // One run of the worker per combination of the models that any samples
+  // have numbers for - one combination at a time, and never a second run
+  // queued behind a first (a press every second would otherwise stack them
+  // up): a change meanwhile just runs it again once this one's done.
   function startModelCheck() {
-    var run = ++modelCheckRun;
-    var keys = [], names = [], rows = [], labels = [], times = [], descriptors = [];
-    Object.keys(enrollments).forEach(function (key) {
-      var entry = enrollments[key], info = alignedInfo(entry), picked = [];
-      (entry.descriptors || []).forEach(function (d, i) { var e = sampleEmbedding(info[i]); if (e) picked.push({ e: e, t: info[i].at || 0, d: d }); });
-      picked = picked.slice(-MODEL_CHECK_MAX_PER_PLAYER);
-      if (!picked.length) return;
-      var p = keys.length;
-      keys.push(key);
-      names.push(entry.displayName || key);
-      picked.forEach(function (s) { rows.push(s.e); labels.push(p); times.push(s.t); descriptors.push(s.d); });
+    if (modelCheckBusy) { modelCheckAgain = true; return; }
+    var run = ++modelCheckRun, jobs = [];
+    modelSubsets(APPEARANCE_MODELS.map(function (m) { return m.id; })).forEach(function (ids) {
+      var job = { ids: ids, keys: [], names: [], rows: [], labels: [], times: [], descriptors: [] };
+      Object.keys(enrollments).forEach(function (key) {
+        var entry = enrollments[key], info = alignedInfo(entry), picked = [];
+        (entry.descriptors || []).forEach(function (d, i) { var e = sampleComboVector(info[i], ids); if (e) picked.push({ e: e, t: info[i].at || 0, d: d }); });
+        picked = picked.slice(-MODEL_CHECK_MAX_PER_PLAYER);
+        if (!picked.length) return;
+        var p = job.keys.length;
+        job.keys.push(key);
+        job.names.push(entry.displayName || key);
+        picked.forEach(function (s) { job.rows.push(s.e); job.labels.push(p); job.times.push(s.t); job.descriptors.push(s.d); });
+      });
+      if (job.rows.length) jobs.push(job);
     });
-    if (!rows.length) { classifier = null; modelCheck = {}; return; }
-    var D = rows[0].length, n = rows.length, X = new Float32Array(n * D);
-    rows.forEach(function (r, i) { X.set(r, i * D); });
+    if (!jobs.length) { modelChecks = {}; return; }
     if (!modelCheckWorker) {
       try {
         modelCheckWorker = new Worker(URL.createObjectURL(new Blob(["(" + modelCheckWorkerSource.toString() + ")()"], { type: "text/javascript" })));
@@ -4804,32 +5072,59 @@
         return;
       }
     }
-    modelCheckWorker.onmessage = function (ev) {
-      var r = ev.data;
-      if (r.run !== modelCheckRun) return; // the samples changed again meanwhile
-      modelThreshold = r.thr;
-      classifier = r.W ? { keys: keys, names: names, W: r.W, D: D } : null;
-      var check = {};
-      keys.forEach(function (key) { check[key] = { tested: 0, right: 0, mixups: {}, doubtful: [] }; });
-      r.outcomes.forEach(function (o, i) {
-        if (!o) return;
-        var c = check[keys[labels[i]]];
-        c.tested++;
-        if (o.result === "right") c.right++;
-        else if (o.result === "wrong") c.doubtful.push({ descriptor: descriptors[i], like: names[o.pred] });
-        else {
-          var other = o.pred !== labels[i] ? o.pred : o.runnerUp;
-          if (other >= 0 && (o.pred !== labels[i] || o.dRunnerUp <= r.thr)) c.mixups[names[other]] = (c.mixups[names[other]] || 0) + 1;
-        }
-      });
-      modelCheck = check;
+    modelCheckBusy = true;
+    var results = {}, left = jobs.length;
+    var done = function () {
+      modelCheckBusy = false;
+      modelChecks = results;
       forgetLastMatch();
       finishEnrollCheck();
+      if (modelCheckAgain) { modelCheckAgain = false; startModelCheck(); }
     };
-    modelCheckWorker.postMessage({
-      run: run, n: n, D: D, X: X, y: Int32Array.from(labels), t: Float64Array.from(times), P: keys.length,
-      neighbourMs: SELF_CHECK_NEIGHBOUR_MS, margin: CLASSIFIER_MARGIN, lambda: 0.5, defaultThreshold: DEFAULT_MODEL_THRESHOLD
-    }, [X.buffer]);
+    modelCheckWorker.onmessage = function (ev) {
+      var r = ev.data, job = jobs[r.job];
+      if (r.run !== run || !job) return;
+      results[comboKey(job.ids)] = modelCheckResult(job, r);
+      if (!--left) done();
+    };
+    modelCheckWorker.onerror = function (e) {
+      console.warn("[PMC appearance] self-check worker failed:", e.message || e);
+      modelCheckWorker = null;
+      done();
+    };
+    jobs.forEach(function (job, index) {
+      var D = job.rows[0].length, n = job.rows.length, X = new Float32Array(n * D);
+      job.rows.forEach(function (row, i) { X.set(row, i * D); });
+      job.rows = null;
+      job.D = D;
+      // DINOv2's distances aren't OSNet's - its threshold gets more room
+      var withDino = job.ids.indexOf("dino") !== -1;
+      modelCheckWorker.postMessage({
+        run: run, job: index, n: n, D: D, X: X, y: Int32Array.from(job.labels), t: Float64Array.from(job.times), P: job.keys.length,
+        neighbourMs: SELF_CHECK_NEIGHBOUR_MS, margin: CLASSIFIER_MARGIN, lambda: 0.5, defaultThreshold: DEFAULT_MODEL_THRESHOLD,
+        minThreshold: withDino ? 0.05 : 0.15, maxThreshold: withDino ? 0.8 : 0.55
+      }, [X.buffer]);
+    });
+  }
+  function modelCheckResult(job, r) {
+    var check = {}, tested = 0, right = 0;
+    job.keys.forEach(function (key) { check[key] = { tested: 0, right: 0, mixups: {}, doubtful: [] }; });
+    r.outcomes.forEach(function (o, i) {
+      if (!o) return;
+      var c = check[job.keys[job.labels[i]]];
+      c.tested++;
+      tested++;
+      if (o.result === "right") { c.right++; right++; }
+      else if (o.result === "wrong") c.doubtful.push({ descriptor: job.descriptors[i], like: job.names[o.pred] });
+      else {
+        var other = o.pred !== job.labels[i] ? o.pred : o.runnerUp;
+        if (other >= 0 && (o.pred !== job.labels[i] || o.dRunnerUp <= r.thr)) c.mixups[job.names[other]] = (c.mixups[job.names[other]] || 0) + 1;
+      }
+    });
+    return {
+      ids: job.ids, thr: r.thr, check: check, tested: tested, right: right,
+      classifier: r.W ? { keys: job.keys, names: job.names, W: r.W, D: job.D } : null
+    };
   }
 
   // ---- Table calibration (pixel <-> real-inches homography) ----
@@ -5554,10 +5849,12 @@
 
   function commitEnrollSample(p, frame) {
     frame.used = true;
-    // The appearance model's numbers for exactly this frame (it may not
-    // have looked at this one itself yet) - a few milliseconds.
-    if (appearanceModel && frame.crop) {
-      appearanceModel.embed(frame.crop).then(function (emb) { finishEnrollSample(p, frame, emb); }, function () { finishEnrollSample(p, frame, frame.emb); });
+    // Every loaded appearance model's numbers for exactly this frame (they
+    // may not have looked at this one themselves yet) - switched on or not,
+    // so the self-check can compare them - a few milliseconds each.
+    var ids = readyModelIds();
+    if (ids.length && frame.crop) {
+      embedPicture(frame.crop, ids).then(function (embs) { finishEnrollSample(p, frame, Object.keys(embs).length ? embs : frame.emb); });
     } else {
       finishEnrollSample(p, frame, frame.emb);
     }
@@ -5565,7 +5862,7 @@
   function finishEnrollSample(p, frame, emb) {
     var key = normalizeNameKey(p.name);
     var info = { kind: p.kind, at: p.at, bend: Math.round(frame.bend), torso: Math.round(frame.torso), leg: frame.leg === null ? null : Math.round(frame.leg), pos: frame.pos };
-    if (emb) info.emb = encodeEmbedding(emb);
+    addEmbeddingsToInfo(info, emb);
     lastEnrollAdd = { name: p.name, key: key, descriptor: frame.descriptor };
     send({ type: "enroll-add", player_name: p.name, descriptor: frame.descriptor, info: info });
     var after = enrollments[key];
@@ -5753,28 +6050,36 @@
     });
     return result;
   }
-  // Both methods' results in: pick the one recognition uses (see
-  // activeRecognitionMethod), and show its results.
+  function checkTotals(check) {
+    var t = 0, r = 0;
+    Object.keys(check || {}).forEach(function (k) { t += check[k].tested; r += check[k].right; });
+    return { tested: t, right: r, rate: t ? r / t : 0 };
+  }
+  // All the results in (the colours', and every combination of the
+  // models'): pick the one recognition uses (see activeRecognitionMethod),
+  // and show its results - also called when a model is switched on or off,
+  // or finishes loading, since every combination's results are already in.
+  var lastRecognitionChoice = null;
   function finishEnrollCheck() {
-    var totals = function (check) {
-      var t = 0, r = 0;
-      Object.keys(check).forEach(function (k) { t += check[k].tested; r += check[k].right; });
-      return { tested: t, rate: t ? r / t : 0 };
-    };
-    var c = totals(colourCheck), m = totals(modelCheck);
-    var beats = appearanceModelState === "ready" && m.tested >= 10 && (m.rate > c.rate + 0.02 || (m.rate >= 0.95 && m.rate >= c.rate));
+    var combo = activeModelCombo(), modelResult = activeModelResult();
+    var modelCheck = modelResult ? modelResult.check : {};
+    var c = checkTotals(colourCheck), m = checkTotals(modelCheck);
+    var beats = combo.length > 0 && m.tested >= 10 && (m.rate > c.rate + 0.02 || (m.rate >= 0.95 && m.rate >= c.rate));
     if (beats !== modelBeatsColours) {
       modelBeatsColours = beats;
       forgetLastMatch();
-      logActivity("Self-check: appearance model " + Math.round(m.rate * 100) + "%, colours " + Math.round(c.rate * 100) + "%" +
-        (settings.recognitionMethod === "auto" ? " - recognizing by " + (beats ? "the appearance model" : "colours") : ""));
     }
     var method = activeRecognitionMethod();
+    var choice = method === "model" ? comboLabel(combo) : "colours";
+    if (choice !== lastRecognitionChoice && (lastRecognitionChoice !== null || choice !== "colours")) {
+      logActivity("Self-check: " + (combo.length ? comboLabel(combo) + " " + Math.round(m.rate * 100) + "%, " : "") + "colours " + Math.round(c.rate * 100) + "% - recognizing by " + choice);
+    }
+    lastRecognitionChoice = choice;
     var active = method === "model" ? modelCheck : colourCheck;
     var results = {};
     Object.keys(enrollments).forEach(function (key) {
       var a = active[key] || { tested: 0, right: 0, mixups: {}, doubtful: [] };
-      results[key] = { tested: a.tested, right: a.right, mixups: a.mixups, doubtful: a.doubtful.slice(), method: method, colour: colourCheck[key] || null, model: modelCheck[key] || null };
+      results[key] = { tested: a.tested, right: a.right, mixups: a.mixups, doubtful: a.doubtful.slice(), method: method, colour: colourCheck[key] || null, model: modelCheck[key] || null, modelLabel: combo.length ? comboLabel(combo) : null };
     });
     enrollCheck = results;
     var pairs = lookAlikePairs();
@@ -5784,6 +6089,48 @@
     });
     renderPlayerList();
     renderLookAlikes(pairs.names);
+    renderModelBox();
+  }
+  // The Enroll tab's models box: how the colours and each combination of
+  // the models do on tonight's samples, what recognition goes by, and
+  // anything a model is waiting for.
+  function renderModelBox() {
+    if (isViewer) return; // (the camera's copy arrives with every frame)
+    // (a score only once there are 10 tests behind it)
+    var score = function (label, t) { if (t.tested >= 10) parts.push(label + " " + Math.round(t.rate * 100) + "%"); };
+    var parts = [];
+    score("colours", checkTotals(colourCheck));
+    modelSubsets(APPEARANCE_MODELS.map(function (m) { return m.id; })).sort(function (a, b) { return a.length - b.length; }).forEach(function (ids) {
+      var r = modelChecks[comboKey(ids)];
+      if (r) score(comboLabel(ids), checkTotals(r.check));
+    });
+    var lines = [parts.length ? "Self-check: " + parts.join(", ") + "." : "Self-check: scores once there are about 10 samples in all."];
+    var combo = activeModelCombo(), method = activeRecognitionMethod();
+    if (method === "model") {
+      lines.push("Recognizing by " + comboLabel(combo) + (settings.recognitionMethod === "model" ? " (Settings)." : "."));
+    } else if (settings.recognitionMethod === "colour") {
+      lines.push("Recognizing by colours (Settings).");
+    } else if (combo.length) {
+      lines.push("Recognizing by colours - " + comboLabel(combo) + (checkTotals(activeModelResult() && activeModelResult().check).tested >= 10 ? " doesn't do better yet." : " needs more samples first."));
+    } else {
+      lines.push("Recognizing by colours" + (liveModelIds().length ? "." : " - no model switched on and loaded."));
+    }
+    var notes = [];
+    APPEARANCE_MODELS.forEach(function (m) {
+      var s = appearanceModels[m.id];
+      if (!settings[m.setting]) return;
+      if (s.state === "loading") notes.push(m.label + " loading...");
+      else if (s.state === "failed") notes.push(m.label + " couldn't load.");
+      else if (s.state === "ready") {
+        var missing = playersWithoutModel(m);
+        if (missing.length && combo.indexOf(m.id) === -1) notes.push(m.label + " waits for a sample of " + missing.join(", ") + ".");
+        else if (s.ms !== null) notes.push(m.label + " " + Math.round(s.ms) + " ms a look.");
+      }
+    });
+    if (notes.length) lines.push(notes.join(" "));
+    modelScoresEl.textContent = lines.join("\n");
+    useOsnetToggle.checked = settings.useOsnet;
+    useDinoToggle.checked = settings.useDino;
   }
   // Players the self-check mixes up often (either way round): names for
   // the warning, and keys "a\nb" (both orders) to look pairs up by.
@@ -5842,7 +6189,7 @@
     } else {
       var m = matchAppearance(analysis, poseForAnalysis(analysis));
       var doing = shooting ? "bent over" : "at the table";
-      var how = m ? (m.method === "model" ? "appearance model, " : "colours, ") : "";
+      var how = m ? (m.method === "model" ? comboLabel(activeModelCombo()) + ", " : "colours, ") : "";
       if (isConfidentMatch(m)) {
         key = normalizeNameKey(m.name);
         text = "Camera sees " + m.name + ", " + doing + " (" + how + "distance " + m.distance.toFixed(2) + ").";
@@ -6193,7 +6540,7 @@
     if (settings.voiceStatusEnabled && !isEmbedded) speak(name + " shooting.");
     if (descriptor && matchDistance <= settings.matchThreshold * 0.7 && !hasPlentyPressedSamples(name)) {
       var info = { kind: "recognized", at: now, pose: descriptorPose || null };
-      if (emb) info.emb = encodeEmbedding(emb);
+      addEmbeddingsToInfo(info, emb);
       send({ type: "enroll-add", player_name: name, descriptor: descriptor, info: info });
       notifyEnrollmentUpdated(name);
     }
@@ -6233,7 +6580,7 @@
     });
     if (!isFirstSample && hasPlentyPressedSamples(name)) return;
     var info = { kind: "scored", at: Date.now(), pose: "upright" }; // (the candidate's formed while upright)
-    if (candidate.emb) info.emb = encodeEmbedding(candidate.emb);
+    addEmbeddingsToInfo(info, candidate.emb);
     if (isFirstSample) {
       send({ type: "enroll-save", player_name: name, descriptors: [candidate.descriptor], info: [info] });
     } else {
