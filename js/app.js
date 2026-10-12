@@ -4410,7 +4410,7 @@
     plusBtn.type = "button";
     plusBtn.className = "btn-ball plus";
     plusBtn.textContent = "+";
-    plusBtn.setAttribute("aria-label", "Add point for " + player.name);
+    plusBtn.setAttribute("aria-label", state.currentGame.unit === "points" ? "Add one point" : "Add point for " + player.name);
     plusBtn.disabled = disabled || networkBlocked;
     plusBtn.addEventListener("click", function () {
       // A direct tap on a card's own +/- (not the keypad) now also
@@ -4436,6 +4436,10 @@
       if (!quickCounterMode) {
         if (state.currentGame.unit === "rack") {
           if (!wasSelected) speakKeypadText(T("keypad.speakWonGameDirectTap", { name: shortDisplayNameForPlayer(player) }));
+        } else if (state.currentGame.unit === "points") {
+          speakKeypadText(T("keypad.speakAddOnePoint"));
+          speakKeypadLeadChange(player, wasLeading, willLead);
+          speakKeypadOnHillChange(player, wasOnHill, willBeOnHill);
         } else {
           var key = wasSelected ? "keypad.speakPointDeltaSelected" : "keypad.speakPointDeltaUnselected";
           speakKeypadText(T(key, { name: shortDisplayNameForPlayer(player), direction: T("keypad.directionPlus"), count: 1 }));
@@ -28139,7 +28143,7 @@
     plusBtn.type = "button";
     plusBtn.className = "btn-ball plus";
     plusBtn.textContent = "+";
-    plusBtn.setAttribute("aria-label", "Add point for " + name);
+    plusBtn.setAttribute("aria-label", unit === "points" ? "Add one point" : "Add point for " + name);
     plusBtn.disabled = networkBlocked;
     plusBtn.addEventListener("click", function () {
       requestTournamentAdjustScore(active, side, 1);

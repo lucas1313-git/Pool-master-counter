@@ -1313,6 +1313,7 @@
   "keypad.directionMinus": "minus",
   "keypad.speakPointDeltaSelected": "{{direction}} {{count}} point",
   "keypad.speakPointDeltaUnselected": "{{name}} {{direction}} {{count}} point",
+  "keypad.speakAddOnePoint": "Add one point",
   "keypad.speakWonGameDirectTap": "{{name}} won the game",
   "players.dragToReorder": "Drag to reorder {{name}}",
   "keypad.voiceLabel": "Voice",
