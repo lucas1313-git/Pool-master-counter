@@ -16266,27 +16266,33 @@
     }
   }
 
+  // Reuses the same full-backup payload as exportAllData, minus contacts
+  // (email/phone), which have no business leaving the device in a file
+  // meant to be handed to whoever's on the other end of Mail/Messages/
+  // AirDrop. Sending an empty object rather than omitting the key
+  // entirely still round-trips cleanly through mergeContactsData if this
+  // file is ever imported elsewhere: local contact info always wins on a
+  // name conflict there, and an empty import adds nothing.
+  //
+  // Deliberately synchronous (built from data already in memory) - see
+  // shareReportWithAttachments below for why that matters enough to pull
+  // this out of collectDayReportAttachments on its own.
+  function buildBackupAttachmentFile() {
+    var payload = buildBackupPayload();
+    payload.contacts = {};
+    return new File([JSON.stringify(payload, null, 2)], defaultBackupFilename(), { type: "application/json" });
+  }
+
   // Builds whichever File attachments the two "Attach ... when sharing"
-  // checkboxes call for, in parallel - the backup JSON is synchronous
-  // (built from data already in memory), the colorful report PNG isn't
-  // (a canvas draw + toBlob), so this always returns a Promise even
-  // though the common case (only the backup checkbox, or neither) never
-  // actually waits on anything.
+  // checkboxes call for, in parallel - the backup JSON is synchronous,
+  // the colorful report PNG isn't (a canvas draw + toBlob), so this
+  // always returns a Promise even though the common case (only the
+  // backup checkbox, or neither) never actually waits on anything.
   function collectDayReportAttachments() {
     var files = [];
     var tasks = [];
     if (dayReportAttachBackupCheckbox.checked) {
-      // Reuses the same full-backup payload as exportAllData, minus
-      // contacts (email/phone), which have no business leaving the
-      // device in a file meant to be handed to whoever's on the other
-      // end of Mail/Messages/AirDrop. Sending an empty object rather
-      // than omitting the key entirely still round-trips cleanly
-      // through mergeContactsData if this file is ever imported
-      // elsewhere: local contact info always wins on a name conflict
-      // there, and an empty import adds nothing.
-      var payload = buildBackupPayload();
-      payload.contacts = {};
-      files.push(new File([JSON.stringify(payload, null, 2)], defaultBackupFilename(), { type: "application/json" }));
+      files.push(buildBackupAttachmentFile());
     }
     if (dayReportAttachColorfulCheckbox.checked) {
       tasks.push(
@@ -16336,36 +16342,55 @@
   // Callers pass their own normal fallback (open the mailto:/sms:
   // link, or a text-only share) so a broken share sheet degrades back
   // to "everything except the actual attachment" instead of "nothing".
-  function shareReportWithAttachments(text, onFallback) {
-    collectDayReportAttachments().then(function (files) {
-      if (!files.length) {
-        if (onFallback) onFallback();
-        return;
-      }
+  function shareFilesOrFallback(files, text, onFallback) {
+    if (!files.length) {
+      if (onFallback) onFallback();
+      return;
+    }
 
-      function fallback() {
-        files.forEach(downloadFileObject);
-        showToast(T("toast.shareFallback"));
-        if (onFallback) onFallback();
-      }
+    function fallback() {
+      files.forEach(downloadFileObject);
+      showToast(T("toast.shareFallback"));
+      if (onFallback) onFallback();
+    }
 
-      // canShare() saying yes doesn't guarantee share() actually works -
-      // some desktop Chrome/macOS combos report file-sharing support but
-      // then reject every call with NotAllowedError (canShare with a
-      // files array is still the correct feature test up front; share()
-      // alone doesn't imply file support).
-      if (navigator.canShare && navigator.canShare({ files: files })) {
-        navigator.share({
-          files: files,
-          title: "Pool Master Counter — Day Report",
-          text: text
-        }).catch(function (err) {
-          if (err && err.name === "AbortError") return;
-          fallback();
-        });
-      } else {
+    // canShare() saying yes doesn't guarantee share() actually works -
+    // some desktop Chrome/macOS combos report file-sharing support but
+    // then reject every call with NotAllowedError (canShare with a
+    // files array is still the correct feature test up front; share()
+    // alone doesn't imply file support).
+    if (navigator.canShare && navigator.canShare({ files: files })) {
+      navigator.share({
+        files: files,
+        title: "Pool Master Counter — Day Report",
+        text: text
+      }).catch(function (err) {
+        if (err && err.name === "AbortError") return;
         fallback();
-      }
+      });
+    } else {
+      fallback();
+    }
+  }
+
+  function shareReportWithAttachments(text, onFallback) {
+    // Only the backup checkbox is on: skip collectDayReportAttachments'
+    // Promise entirely and call navigator.share() in this exact same
+    // tick as the click. iOS Safari ties share() to the triggering user
+    // gesture the same way it ties speechSynthesis.speak() to one (see
+    // speakCameraStatus's comment) - even a single microtask hop through
+    // a resolved Promise.then() is enough to lose that there, which is
+    // why Share Report with only "Attach full backup" checked did
+    // nothing on iPad: the backup JSON never actually needed the async
+    // path (collectDayReportAttachments' own comment already noted this
+    // case "never actually waits on anything") - it was just routed
+    // through one anyway.
+    if (dayReportAttachBackupCheckbox.checked && !dayReportAttachColorfulCheckbox.checked) {
+      shareFilesOrFallback([buildBackupAttachmentFile()], text, onFallback);
+      return;
+    }
+    collectDayReportAttachments().then(function (files) {
+      shareFilesOrFallback(files, text, onFallback);
     });
   }
 
