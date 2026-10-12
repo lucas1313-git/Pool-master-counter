@@ -8197,9 +8197,9 @@
   // builders, all sharing the same computeDayReportData source.
   // Single source of truth for the colorful report's content, consumed by
   // both buildDayReportColorfulHtml (the viewable page) and
-  // buildDayReportImageBlob (the native PNG used when sharing straight
-  // from the main app) - one pass over computeDayReportData, plain data
-  // only, no HTML/canvas concerns here.
+  // buildDayReportImageFileSync (the native PNG used when sharing
+  // straight from the main app) - one pass over computeDayReportData,
+  // plain data only, no HTML/canvas concerns here.
   function computeReportImageData(dateStr, exactDate) {
     var data = computeDayReportData(dateStr, exactDate);
     var tokens = readReportThemeTokens();
@@ -8680,25 +8680,26 @@
     return canvas;
   }
 
-  // Promise<Blob|null> - resolves null (rather than rejecting) on any
-  // drawing failure, so a caller building a share-attachment list can
-  // just skip a null entry instead of needing its own try/catch.
-  function buildDayReportImageBlob(dateStr) {
-    return buildDayReportImageBlobFromData(computeReportImageData(dateStr));
-  }
-
-  function buildDayReportImageBlobFromData(reportImageData) {
-    return new Promise(function (resolve) {
-      try {
-        var canvas = buildReportCanvasFromData(reportImageData);
-        canvas.toBlob(function (blob) {
-          resolve(blob || null);
-        }, "image/png");
-      } catch (e) {
-        console.warn("Could not build colorful report image.", e);
-        resolve(null);
-      }
-    });
+  // The share path's own image builder (see shareReportWithAttachments) -
+  // canvas.toBlob() is callback-based, which is a real wait (not just a
+  // microtask) and enough to lose iOS Safari's requirement that
+  // navigator.share() fire in the same tick as the triggering tap. The
+  // canvas itself is already pure synchronous 2D drawing (no loaded
+  // images), so only its encoding step needed to become synchronous too:
+  // toDataURL() returns immediately, and this decodes that base64 result
+  // into a File by hand instead of waiting on toBlob()'s callback.
+  function buildDayReportImageFileSync(dateStr) {
+    try {
+      var canvas = buildReportCanvasFromData(computeReportImageData(dateStr));
+      var dataUrl = canvas.toDataURL("image/png");
+      var binary = atob(dataUrl.slice(dataUrl.indexOf(",") + 1));
+      var bytes = new Uint8Array(binary.length);
+      for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return new File([bytes], "pool-master-counter-report-" + dateStr + ".png", { type: "image/png" });
+    } catch (e) {
+      console.warn("Could not build colorful report image.", e);
+      return null;
+    }
   }
 
   // The report is a fully separate document once opened (its own tab, its
@@ -8924,17 +8925,21 @@
       "document.body.appendChild(a);a.click();",
       "setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},1000);",
       "}",
+      // Deliberately synchronous all the way through, including the PNG
+      // encode - iOS Safari requires navigator.share() to fire in the
+      // same tick as the triggering tap on #shareReportBtn, and even a
+      // callback-based wait like canvas.toBlob() (let alone the old
+      // setTimeout before it) is enough to lose that. toDataURL() is
+      // synchronous, so this decodes its base64 result into a File by
+      // hand instead.
       "function shareIt(){",
-      'var btn=document.getElementById("shareReportBtn");',
-      "var originalLabel=btn.textContent;",
-      'btn.textContent="⏳ Preparing…";',
-      "btn.disabled=true;",
-      "setTimeout(function(){",
       "try{",
       "var canvas=renderReportPNG();",
-      "canvas.toBlob(function(blob){",
-      "btn.textContent=originalLabel;btn.disabled=false;",
-      "if(!blob)return;",
+      'var dataUrl=canvas.toDataURL("image/png");',
+      'var binary=atob(dataUrl.slice(dataUrl.indexOf(",")+1));',
+      "var bytes=new Uint8Array(binary.length);",
+      "for(var i=0;i<binary.length;i++){bytes[i]=binary.charCodeAt(i);}",
+      'var blob=new Blob([bytes],{type:"image/png"});',
       'var file=new File([blob],filename,{type:"image/png"});',
       "if(navigator.canShare&&navigator.canShare({files:[file]})){",
       'navigator.share({files:[file],title:document.title}).catch(function(err){',
@@ -8942,9 +8947,7 @@
       "fallbackDownload(blob);",
       "});",
       "}else{fallbackDownload(blob);}",
-      '},"image/png");',
-      "}catch(e){btn.textContent=originalLabel;btn.disabled=false;}",
-      "},10);",
+      "}catch(e){}",
       "}",
       'document.getElementById("shareReportBtn").addEventListener("click",shareIt);',
       "})();",
@@ -16284,26 +16287,21 @@
   }
 
   // Builds whichever File attachments the two "Attach ... when sharing"
-  // checkboxes call for, in parallel - the backup JSON is synchronous,
-  // the colorful report PNG isn't (a canvas draw + toBlob), so this
-  // always returns a Promise even though the common case (only the
-  // backup checkbox, or neither) never actually waits on anything.
+  // checkboxes call for. Both are fully synchronous (see
+  // buildBackupAttachmentFile and buildDayReportImageFileSync) - that's
+  // deliberate, not incidental: see shareReportWithAttachments below for
+  // why staying synchronous all the way to navigator.share() matters on
+  // iOS.
   function collectDayReportAttachments() {
     var files = [];
-    var tasks = [];
     if (dayReportAttachBackupCheckbox.checked) {
       files.push(buildBackupAttachmentFile());
     }
     if (dayReportAttachColorfulCheckbox.checked) {
-      tasks.push(
-        buildDayReportImageBlob(todayDateStr()).then(function (blob) {
-          if (blob) files.push(new File([blob], "pool-master-counter-report-" + todayDateStr() + ".png", { type: "image/png" }));
-        })
-      );
+      var imageFile = buildDayReportImageFileSync(todayDateStr());
+      if (imageFile) files.push(imageFile);
     }
-    return Promise.all(tasks).then(function () {
-      return files;
-    });
+    return files;
   }
 
   function downloadFileObject(file) {
@@ -16373,25 +16371,19 @@
     }
   }
 
+  // Builds every attachment and calls navigator.share() synchronously,
+  // in this exact same tick as the click that led here. iOS Safari ties
+  // share() to the triggering user gesture the same way it ties
+  // speechSynthesis.speak() to one (see speakCameraStatus's comment) -
+  // even a single microtask hop through a resolved Promise.then() is
+  // enough to lose that there. That used to be exactly what happened
+  // whenever either attach checkbox was on (building the backup JSON or
+  // the colorful report PNG was routed through a Promise even though
+  // neither genuinely needs to be async - see buildBackupAttachmentFile
+  // and buildDayReportImageFileSync), and Share/Email/Text Report did
+  // nothing on iPad as a result.
   function shareReportWithAttachments(text, onFallback) {
-    // Only the backup checkbox is on: skip collectDayReportAttachments'
-    // Promise entirely and call navigator.share() in this exact same
-    // tick as the click. iOS Safari ties share() to the triggering user
-    // gesture the same way it ties speechSynthesis.speak() to one (see
-    // speakCameraStatus's comment) - even a single microtask hop through
-    // a resolved Promise.then() is enough to lose that there, which is
-    // why Share Report with only "Attach full backup" checked did
-    // nothing on iPad: the backup JSON never actually needed the async
-    // path (collectDayReportAttachments' own comment already noted this
-    // case "never actually waits on anything") - it was just routed
-    // through one anyway.
-    if (dayReportAttachBackupCheckbox.checked && !dayReportAttachColorfulCheckbox.checked) {
-      shareFilesOrFallback([buildBackupAttachmentFile()], text, onFallback);
-      return;
-    }
-    collectDayReportAttachments().then(function (files) {
-      shareFilesOrFallback(files, text, onFallback);
-    });
+    shareFilesOrFallback(collectDayReportAttachments(), text, onFallback);
   }
 
   // Neither attach checkbox is on: a plain text share of the day report
