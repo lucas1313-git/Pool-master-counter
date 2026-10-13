@@ -519,6 +519,14 @@
   // (though can't fully eliminate, since computeDayReportData always
   // reads "today" regardless of what date string it's given) the case
   // where that hour crosses midnight.
+  //
+  // This only works if the tab/app stays open (and, on iOS, foregrounded
+  // - Safari suspends a backgrounded tab's timers) for that full hour
+  // after the last game, which real usage often doesn't do - closing out
+  // right after a session is the common case. maybeAutoArchiveDayReport
+  // and catchUpReportArchiveForPastDay below don't depend on the app
+  // staying open at all, and are what actually catch that day once it's
+  // missed here.
   var idleReportTimer = null;
   function scheduleIdleReportAutoSave() {
     if (idleReportTimer) clearTimeout(idleReportTimer);
@@ -12921,6 +12929,52 @@
       return entry.dateStr === dateStr;
     });
     return match.length ? match[0] : null;
+  }
+
+  // Auto-save path: archives dateStr's report without requiring the user
+  // to manually view/share a Colorful Report first, and without needing
+  // the app to have stayed open for scheduleIdleReportAutoSave's hour -
+  // computeReportImageData already calls archiveDayReport as a side
+  // effect (see its own comment), so this just has to decide WHEN that's
+  // worth doing. Only archives a day that actually had games ("if there
+  // are no changes in the day, don't make a report" - a day with only
+  // notes and no games isn't skipped forever, since re-checking this
+  // same date later, once a game IS played, archives it then).
+  //
+  // exactDate: same meaning as computeDayReportData/computeReportImageData's
+  // own param - omit it for "today" (matches openDayReportColorful's
+  // rolling 24h window, so a late-night session that crosses midnight
+  // still archives as one day, same as manually viewing/sharing it would
+  // show); pass true for any already-past date, like
+  // catchUpReportArchiveForPastDay does, where only the exact calendar
+  // day makes sense.
+  function maybeAutoArchiveDayReport(dateStr, exactDate) {
+    if (noStatsMode) return;
+    if (!computeDayReportData(dateStr, exactDate).games.length) return;
+    computeReportImageData(dateStr, exactDate);
+  }
+
+  var REPORT_ARCHIVE_LAST_SEEN_DATE_KEY = "poolMasterCounter.reportArchive.lastSeenDate.v1";
+
+  // The closest a dependency-free static page (no server, nothing
+  // running once the tab/app is closed) can get to "make today's report
+  // automatically at day's end": catches up the most recent day that had
+  // games but never got archived - the day scheduleIdleReportAutoSave
+  // was meant to catch but couldn't because the app didn't stay open an
+  // hour past the last game, which is the common case. Checked once on
+  // app open, and then periodically (see its own setInterval below) so a
+  // session left open past midnight catches its own day's rollover too,
+  // not just a fresh launch the next day.
+  function catchUpReportArchiveForPastDay() {
+    var lastSeen = null;
+    try {
+      lastSeen = localStorage.getItem(REPORT_ARCHIVE_LAST_SEEN_DATE_KEY);
+    } catch (e) {}
+    var today = todayDateStr();
+    if (lastSeen && lastSeen !== today) maybeAutoArchiveDayReport(lastSeen, true);
+    try {
+      localStorage.setItem(REPORT_ARCHIVE_LAST_SEEN_DATE_KEY, today);
+    } catch (e) {}
   }
 
   // Importing a backup can bring in a whole finished session from
@@ -31561,6 +31615,21 @@
   wireCollapsiblePanel("history-panel", "btn-toggle-history-panel");
   wireCollapsiblePanel("day-notes-panel", "btn-toggle-day-notes-panel");
   wireCollapsiblePanel("report-archive-panel", "btn-toggle-report-archive-panel");
+  // Opening either panel to check today's report is as good a signal as
+  // actually viewing/sharing the Colorful Report that today is worth
+  // archiving - see maybeAutoArchiveDayReport. Registered after the
+  // toggles above so day-notes-panel/report-archive-panel's "collapsed"
+  // class already reflects the click that's happening.
+  [
+    ["btn-toggle-day-notes-panel", "day-notes-panel"],
+    ["btn-toggle-report-archive-panel", "report-archive-panel"]
+  ].forEach(function (pair) {
+    document.getElementById(pair[0]).addEventListener("click", function () {
+      if (!document.getElementById(pair[1]).classList.contains("collapsed")) {
+        maybeAutoArchiveDayReport(todayDateStr());
+      }
+    });
+  });
   wireCollapsiblePanel("resets-panel", "btn-toggle-resets-panel");
   wireCollapsiblePanel("focus-players-wrap", "btn-toggle-focus-players");
   wireCollapsiblePanel("player-page-synopsis-panel", "btn-toggle-player-page-synopsis-panel");
@@ -32228,6 +32297,12 @@
   // Also re-check periodically so a session left open continuously for
   // 12+ hours still gets the pop-up, not just a fresh app launch.
   setInterval(maybeAutoShowLeaderboard, 5 * 60 * 1000);
+
+  catchUpReportArchiveForPastDay();
+  // Same reasoning as maybeAutoShowLeaderboard above - re-check
+  // periodically so a session left open past midnight archives that
+  // day's report too, not just a day caught on the next fresh launch.
+  setInterval(catchUpReportArchiveForPastDay, 5 * 60 * 1000);
 
   checkPendingWizardReopen();
   checkLoadSettingUrlParam();
