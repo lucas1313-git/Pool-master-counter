@@ -576,7 +576,7 @@
   </section>
 
   <section class="panel" id="enrollPanel" hidden>
-    <h2 class="with-keys-help">Enroll players (today's outfits) <button type="button" class="help-btn help-btn-keys" data-help="keys" aria-label="Number pad and score card keys" title="Number pad and score card keys">?</button></h2>
+    <h2 class="with-keys-help">Enroll players <button type="button" class="help-btn help-btn-keys" data-help="keys" aria-label="Number pad and score card keys" title="Number pad and score card keys">?</button></h2>
     <div class="hint"><strong>Identify</strong>: press while the player is at the table (the only one there, or the one bent over) - the camera learns what they look like. <strong>Shooting</strong>: press while they're down on a shot - it also learns how they shoot, and the scoreboard switches to them. Every press adds a sample; nothing is replaced. Press as often as you like, any time, even mid-game.</div>
     <div class="hint">With a number pad: a player's <strong>number</strong> = seen (Identify), <strong>+</strong> = that player shooting, <strong>-</strong> = take back the last one.</div>
     <div class="hint">The frame round the picture lights <strong>yellow</strong> while a seen sample is taken and <strong>green</strong> for a shooting one, with whose it is - gray otherwise.</div>
@@ -594,9 +594,9 @@
       <div class="model-scores" id="modelScores">Self-check: waiting for samples.</div>
     </div>
     <div id="playerList"><div class="hint">No players yet - add them on the scoreboard.</div></div>
-    <button id="clearAllBtn" class="danger" type="button" style="margin-top:10px">Clear all (new session)</button>
+    <button id="clearAllBtn" class="danger" type="button" style="margin-top:10px">Clear all</button>
     <div class="hint"><strong>Self-check</strong>: the camera tests every sample against the others, as if it had just seen that player - the percentage is how often it named them right. Low? Press more for that player, and remove samples it says look like someone else.</div>
-    <div class="hint">Appearance only matches today's clothes - at the start of a new session, Clear all, then add new samples for everyone.</div>
+    <div class="hint"><strong>A new day</strong> (from 5 a.m.): the camera learns everyone's shirt afresh - shirt colours from earlier days stop counting, and so do the appearance models' earlier samples (they see the shirt too). Everything else carries on: trousers, cap or hair, build, how each player shoots. A press or two of Identify per player teaches it today's shirts at once; otherwise every point confirmed on the keypad does. Clear all only to start over from nothing.</div>
   </section>
 
   <details class="panel" id="settingsPanel">
@@ -709,8 +709,8 @@
         a player's name while they're bent over a shot - every press adds to what
         the camera knows about them, as often as you like, even mid-game - or just
         start playing: scoring a real shot on the tablet teaches the camera too.
-        Either way, appearance only lasts one day's outfit, so this happens fresh
-        each session.
+        Either way, it remembers each player from day to day - only their shirt
+        is learned afresh each new day, the same way.
       </p>
       <div class="wizard-step-actions">
         <button id="wizardGoEnrollBtn" type="button">Enroll Players Now</button>
@@ -934,7 +934,7 @@
     },
     recognitionMethod: {
       title: "Recognize players by",
-      body: "Two ways of telling players apart:\n\nClothing colours - counts the colours of each player's shirt, trousers, sleeves and cap. Quick, but can't tell apart two players in similar colours, and is thrown by lighting changes.\n\nAppearance models - models that learned from a great many pictures (OSNet, DINOv2 - switch each on or off on the Enroll tab) see light vs dark, patterns and logos, and the same person from another angle. A small classifier learns tonight's players from your samples, so more samples keep improving it. With both models on, their numbers are used side by side.\n\nEvery sample keeps all of them, and the Enroll tab's self-check scores the colours, each model and both together. \"Whichever recognizes them better\" uses the models that are switched on once the self-check says they do at least as well (95%+) or clearly better - otherwise colours."
+      body: "Two ways of telling players apart:\n\nClothing colours - counts the colours of each player's shirt, trousers, sleeves and cap. Quick, but can't tell apart two players in similar colours, and is thrown by lighting changes.\n\nAppearance models - models that learned from a great many pictures (OSNet, DINOv2 - switch each on or off on the Enroll tab) see light vs dark, patterns and logos, and the same person from another angle. A small classifier learns tonight's players from your samples, so more samples keep improving it. With both models on, their numbers are used side by side.\n\nEvery sample keeps all of them, and the Enroll tab's self-check scores the colours, each model and both together. \"Whichever recognizes them better\" uses the models that are switched on once the self-check says they do at least as well (95%+) or clearly better - otherwise colours.\n\nA new day (from 5 a.m.) - shirts start over: shirt and sleeve colours are only compared with samples from the same day, and the models (which see the shirt too) use only today's samples. Trousers, cap or hair, build and how each player shoots carry on from earlier days, so the camera still knows everyone while it learns today's shirts."
     },
     emptyRoom: {
       title: "Empty-room snapshot",
@@ -2186,9 +2186,11 @@
       if (seenNowKey === key) row.classList.add("seen-now");
       if (keypadEnrollKey === key) row.classList.add("keypad-selected");
       var shots = count ? shootingSampleCount(entry) : 0;
+      // (today's: the only ones that know today's shirt - see playDayOf)
+      var today = count ? todaySampleCount(entry) : 0;
       var meta = document.createElement("div");
       meta.innerHTML = '<div class="name"><button type="button" class="secondary row-number" id="' + enrollRowId("enrollNum-", name) + '">' + rowNumber + '</button>' + escapeHtml(name) + '</div><div class="meta">' +
-        (count ? count + " sample" + (count === 1 ? "" : "s") + ", " + shots + " shooting" : "Not enrolled yet") + "</div>";
+        (count ? count + " sample" + (count === 1 ? "" : "s") + ", " + shots + " shooting, " + (today ? today + " today" : "none today - today's shirt not seen yet") : "Not enrolled yet") + "</div>";
       var check = count ? enrollCheck[key] : null;
       if (check && check.tested >= SELF_CHECK_MIN_SAMPLES) {
         var pct = Math.round(check.right / check.tested * 100);
@@ -2270,11 +2272,11 @@
         send({ type: "enroll-delete", player_name: enrollments[key].displayName || key });
       });
       clearAllBtn.dataset.confirm = "0";
-      clearAllBtn.textContent = "Clear all (new session)";
+      clearAllBtn.textContent = "Clear all";
     } else {
       clearAllBtn.dataset.confirm = "1";
       clearAllBtn.textContent = "Tap again to clear everyone";
-      setTimeout(function () { clearAllBtn.dataset.confirm = "0"; clearAllBtn.textContent = "Clear all (new session)"; }, 3000);
+      setTimeout(function () { clearAllBtn.dataset.confirm = "0"; clearAllBtn.textContent = "Clear all"; }, 3000);
     }
   });
 
@@ -4494,7 +4496,11 @@
     getDetectTick: function () { return detectTick; },
     getLastShot: function () { return lastShot; },
     getPlayingNames: function () { return playingNames; },
-    getKnownNames: function () { return knownNames; }
+    getKnownNames: function () { return knownNames; },
+    // a new day (see playDayOf): which day a moment is, and acting as if it were `now`
+    playDayOf: playDayOf,
+    checkNewDay: checkNewDay,
+    hasPlentyPressedSamples: hasPlentyPressedSamples
   };
   // Same idea for the cue: the tracker, the detector on demand, and the
   // "player out of view at the table" hold, readable and seedable.
@@ -4738,18 +4744,26 @@
     for (var i = r * HIST_LEN, end = i + HIST_LEN; i < end; i++) if (d[i]) return true;
     return false;
   }
+  // The shirt: the torso, and the sleeves (forearms - a short-sleeved
+  // shirt shows the arms, a long-sleeved one covers them).
+  function isShirtRegion(r) {
+    return r === 0 || r === 2;
+  }
   // Compares only the body parts in view in both: legs hidden behind the
   // table (or a face turned away) used to count as a big difference all
   // on its own. A part seen in only one of the two is assumed to differ
   // as much as the parts compared do on average, so a sample with fewer
   // parts in view doesn't come out closer just for having less to compare.
-  function histogramDistance(a, b) {
+  // otherDay: the two are from different days (see playDayOf) - the shirt
+  // is left out the same way, as a part not compared; Infinity when
+  // nothing else was in view in both.
+  function histogramDistance(a, b, otherDay) {
     var sum = 0, compared = 0, either = 0;
     var tones = a.length >= TONE_INDEX + 3 * REGION_COUNT && b.length >= TONE_INDEX + 3 * REGION_COUNT;
     for (var r = 0; r < REGION_COUNT; r++) {
       var seenA = regionSeen(a, r), seenB = regionSeen(b, r);
       if (seenA || seenB) either++;
-      if (!seenA || !seenB) continue;
+      if (!seenA || !seenB || (otherDay && isShirtRegion(r))) continue;
       compared++;
       for (var i = r * HIST_LEN, end = i + HIST_LEN; i < end; i++) sum += Math.abs(a[i] - b[i]);
       if (tones) {
@@ -4759,8 +4773,64 @@
         }
       }
     }
+    if (!compared) return Infinity;
     if (either > compared) sum *= either / compared;
     return sum + Math.abs((a[ASPECT_INDEX] || 0) - (b[ASPECT_INDEX] || 0));
+  }
+
+  // ---- A new day: shirts start over ----
+  // Players come back another day in another shirt - but the same
+  // trousers, cap or hair, build and way of shooting. So a sample's shirt
+  // only counts against a frame (or another sample) from its own day, the
+  // appearance models - which see the whole person, shirt and all - only
+  // use today's samples, and the operator's "plenty pressed" (after which
+  // the camera stops adding samples of its own) counts today's presses.
+  // Everything else every sample knows carries on from day to day. A day
+  // runs from NEW_DAY_HOUR to NEW_DAY_HOUR, so a night that goes past
+  // midnight is still one day.
+  var NEW_DAY_HOUR = 5;
+  function playDayOfDate(d) {
+    if (d.getHours() < NEW_DAY_HOUR) d.setDate(d.getDate() - 1);
+    return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+  }
+  // The day a moment (milliseconds) belongs to, as yyyymmdd - null when
+  // unknown (old samples kept no time, and count as an earlier day).
+  var playDays = new Map();
+  function playDayOf(at) {
+    if (typeof at !== "number" || !isFinite(at)) return null;
+    var day = playDays.get(at);
+    if (day === undefined) {
+      day = playDayOfDate(new Date(at));
+      if (playDays.size > 20000) playDays.clear();
+      playDays.set(at, day);
+    }
+    return day;
+  }
+  function sampleDay(info) {
+    return info ? playDayOf(info.at) : null;
+  }
+  var currentPlayDay = playDayOfDate(new Date());
+  function isTodaySample(info) {
+    return sampleDay(info) === currentPlayDay;
+  }
+  // Checked every half minute: when a new day starts, everything worked
+  // out from the samples is worked out again.
+  function checkNewDay(now) {
+    var day = playDayOfDate(new Date(now || Date.now()));
+    if (day === currentPlayDay) return false;
+    currentPlayDay = day;
+    forgetLastMatch();
+    if (!isViewer && Object.keys(enrollments).length) {
+      console.log("[PMC new day] a new day - shirts are learned afresh, everything else about each player carries on");
+      logActivity("New day - today's shirts are learned afresh; everything else about each player carries on");
+    }
+    renderPlayerList();
+    scheduleEnrollCheck(0);
+    return true;
+  }
+  setInterval(checkNewDay, 30000);
+  function todaySampleCount(entry) {
+    return alignedInfo(entry).filter(isTodaySample).length;
   }
 
   // Once the scoreboard has told us who is Playing, only those players
@@ -4829,20 +4899,25 @@
 
   // A sample as the given method sees it: its colour counts, or the
   // appearance models' numbers - those switched on, side by side (null for
-  // a sample taken without them).
+  // a sample taken without them, or on another day - see playDayOf).
   function sampleVector(method, entry, info, i) {
-    return method === "model" ? sampleComboVector(info[i], activeModelCombo()) : entry.descriptors[i];
+    if (method !== "model") return entry.descriptors[i];
+    return isTodaySample(info[i]) ? sampleComboVector(info[i], activeModelCombo()) : null;
   }
-  function vectorDistance(method, a, b) {
-    return method === "model" ? cosineDistance(a, b) : histogramDistance(a, b);
+  // otherDay: colour counts from different days leave the shirt out
+  function vectorDistance(method, a, b, otherDay) {
+    return method === "model" ? cosineDistance(a, b) : histogramDistance(a, b, otherDay);
   }
 
   // Every listed player's distance from `query` (colour counts, or the
   // model's numbers - `method`), closest first: `distance` against their
   // samples in this posture (`exact` of them). skip(key, i) leaves single
-  // samples out (the self-check's).
-  function rankPlayers(query, pose, keys, skip, method) {
+  // samples out (the self-check's). queryDay: the day `query` is from
+  // (playDayOf) - today unless given. A player with no sample to compare
+  // (nothing but a shirt from another day in view) isn't ranked.
+  function rankPlayers(query, pose, keys, skip, method, queryDay) {
     method = method || "colour";
+    if (queryDay === undefined) queryDay = currentPlayDay;
     var ranked = [];
     keys.forEach(function (key) {
       var entry = enrollments[key];
@@ -4862,13 +4937,18 @@
       }
       var pool = pose && exact >= MIN_SAME_POSE_SAMPLES ? samePose : all;
       if (!pool.length) return;
-      var distances = pool.map(function (i) { return vectorDistance(method, query, vectors[i]); }).sort(function (a, b) { return a - b; });
+      var distances = pool.map(function (i) {
+        return vectorDistance(method, query, vectors[i], queryDay === null || sampleDay(info[i]) !== queryDay);
+      }).filter(isFinite).sort(function (a, b) { return a - b; });
+      if (!distances.length) return;
+      // (counted among the samples in this posture: with only one
+      // bent-over sample, the next-closest would be a standing one - and
+      // among those with something to compare)
+      var distance = distances[agreeingSamples(Math.min(samePose.length, distances.length)) - 1];
       ranked.push({
         key: key,
         name: entry.displayName || key,
-        // (counted among the samples in this posture: with only one
-        // bent-over sample, the next-closest would be a standing one)
-        distance: distances[agreeingSamples(samePose.length) - 1],
+        distance: distance,
         exact: exact
       });
     });
@@ -4918,20 +4998,22 @@
       var entry = enrollments[key], info = alignedInfo(entry), out = [];
       (entry.descriptors || []).forEach(function (d, i) {
         var v = sampleVector(method, entry, info, i);
-        if (v && samplePose(info[i]) !== pose) out.push(v);
+        if (v && samplePose(info[i]) !== pose) out.push({ v: v, day: sampleDay(info[i]) });
       });
       return out.slice(-APART_MAX_SAMPLES);
     };
     var nearest = function (d, list) {
       var closest = Infinity;
-      list.forEach(function (o) { if (o !== d) closest = Math.min(closest, vectorDistance(method, d, o)); });
+      list.forEach(function (o) { if (o !== d) closest = Math.min(closest, vectorDistance(method, d.v, o.v, d.day === null || d.day !== o.day)); });
       return closest;
     };
     var median = function (xs) { xs.sort(function (x, y) { return x - y; }); return xs[Math.floor(xs.length / 2)]; };
     var a = pick(keyA), b = pick(keyB), apart = true;
     if (a.length && b.length) {
       var within = a.length >= 2 ? median(a.map(function (d) { return nearest(d, a); })) : 0;
-      apart = median(b.map(function (d) { return nearest(d, a); })) - within >= methodThreshold(method) * MATCH_MARGIN_FRACTION;
+      var across = median(b.map(function (d) { return nearest(d, a); }));
+      // (not when nothing but other days' shirts was in view to compare)
+      apart = isFinite(across) && isFinite(within) && across - within >= methodThreshold(method) * MATCH_MARGIN_FRACTION;
     }
     apartCache[cacheKey] = apart;
     return apart;
@@ -5234,9 +5316,9 @@
   }
 
   // The models recognition combines right now: switched on, loaded, and in
-  // the samples of everyone who can be recognized - a player whose samples
-  // all predate a model can't be named by it, so the others carry on
-  // without it until everyone has some.
+  // today's samples of everyone who can be recognized - a player whose
+  // samples all predate a model (or today) can't be named by it, so the
+  // others carry on without it until everyone has some.
   var activeComboCache = null;
   var everyoneHasCache = {};
   function everyoneHasCombo(ids) {
@@ -5244,7 +5326,7 @@
     if (!everyoneHasCache.hasOwnProperty(key)) {
       everyoneHasCache[key] = Object.keys(enrollments).every(function (k) {
         var entry = enrollments[k];
-        return !isEligibleForRecognition(entry.displayName || k) || alignedInfo(entry).some(function (i) { return !!sampleComboVector(i, ids); });
+        return !isEligibleForRecognition(entry.displayName || k) || alignedInfo(entry).some(function (i) { return isTodaySample(i) && !!sampleComboVector(i, ids); });
       });
     }
     return everyoneHasCache[key];
@@ -5255,13 +5337,13 @@
     }
     return activeComboCache;
   }
-  // Eligible players with no samples a model has looked at (for the Enroll
-  // tab's note).
+  // Eligible players with no samples today a model has looked at (for the
+  // Enroll tab's note).
   function playersWithoutModel(m) {
     var names = [];
     Object.keys(enrollments).forEach(function (k) {
       var entry = enrollments[k], name = entry.displayName || k;
-      if (isEligibleForRecognition(name) && !alignedInfo(entry).some(function (i) { return i && typeof i[m.infoKey] === "string"; })) names.push(name);
+      if (isEligibleForRecognition(name) && !alignedInfo(entry).some(function (i) { return isTodaySample(i) && typeof i[m.infoKey] === "string"; })) names.push(name);
     });
     return names;
   }
@@ -5486,6 +5568,7 @@
   // have numbers for - one combination at a time, and never a second run
   // queued behind a first (a press every second would otherwise stack them
   // up): a change meanwhile just runs it again once this one's done.
+  // Today's samples only (see playDayOf) - the models see the shirt.
   function startModelCheck() {
     if (modelCheckBusy) { modelCheckAgain = true; return; }
     var run = ++modelCheckRun, jobs = [];
@@ -5493,7 +5576,7 @@
       var job = { ids: ids, keys: [], names: [], rows: [], labels: [], times: [], descriptors: [] };
       Object.keys(enrollments).forEach(function (key) {
         var entry = enrollments[key], info = alignedInfo(entry), picked = [];
-        (entry.descriptors || []).forEach(function (d, i) { var e = sampleComboVector(info[i], ids); if (e) picked.push({ e: e, t: info[i].at || 0, d: d }); });
+        (entry.descriptors || []).forEach(function (d, i) { var e = isTodaySample(info[i]) && sampleComboVector(info[i], ids); if (e) picked.push({ e: e, t: info[i].at || 0, d: d }); });
         picked = picked.slice(-MODEL_CHECK_MAX_PER_PLAYER);
         if (!picked.length) return;
         var p = job.keys.length;
@@ -6481,7 +6564,7 @@
         if (j === i) return true;
         var when = info[j] && info[j].at;
         return !!at && !!when && Math.abs(when - at) < SELF_CHECK_NEIGHBOUR_MS;
-      }, "colour");
+      }, "colour", sampleDay(info[i]));
       if (!ranked.some(function (r) { return r.key === key; })) return; // nothing else of theirs to test against
       result.tested++;
       var m = matchFromRanking(ranked, samplePose(info[i]), "colour");
@@ -6565,7 +6648,7 @@
       else if (s.state === "failed") notes.push(m.label + " couldn't load.");
       else if (s.state === "ready") {
         var missing = playersWithoutModel(m);
-        if (missing.length && combo.indexOf(m.id) === -1) notes.push(m.label + " waits for a sample of " + missing.join(", ") + ".");
+        if (missing.length && combo.indexOf(m.id) === -1) notes.push(m.label + " waits for a sample of " + missing.join(", ") + " today.");
         else if (s.ms !== null) notes.push(m.label + " " + Math.round(s.ms) + " ms a look.");
       }
     });
@@ -7241,13 +7324,14 @@
   }
 
   // The camera adds samples of its own (a recognized shot, a confirmed
-  // score) only until the operator has pressed plenty for that player -
-  // after that its own guesses would mostly just risk teaching it a
-  // mistake (someone else in front at the time).
+  // score) only until the operator has pressed plenty for that player
+  // today - after that its own guesses would mostly just risk teaching it
+  // a mistake (someone else in front at the time). Today's: another day's
+  // presses never saw today's shirt (see playDayOf).
   var PLENTY_PRESSED_SAMPLES = 20;
   function hasPlentyPressedSamples(name) {
     var entry = enrollments[normalizeNameKey(name)];
-    return !!entry && alignedInfo(entry).filter(isPressedSample).length >= PLENTY_PRESSED_SAMPLES;
+    return !!entry && alignedInfo(entry).filter(function (i) { return isPressedSample(i) && isTodaySample(i); }).length >= PLENTY_PRESSED_SAMPLES;
   }
 
   // Gameplay-driven auto-enrollment: a human just confirmed a real score

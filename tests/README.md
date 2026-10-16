@@ -19,3 +19,9 @@ Not part of the app - helpers for testing and for running this machine's own cop
   be, and nobody after 12 s does; crossing walkers keep their ids; a returning player bent over a
   shot is credited to them. `node tests/probe_walking_paths.js http://localhost:4236/ [--calibrated]`
   against a test server (`HOME=tests/tmphome PORT=4236 node server/server.js`).
+- `probe_new_day_shirts.js` - seeds the camera page's same-device sample store with yesterday's
+  samples (synthetic colour counts) and checks a new day: a player in a new shirt - even another
+  player's colour from yesterday - is still recognized by trousers, cap and build; a stranger in a
+  player's old shirt isn't; the appearance models and the "plenty pressed" count use only today's
+  samples; a day runs 5 a.m. to 5 a.m. `node tests/probe_new_day_shirts.js http://localhost:4237/`
+  against a test server (`HOME=tests/tmphome PORT=4237 node server/server.js`).
