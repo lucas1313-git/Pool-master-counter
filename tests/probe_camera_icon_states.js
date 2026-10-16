@@ -2,7 +2,9 @@
 // (camera.html in its iframe, fake video, a synthetic calibrated camera), driven through each
 // state - recognized (green), suspected (yellow: a walking path carrying the name), located (blue:
 // out of view, the camera has an idea where), none (light grey) - and the icon's size: twice the
-// old 30px, without moving the player's name down.
+// old 30px, without moving the player's name down. No fading with time (2026-10-16, per the user):
+// while recognition is on for a player, the icon keeps the best colour reached; benched, it starts
+// over; the camera stopping greys everything after 10 s.
 // usage: node tests/probe_camera_icon_states.js http://localhost:4237/ [screenshot dir]
 // against a test server (`HOME=tests/tmphome PORT=4237 node server/server.js`).
 const puppeteer = require("puppeteer-core");
@@ -149,7 +151,7 @@ function calibration(spec) {
   await sleep(1800);
   await looks(2);
   await sleep(300);
-  check("out of view, her walking path lost a moment ago: Alice blue", (await badge("pa")) === "cam-located" && (await colour("pa")) === "rgb(77, 171, 247)", await badge("pa"));
+  check("out of view, her walking path lost a moment ago: Alice stays yellow (no fading)", (await badge("pa")) === "cam-suspected" && (await colour("pa")) === "rgb(255, 214, 10)", await badge("pa"));
   const mapSaysWhere = await cam.evaluate(() => { const p = window.PMCRoomMapDebug.players().alice; return p && p.last ? [Math.round(p.last.x), Math.round(p.last.y)] : null; });
   check("...and the room map has a spot for her", !!mapSaysWhere, JSON.stringify(mapSaysWhere));
   await shot("icons-located.png");
@@ -158,17 +160,29 @@ function calibration(spec) {
   await sleep(1000);
   await looks(2);
   await sleep(300);
-  check("Bob's look runs out, nothing else on him: grey again", (await badge("pb")) === "cam-none", await badge("pb"));
+  check("Bob's look runs out, nothing else on him: still green (no fading)", (await badge("pb")) === "cam-recognized", await badge("pb"));
   // after Alice's walking path is long gone (12 s), the room map still has her: still blue
   await sleep(12500);
   await looks(2);
   await sleep(300);
-  check("her walking path forgotten, the room map still places her: Alice still blue", (await badge("pa")) === "cam-located", await badge("pa"));
+  check("her walking path forgotten, 12 s later: Alice still yellow", (await badge("pa")) === "cam-suspected", await badge("pa"));
 
   // a re-render of the score cards keeps the colours (no white blink until the next message)
   await page.evaluate(() => { document.querySelector(".keypad-select-trigger").click(); });
   await sleep(100);
-  check("after the score cards are drawn again: Alice still blue", (await badge("pa")) === "cam-located", await badge("pa"));
+  check("after the score cards are drawn again: Alice still yellow", (await badge("pa")) === "cam-suspected", await badge("pa"));
+
+  // Bob benched: recognition is off for him - his colour starts over (grey when he's back, until seen)
+  const toggleBob = () => page.evaluate(() => { const row = [...document.querySelectorAll("#roster-list li.roster-row")].find((r) => /Bob/.test(r.textContent)); row.querySelector(".btn-playing").click(); });
+  await toggleBob();
+  await looks(3);
+  await sleep(400);
+  const camHasBob = await cam.evaluate(() => Object.keys(window.PMCCameraDebug.playerStates()).some((n) => /bob/i.test(n)));
+  check("Bob benched: the camera drops his colour", !camHasBob, String(camHasBob));
+  await toggleBob();
+  await looks(3);
+  await sleep(400);
+  check("...back in the game: grey until seen again", (await badge("pb")) === "cam-none", await badge("pb"));
 
   // the camera page goes away: after 10 s nothing is known
   await page.evaluate(() => { document.getElementById("same-device-camera-iframe").src = "about:blank"; });

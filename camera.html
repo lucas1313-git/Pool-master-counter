@@ -9243,8 +9243,8 @@
   //     at the table, a walking path it lost a moment ago, the room map's
   //     last spot for them (for up to PLAYER_LOCATED_MS);
   //   nothing (white) - not seen, nothing to go on.
-  // A look counts this long - a pass or so missed doesn't change the
-  // colour, someone gone is soon shown as gone (or located).
+  // A look counts this long for the colour it gives; once given, a colour
+  // stays while recognition is on for that player (see playerStates).
   var SIGHTING_SURE_MS = 1500;
   var SIGHTING_GUESS_MS = 1500;
   var PLAYER_LOCATED_MS = 10 * 60 * 1000;
@@ -9289,10 +9289,25 @@
         if (pl.last && now - pl.last.at <= PLAYER_LOCATED_MS) put(pl.name, "located");
       });
     }
+    // No fading with time: while recognition is on for a player (playing,
+    // with samples), their icon only ever goes up - white, blue, yellow,
+    // green - and keeps the best colour reached; it starts over only when
+    // recognition stops for them (benched, samples cleared) or the camera
+    // starts over (this page reloads, the camera stops: the scoreboard
+    // greys every icon when it hears nothing for a while).
+    Object.keys(best).forEach(function (key) {
+      var had = stickyPlayerStates[key];
+      if (!had || rank[best[key].state] > rank[had.state]) stickyPlayerStates[key] = { name: best[key].name, state: best[key].state };
+    });
     var out = {};
-    Object.keys(best).forEach(function (key) { out[best[key].name] = best[key].state; });
+    Object.keys(stickyPlayerStates).forEach(function (key) {
+      var st = stickyPlayerStates[key];
+      if (!isEligibleForRecognition(st.name) || !enrollments[key]) { delete stickyPlayerStates[key]; return; }
+      out[st.name] = st.state;
+    });
     return out;
   }
+  var stickyPlayerStates = {}; // name key -> { name, state } - the best colour reached (see playerStates)
   function reportPlayerStates(now) {
     if (isViewer) return;
     var states = playerStates(now);
