@@ -12,6 +12,7 @@ cp $N24 $SB/PMCServerTest.new
 codesign --remove-signature $SB/PMCServerTest.new
 npx postject $SB/PMCServerTest.new NODE_SEA_BLOB generated/sea-prep.blob --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2 --macho-segment-name NODE_SEA >/dev/null
 codesign --sign - --force $SB/PMCServerTest.new
+chmod +x $SB/PMCServerTest.new  # (once came out without it, and the server couldn't start)
 pkill -f "\./PMCServerTest" || true
 sleep 1
 mv $SB/PMCServerTest.new $DC/PMCServerTest
