@@ -25,3 +25,11 @@ Not part of the app - helpers for testing and for running this machine's own cop
   player's old shirt isn't; the appearance models and the "plenty pressed" count use only today's
   samples; a day runs 5 a.m. to 5 a.m. `node tests/probe_new_day_shirts.js http://localhost:4237/`
   against a test server (`HOME=tests/tmphome PORT=4237 node server/server.js`).
+- `probe_room_map.js` - the camera page's room map against a synthetic camera and room: the
+  camera's lens, position and height from the table calibration (also with the corners tapped the
+  other way round, with tapping errors, and looking nearly straight down); the room's shape from a
+  ray-traced depth map (the table's size, the floor, a cabinet, the walls, the camera); synthetic
+  walkers projected through the camera into the real detection loop - their spots, who they are,
+  where one who walked out of view could be, back on their path; every debugging id in the SVG.
+  `node tests/probe_room_map.js http://localhost:4237/ [screenshot.png]` against a test server
+  (`HOME=tests/tmphome PORT=4237 node server/server.js`).

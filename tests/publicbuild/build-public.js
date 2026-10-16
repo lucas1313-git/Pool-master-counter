@@ -17,8 +17,8 @@ const ROOT_FILES = ["index.html", "camera.html", "manifest.json",
   "about.html", "about.fr.html", "about.es.html", "about.tl.html", "about.zh-yue.html"];
 const DIRS = ["css", "js", "languages", "icons", "camera", "data", "settings", "players", "rules", "docs/screenshots"];
 // source-only files inside the copied folders
-const SKIP = [/(^|\/)README\.md$/, /^camera\/models\/(osnet|dinov2)\/convert\.py$/, /(^|\/)\.DS_Store$/];
-const KEEP = [/^camera\/models\/(osnet|dinov2)\/README\.md$/]; // model licence notes
+const SKIP = [/(^|\/)README\.md$/, /^camera\/models\/(osnet|dinov2|depth)\/convert\.py$/, /(^|\/)\.DS_Store$/];
+const KEEP = [/^camera\/models\/(osnet|dinov2|depth)\/README\.md$/]; // model licence notes
 const VENDOR = [/^camera\/tfjs\.js$/, /^camera\/pose-detection\.js$/, /^camera\/models\//];
 
 function minJs(code, label) {
