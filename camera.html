@@ -642,6 +642,9 @@
         <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="cueDetectionToggle" style="width:auto;margin:0" checked> Cue stick detection (needs calibration)</label><button type="button" class="help-btn" data-help="cueDetection" aria-label="What does this do?">?</button>
       </div>
       <div class="row" style="margin-top:4px">
+        <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="walkingPathsToggle" style="width:auto;margin:0" checked> Follow walking paths</label><button type="button" class="help-btn" data-help="walkingPaths" aria-label="What does this do?">?</button>
+      </div>
+      <div class="row" style="margin-top:4px">
         <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="cueDebugToggle" style="width:auto;margin:0"> Cue debug mode (log, overlay, voice)</label><button type="button" class="help-btn" data-help="cueDebug" aria-label="What does this do?">?</button>
       </div>
 
@@ -915,6 +918,7 @@
   var ballConfirmInput = document.getElementById("ballConfirmInput");
   var cueDetectionToggle = document.getElementById("cueDetectionToggle");
   var cueDebugToggle = document.getElementById("cueDebugToggle");
+  var walkingPathsToggle = document.getElementById("walkingPathsToggle");
   var debugToggle = document.getElementById("debugToggle");
   var relaunchWizardBtn = document.getElementById("relaunchWizardBtn");
 
@@ -975,6 +979,10 @@
     cueDetection: {
       title: "Cue stick detection",
       body: "Looks for a cue stick held out over the calibrated table. A player at the table with their cue over the cloth is taking a shot - this counts as shooting even when the camera can't see them bend over (a far, level camera barely sees a bend at all).\n\nIf a player walks around the table and then drops out of view right next to it, the camera assumes they're still there: the next cue that comes out over the table is credited to them, for up to 45 seconds after they were last seen (each shot they take re-arms it, up to 3 minutes).\n\nOnly works once the table is calibrated. Turn on the debug overlay to see the cue drawn in pink, with how long it is and who it was matched to - long thin lines it turned down are drawn grey with the reason."
+    },
+    walkingPaths: {
+      title: "Follow walking paths",
+      body: "Follows the path each person walks around the room. When a recognized player drops out of view - behind someone else, behind the lamp, out of the picture - and someone turns up again along the way they were walking (or right where they vanished) within about 12 seconds, it's taken to be the same player and keeps their name, even before the camera can recognize them by how they look.\n\nIf that person clearly looks like a different enrolled player, the camera goes by their looks instead. When two players vanish close together and it can't tell which one came back, it doesn't guess.\n\nWorks best with the table calibrated (paths are then measured in inches on the floor). Turn on the debug overlay to see each path drawn on the video - green with a name, grey without - and a dashed circle where a player went out of view."
     },
     cueDebug: {
       title: "Cue debug mode",
@@ -1087,6 +1095,8 @@
     ballConfirmPasses: 3,
     cueDetectionEnabled: true,
     cueDebugEnabled: false,
+    // keep a player's id and name when they turn up again along their walking path
+    walkingPathsEnabled: true,
     // "auto" (whichever the self-check scores higher), "colour" or "model"
     recognitionMethod: "auto",
     // which appearance models "model" combines (the Enroll tab's boxes)
@@ -1120,7 +1130,7 @@
   // after every change, wherever the change came from) and applies what
   // the scoreboard sends - postMessage in same-device mode, the relay for
   // a separate phone.
-  var CAPTURE_SETTING_KEYS = ["matchThreshold", "debounceSec", "consecutiveFrames", "bendEnterAngle", "bendExitAngle", "railDistanceInches", "ballConfirmPasses", "cueDetectionEnabled"];
+  var CAPTURE_SETTING_KEYS = ["matchThreshold", "debounceSec", "consecutiveFrames", "bendEnterAngle", "bendExitAngle", "railDistanceInches", "ballConfirmPasses", "cueDetectionEnabled", "walkingPathsEnabled"];
   function reportCaptureSettings() {
     if (isViewer || !CAPTURE_SETTING_KEYS) return; // (a save during page load, before this section ran)
     var out = {};
@@ -1164,6 +1174,7 @@
     ballConfirmInput.value = settings.ballConfirmPasses;
     cueDetectionToggle.checked = settings.cueDetectionEnabled;
     cueDebugToggle.checked = settings.cueDebugEnabled;
+    walkingPathsToggle.checked = settings.walkingPathsEnabled;
     debugToggle.checked = settings.debugOverlay;
     recognizeDebugToggle.checked = settings.debugOverlay;
     recognizeVoiceToggle.checked = settings.voiceStatusEnabled;
@@ -1214,6 +1225,11 @@
     settings.cueDetectionEnabled = cueDetectionToggle.checked;
     persistSettings();
     resetCueTracking(settings.cueDetectionEnabled ? "enabled" : "disabled");
+  });
+  walkingPathsToggle.addEventListener("change", function () {
+    settings.walkingPathsEnabled = walkingPathsToggle.checked;
+    persistSettings();
+    logActivity("Following walking paths " + (settings.walkingPathsEnabled ? "on" : "off"));
   });
   cueDebugToggle.addEventListener("change", function () {
     settings.cueDebugEnabled = cueDebugToggle.checked;
@@ -1991,7 +2007,7 @@
     "recognizeLiveStatus", "recognizeDebugToggle", "recognizeVoiceToggle",
     "debugToggle", "thresholdInput", "consecutiveInput", "debounceInput",
     "bendEnterInput", "bendExitInput", "railDistanceInput", "recognitionMethodSelect",
-    "ballTrackingToggle", "ballConfirmInput", "cueDetectionToggle", "cueDebugToggle",
+    "ballTrackingToggle", "ballConfirmInput", "cueDetectionToggle", "cueDebugToggle", "walkingPathsToggle",
     "tableSizeSelect", "firstEdgeSelect", "useOsnetToggle", "useDinoToggle", "modelScores",
     "emptyRoomBtn", "emptyRoomStatus", "emptyRoomClearBtn", "roomCutoutToggle"
   ];
@@ -4499,6 +4515,7 @@
     // around a synthetic table through the real detection loop.
     posesOverride: null,
     getStance: function () { return effectiveStance(); },
+    getWalkingPaths: function () { return walkingPaths; },
     getShootingVia: function () { return shootingVia; }
   };
 
@@ -6273,6 +6290,7 @@
 
   function commitEnrollSample(p, frame) {
     frame.used = true;
+    nameWalkingPath(frame.trackId, p.name, p.kind + " press");
     // Every loaded appearance model's numbers for exactly this frame (they
     // may not have looked at this one themselves yet) - switched on or not,
     // so the self-check can compare them - a few milliseconds each.
@@ -6664,6 +6682,246 @@
     }
   }
 
+  // ---- Walking paths ----
+  // Follows each person's walking path from one look to the next, so a
+  // player who drops out of view (behind someone, behind the lamp, out of
+  // the frame) and turns up again along the way they were going is still
+  // the same player - same track id, same name - not a stranger to be
+  // recognized from scratch. The pose model's own tracker forgets a person
+  // after a second, or as soon as they move too far between two looks, and
+  // SinglePose (same-device mode) has no tracker at all; every pose's .id
+  // is replaced with its path's id ("w1", "w2"... - never the same as the
+  // pose model's numbers), so everything keyed by track id (visit tallies,
+  // idle names, table presence, the last shot) carries across the gap.
+  // A position is where the hips are, mapped onto the table's plane - the
+  // hips are about the felt's height, and still in view when the table
+  // hides the legs - in inches once the table is calibrated, otherwise in
+  // picture pixels scaled by the person's shoulder-to-hip length.
+  var PATH_LIVE_GAP_MS = 700; // missing this long or less: the same walk, a look or two missed
+  var PATH_KEEP_MS = 12000; // a lost path is looked for this long
+  var PATH_WALK_ON_MS = 2500; // after vanishing, they may have kept walking this long (then stopped somewhere on the way)
+  var PATH_NEAR_IN = 30; // next-look matching radius...
+  var PATH_SPEED_IN_S = 60; // ...plus a brisk walk (about 3.4 mph) for the time since
+  var PATH_LOST_RADIUS_IN = 24; // how far off their line a returning player may turn up,
+  var PATH_LOST_GROW_IN_S = 10; // growing by this every second they're gone,
+  var PATH_LOST_MAX_RADIUS_IN = 54; // up to this
+  var PATH_STILL_IN_S = 8; // slower than this is standing still (hip jitter)
+  var PATH_TORSO_IN = 20; // uncalibrated: one shoulder-to-hip length counts as this many inches
+  var PATH_MAX_RANGE_IN = 480; // further than this from the table (40 ft) is the plane mapping going wild near the horizon
+  var PATH_CLEAR_RATIO = 0.7; // a returning body joins a lost path only if no other fit is nearly as good
+  var PATH_CERTAINTY = 0.65; // a name carried along a walking path (see visitCertainty)
+  var walkingPaths = []; // { id, name, rawId, points: [{ x, y, px, py, at }], v, pv (per second), ipp, hipOffset, seenAt }
+  var walkingPathUnit = null; // "in" or "px" - paths are dropped when the calibration comes or goes
+  var nextWalkingPathId = 1;
+
+  function walkingPathsActive() {
+    return settings.walkingPathsEnabled && !isViewer;
+  }
+  function walkingPathById(trackId) {
+    for (var i = 0; i < walkingPaths.length; i++) if (walkingPaths[i].id === trackId) return walkingPaths[i];
+    return null;
+  }
+
+  // The hips and shoulders on the picture (either may be missing).
+  function pathAnchor(pose) {
+    var k = pose.keypoints || [];
+    var ok = function (name) { var p = kp(k, name); return p && !(p.score < KEYPOINT_CONF_FLOOR) ? p : null; };
+    var lh = ok("left_hip"), rh = ok("right_hip"), ls = ok("left_shoulder"), rs = ok("right_shoulder");
+    var hip = lh && rh ? midpoint(lh, rh) : lh || rh;
+    var shoulder = ls && rs ? midpoint(ls, rs) : ls || rs;
+    return hip || shoulder ? { hip: hip, shoulder: shoulder } : null;
+  }
+  // Where those hips stand: { x, y (inches, or pixels), px, py (video
+  // pixels), ipp (inches per unit) }. Hips hidden (behind the table, say)
+  // are put where this path's own shoulder-to-hip offset says - the
+  // shoulders themselves are two feet above the felt, too far off the
+  // table's plane to map onto it.
+  function pathPoint(anchor, path) {
+    var at = anchor.hip, offset = path && path.hipOffset;
+    if (!at && !(anchor.shoulder && offset)) return null;
+    if (!at) at = { x: anchor.shoulder.x + offset.x, y: anchor.shoulder.y + offset.y };
+    if (walkingPathUnit === "in") {
+      var real = applyHomography(calibration.h, at.x, at.y);
+      if (!real || !(Math.hypot(real.x - calibXExtent() / 2, real.y - calibYExtent() / 2) <= PATH_MAX_RANGE_IN)) return null;
+      return { x: real.x, y: real.y, px: at.x, py: at.y, ipp: 1 };
+    }
+    var torso = anchor.hip && anchor.shoulder ? Math.hypot(anchor.hip.x - anchor.shoulder.x, anchor.hip.y - anchor.shoulder.y) : offset ? Math.hypot(offset.x, offset.y) : 0;
+    return { x: at.x, y: at.y, px: at.x, py: at.y, ipp: torso > 8 ? PATH_TORSO_IN / torso : null };
+  }
+
+  function pathLast(path) { return path.points[path.points.length - 1]; }
+  // Where they'd be after walking on for ms (units).
+  function pathAhead(path, ms) {
+    var last = pathLast(path), s = Math.min(ms, PATH_WALK_ON_MS) / 1000;
+    return { x: last.x + path.v.x * s, y: last.y + path.v.y * s };
+  }
+  function pathVelocity(points, kx, ky) {
+    var last = points[points.length - 1], first = null;
+    for (var i = points.length - 2; i >= 0 && last.at - points[i].at <= 1500; i--) first = points[i];
+    if (!first || last.at - first.at < 400) return { x: 0, y: 0 };
+    var s = (last.at - first.at) / 1000;
+    return { x: (last[kx] - first[kx]) / s, y: (last[ky] - first[ky]) / s };
+  }
+  function segmentDistance(p, a, b) {
+    var dx = b.x - a.x, dy = b.y - a.y, len2 = dx * dx + dy * dy;
+    var t = len2 > 0 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2)) : 0;
+    return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+  }
+  function pathIpp(path, pt) {
+    return path.ipp || pt.ipp || PATH_TORSO_IN / 60; // (no body length yet: assume a mid-size person)
+  }
+
+  // Gives every pose a walking-path id (pose.rawId keeps the model's own).
+  function followWalkingPaths(poses, now) {
+    if (!poses || !walkingPathsActive()) return;
+    var unit = calibration && calibration.h ? "in" : "px";
+    if (unit !== walkingPathUnit) { walkingPaths = []; walkingPathUnit = unit; }
+    walkingPaths = walkingPaths.filter(function (path) { return now - path.seenAt <= PATH_KEEP_MS; });
+    var obs = poses.map(function (pose) { return { pose: pose, anchor: pathAnchor(pose), path: null }; });
+    var taken = {};
+    var take = function (pairs) {
+      pairs.sort(function (a, b) { return a.cost - b.cost; });
+      pairs.forEach(function (p) {
+        if (p.o.path || taken[p.path.id]) return;
+        p.o.path = p.path;
+        taken[p.path.id] = true;
+      });
+    };
+    // Still walking: within reach of where they were heading. The pose
+    // model following them too makes it all the likelier.
+    var pairs = [];
+    walkingPaths.forEach(function (path) {
+      var gap = now - path.seenAt;
+      if (gap > PATH_LIVE_GAP_MS) return;
+      var ahead = pathAhead(path, gap);
+      obs.forEach(function (o) {
+        var sameRaw = o.pose.id !== undefined && o.pose.id !== null && o.pose.id === path.rawId;
+        var pt = o.anchor && pathPoint(o.anchor, path);
+        if (!pt) { if (sameRaw) pairs.push({ o: o, path: path, cost: 0.5 }); return; }
+        var cost = Math.hypot(pt.x - ahead.x, pt.y - ahead.y) * pathIpp(path, pt) /
+          (PATH_NEAR_IN + PATH_SPEED_IN_S * gap / 1000);
+        if (sameRaw) cost *= 0.5;
+        if (cost <= 1) pairs.push({ o: o, path: path, cost: cost });
+      });
+    });
+    take(pairs);
+    // Back in view: somewhere along the line they were walking when they
+    // vanished (or where they vanished, if standing still). A body two
+    // lost players could equally be - or a lost player two bodies could
+    // equally be - joins neither: no guessing.
+    var lost = [];
+    walkingPaths.forEach(function (path) {
+      var gap = now - path.seenAt;
+      if (gap <= PATH_LIVE_GAP_MS || taken[path.id]) return;
+      var radius = Math.min(PATH_LOST_MAX_RADIUS_IN, PATH_LOST_RADIUS_IN + PATH_LOST_GROW_IN_S * gap / 1000);
+      obs.forEach(function (o) {
+        var pt = !o.path && o.anchor && pathPoint(o.anchor, path);
+        if (!pt) return;
+        var cost = segmentDistance(pt, pathLast(path), pathAhead(path, gap)) * pathIpp(path, pt) / radius;
+        if (cost <= 1) lost.push({ o: o, path: path, cost: cost });
+      });
+    });
+    take(lost.filter(function (p) {
+      return lost.every(function (q) {
+        var rival = q !== p && ((q.o === p.o && q.path.name !== p.path.name) || (q.path === p.path && q.o !== p.o));
+        return !rival || p.cost <= q.cost * PATH_CLEAR_RATIO;
+      });
+    }));
+    obs.forEach(function (o) {
+      var path = o.path, pt = o.anchor && pathPoint(o.anchor, path);
+      if (!path && !pt) return; // nowhere to put them: keeps the model's own id
+      if (!path) {
+        path = { id: "w" + nextWalkingPathId++, name: null, rawId: null, points: [], v: { x: 0, y: 0 }, pv: { x: 0, y: 0 }, ipp: null, hipOffset: null, seenAt: now };
+        walkingPaths.push(path);
+      } else if (now - path.seenAt > PATH_LIVE_GAP_MS) {
+        var secs = ((now - path.seenAt) / 1000).toFixed(1);
+        console.log("[PMC paths] " + (path.name || "unrecognized player") + " (" + path.id + ") back in view after " + secs + "s along their walking path");
+        if (path.name) logActivity(path.name + " back in view after " + secs + "s - followed along their walking path");
+      }
+      if (pt) {
+        path.points.push({ x: pt.x, y: pt.y, px: pt.px, py: pt.py, at: now });
+        while (path.points.length > 40 || now - path.points[0].at > 6000) path.points.shift();
+        if (pt.ipp) path.ipp = path.ipp ? path.ipp * 0.8 + pt.ipp * 0.2 : pt.ipp;
+        var v = pathVelocity(path.points, "x", "y");
+        var still = Math.hypot(v.x, v.y) * pathIpp(path, pt) < PATH_STILL_IN_S;
+        path.v = still ? { x: 0, y: 0 } : v;
+        path.pv = still ? { x: 0, y: 0 } : pathVelocity(path.points, "px", "py");
+      }
+      if (o.anchor && o.anchor.hip && o.anchor.shoulder) {
+        var dx = o.anchor.hip.x - o.anchor.shoulder.x, dy = o.anchor.hip.y - o.anchor.shoulder.y, off = path.hipOffset;
+        path.hipOffset = off ? { x: off.x * 0.8 + dx * 0.2, y: off.y * 0.8 + dy * 0.2 } : { x: dx, y: dy };
+      }
+      path.seenAt = now;
+      path.rawId = o.pose.id === undefined ? null : o.pose.id;
+      o.pose.rawId = o.pose.id;
+      o.pose.id = path.id;
+    });
+  }
+
+  // The name a walking path carries: put on it by a clear recognition, a
+  // shot, a press or the keypad - and the path's alone (one person can't
+  // be on two paths).
+  function nameWalkingPath(trackId, name, via) {
+    var path = name && walkingPathsActive() ? walkingPathById(trackId) : null;
+    if (!path) return;
+    var key = normalizeNameKey(name);
+    walkingPaths.forEach(function (other) {
+      if (other !== path && other.name && normalizeNameKey(other.name) === key) other.name = null;
+    });
+    if (path.name !== name) console.log("[PMC paths] " + path.id + " is " + name + " (" + via + ")" + (path.name ? " - was " + path.name : ""));
+    path.name = name;
+  }
+  // That name for this frame - unless the person clearly looks like
+  // somebody else (then the path was wrong; a clear tally renames it).
+  function walkingPathName(trackId, looksLike) {
+    var path = walkingPathsActive() ? walkingPathById(trackId) : null;
+    if (!path || !path.name || !isEligibleForRecognition(path.name)) return null;
+    if (isConfidentMatch(looksLike) && normalizeNameKey(looksLike.name) !== normalizeNameKey(path.name)) return null;
+    return path.name;
+  }
+
+  // Debug overlay: each path's trail (named green, others grey); a lost
+  // one as a dashed circle where it vanished, with a dashed line along
+  // the way they were heading.
+  function drawWalkingPaths() {
+    if (!walkingPathsActive()) return;
+    var now = Date.now();
+    overlayCtx.save();
+    overlayCtx.font = "12px sans-serif";
+    walkingPaths.forEach(function (path) {
+      if (!path.points.length) return;
+      var colour = path.name ? "#5ec98a" : "#b8b8b8";
+      overlayCtx.strokeStyle = colour;
+      overlayCtx.lineWidth = 2;
+      overlayCtx.setLineDash([]);
+      overlayCtx.beginPath();
+      path.points.forEach(function (p, i) {
+        var o = videoToOverlay(p.px, p.py);
+        if (i) overlayCtx.lineTo(o.x, o.y); else overlayCtx.moveTo(o.x, o.y);
+      });
+      overlayCtx.stroke();
+      var last = pathLast(path), at = videoToOverlay(last.px, last.py);
+      var gap = now - path.seenAt, label = path.name || path.id;
+      if (gap > PATH_LIVE_GAP_MS) {
+        var s = Math.min(gap, PATH_WALK_ON_MS) / 1000;
+        var ahead = videoToOverlay(last.px + path.pv.x * s, last.py + path.pv.y * s);
+        overlayCtx.setLineDash([5, 4]);
+        overlayCtx.beginPath();
+        overlayCtx.arc(at.x, at.y, 22, 0, Math.PI * 2);
+        overlayCtx.moveTo(at.x, at.y);
+        overlayCtx.lineTo(ahead.x, ahead.y);
+        overlayCtx.stroke();
+        label += " - out of view " + Math.round(gap / 1000) + "s";
+      }
+      var tw = overlayCtx.measureText(label).width;
+      overlayCtx.fillStyle = "rgba(0,0,0,0.6)";
+      overlayCtx.fillRect(at.x + 8, at.y - 8, tw + 8, 16);
+      overlayCtx.fillStyle = colour;
+      overlayCtx.fillText(label, at.x + 12, at.y + 4);
+    });
+    overlayCtx.restore();
+  }
+
   // ---- Idle/seated person tracking (lightweight, throttled) ----
   // Lets an already-enrolled player show as "recognized" on the
   // scorecard even while seated waiting for their turn - deliberately
@@ -6705,7 +6963,8 @@
         var liteAnalysis = analyzePose(pose.keypoints);
         if (liteAnalysis) {
           var match = findBestMatch(liteAnalysis.descriptor, poseForAnalysis(liteAnalysis));
-          cached.lastMatchedName = isConfidentMatch(match) ? match.name : null;
+          if (isConfidentMatch(match)) nameWalkingPath(trackId, match.name, "recognized idle");
+          cached.lastMatchedName = isConfidentMatch(match) ? match.name : walkingPathName(trackId, match);
         }
         // Left as whatever it already was when this cycle's frame can't
         // be confidently analyzed - a brief look-away shouldn't flicker
@@ -7310,6 +7569,10 @@
     var looksLike = matchAppearance(analysis, poseForAnalysis(analysis));
     noteVisit(analysis, looksLike, now);
     var visitName = visitIdentity(analysis.trackId, now);
+    if (visitName) nameWalkingPath(analysis.trackId, visitName, "recognized over this visit");
+    // Not recognized (yet) on this visit, but followed here along the
+    // walking path of a player who was.
+    var pathName = visitName ? null : walkingPathName(analysis.trackId, looksLike);
     var limits = personalBendThresholds(isConfidentMatch(looksLike) ? looksLike.name : null);
     var stanceBefore = stance;
     if (bendSignal >= limits.enter) stance = "bent";
@@ -7351,10 +7614,12 @@
       lastUprightDescriptor = analysis.descriptor;
 
       if (uprightStabilityCount >= settings.consecutiveFrames) {
-        var candidateName = visitName || (withinThreshold && uprightConsecutive >= settings.consecutiveFrames ? match.name : null);
+        var matchName = withinThreshold && uprightConsecutive >= settings.consecutiveFrames ? match.name : null;
+        var candidateName = visitName || matchName || pathName;
+        if (matchName && !visitName) nameWalkingPath(analysis.trackId, matchName, "recognized standing");
         candidate = {
           name: candidateName,
-          certainty: visitName ? visitCertainty(analysis.trackId, now) : candidateName ? matchCertainty(match) : 0,
+          certainty: visitName ? visitCertainty(analysis.trackId, now) : matchName ? matchCertainty(match) : candidateName ? PATH_CERTAINTY : 0,
           descriptor: analysis.descriptor,
           emb: analysis.emb || null,
           trackId: analysis.trackId,
@@ -7395,6 +7660,12 @@
           if (activeManualAttribution && visitName !== activeManualAttribution.name) activeManualAttribution = null;
           debugLog("FIRE via this visit's tally name=" + visitName + " (" + via + ")");
           fireEvent(visitName, null, settings.matchThreshold, via + ", recognized over this visit", null, null, visitCertainty(analysis.trackId, now));
+        } else if (pathName && !(candidate && candidate.name === pathName && now - candidate.lastSeenAt <= CANDIDATE_GRACE_MS)) {
+          // Lost from view for a moment, picked up again along their
+          // walking path - the same player.
+          if (activeManualAttribution && pathName !== activeManualAttribution.name) activeManualAttribution = null;
+          debugLog("FIRE via walking path name=" + pathName + " (" + via + ")");
+          fireEvent(pathName, null, settings.matchThreshold, via + ", followed along their walking path", null, null, PATH_CERTAINTY);
         } else if (candidate && candidate.name && now - candidate.lastSeenAt <= CANDIDATE_GRACE_MS) {
           // A genuinely different name just matched on its own - "until
           // another player shoots" per explicit request.
@@ -7422,6 +7693,7 @@
             // (always true at distance 0) is what actually adds this as
             // an enrollment sample - no separate enroll-add needed here.
             fireEvent(activeManualAttribution.name, analysis.descriptor, 0, via, "bent", analysis.emb);
+            nameWalkingPath(analysis.trackId, activeManualAttribution.name, "picked on the keypad");
             activeManualAttribution.firesSinceStart++;
           } else if (oneOnOneGuess(analysis, bentMatch)) {
             var turnName = oneOnOneGuess(analysis, bentMatch);
@@ -7585,6 +7857,7 @@
     drawBallDebug();
     drawCueDebug();
     drawHiddenPresence();
+    drawWalkingPaths();
     if (settings.cueDebugEnabled) drawCueBadge();
     if (!analysis) return;
     var box = analysis.box;
@@ -7671,6 +7944,7 @@
         lastPoseResultAt = Date.now();
         detectTick++;
         if (window.PMCCueDebug.posesOverride) poses = window.PMCCueDebug.posesOverride(poses);
+        followWalkingPaths(poses, Date.now());
         lastPoseCount = (poses || []).length;
         noteRoomFrame(poses);
         currentPoseIds = {};

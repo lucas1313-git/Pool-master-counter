@@ -30867,7 +30867,8 @@
     { key: "bendExitAngle", id: "capture-bend-exit", kind: "float", def: 20, help: "players.cameraBendExitHelpText" },
     { key: "railDistanceInches", id: "capture-rail-distance", kind: "float", def: 30, help: "players.cameraRailDistanceHelpText" },
     { key: "ballConfirmPasses", id: "capture-ball-confirm", kind: "int", def: 3, help: "players.cameraBallConfirmHelpText" },
-    { key: "cueDetectionEnabled", id: "capture-cue-detection", kind: "bool", def: true, help: "players.cameraCueDetectionHelpText" }
+    { key: "cueDetectionEnabled", id: "capture-cue-detection", kind: "bool", def: true, help: "players.cameraCueDetectionHelpText" },
+    { key: "walkingPathsEnabled", id: "capture-walking-paths", kind: "bool", def: true, help: "players.cameraWalkingPathsHelpText" }
   ];
   CAPTURE_SETTINGS.forEach(function (c) {
     if (!c.el) c.el = document.getElementById(c.id);
@@ -30902,9 +30903,10 @@
     var waiting = phone && !phoneCaptureSettingsKnown;
     captureSettingsWaiting.classList.toggle("hidden", !waiting);
     captureSettingsFields.disabled = waiting;
-    // (Tracking's cue checkbox lives outside that fieldset, beside the
-    // recognition switch, which must never be disabled.)
+    // (Tracking's cue and walking-path checkboxes live outside that
+    // fieldset, beside the recognition switch, which must never be disabled.)
     document.getElementById("capture-cue-detection").disabled = waiting;
+    document.getElementById("capture-walking-paths").disabled = waiting;
     if (!phone) renderCaptureSettings(readStoredCameraSettings());
   }
 
