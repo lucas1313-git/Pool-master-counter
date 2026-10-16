@@ -4886,11 +4886,12 @@
     // own comment for what each sub-icon means.
     if (state.cameraInputEnabled && state.sameDeviceCameraSetUp) {
       var camBadge = document.createElement("div");
-      camBadge.className = "scorecard-camera-badge";
+      // (already in its current colour - the camera only resends on a change, every few seconds otherwise)
+      var camState = window.PMCCameraBridge && window.PMCCameraBridge.scorecardCameraStateFor ? window.PMCCameraBridge.scorecardCameraStateFor(player.name) : "none";
+      camBadge.className = "scorecard-camera-badge cam-" + camState;
       camBadge.dataset.playerId = player.id;
       camBadge.innerHTML =
         '<span class="scorecard-camera-badge-icon">' + CAMERA_ICON_SVG + "</span>" +
-        '<span class="scorecard-camera-badge-clock" aria-hidden="true">🕐</span>' +
         '<span class="scorecard-camera-badge-plus" aria-hidden="true">+</span>' +
         '<span class="scorecard-camera-badge-question" aria-hidden="true">?</span>';
       panel.appendChild(camBadge);
@@ -30226,18 +30227,44 @@
   // "that's not actually someone shooting" (a spectator leaning on the
   // rail, say), and only for the rest of this one continuous streak -
   // the next genuinely new occurrence shows again.
+  //
+  // Steady, not blinking: the camera's "bent over, can't say who" can
+  // change several times a second, and the banner used to come and go
+  // with every change - a flashing red ❓ under the cards. It now shows
+  // only once that's held for UNMATCHED_BANNER_SHOW_AFTER_MS, and once up
+  // stays at least UNMATCHED_BANNER_HOLD_MS.
+  var UNMATCHED_BANNER_SHOW_AFTER_MS = 1000;
+  var UNMATCHED_BANNER_HOLD_MS = 3000;
   var unmatchedShooterBannerDismissed = false;
+  var unmatchedShooterSince = null, unmatchedShooterShownAt = 0, unmatchedShooterHideTimer = null;
+  function hideUnmatchedShooterBanner() {
+    if (unmatchedShooterHideTimer) clearTimeout(unmatchedShooterHideTimer);
+    unmatchedShooterHideTimer = null;
+    unmatchedShooterBannerDismissed = false;
+    unmatchedShooterBanner.classList.add("hidden");
+  }
   function updateUnmatchedShooterBanner(name, stance) {
-    var showing = !name && stance === "bent";
-    if (!showing) {
-      unmatchedShooterBannerDismissed = false;
-      unmatchedShooterBanner.classList.add("hidden");
+    var now = Date.now();
+    var wanted = !name && stance === "bent";
+    var visible = !unmatchedShooterBanner.classList.contains("hidden");
+    if (wanted) {
+      if (unmatchedShooterHideTimer) { clearTimeout(unmatchedShooterHideTimer); unmatchedShooterHideTimer = null; }
+      if (unmatchedShooterSince === null) unmatchedShooterSince = now;
+      if (!visible && !unmatchedShooterBannerDismissed && now - unmatchedShooterSince >= UNMATCHED_BANNER_SHOW_AFTER_MS) {
+        unmatchedShooterBanner.classList.remove("hidden");
+        unmatchedShooterShownAt = now;
+      }
       return;
     }
-    unmatchedShooterBanner.classList.toggle("hidden", unmatchedShooterBannerDismissed);
+    unmatchedShooterSince = null;
+    if (!visible) { unmatchedShooterBannerDismissed = false; return; }
+    var left = UNMATCHED_BANNER_HOLD_MS - (now - unmatchedShooterShownAt);
+    if (left <= 0) { hideUnmatchedShooterBanner(); return; }
+    if (!unmatchedShooterHideTimer) unmatchedShooterHideTimer = setTimeout(hideUnmatchedShooterBanner, left);
   }
   btnDismissUnmatchedShooterBanner.addEventListener("click", function () {
     unmatchedShooterBannerDismissed = true;
+    if (unmatchedShooterHideTimer) { clearTimeout(unmatchedShooterHideTimer); unmatchedShooterHideTimer = null; }
     unmatchedShooterBanner.classList.add("hidden");
   });
 
@@ -30414,34 +30441,81 @@
   // player id) and just have their classes toggled here on every camera
   // event, rather than forcing a full renderScoreboard() ~3.5 times a
   // second (expensive, and would disrupt any in-progress keypad
-  // interaction). flashing = "being watched live, not yet confirmed this
-  // round" (see camera.html's shotConfirmedForSeenName comment); idle =
-  // recognized via the lightweight seated/idle check, shown only when
-  // NOT also flashing (flashing already implies "camera sees them,"
-  // showing both would be redundant); needsConfirmation = this is the
-  // camera's best (unconfirmed) guess for who's currently bent over
-  // unmatched - tap them on the keypad to confirm, same action
-  // resolveUnmatchedShooterPrompt already wires into every manual
-  // selection site; recentlyUpdated = a sample was just captured for
-  // them, shown for a few seconds then auto-clears.
+  // interaction). The camera's colour for each player comes from
+  // camera.html's "player-states" (see its playerStates): cam-recognized
+  // (green - in view, known by how they look), cam-suspected (yellow -
+  // someone in view taken for them by extrapolation: their walking path,
+  // a near match, a guess), cam-located (blue - out of view, but the
+  // camera has an idea where), cam-none (white - not seen, nothing to go
+  // on). A camera page from before those states only says who it's
+  // watching (flashingName - green), recognized seated (idle - yellow)
+  // and its guess for an unnamed shooter (needsConfirmation - yellow).
+  // needsConfirmation also shows a "?" - tap them on the keypad to
+  // confirm, same action resolveUnmatchedShooterPrompt already wires into
+  // every manual selection site; recentlyUpdated = a sample was just
+  // captured for them, a "+" for a few seconds.
   var scorecardCameraFlashingName = null;
   var scorecardCameraNeedsConfirmName = null;
   var scorecardCameraIdleNames = {};
   var scorecardCameraRecentlyUpdatedTimers = {};
   var SCORECARD_CAMERA_PLUS_MS = 4000;
+  var scorecardCameraStates = null; // lower-case name -> "recognized" | "suspected" | "located" (null: none received yet)
+  var scorecardCameraStatesAt = 0;
+  var scorecardCameraStatesTimer = null;
+  // The camera sends its states every few seconds - nothing for this long
+  // (its page closed, the link down) and nothing is known any more.
+  var SCORECARD_CAMERA_STATES_STALE_MS = 10000;
+  var SCORECARD_CAMERA_STATE_CLASSES = ["cam-recognized", "cam-suspected", "cam-located", "cam-none"];
+
+  // The red "?" by a player's camera icon (the camera's guess for an
+  // unnamed shooter) - steady like the unmatched-shooter banner: a guess
+  // shows once it's held for UNMATCHED_BANNER_SHOW_AFTER_MS, and stays at
+  // least UNMATCHED_BANNER_HOLD_MS, instead of blinking with every frame.
+  var needsConfirmCandidate = null, needsConfirmCandidateSince = 0, needsConfirmShownAt = 0, needsConfirmHideTimer = null;
+  function setScorecardNeedsConfirm(name) {
+    var now = Date.now();
+    if (name) {
+      if (name !== needsConfirmCandidate) { needsConfirmCandidate = name; needsConfirmCandidateSince = now; }
+      if (scorecardCameraNeedsConfirmName === name) {
+        if (needsConfirmHideTimer) { clearTimeout(needsConfirmHideTimer); needsConfirmHideTimer = null; }
+        return;
+      }
+      if (now - needsConfirmCandidateSince < UNMATCHED_BANNER_SHOW_AFTER_MS) return;
+      if (needsConfirmHideTimer) { clearTimeout(needsConfirmHideTimer); needsConfirmHideTimer = null; }
+      scorecardCameraNeedsConfirmName = name;
+      needsConfirmShownAt = now;
+      return;
+    }
+    needsConfirmCandidate = null;
+    if (!scorecardCameraNeedsConfirmName || needsConfirmHideTimer) return;
+    var left = UNMATCHED_BANNER_HOLD_MS - (now - needsConfirmShownAt);
+    var clear = function () {
+      needsConfirmHideTimer = null;
+      scorecardCameraNeedsConfirmName = null;
+      updateCameraIconsOnScorecard();
+    };
+    if (left <= 0) { scorecardCameraNeedsConfirmName = null; return; }
+    needsConfirmHideTimer = setTimeout(clear, left);
+  }
+
+  function scorecardCameraStateFor(name, needsConfirm) {
+    if (scorecardCameraStates) {
+      if (Date.now() - scorecardCameraStatesAt > SCORECARD_CAMERA_STATES_STALE_MS) return "none";
+      return scorecardCameraStates[name.trim().toLowerCase()] || "none";
+    }
+    if (scorecardCameraFlashingName === name) return "recognized";
+    return needsConfirm || scorecardCameraIdleNames[name] ? "suspected" : "none";
+  }
 
   function updateCameraIconsOnScorecard() {
     Array.prototype.forEach.call(document.querySelectorAll(".scorecard-camera-badge"), function (badge) {
       var player = state.players.filter(function (p) { return p.id === badge.dataset.playerId; })[0];
       if (!player) return;
       var name = player.name;
-      var flashing = scorecardCameraFlashingName === name;
       var needsConfirm = scorecardCameraNeedsConfirmName === name;
-      var idle = !flashing && !!scorecardCameraIdleNames[name];
-      var plus = !!scorecardCameraRecentlyUpdatedTimers[name];
-      badge.classList.toggle("flashing", flashing);
-      badge.classList.toggle("idle", idle);
-      badge.classList.toggle("show-plus", plus);
+      var stateClass = "cam-" + scorecardCameraStateFor(name, needsConfirm);
+      SCORECARD_CAMERA_STATE_CLASSES.forEach(function (c) { badge.classList.toggle(c, c === stateClass); });
+      badge.classList.toggle("show-plus", !!scorecardCameraRecentlyUpdatedTimers[name]);
       badge.classList.toggle("show-question", needsConfirm);
     });
   }
@@ -30458,7 +30532,7 @@
     logCameraDiagnostic(name || null, stance, angle, closestName, closestDistance, matchThreshold, rawPoseConfidence, keypointConfFloor, tooFarFromRail);
     updateUnmatchedShooterBanner(name || null, stance);
     scorecardCameraFlashingName = flashingName || null;
-    scorecardCameraNeedsConfirmName = needsConfirmationName || null;
+    setScorecardNeedsConfirm(needsConfirmationName || null);
     updateCameraIconsOnScorecard();
     // Voice-announces a *change of matched name* only - per explicit
     // request, never for an unmatched sighting (no "seeing someone..."),
@@ -30600,6 +30674,21 @@
   // already send the complete current list each time, not a delta) -
   // see processIdlePoses's own comment for how rarely each entry in it
   // actually got re-checked.
+  // (for buildIndividualPanel, outside boot())
+  window.PMCCameraBridge.scorecardCameraStateFor = function (name) {
+    return scorecardCameraStateFor(name, scorecardCameraNeedsConfirmName === name);
+  };
+  window.PMCCameraBridge.reportPlayerStates = function (states) {
+    scorecardCameraStates = {};
+    Object.keys(states && typeof states === "object" ? states : {}).forEach(function (name) {
+      scorecardCameraStates[String(name).trim().toLowerCase()] = states[name];
+    });
+    scorecardCameraStatesAt = Date.now();
+    // (and again once they'd go stale, should nothing more come)
+    if (scorecardCameraStatesTimer) clearTimeout(scorecardCameraStatesTimer);
+    scorecardCameraStatesTimer = setTimeout(updateCameraIconsOnScorecard, SCORECARD_CAMERA_STATES_STALE_MS + 100);
+    updateCameraIconsOnScorecard();
+  };
   window.PMCCameraBridge.reportIdleStates = function (idleList) {
     scorecardCameraIdleNames = {};
     (idleList || []).forEach(function (entry) {
@@ -30755,9 +30844,16 @@
   // sequence to this player (see activeManualAttribution's own comment
   // there for how and when that stops).
   window.PMCCameraBridge.resolveUnmatchedShooterPrompt = function (playerId) {
+    // (a pick answers the camera's question: the "?" goes at once, not after its hold)
+    if (scorecardCameraNeedsConfirmName || needsConfirmHideTimer) {
+      if (needsConfirmHideTimer) { clearTimeout(needsConfirmHideTimer); needsConfirmHideTimer = null; }
+      scorecardCameraNeedsConfirmName = null;
+      needsConfirmCandidate = null;
+      updateCameraIconsOnScorecard();
+    }
     if (unmatchedShooterBanner.classList.contains("hidden")) return;
-    unmatchedShooterBanner.classList.add("hidden");
-    unmatchedShooterBannerDismissed = false;
+    hideUnmatchedShooterBanner();
+    unmatchedShooterSince = null;
     if (!sameDeviceCameraRunning) return;
     var player = state.players.filter(function (p) { return p.id === playerId; })[0];
     if (!player) return;
@@ -31358,6 +31454,8 @@
       window.PMCCameraBridge.reportCandidateSeen(msg.player_name || null, msg.stance, msg.angle, msg.closestName, msg.closestDistance, msg.matchThreshold, msg.rawPoseConfidence, msg.keypointConfFloor, msg.tooFarFromRail, msg.flashingName, msg.needsConfirmationName);
     } else if (msg.type === "idle-states") {
       window.PMCCameraBridge.reportIdleStates(msg.idle);
+    } else if (msg.type === "player-states") {
+      window.PMCCameraBridge.reportPlayerStates(msg.states);
     } else if (msg.type === "enrollment-updated") {
       window.PMCCameraBridge.reportEnrollmentUpdated(msg.player_name);
     } else if (msg.type === "enroll-result") {

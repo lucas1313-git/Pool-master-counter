@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261015a">
+<link rel="stylesheet" href="css/style.css?v=20261016a">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -1634,7 +1634,7 @@
         <li data-i18n-html="help.camera.setup"><strong>Setup</strong> — tap "📷 Set Up Camera" under Players and choose a path: a separate phone (works over your local network only, no internet involved) or this tablet's own camera. Same-device mode needs a secure page load (HTTPS, or localhost) to access the camera at all — the wizard tells you if that's not met yet. Once set up, the camera auto-starts minimized into the Players panel on every future page load — no need to start it by hand again.</li>
         <li data-i18n-html="help.camera.calibration"><strong>Calibrating the table</strong> — tells the camera exactly where your table's rails are, so it only counts people actually standing at it, not someone walking past or sitting nearby. Tap "Full Screen" on the camera preview, then either tap the 4 corners yourself (most reliable) or try Auto-Detect (faster, but can mis-detect the felt color if lighting or reflections are tricky). Turn on "Show camera debug info" afterward and check the pink outline it draws actually traces your real table — if it doesn't, redo calibration before trusting anything else.</li>
         <li data-i18n-html="help.camera.enroll"><strong>Enrollment</strong> — each unenrolled player shows an "Enroll" button in the roster; tap it, then have them bend over and shoot a few practice shots. This isn't one-and-done: every time you confirm a point for a player on the keypad, the camera quietly learns what they currently look like too, so a shirt change or different lighting doesn't break recognition on its own — but that only works if the game manager actually selects the correct player on the keypad before confirming each point, ideally every single shot. Tap the "?" beside any enrolled player's icon for the full explanation in plain terms.</li>
-        <li data-i18n-html="help.camera.scorecardIcons"><strong>Scorecard icons</strong> — once set up, a small camera icon appears above a player's name on the scorecard whenever the camera has something to say about them: flashing means it's watching them live right now; it stops flashing the instant their shot is confirmed; a "+" means a fresh sample just got captured for them; a "?" means the camera sees someone bent over it can't confidently name, and this is its best guess — tap that player on the keypad to confirm (this also feeds the camera a strong, human-confirmed sample); a small clock means a seated player waiting their turn is still being recognized in the background.</li>
+        <li data-i18n-html="help.camera.scorecardIcons"><strong>Scorecard icons</strong> — once set up, a camera icon sits above each player's name on the scorecard, its colour saying how the camera knows about them right now: green — in view and recognized by how they look; yellow — someone in view is taken for them, but not for sure (followed along the way they walked, a near match, the camera's best guess); blue — out of view, but the camera has an idea where they are in the room (held at the table, or where it last saw them); light grey — not seen, nothing to go on. A "+" means a fresh sample just got captured for them; a "?" means the camera sees someone bent over it can't confidently name, and this is its best guess — tap that player on the keypad to confirm (this also feeds the camera a strong, human-confirmed sample).</li>
         <li data-i18n-html="help.camera.unmatchedBanner"><strong>"Select player from keypad" banner</strong> — appears over the scorecard whenever the camera sees someone shooting it can't identify at all. It clears itself once resolved; tapping the actual shooter on the keypad dismisses it and tells the camera who that was, same effect as the per-player "?" icon above.</li>
         <li data-i18n-html="help.camera.settings"><strong>Tuning settings</strong> — Match sensitivity, Consecutive frames, Re-announce after, both Bend angle settings, and Max distance from rail all live under the camera checkbox in Players (same-device) or inside the camera's own Settings tab (either mode). Every one of them has its own "?" explaining what raising or lowering the number actually does, in plain language — open the right one instead of guessing.</li>
       </ul>
@@ -2543,7 +2543,7 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20261015a"></script>
-<script src="js/camera-client.js?v=20261015a"></script>
+<script src="js/app.js?v=20261016a"></script>
+<script src="js/camera-client.js?v=20261016a"></script>
 </body>
 </html>

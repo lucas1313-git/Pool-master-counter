@@ -4579,7 +4579,10 @@
     // a new day (see playDayOf): which day a moment is, and acting as if it were `now`
     playDayOf: playDayOf,
     checkNewDay: checkNewDay,
-    hasPlentyPressedSamples: hasPlentyPressedSamples
+    hasPlentyPressedSamples: hasPlentyPressedSamples,
+    // the score cards' camera icons (see playerStates)
+    notePlayerSighting: function (name, sure) { notePlayerSighting(name, sure, Date.now()); },
+    playerStates: function () { return playerStates(Date.now()); }
   };
   // Same idea for the cue: the tracker, the detector on demand, and the
   // "player out of view at the table" hold, readable and seedable.
@@ -7129,12 +7132,16 @@
           var match = findBestMatch(liteAnalysis.descriptor, poseForAnalysis(liteAnalysis));
           if (isConfidentMatch(match)) nameWalkingPath(trackId, match.name, "recognized idle");
           cached.lastMatchedName = isConfidentMatch(match) ? match.name : walkingPathName(trackId, match);
+          cached.sure = isConfidentMatch(match);
         }
         // Left as whatever it already was when this cycle's frame can't
         // be confidently analyzed - a brief look-away shouldn't flicker
         // the "idle, recognized" badge off and immediately back on.
       }
-      if (cached.lastMatchedName) idleStates.push({ name: cached.lastMatchedName, trackId: trackId });
+      if (cached.lastMatchedName) {
+        idleStates.push({ name: cached.lastMatchedName, trackId: trackId });
+        notePlayerSighting(cached.lastMatchedName, !!cached.sure, now);
+      }
     });
     // A track that's genuinely left frame (not just unmatched this
     // round) stops being returned by MultiPose entirely - drop its cache
@@ -7200,6 +7207,8 @@
     // fine, but distance is just over threshold" - the latter means the
     // match sensitivity setting needs loosening, not a code bug.
     var closest = analysis ? matchAppearance(analysis, poseForAnalysis(analysis)) : null;
+    var needsConfirmationName = !(candidate && candidate.name) && effectiveStance() === "bent" && closest ? closest.name : null;
+    notePlayerSighting(needsConfirmationName, false, Date.now());
     send({
       type: "candidate",
       // An out-of-view shooter is named from the presence hold (not the
@@ -7242,7 +7251,7 @@
       // unmatched - a concrete best-guess target to tap, not a blind
       // prompt.
       flashingName: lastAnnouncedSeenName && shotConfirmedForSeenName !== lastAnnouncedSeenName ? lastAnnouncedSeenName : null,
-      needsConfirmationName: !(candidate && candidate.name) && effectiveStance() === "bent" && closest ? closest.name : null
+      needsConfirmationName: needsConfirmationName
     });
   }
 
@@ -7738,6 +7747,11 @@
     // Not recognized (yet) on this visit, but followed here along the
     // walking path of a player who was.
     var pathName = visitName ? null : walkingPathName(analysis.trackId, looksLike);
+    // (the score cards' camera icons - see playerStates)
+    if (isConfidentMatch(looksLike)) notePlayerSighting(looksLike.name, true, now);
+    else if (looksLike && looksLike.distance <= looksLike.threshold) notePlayerSighting(looksLike.name, false, now);
+    if (visitName) notePlayerSighting(visitName, true, now);
+    else if (pathName) notePlayerSighting(pathName, false, now);
     var limits = personalBendThresholds(isConfidentMatch(looksLike) ? looksLike.name : null);
     var stanceBefore = stance;
     if (bendSignal >= limits.enter) stance = "bent";
@@ -7859,14 +7873,17 @@
             // an enrollment sample - no separate enroll-add needed here.
             fireEvent(activeManualAttribution.name, analysis.descriptor, 0, via, "bent", analysis.emb);
             nameWalkingPath(analysis.trackId, activeManualAttribution.name, "picked on the keypad");
+            notePlayerSighting(activeManualAttribution.name, true, now);
             activeManualAttribution.firesSinceStart++;
           } else if (oneOnOneGuess(analysis, bentMatch)) {
             var turnName = oneOnOneGuess(analysis, bentMatch);
+            notePlayerSighting(turnName, false, now);
             fireEvent(turnName, null, settings.matchThreshold, via + ", 1-on-1: " + (normalizeNameKey(turnName) === normalizeNameKey(lastShot.name) ? "same player as the last shot" : "the other player's turn"));
           } else if (cueHeld && lastSeenPlayerName(now)) {
             // Someone's holding the cue out over the table and can't be
             // named from how they look right now (bent over, turned away)
             // - the last player seen is the best bet.
+            notePlayerSighting(lastSeenPlayerName(now), false, now);
             fireEvent(lastSeenPlayerName(now), null, settings.matchThreshold, via + ", last seen player");
           } else if (cueHeld) {
             reportCueShooter(null, via);
@@ -8198,6 +8215,7 @@
         if (poses && poses.length) {
           send({ type: "idle-states", idle: processIdlePoses(poses, pose) });
         }
+        reportPlayerStates(Date.now());
       })
       .catch(function (e) { console.error("[camera] detection error:", e); })
       .then(function () { detectionBusy = false; });
@@ -9211,6 +9229,78 @@
     render: renderRoomMap,
     options: roomMapOptions
   };
+
+  // ---- The scoreboard's camera icons: how the camera knows each player ----
+  // Every player's little camera on their score card says how the camera
+  // knows about them right now (sent as "player-states" whenever that
+  // changes, and every few seconds anyway):
+  //   recognized (green) - in view, and known by how they look;
+  //   suspected (yellow) - someone in view is taken for them, but by
+  //     extrapolation rather than a sure look: followed along their walking
+  //     path, a near match, the camera's best guess for a shooter it can't
+  //     name, the 1-on-1 or last-seen guess;
+  //   located (blue) - out of view, but the camera has an idea where: held
+  //     at the table, a walking path it lost a moment ago, the room map's
+  //     last spot for them (for up to PLAYER_LOCATED_MS);
+  //   nothing (white) - not seen, nothing to go on.
+  // A look counts this long - a pass or so missed doesn't change the
+  // colour, someone gone is soon shown as gone (or located).
+  var SIGHTING_SURE_MS = 1500;
+  var SIGHTING_GUESS_MS = 1500;
+  var PLAYER_LOCATED_MS = 10 * 60 * 1000;
+  var PLAYER_STATES_RESEND_MS = 3000;
+  var playerSightings = {}; // name key -> { name, sureAt, guessAt }
+  var lastPlayerStates = { key: null, at: 0 };
+  function notePlayerSighting(name, sure, now) {
+    if (!name) return;
+    var key = normalizeNameKey(name);
+    var s = playerSightings[key] || (playerSightings[key] = { name: name, sureAt: 0, guessAt: 0 });
+    s.name = name;
+    if (sure) s.sureAt = now;
+    else s.guessAt = now;
+  }
+  // { name: "recognized" | "suspected" | "located" } - nobody else listed.
+  function playerStates(now) {
+    var rank = { located: 1, suspected: 2, recognized: 3 }, best = {};
+    var put = function (name, state) {
+      if (!name) return;
+      var key = normalizeNameKey(name);
+      if (!best[key] || rank[state] > rank[best[key].state]) best[key] = { name: name, state: state };
+    };
+    Object.keys(playerSightings).forEach(function (key) {
+      var s = playerSightings[key];
+      if (now - s.sureAt <= SIGHTING_SURE_MS) put(s.name, "recognized");
+      else if (now - s.guessAt <= SIGHTING_GUESS_MS) put(s.name, "suspected");
+      else if (now - Math.max(s.sureAt, s.guessAt) > PLAYER_LOCATED_MS) delete playerSightings[key];
+    });
+    // a walking path carrying their name: in view now, or lost a moment ago
+    walkingPaths.forEach(function (path) {
+      if (path.name && now - path.seenAt <= PATH_KEEP_MS) put(path.name, now - path.seenAt <= PATH_LIVE_GAP_MS ? "suspected" : "located");
+    });
+    var held = heldHiddenPresence(now);
+    if (held && held.name) put(held.name, "located");
+    if (roomMapActive()) {
+      Object.keys(mapTracks).forEach(function (id) {
+        var tr = mapTracks[id], top = trackTop(tr);
+        if (tr.live && top.name !== "?" && top.p >= 0.5) put(top.name, "suspected");
+      });
+      Object.keys(mapPlayers).forEach(function (key) {
+        var pl = mapPlayers[key];
+        if (pl.last && now - pl.last.at <= PLAYER_LOCATED_MS) put(pl.name, "located");
+      });
+    }
+    var out = {};
+    Object.keys(best).forEach(function (key) { out[best[key].name] = best[key].state; });
+    return out;
+  }
+  function reportPlayerStates(now) {
+    if (isViewer) return;
+    var states = playerStates(now);
+    var key = Object.keys(states).sort().map(function (n) { return n + "=" + states[n]; }).join("|");
+    if (key === lastPlayerStates.key && now - lastPlayerStates.at < PLAYER_STATES_RESEND_MS) return;
+    lastPlayerStates = { key: key, at: now };
+    send({ type: "player-states", states: states });
+  }
 
   // ---- Setup wizard ----
   // Guidance/sequencing layer over the tabs above - reuses every existing

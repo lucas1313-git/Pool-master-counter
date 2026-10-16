@@ -33,3 +33,11 @@ Not part of the app - helpers for testing and for running this machine's own cop
   where one who walked out of view could be, back on their path; every debugging id in the SVG.
   `node tests/probe_room_map.js http://localhost:4237/ [screenshot.png]` against a test server
   (`HOME=tests/tmphome PORT=4237 node server/server.js`).
+- `probe_camera_icon_states.js` - the scoreboard with two players and the same-device camera in its
+  iframe (fake video, a synthetic calibrated camera, synthetic people): each score card's camera
+  icon through its states - light grey (nothing known), yellow (someone in view carrying the
+  player's walking path), green (a sure look), blue (out of view, placed by the walking path, then
+  by the room map), grey again once the camera stops talking - its size (60px) with the name left
+  where it was, no flashing, and the colour kept across a redraw of the cards.
+  `node tests/probe_camera_icon_states.js http://localhost:4237/ [screenshot dir]` against a test
+  server (`HOME=tests/tmphome PORT=4237 node server/server.js`).
