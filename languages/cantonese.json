@@ -991,6 +991,8 @@
   "cameraWizard.finish": "完成 ✓",
   "cameraWizard.pathPhone": "📱 用另一部電話",
   "cameraWizard.pathSameDevice": "📷 用呢部機自己嘅鏡頭",
+  "cameraWizard.pathNative": "🎯 iPad 辨認（USB 鏡頭）",
+  "cameraWizard.pathNativeHint": "呢部 iPad 自己認出球員，用插喺佢度嘅 USB 鏡頭（例如 Logitech Brio），再將邊個開緊波傳去你部電腦嘅計分板。",
   "cameraWizard.sameDeviceExplain": "呢部機自己嘅鏡頭(內置或者駁咗嘅 USB 鏡頭)直接影住張檯 - 唔使第二部機或者伺服器。對準張檯,然後跟住打開嘅設定步驟做。",
   "cameraWizard.insecureContext": "用鏡頭要呢個頁面用HTTPS開(或者喺localhost開)。可以睇 server/README.md 入面HTTPS設定嗰段,或者用桌面版App。",
   "cameraWizard.startSameDevice": "開啟呢部機嘅鏡頭 →",

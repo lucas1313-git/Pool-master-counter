@@ -30042,6 +30042,18 @@
     openSameDeviceCameraOverlay();
   }
 
+  // In the iPad app only: its own native recognition with a USB camera
+  // (the Recognition screen, ios/App/App/Recognition.swift on the
+  // ios-app-store-build branch), which reports to the scoreboard on a
+  // computer through the camera contract (docs/camera-protocol.md).
+  var nativeRecognition = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Recognition;
+  var nativeRecognitionCard = document.getElementById("camera-path-card-native");
+  if (nativeRecognition && nativeRecognitionCard) {
+    nativeRecognitionCard.classList.remove("hidden");
+    document.getElementById("camera-wizard-path-native").addEventListener("click", function () {
+      Promise.resolve(nativeRecognition.open()).catch(function (e) { console.warn("Recognition screen:", e); });
+    });
+  }
   btnCameraWizardPathSameDevice.addEventListener("click", function () {
     cameraWizardPathUserChosen = true;
     selectCameraWizardPath("same-device");

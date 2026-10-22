@@ -991,6 +991,8 @@
   "cameraWizard.finish": "Terminer ✓",
   "cameraWizard.pathPhone": "📱 Utiliser un téléphone séparé",
   "cameraWizard.pathSameDevice": "📷 Utiliser la caméra de cet appareil",
+  "cameraWizard.pathNative": "🎯 Reconnaissance par l'iPad (caméra USB)",
+  "cameraWizard.pathNativeHint": "Cet iPad reconnaît lui-même les joueurs, avec une caméra USB comme une Logitech Brio branchée dessus, et envoie qui joue au tableau de score sur votre ordinateur.",
   "cameraWizard.sameDeviceExplain": "La caméra de cet appareil (intégrée ou une caméra USB branchée) surveille directement la table - aucun deuxième appareil ni serveur nécessaire. Pointez-la vers la table, puis suivez les étapes de configuration qui s'ouvrent.",
   "cameraWizard.insecureContext": "L'accès à la caméra nécessite que cette page soit chargée en HTTPS (ou sur localhost). Consultez la section configuration HTTPS de server/README.md, ou utilisez l'application de bureau.",
   "cameraWizard.startSameDevice": "Démarrer la caméra de cet appareil →",

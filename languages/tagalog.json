@@ -991,6 +991,8 @@
   "cameraWizard.finish": "Tapos na ✓",
   "cameraWizard.pathPhone": "📱 Gumamit ng ibang telepono",
   "cameraWizard.pathSameDevice": "📷 Gamitin ang sariling camera ng device na ito",
+  "cameraWizard.pathNative": "🎯 Pagkilala gamit ang iPad (USB camera)",
+  "cameraWizard.pathNativeHint": "Ang iPad na ito mismo ang kumikilala sa mga manlalaro, gamit ang USB camera gaya ng Logitech Brio na nakakabit dito, at ipinapadala kung sino ang tumitira sa scoreboard sa computer mo.",
   "cameraWizard.sameDeviceExplain": "Ang sariling camera ng device na ito (built-in o nakasaksak na USB camera) ang direktang nagbabantay sa mesa - hindi na kailangan ng ikalawang device o server. Itutok ito sa mesa, pagkatapos ay sundin ang mga hakbang sa setup na magbubukas.",
   "cameraWizard.insecureContext": "Kailangang naka-load ang page na ito sa HTTPS (o sa localhost) para gumana ang camera access. Tingnan ang HTTPS setup section ng server/README.md, o gamitin ang desktop app.",
   "cameraWizard.startSameDevice": "Simulan ang camera ng device na ito →",
