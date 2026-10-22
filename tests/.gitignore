@@ -3,3 +3,5 @@ publicbuild/site/
 tmphome/
 *.log
 *.png
+node_modules/
+package-lock.json

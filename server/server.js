@@ -130,7 +130,7 @@ httpServer.listen(PORT, function () {
   addresses.forEach(function (addr) {
     console.log("  " + scheme + "://" + addr + ":" + PORT + "/");
   });
-  console.log("Others join at (or scan the QR on the Group Session page):");
+  console.log("Others join at (or scan the QR on the Multi Tables page):");
   addresses.forEach(function (addr) {
     console.log("  " + scheme + "://" + addr + ":" + PORT + "/?join=1");
   });

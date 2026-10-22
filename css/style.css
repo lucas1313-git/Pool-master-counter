@@ -733,6 +733,136 @@ body > [id^="view-"] > * {
   margin: 4px 0 12px;
 }
 
+/* Games Rotations' "+ Add to Order" once a game is picked (see
+   markRotationAddReady): the app's gold, glowing, so the next step can't
+   be missed. */
+#btn-rotation-add.rotation-add-ready {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+  font-weight: 800;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent), 0 0 18px 2px color-mix(in srgb, var(--accent) 55%, transparent);
+  animation: rotation-add-ready-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes rotation-add-ready-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent), 0 0 12px 1px color-mix(in srgb, var(--accent) 45%, transparent); }
+  50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 45%, transparent), 0 0 26px 4px color-mix(in srgb, var(--accent) 70%, transparent); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #btn-rotation-add.rotation-add-ready { animation: none; }
+}
+
+/* The controls along the top of the scoreboard - Focus Mode, Rotation /
+   Single game, Winner Stays, the voice button and its voice - one
+   centred row, every control the same height and centred on the same
+   line (wrapping onto more rows only when the screen is too narrow). */
+.voice-toggle-row {
+  align-items: center;
+  gap: 10px;
+}
+
+.focus-mode-group {
+  display: contents;
+}
+
+.voice-toggle-row .focus-toggle-btn {
+  margin: 0;
+}
+
+.voice-toggle-row .focus-toggle-btn,
+.voice-toggle-row .game-mode-toggle,
+.voice-toggle-row .scoreboard-queue-toggle,
+.voice-toggle-row .voice-toggle-btn,
+.voice-toggle-row select {
+  min-height: 44px;
+  box-sizing: border-box;
+}
+
+.voice-toggle-row .voice-toggle-btn,
+.voice-toggle-row .focus-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+}
+
+.voice-toggle-row select {
+  height: 44px;
+  margin: 0;
+}
+
+/* Winner Stays' copy in that row - boxed like the pill beside it, lit
+   when on. */
+.scoreboard-queue-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0 14px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.scoreboard-queue-toggle input {
+  width: 18px;
+  height: 18px;
+  min-width: 0;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.scoreboard-queue-toggle:has(input:checked) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 22%, var(--bg-card));
+  color: var(--accent);
+}
+
+.scoreboard-queue-toggle.hidden {
+  display: none;
+}
+
+.game-mode-toggle {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.game-mode-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text);
+  background: var(--bg-card);
+  cursor: pointer;
+}
+
+.game-mode-option + .game-mode-option {
+  border-left: 1px solid var(--border);
+}
+
+.game-mode-option input {
+  width: auto;
+  min-width: 0;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.game-mode-option:has(input:checked) {
+  background: color-mix(in srgb, var(--accent) 22%, var(--bg-card));
+  color: var(--accent);
+}
+
 /* Keeps each toggle+help (or label+select) pair together as one unit
    when the row wraps on a narrow screen, instead of a pair splitting
    across two lines with its help button stranded on its own. */
@@ -1607,6 +1737,12 @@ input[type="number"] {
   min-width: 140px;
 }
 
+/* Winner Stays in the Players section - bigger still. */
+.checkbox-row.checkbox-row-prominent.queue-mode-prominent {
+  font-size: 1.25rem;
+  margin-bottom: 10px;
+}
+
 .checkbox-row.checkbox-row-prominent:has(input:checked) {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 16%, var(--bg-card));
@@ -2060,10 +2196,10 @@ input[type="number"] {
   background: rgba(0, 0, 0, 0.85);
   border: 2px solid var(--accent);
   color: var(--text);
-  padding: 8px 14px;
+  padding: 12px 22px;
   border-radius: 999px;
-  font-size: 0.95rem;
-  font-weight: 600;
+  font-size: 1.35rem;
+  font-weight: 700;
 }
 /* Focus Mode: the cards reach the bottom of the screen and nothing is
    under them, so it floats just above their bottom edge instead. */
@@ -2071,14 +2207,14 @@ input[type="number"] {
   top: auto;
   bottom: 10px;
 }
-.unmatched-shooter-banner-icon { font-size: 1.1rem; line-height: 1; }
+.unmatched-shooter-banner-icon { font-size: 2rem; line-height: 1; }
 .unmatched-shooter-banner-dismiss {
   background: none;
   border: none;
   color: var(--text-dim);
-  font-size: 1.3rem;
+  font-size: 1.8rem;
   line-height: 1;
-  padding: 0 0 0 4px;
+  padding: 0 0 0 6px;
   cursor: pointer;
 }
 .unmatched-shooter-banner-dismiss:hover { color: var(--accent); }
@@ -2476,30 +2612,31 @@ input[type="number"] {
 .player-panel:has(.scorecard-camera-badge) {
   padding-top: 52px;
 }
-/* Sits in the same top band as the card's drag handle (top:8px,
-   42px tall - see .score-card-drag-handle) and is centered in it
-   vertically, drawn above the handle's translucent bar. It's only a
-   status icon, never a control: pointer-events:none lets a press on it
-   reach the drag handle underneath, so the handle still drags from
-   anywhere along its length. The camera icon itself stays on the
-   card's centre line (shifted back by half its own width, not half the
-   whole row) - its clock/+/? marks extend to its right without pushing
-   it off centre. */
+/* Drawn over the card's top band (the drag handle - top:8px, 42px tall,
+   see .score-card-drag-handle) and, being 60px, a little past the
+   card's own top edge - so the larger icon still never pushes the name
+   down: the panel's padding-top stays as it was. It's only a status
+   icon, never a control: pointer-events:none lets a press on it reach
+   the drag handle underneath, so the handle still drags from anywhere
+   along its length. The camera icon itself stays on the card's centre
+   line (shifted back by half its own width, not half the whole row) -
+   its +/? marks extend to its right without pushing it off centre. */
 .scorecard-camera-badge {
   position: absolute;
-  top: 8px;
-  height: 42px;
+  top: -6px;
+  height: 60px;
   left: 50%;
-  transform: translateX(-15px);
+  transform: translateX(-30px);
   display: flex;
   align-items: center;
-  gap: 5px;
-  color: var(--text-dim);
+  gap: 6px;
+  color: #d3d3d3;
   z-index: 3;
   pointer-events: none;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.65));
 }
-.scorecard-camera-badge-icon { width: 30px; height: 30px; display: block; }
-.scorecard-camera-badge-icon svg { width: 30px; height: 30px; display: block; }
+.scorecard-camera-badge-icon { width: 60px; height: 60px; display: block; }
+.scorecard-camera-badge-icon svg { width: 60px; height: 60px; display: block; }
 /* The handle's grip moves to its right end on a card showing the camera
    icon, so the icon (and its clock/+/? marks) never runs into it. */
 .player-panel:has(.scorecard-camera-badge) .score-card-drag-handle {
@@ -2507,43 +2644,35 @@ input[type="number"] {
   padding-right: 14px;
 }
 #app.focus-mode .scorecard-camera-badge {
-  top: 10px;
-  height: clamp(42px, 12cqw, 64px);
-  transform: translateX(calc(clamp(30px, 8cqw, 44px) / -2));
+  height: clamp(60px, 16cqw, 88px);
+  transform: translateX(calc(clamp(60px, 16cqw, 88px) / -2));
 }
 #app.focus-mode .scorecard-camera-badge-icon,
 #app.focus-mode .scorecard-camera-badge-icon svg {
-  width: clamp(30px, 8cqw, 44px);
-  height: clamp(30px, 8cqw, 44px);
+  width: clamp(60px, 16cqw, 88px);
+  height: clamp(60px, 16cqw, 88px);
 }
 
-/* "Being watched live, not yet confirmed this round" - a color swap
-   once a second, not a fade/pulse, so it reads clearly even glanced at
-   from across the table. */
-.scorecard-camera-badge.flashing .scorecard-camera-badge-icon {
-  animation: scorecard-camera-flash 1s step-start infinite;
-}
-@keyframes scorecard-camera-flash {
-  0%, 49% { color: var(--accent); }
-  50%, 100% { color: var(--danger); }
-}
-
-/* Recognized via the lightweight seated/idle check (see
-   processIdlePoses) - static, not flashing, specifically to read as
-   "cached, not live" at a glance. */
-.scorecard-camera-badge-clock { display: none; font-size: 1.2rem; }
-.scorecard-camera-badge.idle .scorecard-camera-badge-icon { color: var(--text-dim); }
-.scorecard-camera-badge.idle .scorecard-camera-badge-clock { display: inline; }
+/* How the camera knows this player right now (see camera.html's
+   playerStates) - steady colours, no flashing: green, in view and
+   recognized by how they look; yellow, someone in view taken for them
+   by extrapolation (their walking path, a near match, a guess); blue,
+   out of view but the camera has an idea where; light grey with a white
+   lens, not seen. */
+.scorecard-camera-badge.cam-recognized { color: #2ecc71; }
+.scorecard-camera-badge.cam-suspected { color: #ffd60a; }
+.scorecard-camera-badge.cam-located { color: #4dabf7; }
+.scorecard-camera-badge.cam-none { color: #d3d3d3; }
 
 /* A fresh sample just landed for this player - self-clears on its own
    after a few seconds (see SCORECARD_CAMERA_PLUS_MS), nothing to click. */
-.scorecard-camera-badge-plus { display: none; font-size: 1.4rem; font-weight: 800; color: var(--accent); }
+.scorecard-camera-badge-plus { display: none; font-size: 2rem; font-weight: 800; color: var(--accent); }
 .scorecard-camera-badge.show-plus .scorecard-camera-badge-plus { display: inline; }
 
 /* The camera's best (unconfirmed) guess for who's bent over right now -
    tap this player on the keypad to confirm, same action the
    "unmatched shooter" scorecard banner above already prompts for. */
-.scorecard-camera-badge-question { display: none; font-size: 1.4rem; font-weight: 800; color: var(--danger); }
+.scorecard-camera-badge-question { display: none; font-size: 2.6rem; font-weight: 800; color: var(--danger); }
 .scorecard-camera-badge.show-question .scorecard-camera-badge-question { display: inline; }
 
 /* ---------- Keyboard/keypad scoring shortcut ---------- */
@@ -2723,15 +2852,13 @@ input[type="number"] {
     height: 30px;
     font-size: 1rem;
   }
-  .scorecard-camera-badge { height: 30px; gap: 3px; transform: translateX(-12px); }
+  .scorecard-camera-badge { height: 48px; gap: 4px; transform: translateX(-24px); }
   .scorecard-camera-badge-icon,
-  .scorecard-camera-badge-icon svg { width: 24px; height: 24px; }
-  .scorecard-camera-badge-clock { font-size: 0.95rem; }
+  .scorecard-camera-badge-icon svg { width: 48px; height: 48px; }
   .scorecard-camera-badge-plus,
-  .scorecard-camera-badge-question { font-size: 1.1rem; }
+  .scorecard-camera-badge-question { font-size: 1.5rem; }
   /* No room for the grip next to the camera's marks on a phone-width
      card - the glyph steps aside while they show (the bar still drags). */
-  .player-panel:has(.scorecard-camera-badge.idle) .score-card-drag-handle,
   .player-panel:has(.scorecard-camera-badge.show-plus) .score-card-drag-handle,
   .player-panel:has(.scorecard-camera-badge.show-question) .score-card-drag-handle {
     color: transparent;
@@ -2777,9 +2904,17 @@ input[type="number"] {
   white-space: nowrap;
 }
 
+/* "Tourney Victories: 2" - 24px on a wide card, smaller on a narrow
+   one (sized off the card's own width, like the name and score: the
+   card is a container-type:inline-size), so two cards side by side on a
+   phone don't push it past their edge; the ellipsis is only a backstop
+   for a much longer translation. */
 .stat-mini.stat-mini-tourney {
-  font-size: 24px;
+  font-size: clamp(12px, 8.5cqw, 24px);
   font-weight: 700;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .stat-mini strong {
@@ -5484,11 +5619,13 @@ input[type="number"] {
   border-radius: 2px;
 }
 
+/* "8-Ball (1 of 3 games)" - big enough to read from across the room,
+   like the Now Playing line above it. */
 .rotation-position-text {
   margin-top: 4px;
   text-align: center;
-  font-weight: 700;
-  font-size: 1.08rem;
+  font-weight: 800;
+  font-size: 1.5rem;
   color: var(--text);
 }
 
@@ -5497,10 +5634,12 @@ input[type="number"] {
    surrounding text instead of looking like a stray form control, with
    the spinner arrows dropped since there's no room for them at this
    size and the +/- aren't needed (the Games Rotations panel's own
-   #rotation-every already covers that). Capped at 3 digits wide, per
-   explicit request. */
-.rotation-position-every-input {
-  width: 3ch;
+   #rotation-every already covers that). Two digits wide (up to 99),
+   per explicit request - min-width 0, or the general number-input
+   minimum makes it far wider. */
+.rotation-position-text .rotation-position-every-input {
+  width: calc(2ch + 0.7em);
+  min-width: 0;
   font: inherit;
   font-weight: 700;
   text-align: center;
@@ -5508,8 +5647,9 @@ input[type="number"] {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 1px 2px;
+  padding: 1px 0.2em;
   -moz-appearance: textfield;
+  appearance: textfield;
 }
 
 .rotation-position-every-input::-webkit-outer-spin-button,
@@ -6541,7 +6681,8 @@ body.network-guest-mode .header-nav-row #btn-open-camera-wizard-header,
 body.network-guest-mode .header-nav-row #btn-open-tournament,
 body.network-guest-mode .header-nav-row #btn-open-global-stats,
 body.network-guest-mode .header-nav-row #btn-open-contact-sheet,
-body.network-guest-mode .header-nav-row #btn-open-group-session {
+body.network-guest-mode .header-nav-row #btn-open-group-session,
+body.network-guest-mode #header-group-start {
   display: none !important;
 }
 
@@ -7342,22 +7483,58 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
   display: inline;
 }
 
-/* The inline "change game type" control added for Quick Game (see
-   renderNowPlayingBanner) - sized/weighted to sit on the same line as
-   the rest of the banner instead of looking like a stray form control,
-   same idea as .racing-to-input/.rotation-position-every-input. */
-.now-playing-type-select {
+/* The Now Playing line's own controls - the game type, the target and
+   its unit (see renderNowPlayingBanner): the line's own big, bold accent
+   type, so the whole line reads as one sentence; a thin border and the
+   card background are all that say they can be changed. */
+.now-playing-banner .now-playing-control {
   display: inline-block;
-  margin-left: 8px;
+  margin: 0 0.15em;
   font: inherit;
-  font-size: 0.85rem;
-  font-weight: 700;
+  font-size: 1em;
+  font-weight: inherit;
+  letter-spacing: inherit;
   color: var(--accent);
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 2px 6px;
-  vertical-align: middle;
+  border-radius: 8px;
+  padding: 0 0.25em;
+  line-height: 1.25;
+  vertical-align: baseline;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.now-playing-banner select.now-playing-control {
+  padding-right: 0.1em;
+  cursor: pointer;
+}
+
+.now-playing-banner select.now-playing-control option {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--bg-card);
+}
+
+/* As wide as its digits (fitNowPlayingControls sets it; this until
+   then), no spinner arrows. */
+.now-playing-banner .now-playing-target-input {
+  width: calc(3ch + 0.8em);
+  text-align: center;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.now-playing-banner .now-playing-target-input::-webkit-outer-spin-button,
+.now-playing-banner .now-playing-target-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* While a Rotation decides the game, the same words as plain text. */
+.now-playing-banner .now-playing-value {
+  display: inline;
 }
 
 /* Duration and (while actually racing - see renderNowPlayingBanner)
@@ -7415,11 +7592,77 @@ body.network-guest-mode .header-nav-row #btn-open-group-session {
 
 /* ---------- Header nav row ---------- */
 
+/* The header's buttons in bordered groups - start a game (Quick Game,
+   Welcome New Player, Game Setup Wizard), events (Tournament, League,
+   Multi Tables), stats (Leaderboard, Global Stats) on one line; Contact
+   Sheet, Set Up Camera and Help, then Theme and Language, on the line below -
+   each line wrapping onto more only when the screen is too narrow. */
 .header-nav-row {
   display: flex;
-  gap: 10px;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  /* all of them together, in one outer frame round the groups */
+  padding: 8px 6px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--bg-panel) 35%, transparent);
+  box-sizing: border-box;
+}
+
+.header-nav-line {
+  display: flex;
   flex-wrap: wrap;
   justify-content: center;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+}
+
+/* (a little tighter than other buttons, so the three groups of the first
+   line share one line on a laptop screen) */
+.header-nav-group .all-players-nav-btn {
+  font-size: 0.8rem;
+  padding: 6px 9px;
+}
+
+.header-nav-group .quick-game-btn {
+  font-size: 1rem;
+  padding: 8px 14px;
+}
+
+.header-nav-group {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--bg-panel) 60%, transparent);
+  max-width: 100%;
+}
+
+/* Every box the same height - the groups and Theme / Language alike (the
+   Quick Game group's, the tallest) - their contents centred inside. */
+.header-nav-group,
+.header-nav-row .theme-select-row,
+.header-nav-row .language-select-row {
+  min-height: 54px;
+  box-sizing: border-box;
+}
+
+.header-nav-row .theme-select-row select,
+.header-nav-row .language-select-row select {
+  min-height: 0;
+  height: 36px;
+}
+
+/* (a group whose buttons are all hidden - e.g. on a guest's device - goes too) */
+.header-nav-group:not(:has(> .btn:not(.hidden))) {
+  display: none;
 }
 
 /* ---------- Elimination Tournament ---------- */

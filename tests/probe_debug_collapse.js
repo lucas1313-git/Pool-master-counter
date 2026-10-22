@@ -1,7 +1,7 @@
 // "Debugging visual matching" folds like Capture Settings: collapsed with its summary, opens and
 // closes from its header or summary, and starts open after a reload while a debug mode is on.
 // usage: node tests/probe_debug_collapse.js http://localhost:4235/ <screenshot dir>
-const puppeteer = require("/private/tmp/claude-501/-Users-lucmartin/955cf1c9-ee76-47df-9aa6-1e62c9263742/scratchpad/videopipe/node_modules/puppeteer-core");
+const puppeteer = require("puppeteer-core");
 const EXE = "/Users/lucmartin/.cache/puppeteer/chrome/mac_arm-154.0.8037.57/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing";
 const BASE = process.argv[2], OUT = process.argv[3];
 let fails = 0;

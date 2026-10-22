@@ -1,0 +1,8 @@
+{
+  "name": "pmc-local-tests",
+  "private": true,
+  "description": "Local browser checks (see README.md)",
+  "dependencies": {
+    "puppeteer-core": "^25.13.0"
+  }
+}

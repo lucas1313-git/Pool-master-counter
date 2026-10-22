@@ -522,9 +522,7 @@
   var idleReportTimer = null;
   function scheduleIdleReportAutoSave() {
     if (idleReportTimer) clearTimeout(idleReportTimer);
-    idleReportTimer = setTimeout(function () {
-      if (state.gameHistory.length > 0) computeReportImageData(todayDateStr());
-    }, 60 * 60 * 1000);
+    idleReportTimer = setTimeout(saveTodaysReportToArchive, 60 * 60 * 1000);
   }
 
   function saveState() {
@@ -702,6 +700,9 @@
     var individualMode = !quickCounterMode && state.currentGame.mode === "individual";
     queueModeRow.classList.toggle("hidden", !individualMode);
     queueModeCheckbox.checked = state.currentGame.queueEnabled;
+    // (its copy at the top of the scoreboard, beside Rotation / Single game)
+    scoreboardQueueRow.classList.toggle("hidden", !individualMode);
+    scoreboardQueueCheckbox.checked = state.currentGame.queueEnabled;
     // Teams-only (the opposite condition from the queue row above) -
     // partners rotating game to game is what makes the team-average
     // Q-Score and per-player session win tracking below meaningful;
@@ -2144,6 +2145,10 @@
   var btnExpandSameDeviceCamera = document.getElementById("btn-expand-same-device-camera");
 
   var btnToggleFocus = document.getElementById("btn-toggle-focus");
+  var scoreboardModeRotationRadio = document.getElementById("scoreboard-mode-rotation");
+  var scoreboardModeSingleRadio = document.getElementById("scoreboard-mode-single");
+  var scoreboardQueueRow = document.getElementById("scoreboard-queue-row");
+  var scoreboardQueueCheckbox = document.getElementById("scoreboard-queue-checkbox");
   var btnToggleKeypadSpeech = document.getElementById("btn-toggle-keypad-speech");
   var btnKeypadSpeechHelp = document.getElementById("btn-keypad-speech-help");
   var keypadSpeechVoiceLabel = document.getElementById("keypad-speech-voice-label");
@@ -3372,12 +3377,24 @@
   function populateGameTypeSelects() {
     [gameTypeSelect, rotationAddType, tournamentGameTypeSelect, wizardGameTypeSelect, wizardRotationAddType, gameSetupPreviewTypeSelect].forEach(function (select) {
       select.innerHTML = "";
+      // Games Rotations' picker starts on "Choose a game type..." rather
+      // than on the first game, so picking any game - 8-Ball included -
+      // is a real choice that lights up "+ Add to Order" (see
+      // markRotationAddReady).
+      if (select === rotationAddType) {
+        var prompt = document.createElement("option");
+        prompt.value = "";
+        prompt.disabled = true;
+        prompt.textContent = T("rotation.chooseGameType");
+        select.appendChild(prompt);
+      }
       GAME_TYPE_LIST.forEach(function (t) {
         var opt = document.createElement("option");
         opt.value = t.id;
         opt.textContent = t.label;
         select.appendChild(opt);
       });
+      if (select === rotationAddType) select.value = "";
     });
   }
 
@@ -3618,6 +3635,8 @@
   function renderRotation() {
     rotationEnabledCheckbox.checked = state.rotation.enabled;
     gameSetupRotationEnabledCheckbox.checked = state.rotation.enabled;
+    scoreboardModeRotationRadio.checked = state.rotation.enabled;
+    scoreboardModeSingleRadio.checked = !state.rotation.enabled;
     rotationEveryInput.value = state.rotation.every;
 
     renderRotationListInto(rotationList);
@@ -4045,6 +4064,7 @@
     var everyInput = document.createElement("input");
     everyInput.type = "number";
     everyInput.min = "1";
+    everyInput.max = "99";
     everyInput.inputMode = "numeric";
     everyInput.className = "rotation-position-every-input";
     everyInput.value = info.every;
@@ -4058,6 +4078,7 @@
         everyInput.value = state.rotation.every;
         return;
       }
+      v = Math.min(99, v);
       state.rotation.every = v;
       saveState();
       applyRotationIfDue();
@@ -4865,11 +4886,12 @@
     // own comment for what each sub-icon means.
     if (state.cameraInputEnabled && state.sameDeviceCameraSetUp) {
       var camBadge = document.createElement("div");
-      camBadge.className = "scorecard-camera-badge";
+      // (already in its current colour - the camera only resends on a change, every few seconds otherwise)
+      var camState = window.PMCCameraBridge && window.PMCCameraBridge.scorecardCameraStateFor ? window.PMCCameraBridge.scorecardCameraStateFor(player.name) : "none";
+      camBadge.className = "scorecard-camera-badge cam-" + camState;
       camBadge.dataset.playerId = player.id;
       camBadge.innerHTML =
         '<span class="scorecard-camera-badge-icon">' + CAMERA_ICON_SVG + "</span>" +
-        '<span class="scorecard-camera-badge-clock" aria-hidden="true">🕐</span>' +
         '<span class="scorecard-camera-badge-plus" aria-hidden="true">+</span>' +
         '<span class="scorecard-camera-badge-question" aria-hidden="true">?</span>';
       panel.appendChild(camBadge);
@@ -5143,42 +5165,92 @@
   function renderNowPlayingBanner() {
     var type = GAME_TYPES[state.currentGame.gameType];
     nowPlayingBanner.innerHTML = "";
-    nowPlayingBanner.appendChild(document.createTextNode(T("scoreboard.nowPlayingBanner", { label: type.label })));
-    if (ROTATION_LABEL_NO_TARGET_TYPES.indexOf(state.currentGame.gameType) === -1) {
-      nowPlayingBanner.appendChild(document.createTextNode(" — "));
-      var note = document.createElement("span");
-      note.className = "target-note";
-      note.textContent = T("gameSetup.targetNote", { target: state.currentGame.target, unit: state.currentGame.unit });
-      nowPlayingBanner.appendChild(note);
-    }
-
-    // A quick way to change the game type right from the scoreboard,
-    // with no trip to the (collapsed) Game Setup panel - added for
-    // Quick Game, where there's no rotation lineup dictating the type
-    // automatically. Hidden whenever a Rotation IS running
-    // (applyRotationIfDue would just overwrite a manual pick back on
-    // the next win anyway, which would be confusing rather than useful
-    // there - the Games Rotation panel is the right place to manage
-    // game type in that case).
-    if (!state.rotation.enabled) {
-      var typeSelect = document.createElement("select");
-      typeSelect.className = "now-playing-type-select";
-      GAME_TYPE_LIST.forEach(function (t) {
-        var opt = document.createElement("option");
-        opt.value = t.id;
-        opt.textContent = t.label;
-        typeSelect.appendChild(opt);
-      });
-      typeSelect.value = state.currentGame.gameType;
-      typeSelect.setAttribute("aria-label", T("scoreboard.changeGameTypeAria"));
-      typeSelect.addEventListener("click", function (e) {
-        e.stopPropagation();
-      });
-      typeSelect.addEventListener("change", function () {
-        setCurrentGameType(typeSelect.value);
-      });
-      nowPlayingBanner.appendChild(typeSelect);
-    }
+    // One line, "Now playing [game] target [n] [unit]", every part in the
+    // banner's own big type - the game, the target and its unit editable
+    // right here, without a trip to the (collapsed) Game Setup panel -
+    // the target too for one-rack games (8-Ball's 1 rack), so the line
+    // never loses it when the game changes. The words around them, and
+    // their order, come from the translation (markers split it, like the
+    // "Racing to" input below). While a Rotation is running the game and
+    // its target are the lineup's, so they're plain text there:
+    // applyRotationIfDue would just put a manual change back on the next win.
+    var editable = !rotationStatusInfo();
+    var M_TYPE = "\u0001", M_TARGET = "\u0002", M_UNIT = "\u0003";
+    var line = T("scoreboard.nowPlayingLine", { type: M_TYPE, target: M_TARGET, unit: M_UNIT });
+    var stopClick = function (el) {
+      el.addEventListener("click", function (e) { e.stopPropagation(); });
+      return el;
+    };
+    var plain = function (text) {
+      var span = document.createElement("span");
+      span.className = "now-playing-value";
+      span.textContent = text;
+      return span;
+    };
+    line.split(/([\u0001-\u0003])/).forEach(function (part) {
+      if (part === M_TYPE) {
+        if (!editable) { nowPlayingBanner.appendChild(plain(type.label)); return; }
+        var typeSelect = stopClick(document.createElement("select"));
+        typeSelect.className = "now-playing-type-select now-playing-control";
+        GAME_TYPE_LIST.forEach(function (t) {
+          var opt = document.createElement("option");
+          opt.value = t.id;
+          opt.textContent = t.label;
+          typeSelect.appendChild(opt);
+        });
+        typeSelect.value = state.currentGame.gameType;
+        typeSelect.setAttribute("aria-label", T("scoreboard.changeGameTypeAria"));
+        typeSelect.addEventListener("change", function () {
+          setCurrentGameType(typeSelect.value);
+        });
+        nowPlayingBanner.appendChild(typeSelect);
+      } else if (part === M_TARGET) {
+        if (!editable) { nowPlayingBanner.appendChild(plain(String(state.currentGame.target))); return; }
+        var targetInput = stopClick(document.createElement("input"));
+        targetInput.type = "number";
+        targetInput.min = "1";
+        targetInput.max = "500";
+        targetInput.inputMode = "numeric";
+        targetInput.className = "now-playing-target-input now-playing-control";
+        targetInput.value = state.currentGame.target;
+        targetInput.setAttribute("aria-label", T("gameSetup.target"));
+        targetInput.addEventListener("input", fitNowPlayingControls); // (a third digit fits while typing)
+        targetInput.addEventListener("change", function () {
+          var v = parseInt(targetInput.value, 10);
+          if (!v || v < 1) { targetInput.value = state.currentGame.target; return; }
+          state.currentGame.target = Math.min(500, v);
+          gameTargetInput.value = state.currentGame.target;
+          saveState();
+          renderScoreboard();
+          updateCurrentGameSummary();
+        });
+        nowPlayingBanner.appendChild(targetInput);
+      } else if (part === M_UNIT) {
+        if (!editable) { nowPlayingBanner.appendChild(plain(unitLabel(state.currentGame.unit))); return; }
+        var unitSelect = stopClick(document.createElement("select"));
+        unitSelect.className = "now-playing-unit-select now-playing-control";
+        ["rack", "balls", "points"].forEach(function (u) {
+          var opt = document.createElement("option");
+          opt.value = u;
+          opt.textContent = unitLabel(u);
+          unitSelect.appendChild(opt);
+        });
+        unitSelect.value = state.currentGame.unit;
+        unitSelect.setAttribute("aria-label", T("scoreboard.targetUnitAria"));
+        unitSelect.addEventListener("change", function () {
+          state.currentGame.unit = unitSelect.value;
+          gameTargetUnitSelect.value = state.currentGame.unit;
+          saveState();
+          renderScoreboard();
+          updateCurrentGameSummary();
+          tickShotCounter();
+        });
+        nowPlayingBanner.appendChild(unitSelect);
+      } else if (part) {
+        nowPlayingBanner.appendChild(document.createTextNode(part));
+      }
+    });
+    fitNowPlayingControls();
 
     var rotationInfo = rotationStatusInfo();
     if (rotationInfo) {
@@ -5248,6 +5320,29 @@
 
     nowPlayingBanner.appendChild(durationRow);
     updateGameDurationDisplay();
+  }
+
+  // Each control on the Now Playing line as wide as what it shows - a
+  // <select> is otherwise as wide as its longest option, which leaves a
+  // gap in the sentence ("Straight Pool       target"), and the target as
+  // wide as its digits. Measured in the line's own font.
+  function fitNowPlayingControls() {
+    var controls = nowPlayingBanner.querySelectorAll(".now-playing-control");
+    if (!controls.length) return;
+    var probe = document.createElement("span");
+    probe.style.cssText = "position:absolute;visibility:hidden;white-space:pre;left:-9999px;top:0";
+    nowPlayingBanner.appendChild(probe);
+    Array.prototype.forEach.call(controls, function (el) {
+      var cs = getComputedStyle(el);
+      probe.style.font = cs.font;
+      probe.style.letterSpacing = cs.letterSpacing;
+      var text = el.tagName === "SELECT" ? (el.options[el.selectedIndex] ? el.options[el.selectedIndex].text : "") : String(el.value || "0");
+      probe.textContent = el.tagName === "SELECT" ? text : text.replace(/./g, "0");
+      var chrome = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) + parseFloat(cs.borderLeftWidth) + parseFloat(cs.borderRightWidth);
+      var arrow = el.tagName === "SELECT" ? parseFloat(cs.fontSize) * 0.9 : parseFloat(cs.fontSize) * 0.15;
+      el.style.width = Math.ceil(probe.offsetWidth + chrome + arrow) + "px";
+    });
+    probe.remove();
   }
 
   function updateGameDurationDisplay() {
@@ -7652,10 +7747,13 @@
   // filter below to an exact calendar-date match instead, so a past
   // date can be reconstructed from history on demand - see
   // archiveImportedReportDates, the only current caller.
-  function computeDayReportData(dateStr, exactDate) {
+  // skipTs (optional): game timestamps to leave out - the ones another
+  // archived report already covers (see backfillReportArchive).
+  function computeDayReportData(dateStr, exactDate, skipTs) {
     var names = getAllKnownPlayerNames();
     var cutoffTs = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     function inRange(ts) {
+      if (skipTs && skipTs[ts]) return false;
       return exactDate ? localDateStrFromTs(ts) === dateStr : ts >= cutoffTs;
     }
     var liveTsSet = {};
@@ -8342,8 +8440,8 @@
   // buildDayReportImageBlob (the native PNG used when sharing straight
   // from the main app) - one pass over computeDayReportData, plain data
   // only, no HTML/canvas concerns here.
-  function computeReportImageData(dateStr, exactDate) {
-    var data = computeDayReportData(dateStr, exactDate);
+  function computeReportImageData(dateStr, exactDate, skipTs) {
+    var data = computeDayReportData(dateStr, exactDate, skipTs);
     var tokens = readReportThemeTokens();
 
     var longDate;
@@ -8431,7 +8529,10 @@
       players: players,
       highlights: highlights,
       games: games,
-      notes: dayNotesTextarea.value || null
+      notes: (exactDate && dateStr !== todayDateStr() ? getDayNotes(dateStr) : dayNotesTextarea.value) || null,
+      // every game's own time, so a later rebuild of a missed day (see
+      // backfillReportArchive) can tell which games this report already has
+      gameTs: data.games.map(function (g) { return g.ts; })
     };
     archiveDayReport(result);
     return result;
@@ -13037,6 +13138,9 @@
 
   function archiveDayReport(reportImageData) {
     if (noStatsMode) return;
+    // (a day with no games isn't worth a row - e.g. a save that ran with
+    // only old games left in the session's history)
+    if (!reportImageData.players || !reportImageData.players.length) return;
     var snapshot = {
       dateStr: reportImageData.dateStr,
       longDate: reportImageData.longDate,
@@ -13044,7 +13148,8 @@
       players: reportImageData.players,
       highlights: reportImageData.highlights,
       games: reportImageData.games,
-      notes: reportImageData.notes
+      notes: reportImageData.notes,
+      gameTs: reportImageData.gameTs || []
     };
     REPORT_ARCHIVE = REPORT_ARCHIVE.filter(function (entry) {
       return entry.dateStr !== snapshot.dateStr;
@@ -13119,7 +13224,87 @@
       return entry.dateStr !== dateStr;
     });
     saveReportArchiveToStorage(REPORT_ARCHIVE);
+    rememberDeletedArchiveDate(dateStr);
     renderReportArchiveList();
+  }
+
+  // A day only used to reach the archive when its colourful report was
+  // opened or shared, or when the app sat open and untouched for an hour
+  // after the last change (scheduleIdleReportAutoSave) - close the app or
+  // let the device sleep sooner, and that day was never archived. So every
+  // start (and every return to the app) rebuilds any recent day that has
+  // games but no report: exactly that calendar day, from the players' own
+  // game logs, leaving out games another report already has (a night
+  // session saved after midnight under the next day's date) - and never a
+  // day the user deleted on purpose.
+  var REPORT_ARCHIVE_DELETED_KEY = "poolMasterCounter.reportArchiveDeleted.v1";
+  var REPORT_BACKFILL_DAYS = 90;
+  function loadDeletedArchiveDates() {
+    try {
+      var parsed = JSON.parse(localStorage.getItem(REPORT_ARCHIVE_DELETED_KEY) || "[]");
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  }
+  function rememberDeletedArchiveDate(dateStr) {
+    var dates = loadDeletedArchiveDates();
+    if (dates.indexOf(dateStr) !== -1) return;
+    dates.push(dateStr);
+    try {
+      localStorage.setItem(REPORT_ARCHIVE_DELETED_KEY, JSON.stringify(dates.slice(-400)));
+    } catch (e) {
+      console.warn("Could not remember a deleted report-archive date.", e);
+    }
+  }
+  // Game times other days' reports already have - today's automatic save
+  // (the last 24 hours) leaves those out, so last night's late games
+  // aren't counted again under today when play starts early the next day.
+  function gamesCoveredByOtherDays(dateStr) {
+    var covered = {};
+    REPORT_ARCHIVE.forEach(function (entry) {
+      if (entry.dateStr === dateStr) return;
+      (entry.gameTs || []).forEach(function (ts) { covered[ts] = true; });
+    });
+    return covered;
+  }
+  function saveTodaysReportToArchive() {
+    if (noStatsMode || state.gameHistory.length === 0) return;
+    var today = todayDateStr();
+    computeReportImageData(today, false, gamesCoveredByOtherDays(today));
+  }
+  function backfillReportArchive() {
+    if (noStatsMode) return 0;
+    var today = todayDateStr();
+    var oldest = localDateStrFromTs(Date.now() - REPORT_BACKFILL_DAYS * 24 * 60 * 60 * 1000);
+    var deleted = {};
+    loadDeletedArchiveDates().forEach(function (d) { deleted[d] = true; });
+    var covered = {};
+    REPORT_ARCHIVE.forEach(function (entry) {
+      (entry.gameTs || []).forEach(function (ts) { covered[ts] = true; });
+    });
+    var missing = {};
+    getAllKnownPlayerNames().forEach(function (name) {
+      allGamesForPlayerName(name).forEach(function (g) {
+        if (!g.ts || covered[g.ts]) return;
+        var d = localDateStrFromTs(g.ts);
+        if (d >= today || d < oldest || deleted[d] || findReportArchiveEntry(d)) return;
+        missing[d] = true;
+      });
+    });
+    var dates = Object.keys(missing).sort();
+    if (!dates.length) return 0;
+    var before = REPORT_ARCHIVE.length;
+    dates.forEach(function (d) {
+      computeReportImageData(d, true, covered);
+    });
+    REPORT_ARCHIVE.sort(function (a, b) { return a.dateStr < b.dateStr ? 1 : a.dateStr > b.dateStr ? -1 : 0; });
+    REPORT_ARCHIVE = REPORT_ARCHIVE.slice(0, REPORT_ARCHIVE_CAP);
+    saveReportArchiveToStorage(REPORT_ARCHIVE);
+    renderReportArchiveList();
+    var added = REPORT_ARCHIVE.length - before;
+    console.log("[Report Archive] rebuilt " + dates.length + " missed day(s): " + dates.join(", "));
+    return added;
   }
 
   // Re-attaches a fresh read of the CURRENT theme's colors to a saved
@@ -16234,11 +16419,15 @@
   // counter data" lives here - the run/best-run records ("balls in a
   // row"), saved rotations/setups, name translations, the removed/
   // graveyard lists, reset snapshots, the report archive, and both
-  // tournament stores, alongside the original seven fields. Deliberately
-  // NOT included: theme/language/focusMode/onboardingSeen and the other
-  // pure per-device UI preferences, plus the leaderboard cache (just a
-  // regenerable snapshot) - those aren't data a second manager's device
-  // should have forced onto it by importing someone else's backup.
+  // tournament stores, alongside the original seven fields - and, since
+  // the user asked for everything to travel, each player's best run of
+  // the day, the Report Archive's deliberately-deleted days, what was
+  // already sent to Challonge, and this device's own settings (see
+  // collectDeviceSettings - those only take effect on a full restore,
+  // never forced onto a second manager's device by a merge). Still left
+  // out: passwords and keys (Challonge, Google Drive) - backups get
+  // shared - plus the leaderboard cache (a regenerable snapshot) and
+  // one-off flags (onboarding seen, pending migrations).
   function buildBackupPayload() {
     return {
       exportedAt: new Date().toISOString(),
@@ -16260,6 +16449,11 @@
       mergedInto: PLAYER_MERGED_INTO,
       resetSnapshots: RESET_SNAPSHOTS,
       reportArchive: REPORT_ARCHIVE,
+      reportArchiveDeleted: loadDeletedArchiveDates(),
+      playerDailyBestRuns: PLAYER_DAILY_BEST_RUNS,
+      challongeDayPushes: CHALLONGE_DAY_PUSHES,
+      challongeRacePushes: loadChallongeRacePushes(),
+      settings: collectDeviceSettings(),
       tournament: TOURNAMENT,
       tournamentResults: TOURNAMENT_RESULTS,
       leagues: LEAGUES,
@@ -16274,6 +16468,66 @@
       // scratch.
       cameraEnrollments: loadCameraEnrollmentsFromStorage()
     };
+  }
+
+  // This device's own settings, as stored: the look (theme, language),
+  // Focus Mode, report and voice preferences, and the camera's whole setup
+  // (its settings, table calibration, empty-room snapshot, which camera).
+  // Exported with everything else; applied only where a backup is meant
+  // to become this device's own setup - a full Import & Replace, or a
+  // device with no players yet adopting a backup (applyDeviceSettings).
+  // (the storage names written out - several of their constants live in
+  // scopes this one can't see, e.g. CAMERA_SETTINGS_STORAGE_KEY inside boot())
+  function deviceSettingKeys() {
+    return ["poolMasterCounter.theme.v1", "poolMasterCounter.language.v1", "poolMasterCounter.focusMode", "poolMasterCounter.leagueFocusMode",
+      "poolMasterCounter.fargoEnabled.v1", "poolMasterCounter.queueSwapSticky.v1", "poolMasterCounter.dayReportFormat.v1",
+      "poolMasterCounter.dayReportAttachBackup.v1", "poolMasterCounter.dayReportAttachColorful.v1",
+      "poolMasterCounter.keypadSpeechEnabled.v1", "poolMasterCounter.keypadSpeechVoicePreset.v1",
+      "pmc-camera-settings", "pmc-camera-calibration", "pmc-camera-background-ref", "pmc-camera-empty-room",
+      "pmc-camera-selected-device", "pmc-camera-wizard-done"];
+  }
+  function collectDeviceSettings() {
+    var out = {};
+    deviceSettingKeys().forEach(function (key) {
+      try {
+        var v = localStorage.getItem(key);
+        if (v !== null) out[key] = v;
+      } catch (e) {}
+    });
+    return out;
+  }
+  function applyDeviceSettings(settings) {
+    if (!settings || typeof settings !== "object") return;
+    deviceSettingKeys().forEach(function (key) {
+      if (typeof settings[key] !== "string") return;
+      try {
+        localStorage.setItem(key, settings[key]);
+      } catch (e) {
+        console.warn("Could not restore the setting " + key + ".", e);
+      }
+    });
+  }
+  // Each player's best run of the day: the more recent day wins, then the
+  // higher run on the same day.
+  function mergePlayerDailyBestRuns(local, imported) {
+    var merged = {};
+    Object.keys(local || {}).forEach(function (key) { merged[key] = local[key]; });
+    Object.keys(imported || {}).forEach(function (key) {
+      var entry = imported[key];
+      if (!entry || !entry.name) return;
+      var existingKey = findKeyCaseInsensitive(merged, entry.name);
+      if (!existingKey) { merged[key] = entry; return; }
+      var mine = merged[existingKey], myDay = localDateStrFromTs(mine.ts), theirDay = localDateStrFromTs(entry.ts);
+      if (theirDay > myDay || (theirDay === myDay && entry.value > mine.value)) merged[existingKey] = entry;
+    });
+    return merged;
+  }
+  function saveDeletedArchiveDates(dates) {
+    try {
+      localStorage.setItem(REPORT_ARCHIVE_DELETED_KEY, JSON.stringify(dates.slice(-400)));
+    } catch (e) {
+      console.warn("Could not save the report archive's deleted days.", e);
+    }
   }
 
   // filename (optional): only the manual "Export All Data" button passes
@@ -17264,9 +17518,18 @@
             var mergedResetSnapshots = mergeArrayByKey(RESET_SNAPSHOTS, data.resetSnapshots, function (s) {
               return s.id;
             }, capAndSortByFieldDesc("ts", RESET_SNAPSHOTS_CAP));
+            // Days deleted from the archive on either device stay deleted.
+            var mergedDeletedDates = loadDeletedArchiveDates().concat(Array.isArray(data.reportArchiveDeleted) ? data.reportArchiveDeleted : []).filter(function (d, i, all) {
+              return typeof d === "string" && all.indexOf(d) === i;
+            });
             var mergedReportArchive = mergeArrayByKey(REPORT_ARCHIVE, data.reportArchive, function (r) {
               return r.dateStr;
-            }, capAndSortByFieldDesc("dateStr", REPORT_ARCHIVE_CAP));
+            }, capAndSortByFieldDesc("dateStr", REPORT_ARCHIVE_CAP)).filter(function (r) {
+              return mergedDeletedDates.indexOf(r.dateStr) === -1;
+            });
+            var mergedPlayerDailyBestRuns = mergePlayerDailyBestRuns(PLAYER_DAILY_BEST_RUNS, data.playerDailyBestRuns);
+            var mergedChallongeDayPushes = mergeMapPreferLocal(CHALLONGE_DAY_PUSHES, data.challongeDayPushes);
+            var mergedChallongeRacePushes = mergeMapPreferLocal(loadChallongeRacePushes(), data.challongeRacePushes);
             // Singleton, not a collection - keep whichever live/in-progress
             // tournament is actually local (don't clobber a bracket someone
             // is mid-match on with an unrelated one from the import); only
@@ -17365,9 +17628,16 @@
             localStorage.setItem(GRAVEYARD_PLAYERS_KEY, JSON.stringify(mergedGraveyardPlayers));
             localStorage.setItem(RESET_SNAPSHOTS_KEY, JSON.stringify(mergedResetSnapshots));
             localStorage.setItem(REPORT_ARCHIVE_KEY, JSON.stringify(mergedReportArchive));
+            saveDeletedArchiveDates(mergedDeletedDates);
+            savePlayerDailyBestRunsToStorage(mergedPlayerDailyBestRuns);
+            saveChallongeDayPushes(mergedChallongeDayPushes);
+            saveChallongeRacePushes(mergedChallongeRacePushes);
             if (mergedTournament) localStorage.setItem(TOURNAMENT_KEY, JSON.stringify(mergedTournament));
             localStorage.setItem(TOURNAMENT_RESULTS_KEY, JSON.stringify(mergedTournamentResults));
             localStorage.setItem(LEAGUES_KEY, JSON.stringify(leagueMerge));
+            // A device with no players yet is adopting this backup as its
+            // own setup: its settings come with it (see collectDeviceSettings).
+            if (localIsFresh) applyDeviceSettings(data.settings);
 
             function finishImport() {
               if (data.exportedAt) {
@@ -17631,6 +17901,7 @@
       PLAYER_MERGED_INTO = {};
       RESET_SNAPSHOTS = [];
       REPORT_ARCHIVE = [];
+      PLAYER_DAILY_BEST_RUNS = {};
       TOURNAMENT = null;
       TOURNAMENT_RESULTS = [];
       LEAGUES = [];
@@ -17665,6 +17936,7 @@
       PLAYER_MERGED_INTO = data.mergedInto && typeof data.mergedInto === "object" ? data.mergedInto : {};
       RESET_SNAPSHOTS = Array.isArray(data.resetSnapshots) ? data.resetSnapshots : [];
       REPORT_ARCHIVE = Array.isArray(data.reportArchive) ? data.reportArchive : [];
+      PLAYER_DAILY_BEST_RUNS = data.playerDailyBestRuns && typeof data.playerDailyBestRuns === "object" ? data.playerDailyBestRuns : {};
       TOURNAMENT = data.tournament && typeof data.tournament === "object" ? data.tournament : null;
       TOURNAMENT_RESULTS = Array.isArray(data.tournamentResults) ? data.tournamentResults : [];
       LEAGUES = Array.isArray(data.leagues) ? data.leagues : [];
@@ -17699,6 +17971,17 @@
       localStorage.setItem(MERGED_INTO_KEY, JSON.stringify(PLAYER_MERGED_INTO));
       localStorage.setItem(RESET_SNAPSHOTS_KEY, JSON.stringify(RESET_SNAPSHOTS));
       localStorage.setItem(REPORT_ARCHIVE_KEY, JSON.stringify(REPORT_ARCHIVE));
+      localStorage.setItem(PLAYER_DAILY_BEST_RUNS_KEY, JSON.stringify(PLAYER_DAILY_BEST_RUNS));
+      // The archive's deleted days and the Challonge push records go with
+      // the game data they're about: the file's in a full replace, none
+      // when the game data is wiped (keep-players).
+      saveDeletedArchiveDates(keepPlayersOnly || !Array.isArray(data.reportArchiveDeleted) ? [] : data.reportArchiveDeleted);
+      if (!keepPlayersOnly) {
+        if (data.challongeDayPushes && typeof data.challongeDayPushes === "object") saveChallongeDayPushes(data.challongeDayPushes);
+        if (data.challongeRacePushes && typeof data.challongeRacePushes === "object") saveChallongeRacePushes(data.challongeRacePushes);
+        // A full replace makes the backup this device's own setup: its settings too.
+        applyDeviceSettings(data.settings);
+      }
       if (TOURNAMENT) localStorage.setItem(TOURNAMENT_KEY, JSON.stringify(TOURNAMENT));
       else localStorage.removeItem(TOURNAMENT_KEY);
       localStorage.setItem(TOURNAMENT_RESULTS_KEY, JSON.stringify(TOURNAMENT_RESULTS));
@@ -29424,6 +29707,13 @@
   // short a player just from checking the box. Turning it back off
   // leaves state.queue alone (harmless while unused) so the order is
   // remembered if it's re-enabled later.
+  // The scoreboard's copy of the checkbox (beside Rotation / Single game)
+  // is the same switch: it ticks this one and lets its handler do the rest.
+  scoreboardQueueCheckbox.addEventListener("change", function () {
+    if (queueModeCheckbox.checked === scoreboardQueueCheckbox.checked) return;
+    queueModeCheckbox.checked = scoreboardQueueCheckbox.checked;
+    queueModeCheckbox.dispatchEvent(new Event("change", { bubbles: true }));
+  });
   queueModeCheckbox.addEventListener("change", function () {
     state.currentGame.queueEnabled = queueModeCheckbox.checked;
     if (queueModeCheckbox.checked) {
@@ -29752,6 +30042,18 @@
     openSameDeviceCameraOverlay();
   }
 
+  // In the iPad app only: its own native recognition with a USB camera
+  // (the Recognition screen, ios/App/App/Recognition.swift on the
+  // ios-app-store-build branch), which reports to the scoreboard on a
+  // computer through the camera contract (docs/camera-protocol.md).
+  var nativeRecognition = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Recognition;
+  var nativeRecognitionCard = document.getElementById("camera-path-card-native");
+  if (nativeRecognition && nativeRecognitionCard) {
+    nativeRecognitionCard.classList.remove("hidden");
+    document.getElementById("camera-wizard-path-native").addEventListener("click", function () {
+      Promise.resolve(nativeRecognition.open()).catch(function (e) { console.warn("Recognition screen:", e); });
+    });
+  }
   btnCameraWizardPathSameDevice.addEventListener("click", function () {
     cameraWizardPathUserChosen = true;
     selectCameraWizardPath("same-device");
@@ -29937,18 +30239,44 @@
   // "that's not actually someone shooting" (a spectator leaning on the
   // rail, say), and only for the rest of this one continuous streak -
   // the next genuinely new occurrence shows again.
+  //
+  // Steady, not blinking: the camera's "bent over, can't say who" can
+  // change several times a second, and the banner used to come and go
+  // with every change - a flashing red ❓ under the cards. It now shows
+  // only once that's held for UNMATCHED_BANNER_SHOW_AFTER_MS, and once up
+  // stays at least UNMATCHED_BANNER_HOLD_MS.
+  var UNMATCHED_BANNER_SHOW_AFTER_MS = 1000;
+  var UNMATCHED_BANNER_HOLD_MS = 3000;
   var unmatchedShooterBannerDismissed = false;
+  var unmatchedShooterSince = null, unmatchedShooterShownAt = 0, unmatchedShooterHideTimer = null;
+  function hideUnmatchedShooterBanner() {
+    if (unmatchedShooterHideTimer) clearTimeout(unmatchedShooterHideTimer);
+    unmatchedShooterHideTimer = null;
+    unmatchedShooterBannerDismissed = false;
+    unmatchedShooterBanner.classList.add("hidden");
+  }
   function updateUnmatchedShooterBanner(name, stance) {
-    var showing = !name && stance === "bent";
-    if (!showing) {
-      unmatchedShooterBannerDismissed = false;
-      unmatchedShooterBanner.classList.add("hidden");
+    var now = Date.now();
+    var wanted = !name && stance === "bent";
+    var visible = !unmatchedShooterBanner.classList.contains("hidden");
+    if (wanted) {
+      if (unmatchedShooterHideTimer) { clearTimeout(unmatchedShooterHideTimer); unmatchedShooterHideTimer = null; }
+      if (unmatchedShooterSince === null) unmatchedShooterSince = now;
+      if (!visible && !unmatchedShooterBannerDismissed && now - unmatchedShooterSince >= UNMATCHED_BANNER_SHOW_AFTER_MS) {
+        unmatchedShooterBanner.classList.remove("hidden");
+        unmatchedShooterShownAt = now;
+      }
       return;
     }
-    unmatchedShooterBanner.classList.toggle("hidden", unmatchedShooterBannerDismissed);
+    unmatchedShooterSince = null;
+    if (!visible) { unmatchedShooterBannerDismissed = false; return; }
+    var left = UNMATCHED_BANNER_HOLD_MS - (now - unmatchedShooterShownAt);
+    if (left <= 0) { hideUnmatchedShooterBanner(); return; }
+    if (!unmatchedShooterHideTimer) unmatchedShooterHideTimer = setTimeout(hideUnmatchedShooterBanner, left);
   }
   btnDismissUnmatchedShooterBanner.addEventListener("click", function () {
     unmatchedShooterBannerDismissed = true;
+    if (unmatchedShooterHideTimer) { clearTimeout(unmatchedShooterHideTimer); unmatchedShooterHideTimer = null; }
     unmatchedShooterBanner.classList.add("hidden");
   });
 
@@ -30125,34 +30453,81 @@
   // player id) and just have their classes toggled here on every camera
   // event, rather than forcing a full renderScoreboard() ~3.5 times a
   // second (expensive, and would disrupt any in-progress keypad
-  // interaction). flashing = "being watched live, not yet confirmed this
-  // round" (see camera.html's shotConfirmedForSeenName comment); idle =
-  // recognized via the lightweight seated/idle check, shown only when
-  // NOT also flashing (flashing already implies "camera sees them,"
-  // showing both would be redundant); needsConfirmation = this is the
-  // camera's best (unconfirmed) guess for who's currently bent over
-  // unmatched - tap them on the keypad to confirm, same action
-  // resolveUnmatchedShooterPrompt already wires into every manual
-  // selection site; recentlyUpdated = a sample was just captured for
-  // them, shown for a few seconds then auto-clears.
+  // interaction). The camera's colour for each player comes from
+  // camera.html's "player-states" (see its playerStates): cam-recognized
+  // (green - in view, known by how they look), cam-suspected (yellow -
+  // someone in view taken for them by extrapolation: their walking path,
+  // a near match, a guess), cam-located (blue - out of view, but the
+  // camera has an idea where), cam-none (white - not seen, nothing to go
+  // on). A camera page from before those states only says who it's
+  // watching (flashingName - green), recognized seated (idle - yellow)
+  // and its guess for an unnamed shooter (needsConfirmation - yellow).
+  // needsConfirmation also shows a "?" - tap them on the keypad to
+  // confirm, same action resolveUnmatchedShooterPrompt already wires into
+  // every manual selection site; recentlyUpdated = a sample was just
+  // captured for them, a "+" for a few seconds.
   var scorecardCameraFlashingName = null;
   var scorecardCameraNeedsConfirmName = null;
   var scorecardCameraIdleNames = {};
   var scorecardCameraRecentlyUpdatedTimers = {};
   var SCORECARD_CAMERA_PLUS_MS = 4000;
+  var scorecardCameraStates = null; // lower-case name -> "recognized" | "suspected" | "located" (null: none received yet)
+  var scorecardCameraStatesAt = 0;
+  var scorecardCameraStatesTimer = null;
+  // The camera sends its states every few seconds - nothing for this long
+  // (its page closed, the link down) and nothing is known any more.
+  var SCORECARD_CAMERA_STATES_STALE_MS = 10000;
+  var SCORECARD_CAMERA_STATE_CLASSES = ["cam-recognized", "cam-suspected", "cam-located", "cam-none"];
+
+  // The red "?" by a player's camera icon (the camera's guess for an
+  // unnamed shooter) - steady like the unmatched-shooter banner: a guess
+  // shows once it's held for UNMATCHED_BANNER_SHOW_AFTER_MS, and stays at
+  // least UNMATCHED_BANNER_HOLD_MS, instead of blinking with every frame.
+  var needsConfirmCandidate = null, needsConfirmCandidateSince = 0, needsConfirmShownAt = 0, needsConfirmHideTimer = null;
+  function setScorecardNeedsConfirm(name) {
+    var now = Date.now();
+    if (name) {
+      if (name !== needsConfirmCandidate) { needsConfirmCandidate = name; needsConfirmCandidateSince = now; }
+      if (scorecardCameraNeedsConfirmName === name) {
+        if (needsConfirmHideTimer) { clearTimeout(needsConfirmHideTimer); needsConfirmHideTimer = null; }
+        return;
+      }
+      if (now - needsConfirmCandidateSince < UNMATCHED_BANNER_SHOW_AFTER_MS) return;
+      if (needsConfirmHideTimer) { clearTimeout(needsConfirmHideTimer); needsConfirmHideTimer = null; }
+      scorecardCameraNeedsConfirmName = name;
+      needsConfirmShownAt = now;
+      return;
+    }
+    needsConfirmCandidate = null;
+    if (!scorecardCameraNeedsConfirmName || needsConfirmHideTimer) return;
+    var left = UNMATCHED_BANNER_HOLD_MS - (now - needsConfirmShownAt);
+    var clear = function () {
+      needsConfirmHideTimer = null;
+      scorecardCameraNeedsConfirmName = null;
+      updateCameraIconsOnScorecard();
+    };
+    if (left <= 0) { scorecardCameraNeedsConfirmName = null; return; }
+    needsConfirmHideTimer = setTimeout(clear, left);
+  }
+
+  function scorecardCameraStateFor(name, needsConfirm) {
+    if (scorecardCameraStates) {
+      if (Date.now() - scorecardCameraStatesAt > SCORECARD_CAMERA_STATES_STALE_MS) return "none";
+      return scorecardCameraStates[name.trim().toLowerCase()] || "none";
+    }
+    if (scorecardCameraFlashingName === name) return "recognized";
+    return needsConfirm || scorecardCameraIdleNames[name] ? "suspected" : "none";
+  }
 
   function updateCameraIconsOnScorecard() {
     Array.prototype.forEach.call(document.querySelectorAll(".scorecard-camera-badge"), function (badge) {
       var player = state.players.filter(function (p) { return p.id === badge.dataset.playerId; })[0];
       if (!player) return;
       var name = player.name;
-      var flashing = scorecardCameraFlashingName === name;
       var needsConfirm = scorecardCameraNeedsConfirmName === name;
-      var idle = !flashing && !!scorecardCameraIdleNames[name];
-      var plus = !!scorecardCameraRecentlyUpdatedTimers[name];
-      badge.classList.toggle("flashing", flashing);
-      badge.classList.toggle("idle", idle);
-      badge.classList.toggle("show-plus", plus);
+      var stateClass = "cam-" + scorecardCameraStateFor(name, needsConfirm);
+      SCORECARD_CAMERA_STATE_CLASSES.forEach(function (c) { badge.classList.toggle(c, c === stateClass); });
+      badge.classList.toggle("show-plus", !!scorecardCameraRecentlyUpdatedTimers[name]);
       badge.classList.toggle("show-question", needsConfirm);
     });
   }
@@ -30169,7 +30544,7 @@
     logCameraDiagnostic(name || null, stance, angle, closestName, closestDistance, matchThreshold, rawPoseConfidence, keypointConfFloor, tooFarFromRail);
     updateUnmatchedShooterBanner(name || null, stance);
     scorecardCameraFlashingName = flashingName || null;
-    scorecardCameraNeedsConfirmName = needsConfirmationName || null;
+    setScorecardNeedsConfirm(needsConfirmationName || null);
     updateCameraIconsOnScorecard();
     // Voice-announces a *change of matched name* only - per explicit
     // request, never for an unmatched sighting (no "seeing someone..."),
@@ -30311,6 +30686,21 @@
   // already send the complete current list each time, not a delta) -
   // see processIdlePoses's own comment for how rarely each entry in it
   // actually got re-checked.
+  // (for buildIndividualPanel, outside boot())
+  window.PMCCameraBridge.scorecardCameraStateFor = function (name) {
+    return scorecardCameraStateFor(name, scorecardCameraNeedsConfirmName === name);
+  };
+  window.PMCCameraBridge.reportPlayerStates = function (states) {
+    scorecardCameraStates = {};
+    Object.keys(states && typeof states === "object" ? states : {}).forEach(function (name) {
+      scorecardCameraStates[String(name).trim().toLowerCase()] = states[name];
+    });
+    scorecardCameraStatesAt = Date.now();
+    // (and again once they'd go stale, should nothing more come)
+    if (scorecardCameraStatesTimer) clearTimeout(scorecardCameraStatesTimer);
+    scorecardCameraStatesTimer = setTimeout(updateCameraIconsOnScorecard, SCORECARD_CAMERA_STATES_STALE_MS + 100);
+    updateCameraIconsOnScorecard();
+  };
   window.PMCCameraBridge.reportIdleStates = function (idleList) {
     scorecardCameraIdleNames = {};
     (idleList || []).forEach(function (entry) {
@@ -30466,9 +30856,16 @@
   // sequence to this player (see activeManualAttribution's own comment
   // there for how and when that stops).
   window.PMCCameraBridge.resolveUnmatchedShooterPrompt = function (playerId) {
+    // (a pick answers the camera's question: the "?" goes at once, not after its hold)
+    if (scorecardCameraNeedsConfirmName || needsConfirmHideTimer) {
+      if (needsConfirmHideTimer) { clearTimeout(needsConfirmHideTimer); needsConfirmHideTimer = null; }
+      scorecardCameraNeedsConfirmName = null;
+      needsConfirmCandidate = null;
+      updateCameraIconsOnScorecard();
+    }
     if (unmatchedShooterBanner.classList.contains("hidden")) return;
-    unmatchedShooterBanner.classList.add("hidden");
-    unmatchedShooterBannerDismissed = false;
+    hideUnmatchedShooterBanner();
+    unmatchedShooterSince = null;
     if (!sameDeviceCameraRunning) return;
     var player = state.players.filter(function (p) { return p.id === playerId; })[0];
     if (!player) return;
@@ -30578,7 +30975,8 @@
     { key: "bendExitAngle", id: "capture-bend-exit", kind: "float", def: 20, help: "players.cameraBendExitHelpText" },
     { key: "railDistanceInches", id: "capture-rail-distance", kind: "float", def: 30, help: "players.cameraRailDistanceHelpText" },
     { key: "ballConfirmPasses", id: "capture-ball-confirm", kind: "int", def: 3, help: "players.cameraBallConfirmHelpText" },
-    { key: "cueDetectionEnabled", id: "capture-cue-detection", kind: "bool", def: true, help: "players.cameraCueDetectionHelpText" }
+    { key: "cueDetectionEnabled", id: "capture-cue-detection", kind: "bool", def: true, help: "players.cameraCueDetectionHelpText" },
+    { key: "walkingPathsEnabled", id: "capture-walking-paths", kind: "bool", def: true, help: "players.cameraWalkingPathsHelpText" }
   ];
   CAPTURE_SETTINGS.forEach(function (c) {
     if (!c.el) c.el = document.getElementById(c.id);
@@ -30613,9 +31011,10 @@
     var waiting = phone && !phoneCaptureSettingsKnown;
     captureSettingsWaiting.classList.toggle("hidden", !waiting);
     captureSettingsFields.disabled = waiting;
-    // (Tracking's cue checkbox lives outside that fieldset, beside the
-    // recognition switch, which must never be disabled.)
+    // (Tracking's cue and walking-path checkboxes live outside that
+    // fieldset, beside the recognition switch, which must never be disabled.)
     document.getElementById("capture-cue-detection").disabled = waiting;
+    document.getElementById("capture-walking-paths").disabled = waiting;
     if (!phone) renderCaptureSettings(readStoredCameraSettings());
   }
 
@@ -31067,6 +31466,8 @@
       window.PMCCameraBridge.reportCandidateSeen(msg.player_name || null, msg.stance, msg.angle, msg.closestName, msg.closestDistance, msg.matchThreshold, msg.rawPoseConfidence, msg.keypointConfFloor, msg.tooFarFromRail, msg.flashingName, msg.needsConfirmationName);
     } else if (msg.type === "idle-states") {
       window.PMCCameraBridge.reportIdleStates(msg.idle);
+    } else if (msg.type === "player-states") {
+      window.PMCCameraBridge.reportPlayerStates(msg.states);
     } else if (msg.type === "enrollment-updated") {
       window.PMCCameraBridge.reportEnrollmentUpdated(msg.player_name);
     } else if (msg.type === "enroll-result") {
@@ -31201,6 +31602,7 @@
     applyRotationIfDue();
     renderRotation();
     renderScoreboard();
+    guideToRotationLineup();
   });
 
   // A synced mirror of the toggle above, living in Current Game too (see
@@ -31213,6 +31615,23 @@
     applyRotationIfDue();
     renderRotation();
     renderScoreboard();
+    guideToRotationLineup();
+  });
+
+  // The scoreboard's own Rotation / Single game choice, beside Focus Mode
+  // - the same switch as the two checkboxes above (renderRotation keeps
+  // all of them in step). Rotation with fewer than two game types in the
+  // lineup has nothing to rotate: Games Rotations opens to add them.
+  [scoreboardModeRotationRadio, scoreboardModeSingleRadio].forEach(function (radio) {
+    radio.addEventListener("change", function () {
+      if (!radio.checked) return;
+      state.rotation.enabled = radio === scoreboardModeRotationRadio;
+      saveState();
+      applyRotationIfDue();
+      renderRotation();
+      renderScoreboard();
+      guideToRotationLineup();
+    });
   });
 
   btnRotationPositionPrev.addEventListener("click", function () {
@@ -31224,15 +31643,49 @@
 
   rotationAddType.addEventListener("change", function () {
     var type = GAME_TYPES[rotationAddType.value];
+    markRotationAddReady(!!type);
     if (!type) return;
     rotationAddTarget.value = type.defaultTarget;
     rotationAddUnit.value = type.unit;
   });
 
   btnRotationAdd.addEventListener("click", function () {
+    // Nothing chosen yet: straight to the list instead.
+    if (!GAME_TYPES[rotationAddType.value]) {
+      openRotationGamePicker();
+      return;
+    }
     var target = parseInt(rotationAddTarget.value, 10) || 1;
     addRotationItem(rotationAddType.value, target, rotationAddUnit.value);
+    rotationAddType.value = "";
+    markRotationAddReady(false);
+    // Still short of the two a rotation needs: the list again, for the next one.
+    if (state.rotation.enabled && state.rotation.order.length < 2) openRotationGamePicker();
   });
+
+  // "+ Add to Order" lights up - gold, glowing - once a game is picked,
+  // so the next step is unmissable; back to normal once it's added.
+  function markRotationAddReady(on) {
+    btnRotationAdd.classList.toggle("rotation-add-ready", !!on);
+  }
+  // Games Rotations' game list, focused and - where the browser lets a
+  // page do it (it needs the tap that led here, a few seconds old at
+  // most) - opened, ready to pick from.
+  function openRotationGamePicker(delayMs) {
+    setTimeout(function () {
+      try { rotationAddType.focus({ preventScroll: true }); } catch (e) { rotationAddType.focus(); }
+      try { if (typeof rotationAddType.showPicker === "function") rotationAddType.showPicker(); } catch (e) {}
+    }, delayMs || 0);
+  }
+  // Rotation switched on with fewer than two game types in its lineup:
+  // nothing to rotate yet - Games Rotations opens and scrolls into view
+  // with its game list open, to add them.
+  function guideToRotationLineup() {
+    if (!state.rotation.enabled || state.rotation.order.length >= 2) return;
+    showToast(T("scoreboard.rotationNeedsTypes"), "🔄");
+    expandAndScrollToPanel("rotation-panel", "btn-toggle-rotation-panel");
+    openRotationGamePicker(600);
+  }
 
   rotationEveryInput.addEventListener("input", function () {
     var v = parseInt(rotationEveryInput.value, 10);
@@ -32585,6 +33038,17 @@
     }
     boot();
     consumePendingArchiveDates();
+    backfillReportArchive();
+    // Leaving the app (closing it, switching away, the device sleeping)
+    // keeps today's report too - no waiting for an idle hour - and
+    // coming back fills in any day missed meanwhile.
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "hidden") {
+        saveTodaysReportToArchive();
+      } else {
+        backfillReportArchive();
+      }
+    });
 
     // A join link (?join=1, from the Group Session QR/URL) puts this
     // device straight into guest mode - GAME_TYPES is already populated

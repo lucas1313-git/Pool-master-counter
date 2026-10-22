@@ -142,6 +142,39 @@
     font-weight: 600;
   }
   .tab-btn.active { background: var(--accent); color: #241a00; border-color: var(--accent); }
+  body.wide main { max-width: 1180px; }
+  .room-map { width: 100%; height: auto; max-height: 82vh; display: block; background: #120707; border: 1px solid var(--border); border-radius: 10px; margin: 8px 0; }
+  .room-map .rm-grid line { stroke: #3a2020; stroke-width: 0.5; }
+  .room-map .rm-grid line.g5 { stroke: #5a3030; stroke-width: 0.9; }
+  .room-map .rm-fov { fill: rgba(90, 169, 230, 0.07); stroke: #5aa9e6; stroke-width: 1; stroke-dasharray: 8 6; }
+  .room-map .rm-obj { fill: none; stroke-width: 1.4; stroke-linecap: round; }
+  .room-map .rm-obj.tall { stroke: #e0c48a; }
+  .room-map .rm-obj.mid { stroke: #c79a5b; }
+  .room-map .rm-obj.low { stroke: #9b7a52; }
+  .room-map .rm-table { fill: rgba(46, 160, 90, 0.18); stroke: #5ec98a; stroke-width: 2; }
+  .room-map .rm-pocket { fill: #0b0505; stroke: #5ec98a; stroke-width: 0.8; }
+  .room-map .rm-cam { fill: #5aa9e6; stroke: #5aa9e6; stroke-width: 2; }
+  .room-map .rm-cam-ray { stroke: #5aa9e6; stroke-width: 0.8; stroke-dasharray: 3 4; }
+  .room-map .rm-trail { fill: none; stroke-linejoin: round; stroke-linecap: round; }
+  .room-map .rm-person, .room-map .rm-heading { stroke-width: 2; }
+  .room-map .rm-zone-line { stroke-width: 1.2; stroke-dasharray: 3 3; fill: none; }
+  .room-map .rm-lastseen { stroke-width: 1.6; fill: none; }
+  .room-map .rm-scale { stroke: #c9a2a2; stroke-width: 1.5; }
+  .room-map text { paint-order: stroke; stroke: #120707; stroke-width: 0.22em; stroke-linejoin: round; }
+  .rm-options { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 0.95rem; }
+  .rm-options label { display: flex; align-items: center; gap: 6px; }
+  .rm-options input { width: auto; margin: 0; }
+  .rm-warning { border: 1px solid var(--accent); border-radius: 8px; padding: 8px 10px; margin: 8px 0; font-size: 0.95rem; }
+  .rm-warning button { margin-top: 8px; }
+  .rm-status { white-space: pre-line; font-size: 0.95rem; color: var(--text-dim); margin: 6px 0 10px; }
+  .rm-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+  .rm-buttons button { flex: 1; }
+  .rm-legend { font-size: 0.85rem; color: var(--text-dim); margin: 10px 0; line-height: 1.6; }
+  .rm-key { font-weight: 600; white-space: nowrap; }
+  .rm-table-list { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin: 8px 0; }
+  .rm-table-list th, .rm-table-list td { border-bottom: 1px solid var(--border); padding: 4px 6px; text-align: left; vertical-align: top; }
+  .rm-table-list .dim { color: var(--text-dim); }
+  .rm-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
   section.panel {
     background: var(--panel);
     border: 1px solid var(--border);
@@ -498,6 +531,7 @@
     <button class="tab-btn active" id="tabRecognize" type="button">Recognize</button>
     <button class="tab-btn" id="tabCalibrate" type="button">Table</button>
     <button class="tab-btn" id="tabEnroll" type="button">Enroll</button>
+    <button class="tab-btn" id="tabRoomMap" type="button">Room map</button>
   </div>
 
   <section class="panel" id="recognizePanel">
@@ -521,6 +555,10 @@
       any camera angle; only needs doing once per mounting.
     </p>
     <div id="calibrationStatus" class="hint">Not calibrated yet.</div>
+    <div class="rm-warning" id="sidesSwappedBox" hidden>
+      <div>The calibration has the table's long side and short end the wrong way round: the first edge tapped was saved as the other side, so every position on the table comes out stretched one way and squashed the other (the distance to the rails, the balls, the room map). The four corners are right - only which side is which.</div>
+      <button id="fixSidesBtn" type="button">Swap them round</button>
+    </div>
 
     <div id="calibrateSetup">
       <label for="tableSizeSelect">Table size</label>
@@ -576,7 +614,7 @@
   </section>
 
   <section class="panel" id="enrollPanel" hidden>
-    <h2 class="with-keys-help">Enroll players (today's outfits) <button type="button" class="help-btn help-btn-keys" data-help="keys" aria-label="Number pad and score card keys" title="Number pad and score card keys">?</button></h2>
+    <h2 class="with-keys-help">Enroll players <button type="button" class="help-btn help-btn-keys" data-help="keys" aria-label="Number pad and score card keys" title="Number pad and score card keys">?</button></h2>
     <div class="hint"><strong>Identify</strong>: press while the player is at the table (the only one there, or the one bent over) - the camera learns what they look like. <strong>Shooting</strong>: press while they're down on a shot - it also learns how they shoot, and the scoreboard switches to them. Every press adds a sample; nothing is replaced. Press as often as you like, any time, even mid-game.</div>
     <div class="hint">With a number pad: a player's <strong>number</strong> = seen (Identify), <strong>+</strong> = that player shooting, <strong>-</strong> = take back the last one.</div>
     <div class="hint">The frame round the picture lights <strong>yellow</strong> while a seen sample is taken and <strong>green</strong> for a shooting one, with whose it is - gray otherwise.</div>
@@ -594,9 +632,38 @@
       <div class="model-scores" id="modelScores">Self-check: waiting for samples.</div>
     </div>
     <div id="playerList"><div class="hint">No players yet - add them on the scoreboard.</div></div>
-    <button id="clearAllBtn" class="danger" type="button" style="margin-top:10px">Clear all (new session)</button>
+    <button id="clearAllBtn" class="danger" type="button" style="margin-top:10px">Clear all</button>
     <div class="hint"><strong>Self-check</strong>: the camera tests every sample against the others, as if it had just seen that player - the percentage is how often it named them right. Low? Press more for that player, and remove samples it says look like someone else.</div>
-    <div class="hint">Appearance only matches today's clothes - at the start of a new session, Clear all, then add new samples for everyone.</div>
+    <div class="hint"><strong>A new day</strong> (from 5 a.m.): the camera learns everyone's shirt afresh - shirt colours from earlier days stop counting, and so do the appearance models' earlier samples (they see the shirt too). Everything else carries on: trousers, cap or hair, build, how each player shoots. A press or two of Identify per player teaches it today's shirts at once; otherwise every point confirmed on the keypad does. Clear all only to start over from nothing.</div>
+  </section>
+
+  <section class="panel" id="roomMapPanel" hidden>
+    <h2>Room map <span class="fine">- seen from above</span> <button type="button" class="help-btn" data-help="roomMap" aria-label="What does this do?">?</button></h2>
+    <div class="rm-options">
+      <label><input type="checkbox" id="roomMapOpt-ids"> Ids &amp; odds</label>
+      <label><input type="checkbox" id="roomMapOpt-trails"> Trails</label>
+      <label><input type="checkbox" id="roomMapOpt-zones"> Where they could be</label>
+      <label><input type="checkbox" id="roomMapOpt-dwell"> Time spent</label>
+      <label><input type="checkbox" id="roomMapOpt-room"> Room shape</label>
+    </div>
+    <svg id="roomMapSvg" class="room-map" viewBox="0 0 100 40" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="The room seen from above"></svg>
+    <div class="rm-status" id="roomMapStatus"></div>
+    <div class="rm-warning" id="roomMapSidesBox" hidden>
+      <div>The table calibration has the long side and short end the wrong way round, so the map comes out stretched. The four corners are right - only which side is which.</div>
+      <button id="roomMapFixSidesBtn" type="button">Swap them round</button>
+    </div>
+    <div class="rm-buttons">
+      <button id="roomMapRebuildBtn" class="secondary" type="button">Work out the room's shape again</button>
+      <button id="roomMapClearBtn" class="secondary" type="button">Clear trails</button>
+    </div>
+    <div class="rm-legend">
+      <span class="rm-key" style="color:#5ec98a">&#9645; T</span> the table &nbsp;
+      <span class="rm-key" style="color:#5aa9e6">&#9679; CAM</span> the camera, dashed: the floor it sees (FOV) &nbsp;
+      <span class="rm-key" style="color:#e0c48a">&#9633; o1, o2...</span> walls and furniture from the empty-room snapshot (lighter = taller) &nbsp;
+      <span class="rm-key">&#9711; w1, w2...</span> a person and their walking path, with who they most likely are &nbsp;
+      <span class="rm-key">&#10005; - - &#9711;</span> out of view: where last seen, and where they could be by now
+    </div>
+    <div id="roomMapPeople"></div>
   </section>
 
   <details class="panel" id="settingsPanel">
@@ -640,6 +707,9 @@
 
       <div class="row" style="margin-top:4px">
         <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="cueDetectionToggle" style="width:auto;margin:0" checked> Cue stick detection (needs calibration)</label><button type="button" class="help-btn" data-help="cueDetection" aria-label="What does this do?">?</button>
+      </div>
+      <div class="row" style="margin-top:4px">
+        <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="walkingPathsToggle" style="width:auto;margin:0" checked> Follow walking paths</label><button type="button" class="help-btn" data-help="walkingPaths" aria-label="What does this do?">?</button>
       </div>
       <div class="row" style="margin-top:4px">
         <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="cueDebugToggle" style="width:auto;margin:0"> Cue debug mode (log, overlay, voice)</label><button type="button" class="help-btn" data-help="cueDebug" aria-label="What does this do?">?</button>
@@ -706,8 +776,8 @@
         a player's name while they're bent over a shot - every press adds to what
         the camera knows about them, as often as you like, even mid-game - or just
         start playing: scoring a real shot on the tablet teaches the camera too.
-        Either way, appearance only lasts one day's outfit, so this happens fresh
-        each session.
+        Either way, it remembers each player from day to day - only their shirt
+        is learned afresh each new day, the same way.
       </p>
       <div class="wizard-step-actions">
         <button id="wizardGoEnrollBtn" type="button">Enroll Players Now</button>
@@ -737,6 +807,7 @@
 <script src="camera/pose-detection.js"></script>
 <script src="camera/osnet.js"></script>
 <script src="camera/dino.js"></script>
+<script src="camera/depth.js"></script>
 <script>
 (function () {
   "use strict";
@@ -864,6 +935,7 @@
   var restartCameraBtn = document.getElementById("restartCameraBtn");
 
   var tabRecognize = document.getElementById("tabRecognize");
+  var tabRoomMap = document.getElementById("tabRoomMap");
   var tabEnroll = document.getElementById("tabEnroll");
   var tabCalibrate = document.getElementById("tabCalibrate");
   var recognizePanel = document.getElementById("recognizePanel");
@@ -915,6 +987,7 @@
   var ballConfirmInput = document.getElementById("ballConfirmInput");
   var cueDetectionToggle = document.getElementById("cueDetectionToggle");
   var cueDebugToggle = document.getElementById("cueDebugToggle");
+  var walkingPathsToggle = document.getElementById("walkingPathsToggle");
   var debugToggle = document.getElementById("debugToggle");
   var relaunchWizardBtn = document.getElementById("relaunchWizardBtn");
 
@@ -930,11 +1003,15 @@
     },
     recognitionMethod: {
       title: "Recognize players by",
-      body: "Two ways of telling players apart:\n\nClothing colours - counts the colours of each player's shirt, trousers, sleeves and cap. Quick, but can't tell apart two players in similar colours, and is thrown by lighting changes.\n\nAppearance models - models that learned from a great many pictures (OSNet, DINOv2 - switch each on or off on the Enroll tab) see light vs dark, patterns and logos, and the same person from another angle. A small classifier learns tonight's players from your samples, so more samples keep improving it. With both models on, their numbers are used side by side.\n\nEvery sample keeps all of them, and the Enroll tab's self-check scores the colours, each model and both together. \"Whichever recognizes them better\" uses the models that are switched on once the self-check says they do at least as well (95%+) or clearly better - otherwise colours."
+      body: "Two ways of telling players apart:\n\nClothing colours - counts the colours of each player's shirt, trousers, sleeves and cap. Quick, but can't tell apart two players in similar colours, and is thrown by lighting changes.\n\nAppearance models - models that learned from a great many pictures (OSNet, DINOv2 - switch each on or off on the Enroll tab) see light vs dark, patterns and logos, and the same person from another angle. A small classifier learns tonight's players from your samples, so more samples keep improving it. With both models on, their numbers are used side by side.\n\nEvery sample keeps all of them, and the Enroll tab's self-check scores the colours, each model and both together. \"Whichever recognizes them better\" uses the models that are switched on once the self-check says they do at least as well (95%+) or clearly better - otherwise colours.\n\nA new day (from 5 a.m.) - shirts start over: shirt and sleeve colours are only compared with samples from the same day, and the models (which see the shirt too) use only today's samples. Trousers, cap or hair, build and how each player shoots carry on from earlier days, so the camera still knows everyone while it learns today's shirts."
     },
     emptyRoom: {
       title: "Empty-room snapshot",
       body: "A picture of the room with nobody in view and nothing on the table. The camera keeps it and compares with it:\n\nBalls - every spot of the cloth is checked against the same spot on the empty table, instead of against one colour for the whole cloth. A lamp's bright patch, the shaded far end, the cushions and the light from a window then all count as cloth, and a ball whose colour is close to the cloth's - a green 6 or 14 in the shade - still stands out.\n\nPlayers - whatever looks just like the empty room is cut out of a player's picture (unless it's right on their body) before the camera measures their colours or the appearance models look at it, so the bookcase behind someone isn't taken for part of how they look. The box below the button turns this off.\n\nThe camera follows slow changes - daylight, a lamp warming up - by itself. If the camera is moved or the lights change a lot, the tab says the view doesn't match any more: take it again. Samples taken before the snapshot were measured with the room in them - for the best self-check, take new ones after it.\n\nThe picture stays on this device (in this browser's storage)."
+    },
+    roomMap: {
+      title: "Room map",
+      body: "The room as if seen from the ceiling straight above the table, in lines.\n\nThe camera - where it is, how high, how wide it sees - is worked out from the table calibration alone: the four corners of the cloth fix it. The dashed outline (FOV) is the floor it can see.\n\nThe room's shape (o1, o2... - walls, shelves, chairs) comes from the empty-room snapshot: a depth model (Depth Anything V2, Apache-2.0, a 27 MB download the first time) says how near every part of the picture is, the cloth sets the scale, and anything standing above the floor is drawn. Lighter outlines are taller. Taking a new snapshot, or calibrating again, works it out again.\n\nPeople: each one the camera follows is a circle with their walking path's id (w1, w2...) and who they most likely are - every look at them is compared with the players' samples, a name the path already carries (an Enroll press, a keypad pick) counts extra, and nobody can be in two places, so the odds are shared out. Their trail is the way they walked (the last 30 seconds bold). Someone out of view keeps a cross where they were last seen and a dashed circle of where they could be by now, growing at walking pace - minus the floor the camera sees, since there they'd be in view. Someone held at the table (hidden behind another player) stays put.\n\nTime spent shows where each player spends their time. Everything stays on this device."
     },
     appearanceModels: {
       title: "Appearance models",
@@ -975,6 +1052,10 @@
     cueDetection: {
       title: "Cue stick detection",
       body: "Looks for a cue stick held out over the calibrated table. A player at the table with their cue over the cloth is taking a shot - this counts as shooting even when the camera can't see them bend over (a far, level camera barely sees a bend at all).\n\nIf a player walks around the table and then drops out of view right next to it, the camera assumes they're still there: the next cue that comes out over the table is credited to them, for up to 45 seconds after they were last seen (each shot they take re-arms it, up to 3 minutes).\n\nOnly works once the table is calibrated. Turn on the debug overlay to see the cue drawn in pink, with how long it is and who it was matched to - long thin lines it turned down are drawn grey with the reason."
+    },
+    walkingPaths: {
+      title: "Follow walking paths",
+      body: "Follows the path each person walks around the room. When a recognized player drops out of view - behind someone else, behind the lamp, out of the picture - and someone turns up again along the way they were walking (or right where they vanished) within about 12 seconds, it's taken to be the same player and keeps their name, even before the camera can recognize them by how they look.\n\nIf that person clearly looks like a different enrolled player, the camera goes by their looks instead. When two players vanish close together and it can't tell which one came back, it doesn't guess.\n\nWorks best with the table calibrated (paths are then measured in inches on the floor). Turn on the debug overlay to see each path drawn on the video - green with a name, grey without - and a dashed circle where a player went out of view."
     },
     cueDebug: {
       title: "Cue debug mode",
@@ -1087,6 +1168,8 @@
     ballConfirmPasses: 3,
     cueDetectionEnabled: true,
     cueDebugEnabled: false,
+    // keep a player's id and name when they turn up again along their walking path
+    walkingPathsEnabled: true,
     // "auto" (whichever the self-check scores higher), "colour" or "model"
     recognitionMethod: "auto",
     // which appearance models "model" combines (the Enroll tab's boxes)
@@ -1120,7 +1203,7 @@
   // after every change, wherever the change came from) and applies what
   // the scoreboard sends - postMessage in same-device mode, the relay for
   // a separate phone.
-  var CAPTURE_SETTING_KEYS = ["matchThreshold", "debounceSec", "consecutiveFrames", "bendEnterAngle", "bendExitAngle", "railDistanceInches", "ballConfirmPasses", "cueDetectionEnabled"];
+  var CAPTURE_SETTING_KEYS = ["matchThreshold", "debounceSec", "consecutiveFrames", "bendEnterAngle", "bendExitAngle", "railDistanceInches", "ballConfirmPasses", "cueDetectionEnabled", "walkingPathsEnabled"];
   function reportCaptureSettings() {
     if (isViewer || !CAPTURE_SETTING_KEYS) return; // (a save during page load, before this section ran)
     var out = {};
@@ -1164,6 +1247,7 @@
     ballConfirmInput.value = settings.ballConfirmPasses;
     cueDetectionToggle.checked = settings.cueDetectionEnabled;
     cueDebugToggle.checked = settings.cueDebugEnabled;
+    walkingPathsToggle.checked = settings.walkingPathsEnabled;
     debugToggle.checked = settings.debugOverlay;
     recognizeDebugToggle.checked = settings.debugOverlay;
     recognizeVoiceToggle.checked = settings.voiceStatusEnabled;
@@ -1215,6 +1299,11 @@
     persistSettings();
     resetCueTracking(settings.cueDetectionEnabled ? "enabled" : "disabled");
   });
+  walkingPathsToggle.addEventListener("change", function () {
+    settings.walkingPathsEnabled = walkingPathsToggle.checked;
+    persistSettings();
+    logActivity("Following walking paths " + (settings.walkingPathsEnabled ? "on" : "off"));
+  });
   cueDebugToggle.addEventListener("change", function () {
     settings.cueDebugEnabled = cueDebugToggle.checked;
     persistSettings();
@@ -1255,6 +1344,10 @@
     recognizePanel.hidden = which !== "recognize";
     enrollPanel.hidden = which !== "enroll";
     calibratePanel.hidden = which !== "calibrate";
+    tabRoomMap.classList.toggle("active", which === "roommap");
+    roomMapPanel.hidden = which !== "roommap";
+    document.body.classList.toggle("wide", which === "roommap");
+    if (which === "roommap") roomMapShown();
     if (which === "enroll" && enrollCheckPending) scheduleEnrollCheck(0);
     overlayEl.classList.toggle("tappable", which === "calibrate" && calibrating);
     renderEnrollLight();
@@ -1262,6 +1355,7 @@
   tabRecognize.addEventListener("click", function () { showTab("recognize"); });
   tabEnroll.addEventListener("click", function () { showTab("enroll"); });
   tabCalibrate.addEventListener("click", function () { showTab("calibrate"); });
+  tabRoomMap.addEventListener("click", function () { showTab("roommap"); });
 
   // code: what the light means, independent of its English text - the
   // scoreboard shows the same three lights (Visual Scoring) in its own
@@ -1780,7 +1874,7 @@
   // elements with no id (the "?" help buttons) are left alone too, since
   // they only ever show static local text - everything else with an id
   // forwards.
-  var VIEWER_LOCAL_ONLY_IDS = { tabRecognize: true, tabCalibrate: true, tabEnroll: true, btnCloseSettingsHelp: true };
+  var VIEWER_LOCAL_ONLY_IDS = { tabRecognize: true, tabCalibrate: true, tabEnroll: true, tabRoomMap: true, btnCloseSettingsHelp: true };
   function initViewerMode() {
     videoEl.hidden = true;
     overlayEl.hidden = true;
@@ -1991,7 +2085,7 @@
     "recognizeLiveStatus", "recognizeDebugToggle", "recognizeVoiceToggle",
     "debugToggle", "thresholdInput", "consecutiveInput", "debounceInput",
     "bendEnterInput", "bendExitInput", "railDistanceInput", "recognitionMethodSelect",
-    "ballTrackingToggle", "ballConfirmInput", "cueDetectionToggle", "cueDebugToggle",
+    "ballTrackingToggle", "ballConfirmInput", "cueDetectionToggle", "cueDebugToggle", "walkingPathsToggle",
     "tableSizeSelect", "firstEdgeSelect", "useOsnetToggle", "useDinoToggle", "modelScores",
     "emptyRoomBtn", "emptyRoomStatus", "emptyRoomClearBtn", "roomCutoutToggle"
   ];
@@ -2170,9 +2264,11 @@
       if (seenNowKey === key) row.classList.add("seen-now");
       if (keypadEnrollKey === key) row.classList.add("keypad-selected");
       var shots = count ? shootingSampleCount(entry) : 0;
+      // (today's: the only ones that know today's shirt - see playDayOf)
+      var today = count ? todaySampleCount(entry) : 0;
       var meta = document.createElement("div");
       meta.innerHTML = '<div class="name"><button type="button" class="secondary row-number" id="' + enrollRowId("enrollNum-", name) + '">' + rowNumber + '</button>' + escapeHtml(name) + '</div><div class="meta">' +
-        (count ? count + " sample" + (count === 1 ? "" : "s") + ", " + shots + " shooting" : "Not enrolled yet") + "</div>";
+        (count ? count + " sample" + (count === 1 ? "" : "s") + ", " + shots + " shooting, " + (today ? today + " today" : "none today - today's shirt not seen yet") : "Not enrolled yet") + "</div>";
       var check = count ? enrollCheck[key] : null;
       if (check && check.tested >= SELF_CHECK_MIN_SAMPLES) {
         var pct = Math.round(check.right / check.tested * 100);
@@ -2254,11 +2350,11 @@
         send({ type: "enroll-delete", player_name: enrollments[key].displayName || key });
       });
       clearAllBtn.dataset.confirm = "0";
-      clearAllBtn.textContent = "Clear all (new session)";
+      clearAllBtn.textContent = "Clear all";
     } else {
       clearAllBtn.dataset.confirm = "1";
       clearAllBtn.textContent = "Tap again to clear everyone";
-      setTimeout(function () { clearAllBtn.dataset.confirm = "0"; clearAllBtn.textContent = "Clear all (new session)"; }, 3000);
+      setTimeout(function () { clearAllBtn.dataset.confirm = "0"; clearAllBtn.textContent = "Clear all"; }, 3000);
     }
   });
 
@@ -2773,6 +2869,7 @@
     buildRoomReference();
     if (source === videoEl) captureBackgroundReference(); // (regionLooksStatic's still-furniture check, from the same moment)
     logActivity("Empty-room snapshot taken");
+    if (roomMapPanel && !roomMapPanel.hidden) buildRoomPlan("new snapshot");
     forgetLastMatch();
     renderEmptyRoomStatus();
     return { at: emptyRoom.at, saved: emptyRoom.saved, size: jpeg ? jpeg.length : 0 };
@@ -4478,7 +4575,14 @@
     getDetectTick: function () { return detectTick; },
     getLastShot: function () { return lastShot; },
     getPlayingNames: function () { return playingNames; },
-    getKnownNames: function () { return knownNames; }
+    getKnownNames: function () { return knownNames; },
+    // a new day (see playDayOf): which day a moment is, and acting as if it were `now`
+    playDayOf: playDayOf,
+    checkNewDay: checkNewDay,
+    hasPlentyPressedSamples: hasPlentyPressedSamples,
+    // the score cards' camera icons (see playerStates)
+    notePlayerSighting: function (name, sure) { notePlayerSighting(name, sure, Date.now()); },
+    playerStates: function () { return playerStates(Date.now()); }
   };
   // Same idea for the cue: the tracker, the detector on demand, and the
   // "player out of view at the table" hold, readable and seedable.
@@ -4499,6 +4603,7 @@
     // around a synthetic table through the real detection loop.
     posesOverride: null,
     getStance: function () { return effectiveStance(); },
+    getWalkingPaths: function () { return walkingPaths; },
     getShootingVia: function () { return shootingVia; }
   };
 
@@ -4721,18 +4826,26 @@
     for (var i = r * HIST_LEN, end = i + HIST_LEN; i < end; i++) if (d[i]) return true;
     return false;
   }
+  // The shirt: the torso, and the sleeves (forearms - a short-sleeved
+  // shirt shows the arms, a long-sleeved one covers them).
+  function isShirtRegion(r) {
+    return r === 0 || r === 2;
+  }
   // Compares only the body parts in view in both: legs hidden behind the
   // table (or a face turned away) used to count as a big difference all
   // on its own. A part seen in only one of the two is assumed to differ
   // as much as the parts compared do on average, so a sample with fewer
   // parts in view doesn't come out closer just for having less to compare.
-  function histogramDistance(a, b) {
+  // otherDay: the two are from different days (see playDayOf) - the shirt
+  // is left out the same way, as a part not compared; Infinity when
+  // nothing else was in view in both.
+  function histogramDistance(a, b, otherDay) {
     var sum = 0, compared = 0, either = 0;
     var tones = a.length >= TONE_INDEX + 3 * REGION_COUNT && b.length >= TONE_INDEX + 3 * REGION_COUNT;
     for (var r = 0; r < REGION_COUNT; r++) {
       var seenA = regionSeen(a, r), seenB = regionSeen(b, r);
       if (seenA || seenB) either++;
-      if (!seenA || !seenB) continue;
+      if (!seenA || !seenB || (otherDay && isShirtRegion(r))) continue;
       compared++;
       for (var i = r * HIST_LEN, end = i + HIST_LEN; i < end; i++) sum += Math.abs(a[i] - b[i]);
       if (tones) {
@@ -4742,8 +4855,64 @@
         }
       }
     }
+    if (!compared) return Infinity;
     if (either > compared) sum *= either / compared;
     return sum + Math.abs((a[ASPECT_INDEX] || 0) - (b[ASPECT_INDEX] || 0));
+  }
+
+  // ---- A new day: shirts start over ----
+  // Players come back another day in another shirt - but the same
+  // trousers, cap or hair, build and way of shooting. So a sample's shirt
+  // only counts against a frame (or another sample) from its own day, the
+  // appearance models - which see the whole person, shirt and all - only
+  // use today's samples, and the operator's "plenty pressed" (after which
+  // the camera stops adding samples of its own) counts today's presses.
+  // Everything else every sample knows carries on from day to day. A day
+  // runs from NEW_DAY_HOUR to NEW_DAY_HOUR, so a night that goes past
+  // midnight is still one day.
+  var NEW_DAY_HOUR = 5;
+  function playDayOfDate(d) {
+    if (d.getHours() < NEW_DAY_HOUR) d.setDate(d.getDate() - 1);
+    return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+  }
+  // The day a moment (milliseconds) belongs to, as yyyymmdd - null when
+  // unknown (old samples kept no time, and count as an earlier day).
+  var playDays = new Map();
+  function playDayOf(at) {
+    if (typeof at !== "number" || !isFinite(at)) return null;
+    var day = playDays.get(at);
+    if (day === undefined) {
+      day = playDayOfDate(new Date(at));
+      if (playDays.size > 20000) playDays.clear();
+      playDays.set(at, day);
+    }
+    return day;
+  }
+  function sampleDay(info) {
+    return info ? playDayOf(info.at) : null;
+  }
+  var currentPlayDay = playDayOfDate(new Date());
+  function isTodaySample(info) {
+    return sampleDay(info) === currentPlayDay;
+  }
+  // Checked every half minute: when a new day starts, everything worked
+  // out from the samples is worked out again.
+  function checkNewDay(now) {
+    var day = playDayOfDate(new Date(now || Date.now()));
+    if (day === currentPlayDay) return false;
+    currentPlayDay = day;
+    forgetLastMatch();
+    if (!isViewer && Object.keys(enrollments).length) {
+      console.log("[PMC new day] a new day - shirts are learned afresh, everything else about each player carries on");
+      logActivity("New day - today's shirts are learned afresh; everything else about each player carries on");
+    }
+    renderPlayerList();
+    scheduleEnrollCheck(0);
+    return true;
+  }
+  setInterval(checkNewDay, 30000);
+  function todaySampleCount(entry) {
+    return alignedInfo(entry).filter(isTodaySample).length;
   }
 
   // Once the scoreboard has told us who is Playing, only those players
@@ -4812,20 +4981,25 @@
 
   // A sample as the given method sees it: its colour counts, or the
   // appearance models' numbers - those switched on, side by side (null for
-  // a sample taken without them).
+  // a sample taken without them, or on another day - see playDayOf).
   function sampleVector(method, entry, info, i) {
-    return method === "model" ? sampleComboVector(info[i], activeModelCombo()) : entry.descriptors[i];
+    if (method !== "model") return entry.descriptors[i];
+    return isTodaySample(info[i]) ? sampleComboVector(info[i], activeModelCombo()) : null;
   }
-  function vectorDistance(method, a, b) {
-    return method === "model" ? cosineDistance(a, b) : histogramDistance(a, b);
+  // otherDay: colour counts from different days leave the shirt out
+  function vectorDistance(method, a, b, otherDay) {
+    return method === "model" ? cosineDistance(a, b) : histogramDistance(a, b, otherDay);
   }
 
   // Every listed player's distance from `query` (colour counts, or the
   // model's numbers - `method`), closest first: `distance` against their
   // samples in this posture (`exact` of them). skip(key, i) leaves single
-  // samples out (the self-check's).
-  function rankPlayers(query, pose, keys, skip, method) {
+  // samples out (the self-check's). queryDay: the day `query` is from
+  // (playDayOf) - today unless given. A player with no sample to compare
+  // (nothing but a shirt from another day in view) isn't ranked.
+  function rankPlayers(query, pose, keys, skip, method, queryDay) {
     method = method || "colour";
+    if (queryDay === undefined) queryDay = currentPlayDay;
     var ranked = [];
     keys.forEach(function (key) {
       var entry = enrollments[key];
@@ -4845,13 +5019,18 @@
       }
       var pool = pose && exact >= MIN_SAME_POSE_SAMPLES ? samePose : all;
       if (!pool.length) return;
-      var distances = pool.map(function (i) { return vectorDistance(method, query, vectors[i]); }).sort(function (a, b) { return a - b; });
+      var distances = pool.map(function (i) {
+        return vectorDistance(method, query, vectors[i], queryDay === null || sampleDay(info[i]) !== queryDay);
+      }).filter(isFinite).sort(function (a, b) { return a - b; });
+      if (!distances.length) return;
+      // (counted among the samples in this posture: with only one
+      // bent-over sample, the next-closest would be a standing one - and
+      // among those with something to compare)
+      var distance = distances[agreeingSamples(Math.min(samePose.length, distances.length)) - 1];
       ranked.push({
         key: key,
         name: entry.displayName || key,
-        // (counted among the samples in this posture: with only one
-        // bent-over sample, the next-closest would be a standing one)
-        distance: distances[agreeingSamples(samePose.length) - 1],
+        distance: distance,
         exact: exact
       });
     });
@@ -4901,20 +5080,22 @@
       var entry = enrollments[key], info = alignedInfo(entry), out = [];
       (entry.descriptors || []).forEach(function (d, i) {
         var v = sampleVector(method, entry, info, i);
-        if (v && samplePose(info[i]) !== pose) out.push(v);
+        if (v && samplePose(info[i]) !== pose) out.push({ v: v, day: sampleDay(info[i]) });
       });
       return out.slice(-APART_MAX_SAMPLES);
     };
     var nearest = function (d, list) {
       var closest = Infinity;
-      list.forEach(function (o) { if (o !== d) closest = Math.min(closest, vectorDistance(method, d, o)); });
+      list.forEach(function (o) { if (o !== d) closest = Math.min(closest, vectorDistance(method, d.v, o.v, d.day === null || d.day !== o.day)); });
       return closest;
     };
     var median = function (xs) { xs.sort(function (x, y) { return x - y; }); return xs[Math.floor(xs.length / 2)]; };
     var a = pick(keyA), b = pick(keyB), apart = true;
     if (a.length && b.length) {
       var within = a.length >= 2 ? median(a.map(function (d) { return nearest(d, a); })) : 0;
-      apart = median(b.map(function (d) { return nearest(d, a); })) - within >= methodThreshold(method) * MATCH_MARGIN_FRACTION;
+      var across = median(b.map(function (d) { return nearest(d, a); }));
+      // (not when nothing but other days' shirts was in view to compare)
+      apart = isFinite(across) && isFinite(within) && across - within >= methodThreshold(method) * MATCH_MARGIN_FRACTION;
     }
     apartCache[cacheKey] = apart;
     return apart;
@@ -5217,9 +5398,9 @@
   }
 
   // The models recognition combines right now: switched on, loaded, and in
-  // the samples of everyone who can be recognized - a player whose samples
-  // all predate a model can't be named by it, so the others carry on
-  // without it until everyone has some.
+  // today's samples of everyone who can be recognized - a player whose
+  // samples all predate a model (or today) can't be named by it, so the
+  // others carry on without it until everyone has some.
   var activeComboCache = null;
   var everyoneHasCache = {};
   function everyoneHasCombo(ids) {
@@ -5227,7 +5408,7 @@
     if (!everyoneHasCache.hasOwnProperty(key)) {
       everyoneHasCache[key] = Object.keys(enrollments).every(function (k) {
         var entry = enrollments[k];
-        return !isEligibleForRecognition(entry.displayName || k) || alignedInfo(entry).some(function (i) { return !!sampleComboVector(i, ids); });
+        return !isEligibleForRecognition(entry.displayName || k) || alignedInfo(entry).some(function (i) { return isTodaySample(i) && !!sampleComboVector(i, ids); });
       });
     }
     return everyoneHasCache[key];
@@ -5238,13 +5419,13 @@
     }
     return activeComboCache;
   }
-  // Eligible players with no samples a model has looked at (for the Enroll
-  // tab's note).
+  // Eligible players with no samples today a model has looked at (for the
+  // Enroll tab's note).
   function playersWithoutModel(m) {
     var names = [];
     Object.keys(enrollments).forEach(function (k) {
       var entry = enrollments[k], name = entry.displayName || k;
-      if (isEligibleForRecognition(name) && !alignedInfo(entry).some(function (i) { return i && typeof i[m.infoKey] === "string"; })) names.push(name);
+      if (isEligibleForRecognition(name) && !alignedInfo(entry).some(function (i) { return isTodaySample(i) && typeof i[m.infoKey] === "string"; })) names.push(name);
     });
     return names;
   }
@@ -5469,6 +5650,7 @@
   // have numbers for - one combination at a time, and never a second run
   // queued behind a first (a press every second would otherwise stack them
   // up): a change meanwhile just runs it again once this one's done.
+  // Today's samples only (see playDayOf) - the models see the shirt.
   function startModelCheck() {
     if (modelCheckBusy) { modelCheckAgain = true; return; }
     var run = ++modelCheckRun, jobs = [];
@@ -5476,7 +5658,7 @@
       var job = { ids: ids, keys: [], names: [], rows: [], labels: [], times: [], descriptors: [] };
       Object.keys(enrollments).forEach(function (key) {
         var entry = enrollments[key], info = alignedInfo(entry), picked = [];
-        (entry.descriptors || []).forEach(function (d, i) { var e = sampleComboVector(info[i], ids); if (e) picked.push({ e: e, t: info[i].at || 0, d: d }); });
+        (entry.descriptors || []).forEach(function (d, i) { var e = isTodaySample(info[i]) && sampleComboVector(info[i], ids); if (e) picked.push({ e: e, t: info[i].at || 0, d: d }); });
         picked = picked.slice(-MODEL_CHECK_MAX_PER_PLAYER);
         if (!picked.length) return;
         var p = job.keys.length;
@@ -5621,6 +5803,7 @@
   }
 
   function renderCalibrationStatus() {
+    renderSidesWarning();
     if (calibration) {
       calibrationStatusEl.textContent = "Calibrated (" + calibration.tableLength + "\" x " + calibration.tableWidth + "\" table). Distance-to-rail checks are active.";
       recalibrateBtn.hidden = false;
@@ -6273,6 +6456,7 @@
 
   function commitEnrollSample(p, frame) {
     frame.used = true;
+    nameWalkingPath(frame.trackId, p.name, p.kind + " press");
     // Every loaded appearance model's numbers for exactly this frame (they
     // may not have looked at this one themselves yet) - switched on or not,
     // so the self-check can compare them - a few milliseconds each.
@@ -6463,7 +6647,7 @@
         if (j === i) return true;
         var when = info[j] && info[j].at;
         return !!at && !!when && Math.abs(when - at) < SELF_CHECK_NEIGHBOUR_MS;
-      }, "colour");
+      }, "colour", sampleDay(info[i]));
       if (!ranked.some(function (r) { return r.key === key; })) return; // nothing else of theirs to test against
       result.tested++;
       var m = matchFromRanking(ranked, samplePose(info[i]), "colour");
@@ -6547,7 +6731,7 @@
       else if (s.state === "failed") notes.push(m.label + " couldn't load.");
       else if (s.state === "ready") {
         var missing = playersWithoutModel(m);
-        if (missing.length && combo.indexOf(m.id) === -1) notes.push(m.label + " waits for a sample of " + missing.join(", ") + ".");
+        if (missing.length && combo.indexOf(m.id) === -1) notes.push(m.label + " waits for a sample of " + missing.join(", ") + " today.");
         else if (s.ms !== null) notes.push(m.label + " " + Math.round(s.ms) + " ms a look.");
       }
     });
@@ -6664,6 +6848,246 @@
     }
   }
 
+  // ---- Walking paths ----
+  // Follows each person's walking path from one look to the next, so a
+  // player who drops out of view (behind someone, behind the lamp, out of
+  // the frame) and turns up again along the way they were going is still
+  // the same player - same track id, same name - not a stranger to be
+  // recognized from scratch. The pose model's own tracker forgets a person
+  // after a second, or as soon as they move too far between two looks, and
+  // SinglePose (same-device mode) has no tracker at all; every pose's .id
+  // is replaced with its path's id ("w1", "w2"... - never the same as the
+  // pose model's numbers), so everything keyed by track id (visit tallies,
+  // idle names, table presence, the last shot) carries across the gap.
+  // A position is where the hips are, mapped onto the table's plane - the
+  // hips are about the felt's height, and still in view when the table
+  // hides the legs - in inches once the table is calibrated, otherwise in
+  // picture pixels scaled by the person's shoulder-to-hip length.
+  var PATH_LIVE_GAP_MS = 700; // missing this long or less: the same walk, a look or two missed
+  var PATH_KEEP_MS = 12000; // a lost path is looked for this long
+  var PATH_WALK_ON_MS = 2500; // after vanishing, they may have kept walking this long (then stopped somewhere on the way)
+  var PATH_NEAR_IN = 30; // next-look matching radius...
+  var PATH_SPEED_IN_S = 60; // ...plus a brisk walk (about 3.4 mph) for the time since
+  var PATH_LOST_RADIUS_IN = 24; // how far off their line a returning player may turn up,
+  var PATH_LOST_GROW_IN_S = 10; // growing by this every second they're gone,
+  var PATH_LOST_MAX_RADIUS_IN = 54; // up to this
+  var PATH_STILL_IN_S = 8; // slower than this is standing still (hip jitter)
+  var PATH_TORSO_IN = 20; // uncalibrated: one shoulder-to-hip length counts as this many inches
+  var PATH_MAX_RANGE_IN = 480; // further than this from the table (40 ft) is the plane mapping going wild near the horizon
+  var PATH_CLEAR_RATIO = 0.7; // a returning body joins a lost path only if no other fit is nearly as good
+  var PATH_CERTAINTY = 0.65; // a name carried along a walking path (see visitCertainty)
+  var walkingPaths = []; // { id, name, rawId, points: [{ x, y, px, py, at }], v, pv (per second), ipp, hipOffset, seenAt }
+  var walkingPathUnit = null; // "in" or "px" - paths are dropped when the calibration comes or goes
+  var nextWalkingPathId = 1;
+
+  function walkingPathsActive() {
+    return settings.walkingPathsEnabled && !isViewer;
+  }
+  function walkingPathById(trackId) {
+    for (var i = 0; i < walkingPaths.length; i++) if (walkingPaths[i].id === trackId) return walkingPaths[i];
+    return null;
+  }
+
+  // The hips and shoulders on the picture (either may be missing).
+  function pathAnchor(pose) {
+    var k = pose.keypoints || [];
+    var ok = function (name) { var p = kp(k, name); return p && !(p.score < KEYPOINT_CONF_FLOOR) ? p : null; };
+    var lh = ok("left_hip"), rh = ok("right_hip"), ls = ok("left_shoulder"), rs = ok("right_shoulder");
+    var hip = lh && rh ? midpoint(lh, rh) : lh || rh;
+    var shoulder = ls && rs ? midpoint(ls, rs) : ls || rs;
+    return hip || shoulder ? { hip: hip, shoulder: shoulder } : null;
+  }
+  // Where those hips stand: { x, y (inches, or pixels), px, py (video
+  // pixels), ipp (inches per unit) }. Hips hidden (behind the table, say)
+  // are put where this path's own shoulder-to-hip offset says - the
+  // shoulders themselves are two feet above the felt, too far off the
+  // table's plane to map onto it.
+  function pathPoint(anchor, path) {
+    var at = anchor.hip, offset = path && path.hipOffset;
+    if (!at && !(anchor.shoulder && offset)) return null;
+    if (!at) at = { x: anchor.shoulder.x + offset.x, y: anchor.shoulder.y + offset.y };
+    if (walkingPathUnit === "in") {
+      var real = applyHomography(calibration.h, at.x, at.y);
+      if (!real || !(Math.hypot(real.x - calibXExtent() / 2, real.y - calibYExtent() / 2) <= PATH_MAX_RANGE_IN)) return null;
+      return { x: real.x, y: real.y, px: at.x, py: at.y, ipp: 1 };
+    }
+    var torso = anchor.hip && anchor.shoulder ? Math.hypot(anchor.hip.x - anchor.shoulder.x, anchor.hip.y - anchor.shoulder.y) : offset ? Math.hypot(offset.x, offset.y) : 0;
+    return { x: at.x, y: at.y, px: at.x, py: at.y, ipp: torso > 8 ? PATH_TORSO_IN / torso : null };
+  }
+
+  function pathLast(path) { return path.points[path.points.length - 1]; }
+  // Where they'd be after walking on for ms (units).
+  function pathAhead(path, ms) {
+    var last = pathLast(path), s = Math.min(ms, PATH_WALK_ON_MS) / 1000;
+    return { x: last.x + path.v.x * s, y: last.y + path.v.y * s };
+  }
+  function pathVelocity(points, kx, ky) {
+    var last = points[points.length - 1], first = null;
+    for (var i = points.length - 2; i >= 0 && last.at - points[i].at <= 1500; i--) first = points[i];
+    if (!first || last.at - first.at < 400) return { x: 0, y: 0 };
+    var s = (last.at - first.at) / 1000;
+    return { x: (last[kx] - first[kx]) / s, y: (last[ky] - first[ky]) / s };
+  }
+  function segmentDistance(p, a, b) {
+    var dx = b.x - a.x, dy = b.y - a.y, len2 = dx * dx + dy * dy;
+    var t = len2 > 0 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2)) : 0;
+    return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+  }
+  function pathIpp(path, pt) {
+    return path.ipp || pt.ipp || PATH_TORSO_IN / 60; // (no body length yet: assume a mid-size person)
+  }
+
+  // Gives every pose a walking-path id (pose.rawId keeps the model's own).
+  function followWalkingPaths(poses, now) {
+    if (!poses || !walkingPathsActive()) return;
+    var unit = calibration && calibration.h ? "in" : "px";
+    if (unit !== walkingPathUnit) { walkingPaths = []; walkingPathUnit = unit; }
+    walkingPaths = walkingPaths.filter(function (path) { return now - path.seenAt <= PATH_KEEP_MS; });
+    var obs = poses.map(function (pose) { return { pose: pose, anchor: pathAnchor(pose), path: null }; });
+    var taken = {};
+    var take = function (pairs) {
+      pairs.sort(function (a, b) { return a.cost - b.cost; });
+      pairs.forEach(function (p) {
+        if (p.o.path || taken[p.path.id]) return;
+        p.o.path = p.path;
+        taken[p.path.id] = true;
+      });
+    };
+    // Still walking: within reach of where they were heading. The pose
+    // model following them too makes it all the likelier.
+    var pairs = [];
+    walkingPaths.forEach(function (path) {
+      var gap = now - path.seenAt;
+      if (gap > PATH_LIVE_GAP_MS) return;
+      var ahead = pathAhead(path, gap);
+      obs.forEach(function (o) {
+        var sameRaw = o.pose.id !== undefined && o.pose.id !== null && o.pose.id === path.rawId;
+        var pt = o.anchor && pathPoint(o.anchor, path);
+        if (!pt) { if (sameRaw) pairs.push({ o: o, path: path, cost: 0.5 }); return; }
+        var cost = Math.hypot(pt.x - ahead.x, pt.y - ahead.y) * pathIpp(path, pt) /
+          (PATH_NEAR_IN + PATH_SPEED_IN_S * gap / 1000);
+        if (sameRaw) cost *= 0.5;
+        if (cost <= 1) pairs.push({ o: o, path: path, cost: cost });
+      });
+    });
+    take(pairs);
+    // Back in view: somewhere along the line they were walking when they
+    // vanished (or where they vanished, if standing still). A body two
+    // lost players could equally be - or a lost player two bodies could
+    // equally be - joins neither: no guessing.
+    var lost = [];
+    walkingPaths.forEach(function (path) {
+      var gap = now - path.seenAt;
+      if (gap <= PATH_LIVE_GAP_MS || taken[path.id]) return;
+      var radius = Math.min(PATH_LOST_MAX_RADIUS_IN, PATH_LOST_RADIUS_IN + PATH_LOST_GROW_IN_S * gap / 1000);
+      obs.forEach(function (o) {
+        var pt = !o.path && o.anchor && pathPoint(o.anchor, path);
+        if (!pt) return;
+        var cost = segmentDistance(pt, pathLast(path), pathAhead(path, gap)) * pathIpp(path, pt) / radius;
+        if (cost <= 1) lost.push({ o: o, path: path, cost: cost });
+      });
+    });
+    take(lost.filter(function (p) {
+      return lost.every(function (q) {
+        var rival = q !== p && ((q.o === p.o && q.path.name !== p.path.name) || (q.path === p.path && q.o !== p.o));
+        return !rival || p.cost <= q.cost * PATH_CLEAR_RATIO;
+      });
+    }));
+    obs.forEach(function (o) {
+      var path = o.path, pt = o.anchor && pathPoint(o.anchor, path);
+      if (!path && !pt) return; // nowhere to put them: keeps the model's own id
+      if (!path) {
+        path = { id: "w" + nextWalkingPathId++, name: null, rawId: null, points: [], v: { x: 0, y: 0 }, pv: { x: 0, y: 0 }, ipp: null, hipOffset: null, seenAt: now };
+        walkingPaths.push(path);
+      } else if (now - path.seenAt > PATH_LIVE_GAP_MS) {
+        var secs = ((now - path.seenAt) / 1000).toFixed(1);
+        console.log("[PMC paths] " + (path.name || "unrecognized player") + " (" + path.id + ") back in view after " + secs + "s along their walking path");
+        if (path.name) logActivity(path.name + " back in view after " + secs + "s - followed along their walking path");
+      }
+      if (pt) {
+        path.points.push({ x: pt.x, y: pt.y, px: pt.px, py: pt.py, at: now });
+        while (path.points.length > 40 || now - path.points[0].at > 6000) path.points.shift();
+        if (pt.ipp) path.ipp = path.ipp ? path.ipp * 0.8 + pt.ipp * 0.2 : pt.ipp;
+        var v = pathVelocity(path.points, "x", "y");
+        var still = Math.hypot(v.x, v.y) * pathIpp(path, pt) < PATH_STILL_IN_S;
+        path.v = still ? { x: 0, y: 0 } : v;
+        path.pv = still ? { x: 0, y: 0 } : pathVelocity(path.points, "px", "py");
+      }
+      if (o.anchor && o.anchor.hip && o.anchor.shoulder) {
+        var dx = o.anchor.hip.x - o.anchor.shoulder.x, dy = o.anchor.hip.y - o.anchor.shoulder.y, off = path.hipOffset;
+        path.hipOffset = off ? { x: off.x * 0.8 + dx * 0.2, y: off.y * 0.8 + dy * 0.2 } : { x: dx, y: dy };
+      }
+      path.seenAt = now;
+      path.rawId = o.pose.id === undefined ? null : o.pose.id;
+      o.pose.rawId = o.pose.id;
+      o.pose.id = path.id;
+    });
+  }
+
+  // The name a walking path carries: put on it by a clear recognition, a
+  // shot, a press or the keypad - and the path's alone (one person can't
+  // be on two paths).
+  function nameWalkingPath(trackId, name, via) {
+    var path = name && walkingPathsActive() ? walkingPathById(trackId) : null;
+    if (!path) return;
+    var key = normalizeNameKey(name);
+    walkingPaths.forEach(function (other) {
+      if (other !== path && other.name && normalizeNameKey(other.name) === key) other.name = null;
+    });
+    if (path.name !== name) console.log("[PMC paths] " + path.id + " is " + name + " (" + via + ")" + (path.name ? " - was " + path.name : ""));
+    path.name = name;
+  }
+  // That name for this frame - unless the person clearly looks like
+  // somebody else (then the path was wrong; a clear tally renames it).
+  function walkingPathName(trackId, looksLike) {
+    var path = walkingPathsActive() ? walkingPathById(trackId) : null;
+    if (!path || !path.name || !isEligibleForRecognition(path.name)) return null;
+    if (isConfidentMatch(looksLike) && normalizeNameKey(looksLike.name) !== normalizeNameKey(path.name)) return null;
+    return path.name;
+  }
+
+  // Debug overlay: each path's trail (named green, others grey); a lost
+  // one as a dashed circle where it vanished, with a dashed line along
+  // the way they were heading.
+  function drawWalkingPaths() {
+    if (!walkingPathsActive()) return;
+    var now = Date.now();
+    overlayCtx.save();
+    overlayCtx.font = "12px sans-serif";
+    walkingPaths.forEach(function (path) {
+      if (!path.points.length) return;
+      var colour = path.name ? "#5ec98a" : "#b8b8b8";
+      overlayCtx.strokeStyle = colour;
+      overlayCtx.lineWidth = 2;
+      overlayCtx.setLineDash([]);
+      overlayCtx.beginPath();
+      path.points.forEach(function (p, i) {
+        var o = videoToOverlay(p.px, p.py);
+        if (i) overlayCtx.lineTo(o.x, o.y); else overlayCtx.moveTo(o.x, o.y);
+      });
+      overlayCtx.stroke();
+      var last = pathLast(path), at = videoToOverlay(last.px, last.py);
+      var gap = now - path.seenAt, label = path.name || path.id;
+      if (gap > PATH_LIVE_GAP_MS) {
+        var s = Math.min(gap, PATH_WALK_ON_MS) / 1000;
+        var ahead = videoToOverlay(last.px + path.pv.x * s, last.py + path.pv.y * s);
+        overlayCtx.setLineDash([5, 4]);
+        overlayCtx.beginPath();
+        overlayCtx.arc(at.x, at.y, 22, 0, Math.PI * 2);
+        overlayCtx.moveTo(at.x, at.y);
+        overlayCtx.lineTo(ahead.x, ahead.y);
+        overlayCtx.stroke();
+        label += " - out of view " + Math.round(gap / 1000) + "s";
+      }
+      var tw = overlayCtx.measureText(label).width;
+      overlayCtx.fillStyle = "rgba(0,0,0,0.6)";
+      overlayCtx.fillRect(at.x + 8, at.y - 8, tw + 8, 16);
+      overlayCtx.fillStyle = colour;
+      overlayCtx.fillText(label, at.x + 12, at.y + 4);
+    });
+    overlayCtx.restore();
+  }
+
   // ---- Idle/seated person tracking (lightweight, throttled) ----
   // Lets an already-enrolled player show as "recognized" on the
   // scorecard even while seated waiting for their turn - deliberately
@@ -6704,14 +7128,20 @@
         cached.lastCheckAt = now;
         var liteAnalysis = analyzePose(pose.keypoints);
         if (liteAnalysis) {
+          noteRoomMapLook(trackId, liteAnalysis, now);
           var match = findBestMatch(liteAnalysis.descriptor, poseForAnalysis(liteAnalysis));
-          cached.lastMatchedName = isConfidentMatch(match) ? match.name : null;
+          if (isConfidentMatch(match)) nameWalkingPath(trackId, match.name, "recognized idle");
+          cached.lastMatchedName = isConfidentMatch(match) ? match.name : walkingPathName(trackId, match);
+          cached.sure = isConfidentMatch(match);
         }
         // Left as whatever it already was when this cycle's frame can't
         // be confidently analyzed - a brief look-away shouldn't flicker
         // the "idle, recognized" badge off and immediately back on.
       }
-      if (cached.lastMatchedName) idleStates.push({ name: cached.lastMatchedName, trackId: trackId });
+      if (cached.lastMatchedName) {
+        idleStates.push({ name: cached.lastMatchedName, trackId: trackId });
+        notePlayerSighting(cached.lastMatchedName, !!cached.sure, now);
+      }
     });
     // A track that's genuinely left frame (not just unmatched this
     // round) stops being returned by MultiPose entirely - drop its cache
@@ -6777,6 +7207,8 @@
     // fine, but distance is just over threshold" - the latter means the
     // match sensitivity setting needs loosening, not a code bug.
     var closest = analysis ? matchAppearance(analysis, poseForAnalysis(analysis)) : null;
+    var needsConfirmationName = !(candidate && candidate.name) && effectiveStance() === "bent" && closest ? closest.name : null;
+    notePlayerSighting(needsConfirmationName, false, Date.now());
     send({
       type: "candidate",
       // An out-of-view shooter is named from the presence hold (not the
@@ -6819,7 +7251,7 @@
       // unmatched - a concrete best-guess target to tap, not a blind
       // prompt.
       flashingName: lastAnnouncedSeenName && shotConfirmedForSeenName !== lastAnnouncedSeenName ? lastAnnouncedSeenName : null,
-      needsConfirmationName: !(candidate && candidate.name) && effectiveStance() === "bent" && closest ? closest.name : null
+      needsConfirmationName: needsConfirmationName
     });
   }
 
@@ -6982,13 +7414,14 @@
   }
 
   // The camera adds samples of its own (a recognized shot, a confirmed
-  // score) only until the operator has pressed plenty for that player -
-  // after that its own guesses would mostly just risk teaching it a
-  // mistake (someone else in front at the time).
+  // score) only until the operator has pressed plenty for that player
+  // today - after that its own guesses would mostly just risk teaching it
+  // a mistake (someone else in front at the time). Today's: another day's
+  // presses never saw today's shirt (see playDayOf).
   var PLENTY_PRESSED_SAMPLES = 20;
   function hasPlentyPressedSamples(name) {
     var entry = enrollments[normalizeNameKey(name)];
-    return !!entry && alignedInfo(entry).filter(isPressedSample).length >= PLENTY_PRESSED_SAMPLES;
+    return !!entry && alignedInfo(entry).filter(function (i) { return isPressedSample(i) && isTodaySample(i); }).length >= PLENTY_PRESSED_SAMPLES;
   }
 
   // Gameplay-driven auto-enrollment: a human just confirmed a real score
@@ -7310,6 +7743,15 @@
     var looksLike = matchAppearance(analysis, poseForAnalysis(analysis));
     noteVisit(analysis, looksLike, now);
     var visitName = visitIdentity(analysis.trackId, now);
+    if (visitName) nameWalkingPath(analysis.trackId, visitName, "recognized over this visit");
+    // Not recognized (yet) on this visit, but followed here along the
+    // walking path of a player who was.
+    var pathName = visitName ? null : walkingPathName(analysis.trackId, looksLike);
+    // (the score cards' camera icons - see playerStates)
+    if (isConfidentMatch(looksLike)) notePlayerSighting(looksLike.name, true, now);
+    else if (looksLike && looksLike.distance <= looksLike.threshold) notePlayerSighting(looksLike.name, false, now);
+    if (visitName) notePlayerSighting(visitName, true, now);
+    else if (pathName) notePlayerSighting(pathName, false, now);
     var limits = personalBendThresholds(isConfidentMatch(looksLike) ? looksLike.name : null);
     var stanceBefore = stance;
     if (bendSignal >= limits.enter) stance = "bent";
@@ -7351,10 +7793,12 @@
       lastUprightDescriptor = analysis.descriptor;
 
       if (uprightStabilityCount >= settings.consecutiveFrames) {
-        var candidateName = visitName || (withinThreshold && uprightConsecutive >= settings.consecutiveFrames ? match.name : null);
+        var matchName = withinThreshold && uprightConsecutive >= settings.consecutiveFrames ? match.name : null;
+        var candidateName = visitName || matchName || pathName;
+        if (matchName && !visitName) nameWalkingPath(analysis.trackId, matchName, "recognized standing");
         candidate = {
           name: candidateName,
-          certainty: visitName ? visitCertainty(analysis.trackId, now) : candidateName ? matchCertainty(match) : 0,
+          certainty: visitName ? visitCertainty(analysis.trackId, now) : matchName ? matchCertainty(match) : candidateName ? PATH_CERTAINTY : 0,
           descriptor: analysis.descriptor,
           emb: analysis.emb || null,
           trackId: analysis.trackId,
@@ -7395,6 +7839,12 @@
           if (activeManualAttribution && visitName !== activeManualAttribution.name) activeManualAttribution = null;
           debugLog("FIRE via this visit's tally name=" + visitName + " (" + via + ")");
           fireEvent(visitName, null, settings.matchThreshold, via + ", recognized over this visit", null, null, visitCertainty(analysis.trackId, now));
+        } else if (pathName && !(candidate && candidate.name === pathName && now - candidate.lastSeenAt <= CANDIDATE_GRACE_MS)) {
+          // Lost from view for a moment, picked up again along their
+          // walking path - the same player.
+          if (activeManualAttribution && pathName !== activeManualAttribution.name) activeManualAttribution = null;
+          debugLog("FIRE via walking path name=" + pathName + " (" + via + ")");
+          fireEvent(pathName, null, settings.matchThreshold, via + ", followed along their walking path", null, null, PATH_CERTAINTY);
         } else if (candidate && candidate.name && now - candidate.lastSeenAt <= CANDIDATE_GRACE_MS) {
           // A genuinely different name just matched on its own - "until
           // another player shoots" per explicit request.
@@ -7422,14 +7872,18 @@
             // (always true at distance 0) is what actually adds this as
             // an enrollment sample - no separate enroll-add needed here.
             fireEvent(activeManualAttribution.name, analysis.descriptor, 0, via, "bent", analysis.emb);
+            nameWalkingPath(analysis.trackId, activeManualAttribution.name, "picked on the keypad");
+            notePlayerSighting(activeManualAttribution.name, true, now);
             activeManualAttribution.firesSinceStart++;
           } else if (oneOnOneGuess(analysis, bentMatch)) {
             var turnName = oneOnOneGuess(analysis, bentMatch);
+            notePlayerSighting(turnName, false, now);
             fireEvent(turnName, null, settings.matchThreshold, via + ", 1-on-1: " + (normalizeNameKey(turnName) === normalizeNameKey(lastShot.name) ? "same player as the last shot" : "the other player's turn"));
           } else if (cueHeld && lastSeenPlayerName(now)) {
             // Someone's holding the cue out over the table and can't be
             // named from how they look right now (bent over, turned away)
             // - the last player seen is the best bet.
+            notePlayerSighting(lastSeenPlayerName(now), false, now);
             fireEvent(lastSeenPlayerName(now), null, settings.matchThreshold, via + ", last seen player");
           } else if (cueHeld) {
             reportCueShooter(null, via);
@@ -7585,6 +8039,7 @@
     drawBallDebug();
     drawCueDebug();
     drawHiddenPresence();
+    drawWalkingPaths();
     if (settings.cueDebugEnabled) drawCueBadge();
     if (!analysis) return;
     var box = analysis.box;
@@ -7671,6 +8126,8 @@
         lastPoseResultAt = Date.now();
         detectTick++;
         if (window.PMCCueDebug.posesOverride) poses = window.PMCCueDebug.posesOverride(poses);
+        followWalkingPaths(poses, Date.now());
+        noteRoomMapPoses(poses, Date.now());
         lastPoseCount = (poses || []).length;
         noteRoomFrame(poses);
         currentPoseIds = {};
@@ -7698,6 +8155,7 @@
         var analysis = pose ? analyzePose(pose.keypoints) : null;
         if (analysis) analysis.trackId = pose.id;
         noteAppearance(analysis, pose ? pose.keypoints : null, Date.now());
+        if (pose) noteRoomMapLook(pose.id, analysis, Date.now());
         if (cueCtx) cueCtx.holderIsAnalyzed = !!(analysis && cueTrack.holder && cueTrack.holder.pose === pose);
         // Computed independently of analyzePose's own gating, specifically
         // so a rejected-for-low-confidence pose is still visible as a
@@ -7757,9 +8215,1106 @@
         if (poses && poses.length) {
           send({ type: "idle-states", idle: processIdlePoses(poses, pose) });
         }
+        reportPlayerStates(Date.now());
       })
       .catch(function (e) { console.error("[camera] detection error:", e); })
       .then(function () { detectionBusy = false; });
+  }
+
+  // ---- Room map (seen from above) ----
+  // A plan of the room as if from the ceiling straight above the table,
+  // drawn in lines (SVG) on the Room map tab: the table; where the camera
+  // is and how much of the floor it sees; the room's walls and furniture,
+  // worked out from the empty-room snapshot; and everyone the camera
+  // follows - where they are, the way they've walked, who each one most
+  // likely is, and where someone out of view could be by now. Every piece
+  // carries an id for debugging: T (table), CAM, FOV (what the camera
+  // sees of the floor), o1, o2... (things in the room), w1, w2... (the
+  // walking paths - see followWalkingPaths).
+  // Positions are the table's own inches - x along the calibration's
+  // first edge, y along the second, the felt at height 0 - so the map
+  // needs the table calibrated; nothing else.
+  var FELT_HEIGHT_IN = 30; // floor to the playing surface (29.25-31in by the rules)
+  var HIP_ABOVE_FELT_IN = 6; // an adult's hips, standing - about 36in off the floor
+  var SHOULDER_ABOVE_FELT_IN = 24;
+  var ANKLE_ABOVE_FELT_IN = 3 - FELT_HEIGHT_IN;
+  var ASSUMED_HFOV_DEG = 78; // the lens, when the table can't tell (looking straight down at it): a usual webcam's
+  var MIN_TILT_FOR_LENS_DEG = 15; // the camera's view this far off straight down, or the table can't tell the lens
+  var MAP_RANGE_IN = 420; // the map reaches at most this far from the table's middle (35 ft)
+
+  function v3dot(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+  function v3scale(a, k) { return [a[0] * k, a[1] * k, a[2] * k]; }
+  function v3sub(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
+  function v3len(a) { return Math.sqrt(v3dot(a, a)); }
+  function v3norm(a) { return v3scale(a, 1 / (v3len(a) || 1)); }
+  function v3cross(a, b) { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; }
+
+  // Where the camera is, from the calibration alone: the felt's four
+  // corners fix the camera's position and aim - and its lens (how wide it
+  // sees), from the table's two sides being square to each other and in
+  // proportion, unless it looks straight down at the table, when a usual
+  // webcam's is assumed. A pinhole camera with its middle at the picture's
+  // middle: { f (lens, pixels), hfov, fromTable, r: [r1, r2, r3] (the
+  // table's axes as the camera sees them), t, C (the camera, table
+  // inches), up (+1: the table's z points up), height (above the felt),
+  // fitPx (how far the table's corners come out from where they were
+  // tapped, pixels) }.
+  function solveCameraModel(h, W, H) {
+    var inv = invertHomography(h);
+    if (!inv) return null;
+    var cx = W / 2, cy = H / 2;
+    // table -> picture, the picture's middle moved to 0,0: its columns are
+    // the table's x axis, y axis and corner as the camera sees them
+    var G = [[inv.i11 - cx * inv.i31, inv.i12 - cx * inv.i32, inv.i13 - cx * inv.i33],
+      [inv.i21 - cy * inv.i31, inv.i22 - cy * inv.i32, inv.i23 - cy * inv.i33],
+      [inv.i31, inv.i32, inv.i33]];
+    var col = function (j) { return [G[0][j], G[1][j], G[2][j]]; };
+    var c1 = col(0), c2 = col(1), c3 = col(2);
+    // The lens from the table's corners being square (f^2 = -a1/b1) - true
+    // whatever size the table is; its sides being in the right proportion
+    // (-a2/b2) needs the size right and the lens straight, so it only
+    // stands in when the corners can't tell (one side square-on to the
+    // camera), or agrees closely enough to average with.
+    var a1 = c1[0] * c2[0] + c1[1] * c2[1], b1 = c1[2] * c2[2];
+    var a2 = c1[0] * c1[0] + c1[1] * c1[1] - c2[0] * c2[0] - c2[1] * c2[1], b2 = c1[2] * c1[2] - c2[2] * c2[2];
+    var lens = function (f2) {
+      if (!(f2 > 0) || !isFinite(f2)) return null;
+      var hf = 2 * Math.atan(W / 2 / Math.sqrt(f2)) * 180 / Math.PI;
+      return hf >= 30 && hf <= 130 ? Math.sqrt(f2) : null;
+    };
+    var fSquare = lens(-a1 / b1), fSides = lens(-a2 / b2);
+    var f = fSquare && fSides && Math.abs(Math.log(fSquare / fSides)) < 0.25 ? Math.sqrt(fSquare * fSides) : fSquare || fSides || NaN;
+    var pose = function (f) {
+      var k = function (c) { return [c[0] / f, c[1] / f, c[2]]; };
+      var k1 = k(c1), k2 = k(c2), k3 = k(c3), lambda = 2 / (v3len(k1) + v3len(k2));
+      var r1 = v3scale(k1, lambda), r2 = v3scale(k2, lambda), t = v3scale(k3, lambda);
+      if (t[2] < 0) { r1 = v3scale(r1, -1); r2 = v3scale(r2, -1); t = v3scale(t, -1); }
+      r1 = v3norm(r1);
+      r2 = v3norm(v3sub(r2, v3scale(r1, v3dot(r1, r2))));
+      return { r: [r1, r2, v3cross(r1, r2)], t: t };
+    };
+    var hfov = 2 * Math.atan(W / 2 / f) * 180 / Math.PI;
+    var fromTable = isFinite(f) && hfov >= 30 && hfov <= 130, p = null;
+    if (fromTable) {
+      p = pose(f);
+      // looking nearly straight down at the table, its sides stay square
+      // whatever the lens - a pixel's tapping error then decides it
+      if (Math.acos(Math.min(1, Math.abs(p.r[2][2]))) * 180 / Math.PI < MIN_TILT_FOR_LENS_DEG) fromTable = false;
+    }
+    if (!fromTable) {
+      hfov = ASSUMED_HFOV_DEG;
+      f = W / 2 / Math.tan(hfov * Math.PI / 360);
+      p = pose(f);
+    }
+    var r1 = p.r[0], r2 = p.r[1], r3 = p.r[2], t = p.t;
+    var C = [-v3dot(r1, t), -v3dot(r2, t), -v3dot(r3, t)];
+    var m = { f: f, cx: cx, cy: cy, W: W, H: H, hfov: hfov, fromTable: fromTable, r: [r1, r2, r3], t: t, C: C, up: C[2] >= 0 ? 1 : -1, height: Math.abs(C[2]) };
+    // The table's two sides, as the camera sees them, should be the same
+    // inches long. Far off - but right with the length and width the other
+    // way round - means the calibration's first edge was saved as the wrong
+    // side (the long side tapped first, saved as the width, say): every
+    // position on the table is then stretched one way and squashed the other.
+    var ratio = (v3len([c1[0] / f, c1[1] / f, c1[2]]) / v3len([c2[0] / f, c2[1] / f, c2[2]]));
+    var aspect = calibXExtent() / calibYExtent();
+    m.sideRatio = ratio;
+    m.sidesSwapped = Math.abs(aspect - 1) > 0.2 && Math.abs(Math.log(ratio)) > 0.45 && Math.abs(Math.log(ratio * aspect * aspect)) < Math.abs(Math.log(ratio)) * 0.5;
+    // how well that camera puts the table back where it was tapped
+    var xExt = calibXExtent(), yExt = calibYExtent(), err = 0;
+    [[0, 0], [xExt, 0], [xExt, yExt], [0, yExt]].forEach(function (p) {
+      var tapped = applyInverseHomography(inv, p[0], p[1]), seen = projectToPixel(m, [p[0], p[1], 0]);
+      err += tapped && seen ? Math.pow(Math.hypot(tapped.x - seen.x, tapped.y - seen.y), 2) : 1e6;
+    });
+    m.fitPx = Math.sqrt(err / 4);
+    return m;
+  }
+  var cameraModelCache = { cal: null, w: 0, h: 0, model: null };
+  function cameraModel() {
+    var W = videoEl.videoWidth, H = videoEl.videoHeight;
+    if (!calibration || !calibration.h || !W || !H) return null;
+    var c = cameraModelCache || {}; // (asked before this part of the page has run: nothing cached yet)
+    if (c.cal !== calibration || c.w !== W || c.h !== H) {
+      cameraModelCache = c = { cal: calibration, w: W, h: H, model: solveCameraModel(calibration.h, W, H) };
+      setTimeout(renderSidesWarning, 0);
+    }
+    return c.model;
+  }
+  // The way a pixel looks, in table axes (scaled so the camera's own
+  // forward part is 1 - so a distance along it is the depth).
+  function pixelRay(m, u, v) {
+    var d = [(u - m.cx) / m.f, (v - m.cy) / m.f, 1];
+    return [v3dot(m.r[0], d), v3dot(m.r[1], d), v3dot(m.r[2], d)];
+  }
+  function projectToPixel(m, P) {
+    var X = [m.r[0][0] * P[0] + m.r[1][0] * P[1] + m.r[2][0] * P[2] + m.t[0], m.r[0][1] * P[0] + m.r[1][1] * P[1] + m.r[2][1] * P[2] + m.t[1], m.r[0][2] * P[0] + m.r[1][2] * P[1] + m.r[2][2] * P[2] + m.t[2]];
+    return X[2] > 0 ? { x: m.cx + m.f * X[0] / X[2], y: m.cy + m.f * X[1] / X[2] } : null;
+  }
+  // Where a ray reaches the given height above the felt: { x, y, depth }, or
+  // null if it never does (above the horizon, or behind the camera).
+  function rayToHeight(m, d, h) {
+    var lam = (m.up * h - m.C[2]) / d[2];
+    return lam > 0 && isFinite(lam) ? { x: m.C[0] + lam * d[0], y: m.C[1] + lam * d[1], depth: lam } : null;
+  }
+  // Where something h inches above the felt, seen at pixel (u, v), stands
+  // - through the felt's own mapping (exact on the felt, whatever the lens)
+  // and on along the camera's line of sight to that height.
+  function pointOnRay(m, u, v, h) {
+    if (pixelRay(m, u, v)[2] * m.up >= 0 || h >= m.height - 1) return null;
+    var felt = applyHomography(calibration.h, u, v);
+    if (!felt) return null;
+    var mu = (m.height - h) / m.height;
+    var p = { x: m.C[0] + mu * (felt.x - m.C[0]), y: m.C[1] + mu * (felt.y - m.C[1]) };
+    return Math.hypot(p.x - calibXExtent() / 2, p.y - calibYExtent() / 2) <= MAP_RANGE_IN * 1.2 ? p : null;
+  }
+  // The floor the camera sees: the picture's edges carried down to the
+  // floor (or, above the horizon, out to `reach` from the table's middle)
+  // - table inches, in order round the outline.
+  function visibleFloor(m, reach) {
+    var N = 16, edge = [], i;
+    for (i = 0; i < N; i++) edge.push([m.W * i / N, m.H]);
+    for (i = 0; i < N; i++) edge.push([m.W, m.H * (1 - i / N)]);
+    for (i = 0; i < N; i++) edge.push([m.W * (1 - i / N), 0]);
+    for (i = 0; i < N; i++) edge.push([0, m.H * i / N]);
+    var tc = { x: calibXExtent() / 2, y: calibYExtent() / 2 };
+    var out = [];
+    edge.forEach(function (e) {
+      var d = pixelRay(m, e[0], e[1]);
+      var p = rayToHeight(m, d, -FELT_HEIGHT_IN);
+      if (p && Math.hypot(p.x - tc.x, p.y - tc.y) <= reach) { out.push({ x: p.x, y: p.y }); return; }
+      // out along the same line, on the floor, to `reach`
+      var len = Math.hypot(d[0], d[1]);
+      if (len < 1e-6) return;
+      var ux = d[0] / len, uy = d[1] / len, fx = m.C[0] - tc.x, fy = m.C[1] - tc.y;
+      var b = fx * ux + fy * uy, c = fx * fx + fy * fy - reach * reach, disc = b * b - c;
+      if (disc < 0) return;
+      var s = -b + Math.sqrt(disc);
+      if (s > 0) out.push({ x: m.C[0] + s * ux, y: m.C[1] + s * uy });
+    });
+    return out;
+  }
+
+  // The calibration's first edge saved as the wrong side (see sidesSwapped):
+  // the same four corners, the first edge the other side of the table.
+  // Not through applyCalibrationFromCorners - that also re-takes the still
+  // background, which wants an empty table, and there may be people there.
+  function fixSwappedCalibration() {
+    var m = cameraModel();
+    if (!m || !m.sidesSwapped) return false;
+    var inv = invertHomography(calibration.h), xExt = calibXExtent(), yExt = calibYExtent();
+    var px = [[0, 0], [xExt, 0], [xExt, yExt], [0, yExt]].map(function (p) { var q = applyInverseHomography(inv, p[0], p[1]); return [q.x, q.y]; });
+    var H = computeHomography(px, [[0, 0], [yExt, 0], [yExt, xExt], [0, xExt]]);
+    if (!H) return false;
+    calibration = { tableLength: calibration.tableLength, tableWidth: calibration.tableWidth, xExtent: yExt, yExtent: xExt, h: H };
+    saveCalibration();
+    resetBallTracking("recalibrated");
+    walkingPaths = [];
+    renderCalibrationStatus();
+    console.log("[PMC room map] calibration fixed: the first edge is the " + (yExt === calibration.tableLength ? "long side" : "short end") + " (" + yExt + "in)");
+    logActivity("Calibration fixed: the table's long side and short end were the wrong way round");
+    roomMapStatic = null;
+    renderSidesWarning();
+    renderRoomMapStatus();
+    scheduleRoomMapRender(true);
+    return true;
+  }
+  function renderSidesWarning() {
+    var m = isViewer ? null : cameraModel(), show = !!(m && m.sidesSwapped);
+    ["sidesSwappedBox", "roomMapSidesBox"].forEach(function (id) { var el = document.getElementById(id); if (el) el.hidden = !show; });
+  }
+  ["fixSidesBtn", "roomMapFixSidesBtn"].forEach(function (id) {
+    var btn = document.getElementById(id);
+    if (btn) btn.addEventListener("click", fixSwappedCalibration);
+  });
+
+  // ---- Room map: the room's shape, from the empty-room snapshot ----
+  // A depth model (camera/depth.js) says how far every pixel of the
+  // snapshot is from the camera, in metres, roughly. The table then sets it
+  // right: the points on the cloth make a flat plane, the table's four
+  // corners on that plane give the scale (its real size is known), and the
+  // biggest flat surface below the cloth, square to it, is the floor. Every
+  // pixel then becomes a point in the room - on the plan where it stands, as
+  // high as it is above the floor. Floor-level points are floor; points
+  // above it (walls, shelves, chairs) fill ROOM_CELL_IN squares, and squares
+  // that touch become one thing (o1, o2..., biggest first).
+  // Only the lens comes from the camera model: where the camera stands is
+  // taken from the snapshot itself, which agrees with itself better than
+  // with four tapped corners.
+  var ROOM_PLAN_KEY = "pmc-room-plan";
+  var ROOM_PLAN_VERSION = 2; // (an older plan is worked out again)
+  var ROOM_CELL_IN = 6;
+  var ROOM_FLOOR_MAX_IN = 6; // up to this above the floor is floor (a rug, a doorstep)
+  var ROOM_TOP_IN = 84; // higher than this (7 ft) may be the ceiling - left out
+  var ROOM_TABLE_MARGIN_IN = 8; // the table's rails and body: drawn from the calibration instead
+  var ROOM_MIN_CELLS = 3;
+  var ROOM_MAX_OBJECTS = 40;
+  var DEPTH_GRID_W = 46; // patches across the snapshot for the depth model (644 pixels)
+  var roomPlan = null; // { at, calKey, cell, objects: [{ id, cells: [ix, iy, ...], hMax, hLow, n }], fit, reach, builtAt, ms }
+  var depthModel = null, depthModelLoading = null, lastRoomDepth = null;
+  var roomPlanState = { busy: false, text: "" };
+  function calibrationKey() {
+    if (!calibration || !calibration.h) return "";
+    var h = calibration.h;
+    return [h.h11, h.h12, h.h13, h.h21, h.h22, h.h23, h.h31, h.h32].map(function (v) { return v.toPrecision(6); }).join(",") + "|" + videoEl.videoWidth + "x" + videoEl.videoHeight;
+  }
+  function loadRoomPlan() {
+    try { roomPlan = JSON.parse(localStorage.getItem(ROOM_PLAN_KEY) || "null"); } catch (e) { roomPlan = null; }
+  }
+  function saveRoomPlan() {
+    try { localStorage.setItem(ROOM_PLAN_KEY, JSON.stringify(roomPlan)); } catch (e) { console.warn("[PMC room map] couldn't keep the room plan (storage full?):", e); }
+  }
+  // Up to date with the snapshot and the calibration?
+  function roomPlanCurrent() {
+    return !!(roomPlan && roomPlan.v === ROOM_PLAN_VERSION && emptyRoom && roomPlan.at === emptyRoom.at && roomPlan.calKey === calibrationKey());
+  }
+  function loadDepthModel() {
+    if (depthModel) return Promise.resolve(depthModel);
+    if (!depthModelLoading) {
+      depthModelLoading = window.PMCDepth ? window.PMCDepth.load("camera/models/depth/") : Promise.reject(new Error("camera/depth.js isn't loaded"));
+      depthModelLoading.then(function (model) { depthModel = model; }, function () { depthModelLoading = null; });
+    }
+    return depthModelLoading;
+  }
+  function buildRoomPlan(why) {
+    var m = cameraModel();
+    if (roomPlanState.busy) return Promise.resolve(roomPlan);
+    if (!m) { roomPlanState.text = "Calibrate the table first (Table tab) - the map is built round it."; renderRoomMapStatus(); return Promise.resolve(null); }
+    if (!emptyRoom || !emptyRoomFits()) { roomPlanState.text = "No room shape yet: take an empty-room snapshot on the Table tab - the walls and furniture are worked out from it."; renderRoomMapStatus(); return Promise.resolve(null); }
+    roomPlanState = { busy: true, text: depthModel ? "Working out the room's shape..." : "Loading the depth model (27 MB, the first time) and working out the room's shape..." };
+    renderRoomMapStatus();
+    var startedAt = Date.now(), snapAt = emptyRoom.at, calKey = calibrationKey();
+    return loadDepthModel().then(function (model) {
+      return model.estimate(emptyRoomCanvas, { gridW: DEPTH_GRID_W });
+    }).then(function (depth) {
+      lastRoomDepth = depth; // (tests and the console: PMCRoomMapDebug.lastDepth)
+      var plan = planFromDepth(depth, m);
+      plan.at = snapAt;
+      plan.calKey = calKey;
+      plan.builtAt = Date.now();
+      plan.ms = Date.now() - startedAt;
+      roomPlan = plan;
+      saveRoomPlan();
+      roomMapStatic = null;
+      roomPlanState = { busy: false, text: "" };
+      console.log("[PMC room map] room shape (" + (why || "asked") + "): " + plan.objects.length + " things; the table " + plan.fit.sides.map(function (v) { return v.toFixed(1); }).join(" x ") + "in in the depth, cloth flat to " + plan.fit.clothRmsIn.toFixed(1) + "in, floor " + (plan.fit.floorAssumed ? "assumed" : plan.fit.clothAboveFloorIn.toFixed(1) + "in below the cloth, " + plan.fit.floorTiltDeg.toFixed(1) + " deg off it") + "; " + plan.ms + "ms");
+      logActivity("Room map: room shape worked out - " + plan.objects.length + " thing" + (plan.objects.length === 1 ? "" : "s") + " in the room");
+      renderRoomMapStatus();
+      scheduleRoomMapRender(true);
+      return plan;
+    }).catch(function (e) {
+      console.warn("[PMC room map] couldn't work out the room's shape:", e);
+      roomPlanState = { busy: false, text: "Couldn't work out the room's shape: " + (e && e.message ? e.message : e) };
+      renderRoomMapStatus();
+      return null;
+    });
+  }
+
+  // A symmetric 3x3 matrix's eigenvalues and eigenvectors (Jacobi
+  // rotations): { values, vectors } - vectors[k][i] is the i-th part of the
+  // eigenvector of values[i].
+  function symmetricEigen3(A) {
+    var a = [A[0].slice(), A[1].slice(), A[2].slice()], V = [[1, 0, 0], [0, 1, 0], [0, 0, 1]], k;
+    for (var sweep = 0; sweep < 40; sweep++) {
+      if (a[0][1] * a[0][1] + a[0][2] * a[0][2] + a[1][2] * a[1][2] < 1e-20) break;
+      [[0, 1], [0, 2], [1, 2]].forEach(function (pq) {
+        var p = pq[0], q = pq[1];
+        if (Math.abs(a[p][q]) < 1e-30) return;
+        var theta = (a[q][q] - a[p][p]) / (2 * a[p][q]);
+        var t = (theta >= 0 ? 1 : -1) / (Math.abs(theta) + Math.sqrt(theta * theta + 1));
+        var c = 1 / Math.sqrt(t * t + 1), s = t * c;
+        for (k = 0; k < 3; k++) { var akp = a[k][p], akq = a[k][q]; a[k][p] = c * akp - s * akq; a[k][q] = s * akp + c * akq; }
+        for (k = 0; k < 3; k++) { var apk = a[p][k], aqk = a[q][k]; a[p][k] = c * apk - s * aqk; a[q][k] = s * apk + c * aqk; }
+        for (k = 0; k < 3; k++) { var vkp = V[k][p], vkq = V[k][q]; V[k][p] = c * vkp - s * vkq; V[k][q] = s * vkp + c * vkq; }
+      });
+    }
+    return { values: [a[0][0], a[1][1], a[2][2]], vectors: V };
+  }
+  // The flat plane through points ([x, y, z]...), least squares, twice more
+  // without the ones furthest off it: { n (unit), c (a point on it), rms }.
+  function fitPlane(points) {
+    var once = function (P) {
+      var c = [0, 0, 0], k, q;
+      P.forEach(function (p) { c[0] += p[0]; c[1] += p[1]; c[2] += p[2]; });
+      c = v3scale(c, 1 / P.length);
+      var M = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+      P.forEach(function (p) { var d = v3sub(p, c); for (k = 0; k < 3; k++) for (q = 0; q < 3; q++) M[k][q] += d[k] * d[q]; });
+      var e = symmetricEigen3(M), lo = 0;
+      for (k = 1; k < 3; k++) if (e.values[k] < e.values[lo]) lo = k;
+      var n = v3norm([e.vectors[0][lo], e.vectors[1][lo], e.vectors[2][lo]]);
+      var rms = Math.sqrt(P.reduce(function (sum, p) { var d = v3dot(v3sub(p, c), n); return sum + d * d; }, 0) / P.length);
+      return { n: n, c: c, rms: rms };
+    };
+    var pl = once(points);
+    for (var round = 0; round < 2 && points.length > 30; round++) {
+      var cut = 2.5 * pl.rms;
+      points = points.filter(function (p) { return Math.abs(v3dot(v3sub(p, pl.c), pl.n)) <= cut; });
+      if (points.length < 10) break;
+      pl = once(points);
+    }
+    return pl;
+  }
+
+  // The flat surface most of the points lie on (within tol): tries planes
+  // through three of them at a time - the same tries for the same points.
+  // score(n, a, inliers) weighs each (null: not wanted); { n, a, inliers }.
+  function ransacPlane(points, tries, tol, score) {
+    var seed = 12345, rand = function () {
+      // (mulberry32)
+      seed = (seed + 0x6D2B79F5) | 0;
+      var r = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) ^ r;
+      return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+    };
+    var sample = points.length > 20000 ? points.filter(function (p, k) { return k % Math.ceil(points.length / 20000) === 0; }) : points;
+    var best = null;
+    for (var t = 0; t < tries && sample.length >= 50; t++) {
+      var A = sample[Math.floor(rand() * sample.length)], B = sample[Math.floor(rand() * sample.length)], C = sample[Math.floor(rand() * sample.length)];
+      var n = v3cross(v3sub(B, A), v3sub(C, A)), len = v3len(n);
+      if (len < 1e-9) continue;
+      n = v3scale(n, 1 / len);
+      var inliers = 0;
+      for (var q = 0; q < sample.length; q++) if (Math.abs(v3dot(v3sub(sample[q], A), n)) < tol) inliers++;
+      var sc = score(n, A, inliers);
+      if (sc !== null && (!best || sc > best.score)) best = { score: sc, n: n, a: A, inliers: inliers };
+    }
+    return best;
+  }
+
+  // depth: { w, h, data (metres along the view), metric } from the depth
+  // model, m: the camera model (for its lens).
+  function planFromDepth(depth, m) {
+    if (!depth.metric) throw new Error("the depth model doesn't give distances");
+    var dw = depth.w, dh = depth.h, z = depth.data, sx = m.W / dw, sy = m.H / dh;
+    var xExt = calibXExtent(), yExt = calibYExtent(), tc = { x: xExt / 2, y: yExt / 2 };
+    var STEP = 2, M_TO_IN = 39.37, margin = Math.min(xExt, yExt) * 0.08;
+    // every other pixel, as a point in the camera's own frame (inches, roughly)
+    var pts = [], felt = [], i, j;
+    for (i = STEP / 2; i < dh; i += STEP) {
+      for (j = STEP / 2; j < dw; j += STEP) {
+        var idx = i * dw + j, here = z[idx];
+        if (!(here > 0)) continue;
+        // depth edges blur foreground into background - those pixels float in mid-air
+        var edge = i >= STEP && i + STEP < dh && j >= STEP && j + STEP < dw &&
+          Math.max(Math.abs(z[idx - STEP] - here), Math.abs(z[idx + STEP] - here), Math.abs(z[idx - STEP * dw] - here), Math.abs(z[idx + STEP * dw] - here)) > 0.05 * here;
+        var u = (j + 0.5) * sx, v = (i + 0.5) * sy, zz = here * M_TO_IN;
+        var X = [(u - m.cx) / m.f * zz, (v - m.cy) / m.f * zz, zz];
+        var p = { X: X, edge: edge };
+        pts.push(p);
+        if (!edge && pixelRay(m, u, v)[2] * m.up < 0) {
+          var hp = applyHomography(calibration.h, u, v);
+          if (hp && hp.x > margin && hp.x < xExt - margin && hp.y > margin && hp.y < yExt - margin) { p.felt = true; felt.push(X); }
+        }
+      }
+    }
+    if (felt.length < 200) throw new Error("too little of the table's cloth in the snapshot");
+    // the cloth's plane - what most of it lies flat on (not a ball, a lamp's
+    // glare, someone leaning over it) - its normal pointing up (towards the camera)
+    var flat = ransacPlane(felt, 300, 1.5, function (n, a, inliers) { return inliers; });
+    var cloth = fitPlane(flat ? felt.filter(function (X) { return Math.abs(v3dot(v3sub(X, flat.a), flat.n)) < 1.5; }) : felt);
+    if (v3dot(cloth.n, cloth.c) > 0) cloth.n = v3scale(cloth.n, -1);
+    // the table's corners on it: the scale, and the table's own axes
+    var inv = invertHomography(calibration.h);
+    var Q = [[0, 0], [xExt, 0], [xExt, yExt], [0, yExt]].map(function (c) {
+      var px = applyInverseHomography(inv, c[0], c[1]), r = [(px.x - m.cx) / m.f, (px.y - m.cy) / m.f, 1];
+      return v3scale(r, v3dot(cloth.c, cloth.n) / v3dot(r, cloth.n));
+    });
+    var xv = v3scale([Q[1][0] - Q[0][0] + Q[2][0] - Q[3][0], Q[1][1] - Q[0][1] + Q[2][1] - Q[3][1], Q[1][2] - Q[0][2] + Q[2][2] - Q[3][2]], 0.5);
+    var yv = v3scale([Q[3][0] - Q[0][0] + Q[2][0] - Q[1][0], Q[3][1] - Q[0][1] + Q[2][1] - Q[1][1], Q[3][2] - Q[0][2] + Q[2][2] - Q[1][2]], 0.5);
+    var L1 = v3len(xv), L2 = v3len(yv), xh = v3norm(xv), yh = v3norm(v3sub(yv, v3scale(xh, v3dot(yv, xh))));
+    var scale = (xExt / L1 + yExt / L2) / 2;
+    var toTable = function (X) { var d = v3sub(X, Q[0]); return { x: scale * v3dot(d, xh), y: scale * v3dot(d, yh) }; };
+    var aboveCloth = function (X) { return scale * v3dot(v3sub(X, cloth.c), cloth.n); };
+    // the floor: the biggest flat surface near enough level with the cloth
+    // and about a table's height below it - seats and the rug's edge are
+    // flat too, so the further a surface is from FELT_HEIGHT_IN below, the
+    // less its size counts (a few hundred tries of three points)
+    var cand = pts.filter(function (p) { if (p.edge || p.felt) return false; var hgt = aboveCloth(p.X) + FELT_HEIGHT_IN; return hgt > -14 && hgt < 14; });
+    var best = ransacPlane(cand.map(function (p) { return p.X; }), 400, 2 / scale, function (n, a, inliers) {
+      if (v3dot(n, cloth.n) < 0) n = v3scale(n, -1);
+      if (v3dot(n, cloth.n) < Math.cos(8 * Math.PI / 180)) return null;
+      var below = scale * Math.abs(v3dot(v3sub(cloth.c, a), n));
+      return inliers * Math.exp(-Math.pow((below - FELT_HEIGHT_IN) / 6, 2));
+    });
+    if (best && v3dot(best.n, cloth.n) < 0) best.n = v3scale(best.n, -1);
+    var floor = null;
+    if (best && best.inliers >= 300) {
+      floor = fitPlane(cand.filter(function (p) { return Math.abs(v3dot(v3sub(p.X, best.a), best.n)) * scale < 2; }).map(function (p) { return p.X; }));
+      if (v3dot(floor.n, cloth.n) < 0) floor.n = v3scale(floor.n, -1);
+    }
+    if (!floor) floor = { n: cloth.n, c: v3sub(cloth.c, v3scale(cloth.n, FELT_HEIGHT_IN / scale)), rms: 0, assumed: true };
+    var aboveFloor = function (X) { return scale * v3dot(v3sub(X, floor.c), floor.n); };
+    // every point onto the plan's squares
+    var cells = new Map();
+    pts.forEach(function (p) {
+      if (p.edge || p.felt) return;
+      var at = toTable(p.X), hf = aboveFloor(p.X);
+      if (Math.hypot(at.x - tc.x, at.y - tc.y) > MAP_RANGE_IN) return;
+      if (at.x > -ROOM_TABLE_MARGIN_IN && at.x < xExt + ROOM_TABLE_MARGIN_IN && at.y > -ROOM_TABLE_MARGIN_IN && at.y < yExt + ROOM_TABLE_MARGIN_IN) return;
+      if (hf > ROOM_TOP_IN) return;
+      var key = Math.floor(at.x / ROOM_CELL_IN) + "," + Math.floor(at.y / ROOM_CELL_IN);
+      var c = cells.get(key);
+      if (!c) { c = { free: 0, occ: 0, hs: [] }; cells.set(key, c); }
+      if (hf < ROOM_FLOOR_MAX_IN) c.free++;
+      else { c.occ++; c.hs.push(hf); }
+    });
+    var occupied = new Map(), floorCells = 0;
+    cells.forEach(function (c, key) {
+      if (c.occ >= 2 && c.occ >= c.free * 0.5) occupied.set(key, c);
+      else if (c.free) floorCells++;
+    });
+    // squares that touch (corners too) are one thing
+    var seen = new Set(), objects = [];
+    occupied.forEach(function (c, key) {
+      if (seen.has(key)) return;
+      var stack = [key], members = [];
+      seen.add(key);
+      while (stack.length) {
+        var cur = stack.pop(), xy = cur.split(","), ix = +xy[0], iy = +xy[1];
+        members.push([ix, iy]);
+        for (var dx = -1; dx <= 1; dx++) {
+          for (var dy = -1; dy <= 1; dy++) {
+            var nk = (ix + dx) + "," + (iy + dy);
+            if (!seen.has(nk) && occupied.has(nk)) { seen.add(nk); stack.push(nk); }
+          }
+        }
+      }
+      if (members.length < ROOM_MIN_CELLS) return;
+      var hs = [], flat = [];
+      members.forEach(function (mxy) { hs = hs.concat(occupied.get(mxy[0] + "," + mxy[1]).hs); flat.push(mxy[0], mxy[1]); });
+      hs.sort(function (p, q) { return p - q; });
+      objects.push({ cells: flat, n: members.length, hMax: Math.round(hs[Math.floor(hs.length * 0.95)]), hLow: Math.round(hs[Math.floor(hs.length * 0.05)]) });
+    });
+    objects.sort(function (p, q) { return q.n - p.n; });
+    objects = objects.slice(0, ROOM_MAX_OBJECTS);
+    objects.forEach(function (o, k) { o.id = "o" + (k + 1); });
+    // how far the room reaches: most of what's in it (a few stray squares far off don't count)
+    var dists = [];
+    objects.forEach(function (o) {
+      for (var q = 0; q < o.cells.length; q += 2) dists.push(Math.hypot((o.cells[q] + 0.5) * ROOM_CELL_IN - tc.x, (o.cells[q + 1] + 0.5) * ROOM_CELL_IN - tc.y));
+    });
+    dists.sort(function (p, q) { return p - q; });
+    var reach = dists.length ? dists[Math.floor(dists.length * 0.97)] : 0;
+    var camAt = toTable([0, 0, 0]);
+    return {
+      v: ROOM_PLAN_VERSION, cell: ROOM_CELL_IN, objects: objects, floorCells: floorCells, reach: Math.min(MAP_RANGE_IN, Math.max(reach + 24, Math.max(xExt, yExt))),
+      fit: {
+        scale: scale, sides: [L1 * scale, L2 * scale], clothRmsIn: cloth.rms * scale, clothPoints: felt.length,
+        floorAssumed: !!floor.assumed, floorRmsIn: floor.rms * scale, floorTiltDeg: Math.acos(Math.min(1, Math.abs(v3dot(floor.n, cloth.n)))) * 180 / Math.PI,
+        clothAboveFloorIn: scale * v3dot(v3sub(cloth.c, floor.c), floor.n),
+        // (its height from the cloth: the floor found is the rougher of the two)
+        camera: { x: camAt.x, y: camAt.y, h: scale * v3dot(v3scale(cloth.c, -1), cloth.n) + FELT_HEIGHT_IN }
+      }
+    };
+  }
+
+  // ---- Room map: the people ----
+  // Each walking path (the ids followWalkingPaths gives) is a track here,
+  // kept for minutes rather than seconds: its spot every look (hips on the
+  // line of sight at hip height - feet or shoulders when the hips are
+  // hidden), the way it walked, and who it most likely is.
+  // Who: every look the camera takes at a person (the one it follows, and
+  // everyone else every few seconds) ranks the players by their samples;
+  // closer ranks more likely, someone nobody's samples are close to is a
+  // stranger ("?"). Those add up over a few seconds per track; a name the
+  // walking path already carries (an Enroll press, a keypad pick, a sure
+  // recognition) is trusted MAP_PATH_NAME_TRUST over what the looks say;
+  // and the tracks share out the players between them - nobody is more
+  // than once in the room.
+  var MAP_TRACK_KEEP_MS = 5 * 60 * 1000; // a track no one has seen for this long is forgotten
+  var MAP_TRAIL_MS = 10 * 60 * 1000; // the way someone walked: the last ten minutes
+  var MAP_LOST_SHOW_MS = 60000; // a lost track, nobody in particular, shows where it could be this long
+  var MAP_EVIDENCE_MS = 5000; // looks count for about this long
+  var MAP_PATH_NAME_TRUST = 0.7;
+  var MAP_SURE = 0.6; // a track this likely someone's is them, for their trail and last-seen spot
+  var MAP_ZONE_START_IN = 18; // out of view: could be this far from where they were seen...
+  var MAP_WALK_IN_S = 40; // ...plus a stroll since (about 2.3 mph)
+  var MAP_DWELL_CELL_IN = 24;
+  var mapTracks = {}; // id -> { id, rawId, pos, how, seenAt, firstAt, live, points: [{ x, y, at }], v, evidence: { name|"?": p }, lookAt, looks, probs }
+  var mapPlayers = {}; // name key -> { name, last: { x, y, at, trackId, v }, trail, dwell: { cell: seconds }, walked, inViewMs, inView }
+  var mapLastUpdateAt = 0;
+  var mapNameColours = {};
+  var MAP_COLOURS = ["#ff6b6b", "#4dabf7", "#ffd43b", "#69db7c", "#da77f2", "#ffa94d", "#3bc9db", "#f783ac", "#a9e34b", "#e599f7"];
+
+  function roomMapActive() {
+    return !isViewer && !!cameraModel();
+  }
+  // Everyone the camera may put a name to right now.
+  function mapCandidateNames() {
+    var names = [], keys = {};
+    var add = function (n) { var k = normalizeNameKey(n); if (k && !keys[k]) { keys[k] = true; names.push(n); } };
+    Object.keys(enrollments).forEach(function (k) { var n = enrollments[k].displayName || k; if (isEligibleForRecognition(n)) add(n); });
+    (playingNames || []).forEach(add);
+    return names;
+  }
+  function mapColour(name) {
+    if (!name || name === "?") return "#9aa0a6";
+    var k = normalizeNameKey(name);
+    if (!mapNameColours[k]) mapNameColours[k] = MAP_COLOURS[Object.keys(mapNameColours).length % MAP_COLOURS.length];
+    return mapNameColours[k];
+  }
+  function posePosition(m, pose) {
+    var k = pose.keypoints || [];
+    var ok = function (name) { var p = kp(k, name); return p && p.score >= KEYPOINT_CONF_FLOOR ? p : null; };
+    var pair = function (a, b) { var p = ok(a), q = ok(b); return p && q ? midpoint(p, q) : p || q; };
+    var tries = [["left_hip", "right_hip", HIP_ABOVE_FELT_IN, "hips"], ["left_ankle", "right_ankle", ANKLE_ABOVE_FELT_IN, "feet"], ["left_shoulder", "right_shoulder", SHOULDER_ABOVE_FELT_IN, "shoulders"]];
+    for (var i = 0; i < tries.length; i++) {
+      var at = pair(tries[i][0], tries[i][1]), p = at && pointOnRay(m, at.x, at.y, tries[i][2]);
+      if (p) return { x: p.x, y: p.y, how: tries[i][3] };
+    }
+    return null;
+  }
+  function mapVelocity(points) {
+    var last = points[points.length - 1], first = null;
+    for (var i = points.length - 2; i >= 0 && last.at - points[i].at <= 1500; i--) first = points[i];
+    if (!first || last.at - first.at < 400) return { x: 0, y: 0 };
+    var s = (last.at - first.at) / 1000;
+    return { x: (last.x - first.x) / s, y: (last.y - first.y) / s };
+  }
+
+  // Every pass, right after the walking paths: each person's spot.
+  var mapCalKey = null;
+  function noteRoomMapPoses(poses, now) {
+    var m = roomMapActive() ? cameraModel() : null;
+    if (!m) return;
+    if (m !== mapCalKey) { mapTracks = {}; mapPlayers = {}; mapCalKey = m; } // (positions from another calibration)
+    var seen = {};
+    (poses || []).forEach(function (pose) {
+      if (pose.id === undefined || pose.id === null) return;
+      var at = posePosition(m, pose);
+      if (!at) return;
+      var id = String(pose.id), tr = mapTracks[id];
+      if (!tr) tr = mapTracks[id] = { id: id, points: [], firstAt: now, seenAt: now, evidence: null, lookAt: 0, looks: 0, probs: null, v: { x: 0, y: 0 } };
+      // (hips jitter a few inches from one look to the next)
+      var p = tr.pos && now - tr.seenAt < 1000 ? { x: tr.pos.x * 0.4 + at.x * 0.6, y: tr.pos.y * 0.4 + at.y * 0.6 } : { x: at.x, y: at.y };
+      seen[id] = true;
+      tr.pos = p;
+      tr.how = at.how;
+      tr.seenAt = now;
+      tr.live = true;
+      tr.rawId = pose.rawId;
+      var lp = tr.points[tr.points.length - 1];
+      if (!lp || now - lp.at >= 500 || Math.hypot(p.x - lp.x, p.y - lp.y) >= 4) tr.points.push({ x: p.x, y: p.y, at: now });
+      while (tr.points.length && now - tr.points[0].at > MAP_TRAIL_MS) tr.points.shift();
+      tr.v = mapVelocity(tr.points);
+    });
+    Object.keys(mapTracks).forEach(function (id) {
+      var tr = mapTracks[id];
+      if (!seen[id]) tr.live = false;
+      if (now - tr.seenAt > MAP_TRACK_KEEP_MS) delete mapTracks[id];
+    });
+    var dt = mapLastUpdateAt ? Math.min(2000, now - mapLastUpdateAt) : 0;
+    mapLastUpdateAt = now;
+    updateMapIdentities(now);
+    updateMapPlayers(now, dt);
+    scheduleRoomMapRender();
+  }
+
+  // One look at a person: how likely each player (and "?", a stranger) is.
+  function noteRoomMapLook(trackId, analysis, now) {
+    if (trackId === undefined || trackId === null || !analysis || !roomMapActive()) return;
+    var tr = mapTracks[String(trackId)];
+    if (!tr) return;
+    var keys = Object.keys(enrollments).filter(function (k) { return isEligibleForRecognition(enrollments[k].displayName || k); });
+    if (!keys.length) return;
+    var pose = poseForAnalysis(analysis), method = "colour", query = analysis.descriptor;
+    if (analysis.emb && activeRecognitionMethod() === "model") {
+      var q = frameComboVector(analysis.emb, activeModelCombo());
+      if (q) { method = "model"; query = q; }
+    }
+    var ranked = rankPlayers(query, pose, keys, null, method), thr = methodThreshold(method);
+    var stranger = Math.exp(-2), weights = { "?": stranger }, total = stranger;
+    keys.forEach(function (k) {
+      var name = enrollments[k].displayName || k, r = ranked.filter(function (x) { return x.key === k; })[0];
+      // (no sample to compare with - nothing but another day's shirt in view: say nothing either way)
+      var wgt = r ? Math.exp(-2 * Math.pow(r.distance / thr, 2)) : stranger * 0.5;
+      weights[name] = wgt;
+      total += wgt;
+    });
+    var alpha = tr.evidence ? 1 - Math.exp(-(now - tr.lookAt) / MAP_EVIDENCE_MS) : 1;
+    var ev = tr.evidence || {};
+    Object.keys(weights).forEach(function (name) { ev[name] = (ev[name] || 0) * (1 - alpha) + alpha * weights[name] / total; });
+    tr.evidence = ev;
+    tr.lookAt = now;
+    tr.looks++;
+    tr.lookMethod = method;
+  }
+
+  // Who each track is, all of them together: each track's own odds, then
+  // shared out so the players add up to at most one each.
+  function updateMapIdentities(now) {
+    var names = mapCandidateNames(), cols = names.concat(["?"]);
+    var rows = Object.keys(mapTracks).map(function (id) { return mapTracks[id]; }).filter(function (tr) { return tr.live || now - tr.seenAt <= MAP_LOST_SHOW_MS; });
+    var P = rows.map(function (tr) {
+      var path = walkingPathById(tr.id), pathName = path && path.name;
+      tr.pathName = pathName || null;
+      var named = pathName && cols.some(function (n) { return normalizeNameKey(n) === normalizeNameKey(pathName); });
+      var row = cols.map(function (name) {
+        var p = tr.evidence ? (tr.evidence[name] || 0) : 1 / cols.length;
+        if (named) p = p * (1 - MAP_PATH_NAME_TRUST) + (normalizeNameKey(pathName) === normalizeNameKey(name) ? MAP_PATH_NAME_TRUST : 0);
+        return p + 1e-4;
+      });
+      var s = row.reduce(function (a, b) { return a + b; }, 0);
+      return row.map(function (p) { return p / s; });
+    });
+    for (var it = 0; it < 12; it++) {
+      for (var c = 0; c < names.length; c++) {
+        var sum = 0, r;
+        for (r = 0; r < P.length; r++) sum += P[r][c];
+        if (sum > 1) for (r = 0; r < P.length; r++) P[r][c] /= sum;
+      }
+      P = P.map(function (row) { var s = row.reduce(function (a, b) { return a + b; }, 0); return row.map(function (p) { return p / s; }); });
+    }
+    rows.forEach(function (tr, r) {
+      var probs = {};
+      cols.forEach(function (name, c) { probs[name] = P[r][c]; });
+      tr.probs = probs;
+      var best = cols.slice().sort(function (a, b) { return probs[b] - probs[a]; })[0];
+      tr.top = best;
+    });
+  }
+  function trackTop(tr) {
+    if (!tr.probs) return { name: "?", p: 1 };
+    var best = "?";
+    Object.keys(tr.probs).forEach(function (n) { if (tr.probs[n] > tr.probs[best]) best = n; });
+    return { name: best, p: tr.probs[best] };
+  }
+
+  // Each player: where they were last surely seen, the way they walked,
+  // where they spent their time.
+  function updateMapPlayers(now, dt) {
+    var names = mapCandidateNames();
+    names.forEach(function (name) {
+      var key = normalizeNameKey(name), pl = mapPlayers[key];
+      if (!pl) pl = mapPlayers[key] = { name: name, last: null, trail: [], dwell: {}, walked: 0, inViewMs: 0, inView: 0 };
+      pl.name = name;
+      var best = null, inView = 0;
+      Object.keys(mapTracks).forEach(function (id) {
+        var tr = mapTracks[id];
+        if (!tr.live || !tr.probs) return;
+        var p = tr.probs[name] || 0;
+        inView += p;
+        if (!best || p > best.p) best = { tr: tr, p: p };
+      });
+      pl.inView = Math.min(1, inView);
+      if (!best || best.p < MAP_SURE) return;
+      var tr = best.tr, pos = tr.pos, prev = pl.trail[pl.trail.length - 1];
+      if (prev && now - prev.at < 2000) pl.walked += Math.hypot(pos.x - prev.x, pos.y - prev.y);
+      pl.last = { x: pos.x, y: pos.y, at: now, trackId: tr.id, v: tr.v };
+      if (!prev || now - prev.at >= 500 || Math.hypot(pos.x - prev.x, pos.y - prev.y) >= 4) pl.trail.push({ x: pos.x, y: pos.y, at: now });
+      while (pl.trail.length && now - pl.trail[0].at > MAP_TRAIL_MS) pl.trail.shift();
+      pl.inViewMs += dt;
+      var cell = Math.floor(pos.x / MAP_DWELL_CELL_IN) + "," + Math.floor(pos.y / MAP_DWELL_CELL_IN);
+      pl.dwell[cell] = (pl.dwell[cell] || 0) + dt / 1000;
+    });
+  }
+  // Where someone out of view could be by now: a circle round where they
+  // were heading (they may have walked on a moment), growing at a stroll,
+  // minus the floor the camera sees (they'd be in view there). Someone
+  // last seen at the table and held there (hidden behind someone, below
+  // the rail) stays put.
+  function mapZone(last, now, heldAtTable) {
+    var s = (now - last.at) / 1000, v = last.v || { x: 0, y: 0 }, on = Math.min(s, 1.5);
+    if (heldAtTable) return { x: last.x, y: last.y, r: MAP_ZONE_START_IN + 6, s: s, held: true };
+    return { x: last.x + v.x * on, y: last.y + v.y * on, r: Math.min(MAP_RANGE_IN * 2, MAP_ZONE_START_IN + MAP_WALK_IN_S * s), s: s };
+  }
+  // Inches from a spot (table inches) to the table's edge - 0 over it.
+  function distanceOffTable(p) {
+    var dx = Math.max(0, -p.x, p.x - calibXExtent()), dy = Math.max(0, -p.y, p.y - calibYExtent());
+    return Math.hypot(dx, dy);
+  }
+  function clearRoomMapTrails() {
+    Object.keys(mapTracks).forEach(function (id) { mapTracks[id].points = mapTracks[id].points.slice(-1); });
+    Object.keys(mapPlayers).forEach(function (k) { mapPlayers[k].trail = mapPlayers[k].trail.slice(-1); mapPlayers[k].dwell = {}; mapPlayers[k].walked = 0; mapPlayers[k].inViewMs = 0; });
+    scheduleRoomMapRender(true);
+  }
+
+  // ---- Room map: drawing ----
+  var ROOM_MAP_OPTIONS_KEY = "pmc-room-map-options";
+  var roomMapOptions = { ids: true, trails: true, zones: true, dwell: false, room: true };
+  try { Object.assign(roomMapOptions, JSON.parse(localStorage.getItem(ROOM_MAP_OPTIONS_KEY) || "{}")); } catch (e) {}
+  var roomMapPanel = document.getElementById("roomMapPanel");
+  var roomMapSvg = document.getElementById("roomMapSvg");
+  var roomMapStatusEl = document.getElementById("roomMapStatus");
+  var roomMapPeopleEl = document.getElementById("roomMapPeople");
+  var roomMapRebuildBtn = document.getElementById("roomMapRebuildBtn");
+  var roomMapClearBtn = document.getElementById("roomMapClearBtn");
+  var roomMapStatic = null; // { key, svg, frame, view } - the parts that don't move
+  var roomMapRenderTimer = null, roomMapRenderedAt = 0;
+  var ROOM_MAP_RENDER_MS = 250;
+
+  // Table inches -> the map's own: the table's middle at 0,0, its long
+  // side across, seen from above (not mirrored) and turned so the camera
+  // is at the bottom - the picture's left is the map's left.
+  function mapFrame(m) {
+    var xExt = calibXExtent(), yExt = calibYExtent();
+    var a = 1, b = 0, c = 0, d = m.up > 0 ? -1 : 1;
+    if (yExt > xExt) { var a2 = -c, b2 = -d; c = a; d = b; a = a2; b = b2; }
+    var cx = xExt / 2, cy = yExt / 2;
+    if (c * (m.C[0] - cx) + d * (m.C[1] - cy) < 0) { a = -a; b = -b; c = -c; d = -d; }
+    return {
+      cx: cx, cy: cy, a: a, b: b, c: c, d: d,
+      x: function (x, y) { return a * (x - cx) + b * (y - cy); },
+      y: function (x, y) { return c * (x - cx) + d * (y - cy); }
+    };
+  }
+  function svgNum(v) { return Math.round(v * 10) / 10; }
+  function svgPt(fr, p) { return svgNum(fr.x(p.x, p.y)) + "," + svgNum(fr.y(p.x, p.y)); }
+  function svgText(x, y, text, fs, fill, extra) {
+    return '<text x="' + svgNum(x) + '" y="' + svgNum(y) + '" font-size="' + svgNum(fs) + '" fill="' + fill + '"' + (extra || "") + ">" + escapeHtml(text) + "</text>";
+  }
+  function feetText(inches) {
+    return (inches / 12).toFixed(inches < 120 ? 1 : 0) + " ft";
+  }
+
+  // The parts that don't move: grid, what the camera sees of the floor,
+  // the room's shape, the table, the camera.
+  function roomMapStaticLayer(m) {
+    var key = calibrationKey() + "|" + (roomPlan && roomPlanCurrent() ? roomPlan.builtAt : "-") + "|" + roomMapOptions.ids + roomMapOptions.room;
+    if (roomMapStatic && roomMapStatic.key === key) return roomMapStatic;
+    var fr = mapFrame(m), xExt = calibXExtent(), yExt = calibYExtent();
+    var plan = roomPlanCurrent() ? roomPlan : null;
+    var reach = plan ? plan.reach : Math.min(MAP_RANGE_IN, Math.max(xExt, yExt) * 1.6);
+    var fov = visibleFloor(m, reach);
+    // the map's extent: the table, the camera, what it sees, the room
+    var xs = [], ys = [];
+    var addPt = function (x, y) { xs.push(fr.x(x, y)); ys.push(fr.y(x, y)); };
+    [[0, 0], [xExt, 0], [xExt, yExt], [0, yExt]].forEach(function (p) { addPt(p[0], p[1]); });
+    addPt(m.C[0], m.C[1]);
+    fov.forEach(function (p) { addPt(p.x, p.y); });
+    if (plan) plan.objects.forEach(function (o) {
+      for (var q = 0; q < o.cells.length; q += 2) {
+        var ox = (o.cells[q] + 0.5) * plan.cell, oy = (o.cells[q + 1] + 0.5) * plan.cell;
+        if (Math.hypot(ox - fr.cx, oy - fr.cy) <= reach + 24) addPt(ox, oy);
+      }
+    });
+    var x0 = Math.min.apply(null, xs), x1 = Math.max.apply(null, xs), y0 = Math.min.apply(null, ys), y1 = Math.max.apply(null, ys);
+    var fs = Math.max(6, (x1 - x0) / 56), pad = Math.max(30, fs * 9); // (room for the labels at the edges)
+    var view = { x0: x0 - pad, y0: y0 - pad, x1: x1 + pad, y1: y1 + pad };
+    view.fs = fs;
+    var out = [];
+    // a foot grid, every 5 ft brighter
+    var g = [];
+    for (var gx = Math.ceil(view.x0 / 12) * 12; gx <= view.x1; gx += 12) g.push('<line x1="' + gx + '" y1="' + svgNum(view.y0) + '" x2="' + gx + '" y2="' + svgNum(view.y1) + '"' + (gx % 60 === 0 ? ' class="g5"' : "") + "/>");
+    for (var gy = Math.ceil(view.y0 / 12) * 12; gy <= view.y1; gy += 12) g.push('<line x1="' + svgNum(view.x0) + '" y1="' + gy + '" x2="' + svgNum(view.x1) + '" y2="' + gy + '"' + (gy % 60 === 0 ? ' class="g5"' : "") + "/>");
+    out.push('<g class="rm-grid">' + g.join("") + "</g>");
+    // what the camera sees of the floor
+    var fovPts = fov.map(function (p) { return svgPt(fr, p); }).join(" ");
+    out.push('<polygon class="rm-fov" points="' + fovPts + '"/>');
+    // the room's shape: each thing's outline, square by square
+    if (plan && roomMapOptions.room) {
+      plan.objects.forEach(function (o) {
+        var set = new Set(), q, path = [];
+        for (q = 0; q < o.cells.length; q += 2) set.add(o.cells[q] + "," + o.cells[q + 1]);
+        var C = plan.cell, minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, sumX = 0, sumY = 0;
+        for (q = 0; q < o.cells.length; q += 2) {
+          var ix = o.cells[q], iy = o.cells[q + 1], x0 = ix * C, y0 = iy * C, x1 = x0 + C, y1 = y0 + C;
+          var seg = function (ax, ay, bx, by) { path.push("M" + svgPt(fr, { x: ax, y: ay }) + "L" + svgPt(fr, { x: bx, y: by })); };
+          if (!set.has((ix - 1) + "," + iy)) seg(x0, y0, x0, y1);
+          if (!set.has((ix + 1) + "," + iy)) seg(x1, y0, x1, y1);
+          if (!set.has(ix + "," + (iy - 1))) seg(x0, y0, x1, y0);
+          if (!set.has(ix + "," + (iy + 1))) seg(x0, y1, x1, y1);
+          var mx = fr.x(x0 + C / 2, y0 + C / 2), my = fr.y(x0 + C / 2, y0 + C / 2);
+          minX = Math.min(minX, mx); maxX = Math.max(maxX, mx); minY = Math.min(minY, my); maxY = Math.max(maxY, my);
+          sumX += mx; sumY += my;
+        }
+        var cls = o.hMax >= 70 ? "tall" : o.hMax >= 36 ? "mid" : "low";
+        out.push('<path class="rm-obj ' + cls + '" d="' + path.join("") + '"><title>' + o.id + ": " + o.n + " squares, " + o.hLow + "-" + o.hMax + " in high</title></path>");
+        if (roomMapOptions.ids && o.n >= 6) {
+          var k = o.cells.length / 2;
+          out.push(svgText(sumX / k, sumY / k, o.id + " " + o.hMax + "in", fs * 0.8, "#d8c7a8", ' text-anchor="middle" class="rm-label"'));
+        }
+      });
+    }
+    // the table: felt, pockets, the head and foot strings left out
+    var corners = [[0, 0], [xExt, 0], [xExt, yExt], [0, yExt]].map(function (p) { return svgPt(fr, { x: p[0], y: p[1] }); });
+    out.push('<polygon class="rm-table" points="' + corners.join(" ") + '"/>');
+    pocketCentersReal().forEach(function (p) { out.push('<circle class="rm-pocket" cx="' + svgNum(fr.x(p[0], p[1])) + '" cy="' + svgNum(fr.y(p[0], p[1])) + '" r="2.5"/>'); });
+    if (roomMapOptions.ids) out.push(svgText(0, fs * 0.35, "T  " + calibration.tableLength + "×" + calibration.tableWidth + "in", fs, "#9be7b0", ' text-anchor="middle" class="rm-label"'));
+    // the camera, and the edges of what it sees
+    var camX = fr.x(m.C[0], m.C[1]), camY = fr.y(m.C[0], m.C[1]);
+    [[0, m.H], [m.W, m.H]].forEach(function (px) {
+      var p = rayToHeight(m, pixelRay(m, px[0], px[1]), -FELT_HEIGHT_IN);
+      if (p) out.push('<line class="rm-cam-ray" x1="' + svgNum(camX) + '" y1="' + svgNum(camY) + '" x2="' + svgNum(fr.x(p.x, p.y)) + '" y2="' + svgNum(fr.y(p.x, p.y)) + '"/>');
+    });
+    var look = pixelRay(m, m.cx, m.cy), lookLen = Math.hypot(look[0], look[1]) || 1;
+    var aheadX = fr.x(m.C[0] + look[0] / lookLen * 30, m.C[1] + look[1] / lookLen * 30), aheadY = fr.y(m.C[0] + look[0] / lookLen * 30, m.C[1] + look[1] / lookLen * 30);
+    out.push('<circle class="rm-cam" cx="' + svgNum(camX) + '" cy="' + svgNum(camY) + '" r="5"/><line class="rm-cam" x1="' + svgNum(camX) + '" y1="' + svgNum(camY) + '" x2="' + svgNum(aheadX) + '" y2="' + svgNum(aheadY) + '"/>');
+    if (roomMapOptions.ids) {
+      out.push(svgText(camX, camY + fs * 1.4, "CAM  " + feetText(m.height + FELT_HEIGHT_IN) + " up · " + Math.round(m.hfov) + "° " + (m.fromTable ? "lens" : "lens assumed"), fs * 0.85, "#8fd0ff", ' text-anchor="middle" class="rm-label"'));
+      var top = fov.reduce(function (best, p) { var y = fr.y(p.x, p.y); return !best || y < best.y ? { x: fr.x(p.x, p.y), y: y } : best; }, null);
+      if (top) out.push(svgText(top.x, top.y - fs * 0.4, "FOV", fs * 0.8, "#8fd0ff", ' text-anchor="middle" class="rm-label"'));
+    }
+    // a 5 ft scale
+    var sbX = view.x0 + fs, sbY = view.y1 - fs;
+    out.push('<line class="rm-scale" x1="' + svgNum(sbX) + '" y1="' + svgNum(sbY) + '" x2="' + svgNum(sbX + 60) + '" y2="' + svgNum(sbY) + '"/>' + svgText(sbX + 30, sbY - fs * 0.4, "5 ft", fs * 0.8, "#c9a2a2", ' text-anchor="middle"'));
+    roomMapStatic = { key: key, svg: out.join(""), frame: fr, view: view, fovPts: fovPts };
+    return roomMapStatic;
+  }
+
+  function scheduleRoomMapRender(now) {
+    if (!roomMapPanel || roomMapPanel.hidden || document.hidden) return;
+    if (now) { renderRoomMap(); return; }
+    if (roomMapRenderTimer) return;
+    roomMapRenderTimer = setTimeout(function () { roomMapRenderTimer = null; renderRoomMap(); }, Math.max(0, ROOM_MAP_RENDER_MS - (Date.now() - roomMapRenderedAt)));
+  }
+  function renderRoomMap() {
+    if (!roomMapSvg) return;
+    roomMapRenderedAt = Date.now();
+    var m = cameraModel();
+    if (!m) {
+      roomMapSvg.setAttribute("viewBox", "0 0 100 40");
+      roomMapSvg.innerHTML = '<text x="50" y="22" font-size="4" fill="#c9a2a2" text-anchor="middle">Calibrate the table (Table tab) to see the room map.</text>';
+      renderRoomMapPeople();
+      return;
+    }
+    var st = roomMapStaticLayer(m), fr = st.frame, view = st.view, fs = view.fs, now = Date.now();
+    var out = [st.svg];
+    out.push('<defs><mask id="rmOutOfView" maskUnits="userSpaceOnUse" x="' + svgNum(view.x0) + '" y="' + svgNum(view.y0) + '" width="' + svgNum(view.x1 - view.x0) + '" height="' + svgNum(view.y1 - view.y0) + '"><rect x="' + svgNum(view.x0) + '" y="' + svgNum(view.y0) + '" width="' + svgNum(view.x1 - view.x0) + '" height="' + svgNum(view.y1 - view.y0) + '" fill="white"/><polygon points="' + st.fovPts + '" fill="black"/></mask></defs>');
+    var players = Object.keys(mapPlayers).map(function (k) { return mapPlayers[k]; }).filter(function (pl) {
+      return mapCandidateNames().some(function (n) { return normalizeNameKey(n) === normalizeNameKey(pl.name); });
+    });
+    // time spent: squares, brighter where longer
+    if (roomMapOptions.dwell) {
+      players.forEach(function (pl) {
+        var max = 0;
+        Object.keys(pl.dwell).forEach(function (c) { max = Math.max(max, pl.dwell[c]); });
+        if (!max) return;
+        var col = mapColour(pl.name);
+        Object.keys(pl.dwell).forEach(function (c) {
+          var sec = pl.dwell[c];
+          if (sec < 2) return;
+          var xy = c.split(","), x0 = +xy[0] * MAP_DWELL_CELL_IN, y0 = +xy[1] * MAP_DWELL_CELL_IN;
+          var pts = [[x0, y0], [x0 + MAP_DWELL_CELL_IN, y0], [x0 + MAP_DWELL_CELL_IN, y0 + MAP_DWELL_CELL_IN], [x0, y0 + MAP_DWELL_CELL_IN]].map(function (p) { return svgPt(fr, { x: p[0], y: p[1] }); });
+          out.push('<polygon points="' + pts.join(" ") + '" fill="' + col + '" fill-opacity="' + (0.06 + 0.4 * sec / max).toFixed(2) + '" stroke="' + col + '" stroke-opacity="0.35" stroke-width="0.6"><title>' + escapeHtml(pl.name) + ": " + Math.round(sec) + "s here</title></polygon>");
+        });
+      });
+    }
+    // the way they walked: the last 30 s bold, the last 2 min fainter, older faintest
+    var trail = function (points, col, cls) {
+      var bands = [[30000, 0.95, 2.2], [120000, 0.55, 1.5], [MAP_TRAIL_MS, 0.25, 1]], from = points.length - 1;
+      bands.forEach(function (band) {
+        var seg = [];
+        while (from >= 0 && now - points[from].at <= band[0]) { seg.push(points[from]); from--; }
+        if (from >= 0 && seg.length) seg.push(points[from]);
+        if (seg.length >= 2) out.push('<polyline class="' + cls + '" points="' + seg.map(function (p) { return svgPt(fr, p); }).join(" ") + '" stroke="' + col + '" stroke-opacity="' + band[1] + '" stroke-width="' + band[2] + '"/>');
+      });
+    };
+    var tracks = Object.keys(mapTracks).map(function (id) { return mapTracks[id]; });
+    if (roomMapOptions.trails) {
+      players.forEach(function (pl) { if (pl.trail.length >= 2) trail(pl.trail, mapColour(pl.name), "rm-trail"); });
+      tracks.forEach(function (tr) { if (trackTop(tr).p < MAP_SURE && tr.points.length >= 2) trail(tr.points, "#9aa0a6", "rm-trail unknown"); });
+    }
+    // out of view: where they could be
+    var held = heldHiddenPresence(now);
+    var zones = [];
+    if (roomMapOptions.zones) {
+      players.forEach(function (pl) {
+        if (!pl.last || pl.inView >= 0.5) return;
+        // (held at the table only if that's where the map last saw them)
+        var atTable = !!(held && held.name && normalizeNameKey(held.name) === normalizeNameKey(pl.name)) && distanceOffTable(pl.last) <= settings.railDistanceInches + 24;
+        zones.push({ z: mapZone(pl.last, now, atTable), label: pl.name + (atTable ? " - at the table, hidden" : " - out of view " + Math.round((now - pl.last.at) / 1000) + "s"), col: mapColour(pl.name), from: pl.last, id: pl.last.trackId });
+      });
+      tracks.forEach(function (tr) {
+        if (tr.live || now - tr.seenAt > MAP_LOST_SHOW_MS || trackTop(tr).p >= MAP_SURE) return;
+        var last = { x: tr.pos.x, y: tr.pos.y, at: tr.seenAt, v: tr.v };
+        zones.push({ z: mapZone(last, now, false), label: tr.id + " lost " + Math.round((now - tr.seenAt) / 1000) + "s", col: "#9aa0a6", from: last, id: tr.id });
+      });
+    }
+    zones.forEach(function (zn) {
+      var z = zn.z, cx = fr.x(z.x, z.y), cy = fr.y(z.x, z.y), fx = fr.x(zn.from.x, zn.from.y), fy = fr.y(zn.from.x, zn.from.y);
+      var mask = z.held ? "" : ' mask="url(#rmOutOfView)"';
+      out.push('<g class="rm-zone"' + mask + '><circle cx="' + svgNum(cx) + '" cy="' + svgNum(cy) + '" r="' + svgNum(z.r) + '" fill="' + zn.col + '" fill-opacity="0.18" stroke="' + zn.col + '" stroke-dasharray="6 5" stroke-width="1.4"/></g>');
+      out.push('<line class="rm-zone-line" x1="' + svgNum(fx) + '" y1="' + svgNum(fy) + '" x2="' + svgNum(cx) + '" y2="' + svgNum(cy) + '" stroke="' + zn.col + '"/>');
+      out.push('<path class="rm-lastseen" d="M' + svgNum(fx - 4) + "," + svgNum(fy - 4) + "L" + svgNum(fx + 4) + "," + svgNum(fy + 4) + "M" + svgNum(fx - 4) + "," + svgNum(fy + 4) + "L" + svgNum(fx + 4) + "," + svgNum(fy - 4) + '" stroke="' + zn.col + '"/>');
+      out.push(svgText(fx, fy - fs * 0.8, zn.label + (roomMapOptions.ids && zn.id ? " [" + zn.id + "]" : ""), fs * 0.8, zn.col, ' text-anchor="middle" class="rm-label"'));
+    });
+    // everyone in view
+    tracks.forEach(function (tr) {
+      if (!tr.live) return;
+      var top = trackTop(tr), col = top.p >= 0.4 ? mapColour(top.name) : "#9aa0a6";
+      var x = fr.x(tr.pos.x, tr.pos.y), y = fr.y(tr.pos.x, tr.pos.y);
+      out.push('<circle class="rm-person" cx="' + svgNum(x) + '" cy="' + svgNum(y) + '" r="10" stroke="' + col + '" fill="' + col + '" fill-opacity="0.25"/>');
+      var speed = Math.hypot(tr.v.x, tr.v.y);
+      if (speed > 8) out.push('<line class="rm-heading" x1="' + svgNum(x) + '" y1="' + svgNum(y) + '" x2="' + svgNum(fr.x(tr.pos.x + tr.v.x, tr.pos.y + tr.v.y)) + '" y2="' + svgNum(fr.y(tr.pos.x + tr.v.x, tr.pos.y + tr.v.y)) + '" stroke="' + col + '"/>');
+      var odds = tr.probs ? Object.keys(tr.probs).sort(function (a, b) { return tr.probs[b] - tr.probs[a]; }).filter(function (n) { return tr.probs[n] >= 0.05; }).slice(0, 3) : [];
+      var line1 = (top.p >= 0.4 && top.name !== "?" ? top.name : "someone") + (roomMapOptions.ids ? "  " + tr.id : "");
+      out.push(svgText(x, y - 13, line1, fs, col, ' text-anchor="middle" class="rm-label"'));
+      if (roomMapOptions.ids && odds.length) out.push(svgText(x, y + 13 + fs * 0.7, odds.map(function (n) { return n + " " + Math.round(tr.probs[n] * 100) + "%"; }).join(" · "), fs * 0.75, "#e9dcc9", ' text-anchor="middle" class="rm-label"'));
+    });
+    roomMapSvg.setAttribute("viewBox", svgNum(view.x0) + " " + svgNum(view.y0) + " " + svgNum(view.x1 - view.x0) + " " + svgNum(view.y1 - view.y0));
+    roomMapSvg.innerHTML = out.join("");
+    renderRoomMapPeople();
+  }
+
+  // Below the map: everyone, in numbers.
+  function renderRoomMapPeople() {
+    if (!roomMapPeopleEl) return;
+    var now = Date.now(), rows = [];
+    var where = function (p) { return "(" + Math.round(p.x - calibXExtent() / 2) + ", " + Math.round(p.y - calibYExtent() / 2) + ")"; };
+    Object.keys(mapTracks).map(function (id) { return mapTracks[id]; }).sort(function (a, b) { return b.seenAt - a.seenAt; }).forEach(function (tr) {
+      if (!tr.live && now - tr.seenAt > MAP_LOST_SHOW_MS) return;
+      var odds = tr.probs ? Object.keys(tr.probs).sort(function (a, b) { return tr.probs[b] - tr.probs[a]; }).slice(0, 3).map(function (n) { return n + " " + Math.round(tr.probs[n] * 100) + "%"; }).join(", ") : "-";
+      rows.push("<tr><td>" + escapeHtml(tr.id) + (tr.rawId !== undefined && tr.rawId !== null ? ' <span class="dim">(pose ' + escapeHtml(tr.rawId) + ")</span>" : "") + "</td><td>" + (tr.live ? "in view" : "lost " + Math.round((now - tr.seenAt) / 1000) + "s") + "</td><td>" + where(tr.pos) + " in, " + escapeHtml(tr.how || "") + "</td><td>" + Math.round(Math.hypot(tr.v.x, tr.v.y)) + " in/s</td><td>" + escapeHtml(odds) + (tr.pathName ? ' <span class="dim">path: ' + escapeHtml(tr.pathName) + "</span>" : "") + "</td><td>" + tr.looks + "</td></tr>");
+    });
+    var tracksHtml = rows.length ? '<table class="rm-table-list"><tr><th>Track</th><th>Seen</th><th>Where (from the table\'s middle)</th><th>Speed</th><th>Who (most likely first)</th><th>Looks</th></tr>' + rows.join("") + "</table>" : '<div class="hint">Nobody in view.</div>';
+    var prow = [];
+    Object.keys(mapPlayers).map(function (k) { return mapPlayers[k]; }).forEach(function (pl) {
+      if (!mapCandidateNames().some(function (n) { return normalizeNameKey(n) === normalizeNameKey(pl.name); })) return;
+      var state = pl.inView >= 0.5 ? "in view (" + Math.round(pl.inView * 100) + "%)" : pl.last ? "out of view " + Math.round((now - pl.last.at) / 1000) + "s, last at " + where(pl.last) : "not seen yet";
+      prow.push('<tr><td><span class="rm-swatch" style="background:' + mapColour(pl.name) + '"></span>' + escapeHtml(pl.name) + "</td><td>" + state + "</td><td>" + feetText(pl.walked) + "</td><td>" + Math.round(pl.inViewMs / 1000) + "s</td></tr>");
+    });
+    var playersHtml = prow.length ? '<table class="rm-table-list"><tr><th>Player</th><th>Now</th><th>Walked</th><th>In view</th></tr>' + prow.join("") + "</table>" : "";
+    roomMapPeopleEl.innerHTML = tracksHtml + playersHtml;
+  }
+
+  function renderRoomMapStatus() {
+    if (!roomMapStatusEl) return;
+    renderSidesWarning();
+    if (isViewer) { roomMapStatusEl.textContent = "The room map is drawn on the camera device itself."; return; }
+    var m = cameraModel(), lines = [];
+    if (!m) {
+      lines.push("Calibrate the table first (Table tab) - the map is built round it.");
+    } else {
+      var floorDist = Math.hypot(m.C[0] - calibXExtent() / 2, m.C[1] - calibYExtent() / 2);
+      lines.push("Camera: " + feetText(m.height + FELT_HEIGHT_IN) + " above the floor, " + feetText(floorDist) + " from the table's middle, seeing " + Math.round(m.hfov) + "° across" + (m.fromTable ? " (worked out from the table" + (m.fitPx > 3 ? ", roughly - " + m.fitPx.toFixed(1) + " px off" : "") + ")" : " (assumed - the camera looks too straight down at the table to tell)") + ".");
+      if (roomPlanState.busy || roomPlanState.text) lines.push(roomPlanState.text);
+      else if (roomPlanCurrent() && roomPlan.fit && roomPlan.fit.sides) {
+        var fit = roomPlan.fit;
+        lines.push("Room shape from the empty-room snapshot: " + roomPlan.objects.length + " thing" + (roomPlan.objects.length === 1 ? "" : "s") + " (o1 the biggest), " + feetText(roomPlan.reach) + " round the table. In its depth the table measures " + fit.sides.map(function (v) { return Math.round(v); }).join(" x ") + " in, " + (fit.floorAssumed ? "the floor not found (assumed " + FELT_HEIGHT_IN + " in below the cloth)" : "the floor " + Math.round(fit.clothAboveFloorIn) + " in below the cloth") + "; it puts the camera " + feetText(fit.camera.h) + " up.");
+      }
+      else if (emptyRoom) lines.push("The room's shape isn't worked out for this snapshot yet.");
+      else lines.push("No room shape yet: take an empty-room snapshot on the Table tab - the walls and furniture are worked out from it.");
+    }
+    roomMapStatusEl.textContent = lines.join("\n");
+    if (roomMapRebuildBtn) roomMapRebuildBtn.disabled = roomPlanState.busy || !m || !emptyRoom;
+  }
+  // The tab opened: draw it, and work out the room's shape if the snapshot
+  // or the calibration is newer than it.
+  function roomMapShown() {
+    renderRoomMapStatus();
+    scheduleRoomMapRender(true);
+    if (!isViewer && cameraModel() && emptyRoom && emptyRoomFits() && !roomPlanCurrent() && !roomPlanState.busy) buildRoomPlan("snapshot or calibration changed");
+  }
+  if (roomMapPanel) {
+    loadRoomPlan();
+    ["ids", "trails", "zones", "dwell", "room"].forEach(function (opt) {
+      var box = document.getElementById("roomMapOpt-" + opt);
+      if (!box) return;
+      box.checked = !!roomMapOptions[opt];
+      box.addEventListener("change", function () {
+        roomMapOptions[opt] = box.checked;
+        try { localStorage.setItem(ROOM_MAP_OPTIONS_KEY, JSON.stringify(roomMapOptions)); } catch (e) {}
+        roomMapStatic = null;
+        scheduleRoomMapRender(true);
+      });
+    });
+    roomMapRebuildBtn.addEventListener("click", function () { buildRoomPlan("asked"); });
+    roomMapClearBtn.addEventListener("click", clearRoomMapTrails);
+  }
+  // Tests and the console: the camera model, the plan, the tracks.
+  window.PMCRoomMapDebug = {
+    cameraModel: cameraModel,
+    solveCameraModel: solveCameraModel,
+    pointOnRay: function (u, v, h) { var m = cameraModel(); return m ? pointOnRay(m, u, v, h) : null; },
+    projectToPixel: function (P) { var m = cameraModel(); return m ? projectToPixel(m, P) : null; },
+    visibleFloor: function (reach) { var m = cameraModel(); return m ? visibleFloor(m, reach || MAP_RANGE_IN) : null; },
+    buildRoomPlan: buildRoomPlan,
+    fixSwappedCalibration: fixSwappedCalibration,
+    // (tests: a depth map of their own - { w, h, data }, bigger = nearer)
+    planFromDepth: function (depth) { var m = cameraModel(); return m ? planFromDepth(depth, m) : null; },
+    setPlan: function (plan) { plan.at = emptyRoom ? emptyRoom.at : null; plan.calKey = calibrationKey(); plan.builtAt = Date.now(); roomPlan = plan; roomMapStatic = null; renderRoomMapStatus(); },
+    getPlan: function () { return roomPlan; },
+    lastDepth: function () { return lastRoomDepth; },
+    planState: function () { return roomPlanState; },
+    tracks: function () { return mapTracks; },
+    players: function () { return mapPlayers; },
+    render: renderRoomMap,
+    options: roomMapOptions
+  };
+
+  // ---- The scoreboard's camera icons: how the camera knows each player ----
+  // Every player's little camera on their score card says how the camera
+  // knows about them right now (sent as "player-states" whenever that
+  // changes, and every few seconds anyway):
+  //   recognized (green) - in view, and known by how they look;
+  //   suspected (yellow) - someone in view is taken for them, but by
+  //     extrapolation rather than a sure look: followed along their walking
+  //     path, a near match, the camera's best guess for a shooter it can't
+  //     name, the 1-on-1 or last-seen guess;
+  //   located (blue) - out of view, but the camera has an idea where: held
+  //     at the table, a walking path it lost a moment ago, the room map's
+  //     last spot for them (for up to PLAYER_LOCATED_MS);
+  //   nothing (white) - not seen, nothing to go on.
+  // A look counts this long for the colour it gives; once given, a colour
+  // stays while recognition is on for that player (see playerStates).
+  var SIGHTING_SURE_MS = 1500;
+  var SIGHTING_GUESS_MS = 1500;
+  var PLAYER_LOCATED_MS = 10 * 60 * 1000;
+  var PLAYER_STATES_RESEND_MS = 3000;
+  var playerSightings = {}; // name key -> { name, sureAt, guessAt }
+  var lastPlayerStates = { key: null, at: 0 };
+  function notePlayerSighting(name, sure, now) {
+    if (!name) return;
+    var key = normalizeNameKey(name);
+    var s = playerSightings[key] || (playerSightings[key] = { name: name, sureAt: 0, guessAt: 0 });
+    s.name = name;
+    if (sure) s.sureAt = now;
+    else s.guessAt = now;
+  }
+  // { name: "recognized" | "suspected" | "located" } - nobody else listed.
+  function playerStates(now) {
+    var rank = { located: 1, suspected: 2, recognized: 3 }, best = {};
+    var put = function (name, state) {
+      if (!name) return;
+      var key = normalizeNameKey(name);
+      if (!best[key] || rank[state] > rank[best[key].state]) best[key] = { name: name, state: state };
+    };
+    Object.keys(playerSightings).forEach(function (key) {
+      var s = playerSightings[key];
+      if (now - s.sureAt <= SIGHTING_SURE_MS) put(s.name, "recognized");
+      else if (now - s.guessAt <= SIGHTING_GUESS_MS) put(s.name, "suspected");
+      else if (now - Math.max(s.sureAt, s.guessAt) > PLAYER_LOCATED_MS) delete playerSightings[key];
+    });
+    // a walking path carrying their name: in view now, or lost a moment ago
+    walkingPaths.forEach(function (path) {
+      if (path.name && now - path.seenAt <= PATH_KEEP_MS) put(path.name, now - path.seenAt <= PATH_LIVE_GAP_MS ? "suspected" : "located");
+    });
+    var held = heldHiddenPresence(now);
+    if (held && held.name) put(held.name, "located");
+    if (roomMapActive()) {
+      Object.keys(mapTracks).forEach(function (id) {
+        var tr = mapTracks[id], top = trackTop(tr);
+        if (tr.live && top.name !== "?" && top.p >= 0.5) put(top.name, "suspected");
+      });
+      Object.keys(mapPlayers).forEach(function (key) {
+        var pl = mapPlayers[key];
+        if (pl.last && now - pl.last.at <= PLAYER_LOCATED_MS) put(pl.name, "located");
+      });
+    }
+    // No fading with time: while recognition is on for a player (playing,
+    // with samples), their icon only ever goes up - white, blue, yellow,
+    // green - and keeps the best colour reached; it starts over only when
+    // recognition stops for them (benched, samples cleared) or the camera
+    // starts over (this page reloads, the camera stops: the scoreboard
+    // greys every icon when it hears nothing for a while).
+    Object.keys(best).forEach(function (key) {
+      var had = stickyPlayerStates[key];
+      if (!had || rank[best[key].state] > rank[had.state]) stickyPlayerStates[key] = { name: best[key].name, state: best[key].state };
+    });
+    var out = {};
+    Object.keys(stickyPlayerStates).forEach(function (key) {
+      var st = stickyPlayerStates[key];
+      if (!isEligibleForRecognition(st.name) || !enrollments[key]) { delete stickyPlayerStates[key]; return; }
+      out[st.name] = st.state;
+    });
+    return out;
+  }
+  var stickyPlayerStates = {}; // name key -> { name, state } - the best colour reached (see playerStates)
+  function reportPlayerStates(now) {
+    if (isViewer) return;
+    var states = playerStates(now);
+    var key = Object.keys(states).sort().map(function (n) { return n + "=" + states[n]; }).join("|");
+    if (key === lastPlayerStates.key && now - lastPlayerStates.at < PLAYER_STATES_RESEND_MS) return;
+    lastPlayerStates = { key: key, at: now };
+    send({ type: "player-states", states: states });
   }
 
   // ---- Setup wizard ----

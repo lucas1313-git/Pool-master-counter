@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261010a">
+<link rel="stylesheet" href="css/style.css?v=20261022a">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -65,17 +65,28 @@
       </div>
     </div>
     <div class="header-nav-row">
-      <button type="button" id="btn-quick-game" class="btn btn-primary all-players-nav-btn quick-game-btn" data-i18n="header.quickGame">⚡ Quick Game</button>
-      <button type="button" id="btn-test-onboarding" class="btn btn-ghost all-players-nav-btn" data-i18n="header.welcomeNewPlayer">👋 Welcome New Player</button>
-      <button type="button" id="btn-open-wizard" class="btn btn-primary all-players-nav-btn" data-i18n="header.startWizard">🧙 Start Wizard</button>
-      <button type="button" id="btn-open-camera-wizard-header" class="btn btn-ghost all-players-nav-btn" data-i18n="cameraWizard.openButton">📷 Set Up Camera</button>
-      <button type="button" id="btn-open-tournament" class="btn btn-ghost all-players-nav-btn" data-i18n="header.tournament">🏆 Tournament</button>
-      <button type="button" id="btn-open-league" class="btn btn-ghost all-players-nav-btn" data-i18n="header.league">🏆 League</button>
-      <button type="button" id="btn-open-global-stats" class="btn btn-ghost all-players-nav-btn" data-i18n="header.globalStats">🌐 Global Stats</button>
-      <button type="button" id="btn-open-leaderboard" class="btn btn-ghost all-players-nav-btn" data-i18n="header.leaderboard">🏆 Leaderboard</button>
-      <button type="button" id="btn-open-group-session" class="btn btn-ghost all-players-nav-btn" data-i18n="header.groupSession">🎯 Group Session</button>
-      <button type="button" id="btn-open-contact-sheet" class="btn btn-ghost all-players-nav-btn" data-i18n="header.contactSheet">📇 Contact Sheet</button>
-      <button type="button" id="btn-open-help" class="btn btn-ghost all-players-nav-btn" data-i18n="header.help">❓ Help</button>
+      <div class="header-nav-line">
+        <div class="header-nav-group" id="header-group-start">
+          <button type="button" id="btn-quick-game" class="btn btn-primary all-players-nav-btn quick-game-btn" data-i18n="header.quickGame">⚡ Quick Game</button>
+          <button type="button" id="btn-test-onboarding" class="btn btn-primary all-players-nav-btn" data-i18n="header.welcomeNewPlayer">👋 Welcome New Player</button>
+          <button type="button" id="btn-open-wizard" class="btn btn-primary all-players-nav-btn" data-i18n="header.startWizard">🧙 Game Setup Wizard</button>
+        </div>
+        <div class="header-nav-group" id="header-group-events">
+          <button type="button" id="btn-open-tournament" class="btn btn-ghost all-players-nav-btn" data-i18n="header.tournament">🏆 Tournament</button>
+          <button type="button" id="btn-open-league" class="btn btn-ghost all-players-nav-btn" data-i18n="header.league">🏆 League</button>
+          <button type="button" id="btn-open-group-session" class="btn btn-ghost all-players-nav-btn" data-i18n="header.groupSession">🎯 Multi Tables</button>
+        </div>
+        <div class="header-nav-group" id="header-group-stats">
+          <button type="button" id="btn-open-leaderboard" class="btn btn-ghost all-players-nav-btn" data-i18n="header.leaderboard">🏆 Leaderboard</button>
+          <button type="button" id="btn-open-global-stats" class="btn btn-ghost all-players-nav-btn" data-i18n="header.globalStats">🌐 Global Stats</button>
+        </div>
+      </div>
+      <div class="header-nav-line">
+        <div class="header-nav-group" id="header-group-people">
+          <button type="button" id="btn-open-contact-sheet" class="btn btn-ghost all-players-nav-btn" data-i18n="header.contactSheet">📇 Contact Sheet</button>
+          <button type="button" id="btn-open-camera-wizard-header" class="btn btn-ghost all-players-nav-btn" data-i18n="cameraWizard.openButton">📷 Set Up Camera</button>
+          <button type="button" id="btn-open-help" class="btn btn-ghost all-players-nav-btn" data-i18n="header.help">❓ Help</button>
+        </div>
       <div class="theme-select-row">
         <label for="theme-select" data-i18n="header.theme">🎨 Theme</label>
         <select id="theme-select">
@@ -110,6 +121,7 @@
         <label for="language-select" data-i18n="header.language">🌐 Language</label>
         <select id="language-select"></select>
       </div>
+      </div>
     </div>
   </header>
 
@@ -143,7 +155,7 @@
         <label><input type="radio" name="game-mode" value="individual" checked> <span data-i18n="gameSetup.individual">Individual</span></label>
         <label><input type="radio" name="game-mode" value="teams"> <span data-i18n="gameSetup.teams">Teams</span></label>
       </div>
-      <label class="checkbox-row" id="queue-mode-row">
+      <label class="checkbox-row checkbox-row-prominent queue-mode-prominent" id="queue-mode-row">
         <input type="checkbox" id="queue-mode-checkbox">
         <span data-i18n="players.queueModeEnable">🎱 Winner Stays (queue standby players)</span>
       </label>
@@ -286,7 +298,14 @@
 
   <section id="scoreboard-panel">
     <div class="row voice-toggle-row">
-      <button type="button" id="btn-toggle-focus" class="btn btn-primary focus-toggle-btn" data-i18n="scoreboard.focusMode">Focus Mode</button>
+      <span class="focus-mode-group">
+        <button type="button" id="btn-toggle-focus" class="btn btn-primary focus-toggle-btn" data-i18n="scoreboard.focusMode">Focus Mode</button>
+        <span class="game-mode-toggle" role="radiogroup" data-i18n-aria-label="scoreboard.gameModeAria" aria-label="Rotation or single game">
+          <label class="game-mode-option"><input type="radio" name="scoreboard-game-mode" id="scoreboard-mode-rotation" value="rotation"> <span data-i18n="scoreboard.modeRotation">🔄 Rotation</span></label>
+          <label class="game-mode-option"><input type="radio" name="scoreboard-game-mode" id="scoreboard-mode-single" value="single" checked> <span data-i18n="scoreboard.modeSingleGame">🎱 Single game</span></label>
+        </span>
+        <label class="scoreboard-queue-toggle hidden" id="scoreboard-queue-row"><input type="checkbox" id="scoreboard-queue-checkbox"> <span data-i18n="players.queueModeEnable">🎱 Winner Stays (queue standby players)</span></label>
+      </span>
       <span class="voice-control-group">
         <button type="button" id="btn-toggle-keypad-speech" class="btn btn-ghost voice-toggle-btn hidden" data-i18n="keypad.speechToggleOn">🔊 Activate Voice</button>
         <button type="button" id="btn-keypad-speech-help" class="format-info-btn hidden" data-i18n-aria-label="keypad.speechHelpAria" aria-label="What does speak keypad do?">❓</button>
@@ -361,6 +380,10 @@
             <select id="camera-device-select" class="camera-device-select" data-i18n-aria-label="visualScoring.cameraChoiceTitle" aria-label="Camera"></select>
           </div>
           <div class="camera-wizard-path-choice" id="camera-wizard-path-choice">
+            <div class="camera-path-card hidden" id="camera-path-card-native">
+              <button type="button" id="camera-wizard-path-native" class="btn btn-ghost camera-wizard-path-btn" data-i18n="cameraWizard.pathNative">🎯 iPad recognition (USB camera)</button>
+              <p class="wizard-step-explain camera-path-hint" data-i18n="cameraWizard.pathNativeHint">This iPad recognizes the players itself, with a USB camera such as a Logitech Brio plugged into it, and sends who's shooting to the scoreboard on your computer.</p>
+            </div>
             <div class="camera-path-card" id="camera-path-card-phone">
               <button type="button" id="camera-wizard-path-phone" class="btn btn-ghost camera-wizard-path-btn" data-i18n="cameraWizard.pathPhone">📱 Use a separate phone</button>
               <p class="wizard-step-explain camera-path-hint" data-i18n="cameraWizard.step1Explain">Set your phone to this URL, or use this QR code on your phone. Setting your phone to wide angle is usually better.</p>
@@ -447,6 +470,13 @@
                 <span><span data-i18n="players.cameraCueDetection">🎯 Cue stick detection</span><small class="setting-comment" data-i18n="visualScoring.cueDetectionComment">Enhance player recognition</small></span>
               </label>
               <button type="button" id="btn-capture-cue-detection-help" class="format-info-btn" data-i18n-aria-label="players.cameraCueDetectionHelpAria" aria-label="What does Cue stick detection do?">❓</button>
+            </div>
+            <div class="row capture-setting-row">
+              <label class="checkbox-row">
+                <input type="checkbox" id="capture-walking-paths" checked>
+                <span><span data-i18n="players.cameraWalkingPaths">👣 Follow walking paths</span><small class="setting-comment" data-i18n="visualScoring.walkingPathsComment">Keeps a player's name when they're out of view for a moment</small></span>
+              </label>
+              <button type="button" id="btn-capture-walking-paths-help" class="format-info-btn" data-i18n-aria-label="players.cameraWalkingPathsHelpAria" aria-label="What does Follow walking paths do?">❓</button>
             </div>
             <div class="row" id="camera-ball-tracking-row">
               <label class="checkbox-row">
@@ -1028,7 +1058,7 @@
 <div id="multi-table-host-overlay" class="confirm-modal-overlay hidden">
   <div class="confirm-modal-card">
     <p class="confirm-modal-message" data-i18n="multiTable.promptTitle">🖥️ Host Multiple Tables</p>
-    <p class="player-stats-note" id="multi-table-host-body" data-i18n="multiTable.promptBody">Each table needs its own device connected to the same local server. Open Group Session to connect this device as the host, or download the app if this page can't host directly.</p>
+    <p class="player-stats-note" id="multi-table-host-body" data-i18n="multiTable.promptBody">Each table needs its own device connected to the same local server. Open Multi Tables to connect this device as the host, or download the app if this page can't host directly.</p>
     <p class="player-stats-note hidden" id="multi-table-host-link-note"></p>
     <div class="confirm-modal-actions">
       <!-- .confirm-modal-actions is column-reverse (see style.css) - this
@@ -1041,7 +1071,7 @@
            sequence reads as complete; the app itself does the rest on
            its own first launch (see installer/standalone-entry.js and
            checkPendingWizardReopen's auto-host handoff). -->
-      <button type="button" id="btn-multi-table-open-group-session" class="btn btn-primary" data-i18n="multiTable.openGroupSessionButton">🔗 Open Group Session</button>
+      <button type="button" id="btn-multi-table-open-group-session" class="btn btn-primary" data-i18n="multiTable.openGroupSessionButton">🔗 Open Multi Tables</button>
       <button type="button" id="btn-multi-table-install-step" class="btn btn-ghost hidden" disabled data-i18n="multiTable.installStepLabel">🚀 3. Install &amp; Open the App</button>
       <button type="button" id="btn-multi-table-download-app" class="btn btn-ghost hidden" data-i18n="multiTable.downloadAppButton">⬇️ 2. Download the App</button>
       <button type="button" id="btn-multi-table-download-data" class="btn btn-ghost" data-i18n="multiTable.downloadDataButton">💾 1. Download My Setup</button>
@@ -1608,7 +1638,7 @@
         <li data-i18n-html="help.camera.setup"><strong>Setup</strong> — tap "📷 Set Up Camera" under Players and choose a path: a separate phone (works over your local network only, no internet involved) or this tablet's own camera. Same-device mode needs a secure page load (HTTPS, or localhost) to access the camera at all — the wizard tells you if that's not met yet. Once set up, the camera auto-starts minimized into the Players panel on every future page load — no need to start it by hand again.</li>
         <li data-i18n-html="help.camera.calibration"><strong>Calibrating the table</strong> — tells the camera exactly where your table's rails are, so it only counts people actually standing at it, not someone walking past or sitting nearby. Tap "Full Screen" on the camera preview, then either tap the 4 corners yourself (most reliable) or try Auto-Detect (faster, but can mis-detect the felt color if lighting or reflections are tricky). Turn on "Show camera debug info" afterward and check the pink outline it draws actually traces your real table — if it doesn't, redo calibration before trusting anything else.</li>
         <li data-i18n-html="help.camera.enroll"><strong>Enrollment</strong> — each unenrolled player shows an "Enroll" button in the roster; tap it, then have them bend over and shoot a few practice shots. This isn't one-and-done: every time you confirm a point for a player on the keypad, the camera quietly learns what they currently look like too, so a shirt change or different lighting doesn't break recognition on its own — but that only works if the game manager actually selects the correct player on the keypad before confirming each point, ideally every single shot. Tap the "?" beside any enrolled player's icon for the full explanation in plain terms.</li>
-        <li data-i18n-html="help.camera.scorecardIcons"><strong>Scorecard icons</strong> — once set up, a small camera icon appears above a player's name on the scorecard whenever the camera has something to say about them: flashing means it's watching them live right now; it stops flashing the instant their shot is confirmed; a "+" means a fresh sample just got captured for them; a "?" means the camera sees someone bent over it can't confidently name, and this is its best guess — tap that player on the keypad to confirm (this also feeds the camera a strong, human-confirmed sample); a small clock means a seated player waiting their turn is still being recognized in the background.</li>
+        <li data-i18n-html="help.camera.scorecardIcons"><strong>Scorecard icons</strong> — once set up, a camera icon sits above each player's name on the scorecard, its colour saying how the camera knows about them right now: green — in view and recognized by how they look; yellow — someone in view is taken for them, but not for sure (followed along the way they walked, a near match, the camera's best guess); blue — out of view, but the camera has an idea where they are in the room (held at the table, or where it last saw them); light grey — not seen, nothing to go on. A "+" means a fresh sample just got captured for them; a "?" means the camera sees someone bent over it can't confidently name, and this is its best guess — tap that player on the keypad to confirm (this also feeds the camera a strong, human-confirmed sample).</li>
         <li data-i18n-html="help.camera.unmatchedBanner"><strong>"Select player from keypad" banner</strong> — appears over the scorecard whenever the camera sees someone shooting it can't identify at all. It clears itself once resolved; tapping the actual shooter on the keypad dismisses it and tells the camera who that was, same effect as the per-player "?" icon above.</li>
         <li data-i18n-html="help.camera.settings"><strong>Tuning settings</strong> — Match sensitivity, Consecutive frames, Re-announce after, both Bend angle settings, and Max distance from rail all live under the camera checkbox in Players (same-device) or inside the camera's own Settings tab (either mode). Every one of them has its own "?" explaining what raising or lowering the number actually does, in plain language — open the right one instead of guessing.</li>
       </ul>
@@ -1962,7 +1992,7 @@
 
   <header class="app-header player-page-header">
     <button type="button" id="btn-group-session-back" class="btn btn-ghost screen-back-btn" aria-label="Back" data-i18n-aria-label="common.back"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
-    <h1 data-i18n="groupSession.heading">Group Session</h1>
+    <h1 data-i18n="groupSession.heading">Multi Tables</h1>
   </header>
 
   <p class="player-stats-note" data-i18n="groupSession.intro">Let another phone on this WiFi join and control this live scoreboard.</p>
@@ -2517,7 +2547,7 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20261010a"></script>
-<script src="js/camera-client.js?v=20261010a"></script>
+<script src="js/app.js?v=20261022a"></script>
+<script src="js/camera-client.js?v=20261022a"></script>
 </body>
 </html>

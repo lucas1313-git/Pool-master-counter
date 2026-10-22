@@ -221,7 +221,7 @@ function attachListeners(httpServer, isHttps) {
 
   httpServer.listen(PORT, function () {
     console.log("Pool Master Counter is running at http://localhost:" + PORT + "/");
-    console.log("Keep this window open while hosting a Group Session.");
+    console.log("Keep this window open while hosting Multi Tables.");
     openBrowser(startUrl());
   });
 }

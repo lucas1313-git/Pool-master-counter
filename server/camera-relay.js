@@ -45,6 +45,9 @@
 //       told apart from "not detecting anyone"), sent every frame (not
 //       just on change), independent of player_up (which only fires on
 //       an actual confirmed shot)
+//     { type: "player-states", states: { name: "recognized" | "suspected" |
+//       "located" } } - each player's camera icon on the score cards (see
+//       camera.html's playerStates), the whole set on every change
 //   Enrollment (per explicit request: additive, improves with use - each
 //   player's enrollment is a growing LIST of descriptors, not one frozen
 //   average):
@@ -382,6 +385,20 @@ function createCameraRelay(WebSocket) {
         // comments for what each carries.
         if (msg.type === "idle-states" && ws.role === "camera") {
           broadcastToListeners({ type: "idle-states", idle: Array.isArray(msg.idle) ? msg.idle : [] });
+          return;
+        }
+        // Each player's camera icon on the score cards: recognized /
+        // suspected / located (see camera.html's playerStates) - the
+        // whole set every time, names not in it known nothing about.
+        if (msg.type === "player-states" && ws.role === "camera") {
+          var states = {};
+          if (msg.states && typeof msg.states === "object") {
+            Object.keys(msg.states).forEach(function (name) {
+              var st = msg.states[name];
+              if (st === "recognized" || st === "suspected" || st === "located") states[String(name).slice(0, 200)] = st;
+            });
+          }
+          broadcastToListeners({ type: "player-states", states: states });
           return;
         }
         if (msg.type === "enrollment-updated" && ws.role === "camera" && msg.player_name) {

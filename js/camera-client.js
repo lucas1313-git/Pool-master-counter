@@ -276,6 +276,7 @@
       else if (msg.type === "roster-request") handleRosterRequest();
       else if (msg.type === "candidate") handleCandidateSeen(msg);
       else if (msg.type === "idle-states") handleIdleStates(msg);
+      else if (msg.type === "player-states" && bridgeReady() && typeof window.PMCCameraBridge.reportPlayerStates === "function") window.PMCCameraBridge.reportPlayerStates(msg.states);
       else if (msg.type === "enrollment-updated") handleEnrollmentUpdated(msg);
       else if (msg.type === "calib-frame") handleCalibFrame(msg);
       else if (msg.type === "remote-camera-list") handleRemoteCameraList(msg);
