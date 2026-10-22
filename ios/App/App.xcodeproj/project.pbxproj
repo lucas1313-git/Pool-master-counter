@@ -18,6 +18,7 @@
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
 		546D4AE8305B4D45A658FC79 /* Purchases.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8419EFFB90DBC81FA5009BD /* Purchases.swift */; };
+		B8D4F2A03C7E5F9A0B1C2D3E /* Recognition.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7C3E19F2B6D4E8F9A0B1C2D /* Recognition.swift */; };
 		8EAE5AF68840849DC7FAC701 /* Products.storekit in Resources */ = {isa = PBXBuildFile; fileRef = F09ED04174BF30A1DF82416B /* Products.storekit */; };
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
 /* End PBXBuildFile section */
@@ -48,6 +49,7 @@
 		9582B6822FE993A50072D4E8 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
 		D8419EFFB90DBC81FA5009BD /* Purchases.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Purchases.swift; sourceTree = "<group>"; };
+		A7C3E19F2B6D4E8F9A0B1C2D /* Recognition.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Recognition.swift; sourceTree = "<group>"; };
 		F09ED04174BF30A1DF82416B /* Products.storekit */ = {isa = PBXFileReference; includeInIndex = 1; name = Products.storekit; path = Products.storekit; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -113,6 +115,7 @@
 				2FAD9762203C412B000D30F8 /* config.xml */,
 				50B271D01FEDC1A000F3C39B /* public */,
 				D8419EFFB90DBC81FA5009BD /* Purchases.swift */,
+				A7C3E19F2B6D4E8F9A0B1C2D /* Recognition.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -244,6 +247,7 @@
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
 				546D4AE8305B4D45A658FC79 /* Purchases.swift in Sources */,
+				B8D4F2A03C7E5F9A0B1C2D3E /* Recognition.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -444,7 +448,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 153;
+				CURRENT_PROJECT_VERSION = 154;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -466,7 +470,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 153;
+				CURRENT_PROJECT_VERSION = 154;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (

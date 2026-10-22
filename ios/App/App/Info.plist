@@ -24,8 +24,15 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>Pool Master Counter uses the camera (or a USB camera plugged into the iPad) to recognize who is shooting at the pool table. The video stays on this iPad; only player names and game events are sent to the scoreboard.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Pool Master Counter uses your local WiFi network to sync scores with another device during a Group Session, and to receive player recognition events from a camera placed at the table.</string>
+	<string>Pool Master Counter uses your local WiFi network to sync scores with another device during Multi Tables, and to exchange player recognition events with the scoreboard on your computer.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

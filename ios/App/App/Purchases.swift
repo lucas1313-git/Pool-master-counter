@@ -103,5 +103,6 @@ public class PurchasesPlugin: CAPPlugin, CAPBridgedPlugin {
 class MainBridgeViewController: CAPBridgeViewController {
     override open func capacitorDidLoad() {
         bridge?.registerPluginInstance(PurchasesPlugin())
+        bridge?.registerPluginInstance(RecognitionPlugin())
     }
 }
