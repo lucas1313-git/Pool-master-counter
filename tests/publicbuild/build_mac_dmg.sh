@@ -10,7 +10,7 @@
 set -e
 REPO=/Users/lucmartin/Pool-master-counter
 # Node 24, like the workflow (Node's single-executable support differs between versions)
-N24=${N24:-/private/tmp/claude-501/-Users-lucmartin/955cf1c9-ee76-47df-9aa6-1e62c9263742/scratchpad/node-v24.21.0-darwin-arm64/bin/node}
+N24=${N24:-$HOME/.cache/pmc-node/node-v24.21.0-darwin-arm64/bin/node}  # official Node 24 (nodejs.org); Homebrew's node@24 lacks a library
 IDENTITY="Developer ID Application: Luc Martin (UFAU7GCXKV)"
 DMG=PoolMasterCounter-mac-arm64.dmg
 [ -x "$N24" ] || { echo "Node 24 not found at $N24 - set N24=<path to a node v24 binary>"; exit 1; }
