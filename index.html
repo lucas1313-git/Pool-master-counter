@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261022a">
+<link rel="stylesheet" href="css/style.css?v=20261024a">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -313,6 +313,9 @@
       <span class="voice-control-group">
         <label for="keypad-speech-voice-select" id="keypad-speech-voice-label" class="hidden" data-i18n="keypad.voiceLabel">Voice</label>
         <select id="keypad-speech-voice-select" class="hidden" data-i18n-aria-label="keypad.voiceLabel" aria-label="Voice"></select>
+      </span>
+      <span class="voice-control-group voice-command-group hidden" id="voice-command-group">
+        <button type="button" id="btn-voice-hold" class="btn voice-hold-btn" data-i18n="voice.holdToTalk" data-i18n-aria-label="voice.holdHint" aria-label="Hold to talk - tap for the sentences">🎤 Talk</button>
       </span>
     </div>
     <button type="button" id="btn-finish-snooker" class="btn btn-primary finish-snooker-btn hidden" data-i18n="snooker.finishFrame">🏁 Finish Snooker Frame</button>
@@ -813,6 +816,17 @@
 </div>
 
 <div id="page-toast" class="page-toast hidden" aria-live="polite"></div>
+<div id="voice-live" class="voice-live hidden" aria-live="polite"></div>
+
+<div id="voice-sheet-overlay" class="help-overlay hidden">
+  <div class="help-card voice-sheet-card">
+    <div class="help-header">
+      <button type="button" id="btn-voice-sheet-close" class="wizard-close-btn" aria-label="Close" data-i18n-aria-label="voice.sheetClose">×</button>
+      <h2 class="help-title" data-i18n="voice.sheetTitle">🎤 Voice commands</h2>
+    </div>
+    <div class="help-body" id="voice-sheet-body"></div>
+  </div>
+</div>
 
 <div id="gamewin-overlay" class="gamewin-overlay hidden">
   <div class="gamewin-card" id="gamewin-card">
@@ -2547,7 +2561,8 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20261022a"></script>
-<script src="js/camera-client.js?v=20261022a"></script>
+<script src="js/app.js?v=20261024a"></script>
+<script src="js/camera-client.js?v=20261024a"></script>
+<script src="js/voice.js?v=20261024a"></script>
 </body>
 </html>

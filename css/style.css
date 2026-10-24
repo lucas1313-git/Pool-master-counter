@@ -9438,3 +9438,96 @@ body.network-guest-mode #header-group-start {
      a wide bracket needs it. */
   @page { margin: 0.5in; }
 }
+
+/* Voice commands (js/voice.js) - the score section's "Hold to talk"
+   button, the big line showing what was heard, and the sentences sheet. */
+.voice-hold-btn {
+  height: 44px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+  padding: 0 16px;
+  font-size: 1rem;
+  font-weight: 800;
+  border: 2px solid var(--accent);
+  background: var(--bg-card);
+  color: var(--accent);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: none;
+}
+
+.voice-hold-btn.listening {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+  animation: voice-hold-pulse 1s ease-in-out infinite;
+}
+
+@keyframes voice-hold-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--danger) 55%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 10px transparent;
+  }
+}
+
+.voice-live {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 1450;
+  max-width: min(92vw, 760px);
+  box-sizing: border-box;
+  padding: 14px 22px;
+  border-radius: 16px;
+  border: 3px solid transparent;
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  font-size: clamp(1.2rem, 2.6vw, 2rem);
+  font-weight: 800;
+  text-align: center;
+  overflow-wrap: anywhere;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+
+.voice-live.listening {
+  border-color: var(--danger);
+}
+
+.voice-live.heard {
+  border-color: var(--accent);
+}
+
+.voice-live.missed,
+.voice-live.hint {
+  border-color: var(--text-dim);
+}
+
+.voice-sheet-section h3 {
+  margin: 18px 0 4px;
+  color: var(--accent);
+  font-size: 1.05rem;
+}
+
+.voice-sheet-note {
+  margin: 0 0 8px;
+  color: var(--text-dim);
+  font-size: 0.88rem;
+}
+
+.voice-sheet-lines {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.voice-sheet-lines li {
+  margin: 4px 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+}

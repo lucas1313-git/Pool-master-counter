@@ -26,7 +26,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   });
   await sleep(500);
   const row = () => page.evaluate(() => {
-    const items = [...document.querySelectorAll(".voice-toggle-row .focus-toggle-btn, .voice-toggle-row .game-mode-toggle, .voice-toggle-row .scoreboard-queue-toggle, .voice-toggle-row .voice-toggle-btn, .voice-toggle-row .format-info-btn, .voice-toggle-row select")]
+    const items = [...document.querySelectorAll(".voice-toggle-row .focus-toggle-btn, .voice-toggle-row .game-mode-toggle, .voice-toggle-row .scoreboard-queue-toggle, .voice-toggle-row .voice-toggle-btn, .voice-toggle-row .format-info-btn, .voice-toggle-row select, .voice-toggle-row .voice-hold-btn")]
       .filter((el) => el.offsetParent !== null)
       .map((el) => { const r = el.getBoundingClientRect(); return { el: el.id || el.className.split(" ")[0], top: Math.round(r.top), mid: Math.round(r.top + r.height / 2), h: Math.round(r.height), left: Math.round(r.left), right: Math.round(r.right) }; });
     return items;

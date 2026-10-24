@@ -41,3 +41,14 @@ Not part of the app - helpers for testing and for running this machine's own cop
   where it was, no flashing, and the colour kept across a redraw of the cards.
   `node tests/probe_camera_icon_states.js http://localhost:4237/ [screenshot dir]` against a test
   server (`HOME=tests/tmphome PORT=4237 node server/server.js`).
+- `test_voice_parser.js` - the voice commands' sentence parser on its own, in Node: every sentence
+  on the "Voice commands" sheet and the usual mishearings ("Luke" for Luc, "at one point", "race 2
+  7", "Luigi's", "queue score") into the right command and players; unknown and doubled names
+  refused. `node tests/test_voice_parser.js`
+- `probe_voice.js` - voice commands in the page with the microphone replaced by a fake that "hears"
+  a given sentence when the hold ends: the number pad's "." key and the 🎤 Talk button held (a tap
+  shows the sentences), game / race / rotation / players / teams / points (with the keypad's beep)
+  / an 8-ball win with balls left (the "." key not typed into the focused field) / "Nice game" /
+  spoken Q-score and score; unknown names, the sheet, phone width.
+  `node tests/probe_voice.js http://localhost:4235/ [screenshot dir]` against a test server
+  (`HOME=tests/tmphome PORT=4235 node server/server.js`).

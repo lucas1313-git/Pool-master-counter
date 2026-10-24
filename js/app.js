@@ -2983,6 +2983,7 @@
       confirmModalOverlay,
       playerConflictOverlay,
       remoteCalibrateOverlay,
+      document.getElementById("voice-sheet-overlay"),
       exceptCameraView ? null : remoteViewerOverlay
     ].some(function (el) {
       return el && !el.classList.contains("hidden");
@@ -25018,8 +25019,9 @@
     return pickKeypadVoice("en-GB");
   }
 
-  function speakKeypadText(text) {
-    if (!keypadSpeechEnabled || !window.speechSynthesis || !text) return;
+  // force: speak even with Keypad Speech off (a voice question's answer)
+  function speakKeypadText(text, force) {
+    if ((!keypadSpeechEnabled && !force) || !window.speechSynthesis || !text) return;
     function speakNow() {
       try {
         var utter = new SpeechSynthesisUtterance(text);
@@ -25313,6 +25315,374 @@
       previewKeypadVoice(keypadSpeechVoiceSelect.value);
     });
   }
+
+  // ---------------------------------------------------------------------
+  // Voice commands (js/voice.js) - hold to talk, English sentences.
+  // voice.js hears and parses; this side does it, the same way the
+  // buttons and the number pad do. Top level on purpose: nothing here may
+  // call a function nested inside boot() - the Rotation radio's own
+  // change event is fired instead (it guides to the rotation list).
+  // Every command returns { ok, text, speak }: text is shown (and, for
+  // speak "ifOn", spoken when Keypad Speech is on; "always": a question's
+  // answer, spoken regardless).
+  // ---------------------------------------------------------------------
+  function voiceContext() {
+    var selected = keypadSelectedPlayerId ? getPlayer(keypadSelectedPlayerId) : null;
+    return {
+      sessionNames: state.players.map(function (p) { return p.name; }),
+      playingNames: activePlayers().map(function (p) { return p.name; }),
+      knownNames: contactSheetVisibleNames(),
+      ratedNames: Object.keys(PLAYER_RATINGS),
+      selectedName: selected ? selected.name : null,
+      gameTypes: GAME_TYPE_LIST.map(function (t) { return { id: t.id, label: t.label }; })
+    };
+  }
+
+  function voiceGameLabel(id) {
+    return GAME_TYPES[id] ? GAME_TYPES[id].label : id;
+  }
+
+  function voiceFindPlayer(name) {
+    var id = name ? getPlayerIdByName(name) : null;
+    return id ? getPlayer(id) : null;
+  }
+
+  // In the session already, or added now (on standby, like the Players
+  // form) - a graveyarded name is refused, as the form does.
+  function voiceEnsureInSession(name) {
+    var p = voiceFindPlayer(name);
+    if (p) return { player: p };
+    if (isPlayerGraveyarded(resolvePlayerName(name))) return { error: T("voice.err.graveyard", { name: name }) };
+    var added = addPlayer(name);
+    return added ? { player: added, added: true } : { error: T("voice.err.unknownName", { name: name }) };
+  }
+
+  function voiceSetRace(n) {
+    n = Math.max(1, Math.min(99, n));
+    if (n === 1 && state.raceToWinsTarget !== 1) lastRaceToWinsTarget = state.raceToWinsTarget;
+    if (n !== 1) lastRaceToWinsTarget = n;
+    state.raceToWinsTarget = n;
+    raceToWinsInput.value = n;
+    state.fairRaceTargets = null;
+    saveState();
+    renderRaceMode();
+    renderScoreboard();
+    renderStandings();
+    updateCurrentGameSummary();
+    return T("voice.done.race", { n: n });
+  }
+
+  function voiceSetTarget(n, unit) {
+    n = Math.max(1, Math.min(500, n));
+    var unitChanged = !!unit && unit !== state.currentGame.unit;
+    if (rotationStatusInfo()) {
+      // a running rotation would put its own target back on the next
+      // game - change the current rotation entry instead
+      updateRotationItem(rotationCurrentIndex(), { target: n, unit: unit || undefined });
+    } else {
+      state.currentGame.target = n;
+      if (unit) state.currentGame.unit = unit;
+      syncGameTypeUI();
+      saveState();
+      renderScoreboard();
+      if (unitChanged) tickShotCounter();
+    }
+    return T("voice.done.target", { n: n, unit: unitLabel(state.currentGame.unit) });
+  }
+
+  // "to N": the target in points/balls games, the race in one-rack games
+  function voiceApplyNumber(n, kind, unit) {
+    if (kind === "race") return voiceSetRace(n);
+    if (kind === "target") return voiceSetTarget(n, unit || null);
+    return state.currentGame.unit === "rack" && state.currentGame.target === 1 ? voiceSetRace(n) : voiceSetTarget(n, null);
+  }
+
+  // Seats exactly these players (everyone else on standby); teamsById
+  // ({ id: "A"|"B" }) switches to Play as Teams, null to individual.
+  function voiceSeatExactly(ids, teamsById) {
+    state.players.forEach(function (p) {
+      var on = ids.indexOf(p.id) !== -1;
+      if (p.playing !== on) p.balls = 0;
+      p.playing = on;
+      if (on) p.teamId = teamsById ? teamsById[p.id] : p.teamId || "A";
+    });
+    state.currentGame.mode = teamsById ? "teams" : "individual";
+    Array.prototype.forEach.call(modeRadios, function (r) {
+      r.checked = r.value === state.currentGame.mode;
+    });
+    if (!teamsById && state.currentGame.queueEnabled) saveQueue(effectiveQueue());
+    saveState();
+    validateNewPlayerNameInput();
+    renderAll();
+    updateCurrentGameSummary();
+  }
+
+  // The win window's balls-left field, as its own stepper sets it.
+  function voiceSetBallsLeft(n) {
+    var input = gamewinDetails.querySelector(".balls-left-input");
+    var minus = gamewinDetails.querySelector(".balls-left-btn.minus");
+    if (!input || !minus) return false;
+    gamewinBallsLeftValue = Math.max(0, Math.min(15, n));
+    renderBallsLeftValue(input, minus);
+    persistBallsLeftLive();
+    return true;
+  }
+
+  function voiceWinWindowOpen() {
+    return !gamewinOverlay.classList.contains("hidden");
+  }
+
+  function voiceExecute(cmd) {
+    var ok = function (text, speak) { return { ok: true, text: text, speak: speak || "ifOn" }; };
+    var fail = function (text) { return { ok: false, text: text, speak: "never" }; };
+    var p, names, ids, i, r;
+    switch (cmd.type) {
+      case "game": {
+        if (!GAME_TYPES[cmd.game]) return fail(T("voice.err.notUnderstood", { text: cmd.heard }));
+        var rotationWasOn = !!state.rotation.enabled;
+        if (rotationWasOn) state.rotation.enabled = false;
+        setCurrentGameType(cmd.game);
+        if (rotationWasOn) {
+          saveState();
+          renderRotation();
+          renderScoreboard();
+        }
+        var gameText = T(rotationWasOn ? "voice.done.gameRotationOff" : "voice.done.game", { game: voiceGameLabel(cmd.game) });
+        if (cmd.n) gameText += " · " + voiceApplyNumber(cmd.n, cmd.kind, cmd.unit);
+        return ok(gameText);
+      }
+      case "race":
+        return ok(voiceSetRace(cmd.n));
+      case "target":
+        return ok(voiceSetTarget(cmd.n, cmd.unit || null));
+      case "raceOrTarget":
+        return ok(voiceApplyNumber(cmd.n, "either", null));
+
+      case "rotationSet": {
+        var games = cmd.games.filter(function (id) { return GAME_TYPES[id]; });
+        if (!games.length) return fail(T("voice.err.notUnderstood", { text: cmd.heard }));
+        state.rotation.order = games.map(function (id) {
+          return { gameType: id, target: GAME_TYPES[id].defaultTarget, unit: GAME_TYPES[id].unit };
+        });
+        // (as addRotationItem: "switch every" from the race, if untouched)
+        if (state.rotation.order.length >= 2 && (state.rotation.every || 1) === 1) {
+          state.rotation.every = Math.max(1, (state.raceToWinsTarget || 1) - 1);
+        }
+        state.rotation.enabled = state.rotation.order.length >= 2;
+        saveState();
+        saveRotationSnapshotIfNew(true);
+        applyRotationIfDue();
+        renderRotation();
+        renderScoreboard();
+        renderWizardIfOpen();
+        var setText = T("voice.done.rotationSet", { games: games.map(voiceGameLabel).join(", ") });
+        if (games.length < 2) setText += " · " + T("scoreboard.rotationNeedsTypes");
+        return ok(setText);
+      }
+      case "rotationAdd":
+        cmd.games.forEach(function (id) {
+          if (GAME_TYPES[id]) addRotationItem(id);
+        });
+        return ok(T("voice.done.rotationAdd", { games: cmd.games.map(voiceGameLabel).join(", ") }));
+      case "rotationRemove": {
+        var removed = [], missing = [];
+        cmd.games.forEach(function (id) {
+          var at = -1;
+          state.rotation.order.forEach(function (entry, j) { if (at === -1 && entry.gameType === id) at = j; });
+          if (at === -1) missing.push(voiceGameLabel(id));
+          else { removeRotationItem(at); removed.push(voiceGameLabel(id)); }
+        });
+        if (!removed.length) return fail(T("voice.err.rotationNotIn", { game: missing.join(", ") }));
+        return ok(T("voice.done.rotationRemove", { games: removed.join(", ") }));
+      }
+      case "rotationClear":
+        state.rotation.order = [];
+        state.rotation.enabled = false;
+        saveState();
+        renderRotation();
+        renderScoreboard();
+        renderWizardIfOpen();
+        return ok(T("voice.done.rotationClear"));
+      case "rotationMode": {
+        // the score section's own radios - same handler, same guidance
+        var radio = cmd.on ? scoreboardModeRotationRadio : scoreboardModeSingleRadio;
+        radio.checked = true;
+        radio.dispatchEvent(new Event("change"));
+        if (cmd.on && state.rotation.order.length < 2) return fail(T("scoreboard.rotationNeedsTypes"));
+        return ok(T(cmd.on ? "voice.done.rotationOn" : "voice.done.rotationOff"));
+      }
+      case "rotationEvery":
+        state.rotation.every = Math.max(1, Math.min(99, cmd.n));
+        saveState();
+        applyRotationIfDue();
+        renderRotation();
+        renderScoreboard();
+        return ok(T("voice.done.every", { n: state.rotation.every }));
+
+      case "addPlayers": {
+        var added = [], already = [];
+        for (i = 0; i < cmd.names.length; i++) {
+          if (voiceFindPlayer(cmd.names[i])) { already.push(cmd.names[i]); continue; }
+          r = voiceEnsureInSession(cmd.names[i]);
+          if (r.error) return fail(r.error);
+          added.push(r.player.name);
+        }
+        validateNewPlayerNameInput();
+        renderAll();
+        var addText = [];
+        if (added.length) addText.push(T("voice.done.added", { names: added.join(", ") }));
+        if (already.length) addText.push(T("voice.done.alreadyIn", { names: already.join(", ") }));
+        return ok(addText.join(" · "));
+      }
+      case "setPlaying": {
+        var changed = [], notes = [];
+        for (i = 0; i < cmd.names.length; i++) {
+          if (cmd.playing) {
+            r = voiceEnsureInSession(cmd.names[i]);
+            if (r.error) return fail(r.error);
+            p = r.player;
+            if (!p.playing) togglePlaying(p.id);
+            // (Winner Stays with both seats taken: queued first instead)
+            if (getPlayer(p.id).playing) changed.push(p.name);
+            else notes.push(T("toast.queuePlayerBumped", { name: p.name }));
+          } else {
+            p = voiceFindPlayer(cmd.names[i]);
+            if (!p) return fail(T("voice.err.notInSession", { name: cmd.names[i] }));
+            if (p.playing) togglePlaying(p.id);
+            changed.push(p.name);
+          }
+        }
+        validateNewPlayerNameInput();
+        renderAll();
+        var playText = changed.length ? [T(cmd.playing ? "voice.done.playing" : "voice.done.standby", { names: changed.join(", ") })] : [];
+        return ok(playText.concat(notes).join(" · "));
+      }
+      case "versus": {
+        var sides = [[], []];
+        for (var s = 0; s < 2; s++) {
+          for (i = 0; i < cmd.sides[s].length; i++) {
+            r = voiceEnsureInSession(cmd.sides[s][i]);
+            if (r.error) return fail(r.error);
+            sides[s].push(r.player);
+          }
+        }
+        ids = sides[0].concat(sides[1]).map(function (pl) { return pl.id; });
+        var namesOf = function (list) { return list.map(function (pl) { return pl.name; }).join(", "); };
+        if (sides[0].length === 1 && sides[1].length === 1) {
+          voiceSeatExactly(ids, null);
+          return ok(T("voice.done.versus", { a: sides[0][0].name, b: sides[1][0].name }));
+        }
+        var teams = {};
+        sides[0].forEach(function (pl) { teams[pl.id] = "A"; });
+        sides[1].forEach(function (pl) { teams[pl.id] = "B"; });
+        voiceSeatExactly(ids, teams);
+        return ok(T("voice.done.teams", { a: namesOf(sides[0]), b: namesOf(sides[1]) }));
+      }
+
+      case "points": {
+        p = cmd.name ? voiceFindPlayer(cmd.name) : keypadSelectedPlayerId ? getPlayer(keypadSelectedPlayerId) : null;
+        if (!p) return fail(cmd.name ? T("voice.err.notInSession", { name: cmd.name }) : T("voice.err.noSelected"));
+        if (!p.playing) return fail(T("voice.err.notPlaying", { name: p.name }));
+        if (!quickCounterMode && state.currentGame.unit === "rack") {
+          return fail(T("voice.err.pointsInRackGame", { game: voiceGameLabel(state.currentGame.gameType), name: p.name }));
+        }
+        // the number pad's +/- path: select, adjust (its beep), the lead /
+        // on-the-hill announcements
+        var wasLeading = keypadPlayerIsLeading(p);
+        var willLead = keypadScoreWouldLead(p, (p.balls || 0) + cmd.n);
+        var wasOnHill = keypadPlayerIsOnHill(p);
+        var willBeOnHill = keypadScoreWouldBeOnHill(p, (p.balls || 0) + cmd.n);
+        if (!quickCounterMode) keypadSelectedPlayerId = p.id;
+        requestAdjustScore(p.id, cmd.n);
+        if (!quickCounterMode) {
+          speakKeypadLeadChange(p, wasLeading, willLead);
+          speakKeypadOnHillChange(p, wasOnHill, willBeOnHill);
+        }
+        var after = getPlayer(p.id);
+        return { ok: true, speak: "never", text: T("voice.done.points", { name: p.name, delta: (cmd.n > 0 ? "+" : "") + cmd.n, score: after ? after.balls : 0 }) };
+      }
+      case "win": {
+        p = voiceFindPlayer(cmd.name);
+        if (!p) return fail(T("voice.err.notInSession", { name: cmd.name }));
+        if (!p.playing) return fail(T("voice.err.notPlaying", { name: p.name }));
+        if (state.currentGame.unit !== "rack") {
+          return fail(T("voice.err.winNotRackGame", { game: voiceGameLabel(state.currentGame.gameType) }));
+        }
+        var beforeTs = state.gameHistory[0] && state.gameHistory[0].ts;
+        keypadSelectedPlayerId = p.id;
+        requestAdjustScore(p.id, 1);
+        var won = !!state.gameHistory[0] && state.gameHistory[0].ts !== beforeTs && voiceWinWindowOpen();
+        if (cmd.ballsLeft === null || cmd.ballsLeft === undefined) return ok(T("voice.done.win", { name: p.name }), "never");
+        if (!won) return ok(T("voice.done.win", { name: p.name }), "never");
+        if (!voiceSetBallsLeft(cmd.ballsLeft)) {
+          return ok(T("voice.done.win", { name: p.name }) + " · " + T("voice.err.ballsLeftHidden", { game: voiceGameLabel(state.gameHistory[0].gameType) }), "never");
+        }
+        return ok(T("voice.done.winBallsLeft", { name: p.name, n: gamewinBallsLeftValue }), "never");
+      }
+      case "ballsLeft":
+        if (!voiceWinWindowOpen()) return fail(T("voice.err.noWinWindow"));
+        if (!voiceSetBallsLeft(cmd.n)) return fail(T("voice.err.ballsLeftHidden", { game: voiceGameLabel(state.gameHistory[0] ? state.gameHistory[0].gameType : state.currentGame.gameType) }));
+        return ok(T("voice.done.ballsLeft", { n: gamewinBallsLeftValue }));
+      case "confirmWin":
+        if (!voiceWinWindowOpen()) return fail(T("voice.err.noWinWindow"));
+        btnGamewinClose.click();
+        return { ok: true, text: null };
+      case "undoWin":
+        if (!voiceWinWindowOpen()) return fail(T("voice.err.noWinWindow"));
+        btnGamewinUndo.click(); // (asks first - "yes" / "no")
+        return { ok: true, text: null };
+      case "answer":
+        if (confirmModalOverlay.classList.contains("hidden")) return fail(T("voice.err.nothingToAnswer"));
+        (cmd.yes ? btnConfirmModalOk : btnConfirmModalCancel).click();
+        return { ok: true, text: null };
+
+      case "qscore": {
+        var entry = getPlayerRatingEntry(cmd.name);
+        if (!entry) return { ok: true, speak: "always", text: T("voice.done.qscoreNone", { name: cmd.name }) };
+        var delta = computeRatingPeriodDelta(cmd.name, "today");
+        var change = !delta ? T("voice.change.none")
+          : delta > 0 ? T("voice.change.up", { n: Math.round(delta) })
+          : T("voice.change.down", { n: Math.round(-delta) });
+        return { ok: true, speak: "always", text: T("voice.done.qscore", { name: cmd.name, rating: Math.round(entry.rating), change: change }) };
+      }
+      case "score": {
+        var playing = activePlayers();
+        if (!playing.length) return { ok: true, speak: "always", text: T("voice.done.scoreNobody") };
+        var rack = state.currentGame.unit === "rack";
+        var parts;
+        if (state.currentGame.mode === "teams") {
+          parts = ["A", "B"].map(function (teamId) {
+            var value = rack ? state.teamWins[teamId] || 0 : sumTeamBalls(teamId);
+            return teamLabelLive(teamId) + " " + value;
+          });
+        } else {
+          parts = playing.map(function (pl) {
+            return pl.name + " " + (rack ? state.playerWins[pl.id] || 0 : pl.balls || 0);
+          });
+        }
+        return { ok: true, speak: "always", text: T("voice.done.score", { list: parts.join(", ") }) };
+      }
+    }
+    return fail(T("voice.err.notUnderstood", { text: cmd.heard || "" }));
+  }
+
+  // A low double tap: "didn't get that" - distinct from every scoring sound.
+  function playVoiceMissSound() {
+    try {
+      var now = getAudioCtx().currentTime;
+      clickSound(now, 240, 0.3);
+      clickSound(now + 0.16, 180, 0.3);
+    } catch (e) {}
+  }
+
+  window.PMCVoiceBridge = {
+    context: voiceContext,
+    execute: voiceExecute,
+    t: function (key, vars) { return T(key, vars); },
+    toast: function (text, icon) { showToast(text, icon); },
+    speak: function (text, always) { speakKeypadText(text, !!always); },
+    missSound: playVoiceMissSound
+  };
 
   // iPadOS 13+ reports navigator.platform as "MacIntel" like a real Mac,
   // so touch support is the only reliable way to tell an iPad apart from
