@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261024b">
+<link rel="stylesheet" href="css/style.css?v=20261024c">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -491,6 +491,21 @@
           </div>
           <p class="wizard-step-explain hidden" id="capture-settings-waiting" data-i18n="visualScoring.captureWaiting">Turn on Camera player recognition and connect the camera phone - its settings show up here once it's connected.</p>
           <fieldset class="capture-settings-fields" id="capture-settings-fields">
+            <div class="settings-frame" id="camera-picture-frame">
+              <h5 class="settings-frame-title" data-i18n="visualScoring.cameraPictureTitle">Camera picture</h5>
+              <div class="row capture-setting-row">
+                <label for="capture-zoom" data-i18n="players.cameraZoom">Zoom (1 to 3)</label>
+                <input type="number" id="capture-zoom" min="1" max="3" step="0.1" value="1">
+                <button type="button" id="btn-capture-zoom-help" class="format-info-btn" data-i18n-aria-label="players.cameraZoomHelpAria" aria-label="What does Zoom do?">❓</button>
+              </div>
+              <div class="row capture-setting-row">
+                <label class="checkbox-row">
+                  <input type="checkbox" id="capture-flip180">
+                  <span data-i18n="players.cameraFlip180">Camera mounted upside down</span>
+                </label>
+                <button type="button" id="btn-capture-flip180-help" class="format-info-btn" data-i18n-aria-label="players.cameraFlip180HelpAria" aria-label="What does Camera mounted upside down do?">❓</button>
+              </div>
+            </div>
             <div class="settings-frame" id="matching-players-frame">
               <h5 class="settings-frame-title" data-i18n="visualScoring.matchingPlayersTitle">Players identification settings</h5>
               <div class="row capture-setting-row">
@@ -2561,8 +2576,8 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20261024b"></script>
-<script src="js/camera-client.js?v=20261024b"></script>
-<script src="js/voice.js?v=20261024b"></script>
+<script src="js/app.js?v=20261024c"></script>
+<script src="js/camera-client.js?v=20261024c"></script>
+<script src="js/voice.js?v=20261024c"></script>
 </body>
 </html>

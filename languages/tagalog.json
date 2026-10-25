@@ -1434,5 +1434,12 @@
   "voice.siri.step1": "Dictate Text (Language: English)",
   "voice.siri.step2": "Get Contents of URL: {{url}} - Method POST, Request Body JSON, isang Text field na pinangalanang text na Dictated Text ang laman",
   "voice.siri.step3": "Speak Text: Contents of URL",
-  "voice.siri.note": "Dapat nasa parehong Wi-Fi ng scoreboard na ito ang phone o computer, at bukas ang scoreboard."
+  "voice.siri.note": "Dapat nasa parehong Wi-Fi ng scoreboard na ito ang phone o computer, at bukas ang scoreboard.",
+  "visualScoring.cameraPictureTitle": "Larawan ng camera",
+  "players.cameraZoom": "Zoom (1 hanggang 3)",
+  "players.cameraZoomHelpAria": "Ano ang ginagawa ng Zoom?",
+  "players.cameraZoomHelpText": "Nilalapit ang gitna ng larawan ng camera - para sa mesang mukhang maliit at sobrang dami ng kuwarto sa paligid. Kapag nag-zoom, mas maraming pixel ang hinihingi sa camera (1080p, saka 4K kung kaya nito), kaya malinaw pa rin ang naka-zoom na larawan.\n\nNasa gitna lagi ang zoom: itutok ang camera sa gitna ng mesa. Kusang kinokonvert ang calibration ng mesa - hindi na kailangang mag-calibrate ulit - pero kailangang kunan ulit ang snapshot ng walang-taong kuwarto.",
+  "players.cameraFlip180": "Nakabaligtad ang camera",
+  "players.cameraFlip180HelpAria": "Ano ang ginagawa ng \"Nakabaligtad ang camera\"?",
+  "players.cameraFlip180HelpText": "Para sa camerang nakabitin nang baligtad (sa kisame, sa ilalim ng istante): itinutuwid ang larawan nito, para sa pagkilala ng player at bola at sa screen.\n\nKusang kinokonvert ang calibration ng mesa; kailangang kunan ulit ang snapshot ng walang-taong kuwarto."
 }

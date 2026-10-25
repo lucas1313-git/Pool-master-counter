@@ -1434,5 +1434,12 @@
   "voice.siri.step1": "Dictate Text (Language: English)",
   "voice.siri.step2": "Get Contents of URL: {{url}} - Method POST, Request Body JSON, one Text field named text set to Dictated Text",
   "voice.siri.step3": "Speak Text: Contents of URL",
-  "voice.siri.note": "The phone or computer must be on the same Wi-Fi as this scoreboard, and the scoreboard open."
+  "voice.siri.note": "The phone or computer must be on the same Wi-Fi as this scoreboard, and the scoreboard open.",
+  "visualScoring.cameraPictureTitle": "Camera picture",
+  "players.cameraZoom": "Zoom (1 to 3)",
+  "players.cameraZoomHelpAria": "What does Zoom do?",
+  "players.cameraZoomHelpText": "Zooms in on the middle of the camera's picture - for a table that looks small with too much room around it. The camera is asked for more pixels when zooming (1080p, then 4K on a camera that has it), so the zoomed picture keeps its detail.\n\nThe zoom stays centred: aim the camera at the middle of the table. The table calibration is converted for you - no need to calibrate again - but the empty-room snapshot has to be taken again.",
+  "players.cameraFlip180": "Camera mounted upside down",
+  "players.cameraFlip180HelpAria": "What does Camera mounted upside down do?",
+  "players.cameraFlip180HelpText": "For a camera hung upside down (from the ceiling, under a shelf): turns its picture the right way up, for player and ball recognition and on screen.\n\nThe table calibration is converted for you; the empty-room snapshot has to be taken again."
 }

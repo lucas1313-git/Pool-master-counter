@@ -1434,5 +1434,12 @@
   "voice.siri.step1": "Dictar texto (Idioma: inglés)",
   "voice.siri.step2": "Obtener contenido de URL: {{url}} - Método POST, Cuerpo de la solicitud JSON, un campo Texto llamado text con Texto dictado",
   "voice.siri.step3": "Leer texto: Contenido de la URL",
-  "voice.siri.note": "El teléfono o la computadora debe estar en el mismo Wi-Fi que este marcador, y el marcador abierto."
+  "voice.siri.note": "El teléfono o la computadora debe estar en el mismo Wi-Fi que este marcador, y el marcador abierto.",
+  "visualScoring.cameraPictureTitle": "Imagen de la cámara",
+  "players.cameraZoom": "Zoom (1 a 3)",
+  "players.cameraZoomHelpAria": "¿Qué hace el zoom?",
+  "players.cameraZoomHelpText": "Acerca el centro de la imagen de la cámara - para una mesa que se ve pequeña, con demasiada sala alrededor. Al hacer zoom se le piden más píxeles a la cámara (1080p, luego 4K si la cámara lo tiene), así la imagen ampliada conserva el detalle.\n\nEl zoom queda centrado: apunta la cámara al centro de la mesa. La calibración de la mesa se convierte sola - no hace falta calibrar otra vez - pero la foto de la sala vacía hay que tomarla de nuevo.",
+  "players.cameraFlip180": "Cámara montada al revés",
+  "players.cameraFlip180HelpAria": "¿Qué hace \"Cámara montada al revés\"?",
+  "players.cameraFlip180HelpText": "Para una cámara colgada al revés (del techo, bajo un estante): pone su imagen al derecho, para el reconocimiento de jugadores y bolas y en pantalla.\n\nLa calibración de la mesa se convierte sola; la foto de la sala vacía hay que tomarla de nuevo."
 }

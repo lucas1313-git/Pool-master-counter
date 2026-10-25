@@ -1434,5 +1434,12 @@
   "voice.siri.step1": "Dicter du texte (Langue : anglais)",
   "voice.siri.step2": "Obtenir le contenu de l'URL : {{url}} - Méthode POST, Corps de la requête JSON, un champ Texte nommé text égal à Texte dicté",
   "voice.siri.step3": "Énoncer le texte : Contenu de l'URL",
-  "voice.siri.note": "Le téléphone ou l'ordinateur doit être sur le même Wi-Fi que ce tableau, et le tableau ouvert."
+  "voice.siri.note": "Le téléphone ou l'ordinateur doit être sur le même Wi-Fi que ce tableau, et le tableau ouvert.",
+  "visualScoring.cameraPictureTitle": "Image de la caméra",
+  "players.cameraZoom": "Zoom (1 à 3)",
+  "players.cameraZoomHelpAria": "À quoi sert le zoom ?",
+  "players.cameraZoomHelpText": "Zoome sur le centre de l'image de la caméra - pour une table qui paraît petite, avec trop de pièce autour. En zoomant, la caméra fournit plus de pixels (1080p, puis 4K si elle le peut), donc l'image zoomée garde ses détails.\n\nLe zoom reste centré : visez le milieu de la table avec la caméra. La calibration de la table est convertie pour vous - inutile de recalibrer - mais la photo de la pièce vide doit être reprise.",
+  "players.cameraFlip180": "Caméra montée à l'envers",
+  "players.cameraFlip180HelpAria": "À quoi sert « Caméra montée à l'envers » ?",
+  "players.cameraFlip180HelpText": "Pour une caméra suspendue à l'envers (au plafond, sous une étagère) : remet son image à l'endroit, pour la reconnaissance des joueurs et des boules et à l'écran.\n\nLa calibration de la table est convertie pour vous ; la photo de la pièce vide doit être reprise."
 }

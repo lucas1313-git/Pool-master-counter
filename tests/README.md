@@ -59,3 +59,9 @@ Not part of the app - helpers for testing and for running this machine's own cop
   scoreboards open only the one used last acts; none open: 503.
   `node tests/probe_voice_siri.js http://localhost:4235/` against a test server
   (`HOME=tests/tmphome PORT=4235 node server/server.js`) started after the change.
+- `probe_camera_zoom.js` - the camera page's zoom and upside-down turn, with a fake camera playing
+  a still test picture (generated into `tmphome/`): the picture zoomed / turned pixel by pixel, the
+  camera asked for 4K when zooming, the table calibration and the furniture snapshot converted
+  exactly and back to the original when undone, and Zoom / "Camera mounted upside down" set in
+  the scoreboard's Capture Settings reaching the camera page. `node tests/probe_camera_zoom.js
+  http://localhost:4235/` against a test server (`HOME=tests/tmphome PORT=4235 node server/server.js`).

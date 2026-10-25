@@ -674,6 +674,12 @@
       <label for="cameraSelect">Camera</label>
       <select id="cameraSelect"></select>
 
+      <label for="zoomInput">Zoom <span id="zoomValue">1.0×</span></label><button type="button" class="help-btn" data-help="zoom" aria-label="What does this do?">?</button>
+      <input type="range" id="zoomInput" min="1" max="3" step="0.1" value="1" style="display:block;width:100%;margin:6px 0 8px">
+      <div class="row" style="margin:4px 0 12px">
+        <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="flip180Toggle" style="width:auto;margin:0"> Camera mounted upside down (turn the picture)</label><button type="button" class="help-btn" data-help="flip180" aria-label="What does this do?">?</button>
+      </div>
+
       <label for="recognitionMethodSelect">Recognize players by</label><button type="button" class="help-btn" data-help="recognitionMethod" aria-label="What does this do?">?</button>
       <select id="recognitionMethodSelect">
         <option value="auto">Whichever recognizes them better (self-check)</option>
@@ -988,6 +994,9 @@
   var cueDetectionToggle = document.getElementById("cueDetectionToggle");
   var cueDebugToggle = document.getElementById("cueDebugToggle");
   var walkingPathsToggle = document.getElementById("walkingPathsToggle");
+  var zoomInput = document.getElementById("zoomInput");
+  var zoomValue = document.getElementById("zoomValue");
+  var flip180Toggle = document.getElementById("flip180Toggle");
   var debugToggle = document.getElementById("debugToggle");
   var relaunchWizardBtn = document.getElementById("relaunchWizardBtn");
 
@@ -1052,6 +1061,14 @@
     cueDetection: {
       title: "Cue stick detection",
       body: "Looks for a cue stick held out over the calibrated table. A player at the table with their cue over the cloth is taking a shot - this counts as shooting even when the camera can't see them bend over (a far, level camera barely sees a bend at all).\n\nIf a player walks around the table and then drops out of view right next to it, the camera assumes they're still there: the next cue that comes out over the table is credited to them, for up to 45 seconds after they were last seen (each shot they take re-arms it, up to 3 minutes).\n\nOnly works once the table is calibrated. Turn on the debug overlay to see the cue drawn in pink, with how long it is and who it was matched to - long thin lines it turned down are drawn grey with the reason."
+    },
+    zoom: {
+      title: "Zoom",
+      body: "Zooms in on the middle of the picture - for a table that looks small, with too much room around it. The camera is asked for more pixels when zooming (1080p, then 4K on a camera that has it), so the zoomed picture keeps its detail.\n\nThe zoom stays centred: aim the camera at the middle of the table. The table calibration is converted for you - no need to calibrate again - but the empty-room snapshot has to be taken again. Also on the scoreboard: Visual Scoring > Capture Settings."
+    },
+    flip180: {
+      title: "Camera mounted upside down",
+      body: "For a camera hung upside down (from the ceiling, under a shelf): turns the picture the right way up, for the player and ball recognition and on screen.\n\nThe table calibration is converted for you; the empty-room snapshot has to be taken again. Also on the scoreboard: Visual Scoring > Capture Settings."
     },
     walkingPaths: {
       title: "Follow walking paths",
@@ -1170,6 +1187,9 @@
     cueDebugEnabled: false,
     // keep a player's id and name when they turn up again along their walking path
     walkingPathsEnabled: true,
+    // the picture: a centred zoom (1-3) and a half turn for a camera mounted upside down
+    zoom: 1,
+    flip180: false,
     // "auto" (whichever the self-check scores higher), "colour" or "model"
     recognitionMethod: "auto",
     // which appearance models "model" combines (the Enroll tab's boxes)
@@ -1203,7 +1223,7 @@
   // after every change, wherever the change came from) and applies what
   // the scoreboard sends - postMessage in same-device mode, the relay for
   // a separate phone.
-  var CAPTURE_SETTING_KEYS = ["matchThreshold", "debounceSec", "consecutiveFrames", "bendEnterAngle", "bendExitAngle", "railDistanceInches", "ballConfirmPasses", "cueDetectionEnabled", "walkingPathsEnabled"];
+  var CAPTURE_SETTING_KEYS = ["matchThreshold", "debounceSec", "consecutiveFrames", "bendEnterAngle", "bendExitAngle", "railDistanceInches", "ballConfirmPasses", "cueDetectionEnabled", "walkingPathsEnabled", "zoom", "flip180"];
   function reportCaptureSettings() {
     if (isViewer || !CAPTURE_SETTING_KEYS) return; // (a save during page load, before this section ran)
     var out = {};
@@ -1220,6 +1240,7 @@
       // 0 is a real choice for the match threshold ("No matching" on the
       // scoreboard's slider); every other number has to be positive.
       if (typeof v === "number" && !(v > 0) && !(k === "matchThreshold" && v === 0)) return;
+      if (k === "zoom") v = Math.max(1, Math.min(3, Math.round(v * 10) / 10));
       settings[k] = v;
       changed.push(k + " " + v);
     });
@@ -1228,6 +1249,7 @@
       applySettingsToInputs();
       if (wasDetectingCue !== settings.cueDetectionEnabled) resetCueTracking(settings.cueDetectionEnabled ? "enabled" : "disabled");
       logActivity("Settings changed from the scoreboard: " + changed.join(", "));
+      applyWantedView();
     } else {
       reportCaptureSettings();
     }
@@ -1248,6 +1270,9 @@
     cueDetectionToggle.checked = settings.cueDetectionEnabled;
     cueDebugToggle.checked = settings.cueDebugEnabled;
     walkingPathsToggle.checked = settings.walkingPathsEnabled;
+    zoomInput.value = settings.zoom;
+    zoomValue.textContent = Number(settings.zoom).toFixed(1) + "×";
+    flip180Toggle.checked = settings.flip180;
     debugToggle.checked = settings.debugOverlay;
     recognizeDebugToggle.checked = settings.debugOverlay;
     recognizeVoiceToggle.checked = settings.voiceStatusEnabled;
@@ -1303,6 +1328,20 @@
     settings.walkingPathsEnabled = walkingPathsToggle.checked;
     persistSettings();
     logActivity("Following walking paths " + (settings.walkingPathsEnabled ? "on" : "off"));
+  });
+  // the picture: the slider shows its value while moving, applies on letting go
+  zoomInput.addEventListener("input", function () {
+    zoomValue.textContent = Number(zoomInput.value).toFixed(1) + "×";
+  });
+  zoomInput.addEventListener("change", function () {
+    settings.zoom = Math.max(1, Math.min(3, Math.round(parseFloat(zoomInput.value) * 10) / 10 || 1));
+    persistSettings();
+    applyWantedView();
+  });
+  flip180Toggle.addEventListener("change", function () {
+    settings.flip180 = flip180Toggle.checked;
+    persistSettings();
+    applyWantedView();
   });
   cueDebugToggle.addEventListener("change", function () {
     settings.cueDebugEnabled = cueDebugToggle.checked;
@@ -1426,6 +1465,7 @@
   var devicesPopulated = false;
 
   function stopCurrentStream() {
+    if (typeof stopView === "function") stopView();
     if (currentStream) {
       currentStream.getTracks().forEach(function (t) { t.stop(); });
       currentStream = null;
@@ -1478,18 +1518,179 @@
   // showing an error, since "the USB camera I used last time isn't
   // plugged in yet" is an expected, ordinary situation at startup, not a
   // real problem to alarm about.
+  // ---- Zoom and upside-down: the picture itself ----
+  // settings.zoom (1 to 3, centred) and settings.flip180 (the camera
+  // mounted upside down - a half turn) are applied once, here: the
+  // camera's stream plays in viewSourceVideo, is drawn zoomed / turned
+  // into viewCanvas, and that canvas's stream is what #video shows - so
+  // everything that reads the picture (players, balls, the table, the
+  // snapshots, the remote view) gets the same zoomed, upright one. A zoom
+  // asks the camera for more pixels first (1080p, then 4K), so the zoomed
+  // picture keeps its detail. Not zoomed or turned: the camera's stream
+  // goes straight to #video, as before.
+  // The zoom stays centred on purpose: with the lens's centre still in the
+  // middle of the picture, the table calibration converts exactly (see
+  // reconcileView) and the room map's camera maths stay true.
+  var ZOOM_MAX = 3;
+  var VIEW_STORAGE_KEY = "pmc-camera-view";
+  var viewSourceVideo = document.createElement("video");
+  viewSourceVideo.muted = true;
+  viewSourceVideo.playsInline = true;
+  viewSourceVideo.setAttribute("playsinline", "");
+  viewSourceVideo.setAttribute("aria-hidden", "true");
+  viewSourceVideo.style.cssText = "position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none";
+  document.body.appendChild(viewSourceVideo);
+  var viewCanvas = document.createElement("canvas");
+  var viewCtx = viewCanvas.getContext("2d");
+  var viewTimer = null;
+  var viewInEffect = { zoom: 1, flip: false }; // what the picture on screen was started with
+
+  function wantedView() {
+    var z = Number(settings.zoom);
+    z = isFinite(z) ? Math.round(z * 10) / 10 : 1;
+    return { zoom: Math.max(1, Math.min(ZOOM_MAX, z)), flip: !!settings.flip180 };
+  }
+  function plainView(v) { return v.zoom <= 1.001 && !v.flip; }
+  function sameView(a, b) { return Math.abs((a.zoom || 1) - (b.zoom || 1)) < 0.001 && !!a.flip === !!b.flip; }
+  function resolutionFor(v) {
+    if (v.zoom > 1.5) return { width: { ideal: 3840 }, height: { ideal: 2160 } };
+    if (v.zoom > 1.001) return { width: { ideal: 1920 }, height: { ideal: 1080 } };
+    return { width: { ideal: 1280 }, height: { ideal: 720 } };
+  }
+  function drawView() {
+    var sw0 = viewSourceVideo.videoWidth, sh0 = viewSourceVideo.videoHeight;
+    if (!sw0 || !sh0) return;
+    var W = 1280, H = Math.round(1280 * sh0 / sw0);
+    if (viewCanvas.width !== W || viewCanvas.height !== H) { viewCanvas.width = W; viewCanvas.height = H; }
+    var z = viewInEffect.zoom, sw = sw0 / z, sh = sh0 / z, f = viewInEffect.flip;
+    viewCtx.setTransform(f ? -1 : 1, 0, 0, f ? -1 : 1, f ? W : 0, f ? H : 0);
+    viewCtx.drawImage(viewSourceVideo, (sw0 - sw) / 2, (sh0 - sh) / 2, sw, sh, 0, 0, W, H);
+  }
+  function stopView() {
+    if (viewTimer) { clearInterval(viewTimer); viewTimer = null; }
+    viewSourceVideo.onloadedmetadata = null;
+    viewSourceVideo.srcObject = null;
+  }
+  // The camera's stream on screen - zoomed / turned when asked.
+  function showStream(stream, view) {
+    stopView();
+    if (plainView(view) || !viewCanvas.captureStream) {
+      viewInEffect = { zoom: 1, flip: false };
+      videoEl.srcObject = stream;
+      return;
+    }
+    viewInEffect = view;
+    videoEl.srcObject = null; // (until the turned / zoomed picture is ready)
+    viewSourceVideo.onloadedmetadata = function () {
+      viewSourceVideo.onloadedmetadata = null;
+      drawView();
+      videoEl.srcObject = viewCanvas.captureStream(30);
+      viewTimer = setInterval(drawView, 33);
+    };
+    viewSourceVideo.srcObject = stream;
+    var playing = viewSourceVideo.play();
+    if (playing && playing.catch) playing.catch(function () {});
+  }
+  // A zoom or turn chosen here or on the scoreboard: a fresh stream at
+  // the resolution it needs.
+  function applyWantedView() {
+    if (isViewer || !currentStream || sameView(wantedView(), viewInEffect)) return;
+    startCamera(cameraSelect.value || null);
+  }
+
+  // The table calibration, the furniture snapshot and the empty-room
+  // snapshot all live in the picture's pixels. When the zoom, the turn or
+  // the picture's size changes, the calibration and the furniture snapshot
+  // are converted to the new picture; the empty-room snapshot has to be
+  // taken again (a picture zoomed out shows room it never saw).
+  // Per axis, new pixels -> old pixels: u_old = 0.5 + s*k*(u_new - 0.5)
+  // (u = x / width; s = -1 when one of the two is turned; k = old zoom /
+  // new zoom).
+  function viewMap(from, to) {
+    var s = (from.flip ? -1 : 1) * (to.flip ? -1 : 1), k = (from.zoom || 1) / (to.zoom || 1);
+    var wo = from.dims[0], ho = from.dims[1], wn = to.dims[0], hn = to.dims[1];
+    return { s: s, k: k, ax: s * k * wo / wn, bx: wo / 2 * (1 - s * k), ay: s * k * ho / hn, by: ho / 2 * (1 - s * k) };
+  }
+  // pixel -> inches after the change = the old one applied to the old pixel
+  function homographyAfterView(H, m) {
+    var p33 = H.h31 * m.bx + H.h32 * m.by + 1;
+    return {
+      h11: H.h11 * m.ax / p33, h12: H.h12 * m.ay / p33, h13: (H.h11 * m.bx + H.h12 * m.by + H.h13) / p33,
+      h21: H.h21 * m.ax / p33, h22: H.h22 * m.ay / p33, h23: (H.h21 * m.bx + H.h22 * m.by + H.h23) / p33,
+      h31: H.h31 * m.ax / p33, h32: H.h32 * m.ay / p33
+    };
+  }
+  // each cell of the new grid from the old grid's cell under it - null
+  // where the old picture didn't reach
+  function gridAfterView(ref, m, dims) {
+    var gray = new Array(ref.w * ref.h);
+    for (var y = 0; y < ref.h; y++) {
+      for (var x = 0; x < ref.w; x++) {
+        var uo = 0.5 + m.s * m.k * ((x + 0.5) / ref.w - 0.5), vo = 0.5 + m.s * m.k * ((y + 0.5) / ref.h - 0.5);
+        var v = uo < 0 || uo >= 1 || vo < 0 || vo >= 1 ? null : ref.gray[Math.floor(vo * ref.h) * ref.w + Math.floor(uo * ref.w)];
+        gray[y * ref.w + x] = v === undefined ? null : v;
+      }
+    }
+    return { w: ref.w, h: ref.h, videoW: dims[0], videoH: dims[1], gray: gray };
+  }
+  function readStoredView() {
+    try { return JSON.parse(localStorage.getItem(VIEW_STORAGE_KEY) || "null"); } catch (e) { return null; }
+  }
+  function reconcileView() {
+    if (isViewer) return;
+    var dims = [videoEl.videoWidth, videoEl.videoHeight];
+    if (!dims[0] || !dims[1]) return;
+    var now = { zoom: viewInEffect.zoom, flip: viewInEffect.flip, dims: dims };
+    var was = readStoredView();
+    if (!was || !was.dims) {
+      // (first time: everything stored was made in the plain picture)
+      var refDims = backgroundReference && backgroundReference.videoW ? [backgroundReference.videoW, backgroundReference.videoH] : dims;
+      was = { zoom: 1, flip: false, dims: refDims };
+    }
+    var viewChanged = !sameView(was, now);
+    if (viewChanged || was.dims[0] !== dims[0] || was.dims[1] !== dims[1]) {
+      var m = viewMap(was, now);
+      if (calibration && calibration.h) {
+        calibration.h = homographyAfterView(calibration.h, m);
+        saveCalibration();
+        resetBallTracking("picture changed");
+        renderCalibrationStatus();
+      }
+      if (backgroundReference && backgroundReference.gray) {
+        backgroundReference = gridAfterView(backgroundReference, m, dims);
+        try { localStorage.setItem(BACKGROUND_REF_STORAGE_KEY, JSON.stringify(backgroundReference)); } catch (e) {}
+      }
+      if (viewChanged && emptyRoom) {
+        forgetEmptyRoom();
+        logActivity("The picture changed: take the empty-room snapshot again");
+      }
+      if (viewChanged) {
+        logActivity("Picture: zoom " + now.zoom.toFixed(1) + "x" + (now.flip ? ", upside down" : "") +
+          (calibration && calibration.h ? " - the table calibration was converted, no need to calibrate again" : ""));
+      }
+    }
+    try { localStorage.setItem(VIEW_STORAGE_KEY, JSON.stringify(now)); } catch (e) {}
+  }
+  videoEl.addEventListener("loadedmetadata", reconcileView);
+  videoEl.addEventListener("resize", reconcileView);
+
   function startCamera(deviceId, isBootAttempt) {
     setStatus(dotCamera, labelCamera, "busy", "Camera: starting...", "starting");
+    var view = wantedView();
+    var size = resolutionFor(view);
     var constraints = {
       audio: false,
       video: deviceId
-        ? { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } }
-        : { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }
+        ? { deviceId: { exact: deviceId }, width: size.width, height: size.height }
+        : { facingMode: { ideal: "environment" }, width: size.width, height: size.height }
     };
+    // a new zoom wants a new size: let go of the camera first - it won't
+    // open at another size while still open
+    if (currentStream && !sameView(view, viewInEffect)) stopCurrentStream();
     return navigator.mediaDevices.getUserMedia(constraints).then(function (stream) {
       stopCurrentStream();
       currentStream = stream;
-      videoEl.srcObject = stream;
+      showStream(stream, view);
       hideCameraWarning();
       setStatus(dotCamera, labelCamera, "ok", "Camera: active", "active");
       var track = stream.getVideoTracks()[0];
@@ -2553,7 +2754,9 @@
     for (var y = y0; y < y1; y++) {
       for (var x = x0; x < x1; x++) {
         var idx = y * bw + x;
-        total += Math.abs(gray[idx] - backgroundReference.gray[idx]);
+        var was = backgroundReference.gray[idx];
+        if (was === null || was === undefined) continue; // (outside the picture before a zoom out)
+        total += Math.abs(gray[idx] - was);
         count++;
       }
     }

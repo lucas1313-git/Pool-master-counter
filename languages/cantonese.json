@@ -1434,5 +1434,12 @@
   "voice.siri.step1": "聽寫文字(語言:英文)",
   "voice.siri.step2": "取得 URL 內容:{{url}} - 方法 POST,要求內文 JSON,一個名叫 text 嘅文字欄位,設為「聽寫的文字」",
   "voice.siri.step3": "朗讀文字:URL 的內容",
-  "voice.siri.note": "電話或者電腦要同呢個記分板用同一個 Wi-Fi,而記分板要開住。"
+  "voice.siri.note": "電話或者電腦要同呢個記分板用同一個 Wi-Fi,而記分板要開住。",
+  "visualScoring.cameraPictureTitle": "鏡頭畫面",
+  "players.cameraZoom": "放大(1 至 3)",
+  "players.cameraZoomHelpAria": "放大有咩用?",
+  "players.cameraZoomHelpText": "放大鏡頭畫面嘅中間 - 適合張檯睇落好細、周圍太多房間嘅情況。放大時會叫鏡頭俾多啲像素(1080p,鏡頭有嘅話再到 4K),所以放大咗嘅畫面都保持清晰。\n\n放大一定喺中間:將鏡頭對準張檯中間。檯嘅校準會自動轉換 - 唔使再校準 - 但係空房間快照要重新影過。",
+  "players.cameraFlip180": "鏡頭倒轉安裝",
+  "players.cameraFlip180HelpAria": "「鏡頭倒轉安裝」有咩用?",
+  "players.cameraFlip180HelpText": "適合倒轉吊住嘅鏡頭(喺天花板、層架底):將畫面轉返正,用嚟認球員、認波同埋喺螢幕顯示。\n\n檯嘅校準會自動轉換;空房間快照要重新影過。"
 }
