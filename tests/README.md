@@ -73,3 +73,11 @@ Not part of the app - helpers for testing and for running this machine's own cop
   pink preview; the slider right under the picture; the setting kept; the scoreboard field.
   `node tests/probe_ball_sensitivity.js http://localhost:4235/ [screenshot dir]` against a test
   server (`HOME=tests/tmphome PORT=4235 node server/server.js`).
+- `probe_room_tags.js` - room tags: a fake camera plays a still room photo (any photo of a room with
+  a pool table - checked with the public-domain "Pool Table—Valley Forge Farm.jpg" from Wikimedia
+  Commons); the empty-room snapshot gets tagged (pool table, chairs...), the tags kept with it and
+  back after a reload without the model running again; a "person" inside a tagged picture set
+  aside, a bigger one not; one on a tagged chair looking like the empty room set aside; 4 rails and
+  6 pockets; the tags drawn on the picture; forgetting the snapshot forgets them.
+  `node tests/probe_room_tags.js http://localhost:4235/ <room photo> [screenshot dir]` against a
+  test server (`HOME=tests/tmphome PORT=4235 node server/server.js`).

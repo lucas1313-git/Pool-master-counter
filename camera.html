@@ -634,6 +634,13 @@
       <label class="empty-room-option"><input type="checkbox" id="roomCutoutToggle" checked> Cut the room out of players' pictures</label>
       <button id="emptyRoomClearBtn" class="secondary" type="button" hidden>Forget the snapshot</button>
     </div>
+
+    <div class="empty-room-box" id="roomTagsBox">
+      <div class="empty-room-title">🏷️ Room tags <button type="button" class="help-btn" data-help="roomTags" aria-label="What does this do?">?</button></div>
+      <div class="progress-text" id="roomTagsStatus">Take the empty-room snapshot: everything in it gets tagged then.</div>
+      <label class="empty-room-option"><input type="checkbox" id="showRoomTagsToggle"> Show the tags on the picture</label>
+      <button id="retagRoomBtn" class="secondary" type="button" hidden>Tag the snapshot again</button>
+    </div>
   </section>
 
   <section class="panel" id="enrollPanel" hidden>
@@ -835,6 +842,7 @@
 <script src="camera/osnet.js"></script>
 <script src="camera/dino.js"></script>
 <script src="camera/depth.js"></script>
+<script src="camera/segment.js"></script>
 <script>
 (function () {
   "use strict";
@@ -1085,6 +1093,10 @@
       title: "Cue stick detection",
       body: "Looks for a cue stick held out over the calibrated table. A player at the table with their cue over the cloth is taking a shot - this counts as shooting even when the camera can't see them bend over (a far, level camera barely sees a bend at all).\n\nIf a player walks around the table and then drops out of view right next to it, the camera assumes they're still there: the next cue that comes out over the table is credited to them, for up to 45 seconds after they were last seen (each shot they take re-arms it, up to 3 minutes).\n\nOnly works once the table is calibrated. Turn on the debug overlay to see the cue drawn in pink, with how long it is and who it was matched to - long thin lines it turned down are drawn grey with the reason."
     },
+    roomTags: {
+      title: "Room tags",
+      body: "When the empty-room snapshot is taken, everything in it gets tagged: chairs, armchairs, the sofa, rugs, lamps, cabinets, paintings, mirrors, the TV, the pool table - 150 kinds of thing a room can hold (Meta's DINOv2 with its ADE20K room labels, on this device, in a few seconds). The tags are kept with the snapshot, so the camera keeps them in mind:\n\n- someone \"seen\" inside a tagged TV, screen, mirror, painting or poster is a picture or a reflection, not a player;\n- a \"person\" on a tagged chair, sofa or coat rack that still looks just like the empty room is the furniture;\n- the room map names its furniture.\n\nThe table's 4 rails and 6 pockets are tagged from the calibration: nothing in a pocket's mouth is ever taken for a ball.\n\n\"Show the tags on the picture\" draws them all, each kind in its colour. Taking a new snapshot tags the room again (also after a zoom or upside-down change, which needs a new snapshot)."
+    },
     ballSensitivity: {
       title: "Ball detection sensitivity",
       body: "How different from the empty felt a spot has to be to count as a ball.\n\nWith an empty-room snapshot (Table tab), every spot of the cloth is compared with the same spot in the snapshot - the snapshot's felt is taken as empty, with its own lights and shadows, and the camera follows the light drifting over the evening. Without one, it's compared with the felt's one colour.\n\n1 = only clear differences count: fewer false balls (shadows, chalk, glare), but a ball close to the felt's colour can be missed. 10 = the slightest difference counts: a green ball on green felt is found, but so may be a shadow. 5 is the standard.\n\nWhile you move the slider, the picture shows in pink what differs from the felt at that sensitivity, and the balls it would see - balls on the table make it easy to check. Also on the scoreboard: Visual Scoring > Capture Settings."
@@ -1214,6 +1226,8 @@
     cueDebugEnabled: false,
     // keep a player's id and name when they turn up again along their walking path
     walkingPathsEnabled: true,
+    // the room's and the table's tags drawn on the picture (Table tab)
+    showRoomTags: false,
     // how different from the empty felt a spot has to be to count as a ball:
     // 1 (only clear differences) to 10 (the slightest); 5 = as before
     ballSensitivity: 5,
@@ -1301,6 +1315,7 @@
     cueDetectionToggle.checked = settings.cueDetectionEnabled;
     cueDebugToggle.checked = settings.cueDebugEnabled;
     walkingPathsToggle.checked = settings.walkingPathsEnabled;
+    document.getElementById("showRoomTagsToggle").checked = settings.showRoomTags;
     ballSensitivityInput.value = settings.ballSensitivity;
     ballSensitivityValue.textContent = settings.ballSensitivity;
     zoomInput.value = settings.zoom;
@@ -1379,6 +1394,12 @@
     document.getElementById("zoomBar").hidden = true;
     document.getElementById("ballSensitivityBar").hidden = true;
   }
+  document.getElementById("showRoomTagsToggle").addEventListener("change", function (e) {
+    settings.showRoomTags = e.target.checked;
+    persistSettings();
+    if (settings.showRoomTags) { overlayCtx.clearRect(0, 0, overlayEl.width, overlayEl.height); drawRoomTags(); }
+  });
+  document.getElementById("retagRoomBtn").addEventListener("click", function () { tagRoom("asked again"); });
   // ball sensitivity: the preview follows the slider; letting go keeps it
   ballSensitivityInput.addEventListener("input", function () {
     settings.ballSensitivity = Math.max(1, Math.min(10, parseInt(ballSensitivityInput.value, 10) || 5));
@@ -3168,6 +3189,8 @@
     if (roomMapPanel && !roomMapPanel.hidden) buildRoomPlan("new snapshot");
     forgetLastMatch();
     renderEmptyRoomStatus();
+    roomTags = null;
+    tagRoom("new snapshot");
     return { at: emptyRoom.at, saved: emptyRoom.saved, size: jpeg ? jpeg.length : 0 };
   }
   function loadEmptyRoom() {
@@ -3183,6 +3206,7 @@
       tableRef = null;
       buildRoomReference();
       renderEmptyRoomStatus();
+      loadRoomTags();
     };
     img.src = stored.jpeg;
   }
@@ -3193,6 +3217,7 @@
     tableRef = null;
     roomNow = { tick: -1, data: null, gain: 1, usable: false, match: 0 };
     try { localStorage.removeItem(EMPTY_ROOM_STORAGE_KEY); } catch (e) {}
+    forgetRoomTags();
     logActivity("Empty-room snapshot forgotten");
     forgetLastMatch();
     renderEmptyRoomStatus();
@@ -3591,6 +3616,9 @@
       var aspect = Math.max(blob.bw, blob.bh) / Math.max(1, Math.min(blob.bw, blob.bh));
       var fill = blob.area / (blob.bw * blob.bh);
       var entry = { x: vp.x, y: vp.y, r: dPx / 2, kind: "object", count: 1, whiteFraction: blob.whiteFraction, meanV: blob.meanV };
+      // a pocket (tagged from the calibration) is never a ball - whatever
+      // shows in its mouth: the hole, a hand fishing a ball out
+      if (inPocketMouth(real)) { entry.kind = "rejected"; entry.reason = "pocket"; rejected.push(entry); return; }
       // Shape, relative to the expected ellipse (so a true ball scores like
       // a unit disc whatever the viewing angle):
       //  roundness: ratio of the two principal spreads - 1 for a disc, ~0.2
@@ -4898,6 +4926,12 @@
     runPass: runBallPass,
     reset: resetBallTracking,
     takeEmptySnapshot: function (source) { return captureEmptyRoom(source || videoEl); },
+    roomTags: function () { return roomTagsFit() ? { at: roomTags.at, gw: roomTags.gw, gh: roomTags.gh, regions: roomTags.regions.map(function (r) { return { id: r.id, name: r.name, kind: r.kind, area: r.area, cells: r.cells.slice(), x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1 }; }) } : null; },
+    tagRoom: function () { return tagRoom("test"); },
+    roomTagRejects: function (box) { var r = roomTagRejects(box); return r ? { name: r.name, kind: r.kind } : null; },
+    lastIgnored: function () { return roomTagIgnored; },
+    tableTags: tableTags,
+    summary: roomTagsSummary,
     // what the sensitivity preview last saw
     preview: function () {
       var smp = ballPreview.sample, inv = ballPreview.inv, inside = 0, foreign = 0;
@@ -5145,6 +5179,15 @@
     var descriptor = torsoHist.concat(legsHist, sleeveHist, capHist, [aspectRatio, legsSeen ? 1 : 0, sleevesSeen ? 1 : 0, capSeen ? 1 : 0], tones[0], tones[1], tones[2], tones[3])
       .map(function (v) { return Math.round(v * 10000) / 10000; });
     var box = boxFromPoints([ls, rs, lh, rh].concat(la && ra ? [la, ra] : []), 0.05);
+
+    // The room's tags: a "person" inside a tagged TV, mirror, painting...
+    // or on tagged furniture that still looks like the empty room isn't one.
+    var tagged = roomTagRejects(box);
+    if (tagged) {
+      lastRejectedAsStatic = true;
+      roomTagIgnored = { name: tagged.name, kind: tagged.kind, at: Date.now() };
+      return null;
+    }
 
     // Rejects furniture that was already sitting in frame when the table
     // was calibrated - see regionLooksStatic's own comment. Checked last,
@@ -6103,6 +6146,318 @@
       ids: job.ids, thr: r.thr, check: check, tested: tested, right: right,
       classifier: r.W ? { keys: job.keys, names: job.names, W: r.W, D: job.D } : null
     };
+  }
+
+  // ---- Room tags: what everything in the empty-room snapshot is ----
+  // When the snapshot is taken, the labelling model (camera/segment.js:
+  // DINOv2 + Meta's ADE20K head) names every 14-pixel patch of it - wall,
+  // floor, chair, armchair, sofa, rug, lamp, cabinet, painting, mirror,
+  // television, pool table... - and the patches become tags: one per thing,
+  // kept with the snapshot (ROOM_TAGS_KEY, the snapshot's own time), so the
+  // camera keeps them in mind:
+  //  - a "person" inside a tagged TV, screen, mirror, painting or poster is
+  //    a picture or a reflection, not a player (analyzePose);
+  //  - a "person" over a tagged chair, sofa, coat... that still looks just
+  //    like the empty room is the furniture (analyzePose);
+  //  - the room map names its furniture (planFromDepth).
+  // The table's rails and pockets are tagged from the calibration instead
+  // (tableTags) - a pocket's mouth is never a ball (detectBallsInFrame).
+  var ROOM_TAGS_KEY = "pmc-camera-room-tags";
+  var ROOM_TAG_GRID_W = 46; // patches across (644 pixels), as the room map's depth
+  var ROOM_TAG_MIN_CONF = 0.25;
+  var ROOM_TAG_KINDS = {
+    picture: ["television receiver", "screen", "crt screen", "monitor", "computer", "painting", "poster", "mirror", "bulletin board", "signboard"],
+    seat: ["chair", "armchair", "sofa", "seat", "stool", "bench", "swivel chair", "ottoman"],
+    furniture: ["cabinet", "wardrobe", "chest of drawers", "bookcase", "shelf", "table", "desk", "coffee table", "counter", "countertop", "bar", "buffet",
+      "case", "box", "lamp", "plant", "flower", "apparel", "cushion", "pillow", "blanket", "towel", "bag", "basket", "barrel", "refrigerator",
+      "arcade machine", "fireplace", "radiator", "sculpture", "vase", "clock", "fan", "ashcan", "bottle", "kitchen island", "stove", "bed"],
+    floor: ["floor", "rug", "step", "stairs"],
+    table: ["pool table"]
+  };
+  var ROOM_TAG_COLOURS = { picture: "#8fd0ff", seat: "#ffd166", furniture: "#f4a261", floor: "#9be7b0", table: "#7bd389", other: "#c9a2a2" };
+  // the room itself - tagged, but not listed as things
+  var ROOM_TAG_UNLISTED = ["wall", "ceiling", "floor", "building", "sky", "house"];
+  var segmentModel = null, segmentModelLoading = null;
+  var roomTags = null; // { at, gw, gh, labels, conf (0-255), classes, regions, regionAt }
+  var roomTagsBusy = false, roomTagsError = "";
+  var roomTagIgnored = null; // { name, kind, at } - the last "person" the tags set aside
+
+  function roomTagKind(name) {
+    for (var k in ROOM_TAG_KINDS) if (ROOM_TAG_KINDS[k].indexOf(name) !== -1) return k;
+    return "other";
+  }
+  function loadSegmentModel() {
+    if (segmentModel) return Promise.resolve(segmentModel);
+    if (!segmentModelLoading) {
+      segmentModelLoading = window.PMCSegment ? window.PMCSegment.load("camera/models/dinov2/", "camera/models/segment/") : Promise.reject(new Error("camera/segment.js isn't loaded"));
+      segmentModelLoading.then(function (m) { segmentModel = m; }, function () { segmentModelLoading = null; });
+    }
+    return segmentModelLoading;
+  }
+  function bytesToB64(u8) { var s = ""; for (var i = 0; i < u8.length; i++) s += String.fromCharCode(u8[i]); return btoa(s); }
+  function b64ToBytes(b) { var s = atob(b), u8 = new Uint8Array(s.length); for (var i = 0; i < s.length; i++) u8[i] = s.charCodeAt(i); return u8; }
+
+  // patches of one kind that touch are one thing; specks (one patch) left out
+  function buildRoomTagRegions(t, videoW, videoH) {
+    var gw = t.gw, gh = t.gh, n = gw * gh, seen = new Uint8Array(n), regions = [], sx = videoW / gw, sy = videoH / gh, minConf = ROOM_TAG_MIN_CONF * 255;
+    for (var i = 0; i < n; i++) {
+      if (seen[i] || t.conf[i] < minConf) continue;
+      var lab = t.labels[i], stack = [i], cells = [];
+      seen[i] = 1;
+      while (stack.length) {
+        var c = stack.pop(), cx = c % gw, cy = (c - cx) / gw;
+        cells.push(c);
+        var around = [cx > 0 ? c - 1 : -1, cx < gw - 1 ? c + 1 : -1, cy > 0 ? c - gw : -1, cy < gh - 1 ? c + gw : -1];
+        for (var a = 0; a < 4; a++) {
+          var nb = around[a];
+          if (nb >= 0 && !seen[nb] && t.labels[nb] === lab && t.conf[nb] >= minConf) { seen[nb] = 1; stack.push(nb); }
+        }
+      }
+      if (cells.length < 2) continue;
+      var x0 = gw, y0 = gh, x1 = 0, y1 = 0;
+      cells.forEach(function (cc) { var px = cc % gw, py = (cc - px) / gw; x0 = Math.min(x0, px); y0 = Math.min(y0, py); x1 = Math.max(x1, px + 1); y1 = Math.max(y1, py + 1); });
+      var name = t.classes[lab];
+      regions.push({ cls: lab, name: name, kind: roomTagKind(name), cells: cells, area: cells.length, x0: x0 * sx, y0: y0 * sy, x1: x1 * sx, y1: y1 * sy });
+    }
+    regions.sort(function (p, q) { return q.area - p.area; });
+    var regionAt = new Int16Array(n).fill(-1);
+    regions.forEach(function (r, k) { r.id = "t" + (k + 1); r.cells.forEach(function (cc) { regionAt[cc] = k; }); });
+    t.regions = regions;
+    t.regionAt = regionAt;
+    return t;
+  }
+  function roomTagsFit() {
+    return !!(roomTags && emptyRoom && roomTags.at === emptyRoom.at && emptyRoomFits());
+  }
+  // the tag under a spot of the picture (video pixels), or null
+  function roomTagAt(x, y) {
+    if (!roomTagsFit()) return null;
+    var gx = Math.floor(x / videoEl.videoWidth * roomTags.gw), gy = Math.floor(y / videoEl.videoHeight * roomTags.gh);
+    if (gx < 0 || gy < 0 || gx >= roomTags.gw || gy >= roomTags.gh) return null;
+    var k = roomTags.regionAt[gy * roomTags.gw + gx];
+    return k >= 0 ? roomTags.regions[k] : null;
+  }
+  // how much of a box (video pixels) lies on each kind of tag, and the one
+  // tag most of it is on
+  function roomTagsUnder(box) {
+    var out = { picture: 0, seat: 0, furniture: 0, top: null, topShare: 0 };
+    if (!roomTagsFit()) return out;
+    var counts = {}, byId = {}, n = 0;
+    for (var iy = 0; iy < 8; iy++) {
+      for (var ix = 0; ix < 6; ix++) {
+        n++;
+        var r = roomTagAt(box.x0 + (ix + 0.5) / 6 * (box.x1 - box.x0), box.y0 + (iy + 0.5) / 8 * (box.y1 - box.y0));
+        if (!r) continue;
+        if (r.kind === "picture") out.picture++;
+        if (r.kind === "seat") out.seat++;
+        if (r.kind === "seat" || r.kind === "furniture") out.furniture++;
+        counts[r.id] = (counts[r.id] || 0) + 1;
+        byId[r.id] = r;
+      }
+    }
+    Object.keys(counts).forEach(function (id) { if (counts[id] > out.topShare * n) { out.top = byId[id]; out.topShare = counts[id] / n; } });
+    out.picture /= n; out.seat /= n; out.furniture /= n;
+    return out;
+  }
+  // how much of a box looks just like the empty room this pass (0-1)
+  function boxLooksLikeRoom(box) {
+    if (!roomNow.usable || roomNow.tick !== detectTick) return 0;
+    var same = 0, n = 0;
+    for (var iy = 0; iy < 8; iy++) {
+      for (var ix = 0; ix < 6; ix++) {
+        n++;
+        if (looksLikeRoom(box.x0 + (ix + 0.5) / 6 * (box.x1 - box.x0), box.y0 + (iy + 0.5) / 8 * (box.y1 - box.y0))) same++;
+      }
+    }
+    return same / n;
+  }
+  // A "person" the tags say isn't one: inside a picture (TV, mirror...)
+  // that's taller than them, or on furniture and looking just like the
+  // empty room. -> the tag's name, or null.
+  function roomTagRejects(box) {
+    var under = roomTagsUnder(box);
+    if (under.top && under.top.kind === "picture" && under.topShare >= 0.8 && (box.y1 - box.y0) <= (under.top.y1 - under.top.y0) * 0.95) return under.top;
+    if (under.furniture >= 0.5 && boxLooksLikeRoom(box) >= 0.8) return under.top && (under.top.kind === "seat" || under.top.kind === "furniture") ? under.top : { name: "furniture", kind: "furniture" };
+    return null;
+  }
+
+  function saveRoomTags() {
+    if (!roomTags) return;
+    try {
+      localStorage.setItem(ROOM_TAGS_KEY, JSON.stringify({ at: roomTags.at, gw: roomTags.gw, gh: roomTags.gh, labels: bytesToB64(roomTags.labels), conf: bytesToB64(roomTags.conf), model: "dinov2-ade20k-1" }));
+    } catch (e) {}
+  }
+  function loadRoomTags() {
+    var stored = null;
+    try { stored = JSON.parse(localStorage.getItem(ROOM_TAGS_KEY) || "null"); } catch (e) {}
+    if (stored && emptyRoom && stored.at === emptyRoom.at && stored.labels) {
+      var classes = segmentModel ? segmentModel.classes : null;
+      var ready = function (cls) {
+        roomTags = buildRoomTagRegions({ at: stored.at, gw: stored.gw, gh: stored.gh, labels: b64ToBytes(stored.labels), conf: b64ToBytes(stored.conf), classes: cls }, emptyRoom.videoW, emptyRoom.videoH);
+        renderRoomTagsStatus();
+      };
+      if (classes) ready(classes);
+      else fetch("camera/models/segment/segment.json").then(function (r) { return r.json(); }).then(function (m) { ready(m.classes); }).catch(function () {});
+      return;
+    }
+    // a snapshot from before room tags existed (or tags lost): tag it now,
+    // once the camera's own start has settled
+    if (emptyRoom && !isViewer) setTimeout(function () { if (!roomTagsFit()) tagRoom("the snapshot had no tags yet"); }, 6000);
+    renderRoomTagsStatus();
+  }
+  function forgetRoomTags() {
+    roomTags = null;
+    roomTagIgnored = null;
+    try { localStorage.removeItem(ROOM_TAGS_KEY); } catch (e) {}
+    renderRoomTagsStatus();
+  }
+  // Labels the snapshot (a few seconds - the model loads the first time).
+  function tagRoom(why) {
+    if (roomTagsBusy || !emptyRoom || isViewer) return Promise.resolve(roomTags);
+    roomTagsBusy = true;
+    roomTagsError = "";
+    renderRoomTagsStatus();
+    var at = emptyRoom.at, w = emptyRoom.videoW, h = emptyRoom.videoH, started = Date.now();
+    return loadSegmentModel().then(function (model) {
+      return model.label(emptyRoomCanvas, { gridW: ROOM_TAG_GRID_W });
+    }).then(function (out) {
+      roomTagsBusy = false;
+      if (!emptyRoom || emptyRoom.at !== at) { renderRoomTagsStatus(); return null; } // (a new snapshot meanwhile)
+      var conf = new Uint8Array(out.conf.length);
+      for (var i = 0; i < conf.length; i++) conf[i] = Math.round(out.conf[i] * 255);
+      roomTags = buildRoomTagRegions({ at: at, gw: out.gw, gh: out.gh, labels: out.labels, conf: conf, classes: out.classes }, w, h);
+      saveRoomTags();
+      logActivity("Room tagged (" + why + ", " + ((Date.now() - started) / 1000).toFixed(1) + " s): " + roomTagsSummary());
+      renderRoomTagsStatus();
+      if (roomMapPanel && !roomMapPanel.hidden) buildRoomPlan("room tags");
+      return roomTags;
+    }).catch(function (e) {
+      roomTagsBusy = false;
+      roomTagsError = e && e.message ? e.message : String(e);
+      console.warn("[PMC room tags] couldn't tag the snapshot:", e);
+      renderRoomTagsStatus();
+      return null;
+    });
+  }
+
+  // ---- The table's own tags: rails and pockets, from the calibration ----
+  var RAIL_WIDTH_IN = 5; // cushion + rail, beyond the cloth
+  var POCKET_MOUTH_IN = { corner: 1.4, side: 1.0 }; // a ball's centre can't get this close without being in it
+  function tableTags() {
+    if (!calibration || !calibration.h) return null;
+    var xMax = calibXExtent(), yMax = calibYExtent();
+    var pockets = pocketCentersReal().map(function (p, i) {
+      return { name: i < 4 ? "corner pocket" : "side pocket", x: p[0], y: p[1], mouth: i < 4 ? POCKET_MOUTH_IN.corner : POCKET_MOUTH_IN.side };
+    });
+    var R = RAIL_WIDTH_IN;
+    var rails = [
+      { name: "rail", poly: [[-R, -R], [xMax + R, -R], [xMax, 0], [0, 0]] },
+      { name: "rail", poly: [[xMax + R, -R], [xMax + R, yMax + R], [xMax, yMax], [xMax, 0]] },
+      { name: "rail", poly: [[xMax + R, yMax + R], [-R, yMax + R], [0, yMax], [xMax, yMax]] },
+      { name: "rail", poly: [[-R, yMax + R], [-R, -R], [0, 0], [0, yMax]] }
+    ];
+    return { pockets: pockets, rails: rails };
+  }
+  // (real inches on the table) in a pocket's mouth?
+  function inPocketMouth(real) {
+    var t = tableTags();
+    if (!t) return false;
+    return t.pockets.some(function (p) { return Math.hypot(real.x - p.x, real.y - p.y) < p.mouth; });
+  }
+
+  function roomTagsSummary() {
+    var counts = {}, order = [];
+    if (roomTagsFit()) {
+      roomTags.regions.forEach(function (r) {
+        if (ROOM_TAG_UNLISTED.indexOf(r.name) !== -1 || r.area < 3) return;
+        if (!counts[r.name]) { counts[r.name] = 0; order.push(r.name); }
+        counts[r.name]++;
+      });
+    }
+    var room = order.map(function (name) { return counts[name] > 1 ? name + " ×" + counts[name] : name; }).join(", ");
+    var table = calibration && calibration.h ? "table: 4 rails, 6 pockets" : "";
+    return [room || (roomTagsFit() ? "nothing but walls and floor" : ""), table].filter(Boolean).join(" · ");
+  }
+  function renderRoomTagsStatus() {
+    var el = document.getElementById("roomTagsStatus");
+    if (!el) return;
+    var retag = document.getElementById("retagRoomBtn");
+    if (retag) retag.hidden = !emptyRoom || roomTagsBusy;
+    if (roomTagsBusy) { el.textContent = segmentModel ? "Tagging the room..." : "Tagging the room (the first time, the labelling model loads - 2 MB on top of DINOv2)..."; return; }
+    if (roomTagsError) { el.textContent = "Couldn't tag the room: " + roomTagsError; return; }
+    if (!emptyRoom) { el.textContent = "Take the empty-room snapshot: everything in it gets tagged then." + (calibration && calibration.h ? " Tagged from the calibration: 4 rails, 6 pockets." : ""); return; }
+    if (!roomTagsFit()) { el.textContent = "Not tagged yet."; return; }
+    var text = "Tagged: " + roomTagsSummary() + ".";
+    if (roomTagIgnored && Date.now() - roomTagIgnored.at < 60000) text += " Just now: a “person” " + (roomTagIgnored.kind === "picture" ? "on the " : "that was the ") + roomTagIgnored.name + " - ignored.";
+    el.textContent = text;
+  }
+
+  // The tags on the picture (Table tab > "Show the tags on the picture"):
+  // each thing's outline in its kind's colour with its name; the rails and
+  // the pockets.
+  function drawRoomTags() {
+    var tt = tableTags();
+    overlayCtx.save();
+    if (roomTagsFit()) {
+      var gw = roomTags.gw, gh = roomTags.gh, cw = videoEl.videoWidth / gw, ch = videoEl.videoHeight / gh;
+      overlayCtx.lineWidth = 2;
+      overlayCtx.font = "bold " + Math.max(11, Math.round(overlayEl.width / 70)) + "px sans-serif";
+      roomTags.regions.forEach(function (r, k) {
+        if (ROOM_TAG_UNLISTED.indexOf(r.name) !== -1) return;
+        var colour = ROOM_TAG_COLOURS[r.kind] || ROOM_TAG_COLOURS.other, sumX = 0, sumY = 0;
+        overlayCtx.strokeStyle = colour;
+        overlayCtx.beginPath();
+        r.cells.forEach(function (c) {
+          var cx = c % gw, cy = (c - cx) / gw;
+          sumX += cx + 0.5; sumY += cy + 0.5;
+          var edge = function (ax, ay, bx, by) {
+            var p = videoToOverlay(ax * cw, ay * ch), q = videoToOverlay(bx * cw, by * ch);
+            overlayCtx.moveTo(p.x, p.y); overlayCtx.lineTo(q.x, q.y);
+          };
+          var at = function (x, y) { return x >= 0 && y >= 0 && x < gw && y < gh && roomTags.regionAt[y * gw + x] === k; };
+          if (!at(cx - 1, cy)) edge(cx, cy, cx, cy + 1);
+          if (!at(cx + 1, cy)) edge(cx + 1, cy, cx + 1, cy + 1);
+          if (!at(cx, cy - 1)) edge(cx, cy, cx + 1, cy);
+          if (!at(cx, cy + 1)) edge(cx, cy + 1, cx + 1, cy + 1);
+        });
+        overlayCtx.stroke();
+        if (r.area >= 3) {
+          var o = videoToOverlay(sumX / r.area * cw, sumY / r.area * ch);
+          var tw = overlayCtx.measureText(r.name).width;
+          overlayCtx.fillStyle = "rgba(0,0,0,0.6)";
+          overlayCtx.fillRect(o.x - tw / 2 - 3, o.y - 9, tw + 6, 16);
+          overlayCtx.fillStyle = colour;
+          overlayCtx.fillText(r.name, o.x - tw / 2, o.y + 4);
+        }
+      });
+    }
+    if (tt) {
+      var inv = invertHomography(calibration.h);
+      var toO = function (pt) { var v = applyInverseHomography(inv, pt[0], pt[1]); return v ? videoToOverlay(v.x, v.y) : null; };
+      overlayCtx.fillStyle = "rgba(160,110,60,0.28)";
+      overlayCtx.strokeStyle = "#c08a4a";
+      overlayCtx.lineWidth = 1.5;
+      tt.rails.forEach(function (rail) {
+        var pts = rail.poly.map(toO);
+        if (pts.some(function (p) { return !p; })) return;
+        overlayCtx.beginPath();
+        pts.forEach(function (p, i) { if (i) overlayCtx.lineTo(p.x, p.y); else overlayCtx.moveTo(p.x, p.y); });
+        overlayCtx.closePath();
+        overlayCtx.fill();
+        overlayCtx.stroke();
+      });
+      overlayCtx.strokeStyle = "#ff4fd8";
+      overlayCtx.lineWidth = 2.5;
+      tt.pockets.forEach(function (p) {
+        var c = toO([p.x, p.y]), e = toO([p.x + 2.5, p.y]), f = toO([p.x, p.y + 2.5]);
+        if (!c || !e || !f) return;
+        var rad = Math.max(5, (Math.hypot(e.x - c.x, e.y - c.y) + Math.hypot(f.x - c.x, f.y - c.y)) / 2);
+        overlayCtx.beginPath();
+        overlayCtx.arc(c.x, c.y, rad, 0, Math.PI * 2);
+        overlayCtx.stroke();
+      });
+    }
+    overlayCtx.restore();
   }
 
   // ---- Table calibration (pixel <-> real-inches homography) ----
@@ -8395,6 +8750,7 @@
   function drawOverlay(keypoints, analysis, matchLabel) {
     overlayCtx.clearRect(0, 0, overlayEl.width, overlayEl.height);
     drawBallPreview();
+    if (settings.showRoomTags && !calibrating) drawRoomTags();
     if (calibrating) drawCalibrationTaps();
     if (!settings.debugOverlay) {
       // The Table tab always shows what the calibration came out as, so
@@ -8837,7 +9193,8 @@
   }
   // Up to date with the snapshot and the calibration?
   function roomPlanCurrent() {
-    return !!(roomPlan && roomPlan.v === ROOM_PLAN_VERSION && emptyRoom && roomPlan.at === emptyRoom.at && roomPlan.calKey === calibrationKey());
+    return !!(roomPlan && roomPlan.v === ROOM_PLAN_VERSION && emptyRoom && roomPlan.at === emptyRoom.at && roomPlan.calKey === calibrationKey() &&
+      (!roomTagsFit() || roomPlan.tagsAt === roomTags.at)); // (named by the room tags once there are some)
   }
   function loadDepthModel() {
     if (depthModel) return Promise.resolve(depthModel);
@@ -8970,7 +9327,7 @@
           Math.max(Math.abs(z[idx - STEP] - here), Math.abs(z[idx + STEP] - here), Math.abs(z[idx - STEP * dw] - here), Math.abs(z[idx + STEP * dw] - here)) > 0.05 * here;
         var u = (j + 0.5) * sx, v = (i + 0.5) * sy, zz = here * M_TO_IN;
         var X = [(u - m.cx) / m.f * zz, (v - m.cy) / m.f * zz, zz];
-        var p = { X: X, edge: edge };
+        var p = { X: X, edge: edge, u: u, v: v };
         pts.push(p);
         if (!edge && pixelRay(m, u, v)[2] * m.up < 0) {
           var hp = applyHomography(calibration.h, u, v);
@@ -9025,9 +9382,15 @@
       if (hf > ROOM_TOP_IN) return;
       var key = Math.floor(at.x / ROOM_CELL_IN) + "," + Math.floor(at.y / ROOM_CELL_IN);
       var c = cells.get(key);
-      if (!c) { c = { free: 0, occ: 0, hs: [] }; cells.set(key, c); }
+      if (!c) { c = { free: 0, occ: 0, hs: [], tags: {} }; cells.set(key, c); }
       if (hf < ROOM_FLOOR_MAX_IN) c.free++;
-      else { c.occ++; c.hs.push(hf); }
+      else {
+        c.occ++;
+        c.hs.push(hf);
+        // what the room tags call it (a chair, the sofa...)
+        var tg = roomTagAt(p.u, p.v);
+        if (tg && ROOM_TAG_UNLISTED.indexOf(tg.name) === -1) c.tags[tg.name] = (c.tags[tg.name] || 0) + 1;
+      }
     });
     var occupied = new Map(), floorCells = 0;
     cells.forEach(function (c, key) {
@@ -9054,7 +9417,10 @@
       var hs = [], flat = [];
       members.forEach(function (mxy) { hs = hs.concat(occupied.get(mxy[0] + "," + mxy[1]).hs); flat.push(mxy[0], mxy[1]); });
       hs.sort(function (p, q) { return p - q; });
-      objects.push({ cells: flat, n: members.length, hMax: Math.round(hs[Math.floor(hs.length * 0.95)]), hLow: Math.round(hs[Math.floor(hs.length * 0.05)]) });
+      var votes = {}, tag = null;
+      members.forEach(function (mxy) { var t = occupied.get(mxy[0] + "," + mxy[1]).tags; Object.keys(t).forEach(function (name) { votes[name] = (votes[name] || 0) + t[name]; }); });
+      Object.keys(votes).forEach(function (name) { if (!tag || votes[name] > votes[tag]) tag = name; });
+      objects.push({ cells: flat, n: members.length, hMax: Math.round(hs[Math.floor(hs.length * 0.95)]), hLow: Math.round(hs[Math.floor(hs.length * 0.05)]), tag: tag });
     });
     objects.sort(function (p, q) { return q.n - p.n; });
     objects = objects.slice(0, ROOM_MAX_OBJECTS);
@@ -9068,7 +9434,7 @@
     var reach = dists.length ? dists[Math.floor(dists.length * 0.97)] : 0;
     var camAt = toTable([0, 0, 0]);
     return {
-      v: ROOM_PLAN_VERSION, cell: ROOM_CELL_IN, objects: objects, floorCells: floorCells, reach: Math.min(MAP_RANGE_IN, Math.max(reach + 24, Math.max(xExt, yExt))),
+      v: ROOM_PLAN_VERSION, cell: ROOM_CELL_IN, objects: objects, floorCells: floorCells, tagsAt: roomTagsFit() ? roomTags.at : null, reach: Math.min(MAP_RANGE_IN, Math.max(reach + 24, Math.max(xExt, yExt))),
       fit: {
         scale: scale, sides: [L1 * scale, L2 * scale], clothRmsIn: cloth.rms * scale, clothPoints: felt.length,
         floorAssumed: !!floor.assumed, floorRmsIn: floor.rms * scale, floorTiltDeg: Math.acos(Math.min(1, Math.abs(v3dot(floor.n, cloth.n)))) * 180 / Math.PI,
@@ -9390,10 +9756,10 @@
           sumX += mx; sumY += my;
         }
         var cls = o.hMax >= 70 ? "tall" : o.hMax >= 36 ? "mid" : "low";
-        out.push('<path class="rm-obj ' + cls + '" d="' + path.join("") + '"><title>' + o.id + ": " + o.n + " squares, " + o.hLow + "-" + o.hMax + " in high</title></path>");
-        if (roomMapOptions.ids && o.n >= 6) {
+        out.push('<path class="rm-obj ' + cls + '" d="' + path.join("") + '"><title>' + (o.tag ? o.tag + " (" + o.id + ")" : o.id) + ": " + o.n + " squares, " + o.hLow + "-" + o.hMax + " in high</title></path>");
+        if (roomMapOptions.ids && (o.n >= 6 || o.tag)) {
           var k = o.cells.length / 2;
-          out.push(svgText(sumX / k, sumY / k, o.id + " " + o.hMax + "in", fs * 0.8, "#d8c7a8", ' text-anchor="middle" class="rm-label"'));
+          out.push(svgText(sumX / k, sumY / k, (o.tag || o.id) + " " + o.hMax + "in", fs * 0.8, "#d8c7a8", ' text-anchor="middle" class="rm-label"'));
         }
       });
     }
