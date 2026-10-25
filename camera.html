@@ -75,6 +75,7 @@
     margin: 8px 2px 4px;
   }
   .zoom-bar[hidden] { display: none; }
+  .bar-hint { font-size: 0.9rem; color: var(--text-dim); margin: 0 2px 4px; min-height: 1.2em; }
   .zoom-bar label { white-space: nowrap; font-weight: 700; }
   .zoom-bar input[type="range"] { flex: 1; width: auto; margin: 0; min-height: 32px; }
   .video-wrap {
@@ -537,6 +538,12 @@
     <input type="range" id="zoomInput" min="1" max="3" step="0.1" value="1">
     <button type="button" class="help-btn" data-help="zoom" aria-label="What does this do?">?</button>
   </div>
+  <div class="zoom-bar" id="ballSensitivityBar">
+    <label for="ballSensitivityInput">🎱 Ball sensitivity <span id="ballSensitivityValue">5</span></label>
+    <input type="range" id="ballSensitivityInput" min="1" max="10" step="1" value="5">
+    <button type="button" class="help-btn" data-help="ballSensitivity" aria-label="What does this do?">?</button>
+  </div>
+  <div class="bar-hint" id="ballSensitivityHint"></div>
 
   <div class="warning-banner" id="cameraWarning" hidden>
     <div id="cameraWarningText"></div>
@@ -1008,6 +1015,8 @@
   var cueDetectionToggle = document.getElementById("cueDetectionToggle");
   var cueDebugToggle = document.getElementById("cueDebugToggle");
   var walkingPathsToggle = document.getElementById("walkingPathsToggle");
+  var ballSensitivityInput = document.getElementById("ballSensitivityInput");
+  var ballSensitivityValue = document.getElementById("ballSensitivityValue");
   var zoomInput = document.getElementById("zoomInput");
   var zoomValue = document.getElementById("zoomValue");
   var flip180Toggle = document.getElementById("flip180Toggle");
@@ -1075,6 +1084,10 @@
     cueDetection: {
       title: "Cue stick detection",
       body: "Looks for a cue stick held out over the calibrated table. A player at the table with their cue over the cloth is taking a shot - this counts as shooting even when the camera can't see them bend over (a far, level camera barely sees a bend at all).\n\nIf a player walks around the table and then drops out of view right next to it, the camera assumes they're still there: the next cue that comes out over the table is credited to them, for up to 45 seconds after they were last seen (each shot they take re-arms it, up to 3 minutes).\n\nOnly works once the table is calibrated. Turn on the debug overlay to see the cue drawn in pink, with how long it is and who it was matched to - long thin lines it turned down are drawn grey with the reason."
+    },
+    ballSensitivity: {
+      title: "Ball detection sensitivity",
+      body: "How different from the empty felt a spot has to be to count as a ball.\n\nWith an empty-room snapshot (Table tab), every spot of the cloth is compared with the same spot in the snapshot - the snapshot's felt is taken as empty, with its own lights and shadows, and the camera follows the light drifting over the evening. Without one, it's compared with the felt's one colour.\n\n1 = only clear differences count: fewer false balls (shadows, chalk, glare), but a ball close to the felt's colour can be missed. 10 = the slightest difference counts: a green ball on green felt is found, but so may be a shadow. 5 is the standard.\n\nWhile you move the slider, the picture shows in pink what differs from the felt at that sensitivity, and the balls it would see - balls on the table make it easy to check. Also on the scoreboard: Visual Scoring > Capture Settings."
     },
     zoom: {
       title: "Zoom",
@@ -1201,6 +1214,9 @@
     cueDebugEnabled: false,
     // keep a player's id and name when they turn up again along their walking path
     walkingPathsEnabled: true,
+    // how different from the empty felt a spot has to be to count as a ball:
+    // 1 (only clear differences) to 10 (the slightest); 5 = as before
+    ballSensitivity: 5,
     // the picture: a centred zoom (1-3) and a half turn for a camera mounted upside down
     zoom: 1,
     flip180: false,
@@ -1237,7 +1253,7 @@
   // after every change, wherever the change came from) and applies what
   // the scoreboard sends - postMessage in same-device mode, the relay for
   // a separate phone.
-  var CAPTURE_SETTING_KEYS = ["matchThreshold", "debounceSec", "consecutiveFrames", "bendEnterAngle", "bendExitAngle", "railDistanceInches", "ballConfirmPasses", "cueDetectionEnabled", "walkingPathsEnabled", "zoom", "flip180"];
+  var CAPTURE_SETTING_KEYS = ["matchThreshold", "debounceSec", "consecutiveFrames", "bendEnterAngle", "bendExitAngle", "railDistanceInches", "ballConfirmPasses", "cueDetectionEnabled", "walkingPathsEnabled", "zoom", "flip180", "ballSensitivity"];
   function reportCaptureSettings() {
     if (isViewer || !CAPTURE_SETTING_KEYS) return; // (a save during page load, before this section ran)
     var out = {};
@@ -1255,6 +1271,7 @@
       // scoreboard's slider); every other number has to be positive.
       if (typeof v === "number" && !(v > 0) && !(k === "matchThreshold" && v === 0)) return;
       if (k === "zoom") v = Math.max(1, Math.min(3, Math.round(v * 10) / 10));
+      if (k === "ballSensitivity") v = Math.max(1, Math.min(10, Math.round(v)));
       settings[k] = v;
       changed.push(k + " " + v);
     });
@@ -1284,6 +1301,8 @@
     cueDetectionToggle.checked = settings.cueDetectionEnabled;
     cueDebugToggle.checked = settings.cueDebugEnabled;
     walkingPathsToggle.checked = settings.walkingPathsEnabled;
+    ballSensitivityInput.value = settings.ballSensitivity;
+    ballSensitivityValue.textContent = settings.ballSensitivity;
     zoomInput.value = settings.zoom;
     zoomValue.textContent = Number(settings.zoom).toFixed(1) + "×";
     flip180Toggle.checked = settings.flip180;
@@ -1356,7 +1375,21 @@
     persistSettings();
     applyWantedView();
   });
-  if (isViewer) document.getElementById("zoomBar").hidden = true;
+  if (isViewer) {
+    document.getElementById("zoomBar").hidden = true;
+    document.getElementById("ballSensitivityBar").hidden = true;
+  }
+  // ball sensitivity: the preview follows the slider; letting go keeps it
+  ballSensitivityInput.addEventListener("input", function () {
+    settings.ballSensitivity = Math.max(1, Math.min(10, parseInt(ballSensitivityInput.value, 10) || 5));
+    ballSensitivityValue.textContent = settings.ballSensitivity;
+    showBallPreviewNow();
+  });
+  ballSensitivityInput.addEventListener("change", function () {
+    settings.ballSensitivity = Math.max(1, Math.min(10, parseInt(ballSensitivityInput.value, 10) || 5));
+    persistSettings();
+    resetBallTracking("ball sensitivity " + settings.ballSensitivity);
+  });
   flip180Toggle.addEventListener("change", function () {
     settings.flip180 = flip180Toggle.checked;
     persistSettings();
@@ -2987,6 +3020,14 @@
   var TABLE_REF_BRIGHT_RATIO = 1.35;
   var TABLE_REF_MAX_FOREIGN = 0.35; // more of the table than this "not cloth": the snapshot doesn't match
   var TABLE_REF_ADAPT_RATE = 0.02;
+  // The ball sensitivity (settings.ballSensitivity, 1-10) widens or narrows
+  // every "is this still the cloth?" tolerance: x1 at 5 (the values above),
+  // x2 at 1 (only clear differences count), x0.42 at 10 (the slightest).
+  function ballLooseness() {
+    var sens = Math.max(1, Math.min(10, Number(settings.ballSensitivity) || 5));
+    return Math.pow(2, (5 - sens) / 4);
+  }
+  function looserRatio(ratio, f) { return ratio < 1 ? Math.max(0.02, 1 - (1 - ratio) * f) : 1 + (ratio - 1) * f; }
   var tableRefCanvas = document.createElement("canvas");
   var tableRefCtx = tableRefCanvas.getContext("2d", { willReadFrequently: true });
   var tableRef = null; // { key, h, s, v: Float32Array }
@@ -3013,9 +3054,12 @@
   // The "not cloth" mask by the empty table: a pixel that differs from the
   // same spot on the empty cloth - in hue, saturation, or clearly in
   // brightness - after the whole table's drift in brightness and hue
-  // (exposure, white balance) is taken out. Null when the snapshot doesn't
-  // match the table any more. The snapshot learns from what's cloth.
-  function foreignByEmptyTable(ref, inside, hArr, sArr, vArr) {
+  // (exposure, white balance) is taken out. The snapshot's cloth is taken
+  // as empty, its lights and shadows included. Null when the snapshot
+  // doesn't match the table any more (judged at the standard tolerances,
+  // whatever the sensitivity). The snapshot learns from what's cloth -
+  // except for a preview (noLearn).
+  function foreignByEmptyTable(ref, inside, hArr, sArr, vArr, noLearn) {
     var n = inside.length, ratios = [], shifts = [], i;
     for (i = 0; i < n; i += 7) {
       if (!inside[i] || ref.v[i] < 0.05) continue;
@@ -3025,22 +3069,26 @@
     if (ratios.length < 50) return null;
     var median = function (xs) { xs.sort(function (a, b) { return a - b; }); return xs[xs.length >> 1]; };
     var gain = median(ratios), shift = shifts.length ? median(shifts) : 0;
+    var f = ballLooseness();
+    var hueTol = TABLE_REF_HUE_TOLERANCE_DEG * f, satTol = TABLE_REF_SAT_TOLERANCE * f;
+    var dark = looserRatio(TABLE_REF_DARK_RATIO, f), bright = looserRatio(TABLE_REF_BRIGHT_RATIO, f);
     var foreign = new Uint8Array(n), count = 0, total = 0;
     for (i = 0; i < n; i++) {
       if (!inside[i]) continue;
       total++;
       var ratio = vArr[i] / Math.max(0.02, ref.v[i] * gain);
-      if ((sArr[i] >= 0.15 && ref.s[i] >= 0.15 && hueDistance(hArr[i], ref.h[i] + shift) > TABLE_REF_HUE_TOLERANCE_DEG) ||
-        Math.abs(sArr[i] - ref.s[i]) > TABLE_REF_SAT_TOLERANCE || ratio < TABLE_REF_DARK_RATIO || ratio > TABLE_REF_BRIGHT_RATIO) {
-        foreign[i] = 1;
-        count++;
-      }
+      var hueOff = sArr[i] >= 0.15 && ref.s[i] >= 0.15 ? hueDistance(hArr[i], ref.h[i] + shift) : 0;
+      var satOff = Math.abs(sArr[i] - ref.s[i]);
+      if (hueOff > hueTol || satOff > satTol || ratio < dark || ratio > bright) foreign[i] = 1;
+      if (hueOff > TABLE_REF_HUE_TOLERANCE_DEG || satOff > TABLE_REF_SAT_TOLERANCE || ratio < TABLE_REF_DARK_RATIO || ratio > TABLE_REF_BRIGHT_RATIO) count++;
     }
     if (!total || count / total > TABLE_REF_MAX_FOREIGN) {
+      if (noLearn) return null;
       tableRefMismatchPasses++;
       if (tableRefMismatchPasses === EMPTY_ROOM_MISMATCH_PASSES) renderEmptyRoomStatus();
       return null;
     }
+    if (noLearn) return foreign;
     if (tableRefMismatchPasses >= EMPTY_ROOM_MISMATCH_PASSES) { tableRefMismatchPasses = 0; renderEmptyRoomStatus(); }
     tableRefMismatchPasses = 0;
     for (i = 0; i < n; i++) {
@@ -3397,7 +3445,9 @@
     return sample;
   }
 
-  function sampleTablePixelsFresh() {
+  // opts.noLearn: a look only (the sensitivity preview) - the snapshot
+  // doesn't learn from it
+  function sampleTablePixelsFresh(opts) {
     var box = calibratedTableBoxVideo();
     if (!box) return null;
     var invH = box.invH, xMax = box.xMax, yMax = box.yMax;
@@ -3480,9 +3530,11 @@
     // empty cloth (see foreignByEmptyTable); without one - or when it no
     // longer matches - against the felt's one colour.
     var ref = tableReferenceFor(bx0, by0, bw, bh, w, h);
-    var foreign = ref ? foreignByEmptyTable(ref, inside, hArr, sArr, vArr) : null;
+    var foreign = ref ? foreignByEmptyTable(ref, inside, hArr, sArr, vArr, !!(opts && opts.noLearn)) : null;
     var usedSnapshot = !!foreign;
     if (!foreign) {
+      var f1 = ballLooseness(), hueTol1 = BALL_FELT_HUE_TOLERANCE_DEG * f1;
+      var dark1 = looserRatio(BALL_DARK_V_RATIO, f1) * feltV, bright1 = looserRatio(BALL_BRIGHT_V_RATIO, f1) * feltV;
       foreign = new Uint8Array(n);
       for (i = 0; i < n; i++) {
         if (!inside[i]) continue;
@@ -3490,7 +3542,7 @@
         // of a glossy ball (stripes, the cue ball) reflect the green cloth
         // and can take on its hue, which used to leave only a striped
         // ball's coloured band as the detected shape - "not round".
-        if (hueDistance(hArr[i], feltH) > BALL_FELT_HUE_TOLERANCE_DEG || sArr[i] < BALL_MIN_SAT_FOR_FELT || vArr[i] < BALL_DARK_V_RATIO * feltV || vArr[i] > BALL_BRIGHT_V_RATIO * feltV) foreign[i] = 1;
+        if (hueDistance(hArr[i], feltH) > hueTol1 || sArr[i] < BALL_MIN_SAT_FOR_FELT || vArr[i] < dark1 || vArr[i] > bright1) foreign[i] = 1;
       }
     }
     return {
@@ -3900,6 +3952,73 @@
     persistSettings();
     applySettingsToInputs();
     logActivity("Keypad correction (" + kind.replace("_", " ") + ") - confirm passes now " + settings.ballConfirmPasses);
+  }
+
+  // ---- The sensitivity, seen: while the slider moves (and 8 s after),
+  // the picture shows in pink what differs from the empty felt at that
+  // sensitivity, with the balls it would see ----
+  var BALL_PREVIEW_MS = 8000;
+  var ballPreview = { until: 0, at: 0, sample: null, inv: null };
+  var ballPreviewCanvas = document.createElement("canvas");
+  var ballPreviewCtx = ballPreviewCanvas.getContext("2d");
+  function refreshBallPreview(force) {
+    var now = Date.now();
+    if (!force && now - ballPreview.at < 400) return;
+    ballPreview.at = now;
+    ballPreview.sample = sampleTablePixelsFresh({ noLearn: true });
+    ballPreview.inv = ballPreview.sample ? detectBallsInFrame(ballPreview.sample) : null;
+    var hint = document.getElementById("ballSensitivityHint");
+    if (hint) {
+      hint.textContent = !ballPreview.sample ? "Calibrate the table first (Table tab) - the preview needs to know where the felt is."
+        : (ballPreview.inv ? ballPreview.inv.objectCount + " ball" + (ballPreview.inv.objectCount === 1 ? "" : "s") + " seen at " + settings.ballSensitivity + (ballPreview.inv.cuePresent ? " + the cue ball" : "") : "") +
+          (ballPreview.sample.usedSnapshot ? " - compared with the empty-room snapshot" : " - no snapshot that fits: compared with the felt's colour");
+    }
+  }
+  function drawBallPreview() {
+    if (Date.now() > ballPreview.until) return false;
+    refreshBallPreview(false);
+    var smp = ballPreview.sample;
+    if (!smp) return false;
+    ballPreviewCanvas.width = smp.w;
+    ballPreviewCanvas.height = smp.h;
+    var img = ballPreviewCtx.createImageData(smp.w, smp.h), d = img.data;
+    for (var i = 0; i < smp.foreign.length; i++) {
+      if (!smp.inside[i] || !smp.foreign[i]) continue;
+      d[i * 4] = 255; d[i * 4 + 1] = 40; d[i * 4 + 2] = 200; d[i * 4 + 3] = 150;
+    }
+    ballPreviewCtx.putImageData(img, 0, 0);
+    var o0 = videoToOverlay(smp.bx0, smp.by0), o1 = videoToOverlay(smp.bx0 + smp.w / smp.scale, smp.by0 + smp.h / smp.scale);
+    overlayCtx.drawImage(ballPreviewCanvas, o0.x, o0.y, o1.x - o0.x, o1.y - o0.y);
+    if (ballPreview.inv) {
+      overlayCtx.save();
+      overlayCtx.lineWidth = 3;
+      ballPreview.inv.balls.forEach(function (b) {
+        if (b.kind === "rejected") return;
+        var p = videoToOverlay(b.x, b.y);
+        var r = Math.max(6, b.r * overlayEl.width / Math.max(1, videoEl.videoWidth || 1) + 3);
+        overlayCtx.strokeStyle = b.kind === "cue" ? "#ffffff" : "#ffd166";
+        overlayCtx.beginPath();
+        overlayCtx.arc(p.x, p.y, r, 0, Math.PI * 2);
+        overlayCtx.stroke();
+      });
+      var label = "Sensitivity " + settings.ballSensitivity + ": " + ballPreview.inv.objectCount + " ball" + (ballPreview.inv.objectCount === 1 ? "" : "s") + (ballPreview.inv.cuePresent ? " + cue ball" : "");
+      overlayCtx.font = "bold " + Math.max(18, Math.round(overlayEl.width / 32)) + "px sans-serif";
+      var lw = overlayCtx.measureText(label).width, lh = Math.max(26, Math.round(overlayEl.width / 22));
+      overlayCtx.fillStyle = "rgba(0,0,0,0.7)";
+      overlayCtx.fillRect((overlayEl.width - lw) / 2 - 12, overlayEl.height - lh - 10, lw + 24, lh);
+      overlayCtx.fillStyle = "#ff8be0";
+      overlayCtx.textBaseline = "middle";
+      overlayCtx.fillText(label, (overlayEl.width - lw) / 2, overlayEl.height - 10 - lh / 2);
+      overlayCtx.restore();
+    }
+    return true;
+  }
+  // the slider moved: show it now, even between detection passes
+  function showBallPreviewNow() {
+    ballPreview.until = Date.now() + BALL_PREVIEW_MS;
+    refreshBallPreview(true);
+    overlayCtx.clearRect(0, 0, overlayEl.width, overlayEl.height);
+    drawBallPreview();
   }
 
   function drawBallDebug() {
@@ -4779,6 +4898,12 @@
     runPass: runBallPass,
     reset: resetBallTracking,
     takeEmptySnapshot: function (source) { return captureEmptyRoom(source || videoEl); },
+    // what the sensitivity preview last saw
+    preview: function () {
+      var smp = ballPreview.sample, inv = ballPreview.inv, inside = 0, foreign = 0;
+      if (smp) for (var i = 0; i < smp.foreign.length; i++) if (smp.inside[i]) { inside++; if (smp.foreign[i]) foreign++; }
+      return { usedSnapshot: !!(smp && smp.usedSnapshot), objectCount: inv ? inv.objectCount : null, cuePresent: !!(inv && inv.cuePresent), foreignFraction: inside ? foreign / inside : null };
+    },
     settings: settings,
     countBallCores: countBallCores
   };
@@ -8269,6 +8394,7 @@
 
   function drawOverlay(keypoints, analysis, matchLabel) {
     overlayCtx.clearRect(0, 0, overlayEl.width, overlayEl.height);
+    drawBallPreview();
     if (calibrating) drawCalibrationTaps();
     if (!settings.debugOverlay) {
       // The Table tab always shows what the calibration came out as, so

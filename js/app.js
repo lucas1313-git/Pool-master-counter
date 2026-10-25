@@ -31345,6 +31345,7 @@
     { key: "bendExitAngle", id: "capture-bend-exit", kind: "float", def: 20, help: "players.cameraBendExitHelpText" },
     { key: "railDistanceInches", id: "capture-rail-distance", kind: "float", def: 30, help: "players.cameraRailDistanceHelpText" },
     { key: "ballConfirmPasses", id: "capture-ball-confirm", kind: "int", def: 3, help: "players.cameraBallConfirmHelpText" },
+    { key: "ballSensitivity", id: "capture-ball-sensitivity", kind: "int", def: 5, help: "players.cameraBallSensitivityHelpText" },
     { key: "cueDetectionEnabled", id: "capture-cue-detection", kind: "bool", def: true, help: "players.cameraCueDetectionHelpText" },
     { key: "walkingPathsEnabled", id: "capture-walking-paths", kind: "bool", def: true, help: "players.cameraWalkingPathsHelpText" },
     { key: "zoom", id: "capture-zoom", kind: "float", def: 1, help: "players.cameraZoomHelpText" },

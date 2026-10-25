@@ -65,3 +65,11 @@ Not part of the app - helpers for testing and for running this machine's own cop
   exactly and back to the original when undone, and Zoom / "Camera mounted upside down" set in
   the scoreboard's Capture Settings reaching the camera page. `node tests/probe_camera_zoom.js
   http://localhost:4235/` against a test server (`HOME=tests/tmphome PORT=4235 node server/server.js`).
+- `probe_ball_sensitivity.js` - ball detection sensitivity against the empty-room snapshot, on a
+  synthetic table (green felt under a lamp, corners under half as bright): the snapshot taken from
+  the empty table, then the camera page reopened on the table with a red ball, the cue ball and a
+  ball of the felt's own colour 30% darker. At 5 the red and cue balls; at 10 the dark one too and
+  no false ball in the dark corners (the snapshot knows the lighting); at 1 the red ball still; the
+  pink preview; the slider right under the picture; the setting kept; the scoreboard field.
+  `node tests/probe_ball_sensitivity.js http://localhost:4235/ [screenshot dir]` against a test
+  server (`HOME=tests/tmphome PORT=4235 node server/server.js`).

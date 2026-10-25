@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261024c">
+<link rel="stylesheet" href="css/style.css?v=20261024d">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -555,6 +555,11 @@
               <label for="capture-ball-confirm" data-i18n="players.cameraBallConfirm">Still passes before a pocketed ball counts</label>
               <input type="number" id="capture-ball-confirm" min="2" max="6" step="1" value="3">
               <button type="button" id="btn-capture-ball-confirm-help" class="format-info-btn" data-i18n-aria-label="players.cameraBallConfirmHelpAria" aria-label="What does Still passes before a pocketed ball counts do?">❓</button>
+            </div>
+            <div class="row capture-setting-row">
+              <label for="capture-ball-sensitivity" data-i18n="players.cameraBallSensitivity">Ball detection sensitivity (1 to 10)</label>
+              <input type="number" id="capture-ball-sensitivity" min="1" max="10" step="1" value="5">
+              <button type="button" id="btn-capture-ball-sensitivity-help" class="format-info-btn" data-i18n-aria-label="players.cameraBallSensitivityHelpAria" aria-label="What does Ball detection sensitivity do?">❓</button>
             </div>
           </fieldset>
         </div>
@@ -2576,8 +2581,8 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20261024c"></script>
-<script src="js/camera-client.js?v=20261024c"></script>
-<script src="js/voice.js?v=20261024c"></script>
+<script src="js/app.js?v=20261024d"></script>
+<script src="js/camera-client.js?v=20261024d"></script>
+<script src="js/voice.js?v=20261024d"></script>
 </body>
 </html>

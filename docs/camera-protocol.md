@@ -100,7 +100,7 @@ Send on connect and on every change.
 | `enroll-result` | `ok`, `reason`, `undone`, `player_name`, `kind`, `total` | the answer to a number-pad press (see `enroll-press`): a sound and a short notice. |
 | `enroll-pressed` | `player_name`, `kind` (`identify`/`shooting`) | any Identify / Shooting sample however it was taken: that player's score card border flashes (once for seen, twice for shooting). |
 | `enrollment-updated` | `player_name` | a "+" by that player's camera icon for 4 s - fresh samples just landed. |
-| `camera-settings-state` | `settings: { key: value }` | what the app is using, shown in Visual Scoring > Capture Settings. Keys the scoreboard knows: `matchThreshold`, `debounceSec`, `consecutiveFrames`, `bendEnterAngle`, `bendExitAngle`, `railDistanceInches`, `ballConfirmPasses`, `cueDetectionEnabled`, `walkingPathsEnabled`, `zoom` (1-3, centred), `flip180` (camera mounted upside down). Send what applies. |
+| `camera-settings-state` | `settings: { key: value }` | what the app is using, shown in Visual Scoring > Capture Settings. Keys the scoreboard knows: `matchThreshold`, `debounceSec`, `consecutiveFrames`, `bendEnterAngle`, `bendExitAngle`, `railDistanceInches`, `ballConfirmPasses`, `cueDetectionEnabled`, `walkingPathsEnabled`, `zoom` (1-3, centred), `flip180` (camera mounted upside down), `ballSensitivity` (1-10, how different from the empty felt a ball must be; 5 standard). Send what applies. |
 | `remote-camera-list` | `devices: [{ deviceId, label }]`, `currentDeviceId` | the camera picker in Visual Scoring > Select Camera. Send when the camera starts. |
 | `idle-states` | `idle: [names]` | older: who's seated and recognized - only used when no `player-states` arrive. |
 
