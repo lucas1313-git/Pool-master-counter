@@ -87,7 +87,11 @@ Not part of the app - helpers for testing and for running this machine's own cop
   crop zoom; parts sent to the computer and a new file every 5 s here (each a real video, ffprobe);
   "mark" / "finish" said on the scoreboard (the recording tab in the background) make a cue named
   [player]-[game]-[position]-[duration]-[date]-[time]-cued; cues.html lists it and plays it from
-  the recording; an ffmpeg clip about as long; "mark" with no recording says so.
+  the recording; "mark" with no recording says so. The cue viewer (js/cue-viewer.js) on the
+  recording page while it records: the cue plays from the file still being written, its start and
+  end nudged / set at the playhead and saved (the name's length and time follow), exported on the
+  spot (cut, downloaded, kept in Clips, about as long as set), a cue added by hand; then the cues
+  page's same viewer plays it from its set start.
   `node tests/probe_recorder.js http://localhost:4235/` against a test server
   (`HOME=tests/tmphome PORT=4235 node server/server.js`).
 - `probe_out_of_view.js` - out of view: a named player who walks out of the picture keeps a tag at

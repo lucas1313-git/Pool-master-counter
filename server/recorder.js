@@ -130,9 +130,12 @@ function piecesFor(from, to) {
   dirs.forEach(function (id) {
     var x = loadSession(id);
     if (!x) return;
-    (x.s.parts || []).forEach(function (p) {
-      if (!p.startedAt || !p.endedAt || p.endedAt <= from || p.startedAt >= to) return;
-      pieces.push({ file: path.join(x.dir, p.file), at: p.startedAt, from: Math.max(0, (from - p.startedAt) / 1000), to: (Math.min(to, p.endedAt) - p.startedAt) / 1000 });
+    var parts = (x.s.parts || []).slice().sort(function (a, b) { return a.n - b.n; });
+    parts.forEach(function (p, i) {
+      // (the part still being recorded: up to now - ffmpeg reads what's there)
+      var end = p.endedAt || (!x.s.endedAt && i === parts.length - 1 ? Date.now() : null);
+      if (!p.startedAt || !end || end <= from || p.startedAt >= to) return;
+      pieces.push({ file: path.join(x.dir, p.file), at: p.startedAt, from: Math.max(0, (from - p.startedAt) / 1000), to: (Math.min(to, end) - p.startedAt) / 1000 });
     });
   });
   pieces.sort(function (a, b) { return a.at - b.at; });
@@ -255,11 +258,11 @@ function attachRecorderRoutes(app) {
     sendJson(res, 200, { cues: cues, ffmpeg: !!ffmpeg() });
   });
 
-  var CUE_FIELDS = ["name", "player", "gameType", "gameLabel", "position", "note", "startedAt", "markedAt", "endedAt", "duration", "source", "session"];
+  var CUE_FIELDS = ["name", "player", "gameType", "gameLabel", "position", "note", "startedAt", "markedAt", "endedAt", "duration", "source", "session", "customName"];
   function pickCue(b, into) {
     CUE_FIELDS.forEach(function (k) {
       if (b[k] === undefined) return;
-      into[k] = typeof b[k] === "number" ? b[k] : b[k] === null ? null : String(b[k]).slice(0, 300);
+      into[k] = typeof b[k] === "number" || typeof b[k] === "boolean" ? b[k] : b[k] === null ? null : String(b[k]).slice(0, 300);
     });
     return into;
   }

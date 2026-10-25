@@ -119,9 +119,54 @@ function makeY4m(file) {
   check("...named for Luigi and the score as they stood at the cue's start, with its start time (not the mark's)", cue && cue.name.indexOf("Luigi-") === 0 && cue.name.indexOf(startStamp + "-cued") !== -1, { name: cue && cue.name, startStamp });
   check("...starting 20 s back - or at the recording's start, here 3 s back", cue && cue.markedAt - cue.startedAt >= 2500 && cue.markedAt - cue.startedAt <= 4500 && cue.endedAt - cue.markedAt >= 6000, cue);
 
-  // the files: several parts, the finished ones indexed
-  await sleep(3000);
+  // the cue viewer on the recording page, while it still records
   await rec.bringToFront();
+  const dl = path.join(__dirname, "tmphome", "downloads");
+  fs.rmSync(dl, { recursive: true, force: true }); fs.mkdirSync(dl, { recursive: true });
+  const cdp = await rec.target().createCDPSession();
+  await cdp.send("Browser.setDownloadBehavior", { behavior: "allow", downloadPath: dl }).catch(() => cdp.send("Page.setDownloadBehavior", { behavior: "allow", downloadPath: dl }));
+  await rec.evaluate(() => window.PMCRecorder.viewer.refresh());
+  await sleep(500);
+  const vRow = await rec.evaluate(() => { const r = document.querySelector("#cueViewer .cv-rows tr[data-id]"); return r ? r.textContent : null; });
+  check("the recording page's own cue viewer lists the cue, while recording", vRow && vRow.indexOf("Luigi-8-Ball-game 4 of raceto 5-") === 0, vRow);
+  await rec.evaluate(() => document.querySelector("#cueViewer .cv-rows tr[data-id] td.n").click());
+  let wallLive = null;
+  for (let i = 0; i < 80; i++) { await sleep(250); wallLive = await rec.evaluate(() => { const v = document.querySelector("#cueViewer video"); return v.currentTime > 0.2 ? window.PMCRecorder.viewer.wallTime() : null; }); if (wallLive) break; }
+  check("...and plays it from the recording still being made", wallLive && wallLive >= cue.startedAt - 1500 && wallLive <= cue.endedAt + 1000, { wallLive, start: cue.startedAt, end: cue.endedAt });
+  const click = (a) => rec.evaluate((a) => document.querySelector('#cueViewer [data-a="' + a + '"]').click(), a);
+  await click("s+1"); await click("s+1"); await click("e-1");
+  const edited = await rec.evaluate(() => { const st = window.PMCRecorder.viewer.state(); return { dirty: st.dirty, s: st.sel.startedAt, e: st.sel.endedAt, name: st.sel.name, shown: document.querySelector("#cueViewer .cv-name").textContent }; });
+  check("set by hand: start +2 s, end -1 s - the name's length and time follow, \"not saved\" shown", edited.dirty && edited.s === cue.startedAt + 2000 && edited.e === cue.endedAt - 1000 && /not saved/.test(edited.shown) && edited.name !== cue.name, edited);
+  await click("save");
+  await sleep(800);
+  let stored = (await (await fetch(BASE + "api/rec/cues")).json()).cues.find((c) => c.id === cue.id);
+  check("💾 saved on the computer", stored.startedAt === cue.startedAt + 2000 && stored.endedAt === cue.endedAt - 1000 && stored.name === edited.name, stored);
+  // the start at the playhead
+  await rec.evaluate((t) => window.PMCRecorder.viewer.seekTo(t, null, false), cue.startedAt + 3000);
+  await sleep(1500);
+  const here = await rec.evaluate(() => window.PMCRecorder.viewer.wallTime());
+  await click("s-here");
+  const atHere = await rec.evaluate(() => window.PMCRecorder.viewer.state().sel.startedAt);
+  check("⟦ Set start here: the start at the playhead", here && Math.abs(atHere - here) < 300, { here, atHere });
+  // export on the spot: saved, cut, downloaded
+  await click("export");
+  let exported = null;
+  for (let i = 0; i < 60 && !exported; i++) { await sleep(500); const f = fs.readdirSync(dl).filter((n) => /\.mp4$/.test(n)); if (f.length) exported = f[0]; }
+  stored = (await (await fetch(BASE + "api/rec/cues")).json()).cues.find((c) => c.id === cue.id);
+  const want = (stored.endedAt - stored.startedAt) / 1000;
+  const ed = exported ? ffprobeDuration(path.join(dl, exported)) : NaN;
+  const exportStatus = await rec.evaluate(() => document.querySelector("#cueViewer .cv-status").textContent);
+  check("⬇ Export while recording: saved, cut and downloaded - about as long as the set cue (" + exported + ")", exported && stored.startedAt === atHere && Math.abs(ed - want) < 2.5, { exported, ed, want, exportStatus });
+  check("...and kept in the Clips folder", stored.clip && fs.existsSync(path.join(ROOT, "Clips", stored.clip)), stored.clip);
+  // a cue of your own
+  const before = (await (await fetch(BASE + "api/rec/cues")).json()).cues.length;
+  await click("new");
+  await sleep(1200);
+  const after = (await (await fetch(BASE + "api/rec/cues")).json()).cues;
+  check("＋ New cue here: a cue of your own at the playhead", after.length === before + 1 && after.some((c) => c.source === "by hand"), after.length);
+
+  // the files: several parts, the finished ones indexed
+  await sleep(1000);
   await rec.click("#recordBtn");
   await sleep(4000);
   const sessions = await (await fetch(BASE + "api/rec/sessions")).json();
@@ -132,25 +177,19 @@ function makeY4m(file) {
   check("a part is a real video of about 5 s", d1 > 3.5 && d1 < 7, d1);
   check("the recording stopped", !!s.endedAt);
 
-  // the cues page
+  // the cues page: the same viewer, and the recordings' timelines
   const cp = await browser.newPage();
   cp.on("pageerror", (e) => errors.push("cues: " + e.message));
   await cp.goto(BASE + "cues.html", { waitUntil: "domcontentloaded" });
   await sleep(1500);
-  const row = await cp.evaluate(() => document.querySelector("#cueRows tr td.name") && document.querySelector("#cueRows tr td.name").textContent);
-  check("the cues page lists it", row && row.indexOf("Luigi-8-Ball-game 4 of raceto 5-") === 0, row);
-  await cp.evaluate(() => document.querySelector('#cueRows button[data-act="play"]').click());
+  const rows = await cp.evaluate(() => Array.from(document.querySelectorAll(".cv-rows tr[data-id] td.n")).map((td) => td.textContent));
+  check("the cues page lists them", rows.some((r) => r === stored.name), rows);
+  await cp.evaluate((id) => document.querySelector('.cv-rows tr[data-id="' + id + '"] td.n').click(), cue.id);
   let wall = null;
-  for (let i = 0; i < 80; i++) { await sleep(250); wall = await cp.evaluate(() => { const v = document.getElementById("player"); return v.currentTime > 0.2 ? window.PMCCues.wallTime() : null; }); if (wall) break; }
-  check("▶ plays it from the recording, from the cue's start", wall && wall >= cue.startedAt - 1500 && wall <= cue.endedAt, { wall, start: cue.startedAt, end: cue.endedAt });
-  const timeline = await cp.evaluate(() => document.querySelectorAll(".session .timeline .cue").length);
-  check("the recording's timeline shows the cue", timeline >= 1, timeline);
-
-  // a clip
-  const clip = await (await fetch(BASE + "api/rec/cues/" + cue.id + "/clip", { method: "POST" })).json();
-  const clipFile = path.join(ROOT, "Clips", clip.file || "-");
-  const cd = ffprobeDuration(clipFile);
-  check("✂ a clip of the cue (" + (clip.file || clip.error) + "), about as long", fs.existsSync(clipFile) && Math.abs(cd - (cue.endedAt - cue.startedAt) / 1000) < 3, { cd, want: (cue.endedAt - cue.startedAt) / 1000, clip });
+  for (let i = 0; i < 80; i++) { await sleep(250); wall = await cp.evaluate(() => { const v = document.querySelector(".cv video"); return v.currentTime > 0.2 ? window.PMCCues.wallTime() : null; }); if (wall) break; }
+  check("▶ plays it from the recording, from its (set) start", wall && wall >= stored.startedAt - 1500 && wall <= stored.endedAt, { wall, start: stored.startedAt, end: stored.endedAt });
+  const timeline = await cp.evaluate(() => document.querySelectorAll(".cv-session .cv-tl .c").length);
+  check("the recording's timeline shows the cues", timeline >= 2, timeline);
 
   check("no page errors", errors.length === 0, errors);
   await browser.close();

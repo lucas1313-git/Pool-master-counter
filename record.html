@@ -97,8 +97,8 @@
   <div class="dim">Mark (M, or say "mark" on the scoreboard) right after a good shot: the cue starts <b id="preRollText">20</b> s before the mark - the shot's beginning - and is named as things stood then. Finish (F, or "finish") ends it. Each one is kept as a cue - see 🎞️ Cues.</div>
 
   <div class="panel">
-    <h2>Last cues</h2>
-    <ul class="cues" id="cueList"><li class="dim">None yet.</li></ul>
+    <h2>🎞️ Cues - watch, set right, export (while it records)</h2>
+    <div id="cueViewer"></div>
   </div>
 
   <div class="panel">
@@ -120,6 +120,7 @@
 </main>
 <div class="toast" id="toast" hidden></div>
 
+<script src="js/cue-viewer.js?v=20261025a"></script>
 <script>
 (function () {
   "use strict";
@@ -414,7 +415,8 @@
   $("recordBtn").addEventListener("click", function () { if (rec.on) stopRecording(); else startRecording(); });
 
   // ---- Cues: Mark ... Finish ----
-  var openCue = null, recentCues = [];
+  var openCue = null;
+  var viewer = window.PMCCueViewer ? window.PMCCueViewer.mount($("cueViewer"), { compact: true }) : null;
   var board = null; // what the scoreboard last said: { player, gameType, gameLabel, position, at }
   // ...and what it said over the last few minutes: a cue is named as things
   // stood at its start (the shot, 20 s before the mark) - not as they stand
@@ -439,9 +441,7 @@
   function cueTitle(c, end) {
     return [c.player || "Table", c.gameLabel, c.position, durationText(end - c.startedAt)].filter(Boolean).join("-");
   }
-  function cueName(c) {
-    return [c.player || "Table", c.gameLabel, c.position, durationText(c.endedAt - c.startedAt), stamp(c.startedAt), "cued"].filter(Boolean).join("-");
-  }
+  function cueName(c) { return window.PMCCueViewer.nameFor(c); }
   function mark(source) {
     if (!rec.on) { toast("Not recording - start the recording first"); return { ok: false, text: "The recording isn't running" }; }
     if (openCue) finishCue("a new mark");
@@ -449,7 +449,7 @@
     var b = board && now - board.at < 15000 ? boardAt(startedAt) || board : {};
     var cue = { markedAt: now, startedAt: startedAt, player: b.player || "", gameType: b.gameType || "", gameLabel: b.gameLabel || "", position: b.position || "", source: source || "button", session: rec.id };
     openCue = cue;
-    api("/api/rec/cues", cue).then(function (saved) { cue.id = saved.id; }).catch(function (e) { log("Couldn't keep the mark: " + e.message); });
+    api("/api/rec/cues", cue).then(function (saved) { cue.id = saved.id; if (viewer) viewer.refresh(); }).catch(function (e) { log("Couldn't keep the mark: " + e.message); });
     $("cueBadge").hidden = false;
     renderRec();
     beep(1320, 90); setTimeout(function () { beep(1320, 90); }, 140);
@@ -467,25 +467,15 @@
     var save = function () {
       return api("/api/rec/cues/" + cue.id, { endedAt: cue.endedAt, duration: cue.duration, name: cue.name, note: why || "" }, "PATCH");
     };
-    (cue.id ? save() : new Promise(function (ok) { setTimeout(ok, 800); }).then(save)).catch(function (e) { log("Couldn't finish the cue: " + e.message); });
-    recentCues.unshift(cue);
-    renderCues();
+    (cue.id ? save() : new Promise(function (ok) { setTimeout(ok, 800); }).then(save))
+      .then(function () { if (viewer) viewer.refresh(); })
+      .catch(function (e) { log("Couldn't finish the cue: " + e.message); });
     $("cueBadge").hidden = true;
     renderRec();
     beep(660, 160);
     toast("✔ " + cue.name);
     log("Cue: " + cue.name + (why ? " (" + why + ")" : ""));
     return { ok: true, text: "Finished: " + durationText(cue.duration) };
-  }
-  function renderCues() {
-    var ul = $("cueList");
-    ul.innerHTML = "";
-    if (!recentCues.length) { ul.innerHTML = '<li class="dim">None yet.</li>'; return; }
-    recentCues.slice(0, 8).forEach(function (c) {
-      var li = document.createElement("li");
-      li.textContent = c.name;
-      ul.appendChild(li);
-    });
   }
   $("markBtn").addEventListener("click", function () { mark("button"); });
   $("finishBtn").addEventListener("click", function () { finishCue(); });
@@ -540,7 +530,7 @@
   startCamera().then(function () { if (settings.autoStart) startRecording(); }).catch(function () {});
 
   // (tests)
-  window.PMCRecorder = { mark: mark, finish: finishCue, start: startRecording, stop: stopRecording, setPartMs: function (ms) { partMsForTests = ms; }, state: function () { return { on: rec.on, id: rec.id, part: rec.part, openCue: openCue, board: board, settings: settings, cropSupported: cropSupported }; } };
+  window.PMCRecorder = { viewer: viewer, mark: mark, finish: finishCue, start: startRecording, stop: stopRecording, setPartMs: function (ms) { partMsForTests = ms; }, state: function () { return { on: rec.on, id: rec.id, part: rec.part, openCue: openCue, board: board, settings: settings, cropSupported: cropSupported }; } };
 })();
 </script>
 </body>
