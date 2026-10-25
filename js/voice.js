@@ -39,6 +39,9 @@
       "Add one point to Luc", "Add 3 points to Luigi", "Take one point from Luc", "Add one point",
       "Luigi wins the game with 5 balls left on the table", "5 balls left", "Nice game", "Undo", "Yes / No"
     ] },
+    { title: "voice.section.recording", note: "voice.note.recording", lines: [
+      "Mark", "Finish"
+    ] },
     { title: "voice.section.questions", note: "voice.note.questions", lines: [
       "What is Luigi's Q-score today?", "What's the score?", "Help"
     ] }
@@ -296,6 +299,9 @@
   var RULES = [
     // --- help, questions, the win window ---
     [/^(?:help|commands|voice commands|what can i say|show (?:me )?(?:the )?(?:voice )?(?:commands|sentences|sheet))$/, function () { return { type: "help" }; }],
+    // --- the recording page's cues ---
+    [/^(?:mark|mark (?:it|that|this|the shot)|cue (?:it|that)|start (?:a |the )?(?:mark|cue|clip)|bookmark(?: (?:it|that|this))?)$/, function () { return { type: "recMark" }; }],
+    [/^(?:finish|finish (?:it|that|the mark|the cue|the clip)|end (?:the )?(?:mark|cue|clip)|stop (?:the )?(?:mark|cue|clip)|cut(?: it| that)?)$/, function () { return { type: "recFinish" }; }],
     [/^(?:(?:what is|whats|tell me|say|give me|read)(?: me)?(?: the)? )?scores?$/, function () { return { type: "score" }; }],
     [/^(?:nice|nice game|good game|confirm|register(?: the)? game|ok|okay|done|close|close it|thats it|great game)$/, function () { return { type: "confirmWin" }; }],
     [/^(?:undo|cancel|undo that|cancel that|take it back|undo the win|cancel the win)$/, function () { return { type: "undoWin" }; }],

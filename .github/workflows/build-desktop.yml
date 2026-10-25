@@ -17,6 +17,8 @@ on:
     paths:
       - "index.html"
       - "camera.html"
+      - "record.html"
+      - "cues.html"
       - "manifest.json"
       - "css/**"
       - "js/**"

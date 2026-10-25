@@ -27,7 +27,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   check("group 1: Quick Game, Welcome New Player, Game Setup Wizard, all primary", JSON.stringify(g["header-group-start"].items) === JSON.stringify(["⚡ Quick Game", "👋 Welcome New Player", "🧙 Game Setup Wizard"]) && g["header-group-start"].primary.every(Boolean), g["header-group-start"]);
   check("group 2: Tournament, League, Multi Tables", JSON.stringify(g["header-group-events"].items) === JSON.stringify(["🏆 Tournament", "🏆 League", "🎯 Multi Tables"]), g["header-group-events"].items);
   check("group 3: Leaderboard, Global Stats", JSON.stringify(g["header-group-stats"].items) === JSON.stringify(["🏆 Leaderboard", "🌐 Global Stats"]), g["header-group-stats"].items);
-  check("group 4: Contact Sheet, Set Up Camera, Help", JSON.stringify(g["header-group-people"].items) === JSON.stringify(["📇 Contact Sheet", "📷 Set Up Camera", "❓ Help"]), g["header-group-people"].items);
+  check("group 4: Contact Sheet, Set Up Camera, Record, Help", JSON.stringify(g["header-group-people"].items) === JSON.stringify(["📇 Contact Sheet", "📷 Set Up Camera", "🎬 Record", "❓ Help"]), g["header-group-people"].items);
   check("all four bordered", info.groups.every((x) => x.border === "solid"));
   check("line 2: Contact Sheet + Help, then Theme, then Language", JSON.stringify(info.lines[1]) === JSON.stringify(["header-group-people", "theme-select-row", "language-select-row"]), info.lines[1]);
   for (const w of [1280, 1024, 768, 390]) {

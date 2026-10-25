@@ -81,3 +81,12 @@ Not part of the app - helpers for testing and for running this machine's own cop
   6 pockets; the tags drawn on the picture; forgetting the snapshot forgets them.
   `node tests/probe_room_tags.js http://localhost:4235/ <room photo> [screenshot dir]` against a
   test server (`HOME=tests/tmphome PORT=4235 node server/server.js`).
+- `probe_recorder.js` - the recording page and its cues end to end: a fake camera (a still test
+  picture) in a headless browser, the scoreboard and record.html in two tabs (BroadcastChannel),
+  the server keeping the video in `<test HOME>/Movies/Pool Master Counter`: the recording's own
+  crop zoom; parts sent to the computer and a new file every 5 s here (each a real video, ffprobe);
+  "mark" / "finish" said on the scoreboard (the recording tab in the background) make a cue named
+  [player]-[game]-[position]-[duration]-[date]-[time]-cued; cues.html lists it and plays it from
+  the recording; an ffmpeg clip about as long; "mark" with no recording says so.
+  `node tests/probe_recorder.js http://localhost:4235/` against a test server
+  (`HOME=tests/tmphome PORT=4235 node server/server.js`).

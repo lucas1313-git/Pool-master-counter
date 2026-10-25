@@ -1444,5 +1444,13 @@
   "players.cameraFlip180HelpText": "適合倒轉吊住嘅鏡頭(喺天花板、層架底):將畫面轉返正,用嚟認球員、認波同埋喺螢幕顯示。\n\n檯嘅校準會自動轉換;空房間快照要重新影過。",
   "players.cameraBallSensitivity": "認波靈敏度(1 至 10)",
   "players.cameraBallSensitivityHelpAria": "「認波靈敏度」有咩用?",
-  "players.cameraBallSensitivityHelpText": "一個位要同空檯呢有幾唔同先當係一粒波。有空房間快照(鏡頭頁面嘅「檯」分頁)嘅話,檯呢每一點都同快照入面同一點比較 - 快照嘅檯呢當係空嘅,連埋佢本身嘅燈光同陰影。冇快照就同檯呢嘅單一顏色比較。\n\n1 = 淨係好明顯嘅分別先算:少啲假波(陰影、粉、反光),但顏色近檯呢嘅波可能認唔到。10 = 少少分別都算:綠檯上嘅綠波都認到,但陰影都可能當係波。5 係標準。\n\n喺鏡頭頁面(「檯」分頁)拉個滑桿,畫面會即時顯示結果。"
+  "players.cameraBallSensitivityHelpText": "一個位要同空檯呢有幾唔同先當係一粒波。有空房間快照(鏡頭頁面嘅「檯」分頁)嘅話,檯呢每一點都同快照入面同一點比較 - 快照嘅檯呢當係空嘅,連埋佢本身嘅燈光同陰影。冇快照就同檯呢嘅單一顏色比較。\n\n1 = 淨係好明顯嘅分別先算:少啲假波(陰影、粉、反光),但顏色近檯呢嘅波可能認唔到。10 = 少少分別都算:綠檯上嘅綠波都認到,但陰影都可能當係波。5 係標準。\n\n喺鏡頭頁面(「檯」分頁)拉個滑桿,畫面會即時顯示結果。",
+  "header.record": "🎬 錄影",
+  "voice.section.recording": "錄影",
+  "voice.note.recording": "開住錄影頁面(🎬 錄影,同一個瀏覽器):Mark 由而家之前少少開始一個標記(20 秒,喺嗰頁設定),Finish 結束佢 - 睇 🎞️ 標記。",
+  "voice.err.noRecorder": "錄影頁面冇開 - 🎬 錄影",
+  "voice.err.notRecording": "錄影頁面冇喺度錄緊",
+  "voice.err.nothingMarked": "冇標記可以結束",
+  "voice.done.marked": "已標記",
+  "voice.done.finished": "完成 - 標記已保存"
 }

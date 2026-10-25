@@ -1444,5 +1444,13 @@
   "players.cameraFlip180HelpText": "Para sa camerang nakabitin nang baligtad (sa kisame, sa ilalim ng istante): itinutuwid ang larawan nito, para sa pagkilala ng player at bola at sa screen.\n\nKusang kinokonvert ang calibration ng mesa; kailangang kunan ulit ang snapshot ng walang-taong kuwarto.",
   "players.cameraBallSensitivity": "Sensitivity sa pagkilala ng bola (1 hanggang 10)",
   "players.cameraBallSensitivityHelpAria": "Ano ang ginagawa ng sensitivity sa pagkilala ng bola?",
-  "players.cameraBallSensitivityHelpText": "Gaano dapat kaiba ang isang bahagi sa walang-lamang felt para ituring na bola. Kapag may snapshot ng walang-taong kuwarto (camera page, tab na Table), ikinukumpara ang bawat bahagi ng tela sa parehong bahagi sa snapshot - itinuturing na walang laman ang felt nito, kasama ang sarili nitong ilaw at anino. Kung wala, sa iisang kulay ng felt.\n\n1 = malinaw na pagkakaiba lang ang bilang: mas kaunting maling bola (anino, chalk, sinag), pero maaaring hindi makita ang bolang kakulay ng felt. 10 = kahit kaunting pagkakaiba: nakikita ang berdeng bola sa berdeng felt, pero baka pati anino. 5 ang karaniwan.\n\nSa camera page (tab na Table), ipinapakita ng slider ang resulta nang live sa larawan."
+  "players.cameraBallSensitivityHelpText": "Gaano dapat kaiba ang isang bahagi sa walang-lamang felt para ituring na bola. Kapag may snapshot ng walang-taong kuwarto (camera page, tab na Table), ikinukumpara ang bawat bahagi ng tela sa parehong bahagi sa snapshot - itinuturing na walang laman ang felt nito, kasama ang sarili nitong ilaw at anino. Kung wala, sa iisang kulay ng felt.\n\n1 = malinaw na pagkakaiba lang ang bilang: mas kaunting maling bola (anino, chalk, sinag), pero maaaring hindi makita ang bolang kakulay ng felt. 10 = kahit kaunting pagkakaiba: nakikita ang berdeng bola sa berdeng felt, pero baka pati anino. 5 ang karaniwan.\n\nSa camera page (tab na Table), ipinapakita ng slider ang resulta nang live sa larawan.",
+  "header.record": "🎬 I-record",
+  "voice.section.recording": "Pagre-record",
+  "voice.note.recording": "Kapag bukas ang recording page (🎬 I-record, sa browser na ito): sinisimulan ng Mark ang isang cue kaunti bago ngayon (20 s, itinatakda sa page na iyon), tinatapos ito ng Finish - tingnan ang 🎞️ Mga cue.",
+  "voice.err.noRecorder": "Hindi bukas ang recording page - 🎬 I-record",
+  "voice.err.notRecording": "Hindi nagre-record ang recording page",
+  "voice.err.nothingMarked": "Walang naka-mark na tatapusin",
+  "voice.done.marked": "Na-mark",
+  "voice.done.finished": "Tapos - naitago ang cue"
 }

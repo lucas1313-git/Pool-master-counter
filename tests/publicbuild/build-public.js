@@ -13,11 +13,11 @@ const repo = path.resolve(process.argv[2]);
 const out = path.resolve(process.argv[3]);
 const esbuild = require(path.join(repo, "installer/node_modules/esbuild"));
 
-const ROOT_FILES = ["index.html", "camera.html", "manifest.json",
+const ROOT_FILES = ["index.html", "camera.html", "record.html", "cues.html", "manifest.json",
   "about.html", "about.fr.html", "about.es.html", "about.tl.html", "about.zh-yue.html"];
 const DIRS = ["css", "js", "languages", "icons", "camera", "data", "settings", "players", "rules", "docs/screenshots"];
 // source-only files inside the copied folders
-const SKIP = [/(^|\/)README\.md$/, /^camera\/models\/(osnet|dinov2|depth)\/convert\.py$/, /(^|\/)\.DS_Store$/];
+const SKIP = [/(^|\/)README\.md$/, /^camera\/models\/(osnet|dinov2|depth|segment)\/convert\.py$/, /(^|\/)\.DS_Store$/];
 const KEEP = [/^camera\/models\/(osnet|dinov2|depth)\/README\.md$/]; // model licence notes
 const VENDOR = [/^camera\/tfjs\.js$/, /^camera\/pose-detection\.js$/, /^camera\/models\//];
 

@@ -1,5 +1,6 @@
 var lan = require("./lan");
 var voiceRelay = require("./voice-relay");
+var recorder = require("./recorder");
 
 // The host's browser needs to know its own LAN-reachable address to build
 // a join URL/QR that a *different* device can actually use. It can't infer
@@ -26,6 +27,8 @@ var voiceRelay = require("./voice-relay");
 function attachApiRoutes(app, port, QRCode, getHttpsInfo) {
   // Voice commands from a Siri Shortcut - see voice-relay.js
   voiceRelay.attachVoiceRoutes(app);
+  // The recording page and its cues - see recorder.js
+  recorder.attachRecorderRoutes(app);
 
   app.get("/api/lan-info", function (req, res) {
     var httpsInfo = getHttpsInfo ? getHttpsInfo() : null;

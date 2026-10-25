@@ -1444,5 +1444,13 @@
   "players.cameraFlip180HelpText": "Para una cámara colgada al revés (del techo, bajo un estante): pone su imagen al derecho, para el reconocimiento de jugadores y bolas y en pantalla.\n\nLa calibración de la mesa se convierte sola; la foto de la sala vacía hay que tomarla de nuevo.",
   "players.cameraBallSensitivity": "Sensibilidad de detección de bolas (1 a 10)",
   "players.cameraBallSensitivityHelpAria": "¿Qué hace la sensibilidad de detección de bolas?",
-  "players.cameraBallSensitivityHelpText": "Cuánto debe diferir un punto del paño vacío para contar como bola. Con una foto de la sala vacía (página de la cámara, pestaña Mesa), cada punto del paño se compara con el mismo punto de la foto - su paño se toma como vacío, con sus propias luces y sombras. Sin foto, con el color único del paño.\n\n1 = solo cuentan las diferencias claras: menos bolas falsas (sombras, tiza, reflejos), pero una bola de color parecido al paño puede pasar desapercibida. 10 = la menor diferencia: se encuentra una bola verde sobre paño verde, pero quizá también una sombra. 5 es el valor estándar.\n\nEn la página de la cámara (pestaña Mesa) el control muestra el resultado en vivo sobre la imagen."
+  "players.cameraBallSensitivityHelpText": "Cuánto debe diferir un punto del paño vacío para contar como bola. Con una foto de la sala vacía (página de la cámara, pestaña Mesa), cada punto del paño se compara con el mismo punto de la foto - su paño se toma como vacío, con sus propias luces y sombras. Sin foto, con el color único del paño.\n\n1 = solo cuentan las diferencias claras: menos bolas falsas (sombras, tiza, reflejos), pero una bola de color parecido al paño puede pasar desapercibida. 10 = la menor diferencia: se encuentra una bola verde sobre paño verde, pero quizá también una sombra. 5 es el valor estándar.\n\nEn la página de la cámara (pestaña Mesa) el control muestra el resultado en vivo sobre la imagen.",
+  "header.record": "🎬 Grabar",
+  "voice.section.recording": "Grabación",
+  "voice.note.recording": "Con la página de grabación abierta (🎬 Grabar, en este navegador): Mark empieza una marca un poco antes de ahora (20 s, se ajusta en esa página), Finish la termina - ver 🎞️ Marcas.",
+  "voice.err.noRecorder": "La página de grabación no está abierta - 🎬 Grabar",
+  "voice.err.notRecording": "La página de grabación no está grabando",
+  "voice.err.nothingMarked": "No hay ninguna marca que terminar",
+  "voice.done.marked": "Marcado",
+  "voice.done.finished": "Terminado - la marca se guarda"
 }

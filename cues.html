@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pool Master Counter - Cues</title>
+<style>
+  :root { --bg: #1a0a0a; --panel: #241010; --accent: #e8b923; --text: #f6efe9; --text-dim: #c9a2a2; --border: #4a1e1e; --rec: #ff4d4d; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  header h1 { margin: 0; font-size: 1.3rem; color: var(--accent); }
+  header nav { display: flex; gap: 8px; flex-wrap: wrap; }
+  a.btn, button { font: inherit; border-radius: 10px; border: 1px solid var(--border); background: var(--panel); color: var(--text); padding: 6px 12px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; min-height: 36px; }
+  main { max-width: 1100px; margin: 0 auto; padding: 12px 16px 40px; }
+  .player { position: sticky; top: 0; z-index: 2; background: var(--bg); padding-bottom: 8px; }
+  video { width: 100%; max-height: 56vh; background: #000; border-radius: 12px; display: block; }
+  .now { font-weight: 800; color: var(--accent); margin: 6px 2px; min-height: 1.3em; overflow-wrap: anywhere; }
+  .tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 10px 0; }
+  input[type="search"] { font: inherit; flex: 1; min-width: 200px; background: #120606; color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+  .dim { color: var(--text-dim); font-size: 0.9rem; }
+  table { width: 100%; border-collapse: collapse; }
+  td, th { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  th { color: var(--text-dim); font-weight: 600; font-size: 0.85rem; }
+  td.name { font-weight: 700; overflow-wrap: anywhere; }
+  td.acts { white-space: nowrap; text-align: right; }
+  tr.open td.name { color: var(--rec); }
+  tr.playing td { background: rgba(232, 185, 35, 0.12); }
+  h2 { font-size: 1rem; color: var(--accent); margin: 22px 0 8px; }
+  .session { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; }
+  .timeline { position: relative; height: 34px; background: #120606; border-radius: 8px; margin-top: 8px; cursor: pointer; overflow: hidden; }
+  .timeline .part { position: absolute; top: 0; bottom: 0; border-right: 1px solid #3a1515; background: #2d1414; }
+  .timeline .cue { position: absolute; top: 4px; bottom: 4px; min-width: 4px; background: var(--accent); border-radius: 3px; opacity: 0.85; }
+  .timeline .head { position: absolute; top: 0; bottom: 0; width: 2px; background: #fff; }
+  .empty { padding: 20px 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🎞️ Cues</h1>
+  <nav>
+    <a class="btn" href="record.html" target="pmc-record">🎬 Recording</a>
+    <a class="btn" href="index.html">← Scoreboard</a>
+  </nav>
+</header>
+<main>
+  <div class="player">
+    <video id="player" controls playsinline></video>
+    <div class="now" id="now">Pick a cue to watch it.</div>
+  </div>
+  <div class="tools">
+    <input type="search" id="search" placeholder="Find a cue - player, game, date...">
+    <span class="dim" id="info"></span>
+  </div>
+  <table>
+    <thead><tr><th>Cue</th><th>When</th><th>Length</th><th></th></tr></thead>
+    <tbody id="cueRows"><tr><td colspan="4" class="dim empty">Loading...</td></tr></tbody>
+  </table>
+  <h2>Recordings</h2>
+  <div id="sessions" class="dim">Loading...</div>
+</main>
+<script>
+(function () {
+  "use strict";
+  // Every cue marked on the recording page (record.html), and the
+  // recordings themselves: a cue plays straight from the recording - from
+  // its start to its end, across files if it has to - and can be saved as
+  // a clip of its own (server/recorder.js, with ffmpeg). A recording's
+  // timeline shows its cues; a click on it plays from there.
+  var $ = function (id) { return document.getElementById(id); };
+  var cues = [], sessions = [], ffmpeg = false, folder = "";
+  var playing = null; // { session, partIndex, endAt, cueId }
+  var video = $("player");
+
+  function api(path, body, method) {
+    return fetch(path, { method: method || (body === undefined ? "GET" : "POST"), headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) })
+      .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || r.status); return j; }); });
+  }
+  function pad2(n) { return String(n).padStart(2, "0"); }
+  function when(t) { var d = new Date(t); return d.toLocaleDateString() + " " + pad2(d.getHours()) + ":" + pad2(d.getMinutes()) + ":" + pad2(d.getSeconds()); }
+  function len(ms) { if (!(ms >= 0)) return "-"; var s = Math.round(ms / 1000); return (s >= 3600 ? Math.floor(s / 3600) + ":" + pad2(Math.floor(s / 60) % 60) : Math.floor(s / 60)) + ":" + pad2(s % 60); }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function cueLabel(c) { return c.name || [c.player || "Table", c.gameLabel, c.position].filter(Boolean).join("-") + " (not finished)"; }
+
+  // the part of a recording that holds a moment (wall-clock ms)
+  function locate(t) {
+    for (var i = 0; i < sessions.length; i++) {
+      var s = sessions[i], parts = (s.parts || []).slice().sort(function (a, b) { return a.n - b.n; });
+      for (var j = 0; j < parts.length; j++) {
+        var p = parts[j], end = p.endedAt || (j === parts.length - 1 ? Date.now() : parts[j + 1].startedAt);
+        if (t >= p.startedAt && t < end) return { session: s, parts: parts, index: j, offset: (t - p.startedAt) / 1000 };
+      }
+    }
+    return null;
+  }
+  function playFrom(t, endAt, cueId, title) {
+    var at = locate(t);
+    if (!at) { $("now").textContent = "That moment isn't in any recording (was the recording running?)."; return; }
+    playing = { session: at.session, parts: at.parts, index: at.index, endAt: endAt || null, cueId: cueId || null };
+    load(at.index, at.offset);
+    $("now").textContent = title || "Recording " + at.session.id + " - " + when(t);
+    renderCues();
+  }
+  function load(index, offset) {
+    var p = playing.parts[index];
+    playing.index = index;
+    video.src = "/api/rec/" + encodeURIComponent(playing.session.id) + "/file/" + encodeURIComponent(p.file);
+    video.onloadedmetadata = function () {
+      video.onloadedmetadata = null;
+      try { video.currentTime = Math.max(0, offset); } catch (e) {}
+      var go = video.play(); if (go && go.catch) go.catch(function () {});
+    };
+  }
+  function wallTime() {
+    if (!playing) return null;
+    return playing.parts[playing.index].startedAt + video.currentTime * 1000;
+  }
+  video.addEventListener("timeupdate", function () {
+    if (playing && playing.endAt && wallTime() >= playing.endAt) { video.pause(); playing.endAt = null; }
+    renderHeads();
+  });
+  // a cue (or a timeline click) running past the end of a file: the next one
+  video.addEventListener("ended", function () {
+    if (!playing || playing.index + 1 >= playing.parts.length) return;
+    if (playing.endAt && playing.parts[playing.index + 1].startedAt >= playing.endAt) return;
+    load(playing.index + 1, 0);
+  });
+
+  function renderCues() {
+    var q = $("search").value.trim().toLowerCase(), rows = [];
+    var list = cues.filter(function (c) { return !q || (cueLabel(c) + " " + when(c.markedAt)).toLowerCase().indexOf(q) !== -1; });
+    if (!list.length) { $("cueRows").innerHTML = '<tr><td colspan="4" class="dim empty">' + (cues.length ? "No cue matches." : "No cues yet - mark moments on the recording page (⭐ Mark, or say \"mark\").") + "</td></tr>"; return; }
+    list.forEach(function (c) {
+      var open = !c.endedAt;
+      rows.push('<tr data-id="' + esc(c.id) + '" class="' + (open ? "open" : "") + (playing && playing.cueId === c.id ? " playing" : "") + '">' +
+        '<td class="name">' + esc(cueLabel(c)) + (c.note ? ' <span class="dim">(' + esc(c.note) + ")</span>" : "") + "</td>" +
+        "<td>" + esc(when(c.markedAt)) + "</td>" +
+        "<td>" + (open ? "recording..." : esc(len(c.endedAt - c.startedAt))) + "</td>" +
+        '<td class="acts"><button data-act="play">▶ Play</button> ' +
+        (c.clip ? '<a class="btn" href="/api/rec/clips/' + encodeURIComponent(c.clip) + '" download="' + esc(c.clip) + '">⬇ Clip</a> ' : (ffmpeg && !open ? '<button data-act="clip">✂ Save clip</button> ' : "")) +
+        '<button data-act="rename" title="Rename">✎</button> <button data-act="delete" title="Delete">🗑</button></td></tr>');
+    });
+    $("cueRows").innerHTML = rows.join("");
+  }
+  $("cueRows").addEventListener("click", function (e) {
+    var btn = e.target.closest("button"), tr = e.target.closest("tr");
+    if (!btn || !tr) return;
+    var c = cues.filter(function (x) { return x.id === tr.getAttribute("data-id"); })[0];
+    if (!c) return;
+    var act = btn.getAttribute("data-act");
+    if (act === "play") playFrom(c.startedAt, c.endedAt || null, c.id, cueLabel(c));
+    if (act === "clip") {
+      btn.disabled = true; btn.textContent = "✂ Cutting...";
+      api("/api/rec/cues/" + c.id + "/clip").then(function (r) { c.clip = r.file; renderCues(); }).catch(function (err) { btn.textContent = "✂ " + err.message; });
+    }
+    if (act === "rename") {
+      var td = tr.querySelector("td.name"), input = document.createElement("input");
+      input.type = "text"; input.value = cueLabel(c); input.style.width = "100%";
+      td.innerHTML = ""; td.appendChild(input); input.focus(); input.select();
+      var done = function (keep) {
+        if (keep && input.value.trim() && input.value.trim() !== c.name) api("/api/rec/cues/" + c.id, { name: input.value.trim() }, "PATCH").then(function (r) { Object.assign(c, r); renderCues(); });
+        else renderCues();
+      };
+      input.addEventListener("keydown", function (k) { if (k.key === "Enter") done(true); if (k.key === "Escape") done(false); });
+      input.addEventListener("blur", function () { done(true); });
+    }
+    if (act === "delete") {
+      if (btn.getAttribute("data-sure")) {
+        api("/api/rec/cues/" + c.id, undefined, "DELETE").then(function () { cues = cues.filter(function (x) { return x !== c; }); renderCues(); renderSessions(); });
+      } else { btn.setAttribute("data-sure", "1"); btn.textContent = "Delete?"; setTimeout(function () { if (btn.isConnected) { btn.removeAttribute("data-sure"); btn.textContent = "🗑"; } }, 3000); }
+    }
+  });
+  $("search").addEventListener("input", renderCues);
+
+  function sessionSpan(s) {
+    var parts = s.parts || [], start = s.startedAt, end = s.endedAt || (parts.length ? (parts[parts.length - 1].endedAt || Date.now()) : start);
+    return { start: start, end: Math.max(end, start + 1000) };
+  }
+  function renderSessions() {
+    if (!sessions.length) { $("sessions").innerHTML = '<div class="dim">No recordings yet. They\'re saved in ' + esc(folder) + "</div>"; return; }
+    $("sessions").innerHTML = sessions.map(function (s) {
+      var sp = sessionSpan(s), total = sp.end - sp.start, live = !s.endedAt;
+      var pct = function (t) { return Math.max(0, Math.min(100, (t - sp.start) / total * 100)); };
+      var parts = (s.parts || []).map(function (p) { return '<div class="part" style="left:' + pct(p.startedAt) + "%;width:" + (pct(p.endedAt || sp.end) - pct(p.startedAt)) + '%"></div>'; }).join("");
+      var marks = cues.filter(function (c) { return c.startedAt >= sp.start && c.startedAt <= sp.end; }).map(function (c) {
+        return '<div class="cue" title="' + esc(cueLabel(c)) + '" style="left:' + pct(c.startedAt) + "%;width:" + Math.max(0.3, pct(c.endedAt || sp.end) - pct(c.startedAt)) + '%"></div>';
+      }).join("");
+      return '<div class="session" data-id="' + esc(s.id) + '"><b>' + esc(s.id) + "</b> " + (live ? '<span style="color:var(--rec)">● recording</span> ' : "") +
+        '<span class="dim">' + esc(len(total)) + " · " + (s.parts || []).length + " file" + ((s.parts || []).length === 1 ? "" : "s") + "</span>" +
+        '<div class="timeline" data-start="' + sp.start + '" data-end="' + sp.end + '">' + parts + marks + '<div class="head" hidden></div></div></div>';
+    }).join("");
+    renderHeads();
+  }
+  $("sessions").addEventListener("click", function (e) {
+    var tl = e.target.closest(".timeline");
+    if (!tl) return;
+    var r = tl.getBoundingClientRect(), start = +tl.getAttribute("data-start"), end = +tl.getAttribute("data-end");
+    playFrom(start + (e.clientX - r.left) / r.width * (end - start));
+  });
+  function renderHeads() {
+    var t = wallTime();
+    document.querySelectorAll(".timeline").forEach(function (tl) {
+      var head = tl.querySelector(".head"), start = +tl.getAttribute("data-start"), end = +tl.getAttribute("data-end");
+      var inside = t !== null && t >= start && t <= end;
+      head.hidden = !inside;
+      if (inside) head.style.left = ((t - start) / (end - start) * 100) + "%";
+    });
+  }
+
+  function refresh() {
+    return Promise.all([api("/api/rec/cues"), api("/api/rec/sessions")]).then(function (r) {
+      cues = r[0].cues || []; ffmpeg = !!r[0].ffmpeg;
+      sessions = r[1].sessions || []; folder = r[1].folder || "";
+      $("info").textContent = cues.length + " cue" + (cues.length === 1 ? "" : "s") + " · saved in " + folder + (ffmpeg ? "" : " · clips need ffmpeg on the computer");
+      if (!document.querySelector("#cueRows input")) renderCues();
+      renderSessions();
+    }).catch(function (e) { $("info").textContent = "The computer's server isn't answering (" + e.message + ")"; });
+  }
+  refresh();
+  setInterval(refresh, 5000);
+  window.PMCCues = { refresh: refresh, playFrom: playFrom, wallTime: wallTime, state: function () { return { cues: cues, sessions: sessions, playing: playing }; } };
+})();
+</script>
+</body>
+</html>

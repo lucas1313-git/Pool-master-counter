@@ -5694,6 +5694,7 @@
   }
 
   function renderScoreboard() {
+    postRecorderContext(); // (the recording page names its cues from what's shown)
     var active = activePlayers();
 
     btnFinishSnooker.classList.toggle("hidden", quickCounterMode || state.currentGame.gameType !== "snooker");
@@ -25636,6 +25637,11 @@
         (cmd.yes ? btnConfirmModalOk : btnConfirmModalCancel).click();
         return { ok: true, text: null };
 
+      case "recMark":
+        return recorderCommand("mark");
+      case "recFinish":
+        return recorderCommand("finish");
+
       case "qscore": {
         var entry = getPlayerRatingEntry(cmd.name);
         if (!entry) return { ok: true, speak: "always", text: T("voice.done.qscoreNone", { name: cmd.name }) };
@@ -25683,6 +25689,66 @@
     speak: function (text, always) { speakKeypadText(text, !!always); },
     missSound: playVoiceMissSound
   };
+
+  // ---------------------------------------------------------------------
+  // The recording page (record.html, opened by the header's 🎬 Record): it
+  // names its cues [player]-[game]-[position]-... from what this says -
+  // the selected player, the game, where the race stands (or the points
+  // and the run) - and takes "mark" / "finish" said here (voice, Siri).
+  // Same browser: a BroadcastChannel, no server needed.
+  // ---------------------------------------------------------------------
+  var recorderChannel = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel("pmc-recorder") : null;
+  var recorderStatus = null; // what the recording page last said: { recording, cueOpen, at }
+  var recorderContextTimer = null;
+
+  // where the selected player stands: "3-2 of 5" (racks), "45 of 100, run 12" (points)
+  function recorderPosition(p) {
+    if (!p) return "";
+    var teams = state.currentGame.mode === "teams";
+    if (state.currentGame.unit === "rack" && !quickCounterMode) {
+      var mine = teams ? state.teamWins[p.teamId] || 0 : state.playerWins[p.id] || 0, theirs = 0;
+      if (teams) theirs = state.teamWins[p.teamId === "A" ? "B" : "A"] || 0;
+      else activePlayers().forEach(function (o) { if (o.id !== p.id) theirs = Math.max(theirs, state.playerWins[o.id] || 0); });
+      var race = effectiveRaceTarget(teams ? p.teamId : p.id);
+      return mine + "-" + theirs + (race > 1 ? " of " + race : "");
+    }
+    var score = teams ? sumTeamBalls(p.teamId) : p.balls || 0;
+    var run = currentRunPlayerId === p.id && currentRunCount > 1 ? ", run " + currentRunCount : "";
+    return score + " of " + state.currentGame.target + run;
+  }
+  function recorderContext() {
+    var p = keypadSelectedPlayerId ? getPlayer(keypadSelectedPlayerId) : null;
+    if (!p && activePlayers().length === 1) p = activePlayers()[0];
+    var type = GAME_TYPES[state.currentGame.gameType];
+    return { type: "context", player: p ? p.name : "", gameType: state.currentGame.gameType, gameLabel: type ? type.label : state.currentGame.gameType, position: recorderPosition(p) };
+  }
+  // (after every scoreboard render, at most every 300 ms, and every 5 s anyway)
+  function postRecorderContext() {
+    if (!recorderChannel || recorderContextTimer) return;
+    recorderContextTimer = setTimeout(function () {
+      recorderContextTimer = null;
+      try { recorderChannel.postMessage(recorderContext()); } catch (e) {}
+    }, 300);
+  }
+  if (recorderChannel) {
+    recorderChannel.onmessage = function (e) {
+      var m = e.data || {};
+      if (m.type === "status") recorderStatus = { recording: !!m.recording, cueOpen: !!m.cueOpen, at: Date.now() };
+      else if (m.type === "context-request") postRecorderContext();
+    };
+    setInterval(postRecorderContext, 5000);
+  }
+  function recorderFresh() { return !!recorderStatus && Date.now() - recorderStatus.at < 5000; }
+  // "mark" / "finish" (voice, Siri) -> { ok, text, speak }
+  function recorderCommand(kind) {
+    if (!recorderChannel || !recorderFresh()) return { ok: false, text: T("voice.err.noRecorder"), speak: "never" };
+    if (kind === "mark" && !recorderStatus.recording) return { ok: false, text: T("voice.err.notRecording"), speak: "never" };
+    if (kind === "finish" && !recorderStatus.cueOpen) return { ok: false, text: T("voice.err.nothingMarked"), speak: "never" };
+    try { recorderChannel.postMessage(recorderContext()); recorderChannel.postMessage({ type: kind, source: "voice" }); } catch (e) {}
+    return { ok: true, text: T(kind === "mark" ? "voice.done.marked" : "voice.done.finished"), speak: "ifOn" };
+  }
+  var btnOpenRecorder = document.getElementById("btn-open-recorder");
+  if (btnOpenRecorder) btnOpenRecorder.addEventListener("click", function () { window.open("record.html", "pmc-record"); });
 
   // iPadOS 13+ reports navigator.platform as "MacIntel" like a real Mac,
   // so touch support is the only reliable way to tell an iPad apart from
