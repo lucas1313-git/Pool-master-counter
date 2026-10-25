@@ -67,6 +67,16 @@
   .dot.ok { background: var(--good); }
   .dot.bad { background: var(--danger); }
   .dot.busy { background: var(--accent); }
+  /* the zoom right under the picture - adjust what the camera sees */
+  .zoom-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 8px 2px 4px;
+  }
+  .zoom-bar[hidden] { display: none; }
+  .zoom-bar label { white-space: nowrap; font-weight: 700; }
+  .zoom-bar input[type="range"] { flex: 1; width: auto; margin: 0; min-height: 32px; }
   .video-wrap {
     position: relative;
     width: 100%;
@@ -522,6 +532,12 @@
     <div class="enroll-light" id="enrollLight" hidden><div class="enroll-light-name" id="enrollLightName" hidden></div></div>
   </div>
 
+  <div class="zoom-bar" id="zoomBar">
+    <label for="zoomInput">🔍 Zoom <span id="zoomValue">1.0×</span></label>
+    <input type="range" id="zoomInput" min="1" max="3" step="0.1" value="1">
+    <button type="button" class="help-btn" data-help="zoom" aria-label="What does this do?">?</button>
+  </div>
+
   <div class="warning-banner" id="cameraWarning" hidden>
     <div id="cameraWarningText"></div>
     <button id="restartCameraBtn" class="secondary">Restart camera</button>
@@ -674,9 +690,7 @@
       <label for="cameraSelect">Camera</label>
       <select id="cameraSelect"></select>
 
-      <label for="zoomInput">Zoom <span id="zoomValue">1.0×</span></label><button type="button" class="help-btn" data-help="zoom" aria-label="What does this do?">?</button>
-      <input type="range" id="zoomInput" min="1" max="3" step="0.1" value="1" style="display:block;width:100%;margin:6px 0 8px">
-      <div class="row" style="margin:4px 0 12px">
+      <div class="row" style="margin:8px 0 12px">
         <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="flip180Toggle" style="width:auto;margin:0"> Camera mounted upside down (turn the picture)</label><button type="button" class="help-btn" data-help="flip180" aria-label="What does this do?">?</button>
       </div>
 
@@ -1064,7 +1078,7 @@
     },
     zoom: {
       title: "Zoom",
-      body: "Zooms in on the middle of the picture - for a table that looks small, with too much room around it. The camera is asked for more pixels when zooming (1080p, then 4K on a camera that has it), so the zoomed picture keeps its detail.\n\nThe zoom stays centred: aim the camera at the middle of the table. The table calibration is converted for you - no need to calibrate again - but the empty-room snapshot has to be taken again. Also on the scoreboard: Visual Scoring > Capture Settings."
+      body: "Zooms in on the middle of the picture - for a table that looks small, with too much room around it. The camera is asked for more pixels when zooming (1080p, then 4K on a camera that has it), so the zoomed picture keeps its detail.\n\nThe zoom stays centred: aim the camera at the middle of the table. The table calibration is converted for you - no need to calibrate again - but the empty-room snapshot has to be taken again. The slider is right under the picture; the picture follows it as it moves. Also on the scoreboard: Visual Scoring > Capture Settings."
     },
     flip180: {
       title: "Camera mounted upside down",
@@ -1330,14 +1344,19 @@
     logActivity("Following walking paths " + (settings.walkingPathsEnabled ? "on" : "off"));
   });
   // the picture: the slider shows its value while moving, applies on letting go
+  // the slider: the picture follows while it moves (the stream already
+  // open); letting go keeps it and fetches more pixels if it needs them
   zoomInput.addEventListener("input", function () {
     zoomValue.textContent = Number(zoomInput.value).toFixed(1) + "×";
+    settings.zoom = Math.max(1, Math.min(3, Math.round(parseFloat(zoomInput.value) * 10) / 10 || 1));
+    setLiveView(wantedView());
   });
   zoomInput.addEventListener("change", function () {
     settings.zoom = Math.max(1, Math.min(3, Math.round(parseFloat(zoomInput.value) * 10) / 10 || 1));
     persistSettings();
     applyWantedView();
   });
+  if (isViewer) document.getElementById("zoomBar").hidden = true;
   flip180Toggle.addEventListener("change", function () {
     settings.flip180 = flip180Toggle.checked;
     persistSettings();
@@ -1552,9 +1571,13 @@
   }
   function plainView(v) { return v.zoom <= 1.001 && !v.flip; }
   function sameView(a, b) { return Math.abs((a.zoom || 1) - (b.zoom || 1)) < 0.001 && !!a.flip === !!b.flip; }
+  // how many pixels to ask the camera for: 720p, 1080p up to 1.5x, 4K above
+  function tierOf(v) { return v.zoom > 1.5 ? 2 : v.zoom > 1.001 ? 1 : 0; }
+  var streamTier = null; // the tier the open stream was asked at
   function resolutionFor(v) {
-    if (v.zoom > 1.5) return { width: { ideal: 3840 }, height: { ideal: 2160 } };
-    if (v.zoom > 1.001) return { width: { ideal: 1920 }, height: { ideal: 1080 } };
+    var t = tierOf(v);
+    if (t === 2) return { width: { ideal: 3840 }, height: { ideal: 2160 } };
+    if (t === 1) return { width: { ideal: 1920 }, height: { ideal: 1080 } };
     return { width: { ideal: 1280 }, height: { ideal: 720 } };
   }
   function drawView() {
@@ -1591,11 +1614,22 @@
     var playing = viewSourceVideo.play();
     if (playing && playing.catch) playing.catch(function () {});
   }
-  // A zoom or turn chosen here or on the scoreboard: a fresh stream at
-  // the resolution it needs.
+  // The picture follows at once, with the stream already open - no
+  // restart, no blink (the zoom slider while it moves).
+  function setLiveView(v) {
+    if (isViewer || !currentStream || sameView(v, viewInEffect)) return;
+    if (plainView(v) !== plainView(viewInEffect)) { showStream(currentStream, v); return; } // (then reconciled on the new picture)
+    viewInEffect = v;
+    reconcileView();
+  }
+  // A zoom or turn chosen (the slider let go, the checkbox, the
+  // scoreboard): a fresh stream when it wants more (or fewer) pixels than
+  // the open one was asked for, otherwise straight away.
   function applyWantedView() {
-    if (isViewer || !currentStream || sameView(wantedView(), viewInEffect)) return;
-    startCamera(cameraSelect.value || null);
+    if (isViewer || !currentStream) return;
+    var v = wantedView();
+    if (tierOf(v) !== streamTier) { startCamera(cameraSelect.value || null); return; }
+    setLiveView(v);
   }
 
   // The table calibration, the furniture snapshot and the empty-room
@@ -1633,6 +1667,7 @@
     }
     return { w: ref.w, h: ref.h, videoW: dims[0], videoH: dims[1], gray: gray };
   }
+  var viewLogTimer = null;
   function readStoredView() {
     try { return JSON.parse(localStorage.getItem(VIEW_STORAGE_KEY) || "null"); } catch (e) { return null; }
   }
@@ -1657,7 +1692,12 @@
         renderCalibrationStatus();
       }
       if (backgroundReference && backgroundReference.gray) {
-        backgroundReference = gridAfterView(backgroundReference, m, dims);
+        // always from the snapshot as it was taken (base), so zooming back
+        // and forth doesn't wear it down
+        var base = backgroundReference.base || { gray: backgroundReference.gray, view: { zoom: was.zoom, flip: was.flip, dims: was.dims } };
+        var converted = gridAfterView({ w: backgroundReference.w, h: backgroundReference.h, gray: base.gray }, viewMap(base.view, now), dims);
+        converted.base = base;
+        backgroundReference = converted;
         try { localStorage.setItem(BACKGROUND_REF_STORAGE_KEY, JSON.stringify(backgroundReference)); } catch (e) {}
       }
       if (viewChanged && emptyRoom) {
@@ -1665,8 +1705,12 @@
         logActivity("The picture changed: take the empty-room snapshot again");
       }
       if (viewChanged) {
-        logActivity("Picture: zoom " + now.zoom.toFixed(1) + "x" + (now.flip ? ", upside down" : "") +
-          (calibration && calibration.h ? " - the table calibration was converted, no need to calibrate again" : ""));
+        // one line once the slider has stopped, not one per step
+        clearTimeout(viewLogTimer);
+        viewLogTimer = setTimeout(function () {
+          logActivity("Picture: zoom " + viewInEffect.zoom.toFixed(1) + "x" + (viewInEffect.flip ? ", upside down" : "") +
+            (calibration && calibration.h ? " - the table calibration was converted, no need to calibrate again" : ""));
+        }, 900);
       }
     }
     try { localStorage.setItem(VIEW_STORAGE_KEY, JSON.stringify(now)); } catch (e) {}
@@ -1686,10 +1730,11 @@
     };
     // a new zoom wants a new size: let go of the camera first - it won't
     // open at another size while still open
-    if (currentStream && !sameView(view, viewInEffect)) stopCurrentStream();
+    if (currentStream && tierOf(view) !== streamTier) stopCurrentStream();
     return navigator.mediaDevices.getUserMedia(constraints).then(function (stream) {
       stopCurrentStream();
       currentStream = stream;
+      streamTier = tierOf(view);
       showStream(stream, view);
       hideCameraWarning();
       setStatus(dotCamera, labelCamera, "ok", "Camera: active", "active");

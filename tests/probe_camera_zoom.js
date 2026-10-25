@@ -115,6 +115,29 @@ const POINTS = [[100, 100], [1180, 100], [100, 620], [1180, 620], [640, 360], [6
   check("plain: calibration untouched, the view noted", calibOk(st.h, 1, false) && st.view && st.view.zoom === 1 && !st.view.flip, st.view);
   const asked0 = await page.evaluate(() => window.__gumAsked.slice(-1)[0]);
   check("plain: the camera asked for 1280x720", asked0 && asked0.w.ideal === 1280, asked0);
+  const place = await page.evaluate(() => {
+    const v = document.getElementById("videoWrap").getBoundingClientRect(), z = document.getElementById("zoomBar").getBoundingClientRect();
+    return { gap: Math.round(z.top - v.bottom), next: document.getElementById("videoWrap").nextElementSibling.id };
+  });
+  check("the zoom slider sits right under the picture", place.next === "zoomBar" && place.gap >= 0 && place.gap < 30, place);
+
+  // dragging: the picture follows at once, with the stream already open
+  const gum0 = await page.evaluate(() => window.__gumAsked.length);
+  for (const z of ["1.1", "1.2", "1.3"]) {
+    await page.evaluate((v) => { const zi = document.getElementById("zoomInput"); zi.value = v; zi.dispatchEvent(new Event("input")); }, z);
+    await sleep(150);
+  }
+  await sleep(1000);
+  col = await colours(); st = await stored();
+  const gum1 = await page.evaluate(() => window.__gumAsked.length);
+  check("dragging to 1.3x: the picture follows right away, no camera restart", JSON.stringify(col) === JSON.stringify(expectColours(1.3, false)) && gum1 === gum0, { col, want: expectColours(1.3, false), gum0, gum1 });
+  check("dragging: the calibration follows exactly", calibOk(st.h, 1.3, false), st.h);
+  await page.evaluate(() => { document.getElementById("zoomInput").dispatchEvent(new Event("change")); });
+  await sleep(500);
+  await waitPicture();
+  const asked13 = await page.evaluate(() => ({ n: window.__gumAsked.length, last: window.__gumAsked.slice(-1)[0] }));
+  col = await colours(); st = await stored();
+  check("let go at 1.3x: the camera reopened at 1080p for the detail, same picture", asked13.n === gum1 + 1 && asked13.last.w.ideal === 1920 && JSON.stringify(col) === JSON.stringify(expectColours(1.3, false)) && calibOk(st.h, 1.3, false), { asked13, col });
 
   await setView(2, false);
   col = await colours(); st = await stored();
@@ -141,8 +164,7 @@ const POINTS = [[100, 100], [1180, 100], [100, 620], [1180, 620], [640, 360], [6
   await setView(1, false);
   st = await stored();
   check("back to plain: the calibration is the original one again", calibOk(st.h, 1, false) && Object.keys(H0).every((k) => Math.abs(st.h[k] - H0[k]) < 1e-9 * Math.max(1, Math.abs(H0[k]))), st.h);
-  const nulls = st.bg.gray.filter((g) => g === null).length;
-  check("back to plain: the furniture snapshot's edges, never seen zoomed in, are left out (not guessed)", nulls > 0 && nulls < 64 * 48 * 0.8, nulls);
+  check("back to plain: the furniture snapshot is the original one again (worked out from it each time)", JSON.stringify(st.bg.gray) === JSON.stringify(BG0));
 
   // from the scoreboard: Capture Settings with the same-device camera not running
   const board = await browser.newPage();
