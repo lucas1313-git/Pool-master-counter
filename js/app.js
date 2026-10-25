@@ -25714,20 +25714,15 @@
   var recorderStatus = null; // what the recording page last said: { recording, cueOpen, at }
   var recorderContextTimer = null;
 
-  // where the selected player stands: "3-2 of 5" (racks), "45 of 100, run 12" (points)
+  // Where the race stands: "game 5 of raceto 7" - the games already won in
+  // this match (both players, or both teams) plus the one being played;
+  // "single game" for a race to 1.
   function recorderPosition(p) {
-    if (!p) return "";
-    var teams = state.currentGame.mode === "teams";
-    if (state.currentGame.unit === "rack" && !quickCounterMode) {
-      var mine = teams ? state.teamWins[p.teamId] || 0 : state.playerWins[p.id] || 0, theirs = 0;
-      if (teams) theirs = state.teamWins[p.teamId === "A" ? "B" : "A"] || 0;
-      else activePlayers().forEach(function (o) { if (o.id !== p.id) theirs = Math.max(theirs, state.playerWins[o.id] || 0); });
-      var race = effectiveRaceTarget(teams ? p.teamId : p.id);
-      return mine + "-" + theirs + (race > 1 ? " of " + race : "");
-    }
-    var score = teams ? sumTeamBalls(p.teamId) : p.balls || 0;
-    var run = currentRunPlayerId === p.id && currentRunCount > 1 ? ", run " + currentRunCount : "";
-    return score + " of " + state.currentGame.target + run;
+    var teams = state.currentGame.mode === "teams", played = 0;
+    if (teams) played = (state.teamWins.A || 0) + (state.teamWins.B || 0);
+    else activePlayers().forEach(function (o) { played += state.playerWins[o.id] || 0; });
+    var race = p ? effectiveRaceTarget(teams ? p.teamId : p.id) : state.raceToWinsTarget;
+    return race > 1 ? "game " + (played + 1) + " of raceto " + race : "single game";
   }
   function recorderContext() {
     var p = keypadSelectedPlayerId ? getPlayer(keypadSelectedPlayerId) : null;

@@ -88,7 +88,9 @@
       var s = sessions[i], parts = (s.parts || []).slice().sort(function (a, b) { return a.n - b.n; });
       for (var j = 0; j < parts.length; j++) {
         var p = parts[j], end = p.endedAt || (j === parts.length - 1 ? Date.now() : parts[j + 1].startedAt);
-        if (t >= p.startedAt && t < end) return { session: s, parts: parts, index: j, offset: (t - p.startedAt) / 1000 };
+        // (a cue from the recording's very start can be a moment before its first file's)
+        var from = j === 0 ? Math.min(p.startedAt, s.startedAt) - 1000 : p.startedAt;
+        if (t >= from && t < end) return { session: s, parts: parts, index: j, offset: Math.max(0, (t - p.startedAt) / 1000) };
       }
     }
     return null;
@@ -128,13 +130,13 @@
 
   function renderCues() {
     var q = $("search").value.trim().toLowerCase(), rows = [];
-    var list = cues.filter(function (c) { return !q || (cueLabel(c) + " " + when(c.markedAt)).toLowerCase().indexOf(q) !== -1; });
+    var list = cues.filter(function (c) { return !q || (cueLabel(c) + " " + when(c.startedAt)).toLowerCase().indexOf(q) !== -1; });
     if (!list.length) { $("cueRows").innerHTML = '<tr><td colspan="4" class="dim empty">' + (cues.length ? "No cue matches." : "No cues yet - mark moments on the recording page (⭐ Mark, or say \"mark\").") + "</td></tr>"; return; }
     list.forEach(function (c) {
       var open = !c.endedAt;
       rows.push('<tr data-id="' + esc(c.id) + '" class="' + (open ? "open" : "") + (playing && playing.cueId === c.id ? " playing" : "") + '">' +
         '<td class="name">' + esc(cueLabel(c)) + (c.note ? ' <span class="dim">(' + esc(c.note) + ")</span>" : "") + "</td>" +
-        "<td>" + esc(when(c.markedAt)) + "</td>" +
+        "<td>" + esc(when(c.startedAt)) + "</td>" +
         "<td>" + (open ? "recording..." : esc(len(c.endedAt - c.startedAt))) + "</td>" +
         '<td class="acts"><button data-act="play">▶ Play</button> ' +
         (c.clip ? '<a class="btn" href="/api/rec/clips/' + encodeURIComponent(c.clip) + '" download="' + esc(c.clip) + '">⬇ Clip</a> ' : (ffmpeg && !open ? '<button data-act="clip">✂ Save clip</button> ' : "")) +
@@ -209,7 +211,7 @@
 
   function refresh() {
     return Promise.all([api("/api/rec/cues"), api("/api/rec/sessions")]).then(function (r) {
-      cues = r[0].cues || []; ffmpeg = !!r[0].ffmpeg;
+      cues = (r[0].cues || []).sort(function (a, b) { return (b.startedAt || 0) - (a.startedAt || 0); }); ffmpeg = !!r[0].ffmpeg;
       sessions = r[1].sessions || []; folder = r[1].folder || "";
       $("info").textContent = cues.length + " cue" + (cues.length === 1 ? "" : "s") + " · saved in " + folder + (ffmpeg ? "" : " · clips need ffmpeg on the computer");
       if (!document.querySelector("#cueRows input")) renderCues();

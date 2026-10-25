@@ -6,7 +6,7 @@
 // Checks: the recording's own zoom (a crop - the yellow square bigger);
 // the parts sent to the computer and a new file every few seconds (here);
 // "mark" / "finish" said on the scoreboard make a cue named
-// [player]-[game]-[position]-[duration]-[date]-[time]-cued from the
+// [player]-[game]-[game N of raceto M]-[duration]-[date]-[time]-cued from the
 // scoreboard, starting 20 s back (or at the recording's start); the cues page
 // lists it and plays it from the recording; a clip cut with ffmpeg about as
 // long as the cue; "mark" with nothing recording says so.
@@ -95,10 +95,15 @@ function makeY4m(file) {
   await rec.click("#recordBtn");
   await sleep(3000);
   const boardSeen = await rec.evaluate(() => document.getElementById("boardText").textContent);
-  check("the recording page hears the scoreboard: Luigi · 8-Ball · 2-1 of 5", /Luigi · 8-Ball · 2-1 of 5/.test(boardSeen), boardSeen);
+  check("the recording page hears the scoreboard: Luigi · 8-Ball · game 4 of raceto 5", /Luigi · 8-Ball · game 4 of raceto 5/.test(boardSeen), boardSeen);
 
-  // mark / finish said on the scoreboard (the recording tab in the background)
+  // mark / finish said on the scoreboard (the recording tab in the background) - right
+  // after the scorer switched to the next player: the cue is still Luigi's, as at its start
   await board.bringToFront();
+  await board.evaluate(() => document.dispatchEvent(new KeyboardEvent("keydown", { key: "2", bubbles: true })));
+  await sleep(900);
+  const switched = await rec.evaluate(() => window.PMCRecorder.state().board);
+  check("the scorer switched to Luc just before the mark (the recorder heard it)", switched && switched.player === "Luc", switched);
   const m = await board.evaluate(() => window.PMCVoice.handleText("mark"));
   check("\"mark\" said on the scoreboard: Marked", m.result && m.result.ok && /Marked/.test(m.result.text), m.result);
   await sleep(6500);
@@ -108,7 +113,10 @@ function makeY4m(file) {
   const cues = await (await fetch(BASE + "api/rec/cues")).json();
   const cue = cues.cues[0];
   const recStart = (await rec.evaluate(() => window.PMCRecorder.state())).id;
-  check("the cue's name: Luigi-8-Ball-2-1 of 5-<duration>-<date>-<time>-cued", cue && /^Luigi-8-Ball-2-1 of 5-\d+s-\d{4}-\d{2}-\d{2}-\d{2}h\d{2}m\d{2}-cued$/.test(cue.name), cue && cue.name);
+  check("the cue's name: Luigi-8-Ball-game 4 of raceto 5-<duration>-<date>-<time>-cued", cue && /^Luigi-8-Ball-game 4 of raceto 5-\d+s-\d{4}-\d{2}-\d{2}-\d{2}h\d{2}m\d{2}-cued$/.test(cue.name), cue && cue.name);
+  const d0 = cue && new Date(cue.startedAt), p2 = (n) => String(n).padStart(2, "0");
+  const startStamp = d0 ? d0.getFullYear() + "-" + p2(d0.getMonth() + 1) + "-" + p2(d0.getDate()) + "-" + p2(d0.getHours()) + "h" + p2(d0.getMinutes()) + "m" + p2(d0.getSeconds()) : "";
+  check("...named for Luigi and the score as they stood at the cue's start, with its start time (not the mark's)", cue && cue.name.indexOf("Luigi-") === 0 && cue.name.indexOf(startStamp + "-cued") !== -1, { name: cue && cue.name, startStamp });
   check("...starting 20 s back - or at the recording's start, here 3 s back", cue && cue.markedAt - cue.startedAt >= 2500 && cue.markedAt - cue.startedAt <= 4500 && cue.endedAt - cue.markedAt >= 6000, cue);
 
   // the files: several parts, the finished ones indexed
@@ -130,7 +138,7 @@ function makeY4m(file) {
   await cp.goto(BASE + "cues.html", { waitUntil: "domcontentloaded" });
   await sleep(1500);
   const row = await cp.evaluate(() => document.querySelector("#cueRows tr td.name") && document.querySelector("#cueRows tr td.name").textContent);
-  check("the cues page lists it", row && row.indexOf("Luigi-8-Ball-2-1 of 5-") === 0, row);
+  check("the cues page lists it", row && row.indexOf("Luigi-8-Ball-game 4 of raceto 5-") === 0, row);
   await cp.evaluate(() => document.querySelector('#cueRows button[data-act="play"]').click());
   let wall = null;
   for (let i = 0; i < 80; i++) { await sleep(250); wall = await cp.evaluate(() => { const v = document.getElementById("player"); return v.currentTime > 0.2 ? window.PMCCues.wallTime() : null; }); if (wall) break; }
