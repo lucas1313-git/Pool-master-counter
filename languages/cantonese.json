@@ -1382,7 +1382,7 @@
   "voice.note.scoring": "計分局:「嗶」一聲就係確認,同數字鍵盤一樣;冇講名嘅話,分數加俾已揀咗嘅球員。計 rack 局:講邊個贏 - 贏局視窗開住嗰陣,剩低幾多波、「Nice game」同「Undo」都用得。",
   "voice.section.questions": "問題",
   "voice.note.questions": "答案會讀出嚟。",
-  "voice.err.notUnderstood": "聽唔明:「{{text}}」- ❓ 有齊啲句子",
+  "voice.err.notUnderstood": "聽唔明:「{{text}}」- 㩒一下 🎤 講嘢 睇句子",
   "voice.err.heardNothing": "乜都聽唔到 - 撳住、講嘢、然後放手",
   "voice.err.micBlocked": "咪高峰被封鎖 - 喺瀏覽器網址列容許佢",
   "voice.err.needsInternet": "語音指令需要上網",
@@ -1428,5 +1428,11 @@
   "voice.change.down": "跌咗 {{n}}",
   "voice.change.none": "冇變",
   "voice.done.score": "比分:{{list}}",
-  "voice.done.scoreNobody": "冇人上場"
+  "voice.done.scoreNobody": "冇人上場",
+  "voice.section.siri": "Siri(iPhone、iPad、Mac)",
+  "voice.siri.intro": "整一次捷徑,之後講「Hey Siri, Scoreboard」再講你嘅句子 - Siri 會講做咗乜。喺「捷徑」App 撳 + ,改名做 Scoreboard,再加呢三個動作:",
+  "voice.siri.step1": "聽寫文字(語言:英文)",
+  "voice.siri.step2": "取得 URL 內容:{{url}} - 方法 POST,要求內文 JSON,一個名叫 text 嘅文字欄位,設為「聽寫的文字」",
+  "voice.siri.step3": "朗讀文字:URL 的內容",
+  "voice.siri.note": "電話或者電腦要同呢個記分板用同一個 Wi-Fi,而記分板要開住。"
 }

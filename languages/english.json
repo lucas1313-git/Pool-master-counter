@@ -1382,7 +1382,7 @@
   "voice.note.scoring": "Points games: the beep confirms, as on the number pad; without a name, the point goes to the selected player. Rack games: say who won - the balls left, \"Nice game\" and \"Undo\" work while the win window is open.",
   "voice.section.questions": "Questions",
   "voice.note.questions": "The answer is spoken out loud.",
-  "voice.err.notUnderstood": "Didn't understand: \"{{text}}\" - ❓ shows the sentences",
+  "voice.err.notUnderstood": "Didn't understand: \"{{text}}\" - tap 🎤 Talk for the sentences",
   "voice.err.heardNothing": "Didn't hear anything - hold, speak, then let go",
   "voice.err.micBlocked": "The microphone is blocked - allow it in the browser's address bar",
   "voice.err.needsInternet": "Voice commands need an internet connection",
@@ -1428,5 +1428,11 @@
   "voice.change.down": "down {{n}}",
   "voice.change.none": "no change",
   "voice.done.score": "Score: {{list}}",
-  "voice.done.scoreNobody": "Nobody is playing"
+  "voice.done.scoreNobody": "Nobody is playing",
+  "voice.section.siri": "Siri (iPhone, iPad, Mac)",
+  "voice.siri.intro": "Make a Shortcut once, then say \"Hey Siri, Scoreboard\" and your sentence - Siri says what was done. In the Shortcuts app, tap + , name it Scoreboard, and add these three actions:",
+  "voice.siri.step1": "Dictate Text (Language: English)",
+  "voice.siri.step2": "Get Contents of URL: {{url}} - Method POST, Request Body JSON, one Text field named text set to Dictated Text",
+  "voice.siri.step3": "Speak Text: Contents of URL",
+  "voice.siri.note": "The phone or computer must be on the same Wi-Fi as this scoreboard, and the scoreboard open."
 }

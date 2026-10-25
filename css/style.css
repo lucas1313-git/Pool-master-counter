@@ -9531,3 +9531,8 @@ body.network-guest-mode #header-group-start {
   font-size: 1.05rem;
   font-weight: 700;
 }
+
+.voice-sheet-steps li {
+  font-weight: 600;
+  font-size: 0.98rem;
+}

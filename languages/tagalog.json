@@ -1382,7 +1382,7 @@
   "voice.note.scoring": "Mga larong may puntos: ang beep ang kumpirmasyon, gaya ng sa number pad; kung walang pangalan, sa napiling player ang puntos. Mga larong rack: sabihin kung sino ang nanalo - gumagana ang natitirang bola, \"Nice game\" at \"Undo\" habang bukas ang window ng panalo.",
   "voice.section.questions": "Mga tanong",
   "voice.note.questions": "Binibigkas nang malakas ang sagot.",
-  "voice.err.notUnderstood": "Hindi naintindihan: \"{{text}}\" - ipinapakita ng ❓ ang mga pangungusap",
+  "voice.err.notUnderstood": "Hindi naintindihan: \"{{text}}\" - pindutin ang 🎤 Magsalita para sa mga pangungusap",
   "voice.err.heardNothing": "Walang narinig - pindutin, magsalita, saka bitawan",
   "voice.err.micBlocked": "Naka-block ang mikropono - payagan ito sa address bar ng browser",
   "voice.err.needsInternet": "Kailangan ng internet ang mga voice command",
@@ -1428,5 +1428,11 @@
   "voice.change.down": "bumaba ng {{n}}",
   "voice.change.none": "walang pagbabago",
   "voice.done.score": "Iskor: {{list}}",
-  "voice.done.scoreNobody": "Walang naglalaro"
+  "voice.done.scoreNobody": "Walang naglalaro",
+  "voice.section.siri": "Siri (iPhone, iPad, Mac)",
+  "voice.siri.intro": "Gumawa ng Shortcut nang isang beses, saka sabihin ang \"Hey Siri, Scoreboard\" at ang pangungusap - sasabihin ni Siri ang nagawa. Sa Shortcuts app, pindutin ang + , pangalanan itong Scoreboard, at idagdag ang tatlong action na ito:",
+  "voice.siri.step1": "Dictate Text (Language: English)",
+  "voice.siri.step2": "Get Contents of URL: {{url}} - Method POST, Request Body JSON, isang Text field na pinangalanang text na Dictated Text ang laman",
+  "voice.siri.step3": "Speak Text: Contents of URL",
+  "voice.siri.note": "Dapat nasa parehong Wi-Fi ng scoreboard na ito ang phone o computer, at bukas ang scoreboard."
 }

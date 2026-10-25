@@ -52,3 +52,10 @@ Not part of the app - helpers for testing and for running this machine's own cop
   spoken Q-score and score; unknown names, the sheet, phone width.
   `node tests/probe_voice.js http://localhost:4235/ [screenshot dir]` against a test server
   (`HOME=tests/tmphome PORT=4235 node server/server.js`).
+- `probe_voice_siri.js` - voice commands from a Siri Shortcut: sentences sent to the server's
+  `/voice` (JSON, form, plain text, `?text=`) are done on the open scoreboard and the answer comes
+  back as plain text for Siri to speak ("Luc plus 1, now 1"); the page doesn't speak them itself;
+  "Help" opens the sheet with the Shortcut's steps and this computer's address; with two
+  scoreboards open only the one used last acts; none open: 503.
+  `node tests/probe_voice_siri.js http://localhost:4235/` against a test server
+  (`HOME=tests/tmphome PORT=4235 node server/server.js`) started after the change.

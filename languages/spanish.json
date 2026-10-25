@@ -1382,7 +1382,7 @@
   "voice.note.scoring": "Juegos de puntos: el pitido confirma, como en el teclado numérico; sin nombre, el punto va al jugador seleccionado. Juegos de racks: di quién ganó - las bolas restantes, \"Nice game\" y \"Undo\" funcionan mientras la ventana de victoria está abierta.",
   "voice.section.questions": "Preguntas",
   "voice.note.questions": "La respuesta se dice en voz alta.",
-  "voice.err.notUnderstood": "No entendí: \"{{text}}\" - ❓ muestra las frases",
+  "voice.err.notUnderstood": "No entendí: \"{{text}}\" - toca 🎤 Hablar para ver las frases",
   "voice.err.heardNothing": "No se oyó nada - mantén, habla y suelta",
   "voice.err.micBlocked": "El micrófono está bloqueado - permítelo en la barra de direcciones del navegador",
   "voice.err.needsInternet": "Los comandos de voz necesitan internet",
@@ -1428,5 +1428,11 @@
   "voice.change.down": "baja {{n}}",
   "voice.change.none": "sin cambios",
   "voice.done.score": "Marcador: {{list}}",
-  "voice.done.scoreNobody": "Nadie está jugando"
+  "voice.done.scoreNobody": "Nadie está jugando",
+  "voice.section.siri": "Siri (iPhone, iPad, Mac)",
+  "voice.siri.intro": "Crea un Atajo una sola vez y luego di \"Oye Siri, Scoreboard\" y tu frase - Siri dice lo que se hizo. En la app Atajos, toca + , llámalo Scoreboard y agrega estas tres acciones:",
+  "voice.siri.step1": "Dictar texto (Idioma: inglés)",
+  "voice.siri.step2": "Obtener contenido de URL: {{url}} - Método POST, Cuerpo de la solicitud JSON, un campo Texto llamado text con Texto dictado",
+  "voice.siri.step3": "Leer texto: Contenido de la URL",
+  "voice.siri.note": "El teléfono o la computadora debe estar en el mismo Wi-Fi que este marcador, y el marcador abierto."
 }

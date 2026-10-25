@@ -666,11 +666,13 @@
     handleAlternatives(alternatives);
   }
 
-  function report(result) {
+  // remote: from a Siri Shortcut - Siri speaks the answer, not the page
+  function report(result, remote) {
     var b = bridge();
     if (!b || !result) return;
     if (result.text) b.toast(result.text, "🎤 ");
     if (result.ok === false) b.missSound();
+    if (remote) return;
     if (result.text && result.speak === "always") b.speak(result.text, true);
     else if (result.text && result.speak === "ifOn") b.speak(result.text, false);
   }
@@ -685,7 +687,8 @@
 
   // The whole path from what was heard to what happened - also what the
   // tests call (PMCVoice.handleText), skipping the microphone.
-  function handleAlternatives(alternatives) {
+  function handleAlternatives(alternatives, opts) {
+    var remote = !!(opts && opts.remote);
     var b = bridge();
     if (!b) return null;
     var ctx = b.context();
@@ -697,8 +700,66 @@
     else if (u.error) result = { ok: false, text: errorText(u) };
     else if (u.cmd.type === "help") { openSheet(); result = { ok: true, text: null }; }
     else result = b.execute(u.cmd) || { ok: false, text: null };
-    report(result);
+    report(result, remote);
     return { heard: u.heard, cmd: u.cmd || null, result: result };
+  }
+
+  // ---- Siri: sentences from the computer's server (server/voice-relay.js) ----
+  // What Siri says back: the same words as the toast, without the symbols.
+  function speakable(text) {
+    return String(text || "")
+      .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, "")
+      .replace(/\s*\u2192\s*/g, ", now ")
+      .replace(/(^|\s)\+(\d)/g, "$1plus $2")
+      .replace(/(^|\s)-(\d)/g, "$1minus $2")
+      .replace(/[\u201C\u201D"]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+  function speechFor(out) {
+    if (!out) return "The scoreboard isn't ready yet.";
+    var r = out.result || {};
+    if (out.cmd && out.cmd.type === "help") return "The sentences are on the scoreboard's screen.";
+    if (r.text) return speakable(r.text);
+    return r.ok === false ? "Sorry, that didn't work." : "Done.";
+  }
+
+  function post(path, data) {
+    try {
+      fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data), keepalive: true }).catch(function () {});
+    } catch (e) {}
+  }
+
+  // Only where the page comes from the computer's own server (not the iOS
+  // app, not a plain file); anywhere else /voice/events isn't there and
+  // the EventSource just gives up.
+  function connectRemote() {
+    if (!root.EventSource || isNativeApp() || !/^https?:$/.test(location.protocol)) return;
+    var client = null, lastUsedSent = 0, es;
+    try { es = new EventSource("voice/events"); } catch (e) { return; }
+    function reportActive(used) {
+      if (client) post("voice/active", { client: client, visible: document.visibilityState === "visible", used: !!used });
+    }
+    es.addEventListener("hello", function (e) {
+      try { client = JSON.parse(e.data).client; } catch (err) {}
+      reportActive(false);
+    });
+    es.addEventListener("command", function (e) {
+      var m;
+      try { m = JSON.parse(e.data); } catch (err) { return; }
+      var out = handleAlternatives([String(m.text || "")], { remote: true });
+      post("voice/result", { id: m.id, ok: !!(out && out.result && out.result.ok !== false), speech: speechFor(out) });
+    });
+    document.addEventListener("visibilitychange", function () { reportActive(false); });
+    // the scoreboard being used: it's the one Siri talks to
+    ["pointerdown", "keydown"].forEach(function (type) {
+      document.addEventListener(type, function () {
+        var now = Date.now();
+        if (now - lastUsedSent < 5000) return;
+        lastUsedSent = now;
+        reportActive(true);
+      }, true);
+    });
   }
 
   // ---- the sheet ----
@@ -730,6 +791,44 @@
       wrap.appendChild(ul);
       body.appendChild(wrap);
     });
+    if (/^https?:$/.test(location.protocol) && !isNativeApp()) body.appendChild(buildSiriSection());
+  }
+
+  // How to make the Siri Shortcut, with this computer's address in it.
+  function buildSiriSection() {
+    var wrap = document.createElement("section");
+    wrap.className = "voice-sheet-section voice-sheet-siri hidden"; // (shown once the server answers)
+    var h = document.createElement("h3");
+    h.textContent = t("voice.section.siri");
+    wrap.appendChild(h);
+    var intro = document.createElement("p");
+    intro.className = "voice-sheet-note";
+    intro.textContent = t("voice.siri.intro");
+    wrap.appendChild(intro);
+    var ol = document.createElement("ol");
+    ol.className = "voice-sheet-lines voice-sheet-steps";
+    var urlItem = document.createElement("li");
+    function setUrl(url) { urlItem.textContent = t("voice.siri.step2", { url: url }); }
+    [t("voice.siri.step1"), null, t("voice.siri.step3")].forEach(function (text) {
+      if (text === null) { setUrl(location.origin + "/voice"); ol.appendChild(urlItem); return; }
+      var li = document.createElement("li");
+      li.textContent = text;
+      ol.appendChild(li);
+    });
+    wrap.appendChild(ol);
+    var note = document.createElement("p");
+    note.className = "voice-sheet-note";
+    note.textContent = t("voice.siri.note");
+    wrap.appendChild(note);
+    // the address another device reaches this computer at (not "localhost")
+    try {
+      fetch("api/lan-info").then(function (r) { return r.ok ? r.json() : null; }).then(function (info) {
+        if (!info || !info.port) return;
+        setUrl("http://" + (info.addresses && info.addresses.length ? info.addresses[0] : location.hostname) + ":" + info.port + "/voice");
+        wrap.classList.remove("hidden");
+      }).catch(function () {});
+    } catch (e) {}
+    return wrap;
   }
   function openSheet() {
     var overlay = el("voice-sheet-overlay");
@@ -753,6 +852,7 @@
   }
 
   function init() {
+    connectRemote(); // (Siri doesn't need the browser's speech recognition)
     var group = el("voice-command-group");
     var holdBtn = el("btn-voice-hold");
     if (!group || !holdBtn) return;

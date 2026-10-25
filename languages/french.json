@@ -1382,7 +1382,7 @@
   "voice.note.scoring": "Jeux à points : le bip confirme, comme au pavé numérique ; sans nom, le point va au joueur sélectionné. Jeux à racks : dites qui a gagné - les boules restantes, « Nice game » et « Undo » marchent tant que la fenêtre de victoire est ouverte.",
   "voice.section.questions": "Questions",
   "voice.note.questions": "La réponse est dite à voix haute.",
-  "voice.err.notUnderstood": "Pas compris : « {{text}} » - ❓ montre les phrases",
+  "voice.err.notUnderstood": "Pas compris : « {{text}} » - touchez 🎤 Parler pour voir les phrases",
   "voice.err.heardNothing": "Rien entendu - maintenez, parlez, puis relâchez",
   "voice.err.micBlocked": "Le micro est bloqué - autorisez-le dans la barre d'adresse du navigateur",
   "voice.err.needsInternet": "Les commandes vocales ont besoin d'Internet",
@@ -1428,5 +1428,11 @@
   "voice.change.down": "en baisse de {{n}}",
   "voice.change.none": "sans changement",
   "voice.done.score": "Score : {{list}}",
-  "voice.done.scoreNobody": "Personne ne joue"
+  "voice.done.scoreNobody": "Personne ne joue",
+  "voice.section.siri": "Siri (iPhone, iPad, Mac)",
+  "voice.siri.intro": "Créez un Raccourci une seule fois, puis dites « Dis Siri, Scoreboard » et votre phrase - Siri dit ce qui a été fait. Dans l'app Raccourcis, touchez + , nommez-le Scoreboard et ajoutez ces trois actions :",
+  "voice.siri.step1": "Dicter du texte (Langue : anglais)",
+  "voice.siri.step2": "Obtenir le contenu de l'URL : {{url}} - Méthode POST, Corps de la requête JSON, un champ Texte nommé text égal à Texte dicté",
+  "voice.siri.step3": "Énoncer le texte : Contenu de l'URL",
+  "voice.siri.note": "Le téléphone ou l'ordinateur doit être sur le même Wi-Fi que ce tableau, et le tableau ouvert."
 }
