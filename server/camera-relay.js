@@ -512,6 +512,12 @@ function createCameraRelay(WebSocket) {
           broadcastToCameras({ type: "turn_confirmed", player_name: msg.player_name });
           return;
         }
+        // Points games: the scorer switched the selected player - who the
+        // camera should expect at the table next (camera.html's expectedShooter).
+        if (msg.type === "expected-shooter" && ws.role === "listener") {
+          broadcastToCameras({ type: "expected-shooter", player_name: typeof msg.player_name === "string" ? msg.player_name : null, ts: Number(msg.ts) || Date.now() });
+          return;
+        }
 
         if (msg.type === "enroll-press" && ws.role === "listener" && msg.player_name && (msg.kind === "identify" || msg.kind === "shooting")) {
           broadcastToCameras({ type: "enroll-press", player_name: String(msg.player_name), kind: msg.kind });

@@ -110,6 +110,7 @@ Send on connect and on every change.
 |---|---|---|
 | `roster` | `names` (the score cards), `playing` (in the game - recognize only these), `known` (the contact sheet - forget samples of anyone not in it) | keep it; ask for it with `{ "type": "roster-request" }` after connecting. |
 | `turn_confirmed` | `player_name` | a person just confirmed a score for this player - stronger truth than the app's own guess (a good moment to learn their look). |
+| `expected-shooter` | `player_name`, `ts` | points games: the scorer switched the selected player on the score card (not the camera's own pick) - they're up next. A hint for who comes to the table: lean that way when looks don't settle it, never against a clear recognition. |
 | `enroll-press` | `player_name`, `kind` (`identify` = seen, `shooting`) | the number pad (7 / 8 during play): take a sample of that player now; answer with `enroll-result` (+ `enroll-pressed`). |
 | `enroll-undo` | - | the number pad's 0: take back the last sample; answer with `enroll-result` (`undone: true`). |
 | `enrollments` | `data` (the server's whole sample store) | sent to every camera after the scoreboard removes a player (graveyard): forget anyone no longer in it. An app with its own samples can rely on `roster.known` instead - forget anyone not in it. |

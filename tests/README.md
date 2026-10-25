@@ -97,3 +97,9 @@ Not part of the app - helpers for testing and for running this machine's own cop
   out of the camera's sight, its circle capped at 5 ft. Synthetic people as probe_walking_paths.js.
   `node tests/probe_out_of_view.js http://localhost:4236/` against a test server
   (`HOME=tests/tmphome PORT=4236 node server/server.js`).
+- `probe_expected_shooter.js` - the turn order as a hint for the camera: a keypad switch in
+  Straight Pool sends "expected-shooter" (not in 8-Ball, not the camera's own pick); the relay
+  passes it to the camera; camera.html keeps it for Playing players and uses it to break ties and
+  for a shooter nobody's looks name - never over a clear match of someone else.
+  `node tests/probe_expected_shooter.js http://localhost:4236/` against a test server
+  (`HOME=tests/tmphome PORT=4236 node server/server.js`).

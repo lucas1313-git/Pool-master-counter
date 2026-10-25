@@ -3065,6 +3065,16 @@
   // when this selection came from the physical/on-screen KEYPAD itself
   // (a digit press, or Enter's "next player"), or a direct tap on a
   // player's name/score (see buildIndividualPanel/buildMemberCard).
+  // The turn order, for the camera (camera.html's expectedShooter): in a
+  // points game the scorer switching the selected player means that
+  // player is up next - a strong hint for who comes to the table.
+  var selectingForCamera = false; // (the camera's own pick - not sent back to it)
+  function tellCameraExpectedShooter(playerId) {
+    if (quickCounterMode || state.currentGame.unit === "rack" || !window.PMCCameraBridge || !window.PMCCameraBridge.sendCameraCommand) return;
+    var p = getPlayer(playerId);
+    if (p) window.PMCCameraBridge.sendCameraCommand({ type: "expected-shooter", player_name: p.name, ts: Date.now() });
+  }
+
   function selectKeypadPlayer(targetId, keypadNum, announce) {
     if (!targetId) return;
     cancelKeypadEntry();
@@ -3080,6 +3090,9 @@
       resetCurrentRun();
     }
     keypadSelectedPlayerId = targetId;
+    // switched here (not by the camera's own pick), in a points game: the
+    // camera expects them at the table next
+    if (!selectingForCamera && targetId !== previousPlayerId) tellCameraExpectedShooter(targetId);
     markFirstShot();
     renderScoreboard();
     // Only during an actual points/ball game - Quick Counter is a
@@ -33519,7 +33532,8 @@
     // announce false: no spoken "X playing" (a camera switch that
     // shouldn't be spoken - see cameraShotVoiceAllowed).
     selectPlayer: function (id, announce) {
-      selectKeypadPlayer(id, null, announce !== false);
+      selectingForCamera = true;
+      try { selectKeypadPlayer(id, null, announce !== false); } finally { selectingForCamera = false; }
     },
     // Read by camera-client.js so it can hand these to the recognizer
     // page over the relay (see Step 3 of the camera feature) - not used

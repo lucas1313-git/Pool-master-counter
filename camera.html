@@ -2013,6 +2013,8 @@
       handleLocalMessage(msg);
     } else if (msg.type === "turn_confirmed" && msg.player_name) {
       handleTurnConfirmed(msg.player_name);
+    } else if (msg.type === "expected-shooter") {
+      noteExpectedShooter(msg.player_name || null);
     } else if (msg.type === "ball_feedback" && msg.kind) {
       handleBallFeedback(msg.kind);
     } else if (msg.type === "stop-camera") {
@@ -5011,6 +5013,9 @@
     posesOverride: null,
     getStance: function () { return effectiveStance(); },
     getWalkingPaths: function () { return walkingPaths; },
+    expectedShooter: function () { return expectedShooterName(); },
+    expectedTieBreak: function (m) { return expectedTieBreak(m); },
+    expectedFallback: function (m) { return expectedFallback(m); },
     getShootingVia: function () { return shootingVia; }
   };
 
@@ -8419,6 +8424,9 @@
       name = activeManualAttribution.name;
       via = "cue over the table, picked on the scoreboard";
       manual = true;
+    } else if (expectedShooterName(now)) {
+      name = expectedShooterName(now);
+      via = "cue over the table, expected next (the scoreboard switched to them)";
     } else if (lastSeenPlayerName(now)) {
       name = lastSeenPlayerName(now);
       via = "cue over the table, last seen player";
@@ -8502,6 +8510,45 @@
   function noteLastShot(name, trackId) {
     lastShot = { name: name, trackId: trackId === undefined ? null : trackId, at: Date.now() };
   }
+  // ---- Who's expected to shoot next (the scoreboard says) ----
+  // In a points game, the scorer switching the selected player on the score
+  // card means: that player is up next. The camera leans that way - a
+  // bent-over shooter its looks can't name, two players who look alike, the
+  // room map's odds near the table - but never against a clear recognition
+  // of someone else. Kept until the scoreboard says otherwise (or 10 min).
+  var EXPECTED_SHOOTER_MS = 10 * 60 * 1000;
+  var EXPECTED_CERTAINTY = 0.6;
+  var MAP_EXPECTED_TRUST = 0.25; // how much the room map's odds near the table lean to them
+  var expectedShooter = null; // { name, at }
+  function noteExpectedShooter(name) {
+    if (!name) { expectedShooter = null; return; }
+    if (expectedShooter && normalizeNameKey(expectedShooter.name) === normalizeNameKey(name)) { expectedShooter.at = Date.now(); return; }
+    expectedShooter = { name: name, at: Date.now() };
+    logActivity("Expected next: " + name + " (the scoreboard switched to them)");
+  }
+  function expectedShooterName(now) {
+    if (!expectedShooter || (now || Date.now()) - expectedShooter.at > EXPECTED_SHOOTER_MS) return null;
+    return isEligibleForRecognition(expectedShooter.name) ? expectedShooter.name : null;
+  }
+  // A match the looks alone don't settle, with the expected player closest
+  // or next: the expected player.
+  function expectedTieBreak(m, now) {
+    var name = expectedShooterName(now);
+    if (!name || !m || !(m.distance <= m.threshold)) return null;
+    var k = normalizeNameKey(name);
+    if (normalizeNameKey(m.name) === k) return name;
+    if (!m.clear && m.runnerUp && normalizeNameKey(m.runnerUp) === k) return name;
+    return null;
+  }
+  // A shooter nobody's looks name: the expected player - unless they
+  // clearly look like someone else.
+  function expectedFallback(m, now) {
+    var name = expectedShooterName(now);
+    if (!name) return null;
+    if (m && m.clear && m.distance <= m.threshold && normalizeNameKey(m.name) !== normalizeNameKey(name)) return null;
+    return name;
+  }
+
   function oneOnOneGuess(analysis, m) {
     if (!lastShot || !m || m.distance > m.threshold) return null;
     if (lastShot.trackId === null || analysis.trackId === undefined || analysis.trackId === null) return null;
@@ -8621,11 +8668,13 @@
 
       if (uprightStabilityCount >= settings.consecutiveFrames) {
         var matchName = withinThreshold && uprightConsecutive >= settings.consecutiveFrames ? match.name : null;
-        var candidateName = visitName || matchName || pathName;
+        // (looks that don't settle it, with the expected player closest or next: them)
+        var expectedName = !visitName && !matchName && !pathName ? expectedTieBreak(match, now) : null;
+        var candidateName = visitName || matchName || pathName || expectedName;
         if (matchName && !visitName) nameWalkingPath(analysis.trackId, matchName, "recognized standing");
         candidate = {
           name: candidateName,
-          certainty: visitName ? visitCertainty(analysis.trackId, now) : matchName ? matchCertainty(match) : candidateName ? PATH_CERTAINTY : 0,
+          certainty: visitName ? visitCertainty(analysis.trackId, now) : matchName ? matchCertainty(match) : expectedName ? EXPECTED_CERTAINTY : candidateName ? PATH_CERTAINTY : 0,
           descriptor: analysis.descriptor,
           emb: analysis.emb || null,
           trackId: analysis.trackId,
@@ -8702,6 +8751,10 @@
             nameWalkingPath(analysis.trackId, activeManualAttribution.name, "picked on the keypad");
             notePlayerSighting(activeManualAttribution.name, true, now);
             activeManualAttribution.firesSinceStart++;
+          } else if (expectedFallback(bentMatch, now)) {
+            var nextName = expectedFallback(bentMatch, now);
+            notePlayerSighting(nextName, false, now);
+            fireEvent(nextName, null, settings.matchThreshold, via + ", expected next (the scoreboard switched to them)", undefined, undefined, EXPECTED_CERTAINTY);
           } else if (oneOnOneGuess(analysis, bentMatch)) {
             var turnName = oneOnOneGuess(analysis, bentMatch);
             notePlayerSighting(turnName, false, now);
@@ -9686,9 +9739,12 @@
       var path = walkingPathById(tr.id), pathName = path && path.name;
       tr.pathName = pathName || null;
       var named = pathName && cols.some(function (n) { return normalizeNameKey(n) === normalizeNameKey(pathName); });
+      // someone in view at the table, no name on their path: the expected player, a little
+      var expected = !named && tr.live && tr.pos && distanceOffTable(tr.pos) <= settings.railDistanceInches + 24 ? expectedShooterName(now) : null;
       var row = cols.map(function (name) {
         var p = tr.evidence ? (tr.evidence[name] || 0) : 1 / cols.length;
         if (named) p = p * (1 - MAP_PATH_NAME_TRUST) + (normalizeNameKey(pathName) === normalizeNameKey(name) ? MAP_PATH_NAME_TRUST : 0);
+        else if (expected) p = p * (1 - MAP_EXPECTED_TRUST) + (normalizeNameKey(expected) === normalizeNameKey(name) ? MAP_EXPECTED_TRUST : 0);
         return p + 1e-4;
       });
       var s = row.reduce(function (a, b) { return a + b; }, 0);
