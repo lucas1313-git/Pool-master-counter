@@ -7,9 +7,11 @@
 // exported - cut out with ffmpeg and downloaded on the spot (also kept in
 // the Clips folder).
 //
-// PMCCueViewer.mount(container, { compact, sessions }) -> { refresh,
-// select(id), state() }. PMCCueViewer.nameFor(cue) - the cue's name,
-// [player]-[game]-[game N of raceto M]-[duration]-[date]-[time]-cued, with
+// PMCCueViewer.mount(container, { compact, sessions, onDelete(cueId) }) ->
+// { refresh, select(id), state() }. A cue (🗑 on its row) and a whole
+// recording (🗑 on its timeline - to the Trash, with its cues) can be
+// deleted, a second click confirming. PMCCueViewer.nameFor(cue) - the cue's name,
+// [player]-vs-[opponent]-[game]-[game N of raceto M]-[duration]-[date]-[time]-cued, with
 // its own start and length (record.html names new cues with it too).
 (function () {
   "use strict";
@@ -19,8 +21,14 @@
   function pad2(n) { return String(n).padStart(2, "0"); }
   function durationText(ms) { var s = Math.max(0, Math.round(ms / 1000)); return (s >= 60 ? Math.floor(s / 60) + "m" : "") + pad2(s % 60) + "s"; }
   function stamp(t) { var d = new Date(t); return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()) + "-" + pad2(d.getHours()) + "h" + pad2(d.getMinutes()) + "m" + pad2(d.getSeconds()); }
+  // the shooter and who they play against ("Luigi-vs-Bob"); nobody selected:
+  // the two sides ("Luc-vs-Bob"), or the table
+  function whoOf(c) {
+    if (c.player) return c.player + (c.opponent ? "-vs-" + c.opponent : "");
+    return c.matchup || "Table";
+  }
   function nameFor(c) {
-    return [c.player || "Table", c.gameLabel, c.position, c.endedAt ? durationText(c.endedAt - c.startedAt) : "", stamp(c.startedAt), "cued"].filter(Boolean).join("-");
+    return [whoOf(c), c.gameLabel, c.position, c.endedAt ? durationText(c.endedAt - c.startedAt) : "", stamp(c.startedAt), "cued"].filter(Boolean).join("-");
   }
   function clockOf(t) { var d = new Date(t); return pad2(d.getHours()) + ":" + pad2(d.getMinutes()) + ":" + pad2(d.getSeconds()) + "." + Math.floor(d.getMilliseconds() / 100); }
   function len(ms) { if (!(ms >= 0)) return "-"; var s = Math.round(ms / 1000); return (s >= 3600 ? Math.floor(s / 3600) + ":" + pad2(Math.floor(s / 60) % 60) : Math.floor(s / 60)) + ":" + pad2(s % 60); }
@@ -62,7 +70,12 @@
     ".cv .cv-tl { position: relative; height: 30px; background: #120606; border-radius: 8px; margin-top: 6px; cursor: pointer; overflow: hidden; }",
     ".cv .cv-tl .c { position: absolute; top: 4px; bottom: 4px; min-width: 4px; background: var(--accent, #e8b923); border-radius: 3px; opacity: 0.85; }",
     ".cv .cv-tl .h { position: absolute; top: 0; bottom: 0; width: 2px; background: #fff; }",
-    ".cv .dim { color: var(--text-dim, #c9a2a2); font-size: 0.9rem; }"
+    ".cv .dim { color: var(--text-dim, #c9a2a2); font-size: 0.9rem; }",
+    ".cv td.x { width: 1%; white-space: nowrap; text-align: right; }",
+    ".cv button.cv-del { min-height: 32px; padding: 4px 9px; }",
+    ".cv button.cv-del.sure { background: #b3261e; border-color: #b3261e; color: #fff; font-weight: 800; }",
+    ".cv .cv-session-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }",
+    ".cv .cv-session-head .cv-del { margin-left: auto; }"
   ].join("\n");
 
   function mount(root, opts) {
@@ -102,6 +115,7 @@
     var play = null;  // { session, parts, index, stopAt }
     var dirty = false;
     var refreshTimer = null;
+    var sure = null; // { what: "cue" | "session", id, until } - the 🗑 asking "Delete?"; a second click deletes
 
     function status(text) { q(".cv-status").textContent = text || ""; }
 
@@ -317,7 +331,7 @@
       if (a === "revert") { sel = JSON.parse(JSON.stringify(saved)); dirty = false; renderLine(); renderButtons(); status("Back as it was."); }
       if (a === "export") exportClip();
       if (a === "rename") renameBox();
-      if (a === "delete") deleteCue(b);
+      if (a === "delete" && sel) deleteCue(sel.id);
       if (a === "new") newCueHere();
     });
     function renameBox() {
@@ -334,13 +348,44 @@
       input.addEventListener("keydown", function (k) { if (k.key === "Enter") done(true); if (k.key === "Escape") done(false); k.stopPropagation(); });
       input.addEventListener("blur", function () { done(true); });
     }
-    function deleteCue(btn) {
-      if (!btn.dataset.sure) { btn.dataset.sure = "1"; btn.textContent = "Delete?"; setTimeout(function () { if (btn.isConnected) { delete btn.dataset.sure; btn.textContent = "🗑"; } }, 3000); return; }
-      api("/api/rec/cues/" + sel.id, undefined, "DELETE").then(function () {
-        cues = cues.filter(function (c) { return c.id !== sel.id; });
-        sel = saved = null; dirty = false;
-        q(".cv-edit").hidden = true; renderName(); renderRows(); status("Deleted.");
+    // ---- deleting: a first click asks ("Delete?", 4 s), a second deletes ----
+    function askSure(what, id) {
+      if (sure && sure.what === what && sure.id === id && Date.now() < sure.until) { sure = null; return true; }
+      sure = { what: what, id: id, until: Date.now() + 4000 };
+      setTimeout(function () { if (sure && Date.now() >= sure.until) { sure = null; renderSure(); } }, 4100);
+      renderSure();
+      return false;
+    }
+    function renderSure() {
+      root.querySelectorAll("button.cv-del").forEach(function (b) {
+        var on = !!sure && b.getAttribute("data-del") === sure.what && b.getAttribute("data-id") === sure.id;
+        b.classList.toggle("sure", on);
+        b.textContent = on ? (sure.what === "session" ? "Delete this recording?" : "Delete?") : (b.getAttribute("data-del") === "session" ? "🗑 Delete" : "🗑");
       });
+      var own = q('.cv-edit [data-a="delete"]'), mine = !!sure && sure.what === "cue" && !!sel && sure.id === sel.id;
+      own.textContent = mine ? "Delete?" : "🗑";
+      own.style.cssText = mine ? "background:#b3261e;border-color:#b3261e;color:#fff;font-weight:800" : "";
+    }
+    function deleteCue(id) {
+      if (!askSure("cue", id)) return;
+      api("/api/rec/cues/" + encodeURIComponent(id), undefined, "DELETE").then(function () {
+        var c = cues.filter(function (x) { return x.id === id; })[0];
+        cues = cues.filter(function (x) { return x.id !== id; });
+        if (sel && sel.id === id) { sel = saved = null; dirty = false; q(".cv-edit").hidden = true; renderName(); }
+        renderRows(); renderSessions();
+        status("Deleted: " + (c ? c.name || nameFor(c) : "the cue"));
+        if (opts.onDelete) opts.onDelete(id);
+      }).catch(function (e) { status("Couldn't delete it: " + e.message); });
+    }
+    function deleteSession(id) {
+      if (!askSure("session", id)) return;
+      status("Moving the recording to the Trash...");
+      api("/api/rec/sessions/" + encodeURIComponent(id), undefined, "DELETE").then(function (r) {
+        if (play && play.session.id === id) { video.pause(); video.removeAttribute("src"); video.load(); play = null; }
+        if (sel && sel.session === id) { sel = saved = null; dirty = false; q(".cv-edit").hidden = true; renderName(); }
+        status("Recording " + id + " is in the Trash" + (r.cues ? " (with its " + r.cues + " cue" + (r.cues === 1 ? "" : "s") + ")" : "") + " - the exported clips are kept.");
+        return refresh();
+      }).catch(function (e) { status("Couldn't delete it: " + e.message); });
     }
     // a cue of your own: 20 s from the playhead (or the last 20 s recorded), then set it right
     function newCueHere() {
@@ -371,10 +416,14 @@
       if (!list.length) { rows.innerHTML = '<tr><td class="dim">' + (cues.length ? "No cue matches." : "No cues yet - ⭐ Mark during the recording (or say \"mark\").") + "</td></tr>"; return; }
       rows.innerHTML = list.slice(0, opts.compact ? 12 : 1000).map(function (c) {
         return '<tr data-id="' + esc(c.id) + '" class="' + (sel && sel.id === c.id ? "sel " : "") + (c.endedAt ? "" : "open") + '"><td class="n">' + esc(c.name || nameFor(c) + (c.endedAt ? "" : " (still marking)")) + '</td><td class="dim" style="white-space:nowrap">' + esc(when(c.startedAt)) + '</td><td class="dim">' + (c.endedAt ? esc(len(c.endedAt - c.startedAt)) : "...") + "</td><td>" +
-          (c.clip ? '<a class="cv-btn" href="/api/rec/clips/' + encodeURIComponent(c.clip) + '" download="' + esc(c.clip) + '" title="The exported clip">⬇</a>' : "") + "</td></tr>";
+          (c.clip ? '<a class="cv-btn" href="/api/rec/clips/' + encodeURIComponent(c.clip) + '" download="' + esc(c.clip) + '" title="The exported clip">⬇</a>' : "") + "</td>" +
+          '<td class="x"><button class="cv-del" data-del="cue" data-id="' + esc(c.id) + '" title="Delete this cue (the recording stays)">🗑</button></td></tr>';
       }).join("");
+      renderSure();
     }
     q(".cv-rows").addEventListener("click", function (e) {
+      var del = e.target.closest("button.cv-del");
+      if (del) { deleteCue(del.getAttribute("data-id")); return; }
       if (e.target.closest("a")) return;
       var tr = e.target.closest("tr[data-id]");
       if (tr) select(tr.getAttribute("data-id"));
@@ -392,8 +441,11 @@
         var marks = cues.filter(function (c) { return c.startedAt >= sp.start - 2000 && c.startedAt <= sp.end; }).map(function (c) {
           return '<div class="c" title="' + esc(c.name || nameFor(c)) + '" style="left:' + p(c.startedAt) + "%;width:" + Math.max(0.3, p(c.endedAt || sp.end) - p(c.startedAt)) + '%"></div>';
         }).join("");
-        return '<div class="cv-session"><b>' + esc(s.id) + "</b> " + (sp.live ? '<span style="color:#ff4d4d">● recording</span> ' : "") + '<span class="dim">' + esc(len(total)) + " · " + n + " file" + (n === 1 ? "" : "s") + '</span><div class="cv-tl" data-s="' + sp.start + '" data-e="' + sp.end + '">' + marks + '<div class="h" hidden></div></div></div>';
+        return '<div class="cv-session"><div class="cv-session-head"><b>' + esc(s.id) + "</b> " + (sp.live ? '<span style="color:#ff4d4d">● recording</span> ' : "") + '<span class="dim">' + esc(len(total)) + " · " + n + " file" + (n === 1 ? "" : "s") + "</span>" +
+          '<button class="cv-del" data-del="session" data-id="' + esc(s.id) + '"' + (sp.live ? ' disabled title="Stop the recording first"' : ' title="Move this recording to the Trash, with its cues (exported clips are kept)"') + ">🗑 Delete</button></div>" +
+          '<div class="cv-tl" data-s="' + sp.start + '" data-e="' + sp.end + '">' + marks + '<div class="h" hidden></div></div></div>';
       }).join("");
+      renderSure();
       renderSessionHeads();
     }
     function renderSessionHeads() {
@@ -406,6 +458,8 @@
       });
     }
     root.addEventListener("click", function (e) {
+      var del = e.target.closest('.cv-sess button.cv-del[data-del="session"]');
+      if (del) { if (!del.disabled) deleteSession(del.getAttribute("data-id")); return; }
       var tl = e.target.closest(".cv-tl");
       if (!tl) return;
       var r = tl.getBoundingClientRect(), s = +tl.getAttribute("data-s"), en = +tl.getAttribute("data-e");
@@ -437,10 +491,12 @@
       setMark: setMark,
       save: save,
       exportClip: exportClip,
+      deleteCue: deleteCue,
+      deleteSession: deleteSession,
       wallTime: wallTime,
       state: function () { return { sel: sel, dirty: dirty, cues: cues, sessions: sessions, play: play }; }
     };
   }
 
-  window.PMCCueViewer = { mount: mount, nameFor: nameFor };
+  window.PMCCueViewer = { mount: mount, nameFor: nameFor, whoOf: whoOf };
 })();

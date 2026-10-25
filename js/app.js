@@ -3307,6 +3307,14 @@
       return;
     }
 
+    // While the recording page records, "/" sets a cue - and ends it on
+    // the next press (the shot counter's pause gets "/" back otherwise).
+    if (e.key === "/" && !e.ctrlKey && !e.metaKey && !e.altKey && recorderCueReady()) {
+      e.preventDefault();
+      recorderToggleCue("key");
+      return;
+    }
+
     // Shot counter: "/" toggles pause/unpause, "*" toggles hide/show, the
     // numeric keypad's dedicated Clear key zeroes it. Only live when
     // there's actually a counter running (see shotCounterActive), so
@@ -25789,11 +25797,28 @@
     var race = p ? effectiveRaceTarget(teams ? p.teamId : p.id) : state.raceToWinsTarget;
     return race > 1 ? "game " + (played + 1) + " of raceto " + race : "single game";
   }
+  // Who the shooter plays against: the other player, the other team's
+  // players ("Bob+Chris"), or everyone else in a points game; with nobody
+  // selected, the two sides ("Luc-vs-Bob") stand for the table.
+  function recorderSides() {
+    if (state.currentGame.mode === "teams") {
+      return ["A", "B"].map(function (teamId) {
+        return { key: teamId, label: teamMembersLive(teamId).map(function (o) { return o.name; }).join("+") };
+      }).filter(function (s) { return s.label; });
+    }
+    return activePlayers().map(function (o) { return { key: o.id, label: o.name }; });
+  }
   function recorderContext() {
     var p = keypadSelectedPlayerId ? getPlayer(keypadSelectedPlayerId) : null;
     if (!p && activePlayers().length === 1) p = activePlayers()[0];
     var type = GAME_TYPES[state.currentGame.gameType];
-    return { type: "context", player: p ? p.name : "", gameType: state.currentGame.gameType, gameLabel: type ? type.label : state.currentGame.gameType, position: recorderPosition(p) };
+    var sides = recorderSides(), mine = p ? (state.currentGame.mode === "teams" ? p.teamId : p.id) : null;
+    var others = sides.filter(function (s) { return s.key !== mine; }).map(function (s) { return s.label; });
+    return {
+      type: "context", player: p ? p.name : "", opponent: p ? others.join("+") : "",
+      matchup: !p && sides.length === 2 ? sides[0].label + "-vs-" + sides[1].label : "",
+      gameType: state.currentGame.gameType, gameLabel: type ? type.label : state.currentGame.gameType, position: recorderPosition(p)
+    };
   }
   // (after every scoreboard render, at most every 300 ms, and every 5 s anyway)
   function postRecorderContext() {
@@ -25803,23 +25828,76 @@
       try { recorderChannel.postMessage(recorderContext()); } catch (e) {}
     }, 300);
   }
+  var recorderGuessUntil = 0; // (a cue just set or ended here: the page's next status may predate it)
   if (recorderChannel) {
     recorderChannel.onmessage = function (e) {
       var m = e.data || {};
-      if (m.type === "status") recorderStatus = { recording: !!m.recording, cueOpen: !!m.cueOpen, at: Date.now() };
-      else if (m.type === "context-request") postRecorderContext();
+      if (m.type === "status") {
+        var keep = Date.now() < recorderGuessUntil && recorderStatus;
+        recorderStatus = { recording: !!m.recording, cueOpen: keep ? recorderStatus.cueOpen : !!m.cueOpen, cueSince: keep ? recorderStatus.cueSince : m.cueSince || null, at: Date.now() };
+        renderRecorderCueButton();
+      } else if (m.type === "context-request") postRecorderContext();
     };
     setInterval(postRecorderContext, 5000);
+    setInterval(renderRecorderCueButton, 1000);
   }
   function recorderFresh() { return !!recorderStatus && Date.now() - recorderStatus.at < 5000; }
-  // "mark" / "finish" (voice, Siri) -> { ok, text, speak }
+  // The cue's only sound here: a tick so light the recording's microphone
+  // barely hears it - a moment after the recording page has silenced its
+  // sound for the cue (record.html's duck), so it isn't in the video at all.
+  function playRecorderTick(kind) {
+    try {
+      var ctx = getAudioCtx(), t = ctx.currentTime + 0.15;
+      var o = ctx.createOscillator(), g = ctx.createGain();
+      o.frequency.value = kind === "mark" ? 1700 : 1200;
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(0.012, t + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.04);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(t); o.stop(t + 0.06);
+    } catch (e) {}
+  }
+  function sendRecorderCue(kind, source) {
+    try { recorderChannel.postMessage(recorderContext()); recorderChannel.postMessage({ type: kind, source: source }); } catch (e) {}
+    recorderStatus.cueOpen = kind === "mark";
+    recorderStatus.cueSince = kind === "mark" ? Date.now() : null;
+    recorderGuessUntil = Date.now() + 1800;
+    playRecorderTick(kind);
+    renderRecorderCueButton();
+  }
+  // "mark" / "finish" (voice, Siri) -> { ok, text, speak } - never said out
+  // loud (it would be in the recording)
   function recorderCommand(kind) {
     if (!recorderChannel || !recorderFresh()) return { ok: false, text: T("voice.err.noRecorder"), speak: "never" };
     if (kind === "mark" && !recorderStatus.recording) return { ok: false, text: T("voice.err.notRecording"), speak: "never" };
     if (kind === "finish" && !recorderStatus.cueOpen) return { ok: false, text: T("voice.err.nothingMarked"), speak: "never" };
-    try { recorderChannel.postMessage(recorderContext()); recorderChannel.postMessage({ type: kind, source: "voice" }); } catch (e) {}
-    return { ok: true, text: T(kind === "mark" ? "voice.done.marked" : "voice.done.finished"), speak: "ifOn" };
+    sendRecorderCue(kind, "voice");
+    return { ok: true, text: T(kind === "mark" ? "voice.done.marked" : "voice.done.finished"), speak: "never" };
   }
+  // The score section's ⭐ Cue button and the "/" key: a cue when there's
+  // none, its end when there is - while the recording page records.
+  function recorderCueReady() { return !!recorderChannel && recorderFresh() && recorderStatus.recording; }
+  function recorderToggleCue(source) {
+    if (!recorderChannel || !recorderFresh()) { showToast(T("voice.err.noRecorder"), "🎬 "); return false; }
+    if (!recorderStatus.recording) { showToast(T("voice.err.notRecording"), "🎬 "); return false; }
+    var kind = recorderStatus.cueOpen ? "finish" : "mark";
+    sendRecorderCue(kind, source);
+    showToast(T(kind === "mark" ? "recorder.cueSet" : "voice.done.finished"), kind === "mark" ? "⭐ " : "✔ ");
+    return true;
+  }
+  var recorderCueGroup = document.getElementById("recorder-cue-group");
+  var btnRecorderCue = document.getElementById("btn-recorder-cue");
+  function renderRecorderCueButton() {
+    if (!btnRecorderCue) return;
+    var ready = recorderCueReady();
+    recorderCueGroup.classList.toggle("hidden", !ready);
+    if (!ready) return;
+    var open = recorderStatus.cueOpen, s = open && recorderStatus.cueSince ? Math.max(0, Math.round((Date.now() - recorderStatus.cueSince) / 1000)) : 0;
+    btnRecorderCue.textContent = open ? T("recorder.endCue", { time: Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0") }) : T("recorder.cue");
+    btnRecorderCue.classList.toggle("open", open);
+    btnRecorderCue.title = T("recorder.cueHint");
+  }
+  if (btnRecorderCue) btnRecorderCue.addEventListener("click", function () { recorderToggleCue("scoreboard button"); });
   var btnOpenRecorder = document.getElementById("btn-open-recorder");
   if (btnOpenRecorder) btnOpenRecorder.addEventListener("click", function () { window.open("record.html", "pmc-record"); });
 

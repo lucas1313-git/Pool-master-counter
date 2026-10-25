@@ -91,7 +91,7 @@ ${sections}
 </table>
 
 <h2>Recording: marking the best moments</h2>
-<p>With the recording page open (<b>🎬 Record</b> in the scoreboard's header), say <span class="say">“mark”</span> right after a good shot: the cue starts <b>20 seconds earlier</b> — the beginning of the shot — and is named for the player and where the race stood then (e.g. <code>Luigi-8-Ball-game 5 of raceto 7-1m35s-…-cued</code>). Say <span class="say">“finish”</span> to end it. On the recording page's 🎞️ Cues panel (or the Cues page) every cue can be watched, its start and end set by hand, and exported as a clip — even while it records.</p>
+<p>With the recording page open (<b>🎬 Record</b> in the scoreboard's header), say <span class="say">“mark”</span> right after a good shot — or press the <b>/</b> key, or the <b>⭐ Cue</b> button in the score section: the cue starts <b>20 seconds earlier</b> — the beginning of the shot — and is named for the player, who they play against and where the race stood then (e.g. <code>Luigi-vs-Bob-8-Ball-game 5 of raceto 7-1m35s-…-cued</code>). Say <span class="say">“finish”</span> (or <b>/</b> again, <b>✔ End cue</b>) to end it. Nothing is said out loud, and the recording's own sound goes quiet for a moment at each cue, so no cue sound ends up in the video. On the recording page's 🎞️ Cues panel (or the Cues page) every cue can be watched, its start and end set by hand, exported as a clip — even while it records — or deleted (🗑); a whole recording can be deleted too (it goes to the Trash).</p>
 
 <div class="foot">Made from the app's own sentence list (js/voice.js) — what's here is exactly what the scoreboard understands. Siri address: ${esc(BASE)}/voice.</div>
 </body></html>`;

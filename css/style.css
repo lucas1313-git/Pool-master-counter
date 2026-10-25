@@ -9459,6 +9459,27 @@ body.network-guest-mode #header-group-start {
   touch-action: none;
 }
 
+.recorder-cue-btn {
+  height: 44px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+  padding: 0 16px;
+  font-size: 1rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  border: 2px solid var(--accent);
+  background: var(--accent);
+  color: #1a0a0a;
+}
+
+.recorder-cue-btn.open {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
 .voice-hold-btn.listening {
   background: var(--danger);
   border-color: var(--danger);

@@ -21,6 +21,8 @@
 //   POST   /api/rec/:id/part/:n/end          { startedAt, endedAt }
 //   POST   /api/rec/:id/stop                 { endedAt }
 //   GET    /api/rec/sessions                 every recording, newest first
+//   DELETE /api/rec/sessions/:id             to the Trash, with its cues (not while it records;
+//                                            exported clips are kept)
 //   GET    /api/rec/:id/file/:name           a part (seekable: Range requests)
 //   GET    /api/rec/cues                     every cue, newest first
 //   POST   /api/rec/cues                     a new cue -> the cue (with its id)
@@ -247,6 +249,32 @@ function attachRecorderRoutes(app) {
     sendJson(res, 200, { folder: root(), sessions: list });
   });
 
+  // A recording goes to the Trash (it can be put back from there) - its
+  // cues with it, the clips already exported stay. Not while it records:
+  // no end yet and a file written in the last minute (a recording that
+  // was never stopped - the computer slept, the page closed - can go).
+  app.delete("/api/rec/sessions/:id", function (req, res) {
+    var x = loadSession(req.params.id);
+    if (!x) return sendJson(res, 404, { error: "no such recording" });
+    if (!x.s.endedAt) {
+      var latest = 0;
+      try { fs.readdirSync(x.dir).forEach(function (n) { latest = Math.max(latest, fs.statSync(path.join(x.dir, n)).mtimeMs); }); } catch (e) {}
+      if (Date.now() - latest < 60000) return sendJson(res, 409, { error: "it's still recording - stop it first" });
+    }
+    var trash = path.join(os.homedir(), ".Trash"), dest = path.join(trash, "Pool Master Counter " + req.params.id), k = 2;
+    try {
+      fs.mkdirSync(trash, { recursive: true });
+      while (fs.existsSync(dest)) dest = path.join(trash, "Pool Master Counter " + req.params.id + " (" + k++ + ")");
+      fs.renameSync(x.dir, dest);
+    } catch (e) { return sendJson(res, 500, { error: "couldn't move it to the Trash (" + e.message + ")" }); }
+    var span = { s: x.s.startedAt, e: x.s.endedAt || Date.now() };
+    var cues = loadCues(), left = cues.filter(function (c) {
+      return c.session ? c.session !== req.params.id : !(c.startedAt >= span.s && c.startedAt <= span.e);
+    });
+    if (left.length !== cues.length) saveCues(left);
+    sendJson(res, 200, { ok: true, trash: dest, cues: cues.length - left.length });
+  });
+
   app.get("/api/rec/:id/file/:name", function (req, res) {
     var x = loadSession(req.params.id), name = req.params.name;
     if (!x || !/^part-\d{3,4}\.(mp4|webm)$/.test(name)) return sendJson(res, 404, { error: "not found" });
@@ -258,7 +286,7 @@ function attachRecorderRoutes(app) {
     sendJson(res, 200, { cues: cues, ffmpeg: !!ffmpeg() });
   });
 
-  var CUE_FIELDS = ["name", "player", "gameType", "gameLabel", "position", "note", "startedAt", "markedAt", "endedAt", "duration", "source", "session", "customName"];
+  var CUE_FIELDS = ["name", "player", "opponent", "matchup", "gameType", "gameLabel", "position", "note", "startedAt", "markedAt", "endedAt", "duration", "source", "session", "customName"];
   function pickCue(b, into) {
     CUE_FIELDS.forEach(function (k) {
       if (b[k] === undefined) return;

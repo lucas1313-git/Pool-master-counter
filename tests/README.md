@@ -86,8 +86,13 @@ Not part of the app - helpers for testing and for running this machine's own cop
   the server keeping the video in `<test HOME>/Movies/Pool Master Counter`: the recording's own
   crop zoom; parts sent to the computer and a new file every 5 s here (each a real video, ffprobe);
   "mark" / "finish" said on the scoreboard (the recording tab in the background) make a cue named
-  [player]-[game]-[position]-[duration]-[date]-[time]-cued; cues.html lists it and plays it from
-  the recording; "mark" with no recording says so. The cue viewer (js/cue-viewer.js) on the
+  [player]-vs-[opponent]-[game]-[position]-[duration]-[date]-[time]-cued, never said out loud;
+  the score section's ⭐ Cue button and the "/" key set and end one (the button counting), "/"
+  still the shot counter's pause when nothing records; the recorded sound (the fake microphone's
+  beep, measured) silent for a moment at a cue, then back; cues.html lists it and plays it from
+  the recording; "mark" with no recording says so; a cue deleted from its row (asks first); a
+  recording that's still recording can't be deleted, a stopped one goes to `<test HOME>/.Trash`
+  with its cues, the exported clip kept. The cue viewer (js/cue-viewer.js) on the
   recording page while it records: the cue plays from the file still being written, its start and
   end nudged / set at the playhead and saved (the name's length and time follow), exported on the
   spot (cut, downloaded, kept in Clips, about as long as set), a cue added by hand; then the cues
