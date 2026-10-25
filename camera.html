@@ -7604,6 +7604,13 @@
   var PATH_MAX_RANGE_IN = 480; // further than this from the table (40 ft) is the plane mapping going wild near the horizon
   var PATH_CLEAR_RATIO = 0.7; // a returning body joins a lost path only if no other fit is nearly as good
   var PATH_CERTAINTY = 0.65; // a name carried along a walking path (see visitCertainty)
+  // Walked out of the picture (lost at its edge, not hidden in the middle
+  // of it): a named path is kept this long, and someone coming back in at
+  // that edge - near where they left, and nobody else named left there -
+  // gets the name back (unless they clearly look like someone else).
+  var PATH_EXIT_KEEP_MS = 20 * 60 * 1000;
+  var PATH_EDGE_FRACTION = 0.08; // this close to the picture's edge (of its size) is at the edge
+  var PATH_REENTRY_RADIUS = 0.25; // back in within this much of the picture's width of where they left
   var walkingPaths = []; // { id, name, rawId, points: [{ x, y, px, py, at }], v, pv (per second), ipp, hipOffset, seenAt }
   var walkingPathUnit = null; // "in" or "px" - paths are dropped when the calibration comes or goes
   var nextWalkingPathId = 1;
@@ -7670,7 +7677,14 @@
     if (!poses || !walkingPathsActive()) return;
     var unit = calibration && calibration.h ? "in" : "px";
     if (unit !== walkingPathUnit) { walkingPaths = []; walkingPathUnit = unit; }
-    walkingPaths = walkingPaths.filter(function (path) { return now - path.seenAt <= PATH_KEEP_MS; });
+    // (a path just lost: walked out of the picture, or hidden in it?)
+    walkingPaths.forEach(function (path) {
+      if (!path.exitChecked && now - path.seenAt > PATH_LIVE_GAP_MS) { path.exited = pathExit(path); path.exitChecked = true; }
+    });
+    walkingPaths = walkingPaths.filter(function (path) {
+      var gap = now - path.seenAt;
+      return gap <= PATH_KEEP_MS || (path.name && path.exited && gap <= PATH_EXIT_KEEP_MS);
+    });
     var obs = poses.map(function (pose) { return { pose: pose, anchor: pathAnchor(pose), path: null }; });
     var taken = {};
     var take = function (pairs) {
@@ -7706,7 +7720,7 @@
     var lost = [];
     walkingPaths.forEach(function (path) {
       var gap = now - path.seenAt;
-      if (gap <= PATH_LIVE_GAP_MS || taken[path.id]) return;
+      if (gap <= PATH_LIVE_GAP_MS || gap > PATH_KEEP_MS || taken[path.id]) return;
       var radius = Math.min(PATH_LOST_MAX_RADIUS_IN, PATH_LOST_RADIUS_IN + PATH_LOST_GROW_IN_S * gap / 1000);
       obs.forEach(function (o) {
         var pt = !o.path && o.anchor && pathPoint(o.anchor, path);
@@ -7721,6 +7735,24 @@
         return !rival || p.cost <= q.cost * PATH_CLEAR_RATIO;
       });
     }));
+    // Back in where they walked out, long after: someone coming in at the
+    // edge a named player left by, near where they left. Two named players
+    // gone the same way - or two bodies coming in - joins nobody.
+    var W = videoEl.videoWidth || 0, back = [];
+    if (W) walkingPaths.forEach(function (path) {
+      var gap = now - path.seenAt;
+      if (gap <= PATH_KEEP_MS || taken[path.id] || !path.name || !path.exited) return;
+      obs.forEach(function (o) {
+        if (o.path || !o.anchor) return;
+        var at = o.anchor.hip || o.anchor.shoulder, side = frameEdgeSide(at.x, at.y, 2 * PATH_EDGE_FRACTION);
+        if (side !== path.exited.side) return;
+        var d = Math.hypot(at.x - path.exited.px, at.y - path.exited.py) / W;
+        if (d <= PATH_REENTRY_RADIUS) back.push({ o: o, path: path, cost: d / PATH_REENTRY_RADIUS, reentry: true });
+      });
+    });
+    take(back.filter(function (p) {
+      return back.every(function (q) { return q === p || (q.o !== p.o && q.path !== p.path); });
+    }));
     obs.forEach(function (o) {
       var path = o.path, pt = o.anchor && pathPoint(o.anchor, path);
       if (!path && !pt) return; // nowhere to put them: keeps the model's own id
@@ -7728,10 +7760,12 @@
         path = { id: "w" + nextWalkingPathId++, name: null, rawId: null, points: [], v: { x: 0, y: 0 }, pv: { x: 0, y: 0 }, ipp: null, hipOffset: null, seenAt: now };
         walkingPaths.push(path);
       } else if (now - path.seenAt > PATH_LIVE_GAP_MS) {
-        var secs = ((now - path.seenAt) / 1000).toFixed(1);
-        console.log("[PMC paths] " + (path.name || "unrecognized player") + " (" + path.id + ") back in view after " + secs + "s along their walking path");
-        if (path.name) logActivity(path.name + " back in view after " + secs + "s - followed along their walking path");
+        var secs = ((now - path.seenAt) / 1000).toFixed(1), longGone = now - path.seenAt > PATH_KEEP_MS;
+        console.log("[PMC paths] " + (path.name || "unrecognized player") + " (" + path.id + ") back in view after " + secs + "s " + (longGone ? "where they left" : "along their walking path"));
+        if (path.name) logActivity(path.name + " back in view after " + (longGone ? agoText(now - path.seenAt) : secs + "s") + " - " + (longGone ? "came back in where they left" : "followed along their walking path"));
       }
+      path.exited = null;
+      path.exitChecked = false;
       if (pt) {
         path.points.push({ x: pt.x, y: pt.y, px: pt.px, py: pt.py, at: now });
         while (path.points.length > 40 || now - path.points[0].at > 6000) path.points.shift();
@@ -7750,6 +7784,71 @@
       o.pose.rawId = o.pose.id;
       o.pose.id = path.id;
     });
+  }
+
+  // Which edge of the picture a spot (video pixels) is at, if any (within
+  // `fraction` of the picture's size).
+  function frameEdgeSide(x, y, fraction) {
+    var W = videoEl.videoWidth || 0, H = videoEl.videoHeight || 0;
+    if (!W || !H) return null;
+    var d = { left: x / W, right: (W - x) / W, top: y / H, bottom: (H - y) / H }, side = null;
+    Object.keys(d).forEach(function (k) { if (d[k] <= fraction && (!side || d[k] < d[side])) side = k; });
+    return side;
+  }
+  // A path just lost: at the picture's edge - or heading over it - it
+  // walked out of the picture ({ side, px, py }); anywhere else it's hidden
+  // in it (null).
+  function pathExit(path) {
+    var last = pathLast(path);
+    if (!last || typeof last.px !== "number") return null;
+    var pv = path.pv || { x: 0, y: 0 };
+    var side = frameEdgeSide(last.px, last.py, PATH_EDGE_FRACTION) || frameEdgeSide(last.px + pv.x * 0.7, last.py + pv.y * 0.7, PATH_EDGE_FRACTION / 2);
+    return side ? { side: side, px: last.px, py: last.py } : null;
+  }
+  function agoText(ms) {
+    var s = Math.round(ms / 1000);
+    return s < 60 ? s + "s" : s < 3600 ? Math.round(s / 60) + " min" : Math.floor(s / 3600) + " h " + Math.round((s % 3600) / 60) + " min";
+  }
+  // On the camera's picture: each named player who walked out of it, at
+  // the edge they left by - their name, how long ago, an arrow out.
+  function drawOutOfViewTags() {
+    if (!walkingPathsActive()) return;
+    var now = Date.now(), W = videoEl.videoWidth || 0, H = videoEl.videoHeight || 0;
+    if (!W || !H) return;
+    overlayCtx.save();
+    overlayCtx.font = "bold " + Math.max(13, Math.round(overlayEl.width / 55)) + "px sans-serif";
+    overlayCtx.textBaseline = "middle";
+    walkingPaths.forEach(function (path) {
+      if (!path.name || !path.exited || now - path.seenAt <= PATH_LIVE_GAP_MS) return;
+      var e = path.exited;
+      var x = e.side === "left" ? 0 : e.side === "right" ? W : e.px, y = e.side === "top" ? 0 : e.side === "bottom" ? H : e.py;
+      var o = videoToOverlay(Math.min(Math.max(x, 0), W), Math.min(Math.max(y, 0), H));
+      var label = path.name + " · " + agoText(now - path.seenAt), tw = overlayCtx.measureText(label).width, bh = Math.max(22, Math.round(overlayEl.width / 40)), a = bh * 0.6;
+      var bx = e.side === "left" ? o.x + a + 4 : e.side === "right" ? o.x - a - tw - 20 : o.x - tw / 2 - 8;
+      var by = e.side === "top" ? o.y + a + 4 : e.side === "bottom" ? o.y - a - bh - 4 : o.y - bh / 2;
+      bx = Math.min(Math.max(bx, 2), overlayEl.width - tw - 18);
+      by = Math.min(Math.max(by, 2), overlayEl.height - bh - 2);
+      var col = typeof mapColour === "function" ? mapColour(path.name) : "#ffd166";
+      overlayCtx.fillStyle = "rgba(0,0,0,0.7)";
+      overlayCtx.fillRect(bx, by, tw + 16, bh);
+      overlayCtx.strokeStyle = col;
+      overlayCtx.lineWidth = 2;
+      overlayCtx.setLineDash([5, 4]);
+      overlayCtx.strokeRect(bx, by, tw + 16, bh);
+      overlayCtx.setLineDash([]);
+      overlayCtx.fillStyle = col;
+      overlayCtx.fillText(label, bx + 8, by + bh / 2);
+      // the arrow, out of the picture
+      var cx = Math.min(Math.max(o.x, a), overlayEl.width - a), cy = Math.min(Math.max(o.y, a), overlayEl.height - a);
+      var dir = { left: [-1, 0], right: [1, 0], top: [0, -1], bottom: [0, 1] }[e.side];
+      overlayCtx.beginPath();
+      overlayCtx.moveTo(cx + dir[0] * a * 0.4, cy + dir[1] * a * 0.4);
+      overlayCtx.lineTo(cx - dir[0] * a * 0.6 - dir[1] * a * 0.5, cy - dir[1] * a * 0.6 - dir[0] * a * 0.5);
+      overlayCtx.lineTo(cx - dir[0] * a * 0.6 + dir[1] * a * 0.5, cy - dir[1] * a * 0.6 + dir[0] * a * 0.5);
+      overlayCtx.closePath();
+      overlayCtx.fill();
+    });
+    overlayCtx.restore();
   }
 
   // The name a walking path carries: put on it by a clear recognition, a
@@ -8750,6 +8849,7 @@
   function drawOverlay(keypoints, analysis, matchLabel) {
     overlayCtx.clearRect(0, 0, overlayEl.width, overlayEl.height);
     drawBallPreview();
+    drawOutOfViewTags();
     if (settings.showRoomTags && !calibrating) drawRoomTags();
     if (calibrating) drawCalibrationTaps();
     if (!settings.debugOverlay) {
@@ -9645,15 +9745,37 @@
       pl.dwell[cell] = (pl.dwell[cell] || 0) + dt / 1000;
     });
   }
-  // Where someone out of view could be by now: a circle round where they
-  // were heading (they may have walked on a moment), growing at a stroll,
-  // minus the floor the camera sees (they'd be in view there). Someone
-  // last seen at the table and held there (hidden behind someone, below
-  // the rail) stays put.
-  function mapZone(last, now, heldAtTable) {
+  // Where someone out of view is expected: where they were heading (they
+  // may have walked on a moment) - and out of the camera's sight, since in
+  // it they'd be seen: pushed just past the edge of the floor it sees, the
+  // way they were going (or away from the table). A circle round that,
+  // growing at a stroll to 5 ft, then staying - their tag stays there
+  // until they're seen again. Someone last seen at the table and held there
+  // (hidden behind someone, below the rail) stays put.
+  var MAP_ZONE_MAX_IN = 60;
+  function mapZone(last, now, heldAtTable, fov) {
     var s = (now - last.at) / 1000, v = last.v || { x: 0, y: 0 }, on = Math.min(s, 1.5);
     if (heldAtTable) return { x: last.x, y: last.y, r: MAP_ZONE_START_IN + 6, s: s, held: true };
-    return { x: last.x + v.x * on, y: last.y + v.y * on, r: Math.min(MAP_RANGE_IN * 2, MAP_ZONE_START_IN + MAP_WALK_IN_S * s), s: s };
+    var p = { x: last.x + v.x * on, y: last.y + v.y * on };
+    if (fov && fov.length > 2 && pointInPolygon(p, fov)) {
+      var speed = Math.hypot(v.x, v.y), d = speed > PATH_STILL_IN_S ? { x: v.x / speed, y: v.y / speed } : null;
+      if (!d) {
+        var tcx = calibration ? calibXExtent() / 2 : 0, tcy = calibration ? calibYExtent() / 2 : 0;
+        var ax = p.x - tcx, ay = p.y - tcy, al = Math.hypot(ax, ay) || 1;
+        d = { x: ax / al, y: ay / al };
+      }
+      for (var k = 0; k < 120 && pointInPolygon(p, fov); k++) { p.x += d.x * 6; p.y += d.y * 6; }
+      p.x += d.x * 18; p.y += d.y * 18;
+    }
+    return { x: p.x, y: p.y, r: Math.min(MAP_ZONE_MAX_IN, MAP_ZONE_START_IN + MAP_WALK_IN_S * s), s: s };
+  }
+  function pointInPolygon(p, poly) {
+    var inside = false;
+    for (var i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      var a = poly[i], b = poly[j];
+      if ((a.y > p.y) !== (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x) inside = !inside;
+    }
+    return inside;
   }
   // Inches from a spot (table inches) to the table's edge - 0 over it.
   function distanceOffTable(p) {
@@ -9785,7 +9907,7 @@
     // a 5 ft scale
     var sbX = view.x0 + fs, sbY = view.y1 - fs;
     out.push('<line class="rm-scale" x1="' + svgNum(sbX) + '" y1="' + svgNum(sbY) + '" x2="' + svgNum(sbX + 60) + '" y2="' + svgNum(sbY) + '"/>' + svgText(sbX + 30, sbY - fs * 0.4, "5 ft", fs * 0.8, "#c9a2a2", ' text-anchor="middle"'));
-    roomMapStatic = { key: key, svg: out.join(""), frame: fr, view: view, fovPts: fovPts };
+    roomMapStatic = { key: key, svg: out.join(""), frame: fr, view: view, fovPts: fovPts, fov: fov };
     return roomMapStatic;
   }
 
@@ -9850,12 +9972,12 @@
         if (!pl.last || pl.inView >= 0.5) return;
         // (held at the table only if that's where the map last saw them)
         var atTable = !!(held && held.name && normalizeNameKey(held.name) === normalizeNameKey(pl.name)) && distanceOffTable(pl.last) <= settings.railDistanceInches + 24;
-        zones.push({ z: mapZone(pl.last, now, atTable), label: pl.name + (atTable ? " - at the table, hidden" : " - out of view " + Math.round((now - pl.last.at) / 1000) + "s"), col: mapColour(pl.name), from: pl.last, id: pl.last.trackId });
+        zones.push({ z: mapZone(pl.last, now, atTable, st.fov), label: pl.name + (atTable ? " - at the table, hidden" : " - out of view " + agoText(now - pl.last.at)), col: mapColour(pl.name), from: pl.last, id: pl.last.trackId, tag: !atTable });
       });
       tracks.forEach(function (tr) {
         if (tr.live || now - tr.seenAt > MAP_LOST_SHOW_MS || trackTop(tr).p >= MAP_SURE) return;
         var last = { x: tr.pos.x, y: tr.pos.y, at: tr.seenAt, v: tr.v };
-        zones.push({ z: mapZone(last, now, false), label: tr.id + " lost " + Math.round((now - tr.seenAt) / 1000) + "s", col: "#9aa0a6", from: last, id: tr.id });
+        zones.push({ z: mapZone(last, now, false, st.fov), label: tr.id + " lost " + agoText(now - tr.seenAt), col: "#9aa0a6", from: last, id: tr.id });
       });
     }
     zones.forEach(function (zn) {
@@ -9864,7 +9986,9 @@
       out.push('<g class="rm-zone"' + mask + '><circle cx="' + svgNum(cx) + '" cy="' + svgNum(cy) + '" r="' + svgNum(z.r) + '" fill="' + zn.col + '" fill-opacity="0.18" stroke="' + zn.col + '" stroke-dasharray="6 5" stroke-width="1.4"/></g>');
       out.push('<line class="rm-zone-line" x1="' + svgNum(fx) + '" y1="' + svgNum(fy) + '" x2="' + svgNum(cx) + '" y2="' + svgNum(cy) + '" stroke="' + zn.col + '"/>');
       out.push('<path class="rm-lastseen" d="M' + svgNum(fx - 4) + "," + svgNum(fy - 4) + "L" + svgNum(fx + 4) + "," + svgNum(fy + 4) + "M" + svgNum(fx - 4) + "," + svgNum(fy + 4) + "L" + svgNum(fx + 4) + "," + svgNum(fy - 4) + '" stroke="' + zn.col + '"/>');
-      out.push(svgText(fx, fy - fs * 0.8, zn.label + (roomMapOptions.ids && zn.id ? " [" + zn.id + "]" : ""), fs * 0.8, zn.col, ' text-anchor="middle" class="rm-label"'));
+      // a player's tag where they're expected; an unknown's where it was lost
+      var lx = zn.tag ? cx : fx, ly = zn.tag ? cy - Math.min(z.r, 40) - fs * 0.4 : fy - fs * 0.8;
+      out.push(svgText(lx, ly, zn.label + (roomMapOptions.ids && zn.id ? " [" + zn.id + "]" : ""), fs * (zn.tag ? 0.95 : 0.8), zn.col, ' text-anchor="middle" class="rm-label' + (zn.tag ? " rm-tag" : "") + '"'));
     });
     // everyone in view
     tracks.forEach(function (tr) {
@@ -9956,6 +10080,8 @@
     pointOnRay: function (u, v, h) { var m = cameraModel(); return m ? pointOnRay(m, u, v, h) : null; },
     projectToPixel: function (P) { var m = cameraModel(); return m ? projectToPixel(m, P) : null; },
     visibleFloor: function (reach) { var m = cameraModel(); return m ? visibleFloor(m, reach || MAP_RANGE_IN) : null; },
+    mapZone: mapZone,
+    pointInPolygon: pointInPolygon,
     buildRoomPlan: buildRoomPlan,
     fixSwappedCalibration: fixSwappedCalibration,
     // (tests: a depth map of their own - { w, h, data }, bigger = nearer)

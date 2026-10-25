@@ -90,3 +90,10 @@ Not part of the app - helpers for testing and for running this machine's own cop
   the recording; an ffmpeg clip about as long; "mark" with no recording says so.
   `node tests/probe_recorder.js http://localhost:4235/` against a test server
   (`HOME=tests/tmphome PORT=4235 node server/server.js`).
+- `probe_out_of_view.js` - out of view: a named player who walks out of the picture keeps a tag at
+  the edge they left by (name, time, arrow), is kept past the 12 s a hidden player is looked for,
+  and gets their path and name back coming in at that edge; hidden mid-picture as long: no name;
+  two named players gone the same way: the next one in gets neither; the room map's tag spot just
+  out of the camera's sight, its circle capped at 5 ft. Synthetic people as probe_walking_paths.js.
+  `node tests/probe_out_of_view.js http://localhost:4236/` against a test server
+  (`HOME=tests/tmphome PORT=4236 node server/server.js`).
