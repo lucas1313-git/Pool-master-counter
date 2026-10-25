@@ -11,7 +11,8 @@ var ctx = {
   gameTypes: gameTypes,
   sessionNames: ["Luc", "Luigi", "Bob", "Chris", "Kim"],
   playingNames: ["Luc", "Luigi"],
-  knownNames: ["Luc", "Luigi", "Bob", "Chris", "Kim", "Samantha", "Mario"],
+  knownNames: ["Luc", "Luigi", "Bob", "Chris", "Kim", "Samantha", "Mario", "Bob Smith Jr"],
+  nicknames: [{ nick: "Sammy", name: "Samantha" }, { nick: "Big Mike", name: "Mario" }],
   ratedNames: ["Luc", "Luigi", "Bob", "Chris", "Mario"]
 };
 
@@ -120,6 +121,20 @@ check("the weather is nice", { none: true });
 check("Zelda and Luc are the team against Bob", { type: "versus", sides: [["Zelda", "Luc"], ["Bob"]] });
 check("Luigi and Luc are a team against Bob and Chris", { type: "versus", sides: [["Luigi", "Luc"], ["Bob", "Chris"]] });
 check("add Luc plays to the session", { error: "unknown" });
+
+// --- a whole session in one sentence ---
+check("Set session, race to 5, rotate every 2, players are Luigi, Luc, Bob and Chris, Luigi and Luc are playing",
+  { type: "session", race: 5, every: 2, players: ["Luigi", "Luc", "Bob", "Chris"], playing: ["Luigi", "Luc"] });
+check("set session race to five rotate every two players are luigi luke bob and chris luigi and luke are playing",
+  { type: "session", race: 5, every: 2, players: ["Luigi", "Luc", "Bob", "Chris"], playing: ["Luigi", "Luc"] });
+check("set the session race to 7 players are Sammy and Big Mike", { type: "session", race: 7, players: ["Samantha", "Mario"], playing: null });
+check("set session players are Luigi Luc Kim, Kim and Luc are playing", { type: "session", players: ["Luigi", "Luc", "Kim"], playing: ["Kim", "Luc"] });
+check("set session race to 3 rotation 8-ball and 9-ball every 2 games players are Luigi and Luc", { type: "session", race: 3, every: 2, rotation: ["8ball", "9ball"], players: ["Luigi", "Luc"] });
+check("new session play straight pool race to 2 players are Bob Smith Jr and Luigi", { type: "session", race: 2, game: "straight", players: ["Bob Smith Jr", "Luigi"] });
+check("set session Luigi and Luc are playing", { type: "session", players: null, playing: ["Luigi", "Luc"] });
+check("set session race to 5 players are Luigi Zelda and Luc", { error: "unknown" });
+check("add one point to Sammy", { type: "points", n: 1, name: "Samantha" });
+check("what is Big Mike's q score", { type: "qscore", name: "Mario" });
 
 console.log((count - failures) + " / " + count + " sentences understood as expected");
 process.exit(failures ? 1 : 0);

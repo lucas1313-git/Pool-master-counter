@@ -25346,6 +25346,8 @@
       sessionNames: state.players.map(function (p) { return p.name; }),
       playingNames: activePlayers().map(function (p) { return p.name; }),
       knownNames: contactSheetVisibleNames(),
+      // nicknames answer for their player (Contact Sheet)
+      nicknames: contactSheetVisibleNames().map(function (n) { return { nick: getPlayerContact(n).nickname || "", name: n }; }).filter(function (x) { return x.nick; }),
       ratedNames: Object.keys(PLAYER_RATINGS),
       selectedName: selected ? selected.name : null,
       gameTypes: GAME_TYPE_LIST.map(function (t) { return { id: t.id, label: t.label }; })
@@ -25649,6 +25651,69 @@
         if (confirmModalOverlay.classList.contains("hidden")) return fail(T("voice.err.nothingToAnswer"));
         (cmd.yes ? btnConfirmModalOk : btnConfirmModalCancel).click();
         return { ok: true, text: null };
+
+      // "Set session, race to 5, rotate every 2, players are ..., ... are playing"
+      case "session": {
+        var said = [], r2;
+        if (cmd.rotation && cmd.rotation.length) {
+          r2 = voiceExecute({ type: "rotationSet", games: cmd.rotation, heard: cmd.heard });
+          if (!r2.ok) return r2;
+          said.push(r2.text);
+        } else if (cmd.game) {
+          r2 = voiceExecute({ type: "game", game: cmd.game, heard: cmd.heard });
+          if (!r2.ok) return r2;
+          said.push(r2.text);
+        }
+        if (cmd.race) said.push(voiceSetRace(cmd.race));
+        if (cmd.every) {
+          state.rotation.every = Math.max(1, Math.min(99, cmd.every));
+          saveState();
+          applyRotationIfDue();
+          renderRotation();
+          said.push(T("voice.done.every", { n: state.rotation.every }));
+        }
+        if (cmd.players && cmd.players.length) {
+          // the session: exactly these (from the Contact Sheet); anyone else
+          // leaves it - or, with something recorded this session, goes on standby
+          var keep = [];
+          for (i = 0; i < cmd.players.length; i++) {
+            r = voiceEnsureInSession(cmd.players[i]);
+            if (r.error) return fail(r.error);
+            keep.push(r.player.id);
+          }
+          var left = [], benched = [];
+          state.players.slice().forEach(function (pl) {
+            if (keep.indexOf(pl.id) !== -1) return;
+            if ((state.playerWins[pl.id] || 0) > 0 || (pl.balls || 0) > 0) {
+              if (pl.playing) { pl.playing = false; pl.balls = 0; }
+              benched.push(pl.name);
+            } else {
+              removePlayer(pl.id);
+              left.push(pl.name);
+            }
+          });
+          said.push(T("voice.done.sessionPlayers", { names: keep.map(function (id) { return getPlayer(id).name; }).join(", ") }));
+          if (left.length) said.push(T("voice.done.sessionLeft", { names: left.join(", ") }));
+          if (benched.length) said.push(T("voice.done.standby", { names: benched.join(", ") }));
+          // two players and nobody said: those two play
+          if (!(cmd.playing && cmd.playing.length) && keep.length === 2) cmd.playing = keep.map(function (id) { return getPlayer(id).name; });
+        }
+        if (cmd.playing && cmd.playing.length) {
+          ids = [];
+          for (i = 0; i < cmd.playing.length; i++) {
+            r = voiceEnsureInSession(cmd.playing[i]);
+            if (r.error) return fail(r.error);
+            ids.push(r.player.id);
+          }
+          voiceSeatExactly(ids, null);
+          said.push(T("voice.done.playing", { names: ids.map(function (id) { return getPlayer(id).name; }).join(", ") }));
+        } else {
+          saveState();
+          validateNewPlayerNameInput();
+          renderAll();
+        }
+        return ok(T("voice.done.session") + " " + said.join(" · "));
+      }
 
       case "recMark":
         return recorderCommand("mark");

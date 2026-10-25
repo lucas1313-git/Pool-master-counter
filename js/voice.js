@@ -39,6 +39,10 @@
       "Add one point to Luc", "Add 3 points to Luigi", "Take one point from Luc", "Add one point",
       "Luigi wins the game with 5 balls left on the table", "5 balls left", "Nice game", "Undo", "Yes / No"
     ] },
+    { title: "voice.section.session", note: "voice.note.session", lines: [
+      "Set session, race to 5, rotate every 2, players are Luigi, Luc, Bob and Chris, Luigi and Luc are playing",
+      "Set session, race to 7, rotation 8-ball and 9-ball, players are Luigi and Luc"
+    ] },
     { title: "voice.section.recording", note: "voice.note.recording", lines: [
       "Mark", "Finish"
     ] },
@@ -299,6 +303,8 @@
   var RULES = [
     // --- help, questions, the win window ---
     [/^(?:help|commands|voice commands|what can i say|show (?:me )?(?:the )?(?:voice )?(?:commands|sentences|sheet))$/, function () { return { type: "help" }; }],
+    // --- a whole session in one sentence ---
+    [/^(?:set|setup|set up|start|new)(?: up)?(?: the| a| new| our)? session\b(.*)$/, function (m, s, ctx) { return parseSession(m[1], ctx); }],
     // --- the recording page's cues ---
     [/^(?:mark|mark (?:it|that|this|the shot)|cue (?:it|that)|start (?:a |the )?(?:mark|cue|clip)|bookmark(?: (?:it|that|this))?)$/, function () { return { type: "recMark" }; }],
     [/^(?:finish|finish (?:it|that|the mark|the cue|the clip)|end (?:the )?(?:mark|cue|clip)|stop (?:the )?(?:mark|cue|clip)|cut(?: it| that)?)$/, function () { return { type: "recFinish" }; }],
@@ -434,6 +440,47 @@
     }]
   ];
 
+  // "Set session, race to 5, rotate every 2, players are Luigi Luc Bob and
+  // Chris, Luigi and Luc are playing" - each part optional, in any order,
+  // with or without commas (the recognizer rarely puts any): the parts with
+  // a number or a game are taken out first, what's left is the players.
+  function parseSession(rest, ctx) {
+    var cmd = { type: "session" }, s = " " + String(rest || "").trim() + " ";
+    var take = function (re, fn) { s = s.replace(re, function () { fn.apply(null, arguments); return " "; }); };
+    take(/ (?:and )?(?:race to|race too|raced to|race 2|race) (\d+)(?: games?| racks?)?(?= )/, function (all, n) { cmd.race = num(n); });
+    take(/ (?:and )?(?:(?:rotate|rotation|rotating|change(?: the)?(?: games?)?|switch(?: the)?(?: games?)?|next game) )?every (\d+)(?: games?| racks?)?(?= )/, function (all, n) { cmd.every = num(n); });
+    take(/ (?:and )?(?:the )?(?:rotation(?: is| of)?|rotate between|games are) ((?:g_[a-z0-9]+ (?:and )?)+)/, function (all, g) { cmd.rotation = gamesIn(g, ctx.gameTypes); });
+    take(/ (?:and )?(?:play|playing|the game is|game is|game) (g_[a-z0-9]+)(?= )/, function (all, g) { cmd.game = gameIdFromToken(g.slice(2), ctx.gameTypes); });
+    s = s.replace(/\s+/g, " ").trim();
+    var playingAtEnd = / (?:are|is) (?:playing|in)$| playing$/.test(" " + s);
+    var m = (" " + s).match(/ (?:the )?players (?:are |is |will be )?(.*)$/);
+    var text = m ? m[1] : s;
+    text = text.replace(/ ?(?:(?:are|is) (?:playing|in)|playing)$/, "").trim();
+    if (m) cmd.playersSaid = true;
+    if (text && (m || playingAtEnd)) { cmd.namesText = text; cmd.playingSaid = playingAtEnd; }
+    if (!cmd.race && !cmd.every && !cmd.rotation && !cmd.game && !cmd.namesText) return null;
+    return cmd;
+  }
+
+  // A run of spoken names, no commas ("luigi luc bob and chris") -> the
+  // names, by the players known: each one or two or three words that make a
+  // name, best fit overall. Words that make nobody are kept as unknown.
+  function segmentNames(text, pool) {
+    var words = String(text || "").split(" ").filter(function (w) { return w && !/^(?:and|with|plus|also|then|too|the)$/.test(w); });
+    var best = [{ score: 0, items: [] }];
+    for (var i = 1; i <= words.length; i++) {
+      best[i] = null;
+      for (var len = 1; len <= 3 && len <= i; len++) {
+        var prev = best[i - len];
+        if (!prev) continue;
+        var span = words.slice(i - len, i).join(" "), r = resolveName(span, pool, false);
+        var score = prev.score + (r.name ? 2 - 0.01 * len : len === 1 ? -3 : -100);
+        if (!best[i] || score > best[i].score) best[i] = { score: score, items: prev.items.concat([r.name ? { span: span, name: r.name } : { span: span, name: null, error: r }]) };
+      }
+    }
+    return best[words.length] ? best[words.length].items : [];
+  }
+
   function gameCommand(token, keyword, n, unitWord, ctx) {
     var cmd = { type: "game", game: gameIdFromToken(token.slice(2), ctx.gameTypes) };
     if (n !== undefined) {
@@ -484,13 +531,17 @@
 
   // -> { cmd } with names filled in, or { error }
   function resolve(cmd, ctx) {
+    // nicknames (the Contact Sheet's) answer for their player
+    var nicks = {}, nickNames = [];
+    (ctx.nicknames || []).forEach(function (x) { if (x && x.nick && x.name) { nicks[nameKey(x.nick)] = x.name; nickNames.push(x.nick); } });
+    var real = function (n) { return n && nicks[nameKey(n)] ? nicks[nameKey(n)] : n; };
     var session = ctx.sessionNames || [], playing = ctx.playingNames || [];
-    var everyone = union(session, ctx.knownNames);
+    var everyone = union(session, ctx.knownNames, nickNames);
     var out = JSON.parse(JSON.stringify(cmd)), err = null;
     function one(span, pool, allowNew) {
-      var r = resolveName(span, pool, allowNew);
+      var r = resolveName(span, union(pool, nickNames), allowNew);
       if (r.error && !err) err = r;
-      return r.name || null;
+      return real(r.name) || null;
     }
     function many(spans, pool, allowNew) { return spans.map(function (s) { return one(s, pool, allowNew); }); }
     switch (cmd.type) {
@@ -506,6 +557,25 @@
         break;
       case "addPlayers":
         out.names = many(cmd.names, everyone, true);
+        break;
+      case "session":
+        if (cmd.namesText) {
+          var seg = segmentNames(cmd.namesText, everyone);
+          var bad = seg.filter(function (x) { return !x.name; })[0];
+          if (bad || !seg.length) { err = bad ? (bad.error.error ? bad.error : { error: "unknown", span: bad.span, options: [] }) : { error: "unknown", span: cmd.namesText, options: [] }; break; }
+          var names = seg.map(function (x) { return real(x.name); });
+          // a name said a second time starts the "are playing" part
+          var k = -1;
+          names.forEach(function (n, i) { if (k === -1 && names.slice(0, i).some(function (q) { return nameKey(q) === nameKey(n); })) k = i; });
+          if (cmd.playersSaid) {
+            out.players = k === -1 ? names : names.slice(0, k);
+            out.playing = k !== -1 ? names.slice(k) : cmd.playingSaid ? names.slice() : null;
+          } else {
+            out.players = null;
+            out.playing = names;
+          }
+          delete out.namesText;
+        }
         break;
       case "versus":
         out.sides = [many(cmd.sides[0], everyone, true), many(cmd.sides[1], everyone, true)];
@@ -532,7 +602,7 @@
     return firstError || { none: true, heard: alternatives[0] || "" };
   }
 
-  var api = { SHEET: SHEET, normalize: normalize, parse: parse, resolve: resolve, resolveName: resolveName, understand: understand, soundKey: soundKey };
+  var api = { SHEET: SHEET, segmentNames: segmentNames, normalize: normalize, parse: parse, resolve: resolve, resolveName: resolveName, understand: understand, soundKey: soundKey };
   root.PMCVoiceParser = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 

@@ -1452,5 +1452,10 @@
   "voice.err.notRecording": "錄影頁面冇喺度錄緊",
   "voice.err.nothingMarked": "冇標記可以結束",
   "voice.done.marked": "已標記",
-  "voice.done.finished": "完成 - 標記已保存"
+  "voice.done.finished": "完成 - 標記已保存",
+  "voice.section.session": "成個場次",
+  "voice.note.session": "一句講晒,每部分都係可選,次序不拘:搶幾多局、輪換嘅局種同幾耐換一次、球員(聯絡名單入面嘅 - 用花名都得),同埋邊個上場(其他人全部候場)。冇提到嘅人會離開場次 - 如果今次場次有紀錄,就改為候場。",
+  "voice.done.session": "場次已設定:",
+  "voice.done.sessionPlayers": "球員:{{names}}",
+  "voice.done.sessionLeft": "離開咗場次:{{names}}"
 }

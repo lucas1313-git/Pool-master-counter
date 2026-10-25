@@ -107,3 +107,7 @@ Not part of the app - helpers for testing and for running this machine's own cop
   for a shooter nobody's looks name - never over a clear match of someone else.
   `node tests/probe_expected_shooter.js http://localhost:4236/` against a test server
   (`HOME=tests/tmphome PORT=4236 node server/server.js`).
+- `make_voice_pdf.js` - makes `docs/voice-commands.pdf` (and its .html): how to talk to the
+  scoreboard, every sentence (from js/voice.js's own SHEET and english.json, so it can't drift),
+  the Siri Shortcut set-up with this computer's address, troubleshooting, recording marks.
+  `node tests/make_voice_pdf.js [http://<address>:4173]`.

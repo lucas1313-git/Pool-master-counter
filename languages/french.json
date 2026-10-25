@@ -1452,5 +1452,10 @@
   "voice.err.notRecording": "La page d'enregistrement n'enregistre pas",
   "voice.err.nothingMarked": "Aucun repère à terminer",
   "voice.done.marked": "Repère posé",
-  "voice.done.finished": "Terminé - le repère est gardé"
+  "voice.done.finished": "Terminé - le repère est gardé",
+  "voice.section.session": "Toute la session",
+  "voice.note.session": "Une seule phrase, chaque partie facultative, dans n'importe quel ordre : la course, les jeux de la rotation et leur fréquence, les joueurs (de la Fiche Contacts - les surnoms marchent), et qui joue (tous les autres en Standby). Quelqu'un qui n'est pas nommé quitte la session - ou, s'il a des parties enregistrées dans cette session, passe en Standby.",
+  "voice.done.session": "Session réglée :",
+  "voice.done.sessionPlayers": "Joueurs : {{names}}",
+  "voice.done.sessionLeft": "Ont quitté la session : {{names}}"
 }

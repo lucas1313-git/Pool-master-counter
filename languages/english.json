@@ -1452,5 +1452,10 @@
   "voice.err.notRecording": "The recording page isn't recording",
   "voice.err.nothingMarked": "Nothing is marked to finish",
   "voice.done.marked": "Marked",
-  "voice.done.finished": "Finished - the cue is kept"
+  "voice.done.finished": "Finished - the cue is kept",
+  "voice.section.session": "Whole session",
+  "voice.note.session": "One sentence, every part optional, in any order: the race, the rotation's games and how often it changes, the players (from the Contact Sheet - nicknames are fine), and who's playing (everyone else on standby). Anyone not named leaves the session - or, with games recorded this session, goes on standby.",
+  "voice.done.session": "Session set:",
+  "voice.done.sessionPlayers": "Players: {{names}}",
+  "voice.done.sessionLeft": "Left the session: {{names}}"
 }

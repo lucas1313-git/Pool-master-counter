@@ -1,0 +1,107 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>Voice commands and Siri</title>
+<style>
+  @page { size: Letter; margin: 16mm 15mm 16mm 15mm; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif; color: #1d1414; font-size: 10.5pt; line-height: 1.42; margin: 0; }
+  header { border-bottom: 3px solid #b8890f; padding-bottom: 8px; margin-bottom: 14px; }
+  h1 { font-size: 22pt; margin: 0; color: #5a1414; }
+  .sub { color: #6b5555; margin-top: 2px; }
+  h2 { font-size: 14pt; color: #5a1414; margin: 18px 0 6px; border-bottom: 1px solid #e3d3c3; padding-bottom: 3px; }
+  h3 { font-size: 11.5pt; margin: 0 0 2px; color: #7a4a00; }
+  .cmds { break-inside: avoid; margin: 0 0 11px; }
+  .note { margin: 0 0 4px; color: #4a3a3a; font-size: 9.5pt; }
+  ul { margin: 0; padding-left: 18px; }
+  li { margin: 1px 0; font-weight: 600; }
+  ol.steps li { font-weight: 400; margin: 4px 0; }
+  .how { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 18px; }
+  .box { border: 1px solid #e3d3c3; border-radius: 8px; padding: 8px 11px; background: #fbf7f1; break-inside: avoid; }
+  .box b { color: #5a1414; }
+  code, .url { font-family: "SF Mono", Menlo, monospace; font-size: 9.5pt; background: #f3ebe0; padding: 1px 4px; border-radius: 4px; }
+  .page-break { break-before: page; }
+  .say { font-size: 12pt; font-weight: 700; color: #5a1414; }
+  .foot { margin-top: 18px; color: #8a7a7a; font-size: 8.5pt; border-top: 1px solid #e3d3c3; padding-top: 6px; }
+  table.trouble td { vertical-align: top; padding: 3px 8px 3px 0; }
+  table.trouble td:first-child { font-weight: 700; white-space: nowrap; color: #5a1414; }
+</style></head><body>
+<header>
+  <h1>🎱 Pool Master Counter — Voice commands &amp; Siri</h1>
+  <div class="sub">Say it instead of tapping it · English · October 25, 2026</div>
+</header>
+
+<h2>How to talk to the scoreboard</h2>
+<div class="how">
+  <div class="box"><b>Hold to talk.</b> Hold the <b>🎤 Talk</b> button (score section, top row) — or hold the <b>.</b> key on the number pad — say <b>one sentence</b>, then let go. A quick tap on 🎤 Talk shows all the sentences.</div>
+  <div class="box"><b>What you see and hear.</b> A big line at the bottom shows what was heard; a message at the top says what was done. Points beep like the number pad; questions (Q-score, the score) are answered out loud.</div>
+  <div class="box"><b>Names.</b> Anyone on the scoreboard or in the Contact Sheet — <b>nicknames work too</b>. A name that sounds alike is found (“Luke” for Luc); when two names are too close, it asks instead of guessing.</div>
+  <div class="box"><b>First time.</b> The browser asks to use the microphone — allow it. Chrome needs the internet (it sends the sound to Google to turn it into words). English only for now.</div>
+</div>
+
+<h2>The sentences</h2>
+<p class="note">Luigi, Luc, Bob and Chris stand for your players' names; numbers and games are examples. Say one sentence at a time.</p>
+
+  <section class="cmds">
+    <h3>Game and race</h3>
+    <p class="note">Picks the game being played now (this turns the rotation off). &quot;Race to&quot; is the number of games to win; &quot;target&quot; is the points or racks within one game.</p>
+    <ul><li>“Play 8-ball”</li><li>“Now playing straight pool”</li><li>“Play 9-ball race to 5”</li><li>“Race to 7”</li><li>“Target 100 points”</li></ul>
+  </section>
+  <section class="cmds">
+    <h3>Rotation</h3>
+    <p class="note">The games played in turn - say them in order.</p>
+    <ul><li>“Rotation 8-ball and 9-ball”</li><li>“Add 10-ball to the rotation”</li><li>“Remove 9-ball from the rotation”</li><li>“Change game every 2 games”</li><li>“Rotation on”</li><li>“Single game”</li><li>“Clear the rotation”</li></ul>
+  </section>
+  <section class="cmds">
+    <h3>Players</h3>
+    <p class="note">Anyone on the scoreboard or in the Contact Sheet - a new name is added. &quot;Plays against&quot; seats exactly those two and puts everyone else on standby.</p>
+    <ul><li>“Add Luigi to the session”</li><li>“Luigi is playing”</li><li>“Luigi is standby”</li><li>“Luigi plays against Luc”</li></ul>
+  </section>
+  <section class="cmds">
+    <h3>Teams</h3>
+    <p class="note">Seats them as Team A and Team B; everyone else goes on standby.</p>
+    <ul><li>“Luigi and Luc against Bob and Chris”</li><li>“Luigi and Luc are team A against Bob and Chris as team B”</li></ul>
+  </section>
+  <section class="cmds">
+    <h3>Scoring</h3>
+    <p class="note">Points games: the beep confirms, as on the number pad; without a name, the point goes to the selected player. Rack games: say who won - the balls left, &quot;Nice game&quot; and &quot;Undo&quot; work while the win window is open.</p>
+    <ul><li>“Add one point to Luc”</li><li>“Add 3 points to Luigi”</li><li>“Take one point from Luc”</li><li>“Add one point”</li><li>“Luigi wins the game with 5 balls left on the table”</li><li>“5 balls left”</li><li>“Nice game”</li><li>“Undo”</li><li>“Yes / No”</li></ul>
+  </section>
+  <section class="cmds">
+    <h3>Whole session</h3>
+    <p class="note">One sentence, every part optional, in any order: the race, the rotation's games and how often it changes, the players (from the Contact Sheet - nicknames are fine), and who's playing (everyone else on standby). Anyone not named leaves the session - or, with games recorded this session, goes on standby.</p>
+    <ul><li>“Set session, race to 5, rotate every 2, players are Luigi, Luc, Bob and Chris, Luigi and Luc are playing”</li><li>“Set session, race to 7, rotation 8-ball and 9-ball, players are Luigi and Luc”</li></ul>
+  </section>
+  <section class="cmds">
+    <h3>Recording</h3>
+    <p class="note">With the recording page open (🎬 Record, in this browser): Mark starts a cue a little before now (20 s, set on that page), Finish ends it - see 🎞️ Cues.</p>
+    <ul><li>“Mark”</li><li>“Finish”</li></ul>
+  </section>
+  <section class="cmds">
+    <h3>Questions</h3>
+    <p class="note">The answer is spoken out loud.</p>
+    <ul><li>“What is Luigi's Q-score today?”</li><li>“What's the score?”</li><li>“Help”</li></ul>
+  </section>
+
+<h2 class="page-break">Siri — “Hey Siri, Scoreboard”</h2>
+<p>With a Siri Shortcut you can say any of these sentences without touching anything — from your iPhone, iPad or the Mac. Siri listens, sends the sentence to the scoreboard on your Mac, and says what was done (“Luc plus 1, now 13”).</p>
+<h3>Make the Shortcut once</h3>
+<ol class="steps">
+  <li>Open the <b>Shortcuts</b> app, tap <b>+</b>, and name the shortcut <b>Scoreboard</b> (the name is what you'll say to Siri).</li>
+  <li>Add the action <b>Dictate Text</b>. Set its Language to <b>English</b> (Stop Listening: After Pause).</li>
+  <li>Add <b>Get Contents of URL</b>. URL: <span class="url">http://10.0.0.52:4173/voice</span>. Tap <b>Show More</b>: Method <b>POST</b>, Request Body <b>JSON</b>, then <b>Add new field → Text</b>: key <code>text</code>, value: the <b>Dictated Text</b> variable.</li>
+  <li>Add <b>Speak Text</b> — it speaks the <b>Contents of URL</b> (the scoreboard's answer).</li>
+</ol>
+<h3>Use it</h3>
+<p>Say <span class="say">“Hey Siri, Scoreboard”</span>, wait for Siri to listen, then say your sentence — for example <span class="say">“add one point to Luc”</span>, <span class="say">“mark”</span> or <span class="say">“set session, race to 5, players are Luigi, Luc, Bob and Chris, Luigi and Luc are playing”</span>.</p>
+<h3>If it doesn't work</h3>
+<table class="trouble">
+  <tr><td>“The scoreboard isn't open”</td><td>Open the scoreboard on the Mac (reload it once after an update). It must stay open — in the background is fine.</td></tr>
+  <tr><td>Nothing happens on the iPhone</td><td>The phone must be on the same Wi-Fi as the Mac. The first time, iOS asks to let Shortcuts use the local network — allow it.</td></tr>
+  <tr><td>The address changed</td><td>The Mac's address can change (a new router, a different Wi-Fi). The scoreboard's sentence list (a tap on 🎤 Talk) ends with a Siri section showing the current one — update step 3.</td></tr>
+  <tr><td>Two scoreboards open</td><td>The one used last (on screen) does the sentence — never both, so a point is never counted twice.</td></tr>
+  <tr><td>A wrong name</td><td>Say the full name, or the nickname from the Contact Sheet; the big line at the bottom of the scoreboard shows what was heard.</td></tr>
+</table>
+
+<h2>Recording: marking the best moments</h2>
+<p>With the recording page open (<b>🎬 Record</b> in the scoreboard's header), say <span class="say">“mark”</span> right after a good shot: the cue starts <b>20 seconds earlier</b> — the beginning of the shot — and is named for the player and where the race stood then (e.g. <code>Luigi-8-Ball-game 5 of raceto 7-1m35s-…-cued</code>). Say <span class="say">“finish”</span> to end it. On the recording page's 🎞️ Cues panel (or the Cues page) every cue can be watched, its start and end set by hand, and exported as a clip — even while it records.</p>
+
+<div class="foot">Made from the app's own sentence list (js/voice.js) — what's here is exactly what the scoreboard understands. Siri address: http://10.0.0.52:4173/voice.</div>
+</body></html>

@@ -1452,5 +1452,10 @@
   "voice.err.notRecording": "Hindi nagre-record ang recording page",
   "voice.err.nothingMarked": "Walang naka-mark na tatapusin",
   "voice.done.marked": "Na-mark",
-  "voice.done.finished": "Tapos - naitago ang cue"
+  "voice.done.finished": "Tapos - naitago ang cue",
+  "voice.section.session": "Buong session",
+  "voice.note.session": "Isang pangungusap, bawat bahagi ay opsyonal, kahit anong pagkakasunod: ang race, ang mga laro ng rotation at kung gaano kadalas magpalit, ang mga player (mula sa Listahan ng Contact - puwede ang palayaw), at kung sino ang naglalaro (Standby ang lahat ng iba). Ang hindi nabanggit ay aalis sa session - o, kung may larong naitala sa session na ito, mapupunta sa Standby.",
+  "voice.done.session": "Naitakda ang session:",
+  "voice.done.sessionPlayers": "Mga player: {{names}}",
+  "voice.done.sessionLeft": "Umalis sa session: {{names}}"
 }

@@ -1452,5 +1452,10 @@
   "voice.err.notRecording": "La página de grabación no está grabando",
   "voice.err.nothingMarked": "No hay ninguna marca que terminar",
   "voice.done.marked": "Marcado",
-  "voice.done.finished": "Terminado - la marca se guarda"
+  "voice.done.finished": "Terminado - la marca se guarda",
+  "voice.section.session": "Toda la sesión",
+  "voice.note.session": "Una sola frase, cada parte opcional, en cualquier orden: la carrera, los juegos de la rotación y cada cuánto cambia, los jugadores (de la Ficha de Contactos - los apodos sirven) y quién juega (todos los demás en Standby). Quien no se nombre sale de la sesión - o, si tiene partidas registradas en esta sesión, pasa a Standby.",
+  "voice.done.session": "Sesión lista:",
+  "voice.done.sessionPlayers": "Jugadores: {{names}}",
+  "voice.done.sessionLeft": "Salieron de la sesión: {{names}}"
 }

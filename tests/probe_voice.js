@@ -202,10 +202,16 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   s = await say("the weather is nice");
   check("not a command: \"Didn't understand\"", /Didn't understand/.test(s.toast), s.toast);
 
+  // --- a whole session in one sentence ---
+  s = await say("Set session, race to 5, rotate every 2, players are Luigi, Luc and Bob, Luigi and Bob are playing");
+  check("\"Set session, race to 5, rotate every 2, players are Luigi, Luc and Bob, Luigi and Bob are playing\"",
+    s.race === 5 && s.every === 2 && Object.keys(s.players).sort().join() === "Bob,Luc,Luigi" && s.players.Luigi.playing && s.players.Bob.playing && !s.players.Luc.playing, { race: s.race, every: s.every, players: s.players });
+  check("...said back: the race, the rotation, the players, who left, who's playing", /Session set:.*Race to 5.*every 2.*Players: Luigi, Luc, Bob.*Left the session: .*Chris.*Playing: Luigi, Bob/.test(s.toast), s.toast);
+
   // --- the sheet ---
   await say("Help");
   const sheet = await page.evaluate(() => ({ open: !document.getElementById("voice-sheet-overlay").classList.contains("hidden"), sections: document.querySelectorAll("#voice-sheet-body .voice-sheet-section:not(.voice-sheet-siri)").length, siri: !!document.querySelector("#voice-sheet-body .voice-sheet-siri"), text: document.getElementById("voice-sheet-body").textContent }));
-  check("\"Help\" opens the sentences sheet (7 sections of sentences + Siri)", sheet.open && sheet.sections === 7 && sheet.siri && /Luigi wins the game with 5 balls left/.test(sheet.text), sheet);
+  check("\"Help\" opens the sentences sheet (8 sections of sentences + Siri)", sheet.open && sheet.sections === 8 && sheet.siri && /Luigi wins the game with 5 balls left/.test(sheet.text), sheet);
   if (OUT) { await page.screenshot({ path: OUT + "/voice_sheet.png" }); }
   await page.keyboard.press("Escape");
   await sleep(200);
