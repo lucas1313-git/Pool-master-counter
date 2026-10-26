@@ -18,7 +18,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261026a">
+<link rel="stylesheet" href="css/style.css?v=20261026b">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -710,24 +710,7 @@
       <!-- 1. Back up: where to, and one button -->
       <div class="backup-subsection bk-card" id="bk-backup">
         <h3 class="backup-subsection-title" data-i18n="bk.backupTitle">💾 Back up</h3>
-        <div class="bk-dest" role="radiogroup" aria-labelledby="bk-dest-label">
-          <span class="bk-dest-label" id="bk-dest-label" data-i18n="bk.destLabel">Backups go to:</span>
-          <label class="bk-choice"><input type="radio" name="bk-dest" value="device" id="bk-dest-device"> <span><b data-i18n="bk.destDevice">This device</b><small data-i18n="bk.destDeviceHint">A file in Downloads. On an iPhone or iPad, Files opens: pick iCloud Drive to keep it in iCloud.</small></span></label>
-          <label class="bk-choice"><input type="radio" name="bk-dest" value="drive" id="bk-dest-drive"> <span><b data-i18n="bk.destDrive">Google Drive</b><small data-i18n="bk.destDriveHint">A folder in your Google account, the same from every device.</small></span></label>
-        </div>
-        <div class="bk-drive hidden" id="bk-drive-box">
-          <p class="player-stats-note" id="drive-connect-status" aria-live="polite"></p>
-          <div class="row" id="drive-connect-buttons">
-            <button type="button" id="btn-drive-connect" class="btn btn-primary" data-i18n="backup.driveConnect">🔗 Connect Google Drive</button>
-            <button type="button" id="btn-drive-disconnect" class="btn btn-ghost hidden" data-i18n="backup.driveDisconnect">Disconnect</button>
-          </div>
-          <label class="bk-field-label" for="drive-folder-link-input" data-i18n="bk.folderLabel">Which folder? In Google Drive, open the folder, then Share → Copy link, and paste it here:</label>
-          <div class="row" id="drive-backup-folder">
-            <input type="text" id="drive-folder-link-input" data-i18n-placeholder="bk.folderPlaceholder" placeholder="https://drive.google.com/drive/folders/…">
-            <button type="button" id="btn-drive-folder-open" class="btn btn-ghost" data-i18n="bk.openFolder">📁 Open</button>
-          </div>
-          <p class="player-stats-note" id="drive-backup-status" aria-live="polite"></p>
-        </div>
+        <p class="player-stats-note bk-where" id="bk-where" aria-live="polite"></p>
         <button type="button" id="btn-backup-now" class="btn btn-primary bk-big" data-i18n="bk.backupNow">💾 Back up now</button>
         <p class="player-stats-note bk-last" id="bk-last" aria-live="polite"></p>
       </div>
@@ -735,7 +718,7 @@
       <!-- 2. Restore: one button, then which backup and how -->
       <div class="backup-subsection bk-card" id="bk-restore">
         <h3 class="backup-subsection-title" data-i18n="bk.restoreTitle">⬇️ Restore</h3>
-        <p class="player-stats-note" data-i18n="bk.restoreIntro">Bring back a backup, from a file or from your Google Drive folder. You choose whether it's added to what's here, or replaces it.</p>
+        <p class="player-stats-note" data-i18n="bk.restoreIntro">Pick a backup file (on an iPhone or iPad you can look in iCloud Drive or Google Drive). Then you choose whether it's added to what's here, or replaces it.</p>
         <button type="button" id="btn-restore" class="btn btn-primary bk-big" data-i18n="bk.restoreButton">⬇️ Restore a backup…</button>
         <input type="file" id="import-file-input" accept="application/json" class="hidden">
         <input type="file" id="squash-import-file-input" accept="application/json" class="hidden">
@@ -788,9 +771,23 @@
             <button type="button" id="btn-bk-web-restore" class="btn btn-ghost" data-i18n="bk.webLinkButton">⬇️ Restore</button>
           </div>
         </div>
-        <div class="bk-more-item" id="drive-connect">
-          <h4 class="session-subsection-subheading" data-i18n="bk.googleSetupTitle">🔧 Google sign-in setup</h4>
-          <p class="player-stats-note" data-i18n="bk.googleSetupNote">Only needed once, by whoever runs this app, if "Connect Google Drive" says Google sign-in isn't set up. It needs an OAuth client from Google Cloud (❓ shows the steps).</p>
+        <div class="bk-more-item hidden" id="bk-drive-box">
+          <h4 class="session-subsection-subheading" data-i18n="bk.driveTitle">☁️ Straight into a Google Drive folder</h4>
+          <p class="player-stats-note" id="drive-connect-status" aria-live="polite"></p>
+          <div class="row hidden" id="drive-connect-buttons">
+            <button type="button" id="btn-drive-connect" class="btn btn-primary" data-i18n="backup.driveConnect">🔗 Connect Google Drive</button>
+            <button type="button" id="btn-drive-disconnect" class="btn btn-ghost hidden" data-i18n="backup.driveDisconnect">Disconnect</button>
+          </div>
+          <label class="bk-field-label" for="drive-folder-link-input" data-i18n="bk.folderLabel">Which folder? In Google Drive, open the folder, then Share → Copy link, and paste it here:</label>
+          <div class="row" id="drive-backup-folder">
+            <input type="text" id="drive-folder-link-input" data-i18n-placeholder="bk.folderPlaceholder" placeholder="https://drive.google.com/drive/folders/…">
+            <button type="button" id="btn-drive-folder-open" class="btn btn-ghost" data-i18n="bk.openFolder">📁 Open</button>
+          </div>
+          <p class="player-stats-note" id="drive-backup-status" aria-live="polite"></p>
+        </div>
+        <div class="bk-more-item hidden" id="drive-connect">
+          <h4 class="session-subsection-subheading" data-i18n="bk.googleSetupTitle">🔧 Google sign-in (for the app's owner)</h4>
+          <p class="player-stats-note" data-i18n="bk.googleSetupNote">Only if you've made a Google Cloud OAuth client for this app - most people never need this. ❓ shows the steps.</p>
           <div class="row" id="drive-connect-setup">
             <input type="text" id="drive-client-id-input" autocomplete="off" spellcheck="false" data-i18n-placeholder="backup.driveClientIdPlaceholder" placeholder="OAuth client ID (…apps.googleusercontent.com)">
             <input type="password" id="drive-client-secret-input" autocomplete="new-password" data-i18n-placeholder="backup.driveClientSecretPlaceholder" placeholder="Client secret">
@@ -1665,7 +1662,7 @@
       <h3 data-i18n="help.nav.main">Main Page</h3>
       <p data-i18n="help.main.intro">The main page is where every game gets played. Every panel here is collapsed by default with a one-line summary of what's inside — tap the chevron to expand it. The "🎨 Theme" dropdown at the very top switches the whole app's colors and font in one tap and remembers your choice — six dark palettes, two bright/light ones, and two high-contrast pairs (one dark, one light) for maximum legibility.</p>
       <ul>
-        <li data-i18n-html="help.main.backup"><strong>Backup &amp; Restore</strong> — choose where backups go (this device, or a Google Drive folder), then <strong>💾 Back up now</strong> saves one file with everything: players, games, stats, ratings, saved lists and settings. <strong>⬇️ Restore a backup</strong> asks which backup (a file, or one in your Drive folder) and how: <em>Add to what's here</em> (nothing here is lost) or <em>Replace what's here</em> (what's here is backed up first). Recover Data undoes a reset; Share results shares the standings or the last session. Naming a backup, a backup for a shared folder, restoring from a web address and the one-time Google sign-in setup are under ⚙️ More options.</li>
+        <li data-i18n-html="help.main.backup"><strong>Backup &amp; Restore</strong> — <strong>💾 Back up now</strong> saves one file with everything: players, games, stats, ratings, saved lists and settings. On a phone or tablet you choose where it goes (Save to Files: iCloud Drive, Google Drive…); on a computer it goes to Downloads. <strong>⬇️ Restore a backup</strong> lets you pick a backup file, then asks how: <em>Add to what's here</em> (nothing here is lost) or <em>Replace what's here</em> (what's here is backed up first). Recover Data undoes a reset; Share results shares the standings or the last session. Naming a backup, a backup for a shared folder and restoring from a web address are under ⚙️ More options.</li>
         <li data-i18n-html="help.main.gameOrder"><strong>Games Rotations</strong> — Turn on "Rotate game types automatically" to cycle through a sequence of game rules on their own. Each step in the order is its own rule — game type, target number, and unit (rack/balls/points) — so the same game type can appear twice with different rules (e.g. "8-Ball — 1 rack" then "8-Ball — 3 racks"). The target number and unit are editable right in the list — change either any time without removing and re-adding the step. "Switch every" controls how many games play before advancing. Load Rotation swaps in a saved sequence outright; any new sequence you build is auto-saved as a loadable entry the moment it's set up or played.</li>
         <li data-i18n-html="help.main.currentGame"><strong>Current Session</strong> — Tournament Setup: Load Setup applies a saved configuration in one tap; Tournament Type is either Race to Wins (set how many wins ends it) or Timed Tournament (set a duration instead); Games Rotation is either Rotate game types automatically or Single Game; Use Fargo rating to balance the race shortens the underdog's target based on the rating gap (❓ for the exact math). Current Game: the game type, the target number, and the unit (rack/balls/points — adjustable independently of the game type's usual default, e.g. One Pocket to "1 rack" instead of "8 balls"), plus the Shot Counter. Reset Current Game (clearing the live score without crediting a win) lives in the All Resets section below; Undo Last Win is the − button on a player's card once their game reaches its target.</li>
         <li data-i18n-html="help.main.players"><strong>Players</strong> — Add a player by name (auto-capitalized, checked live for a duplicate nickname — the Add button stays disabled until the name is unique). The optional "Starting rating" field lets you seed a brand-new player's rating from a number they've earned elsewhere (another league, another tournament) — it only takes effect for a name that's never been rated on this device before; it's ignored for anyone already tracked. Tap a player's Standby/Playing badge to move them in or out of the current game. The ✕ removes someone from today's roster only — career stats and rating stay on the device; no confirmation if no games have been played yet this session, since there's nothing to lose. Load Player List swaps in players from a saved list (adds anyone missing, never resets what's already there); Export/Import Player Lists use a separate, hand-editable JSON format just for lists.</li>
@@ -2657,8 +2654,8 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20261026a"></script>
-<script src="js/camera-client.js?v=20261026a"></script>
-<script src="js/voice.js?v=20261026a"></script>
+<script src="js/app.js?v=20261026b"></script>
+<script src="js/camera-client.js?v=20261026b"></script>
+<script src="js/voice.js?v=20261026b"></script>
 </body>
 </html>
