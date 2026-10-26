@@ -8468,7 +8468,7 @@
   // builders, all sharing the same computeDayReportData source.
   // Single source of truth for the colorful report's content, consumed by
   // both buildDayReportColorfulHtml (the viewable page) and
-  // buildDayReportImageBlob (the native PNG used when sharing straight
+  // collectDayReportAttachmentsNow (the native PNG used when sharing straight
   // from the main app) - one pass over computeDayReportData, plain data
   // only, no HTML/canvas concerns here.
   function computeReportImageData(dateStr, exactDate, skipTs) {
@@ -8954,27 +8954,6 @@
     return canvas;
   }
 
-  // Promise<Blob|null> - resolves null (rather than rejecting) on any
-  // drawing failure, so a caller building a share-attachment list can
-  // just skip a null entry instead of needing its own try/catch.
-  function buildDayReportImageBlob(dateStr) {
-    return buildDayReportImageBlobFromData(computeReportImageData(dateStr));
-  }
-
-  function buildDayReportImageBlobFromData(reportImageData) {
-    return new Promise(function (resolve) {
-      try {
-        var canvas = buildReportCanvasFromData(reportImageData);
-        canvas.toBlob(function (blob) {
-          resolve(blob || null);
-        }, "image/png");
-      } catch (e) {
-        console.warn("Could not build colorful report image.", e);
-        resolve(null);
-      }
-    });
-  }
-
   // The report is a fully separate document once opened (its own tab, its
   // own JS context) - it has no access back to this app's functions, so it
   // needs its own copy of the canShare({files})-first, download-fallback
@@ -9198,17 +9177,15 @@
       "document.body.appendChild(a);a.click();",
       "setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},1000);",
       "}",
+      "function toBlobNow(canvas){",
+      'var d=canvas.toDataURL("image/png"),i=d.indexOf(","),bin=atob(d.slice(i+1)),b=new Uint8Array(bin.length);',
+      "for(var k=0;k<bin.length;k++)b[k]=bin.charCodeAt(k);",
+      'return new Blob([b],{type:"image/png"});',
+      "}",
+      // (Safari only opens the share sheet straight from the tap: the picture and the sheet, both within it)
       "function shareIt(){",
-      'var btn=document.getElementById("shareReportBtn");',
-      "var originalLabel=btn.textContent;",
-      'btn.textContent="⏳ Preparing…";',
-      "btn.disabled=true;",
-      "setTimeout(function(){",
-      "try{",
-      "var canvas=renderReportPNG();",
-      "canvas.toBlob(function(blob){",
-      "btn.textContent=originalLabel;btn.disabled=false;",
-      "if(!blob)return;",
+      "var blob;",
+      "try{blob=toBlobNow(renderReportPNG());}catch(e){return;}",
       'var file=new File([blob],filename,{type:"image/png"});',
       "if(navigator.canShare&&navigator.canShare({files:[file]})){",
       'navigator.share({files:[file],title:document.title}).catch(function(err){',
@@ -9216,9 +9193,6 @@
       "fallbackDownload(blob);",
       "});",
       "}else{fallbackDownload(blob);}",
-      '},"image/png");',
-      "}catch(e){btn.textContent=originalLabel;btn.disabled=false;}",
-      "},10);",
       "}",
       'document.getElementById("shareReportBtn").addEventListener("click",shareIt);',
       "})();",
@@ -16992,37 +16966,37 @@
   }
 
   // Builds whichever File attachments the two "Attach ... when sharing"
-  // checkboxes call for, in parallel - the backup JSON is synchronous
-  // (built from data already in memory), the colorful report PNG isn't
-  // (a canvas draw + toBlob), so this always returns a Promise even
-  // though the common case (only the backup checkbox, or neither) never
-  // actually waits on anything.
-  function collectDayReportAttachments() {
+  // checkboxes call for - right away, no waiting: Safari (iPhone, iPad)
+  // only opens the share sheet straight from the tap - asked even a moment
+  // later (after a canvas.toBlob, or any promise), it refuses, and the
+  // report went out as a download and bare text instead. The picture is
+  // drawn at once anyway; toDataURL hands it over at once too. The backup
+  // leaves out contacts (email/phone) - no business leaving the device in
+  // a file handed to whoever's on the other end of Mail/Messages/AirDrop.
+  function collectDayReportAttachmentsNow() {
     var files = [];
-    var tasks = [];
     if (dayReportAttachBackupCheckbox.checked) {
-      // Reuses the same full-backup payload as exportAllData, minus
-      // contacts (email/phone), which have no business leaving the
-      // device in a file meant to be handed to whoever's on the other
-      // end of Mail/Messages/AirDrop. Sending an empty object rather
-      // than omitting the key entirely still round-trips cleanly
-      // through mergeContactsData if this file is ever imported
-      // elsewhere: local contact info always wins on a name conflict
-      // there, and an empty import adds nothing.
       var payload = buildBackupPayload();
       payload.contacts = {};
       files.push(new File([JSON.stringify(payload, null, 2)], defaultBackupFilename(), { type: "application/json" }));
     }
     if (dayReportAttachColorfulCheckbox.checked) {
-      tasks.push(
-        buildDayReportImageBlob(todayDateStr()).then(function (blob) {
-          if (blob) files.push(new File([blob], "pool-master-counter-report-" + todayDateStr() + ".png", { type: "image/png" }));
-        })
-      );
+      try {
+        var blob = dataUrlToBlob(buildReportCanvasFromData(computeReportImageData(todayDateStr())).toDataURL("image/png"));
+        if (blob) files.push(new File([blob], "pool-master-counter-report-" + todayDateStr() + ".png", { type: "image/png" }));
+      } catch (e) {
+        console.warn("Could not build colorful report image.", e);
+      }
     }
-    return Promise.all(tasks).then(function () {
-      return files;
-    });
+    return files;
+  }
+  function dataUrlToBlob(dataUrl) {
+    var comma = dataUrl.indexOf(",");
+    if (comma < 0) return null;
+    var mime = (dataUrl.slice(0, comma).match(/data:([^;,]+)/) || [])[1] || "application/octet-stream";
+    var bin = atob(dataUrl.slice(comma + 1)), bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new Blob([bytes], { type: mime });
   }
 
   function downloadFileObject(file) {
@@ -17062,7 +17036,8 @@
   // link, or a text-only share) so a broken share sheet degrades back
   // to "everything except the actual attachment" instead of "nothing".
   function shareReportWithAttachments(text, onFallback) {
-    collectDayReportAttachments().then(function (files) {
+    // (built and shared within this tap - see collectDayReportAttachmentsNow)
+    (function (files) {
       if (!files.length) {
         if (onFallback) onFallback();
         return;
@@ -17091,7 +17066,7 @@
       } else {
         fallback();
       }
-    });
+    })(collectDayReportAttachmentsNow());
   }
 
   // Neither attach checkbox is on: a plain text share of the day report
@@ -30608,37 +30583,46 @@
   renderLastBackup();
   refreshDriveConnect();
 
-  // ---- ⬇️ Restore: which backup (a file, or one in the Google Drive
-  // folder), then how - added to what's here (the merge import), or
-  // replacing it (Import & Replace, what's here backed up first).
+  // ---- ⬇️ Restore: which backup (a file, a link, or - signed in - the
+  // Google Drive folder), then how: added to what's here (the merge
+  // import), or replacing it (Import & Replace, what's here backed up first).
   var bkEl = {
     open: document.getElementById("btn-restore"),
     overlay: document.getElementById("bk-restore-overlay"),
     pick: document.getElementById("bk-step-pick"),
     how: document.getElementById("bk-step-how"),
     pickFile: document.getElementById("btn-bk-pick-file"),
+    pickLink: document.getElementById("btn-bk-pick-link"),
     pickDrive: document.getElementById("btn-bk-pick-drive"),
     file: document.getElementById("bk-restore-file-input"),
+    linkRow: document.getElementById("bk-link-row"),
+    linkInput: document.getElementById("bk-link-input"),
+    linkGo: document.getElementById("btn-bk-link-go"),
+    linkOpen: document.getElementById("btn-bk-link-open"),
     note: document.getElementById("bk-drive-pick-note"),
     list: document.getElementById("bk-drive-list"),
     summary: document.getElementById("bk-backup-summary"),
     add: document.getElementById("btn-bk-add"),
     replace: document.getElementById("btn-bk-replace"),
     back: document.getElementById("btn-bk-back"),
-    cancel: document.getElementById("btn-bk-cancel"),
-    webInput: document.getElementById("bk-web-link-input"),
-    webGo: document.getElementById("btn-bk-web-restore")
+    cancel: document.getElementById("btn-bk-cancel")
   };
   var bkChosen = null; // { text, data }
+  var bkLinkTarget = ""; // a link this device couldn't read: opened for the person to download it
   function bkStep(step) {
     bkEl.pick.classList.toggle("hidden", step !== "pick");
     bkEl.how.classList.toggle("hidden", step !== "how");
     bkEl.back.classList.toggle("hidden", step !== "how");
   }
+  function bkSay(text) {
+    bkEl.note.textContent = text || "";
+    bkEl.linkOpen.classList.add("hidden");
+  }
   function openRestore() {
     bkChosen = null;
     bkEl.list.innerHTML = "";
-    bkEl.note.textContent = "";
+    bkSay("");
+    bkEl.linkRow.classList.add("hidden");
     bkEl.pickDrive.classList.toggle("hidden", !bkCanUseDrive());
     bkStep("pick");
     bkEl.overlay.classList.remove("hidden");
@@ -30655,7 +30639,7 @@
     var data = null;
     try { data = JSON.parse(text); } catch (e) {}
     if (!data || typeof data !== "object" || !data.state) {
-      bkEl.note.textContent = data && typeof data === "object" ? describeUnrecognizedBackupFile(data) : T("bk.notABackup");
+      bkSay(data && typeof data === "object" ? describeUnrecognizedBackupFile(data) : T("bk.notABackup"));
       return;
     }
     bkChosen = { text: text, data: data };
@@ -30663,13 +30647,24 @@
     bkEl.summary.textContent = data.exportedAt ? T("bk.summary", { date: formatTimestamp(data.exportedAt, true), players: n }) : T("bk.summaryNoDate", { players: n });
     bkStep("how");
   }
-  // signed in to Google with a folder: "Which backup?" (a file or the Drive
-  // folder); otherwise straight to the file picker, then "How?"
+  // a folder's backups, newest first - one tap reads one
+  function bkRenderFiles(files, read) {
+    bkEl.list.innerHTML = "";
+    bkSay(files.length ? "" : T("bk.driveNoBackups"));
+    files.forEach(function (f) {
+      var row = document.createElement("button");
+      row.type = "button";
+      row.className = "btn btn-ghost bk-drive-row";
+      row.textContent = "📄 " + f.name + (f.modifiedTime ? " — " + formatTimestamp(f.modifiedTime, true) : "");
+      row.addEventListener("click", function () {
+        bkSay(T("bk.loading"));
+        read(f.id).then(function (text) { bkSay(""); bkUse(text); }, function (e) { bkSay(T("backup.driveFetchFailed") + (e && e.message ? " (" + e.message + ")" : "")); });
+      });
+      bkEl.list.appendChild(row);
+    });
+  }
   function bkCanUseDrive() { return (driveServerConnected || browserDrive.ready()) && !!extractDriveFolderId(loadDriveFolderLink()); }
-  bkEl.open.addEventListener("click", function () {
-    if (bkCanUseDrive()) { openRestore(); return; }
-    bkEl.file.click();
-  });
+  bkEl.open.addEventListener("click", openRestore);
   bkEl.cancel.addEventListener("click", closeRestore);
   bkEl.back.addEventListener("click", function () { bkStep("pick"); });
   bkEl.overlay.addEventListener("click", function (e) { if (e.target === bkEl.overlay) closeRestore(); });
@@ -30679,56 +30674,109 @@
     bkEl.file.value = "";
     if (!f) return;
     var reader = new FileReader();
-    // (picked straight from the Restore button: the dialog opens with it)
-    var opened = function () { if (bkEl.overlay.classList.contains("hidden")) openRestore(); };
-    reader.onload = function () { opened(); bkUse(String(reader.result || "")); };
-    reader.onerror = function () { opened(); bkEl.note.textContent = T("alert.couldNotReadFile"); };
+    reader.onload = function () { bkUse(String(reader.result || "")); };
+    reader.onerror = function () { bkSay(T("alert.couldNotReadFile")); };
     reader.readAsText(f);
   });
-  // ☁️ the backups in the Google Drive folder, newest first - one tap reads it
+
+  // 🔗 From a link: a backup file, or a Google Drive folder. Read by
+  // whatever this device has - the Mac's server (signed in, Google Drive
+  // for desktop, a file shared "anyone with the link", any address) or a
+  // Google sign-in here - and when neither can, the link opens for the
+  // person to download the backup and pick it as a file. (No API keys.)
+  function driveFileIdFromLink(link) {
+    var s = String(link || ""), m = s.match(/drive\.google\.com\/(?:file\/d|uc|open)(?:\/([A-Za-z0-9_-]{10,}))?(?:[^?#]*)?(?:\?[^#]*?\bid=([A-Za-z0-9_-]{10,}))?/);
+    if (m && (m[1] || m[2])) return m[1] || m[2];
+    m = s.match(/docs\.google\.com\/[^?#]*\/d\/([A-Za-z0-9_-]{10,})/);
+    return m ? m[1] : null;
+  }
+  function bkLinkCantOpen(link, key) {
+    bkSay(T(key));
+    bkLinkTarget = link;
+    bkEl.linkOpen.classList.remove("hidden");
+  }
+  function restoreFromLink(raw) {
+    var link = String(raw || "").trim();
+    bkEl.list.innerHTML = "";
+    if (!/^https?:\/\//i.test(link)) { bkSay(T("bk.linkBad")); return; }
+    var folderId = /\/folders\//.test(link) ? extractDriveFolderId(link) : null;
+    var fileId = folderId ? null : driveFileIdFromLink(link);
+    var take = function (text) { bkSay(""); bkUse(text); };
+    var viaToken = function (work) { return new Promise(function (ok, no) { browserDrive.withToken(function (err) { if (err) return no(err); work().then(ok, no); }); }); };
+    bkSay(T("bk.loading"));
+    // the Mac: its server reads it, with whatever this computer has
+    if (driveServerHere === true) {
+      fetch("api/backup/from-link?url=" + encodeURIComponent(link))
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          if (j.kind === "file") return take(j.text);
+          if (j.kind === "folder") {
+            return bkRenderFiles(j.files || [], function (id) {
+              return fetch("api/backup/from-link/file?url=" + encodeURIComponent(link) + "&id=" + encodeURIComponent(id)).then(function (r) { if (!r.ok) throw new Error(String(r.status)); return r.text(); });
+            });
+          }
+          bkLinkCantOpen(link, j.error === "drive-not-shared" ? "bk.linkDriveNotShared" : j.error === "folder-unreachable" ? "bk.linkFolderHere" : j.error === "not-a-backup" ? "bk.linkNotABackup" : "bk.linkCantOpen");
+        })
+        .catch(function () { bkLinkCantOpen(link, "bk.linkCantOpen"); });
+      return;
+    }
+    if (folderId) {
+      if (browserDrive.ready()) {
+        viaToken(function () { return browserDrive.list(folderId); }).then(function (files) {
+          bkRenderFiles(files, function (id) { return viaToken(function () { return browserDrive.read(id); }); });
+        }, function () { bkLinkCantOpen(link, "bk.linkFolderHere"); });
+      } else bkLinkCantOpen(link, "bk.linkFolderHere");
+      return;
+    }
+    if (fileId) {
+      if (browserDrive.ready()) viaToken(function () { return browserDrive.read(fileId); }).then(take, function () { bkLinkCantOpen(link, "bk.linkDriveHere"); });
+      else bkLinkCantOpen(link, "bk.linkDriveHere");
+      return;
+    }
+    fetch(link)
+      .then(function (r) { if (!r.ok) throw new Error(String(r.status)); return r.text(); })
+      .then(take, function () { bkLinkCantOpen(link, "bk.linkCantOpen"); });
+  }
+  bkEl.pickLink.addEventListener("click", function () {
+    bkEl.linkRow.classList.remove("hidden");
+    bkEl.list.innerHTML = "";
+    bkSay("");
+    bkEl.linkInput.focus();
+  });
+  bkEl.linkGo.addEventListener("click", function () { restoreFromLink(bkEl.linkInput.value); });
+  bkEl.linkInput.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); restoreFromLink(bkEl.linkInput.value); } });
+  bkEl.linkOpen.addEventListener("click", function () { if (bkLinkTarget) window.open(bkLinkTarget, "_blank", "noopener"); });
+
+  // ☁️ signed in to Google: the backups in the Google Drive folder
   bkEl.pickDrive.addEventListener("click", function () {
     var link = loadDriveFolderLink(), folderId = extractDriveFolderId(link);
+    bkEl.linkRow.classList.add("hidden");
     bkEl.list.innerHTML = "";
-    if (!folderId) { bkEl.note.textContent = T("bk.driveNeedsFolder"); return; }
-    var render = function (files, read) {
-      bkEl.note.textContent = files.length ? "" : T("bk.driveNoBackups");
-      files.forEach(function (f) {
-        var row = document.createElement("button");
-        row.type = "button";
-        row.className = "btn btn-ghost bk-drive-row";
-        row.textContent = "📄 " + f.name + " — " + formatTimestamp(f.modifiedTime, true);
-        row.addEventListener("click", function () {
-          bkEl.note.textContent = T("bk.loading");
-          read(f.id).then(function (text) { bkEl.note.textContent = ""; bkUse(text); }, function (e) { bkEl.note.textContent = T("backup.driveFetchFailed") + " (" + e.message + ")"; });
-        });
-        bkEl.list.appendChild(row);
-      });
-    };
-    var failed = function (e) { bkEl.note.textContent = T("backup.driveListFailed") + (e && e.message ? " (" + e.message + ")" : ""); };
+    if (!folderId) { bkSay(T("bk.driveNeedsFolder")); return; }
+    var failed = function (e) { bkSay(T("backup.driveListFailed") + (e && e.message ? " (" + e.message + ")" : "")); };
+    bkSay(T("bk.loading"));
     if (driveServerConnected) {
-      bkEl.note.textContent = T("bk.loading");
       fetch("api/drive/folder?link=" + encodeURIComponent(link))
         .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || r.status); return j; }); })
         .then(function (j) {
-          render(j.files || [], function (id) {
+          bkRenderFiles(j.files || [], function (id) {
             return fetch("api/drive/file/" + encodeURIComponent(id)).then(function (r) { if (!r.ok) throw new Error(String(r.status)); return r.text(); });
           });
         }, failed);
       return;
     }
     if (browserDrive.ready()) {
-      bkEl.note.textContent = T("bk.loading");
       browserDrive.withToken(function (err) {
         if (err) return failed(err);
         browserDrive.list(folderId).then(function (files) {
-          render(files, function (id) {
+          bkRenderFiles(files, function (id) {
             return new Promise(function (ok, no) { browserDrive.withToken(function (e2) { if (e2) return no(e2); browserDrive.read(id).then(ok, no); }); });
           });
         }, failed);
       });
       return;
     }
-    bkEl.note.textContent = T("bk.driveNeedsConnect");
+    bkSay(T("bk.driveNeedsConnect"));
   });
   bkEl.add.addEventListener("click", function () {
     var chosen = bkChosen;
@@ -30740,15 +30788,6 @@
     closeRestore();
     // (the same "Are you sure?" as before - and what's here is backed up first)
     if (chosen) squashImportFile(new File([chosen.text], "backup.json", { type: "application/json" }));
-  });
-  // More options: a backup from a web address
-  bkEl.webGo.addEventListener("click", function () {
-    var url = bkEl.webInput.value.trim();
-    if (!/^https?:\/\//i.test(url)) { showToast(T("bk.webLinkFailed"), "⚠️ "); return; }
-    fetch(url)
-      .then(function (r) { if (!r.ok) throw new Error(String(r.status)); return r.text(); })
-      .then(function (text) { openRestore(); bkUse(text); })
-      .catch(function () { showToast(T("bk.webLinkFailed"), "⚠️ "); });
   });
 
   btnSquashImportData.addEventListener("click", function () {
