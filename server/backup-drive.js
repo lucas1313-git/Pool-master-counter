@@ -1,5 +1,7 @@
 // Backups into the Google Drive folder the user linked (Backup & Transfer's
-// Drive folder link). With Google Drive for desktop on this computer, every
+// Drive folder link). Google Drive connected (their own OAuth client, see
+// google-drive.js): uploaded through the Drive API - from any device. Else,
+// with Google Drive for desktop on this computer, every
 // synced folder is a real folder under ~/Library/CloudStorage/GoogleDrive-
 // <account>, marked with its Drive id (the extended attribute
 // com.google.drivefs.item-id#S) - so the folder in the link is found by its
@@ -8,9 +10,9 @@
 // ~/Documents/Pool Master Counter Backups and - asked from this computer -
 // put on the clipboard as a file, ready to paste where it should go.
 //
-//   GET  /api/backup/drive?link=...           where a backup would go -> { folder, where } | { reason }
+//   GET  /api/backup/drive?link=...           where a backup would go -> { folder, where, via } | { reason }
 //   POST /api/backup/drive  { link, filename, content, copy }
-//        -> { saved: true, file, where }                    (in the Drive folder)
+//        -> { saved: true, file, where, via: "api" | "desktop" }   (in the Drive folder)
 //        -> { saved: false, reason, file, kept, copied }    (kept in Documents; on the clipboard)
 // Like the camera relay: no login, the local network only.
 
@@ -18,6 +20,7 @@ var fs = require("fs");
 var path = require("path");
 var os = require("os");
 var childProcess = require("child_process");
+var googleDrive = require("./google-drive");
 
 var MAX_BODY = 200 * 1024 * 1024;
 var ATTR = "com.google.drivefs.item-id#S";
@@ -77,6 +80,7 @@ function startDirs() {
   } catch (e) {}
   return out;
 }
+function describeApi(name) { var a = googleDrive.account(); return "Google Drive" + (a ? " (" + a + ")" : "") + " › " + name; }
 function describe(dir) {
   var rel = path.relative(cloudRoot(), dir).split(path.sep), acc = (rel.shift() || "").replace(/^GoogleDrive-/, "");
   return "Google Drive (" + acc + ") › " + rel.join(" › ");
@@ -154,10 +158,17 @@ function attachBackupDriveRoutes(app) {
     var link = (req.query && req.query.link) || "";
     var id = folderIdFromLink(link);
     if (!id) return sendJson(res, 200, { reason: link ? "not-a-folder-link" : "no-link" });
-    findFolder(id, function (dir, why) {
-      if (dir) return sendJson(res, 200, { folder: path.basename(dir), where: describe(dir) });
-      sendJson(res, 200, { reason: why || "not-synced", kept: keptDir() });
-    });
+    var local = function (apiError) {
+      findFolder(id, function (dir, why) {
+        if (dir) return sendJson(res, 200, { folder: path.basename(dir), where: describe(dir), via: "desktop", apiError: apiError || null });
+        sendJson(res, 200, { reason: why || "not-synced", kept: keptDir(), apiError: apiError || null });
+      });
+    };
+    if (!googleDrive.connected()) return local();
+    googleDrive.folderInfo(id).then(function (f) {
+      if (f.mimeType && f.mimeType !== "application/vnd.google-apps.folder") return local("not a folder");
+      sendJson(res, 200, { folder: f.name, where: describeApi(f.name), via: "api" });
+    }, function (e) { local(e.message); });
   });
 
   app.post("/api/backup/drive", function (req, res) {
@@ -172,13 +183,22 @@ function attachBackupDriveRoutes(app) {
         copyFileToClipboard(file, function (ok) { sendJson(res, 200, { saved: false, reason: reason, file: path.basename(file), kept: keptDir(), copied: ok }); });
       };
       if (!id) return keep(b.link ? "not-a-folder-link" : "no-link");
-      findFolder(id, function (dir, why) {
-        if (!dir) return keep(why || "not-synced");
-        var file;
-        try { file = uniquePath(dir, name); fs.writeFileSync(file, b.content); }
-        catch (e) { return keep("write-failed"); }
-        sendJson(res, 200, { saved: true, file: path.basename(file), folder: path.basename(dir), where: describe(dir) });
-      });
+      var local = function () {
+        findFolder(id, function (dir, why) {
+          if (!dir) return keep(why || "not-synced");
+          var file;
+          try { file = uniquePath(dir, name); fs.writeFileSync(file, b.content); }
+          catch (e) { return keep("write-failed"); }
+          sendJson(res, 200, { saved: true, file: path.basename(file), folder: path.basename(dir), where: describe(dir), via: "desktop" });
+        });
+      };
+      // connected: straight up through the Drive API (no luck: as before)
+      if (!googleDrive.connected()) return local();
+      googleDrive.upload(id, name, b.content).then(function (f) {
+        // (uploaded: its folder's name only for saying so)
+        var done = function (folder) { sendJson(res, 200, { saved: true, file: f.name || name, folder: folder, where: describeApi(folder), via: "api" }); };
+        googleDrive.folderInfo(id).then(function (info) { done(info.name); }, function () { done("Drive"); });
+      }, function (e) { console.warn("[backup] Drive upload failed (" + e.message + ") - trying this computer's Drive folder"); local(); });
     });
   });
 }

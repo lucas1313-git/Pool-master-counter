@@ -16614,7 +16614,7 @@
       .then(function (r) {
         if (r.saved) {
           showToast(T("backup.driveSaved", { folder: r.folder, file: r.file }), "💾 ");
-          renderDriveBackupStatus({ folder: r.folder, where: r.where });
+          renderDriveBackupStatus({ folder: r.folder, where: r.where, via: r.via });
           return;
         }
         if (!manual) { showToast(T("backup.driveKept", { file: r.file }), "💾 "); return; }
@@ -16634,7 +16634,7 @@
     var show = function (key, vars) { if (seq === driveStatusSeq) el.textContent = T(key, vars || {}); };
     if (!link) return show("backup.driveStatusNone");
     if (!extractDriveFolderId(link)) return show("backup.driveStatusFileLink");
-    if (known) return show("backup.driveStatusFound", known);
+    if (known) return show(known.via === "api" ? "backup.driveStatusApi" : "backup.driveStatusFound", known);
     show("backup.driveStatusLooking");
     fetch("api/backup/drive?link=" + encodeURIComponent(link))
       .then(function (r) {
@@ -16642,7 +16642,8 @@
         return r.json();
       })
       .then(function (r) {
-        if (r.folder) show("backup.driveStatusFound", { folder: r.folder, where: r.where });
+        if (r.folder && r.via === "api") show("backup.driveStatusApi", { folder: r.folder });
+        else if (r.folder) show("backup.driveStatusFound", { folder: r.folder, where: r.where });
         else show("backup.driveStatusElsewhere");
       })
       .catch(function () { show("backup.driveStatusDownload"); });
@@ -30052,7 +30053,9 @@
     window.open(link, "_blank", "noopener");
   });
 
-  function renderDriveFilePicker(files) {
+  // fetchText (optional): how a picked file is read - through this
+  // computer's Google Drive sign-in, or (default) the Drive API key
+  function renderDriveFilePicker(files, fetchText) {
     driveFilePicker.innerHTML = "";
     if (!files.length) {
       var empty = document.createElement("p");
@@ -30071,7 +30074,7 @@
         row.disabled = true;
         var originalLabel = row.textContent;
         row.textContent = "⏳ " + T("backup.driveLoading");
-        fetchDriveFileText(f.id, driveApiKeyInput.value.trim())
+        (fetchText ? fetchText(f.id) : fetchDriveFileText(f.id, driveApiKeyInput.value.trim()))
           .then(function (text) {
             driveFilePicker.classList.add("hidden");
             driveFilePicker.innerHTML = "";
@@ -30134,6 +30137,12 @@
       importFileInput.click();
       return;
     }
+    // Google Drive signed in on this computer's server: the folder's
+    // backups listed and read through it - private folders too, no key
+    if (driveConn && driveConn.connected && extractDriveFolderId(link)) {
+      importFromConnectedDrive(link);
+      return;
+    }
     if (!apiKey) {
       fetchDirectLinkAndImport(link);
       return;
@@ -30161,6 +30170,122 @@
         btnDriveImport.textContent = originalLabel;
       });
   });
+
+  function importFromConnectedDrive(link) {
+    var originalLabel = btnDriveImport.textContent;
+    btnDriveImport.disabled = true;
+    btnDriveImport.textContent = "⏳ " + T("backup.driveLoading");
+    driveFilePicker.classList.add("hidden");
+    driveFilePicker.innerHTML = "";
+    var readFile = function (id) {
+      return fetch("api/drive/file/" + encodeURIComponent(id)).then(function (res) {
+        if (!res.ok) throw new Error("drive-file-" + res.status);
+        return res.text();
+      });
+    };
+    fetch("api/drive/folder?link=" + encodeURIComponent(link))
+      .then(function (res) {
+        return res.json().then(function (j) { if (!res.ok) throw new Error(j.error || "drive-folder-" + res.status); return j; });
+      })
+      .then(function (j) { renderDriveFilePicker(j.files || [], readFile); })
+      .catch(function (e) {
+        console.warn("Drive folder list (signed in) failed.", e);
+        showToast(T("backup.driveListFailed"));
+      })
+      .then(function () {
+        btnDriveImport.disabled = false;
+        btnDriveImport.textContent = originalLabel;
+      });
+  }
+
+  // ---- Google Drive sign-in (server/google-drive.js): the user's own
+  // OAuth client, signed in once on the Mac - the secret and the sign-in
+  // stay on its server; every device using it reads and saves through it.
+  var driveConn = null; // { configured, connected, account, lost, redirectUri, local } - null: no server here
+  var driveConnectEl = {
+    status: document.getElementById("drive-connect-status"),
+    setup: document.getElementById("drive-connect-setup"),
+    buttons: document.getElementById("drive-connect-buttons"),
+    clientId: document.getElementById("drive-client-id-input"),
+    secret: document.getElementById("drive-client-secret-input"),
+    save: document.getElementById("btn-drive-save-client"),
+    connect: document.getElementById("btn-drive-connect"),
+    disconnect: document.getElementById("btn-drive-disconnect"),
+    help: document.getElementById("btn-drive-connect-help")
+  };
+  var driveConnectWatch = null;
+  function renderDriveConnect() {
+    var el = driveConnectEl, c = driveConn;
+    var show = function (node, on) { node.classList.toggle("hidden", !on); };
+    if (!c) {
+      el.status.textContent = T("backup.driveConnectNoServer");
+      show(el.setup, false); show(el.buttons, false);
+      return;
+    }
+    if (c.connected) {
+      el.status.textContent = T("backup.driveConnected", { account: c.account || "Google" });
+      show(el.setup, false); show(el.buttons, c.local);
+      show(el.connect, false); show(el.disconnect, true);
+      return;
+    }
+    if (!c.local) {
+      el.status.textContent = T("backup.driveConnectOnMac");
+      show(el.setup, false); show(el.buttons, false);
+      return;
+    }
+    el.status.textContent = driveConnectWatch ? T("backup.driveConnecting") : !c.configured ? T("backup.driveConnectSetup") : c.lost ? T("backup.driveConnectLost") : T("backup.driveConnectReady");
+    el.clientId.placeholder = c.configured ? T("backup.driveClientSaved") : T("backup.driveClientIdPlaceholder");
+    show(el.setup, true); show(el.buttons, true);
+    show(el.connect, true); show(el.disconnect, false);
+    el.connect.disabled = !c.configured;
+  }
+  function refreshDriveConnect() {
+    return fetch("api/drive/status")
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .catch(function () { return null; })
+      .then(function (s) {
+        var was = driveConn && driveConn.connected;
+        driveConn = s && typeof s.connected === "boolean" ? s : null;
+        if (driveConn && driveConn.connected && driveConnectWatch) { clearInterval(driveConnectWatch); driveConnectWatch = null; }
+        renderDriveConnect();
+        if (!!(driveConn && driveConn.connected) !== !!was) renderDriveBackupStatus();
+        return driveConn;
+      });
+  }
+  driveConnectEl.save.addEventListener("click", function () {
+    var id = driveConnectEl.clientId.value.trim(), secret = driveConnectEl.secret.value.trim();
+    fetch("api/drive/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clientId: id, clientSecret: secret }) })
+      .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || r.status); return j; }); })
+      .then(function () {
+        driveConnectEl.secret.value = "";
+        driveConnectEl.clientId.value = "";
+        showToast(T("backup.driveClientSavedToast"), "🔗 ");
+        refreshDriveConnect();
+      })
+      .catch(function (e) { showToast(T("backup.driveConnectError", { error: e.message }), "⚠️ "); });
+  });
+  driveConnectEl.connect.addEventListener("click", function () {
+    window.open("api/drive/connect", "pmc-drive-connect");
+    // (until it's done in that tab: checked every 2 s, for up to 5 minutes)
+    clearInterval(driveConnectWatch);
+    var until = Date.now() + 5 * 60000;
+    driveConnectWatch = setInterval(function () {
+      if (Date.now() > until) { clearInterval(driveConnectWatch); driveConnectWatch = null; renderDriveConnect(); return; }
+      refreshDriveConnect();
+    }, 2000);
+    renderDriveConnect();
+  });
+  driveConnectEl.disconnect.addEventListener("click", function () {
+    confirmModal(T("backup.driveDisconnectConfirm"), function () {
+      fetch("api/drive/disconnect", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })
+        .then(function () { showToast(T("backup.driveDisconnected"), "🔗 "); refreshDriveConnect(); renderDriveBackupStatus(); });
+    });
+  });
+  driveConnectEl.help.addEventListener("click", function () {
+    alertModal(T("backup.driveConnectHelp", { uri: (driveConn && driveConn.redirectUri) || "http://localhost:4173/api/drive/oauth/callback" }));
+  });
+  try { new BroadcastChannel("pmc-drive").onmessage = function () { refreshDriveConnect(); renderDriveBackupStatus(); }; } catch (e) {}
+  refreshDriveConnect();
 
   btnSquashImportData.addEventListener("click", function () {
     squashImportFileInput.click();

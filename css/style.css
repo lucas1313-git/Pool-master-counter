@@ -4370,6 +4370,8 @@ input[type="number"] {
 
 .confirm-modal-message {
   margin: 0 0 20px;
+  /* (a long address - a link, a redirect URI - wraps instead of running off) */
+  overflow-wrap: anywhere;
   /* This app is meant to be read across a table, not held up close -
      explanatory popups (the rating system, K-factor, why a specific
      game moved the rating the way it did, ...) are exactly the content

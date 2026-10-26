@@ -119,6 +119,15 @@ Not part of the app - helpers for testing and for running this machine's own cop
   server -> downloaded + asked; a file link -> a plain download; a fresh device importing the file
   gets the link; Import & Replace takes it (its automatic backup kept quietly).
   `node tests/probe_drive_backup.js`.
+- `probe_drive_connect.js` - Google Drive signed in with the user's own OAuth client
+  (server/google-drive.js), against a fake Google it runs itself on 4299 (sign-in page, token
+  endpoint checking PKCE and refresh tokens, revoke, a small Drive with resumable uploads), the
+  scoreboard's server on 4237 with a throwaway HOME and `PMC_GOOGLE_*` pointing at the fake. The
+  client saved on this computer only (bad ID refused, secret never sent back, file mode 600);
+  Connect -> sign-in -> "Connected as ..."; All Data uploaded into the linked folder (no secret or
+  token in it); Import lists and reads the folder's backups through the sign-in; the access token
+  renewed; Disconnect revokes; a sign-in Google ended -> "press Connect again"; set-up refused from
+  another device. `node tests/probe_drive_connect.js`.
 - `probe_out_of_view.js` - out of view: a named player who walks out of the picture keeps a tag at
   the edge they left by (name, time, arrow), is kept past the 12 s a hidden player is looked for,
   and gets their path and name back coming in at that edge; hidden mid-picture as long: no name;

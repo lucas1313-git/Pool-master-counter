@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261025g">
+<link rel="stylesheet" href="css/style.css?v=20261025h">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -708,6 +708,20 @@
           <button type="button" id="btn-drive-folder-open" class="btn btn-ghost" data-i18n="backup.driveOpenFolder">📁 Open Folder</button>
         </div>
         <p class="player-stats-note" id="drive-backup-status" aria-live="polite"></p>
+        <div class="drive-connect" id="drive-connect">
+          <h4 class="session-subsection-subheading" data-i18n="backup.driveConnectHeading">🔗 Google Drive sign-in</h4>
+          <p class="player-stats-note" id="drive-connect-status" aria-live="polite"></p>
+          <div class="row hidden" id="drive-connect-setup">
+            <input type="text" id="drive-client-id-input" autocomplete="off" spellcheck="false" data-i18n-placeholder="backup.driveClientIdPlaceholder" placeholder="OAuth client ID (…apps.googleusercontent.com)">
+            <input type="password" id="drive-client-secret-input" autocomplete="new-password" data-i18n-placeholder="backup.driveClientSecretPlaceholder" placeholder="Client secret">
+            <button type="button" id="btn-drive-save-client" class="btn btn-ghost" data-i18n="backup.driveSaveClient">💾 Save</button>
+          </div>
+          <div class="row hidden" id="drive-connect-buttons">
+            <button type="button" id="btn-drive-connect" class="btn btn-primary" data-i18n="backup.driveConnect">🔗 Connect Google Drive</button>
+            <button type="button" id="btn-drive-disconnect" class="btn btn-ghost hidden" data-i18n="backup.driveDisconnect">Disconnect</button>
+            <button type="button" id="btn-drive-connect-help" class="format-info-btn" data-i18n-aria-label="backup.driveConnectHelpAria" aria-label="How do I connect Google Drive?">❓</button>
+          </div>
+        </div>
       </div>
 
       <div class="backup-subsection">
@@ -2591,8 +2605,8 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20261025g"></script>
-<script src="js/camera-client.js?v=20261025g"></script>
-<script src="js/voice.js?v=20261025g"></script>
+<script src="js/app.js?v=20261025h"></script>
+<script src="js/camera-client.js?v=20261025h"></script>
+<script src="js/voice.js?v=20261025h"></script>
 </body>
 </html>
