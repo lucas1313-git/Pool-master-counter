@@ -15777,6 +15777,11 @@
     } catch (e) {
       console.warn("Could not save Drive folder link.", e);
     }
+    // (one brought in by an import: shown, and where backups now go)
+    if (driveFolderLinkInput && driveFolderLinkInput.value.trim() !== (link || "")) {
+      driveFolderLinkInput.value = link || "";
+      renderDriveBackupStatus();
+    }
   }
 
   // The API key is a per-device setting, never part of buildBackupPayload -
@@ -16374,8 +16379,8 @@
   // view" (a public API key can't authenticate as anyone, so Drive treats
   // every request as anonymous - exactly the access an anonymous "view"
   // link grants, and no more). Writing back to Drive would need real OAuth
-  // sign-in instead, which is why Export still just downloads a file
-  // locally - see backup.driveExportNote.
+  // sign-in instead - which is why a backup reaches Drive through Google
+  // Drive for desktop's synced folder instead (see backupToDrive).
   function driveApiUrl(path, apiKey) {
     var sep = path.indexOf("?") === -1 ? "?" : "&";
     return "https://www.googleapis.com/drive/v3/" + path + sep + "key=" + encodeURIComponent(apiKey);
@@ -16574,7 +16579,10 @@
   // extraFields (optional): merged onto the payload as-is - only
   // downloadSetupForMultiTableHost passes this, to stamp a
   // pendingWizardStep field onto an otherwise completely normal export.
-  function exportAllData(filename, obfuscate, extraFields) {
+  // manual (optional): the "All Data" button itself - only then is the
+  // user asked about opening the Drive folder (see backupToDrive); the
+  // automatic safety backups save quietly.
+  function exportAllData(filename, obfuscate, extraFields, manual) {
     var payload = buildBackupPayload();
     if (obfuscate) payload.contacts = {};
     if (extraFields) {
@@ -16582,7 +16590,62 @@
         payload[key] = extraFields[key];
       });
     }
-    downloadJSON(filename ? sanitizeBackupFilename(filename) : defaultBackupFilename(), payload);
+    var name = filename ? sanitizeBackupFilename(filename) : defaultBackupFilename();
+    // A backup goes to the Drive folder in the link (a hand-off file with
+    // extraFields - the multi-table setup - is a transfer, not a backup).
+    if (!extraFields && extractDriveFolderId(loadDriveFolderLink())) backupToDrive(name, payload, !!manual);
+    else downloadJSON(name, payload);
+  }
+
+  // Backups into the Google Drive folder in the Drive folder link (see
+  // server/backup-drive.js). Served by this computer's server: straight
+  // into that folder when Google Drive for desktop syncs it here; if not,
+  // kept in Documents › Pool Master Counter Backups and copied as a file,
+  // the folder opened to paste it in. No server (the GitHub page, a phone
+  // on its own): downloaded as always, the folder opened to drag it in.
+  function backupToDrive(name, payload, manual) {
+    var link = loadDriveFolderLink();
+    var openFolder = function () { window.open(link, "_blank", "noopener"); };
+    fetch("api/backup/drive", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ link: link, filename: name, content: JSON.stringify(payload, null, 2), copy: manual }) })
+      .then(function (r) {
+        if (!r.ok) throw new Error(String(r.status));
+        return r.json();
+      })
+      .then(function (r) {
+        if (r.saved) {
+          showToast(T("backup.driveSaved", { folder: r.folder, file: r.file }), "💾 ");
+          renderDriveBackupStatus({ folder: r.folder, where: r.where });
+          return;
+        }
+        if (!manual) { showToast(T("backup.driveKept", { file: r.file }), "💾 "); return; }
+        confirmModal(T(r.copied ? "backup.driveCopiedAsk" : "backup.driveKeptAsk", { file: r.file }), openFolder);
+      })
+      .catch(function () {
+        downloadJSON(name, payload);
+        if (manual) confirmModal(T("backup.driveDownloadedAsk", { file: name }), openFolder);
+      });
+  }
+  // Under the link: where a backup will go - asked of the server
+  var driveStatusSeq = 0;
+  function renderDriveBackupStatus(known) {
+    var el = document.getElementById("drive-backup-status");
+    if (!el) return;
+    var link = loadDriveFolderLink(), seq = ++driveStatusSeq;
+    var show = function (key, vars) { if (seq === driveStatusSeq) el.textContent = T(key, vars || {}); };
+    if (!link) return show("backup.driveStatusNone");
+    if (!extractDriveFolderId(link)) return show("backup.driveStatusFileLink");
+    if (known) return show("backup.driveStatusFound", known);
+    show("backup.driveStatusLooking");
+    fetch("api/backup/drive?link=" + encodeURIComponent(link))
+      .then(function (r) {
+        if (!r.ok) throw new Error(String(r.status));
+        return r.json();
+      })
+      .then(function (r) {
+        if (r.folder) show("backup.driveStatusFound", { folder: r.folder, where: r.where });
+        else show("backup.driveStatusElsewhere");
+      })
+      .catch(function () { show("backup.driveStatusDownload"); });
   }
 
   // Not a new storage mechanism - Safari has no programmatic access to a
@@ -18008,8 +18071,10 @@
       if (!keepPlayersOnly) {
         if (data.challongeDayPushes && typeof data.challongeDayPushes === "object") saveChallongeDayPushes(data.challongeDayPushes);
         if (data.challongeRacePushes && typeof data.challongeRacePushes === "object") saveChallongeRacePushes(data.challongeRacePushes);
-        // A full replace makes the backup this device's own setup: its settings too.
+        // A full replace makes the backup this device's own setup: its settings too,
+        // and its Drive folder link (where backups go).
         applyDeviceSettings(data.settings);
+        if (data.driveFolderLink) saveDriveFolderLink(data.driveFolderLink);
       }
       if (TOURNAMENT) localStorage.setItem(TOURNAMENT_KEY, JSON.stringify(TOURNAMENT));
       else localStorage.removeItem(TOURNAMENT_KEY);
@@ -29812,7 +29877,7 @@
       T("backup.exportFilenamePrompt"),
       defaultBackupFilename(),
       function (name, obfuscate) {
-        exportAllData(name, obfuscate);
+        exportAllData(name, obfuscate, null, true);
       },
       null,
       null,
@@ -29835,7 +29900,9 @@
   driveApiKeyInput.value = loadDriveApiKey();
   driveFolderLinkInput.addEventListener("change", function () {
     saveDriveFolderLink(driveFolderLinkInput.value.trim());
+    renderDriveBackupStatus();
   });
+  renderDriveBackupStatus();
   driveApiKeyInput.addEventListener("change", function () {
     saveDriveApiKey(driveApiKeyInput.value.trim());
   });

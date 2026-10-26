@@ -1,6 +1,7 @@
 var lan = require("./lan");
 var voiceRelay = require("./voice-relay");
 var recorder = require("./recorder");
+var backupDrive = require("./backup-drive");
 
 // The host's browser needs to know its own LAN-reachable address to build
 // a join URL/QR that a *different* device can actually use. It can't infer
@@ -29,6 +30,8 @@ function attachApiRoutes(app, port, QRCode, getHttpsInfo) {
   voiceRelay.attachVoiceRoutes(app);
   // The recording page and its cues - see recorder.js
   recorder.attachRecorderRoutes(app);
+  // Backups straight into the linked Google Drive folder - see backup-drive.js
+  backupDrive.attachBackupDriveRoutes(app);
 
   app.get("/api/lan-info", function (req, res) {
     var httpsInfo = getHttpsInfo ? getHttpsInfo() : null;

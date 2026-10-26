@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261025f">
+<link rel="stylesheet" href="css/style.css?v=20261025g">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -700,6 +700,16 @@
     <div class="panel-body" id="backup-panel-body">
       <p class="player-stats-note" data-i18n="backup.note">All stats and session data live on this device only. Export a backup file to move everything to another iPhone, iPad, or computer.</p>
 
+      <div class="backup-subsection" id="drive-backup-folder">
+        <h3 class="backup-subsection-title" data-i18n="backup.driveFolderHeading">☁️ Google Drive folder</h3>
+        <p class="player-stats-note" data-i18n="backup.driveFolderIntro">Paste the link of your Google Drive backup folder: every backup (All Data, and the automatic ones before a reset) is saved into it. It travels in the All Data file and comes back with an import.</p>
+        <div class="row">
+          <input type="text" id="drive-folder-link-input" data-i18n-placeholder="backup.driveFolderLinkPlaceholder" placeholder="Backup file link, or a Drive folder link">
+          <button type="button" id="btn-drive-folder-open" class="btn btn-ghost" data-i18n="backup.driveOpenFolder">📁 Open Folder</button>
+        </div>
+        <p class="player-stats-note" id="drive-backup-status" aria-live="polite"></p>
+      </div>
+
       <div class="backup-subsection">
         <h3 class="backup-subsection-title" data-i18n="backup.exportHeading">⬆️ Export Games</h3>
         <div class="row">
@@ -725,17 +735,12 @@
         <p class="player-stats-note" data-i18n="backup.importDataNote">Merges into what's already on this device — nothing here is deleted, same-named players get a conflict check, and history from both sides is combined.</p>
 
         <h4 class="session-subsection-subheading" data-i18n="backup.driveHeading">☁️ Import from a Link</h4>
-        <p class="player-stats-note" data-i18n="backup.driveIntro">Paste a link to a backup file, and Import pulls it straight from there — works with any direct link, no setup needed. To instead browse every backup inside a whole Google Drive folder, add a free read-only Drive API key too (one-time setup, see ❓).</p>
-        <div class="row">
-          <input type="text" id="drive-folder-link-input" data-i18n-placeholder="backup.driveFolderLinkPlaceholder" placeholder="Backup file link, or a Drive folder link">
-          <button type="button" id="btn-drive-folder-open" class="btn btn-ghost" data-i18n="backup.driveOpenFolder">📁 Open Folder</button>
-        </div>
+        <p class="player-stats-note" data-i18n="backup.driveIntro">Import reads the link in ☁️ Google Drive folder above: a link to a backup file works as is, no setup needed. To browse every backup inside the whole folder, add a free read-only Drive API key too (one-time setup, see ❓).</p>
         <div class="row">
           <input type="text" id="drive-api-key-input" data-i18n-placeholder="backup.driveApiKeyPlaceholder" placeholder="Drive API key (optional — only to browse a folder)">
           <button type="button" id="btn-drive-api-key-help" class="format-info-btn" data-i18n-aria-label="backup.driveApiKeyHelpAria" aria-label="How do I get a Drive API key?">❓</button>
           <button type="button" id="btn-drive-import" class="btn btn-ghost" data-i18n="backup.driveImportButton">☁️ Import from Link</button>
         </div>
-        <p class="player-stats-note" data-i18n="backup.driveExportNote">Export still downloads a file below, same as always — Google Drive only allows uploads from a signed-in account, so "Open Folder" is the fast path: it jumps straight to your Drive tab, ready for you to drag the downloaded file in.</p>
         <div id="drive-file-picker" class="hidden"></div>
 
         <div class="backup-subsection collapsible-panel collapsed" id="squash-panel">
@@ -2586,8 +2591,8 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20261025f"></script>
-<script src="js/camera-client.js?v=20261025f"></script>
-<script src="js/voice.js?v=20261025f"></script>
+<script src="js/app.js?v=20261025g"></script>
+<script src="js/camera-client.js?v=20261025g"></script>
+<script src="js/voice.js?v=20261025g"></script>
 </body>
 </html>

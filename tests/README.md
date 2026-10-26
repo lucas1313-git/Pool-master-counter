@@ -110,6 +110,15 @@ Not part of the app - helpers for testing and for running this machine's own cop
   before the press (look-back); a non-shot then nothing -> "No shot within ..." and no clip; cancel;
   "auto cue" said; the recording page's own button and A key; a shot heard twice counted once.
   `node tests/probe_auto_cue.js http://localhost:4235/` (same test server).
+- `probe_drive_backup.js` - backups into the linked Google Drive folder: a fake Google Drive for
+  desktop under its own test HOME (folders marked with `com.google.drivefs.item-id#S`, as Drive for
+  desktop marks them); starts its own server on 4236 with `PMC_CLOUD_STORAGE` and
+  `PMC_CLIPBOARD_FILE` (the real clipboard is never touched). The folder found from the link, All
+  Data saved straight into it (complete, carrying the link, a second one beside it); a folder not
+  synced -> kept in Documents › Pool Master Counter Backups + copied + asked to open the folder; no
+  server -> downloaded + asked; a file link -> a plain download; a fresh device importing the file
+  gets the link; Import & Replace takes it (its automatic backup kept quietly).
+  `node tests/probe_drive_backup.js`.
 - `probe_out_of_view.js` - out of view: a named player who walks out of the picture keeps a tag at
   the edge they left by (name, time, arrow), is kept past the 12 s a hidden player is looked for,
   and gets their path and name back coming in at that edge; hidden mid-picture as long: no name;
