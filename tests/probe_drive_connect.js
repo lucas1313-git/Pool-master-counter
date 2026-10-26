@@ -126,8 +126,7 @@ function lanIp() { for (const l of Object.values(os.networkInterfaces())) for (c
     }
     const b = document.getElementById("btn-toggle-backup-panel");
     if (document.getElementById("backup-panel").classList.contains("collapsed")) b.click();
-    // Backup & Restore: backups to Google Drive; the one-time sign-in setup is under More options
-    document.getElementById("bk-dest-drive").click();
+    // Backup & Restore › More options: the Drive folder and the owner's sign-in setup (on the Mac)
     document.getElementById("bk-more").open = true;
   });
   await sleep(800);
@@ -140,7 +139,8 @@ function lanIp() { for (const l of Object.values(os.networkInterfaces())) for (c
   const type = (id, v) => page.evaluate((id, v) => { const i = document.getElementById(id); i.value = v; i.dispatchEvent(new Event("input", { bubbles: true })); }, id, v);
 
   let u = await ui();
-  check("not set up: \"Google sign-in isn't set up for this app yet\" - the setup (ID and secret, on this Mac) under More options", /isn't set up for this app yet/.test(u.status) && u.setup && u.secret && u.connect, u);
+  u = await waitUi((x) => /no sign-in needed/.test(x.status));
+  check("no sign-in set up: no Connect (nothing it could do), \"no sign-in needed\" here; the owner's setup (ID and secret) under More options", /no sign-in needed/.test(u.status) && u.setup && u.secret && !u.connect, u);
 
   // the client: a wrong ID refused, then saved
   await type("drive-client-id-input", "not-a-client-id"); await type("drive-client-secret-input", SECRET);

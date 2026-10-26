@@ -88,7 +88,7 @@ const jsonFiles = (dir) => (fs.existsSync(dir) ? fs.readdirSync(dir).filter((n) 
 
   // where it is: the section, before Export
   const order = await page.evaluate(() => { const sec = document.getElementById("drive-backup-folder"), exp = document.getElementById("btn-export-all-data"); return !!sec && !!(sec.compareDocumentPosition(exp) & Node.DOCUMENT_POSITION_FOLLOWING) && sec.contains(document.getElementById("drive-folder-link-input")); });
-  check("the Drive folder link: in Back up, before everything else that backs up", order);
+  check("the Drive folder link: under ⚙️ More options › Straight into a Google Drive folder (on the Mac)", await page.evaluate(() => document.getElementById("bk-more").contains(document.getElementById("drive-folder-link-input")) && !document.getElementById("bk-drive-box").classList.contains("hidden")));
   check("no link yet: backups download as usual", /No folder yet/.test(await status()), await status());
 
   // 1. the folder synced here: saved straight into it
@@ -121,7 +121,8 @@ const jsonFiles = (dir) => (fs.existsSync(dir) ? fs.readdirSync(dir).filter((n) 
   await sleep(300);
   check("...yes: the folder's link opens", (await page.evaluate(() => window.__opened)).slice(-1)[0] === OTHER, await page.evaluate(() => window.__opened));
 
-  // 3. no server (as on the GitHub page): downloaded, asked to open the folder
+  // 3. no server (as on the GitHub page), not signed in: a plain download - no
+  // question about a folder this device can't save into (no dead ends)
   await page.setRequestInterception(true);
   const block = (req) => (req.url().indexOf("/api/backup/drive") !== -1 ? req.respond({ status: 404, contentType: "text/html", body: "not here" }) : req.continue());
   page.on("request", block);
@@ -129,14 +130,11 @@ const jsonFiles = (dir) => (fs.existsSync(dir) ? fs.readdirSync(dir).filter((n) 
   s = await waitStatus(/downloads, and the folder opens/);
   check("no server: \"a backup downloads, and the folder opens\"", /downloads, and the folder opens/.test(s), s);
   await exportAll();
-  m = null;
-  for (let i = 0; i < 30 && !m; i++) { await sleep(250); m = await modal(); }
+  await sleep(1500);
+  m = await modal();
   let dl = [];
   for (let i = 0; i < 20 && !dl.length; i++) { await sleep(250); dl = jsonFiles(DL); }
-  check("...downloaded, and asks to open the folder to drag it in", dl.length === 1 && m && /The backup is downloaded: .*Open your Drive folder to drag it in/.test(m), { dl, m });
-  await page.click("#btn-confirm-modal-ok");
-  await sleep(300);
-  check("...yes: the folder opens", (await page.evaluate(() => window.__opened)).slice(-1)[0] === LINK);
+  check("...the backup downloads, said plainly, nothing to answer", dl.length === 1 && !m && /Backup saved in Downloads/.test(await toast()), { dl, m, t: await toast() });
   page.off("request", block);
   await page.setRequestInterception(false);
 

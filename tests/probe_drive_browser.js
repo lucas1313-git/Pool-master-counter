@@ -98,7 +98,7 @@ const fakeGoogle = http.createServer(async (req, res) => {
   await page.evaluateOnNewDocument((g) => { window.PMC_TEST_GOOGLE_API = g; window.PMC_TEST_GIS_SRC = g + "/gsi/client"; window.__downloads = []; const click = HTMLAnchorElement.prototype.click; HTMLAnchorElement.prototype.click = function () { if (this.download) window.__downloads.push(this.download); return click.call(this); }; }, G);
   await page.goto(BASE + "manifest.json");
   await page.evaluate(() => { localStorage.clear(); localStorage.setItem("poolMasterCounter.onboardingSeen.v1", "1"); localStorage.setItem("poolMasterCounter.migratedFromRepo.v1", "1"); });
-  await page.goto(BASE, { waitUntil: "networkidle2" });
+  await page.goto(BASE + "?owner", { waitUntil: "networkidle2" });
   await sleep(700);
   await page.evaluate(async () => {
     for (const n of ["Luigi", "Luc"]) {
@@ -110,8 +110,8 @@ const fakeGoogle = http.createServer(async (req, res) => {
   const openPanel = () => page.evaluate(() => { const b = document.getElementById("btn-toggle-backup-panel"); if (document.getElementById("backup-panel").classList.contains("collapsed")) b.click(); });
   const closeModals = async () => { for (let i = 0; i < 10; i++) { const open = await page.evaluate(() => { const o = document.getElementById("confirm-modal-overlay"); if (o && !o.classList.contains("hidden")) { document.getElementById("btn-confirm-modal-ok").click(); return true; } return false; }); if (!open) break; await sleep(400); } };
   await openPanel();
-  // Backup & Restore: backups to Google Drive; the one-time sign-in setup is under More options
-  await page.evaluate(() => { document.getElementById("bk-dest-drive").click(); document.getElementById("bk-more").open = true; });
+  // Backup & Restore › More options (the owner's sign-in setup: ?owner in the address)
+  await page.evaluate(() => { document.getElementById("bk-more").open = true; });
   await sleep(800);
   const ui = () => page.evaluate(() => {
     const vis = (id) => { const e = document.getElementById(id); return !e.classList.contains("hidden") && e.offsetParent !== null; };
@@ -120,8 +120,8 @@ const fakeGoogle = http.createServer(async (req, res) => {
   const waitUi = async (f) => { let u; for (let i = 0; i < 40; i++) { u = await ui(); if (f(u)) break; await sleep(250); } return u; };
   const toast = () => page.evaluate(() => { const t = [...document.querySelectorAll("#page-toast, #win-toast")].find((x) => !x.classList.contains("hidden") && x.textContent.trim()); return t ? t.textContent : ""; });
 
-  let u = await waitUi((x) => /isn't set up for this app yet/.test(x.status));
-  check("no Mac server, nothing set up: \"Google sign-in isn't set up for this app yet\" - the setup asks for the client ID only, no secret field", /isn't set up for this app yet/.test(u.status) && u.idField && !u.secretField, u);
+  let u = await waitUi((x) => /Save the app's Google client ID below/.test(x.status));
+  check("no Mac server, the owner (?owner), nothing set up: the setup asks for the client ID only (no secret field), no Connect until it's saved", u.idField && !u.secretField && !u.connect, u);
 
   await page.evaluate((id) => { const i = document.getElementById("drive-client-id-input"); i.value = id; }, CLIENT_ID);
   await page.click("#btn-drive-save-client");
