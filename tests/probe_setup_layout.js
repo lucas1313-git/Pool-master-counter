@@ -80,6 +80,22 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   s = await state();
   check("\"change every [3] games\": the rotation's Switch every (Games Rotations shows 3 too)", s.every === 3 && (await page.evaluate(() => document.getElementById("rotation-every").value)) === "3", s);
 
+  // Games Rotations: the same - "Rotate game types automatically — change every [n] games" in one box
+  await page.evaluate(() => { const b = document.getElementById("btn-toggle-rotation-panel"); if (document.getElementById("rotation-panel").classList.contains("collapsed")) b.click(); });
+  await sleep(400);
+  const gr = await page.evaluate(() => {
+    const c = document.getElementById("rotation-enabled"), n = document.getElementById("rotation-every"), row = c.closest(".setting-with-number");
+    const a = c.getBoundingClientRect(), b = n.getBoundingClientRect();
+    return { same: !!row && row.contains(n), dy: Math.abs((a.top + a.height / 2) - (b.top + b.height / 2)), text: row ? row.textContent.replace(/\s+/g, " ").trim() : "", font: parseFloat(getComputedStyle(n).fontSize), oldRow: [...document.querySelectorAll("#rotation-panel-body label")].some((l) => /Switch every/.test(l.textContent)) };
+  });
+  check("Games Rotations: \"Rotate game types automatically — change every [3] games\" in one box, the number big - no separate Switch every row", gr.same && gr.dy < 12 && /Rotate game types automatically\s*— change every\s*games/.test(gr.text) && gr.font >= 20 && !gr.oldRow, gr);
+  if (OUT) { const el = await page.$("#rotation-panel"); await el.screenshot({ path: OUT + "/games_rotations.png" }); }
+  await page.click("#rotation-every"); await sleep(100);
+  await page.keyboard.type("4");
+  await sleep(300);
+  s = await state();
+  check("...typing 4 there: Switch every 4 - Current Session's box shows 4 too", s.every === 4 && (await page.evaluate(() => document.getElementById("game-setup-rotation-every").value)) === "4", s);
+
   // the score card line, with a rotation: 8-Ball and 9-Ball, every 5
   for (const t of ["Rotation 8-ball and 9-ball", "Change game every 5 games"]) { await page.evaluate((t) => window.PMCVoice.handleText(t), t); await sleep(500); }
   await page.evaluate(() => { const o = document.getElementById("confirm-modal-overlay"); if (o && !o.classList.contains("hidden")) document.getElementById("btn-confirm-modal-ok").click(); });

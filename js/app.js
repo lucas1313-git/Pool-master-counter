@@ -3668,7 +3668,7 @@
     gameSetupRotationEnabledCheckbox.checked = state.rotation.enabled;
     scoreboardModeRotationRadio.checked = state.rotation.enabled;
     scoreboardModeSingleRadio.checked = !state.rotation.enabled;
-    rotationEveryInput.value = state.rotation.every;
+    if (document.activeElement !== rotationEveryInput) rotationEveryInput.value = state.rotation.every;
     if (document.activeElement !== gameSetupRotationEveryInput) gameSetupRotationEveryInput.value = state.rotation.every;
 
     renderRotationListInto(rotationList);
@@ -33167,10 +33167,11 @@
   });
   gameSetupRotationEveryInput.addEventListener("blur", function () { gameSetupRotationEveryInput.value = state.rotation.every; });
 
+  rotationEveryInput.addEventListener("blur", function () { rotationEveryInput.value = state.rotation.every; });
   rotationEveryInput.addEventListener("input", function () {
     var v = parseInt(rotationEveryInput.value, 10);
     if (!v || v < 1) return;
-    state.rotation.every = v;
+    state.rotation.every = Math.min(99, v);
     saveState();
     applyRotationIfDue();
     renderRotation();

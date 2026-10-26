@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261026e">
+<link rel="stylesheet" href="css/style.css?v=20261026f">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -183,8 +183,10 @@
     </button>
     <p class="panel-summary" id="rotation-panel-summary"></p>
     <div class="panel-body" id="rotation-panel-body">
-      <div class="row">
-        <label class="checkbox-row checkbox-row-prominent"><input type="checkbox" id="rotation-enabled"> <span data-i18n="rotation.autoRotate">Rotate game types automatically</span></label>
+      <!-- the same as Current Session › Tournament Type: the switch's number in the checkbox's own box -->
+      <div class="checkbox-row checkbox-row-prominent setting-with-number">
+        <label class="setting-with-number-label"><input type="checkbox" id="rotation-enabled"> <span data-i18n="rotation.autoRotate">Rotate game types automatically</span></label>
+        <span class="setting-number inline-number-template" data-template="rotation.changeEveryInline" data-input="rotation-every">— change every {{n}} games</span><input type="number" id="rotation-every" class="big-number-input" min="1" max="99" value="1" inputmode="numeric">
       </div>
       <div class="row">
         <select id="rotation-load-select"></select>
@@ -201,11 +203,6 @@
         <button type="button" id="btn-rotation-add" class="btn btn-ghost" data-i18n="rotation.addToOrder">+ Add to Order</button>
       </div>
       <ul id="rotation-list" class="rotation-list"></ul>
-      <div class="row">
-        <label for="rotation-every" data-i18n="rotation.switchEvery">Switch every</label>
-        <input type="number" id="rotation-every" min="1" max="99" value="1">
-        <span data-i18n="common.games">games</span>
-      </div>
       <p id="rotation-status" class="rotation-status"></p>
     </div>
   </section>
@@ -2661,10 +2658,10 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/mp4-clip.js?v=20261026e"></script>
-<script src="js/local-recorder.js?v=20261026e"></script>
-<script src="js/app.js?v=20261026e"></script>
-<script src="js/camera-client.js?v=20261026e"></script>
-<script src="js/voice.js?v=20261026e"></script>
+<script src="js/mp4-clip.js?v=20261026f"></script>
+<script src="js/local-recorder.js?v=20261026f"></script>
+<script src="js/app.js?v=20261026f"></script>
+<script src="js/camera-client.js?v=20261026f"></script>
+<script src="js/voice.js?v=20261026f"></script>
 </body>
 </html>
