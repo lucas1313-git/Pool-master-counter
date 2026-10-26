@@ -128,6 +128,14 @@ Not part of the app - helpers for testing and for running this machine's own cop
   token in it); Import lists and reads the folder's backups through the sign-in; the access token
   renewed; Disconnect revokes; a sign-in Google ended -> "press Connect again"; set-up refused from
   another device. `node tests/probe_drive_connect.js`.
+- `probe_drive_browser.js` - Google Drive signed in on the device itself (the GitHub page on an
+  iPad, no Mac server): the site from a plain file server (no /api, like GitHub Pages) on 4240, a
+  fake Google with CORS on 4298 (a fake Google Identity Services library at /gsi/client, a small
+  Drive), the page pointed at it by `window.PMC_TEST_GOOGLE_API` / `PMC_TEST_GIS_SRC`. No secret
+  field; the ID kept on this device; Connect (full Drive, consent the first time); All Data uploaded
+  (no client ID or token in it, the token for this tab only); an hour later the next backup asks
+  Google again without consent and still uploads; Import lists and reads; Disconnect revokes.
+  `node tests/probe_drive_browser.js`.
 - `probe_out_of_view.js` - out of view: a named player who walks out of the picture keeps a tag at
   the edge they left by (name, time, arrow), is kept past the 12 s a hidden player is looked for,
   and gets their path and name back coming in at that edge; hidden mid-picture as long: no name;
