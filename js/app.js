@@ -2407,7 +2407,7 @@
   var gameTargetUnitSelect = document.getElementById("game-target-unit-select");
   var modeRadios = document.getElementsByName("game-mode");
   var raceToWinsInput = document.getElementById("race-to-wins");
-  var raceToWinsRow = document.getElementById("race-to-wins-row");
+  var raceToWinsRow = document.getElementById("race-to-wins-row") || document.createElement("div"); // (gone: the number sits in Race to Wins itself)
   var raceModeRaceToRadio = document.getElementById("race-mode-raceto");
   var raceModeSingleRadio = document.getElementById("race-mode-single");
   var fairRaceEnabledCheckbox = document.getElementById("fair-race-enabled-checkbox");
@@ -2437,6 +2437,7 @@
 
   var rotationEnabledCheckbox = document.getElementById("rotation-enabled");
   var gameSetupRotationEnabledCheckbox = document.getElementById("game-setup-rotation-enabled");
+  var gameSetupRotationEveryInput = document.getElementById("game-setup-rotation-every");
   var rotationLoadSelect = document.getElementById("rotation-load-select");
   var btnRotationLoad = document.getElementById("btn-rotation-load");
   var rotationAddType = document.getElementById("rotation-add-type");
@@ -3668,6 +3669,7 @@
     scoreboardModeRotationRadio.checked = state.rotation.enabled;
     scoreboardModeSingleRadio.checked = !state.rotation.enabled;
     rotationEveryInput.value = state.rotation.every;
+    if (document.activeElement !== gameSetupRotationEveryInput) gameSetupRotationEveryInput.value = state.rotation.every;
 
     renderRotationListInto(rotationList);
 
@@ -5235,13 +5237,14 @@
         });
         nowPlayingBanner.appendChild(typeSelect);
       } else if (part === M_TARGET) {
-        if (!editable) { nowPlayingBanner.appendChild(plain(String(state.currentGame.target))); return; }
+        // The target is always adjustable - during a Rotation too: it's then
+        // this game's target in the lineup as well, so the rotation keeps it.
         var targetInput = stopClick(document.createElement("input"));
         targetInput.type = "number";
         targetInput.min = "1";
         targetInput.max = "500";
         targetInput.inputMode = "numeric";
-        targetInput.className = "now-playing-target-input now-playing-control";
+        targetInput.className = "now-playing-target-input now-playing-number now-playing-control";
         targetInput.value = state.currentGame.target;
         targetInput.setAttribute("aria-label", T("gameSetup.target"));
         targetInput.addEventListener("input", fitNowPlayingControls); // (a third digit fits while typing)
@@ -5250,6 +5253,10 @@
           if (!v || v < 1) { targetInput.value = state.currentGame.target; return; }
           state.currentGame.target = Math.min(500, v);
           gameTargetInput.value = state.currentGame.target;
+          if (!editable && state.rotation.order[rotationCurrentIndex()]) {
+            state.rotation.order[rotationCurrentIndex()].target = state.currentGame.target;
+            renderRotation();
+          }
           saveState();
           renderScoreboard();
           updateCurrentGameSummary();
@@ -5282,16 +5289,45 @@
     });
     fitNowPlayingControls();
 
+    // "— switches to 9-Ball in [y] games": y adjustable - the games left
+    // before the switch (1 to "Switch every"); the game being played stays.
     var rotationInfo = rotationStatusInfo();
     if (rotationInfo) {
       var rotationNote = document.createElement("span");
       rotationNote.className = "rotation-note";
-      rotationNote.textContent = T(rotationInfo.untilSwitch === 1 ? "rotation.statusSwitchesInOne" : "rotation.statusSwitchesInMany", {
+      var M_COUNT = "\u0004";
+      var noteParts = T(rotationInfo.untilSwitch === 1 ? "rotation.statusSwitchesInOne" : "rotation.statusSwitchesInMany", {
         next: rotationInfo.nextLabel,
-        count: rotationInfo.untilSwitch
+        count: M_COUNT
+      }).split(M_COUNT);
+      rotationNote.appendChild(document.createTextNode(noteParts[0] || ""));
+      var untilInput = stopClick(document.createElement("input"));
+      untilInput.type = "number";
+      untilInput.min = "1";
+      untilInput.max = String(rotationInfo.every);
+      untilInput.inputMode = "numeric";
+      untilInput.className = "now-playing-target-input now-playing-number now-playing-control now-playing-switch-input";
+      untilInput.value = rotationInfo.untilSwitch;
+      untilInput.setAttribute("aria-label", T("rotation.gamesUntilSwitchAria", { every: rotationInfo.every }));
+      untilInput.title = T("rotation.gamesUntilSwitchAria", { every: rotationInfo.every });
+      untilInput.addEventListener("input", fitNowPlayingControls);
+      untilInput.addEventListener("change", function () {
+        var info = rotationStatusInfo();
+        var v = parseInt(untilInput.value, 10);
+        if (!info || !v) { untilInput.value = info ? info.untilSwitch : 1; return; }
+        v = Math.max(1, Math.min(info.every, v));
+        // the same leg (the same game), with v games left in it
+        state.gamesPlayedCount = Math.floor(state.gamesPlayedCount / info.every) * info.every + (info.every - v);
+        saveState();
+        applyRotationIfDue();
+        renderRotation();
+        renderScoreboard();
       });
+      rotationNote.appendChild(untilInput);
+      rotationNote.appendChild(document.createTextNode(noteParts.slice(1).join("")));
       nowPlayingBanner.appendChild(rotationNote);
     }
+    fitNowPlayingControls();
     renderRotationPositionControl();
 
     var durationRow = document.createElement("div");
@@ -19238,7 +19274,7 @@
     raceToWinsInput.value = state.raceToWinsTarget;
     raceModeSingleRadio.checked = state.raceToWinsTarget === 1;
     raceModeRaceToRadio.checked = state.raceToWinsTarget !== 1;
-    raceToWinsRow.classList.toggle("hidden", state.raceToWinsTarget === 1);
+    showRaceToNumber();
     Array.prototype.forEach.call(modeRadios, function (r) {
       r.checked = r.value === state.currentGame.mode;
     });
@@ -20008,7 +20044,35 @@
 
   function renderRaceMode() {
     syncRaceModeRadios();
-    raceToWinsRow.classList.toggle("hidden", state.raceToWinsTarget === 1);
+    showRaceToNumber();
+  }
+
+  // The race number sits in "🏁 Race to [n] wins" itself - always shown:
+  // the race when racing; on Single Game, the race Race to Wins would
+  // start (the last one, or a whole rotation's worth), ready to pick.
+  function showRaceToNumber() {
+    if (document.activeElement === raceToWinsInput) return; // (not from under someone typing)
+    raceToWinsInput.value = state.raceToWinsTarget > 1 ? state.raceToWinsTarget : computeRotationAwareRaceToSuggestion();
+  }
+
+  // "🏁 Race to {{n}} wins", "— change every {{n}} games": the words
+  // around a number box come from the translation (its own word order);
+  // the box stays the same element, just placed between them.
+  function fillInlineNumberTemplates(root) {
+    Array.prototype.forEach.call((root || document).querySelectorAll(".inline-number-template"), function (span) {
+      var input = document.getElementById(span.getAttribute("data-input"));
+      if (!input) return;
+      var marker = "\u0007", parts = T(span.getAttribute("data-template"), { n: marker }).split(marker);
+      span.textContent = parts[0] || "";
+      span.parentNode.insertBefore(input, span.nextSibling);
+      var tail = input.nextSibling;
+      if (!(tail && tail.nodeType === 1 && tail.classList.contains("inline-number-after"))) {
+        tail = document.createElement("span");
+        tail.className = "inline-number-after";
+        span.parentNode.insertBefore(tail, input.nextSibling);
+      }
+      tail.textContent = parts.length > 1 ? parts.slice(1).join("") : "";
+    });
   }
 
   function finalizeWizardAndStart() {
@@ -20175,7 +20239,7 @@
     syncGameTypeUI();
     raceToWinsInput.value = state.raceToWinsTarget;
     syncRaceModeRadios();
-    raceToWinsRow.classList.toggle("hidden", state.raceToWinsTarget === 1);
+    showRaceToNumber();
     Array.prototype.forEach.call(modeRadios, function (r) {
       r.checked = r.value === "individual";
     });
@@ -32892,7 +32956,6 @@
     if (!raceModeSingleRadio.checked) return;
     if (state.raceToWinsTarget !== 1) lastRaceToWinsTarget = state.raceToWinsTarget;
     state.raceToWinsTarget = 1;
-    raceToWinsInput.value = 1;
     state.fairRaceTargets = null;
     saveState();
     renderRaceMode();
@@ -32901,38 +32964,33 @@
     updateCurrentGameSummary();
   });
 
-  // Per explicit request: asks instead of silently defaulting to
-  // lastRaceToWinsTarget/5 - the prompt's own default value is already
-  // that same rotation-aware suggestion (see
-  // computeRotationAwareRaceToSuggestion above), so just hitting Enter
-  // reproduces the old silent behavior exactly when there's no
-  // rotation to size against, or the full-rotation total when there
-  // is one. Backing out (Cancel, or dismissing the overlay) reverts
-  // the radio back to Single Game rather than leaving "Race to"
-  // selected with no real target chosen.
+  // Race to Wins: the race is the number shown right in the option (on
+  // Single Game it already shows the suggestion - the last race, or a
+  // whole rotation's worth), so nothing to answer first; the number is
+  // selected, ready to type over.
   raceModeRaceToRadio.addEventListener("change", function () {
     if (!raceModeRaceToRadio.checked) return;
-    var suggested = computeRotationAwareRaceToSuggestion();
-    promptModal(
-      T("gameSetup.raceToPrompt"),
-      String(suggested),
-      function (value) {
-        var target = parseInt(value, 10);
-        if (!(target >= 1)) target = suggested;
-        state.raceToWinsTarget = target;
-        raceToWinsInput.value = target;
-        if (target !== 1) lastRaceToWinsTarget = target;
-        state.fairRaceTargets = null;
-        saveState();
-        renderRaceMode();
-        renderScoreboard();
-        renderStandings();
-        updateCurrentGameSummary();
-      },
-      function () {
-        raceModeSingleRadio.checked = true;
-      }
-    );
+    var target = parseInt(raceToWinsInput.value, 10);
+    if (!(target > 1)) target = computeRotationAwareRaceToSuggestion();
+    if (!(target > 1)) target = 5;
+    state.raceToWinsTarget = target;
+    raceToWinsInput.value = target;
+    lastRaceToWinsTarget = target;
+    state.fairRaceTargets = null;
+    saveState();
+    renderRaceMode();
+    renderScoreboard();
+    renderStandings();
+    updateCurrentGameSummary();
+    try { raceToWinsInput.focus(); raceToWinsInput.select(); } catch (e) {}
+  });
+  // (the number box sits inside the Race to Wins option: a tap on it is the
+  // box's - typing a number there picks Race to Wins through its input)
+  raceToWinsInput.addEventListener("click", function (e) { e.stopPropagation(); });
+  raceToWinsInput.addEventListener("blur", showRaceToNumber);
+  // (the big number boxes: a tap selects the number, so typing replaces it)
+  Array.prototype.forEach.call(document.querySelectorAll(".big-number-input"), function (el) {
+    el.addEventListener("focus", function () { setTimeout(function () { try { el.select(); } catch (e) {} }, 0); });
   });
 
   fairRaceEnabledCheckbox.addEventListener("change", function () {
@@ -33042,6 +33100,17 @@
     expandAndScrollToPanel("rotation-panel", "btn-toggle-rotation-panel");
     openRotationGamePicker(600);
   }
+
+  gameSetupRotationEveryInput.addEventListener("input", function () {
+    var v = parseInt(gameSetupRotationEveryInput.value, 10);
+    if (!v || v < 1) return;
+    state.rotation.every = Math.min(99, v);
+    saveState();
+    applyRotationIfDue();
+    renderRotation();
+    renderScoreboard();
+  });
+  gameSetupRotationEveryInput.addEventListener("blur", function () { gameSetupRotationEveryInput.value = state.rotation.every; });
 
   rotationEveryInput.addEventListener("input", function () {
     var v = parseInt(rotationEveryInput.value, 10);
@@ -34382,6 +34451,9 @@
       trio[2].value = type.unit;
     });
     applyDomTranslations(document);
+    fillInlineNumberTemplates(document);
+    showRaceToNumber();
+    if (document.activeElement !== gameSetupRotationEveryInput) gameSetupRotationEveryInput.value = state.rotation.every;
     // Re-run now that languages have actually finished loading (see
     // syncKeypadSpeechToggleButtonText's own comment on why the very
     // first, top-level call - made before this point - can't rely on

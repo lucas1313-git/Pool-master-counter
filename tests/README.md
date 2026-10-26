@@ -168,3 +168,11 @@ Not part of the app - helpers for testing and for running this machine's own cop
   scoreboard, every sentence (from js/voice.js's own SHEET and english.json, so it can't drift),
   the Siri Shortcut set-up with this computer's address, troubleshooting, recording marks.
   `node tests/make_voice_pdf.js [http://<address>:4173]`.
+- `probe_setup_layout.js` - Current Session › Tournament Type and the score card line: "🏁 Race to
+  [n] wins" beside "🎯 Single Game" (the number in its option, big; Single Game keeps it shown; a tap
+  selects it, typing picks Race to Wins; Race to Wins uses it - no question); "Rotate game types
+  automatically — change every [n] games" (= Games Rotations' Switch every); Timed Tournament under it
+  with "— ends after [n] minutes"; Q-Score and its explanation on one line; "🎱 Now playing 8-Ball -
+  target [x] rack — switches to 9-Ball in [y] games." (x, y their own colour, bigger; x keeps the
+  rotation's target, y the games left, kept to Switch every).
+  `node tests/probe_setup_layout.js http://localhost:4235/ [screenshot dir]`.

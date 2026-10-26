@@ -1,4 +1,4 @@
-// The scoreboard's Now Playing line: "Now playing [game] target [n] [unit]", the controls in the
+// The scoreboard's Now Playing line: "Now playing [game] - target [n] [unit]", the controls in the
 // line's own big accent type, kept in step with Game Setup both ways, the target there for every
 // game; plain text while a Rotation runs. The Rotation / Single game radios beside Focus Mode, and
 // the rotation line's size and its two-digit "every" box.
@@ -50,9 +50,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await page.select("#now-playing-banner select.now-playing-type-select", "straight");
   await sleep(500);
   t = await line();
-  check("Straight Pool: Now playing [game] target [n] [unit]", /^🎱 Now playing \[Straight Pool v\] target \[100\] \[points v\]$/.test(t), t);
+  check("Straight Pool: Now playing [game] - target [n] [unit]", /^🎱 Now playing \[Straight Pool v\] - target \[100\] \[points v\]$/.test(t), t);
   let st = await styleOf();
-  check("the controls use the line's own size, weight and colour", st.controls.length === 3 && st.controls.every((c) => c[1] === st.banner[0] && c[2] === st.banner[1] && c[3] === st.banner[2]), st);
+  check("the game and unit use the line's own size, weight and colour - the number its own colour, a bit bigger", st.controls.length === 3 && [st.controls[0], st.controls[2]].every((c) => c[1] === st.banner[0] && c[2] === st.banner[1] && c[3] === st.banner[2]) && st.controls[1][0] === "INPUT" && st.controls[1][3] !== st.banner[2] && parseFloat(st.controls[1][1]) > parseFloat(st.banner[0]), st);
   if (OUT) { const el = await page.$("#now-playing-banner"); await el.screenshot({ path: OUT + "/now_playing_1280.png" }); }
   // the target from the line
   await page.evaluate(() => { const i = document.querySelector("#now-playing-banner .now-playing-target-input"); i.value = "75"; i.dispatchEvent(new Event("change", { bubbles: true })); });
@@ -75,7 +75,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await page.select("#now-playing-banner select.now-playing-type-select", "8ball");
   await sleep(400);
   t = await line();
-  check("8-Ball: the target stays - Now playing [8-Ball] target [1] [rack]", /^🎱 Now playing \[8-Ball v\] target \[1\] \[rack v\]$/.test(t), t);
+  check("8-Ball: the target stays - Now playing [8-Ball] - target [1] [rack]", /^🎱 Now playing \[8-Ball v\] - target \[1\] \[rack v\]$/.test(t), t);
   // phone width
   await page.select("#now-playing-banner select.now-playing-type-select", "straight");
   await sleep(300);
@@ -95,7 +95,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const toast = await page.evaluate(() => document.body.innerText.includes("Add at least two game types to the rotation first."));
   const rotPanelOpen = await page.evaluate(() => !document.getElementById("rotation-panel").classList.contains("collapsed"));
   check("Rotation with no lineup: on, says to add game types, opens Games Rotations", m.rotation && m.enabled && toast && rotPanelOpen, { m, toast, rotPanelOpen });
-  check("...nothing rotating yet: the line stays editable", /^🎱 Now playing \[[^\]]+ v\] target \[\d+\] \[[a-z]+ v\]$/.test(await line()), await line());
+  check("...nothing rotating yet: the line stays editable", /^🎱 Now playing \[[^\]]+ v\] - target \[\d+\] \[[a-z]+ v\]$/.test(await line()), await line());
   // a lineup: 8-Ball and Straight Pool
   await page.evaluate(() => {
     const add = (type) => { const s = document.getElementById("rotation-add-type"); s.value = type; s.dispatchEvent(new Event("change", { bubbles: true })); document.getElementById("btn-rotation-add").click(); };
@@ -106,7 +106,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   t = await line();
   const controls = await page.evaluate(() => document.querySelectorAll("#now-playing-banner .now-playing-control").length);
   console.log("rotation line:", t);
-  check("Rotation running: the same words as text, target included", controls === 0 && /^🎱 Now playing \{8-Ball\} target \{1\} \{rack\}/.test(t), { controls, t });
+  check("Rotation running: the game and unit as text (the rotation's), the target and the games until the switch adjustable", controls === 2 && /^🎱 Now playing \{8-Ball\} - target \[1\] \{rack\}/.test(t), { controls, t });
   const rot = await page.evaluate(() => { const el = document.getElementById("rotation-position-text"), i = el.querySelector("input"); return { text: el.textContent + "[" + (i && i.value) + "]", size: getComputedStyle(el).fontSize, inputW: i ? Math.round(i.getBoundingClientRect().width) : null, max: i && i.max }; });
   check("the rotation line is big (1.5rem) and its box two digits wide", rot.size === "24px" && rot.inputW > 20 && rot.inputW < 60 && rot.max === "99", rot);
   if (OUT) { const el = await page.$("#rotation-position-row"); await el.screenshot({ path: OUT + "/rotation_line.png" }); const bar = await page.$(".voice-toggle-row"); await bar.screenshot({ path: OUT + "/mode_toggle.png" }); }
@@ -118,7 +118,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await sleep(600);
   m = await modes();
   t = await line();
-  check("Single game again: rotation off, the target still on the line, editable", m.single && !m.enabled && /^🎱 Now playing \[[^\]]+ v\] target \[\d+\] \[[a-z]+ v\]$/.test(t) && (await page.evaluate(() => document.getElementById("rotation-enabled").checked)) === false, { m, t });
+  check("Single game again: rotation off, the target still on the line, editable", m.single && !m.enabled && /^🎱 Now playing \[[^\]]+ v\] - target \[\d+\] \[[a-z]+ v\]$/.test(t) && (await page.evaluate(() => document.getElementById("rotation-enabled").checked)) === false, { m, t });
   // French
   await page.evaluate(() => { localStorage.setItem("poolMasterCounter.language", "fr"); });
   check("no page errors", errors.length === 0, errors);

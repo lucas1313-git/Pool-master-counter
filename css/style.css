@@ -9765,3 +9765,75 @@ body.network-guest-mode #header-group-start {
 }
 
 
+
+/* Tournament Type: "🏁 Race to [n] wins" / "🎯 Single Game" side by side,
+   the race number right in its option; Rotate / Timed / Q-Score each a
+   boxed row with its own number (or explanation) on the same line. The
+   numbers are big and stand out - their own color, not the label's. */
+.race-mode-row .race-mode-option {
+  flex-wrap: wrap;
+}
+
+.big-number-input,
+input[type="number"].big-number-input {
+  width: 3.4em;
+  font: inherit;
+  font-size: 1.35rem;
+  font-weight: 800;
+  text-align: center;
+  color: var(--text);
+  background: var(--bg);
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  padding: 2px 4px;
+  line-height: 1.2;
+}
+
+.setting-with-number {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  margin: 8px 0;
+  cursor: default;
+}
+
+.setting-with-number-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.setting-with-number-label input[type="checkbox"] {
+  width: 24px;
+  height: 24px;
+  accent-color: var(--accent);
+  flex: 0 0 auto;
+}
+
+.setting-number {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.setting-number.hidden {
+  display: none;
+}
+
+.fair-race-inline-explain {
+  flex: 1 1 260px;
+  font-size: 0.92rem;
+  font-weight: 400;
+  color: var(--text-dim);
+}
+
+/* The score card line's numbers (the target, the games until the switch):
+   their own color and a bit bigger than the words around them. */
+.now-playing-banner .now-playing-number {
+  font-size: 1.15em;
+  color: var(--text);
+  border: 2px solid var(--accent);
+}

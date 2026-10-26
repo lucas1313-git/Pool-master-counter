@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261026c">
+<link rel="stylesheet" href="css/style.css?v=20261026d">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -229,41 +229,24 @@
         </div>
 
         <h4 class="session-subsection-subheading" data-i18n="gameSetup.tournamentTypeHeading">Tournament Type</h4>
-        <div class="row mode-row">
-          <label><input type="radio" name="race-mode" id="race-mode-raceto" value="raceto" checked> <span data-i18n="gameSetup.raceModeRaceTo">🏁 Race to Wins</span></label>
-          <label class="checkbox-row checkbox-row-prominent">
-            <input type="checkbox" id="timed-tournament-enabled-checkbox">
-            <span data-i18n="gameSetup.timedTournamentEnable">⏰ Timed Tournament</span>
-          </label>
+        <!-- Race to [n] wins / Single Game side by side - the number right in its option, big
+             (typing it picks Race to Wins); then rotation, the timed tournament and the Q-Score
+             balance, each with its own number on the same line. -->
+        <div class="row mode-row race-mode-row">
+          <label class="race-mode-option" id="race-mode-raceto-option"><input type="radio" name="race-mode" id="race-mode-raceto" value="raceto" checked> <span class="inline-number-template" data-template="gameSetup.raceToWinsInline" data-input="race-to-wins">🏁 Race to {{n}} wins</span><input type="number" id="race-to-wins" class="big-number-input" min="1" max="99" value="5" inputmode="numeric"></label>
+          <label class="race-mode-option"><input type="radio" name="race-mode" id="race-mode-single" value="single"> <span data-i18n="gameSetup.raceModeSingle">🎯 Single Game</span></label>
         </div>
-        <div class="row settings-row">
-          <div class="settings-col" id="race-to-wins-row">
-            <label for="race-to-wins" data-i18n="gameSetup.raceToMilestone">Race-to milestone</label>
-            <input type="number" id="race-to-wins" min="1" max="99" value="5">
-            <span data-i18n="common.wins">wins</span>
-          </div>
-          <div class="settings-col hidden" id="timed-tournament-minutes-row">
-            <label for="timed-tournament-minutes-input" data-i18n="gameSetup.timedTournamentEndsAfter">Ends after</label>
-            <input type="number" id="timed-tournament-minutes-input" min="1" max="600" value="60">
-            <span data-i18n="common.minutes">minutes</span>
-          </div>
+        <div class="checkbox-row checkbox-row-prominent setting-with-number">
+          <label class="setting-with-number-label"><input type="checkbox" id="game-setup-rotation-enabled"> <span data-i18n="rotation.autoRotate">Rotate game types automatically</span></label>
+          <span class="setting-number inline-number-template" data-template="rotation.changeEveryInline" data-input="game-setup-rotation-every">— change every {{n}} games</span><input type="number" id="game-setup-rotation-every" class="big-number-input" min="1" max="99" value="1" inputmode="numeric">
         </div>
-
-        <h4 class="session-subsection-subheading" data-i18n="gameSetup.gamesRotationHeading">Games Rotation</h4>
-        <div class="row mode-row">
-          <label class="checkbox-row checkbox-row-prominent">
-            <input type="checkbox" id="game-setup-rotation-enabled">
-            <span data-i18n="rotation.autoRotate">Rotate game types automatically</span>
-          </label>
-          <label><input type="radio" name="race-mode" id="race-mode-single" value="single"> <span data-i18n="gameSetup.raceModeSingle">🎯 Single Game</span></label>
+        <div class="checkbox-row checkbox-row-prominent setting-with-number">
+          <label class="setting-with-number-label"><input type="checkbox" id="timed-tournament-enabled-checkbox"> <span data-i18n="gameSetup.timedTournamentEnable">⏰ Timed Tournament</span></label>
+          <span class="setting-number hidden" id="timed-tournament-minutes-row"><span class="inline-number-template" data-template="gameSetup.timedEndsAfterInline" data-input="timed-tournament-minutes-input">— ends after {{n}} minutes</span><input type="number" id="timed-tournament-minutes-input" class="big-number-input" min="1" max="600" value="60" inputmode="numeric"></span>
         </div>
-
-        <label class="checkbox-row checkbox-row-prominent">
-          <input type="checkbox" id="fair-race-enabled-checkbox">
-          <span data-i18n="gameSetup.fairRaceEnable">⚖️ Use Fargo rating to balance the race</span>
-        </label>
-        <div class="fair-race-explain-row">
-          <p class="player-stats-note" data-i18n="gameSetup.fairRaceShortExplain">Shortens the underdog's target based on the rating gap, so the match is closer to a coin flip.</p>
+        <div class="checkbox-row checkbox-row-prominent setting-with-number fair-race-row">
+          <label class="setting-with-number-label"><input type="checkbox" id="fair-race-enabled-checkbox"> <span data-i18n="gameSetup.fairRaceEnable">⚖️ Use Q-Score to balance the race</span></label>
+          <span class="fair-race-inline-explain" data-i18n="gameSetup.fairRaceShortExplain">Shortens the underdog's target based on the rating gap, so the match is closer to a coin flip.</span>
           <button type="button" id="btn-fair-race-info-session" class="format-info-btn" data-i18n-aria-label="tournament.fairRaceInfoAria" aria-label="What does this mean?">❓</button>
         </div>
       </div>
@@ -2650,8 +2633,8 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20261026c"></script>
-<script src="js/camera-client.js?v=20261026c"></script>
-<script src="js/voice.js?v=20261026c"></script>
+<script src="js/app.js?v=20261026d"></script>
+<script src="js/camera-client.js?v=20261026d"></script>
+<script src="js/voice.js?v=20261026d"></script>
 </body>
 </html>
