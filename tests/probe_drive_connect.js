@@ -126,18 +126,21 @@ function lanIp() { for (const l of Object.values(os.networkInterfaces())) for (c
     }
     const b = document.getElementById("btn-toggle-backup-panel");
     if (document.getElementById("backup-panel").classList.contains("collapsed")) b.click();
+    // Backup & Restore › More options: the Drive folder and the owner's sign-in setup (on the Mac)
+    document.getElementById("bk-more").open = true;
   });
   await sleep(800);
   const ui = () => page.evaluate(() => {
     const vis = (id) => !document.getElementById(id).classList.contains("hidden") && document.getElementById(id).offsetParent !== null;
-    return { status: document.getElementById("drive-connect-status").textContent, setup: vis("drive-connect-setup"), connect: vis("btn-drive-connect"), connectDisabled: document.getElementById("btn-drive-connect").disabled, disconnect: vis("btn-drive-disconnect"), backup: document.getElementById("drive-backup-status").textContent };
+    return { status: document.getElementById("drive-connect-status").textContent, setup: vis("drive-connect-setup"), secret: vis("drive-client-secret-input"), connect: vis("btn-drive-connect"), disconnect: vis("btn-drive-disconnect"), backup: document.getElementById("drive-backup-status").textContent };
   });
   const waitUi = async (f) => { let u; for (let i = 0; i < 40; i++) { u = await ui(); if (f(u)) break; await sleep(250); } return u; };
   const toast = () => page.evaluate(() => { const t = [...document.querySelectorAll("#page-toast, #win-toast")].find((x) => !x.classList.contains("hidden") && x.textContent.trim()); return t ? t.textContent : ""; });
   const type = (id, v) => page.evaluate((id, v) => { const i = document.getElementById(id); i.value = v; i.dispatchEvent(new Event("input", { bubbles: true })); }, id, v);
 
   let u = await ui();
-  check("not set up: asks for the client ID and secret, Connect waits for them", /paste your OAuth client's ID and secret/.test(u.status) && u.setup && u.connect && u.connectDisabled, u);
+  u = await waitUi((x) => /no sign-in needed/.test(x.status));
+  check("no sign-in set up: no Connect (nothing it could do), \"no sign-in needed\" here; the owner's setup (ID and secret) under More options", /no sign-in needed/.test(u.status) && u.setup && u.secret && !u.connect, u);
 
   // the client: a wrong ID refused, then saved
   await type("drive-client-id-input", "not-a-client-id"); await type("drive-client-secret-input", SECRET);
@@ -145,12 +148,12 @@ function lanIp() { for (const l of Object.values(os.networkInterfaces())) for (c
   check("a wrong client ID: refused, says why", /isn't a client ID/.test(await toast()), await toast());
   await type("drive-client-id-input", CLIENT_ID); await type("drive-client-secret-input", SECRET);
   await page.click("#btn-drive-save-client");
-  u = await waitUi((x) => /Client saved - press Connect/.test(x.status));
+  u = await waitUi((x) => /Not connected yet/.test(x.status));
   const cfgFile = path.join(HOME, ".pool-master-counter", "google-drive.json");
   const mode = fs.existsSync(cfgFile) ? (fs.statSync(cfgFile).mode & 0o777).toString(8) : null;
   const statusJson = await (await fetch(BASE + "api/drive/status")).text();
   const typedLeft = await page.evaluate(() => document.getElementById("drive-client-secret-input").value);
-  check("saved: \"press Connect\", Connect on, the secret field emptied", !u.connectDisabled && typedLeft === "", { u, typedLeft });
+  check("saved: \"Not connected yet: press Connect\", the secret field emptied", /Not connected yet/.test(u.status) && u.connect && typedLeft === "", { u, typedLeft });
   check("...kept on this computer only, readable by this user only (600), never sent back", mode === "600" && JSON.parse(fs.readFileSync(cfgFile, "utf8")).clientSecret === SECRET && statusJson.indexOf(SECRET) === -1, { mode, statusJson });
 
   // Connect: Google's sign-in, straight back
@@ -160,14 +163,14 @@ function lanIp() { for (const l of Object.values(os.networkInterfaces())) for (c
   let tabText = "";
   for (let i = 0; i < 40; i++) { await sleep(250); try { tabText = await tab.evaluate(() => document.body ? document.body.innerText : ""); } catch (e) {} if (/connected/i.test(tabText)) break; }
   check("Connect: Google's sign-in (code + PKCE checked) and back - \"Google Drive connected (tester@example.com)\"", /Google Drive connected \(tester@example\.com\)/.test(tabText), tabText);
-  u = await waitUi((x) => /Connected as/.test(x.status));
-  check("the scoreboard: \"Connected as tester@example.com\", Disconnect offered, the client fields put away", /Connected as tester@example\.com/.test(u.status) && u.disconnect && !u.setup && !u.connect, u);
+  u = await waitUi((x) => /Connected to Google as/.test(x.status));
+  check("the scoreboard: \"Connected to Google as tester@example.com\", Disconnect offered", /Connected to Google as tester@example\.com/.test(u.status) && u.disconnect && !u.connect, u);
 
   // the folder: backups upload into it
   await page.evaluate((l) => { const i = document.getElementById("drive-folder-link-input"); i.value = l; i.dispatchEvent(new Event("change", { bubbles: true })); }, LINK);
   u = await waitUi((x) => /upload straight into/.test(x.backup));
   check("the folder link: \"Backups upload straight into “Pool Backups” (Google Drive, signed in)\"", /Backups upload straight into “Pool Backups” \(Google Drive, signed in\)/.test(u.backup), u.backup);
-  await page.click("#btn-export-all-data"); await sleep(300); await page.click("#btn-confirm-modal-ok");
+  await page.click("#btn-backup-now");
   let up = null;
   for (let i = 0; i < 40 && !up; i++) { await sleep(250); up = google.files.find((f) => /all-data/.test(f.name)); }
   const upData = up ? JSON.parse(up.content) : null;
@@ -176,19 +179,22 @@ function lanIp() { for (const l of Object.values(os.networkInterfaces())) for (c
   await sleep(300);
   check("...says so", /Saved in your Drive folder “Pool Backups”/.test(await toast()), await toast());
 
-  // Import: the folder's backups listed and read through the sign-in
-  await page.click("#btn-drive-import");
+  // Restore › From Google Drive: the folder's backups listed and read through the sign-in
+  await page.click("#btn-restore"); await sleep(300);
+  await page.click("#btn-bk-pick-drive");
   let rows = [];
-  for (let i = 0; i < 30 && rows.length < 2; i++) { await sleep(250); rows = await page.evaluate(() => [...document.querySelectorAll("#drive-file-picker .drive-file-row")].map((b) => b.textContent)); }
-  check("☁️ Import from Link: the folder's backups listed (no API key, a private folder)", rows.length === 2 && rows.some((r) => /old-backup\.json/.test(r)), rows);
-  await page.evaluate(() => [...document.querySelectorAll("#drive-file-picker .drive-file-row")].find((b) => /old-backup/.test(b.textContent)).click());
+  for (let i = 0; i < 30 && rows.length < 2; i++) { await sleep(250); rows = await page.evaluate(() => [...document.querySelectorAll("#bk-drive-list .bk-drive-row")].map((b) => b.textContent)); }
+  check("⬇️ Restore › From Google Drive: the folder's backups listed (no API key, a private folder)", rows.length === 2 && rows.some((r) => /old-backup\.json/.test(r)), rows);
+  await page.evaluate(() => [...document.querySelectorAll("#bk-drive-list .bk-drive-row")].find((b) => /old-backup/.test(b.textContent)).click());
+  for (let i = 0; i < 20; i++) { await sleep(250); if (await page.evaluate(() => !document.getElementById("bk-step-how").classList.contains("hidden"))) break; }
+  await page.click("#btn-bk-add");
   let mario = false;
   for (let i = 0; i < 30 && !mario; i++) {
     await sleep(300);
     await page.evaluate(() => { const o = document.getElementById("confirm-modal-overlay"); if (o && !o.classList.contains("hidden")) document.getElementById("btn-confirm-modal-ok").click(); });
     mario = await page.evaluate(() => { try { return JSON.parse(localStorage.getItem("poolMasterCounter.state.v2")).players.some((p) => p.name === "Mario"); } catch (e) { return false; } });
   }
-  check("...one picked: read through the sign-in and imported (Mario is here)", mario);
+  check("...one picked, \"Add to what's here\": read through the sign-in and imported (Mario is here)", mario);
   check("the access token renewed from the refresh token along the way", google.calls.refresh >= 1, google.calls);
 
   // Disconnect: revoked (the import's own messages closed first)
@@ -197,15 +203,15 @@ function lanIp() { for (const l of Object.values(os.networkInterfaces())) for (c
   await sleep(800); await closeModals(); await openPanel(); await sleep(400);
   await page.evaluate(() => document.getElementById("btn-drive-disconnect").click()); await sleep(400);
   await page.evaluate(() => document.getElementById("btn-confirm-modal-ok").click());
-  u = await waitUi((x) => /Client saved - press Connect/.test(x.status));
-  check("Disconnect: the sign-in revoked at Google, back to \"press Connect\"", google.calls.revoked.length === 1 && /^refresh-/.test(google.calls.revoked[0]) && /Client saved - press Connect/.test(u.status), { revoked: google.calls.revoked, u });
+  u = await waitUi((x) => /Not connected yet/.test(x.status));
+  check("Disconnect: the sign-in revoked at Google, back to \"Not connected yet\"", google.calls.revoked.length === 1 && /^refresh-/.test(google.calls.revoked[0]) && /Not connected yet/.test(u.status), { revoked: google.calls.revoked, u });
 
   // a sign-in Google ended: "press Connect again"
   const tab2 = new Promise((ok) => browser.once("targetcreated", (t) => ok(t)));
   await closeModals(); await openPanel();
   await page.evaluate(() => document.getElementById("btn-drive-connect").click());
   await (await tab2).page();
-  await waitUi((x) => /Connected as/.test(x.status));
+  await waitUi((x) => /Connected to Google as/.test(x.status));
   google.rejectRefresh = true;
   await sleep(1500); // (the access token is near its end: the next call renews - and Google refuses)
   await page.evaluate(() => { const i = document.getElementById("drive-folder-link-input"); i.value = i.value + " "; i.dispatchEvent(new Event("change", { bubbles: true })); });

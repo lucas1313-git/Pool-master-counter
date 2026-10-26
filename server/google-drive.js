@@ -241,4 +241,4 @@ function attachGoogleDriveRoutes(app, port) {
   });
 }
 
-module.exports = { attachGoogleDriveRoutes: attachGoogleDriveRoutes, connected: connected, account: function () { return loadConfig().account || null; }, folderInfo: folderInfo, upload: upload, folderIdFromLink: folderIdFromLink };
+module.exports = { attachGoogleDriveRoutes: attachGoogleDriveRoutes, connected: connected, account: function () { return loadConfig().account || null; }, folderInfo: folderInfo, upload: upload, listFolder: listFolder, download: download, folderIdFromLink: folderIdFromLink };

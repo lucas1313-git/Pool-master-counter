@@ -136,6 +136,21 @@ Not part of the app - helpers for testing and for running this machine's own cop
   (no client ID or token in it, the token for this tab only); an hour later the next backup asks
   Google again without consent and still uploads; Import lists and reads; Disconnect revokes.
   `node tests/probe_drive_browser.js`.
+- `probe_backup_simple.js` - the simpler Backup & Restore and its rule, no dead ends (every button
+  shown can finish its job on this device). The Mac (its server on 4241, a throwaway HOME, a fake
+  Google Drive for desktop folder), the GitHub site (a plain file server on 4243) and a pretend tablet
+  with a share sheet; a little web server on 4242. Plain words (no API key / client ID / "iCloud
+  Sync"); Share Standings in Publish Daily Report, Share Last Session kept; GitHub: nothing
+  Google-related (the owner's setup only with ?owner); computer: Downloads; tablet: the share sheet,
+  "saved where you chose", cancel said; Mac: the Drive folder straight in, no "isn't set up" scare;
+  Restore: a file -> Add / Replace; From a link: a Drive folder synced on the Mac listed, a web
+  address read, a Drive folder/file a device can't open -> said, with "Open the link"; phone fit.
+  `node tests/probe_backup_simple.js [screenshot dir]`.
+- `probe_day_report_share.js` - Publish Daily Report sharing with attachments (the backup and the
+  colorful report picture) and the colorful report page's own Share, on a GitHub-like file server
+  (4244). Safari only opens the share sheet straight from the tap, so a pretend share sheet notes
+  whether it was asked during the tap, and what it got: during the tap, with the backup (no contacts),
+  a real PNG and the text. `node tests/probe_day_report_share.js`.
 - `probe_out_of_view.js` - out of view: a named player who walks out of the picture keeps a tag at
   the edge they left by (name, time, arrow), is kept past the 12 s a hidden player is looked for,
   and gets their path and name back coming in at that edge; hidden mid-picture as long: no name;

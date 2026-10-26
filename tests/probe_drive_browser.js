@@ -98,7 +98,7 @@ const fakeGoogle = http.createServer(async (req, res) => {
   await page.evaluateOnNewDocument((g) => { window.PMC_TEST_GOOGLE_API = g; window.PMC_TEST_GIS_SRC = g + "/gsi/client"; window.__downloads = []; const click = HTMLAnchorElement.prototype.click; HTMLAnchorElement.prototype.click = function () { if (this.download) window.__downloads.push(this.download); return click.call(this); }; }, G);
   await page.goto(BASE + "manifest.json");
   await page.evaluate(() => { localStorage.clear(); localStorage.setItem("poolMasterCounter.onboardingSeen.v1", "1"); localStorage.setItem("poolMasterCounter.migratedFromRepo.v1", "1"); });
-  await page.goto(BASE, { waitUntil: "networkidle2" });
+  await page.goto(BASE + "?owner", { waitUntil: "networkidle2" });
   await sleep(700);
   await page.evaluate(async () => {
     for (const n of ["Luigi", "Luc"]) {
@@ -110,6 +110,8 @@ const fakeGoogle = http.createServer(async (req, res) => {
   const openPanel = () => page.evaluate(() => { const b = document.getElementById("btn-toggle-backup-panel"); if (document.getElementById("backup-panel").classList.contains("collapsed")) b.click(); });
   const closeModals = async () => { for (let i = 0; i < 10; i++) { const open = await page.evaluate(() => { const o = document.getElementById("confirm-modal-overlay"); if (o && !o.classList.contains("hidden")) { document.getElementById("btn-confirm-modal-ok").click(); return true; } return false; }); if (!open) break; await sleep(400); } };
   await openPanel();
+  // Backup & Restore › More options (the owner's sign-in setup: ?owner in the address)
+  await page.evaluate(() => { document.getElementById("bk-more").open = true; });
   await sleep(800);
   const ui = () => page.evaluate(() => {
     const vis = (id) => { const e = document.getElementById(id); return !e.classList.contains("hidden") && e.offsetParent !== null; };
@@ -118,26 +120,26 @@ const fakeGoogle = http.createServer(async (req, res) => {
   const waitUi = async (f) => { let u; for (let i = 0; i < 40; i++) { u = await ui(); if (f(u)) break; await sleep(250); } return u; };
   const toast = () => page.evaluate(() => { const t = [...document.querySelectorAll("#page-toast, #win-toast")].find((x) => !x.classList.contains("hidden") && x.textContent.trim()); return t ? t.textContent : ""; });
 
-  let u = await waitUi((x) => /right on this device/.test(x.status));
-  check("no Mac server: sign in right on this device - the client ID field, no secret field", /Sign in to Google Drive right on this device/.test(u.status) && u.idField && !u.secretField && u.connectDisabled, u);
+  let u = await waitUi((x) => /Save the app's Google client ID below/.test(x.status));
+  check("no Mac server, the owner (?owner), nothing set up: the setup asks for the client ID only (no secret field), no Connect until it's saved", u.idField && !u.secretField && !u.connect, u);
 
   await page.evaluate((id) => { const i = document.getElementById("drive-client-id-input"); i.value = id; }, CLIENT_ID);
   await page.click("#btn-drive-save-client");
-  u = await waitUi((x) => /Client ID saved on this device/.test(x.status));
+  u = await waitUi((x) => /Not connected yet/.test(x.status));
   const kept = await page.evaluate(() => localStorage.getItem("poolMasterCounter.driveBrowserClientId.v1"));
   for (let i = 0; i < 20; i++) { if (await page.evaluate(() => !!(window.google && window.google.accounts))) break; await sleep(200); }
-  check("saved on this device, Google's sign-in library loaded, Connect on", kept === CLIENT_ID && !u.connectDisabled && (await page.evaluate(() => !!(window.google && window.google.accounts))), { kept, u });
+  check("saved on this device, Google's sign-in library loaded - \"Not connected yet: press Connect\"", kept === CLIENT_ID && u.connect && (await page.evaluate(() => !!(window.google && window.google.accounts))), { kept, u });
 
   await page.click("#btn-drive-connect");
-  u = await waitUi((x) => /Connected as/.test(x.status));
+  u = await waitUi((x) => /Connected to Google as/.test(x.status));
   const gis = await page.evaluate(() => window.__gis);
-  check("Connect: Google's sign-in for the full Drive, consent the first time -> \"Connected as ipad-tester@example.com on this device\"", /Connected as ipad-tester@example\.com on this device/.test(u.status) && gis.cfg.client_id === CLIENT_ID && /auth\/drive$/.test(gis.cfg.scope) && gis.requests[0].prompt === "consent" && u.disconnect, { u, gis });
+  check("Connect: Google's sign-in for the full Drive, consent the first time -> \"Connected to Google as ipad-tester@example.com\"", /Connected to Google as ipad-tester@example\.com/.test(u.status) && gis.cfg.client_id === CLIENT_ID && /auth\/drive$/.test(gis.cfg.scope) && gis.requests[0].prompt === "consent" && u.disconnect, { u, gis });
 
   await page.evaluate((l) => { const i = document.getElementById("drive-folder-link-input"); i.value = l; i.dispatchEvent(new Event("change", { bubbles: true })); }, LINK);
   u = await waitUi((x) => /signed in on this device/.test(x.backup));
   check("the folder link: \"Backups upload straight into your Drive folder (signed in on this device)\"", /upload straight into your Drive folder \(signed in on this device\)/.test(u.backup), u.backup);
 
-  await page.click("#btn-export-all-data"); await sleep(300); await page.click("#btn-confirm-modal-ok");
+  await page.click("#btn-backup-now");
   let up = null;
   for (let i = 0; i < 40 && !up; i++) { await sleep(250); up = google.files.find((f) => /all-data/.test(f.name)); }
   const data = up ? JSON.parse(up.content) : null;
@@ -150,18 +152,21 @@ const fakeGoogle = http.createServer(async (req, res) => {
   // an hour later: the token is spent - the next backup asks Google again (no consent screen) and uploads
   await page.evaluate(() => { const k = "poolMasterCounter.driveBrowserToken.v1"; const t = JSON.parse(sessionStorage.getItem(k)); t.expiresAt = Date.now() - 1000; sessionStorage.setItem(k, JSON.stringify(t)); });
   const before = google.uploads;
-  await page.click("#btn-export-all-data"); await sleep(300); await page.click("#btn-confirm-modal-ok");
+  await page.click("#btn-backup-now");
   for (let i = 0; i < 40 && google.uploads === before; i++) await sleep(250);
   const reqs = await page.evaluate(() => window.__gis.requests);
   check("an hour later: the next backup asks Google again (no consent screen this time) and still uploads", google.uploads === before + 1 && reqs.length === 2 && reqs[1].prompt === "" && reqs[1].hint === "ipad-tester@example.com", { uploads: google.uploads - before, reqs });
 
   // Import: the folder's backups listed and one read
   await closeModals();
-  await page.click("#btn-drive-import");
+  await page.click("#btn-restore"); await sleep(300);
+  await page.click("#btn-bk-pick-drive");
   let rows = [];
-  for (let i = 0; i < 30 && rows.length < 3; i++) { await sleep(250); rows = await page.evaluate(() => [...document.querySelectorAll("#drive-file-picker .drive-file-row")].map((b) => b.textContent)); }
-  check("☁️ Import from Link: the folder's backups listed (no API key)", rows.length === 3 && rows.some((r) => /old-backup\.json/.test(r)), rows);
-  await page.evaluate(() => [...document.querySelectorAll("#drive-file-picker .drive-file-row")].find((b) => /old-backup/.test(b.textContent)).click());
+  for (let i = 0; i < 30 && rows.length < 3; i++) { await sleep(250); rows = await page.evaluate(() => [...document.querySelectorAll("#bk-drive-list .bk-drive-row")].map((b) => b.textContent)); }
+  check("⬇️ Restore › From Google Drive: the folder's backups listed (no API key)", rows.length === 3 && rows.some((r) => /old-backup\.json/.test(r)), rows);
+  await page.evaluate(() => [...document.querySelectorAll("#bk-drive-list .bk-drive-row")].find((b) => /old-backup/.test(b.textContent)).click());
+  for (let i = 0; i < 20; i++) { await sleep(250); if (await page.evaluate(() => !document.getElementById("bk-step-how").classList.contains("hidden"))) break; }
+  await page.click("#btn-bk-add");
   let mario = false;
   for (let i = 0; i < 30 && !mario; i++) {
     await sleep(300);
@@ -174,10 +179,10 @@ const fakeGoogle = http.createServer(async (req, res) => {
   await sleep(600); await closeModals(); await openPanel(); await sleep(300);
   await page.evaluate(() => document.getElementById("btn-drive-disconnect").click()); await sleep(300);
   await page.evaluate(() => document.getElementById("btn-confirm-modal-ok").click());
-  u = await waitUi((x) => /Client ID saved on this device/.test(x.status));
+  u = await waitUi((x) => /Not connected yet/.test(x.status));
   await sleep(500);
   const revoked = google.revoked;
-  check("Disconnect: the token revoked, back to \"Client ID saved - press Connect\"", revoked.length === 1 && /^tok-/.test(revoked[0]) && /Client ID saved on this device/.test(u.status), { revoked, u });
+  check("Disconnect: the token revoked, back to \"Not connected yet\"", revoked.length === 1 && /^tok-/.test(revoked[0]) && /Not connected yet/.test(u.status), { revoked, u });
 
   check("no page errors", errors.length === 0, errors);
   await browser.close();

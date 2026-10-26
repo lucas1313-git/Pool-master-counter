@@ -1880,18 +1880,20 @@
 
   var btnExportAllData = document.getElementById("btn-export-all-data");
   var btnExportAllDataHelp = document.getElementById("btn-export-all-data-help");
-  var btnImportAllData = document.getElementById("btn-import-all-data");
+  // (Backup & Restore no longer shows these - stand-ins keep their old wiring harmless)
+  function optionalEl(id, tag) { return document.getElementById(id) || document.createElement(tag || "button"); }
+  var btnImportAllData = optionalEl("btn-import-all-data");
   var btnExportSync = document.getElementById("btn-export-sync");
   var btnExportSyncHelp = document.getElementById("btn-export-sync-help");
   var syncStatusLine = document.getElementById("sync-status-line");
   var importFileInput = document.getElementById("import-file-input");
   var driveFolderLinkInput = document.getElementById("drive-folder-link-input");
-  var driveApiKeyInput = document.getElementById("drive-api-key-input");
+  var driveApiKeyInput = optionalEl("drive-api-key-input", "input");
   var btnDriveFolderOpen = document.getElementById("btn-drive-folder-open");
-  var btnDriveApiKeyHelp = document.getElementById("btn-drive-api-key-help");
-  var btnDriveImport = document.getElementById("btn-drive-import");
-  var driveFilePicker = document.getElementById("drive-file-picker");
-  var btnSquashImportData = document.getElementById("btn-squash-import-data");
+  var btnDriveApiKeyHelp = optionalEl("btn-drive-api-key-help");
+  var btnDriveImport = optionalEl("btn-drive-import");
+  var driveFilePicker = optionalEl("drive-file-picker", "div");
+  var btnSquashImportData = optionalEl("btn-squash-import-data");
   var squashImportFileInput = document.getElementById("squash-import-file-input");
   var squashWarningOverlay = document.getElementById("squash-warning-overlay");
   var squashWarningBody = document.getElementById("squash-warning-body");
@@ -8466,7 +8468,7 @@
   // builders, all sharing the same computeDayReportData source.
   // Single source of truth for the colorful report's content, consumed by
   // both buildDayReportColorfulHtml (the viewable page) and
-  // buildDayReportImageBlob (the native PNG used when sharing straight
+  // collectDayReportAttachmentsNow (the native PNG used when sharing straight
   // from the main app) - one pass over computeDayReportData, plain data
   // only, no HTML/canvas concerns here.
   function computeReportImageData(dateStr, exactDate, skipTs) {
@@ -8952,27 +8954,6 @@
     return canvas;
   }
 
-  // Promise<Blob|null> - resolves null (rather than rejecting) on any
-  // drawing failure, so a caller building a share-attachment list can
-  // just skip a null entry instead of needing its own try/catch.
-  function buildDayReportImageBlob(dateStr) {
-    return buildDayReportImageBlobFromData(computeReportImageData(dateStr));
-  }
-
-  function buildDayReportImageBlobFromData(reportImageData) {
-    return new Promise(function (resolve) {
-      try {
-        var canvas = buildReportCanvasFromData(reportImageData);
-        canvas.toBlob(function (blob) {
-          resolve(blob || null);
-        }, "image/png");
-      } catch (e) {
-        console.warn("Could not build colorful report image.", e);
-        resolve(null);
-      }
-    });
-  }
-
   // The report is a fully separate document once opened (its own tab, its
   // own JS context) - it has no access back to this app's functions, so it
   // needs its own copy of the canShare({files})-first, download-fallback
@@ -9196,17 +9177,15 @@
       "document.body.appendChild(a);a.click();",
       "setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},1000);",
       "}",
+      "function toBlobNow(canvas){",
+      'var d=canvas.toDataURL("image/png"),i=d.indexOf(","),bin=atob(d.slice(i+1)),b=new Uint8Array(bin.length);',
+      "for(var k=0;k<bin.length;k++)b[k]=bin.charCodeAt(k);",
+      'return new Blob([b],{type:"image/png"});',
+      "}",
+      // (Safari only opens the share sheet straight from the tap: the picture and the sheet, both within it)
       "function shareIt(){",
-      'var btn=document.getElementById("shareReportBtn");',
-      "var originalLabel=btn.textContent;",
-      'btn.textContent="⏳ Preparing…";',
-      "btn.disabled=true;",
-      "setTimeout(function(){",
-      "try{",
-      "var canvas=renderReportPNG();",
-      "canvas.toBlob(function(blob){",
-      "btn.textContent=originalLabel;btn.disabled=false;",
-      "if(!blob)return;",
+      "var blob;",
+      "try{blob=toBlobNow(renderReportPNG());}catch(e){return;}",
       'var file=new File([blob],filename,{type:"image/png"});',
       "if(navigator.canShare&&navigator.canShare({files:[file]})){",
       'navigator.share({files:[file],title:document.title}).catch(function(err){',
@@ -9214,9 +9193,6 @@
       "fallbackDownload(blob);",
       "});",
       "}else{fallbackDownload(blob);}",
-      '},"image/png");',
-      "}catch(e){btn.textContent=originalLabel;btn.disabled=false;}",
-      "},10);",
       "}",
       'document.getElementById("shareReportBtn").addEventListener("click",shareIt);',
       "})();",
@@ -16591,10 +16567,67 @@
       });
     }
     var name = filename ? sanitizeBackupFilename(filename) : defaultBackupFilename();
-    // A backup goes to the Drive folder in the link (a hand-off file with
-    // extraFields - the multi-table setup - is a transfer, not a backup).
-    if (!extraFields && extractDriveFolderId(loadDriveFolderLink())) backupToDrive(name, payload, !!manual);
-    else downloadJSON(name, payload);
+    // Where a backup goes (a hand-off file with extraFields - the
+    // multi-table setup - is a transfer, not a backup: always a download):
+    // straight into the Google Drive folder where that can work; else, from
+    // the button on a phone or tablet, the share sheet; else Downloads.
+    if (!extraFields && backupGoesToDrive()) { backupToDrive(name, payload, !!manual); return; }
+    if (!extraFields && manual && sharesFiles()) { shareBackupFile(name, payload); return; }
+    downloadJSON(name, payload);
+    if (!extraFields) {
+      noteBackup("device", name);
+      if (manual) showToast(T("bk.downloadedToast", { file: name }), "💾 ");
+    }
+  }
+
+  // Straight into the Google Drive folder only where that works: a folder
+  // link, and signed in to Google or on the Mac (its server, with Google
+  // Drive for desktop). Nowhere else - no dead ends.
+  function backupGoesToDrive() {
+    if (!extractDriveFolderId(loadDriveFolderLink())) return false;
+    return driveServerConnected || browserDrive.ready() || driveServerHere === true;
+  }
+  // A phone or tablet that can share files: the share sheet - Save to Files
+  // (iCloud Drive, Google Drive, On My iPad), the Drive app, AirDrop, Mail.
+  // (A computer's share sheet has no "save in a folder": Downloads there.)
+  function sharesFiles() {
+    var touch = (navigator.maxTouchPoints || 0) > 1 || !!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
+    if (!touch || !navigator.canShare || !navigator.share) return false;
+    try { return navigator.canShare({ files: [new File(["{}"], "backup.json", { type: "application/json" })] }); } catch (e) { return false; }
+  }
+  function shareBackupFile(name, payload) {
+    var file = new File([JSON.stringify(payload, null, 2)], name, { type: "application/json" });
+    navigator.share({ files: [file], title: name }).then(function () {
+      noteBackup("shared", name);
+      showToast(T("bk.sharedToast"), "💾 ");
+    }, function (err) {
+      if (err && err.name === "AbortError") { showToast(T("bk.shareCancelled"), "💾 "); return; }
+      // (a share sheet that says yes, then refuses: the plain download)
+      downloadJSON(name, payload);
+      noteBackup("device", name);
+      showToast(T("bk.downloadedToast", { file: name }), "💾 ");
+    });
+  }
+  // under "Back up now": where this one will go
+  function renderBackupWhere() {
+    var el = document.getElementById("bk-where");
+    if (el) el.textContent = backupGoesToDrive() ? T("bk.whereDrive") : sharesFiles() ? T("bk.whereShare") : T("bk.whereDownload");
+  }
+  // the last backup made here: when, and where it went - shown in Backup & Restore
+  var LAST_BACKUP_KEY = "poolMasterCounter.lastBackup.v1";
+  function noteBackup(where, file, folder) {
+    try { localStorage.setItem(LAST_BACKUP_KEY, JSON.stringify({ at: Date.now(), where: where, file: file || "", folder: folder || "" })); } catch (e) {}
+    renderLastBackup();
+  }
+  function renderLastBackup() {
+    var last = null;
+    try { last = JSON.parse(localStorage.getItem(LAST_BACKUP_KEY) || "null"); } catch (e) {}
+    var when = last ? formatTimestamp(new Date(last.at).toISOString(), true) : "";
+    var text = !last ? T("bk.lastNone")
+      : last.where === "drive" ? T("bk.lastDrive", { when: when, folder: last.folder || "Drive" })
+      : last.where === "shared" ? T("bk.lastShared", { when: when })
+      : T("bk.lastDevice", { when: when });
+    ["bk-last", "backup-panel-summary"].forEach(function (id) { var el = document.getElementById(id); if (el) el.textContent = text; });
   }
 
   // Backups into the Google Drive folder in the Drive folder link (see
@@ -16604,8 +16637,8 @@
   // the folder opened to paste it in. No server (the GitHub page, a phone
   // on its own): downloaded as always, the folder opened to drag it in.
   function backupToDrive(name, payload, manual) {
-    // no Mac server here (the GitHub page), signed in on this device: straight up from the browser
-    if (driveServerHere !== true && browserDrive.ready()) return backupToDriveInBrowser(name, payload, manual);
+    // signed in to Google in this browser (and the Mac's server isn't): straight up from here
+    if (!driveServerConnected && browserDrive.ready()) return backupToDriveInBrowser(name, payload, manual);
     var link = loadDriveFolderLink();
     var openFolder = function () { window.open(link, "_blank", "noopener"); };
     fetch("api/backup/drive", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ link: link, filename: name, content: JSON.stringify(payload, null, 2), copy: manual }) })
@@ -16617,13 +16650,16 @@
         if (r.saved) {
           showToast(T("backup.driveSaved", { folder: r.folder, file: r.file }), "💾 ");
           renderDriveBackupStatus({ folder: r.folder, where: r.where, via: r.via });
+          noteBackup("drive", r.file, r.folder);
           return;
         }
+        noteBackup("device", r.file);
         if (!manual) { showToast(T("backup.driveKept", { file: r.file }), "💾 "); return; }
         confirmModal(T(r.copied ? "backup.driveCopiedAsk" : "backup.driveKeptAsk", { file: r.file }), openFolder);
       })
       .catch(function () {
         downloadJSON(name, payload);
+        noteBackup("device", name);
         if (manual) confirmModal(T("backup.driveDownloadedAsk", { file: name }), openFolder);
       });
   }
@@ -16641,11 +16677,19 @@
   var GOOGLE_API = window.PMC_TEST_GOOGLE_API || "https://www.googleapis.com"; // (tests point these at a fake)
   var GIS_SRC = window.PMC_TEST_GIS_SRC || "https://accounts.google.com/gsi/client";
   var driveServerHere = null; // the Mac's server answered (true) or didn't (false); null: not asked yet
+  var driveServerConnected = false; // ...and is signed in to Google Drive
+  var driveDesktopFolder = false; // ...or saves into the folder through Google Drive for desktop (no sign-in needed)
+  var onDriveStatusChange = null; // (Backup & Restore's Google part, told when that changes)
+  // This app's own Google sign-in (a "Web application" OAuth client ID - not
+  // a secret: it's in every sign-in request anyway). Filled in once by
+  // whoever runs the app, it makes "Connect Google Drive" just work for
+  // everyone; empty: each device can save one under More options.
+  var BUILT_IN_GOOGLE_CLIENT_ID = "";
   var browserDrive = (function () {
     var tokenClient = null, gisLoading = null, pendingCb = null;
     function get(store, key) { try { return store.getItem(key) || ""; } catch (e) { return ""; } }
     function put(store, key, v) { try { if (v) store.setItem(key, v); else store.removeItem(key); } catch (e) {} }
-    function clientId() { return get(localStorage, BROWSER_DRIVE_CLIENT_KEY); }
+    function clientId() { return get(localStorage, BROWSER_DRIVE_CLIENT_KEY) || BUILT_IN_GOOGLE_CLIENT_ID; }
     function account() { return get(localStorage, BROWSER_DRIVE_ACCOUNT_KEY); }
     function token() {
       try {
@@ -16766,6 +16810,7 @@
     var openFolder = function () { window.open(link, "_blank", "noopener"); };
     var fallback = function () {
       downloadJSON(name, payload);
+      noteBackup("device", name);
       if (manual) confirmModal(T("backup.driveDownloadedAsk", { file: name }), openFolder);
     };
     browserDrive.withToken(function (err) {
@@ -16774,6 +16819,7 @@
         .then(function (f) {
           return browserDrive.folderName(folderId).catch(function () { return "Drive"; }).then(function (folder) {
             showToast(T("backup.driveSaved", { folder: folder, file: f.name || name }), "💾 ");
+            noteBackup("drive", f.name || name, folder);
           });
         })
         .catch(function (e) { showToast(T("backup.driveUploadFailed", { error: e.message }), "⚠️ "); fallback(); });
@@ -16798,12 +16844,15 @@
       })
       .then(function (r) {
         driveServerHere = true;
+        renderBackupWhere();
+        if (seq === driveStatusSeq && driveDesktopFolder !== (r.via === "desktop")) { driveDesktopFolder = r.via === "desktop"; if (onDriveStatusChange) onDriveStatusChange(); }
         if (r.folder && r.via === "api") show("backup.driveStatusApi", { folder: r.folder });
         else if (r.folder) show("backup.driveStatusFound", { folder: r.folder, where: r.where });
         else show("backup.driveStatusElsewhere");
       })
       .catch(function () {
         driveServerHere = false;
+        renderBackupWhere();
         show(browserDrive.ready() ? "backup.driveStatusBrowser" : "backup.driveStatusDownload");
       });
   }
@@ -16882,6 +16931,8 @@
     var exportedText = exportedAt ? formatSyncStatusTimestamp(exportedAt) : T("backup.syncStatusNever");
 
     syncStatusLine.innerHTML = "";
+    // (nothing shared or brought in yet: nothing to say)
+    if (!exportedAt && !importedAt) return;
     var importLine = document.createElement("div");
     importLine.textContent = T("backup.syncStatusLastImport", { when: importedText });
     var exportLine = document.createElement("div");
@@ -16915,37 +16966,37 @@
   }
 
   // Builds whichever File attachments the two "Attach ... when sharing"
-  // checkboxes call for, in parallel - the backup JSON is synchronous
-  // (built from data already in memory), the colorful report PNG isn't
-  // (a canvas draw + toBlob), so this always returns a Promise even
-  // though the common case (only the backup checkbox, or neither) never
-  // actually waits on anything.
-  function collectDayReportAttachments() {
+  // checkboxes call for - right away, no waiting: Safari (iPhone, iPad)
+  // only opens the share sheet straight from the tap - asked even a moment
+  // later (after a canvas.toBlob, or any promise), it refuses, and the
+  // report went out as a download and bare text instead. The picture is
+  // drawn at once anyway; toDataURL hands it over at once too. The backup
+  // leaves out contacts (email/phone) - no business leaving the device in
+  // a file handed to whoever's on the other end of Mail/Messages/AirDrop.
+  function collectDayReportAttachmentsNow() {
     var files = [];
-    var tasks = [];
     if (dayReportAttachBackupCheckbox.checked) {
-      // Reuses the same full-backup payload as exportAllData, minus
-      // contacts (email/phone), which have no business leaving the
-      // device in a file meant to be handed to whoever's on the other
-      // end of Mail/Messages/AirDrop. Sending an empty object rather
-      // than omitting the key entirely still round-trips cleanly
-      // through mergeContactsData if this file is ever imported
-      // elsewhere: local contact info always wins on a name conflict
-      // there, and an empty import adds nothing.
       var payload = buildBackupPayload();
       payload.contacts = {};
       files.push(new File([JSON.stringify(payload, null, 2)], defaultBackupFilename(), { type: "application/json" }));
     }
     if (dayReportAttachColorfulCheckbox.checked) {
-      tasks.push(
-        buildDayReportImageBlob(todayDateStr()).then(function (blob) {
-          if (blob) files.push(new File([blob], "pool-master-counter-report-" + todayDateStr() + ".png", { type: "image/png" }));
-        })
-      );
+      try {
+        var blob = dataUrlToBlob(buildReportCanvasFromData(computeReportImageData(todayDateStr())).toDataURL("image/png"));
+        if (blob) files.push(new File([blob], "pool-master-counter-report-" + todayDateStr() + ".png", { type: "image/png" }));
+      } catch (e) {
+        console.warn("Could not build colorful report image.", e);
+      }
     }
-    return Promise.all(tasks).then(function () {
-      return files;
-    });
+    return files;
+  }
+  function dataUrlToBlob(dataUrl) {
+    var comma = dataUrl.indexOf(",");
+    if (comma < 0) return null;
+    var mime = (dataUrl.slice(0, comma).match(/data:([^;,]+)/) || [])[1] || "application/octet-stream";
+    var bin = atob(dataUrl.slice(comma + 1)), bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new Blob([bytes], { type: mime });
   }
 
   function downloadFileObject(file) {
@@ -16985,7 +17036,8 @@
   // link, or a text-only share) so a broken share sheet degrades back
   // to "everything except the actual attachment" instead of "nothing".
   function shareReportWithAttachments(text, onFallback) {
-    collectDayReportAttachments().then(function (files) {
+    // (built and shared within this tap - see collectDayReportAttachmentsNow)
+    (function (files) {
       if (!files.length) {
         if (onFallback) onFallback();
         return;
@@ -17014,7 +17066,7 @@
       } else {
         fallback();
       }
-    });
+    })(collectDayReportAttachmentsNow());
   }
 
   // Neither attach checkbox is on: a plain text share of the day report
@@ -30388,7 +30440,7 @@
   // ---- Google Drive sign-in (server/google-drive.js): the user's own
   // OAuth client, signed in once on the Mac - the secret and the sign-in
   // stay on its server; every device using it reads and saves through it.
-  var driveConn = null; // { configured, connected, account, lost, redirectUri, local } - null: no server here
+  var driveConn = null; // the Mac server's sign-in: { configured, connected, account, lost, redirectUri, local } - null: no server here
   var driveConnectEl = {
     status: document.getElementById("drive-connect-status"),
     setup: document.getElementById("drive-connect-setup"),
@@ -30398,65 +30450,82 @@
     save: document.getElementById("btn-drive-save-client"),
     connect: document.getElementById("btn-drive-connect"),
     disconnect: document.getElementById("btn-drive-disconnect"),
-    help: document.getElementById("btn-drive-connect-help")
+    help: document.getElementById("btn-drive-connect-help"),
+    box: document.getElementById("bk-drive-box"),
+    setupBox: document.getElementById("drive-connect"),
+    more: document.getElementById("bk-more"),
+    backupNow: document.getElementById("btn-backup-now")
   };
   var driveConnectWatch = null;
+  // Which sign-in "Connect Google Drive" uses: this computer's server when
+  // it has the whole OAuth client (secret too) and this is that computer;
+  // else Google's sign-in right in this browser (the client ID only - built
+  // into the app, or saved on this device); else: not set up yet.
+  function connectWay() {
+    if (driveConn && driveConn.configured && driveConn.local) return "server";
+    if (browserDrive.clientId()) return "browser";
+    return null;
+  }
+  function driveConnectedAs() {
+    if (driveConn && driveConn.connected) return driveConn.account || "Google";
+    if (browserDrive.ready()) return browserDrive.account();
+    return null;
+  }
+  // (the owner's sign-in setup shows on the Mac itself, or anywhere with ?owner in the
+  // address - not #owner: the page drops its # part as it starts)
+  var driveOwnerMode = /[?&]owner\b/.test(location.search);
+  // The Google Drive part of More options shows only where it can work: on
+  // the Mac (its server - Google Drive for desktop, no sign-in needed), or
+  // where a Google sign-in is available. Connect only when it can connect.
   function renderDriveConnect() {
-    var el = driveConnectEl, c = driveConn;
+    var el = driveConnectEl, c = driveConn, who = driveConnectedAs(), way = connectWay();
     var show = function (node, on) { node.classList.toggle("hidden", !on); };
-    show(el.secret, !!c); // (signed in on this device: the ID only - never a secret on a public page)
-    if (!c) {
-      var id = browserDrive.clientId(), who = browserDrive.account();
-      if (id && who) {
-        el.status.textContent = T("backup.driveBrowserConnected", { account: who });
-        show(el.setup, false); show(el.buttons, true);
-        show(el.connect, false); show(el.disconnect, true);
-        return;
-      }
-      el.status.textContent = driveConnectWatch ? T("backup.driveConnecting") : id ? T("backup.driveBrowserReady") : T("backup.driveBrowserSetup");
-      el.clientId.placeholder = id ? T("backup.driveClientSaved") : T("backup.driveClientIdPlaceholder");
-      show(el.setup, true); show(el.buttons, true);
-      show(el.connect, true); show(el.disconnect, false);
-      el.connect.disabled = !id;
-      return;
+    show(el.box, driveServerHere === true || !!way || !!who || driveOwnerMode);
+    show(el.buttons, !!way || !!who);
+    if (who) {
+      el.status.textContent = T("bk.connectedAs", { account: who });
+      show(el.connect, false);
+      // (signed in through the Mac's server: only the Mac can sign it out)
+      show(el.disconnect, !(c && c.connected) || c.local);
+    } else if (way) {
+      el.status.textContent = driveConnectWatch ? T("backup.driveConnecting") : c && c.lost ? T("backup.driveConnectLost") : T("bk.notConnected");
+      show(el.connect, true);
+      show(el.disconnect, false);
+    } else {
+      el.status.textContent = driveServerHere !== true ? T("bk.ownerNoClient") : driveDesktopFolder ? T("bk.desktopNoSignIn") : T("bk.driveMacOnly");
     }
-    if (c.connected) {
-      el.status.textContent = T("backup.driveConnected", { account: c.account || "Google" });
-      show(el.setup, false); show(el.buttons, c.local);
-      show(el.connect, false); show(el.disconnect, true);
-      return;
-    }
-    if (!c.local) {
-      el.status.textContent = T("backup.driveConnectOnMac");
-      show(el.setup, false); show(el.buttons, false);
-      return;
-    }
-    el.status.textContent = driveConnectWatch ? T("backup.driveConnecting") : !c.configured ? T("backup.driveConnectSetup") : c.lost ? T("backup.driveConnectLost") : T("backup.driveConnectReady");
-    el.clientId.placeholder = c.configured ? T("backup.driveClientSaved") : T("backup.driveClientIdPlaceholder");
-    show(el.setup, true); show(el.buttons, true);
-    show(el.connect, true); show(el.disconnect, false);
-    el.connect.disabled = !c.configured;
+    // the owner's setup: a secret only where this computer's server keeps it
+    show(el.setupBox, !!(c && c.local) || driveOwnerMode);
+    show(el.secret, !!(c && c.local));
+    el.clientId.placeholder = (c && c.configured) || browserDrive.clientId() ? T("backup.driveClientSaved") : T("backup.driveClientIdPlaceholder");
+    renderBackupWhere();
   }
   function refreshDriveConnect() {
     return fetch("api/drive/status")
       .then(function (r) { return r.ok ? r.json() : null; })
       .catch(function () { return null; })
       .then(function (s) {
-        var was = driveConn && driveConn.connected;
+        var was = driveConnectedAs();
         driveConn = s && typeof s.connected === "boolean" ? s : null;
         driveServerHere = !!driveConn;
-        if (!driveConn && browserDrive.clientId()) browserDrive.loadGis().catch(function () {});
+        driveServerConnected = !!(driveConn && driveConn.connected);
+        if (browserDrive.clientId()) browserDrive.loadGis().catch(function () {});
         if (driveConn && driveConn.connected && driveConnectWatch) { clearInterval(driveConnectWatch); driveConnectWatch = null; }
         renderDriveConnect();
-        if (!!(driveConn && driveConn.connected) !== !!was) renderDriveBackupStatus();
+        if (driveConnectedAs() !== was) renderDriveBackupStatus();
         return driveConn;
       });
   }
+  // 💾 Back up now: no questions - it goes where renderBackupWhere says
+  driveConnectEl.backupNow.addEventListener("click", function () {
+    exportAllData(null, false, null, true);
+  });
   driveConnectEl.save.addEventListener("click", function () {
     var id = driveConnectEl.clientId.value.trim(), secret = driveConnectEl.secret.value.trim();
-    if (!driveConn) {
-      // this device's own sign-in: the client ID only, kept here
-      if (!/\.apps\.googleusercontent\.com$/.test(id)) { showToast(T("backup.driveConnectError", { error: "that isn't a client ID (it ends in .apps.googleusercontent.com)" }), "⚠️ "); return; }
+    if (!/\.apps\.googleusercontent\.com$/.test(id)) { showToast(T("backup.driveConnectError", { error: "that isn't a client ID (it ends in .apps.googleusercontent.com)" }), "⚠️ "); return; }
+    // with a secret, on the Mac: its server keeps the whole client (one sign-in that lasts);
+    // the ID alone: Google's sign-in in this browser, kept on this device
+    if (!(driveConn && driveConn.local && secret)) {
       browserDrive.setClientId(id);
       driveConnectEl.clientId.value = "";
       showToast(T("backup.driveClientSavedToast"), "🔗 ");
@@ -30474,7 +30543,9 @@
       .catch(function (e) { showToast(T("backup.driveConnectError", { error: e.message }), "⚠️ "); });
   });
   driveConnectEl.connect.addEventListener("click", function () {
-    if (!driveConn) {
+    var way = connectWay();
+    if (!way) return; // (not shown then)
+    if (way === "browser") {
       // Google's sign-in window, straight from this tap
       if (!browserDrive.gisReady()) { browserDrive.loadGis().catch(function () {}); showToast(T("backup.driveBrowserLoading"), "⏳ "); return; }
       browserDrive.connect(function (err) {
@@ -30496,17 +30567,228 @@
   });
   driveConnectEl.disconnect.addEventListener("click", function () {
     confirmModal(T("backup.driveDisconnectConfirm"), function () {
-      if (!driveConn) { browserDrive.disconnect(); showToast(T("backup.driveDisconnected"), "🔗 "); renderDriveConnect(); renderDriveBackupStatus(); return; }
-      fetch("api/drive/disconnect", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })
-        .then(function () { showToast(T("backup.driveDisconnected"), "🔗 "); refreshDriveConnect(); renderDriveBackupStatus(); });
+      if (browserDrive.ready()) browserDrive.disconnect();
+      var done = function () { showToast(T("backup.driveDisconnected"), "🔗 "); refreshDriveConnect(); renderDriveBackupStatus(); };
+      if (driveConn && driveConn.connected && driveConn.local) fetch("api/drive/disconnect", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }).then(done, done);
+      else done();
     });
   });
   driveConnectEl.help.addEventListener("click", function () {
-    if (!driveConn) return alertModal(T("backup.driveConnectHelpBrowser", { origin: location.origin }));
-    alertModal(T("backup.driveConnectHelp", { uri: (driveConn && driveConn.redirectUri) || "http://localhost:4173/api/drive/oauth/callback" }));
+    if (!(driveConn && driveConn.local)) return alertModal(T("backup.driveConnectHelpBrowser", { origin: location.origin }));
+    alertModal(T("backup.driveConnectHelp", { uri: driveConn.redirectUri || "http://localhost:4173/api/drive/oauth/callback" }));
   });
   try { new BroadcastChannel("pmc-drive").onmessage = function () { refreshDriveConnect(); renderDriveBackupStatus(); }; } catch (e) {}
+  onDriveStatusChange = renderDriveConnect;
+  renderDriveConnect();
+  renderLastBackup();
   refreshDriveConnect();
+
+  // ---- ⬇️ Restore: which backup (a file, a link, or - signed in - the
+  // Google Drive folder), then how: added to what's here (the merge
+  // import), or replacing it (Import & Replace, what's here backed up first).
+  var bkEl = {
+    open: document.getElementById("btn-restore"),
+    overlay: document.getElementById("bk-restore-overlay"),
+    pick: document.getElementById("bk-step-pick"),
+    how: document.getElementById("bk-step-how"),
+    pickFile: document.getElementById("btn-bk-pick-file"),
+    pickLink: document.getElementById("btn-bk-pick-link"),
+    pickDrive: document.getElementById("btn-bk-pick-drive"),
+    file: document.getElementById("bk-restore-file-input"),
+    linkRow: document.getElementById("bk-link-row"),
+    linkInput: document.getElementById("bk-link-input"),
+    linkGo: document.getElementById("btn-bk-link-go"),
+    linkOpen: document.getElementById("btn-bk-link-open"),
+    note: document.getElementById("bk-drive-pick-note"),
+    list: document.getElementById("bk-drive-list"),
+    summary: document.getElementById("bk-backup-summary"),
+    add: document.getElementById("btn-bk-add"),
+    replace: document.getElementById("btn-bk-replace"),
+    back: document.getElementById("btn-bk-back"),
+    cancel: document.getElementById("btn-bk-cancel")
+  };
+  var bkChosen = null; // { text, data }
+  var bkLinkTarget = ""; // a link this device couldn't read: opened for the person to download it
+  function bkStep(step) {
+    bkEl.pick.classList.toggle("hidden", step !== "pick");
+    bkEl.how.classList.toggle("hidden", step !== "how");
+    bkEl.back.classList.toggle("hidden", step !== "how");
+  }
+  function bkSay(text) {
+    bkEl.note.textContent = text || "";
+    bkEl.linkOpen.classList.add("hidden");
+  }
+  function openRestore() {
+    bkChosen = null;
+    bkEl.list.innerHTML = "";
+    bkSay("");
+    bkEl.linkRow.classList.add("hidden");
+    bkEl.pickDrive.classList.toggle("hidden", !bkCanUseDrive());
+    bkStep("pick");
+    bkEl.overlay.classList.remove("hidden");
+  }
+  function closeRestore() { bkEl.overlay.classList.add("hidden"); }
+  function backupPlayerCount(data) {
+    var names = {};
+    ((data.state && data.state.players) || []).forEach(function (p) { if (p && p.name) names[p.name.toLowerCase()] = true; });
+    Object.keys(data.playerStats || {}).forEach(function (n) { names[String(n).toLowerCase()] = true; });
+    return Object.keys(names).length;
+  }
+  // a backup's text: checked, summed up, then "how should it come in?"
+  function bkUse(text) {
+    var data = null;
+    try { data = JSON.parse(text); } catch (e) {}
+    if (!data || typeof data !== "object" || !data.state) {
+      bkSay(data && typeof data === "object" ? describeUnrecognizedBackupFile(data) : T("bk.notABackup"));
+      return;
+    }
+    bkChosen = { text: text, data: data };
+    var n = backupPlayerCount(data);
+    bkEl.summary.textContent = data.exportedAt ? T("bk.summary", { date: formatTimestamp(data.exportedAt, true), players: n }) : T("bk.summaryNoDate", { players: n });
+    bkStep("how");
+  }
+  // a folder's backups, newest first - one tap reads one
+  function bkRenderFiles(files, read) {
+    bkEl.list.innerHTML = "";
+    bkSay(files.length ? "" : T("bk.driveNoBackups"));
+    files.forEach(function (f) {
+      var row = document.createElement("button");
+      row.type = "button";
+      row.className = "btn btn-ghost bk-drive-row";
+      row.textContent = "📄 " + f.name + (f.modifiedTime ? " — " + formatTimestamp(f.modifiedTime, true) : "");
+      row.addEventListener("click", function () {
+        bkSay(T("bk.loading"));
+        read(f.id).then(function (text) { bkSay(""); bkUse(text); }, function (e) { bkSay(T("backup.driveFetchFailed") + (e && e.message ? " (" + e.message + ")" : "")); });
+      });
+      bkEl.list.appendChild(row);
+    });
+  }
+  function bkCanUseDrive() { return (driveServerConnected || browserDrive.ready()) && !!extractDriveFolderId(loadDriveFolderLink()); }
+  bkEl.open.addEventListener("click", openRestore);
+  bkEl.cancel.addEventListener("click", closeRestore);
+  bkEl.back.addEventListener("click", function () { bkStep("pick"); });
+  bkEl.overlay.addEventListener("click", function (e) { if (e.target === bkEl.overlay) closeRestore(); });
+  bkEl.pickFile.addEventListener("click", function () { bkEl.file.click(); });
+  bkEl.file.addEventListener("change", function () {
+    var f = bkEl.file.files && bkEl.file.files[0];
+    bkEl.file.value = "";
+    if (!f) return;
+    var reader = new FileReader();
+    reader.onload = function () { bkUse(String(reader.result || "")); };
+    reader.onerror = function () { bkSay(T("alert.couldNotReadFile")); };
+    reader.readAsText(f);
+  });
+
+  // 🔗 From a link: a backup file, or a Google Drive folder. Read by
+  // whatever this device has - the Mac's server (signed in, Google Drive
+  // for desktop, a file shared "anyone with the link", any address) or a
+  // Google sign-in here - and when neither can, the link opens for the
+  // person to download the backup and pick it as a file. (No API keys.)
+  function driveFileIdFromLink(link) {
+    var s = String(link || ""), m = s.match(/drive\.google\.com\/(?:file\/d|uc|open)(?:\/([A-Za-z0-9_-]{10,}))?(?:[^?#]*)?(?:\?[^#]*?\bid=([A-Za-z0-9_-]{10,}))?/);
+    if (m && (m[1] || m[2])) return m[1] || m[2];
+    m = s.match(/docs\.google\.com\/[^?#]*\/d\/([A-Za-z0-9_-]{10,})/);
+    return m ? m[1] : null;
+  }
+  function bkLinkCantOpen(link, key) {
+    bkSay(T(key));
+    bkLinkTarget = link;
+    bkEl.linkOpen.classList.remove("hidden");
+  }
+  function restoreFromLink(raw) {
+    var link = String(raw || "").trim();
+    bkEl.list.innerHTML = "";
+    if (!/^https?:\/\//i.test(link)) { bkSay(T("bk.linkBad")); return; }
+    var folderId = /\/folders\//.test(link) ? extractDriveFolderId(link) : null;
+    var fileId = folderId ? null : driveFileIdFromLink(link);
+    var take = function (text) { bkSay(""); bkUse(text); };
+    var viaToken = function (work) { return new Promise(function (ok, no) { browserDrive.withToken(function (err) { if (err) return no(err); work().then(ok, no); }); }); };
+    bkSay(T("bk.loading"));
+    // the Mac: its server reads it, with whatever this computer has
+    if (driveServerHere === true) {
+      fetch("api/backup/from-link?url=" + encodeURIComponent(link))
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          if (j.kind === "file") return take(j.text);
+          if (j.kind === "folder") {
+            return bkRenderFiles(j.files || [], function (id) {
+              return fetch("api/backup/from-link/file?url=" + encodeURIComponent(link) + "&id=" + encodeURIComponent(id)).then(function (r) { if (!r.ok) throw new Error(String(r.status)); return r.text(); });
+            });
+          }
+          bkLinkCantOpen(link, j.error === "drive-not-shared" ? "bk.linkDriveNotShared" : j.error === "folder-unreachable" ? "bk.linkFolderHere" : j.error === "not-a-backup" ? "bk.linkNotABackup" : "bk.linkCantOpen");
+        })
+        .catch(function () { bkLinkCantOpen(link, "bk.linkCantOpen"); });
+      return;
+    }
+    if (folderId) {
+      if (browserDrive.ready()) {
+        viaToken(function () { return browserDrive.list(folderId); }).then(function (files) {
+          bkRenderFiles(files, function (id) { return viaToken(function () { return browserDrive.read(id); }); });
+        }, function () { bkLinkCantOpen(link, "bk.linkFolderHere"); });
+      } else bkLinkCantOpen(link, "bk.linkFolderHere");
+      return;
+    }
+    if (fileId) {
+      if (browserDrive.ready()) viaToken(function () { return browserDrive.read(fileId); }).then(take, function () { bkLinkCantOpen(link, "bk.linkDriveHere"); });
+      else bkLinkCantOpen(link, "bk.linkDriveHere");
+      return;
+    }
+    fetch(link)
+      .then(function (r) { if (!r.ok) throw new Error(String(r.status)); return r.text(); })
+      .then(take, function () { bkLinkCantOpen(link, "bk.linkCantOpen"); });
+  }
+  bkEl.pickLink.addEventListener("click", function () {
+    bkEl.linkRow.classList.remove("hidden");
+    bkEl.list.innerHTML = "";
+    bkSay("");
+    bkEl.linkInput.focus();
+  });
+  bkEl.linkGo.addEventListener("click", function () { restoreFromLink(bkEl.linkInput.value); });
+  bkEl.linkInput.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); restoreFromLink(bkEl.linkInput.value); } });
+  bkEl.linkOpen.addEventListener("click", function () { if (bkLinkTarget) window.open(bkLinkTarget, "_blank", "noopener"); });
+
+  // ☁️ signed in to Google: the backups in the Google Drive folder
+  bkEl.pickDrive.addEventListener("click", function () {
+    var link = loadDriveFolderLink(), folderId = extractDriveFolderId(link);
+    bkEl.linkRow.classList.add("hidden");
+    bkEl.list.innerHTML = "";
+    if (!folderId) { bkSay(T("bk.driveNeedsFolder")); return; }
+    var failed = function (e) { bkSay(T("backup.driveListFailed") + (e && e.message ? " (" + e.message + ")" : "")); };
+    bkSay(T("bk.loading"));
+    if (driveServerConnected) {
+      fetch("api/drive/folder?link=" + encodeURIComponent(link))
+        .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || r.status); return j; }); })
+        .then(function (j) {
+          bkRenderFiles(j.files || [], function (id) {
+            return fetch("api/drive/file/" + encodeURIComponent(id)).then(function (r) { if (!r.ok) throw new Error(String(r.status)); return r.text(); });
+          });
+        }, failed);
+      return;
+    }
+    if (browserDrive.ready()) {
+      browserDrive.withToken(function (err) {
+        if (err) return failed(err);
+        browserDrive.list(folderId).then(function (files) {
+          bkRenderFiles(files, function (id) {
+            return new Promise(function (ok, no) { browserDrive.withToken(function (e2) { if (e2) return no(e2); browserDrive.read(id).then(ok, no); }); });
+          });
+        }, failed);
+      });
+      return;
+    }
+    bkSay(T("bk.driveNeedsConnect"));
+  });
+  bkEl.add.addEventListener("click", function () {
+    var chosen = bkChosen;
+    closeRestore();
+    if (chosen) importAllDataFromText(chosen.text);
+  });
+  bkEl.replace.addEventListener("click", function () {
+    var chosen = bkChosen;
+    closeRestore();
+    // (the same "Are you sure?" as before - and what's here is backed up first)
+    if (chosen) squashImportFile(new File([chosen.text], "backup.json", { type: "application/json" }));
+  });
 
   btnSquashImportData.addEventListener("click", function () {
     squashImportFileInput.click();
@@ -33383,7 +33665,6 @@
   });
 
   wireCollapsiblePanel("backup-panel", "btn-toggle-backup-panel");
-  wireCollapsiblePanel("squash-panel", "btn-toggle-squash-panel");
   wireCollapsiblePanel("challonge-panel", "btn-toggle-challonge-panel");
   wireCollapsiblePanel("challonge-panel-league", "btn-toggle-challonge-panel-league");
   wireCollapsiblePanel("rotation-panel", "btn-toggle-rotation-panel");
