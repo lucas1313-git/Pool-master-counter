@@ -346,6 +346,16 @@ function createCameraRelay(WebSocket) {
           broadcastToListeners({ type: msg.type, count: msg.count, objectRemaining: msg.objectRemaining, ts: msg.ts });
           return;
         }
+        // Shots (for the recording's 🎯 Auto cue): begin / end / watch, the
+        // times as "ms ago" (no clock to agree on). Fields copied explicitly.
+        if (msg.type === "shot" && ws.role === "camera") {
+          var ago = function (v) { return typeof v === "number" && isFinite(v) && v >= 0 ? Math.min(v, 600000) : null; };
+          var phase = msg.phase === "begin" || msg.phase === "end" || msg.phase === "watch" ? msg.phase : null;
+          if (!phase) return;
+          broadcastToListeners({ type: "shot", phase: phase, shot: !!msg.shot, moved: typeof msg.moved === "number" ? msg.moved : null, aiming: !!msg.aiming, ok: msg.ok !== false, why: typeof msg.why === "string" ? msg.why.slice(0, 80) : null, busy: !!msg.busy,
+            beganAgo: ago(msg.beganAgo), aimAgo: ago(msg.aimAgo), endAgo: ago(msg.endAgo), shooter: typeof msg.shooter === "string" ? msg.shooter.slice(0, 80) : null, ts: msg.ts });
+          return;
+        }
 
         // Cue stick over the table: came out over the cloth ("detected"),
         // put away ("gone"), or put down to a shooter ("shooter").

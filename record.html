@@ -44,6 +44,9 @@
   #recordBtn.on { background: var(--rec); border-color: var(--rec); color: #fff; }
   #markBtn { background: var(--accent); border-color: var(--accent); color: #1a0a0a; }
   #finishBtn { border: 2px solid var(--accent); color: var(--accent); }
+  #autoBtn { border: 2px solid var(--accent); color: var(--accent); }
+  #autoBtn.on { background: var(--rec); border-color: var(--rec); color: #fff; }
+  .auto-badge { bottom: auto; top: 56px; border-color: var(--rec); color: #fff; }
   .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin-top: 12px; }
   .panel h2 { margin: 0 0 8px; font-size: 1rem; color: var(--accent); }
   select, input[type="number"] { font: inherit; background: #120606; color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; }
@@ -69,6 +72,7 @@
     <span class="pill"><span class="dot" id="camDot"></span><span id="camText">Camera: starting...</span></span>
     <span class="pill"><span class="dot" id="recDot"></span><span id="recText">Not recording</span></span>
     <span class="pill"><span class="dot" id="boardDot"></span><span id="boardText">Scoreboard: not heard from yet</span></span>
+    <span class="pill"><span class="dot" id="shotDot"></span><span id="shotText">Shots: not heard from the camera</span></span>
     <span class="pill dim" id="folderText">Saved on the computer</span>
   </div>
 
@@ -76,6 +80,7 @@
     <video id="out" autoplay playsinline muted></video>
     <div class="rec-badge" id="recBadge">● 00:00:00</div>
     <div class="cue-badge" id="cueBadge" hidden></div>
+    <div class="cue-badge auto-badge" id="autoBadge" hidden></div>
     <div class="inset" id="inset" title="Drag to move the zoomed area">
       <video id="raw" autoplay playsinline muted></video>
       <div class="crop" id="cropBox"></div>
@@ -93,8 +98,10 @@
     <button type="button" class="big" id="recordBtn">● Start recording</button>
     <button type="button" class="big" id="markBtn" disabled>⭐ Mark</button>
     <button type="button" class="big" id="finishBtn" disabled>✔ Finish</button>
+    <button type="button" class="big" id="autoBtn" disabled>🎯 Auto cue</button>
   </div>
   <div class="dim">Mark (M, or say "mark" on the scoreboard) right after a good shot: the cue starts <b id="preRollText">20</b> s before the mark - the shot's beginning - and is named as things stood then. Finish (F, or "finish") ends it - or / (here, or on the scoreboard, or its ⭐ Cue button) for both. Each one is kept as a cue - see 🎞️ Cues.</div>
+  <div class="dim">🎯 Auto cue (A here, * or 🎯 on the scoreboard, or say "auto cue"): the camera finds the shot - the one going on, or the last one up to <b id="autoBackText">15</b> s before the press, or else the next one within <b id="autoWaitText">25</b> s - and keeps it from <b id="autoLeadText">5</b> s before the player gets down on it to <b id="autoTailText">5</b> s after the balls stop. No shot in that time: no clip. Needs the camera page watching the table (📷 Set Up Camera, table calibrated). Press again to cancel.</div>
 
   <div class="panel">
     <h2>🎞️ Cues - watch, set right, export (while it records)</h2>
@@ -113,6 +120,7 @@
     </div>
     <div class="row"><label><input type="checkbox" id="soundToggle" checked> Record sound</label></div>
     <div class="row"><label for="preRoll">A clip starts</label><input type="number" id="preRoll" min="0" max="120" step="1" value="20"><span>seconds before the mark</span></div>
+    <div class="row"><label for="autoBack">🎯 Auto cue: looks back</label><input type="number" id="autoBack" min="0" max="60" step="1" value="15"><span>s, waits</span><input type="number" id="autoWait" min="5" max="120" step="1" value="25"><span>s for a shot, keeps</span><input type="number" id="autoLead" min="0" max="30" step="1" value="5"><span>s before it and</span><input type="number" id="autoTail" min="0" max="30" step="1" value="5"><span>s after</span></div>
     <div class="row"><label for="partMin">A new file every</label><input type="number" id="partMin" min="2" max="60" step="1" value="10"><span>minutes (quick to open and jump around in)</span></div>
     <div class="row"><label><input type="checkbox" id="autoStart"> Start recording as soon as this page opens</label></div>
     <div class="log" id="log"></div>
@@ -140,7 +148,7 @@
   var SIZE = { 720: [1280, 720], 1080: [1920, 1080], 2160: [3840, 2160] };
 
   var $ = function (id) { return document.getElementById(id); };
-  var settings = { deviceId: "", quality: "1080", sound: true, preRoll: 20, partMin: 10, autoStart: false, zoom: 1, cx: 0.5, cy: 0.5 };
+  var settings = { deviceId: "", quality: "1080", sound: true, preRoll: 20, partMin: 10, autoStart: false, zoom: 1, cx: 0.5, cy: 0.5, autoBack: 15, autoWait: 25, autoLead: 5, autoTail: 5 };
   try { Object.assign(settings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}")); } catch (e) {}
   function saveSettings() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) {} }
 
@@ -433,6 +441,7 @@
   function stopRecording() {
     if (!rec.on) return;
     if (openCue) finishCue("recording stopped");
+    if (auto) { if (auto.pick) finishAuto(true); else endAuto("stopped"); }
     rec.on = false;
     clearTimeout(rec.partTimer);
     if (rec.recorder && rec.recorder.state !== "inactive") rec.recorder.stop();
@@ -452,6 +461,9 @@
     $("recordBtn").classList.toggle("on", rec.on);
     $("markBtn").disabled = !rec.on;
     $("finishBtn").disabled = !rec.on || !openCue;
+    $("autoBtn").disabled = !rec.on;
+    $("autoBtn").classList.toggle("on", !!auto);
+    $("autoBtn").textContent = auto ? "✖ Cancel auto cue" : "🎯 Auto cue";
     $("recDot").className = "dot" + (rec.on ? " rec" : "");
     $("recText").textContent = rec.on ? "Recording · file " + rec.part : "Not recording";
     $("recBadge").classList.toggle("on", rec.on);
@@ -460,7 +472,11 @@
     $("recBadge").textContent = rec.on ? "● " + clock(Date.now() - rec.startedAt) : "■ not recording";
     if (openCue) $("cueBadge").textContent = "⭐ " + cueTitle(openCue, Date.now()) + " - say \"finish\" or press F";
     if (openCue && Date.now() - openCue.markedAt > MAX_CUE_MS) finishCue("nobody finished it");
-    post({ type: "status", recording: rec.on, since: rec.startedAt, cueOpen: !!openCue, cueSince: openCue ? openCue.markedAt : null, at: Date.now() });
+    if (auto) evaluateAuto();
+    renderAuto();
+    post({ type: "status", recording: rec.on, since: rec.startedAt, cueOpen: !!openCue, cueSince: openCue ? openCue.markedAt : null,
+      auto: auto ? auto.state : null, autoSince: auto ? auto.pressedAt : null, autoShotSince: auto && auto.state === "shot" ? auto.liveSince : null,
+      watching: watching(), watchWhy: shotWatch && !shotWatch.ok ? shotWatch.why : null, at: Date.now() });
     var fresh = board && Date.now() - board.at < 8000;
     $("boardDot").className = "dot" + (fresh ? " ok" : "");
     $("boardText").textContent = fresh ? "Scoreboard: " + (board.player ? window.PMCCueViewer.whoOf(board) : (board.matchup ? board.matchup + " (no player selected)" : "no player selected")) + " · " + (board.gameLabel || "") + (board.position ? " · " + board.position : "") : "Scoreboard: not heard from (open it in this browser)";
@@ -538,13 +554,123 @@
     log("Cue: " + cue.name + (why ? " (" + why + ")" : ""));
     return { ok: true, text: "Finished: " + durationText(cue.duration) };
   }
+  // ---- 🎯 Auto cue: the shot the camera saw ----
+  // The camera page (player detection) says when a shot begins and ends -
+  // "shot" messages, passed on by the scoreboard (begin / end / watch, see
+  // docs/camera-protocol.md). Pressed: the shot going on, or else the last
+  // one up to autoBack s before the press, or else the next one starting
+  // within autoWait s - kept from autoLead s before the player got down on
+  // it (or the table started moving) to autoTail s after everything was
+  // still. No shot in that time: no clip.
+  var shotWatch = null; // { ok, why, at } - the camera watching the table
+  var episodes = [];    // what the camera saw: { beganAt, aimAt, endedAt, shot, moved, shooter, live }
+  var seenShotMsgs = {};
+  var auto = null;      // { pressedAt, source, session, state: "waiting" | "shot" | "keeping", liveSince, pick }
+  function watching() { return !!shotWatch && shotWatch.ok && Date.now() - shotWatch.at < 10000; }
+  function shotStart(e) { return e.aimAt || e.beganAt; }
+  function noteShot(m) {
+    var now = Date.now();
+    if (m.id) { if (seenShotMsgs[m.id]) return; seenShotMsgs[m.id] = now; } // (two scoreboards open: once)
+    if (m.phase === "watch") shotWatch = { ok: m.ok !== false, why: m.why || "", at: now };
+    else if (m.phase === "begin") {
+      shotWatch = { ok: true, why: "", at: now };
+      episodes.push({ beganAt: m.at || now, live: true });
+    } else if (m.phase === "end") {
+      shotWatch = { ok: true, why: "", at: now };
+      var e = null;
+      for (var i = episodes.length - 1; i >= 0; i--) if (episodes[i].live) { e = episodes[i]; break; }
+      if (!e) { e = {}; episodes.push(e); }
+      Object.assign(e, { live: false, beganAt: m.beganAt || now, aimAt: m.aimAt || null, endedAt: m.endedAt || now, shot: !!m.shot, moved: m.moved, shooter: m.shooter || "" });
+      if (e.shot) log("Shot seen" + (e.shooter ? " (" + e.shooter + ")" : "") + ": " + clock(e.endedAt - shotStart(e)) + " long");
+    }
+    // (an end that never came - the camera closed: not a shot)
+    episodes.forEach(function (x) { if (x.live && now - x.beganAt > 150000) { x.live = false; x.shot = false; } });
+    while (episodes.length && now - (episodes[0].endedAt || episodes[0].beganAt) > 10 * 60000) episodes.shift();
+    Object.keys(seenShotMsgs).forEach(function (k) { if (now - seenShotMsgs[k] > 60000) delete seenShotMsgs[k]; });
+    if (auto) evaluateAuto();
+  }
+  function autoSpan(e) {
+    return { start: Math.max(rec.startedAt || 0, shotStart(e) - settings.autoLead * 1000), end: e.endedAt + settings.autoTail * 1000 };
+  }
+  function evaluateAuto() {
+    if (!auto) return;
+    if (auto.pick) { finishAuto(false); return; }
+    var now = Date.now(), P = auto.pressedAt, back = settings.autoBack * 1000, wait = settings.autoWait * 1000, pick = null;
+    var live = episodes.filter(function (e) { return e.live; }).pop() || null;
+    var shots = episodes.filter(function (e) { return !e.live && e.shot; });
+    // 1. a shot going on at the press: wait for its end
+    if (live && live.beganAt <= P) { auto.state = "shot"; auto.liveSince = live.beganAt; return; }
+    // 2. the last shot up to autoBack s before the press
+    shots.forEach(function (e) { if (e.endedAt >= P - back && shotStart(e) <= P && (!pick || shotStart(e) > shotStart(pick))) pick = e; });
+    // 3. the next one, starting within autoWait s
+    if (!pick) {
+      if (live && live.beganAt <= P + wait) { auto.state = "shot"; auto.liveSince = live.beganAt; return; }
+      shots.forEach(function (e) { if (shotStart(e) > P && shotStart(e) <= P + wait && (!pick || shotStart(e) < shotStart(pick))) pick = e; });
+    }
+    if (pick) { auto.pick = pick; auto.state = "keeping"; finishAuto(false); return; }
+    auto.state = "waiting";
+    if (now > P + wait) endAuto("noShot");
+  }
+  // kept once its last autoTail s are recorded (or the recording stops)
+  function finishAuto(stopping) {
+    var a = auto, span = autoSpan(a.pick), now = Date.now();
+    if (!stopping && now < span.end) return;
+    var end = Math.min(span.end, now);
+    var b = boardAt(span.start) || board || {};
+    var cue = { markedAt: a.pressedAt, startedAt: span.start, endedAt: end, duration: end - span.start, player: b.player || "", opponent: b.opponent || "", matchup: b.matchup || "", gameType: b.gameType || "", gameLabel: b.gameLabel || "", position: b.position || "",
+      source: "auto (" + a.source + ")", session: a.session, shotAt: shotStart(a.pick), shotEndedAt: a.pick.endedAt, cameraShooter: a.pick.shooter || "", note: "the camera's shot" };
+    cue.name = cueName(cue);
+    api("/api/rec/cues", cue).then(function () { if (viewer) viewer.refresh(); }).catch(function (e) { log("Couldn't keep the auto cue: " + e.message); });
+    endAuto("kept", cue.name);
+  }
+  function endAuto(code, name) {
+    auto = null;
+    var text = code === "kept" ? "🎯 Kept: " + name
+      : code === "noShot" ? "🎯 No shot within " + settings.autoWait + " s - no clip"
+      : code === "stopped" ? "🎯 The recording stopped before the shot - no clip"
+      : code === "noCamera" ? "🎯 The camera isn't watching the table" + (shotWatch && !shotWatch.ok && shotWatch.why ? " (" + shotWatch.why + ")" : "") + " - open 📷 Set Up Camera on the scoreboard"
+      : "🎯 Auto cue cancelled";
+    toast(text);
+    log(text);
+    post({ type: "auto-result", code: code, name: name || "", wait: settings.autoWait });
+    renderRec();
+    renderAuto();
+  }
+  function autoCue(source) {
+    if (!rec.on) { toast("Not recording - start the recording first"); return { ok: false, code: "notRecording" }; }
+    if (auto) { endAuto("cancelled"); return { ok: true, code: "cancelled" }; }
+    if (!watching()) { endAuto("noCamera"); return { ok: false, code: "noCamera" }; }
+    auto = { pressedAt: Date.now(), source: source || "button", session: rec.id, state: "waiting" };
+    duck(quietFor(source));
+    tick(1700);
+    log("🎯 Auto cue (" + (source || "button") + "): finding the shot");
+    evaluateAuto();
+    renderRec();
+    renderAuto();
+    return { ok: true, code: "started" };
+  }
+  function renderAuto() {
+    var w = watching();
+    $("shotDot").className = "dot" + (w ? " ok" : "");
+    $("shotText").textContent = w ? "Shots: the camera is watching the table" : shotWatch && !shotWatch.ok && Date.now() - shotWatch.at < 10000 ? "Shots: the camera can't watch the table - " + shotWatch.why : "Shots: not heard from the camera (📷 Set Up Camera)";
+    var badge = $("autoBadge");
+    badge.hidden = !auto;
+    if (!auto) return;
+    var now = Date.now();
+    badge.textContent = auto.state === "keeping" ? "🎯 Shot over - keeping " + Math.max(0, Math.ceil((autoSpan(auto.pick).end - now) / 1000)) + " s more"
+      : auto.state === "shot" ? "🎯 Shot going on " + clock(now - auto.liveSince) + " - kept when the balls stop"
+      : "🎯 Finding the shot - " + Math.max(0, Math.ceil((auto.pressedAt + settings.autoWait * 1000 - now) / 1000)) + " s left";
+  }
+
   $("markBtn").addEventListener("click", function () { mark("button"); });
+  $("autoBtn").addEventListener("click", function () { autoCue("button"); });
   $("finishBtn").addEventListener("click", function () { finishCue(); });
   document.addEventListener("keydown", function (e) {
     if (e.target && /INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
     if (e.key === "m" || e.key === "M") { e.preventDefault(); mark("key"); }
     if (e.key === "f" || e.key === "F") { e.preventDefault(); finishCue(); }
     if (e.key === "/") { e.preventDefault(); if (openCue) finishCue(); else mark("key"); }
+    if (e.key === "a" || e.key === "A" || e.key === "*") { e.preventDefault(); autoCue("key"); }
   });
 
   // ---- Talking with the scoreboard (same browser): what's being played,
@@ -556,6 +682,8 @@
     if (m.type === "context") { board = { player: m.player || "", opponent: m.opponent || "", matchup: m.matchup || "", gameType: m.gameType || "", gameLabel: m.gameLabel || "", position: m.position || "", at: Date.now() }; noteBoard(Object.assign({}, board)); }
     else if (m.type === "mark") post({ type: "reply", id: m.id, result: mark(m.source || "scoreboard") });
     else if (m.type === "finish") post({ type: "reply", id: m.id, result: finishCue("", m.source) });
+    else if (m.type === "auto-cue") post({ type: "reply", id: m.id, result: autoCue(m.source || "scoreboard") });
+    else if (m.type === "shot") noteShot(m);
   };
   post({ type: "context-request" });
 
@@ -566,6 +694,12 @@
   $("preRollText").textContent = settings.preRoll;
   $("partMin").value = settings.partMin;
   $("autoStart").checked = settings.autoStart;
+  ["autoBack", "autoWait", "autoLead", "autoTail"].forEach(function (k) {
+    var input = $(k), lim = { autoBack: [0, 60], autoWait: [5, 120], autoLead: [0, 30], autoTail: [0, 30] }[k];
+    var show = function () { $(k + "Text").textContent = settings[k]; };
+    input.value = settings[k]; show();
+    input.addEventListener("change", function () { var v = parseInt(input.value, 10); settings[k] = Math.max(lim[0], Math.min(lim[1], isNaN(v) ? settings[k] : v)); input.value = settings[k]; show(); saveSettings(); });
+  });
   $("zoom").value = settings.zoom;
   function restartIfIdle(what) {
     if (rec.on) { toast("Stop the recording first to change the " + what); return false; }
@@ -592,7 +726,7 @@
   startCamera().then(function () { if (settings.autoStart) startRecording(); }).catch(function () {});
 
   // (tests)
-  window.PMCRecorder = { viewer: viewer, mark: mark, finish: finishCue, start: startRecording, stop: stopRecording, duck: duck, recordedStream: function () { return outStream; }, setPartMs: function (ms) { partMsForTests = ms; }, state: function () { return { ducks: ducks, ducking: !!duckGain, on: rec.on, id: rec.id, part: rec.part, openCue: openCue, board: board, settings: settings, cropSupported: cropSupported }; } };
+  window.PMCRecorder = { viewer: viewer, mark: mark, finish: finishCue, start: startRecording, stop: stopRecording, duck: duck, recordedStream: function () { return outStream; }, setPartMs: function (ms) { partMsForTests = ms; }, autoCue: autoCue, shotsSeen: function () { return episodes; }, state: function () { return { auto: auto, watching: watching(), ducks: ducks, ducking: !!duckGain, on: rec.on, id: rec.id, part: rec.part, openCue: openCue, board: board, settings: settings, cropSupported: cropSupported }; } };
 })();
 </script>
 </body>

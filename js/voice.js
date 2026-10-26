@@ -44,7 +44,7 @@
       "Set session, race to 7, rotation 8-ball and 9-ball, players are Luigi and Luc"
     ] },
     { title: "voice.section.recording", note: "voice.note.recording", lines: [
-      "Mark", "Finish"
+      "Mark", "Finish", "Auto cue"
     ] },
     { title: "voice.section.questions", note: "voice.note.questions", lines: [
       "What is Luigi's Q-score today?", "What's the score?", "Help"
@@ -308,6 +308,8 @@
     // --- the recording page's cues ---
     [/^(?:mark|mark (?:it|that|this|the shot)|cue (?:it|that)|start (?:a |the )?(?:mark|cue|clip)|bookmark(?: (?:it|that|this))?)$/, function () { return { type: "recMark" }; }],
     [/^(?:finish|finish (?:it|that|the mark|the cue|the clip)|end (?:the )?(?:mark|cue|clip)|stop (?:the )?(?:mark|cue|clip)|cut(?: it| that)?)$/, function () { return { type: "recFinish" }; }],
+    // (the camera finds the shot - "cue" is often heard as "q" or "queue")
+    [/^(?:auto|automatic|smart|otto) (?:cue|q|queue|mark|clip)(?: (?:it|that|the shot|this shot))?$/, function () { return { type: "recAuto" }; }],
     [/^(?:(?:what is|whats|tell me|say|give me|read)(?: me)?(?: the)? )?scores?$/, function () { return { type: "score" }; }],
     [/^(?:nice|nice game|good game|confirm|register(?: the)? game|ok|okay|done|close|close it|thats it|great game)$/, function () { return { type: "confirmWin" }; }],
     [/^(?:undo|cancel|undo that|cancel that|take it back|undo the win|cancel the win)$/, function () { return { type: "undoWin" }; }],

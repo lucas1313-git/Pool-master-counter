@@ -9474,6 +9474,16 @@ body.network-guest-mode #header-group-start {
   color: #1a0a0a;
 }
 
+.recorder-auto-btn {
+  background: var(--bg-card);
+  color: var(--accent);
+}
+
+.recorder-auto-btn.off {
+  opacity: 0.55;
+  border-style: dashed;
+}
+
 .recorder-cue-btn.open {
   background: var(--danger);
   border-color: var(--danger);

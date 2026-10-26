@@ -3880,10 +3880,89 @@
     send(msg);
   }
 
-  function runBallPass() {
+  // ---- Shots, for the recording's 🎯 Auto cue ----
+  // A shot as the recording page needs it: from the player getting down on
+  // it (bent over, or a cue over the cloth) - or the table starting to move
+  // - until everything on the table is still again; and whether the balls
+  // ended up somewhere else (a shot - not someone leaning over the table or
+  // walking past it). Sent as "shot" messages: phase "begin", phase "end"
+  // (times as "ms ago" - another device's clock doesn't matter), and
+  // "watch" every few seconds (the camera is watching the table). Runs on
+  // every table pass, ball tracking on or not.
+  var SHOT_SETTLE_PASSES = 3;  // still passes in a row (~2.5 s) = it's over
+  var SHOT_MAX_MS = 120000;    // still busy after this: not a shot (something keeps moving)
+  // the balls moved: this many points of the table's small picture (160 px
+  // wide - a ball is 3-4 px there) changed by this much since before the
+  // shot. The cue ball always moves in a shot, and it's the brightest thing
+  // on the cloth.
+  var SHOT_MOVED_LEVEL = 28;
+  var SHOT_MOVED_PIXELS = 5;
+  var SHOT_WATCH_MS = 3000;
+  var shotTrack = { active: null, still: 0, rest: null, lastWatchAt: 0, last: null };
+  function shotShooterName() {
+    return shootingVia === "cue-hidden" ? cueHiddenShooterName : (candidate && candidate.name) || (cueTrack && cueTrack.shooterName) || null;
+  }
+  function shotMovedPixels(a, b) {
+    if (!a || !b || a.length !== b.length) return null;
+    var moved = 0;
+    for (var i = 0; i < a.length; i++) if (Math.abs(a[i] - b[i]) >= SHOT_MOVED_LEVEL) moved++;
+    return moved;
+  }
+  function sendShotWatch(now, ok, why) {
+    if (now - shotTrack.lastWatchAt < SHOT_WATCH_MS) return;
+    shotTrack.lastWatchAt = now;
+    send({ type: "shot", phase: "watch", ok: ok, why: why || null, busy: !!shotTrack.active, ts: now });
+  }
+  function endShot(now, isShot, moved) {
+    var a = shotTrack.active;
+    shotTrack.active = null;
+    shotTrack.still = 0;
+    shotTrack.rest = ballPrevMotionFrame;
+    shotTrack.last = { shot: isShot, moved: moved, beganAt: a.beganAt, aimAt: a.aimAt, endedAt: a.lastBusyAt, shooter: a.shooter };
+    send({ type: "shot", phase: "end", shot: isShot, moved: moved, beganAgo: now - a.beganAt, aimAgo: a.aimAt ? now - a.aimAt : null, endAgo: now - a.lastBusyAt, shooter: a.shooter || null, ts: now });
+    if (isShot) logActivity("Shot" + (a.shooter ? " (" + a.shooter + ")" : "") + ": " + Math.round((a.lastBusyAt - (a.aimAt || a.beganAt)) / 1000) + " s" + (moved !== null ? " (the balls moved)" : ""));
+  }
+  function runShotPass(motion, now) {
+    sendShotWatch(now, true);
+    if (!isFinite(motion)) return; // (no earlier picture to compare with yet)
+    var aiming = effectiveStance() === "bent" || (cueDetectionActive() && cueTrack.present);
+    var busy = motion >= BALL_STILL_DIFF_THRESHOLD || aiming;
+    var a = shotTrack.active;
+    if (!a) {
+      if (!busy) { shotTrack.rest = ballPrevMotionFrame; return; }
+      shotTrack.active = { beganAt: now, aimAt: aiming ? now : null, lastBusyAt: now, rest: shotTrack.rest, shooter: aiming ? shotShooterName() : null };
+      shotTrack.still = 0;
+      send({ type: "shot", phase: "begin", aiming: aiming, ts: now });
+      return;
+    }
+    if (busy) {
+      a.lastBusyAt = now;
+      shotTrack.still = 0;
+      if (aiming && !a.aimAt) a.aimAt = now;
+      if (aiming && !a.shooter) a.shooter = shotShooterName();
+      if (now - a.beganAt > SHOT_MAX_MS) endShot(now, false, null);
+      return;
+    }
+    if (++shotTrack.still < SHOT_SETTLE_PASSES) return;
+    // over: the balls somewhere else than before it began = a shot (no
+    // picture from before - the camera just started - then: if someone aimed)
+    var moved = shotMovedPixels(a.rest, ballPrevMotionFrame);
+    endShot(now, moved === null ? !!a.aimAt : moved >= SHOT_MOVED_PIXELS, moved);
+  }
+  // Every few ticks: the table's motion, measured once - for the shots and
+  // (when it's on) ball tracking.
+  function runTablePass() {
     var box = calibratedTableBoxVideo();
     if (!box) return;
     var motion = measureTableMotion(box);
+    if (settings.ballTrackingEnabled) runBallPass(motion, box);
+    runShotPass(motion, Date.now());
+  }
+
+  function runBallPass(motionIn, boxIn) {
+    var box = boxIn || calibratedTableBoxVideo();
+    if (!box) return;
+    var motion = motionIn !== undefined ? motionIn : measureTableMotion(box);
     var inv = detectBallsInFrame(sampleTablePixels());
     if (!inv) return;
     ballTrack.lastInventory = inv;
@@ -4926,6 +5005,7 @@
     track: ballTrack,
     detect: detectBallsInFrame,
     runPass: runBallPass,
+    shots: shotTrack,
     reset: resetBallTracking,
     takeEmptySnapshot: function (source) { return captureEmptyRoom(source || videoEl); },
     roomTags: function () { return roomTagsFit() ? { at: roomTags.at, gw: roomTags.gw, gh: roomTags.gh, regions: roomTags.regions.map(function (r) { return { id: r.id, name: r.name, kind: r.kind, area: r.area, cells: r.cells.slice(), x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1 }; }) } : null; },
@@ -9088,7 +9168,8 @@
         // After handleRecognitionFrame so this pass sees the freshly
         // updated stance, before drawOverlay so the overlay shows this
         // pass's inventory rather than the previous one's.
-        if (settings.ballTrackingEnabled && calibration && !isViewer && (++ballTickCounter % BALL_PASS_EVERY_N_TICKS === 0)) runBallPass();
+        if (calibration && !isViewer && (++ballTickCounter % BALL_PASS_EVERY_N_TICKS === 0)) runTablePass();
+        else if (!calibration && !isViewer) sendShotWatch(Date.now(), false, "calibrate the table");
         drawOverlay(pose ? pose.keypoints : null, analysis, matchLabel);
         // Must run AFTER handleRecognitionFrame/analyzePose above, not
         // before - processIdlePoses calls analyzePose too, which would

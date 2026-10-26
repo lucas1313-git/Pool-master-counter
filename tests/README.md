@@ -99,6 +99,17 @@ Not part of the app - helpers for testing and for running this machine's own cop
   page's same viewer plays it from its set start.
   `node tests/probe_recorder.js http://localhost:4235/` against a test server
   (`HOME=tests/tmphome PORT=4235 node server/server.js`).
+- `probe_shot_detect.js` - the camera page's shots (for the 🎯 Auto cue) on a synthetic table: a
+  looping video where the cue ball rolls to another spot = a shot (begin, then end with `shot:
+  true`, the balls moved, "ms ago" times about as long as the rolling), a dark arm sweeping over the
+  cloth = not a shot, no calibration = `watch` with ok false. Heard as a listener on /ws-camera.
+  `node tests/probe_shot_detect.js http://localhost:4235/` (same test server).
+- `probe_auto_cue.js` - the 🎯 Auto cue end to end (scoreboard + recording page, the camera's shots
+  fed in through `PMCCameraBridge.reportShot`): dimmed and refused with no camera; "*" then a shot
+  -> kept 5 s before the aim to 5 s after the balls stop, the button counting meanwhile; a shot just
+  before the press (look-back); a non-shot then nothing -> "No shot within ..." and no clip; cancel;
+  "auto cue" said; the recording page's own button and A key; a shot heard twice counted once.
+  `node tests/probe_auto_cue.js http://localhost:4235/` (same test server).
 - `probe_out_of_view.js` - out of view: a named player who walks out of the picture keeps a tag at
   the edge they left by (name, time, arrow), is kept past the 12 s a hidden player is looked for,
   and gets their path and name back coming in at that edge; hidden mid-picture as long: no name;

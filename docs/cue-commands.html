@@ -29,6 +29,8 @@
   .timeline .cue { position: absolute; left: 22%; width: 52%; top: 12px; height: 18px; background: rgba(232,185,35,0.45); border: 2px solid #b8890f; border-radius: 5px; }
   .timeline .t { position: absolute; top: 32px; font-size: 8.5pt; color: #5a1414; transform: translateX(-50%); white-space: nowrap; font-weight: 700; }
   .timeline .m { position: absolute; top: 4px; width: 2px; height: 30px; background: #5a1414; }
+  .timeline .look { position: absolute; top: 14px; height: 14px; border: 2px dashed #8a6a5a; border-radius: 5px; }
+  .timeline .t.up { top: -12px; }
   table.trouble { border-collapse: collapse; width: 100%; }
   table.trouble td { vertical-align: top; padding: 4px 8px 4px 0; border-bottom: 1px solid #efe3d6; }
   table.trouble td:first-child { font-weight: 700; color: #5a1414; width: 36%; }
@@ -65,7 +67,27 @@
 <p class="note">One sentence at a time. The big line at the bottom of the scoreboard shows what was heard; a message at the top says <b>Marked</b> or <b>Finished</b>. Nothing is said out loud — it would end up in the video.</p>
 <div class="box" style="margin-top:6px"><h3>With Siri</h3>Say <b>“Hey Siri, Scoreboard”</b>, wait for Siri, then <b>“Mark”</b> (later: “Hey Siri, Scoreboard” … <b>“Finish”</b>). The Shortcut is set up once — see the <i>Voice commands &amp; Siri</i> PDF. Siri answers out loud on the phone; the recording goes quiet for 3 seconds so that answer isn't in the video.</div>
 
-<h2 class="page-break">What a cue is</h2>
+<h2 class="page-break">🎯 Auto cue — the camera finds the shot</h2>
+<p>A second way to mark: press <span class="btn" style="background:#fff;border:1.5px solid #b8890f;color:#7a4a00">🎯 Auto cue</span> (beside ⭐ Cue), press <span class="key">*</span>, or say <b>“Auto cue”</b> — before, during or just after a shot. You don't finish it: the camera watches the table and the clip cuts itself.</p>
+<div class="timeline" style="height:58px;margin-top:20px">
+  <div class="bar"></div>
+  <div class="look" style="left:27%;width:53%"></div>
+  <div class="cue" style="left:30%;width:46%;top:12px"></div>
+  <div class="m" style="left:35%"></div><div class="t" style="left:35%">down on the shot</div>
+  <div class="m" style="left:47%"></div><div class="t up" style="left:47%">🎯 pressed</div>
+  <div class="m" style="left:71%"></div><div class="t" style="left:71%">balls stop</div>
+  <div class="t up" style="left:27%">15 s back</div><div class="t up" style="left:80%">25 s ahead</div>
+</div>
+<ul class="plain" style="margin-top:14px">
+  <li><b>Which shot:</b> the one going on when you press; otherwise the last one up to <b>15 s</b> before the press; otherwise the next one starting within <b>25 s</b>.</li>
+  <li><b>The clip:</b> from <b>5 s before</b> the player gets down on the shot to <b>5 s after</b> the balls stop. Named like any cue.</li>
+  <li><b>No shot in that time: no clip</b> (the scoreboard says “No shot within 25 s”). Someone leaning over the table or walking past isn't a shot — the balls have to end up somewhere else.</li>
+  <li>While it works, the button shows <b>🎯 Finding the shot 0:04</b>, then <b>🎯 Shot 0:06</b>, then <b>Keeping 5 s more</b>. <b>Press again to cancel.</b></li>
+  <li><b>It needs the camera page watching the table</b> (📷 Set Up Camera, the table calibrated). The button is dimmed when it isn't; the recording page shows “Shots: the camera is watching the table”. On the recording page: <b>🎯 Auto cue</b> or the <span class="key">A</span> key; the 15 / 25 / 5 / 5 seconds can be changed in its Settings.</li>
+</ul>
+<div class="box" style="margin-top:6px"><h3>Say it</h3><ul class="say"><li>“Auto cue”</li><li>“Auto clip”</li><li>“Auto mark”</li></ul></div>
+
+<h2>What a cue is</h2>
 <p><b>Mark right after the good shot.</b> You only know a shot was good once it's over, so the cue <b>starts 20 seconds before</b> you marked it — the beginning of the shot — and runs until you finish it.</p>
 <div class="timeline">
   <div class="bar"></div><div class="cue"></div>
@@ -103,6 +125,8 @@
   <tr><td>No ⭐ Cue button</td><td>It only shows while recording, and only if both pages come from the same address. Reload the scoreboard after an update.</td></tr>
   <tr><td>“Nothing is marked to finish”</td><td>There's no open cue — it was already finished (or a new mark ended it).</td></tr>
   <tr><td><span class="key">/</span> pauses the shot counter instead</td><td>The scoreboard doesn't see a recording running — check the two points above.</td></tr>
+  <tr><td>🎯 Auto cue dimmed, “needs the camera”</td><td>Open 📷 Set Up Camera on the scoreboard and calibrate the table; the camera page must stay open (it can be in the background).</td></tr>
+  <tr><td>“No shot within 25 s”</td><td>The camera saw no ball move in that time. Press closer to the shot, or use ⭐ Cue / <span class="key">/</span> instead.</td></tr>
   <tr><td>“Mark” not understood</td><td>Say it a little longer: “mark the shot”. Voice needs the internet in Chrome.</td></tr>
 </table>
 

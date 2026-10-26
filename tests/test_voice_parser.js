@@ -109,6 +109,12 @@ check("yes", { type: "answer", yes: true });
 check("What is Luigi's Q-score today?", { type: "qscore", name: "Luigi", today: true });
 check("what is luigi q score today", { type: "qscore", name: "Luigi", today: true });
 check("what's Mario's queue score", { type: "qscore", name: "Mario" });
+// --- the recording's 🎯 Auto cue ("cue" often heard as "q" / "queue") ---
+check("Auto cue", { type: "recAuto" });
+check("auto queue", { type: "recAuto" });
+check("Otto Q", { type: "recAuto" });
+check("auto clip the shot", { type: "recAuto" });
+check("mark", { type: "recMark" });
 check("Q score of Bob", { type: "qscore", name: "Bob" });
 check("What's the score?", { type: "score" });
 check("Help", { type: "help" });

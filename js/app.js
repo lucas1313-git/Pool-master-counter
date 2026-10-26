@@ -3314,6 +3314,12 @@
       recorderToggleCue("key");
       return;
     }
+    // ...and "*" a 🎯 Auto cue (the shot counter's show / hide otherwise)
+    if (e.key === "*" && !e.ctrlKey && !e.metaKey && !e.altKey && recorderCueReady()) {
+      e.preventDefault();
+      recorderToggleAuto("key");
+      return;
+    }
 
     // Shot counter: "/" toggles pause/unpause, "*" toggles hide/show, the
     // numeric keypad's dedicated Clear key zeroes it. Only live when
@@ -25727,6 +25733,8 @@
         return recorderCommand("mark");
       case "recFinish":
         return recorderCommand("finish");
+      case "recAuto":
+        return recorderCommand("auto");
 
       case "qscore": {
         var entry = getPlayerRatingEntry(cmd.name);
@@ -25828,15 +25836,20 @@
       try { recorderChannel.postMessage(recorderContext()); } catch (e) {}
     }, 300);
   }
-  var recorderGuessUntil = 0; // (a cue just set or ended here: the page's next status may predate it)
+  var recorderGuessAt = 0; // (a cue just set or ended here: a status the page sent before it got that is out of date)
   if (recorderChannel) {
     recorderChannel.onmessage = function (e) {
       var m = e.data || {};
       if (m.type === "status") {
-        var keep = Date.now() < recorderGuessUntil && recorderStatus;
-        recorderStatus = { recording: !!m.recording, cueOpen: keep ? recorderStatus.cueOpen : !!m.cueOpen, cueSince: keep ? recorderStatus.cueSince : m.cueSince || null, at: Date.now() };
+        var keep = !!recorderStatus && (m.at || 0) < recorderGuessAt + 300 && Date.now() < recorderGuessAt + 2000;
+        recorderStatus = {
+          recording: !!m.recording, cueOpen: keep ? recorderStatus.cueOpen : !!m.cueOpen, cueSince: keep ? recorderStatus.cueSince : m.cueSince || null,
+          auto: keep ? recorderStatus.auto : m.auto || null, autoSince: keep ? recorderStatus.autoSince : m.autoSince || null, autoShotSince: m.autoShotSince || null,
+          watching: !!m.watching, watchWhy: m.watchWhy || null, at: Date.now()
+        };
         renderRecorderCueButton();
       } else if (m.type === "context-request") postRecorderContext();
+      else if (m.type === "auto-result") recorderAutoResult(m);
     };
     setInterval(postRecorderContext, 5000);
     setInterval(renderRecorderCueButton, 1000);
@@ -25861,19 +25874,63 @@
     try { recorderChannel.postMessage(recorderContext()); recorderChannel.postMessage({ type: kind, source: source }); } catch (e) {}
     recorderStatus.cueOpen = kind === "mark";
     recorderStatus.cueSince = kind === "mark" ? Date.now() : null;
-    recorderGuessUntil = Date.now() + 1800;
+    recorderGuessAt = Date.now();
     playRecorderTick(kind);
     renderRecorderCueButton();
   }
-  // "mark" / "finish" (voice, Siri) -> { ok, text, speak } - never said out
-  // loud (it would be in the recording)
+  // "mark" / "finish" / "auto" (voice, Siri) -> { ok, text, speak } - never
+  // said out loud (it would be in the recording)
   function recorderCommand(kind) {
     if (!recorderChannel || !recorderFresh()) return { ok: false, text: T("voice.err.noRecorder"), speak: "never" };
-    if (kind === "mark" && !recorderStatus.recording) return { ok: false, text: T("voice.err.notRecording"), speak: "never" };
+    if ((kind === "mark" || kind === "auto") && !recorderStatus.recording) return { ok: false, text: T("voice.err.notRecording"), speak: "never" };
+    if (kind === "auto") {
+      if (!recorderStatus.auto && !recorderStatus.watching) return { ok: false, text: T("recorder.autoNoCamera"), speak: "never" };
+      var cancel = !!recorderStatus.auto;
+      sendRecorderAuto("voice");
+      return { ok: true, text: T(cancel ? "recorder.autoCancelled" : "recorder.autoStarted"), speak: "never" };
+    }
     if (kind === "finish" && !recorderStatus.cueOpen) return { ok: false, text: T("voice.err.nothingMarked"), speak: "never" };
     sendRecorderCue(kind, "voice");
     return { ok: true, text: T(kind === "mark" ? "voice.done.marked" : "voice.done.finished"), speak: "never" };
   }
+  // 🎯 Auto cue (its button, the "*" key, "auto cue"): the recording page
+  // finds the shot the camera saw and keeps it - pressed again, cancelled.
+  function sendRecorderAuto(source) {
+    try { recorderChannel.postMessage(recorderContext()); recorderChannel.postMessage({ type: "auto-cue", source: source }); } catch (e) {}
+    var cancel = !!recorderStatus.auto;
+    recorderStatus.auto = cancel ? null : "waiting";
+    recorderStatus.autoSince = cancel ? null : Date.now();
+    recorderGuessAt = Date.now();
+    playRecorderTick(cancel ? "finish" : "mark");
+    renderRecorderCueButton();
+  }
+  function recorderToggleAuto(source) {
+    if (!recorderChannel || !recorderFresh()) { showToast(T("voice.err.noRecorder"), "🎬 "); return false; }
+    if (!recorderStatus.recording) { showToast(T("voice.err.notRecording"), "🎬 "); return false; }
+    if (!recorderStatus.auto && !recorderStatus.watching) { showToast(T("recorder.autoNoCamera"), "🎯 "); return false; }
+    var cancel = !!recorderStatus.auto;
+    sendRecorderAuto(source);
+    showToast(T(cancel ? "recorder.autoCancelled" : "recorder.autoStarted"), "🎯 ");
+    return true;
+  }
+  // what came of it (the recording page decides): kept, no shot, ...
+  function recorderAutoResult(m) {
+    if (recorderStatus) { recorderStatus.auto = null; recorderStatus.autoSince = null; }
+    var key = { kept: "recorder.autoKept", noShot: "recorder.autoNoShot", stopped: "recorder.autoStopped", noCamera: "recorder.autoNoCamera", cancelled: "recorder.autoCancelled" }[m.code];
+    if (key && m.code !== "cancelled") showToast(T(key, { name: m.name || "", s: m.wait || 25 }), "🎯 ");
+    renderRecorderCueButton();
+  }
+  // the camera's shots (PMCCameraBridge.reportShot - relay or same-device):
+  // its "ms ago" times made this computer's, then on to the recording page
+  function recorderShot(m) {
+    if (!recorderChannel || !m || !m.phase) return;
+    var now = Date.now(), at = function (ago) { return typeof ago === "number" && isFinite(ago) ? now - ago : null; };
+    try {
+      recorderChannel.postMessage({ type: "shot", id: m.phase + ":" + (m.ts || now), phase: m.phase, ok: m.ok !== false, why: m.why || null, shot: !!m.shot, moved: typeof m.moved === "number" ? m.moved : null,
+        at: now, beganAt: at(m.beganAgo), aimAt: at(m.aimAgo), endedAt: at(m.endAgo), shooter: m.shooter || null });
+    } catch (e) {}
+  }
+
   // The score section's ⭐ Cue button and the "/" key: a cue when there's
   // none, its end when there is - while the recording page records.
   function recorderCueReady() { return !!recorderChannel && recorderFresh() && recorderStatus.recording; }
@@ -25887,6 +25944,8 @@
   }
   var recorderCueGroup = document.getElementById("recorder-cue-group");
   var btnRecorderCue = document.getElementById("btn-recorder-cue");
+  var btnRecorderAuto = document.getElementById("btn-recorder-auto");
+  function mmss(ms) { var s = Math.max(0, Math.round(ms / 1000)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
   function renderRecorderCueButton() {
     if (!btnRecorderCue) return;
     var ready = recorderCueReady();
@@ -25896,8 +25955,18 @@
     btnRecorderCue.textContent = open ? T("recorder.endCue", { time: Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0") }) : T("recorder.cue");
     btnRecorderCue.classList.toggle("open", open);
     btnRecorderCue.title = T("recorder.cueHint");
+    if (!btnRecorderAuto) return;
+    var a = recorderStatus.auto, now = Date.now();
+    btnRecorderAuto.textContent = !a ? T("recorder.autoCue")
+      : a === "shot" ? T("recorder.autoShot", { time: mmss(now - (recorderStatus.autoShotSince || now)) })
+      : a === "keeping" ? T("recorder.autoKeeping")
+      : T("recorder.autoWaiting", { time: mmss(now - (recorderStatus.autoSince || now)) });
+    btnRecorderAuto.classList.toggle("open", !!a);
+    btnRecorderAuto.classList.toggle("off", !a && !recorderStatus.watching);
+    btnRecorderAuto.title = recorderStatus.watching || a ? T("recorder.autoHint") : T("recorder.autoNoCamera");
   }
   if (btnRecorderCue) btnRecorderCue.addEventListener("click", function () { recorderToggleCue("scoreboard button"); });
+  if (btnRecorderAuto) btnRecorderAuto.addEventListener("click", function () { recorderToggleAuto("scoreboard button"); });
   var btnOpenRecorder = document.getElementById("btn-open-recorder");
   if (btnOpenRecorder) btnOpenRecorder.addEventListener("click", function () { window.open("record.html", "pmc-record"); });
 
@@ -32068,6 +32137,8 @@
       window.PMCCameraBridge.reportBallEvent(msg);
     } else if (msg.type === "cue_event") {
       window.PMCCameraBridge.reportCueEvent(msg);
+    } else if (msg.type === "shot") {
+      window.PMCCameraBridge.reportShot(msg);
     } else if (msg.type === "camera-settings-state") {
       window.PMCCameraBridge.reportCameraSettings(msg.settings);
     } else if (msg.type === "camera-status") {
@@ -33663,6 +33734,8 @@
     isEnabled: function () {
       return !!state.cameraInputEnabled;
     },
+    // the camera's shots -> the recording page (its 🎯 Auto cue)
+    reportShot: function (msg) { recorderShot(msg); },
     isAnyOverlayOpen: isAnyOverlayOpen,
     getSelectedPlayerId: function () {
       return keypadSelectedPlayerId;

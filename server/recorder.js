@@ -286,7 +286,7 @@ function attachRecorderRoutes(app) {
     sendJson(res, 200, { cues: cues, ffmpeg: !!ffmpeg() });
   });
 
-  var CUE_FIELDS = ["name", "player", "opponent", "matchup", "gameType", "gameLabel", "position", "note", "startedAt", "markedAt", "endedAt", "duration", "source", "session", "customName"];
+  var CUE_FIELDS = ["name", "player", "opponent", "matchup", "gameType", "gameLabel", "position", "note", "startedAt", "markedAt", "endedAt", "duration", "source", "session", "customName", "shotAt", "shotEndedAt", "cameraShooter"];
   function pickCue(b, into) {
     CUE_FIELDS.forEach(function (k) {
       if (b[k] === undefined) return;

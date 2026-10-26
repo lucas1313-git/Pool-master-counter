@@ -282,6 +282,7 @@
       else if (msg.type === "remote-camera-list") handleRemoteCameraList(msg);
       else if (msg.type === "ball_pocketed" || msg.type === "ball_rerack" || msg.type === "ball_reappeared") handleBallEvent(msg);
       else if (msg.type === "cue_event") handleCueEvent(msg);
+      else if (msg.type === "shot" && bridgeReady() && typeof window.PMCCameraBridge.reportShot === "function") window.PMCCameraBridge.reportShot(msg);
       else if (msg.type === "enroll-result" && bridgeReady() && typeof window.PMCCameraBridge.reportEnrollResult === "function") window.PMCCameraBridge.reportEnrollResult(msg);
       else if (msg.type === "enroll-pressed" && bridgeReady() && typeof window.PMCCameraBridge.reportEnrollPressed === "function") window.PMCCameraBridge.reportEnrollPressed(msg);
       else if (msg.type === "camera-settings-state") handleCameraSettingsState(msg);
