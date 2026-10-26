@@ -9837,3 +9837,97 @@ input[type="number"].big-number-input {
   color: var(--text);
   border: 2px solid var(--accent);
 }
+
+/* 🎬 Record this session (js/local-recorder.js) - on a device with no
+   local server: the camera's picture while it records, big Start and Cue
+   buttons, then the cues and the recordings kept on this device. */
+.lrec-stage video {
+  width: 100%;
+  max-height: 46vh;
+  background: #000;
+  border-radius: var(--radius);
+  display: block;
+  margin: 8px 0;
+}
+
+.lrec-big {
+  flex: 1;
+  min-height: 56px;
+  font-size: 1.2rem;
+  font-weight: 800;
+}
+
+#btn-lrec-start.lrec-on {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+.lrec-status {
+  text-align: center;
+  font-weight: 700;
+  color: var(--text-dim);
+  margin: 6px 0 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.lrec-status.lrec-live {
+  color: var(--danger);
+}
+
+.lrec-list {
+  list-style: none;
+  padding: 0;
+  margin: 6px 0 14px;
+}
+
+.lrec-list li {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  background: var(--bg-card);
+}
+
+.lrec-list li.lrec-empty {
+  color: var(--text-dim);
+  background: none;
+  border-style: dashed;
+}
+
+.lrec-name {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.lrec-meta {
+  color: var(--text-dim);
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+  margin: 2px 0 6px;
+}
+
+.lrec-actions {
+  gap: 6px;
+}
+
+.lrec-actions .btn.lrec-ready {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent, #1a0a0a);
+  font-weight: 800;
+}
+
+.lrec-actions .btn.lrec-sure {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+#lrec-player {
+  width: 100%;
+  max-height: 50vh;
+  background: #000;
+  border-radius: var(--radius);
+  margin: 6px 0;
+}

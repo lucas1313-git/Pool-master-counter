@@ -26221,7 +26221,17 @@
   }
   // "mark" / "finish" / "auto" (voice, Siri) -> { ok, text, speak } - never
   // said out loud (it would be in the recording)
+  // (a recording on this device - js/local-recorder.js, no local server - takes the cues itself)
+  function localRecording() { return !!(window.PMCLocalRecorder && window.PMCLocalRecorder.isRecording()); }
   function recorderCommand(kind) {
+    if (localRecording()) {
+      var L = window.PMCLocalRecorder;
+      if (kind === "auto") return { ok: false, text: T("recorder.autoNoCamera"), speak: "never" };
+      if (kind === "finish" && !L.cueOpen()) return { ok: false, text: T("voice.err.nothingMarked"), speak: "never" };
+      if (kind === "mark") L.mark("voice"); else L.finish("voice");
+      playRecorderTick(kind);
+      return { ok: true, text: T(kind === "mark" ? "voice.done.marked" : "voice.done.finished"), speak: "never" };
+    }
     if (!recorderChannel || !recorderFresh()) return { ok: false, text: T("voice.err.noRecorder"), speak: "never" };
     if ((kind === "mark" || kind === "auto") && !recorderStatus.recording) return { ok: false, text: T("voice.err.notRecording"), speak: "never" };
     if (kind === "auto") {
@@ -26274,8 +26284,15 @@
 
   // The score section's ⭐ Cue button and the "/" key: a cue when there's
   // none, its end when there is - while the recording page records.
-  function recorderCueReady() { return !!recorderChannel && recorderFresh() && recorderStatus.recording; }
+  function recorderCueReady() { return localRecording() || (!!recorderChannel && recorderFresh() && recorderStatus.recording); }
   function recorderToggleCue(source) {
+    if (localRecording()) {
+      var wasOpen = window.PMCLocalRecorder.cueOpen();
+      window.PMCLocalRecorder.toggleCue(source);
+      playRecorderTick(wasOpen ? "finish" : "mark");
+      if (!wasOpen) showToast(T("recorder.cueSet"), "⭐ ");
+      return true;
+    }
     if (!recorderChannel || !recorderFresh()) { showToast(T("voice.err.noRecorder"), "🎬 "); return false; }
     if (!recorderStatus.recording) { showToast(T("voice.err.notRecording"), "🎬 "); return false; }
     var kind = recorderStatus.cueOpen ? "finish" : "mark";
@@ -26292,11 +26309,16 @@
     var ready = recorderCueReady();
     recorderCueGroup.classList.toggle("hidden", !ready);
     if (!ready) return;
-    var open = recorderStatus.cueOpen, s = open && recorderStatus.cueSince ? Math.max(0, Math.round((Date.now() - recorderStatus.cueSince) / 1000)) : 0;
+    var local = localRecording(), L = window.PMCLocalRecorder;
+    var open = local ? L.cueOpen() : recorderStatus.cueOpen, since = local ? L.cueSince() : recorderStatus.cueSince;
+    var s = open && since ? Math.max(0, Math.round((Date.now() - since) / 1000)) : 0;
     btnRecorderCue.textContent = open ? T("recorder.endCue", { time: Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0") }) : T("recorder.cue");
     btnRecorderCue.classList.toggle("open", open);
     btnRecorderCue.title = T("recorder.cueHint");
     if (!btnRecorderAuto) return;
+    // (recording on this device: player recognition is off - no shots to find)
+    btnRecorderAuto.classList.toggle("hidden", local);
+    if (local) return;
     var a = recorderStatus.auto, now = Date.now();
     btnRecorderAuto.textContent = !a ? T("recorder.autoCue")
       : a === "shot" ? T("recorder.autoShot", { time: mmss(now - (recorderStatus.autoShotSince || now)) })
@@ -26309,7 +26331,11 @@
   if (btnRecorderCue) btnRecorderCue.addEventListener("click", function () { recorderToggleCue("scoreboard button"); });
   if (btnRecorderAuto) btnRecorderAuto.addEventListener("click", function () { recorderToggleAuto("scoreboard button"); });
   var btnOpenRecorder = document.getElementById("btn-open-recorder");
-  if (btnOpenRecorder) btnOpenRecorder.addEventListener("click", function () { window.open("record.html", "pmc-record"); });
+  // (no local server here: the recording happens in the app - 🎬 Record this session)
+  if (btnOpenRecorder) btnOpenRecorder.addEventListener("click", function () {
+    if (window.PMCLocalRecordPanel && window.PMCLocalRecordPanel.available()) { window.PMCLocalRecordPanel.open(); return; }
+    window.open("record.html", "pmc-record");
+  });
 
   // iPadOS 13+ reports navigator.platform as "MacIntel" like a real Mac,
   // so touch support is the only reliable way to tell an iPad apart from
@@ -30573,6 +30599,7 @@
         driveConn = s && typeof s.connected === "boolean" ? s : null;
         driveServerHere = !!driveConn;
         driveServerConnected = !!(driveConn && driveConn.connected);
+        renderLocalRecordPanel();
         if (browserDrive.clientId()) browserDrive.loadGis().catch(function () {});
         if (driveConn && driveConn.connected && driveConnectWatch) { clearInterval(driveConnectWatch); driveConnectWatch = null; }
         renderDriveConnect();
@@ -30643,6 +30670,34 @@
   });
   try { new BroadcastChannel("pmc-drive").onmessage = function () { refreshDriveConnect(); renderDriveBackupStatus(); }; } catch (e) {}
   onDriveStatusChange = renderDriveConnect;
+
+  // ---- 🎬 Record this session (js/local-recorder.js): the recording and
+  // its cues in the app itself - where no local server can (an iPad on the
+  // GitHub site), not on an iPhone. Player recognition (the same camera)
+  // pauses while it records, and comes back after.
+  var localRecordPanel = document.getElementById("local-record-panel");
+  var IS_IPHONE = /iPhone|iPod/.test(navigator.userAgent || "");
+  var localRecorderMounted = false;
+  function localRecordingAvailable() { return driveServerHere === false && !IS_IPHONE && !!window.PMCLocalRecorder && !!window.MediaRecorder && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia); }
+  function renderLocalRecordPanel() {
+    var on = localRecordingAvailable();
+    localRecordPanel.classList.toggle("hidden", !on);
+    if (!on || localRecorderMounted) return;
+    localRecorderMounted = true;
+    window.PMCLocalRecorder.mount(document.getElementById("local-record-panel-body"), {
+      t: function (k, v) { return T(k, v); },
+      toast: function (text, icon) { showToast(text, icon); },
+      context: function () { var c = recorderContext(); return { player: c.player, opponent: c.opponent, matchup: c.matchup, gameType: c.gameType, gameLabel: c.gameLabel, position: c.position }; },
+      pauseRecognition: function () { if (!sameDeviceCameraRunning) return false; stopSameDeviceCamera(); return true; },
+      resumeRecognition: function () { if (!state.cameraInputEnabled) return; openSameDeviceCameraOverlay(); minimizeSameDeviceCameraOverlay(); },
+      changed: function () { renderRecorderCueButton(); }
+    });
+  }
+  wireCollapsiblePanel("local-record-panel", "btn-toggle-local-record-panel");
+  window.PMCLocalRecordPanel = {
+    available: localRecordingAvailable,
+    open: function () { expandAndScrollToPanel("local-record-panel", "btn-toggle-local-record-panel"); }
+  };
   renderDriveConnect();
   renderLastBackup();
   refreshDriveConnect();

@@ -176,3 +176,14 @@ Not part of the app - helpers for testing and for running this machine's own cop
   target [x] rack — switches to 9-Ball in [y] games." (x, y their own colour, bigger; x keeps the
   rotation's target, y the games left, kept to Switch every).
   `node tests/probe_setup_layout.js http://localhost:4235/ [screenshot dir]`.
+- `test_mp4_clip.js` - js/mp4-clip.js in Node: an ffmpeg-made fragmented MP4 (like MediaRecorder's)
+  fed to the Indexer in random pieces, then cut at three stretches: each clip starts on the right key
+  frame, is as long as asked, decodes cleanly. `node tests/test_mp4_clip.js`.
+- `probe_local_recorder.js` - 🎬 Record this session (js/local-recorder.js), on a GitHub-like file
+  server (4247) with a fake camera and microphone: the panel only without a server and not on an
+  iPhone; the header's 🎬 Record opens it; recording (MP4), the score card's ⭐ Cue there (no 🎯 Auto
+  cue), "/" sets and ends a cue named as usual; kept on this device with its fragments indexed; ⬇ Save
+  clip = an ordinary MP4 about as long as the cue (ffprobe, decodes); the whole recording saved; on a
+  tablet Save prepares then "📤 Share it now" opens the share sheet from that tap; 🗑 asks first.
+  `node tests/probe_local_recorder.js [screenshot dir]`.
+

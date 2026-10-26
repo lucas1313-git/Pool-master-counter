@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261026d">
+<link rel="stylesheet" href="css/style.css?v=20261026e">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -207,6 +207,34 @@
         <span data-i18n="common.games">games</span>
       </div>
       <p id="rotation-status" class="rotation-status"></p>
+    </div>
+  </section>
+
+  <section class="panel collapsible-panel collapsed hidden" id="local-record-panel">
+    <button type="button" class="panel-toggle" id="btn-toggle-local-record-panel" aria-expanded="false" aria-controls="local-record-panel-body">
+      <h2 data-i18n="lrec.heading">🎬 Record this session</h2>
+      <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+    </button>
+    <p class="panel-summary" id="local-record-panel-summary"></p>
+    <div class="panel-body" id="local-record-panel-body">
+      <p class="player-stats-note" data-i18n="lrec.intro">Records with this device's camera; the video stays on this device until you save it. Right after a good shot press ⭐ Cue (or the / key, or say "mark"): the clip starts 20 s before. Player recognition pauses while it records.</p>
+      <div class="lrec-stage"><video id="lrec-preview" class="hidden" playsinline muted autoplay></video></div>
+      <div class="row lrec-settings">
+        <label for="lrec-camera" data-i18n="lrec.camera">Camera</label>
+        <select id="lrec-camera"></select>
+        <label class="checkbox-row"><input type="checkbox" id="lrec-sound" checked> <span data-i18n="lrec.sound">Record sound</span></label>
+      </div>
+      <div class="row lrec-controls">
+        <button type="button" id="btn-lrec-start" class="btn btn-primary lrec-big">● Start recording</button>
+        <button type="button" id="btn-lrec-cue" class="btn recorder-cue-btn lrec-big" disabled>⭐ Cue</button>
+      </div>
+      <p class="lrec-status" id="lrec-status" aria-live="polite"></p>
+      <h3 class="backup-subsection-title" data-i18n="lrec.cuesTitle">⭐ Cues</h3>
+      <ul class="lrec-list" id="lrec-cues"></ul>
+      <h3 class="backup-subsection-title" data-i18n="lrec.recordingsTitle">🎞️ Recordings on this device</h3>
+      <ul class="lrec-list" id="lrec-sessions"></ul>
+      <video id="lrec-player" class="hidden" controls playsinline></video>
+      <p class="player-stats-note" id="lrec-storage"></p>
     </div>
   </section>
 
@@ -2633,8 +2661,10 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20261026d"></script>
-<script src="js/camera-client.js?v=20261026d"></script>
-<script src="js/voice.js?v=20261026d"></script>
+<script src="js/mp4-clip.js?v=20261026e"></script>
+<script src="js/local-recorder.js?v=20261026e"></script>
+<script src="js/app.js?v=20261026e"></script>
+<script src="js/camera-client.js?v=20261026e"></script>
+<script src="js/voice.js?v=20261026e"></script>
 </body>
 </html>
