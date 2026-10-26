@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261026b">
+<link rel="stylesheet" href="css/style.css?v=20261026c">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -660,6 +660,7 @@
         <button type="button" id="btn-day-report-email" class="btn btn-ghost" data-i18n="dayNotes.emailReport">📧 Email Report</button>
         <button type="button" id="btn-day-report-sms" class="btn btn-ghost" data-i18n="dayNotes.textReport">📱 Text Report</button>
         <button type="button" id="btn-day-report-share-backup" class="btn btn-ghost" data-i18n="dayNotes.share">📤 Share Report</button>
+        <button type="button" id="btn-share" class="btn btn-ghost" data-i18n="gameSetup.shareStandings">Share Standings</button>
         <button type="button" id="btn-day-report-csv" class="btn btn-ghost" data-i18n="dayNotes.exportCsv">📊 Export as Excel (CSV)</button>
         <button type="button" id="btn-day-report-print" class="btn btn-ghost" data-i18n="dayNotes.printReport">🖨️ Print Report</button>
         <button type="button" id="btn-day-report-colorful" class="btn btn-ghost" data-i18n="dayNotes.colorfulReport">🎨 Colorful Report</button>
@@ -711,7 +712,7 @@
       <!-- 2. Restore: one button, then which backup and how -->
       <div class="backup-subsection bk-card" id="bk-restore">
         <h3 class="backup-subsection-title" data-i18n="bk.restoreTitle">⬇️ Restore</h3>
-        <p class="player-stats-note" data-i18n="bk.restoreIntro">Pick a backup file (on an iPhone or iPad you can look in iCloud Drive or Google Drive). Then you choose whether it's added to what's here, or replaces it.</p>
+        <p class="player-stats-note" data-i18n="bk.restoreIntro">Pick a backup file (on an iPhone or iPad you can look in iCloud Drive or Google Drive), or paste a link to one. Then you choose whether it's added to what's here, or replaces it.</p>
         <button type="button" id="btn-restore" class="btn btn-primary bk-big" data-i18n="bk.restoreButton">⬇️ Restore a backup…</button>
         <input type="file" id="import-file-input" accept="application/json" class="hidden">
         <input type="file" id="squash-import-file-input" accept="application/json" class="hidden">
@@ -731,9 +732,8 @@
 
       <!-- 4. Share results (not backups) -->
       <div class="backup-subsection" id="bk-share">
-        <h3 class="backup-subsection-title" data-i18n="bk.shareTitle">📤 Share results</h3>
+        <h3 class="backup-subsection-title" data-i18n="bk.shareTitle">📤 Share the last session</h3>
         <div class="row">
-          <button type="button" id="btn-share" class="btn btn-ghost" data-i18n="gameSetup.shareStandings">Share Standings</button>
           <button type="button" id="btn-export-session" class="btn btn-ghost" data-i18n="gameSetup.exportSession">Share Last Session</button>
           <button type="button" id="btn-export-session-help" class="format-info-btn" data-i18n-aria-label="backup.exportSessionHelpAria" aria-label="What does Share Last Session share?">❓</button>
         </div>
@@ -756,13 +756,6 @@
           </div>
           <p class="player-stats-note" data-i18n="bk.backupSharedNote">Several people keeping backups in one folder (iCloud Drive, Google Drive): your name goes in the file's name so nobody's backup is replaced.</p>
           <div class="player-stats-note" id="sync-status-line"></div>
-        </div>
-        <div class="bk-more-item">
-          <label class="bk-field-label" for="bk-web-link-input" data-i18n="bk.webLinkLabel">Restore from a web address (a direct link to a backup file):</label>
-          <div class="row">
-            <input type="text" id="bk-web-link-input" placeholder="https://…">
-            <button type="button" id="btn-bk-web-restore" class="btn btn-ghost" data-i18n="bk.webLinkButton">⬇️ Restore</button>
-          </div>
         </div>
         <div class="bk-more-item hidden" id="bk-drive-box">
           <h4 class="session-subsection-subheading" data-i18n="bk.driveTitle">☁️ Straight into a Google Drive folder</h4>
@@ -787,6 +780,7 @@
             <button type="button" id="btn-drive-save-client" class="btn btn-ghost" data-i18n="backup.driveSaveClient">💾 Save</button>
             <button type="button" id="btn-drive-connect-help" class="format-info-btn" data-i18n-aria-label="backup.driveConnectHelpAria" aria-label="How do I connect Google Drive?">❓</button>
           </div>
+
         </div>
       </details>
 
@@ -815,9 +809,18 @@
             <p class="bk-step-q" data-i18n="bk.whichBackup">Which backup?</p>
             <div class="bk-pick-buttons">
               <button type="button" id="btn-bk-pick-file" class="btn btn-ghost bk-pick"><span data-i18n="bk.pickFile">📄 A file on this device</span></button>
+              <button type="button" id="btn-bk-pick-link" class="btn btn-ghost bk-pick"><span data-i18n="bk.pickLink">🔗 From a link</span></button>
               <button type="button" id="btn-bk-pick-drive" class="btn btn-ghost bk-pick"><span data-i18n="bk.pickDrive">☁️ From Google Drive</span></button>
             </div>
-            <p class="player-stats-note" id="bk-drive-pick-note"></p>
+            <div class="bk-link-row hidden" id="bk-link-row">
+              <label class="bk-field-label" for="bk-link-input" data-i18n="bk.linkLabel">Paste the link of a backup file, or of a Google Drive folder:</label>
+              <div class="row">
+                <input type="url" id="bk-link-input" placeholder="https://…" autocomplete="off" spellcheck="false">
+                <button type="button" id="btn-bk-link-go" class="btn btn-primary" data-i18n="bk.linkGo">⬇️ Open</button>
+              </div>
+            </div>
+            <p class="player-stats-note" id="bk-drive-pick-note" aria-live="polite"></p>
+            <button type="button" id="btn-bk-link-open" class="btn btn-ghost hidden" data-i18n="bk.linkOpenButton">🔗 Open the link</button>
             <div id="bk-drive-list" class="bk-drive-list"></div>
           </div>
           <div id="bk-step-how" class="hidden">
@@ -1655,7 +1658,7 @@
       <h3 data-i18n="help.nav.main">Main Page</h3>
       <p data-i18n="help.main.intro">The main page is where every game gets played. Every panel here is collapsed by default with a one-line summary of what's inside — tap the chevron to expand it. The "🎨 Theme" dropdown at the very top switches the whole app's colors and font in one tap and remembers your choice — six dark palettes, two bright/light ones, and two high-contrast pairs (one dark, one light) for maximum legibility.</p>
       <ul>
-        <li data-i18n-html="help.main.backup"><strong>Backup &amp; Restore</strong> — <strong>💾 Back up now</strong> saves one file with everything: players, games, stats, ratings, saved lists and settings. On a phone or tablet you choose where it goes (Save to Files: iCloud Drive, Google Drive…); on a computer it goes to Downloads. <strong>⬇️ Restore a backup</strong> lets you pick a backup file, then asks how: <em>Add to what's here</em> (nothing here is lost) or <em>Replace what's here</em> (what's here is backed up first). Recover Data undoes a reset; Share results shares the standings or the last session. Naming a backup, a backup for a shared folder and restoring from a web address are under ⚙️ More options.</li>
+        <li data-i18n-html="help.main.backup"><strong>Backup &amp; Restore</strong> — <strong>💾 Back up now</strong> saves one file with everything: players, games, stats, ratings, saved lists and settings. On a phone or tablet you choose where it goes (Save to Files: iCloud Drive, Google Drive…); on a computer it goes to Downloads. <strong>⬇️ Restore a backup</strong> takes a backup file, or a link (to a backup file, or to a Google Drive folder of backups), then asks how: <em>Add to what's here</em> (nothing here is lost) or <em>Replace what's here</em> (what's here is backed up first). Recover Data undoes a reset; Share the last session sends that session to another device. Naming a backup and a backup for a shared folder are under ⚙️ More options. (Share Standings is in Publish Daily Report.)</li>
         <li data-i18n-html="help.main.gameOrder"><strong>Games Rotations</strong> — Turn on "Rotate game types automatically" to cycle through a sequence of game rules on their own. Each step in the order is its own rule — game type, target number, and unit (rack/balls/points) — so the same game type can appear twice with different rules (e.g. "8-Ball — 1 rack" then "8-Ball — 3 racks"). The target number and unit are editable right in the list — change either any time without removing and re-adding the step. "Switch every" controls how many games play before advancing. Load Rotation swaps in a saved sequence outright; any new sequence you build is auto-saved as a loadable entry the moment it's set up or played.</li>
         <li data-i18n-html="help.main.currentGame"><strong>Current Session</strong> — Tournament Setup: Load Setup applies a saved configuration in one tap; Tournament Type is either Race to Wins (set how many wins ends it) or Timed Tournament (set a duration instead); Games Rotation is either Rotate game types automatically or Single Game; Use Fargo rating to balance the race shortens the underdog's target based on the rating gap (❓ for the exact math). Current Game: the game type, the target number, and the unit (rack/balls/points — adjustable independently of the game type's usual default, e.g. One Pocket to "1 rack" instead of "8 balls"), plus the Shot Counter. Reset Current Game (clearing the live score without crediting a win) lives in the All Resets section below; Undo Last Win is the − button on a player's card once their game reaches its target.</li>
         <li data-i18n-html="help.main.players"><strong>Players</strong> — Add a player by name (auto-capitalized, checked live for a duplicate nickname — the Add button stays disabled until the name is unique). The optional "Starting rating" field lets you seed a brand-new player's rating from a number they've earned elsewhere (another league, another tournament) — it only takes effect for a name that's never been rated on this device before; it's ignored for anyone already tracked. Tap a player's Standby/Playing badge to move them in or out of the current game. The ✕ removes someone from today's roster only — career stats and rating stay on the device; no confirmation if no games have been played yet this session, since there's nothing to lose. Load Player List swaps in players from a saved list (adds anyone missing, never resets what's already there); Export/Import Player Lists use a separate, hand-editable JSON format just for lists.</li>
@@ -2647,8 +2650,8 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/app.js?v=20261026b"></script>
-<script src="js/camera-client.js?v=20261026b"></script>
-<script src="js/voice.js?v=20261026b"></script>
+<script src="js/app.js?v=20261026c"></script>
+<script src="js/camera-client.js?v=20261026c"></script>
+<script src="js/voice.js?v=20261026c"></script>
 </body>
 </html>

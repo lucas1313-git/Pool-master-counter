@@ -3,7 +3,8 @@
 // file and lets the device decide where it goes (a phone or tablet: the
 // share sheet - Save to Files: iCloud Drive, Google Drive...; a computer:
 // Downloads; on the Mac with a Google Drive folder: straight into it);
-// "⬇️ Restore a backup" opens the file picker, then asks how (add / replace).
+// "⬇️ Restore a backup" takes a file or a link, then asks how (add / replace).
+// Share Standings lives in Publish Daily Report; Share Last Session stays.
 // Google Drive extras only where they work.
 // Two places: the Mac (its server on 4241 - throwaway HOME, a fake Google
 // Drive for desktop folder) and the GitHub site (a plain file server on 4243,
@@ -14,10 +15,12 @@
 // "It goes to this computer's Downloads folder"; a tablet: the share sheet
 // ("You choose where it goes"), "saved where you chose", cancel said; the
 // Mac: the Drive folder part (no Connect without a sign-in, no "isn't set up"
-// scare), with the synced folder -> straight into it; Restore -> the file
-// picker at once -> summary -> Add (nothing lost) / Replace ("Are you
-// sure?", what's here backed up first); not a backup -> said, try again;
-// a web address -> "How should it come in?"; the dialog fits a phone.
+// scare), with the synced folder -> straight into it; Restore -> a file ->
+// summary -> Add (nothing lost) / Replace ("Are you sure?", what's here
+// backed up first); not a backup -> said, try again; From a link: a Drive
+// folder synced on the Mac -> its backups listed; on the GitHub site a web
+// address -> "How should it come in?", a Drive folder it can't open ->
+// said, with "Open the link"; no API key anywhere; the dialog fits a phone.
 // usage: node tests/probe_backup_simple.js [screenshot dir]
 const puppeteer = require("puppeteer-core");
 const http = require("http");
@@ -109,8 +112,10 @@ const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/cs
     return { title: panel.querySelector("h2").textContent, summary: document.getElementById("backup-panel-summary").textContent, moreOpen: document.getElementById("bk-more").open, visibleText,
       sections: [...panel.querySelectorAll(".backup-subsection > h3")].map((h) => h.textContent) };
   });
-  check("the panel: \"💾 Backup & Restore\", four jobs, More options folded", look.title === "💾 Backup & Restore" && JSON.stringify(look.sections) === JSON.stringify(["💾 Back up", "⬇️ Restore", "🗄️ Recover Data", "📤 Share results"]) && !look.moreOpen, look);
+  check("the panel: \"💾 Backup & Restore\", four jobs, More options folded", look.title === "💾 Backup & Restore" && JSON.stringify(look.sections) === JSON.stringify(["💾 Back up", "⬇️ Restore", "🗄️ Recover Data", "📤 Share the last session"]) && !look.moreOpen, look);
   check("...no API key, no client ID, no secret, no \"iCloud Sync\", nothing to connect in sight", !/API key|client ID|secret|iCloud Sync|Connect Google/i.test(look.visibleText), look.visibleText);
+  const shares = await page.evaluate(() => ({ standingsInReport: document.getElementById("day-notes-panel").contains(document.getElementById("btn-share")), sessionInBackup: document.getElementById("backup-panel").contains(document.getElementById("btn-export-session")), apiKeyField: !!document.getElementById("drive-api-key-input") }));
+  check("Share Standings is in Publish Daily Report; Share Last Session stays in Backup & Restore; no API key field anywhere", shares.standingsInReport && shares.sessionInBackup && !shares.apiKeyField, shares);
   await openMore(page);
   await sleep(200);
   const gh = { drive: await vis(page, "bk-drive-box"), setup: await vis(page, "drive-connect"), connect: await vis(page, "btn-drive-connect") };
@@ -164,14 +169,15 @@ const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/cs
   const players = () => page.evaluate(() => { try { return JSON.parse(localStorage.getItem("poolMasterCounter.state.v2")).players.map((p) => p.name).sort(); } catch (e) { return []; } });
   const closeModals = async () => { for (let i = 0; i < 10; i++) { const o = await page.evaluate(() => { const o = document.getElementById("confirm-modal-overlay"); if (o && !o.classList.contains("hidden")) { document.getElementById("btn-confirm-modal-ok").click(); return true; } return false; }); if (!o) break; await sleep(400); } };
   const restoreWith = async (file) => {
-    const [chooser] = await Promise.all([page.waitForFileChooser({ timeout: 5000 }), page.click("#btn-restore")]);
+    if (await page.evaluate(() => document.getElementById("bk-restore-overlay").classList.contains("hidden"))) { await page.click("#btn-restore"); await sleep(300); }
+    const [chooser] = await Promise.all([page.waitForFileChooser({ timeout: 5000 }), page.click("#btn-bk-pick-file")]);
     await chooser.accept([file]);
     await sleep(700);
   };
   await page.evaluate(() => { document.getElementById("bk-more").open = false; });
   await restoreWith(junkFile);
   const junk = await page.evaluate(() => ({ open: !document.getElementById("bk-restore-overlay").classList.contains("hidden"), how: !document.getElementById("bk-step-how").classList.contains("hidden"), note: document.getElementById("bk-drive-pick-note").textContent, again: !document.getElementById("btn-bk-pick-file").classList.contains("hidden"), drive: !document.getElementById("btn-bk-pick-drive").classList.contains("hidden") }));
-  check("Restore: the file picker straight away - a file that isn't a backup: said, \"A file on this device\" to try again, no Drive button (not signed in)", junk.open && !junk.how && /doesn't|isn't/.test(junk.note) && junk.again && !junk.drive, junk);
+  check("Restore: \"Which backup?\" - a file that isn't a backup: said, \"A file on this device\" to try again, no Drive button (not signed in)", junk.open && !junk.how && /doesn't|isn't/.test(junk.note) && junk.again && !junk.drive, junk);
   await page.click("#btn-bk-cancel"); await sleep(200);
   await restoreWith(backupFile);
   const how = await page.evaluate(() => ({ how: !document.getElementById("bk-step-how").classList.contains("hidden"), summary: document.getElementById("bk-backup-summary").textContent, add: document.getElementById("btn-bk-add").textContent, replace: document.getElementById("btn-bk-replace").textContent }));
@@ -193,14 +199,45 @@ const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/cs
   await sleep(800);
   check("Replace: \"Are you sure?\", then exactly the backup (Mario, Peach) - what was here backed up first, into the Drive folder", sure && JSON.stringify(ps) === JSON.stringify(["Mario", "Peach"]) && jsonFiles(BACKUPS).length === before + 1, { sure, ps, files: jsonFiles(BACKUPS) });
 
-  // a web address (More options): straight to "How should it come in?"
+  // From a link, on the Mac: a Google Drive folder this computer syncs - its backups listed, one read
   await closeModals();
-  await page.evaluate(() => { const b = document.getElementById("btn-toggle-backup-panel"); if (document.getElementById("backup-panel").classList.contains("collapsed")) b.click(); document.getElementById("bk-more").open = true; });
-  await page.evaluate((u) => { document.getElementById("bk-web-link-input").value = u; }, "http://localhost:" + WPORT + "/backup.json");
-  await page.click("#btn-bk-web-restore");
-  await sleep(800);
-  const webHow = await page.evaluate(() => ({ open: !document.getElementById("bk-restore-overlay").classList.contains("hidden"), how: !document.getElementById("bk-step-how").classList.contains("hidden"), summary: document.getElementById("bk-backup-summary").textContent }));
-  check("More options › Restore from a web address: read, then \"How should it come in?\"", webHow.open && webHow.how && /2 players/.test(webHow.summary), webHow);
+  await page.evaluate(() => { const b = document.getElementById("btn-toggle-backup-panel"); if (document.getElementById("backup-panel").classList.contains("collapsed")) b.click(); });
+  await sleep(300);
+  await page.click("#btn-restore"); await sleep(300);
+  await page.click("#btn-bk-pick-link"); await sleep(200);
+  await page.evaluate((l) => { document.getElementById("bk-link-input").value = l; }, LINK);
+  await page.click("#btn-bk-link-go");
+  let rows = [];
+  for (let i = 0; i < 30 && !rows.length; i++) { await sleep(250); rows = await page.evaluate(() => [...document.querySelectorAll("#bk-drive-list .bk-drive-row")].map((b) => b.textContent)); }
+  check("From a link, on the Mac: a Google Drive folder synced here - its backups listed (no sign-in, no key)", rows.length === jsonFiles(BACKUPS).length && rows.length >= 2 && rows.every((r) => /\.json/.test(r)), { rows, files: jsonFiles(BACKUPS) });
+  await page.evaluate(() => document.querySelector("#bk-drive-list .bk-drive-row").click());
+  for (let i = 0; i < 20; i++) { await sleep(250); if (await page.evaluate(() => !document.getElementById("bk-step-how").classList.contains("hidden"))) break; }
+  check("...one picked: \"How should it come in?\"", await page.evaluate(() => !document.getElementById("bk-step-how").classList.contains("hidden")));
+  await page.click("#btn-bk-cancel"); await sleep(200);
+
+  // From a link, on the GitHub site: a web address read straight; a Drive folder it can't open - said, with "Open the link"
+  const gp = await open(STATIC);
+  await gp.evaluate(() => { window.__opened = []; window.open = (u) => { window.__opened.push(u); return null; }; });
+  const linkTry = async (url) => {
+    await gp.evaluate(() => { if (document.getElementById("bk-restore-overlay").classList.contains("hidden")) document.getElementById("btn-restore").click(); document.getElementById("btn-bk-back").click(); });
+    await sleep(200);
+    await gp.evaluate((u) => { document.getElementById("btn-bk-pick-link").click(); document.getElementById("bk-link-input").value = u; document.getElementById("btn-bk-link-go").click(); }, url);
+    await sleep(1200);
+    return gp.evaluate(() => ({ how: !document.getElementById("bk-step-how").classList.contains("hidden"), summary: document.getElementById("bk-backup-summary").textContent, note: document.getElementById("bk-drive-pick-note").textContent, openLink: !document.getElementById("btn-bk-link-open").classList.contains("hidden") }));
+  };
+  let lt = await linkTry("http://localhost:" + WPORT + "/backup.json");
+  check("GitHub site, From a link: a web address - read, \"Backup from ... · 2 players\", then how", lt.how && /2 players/.test(lt.summary), lt);
+  lt = await linkTry(LINK);
+  await gp.evaluate(() => document.getElementById("btn-bk-link-open").click());
+  const opened = await gp.evaluate(() => window.__opened);
+  check("...a Google Drive folder it can't open by itself: said plainly, and \"🔗 Open the link\" opens it (download, then pick the file) - no dead end", !lt.how && /can't look inside that Google Drive folder/.test(lt.note) && lt.openLink && opened[0] === LINK, { lt, opened });
+  lt = await linkTry("https://drive.google.com/file/d/1AbCdEfGhIjKlMnOpQr/view?usp=sharing");
+  check("...a Google Drive file it can't read by itself: same - said, with \"Open the link\"", !lt.how && /can't read a Google Drive file/.test(lt.note) && lt.openLink, lt);
+  await gp.close();
+
+  // the dialog on a phone
+  await page.click("#btn-restore"); await sleep(300);
+  await page.click("#btn-bk-pick-link"); await sleep(200);
   await page.setViewport({ width: 390, height: 844 });
   await sleep(400);
   const fit = await page.evaluate(() => { const d = document.querySelector("#bk-restore-overlay .bk-dialog").getBoundingClientRect(); return { left: Math.round(d.left), right: Math.round(d.right), w: document.documentElement.scrollWidth }; });

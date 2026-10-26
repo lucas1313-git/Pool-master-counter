@@ -11,6 +11,9 @@
 // put on the clipboard as a file, ready to paste where it should go.
 //
 //   GET  /api/backup/drive?link=...           where a backup would go -> { folder, where, via } | { reason }
+//   GET  /api/backup/from-link?url=...       a backup from a link -> { kind: "file", text } |
+//                                            { kind: "folder", name, files: [{ id, name, modifiedTime }] }
+//   GET  /api/backup/from-link/file?url=...&id=...   one backup of that folder (its text)
 //   POST /api/backup/drive  { link, filename, content, copy }
 //        -> { saved: true, file, where, via: "api" | "desktop" }   (in the Drive folder)
 //        -> { saved: false, reason, file, kept, copied }    (kept in Documents; on the clipboard)
@@ -153,7 +156,93 @@ function copyFileToClipboard(file, cb) {
   childProcess.execFile("/usr/bin/osascript", ["-e", script], { timeout: 10000 }, function (err) { cb(!err); });
 }
 
+// ---- a backup from a link (Restore › From a link), fetched here - a
+// browser may not read another site's file (Google Drive's least of all):
+// a Google Drive file (signed in, or shared "anyone with the link"), a
+// Google Drive folder (signed in, or synced on this computer by Drive for
+// desktop - its backups listed), or any web address.
+var LINK_MAX = 100 * 1024 * 1024;
+function driveFileIdFromLink(link) {
+  var s = String(link || ""), m = s.match(/drive\.google\.com\/(?:file\/d|uc|open)(?:\/([A-Za-z0-9_-]{10,}))?(?:[^?#]*)?(?:\?[^#]*?\bid=([A-Za-z0-9_-]{10,}))?/);
+  if (m && (m[1] || m[2])) return m[1] || m[2];
+  m = s.match(/docs\.google\.com\/[^?#]*\/d\/([A-Za-z0-9_-]{10,})/);
+  return m ? m[1] : null;
+}
+// (only addresses out on the internet - never this computer's own network)
+function publicUrl(link) {
+  var u;
+  try { u = new URL(String(link || "").trim()); } catch (e) { return null; }
+  if (!/^https?:$/.test(u.protocol)) return null;
+  var h = u.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (h === "localhost" || /\.local$/.test(h) || /^(127\.|10\.|192\.168\.|169\.254\.|0\.)/.test(h) || /^172\.(1[6-9]|2\d|3[01])\./.test(h) || h === "::1" || /^f[cd]/.test(h) || /^fe80:/.test(h)) return null;
+  return u.href;
+}
+function fetchText(url) {
+  return fetch(url, { redirect: "follow", headers: { "User-Agent": "PoolMasterCounter" } }).then(function (r) {
+    if (!r.ok) throw new Error("the link answered " + r.status);
+    var len = Number(r.headers.get("content-length") || 0);
+    if (len > LINK_MAX) throw new Error("that file is too big for a backup");
+    return r.text();
+  });
+}
+function looksLikeBackup(text) { var t = String(text || "").trim(); return t.charAt(0) === "{"; }
+function localFolderFiles(dir) {
+  return fs.readdirSync(dir).filter(function (n) { return /\.json$/i.test(n); }).map(function (n) {
+    var st = fs.statSync(path.join(dir, n));
+    return { id: "local:" + n, name: n, modifiedTime: new Date(st.mtimeMs).toISOString() };
+  }).sort(function (a, b) { return a.modifiedTime < b.modifiedTime ? 1 : -1; }).slice(0, 100);
+}
+
 function attachBackupDriveRoutes(app) {
+  app.get("/api/backup/from-link", function (req, res) {
+    var link = String((req.query && req.query.url) || "").trim();
+    var folderId = /\/folders\//.test(link) ? folderIdFromLink(link) : null, fileId = folderId ? null : driveFileIdFromLink(link);
+    var fail = function (e, code) { sendJson(res, 200, { error: code || "unreadable", message: e && e.message ? e.message : String(e || "") }); };
+    if (folderId) {
+      var local = function () {
+        findFolder(folderId, function (dir) {
+          if (!dir) return fail(null, "folder-unreachable");
+          try { sendJson(res, 200, { kind: "folder", name: path.basename(dir), files: localFolderFiles(dir) }); } catch (e) { fail(e); }
+        });
+      };
+      if (!googleDrive.connected()) return local();
+      return Promise.all([googleDrive.folderInfo(folderId), googleDrive.listFolder(folderId)])
+        .then(function (r) { sendJson(res, 200, { kind: "folder", name: r[0].name, files: r[1] }); }, local);
+    }
+    if (fileId) {
+      var publicCopy = function () {
+        fetchText("https://drive.google.com/uc?export=download&id=" + encodeURIComponent(fileId)).then(function (text) {
+          if (!looksLikeBackup(text)) return fail(null, "drive-not-shared");
+          sendJson(res, 200, { kind: "file", text: text });
+        }, function () { fail(null, "drive-not-shared"); });
+      };
+      if (!googleDrive.connected()) return publicCopy();
+      return googleDrive.download(fileId).then(function (text) { sendJson(res, 200, { kind: "file", text: text }); }, publicCopy);
+    }
+    var url = publicUrl(link);
+    if (!url) return fail(null, "bad-link");
+    fetchText(url).then(function (text) {
+      if (!looksLikeBackup(text)) return fail(null, "not-a-backup");
+      sendJson(res, 200, { kind: "file", text: text });
+    }, function (e) { fail(e); });
+  });
+
+  app.get("/api/backup/from-link/file", function (req, res) {
+    var q = req.query || {}, folderId = folderIdFromLink(q.url), id = String(q.id || "");
+    var send = function (text) { res.statusCode = 200; res.setHeader("Content-Type", "application/json; charset=utf-8"); res.setHeader("Cache-Control", "no-store"); res.end(text); };
+    if (!folderId || !id) return sendJson(res, 400, { error: "bad request" });
+    if (id.indexOf("local:") === 0) {
+      var name = id.slice(6);
+      if (!/^[^\/\\]+\.json$/i.test(name)) return sendJson(res, 400, { error: "bad name" });
+      return findFolder(folderId, function (dir) {
+        if (!dir) return sendJson(res, 404, { error: "folder-unreachable" });
+        fs.readFile(path.join(dir, name), "utf8", function (err, text) { if (err) return sendJson(res, 404, { error: "not found" }); send(text); });
+      });
+    }
+    if (!googleDrive.connected() || !/^[A-Za-z0-9_-]{10,}$/.test(id)) return sendJson(res, 409, { error: "not signed in" });
+    googleDrive.download(id).then(send, function (e) { sendJson(res, 502, { error: e.message }); });
+  });
+
   app.get("/api/backup/drive", function (req, res) {
     var link = (req.query && req.query.link) || "";
     var id = folderIdFromLink(link);
@@ -203,4 +292,4 @@ function attachBackupDriveRoutes(app) {
   });
 }
 
-module.exports = { attachBackupDriveRoutes: attachBackupDriveRoutes, _folderIdFromLink: folderIdFromLink };
+module.exports = { attachBackupDriveRoutes: attachBackupDriveRoutes, _folderIdFromLink: folderIdFromLink, _driveFileIdFromLink: driveFileIdFromLink, _publicUrl: publicUrl };

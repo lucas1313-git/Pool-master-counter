@@ -9703,8 +9703,17 @@ body.network-guest-mode #header-group-start {
 
 .bk-pick-buttons {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 10px;
+}
+
+.bk-link-row {
+  margin-top: 10px;
+}
+
+.bk-link-row input {
+  flex: 1;
+  min-width: 0;
 }
 
 .bk-pick {
@@ -9755,8 +9764,4 @@ body.network-guest-mode #header-group-start {
   margin-top: 10px;
 }
 
-@media (max-width: 520px) {
-  .bk-pick-buttons {
-    grid-template-columns: 1fr;
-  }
-}
+
