@@ -76,7 +76,10 @@ const jsonFiles = (dir) => (fs.existsSync(dir) ? fs.readdirSync(dir).filter((n) 
   const status = () => page.evaluate(() => document.getElementById("drive-backup-status").textContent);
   const waitStatus = async (re) => { let s = ""; for (let i = 0; i < 40; i++) { s = await status(); if (re.test(s)) break; await sleep(250); } return s; };
   const modal = () => page.evaluate(() => { const o = document.getElementById("confirm-modal-overlay"); return o.classList.contains("hidden") ? null : document.getElementById("confirm-modal-message").textContent; });
+  // (the backup that asks for a name: ⚙️ More options › Back up with a different name… - it
+  // goes through every fallback; "Back up now" first asks for what's missing instead)
   const exportAll = async () => {
+    await page.evaluate(() => { document.getElementById("bk-more").open = true; });
     await page.click("#btn-export-all-data");
     await sleep(300);
     await page.click("#btn-confirm-modal-ok"); // (the file name: as offered)
@@ -85,7 +88,7 @@ const jsonFiles = (dir) => (fs.existsSync(dir) ? fs.readdirSync(dir).filter((n) 
 
   // where it is: the section, before Export
   const order = await page.evaluate(() => { const sec = document.getElementById("drive-backup-folder"), exp = document.getElementById("btn-export-all-data"); return !!sec && !!(sec.compareDocumentPosition(exp) & Node.DOCUMENT_POSITION_FOLLOWING) && sec.contains(document.getElementById("drive-folder-link-input")); });
-  check("☁️ Google Drive folder: its own section at the top of Backup & Transfer, the link in it", order);
+  check("the Drive folder link: in Back up, before everything else that backs up", order);
   check("no link yet: backups download as usual", /No folder yet/.test(await status()), await status());
 
   // 1. the folder synced here: saved straight into it

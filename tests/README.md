@@ -136,6 +136,14 @@ Not part of the app - helpers for testing and for running this machine's own cop
   (no client ID or token in it, the token for this tab only); an hour later the next backup asks
   Google again without consent and still uploads; Import lists and reads; Disconnect revokes.
   `node tests/probe_drive_browser.js`.
+- `probe_backup_simple.js` - the simpler Backup & Restore panel as a person uses it (its own server
+  on 4241, a fake Drive for desktop folder, a little web server on 4242): plain words (no API key /
+  client ID / "iCloud Sync" in sight, More options folded); Back up now to this device -> "Last
+  backup: ... on this device"; Google Drive with no sign-in set up -> says so, opens More options; no
+  folder -> asks for it; with the synced folder -> saved there, no "not set up" scare; Restore a file
+  -> summary -> Add (nothing lost) / Replace ("Are you sure?", what's here backed up first); not a
+  backup -> said; From Google Drive unconnected -> "Connect first"; a web address -> "How should it
+  come in?"; the dialog fits a phone. `node tests/probe_backup_simple.js [screenshot dir]`.
 - `probe_out_of_view.js` - out of view: a named player who walks out of the picture keeps a tag at
   the edge they left by (name, time, arrow), is kept past the 12 s a hidden player is looked for,
   and gets their path and name back coming in at that edge; hidden mid-picture as long: no name;
