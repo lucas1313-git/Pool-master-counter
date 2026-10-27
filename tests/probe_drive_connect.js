@@ -171,6 +171,8 @@ function lanIp() { for (const l of Object.values(os.networkInterfaces())) for (c
   u = await waitUi((x) => /upload straight into/.test(x.backup));
   check("the folder link: \"Backups upload straight into “Pool Backups” (Google Drive, signed in)\"", /Backups upload straight into “Pool Backups” \(Google Drive, signed in\)/.test(u.backup), u.backup);
   await page.click("#btn-backup-now");
+  await page.waitForSelector("#confirm-modal-overlay:not(.hidden)", { timeout: 3000 });
+  await page.click("#btn-confirm-modal-ok"); // (the name box: today's name, as offered)
   let up = null;
   for (let i = 0; i < 40 && !up; i++) { await sleep(250); up = google.files.find((f) => /all-data/.test(f.name)); }
   const upData = up ? JSON.parse(up.content) : null;

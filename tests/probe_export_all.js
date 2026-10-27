@@ -81,7 +81,7 @@ const localDate = (ms) => { const d = new Date(ms); return d.getFullYear() + "-"
   // export
   await page.evaluate(() => { const p = document.getElementById("backup-panel"); if (p && p.classList.contains("collapsed")) document.getElementById("btn-toggle-backup-panel").click(); });
   await sleep(300);
-  await page.evaluate(() => document.getElementById("btn-export-all-data").click());
+  await page.evaluate(() => document.getElementById("btn-backup-now").click());
   await sleep(400);
   await page.click("#btn-confirm-modal-ok");
   let rawExport = null;

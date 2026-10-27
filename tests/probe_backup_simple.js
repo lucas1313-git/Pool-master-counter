@@ -11,7 +11,8 @@
 // no server behind it); a little web server on 4242 hands out a backup.
 // Checks: plain words (no API key / client ID / "iCloud Sync" in sight);
 // GitHub-like: no Google Drive part, no sign-in setup, nothing to connect
-// (the owner's setup only with ?owner); a computer: Back up now -> Downloads,
+// (the owner's setup only with ?owner); Back up now asks for the name first
+// (today's offered, a typed one used); a computer: Back up now -> Downloads,
 // "It goes to this computer's Downloads folder"; a tablet: the share sheet
 // ("You choose where it goes"), "saved where you chose", cancel said; the
 // Mac: the Drive folder part (no Connect without a sign-in, no "isn't set up"
@@ -103,6 +104,15 @@ const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/cs
   const text = (page, id) => page.evaluate((id) => document.getElementById(id).textContent, id);
   const toast = (page) => page.evaluate(() => { const t = [...document.querySelectorAll("#page-toast, #win-toast")].find((x) => !x.classList.contains("hidden") && x.textContent.trim()); return t ? t.textContent : ""; });
   const openMore = (page) => page.evaluate(() => { document.getElementById("bk-more").open = true; });
+  // 💾 Back up now: the name box first (today's name offered) - OK, or a name of its own
+  const backupNow = async (page, name) => {
+    await page.click("#btn-backup-now");
+    let box = null;
+    for (let i = 0; i < 20 && !box; i++) { await sleep(100); box = await page.evaluate(() => { const o = document.getElementById("confirm-modal-overlay"); return o.classList.contains("hidden") ? null : { message: document.getElementById("confirm-modal-message").textContent, name: document.getElementById("confirm-modal-input").value, contacts: !document.getElementById("confirm-modal-obfuscate-row").classList.contains("hidden") }; }); }
+    if (box && name) await page.evaluate((n) => { document.getElementById("confirm-modal-input").value = n; }, name);
+    if (box) await page.click("#btn-confirm-modal-ok");
+    return box;
+  };
 
   // ---- the GitHub site (no server), a computer ----
   let page = await open(STATIC);
@@ -110,7 +120,7 @@ const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/cs
     const panel = document.getElementById("backup-panel");
     const visibleText = [...panel.querySelectorAll("h2, h3, h4, button, label, summary, p")].filter((e) => e.offsetParent !== null).map((e) => e.textContent.trim()).join(" | ");
     return { title: panel.querySelector("h2").textContent, summary: document.getElementById("backup-panel-summary").textContent, moreOpen: document.getElementById("bk-more").open, visibleText,
-      sections: [...panel.querySelectorAll(".backup-subsection > h3")].map((h) => h.textContent) };
+      sections: [...panel.querySelectorAll(".backup-subsection > h3, .backup-subsection > .bk-title-row > h3")].map((h) => h.textContent) };
   });
   check("the panel: \"💾 Backup & Restore\", four jobs, More options folded", look.title === "💾 Backup & Restore" && JSON.stringify(look.sections) === JSON.stringify(["💾 Back up", "⬇️ Restore", "🗄️ Recover Data", "📤 Share the last session"]) && !look.moreOpen, look);
   check("...no API key, no client ID, no secret, no \"iCloud Sync\", nothing to connect in sight", !/API key|client ID|secret|iCloud Sync|Connect Google/i.test(look.visibleText), look.visibleText);
@@ -123,10 +133,11 @@ const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/cs
   if (OUT) await (await page.$("#backup-panel")).screenshot({ path: OUT + "/backup_panel.png" });
   await page.evaluate(() => { document.getElementById("bk-more").open = false; });
   const whereDl = await text(page, "bk-where");
-  await page.click("#btn-backup-now");
+  const box = await backupNow(page);
   await sleep(500);
   const dls = await page.evaluate(() => window.__downloads);
-  check("a computer: \"It goes to this computer's Downloads folder.\" - Back up now: downloaded, said, no questions", /Downloads folder/.test(whereDl) && dls.length === 1 && /all-data/.test(dls[0]) && /Backup saved in Downloads/.test(await toast(page)), { whereDl, dls, t: await toast(page) });
+  check("Back up now asks for the file's name first: \"Name this backup file:\", today's name filled in, the leave-out-contacts box beside it", box && box.message === "Name this backup file:" && /^pool-master-counter-all-data-\d{4}-\d\d-\d\d.*\.json$/.test(box.name) && box.contacts, box);
+  check("a computer: \"It goes to this computer's Downloads folder.\" - OK: downloaded under that name, said", /Downloads folder/.test(whereDl) && dls.length === 1 && dls[0] === box.name && /Backup saved in Downloads/.test(await toast(page)), { whereDl, dls, t: await toast(page) });
   check("...\"Last backup: <when>, saved as a file on this device.\" (and on the closed panel)", /^Last backup: .+, saved as a file on this device\.$/.test(await text(page, "bk-last")) && (await text(page, "backup-panel-summary")) === (await text(page, "bk-last")));
   await page.close();
   page = await open(STATIC, { hash: "?owner" });
@@ -138,13 +149,13 @@ const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/cs
   // ---- the GitHub site on a tablet: the share sheet ----
   page = await open(STATIC, { tablet: true });
   const whereShare = await text(page, "bk-where");
-  await page.click("#btn-backup-now"); await sleep(400);
+  await backupNow(page, "Friday league"); await sleep(400);
   const shared = await page.evaluate(() => ({ shared: window.__shared, downloads: window.__downloads }));
-  check("a tablet: \"You choose where it goes: Save to Files (iCloud Drive, Google Drive…)...\" - Back up now opens the share sheet", /You choose where it goes: Save to Files/.test(whereShare) && shared.shared.length === 1 && /all-data/.test(shared.shared[0]) && shared.downloads.length === 0, { whereShare, shared });
+  check("a tablet: \"You choose where it goes: Save to Files (iCloud Drive, Google Drive…)...\" - Back up now, a name typed (\"Friday league\"), OK: the share sheet gets \"Friday league.json\"", /You choose where it goes: Save to Files/.test(whereShare) && shared.shared.length === 1 && shared.shared[0] === "Friday league.json" && shared.downloads.length === 0, { whereShare, shared });
   check("...the share sheet gets the file alone - no title riding along as a second item (\"Save as 2 Items\" in Files)", (await page.evaluate(() => window.__shareKeys)) === "files", await page.evaluate(() => window.__shareKeys));
   check("...done: \"Last backup: <when>, saved where you chose.\"", /saved where you chose/.test(await text(page, "bk-last")), await text(page, "bk-last"));
   await page.evaluate(() => { window.__shareAnswer = "cancel"; });
-  await page.click("#btn-backup-now"); await sleep(400);
+  await backupNow(page); await sleep(400);
   check("...the share sheet closed without saving: said plainly (\"Not saved - press Back up now again...\")", /Not saved - press Back up now again/.test(await toast(page)), await toast(page));
   if (OUT) { await page.setViewport({ width: 390, height: 844 }); await sleep(300); await (await page.$("#bk-backup")).screenshot({ path: OUT + "/backup_tablet.png" }); }
   await page.close();
@@ -159,7 +170,7 @@ const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/cs
   for (let i = 0; i < 20; i++) { if (/already syncs this folder/.test(await text(page, "drive-connect-status"))) break; await sleep(250); }
   const whereDrive = await text(page, "bk-where");
   check("...the folder (synced here): \"already syncs this folder\" - and Back up now: \"It goes straight into your Google Drive folder\"", /already syncs this folder/.test(await text(page, "drive-connect-status")) && /straight into your Google Drive folder/.test(whereDrive), { whereDrive });
-  await page.click("#btn-backup-now");
+  await backupNow(page);
   let saved = [];
   for (let i = 0; i < 30 && !saved.length; i++) { await sleep(250); saved = jsonFiles(BACKUPS); }
   await sleep(400);

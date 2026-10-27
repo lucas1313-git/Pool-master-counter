@@ -140,6 +140,8 @@ const fakeGoogle = http.createServer(async (req, res) => {
   check("the folder link: \"Backups upload straight into your Drive folder (signed in on this device)\"", /upload straight into your Drive folder \(signed in on this device\)/.test(u.backup), u.backup);
 
   await page.click("#btn-backup-now");
+  await page.waitForSelector("#confirm-modal-overlay:not(.hidden)", { timeout: 3000 });
+  await page.click("#btn-confirm-modal-ok"); // (the name box: today's name, as offered)
   let up = null;
   for (let i = 0; i < 40 && !up; i++) { await sleep(250); up = google.files.find((f) => /all-data/.test(f.name)); }
   const data = up ? JSON.parse(up.content) : null;
@@ -153,6 +155,8 @@ const fakeGoogle = http.createServer(async (req, res) => {
   await page.evaluate(() => { const k = "poolMasterCounter.driveBrowserToken.v1"; const t = JSON.parse(sessionStorage.getItem(k)); t.expiresAt = Date.now() - 1000; sessionStorage.setItem(k, JSON.stringify(t)); });
   const before = google.uploads;
   await page.click("#btn-backup-now");
+  await page.waitForSelector("#confirm-modal-overlay:not(.hidden)", { timeout: 3000 });
+  await page.click("#btn-confirm-modal-ok");
   for (let i = 0; i < 40 && google.uploads === before; i++) await sleep(250);
   const reqs = await page.evaluate(() => window.__gis.requests);
   check("an hour later: the next backup asks Google again (no consent screen this time) and still uploads", google.uploads === before + 1 && reqs.length === 2 && reqs[1].prompt === "" && reqs[1].hint === "ipad-tester@example.com", { uploads: google.uploads - before, reqs });

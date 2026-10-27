@@ -9931,3 +9931,10 @@ input[type="number"].big-number-input {
   border-radius: var(--radius);
   margin: 6px 0;
 }
+
+/* "💾 Back up" with its ❓ (what a backup includes) beside it */
+.bk-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

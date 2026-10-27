@@ -76,18 +76,15 @@ const jsonFiles = (dir) => (fs.existsSync(dir) ? fs.readdirSync(dir).filter((n) 
   const status = () => page.evaluate(() => document.getElementById("drive-backup-status").textContent);
   const waitStatus = async (re) => { let s = ""; for (let i = 0; i < 40; i++) { s = await status(); if (re.test(s)) break; await sleep(250); } return s; };
   const modal = () => page.evaluate(() => { const o = document.getElementById("confirm-modal-overlay"); return o.classList.contains("hidden") ? null : document.getElementById("confirm-modal-message").textContent; });
-  // (the backup that asks for a name: ⚙️ More options › Back up with a different name… - it
-  // goes through every fallback; "Back up now" first asks for what's missing instead)
+  // (💾 Back up now: the name box first, then through every fallback)
   const exportAll = async () => {
-    await page.evaluate(() => { document.getElementById("bk-more").open = true; });
-    await page.click("#btn-export-all-data");
+    await page.click("#btn-backup-now");
     await sleep(300);
     await page.click("#btn-confirm-modal-ok"); // (the file name: as offered)
   };
   const toast = () => page.evaluate(() => { const t = [...document.querySelectorAll("#page-toast, #win-toast")].find((x) => !x.classList.contains("hidden") && x.textContent.trim()); return t ? t.textContent : ""; });
 
-  // where it is: the section, before Export
-  const order = await page.evaluate(() => { const sec = document.getElementById("drive-backup-folder"), exp = document.getElementById("btn-export-all-data"); return !!sec && !!(sec.compareDocumentPosition(exp) & Node.DOCUMENT_POSITION_FOLLOWING) && sec.contains(document.getElementById("drive-folder-link-input")); });
+  // where it is: under More options
   check("the Drive folder link: under ⚙️ More options › Straight into a Google Drive folder (on the Mac)", await page.evaluate(() => document.getElementById("bk-more").contains(document.getElementById("drive-folder-link-input")) && !document.getElementById("bk-drive-box").classList.contains("hidden")));
   check("no link yet: backups download as usual", /No folder yet/.test(await status()), await status());
 

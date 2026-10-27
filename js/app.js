@@ -1878,7 +1878,6 @@
   // DOM refs
   // ---------------------------------------------------------------------
 
-  var btnExportAllData = document.getElementById("btn-export-all-data");
   var btnExportAllDataHelp = document.getElementById("btn-export-all-data-help");
   // (Backup & Restore no longer shows these - stand-ins keep their old wiring harmless)
   function optionalEl(id, tag) { return document.getElementById(id) || document.createElement(tag || "button"); }
@@ -30175,19 +30174,6 @@
       });
   }
 
-  btnExportAllData.addEventListener("click", function () {
-    promptModal(
-      T("backup.exportFilenamePrompt"),
-      defaultBackupFilename(),
-      function (name, obfuscate) {
-        exportAllData(name, obfuscate, null, true);
-      },
-      null,
-      null,
-      true
-    );
-  });
-
   btnImportAllData.addEventListener("click", function () {
     importFileInput.click();
   });
@@ -30608,9 +30594,21 @@
         return driveConn;
       });
   }
-  // 💾 Back up now: no questions - it goes where renderBackupWhere says
+  // 💾 Back up now: the file's name first (today's, ready to keep or change -
+  // and whether to leave out everyone's contact details), then it goes
+  // where renderBackupWhere says. (The OK is a tap of its own: the share
+  // sheet can open from it.)
   driveConnectEl.backupNow.addEventListener("click", function () {
-    exportAllData(null, false, null, true);
+    promptModal(
+      T("backup.exportFilenamePrompt"),
+      defaultBackupFilename(),
+      function (name, obfuscate) {
+        exportAllData(name, obfuscate, null, true);
+      },
+      null,
+      null,
+      true
+    );
   });
   driveConnectEl.save.addEventListener("click", function () {
     var id = driveConnectEl.clientId.value.trim(), secret = driveConnectEl.secret.value.trim();
