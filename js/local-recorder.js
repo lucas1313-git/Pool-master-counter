@@ -69,7 +69,8 @@
     if (touch && navigator.canShare && navigator.share) {
       try {
         if (navigator.canShare({ files: [file] })) {
-          return navigator.share({ files: [file], title: file.name }).then(function () { return "shared"; }, function (e) { if (e && e.name === "AbortError") return "cancelled"; download(file); return "downloaded"; });
+          // (the file alone: a title would be saved as a second, text item)
+          return navigator.share({ files: [file] }).then(function () { return "shared"; }, function (e) { if (e && e.name === "AbortError") return "cancelled"; download(file); return "downloaded"; });
         }
       } catch (e) {}
     }

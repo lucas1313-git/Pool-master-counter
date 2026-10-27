@@ -80,7 +80,7 @@ const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/cs
       if (tablet) {
         Object.defineProperty(navigator, "maxTouchPoints", { get: () => 5 });
         navigator.canShare = (d) => !!(d && d.files && d.files.length);
-        navigator.share = (d) => { window.__shared.push(d.files[0].name); return window.__shareAnswer === "cancel" ? Promise.reject(new DOMException("cancelled", "AbortError")) : Promise.resolve(); };
+        navigator.share = (d) => { window.__shared.push(d.files[0].name); window.__shareKeys = Object.keys(d).sort().join(","); return window.__shareAnswer === "cancel" ? Promise.reject(new DOMException("cancelled", "AbortError")) : Promise.resolve(); };
       }
     }, !!opts.tablet);
     await page.goto(base + "manifest.json");
@@ -141,6 +141,7 @@ const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/cs
   await page.click("#btn-backup-now"); await sleep(400);
   const shared = await page.evaluate(() => ({ shared: window.__shared, downloads: window.__downloads }));
   check("a tablet: \"You choose where it goes: Save to Files (iCloud Drive, Google Drive…)...\" - Back up now opens the share sheet", /You choose where it goes: Save to Files/.test(whereShare) && shared.shared.length === 1 && /all-data/.test(shared.shared[0]) && shared.downloads.length === 0, { whereShare, shared });
+  check("...the share sheet gets the file alone - no title riding along as a second item (\"Save as 2 Items\" in Files)", (await page.evaluate(() => window.__shareKeys)) === "files", await page.evaluate(() => window.__shareKeys));
   check("...done: \"Last backup: <when>, saved where you chose.\"", /saved where you chose/.test(await text(page, "bk-last")), await text(page, "bk-last"));
   await page.evaluate(() => { window.__shareAnswer = "cancel"; });
   await page.click("#btn-backup-now"); await sleep(400);

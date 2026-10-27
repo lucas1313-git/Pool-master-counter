@@ -9224,7 +9224,7 @@
       "try{blob=toBlobNow(renderReportPNG());}catch(e){return;}",
       'var file=new File([blob],filename,{type:"image/png"});',
       "if(navigator.canShare&&navigator.canShare({files:[file]})){",
-      'navigator.share({files:[file],title:document.title}).catch(function(err){',
+      'navigator.share({files:[file]}).catch(function(err){',
       'if(err&&err.name==="AbortError")return;',
       "fallbackDownload(blob);",
       "});",
@@ -16633,7 +16633,8 @@
   }
   function shareBackupFile(name, payload) {
     var file = new File([JSON.stringify(payload, null, 2)], name, { type: "application/json" });
-    navigator.share({ files: [file], title: name }).then(function () {
+    // (the file alone: a title rides along as a second, text item - "Save as 2 Items" in Files)
+    navigator.share({ files: [file] }).then(function () {
       noteBackup("shared", name);
       showToast(T("bk.sharedToast"), "💾 ");
     }, function (err) {
@@ -26749,7 +26750,7 @@
     }
     var file = new File([buildVCard(names)], "pool-master-counter-contacts.vcf", { type: "text/vcard" });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      navigator.share({ files: [file], title: T("contactSheet.exportAddressBook") }).catch(function (err) {
+      navigator.share({ files: [file] }).catch(function (err) {
         if (err && err.name === "AbortError") return;
         downloadFileObject(file);
       });

@@ -69,7 +69,7 @@ function makeY4m(file) {
         window.addEventListener("click", () => { window.__tap = false; }, false);
         Object.defineProperty(navigator, "maxTouchPoints", { get: () => 5 });
         navigator.canShare = (d) => !!(d && d.files && d.files.length);
-        navigator.share = (d) => { window.__shares.push({ duringTap: window.__tap, name: d.files[0].name, size: d.files[0].size }); return Promise.resolve(); };
+        navigator.share = (d) => { window.__shares.push({ duringTap: window.__tap, name: d.files[0].name, size: d.files[0].size, keys: Object.keys(d).sort().join(",") }); return Promise.resolve(); };
       }
     }, !!opts.tablet);
     await page.goto(BASE + "manifest.json");
@@ -160,7 +160,7 @@ function makeY4m(file) {
   await page.click(saveBtn);
   await sleep(500);
   const shares = await page.evaluate(() => window.__shares);
-  check("a tablet: ⬇ Save clip prepares it, then \"📤 Share it now\" - that tap opens the share sheet with the clip", /Share it now/.test(label) && before === 0 && shares.length === 1 && shares[0].duringTap && /\.mp4$/.test(shares[0].name) && shares[0].size > 10000, { label, shares });
+  check("a tablet: ⬇ Save clip prepares it, then \"📤 Share it now\" - that tap opens the share sheet with the clip", /Share it now/.test(label) && before === 0 && shares.length === 1 && shares[0].duringTap && /\.mp4$/.test(shares[0].name) && shares[0].size > 10000 && shares[0].keys === "files", { label, shares });
 
   // 🗑 asks first
   const bin = "#lrec-cues .lrec-del";
