@@ -179,6 +179,11 @@ Not part of the app - helpers for testing and for running this machine's own cop
   and "Replace") changes no key and says so; a backup carries the camera page's room plan, tags, map
   options and view, Quick Game's race and the Drive folder link. Fills the storage on purpose with a
   junk key. Its own file server on 4249. `node tests/probe_storage.js`.
+- `probe_scores.js` - every score is kept, and so is in every backup: a Straight Pool game to 10
+  keeps both players' points (10-7) and the race tally, in the players' game logs and the backup
+  file; the game that ends a race to 3 holds its final score (3-1); a finished 4-player single
+  elimination keeps its game, race, all 3 matches with scores, and the placings (the two semi-final
+  losers sharing 3rd). Its own file server on 4250. `node tests/probe_scores.js`.
 - `probe_out_of_view.js` - out of view: a named player who walks out of the picture keeps a tag at
   the edge they left by (name, time, arrow), is kept past the 12 s a hidden player is looked for,
   and gets their path and name back coming in at that edge; hidden mid-picture as long: no name;

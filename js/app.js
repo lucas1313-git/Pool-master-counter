@@ -6279,6 +6279,23 @@
     var target = effectiveRaceTarget(key);
     var mvpId = null;
     var mvpName = null;
+    // Every seated player's points (or racks) at the win - kept with the
+    // game, and so in every backup ("100-87", "3-2"), taken before Winner
+    // Stays or the next game clears them.
+    var finalScores = {};
+    activePlayers().forEach(function (p) {
+      finalScores[p.name] = p.balls || 0;
+    });
+    // Each seated player's wins in this session/race after this game (the
+    // game that ends a race holds its final score) - taken before Winner
+    // Stays seats someone else.
+    var raceTally = null;
+    function takeRaceTally() {
+      raceTally = {};
+      activePlayers().forEach(function (p) {
+        raceTally[p.name] = state.playerWins[p.id] || 0;
+      });
+    }
     if (isTeam) {
       var members = teamMembersLive(key);
       var otherTeamId = key === "A" ? "B" : "A";
@@ -6310,6 +6327,7 @@
         state.teamMvpWins[mvp.id] = (state.teamMvpWins[mvp.id] || 0) + 1;
       }
       summary = teamLabelLive(key) + " won " + typeLabel + " (target " + state.currentGame.target + ")";
+      takeRaceTally();
       if (isRacing() && target > 0 && newTeamWins % target === 0) {
         milestoneNames = winnerNames.join(" & ");
         milestoneCount = newTeamWins;
@@ -6337,6 +6355,8 @@
       } else if (isRacing() && target > 1 && newPlayerWins % target === target - 1) {
         onHillNames = getPlayer(key).name;
       }
+
+      takeRaceTally();
 
       // Captured now, before the queue-mode block below can zero the
       // loser's balls (and before resetGameBalls() does the same for
@@ -6485,6 +6505,8 @@
       summary: summary,
       wonRace: !!milestoneNames,
       raceTarget: target,
+      scores: finalScores,
+      raceTally: raceTally,
       skunk: skunk,
       raceCount: milestoneCount,
       ballsLeftOnTable: ballsLeftPrefill,
@@ -20829,6 +20851,8 @@
         isTeam: entry.isTeam,
         unit: entry.unit,
         teamRated: !!(entry.teamRated || entry.rotatingTeams),
+        scores: entry.scores || null,
+        raceTally: entry.raceTally || null,
         mvpName: entry.mvpName,
         durationMs: entry.durationMs,
         wonRace: entry.wonRace,
@@ -27454,6 +27478,47 @@
   // own tournamentGamesForPlayerName history below. entrantMembers itself
   // is also stored, so that function can tell a player's own teammates
   // apart from real opponents.
+  // Final placings, best first: [{ place: 1, names: [...] }, { place: 3,
+  // names: [both semi-final losers] }...] (entrant labels; a shared place
+  // keeps its first number). Elimination: who went out in a later round
+  // finished higher (the list runs winners rounds, losers rounds, then the
+  // final); round robin / Swiss: matches won.
+  function tournamentPlacings(t) {
+    var all = allBracketMatches(t).filter(function (m) {
+      return m.a && m.b && m.winner;
+    });
+    var score = {};
+    (t.players || []).forEach(function (p) {
+      score[p] = 0;
+    });
+    if (t.format === "roundrobin" || t.format === "swiss") {
+      all.forEach(function (m) {
+        score[m.winner] = (score[m.winner] || 0) + 1;
+      });
+    } else {
+      var roundOrder = {};
+      var rounds = 0;
+      all.forEach(function (m, i) {
+        var round = m.tag || "#" + i;
+        if (!(round in roundOrder)) roundOrder[round] = ++rounds;
+        if (m.loser) score[m.loser] = roundOrder[round];
+      });
+      (t.championNames || [t.champion]).forEach(function (c) {
+        if (c) score[c] = rounds + 1;
+      });
+    }
+    var names = Object.keys(score).sort(function (a, b) {
+      return score[b] - score[a];
+    });
+    var out = [];
+    names.forEach(function (n, i) {
+      var last = out[out.length - 1];
+      if (last && score[last.names[0]] === score[n]) last.names.push(n);
+      else out.push({ place: i + 1, names: [n] });
+    });
+    return out;
+  }
+
   function recordTournamentCompletion(t) {
     if (noStatsMode) return;
     var entrantMembers = t.entrantMembers || {};
@@ -27475,7 +27540,21 @@
       championNames: flattenEntrants(t.championNames || [t.champion]),
       format: t.format,
       players: flattenEntrants(t.players),
-      entrantMembers: entrantMembers
+      entrantMembers: entrantMembers,
+      // ...and the whole event, so a backup has every score: the game, the
+      // race, every match played (entrants, final score, winner) and the
+      // final placings.
+      gameType: t.gameType,
+      target: t.target,
+      raceTo: t.raceTo,
+      matches: allBracketMatches(t)
+        .filter(function (m) {
+          return m.a && m.b && m.winner;
+        })
+        .map(function (m) {
+          return { round: m.tag || null, a: m.a, b: m.b, scoreA: m.scoreA, scoreB: m.scoreB, winner: m.winner };
+        }),
+      placings: tournamentPlacings(t)
     });
     if (TOURNAMENT_RESULTS.length > 200) TOURNAMENT_RESULTS.length = 200;
     saveTournamentResultsToStorage(TOURNAMENT_RESULTS);
@@ -27671,23 +27750,28 @@
     return pendingWbMatches(t).concat(pendingLbMatches(t), pendingGfMatches(t));
   }
 
-  function findBracketMatchById(t, id) {
+  function allBracketMatches(t) {
     var all = [];
     if (t.format === "roundrobin") {
-      all = t.matches;
+      all = t.matches || [];
     } else if (t.format === "swiss") {
-      t.rounds.forEach(function (r) {
+      (t.rounds || []).forEach(function (r) {
         all = all.concat(r);
       });
     } else {
-      t.wb.forEach(function (r) {
+      (t.wb || []).forEach(function (r) {
         all = all.concat(r);
       });
-      t.lbRounds.forEach(function (r) {
+      (t.lbRounds || []).forEach(function (r) {
         all = all.concat(r);
       });
-      all = all.concat(t.grandFinal);
+      all = all.concat(t.grandFinal || []);
     }
+    return all;
+  }
+
+  function findBracketMatchById(t, id) {
+    var all = allBracketMatches(t);
     for (var i = 0; i < all.length; i++) {
       if (all[i].id === id) return all[i];
     }
@@ -29032,7 +29116,8 @@
     tournamentMatchWinOverlay.classList.remove("hidden");
   }
 
-  function recordTournamentRackWin(winnerLabel, loserLabel, durationMs) {
+  // scores / tally: the board's points at the win and the match score after it, by entrant.
+  function recordTournamentRackWin(winnerLabel, loserLabel, durationMs, scores, tally) {
     var entrantMembers = TOURNAMENT.entrantMembers || {};
     var winnerMembers = entrantMembers[winnerLabel] || [winnerLabel];
     var loserMembers = entrantMembers[loserLabel] || [loserLabel];
@@ -29051,7 +29136,9 @@
       mvpName: null,
       durationMs: durationMs,
       summary: winnerLabel + " won " + typeLabel + " (tournament vs " + loserLabel + ")",
-      teamRated: isTeam
+      teamRated: isTeam,
+      scores: scores || null,
+      raceTally: tally || null
     });
     trimGameHistory();
     var rackWeight = ratingWeightFor(TOURNAMENT.gameType, TOURNAMENT.target);
@@ -29971,7 +30058,12 @@
       active[winsKey] += 1;
       var startedMs = active.startedAt ? new Date(active.startedAt).getTime() : null;
       var durationMs = startedMs ? Math.max(0, Date.now() - startedMs) : null;
-      recordTournamentRackWin(name, otherName, durationMs);
+      var rackScores = {}, matchTally = {};
+      rackScores[match.a] = side === "a" ? next : active.aBalls || 0;
+      rackScores[match.b] = side === "b" ? next : active.bBalls || 0;
+      matchTally[match.a] = active.aWins;
+      matchTally[match.b] = active.bWins;
+      recordTournamentRackWin(name, otherName, durationMs, rackScores, matchTally);
       active.aBalls = 0;
       active.bBalls = 0;
       active.startedAt = new Date().toISOString();
