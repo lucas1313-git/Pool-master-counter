@@ -17,6 +17,20 @@ const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/cs
 let fails = 0;
 function check(label, ok, extra) { console.log((ok ? "PASS " : "FAIL ") + label + (extra !== undefined && !ok ? "  " + JSON.stringify(extra) : "")); if (!ok) fails++; }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// (game logs, report archive... live in IndexedDB - js/big-store.js - under the generation in use)
+const readBig = (page, name) => page.evaluate((name) => new Promise((resolve) => {
+  const gen = localStorage.getItem("poolMasterCounter.bigStoreGen.v1") || "0";
+  const req = indexedDB.open("pmc-big", 1);
+  req.onupgradeneeded = () => req.result.createObjectStore("kv");
+  req.onerror = () => resolve(null);
+  req.onsuccess = () => {
+    try {
+      const get = req.result.transaction("kv", "readonly").objectStore("kv").get(name + "@" + gen);
+      get.onsuccess = () => { resolve(get.result === undefined ? null : get.result); req.result.close(); };
+      get.onerror = () => resolve(null);
+    } catch (e) { resolve(null); }
+  };
+}), name);
 
 (async () => {
   const site = http.createServer((req, res) => {
@@ -59,7 +73,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     }
   });
   const live = () => page.evaluate(() => JSON.parse(localStorage.getItem("poolMasterCounter.state.v2")).gameHistory);
-  const stats = () => page.evaluate(() => JSON.parse(localStorage.getItem("poolMasterCounter.playerStats.v1") || "{}"));
+  const stats = async () => (await readBig(page, "playerStats")) || {};
 
   // ---- 1. Straight Pool to 10: both players' points ----
   await open({ gameType: "straight", target: 10, unit: "points", mode: "individual" }, ["Alex", "Sam"], 5);

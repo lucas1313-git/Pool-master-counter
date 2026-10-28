@@ -1633,5 +1633,6 @@
   "storage.group.session": "La sesión en curso",
   "storage.group.ratings": "Clasificaciones",
   "storage.group.other": "Todo lo demás",
-  "storage.files": "Grabaciones y otros archivos: {{used}} MB (caben unos {{room}} GB más)."
+  "storage.files": "La base de datos, las grabaciones y otros archivos: {{used}} MB (caben unos {{room}} GB más).",
+  "storage.inDatabase": "{{what}}, en la base de datos: {{mb}} MB"
 }

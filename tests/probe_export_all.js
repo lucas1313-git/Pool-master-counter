@@ -12,6 +12,20 @@ const DL = path.join(__dirname, "tmphome", "dl");
 let fails = 0;
 function check(label, ok, extra) { console.log((ok ? "PASS " : "FAIL ") + label + (extra !== undefined ? "  " + JSON.stringify(extra).slice(0, 400) : "")); if (!ok) fails++; }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// (game logs, report archive... live in IndexedDB - js/big-store.js - under the generation in use)
+const readBig = (page, name) => page.evaluate((name) => new Promise((resolve) => {
+  const gen = localStorage.getItem("poolMasterCounter.bigStoreGen.v1") || "0";
+  const req = indexedDB.open("pmc-big", 1);
+  req.onupgradeneeded = () => req.result.createObjectStore("kv");
+  req.onerror = () => resolve(null);
+  req.onsuccess = () => {
+    try {
+      const get = req.result.transaction("kv", "readonly").objectStore("kv").get(name + "@" + gen);
+      get.onsuccess = () => { resolve(get.result === undefined ? null : get.result); req.result.close(); };
+      get.onerror = () => resolve(null);
+    } catch (e) { resolve(null); }
+  };
+}), name);
 const DAY = 86400000;
 const localDate = (ms) => { const d = new Date(ms); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
 (async () => {
@@ -54,7 +68,7 @@ const localDate = (ms) => { const d = new Date(ms); return d.getFullYear() + "-"
     await sleep(500);
   };
   const ls = (k) => page.evaluate((k) => localStorage.getItem(k), k);
-  const archiveDates = () => page.evaluate(() => JSON.parse(localStorage.getItem("poolMasterCounter.reportArchive.v1") || "[]").map((e) => e.dateStr));
+  const archiveDates = async () => ((await readBig(page, "reportArchive")) || []).map((e) => e.dateStr);
   const now = Date.now(), d5 = new Date(now - 5 * DAY), d2 = new Date(now - 2 * DAY);
   d5.setHours(20, 0, 0, 0); d2.setHours(20, 0, 0, 0);
 

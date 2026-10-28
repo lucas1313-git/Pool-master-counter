@@ -23,6 +23,20 @@ const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/cs
 let fails = 0;
 function check(label, ok, extra) { console.log((ok ? "PASS " : "FAIL ") + label + (extra !== undefined && !ok ? "  " + JSON.stringify(extra) : "")); if (!ok) fails++; }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// (game logs, report archive... live in IndexedDB - js/big-store.js - under the generation in use)
+const readBig = (page, name) => page.evaluate((name) => new Promise((resolve) => {
+  const gen = localStorage.getItem("poolMasterCounter.bigStoreGen.v1") || "0";
+  const req = indexedDB.open("pmc-big", 1);
+  req.onupgradeneeded = () => req.result.createObjectStore("kv");
+  req.onerror = () => resolve(null);
+  req.onsuccess = () => {
+    try {
+      const get = req.result.transaction("kv", "readonly").objectStore("kv").get(name + "@" + gen);
+      get.onsuccess = () => { resolve(get.result === undefined ? null : get.result); req.result.close(); };
+      get.onerror = () => resolve(null);
+    } catch (e) { resolve(null); }
+  };
+}), name);
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "pmc-ratings-"));
 
 // Players' saved game logs for these games: [winner, loser, isoTs]
@@ -96,11 +110,12 @@ const ts = (dayOffset, minute) => new Date(Date.UTC(2026, 8, 1 + dayOffset, 18, 
   for (let i = 0; i < 30; i++) tableA.push([i % 6 ? "Bob" : "Carl", i % 6 ? "Carl" : "Bob", ts(i, 0)]);
   tableB.push(["Dan", "Bob", ts(10, 30)], ["Dan", "Bob", ts(20, 30)]); // (in between table A's games)
   const devB = await open({ [STATS]: statsFor(tableB) });
-  const backupB = await devB.evaluate(() => JSON.stringify({ exportedAt: new Date().toISOString(),
+  const statsB = await readBig(devB, "playerStats");
+  const backupB = await devB.evaluate((statsB) => JSON.stringify({ exportedAt: new Date().toISOString(),
     state: JSON.parse(localStorage.getItem("poolMasterCounter.state.v2")),
-    playerStats: JSON.parse(localStorage.getItem("poolMasterCounter.playerStats.v1")),
+    playerStats: statsB,
     ratings: JSON.parse(localStorage.getItem("poolMasterCounter.ratings.v1")),
-    ratedGames: JSON.parse(localStorage.getItem("poolMasterCounter.ratedGames.v1") || "null") }));
+    ratedGames: JSON.parse(localStorage.getItem("poolMasterCounter.ratedGames.v1") || "null") }), statsB);
   await devB.close();
   const file = path.join(TMP, "table-b.json");
   fs.writeFileSync(file, backupB);
@@ -166,7 +181,7 @@ const ts = (dayOffset, minute) => new Date(Date.UTC(2026, 8, 1 + dayOffset, 18, 
   const seeded = Object.assign({}, jose, jobo);
   seeded.Ana.sessions = seeded.Ana.sessions.concat(jobo.Ana.sessions);
   page = await open({ [STATS]: seeded, [RATINGS]: { [nfd]: { name: nfd, rating: 480, gamesPlayed: 3, history: [{ ts: ts(1, 0), rating: 410, delta: 10, fromGame: true }, { ts: ts(1, 5), rating: 470, delta: 60 }, { ts: ts(1, 10), rating: 480, delta: 10, fromGame: true }] } } }, [nfc, "Jo Bob", "Ana"]);
-  const keys = await page.evaluate(() => ({ stats: Object.keys(JSON.parse(localStorage.getItem("poolMasterCounter.playerStats.v1") || "{}")), ratings: Object.keys(JSON.parse(localStorage.getItem("poolMasterCounter.ratings.v1") || "{}")) }));
+  const keys = { stats: Object.keys((await readBig(page, "playerStats")) || {}), ratings: await page.evaluate(() => Object.keys(JSON.parse(localStorage.getItem("poolMasterCounter.ratings.v1") || "{}"))) };
   const joseKeys = (list) => list.filter((k) => k.normalize("NFC").toLowerCase() === nfc.toLowerCase());
   check("\"José\" from a Mac file (e + accent) and \"José\" on the roster: one player in the stats and in the ratings", joseKeys(keys.stats).length === 1 && joseKeys(keys.ratings).length === 1 && joseKeys(keys.stats)[0] === nfc, keys);
   check("...\"Jo  Bob\" (two spaces) and \"Jo Bob\": one player", keys.stats.filter((k) => /^jo\s+bob$/i.test(k)).length === 1 && keys.stats.indexOf("Jo Bob") !== -1, keys.stats);

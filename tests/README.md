@@ -175,10 +175,14 @@ Not part of the app - helpers for testing and for running this machine's own cop
   own file server on 4247. `node tests/probe_ratings.js`.
 - `probe_storage.js` - storage you can trust: with the storage full, the next score shows the red
   "NOT SAVED" bar (Back up now, See storage), gone again after the next save that works; Backup &
-  Restore's storage meter and "What's using it"; an import that doesn't fit ("Add to what's here"
-  and "Replace") changes no key and says so; a backup carries the camera page's room plan, tags, map
-  options and view, Quick Game's race and the Drive folder link. Fills the storage on purpose with a
-  junk key. Its own file server on 4249. `node tests/probe_storage.js`.
+  Restore's storage meter and "What's using it"; 1.5 MB of game logs comes in with little room left
+  (they go to IndexedDB - js/big-store.js), while an import that can't be written ("Add to what's
+  here" and "Replace") changes no key and no game log and says so; an older version's game logs move
+  into the database on the first start and are in the backup; a backup carries the camera page's
+  room plan, tags, map options and view, Quick Game's race and the Drive folder link. Fills the
+  storage on purpose with a junk key. Its own file server on 4249. `node tests/probe_storage.js`.
+  (Tests that read game logs or the report archive read them from IndexedDB - see readBig in
+  probe_pool_day.js and the others.)
 - `probe_scores.js` - every score is kept, and so is in every backup: a Straight Pool game to 10
   keeps both players' points (10-7) and the race tally, in the players' game logs and the backup
   file; the game that ends a race to 3 holds its final score (3-1); a finished 4-player single

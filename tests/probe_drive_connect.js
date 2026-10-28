@@ -193,8 +193,11 @@ function lanIp() { for (const l of Object.values(os.networkInterfaces())) for (c
   let mario = false;
   for (let i = 0; i < 30 && !mario; i++) {
     await sleep(300);
-    await page.evaluate(() => { const o = document.getElementById("confirm-modal-overlay"); if (o && !o.classList.contains("hidden")) document.getElementById("btn-confirm-modal-ok").click(); });
-    mario = await page.evaluate(() => { try { return JSON.parse(localStorage.getItem("poolMasterCounter.state.v2")).players.some((p) => p.name === "Mario"); } catch (e) { return false; } });
+    // (the import reloads the page - a read caught mid-reload just tries again)
+    try {
+      await page.evaluate(() => { const o = document.getElementById("confirm-modal-overlay"); if (o && !o.classList.contains("hidden")) document.getElementById("btn-confirm-modal-ok").click(); });
+      mario = await page.evaluate(() => { try { return JSON.parse(localStorage.getItem("poolMasterCounter.state.v2")).players.some((p) => p.name === "Mario"); } catch (e) { return false; } });
+    } catch (e) {}
   }
   check("...one picked, \"Add to what's here\": read through the sign-in and imported (Mario is here)", mario);
   check("the access token renewed from the refresh token along the way", google.calls.refresh >= 1, google.calls);

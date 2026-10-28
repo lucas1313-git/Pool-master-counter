@@ -843,6 +843,7 @@
 <script src="camera/dino.js"></script>
 <script src="camera/depth.js"></script>
 <script src="camera/segment.js"></script>
+<script src="js/big-store.js?v=20261028g"></script>
 <script>
 (function () {
   "use strict";
@@ -1902,15 +1903,37 @@
     entry.info = keep.map(function (i) { return info[i]; });
     return entry;
   }
-  function loadLocalEnrollments() {
-    try {
-      return JSON.parse(localStorage.getItem(LOCAL_ENROLLMENTS_KEY)) || {};
-    } catch (e) {
-      return {};
+  // This tablet's player samples live in the database (js/big-store.js -
+  // localStorage's ~5 MB filled up after a few regulars), this page keeping a
+  // copy; after each save a small key tells the scoreboard to read them again.
+  var LOCAL_ENROLLMENTS_REV_KEY = "pmc-camera-enrollments-rev";
+  var localEnrollmentsCache = null;
+  var localEnrollmentsReady = (function () {
+    if (!window.PMCBigStore) {
+      return Promise.resolve().then(function () {
+        try { localEnrollmentsCache = JSON.parse(localStorage.getItem(LOCAL_ENROLLMENTS_KEY)) || {}; } catch (e) { localEnrollmentsCache = {}; }
+      });
     }
+    PMCBigStore.register("cameraEnrollments", LOCAL_ENROLLMENTS_KEY);
+    return PMCBigStore.load("cameraEnrollments", {}).then(function (v) {
+      localEnrollmentsCache = v && typeof v === "object" ? v : {};
+    }, function () {
+      localEnrollmentsCache = {};
+    });
+  })();
+  function loadLocalEnrollments() {
+    return localEnrollmentsCache || {};
   }
   function saveLocalEnrollments(data) {
-    try { localStorage.setItem(LOCAL_ENROLLMENTS_KEY, JSON.stringify(data)); } catch (e) {}
+    localEnrollmentsCache = data;
+    var done = window.PMCBigStore ? PMCBigStore.set("cameraEnrollments", data) : Promise.resolve().then(function () { localStorage.setItem(LOCAL_ENROLLMENTS_KEY, JSON.stringify(data)); });
+    done.then(function () {
+      try { localStorage.setItem(LOCAL_ENROLLMENTS_REV_KEY, String(Date.now())); } catch (e) {}
+    }, function (e) {
+      console.warn("[PMC camera] couldn't save the player samples (storage full?):", e);
+      // (the scoreboard shows NOT SAVED)
+      try { window.parent.postMessage({ type: "storage-failed" }, location.origin); } catch (e2) {}
+    });
   }
   function applyEnrollAdd(store, msg) {
     var addKey = normalizeNameKey(msg.player_name);
@@ -1925,6 +1948,10 @@
     return true;
   }
   function handleLocalMessage(msg) {
+    if (!localEnrollmentsCache) {
+      localEnrollmentsReady.then(function () { handleLocalMessage(msg); });
+      return;
+    }
     var localEnrollments = loadLocalEnrollments();
     if (msg.type === "enroll-save" && msg.player_name) {
       var saveKey = normalizeNameKey(msg.player_name);
@@ -3167,6 +3194,18 @@
     };
     tick();
   }
+  // What's kept of the snapshot: at most 1280 wide at 0.8 - about a third
+  // of the full picture, and the room and cloth references are worked out at
+  // far smaller sizes (ROOM_W) anyway. The picture in use stays full size.
+  function storedEmptyRoomJpeg() {
+    var w = emptyRoomCanvas.width, h = emptyRoomCanvas.height;
+    if (w <= 1280) return emptyRoomCanvas.toDataURL("image/jpeg", 0.8);
+    var small = document.createElement("canvas");
+    small.width = 1280;
+    small.height = Math.round(h * 1280 / w);
+    small.getContext("2d").drawImage(emptyRoomCanvas, 0, 0, small.width, small.height);
+    return small.toDataURL("image/jpeg", 0.8);
+  }
   // source: the video, or (tests) any picture the video's size
   function captureEmptyRoom(source) {
     var vw = videoEl.videoWidth, vh = videoEl.videoHeight;
@@ -3175,7 +3214,7 @@
     emptyRoomCanvas.height = vh;
     try { emptyRoomCtx.drawImage(source, 0, 0, vw, vh); } catch (e) { return null; }
     var jpeg = null;
-    try { jpeg = emptyRoomCanvas.toDataURL("image/jpeg", 0.9); } catch (e) {}
+    try { jpeg = storedEmptyRoomJpeg(); } catch (e) {}
     emptyRoom = { at: Date.now(), videoW: vw, videoH: vh, saved: false, jpeg: jpeg };
     try {
       localStorage.setItem(EMPTY_ROOM_STORAGE_KEY, JSON.stringify({ at: emptyRoom.at, videoW: vw, videoH: vh, jpeg: jpeg }));

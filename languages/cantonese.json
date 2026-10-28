@@ -1633,5 +1633,6 @@
   "storage.group.session": "今晚嘅場次",
   "storage.group.ratings": "評分",
   "storage.group.other": "其他所有嘢",
-  "storage.files": "錄影同其他檔案：{{used}} MB（仲有大約 {{room}} GB 空間）。"
+  "storage.files": "資料庫、錄影同其他檔案：{{used}} MB（仲有大約 {{room}} GB 空間）。",
+  "storage.inDatabase": "{{what}}（喺資料庫）：{{mb}} MB"
 }

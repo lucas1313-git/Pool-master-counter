@@ -174,8 +174,11 @@ const fakeGoogle = http.createServer(async (req, res) => {
   let mario = false;
   for (let i = 0; i < 30 && !mario; i++) {
     await sleep(300);
-    await page.evaluate(() => { const o = document.getElementById("confirm-modal-overlay"); if (o && !o.classList.contains("hidden")) document.getElementById("btn-confirm-modal-ok").click(); });
-    mario = await page.evaluate(() => { try { return JSON.parse(localStorage.getItem("poolMasterCounter.state.v2")).players.some((p) => p.name === "Mario"); } catch (e) { return false; } });
+    // (the import reloads the page - a read caught mid-reload just tries again)
+    try {
+      await page.evaluate(() => { const o = document.getElementById("confirm-modal-overlay"); if (o && !o.classList.contains("hidden")) document.getElementById("btn-confirm-modal-ok").click(); });
+      mario = await page.evaluate(() => { try { return JSON.parse(localStorage.getItem("poolMasterCounter.state.v2")).players.some((p) => p.name === "Mario"); } catch (e) { return false; } });
+    } catch (e) {}
   }
   check("...one picked: read from Drive and imported (Mario is here)", mario);
 

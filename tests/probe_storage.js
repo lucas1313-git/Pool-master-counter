@@ -2,8 +2,11 @@
 // - storage full: the next score shows a big red "NOT SAVED" bar ("storage is full"), with Back up
 //   now and See storage; once there's room again the next save takes it away;
 // - Backup & Restore shows how full the storage is and what's using it;
-// - importing a backup that doesn't fit changes nothing ("Add to what's here" and "Replace"): every
-//   key is as it was, and the alert says so;
+// - a big backup (1.5 MB of game logs) now comes in with little room left - the game logs go to the
+//   database (js/big-store.js); one that can't be written changes nothing ("Add to what's here" and
+//   "Replace"): every key and the game logs are as they were, and the alert says so;
+// - updating from an older version: game logs still in the browser's storage move into the database
+//   on the first start (the old key cleared), survive a reload, and are in the backup;
 // - a backup carries everything but videos: the camera page's room plan / tags / map options / view,
 //   Quick Game's race, the Drive folder link.
 // Its own file server on 4249; storage is filled on purpose with a junk key.
@@ -20,6 +23,20 @@ const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/cs
 let fails = 0;
 function check(label, ok, extra) { console.log((ok ? "PASS " : "FAIL ") + label + (extra !== undefined && !ok ? "  " + JSON.stringify(extra) : "")); if (!ok) fails++; }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// (game logs, report archive... live in IndexedDB - js/big-store.js - under the generation in use)
+const readBig = (page, name) => page.evaluate((name) => new Promise((resolve) => {
+  const gen = localStorage.getItem("poolMasterCounter.bigStoreGen.v1") || "0";
+  const req = indexedDB.open("pmc-big", 1);
+  req.onupgradeneeded = () => req.result.createObjectStore("kv");
+  req.onerror = () => resolve(null);
+  req.onsuccess = () => {
+    try {
+      const get = req.result.transaction("kv", "readonly").objectStore("kv").get(name + "@" + gen);
+      get.onsuccess = () => { resolve(get.result === undefined ? null : get.result); req.result.close(); };
+      get.onerror = () => resolve(null);
+    } catch (e) { resolve(null); }
+  };
+}), name);
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "pmc-storage-"));
 
 (async () => {
@@ -111,7 +128,7 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "pmc-storage-"));
   check("...and the Drive folder link", backup.driveFolderLink === extras["poolMasterCounter.driveFolderLink.v1"], backup.driveFolderLink);
 
   // ---- 3. An import that doesn't fit changes nothing ----
-  // a backup with ~1.5 MB of game logs; here: Alex & Sam, a saved list, a note
+  // a backup with ~1.5 MB of game logs and 300 KB of notes; here: Alex & Sam, a saved list, a note
   const bigStats = {};
   for (let p = 0; p < 6; p++) {
     const games = [];
@@ -119,7 +136,7 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "pmc-storage-"));
     bigStats["P" + p] = { name: "P" + p, sessions: [{ date: "2026-06-01", wins: 350, gamesWon: [], opponents: ["Q" + p], games }] };
   }
   const bigFile = path.join(TMP, "big.json");
-  fs.writeFileSync(bigFile, JSON.stringify({ exportedAt: "2026-06-02T09:00:00.000Z", state: { players: [{ id: "x1", name: "Pat", playing: false, balls: 0 }], currentGame: { gameType: "8ball", target: 1, unit: "rack", mode: "individual" }, gameHistory: [] }, playerStats: bigStats, rosters: [{ id: "r1", label: "Big night", players: ["Pat"] }] }));
+  fs.writeFileSync(bigFile, JSON.stringify({ exportedAt: "2026-06-02T09:00:00.000Z", state: { players: [{ id: "x1", name: "Pat", playing: false, balls: 0 }], currentGame: { gameType: "8ball", target: 1, unit: "rack", mode: "individual" }, gameHistory: [] }, playerStats: bigStats, rosters: [{ id: "r1", label: "Big night", players: ["Pat"] }], dayNotes: { "2026-06-01": "n".repeat(300000) } })); // (notes stay in the browser's storage)
   const keysNow = () => page.evaluate(() => { const o = {}; for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k !== "zz-junk") o[k] = localStorage.getItem(k); } return o; });
   const tryImport = async (how) => {
     await page.evaluate(() => { const p = document.getElementById("backup-panel"); if (p.classList.contains("collapsed")) document.getElementById("btn-toggle-backup-panel").click(); });
@@ -139,20 +156,54 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "pmc-storage-"));
     }
     return page.evaluate(() => { const o = document.getElementById("confirm-modal-overlay"); return o && !o.classList.contains("hidden") ? document.getElementById("confirm-modal-message").textContent : ""; });
   };
+  // a) little room left: the game logs go to the database - it comes in
+  await fresh();
+  await addPlayers(["Alex", "Sam"]);
+  await winRack("Alex");
+  await fill(400000);
+  let said = await tryImport("add");
+  await page.evaluate(() => { const o = document.getElementById("confirm-modal-overlay"); if (o && !o.classList.contains("hidden")) document.getElementById("btn-confirm-modal-ok").click(); });
+  await sleep(2500);
+  let logs = (await readBig(page, "playerStats")) || {};
+  check("1.5 MB of game logs, little room left in the browser's storage: \"Add to what's here\" brings it in (the logs go to the database)", !/Nothing was changed/.test(said) && ["P0", "P5"].every((n) => logs[n] && logs[n].sessions[0].games.length === 700), { said, players: Object.keys(logs) });
+  await page.evaluate(() => localStorage.removeItem("zz-junk"));
+  // b) no room at all: nothing changes
   for (const how of ["add", "replace"]) {
     await fresh();
     await addPlayers(["Alex", "Sam"]);
     await winRack("Alex");
     await page.evaluate(() => { localStorage.setItem("poolMasterCounter.dayNotes.v1", JSON.stringify({ "2026-10-20": "keep me" })); localStorage.setItem("poolMasterCounter.rosters.v1", JSON.stringify([{ id: "mine", label: "Mine", players: ["Alex", "Sam"] }])); });
-    await fill(400000); // (room for the small keys, not for 1.5 MB of game logs)
+    await page.evaluate(() => document.getElementById("btn-reset-session-tournament").click());
+    await sleep(300);
+    await page.click("#btn-save-session-save"); // (Alex's game into his log, in the database)
+    await sleep(600);
+    const logsBefore = JSON.stringify((await readBig(page, "playerStats")) || {});
+    await fill(0);
     const before = await keysNow();
-    const said = await tryImport(how);
+    said = await tryImport(how);
     const after = await keysNow();
     const changed = Object.keys(Object.assign({}, before, after)).filter((k) => before[k] !== after[k] && !/lastBackup|leaderboard|pendingArchive|focusMode/.test(k));
-    check((how === "add" ? "Add to what's here" : "Replace what's here") + ", storage too full for the backup: \"Nothing was changed...\", and every key is as it was", /^Nothing was changed: this device's storage is full/.test(said) && changed.length === 0, { said, changed });
+    const logsAfter = JSON.stringify((await readBig(page, "playerStats")) || {});
+    check((how === "add" ? "Add to what's here" : "Replace what's here") + ", no room at all: \"Nothing was changed...\" - every key, and the game logs, as they were", /^Nothing was changed: this device's storage is full/.test(said) && changed.length === 0 && logsAfter === logsBefore && /Alex/.test(logsAfter), { said, changed, logsSame: logsAfter === logsBefore });
     await page.evaluate(() => { localStorage.removeItem("zz-junk"); const o = document.getElementById("confirm-modal-overlay"); if (o && !o.classList.contains("hidden")) document.getElementById("btn-confirm-modal-ok").click(); });
     await sleep(1500);
   }
+
+  // ---- 4. From an older version: the game logs move into the database ----
+  const oldLogs = { Old: { name: "Old", sessions: [{ date: "2026-05-01", wins: 1, gamesWon: ["8-Ball"], opponents: ["Timer"], games: [{ ts: "2026-05-01T20:00:00.000Z", gameType: "8ball", gameLabel: "8-Ball", target: 1, result: "won", winnerNames: ["Old"], opponentNames: ["Timer"], teammateNames: [], isTeam: false }] }] } };
+  await fresh({ "poolMasterCounter.playerStats.v1": JSON.stringify(oldLogs) });
+  await sleep(500);
+  const moved = { legacy: await page.evaluate(() => localStorage.getItem("poolMasterCounter.playerStats.v1")), db: await readBig(page, "playerStats") };
+  check("an older version's game logs move into the database on the first start (the old key cleared)", moved.legacy === null && moved.db && moved.db.Old && moved.db.Old.sessions[0].games.length === 1, moved);
+  await page.reload({ waitUntil: "networkidle2" });
+  await sleep(800);
+  await page.evaluate(() => { window.__lastExport = null; document.getElementById("btn-backup-now").click(); });
+  await sleep(300);
+  await page.click("#btn-confirm-modal-ok");
+  raw = null;
+  for (let i = 0; i < 30 && !raw; i++) { await sleep(200); raw = await page.evaluate(() => window.__lastExport); }
+  const again = raw ? JSON.parse(raw).playerStats : null;
+  check("...still there after a reload, and in the backup file", again && again.Old && again.Old.sessions[0].games.length === 1, again && Object.keys(again));
 
   check("no page errors", errors.length === 0, errors);
   await browser.close();

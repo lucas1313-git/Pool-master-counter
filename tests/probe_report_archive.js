@@ -9,6 +9,20 @@ const BASE = process.argv[2];
 let fails = 0;
 function check(label, ok, extra) { console.log((ok ? "PASS " : "FAIL ") + label + (extra !== undefined ? "  " + JSON.stringify(extra) : "")); if (!ok) fails++; }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// (game logs, report archive... live in IndexedDB - js/big-store.js - under the generation in use)
+const readBig = (page, name) => page.evaluate((name) => new Promise((resolve) => {
+  const gen = localStorage.getItem("poolMasterCounter.bigStoreGen.v1") || "0";
+  const req = indexedDB.open("pmc-big", 1);
+  req.onupgradeneeded = () => req.result.createObjectStore("kv");
+  req.onerror = () => resolve(null);
+  req.onsuccess = () => {
+    try {
+      const get = req.result.transaction("kv", "readonly").objectStore("kv").get(name + "@" + gen);
+      get.onsuccess = () => { resolve(get.result === undefined ? null : get.result); req.result.close(); };
+      get.onerror = () => resolve(null);
+    } catch (e) { resolve(null); }
+  };
+}), name);
 const DAY = 86400000;
 const localDate = (ms) => { const d = new Date(ms); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
 (async () => {
@@ -38,7 +52,7 @@ const localDate = (ms) => { const d = new Date(ms); return d.getFullYear() + "-"
     await page.evaluate(() => { for (let i = 0; i < 4; i++) { const b = [...document.querySelectorAll("button")].find((x) => x.offsetParent && /^(Next game|Continue|OK|Close|Got it|Start next game|Done)/i.test(x.textContent.trim()) && x.closest("[class*='overlay'],[class*='modal'],[role='dialog']")); if (b) b.click(); } });
     await sleep(500);
   };
-  const archive = () => page.evaluate(() => JSON.parse(localStorage.getItem("poolMasterCounter.reportArchive.v1") || "[]").map((e) => ({ date: e.dateStr, games: (e.games || []).reduce((n, g) => n + (/×(\d+)/.test(g.label) ? +/×(\d+)/.exec(g.label)[1] : 1), 0), notes: e.notes || null })));
+  const archive = async () => ((await readBig(page, "reportArchive")) || []).map((e) => ({ date: e.dateStr, games: (e.games || []).reduce((n, g) => n + (/×(\d+)/.test(g.label) ? +/×(\d+)/.exec(g.label)[1] : 1), 0), notes: e.notes || null }));
   const hide = () => page.evaluate(() => { Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true }); document.dispatchEvent(new Event("visibilitychange")); Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true }); });
 
   await page.goto(BASE + "manifest.json");

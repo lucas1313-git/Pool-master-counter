@@ -551,6 +551,75 @@
     scheduleIdleReportAutoSave();
   }
 
+  // The big stores - players' game logs, the report archive, Recover Data
+  // copies, the camera's player samples - live in IndexedDB (js/big-store.js),
+  // with this page's copy in memory (PLAYER_STATS, REPORT_ARCHIVE,
+  // RESET_SNAPSHOTS, CAMERA_ENROLLMENTS_CACHE), so a backup is still built at
+  // once, inside the tap. Loaded before boot(); until then nothing is saved.
+  var BIG_STORE_GEN_KEY = "poolMasterCounter.bigStoreGen.v1";
+  var bigStoresLoaded = false;
+  var bigSavePending = {};
+  function saveBigStore(name, value) {
+    if (!bigStoresLoaded) return;
+    if (!window.PMCBigStore) return;
+    var first = !(name in bigSavePending);
+    bigSavePending[name] = value;
+    if (!first) return;
+    // (several saves in one tap - one per player - become one write)
+    Promise.resolve().then(function () {
+      var v = bigSavePending[name];
+      delete bigSavePending[name];
+      PMCBigStore.set(name, v).then(null, function (e) {
+        noteSaveFailure(name, e);
+      });
+    });
+  }
+  function loadBigStores() {
+    if (!window.PMCBigStore) {
+      bigStoresLoaded = true;
+      return Promise.resolve();
+    }
+    PMCBigStore.register("playerStats", PLAYER_STATS_KEY);
+    PMCBigStore.register("reportArchive", REPORT_ARCHIVE_KEY);
+    PMCBigStore.register("resetSnapshots", RESET_SNAPSHOTS_KEY);
+    PMCBigStore.register("cameraEnrollments", CAMERA_ENROLLMENTS_KEY);
+    // (no generation in use - a new device, or its site data cleared: start a
+    // fresh one, so nothing left in the database from before comes back)
+    try {
+      if (!localStorage.getItem(BIG_STORE_GEN_KEY)) localStorage.setItem(BIG_STORE_GEN_KEY, PMCBigStore.newGen());
+    } catch (e) {}
+    return Promise.all([
+      PMCBigStore.load("playerStats", null),
+      PMCBigStore.load("reportArchive", null),
+      PMCBigStore.load("resetSnapshots", null),
+      PMCBigStore.load("cameraEnrollments", null)
+    ]).then(function (v) {
+      if (v[0] && typeof v[0] === "object") PLAYER_STATS = v[0];
+      if (Array.isArray(v[1])) REPORT_ARCHIVE = v[1];
+      if (Array.isArray(v[2])) RESET_SNAPSHOTS = v[2];
+      if (v[3] && typeof v[3] === "object") CAMERA_ENROLLMENTS_CACHE = v[3];
+      bigStoresLoaded = true;
+      var result = consolidateCaseVariantPlayerStats(PLAYER_STATS);
+      PLAYER_STATS = result.stats;
+      if (result.changed) savePlayerStatsToStorage(PLAYER_STATS);
+      PMCBigStore.prune().then(null, function () {});
+    }, function (e) {
+      bigStoresLoaded = true;
+      console.warn("Could not load the big stores.", e);
+    });
+  }
+  // An import's big values go into a new generation first (null: no
+  // database here - they go in the all-or-nothing localStorage write instead).
+  function bigImportGeneration() {
+    return window.PMCBigStore && PMCBigStore.available() ? PMCBigStore.newGen() : null;
+  }
+  function writeBigImport(gen, values) {
+    if (!gen) return Promise.resolve();
+    return Promise.all(Object.keys(values).map(function (name) {
+      return PMCBigStore.set(name, values[name], gen);
+    }));
+  }
+
   // Every save that fails ends up here: still logged, and now said on
   // screen - a big red "NOT SAVED" bar over the board (storage full is the
   // usual reason: camera samples, years of games), with a way to back up
@@ -13005,11 +13074,7 @@
 
   function savePlayerStatsToStorage(allStats) {
     if (noStatsMode) return;
-    try {
-      localStorage.setItem(PLAYER_STATS_KEY, JSON.stringify(allStats));
-    } catch (e) {
-      noteSaveFailure("player stats", e);
-    }
+    saveBigStore("playerStats", allStats);
   }
 
   function loadRatingsFromStorage() {
@@ -13067,14 +13132,29 @@
   // written to directly from this file outside of import/squash - during
   // normal play camera.html owns this key exclusively.
   var CAMERA_ENROLLMENTS_KEY = "pmc-camera-local-enrollments";
-  function loadCameraEnrollmentsFromStorage() {
+  // The camera page (same device) keeps its player samples in the database
+  // (js/big-store.js); this is this page's copy, loaded at start-up and again
+  // whenever the camera page says they changed (CAMERA_ENROLLMENTS_REV_KEY).
+  var CAMERA_ENROLLMENTS_REV_KEY = "pmc-camera-enrollments-rev";
+  var CAMERA_ENROLLMENTS_CACHE = (function () {
     try {
-      var raw = localStorage.getItem(CAMERA_ENROLLMENTS_KEY);
-      var parsed = raw ? JSON.parse(raw) : {};
+      var parsed = JSON.parse(localStorage.getItem(CAMERA_ENROLLMENTS_KEY) || "{}");
       return parsed && typeof parsed === "object" ? parsed : {};
     } catch (e) {
       return {};
     }
+  })();
+  function loadCameraEnrollmentsFromStorage() {
+    return CAMERA_ENROLLMENTS_CACHE;
+  }
+  function refreshCameraEnrollments() {
+    if (!window.PMCBigStore || !bigStoresLoaded) return Promise.resolve(CAMERA_ENROLLMENTS_CACHE);
+    return PMCBigStore.load("cameraEnrollments", null).then(function (v) {
+      CAMERA_ENROLLMENTS_CACHE = v && typeof v === "object" ? v : {};
+      return CAMERA_ENROLLMENTS_CACHE;
+    }, function () {
+      return CAMERA_ENROLLMENTS_CACHE;
+    });
   }
   // True only when at least one real sample was actually captured -
   // camera.html can leave a stub entry with an empty descriptors array in
@@ -13285,11 +13365,7 @@
 
   function saveResetSnapshotsToStorage(snapshots) {
     if (noStatsMode) return;
-    try {
-      localStorage.setItem(RESET_SNAPSHOTS_KEY, JSON.stringify(snapshots));
-    } catch (e) {
-      noteSaveFailure("reset snapshots", e);
-    }
+    saveBigStore("resetSnapshots", snapshots);
   }
 
   // Capped local archive of every colorful report ever generated, one
@@ -13316,11 +13392,7 @@
 
   function saveReportArchiveToStorage(entries) {
     if (noStatsMode) return;
-    try {
-      localStorage.setItem(REPORT_ARCHIVE_KEY, JSON.stringify(entries));
-    } catch (e) {
-      noteSaveFailure("report archive", e);
-    }
+    saveBigStore("reportArchive", entries);
   }
 
   var REPORT_ARCHIVE = loadReportArchiveFromStorage();
@@ -16836,7 +16908,7 @@
       PLAYER_NAME_TRANSLATIONS_KEY, CAMERA_ENROLLMENTS_KEY, REMOVED_PLAYERS_KEY, GRAVEYARD_PLAYERS_KEY, MERGED_INTO_KEY,
       RESET_SNAPSHOTS_KEY, REPORT_ARCHIVE_KEY, REPORT_ARCHIVE_DELETED_KEY, PLAYER_DAILY_BEST_RUNS_KEY, CHALLONGE_DAY_PUSHES_KEY,
       CHALLONGE_RACE_PUSHES_KEY, TOURNAMENT_KEY, TOURNAMENT_RESULTS_KEY, LEAGUES_KEY, LAST_SYNC_IMPORT_KEY,
-      LAST_SYNC_IMPORT_NAME_KEY, DRIVE_FOLDER_LINK_KEY].concat(deviceSettingKeys());
+      LAST_SYNC_IMPORT_NAME_KEY, DRIVE_FOLDER_LINK_KEY, BIG_STORE_GEN_KEY].concat(deviceSettingKeys());
   }
 
   // (everything but videos goes in a backup: the camera page's room plan,
@@ -17040,6 +17112,19 @@
         li.textContent = T("storage.group." + g) + ": " + formatMegabytes(use.groups[g]) + " MB";
         list.appendChild(li);
       });
+    // (and what's in the database - see js/big-store.js)
+    if (bigStoresLoaded && window.PMCBigStore && PMCBigStore.available()) {
+      [["games", PLAYER_STATS], ["camera", CAMERA_ENROLLMENTS_CACHE], ["reports", REPORT_ARCHIVE], ["recover", RESET_SNAPSHOTS]].forEach(function (pair) {
+        var bytes = 0;
+        try {
+          bytes = JSON.stringify(pair[1] || {}).length * 2;
+        } catch (e) {}
+        if (bytes < 10 * 1024) return;
+        var li = document.createElement("li");
+        li.textContent = T("storage.inDatabase", { what: T("storage.group." + pair[0]), mb: formatMegabytes(bytes) });
+        list.appendChild(li);
+      });
+    }
     var files = document.getElementById("bk-storage-files");
     files.textContent = "";
     if (navigator.storage && navigator.storage.estimate) {
@@ -18356,85 +18441,96 @@
               if (p && p.name) p.name = capitalizeName(p.name);
             });
 
-            // (all of it or none of it - see withStorageRollback; the state
-            // too, rewritten in finishImport if players come back below)
-            var imported = withStorageRollback(importStorageKeys(), function () {
-              localStorage.setItem(ROSTERS_KEY, JSON.stringify(rosterMerge.rosters));
-              localStorage.setItem(TEAMS_KEY, JSON.stringify(teamMerge.teams));
-              localStorage.setItem(PLAYER_STATS_KEY, JSON.stringify(mergedPlayerStats));
-              localStorage.setItem(RATINGS_KEY, JSON.stringify(mergedRatings));
-              // (two devices' ratings are each a path through their own games -
-              // the true rating comes from all the games together, in order)
-              localStorage.setItem(RATINGS_RECOMPUTE_KEY, "1");
-              localStorage.setItem(CONTACTS_KEY, JSON.stringify(mergedContacts));
-              localStorage.setItem(PLAYER_ADDED_KEY, JSON.stringify(mergedPlayerAdded));
-              localStorage.setItem(RUN_RECORDS_KEY, JSON.stringify(mergedRunRecords));
-              localStorage.setItem(PLAYER_BEST_RUNS_KEY, JSON.stringify(mergedPlayerBestRuns));
-              localStorage.setItem(DAY_NOTES_KEY, JSON.stringify(mergedDayNotes));
-              localStorage.setItem(ROTATIONS_KEY, JSON.stringify(mergedRotations));
-              localStorage.setItem(GAME_SETUPS_KEY, JSON.stringify(mergedGameSetups));
-              localStorage.setItem(PLAYER_NAME_TRANSLATIONS_KEY, JSON.stringify(mergedPlayerNameTranslations));
-              localStorage.setItem(CAMERA_ENROLLMENTS_KEY, JSON.stringify(mergedCameraEnrollments));
-              localStorage.setItem(REMOVED_PLAYERS_KEY, JSON.stringify(mergedRemovedPlayers));
-              localStorage.setItem(GRAVEYARD_PLAYERS_KEY, JSON.stringify(mergedGraveyardPlayers));
-              localStorage.setItem(RESET_SNAPSHOTS_KEY, JSON.stringify(mergedResetSnapshots));
-              localStorage.setItem(REPORT_ARCHIVE_KEY, JSON.stringify(mergedReportArchive));
-              saveDeletedArchiveDates(mergedDeletedDates);
-              savePlayerDailyBestRunsToStorage(mergedPlayerDailyBestRuns);
-              saveChallongeDayPushes(mergedChallongeDayPushes);
-              saveChallongeRacePushes(mergedChallongeRacePushes);
-              if (mergedTournament) localStorage.setItem(TOURNAMENT_KEY, JSON.stringify(mergedTournament));
-              localStorage.setItem(TOURNAMENT_RESULTS_KEY, JSON.stringify(mergedTournamentResults));
-              localStorage.setItem(LEAGUES_KEY, JSON.stringify(leagueMerge));
-              localStorage.setItem(MERGED_INTO_KEY, JSON.stringify(PLAYER_MERGED_INTO));
-              localStorage.setItem(STORAGE_KEY, JSON.stringify(finalState));
-              // A device with no players yet is adopting this backup as its
-              // own setup: its settings come with it (see collectDeviceSettings).
-              if (localIsFresh) applyDeviceSettings(data.settings);
-            });
-            if (!imported) {
-              alertModal(T("alert.importNotSaved"));
-              return;
-            }
+            // The big values (game logs, report archive, Recover Data copies,
+            // camera samples) go into the database first, as a new generation
+            // nothing uses yet - see js/big-store.js.
+            var bigGen = bigImportGeneration();
+            writeBigImport(bigGen, { playerStats: mergedPlayerStats, reportArchive: mergedReportArchive, resetSnapshots: mergedResetSnapshots, cameraEnrollments: mergedCameraEnrollments }).then(function () {
+              // (all of it or none of it - see withStorageRollback; the state
+              // too, rewritten in finishImport if players come back below)
+              var imported = withStorageRollback(importStorageKeys(), function () {
+                localStorage.setItem(ROSTERS_KEY, JSON.stringify(rosterMerge.rosters));
+                localStorage.setItem(TEAMS_KEY, JSON.stringify(teamMerge.teams));
+                if (!bigGen) localStorage.setItem(PLAYER_STATS_KEY, JSON.stringify(mergedPlayerStats));
+                localStorage.setItem(RATINGS_KEY, JSON.stringify(mergedRatings));
+                // (two devices' ratings are each a path through their own games -
+                // the true rating comes from all the games together, in order)
+                localStorage.setItem(RATINGS_RECOMPUTE_KEY, "1");
+                localStorage.setItem(CONTACTS_KEY, JSON.stringify(mergedContacts));
+                localStorage.setItem(PLAYER_ADDED_KEY, JSON.stringify(mergedPlayerAdded));
+                localStorage.setItem(RUN_RECORDS_KEY, JSON.stringify(mergedRunRecords));
+                localStorage.setItem(PLAYER_BEST_RUNS_KEY, JSON.stringify(mergedPlayerBestRuns));
+                localStorage.setItem(DAY_NOTES_KEY, JSON.stringify(mergedDayNotes));
+                localStorage.setItem(ROTATIONS_KEY, JSON.stringify(mergedRotations));
+                localStorage.setItem(GAME_SETUPS_KEY, JSON.stringify(mergedGameSetups));
+                localStorage.setItem(PLAYER_NAME_TRANSLATIONS_KEY, JSON.stringify(mergedPlayerNameTranslations));
+                if (!bigGen) localStorage.setItem(CAMERA_ENROLLMENTS_KEY, JSON.stringify(mergedCameraEnrollments));
+                localStorage.setItem(REMOVED_PLAYERS_KEY, JSON.stringify(mergedRemovedPlayers));
+                localStorage.setItem(GRAVEYARD_PLAYERS_KEY, JSON.stringify(mergedGraveyardPlayers));
+                if (!bigGen) localStorage.setItem(RESET_SNAPSHOTS_KEY, JSON.stringify(mergedResetSnapshots));
+                if (!bigGen) localStorage.setItem(REPORT_ARCHIVE_KEY, JSON.stringify(mergedReportArchive));
+                saveDeletedArchiveDates(mergedDeletedDates);
+                savePlayerDailyBestRunsToStorage(mergedPlayerDailyBestRuns);
+                saveChallongeDayPushes(mergedChallongeDayPushes);
+                saveChallongeRacePushes(mergedChallongeRacePushes);
+                if (mergedTournament) localStorage.setItem(TOURNAMENT_KEY, JSON.stringify(mergedTournament));
+                localStorage.setItem(TOURNAMENT_RESULTS_KEY, JSON.stringify(mergedTournamentResults));
+                localStorage.setItem(LEAGUES_KEY, JSON.stringify(leagueMerge));
+                localStorage.setItem(MERGED_INTO_KEY, JSON.stringify(PLAYER_MERGED_INTO));
+                // (the big values went into the database first, under bigGen - switching to them is part of this write)
+                if (bigGen) localStorage.setItem(BIG_STORE_GEN_KEY, bigGen);
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(finalState));
+                // A device with no players yet is adopting this backup as its
+                // own setup: its settings come with it (see collectDeviceSettings).
+                if (localIsFresh) applyDeviceSettings(data.settings);
+              });
+              if (!imported) {
+                alertModal(T("alert.importNotSaved"));
+                return;
+              }
 
-            function finishImport() {
-              if (data.exportedAt) {
-                try {
-                  localStorage.setItem(LAST_SYNC_IMPORT_KEY, data.exportedAt);
-                  if (data.exportedBy) localStorage.setItem(LAST_SYNC_IMPORT_NAME_KEY, data.exportedBy);
-                } catch (e) {
-                  noteSaveFailure("last-sync-import timestamp", e);
+              function finishImport() {
+                if (data.exportedAt) {
+                  try {
+                    localStorage.setItem(LAST_SYNC_IMPORT_KEY, data.exportedAt);
+                    if (data.exportedBy) localStorage.setItem(LAST_SYNC_IMPORT_NAME_KEY, data.exportedBy);
+                  } catch (e) {
+                    noteSaveFailure("last-sync-import timestamp", e);
+                  }
+                }
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(finalState));
+                if (!localIsFresh) {
+                  alertModal(T("alert.mergedImport", { players: newPlayerCount, lists: rosterMerge.added }), function () {
+                    location.reload();
+                  });
+                } else {
+                  location.reload();
                 }
               }
-              localStorage.setItem(STORAGE_KEY, JSON.stringify(finalState));
-              if (!localIsFresh) {
-                alertModal(T("alert.mergedImport", { players: newPlayerCount, lists: rosterMerge.added }), function () {
-                  location.reload();
+
+              if (conflictedNames.length) {
+                showRemovedPlayersConflict(conflictedNames, function (restoredNames) {
+                  restoredNames.forEach(function (name) {
+                    clearPlayerRemoved(name);
+                    finalState.players.push({
+                      id: uid(),
+                      name: capitalizeName(name),
+                      voice: finalState.players.length % VOICE_PITCHES.length,
+                      playing: false,
+                      teamId: null,
+                      balls: 0
+                    });
+                    if (!localIsFresh) newPlayerCount += 1;
+                  });
+                  finishImport();
                 });
               } else {
-                location.reload();
-              }
-            }
-
-            if (conflictedNames.length) {
-              showRemovedPlayersConflict(conflictedNames, function (restoredNames) {
-                restoredNames.forEach(function (name) {
-                  clearPlayerRemoved(name);
-                  finalState.players.push({
-                    id: uid(),
-                    name: capitalizeName(name),
-                    voice: finalState.players.length % VOICE_PITCHES.length,
-                    playing: false,
-                    teamId: null,
-                    balls: 0
-                  });
-                  if (!localIsFresh) newPlayerCount += 1;
-                });
                 finishImport();
-              });
-            } else {
-              finishImport();
-            }
+              }
+            }, function (e) {
+              noteSaveFailure("the imported data", e);
+              alertModal(T("alert.importNotSaved"));
+            });
           }
 
           // Same-name-on-both-sides check: only possible in the merge
@@ -18709,11 +18805,23 @@
     // an explicit, just-confirmed data-replacement that's about to
     // reload the page anyway. Same bypass importAllData's own finishImport
     // already uses for exactly this reason.
+    var bigGen = bigImportGeneration();
+    writeBigImport(bigGen, { playerStats: PLAYER_STATS, reportArchive: REPORT_ARCHIVE, resetSnapshots: RESET_SNAPSHOTS, cameraEnrollments: mergedCameraEnrollmentsForSquash }).then(function () {
+      finishSquash(bigGen);
+    }, function (e) {
+      noteSaveFailure("the imported data", e);
+      closeSquashWarning();
+      alertModal(T("alert.importNotSaved"), function () {
+        location.reload();
+      });
+    });
+
+    function finishSquash(bigGen) {
     var replaced = withStorageRollback(importStorageKeys(), function () {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       localStorage.setItem(ROSTERS_KEY, JSON.stringify(SAVED_ROSTERS));
       localStorage.setItem(TEAMS_KEY, JSON.stringify(SAVED_TEAMS));
-      localStorage.setItem(PLAYER_STATS_KEY, JSON.stringify(PLAYER_STATS));
+      if (!bigGen) localStorage.setItem(PLAYER_STATS_KEY, JSON.stringify(PLAYER_STATS));
       localStorage.setItem(RATINGS_KEY, JSON.stringify(PLAYER_RATINGS));
       // (the file's record of rated games; an older file without one gets it
       // rebuilt from its own rating histories on the next start)
@@ -18729,12 +18837,12 @@
       localStorage.setItem(ROTATIONS_KEY, JSON.stringify(SAVED_ROTATIONS));
       localStorage.setItem(GAME_SETUPS_KEY, JSON.stringify(SAVED_GAME_SETUPS));
       localStorage.setItem(PLAYER_NAME_TRANSLATIONS_KEY, JSON.stringify(PLAYER_NAME_TRANSLATIONS));
-      localStorage.setItem(CAMERA_ENROLLMENTS_KEY, JSON.stringify(mergedCameraEnrollmentsForSquash));
+      if (!bigGen) localStorage.setItem(CAMERA_ENROLLMENTS_KEY, JSON.stringify(mergedCameraEnrollmentsForSquash));
       localStorage.setItem(REMOVED_PLAYERS_KEY, JSON.stringify(REMOVED_PLAYERS));
       localStorage.setItem(GRAVEYARD_PLAYERS_KEY, JSON.stringify(GRAVEYARD_PLAYERS));
       localStorage.setItem(MERGED_INTO_KEY, JSON.stringify(PLAYER_MERGED_INTO));
-      localStorage.setItem(RESET_SNAPSHOTS_KEY, JSON.stringify(RESET_SNAPSHOTS));
-      localStorage.setItem(REPORT_ARCHIVE_KEY, JSON.stringify(REPORT_ARCHIVE));
+      if (!bigGen) localStorage.setItem(RESET_SNAPSHOTS_KEY, JSON.stringify(RESET_SNAPSHOTS));
+      if (!bigGen) localStorage.setItem(REPORT_ARCHIVE_KEY, JSON.stringify(REPORT_ARCHIVE));
       localStorage.setItem(PLAYER_DAILY_BEST_RUNS_KEY, JSON.stringify(PLAYER_DAILY_BEST_RUNS));
       // The archive's deleted days and the Challonge push records go with
       // the game data they're about: the file's in a full replace, none
@@ -18756,6 +18864,7 @@
         localStorage.setItem(LAST_SYNC_IMPORT_KEY, data.exportedAt);
         if (data.exportedBy) localStorage.setItem(LAST_SYNC_IMPORT_NAME_KEY, data.exportedBy);
       }
+      if (bigGen) localStorage.setItem(BIG_STORE_GEN_KEY, bigGen);
     });
     closeSquashWarning();
     if (!replaced) {
@@ -18768,6 +18877,7 @@
     alertModal(T(keepPlayersOnly ? "alert.squashDoneKeepPlayers" : "alert.squashDoneFull", { count: resultingPlayerCount }), function () {
       location.reload();
     });
+    }
   }
 
   // ---------------------------------------------------------------------
@@ -31187,6 +31297,7 @@
   // where renderBackupWhere says. (The OK is a tap of its own: the share
   // sheet can open from it.)
   driveConnectEl.backupNow.addEventListener("click", function () {
+    refreshCameraEnrollments(); // (fresh by the time OK is tapped)
     promptModal(
       T("backup.exportFilenamePrompt"),
       defaultBackupFilename(),
@@ -31325,6 +31436,7 @@
     bkEl.linkOpen.classList.add("hidden");
   }
   function openRestore() {
+    refreshCameraEnrollments(); // (an import merges with the freshest camera samples)
     bkChosen = null;
     bkEl.list.innerHTML = "";
     bkSay("");
@@ -33431,7 +33543,8 @@
           // to do the deleting, or it would write everyone back.
           names.forEach(function (name) { sendToSameDeviceCamera({ type: "enroll-delete", player_name: name }); });
         } else {
-          try { localStorage.setItem(CAMERA_ENROLLMENTS_KEY, "{}"); } catch (e) {}
+          CAMERA_ENROLLMENTS_CACHE = {};
+          if (window.PMCBigStore) PMCBigStore.set("cameraEnrollments", {}).then(null, function (e) { noteSaveFailure("camera samples", e); });
         }
       } else {
         // The relay deletes each one, tells every camera, and sends the
@@ -33447,7 +33560,12 @@
     renderEnrollmentStatus();
   };
   window.addEventListener("storage", function (e) {
-    if (e.key === CAMERA_ENROLLMENTS_KEY) renderEnrollmentStatus();
+    if (e.key === CAMERA_ENROLLMENTS_REV_KEY) refreshCameraEnrollments().then(renderEnrollmentStatus);
+    else if (e.key === CAMERA_ENROLLMENTS_KEY) renderEnrollmentStatus();
+  });
+  // (the camera page couldn't save its samples - storage full)
+  window.addEventListener("message", function (e) {
+    if (e.origin === location.origin && e.data && e.data.type === "storage-failed") noteSaveFailure("camera samples", { name: "QuotaExceededError" });
   });
   renderEnrollmentStatus();
   // Until camera recognition has been turned on, Capture Settings starts
@@ -35095,7 +35213,9 @@
       return DEFAULT_GAME_TYPES;
     });
 
-  Promise.all([gameTypesPromise, migrateFromRepoIfNeeded(), languagePromise]).then(function (results) {
+  loadBigStores().then(function () {
+    return Promise.all([gameTypesPromise, migrateFromRepoIfNeeded(), languagePromise]);
+  }).then(function (results) {
     GAME_TYPE_LIST = results[0];
     GAME_TYPE_LIST.forEach(function (t) {
       GAME_TYPES[t.id] = { label: t.label, defaultTarget: t.defaultTarget, unit: t.unit };

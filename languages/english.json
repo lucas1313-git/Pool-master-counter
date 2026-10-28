@@ -1633,5 +1633,6 @@
   "storage.group.session": "Tonight's session",
   "storage.group.ratings": "Ratings",
   "storage.group.other": "Everything else",
-  "storage.files": "Recordings and other files: {{used}} MB (room for about {{room}} GB more)."
+  "storage.files": "The database, recordings and other files: {{used}} MB (room for about {{room}} GB more).",
+  "storage.inDatabase": "{{what}}, in the database: {{mb}} MB"
 }

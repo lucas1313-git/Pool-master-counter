@@ -19,6 +19,20 @@ const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/cs
 let fails = 0;
 function check(label, ok, extra) { console.log((ok ? "PASS " : "FAIL ") + label + (extra !== undefined && !ok ? "  " + JSON.stringify(extra) : "")); if (!ok) fails++; }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// (game logs, report archive... live in IndexedDB - js/big-store.js - under the generation in use)
+const readBig = (page, name) => page.evaluate((name) => new Promise((resolve) => {
+  const gen = localStorage.getItem("poolMasterCounter.bigStoreGen.v1") || "0";
+  const req = indexedDB.open("pmc-big", 1);
+  req.onupgradeneeded = () => req.result.createObjectStore("kv");
+  req.onerror = () => resolve(null);
+  req.onsuccess = () => {
+    try {
+      const get = req.result.transaction("kv", "readonly").objectStore("kv").get(name + "@" + gen);
+      get.onsuccess = () => { resolve(get.result === undefined ? null : get.result); req.result.close(); };
+      get.onerror = () => resolve(null);
+    } catch (e) { resolve(null); }
+  };
+}), name);
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "pmc-pool-day-"));
 
 (async () => {
@@ -65,7 +79,7 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "pmc-pool-day-"));
     return { players, playerWins, teamWins: {}, teamMvpWins: {}, gameHistory: games, gamesPlayedCount: games.length,
       currentGame: { gameType: "8ball", target: 1, unit: "rack", mode: "individual" }, raceToWinsTarget: 1, rotation: { enabled: false, order: [], every: 1 } };
   };
-  const stats = (page) => page.evaluate(() => JSON.parse(localStorage.getItem("poolMasterCounter.playerStats.v1") || "{}"));
+  const stats = async (page) => (await readBig(page, "playerStats")) || {};
   const gamesOf = (st, name) => { const e = st[name]; const out = []; (e ? e.sessions : []).forEach((s) => (s.games || []).forEach((g) => out.push({ date: s.date, ts: g.ts, result: g.result }))); return out; };
   const saveAndStartNew = async (page, skip) => {
     await page.evaluate(() => document.getElementById("btn-reset-session-tournament").click());
@@ -94,7 +108,7 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "pmc-pool-day-"));
   check("...and the board is cleared", (await page.evaluate(() => JSON.parse(localStorage.getItem("poolMasterCounter.state.v2")).gameHistory.length)) === 0);
   await page.reload({ waitUntil: "networkidle2" });
   await sleep(1200);
-  const archive = await page.evaluate(() => JSON.parse(localStorage.getItem("poolMasterCounter.reportArchive.v1") || "[]").map((e) => ({ d: e.dateStr, n: (e.gameTs || []).length })));
+  const archive = ((await readBig(page, "reportArchive")) || []).map((e) => ({ d: e.dateStr, n: (e.gameTs || []).length }));
   check("the night's report is archived once, under 2026-10-20, with all 5 games (nothing under the 21st)", archive.length === 1 && archive[0].d === "2026-10-20" && archive[0].n === 5, archive);
   await page.close();
 
