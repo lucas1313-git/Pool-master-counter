@@ -157,6 +157,13 @@ Not part of the app - helpers for testing and for running this machine's own cop
   real race (milestone exactly at n) and is remembered; the leaderboard says "1 win" and "1 tournament
   win". The fanfare is spotted by counting Web Audio oscillators. Its own file server on 4245.
   `node tests/probe_race_to_one.js [screenshot dir]`.
+- `probe_pool_day.js` - a night is one "pool day" (5 a.m. to 5 a.m.) and saving keeps all of it:
+  Save & Start New Session a week later files a 21:10-00:20 night under the night's own date, for
+  every name in it (a player since removed too), and its report is archived once under that date;
+  past 200 games the oldest go into the stats before they leave the board; a new Quick Game saves
+  the board first, Start Without Saving still drops it; importing a 19:00-01:00 night keeps all 13
+  games in Los Angeles and in Manila (time zones emulated). Its own file server on 4246.
+  `node tests/probe_pool_day.js`.
 - `probe_out_of_view.js` - out of view: a named player who walks out of the picture keeps a tag at
   the edge they left by (name, time, arrow), is kept past the 12 s a hidden player is looked for,
   and gets their path and name back coming in at that edge; hidden mid-picture as long: no name;

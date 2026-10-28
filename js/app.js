@@ -6427,7 +6427,7 @@
       // ever played, only the ones marked as playing for the team.
       teamCredit: null
     });
-    if (state.gameHistory.length > 200) state.gameHistory.length = 200;
+    trimGameHistory();
     if (!noStatsMode && !isTeam) {
       // Team Mode isn't rated at all (see applyMultiWayRatingResult's
       // comment) - averaging teammates together, or moving every
@@ -7801,17 +7801,29 @@
 
   var DAY_NOTES = loadDayNotesFromStorage();
 
-  // Local calendar day (not UTC) - a UTC slice reads as "tomorrow" for
-  // anyone west of UTC once local evening crosses into UTC's next day,
-  // which silently mis-buckets that session's "today" stats. Matches
-  // periodStartDate("today")'s local-midnight boundary below.
+  // The "pool day" a moment belongs to: local time (never UTC - a UTC
+  // slice reads as "tomorrow" for anyone west of UTC by the evening), and
+  // a day runs from 5 a.m. to 5 a.m., so a night that goes past midnight
+  // is still one night - its stats, its Day Report, its notes, its place
+  // in the report archive (the camera's "new day" starts at 5 a.m. too).
+  // Every date here goes through these two, and periodStartDate("today")
+  // starts at the same 5 a.m.
+  var POOL_DAY_START_HOUR = 5;
   function todayDateStr() {
     return localDateStrFromTs(new Date());
   }
 
   function localDateStrFromTs(ts) {
     var d = new Date(ts);
+    if (d.getHours() < POOL_DAY_START_HOUR) d.setDate(d.getDate() - 1);
     return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+
+  // 5 a.m. of the pool day `now` is in.
+  function poolDayStart(now) {
+    var start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), POOL_DAY_START_HOUR);
+    if (now < start) start.setDate(start.getDate() - 1);
+    return start;
   }
 
   function getDayNotes(dateStr) {
@@ -7852,14 +7864,19 @@
   function computeDayReportData(dateStr, exactDate, skipTs) {
     var names = getAllKnownPlayerNames();
     var cutoffTs = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    function inRange(ts) {
-      if (skipTs && skipTs[ts]) return false;
-      return exactDate ? localDateStrFromTs(ts) === dateStr : ts >= cutoffTs;
-    }
     var liveTsSet = {};
     (state.gameHistory || []).forEach(function (entry) {
       if (entry && entry.ts) liveTsSet[entry.ts] = true;
     });
+    // That pool day's games (5 a.m. to 5 a.m.) - and, for today's live
+    // report, last night's games still on the scoreboard (not saved yet,
+    // from the last 24 hours), so a night published the next afternoon
+    // still has them.
+    function inRange(ts) {
+      if (skipTs && skipTs[ts]) return false;
+      if (localDateStrFromTs(ts) === dateStr) return true;
+      return !exactDate && !!liveTsSet[ts] && ts >= cutoffTs;
+    }
     var gamesByTs = {};
     var players = [];
     names.forEach(function (name) {
@@ -13284,11 +13301,14 @@
       console.warn("Could not clear the pending report-archive queue.", e);
     }
     var today = todayDateStr();
+    var deleted = {};
+    loadDeletedArchiveDates().forEach(function (d) { deleted[d] = true; });
     pending.forEach(function (dateStr) {
       // "Today" stays owned by the normal live mechanism (see
       // scheduleIdleReportAutoSave) - reconstructing it here mid-day from
       // a point-in-time snapshot would fight with that, not complement it.
-      if (dateStr === today || findReportArchiveEntry(dateStr)) return;
+      // And a day deleted on purpose stays deleted (as backfillReportArchive).
+      if (dateStr === today || deleted[dateStr] || findReportArchiveEntry(dateStr)) return;
       computeReportImageData(dateStr, true);
     });
   }
@@ -17174,7 +17194,7 @@
     var byPlayerDates = {};
     (gameHistory || []).forEach(function (entry) {
       if (!entry || typeof entry === "string" || !entry.winnerNames || !entry.ts) return;
-      var date = entry.ts.slice(0, 10);
+      var date = localDateStrFromTs(entry.ts);
       (entry.winnerNames || []).concat(entry.opponentNames || []).forEach(function (name) {
         if (!byPlayerDates[name]) byPlayerDates[name] = {};
         byPlayerDates[name][date] = true;
@@ -20315,6 +20335,9 @@
   }
 
   function startQuickGame() {
+    // (what's on the board now goes into the players' stats first - while
+    // its own "don't record" setting still applies)
+    exportAllPlayerStats();
     var p1 = resolveOrCreateQuickGamePlayer(quickGamePlayer1Input.value);
     var p2 = resolveOrCreateQuickGamePlayer(quickGamePlayer2Input.value);
     if (!p1 || !p2 || p1.id === p2.id) return;
@@ -20336,6 +20359,7 @@
   // Game otherwise - real game type/win-crediting/Focus Mode, just
   // skipping the naming step and the stats it would otherwise save.
   function startQuickGameWithoutNames() {
+    exportAllPlayerStats();
     var p1 = addPlayer("Player " + nextAvailablePlayerNumber());
     var p2 = addPlayer("Player " + nextAvailablePlayerNumber());
     noStatsMode = true;
@@ -20468,6 +20492,31 @@
       games: games,
       wonTournament: false
     };
+  }
+
+  // One session per pool day this player has games on in the live
+  // (not yet saved) history - a session left open past 5 a.m., or for a
+  // few nights, has more than today's. Today's carries the live race
+  // trophy; the counts come from the games themselves.
+  function liveSessionsForName(name) {
+    var key = normalizeNameKey(name);
+    var today = todayDateStr();
+    var days = {};
+    (state.gameHistory || []).forEach(function (entry) {
+      if (!entry || typeof entry === "string" || !entry.winnerNames || !entry.ts) return;
+      var involved = entry.winnerNames.concat(entry.opponentNames || []).some(function (n) {
+        return normalizeNameKey(n) === key;
+      });
+      if (involved) days[localDateStrFromTs(entry.ts)] = true;
+    });
+    return Object.keys(days)
+      .sort()
+      .map(function (day) {
+        var session = computeSessionFromGameHistory(state.gameHistory, name, day);
+        if (session && day === today) session.wonTournament = !!computeLiveSessionForPlayer(name).wonTournament;
+        return session;
+      })
+      .filter(Boolean);
   }
 
   // Accepts a player NAME (not id) so it works for players still on the
@@ -20626,8 +20675,9 @@
 
   function periodStartDate(period) {
     var now = new Date();
+    var dayStart = poolDayStart(now);
     if (period === "today") {
-      return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      return dayStart;
     }
     // Rolling windows, not calendar Monday/1st-of-month - "This Week"/
     // "This Month" (Player Stats, Leaderboard, All Players alike) mean
@@ -20636,10 +20686,10 @@
     // almost nothing right after a Monday or the 1st. The "-6"/"-29" (not
     // "-7"/"-30") is what makes today count as one of the 7/30 days.
     if (period === "week") {
-      return new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
+      return new Date(dayStart.getFullYear(), dayStart.getMonth(), dayStart.getDate() - 6, POOL_DAY_START_HOUR);
     }
     if (period === "month") {
-      return new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29);
+      return new Date(dayStart.getFullYear(), dayStart.getMonth(), dayStart.getDate() - 29, POOL_DAY_START_HOUR);
     }
     if (period === "6month") {
       return new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
@@ -20661,9 +20711,8 @@
   // in-progress edits - e.g. the win popup's live balls-left patch-back -
   // that a fresh getPlayerSessions() read wouldn't see yet).
   function collectAllGamesForPlayer(name) {
-    var live = computeLiveSessionForPlayer(name);
     var savedSessions = name === currentStatsPlayerName ? currentStatsSessions || [] : getPlayerSessions(name);
-    var sessions = mergeSessionIntoList(savedSessions, live);
+    var sessions = mergeSessionLists(savedSessions, liveSessionsForName(name));
     var games = [];
     sessions.forEach(function (s) {
       (s.games || []).forEach(function (g) {
@@ -21754,10 +21803,7 @@
   // in the current in-progress session — deduped the same way the stats
   // synopsis page does.
   function allGamesForPlayerName(name) {
-    var sessions = getPlayerSessions(name);
-    var today = todayDateStr();
-    var live = computeSessionFromGameHistory(state.gameHistory, name, today);
-    var merged = live ? mergeSessionIntoList(sessions, live) : sessions;
+    var merged = mergeSessionLists(getPlayerSessions(name), liveSessionsForName(name));
     var games = [];
     merged.forEach(function (s) {
       (s.games || []).forEach(function (g) {
@@ -28641,7 +28687,7 @@
       durationMs: durationMs,
       summary: winnerLabel + " won " + typeLabel + " (tournament vs " + loserLabel + ")"
     });
-    if (state.gameHistory.length > 200) state.gameHistory.length = 200;
+    trimGameHistory();
     if (!isTeam) {
       // A doubles-entrant match isn't rated at all - see
       // applyMultiWayRatingResult's comment on creditWin's isTeam check.
@@ -30157,19 +30203,46 @@
     });
   }
 
-  function mergeSessionIntoList(sessions, live) {
-    return mergeSessionLists(sessions, [live]);
-  }
-
+  // Files the live session into each player's saved stats: every pool
+  // day it has games on (not just today - a night saved after 5 a.m., or
+  // the next evening, keeps all of it), for every name in it (players
+  // since removed from the roster, tournament-only entrants). Safe to run
+  // again: games are matched by time, never counted twice.
   function exportAllPlayerStats() {
     if (noStatsMode) return;
-    state.players.forEach(function (p) {
-      var live = computeLiveSessionForPlayer(p.name);
-      if (!live || !live.games || live.games.length === 0) return;
-      var sessions = mergeSessionIntoList(getPlayerSessions(p.name), live);
-      setPlayerSessions(p.name, sessions);
-      if (p.name === currentStatsPlayerName) currentStatsSessions = sessions;
+    var names = {};
+    (state.gameHistory || []).forEach(function (entry) {
+      if (!entry || typeof entry === "string" || !entry.winnerNames) return;
+      entry.winnerNames.concat(entry.opponentNames || []).forEach(function (n) {
+        if (n) names[normalizeNameKey(n)] = n;
+      });
     });
+    Object.keys(names).forEach(function (key) {
+      var name = names[key];
+      var live = liveSessionsForName(name);
+      if (!live.length) return;
+      var sessions = mergeSessionLists(getPlayerSessions(name), live);
+      setPlayerSessions(name, sessions);
+      if (currentStatsPlayerName && normalizeNameKey(currentStatsPlayerName) === key) currentStatsSessions = sessions;
+    });
+  }
+
+  // The live history keeps its latest GAME_HISTORY_MAX games; the ones
+  // falling off the end go into the players' saved stats first (a long
+  // tournament or a night that's never saved can pass 200).
+  var GAME_HISTORY_MAX = 200;
+  function trimGameHistory() {
+    if (state.gameHistory.length <= GAME_HISTORY_MAX) return;
+    var dropped = state.gameHistory.slice(GAME_HISTORY_MAX);
+    if (!noStatsMode) {
+      var byName = summarizeGameHistoryByPlayer(dropped);
+      Object.keys(byName).forEach(function (name) {
+        var sessions = mergeSessionLists(getPlayerSessions(name), byName[name]);
+        setPlayerSessions(name, sessions);
+        if (name === currentStatsPlayerName) currentStatsSessions = sessions;
+      });
+    }
+    state.gameHistory.length = GAME_HISTORY_MAX;
   }
 
   function exportCurrentPlayerStats() {
@@ -30179,8 +30252,7 @@
       showToast(T("toast.noStatsModeNothingSaved"));
       return;
     }
-    var live = computeLiveSessionForPlayer(name);
-    var sessions = mergeSessionIntoList(currentStatsSessions || [], live);
+    var sessions = mergeSessionLists(currentStatsSessions || [], liveSessionsForName(name));
     currentStatsSessions = sessions;
     setPlayerSessions(name, sessions);
     renderPlayerHistoryList(sessions);
