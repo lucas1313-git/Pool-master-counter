@@ -644,6 +644,16 @@
     return targets[key] || state.raceToWinsTarget;
   }
 
+  // A race target of 1 ("Single Game", Quick Game's "Open play") is no
+  // race at all: no milestone, no "on the hill", no 🏁, no tournament in
+  // the stats - the board just keeps counting tonight's wins.
+  function isRacing() {
+    return state.raceToWinsTarget > 1;
+  }
+  function raceReached(wins, key) {
+    return isRacing() && wins > 0 && wins >= effectiveRaceTarget(key);
+  }
+
   // Mirrors buildRotationRow/renderRotationListInto/moveRotationItem
   // (the Games Rotation list) - same ordered-list-with-up/down-arrows
   // interaction, just for standby players instead of game types. No
@@ -1772,6 +1782,22 @@
     return str;
   }
 
+  // T for a sentence with a count in it: the "...One" key when the
+  // language's own plural rules call this count singular (French: 0
+  // and 1), else the plain key - "1 win", "2 wins", "0 victoire".
+  var PLURAL_LOCALES = { english: "en", french: "fr", spanish: "es", cantonese: "yue", tagalog: "fil" };
+  function TP(key, n, vars) {
+    var one;
+    try {
+      one = new Intl.PluralRules(PLURAL_LOCALES[activeLanguageCode] || "en").select(n) === "one";
+    } catch (e) {
+      one = n === 1;
+    }
+    var oneKey = key + "One";
+    var hasOne = LANG_DICT_ACTIVE[oneKey] !== undefined || LANG_DICT_EN[oneKey] !== undefined;
+    return T(one && hasOne ? oneKey : key, vars);
+  }
+
   // Translates a raw unit value ("rack"/"balls"/"points", as stored on
   // state.currentGame/rotation entries) for display - the value itself
   // stays an untranslated internal identifier, only the shown label
@@ -2427,6 +2453,9 @@
   var quickGameRequirement = document.getElementById("quick-game-requirement");
   var btnQuickGameStart = document.getElementById("btn-quick-game-start");
   var btnQuickGameNoNames = document.getElementById("btn-quick-game-no-names");
+  var quickGameRaceToRadio = document.getElementById("quick-game-race-raceto");
+  var quickGameOpenPlayRadio = document.getElementById("quick-game-open-play");
+  var quickGameRaceToInput = document.getElementById("quick-game-race-to");
   var btnQuickGameCancel = document.getElementById("btn-quick-game-cancel");
 
   var btnResetGame = document.getElementById("btn-reset-game");
@@ -3901,8 +3930,9 @@
   }
 
   function buildStandingsRow(name, wins, memberNames, key) {
+    var racing = isRacing();
     var target = effectiveRaceTarget(key);
-    var reached = wins >= target;
+    var reached = raceReached(wins, key);
     var li = document.createElement("li");
     li.className = "standings-row" + (reached ? " is-reached" : "");
 
@@ -3926,18 +3956,21 @@
     });
     var countEl = document.createElement("span");
     countEl.className = "standings-count";
-    countEl.textContent = wins + " / " + target + (reached ? " 🏁" : "");
+    countEl.textContent = racing ? wins + " / " + target + (reached ? " 🏁" : "") : String(wins);
     top.appendChild(nameEl);
     top.appendChild(countEl);
     li.appendChild(top);
 
-    var track = document.createElement("div");
-    track.className = "standings-bar-track";
-    var fill = document.createElement("div");
-    fill.className = "standings-bar-fill";
-    fill.style.width = Math.min(100, (wins / target) * 100) + "%";
-    track.appendChild(fill);
-    li.appendChild(track);
+    // (no race, no finish line: just the count)
+    if (racing) {
+      var track = document.createElement("div");
+      track.className = "standings-bar-track";
+      var fill = document.createElement("div");
+      fill.className = "standings-bar-fill";
+      fill.style.width = Math.min(100, (wins / target) * 100) + "%";
+      track.appendChild(fill);
+      li.appendChild(track);
+    }
 
     return li;
   }
@@ -3953,7 +3986,7 @@
     teamStandingsList.classList.toggle("hidden", !isTeamsMode);
 
     if (isTeamsMode) {
-      standingsTitle.textContent = T("standings.raceToTeams", { target: state.raceToWinsTarget });
+      standingsTitle.textContent = isRacing() ? T("standings.raceToTeams", { target: state.raceToWinsTarget }) : T("standings.teamsNoRace");
 
       // Teams are tracked per slot ("A"/"B"), not per exact roster combo, so
       // this always shows exactly the two live team slots - a sub joining or
@@ -4014,6 +4047,7 @@
     var leader = sorted[0];
     var leaderWins = state.playerWins[leader.id] || 0;
     if (leaderWins === 0) return T("standings.noGamesWonYet");
+    if (!isRacing()) return T(leaderWins === 1 ? "standings.leaderSummaryNoRaceOne" : "standings.leaderSummaryNoRaceMany", { name: leader.name, wins: leaderWins });
     return T(leaderWins === 1 ? "standings.leaderSummaryOne" : "standings.leaderSummaryMany", {
       name: leader.name,
       wins: leaderWins,
@@ -4964,7 +4998,7 @@
     var isSingleRackGame = state.currentGame.unit === "rack" && state.currentGame.target === 1;
 
     if (!isSingleRackGame) {
-      panel.appendChild(buildStatMini(T("scoreboard.tourneyWin"), wins, wins >= effectiveRaceTarget(player.id), "stat-mini-tourney"));
+      panel.appendChild(buildStatMini(T(isRacing() ? "scoreboard.tourneyWin" : "scoreboard.winsNoRace"), wins, raceReached(wins, player.id), "stat-mini-tourney"));
     }
 
     var block = document.createElement("div");
@@ -4980,10 +5014,10 @@
       // ambiguous score when it's actually the session win count.
       var label = document.createElement("div");
       label.className = "stat-label";
-      label.textContent = T("scoreboard.tourneyWin");
+      label.textContent = T(isRacing() ? "scoreboard.tourneyWin" : "scoreboard.winsNoRace");
       block.appendChild(label);
       value.textContent = wins;
-      if (wins >= effectiveRaceTarget(player.id)) value.appendChild(buildFlagSpan());
+      if (raceReached(wins, player.id)) value.appendChild(buildFlagSpan());
     } else {
       // No "[game] · target [n]" label here anymore - the "Now Playing"
       // banner above the scoreboard (renderNowPlayingBanner) already
@@ -5046,7 +5080,7 @@
     // partners change game to game.
     var showSessionWins = state.rotatingTeamsEnabled;
     var mvpWins = showSessionWins ? state.playerWins[player.id] || 0 : state.teamMvpWins[player.id] || 0;
-    card.appendChild(buildStatMini(T("scoreboard.tourneyWin"), mvpWins, mvpWins >= effectiveRaceTarget(player.teamId), "stat-mini-tourney"));
+    card.appendChild(buildStatMini(T(isRacing() ? "scoreboard.tourneyWin" : "scoreboard.winsNoRace"), mvpWins, raceReached(mvpWins, player.teamId), "stat-mini-tourney"));
 
     // Buttons sit above the score (between the name/badges and the
     // number itself), same order as buildIndividualPanel's own card.
@@ -5153,7 +5187,7 @@
       var isSingleRackGame = state.currentGame.unit === "rack" && state.currentGame.target === 1;
 
       if (!isSingleRackGame) {
-        panel.appendChild(buildStatMini(T("scoreboard.pairedSessionWin"), wins, wins >= effectiveRaceTarget(teamId)));
+        panel.appendChild(buildStatMini(T("scoreboard.pairedSessionWin"), wins, raceReached(wins, teamId)));
       }
 
       var block = document.createElement("div");
@@ -5168,7 +5202,7 @@
         label.textContent = T("scoreboard.pairedSessionWinScore");
         block.appendChild(label);
         value.textContent = wins;
-        if (wins >= effectiveRaceTarget(teamId)) value.appendChild(buildFlagSpan());
+        if (raceReached(wins, teamId)) value.appendChild(buildFlagSpan());
       } else {
         // No "[game] · target [n]" label here anymore - the "Now Playing"
         // banner above the scoreboard already says both.
@@ -5713,7 +5747,7 @@
     exportAllPlayerStats();
     startNewSession(true);
 
-    milestoneHeadline.textContent = T("timedTournament.headline", { names: result.names, count: result.count });
+    milestoneHeadline.textContent = TP("timedTournament.headline", result.count, { names: result.names, count: result.count });
     milestoneDetails.innerHTML = "";
     milestoneDetails.appendChild(playerStatsRow(T("milestone.tournamentGoal"), T("timedTournament.expiredLabel")));
     milestoneOverlay.classList.remove("hidden");
@@ -6204,10 +6238,10 @@
         state.teamMvpWins[mvp.id] = (state.teamMvpWins[mvp.id] || 0) + 1;
       }
       summary = teamLabelLive(key) + " won " + typeLabel + " (target " + state.currentGame.target + ")";
-      if (target > 0 && newTeamWins % target === 0) {
+      if (isRacing() && target > 0 && newTeamWins % target === 0) {
         milestoneNames = winnerNames.join(" & ");
         milestoneCount = newTeamWins;
-      } else if (target > 1 && newTeamWins % target === target - 1) {
+      } else if (isRacing() && target > 1 && newTeamWins % target === target - 1) {
         onHillNames = teamLabelLive(key);
       }
     } else {
@@ -6225,10 +6259,10 @@
       var newPlayerWins = (state.playerWins[key] || 0) + 1;
       state.playerWins[key] = newPlayerWins;
       summary = getPlayer(key).name + " won " + typeLabel + " (target " + state.currentGame.target + ")";
-      if (target > 0 && newPlayerWins % target === 0) {
+      if (isRacing() && target > 0 && newPlayerWins % target === 0) {
         milestoneNames = getPlayer(key).name;
         milestoneCount = newPlayerWins;
-      } else if (target > 1 && newPlayerWins % target === target - 1) {
+      } else if (isRacing() && target > 1 && newPlayerWins % target === target - 1) {
         onHillNames = getPlayer(key).name;
       }
 
@@ -7087,7 +7121,7 @@
     });
     var info = rotationStatusInfo();
 
-    milestoneHeadline.textContent = T("milestone.headline", { names: names, count: count, target: target });
+    milestoneHeadline.textContent = TP("milestone.headline", count, { names: names, count: count, target: target });
 
     milestoneDetails.innerHTML = "";
     milestoneDetails.appendChild(playerStatsListRow(T("milestone.players"), playerNames, true));
@@ -20163,6 +20197,9 @@
   // of "quick".
   // ---------------------------------------------------------------------
 
+  // raceToWinsTarget is the popup's own choice ("🏁 Race to [5]" or
+  // "🎱 Open play", which is 1 = no race), remembered on this device.
+  var QUICK_GAME_RACE_KEY = "poolMasterCounter.quickGameRace.v1";
   var QUICK_GAME_SETUP = {
     gameType: "8ball",
     target: 1,
@@ -20208,7 +20245,24 @@
     }
   }
 
+  function loadQuickGameRace() {
+    try {
+      var n = parseInt(localStorage.getItem(QUICK_GAME_RACE_KEY), 10);
+      if (n >= 1 && n <= 99) return n;
+    } catch (e) {}
+    return 5;
+  }
+  function chosenQuickGameRace() {
+    if (quickGameOpenPlayRadio.checked) return 1;
+    var n = parseInt(quickGameRaceToInput.value, 10);
+    return n >= 2 && n <= 99 ? n : 5;
+  }
+
   function openQuickGameModal() {
+    var race = loadQuickGameRace();
+    quickGameOpenPlayRadio.checked = race === 1;
+    quickGameRaceToRadio.checked = race !== 1;
+    quickGameRaceToInput.value = race === 1 ? 5 : race;
     quickGamePlayer1Input.value = "";
     quickGamePlayer2Input.value = "";
     quickGameRequirement.classList.add("hidden");
@@ -20235,7 +20289,13 @@
       noStatsCheckbox.checked = false;
     }
 
-    loadGameSetupEntry(QUICK_GAME_SETUP);
+    var race = chosenQuickGameRace();
+    try {
+      localStorage.setItem(QUICK_GAME_RACE_KEY, String(race));
+    } catch (e) {}
+    var setup = JSON.parse(JSON.stringify(QUICK_GAME_SETUP));
+    setup.raceToWinsTarget = race;
+    loadGameSetupEntry(setup);
     syncGameTypeUI();
     raceToWinsInput.value = state.raceToWinsTarget;
     syncRaceModeRadios();
@@ -20434,7 +20494,7 @@
       // not an individual fair-race target keyed by this player's id.
       var livePlayer = getPlayer(playerId);
       var raceKey = state.currentGame.mode === "teams" && livePlayer && livePlayer.teamId ? livePlayer.teamId : playerId;
-      session.wonTournament = wins > 0 && wins >= effectiveRaceTarget(raceKey);
+      session.wonTournament = raceReached(wins, raceKey);
     } else {
       session.wonTournament = false;
     }
@@ -24794,12 +24854,12 @@
   // export, so the two never drift apart.
   function leaderboardStatParts(entry, isTeamEntry) {
     var statParts = [
-      T("leaderboard.statWins", { wins: entry.wins }),
-      T("leaderboard.statGames", { games: entry.gamesPlayed }),
+      TP("leaderboard.statWins", entry.wins, { wins: entry.wins }),
+      TP("leaderboard.statGames", entry.gamesPlayed, { games: entry.gamesPlayed }),
       T("leaderboard.statWinPct", { pct: Math.round(entry.winPct * 100) })
     ];
     if (entry.tournamentWins > 0) {
-      statParts.push(T("leaderboard.statTournamentWins", { wins: entry.tournamentWins }));
+      statParts.push(TP("leaderboard.statTournamentWins", entry.tournamentWins, { wins: entry.tournamentWins }));
     }
     if (entry.avgDominanceRatio > 0) {
       statParts.push(T("leaderboard.statDominance", { pct: Math.round(entry.avgDominanceRatio * 100) }));
@@ -33682,6 +33742,10 @@
   btnQuickGameCancel.addEventListener("click", closeQuickGameModal);
   btnQuickGameStart.addEventListener("click", startQuickGame);
   btnQuickGameNoNames.addEventListener("click", startQuickGameWithoutNames);
+  // (typing a race number picks "Race to")
+  quickGameRaceToInput.addEventListener("input", function () {
+    quickGameRaceToRadio.checked = true;
+  });
   quickGameOverlay.addEventListener("click", function (e) {
     if (e.target === quickGameOverlay) closeQuickGameModal();
   });

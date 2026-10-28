@@ -151,6 +151,12 @@ Not part of the app - helpers for testing and for running this machine's own cop
   (4244). Safari only opens the share sheet straight from the tap, so a pretend share sheet notes
   whether it was asked during the tap, and what it got: during the tap, with the backup (no contacts),
   a real PNG and the text. `node tests/probe_day_report_share.js`.
+- `probe_race_to_one.js` - a race to 1 is no race: Quick Game's "🎱 Open play" and Current
+  Session's "🎯 Single Game" keep a running tally (no "won the tournament" popup, no fanfare, no new
+  session, no tournament in the stats, no 🏁, "Wins" on the card); Quick Game's "🏁 Race to [n]" is a
+  real race (milestone exactly at n) and is remembered; the leaderboard says "1 win" and "1 tournament
+  win". The fanfare is spotted by counting Web Audio oscillators. Its own file server on 4245.
+  `node tests/probe_race_to_one.js [screenshot dir]`.
 - `probe_out_of_view.js` - out of view: a named player who walks out of the picture keeps a tag at
   the edge they left by (name, time, arrow), is kept past the 12 s a hidden player is looked for,
   and gets their path and name back coming in at that edge; hidden mid-picture as long: no name;
