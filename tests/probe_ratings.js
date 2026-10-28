@@ -5,7 +5,10 @@
 //   game on one device - not whichever device's number came last;
 // - "José" typed as one character or as e + accent (a Mac file), or "Jo  Bob" with two spaces, is
 //   one player, in the stats and in the ratings;
-// - "reset all ratings" stays reset after a restart.
+// - "reset all ratings" stays reset after a restart;
+// - the rules: both players of a game move by the same amount (ratings always add up), team games
+//   are rated (each side by its average), a longer game counts more (a Straight Pool game to 100
+//   about 2.7 times a rack), and an old team game from before stays unrated until a recompute.
 // Its own file server on 4247; players' game logs are seeded straight into storage.
 // usage: node tests/probe_ratings.js
 const puppeteer = require("puppeteer-core");
@@ -84,6 +87,7 @@ const ts = (dayOffset, minute) => new Date(Date.UTC(2026, 8, 1 + dayOffset, 18, 
   check("600 games rated once: Alice and Bob each 600 games played", r1.Alice && r1.Alice.gamesPlayed === 600 && r1.Bob.gamesPlayed === 600, brief(r1));
   check("...three starts in a row: the same ratings and games played (nothing re-rated)", JSON.stringify(brief(r1)) === JSON.stringify(brief(r2)) && JSON.stringify(brief(r2)) === JSON.stringify(brief(r3)), [brief(r1), brief(r2), brief(r3)]);
   const sorted = (h) => h.every((x, i) => i === 0 || h[i - 1].ts <= x.ts);
+  check("...both move by the same amount: Alice + Bob still add up to 800", r3.Alice.rating + r3.Bob.rating === 800, { alice: r3.Alice.rating, bob: r3.Bob.rating });
   check("...histories keep the last 500 points, in time order", r3.Alice.history.length === 500 && sorted(r3.Alice.history) && sorted(r3.Bob.history), { len: r3.Alice.history.length });
   await page.close();
 
@@ -123,6 +127,37 @@ const ts = (dayOffset, minute) => new Date(Date.UTC(2026, 8, 1 + dayOffset, 18, 
   await ref.close();
   check("merging table B's iPad into table A's: Bob, Carl and Dan rated as if every game was on one device", ["Bob", "Carl", "Dan"].every((n) => merged[n] && oneDevice[n] && merged[n].rating === oneDevice[n].rating && merged[n].games === oneDevice[n].games), { beforeMerge, merged, oneDevice });
   check("...Bob: 32 games played (30 + 2), not one device's count", merged.Bob && merged.Bob.games === 32, merged.Bob);
+  check("...and the three still add up to 1200", merged.Bob.rating + merged.Carl.rating + merged.Dan.rating === 1200, merged);
+
+  // ---- 2b. Team games are rated; a longer game counts more ----
+  const game = (w, l, t, extra) => Object.assign({ ts: t, gameType: "8ball", gameLabel: "8-Ball", target: 1, unit: "rack", winnerNames: w, opponentNames: l, teammateNames: [], isTeam: w.length > 1 }, extra || {});
+  const logs = {};
+  const put = (name, g, won) => { (logs[name] = logs[name] || { name, sessions: [{ date: g.ts.slice(0, 10), wins: 0, gamesWon: [], opponents: [], games: [] }] }).sessions[0].games.push(Object.assign({}, g, { result: won ? "won" : "lost" })); };
+  const seedGame = (g) => { g.winnerNames.forEach((n) => put(n, g, true)); g.opponentNames.forEach((n) => put(n, g, false)); };
+  seedGame(game(["Kai"], ["Lin"], ts(5, 0)));
+  seedGame(game(["Mo"], ["Ned"], ts(5, 5), { gameType: "straight", gameLabel: "Straight Pool", target: 100, unit: "points" }));
+  seedGame(game(["Ola", "Pia"], ["Quin", "Rex"], ts(5, 10), { teamRated: true }));
+  seedGame(game(["Sol", "Tam"], ["Uma", "Vic"], ts(5, 15))); // (an old team game: no teamRated)
+  page = await open({ [STATS]: logs });
+  const rr = brief(await ratings(page));
+  check("an 8-Ball rack between two new players: +12 / -12", rr.Kai && rr.Kai.rating === 412 && rr.Lin.rating === 388, { Kai: rr.Kai, Lin: rr.Lin });
+  check("...a Straight Pool game to 100 counts about 2.7 racks: +32 / -32", rr.Mo && rr.Mo.rating === 432 && rr.Ned.rating === 368, { Mo: rr.Mo, Ned: rr.Ned });
+  check("...a team game moves all four players (each side by its average)", rr.Ola && rr.Ola.rating > 400 && rr.Pia.rating > 400 && rr.Quin.rating < 400 && rr.Rex.rating < 400, { Ola: rr.Ola, Quin: rr.Quin });
+  check("...an old team game from before team games were rated stays unrated", !rr.Sol && !rr.Uma, { Sol: rr.Sol, Uma: rr.Uma });
+  await page.close();
+
+  // ---- 2c. Live: a regular beats a newcomer - the card's preview is what happens, both move the same ----
+  const regLog = [];
+  for (let i = 0; i < 25; i++) regLog.push([i % 2 ? "Reg" : "Old", i % 2 ? "Old" : "Reg", ts(6, i)]);
+  page = await open({ [STATS]: statsFor(regLog) }, ["Reg", "Newb"]);
+  const before = await ratings(page);
+  const preview = await page.evaluate(() => { const plus = [...document.querySelectorAll("#scoreboard button.btn-ball.plus")].find((b) => b.getAttribute("aria-label") === "Add point for Reg"); const card = plus.closest(".player-panel"); const p = card.querySelector(".rating-pronostic"); return p ? p.textContent : null; });
+  await page.evaluate(() => [...document.querySelectorAll("#scoreboard button.btn-ball.plus")].find((b) => b.getAttribute("aria-label") === "Add point for Reg").click());
+  await sleep(500);
+  const after2 = await ratings(page);
+  const regGain = after2.Reg.rating - before.Reg.rating, newbLoss = after2.Newb.rating - 400;
+  check("a regular (8 a game) beats a newcomer (24): both move the same, " + regGain + " / " + newbLoss + ", as the card said (" + preview + ")", regGain > 0 && regGain === -newbLoss && preview && preview.replace(/\s/g, "").indexOf("+" + regGain + "/") === 0, { regGain, newbLoss, preview });
+  await page.close();
 
   // ---- 3. One player, however the name was typed ----
   const nfd = "José", nfc = "José";

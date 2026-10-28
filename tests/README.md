@@ -168,8 +168,11 @@ Not part of the app - helpers for testing and for running this machine's own cop
   give the same ratings and games played on three starts in a row, histories in time order;
   merging another iPad's backup ("Add to what's here") gives the ratings of every game played on one
   device; "José" typed as one character or e + accent, and "Jo  Bob" with two spaces, are one
-  player in stats and ratings; "reset all ratings" stays reset after a restart. Its own file server
-  on 4247. `node tests/probe_ratings.js`.
+  player in stats and ratings; "reset all ratings" stays reset after a restart; the rules: both
+  players move by the same amount (ratings add up; a regular vs a newcomer: the card's +X/-Y is what
+  happens), team games are rated (each side by its average), a longer game counts more (Straight
+  Pool to 100: +32 against +12 for a rack), an old team game stays unrated until a recompute. Its
+  own file server on 4247. `node tests/probe_ratings.js`.
 - `probe_out_of_view.js` - out of view: a named player who walks out of the picture keeps a tag at
   the edge they left by (name, time, arrow), is kept past the 12 s a hidden player is looked for,
   and gets their path and name back coming in at that edge; hidden mid-picture as long: no name;

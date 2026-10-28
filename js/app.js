@@ -4990,7 +4990,7 @@
     name.appendChild(buildRatingBadge(player.name));
     var soleOpponent = soleActiveOpponent(player);
     if (soleOpponent) {
-      name.appendChild(buildRatingPronosticEl(ratingPronosticVsOpponent(player.name, getPlayerRating(soleOpponent.name))));
+      name.appendChild(buildRatingPronosticEl(ratingPronosticVsOpponent(player.name, getPlayerRating(soleOpponent.name), soleOpponent.name)));
     }
     panel.appendChild(name);
 
@@ -6409,8 +6409,9 @@
       winnerNames: winnerNames,
       winnerIds: winnerIds,
       isTeam: isTeam,
-      // (a team game rated as Rotating Teams - see applyRotatingTeamsRatingResult)
-      rotatingTeams: !!(isTeam && state.rotatingTeamsEnabled),
+      unit: state.currentGame.unit,
+      // (a team game rated the team way - see applyRotatingTeamsRatingResult)
+      teamRated: !!isTeam,
       teamId: isTeam ? key : null,
       teamComboKey: teamComboKeyValue,
       opponentNames: opponentNames,
@@ -6444,15 +6445,15 @@
       // member the same amount regardless of their own rating, produced
       // confusing swings unrelated to that player's own performance.
       if (winnerNames.length > 1 || opponentNames.length > 1) {
-        applyMultiWayRatingResult(winnerNames, opponentNames, ts);
+        applyMultiWayRatingResult(winnerNames, opponentNames, ts, currentGameRatingWeight());
       } else {
-        applyPairwiseRatingResult(winnerNames[0], opponentNames[0], ts);
+        applyPairwiseRatingResult(winnerNames[0], opponentNames[0], ts, currentGameRatingWeight());
       }
       saveRatingsToStorage(PLAYER_RATINGS);
-    } else if (!noStatsMode && isTeam && state.rotatingTeamsEnabled) {
-      // The one explicit exception to "Team Mode isn't rated" above -
-      // see applyRotatingTeamsRatingResult's own comment.
-      applyRotatingTeamsRatingResult(winnerNames, opponentNames, ts);
+    } else if (!noStatsMode && isTeam) {
+      // Team games are rated too: each side by its average rating (see
+      // applyRotatingTeamsRatingResult).
+      applyRotatingTeamsRatingResult(winnerNames, opponentNames, ts, currentGameRatingWeight());
       saveRatingsToStorage(PLAYER_RATINGS);
     }
     state.gamesPlayedCount += 1;
@@ -10557,7 +10558,7 @@
     // real games too, so a member's overall rating (shown everywhere
     // else via buildRatingBadge) should move with their league record
     // instead of staying frozen at whatever it was before they joined.
-    applyPairwiseRatingResult(aWon ? nameA : nameB, aWon ? nameB : nameA, ts);
+    applyPairwiseRatingResult(aWon ? nameA : nameB, aWon ? nameB : nameA, ts, leagueMatchRatingWeight(league, { scoreA: scoreA, scoreB: scoreB }));
     saveRatingsToStorage(PLAYER_RATINGS);
 
     saveLeaguesToStorage(LEAGUES);
@@ -14835,22 +14836,28 @@
   // keepManual: hand-entered ratings and resets stay, as events at their
   // own moment in the replay (after merging a backup); without it (the
   // explicit "recompute" button) only the games count.
+  // Under today's rules: every game (team games too), each weighted by its
+  // length, and league matches (kept in the leagues, not the game logs).
   function recomputeAllRatingsFromGameHistory(keepManual) {
-    // A team game moved ratings only as Rotating Teams - known from the
-    // game itself, or (older games) from its points in the histories.
-    var ratedTeamTs = {};
     var manual = [];
     Object.keys(PLAYER_RATINGS).forEach(function (key) {
       (PLAYER_RATINGS[key].history || []).forEach(function (h) {
-        if (h.fromGame) ratedTeamTs[h.ts] = true;
-        else if (keepManual && h.ts && typeof h.rating === "number") manual.push({ ts: h.ts, manual: true, name: key, rating: h.rating, reset: !!h.reset });
+        if (!h.fromGame && keepManual && h.ts && typeof h.rating === "number") manual.push({ ts: h.ts, manual: true, name: key, rating: h.rating, reset: !!h.reset });
       });
     });
     var byTs = {};
     getAllKnownPlayerNames().forEach(function (name) {
       allGamesForPlayerName(name).forEach(function (g) {
         if (g.result !== "won" || !g.ts || byTs[g.ts]) return;
-        byTs[g.ts] = { ts: g.ts, isTeam: !!g.isTeam, rotatingTeams: !!g.rotatingTeams, winnerNames: g.winnerNames || [], loserNames: g.opponentNames || [] };
+        byTs[g.ts] = { ts: g.ts, isTeam: !!g.isTeam, weight: ratingWeightFor(g.gameType, g.target, g.unit), winnerNames: g.winnerNames || [], loserNames: g.opponentNames || [] };
+      });
+    });
+    (LEAGUES || []).forEach(function (league) {
+      (league.matches || []).forEach(function (m) {
+        if (!m.ts || !m.winner || byTs[m.ts]) return;
+        var loser = m.winner === m.playerA ? m.playerB : m.playerA;
+        if (!loser) return;
+        byTs[m.ts] = { ts: m.ts, isTeam: false, weight: leagueMatchRatingWeight(league, m), winnerNames: [m.winner], loserNames: [loser] };
       });
     });
     var toApply = Object.keys(byTs)
@@ -14874,15 +14881,9 @@
         return;
       }
       if (!g.winnerNames.length || !g.loserNames.length) return;
-      if (g.isTeam) {
-        if (g.rotatingTeams || ratedTeamTs[g.ts]) applyRotatingTeamsRatingResult(g.winnerNames, g.loserNames, g.ts);
-        return;
-      }
-      if (g.winnerNames.length > 1 || g.loserNames.length > 1) {
-        applyMultiWayRatingResult(g.winnerNames, g.loserNames, g.ts);
-      } else {
-        applyPairwiseRatingResult(g.winnerNames[0], g.loserNames[0], g.ts);
-      }
+      if (g.isTeam) applyRotatingTeamsRatingResult(g.winnerNames, g.loserNames, g.ts, g.weight);
+      else if (g.winnerNames.length > 1 || g.loserNames.length > 1) applyMultiWayRatingResult(g.winnerNames, g.loserNames, g.ts, g.weight);
+      else applyPairwiseRatingResult(g.winnerNames[0], g.loserNames[0], g.ts, g.weight);
     });
     saveRatingsToStorage(PLAYER_RATINGS);
     return Object.keys(PLAYER_RATINGS).length;
@@ -15035,11 +15036,38 @@
   // expected-score term - just read-only (getPlayerRatingEntry, never
   // ensureRatingEntry, so merely opening the scoreboard can't create a
   // rating entry for someone who hasn't played a rated game yet).
-  function ratingPronosticVsOpponent(name, opponentRating) {
+  // How much one result moves ratings: a rack is 1; a longer game - a
+  // game of several racks, a Straight Pool game (about 14 balls a rack) -
+  // counts more, by the square root of its racks (only who won the whole
+  // game is known, not every rack), at most 3 times a rack.
+  function ratingWeightFor(gameType, target, unit) {
+    var u = unit || (target === 1 ? "rack" : (GAME_TYPES[gameType] && GAME_TYPES[gameType].unit) || "rack");
+    var racks = 1;
+    if (u === "rack") racks = target || 1;
+    else if (gameType === "straight") racks = (target || 0) / 14;
+    return Math.sqrt(Math.max(1, Math.min(9, racks)));
+  }
+  function currentGameRatingWeight() {
+    return ratingWeightFor(state.currentGame.gameType, state.currentGame.target, state.currentGame.unit);
+  }
+  // A league match is rated once: its racks played (APA 9-Ball scores
+  // points - about 10 a rack).
+  function leagueMatchRatingWeight(league, match) {
+    var played = (match.scoreA || 0) + (match.scoreB || 0);
+    var racks = league && league.format === "apa9ball" ? played / 10 : played;
+    return Math.sqrt(Math.max(1, Math.min(9, racks)));
+  }
+  // Both players of a game move by the same amount (each side's speed
+  // averaged), so a game never adds or removes rating points overall.
+  function pairRatingK(nameA, nameB) {
+    var a = getPlayerRatingEntry(nameA), b = getPlayerRatingEntry(nameB);
+    return (ratingKFor(a ? a.gamesPlayed : 0) + ratingKFor(b ? b.gamesPlayed : 0)) / 2;
+  }
+
+  function ratingPronosticVsOpponent(name, opponentRating, opponentName) {
     var entry = getPlayerRatingEntry(name);
     var myRating = entry ? entry.rating : DEFAULT_RATING;
-    var gamesPlayed = entry ? entry.gamesPlayed : 0;
-    var k = ratingKFor(gamesPlayed);
+    var k = (opponentName ? pairRatingK(name, opponentName) : ratingKFor(entry ? entry.gamesPlayed : 0)) * currentGameRatingWeight();
     var expected = eloExpectedScore(myRating, opponentRating);
     return { win: Math.round(k * (1 - expected)), lose: -Math.round(k * expected) };
   }
@@ -15084,14 +15112,14 @@
   // One pairwise result: winnerName beat loserName. Both ratings update
   // from their pre-game values (the expected score is computed once,
   // before either is touched).
-  function applyPairwiseRatingResult(winnerName, loserName, ts) {
+  // weight: see ratingWeightFor (1 = one rack).
+  function applyPairwiseRatingResult(winnerName, loserName, ts, weight) {
     var winnerEntry = ensureRatingEntry(winnerName);
     var loserEntry = ensureRatingEntry(loserName);
     var expectedWinner = eloExpectedScore(winnerEntry.rating, loserEntry.rating);
-    var winnerDelta = Math.round(ratingKFor(winnerEntry.gamesPlayed) * (1 - expectedWinner));
-    var loserDelta = Math.round(ratingKFor(loserEntry.gamesPlayed) * -(1 - expectedWinner));
-    bumpPlayerRating(winnerName, winnerDelta, ts);
-    bumpPlayerRating(loserName, loserDelta, ts);
+    var delta = Math.round(pairRatingK(winnerName, loserName) * (weight || 1) * (1 - expectedWinner));
+    bumpPlayerRating(winnerName, delta, ts);
+    bumpPlayerRating(loserName, -delta, ts);
   }
 
   function averageRating(names) {
@@ -15115,28 +15143,32 @@
   // player. Both reference ratings are read before any bump is applied,
   // so bumping one player never shifts another's "who's the strongest
   // opponent" calculation mid-game.
-  function applyMultiWayRatingResult(winnerNames, loserNames, ts) {
-    var strongestLoserRating = Math.max.apply(
-      null,
-      loserNames.map(function (n) {
-        return getPlayerRating(n);
-      })
-    );
-    var strongestWinnerRating = Math.max.apply(
-      null,
-      winnerNames.map(function (n) {
-        return getPlayerRating(n);
-      })
-    );
-    winnerNames.forEach(function (n) {
+  function applyMultiWayRatingResult(winnerNames, loserNames, ts, weight) {
+    function strongest(names) {
+      return names.reduce(function (best, n) {
+        return best === null || getPlayerRating(n) > getPlayerRating(best) ? n : best;
+      }, null);
+    }
+    var strongestLoser = strongest(loserNames);
+    var strongestWinner = strongest(winnerNames);
+    var strongestLoserRating = getPlayerRating(strongestLoser);
+    var strongestWinnerRating = getPlayerRating(strongestWinner);
+    // (every K read before any bump, like the ratings)
+    var winnerK = winnerNames.map(function (n) {
+      return pairRatingK(n, strongestLoser) * (weight || 1);
+    });
+    var loserK = loserNames.map(function (n) {
+      return pairRatingK(n, strongestWinner) * (weight || 1);
+    });
+    winnerNames.forEach(function (n, i) {
       var entry = ensureRatingEntry(n);
       var expected = eloExpectedScore(entry.rating, strongestLoserRating);
-      bumpPlayerRating(n, Math.round(ratingKFor(entry.gamesPlayed) * (1 - expected)), ts);
+      bumpPlayerRating(n, Math.round(winnerK[i] * (1 - expected)), ts);
     });
-    loserNames.forEach(function (n) {
+    loserNames.forEach(function (n, i) {
       var entry = ensureRatingEntry(n);
       var expected = eloExpectedScore(entry.rating, strongestWinnerRating);
-      bumpPlayerRating(n, -Math.round(ratingKFor(entry.gamesPlayed) * expected), ts);
+      bumpPlayerRating(n, -Math.round(loserK[i] * expected), ts);
     });
   }
 
@@ -15154,17 +15186,24 @@
   // still picks their own K-factor, same as every other rating path,
   // so a provisional teammate still moves faster than an established
   // one even off the identical expected-score term.
-  function applyRotatingTeamsRatingResult(winnerNames, loserNames, ts) {
+  // Now every team game (Teams mode, a doubles entrant in a tournament),
+  // not only Rotating Teams.
+  function applyRotatingTeamsRatingResult(winnerNames, loserNames, ts, weight) {
     var winnerAvg = averageRating(winnerNames);
     var loserAvg = averageRating(loserNames);
     var expectedWinner = eloExpectedScore(winnerAvg, loserAvg);
-    winnerNames.forEach(function (n) {
-      var entry = ensureRatingEntry(n);
-      bumpPlayerRating(n, Math.round(ratingKFor(entry.gamesPlayed) * (1 - expectedWinner)), ts);
+    var w = weight || 1;
+    var winnerK = winnerNames.map(function (n) {
+      return ratingKFor(ensureRatingEntry(n).gamesPlayed) * w;
     });
-    loserNames.forEach(function (n) {
-      var entry = ensureRatingEntry(n);
-      bumpPlayerRating(n, -Math.round(ratingKFor(entry.gamesPlayed) * expectedWinner), ts);
+    var loserK = loserNames.map(function (n) {
+      return ratingKFor(ensureRatingEntry(n).gamesPlayed) * w;
+    });
+    winnerNames.forEach(function (n, i) {
+      bumpPlayerRating(n, Math.round(winnerK[i] * (1 - expectedWinner)), ts);
+    });
+    loserNames.forEach(function (n, i) {
+      bumpPlayerRating(n, -Math.round(loserK[i] * expectedWinner), ts);
     });
   }
 
@@ -15193,6 +15232,7 @@
         return sum + ratingKFor(entry ? entry.gamesPlayed : 0);
       }, 0) / myNames.length;
     var expected = eloExpectedScore(myAvg, opponentAvg);
+    avgK *= currentGameRatingWeight();
     return { win: Math.round(avgK * (1 - expected)), lose: -Math.round(avgK * expected) };
   }
 
@@ -15254,7 +15294,7 @@
     getAllKnownPlayerNames().forEach(function (name) {
       allGamesForPlayerName(name).forEach(function (g) {
         if (g.result !== "won" || !g.ts || alreadyRated[g.ts] || byTs[g.ts]) return;
-        byTs[g.ts] = { ts: g.ts, isTeam: !!g.isTeam, winnerNames: g.winnerNames || [], loserNames: g.opponentNames || [] };
+        byTs[g.ts] = { ts: g.ts, isTeam: !!g.isTeam, teamRated: !!(g.teamRated || g.rotatingTeams), weight: ratingWeightFor(g.gameType, g.target, g.unit), winnerNames: g.winnerNames || [], loserNames: g.opponentNames || [] };
       });
     });
 
@@ -15268,11 +15308,17 @@
     if (!toApply.length) return;
 
     toApply.forEach(function (g) {
-      if (!g.winnerNames.length || !g.loserNames.length || g.isTeam) return;
+      if (!g.winnerNames.length || !g.loserNames.length) return;
+      // (an old team game from before team games were rated stays unrated
+      // here - a full recompute rates it under today's rules)
+      if (g.isTeam) {
+        if (g.teamRated) applyRotatingTeamsRatingResult(g.winnerNames, g.loserNames, g.ts, g.weight);
+        return;
+      }
       if (g.winnerNames.length > 1 || g.loserNames.length > 1) {
-        applyMultiWayRatingResult(g.winnerNames, g.loserNames, g.ts);
+        applyMultiWayRatingResult(g.winnerNames, g.loserNames, g.ts, g.weight);
       } else {
-        applyPairwiseRatingResult(g.winnerNames[0], g.loserNames[0], g.ts);
+        applyPairwiseRatingResult(g.winnerNames[0], g.loserNames[0], g.ts, g.weight);
       }
     });
     // (older games rated now land after newer points - keep every history
@@ -20625,7 +20671,8 @@
             })
           : [],
         isTeam: entry.isTeam,
-        rotatingTeams: entry.rotatingTeams || false,
+        unit: entry.unit,
+        teamRated: !!(entry.teamRated || entry.rotatingTeams),
         mvpName: entry.mvpName,
         durationMs: entry.durationMs,
         wonRace: entry.wonRace,
@@ -22959,6 +23006,13 @@
       }
 
       var k = isTeam ? RATING_K_PROVISIONAL : ratingKFor(gamesPlayedBefore);
+      // The points actually on the line for this result (both players'
+      // speeds averaged, times the game's length - see ratingWeightFor),
+      // read back from the real change and the odds before it.
+      if (rawExpectedPct !== null && typeof h.delta === "number") {
+        var share = game.result === "won" ? 1 - rawExpectedPct / 100 : rawExpectedPct / 100;
+        if (share > 0.02) k = Math.round(Math.abs(h.delta) / share);
+      }
       var kStatus = isTeam || gamesPlayedBefore < RATING_PROVISIONAL_GAMES
         ? T("playerPage.ratingHistoryProvisional", { games: RATING_PROVISIONAL_GAMES })
         : T("playerPage.ratingHistoryEstablished");
@@ -28840,15 +28894,14 @@
       mvpId: null,
       mvpName: null,
       durationMs: durationMs,
-      summary: winnerLabel + " won " + typeLabel + " (tournament vs " + loserLabel + ")"
+      summary: winnerLabel + " won " + typeLabel + " (tournament vs " + loserLabel + ")",
+      teamRated: isTeam
     });
     trimGameHistory();
-    if (!isTeam) {
-      // A doubles-entrant match isn't rated at all - see
-      // applyMultiWayRatingResult's comment on creditWin's isTeam check.
-      applyPairwiseRatingResult(winnerMembers[0], loserMembers[0], ts);
-      saveRatingsToStorage(PLAYER_RATINGS);
-    }
+    var rackWeight = ratingWeightFor(TOURNAMENT.gameType, TOURNAMENT.target);
+    if (isTeam) applyRotatingTeamsRatingResult(winnerMembers, loserMembers, ts, rackWeight);
+    else applyPairwiseRatingResult(winnerMembers[0], loserMembers[0], ts, rackWeight);
+    saveRatingsToStorage(PLAYER_RATINGS);
     saveState();
   }
 
