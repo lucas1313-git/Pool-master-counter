@@ -164,6 +164,12 @@ Not part of the app - helpers for testing and for running this machine's own cop
   the board first, Start Without Saving still drops it; importing a 19:00-01:00 night keeps all 13
   games in Los Angeles and in Manila (time zones emulated). Its own file server on 4246.
   `node tests/probe_pool_day.js`.
+- `probe_ratings.js` - ratings that stay right: 600 rated games (past the 500-point history cap)
+  give the same ratings and games played on three starts in a row, histories in time order;
+  merging another iPad's backup ("Add to what's here") gives the ratings of every game played on one
+  device; "José" typed as one character or e + accent, and "Jo  Bob" with two spaces, are one
+  player in stats and ratings; "reset all ratings" stays reset after a restart. Its own file server
+  on 4247. `node tests/probe_ratings.js`.
 - `probe_out_of_view.js` - out of view: a named player who walks out of the picture keeps a tag at
   the edge they left by (name, time, arrow), is kept past the 12 s a hidden player is looked for,
   and gets their path and name back coming in at that edge; hidden mid-picture as long: no name;

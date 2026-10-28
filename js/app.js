@@ -241,8 +241,16 @@
   // "bob" are the same person. This is the single normalization key used
   // to compare/group names; the actual display casing is decided by
   // resolvePlayerName / consolidateCaseVariantPlayerStats below.
+  // Also the same person whichever way an accent was typed ("José" as one
+  // character or as e + combining accent, which a Mac file can bring) or
+  // with a double space.
   function normalizeNameKey(name) {
-    return (name || "").trim().toLowerCase();
+    return cleanNameText(name).toLowerCase();
+  }
+  function cleanNameText(name) {
+    var text = String(name || "");
+    if (text.normalize) text = text.normalize("NFC");
+    return text.replace(/\s+/g, " ").trim();
   }
 
   // Generic chevron collapse/expand for any element carrying the
@@ -5978,7 +5986,7 @@
   // ("bob smith" -> "Bob Smith"), so intentional casing elsewhere in a
   // name (e.g. "McDonald") is left alone.
   function capitalizeName(name) {
-    return (name || "").replace(/\S+/g, function (word) {
+    return cleanNameText(name).replace(/\S+/g, function (word) {
       return word.charAt(0).toUpperCase() + word.slice(1);
     });
   }
@@ -6401,6 +6409,8 @@
       winnerNames: winnerNames,
       winnerIds: winnerIds,
       isTeam: isTeam,
+      // (a team game rated as Rotating Teams - see applyRotatingTeamsRatingResult)
+      rotatingTeams: !!(isTeam && state.rotatingTeamsEnabled),
       teamId: isTeam ? key : null,
       teamComboKey: teamComboKeyValue,
       opponentNames: opponentNames,
@@ -12929,6 +12939,7 @@
     if (noStatsMode) return;
     try {
       localStorage.setItem(RATINGS_KEY, JSON.stringify(ratings));
+      if (RATED_GAMES) localStorage.setItem(RATED_GAMES_KEY, JSON.stringify(Object.keys(RATED_GAMES)));
     } catch (e) {
       console.warn("Could not save ratings.", e);
     }
@@ -13631,6 +13642,37 @@
   }
 
   var PLAYER_RATINGS = loadRatingsFromStorage();
+
+  // Every game that has moved ratings, by its time - kept apart from the
+  // players' rating histories, which only keep their last
+  // RATING_HISTORY_CAP points. Start-up rates any game it doesn't find
+  // here (an imported player's, say); before this record, a game that had
+  // simply fallen off a long history looked unrated and was rated again
+  // on every start, so ratings and games played crept up for good. Also
+  // keeps "reset ratings" and an abandoned tournament's reverted games
+  // from being re-rated on the next start. null until built on this device
+  // (see seedRatedGames).
+  var RATED_GAMES_KEY = "poolMasterCounter.ratedGames.v1";
+  // Set by an "Add to what's here" import: the next start rebuilds every
+  // rating from the combined games (see backfillMissingRatingsFromHistory).
+  var RATINGS_RECOMPUTE_KEY = "poolMasterCounter.ratingsRecomputePending.v1";
+  var RATED_GAMES = (function () {
+    try {
+      var list = JSON.parse(localStorage.getItem(RATED_GAMES_KEY) || "null");
+      if (!Array.isArray(list)) return null;
+      var set = {};
+      list.forEach(function (ts) {
+        set[ts] = true;
+      });
+      return set;
+    } catch (e) {
+      return null;
+    }
+  })();
+  function markGameRated(ts) {
+    if (!RATED_GAMES) RATED_GAMES = {};
+    if (ts) RATED_GAMES[ts] = true;
+  }
   (function consolidateRatingsCasingOnBoot() {
     var result = consolidateCaseVariantRatings(PLAYER_RATINGS);
     PLAYER_RATINGS = result.ratings;
@@ -14757,9 +14799,13 @@
         saveResetSnapshot("allRatings", T("resetSnapshot.allRatingsLabel"), {
           ratings: JSON.parse(JSON.stringify(PLAYER_RATINGS))
         });
+        // (a reset point in the history, not an empty one: a later rebuild
+        // from the games - after merging a backup - starts them over here too)
+        var ts = new Date().toISOString();
         state.players.forEach(function (p) {
           var key = findRatingKey(p.name) || p.name;
-          PLAYER_RATINGS[key] = { name: key, rating: DEFAULT_RATING, gamesPlayed: 0, history: [] };
+          var before = PLAYER_RATINGS[key] ? PLAYER_RATINGS[key].rating : DEFAULT_RATING;
+          PLAYER_RATINGS[key] = { name: key, rating: DEFAULT_RATING, gamesPlayed: 0, history: [{ ts: ts, rating: DEFAULT_RATING, delta: DEFAULT_RATING - before, reset: true }] };
         });
         saveRatingsToStorage(PLAYER_RATINGS);
         renderAll();
@@ -14786,25 +14832,52 @@
   // and replay logic as backfillMissingRatingsFromHistory, just without
   // its alreadyRated skip - here every game is meant to be replayed, not
   // only ones missing from history.
-  function recomputeAllRatingsFromGameHistory() {
+  // keepManual: hand-entered ratings and resets stay, as events at their
+  // own moment in the replay (after merging a backup); without it (the
+  // explicit "recompute" button) only the games count.
+  function recomputeAllRatingsFromGameHistory(keepManual) {
+    // A team game moved ratings only as Rotating Teams - known from the
+    // game itself, or (older games) from its points in the histories.
+    var ratedTeamTs = {};
+    var manual = [];
+    Object.keys(PLAYER_RATINGS).forEach(function (key) {
+      (PLAYER_RATINGS[key].history || []).forEach(function (h) {
+        if (h.fromGame) ratedTeamTs[h.ts] = true;
+        else if (keepManual && h.ts && typeof h.rating === "number") manual.push({ ts: h.ts, manual: true, name: key, rating: h.rating, reset: !!h.reset });
+      });
+    });
     var byTs = {};
     getAllKnownPlayerNames().forEach(function (name) {
       allGamesForPlayerName(name).forEach(function (g) {
         if (g.result !== "won" || !g.ts || byTs[g.ts]) return;
-        byTs[g.ts] = { ts: g.ts, isTeam: !!g.isTeam, winnerNames: g.winnerNames || [], loserNames: g.opponentNames || [] };
+        byTs[g.ts] = { ts: g.ts, isTeam: !!g.isTeam, rotatingTeams: !!g.rotatingTeams, winnerNames: g.winnerNames || [], loserNames: g.opponentNames || [] };
       });
     });
     var toApply = Object.keys(byTs)
       .map(function (ts) {
         return byTs[ts];
       })
+      .concat(manual)
       .sort(function (a, b) {
-        return a.ts.localeCompare(b.ts);
+        return a.ts.localeCompare(b.ts) || (a.manual ? 1 : 0) - (b.manual ? 1 : 0);
       });
 
     PLAYER_RATINGS = {};
+    RATED_GAMES = {};
     toApply.forEach(function (g) {
-      if (!g.winnerNames.length || !g.loserNames.length || g.isTeam) return;
+      if (g.manual) {
+        var entry = ensureRatingEntry(g.name);
+        entry.history.push({ ts: g.ts, rating: g.rating, delta: g.rating - entry.rating, reset: g.reset || undefined });
+        if (entry.history.length > RATING_HISTORY_CAP) entry.history.shift();
+        entry.rating = g.rating;
+        if (g.reset) entry.gamesPlayed = 0;
+        return;
+      }
+      if (!g.winnerNames.length || !g.loserNames.length) return;
+      if (g.isTeam) {
+        if (g.rotatingTeams || ratedTeamTs[g.ts]) applyRotatingTeamsRatingResult(g.winnerNames, g.loserNames, g.ts);
+        return;
+      }
       if (g.winnerNames.length > 1 || g.loserNames.length > 1) {
         applyMultiWayRatingResult(g.winnerNames, g.loserNames, g.ts);
       } else {
@@ -15004,6 +15077,7 @@
     // must not decrement it either.
     entry.history.push({ ts: ts, rating: entry.rating, delta: delta, fromGame: true });
     if (entry.history.length > RATING_HISTORY_CAP) entry.history.shift();
+    markGameRated(ts);
     return entry;
   }
 
@@ -15132,13 +15206,49 @@
   // for that game) in chronological order, so the rating ends up exactly
   // where it would have if the game had been rated live. Already-rated
   // games are skipped by ts, so this is safe to run on every boot.
-  function backfillMissingRatingsFromHistory() {
-    var alreadyRated = {};
+  // Builds RATED_GAMES the first time on a device (or after a Replace
+  // import of a backup that didn't carry one): every point in a history,
+  // and - for a full history, which has dropped its oldest points - that
+  // player's games from before its oldest kept point.
+  function seedRatedGames() {
+    RATED_GAMES = {};
+    var keptSince = {};
     Object.keys(PLAYER_RATINGS).forEach(function (key) {
-      (PLAYER_RATINGS[key].history || []).forEach(function (h) {
-        alreadyRated[h.ts] = true;
+      var history = PLAYER_RATINGS[key].history || [];
+      var oldest = null;
+      history.forEach(function (h) {
+        if (!h.ts) return;
+        RATED_GAMES[h.ts] = true;
+        if (oldest === null || h.ts < oldest) oldest = h.ts;
+      });
+      if (history.length >= RATING_HISTORY_CAP && oldest) keptSince[normalizeNameKey(key)] = oldest;
+    });
+    getAllKnownPlayerNames().forEach(function (name) {
+      var since = keptSince[normalizeNameKey(name)];
+      if (!since) return;
+      allGamesForPlayerName(name).forEach(function (g) {
+        if (g.ts && g.ts < since) RATED_GAMES[g.ts] = true;
       });
     });
+  }
+
+  function backfillMissingRatingsFromHistory() {
+    var recompute = false;
+    try {
+      recompute = localStorage.getItem(RATINGS_RECOMPUTE_KEY) === "1";
+    } catch (e) {}
+    if (recompute) {
+      recomputeAllRatingsFromGameHistory(true);
+      try {
+        localStorage.removeItem(RATINGS_RECOMPUTE_KEY);
+      } catch (e) {}
+      return;
+    }
+    if (!RATED_GAMES) {
+      seedRatedGames();
+      saveRatingsToStorage(PLAYER_RATINGS);
+    }
+    var alreadyRated = RATED_GAMES;
 
     var byTs = {};
     getAllKnownPlayerNames().forEach(function (name) {
@@ -15164,6 +15274,15 @@
       } else {
         applyPairwiseRatingResult(g.winnerNames[0], g.loserNames[0], g.ts);
       }
+    });
+    // (older games rated now land after newer points - keep every history
+    // in time order, which "change this week" and the graphs read)
+    Object.keys(PLAYER_RATINGS).forEach(function (key) {
+      var history = PLAYER_RATINGS[key].history || [];
+      history.sort(function (a, b) {
+        return a.ts.localeCompare(b.ts);
+      });
+      if (history.length > RATING_HISTORY_CAP) history.splice(0, history.length - RATING_HISTORY_CAP);
     });
     saveRatingsToStorage(PLAYER_RATINGS);
   }
@@ -15221,7 +15340,7 @@
   function computeRatingDeltaForDate(name, dateStr) {
     var entry = getPlayerRatingEntry(name);
     if (!entry || entry.history.length === 0) return null;
-    var dayStartMs = new Date(dateStr + "T00:00:00").getTime();
+    var dayStartMs = new Date(dateStr + "T" + String(POOL_DAY_START_HOUR).padStart(2, "0") + ":00:00").getTime();
     var dayEndMs = dayStartMs + 24 * 60 * 60 * 1000;
     var startRating = DEFAULT_RATING;
     var endRating = null;
@@ -16535,6 +16654,7 @@
       teams: SAVED_TEAMS,
       playerStats: PLAYER_STATS,
       ratings: PLAYER_RATINGS,
+      ratedGames: RATED_GAMES ? Object.keys(RATED_GAMES) : null,
       contacts: PLAYER_CONTACTS,
       playerAdded: PLAYER_ADDED,
       runRecords: RUN_RECORDS,
@@ -17261,10 +17381,31 @@
           seen[h.ts] = true;
           deduped.push(h);
         });
+      // Games played: this device's own count plus the games the other
+      // side adds (a restore puts back points a revert took away) - a
+      // history keeps only its last RATING_HISTORY_CAP points, so its
+      // length is no count of games. (An "Add" import then rebuilds every
+      // rating from the combined games anyway - RATINGS_RECOMPUTE_KEY.)
+      var local = localRatings && localRatings[name];
+      var imported = importedRatings && importedRatings[name];
+      var localTs = {};
+      ((local && local.history) || []).forEach(function (h) {
+        localTs[h.ts] = true;
+      });
+      var addedGames = deduped.filter(function (h) {
+        return h.fromGame && !localTs[h.ts];
+      });
+      addedGames.forEach(function (h) {
+        markGameRated(h.ts);
+      });
+      var gamesPlayed = local
+        ? (local.gamesPlayed || 0) + addedGames.length
+        : Math.max((imported && imported.gamesPlayed) || 0, addedGames.length);
+      if (deduped.length > RATING_HISTORY_CAP) deduped = deduped.slice(deduped.length - RATING_HISTORY_CAP);
       result[name] = {
         name: name,
         rating: deduped.length ? deduped[deduped.length - 1].rating : DEFAULT_RATING,
-        gamesPlayed: deduped.length,
+        gamesPlayed: gamesPlayed,
         history: deduped
       };
     });
@@ -18009,6 +18150,9 @@
             localStorage.setItem(TEAMS_KEY, JSON.stringify(teamMerge.teams));
             localStorage.setItem(PLAYER_STATS_KEY, JSON.stringify(mergedPlayerStats));
             localStorage.setItem(RATINGS_KEY, JSON.stringify(mergedRatings));
+            // (two devices' ratings are each a path through their own games -
+            // the true rating comes from all the games together, in order)
+            localStorage.setItem(RATINGS_RECOMPUTE_KEY, "1");
             localStorage.setItem(CONTACTS_KEY, JSON.stringify(mergedContacts));
             localStorage.setItem(PLAYER_ADDED_KEY, JSON.stringify(mergedPlayerAdded));
             localStorage.setItem(RUN_RECORDS_KEY, JSON.stringify(mergedRunRecords));
@@ -18351,6 +18495,12 @@
       localStorage.setItem(TEAMS_KEY, JSON.stringify(SAVED_TEAMS));
       localStorage.setItem(PLAYER_STATS_KEY, JSON.stringify(PLAYER_STATS));
       localStorage.setItem(RATINGS_KEY, JSON.stringify(PLAYER_RATINGS));
+      // (the file's record of rated games; an older file without one gets it
+      // rebuilt from its own rating histories on the next start)
+      if (keepPlayersOnly) localStorage.setItem(RATED_GAMES_KEY, "[]");
+      else if (Array.isArray(data.ratedGames)) localStorage.setItem(RATED_GAMES_KEY, JSON.stringify(data.ratedGames));
+      else localStorage.removeItem(RATED_GAMES_KEY);
+      localStorage.removeItem(RATINGS_RECOMPUTE_KEY);
       localStorage.setItem(CONTACTS_KEY, JSON.stringify(PLAYER_CONTACTS));
       localStorage.setItem(PLAYER_ADDED_KEY, JSON.stringify(PLAYER_ADDED));
       localStorage.setItem(RUN_RECORDS_KEY, JSON.stringify(RUN_RECORDS));
@@ -20433,14 +20583,18 @@
   // one player on one calendar date, from any gameHistory array — the
   // live in-progress one, or one pulled out of an imported backup file.
   function computeSessionFromGameHistory(gameHistory, playerName, dateStr) {
+    var myKey = normalizeNameKey(playerName);
+    function isMe(n) {
+      return normalizeNameKey(n) === myKey;
+    }
     var gamesWon = [];
     var opponentSet = {};
     var games = [];
     (gameHistory || []).forEach(function (entry) {
       if (!entry || typeof entry === "string" || !entry.winnerNames || !entry.ts) return;
       if (localDateStrFromTs(entry.ts) !== dateStr) return;
-      var won = entry.winnerNames.indexOf(playerName) !== -1;
-      var lost = !won && (entry.opponentNames || []).indexOf(playerName) !== -1;
+      var won = entry.winnerNames.some(isMe);
+      var lost = !won && (entry.opponentNames || []).some(isMe);
       if (!won && !lost) return;
       if (won) {
         gamesWon.push(entry.gameLabel);
@@ -20467,10 +20621,11 @@
         opponentNames: won ? (entry.opponentNames || []) : entry.winnerNames.slice(),
         teammateNames: entry.isTeam
           ? myRawSide.filter(function (n) {
-              return n !== playerName;
+              return !isMe(n);
             })
           : [],
         isTeam: entry.isTeam,
+        rotatingTeams: entry.rotatingTeams || false,
         mvpName: entry.mvpName,
         durationMs: entry.durationMs,
         wonRace: entry.wonRace,

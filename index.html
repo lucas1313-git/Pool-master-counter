@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261028b">
+<link rel="stylesheet" href="css/style.css?v=20261028c">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -138,7 +138,7 @@
       </div>
       <p id="new-player-name-requirement" class="new-player-name-requirement hidden"></p>
       <form id="add-player-form" class="row">
-        <input type="text" id="new-player-name" data-i18n-placeholder="players.namePlaceholder" placeholder="Player name" autocomplete="off" required>
+        <input type="text" id="new-player-name" maxlength="40" data-i18n-placeholder="players.namePlaceholder" placeholder="Player name" autocomplete="off" required>
         <input type="number" id="new-player-rating" data-i18n-placeholder="players.ratingPlaceholder" placeholder="Starting rating (optional)" min="0" max="900" value="400">
         <button type="submit" id="btn-add-player" class="btn btn-primary" disabled data-i18n="common.add">Add</button>
       </form>
@@ -1118,10 +1118,10 @@
       <label class="race-mode-option"><input type="radio" name="quick-game-race-mode" id="quick-game-open-play" value="open"> <span data-i18n="quickGame.openPlay">🎱 Open play (no race)</span></label>
     </div>
     <div class="row">
-      <input type="text" id="quick-game-player1" data-i18n-placeholder="quickGame.player1Placeholder" placeholder="Player 1" autocomplete="off">
+      <input type="text" id="quick-game-player1" maxlength="40" data-i18n-placeholder="quickGame.player1Placeholder" placeholder="Player 1" autocomplete="off">
     </div>
     <div class="row">
-      <input type="text" id="quick-game-player2" data-i18n-placeholder="quickGame.player2Placeholder" placeholder="Who are you playing against?" autocomplete="off">
+      <input type="text" id="quick-game-player2" maxlength="40" data-i18n-placeholder="quickGame.player2Placeholder" placeholder="Who are you playing against?" autocomplete="off">
     </div>
     <div class="confirm-modal-actions">
       <button type="button" id="btn-quick-game-start" class="btn btn-primary" disabled data-i18n="quickGame.startButton">▶️ Start</button>
@@ -1455,7 +1455,7 @@
         </div>
         <p id="wizard-new-player-name-requirement" class="new-player-name-requirement hidden"></p>
         <form id="wizard-add-player-form" class="row">
-          <input type="text" id="wizard-new-player-name" data-i18n-placeholder="players.namePlaceholder" placeholder="Player name" autocomplete="off" required>
+          <input type="text" id="wizard-new-player-name" maxlength="40" data-i18n-placeholder="players.namePlaceholder" placeholder="Player name" autocomplete="off" required>
           <input type="number" id="wizard-new-player-rating" data-i18n-placeholder="players.ratingPlaceholder" placeholder="Starting rating (optional)" min="0" max="900" value="400">
           <button type="submit" id="wizard-btn-add-player" class="btn btn-primary" disabled data-i18n="common.add">Add</button>
         </form>
@@ -1542,7 +1542,7 @@
         <p class="wizard-step-explain" data-i18n="onboarding.step2Explain">What should we call you? An optional starting rating carries over a known rating from outside this device — leave it blank to start at the default.</p>
         <p id="onboarding-name-requirement" class="new-player-name-requirement hidden"></p>
         <div id="onboarding-name-form" class="row">
-          <input type="text" id="onboarding-name-input" data-i18n-placeholder="players.namePlaceholder" placeholder="Player name" autocomplete="off" required>
+          <input type="text" id="onboarding-name-input" maxlength="40" data-i18n-placeholder="players.namePlaceholder" placeholder="Player name" autocomplete="off" required>
           <input type="number" id="onboarding-rating-input" data-i18n-placeholder="players.ratingPlaceholder" placeholder="Starting rating (optional)" min="0" max="900" value="400">
         </div>
         <div id="onboarding-email-form" class="row">
@@ -2658,10 +2658,10 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/mp4-clip.js?v=20261028b"></script>
-<script src="js/local-recorder.js?v=20261028b"></script>
-<script src="js/app.js?v=20261028b"></script>
-<script src="js/camera-client.js?v=20261028b"></script>
-<script src="js/voice.js?v=20261028b"></script>
+<script src="js/mp4-clip.js?v=20261028c"></script>
+<script src="js/local-recorder.js?v=20261028c"></script>
+<script src="js/app.js?v=20261028c"></script>
+<script src="js/camera-client.js?v=20261028c"></script>
+<script src="js/voice.js?v=20261028c"></script>
 </body>
 </html>
