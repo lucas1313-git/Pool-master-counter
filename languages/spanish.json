@@ -1616,5 +1616,22 @@
   "voice.note.session": "Una sola frase, cada parte opcional, en cualquier orden: la carrera, los juegos de la rotación y cada cuánto cambia, los jugadores (de la Ficha de Contactos - los apodos sirven) y quién juega (todos los demás en Standby). Quien no se nombre sale de la sesión - o, si tiene partidas registradas en esta sesión, pasa a Standby.",
   "voice.done.session": "Sesión lista:",
   "voice.done.sessionPlayers": "Jugadores: {{names}}",
-  "voice.done.sessionLeft": "Salieron de la sesión: {{names}}"
+  "voice.done.sessionLeft": "Salieron de la sesión: {{names}}",
+  "saveFailed.title": "⚠️ NO GUARDADO",
+  "saveFailed.full": "El almacenamiento de este dispositivo está lleno: el último cambio no se guardó. Haz una copia ahora y luego libera espacio (ver almacenamiento).",
+  "saveFailed.other": "El último cambio no se pudo guardar en este dispositivo. Haz una copia ahora para conservar lo que hay en pantalla.",
+  "saveFailed.backup": "💾 Hacer copia ahora",
+  "saveFailed.storage": "Ver almacenamiento",
+  "alert.importNotSaved": "No se cambió nada: el almacenamiento de este dispositivo está lleno y no se pudo traer la copia. Libera espacio (Copia y restauración muestra qué lo ocupa) y vuelve a intentarlo.",
+  "storage.line": "Almacenamiento en este dispositivo: {{used}} de unos {{total}} MB usados ({{pct}} %).",
+  "storage.full": "Casi lleno: haz una copia y luego borra lo que no necesites (copias de Recuperar datos, muestras de la cámara).",
+  "storage.whatUses": "Qué lo ocupa",
+  "storage.group.games": "Historial de partidas de los jugadores",
+  "storage.group.camera": "Cámara (muestras de jugadores, foto de la sala)",
+  "storage.group.reports": "Archivo de informes",
+  "storage.group.recover": "Copias de Recuperar datos",
+  "storage.group.session": "La sesión en curso",
+  "storage.group.ratings": "Clasificaciones",
+  "storage.group.other": "Todo lo demás",
+  "storage.files": "Grabaciones y otros archivos: {{used}} MB (caben unos {{room}} GB más)."
 }

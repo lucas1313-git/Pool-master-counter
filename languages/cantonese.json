@@ -1616,5 +1616,22 @@
   "voice.note.session": "一句講晒,每部分都係可選,次序不拘:搶幾多局、輪換嘅局種同幾耐換一次、球員(聯絡名單入面嘅 - 用花名都得),同埋邊個上場(其他人全部候場)。冇提到嘅人會離開場次 - 如果今次場次有紀錄,就改為候場。",
   "voice.done.session": "場次已設定:",
   "voice.done.sessionPlayers": "球員:{{names}}",
-  "voice.done.sessionLeft": "離開咗場次:{{names}}"
+  "voice.done.sessionLeft": "離開咗場次:{{names}}",
+  "saveFailed.title": "⚠️ 未儲存",
+  "saveFailed.full": "呢部裝置嘅儲存空間滿咗，最後一個改動冇儲存到。而家先備份，再清走啲空間（睇吓儲存空間）。",
+  "saveFailed.other": "最後一個改動喺呢部裝置儲存唔到。而家備份，保住畫面上嘅嘢。",
+  "saveFailed.backup": "💾 而家備份",
+  "saveFailed.storage": "睇吓儲存空間",
+  "alert.importNotSaved": "乜都冇改到：呢部裝置嘅儲存空間滿咗，備份放唔入嚟。清走啲空間（備份同還原會顯示邊啲嘢佔用緊）再試。",
+  "storage.line": "呢部裝置嘅儲存空間：大約 {{total}} MB 入面用咗 {{used}}（{{pct}}%）。",
+  "storage.full": "差唔多滿：先備份，再清走用唔著嘅嘢（復原資料嘅副本、鏡頭樣本）。",
+  "storage.whatUses": "邊啲嘢佔用緊",
+  "storage.group.games": "球員嘅對局紀錄",
+  "storage.group.camera": "鏡頭（球員樣本、房間相片）",
+  "storage.group.reports": "報告存檔",
+  "storage.group.recover": "復原資料嘅副本",
+  "storage.group.session": "今晚嘅場次",
+  "storage.group.ratings": "評分",
+  "storage.group.other": "其他所有嘢",
+  "storage.files": "錄影同其他檔案：{{used}} MB（仲有大約 {{room}} GB 空間）。"
 }

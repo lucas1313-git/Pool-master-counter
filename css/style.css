@@ -9938,3 +9938,78 @@ input[type="number"].big-number-input {
   align-items: center;
   gap: 8px;
 }
+
+
+/* "NOT SAVED": a save failed (storage full, usually) - over everything,
+   until a save works again */
+.not-saved-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10000;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding: calc(10px + env(safe-area-inset-top, 0px)) 16px 10px;
+  background: #b3121b;
+  color: #fff;
+  font-size: 1.05rem;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+}
+.not-saved-banner strong {
+  font-size: 1.35rem;
+  letter-spacing: 0.04em;
+}
+.not-saved-banner #not-saved-message {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+.not-saved-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.not-saved-banner .btn-ghost {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.7);
+}
+body.has-not-saved-banner #app {
+  padding-top: 76px;
+}
+
+/* Backup & Restore: how full this device's storage is */
+.bk-storage {
+  margin-top: 12px;
+}
+.bk-storage-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.bk-storage-bar span {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+}
+.bk-storage.is-full .bk-storage-bar span {
+  background: var(--danger);
+}
+.bk-storage.is-full .bk-storage-line {
+  color: var(--danger);
+  font-weight: 700;
+}
+.bk-storage-details summary {
+  cursor: pointer;
+  margin-top: 6px;
+  color: var(--text-dim);
+}
+.bk-storage-list {
+  margin: 6px 0 0;
+  padding-left: 1.2em;
+  color: var(--text-dim);
+}

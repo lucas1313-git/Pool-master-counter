@@ -173,6 +173,12 @@ Not part of the app - helpers for testing and for running this machine's own cop
   happens), team games are rated (each side by its average), a longer game counts more (Straight
   Pool to 100: +32 against +12 for a rack), an old team game stays unrated until a recompute. Its
   own file server on 4247. `node tests/probe_ratings.js`.
+- `probe_storage.js` - storage you can trust: with the storage full, the next score shows the red
+  "NOT SAVED" bar (Back up now, See storage), gone again after the next save that works; Backup &
+  Restore's storage meter and "What's using it"; an import that doesn't fit ("Add to what's here"
+  and "Replace") changes no key and says so; a backup carries the camera page's room plan, tags, map
+  options and view, Quick Game's race and the Drive folder link. Fills the storage on purpose with a
+  junk key. Its own file server on 4249. `node tests/probe_storage.js`.
 - `probe_out_of_view.js` - out of view: a named player who walks out of the picture keeps a tag at
   the edge they left by (name, time, arrow), is kept past the 12 s a hidden player is looked for,
   and gets their path and name back coming in at that edge; hidden mid-picture as long: no name;

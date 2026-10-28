@@ -1616,5 +1616,22 @@
   "voice.note.session": "One sentence, every part optional, in any order: the race, the rotation's games and how often it changes, the players (from the Contact Sheet - nicknames are fine), and who's playing (everyone else on standby). Anyone not named leaves the session - or, with games recorded this session, goes on standby.",
   "voice.done.session": "Session set:",
   "voice.done.sessionPlayers": "Players: {{names}}",
-  "voice.done.sessionLeft": "Left the session: {{names}}"
+  "voice.done.sessionLeft": "Left the session: {{names}}",
+  "saveFailed.title": "⚠️ NOT SAVED",
+  "saveFailed.full": "This device's storage is full, so the last change wasn't saved. Back up now, then free some space (see storage).",
+  "saveFailed.other": "The last change couldn't be saved on this device. Back up now to keep what's on screen.",
+  "saveFailed.backup": "💾 Back up now",
+  "saveFailed.storage": "See storage",
+  "alert.importNotSaved": "Nothing was changed: this device's storage is full, so the backup couldn't be brought in. Free some space (Backup & Restore shows what's using it) and try again.",
+  "storage.line": "Storage on this device: {{used}} of about {{total}} MB used ({{pct}}%).",
+  "storage.full": "Almost full: back up, then clear what you don't need (Recover Data copies, camera samples).",
+  "storage.whatUses": "What's using it",
+  "storage.group.games": "Players' game logs",
+  "storage.group.camera": "Camera (player samples, room photo)",
+  "storage.group.reports": "Report archive",
+  "storage.group.recover": "Recover Data copies",
+  "storage.group.session": "Tonight's session",
+  "storage.group.ratings": "Ratings",
+  "storage.group.other": "Everything else",
+  "storage.files": "Recordings and other files: {{used}} MB (room for about {{room}} GB more)."
 }

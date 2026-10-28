@@ -1616,5 +1616,22 @@
   "voice.note.session": "Isang pangungusap, bawat bahagi ay opsyonal, kahit anong pagkakasunod: ang race, ang mga laro ng rotation at kung gaano kadalas magpalit, ang mga player (mula sa Listahan ng Contact - puwede ang palayaw), at kung sino ang naglalaro (Standby ang lahat ng iba). Ang hindi nabanggit ay aalis sa session - o, kung may larong naitala sa session na ito, mapupunta sa Standby.",
   "voice.done.session": "Naitakda ang session:",
   "voice.done.sessionPlayers": "Mga player: {{names}}",
-  "voice.done.sessionLeft": "Umalis sa session: {{names}}"
+  "voice.done.sessionLeft": "Umalis sa session: {{names}}",
+  "saveFailed.title": "⚠️ HINDI NA-SAVE",
+  "saveFailed.full": "Puno na ang storage ng device na ito, kaya hindi na-save ang huling pagbabago. Mag-backup ngayon, saka magbakante ng espasyo (tingnan ang storage).",
+  "saveFailed.other": "Hindi na-save sa device na ito ang huling pagbabago. Mag-backup ngayon para hindi mawala ang nasa screen.",
+  "saveFailed.backup": "💾 Mag-backup ngayon",
+  "saveFailed.storage": "Tingnan ang storage",
+  "alert.importNotSaved": "Walang nabago: puno na ang storage ng device na ito kaya hindi naipasok ang backup. Magbakante ng espasyo (makikita sa Backup at Restore kung ano ang gumagamit nito) at subukan ulit.",
+  "storage.line": "Storage sa device na ito: {{used}} sa humigit-kumulang {{total}} MB ang gamit ({{pct}}%).",
+  "storage.full": "Halos puno na: mag-backup, saka burahin ang hindi na kailangan (mga kopya sa Recover Data, mga sample ng camera).",
+  "storage.whatUses": "Ano ang gumagamit nito",
+  "storage.group.games": "Mga talaan ng laro ng mga manlalaro",
+  "storage.group.camera": "Camera (mga sample ng manlalaro, litrato ng kuwarto)",
+  "storage.group.reports": "Archive ng mga report",
+  "storage.group.recover": "Mga kopya sa Recover Data",
+  "storage.group.session": "Ang session ngayong gabi",
+  "storage.group.ratings": "Mga rating",
+  "storage.group.other": "Lahat ng iba pa",
+  "storage.files": "Mga recording at iba pang file: {{used}} MB (may puwang pa para sa mga {{room}} GB)."
 }

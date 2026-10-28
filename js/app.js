@@ -544,10 +544,74 @@
     if (noStatsMode) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      clearSaveFailure();
     } catch (e) {
-      console.warn("Could not save state.", e);
+      noteSaveFailure("state", e);
     }
     scheduleIdleReportAutoSave();
+  }
+
+  // Every save that fails ends up here: still logged, and now said on
+  // screen - a big red "NOT SAVED" bar over the board (storage full is the
+  // usual reason: camera samples, years of games), with a way to back up
+  // what's on screen and to see what's using the space. It goes away by
+  // itself once a save works again.
+  var saveFailureCount = 0;
+  function isQuotaError(e) {
+    return !!e && (e.name === "QuotaExceededError" || e.name === "NS_ERROR_DOM_QUOTA_REACHED" || e.code === 22 || e.code === 1014);
+  }
+  function noteSaveFailure(what, e) {
+    saveFailureCount += 1;
+    console.warn("Could not save " + what + ".", e);
+    var bar = document.getElementById("not-saved-banner");
+    if (!bar) return;
+    document.getElementById("not-saved-message").textContent = T(isQuotaError(e) ? "saveFailed.full" : "saveFailed.other");
+    bar.classList.remove("hidden");
+    document.body.classList.add("has-not-saved-banner");
+  }
+  function clearSaveFailure() {
+    var bar = document.getElementById("not-saved-banner");
+    if (!bar || bar.classList.contains("hidden")) return;
+    bar.classList.add("hidden");
+    document.body.classList.remove("has-not-saved-banner");
+  }
+
+  // Writes a set of keys as one (an import): if any write fails - thrown,
+  // or a save helper that reports through noteSaveFailure - every one of
+  // these keys gets its old value back, so the data is never left half old
+  // and half new. Old values go back after the new ones are cleared, so they
+  // fit again. True when everything was written.
+  function withStorageRollback(keys, write) {
+    var before = {};
+    keys.forEach(function (k) {
+      try {
+        before[k] = localStorage.getItem(k);
+      } catch (e) {
+        before[k] = null;
+      }
+    });
+    var failuresBefore = saveFailureCount;
+    var ok = true;
+    try {
+      write();
+    } catch (e) {
+      ok = false;
+      noteSaveFailure("the imported data", e);
+    }
+    if (ok && saveFailureCount !== failuresBefore) ok = false;
+    if (!ok) {
+      keys.forEach(function (k) {
+        try {
+          localStorage.removeItem(k);
+        } catch (e) {}
+      });
+      keys.forEach(function (k) {
+        try {
+          if (before[k] !== null) localStorage.setItem(k, before[k]);
+        } catch (e) {}
+      });
+    }
+    return ok;
   }
 
   function getPlayer(id) {
@@ -1714,7 +1778,7 @@
       try {
         localStorage.setItem(THEME_KEY, id);
       } catch (e) {
-        console.warn("Could not save theme.", e);
+        noteSaveFailure("theme", e);
       }
     }
   }
@@ -1764,7 +1828,7 @@
     try {
       localStorage.setItem(LANGUAGE_KEY, code);
     } catch (e) {
-      console.warn("Could not save language.", e);
+      noteSaveFailure("language", e);
     }
   }
 
@@ -3477,7 +3541,7 @@
     try {
       localStorage.setItem(FOCUS_MODE_KEY, on ? "1" : "0");
     } catch (e) {
-      console.warn("Could not save focus mode preference.", e);
+      noteSaveFailure("focus mode preference", e);
     }
   }
 
@@ -3498,7 +3562,7 @@
     try {
       localStorage.setItem(LEAGUE_FOCUS_MODE_KEY, on ? "1" : "0");
     } catch (e) {
-      console.warn("Could not save league focus mode preference.", e);
+      noteSaveFailure("league focus mode preference", e);
     }
   }
 
@@ -3522,7 +3586,7 @@
     try {
       localStorage.setItem(FARGO_ENABLED_KEY, on ? "1" : "0");
     } catch (e) {
-      console.warn("Could not save Fargo preference.", e);
+      noteSaveFailure("Fargo preference", e);
     }
   }
 
@@ -6665,7 +6729,7 @@
     try {
       localStorage.setItem(QUEUE_SWAP_STICKY_KEY, value ? "true" : "false");
     } catch (e) {
-      console.warn("Could not save queue-swap notice preference.", e);
+      noteSaveFailure("queue-swap notice preference", e);
     }
   }
 
@@ -7235,7 +7299,7 @@
     try {
       localStorage.setItem(RUN_RECORDS_KEY, JSON.stringify(data));
     } catch (e) {
-      console.warn("Could not save run records.", e);
+      noteSaveFailure("run records", e);
     }
   }
 
@@ -7274,7 +7338,7 @@
     try {
       localStorage.setItem(PLAYER_BEST_RUNS_KEY, JSON.stringify(data));
     } catch (e) {
-      console.warn("Could not save player best runs.", e);
+      noteSaveFailure("player best runs", e);
     }
   }
 
@@ -7328,7 +7392,7 @@
     try {
       localStorage.setItem(PLAYER_DAILY_BEST_RUNS_KEY, JSON.stringify(data));
     } catch (e) {
-      console.warn("Could not save player daily best runs.", e);
+      noteSaveFailure("player daily best runs", e);
     }
   }
 
@@ -7806,7 +7870,7 @@
     try {
       localStorage.setItem(DAY_NOTES_KEY, JSON.stringify(notes));
     } catch (e) {
-      console.warn("Could not save day notes.", e);
+      noteSaveFailure("day notes", e);
     }
   }
 
@@ -9335,7 +9399,7 @@
     try {
       localStorage.setItem(DAY_REPORT_FORMAT_KEY, format);
     } catch (e) {
-      console.warn("Could not save day report format.", e);
+      noteSaveFailure("day report format", e);
     }
   }
 
@@ -9356,7 +9420,7 @@
     try {
       localStorage.setItem(DAY_REPORT_ATTACH_BACKUP_KEY, value ? "true" : "false");
     } catch (e) {
-      console.warn("Could not save day report attach-backup preference.", e);
+      noteSaveFailure("day report attach-backup preference", e);
     }
   }
 
@@ -9378,7 +9442,7 @@
     try {
       localStorage.setItem(DAY_REPORT_ATTACH_COLORFUL_KEY, value ? "true" : "false");
     } catch (e) {
-      console.warn("Could not save day report attach-colorful preference.", e);
+      noteSaveFailure("day report attach-colorful preference", e);
     }
   }
 
@@ -9758,7 +9822,7 @@
     try {
       localStorage.setItem(ROSTERS_KEY, JSON.stringify(rosters));
     } catch (e) {
-      console.warn("Could not save rosters.", e);
+      noteSaveFailure("rosters", e);
     }
   }
 
@@ -9781,7 +9845,7 @@
     try {
       localStorage.setItem(TEAMS_KEY, JSON.stringify(teams));
     } catch (e) {
-      console.warn("Could not save teams.", e);
+      noteSaveFailure("teams", e);
     }
   }
 
@@ -9925,7 +9989,7 @@
     try {
       localStorage.setItem(LEAGUES_KEY, JSON.stringify(leagues));
     } catch (e) {
-      console.warn("Could not save leagues.", e);
+      noteSaveFailure("leagues", e);
     }
   }
 
@@ -12827,7 +12891,7 @@
         localStorage.setItem(PENDING_WIZARD_REOPEN_KEY, settingStep);
         localStorage.setItem(PENDING_AUTO_HOST_KEY, "1");
       } catch (e) {
-        console.warn("Could not save pending wizard reopen.", e);
+        noteSaveFailure("pending wizard reopen", e);
       }
       importFileInput.click();
     });
@@ -12884,7 +12948,7 @@
     try {
       localStorage.setItem(ROTATIONS_KEY, JSON.stringify(rotations));
     } catch (e) {
-      console.warn("Could not save rotations.", e);
+      noteSaveFailure("rotations", e);
     }
   }
 
@@ -12903,7 +12967,7 @@
     try {
       localStorage.setItem(GAME_SETUPS_KEY, JSON.stringify(setups));
     } catch (e) {
-      console.warn("Could not save game setups.", e);
+      noteSaveFailure("game setups", e);
     }
   }
 
@@ -12922,7 +12986,7 @@
     try {
       localStorage.setItem(PLAYER_STATS_KEY, JSON.stringify(allStats));
     } catch (e) {
-      console.warn("Could not save player stats.", e);
+      noteSaveFailure("player stats", e);
     }
   }
 
@@ -12942,7 +13006,7 @@
       localStorage.setItem(RATINGS_KEY, JSON.stringify(ratings));
       if (RATED_GAMES) localStorage.setItem(RATED_GAMES_KEY, JSON.stringify(Object.keys(RATED_GAMES)));
     } catch (e) {
-      console.warn("Could not save ratings.", e);
+      noteSaveFailure("ratings", e);
     }
   }
 
@@ -12963,7 +13027,7 @@
     try {
       localStorage.setItem(PLAYER_ADDED_KEY, JSON.stringify(added));
     } catch (e) {
-      console.warn("Could not save player added dates.", e);
+      noteSaveFailure("player added dates", e);
     }
   }
 
@@ -13066,7 +13130,7 @@
     try {
       localStorage.setItem(PLAYER_NAME_TRANSLATIONS_KEY, JSON.stringify(translations));
     } catch (e) {
-      console.warn("Could not save player name translations.", e);
+      noteSaveFailure("player name translations", e);
     }
   }
 
@@ -13089,7 +13153,7 @@
     try {
       localStorage.setItem(CONTACTS_KEY, JSON.stringify(contacts));
     } catch (e) {
-      console.warn("Could not save player contacts.", e);
+      noteSaveFailure("player contacts", e);
     }
   }
 
@@ -13115,7 +13179,7 @@
     try {
       localStorage.setItem(REMOVED_PLAYERS_KEY, JSON.stringify(removed));
     } catch (e) {
-      console.warn("Could not save removed players.", e);
+      noteSaveFailure("removed players", e);
     }
   }
 
@@ -13146,7 +13210,7 @@
     try {
       localStorage.setItem(GRAVEYARD_PLAYERS_KEY, JSON.stringify(graveyard));
     } catch (e) {
-      console.warn("Could not save graveyard players.", e);
+      noteSaveFailure("graveyard players", e);
     }
   }
 
@@ -13177,7 +13241,7 @@
     try {
       localStorage.setItem(MERGED_INTO_KEY, JSON.stringify(map));
     } catch (e) {
-      console.warn("Could not save merged-player records.", e);
+      noteSaveFailure("merged-player records", e);
     }
   }
 
@@ -13202,7 +13266,7 @@
     try {
       localStorage.setItem(RESET_SNAPSHOTS_KEY, JSON.stringify(snapshots));
     } catch (e) {
-      console.warn("Could not save reset snapshots.", e);
+      noteSaveFailure("reset snapshots", e);
     }
   }
 
@@ -13233,7 +13297,7 @@
     try {
       localStorage.setItem(REPORT_ARCHIVE_KEY, JSON.stringify(entries));
     } catch (e) {
-      console.warn("Could not save report archive.", e);
+      noteSaveFailure("report archive", e);
     }
   }
 
@@ -15907,7 +15971,7 @@
     try {
       localStorage.setItem(MIGRATED_FROM_REPO_KEY, "1");
     } catch (e) {
-      console.warn("Could not save migratedFromRepo flag.", e);
+      noteSaveFailure("migratedFromRepo flag", e);
     }
   }
 
@@ -15986,7 +16050,7 @@
     try {
       localStorage.setItem(LAST_SYNC_EXPORTER_NAME_KEY, name || "");
     } catch (e) {
-      console.warn("Could not save sync exporter name.", e);
+      noteSaveFailure("sync exporter name", e);
     }
   }
 
@@ -16005,7 +16069,7 @@
     try {
       localStorage.setItem(DRIVE_FOLDER_LINK_KEY, link || "");
     } catch (e) {
-      console.warn("Could not save Drive folder link.", e);
+      noteSaveFailure("Drive folder link", e);
     }
     // (one brought in by an import: shown, and where backups now go)
     if (driveFolderLinkInput && driveFolderLinkInput.value.trim() !== (link || "")) {
@@ -16030,7 +16094,7 @@
     try {
       localStorage.setItem(DRIVE_API_KEY_KEY, key || "");
     } catch (e) {
-      console.warn("Could not save Drive API key.", e);
+      noteSaveFailure("Drive API key", e);
     }
   }
 
@@ -16172,13 +16236,13 @@
     try { return localStorage.getItem(CHALLONGE_CLIENT_ID_KEY) || ""; } catch (e) { return ""; }
   }
   function saveChallongeClientId(id) {
-    try { localStorage.setItem(CHALLONGE_CLIENT_ID_KEY, id || ""); } catch (e) { console.warn("Could not save Challonge client id.", e); }
+    try { localStorage.setItem(CHALLONGE_CLIENT_ID_KEY, id || ""); } catch (e) { noteSaveFailure("Challonge client id", e); }
   }
   function loadChallongeClientSecret() {
     try { return localStorage.getItem(CHALLONGE_CLIENT_SECRET_KEY) || ""; } catch (e) { return ""; }
   }
   function saveChallongeClientSecret(secret) {
-    try { localStorage.setItem(CHALLONGE_CLIENT_SECRET_KEY, secret || ""); } catch (e) { console.warn("Could not save Challonge client secret.", e); }
+    try { localStorage.setItem(CHALLONGE_CLIENT_SECRET_KEY, secret || ""); } catch (e) { noteSaveFailure("Challonge client secret", e); }
   }
   function loadChallongeToken() {
     try {
@@ -16192,7 +16256,7 @@
     try {
       localStorage.setItem(CHALLONGE_TOKEN_KEY, JSON.stringify(token));
     } catch (e) {
-      console.warn("Could not save Challonge token.", e);
+      noteSaveFailure("Challonge token", e);
     }
   }
 
@@ -16215,7 +16279,7 @@
     try {
       localStorage.setItem(CHALLONGE_DAY_PUSHES_KEY, JSON.stringify(data));
     } catch (e) {
-      console.warn("Could not save Challonge day-push tracking.", e);
+      noteSaveFailure("Challonge day-push tracking", e);
     }
   }
   var CHALLONGE_DAY_PUSHES = loadChallongeDayPushes();
@@ -16243,7 +16307,7 @@
     try {
       localStorage.setItem(CHALLONGE_RACE_PUSHES_KEY, JSON.stringify(data));
     } catch (e) {
-      console.warn("Could not save Challonge race-push tracking.", e);
+      noteSaveFailure("Challonge race-push tracking", e);
     }
   }
 
@@ -16743,13 +16807,26 @@
   // device with no players yet adopting a backup (applyDeviceSettings).
   // (the storage names written out - several of their constants live in
   // scopes this one can't see, e.g. CAMERA_SETTINGS_STORAGE_KEY inside boot())
+  // Every key an import may write (see withStorageRollback).
+  function importStorageKeys() {
+    return [STORAGE_KEY, ROSTERS_KEY, TEAMS_KEY, PLAYER_STATS_KEY, RATINGS_KEY, RATED_GAMES_KEY, RATINGS_RECOMPUTE_KEY,
+      CONTACTS_KEY, PLAYER_ADDED_KEY, RUN_RECORDS_KEY, PLAYER_BEST_RUNS_KEY, DAY_NOTES_KEY, ROTATIONS_KEY, GAME_SETUPS_KEY,
+      PLAYER_NAME_TRANSLATIONS_KEY, CAMERA_ENROLLMENTS_KEY, REMOVED_PLAYERS_KEY, GRAVEYARD_PLAYERS_KEY, MERGED_INTO_KEY,
+      RESET_SNAPSHOTS_KEY, REPORT_ARCHIVE_KEY, REPORT_ARCHIVE_DELETED_KEY, PLAYER_DAILY_BEST_RUNS_KEY, CHALLONGE_DAY_PUSHES_KEY,
+      CHALLONGE_RACE_PUSHES_KEY, TOURNAMENT_KEY, TOURNAMENT_RESULTS_KEY, LEAGUES_KEY, LAST_SYNC_IMPORT_KEY,
+      LAST_SYNC_IMPORT_NAME_KEY, DRIVE_FOLDER_LINK_KEY].concat(deviceSettingKeys());
+  }
+
+  // (everything but videos goes in a backup: the camera page's room plan,
+  // tags, map options and view, and Quick Game's race, too)
   function deviceSettingKeys() {
     return ["poolMasterCounter.theme.v1", "poolMasterCounter.language.v1", "poolMasterCounter.focusMode", "poolMasterCounter.leagueFocusMode",
       "poolMasterCounter.fargoEnabled.v1", "poolMasterCounter.queueSwapSticky.v1", "poolMasterCounter.dayReportFormat.v1",
       "poolMasterCounter.dayReportAttachBackup.v1", "poolMasterCounter.dayReportAttachColorful.v1",
       "poolMasterCounter.keypadSpeechEnabled.v1", "poolMasterCounter.keypadSpeechVoicePreset.v1",
       "pmc-camera-settings", "pmc-camera-calibration", "pmc-camera-background-ref", "pmc-camera-empty-room",
-      "pmc-camera-selected-device", "pmc-camera-wizard-done"];
+      "pmc-camera-selected-device", "pmc-camera-wizard-done",
+      "pmc-room-plan", "pmc-camera-room-tags", "pmc-room-map-options", "pmc-camera-view", "poolMasterCounter.quickGameRace.v1"];
   }
   function collectDeviceSettings() {
     var out = {};
@@ -16791,7 +16868,7 @@
     try {
       localStorage.setItem(REPORT_ARCHIVE_DELETED_KEY, JSON.stringify(dates.slice(-400)));
     } catch (e) {
-      console.warn("Could not save the report archive's deleted days.", e);
+      noteSaveFailure("the report archive's deleted days", e);
     }
   }
 
@@ -16884,6 +16961,71 @@
       : last.where === "shared" ? T("bk.lastShared", { when: when })
       : T("bk.lastDevice", { when: when });
     ["bk-last", "backup-panel-summary"].forEach(function (id) { var el = document.getElementById(id); if (el) el.textContent = text; });
+    renderStorageMeter();
+  }
+
+  // How much of this device's browser storage the app uses (about 5 MB on
+  // an iPad - Safari counts every letter as two bytes) and what for; the
+  // recordings and other files live apart (navigator.storage.estimate).
+  // (Safari - every iPad and iPhone - allows about 5 MB; Chrome, Edge and
+  // Firefox about 10. Never less than what's already in it.)
+  function localStorageLimitBytes(used) {
+    var ua = navigator.userAgent || "";
+    var safari = /iPad|iPhone|iPod/.test(ua) || (/Safari/.test(ua) && !/Chrome|Chromium|CriOS|Edg|Firefox|FxiOS|Android/.test(ua)) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    return Math.max(used, (safari ? 5 : 10) * 1024 * 1024);
+  }
+  function localStorageUsage() {
+    var groups = { games: 0, camera: 0, reports: 0, recover: 0, session: 0, ratings: 0, other: 0 };
+    var total = 0;
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var key = localStorage.key(i);
+        var bytes = (key.length + (localStorage.getItem(key) || "").length) * 2;
+        total += bytes;
+        var g = key === PLAYER_STATS_KEY ? "games"
+          : /^pmc-(camera|room)/.test(key) ? "camera"
+          : key === REPORT_ARCHIVE_KEY ? "reports"
+          : key === RESET_SNAPSHOTS_KEY ? "recover"
+          : key === STORAGE_KEY ? "session"
+          : key === RATINGS_KEY || key === RATED_GAMES_KEY ? "ratings"
+          : "other";
+        groups[g] += bytes;
+      }
+    } catch (e) {}
+    return { total: total, groups: groups };
+  }
+  function formatMegabytes(bytes) {
+    return (bytes / (1024 * 1024)).toFixed(bytes < 1024 * 1024 ? 2 : 1);
+  }
+  function renderStorageMeter() {
+    var box = document.getElementById("bk-storage");
+    if (!box) return;
+    var use = localStorageUsage();
+    var limit = localStorageLimitBytes(use.total);
+    var pct = Math.min(100, Math.round((use.total / limit) * 100));
+    var full = pct >= 85;
+    box.classList.toggle("is-full", full);
+    document.getElementById("bk-storage-line").textContent =
+      T("storage.line", { used: formatMegabytes(use.total), total: formatMegabytes(limit), pct: pct }) + (full ? " " + T("storage.full") : "");
+    document.getElementById("bk-storage-fill").style.width = pct + "%";
+    var list = document.getElementById("bk-storage-list");
+    list.innerHTML = "";
+    Object.keys(use.groups)
+      .filter(function (g) { return use.groups[g] >= 10 * 1024; })
+      .sort(function (a, b) { return use.groups[b] - use.groups[a]; })
+      .forEach(function (g) {
+        var li = document.createElement("li");
+        li.textContent = T("storage.group." + g) + ": " + formatMegabytes(use.groups[g]) + " MB";
+        list.appendChild(li);
+      });
+    var files = document.getElementById("bk-storage-files");
+    files.textContent = "";
+    if (navigator.storage && navigator.storage.estimate) {
+      navigator.storage.estimate().then(function (est) {
+        if (!est || !est.quota) return;
+        files.textContent = T("storage.files", { used: formatMegabytes(est.usage || 0), room: Math.max(0, Math.floor((est.quota - (est.usage || 0)) / (1024 * 1024 * 1024))) });
+      }, function () {});
+    }
   }
 
   // Backups into the Google Drive folder in the Drive folder link (see
@@ -17133,7 +17275,7 @@
         try {
           localStorage.setItem(LAST_SYNC_EXPORT_KEY, payload.exportedAt);
         } catch (e) {
-          console.warn("Could not save last-sync-export timestamp.", e);
+          noteSaveFailure("last-sync-export timestamp", e);
         }
         renderSyncStatusLine();
       },
@@ -17946,7 +18088,7 @@
           Object.keys(importedMergedInto).forEach(function (key) {
             if (!PLAYER_MERGED_INTO[key]) PLAYER_MERGED_INTO[key] = importedMergedInto[key];
           });
-          saveMergedIntoToStorage(PLAYER_MERGED_INTO);
+          // (saved with everything else, all or nothing - see withStorageRollback below)
 
           // A name permanently merged away on this device (see
           // recordPlayerMerge) should never come back as its own
@@ -18192,36 +18334,46 @@
               if (p && p.name) p.name = capitalizeName(p.name);
             });
 
-            localStorage.setItem(ROSTERS_KEY, JSON.stringify(rosterMerge.rosters));
-            localStorage.setItem(TEAMS_KEY, JSON.stringify(teamMerge.teams));
-            localStorage.setItem(PLAYER_STATS_KEY, JSON.stringify(mergedPlayerStats));
-            localStorage.setItem(RATINGS_KEY, JSON.stringify(mergedRatings));
-            // (two devices' ratings are each a path through their own games -
-            // the true rating comes from all the games together, in order)
-            localStorage.setItem(RATINGS_RECOMPUTE_KEY, "1");
-            localStorage.setItem(CONTACTS_KEY, JSON.stringify(mergedContacts));
-            localStorage.setItem(PLAYER_ADDED_KEY, JSON.stringify(mergedPlayerAdded));
-            localStorage.setItem(RUN_RECORDS_KEY, JSON.stringify(mergedRunRecords));
-            localStorage.setItem(PLAYER_BEST_RUNS_KEY, JSON.stringify(mergedPlayerBestRuns));
-            localStorage.setItem(DAY_NOTES_KEY, JSON.stringify(mergedDayNotes));
-            localStorage.setItem(ROTATIONS_KEY, JSON.stringify(mergedRotations));
-            localStorage.setItem(GAME_SETUPS_KEY, JSON.stringify(mergedGameSetups));
-            localStorage.setItem(PLAYER_NAME_TRANSLATIONS_KEY, JSON.stringify(mergedPlayerNameTranslations));
-            localStorage.setItem(CAMERA_ENROLLMENTS_KEY, JSON.stringify(mergedCameraEnrollments));
-            localStorage.setItem(REMOVED_PLAYERS_KEY, JSON.stringify(mergedRemovedPlayers));
-            localStorage.setItem(GRAVEYARD_PLAYERS_KEY, JSON.stringify(mergedGraveyardPlayers));
-            localStorage.setItem(RESET_SNAPSHOTS_KEY, JSON.stringify(mergedResetSnapshots));
-            localStorage.setItem(REPORT_ARCHIVE_KEY, JSON.stringify(mergedReportArchive));
-            saveDeletedArchiveDates(mergedDeletedDates);
-            savePlayerDailyBestRunsToStorage(mergedPlayerDailyBestRuns);
-            saveChallongeDayPushes(mergedChallongeDayPushes);
-            saveChallongeRacePushes(mergedChallongeRacePushes);
-            if (mergedTournament) localStorage.setItem(TOURNAMENT_KEY, JSON.stringify(mergedTournament));
-            localStorage.setItem(TOURNAMENT_RESULTS_KEY, JSON.stringify(mergedTournamentResults));
-            localStorage.setItem(LEAGUES_KEY, JSON.stringify(leagueMerge));
-            // A device with no players yet is adopting this backup as its
-            // own setup: its settings come with it (see collectDeviceSettings).
-            if (localIsFresh) applyDeviceSettings(data.settings);
+            // (all of it or none of it - see withStorageRollback; the state
+            // too, rewritten in finishImport if players come back below)
+            var imported = withStorageRollback(importStorageKeys(), function () {
+              localStorage.setItem(ROSTERS_KEY, JSON.stringify(rosterMerge.rosters));
+              localStorage.setItem(TEAMS_KEY, JSON.stringify(teamMerge.teams));
+              localStorage.setItem(PLAYER_STATS_KEY, JSON.stringify(mergedPlayerStats));
+              localStorage.setItem(RATINGS_KEY, JSON.stringify(mergedRatings));
+              // (two devices' ratings are each a path through their own games -
+              // the true rating comes from all the games together, in order)
+              localStorage.setItem(RATINGS_RECOMPUTE_KEY, "1");
+              localStorage.setItem(CONTACTS_KEY, JSON.stringify(mergedContacts));
+              localStorage.setItem(PLAYER_ADDED_KEY, JSON.stringify(mergedPlayerAdded));
+              localStorage.setItem(RUN_RECORDS_KEY, JSON.stringify(mergedRunRecords));
+              localStorage.setItem(PLAYER_BEST_RUNS_KEY, JSON.stringify(mergedPlayerBestRuns));
+              localStorage.setItem(DAY_NOTES_KEY, JSON.stringify(mergedDayNotes));
+              localStorage.setItem(ROTATIONS_KEY, JSON.stringify(mergedRotations));
+              localStorage.setItem(GAME_SETUPS_KEY, JSON.stringify(mergedGameSetups));
+              localStorage.setItem(PLAYER_NAME_TRANSLATIONS_KEY, JSON.stringify(mergedPlayerNameTranslations));
+              localStorage.setItem(CAMERA_ENROLLMENTS_KEY, JSON.stringify(mergedCameraEnrollments));
+              localStorage.setItem(REMOVED_PLAYERS_KEY, JSON.stringify(mergedRemovedPlayers));
+              localStorage.setItem(GRAVEYARD_PLAYERS_KEY, JSON.stringify(mergedGraveyardPlayers));
+              localStorage.setItem(RESET_SNAPSHOTS_KEY, JSON.stringify(mergedResetSnapshots));
+              localStorage.setItem(REPORT_ARCHIVE_KEY, JSON.stringify(mergedReportArchive));
+              saveDeletedArchiveDates(mergedDeletedDates);
+              savePlayerDailyBestRunsToStorage(mergedPlayerDailyBestRuns);
+              saveChallongeDayPushes(mergedChallongeDayPushes);
+              saveChallongeRacePushes(mergedChallongeRacePushes);
+              if (mergedTournament) localStorage.setItem(TOURNAMENT_KEY, JSON.stringify(mergedTournament));
+              localStorage.setItem(TOURNAMENT_RESULTS_KEY, JSON.stringify(mergedTournamentResults));
+              localStorage.setItem(LEAGUES_KEY, JSON.stringify(leagueMerge));
+              localStorage.setItem(MERGED_INTO_KEY, JSON.stringify(PLAYER_MERGED_INTO));
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(finalState));
+              // A device with no players yet is adopting this backup as its
+              // own setup: its settings come with it (see collectDeviceSettings).
+              if (localIsFresh) applyDeviceSettings(data.settings);
+            });
+            if (!imported) {
+              alertModal(T("alert.importNotSaved"));
+              return;
+            }
 
             function finishImport() {
               if (data.exportedAt) {
@@ -18229,7 +18381,7 @@
                   localStorage.setItem(LAST_SYNC_IMPORT_KEY, data.exportedAt);
                   if (data.exportedBy) localStorage.setItem(LAST_SYNC_IMPORT_NAME_KEY, data.exportedBy);
                 } catch (e) {
-                  console.warn("Could not save last-sync-import timestamp.", e);
+                  noteSaveFailure("last-sync-import timestamp", e);
                 }
               }
               localStorage.setItem(STORAGE_KEY, JSON.stringify(finalState));
@@ -18535,7 +18687,7 @@
     // an explicit, just-confirmed data-replacement that's about to
     // reload the page anyway. Same bypass importAllData's own finishImport
     // already uses for exactly this reason.
-    try {
+    var replaced = withStorageRollback(importStorageKeys(), function () {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       localStorage.setItem(ROSTERS_KEY, JSON.stringify(SAVED_ROSTERS));
       localStorage.setItem(TEAMS_KEY, JSON.stringify(SAVED_TEAMS));
@@ -18582,11 +18734,15 @@
         localStorage.setItem(LAST_SYNC_IMPORT_KEY, data.exportedAt);
         if (data.exportedBy) localStorage.setItem(LAST_SYNC_IMPORT_NAME_KEY, data.exportedBy);
       }
-    } catch (e) {
-      console.warn("Could not save squashed data.", e);
-    }
-
+    });
     closeSquashWarning();
+    if (!replaced) {
+      // (nothing changed here; this page's memory has the file's data, so start over from what's saved)
+      alertModal(T("alert.importNotSaved"), function () {
+        location.reload();
+      });
+      return;
+    }
     alertModal(T(keepPlayersOnly ? "alert.squashDoneKeepPlayers" : "alert.squashDoneFull", { count: resultingPlayerCount }), function () {
       location.reload();
     });
@@ -20067,7 +20223,7 @@
     try {
       localStorage.setItem(ONBOARDING_SEEN_KEY, "1");
     } catch (e) {
-      console.warn("Could not save onboarding-seen flag.", e);
+      noteSaveFailure("onboarding-seen flag", e);
     }
   }
 
@@ -24737,7 +24893,7 @@
         JSON.stringify({ entries: currentLeaderboardSnapshotEntries(), ts: new Date().toISOString() })
       );
     } catch (e) {
-      console.warn("Could not save leaderboard snapshot.", e);
+      noteSaveFailure("leaderboard snapshot", e);
     }
   }
 
@@ -25761,7 +25917,7 @@
     try {
       localStorage.setItem(KEYPAD_SPEECH_VOICE_KEY, keypadSpeechVoicePreset);
     } catch (e) {
-      console.warn("Could not save keypad speech voice choice.", e);
+      noteSaveFailure("keypad speech voice choice", e);
     }
   }
 
@@ -25944,7 +26100,7 @@
     try {
       localStorage.setItem(KEYPAD_SPEECH_KEY, on ? "1" : "0");
     } catch (e) {
-      console.warn("Could not save keypad speech setting.", e);
+      noteSaveFailure("keypad speech setting", e);
     }
     btnToggleKeypadSpeech.classList.toggle("is-listening", on);
     syncKeypadSpeechToggleButtonText();
@@ -27255,7 +27411,7 @@
       if (t) localStorage.setItem(TOURNAMENT_KEY, JSON.stringify(t));
       else localStorage.removeItem(TOURNAMENT_KEY);
     } catch (e) {
-      console.warn("Could not save tournament.", e);
+      noteSaveFailure("tournament", e);
     }
   }
 
@@ -27282,7 +27438,7 @@
     try {
       localStorage.setItem(TOURNAMENT_RESULTS_KEY, JSON.stringify(list));
     } catch (e) {
-      console.warn("Could not save tournament results.", e);
+      noteSaveFailure("tournament results", e);
     }
   }
 
@@ -33563,6 +33719,20 @@
   achievementsModalOverlay.addEventListener("click", function (e) {
     if (e.target === achievementsModalOverlay) closeAchievementsModal();
   });
+
+  // the "NOT SAVED" banner: back up what's on screen, see what fills the storage, close
+  document.getElementById("btn-not-saved-backup").addEventListener("click", function () {
+    document.getElementById("btn-backup-now").click();
+  });
+  document.getElementById("btn-not-saved-storage").addEventListener("click", function () {
+    if (appRoot.classList.contains("focus-mode")) setFocusMode(false);
+    var panel = document.getElementById("backup-panel");
+    if (panel.classList.contains("collapsed")) document.getElementById("btn-toggle-backup-panel").click();
+    renderStorageMeter();
+    document.getElementById("bk-storage-details").open = true;
+    document.getElementById("bk-storage").scrollIntoView({ block: "center" });
+  });
+  document.getElementById("btn-not-saved-close").addEventListener("click", clearSaveFailure);
 
   btnSaveSessionSave.addEventListener("click", function () {
     exportSession();

@@ -1616,5 +1616,22 @@
   "voice.note.session": "Une seule phrase, chaque partie facultative, dans n'importe quel ordre : la course, les jeux de la rotation et leur fréquence, les joueurs (de la Fiche Contacts - les surnoms marchent), et qui joue (tous les autres en Standby). Quelqu'un qui n'est pas nommé quitte la session - ou, s'il a des parties enregistrées dans cette session, passe en Standby.",
   "voice.done.session": "Session réglée :",
   "voice.done.sessionPlayers": "Joueurs : {{names}}",
-  "voice.done.sessionLeft": "Ont quitté la session : {{names}}"
+  "voice.done.sessionLeft": "Ont quitté la session : {{names}}",
+  "saveFailed.title": "⚠️ NON ENREGISTRÉ",
+  "saveFailed.full": "Le stockage de cet appareil est plein : la dernière modification n'a pas été enregistrée. Faites une sauvegarde maintenant, puis libérez de l'espace (voir le stockage).",
+  "saveFailed.other": "La dernière modification n'a pas pu être enregistrée sur cet appareil. Faites une sauvegarde maintenant pour garder ce qui est à l'écran.",
+  "saveFailed.backup": "💾 Sauvegarder maintenant",
+  "saveFailed.storage": "Voir le stockage",
+  "alert.importNotSaved": "Rien n'a été modifié : le stockage de cet appareil est plein, la sauvegarde n'a pas pu être importée. Libérez de l'espace (Sauvegarde et restauration montre ce qui l'occupe) et réessayez.",
+  "storage.line": "Stockage sur cet appareil : {{used}} Mo utilisés sur environ {{total}} Mo ({{pct}} %).",
+  "storage.full": "Presque plein : faites une sauvegarde, puis supprimez ce qui ne sert plus (copies de Récupérer des données, échantillons de la caméra).",
+  "storage.whatUses": "Ce qui l'occupe",
+  "storage.group.games": "Historique des parties des joueurs",
+  "storage.group.camera": "Caméra (échantillons des joueurs, photo de la salle)",
+  "storage.group.reports": "Archives des rapports",
+  "storage.group.recover": "Copies de Récupérer des données",
+  "storage.group.session": "La session en cours",
+  "storage.group.ratings": "Classements",
+  "storage.group.other": "Tout le reste",
+  "storage.files": "Enregistrements et autres fichiers : {{used}} Mo (place pour environ {{room}} Go de plus)."
 }

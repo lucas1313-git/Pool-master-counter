@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261028d">
+<link rel="stylesheet" href="css/style.css?v=20261028e">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -34,6 +34,16 @@
 <div id="network-status-bar" class="hidden">
   <span id="network-status-pill" class="network-status-pill"></span>
   <button type="button" id="btn-leave-session" class="btn btn-ghost" data-i18n="network.leaveSessionButton">Leave Session</button>
+</div>
+
+<div id="not-saved-banner" class="not-saved-banner hidden" role="alert">
+  <strong data-i18n="saveFailed.title">⚠️ NOT SAVED</strong>
+  <span id="not-saved-message"></span>
+  <span class="not-saved-actions">
+    <button type="button" id="btn-not-saved-backup" class="btn btn-primary" data-i18n="saveFailed.backup">💾 Back up now</button>
+    <button type="button" id="btn-not-saved-storage" class="btn btn-ghost" data-i18n="saveFailed.storage">See storage</button>
+    <button type="button" id="btn-not-saved-close" class="btn btn-ghost not-saved-close" aria-label="Close" data-i18n-aria-label="common.close">✕</button>
+  </span>
 </div>
 
 <div id="app">
@@ -718,6 +728,16 @@
         <p class="player-stats-note bk-where" id="bk-where" aria-live="polite"></p>
         <button type="button" id="btn-backup-now" class="btn btn-primary bk-big" data-i18n="bk.backupNow">💾 Back up now</button>
         <p class="player-stats-note bk-last" id="bk-last" aria-live="polite"></p>
+        <!-- How full this device's storage is, and what's using it -->
+        <div class="bk-storage" id="bk-storage">
+          <p class="player-stats-note bk-storage-line" id="bk-storage-line"></p>
+          <div class="bk-storage-bar" aria-hidden="true"><span id="bk-storage-fill"></span></div>
+          <details class="bk-storage-details" id="bk-storage-details">
+            <summary data-i18n="storage.whatUses">What's using it</summary>
+            <ul class="bk-storage-list" id="bk-storage-list"></ul>
+            <p class="player-stats-note" id="bk-storage-files"></p>
+          </details>
+        </div>
       </div>
 
       <!-- 2. Restore: one button, then which backup and how -->
@@ -2658,10 +2678,10 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/mp4-clip.js?v=20261028d"></script>
-<script src="js/local-recorder.js?v=20261028d"></script>
-<script src="js/app.js?v=20261028d"></script>
-<script src="js/camera-client.js?v=20261028d"></script>
-<script src="js/voice.js?v=20261028d"></script>
+<script src="js/mp4-clip.js?v=20261028e"></script>
+<script src="js/local-recorder.js?v=20261028e"></script>
+<script src="js/app.js?v=20261028e"></script>
+<script src="js/camera-client.js?v=20261028e"></script>
+<script src="js/voice.js?v=20261028e"></script>
 </body>
 </html>
