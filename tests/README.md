@@ -303,3 +303,9 @@ Not part of the app - helpers for testing and for running this machine's own cop
   closes itself after about 6 s with 🔁 Rematch / 👥 New players; ↩ Undo in the banner takes the
   last rack back; 🎱 Balls left only when tapped; "on the hill" and a game change in one banner;
   Celebrations Off: the race won as a banner line. `node tests/probe_win_banner.js [dir]`.
+- `probe_undo.js` - real undo and changing who won (4259): racks Kim, Jo, Kim then two ↩ Undo on
+  the board (no confirm) - board, game log and both ratings exactly as after rack 1; the board's
+  Undo has its own shape and sits 52+ px (10 mm on an iPad) from every +; Straight Pool won at
+  100-87, Undo gives 99-87 back; Winner Stays seats and line come back; 🔄 Change winner gives the
+  rack to Jo (ratings follow); Recent Games ✏️ on a past game moves the Leaderboard (Ann 8/Bob 4 to
+  7/5), 🗑 asks then removes a game. `node tests/probe_undo.js [screenshot dir]`.

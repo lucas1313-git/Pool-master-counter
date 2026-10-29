@@ -11,7 +11,7 @@
 // Import lists the folder's backups and reads one through the sign-in (a
 // private folder, no API key); the access token renewed from the refresh
 // token; Disconnect revokes it; a sign-in Google ended -> "press Connect
-// again"; set-up refused from another device.
+// again"; set-up refused from another device (unpaired: 401; paired: 403).
 // usage: node tests/probe_drive_connect.js     (starts its own servers on 4237 and 4299)
 const puppeteer = require("puppeteer-core");
 const http = require("http");
@@ -93,7 +93,8 @@ const fakeGoogle = http.createServer(async (req, res) => {
     const f = google.files.find((x) => x.id === fm[1]);
     if (!f) return json(res, 404, { error: { message: "File not found" } });
     if (u.searchParams.get("alt") === "media") { res.writeHead(200, { "Content-Type": "application/json" }); return res.end(f.content); }
-    return json(res, 200, { id: f.id, name: f.name, mimeType: f.mimeType });
+    // (like Google: the folder it's in, when asked - the server reads only files in the backups folder)
+    return json(res, 200, { id: f.id, name: f.name, mimeType: f.mimeType, parents: f.parents });
   }
   json(res, 404, { error: { message: "no such fake endpoint " + p } });
 });
@@ -229,9 +230,17 @@ function lanIp() { for (const l of Object.values(os.networkInterfaces())) for (c
   // set up from another device: refused
   const ip = lanIp();
   if (ip) {
-    const r = await fetch("http://" + ip + ":" + PORT + "/api/drive/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clientId: CLIENT_ID, clientSecret: "x".repeat(20) }) }).catch(() => null);
-    const st = r ? await (await fetch("http://" + ip + ":" + PORT + "/api/drive/status")).json() : null;
-    check("from another device: the client can't be changed (403), and the page says to connect on the Mac", r && r.status === 403 && st && st.local === false, { status: r && r.status, st });
+    const config = (headers) => fetch("http://" + ip + ":" + PORT + "/api/drive/config", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, headers || {}), body: JSON.stringify({ clientId: CLIENT_ID, clientSecret: "x".repeat(20) }) }).catch(() => null);
+    // (an unpaired device gets nowhere at all - see probe_pairing.js)
+    const unpaired = await config();
+    check("from another device, not paired: refused before anything (401)", unpaired && unpaired.status === 401, unpaired && unpaired.status);
+    // paired: still not allowed to change the client - that's for the Mac
+    const code = (await (await fetch("http://localhost:" + PORT + "/api/pair/code")).json()).code;
+    const pairRes = await fetch("http://" + ip + ":" + PORT + "/api/pair", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code, name: "probe" }) });
+    const cookie = ((pairRes.headers.get("set-cookie") || "").match(/pmc_device=[a-f0-9]+/) || [""])[0];
+    const r = await config({ Cookie: cookie });
+    const st = r ? await (await fetch("http://" + ip + ":" + PORT + "/api/drive/status", { headers: { Cookie: cookie } })).json() : null;
+    check("from another device, paired: the client can't be changed (403), and the page says to connect on the Mac", r && r.status === 403 && st && st.local === false, { status: r && r.status, st });
   } else console.log("SKIP from another device (no network address)");
 
   check("no page errors", errors.length === 0, errors);

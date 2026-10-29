@@ -6323,8 +6323,179 @@
           : T("history.wonRaceSession", { names: entry.winnerNames.join(" & "), target: entry.raceTarget });
         li.appendChild(raceBanner);
       }
+      if (entry.edited) li.appendChild(document.createTextNode(" " + T("history.edited")));
+      li.appendChild(buildHistoryGameTools(entry));
       historyList.appendChild(li);
     });
+  }
+
+  // ✏️ Edit (who won, the score) and 🗑 Delete on a game in Recent Games.
+  // Edit: one-on-one games that didn't win a race (a race won stays as it
+  // went - undo it from its own screen); Delete: any.
+  function buildHistoryGameTools(entry) {
+    var tools = document.createElement("span");
+    tools.className = "history-game-tools";
+    var participants = historyParticipants(entry);
+    if (!entry.isTeam && !entry.wonRace && participants.length >= 2) {
+      var edit = document.createElement("button");
+      edit.type = "button";
+      edit.className = "btn btn-ghost history-edit";
+      edit.textContent = "✏️";
+      edit.setAttribute("aria-label", T("history.editAria"));
+      edit.addEventListener("click", function () { editHistoryGame(entry); });
+      tools.appendChild(edit);
+    }
+    var del = document.createElement("button");
+    del.type = "button";
+    del.className = "btn btn-ghost history-delete";
+    del.textContent = "🗑";
+    del.setAttribute("aria-label", T("history.deleteAria"));
+    del.addEventListener("click", function () {
+      confirmModal(T("history.deleteConfirm", { summary: historyGameText(entry) }), function () {
+        deleteGameEverywhere(entry.ts);
+      });
+    });
+    tools.appendChild(del);
+    return tools;
+  }
+
+  // everyone who played that game (winners first)
+  function historyParticipants(entry) {
+    var names = (entry.winnerNames || []).slice();
+    (entry.opponentNames || []).concat(entry.teammateNames || []).forEach(function (n) {
+      if (names.indexOf(n) === -1) names.push(n);
+    });
+    return names;
+  }
+  function historyGameText(entry) {
+    return (entry.winnerNames || []).join(" & ") + " " + T("history.wonGameTarget", { game: entry.gameLabel, target: entry.target });
+  }
+
+  // Who won (a tap on the right name), then - for a game with a score
+  // beyond one rack - the score; saved everywhere, ratings and stats
+  // recomputed (see editGameEverywhere).
+  function editHistoryGame(entry) {
+    var names = historyParticipants(entry);
+    tournamentChooser(T("history.editWho"), names.map(function (n) {
+      return {
+        label: (entry.winnerNames.indexOf(n) !== -1 ? "🏆 " : "") + n,
+        primary: entry.winnerNames.indexOf(n) !== -1,
+        run: function () {
+          var scores = entry.scores || null;
+          if (names.length === 2 && !(entry.unit === "rack" && entry.target === 1)) {
+            var other = names[0] === n ? names[1] : names[0];
+            tournamentScoreDialogFor(n, other, scores ? scores[n] : null, scores ? scores[other] : null, function (a, b) {
+              var next = {};
+              next[n] = a;
+              next[other] = b;
+              editGameEverywhere(entry.ts, n, next);
+            });
+            return;
+          }
+          var flipped = null;
+          if (scores && entry.winnerNames[0] !== n) {
+            // (a single rack: the score follows the winner)
+            flipped = {};
+            Object.keys(scores).forEach(function (k) { flipped[k] = k === n ? scores[entry.winnerNames[0]] : k === entry.winnerNames[0] ? scores[n] : scores[k]; });
+          }
+          editGameEverywhere(entry.ts, n, flipped);
+        }
+      };
+    }));
+  }
+
+  // A one-on-one (or free-for-all) game's winner and score changed wherever
+  // it's kept - this session's log and every player's saved copy - its
+  // rating changes taken back and made again for the new result, the
+  // session's wins recounted. The leaderboard and stats read from those, so
+  // they follow. Undo's history starts over (its snapshots predate this).
+  function editGameEverywhere(ts, winnerName, scores) {
+    var live = state.gameHistory.filter(function (g) { return g && g.ts === ts; })[0];
+    var any = live;
+    var participants = null;
+    if (live) {
+      participants = historyParticipants(live);
+    } else {
+      Object.keys(PLAYER_STATS).forEach(function (key) {
+        (PLAYER_STATS[key].sessions || []).forEach(function (sess) {
+          (sess.games || []).forEach(function (g) {
+            // (the winner's copy lists everyone who lost: preferred)
+            if (g && g.ts === ts && (!participants || g.result === "won")) {
+              any = g;
+              var owner = PLAYER_STATS[key].name || key;
+              participants = [owner].concat((g.opponentNames || []).filter(function (n) { return n !== owner; }));
+            }
+          });
+        });
+      });
+    }
+    if (!participants || participants.indexOf(winnerName) === -1) return;
+    var losers = participants.filter(function (n) { return n !== winnerName; });
+    retractRatingsAt(ts);
+    if (live) {
+      var winnerId = getPlayerIdByName(winnerName);
+      live.winnerNames = [winnerName];
+      live.winnerIds = winnerId ? [winnerId] : [];
+      live.opponentNames = losers;
+      live.mvpName = winnerName;
+      live.mvpId = winnerId || null;
+      if (scores) live.scores = scores;
+      live.summary = winnerName + " won " + live.gameLabel + " (target " + live.target + ")";
+      live.edited = true;
+      recomputeLiveWinsFromGameHistory();
+      saveState();
+    }
+    var statsChanged = false;
+    Object.keys(PLAYER_STATS).forEach(function (key) {
+      var owner = PLAYER_STATS[key].name || key;
+      (PLAYER_STATS[key].sessions || []).forEach(function (sess) {
+        var touched = false;
+        (sess.games || []).forEach(function (g) {
+          if (!g || g.ts !== ts) return;
+          var won = normalizeNameKey(owner) === normalizeNameKey(winnerName);
+          g.result = won ? "won" : "lost";
+          g.winnerNames = [winnerName];
+          g.opponentNames = won ? losers : [winnerName];
+          if (scores) g.scores = scores;
+          g.edited = true;
+          touched = true;
+        });
+        if (touched) {
+          statsChanged = true;
+          var wonGames = (sess.games || []).filter(function (g) { return g.result === "won"; });
+          sess.wins = wonGames.length;
+          sess.gamesWon = wonGames.map(function (g) { return g.gameLabel; });
+        }
+      });
+    });
+    if (statsChanged) savePlayerStatsToStorage(PLAYER_STATS);
+    if (!noStatsMode && any) {
+      var weight = ratingWeightFor(any.gameType, any.target, any.unit);
+      if (losers.length === 1) applyPairwiseRatingResult(winnerName, losers[0], ts, weight);
+      else applyMultiWayRatingResult([winnerName], losers, ts, weight);
+      participants.forEach(function (n) {
+        var e = getPlayerRatingEntry(n);
+        if (e) e.history.sort(function (x, y) { return x.ts.localeCompare(y.ts); });
+      });
+    }
+    saveRatingsToStorage(PLAYER_RATINGS);
+    clearUndo();
+    renderAll();
+    showToast(T("history.editedToast", { name: winnerName }));
+  }
+
+  // A game taken out wherever it's kept, its rating changes with it, the
+  // session's wins recounted.
+  function deleteGameEverywhere(ts) {
+    var wasLive = state.gameHistory.some(function (g) { return g && g.ts === ts; });
+    removeGamesEverywhere([ts]);
+    if (wasLive) {
+      recomputeLiveWinsFromGameHistory();
+      applyRotationIfDue();
+      saveState();
+    }
+    clearUndo();
+    renderAll();
   }
 
   // ---------------------------------------------------------------------
@@ -6837,6 +7008,9 @@
     // reload with the win popup still open closes and archives it then
     // (see closeRaceLeftOpen), exactly once.
     if (milestoneNames) state.raceClosedPending = { ts: ts, names: milestoneNames, count: milestoneCount, target: target };
+    // (↩ Undo's last snapshot is from just before this win - see pushUndo)
+    var undoTop = undoStack[undoStack.length - 1];
+    if (undoTop && !undoTop.createdTs) undoTop.createdTs = ts;
     trimGameHistory();
     if (!noStatsMode && !isTeam) {
       // Team Mode isn't rated at all (see applyMultiWayRatingResult's
@@ -6957,6 +7131,123 @@
   // gamesPlayedCount stay correct no matter which one was clicked. No
   // confirm dialog or UI feedback of its own - callers own that. Returns
   // the undone entry, or null if there was nothing to undo.
+  // ---------- ↩ Undo: the last UNDO_MAX scoring actions ----------
+  // Before each scoring action (a + or − on a card, a rack won, a frame
+  // finished), the board as it was: every player's score, seat and team,
+  // the Winner Stays line, the wins, the game log, the game being played and
+  // the rotation's place, and the ratings of everyone at the table. ↩ Undo
+  // puts the last one back exactly - after 3 racks, two undos leave the board
+  // and the ratings as after rack 1; a Straight Pool game won at 100-87 comes
+  // back at 99-87. Settings changed in between (the race, the rotation's
+  // games...) stay as they are. In memory only; a new session (a race won)
+  // starts over - a race won is taken back by its own snapshot (see
+  // restoreTournamentWinSnapshot).
+  var UNDO_MAX = 20;
+  var undoStack = [];
+
+  function pushUndo(kind, playerId) {
+    var ratings = {};
+    activePlayers().forEach(function (p) {
+      var key = findRatingKey(p.name) || p.name;
+      ratings[key] = PLAYER_RATINGS[key] ? JSON.parse(JSON.stringify(PLAYER_RATINGS[key])) : null;
+    });
+    undoStack.push({
+      kind: kind,
+      playerId: playerId || null,
+      // (the game this action creates, if it ends one - see creditWin)
+      createdTs: null,
+      board: JSON.stringify({
+        players: state.players.map(function (p) { return { id: p.id, balls: p.balls, playing: p.playing, teamId: p.teamId }; }),
+        playerWins: state.playerWins,
+        teamWins: state.teamWins,
+        teamMvpWins: state.teamMvpWins,
+        gameHistory: state.gameHistory,
+        gamesPlayedCount: state.gamesPlayedCount,
+        queue: state.queue || [],
+        raceClosedPending: state.raceClosedPending || null,
+        game: { gameType: state.currentGame.gameType, target: state.currentGame.target, unit: state.currentGame.unit, startedAt: state.currentGame.startedAt }
+      }),
+      ratings: ratings
+    });
+    if (undoStack.length > UNDO_MAX) undoStack.shift();
+    renderBoardUndo();
+  }
+
+  // The last action taken back. Returns its snapshot (null: nothing to undo).
+  function undoLastAction() {
+    var snap = undoStack.pop();
+    if (!snap) return null;
+    var b = JSON.parse(snap.board);
+    b.players.forEach(function (was) {
+      var p = getPlayer(was.id);
+      if (!p) return;
+      p.balls = was.balls;
+      p.playing = was.playing;
+      p.teamId = was.teamId;
+    });
+    state.playerWins = b.playerWins;
+    state.teamWins = b.teamWins;
+    state.teamMvpWins = b.teamMvpWins;
+    state.gameHistory = b.gameHistory;
+    state.gamesPlayedCount = b.gamesPlayedCount;
+    state.queue = b.queue;
+    state.raceClosedPending = b.raceClosedPending;
+    state.currentGame.gameType = b.game.gameType;
+    state.currentGame.target = b.game.target;
+    state.currentGame.unit = b.game.unit;
+    state.currentGame.startedAt = b.game.startedAt;
+    state.fairRaceTargets = null;
+    Object.keys(snap.ratings).forEach(function (key) {
+      if (snap.ratings[key]) PLAYER_RATINGS[key] = snap.ratings[key];
+      else delete PLAYER_RATINGS[key];
+    });
+    saveRatingsToStorage(PLAYER_RATINGS);
+    saveState();
+    syncGameTypeUI();
+    renderAll();
+    renderBoardUndo();
+    return snap;
+  }
+
+  function clearUndo() {
+    undoStack = [];
+    renderBoardUndo();
+  }
+
+  // The board's own ↩ Undo (well away from every +; its own shape): the last
+  // action - or, right after a race won, the race (its snapshot).
+  function renderBoardUndo() {
+    var btn = document.getElementById("btn-board-undo");
+    if (!btn) return;
+    btn.disabled = !undoStack.length && !lastTournamentWinSnapshot;
+  }
+
+  function boardUndo() {
+    if (!undoStack.length) {
+      if (lastTournamentWinSnapshot) {
+        var raceUndone = restoreTournamentWinSnapshot();
+        showUndoneBanner(raceUndone.summary || "");
+      }
+      return;
+    }
+    var top = undoStack[undoStack.length - 1];
+    var game = top.createdTs ? state.gameHistory.filter(function (g) { return g && g.ts === top.createdTs; })[0] : null;
+    var who = top.playerId ? getPlayer(top.playerId) : null;
+    undoLastAction();
+    showUndoneBanner(game ? game.summary : T(top.kind === "minus" ? "undo.minusFor" : "undo.plusFor", { name: who ? who.name : "" }));
+  }
+
+  // the banner just saying what was taken back
+  function showUndoneBanner(what) {
+    winBanner.entry = null;
+    winBanner.notices = [];
+    winBanner.undone = what;
+    renderWinBanner();
+    revealWinBanner();
+    if (winBanner.hideTimer) clearTimeout(winBanner.hideTimer);
+    winBanner.hideTimer = setTimeout(hideWinBanner, 3000);
+  }
+
   function retrogradeLastGame() {
     var entry = state.gameHistory[0];
     if (!entry || typeof entry === "string" || !entry.winnerIds) return null;
@@ -6988,6 +7279,14 @@
     var entry = state.gameHistory[0];
     if (!entry || typeof entry === "string" || !entry.winnerIds || (playerId && entry.winnerIds.indexOf(playerId) === -1)) {
       showToast(T("toast.noWinToUndo"));
+      return;
+    }
+    // (their win was the last thing scored: taken back at once, the board
+    // as it was - see pushUndo)
+    var top = undoStack[undoStack.length - 1];
+    if (top && top.createdTs === entry.ts) {
+      undoLastAction();
+      showUndoneBanner(entry.summary);
       return;
     }
     confirmModal(T("confirm.undoWin", { summary: entry.summary }), function () {
@@ -7187,6 +7486,20 @@
       undo.disabled = !winBannerUndoable(entry);
       undo.addEventListener("click", undoFromWinBanner);
       actions.appendChild(undo);
+      var others = winBannerOtherWinners(entry);
+      if (others.length) {
+        var change = document.createElement("button");
+        change.type = "button";
+        change.className = "btn btn-ghost win-banner-change";
+        change.id = "btn-win-banner-change";
+        change.textContent = T("banner.changeWinner");
+        change.addEventListener("click", function () {
+          winBanner.changing = !winBanner.changing;
+          renderWinBanner();
+          restartWinBannerTimer();
+        });
+        actions.appendChild(change);
+      }
       if (ballsLeftApplies(entry)) {
         var balls = document.createElement("button");
         balls.type = "button";
@@ -7222,6 +7535,23 @@
         actions.appendChild(skunk);
       }
       winBannerEl.appendChild(actions);
+      if (winBanner.changing && others.length) {
+        // "Who really won?" - tap the right name
+        var row = document.createElement("div");
+        row.className = "win-banner-change-row";
+        var ask = document.createElement("span");
+        ask.textContent = T("banner.whoWon");
+        row.appendChild(ask);
+        others.forEach(function (o) {
+          var b = document.createElement("button");
+          b.type = "button";
+          b.className = "btn btn-primary win-banner-winner";
+          b.textContent = o.label;
+          b.addEventListener("click", function () { changeLastWinner(entry, o); });
+          row.appendChild(b);
+        });
+        winBannerEl.appendChild(row);
+      }
       if (winBanner.ballsOpen && ballsLeftApplies(entry)) winBannerEl.appendChild(buildWinBannerBallsStepper(entry));
     }
     winBanner.notices.forEach(function (notice) {
@@ -7237,6 +7567,10 @@
     close.textContent = "✕";
     close.addEventListener("click", hideWinBanner);
     winBannerEl.appendChild(close);
+    // (a toast keeps just under it, however tall it grows)
+    if (!winBannerEl.classList.contains("hidden")) {
+      document.body.style.setProperty("--win-banner-bottom", Math.round(winBannerEl.getBoundingClientRect().bottom) + "px");
+    }
   }
 
   // − n + : unset until touched ("+" from unset is 0, "−" from 0 unsets)
@@ -7311,6 +7645,7 @@
     winBanner.entry = entry;
     winBanner.undone = null;
     winBanner.ballsOpen = false;
+    winBanner.changing = false;
     winBanner.notices = notices || [];
     renderWinBanner();
     revealWinBanner();
@@ -7350,8 +7685,46 @@
     var snap = lastTournamentWinSnapshot;
     return !!(snap && snap.gameHistory && snap.gameHistory[0] && snap.gameHistory[0].ts === entry.ts);
   }
+  // ↩ Undo's last snapshot is from just before this rack (nothing scored since)
+  function winBannerIsLastAction(entry) {
+    var top = undoStack[undoStack.length - 1];
+    return !!(entry && top && top.createdTs === entry.ts);
+  }
   function winBannerUndoable(entry) {
-    return !!entry && ((state.gameHistory[0] && state.gameHistory[0].ts === entry.ts) || winBannerRaceSnapshotFor(entry));
+    return !!entry && (winBannerIsLastAction(entry) || (state.gameHistory[0] && state.gameHistory[0].ts === entry.ts) || winBannerRaceSnapshotFor(entry));
+  }
+
+  // "Change winner" (a single rack just won, nothing scored since): who
+  // else could have won it - the other players at the table, or the other
+  // team.
+  function winBannerOtherWinners(entry) {
+    if (!entry || !winBannerIsLastAction(entry) || entry.unit !== "rack" || entry.target !== 1) return [];
+    if (entry.isTeam) {
+      var other = entry.teamId === "A" ? "B" : "A";
+      return teamMembersLive(other).length ? [{ team: other, label: teamLabelLive(other) }] : [];
+    }
+    return (entry.opponentNames || []).map(function (n) {
+      var p = getPlayer(getPlayerIdByName(n));
+      return p ? { id: p.id, label: p.name } : null;
+    }).filter(Boolean);
+  }
+
+  // The rack goes to the right player instead: the board back to just
+  // before it (scores, seats, ratings), then the win credited to them - their
+  // own banner, Winner Stays seating them, the race counting it.
+  function changeLastWinner(entry, to) {
+    if (!winBannerIsLastAction(entry)) return;
+    undoLastAction();
+    if (to.team) {
+      pushUndo("win", null);
+      creditWin(true, to.team, null);
+      return;
+    }
+    var p = getPlayer(to.id);
+    if (!p) return;
+    pushUndo("win", p.id);
+    p.balls = state.currentGame.target;
+    creditWin(false, p.id, p.voice);
   }
 
   // ↩ Undo: the rack shown is taken back at once (a race it won too - the
@@ -7361,6 +7734,10 @@
     if (!entry) return;
     if (winBannerRaceSnapshotFor(entry)) {
       restoreTournamentWinSnapshot();
+      winBanner.undone = entry.summary;
+    } else if (winBannerIsLastAction(entry)) {
+      // (the whole board as it was before this rack: scores, seats, ratings)
+      undoLastAction();
       winBanner.undone = entry.summary;
     } else if (state.gameHistory[0] && state.gameHistory[0].ts === entry.ts) {
       var undone = retrogradeLastGame();
@@ -7586,6 +7963,7 @@
     lastTournamentWinSnapshot = null;
     // (the banner's Undo can't reach the race any more)
     if (winBannerShowsGame()) renderWinBanner();
+    renderBoardUndo();
   }
 
   // Undoes the entire just-finished tournament's archiving/new-session
@@ -8033,6 +8411,7 @@
       }
     }
 
+    pushUndo(delta > 0 ? "plus" : "minus", playerId);
     markFirstShot();
 
     // Quick Counter: just tally, never check a target or credit a win.
@@ -8101,6 +8480,7 @@
         showToast(T("snooker.tie"));
         return;
       }
+      pushUndo("win", null);
       creditWin(true, scoreA > scoreB ? "A" : "B", null);
     } else {
       var active = activePlayers();
@@ -8112,6 +8492,7 @@
         showToast(T("snooker.tie"));
         return;
       }
+      pushUndo("win", sorted[0].id);
       creditWin(false, sorted[0].id, sorted[0].voice);
     }
   }
@@ -8155,6 +8536,7 @@
   function startNewSession(saveRoster) {
     if (saveRoster) maybeSaveRosterOnNewSession();
     state.raceClosedPending = null;
+    clearUndo();
     state.playerWins = {};
     state.teamWins = {};
     state.teamMvpWins = {};
@@ -35541,6 +35923,7 @@
   });
 
   btnMilestoneClose.addEventListener("click", closeMilestone);
+  document.getElementById("btn-board-undo").addEventListener("click", boardUndo);
   // 🔁 Rematch: the same players, a new race (the new session's already
   // set up - the screen just goes); 👥 New players: Quick Game.
   document.getElementById("btn-milestone-rematch").addEventListener("click", closeMilestone);

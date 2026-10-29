@@ -90,7 +90,7 @@ Every color that needs to read clearly against an accent-colored background (but
 - **Standings** show live progress toward the race-to-wins milestone, both by team and individually.
 - **Milestone, On-the-Hill, and Game Changed pop-ups** celebrate a race-to win, warn when someone is one win from it, and announce when the rotation switches game types. Winning the whole race-to-N milestone plays the same Ode to Joy fanfare a bracket Tournament champion gets — see [Sound](#sound).
 - **"Do not record games statistics and players data"** — check it to play a purely in-memory session: nothing is saved (no state, career stats, or ratings) until it's unchecked. Wins still count live on screen for the rest of the browser tab, but none of it survives a reload — useful for a throwaway practice session that shouldn't count.
-- **Undo Last Win**, **Reset Current Game**, **Share Standings** (pre-filled email), and **Export Session** (JSON) are all one tap away.
+- **↩ Undo** (above the score cards and in each win's banner) takes back the last score — a point or a rack won — with the board exactly as it was (scores, seats, ratings), up to 20 times; **🔄 Change winner** gives the last rack to the right player, and **Recent Games** has ✏️ Edit (who won, the score) and 🗑 Delete on every game today. **Reset Current Game**, **Share Standings** (pre-filled email), and **Export Session** (JSON) are one tap away.
 - **New Game** starts a fresh session; if there are unsaved games it offers to save them to career stats first, skip saving, or cancel.
 - **Recent Games** lists everything played this session.
 

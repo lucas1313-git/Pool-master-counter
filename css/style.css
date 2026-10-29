@@ -10271,3 +10271,49 @@ body.has-not-saved-banner #app {
 body.win-banner-up .page-toast {
   top: calc(var(--win-banner-bottom, 120px) + 8px);
 }
+
+/* ↩ Undo on the board: a round-ended outline, unlike the filled +/−
+   blocks, and kept well clear of them (the row's own margin) */
+.board-undo-row {
+  display: flex;
+  justify-content: center;
+  margin: 2px 0 36px;
+}
+.board-undo-btn {
+  min-height: 44px;
+  padding: 8px 22px;
+  border-radius: 999px;
+  border: 2px dashed var(--accent);
+  background: transparent;
+  color: var(--accent);
+  font-weight: 800;
+  font-size: 1.05rem;
+  cursor: pointer;
+}
+.board-undo-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+#app.focus-mode .board-undo-row {
+  margin-bottom: 40px;
+}
+
+/* Recent Games: ✏️ / 🗑 on each game */
+.history-game-tools {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+.history-game-tools .btn {
+  min-height: 34px;
+  padding: 2px 8px;
+}
+/* the banner's "Who won it?" - a name to tap */
+.win-banner-change-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+}
