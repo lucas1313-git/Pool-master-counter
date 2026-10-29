@@ -493,3 +493,19 @@ Not part of the app - helpers for testing and for running this machine's own cop
   model found one, no id). With a clip (needs ffmpeg): people per look, ids, and how often a
   person kept their id. Use only footage of people who agreed to it.
   `node tests/probe_real_detector.js http://localhost:4235/ <photo or clip> [shots]`.
+- **probe_camera_keepalive.js** — the camera through a whole night (P26), its own server on 4282,
+  the scoreboard with this device's camera: the wake lock asked for again after the browser lets
+  it go; the camera's stream "ended" - "📷 The camera stopped - restarting it…" over the board,
+  then a new track and the banner gone; a frozen picture (the video paused, the stall time
+  shortened) - "📷 The camera's picture has frozen" over the board, detection stops, the camera
+  restarts and the banner goes. `node tests/probe_camera_keepalive.js [shots]`.
+- **probe_recorder_night.js** — 🎬 Record this session through a night (P26), its own server on
+  4281, a fake camera, the waits shortened: ✨ Highlights (the default) keeps only what the cues
+  cover (the clip still cut and decoding, no Play / Save of the whole); a wake lock while
+  recording; 🎞️ Everything saved in parts (part 2 decodes, ~6 s); the camera lost - kept, and a
+  new recording starts; space running low - stops with a message, everything up to then kept;
+  too little space - won't start. `node tests/probe_recorder_night.js [shots]`.
+- **test_recorder_retention.js** — the Mac recorder's "Keep recordings" (P26), no browser, a
+  throwaway home folder: for good keeps all; 30 days sends the 40-day-old recording to the Trash,
+  keeps the 10-day-old one, cuts a not-yet-cut cue as a clip first (with ffmpeg); other values
+  read as for good. `node tests/test_recorder_retention.js`.

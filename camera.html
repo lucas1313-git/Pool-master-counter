@@ -847,7 +847,7 @@
   </div>
 </div>
 
-<script src="js/camera-i18n.js?v=20261029g"></script>
+<script src="js/camera-i18n.js?v=20261029n"></script>
 <script src="js/pairing.js?v=20261028m"></script>
 <script src="camera/tfjs.js"></script>
 <script src="camera/pose-detection.js"></script>
@@ -1664,6 +1664,9 @@
     if (plainView(view) || !viewCanvas.captureStream) {
       viewInEffect = { zoom: 1, flip: false };
       videoEl.srcObject = stream;
+      // (a restarted camera: the picture may have been left paused)
+      var shown = videoEl.play && videoEl.play();
+      if (shown && shown.catch) shown.catch(function () {});
       return;
     }
     viewInEffect = view;
@@ -1782,7 +1785,31 @@
   videoEl.addEventListener("loadedmetadata", reconcileView);
   videoEl.addEventListener("resize", reconcileView);
 
-  function startCamera(deviceId, isBootAttempt) {
+  // ---- Keeping the camera going all night ----
+  // The camera's stream ending ("ended": another app took it, a cable, iOS
+  // pulling it) or going quiet ("mute" for more than a few seconds) restarts
+  // it on its own, after 1, 3, 10, 30 s, then every minute - a camera left
+  // running at the table for hours mustn't need someone to tap Restart. Not
+  // when the scoreboard stopped it on purpose (stop-camera).
+  var CAMERA_RETRY_MS = [1000, 3000, 10000, 30000, 60000];
+  var CAMERA_MUTE_GRACE_MS = 3000;
+  var cameraRetries = 0, cameraRetryTimer = null, cameraHealthyTimer = null, cameraStoppedOnPurpose = false;
+  function scheduleCameraRestart(why) {
+    if (cameraStoppedOnPurpose || isViewer || cameraRetryTimer) return;
+    var wait = CAMERA_RETRY_MS[Math.min(cameraRetries, CAMERA_RETRY_MS.length - 1)];
+    cameraRetries++;
+    clearTimeout(cameraHealthyTimer);
+    setStatus(dotCamera, labelCamera, "bad", CT("cam.restarting", "Camera: {{why}} - restarting in {{s}} s", { why: why, s: Math.round(wait / 1000) }), why === "frozen" ? "frozen" : "restarting");
+    logActivity("Camera " + why + " - restarting it in " + Math.round(wait / 1000) + " s (try " + cameraRetries + ")");
+    cameraRetryTimer = setTimeout(function () {
+      cameraRetryTimer = null;
+      if (cameraStoppedOnPurpose) return;
+      startCamera(cameraSelect.value || loadStoredCameraDeviceId() || null, false, true);
+    }, wait);
+  }
+
+  function startCamera(deviceId, isBootAttempt, isRetry) {
+    if (!isRetry) { cameraStoppedOnPurpose = false; cameraRetries = 0; clearTimeout(cameraRetryTimer); cameraRetryTimer = null; }
     setStatus(dotCamera, labelCamera, "busy", "Camera: starting...", "starting");
     var view = wantedView();
     var size = resolutionFor(view);
@@ -1803,11 +1830,23 @@
       hideCameraWarning();
       setStatus(dotCamera, labelCamera, "ok", "Camera: active", "active");
       var track = stream.getVideoTracks()[0];
+      noteFreshStream();
+      // (a minute without trouble: the next one starts from the first wait again)
+      clearTimeout(cameraHealthyTimer);
+      cameraHealthyTimer = setTimeout(function () { cameraRetries = 0; }, 60000);
       if (track) {
+        var muteTimer = null;
         track.addEventListener("ended", function () {
+          if (currentStream !== stream) return;
           setStatus(dotCamera, labelCamera, "bad", "Camera: stopped", "stopped");
-          showCameraWarning("The camera stream stopped unexpectedly (locked phone, another app took the camera, or a cable/mount issue). Tap below to restart it.");
+          showCameraWarning("The camera stream stopped unexpectedly (locked phone, another app took the camera, or a cable/mount issue). It restarts on its own - or tap below.");
+          scheduleCameraRestart("stopped");
         });
+        track.addEventListener("mute", function () {
+          clearTimeout(muteTimer);
+          muteTimer = setTimeout(function () { if (track.muted && currentStream === stream) scheduleCameraRestart("muted"); }, CAMERA_MUTE_GRACE_MS);
+        });
+        track.addEventListener("unmute", function () { clearTimeout(muteTimer); });
       }
       var activeDeviceId = track && track.getSettings ? track.getSettings().deviceId : null;
       if (!devicesPopulated) populateCameraList(activeDeviceId);
@@ -1820,6 +1859,8 @@
         startCamera(null, false);
         return;
       }
+      // (a restart that failed: tried again, later)
+      if (isRetry) { scheduleCameraRestart("stopped"); return; }
       setStatus(dotCamera, labelCamera, "bad", "Camera: error", "error");
       var httpsNote = location.protocol !== "https:" && location.hostname !== "localhost"
         ? " This page is being served over plain HTTP - iOS Safari blocks camera access entirely without HTTPS. See server/README.md for how to enable it."
@@ -1835,13 +1876,31 @@
   });
 
   // ---- Wake Lock ----
-  var wakeLock = null;
+  // Held while the camera runs; the browser lets it go whenever the page is
+  // hidden (and now and then on its own) - it used to stay "held" here after
+  // that, so the screen locked a few minutes later and the camera with it.
+  // Asked for again on "release" and whenever the page is visible again.
+  var wakeLock = null, wakeWanted = false;
   function requestWakeLock() {
-    if (!("wakeLock" in navigator)) return;
-    navigator.wakeLock.request("screen").then(function (lock) { wakeLock = lock; }).catch(function () {});
+    wakeWanted = true;
+    if (!("wakeLock" in navigator) || wakeLock || document.visibilityState !== "visible") return;
+    navigator.wakeLock.request("screen").then(function (lock) {
+      if (!wakeWanted) { try { lock.release(); } catch (e) {} return; }
+      wakeLock = lock;
+      lock.addEventListener("release", function () {
+        if (wakeLock === lock) wakeLock = null;
+        if (wakeWanted && document.visibilityState === "visible") setTimeout(requestWakeLock, 3000);
+      });
+    }).catch(function () {});
+  }
+  function releaseWakeLock() {
+    wakeWanted = false;
+    var lock = wakeLock;
+    wakeLock = null;
+    if (lock) { try { lock.release(); } catch (e) {} }
   }
   document.addEventListener("visibilitychange", function () {
-    if (document.visibilityState === "visible" && !wakeLock) requestWakeLock();
+    if (document.visibilityState === "visible" && wakeWanted) requestWakeLock();
   });
 
   // ---- Relay connection (role: camera) - or, when isEmbedded, a local
@@ -2082,8 +2141,10 @@
     } else if (msg.type === "ball_feedback" && msg.kind) {
       handleBallFeedback(msg.kind);
     } else if (msg.type === "stop-camera") {
+      cameraStoppedOnPurpose = true;
+      clearTimeout(cameraRetryTimer); cameraRetryTimer = null;
       stopCurrentStream();
-      if (wakeLock) { try { wakeLock.release(); } catch (e) {} wakeLock = null; }
+      releaseWakeLock();
     } else if (msg.type === "reload-settings") {
       // Same-device mode only - the debug/voice checkboxes live on the
       // parent page (index.html's Players panel, so they're visible
@@ -5178,6 +5239,11 @@
     expectedTieBreak: function (m) { return expectedTieBreak(m); },
     expectedFallback: function (m) { return expectedFallback(m); },
     getShootingVia: function () { return shootingVia; },
+    // keeping the camera going (tests)
+    setStallMs: function (ms) { STALL_MS = ms; },
+    cameraHealth: function () { return { frozen: stall.frozen, retries: cameraRetries, restarting: !!cameraRetryTimer, trackId: currentStream && currentStream.getVideoTracks()[0] ? currentStream.getVideoTracks()[0].id : null, wakeWanted: wakeWanted, wakeHeld: !!wakeLock }; },
+    endTrack: function () { var t = currentStream && currentStream.getVideoTracks()[0]; if (t) t.dispatchEvent(new Event("ended")); },
+    muteTrack: function () { var t = currentStream && currentStream.getVideoTracks()[0]; if (t) t.dispatchEvent(new Event("mute")); },
     // at the table? (feetAtTable for a pose's feet) / who'd be picked
     atTable: function (pose) { var peek = quickStancePeek(pose.keypoints); return peek ? feetAtTable(peek.ankleMid) : null; },
     selectActive: function (poses) { return selectActivePose(poses); }
@@ -9303,11 +9369,83 @@
     overlayCtx.restore();
   }
 
+  // ---- A frozen picture ----
+  // A camera can stay "on" while its picture stops: no new frames at all
+  // (requestVideoFrameCallback goes quiet), or the same frame over and over
+  // (a patch of the picture, unscaled, exactly the same - a live sensor's
+  // noise never is; Chrome's test camera playing a still picture is the one
+  // exception, and only the first check applies to it). STALL_MS of that:
+  // "frozen" - detection stops (it was reading the last frame over and over),
+  // the scoreboard shows a big banner, and the camera is restarted.
+  var STALL_MS = 8000;
+  var stall = { frameAt: Date.now(), changedAt: Date.now(), sample: null, frozen: false, armed: null };
+  var stallCanvas = document.createElement("canvas");
+  stallCanvas.width = stallCanvas.height = 24;
+  var stallCtx = stallCanvas.getContext("2d", { willReadFrequently: true });
+  function frameSource() {
+    return videoEl.srcObject === currentStream ? videoEl : viewSourceVideo;
+  }
+  function armFrameCallback() {
+    var src = frameSource();
+    if (!src || !src.requestVideoFrameCallback || stall.armed === src) return;
+    stall.armed = src;
+    src.requestVideoFrameCallback(function seen() {
+      stall.frameAt = Date.now();
+      if (stall.armed !== src) return;
+      src.requestVideoFrameCallback(seen);
+    });
+  }
+  function noteFreshStream() {
+    stall.frameAt = stall.changedAt = Date.now();
+    stall.sample = null;
+    stall.armed = null;
+  }
+  function isTestCamera() {
+    var t = currentStream && currentStream.getVideoTracks()[0];
+    return !!(t && /^fake_device/.test(t.label || ""));
+  }
+  function samePictureAsBefore() {
+    var src = frameSource();
+    if (!src || !src.videoWidth) return false;
+    var w = 24, x = Math.round(src.videoWidth / 2 - w / 2), y = Math.round(src.videoHeight / 2 - w / 2);
+    try { stallCtx.drawImage(src, x, y, w, w, 0, 0, w, w); } catch (e) { return false; }
+    var px = stallCtx.getImageData(0, 0, w, w).data, before = stall.sample, same = !!before;
+    if (before) for (var i = 0; i < px.length; i += 4) if (px[i] !== before[i] || px[i + 1] !== before[i + 1] || px[i + 2] !== before[i + 2]) { same = false; break; }
+    stall.sample = px;
+    return same;
+  }
+  function checkStall() {
+    var now = Date.now();
+    if (isViewer || !currentStream || cameraRetryTimer) { stall.changedAt = now; stall.frameAt = now; return; }
+    armFrameCallback();
+    var framesCome = !frameSource().requestVideoFrameCallback || now - stall.frameAt < STALL_MS;
+    var changes = isTestCamera() || !samePictureAsBefore();
+    if (framesCome && changes) {
+      stall.changedAt = now;
+      if (stall.frozen) {
+        stall.frozen = false;
+        setStatus(dotCamera, labelCamera, "ok", "Camera: active", "active");
+        hideCameraWarning();
+        logActivity("Camera picture moving again");
+      }
+      return;
+    }
+    if (!framesCome) stall.changedAt = Math.min(stall.changedAt, stall.frameAt);
+    // (still frozen after a restart: restarted again, the waits growing)
+    if (now - stall.changedAt >= STALL_MS) {
+      if (!stall.frozen) showCameraWarning(CT("cam.frozenWarning", "The camera's picture has frozen - restarting it."));
+      stall.frozen = true;
+      scheduleCameraRestart("frozen");
+    }
+  }
+  setInterval(checkStall, 1000);
+
   // ---- Main detection loop ----
   var detectionBusy = false;
 
   function runDetectionLoop() {
-    if (detectionBusy || !modelsReady || !currentStream) return;
+    // (not on a frozen picture: the same frame read over and over)
+    if (detectionBusy || !modelsReady || !currentStream || stall.frozen) return;
     detectionBusy = true;
     detector.estimatePoses(videoEl)
       .then(function (poses) {

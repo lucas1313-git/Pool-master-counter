@@ -124,11 +124,13 @@
     <div class="row"><label for="autoBack">🎯 Auto cue: looks back</label><input type="number" id="autoBack" min="0" max="60" step="1" value="15"><span>s, waits</span><input type="number" id="autoWait" min="5" max="120" step="1" value="25"><span>s for a shot, keeps</span><input type="number" id="autoLead" min="0" max="30" step="1" value="5"><span>s before it and</span><input type="number" id="autoTail" min="0" max="30" step="1" value="5"><span>s after</span></div>
     <div class="row"><label for="partMin">A new file every</label><input type="number" id="partMin" min="2" max="60" step="1" value="10"><span>minutes (quick to open and jump around in)</span></div>
     <div class="row"><label><input type="checkbox" id="autoStart"> Start recording as soon as this page opens</label></div>
+    <div class="row"><label for="keepSelect" data-i18n="rec.keepFor">Keep recordings</label><select id="keepSelect"></select></div>
     <div class="log" id="log"></div>
   </div>
 </main>
 <div class="toast" id="toast" hidden></div>
 
+<script src="js/camera-i18n.js?v=20261029n"></script>
 <script src="js/pairing.js?v=20261028m"></script>
 <script src="js/recording-consent.js?v=20261028m"></script>
 <script src="js/cue-viewer.js?v=20261025b"></script>
@@ -728,6 +730,30 @@
   document.addEventListener("visibilitychange", function () { if (!document.hidden) holdAwake(); });
   window.addEventListener("beforeunload", function (e) { if (rec.on) { e.preventDefault(); e.returnValue = ""; } });
 
+  // Keeping recordings (server/recorder.js's keepDays): for good, or so many
+  // days - then to the Trash, their cues cut out as clips first.
+  function renderKeepOptions(current) {
+    var sel = $("keepSelect");
+    sel.innerHTML = "";
+    [0, 7, 14, 30, 90].forEach(function (n) {
+      var o = document.createElement("option");
+      o.value = String(n);
+      o.textContent = n ? CT("rec.keepDays", "{{n}} days (then to the Trash, cues kept as clips)", { n: n }) : CT("rec.keepForever", "for good");
+      sel.appendChild(o);
+    });
+    sel.value = String(current || 0);
+  }
+  var keepDays = 0;
+  renderKeepOptions(keepDays);
+  window.onCameraI18nReady = function () { renderKeepOptions(keepDays); };
+  api("/api/rec/settings").then(function (r) { keepDays = r.keepDays || 0; renderKeepOptions(keepDays); }).catch(function () {});
+  $("keepSelect").addEventListener("change", function () {
+    var n = Number($("keepSelect").value);
+    api("/api/rec/settings", { keepDays: n }).then(function (r) {
+      keepDays = r.keepDays;
+      log(n ? "Recordings older than " + n + " days go to the Trash (their cues cut out as clips first)" + (r.trashed && r.trashed.length ? " - " + r.trashed.length + " moved now" : "") : "Recordings are kept for good");
+    }).catch(function (e) { log("Couldn't change it: " + e.message); });
+  });
   api("/api/rec/info").then(function (i) { $("folderText").textContent = "Saved to " + i.folder + (i.ffmpeg ? "" : " (no ffmpeg: clips can't be cut)"); }).catch(function () { $("folderText").textContent = "The computer's server isn't answering - recordings need it"; });
   drawCropBox();
   renderRec();

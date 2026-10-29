@@ -31,7 +31,14 @@
 //   POST   /api/rec/cues/:cue/clip           cut it out -> { file }
 //   GET    /api/rec/clips/:name              a clip
 //   GET    /api/rec/info                     where it all goes, ffmpeg or not
+//   GET    /api/rec/settings                 { keepDays } (0: keep them all)
+//   POST   /api/rec/settings                 { keepDays: 0 | 7 | 14 | 30 | 90 }
 // Like the camera relay: no login, the local network only.
+//
+// Keeping them (settings.json, keepDays): a recording older than that goes to
+// the Trash on its own (at start-up, when the setting changes, every few
+// hours) - its cues cut out as clips first (they're kept in Clips/), and one
+// with cues it can't cut (no ffmpeg) is left alone. 0, the default: kept.
 
 var fs = require("fs");
 var path = require("path");
@@ -42,6 +49,9 @@ var MAX_JSON = 256 * 1024;
 
 function root() { return path.join(os.homedir(), "Movies", "Pool Master Counter"); }
 function cuesFile() { return path.join(root(), "cues.json"); }
+function settingsFile() { return path.join(root(), "settings.json"); }
+var KEEP_DAYS = [0, 7, 14, 30, 90];
+function loadSettings() { var s = readJson(settingsFile(), {}); return { keepDays: KEEP_DAYS.indexOf(s.keepDays) !== -1 ? s.keepDays : 0 }; }
 function clipsDir() { return path.join(root(), "Clips"); }
 
 var ffmpegPath;
@@ -175,7 +185,72 @@ function cutClip(cue, cb) {
   })();
 }
 
+// A recording to the Trash (it can be put back from there), its cues with
+// it - the clips already cut stay. -> { trash, cues } or throws.
+function trashSession(id, x) {
+  var trash = path.join(os.homedir(), ".Trash"), dest = path.join(trash, "Pool Master Counter " + id), k = 2;
+  fs.mkdirSync(trash, { recursive: true });
+  while (fs.existsSync(dest)) dest = path.join(trash, "Pool Master Counter " + id + " (" + k++ + ")");
+  fs.renameSync(x.dir, dest);
+  var span = { s: x.s.startedAt, e: x.s.endedAt || Date.now() };
+  var cues = loadCues(), left = cues.filter(function (c) {
+    return c.session ? c.session !== id : !(c.startedAt >= span.s && c.startedAt <= span.e);
+  });
+  if (left.length !== cues.length) saveCues(left);
+  return { trash: dest, cues: cues.length - left.length };
+}
+function cuesOf(id, x) {
+  var span = { s: x.s.startedAt, e: x.s.endedAt || Date.now() };
+  return loadCues().filter(function (c) { return c.session ? c.session === id : c.startedAt >= span.s && c.startedAt <= span.e; });
+}
+
+// Recordings older than keepDays: their cues cut out, then to the Trash.
+// cb(names trashed).
+var retentionRunning = false;
+function applyRetention(now, cb) {
+  var keep = loadSettings().keepDays;
+  if (!keep || retentionRunning) return cb && cb([]);
+  retentionRunning = true;
+  var ids = [];
+  try { ids = fs.readdirSync(root()).filter(function (n) { return !!sessionDir(n); }); } catch (e) {}
+  var old = ids.map(function (id) { return { id: id, x: loadSession(id) }; }).filter(function (o) {
+    return o.x && o.x.s.endedAt && now - o.x.s.endedAt > keep * 86400000;
+  });
+  var gone = [];
+  (function next(i) {
+    if (i >= old.length) { retentionRunning = false; return cb && cb(gone); }
+    var o = old[i], uncut = cuesOf(o.id, o.x).filter(function (c) { return !c.clip && c.endedAt; });
+    if (uncut.length && !ffmpeg()) return next(i + 1); // (its cues can't be kept as clips: it stays)
+    (function cutNext(j) {
+      if (j >= uncut.length) {
+        try { trashSession(o.id, o.x); gone.push(o.id); console.log("[recorder] " + o.id + " is older than " + keep + " days - moved to the Trash"); } catch (e) { console.warn("[recorder] couldn't move " + o.id + " to the Trash: " + e.message); }
+        return next(i + 1);
+      }
+      cutClip(uncut[j], function (err, name) {
+        if (err) { console.warn("[recorder] kept " + o.id + ": a cue couldn't be cut (" + err.message + ")"); return next(i + 1); }
+        var cues = loadCues();
+        cues.forEach(function (c) { if (c.id === uncut[j].id) c.clip = name; });
+        saveCues(cues);
+        cutNext(j + 1);
+      });
+    })(0);
+  })(0);
+}
+
 function attachRecorderRoutes(app) {
+  // (kept recordings: looked at shortly after start-up, then every 6 hours)
+  setTimeout(function () { applyRetention(Date.now()); }, 15000).unref();
+  setInterval(function () { applyRetention(Date.now()); }, 6 * 3600 * 1000).unref();
+  app.get("/api/rec/settings", function (req, res) { sendJson(res, 200, loadSettings()); });
+  app.post("/api/rec/settings", function (req, res) {
+    readBody(req, function (b) {
+      if (!b || KEEP_DAYS.indexOf(Number(b.keepDays)) === -1) return sendJson(res, 400, { error: "keepDays: one of " + KEEP_DAYS.join(", ") });
+      fs.mkdirSync(root(), { recursive: true });
+      writeJson(settingsFile(), { keepDays: Number(b.keepDays) });
+      applyRetention(Date.now(), function (gone) { sendJson(res, 200, { keepDays: Number(b.keepDays), trashed: gone }); });
+    });
+  });
+
   app.get("/api/rec/info", function (req, res) {
     sendJson(res, 200, { folder: root(), ffmpeg: !!ffmpeg() });
   });
@@ -261,18 +336,9 @@ function attachRecorderRoutes(app) {
       try { fs.readdirSync(x.dir).forEach(function (n) { latest = Math.max(latest, fs.statSync(path.join(x.dir, n)).mtimeMs); }); } catch (e) {}
       if (Date.now() - latest < 60000) return sendJson(res, 409, { error: "it's still recording - stop it first" });
     }
-    var trash = path.join(os.homedir(), ".Trash"), dest = path.join(trash, "Pool Master Counter " + req.params.id), k = 2;
-    try {
-      fs.mkdirSync(trash, { recursive: true });
-      while (fs.existsSync(dest)) dest = path.join(trash, "Pool Master Counter " + req.params.id + " (" + k++ + ")");
-      fs.renameSync(x.dir, dest);
-    } catch (e) { return sendJson(res, 500, { error: "couldn't move it to the Trash (" + e.message + ")" }); }
-    var span = { s: x.s.startedAt, e: x.s.endedAt || Date.now() };
-    var cues = loadCues(), left = cues.filter(function (c) {
-      return c.session ? c.session !== req.params.id : !(c.startedAt >= span.s && c.startedAt <= span.e);
-    });
-    if (left.length !== cues.length) saveCues(left);
-    sendJson(res, 200, { ok: true, trash: dest, cues: cues.length - left.length });
+    var done;
+    try { done = trashSession(req.params.id, x); } catch (e) { return sendJson(res, 500, { error: "couldn't move it to the Trash (" + e.message + ")" }); }
+    sendJson(res, 200, { ok: true, trash: done.trash, cues: done.cues });
   });
 
   app.get("/api/rec/:id/file/:name", function (req, res) {
@@ -336,4 +402,4 @@ function attachRecorderRoutes(app) {
   });
 }
 
-module.exports = { attachRecorderRoutes: attachRecorderRoutes, _piecesFor: piecesFor };
+module.exports = { attachRecorderRoutes: attachRecorderRoutes, _piecesFor: piecesFor, _applyRetention: applyRetention };

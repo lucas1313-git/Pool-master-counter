@@ -38308,7 +38308,19 @@
   var cameraStatusCodes = { link: null, models: null, camera: null };
   var cameraPhonesConnected = null; // separate phone: from the relay's camera-presence; null = not connected to the relay
   var CAMERA_LIGHT_MODELS = { ready: ["ok", "visualScoring.lightModelsReady"], loading: ["busy", "visualScoring.lightModelsLoading"], failed: ["bad", "visualScoring.lightModelsFailed"] };
-  var CAMERA_LIGHT_CAMERA = { active: ["ok", "visualScoring.lightCameraActive"], starting: ["busy", "visualScoring.lightCameraStarting"], stopped: ["bad", "visualScoring.lightCameraStopped"], error: ["bad", "visualScoring.lightCameraError"] };
+  var CAMERA_LIGHT_CAMERA = { active: ["ok", "visualScoring.lightCameraActive"], starting: ["busy", "visualScoring.lightCameraStarting"], stopped: ["bad", "visualScoring.lightCameraStopped"], error: ["bad", "visualScoring.lightCameraError"], frozen: ["bad", "visualScoring.lightCameraFrozen"], restarting: ["busy", "visualScoring.lightCameraRestarting"] };
+  // A camera in trouble (its picture frozen, or stopped and restarting on
+  // its own - camera.html's checkStall / scheduleCameraRestart): a big
+  // banner on the board, so it's seen from the table, not only in Visual
+  // Scoring. Gone when the camera is back.
+  var CAMERA_TROUBLE = { frozen: "cameraTrouble.frozen", stopped: "cameraTrouble.stopped", restarting: "cameraTrouble.stopped" };
+  function renderCameraTroubleBanner(live) {
+    var el = document.getElementById("camera-trouble-banner");
+    if (!el) return;
+    var key = state.cameraInputEnabled && live ? CAMERA_TROUBLE[cameraStatusCodes.camera] : null;
+    el.classList.toggle("hidden", !key);
+    el.textContent = key ? T(key) : "";
+  }
   function clearCameraStatusCodes() {
     cameraStatusCodes = { link: null, models: null, camera: null };
     renderCameraStatusLights();
@@ -38328,6 +38340,7 @@
     }
     var models = (live && CAMERA_LIGHT_MODELS[cameraStatusCodes.models]) || ["", "visualScoring.lightModelsUnknown"];
     var camera = (live && CAMERA_LIGHT_CAMERA[cameraStatusCodes.camera]) || ["", "visualScoring.lightCameraUnknown"];
+    renderCameraTroubleBanner(live);
     return [link, models, camera];
   }
   function renderCameraStatusLights() {

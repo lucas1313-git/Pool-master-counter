@@ -37,7 +37,7 @@
         if (v) el.setAttribute(attr, v);
       });
     });
-    if (dict["cam.pageTitle"]) document.title = dict["cam.pageTitle"];
+    if (dict["cam.pageTitle"] && /camera\.html$/.test(location.pathname)) document.title = dict["cam.pageTitle"];
   }
 
   window.PMCCameraI18n = { code: code, apply: apply };

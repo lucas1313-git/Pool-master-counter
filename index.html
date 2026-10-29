@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261029m">
+<link rel="stylesheet" href="css/style.css?v=20261029n">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -231,6 +231,11 @@
       <div class="row lrec-settings">
         <label for="lrec-camera" data-i18n="lrec.camera">Camera</label>
         <select id="lrec-camera"></select>
+        <label for="lrec-mode" data-i18n="lrec.mode">Keep</label>
+        <select id="lrec-mode">
+          <option value="highlights" data-i18n="lrec.modeHighlights">✨ Highlights - only the cued clips</option>
+          <option value="full" data-i18n="lrec.modeFull">🎞️ Everything</option>
+        </select>
         <label class="checkbox-row"><input type="checkbox" id="lrec-sound"> <span data-i18n="lrec.sound">🎙️ Record sound too (what's said at the table - ask first)</span></label>
         <button type="button" id="btn-lrec-sign" class="btn btn-ghost" data-i18n="rec.printSign">🖨️ Print a "Camera in use" sign</button>
       </div>
@@ -328,6 +333,7 @@
     <!-- The board's top bar: the menu, one read-only line saying what's being played, Undo and
          the game's settings (js/app.js renderBoardStatus, openGameSheet, openBoardMenu) - nothing
          on the board changes a setting by itself. -->
+    <div class="camera-trouble-banner hidden" id="camera-trouble-banner" role="alert"></div>
     <div class="board-topbar" id="board-topbar">
       <button type="button" id="btn-board-menu" class="board-topbar-btn" data-i18n-aria-label="board.menuAria" aria-label="Menu"><span aria-hidden="true">☰</span><span class="board-topbar-label" data-i18n="board.menu">Menu</span></button>
       <div class="board-status" id="board-status"></div>
@@ -3033,18 +3039,18 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/pairing.js?v=20261029m"></script>
-<script src="js/big-store.js?v=20261029m"></script>
-<script src="js/mp4-clip.js?v=20261029m"></script>
-<script src="js/recording-consent.js?v=20261029m"></script>
-<script src="js/local-recorder.js?v=20261029m"></script>
-<script src="js/app.js?v=20261029m"></script>
-<script src="js/camera-client.js?v=20261029m"></script>
-<script src="js/voice.js?v=20261029m"></script>
+<script src="js/pairing.js?v=20261029n"></script>
+<script src="js/big-store.js?v=20261029n"></script>
+<script src="js/mp4-clip.js?v=20261029n"></script>
+<script src="js/recording-consent.js?v=20261029n"></script>
+<script src="js/local-recorder.js?v=20261029n"></script>
+<script src="js/app.js?v=20261029n"></script>
+<script src="js/camera-client.js?v=20261029n"></script>
+<script src="js/voice.js?v=20261029n"></script>
 <script>
   // The app opens with no network (sw.js, P21) - on http(s) only, not in the iOS app
   if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol) && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
-    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261029m").catch(function () {}); });
+    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261029n").catch(function () {}); });
   }
 </script>
 </body>

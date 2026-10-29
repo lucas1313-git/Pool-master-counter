@@ -8143,6 +8143,25 @@ body.network-guest-mode #header-group-start {
   font-size: 1.1rem;
 }
 
+/* The camera's picture frozen / the camera stopped - over the board,
+   big enough to see from the table (see renderCameraTroubleBanner). */
+.camera-trouble-banner {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1160;
+  max-width: min(92vw, 900px);
+  padding: 16px 26px;
+  border-radius: 14px;
+  background: #b3261e;
+  color: #fff;
+  font-size: clamp(1.2rem, 2.6vw, 2rem);
+  font-weight: 800;
+  text-align: center;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+}
+
 /* "Camera right 7 of 9 tonight" - top of Visual Scoring, from the
    operator's corrections (see judgeCameraCall). */
 .camera-accuracy-line {
