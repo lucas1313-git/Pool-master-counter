@@ -6,7 +6,7 @@ Some are English on purpose - the app's Taglish keeps a few pool and app words a
 practice, Winner stays, bracket). Keep those where they read naturally; translate the rest.
 Written by `node tests/tagalog_review.js` - run it again after changes.
 
-## Identical to English (201)
+## Identical to English (205)
 
 | Key | English (= Tagalog now) |
 |---|---|
@@ -81,6 +81,10 @@ Written by `node tests/tagalog_review.js` - run it again after changes.
 | `notify.methodEmail` | 📧 Email |
 | `notify.methodSms` | 📱 SMS |
 | `paywall.heading` | 🎨 Colorful Reports — Pro Feature |
+| `payouts.sidePotPot` | Pot |
+| `payouts.sidePotDefault` | Side pot |
+| `payouts.calcutta` | Calcutta |
+| `payouts.reportCalcutta` | Calcutta: |
 | `playerConflict.backupLabel` | Backup: |
 | `playerConflict.oneSession` | session |
 | `playerPage.allTimeBestRun` | 🏆 All-Time Best Run |
@@ -212,10 +216,11 @@ Written by `node tests/tagalog_review.js` - run it again after changes.
 | `shotClock.extended` | : extension, +25 s |
 | `voice.section.shotClock` | Shot clock |
 
-## Mostly English words (13)
+## Mostly English words (14)
 
 | Key | English | Tagalog now |
 |---|---|---|
+| `payouts.sidePotPlaceholder` | e.g. Break and run | hal. Break and run |
 | `playerPage.clubTeamWinRate` | Team win rate | Win rate ng team |
 | `visualScoring.lightRecognitionOff` | Camera recognition: off | Camera recognition: naka-off |
 | `cameraWizard.remoteViewerHeading` | Camera Setup (Remote) | Setup ng Camera (Remote) |

@@ -3995,6 +3995,7 @@
     "voice-sheet-overlay": "btn-voice-sheet-close",
     "tournament-match-win-overlay": "btn-tournament-match-win-close",
     "end-night-overlay": "btn-end-night-close",
+    "payouts-overlay": "btn-payouts-close",
     "challonge-push-review-overlay": "btn-challonge-push-review-close",
     "paywall-modal-overlay": "btn-paywall-cancel",
     "multi-table-host-overlay": "btn-multi-table-close",
@@ -10828,7 +10829,8 @@
   }
 
   function formatReportTournamentText(t) {
-    return T("report.tournamentWin", { names: joinNamesForReport(t.championNames || []), format: challongeFormatText(t.format), players: countPhrase("players", (t.players || []).length) });
+    var payouts = formatReportPayoutText(t.payouts);
+    return T("report.tournamentWin", { names: joinNamesForReport(t.championNames || []), format: challongeFormatText(t.format), players: countPhrase("players", (t.players || []).length) }) + (payouts ? " — " + payouts : "");
   }
 
   function formatReportTournamentLine(t) {
@@ -12378,9 +12380,9 @@
 
     if (data.tournaments.length) {
       lines.push("\r\n");
-      lines.push(csvRow([T("report.colTime"), T("report.colTournament"), T("report.colChampions"), T("report.colPlayers")]));
+      lines.push(csvRow([T("report.colTime"), T("report.colTournament"), T("report.colChampions"), T("report.colPlayers"), T("report.colPayouts")]));
       data.tournaments.forEach(function (t) {
-        lines.push(csvRow([formatReportGameTime(t.ts), challongeFormatText(t.format), joinNamesForReport(t.championNames || []), (t.players || []).length]));
+        lines.push(csvRow([formatReportGameTime(t.ts), challongeFormatText(t.format), joinNamesForReport(t.championNames || []), (t.players || []).length, formatReportPayoutText(t.payouts)]));
       });
     }
 
@@ -19958,7 +19960,7 @@
   // tags, map options and view, and Quick Game's race, too)
   function deviceSettingKeys() {
     return ["poolMasterCounter.theme.v1", "poolMasterCounter.language.v1", "poolMasterCounter.focusMode", "poolMasterCounter.leagueFocusMode",
-      "poolMasterCounter.fargoEnabled.v1", "poolMasterCounter.queueSwapSticky.v1", "poolMasterCounter.dayReportFormat.v1",
+      "poolMasterCounter.fargoEnabled.v1", "poolMasterCounter.queueSwapSticky.v1", "poolMasterCounter.dayReportFormat.v1", "poolMasterCounter.payoutPresets.v1",
       "poolMasterCounter.celebrations.v1", "poolMasterCounter.sounds.v1", "poolMasterCounter.soundVolume.v1",
       "poolMasterCounter.challongePrivate.v1", "poolMasterCounter.challongeVenue.v1",
       "poolMasterCounter.dayReportAttachBackup.v1", "poolMasterCounter.dayReportAttachColorful.v1",
@@ -31142,6 +31144,444 @@
     return group.names.length > 1 ? placeOrdinal(group.place) + "–" + placeOrdinal(group.place + group.names.length - 1) : placeOrdinal(group.place);
   }
 
+  // ---- Tournament money (P33) ----
+  // Bookkeeping only - nothing is paid or charged. t.money: { currency,
+  // entryFee, greenFee, addedMoney, houseCutPct, sidePots: [{ name, buyIn,
+  // entries, winners: [name] }], calcutta: { enabled, houseCutPct, bids:
+  // { entrant: { buyer, amount } } } } - the sums are js/lib/payouts.js'.
+  // The payout table by field size is the director's own: edited in the
+  // 💰 Payouts sheet, kept for every tournament after (and in backups).
+  var PAYOUT_PRESETS_KEY = "poolMasterCounter.payoutPresets.v1";
+  function loadPayoutPresets() {
+    try {
+      var p = JSON.parse(localStorage.getItem(PAYOUT_PRESETS_KEY) || "null");
+      if (Array.isArray(p) && p.length && p.every(function (r) { return r && r.upTo > 0 && Array.isArray(r.pcts); })) return p;
+    } catch (e) {}
+    return JSON.parse(JSON.stringify(PMCLib.payouts.DEFAULT_PAYOUT_PRESETS));
+  }
+  function savePayoutPresets(presets) {
+    try {
+      localStorage.setItem(PAYOUT_PRESETS_KEY, JSON.stringify(presets));
+    } catch (e) {
+      noteSaveFailure("payout table", e);
+    }
+  }
+
+  function tournamentMoney(t) {
+    if (!t.money) t.money = { currency: "$", entryFee: 0, greenFee: 0, addedMoney: 0, houseCutPct: 0, sidePots: [], calcutta: { enabled: false, houseCutPct: 0, bids: {} } };
+    if (!t.money.sidePots) t.money.sidePots = [];
+    if (!t.money.calcutta) t.money.calcutta = { enabled: false, houseCutPct: 0, bids: {} };
+    if (!t.money.calcutta.bids) t.money.calcutta.bids = {};
+    return t.money;
+  }
+  // anything to pay out: a prize pool, a side pot or a Calcutta
+  function tournamentHasMoney(t) {
+    var m = t && t.money;
+    if (!m) return false;
+    return PMCLib.payouts.prizePool(m, (t.players || []).length).pool > 0 || (m.sidePots || []).length > 0 || !!(m.calcutta && m.calcutta.enabled);
+  }
+  // "$1,250" - the tournament's currency sign, the app's language's digits
+  function formatMoney(n, currency) {
+    var digits;
+    try {
+      digits = Number(n || 0).toLocaleString(PLURAL_LOCALES[activeLanguageCode] || "en");
+    } catch (e) {
+      digits = String(n || 0);
+    }
+    return (currency || "$") + digits;
+  }
+  // the payouts as they stand: by the final placings once it's over, by
+  // place (the table's amounts) before
+  function tournamentPayoutsNow(t) {
+    return PMCLib.payouts.tournamentPayouts(t.money || {}, (t.players || []).length, t.champion ? t.placings || tournamentPlacings(t) : null, loadPayoutPresets());
+  }
+  // "$27" or "$27 each" (a shared place), or "$28 / $27" (rounding)
+  function payoutRowText(row, currency) {
+    var same = row.each.every(function (a) { return a === row.each[0]; });
+    if (!same) return row.each.map(function (a) { return formatMoney(a, currency); }).join(" / ");
+    return row.names.length > 1 ? T("payouts.each", { amount: formatMoney(row.each[0], currency) }) : formatMoney(row.each[0], currency);
+  }
+
+  // What the Day Report keeps (TOURNAMENT_RESULTS' payouts): the amounts
+  // paid, by name - or null when there's no money in it.
+  function tournamentPayoutRecord(t) {
+    if (!t.champion || !tournamentHasMoney(t)) return null;
+    var pay = tournamentPayoutsNow(t);
+    return {
+      currency: t.money.currency || "$",
+      pool: pay.pool.pool,
+      places: pay.places.map(function (r) { return { place: r.place, names: r.names, each: r.each }; }),
+      sidePots: pay.sidePots.filter(function (s) { return s.winners.length; }).map(function (s) { return { name: s.name, winners: s.winners, each: s.each }; }),
+      calcutta: pay.calcutta ? { pot: pay.calcutta.pot, byBuyer: pay.calcutta.byBuyer } : null
+    };
+  }
+  // "💰 Kim $194, Jo $116 · Break and run: Kim $20 · Calcutta: Sam $189"
+  function formatReportPayoutText(p) {
+    if (!p) return "";
+    var money = function (n) { return formatMoney(n, p.currency); };
+    var parts = [];
+    var prize = [];
+    (p.places || []).forEach(function (r) {
+      r.names.forEach(function (n, i) { prize.push(n + " " + money(r.each[i])); });
+    });
+    if (prize.length) parts.push("💰 " + prize.join(", "));
+    (p.sidePots || []).forEach(function (s) {
+      parts.push(T("payouts.reportSidePot", { name: s.name || T("payouts.sidePotDefault"), list: s.winners.map(function (w, i) { return w + " " + money(s.each[i]); }).join(", ") }));
+    });
+    var buyers = p.calcutta ? Object.keys(p.calcutta.byBuyer || {}) : [];
+    if (buyers.length) parts.push(T("payouts.reportCalcutta", { list: buyers.map(function (b) { return b + " " + money(p.calcutta.byBuyer[b]); }).join(", ") }));
+    return parts.join(" · ");
+  }
+
+  // Under the champion banner: "💰 Kim takes $194 of the $388 prize pool"
+  // (and the Calcutta's buyer)
+  function championPayoutText(t) {
+    var pay = tournamentPayoutsNow(t), cur = t.money.currency || "$";
+    var parts = [];
+    var top = pay.places[0];
+    if (top && pay.pool.pool > 0) parts.push(T("payouts.bannerWin", { name: top.names.join(" & "), amount: payoutRowText(top, cur), pool: formatMoney(pay.pool.pool, cur) }));
+    var ctop = pay.calcutta && pay.calcutta.places[0];
+    if (ctop) {
+      ctop.names.forEach(function (n, i) {
+        if (ctop.buyers[i]) parts.push(T("payouts.bannerCalcutta", { buyer: ctop.buyers[i], amount: formatMoney(ctop.each[i], cur) }));
+      });
+    }
+    return parts.join(" · ");
+  }
+
+  // ---- the 💰 Payouts sheet ----
+  var payoutsOverlay = document.getElementById("payouts-overlay");
+  function openPayoutsSheet() {
+    if (!TOURNAMENT) return;
+    tournamentMoney(TOURNAMENT);
+    buildPayoutsSheet();
+    payoutsOverlay.classList.remove("hidden");
+  }
+  function closePayoutsSheet() {
+    payoutsOverlay.classList.add("hidden");
+    renderTournamentPage();
+  }
+  // every change saved at once - the tournament, and its Day Report
+  // record once it's over (the money is often filled in at the end)
+  function savePayoutsChange() {
+    var t = TOURNAMENT;
+    if (!t) return;
+    saveTournamentToStorage(t);
+    if (t.champion) {
+      var changed = false;
+      TOURNAMENT_RESULTS.forEach(function (r) {
+        if (r.tournamentId === t.createdAt) {
+          r.payouts = tournamentPayoutRecord(t);
+          changed = true;
+        }
+      });
+      if (changed) saveTournamentResultsToStorage(TOURNAMENT_RESULTS);
+    }
+    renderPayoutsSummary();
+  }
+
+  function payoutsEl(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  // a labelled input on its own row; onValue(raw) on every keystroke
+  function payoutsInputRow(labelText, id, value, onValue, opts) {
+    opts = opts || {};
+    var row = payoutsEl("div", "gs-row payouts-row");
+    var label = payoutsEl("label", "gs-label", labelText);
+    label.htmlFor = id;
+    row.appendChild(label);
+    var input = document.createElement("input");
+    input.id = id;
+    if (opts.text) {
+      input.type = "text";
+      input.className = "payouts-text";
+      if (opts.maxLength) input.maxLength = opts.maxLength;
+    } else {
+      input.type = "number";
+      input.className = "gs-number payouts-number";
+      input.min = "0";
+      input.step = opts.step || "1";
+      input.inputMode = opts.step ? "decimal" : "numeric";
+    }
+    input.value = value === 0 || value == null ? "" : String(value);
+    if (opts.placeholder) input.placeholder = opts.placeholder;
+    input.addEventListener("input", function () {
+      onValue(input.value);
+      savePayoutsChange();
+    });
+    row.appendChild(input);
+    if (opts.unit) row.appendChild(payoutsEl("span", "gs-unit-word", opts.unit));
+    return row;
+  }
+
+  function buildPayoutsSheet() {
+    var t = TOURNAMENT, m = tournamentMoney(t), U = PMCLib.payouts.units;
+    var n = (t.players || []).length;
+    var body = document.getElementById("payouts-body");
+    body.innerHTML = "";
+    body.appendChild(payoutsEl("p", "gs-note", T("payouts.bookkeeping")));
+
+    // the money in
+    body.appendChild(payoutsInputRow(T("payouts.currency"), "payouts-currency", m.currency || "$", function (v) { m.currency = v.trim() || "$"; }, { text: true, maxLength: 4 }));
+    body.appendChild(payoutsInputRow(T("payouts.entryFee"), "payouts-entry", m.entryFee, function (v) { m.entryFee = U(v); }, { unit: T("payouts.eachPlayer") }));
+    body.appendChild(payoutsInputRow(T("payouts.greenFee"), "payouts-green", m.greenFee, function (v) { m.greenFee = U(v); }, { unit: T("payouts.eachPlayer") }));
+    body.appendChild(payoutsInputRow(T("payouts.addedMoney"), "payouts-added", m.addedMoney, function (v) { m.addedMoney = U(v); }));
+    body.appendChild(payoutsInputRow(T("payouts.houseCut"), "payouts-cut", m.houseCutPct, function (v) { m.houseCutPct = Math.min(100, Math.max(0, Number(v) || 0)); }, { step: "0.5", unit: T("payouts.houseCutUnit") }));
+    body.appendChild(payoutsEl("div", "payouts-summary", "")).id = "payouts-summary";
+
+    // the payout table for this field
+    var preset = PMCLib.payouts.presetForField(loadPayoutPresets(), n);
+    body.appendChild(payoutsEl("h4", "payouts-heading", T("payouts.tableHeading", { players: countPhrase("players", n) })));
+    body.appendChild(payoutsEl("ol", "payouts-places", "")).id = "payouts-places";
+    body.appendChild(payoutsInputRow(T("payouts.pctsLabel", { n: preset.upTo }), "payouts-pcts", preset.pcts.join(", "), function (v) {
+      var pcts = PMCLib.payouts.parsePcts(v);
+      if (!pcts.length) return;
+      var presets = loadPayoutPresets();
+      presets.forEach(function (r) { if (r.upTo === preset.upTo) r.pcts = pcts; });
+      savePayoutPresets(presets);
+    }, { text: true }));
+    var editAll = payoutsEl("button", "btn btn-ghost payouts-edit-all", T("payouts.editAll"));
+    editAll.type = "button";
+    editAll.id = "btn-payouts-edit-all";
+    var presetsBox = payoutsEl("div", "payouts-presets hidden", "");
+    presetsBox.id = "payouts-presets";
+    editAll.addEventListener("click", function () {
+      presetsBox.classList.toggle("hidden");
+      if (!presetsBox.classList.contains("hidden")) buildPayoutPresetsEditor(presetsBox);
+    });
+    body.appendChild(editAll);
+    body.appendChild(presetsBox);
+
+    // side pots
+    body.appendChild(payoutsEl("h4", "payouts-heading", T("payouts.sidePots")));
+    m.sidePots.forEach(function (sp, i) {
+      var box = payoutsEl("div", "payouts-sidepot", "");
+      box.appendChild(payoutsInputRow(T("payouts.sidePotName"), "payouts-sidepot-name-" + i, sp.name, function (v) { sp.name = v; }, { text: true, maxLength: 40, placeholder: T("payouts.sidePotPlaceholder") }));
+      box.appendChild(payoutsInputRow(T("payouts.sidePotBuyIn"), "payouts-sidepot-buyin-" + i, sp.buyIn, function (v) { sp.buyIn = U(v); }));
+      box.appendChild(payoutsInputRow(T("payouts.sidePotEntries"), "payouts-sidepot-entries-" + i, sp.entries, function (v) { sp.entries = U(v); }));
+      var row = payoutsEl("div", "gs-row payouts-row");
+      var label = payoutsEl("label", "gs-label", T("payouts.sidePotWinner"));
+      label.htmlFor = "payouts-sidepot-winner-" + i;
+      row.appendChild(label);
+      var sel = document.createElement("select");
+      sel.id = "payouts-sidepot-winner-" + i;
+      sel.className = "gs-select";
+      [""].concat(t.players || []).forEach(function (name) {
+        var o = document.createElement("option");
+        o.value = name;
+        o.textContent = name || T("payouts.notYet");
+        sel.appendChild(o);
+      });
+      sel.value = (sp.winners || [])[0] || "";
+      sel.addEventListener("change", function () {
+        sp.winners = sel.value ? [sel.value] : [];
+        savePayoutsChange();
+      });
+      row.appendChild(sel);
+      var amount = payoutsEl("span", "payouts-sidepot-amount", "");
+      amount.setAttribute("data-sidepot", String(i));
+      row.appendChild(amount);
+      var remove = payoutsEl("button", "btn btn-ghost payouts-remove", "×");
+      remove.type = "button";
+      remove.setAttribute("aria-label", T("payouts.removeAria"));
+      remove.addEventListener("click", function () {
+        m.sidePots.splice(i, 1);
+        savePayoutsChange();
+        buildPayoutsSheet();
+      });
+      row.appendChild(remove);
+      box.appendChild(row);
+      body.appendChild(box);
+    });
+    var addPot = payoutsEl("button", "btn btn-ghost", T("payouts.addSidePot"));
+    addPot.type = "button";
+    addPot.id = "btn-payouts-add-sidepot";
+    addPot.addEventListener("click", function () {
+      m.sidePots.push({ name: "", buyIn: 0, entries: n, winners: [] });
+      savePayoutsChange();
+      buildPayoutsSheet();
+    });
+    body.appendChild(addPot);
+
+    // the Calcutta
+    body.appendChild(payoutsEl("h4", "payouts-heading", T("payouts.calcutta")));
+    var toggle = payoutsEl("label", "gs-toggle", "");
+    var box = document.createElement("input");
+    box.type = "checkbox";
+    box.id = "payouts-calcutta-on";
+    box.checked = !!m.calcutta.enabled;
+    box.addEventListener("change", function () {
+      m.calcutta.enabled = box.checked;
+      savePayoutsChange();
+      buildPayoutsSheet();
+    });
+    toggle.appendChild(box);
+    toggle.appendChild(payoutsEl("span", "", T("payouts.calcuttaOn")));
+    body.appendChild(toggle);
+    if (m.calcutta.enabled) {
+      body.appendChild(payoutsEl("p", "gs-note", T("payouts.calcuttaHint")));
+      body.appendChild(payoutsInputRow(T("payouts.houseCut"), "payouts-calcutta-cut", m.calcutta.houseCutPct, function (v) { m.calcutta.houseCutPct = Math.min(100, Math.max(0, Number(v) || 0)); }, { step: "0.5", unit: T("payouts.calcuttaCutUnit") }));
+      var list = payoutsEl("div", "payouts-calcutta-list", "");
+      (t.players || []).forEach(function (name, i) {
+        var bid = m.calcutta.bids[name] || (m.calcutta.bids[name] = { buyer: "", amount: 0 });
+        var row = payoutsEl("div", "gs-row payouts-row payouts-calcutta-row");
+        row.appendChild(payoutsEl("span", "gs-label payouts-calcutta-player", name));
+        var buyer = document.createElement("input");
+        buyer.type = "text";
+        buyer.className = "payouts-text";
+        buyer.id = "payouts-calcutta-buyer-" + i;
+        buyer.maxLength = 40;
+        buyer.placeholder = T("payouts.buyer");
+        buyer.setAttribute("aria-label", T("payouts.buyerAria", { name: name }));
+        buyer.value = bid.buyer || "";
+        buyer.addEventListener("input", function () {
+          bid.buyer = buyer.value.trim();
+          savePayoutsChange();
+        });
+        var amount = document.createElement("input");
+        amount.type = "number";
+        amount.min = "0";
+        amount.step = "1";
+        amount.inputMode = "numeric";
+        amount.className = "gs-number payouts-number";
+        amount.id = "payouts-calcutta-bid-" + i;
+        amount.placeholder = T("payouts.bid");
+        amount.setAttribute("aria-label", T("payouts.bidAria", { name: name }));
+        amount.value = bid.amount ? String(bid.amount) : "";
+        amount.addEventListener("input", function () {
+          bid.amount = U(amount.value);
+          savePayoutsChange();
+        });
+        row.appendChild(buyer);
+        row.appendChild(amount);
+        list.appendChild(row);
+      });
+      body.appendChild(list);
+      body.appendChild(payoutsEl("div", "payouts-summary", "")).id = "payouts-calcutta-summary";
+    }
+    renderPayoutsSummary();
+  }
+
+  // ✏️ All field sizes: up to N players -> percents, for every row
+  function buildPayoutPresetsEditor(boxEl) {
+    boxEl.innerHTML = "";
+    var presets = loadPayoutPresets();
+    presets.forEach(function (row, i) {
+      var r = payoutsEl("div", "gs-row payouts-row payouts-preset-row");
+      r.appendChild(payoutsEl("span", "gs-unit-word", T("payouts.presetUpTo")));
+      var upTo = document.createElement("input");
+      upTo.type = "number";
+      upTo.min = "2";
+      upTo.step = "1";
+      upTo.className = "gs-number payouts-number";
+      upTo.value = String(row.upTo);
+      upTo.setAttribute("aria-label", T("payouts.presetUpToAria"));
+      var pcts = document.createElement("input");
+      pcts.type = "text";
+      pcts.className = "payouts-text";
+      pcts.value = row.pcts.join(", ");
+      pcts.setAttribute("aria-label", T("payouts.presetPctsAria", { n: row.upTo }));
+      var save = function () {
+        var list = loadPayoutPresets();
+        var p = PMCLib.payouts.parsePcts(pcts.value), u = parseInt(upTo.value, 10);
+        if (!list[i] || !p.length || !(u >= 2)) return;
+        list[i] = { upTo: u, pcts: p };
+        savePayoutPresets(list);
+        renderPayoutsSummary();
+      };
+      upTo.addEventListener("change", function () { save(); buildPayoutsSheet(); });
+      pcts.addEventListener("input", save);
+      r.appendChild(upTo);
+      r.appendChild(payoutsEl("span", "gs-unit-word", T("payouts.presetPlayers")));
+      r.appendChild(pcts);
+      var remove = payoutsEl("button", "btn btn-ghost payouts-remove", "×");
+      remove.type = "button";
+      remove.setAttribute("aria-label", T("payouts.removeAria"));
+      remove.disabled = presets.length <= 1;
+      remove.addEventListener("click", function () {
+        var list = loadPayoutPresets();
+        list.splice(i, 1);
+        savePayoutPresets(list);
+        buildPayoutsSheet();
+        document.getElementById("btn-payouts-edit-all").click();
+      });
+      r.appendChild(remove);
+      boxEl.appendChild(r);
+    });
+    var actions = payoutsEl("div", "gs-row", "");
+    var add = payoutsEl("button", "btn btn-ghost", T("payouts.addPreset"));
+    add.type = "button";
+    add.addEventListener("click", function () {
+      var list = loadPayoutPresets();
+      var last = list[list.length - 1];
+      list.push({ upTo: (last ? last.upTo : 8) * 2, pcts: last ? last.pcts.slice() : [70, 30] });
+      savePayoutPresets(list);
+      buildPayoutPresetsEditor(boxEl);
+    });
+    var reset = payoutsEl("button", "btn btn-ghost", T("payouts.resetPresets"));
+    reset.type = "button";
+    reset.addEventListener("click", function () {
+      savePayoutPresets(JSON.parse(JSON.stringify(PMCLib.payouts.DEFAULT_PAYOUT_PRESETS)));
+      buildPayoutsSheet();
+      document.getElementById("btn-payouts-edit-all").click();
+    });
+    actions.appendChild(add);
+    actions.appendChild(reset);
+    boxEl.appendChild(actions);
+  }
+
+  // the sheet's live numbers (no inputs rebuilt - typing keeps its place)
+  function renderPayoutsSummary() {
+    var t = TOURNAMENT;
+    var summary = document.getElementById("payouts-summary");
+    if (!t || !summary) return;
+    var cur = t.money.currency || "$", n = (t.players || []).length;
+    var pay = tournamentPayoutsNow(t), pool = pay.pool;
+    summary.innerHTML = "";
+    if (pool.perPlayer) summary.appendChild(payoutsEl("div", "payouts-line", TP("payouts.collect", n, { amount: formatMoney(pool.perPlayer, cur), n: n })));
+    summary.appendChild(payoutsEl("div", "payouts-pool", T("payouts.pool", { amount: formatMoney(pool.pool, cur) })));
+    summary.appendChild(payoutsEl("div", "payouts-line", T("payouts.breakdown", { entries: formatMoney(pool.entries, cur), cut: formatMoney(pool.houseCut, cur), added: formatMoney(pool.added, cur), green: formatMoney(pool.greenFees, cur) })));
+
+    var places = document.getElementById("payouts-places");
+    places.innerHTML = "";
+    var total = pay.pcts.reduce(function (a, b) { return a + b; }, 0);
+    pay.places.forEach(function (row) {
+      var li = payoutsEl("li", "payouts-place", "");
+      var label = row.names.length > 1 || row.names[0] ? placingLabel(row) + " " + row.names.join(", ") : placeOrdinal(row.place);
+      li.appendChild(payoutsEl("span", "payouts-place-name", label));
+      li.appendChild(payoutsEl("span", "payouts-place-pct", (Math.round(row.pct * 10) / 10) + "%"));
+      li.appendChild(payoutsEl("strong", "payouts-place-amount", payoutRowText(row, cur)));
+      places.appendChild(li);
+    });
+    if (Math.abs(total - 100) > 0.01) places.appendChild(payoutsEl("li", "gs-note", T("payouts.scaled", { total: Math.round(total * 10) / 10 })));
+
+    document.querySelectorAll(".payouts-sidepot-amount").forEach(function (el) {
+      var sp = pay.sidePots[parseInt(el.getAttribute("data-sidepot"), 10)];
+      el.textContent = sp ? T("payouts.sidePotPot", { amount: formatMoney(sp.pot, cur) }) : "";
+    });
+
+    var csum = document.getElementById("payouts-calcutta-summary");
+    if (csum && pay.calcutta) {
+      var c = pay.calcutta;
+      csum.innerHTML = "";
+      csum.appendChild(payoutsEl("div", "payouts-pool", T("payouts.calcuttaSummary", { bids: formatMoney(c.bids, cur), cut: formatMoney(c.houseCut, cur), pot: formatMoney(c.pot, cur) })));
+      // over: who each place's share goes to; before: the table's amounts on this pot
+      var rows = c.places.length ? c.places : PMCLib.payouts.splitByPlacings(c.pot, pay.pcts, pay.pcts.map(function (p, i) { return { place: i + 1, names: [""] }; }));
+      rows.forEach(function (row) {
+        if (!row.buyers) {
+          csum.appendChild(payoutsEl("div", "payouts-line", placeOrdinal(row.place) + " · " + formatMoney(row.each[0], cur)));
+          return;
+        }
+        row.names.forEach(function (name, i) {
+          csum.appendChild(payoutsEl("div", "payouts-line", T("payouts.calcuttaTo", { place: placingLabel(row), name: name, buyer: row.buyers[i] || T("payouts.noBuyer"), amount: formatMoney(row.each[i], cur) })));
+        });
+      });
+    }
+  }
+
   function recordTournamentCompletion(t) {
     if (noStatsMode) {
       t.placings = tournamentPlacings(t);
@@ -31181,7 +31621,9 @@
         .map(function (m) {
           return { round: m.tag || null, a: m.a, b: m.b, scoreA: m.scoreA, scoreB: m.scoreB, winner: m.winner };
         }),
-      placings: (t.placings = tournamentPlacings(t))
+      placings: (t.placings = tournamentPlacings(t)),
+      // (the prize money, side pots and Calcutta paid - P33; null: none)
+      payouts: tournamentPayoutRecord(t)
     });
     if (TOURNAMENT_RESULTS.length > 200) TOURNAMENT_RESULTS.length = 200;
     saveTournamentResultsToStorage(TOURNAMENT_RESULTS);
@@ -35257,6 +35699,8 @@
     btnTournamentAbandon.textContent = T("tournament.startNew");
     btnTournamentAbandon.classList.toggle("hidden", !t.champion);
     document.getElementById("btn-tournament-more").classList.toggle("hidden", !!t.champion);
+    // (the money is the host's bookkeeping - not on a table's own device)
+    document.getElementById("btn-tournament-payouts").classList.toggle("hidden", networkMode === "guest");
     document.getElementById("btn-tournament-bracket-tv").textContent = T(document.body.getAttribute("data-tournament-tv") === "bracket" ? "tournament.tvExit" : "tournament.bracketTvButton");
     var manage = document.getElementById("tournament-manage-row");
     manage.classList.toggle("hidden", !!t.champion);
@@ -35292,6 +35736,14 @@
       (t.championNames || [t.champion]).forEach(function (name) {
         appendEntrantIdentity(tournamentChampionBanner, name, t);
       });
+      var payLine = tournamentHasMoney(t) ? championPayoutText(t) : "";
+      if (payLine) {
+        var payEl = document.createElement("div");
+        payEl.className = "tournament-banner-payout";
+        payEl.id = "tournament-banner-payout";
+        payEl.textContent = payLine;
+        tournamentChampionBanner.appendChild(payEl);
+      }
     } else {
       tournamentChampionBanner.classList.add("hidden");
       tournamentChampionBanner.textContent = "";
@@ -35301,6 +35753,9 @@
     placingsEl.innerHTML = "";
     placingsEl.classList.toggle("hidden", !t.champion);
     if (t.champion) {
+      // (with money in it: each place's share - P33)
+      var paidByPlace = {};
+      if (tournamentHasMoney(t)) tournamentPayoutsNow(t).places.forEach(function (row) { paidByPlace[row.place] = row; });
       (t.placings || tournamentPlacings(t)).forEach(function (group) {
         var li = document.createElement("li");
         var place = document.createElement("span");
@@ -35308,6 +35763,13 @@
         place.textContent = placingLabel(group);
         li.appendChild(place);
         li.appendChild(document.createTextNode(" " + group.names.join(", ")));
+        var paid = paidByPlace[group.place];
+        if (paid) {
+          var amount = document.createElement("strong");
+          amount.className = "tournament-placing-payout";
+          amount.textContent = payoutRowText(paid, t.money.currency);
+          li.appendChild(amount);
+        }
         placingsEl.appendChild(li);
       });
     }
@@ -40037,6 +40499,9 @@
     tournamentChooser(T("tournament.moreTitle"), [{ label: T("tournament.abandon"), danger: true, id: "btn-tournament-menu-abandon", run: abandonTournament }]);
   });
   document.getElementById("btn-tournament-bracket-tv").addEventListener("click", function () { setTournamentTvMode("bracket"); });
+  document.getElementById("btn-tournament-payouts").addEventListener("click", openPayoutsSheet);
+  document.getElementById("btn-payouts-close").addEventListener("click", closePayoutsSheet);
+  document.getElementById("btn-payouts-done").addEventListener("click", closePayoutsSheet);
   document.getElementById("btn-tournament-next-up").addEventListener("click", function () {
     loadFollowQrUrl();
     setTournamentTvMode("next");

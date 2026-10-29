@@ -123,6 +123,16 @@ Setup is otherwise the same regardless of format: pick the game type, per-match 
 - The eventual champion (or co-champions, in a Round Robin tie) gets a 👑, and the finishing fanfare plays about a second later — see [Sound](#sound).
 - Every rack played in a tournament still counts toward each player's career stats, rating, and the All Players graphs — it isn't a separate, disconnected pool of data.
 
+### 💰 Payouts, side pots and a Calcutta
+
+Bookkeeping only: nothing is paid or charged. **💰 Payouts** on the tournament screen (the host's device) keeps the money for the event:
+
+- **Entry fee, green fee, added money and house cut.** The prize pool is the entry fees, less the house cut (a percent of the entries, rounded down), plus added money; green fees are the house's. It updates live, late players included: "Collect $25 from each of the 16 players · Prize pool: $388".
+- **A payout table by field size**, best place first, in percent: 70/30 up to 8 players, 50/30/20 up to 16, 6 places up to 24, 8 up to 32, 16 up to 64. Edit this field's row in place, or ✏️ every row (add, remove, back to the defaults); the table is kept for every tournament after and goes in backups. A shared place (single elimination's 3rd–4th) splits the places it covers. Every share is a whole currency unit; what rounding leaves over goes to the winner, so the shares always add up to the pool.
+- **Side pots** (a break-and-run pot...): a buy-in times the entries, to its winner.
+- **A Calcutta**: a buyer and a bid for each player; the bids less the house cut are split by where each player finishes, with the same table, and paid to their buyer.
+- When it's over the champion banner says what the winner takes (and who collects the Calcutta), the placings show each place's share, and the Day Report's tournament line lists every payout, side pot and Calcutta share (the CSV has a Payouts column). Changed after the end, they follow.
+
 ### Race-to-N sessions count as Tournaments too
 
 A regular session's race-to-wins milestone (the **Tourney win** counter on the scoreboard) is a Tournament in every stat that tracks them, on top of bracket Tournaments — reaching it credits a Tournament win for the winner (or winning team) and a Tournament loss for everyone else who was playing, exactly like a bracket champion and the players they beat. This is derived automatically from existing game history, so it applies retroactively too — every race-to-N session ever completed on a device shows up the moment this feature is present, not just new ones going forward.

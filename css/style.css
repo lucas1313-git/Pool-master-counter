@@ -8162,6 +8162,27 @@ body.network-guest-mode #header-group-start {
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
 }
 
+/* 💰 a tournament's money (P33): the sheet, the champion's share, each place's */
+.payouts-row { margin: 6px 0; }
+.payouts-row .gs-label { min-width: 120px; }
+.payouts-number { width: 96px; }
+.payouts-text { flex: 1 1 140px; min-height: 48px; font-size: 1.05rem; }
+.payouts-heading { margin: 18px 0 6px; font-size: 1.1rem; }
+.payouts-summary { margin: 10px 0; padding: 10px 12px; border-radius: 12px; background: var(--bg-card); border: 1px solid var(--border); }
+.payouts-pool { font-size: 1.4rem; font-weight: 900; color: var(--accent); }
+.payouts-line { color: var(--text-dim); margin: 2px 0; }
+.payouts-places { margin: 4px 0 8px; padding-left: 0; list-style: none; }
+.payouts-place { display: flex; gap: 10px; align-items: baseline; padding: 4px 0; border-bottom: 1px solid var(--border); }
+.payouts-place-name { flex: 1 1 auto; }
+.payouts-place-pct { color: var(--text-dim); }
+.payouts-place-amount { min-width: 70px; text-align: right; font-size: 1.15rem; }
+.payouts-sidepot { padding: 6px 0; border-bottom: 1px solid var(--border); }
+.payouts-sidepot-amount { font-weight: 800; }
+.payouts-remove { min-width: 48px; }
+.payouts-calcutta-player { min-width: 120px; }
+.tournament-banner-payout { margin-top: 8px; font-size: 0.75em; font-weight: 800; }
+.tournament-placing-payout { margin-left: 10px; color: var(--accent); }
+
 /* the shot clock (P31): the widget's +25, red under 10 s; the giant clock -
    most of the screen under 10 s on the board */
 .shot-counter-extend-btn {

@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261029u">
+<link rel="stylesheet" href="css/style.css?v=20261029v">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -1375,6 +1375,20 @@
   </div>
 </div>
 
+<!-- 💰 A tournament's money - entry, the payout table, side pots, a Calcutta; bookkeeping only (js/app.js openPayoutsSheet) -->
+<div id="payouts-overlay" class="confirm-modal-overlay board-sheet-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="payouts-title">
+  <div class="confirm-modal-card board-sheet payouts-sheet">
+    <div class="board-sheet-head">
+      <h3 class="confirm-modal-title" id="payouts-title" data-i18n="payouts.title">💰 Payouts</h3>
+      <button type="button" class="board-sheet-close" id="btn-payouts-close" data-i18n-aria-label="common.close" aria-label="Close">×</button>
+    </div>
+    <div class="board-sheet-body" id="payouts-body"></div>
+    <div class="confirm-modal-actions board-sheet-foot">
+      <button type="button" id="btn-payouts-done" class="btn btn-primary" data-i18n="payouts.done">Done</button>
+    </div>
+  </div>
+</div>
+
 <!-- ☰ Menu: everything that isn't the board (js/app.js openBoardMenu) -->
 <div id="board-menu-overlay" class="confirm-modal-overlay board-sheet-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="board-menu-title">
   <div class="confirm-modal-card board-sheet board-menu-sheet">
@@ -2640,6 +2654,7 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
       <button type="button" id="btn-tournament-abandon" class="btn btn-primary hidden" data-i18n="tournament.startNew">🏆 New Tournament</button>
       <button type="button" id="btn-tournament-bracket-tv" class="btn btn-ghost" data-i18n="tournament.bracketTvButton">📺 Full-screen bracket</button>
       <button type="button" id="btn-tournament-next-up" class="btn btn-ghost" data-i18n="tournament.nextUpButton">📺 Next up</button>
+      <button type="button" id="btn-tournament-payouts" class="btn btn-ghost" data-i18n="payouts.button">💰 Payouts</button>
       <button type="button" id="btn-tournament-print" class="btn btn-ghost" data-i18n="tournament.printBracket">🖨️ Print Bracket</button>
       <button type="button" id="btn-tournament-push-challonge" class="btn btn-ghost" data-i18n="challonge.pushButton">☁️ Push to Challonge</button>
       <button type="button" id="btn-tournament-close-challonge" class="btn btn-ghost" data-i18n="challonge.closeTournamentButton">🔒 Close Tournament</button>
@@ -3075,24 +3090,25 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/pairing.js?v=20261029u"></script>
-<script src="js/big-store.js?v=20261029u"></script>
-<script src="js/mp4-clip.js?v=20261029u"></script>
-<script src="js/recording-consent.js?v=20261029u"></script>
-<script src="js/local-recorder.js?v=20261029u"></script>
-<script src="js/lib/pool-day.js?v=20261029u"></script>
-<script src="js/lib/race-math.js?v=20261029u"></script>
-<script src="js/lib/handicaps.js?v=20261029u"></script>
-<script src="js/lib/brackets.js?v=20261029u"></script>
-<script src="js/lib/league.js?v=20261029u"></script>
-<script src="js/lib/events.js?v=20261029u"></script>
-<script src="js/app.js?v=20261029u"></script>
-<script src="js/camera-client.js?v=20261029u"></script>
-<script src="js/voice.js?v=20261029u"></script>
+<script src="js/pairing.js?v=20261029v"></script>
+<script src="js/big-store.js?v=20261029v"></script>
+<script src="js/mp4-clip.js?v=20261029v"></script>
+<script src="js/recording-consent.js?v=20261029v"></script>
+<script src="js/local-recorder.js?v=20261029v"></script>
+<script src="js/lib/pool-day.js?v=20261029v"></script>
+<script src="js/lib/race-math.js?v=20261029v"></script>
+<script src="js/lib/handicaps.js?v=20261029v"></script>
+<script src="js/lib/brackets.js?v=20261029v"></script>
+<script src="js/lib/league.js?v=20261029v"></script>
+<script src="js/lib/events.js?v=20261029v"></script>
+<script src="js/lib/payouts.js?v=20261029v"></script>
+<script src="js/app.js?v=20261029v"></script>
+<script src="js/camera-client.js?v=20261029v"></script>
+<script src="js/voice.js?v=20261029v"></script>
 <script>
   // The app opens with no network (sw.js, P21) - on http(s) only, not in the iOS app
   if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol) && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
-    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261029u").catch(function () {}); });
+    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261029v").catch(function () {}); });
   }
 </script>
 </body>
