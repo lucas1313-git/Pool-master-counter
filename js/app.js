@@ -857,18 +857,31 @@
             };
           })
       : activePlayers().map(function (p) {
-          return { key: p.id, rating: getPlayerRating(p.name) };
+          return { key: p.id, rating: getPlayerRating(p.name), fargo: fargoRatingFor(p.name) };
         });
+    // (every player with a real Fargo rating, FargoRate on: FargoRate's
+    // fair-match race from those - see computeFargoRaceTargets)
+    var source = !isTeamMode && sides.length > 1 && sides.every(function (s) { return s.fargo; }) ? "fargo" : "app";
     var rosterKey = sides
       .map(function (s) {
         return s.key;
       })
       .sort()
-      .join(",");
+      .join(",") + (source === "fargo" ? "|fargo" : "");
     if (!state.fairRaceTargets || state.fairRaceTargets.rosterKey !== rosterKey) {
-      state.fairRaceTargets = { rosterKey: rosterKey, targets: computeFairRaceTargets(sides, state.raceToWinsTarget) };
+      state.fairRaceTargets = {
+        rosterKey: rosterKey,
+        source: source,
+        targets: source === "fargo" ? computeFargoRaceTargets(sides, state.raceToWinsTarget) : computeFairRaceTargets(sides, state.raceToWinsTarget)
+      };
     }
     return state.fairRaceTargets.targets;
+  }
+  // "fargo" or "app": where the balanced race's numbers came from
+  function fairRaceSource() {
+    if (!state.fairRaceEnabled) return "";
+    ensureFairRaceTargets();
+    return state.fairRaceTargets.source || "app";
   }
 
   // The one function every win-target comparison/check should call
@@ -4192,15 +4205,31 @@
   // ---------------------------------------------------------------------
 
   var FARGO_ENABLED_KEY = "poolMasterCounter.fargoEnabled.v1";
-  var fargoEnabled = false;
+  // (read now, not only in boot: the first board's balanced race needs it -
+  // a Fargo Fair-Match race when everyone's linked, see ensureFairRaceTargets)
+  var fargoEnabled = (function () {
+    try {
+      return localStorage.getItem(FARGO_ENABLED_KEY) === "1";
+    } catch (e) {
+      return false;
+    }
+  })();
 
   function setFargoEnabled(on) {
     fargoEnabled = on;
+    showFairRaceFargoHint();
     try {
       localStorage.setItem(FARGO_ENABLED_KEY, on ? "1" : "0");
     } catch (e) {
       noteSaveFailure("Fargo preference", e);
     }
+  }
+
+  // Under "Use ratings to balance the race": with FargoRate on, a line
+  // saying linked players get FargoRate's fair-match race.
+  function showFairRaceFargoHint() {
+    var hint = document.getElementById("fair-race-fargo-hint");
+    if (hint) hint.classList.toggle("hidden", !fargoEnabled);
   }
 
   // ---------------------------------------------------------------------
@@ -5261,10 +5290,12 @@
   // time this side's own target can actually differ from the plain
   // "Race-to milestone" setting everyone already sees summarized
   // elsewhere.
-  function buildFairRaceNote(target) {
+  // fargo: this side's Fargo rating when the race came from FargoRate's
+  // chart - shown with it ("Race to 5 · Fargo 480").
+  function buildFairRaceNote(target, fargo) {
     var el = document.createElement("div");
     el.className = "fair-race-note";
-    el.textContent = T("scoreboard.fairRaceTarget", { target: target });
+    el.textContent = fargo ? T("scoreboard.fargoRaceTarget", { target: target, rating: fargo }) : T("scoreboard.fairRaceTarget", { target: target });
     return el;
   }
 
@@ -5788,7 +5819,7 @@
     var runBadge = buildRunStreakBadge(player);
     if (runBadge) panel.appendChild(runBadge);
 
-    if (state.fairRaceEnabled) panel.appendChild(buildFairRaceNote(effectiveRaceTarget(player.id)));
+    if (state.fairRaceEnabled) panel.appendChild(buildFairRaceNote(effectiveRaceTarget(player.id), fairRaceSource() === "fargo" ? fargoRatingFor(player.name) : null));
 
     // ⚠️ two fouls in a row, where a third costs something (P24)
     if (state.currentGame.trackEvents && state.turns && (state.turns.foulsInRow || {})[player.name] === 2 && foulRule(state.currentGame.gameType, 2).warns) {
@@ -6772,7 +6803,7 @@
     var rot = rotationStatusInfo();
     if (rot) parts.push({ text: T(rot.untilSwitch === 1 ? "board.statusRotationNext" : "board.statusRotationIn", { next: GAME_TYPES[state.rotation.order[(rotationCurrentIndex() + 1) % state.rotation.order.length].gameType].label, count: rot.untilSwitch }) });
     if (isRacing()) parts.push({ text: T("board.statusRace", { n: state.raceToWinsTarget }) });
-    if (isRacing() && state.fairRaceEnabled) parts.push({ text: T("board.statusBalanced") });
+    if (isRacing() && state.fairRaceEnabled) parts.push({ text: T(fairRaceSource() === "fargo" ? "board.statusFargoFairMatch" : "board.statusBalanced") });
     if (state.currentGame.mode === "teams") parts.push({ text: T("board.statusTeams") });
     else if (state.currentGame.queueEnabled) parts.push({ text: T("board.statusWinnerStays") });
     if (timedTournamentActive()) parts.push({ text: T("board.statusTimed") });
@@ -18171,6 +18202,32 @@
       targets[s.key] = s.key === anchor.key ? anchorRace : fairRaceTarget(eloExpectedScore(anchor.rating, s.rating), anchorRace);
     });
     return targets;
+  }
+
+  function fargoFairRace() { return PMCLib.raceMath.fargoFairRace.apply(null, arguments); } // (js/lib/race-math.js)
+
+  // The same, from real Fargo ratings ({key, fargo}) and FargoRate's own
+  // fair-match chart (fargoFairRace) - the highest-rated side races to
+  // anchorRace, everyone else to the chart's race for their gap from it.
+  function computeFargoRaceTargets(fargoSides, anchorRace) {
+    var targets = {};
+    if (fargoSides.length === 0) return targets;
+    var anchor = fargoSides.reduce(function (best, s) {
+      return s.fargo > best.fargo ? s : best;
+    });
+    fargoSides.forEach(function (s) {
+      targets[s.key] = s.key === anchor.key ? anchorRace : fargoFairRace(anchor.fargo - s.fargo, anchorRace);
+    });
+    return targets;
+  }
+
+  // A player's real Fargo rating - linked to FargoRate (the contact's
+  // Fargo ID) with "Use real FargoRate ratings" on - or null.
+  function fargoRatingFor(name) {
+    if (!fargoEnabled || !name) return null;
+    var c = getPlayerContact(name);
+    var r = c && c.fargoId ? Number(c.fargoRating) : NaN;
+    return r > 0 ? r : null;
   }
 
   // New/lightly-rated players move faster (a "provisional" period) so a
@@ -34555,15 +34612,22 @@
     // sides are known.
     if (t.fairRace) {
       var entrantMembersForRace = t.entrantMembers || {};
-      var targets = computeFairRaceTargets(
-        [
-          { key: "a", rating: averageRating(entrantMembersForRace[match.a] || [match.a]) },
-          { key: "b", rating: averageRating(entrantMembersForRace[match.b] || [match.b]) }
-        ],
-        t.raceTo
-      );
+      var membersA = entrantMembersForRace[match.a] || [match.a], membersB = entrantMembersForRace[match.b] || [match.b];
+      // (two single players, both with a real Fargo rating: FargoRate's chart)
+      var fargoA = membersA.length === 1 ? fargoRatingFor(membersA[0]) : null;
+      var fargoB = membersB.length === 1 ? fargoRatingFor(membersB[0]) : null;
+      var targets = fargoA && fargoB
+        ? computeFargoRaceTargets([{ key: "a", fargo: fargoA }, { key: "b", fargo: fargoB }], t.raceTo)
+        : computeFairRaceTargets(
+          [
+            { key: "a", rating: averageRating(membersA) },
+            { key: "b", rating: averageRating(membersB) }
+          ],
+          t.raceTo
+        );
       active.raceToA = targets.a;
       active.raceToB = targets.b;
+      if (fargoA && fargoB) { active.fargoA = fargoA; active.fargoB = fargoB; }
     }
     match.table = table;
     t.activeMatches.push(active);
@@ -34708,7 +34772,7 @@
     if (wins >= sideRaceTo) score.appendChild(buildFlagSpan());
     panel.appendChild(score);
 
-    if (t.fairRace) panel.appendChild(buildFairRaceNote(sideRaceTo));
+    if (t.fairRace) panel.appendChild(buildFairRaceNote(sideRaceTo, active && active[side === "a" ? "fargoA" : "fargoB"]));
 
     var unit = GAME_TYPES[t.gameType].unit;
     var oneRackWins = unit === "rack" && (t.target || 1) <= 1;
@@ -40123,8 +40187,10 @@
   }
   fargoEnabled = storedFargoEnabled === "1";
   fargoEnabledCheckbox.checked = fargoEnabled;
+  showFairRaceFargoHint();
   fargoEnabledCheckbox.addEventListener("change", function () {
     setFargoEnabled(fargoEnabledCheckbox.checked);
+    renderAll(); // (a balanced race from Fargo ratings now, or no longer - ensureFairRaceTargets)
     renderContactSheetPage();
     if (!playerPageView.classList.contains("hidden") && currentStatsPlayerName) {
       openPlayerStatsPage(currentStatsPlayerName, true);

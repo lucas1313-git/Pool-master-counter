@@ -6,7 +6,7 @@ Some are English on purpose - the app's Taglish keeps a few pool and app words a
 practice, Winner stays, bracket). Keep those where they read naturally; translate the rest.
 Written by `node tests/tagalog_review.js` - run it again after changes.
 
-## Identical to English (200)
+## Identical to English (201)
 
 | Key | English (= Tagalog now) |
 |---|---|
@@ -110,6 +110,7 @@ Written by `node tests/tagalog_review.js` - run it again after changes.
 | `players.standby` | Standby |
 | `rotation.heading` | Games Rotations |
 | `scoreboard.fairRaceTarget` | Race to |
+| `scoreboard.fargoRaceTarget` | Race to · Fargo |
 | `scoreboard.focusMode` | Focus Mode |
 | `scoreboard.gameTargetLabel` | · Target |
 | `skunk.indicator` | 🦨 Skunk! |

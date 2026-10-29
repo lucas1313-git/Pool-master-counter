@@ -31,3 +31,33 @@ test("BCA handicap: a big gap is capped at twice the base", () => {
 test("BCA handicap: a bigger gap never asks for a shorter race", () => {
   assert.ok(R.bcaRaceForRatingGap(5, 300) >= R.bcaRaceForRatingGap(5, 100));
 });
+
+// FargoRate's fair-match race (P32): fargoFairRace(gap, the stronger player's race)
+test("Fargo Fair-Match: a gap of 0 - both race to the same", () => {
+  assert.equal(R.fargoFairRace(0, 9), 9);
+  assert.equal(R.fargoFairRace(0, 7), 7);
+  assert.equal(R.fargoFairRace(0, 5), 5);
+});
+test("Fargo Fair-Match: a gap of 100 (2 to 1) - 9-5, 10-5, 8-4, 7-4, 5-3", () => {
+  assert.equal(R.fargoFairRace(100, 9), 5);
+  assert.equal(R.fargoFairRace(100, 10), 5); // (FargoRate's own example: 10-5 or 8-4)
+  assert.equal(R.fargoFairRace(100, 8), 4);
+  assert.equal(R.fargoFairRace(100, 7), 4);
+  assert.equal(R.fargoFairRace(100, 5), 3);
+});
+test("Fargo Fair-Match: a gap of 200 (4 to 1) - 9-2, 8-2, 7-2, 5-1, 3-1", () => {
+  assert.equal(R.fargoFairRace(200, 9), 2);
+  assert.equal(R.fargoFairRace(200, 8), 2);
+  assert.equal(R.fargoFairRace(200, 7), 2);
+  assert.equal(R.fargoFairRace(200, 5), 1);
+  assert.equal(R.fargoFairRace(200, 3), 1);
+});
+test("Fargo Fair-Match: a race to 9 gives FargoRate's published chart, row by row", () => {
+  assert.equal(R.FARGO_FAIR_RACE_TO_9.length, 8);
+  R.FARGO_FAIR_RACE_TO_9.forEach(([gap, race]) => assert.equal(R.fargoFairRace(gap, 9), race, "gap " + gap));
+});
+test("Fargo Fair-Match: a bigger gap never a longer race; never under 1; the stronger side's gap (negative) changes nothing", () => {
+  for (let g = 0; g < 600; g += 5) assert.ok(R.fargoFairRace(g + 5, 9) <= R.fargoFairRace(g, 9), "gap " + g);
+  assert.equal(R.fargoFairRace(1000, 9), 1);
+  assert.equal(R.fargoFairRace(-120, 9), 9);
+});

@@ -1,6 +1,6 @@
 // js/lib/race-math.js
-// Race math: the Elo expected score, the chance of winning a race to N from a per-rack chance, and 
-// the BCA-style handicapped race for a rating gap.
+// Race math: the Elo expected score, the chance of winning a race to N from a per-rack chance, 
+// the BCA-style handicapped race for a rating gap, and FargoRate's fair-match race.
 // Pure: no page, no storage, no app state - js/app.js calls it through
 // PMCLib.raceMath (loaded before it), and the unit tests (tests/unit/) load it in Node.
 // Moved out of js/app.js as it was (P29).
@@ -54,8 +54,24 @@
     return f(needA, needB);
   }
 
+  // FargoRate's own fair match (fargorate.com/faq, "What does a particular
+  // Fargo Rating difference mean?"): the two races in the same ratio as the
+  // games each player is expected to win - 100 points = 2 to 1 - so the
+  // weaker player's race is the stronger one's divided by 2^(gap / 100).
+  // Their published chart for a race to 9, as published (rating gap,
+  // weaker player's race) - each row is exactly that ratio; between rows
+  // the nearest whole game, never under 1.
+  var FARGO_FAIR_RACE_TO_9 = [[17, 8], [36, 7], [58, 6], [85, 5], [117, 4], [158, 3], [217, 2], [317, 1]];
+
+  function fargoFairRace(gap, anchorRace) {
+    if (!(gap > 0)) return anchorRace;
+    return Math.max(1, Math.min(anchorRace, Math.round(anchorRace / Math.pow(2, gap / 100))));
+  }
+
   var api = {
     BCA_MAX_RACE_FACTOR: BCA_MAX_RACE_FACTOR,
+    FARGO_FAIR_RACE_TO_9: FARGO_FAIR_RACE_TO_9,
+    fargoFairRace: fargoFairRace,
     eloExpectedScore: eloExpectedScore,
     raceWinProbability: raceWinProbability,
     bcaRaceForRatingGap: bcaRaceForRatingGap

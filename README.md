@@ -171,6 +171,12 @@ Every player has an automatic, Elo-style rating inspired by the scale [FargoRate
 
 This is a from-scratch implementation matched to FargoRate's *published* odds and scale — not a reverse-engineered clone of Fargo's own algorithm, which recomputes every player's rating together in a proprietary daily global optimization and isn't something that can run client-side in a static app.
 
+### Fargo Fair-Match races
+
+With **⚖️ Use ratings to balance the race** on, the underdog's race is shortened from the rating gap so the match is close to a coin flip. Turn on **Use real FargoRate ratings** on the Contact Sheet and link players to their Fargo IDs there (🔎 Find on Fargo, or enter the ID): when every player in the match is linked, the race comes from FargoRate's own fair-match chart instead (the FAQ on fargorate.com, "What does a particular Fargo Rating difference mean?"). There, the two races are in the same ratio as the games each player is expected to win: the weaker player's race is the stronger player's divided by 2 for every 100 points, rounded to a whole game. In a race to 9 that's 9–8 at a 17-point gap, 9–5 at 100, 9–2 at 200 and 9–1 at 317, FargoRate's published table. The board says **⚖️ Fargo Fair-Match** and each card shows the Fargo rating it used ("Race to 5 · Fargo 500"); anyone not linked, or FargoRate off, and it's this app's own ratings as before. Tournaments with balanced races do the same, match by match.
+
+FargoRate doesn't publish a file format for sending results in (leagues enter scores in its League Management System, tournaments go through its own tools), so there's no FargoRate export, and nothing is ever sent to FargoRate. The app only looks players up.
+
 ## Sound
 
 Every sound is synthesized on the fly with the Web Audio API — no audio files, nothing to download. A win or loss plays a short tone; reaching a race-to-N milestone (a regular session or a bracket Tournament) plays a bigger fanfare: the full 30-note main theme of Beethoven's 9th Symphony ("Ode to Joy"), pitched low and drenched in a synthetic reverb tail for a deep, triumphant feel, starting about a second after the win is announced so it doesn't step on the announcement itself.

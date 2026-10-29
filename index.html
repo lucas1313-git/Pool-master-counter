@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261029t">
+<link rel="stylesheet" href="css/style.css?v=20261029u">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -291,6 +291,7 @@
         <div class="checkbox-row checkbox-row-prominent setting-with-number fair-race-row">
           <label class="setting-with-number-label"><input type="checkbox" id="fair-race-enabled-checkbox"> <span data-i18n="gameSetup.fairRaceEnable">⚖️ Use Q-Score to balance the race</span></label>
           <span class="fair-race-inline-explain" data-i18n="gameSetup.fairRaceShortExplain">Shortens the underdog's target based on the rating gap, so the match is closer to a coin flip.</span>
+          <span id="fair-race-fargo-hint" class="fair-race-inline-explain hidden" data-i18n="gameSetup.fairRaceFargoHint">🎱 Fargo Fair-Match: when every player is linked to FargoRate, the race comes from FargoRate's own fair-match chart. Otherwise this app's ratings are used.</span>
           <button type="button" id="btn-fair-race-info-session" class="format-info-btn" data-i18n-aria-label="tournament.fairRaceInfoAria" aria-label="What does this mean?">❓</button>
         </div>
       </div>
@@ -3074,24 +3075,24 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/pairing.js?v=20261029t"></script>
-<script src="js/big-store.js?v=20261029t"></script>
-<script src="js/mp4-clip.js?v=20261029t"></script>
-<script src="js/recording-consent.js?v=20261029t"></script>
-<script src="js/local-recorder.js?v=20261029t"></script>
-<script src="js/lib/pool-day.js?v=20261029t"></script>
-<script src="js/lib/race-math.js?v=20261029t"></script>
-<script src="js/lib/handicaps.js?v=20261029t"></script>
-<script src="js/lib/brackets.js?v=20261029t"></script>
-<script src="js/lib/league.js?v=20261029t"></script>
-<script src="js/lib/events.js?v=20261029t"></script>
-<script src="js/app.js?v=20261029t"></script>
-<script src="js/camera-client.js?v=20261029t"></script>
-<script src="js/voice.js?v=20261029t"></script>
+<script src="js/pairing.js?v=20261029u"></script>
+<script src="js/big-store.js?v=20261029u"></script>
+<script src="js/mp4-clip.js?v=20261029u"></script>
+<script src="js/recording-consent.js?v=20261029u"></script>
+<script src="js/local-recorder.js?v=20261029u"></script>
+<script src="js/lib/pool-day.js?v=20261029u"></script>
+<script src="js/lib/race-math.js?v=20261029u"></script>
+<script src="js/lib/handicaps.js?v=20261029u"></script>
+<script src="js/lib/brackets.js?v=20261029u"></script>
+<script src="js/lib/league.js?v=20261029u"></script>
+<script src="js/lib/events.js?v=20261029u"></script>
+<script src="js/app.js?v=20261029u"></script>
+<script src="js/camera-client.js?v=20261029u"></script>
+<script src="js/voice.js?v=20261029u"></script>
 <script>
   // The app opens with no network (sw.js, P21) - on http(s) only, not in the iOS app
   if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol) && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
-    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261029t").catch(function () {}); });
+    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261029u").catch(function () {}); });
   }
 </script>
 </body>
