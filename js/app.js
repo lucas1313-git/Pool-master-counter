@@ -1582,6 +1582,22 @@
   // A quiet single tick - the countdown warning in the final 5 seconds
   // before playShotCounterBeep fires, deliberately much smaller/shorter
   // than the beep it's leading up to so the two stay easy to tell apart.
+  // The shot clock run out: a buzzer - long, low and rough, nothing like the
+  // beeps before it.
+  function playShotClockBuzzer() {
+    if (!soundAllowed("alert")) return;
+    var ctx = getAudioCtx(), now = ctx.currentTime;
+    var osc = ctx.createOscillator(), osc2 = ctx.createOscillator(), gain = ctx.createGain();
+    osc.type = "square"; osc.frequency.value = 196;
+    osc2.type = "sawtooth"; osc2.frequency.value = 202;
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.35, now + 0.03);
+    gain.gain.setValueAtTime(0.35, now + 0.9);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.1);
+    osc.connect(gain); osc2.connect(gain); gain.connect(audioOut(ctx));
+    osc.start(now); osc2.start(now); osc.stop(now + 1.15); osc2.stop(now + 1.15);
+  }
+
   function playShotCounterTick() {
     if (!soundAllowed("alert")) return;
     clickSound(getAudioCtx().currentTime, 700, 0.14);
@@ -3574,6 +3590,8 @@
       if (tableWatch.day !== day) { tableWatch.day = day; tableWatch.shots = 0; }
       tableWatch.shots++;
       if (cameraSimpleModeOn) creditSimpleShot();
+      // (the balls stopped after a shot: the next one's clock, if asked for)
+      if (state.currentGame.shotClockFromCamera && shotCounterActive()) restartShotClock();
     }
     renderTableWatch();
   }
@@ -3884,14 +3902,8 @@
         toggleShotCounterVisibility();
         return;
       } else if (e.key === "Clear") {
-        shotCounterAccumulatedMs = 0;
-        shotCounterLastBeepMs = 0;
-        shotCounterLastTickCountdown = null;
-        // While running, elapsed is entirely (now - runningSince) - has
-        // to move that reference point up to now too, or a Clear during
-        // an unbroken run (the common case: never paused) would do
-        // nothing, since accumulatedMs was already 0.
-        if (shotCounterRunningSince) shotCounterRunningSince = Date.now();
+        resetShotCounterToZero();
+        return;
       }
       tickShotCounter();
     }
@@ -6238,77 +6250,108 @@
     updateGameDurationDisplay();
   }
 
-  // Shot counter (see handleKeypadShortcut and the shotCounter* module
-  // vars). Works for every unit (rack/balls/points) as long as the Game
-  // Setup checkbox is on - Quick Counter has no notion of a game unit at
-  // all, so it's excluded outright.
+  // ---- The shot clock (P31) ----
+  // A real shot clock: 30 or 35 seconds a shot (state.currentGame.
+  // shotCounterBeepSec - the old counter's setting, kept), counting down;
+  // a beep at 10 and at 5 seconds and a buzzer at 0; one +25 s extension
+  // per player per rack; reset by tapping it (it starts running at once),
+  // by the Clear key, on a score in a points game, or - with the camera on
+  // and "Start from the camera" ticked - when the camera sees the balls stop
+  // after a shot. A new rack sets it back, waiting (the break comes after
+  // the rack-up: "/" or a tap starts it). Under 10 seconds on the board it
+  // goes giant - most of the screen, readable across a 9-foot table.
+  // shotCounterAccumulatedMs / RunningSince: this shot's elapsed time, as
+  // before; shotClockBonusMs: extensions added to this shot.
+  var SHOT_CLOCK_EXTENSION_MS = 25000;
+  var shotClockBonusMs = 0;
+  var shotClockAlerts = {}; // { 10: true, 5: true, 0: true } - this shot's beeps already played
+  var shotClockExtensionsUsed = {}; // player id -> true, this rack
+  // (tests: what the clock played, and when - see probe_shot_clock)
+  window.PMCShotClockDebug = { events: [] };
+
   function shotCounterActive() {
     return !quickCounterMode && !!state.currentGame.shotCounterEnabled;
   }
-
+  // 30 or 35 (an older setting in between reads as the nearer one)
+  function shotClockSeconds() {
+    return (state.currentGame.shotCounterBeepSec || 30) >= 33 ? 35 : 30;
+  }
   function shotCounterElapsedMs() {
     return shotCounterAccumulatedMs + (shotCounterRunningSince ? Date.now() - shotCounterRunningSince : 0);
   }
+  function shotClockRemainingMs() {
+    return Math.max(0, shotClockSeconds() * 1000 + shotClockBonusMs - shotCounterElapsedMs());
+  }
+  function resetShotClockShot(running) {
+    shotCounterAccumulatedMs = 0;
+    shotClockBonusMs = 0;
+    shotClockAlerts = {};
+    shotCounterLastBeepMs = 0;
+    shotCounterLastTickCountdown = null;
+    shotCounterRunningSince = running ? Date.now() : null;
+  }
 
-  // Called when the Game Setup checkbox is checked (or a "balls" game
-  // with it already checked is freshly set up), on boot to restore an
-  // already-enabled counter, and on every new game/rack (see
-  // resetGameBalls) - always resets to a clean, paused 0:00 rather than
-  // auto-running: the player starts it themselves (tap the widget or
-  // "/") once they're actually at the table and ready to shoot, instead
-  // of the clock silently running during rack-up/setup time. Doesn't
-  // touch shotCounterHidden: that's persisted separately
-  // (state.currentGame.shotCounterHidden) so a hidden counter reloads
-  // still hidden instead of popping back up on every page load.
+  // A new game or rack (see resetGameBalls), the clock switched on, a
+  // reload: full time, waiting, every player's extension back.
   function startShotCounter() {
-    shotCounterAccumulatedMs = 0;
-    shotCounterLastBeepMs = 0;
-    shotCounterLastTickCountdown = null;
-    shotCounterRunningSince = null;
+    resetShotClockShot(false);
+    shotClockExtensionsUsed = {};
     tickShotCounter();
   }
-
-  // Called when the checkbox is unchecked - progress isn't kept (there's
-  // nowhere meaningful to keep it once the feature's off), so re-enabling
-  // later is the same as starting fresh via startShotCounter.
   function stopShotCounter() {
-    shotCounterAccumulatedMs = 0;
-    shotCounterLastBeepMs = 0;
-    shotCounterLastTickCountdown = null;
-    shotCounterRunningSince = null;
+    resetShotClockShot(false);
+    shotClockExtensionsUsed = {};
     tickShotCounter();
   }
 
-  // Flips pause/unpause - shared by the "/" keypad shortcut and a tap on
-  // the widget itself (see its click listener near boot).
+  // "/" on the number pad: run / hold, as before.
   function toggleShotCounterPause() {
     if (!shotCounterActive()) return;
     if (shotCounterRunningSince) {
       shotCounterAccumulatedMs += Date.now() - shotCounterRunningSince;
       shotCounterRunningSince = null;
     } else {
+      if (shotClockRemainingMs() <= 0) resetShotClockShot(false); // (run out: a new shot)
       shotCounterRunningSince = Date.now();
     }
     tickShotCounter();
   }
 
-  // Zeroes the elapsed time back to 0:00 without otherwise touching
-  // whether it's running or paused right now (unlike startShotCounter,
-  // which always leaves it paused at 0:00 - this is "restart the clock
-  // mid-shot", not "set the feature up fresh") - just means "back to
-  // zero, keep doing whatever it was doing".
+  // The clock tapped, or "reset clock": full time for the next shot, running.
+  function restartShotClock() {
+    if (!shotCounterActive()) return;
+    resetShotClockShot(true);
+    tickShotCounter();
+  }
+  // The Clear key: back to full time, running or waiting as it was.
   function resetShotCounterToZero() {
     if (!shotCounterActive()) return;
-    shotCounterAccumulatedMs = 0;
-    shotCounterLastBeepMs = 0;
-    shotCounterLastTickCountdown = null;
-    if (shotCounterRunningSince) shotCounterRunningSince = Date.now();
+    resetShotClockShot(!!shotCounterRunningSince);
     tickShotCounter();
   }
 
-  // Flips show/hide - shared by the "*" keypad shortcut and the Game
-  // Setup panel's Show/Hide Timer button. Persisted so the widget stays
-  // hidden across a reload instead of popping back up (see startShotCounter).
+  // +25 s for the player shooting (the one picked on the number pad, or the
+  // event bar's shooter) - once per player per rack. -> { ok, text }
+  function extendShotClock(playerId) {
+    if (!shotCounterActive()) return { ok: false, text: T("shotClock.off") };
+    var p = playerId ? getPlayer(playerId) : keypadSelectedPlayerId ? getPlayer(keypadSelectedPlayerId) : typeof eventShooter === "function" ? eventShooter() : null;
+    if (!p) return { ok: false, text: T("shotClock.pickShooter") };
+    if (shotClockExtensionsUsed[p.id]) return { ok: false, text: T("shotClock.extensionUsed", { name: p.name }) };
+    shotClockExtensionsUsed[p.id] = true;
+    shotClockBonusMs += SHOT_CLOCK_EXTENSION_MS;
+    // (an extension asked for after the warnings: they play again if it gets that low again)
+    var left = shotClockRemainingMs();
+    [10, 5, 0].forEach(function (s) { if (left > s * 1000) delete shotClockAlerts[s]; });
+    window.PMCShotClockDebug.events.push({ kind: "extension", player: p.name, at: Date.now() });
+    tickShotCounter();
+    return { ok: true, text: T("shotClock.extended", { name: p.name }) };
+  }
+  function extendShotClockFromButton(e) {
+    if (e) e.stopPropagation();
+    var r = extendShotClock();
+    showToast(r.text, r.ok ? "⏱️ " : "⚠️ ");
+  }
+
   function toggleShotCounterVisibility() {
     if (!shotCounterActive()) return;
     shotCounterHidden = !shotCounterHidden;
@@ -6317,13 +6360,6 @@
     tickShotCounter();
   }
 
-  // Turns the feature off outright - unlike toggleShotCounterVisibility
-  // (which only hides the WIDGET while it keeps ticking/beeping
-  // underneath), this is the same as unchecking the Game Setup
-  // checkbox: the widget's own ⏹ button, for whenever it's showing up
-  // unexpectedly (e.g. left on from an earlier game/session - the
-  // setting persists across games on purpose, so this is the fast way
-  // back rather than hunting down the checkbox in Game Setup).
   function killShotCounter() {
     if (!shotCounterActive()) return;
     state.currentGame.shotCounterEnabled = false;
@@ -6333,9 +6369,17 @@
     stopShotCounter();
   }
 
-  // Runs every second (see the setInterval near boot) and also called
-  // directly after every keypad action, so the widget and beep schedule
-  // react immediately instead of waiting up to a second.
+  // The sounds: a beep at 10 and at 5 seconds (two taps, as the counter's
+  // beep was), a buzzer at 0.
+  function shotClockAlert(seconds) {
+    shotClockAlerts[seconds] = true;
+    window.PMCShotClockDebug.events.push({ kind: seconds ? "beep" + seconds : "buzzer", at: Date.now() });
+    if (seconds) playShotCounterBeep();
+    else playShotClockBuzzer();
+  }
+
+  // Every second (the setInterval near boot) and straight after anything
+  // that changes the clock.
   function tickShotCounter() {
     var widget = document.getElementById("shot-counter-widget");
     if (!widget) return;
@@ -6343,35 +6387,32 @@
     var overlayOrAppHidden = isAnyOverlayOpen() || appRoot.classList.contains("hidden");
     var visible = active && !shotCounterHidden && !overlayOrAppHidden;
     widget.classList.toggle("hidden", !visible);
-    // Stays visible whenever the counter is active at all, regardless
-    // of shotCounterHidden - the whole point is a way back once the
-    // widget itself is hidden, so it can't be gated by that same flag.
     var toggleBtn = document.getElementById("shot-counter-visibility-toggle");
     if (toggleBtn) toggleBtn.classList.toggle("hidden", !(active && !overlayOrAppHidden));
-    if (!active) return;
+    var giant = document.getElementById("shot-clock-giant");
+    if (!active) { if (giant) giant.classList.add("hidden"); return; }
 
-    var elapsed = shotCounterElapsedMs();
-    var timeEl = document.getElementById("shot-counter-time");
-    if (timeEl) timeEl.textContent = formatDuration(elapsed);
-
-    // Beeps (and the countdown ticks leading up to one) while running
-    // regardless of hidden/visible (explicitly requested), but pause
-    // along with the counter - runningSince is null while paused, so
-    // this whole block is skipped then.
-    if (shotCounterRunningSince) {
-      var beepMs = Math.max(5, state.currentGame.shotCounterBeepSec || 30) * 1000;
-      var remainingMs = beepMs - (elapsed - shotCounterLastBeepMs);
-      if (remainingMs <= 0) {
-        shotCounterLastBeepMs = elapsed;
-        shotCounterLastTickCountdown = null;
-        playShotCounterBeep();
-      } else if (remainingMs <= 5000) {
-        var countdown = Math.ceil(remainingMs / 1000);
-        if (countdown !== shotCounterLastTickCountdown) {
-          shotCounterLastTickCountdown = countdown;
-          playShotCounterTick();
-        }
+    var left = shotClockRemainingMs(), running = !!shotCounterRunningSince;
+    if (running) {
+      [10, 5].forEach(function (s) { if (left <= s * 1000 && left > 0 && !shotClockAlerts[s]) shotClockAlert(s); });
+      if (left <= 0 && !shotClockAlerts[0]) {
+        // (out of time: the clock stops at 0 - the next tap starts the next shot)
+        shotCounterAccumulatedMs = shotClockSeconds() * 1000 + shotClockBonusMs;
+        shotCounterRunningSince = null;
+        shotClockAlert(0);
       }
+    }
+    var secs = Math.ceil(left / 1000);
+    var timeEl = document.getElementById("shot-counter-time");
+    if (timeEl) timeEl.textContent = String(secs);
+    widget.classList.toggle("shot-clock-running", running);
+    widget.classList.toggle("shot-clock-low", left <= 10000);
+    // giant on the board under 10 s (and at 0 until it's reset)
+    var big = visible && appRoot.classList.contains("focus-mode") && left <= 10000 && (running || shotClockAlerts[0]);
+    if (giant) {
+      giant.classList.toggle("hidden", !big);
+      giant.classList.toggle("shot-clock-out", left <= 0);
+      document.getElementById("shot-clock-giant-time").textContent = String(secs);
     }
   }
 
@@ -6885,7 +6926,7 @@
     gsEl("gs-timed").checked = !!state.currentGame.timedTournamentEnabled;
     gsEl("gs-timed-minutes").value = state.currentGame.timedTournamentMinutes || timedTournamentMinutesInput.value || 60;
     gsEl("gs-shot-clock").checked = !!state.currentGame.shotCounterEnabled;
-    gsEl("gs-shot-beep").value = state.currentGame.shotCounterBeepSec || shotCounterBeepInput.value || 30;
+    gsEl("gs-shot-beep").value = shotClockSeconds();
     gsEl("gs-practice").checked = noStatsMode;
     gsEl("gs-track-events").checked = !!state.currentGame.trackEvents;
     gsRadio("gs-break-rule", state.currentGame.breakRule || "winner");
@@ -10388,6 +10429,8 @@
     player.balls = next;
     bumpRunForPlayer(playerId, delta);
     if (delta > 0) trackPot(player, opts && opts.balls);
+    // (a ball in, in a points game: the next shot - the shot clock starts again)
+    if (delta > 0 && shotCounterActive() && state.currentGame.unit !== "rack") restartShotClock();
 
     if (delta > 0) {
       var target = state.currentGame.target;
@@ -29659,7 +29702,7 @@
   // from that state. Only while nothing else changed the board since, and
   // a win asks first (a misheard "undo" mustn't take a rack back).
   var VOICE_UNDO_MS = 10 * 60 * 1000;
-  var VOICE_NOT_UNDOABLE = { help: 1, score: 1, qscore: 1, confirmWin: 1, answer: 1, recMark: 1, recFinish: 1, recAuto: 1, undo: 1, ballsLeft: 1 };
+  var VOICE_NOT_UNDOABLE = { help: 1, score: 1, qscore: 1, confirmWin: 1, answer: 1, recMark: 1, recFinish: 1, recAuto: 1, undo: 1, ballsLeft: 1, shotExtension: 1, shotClockReset: 1 };
   var lastVoiceAction = null; // { at, heard, kind, stateBefore, depth, depthAfter, boardAfter }
   function voiceBoardKey() {
     return JSON.stringify({
@@ -29927,6 +29970,20 @@
         if (!voiceWinWindowOpen()) return fail(T("voice.err.noWinWindow"));
         if (!voiceSetBallsLeft(cmd.n)) return fail(T("voice.err.ballsLeftHidden", { game: voiceGameLabel(state.gameHistory[0] ? state.gameHistory[0].gameType : state.currentGame.gameType) }));
         return ok(TP("voice.done.ballsLeft", voiceBallsLeftNow(), { n: voiceBallsLeftNow() }));
+      case "shotExtension": {
+        var extFor = null;
+        if (cmd.name) {
+          p = voiceFindPlayer(cmd.name);
+          if (!p) return fail(T("voice.err.notInSession", { name: cmd.name }));
+          extFor = p.id;
+        }
+        var ext = extendShotClock(extFor);
+        return ext.ok ? ok(ext.text) : fail(ext.text);
+      }
+      case "shotClockReset":
+        if (!shotCounterActive()) return fail(T("shotClock.off"));
+        restartShotClock();
+        return ok(T("shotClock.resetDone"));
       case "confirmWin":
         if (!voiceWinWindowOpen()) return fail(T("voice.err.noWinWindow"));
         hideWinBanner();
@@ -36447,12 +36504,21 @@
 
   shotCounterBeepInput.addEventListener("input", function () {
     var sec = parseInt(shotCounterBeepInput.value, 10);
-    if (!sec || sec < 5) return;
-    state.currentGame.shotCounterBeepSec = Math.min(600, sec);
+    if (!sec) return;
+    state.currentGame.shotCounterBeepSec = sec >= 33 ? 35 : 30; // (30 or 35 a shot)
     saveState();
+    tickShotCounter();
   });
 
-  document.getElementById("shot-counter-widget").addEventListener("click", toggleShotCounterPause);
+  // (a tap on the clock - the widget or the giant one: full time, running)
+  document.getElementById("shot-counter-widget").addEventListener("click", restartShotClock);
+  document.getElementById("shot-clock-giant").addEventListener("click", restartShotClock);
+  document.getElementById("shot-counter-extend").addEventListener("click", extendShotClockFromButton);
+  document.getElementById("shot-clock-giant-extend").addEventListener("click", extendShotClockFromButton);
+  document.getElementById("shot-clock-from-camera").addEventListener("change", function () {
+    state.currentGame.shotClockFromCamera = document.getElementById("shot-clock-from-camera").checked;
+    saveState();
+  });
   document.getElementById("shot-counter-reset").addEventListener("click", function (e) {
     e.stopPropagation();
     resetShotCounterToZero();
@@ -39976,6 +40042,7 @@
   shotCounterEnabledCheckbox.checked = state.currentGame.shotCounterEnabled;
   shotCounterBeepRow.classList.toggle("hidden", !state.currentGame.shotCounterEnabled);
   shotCounterBeepInput.value = state.currentGame.shotCounterBeepSec;
+  document.getElementById("shot-clock-from-camera").checked = !!state.currentGame.shotClockFromCamera;
   // Live count is never restored across a reload (see the shotCounter*
   // module vars) - only the setting is; a "balls" game reloaded with the
   // checkbox already on starts a fresh running 0:00 rather than staying

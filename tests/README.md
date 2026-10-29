@@ -544,3 +544,9 @@ Not part of the app - helpers for testing and for running this machine's own cop
   (median of 5), and ☰ › 📊 All players opening; with --check, All Players must open in under
   300 ms. Before P29's step 2: 1,927 ms (a date formatter made for every game); after: about
   110 ms, a tap 94 -> ~55 ms. `node tests/measure_all_players.js [--check]`.
+- **probe_shot_clock.js** — a real shot clock (P31), its own server on 4288, the page's clock moved
+  on by the test: 30 s waiting, a tap starts it; a beep at 10 (the clock giant on the board, at
+  least 40% of the screen), a beep at 5, the buzzer at 0 - each once; a tap resets it; one +25 s
+  extension per player per rack (a second refused, the other player's fine, back after a rack
+  won); a ball in restarts it; voice "extension for Kim" / "reset clock"; 35 s from the Game
+  sheet. `node tests/probe_shot_clock.js [shots]`.

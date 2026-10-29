@@ -43,6 +43,9 @@
       "Add one point to Luc", "Add 3 points to Luigi", "Take one point from Luc", "Add one point",
       "Luigi wins the game with 5 balls left on the table", "5 balls left", "Nice game", "Undo", "Yes / No"
     ] },
+    { title: "voice.section.shotClock", note: "voice.note.shotClock", lines: [
+      "Extension", "Extension for Luigi", "Reset clock"
+    ] },
     { title: "voice.section.session", note: "voice.note.session", lines: [
       "Set session, race to 5, rotate every 2, players are Luigi, Luc, Bob and Chris, Luigi and Luc are playing",
       "Set session, race to 7, rotation 8-ball and 9-ball, players are Luigi and Luc"
@@ -124,6 +127,9 @@
       [/^(.+?) moins (\d+)(?: points?)?$/, "$1 minus $2"],
       [/^(.+?) plus (\d+) points?$/, "$1 plus $2"],
       [/^(?:quel est le score|cest combien|le score|score)$/, "score"],
+      [/^(?:1 )?(?:prolongation|extension)$/, "extension"], // ("une": a number by now)
+      [/^(?:prolongation|extension) pour (.+)$/, "extension for $1"],
+      [/^(?:remets? le chrono a zero|relance le chrono|reinitialise le chrono|chrono a zero|remise a zero)$/, "reset clock"],
       [/^(?:aide|commandes|que puis je dire)$/, "help"],
       [/^(?:oui|ouais|daccord)$/, "yes"],
       [/^non$/, "no"]
@@ -138,6 +144,9 @@
       [/^(.+?) mas (\d+)(?: puntos?)?$/, "$1 plus $2"],
       [/^(.+?) menos (\d+)(?: puntos?)?$/, "$1 minus $2"],
       [/^(?:cual es el marcador|como va el marcador|el marcador|marcador|como va)$/, "score"],
+      [/^(?:1 )?(?:extension|prorroga)$/, "extension"], // ("una": a number by now)
+      [/^(?:extension|prorroga) para (.+)$/, "extension for $1"],
+      [/^(?:reinicia el reloj|reiniciar el reloj|reinicia el cronometro|reloj a cero)$/, "reset clock"],
       [/^(?:ayuda|comandos|que puedo decir)$/, "help"],
       [/^(?:si|claro|vale)$/, "yes"],
       [/^no$/, "no"]
@@ -148,6 +157,8 @@
       [/^(?:bawasan ng|bawas)(?: (\d+))? (?:puntos?|points?) (?:kay|sa) (.+)$/, "take $#1 points from $2"],
       [/^(?:panalo|nanalo) (?:si )?(.+)$/, "$1 wins"],
       [/^(.+?) (?:panalo|nanalo|ang panalo)$/, "$1 wins"],
+      [/^(?:extension|dagdag na oras)$/, "extension"],
+      [/^(?:i reset ang orasan|ulitin ang orasan|reset clock)$/, "reset clock"],
       [/^(?:oo|opo)$/, "yes"],
       [/^(?:hindi|ayoko)$/, "no"]
     ]
@@ -160,6 +171,8 @@
     [/^\s*(.+?)\s*(?:減|减|扣)\s*(\d+)\s*分?\s*$/, "$1 minus $2"],
     [/^\s*(.+?)\s*贏(?:咗)?(?:呢局|呢鋪|呢盤)?\s*$/, "$1 wins"],
     [/^\s*(?:而家幾多分|比數|幾多分)\s*$/, "score"],
+    [/^\s*(?:延時|加時)\s*$/, "extension"],
+    [/^\s*(?:重設計時|重新計時|計時歸零)\s*$/, "reset clock"],
     [/^\s*(?:係|好|啱)\s*$/, "yes"],
     [/^\s*(?:唔係|唔好)\s*$/, "no"]
   ];
@@ -450,6 +463,13 @@
     [/^(?:(?:what is|whats|tell me|say|give me|read)(?: me)?(?: the)? )?scores?$/, function () { return { type: "score" }; }],
     [/^(?:nice|nice game|good game|confirm|register(?: the)? game|ok|okay|done|close|close it|thats it|great game)$/, function () { return { type: "confirmWin" }; }],
     [/^(?:undo|cancel|undo that|cancel that|take it back|undo the win|cancel the win|undo the last one|go back)$/, function () { return { type: "undo" }; }],
+    // --- the shot clock ---
+    [/^(?:(?:an |the )?extension|(?:use|take|i want|we want) (?:my |the |an |our )?extension)$/, function () { return { type: "shotExtension", name: null }; }],
+    [/^(?:(?:an |the )?extension (?:for|to) (.+)|(.+?) (?:takes|uses|wants|calls) (?:an |the |his |her |their )?extension)$/, function (m) {
+      var name = m[1] || m[2];
+      return nameSpanOk(name) ? { type: "shotExtension", name: name } : null;
+    }],
+    [/^(?:reset (?:the )?(?:shot )?clock|restart (?:the )?(?:shot )?clock|(?:shot )?clock reset|reset the timer|new shot)$/, function () { return { type: "shotClockReset" }; }],
     [/^(?:yes|yeah|yep|sure|correct|confirm it)$/, function () { return { type: "answer", yes: true }; }],
     [/^(?:no|nope|dont|do not)$/, function () { return { type: "answer", yes: false }; }],
 
@@ -686,6 +706,7 @@
     switch (cmd.type) {
       case "points":
       case "win":
+      case "shotExtension":
         if (cmd.name) out.name = one(cmd.name, union(playing, session), false);
         break;
       case "qscore":

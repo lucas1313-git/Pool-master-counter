@@ -8162,6 +8162,47 @@ body.network-guest-mode #header-group-start {
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
 }
 
+/* the shot clock (P31): the widget's +25, red under 10 s; the giant clock -
+   most of the screen under 10 s on the board */
+.shot-counter-extend-btn {
+  flex: 0 0 auto;
+  height: 40px;
+  padding: 0 12px;
+  margin-left: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 999px;
+  font-size: 1.1rem;
+  font-weight: 800;
+  line-height: 1;
+  color: inherit;
+  cursor: pointer;
+}
+.shot-counter-widget.shot-clock-low #shot-counter-time { color: #ff5a4f; }
+.shot-clock-giant {
+  position: fixed;
+  inset: 8vh 6vw;
+  z-index: 1150;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 28px;
+  background: rgba(10, 8, 6, 0.9);
+  border: 6px solid #ff5a4f;
+  color: #fff;
+  cursor: pointer;
+}
+.shot-clock-giant.hidden { display: none; }
+.shot-clock-giant-time { font-size: min(58vh, 60vw); line-height: 1; font-weight: 900; font-variant-numeric: tabular-nums; color: #ffd23f; }
+.shot-clock-giant.shot-clock-out { border-color: #ff2d2d; animation: shot-clock-out 0.6s steps(2) infinite; }
+.shot-clock-giant.shot-clock-out .shot-clock-giant-time { color: #ff2d2d; }
+@keyframes shot-clock-out { 50% { background: rgba(120, 10, 10, 0.92); } }
+@media (prefers-reduced-motion: reduce) { .shot-clock-giant.shot-clock-out { animation: none; } }
+.shot-clock-giant-row { display: flex; gap: 24px; align-items: center; margin-top: 2vh; }
+.shot-clock-giant-extend { font-size: clamp(1.4rem, 3.5vw, 2.4rem); min-height: 64px; padding: 0 28px; font-weight: 900; }
+.shot-clock-giant-hint { font-size: clamp(1rem, 2vw, 1.5rem); opacity: 0.75; }
+
 /* 🎤 "Heard: ..." for 5 s over the board, with its Undo (showVoiceHeard) */
 .voice-heard-banner {
   position: fixed;

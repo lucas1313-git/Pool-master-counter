@@ -217,7 +217,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   // --- the sheet ---
   await say("Help");
   const sheet = await page.evaluate(() => ({ open: !document.getElementById("voice-sheet-overlay").classList.contains("hidden"), sections: document.querySelectorAll("#voice-sheet-body .voice-sheet-section:not(.voice-sheet-siri)").length, siri: !!document.querySelector("#voice-sheet-body .voice-sheet-siri"), text: document.getElementById("voice-sheet-body").textContent }));
-  check("\"Help\" opens the sentences sheet (8 sections of sentences + Siri)", sheet.open && sheet.sections === 8 && sheet.siri && /Luigi wins the game with 5 balls left/.test(sheet.text), sheet);
+  check("\"Help\" opens the sentences sheet (9 sections of sentences + Siri - the shot clock's since P31)", sheet.open && sheet.sections === 9 && sheet.siri && /Luigi wins the game with 5 balls left/.test(sheet.text), sheet);
   if (OUT) { await page.screenshot({ path: OUT + "/voice_sheet.png" }); }
   await page.keyboard.press("Escape");
   await sleep(200);

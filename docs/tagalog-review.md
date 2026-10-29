@@ -6,7 +6,7 @@ Some are English on purpose - the app's Taglish keeps a few pool and app words a
 practice, Winner stays, bracket). Keep those where they read naturally; translate the rest.
 Written by `node tests/tagalog_review.js` - run it again after changes.
 
-## Identical to English (198)
+## Identical to English (200)
 
 | Key | English (= Tagalog now) |
 |---|---|
@@ -35,7 +35,7 @@ Written by `node tests/tagalog_review.js` - run it again after changes.
 | `dayNotes.bestRunAllTime` | 🏆 All-time record: () |
 | `fargo.comparisonText` | Rating: · Fargo: |
 | `gameSetup.raceModeRaceTo` | 🏁 Race to Wins |
-| `gameSetup.shotCounterEnable` | ⏱️ Shot counter |
+| `gameSetup.shotCounterEnable` | ⏱️ Shot clock |
 | `gameSetup.summaryLine` | ( ) · · Race to wins |
 | `gameSetup.target` | Target |
 | `gameSetup.teamA` | Team A |
@@ -208,8 +208,10 @@ Written by `node tests/tagalog_review.js` - run it again after changes.
 | `players.cameraSimpleMode` | 🎱 Simple mode |
 | `players.cameraLabs` | 🧪 Labs |
 | `visualScoring.simpleModeOn` | Simple mode |
+| `shotClock.extended` | : extension, +25 s |
+| `voice.section.shotClock` | Shot clock |
 
-## Mostly English words (14)
+## Mostly English words (13)
 
 | Key | English | Tagalog now |
 |---|---|---|
@@ -223,7 +225,6 @@ Written by `node tests/tagalog_review.js` - run it again after changes.
 | `pair.panelAppTitle` | Siri Shortcut and the iPad camera app | Siri Shortcut at ang iPad camera app |
 | `gameSheet.chWinnerOn` | Winner Stays on | Winner Stays: naka-on |
 | `gameSheet.chWinnerOff` | Winner Stays off | Winner Stays: naka-off |
-| `gameSheet.chShotOn` | Shot clock, a beep every s | Shot clock, beep tuwing s |
 | `tournament.newHeadingRoundRobin` | New Round Robin Tournament | Bagong Round Robin Tournament |
 | `common.logoAria` | Pool Master Counter logo | Logo ng Pool Master Counter |
 | `tournament.bracketTvButton` | 📺 Full-screen bracket | 📺 Full-screen na bracket |

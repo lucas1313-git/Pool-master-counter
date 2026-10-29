@@ -190,7 +190,9 @@ function makeY4m(file) {
   await sleep(1200);
   check("...and ✔ End cue ends it", !(await rec.evaluate(() => window.PMCRecorder.state().openCue)) && !(await cueBtn()).open);
   check("still nothing said out loud", (await board.evaluate(() => window.__spoken.length)) === 0, await board.evaluate(() => window.__spoken));
-  check("...and the shot counter kept running through the \"/\" cues (not paused by them)", await shotRuns());
+  // (a 30 s shot clock now: it may have run all the way down to the buzzer by here - running all the same)
+  const ranOut = () => board.evaluate(() => window.PMCShotClockDebug.events.some((e) => e.kind === "buzzer"));
+  check("...and the shot clock kept running through the \"/\" cues (not paused by them)", (await shotRuns()) || (await ranOut()));
   // not while it records: a recording can't be deleted
   const live = await fetch(BASE + "api/rec/sessions/" + encodeURIComponent(await rec.evaluate(() => window.PMCRecorder.state().id)), { method: "DELETE" });
   check("a recording can't be deleted while it records (409)", live.status === 409, live.status);
@@ -266,6 +268,8 @@ function makeY4m(file) {
   await board.bringToFront();
   await sleep(1200);
   const cueHidden = await board.evaluate(() => document.getElementById("recorder-cue-group").classList.contains("hidden"));
+  await board.evaluate(() => document.getElementById("shot-counter-widget").click()); // (a fresh shot, running - it may have run out)
+  await sleep(300);
   await slash();
   const r2 = await shotRuns();
   check("recording stopped: ⭐ Cue hidden, \"/\" pauses the shot counter again", cueHidden && !r2, { cueHidden, r2 });

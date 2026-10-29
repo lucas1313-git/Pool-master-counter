@@ -187,6 +187,15 @@ checkIn("cantonese", "Luigi加十五分", { type: "points", n: 15, name: "Luigi"
 checkIn("cantonese", "Luc減一分", { type: "points", n: -1, name: "Luc" });
 checkIn("cantonese", "Luc贏咗", { type: "win", name: "Luc" });
 checkIn("cantonese", "撤銷", { type: "undo" });
+// the shot clock (P31)
+check("Extension", { type: "shotExtension", name: null });
+check("extension for Luigi", { type: "shotExtension", name: "Luigi" });
+check("Luc takes an extension", { type: "shotExtension", name: "Luc" });
+check("reset the clock", { type: "shotClockReset" });
+checkIn("french", "une prolongation", { type: "shotExtension", name: null });
+checkIn("french", "relance le chrono", { type: "shotClockReset" });
+checkIn("spanish", "prórroga para Luc", { type: "shotExtension", name: "Luc" });
+checkIn("cantonese", "延時", { type: "shotExtension", name: null });
 // "undo" in English: the last thing said, whatever it was (not only a win)
 check("undo", { type: "undo" });
 check("go back", { type: "undo" });
