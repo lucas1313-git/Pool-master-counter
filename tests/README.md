@@ -451,3 +451,17 @@ Not part of the app - helpers for testing and for running this machine's own cop
   end with identical standings, the matches kept on the host only; the forfeit is unrated; a
   deleted match updates both; ➕ Next week shows Week 2 on both and the next result is week 2.
   `node tests/probe_league_relay.js [screenshot dir]`.
+- **test_events.js** — breaks, fouls, safeties and innings (P24), no browser: a run ends on a Miss
+  and on a Safety (A runs 10, misses; B safe; A runs 5: high run 10, not 15), innings and
+  safeties counted; 14.1 fouls −1 / break foul −2, three on three turns in a row −16 and a re-rack,
+  a legal shot clears the streak; the two-foul warning only where a third costs (14.1, 9-, 10-ball);
+  a third foul loses the rack in 9-ball; who breaks next (winner, loser, in turn); 15-ball
+  rotation: 61 with two players, the leader once nobody can catch them with three (50-40-30 is
+  over, 50-40-20 isn't). `node tests/test_events.js`.
+- **probe_events.js** — the event bar on an iPad board (P24), its own server on 4279: switched on
+  in ☰ 🎱 Game; in 14.1 the bar shows who's at the table, Miss, Safety, Foul −1, Break foul −2, ⋯
+  and +2 / +5 / +10; Kim +5 +5, Miss, Jo safe, Kim +5 - high run 10, innings 2/1, 1 safety; Jo's
+  three fouls - "⚠️ 2 fouls" on the card, then −16 and a re-rack; 9-Ball (loser breaks): the
+  banner's Break & run / Golden break tags, "🎱 Jo breaks", ⋯ › Jo concedes; 15-ball with three at
+  48-40-30, +2 ends the frame at 50-40-30; the player page's innings, high run, break & run %,
+  racks won on the break and safeties. `node tests/probe_events.js [screenshot dir]`.

@@ -5637,6 +5637,13 @@
 
     if (state.fairRaceEnabled) panel.appendChild(buildFairRaceNote(effectiveRaceTarget(player.id)));
 
+    // ⚠️ two fouls in a row, where a third costs something (P24)
+    if (state.currentGame.trackEvents && state.turns && (state.turns.foulsInRow || {})[player.name] === 2 && foulRule(state.currentGame.gameType, 2).warns) {
+      var foulTag = document.createElement("span");
+      foulTag.className = "card-hill-tag card-foul-tag";
+      foulTag.textContent = T("events.twoFouls");
+      panel.appendChild(foulTag);
+    }
     var streak = winnerStaysOn() && state.currentGame.queueStreak;
     if (cardOnHill(player)) {
       panel.classList.add("is-on-hill");
@@ -6587,6 +6594,7 @@
     if (state.currentGame.mode === "teams") parts.push({ text: T("board.statusTeams") });
     else if (state.currentGame.queueEnabled) parts.push({ text: T("board.statusWinnerStays") });
     if (timedTournamentActive()) parts.push({ text: T("board.statusTimed") });
+    if (state.currentGame.trackEvents && state.currentGame.breakerName && state.currentGame.unit === "rack") parts.push({ text: T("events.breaks", { name: state.currentGame.breakerName }) });
     return parts;
   }
 
@@ -6738,6 +6746,8 @@
     gsEl("gs-shot-clock").checked = !!state.currentGame.shotCounterEnabled;
     gsEl("gs-shot-beep").value = state.currentGame.shotCounterBeepSec || shotCounterBeepInput.value || 30;
     gsEl("gs-practice").checked = noStatsMode;
+    gsEl("gs-track-events").checked = !!state.currentGame.trackEvents;
+    gsRadio("gs-break-rule", state.currentGame.breakRule || "winner");
     syncGameSheet();
     gameSheetOverlay.classList.remove("hidden");
   }
@@ -6762,6 +6772,7 @@
     gsEl("gs-pairing-note").classList.toggle("hidden", !(stays && gsRadioValue("gs-race") === "race"));
     gsEl("gs-timed-stepper").classList.toggle("is-off", !gsEl("gs-timed").checked);
     gsEl("gs-shot-stepper").classList.toggle("is-off", !gsEl("gs-shot-clock").checked);
+    gsEl("gs-break-rule-row").classList.toggle("hidden", !gsEl("gs-track-events").checked);
   }
 
   function readGameSheet() {
@@ -6780,7 +6791,9 @@
       timedMinutes: gsNumber("gs-timed-minutes", 60),
       shotClock: gsEl("gs-shot-clock").checked,
       shotBeep: gsNumber("gs-shot-beep", 30),
-      practice: gsEl("gs-practice").checked
+      practice: gsEl("gs-practice").checked,
+      trackEvents: gsEl("gs-track-events").checked,
+      breakRule: gsRadioValue("gs-break-rule") || "winner"
     };
   }
 
@@ -6833,6 +6846,23 @@
 
   function applyGameSheetWith(want) {
     var changes = [];
+    var trackingChanged = false;
+    // breaks, fouls & innings (P24): on, the tracker starts with the
+    // breaker at the table
+    if (typeof want.trackEvents === "boolean" && want.trackEvents !== !!state.currentGame.trackEvents) {
+      state.currentGame.trackEvents = want.trackEvents;
+      if (want.trackEvents) {
+        if (!state.currentGame.breakerName) state.currentGame.breakerName = (activePlayers()[0] || {}).name || null;
+        state.turns = newTurnTracker(state.currentGame.breakerName);
+      }
+      changes.push(T(want.trackEvents ? "events.chOn" : "events.chOff"));
+      trackingChanged = true;
+    }
+    if (want.breakRule && want.breakRule !== (state.currentGame.breakRule || "winner")) {
+      state.currentGame.breakRule = want.breakRule;
+      changes.push(T("events.chBreak." + want.breakRule));
+      trackingChanged = true;
+    }
     // Winner Stays with a race: a race for each pairing, chosen here (see
     // the Winner Stays switch, which drops a race chosen before it)
     state.currentGame.queueRaceChosen = want.winnerStays && want.race > 1;
@@ -6929,6 +6959,11 @@
     }
 
     renderBoardStatus();
+    // (the tracking settings have no control of their own to save them)
+    if (trackingChanged) {
+      saveState();
+      renderScoreboard();
+    }
     if (changes.length) showBannerNotice(T("gameSheet.applied", { changes: changes.join(" · ") }));
   }
 
@@ -7499,6 +7534,7 @@
 
   function renderScoreboard() {
     noteBoardScoreLine();
+    renderEventBar();
     postRecorderContext(); // (the recording page names its cues from what's shown)
     var active = activePlayers();
     if (needsTwoAtTheTable()) {
@@ -8477,8 +8513,13 @@
       // every game unless a solo winner with a club team explicitly opts
       // this one in - a player's team stats aren't just every game they
       // ever played, only the ones marked as playing for the team.
-      teamCredit: null
+      teamCredit: null,
+      // (breaks, innings, runs, safeties and fouls, when tracked - P24)
+      turns: state.currentGame.trackEvents && state.turns ? { innings: state.turns.innings, best: state.turns.best, safeties: state.turns.safeties, fouls: state.turns.fouls } : null,
+      breakerName: state.currentGame.trackEvents ? state.currentGame.breakerName || null : null,
+      tags: null
     });
+    if (state.currentGame.trackEvents) startNextRackTracking(winnerNames);
     // The race is closed the moment this win reaches it - saved, so a
     // reload with the win popup still open closes and archives it then
     // (see closeRaceLeftOpen), exactly once.
@@ -8638,6 +8679,8 @@
         gamesPlayedCount: state.gamesPlayedCount,
         queue: state.queue || [],
         raceClosedPending: state.raceClosedPending || null,
+        turns: state.turns || null,
+        breakerName: state.currentGame.breakerName || null,
         game: { gameType: state.currentGame.gameType, target: state.currentGame.target, unit: state.currentGame.unit, startedAt: state.currentGame.startedAt }
       }),
       ratings: ratings
@@ -8665,6 +8708,8 @@
     state.gamesPlayedCount = b.gamesPlayedCount;
     state.queue = b.queue;
     state.raceClosedPending = b.raceClosedPending;
+    if ("turns" in b) state.turns = b.turns;
+    if ("breakerName" in b) state.currentGame.breakerName = b.breakerName;
     state.currentGame.gameType = b.game.gameType;
     state.currentGame.target = b.game.target;
     state.currentGame.unit = b.game.unit;
@@ -9011,6 +9056,28 @@
         actions.appendChild(skunk);
       }
       winBannerEl.appendChild(actions);
+      // the rack's tags, when breaks and fouls are tracked (P24)
+      if (eventsOn() && entry && entry.unit === "rack" && entry.ts === (state.gameHistory[0] || {}).ts) {
+        var tagRow = document.createElement("div");
+        tagRow.className = "win-banner-tags";
+        rackTagsFor(entry.gameType).forEach(function (tag) {
+          var t = document.createElement("button");
+          t.type = "button";
+          var on = (entry.tags || []).indexOf(tag) !== -1;
+          t.className = "btn btn-ghost win-banner-tag" + (on ? " is-on" : "");
+          t.setAttribute("aria-pressed", on ? "true" : "false");
+          t.dataset.tag = tag;
+          t.textContent = T("events.tag." + tag);
+          t.addEventListener("click", function () {
+            tagLastGame(tag, true);
+            entry.tags = (state.gameHistory[0] || {}).tags || null;
+            restartWinBannerTimer();
+            renderWinBanner();
+          });
+          tagRow.appendChild(t);
+        });
+        winBannerEl.appendChild(tagRow);
+      }
       if (winBanner.changing && others.length) {
         // "Who really won?" - tap the right name
         var row = document.createElement("div");
@@ -9837,6 +9904,274 @@
     currentRunCount = 0;
   }
 
+  // ---- Breaks, fouls, safeties and innings (P24) ----
+  // Optional - ☰ 🎱 Game › "Track breaks, fouls & innings"
+  // (state.currentGame.trackEvents): an event bar under the board. These
+  // rules are plain functions of plain data (tests/test_events.js); the
+  // tracker lives in state.turns, one per rack, and goes onto the game
+  // entry when the rack is won (g.turns).
+  //   shooter: whose turn it is; run: their run so far (balls);
+  //   best / innings / safeties / foulsInRow / fouls: { name: n }
+  function newTurnTracker(shooter) {
+    var tr = { shooter: null, run: 0, best: {}, innings: {}, safeties: {}, foulsInRow: {}, fouls: {} };
+    if (shooter) turnStart(tr, shooter);
+    return tr;
+  }
+
+  // a turn at the table begins (an inning)
+  function turnStart(tr, name) {
+    if (tr.shooter === name) return;
+    tr.shooter = name;
+    tr.run = 0;
+    tr.innings[name] = (tr.innings[name] || 0) + 1;
+  }
+
+  // balls potted: a legal shot - the run grows, a foul streak ends
+  function turnPot(tr, name, balls) {
+    turnStart(tr, name);
+    tr.run += balls;
+    if (tr.run > (tr.best[name] || 0)) tr.best[name] = tr.run;
+    tr.foulsInRow[name] = 0;
+  }
+
+  // the turn ends: "miss", "safety" or "foul" - the run ends there; the
+  // next player's inning begins. Returns the shooter's fouls in a row.
+  function turnEnd(tr, kind, nextName) {
+    var name = tr.shooter;
+    var inRow = 0;
+    if (name) {
+      if (kind === "safety") tr.safeties[name] = (tr.safeties[name] || 0) + 1;
+      if (kind === "foul") {
+        inRow = tr.foulsInRow[name] = (tr.foulsInRow[name] || 0) + 1;
+        tr.fouls[name] = (tr.fouls[name] || 0) + 1;
+      } else {
+        tr.foulsInRow[name] = 0;
+      }
+    }
+    tr.shooter = null;
+    tr.run = 0;
+    if (nextName) turnStart(tr, nextName);
+    return inRow;
+  }
+
+  // A foul's cost in this game: points (14.1: −1, −2 on the break; the
+  // third in a row −1 and 15 more, and a re-rack), what a third in a row
+  // does ("rerack" in 14.1, "lose" the rack in 9- and 10-ball), and
+  // whether a two-foul warning matters here.
+  var THREE_FOUL_GAMES = { straight: "rerack", "9ball": "lose", "10ball": "lose" };
+  function foulRule(gameType, inRow, breakFoul) {
+    var third = THREE_FOUL_GAMES[gameType] || null;
+    var rule = { points: 0, third: null, warns: !!third };
+    if (gameType === "straight") rule.points = breakFoul ? -2 : -1;
+    if (third && inRow >= 3) {
+      rule.third = third;
+      if (gameType === "straight") rule.points = -16;
+    }
+    return rule;
+  }
+
+  // Who breaks the next rack: "winner", "loser" or "alternate"
+  function nextBreaker(rule, players, lastBreaker, winner) {
+    var others = players.filter(function (n) { return n !== winner; });
+    if (rule === "loser") return others[0] || winner;
+    if (rule === "alternate") {
+      var i = players.indexOf(lastBreaker);
+      return players[(i + 1) % players.length] || winner;
+    }
+    return winner;
+  }
+
+  // 15-ball rotation (120 points a frame): with two players the first to
+  // 61; with more, the leader as soon as nobody can catch them with what's
+  // left on the table (rules/rotation.html) - a fixed 61 could leave
+  // three players stuck at 50-40-30. scores: [{ id, score }]
+  var ROTATION_FRAME_POINTS = 120;
+  function rotationFrameWinner(scores) {
+    if (!scores || scores.length < 2) return null;
+    var sorted = scores.slice().sort(function (a, b) { return b.score - a.score; });
+    var left = Math.max(0, ROTATION_FRAME_POINTS - scores.reduce(function (sum, x) { return sum + Math.max(0, x.score); }, 0));
+    return sorted[0].score > sorted[1].score + left ? sorted[0].id : null;
+  }
+
+  // The tracker on the board (state.turns) - started when tracking is on,
+  // reset each rack with the next breaker at the table.
+  function eventsOn() {
+    return !quickCounterMode && !!state.currentGame.trackEvents;
+  }
+  function ensureTurns() {
+    if (!state.turns) state.turns = newTurnTracker(state.currentGame.breakerName || null);
+    return state.turns;
+  }
+  function trackPot(player, balls) {
+    if (!eventsOn()) return;
+    turnPot(ensureTurns(), player.name, balls || 1);
+  }
+  function eventShooter() {
+    var tr = ensureTurns();
+    var name = tr.shooter || (getPlayer(keypadSelectedPlayerId) || {}).name || state.currentGame.breakerName || ((activePlayers()[0] || {}).name);
+    return activePlayers().filter(function (p) { return p.name === name; })[0] || activePlayers()[0] || null;
+  }
+  // whoever plays next: the other player, or the next seat round the table
+  function nextShooterAfter(name) {
+    var names = activePlayers().map(function (p) { return p.name; });
+    var i = names.indexOf(name);
+    return names.length ? names[(i + 1) % names.length] : null;
+  }
+  function startNextRackTracking(winnerNames) {
+    var names = activePlayers().map(function (p) { return p.name; });
+    var winner = (winnerNames || [])[0] || names[0];
+    var breaker = nextBreaker(state.currentGame.breakRule || "winner", names, state.currentGame.breakerName || names[0], winner);
+    state.currentGame.breakerName = breaker || null;
+    state.turns = newTurnTracker(breaker || null);
+  }
+
+  // ⤵ Miss / end turn, 🛡 Safety, ⚠️ Foul (the game's penalty), and the
+  // third foul in a row (P24) - each an undoable action
+  function boardTurnEvent(kind, breakFoul) {
+    if (!eventsOn()) return;
+    var shooter = eventShooter();
+    if (!shooter) return;
+    pushUndo("event", shooter.id);
+    var tr = ensureTurns();
+    turnStart(tr, shooter.name);
+    var next = nextShooterAfter(shooter.name);
+    var inRow = turnEnd(tr, kind, next);
+    currentRunPlayerId = null;
+    currentRunCount = 0;
+    if (kind === "foul") {
+      var rule = foulRule(state.currentGame.gameType, inRow, breakFoul);
+      if (state.currentGame.gameType === "snooker") {
+        // (a snooker foul gives the opponent at least 4)
+        var opp = activePlayers().filter(function (p) { return p.name === next; })[0];
+        if (opp) opp.balls = (opp.balls || 0) + 4;
+      } else if (state.currentGame.gameType === "onepocket") {
+        shooter.balls = (shooter.balls || 0) - 1;
+      } else if (rule.points) {
+        shooter.balls = (shooter.balls || 0) + rule.points;
+      }
+      if (rule.third === "rerack") {
+        tr.foulsInRow[shooter.name] = 0;
+        state.currentGame.breakerName = shooter.name;
+        showBannerNotice(T("events.thirdFoulRerack", { name: shooter.name }));
+      } else if (rule.third === "lose" && next && next !== shooter.name) {
+        var winner = activePlayers().filter(function (p) { return p.name === next; })[0];
+        tr.foulsInRow[shooter.name] = 0;
+        saveState();
+        creditWin(false, winner.id, winner.voice);
+        tagLastGame("threeFouls");
+        showBannerNotice(T("events.thirdFoulLoses", { name: shooter.name, winner: next }));
+        return;
+      } else if (rule.warns && inRow === 2) {
+        showBannerNotice(T("events.twoFoulsWarning", { name: shooter.name }));
+      }
+    }
+    saveState();
+    renderAll();
+  }
+
+  // +N: points in a points game (N balls in 14.1; one ball worth N in
+  // rotation and snooker)
+  function boardChip(n) {
+    var shooter = eventShooter();
+    if (!shooter) return;
+    var oneBallEach = state.currentGame.gameType === "15ballrotation" || state.currentGame.gameType === "snooker";
+    keypadSelectedPlayerId = shooter.id;
+    requestAdjustScore(shooter.id, n, { balls: oneBallEach ? 1 : n });
+  }
+
+  // 🏳️ Concede / 🏆 Declare winner (the small ⋯ menu)
+  function boardEndGameMenu() {
+    var players = activePlayers();
+    var choices = [];
+    players.forEach(function (p) {
+      choices.push({ label: T("events.concede", { name: p.name }), run: function () {
+        var others = activePlayers().filter(function (x) { return x.id !== p.id; });
+        if (others.length !== 1) return;
+        pushUndo("plus", others[0].id);
+        creditWin(false, others[0].id, others[0].voice);
+        tagLastGame("conceded");
+      } });
+    });
+    players.forEach(function (p) {
+      choices.push({ label: T("events.declareWinner", { name: p.name }), run: function () {
+        pushUndo("plus", p.id);
+        creditWin(false, p.id, p.voice);
+        tagLastGame("declared");
+      } });
+    });
+    tournamentChooser(T("events.endGameTitle"), choices);
+  }
+
+  // a tag on the rack just won (end-of-rack tags, concede, declared)
+  function tagLastGame(tag, toggle) {
+    var g = state.gameHistory[0];
+    if (!g || typeof g === "string") return;
+    var tags = (g.tags || []).slice();
+    var i = tags.indexOf(tag);
+    if (i === -1) tags.push(tag);
+    else if (toggle) tags.splice(i, 1);
+    patchGameEverywhere(g.ts, { tags: tags.length ? tags : null });
+    saveState();
+  }
+
+  // the end-of-rack tags a game offers
+  function rackTagsFor(gameType) {
+    var tags = ["breakAndRun"];
+    if (gameType === "8ball" || gameType === "8ballrotation" || gameType === "8ballpunishment") tags.push("eightOnBreak", "scratchOnEight");
+    if (gameType === "9ball") tags.push("goldenBreak");
+    if (gameType === "10ball") tags.push("tenOnBreak");
+    return tags;
+  }
+
+  function renderEventBar() {
+    var bar = document.getElementById("event-bar");
+    if (!bar) return;
+    var on = eventsOn() && activePlayers().length >= 2;
+    bar.classList.toggle("hidden", !on);
+    if (!on) return;
+    bar.innerHTML = "";
+    var tr = ensureTurns();
+    var shooter = eventShooter();
+    var who = document.createElement("div");
+    who.className = "event-bar-who";
+    who.textContent = shooter ? T("events.atTable", { name: shooter.name, run: tr.shooter === shooter.name ? tr.run : 0, inning: tr.innings[shooter.name] || 1 }) : "";
+    bar.appendChild(who);
+    var row = document.createElement("div");
+    row.className = "event-bar-row";
+    function btn(label, cls, run) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "btn event-btn " + cls;
+      b.textContent = label;
+      b.addEventListener("click", run);
+      row.appendChild(b);
+      return b;
+    }
+    var type = state.currentGame.gameType;
+    btn(T("events.miss"), "event-miss", function () { boardTurnEvent("miss"); });
+    btn(T("events.safety"), "event-safety", function () { boardTurnEvent("safety"); });
+    var rule = foulRule(type, 1);
+    btn(rule.points ? T("events.foulPoints", { n: "−" + Math.abs(rule.points) }) : type === "snooker" ? T("events.foulSnooker") : type === "onepocket" ? T("events.foulPoints", { n: "−1" }) : T("events.foul"), "event-foul", function () { boardTurnEvent("foul"); });
+    if (type === "straight") btn(T("events.breakFoul"), "event-foul", function () { boardTurnEvent("foul", true); });
+    btn("⋯", "event-more", boardEndGameMenu).setAttribute("aria-label", T("events.endGameTitle"));
+    bar.appendChild(row);
+    var chips = type === "straight" ? [2, 5, 10] : type === "15ballrotation" ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] : type === "snooker" ? [1, 2, 3, 4, 5, 6, 7] : [];
+    if (chips.length) {
+      var chipRow = document.createElement("div");
+      chipRow.className = "event-bar-chips";
+      chips.forEach(function (n) {
+        var c = document.createElement("button");
+        c.type = "button";
+        c.className = "btn event-chip";
+        c.textContent = "+" + n;
+        c.setAttribute("aria-label", T("events.chipAria", { n: n }));
+        c.addEventListener("click", function () { boardChip(n); });
+        chipRow.appendChild(c);
+      });
+      bar.appendChild(chipRow);
+    }
+  }
+
   function runTrackingApplies() {
     return !quickCounterMode && state.currentGame.unit !== "rack";
   }
@@ -9965,11 +10300,16 @@
     if (next < 0 && !allowNegative) next = 0;
     player.balls = next;
     bumpRunForPlayer(playerId, delta);
+    if (delta > 0) trackPot(player, opts && opts.balls);
 
     if (delta > 0) {
       var target = state.currentGame.target;
       var isTeamMode = state.currentGame.mode === "teams" && player.teamId;
       var reached = isTeamMode ? sumTeamBalls(player.teamId) >= target : next >= target;
+      // (15-ball rotation with three or more: the leader once nobody can catch them)
+      if (!isTeamMode && state.currentGame.gameType === "15ballrotation" && activePlayers().length > 2) {
+        reached = rotationFrameWinner(activePlayers().map(function (p) { return { id: p.id, score: p.balls || 0 }; })) === playerId;
+      }
 
       if (reached) {
         var winnerVoice = isTeamMode ? null : player.voice;
@@ -23808,7 +24148,11 @@
         timedMinutes: entry.timedMinutes || null,
         ballsLeftOnTable: entry.ballsLeftOnTable === undefined ? null : entry.ballsLeftOnTable,
         skunk: entry.skunk === undefined ? false : entry.skunk,
-        teamCredit: entry.teamCredit || null
+        teamCredit: entry.teamCredit || null,
+        // (breaks, innings, runs, safeties, fouls and the rack's tags, when tracked - P24)
+        turns: entry.turns || null,
+        breakerName: entry.breakerName || null,
+        tags: entry.tags || null
       });
     });
     if (games.length === 0) return null;
@@ -24354,6 +24698,28 @@
     return row;
   }
 
+  // A player's breaks and innings from their tracked games (P24): null
+  // when none was tracked
+  function playerTrackedStats(name, games) {
+    var t = { innings: 0, highRun: 0, safeties: 0, broke: 0, breakWins: 0, breakAndRuns: 0, games: 0 };
+    (games || []).forEach(function (g) {
+      if (!g.turns && !g.breakerName) return;
+      t.games += 1;
+      var tr = g.turns || {};
+      t.innings += (tr.innings || {})[name] || 0;
+      t.highRun = Math.max(t.highRun, (tr.best || {})[name] || 0);
+      t.safeties += (tr.safeties || {})[name] || 0;
+      if (g.breakerName === name) {
+        t.broke += 1;
+        if (g.result === "won") {
+          t.breakWins += 1;
+          if ((g.tags || []).indexOf("breakAndRun") !== -1) t.breakAndRuns += 1;
+        }
+      }
+    });
+    return t.games ? t : null;
+  }
+
   function renderPlayerSynopsis() {
     if (!currentStatsPlayerName) return;
     var allGames = collectAllGamesForPlayer(currentStatsPlayerName);
@@ -24406,6 +24772,16 @@
     playerPageSynopsisBody.appendChild(
       synopsisStatRow(T("playerPage.winPct"), synopsis.pct === null ? "—" : synopsis.pct + "%")
     );
+    // innings, high run, break-and-run %, break %, safeties - from the
+    // games with breaks and fouls tracked (P24)
+    var tracked = playerTrackedStats(currentStatsPlayerName, filtered);
+    if (tracked) {
+      playerPageSynopsisBody.appendChild(synopsisStatRow(T("events.statInnings"), tracked.innings));
+      playerPageSynopsisBody.appendChild(synopsisStatRow(T("events.statHighRun"), tracked.highRun));
+      playerPageSynopsisBody.appendChild(synopsisStatRow(T("events.statBreakAndRun"), tracked.broke ? Math.round((100 * tracked.breakAndRuns) / tracked.broke) + "% (" + tracked.breakAndRuns + "/" + tracked.broke + ")" : "—"));
+      playerPageSynopsisBody.appendChild(synopsisStatRow(T("events.statBreakWins"), tracked.broke ? Math.round((100 * tracked.breakWins) / tracked.broke) + "% (" + tracked.breakWins + "/" + tracked.broke + ")" : "—"));
+      playerPageSynopsisBody.appendChild(synopsisStatRow(T("events.statSafeties"), tracked.safeties));
+    }
 
     // This player's OWN best run - NOT getAllTimeBestRun()/
     // getTodaysBestRun(), which are the single app-wide record across
@@ -28725,7 +29101,7 @@
   // to trigger remotely.
   function dispatchNetworkAction(msg) {
     if (msg.fn === "adjustScore") {
-      adjustScore(msg.args[0], msg.args[1]);
+      adjustScore(msg.args[0], msg.args[1], msg.args[2] && typeof msg.args[2].balls === "number" ? { balls: msg.args[2].balls } : undefined);
     } else if (msg.fn === "undoLastWin") {
       undoLastWin(msg.args[0]);
     } else if (msg.fn === "tournamentAdjustScore") {
@@ -28798,12 +29174,12 @@
     return networkMode !== "guest" || (!!myTableNumber && (!match.table || match.table === myTableNumber));
   }
 
-  function requestAdjustScore(playerId, delta) {
+  function requestAdjustScore(playerId, delta, opts) {
     if (networkMode === "guest") {
-      if (networkWs) networkWs.send(JSON.stringify({ type: "action", fn: "adjustScore", args: [playerId, delta] }));
+      if (networkWs) networkWs.send(JSON.stringify({ type: "action", fn: "adjustScore", args: [playerId, delta, opts || null] }));
       return;
     }
-    adjustScore(playerId, delta);
+    adjustScore(playerId, delta, opts);
   }
 
   // undoLastWin opens a confirmModal - triggered remotely, that dialog

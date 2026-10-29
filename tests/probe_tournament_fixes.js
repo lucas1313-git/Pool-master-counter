@@ -199,6 +199,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     await sleep(450); await closeWinPopups(); await sleep(200);
   }
   t = await T();
+  // (three left level after every tie-break - a circle of 1-0 wins - asks about a playoff: shared here)
+  if (t.playoffPending) {
+    await page.evaluate(() => document.getElementById("btn-tournament-share-title").click());
+    await sleep(400);
+    t = await T();
+  }
   check("...the others play on and the round robin finishes", !!t.champion, { champion: t.champion });
 
   // ---- A late player into a bye ----

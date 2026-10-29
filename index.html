@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261029k">
+<link rel="stylesheet" href="css/style.css?v=20261029l">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -400,6 +400,8 @@
     </div>
     <button type="button" id="shot-counter-visibility-toggle" class="shot-counter-visibility-toggle hidden" data-i18n-aria-label="gameSetup.shotCounterToggleVisibility" aria-label="Show/Hide Timer">👁️</button>
     <div class="scoreboard" id="scoreboard"></div>
+    <!-- breaks, fouls & innings (P24, js/app.js renderEventBar) -->
+    <div class="event-bar hidden" id="event-bar" role="group" aria-label="Turn" data-i18n-aria-label="events.barAria"></div>
     <div id="board-solo-row" class="board-solo-row hidden">
       <span data-i18n="scoreboard.soloHint">Nobody to play against yet.</span>
       <button type="button" id="btn-solo-new-game" class="btn btn-primary" data-i18n="scoreboard.newGame">▶️ New game</button>
@@ -1300,6 +1302,15 @@
         <span class="gs-unit-word" data-i18n="gameSheet.beepEvery">beep every</span>
         <span class="gs-stepper" id="gs-shot-stepper"><button type="button" class="gs-step" data-for="gs-shot-beep" data-step="-5" aria-label="Less" data-i18n-aria-label="common.stepDown">−</button><input type="number" id="gs-shot-beep" class="gs-number" min="5" max="600" inputmode="numeric" data-i18n-aria-label="common.seconds" aria-label="seconds"><button type="button" class="gs-step" data-for="gs-shot-beep" data-step="5" aria-label="More" data-i18n-aria-label="common.stepUp">+</button></span>
         <span class="gs-unit-word" data-i18n="common.seconds">seconds</span>
+      </div>
+      <label class="gs-toggle"><input type="checkbox" id="gs-track-events"> <span data-i18n="events.settingToggle">🎯 Track breaks, fouls &amp; innings</span></label>
+      <div class="gs-row gs-subrow hidden" id="gs-break-rule-row">
+        <span class="gs-label" data-i18n="events.whoBreaks">Who breaks</span>
+        <span class="gs-chips" role="radiogroup">
+          <label class="gs-chip"><input type="radio" name="gs-break-rule" value="winner"> <span data-i18n="events.breakWinner">Winner</span></label>
+          <label class="gs-chip"><input type="radio" name="gs-break-rule" value="alternate"> <span data-i18n="events.breakAlternate">In turn</span></label>
+          <label class="gs-chip"><input type="radio" name="gs-break-rule" value="loser"> <span data-i18n="events.breakLoser">Loser</span></label>
+        </span>
       </div>
       <label class="gs-toggle gs-practice"><input type="checkbox" id="gs-practice"> <span data-i18n="gameSheet.practice">Practice (not saved)</span></label>
     </div>
@@ -3021,18 +3032,18 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/pairing.js?v=20261029k"></script>
-<script src="js/big-store.js?v=20261029k"></script>
-<script src="js/mp4-clip.js?v=20261029k"></script>
-<script src="js/recording-consent.js?v=20261029k"></script>
-<script src="js/local-recorder.js?v=20261029k"></script>
-<script src="js/app.js?v=20261029k"></script>
-<script src="js/camera-client.js?v=20261029k"></script>
-<script src="js/voice.js?v=20261029k"></script>
+<script src="js/pairing.js?v=20261029l"></script>
+<script src="js/big-store.js?v=20261029l"></script>
+<script src="js/mp4-clip.js?v=20261029l"></script>
+<script src="js/recording-consent.js?v=20261029l"></script>
+<script src="js/local-recorder.js?v=20261029l"></script>
+<script src="js/app.js?v=20261029l"></script>
+<script src="js/camera-client.js?v=20261029l"></script>
+<script src="js/voice.js?v=20261029l"></script>
 <script>
   // The app opens with no network (sw.js, P21) - on http(s) only, not in the iOS app
   if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol) && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
-    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261029k").catch(function () {}); });
+    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261029l").catch(function () {}); });
   }
 </script>
 </body>

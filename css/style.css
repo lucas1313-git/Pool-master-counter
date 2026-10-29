@@ -11750,3 +11750,58 @@ body.network-guest-mode #league-add-member-contact-fields {
 .league-result-form input[type="number"] {
   width: 5em;
 }
+
+/* 🎯 the event bar under the board (P24): who's at the table, Miss,
+   Safety, Foul, ⋯; +N chips in points games */
+.event-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 16px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-card);
+}
+.event-bar-who {
+  font-weight: 800;
+  font-size: 1.05rem;
+  text-align: center;
+}
+.event-bar-row,
+.event-bar-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+.event-btn {
+  min-height: 52px;
+  padding: 10px 16px;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+.event-foul {
+  border-color: var(--danger);
+}
+.event-chip {
+  min-width: 56px;
+  min-height: 48px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.card-foul-tag {
+  background: var(--danger);
+  color: #fff;
+}
+.win-banner-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 6px;
+}
+.win-banner-tag.is-on {
+  background: var(--accent);
+  color: var(--on-accent, #111);
+}

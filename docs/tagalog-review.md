@@ -6,7 +6,7 @@ Some are English on purpose - the app's Taglish keeps a few pool and app words a
 practice, Winner stays, bracket). Keep those where they read naturally; translate the rest.
 Written by `node tests/tagalog_review.js` - run it again after changes.
 
-## Identical to English (188)
+## Identical to English (195)
 
 | Key | English (= Tagalog now) |
 |---|---|
@@ -198,6 +198,13 @@ Written by `node tests/tagalog_review.js` - run it again after changes.
 | `league.kindForfeit` | Forfeit |
 | `league.resultScoreA` | Score A |
 | `league.resultScoreB` | Score B |
+| `events.safety` | 🛡️ Safety |
+| `events.foul` | ⚠️ Foul |
+| `events.foulPoints` | ⚠️ Foul |
+| `events.tag.breakAndRun` | Break & run |
+| `events.tag.goldenBreak` | Golden break |
+| `events.statBreakAndRun` | Break & run |
+| `events.barAria` | Turn |
 
 ## Mostly English words (14)
 
