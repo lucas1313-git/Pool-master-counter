@@ -315,7 +315,7 @@ Not part of the app - helpers for testing and for running this machine's own cop
   the board again; a toast never takes a tap meant for what's under it; 🎱 Game › Edit the lineup…
   opens Games Rotations where it can be seen;
   nobody playing: the board says so and ▶️ New game opens Quick Game, which lands on the board;
-  after the welcome's "Get to it now" one player alone gets "Nobody to play against yet" and
+  after the welcome's (☰ Menu › Players) "Get to it now" one player alone gets "Nobody to play against yet" and
   ▶️ New game with their name filled in.
   `node tests/probe_board_home.js [screenshot dir]`.
 - `probe_board_layout.js` - the board's layout (4266), Kim v Jo at 1180x820: top bar ☰ Menu / one
@@ -345,3 +345,9 @@ Not part of the app - helpers for testing and for running this machine's own cop
   Playing; 15 Ball Rotation keeps four seated; Teams split 2/2, one card per team (one +, one
   number, "Team A 0 – 0 Team B", no scroll), the team's + credits nobody unless a player is picked.
   `node tests/probe_who_plays.js [screenshot dir]`.
+- `probe_first_launch.js` - first launch in three taps (4269), from empty storage: one screen (two
+  names, 8/9/10/Straight/One Pocket chips, race 5), no email/phone/rating; "Kim", "Jo", Start = a
+  scorable 8-Ball race to 5 in 1 tap; three tips once (beside the +, ↩ Undo, 🎱 Game, none over
+  another), not again after a restart; 9-Ball + race 6 in 3 taps; nothing typed = Player 1 v
+  Player 2; More setups opens the wizard, Restore a backup the restore; the wizard in ☰ Menu ›
+  More; a player's page has 📇 Email & phone. `node tests/probe_first_launch.js [screenshot dir]`.

@@ -1910,5 +1910,18 @@
   "teams.credit": "記功：",
   "teams.plusAria": "{{team}} 加一分",
   "teams.minusAria": "{{team}} 扣一分",
-  "teams.header": "A隊 {{a}} – {{b}} B隊"
+  "teams.header": "A隊 {{a}} – {{b}} B隊",
+  "firstRun.title": "🎱 開波",
+  "firstRun.player1": "球手 1",
+  "firstRun.player2": "球手 2",
+  "firstRun.vs": "對",
+  "firstRun.start": "▶️ 開始",
+  "firstRun.more": "更多玩法：錦標賽、聯賽、三人或以上、隊制",
+  "firstRun.restore": "⬇️ 還原備份",
+  "tips.aria": "提示",
+  "tips.plus": "撳 + 計分",
+  "tips.undo": "↩ 撤銷喺度",
+  "tips.game": "🎱 對局設定喺度",
+  "tips.ok": "明白",
+  "playerPage.contact": "📇 電郵同電話"
 }

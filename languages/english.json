@@ -1910,5 +1910,18 @@
   "teams.credit": "Credit:",
   "teams.plusAria": "Add a point for {{team}}",
   "teams.minusAria": "Take a point from {{team}}",
-  "teams.header": "Team A {{a}} – {{b}} Team B"
+  "teams.header": "Team A {{a}} – {{b}} Team B",
+  "firstRun.title": "🎱 Let's play",
+  "firstRun.player1": "Player 1",
+  "firstRun.player2": "Player 2",
+  "firstRun.vs": "v",
+  "firstRun.start": "▶️ Start",
+  "firstRun.more": "More setups: tournament, league, 3+ players, teams",
+  "firstRun.restore": "⬇️ Restore a backup",
+  "tips.aria": "Tips",
+  "tips.plus": "Tap + to score",
+  "tips.undo": "↩ Undo is here",
+  "tips.game": "🎱 Game settings here",
+  "tips.ok": "Got it",
+  "playerPage.contact": "📇 Email & phone"
 }

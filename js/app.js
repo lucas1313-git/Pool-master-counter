@@ -6947,7 +6947,112 @@
     try { clickSound(getAudioCtx().currentTime, 660, 0.4); } catch (e) {}
   }
 
+  // ---- first launch ----
+  var firstRunOverlay = document.getElementById("first-run-overlay");
+  function openFirstRun() {
+    document.getElementById("first-run-p1").value = "";
+    document.getElementById("first-run-p2").value = "";
+    document.getElementById("first-run-race").value = 5;
+    firstRunOverlay.classList.remove("hidden");
+  }
+  function closeFirstRun() {
+    firstRunOverlay.classList.add("hidden");
+    markOnboardingSeen();
+  }
+  // Start: the two (or "Player 1" / "Player 2"), the game and the race -
+  // Quick Game's own start, straight to the board, then the three tips
+  function startFirstRun() {
+    var n1 = document.getElementById("first-run-p1").value.trim() || T("firstRun.player1");
+    var n2 = document.getElementById("first-run-p2").value.trim() || T("firstRun.player2");
+    if (normalizeNameKey(resolvePlayerName(n1)) === normalizeNameKey(resolvePlayerName(n2))) n2 = T("firstRun.player2") === n1 ? T("firstRun.player1") : T("firstRun.player2");
+    var game = (document.querySelector('input[name="first-run-game"]:checked') || {}).value || "8ball";
+    var race = Math.max(1, Math.min(99, parseInt(document.getElementById("first-run-race").value, 10) || 5));
+    exportAllPlayerStats();
+    var a = resolveOrCreateQuickGamePlayer(n1), b = resolveOrCreateQuickGamePlayer(n2);
+    if (!a || !b || a.id === b.id) return;
+    noStatsMode = false;
+    noStatsCheckbox.checked = false;
+    // (Quick Game reads its race from its own dialog's fields)
+    quickGameOpenPlayRadio.checked = race === 1;
+    quickGameRaceToRadio.checked = race !== 1;
+    quickGameRaceToInput.value = race === 1 ? 5 : race;
+    closeFirstRun();
+    finishStartingQuickGame(a, b);
+    if (game !== state.currentGame.gameType && GAME_TYPES[game]) setCurrentGameType(game);
+    if (!leaderboardPageView.classList.contains("hidden")) closeLeaderboardPage(true);
+    setTimeout(showBoardTips, 450);
+  }
+
+  // ---- three tips on the board, once ----
+  var BOARD_TIPS_KEY = "poolMasterCounter.boardTipsSeen.v1";
+  function showBoardTips() {
+    try { if (localStorage.getItem(BOARD_TIPS_KEY) === "1") return; } catch (e) {}
+    var plus = scoreboard.querySelector(".btn-ball.plus"), undo = document.getElementById("btn-board-undo"), game = document.getElementById("btn-board-game");
+    if (!plus || !appRoot.classList.contains("focus-mode") || appRoot.classList.contains("hidden")) return;
+    var tips = document.getElementById("board-tips");
+    tips.classList.remove("hidden");
+    // each beside what it points at, kept on the screen
+    var place = function (tip, target, above) {
+      var r = target.getBoundingClientRect(), t = tip.getBoundingClientRect();
+      var left = Math.max(8, Math.min(innerWidth - t.width - 8, r.left + r.width / 2 - t.width / 2));
+      var top = above ? r.top - t.height - 12 : r.bottom + 12;
+      tip.style.left = Math.round(left) + "px";
+      tip.style.top = Math.round(Math.max(8, Math.min(innerHeight - t.height - 8, top))) + "px";
+      tip.classList.toggle("points-down", !!above);
+    };
+    place(document.getElementById("board-tip-plus"), plus, true);
+    place(document.getElementById("board-tip-game"), game, false);
+    place(document.getElementById("board-tip-undo"), undo, false);
+    // (↩ Undo sits right beside 🎱 Game: its tip steps aside, left - or
+    // down, if there's no room on the left)
+    var tu = document.getElementById("board-tip-undo"), tg = document.getElementById("board-tip-game");
+    var a = tu.getBoundingClientRect(), b = tg.getBoundingClientRect();
+    if (a.right > b.left - 8 && a.left < b.right + 8 && a.bottom > b.top && a.top < b.bottom) {
+      var left = b.left - 8 - a.width;
+      if (left >= 8) tu.style.left = Math.round(left) + "px";
+      else tu.style.top = Math.round(b.bottom + 10) + "px";
+    }
+  }
+  function closeBoardTips() {
+    document.getElementById("board-tips").classList.add("hidden");
+    try { localStorage.setItem(BOARD_TIPS_KEY, "1"); } catch (e) {}
+  }
+
   function wireBoardHome() {
+    document.getElementById("btn-first-run-start").addEventListener("click", startFirstRun);
+    document.getElementById("first-run-p2").addEventListener("keydown", function (e) { if (e.key === "Enter") startFirstRun(); });
+    document.getElementById("first-run-p1").addEventListener("keydown", function (e) { if (e.key === "Enter") document.getElementById("first-run-p2").focus(); });
+    Array.prototype.forEach.call(document.querySelectorAll(".first-run-step"), function (b) {
+      b.addEventListener("click", function () {
+        var input = document.getElementById("first-run-race");
+        input.value = Math.max(1, Math.min(99, (parseInt(input.value, 10) || 5) + parseInt(b.dataset.step, 10)));
+      });
+    });
+    document.getElementById("btn-first-run-more").addEventListener("click", function () {
+      closeFirstRun();
+      document.getElementById("btn-open-wizard").click();
+    });
+    document.getElementById("btn-first-run-restore").addEventListener("click", function () {
+      closeFirstRun();
+      // (a first launch can have the leaderboard up, over the page the restore is on)
+      if (!leaderboardPageView.classList.contains("hidden")) closeLeaderboardPage(true);
+      expandAndScrollToPanel("backup-panel", "btn-toggle-backup-panel");
+      document.getElementById("btn-restore").click();
+    });
+    document.getElementById("btn-board-tips-ok").addEventListener("click", closeBoardTips);
+    document.getElementById("board-tips").addEventListener("click", function (e) { if (e.target.id === "board-tips") closeBoardTips(); });
+    // 📇 on a player's page: their email and phone, on the Contact Sheet
+    document.getElementById("btn-player-page-contact").addEventListener("click", function () {
+      var name = currentStatsPlayerName;
+      openContactSheetPage();
+      var row = [].filter.call(document.querySelectorAll("#view-contact-sheet .contact-sheet-row, .contact-sheet-row"), function (li) { return li.dataset.name === name; })[0];
+      if (row) {
+        row.scrollIntoView({ block: "center" });
+        flashDataChanged(row);
+        var field = row.querySelector('input[type="email"], input[type="tel"], input:not([type="checkbox"])');
+        if (field) try { field.focus({ preventScroll: true }); } catch (e) {}
+      }
+    });
     Array.prototype.forEach.call(document.querySelectorAll('input[name="sound-level"]'), function (r) {
       r.addEventListener("change", function () {
         if (!r.checked) return;
@@ -26419,6 +26524,7 @@
   function contactSheetRow(name) {
     var li = document.createElement("li");
     li.className = "contact-sheet-row";
+    li.dataset.name = name;
 
     var checkbox = document.createElement("input");
     checkbox.type = "checkbox";
@@ -38278,8 +38384,11 @@
   renderAll();
   loadHandicapChartsFromServer();
 
+  // First launch: one screen - two names, the game, the race, Start (the
+  // old welcome, with its email/phone/rating questions, is ☰ Menu ›
+  // Players › Welcome a new player now)
   if (!hasSeenOnboarding() && isFirstTimeUser()) {
-    openOnboarding();
+    openFirstRun();
   }
 
   // The scoreboard is the home screen: the app always opens on the board

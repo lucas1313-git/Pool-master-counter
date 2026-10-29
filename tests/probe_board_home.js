@@ -8,8 +8,8 @@
 //   Rotations where it can be seen (a jump to a panel used to scroll to one the board hides);
 // - nobody playing: the board says so and offers ▶️ New game, which opens Quick Game and
 //   lands on the board with the two players;
-// - first launch, welcome then "Get to it now": Luc alone on the board, with "Nobody to play
-//   against yet" and ▶️ New game, which opens Quick Game with Luc filled in;
+// - the welcome (☰ Menu › Players › Welcome a new player) then "Get to it now": Luc alone on the
+//   board, with "Nobody to play against yet" and ▶️ New game, which opens Quick Game with Luc filled in;
 // - no page errors.
 // Its own file server on 4260.
 // usage: node tests/probe_board_home.js [screenshot dir]
@@ -139,14 +139,17 @@ function seededBoard() {
   check("...and starting it lands on the board with Kim and Jo", started.focus && started.names.some((n) => n.startsWith("Kim")) && started.names.some((n) => n.startsWith("Jo")), started);
   await page.close();
 
-  // ---- first launch: welcome, "Get to it now", then one player on the board ----
+  // ---- the welcome (☰ Menu › Players › Welcome a new player), "Get to it now", then one player on the board ----
   page = await browser.newPage();
   page.on("pageerror", (e) => errors.push(e.message));
   await page.setViewport({ width: 1180, height: 820, hasTouch: true });
   await page.goto(BASE + "manifest.json");
-  await page.evaluate(() => { localStorage.clear(); localStorage.setItem("poolMasterCounter.migratedFromRepo.v1", "1"); });
+  await page.evaluate(() => { localStorage.clear(); localStorage.setItem("poolMasterCounter.migratedFromRepo.v1", "1"); localStorage.setItem("poolMasterCounter.onboardingSeen.v1", "1"); });
   await page.goto(BASE, { waitUntil: "networkidle2" });
   await sleep(900);
+  await page.click("#btn-board-menu"); await sleep(200);
+  await page.evaluate(() => [...document.querySelectorAll("#board-menu-list .board-menu-row")].find((b) => b.dataset.menuKey === "menu.players").click()); await sleep(150);
+  await page.evaluate(() => [...document.querySelectorAll("#board-menu-list .board-menu-row")].find((b) => b.dataset.menuKey === "menu.welcomePlayer").click()); await sleep(400);
   await page.click("#btn-onboarding-go"); await sleep(300);
   await page.type("#onboarding-name-input", "Luc");
   await page.click("#btn-onboarding-go"); await sleep(300);
@@ -157,7 +160,7 @@ function seededBoard() {
     const r = row.getBoundingClientRect();
     return { focus: document.getElementById("app").classList.contains("focus-mode"), cards: document.querySelectorAll("#scoreboard .player-panel").length, row: row.offsetParent ? row.textContent.replace(/\s+/g, " ").trim() : null, top: Math.round(r.top), h: innerHeight };
   });
-  check("first launch, welcome then \"Get to it now\": the board with Luc alone says \"Nobody to play against yet\" and offers ▶️ New game", solo.focus && solo.cards === 1 && /Nobody to play against yet\. ▶️ New game/.test(solo.row || ""), solo);
+  check("the welcome (☰ Menu › Players) then \"Get to it now\": the board with Luc alone says \"Nobody to play against yet\" and offers ▶️ New game", solo.focus && solo.cards === 1 && /Nobody to play against yet\. ▶️ New game/.test(solo.row || ""), solo);
   if (OUT) await page.screenshot({ path: path.join(OUT, "home_solo.png"), fullPage: true });
   await page.click("#btn-solo-new-game");
   await sleep(400);

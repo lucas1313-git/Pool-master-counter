@@ -199,6 +199,7 @@ The scoreboard is the home screen: the app always opens on the board (Focus Mode
 - **Winner Stays**: two at the table, the rest in line. 8-Ball, 9-Ball, 10-Ball, Straight Pool, One Pocket and Snooker are two at a time - with three or more marked Playing, Winner Stays goes on by itself (the banner says so), so a rack only ever gives a result to the two who played it. The board shows the winner's streak ("🔥 Kim: 3 in a row") and who's next; seat changes are said in the banner. There's no race by default - pick **Race to n** with it in 🎱 Game for a race for each pairing (the first to it stays) - and an optional "most wins in a row".
 - **Teams**: whoever's playing is split A, B, A, B. One card per team - "Team A 3 – 2 Team B" above them - with one number and one big **+**; **Credit** (or the keypad's numbers) picks who potted the winning ball, if you want to.
 - With nobody playing yet, the board offers **▶️ New game**. Players added in the Setup Wizard are Playing straight away.
+- **First launch** is one screen: two names (or Player 1 / Player 2), the game (8, 9, 10, Straight Pool, One Pocket), the race (5) and **▶️ Start** - straight to the board, with three tips the first time (+, ↩ Undo, 🎱 Game). Under it: more setups (the wizard: tournament, league, 3+ players, teams) and **Restore a backup**. No email, phone or rating is asked - a player's page has **📇 Email & phone** for later.
 
 ## Backup, import/export & data safety
 

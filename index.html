@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261029b">
+<link rel="stylesheet" href="css/style.css?v=20261029c">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -1181,6 +1181,42 @@
   </div>
 </div>
 
+<!-- First launch: two names, the game, the race - Start goes straight to the board (js/app.js openFirstRun) -->
+<div id="first-run-overlay" class="confirm-modal-overlay first-run-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="first-run-title">
+  <div class="confirm-modal-card board-sheet first-run-card">
+    <h2 class="first-run-title" id="first-run-title" data-i18n="firstRun.title">🎱 Let's play</h2>
+    <div class="first-run-names">
+      <input type="text" id="first-run-p1" maxlength="40" data-i18n-placeholder="firstRun.player1" placeholder="Player 1" autocomplete="off" enterkeyhint="next">
+      <span class="first-run-vs" data-i18n="firstRun.vs">v</span>
+      <input type="text" id="first-run-p2" maxlength="40" data-i18n-placeholder="firstRun.player2" placeholder="Player 2" autocomplete="off" enterkeyhint="go">
+    </div>
+    <div class="gs-chips first-run-games" role="radiogroup" data-i18n-aria-label="gameSheet.game" aria-label="Game">
+      <label class="gs-chip"><input type="radio" name="first-run-game" value="8ball" checked> <span>8-Ball</span></label>
+      <label class="gs-chip"><input type="radio" name="first-run-game" value="9ball"> <span>9-Ball</span></label>
+      <label class="gs-chip"><input type="radio" name="first-run-game" value="10ball"> <span>10-Ball</span></label>
+      <label class="gs-chip"><input type="radio" name="first-run-game" value="straight"> <span>Straight Pool</span></label>
+      <label class="gs-chip"><input type="radio" name="first-run-game" value="onepocket"> <span>One Pocket</span></label>
+    </div>
+    <div class="gs-row first-run-race">
+      <label class="gs-label" for="first-run-race" data-i18n="gameSheet.raceTo">Race to</label>
+      <span class="gs-stepper"><button type="button" class="gs-step first-run-step" data-step="-1" aria-label="−">−</button><input type="number" id="first-run-race" class="gs-number" min="1" max="99" value="5" inputmode="numeric"><button type="button" class="gs-step first-run-step" data-step="1" aria-label="+">+</button></span>
+    </div>
+    <button type="button" id="btn-first-run-start" class="btn btn-primary first-run-start" data-i18n="firstRun.start">▶️ Start</button>
+    <div class="first-run-more">
+      <button type="button" id="btn-first-run-more" class="btn btn-ghost" data-i18n="firstRun.more">More setups: tournament, league, 3+ players, teams</button>
+      <button type="button" id="btn-first-run-restore" class="btn btn-ghost" data-i18n="firstRun.restore">⬇️ Restore a backup</button>
+    </div>
+  </div>
+</div>
+
+<!-- Three tips on the board, once (js/app.js showBoardTips) -->
+<div id="board-tips" class="board-tips hidden" role="dialog" aria-modal="true" data-i18n-aria-label="tips.aria" aria-label="Tips">
+  <div class="board-tip" id="board-tip-plus" data-i18n="tips.plus">Tap + to score</div>
+  <div class="board-tip" id="board-tip-undo" data-i18n="tips.undo">↩ Undo is here</div>
+  <div class="board-tip" id="board-tip-game" data-i18n="tips.game">🎱 Game settings here</div>
+  <button type="button" id="btn-board-tips-ok" class="btn btn-primary board-tips-ok" data-i18n="tips.ok">Got it</button>
+</div>
+
 <!-- 🎱 Game: everything about the game being played, applied together (js/app.js openGameSheet / applyGameSheet) -->
 <div id="game-sheet-overlay" class="confirm-modal-overlay board-sheet-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="game-sheet-title">
   <div class="confirm-modal-card board-sheet">
@@ -2038,6 +2074,7 @@
     <select id="player-page-switcher" class="player-page-switcher" aria-label="Switch to another player" data-i18n-aria-label="playerPage.switcherAriaLabel"></select>
     <button type="button" id="btn-return-to-global-stats" class="btn btn-ghost" data-i18n="playerPage.globalStats">🌐 Global Stats</button>
     <button type="button" id="btn-player-forget-camera" class="btn btn-ghost" data-i18n="playerPage.forgetCamera">📷 Forget on camera</button>
+    <button type="button" id="btn-player-page-contact" class="btn btn-ghost" data-i18n="playerPage.contact">📇 Email &amp; phone</button>
     <button type="button" id="btn-open-help-player-page" class="btn btn-ghost" data-i18n="header.help">❓ Help</button>
   </header>
 
@@ -2886,13 +2923,13 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/pairing.js?v=20261029b"></script>
-<script src="js/big-store.js?v=20261029b"></script>
-<script src="js/mp4-clip.js?v=20261029b"></script>
-<script src="js/recording-consent.js?v=20261029b"></script>
-<script src="js/local-recorder.js?v=20261029b"></script>
-<script src="js/app.js?v=20261029b"></script>
-<script src="js/camera-client.js?v=20261029b"></script>
-<script src="js/voice.js?v=20261029b"></script>
+<script src="js/pairing.js?v=20261029c"></script>
+<script src="js/big-store.js?v=20261029c"></script>
+<script src="js/mp4-clip.js?v=20261029c"></script>
+<script src="js/recording-consent.js?v=20261029c"></script>
+<script src="js/local-recorder.js?v=20261029c"></script>
+<script src="js/app.js?v=20261029c"></script>
+<script src="js/camera-client.js?v=20261029c"></script>
+<script src="js/voice.js?v=20261029c"></script>
 </body>
 </html>

@@ -1910,5 +1910,18 @@
   "teams.credit": "Crédito:",
   "teams.plusAria": "Sumar un punto a {{team}}",
   "teams.minusAria": "Quitar un punto a {{team}}",
-  "teams.header": "Equipo A {{a}} – {{b}} Equipo B"
+  "teams.header": "Equipo A {{a}} – {{b}} Equipo B",
+  "firstRun.title": "🎱 A jugar",
+  "firstRun.player1": "Jugador 1",
+  "firstRun.player2": "Jugador 2",
+  "firstRun.vs": "contra",
+  "firstRun.start": "▶️ Empezar",
+  "firstRun.more": "Más formatos: torneo, liga, 3 o más jugadores, equipos",
+  "firstRun.restore": "⬇️ Restaurar una copia",
+  "tips.aria": "Consejos",
+  "tips.plus": "Toca + para anotar",
+  "tips.undo": "↩ Deshacer está aquí",
+  "tips.game": "🎱 Ajustes del juego aquí",
+  "tips.ok": "Entendido",
+  "playerPage.contact": "📇 Correo y teléfono"
 }

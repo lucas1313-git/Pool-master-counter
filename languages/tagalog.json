@@ -1910,5 +1910,18 @@
   "teams.credit": "Credit:",
   "teams.plusAria": "Magdagdag ng puntos sa {{team}}",
   "teams.minusAria": "Magbawas ng puntos sa {{team}}",
-  "teams.header": "Team A {{a}} – {{b}} Team B"
+  "teams.header": "Team A {{a}} – {{b}} Team B",
+  "firstRun.title": "🎱 Tara, laro",
+  "firstRun.player1": "Manlalaro 1",
+  "firstRun.player2": "Manlalaro 2",
+  "firstRun.vs": "laban kay",
+  "firstRun.start": "▶️ Simulan",
+  "firstRun.more": "Iba pang setup: tournament, league, 3+ manlalaro, mga team",
+  "firstRun.restore": "⬇️ Mag-restore ng backup",
+  "tips.aria": "Mga tip",
+  "tips.plus": "Pindutin ang + para mag-score",
+  "tips.undo": "↩ Narito ang Undo",
+  "tips.game": "🎱 Narito ang settings ng laro",
+  "tips.ok": "Sige",
+  "playerPage.contact": "📇 Email at telepono"
 }
