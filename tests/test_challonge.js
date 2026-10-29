@@ -19,7 +19,10 @@
 const fs = require("fs");
 const path = require("path");
 const ROOT = path.join(__dirname, "..");
-const src = fs.readFileSync(path.join(ROOT, "js", "app.js"), "utf8").split("\n");
+// (js/lib/ first - the pure functions live there now - then js/app.js)
+const LIB = path.join(ROOT, "js", "lib");
+const src = fs.readdirSync(LIB).filter((f) => f.endsWith(".js")).map((f) => fs.readFileSync(path.join(LIB, f), "utf8"))
+  .concat(fs.readFileSync(path.join(ROOT, "js", "app.js"), "utf8")).join("\n").split("\n");
 const EN = JSON.parse(fs.readFileSync(path.join(ROOT, "languages", "english.json"), "utf8"));
 function extract(name) {
   const re = new RegExp("^  function " + name + "\\(");

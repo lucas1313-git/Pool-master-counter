@@ -1,0 +1,21 @@
+# The Node tests on every push and pull request: the unit tests (tests/unit/,
+# node:test, on the pure functions in js/lib/) and the Node-only checks
+# (tests/run_node_checks.js). Nothing to install - `npm test` needs Node
+# alone; the browser probes (puppeteer) stay on the computer.
+name: Unit tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: npm test
+        run: npm test

@@ -533,3 +533,9 @@ Not part of the app - helpers for testing and for running this machine's own cop
   refused once the board changed since; in French the recognizer asks for fr-FR, "ajoute trois
   points à Kim" / "annule", the sheet opens with the French sentences; a clicker's Page Down
   learned, then one press listens and the next stops. `node tests/probe_voice_bar.js [shots]`.
+- **unit/*.test.js** and **run_node_checks.js** — `npm test` (P29), what CI runs on every push
+  (.github/workflows/unit-tests.yml): node:test unit tests on the pure functions moved to js/lib/
+  (the pool day, race math, APA handicaps, brackets, league standings and merging, breaks and
+  fouls - 68 tests), then the Node-only checks above one after the other (a check needing ffmpeg
+  or esbuild is skipped, and says so, where there's none). The checks that pull functions out of
+  js/app.js read js/lib/ first. `npm test`.

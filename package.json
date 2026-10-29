@@ -4,6 +4,7 @@
   "description": "Native iOS/Android wrapper (Capacitor) for the Pool Master Counter static web app.",
   "private": true,
   "scripts": {
+    "test": "node --test \"tests/unit/*.test.js\" && node tests/run_node_checks.js",
     "sync:ios": "rm -rf www && mkdir -p www && cp index.html manifest.json www/ && cp -R css js languages icons rules data www/ && npx cap sync ios"
   },
   "repository": {

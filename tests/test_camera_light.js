@@ -32,6 +32,10 @@ check("capture capped at 1080p: 3x zoom asks for 1920 x 1080 (2x too), no zoom 1
 const defaults = html.slice(html.indexOf("  var settings = {"), html.indexOf("  var hasLocalSettingsOverride"));
 check("the camera page's defaults: DINOv2 off, Labs off, Simple mode off", /useDino: false/.test(defaults) && /labsEnabled: false/.test(defaults) && /simpleMode: false/.test(defaults) && /useOsnet: true/.test(defaults));
 
+// (the public build needs esbuild - installer/node_modules; CI doesn't install it)
+if (!fs.existsSync(path.join(REPO, "installer", "node_modules", "esbuild"))) {
+  console.log("SKIP the paid / free build checks (no esbuild: cd installer && npm install)");
+} else {
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "pmc-paid-"));
 const build = (dir, paid) => spawnSync(process.execPath, [path.join(REPO, "tests", "publicbuild", "build-public.js"), REPO, dir], { env: Object.assign({}, process.env, { PMC_PAID_BUILD: paid ? "1" : "" }), encoding: "utf8" });
 const paid = build(path.join(tmp, "paid"), true), free = build(path.join(tmp, "free"), false);
@@ -39,6 +43,7 @@ const has = (dir, rel) => fs.existsSync(path.join(tmp, dir, rel));
 check("a paid build leaves OSNet out (its weights and its loader; the licence note kept)", paid.status === 0 && !has("paid", "camera/models/osnet/osnet.bin") && !has("paid", "camera/osnet.js") && has("paid", "camera/models/osnet/README.md") && has("paid", "camera/models/movenet-multipose-lightning/model.json"), paid.stderr);
 check("...a free build has it", free.status === 0 && has("free", "camera/models/osnet/osnet.bin") && has("free", "camera/osnet.js"), free.stderr);
 fs.rmSync(tmp, { recursive: true, force: true });
+}
 
 const about = ["about.html", "about.fr.html", "about.es.html", "about.tl.html", "about.zh-yue.html"].map((f) => fs.readFileSync(path.join(REPO, f), "utf8"));
 check("the About pages (5 languages) say OSNet's weights come from Market-1501, research / non-commercial only, kept out of any paid version", about.every((a) => /id="model-licences"[^>]*>[^<]*Market-1501/.test(a) && /OSNet/.test(a)));

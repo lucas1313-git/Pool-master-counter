@@ -10006,94 +10006,21 @@
     currentRunCount = 0;
   }
 
-  // ---- Breaks, fouls, safeties and innings (P24) ----
-  // Optional - ☰ 🎱 Game › "Track breaks, fouls & innings"
-  // (state.currentGame.trackEvents): an event bar under the board. These
-  // rules are plain functions of plain data (tests/test_events.js); the
-  // tracker lives in state.turns, one per rack, and goes onto the game
-  // entry when the rack is won (g.turns).
-  //   shooter: whose turn it is; run: their run so far (balls);
-  //   best / innings / safeties / foulsInRow / fouls: { name: n }
-  function newTurnTracker(shooter) {
-    var tr = { shooter: null, run: 0, best: {}, innings: {}, safeties: {}, foulsInRow: {}, fouls: {} };
-    if (shooter) turnStart(tr, shooter);
-    return tr;
-  }
+  function newTurnTracker() { return PMCLib.events.newTurnTracker.apply(null, arguments); } // (js/lib/events.js)
 
-  // a turn at the table begins (an inning)
-  function turnStart(tr, name) {
-    if (tr.shooter === name) return;
-    tr.shooter = name;
-    tr.run = 0;
-    tr.innings[name] = (tr.innings[name] || 0) + 1;
-  }
+  function turnStart() { return PMCLib.events.turnStart.apply(null, arguments); } // (js/lib/events.js)
 
-  // balls potted: a legal shot - the run grows, a foul streak ends
-  function turnPot(tr, name, balls) {
-    turnStart(tr, name);
-    tr.run += balls;
-    if (tr.run > (tr.best[name] || 0)) tr.best[name] = tr.run;
-    tr.foulsInRow[name] = 0;
-  }
+  function turnPot() { return PMCLib.events.turnPot.apply(null, arguments); } // (js/lib/events.js)
 
-  // the turn ends: "miss", "safety" or "foul" - the run ends there; the
-  // next player's inning begins. Returns the shooter's fouls in a row.
-  function turnEnd(tr, kind, nextName) {
-    var name = tr.shooter;
-    var inRow = 0;
-    if (name) {
-      if (kind === "safety") tr.safeties[name] = (tr.safeties[name] || 0) + 1;
-      if (kind === "foul") {
-        inRow = tr.foulsInRow[name] = (tr.foulsInRow[name] || 0) + 1;
-        tr.fouls[name] = (tr.fouls[name] || 0) + 1;
-      } else {
-        tr.foulsInRow[name] = 0;
-      }
-    }
-    tr.shooter = null;
-    tr.run = 0;
-    if (nextName) turnStart(tr, nextName);
-    return inRow;
-  }
+  function turnEnd() { return PMCLib.events.turnEnd.apply(null, arguments); } // (js/lib/events.js)
 
-  // A foul's cost in this game: points (14.1: −1, −2 on the break; the
-  // third in a row −1 and 15 more, and a re-rack), what a third in a row
-  // does ("rerack" in 14.1, "lose" the rack in 9- and 10-ball), and
-  // whether a two-foul warning matters here.
-  var THREE_FOUL_GAMES = { straight: "rerack", "9ball": "lose", "10ball": "lose" };
-  function foulRule(gameType, inRow, breakFoul) {
-    var third = THREE_FOUL_GAMES[gameType] || null;
-    var rule = { points: 0, third: null, warns: !!third };
-    if (gameType === "straight") rule.points = breakFoul ? -2 : -1;
-    if (third && inRow >= 3) {
-      rule.third = third;
-      if (gameType === "straight") rule.points = -16;
-    }
-    return rule;
-  }
+  var THREE_FOUL_GAMES = PMCLib.events.THREE_FOUL_GAMES; // (js/lib/events.js)
+  function foulRule() { return PMCLib.events.foulRule.apply(null, arguments); } // (js/lib/events.js)
 
-  // Who breaks the next rack: "winner", "loser" or "alternate"
-  function nextBreaker(rule, players, lastBreaker, winner) {
-    var others = players.filter(function (n) { return n !== winner; });
-    if (rule === "loser") return others[0] || winner;
-    if (rule === "alternate") {
-      var i = players.indexOf(lastBreaker);
-      return players[(i + 1) % players.length] || winner;
-    }
-    return winner;
-  }
+  function nextBreaker() { return PMCLib.events.nextBreaker.apply(null, arguments); } // (js/lib/events.js)
 
-  // 15-ball rotation (120 points a frame): with two players the first to
-  // 61; with more, the leader as soon as nobody can catch them with what's
-  // left on the table (rules/rotation.html) - a fixed 61 could leave
-  // three players stuck at 50-40-30. scores: [{ id, score }]
-  var ROTATION_FRAME_POINTS = 120;
-  function rotationFrameWinner(scores) {
-    if (!scores || scores.length < 2) return null;
-    var sorted = scores.slice().sort(function (a, b) { return b.score - a.score; });
-    var left = Math.max(0, ROTATION_FRAME_POINTS - scores.reduce(function (sum, x) { return sum + Math.max(0, x.score); }, 0));
-    return sorted[0].score > sorted[1].score + left ? sorted[0].id : null;
-  }
+  var ROTATION_FRAME_POINTS = PMCLib.events.ROTATION_FRAME_POINTS; // (js/lib/events.js)
+  function rotationFrameWinner() { return PMCLib.events.rotationFrameWinner.apply(null, arguments); } // (js/lib/events.js)
 
   // The tracker on the board (state.turns) - started when tracking is on,
   // reset each rack with the next breaker at the table.
@@ -10603,30 +10530,12 @@
 
   var DAY_NOTES = loadDayNotesFromStorage();
 
-  // The "pool day" a moment belongs to: local time (never UTC - a UTC
-  // slice reads as "tomorrow" for anyone west of UTC by the evening), and
-  // a day runs from 5 a.m. to 5 a.m., so a night that goes past midnight
-  // is still one night - its stats, its Day Report, its notes, its place
-  // in the report archive (the camera's "new day" starts at 5 a.m. too).
-  // Every date here goes through these two, and periodStartDate("today")
-  // starts at the same 5 a.m.
-  var POOL_DAY_START_HOUR = 5;
-  function todayDateStr() {
-    return localDateStrFromTs(new Date());
-  }
+  var POOL_DAY_START_HOUR = PMCLib.poolDay.POOL_DAY_START_HOUR; // (js/lib/pool-day.js)
+  function todayDateStr() { return PMCLib.poolDay.todayDateStr.apply(null, arguments); } // (js/lib/pool-day.js)
 
-  function localDateStrFromTs(ts) {
-    var d = new Date(ts);
-    if (d.getHours() < POOL_DAY_START_HOUR) d.setDate(d.getDate() - 1);
-    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
-  }
+  function localDateStrFromTs() { return PMCLib.poolDay.localDateStrFromTs.apply(null, arguments); } // (js/lib/pool-day.js)
 
-  // 5 a.m. of the pool day `now` is in.
-  function poolDayStart(now) {
-    var start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), POOL_DAY_START_HOUR);
-    if (now < start) start.setDate(start.getDate() - 1);
-    return start;
-  }
+  function poolDayStart() { return PMCLib.poolDay.poolDayStart.apply(null, arguments); } // (js/lib/pool-day.js)
 
   function getDayNotes(dateStr) {
     return DAY_NOTES[dateStr] || "";
@@ -12764,112 +12673,17 @@
     return l;
   }
 
-  // ---- League standings from the match list (P23) ----
-  // A member's played / won / points are the sum of the league's matches,
-  // so an edit, a delete, a merged import or the relay just recomputes.
-  // A league saved before every match was kept may count more than its
-  // list: that difference is taken once as a baseline (season 1) and
-  // kept, so nobody loses what they had.
-  function leagueMatchSums(league, season) {
-    var sums = {};
-    (league.members || []).forEach(function (mem) { sums[mem.name] = { played: 0, won: 0, points: 0 }; });
-    (league.matches || []).forEach(function (m) {
-      if (season && (m.season || 1) !== season) return;
-      [["playerA", "leaguePointsA"], ["playerB", "leaguePointsB"]].forEach(function (side) {
-        var s = sums[m[side[0]]];
-        if (!s) return;
-        s.played += 1;
-        if (m.winner === m[side[0]]) s.won += 1;
-        s.points += m[side[1]] || 0;
-      });
-    });
-    return sums;
-  }
+  function leagueMatchSums() { return PMCLib.league.leagueMatchSums.apply(null, arguments); } // (js/lib/league.js)
 
-  function takeLeagueStandingsBaseline(league) {
-    var sums = leagueMatchSums(league);
-    var base = {};
-    (league.members || []).forEach(function (mem) {
-      var s = sums[mem.name];
-      var extra = { played: Math.max(0, (mem.matchesPlayed || 0) - s.played), won: Math.max(0, (mem.matchesWon || 0) - s.won), points: Math.max(0, (mem.leaguePoints || 0) - s.points) };
-      if (extra.played || extra.won || extra.points) base[mem.name] = extra;
-    });
-    league.standingsBaseline = base;
-    league.standingsFromMatches = true;
-  }
+  function takeLeagueStandingsBaseline() { return PMCLib.league.takeLeagueStandingsBaseline.apply(null, arguments); } // (js/lib/league.js)
 
-  function recomputeLeagueStandings(league) {
-    var sums = leagueMatchSums(league);
-    var base = league.standingsBaseline || {};
-    (league.members || []).forEach(function (mem) {
-      var s = sums[mem.name], b = base[mem.name] || {};
-      mem.matchesPlayed = (b.played || 0) + s.played;
-      mem.matchesWon = (b.won || 0) + s.won;
-      mem.leaguePoints = (b.points || 0) + s.points;
-    });
-  }
+  function recomputeLeagueStandings() { return PMCLib.league.recomputeLeagueStandings.apply(null, arguments); } // (js/lib/league.js)
 
-  // One season's standings rows (members with that season's counts only)
-  function leagueSeasonRows(league, season) {
-    var sums = leagueMatchSums(league, season);
-    var base = season === 1 ? league.standingsBaseline || {} : {};
-    return (league.members || []).map(function (mem) {
-      var s = sums[mem.name], b = base[mem.name] || {};
-      return Object.assign({}, mem, { matchesPlayed: (b.played || 0) + s.played, matchesWon: (b.won || 0) + s.won, leaguePoints: (b.points || 0) + s.points });
-    });
-  }
+  function leagueSeasonRows() { return PMCLib.league.leagueSeasonRows.apply(null, arguments); } // (js/lib/league.js)
 
-  // Teams' standings: their members' totals (the rows given)
-  function leagueTeamRows(league, rows) {
-    return (league.teams || []).map(function (team) {
-      var mine = rows.filter(function (r) { var t = leagueTeamForMember(league, r.name); return t && t.id === team.id; });
-      return {
-        name: team.name,
-        played: mine.reduce(function (a, r) { return a + r.matchesPlayed; }, 0),
-        won: mine.reduce(function (a, r) { return a + r.matchesWon; }, 0),
-        points: mine.reduce(function (a, r) { return a + r.leaguePoints; }, 0)
-      };
-    }).sort(function (a, b) { return b.points - a.points || b.won - a.won || a.name.localeCompare(b.name); });
-  }
+  function leagueTeamRows() { return PMCLib.league.leagueTeamRows.apply(null, arguments); } // (js/lib/league.js)
 
-  // Merges a league file into this device's copy of the same league (P23):
-  // matches by id (an id on both: the later edit wins), deleted matches
-  // stay deleted (either side's), members, teams and the latest
-  // season/week added; then the standings recomputed. Returns the matches
-  // this device didn't have (for their rating changes).
-  function mergeLeagueInto(local, incoming) {
-    var deleted = {};
-    (local.deletedMatchIds || []).concat(incoming.deletedMatchIds || []).forEach(function (id) { deleted[id] = true; });
-    var byId = {};
-    var added = [];
-    (local.matches || []).forEach(function (m) { byId[m.id] = m; });
-    (incoming.matches || []).forEach(function (m) {
-      var mine = byId[m.id];
-      if (!mine) {
-        byId[m.id] = m;
-        if (!deleted[m.id]) added.push(m);
-      } else if ((m.editedAt || m.ts || "") > (mine.editedAt || mine.ts || "")) {
-        byId[m.id] = m;
-      }
-    });
-    local.matches = Object.keys(byId).map(function (id) { return byId[id]; }).filter(function (m) { return !deleted[m.id]; }).sort(function (a, b) { return (a.ts || "").localeCompare(b.ts || ""); });
-    local.deletedMatchIds = Object.keys(deleted);
-    (incoming.members || []).forEach(function (mem) {
-      if (!local.members.some(function (x) { return x.name === mem.name; })) local.members.push(Object.assign({}, mem, { matchesPlayed: 0, matchesWon: 0, leaguePoints: 0 }));
-    });
-    (incoming.teams || []).forEach(function (team) {
-      if (!(local.teams || []).some(function (x) { return x.id === team.id; })) (local.teams = local.teams || []).push(team);
-    });
-    var base = local.standingsBaseline || {};
-    Object.keys(incoming.standingsBaseline || {}).forEach(function (n) { if (!base[n]) base[n] = incoming.standingsBaseline[n]; });
-    local.standingsBaseline = base;
-    if ((incoming.season || 1) > (local.season || 1) || ((incoming.season || 1) === (local.season || 1) && (incoming.week || 1) > (local.week || 1))) {
-      local.season = incoming.season || 1;
-      local.week = incoming.week || 1;
-    }
-    recomputeLeagueStandings(local);
-    return added;
-  }
+  function mergeLeagueInto() { return PMCLib.league.mergeLeagueInto.apply(null, arguments); } // (js/lib/league.js)
 
   function loadLeaguesFromStorage() {
     try {
@@ -12898,69 +12712,20 @@
   var LEAGUES = loadLeaguesFromStorage();
   var activeLeagueId = LEAGUES.length ? LEAGUES[0].id : null;
 
-  // 8-Ball: APA's "Games Must Win" chart - a race depends on BOTH
-  // players' Skill Levels (2-7 in 8-Ball): APA_8BALL_RACE_CHART[you]
-  // [opponent] = [games you must win, games they must win]. Every cell
-  // copied from APA's own chart (Official Team Manual, The Equalizer
-  // Handicap System > Games Must Win Charts, rules.poolplayers.com,
-  // checked 28 Oct 2026); data/handicap-charts.json carries the same.
-  var APA_8BALL_RACE_CHART = {
-    2: { 2: [2, 2], 3: [2, 3], 4: [2, 4], 5: [2, 5], 6: [2, 6], 7: [2, 7] },
-    3: { 2: [3, 2], 3: [2, 2], 4: [2, 3], 5: [2, 4], 6: [2, 5], 7: [2, 6] },
-    4: { 2: [4, 2], 3: [3, 2], 4: [3, 3], 5: [3, 4], 6: [3, 5], 7: [2, 5] },
-    5: { 2: [5, 2], 3: [4, 2], 4: [4, 3], 5: [4, 4], 6: [4, 5], 7: [3, 5] },
-    6: { 2: [6, 2], 3: [5, 2], 4: [5, 3], 5: [5, 4], 6: [5, 5], 7: [4, 5] },
-    7: { 2: [7, 2], 3: [6, 2], 4: [5, 2], 5: [5, 3], 6: [5, 4], 7: [5, 5] }
-  };
-  var APA_8BALL_MIN_SL = 2;
-  var APA_8BALL_MAX_SL = 7;
+  var APA_8BALL_RACE_CHART = PMCLib.handicaps.APA_8BALL_RACE_CHART; // (js/lib/handicaps.js)
+  var APA_8BALL_MIN_SL = PMCLib.handicaps.APA_8BALL_MIN_SL; // (js/lib/handicaps.js)
+  var APA_8BALL_MAX_SL = PMCLib.handicaps.APA_8BALL_MAX_SL; // (js/lib/handicaps.js)
 
-  // 9-Ball: points to win, from the player's own Skill Level alone (APA's
-  // "Points Required To Win" chart). Balls 1-8 are a point each, the
-  // 9-ball two - the league board's "9-ball +2" button (APA 9-Ball only).
-  var APA_9BALL_POINTS_TARGET = { 1: 14, 2: 19, 3: 25, 4: 31, 5: 38, 6: 46, 7: 55, 8: 65, 9: 75 };
-  // APA 9-Ball match points: 20 a match, split by the "Score of Match"
-  // chart on APA's 9-Ball scoresheet - by the LOSER's Skill Level, the
-  // fewest points they must have made to earn 1, 2, ... 8 of the 20 (the
-  // winner gets the rest: 20-0 down to 12-8).
-  var APA_9BALL_LOSER_POINT_STEPS = {
-    1: [3, 4, 5, 7, 8, 9, 11, 12],
-    2: [4, 6, 8, 9, 11, 13, 15, 17],
-    3: [5, 7, 10, 12, 15, 17, 20, 22],
-    4: [6, 9, 12, 15, 19, 22, 25, 28],
-    5: [7, 11, 15, 19, 23, 27, 30, 34],
-    6: [9, 13, 18, 23, 28, 32, 37, 41],
-    7: [11, 16, 22, 27, 33, 38, 44, 50],
-    8: [14, 20, 27, 33, 40, 46, 53, 59],
-    9: [18, 25, 32, 39, 47, 54, 61, 68]
-  };
-  var APA_9BALL_MIN_SL = 1;
-  var APA_9BALL_MAX_SL = 9;
+  var APA_9BALL_POINTS_TARGET = PMCLib.handicaps.APA_9BALL_POINTS_TARGET; // (js/lib/handicaps.js)
+  var APA_9BALL_LOSER_POINT_STEPS = PMCLib.handicaps.APA_9BALL_LOSER_POINT_STEPS; // (js/lib/handicaps.js)
+  var APA_9BALL_MIN_SL = PMCLib.handicaps.APA_9BALL_MIN_SL; // (js/lib/handicaps.js)
+  var APA_9BALL_MAX_SL = PMCLib.handicaps.APA_9BALL_MAX_SL; // (js/lib/handicaps.js)
 
   function apaSkillLevelRange(format) {
     return format === "apa9ball" ? { min: APA_9BALL_MIN_SL, max: APA_9BALL_MAX_SL } : { min: APA_8BALL_MIN_SL, max: APA_8BALL_MAX_SL };
   }
 
-  // Data-driven handicap charts for league match targets (see
-  // league.useHandicap/handicapSystem/handicapBaseGames below and
-  // leagueMatchTargets). A chart is either per player ({SL: target}) or
-  // for two players ({SL: {opponent SL: [target, opponent's target]}},
-  // like APA 8-Ball). Pre-seeded with APA's real charts (the
-  // only one of the four with one official nationwide table - matches
-  // APA_8BALL_RACE_CHART/APA_9BALL_POINTS_TARGET above) so the app works
-  // correctly even before data/handicap-charts.json has loaded, or if it
-  // never does (offline, fetch blocked, etc.) - BCA/VNBA/TAP start empty
-  // either way since none of them publish one universal chart. This is
-  // the shared, app-wide fallback only; each league's own numbers live
-  // on the league itself (customHandicapCharts, edited via "View/Edit
-  // Table") and take priority over this when present - see
-  // leagueEffectiveHandicapChart.
-  var HANDICAP_CHARTS = {
-    apa: { "8ball": JSON.parse(JSON.stringify(APA_8BALL_RACE_CHART)), "9ball": Object.assign({}, APA_9BALL_POINTS_TARGET) },
-    bca: { "8ball": {}, "9ball": {} },
-    vnba: { "8ball": {}, "9ball": {} },
-    tap: { "8ball": {}, "9ball": {} }
-  };
+  var HANDICAP_CHARTS = PMCLib.handicaps.HANDICAP_CHARTS; // (js/lib/handicaps.js)
 
   function blankHandicapChartsBySystem() {
     return {
@@ -13038,23 +12803,9 @@
     return system === "bca";
   }
 
-  // A member's Skill Level as the chart reads it: APA 8-Ball runs 2-7
-  // (an 8 or 9 entered before the chart was right reads as a 7).
-  function leagueChartSkillLevel(league, skillLevel) {
-    if (league.handicapSystem === "apa" && league.format !== "apa9ball") {
-      return Math.max(APA_8BALL_MIN_SL, Math.min(APA_8BALL_MAX_SL, skillLevel));
-    }
-    return skillLevel;
-  }
+  function leagueChartSkillLevel() { return PMCLib.handicaps.leagueChartSkillLevel.apply(null, arguments); } // (js/lib/handicaps.js)
 
-  // The race in a two-player chart (APA 8-Ball): {targetA, targetB}, or
-  // null for a per-player chart or a pair it doesn't cover.
-  function handicapChartRaces(chart, slA, slB) {
-    var row = chart[slA];
-    if (!row || typeof row !== "object") return null;
-    var cell = row[slB];
-    return Array.isArray(cell) && cell.length === 2 && cell[0] > 0 && cell[1] > 0 ? { targetA: cell[0], targetB: cell[1] } : null;
-  }
+  function handicapChartRaces() { return PMCLib.handicaps.handicapChartRaces.apply(null, arguments); } // (js/lib/handicaps.js)
 
   // The single source of truth for what two members must reach to win a
   // league match against each other (at match start - startLeagueMatch -
@@ -13081,27 +12832,9 @@
     return { targetA: own(slA), targetB: own(slB) };
   }
 
-  // BCA's handicap compares the two players actually matched: the
-  // lower-rated one races to Base Games to Win, and the higher-rated
-  // one's race is whichever makes the match closest to 50/50 on this
-  // app's rating scale (100 points = 2 to 1 a game, FargoRate's scale -
-  // eloExpectedScore/raceWinProbability) - at most twice the base: past
-  // that a match is too lopsided to even out by race length alone.
-  var BCA_MAX_RACE_FACTOR = 2;
+  var BCA_MAX_RACE_FACTOR = PMCLib.raceMath.BCA_MAX_RACE_FACTOR; // (js/lib/race-math.js)
 
-  function bcaRaceForRatingGap(base, gap) {
-    var p = eloExpectedScore(Math.abs(gap), 0);
-    var best = base;
-    var bestDiff = Infinity;
-    for (var race = base; race <= base * BCA_MAX_RACE_FACTOR; race++) {
-      var diff = Math.abs(raceWinProbability(p, race, base) - 0.5);
-      if (diff < bestDiff - 1e-9) {
-        bestDiff = diff;
-        best = race;
-      }
-    }
-    return best;
-  }
+  function bcaRaceForRatingGap() { return PMCLib.raceMath.bcaRaceForRatingGap.apply(null, arguments); } // (js/lib/race-math.js)
 
   function leagueBcaMatchTargets(league, memberA, memberB) {
     var base = league.handicapBaseGames;
@@ -13567,49 +13300,9 @@
     saveLeaguesToStorage(LEAGUES);
   }
 
-  // Standings points for one finished match - a simplified stand-in for
-  // APA's own full Team Points formula (which is built around 5-person
-  // team segments this app doesn't model): the winner banks 2 points; the
-  // loser banks 1 "close match" point if they reached at least half of
-  // their own target, otherwise 0. Simple, integer, easy to reason about -
-  // not a claim of official APA precision.
-  // A match's league points, the way the league's system scores it:
-  // - APA 8-Ball (its scoresheet's Match Points Earned): a shutout 3-0,
-  //   the loser on the hill (one game short) 2-1, otherwise 2-0;
-  // - APA 9-Ball: 20 points split by the Score of Match chart, from the
-  //   loser's Skill Level and points made (APA_9BALL_LOSER_POINT_STEPS);
-  // - BCA/VNBA/TAP (each league its own rules): 2 to the winner, 1 to a
-  //   loser who reached half their race.
-  function leaguePointsForResult(league, winnerScore, winnerTarget, loserScore, loserTarget, loserSkillLevel) {
-    if (league && league.handicapSystem === "apa") {
-      if (league.format === "apa9ball") {
-        var loserPoints = apa9BallLoserMatchPoints(loserScore, loserTarget, loserSkillLevel);
-        return { winnerPoints: 20 - loserPoints, loserPoints: loserPoints };
-      }
-      if (loserScore <= 0) return { winnerPoints: 3, loserPoints: 0 };
-      if (loserScore >= loserTarget - 1) return { winnerPoints: 2, loserPoints: 1 };
-      return { winnerPoints: 2, loserPoints: 0 };
-    }
-    var loserCredit = loserScore >= loserTarget / 2 ? 1 : 0;
-    return { winnerPoints: 2, loserPoints: loserCredit };
-  }
+  function leaguePointsForResult() { return PMCLib.handicaps.leaguePointsForResult.apply(null, arguments); } // (js/lib/handicaps.js)
 
-  // The loser's share of an APA 9-Ball match's 20 points. Their Skill
-  // Level picks the chart row; a race that isn't that row's (handicap
-  // off, a base number) reads the row whose target is nearest, with the
-  // points made scaled to it.
-  function apa9BallLoserMatchPoints(loserScore, loserTarget, loserSkillLevel) {
-    var sl = loserSkillLevel;
-    if (!APA_9BALL_LOSER_POINT_STEPS[sl] || APA_9BALL_POINTS_TARGET[sl] !== loserTarget) {
-      if (!APA_9BALL_LOSER_POINT_STEPS[sl]) sl = 1;
-      Object.keys(APA_9BALL_POINTS_TARGET).forEach(function (k) {
-        if (Math.abs(APA_9BALL_POINTS_TARGET[k] - loserTarget) < Math.abs(APA_9BALL_POINTS_TARGET[sl] - loserTarget)) sl = +k;
-      });
-    }
-    var rowTarget = APA_9BALL_POINTS_TARGET[sl];
-    var made = loserTarget > 0 && loserTarget !== rowTarget ? Math.floor((loserScore * rowTarget) / loserTarget) : loserScore;
-    return APA_9BALL_LOSER_POINT_STEPS[sl].filter(function (step) { return made >= step; }).length;
-  }
+  function apa9BallLoserMatchPoints() { return PMCLib.handicaps.apa9BallLoserMatchPoints.apply(null, arguments); } // (js/lib/handicaps.js)
 
   // The rule above in words, for the chart viewer.
   function leaguePointsRuleKey(league) {
@@ -13835,16 +13528,7 @@
     return match.length ? match[0] : null;
   }
 
-  // A member belongs to at most one team per league - "assign a team to a
-  // table" seeds that table's queue with the whole roster, so a name on
-  // two teams at once would make that seed ambiguous. Returns the team
-  // they're already on, or null.
-  function leagueTeamForMember(league, name) {
-    var match = (league.teams || []).filter(function (t) {
-      return t.memberNames.indexOf(name) !== -1;
-    });
-    return match.length ? match[0] : null;
-  }
+  function leagueTeamForMember() { return PMCLib.league.leagueTeamForMember.apply(null, arguments); } // (js/lib/league.js)
 
   // Whether two names are on the same league team - two players sharing a
   // team never play each other in a Team league, regardless of hosting
@@ -18332,30 +18016,9 @@
     return isNaN(n) ? null : n;
   }
 
-  // Win probability for A over B given the two ratings — a 100-point gap
-  // is a 2:1 expected win ratio, matching FargoRate's published scale.
-  function eloExpectedScore(ratingA, ratingB) {
-    return 1 / (1 + Math.pow(2, (ratingB - ratingA) / 100));
-  }
+  function eloExpectedScore() { return PMCLib.raceMath.eloExpectedScore.apply(null, arguments); } // (js/lib/race-math.js)
 
-  // P(a player racing to needA wins reaches that before an opponent
-  // racing to needB does), given the first player's per-game win
-  // probability p. Plain DP over "wins still needed" from each side -
-  // numerically stable for any race length this app would ever use
-  // (races top out well under 100), no factorials/overflow risk.
-  function raceWinProbability(p, needA, needB) {
-    var memo = {};
-    function f(i, j) {
-      if (i === 0) return 1;
-      if (j === 0) return 0;
-      var k = i + "," + j;
-      if (memo[k] !== undefined) return memo[k];
-      var v = p * f(i - 1, j) + (1 - p) * f(i, j - 1);
-      memo[k] = v;
-      return v;
-    }
-    return f(needA, needB);
-  }
+  function raceWinProbability() { return PMCLib.raceMath.raceWinProbability.apply(null, arguments); } // (js/lib/race-math.js)
 
   // The weaker side's fair race length against an anchor racing to
   // anchorRace, given the anchor's per-game win probability p over this
@@ -24453,32 +24116,7 @@
 
   var currentStatsPeriod = "all";
 
-  function periodStartDate(period) {
-    var now = new Date();
-    var dayStart = poolDayStart(now);
-    if (period === "today") {
-      return dayStart;
-    }
-    // Rolling windows, not calendar Monday/1st-of-month - "This Week"/
-    // "This Month" (Player Stats, Leaderboard, All Players alike) mean
-    // the last 7/30 days INCLUDING today, regardless of what day of the
-    // week or month it currently is - so the window never shrinks to
-    // almost nothing right after a Monday or the 1st. The "-6"/"-29" (not
-    // "-7"/"-30") is what makes today count as one of the 7/30 days.
-    if (period === "week") {
-      return new Date(dayStart.getFullYear(), dayStart.getMonth(), dayStart.getDate() - 6, POOL_DAY_START_HOUR);
-    }
-    if (period === "month") {
-      return new Date(dayStart.getFullYear(), dayStart.getMonth(), dayStart.getDate() - 29, POOL_DAY_START_HOUR);
-    }
-    if (period === "6month") {
-      return new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
-    }
-    if (period === "year") {
-      return new Date(now.getFullYear(), 0, 1);
-    }
-    return null;
-  }
+  function periodStartDate() { return PMCLib.poolDay.periodStartDate.apply(null, arguments); } // (js/lib/pool-day.js)
 
   // currentStatsSessions is only ever kept in sync with whichever player
   // the Player Stats page currently has open (see openPlayerStatsPage) -
@@ -31420,78 +31058,15 @@
     return games;
   }
 
-  function nextPow2(n) {
-    var p = 1;
-    while (p < n) p *= 2;
-    return p;
-  }
+  function nextPow2() { return PMCLib.brackets.nextPow2.apply(null, arguments); } // (js/lib/brackets.js)
 
-  // Standard tournament seeding order (1v4/2v3 for a 4-bracket, 1v8/4v5/
-  // 2v7/3v6 for an 8-bracket, etc.) — used so byes land spread across the
-  // draw instead of clustered together.
-  function seedOrder(size) {
-    if (size === 1) return [1];
-    var prev = seedOrder(size / 2);
-    var result = [];
-    prev.forEach(function (s) {
-      result.push(s);
-      result.push(size + 1 - s);
-    });
-    return result;
-  }
+  function seedOrder() { return PMCLib.brackets.seedOrder.apply(null, arguments); } // (js/lib/brackets.js)
 
-  // feederA/feederB (optional) are the specific match objects whose
-  // winner became this match's .a/.b - only ever set for losers-bracket
-  // matches (see pairUpNames), so the losers bracket can be drawn as a
-  // real connected tree instead of flat labeled columns. Winners-bracket
-  // matches don't need this: their feeders are always computable from
-  // position alone, t.wb[ri-1][mi*2] and [mi*2+1] - the second one just
-  // won't exist for a pendingBye match (see buildWinnersBracketRounds),
-  // which only ever has the one.
-  function createBracketMatch(a, b, tag, feederA, feederB) {
-    return {
-      id: uid(),
-      a: a || null,
-      b: b || null,
-      winner: null,
-      loser: null,
-      // The final race tally, stamped by reportBracketResult once the
-      // match ends - relative to a/b (not winner/loser), so it stays
-      // meaningful regardless of who won. null until then. This is the
-      // only permanent record of an exact score anywhere in the app -
-      // state.gameHistory logs individual rack wins, not a match total.
-      scoreA: null,
-      scoreB: null,
-      tag: tag,
-      collected: false,
-      feederA: feederA || null,
-      feederB: feederB || null,
-      table: null
-    };
-  }
+  function createBracketMatch() { return PMCLib.brackets.createBracketMatch.apply(null, arguments); } // (js/lib/brackets.js)
 
-  // Pairs up consecutive { name, feeder } entries (feeder is the match
-  // that produced that name, or null if it has none - e.g. round robin
-  // never uses this) into new matches, stamping each with where its two
-  // sides actually came from. leftover carries its own feeder through
-  // too, so it's never lost if this name has to wait another round
-  // before finally getting paired.
-  function pairUpNames(entries, tag) {
-    var matches = [];
-    var i = 0;
-    while (i + 1 < entries.length) {
-      matches.push(createBracketMatch(entries[i].name, entries[i + 1].name, tag, entries[i].feeder, entries[i + 1].feeder));
-      i += 2;
-    }
-    var leftover = i < entries.length ? [entries[i]] : [];
-    return { matches: matches, leftover: leftover };
-  }
+  function pairUpNames() { return PMCLib.brackets.pairUpNames.apply(null, arguments); } // (js/lib/brackets.js)
 
-  function wbRoundComplete(t, ri) {
-    return t.wb[ri].every(function (m) {
-      return m.winner !== null;
-    });
-  }
+  function wbRoundComplete() { return PMCLib.brackets.wbRoundComplete.apply(null, arguments); } // (js/lib/brackets.js)
 
   function pendingWbMatches(t) {
     var out = [];
@@ -31503,15 +31078,7 @@
     return out;
   }
 
-  function pendingLbMatches(t) {
-    var out = [];
-    t.lbRounds.forEach(function (rnd) {
-      rnd.forEach(function (m) {
-        if (m.a !== null && m.b !== null && m.winner === null) out.push(m);
-      });
-    });
-    return out;
-  }
+  function pendingLbMatches() { return PMCLib.brackets.pendingLbMatches.apply(null, arguments); } // (js/lib/brackets.js)
 
   function pendingGfMatches(t) {
     return t.grandFinal.filter(function (m) {
@@ -31763,154 +31330,9 @@
     if (t.format === "single" && t.wbChampion && !t.champion) t.champion = t.wbChampion;
   }
 
-  // Shuffles the field (or takes the organizer's / the ratings' order) and
-  // builds the winners bracket the standard way: a power-of-two draw, so the
-  // byes it needs (the next power of two minus the players) all fall in
-  // round 1, at most one each - to the top seeds, placed by seedOrder so
-  // seed 1 and seed 2 can only meet in the final. Every later round is full.
-  // (Before, rounds were sized to the players left, which let one player's
-  // bye be followed by more free passes - a walk into the final.)
-  // seededOrder (optional): a real 1..N ranking (getTournamentSeeds) instead
-  // of the random draw. pairAdjacent: "Match Similar Ratings" - seededOrder
-  // is strongest first and neighbours play each other in round 1 (the
-  // strongest face off at once, as that mode promises), the byes going to
-  // the lowest-rated; the winners of neighbouring matches meet next.
-  function buildWinnersBracketRounds(playerNames, seededOrder, pairAdjacent) {
-    var shuffled;
-    if (seededOrder) {
-      shuffled = seededOrder.slice();
-    } else {
-      shuffled = playerNames.slice();
-      for (var i = shuffled.length - 1; i > 0; i--) {
-        var j = Math.floor(Math.random() * (i + 1));
-        var tmp = shuffled[i];
-        shuffled[i] = shuffled[j];
-        shuffled[j] = tmp;
-      }
-    }
-    var n = shuffled.length;
-    var size = nextPow2(Math.max(2, n));
-    var byes = size - n;
-    var slots = [];
-    if (pairAdjacent) {
-      var playing = shuffled.slice(0, n - byes);
-      playing.forEach(function (name) {
-        slots.push(name);
-      });
-      shuffled.slice(n - byes).forEach(function (name) {
-        slots.push(name, null);
-      });
-    } else {
-      seedOrder(size).forEach(function (seed) {
-        slots.push(seed <= n ? shuffled[seed - 1] : null);
-      });
-    }
+  function buildWinnersBracketRounds() { return PMCLib.brackets.buildWinnersBracketRounds.apply(null, arguments); } // (js/lib/brackets.js)
 
-    var wb = [];
-    var r1 = [];
-    for (var k = 0; k < slots.length; k += 2) {
-      r1.push(createBracketMatch(slots[k], slots[k + 1], "Winners R1"));
-    }
-    wb.push(r1);
-    while (wb[wb.length - 1].length > 1) {
-      var cur = [];
-      for (var m = 0; m < wb[wb.length - 1].length; m += 2) {
-        cur.push(createBracketMatch(null, null, "Winners R" + (wb.length + 1)));
-      }
-      wb.push(cur);
-    }
-    // a bye resolves at once: its one player goes through
-    wb[0].forEach(function (match) {
-      if ((match.a === null) !== (match.b === null)) {
-        match.winner = match.a !== null ? match.a : match.b;
-        match.loser = null;
-      }
-    });
-    return { shuffled: shuffled, size: size, wb: wb };
-  }
-
-  // The losers bracket of a double elimination, laid out in full from the
-  // start (the standard template): round 1 pairs the winners-round-1 losers;
-  // then, for each later winners round, one round where its losers drop in
-  // against the losers-bracket survivors, and one where the survivors play
-  // each other - down to the losers final (against the winners final's
-  // loser). Drop-ins come in reversed, then half-swapped, alternately, so
-  // nobody meets the player who just beat them, and everyone's path is
-  // known ("if you lose, you go to..."). The longest path is the standard
-  // 2 x (rounds - 1) matches. Slots a round-1 bye leaves empty are worked
-  // out here and taken out: a match with one real side passes that side
-  // straight on, one with none disappears.
-  // Each match keeps where its two sides come from (srcA/srcB: a winners
-  // match's loser, or a losers match's winner) - advanceBracketV2 fills them
-  // in - and feederA/feederB point at those matches (by id) for drawing.
-  function buildLosersBracketRounds(wb) {
-    var EMPTY = null;
-    // (only round 1 has byes - a later winners match always has a loser)
-    function wbLoser(match, firstRound) {
-      return firstRound && (match.a === null || match.b === null) ? EMPTY : { kind: "wbLoser", match: match };
-    }
-    function dropOrder(list, dropRound) {
-      if (list.length < 2) return list.slice();
-      if (dropRound % 2 === 1) return list.slice().reverse();
-      var half = list.length / 2;
-      return list.slice(half).concat(list.slice(0, half));
-    }
-    // a source through any taken-out match: what it really carries
-    function through(src) {
-      while (src && src.kind === "lbWinner" && src.match.passThrough !== undefined) src = src.match.passThrough;
-      return src;
-    }
-    var rounds = [];
-    if (wb.length < 2) return rounds;
-    var first = [];
-    for (var i = 0; i < wb[0].length; i += 2) first.push({ srcA: wbLoser(wb[0][i], true), srcB: wbLoser(wb[0][i + 1], true) });
-    rounds.push(first);
-    for (var r = 1; r < wb.length; r++) {
-      var drops = dropOrder(wb[r], r);
-      var minor = rounds[rounds.length - 1].map(function (prev, idx) {
-        return { srcA: { kind: "lbWinner", match: prev }, srcB: wbLoser(drops[idx], false) };
-      });
-      rounds.push(minor);
-      if (r < wb.length - 1) {
-        var major = [];
-        for (var q = 0; q < minor.length; q += 2) major.push({ srcA: { kind: "lbWinner", match: minor[q] }, srcB: { kind: "lbWinner", match: minor[q + 1] } });
-        rounds.push(major);
-      }
-    }
-    // take out the matches a bye leaves empty or one-sided, round by round
-    var kept = [];
-    rounds.forEach(function (round) {
-      var real = [];
-      round.forEach(function (m) {
-        m.srcA = through(m.srcA);
-        m.srcB = through(m.srcB);
-        if (!m.srcA || !m.srcB) {
-          m.passThrough = m.srcA || m.srcB || EMPTY;
-          return;
-        }
-        real.push(m);
-      });
-      if (real.length) kept.push(real);
-    });
-    return kept.map(function (round, ri) {
-      return round.map(function (m) {
-        var match = createBracketMatch(null, null, "Losers R" + (ri + 1));
-        m.built = match;
-        return match;
-      });
-    }).map(function (round, ri) {
-      kept[ri].forEach(function (m, mi) {
-        var match = round[mi];
-        ["A", "B"].forEach(function (side) {
-          var src = m["src" + side];
-          var from = src.kind === "wbLoser" ? src.match : src.match.built;
-          match["src" + side] = { kind: src.kind, id: from.id };
-          match["feeder" + side] = { id: from.id, tag: from.tag };
-        });
-      });
-      return round;
-    });
-  }
+  function buildLosersBracketRounds() { return PMCLib.brackets.buildLosersBracketRounds.apply(null, arguments); } // (js/lib/brackets.js)
 
   function buildDoubleEliminationBracket(playerNames, gameType, target, raceTo, fairRace, seededOrder, pairAdjacent) {
     var built = buildWinnersBracketRounds(playerNames, seededOrder, pairAdjacent);
@@ -32343,13 +31765,7 @@
     t.champion = names.join(" & ");
   }
 
-  // Only single/double elimination tournaments ever have a grandFinal
-  // array at all - round robin and swiss can never have a "grand final"
-  // match by definition, so treat a missing grandFinal as "no", not a
-  // crash (this used to throw for every non-elimination format).
-  function isGrandFinalMatch(t, match) {
-    return !!t.grandFinal && t.grandFinal.indexOf(match) !== -1;
-  }
+  function isGrandFinalMatch() { return PMCLib.brackets.isGrandFinalMatch.apply(null, arguments); } // (js/lib/brackets.js)
 
   function reportBracketResult(t, match, winnerName, scoreA, scoreB) {
     if (match.a !== winnerName && match.b !== winnerName) return;

@@ -1,0 +1,11 @@
+# macOS
+.DS_Store
+
+# installed packages (installer/, server/, tests/ and challonge-proxy/ list their own too)
+node_modules/
+
+# the web app copied for the iOS wrapper - made again by `npm run sync:ios`
+/www/
+
+# Not ignored on purpose: ios/ - the iOS project lives on the ios-app-store-build branch, where
+# it's tracked; ignoring it here would carry over when main is merged there and hide new iOS files.
