@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261028o">
+<link rel="stylesheet" href="css/style.css?v=20261028p">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -392,6 +392,10 @@
     <!-- ↩ Undo the last scoring action (js/app.js boardUndo) - its own shape, well away from every + -->
     <div class="board-undo-row"><button type="button" id="btn-board-undo" class="board-undo-btn" disabled data-i18n="undo.button" data-i18n-aria-label="undo.aria" aria-label="Undo the last score">↩ Undo</button></div>
     <div class="scoreboard" id="scoreboard"></div>
+    <div id="board-solo-row" class="board-solo-row hidden">
+      <span data-i18n="scoreboard.soloHint">Nobody to play against yet.</span>
+      <button type="button" id="btn-solo-new-game" class="btn btn-primary" data-i18n="scoreboard.newGame">▶️ New game</button>
+    </div>
     <div class="unmatched-shooter-banner-anchor">
       <div id="unmatched-shooter-banner" class="unmatched-shooter-banner hidden">
         <span class="unmatched-shooter-banner-icon" aria-hidden="true">📷</span>
@@ -2733,13 +2737,13 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/pairing.js?v=20261028o"></script>
-<script src="js/big-store.js?v=20261028o"></script>
-<script src="js/mp4-clip.js?v=20261028o"></script>
-<script src="js/recording-consent.js?v=20261028o"></script>
-<script src="js/local-recorder.js?v=20261028o"></script>
-<script src="js/app.js?v=20261028o"></script>
-<script src="js/camera-client.js?v=20261028o"></script>
-<script src="js/voice.js?v=20261028o"></script>
+<script src="js/pairing.js?v=20261028p"></script>
+<script src="js/big-store.js?v=20261028p"></script>
+<script src="js/mp4-clip.js?v=20261028p"></script>
+<script src="js/recording-consent.js?v=20261028p"></script>
+<script src="js/local-recorder.js?v=20261028p"></script>
+<script src="js/app.js?v=20261028p"></script>
+<script src="js/camera-client.js?v=20261028p"></script>
+<script src="js/voice.js?v=20261028p"></script>
 </body>
 </html>

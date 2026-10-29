@@ -190,7 +190,7 @@ Tap **❓ Help** — it's on every page (the main page, the Setup Wizard, All Pl
 
 ## Focus Mode
 
-Tap **Focus Mode** (or finish the Setup Wizard) to hide every setup/stats panel and show only the live scoreboard — ideal once everyone's ready to play and you just want ball counters on screen. Tap **Show All** to bring the rest of the page back.
+The scoreboard is the home screen: the app always opens in Focus Mode, with every setup/stats panel hidden and only the live scoreboard on screen. Tap **Show All** to bring the rest of the page back for the moment, and **Focus Mode** to return to the board. With nobody playing yet, the board offers **▶️ New game** (Quick Game).
 
 ## Backup, import/export & data safety
 

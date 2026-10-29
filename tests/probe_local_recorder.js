@@ -24,6 +24,11 @@ const OUT = process.argv[2];
 let fails = 0;
 function check(label, ok, extra) { console.log((ok ? "PASS " : "FAIL ") + label + (extra !== undefined && !ok ? "  " + JSON.stringify(extra) : "")); if (!ok) fails++; }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// The app opens on the board (Focus Mode); this probe works in the panels, so 🔍 Show All once it's up.
+const showAll = async (pg) => {
+  await pg.waitForFunction(() => document.getElementById("app") && document.getElementById("app").classList.contains("focus-mode"), { timeout: 10000 });
+  await pg.evaluate(() => document.getElementById("btn-toggle-focus").click());
+};
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".png": "image/png", ".svg": "image/svg+xml" };
 const TMP = path.join(__dirname, "tmphome", "local-recorder");
 const FF = fs.existsSync("/opt/homebrew/bin/ffprobe") ? "/opt/homebrew/bin/" : "";
@@ -77,7 +82,7 @@ function makeY4m(file) {
     }, !!opts.tablet);
     await page.goto(BASE + "manifest.json");
     await page.evaluate(() => { localStorage.setItem("poolMasterCounter.onboardingSeen.v1", "1"); localStorage.setItem("poolMasterCounter.migratedFromRepo.v1", "1"); });
-    await page.goto(BASE, { waitUntil: "networkidle2" });
+    await page.goto(BASE, { waitUntil: "networkidle2" }); await showAll(page);
     await sleep(1200);
     return page;
   }

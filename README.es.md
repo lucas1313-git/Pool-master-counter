@@ -190,7 +190,7 @@ Toca **❓ Ayuda** — está en cada página (la página principal, el Asistente
 
 ## Modo Enfoque
 
-Toca **Modo Enfoque** (o termina el Asistente de configuración) para ocultar todos los paneles de configuración/estadísticas y mostrar solo el marcador en vivo — ideal una vez que todos están listos para jugar y solo quieres los contadores de bolas en pantalla. Toca **Mostrar todo** para recuperar el resto de la página.
+El marcador es la pantalla de inicio: la app siempre se abre en Modo Enfoque, con todos los paneles de configuración/estadísticas ocultos y solo el marcador en vivo en pantalla. Toca **Mostrar todo** para recuperar el resto de la página por el momento, y **Modo Enfoque** para volver al marcador. Si todavía no juega nadie, el marcador ofrece **▶️ Partida nueva** (Partida rápida).
 
 ## Copia de seguridad, importar/exportar y seguridad de datos
 

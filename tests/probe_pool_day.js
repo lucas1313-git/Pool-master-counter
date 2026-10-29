@@ -19,6 +19,11 @@ const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/cs
 let fails = 0;
 function check(label, ok, extra) { console.log((ok ? "PASS " : "FAIL ") + label + (extra !== undefined && !ok ? "  " + JSON.stringify(extra) : "")); if (!ok) fails++; }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// The app opens on the board (Focus Mode); this probe works in the panels, so 🔍 Show All once it's up.
+const showAll = async (pg) => {
+  await pg.waitForFunction(() => document.getElementById("app") && document.getElementById("app").classList.contains("focus-mode"), { timeout: 10000 });
+  await pg.evaluate(() => document.getElementById("btn-toggle-focus").click());
+};
 // (game logs, report archive... live in IndexedDB - js/big-store.js - under the generation in use)
 const readBig = (page, name) => page.evaluate((name) => new Promise((resolve) => {
   const gen = localStorage.getItem("poolMasterCounter.bigStoreGen.v1") || "0";
@@ -62,7 +67,7 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "pmc-pool-day-"));
       const state = seedSrc ? new Function("arg", "return (" + seedSrc + ")(arg)")(arg) : null;
       if (state) localStorage.setItem("poolMasterCounter.state.v2", JSON.stringify(state));
     }, seed ? seed.toString() : null, arg === undefined ? null : arg);
-    await page.goto(BASE, { waitUntil: "networkidle2" });
+    await page.goto(BASE, { waitUntil: "networkidle2" }); await showAll(page);
     await sleep(900);
     return page;
   }
@@ -106,7 +111,7 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "pmc-pool-day-"));
   check("...all under the night's own date, 2026-10-20 (00:20 belongs to the night, not to the 21st)", alex.every((g) => g.date === "2026-10-20"), alex.map((g) => g.date));
   check("...Kim (not on the roster) keeps the game he played", kim.length === 1 && kim[0].result === "won", kim);
   check("...and the board is cleared", (await page.evaluate(() => JSON.parse(localStorage.getItem("poolMasterCounter.state.v2")).gameHistory.length)) === 0);
-  await page.reload({ waitUntil: "networkidle2" });
+  await page.reload({ waitUntil: "networkidle2" }); await showAll(page);
   await sleep(1200);
   const archive = ((await readBig(page, "reportArchive")) || []).map((e) => ({ d: e.dateStr, n: (e.gameTs || []).length }));
   check("the night's report is archived once, under 2026-10-20, with all 5 games (nothing under the 21st)", archive.length === 1 && archive[0].d === "2026-10-20" && archive[0].n === 5, archive);

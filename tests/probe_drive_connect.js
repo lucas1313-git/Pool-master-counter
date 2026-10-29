@@ -25,6 +25,11 @@ const PORT = 4237, GPORT = 4299, BASE = "http://localhost:" + PORT + "/", G = "h
 let fails = 0;
 function check(label, ok, extra) { console.log((ok ? "PASS " : "FAIL ") + label + (extra !== undefined && !ok ? "  " + JSON.stringify(extra) : "")); if (!ok) fails++; }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// The app opens on the board (Focus Mode); this probe works in the panels, so 🔍 Show All once it's up.
+const showAll = async (pg) => {
+  await pg.waitForFunction(() => document.getElementById("app") && document.getElementById("app").classList.contains("focus-mode"), { timeout: 10000 });
+  await pg.evaluate(() => document.getElementById("btn-toggle-focus").click());
+};
 const HOME = path.join(__dirname, "tmphome", "drive-connect-home");
 const CLIENT_ID = "123456-test.apps.googleusercontent.com", SECRET = "GOCSPX-test-secret-value";
 const FOLDER = "1FAKEpoolBackupsFolder01", LINK = "https://drive.google.com/drive/folders/" + FOLDER;
@@ -117,7 +122,7 @@ function lanIp() { for (const l of Object.values(os.networkInterfaces())) for (c
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto(BASE + "manifest.json");
   await page.evaluate(() => { localStorage.clear(); localStorage.setItem("poolMasterCounter.onboardingSeen.v1", "1"); localStorage.setItem("poolMasterCounter.migratedFromRepo.v1", "1"); });
-  await page.goto(BASE, { waitUntil: "networkidle2" });
+  await page.goto(BASE, { waitUntil: "networkidle2" }); await showAll(page);
   await sleep(600);
   await page.evaluate(async () => {
     for (const n of ["Luigi", "Luc"]) {
@@ -222,7 +227,7 @@ function lanIp() { for (const l of Object.values(os.networkInterfaces())) for (c
   await sleep(1500); // (the access token is near its end: the next call renews - and Google refuses)
   await page.evaluate(() => { const i = document.getElementById("drive-folder-link-input"); i.value = i.value + " "; i.dispatchEvent(new Event("change", { bubbles: true })); });
   await sleep(1500);
-  await page.reload({ waitUntil: "networkidle2" });
+  await page.reload({ waitUntil: "networkidle2" }); await showAll(page);
   await page.evaluate(() => { const b = document.getElementById("btn-toggle-backup-panel"); if (document.getElementById("backup-panel").classList.contains("collapsed")) b.click(); });
   u = await waitUi((x) => /ended the sign-in/.test(x.status));
   check("a sign-in Google ended (expired / withdrawn): \"press Connect again\"", /Google ended the sign-in.*press Connect again/.test(u.status), u.status);

@@ -190,7 +190,7 @@ Appuyez sur **❓ Aide** — présent sur chaque page (la page principale, l'Ass
 
 ## Mode Focus
 
-Appuyez sur **Mode Focus** (ou terminez l'Assistant de configuration) pour masquer tous les panneaux de configuration/statistiques et n'afficher que le tableau de score en direct — idéal une fois que tout le monde est prêt à jouer et que vous voulez juste les compteurs de billes à l'écran. Appuyez sur **Tout afficher** pour retrouver le reste de la page.
+Le tableau de score est l'écran d'accueil : l'application s'ouvre toujours en Mode Focus, tous les panneaux de configuration/statistiques masqués et seul le tableau de score en direct à l'écran. Appuyez sur **Tout afficher** pour retrouver le reste de la page le temps qu'il faut, et sur **Mode Focus** pour revenir au tableau. Quand personne ne joue encore, le tableau propose **▶️ Nouvelle partie** (Partie rapide).
 
 ## Sauvegarde, import/export et sécurité des données
 

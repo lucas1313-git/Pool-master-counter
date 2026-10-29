@@ -309,3 +309,12 @@ Not part of the app - helpers for testing and for running this machine's own cop
   100-87, Undo gives 99-87 back; Winner Stays seats and line come back; 🔄 Change winner gives the
   rack to Jo (ratings follow); Recent Games ✏️ on a past game moves the Leaderboard (Ann 8/Bob 4 to
   7/5), 🗑 asks then removes a game. `node tests/probe_undo.js [screenshot dir]`.
+- `probe_board_home.js` - the scoreboard is the home screen (4260): with Kim v Jo racing to 5 the
+  app opens in Focus Mode at 1180x820, 820x1180, 390x844 and 1920x1080 with the first + fully on
+  the first screen; 🔍 Show All brings the panels back and the next launch is on the board again;
+  a toast never takes a tap meant for what's under it;
+  Rotation switched on from the board with no lineup opens Games Rotations where it can be seen;
+  nobody playing: the board says so and ▶️ New game opens Quick Game, which lands on the board;
+  after the welcome's "Get to it now" one player alone gets "Nobody to play against yet" and
+  ▶️ New game with their name filled in.
+  `node tests/probe_board_home.js [screenshot dir]`.

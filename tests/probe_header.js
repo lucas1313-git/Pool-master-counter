@@ -8,6 +8,11 @@ const [BASE, OUT] = process.argv.slice(2);
 let fails = 0;
 function check(label, ok, extra) { console.log((ok ? "PASS " : "FAIL ") + label + (extra !== undefined ? "  " + JSON.stringify(extra) : "")); if (!ok) fails++; }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// The app opens on the board (Focus Mode); this probe looks at the header, so 🔍 Show All once it's up.
+const showAll = async (pg) => {
+  await pg.waitForFunction(() => document.getElementById("app") && document.getElementById("app").classList.contains("focus-mode"), { timeout: 10000 });
+  await pg.evaluate(() => document.getElementById("btn-toggle-focus").click());
+};
 (async () => {
   const browser = await puppeteer.launch({ executablePath: EXE, headless: "new", defaultViewport: { width: 1280, height: 900 } });
   const page = await browser.newPage();
@@ -15,7 +20,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto(BASE + "manifest.json");
   await page.evaluate(() => { localStorage.clear(); localStorage.setItem("poolMasterCounter.onboardingSeen.v1", "1"); localStorage.setItem("poolMasterCounter.migratedFromRepo.v1", "1"); });
-  await page.goto(BASE, { waitUntil: "networkidle2" });
+  await page.goto(BASE, { waitUntil: "networkidle2" }); await showAll(page);
   await sleep(800);
   const info = await page.evaluate(() => {
     const groups = [...document.querySelectorAll(".header-nav-group")].map((g) => ({ id: g.id, items: [...g.children].map((b) => b.textContent.trim()), primary: [...g.children].map((b) => b.classList.contains("btn-primary")), border: getComputedStyle(g).borderTopStyle }));
@@ -51,7 +56,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await page.evaluate(() => document.body.classList.remove("network-guest-mode"));
   for (const [lang, title] of [["english", "Multi Tables"], ["french", "Multi-tables"]]) {
     await page.evaluate((lang) => localStorage.setItem("poolMasterCounter.language.v1", lang), lang);
-    await page.goto(BASE, { waitUntil: "networkidle2" });
+    await page.goto(BASE, { waitUntil: "networkidle2" }); await showAll(page);
     await sleep(800);
     await page.evaluate(() => document.getElementById("btn-open-group-session").click());
     await sleep(600);

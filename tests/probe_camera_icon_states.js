@@ -17,6 +17,12 @@ function check(name, ok, detail) {
   console.log((ok ? "PASS " : "FAIL ") + name + (detail ? " - " + detail : ""));
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// The app opens on the board (Focus Mode, where the icon grows with the card); the sizes below
+// are the normal layout's, so 🔍 Show All once it's up.
+const showAll = async (pg) => {
+  await pg.waitForFunction(() => document.getElementById("app") && document.getElementById("app").classList.contains("focus-mode"), { timeout: 10000 });
+  await pg.evaluate(() => document.getElementById("btn-toggle-focus").click());
+};
 
 // a synthetic camera (as in probe_room_map.js): table inches, z up from the felt
 const FELT = 30;
@@ -72,7 +78,7 @@ function calibration(spec) {
     const d = () => Array.from({ length: 208 }, (_, i) => (i === 3 ? 1 : 0));
     localStorage.setItem("pmc-camera-local-enrollments", JSON.stringify({ alice: { displayName: "Alice", descriptors: [d(), d(), d()], info: [null, null, null] }, bob: { displayName: "Bob", descriptors: [d(), d(), d()], info: [null, null, null] } }));
   });
-  await page.reload({ waitUntil: "networkidle2" });
+  await page.reload({ waitUntil: "networkidle2" }); await showAll(page);
   await page.waitForFunction(() => document.querySelectorAll(".scorecard-camera-badge").length === 2, { timeout: 30000, polling: 200 });
   // the camera's iframe: started, its video's size known
   await page.waitForFunction(() => { const f = document.getElementById("same-device-camera-iframe"); try { return f && f.contentWindow.PMCCueDebug && f.contentDocument.getElementById("video").videoWidth > 0; } catch (e) { return false; } }, { timeout: 90000, polling: 250 });

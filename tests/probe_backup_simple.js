@@ -35,6 +35,11 @@ const OUT = process.argv[2];
 let fails = 0;
 function check(label, ok, extra) { console.log((ok ? "PASS " : "FAIL ") + label + (extra !== undefined && !ok ? "  " + JSON.stringify(extra) : "")); if (!ok) fails++; }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// The app opens on the board (Focus Mode); this probe works in the panels, so 🔍 Show All once it's up.
+const showAll = async (pg) => {
+  await pg.waitForFunction(() => document.getElementById("app") && document.getElementById("app").classList.contains("focus-mode"), { timeout: 10000 });
+  await pg.evaluate(() => document.getElementById("btn-toggle-focus").click());
+};
 const HOME = path.join(__dirname, "tmphome", "backup-simple-home");
 const CLOUD = path.join(HOME, "Library", "CloudStorage");
 const BACKUPS = path.join(CLOUD, "GoogleDrive-test@example.com", "My Drive", "Backups");
@@ -86,7 +91,7 @@ const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/cs
     }, !!opts.tablet);
     await page.goto(base + "manifest.json");
     await page.evaluate(() => { localStorage.clear(); localStorage.setItem("poolMasterCounter.onboardingSeen.v1", "1"); localStorage.setItem("poolMasterCounter.migratedFromRepo.v1", "1"); });
-    await page.goto(base + (opts.hash || ""), { waitUntil: "networkidle2" });
+    await page.goto(base + (opts.hash || ""), { waitUntil: "networkidle2" }); await showAll(page);
     await sleep(700);
     await page.evaluate(async () => {
       for (const n of ["Luigi", "Luc"]) {
@@ -181,6 +186,8 @@ const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/cs
   const players = () => page.evaluate(() => { try { return JSON.parse(localStorage.getItem("poolMasterCounter.state.v2")).players.map((p) => p.name).sort(); } catch (e) { return []; } });
   const closeModals = async () => { for (let i = 0; i < 10; i++) { const o = await page.evaluate(() => { const o = document.getElementById("confirm-modal-overlay"); if (o && !o.classList.contains("hidden")) { document.getElementById("btn-confirm-modal-ok").click(); return true; } return false; }); if (!o) break; await sleep(400); } };
   const restoreWith = async (file) => {
+    // a restore reloads the page, which opens on the board again
+    await page.evaluate(() => { if (document.getElementById("app").classList.contains("focus-mode")) document.getElementById("btn-toggle-focus").click(); });
     if (await page.evaluate(() => document.getElementById("bk-restore-overlay").classList.contains("hidden"))) { await page.click("#btn-restore"); await sleep(300); }
     const [chooser] = await Promise.all([page.waitForFileChooser({ timeout: 5000 }), page.click("#btn-bk-pick-file")]);
     await chooser.accept([file]);
@@ -200,7 +207,7 @@ const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/cs
   for (let i = 0; i < 20; i++) { await sleep(300); await closeModals(); ps = await players(); if (ps.includes("Mario")) break; }
   check("Add: Mario and Peach join Luigi and Luc - nothing lost", JSON.stringify(ps) === JSON.stringify(["Luc", "Luigi", "Mario", "Peach"]), ps);
   await sleep(500); await closeModals();
-  await page.evaluate(() => { const b = document.getElementById("btn-toggle-backup-panel"); if (document.getElementById("backup-panel").classList.contains("collapsed")) b.click(); });
+  await page.evaluate(() => { if (document.getElementById("app").classList.contains("focus-mode")) document.getElementById("btn-toggle-focus").click(); const b = document.getElementById("btn-toggle-backup-panel"); if (document.getElementById("backup-panel").classList.contains("collapsed")) b.click(); });
   await sleep(300);
   const before = jsonFiles(BACKUPS).length;
   await restoreWith(backupFile);
@@ -213,7 +220,7 @@ const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/cs
 
   // From a link, on the Mac: a Google Drive folder this computer syncs - its backups listed, one read
   await closeModals();
-  await page.evaluate(() => { const b = document.getElementById("btn-toggle-backup-panel"); if (document.getElementById("backup-panel").classList.contains("collapsed")) b.click(); });
+  await page.evaluate(() => { if (document.getElementById("app").classList.contains("focus-mode")) document.getElementById("btn-toggle-focus").click(); const b = document.getElementById("btn-toggle-backup-panel"); if (document.getElementById("backup-panel").classList.contains("collapsed")) b.click(); });
   await sleep(300);
   await page.click("#btn-restore"); await sleep(300);
   await page.click("#btn-bk-pick-link"); await sleep(200);

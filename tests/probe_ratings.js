@@ -23,6 +23,11 @@ const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/cs
 let fails = 0;
 function check(label, ok, extra) { console.log((ok ? "PASS " : "FAIL ") + label + (extra !== undefined && !ok ? "  " + JSON.stringify(extra) : "")); if (!ok) fails++; }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// The app opens on the board (Focus Mode); this probe works in the panels, so 🔍 Show All once it's up.
+const showAll = async (pg) => {
+  await pg.waitForFunction(() => document.getElementById("app") && document.getElementById("app").classList.contains("focus-mode"), { timeout: 10000 });
+  await pg.evaluate(() => document.getElementById("btn-toggle-focus").click());
+};
 // (game logs, report archive... live in IndexedDB - js/big-store.js - under the generation in use)
 const readBig = (page, name) => page.evaluate((name) => new Promise((resolve) => {
   const gen = localStorage.getItem("poolMasterCounter.bigStoreGen.v1") || "0";
@@ -81,7 +86,7 @@ const ts = (dayOffset, minute) => new Date(Date.UTC(2026, 8, 1 + dayOffset, 18, 
       Object.keys(stores).forEach((k) => localStorage.setItem(k, JSON.stringify(stores[k])));
       if (roster) localStorage.setItem("poolMasterCounter.state.v2", JSON.stringify({ players: roster.map((n, i) => ({ id: "p" + i, name: n, playing: true, balls: 0 })), playerWins: {}, teamWins: {}, teamMvpWins: {}, gameHistory: [], gamesPlayedCount: 0, currentGame: { gameType: "8ball", target: 1, unit: "rack", mode: "individual" }, raceToWinsTarget: 5, rotation: { enabled: false, order: [], every: 1 } }));
     }, stores, roster || null);
-    await page.goto(BASE, { waitUntil: "networkidle2" });
+    await page.goto(BASE, { waitUntil: "networkidle2" }); await showAll(page);
     await sleep(900);
     return page;
   }
@@ -94,9 +99,9 @@ const ts = (dayOffset, minute) => new Date(Date.UTC(2026, 8, 1 + dayOffset, 18, 
   for (let i = 0; i < 600; i++) many.push([i % 3 ? "Alice" : "Bob", i % 3 ? "Bob" : "Alice", ts(Math.floor(i / 20), i % 20)]);
   let page = await open({ [STATS]: statsFor(many) }, ["Alice", "Bob"]);
   const r1 = await ratings(page);
-  await page.reload({ waitUntil: "networkidle2" }); await sleep(900);
+  await page.reload({ waitUntil: "networkidle2" }); await sleep(900); await showAll(page);
   const r2 = await ratings(page);
-  await page.reload({ waitUntil: "networkidle2" }); await sleep(900);
+  await page.reload({ waitUntil: "networkidle2" }); await sleep(900); await showAll(page);
   const r3 = await ratings(page);
   check("600 games rated once: Alice and Bob each 600 games played", r1.Alice && r1.Alice.gamesPlayed === 600 && r1.Bob.gamesPlayed === 600, brief(r1));
   check("...three starts in a row: the same ratings and games played (nothing re-rated)", JSON.stringify(brief(r1)) === JSON.stringify(brief(r2)) && JSON.stringify(brief(r2)) === JSON.stringify(brief(r3)), [brief(r1), brief(r2), brief(r3)]);
@@ -195,7 +200,7 @@ const ts = (dayOffset, minute) => new Date(Date.UTC(2026, 8, 1 + dayOffset, 18, 
   await page.evaluate(() => document.getElementById("btn-reset-all-ratings").click());
   await sleep(300);
   for (let i = 0; i < 2; i++) { await page.click("#btn-confirm-modal-ok"); await sleep(400); }
-  await page.reload({ waitUntil: "networkidle2" }); await sleep(900);
+  await page.reload({ waitUntil: "networkidle2" }); await sleep(900); await showAll(page);
   const after = brief(await ratings(page));
   check("reset all ratings, then a restart: Eve and Fay stay at 400 (their games aren't rated again)", rated.Eve.rating > 400 && after.Eve.rating === 400 && after.Fay.rating === 400 && after.Eve.games === 0, { rated, after });
   await page.close();

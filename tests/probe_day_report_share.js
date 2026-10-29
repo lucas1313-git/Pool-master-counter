@@ -73,6 +73,8 @@ const SHEET = () => {
   }));
   await page.goto(BASE, { waitUntil: "networkidle2" });
   await sleep(700);
+  // the app opens on the board - this works in the panels below it
+  await page.evaluate(() => { if (document.getElementById("app").classList.contains("focus-mode")) document.getElementById("btn-toggle-focus").click(); });
   // a little day: Luigi beats Luc twice (a race to 5 - no "on the hill" banner over the buttons)
   await page.evaluate(async () => {
     for (const n of ["Luigi", "Luc"]) {

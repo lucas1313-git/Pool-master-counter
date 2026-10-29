@@ -23,6 +23,11 @@ const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/cs
 let fails = 0;
 function check(label, ok, extra) { console.log((ok ? "PASS " : "FAIL ") + label + (extra !== undefined && !ok ? "  " + JSON.stringify(extra) : "")); if (!ok) fails++; }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// The app opens on the board (Focus Mode); this probe works in the panels, so 🔍 Show All once it's up.
+const showAll = async (pg) => {
+  await pg.waitForFunction(() => document.getElementById("app") && document.getElementById("app").classList.contains("focus-mode"), { timeout: 10000 });
+  await pg.evaluate(() => document.getElementById("btn-toggle-focus").click());
+};
 // (game logs, report archive... live in IndexedDB - js/big-store.js - under the generation in use)
 const readBig = (page, name) => page.evaluate((name) => new Promise((resolve) => {
   const gen = localStorage.getItem("poolMasterCounter.bigStoreGen.v1") || "0";
@@ -67,7 +72,7 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "pmc-storage-"));
       localStorage.setItem("poolMasterCounter.migratedFromRepo.v1", "1");
       Object.keys(extra || {}).forEach((k) => localStorage.setItem(k, extra[k]));
     }, extra || null);
-    await page.goto(BASE, { waitUntil: "networkidle2" });
+    await page.goto(BASE, { waitUntil: "networkidle2" }); await showAll(page);
     await sleep(800);
   };
   // fill the storage with a junk key until nothing more fits, then give back `leave` characters
@@ -195,7 +200,7 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "pmc-storage-"));
   await sleep(500);
   const moved = { legacy: await page.evaluate(() => localStorage.getItem("poolMasterCounter.playerStats.v1")), db: await readBig(page, "playerStats") };
   check("an older version's game logs move into the database on the first start (the old key cleared)", moved.legacy === null && moved.db && moved.db.Old && moved.db.Old.sessions[0].games.length === 1, moved);
-  await page.reload({ waitUntil: "networkidle2" });
+  await page.reload({ waitUntil: "networkidle2" }); await showAll(page);
   await sleep(800);
   await page.evaluate(() => { window.__lastExport = null; document.getElementById("btn-backup-now").click(); });
   await sleep(300);

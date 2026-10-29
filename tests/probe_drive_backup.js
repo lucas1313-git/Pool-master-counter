@@ -23,6 +23,11 @@ const PORT = 4236, BASE = "http://localhost:" + PORT + "/";
 let fails = 0;
 function check(label, ok, extra) { console.log((ok ? "PASS " : "FAIL ") + label + (extra !== undefined && !ok ? "  " + JSON.stringify(extra) : "")); if (!ok) fails++; }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// The app opens on the board (Focus Mode); this probe works in the panels, so 🔍 Show All once it's up.
+const showAll = async (pg) => {
+  await pg.waitForFunction(() => document.getElementById("app") && document.getElementById("app").classList.contains("focus-mode"), { timeout: 10000 });
+  await pg.evaluate(() => document.getElementById("btn-toggle-focus").click());
+};
 
 const HOME = path.join(__dirname, "tmphome", "drive-backup-home");
 const CLOUD = path.join(HOME, "Library", "CloudStorage");
@@ -59,7 +64,7 @@ const jsonFiles = (dir) => (fs.existsSync(dir) ? fs.readdirSync(dir).filter((n) 
   await cdp.send("Browser.setDownloadBehavior", { behavior: "allow", downloadPath: DL }).catch(() => cdp.send("Page.setDownloadBehavior", { behavior: "allow", downloadPath: DL }));
   await page.goto(BASE + "manifest.json");
   await page.evaluate(() => { localStorage.clear(); localStorage.setItem("poolMasterCounter.onboardingSeen.v1", "1"); localStorage.setItem("poolMasterCounter.migratedFromRepo.v1", "1"); });
-  await page.goto(BASE, { waitUntil: "networkidle2" });
+  await page.goto(BASE, { waitUntil: "networkidle2" }); await showAll(page);
   await sleep(600);
   await page.evaluate(async () => {
     for (const n of ["Luigi", "Luc"]) {
@@ -151,7 +156,7 @@ const jsonFiles = (dir) => (fs.existsSync(dir) ? fs.readdirSync(dir).filter((n) 
   p2.on("pageerror", (e) => errors.push("fresh: " + e.message));
   await p2.goto(BASE + "manifest.json");
   await p2.evaluate(() => { localStorage.clear(); localStorage.setItem("poolMasterCounter.onboardingSeen.v1", "1"); localStorage.setItem("poolMasterCounter.migratedFromRepo.v1", "1"); });
-  await p2.goto(BASE, { waitUntil: "networkidle2" });
+  await p2.goto(BASE, { waitUntil: "networkidle2" }); await showAll(p2);
   await sleep(500);
   const input = await p2.$("#import-file-input");
   await input.uploadFile(path.join(BACKUPS, saved[0]));

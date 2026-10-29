@@ -25,6 +25,11 @@ const PORT = 4240, GPORT = 4298, BASE = "http://localhost:" + PORT + "/", G = "h
 let fails = 0;
 function check(label, ok, extra) { console.log((ok ? "PASS " : "FAIL ") + label + (extra !== undefined && !ok ? "  " + JSON.stringify(extra) : "")); if (!ok) fails++; }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// The app opens on the board (Focus Mode); this probe works in the panels, so 🔍 Show All once it's up.
+const showAll = async (pg) => {
+  await pg.waitForFunction(() => document.getElementById("app") && document.getElementById("app").classList.contains("focus-mode"), { timeout: 10000 });
+  await pg.evaluate(() => document.getElementById("btn-toggle-focus").click());
+};
 const CLIENT_ID = "987654-web.apps.googleusercontent.com";
 const FOLDER = "1FAKEipadBackupsFolder01", LINK = "https://drive.google.com/drive/folders/" + FOLDER;
 
@@ -98,7 +103,7 @@ const fakeGoogle = http.createServer(async (req, res) => {
   await page.evaluateOnNewDocument((g) => { window.PMC_TEST_GOOGLE_API = g; window.PMC_TEST_GIS_SRC = g + "/gsi/client"; window.__downloads = []; const click = HTMLAnchorElement.prototype.click; HTMLAnchorElement.prototype.click = function () { if (this.download) window.__downloads.push(this.download); return click.call(this); }; }, G);
   await page.goto(BASE + "manifest.json");
   await page.evaluate(() => { localStorage.clear(); localStorage.setItem("poolMasterCounter.onboardingSeen.v1", "1"); localStorage.setItem("poolMasterCounter.migratedFromRepo.v1", "1"); });
-  await page.goto(BASE + "?owner", { waitUntil: "networkidle2" });
+  await page.goto(BASE + "?owner", { waitUntil: "networkidle2" }); await showAll(page);
   await sleep(700);
   await page.evaluate(async () => {
     for (const n of ["Luigi", "Luc"]) {

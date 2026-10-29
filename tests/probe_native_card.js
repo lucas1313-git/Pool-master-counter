@@ -15,7 +15,7 @@ function check(label, ok, extra) { console.log((ok ? "PASS " : "FAIL ") + label 
     if (native) await page.evaluateOnNewDocument(() => { window.__opened = 0; window.Capacitor = { isNativePlatform: () => true, Plugins: { Recognition: { open: () => { window.__opened++; return Promise.resolve(); } } } }; });
     await page.goto(BASE + "manifest.json");
     await page.evaluate(() => { localStorage.clear(); localStorage.setItem("poolMasterCounter.onboardingSeen.v1", "1"); localStorage.setItem("poolMasterCounter.migratedFromRepo.v1", "1"); });
-    await page.goto(BASE, { waitUntil: "networkidle2" });
+    await page.goto(BASE, { waitUntil: "networkidle2" }); await showAll(page);
     await new Promise((r) => setTimeout(r, 700));
     return page.evaluate(() => !document.getElementById("camera-path-card-native").classList.contains("hidden"));
   };
@@ -30,3 +30,8 @@ function check(label, ok, extra) { console.log((ok ? "PASS " : "FAIL ") + label 
   console.log(fails ? "NATIVE_CARD_FAIL (" + fails + ")" : "NATIVE_CARD_OK");
   await browser.close();
 })().catch((e) => { console.error(e); process.exit(1); });
+// The app opens on the board (Focus Mode); this probe works in the panels, so 🔍 Show All once it's up.
+const showAll = async (pg) => {
+  await pg.waitForFunction(() => document.getElementById("app") && document.getElementById("app").classList.contains("focus-mode"), { timeout: 10000 });
+  await pg.evaluate(() => document.getElementById("btn-toggle-focus").click());
+};

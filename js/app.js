@@ -300,6 +300,9 @@
   // and the stat detail popup's "View Full Graph" button.
   function expandAndScrollToPanel(panelElId, toggleBtnElId) {
     var panel = document.getElementById(panelElId);
+    // Focus Mode (the home screen) hides every panel - show them first,
+    // or this would scroll to nothing.
+    if (appRoot.classList.contains("focus-mode") && appRoot.contains(panel)) setFocusMode(false);
     if (panel.classList.contains("collapsed")) {
       document.getElementById(toggleBtnElId).click();
     }
@@ -2419,6 +2422,7 @@
   var focusPlayersSummary = document.getElementById("focus-players-summary");
   var focusPlayersList = document.getElementById("focus-players-list");
   var appRoot = document.getElementById("app");
+  var boardSoloRow = document.getElementById("board-solo-row");
   var playerPageView = document.getElementById("view-player-page");
   var playerPageName = document.getElementById("player-page-name");
   var playerPageAdded = document.getElementById("player-page-added");
@@ -6171,6 +6175,9 @@
   function renderScoreboard() {
     postRecorderContext(); // (the recording page names its cues from what's shown)
     var active = activePlayers();
+    // One player seated and nobody to play: the board offers a game
+    // with them already filled in (see openQuickGameModalWith).
+    boardSoloRow.classList.toggle("hidden", quickCounterMode || state.currentGame.mode === "teams" || active.length !== 1);
 
     btnFinishSnooker.classList.toggle("hidden", quickCounterMode || state.currentGame.gameType !== "snooker");
 
@@ -6194,11 +6201,20 @@
     scoreboard.innerHTML = "";
 
     if (active.length === 0) {
-      scoreboard.className = "scoreboard";
+      scoreboard.className = "scoreboard scoreboard-empty";
       var hint = document.createElement("div");
       hint.className = "empty-hint";
       hint.textContent = T("scoreboard.markPlayingHint");
       scoreboard.appendChild(hint);
+      // The board is the home screen, so an empty one starts a game
+      // itself instead of pointing at settings hidden behind it.
+      var newGame = document.createElement("button");
+      newGame.type = "button";
+      newGame.id = "btn-empty-new-game";
+      newGame.className = "btn btn-primary empty-new-game";
+      newGame.textContent = T("scoreboard.newGame");
+      newGame.addEventListener("click", openQuickGameModal);
+      scoreboard.appendChild(newGame);
       refreshKeypadNumbering();
       return;
     }
@@ -21773,6 +21789,15 @@
     quickGamePlayer1Input.focus();
   }
 
+  // Quick Game with player 1 already filled in - the board's own "New
+  // game" when only one player is seated.
+  function openQuickGameModalWith(name) {
+    openQuickGameModal();
+    quickGamePlayer1Input.value = name;
+    validateQuickGameInputs();
+    quickGamePlayer2Input.focus();
+  }
+
   function closeQuickGameModal() {
     quickGameOverlay.classList.add("hidden");
   }
@@ -36488,6 +36513,10 @@
   quickGameOverlay.addEventListener("click", function (e) {
     if (e.target === quickGameOverlay) closeQuickGameModal();
   });
+  document.getElementById("btn-solo-new-game").addEventListener("click", function () {
+    var seated = activePlayers();
+    openQuickGameModalWith(seated.length === 1 ? seated[0].name : "");
+  });
   quickGamePlayer1Input.addEventListener("input", validateQuickGameInputs);
   quickGamePlayer2Input.addEventListener("input", validateQuickGameInputs);
   attachNameAutocomplete(quickGamePlayer1Input, function () {
@@ -37271,13 +37300,10 @@
     openOnboarding();
   }
 
-  var storedFocusMode = "0";
-  try {
-    storedFocusMode = localStorage.getItem(FOCUS_MODE_KEY) || "0";
-  } catch (e) {
-    storedFocusMode = "0";
-  }
-  setFocusMode(storedFocusMode === "1");
+  // The scoreboard is the home screen: the app always opens on the board
+  // (Focus Mode); 🔍 Show All brings the settings and panels back for the
+  // moment.
+  setFocusMode(true);
   btnToggleFocus.addEventListener("click", function () {
     setFocusMode(!appRoot.classList.contains("focus-mode"));
   });
