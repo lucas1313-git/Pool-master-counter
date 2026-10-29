@@ -297,3 +297,9 @@ Not part of the app - helpers for testing and for running this machine's own cop
 - `test_privacy.js` - appearance samples not refreshed in 90 days are forgotten (the server's copy
   and camera.html's, the same); the Challonge proxy forwards only the app's five calls.
   `node tests/test_privacy.js`.
+- `probe_win_banner.js` - one tap per rack (4258): a race to 5 takes exactly 5 taps on +, each rack
+  a banner ("Kim won rack 3 · 3–0"), never a dialog, no duplicate toast, nothing focused; nothing
+  appears under the + for 600 ms (the race-won screen too comes after); one race-won screen that
+  closes itself after about 6 s with 🔁 Rematch / 👥 New players; ↩ Undo in the banner takes the
+  last rack back; 🎱 Balls left only when tapped; "on the hill" and a game change in one banner;
+  Celebrations Off: the race won as a banner line. `node tests/probe_win_banner.js [dir]`.

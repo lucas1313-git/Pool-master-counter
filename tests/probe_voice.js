@@ -1,7 +1,7 @@
 // Voice commands, in the page: the microphone is replaced by a fake that
 // "hears" window.__voiceNext when the hold ends, so the whole path runs -
 // the number pad's "." key and the 🎤 button held, what's done, the beep,
-// what's spoken, the win window's balls left, the sentences sheet.
+// what's spoken, the win banner's balls left, the sentences sheet.
 // usage: node tests/probe_voice.js http://localhost:4235/ <screenshot dir>
 const puppeteer = require("puppeteer-core");
 const EXE = "/Users/lucmartin/.cache/puppeteer/chrome/mac_arm-154.0.8037.57/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing";
@@ -61,7 +61,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       lastWin: s.gameHistory[0] && typeof s.gameHistory[0] === "object" ? { winner: s.gameHistory[0].winnerNames, ballsLeft: s.gameHistory[0].ballsLeftOnTable } : null,
       toast: document.getElementById("page-toast").textContent,
       rotationRadio: document.getElementById("scoreboard-mode-rotation").checked,
-      winOpen: !document.getElementById("gamewin-overlay").classList.contains("hidden") };
+      winOpen: !document.getElementById("win-banner").classList.contains("hidden") && /won/.test(document.getElementById("win-banner").textContent) };
   });
   const say = async (text) => { await page.evaluate((t) => window.PMCVoice.handleText(t), text); await sleep(250); return st(); };
   const holdKey = async (text) => {
@@ -146,14 +146,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   // --- an 8-ball win with balls left ---
   s = await say("Play 8-ball");
   s = await say("Luigi wins the game with 5 balls left on the table");
-  const field = await page.evaluate(() => { const i = document.querySelector("#gamewin-details .balls-left-input"); return i ? i.value : null; });
-  check("\"Luigi wins the game with 5 balls left on the table\": the win window, Luigi, 5 left", s.winOpen && s.lastWin && s.lastWin.winner.join() === "Luigi" && s.lastWin.ballsLeft === 5 && field === "5", { s, field });
+  const field = await page.evaluate(() => { const v = document.getElementById("win-banner-balls-value"); return v ? v.textContent : null; });
+  check("\"Luigi wins the game with 5 balls left on the table\": the win banner, Luigi, 5 left", s.winOpen && s.lastWin && s.lastWin.winner.join() === "Luigi" && s.lastWin.ballsLeft === 5 && field === "5", { s, field });
   if (OUT) await page.screenshot({ path: OUT + "/voice_win.png" });
   s = await holdKey("6 balls left");
-  const field2 = await page.evaluate(() => document.querySelector("#gamewin-details .balls-left-input").value);
-  check("\"6 balls left\" by the held key while the balls-left field has focus: 6, no '.' typed", s.lastWin.ballsLeft === 6 && field2 === "6", { field2, s: s.lastWin });
+  const field2 = await page.evaluate(() => document.getElementById("win-banner-balls-value").textContent);
+  check("\"6 balls left\" by the held key: 6 on the banner and the game", s.lastWin.ballsLeft === 6 && field2 === "6", { field2, s: s.lastWin });
   s = await say("Nice game");
-  check("\"Nice game\" closes the win window, 6 kept", !s.winOpen && s.lastWin.ballsLeft === 6, s);
+  check("\"Nice game\" closes the win banner, 6 kept", !s.winOpen && s.lastWin.ballsLeft === 6, s);
 
   // --- Q-score ---
   await page.evaluate(() => { window.__spoken = []; });

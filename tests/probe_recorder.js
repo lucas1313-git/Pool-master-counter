@@ -72,7 +72,8 @@ function makeY4m(file) {
   // "/" without a recording: the shot counter's pause, as always
   const slash = () => board.evaluate(() => document.dispatchEvent(new KeyboardEvent("keydown", { key: "/", bubbles: true })));
   const shotTime = () => board.evaluate(() => document.getElementById("shot-counter-time").textContent);
-  const shotRuns = async () => { const a = await shotTime(); await sleep(1300); return a !== (await shotTime()); };
+  // (the shown time moves on a once-a-second tick: 2.2 s always sees it move, if it runs)
+  const shotRuns = async () => { const a = await shotTime(); await sleep(2200); return a !== (await shotTime()); };
   await board.evaluate(() => { const c = document.getElementById("shot-counter-enabled-checkbox"); c.checked = true; c.dispatchEvent(new Event("change", { bubbles: true })); });
   await sleep(300);
   const r0 = await shotRuns();

@@ -2872,11 +2872,6 @@
   var tournamentMatchWinSubtext = document.getElementById("tournament-match-win-subtext");
   var btnTournamentMatchWinClose = document.getElementById("btn-tournament-match-win-close");
 
-  var gamewinOverlay = document.getElementById("gamewin-overlay");
-  var gamewinMessage = document.getElementById("gamewin-message");
-  var gamewinDetails = document.getElementById("gamewin-details");
-  var btnGamewinClose = document.getElementById("btn-gamewin-close");
-  var btnGamewinUndo = document.getElementById("btn-gamewin-undo");
 
   var forceResetOverlay = document.getElementById("force-reset-overlay");
   var forceResetMessage = document.getElementById("force-reset-message");
@@ -2884,20 +2879,6 @@
 
   var btnResetTodayStats = document.getElementById("btn-reset-today-stats");
 
-  // Optional "balls left on the table" marker for whichever game the
-  // gamewin overlay is currently showing — unset (null) unless the +/-
-  // counter is used. Tracks which game record to patch once the dialog
-  // closes (see showGameWinOverlay/closeGameWinOverlay below).
-  var gamewinBallsLeftValue = null;
-  var gamewinPendingTs = null;
-  var gamewinPendingOnClose = null;
-  // "Count this win for the team" checkbox (see buildCountsForTeamRow) -
-  // gamewinCountsForTeamName is the club team it would be credited to
-  // (null when the win isn't a solo win by someone on a club team, so
-  // the row isn't even shown), gamewinCountsForTeamValue is whether the
-  // checkbox is currently checked.
-  var gamewinCountsForTeamName = null;
-  var gamewinCountsForTeamValue = false;
 
   var onHillOverlay = document.getElementById("onhill-overlay");
   var onHillCard = onHillOverlay.querySelector(".onhill-card");
@@ -3245,7 +3226,6 @@
       onboardingOverlay,
       quickGameOverlay,
       milestoneOverlay,
-      gamewinOverlay,
       forceResetOverlay,
       onHillOverlay,
       gameChangeOverlay,
@@ -3638,7 +3618,6 @@
     [recoverDetailOverlay, btnRecoverRestore, btnRecoverCancel],
     [onboardingOverlay, btnOnboardingGo, btnOnboardingCancel],
     [milestoneOverlay, btnMilestoneClose, btnMilestoneClose],
-    [gamewinOverlay, btnGamewinClose, btnGamewinClose],
     [forceResetOverlay, btnForceResetClose, btnForceResetClose],
     [onHillOverlay, btnOnHillClose, btnOnHillClose],
     [gameChangeOverlay, btnGameChangeClose, btnGameChangeClose],
@@ -6063,7 +6042,7 @@
     saveState();
     renderAll();
     tickTimedTournament();
-    showToast(T("timedTournament.playoffToast", { names: result.names }));
+    showBannerNotice(T("timedTournament.playoffToast", { names: result.names }), true);
   }
 
   function finishTimedPlayoff(winnerKey) {
@@ -6133,8 +6112,7 @@
     milestoneDetails.innerHTML = "";
     milestoneDetails.appendChild(playerStatsRow(T("milestone.tournamentGoal"), T("timedTournament.expiredLabel")));
     btnMilestoneChallonge.classList.add("hidden");
-    milestoneOverlay.classList.remove("hidden");
-    playTournamentChampionSound();
+    showMilestoneMoment(TP("timedTournament.headline", count, { names: names, count: count }));
   }
 
   // Runs on the same 1-second cadence as tickShotCounter (see the
@@ -6173,7 +6151,7 @@
         timedTournamentTimeUp = true;
         saveTimedClock();
         playTimedTournamentOneMinWarning();
-        showToast(T("timedTournament.lastRackToast"));
+        showBannerNotice(T("timedTournament.lastRackToast"), true);
         tickTimedTournament();
         return;
       }
@@ -6888,28 +6866,31 @@
 
     resetGameBalls();
     saveState();
-    playWinSound(winnerVoice);
+    var celebrations = celebrationsLevel();
+    if (celebrations !== "off") playWinSound(winnerVoice);
     renderAll();
 
-    showToast(summary);
-    // The balls-left counter needs to be set (or skipped) before any of
-    // these run, since celebrateTournamentWin archives this exact game
-    // and resets the session — deferred to showGameWinOverlay's onClose.
-    showGameWinOverlay(summary, ts, function () {
-      if (milestoneNames) {
-        celebrateTournamentWin(milestoneNames, milestoneCount, target);
-      } else if (timedTournamentSessionOver(key, isTeam)) {
-        // (the timed session ended with this rack - see timedTournamentSessionOver)
-      } else if (onHillNames) {
-        announceOnHill(onHillNames, target);
-      } else if (gameTypeChanged) {
-        announceGameChange(
-          GAME_TYPES[state.currentGame.gameType].label + " (" + state.currentGame.target + " " + unitLabel(state.currentGame.unit) + ")"
-        );
-      } else if (queueSwapInfo) {
-        announceQueueSwap(queueSwapInfo.newName, queueSwapInfo.benchedName);
-      }
-    });
+    // The win is in: the banner says so (no popup to dismiss), with every
+    // notice this win brings - none of them lost behind another.
+    var fresh = state.gameHistory.filter(function (g) { return g && g.ts === ts; })[0];
+    var gameNumber = state.gamesPlayedCount;
+    var notices = [];
+    if (onHillNames) notices.push({ text: T("banner.onHill", { names: onHillNames, target: target }) });
+    if (gameTypeChanged) {
+      notices.push({ text: T("gamechange.nowPlaying", { label: GAME_TYPES[state.currentGame.gameType].label + " (" + state.currentGame.target + " " + unitLabel(state.currentGame.unit) + ")" }) });
+    }
+    if (queueSwapInfo) notices.push({ text: T("queueswap.message", { newName: queueSwapInfo.newName, benchedName: queueSwapInfo.benchedName }), sticky: loadQueueSwapSticky() });
+    if (celebrations === "full") {
+      if (onHillNames) playOnHillSound();
+      else if (gameTypeChanged || queueSwapInfo) playPositiveSound(null);
+    }
+    if (fresh) fresh.gameNumber = gameNumber;
+    showWinBanner(fresh || null, notices);
+    // A race won closes at once (archived, a new session - nothing more
+    // can be scored into it); only its big moment waits for the finger to
+    // lift (see celebrateTournamentWin). Same for a timed session's end.
+    if (milestoneNames) celebrateTournamentWin(milestoneNames, milestoneCount, target);
+    else timedTournamentSessionOver(key, isTeam);
     return summary;
   }
 
@@ -7046,30 +7027,12 @@
     }
   }
 
-  function announceOnHill(names, target) {
-    onHillMessage.textContent = names + " is ON THE HILL — one more win takes the race to " + target + "! Better step up. 👀";
-    onHillOverlay.classList.remove("hidden");
-    fitOnHillCardToViewport();
-    playOnHillSound();
-    if (onHillAutoCloseTimer) clearTimeout(onHillAutoCloseTimer);
-    onHillAutoCloseTimer = setTimeout(function () {
-      onHillAutoCloseTimer = null;
-      closeOnHill();
-    }, 5000);
-  }
-
   function closeOnHill() {
     if (onHillAutoCloseTimer) {
       clearTimeout(onHillAutoCloseTimer);
       onHillAutoCloseTimer = null;
     }
     onHillOverlay.classList.add("hidden");
-  }
-
-  function announceGameChange(label) {
-    gameChangeMessage.textContent = T("gamechange.nowPlaying", { label: label });
-    gameChangeOverlay.classList.remove("hidden");
-    playPositiveSound(null);
   }
 
   function closeGameChange() {
@@ -7096,27 +7059,14 @@
 
   var queueSwapAutoCloseTimer = null;
 
-  // Big, hard-to-miss popup for whoever just got seated by the "Winner
-  // Stays" queue (a win swapping the loser out, or manually benching the
-  // active player) - a busy/loud pool room can't rely on a small toast
-  // for this, since the incoming player needs to actually notice it's
-  // their turn. Auto-closes after 5s by default, same as announceOnHill;
-  // queueSwapStickyCheckbox (players.queueSwapStickyLabel) lets someone
-  // running a noisy room keep it up until it's manually dismissed instead.
+  // Whoever just got seated by the "Winner Stays" queue (benching the
+  // active player by hand - a win's own swap goes in its win banner): a
+  // line in the banner, gone with it after a few seconds -
+  // queueSwapStickyCheckbox (players.queueSwapStickyLabel) keeps it up
+  // until dismissed, for a busy room.
   function announceQueueSwap(newName, benchedName) {
-    queueSwapMessage.textContent = T("queueswap.message", { newName: newName, benchedName: benchedName });
-    queueSwapOverlay.classList.remove("hidden");
-    playPositiveSound(null);
-    if (queueSwapAutoCloseTimer) {
-      clearTimeout(queueSwapAutoCloseTimer);
-      queueSwapAutoCloseTimer = null;
-    }
-    if (!loadQueueSwapSticky()) {
-      queueSwapAutoCloseTimer = setTimeout(function () {
-        queueSwapAutoCloseTimer = null;
-        closeQueueSwap();
-      }, 5000);
-    }
+    showBannerNotice(T("queueswap.message", { newName: newName, benchedName: benchedName }), loadQueueSwapSticky());
+    if (celebrationsLevel() === "full") playPositiveSound(null);
   }
 
   function closeQueueSwap() {
@@ -7127,264 +7077,304 @@
     queueSwapOverlay.classList.add("hidden");
   }
 
-  // Reflects the current counter value into the dialog and disables "-"
-  // once it can't go any lower than unset.
-  function renderBallsLeftValue(valueInput, minusBtn) {
-    valueInput.value = gamewinBallsLeftValue === null ? "" : String(gamewinBallsLeftValue);
-    minusBtn.disabled = gamewinBallsLeftValue === null;
-  }
+  // ---------- The win banner ----------
+  // Each rack's win, at the top of the screen for about 8 s and never in
+  // the way: "Sam won rack 3 · 3–1", ↩ Undo, 🎱 Balls left (a small
+  // stepper, only once tapped - nothing takes the keyboard), the club-team
+  // toggle, and every notice the win brings (on the hill, the next player,
+  // the game changing, time up), so none is lost behind another popup. A
+  // race or tournament won still gets its full-screen moment (see
+  // celebrateTournamentWin), unless Celebrations is Off.
+  var WIN_BANNER_MS = 8000;
+  var TAP_GUARD_MS = 600;
+  var CELEBRATIONS_KEY = "poolMasterCounter.celebrations.v1";
+  var lastTap = { at: 0, x: -1, y: -1 };
+  document.addEventListener("pointerdown", function (e) {
+    lastTap = { at: Date.now(), x: e.clientX, y: e.clientY };
+  }, true);
+  var winBannerEl = document.getElementById("win-banner");
+  // entry: the game shown (the same object as in the session's history);
+  // notices: [{ text, sticky }]; ballsOpen: the stepper shown
+  var winBanner = { entry: null, notices: [], ballsOpen: false, hideTimer: null, revealTimer: null, undone: null };
 
-  // Writes the current balls-left value straight onto the game it belongs
-  // to and refreshes any player-stats view already open behind the
-  // overlay, the instant it changes - rather than waiting for the dialog
-  // to close (closeGameWinOverlay's own patch-back stays as a harmless,
-  // redundant safety net for it).
-  function persistBallsLeftLive() {
-    if (state.gameHistory[0] && state.gameHistory[0].ts === gamewinPendingTs) {
-      state.gameHistory[0].ballsLeftOnTable = gamewinBallsLeftValue;
-      // Rack-mode skunk only has one source of truth: this field. 7
-      // left means the loser potted none of their 7 object balls.
-      if (SKUNK_RACK_GAME_TYPES.indexOf(state.gameHistory[0].gameType) !== -1) {
-        state.gameHistory[0].skunk = gamewinBallsLeftValue === 7;
-      }
-      saveState();
-      updateGamewinSkunkIndicator();
-      if (currentStatsPlayerName) {
-        currentStatsSessions = getPlayerSessions(currentStatsPlayerName);
-        renderPlayerHistoryList(currentStatsSessions);
-      }
+  // Full: every sound; Quiet (the default): each rack's win sound and a
+  // race won's big moment; Off: silent, a race won shown in the banner too.
+  function celebrationsLevel() {
+    try {
+      var v = localStorage.getItem(CELEBRATIONS_KEY);
+      return v === "full" || v === "off" ? v : "quiet";
+    } catch (e) {
+      return "quiet";
     }
   }
 
-  // Read-only badge, not an input - nothing to toggle by hand. Shown
-  // immediately for the auto-detected points/balls-unit case (see
-  // creditWin), and appears live the moment the balls-left stepper
-  // below hits 7 for a rack-mode game (see persistBallsLeftLive).
-  function buildSkunkIndicator() {
-    var el = document.createElement("div");
-    el.className = "gamewin-skunk-indicator hidden";
-    el.textContent = T("skunk.indicator");
-    return el;
+  // Runs fn once the finger that set it off has been up TAP_GUARD_MS - so
+  // nothing appears under a tap that's about to land again.
+  function afterTapGuard(fn) {
+    var wait = TAP_GUARD_MS - (Date.now() - lastTap.at);
+    if (wait > 0) setTimeout(fn, wait);
+    else fn();
   }
 
-  function updateGamewinSkunkIndicator() {
-    var el = gamewinDetails.querySelector(".gamewin-skunk-indicator");
-    if (!el) return;
-    var isSkunk = !!(state.gameHistory[0] && state.gameHistory[0].ts === gamewinPendingTs && state.gameHistory[0].skunk);
-    el.classList.toggle("hidden", !isSkunk);
-  }
-
-  // Writes the checkbox's current state straight onto the game it
-  // belongs to, same live-patch pattern as persistBallsLeftLive - a
-  // player's club team stats (see computeClubTeamAggregate,
-  // Player Stats page) aren't just every game they ever won, only the
-  // ones explicitly marked here as playing for the team.
-  function persistCountsForTeamLive() {
-    if (state.gameHistory[0] && state.gameHistory[0].ts === gamewinPendingTs) {
-      state.gameHistory[0].teamCredit = gamewinCountsForTeamValue ? gamewinCountsForTeamName : null;
-      saveState();
-      if (currentStatsPlayerName) {
-        currentStatsSessions = getPlayerSessions(currentStatsPlayerName);
-        renderPlayerSynopsis();
-      }
-    }
-  }
-
-  // Only ever shown for a solo win (individual mode, one winner) by
-  // someone with a persistent club team (see buildClubTeamBadge) -
-  // "Play as Teams" mode games already have their own separate team-wins
-  // counter (state.teamWins) and aren't what this is for. Unchecked by
-  // default: most solo games are just personal practice, only some are
-  // an official team match that should count toward the team's record.
-  function buildCountsForTeamRow(teamName) {
-    var row = document.createElement("label");
-    row.className = "player-stats-row gamewin-counts-for-team-row";
-    var label = document.createElement("span");
-    label.className = "label";
-    label.textContent = T("gamewin.countsForTeamLabel", { team: teamName });
-    var checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.checked = gamewinCountsForTeamValue;
-    checkbox.addEventListener("change", function () {
-      gamewinCountsForTeamValue = checkbox.checked;
-      persistCountsForTeamLive();
+  // A game's fields, on the session's copy and every player's saved copy
+  // (a race's last rack is archived the moment it's won).
+  function patchGameEverywhere(ts, fields) {
+    state.gameHistory.forEach(function (g) {
+      if (g && g.ts === ts) Object.assign(g, fields);
     });
-    row.appendChild(label);
-    row.appendChild(checkbox);
-    return row;
-  }
-
-  // Optional +/- counter (also directly typeable on a real keyboard) for
-  // how many balls were left on the table when this game ended. Starts
-  // unset (null) - "+" from unset goes to 0, "-" from 0 goes back to
-  // unset, and clearing the field by hand does the same, so leaving it
-  // alone never records a value. Lives in the per-game win overlay
-  // (showGameWinOverlay), not the tournament/milestone one - it's a
-  // property of the specific game just played, not the race as a whole.
-  function buildBallsLeftRow() {
-    var row = document.createElement("div");
-    row.className = "player-stats-row balls-left-row";
-    var label = document.createElement("span");
-    label.className = "label";
-    label.textContent = T("ballsLeft.label");
-
-    var stepper = document.createElement("div");
-    stepper.className = "balls-left-stepper";
-    var minusBtn = document.createElement("button");
-    minusBtn.type = "button";
-    minusBtn.className = "balls-left-btn minus";
-    minusBtn.textContent = "−";
-    minusBtn.setAttribute("aria-label", T("ballsLeft.decrease"));
-
-    var valueInput = document.createElement("input");
-    valueInput.type = "number";
-    valueInput.inputMode = "numeric";
-    valueInput.min = "0";
-    valueInput.placeholder = T("ballsLeft.unset");
-    valueInput.className = "balls-left-value balls-left-input";
-    valueInput.setAttribute("aria-label", T("ballsLeft.label"));
-
-    var plusBtn = document.createElement("button");
-    plusBtn.type = "button";
-    plusBtn.className = "balls-left-btn plus";
-    plusBtn.textContent = "+";
-    plusBtn.setAttribute("aria-label", T("ballsLeft.increase"));
-
-    minusBtn.addEventListener("click", function () {
-      if (gamewinBallsLeftValue === null) return;
-      gamewinBallsLeftValue = gamewinBallsLeftValue === 0 ? null : gamewinBallsLeftValue - 1;
-      renderBallsLeftValue(valueInput, minusBtn);
-      persistBallsLeftLive();
-    });
-    plusBtn.addEventListener("click", function () {
-      gamewinBallsLeftValue = gamewinBallsLeftValue === null ? 0 : gamewinBallsLeftValue + 1;
-      renderBallsLeftValue(valueInput, minusBtn);
-      persistBallsLeftLive();
-    });
-    valueInput.addEventListener("input", function () {
-      if (valueInput.value === "") {
-        gamewinBallsLeftValue = null;
-      } else {
-        var n = parseInt(valueInput.value, 10);
-        gamewinBallsLeftValue = isNaN(n) ? null : Math.max(0, n);
-      }
-      minusBtn.disabled = gamewinBallsLeftValue === null;
-      persistBallsLeftLive();
-    });
-
-    stepper.appendChild(minusBtn);
-    stepper.appendChild(valueInput);
-    stepper.appendChild(plusBtn);
-    row.appendChild(label);
-    row.appendChild(stepper);
-    renderBallsLeftValue(valueInput, minusBtn);
-    return row;
-  }
-
-  // Shown for every credited win (not just a race-ending one) so the
-  // balls-left marker can be set for that specific game before anything
-  // else happens - in particular, before a race-ending win archives the
-  // game and resets the session in celebrateTournamentWin. onClose runs
-  // whatever should happen next (milestone/on-hill/game-change), deferred
-  // until this dialog is dismissed.
-  function showGameWinOverlay(summary, ts, onClose) {
-    // One Pocket/points-unit wins arrive with a computed prefill already
-    // sitting on the fresh gameHistory entry (see creditWin's
-    // ballsLeftPrefill) - pick it up here instead of always starting
-    // blank; still just a starting point, editable/clearable the same
-    // as a manually typed value.
-    var freshEntry = state.gameHistory[0] && state.gameHistory[0].ts === ts ? state.gameHistory[0] : null;
-    gamewinBallsLeftValue = freshEntry && freshEntry.ballsLeftOnTable !== null && freshEntry.ballsLeftOnTable !== undefined ? freshEntry.ballsLeftOnTable : null;
-    gamewinPendingTs = ts;
-    gamewinPendingOnClose = onClose;
-    gamewinMessage.textContent = summary;
-    gamewinDetails.innerHTML = "";
-    // Must be the game type that was actually just won (freshEntry's own
-    // gameType, frozen at win time), not state.currentGame.gameType - a
-    // rotation switch (see applyRotationIfDue, called in recordWin before
-    // this) has often already advanced that to the NEXT game type by the
-    // time this overlay opens, which previously made e.g. an 8-Ball win
-    // that rotates into 9-Ball incorrectly hide the balls-left field (and
-    // the reverse direction wrongly show it) - this dialog is about the
-    // game that just ended, not the one about to start.
-    var wonGameType = freshEntry ? freshEntry.gameType : state.currentGame.gameType;
-    // 9-Ball/10-Ball have no well-defined "balls left" concept (see
-    // LEADERBOARD_BALLS_LEFT_MAX_BY_GAME_TYPE) - no field to show at
-    // all for them, rather than one that's always meaningless to fill in.
-    if (BALLS_LEFT_HIDDEN_GAME_TYPES.indexOf(wonGameType) === -1) {
-      gamewinDetails.appendChild(buildBallsLeftRow());
-      if (freshEntry && typeof freshEntry.pointsGapAtWin === "number") {
-        var pointsHint = document.createElement("p");
-        pointsHint.className = "balls-left-points-hint";
-        pointsHint.textContent = T("ballsLeft.pointsGapHint", {
-          points: Math.round(freshEntry.pointsGapAtWin),
-          target: freshEntry.target,
-          balls: freshEntry.ballsLeftOnTable
+    saveState();
+    var changed = false;
+    Object.keys(PLAYER_STATS).forEach(function (key) {
+      (PLAYER_STATS[key].sessions || []).forEach(function (s) {
+        (s.games || []).forEach(function (g) {
+          if (g && g.ts === ts) {
+            Object.assign(g, fields);
+            changed = true;
+          }
         });
-        gamewinDetails.appendChild(pointsHint);
-      }
+      });
+    });
+    if (changed) savePlayerStatsToStorage(PLAYER_STATS);
+    if (currentStatsPlayerName) {
+      currentStatsSessions = getPlayerSessions(currentStatsPlayerName);
+      renderPlayerHistoryList(currentStatsSessions);
     }
-    gamewinDetails.appendChild(buildSkunkIndicator());
-    updateGamewinSkunkIndicator();
-    // Only a solo (non-"Play as Teams") win by someone with a club team
-    // gets the "count this win for the team" checkbox - see
-    // buildCountsForTeamRow.
-    gamewinCountsForTeamName =
-      freshEntry && !freshEntry.isTeam && freshEntry.winnerNames && freshEntry.winnerNames.length === 1
-        ? getPlayerContact(freshEntry.winnerNames[0]).clubTeam || null
-        : null;
-    gamewinCountsForTeamValue = !!(freshEntry && freshEntry.teamCredit);
-    if (gamewinCountsForTeamName) gamewinDetails.appendChild(buildCountsForTeamRow(gamewinCountsForTeamName));
-    gamewinOverlay.classList.remove("hidden");
-    // Focus the balls-left field so a number key works right away, with
-    // no click needed first - can only happen once the overlay is no
-    // longer .hidden (an element can't take focus while display:none).
-    // preventScroll: true - this overlay is position:fixed and already
-    // covers the whole viewport, so the browser's default focus-scroll
-    // behavior only ever yanked the page underneath (particularly
-    // noticeable with many players on screen, crediting a win from far
-    // down the list) back toward this input's old scroll position -
-    // there's nothing useful for it to scroll to.
-    var ballsLeftInput = gamewinDetails.querySelector(".balls-left-input");
-    if (ballsLeftInput) ballsLeftInput.focus({ preventScroll: true });
   }
 
-  function closeGameWinOverlay() {
-    // The just-credited game is still the front of gameHistory at this
-    // point (nothing else can run while this dialog is up) - patch the
-    // marker directly onto it so it's already there by the time any
-    // archiving (celebrateTournamentWin's exportAllPlayerStats) reads it.
-    if (state.gameHistory[0] && state.gameHistory[0].ts === gamewinPendingTs) {
-      if (gamewinBallsLeftValue !== null) {
-        state.gameHistory[0].ballsLeftOnTable = gamewinBallsLeftValue;
-        if (SKUNK_RACK_GAME_TYPES.indexOf(state.gameHistory[0].gameType) !== -1) {
-          state.gameHistory[0].skunk = gamewinBallsLeftValue === 7;
-        }
+  // "3–1" (the two at the table), or "Sam 3 · Bob 1 · Kim 0", or the teams'.
+  function winBannerScore(entry) {
+    if (entry.isTeam) {
+      return ["A", "B"].map(function (k) { return teamLabelLive(k) + " " + (state.teamWins[k] || 0); }).join(" · ");
+    }
+    var tally = entry.raceTally || {};
+    var names = Object.keys(tally);
+    var winner = (entry.winnerNames || [])[0];
+    if (names.length === 2 && winner && tally[winner] !== undefined) {
+      var other = names[0] === winner ? names[1] : names[0];
+      return tally[winner] + "–" + tally[other];
+    }
+    return names.map(function (n) { return n + " " + tally[n]; }).join(" · ");
+  }
+
+  function ballsLeftApplies(entry) {
+    return !!entry && BALLS_LEFT_HIDDEN_GAME_TYPES.indexOf(entry.gameType) === -1;
+  }
+
+  function renderWinBanner() {
+    var entry = winBanner.entry;
+    winBannerEl.innerHTML = "";
+    if (winBanner.undone) {
+      var u = document.createElement("div");
+      u.className = "win-banner-main";
+      u.textContent = T("banner.undone", { summary: winBanner.undone });
+      winBannerEl.appendChild(u);
+      return;
+    }
+    if (entry) {
+      var main = document.createElement("div");
+      main.className = "win-banner-main";
+      var n = entry.gameNumber || state.gamesPlayedCount;
+      main.textContent = T(entry.target > 1 && entry.unit === "rack" ? "banner.wonGame" : "banner.wonRack", { name: (entry.winnerNames || []).join(" & "), n: n }) +
+        (winBannerScore(entry) ? " · " + winBannerScore(entry) : "");
+      winBannerEl.appendChild(main);
+      var actions = document.createElement("div");
+      actions.className = "win-banner-actions";
+      var undo = document.createElement("button");
+      undo.type = "button";
+      undo.className = "btn btn-ghost win-banner-undo";
+      undo.id = "btn-win-banner-undo";
+      undo.textContent = T("banner.undo");
+      undo.disabled = !winBannerUndoable(entry);
+      undo.addEventListener("click", undoFromWinBanner);
+      actions.appendChild(undo);
+      if (ballsLeftApplies(entry)) {
+        var balls = document.createElement("button");
+        balls.type = "button";
+        balls.className = "btn btn-ghost win-banner-balls";
+        balls.id = "btn-win-banner-balls";
+        balls.textContent = entry.ballsLeftOnTable === null || entry.ballsLeftOnTable === undefined ? T("banner.ballsLeft") : T("banner.ballsLeftValue", { n: entry.ballsLeftOnTable });
+        balls.addEventListener("click", function () {
+          winBanner.ballsOpen = !winBanner.ballsOpen;
+          renderWinBanner();
+          restartWinBannerTimer();
+        });
+        actions.appendChild(balls);
       }
-      state.gameHistory[0].teamCredit = gamewinCountsForTeamValue ? gamewinCountsForTeamName : null;
+      var team = entry && !entry.isTeam && entry.winnerNames && entry.winnerNames.length === 1 ? getPlayerContact(entry.winnerNames[0]).clubTeam || null : null;
+      if (team) {
+        var chip = document.createElement("label");
+        chip.className = "win-banner-team";
+        var box = document.createElement("input");
+        box.type = "checkbox";
+        box.checked = !!entry.teamCredit;
+        box.addEventListener("change", function () {
+          patchGameEverywhere(entry.ts, { teamCredit: box.checked ? team : null });
+          restartWinBannerTimer();
+        });
+        chip.appendChild(box);
+        chip.appendChild(document.createTextNode(" " + T("gamewin.countsForTeamLabel", { team: team })));
+        actions.appendChild(chip);
+      }
+      if (entry.skunk) {
+        var skunk = document.createElement("span");
+        skunk.className = "win-banner-skunk";
+        skunk.textContent = T("skunk.indicator");
+        actions.appendChild(skunk);
+      }
+      winBannerEl.appendChild(actions);
+      if (winBanner.ballsOpen && ballsLeftApplies(entry)) winBannerEl.appendChild(buildWinBannerBallsStepper(entry));
+    }
+    winBanner.notices.forEach(function (notice) {
+      var line = document.createElement("div");
+      line.className = "win-banner-notice";
+      line.textContent = notice.text;
+      winBannerEl.appendChild(line);
+    });
+    var close = document.createElement("button");
+    close.type = "button";
+    close.className = "win-banner-close";
+    close.setAttribute("aria-label", T("common.close"));
+    close.textContent = "✕";
+    close.addEventListener("click", hideWinBanner);
+    winBannerEl.appendChild(close);
+  }
+
+  // − n + : unset until touched ("+" from unset is 0, "−" from 0 unsets)
+  function buildWinBannerBallsStepper(entry) {
+    var row = document.createElement("div");
+    row.className = "win-banner-balls-row";
+    var label = document.createElement("span");
+    label.textContent = T("ballsLeft.label");
+    var minus = document.createElement("button");
+    minus.type = "button";
+    minus.className = "balls-left-btn minus";
+    minus.textContent = "−";
+    minus.setAttribute("aria-label", T("ballsLeft.decrease"));
+    var value = document.createElement("span");
+    value.className = "win-banner-balls-value";
+    value.id = "win-banner-balls-value";
+    var plus = document.createElement("button");
+    plus.type = "button";
+    plus.className = "balls-left-btn plus";
+    plus.textContent = "+";
+    plus.setAttribute("aria-label", T("ballsLeft.increase"));
+    var current = entry.ballsLeftOnTable === undefined ? null : entry.ballsLeftOnTable;
+    value.textContent = current === null ? T("ballsLeft.unset") : String(current);
+    minus.disabled = current === null;
+    minus.addEventListener("click", function () { setWinBannerBallsLeft(current === null ? null : current === 0 ? null : current - 1); });
+    plus.addEventListener("click", function () { setWinBannerBallsLeft(current === null ? 0 : Math.min(15, current + 1)); });
+    row.appendChild(label);
+    row.appendChild(minus);
+    row.appendChild(value);
+    row.appendChild(plus);
+    return row;
+  }
+
+  function setWinBannerBallsLeft(n) {
+    var entry = winBanner.entry;
+    if (!entry) return false;
+    var fields = { ballsLeftOnTable: n };
+    if (SKUNK_RACK_GAME_TYPES.indexOf(entry.gameType) !== -1) fields.skunk = n === 7;
+    Object.assign(entry, fields);
+    patchGameEverywhere(entry.ts, fields);
+    renderWinBanner();
+    restartWinBannerTimer();
+    return true;
+  }
+
+  function restartWinBannerTimer() {
+    if (winBanner.hideTimer) clearTimeout(winBanner.hideTimer);
+    winBanner.hideTimer = null;
+    var sticky = winBanner.notices.some(function (n) { return n.sticky; });
+    if (!sticky) winBanner.hideTimer = setTimeout(hideWinBanner, WIN_BANNER_MS);
+  }
+
+  // Shown at once - unless it would land under a finger that tapped less
+  // than TAP_GUARD_MS ago: then a moment later.
+  function revealWinBanner() {
+    if (winBanner.revealTimer) clearTimeout(winBanner.revealTimer);
+    winBannerEl.classList.remove("hidden");
+    winBannerEl.classList.add("win-banner-pending");
+    var r = winBannerEl.getBoundingClientRect();
+    var since = Date.now() - lastTap.at;
+    var under = lastTap.x >= r.left && lastTap.x <= r.right && lastTap.y >= r.top && lastTap.y <= r.bottom;
+    // (a toast meanwhile goes under it - see body.win-banner-up)
+    document.body.classList.add("win-banner-up");
+    document.body.style.setProperty("--win-banner-bottom", Math.round(r.bottom) + "px");
+    var show = function () { winBannerEl.classList.remove("win-banner-pending"); };
+    if (under && since < TAP_GUARD_MS) winBanner.revealTimer = setTimeout(show, TAP_GUARD_MS - since);
+    else show();
+    restartWinBannerTimer();
+  }
+
+  function showWinBanner(entry, notices) {
+    winBanner.entry = entry;
+    winBanner.undone = null;
+    winBanner.ballsOpen = false;
+    winBanner.notices = notices || [];
+    renderWinBanner();
+    revealWinBanner();
+  }
+
+  // A notice of its own (no win: someone benched by hand, a time-up) -
+  // added to the banner showing, or a banner of its own.
+  function showBannerNotice(text, sticky) {
+    if (winBannerEl.classList.contains("hidden")) {
+      winBanner.entry = null;
+      winBanner.undone = null;
+      winBanner.notices = [];
+    }
+    winBanner.notices.push({ text: text, sticky: !!sticky });
+    renderWinBanner();
+    revealWinBanner();
+  }
+
+  function hideWinBanner() {
+    if (winBanner.hideTimer) clearTimeout(winBanner.hideTimer);
+    if (winBanner.revealTimer) clearTimeout(winBanner.revealTimer);
+    winBanner.hideTimer = winBanner.revealTimer = null;
+    winBannerEl.classList.add("hidden");
+    document.body.classList.remove("win-banner-up");
+    winBanner.entry = null;
+    winBanner.notices = [];
+    winBanner.undone = null;
+  }
+
+  function winBannerShowsGame() {
+    return !winBannerEl.classList.contains("hidden") && !!winBanner.entry;
+  }
+
+  // The rack shown can still be taken back: the session's last game, or
+  // the rack that just won a race (its snapshot still at hand).
+  function winBannerRaceSnapshotFor(entry) {
+    var snap = lastTournamentWinSnapshot;
+    return !!(snap && snap.gameHistory && snap.gameHistory[0] && snap.gameHistory[0].ts === entry.ts);
+  }
+  function winBannerUndoable(entry) {
+    return !!entry && ((state.gameHistory[0] && state.gameHistory[0].ts === entry.ts) || winBannerRaceSnapshotFor(entry));
+  }
+
+  // ↩ Undo: the rack shown is taken back at once (a race it won too - the
+  // race-won screen goes with it).
+  function undoFromWinBanner() {
+    var entry = winBanner.entry;
+    if (!entry) return;
+    if (winBannerRaceSnapshotFor(entry)) {
+      restoreTournamentWinSnapshot();
+      winBanner.undone = entry.summary;
+    } else if (state.gameHistory[0] && state.gameHistory[0].ts === entry.ts) {
+      var undone = retrogradeLastGame();
       saveState();
+      renderAll();
+      winBanner.undone = undone ? undone.summary : entry.summary;
+    } else {
+      return;
     }
-    gamewinOverlay.classList.add("hidden");
-    var onClose = gamewinPendingOnClose;
-    gamewinBallsLeftValue = null;
-    gamewinPendingTs = null;
-    gamewinPendingOnClose = null;
-    gamewinCountsForTeamName = null;
-    gamewinCountsForTeamValue = false;
-    if (onClose) onClose();
-  }
-
-  // Dismisses the win overlay after a quick-action (undo) has already
-  // changed the game it was celebrating out from under it - skips both the
-  // balls-left patch-back and the queued onClose chain (milestone/on-hill/
-  // game-change), since neither still applies.
-  function dismissGameWinOverlaySilently() {
-    gamewinOverlay.classList.add("hidden");
-    gamewinBallsLeftValue = null;
-    gamewinCountsForTeamName = null;
-    gamewinCountsForTeamValue = false;
-    gamewinPendingTs = null;
-    gamewinPendingOnClose = null;
+    winBanner.entry = null;
+    winBanner.notices = [];
+    renderWinBanner();
+    if (winBanner.hideTimer) clearTimeout(winBanner.hideTimer);
+    winBanner.hideTimer = setTimeout(hideWinBanner, 3000);
   }
 
   // A large, unmissable confirmation that a forced correction actually
@@ -7398,26 +7388,6 @@
 
   function closeForceResetNotice() {
     forceResetOverlay.classList.add("hidden");
-  }
-
-  // Lets a misclick be corrected right from the win popup instead of
-  // hunting for "Undo Last Win" elsewhere - undoes the exact win this
-  // dialog is celebrating (still the front of gameHistory at this point,
-  // same as undoLastWin's own precondition) and closes the dialog without
-  // running its queued follow-up.
-  function undoWinFromGameWinOverlay() {
-    var entry = state.gameHistory[0];
-    if (!entry || typeof entry === "string" || !entry.winnerIds) {
-      showToast(T("toast.noWinToUndo"));
-      return;
-    }
-    confirmModal(T("confirm.undoWin", { summary: entry.summary }), function () {
-      var undone = retrogradeLastGame();
-      saveState();
-      dismissGameWinOverlaySilently();
-      renderAll();
-      showForceResetNotice(T("forceReset.gameMessage", { summary: undone.summary }));
-    });
   }
 
   // Wipes every game recorded today - both the still-live session and any
@@ -7507,7 +7477,7 @@
     });
   }
 
-  // In-memory only (never persisted, same as gamewinPendingOnClose) -
+  // In-memory only (never persisted) -
   // captured fresh at the top of every celebrateTournamentWin call, and
   // only ever reachable through the "Undo this win" button living inside
   // the milestone overlay it was captured for, so a stale snapshot can
@@ -7578,13 +7548,44 @@
 
     btnMilestoneChallonge.classList.toggle("hidden", !challongeHasCredentials());
     btnMilestoneChallonge.disabled = false;
-    milestoneOverlay.classList.remove("hidden");
-    playTournamentChampionSound();
+    showMilestoneMoment(T("banner.raceWon", { names: names, target: target }));
   }
 
+  // A race or tournament won: its full-screen moment - once the finger
+  // that won it has lifted (nothing appears under a tap for TAP_GUARD_MS),
+  // closing itself after MILESTONE_AUTO_CLOSE_MS unless someone's using it
+  // (Undo, Push, Rematch...). Celebrations Off: just a line in the banner.
+  var MILESTONE_AUTO_CLOSE_MS = 6000;
+  var milestoneAutoCloseTimer = null;
+  function showMilestoneMoment(bannerText) {
+    if (celebrationsLevel() === "off") {
+      showBannerNotice(bannerText);
+      return;
+    }
+    afterTapGuard(function () {
+      milestoneOverlay.classList.remove("hidden");
+      playTournamentChampionSound();
+      if (milestoneAutoCloseTimer) clearTimeout(milestoneAutoCloseTimer);
+      milestoneAutoCloseTimer = setTimeout(function () {
+        milestoneAutoCloseTimer = null;
+        if (milestoneOverlay.classList.contains("hidden") || !confirmModalOverlay.classList.contains("hidden")) return;
+        closeMilestone();
+      }, MILESTONE_AUTO_CLOSE_MS);
+    });
+  }
+  // (someone using the screen: it stays)
+  milestoneOverlay.addEventListener("pointerdown", function () {
+    if (milestoneAutoCloseTimer) clearTimeout(milestoneAutoCloseTimer);
+    milestoneAutoCloseTimer = null;
+  });
+
   function closeMilestone() {
+    if (milestoneAutoCloseTimer) clearTimeout(milestoneAutoCloseTimer);
+    milestoneAutoCloseTimer = null;
     milestoneOverlay.classList.add("hidden");
     lastTournamentWinSnapshot = null;
+    // (the banner's Undo can't reach the race any more)
+    if (winBannerShowsGame()) renderWinBanner();
   }
 
   // Undoes the entire just-finished tournament's archiving/new-session
@@ -7596,25 +7597,32 @@
       showToast(T("toast.noWinToUndo"));
       return;
     }
-    var snapshot = lastTournamentWinSnapshot;
     confirmModal(T("confirm.undoTournamentWin"), function () {
-      state.gameHistory = snapshot.gameHistory;
-      state.playerWins = snapshot.playerWins;
-      state.teamWins = snapshot.teamWins;
-      state.teamMvpWins = snapshot.teamMvpWins;
-      state.gamesPlayedCount = snapshot.gamesPlayedCount;
-      state.currentGame = snapshot.currentGame;
-      PLAYER_STATS = snapshot.playerStats;
-      savePlayerStatsToStorage(PLAYER_STATS);
-
-      var undone = retrogradeLastGame();
-      saveState();
-      lastTournamentWinSnapshot = null;
-      milestoneOverlay.classList.add("hidden");
-      syncGameTypeUI();
-      renderAll();
+      var undone = restoreTournamentWinSnapshot();
       showForceResetNotice(T("forceReset.tournamentMessage", { summary: undone.summary }));
     });
+  }
+
+  // The race (or tournament) win taken back: the session as it was just
+  // before its last rack (the snapshot), then that rack undone too.
+  function restoreTournamentWinSnapshot() {
+    var snapshot = lastTournamentWinSnapshot;
+    state.gameHistory = snapshot.gameHistory;
+    state.playerWins = snapshot.playerWins;
+    state.teamWins = snapshot.teamWins;
+    state.teamMvpWins = snapshot.teamMvpWins;
+    state.gamesPlayedCount = snapshot.gamesPlayedCount;
+    state.currentGame = snapshot.currentGame;
+    PLAYER_STATS = snapshot.playerStats;
+    savePlayerStatsToStorage(PLAYER_STATS);
+
+    var undone = retrogradeLastGame();
+    saveState();
+    lastTournamentWinSnapshot = null;
+    closeMilestone();
+    syncGameTypeUI();
+    renderAll();
+    return undone || {};
   }
 
   function resetGameBalls() {
@@ -17512,6 +17520,7 @@
   function deviceSettingKeys() {
     return ["poolMasterCounter.theme.v1", "poolMasterCounter.language.v1", "poolMasterCounter.focusMode", "poolMasterCounter.leagueFocusMode",
       "poolMasterCounter.fargoEnabled.v1", "poolMasterCounter.queueSwapSticky.v1", "poolMasterCounter.dayReportFormat.v1",
+      "poolMasterCounter.celebrations.v1",
       "poolMasterCounter.challongePrivate.v1", "poolMasterCounter.challongeVenue.v1",
       "poolMasterCounter.dayReportAttachBackup.v1", "poolMasterCounter.dayReportAttachColorful.v1",
       "poolMasterCounter.keypadSpeechEnabled.v1", "poolMasterCounter.keypadSpeechVoicePreset.v1",
@@ -27007,19 +27016,20 @@
     updateCurrentGameSummary();
   }
 
-  // The win window's balls-left field, as its own stepper sets it.
+  // The win banner's balls left, as its own stepper sets it (false: a
+  // game with no balls left to count, like 9-Ball).
   function voiceSetBallsLeft(n) {
-    var input = gamewinDetails.querySelector(".balls-left-input");
-    var minus = gamewinDetails.querySelector(".balls-left-btn.minus");
-    if (!input || !minus) return false;
-    gamewinBallsLeftValue = Math.max(0, Math.min(15, n));
-    renderBallsLeftValue(input, minus);
-    persistBallsLeftLive();
-    return true;
+    if (!winBanner.entry || !ballsLeftApplies(winBanner.entry)) return false;
+    winBanner.ballsOpen = true;
+    return setWinBannerBallsLeft(Math.max(0, Math.min(15, n)));
+  }
+  function voiceBallsLeftNow() {
+    return winBanner.entry ? winBanner.entry.ballsLeftOnTable : null;
   }
 
+  // the win banner up, showing a game
   function voiceWinWindowOpen() {
-    return !gamewinOverlay.classList.contains("hidden");
+    return winBannerShowsGame();
   }
 
   function voiceExecute(cmd) {
@@ -27207,20 +27217,25 @@
         if (!voiceSetBallsLeft(cmd.ballsLeft)) {
           return ok(T("voice.done.win", { name: p.name }) + " · " + T("voice.err.ballsLeftHidden", { game: voiceGameLabel(state.gameHistory[0].gameType) }), "never");
         }
-        return ok(T("voice.done.winBallsLeft", { name: p.name, n: gamewinBallsLeftValue }), "never");
+        return ok(T("voice.done.winBallsLeft", { name: p.name, n: voiceBallsLeftNow() }), "never");
       }
       case "ballsLeft":
         if (!voiceWinWindowOpen()) return fail(T("voice.err.noWinWindow"));
         if (!voiceSetBallsLeft(cmd.n)) return fail(T("voice.err.ballsLeftHidden", { game: voiceGameLabel(state.gameHistory[0] ? state.gameHistory[0].gameType : state.currentGame.gameType) }));
-        return ok(T("voice.done.ballsLeft", { n: gamewinBallsLeftValue }));
+        return ok(T("voice.done.ballsLeft", { n: voiceBallsLeftNow() }));
       case "confirmWin":
         if (!voiceWinWindowOpen()) return fail(T("voice.err.noWinWindow"));
-        btnGamewinClose.click();
+        hideWinBanner();
         return { ok: true, text: null };
-      case "undoWin":
-        if (!voiceWinWindowOpen()) return fail(T("voice.err.noWinWindow"));
-        btnGamewinUndo.click(); // (asks first - "yes" / "no")
+      case "undoWin": {
+        if (!voiceWinWindowOpen() || !winBannerUndoable(winBanner.entry)) return fail(T("voice.err.noWinWindow"));
+        // (asks first - "yes" / "no": a misheard "undo" mustn't take a rack back)
+        var undoing = winBanner.entry;
+        confirmModal(T("confirm.undoWin", { summary: undoing.summary }), function () {
+          if (winBanner.entry === undoing) undoFromWinBanner();
+        });
         return { ok: true, text: null };
+      }
       case "answer":
         if (confirmModalOverlay.classList.contains("hidden")) return fail(T("voice.err.nothingToAnswer"));
         (cmd.yes ? btnConfirmModalOk : btnConfirmModalCancel).click();
@@ -35526,6 +35541,22 @@
   });
 
   btnMilestoneClose.addEventListener("click", closeMilestone);
+  // 🔁 Rematch: the same players, a new race (the new session's already
+  // set up - the screen just goes); 👥 New players: Quick Game.
+  document.getElementById("btn-milestone-rematch").addEventListener("click", closeMilestone);
+  document.getElementById("btn-milestone-new-players").addEventListener("click", function () {
+    closeMilestone();
+    document.getElementById("btn-quick-game").click();
+  });
+  // 🎉 Celebrations: Full / Quiet / Off (see celebrationsLevel)
+  (function () {
+    var select = document.getElementById("celebrations-select");
+    if (!select) return;
+    select.value = celebrationsLevel();
+    select.addEventListener("change", function () {
+      try { localStorage.setItem(CELEBRATIONS_KEY, select.value); } catch (e) { noteSaveFailure("celebrations setting", e); }
+    });
+  })();
   btnMilestoneUndo.addEventListener("click", undoTournamentWinFromMilestoneOverlay);
   btnMilestoneChallonge.addEventListener("click", function () {
     pushRaceToChallonge(lastTournamentWinSnapshot, btnMilestoneChallonge);
@@ -35539,11 +35570,7 @@
     if (e.target === tournamentMatchWinOverlay) closeTournamentMatchWinPopup();
   });
 
-  btnGamewinClose.addEventListener("click", closeGameWinOverlay);
-  btnGamewinUndo.addEventListener("click", undoWinFromGameWinOverlay);
-  gamewinOverlay.addEventListener("click", function (e) {
-    if (e.target === gamewinOverlay) closeGameWinOverlay();
-  });
+
 
   btnForceResetClose.addEventListener("click", closeForceResetNotice);
   forceResetOverlay.addEventListener("click", function (e) {

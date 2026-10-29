@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261028m">
+<link rel="stylesheet" href="css/style.css?v=20261028n">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -279,6 +279,14 @@
         <div class="checkbox-row checkbox-row-prominent setting-with-number">
           <label class="setting-with-number-label"><input type="checkbox" id="timed-tournament-enabled-checkbox"> <span data-i18n="gameSetup.timedTournamentEnable">⏰ Timed Tournament</span></label>
           <span class="setting-number hidden" id="timed-tournament-minutes-row"><span class="inline-number-template" data-template="gameSetup.timedEndsAfterInline" data-input="timed-tournament-minutes-input">— ends after {{n}} minutes</span><input type="number" id="timed-tournament-minutes-input" class="big-number-input" min="1" max="600" value="60" inputmode="numeric"></span>
+        </div>
+        <div class="row celebrations-row">
+          <label for="celebrations-select" data-i18n="celebrations.label">🎉 Celebrations</label>
+          <select id="celebrations-select">
+            <option value="full" data-i18n="celebrations.full">Full - sounds for everything</option>
+            <option value="quiet" data-i18n="celebrations.quiet">Quiet - the win sound, a big moment for a race won</option>
+            <option value="off" data-i18n="celebrations.off">Off - silent, just the banner</option>
+          </select>
         </div>
         <label class="checkbox-row timed-finish-rack-row hidden" id="timed-tournament-finish-row"><input type="checkbox" id="timed-tournament-finish-rack" checked> <span data-i18n="gameSetup.timedFinishRack">⏰ When time's up, finish the rack in play — the session ends at the next win</span></label>
         <div class="checkbox-row checkbox-row-prominent setting-with-number fair-race-row">
@@ -949,6 +957,8 @@
 </div>
 
 <div id="page-toast" class="page-toast hidden" aria-live="polite"></div>
+<!-- each rack's win, its Undo and every notice (on the hill, next player, game change) - never in the way (js/app.js showWinBanner) -->
+<div id="win-banner" class="win-banner hidden" role="status" aria-live="polite"></div>
 <div id="voice-live" class="voice-live hidden" aria-live="polite"></div>
 
 <div id="voice-sheet-overlay" class="help-overlay hidden">
@@ -961,19 +971,6 @@
   </div>
 </div>
 
-<div id="gamewin-overlay" class="gamewin-overlay hidden">
-  <div class="gamewin-card" id="gamewin-card">
-    <div class="gamewin-emoji">🎱🏆</div>
-    <h2 data-i18n="gamewin.title">Nice shot!</h2>
-    <p id="gamewin-message"></p>
-    <div id="gamewin-details" class="gamewin-details"></div>
-    <div class="gamewin-quick-actions">
-      <button type="button" id="btn-gamewin-undo" class="btn btn-ghost" data-i18n="gamewin.undoThisWin">↩ Undo this win</button>
-    </div>
-    <button type="button" id="btn-gamewin-close" class="btn btn-primary" data-i18n="milestone.nice">Nice!</button>
-  </div>
-</div>
-
 <div id="milestone-overlay" class="milestone-overlay hidden">
   <div class="milestone-card" id="milestone-card">
     <div class="milestone-emoji">🎉🏆🎉</div>
@@ -983,6 +980,10 @@
     <div class="gamewin-quick-actions">
       <button type="button" id="btn-milestone-undo" class="btn btn-ghost" data-i18n="gamewin.undoThisWin">↩ Undo this win</button>
       <button type="button" id="btn-milestone-challonge" class="btn btn-ghost hidden" data-i18n="challonge.racePushButton">☁️ Push this race to Challonge</button>
+    </div>
+    <div class="gamewin-quick-actions">
+      <button type="button" id="btn-milestone-rematch" class="btn btn-ghost" data-i18n="milestone.rematch">🔁 Rematch</button>
+      <button type="button" id="btn-milestone-new-players" class="btn btn-ghost" data-i18n="milestone.newPlayers">👥 New players</button>
     </div>
     <button type="button" id="btn-milestone-close" class="btn btn-primary" data-i18n="milestone.nice">Nice!</button>
   </div>
@@ -2730,13 +2731,13 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/pairing.js?v=20261028m"></script>
-<script src="js/big-store.js?v=20261028m"></script>
-<script src="js/mp4-clip.js?v=20261028m"></script>
-<script src="js/recording-consent.js?v=20261028m"></script>
-<script src="js/local-recorder.js?v=20261028m"></script>
-<script src="js/app.js?v=20261028m"></script>
-<script src="js/camera-client.js?v=20261028m"></script>
-<script src="js/voice.js?v=20261028m"></script>
+<script src="js/pairing.js?v=20261028n"></script>
+<script src="js/big-store.js?v=20261028n"></script>
+<script src="js/mp4-clip.js?v=20261028n"></script>
+<script src="js/recording-consent.js?v=20261028n"></script>
+<script src="js/local-recorder.js?v=20261028n"></script>
+<script src="js/app.js?v=20261028n"></script>
+<script src="js/camera-client.js?v=20261028n"></script>
+<script src="js/voice.js?v=20261028n"></script>
 </body>
 </html>

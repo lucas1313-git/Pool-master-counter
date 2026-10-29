@@ -10197,3 +10197,77 @@ body.has-not-saved-banner #app {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.85rem;
 }
+
+/* Each rack's win and every notice (js/app.js showWinBanner): at the top,
+   never covering the board's buttons for long, nothing to dismiss */
+.win-banner {
+  position: fixed;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1250;
+  width: min(640px, calc(100vw - 24px));
+  box-sizing: border-box;
+  background: var(--modal-surface);
+  color: var(--text);
+  border: 2px solid var(--accent);
+  border-radius: 14px;
+  padding: 10px 46px 10px 14px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: center;
+}
+/* (laid out, not yet shown: it would land under the finger that tapped) */
+.win-banner.win-banner-pending {
+  visibility: hidden;
+}
+.win-banner-main {
+  font-size: clamp(1.1rem, 3.6vw, 1.6rem);
+  font-weight: 800;
+}
+.win-banner-actions,
+.win-banner-balls-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+}
+.win-banner-actions .btn {
+  min-height: 40px;
+}
+.win-banner-notice {
+  font-weight: 700;
+  color: var(--accent);
+}
+.win-banner-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.win-banner-balls-value {
+  min-width: 3ch;
+  font-size: 1.4rem;
+  font-weight: 800;
+}
+.win-banner-team {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.win-banner-skunk {
+  font-weight: 800;
+}
+/* (a toast while the banner is up goes just under it, not over it) */
+body.win-banner-up .page-toast {
+  top: calc(var(--win-banner-bottom, 120px) + 8px);
+}

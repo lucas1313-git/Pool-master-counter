@@ -1,7 +1,7 @@
 // Races always end, played through the scoreboard:
-// - Race to 3: the page reloads with the final win's popup still open - the race closes and is
-//   archived then, exactly once (one race win in the stats, a fresh session; another reload changes
-//   nothing);
+// - Race to 3: the 3rd win closes and archives the race at once (one race win in the stats, a
+//   fresh session), its race-won screen after; a reload changes nothing; a page gone between the
+//   winning rack and the close (the saved "race closed" flag) closes it at start-up, once;
 // - a board left at 6 wins of a race to 5 (from before this fix) closes at start-up;
 // - the race lowered mid-match under someone's wins (Race to 5, Kim on 3, lowered to 3): it asks;
 //   Cancel puts the race back at 5 and nothing ends; OK ends it - "Kim won the tournament with 3
@@ -94,14 +94,32 @@ const readBig = (page, name) => page.evaluate((name) => new Promise((resolve) =>
   await winRack("Kim");
   await winRack("Kim");
   await winRack("Kim", true);
-  const popup = await visible("gamewin-overlay");
   let st = await state();
-  check("Race to 3: Kim's 3rd win, its popup open - the race is marked closed (saved)", popup && st.raceClosedPending && st.raceClosedPending.names === "Kim" && st.raceClosedPending.count === 3, { popup, pending: st.raceClosedPending });
+  let wins = await raceWins();
+  check("Race to 3: Kim's 3rd win closes the race at once - archived (Kim 1 race win), a fresh session, nothing left pending",
+    st.gameHistory.length === 0 && !st.raceClosedPending && wins.Kim === 1 && !wins.Jo, { games: st.gameHistory.length, pending: st.raceClosedPending, wins });
+  await sleep(600);
+  check("...its race-won screen: \"Kim won the tournament with 3 wins!\"", (await visible("milestone-overlay")) && /Kim won the tournament with 3 wins/.test(await headline()), await headline());
+  await reload();
+  wins = await raceWins();
+  check("...reloaded: nothing more (still 1 race win, no race-won screen again)", wins.Kim === 1 && !(await visible("milestone-overlay")), wins);
+
+  // ---- the page gone between the winning rack and the race closing ----
+  await fresh();
+  await page.evaluate(() => {
+    const players = [{ id: "k", name: "Kim", playing: true, balls: 0 }, { id: "j", name: "Jo", playing: true, balls: 0 }];
+    const now = Date.now();
+    const g = (i) => ({ ts: new Date(now - (5 - i) * 60000).toISOString(), gameType: "8ball", gameLabel: "8-Ball", target: 1, unit: "rack", winnerNames: ["Kim"], winnerIds: ["k"], opponentNames: ["Jo"], isTeam: false, summary: "Kim won", wonRace: i === 2, raceTarget: 3, raceCount: i === 2 ? 3 : 0 });
+    const games = [g(0), g(1), g(2)].reverse();
+    localStorage.setItem("poolMasterCounter.state.v2", JSON.stringify({ players, playerWins: { k: 3, j: 0 }, teamWins: {}, teamMvpWins: {}, gameHistory: games, gamesPlayedCount: 3,
+      currentGame: { gameType: "8ball", target: 1, unit: "rack", mode: "individual" }, raceToWinsTarget: 3, rotation: { enabled: false, order: [], every: 1 },
+      raceClosedPending: { ts: games[0].ts, names: "Kim", count: 3, target: 3 } }));
+  });
   await reload();
   st = await state();
-  let wins = await raceWins();
+  wins = await raceWins();
   const m1 = await visible("milestone-overlay");
-  check("...reloaded with the popup open: the race closes - \"Kim won the tournament with 3 wins!\", a fresh session, Kim 1 race win in the stats",
+  check("the page gone between the winning rack and the close (the saved flag): at start-up the race closes - \"Kim won the tournament with 3 wins!\", a fresh session, 1 race win",
     m1 && /Kim won the tournament with 3 wins/.test(await headline()) && st.gameHistory.length === 0 && !st.raceClosedPending && wins.Kim === 1 && !wins.Jo, { m1, games: st.gameHistory.length, pending: st.raceClosedPending, wins });
   if (OUT) await page.screenshot({ path: path.join(OUT, "closed_after_reload.png") });
   await page.click("#btn-milestone-close");
