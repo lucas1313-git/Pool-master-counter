@@ -2243,5 +2243,17 @@
   "events.breakWinner": "Gagnant",
   "events.breakAlternate": "Chacun son tour",
   "events.breakLoser": "Perdant",
-  "events.barAria": "Tour"
+  "events.barAria": "Tour",
+  "visualScoring.cameraRight": "📷 Caméra juste {{right}} fois sur {{total}} ce soir",
+  "cam.playAreaTitle": "Zone de jeu (facultatif)",
+  "cam.playAreaHint": "Touchez le sol tout autour, là où les joueurs se tiennent pour tirer : au moins 3 points. Seules les personnes debout à l’intérieur comptent alors comme à la table (en plus de la distance à la bande) : un canapé ou un bar à côté de la table est exclu.",
+  "cam.playAreaDraw": "✏️ Tracer la zone de jeu",
+  "cam.playAreaDone": "Terminé",
+  "cam.playAreaClear": "Retirer le contour",
+  "cam.playAreaTapping": "Points touchés : {{n}}. Touchez le sol là où les joueurs se tiennent, puis Terminé.",
+  "cam.playAreaSet": "Contour de {{n}} points : seules les personnes debout à l’intérieur comptent comme à la table.",
+  "cam.playAreaNone": "Pas de contour : toute personne assez près de la bande compte comme à la table.",
+  "cam.playAreaNotFloor": "La caméra ne sait pas placer ce point au sol : touchez plus près de la table.",
+  "cam.feetFarAway": "trop loin de la table",
+  "cam.outsidePlayArea": "hors de la zone de jeu"
 }

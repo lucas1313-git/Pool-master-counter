@@ -2243,5 +2243,17 @@
   "events.breakWinner": "Ganador",
   "events.breakAlternate": "Alterno",
   "events.breakLoser": "Perdedor",
-  "events.barAria": "Turno"
+  "events.barAria": "Turno",
+  "visualScoring.cameraRight": "📷 La cámara acertó {{right}} de {{total}} esta noche",
+  "cam.playAreaTitle": "Zona de juego (opcional)",
+  "cam.playAreaHint": "Toca el suelo alrededor, donde los jugadores se colocan para tirar: al menos 3 puntos. Entonces solo cuenta como en la mesa quien esté de pie dentro (además de la distancia a la banda), y un sofá o una barra junto a la mesa quedan fuera.",
+  "cam.playAreaDraw": "✏️ Dibujar la zona de juego",
+  "cam.playAreaDone": "Listo",
+  "cam.playAreaClear": "Quitar el contorno",
+  "cam.playAreaTapping": "Puntos marcados: {{n}}. Toca el suelo donde se colocan los jugadores y luego Listo.",
+  "cam.playAreaSet": "Contorno de {{n}} puntos: solo cuenta como en la mesa quien esté de pie dentro.",
+  "cam.playAreaNone": "Sin contorno: cualquiera a la distancia de la banda cuenta como en la mesa.",
+  "cam.playAreaNotFloor": "La cámara no puede situar ese punto en el suelo: toca más cerca de la mesa.",
+  "cam.feetFarAway": "demasiado lejos de la mesa",
+  "cam.outsidePlayArea": "fuera de la zona de juego"
 }

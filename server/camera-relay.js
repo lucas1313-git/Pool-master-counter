@@ -78,7 +78,7 @@
 //   feedback loops): a human confirming a real score for a player is
 //   stronger ground truth than the camera's own self-match, so camera.html
 //   uses this to label (or relabel) its current candidate appearance:
-//     { type: "turn_confirmed", player_name } (listener -> relay -> every "camera")
+//     { type: "turn_confirmed", player_name, picked: "hand" | "camera" } (listener -> relay -> every "camera")
 //   The scoreboard's number pad during play (7 = the selected player is
 //   seen, 8 = shooting, 0 = take back the last one) - the same as the
 //   camera's own Identify/Shooting/Undo buttons - and how it went:
@@ -275,7 +275,6 @@ function createCameraRelay(WebSocket) {
   // own listener connection, and so cameras only pay the cost of
   // streaming viewer-frame while someone's actually watching.
   var viewerSockets = new Set();
-  var viewerFrameCount = 0; // TEMPORARY DIAGNOSTIC
   var enrollments = loadEnrollments();
   // (stale samples go at start-up and twice a day after)
   function expireNow() {
@@ -367,7 +366,6 @@ function createCameraRelay(WebSocket) {
             viewerSockets.add(ws);
             if (wasEmpty) broadcastToCameras({ type: "hello-viewer-connected" });
           }
-          console.log("[DEBUG] hello role=" + ws.role + " | cameras=" + cameraSockets.size + " listeners=" + listenerSockets.size + " viewers=" + viewerSockets.size + (msg.lastCloseDebug ? " | PREV CLOSE: " + msg.lastCloseDebug : ""));
           return;
         }
 
@@ -559,7 +557,7 @@ function createCameraRelay(WebSocket) {
         }
 
         if (msg.type === "turn_confirmed" && ws.role === "listener" && msg.player_name) {
-          broadcastToCameras({ type: "turn_confirmed", player_name: msg.player_name });
+          broadcastToCameras({ type: "turn_confirmed", player_name: msg.player_name, picked: msg.picked === "hand" || msg.picked === "camera" ? msg.picked : undefined });
           return;
         }
         // Points games: the scorer switched the selected player - who the
@@ -649,33 +647,19 @@ function createCameraRelay(WebSocket) {
         // DOM, so no camera-side logic needed per feature, just this
         // passthrough. viewer-frame is the matching one-way stream back.
         if (msg.type === "viewer-click" && ws.role === "viewer" && msg.id) {
-          console.log("[DEBUG] viewer-click id=" + msg.id + " -> " + cameraSockets.size + " camera(s)");
           broadcastToCameras({ type: "viewer-click", id: msg.id });
           return;
         }
         if (msg.type === "viewer-change" && ws.role === "viewer" && msg.id) {
-          console.log("[DEBUG] viewer-change id=" + msg.id + " value=" + msg.value + " checked=" + msg.checked + " -> " + cameraSockets.size + " camera(s)");
           broadcastToCameras({ type: "viewer-change", id: msg.id, value: msg.value, checked: msg.checked });
           return;
         }
         if (msg.type === "viewer-canvas-tap" && ws.role === "viewer" && typeof msg.fx === "number" && typeof msg.fy === "number") {
-          console.log("[DEBUG] viewer-canvas-tap fx=" + msg.fx + " fy=" + msg.fy + " -> " + cameraSockets.size + " camera(s)");
           broadcastToCameras({ type: "viewer-canvas-tap", fx: msg.fx, fy: msg.fy });
           return;
         }
         if (msg.type === "viewer-frame" && ws.role === "camera") {
-          viewerFrameCount++;
-          if (viewerFrameCount === 1 || viewerFrameCount % 5 === 0) {
-            console.log("[DEBUG] viewer-frame #" + viewerFrameCount + " dataUrl bytes=" + (msg.dataUrl ? msg.dataUrl.length : 0) + " -> " + viewerSockets.size + " viewer(s) | dotModels=" + (msg.elements && msg.elements.dotModels ? msg.elements.dotModels.cls : "?") + " dotCamera=" + (msg.elements && msg.elements.dotCamera ? msg.elements.dotCamera.cls : "?"));
-          }
           broadcastToViewers({ type: "viewer-frame", dataUrl: msg.dataUrl, elements: msg.elements || {} });
-          return;
-        }
-
-        // TEMPORARY DIAGNOSTIC: free-form client-side debug text, logged
-        // server-side only - never broadcast anywhere.
-        if (msg.type === "client-debug") {
-          console.log("[CLIENT-DEBUG, role=" + ws.role + "] " + msg.text);
           return;
         }
       });

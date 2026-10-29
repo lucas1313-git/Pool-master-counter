@@ -625,6 +625,16 @@
     </div>
     <button id="recalibrateBtn" class="secondary" type="button" hidden data-i18n="cam.recalibrate">Re-calibrate</button>
 
+    <div class="empty-room-box" id="playAreaBox" hidden>
+      <div class="empty-room-title" data-i18n="cam.playAreaTitle">Playing area (optional)</div>
+      <div class="hint" data-i18n="cam.playAreaHint">Tap round the floor where players stand to shoot, at least 3 points. Then only people standing inside it count as at the table (as well as the rail distance), so a sofa or a bar next to the table is left out.</div>
+      <div class="progress-text" id="playAreaStatus"></div>
+      <button id="playAreaDrawBtn" type="button" data-i18n="cam.playAreaDraw">✏️ Draw the playing area</button>
+      <button id="playAreaDoneBtn" type="button" hidden data-i18n="cam.playAreaDone">Done</button>
+      <button id="playAreaCancelBtn" class="secondary" type="button" hidden data-i18n="common.cancel">Cancel</button>
+      <button id="playAreaClearBtn" class="secondary" type="button" hidden data-i18n="cam.playAreaClear">Remove the outline</button>
+    </div>
+
     <div class="empty-room-box">
       <div class="empty-room-title">Empty-room snapshot <button type="button" class="help-btn" data-help="emptyRoom" aria-label="What does this do?" data-i18n-aria-label="cam.whatDoesThisDo">?</button></div>
       <div class="hint">Take every ball and cue off the table, then press the button and step out of view: the camera remembers the room and the empty table, so it can tell balls from the cloth's lights and shadows, and players from the furniture behind them. It follows the daylight by itself; take it again if the camera is moved.</div>
@@ -857,16 +867,9 @@
   // shooter over someone sitting closer to the camera. Vendored the same
   // way as the old singlepose model (no CDN) - weights captured directly
   // from a loaded TFHub model instance, not hand-converted.
+  // The same model on every path - the phone, a desktop and same-device
+  // mode alike - so everyone in view has a pose and a track id.
   var MODEL_URL = "camera/models/movenet-multipose-lightning/model.json";
-  // TEMPORARY DIAGNOSTIC - SinglePose Thunder is a bigger, more accurate
-  // network than MultiPose Lightning, at the cost of only ever tracking one
-  // person (loses the "prefer the real shooter over someone sitting closer
-  // to the camera" selection above). Only wired in for same-device mode
-  // right now, to test whether the Lightning model's accuracy (not camera
-  // framing) is why a deep bend-over sometimes drops pose detection to zero
-  // entirely. Remove this and the model files under
-  // camera/models/movenet-singlepose-thunder/ once that's answered either way.
-  var MODEL_URL_THUNDER_DIAGNOSTIC = "camera/models/movenet-singlepose-thunder/model.json";
   var WS_PATH = "/ws-camera";
   // Set only when opened as an <iframe src="camera.html?embedded=1"> from
   // index.html (the same-device mode) - see the "Relay connection" section
@@ -1009,6 +1012,12 @@
   var calibrationStepText = document.getElementById("calibrationStepText");
   var cancelCalibrationBtn = document.getElementById("cancelCalibrationBtn");
   var recalibrateBtn = document.getElementById("recalibrateBtn");
+  var playAreaBox = document.getElementById("playAreaBox");
+  var playAreaStatus = document.getElementById("playAreaStatus");
+  var playAreaDrawBtn = document.getElementById("playAreaDrawBtn");
+  var playAreaDoneBtn = document.getElementById("playAreaDoneBtn");
+  var playAreaCancelBtn = document.getElementById("playAreaCancelBtn");
+  var playAreaClearBtn = document.getElementById("playAreaClearBtn");
 
   var cameraSelect = document.getElementById("cameraSelect");
   var thresholdInput = document.getElementById("thresholdInput");
@@ -1464,7 +1473,9 @@
     document.body.classList.toggle("wide", which === "roommap");
     if (which === "roommap") roomMapShown();
     if (which === "enroll" && enrollCheckPending) scheduleEnrollCheck(0);
-    overlayEl.classList.toggle("tappable", which === "calibrate" && calibrating);
+    if (which !== "calibrate") playAreaTaps = null; // (leaving the tab stops drawing)
+    overlayEl.classList.toggle("tappable", which === "calibrate" && (calibrating || !!playAreaTaps));
+    renderPlayAreaBox();
     renderEnrollLight();
   }
   tabRecognize.addEventListener("click", function () { showTab("recognize"); });
@@ -1499,15 +1510,11 @@
     return tf.setBackend("webgl").then(function () {
       return tf.ready();
     }).then(function () {
-      return isEmbedded
-        ? poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
-            modelType: poseDetection.movenet.modelType.SINGLEPOSE_THUNDER,
-            modelUrl: MODEL_URL_THUNDER_DIAGNOSTIC
-          })
-        : poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
-            modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING,
-            modelUrl: MODEL_URL
-          });
+      return poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
+        modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING,
+        modelUrl: MODEL_URL,
+        enableTracking: true
+      });
     }).then(function (d) {
       detector = d;
       modelsReady = true;
@@ -2036,13 +2043,10 @@
     }
   }
 
-  // TEMPORARY DIAGNOSTIC - logs directly to this page's own console (visible
-  // via DevTools regardless of relay/embedded mode) AND still relays via
-  // client-debug when a relay connection exists, so the same call site works
-  // for both the remote-viewer (server log) and same-device (console) setups.
+  // Why a shot did or didn't fire, step by step - to this page's own
+  // console, with the Debug overlay switched on only.
   function debugLog(text) {
-    try { console.log("[PMC-DEBUG] " + text); } catch (e) {}
-    try { send({ type: "client-debug", text: text }); } catch (e) {}
+    if (settings.debugOverlay) console.log("[PMC-DEBUG] " + text);
   }
 
   function handleIncomingMessage(msg) {
@@ -2072,7 +2076,7 @@
       // The scoreboard graveyarded a player - drop them from the local store.
       handleLocalMessage(msg);
     } else if (msg.type === "turn_confirmed" && msg.player_name) {
-      handleTurnConfirmed(msg.player_name);
+      handleTurnConfirmed(msg.player_name, msg.picked);
     } else if (msg.type === "expected-shooter") {
       noteExpectedShooter(msg.player_name || null);
     } else if (msg.type === "ball_feedback" && msg.kind) {
@@ -2149,11 +2153,9 @@
     } else if (msg.type === "hello-viewer-connected") {
       hasViewerConnected = true;
       if (enrollCheckPending) scheduleEnrollCheck(0);
-      try { send({ type: "client-debug", text: "hello-viewer-connected received, starting stream. dotModels=" + document.getElementById("dotModels").className + " dotCamera=" + document.getElementById("dotCamera").className }); } catch (e) {}
       startViewerFrameStream();
     } else if (msg.type === "hello-viewer-disconnected") {
       hasViewerConnected = false;
-      try { send({ type: "client-debug", text: "hello-viewer-disconnected received, stopping stream" }); } catch (e) {}
     } else if (msg.type === "viewer-frame") {
       applyViewerFrame(msg);
     }
@@ -2236,31 +2238,12 @@
           if (typeof snap.hidden === "boolean") el.hidden = snap.hidden;
         }
       } catch (e) {
-        // TEMPORARY DIAGNOSTIC: an exception applying one element used
-        // to silently abort the whole forEach, leaving every id after
-        // it (including the status dots, inserted last) stuck at
-        // whatever they were before.
-        try { send({ type: "client-debug", text: "applyViewerFrame EXCEPTION on id=" + id + ": " + e.message }); } catch (e2) {}
+        // (one element that can't be applied mustn't stop the rest - the
+        // status dots come last)
+        console.warn("[camera viewer] couldn't apply " + id + ": " + e.message);
       }
     });
-    // TEMPORARY DIAGNOSTIC: report what this page's OWN dots look like
-    // right after applying an incoming frame, throttled to roughly once
-    // every ~5s (viewerFrameApplyCount is only ever incremented here, on
-    // the viewer instance).
-    viewerFrameApplyCount++;
-    if (viewerFrameApplyCount === 1 || viewerFrameApplyCount % 3 === 0) {
-      try {
-        send({
-          type: "client-debug",
-          text: "applyViewerFrame #" + viewerFrameApplyCount + " - AFTER apply: dotModels=" + document.getElementById("dotModels").className +
-            " dotCamera=" + document.getElementById("dotCamera").className +
-            " | sent in payload: dotModels=" + (elements.dotModels ? elements.dotModels.cls : "MISSING") +
-            " dotCamera=" + (elements.dotCamera ? elements.dotCamera.cls : "MISSING")
-        });
-      } catch (e) {}
-    }
   }
-  var viewerFrameApplyCount = 0;
 
   // ---- Viewer mode boot: no local camera, no model, no detection loop -
   // every interactive element's click/change is forwarded to the real
@@ -2439,6 +2422,7 @@
   }
 
   function applyRemoteTap(fx, fy) {
+    if (playAreaTaps && !calibrating) { addPlayAreaTap(overlayToVideo(fx * overlayEl.width, fy * overlayEl.height)); return; }
     if (!calibrating) return;
     var overlayX = fx * overlayEl.width;
     var overlayY = fy * overlayEl.height;
@@ -2576,14 +2560,9 @@
     try { ws = new WebSocket(wsUrl()); } catch (e) { ws = null; scheduleReconnect(); return; }
     ws.addEventListener("open", function () {
       setStatus(dotRelay, labelRelay, "ok", isViewer ? "Remote viewer: connected" : "Relay: connected", "connected");
-      // TEMPORARY DIAGNOSTIC: reports the previous connection's close
-      // code/reason (if any) on the reconnect that follows it, so an
-      // unexpected disconnect shows up in the server's own log even
-      // though nobody can see this browser's console directly.
-      send({ type: "hello", role: isViewer ? "viewer" : "camera", lastCloseDebug: lastCloseDebugInfo });
+      send({ type: "hello", role: isViewer ? "viewer" : "camera" });
       reportCaptureSettings();
       reportCameraStatus();
-      lastCloseDebugInfo = null;
       send({ type: "enroll-get" });
       if (!isViewer && !hasLocalSettingsOverride) send({ type: "settings-request" });
       send({ type: "roster-request" });
@@ -2593,14 +2572,12 @@
       try { msg = JSON.parse(event.data); } catch (e) { return; }
       handleIncomingMessage(msg);
     });
-    ws.addEventListener("close", function (evt) {
+    ws.addEventListener("close", function () {
       ws = null;
-      lastCloseDebugInfo = "code=" + evt.code + " reason=" + JSON.stringify(evt.reason) + " clean=" + evt.wasClean;
       setStatus(dotRelay, labelRelay, "bad", isViewer ? "Remote viewer: disconnected" : "Relay: disconnected", "disconnected");
       scheduleReconnect();
     });
   }
-  var lastCloseDebugInfo = null;
 
   function initEmbeddedMode() {
     setStatus(dotRelay, labelRelay, "ok", "Same-device mode", "same-device");
@@ -4967,10 +4944,8 @@
     poses.forEach(function (pose) {
       var peek = quickStancePeek(pose.keypoints);
       if (!peek || !peek.standing) return;
-      if (calibration && peek.ankleMid) {
-        var real = applyHomography(calibration.h, peek.ankleMid.x, peek.ankleMid.y);
-        if (real && distanceToNearestRail(real, calibration.tableLength, calibration.tableWidth) > settings.railDistanceInches) return;
-      }
+      var feet = feetAtTable(peek.ankleMid);
+      if (feet && !feet.within) return;
       var scale = bodyScalePx(pose.keypoints);
       if (scale > 0) eligible.push({ pose: pose, scale: scale });
     });
@@ -5202,7 +5177,10 @@
     expectedShooter: function () { return expectedShooterName(); },
     expectedTieBreak: function (m) { return expectedTieBreak(m); },
     expectedFallback: function (m) { return expectedFallback(m); },
-    getShootingVia: function () { return shootingVia; }
+    getShootingVia: function () { return shootingVia; },
+    // at the table? (feetAtTable for a pose's feet) / who'd be picked
+    atTable: function (pose) { var peek = quickStancePeek(pose.keypoints); return peek ? feetAtTable(peek.ankleMid) : null; },
+    selectActive: function (poses) { return selectActivePose(poses); }
   };
 
   // ---- Multi-person selection (MultiPose returns up to 6 people) ----
@@ -5262,14 +5240,9 @@
     poses.forEach(function (pose) {
       var peek = quickStancePeek(pose.keypoints);
       if (!peek || !peek.standing) return;
-      var railDist = 0;
-      if (calibration && peek.ankleMid) {
-        var real = applyHomography(calibration.h, peek.ankleMid.x, peek.ankleMid.y);
-        if (real) {
-          railDist = distanceToNearestRail(real, calibration.tableLength, calibration.tableWidth);
-          if (railDist > settings.railDistanceInches) return; // standing, but not at the table
-        }
-      }
+      var feet = feetAtTable(peek.ankleMid);
+      if (feet && !feet.within) return; // standing, but not at the table
+      var railDist = feet ? feet.dist : 0;
       var bendSignal = peek.legAngleDeg === null ? peek.torsoAngleDeg : peek.torsoAngleDeg - peek.legAngleDeg;
       if (bendSignal > bestBendSignal || (bendSignal === bestBendSignal && railDist < bestRailDist)) {
         best = pose;
@@ -5711,6 +5684,13 @@
   // Close enough, and clearly closer than anyone else.
   function isConfidentMatch(m) {
     return !!m && m.distance <= m.threshold && m.clear;
+  }
+  // Sure enough to learn from: well inside the threshold, as well as clear
+  // of everyone else (the same margin a recognized shot learns at - see
+  // fireEvent).
+  var SURE_MATCH_FRACTION = 0.7;
+  function isSureMatch(m) {
+    return isConfidentMatch(m) && m.distance <= m.threshold * SURE_MATCH_FRACTION;
   }
 
   // The closest player who can be recognized right now (see
@@ -6731,7 +6711,85 @@
       calibrationStatusEl.textContent = "Not calibrated - the \"close enough to the table\" check is skipped (always passes) until you calibrate.";
       recalibrateBtn.hidden = true;
     }
+    renderPlayAreaBox();
     renderPlayerList();
+  }
+
+  // ---- Playing area ----
+  // An outline on the floor round the table, tapped on the picture: only
+  // people standing inside it count as at the table (see feetAtTable) -
+  // for a table with a sofa, a bar or a doorway close to one side, where
+  // the rail distance alone would take people sitting or passing there.
+  // Kept with the calibration, in the table's inches on the floor (so the
+  // zoom doesn't move it); a new calibration starts without one.
+  var playAreaTaps = null; // [[x, y] floor inches] while drawing
+  function playAreaPointAt(v) {
+    var m = cameraModel();
+    return m ? pointOnRay(m, v.x, v.y, -FELT_HEIGHT_IN) : null;
+  }
+  function renderPlayAreaBox() {
+    if (!playAreaBox) return;
+    playAreaBox.hidden = !calibration;
+    if (!calibration) { playAreaTaps = null; return; }
+    var drawing = !!playAreaTaps, area = calibration.playArea;
+    playAreaDrawBtn.hidden = drawing;
+    playAreaDoneBtn.hidden = !drawing;
+    playAreaDoneBtn.disabled = drawing && playAreaTaps.length < 3;
+    playAreaCancelBtn.hidden = !drawing;
+    playAreaClearBtn.hidden = drawing || !area;
+    playAreaStatus.textContent = drawing ? CT("cam.playAreaTapping", "Points tapped: {{n}}. Tap round the floor where players stand, then Done.", { n: playAreaTaps.length }) :
+      area ? CT("cam.playAreaSet", "Outline of {{n}} points: only people standing inside it count as at the table.", { n: area.length }) :
+      CT("cam.playAreaNone", "No outline: anyone within the rail distance counts as at the table.");
+    overlayEl.classList.toggle("tappable", drawing || calibrating);
+  }
+  function addPlayAreaTap(v) {
+    var p = playAreaPointAt(v);
+    if (!p) { playAreaStatus.textContent = CT("cam.playAreaNotFloor", "That's not the floor the camera can place - tap nearer the table."); return; }
+    playAreaTaps.push([Math.round(p.x), Math.round(p.y)]);
+    renderPlayAreaBox();
+  }
+  playAreaDrawBtn.addEventListener("click", function () {
+    if (!calibration || !cameraModel()) return;
+    if (calibrating) cancelCalibration();
+    playAreaTaps = [];
+    renderPlayAreaBox();
+  });
+  playAreaDoneBtn.addEventListener("click", function () {
+    if (!calibration || !playAreaTaps || playAreaTaps.length < 3) return;
+    calibration.playArea = playAreaTaps;
+    playAreaTaps = null;
+    saveCalibration();
+    logActivity("Playing area drawn (" + calibration.playArea.length + " points)");
+    renderPlayAreaBox();
+  });
+  playAreaCancelBtn.addEventListener("click", function () { playAreaTaps = null; renderPlayAreaBox(); });
+  playAreaClearBtn.addEventListener("click", function () {
+    if (!calibration) return;
+    delete calibration.playArea;
+    saveCalibration();
+    logActivity("Playing area removed");
+    renderPlayAreaBox();
+  });
+  function drawPlayArea() {
+    var pts = playAreaTaps || (calibration && calibration.playArea);
+    var m = pts && pts.length ? cameraModel() : null;
+    if (!m) return;
+    var px = pts.map(function (p) { var q = projectToPixel(m, [p[0], p[1], -m.up * FELT_HEIGHT_IN]); return q ? videoToOverlay(q.x, q.y) : null; }).filter(function (q) { return q; });
+    if (!px.length) return;
+    overlayCtx.save();
+    overlayCtx.strokeStyle = "#ffd23f";
+    overlayCtx.fillStyle = "rgba(255, 210, 63, 0.12)";
+    overlayCtx.lineWidth = 3;
+    if (playAreaTaps) overlayCtx.setLineDash([8, 6]);
+    overlayCtx.beginPath();
+    overlayCtx.moveTo(px[0].x, px[0].y);
+    for (var i = 1; i < px.length; i++) overlayCtx.lineTo(px[i].x, px[i].y);
+    if (!playAreaTaps || px.length >= 3) { overlayCtx.closePath(); overlayCtx.fill(); }
+    overlayCtx.stroke();
+    overlayCtx.setLineDash([]);
+    overlayCtx.fillStyle = "#ffd23f";
+    px.forEach(function (q) { overlayCtx.beginPath(); overlayCtx.arc(q.x, q.y, 5, 0, Math.PI * 2); overlayCtx.fill(); });
+    overlayCtx.restore();
   }
 
   function solveLinearSystem(A, b) {
@@ -6811,9 +6869,12 @@
     return { x: (invH.i11 * rX + invH.i12 * rY + invH.i13) / w, y: (invH.i21 * rX + invH.i22 * rY + invH.i23) / w };
   }
 
-  // Perpendicular distance (inches) from a real-world table-relative point
-  // to the nearest of the table's 4 rails - 0 or negative means the point
-  // projects onto/over the table bed itself (a strong shooting-position signal).
+  // How far (inches) a real-world table-relative point is from the table:
+  // 0 on or over the bed, otherwise straight to the nearest rail or corner.
+  // (It used to be the signed distance to the nearest rail line - negative
+  // outside the table, so "further than the rail limit" never turned
+  // anyone away.) side: the rail it's nearest (inside the table), or the
+  // one it's furthest beyond (outside).
   // Side indices: 0 = y=0 rail, 1 = y=max rail, 2 = x=0 rail, 3 = x=max
   // rail - tied to calibration corner order (see finishCalibration/
   // detectTableAuto), not camera-relative "near/far" - those don't mean
@@ -6829,10 +6890,50 @@
     for (var i = 1; i < distances.length; i++) {
       if (distances[i] < distances[bestIdx]) bestIdx = i;
     }
-    return { side: bestIdx, distance: distances[bestIdx] };
+    var dx = Math.max(0, -realPoint.x, realPoint.x - xMax), dy = Math.max(0, -realPoint.y, realPoint.y - yMax);
+    return { side: bestIdx, distance: Math.sqrt(dx * dx + dy * dy) };
   }
   function distanceToNearestRail(realPoint, tableLength, tableWidth) {
     return nearestRailSide(realPoint, tableLength, tableWidth).distance;
+  }
+
+  // Where someone's feet stand, in the table's inches: along the camera's
+  // line of sight down to ankle height (see solveCameraModel), not onto the
+  // felt's own plane - the feet are about 27 inches below the felt, so that
+  // put anyone on the far side well inside the table and anyone on the near
+  // side further out than they were. Without a camera model that puts the
+  // table's corners back where they were tapped, the felt's plane as before.
+  // null: uncalibrated, no feet, or out past the room.
+  var FEET_MODEL_MAX_FIT_PX = 12;
+  function feetOnFloor(ankleMid) {
+    if (!calibration || !calibration.h || !ankleMid) return null;
+    var m = cameraModel();
+    if (m && m.fitPx <= Math.max(FEET_MODEL_MAX_FIT_PX, m.W * 0.02)) return pointOnRay(m, ankleMid.x, ankleMid.y, ANKLE_ABOVE_FELT_IN);
+    return applyHomography(calibration.h, ankleMid.x, ankleMid.y);
+  }
+  // Inside the playing area drawn on the Table tab (any point counts when
+  // none is drawn).
+  function insidePlayArea(real) {
+    var area = calibration && calibration.playArea;
+    if (!area || area.length < 3) return true;
+    var inside = false;
+    for (var i = 0, j = area.length - 1; i < area.length; j = i++) {
+      var xi = area[i][0], yi = area[i][1], xj = area[j][0], yj = area[j][1];
+      if ((yi > real.y) !== (yj > real.y) && real.x < (xj - xi) * (real.y - yi) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+  }
+  // Is someone with feet at ankleMid at the table? { real, dist, inArea,
+  // within } - within: no further than railDistanceInches from it, and
+  // inside the playing area if one is drawn. null when it can't be told
+  // (uncalibrated, feet not seen) - the callers don't gate on it then.
+  function feetAtTable(ankleMid) {
+    if (!calibration || !calibration.h || !ankleMid) return null;
+    var real = feetOnFloor(ankleMid);
+    if (!real) return { real: null, dist: Infinity, inArea: false, within: false };
+    var dist = distanceToNearestRail(real, calibration.tableLength, calibration.tableWidth);
+    var inArea = insidePlayArea(real);
+    return { real: real, dist: dist, inArea: inArea, within: dist <= settings.railDistanceInches && inArea };
   }
 
   function currentTableSize() {
@@ -6852,7 +6953,9 @@
     calibrateTappingEl.hidden = true;
     calibrating = false;
     calibrationTaps = [];
+    playAreaTaps = null;
     overlayEl.classList.remove("tappable");
+    renderPlayAreaBox();
   }
   showManualCalibrationBtn.addEventListener("click", function () {
     calibrateSetupEl.hidden = true;
@@ -6862,6 +6965,7 @@
   recalibrateBtn.addEventListener("click", showCalibrateSetup);
 
   function startCalibration() {
+    playAreaTaps = null;
     calibrating = true;
     calibrationTaps = [];
     lastAutoDetectDebug = null; // avoid a stale Auto-Detect outline overlapping fresh manual taps
@@ -6887,7 +6991,7 @@
   cancelCalibrationBtn.addEventListener("click", cancelCalibration);
 
   overlayEl.addEventListener("click", function (evt) {
-    if (!calibrating) return;
+    if (!calibrating && !playAreaTaps) return;
     var rect = overlayEl.getBoundingClientRect();
     // Expressed as 0-1 fractions of the displayed canvas, then handed to
     // applyRemoteTap - the exact same conversion a remote tap's fx/fy
@@ -7773,8 +7877,7 @@
   // the frame) and turns up again along the way they were going is still
   // the same player - same track id, same name - not a stranger to be
   // recognized from scratch. The pose model's own tracker forgets a person
-  // after a second, or as soon as they move too far between two looks, and
-  // SinglePose (same-device mode) has no tracker at all; every pose's .id
+  // after a second, or as soon as they move too far between two looks; every pose's .id
   // is replaced with its path's id ("w1", "w2"... - never the same as the
   // pose model's numbers), so everything keyed by track id (visit tallies,
   // idle names, table presence, the last shot) carries across the gap.
@@ -8312,11 +8415,8 @@
   }
 
   function withinRailDistance(analysis) {
-    if (!calibration || !analysis.ankleMid) return true; // uncalibrated - don't gate on it
-    var real = applyHomography(calibration.h, analysis.ankleMid.x, analysis.ankleMid.y);
-    if (!real) return true;
-    var dist = distanceToNearestRail(real, calibration.tableLength, calibration.tableWidth);
-    return dist <= settings.railDistanceInches;
+    var feet = feetAtTable(analysis.ankleMid);
+    return !feet || feet.within; // (uncalibrated, or no feet seen - don't gate on it)
   }
 
   // Best-effort check that a bend is actually directed toward the table,
@@ -8341,7 +8441,10 @@
     if (!calibration || !analysis.ankleMid) return true;
     var real = applyHomography(calibration.h, analysis.ankleMid.x, analysis.ankleMid.y);
     if (!real) return true;
-    var nearest = nearestRailSide(real, calibration.tableLength, calibration.tableWidth);
+    // (which side they're at from where the feet really are - the felt's
+    // plane puts far-side feet inside the table; the way into the table
+    // on the picture, below, from the felt's own mapping near the feet)
+    var nearest = nearestRailSide(feetOnFloor(analysis.ankleMid) || real, calibration.tableLength, calibration.tableWidth);
     // Side 0 is the y=0 rail (the table is at +y from it), 1 the y=max
     // rail, 2 the x=0 rail, 3 the x=max rail - whether the feet project
     // just outside the rail (players on the camera's side) or just inside
@@ -8375,8 +8478,7 @@
   // Where the player's feet are, in inches on the table's own axes (see
   // calibration), or null when uncalibrated or the feet aren't visible.
   function tablePositionFor(analysis) {
-    if (!calibration || !analysis || !analysis.ankleMid) return null;
-    var real = applyHomography(calibration.h, analysis.ankleMid.x, analysis.ankleMid.y);
+    var real = analysis ? feetOnFloor(analysis.ankleMid) : null;
     return real ? { x: Math.round(real.x), y: Math.round(real.y) } : null;
   }
 
@@ -8442,14 +8544,24 @@
     return !!entry && alignedInfo(entry).filter(function (i) { return isPressedSample(i) && isTodaySample(i); }).length >= PLENTY_PRESSED_SAMPLES;
   }
 
-  // Gameplay-driven auto-enrollment: a human just confirmed a real score
-  // for `name` - stronger ground truth than the camera's own self-match,
-  // so this labels (or relabels, if the camera's own candidate guessed a
-  // different name) the current candidate appearance, independent of
+  // Gameplay-driven auto-enrollment: a human just scored for `name`.
+  // picked: "hand" - the operator chose that player (a number key, their
+  // card, a voice command); "camera" - they scored whoever the camera had
+  // just picked. The current candidate (whoever stood at the table in the
+  // last few seconds) is learned as `name` only when that's safe: picked
+  // by hand and the candidate's looks don't clearly say someone else, or
+  // its looks already settled on `name` beyond doubt. (It used to label the
+  // candidate with whoever was scored, so a wrong camera pick that got
+  // scored taught the camera its own mistake.) Independent of
   // fireEvent/player_up/the debounce timer - this must never call
   // fireEvent, to avoid an accidental double broadcast.
-  function handleTurnConfirmed(name) {
+  function handleTurnConfirmed(name, picked) {
     if (!candidate || Date.now() - candidate.lastSeenAt > TURN_CONFIRM_GRACE_MS) return;
+    var sure = !!candidate.sureName && normalizeNameKey(candidate.sureName) === normalizeNameKey(name);
+    if (!sure && (picked !== "hand" || candidate.sureName)) {
+      logActivity(name + " scored - not learned (" + (candidate.sureName ? "the player in view looks like " + candidate.sureName : "picked by the camera, and its looks aren't sure") + ")");
+      return;
+    }
     var isFirstSample = !Object.keys(enrollments).some(function (key) {
       return (enrollments[key].displayName || key).toLowerCase() === name.toLowerCase();
     });
@@ -8462,7 +8574,7 @@
       send({ type: "enroll-add", player_name: name, descriptor: candidate.descriptor, info: info });
     }
     notifyEnrollmentUpdated(name);
-    logActivity(name + " confirmed by scoring");
+    logActivity(name + " confirmed by scoring (" + (sure ? "recognized" : "picked by hand") + ")");
   }
 
   // ---- Player out of view at the table ----
@@ -8860,6 +8972,9 @@
         if (matchName && !visitName) nameWalkingPath(analysis.trackId, matchName, "recognized standing");
         candidate = {
           name: candidateName,
+          // the name its own looks settle beyond doubt (the only one a
+          // shot or a score may teach it - see handleTurnConfirmed)
+          sureName: matchName && isSureMatch(match) ? matchName : null,
           certainty: visitName ? visitCertainty(analysis.trackId, now) : matchName ? matchCertainty(match) : expectedName ? EXPECTED_CERTAINTY : candidateName ? PATH_CERTAINTY : 0,
           descriptor: analysis.descriptor,
           emb: analysis.emb || null,
@@ -8912,7 +9027,11 @@
           // another player shoots" per explicit request.
           if (activeManualAttribution && candidate.name !== activeManualAttribution.name) activeManualAttribution = null;
           debugLog("FIRE via upright-candidate name=" + candidate.name + " (" + via + ")");
-          fireEvent(candidate.name, candidate.descriptor, 0, via, "upright", candidate.emb, candidate.certainty);
+          // (its looks are learned only when they settled this name beyond
+          // doubt - not a name from the turn order, a walking path or a
+          // visit's tally)
+          var learnIt = candidate.sureName === candidate.name;
+          fireEvent(candidate.name, learnIt ? candidate.descriptor : null, 0, via, "upright", learnIt ? candidate.emb : null, candidate.certainty);
         } else {
           // Fallback: no fresh *named* upright identification (either
           // nothing stable was seen, or it was stable but unmatched) -
@@ -9091,6 +9210,7 @@
     drawOutOfViewTags();
     if (settings.showRoomTags && !calibrating) drawRoomTags();
     if (calibrating) drawCalibrationTaps();
+    if (!calibrating && (playAreaTaps || !calibratePanel.hidden || settings.debugOverlay)) drawPlayArea();
     if (!settings.debugOverlay) {
       // The Table tab always shows what the calibration came out as, so
       // it can be checked against the real table right after tapping.
@@ -9141,18 +9261,17 @@
   // rejecting a real shot (the exact scenario the "too far from any
   // calibrated rail" diagnostic log line is about).
   function drawRailDistanceMarker(analysis) {
-    if (!calibration || !analysis.ankleMid) return;
-    var real = applyHomography(calibration.h, analysis.ankleMid.x, analysis.ankleMid.y);
-    if (!real) return;
-    var dist = distanceToNearestRail(real, calibration.tableLength, calibration.tableWidth);
-    var within = dist <= settings.railDistanceInches;
+    var feet = feetAtTable(analysis.ankleMid);
+    if (!feet) return;
+    var within = feet.within;
     var p = videoToOverlay(analysis.ankleMid.x, analysis.ankleMid.y);
     overlayCtx.strokeStyle = "#ffa500";
     overlayCtx.lineWidth = 2;
     overlayCtx.beginPath();
     overlayCtx.arc(p.x, p.y, 8, 0, Math.PI * 2);
     overlayCtx.stroke();
-    var text = dist.toFixed(1) + "in from rail (limit " + settings.railDistanceInches + "in)";
+    var text = !feet.real ? CT("cam.feetFarAway", "too far from the table") :
+      feet.dist.toFixed(1) + "in from rail (limit " + settings.railDistanceInches + "in)" + (feet.inArea ? "" : " - " + CT("cam.outsidePlayArea", "outside the playing area"));
     overlayCtx.font = "13px sans-serif";
     var tw = overlayCtx.measureText(text).width;
     overlayCtx.fillStyle = "rgba(0,0,0,0.6)";
@@ -9242,7 +9361,7 @@
           lastRawPoseConfidence = null;
         }
 
-        debugLog("detect posesFound=" + (poses ? poses.length : 0) +
+        if (settings.debugOverlay) debugLog("detect posesFound=" + (poses ? poses.length : 0) +
           " activePoseSelected=" + !!pose +
           " analysisOk=" + !!analysis +
           " rejectedAsStatic=" + lastRejectedAsStatic +
@@ -9250,10 +9369,9 @@
           (cueCtx ? " cue=" + Math.round(cueTrack.cue ? cueTrack.cue.lengthIn : 0) + "in holder=" + (cueTrack.holder ? cueTrack.holder.how : "none") : "") +
           (analysis ? " torsoAngle=" + analysis.torsoAngleDeg.toFixed(1) + " legAngle=" + (analysis.legAngleDeg === null ? "null" : analysis.legAngleDeg.toFixed(1)) + " effBend=" + effectiveBendAngle(analysis).toFixed(1) : "") +
           (analysis && calibration && analysis.ankleMid ? (function () {
-            var real = applyHomography(calibration.h, analysis.ankleMid.x, analysis.ankleMid.y);
-            if (!real) return " railDist=noHomography";
-            var dist = distanceToNearestRail(real, calibration.tableLength, calibration.tableWidth);
-            return " railDist=" + dist.toFixed(1) + "in limit=" + settings.railDistanceInches + "in within=" + (dist <= settings.railDistanceInches);
+            var feet = feetAtTable(analysis.ankleMid);
+            if (!feet.real) return " railDist=farAway";
+            return " railDist=" + feet.dist.toFixed(1) + "in limit=" + settings.railDistanceInches + "in inArea=" + feet.inArea + " within=" + feet.within;
           })() : (analysis ? " railDist=noAnkles(freePass)" : "")));
 
         var matchLabel = null;
@@ -9402,8 +9520,8 @@
     var W = videoEl.videoWidth, H = videoEl.videoHeight;
     if (!calibration || !calibration.h || !W || !H) return null;
     var c = cameraModelCache || {}; // (asked before this part of the page has run: nothing cached yet)
-    if (c.cal !== calibration || c.w !== W || c.h !== H) {
-      cameraModelCache = c = { cal: calibration, w: W, h: H, model: solveCameraModel(calibration.h, W, H) };
+    if (c.cal !== calibration || c.hom !== calibration.h || c.w !== W || c.h !== H) {
+      cameraModelCache = c = { cal: calibration, hom: calibration.h, w: W, h: H, model: solveCameraModel(calibration.h, W, H) };
       setTimeout(renderSidesWarning, 0);
     }
     return c.model;

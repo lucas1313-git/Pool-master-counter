@@ -465,3 +465,31 @@ Not part of the app - helpers for testing and for running this machine's own cop
   banner's Break & run / Golden break tags, "🎱 Jo breaks", ⋯ › Jo concedes; 15-ball with three at
   48-40-30, +2 ends the frame at 50-40-30; the player page's innings, high run, break & run %,
   racks won on the break and safeties. `node tests/probe_events.js [screenshot dir]`.
+- **test_rail_distance.js** — "Max distance from the rail" (P25), no browser, camera.html's own
+  functions: 0 on or over the table, the straight-line distance to the nearest rail or corner
+  outside it (never negative - the old signed distance let everyone through); the side it's at;
+  feet down the camera's line of sight to the floor (a synthetic camera, its homography from the
+  table's corners): 12 in beyond the far rail is 12 in out, where the felt's plane put those feet
+  over the table; at the table = within the limit and inside the playing area if one is drawn.
+  `node tests/test_rail_distance.js`.
+- **test_camera_learning.js** — what a score teaches the camera (P25), no browser, camera.html's
+  handleTurnConfirmed: a score for the camera's own pick teaches nothing unless the player in view
+  already matched that name beyond doubt; a player picked by hand is learned (first sample or one
+  more) unless the player in view is clearly someone else; an older scoreboard that doesn't say
+  who picked - only a sure match. `node tests/test_camera_learning.js`.
+- **probe_camera_calls.js** — the camera's picks on an iPad board (P25), its own server on 4280:
+  a score for the camera's pick says "picked: camera", one after a number key "picked: hand";
+  Visual Scoring shows "📷 Camera right 2 of 3 tonight" from the corrections (then 3 of 4), kept
+  after a reload, another day's count not shown. `node tests/probe_camera_calls.js [shots]`.
+- **probe_play_area.js** — who's at the table with a calibrated camera (P25): a synthetic camera
+  and synthetic people through camera.html?embedded=1 - 100 in off the near rail isn't at the
+  table; 12 in beyond the far rail is, 40 in isn't (feet on the floor); Table tab › ✏️ Draw the
+  playing area, four taps, Done - kept with the calibration; then the player off the left-out end
+  doesn't count (and isn't picked), until the outline is removed.
+  `node tests/probe_play_area.js http://localhost:4235/ [shots]` against a test server.
+- **probe_real_detector.js** — the real pose model on a real photo or clip (P25), same-device mode
+  (?embedded=1) with a fake camera: MultiPose finds two or more people in one look, each with the
+  model's own track id and a walking-path id, the same ids look after look (the old single-pose
+  model found one, no id). With a clip (needs ffmpeg): people per look, ids, and how often a
+  person kept their id. Use only footage of people who agreed to it.
+  `node tests/probe_real_detector.js http://localhost:4235/ <photo or clip> [shots]`.

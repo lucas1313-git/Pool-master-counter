@@ -45,10 +45,11 @@
   // rather than a bare one-time call at load, since script load order
   // between this file and js/app.js's IIFE isn't guaranteed - the bridge
   // may not exist yet the instant this file runs.
-  function sendTurnConfirmed(playerName) {
+  // picked: "hand" | "camera" - see js/app.js's cameraPickedPlayerId.
+  function sendTurnConfirmed(playerName, picked) {
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
     try {
-      ws.send(JSON.stringify({ type: "turn_confirmed", player_name: playerName }));
+      ws.send(JSON.stringify({ type: "turn_confirmed", player_name: playerName, picked: picked }));
     } catch (e) {}
   }
 

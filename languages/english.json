@@ -2243,5 +2243,17 @@
   "events.breakWinner": "Winner",
   "events.breakAlternate": "In turn",
   "events.breakLoser": "Loser",
-  "events.barAria": "Turn"
+  "events.barAria": "Turn",
+  "visualScoring.cameraRight": "📷 Camera right {{right}} of {{total}} tonight",
+  "cam.playAreaTitle": "Playing area (optional)",
+  "cam.playAreaHint": "Tap round the floor where players stand to shoot, at least 3 points. Then only people standing inside it count as at the table (as well as the rail distance), so a sofa or a bar next to the table is left out.",
+  "cam.playAreaDraw": "✏️ Draw the playing area",
+  "cam.playAreaDone": "Done",
+  "cam.playAreaClear": "Remove the outline",
+  "cam.playAreaTapping": "Points tapped: {{n}}. Tap round the floor where players stand, then Done.",
+  "cam.playAreaSet": "Outline of {{n}} points: only people standing inside it count as at the table.",
+  "cam.playAreaNone": "No outline: anyone within the rail distance counts as at the table.",
+  "cam.playAreaNotFloor": "That's not the floor the camera can place - tap nearer the table.",
+  "cam.feetFarAway": "too far from the table",
+  "cam.outsidePlayArea": "outside the playing area"
 }

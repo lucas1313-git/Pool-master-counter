@@ -3493,6 +3493,47 @@
   // points game the scorer switching the selected player means that
   // player is up next - a strong hint for who comes to the table.
   var selectingForCamera = false; // (the camera's own pick - not sent back to it)
+  // The player the camera last picked (handleCameraShot), until a player is
+  // picked by hand: a score for them tells the camera "scored your pick",
+  // not "this is who it was" - see camera.html's handleTurnConfirmed.
+  var cameraPickedPlayerId = null;
+
+  // How the camera's picks went tonight, for Visual Scoring: a pick is
+  // right unless the operator corrected it before the camera's next one -
+  // picked someone else by hand, or (in a points game, where a score says
+  // who was shooting) scored someone else.
+  var CAMERA_CALLS_KEY = "poolMasterCounter.cameraCalls.v1";
+  var cameraCall = null; // { id } - the pick not judged yet
+  function cameraCallsTonight() {
+    var day = localDateStrFromTs(Date.now()), c = null;
+    try { c = JSON.parse(localStorage.getItem(CAMERA_CALLS_KEY) || "null"); } catch (e) {}
+    return c && c.day === day && c.total >= 0 ? c : { day: day, right: 0, total: 0 };
+  }
+  function judgeCameraCall(right) {
+    if (!cameraCall) return;
+    cameraCall = null;
+    var c = cameraCallsTonight();
+    c.total += 1;
+    if (right) c.right += 1;
+    try { localStorage.setItem(CAMERA_CALLS_KEY, JSON.stringify(c)); } catch (e) {}
+    renderCameraAccuracy();
+  }
+  function noteCameraPick(id) {
+    judgeCameraCall(true); // (the one before it went uncorrected)
+    cameraCall = { id: id };
+    cameraPickedPlayerId = id;
+  }
+  function noteHandPick(id) {
+    cameraPickedPlayerId = null;
+    if (cameraCall && cameraCall.id !== id) judgeCameraCall(false);
+  }
+  function renderCameraAccuracy() {
+    var el = document.getElementById("camera-accuracy-line");
+    if (!el) return;
+    var c = cameraCallsTonight();
+    el.classList.toggle("hidden", !c.total);
+    el.textContent = c.total ? T("visualScoring.cameraRight", { right: c.right, total: c.total }) : "";
+  }
   function tellCameraExpectedShooter(playerId) {
     if (quickCounterMode || state.currentGame.unit === "rack" || !window.PMCCameraBridge || !window.PMCCameraBridge.sendCameraCommand) return;
     var p = getPlayer(playerId);
@@ -3514,6 +3555,7 @@
       resetCurrentRun();
     }
     keypadSelectedPlayerId = targetId;
+    if (!selectingForCamera) noteHandPick(targetId);
     // switched here (not by the camera's own pick), in a points game: the
     // camera expects them at the table next
     if (!selectingForCamera && targetId !== previousPlayerId) tellCameraExpectedShooter(targetId);
@@ -10246,10 +10288,14 @@
     // for this pass.
     // A camera-originated ball credit is excluded too - it is the
     // camera's own guess, not a human confirming who's at the table.
+    // (picked: "camera" when this is the camera's own pick being scored -
+    // the camera then learns from it only if it was already sure)
+    var picked = player.id === cameraPickedPlayerId ? "camera" : "hand";
+    if (delta > 0 && !fromCamera && cameraCall && !quickCounterMode && state.currentGame.unit !== "rack") judgeCameraCall(player.id === cameraCall.id);
     if (delta > 0 && !fromCamera && cameraTurnConfirmedCallbacks.length) {
       cameraTurnConfirmedCallbacks.forEach(function (cb) {
         try {
-          cb(player.name);
+          cb(player.name, picked);
         } catch (e) {}
       });
     }
@@ -20010,7 +20056,7 @@
       PLAYER_NAME_TRANSLATIONS_KEY, CAMERA_ENROLLMENTS_KEY, REMOVED_PLAYERS_KEY, GRAVEYARD_PLAYERS_KEY, MERGED_INTO_KEY,
       RESET_SNAPSHOTS_KEY, REPORT_ARCHIVE_KEY, REPORT_ARCHIVE_DELETED_KEY, PLAYER_DAILY_BEST_RUNS_KEY, CHALLONGE_DAY_PUSHES_KEY,
       CHALLONGE_RACE_PUSHES_KEY, TOURNAMENT_KEY, TOURNAMENT_RESULTS_KEY, LEAGUES_KEY, LAST_SYNC_IMPORT_KEY,
-      LAST_SYNC_IMPORT_NAME_KEY, DRIVE_FOLDER_LINK_KEY, BIG_STORE_GEN_KEY].concat(deviceSettingKeys());
+      LAST_SYNC_IMPORT_NAME_KEY, DRIVE_FOLDER_LINK_KEY, BIG_STORE_GEN_KEY, CAMERA_CALLS_KEY].concat(deviceSettingKeys());
   }
 
   // (everything but videos goes in a backup: the camera page's room plan,
@@ -37765,6 +37811,9 @@
     var already = id === window.PMCCameraBridge.getSelectedPlayerId();
     var voice = cameraShotVoiceAllowed(certainty);
     if (!already) window.PMCCameraBridge.selectPlayer(id, voice);
+    // (already selected by hand: still the operator's pick)
+    if (!already || cameraPickedPlayerId === id) noteCameraPick(id);
+    else { judgeCameraCall(true); cameraCall = { id: id }; }
     window.PMCCameraBridge.announceShotFired(name, certainty);
     noteCameraShot("Shot: " + name + (already ? " - already selected" : " - selected") +
       (typeof certainty === "number" ? " (" + Math.round(certainty * 100) + "% sure" + (voice ? ")" : ", not spoken)") : ""));
@@ -39543,6 +39592,8 @@
   wireCollapsiblePanel("game-setup-panel", "btn-toggle-game-setup-panel");
   wireCollapsiblePanel("players-panel", "btn-toggle-players-panel");
   wireCollapsiblePanel("visual-scoring-panel", "btn-toggle-visual-scoring-panel");
+  renderCameraAccuracy();
+  btnToggleVisualScoringPanel.addEventListener("click", renderCameraAccuracy);
   wireCollapsiblePanel("camera-setup-panel", "btn-toggle-camera-setup-panel");
   wireCollapsiblePanel("capture-settings-panel", "btn-toggle-capture-settings-panel");
   wireCollapsiblePanel("camera-debug-options-row", "btn-toggle-camera-debug-options");
@@ -40109,7 +40160,7 @@
     renderBackupReminder();
   });
   document.addEventListener("visibilitychange", function () {
-    if (document.visibilityState === "visible") renderBackupReminder();
+    if (document.visibilityState === "visible") { renderBackupReminder(); renderCameraAccuracy(); }
   });
   document.getElementById("btn-home-screen-tip-ok").addEventListener("click", function () {
     try { localStorage.setItem(HOME_SCREEN_TIP_KEY, "1"); } catch (e) {}
@@ -40530,10 +40581,10 @@
   // transports. Registered directly (not through a retry-poll loop like
   // camera-client.js needs) since this runs in the same IIFE, after
   // PMCCameraBridge above is already defined - no load-order uncertainty.
-  window.PMCCameraBridge.onTurnConfirmed(function (playerName) {
+  window.PMCCameraBridge.onTurnConfirmed(function (playerName, picked) {
     if (sameDeviceCameraOverlay.classList.contains("hidden")) return;
     try {
-      sameDeviceCameraIframe.contentWindow.postMessage({ type: "turn_confirmed", player_name: playerName }, location.origin);
+      sameDeviceCameraIframe.contentWindow.postMessage({ type: "turn_confirmed", player_name: playerName, picked: picked }, location.origin);
     } catch (e) {}
   });
 })();

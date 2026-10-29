@@ -2243,5 +2243,17 @@
   "events.breakWinner": "Panalo",
   "events.breakAlternate": "Salitan",
   "events.breakLoser": "Talo",
-  "events.barAria": "Turn"
+  "events.barAria": "Turn",
+  "visualScoring.cameraRight": "📷 Tama ang camera nang {{right}} sa {{total}} ngayong gabi",
+  "cam.playAreaTitle": "Lugar ng laro (opsyonal)",
+  "cam.playAreaHint": "I-tap ang sahig sa paligid kung saan tumatayo ang mga manlalaro para tumira, kahit 3 punto. Ang mga nakatayo lang sa loob nito ang ituturing na nasa mesa (pati ang layo sa riles), kaya hindi kasama ang sofa o bar sa tabi ng mesa.",
+  "cam.playAreaDraw": "✏️ Iguhit ang lugar ng laro",
+  "cam.playAreaDone": "Tapos na",
+  "cam.playAreaClear": "Alisin ang balangkas",
+  "cam.playAreaTapping": "Mga puntong na-tap: {{n}}. I-tap ang sahig kung saan tumatayo ang mga manlalaro, saka Tapos na.",
+  "cam.playAreaSet": "Balangkas na may {{n}} punto: ang nakatayo lang sa loob ang ituturing na nasa mesa.",
+  "cam.playAreaNone": "Walang balangkas: sinumang nasa loob ng layo sa riles ay ituturing na nasa mesa.",
+  "cam.playAreaNotFloor": "Hindi matukoy ng camera ang puntong iyan sa sahig - mag-tap nang mas malapit sa mesa.",
+  "cam.feetFarAway": "masyadong malayo sa mesa",
+  "cam.outsidePlayArea": "nasa labas ng lugar ng laro"
 }

@@ -2243,5 +2243,17 @@
   "events.breakWinner": "贏家",
   "events.breakAlternate": "輪流",
   "events.breakLoser": "輸家",
-  "events.barAria": "輪到"
+  "events.barAria": "輪到",
+  "visualScoring.cameraRight": "📷 今晚鏡頭認啱 {{right}} 次（共 {{total}} 次）",
+  "cam.playAreaTitle": "打波範圍（可選）",
+  "cam.playAreaHint": "喺地下圍住球枱撳，撳球員企位打波嘅地方，最少 3 點。之後只有企喺範圍入面嘅人先當係喺枱邊（仲要計埋離枱邊幾遠），咁球枱隔籬嘅梳化或者吧枱就唔會計。",
+  "cam.playAreaDraw": "✏️ 畫打波範圍",
+  "cam.playAreaDone": "完成",
+  "cam.playAreaClear": "刪除範圍",
+  "cam.playAreaTapping": "已撳 {{n}} 點。喺球員企嘅地方撳，撳完揀完成。",
+  "cam.playAreaSet": "範圍有 {{n}} 點：只有企喺入面嘅人先當係喺枱邊。",
+  "cam.playAreaNone": "未畫範圍：喺離枱邊距離以內嘅人都當係喺枱邊。",
+  "cam.playAreaNotFloor": "鏡頭計唔到嗰點喺地下邊度，撳近啲球枱。",
+  "cam.feetFarAway": "離球枱太遠",
+  "cam.outsidePlayArea": "喺打波範圍外面"
 }
