@@ -27895,6 +27895,10 @@
   // among themselves before the next winners-bracket round's losers arrive),
   // and sets up the grand final once both bracket champions are known.
   function advanceBracket(t) {
+    if (t.bracketVersion === 2) {
+      advanceBracketV2(t);
+      return;
+    }
     var changed = true;
     while (changed) {
       changed = false;
@@ -28012,31 +28016,78 @@
     }
   }
 
-  // Shuffles the field and builds the empty winners-bracket rounds shared
-  // by both tournament formats — round 1 seeded with the standard spread
-  // (1v4/2v3, etc.) so any bye lands away from the strongest seeds,
-  // every later round starting empty until winners advance into it.
-  // Unlike a classic "pad straight to the next power of two" bracket,
-  // rounds here are only ever sized to fit however many real entrants
-  // (or, from round 2 on, real winners) actually exist - at most one
-  // match anywhere ever needs a bye (see the pendingBye rounds below),
-  // instead of a small or awkward field (9 players, or even 10) dumping
-  // most of the round-1 byes needed to reach a power of two all at
-  // once and letting several of them land on each other as an
-  // apparently-already-decided later round.
-  // seededOrder (optional): a real 1..N ranking supplied by the organizer
-  // (see getTournamentSeeds) instead of the default random draw. Either
-  // way, seedOrder below is what actually spreads seed 1/2/3/4... onto
-  // opposite halves of the bracket so they can't meet early - that spread
-  // happens the same way whether the ranking behind it is random or real.
-  // pairAdjacent (optional): the opposite of that spread - used for
-  // "Match Similar Ratings" seeding, where seededOrder is already
-  // strongest-to-weakest and the whole point is for adjacent ranks to
-  // play each other round 1 instead of being kept apart. Byes in this
-  // mode go to the weakest players (paired against nobody) rather than
-  // the standard convention of rewarding the strongest with a bye - a
-  // bye here would let a top player dodge the very round-1 gauntlet this
-  // mode exists to create.
+  // Version 2 (the standard layout): every match already exists, each side
+  // knowing where it comes from - a winner moves to its next winners match by
+  // position, a winners match's loser to the losers match that names it, a
+  // losers match's winner to the one that names it (none: the losers final -
+  // the losers-bracket champion). Then the grand final, as before.
+  function advanceBracketV2(t) {
+    var lbAll = [];
+    t.lbRounds.forEach(function (round) {
+      round.forEach(function (m) {
+        lbAll.push(m);
+      });
+    });
+    function feed(kind, from, name) {
+      var fed = false;
+      lbAll.forEach(function (m) {
+        if (m.srcA && m.srcA.kind === kind && m.srcA.id === from.id) {
+          m.a = name;
+          fed = true;
+        }
+        if (m.srcB && m.srcB.kind === kind && m.srcB.id === from.id) {
+          m.b = name;
+          fed = true;
+        }
+      });
+      return fed;
+    }
+    var changed = true;
+    while (changed) {
+      changed = false;
+      t.wb.forEach(function (round, ri) {
+        round.forEach(function (m, mi) {
+          if (m.winner === null || m.collected) return;
+          m.collected = true;
+          changed = true;
+          if (ri + 1 < t.wb.length) {
+            var next = t.wb[ri + 1][Math.floor(mi / 2)];
+            if (mi % 2 === 0) next.a = m.winner;
+            else next.b = m.winner;
+          } else {
+            t.wbChampion = m.winner;
+            // (two players: no losers bracket - the final's loser is its champion)
+            if (t.format === "double" && !t.lbRounds.length && m.loser) t.lbChampion = m.loser;
+          }
+          if (m.loser) feed("wbLoser", m, m.loser);
+        });
+      });
+      lbAll.forEach(function (m) {
+        if (m.winner === null || m.collected) return;
+        m.collected = true;
+        changed = true;
+        if (!feed("lbWinner", m, m.winner)) t.lbChampion = m.winner;
+      });
+      if (t.format === "double" && t.wbChampion && t.lbChampion && t.grandFinal.length === 0) {
+        t.grandFinal.push(createBracketMatch(t.wbChampion, t.lbChampion, "Grand Final"));
+        changed = true;
+      }
+    }
+    if (t.format === "single" && t.wbChampion && !t.champion) t.champion = t.wbChampion;
+  }
+
+  // Shuffles the field (or takes the organizer's / the ratings' order) and
+  // builds the winners bracket the standard way: a power-of-two draw, so the
+  // byes it needs (the next power of two minus the players) all fall in
+  // round 1, at most one each - to the top seeds, placed by seedOrder so
+  // seed 1 and seed 2 can only meet in the final. Every later round is full.
+  // (Before, rounds were sized to the players left, which let one player's
+  // bye be followed by more free passes - a walk into the final.)
+  // seededOrder (optional): a real 1..N ranking (getTournamentSeeds) instead
+  // of the random draw. pairAdjacent: "Match Similar Ratings" - seededOrder
+  // is strongest first and neighbours play each other in round 1 (the
+  // strongest face off at once, as that mode promises), the byes going to
+  // the lowest-rated; the winners of neighbouring matches meet next.
   function buildWinnersBracketRounds(playerNames, seededOrder, pairAdjacent) {
     var shuffled;
     if (seededOrder) {
@@ -28051,35 +28102,21 @@
       }
     }
     var n = shuffled.length;
-    var slots;
+    var size = nextPow2(Math.max(2, n));
+    var byes = size - n;
+    var slots = [];
     if (pairAdjacent) {
-      // Adjacent-rated players pair off in order; the single weakest
-      // (last, since shuffled/seededOrder is already strongest-to-
-      // weakest here) gets the bye when n is odd - same principle as
-      // byes always going to the weakest player in this mode, just
-      // needing at most one now instead of however many it used to take
-      // to pad all the way to a power of two.
-      var byeCount = n % 2;
-      slots = shuffled.slice(0, n - byeCount);
-      if (byeCount) slots.push(shuffled[n - 1], null);
+      var playing = shuffled.slice(0, n - byes);
+      playing.forEach(function (name) {
+        slots.push(name);
+      });
+      shuffled.slice(n - byes).forEach(function (name) {
+        slots.push(name, null);
+      });
     } else {
-      // Same spread seedOrder already used to keep strong seeds apart
-      // across the draw (1 vs the bottom seed, 2 vs the next-from-
-      // bottom, etc.) - computed against the next power of two as
-      // always, but now only to DERIVE that spread order, not to size
-      // the round: the phantom seed numbers beyond n are dropped
-      // instead of becoming real bye slots, so pairing what's left two
-      // at a time needs at most one true bye (whoever's odd one out),
-      // not "however many seeds it takes to reach a power of two".
-      var spread = seedOrder(nextPow2(n))
-        .filter(function (s) {
-          return s <= n;
-        })
-        .map(function (s) {
-          return shuffled[s - 1];
-        });
-      slots = spread.slice();
-      if (n % 2 === 1) slots.push(null);
+      seedOrder(size).forEach(function (seed) {
+        slots.push(seed <= n ? shuffled[seed - 1] : null);
+      });
     }
 
     var wb = [];
@@ -28088,48 +28125,112 @@
       r1.push(createBracketMatch(slots[k], slots[k + 1], "Winners R1"));
     }
     wb.push(r1);
-
-    // Every later round is sized to fit however many winners the round
-    // before it can actually produce - ceil(), not an exact half, since
-    // an odd match count (itself possible whenever the round before IT
-    // had an odd number of real entrants) leaves one winner with nobody
-    // to pair against yet. That leftover match is flagged pendingBye
-    // (instead of resolved immediately the way round 1's bye already is
-    // above) because - unlike round 1 - who actually lands in it isn't
-    // known until its one real feeder match has been played;
-    // advanceBracket resolves it the instant that happens. This is the
-    // whole reason a small or awkwardly-sized field no longer needs to
-    // be padded out to the next power of two up front: at most one
-    // match anywhere ever needs a bye, rather than dumping every
-    // "missing" slot into round 1 alone.
     while (wb[wb.length - 1].length > 1) {
-      var prev = wb[wb.length - 1];
       var cur = [];
-      for (var m = 0; m < prev.length; m += 2) {
-        var match = createBracketMatch(null, null, "Winners R" + (wb.length + 1));
-        if (m + 1 >= prev.length) match.pendingBye = true;
-        cur.push(match);
+      for (var m = 0; m < wb[wb.length - 1].length; m += 2) {
+        cur.push(createBracketMatch(null, null, "Winners R" + (wb.length + 1)));
       }
       wb.push(cur);
     }
-
-    // Round-1 byes are structural (a slot was never filled because there
-    // weren't enough real players) — resolve them once, explicitly, here.
-    // Every other empty slot elsewhere in the bracket just means "not
-    // decided yet" and must never be treated as a bye.
-    wb[0].forEach(function (m) {
-      if ((m.a === null) !== (m.b === null)) {
-        m.winner = m.a !== null ? m.a : m.b;
-        m.loser = null;
+    // a bye resolves at once: its one player goes through
+    wb[0].forEach(function (match) {
+      if ((match.a === null) !== (match.b === null)) {
+        match.winner = match.a !== null ? match.a : match.b;
+        match.loser = null;
       }
     });
+    return { shuffled: shuffled, size: size, wb: wb };
+  }
 
-    return { shuffled: shuffled, size: nextPow2(n), wb: wb };
+  // The losers bracket of a double elimination, laid out in full from the
+  // start (the standard template): round 1 pairs the winners-round-1 losers;
+  // then, for each later winners round, one round where its losers drop in
+  // against the losers-bracket survivors, and one where the survivors play
+  // each other - down to the losers final (against the winners final's
+  // loser). Drop-ins come in reversed, then half-swapped, alternately, so
+  // nobody meets the player who just beat them, and everyone's path is
+  // known ("if you lose, you go to..."). The longest path is the standard
+  // 2 x (rounds - 1) matches. Slots a round-1 bye leaves empty are worked
+  // out here and taken out: a match with one real side passes that side
+  // straight on, one with none disappears.
+  // Each match keeps where its two sides come from (srcA/srcB: a winners
+  // match's loser, or a losers match's winner) - advanceBracketV2 fills them
+  // in - and feederA/feederB point at those matches (by id) for drawing.
+  function buildLosersBracketRounds(wb) {
+    var EMPTY = null;
+    // (only round 1 has byes - a later winners match always has a loser)
+    function wbLoser(match, firstRound) {
+      return firstRound && (match.a === null || match.b === null) ? EMPTY : { kind: "wbLoser", match: match };
+    }
+    function dropOrder(list, dropRound) {
+      if (list.length < 2) return list.slice();
+      if (dropRound % 2 === 1) return list.slice().reverse();
+      var half = list.length / 2;
+      return list.slice(half).concat(list.slice(0, half));
+    }
+    // a source through any taken-out match: what it really carries
+    function through(src) {
+      while (src && src.kind === "lbWinner" && src.match.passThrough !== undefined) src = src.match.passThrough;
+      return src;
+    }
+    var rounds = [];
+    if (wb.length < 2) return rounds;
+    var first = [];
+    for (var i = 0; i < wb[0].length; i += 2) first.push({ srcA: wbLoser(wb[0][i], true), srcB: wbLoser(wb[0][i + 1], true) });
+    rounds.push(first);
+    for (var r = 1; r < wb.length; r++) {
+      var drops = dropOrder(wb[r], r);
+      var minor = rounds[rounds.length - 1].map(function (prev, idx) {
+        return { srcA: { kind: "lbWinner", match: prev }, srcB: wbLoser(drops[idx], false) };
+      });
+      rounds.push(minor);
+      if (r < wb.length - 1) {
+        var major = [];
+        for (var q = 0; q < minor.length; q += 2) major.push({ srcA: { kind: "lbWinner", match: minor[q] }, srcB: { kind: "lbWinner", match: minor[q + 1] } });
+        rounds.push(major);
+      }
+    }
+    // take out the matches a bye leaves empty or one-sided, round by round
+    var kept = [];
+    rounds.forEach(function (round) {
+      var real = [];
+      round.forEach(function (m) {
+        m.srcA = through(m.srcA);
+        m.srcB = through(m.srcB);
+        if (!m.srcA || !m.srcB) {
+          m.passThrough = m.srcA || m.srcB || EMPTY;
+          return;
+        }
+        real.push(m);
+      });
+      if (real.length) kept.push(real);
+    });
+    return kept.map(function (round, ri) {
+      return round.map(function (m) {
+        var match = createBracketMatch(null, null, "Losers R" + (ri + 1));
+        m.built = match;
+        return match;
+      });
+    }).map(function (round, ri) {
+      kept[ri].forEach(function (m, mi) {
+        var match = round[mi];
+        ["A", "B"].forEach(function (side) {
+          var src = m["src" + side];
+          var from = src.kind === "wbLoser" ? src.match : src.match.built;
+          match["src" + side] = { kind: src.kind, id: from.id };
+          match["feeder" + side] = { id: from.id, tag: from.tag };
+        });
+      });
+      return round;
+    });
   }
 
   function buildDoubleEliminationBracket(playerNames, gameType, target, raceTo, fairRace, seededOrder, pairAdjacent) {
     var built = buildWinnersBracketRounds(playerNames, seededOrder, pairAdjacent);
     var t = {
+      // (2: the standard draw and the full losers template - advanceBracketV2;
+      // a tournament started before keeps its own logic, advanceBracket)
+      bracketVersion: 2,
       format: "double",
       createdAt: new Date().toISOString(),
       gameType: gameType,
@@ -28139,7 +28240,7 @@
       players: built.shuffled,
       size: built.size,
       wb: built.wb,
-      lbRounds: [],
+      lbRounds: buildLosersBracketRounds(built.wb),
       lbWaiting: [],
       lbNextWbRoundToDrop: 0,
       wbChampion: null,
@@ -28161,6 +28262,7 @@
   function buildSingleEliminationBracket(playerNames, gameType, target, raceTo, fairRace, seededOrder, pairAdjacent) {
     var built = buildWinnersBracketRounds(playerNames, seededOrder, pairAdjacent);
     var t = {
+      bracketVersion: 2,
       format: "single",
       createdAt: new Date().toISOString(),
       gameType: gameType,
@@ -29132,9 +29234,12 @@
   }
 
   function findWbPosition(t, match) {
-    if (!t.wb) return null;
+    if (!t.wb || !match) return null;
     for (var ri = 0; ri < t.wb.length; ri++) {
       var mi = t.wb[ri].indexOf(match);
+      if (mi === -1) {
+        for (var k = 0; k < t.wb[ri].length; k++) if (t.wb[ri][k].id === match.id) mi = k;
+      }
       if (mi !== -1) return { ri: ri, mi: mi };
     }
     return null;
@@ -29718,6 +29823,23 @@
       div.appendChild(row);
     });
 
+    // Double elimination: where this match's loser goes ("If you lose:
+    // Losers R2") - known from the start in the standard layout.
+    if (t.format === "double" && t.bracketVersion === 2 && !match.winner && match.a && match.b && findWbPosition(t, match)) {
+      var dropTo = null;
+      t.lbRounds.forEach(function (round) {
+        round.forEach(function (lm) {
+          if ((lm.srcA && lm.srcA.kind === "wbLoser" && lm.srcA.id === match.id) || (lm.srcB && lm.srcB.kind === "wbLoser" && lm.srcB.id === match.id)) dropTo = lm;
+        });
+      });
+      if (dropTo) {
+        var ifLose = document.createElement("div");
+        ifLose.className = "tournament-match-iflose";
+        ifLose.textContent = T("tournament.ifYouLose", { round: matchRoundLabel(t, dropTo) });
+        div.appendChild(ifLose);
+      }
+    }
+
     // A multi-table event needs to tell players where to actually go
     // play, not just that they're up - only worth showing at all once
     // there's more than one table to choose between, and only for a
@@ -29916,6 +30038,12 @@
   var LB_TREE_VISIBLE_DEPTH = 3;
   var lbTreeExpandedNodes = {};
 
+  // A drawing link (feederA/feederB) to the match it names, as it is now -
+  // the standard layout stores links by id (a stored copy would never update).
+  function liveBracketMatch(t, ref) {
+    return (ref && ref.id && t && findBracketMatchById(t, ref.id)) || ref;
+  }
+
   function isLosersMatch(match) {
     return typeof match.tag === "string" && match.tag.indexOf("Losers") === 0;
   }
@@ -29923,9 +30051,10 @@
   // How many further LB-only levels exist below this match (0 if none of
   // its feeders are themselves LB matches) - used purely to word the
   // collapsed stub ("2 earlier rounds" vs "1 earlier round").
-  function lbSubtreeDepth(match) {
-    var a = match.feederA && isLosersMatch(match.feederA) ? lbSubtreeDepth(match.feederA) + 1 : 0;
-    var b = match.feederB && isLosersMatch(match.feederB) ? lbSubtreeDepth(match.feederB) + 1 : 0;
+  function lbSubtreeDepth(match, t) {
+    var fa = liveBracketMatch(t, match.feederA), fb = liveBracketMatch(t, match.feederB);
+    var a = fa && isLosersMatch(fa) ? lbSubtreeDepth(fa, t) + 1 : 0;
+    var b = fb && isLosersMatch(fb) ? lbSubtreeDepth(fb, t) + 1 : 0;
     return Math.max(a, b);
   }
 
@@ -29958,6 +30087,21 @@
   function lbFrontierMatches(t) {
     var consumedIds = {};
     var all = [];
+    // (standard layout: every match exists from the start - only the ones
+    // whose two players are known count, as before)
+    if (t.bracketVersion === 2) {
+      t.lbRounds.forEach(function (rnd) {
+        rnd.forEach(function (m) {
+          if (m.a === null || m.b === null) return;
+          all.push(m);
+          if (m.feederA) consumedIds[m.feederA.id] = true;
+          if (m.feederB) consumedIds[m.feederB.id] = true;
+        });
+      });
+      return all.filter(function (m) {
+        return !consumedIds[m.id];
+      });
+    }
     t.lbRounds.forEach(function (rnd) {
       rnd.forEach(function (m) {
         all.push(m);
@@ -29978,6 +30122,7 @@
   // from the current root, passed through to renderLbTreeNode so it can
   // decide whether this feeder is still past the visible window.
   function renderLbFeederNode(feeder, activeMatchId, t, depth) {
+    feeder = liveBracketMatch(t, feeder);
     if (isLosersMatch(feeder)) return renderLbTreeNode(feeder, activeMatchId, t, depth);
     var stub = document.createElement("div");
     stub.className = "wb-tree-card-wrap lb-tree-wb-stub";
@@ -29995,7 +30140,7 @@
 
   function renderLbTreeNode(match, activeMatchId, t, depth) {
     if (depth >= LB_TREE_VISIBLE_DEPTH && !lbTreeExpandedNodes[match.id]) {
-      return renderLbCollapsedStub(match, lbSubtreeDepth(match));
+      return renderLbCollapsedStub(match, lbSubtreeDepth(match, t));
     }
     var card = tournamentMatchCard(match, activeMatchId, t);
     var wrap = document.createElement("div");

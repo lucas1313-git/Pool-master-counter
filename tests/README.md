@@ -188,6 +188,17 @@ Not part of the app - helpers for testing and for running this machine's own cop
   file; the game that ends a race to 3 holds its final score (3-1); a finished 4-player single
   elimination keeps its game, race, all 3 matches with scores, and the placings (the two semi-final
   losers sharing 3rd). Its own file server on 4250. `node tests/probe_scores.js`.
+- `test_brackets.js` (node, no browser) - brackets built the standard way: the real functions pulled
+  out of js/app.js and played with random results for every field size 3-64, single and double
+  elimination: byes only in round 1, at most one each, to the top seeds (seed 1 meets seed 2 in the
+  final when the higher seed wins); the wins needed to take the title differ by at most one; no
+  deadlock; everyone out on their 1st/2nd loss; the losers bracket no longer than the standard
+  2 x (rounds - 1); nobody's first losers match against the player who just beat them; the grand
+  final resets; "Match Similar Ratings" pairs neighbours. `node tests/test_brackets.js`.
+- `probe_brackets_ui.js` - the same on screen: 9 players single elimination is a "Round of 16" with
+  7 byes and 8 matches to a champion; 6 players double elimination shows "If you lose: Losers R..."
+  on every winners match, plays the losers bracket and ends with placings. Its own file server on
+  4251. `node tests/probe_brackets_ui.js [screenshot dir]`.
 - `probe_out_of_view.js` - out of view: a named player who walks out of the picture keeps a tag at
   the edge they left by (name, time, arrow), is kept past the 12 s a hidden player is looked for,
   and gets their path and name back coming in at that edge; hidden mid-picture as long: no name;

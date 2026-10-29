@@ -1634,5 +1634,6 @@
   "storage.group.ratings": "Classements",
   "storage.group.other": "Tout le reste",
   "storage.files": "La base de données, les enregistrements et autres fichiers : {{used}} Mo (place pour environ {{room}} Go de plus).",
-  "storage.inDatabase": "{{what}}, dans la base de données : {{mb}} Mo"
+  "storage.inDatabase": "{{what}}, dans la base de données : {{mb}} Mo",
+  "tournament.ifYouLose": "En cas de défaite : {{round}}"
 }

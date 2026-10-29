@@ -10013,3 +10013,10 @@ body.has-not-saved-banner #app {
   padding-left: 1.2em;
   color: var(--text-dim);
 }
+
+/* Double elimination: where a winners-bracket match's loser goes */
+.tournament-match-iflose {
+  margin-top: 4px;
+  font-size: 0.82rem;
+  color: var(--text-dim);
+}

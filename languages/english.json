@@ -1634,5 +1634,6 @@
   "storage.group.ratings": "Ratings",
   "storage.group.other": "Everything else",
   "storage.files": "The database, recordings and other files: {{used}} MB (room for about {{room}} GB more).",
-  "storage.inDatabase": "{{what}}, in the database: {{mb}} MB"
+  "storage.inDatabase": "{{what}}, in the database: {{mb}} MB",
+  "tournament.ifYouLose": "If you lose: {{round}}"
 }

@@ -1634,5 +1634,6 @@
   "storage.group.ratings": "Mga rating",
   "storage.group.other": "Lahat ng iba pa",
   "storage.files": "Ang database, mga recording at iba pang file: {{used}} MB (may puwang pa para sa mga {{room}} GB).",
-  "storage.inDatabase": "{{what}}, nasa database: {{mb}} MB"
+  "storage.inDatabase": "{{what}}, nasa database: {{mb}} MB",
+  "tournament.ifYouLose": "Kung matalo: {{round}}"
 }
