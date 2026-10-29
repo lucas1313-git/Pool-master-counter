@@ -2848,6 +2848,29 @@ input[type="number"] {
 .scorecard-camera-badge.cam-suspected { color: #ffd60a; }
 .scorecard-camera-badge.cam-located { color: #4dabf7; }
 .scorecard-camera-badge.cam-none { color: #d3d3d3; }
+/* ...and its shape (P19), never colour alone: a round tag on the icon's
+   lower right - ✓ recognized, ≈ taken for them, ↗ out of view, – not
+   seen - ringed in the state's colour. */
+.scorecard-camera-badge-icon { position: relative; }
+.scorecard-camera-badge-mark {
+  position: absolute;
+  right: -6%;
+  bottom: -4%;
+  width: 44%;
+  height: 44%;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  background: #15110f;
+  color: #fff;
+  font-weight: 800;
+  font-size: clamp(15px, 4.4cqw, 24px);
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+.scorecard-camera-badge-mark:empty { display: none; }
 
 /* A fresh sample just landed for this player - self-clears on its own
    after a few seconds (see SCORECARD_CAMERA_PLUS_MS), nothing to click. */
@@ -3169,6 +3192,24 @@ input[type="number"] {
    the result. */
 .keypad-select-trigger {
   cursor: pointer;
+}
+/* The score is the button that picks the player (P19) - it still looks
+   like the number it always was. */
+button.stat-value {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  background: none;
+  border: 0;
+  border-radius: 12px;
+  padding: 0;
+  margin: 0;
+  font-family: inherit;
+  box-shadow: none;
+  -webkit-tap-highlight-color: transparent;
+}
+button.stat-value:active {
+  transform: none;
 }
 
 /* "🔥 N in a row" - shown only for whichever player currently has an
@@ -11324,4 +11365,40 @@ body.win-banner-up .page-toast {
   font-weight: 700;
   min-height: 44px;
   line-height: 44px;
+}
+
+/* A popup takes the focus itself when it opens (P19) - no ring around the whole screen. */
+[role="dialog"]:focus,
+[role="alertdialog"]:focus {
+  outline: none;
+}
+
+/* Read by screen readers, not shown (the board's live region, P19). */
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Less motion when the device asks for it (P19): every animation and
+   transition settles at once (the score flash, the hill shake, the
+   milestone pop, the cards sliding in...); JS scrolls jump instead of
+   gliding (smoothOrInstant). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+    scroll-behavior: auto !important;
+  }
 }

@@ -536,31 +536,31 @@
   <div class="zoom-bar" id="zoomBar">
     <label for="zoomInput">🔍 Zoom <span id="zoomValue">1.0×</span></label>
     <input type="range" id="zoomInput" min="1" max="3" step="0.1" value="1">
-    <button type="button" class="help-btn" data-help="zoom" aria-label="What does this do?">?</button>
+    <button type="button" class="help-btn" data-help="zoom" aria-label="What does this do?" data-i18n-aria-label="cam.whatDoesThisDo">?</button>
   </div>
   <div class="zoom-bar" id="ballSensitivityBar">
     <label for="ballSensitivityInput">🎱 Ball sensitivity <span id="ballSensitivityValue">5</span></label>
     <input type="range" id="ballSensitivityInput" min="1" max="10" step="1" value="5">
-    <button type="button" class="help-btn" data-help="ballSensitivity" aria-label="What does this do?">?</button>
+    <button type="button" class="help-btn" data-help="ballSensitivity" aria-label="What does this do?" data-i18n-aria-label="cam.whatDoesThisDo">?</button>
   </div>
   <div class="bar-hint" id="ballSensitivityHint"></div>
 
   <div class="warning-banner" id="cameraWarning" hidden>
     <div id="cameraWarningText"></div>
-    <button id="restartCameraBtn" class="secondary">Restart camera</button>
+    <button id="restartCameraBtn" class="secondary" data-i18n="cam.restartCamera">Restart camera</button>
   </div>
 
   <div class="tabs">
-    <button class="tab-btn active" id="tabRecognize" type="button">Recognize</button>
-    <button class="tab-btn" id="tabCalibrate" type="button">Table</button>
-    <button class="tab-btn" id="tabEnroll" type="button">Enroll</button>
-    <button class="tab-btn" id="tabRoomMap" type="button">Room map</button>
+    <button class="tab-btn active" id="tabRecognize" type="button" data-i18n="cam.tabRecognize">Recognize</button>
+    <button class="tab-btn" id="tabCalibrate" type="button" data-i18n="cam.tabTable">Table</button>
+    <button class="tab-btn" id="tabEnroll" type="button" data-i18n="cam.tabEnroll">Enroll</button>
+    <button class="tab-btn" id="tabRoomMap" type="button" data-i18n="cam.tabRoomMap">Room map</button>
   </div>
 
   <section class="panel" id="recognizePanel">
-    <h2>Recent activity</h2>
-    <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><input type="checkbox" id="recognizeDebugToggle" style="width:auto;margin:0"> Show debug info (angle, match distance)<button type="button" class="help-btn" data-help="debugOverlay" aria-label="What does this do?">?</button></label>
-    <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><input type="checkbox" id="recognizeVoiceToggle" style="width:auto;margin:0"> Speak player status changes (seen / shooting)<button type="button" class="help-btn" data-help="voiceStatus" aria-label="What does this do?">?</button></label>
+    <h2 data-i18n="cam.recentActivity">Recent activity</h2>
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><input type="checkbox" id="recognizeDebugToggle" style="width:auto;margin:0"> Show debug info (angle, match distance)<button type="button" class="help-btn" data-help="debugOverlay" aria-label="What does this do?" data-i18n-aria-label="cam.whatDoesThisDo">?</button></label>
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><input type="checkbox" id="recognizeVoiceToggle" style="width:auto;margin:0"> Speak player status changes (seen / shooting)<button type="button" class="help-btn" data-help="voiceStatus" aria-label="What does this do?" data-i18n-aria-label="cam.whatDoesThisDo">?</button></label>
     <div class="progress-text" id="recognizeLiveStatus" hidden></div>
     <div class="log" id="recognizeLog"><div>Waiting for a recognized player...</div></div>
     <p class="fine" style="margin-top:8px">
@@ -571,7 +571,7 @@
   </section>
 
   <section class="panel" id="calibratePanel" hidden>
-    <h2>Table calibration (optional, improves accuracy)</h2>
+    <h2 data-i18n="cam.calibrationHeading">Table calibration (optional, improves accuracy)</h2>
     <p class="fine">
       Lets the camera know real table measurements, so "close enough to be
       shooting" is a real calibrated distance instead of a guess. Works from
@@ -580,11 +580,11 @@
     <div id="calibrationStatus" class="hint">Not calibrated yet.</div>
     <div class="rm-warning" id="sidesSwappedBox" hidden>
       <div>The calibration has the table's long side and short end the wrong way round: the first edge tapped was saved as the other side, so every position on the table comes out stretched one way and squashed the other (the distance to the rails, the balls, the room map). The four corners are right - only which side is which.</div>
-      <button id="fixSidesBtn" type="button">Swap them round</button>
+      <button id="fixSidesBtn" type="button" data-i18n="cam.swapSides">Swap them round</button>
     </div>
 
     <div id="calibrateSetup">
-      <label for="tableSizeSelect">Table size</label>
+      <label for="tableSizeSelect" data-i18n="cam.tableSize">Table size</label>
       <select id="tableSizeSelect">
         <option value="7">7-foot (78" x 39")</option>
         <option value="8" selected>8-foot (88" x 44")</option>
@@ -603,10 +603,10 @@
           <input type="number" id="customWidth" min="15" max="90" value="44">
         </div>
       </div>
-      <button id="detectTableBtn" type="button">Detect table automatically</button>
+      <button id="detectTableBtn" type="button" data-i18n="cam.detectTable">Detect table automatically</button>
       <div class="hint">Point the camera at the whole table, empty - no balls, rack, or cue - for the best result.</div>
       <div class="progress-text" id="detectStatusText" hidden></div>
-      <button id="showManualCalibrationBtn" class="secondary" type="button">Calibrate manually instead</button>
+      <button id="showManualCalibrationBtn" class="secondary" type="button" data-i18n="cam.calibrateManually">Calibrate manually instead</button>
     </div>
 
     <div id="manualCalibrateSetup" hidden>
@@ -615,31 +615,31 @@
         <option value="width">Short end (width)</option>
         <option value="length">Long side (length)</option>
       </select>
-      <button id="startCalibrationBtn" type="button">Start manual calibration</button>
-      <button id="backToAutoBtn" class="secondary" type="button">Back</button>
+      <button id="startCalibrationBtn" type="button" data-i18n="cam.startManualCalibration">Start manual calibration</button>
+      <button id="backToAutoBtn" class="secondary" type="button" data-i18n="common.back">Back</button>
     </div>
 
     <div id="calibrateTapping" hidden>
       <div class="progress-text" id="calibrationStepText">Tap corner 1 of 4</div>
-      <button id="cancelCalibrationBtn" class="secondary" type="button">Cancel</button>
+      <button id="cancelCalibrationBtn" class="secondary" type="button" data-i18n="common.cancel">Cancel</button>
     </div>
-    <button id="recalibrateBtn" class="secondary" type="button" hidden>Re-calibrate</button>
+    <button id="recalibrateBtn" class="secondary" type="button" hidden data-i18n="cam.recalibrate">Re-calibrate</button>
 
     <div class="empty-room-box">
-      <div class="empty-room-title">Empty-room snapshot <button type="button" class="help-btn" data-help="emptyRoom" aria-label="What does this do?">?</button></div>
+      <div class="empty-room-title">Empty-room snapshot <button type="button" class="help-btn" data-help="emptyRoom" aria-label="What does this do?" data-i18n-aria-label="cam.whatDoesThisDo">?</button></div>
       <div class="hint">Take every ball and cue off the table, then press the button and step out of view: the camera remembers the room and the empty table, so it can tell balls from the cloth's lights and shadows, and players from the furniture behind them. It follows the daylight by itself; take it again if the camera is moved.</div>
-      <button id="emptyRoomBtn" type="button">📸 Take empty-room snapshot</button>
+      <button id="emptyRoomBtn" type="button" data-i18n="cam.takeEmptyRoom">📸 Take empty-room snapshot</button>
       <div class="progress-text" id="emptyRoomStatus">No snapshot yet.</div>
       <img id="emptyRoomThumb" class="empty-room-thumb" alt="The empty-room snapshot" hidden>
       <label class="empty-room-option"><input type="checkbox" id="roomCutoutToggle" checked> Cut the room out of players' pictures</label>
-      <button id="emptyRoomClearBtn" class="secondary" type="button" hidden>Forget the snapshot</button>
+      <button id="emptyRoomClearBtn" class="secondary" type="button" hidden data-i18n="cam.forgetSnapshot">Forget the snapshot</button>
     </div>
 
     <div class="empty-room-box" id="roomTagsBox">
-      <div class="empty-room-title">🏷️ Room tags <button type="button" class="help-btn" data-help="roomTags" aria-label="What does this do?">?</button></div>
+      <div class="empty-room-title">🏷️ Room tags <button type="button" class="help-btn" data-help="roomTags" aria-label="What does this do?" data-i18n-aria-label="cam.whatDoesThisDo">?</button></div>
       <div class="progress-text" id="roomTagsStatus">Take the empty-room snapshot: everything in it gets tagged then.</div>
       <label class="empty-room-option"><input type="checkbox" id="showRoomTagsToggle"> Show the tags on the picture</label>
-      <button id="retagRoomBtn" class="secondary" type="button" hidden>Tag the snapshot again</button>
+      <button id="retagRoomBtn" class="secondary" type="button" hidden data-i18n="cam.retagSnapshot">Tag the snapshot again</button>
     </div>
   </section>
 
@@ -650,14 +650,14 @@
     <div class="hint">The frame round the picture lights <strong>yellow</strong> while a seen sample is taken and <strong>green</strong> for a shooting one, with whose it is - gray otherwise.</div>
     <div class="enroll-live" id="enrollLiveStatus">Nobody at the table yet.</div>
     <div class="progress-text" id="enrollShotStatus">Press Identify or Shooting beside a player.</div>
-    <button id="enrollUndoBtn" class="secondary" type="button">Undo last press</button>
+    <button id="enrollUndoBtn" class="secondary" type="button" data-i18n="cam.undoLastPress">Undo last press</button>
     <div class="enroll-check" id="enrollCheckStatus" hidden></div>
     <div class="model-box">
       <div class="model-toggles">
         <span class="model-box-title">Appearance models</span>
         <label><input type="checkbox" id="useOsnetToggle" checked> OSNet</label>
         <label><input type="checkbox" id="useDinoToggle" checked> DINOv2</label>
-        <button type="button" class="help-btn" data-help="appearanceModels" aria-label="What does this do?">?</button>
+        <button type="button" class="help-btn" data-help="appearanceModels" aria-label="What does this do?" data-i18n-aria-label="cam.whatDoesThisDo">?</button>
       </div>
       <div class="model-scores" id="modelScores">Self-check: waiting for samples.</div>
     </div>
@@ -668,7 +668,7 @@
   </section>
 
   <section class="panel" id="roomMapPanel" hidden>
-    <h2>Room map <span class="fine">- seen from above</span> <button type="button" class="help-btn" data-help="roomMap" aria-label="What does this do?">?</button></h2>
+    <h2>Room map <span class="fine">- seen from above</span> <button type="button" class="help-btn" data-help="roomMap" aria-label="What does this do?" data-i18n-aria-label="cam.whatDoesThisDo">?</button></h2>
     <div class="rm-options">
       <label><input type="checkbox" id="roomMapOpt-ids"> Ids &amp; odds</label>
       <label><input type="checkbox" id="roomMapOpt-trails"> Trails</label>
@@ -680,11 +680,11 @@
     <div class="rm-status" id="roomMapStatus"></div>
     <div class="rm-warning" id="roomMapSidesBox" hidden>
       <div>The table calibration has the long side and short end the wrong way round, so the map comes out stretched. The four corners are right - only which side is which.</div>
-      <button id="roomMapFixSidesBtn" type="button">Swap them round</button>
+      <button id="roomMapFixSidesBtn" type="button" data-i18n="cam.swapSides">Swap them round</button>
     </div>
     <div class="rm-buttons">
-      <button id="roomMapRebuildBtn" class="secondary" type="button">Work out the room's shape again</button>
-      <button id="roomMapClearBtn" class="secondary" type="button">Clear trails</button>
+      <button id="roomMapRebuildBtn" class="secondary" type="button" data-i18n="cam.rebuildRoom">Work out the room's shape again</button>
+      <button id="roomMapClearBtn" class="secondary" type="button" data-i18n="cam.clearTrails">Clear trails</button>
     </div>
     <div class="rm-legend">
       <span class="rm-key" style="color:#5ec98a">&#9645; T</span> the table &nbsp;
@@ -697,60 +697,60 @@
   </section>
 
   <details class="panel" id="settingsPanel">
-    <summary>Settings (needs on-site tuning)</summary>
+    <summary data-i18n="cam.settingsSummary">Settings (needs on-site tuning)</summary>
     <div style="margin-top:10px">
-      <button id="relaunchWizardBtn" class="secondary" type="button" style="margin-bottom:12px">🧙 Re-run Setup Wizard</button>
+      <button id="relaunchWizardBtn" class="secondary" type="button" style="margin-bottom:12px" data-i18n="cam.rerunWizard">🧙 Re-run Setup Wizard</button>
 
       <label for="cameraSelect">Camera</label>
       <select id="cameraSelect"></select>
 
       <div class="row" style="margin:8px 0 12px">
-        <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="flip180Toggle" style="width:auto;margin:0"> Camera mounted upside down (turn the picture)</label><button type="button" class="help-btn" data-help="flip180" aria-label="What does this do?">?</button>
+        <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="flip180Toggle" style="width:auto;margin:0"> Camera mounted upside down (turn the picture)</label><button type="button" class="help-btn" data-help="flip180" aria-label="What does this do?" data-i18n-aria-label="cam.whatDoesThisDo">?</button>
       </div>
 
-      <label for="recognitionMethodSelect">Recognize players by</label><button type="button" class="help-btn" data-help="recognitionMethod" aria-label="What does this do?">?</button>
+      <label for="recognitionMethodSelect">Recognize players by</label><button type="button" class="help-btn" data-help="recognitionMethod" aria-label="What does this do?" data-i18n-aria-label="cam.whatDoesThisDo">?</button>
       <select id="recognitionMethodSelect">
         <option value="auto">Whichever recognizes them better (self-check)</option>
         <option value="model">Appearance models (Enroll tab)</option>
         <option value="colour">Clothing colours</option>
       </select>
 
-      <label for="thresholdInput">Appearance match distance (lower = stricter)</label><button type="button" class="help-btn" data-help="threshold" aria-label="What does this do?">?</button>
+      <label for="thresholdInput">Appearance match distance (lower = stricter)</label><button type="button" class="help-btn" data-help="threshold" aria-label="What does this do?" data-i18n-aria-label="cam.whatDoesThisDo">?</button>
       <input type="number" id="thresholdInput" min="0" max="9" step="0.1" value="1.2">
 
-      <label for="consecutiveInput">Consecutive frames required</label><button type="button" class="help-btn" data-help="consecutive" aria-label="What does this do?">?</button>
+      <label for="consecutiveInput">Consecutive frames required</label><button type="button" class="help-btn" data-help="consecutive" aria-label="What does this do?" data-i18n-aria-label="cam.whatDoesThisDo">?</button>
       <input type="number" id="consecutiveInput" min="1" max="10" step="1" value="3">
 
-      <label for="debounceInput">Re-announce same player after (sec)</label><button type="button" class="help-btn" data-help="debounce" aria-label="What does this do?">?</button>
+      <label for="debounceInput">Re-announce same player after (sec)</label><button type="button" class="help-btn" data-help="debounce" aria-label="What does this do?" data-i18n-aria-label="cam.whatDoesThisDo">?</button>
       <input type="number" id="debounceInput" min="1" max="120" step="1" value="10">
 
-      <label for="bendEnterInput">Bent-over angle - enter (degrees from upright)</label><button type="button" class="help-btn" data-help="bendEnter" aria-label="What does this do?">?</button>
+      <label for="bendEnterInput">Bent-over angle - enter (degrees from upright)</label><button type="button" class="help-btn" data-help="bendEnter" aria-label="What does this do?" data-i18n-aria-label="cam.whatDoesThisDo">?</button>
       <input type="number" id="bendEnterInput" min="10" max="85" step="1" value="30">
 
-      <label for="bendExitInput">Bent-over angle - exit back to upright (degrees)</label><button type="button" class="help-btn" data-help="bendExit" aria-label="What does this do?">?</button>
+      <label for="bendExitInput">Bent-over angle - exit back to upright (degrees)</label><button type="button" class="help-btn" data-help="bendExit" aria-label="What does this do?" data-i18n-aria-label="cam.whatDoesThisDo">?</button>
       <input type="number" id="bendExitInput" min="5" max="80" step="1" value="20">
 
-      <label for="railDistanceInput">Max distance from rail to count as "at the table" (inches, needs calibration)</label><button type="button" class="help-btn" data-help="railDistance" aria-label="What does this do?">?</button>
+      <label for="railDistanceInput">Max distance from rail to count as "at the table" (inches, needs calibration)</label><button type="button" class="help-btn" data-help="railDistance" aria-label="What does this do?" data-i18n-aria-label="cam.whatDoesThisDo">?</button>
       <input type="number" id="railDistanceInput" min="6" max="72" step="1" value="30">
 
       <div class="row" style="margin-top:4px">
-        <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="ballTrackingToggle" style="width:auto;margin:0"> Ball tracking (Straight Pool, needs calibration)</label><button type="button" class="help-btn" data-help="ballTracking" aria-label="What does this do?">?</button>
+        <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="ballTrackingToggle" style="width:auto;margin:0"> Ball tracking (Straight Pool, needs calibration)</label><button type="button" class="help-btn" data-help="ballTracking" aria-label="What does this do?" data-i18n-aria-label="cam.whatDoesThisDo">?</button>
       </div>
-      <label for="ballConfirmInput">Still passes before a pocketed ball counts</label><button type="button" class="help-btn" data-help="ballConfirm" aria-label="What does this do?">?</button>
+      <label for="ballConfirmInput">Still passes before a pocketed ball counts</label><button type="button" class="help-btn" data-help="ballConfirm" aria-label="What does this do?" data-i18n-aria-label="cam.whatDoesThisDo">?</button>
       <input type="number" id="ballConfirmInput" min="2" max="6" step="1" value="3">
 
       <div class="row" style="margin-top:4px">
-        <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="cueDetectionToggle" style="width:auto;margin:0" checked> Cue stick detection (needs calibration)</label><button type="button" class="help-btn" data-help="cueDetection" aria-label="What does this do?">?</button>
+        <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="cueDetectionToggle" style="width:auto;margin:0" checked> Cue stick detection (needs calibration)</label><button type="button" class="help-btn" data-help="cueDetection" aria-label="What does this do?" data-i18n-aria-label="cam.whatDoesThisDo">?</button>
       </div>
       <div class="row" style="margin-top:4px">
-        <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="walkingPathsToggle" style="width:auto;margin:0" checked> Follow walking paths</label><button type="button" class="help-btn" data-help="walkingPaths" aria-label="What does this do?">?</button>
+        <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="walkingPathsToggle" style="width:auto;margin:0" checked> Follow walking paths</label><button type="button" class="help-btn" data-help="walkingPaths" aria-label="What does this do?" data-i18n-aria-label="cam.whatDoesThisDo">?</button>
       </div>
       <div class="row" style="margin-top:4px">
-        <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="cueDebugToggle" style="width:auto;margin:0"> Cue debug mode (log, overlay, voice)</label><button type="button" class="help-btn" data-help="cueDebug" aria-label="What does this do?">?</button>
+        <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="cueDebugToggle" style="width:auto;margin:0"> Cue debug mode (log, overlay, voice)</label><button type="button" class="help-btn" data-help="cueDebug" aria-label="What does this do?" data-i18n-aria-label="cam.whatDoesThisDo">?</button>
       </div>
 
       <div class="row" style="margin-top:4px">
-        <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="debugToggle" style="width:auto;margin:0"> Show debug overlay</label><button type="button" class="help-btn" data-help="debugOverlay" aria-label="What does this do?">?</button>
+        <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="debugToggle" style="width:auto;margin:0"> Show debug overlay</label><button type="button" class="help-btn" data-help="debugOverlay" aria-label="What does this do?" data-i18n-aria-label="cam.whatDoesThisDo">?</button>
       </div>
     </div>
   </details>
@@ -764,7 +764,7 @@
   </div>
 </div>
 
-<button id="resumeSetupPill" class="resume-setup-pill" type="button" hidden>Resume Setup →</button>
+<button id="resumeSetupPill" class="resume-setup-pill" type="button" hidden data-i18n="cam.resumeSetup">Resume Setup →</button>
 
 <div id="setupWizardOverlay" class="wizard-overlay" hidden>
   <div class="wizard-card">
@@ -831,12 +831,13 @@
     </div>
 
     <div class="wizard-footer">
-      <button id="wizardFinishBtn" type="button" hidden>Finish Setup</button>
-      <button id="wizardNextBtn" type="button">Next →</button>
+      <button id="wizardFinishBtn" type="button" hidden data-i18n="cam.finishSetup">Finish Setup</button>
+      <button id="wizardNextBtn" type="button" data-i18n="cam.next">Next →</button>
     </div>
   </div>
 </div>
 
+<script src="js/camera-i18n.js?v=20261029g"></script>
 <script src="js/pairing.js?v=20261028m"></script>
 <script src="camera/tfjs.js"></script>
 <script src="camera/pose-detection.js"></script>
@@ -2740,7 +2741,7 @@
   clearAllBtn.addEventListener("click", function () {
     if (clearAllBtn.dataset.confirm === "1") {
       lastEnrollAdd = null;
-      enrollUndoBtn.textContent = "Undo last press";
+      enrollUndoBtn.textContent = CT("cam.undoLastPress", "Undo last press");
       Object.keys(enrollments).forEach(function (key) {
         send({ type: "enroll-delete", player_name: enrollments[key].displayName || key });
       });
@@ -3231,7 +3232,7 @@
   function cancelEmptyRoomCountdown(text) {
     if (emptyRoomTimer) clearTimeout(emptyRoomTimer);
     emptyRoomTimer = null;
-    emptyRoomBtn.textContent = "📸 Take empty-room snapshot";
+    emptyRoomBtn.textContent = CT("cam.takeEmptyRoom", "📸 Take empty-room snapshot");
     if (text) emptyRoomStatusEl.textContent = text;
     else renderEmptyRoomStatus();
   }
@@ -3255,7 +3256,7 @@
         return;
       }
       emptyRoomTimer = null;
-      emptyRoomBtn.textContent = "📸 Take empty-room snapshot";
+      emptyRoomBtn.textContent = CT("cam.takeEmptyRoom", "📸 Take empty-room snapshot");
       captureEmptyRoom(videoEl);
     };
     tick();
@@ -7189,7 +7190,7 @@
 
   function setEnrollShotStatus(text) {
     enrollShotStatus.textContent = text;
-    enrollUndoBtn.textContent = lastEnrollAdd ? "Undo last press (" + lastEnrollAdd.name + ")" : "Undo last press";
+    enrollUndoBtn.textContent = lastEnrollAdd ? CT("cam.undoLastPressFor", "Undo last press ({{name}})", { name: lastEnrollAdd.name }) : CT("cam.undoLastPress", "Undo last press");
     keepEnrollAnchor();
   }
 
@@ -10492,15 +10493,16 @@
   // Back from the Table or Enroll tab (Resume Setup), the step's job is
   // done - so its way forward reads "Next", not "Skip for now", and is
   // the main button; the other one offers to do it again.
+  window.onCameraI18nReady = function () { updateWizardStepButtons(); };
   function updateWizardStepButtons() {
     var calibrated = !!calibration;
-    wizardGoCalibrateBtn.textContent = calibrated ? "Re-calibrate" : "Open Table Calibration";
-    wizardSkipCalibrateBtn.textContent = calibrated ? "Next →" : "Skip for now";
+    wizardGoCalibrateBtn.textContent = calibrated ? CT("cam.recalibrate", "Re-calibrate") : CT("cam.openCalibration", "Open Table Calibration");
+    wizardSkipCalibrateBtn.textContent = calibrated ? CT("cam.next", "Next →") : CT("cam.skipForNow", "Skip for now");
     wizardGoCalibrateBtn.classList.toggle("secondary", calibrated);
     wizardSkipCalibrateBtn.classList.toggle("secondary", !calibrated);
     var enrolledCount = Object.keys(enrollments).length;
-    wizardGoEnrollBtn.textContent = enrolledCount ? "Add More Samples" : "Enroll Players Now";
-    wizardSkipEnrollBtn.textContent = enrolledCount ? "Next →" : "I'll Just Start Playing";
+    wizardGoEnrollBtn.textContent = enrolledCount ? CT("cam.addMoreSamples", "Add More Samples") : CT("cam.enrollNow", "Enroll Players Now");
+    wizardSkipEnrollBtn.textContent = enrolledCount ? CT("cam.next", "Next →") : CT("cam.justStartPlaying", "I'll Just Start Playing");
     wizardGoEnrollBtn.classList.toggle("secondary", !!enrolledCount);
     wizardSkipEnrollBtn.classList.toggle("secondary", !enrolledCount);
   }

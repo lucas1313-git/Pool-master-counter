@@ -93,7 +93,7 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "pmc-pool-day-"));
     await sleep(500);
   };
   const winRack = async (page, name) => {
-    await page.evaluate((name) => [...document.querySelectorAll("#scoreboard button.btn-ball.plus")].find((b) => b.getAttribute("aria-label") === "Add point for " + name).click(), name);
+    await page.evaluate((name) => [...document.querySelectorAll("#scoreboard button.btn-ball.plus")].find((b) => b.getAttribute("aria-label").endsWith(" for " + name)).click(), name);
     await sleep(300);
     await page.evaluate(() => { const o = document.getElementById("gamewin-overlay"); if (o && !o.classList.contains("hidden")) document.getElementById("btn-gamewin-close").click(); });
     await sleep(300);

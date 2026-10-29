@@ -167,7 +167,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   // a casual game meanwhile, on the main board
   await page.evaluate(() => document.getElementById("btn-tournament-back") ? document.getElementById("btn-tournament-back").click() : history.back());
   await sleep(500);
-  await page.evaluate(() => [...document.querySelectorAll("#scoreboard button.btn-ball.plus")].find((b) => b.getAttribute("aria-label") === "Add point for Zed").click());
+  await page.evaluate(() => [...document.querySelectorAll("#scoreboard button.btn-ball.plus")].find((b) => b.getAttribute("aria-label").endsWith(" for Zed")).click());
   await sleep(500);
   await closeWinPopups();
   const casual = (await ratings()).Zed;

@@ -79,7 +79,7 @@ const readBig = (page, name) => page.evaluate((name) => new Promise((resolve) =>
   await page.goto(BASE, { waitUntil: "networkidle2" });
   await sleep(900);
   const plus = async (name) => {
-    await page.evaluate((name) => [...document.querySelectorAll("#scoreboard .btn-ball.plus")].find((b) => b.getAttribute("aria-label") === "Add point for " + name).click(), name);
+    await page.evaluate((name) => [...document.querySelectorAll("#scoreboard .btn-ball.plus")].find((b) => b.getAttribute("aria-label").endsWith(" for " + name)).click(), name);
     await sleep(800);
     await page.evaluate(() => { const m = document.getElementById("milestone-overlay"); if (!m.classList.contains("hidden")) document.getElementById("btn-milestone-rematch").click(); });
     await sleep(200);

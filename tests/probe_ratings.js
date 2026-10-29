@@ -171,8 +171,8 @@ const ts = (dayOffset, minute) => new Date(Date.UTC(2026, 8, 1 + dayOffset, 18, 
   for (let i = 0; i < 25; i++) regLog.push([i % 2 ? "Reg" : "Old", i % 2 ? "Old" : "Reg", ts(6, i)]);
   page = await open({ [STATS]: statsFor(regLog) }, ["Reg", "Newb"]);
   const before = await ratings(page);
-  const preview = await page.evaluate(() => { const plus = [...document.querySelectorAll("#scoreboard button.btn-ball.plus")].find((b) => b.getAttribute("aria-label") === "Add point for Reg"); const card = plus.closest(".player-panel"); const p = card.querySelector(".rating-pronostic"); return p ? p.textContent : null; });
-  await page.evaluate(() => [...document.querySelectorAll("#scoreboard button.btn-ball.plus")].find((b) => b.getAttribute("aria-label") === "Add point for Reg").click());
+  const preview = await page.evaluate(() => { const plus = [...document.querySelectorAll("#scoreboard button.btn-ball.plus")].find((b) => b.getAttribute("aria-label").endsWith(" for Reg")); const card = plus.closest(".player-panel"); const p = card.querySelector(".rating-pronostic"); return p ? p.textContent : null; });
+  await page.evaluate(() => [...document.querySelectorAll("#scoreboard button.btn-ball.plus")].find((b) => b.getAttribute("aria-label").endsWith(" for Reg")).click());
   await sleep(500);
   const after2 = await ratings(page);
   const regGain = after2.Reg.rating - before.Reg.rating, newbLoss = after2.Newb.rating - 400;

@@ -94,7 +94,7 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "pmc-storage-"));
     document.querySelectorAll("#roster-list li.roster-row .btn-playing:not(.is-on)").forEach((b) => b.click());
   }, names);
   const winRack = async (name) => {
-    await page.evaluate((name) => [...document.querySelectorAll("#scoreboard button.btn-ball.plus")].find((b) => b.getAttribute("aria-label") === "Add point for " + name).click(), name);
+    await page.evaluate((name) => [...document.querySelectorAll("#scoreboard button.btn-ball.plus")].find((b) => b.getAttribute("aria-label").endsWith(" for " + name)).click(), name);
     await sleep(300);
     await page.evaluate(() => { const o = document.getElementById("gamewin-overlay"); if (o && !o.classList.contains("hidden")) document.getElementById("btn-gamewin-close").click(); });
     await sleep(300);

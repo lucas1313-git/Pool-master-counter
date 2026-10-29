@@ -290,7 +290,7 @@
       els.player.classList.remove("hidden");
       els.player.src = url;
       els.player.onloadedmetadata = function () { try { els.player.currentTime = Math.max(0, (atMs || 0) / 1000); } catch (e) {} els.player.play().catch(function () {}); };
-      els.player.scrollIntoView({ block: "center", behavior: "smooth" });
+      els.player.scrollIntoView({ block: "center", behavior: window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
     });
   }
 

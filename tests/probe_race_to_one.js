@@ -45,7 +45,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const visible = (id) => page.evaluate((id) => { const e = document.getElementById(id); return !!e && !e.classList.contains("hidden"); }, id);
   const state = () => page.evaluate(() => JSON.parse(localStorage.getItem("poolMasterCounter.state.v2")));
   const cardNumber = (name) => page.evaluate((name) => {
-    const plus = [...document.querySelectorAll("#scoreboard button.btn-ball.plus")].find((b) => b.getAttribute("aria-label") === "Add point for " + name);
+    const plus = [...document.querySelectorAll("#scoreboard button.btn-ball.plus")].find((b) => b.getAttribute("aria-label").endsWith(" for " + name));
     const card = plus && plus.closest(".player-panel");
     const v = card && card.querySelector(".stat-value");
     const l = card && card.querySelector(".stat-label");
@@ -54,7 +54,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   // one rack: + for that player, then "Nice!" on the rack popup; reports what showed up
   const winRack = async (name) => {
     const before = await page.evaluate(() => window.__osc);
-    await page.evaluate((name) => [...document.querySelectorAll("#scoreboard button.btn-ball.plus")].find((b) => b.getAttribute("aria-label") === "Add point for " + name).click(), name);
+    await page.evaluate((name) => [...document.querySelectorAll("#scoreboard button.btn-ball.plus")].find((b) => b.getAttribute("aria-label").endsWith(" for " + name)).click(), name);
     await sleep(350);
     const rackPopup = await visible("gamewin-overlay");
     if (rackPopup) await page.click("#btn-gamewin-close");

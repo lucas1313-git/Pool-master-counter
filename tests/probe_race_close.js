@@ -78,7 +78,7 @@ const readBig = (page, name) => page.evaluate((name) => new Promise((resolve) =>
   };
   // one rack: + for that player; the popup closed unless keepOpen
   const winRack = async (name, keepOpen) => {
-    await page.evaluate((name) => [...document.querySelectorAll("#scoreboard button.btn-ball.plus")].find((b) => b.getAttribute("aria-label") === "Add point for " + name).click(), name);
+    await page.evaluate((name) => [...document.querySelectorAll("#scoreboard button.btn-ball.plus")].find((b) => b.getAttribute("aria-label").endsWith(" for " + name)).click(), name);
     await sleep(400);
     if (keepOpen) return;
     if (await visible("gamewin-overlay")) await page.click("#btn-gamewin-close");

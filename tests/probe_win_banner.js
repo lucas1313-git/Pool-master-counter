@@ -63,7 +63,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     await sleep(800);
   };
   const plusOf = (name) => page.evaluate((name) => {
-    const b = [...document.querySelectorAll("#scoreboard button.btn-ball.plus")].find((x) => x.getAttribute("aria-label") === "Add point for " + name);
+    const b = [...document.querySelectorAll("#scoreboard button.btn-ball.plus")].find((x) => x.getAttribute("aria-label").endsWith(" for " + name));
     const r = b.getBoundingClientRect();
     return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
   }, name);
@@ -102,11 +102,11 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   check("Race to 5: racks 1-4 - the banner each time (\"Kim won rack 3 · 3–0\"), never a dialog",
     racks.slice(0, 4).every((r, i) => r.banner && r.banner.indexOf("Kim won rack " + (i + 1) + " · " + (i + 1) + "–0") !== -1 && r.dialogs.length === 0), racks.map((r) => ({ b: r.banner && r.banner.slice(0, 60), d: r.dialogs })));
   check("...no toast saying the same again, nothing put in the keyboard's way (no field focused)", racks.every((r) => !/won rack|Kim won/.test(r.toast) && r.focus !== "INPUT"), racks.map((r) => ({ t: r.toast, f: r.focus })));
-  check("...nothing new under the + for 600 ms after each tap (the + itself every time it's looked at)", racks.every((r) => r.underPlus.every((u) => u === "Add point for Kim")), racks.map((r) => r.underPlus));
+  check("...nothing new under the + for 600 ms after each tap (the + itself every time it's looked at)", racks.every((r) => r.underPlus.every((u) => / for Kim$/.test(u))), racks.map((r) => r.underPlus));
   const after4 = racks[3].banner || "";
   check("...rack 4 says Kim is on the hill", /Kim is on the hill/.test(after4), after4);
   check("...the 5th tap: the race-won screen (full screen) comes only after 600 ms - till 550 ms the + is still what's under the finger, at 800 ms it's up",
-    racks[4].underPlus.every((u) => u === "Add point for Kim") && racks[4].milestone, racks[4]);
+    racks[4].underPlus.every((u) => / for Kim$/.test(u)) && racks[4].milestone, racks[4]);
   await sleep(500);
   let s5 = await shown();
   const state5 = await st();

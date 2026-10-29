@@ -235,7 +235,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await page.click("#btn-quick-game-start");
   await sleep(700);
   for (let i = 0; i < 2; i++) {
-    await page.evaluate(() => [...document.querySelectorAll("#scoreboard button.btn-ball.plus")].find((b) => b.getAttribute("aria-label") === "Add point for Kim").click());
+    await page.evaluate(() => [...document.querySelectorAll("#scoreboard button.btn-ball.plus")].find((b) => b.getAttribute("aria-label").endsWith(" for Kim")).click());
     await sleep(350);
     if (await visible("gamewin-overlay")) await page.click("#btn-gamewin-close");
     await sleep(900);

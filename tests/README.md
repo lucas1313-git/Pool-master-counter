@@ -377,7 +377,8 @@ Not part of the app - helpers for testing and for running this machine's own cop
   empty; no English "(target 1)" or "1 wins", no "game(s)"-style plurals in any language, no
   "Q-Score"; no old name in English (Global Stats, Export Stats, Tournament Type, Single game);
   the glossary's rating words (French "cote", Spanish "puntuación" - "classement" / "clasificación"
-  are the leaderboard; Cantonese 搶 N, 評分); every key the code and index.html name exists; every
+  are the leaderboard; Cantonese 搶 N, 評分); every key the code, index.html and camera.html name
+  exists; every
   count sentence TP picks has its singular in every language. `node tests/test_strings.js`.
 - **probe_names.js** — one name per idea (P18) at 1180x820, its own server on 4272: Kim wins a rack
   in an 8-Ball race to 15 - Recent Games "Kim won 8-Ball", no "(target 1)"; ☰ Menu has "All
@@ -386,3 +387,15 @@ Not part of the app - helpers for testing and for running this machine's own cop
   the tournament heading follows the format (Elimination for single and double, Round Robin,
   Swiss); a player's page "💾 Save to history"; in French "1 victoire" / "9 victoires".
   `node tests/probe_names.js [screenshot dir]` (board, leaderboard and tournament screenshots).
+- **probe_accessibility.js** — accessibility (P19) at 1180x820, its own server on 4273: every popup
+  (42) is a named dialog (role, aria-modal, aria-labelledby); ☰ Menu by keyboard - the focus goes
+  in, Tab stays inside, Escape closes it and the focus is back on ☰; End night closes on Escape;
+  a rack game's + "Win the rack for Kim", a points game's "Add a point for Kim" / "Take a point
+  from Kim"; the score is a real button (Enter picks the player); one polite live region reads
+  "Kim won rack 1 ... Score: Kim 1, Jo 0" (the win banner isn't a second one); reduced motion
+  stops the score flash; the camera icon's ✓ ≈ ↗ – shapes and their spoken names; in French the
+  + says "Gagner la manche pour Kim", no English label is left, and End night's share is French
+  ("Kim bat Jo"); camera.html?lang=french has French tabs and title; docs/tagalog-review.md is
+  written. `node tests/probe_accessibility.js [screenshot dir]`.
+- **tagalog_review.js** — writes docs/tagalog-review.md: the Tagalog strings still in English
+  (identical to English, then mostly English words), for review. `node tests/tagalog_review.js`.

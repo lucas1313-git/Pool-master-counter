@@ -72,7 +72,7 @@ function board(opts) {
   const seated = () => page.evaluate(() => [...document.querySelectorAll("#scoreboard .player-panel .player-name")].map((n) => n.textContent.replace(/\d.*$/, "").trim()));
   const banner = () => page.evaluate(() => document.getElementById("win-banner").classList.contains("hidden") ? "" : document.getElementById("win-banner").textContent);
   const plusFor = async (name) => {
-    await page.evaluate((name) => { const b = [...document.querySelectorAll("#scoreboard .btn-ball.plus")].find((x) => x.getAttribute("aria-label") === "Add point for " + name); b.click(); }, name);
+    await page.evaluate((name) => { const b = [...document.querySelectorAll("#scoreboard .btn-ball.plus")].find((x) => x.getAttribute("aria-label").endsWith(" for " + name)); b.click(); }, name);
     await sleep(900);
   };
   const line = () => page.evaluate(() => { const el = document.getElementById("winner-stays-line"); return el.classList.contains("hidden") ? "" : el.textContent; });

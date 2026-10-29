@@ -86,7 +86,7 @@ const secs = (t) => { const m = /(\d+):(\d\d)(?::(\d\d))?/.exec(t || ""); if (!m
     await sleep(1200);
   };
   const winRack = async (name) => {
-    await page.evaluate((name) => [...document.querySelectorAll("#scoreboard button.btn-ball.plus")].find((b) => b.getAttribute("aria-label") === "Add point for " + name).click(), name);
+    await page.evaluate((name) => [...document.querySelectorAll("#scoreboard button.btn-ball.plus")].find((b) => b.getAttribute("aria-label").endsWith(" for " + name)).click(), name);
     await sleep(400);
     if (await visible("gamewin-overlay")) await page.click("#btn-gamewin-close");
     await sleep(700);

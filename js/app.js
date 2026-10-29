@@ -306,7 +306,7 @@
     if (panel.classList.contains("collapsed")) {
       document.getElementById(toggleBtnElId).click();
     }
-    panel.scrollIntoView({ behavior: "smooth", block: "start" });
+    panel.scrollIntoView({ behavior: smoothOrInstant(), block: "start" });
   }
 
   // The Player Stats page's minimal section chips (see
@@ -323,7 +323,7 @@
       detail.hidden = !willExpand;
       chip.setAttribute("aria-expanded", willExpand ? "true" : "false");
       chip.classList.toggle("is-active", willExpand);
-      if (willExpand) detail.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (willExpand) detail.scrollIntoView({ behavior: smoothOrInstant(), block: "start" });
     });
   }
 
@@ -335,7 +335,7 @@
   function expandAndScrollToDetailChip(chipElId, detailElId) {
     var detail = document.getElementById(detailElId);
     if (detail.hidden) document.getElementById(chipElId).click();
-    detail.scrollIntoView({ behavior: "smooth", block: "start" });
+    detail.scrollIntoView({ behavior: smoothOrInstant(), block: "start" });
   }
 
   // A brief accent-colored flash around an element - used to catch the
@@ -918,7 +918,7 @@
     var upBtn = document.createElement("button");
     upBtn.type = "button";
     upBtn.textContent = "↑";
-    upBtn.setAttribute("aria-label", "Move " + player.name + " up in the queue");
+    upBtn.setAttribute("aria-label", T("aria.moveUpInQueue", { name: player.name }));
     upBtn.disabled = i === 0;
     upBtn.addEventListener("click", function () {
       moveQueueItem(i, -1);
@@ -927,7 +927,7 @@
     var downBtn = document.createElement("button");
     downBtn.type = "button";
     downBtn.textContent = "↓";
-    downBtn.setAttribute("aria-label", "Move " + player.name + " down in the queue");
+    downBtn.setAttribute("aria-label", T("aria.moveDownInQueue", { name: player.name }));
     downBtn.disabled = i === total - 1;
     downBtn.addEventListener("click", function () {
       moveQueueItem(i, 1);
@@ -2133,6 +2133,9 @@
     });
     root.querySelectorAll("[data-i18n-label]").forEach(function (el) {
       el.setAttribute("label", T(el.getAttribute("data-i18n-label")));
+    });
+    root.querySelectorAll("[data-i18n-title]").forEach(function (el) {
+      el.setAttribute("title", T(el.getAttribute("data-i18n-title")));
     });
   }
 
@@ -3449,7 +3452,7 @@
     // used the shortcut staring at wherever they happened to be
     // scrolled to.
     if (appRoot.classList.contains("focus-mode")) {
-      window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+      window.scrollTo({ top: document.body.scrollHeight, behavior: smoothOrInstant() });
     }
   }
 
@@ -3505,6 +3508,11 @@
 
   function handleKeypadShortcut(e) {
     if (isTypingIntoField(document.activeElement)) return;
+    // Enter / Space press a button the keyboard has focused, as anywhere
+    // else (P19) - the number pad keeps them otherwise, including after a
+    // tap or a click left a button focused (no :focus-visible then).
+    var focused = document.activeElement;
+    if ((e.key === "Enter" || e.key === " ") && focused && focused !== document.body && focused.matches("button, a[href], summary, select, [role='button']") && focused.matches(":focus-visible")) return;
     var cameraFrame = fullScreenCameraFrame();
     if (cameraFrame && /^[0-9+\-]$/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
       e.preventDefault();
@@ -3725,9 +3733,12 @@
       return;
     }
 
+    var top = topDialog();
     for (var i = 0; i < OVERLAY_KEY_TARGETS.length; i++) {
       var overlay = OVERLAY_KEY_TARGETS[i][0];
       if (!overlay || overlay.classList.contains("hidden")) continue;
+      // only the popup on top answers (Help can sit under Game Rules)
+      if (top && overlay !== top) continue;
       e.preventDefault();
       (e.key === "Enter" ? OVERLAY_KEY_TARGETS[i][1] : OVERLAY_KEY_TARGETS[i][2]).click();
       return;
@@ -3735,6 +3746,152 @@
   }
 
   document.addEventListener("keydown", handleOverlayEnterEscape);
+
+  // ---------------------------------------------------------------------
+  // Every popup is a dialog (P19): role="dialog" + aria-modal, named by its
+  // heading; opening one moves the focus into it (unless its opener already
+  // put it on a field inside), Tab stays inside the popup on top, Escape
+  // clicks that popup's close / cancel button, and closing it gives the
+  // focus back to what had it. The popups that already answer Escape
+  // themselves (OVERLAY_KEY_TARGETS, the confirm, the wizard, the board's
+  // sheets) keep doing it - DIALOG_ESCAPE names the rest. A popup built in
+  // code (tournament chooser...) marks its cancel button data-dialog-close.
+  // ---------------------------------------------------------------------
+  var DIALOG_ESCAPE = {
+    "squash-warning-overlay": "btn-squash-cancel",
+    "bk-restore-overlay": "btn-bk-cancel",
+    "voice-sheet-overlay": "btn-voice-sheet-close",
+    "tournament-match-win-overlay": "btn-tournament-match-win-close",
+    "end-night-overlay": "btn-end-night-close",
+    "challonge-push-review-overlay": "btn-challonge-push-review-close",
+    "paywall-modal-overlay": "btn-paywall-cancel",
+    "multi-table-host-overlay": "btn-multi-table-close",
+    "full-reset-step2-overlay": "btn-full-reset-step2-cancel",
+    "delete-by-date-modal-overlay": "btn-delete-by-date-cancel",
+    "game-setup-manage-overlay": "btn-game-setup-manage-cancel",
+    "game-setup-preview-overlay": "btn-game-setup-preview-cancel",
+    "player-stat-detail-overlay": "btn-player-stat-detail-close",
+    "same-device-camera-overlay": "btn-close-same-device-camera",
+    "remote-calibrate-overlay": "btn-close-remote-calibrate",
+    "remote-viewer-overlay": "btn-close-remote-viewer",
+    "game-rules-overlay": "btn-game-rules-close",
+    "league-handicap-chart-overlay": "btn-league-handicap-chart-close",
+    "fargo-search-overlay": "btn-fargo-search-close",
+    "tournament-format-info-overlay": "btn-tournament-format-info-cancel",
+    "league-wizard-overlay": "btn-league-wizard-close"
+  };
+  var dialogStack = [];
+  var lastFocusOutsideDialogs = null;
+
+  function dialogIsOpen(el) {
+    return !!el && el.isConnected && !el.classList.contains("hidden");
+  }
+
+  function topDialog() {
+    for (var i = dialogStack.length - 1; i >= 0; i--) {
+      if (dialogIsOpen(dialogStack[i].el)) return dialogStack[i].el;
+    }
+    return null;
+  }
+
+  function dialogFocusables(el) {
+    return Array.prototype.filter.call(el.querySelectorAll('a[href], button, input, select, textarea, summary, [tabindex]:not([tabindex="-1"])'), function (f) {
+      return !f.disabled && f.getClientRects().length > 0 && getComputedStyle(f).visibility !== "hidden";
+    });
+  }
+
+  function dialogOpened(el) {
+    var active = document.activeElement;
+    var back = active && active !== document.body && !el.contains(active) ? active : lastFocusOutsideDialogs;
+    dialogStack.push({ el: el, back: back });
+    if (!el.contains(document.activeElement)) {
+      var first = el.querySelector("[data-autofocus]");
+      try { (first && first.getClientRects().length ? first : el).focus({ preventScroll: true }); } catch (e) {}
+    }
+  }
+
+  function dialogClosed(el) {
+    var i = -1;
+    dialogStack.forEach(function (d, j) { if (d.el === el) i = j; });
+    if (i < 0) return;
+    var back = dialogStack[i].back;
+    dialogStack.splice(i, 1);
+    var active = document.activeElement;
+    if ((!active || active === document.body || el.contains(active)) && back && back.isConnected && back.getClientRects().length) {
+      try { back.focus({ preventScroll: true }); } catch (e) {}
+    }
+  }
+
+  function syncDialog(el) {
+    var open = dialogIsOpen(el);
+    var known = dialogStack.some(function (d) { return d.el === el; });
+    if (open && !known) dialogOpened(el);
+    else if (!open && known) dialogClosed(el);
+  }
+
+  function setupDialog(el) {
+    if (el.getAttribute("data-dialog-ready")) return;
+    el.setAttribute("data-dialog-ready", "1");
+    if (!el.hasAttribute("role")) el.setAttribute("role", el.id === "confirm-modal-overlay" ? "alertdialog" : "dialog");
+    el.setAttribute("aria-modal", "true");
+    if (!el.hasAttribute("tabindex")) el.setAttribute("tabindex", "-1");
+    if (!el.hasAttribute("aria-labelledby") && !el.hasAttribute("aria-label")) {
+      var name = el.querySelector("h1, h2, h3, h4") || el.querySelector("p");
+      if (name) {
+        if (!name.id) name.id = el.id + "-title";
+        el.setAttribute("aria-labelledby", name.id);
+      }
+    }
+    new MutationObserver(function () { syncDialog(el); }).observe(el, { attributes: true, attributeFilter: ["class"] });
+    syncDialog(el);
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('[id$="-overlay"]'), setupDialog);
+  new MutationObserver(function (records) {
+    records.forEach(function (r) {
+      Array.prototype.forEach.call(r.addedNodes, function (n) { if (n.nodeType === 1 && /-overlay$/.test(n.id || "")) setupDialog(n); });
+      Array.prototype.forEach.call(r.removedNodes, function (n) { if (n.nodeType === 1) dialogClosed(n); });
+    });
+  }).observe(document.body, { childList: true });
+
+  document.addEventListener("focusin", function (e) {
+    if (!dialogStack.some(function (d) { return dialogIsOpen(d.el) && d.el.contains(e.target); })) lastFocusOutsideDialogs = e.target;
+  });
+
+  document.addEventListener("keydown", function (e) {
+    var top = topDialog();
+    if (!top) return;
+    if (e.key === "Escape" && !e.defaultPrevented) {
+      var closeBtn = DIALOG_ESCAPE[top.id] ? document.getElementById(DIALOG_ESCAPE[top.id]) : top.querySelector("[data-dialog-close]");
+      if (closeBtn && closeBtn.getClientRects().length) {
+        e.preventDefault();
+        closeBtn.click();
+      }
+      return;
+    }
+    if (e.key !== "Tab") return;
+    var f = dialogFocusables(top);
+    var active = document.activeElement;
+    if (!f.length) {
+      e.preventDefault();
+      top.focus({ preventScroll: true });
+    } else if (!top.contains(active)) {
+      e.preventDefault();
+      f[e.shiftKey ? f.length - 1 : 0].focus();
+    } else if (e.shiftKey && (active === f[0] || active === top)) {
+      e.preventDefault();
+      f[f.length - 1].focus();
+    } else if (!e.shiftKey && active === f[f.length - 1]) {
+      e.preventDefault();
+      f[0].focus();
+    }
+  });
+
+  // Reduced motion (P19): no smooth scrolling when the device asks for less
+  // motion - the CSS stops the animations and transitions.
+  function smoothOrInstant() {
+    return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+  }
 
   function populateGameTypeSelects() {
     [gameTypeSelect, rotationAddType, tournamentGameTypeSelect, wizardGameTypeSelect, wizardRotationAddType, gameSetupPreviewTypeSelect].forEach(function (select) {
@@ -3925,7 +4082,7 @@
     targetInput.min = "1";
     targetInput.max = "500";
     targetInput.value = entry.target;
-    targetInput.setAttribute("aria-label", "Target for " + name.textContent);
+    targetInput.setAttribute("aria-label", T("aria.targetFor", { game: name.textContent }));
     targetInput.addEventListener("change", function () {
       var val = parseInt(targetInput.value, 10);
       if (val > 0) updateRotationItem(i, { target: val });
@@ -3934,7 +4091,7 @@
 
     var unitSelect = document.createElement("select");
     unitSelect.className = "rotation-unit-select";
-    unitSelect.setAttribute("aria-label", "Unit for " + name.textContent);
+    unitSelect.setAttribute("aria-label", T("aria.unitFor", { game: name.textContent }));
     ["rack", "balls", "points"].forEach(function (u) {
       var opt = document.createElement("option");
       opt.value = u;
@@ -3967,7 +4124,7 @@
 
     var removeBtn = document.createElement("button");
     removeBtn.type = "button";
-    removeBtn.setAttribute("aria-label", "Remove from rotation");
+    removeBtn.setAttribute("aria-label", T("aria.removeFromRotation"));
     removeBtn.textContent = "×";
     removeBtn.addEventListener("click", function () {
       removeRotationItem(i);
@@ -4543,7 +4700,7 @@
       var statsBtn = document.createElement("button");
       statsBtn.type = "button";
       statsBtn.className = "roster-stats-btn";
-      statsBtn.setAttribute("aria-label", "View stats for " + p.name);
+      statsBtn.setAttribute("aria-label", T("aria.viewStatsFor", { name: p.name }));
       statsBtn.textContent = "📊";
       statsBtn.addEventListener("click", function () {
         openPlayerStatsPage(p.name);
@@ -4553,7 +4710,7 @@
       var removeBtn = document.createElement("button");
       removeBtn.type = "button";
       removeBtn.className = "roster-remove";
-      removeBtn.setAttribute("aria-label", "Remove " + p.name);
+      removeBtn.setAttribute("aria-label", T("aria.removePlayer", { name: p.name }));
       removeBtn.textContent = "×";
       removeBtn.addEventListener("click", function () {
         removePlayerWithUndo(p.id);
@@ -4886,6 +5043,15 @@
     if (player.id === lastScoredPlayerId) valueEl.classList.add("stat-value-flash");
   }
 
+  // The + and − on a score card, named for what they do (P19): in a game
+  // where one rack is the win, the + wins the rack; otherwise it adds (and
+  // the − takes away) a rack, a ball or a point.
+  function scoreButtonAria(sign, name, unit, plusWinsRack) {
+    if (sign > 0 && plusWinsRack) return T("aria.winRackFor", { name: name });
+    var kind = unit === "rack" ? "Rack" : unit === "balls" ? "Ball" : "Point";
+    return T((sign > 0 ? "aria.add" : "aria.remove") + kind + "For", { name: name });
+  }
+
   function buildBallControls(player, disabled, undoOnMinus) {
     var controls = document.createElement("div");
     controls.className = "ball-controls";
@@ -4898,7 +5064,7 @@
     // disabled until host-status:true comes back over the relay.
     var networkBlocked = networkMode === "guest" && !networkHostConnected;
     if (undoOnMinus) {
-      minusBtn.setAttribute("aria-label", "Undo last win for " + player.name);
+      minusBtn.setAttribute("aria-label", T("aria.undoLastWinFor", { name: player.name }));
       var lastGame = state.gameHistory[0];
       var canUndo = !!(lastGame && typeof lastGame !== "string" && lastGame.winnerIds && lastGame.winnerIds.indexOf(player.id) !== -1);
       minusBtn.disabled = disabled || !canUndo || networkBlocked;
@@ -4906,7 +5072,7 @@
         requestUndoLastWin(player.id);
       });
     } else {
-      minusBtn.setAttribute("aria-label", "Remove point for " + player.name);
+      minusBtn.setAttribute("aria-label", scoreButtonAria(-1, player.name, quickCounterMode ? "points" : state.currentGame.unit, false));
       var minusAllowNegative = quickCounterMode || state.currentGame.unit !== "rack";
       minusBtn.disabled = disabled || (!minusAllowNegative && (player.balls || 0) <= 0) || networkBlocked;
       minusBtn.addEventListener("click", function () {
@@ -4933,7 +5099,7 @@
     plusBtn.type = "button";
     plusBtn.className = "btn-ball plus";
     plusBtn.textContent = "+";
-    plusBtn.setAttribute("aria-label", "Add point for " + player.name);
+    plusBtn.setAttribute("aria-label", scoreButtonAria(1, player.name, quickCounterMode ? "points" : state.currentGame.unit, !quickCounterMode && state.currentGame.unit === "rack" && (state.currentGame.target || 1) <= 1));
     plusBtn.disabled = disabled || networkBlocked;
     plusBtn.addEventListener("click", function () {
       // A direct tap on a card's own +/- (not the keypad) now also
@@ -5016,7 +5182,7 @@
     nameInput.className = "quick-counter-name-input";
     nameInput.value = player.name;
     nameInput.autocomplete = "off";
-    nameInput.setAttribute("aria-label", "Rename " + player.name);
+    nameInput.setAttribute("aria-label", T("aria.renamePlayer", { name: player.name }));
     nameInput.addEventListener("change", function () {
       renamePlayerInline(player.id, nameInput.value);
     });
@@ -5032,7 +5198,7 @@
     removeBtn.type = "button";
     removeBtn.className = "quick-counter-remove-player";
     removeBtn.textContent = "−";
-    removeBtn.setAttribute("aria-label", "Remove " + player.name);
+    removeBtn.setAttribute("aria-label", T("aria.removePlayer", { name: player.name }));
     removeBtn.addEventListener("click", function () {
       removePlayerWithUndo(player.id);
     });
@@ -5269,9 +5435,10 @@
       camBadge.className = "scorecard-camera-badge cam-" + camState;
       camBadge.dataset.playerId = player.id;
       camBadge.innerHTML =
-        '<span class="scorecard-camera-badge-icon">' + CAMERA_ICON_SVG + "</span>" +
+        '<span class="scorecard-camera-badge-icon">' + CAMERA_ICON_SVG + '<span class="scorecard-camera-badge-mark" aria-hidden="true"></span></span>' +
         '<span class="scorecard-camera-badge-plus" aria-hidden="true">+</span>' +
         '<span class="scorecard-camera-badge-question" aria-hidden="true">?</span>';
+      markCameraBadgeState(camBadge, camState);
       panel.appendChild(camBadge);
     }
 
@@ -5329,8 +5496,12 @@
 
     var block = document.createElement("div");
     block.className = "stat-block";
-    var value = document.createElement("div");
+    // (a real button - the keyboard's and a screen reader's way to pick the
+    // player; tapping the name does the same for a finger)
+    var value = document.createElement("button");
+    value.type = "button";
     value.className = "stat-value keypad-select-trigger";
+    value.setAttribute("aria-pressed", keypadSelectedPlayerId === player.id ? "true" : "false");
     value.addEventListener("click", function () {
       selectKeypadPlayer(player.id, null, true);
       window.PMCCameraBridge.resolveUnmatchedShooterPrompt(player.id);
@@ -5358,6 +5529,7 @@
       value.textContent = player.balls || 0;
       applyScoreFlash(value, player);
     }
+    value.setAttribute("aria-label", T("aria.selectPlayerScore", { name: player.name, score: value.textContent.replace(/\s+/g, " ").trim() }));
     block.appendChild(value);
 
     // The score, then the + zone under it - buildBallControls' own two
@@ -7229,14 +7401,18 @@
     });
 
     document.addEventListener("keydown", function (e) {
-      if (e.key !== "Escape") return;
-      if (!gameSheetOverlay.classList.contains("hidden")) closeGameSheet();
-      else if (!boardMenuOverlay.classList.contains("hidden")) closeBoardMenu();
-      else if (!benchSheetOverlay.classList.contains("hidden")) closeBenchSheet();
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      var top = topDialog();
+      if (top === gameSheetOverlay) closeGameSheet();
+      else if (top === boardMenuOverlay) closeBoardMenu();
+      else if (top === benchSheetOverlay) closeBenchSheet();
+      else return;
+      e.preventDefault();
     });
   }
 
   function renderScoreboard() {
+    noteBoardScoreLine();
     postRecorderContext(); // (the recording page names its cues from what's shown)
     var active = activePlayers();
     if (needsTwoAtTheTable()) {
@@ -8867,6 +9043,53 @@
     winBanner.notices = notices || [];
     renderWinBanner();
     revealWinBanner();
+    var main = winBannerEl.querySelector(".win-banner-main");
+    announceOnBoard([main ? main.textContent : ""].concat(winBanner.notices.map(function (n) { return n.text; })).filter(Boolean).join(". "));
+  }
+
+  // One polite live region for the board (P19, #score-announcer): the
+  // score after every change - the +, the −, undo, the keypad, voice, the
+  // camera; renderScoreboard notices it - with the win banner's words or
+  // a notice first. (The banner itself isn't a live region any more.)
+  var scoreAnnouncer = document.getElementById("score-announcer");
+  var announcedScoreLine = null;
+  var announcePrefixes = [];
+  var announceTimer = null;
+
+  function boardScoreLine() {
+    var playing = activePlayers();
+    if (!playing.length) return "";
+    var g = state.currentGame;
+    var winsCount = g.unit === "rack" && (g.target || 1) <= 1;
+    var parts = g.mode === "teams"
+      ? ["A", "B"].map(function (id) { return teamLabelLive(id) + " " + (winsCount ? state.teamWins[id] || 0 : sumTeamBalls(id)); })
+      : playing.map(function (p) { return p.name + " " + (winsCount ? state.playerWins[p.id] || 0 : p.balls || 0); });
+    return T("voice.done.score", { list: parts.join(", ") });
+  }
+
+  function flushBoardAnnouncement() {
+    announceTimer = null;
+    var line = boardScoreLine();
+    var parts = announcePrefixes.slice();
+    announcePrefixes = [];
+    if (line && line !== announcedScoreLine) parts.push(line);
+    announcedScoreLine = line;
+    if (!parts.length || !scoreAnnouncer) return;
+    // (emptied first, so the same words twice are still read twice)
+    scoreAnnouncer.textContent = "";
+    setTimeout(function () { scoreAnnouncer.textContent = parts.join(". "); }, 40);
+  }
+
+  function announceOnBoard(text) {
+    if (text) announcePrefixes.push(text);
+    if (announceTimer) clearTimeout(announceTimer);
+    announceTimer = setTimeout(flushBoardAnnouncement, 450);
+  }
+
+  function noteBoardScoreLine() {
+    var line = boardScoreLine();
+    if (announcedScoreLine == null) announcedScoreLine = line;
+    else if (line !== announcedScoreLine) announceOnBoard("");
   }
 
   // A notice of its own (no win: someone benched by hand, a time-up) -
@@ -8880,6 +9103,7 @@
     winBanner.notices.push({ text: text, sticky: !!sticky });
     renderWinBanner();
     revealWinBanner();
+    announceOnBoard(text);
   }
 
   function hideWinBanner() {
@@ -10000,18 +10224,37 @@
     return "Tournament";
   }
 
+  // The day report, the End night share, the picture card and the CSV are
+  // written in the app's language (P19) - they were always English. Dates,
+  // times and name lists follow that language too (REPORT_LOCALES).
+  var REPORT_LOCALES = { english: "en", french: "fr", spanish: "es", tagalog: "fil", cantonese: "zh-HK" };
+  function reportLocale() {
+    return REPORT_LOCALES[activeLanguageCode] || "en";
+  }
+
+  function formatReportRaceWinText(g) {
+    var names = joinNamesForReport((g.winnerNames || []).length ? g.winnerNames : (g.teammateNames || []));
+    if (g.timedSession) return T("report.raceWinTimed", { names: names, minutes: g.timedMinutes });
+    return T("report.raceWin", { names: names, target: g.raceTarget });
+  }
+
   function formatReportRaceWinLine(g) {
     var time = formatReportGameTime(g.ts);
-    var names = joinNamesForReport((g.winnerNames || []).length ? g.winnerNames : (g.teammateNames || []));
-    if (g.timedSession) return "🏆 " + (time ? time + " — " : "") + names + " won the " + g.timedMinutes + "-minute timed session!";
-    return "🏆 " + (time ? time + " — " : "") + names + " won the Race to " + g.raceTarget + " session!";
+    return "🏆 " + (time ? time + " — " : "") + formatReportRaceWinText(g);
+  }
+
+  function formatReportTournamentText(t) {
+    return T("report.tournamentWin", { names: joinNamesForReport(t.championNames || []), format: challongeFormatText(t.format), players: countPhrase("players", (t.players || []).length) });
   }
 
   function formatReportTournamentLine(t) {
     var time = formatReportGameTime(t.ts);
-    var champions = joinNamesForReport(t.championNames || []);
-    var text = champions + " won the " + tournamentFormatLabel(t.format) + " tournament (" + (t.players || []).length + " players)";
-    return "👑 " + (time ? time + " — " : "") + text;
+    return "👑 " + (time ? time + " — " : "") + formatReportTournamentText(t);
+  }
+
+  // "Kim def. Jo" / "Kim won" - one game-log result, in every format
+  function formatReportResult(winners, losers, scores) {
+    return (losers ? T("report.defeated", { winners: winners, losers: losers }) : T("report.wonAlone", { winners: winners })) + (scores && scores.length ? " " + scores.join(", ") : "");
   }
 
   function formatReportMatchupLine(m) {
@@ -10021,20 +10264,23 @@
   function appendReportMatchups(lines, data) {
     if (!data.matchups || !data.matchups.length) return;
     lines.push("");
-    lines.push("Matchups");
+    lines.push(T("endNight.matchups"));
     data.matchups.forEach(function (m) { lines.push(formatReportMatchupLine(m)); });
   }
 
   function formatReportBestRunLine(run) {
-    return "🔥 Best run of the day: " + run.value + " in a row (" + run.name + ")";
+    return T("report.bestRun", { n: run.value, name: run.name });
   }
 
   function joinNamesForReport(names) {
     names = names || [];
     if (names.length === 0) return "";
     if (names.length === 1) return names[0];
-    if (names.length === 2) return names[0] + " and " + names[1];
-    return names.slice(0, -1).join(", ") + ", and " + names[names.length - 1];
+    try {
+      return new Intl.ListFormat(reportLocale(), { style: "long", type: "conjunction" }).format(names);
+    } catch (e) {
+      return names.slice(0, -1).join(", ") + " & " + names[names.length - 1];
+    }
   }
 
   // Same idea as joinNamesForReport, but bounded - an individual-mode
@@ -10045,12 +10291,12 @@
   function joinNamesCapped(names, cap) {
     names = names || [];
     if (names.length <= cap) return joinNamesForReport(names);
-    return names.slice(0, cap).join(", ") + " +" + (names.length - cap) + " more";
+    return T("report.andMore", { names: names.slice(0, cap).join(", "), n: names.length - cap });
   }
 
   function formatReportGameTime(ts) {
     try {
-      return new Date(ts).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+      return new Date(ts).toLocaleTimeString(reportLocale(), { hour: "numeric", minute: "2-digit" });
     } catch (e) {
       return "";
     }
@@ -10100,8 +10346,8 @@
     var winners = joinNamesForReport(group.winnerNames || []);
     var losers = joinNamesForReport(group.opponentNames || []);
     var time = formatReportGameTime(group.ts);
-    var text = group.count === 1 ? winners + " won " + group.gameLabel : winners + " won " + group.count + " games of " + group.gameLabel;
-    if (losers) text += " against " + losers;
+    var text = group.count === 1 ? T("report.wonGame", { winners: winners, game: group.gameLabel }) : T("report.wonGames", { winners: winners, games: countPhrase("games", group.count), game: group.gameLabel });
+    if (losers) text += " " + T("report.against", { losers: losers });
     if (group.scores && group.scores.length) text += " (" + group.scores.join(", ") + ")";
     text += formatSkunkSuffix(group.skunkCount);
     return (time ? time + " — " : "") + text;
@@ -10185,8 +10431,7 @@
     var winners = joinNamesCapped(group.winnerNames || [], 2);
     var losers = joinNamesCapped(group.opponentNames || [], 2);
     var label = group.gameLabel + (group.count > 1 ? " ×" + group.count : "") + formatSkunkSuffix(group.skunkCount);
-    var result = (losers ? winners + " def. " + losers : winners + " won") + (group.scores && group.scores.length ? " " + group.scores.join(", ") : "");
-    return [formatReportGameTime(group.ts), result, label];
+    return [formatReportGameTime(group.ts), formatReportResult(winners, losers, group.scores), label];
   }
 
   // Always YYYY-MM-DD, regardless of the active language - dates are a
@@ -10207,7 +10452,7 @@
 
   function buildDayReportTextTable(dateStr) {
     var data = computeDayReportData(dateStr);
-    var lines = ["🎱 POOL MASTER COUNTER — DAY REPORT", formatReportDateHeading(dateStr), ""];
+    var lines = ["🎱 " + T("report.title").toLocaleUpperCase(reportLocale()), formatReportDateHeading(dateStr), ""];
     var leaderboardChangeLines = computeLeaderboardChangesLines();
     if (leaderboardChangeLines) {
       lines = lines.concat(leaderboardChangeLines);
@@ -10215,15 +10460,15 @@
     }
     var notes = getDayNotes(dateStr);
     if (notes) {
-      lines.push("Notes");
+      lines.push(T("report.notes"));
       lines.push(notes);
       lines.push("");
     }
     if (data.players.length === 0 && data.tournaments.length === 0) {
-      lines.push("No games recorded today.");
+      lines.push(T("report.noGames"));
     } else {
       if (data.players.length) {
-        var statHeaders = ["Player", "W", "L", "Rating", "Δ"];
+        var statHeaders = [T("report.colPlayer"), T("report.colW"), T("report.colL"), T("report.colRating"), "Δ"];
         var statRows = data.players.map(function (p) {
           return [p.name, String(p.wins), String(p.losses), String(p.rating), formatReportRatingDelta(p.ratingDelta)];
         });
@@ -10240,7 +10485,7 @@
             return label + " ×" + gameTypeCounts[label];
           })
           .join(", ");
-        lines.push("Total games: " + data.games.length + (typesSummary ? "   |   " + typesSummary : ""));
+        lines.push(T("report.totalGames", { n: data.games.length }) + (typesSummary ? "   |   " + typesSummary : ""));
       }
 
       if (data.raceWins.length || data.tournaments.length || data.bestRunToday) {
@@ -10262,19 +10507,19 @@
         return g.isLive;
       });
       var hasBothGroups = earlierGames.length > 0 && liveGames.length > 0;
-      var gameLogHeaders = ["Time", "Result", "Game"];
+      var gameLogHeaders = [T("report.colTime"), T("report.colResult"), T("report.colGame")];
 
       if (data.games.length > 0) {
         lines.push("");
-        lines.push("Game Log");
+        lines.push(T("report.gameLog"));
         if (hasBothGroups) {
           lines.push("");
-          lines.push("Earlier session:");
+          lines.push(T("report.earlierSession"));
           buildTextTable(gameLogHeaders, groupReportGames(earlierGames).map(gameLogTableRow)).forEach(function (l) {
             lines.push(l);
           });
           lines.push("");
-          lines.push("Current session:");
+          lines.push(T("report.currentSession"));
           buildTextTable(gameLogHeaders, groupReportGames(liveGames).map(gameLogTableRow)).forEach(function (l) {
             lines.push(l);
           });
@@ -10293,7 +10538,7 @@
   // played today.
   function buildDayReportTextCompact(dateStr) {
     var data = computeDayReportData(dateStr);
-    var lines = ["🎱 " + formatReportDateHeading(dateStr) + " — Day Report", ""];
+    var lines = ["🎱 " + formatReportDateHeading(dateStr) + " — " + T("report.dayReport"), ""];
     var leaderboardChangeLines = computeLeaderboardChangesLines();
     if (leaderboardChangeLines) {
       lines = lines.concat(leaderboardChangeLines);
@@ -10301,14 +10546,14 @@
     }
     var notes = getDayNotes(dateStr);
     if (notes) {
-      lines.push("Notes: " + notes);
+      lines.push(T("report.notesLine", { notes: notes }));
       lines.push("");
     }
     if (data.players.length === 0 && data.tournaments.length === 0) {
-      lines.push("No games recorded today.");
+      lines.push(T("report.noGames"));
     } else {
       if (data.players.length) {
-        var statHeaders = ["Player", "W", "L", "Rating", "Δ"];
+        var statHeaders = [T("report.colPlayer"), T("report.colW"), T("report.colL"), T("report.colRating"), "Δ"];
         var statRows = data.players.map(function (p) {
           return [p.name, String(p.wins), String(p.losses), String(p.rating), formatReportRatingDelta(p.ratingDelta)];
         });
@@ -10319,12 +10564,12 @@
         var skunkTotal = data.games.filter(function (g) {
           return g.skunk;
         }).length;
-        var gamesLine = data.games.length + " game" + (data.games.length === 1 ? "" : "s") + " played today.";
+        var gamesLine = T("report.gamesPlayedToday", { games: countPhrase("games", data.games.length) });
         // No per-game log in this format to attach a marker to (see the
         // other 3 builders' formatSkunkSuffix calls) - a same-line total
         // instead.
         if (skunkTotal > 0) {
-          gamesLine += " 🦨 " + skunkTotal + " skunk win" + (skunkTotal === 1 ? "" : "s") + ".";
+          gamesLine += " 🦨 " + countPhrase("skunkWins", skunkTotal) + ".";
         }
         lines.push(gamesLine);
       }
@@ -10349,11 +10594,11 @@
     var data = computeDayReportData(dateStr);
     var longDate;
     try {
-      longDate = new Date(dateStr + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+      longDate = new Date(dateStr + "T00:00:00").toLocaleDateString(reportLocale(), { weekday: "long", year: "numeric", month: "long", day: "numeric" });
     } catch (e) {
       longDate = formatReportDateHeading(dateStr);
     }
-    var lines = ["🎱 Pool Master Counter — Day Report", longDate, "══════════════════════════", ""];
+    var lines = ["🎱 " + T("report.title"), longDate, "══════════════════════════", ""];
     var leaderboardChangeLines = computeLeaderboardChangesLines();
     if (leaderboardChangeLines) {
       lines = lines.concat(leaderboardChangeLines);
@@ -10361,23 +10606,21 @@
     }
     var notes = getDayNotes(dateStr);
     if (notes) {
-      lines.push("NOTES");
+      lines.push(T("report.notes").toLocaleUpperCase(reportLocale()));
       lines.push(notes);
       lines.push("");
     }
     if (data.players.length === 0 && data.tournaments.length === 0) {
-      lines.push("No games recorded today.");
+      lines.push(T("report.noGames"));
     } else {
       if (data.players.length) {
-        lines.push("PLAYERS TODAY");
+        lines.push(T("report.playersToday").toLocaleUpperCase(reportLocale()));
         data.players.forEach(function (p) {
-          var winWord = p.wins === 1 ? "win" : "wins";
-          var lossWord = p.losses === 1 ? "loss" : "losses";
-          lines.push("• " + p.name + " — " + p.wins + " " + winWord + ", " + p.losses + " " + lossWord + ", rating " + p.rating + " (" + formatReportRatingDelta(p.ratingDelta) + ")");
+          lines.push("• " + T("report.playerLine", { name: p.name, wins: countPhrase("wins", p.wins), losses: countPhrase("losses", p.losses), rating: p.rating, delta: formatReportRatingDelta(p.ratingDelta) }));
         });
         lines.push("");
-        lines.push("SUMMARY");
-        lines.push("Total games played: " + data.games.length);
+        lines.push(T("report.summary").toLocaleUpperCase(reportLocale()));
+        lines.push(T("report.totalGamesPlayed", { n: data.games.length }));
         var gameTypeCounts = {};
         data.games.forEach(function (g) {
           gameTypeCounts[g.gameLabel] = (gameTypeCounts[g.gameLabel] || 0) + 1;
@@ -10387,12 +10630,12 @@
             return label + " (" + gameTypeCounts[label] + ")";
           })
           .join(", ");
-        if (typesSummary) lines.push("Games played: " + typesSummary);
+        if (typesSummary) lines.push(T("report.gamesPlayedList", { list: typesSummary }));
       }
 
       if (data.raceWins.length || data.tournaments.length || data.bestRunToday) {
         lines.push("");
-        lines.push("TOURNAMENTS");
+        lines.push(T("report.tournaments").toLocaleUpperCase(reportLocale()));
         data.raceWins.forEach(function (g) {
           lines.push(formatReportRaceWinLine(g));
         });
@@ -10405,7 +10648,7 @@
 
       if (data.games.length > 0) {
         lines.push("");
-        lines.push("GAME DETAILS");
+        lines.push(T("report.gameDetails").toLocaleUpperCase(reportLocale()));
         groupReportGames(data.games).forEach(function (g) {
           lines.push("✅ " + formatReportGameGroupLine(g));
         });
@@ -10425,7 +10668,7 @@
   // wherever it gets pasted is more likely to preserve a monospace font.
   function buildDayReportTextPlain(dateStr) {
     var data = computeDayReportData(dateStr);
-    var lines = ["🎱 POOL MASTER COUNTER — DAY REPORT", formatReportDateHeading(dateStr), ""];
+    var lines = ["🎱 " + T("report.title").toLocaleUpperCase(reportLocale()), formatReportDateHeading(dateStr), ""];
     var leaderboardChangeLines = computeLeaderboardChangesLines();
     if (leaderboardChangeLines) {
       lines = lines.concat(leaderboardChangeLines);
@@ -10433,15 +10676,15 @@
     }
     var notes = getDayNotes(dateStr);
     if (notes) {
-      lines.push("Notes: " + notes);
+      lines.push(T("report.notesLine", { notes: notes }));
       lines.push("");
     }
     if (data.players.length === 0 && data.tournaments.length === 0) {
-      lines.push("No games recorded today.");
+      lines.push(T("report.noGames"));
     } else {
       if (data.players.length) {
         data.players.forEach(function (p) {
-          lines.push(p.name + " — " + p.wins + "W-" + p.losses + "L, " + p.rating + " (" + formatReportRatingDelta(p.ratingDelta) + ")");
+          lines.push(p.name + " — " + p.wins + T("report.colW") + "-" + p.losses + T("report.colL") + ", " + p.rating + " (" + formatReportRatingDelta(p.ratingDelta) + ")");
         });
         lines.push("");
         var gameTypeCounts = {};
@@ -10453,7 +10696,7 @@
             return label + " ×" + gameTypeCounts[label];
           })
           .join(", ");
-        lines.push("Total games: " + data.games.length + (typesSummary ? " · " + typesSummary : ""));
+        lines.push(T("report.totalGames", { n: data.games.length }) + (typesSummary ? " · " + typesSummary : ""));
       }
 
       if (data.raceWins.length || data.tournaments.length || data.bestRunToday) {
@@ -10470,13 +10713,12 @@
 
       if (data.games.length > 0) {
         lines.push("");
-        lines.push("Game Log");
+        lines.push(T("report.gameLog"));
         groupReportGames(data.games).forEach(function (g) {
           var winners = joinNamesCapped(g.winnerNames || [], 2);
           var losers = joinNamesCapped(g.opponentNames || [], 2);
           var label = g.gameLabel + (g.count > 1 ? " ×" + g.count : "") + formatSkunkSuffix(g.skunkCount);
-          var result = (losers ? winners + " def. " + losers : winners + " won") + (g.scores && g.scores.length ? " " + g.scores.join(", ") : "");
-          lines.push(formatReportGameTime(g.ts) + " · " + result + " · " + label);
+          lines.push(formatReportGameTime(g.ts) + " · " + formatReportResult(winners, losers, g.scores) + " · " + label);
         });
       }
     }
@@ -10501,7 +10743,7 @@
     dayReportPrintView.innerHTML = "";
 
     var title = document.createElement("h1");
-    title.textContent = "🎱 Pool Master Counter — Day Report";
+    title.textContent = "🎱 " + T("report.title");
     dayReportPrintView.appendChild(title);
 
     var dateHeading = document.createElement("p");
@@ -10523,16 +10765,16 @@
 
     if (data.players.length === 0 && data.tournaments.length === 0) {
       var empty = document.createElement("p");
-      empty.textContent = "No games recorded today.";
+      empty.textContent = T("report.noGames");
       dayReportPrintView.appendChild(empty);
     } else {
       if (data.players.length) {
-        dayReportPrintView.appendChild(printReportSectionHeading("Players Today"));
+        dayReportPrintView.appendChild(printReportSectionHeading(T("report.playersToday")));
         var table = document.createElement("table");
         table.className = "print-report-table";
         var thead = document.createElement("thead");
         var headRow = document.createElement("tr");
-        ["Player", "Wins", "Losses", "Rating", "Rating Change"].forEach(function (h) {
+        [T("report.colPlayer"), T("report.colWins"), T("report.colLosses"), T("report.colRating"), T("report.colRatingChange")].forEach(function (h) {
           var th = document.createElement("th");
           th.textContent = h;
           headRow.appendChild(th);
@@ -10554,7 +10796,7 @@
       }
 
       if (data.raceWins.length || data.tournaments.length || data.bestRunToday) {
-        dayReportPrintView.appendChild(printReportSectionHeading("Tournaments"));
+        dayReportPrintView.appendChild(printReportSectionHeading(T("report.tournaments")));
         var tournList = document.createElement("ul");
         data.raceWins.forEach(function (g) {
           var li = document.createElement("li");
@@ -10575,7 +10817,7 @@
       }
 
       if (data.games.length > 0) {
-        dayReportPrintView.appendChild(printReportSectionHeading("Game Details"));
+        dayReportPrintView.appendChild(printReportSectionHeading(T("report.gameDetails")));
         var gamesList = document.createElement("ul");
         groupReportGames(data.games).forEach(function (g) {
           var li = document.createElement("li");
@@ -10588,7 +10830,7 @@
 
     var notes = dayNotesTextarea.value;
     if (notes) {
-      dayReportPrintView.appendChild(printReportSectionHeading("Notes"));
+      dayReportPrintView.appendChild(printReportSectionHeading(T("report.notes")));
       var notesP = document.createElement("p");
       notesP.className = "print-report-notes";
       notesP.textContent = notes;
@@ -10640,7 +10882,7 @@
 
     var longDate;
     try {
-      longDate = new Date(dateStr + "T00:00:00").toLocaleDateString(undefined, {
+      longDate = new Date(dateStr + "T00:00:00").toLocaleDateString(reportLocale(), {
         weekday: "long",
         year: "numeric",
         month: "long",
@@ -10673,12 +10915,10 @@
 
     var highlights = [];
     data.raceWins.forEach(function (g) {
-      var names = joinNamesForReport(((g.winnerNames && g.winnerNames.length ? g.winnerNames : g.teammateNames) || []));
-      highlights.push("🏆 " + names + " won the Race to " + g.raceTarget + " session!");
+      highlights.push("🏆 " + formatReportRaceWinText(g));
     });
     data.tournaments.forEach(function (t) {
-      var champs = joinNamesForReport(t.championNames || []);
-      highlights.push("👑 " + champs + " won the " + tournamentFormatLabel(t.format) + " tournament (" + (t.players || []).length + " players)");
+      highlights.push("👑 " + formatReportTournamentText(t));
     });
 
     var games = groupReportGames(data.games).map(function (g) {
@@ -10686,7 +10926,7 @@
       var losers = joinNamesForReport(g.opponentNames || []);
       var countText = g.count > 1 ? " ×" + g.count : "";
       var label = g.gameLabel + countText;
-      var plainResult = (losers ? winners + " def. " + losers : winners + " won") + (g.scores && g.scores.length ? " " + g.scores.join(", ") : "");
+      var plainResult = formatReportResult(winners, losers, g.scores);
       var skunkText = g.skunkCount > 0 ? " 🦨×" + g.skunkCount : "";
       return {
         time: formatReportGameTime(g.ts),
@@ -10714,10 +10954,20 @@
       // read from here, with the day report's own original copy as the
       // default so this call site's behavior is unchanged.
       appTitle: "🎱 Pool Master Counter",
-      tagline: "Don't get cocky!",
-      emptyText: "No games recorded today.",
-      leaderboardLabel: "Leaderboard",
-      gamesLabel: "Game Log",
+      tagline: T("report.tagline"),
+      emptyText: T("report.noGames"),
+      leaderboardLabel: T("leaderboard.heading"),
+      gamesLabel: T("report.gameLog"),
+      // (the rest of the card's words, in the app's language - an archived
+      // card from before has none, and its builders fall back to English)
+      highlightsLabel: T("report.highlights"),
+      notesLabel: T("report.notes"),
+      generatedText: T("report.generated", { when: formatTimestamp(new Date().toISOString(), true) }),
+      winLetter: T("report.colW"),
+      lossLetter: T("report.colL"),
+      defeatedWord: T("report.defeatedWord"),
+      wonWord: T("report.wonWord"),
+      shareLabel: T("endNight.share"),
       pageTitle: "Pool Master Counter — " + formatReportDateHeading(dateStr),
       imageFilename: "pool-master-counter-report-" + dateStr + ".png",
       players: players,
@@ -10754,7 +11004,7 @@
           '<span class="name">' + escapeHtmlForReport(p.name) + "</span>" +
           '<span class="rating">' + p.rating + ' <span class="delta ' + p.deltaClass + '">' + escapeHtmlForReport(p.deltaText) + "</span></span>" +
           "</div>" +
-          '<div class="record"><span class="win">' + p.wins + 'W</span> · <span class="loss">' + p.losses + "L</span></div>" +
+          '<div class="record"><span class="win">' + p.wins + escapeHtmlForReport(reportImageData.winLetter || "W") + '</span> · <span class="loss">' + p.losses + escapeHtmlForReport(reportImageData.lossLetter || "L") + "</span></div>" +
           '<div class="bar-track"><div class="bar-fill" style="width:' + p.barPct + '%"></div></div>' +
           "</div>" +
           "</div>"
@@ -10771,8 +11021,8 @@
     var gamesHtml = reportImageData.games
       .map(function (g) {
         var resultHtml = g.losers
-          ? "<strong>" + escapeHtmlForReport(g.winners) + "</strong> def. " + escapeHtmlForReport(g.losers)
-          : "<strong>" + escapeHtmlForReport(g.winners) + "</strong> won";
+          ? "<strong>" + escapeHtmlForReport(g.winners) + "</strong> " + escapeHtmlForReport(reportImageData.defeatedWord || "def.") + " " + escapeHtmlForReport(g.losers)
+          : "<strong>" + escapeHtmlForReport(g.winners) + "</strong> " + escapeHtmlForReport(reportImageData.wonWord || "won");
         var skunkHtml = g.skunkCount > 0 ? ' <span class="skunk-badge">🦨×' + g.skunkCount + "</span>" : "";
         return (
           '<div class="game-row">' +
@@ -10784,7 +11034,7 @@
       .join("");
 
     var notesHtml = reportImageData.notes
-      ? '<div class="section"><h2>Notes</h2><div class="notes-card">' + escapeHtmlForReport(reportImageData.notes) + "</div></div>"
+      ? '<div class="section"><h2>' + escapeHtmlForReport(reportImageData.notesLabel || "Notes") + '</h2><div class="notes-card">' + escapeHtmlForReport(reportImageData.notes) + "</div></div>"
       : "";
 
     return (
@@ -10832,17 +11082,17 @@
       ".share-btn:hover { border-color: var(--accent); color: var(--accent); }" +
       "@media print { .toolbar { display: none; } }" +
       "</style></head><body><div class=\"wrap\">" +
-      '<div class="toolbar"><button type="button" class="share-btn" id="shareReportBtn">📤 Share</button></div>' +
+      '<div class="toolbar"><button type="button" class="share-btn" id="shareReportBtn">' + escapeHtmlForReport(reportImageData.shareLabel || "📤 Share") + "</button></div>" +
       '<div class="hero"><h1>' + escapeHtmlForReport(reportImageData.appTitle) + '</h1><div class="date">' +
       escapeHtmlForReport(reportImageData.longDate) +
       '</div><div class="tagline">' + escapeHtmlForReport(reportImageData.tagline) + '</div></div>' +
       (reportImageData.players.length
         ? '<div class="section"><h2>' + escapeHtmlForReport(reportImageData.leaderboardLabel) + '</h2><div class="leaderboard">' + leaderboardHtml + "</div></div>"
         : '<div class="section"><p class="empty-note">' + escapeHtmlForReport(reportImageData.emptyText) + "</p></div>") +
-      (highlightsHtml ? '<div class="section"><h2>Highlights</h2>' + highlightsHtml + "</div>" : "") +
+      (highlightsHtml ? '<div class="section"><h2>' + escapeHtmlForReport(reportImageData.highlightsLabel || "Highlights") + "</h2>" + highlightsHtml + "</div>" : "") +
       (gamesHtml ? '<div class="section"><h2>' + escapeHtmlForReport(reportImageData.gamesLabel) + '</h2><div class="game-log">' + gamesHtml + "</div></div>" : "") +
       notesHtml +
-      "<footer>Generated " + escapeHtmlForReport(reportImageData.generatedAt) + " · Pool Master Counter</footer>" +
+      "<footer>" + escapeHtmlForReport(reportImageData.generatedText || "Generated " + reportImageData.generatedAt) + " · Pool Master Counter</footer>" +
       "</div>" +
       buildColorfulReportShareScript(reportImageData) +
       "</body></html>"
@@ -11016,14 +11266,14 @@
 
         ctx.font = "13px " + font;
         ctx.fillStyle = tok("--accent", "#e8b923");
-        var winsText = p.wins + "W";
+        var winsText = p.wins + (reportData.winLetter || "W");
         ctx.fillText(winsText, contentX, cardY + 42);
         var winsW = ctx.measureText(winsText).width;
         ctx.fillStyle = tok("--text-dim", "#c9a2a2");
         ctx.fillText(" · ", contentX + winsW, cardY + 42);
         var sepW = ctx.measureText(" · ").width;
         ctx.fillStyle = tok("--danger", "#ff5252");
-        ctx.fillText(p.losses + "L", contentX + winsW + sepW, cardY + 42);
+        ctx.fillText(p.losses + (reportData.lossLetter || "L"), contentX + winsW + sepW, cardY + 42);
 
         var barY = cardY + 54,
           barW = contentW;
@@ -11046,7 +11296,7 @@
 
     if (reportData.highlights.length) {
       cy += SECTION_GAP - PLAYER_GAP;
-      drawLabel("Highlights");
+      drawLabel(reportData.highlightsLabel || "Highlights");
       reportData.highlights.forEach(function (line) {
         var g = ctx.createLinearGradient(PAD, cy, PAD + CW, cy);
         g.addColorStop(0, tok("--accent-dark", "#b8890f"));
@@ -11092,7 +11342,7 @@
 
     if (reportData.notes) {
       cy += SECTION_GAP;
-      drawLabel("Notes");
+      drawLabel(reportData.notesLabel || "Notes");
       ctx.fillStyle = tok("--bg-card", "#2e1414");
       reportCanvasRoundRect(ctx, PAD, cy, CW, notesCardH, 8);
       ctx.fill();
@@ -11111,7 +11361,7 @@
     ctx.textAlign = "center";
     ctx.font = "11px " + font;
     ctx.fillStyle = tok("--text-dim", "#c9a2a2");
-    ctx.fillText("Generated " + reportData.generatedAt + " · Pool Master Counter", W / 2, cy + 32);
+    ctx.fillText((reportData.generatedText || "Generated " + reportData.generatedAt) + " · Pool Master Counter", W / 2, cy + 32);
     ctx.textAlign = "left";
 
     return canvas;
@@ -11250,14 +11500,14 @@
       'ctx.textAlign="left";',
       'ctx.font="13px "+font;',
       'ctx.fillStyle=tok("--accent","#e8b923");',
-      'var winsText=p.wins+"W";',
+      'var winsText=p.wins+(DATA.winLetter||"W");',
       "ctx.fillText(winsText,contentX,cardY+42);",
       "var winsW=ctx.measureText(winsText).width;",
       'ctx.fillStyle=tok("--text-dim","#c9a2a2");',
       'ctx.fillText(" · ",contentX+winsW,cardY+42);',
       'var sepW=ctx.measureText(" · ").width;',
       'ctx.fillStyle=tok("--danger","#ff5252");',
-      'ctx.fillText(p.losses+"L",contentX+winsW+sepW,cardY+42);',
+      'ctx.fillText(p.losses+(DATA.lossLetter||"L"),contentX+winsW+sepW,cardY+42);',
       "var barY=cardY+54,barW=contentW;",
       'ctx.fillStyle=tok("--bg-panel","#241010");',
       "roundRect(ctx,contentX,barY,barW,5,3);ctx.fill();",
@@ -11274,7 +11524,7 @@
       "}",
       "if(DATA.highlights.length){",
       "cy+=SECTION_GAP-PLAYER_GAP;",
-      'drawLabel("Highlights");',
+      'drawLabel(DATA.highlightsLabel||"Highlights");',
       "DATA.highlights.forEach(function(line){",
       "var g=ctx.createLinearGradient(PAD,cy,PAD+CW,cy);",
       'g.addColorStop(0,tok("--accent-dark","#b8890f"));',
@@ -11315,7 +11565,7 @@
       "}",
       "if(DATA.notes){",
       "cy+=SECTION_GAP;",
-      'drawLabel("Notes");',
+      'drawLabel(DATA.notesLabel||"Notes");',
       'ctx.fillStyle=tok("--bg-card","#2e1414");',
       "roundRect(ctx,PAD,cy,CW,notesCardH,8);ctx.fill();",
       'ctx.fillStyle=tok("--accent","#e8b923");',
@@ -11329,7 +11579,7 @@
       'ctx.textAlign="center";',
       'ctx.font="11px "+font;',
       'ctx.fillStyle=tok("--text-dim","#c9a2a2");',
-      'ctx.fillText("Generated "+DATA.generatedAt+" · Pool Master Counter",W/2,cy+32);',
+      'ctx.fillText((DATA.generatedText||"Generated "+DATA.generatedAt)+" · Pool Master Counter",W/2,cy+32);',
       'ctx.textAlign="left";',
       "return canvas;",
       "}",
@@ -11518,16 +11768,16 @@
   function buildDayReportCsv(dateStr) {
     var data = computeDayReportData(dateStr);
     var lines = [];
-    lines.push(csvRow(["Pool Master Counter — Day Report", formatReportDateHeading(dateStr)]));
+    lines.push(csvRow([T("report.title"), formatReportDateHeading(dateStr)]));
     lines.push("\r\n");
 
-    lines.push(csvRow(["Player", "Wins", "Losses", "Rating", "Rating Change"]));
+    lines.push(csvRow([T("report.colPlayer"), T("report.colWins"), T("report.colLosses"), T("report.colRating"), T("report.colRatingChange")]));
     data.players.forEach(function (p) {
       lines.push(csvRow([p.name, p.wins, p.losses, p.rating, formatReportRatingDelta(p.ratingDelta)]));
     });
     lines.push("\r\n");
 
-    lines.push(csvRow(["Time", "Winner(s)", "Opponent(s)", "Game", "Duration", "Race Milestone", "Skunk"]));
+    lines.push(csvRow([T("report.colTime"), T("report.colWinners"), T("report.colOpponents"), T("report.colGame"), T("report.colDuration"), T("report.colRace"), T("report.colSkunk")]));
     data.games.forEach(function (g) {
       lines.push(
         csvRow([
@@ -11536,23 +11786,23 @@
           joinNamesForReport(g.opponentNames || []),
           g.gameLabel,
           formatDuration(g.durationMs),
-          g.wonRace ? (g.timedSession ? g.timedMinutes + "-minute session" : "Race to " + g.raceTarget) : "",
-          g.skunk ? "Yes" : ""
+          g.wonRace ? (g.timedSession ? T("report.timedSession", { minutes: g.timedMinutes }) : T("board.statusRace", { n: g.raceTarget })) : "",
+          g.skunk ? T("report.yes") : ""
         ])
       );
     });
 
     if (data.tournaments.length) {
       lines.push("\r\n");
-      lines.push(csvRow(["Time", "Tournament", "Champion(s)", "Players"]));
+      lines.push(csvRow([T("report.colTime"), T("report.colTournament"), T("report.colChampions"), T("report.colPlayers")]));
       data.tournaments.forEach(function (t) {
-        lines.push(csvRow([formatReportGameTime(t.ts), tournamentFormatLabel(t.format), joinNamesForReport(t.championNames || []), (t.players || []).length]));
+        lines.push(csvRow([formatReportGameTime(t.ts), challongeFormatText(t.format), joinNamesForReport(t.championNames || []), (t.players || []).length]));
       });
     }
 
     if (data.bestRunToday) {
       lines.push("\r\n");
-      lines.push(csvRow(["Best Run Today", "Player"]));
+      lines.push(csvRow([T("report.bestRunToday"), T("report.colPlayer")]));
       lines.push(csvRow([data.bestRunToday.value, data.bestRunToday.name]));
     }
 
@@ -13516,7 +13766,8 @@
     minusBtn.type = "button";
     minusBtn.className = "btn-ball minus";
     minusBtn.textContent = "−";
-    minusBtn.setAttribute("aria-label", "Remove point for " + name);
+    var leaguePoints = league.handicapSystem === "apa" && league.format === "apa9ball";
+    minusBtn.setAttribute("aria-label", scoreButtonAria(-1, name, leaguePoints ? "points" : "rack", false));
     minusBtn.disabled = score <= 0;
     minusBtn.addEventListener("click", function () {
       leagueAdjustScore(league, active, side, -1);
@@ -13526,7 +13777,7 @@
     plusBtn.type = "button";
     plusBtn.className = "btn-ball plus";
     plusBtn.textContent = "+";
-    plusBtn.setAttribute("aria-label", "Add point for " + name);
+    plusBtn.setAttribute("aria-label", scoreButtonAria(1, name, leaguePoints ? "points" : "rack", !leaguePoints));
     plusBtn.addEventListener("click", function () {
       leagueAdjustScore(league, active, side, 1);
     });
@@ -13845,7 +14096,7 @@
         league.focusedTable = tableNum;
         saveLeaguesToStorage(LEAGUES);
         renderLeaguePage();
-        leagueCurrentMatchPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+        leagueCurrentMatchPanel.scrollIntoView({ behavior: smoothOrInstant(), block: "start" });
       });
       card.appendChild(jumpBtn);
       return card;
@@ -15339,6 +15590,21 @@
     '<path d="M9.2 4.5c.3-.5.8-.8 1.4-.8h2.8c.6 0 1.1.3 1.4.8l.9 1.5H19a3 3 0 0 1 3 3V17a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3V9a3 3 0 0 1 3-3h3.3l.9-1.5Z" fill="currentColor"/>' +
     '<circle cx="12" cy="13" r="3.4" fill="none" stroke="#fff" stroke-width="1.5"/>' +
     "</svg>";
+
+  // The score card's camera icon is coloured by state (see
+  // SCORECARD_CAMERA_STATE_CLASSES, inside boot) and carries a shape for each,
+  // so a state never rests on its colour alone
+  // (P19 - green and yellow look alike to red-green colour blindness):
+  // ✓ recognized, ≈ taken for them, ↗ out of view, – not seen. A screen
+  // reader hears the state's name.
+  var SCORECARD_CAMERA_STATE_MARKS = { recognized: "✓", suspected: "≈", located: "↗", none: "–" };
+
+  function markCameraBadgeState(badge, camState) {
+    var mark = badge.querySelector(".scorecard-camera-badge-mark");
+    if (mark) mark.textContent = SCORECARD_CAMERA_STATE_MARKS[camState] || "";
+    badge.setAttribute("role", "img");
+    badge.setAttribute("aria-label", T("cameraState." + camState));
+  }
 
   // Shows a fixed 18x18 camera icon when this player has real camera-
   // enrollment samples saved, or a small "Enroll" button when they don't
@@ -17829,7 +18095,7 @@
     var btn = document.createElement("button");
     btn.type = "button";
     btn.className = "btn btn-ghost player-link-icon";
-    btn.setAttribute("aria-label", "View " + name + "'s single-player stats");
+    btn.setAttribute("aria-label", T("aria.viewSinglePlayerStats", { name: name }));
     btn.innerHTML =
       '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" ' +
       'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
@@ -21642,7 +21908,7 @@
     });
     saveState();
     renderAll();
-    showToast("Loaded \"" + roster.label + "\" — " + players.length + " player" + (players.length === 1 ? "" : "s") + ".");
+    showToast(T("toast.loadedRoster", { label: roster.label, players: countPhrase("players", players.length) }));
   }
 
   function loadSelectedRoster() {
@@ -22384,7 +22650,7 @@
   }
 
   function renderWizardPlayingList() {
-    renderPlayingToggleListInto(wizardPlayingList, "No players yet — go back and add some.");
+    renderPlayingToggleListInto(wizardPlayingList, T("wizard.noPlayersYet"));
     var playingCount = state.players.filter(function (p) {
       return p.playing;
     }).length;
@@ -26146,7 +26412,7 @@
       detail.hidden = !willExpand;
       li.classList.toggle("is-collapsed", !willExpand);
       toggleBtn.setAttribute("aria-expanded", willExpand ? "true" : "false");
-      if (willExpand) detail.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (willExpand) detail.scrollIntoView({ behavior: smoothOrInstant(), block: "start" });
     }
     toggleBtn.addEventListener("click", toggleExpanded);
     chevron.addEventListener("click", toggleExpanded);
@@ -26177,7 +26443,7 @@
           }
           var nowHidden = graphHolder.classList.toggle("hidden");
           showGraphBtn.textContent = T(nowHidden ? "allPlayers.showGraph" : "allPlayers.hideGraph");
-          if (!nowHidden) graphHolder.scrollIntoView({ behavior: "smooth", block: "start" });
+          if (!nowHidden) graphHolder.scrollIntoView({ behavior: smoothOrInstant(), block: "start" });
         });
         detail.appendChild(showGraphBtn);
         detail.appendChild(graphHolder);
@@ -27337,28 +27603,28 @@
       if (mvpChanged && e.name === currentMvp) return; // covered by the MVP line instead
       var prevRank = previousRankByName[e.name];
       if (prevRank === undefined) {
-        movers.push(e.name + " joined the rankings at #" + e.rank + ".");
+        movers.push(T("report.lbJoined", { name: e.name, rank: e.rank }));
       } else if (prevRank !== e.rank) {
         movers.push(
           e.rank < prevRank
-            ? e.name + " climbed to #" + e.rank + " (was #" + prevRank + ")."
-            : e.name + " dropped to #" + e.rank + " (was #" + prevRank + ")."
+            ? T("report.lbClimbed", { name: e.name, rank: e.rank, was: prevRank })
+            : T("report.lbDropped", { name: e.name, rank: e.rank, was: prevRank })
         );
       }
     });
     previous.forEach(function (e) {
-      if (!currentNameSet[e.name]) movers.push(e.name + " dropped out of the rankings.");
+      if (!currentNameSet[e.name]) movers.push(T("report.lbDroppedOut", { name: e.name }));
     });
 
     if (!mvpChanged && movers.length === 0) return null;
 
-    var lines = ["🏆 Leaderboard update:"];
-    if (mvpChanged) lines.push("New MVP — " + currentMvp + " (was " + previousMvp + ").");
+    var lines = ["🏆 " + T("report.lbUpdate")];
+    if (mvpChanged) lines.push(T("report.lbNewMvp", { name: currentMvp, was: previousMvp }));
     var shown = movers.slice(0, LEADERBOARD_CHANGE_MOVERS_CAP);
     var overflow = movers.length - shown.length;
     lines = lines.concat(shown);
     if (overflow > 0) {
-      lines.push("...and " + overflow + " more change" + (overflow === 1 ? "" : "s") + ".");
+      lines.push(T("report.lbMoreChanges", { changes: countPhrase("changes", overflow) }));
     }
     return lines;
   }
@@ -32747,6 +33013,7 @@
       cancel.type = "button";
       cancel.className = "btn btn-ghost";
       cancel.textContent = T("common.cancel");
+      cancel.setAttribute("data-dialog-close", "");
       cancel.addEventListener("click", close);
       card.appendChild(cancel);
     }
@@ -32818,6 +33085,7 @@
     cancel.type = "button";
     cancel.className = "btn btn-ghost";
     cancel.textContent = T("common.cancel");
+    cancel.setAttribute("data-dialog-close", "");
     cancel.addEventListener("click", close);
     card.appendChild(save);
     card.appendChild(cancel);
@@ -33448,7 +33716,7 @@
     // where that tap came from, so jump there directly instead of
     // leaving whoever just started the match staring at wherever they
     // happened to be scrolled to.
-    tournamentCurrentMatchPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+    tournamentCurrentMatchPanel.scrollIntoView({ behavior: smoothOrInstant(), block: "start" });
   }
 
   // active: the specific t.activeMatches entry this board's +/- buttons
@@ -33568,7 +33836,7 @@
     minusBtn.type = "button";
     minusBtn.className = "btn-ball minus";
     minusBtn.textContent = "−";
-    minusBtn.setAttribute("aria-label", "Remove point for " + name);
+    minusBtn.setAttribute("aria-label", scoreButtonAria(-1, name, unit, false));
     minusBtn.disabled = (!allowNegative && balls <= 0) || networkBlocked;
     minusBtn.addEventListener("click", function () {
       requestTournamentAdjustScore(active, side, -1);
@@ -33578,7 +33846,7 @@
     plusBtn.type = "button";
     plusBtn.className = "btn-ball plus";
     plusBtn.textContent = "+";
-    plusBtn.setAttribute("aria-label", "Add point for " + name);
+    plusBtn.setAttribute("aria-label", scoreButtonAria(1, name, unit, unit === "rack"));
     plusBtn.disabled = networkBlocked;
     plusBtn.addEventListener("click", function () {
       requestTournamentAdjustScore(active, side, 1);
@@ -36057,8 +36325,10 @@
       if (!player) return;
       var name = player.name;
       var needsConfirm = scorecardCameraNeedsConfirmName === name;
-      var stateClass = "cam-" + scorecardCameraStateFor(name, needsConfirm);
+      var camState = scorecardCameraStateFor(name, needsConfirm);
+      var stateClass = "cam-" + camState;
       SCORECARD_CAMERA_STATE_CLASSES.forEach(function (c) { badge.classList.toggle(c, c === stateClass); });
+      markCameraBadgeState(badge, camState);
       badge.classList.toggle("show-plus", !!scorecardCameraRecentlyUpdatedTimers[name]);
       badge.classList.toggle("show-question", needsConfirm);
     });
@@ -37719,7 +37989,7 @@
   btnLeagueWizardNext.addEventListener("click", leagueWizardNext);
   btnLeagueWizardFinish.addEventListener("click", function () {
     closeLeagueWizard();
-    leagueTablesGrid.scrollIntoView({ behavior: "smooth", block: "start" });
+    leagueTablesGrid.scrollIntoView({ behavior: smoothOrInstant(), block: "start" });
   });
   btnLeagueWizardMarkAll.addEventListener("click", function () {
     var league = leagueWizardOrganizerLeague();

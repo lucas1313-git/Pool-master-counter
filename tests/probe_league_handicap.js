@@ -81,7 +81,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       const ok = await page.evaluate((name, nine) => {
         const b = nine
           ? [...document.querySelectorAll("#league-current-match-panel .league-nine-ball")].find((x) => x.getAttribute("aria-label").includes(name))
-          : [...document.querySelectorAll("#league-current-match-panel button.btn-ball.plus")].find((x) => x.getAttribute("aria-label") === "Add point for " + name);
+          : [...document.querySelectorAll("#league-current-match-panel button.btn-ball.plus")].find((x) => x.getAttribute("aria-label").endsWith(" for " + name));
         if (b) b.click();
         return !!b;
       }, name, nine);

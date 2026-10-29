@@ -2,7 +2,8 @@
 // - every key in all five language files, none empty;
 // - no English UI string with "(target 1)" or "1 wins", no "game(s)"-style plurals in any language,
 //   no "Q-Score" (the rating is "Rating"; Fargo only for real FargoRate numbers);
-// - every key the code and index.html name literally (T("…"), TP("…"), data-i18n="…") exists;
+// - every key the code, index.html and camera.html name literally (T("…"), TP("…"), CT("…"),
+//   data-i18n="…") exists;
 // - every sentence the code counts with TP("…", n) that has a plural noun after its count has its
 //   singular ("…One") too, in every language.
 // usage: node tests/test_strings.js
@@ -58,14 +59,18 @@ const longHelp = helpSentences.filter((n) => n > 30);
 check("help sentences are short: " + helpSentences.length + " average " + avgHelp.toFixed(1) + " words (at most 15), none over 30", avgHelp <= 15 && longHelp.length === 0, longHelp);
 
 // keys the code names
-const sources = ["js/app.js", "js/voice.js", "js/pairing.js", "js/recording-consent.js", "js/local-recorder.js", "js/camera-client.js"].map((f) => fs.readFileSync(path.join(REPO, f), "utf8")).join("\n");
+const sources = ["js/app.js", "js/voice.js", "js/pairing.js", "js/recording-consent.js", "js/local-recorder.js", "js/camera-client.js", "js/camera-i18n.js"].map((f) => fs.readFileSync(path.join(REPO, f), "utf8")).join("\n");
 const html = fs.readFileSync(path.join(REPO, "index.html"), "utf8");
 const used = new Set();
 // (a literal that's the whole key - "storage.group." + id is built, not named)
 for (const m of sources.matchAll(/\bTP?\("([a-zA-Z][a-zA-Z0-9_]*\.[a-zA-Z0-9_.]*[a-zA-Z0-9_])"\s*[,)]/g)) used.add(m[1]);
 for (const m of html.matchAll(/data-i18n(?:-[a-z-]+)?="([a-zA-Z][a-zA-Z0-9_]*\.[a-zA-Z0-9_.]+)"/g)) used.add(m[1]);
+// camera.html's own words (P19): data-i18n there, CT("…") in its script
+const camera = fs.readFileSync(path.join(REPO, "camera.html"), "utf8");
+for (const m of camera.matchAll(/data-i18n(?:-[a-z-]+)?="([a-zA-Z][a-zA-Z0-9_]*\.[a-zA-Z0-9_.]+)"/g)) used.add(m[1]);
+for (const m of camera.matchAll(/\bCT\("([a-zA-Z][a-zA-Z0-9_]*\.[a-zA-Z0-9_.]*[a-zA-Z0-9_])"/g)) used.add(m[1]);
 const unknown = [...used].filter((k) => !(k in en));
-check("every key named in the code and index.html exists (" + used.size + " named)", unknown.length === 0, unknown);
+check("every key named in the code, index.html and camera.html exists (" + used.size + " named)", unknown.length === 0, unknown);
 
 // TP's singulars
 const tpKeys = new Set();

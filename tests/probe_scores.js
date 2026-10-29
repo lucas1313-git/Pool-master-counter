@@ -62,7 +62,7 @@ const readBig = (page, name) => page.evaluate((name) => new Promise((resolve) =>
     await page.goto(BASE, { waitUntil: "networkidle2" });
     await sleep(800);
   };
-  const tapPlus = (name) => page.evaluate((name) => [...document.querySelectorAll("#scoreboard button.btn-ball.plus")].find((b) => b.getAttribute("aria-label") === "Add point for " + name).click(), name);
+  const tapPlus = (name) => page.evaluate((name) => [...document.querySelectorAll("#scoreboard button.btn-ball.plus")].find((b) => b.getAttribute("aria-label").endsWith(" for " + name)).click(), name);
   const closeAll = () => page.evaluate(() => {
     for (let i = 0; i < 6; i++) {
       const shown = (x) => !x.classList.contains("hidden") && getComputedStyle(x).display !== "none" && x.getClientRects().length > 0;

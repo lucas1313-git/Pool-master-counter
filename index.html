@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261029f">
+<link rel="stylesheet" href="css/style.css?v=20261029g">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -52,7 +52,7 @@
 
   <header class="app-header">
     <div class="brand">
-      <svg class="brand-logo" viewBox="0 0 120 120" role="img" aria-label="Pool Master Counter logo">
+      <svg class="brand-logo" viewBox="0 0 120 120" role="img" aria-label="Pool Master Counter logo" data-i18n-aria-label="common.logoAria">
         <defs>
           <radialGradient id="logoBg" cx="35%" cy="30%" r="75%">
             <stop offset="0%" style="stop-color: var(--felt-light)" />
@@ -967,7 +967,8 @@
 
 <div id="page-toast" class="page-toast hidden" aria-live="polite"></div>
 <!-- each rack's win, its Undo and every notice (on the hill, next player, game change) - never in the way (js/app.js showWinBanner) -->
-<div id="win-banner" class="win-banner hidden" role="status" aria-live="polite"></div>
+<div id="win-banner" class="win-banner hidden"></div>
+<div id="score-announcer" class="visually-hidden" aria-live="polite" aria-atomic="true"></div>
 <div id="voice-live" class="voice-live hidden" aria-live="polite"></div>
 
 <div id="voice-sheet-overlay" class="help-overlay hidden">
@@ -1200,7 +1201,7 @@
     </div>
     <div class="gs-row first-run-race">
       <label class="gs-label" for="first-run-race" data-i18n="gameSheet.raceTo">Race to</label>
-      <span class="gs-stepper"><button type="button" class="gs-step first-run-step" data-step="-1" aria-label="−">−</button><input type="number" id="first-run-race" class="gs-number" min="1" max="99" value="5" inputmode="numeric"><button type="button" class="gs-step first-run-step" data-step="1" aria-label="+">+</button></span>
+      <span class="gs-stepper"><button type="button" class="gs-step first-run-step" data-step="-1" aria-label="Less" data-i18n-aria-label="common.stepDown">−</button><input type="number" id="first-run-race" class="gs-number" min="1" max="99" value="5" inputmode="numeric"><button type="button" class="gs-step first-run-step" data-step="1" aria-label="More" data-i18n-aria-label="common.stepUp">+</button></span>
     </div>
     <button type="button" id="btn-first-run-start" class="btn btn-primary first-run-start" data-i18n="firstRun.start">▶️ Start</button>
     <div class="first-run-more">
@@ -1232,7 +1233,7 @@
       </div>
       <div class="gs-row">
         <label class="gs-label" for="gs-target" data-i18n="gameSheet.target">Target</label>
-        <span class="gs-stepper"><button type="button" class="gs-step" data-for="gs-target" data-step="-1" aria-label="−">−</button><input type="number" id="gs-target" class="gs-number" min="1" max="500" inputmode="numeric"><button type="button" class="gs-step" data-for="gs-target" data-step="1" aria-label="+">+</button></span>
+        <span class="gs-stepper"><button type="button" class="gs-step" data-for="gs-target" data-step="-1" aria-label="Less" data-i18n-aria-label="common.stepDown">−</button><input type="number" id="gs-target" class="gs-number" min="1" max="500" inputmode="numeric"><button type="button" class="gs-step" data-for="gs-target" data-step="1" aria-label="More" data-i18n-aria-label="common.stepUp">+</button></span>
         <select id="gs-unit" class="gs-select gs-unit">
           <option value="rack" data-i18n="units.rack">rack</option>
           <option value="balls" data-i18n="units.balls">balls</option>
@@ -1246,7 +1247,7 @@
           <label class="gs-chip"><input type="radio" name="gs-race" value="single"> <span data-i18n="gameSheet.single">Single games</span></label>
           <label class="gs-chip"><input type="radio" name="gs-race" value="race"> <span data-i18n="gameSheet.raceTo">Race to</span></label>
         </span>
-        <span class="gs-stepper" id="gs-race-stepper"><button type="button" class="gs-step" data-for="gs-race-to" data-step="-1" aria-label="−">−</button><input type="number" id="gs-race-to" class="gs-number" min="2" max="99" inputmode="numeric" data-i18n-aria-label="gameSheet.raceTo" aria-label="Race to"><button type="button" class="gs-step" data-for="gs-race-to" data-step="1" aria-label="+">+</button></span>
+        <span class="gs-stepper" id="gs-race-stepper"><button type="button" class="gs-step" data-for="gs-race-to" data-step="-1" aria-label="Less" data-i18n-aria-label="common.stepDown">−</button><input type="number" id="gs-race-to" class="gs-number" min="2" max="99" inputmode="numeric" data-i18n-aria-label="gameSheet.raceTo" aria-label="Race to"><button type="button" class="gs-step" data-for="gs-race-to" data-step="1" aria-label="More" data-i18n-aria-label="common.stepUp">+</button></span>
       </div>
       <div class="gs-row">
         <span class="gs-label" data-i18n="gameSheet.rotation">Rotation</span>
@@ -1259,7 +1260,7 @@
       </div>
       <div class="gs-row gs-subrow" id="gs-rotation-every-row">
         <label class="gs-label" for="gs-rotation-every" data-i18n="gameSheet.changeEvery">Change game every</label>
-        <span class="gs-stepper"><button type="button" class="gs-step" data-for="gs-rotation-every" data-step="-1" aria-label="−">−</button><input type="number" id="gs-rotation-every" class="gs-number" min="1" max="99" inputmode="numeric"><button type="button" class="gs-step" data-for="gs-rotation-every" data-step="1" aria-label="+">+</button></span>
+        <span class="gs-stepper"><button type="button" class="gs-step" data-for="gs-rotation-every" data-step="-1" aria-label="Less" data-i18n-aria-label="common.stepDown">−</button><input type="number" id="gs-rotation-every" class="gs-number" min="1" max="99" inputmode="numeric"><button type="button" class="gs-step" data-for="gs-rotation-every" data-step="1" aria-label="More" data-i18n-aria-label="common.stepUp">+</button></span>
         <button type="button" id="btn-gs-edit-lineup" class="btn btn-ghost" data-i18n="gameSheet.editLineup">Edit the lineup…</button>
       </div>
       <div class="gs-row">
@@ -1273,19 +1274,19 @@
       <label class="gs-toggle"><input type="checkbox" id="gs-winner-stays"> <span data-i18n="gameSheet.winnerStays">🎱 Winner Stays - the loser goes to the back of the line</span></label>
       <div class="gs-row gs-subrow" id="gs-max-streak-row">
         <label class="gs-label" for="gs-max-streak" data-i18n="gameSheet.maxStreak">Most wins in a row</label>
-        <span class="gs-stepper"><button type="button" class="gs-step" data-for="gs-max-streak" data-step="-1" aria-label="−">−</button><input type="number" id="gs-max-streak" class="gs-number" min="0" max="20" inputmode="numeric"><button type="button" class="gs-step" data-for="gs-max-streak" data-step="1" aria-label="+">+</button></span>
+        <span class="gs-stepper"><button type="button" class="gs-step" data-for="gs-max-streak" data-step="-1" aria-label="Less" data-i18n-aria-label="common.stepDown">−</button><input type="number" id="gs-max-streak" class="gs-number" min="0" max="20" inputmode="numeric"><button type="button" class="gs-step" data-for="gs-max-streak" data-step="1" aria-label="More" data-i18n-aria-label="common.stepUp">+</button></span>
         <span class="gs-unit-word" data-i18n="gameSheet.maxStreakHint">(0: no limit)</span>
       </div>
       <p class="gs-note hidden" id="gs-pairing-note" data-i18n="gameSheet.racePerPairing">With Winner Stays, the race is each pairing's: the first to it stays, the other goes to the back of the line.</p>
       <div class="gs-row">
         <label class="gs-toggle"><input type="checkbox" id="gs-timed"> <span data-i18n="gameSheet.timed">⏰ Timed</span></label>
-        <span class="gs-stepper" id="gs-timed-stepper"><button type="button" class="gs-step" data-for="gs-timed-minutes" data-step="-5" aria-label="−">−</button><input type="number" id="gs-timed-minutes" class="gs-number" min="1" max="600" inputmode="numeric" data-i18n-aria-label="gameSheet.minutes" aria-label="minutes"><button type="button" class="gs-step" data-for="gs-timed-minutes" data-step="5" aria-label="+">+</button></span>
+        <span class="gs-stepper" id="gs-timed-stepper"><button type="button" class="gs-step" data-for="gs-timed-minutes" data-step="-5" aria-label="Less" data-i18n-aria-label="common.stepDown">−</button><input type="number" id="gs-timed-minutes" class="gs-number" min="1" max="600" inputmode="numeric" data-i18n-aria-label="gameSheet.minutes" aria-label="minutes"><button type="button" class="gs-step" data-for="gs-timed-minutes" data-step="5" aria-label="More" data-i18n-aria-label="common.stepUp">+</button></span>
         <span class="gs-unit-word" data-i18n="gameSheet.minutes">minutes</span>
       </div>
       <div class="gs-row">
         <label class="gs-toggle"><input type="checkbox" id="gs-shot-clock"> <span data-i18n="gameSheet.shotClock">⏱️ Shot clock</span></label>
         <span class="gs-unit-word" data-i18n="gameSheet.beepEvery">beep every</span>
-        <span class="gs-stepper" id="gs-shot-stepper"><button type="button" class="gs-step" data-for="gs-shot-beep" data-step="-5" aria-label="−">−</button><input type="number" id="gs-shot-beep" class="gs-number" min="5" max="600" inputmode="numeric" data-i18n-aria-label="common.seconds" aria-label="seconds"><button type="button" class="gs-step" data-for="gs-shot-beep" data-step="5" aria-label="+">+</button></span>
+        <span class="gs-stepper" id="gs-shot-stepper"><button type="button" class="gs-step" data-for="gs-shot-beep" data-step="-5" aria-label="Less" data-i18n-aria-label="common.stepDown">−</button><input type="number" id="gs-shot-beep" class="gs-number" min="5" max="600" inputmode="numeric" data-i18n-aria-label="common.seconds" aria-label="seconds"><button type="button" class="gs-step" data-for="gs-shot-beep" data-step="5" aria-label="More" data-i18n-aria-label="common.stepUp">+</button></span>
         <span class="gs-unit-word" data-i18n="common.seconds">seconds</span>
       </div>
       <label class="gs-toggle gs-practice"><input type="checkbox" id="gs-practice"> <span data-i18n="gameSheet.practice">Practice (not saved)</span></label>
@@ -1623,7 +1624,7 @@
     <button type="button" id="btn-wizard-close" class="wizard-close-btn" aria-label="Close wizard" data-i18n-aria-label="wizard.closeAriaLabel">×</button>
 
     <div class="wizard-header">
-      <svg class="wizard-mascot" viewBox="0 0 120 150" role="img" aria-label="Cartoon wizard mascot">
+      <svg class="wizard-mascot" viewBox="0 0 120 150" role="img" aria-label="Cartoon wizard mascot" data-i18n-aria-label="wizard.mascotAria">
         <defs>
           <radialGradient id="wizardOrbGlow" cx="50%" cy="50%" r="60%">
             <stop offset="0%" stop-color="#fff3c4" />
@@ -1860,7 +1861,7 @@
       <h2 data-i18n="cameraWizard.sameDeviceOverlayHeading">This Tablet's Camera</h2>
       <button type="button" id="btn-close-same-device-camera" class="wizard-close-btn" aria-label="Close" data-i18n-aria-label="common.close">×</button>
     </div>
-    <iframe id="same-device-camera-iframe" class="same-device-camera-iframe" src="" allow="camera" title="Camera recognition"></iframe>
+    <iframe id="same-device-camera-iframe" class="same-device-camera-iframe" src="" allow="camera" title="Camera recognition" data-i18n-title="cameraWizard.recognitionFrameTitle"></iframe>
   </div>
 </div>
 
@@ -1894,7 +1895,7 @@
       <h2 data-i18n="cameraWizard.remoteViewerHeading">Camera Setup (Remote)</h2>
       <button type="button" id="btn-close-remote-viewer" class="wizard-close-btn" aria-label="Close" data-i18n-aria-label="common.close">×</button>
     </div>
-    <iframe id="remote-viewer-iframe" class="same-device-camera-iframe" src="" title="Remote camera setup"></iframe>
+    <iframe id="remote-viewer-iframe" class="same-device-camera-iframe" src="" title="Remote camera setup" data-i18n-title="cameraWizard.remoteViewerFrameTitle"></iframe>
   </div>
 </div>
 
@@ -2822,7 +2823,7 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
     <button type="button" id="btn-league-wizard-close" class="wizard-close-btn" aria-label="Close wizard" data-i18n-aria-label="wizard.closeAriaLabel">×</button>
 
     <div class="wizard-header">
-      <svg class="wizard-mascot" viewBox="0 0 120 150" role="img" aria-label="Cartoon wizard mascot">
+      <svg class="wizard-mascot" viewBox="0 0 120 150" role="img" aria-label="Cartoon wizard mascot" data-i18n-aria-label="wizard.mascotAria">
         <defs>
           <radialGradient id="leagueWizardOrbGlow" cx="50%" cy="50%" r="60%">
             <stop offset="0%" stop-color="#fff3c4" />
@@ -2945,13 +2946,13 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/pairing.js?v=20261029f"></script>
-<script src="js/big-store.js?v=20261029f"></script>
-<script src="js/mp4-clip.js?v=20261029f"></script>
-<script src="js/recording-consent.js?v=20261029f"></script>
-<script src="js/local-recorder.js?v=20261029f"></script>
-<script src="js/app.js?v=20261029f"></script>
-<script src="js/camera-client.js?v=20261029f"></script>
-<script src="js/voice.js?v=20261029f"></script>
+<script src="js/pairing.js?v=20261029g"></script>
+<script src="js/big-store.js?v=20261029g"></script>
+<script src="js/mp4-clip.js?v=20261029g"></script>
+<script src="js/recording-consent.js?v=20261029g"></script>
+<script src="js/local-recorder.js?v=20261029g"></script>
+<script src="js/app.js?v=20261029g"></script>
+<script src="js/camera-client.js?v=20261029g"></script>
+<script src="js/voice.js?v=20261029g"></script>
 </body>
 </html>
