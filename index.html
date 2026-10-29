@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261028p">
+<link rel="stylesheet" href="css/style.css?v=20261028q">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -47,6 +47,8 @@
 </div>
 
 <div id="app">
+  <!-- on the full page (🔍 Show All / a menu item): straight back to the board -->
+  <button type="button" id="btn-back-to-board" class="back-to-board-btn" data-i18n="board.backToBoard">🎱 Back to the board</button>
 
   <header class="app-header">
     <div class="brand">
@@ -77,9 +79,9 @@
     <div class="header-nav-row">
       <div class="header-nav-line">
         <div class="header-nav-group" id="header-group-start">
-          <button type="button" id="btn-quick-game" class="btn btn-primary all-players-nav-btn quick-game-btn" data-i18n="header.quickGame">⚡ Quick Game</button>
-          <button type="button" id="btn-test-onboarding" class="btn btn-primary all-players-nav-btn" data-i18n="header.welcomeNewPlayer">👋 Welcome New Player</button>
-          <button type="button" id="btn-open-wizard" class="btn btn-primary all-players-nav-btn" data-i18n="header.startWizard">🧙 Game Setup Wizard</button>
+          <button type="button" id="btn-quick-game" class="btn btn-primary all-players-nav-btn quick-game-btn" data-i18n="header.quickGame">▶️ New game</button>
+          <button type="button" id="btn-test-onboarding" class="btn btn-ghost all-players-nav-btn" data-i18n="header.welcomeNewPlayer">👋 Welcome New Player</button>
+          <button type="button" id="btn-open-wizard" class="btn btn-ghost all-players-nav-btn" data-i18n="header.startWizard">🧙 Game Setup Wizard</button>
         </div>
         <div class="header-nav-group" id="header-group-events">
           <button type="button" id="btn-open-tournament" class="btn btn-ghost all-players-nav-btn" data-i18n="header.tournament">🏆 Tournament</button>
@@ -326,6 +328,27 @@
   </section>
 
   <section id="scoreboard-panel">
+    <!-- The board's top bar: the menu, one read-only line saying what's being played, Undo and
+         the game's settings (js/app.js renderBoardStatus, openGameSheet, openBoardMenu) - nothing
+         on the board changes a setting by itself. -->
+    <div class="board-topbar" id="board-topbar">
+      <button type="button" id="btn-board-menu" class="board-topbar-btn" data-i18n-aria-label="board.menuAria" aria-label="Menu"><span aria-hidden="true">☰</span><span class="board-topbar-label" data-i18n="board.menu">Menu</span></button>
+      <div class="board-status" id="board-status"></div>
+      <!-- actions that belong at the table, only while they can be used: talk, the recording's cues, Done arranging -->
+      <div class="board-actions" id="board-actions">
+        <span class="voice-control-group voice-command-group hidden" id="voice-command-group">
+          <button type="button" id="btn-voice-hold" class="btn voice-hold-btn" data-i18n="voice.holdToTalk" data-i18n-aria-label="voice.holdHint" aria-label="Hold to talk - tap for the sentences">🎤 Talk</button>
+        </span>
+        <span class="voice-control-group recorder-cue-group hidden" id="recorder-cue-group">
+          <button type="button" id="btn-recorder-cue" class="btn recorder-cue-btn" title="Mark a cue in the recording (from 20 s before) - again to end it. Key: /">⭐ Cue</button>
+          <button type="button" id="btn-recorder-auto" class="btn recorder-cue-btn recorder-auto-btn" title="The camera finds the shot and keeps it, 5 s before to 5 s after. Key: *">🎯 Auto cue</button>
+        </span>
+        <button type="button" id="btn-arrange-done" class="btn btn-primary arrange-done-btn hidden" data-i18n="board.arrangeDone">✓ Done arranging</button>
+      </div>
+      <!-- ↩ Undo the last scoring action (js/app.js boardUndo) - its own shape, well away from every + -->
+      <button type="button" id="btn-board-undo" class="board-undo-btn" disabled data-i18n="undo.button" data-i18n-aria-label="undo.aria" aria-label="Undo the last score">↩ Undo</button>
+      <button type="button" id="btn-board-game" class="board-topbar-btn board-game-btn" data-i18n-aria-label="board.gameAria" aria-label="Game settings"><span aria-hidden="true">🎱</span><span class="board-topbar-label" data-i18n="board.game">Game</span></button>
+    </div>
     <div class="row voice-toggle-row">
       <span class="focus-mode-group">
         <button type="button" id="btn-toggle-focus" class="btn btn-primary focus-toggle-btn" data-i18n="scoreboard.focusMode">Focus Mode</button>
@@ -334,21 +357,6 @@
           <label class="game-mode-option"><input type="radio" name="scoreboard-game-mode" id="scoreboard-mode-single" value="single" checked> <span data-i18n="scoreboard.modeSingleGame">🎱 Single game</span></label>
         </span>
         <label class="scoreboard-queue-toggle hidden" id="scoreboard-queue-row"><input type="checkbox" id="scoreboard-queue-checkbox"> <span data-i18n="players.queueModeEnable">🎱 Winner Stays (queue standby players)</span></label>
-      </span>
-      <span class="voice-control-group">
-        <button type="button" id="btn-toggle-keypad-speech" class="btn btn-ghost voice-toggle-btn hidden" data-i18n="keypad.speechToggleOn">🔊 Activate Voice</button>
-        <button type="button" id="btn-keypad-speech-help" class="format-info-btn hidden" data-i18n-aria-label="keypad.speechHelpAria" aria-label="What does speak keypad do?">❓</button>
-      </span>
-      <span class="voice-control-group">
-        <label for="keypad-speech-voice-select" id="keypad-speech-voice-label" class="hidden" data-i18n="keypad.voiceLabel">Voice</label>
-        <select id="keypad-speech-voice-select" class="hidden" data-i18n-aria-label="keypad.voiceLabel" aria-label="Voice"></select>
-      </span>
-      <span class="voice-control-group voice-command-group hidden" id="voice-command-group">
-        <button type="button" id="btn-voice-hold" class="btn voice-hold-btn" data-i18n="voice.holdToTalk" data-i18n-aria-label="voice.holdHint" aria-label="Hold to talk - tap for the sentences">🎤 Talk</button>
-      </span>
-      <span class="voice-control-group recorder-cue-group hidden" id="recorder-cue-group">
-        <button type="button" id="btn-recorder-cue" class="btn recorder-cue-btn" title="Mark a cue in the recording (from 20 s before) - again to end it. Key: /">⭐ Cue</button>
-        <button type="button" id="btn-recorder-auto" class="btn recorder-cue-btn recorder-auto-btn" title="The camera finds the shot and keeps it, 5 s before to 5 s after. Key: *">🎯 Auto cue</button>
       </span>
     </div>
     <button type="button" id="btn-finish-snooker" class="btn btn-primary finish-snooker-btn hidden" data-i18n="snooker.finishFrame">🏁 Finish Snooker Frame</button>
@@ -389,8 +397,6 @@
     </div>
     </div>
     <button type="button" id="shot-counter-visibility-toggle" class="shot-counter-visibility-toggle hidden" data-i18n-aria-label="gameSetup.shotCounterToggleVisibility" aria-label="Show/Hide Timer">👁️</button>
-    <!-- ↩ Undo the last scoring action (js/app.js boardUndo) - its own shape, well away from every + -->
-    <div class="board-undo-row"><button type="button" id="btn-board-undo" class="board-undo-btn" disabled data-i18n="undo.button" data-i18n-aria-label="undo.aria" aria-label="Undo the last score">↩ Undo</button></div>
     <div class="scoreboard" id="scoreboard"></div>
     <div id="board-solo-row" class="board-solo-row hidden">
       <span data-i18n="scoreboard.soloHint">Nobody to play against yet.</span>
@@ -1158,7 +1164,7 @@
 
 <div id="quick-game-overlay" class="confirm-modal-overlay hidden">
   <div class="confirm-modal-card">
-    <h3 class="confirm-modal-title" data-i18n="quickGame.title">⚡ Quick Game</h3>
+    <h3 class="confirm-modal-title" data-i18n="quickGame.title">▶️ New game</h3>
     <p class="player-stats-note" data-i18n="quickGame.explain">Two players, 8-Ball, straight into Focus Mode. Race to a number of wins, or open play with no race. You can still change the game type from the scorecards once it starts.</p>
     <p id="quick-game-requirement" class="new-player-name-requirement hidden"></p>
     <div class="row mode-row race-mode-row quick-game-race-row">
@@ -1175,6 +1181,123 @@
       <button type="button" id="btn-quick-game-start" class="btn btn-primary" disabled data-i18n="quickGame.startButton">▶️ Start</button>
       <button type="button" id="btn-quick-game-no-names" class="btn btn-ghost" data-i18n="quickGame.startWithoutNames">👤 Play Without Names</button>
       <button type="button" id="btn-quick-game-cancel" class="btn btn-ghost" data-i18n="common.cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- 🎱 Game: everything about the game being played, applied together (js/app.js openGameSheet / applyGameSheet) -->
+<div id="game-sheet-overlay" class="confirm-modal-overlay board-sheet-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="game-sheet-title">
+  <div class="confirm-modal-card board-sheet">
+    <div class="board-sheet-head">
+      <h3 class="confirm-modal-title" id="game-sheet-title" data-i18n="gameSheet.title">🎱 Game</h3>
+      <button type="button" class="board-sheet-close" id="btn-game-sheet-close" data-i18n-aria-label="common.close" aria-label="Close">×</button>
+    </div>
+    <div class="board-sheet-body">
+      <div class="gs-row">
+        <label class="gs-label" for="gs-game-type" data-i18n="gameSheet.game">Game</label>
+        <select id="gs-game-type" class="gs-select"></select>
+      </div>
+      <div class="gs-row">
+        <label class="gs-label" for="gs-target" data-i18n="gameSheet.target">Target</label>
+        <span class="gs-stepper"><button type="button" class="gs-step" data-for="gs-target" data-step="-1" aria-label="−">−</button><input type="number" id="gs-target" class="gs-number" min="1" max="500" inputmode="numeric"><button type="button" class="gs-step" data-for="gs-target" data-step="1" aria-label="+">+</button></span>
+        <select id="gs-unit" class="gs-select gs-unit">
+          <option value="rack" data-i18n="units.rack">rack</option>
+          <option value="balls" data-i18n="units.balls">balls</option>
+          <option value="points" data-i18n="units.points">points</option>
+        </select>
+      </div>
+      <p class="gs-note hidden" id="gs-rotation-note" data-i18n="gameSheet.rotationPicks">The rotation picks the game.</p>
+      <div class="gs-row">
+        <span class="gs-label" data-i18n="gameSheet.match">Match</span>
+        <span class="gs-chips" role="radiogroup">
+          <label class="gs-chip"><input type="radio" name="gs-race" value="single"> <span data-i18n="gameSheet.single">Single games</span></label>
+          <label class="gs-chip"><input type="radio" name="gs-race" value="race"> <span data-i18n="gameSheet.raceTo">Race to</span></label>
+        </span>
+        <span class="gs-stepper" id="gs-race-stepper"><button type="button" class="gs-step" data-for="gs-race-to" data-step="-1" aria-label="−">−</button><input type="number" id="gs-race-to" class="gs-number" min="2" max="99" inputmode="numeric" data-i18n-aria-label="gameSheet.raceTo" aria-label="Race to"><button type="button" class="gs-step" data-for="gs-race-to" data-step="1" aria-label="+">+</button></span>
+      </div>
+      <div class="gs-row">
+        <span class="gs-label" data-i18n="gameSheet.rotation">Rotation</span>
+        <span class="gs-chips" role="radiogroup">
+          <label class="gs-chip"><input type="radio" name="gs-rotation" value="off"> <span data-i18n="gameSheet.rotationOff">Off</span></label>
+          <label class="gs-chip"><input type="radio" name="gs-rotation" value="8-9"> <span data-i18n="gameSheet.rotation89">8/9 alternate</span></label>
+          <label class="gs-chip"><input type="radio" name="gs-rotation" value="8-9-10"> <span data-i18n="gameSheet.rotation8910">8/9/10</span></label>
+          <label class="gs-chip hidden" id="gs-rotation-custom-chip"><input type="radio" name="gs-rotation" value="custom"> <span id="gs-rotation-custom-label"></span></label>
+        </span>
+      </div>
+      <div class="gs-row gs-subrow" id="gs-rotation-every-row">
+        <label class="gs-label" for="gs-rotation-every" data-i18n="gameSheet.changeEvery">Change game every</label>
+        <span class="gs-stepper"><button type="button" class="gs-step" data-for="gs-rotation-every" data-step="-1" aria-label="−">−</button><input type="number" id="gs-rotation-every" class="gs-number" min="1" max="99" inputmode="numeric"><button type="button" class="gs-step" data-for="gs-rotation-every" data-step="1" aria-label="+">+</button></span>
+        <button type="button" id="btn-gs-edit-lineup" class="btn btn-ghost" data-i18n="gameSheet.editLineup">Edit the lineup…</button>
+      </div>
+      <div class="gs-row">
+        <span class="gs-label" data-i18n="gameSheet.players">Players</span>
+        <span class="gs-chips" role="radiogroup">
+          <label class="gs-chip"><input type="radio" name="gs-mode" value="individual"> <span data-i18n="gameSetup.individual">Individual</span></label>
+          <label class="gs-chip"><input type="radio" name="gs-mode" value="teams"> <span data-i18n="gameSheet.teams">Teams A and B</span></label>
+        </span>
+      </div>
+      <p class="gs-note hidden" id="gs-teams-note" data-i18n="gameSheet.teamsSplit">Whoever's playing is split between A and B, one each in turn.</p>
+      <label class="gs-toggle"><input type="checkbox" id="gs-winner-stays"> <span data-i18n="gameSheet.winnerStays">🎱 Winner Stays - the loser goes to the back of the line</span></label>
+      <div class="gs-row">
+        <label class="gs-toggle"><input type="checkbox" id="gs-timed"> <span data-i18n="gameSheet.timed">⏰ Timed</span></label>
+        <span class="gs-stepper" id="gs-timed-stepper"><button type="button" class="gs-step" data-for="gs-timed-minutes" data-step="-5" aria-label="−">−</button><input type="number" id="gs-timed-minutes" class="gs-number" min="1" max="600" inputmode="numeric" data-i18n-aria-label="gameSheet.minutes" aria-label="minutes"><button type="button" class="gs-step" data-for="gs-timed-minutes" data-step="5" aria-label="+">+</button></span>
+        <span class="gs-unit-word" data-i18n="gameSheet.minutes">minutes</span>
+      </div>
+      <div class="gs-row">
+        <label class="gs-toggle"><input type="checkbox" id="gs-shot-clock"> <span data-i18n="gameSheet.shotClock">⏱️ Shot clock</span></label>
+        <span class="gs-unit-word" data-i18n="gameSheet.beepEvery">beep every</span>
+        <span class="gs-stepper" id="gs-shot-stepper"><button type="button" class="gs-step" data-for="gs-shot-beep" data-step="-5" aria-label="−">−</button><input type="number" id="gs-shot-beep" class="gs-number" min="5" max="600" inputmode="numeric" data-i18n-aria-label="common.seconds" aria-label="seconds"><button type="button" class="gs-step" data-for="gs-shot-beep" data-step="5" aria-label="+">+</button></span>
+        <span class="gs-unit-word" data-i18n="common.seconds">seconds</span>
+      </div>
+      <label class="gs-toggle gs-practice"><input type="checkbox" id="gs-practice"> <span data-i18n="gameSheet.practice">Practice (not saved)</span></label>
+    </div>
+    <div class="confirm-modal-actions board-sheet-foot">
+      <button type="button" id="btn-game-sheet-apply" class="btn btn-primary" data-i18n="gameSheet.apply">Apply</button>
+      <button type="button" id="btn-game-sheet-cancel" class="btn btn-ghost" data-i18n="common.cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ☰ Menu: everything that isn't the board (js/app.js openBoardMenu) -->
+<div id="board-menu-overlay" class="confirm-modal-overlay board-sheet-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="board-menu-title">
+  <div class="confirm-modal-card board-sheet board-menu-sheet">
+    <div class="board-sheet-head">
+      <button type="button" class="board-sheet-back hidden" id="btn-board-menu-back" data-i18n="board.menuBack">‹ Menu</button>
+      <h3 class="confirm-modal-title" id="board-menu-title" data-i18n="board.menu">Menu</h3>
+      <button type="button" class="board-sheet-close" id="btn-board-menu-close" data-i18n-aria-label="common.close" aria-label="Close">×</button>
+    </div>
+    <div class="board-sheet-body">
+      <ul class="board-menu-list" id="board-menu-list"></ul>
+      <!-- 🎤 Voice: speaking the score, and its voice -->
+      <div class="menu-voice-box hidden" id="menu-voice-box">
+      <span class="voice-control-group">
+        <button type="button" id="btn-toggle-keypad-speech" class="btn btn-ghost voice-toggle-btn hidden" data-i18n="keypad.speechToggleOn">🔊 Activate Voice</button>
+        <button type="button" id="btn-keypad-speech-help" class="format-info-btn hidden" data-i18n-aria-label="keypad.speechHelpAria" aria-label="What does speak keypad do?">❓</button>
+      </span>
+      <span class="voice-control-group">
+        <label for="keypad-speech-voice-select" id="keypad-speech-voice-label" class="hidden" data-i18n="keypad.voiceLabel">Voice</label>
+        <select id="keypad-speech-voice-select" class="hidden" data-i18n-aria-label="keypad.voiceLabel" aria-label="Voice"></select>
+      </span>
+        <p class="gs-note" data-i18n="board.voiceTalkNote">🎤 Talk on the board: hold it and say what happened ("Kim wins the game") - tap it for every sentence it knows.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ⇄ on a card: who sits in instead (js/app.js openBenchSheet) -->
+<div id="bench-sheet-overlay" class="confirm-modal-overlay board-sheet-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="bench-sheet-title">
+  <div class="confirm-modal-card board-sheet">
+    <div class="board-sheet-head">
+      <h3 class="confirm-modal-title" id="bench-sheet-title"></h3>
+      <button type="button" class="board-sheet-close" id="btn-bench-sheet-close" data-i18n-aria-label="common.close" aria-label="Close">×</button>
+    </div>
+    <div class="board-sheet-body">
+      <ul class="bench-list" id="bench-list"></ul>
+      <form class="bench-add" id="bench-add-form">
+        <input type="text" id="bench-add-name" maxlength="40" data-i18n-placeholder="bench.newPlayerPlaceholder" placeholder="Someone new - their name" autocomplete="off">
+        <button type="submit" class="btn btn-primary" id="btn-bench-add" data-i18n="bench.sitIn">Sit in</button>
+      </form>
+      <button type="button" class="btn btn-ghost bench-sit-out" id="btn-bench-sit-out"></button>
     </div>
   </div>
 </div>
@@ -2737,13 +2860,13 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/pairing.js?v=20261028p"></script>
-<script src="js/big-store.js?v=20261028p"></script>
-<script src="js/mp4-clip.js?v=20261028p"></script>
-<script src="js/recording-consent.js?v=20261028p"></script>
-<script src="js/local-recorder.js?v=20261028p"></script>
-<script src="js/app.js?v=20261028p"></script>
-<script src="js/camera-client.js?v=20261028p"></script>
-<script src="js/voice.js?v=20261028p"></script>
+<script src="js/pairing.js?v=20261028q"></script>
+<script src="js/big-store.js?v=20261028q"></script>
+<script src="js/mp4-clip.js?v=20261028q"></script>
+<script src="js/recording-consent.js?v=20261028q"></script>
+<script src="js/local-recorder.js?v=20261028q"></script>
+<script src="js/app.js?v=20261028q"></script>
+<script src="js/camera-client.js?v=20261028q"></script>
+<script src="js/voice.js?v=20261028q"></script>
 </body>
 </html>

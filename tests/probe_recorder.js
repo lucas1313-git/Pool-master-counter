@@ -142,7 +142,8 @@ function makeY4m(file) {
   await board.evaluate(() => { window.__spoken = []; const s = window.speechSynthesis.speak.bind(window.speechSynthesis); window.speechSynthesis.speak = (u) => { window.__spoken.push(u.text); return s(u); }; });
   const cueBtn = () => board.evaluate(() => { const b = document.getElementById("btn-recorder-cue"); return { shown: !document.getElementById("recorder-cue-group").classList.contains("hidden") && b.offsetParent !== null, text: b.textContent, open: b.classList.contains("open"), h: Math.round(b.getBoundingClientRect().height) }; });
   let cb = await cueBtn();
-  check("the score section shows ⭐ Cue while it records (44 px, like the row)", cb.shown && cb.text === "⭐ Cue" && !cb.open && cb.h === 44, cb);
+  const barH = await board.evaluate(() => Math.round(document.getElementById("btn-board-game").getBoundingClientRect().height));
+  check("the board's top bar shows ⭐ Cue while it records (as tall as its other buttons)", cb.shown && cb.text === "⭐ Cue" && !cb.open && cb.h === barH, { cb, barH });
   const switchedAt = Date.now();
   await board.evaluate(() => document.dispatchEvent(new KeyboardEvent("keydown", { key: "2", bubbles: true })));
   await sleep(900);

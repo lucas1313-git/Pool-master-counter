@@ -1,4 +1,4 @@
-// The header's button groups: 4 bordered groups in the asked order, the first three primary,
+// The header's button groups: 4 bordered groups in the asked order, ▶️ New game the one primary,
 // line 1 = start / events / stats, line 2 = Contact Sheet + Set Up Camera + Help, Theme, Language; renamed buttons;
 // no sideways scroll; screenshots at several widths.
 // usage: node tests/probe_header.js http://localhost:4235/ <screenshot dir>
@@ -29,7 +29,7 @@ const showAll = async (pg) => {
   });
   console.log(JSON.stringify(info));
   const g = Object.fromEntries(info.groups.map((x) => [x.id, x]));
-  check("group 1: Quick Game, Welcome New Player, Game Setup Wizard, all primary", JSON.stringify(g["header-group-start"].items) === JSON.stringify(["⚡ Quick Game", "👋 Welcome New Player", "🧙 Game Setup Wizard"]) && g["header-group-start"].primary.every(Boolean), g["header-group-start"]);
+  check("group 1: New game (the one primary), Welcome New Player, Game Setup Wizard", JSON.stringify(g["header-group-start"].items) === JSON.stringify(["▶️ New game", "👋 Welcome New Player", "🧙 Game Setup Wizard"]) && JSON.stringify(g["header-group-start"].primary) === JSON.stringify([true, false, false]), g["header-group-start"]);
   check("group 2: Tournament, League, Multi Tables", JSON.stringify(g["header-group-events"].items) === JSON.stringify(["🏆 Tournament", "🏆 League", "🎯 Multi Tables"]), g["header-group-events"].items);
   check("group 3: Leaderboard, Global Stats", JSON.stringify(g["header-group-stats"].items) === JSON.stringify(["🏆 Leaderboard", "🌐 Global Stats"]), g["header-group-stats"].items);
   check("group 4: Contact Sheet, Set Up Camera, Record, Help", JSON.stringify(g["header-group-people"].items) === JSON.stringify(["📇 Contact Sheet", "📷 Set Up Camera", "🎬 Record", "❓ Help"]), g["header-group-people"].items);

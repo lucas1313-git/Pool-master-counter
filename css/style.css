@@ -1064,7 +1064,7 @@ body > [id^="view-"] > * {
   left: 10px;
 }
 
-#app.focus-mode .player-panel:has(.keypad-number-badge:not(:empty)),
+#app.focus-mode .player-panel:not(.card-v2):has(.keypad-number-badge:not(:empty)),
 #app.focus-mode .member-card:has(.keypad-number-badge:not(:empty)) {
   padding-top: 76px;
 }
@@ -1192,13 +1192,6 @@ body > [id^="view-"] > * {
    relative to that same, real, un-enlarged box - there's no longer
    anything to overflow, by construction, no matter how many players
    are sharing the row or how long a name/how wide a score gets. */
-#app.focus-mode .player-panel.is-keypad-selected .player-name {
-  font-size: clamp(2.2rem, min(18cqw, 18cqh), 6rem);
-}
-
-#app.focus-mode .player-panel.is-keypad-selected .stat-value {
-  font-size: clamp(5rem, min(48cqw, 54cqh), 16rem);
-}
 
 #app.focus-mode .member-card.is-keypad-selected .member-name {
   font-size: clamp(1.6rem, 11cqw, 3.6rem);
@@ -2765,7 +2758,7 @@ input[type="number"] {
    bottom edge reaches 50px down from the card's top edge - when a real
    number is showing, push the whole card's content below that instead of
    letting the centered name text start right under (and behind) it. */
-.player-panel:has(.keypad-number-badge:not(:empty)),
+.player-panel:not(.card-v2):has(.keypad-number-badge:not(:empty)),
 .member-card:has(.keypad-number-badge:not(:empty)) {
   padding-top: 52px;
 }
@@ -10355,4 +10348,537 @@ body.win-banner-up .page-toast {
   gap: 8px;
   justify-content: center;
   align-items: center;
+}
+
+/* ---------- The board as the home screen (js/app.js renderBoardStatus, openGameSheet,
+   openBoardMenu, openBenchSheet, setArrangeMode) ---------- */
+
+/* the full page's way back to the board */
+.back-to-board-btn {
+  display: none;
+}
+#app:not(.focus-mode) > .back-to-board-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 900;
+  min-height: 48px;
+  padding: 8px 18px;
+  border-radius: 999px;
+  border: 2px solid var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 800;
+  font-size: 1rem;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+}
+
+/* the top bar: ☰ Menu, what's being played, ↩ Undo, 🎱 Game */
+.board-topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+.board-topbar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  min-height: 52px;
+  min-width: 52px;
+  padding: 8px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text);
+  font-weight: 800;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+.board-topbar-btn > span[aria-hidden] {
+  font-size: 1.35rem;
+  line-height: 1;
+}
+.board-status {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: center;
+  font-size: clamp(1.05rem, 2.2vw, 1.6rem);
+  font-weight: 800;
+  line-height: 1.25;
+  color: var(--text);
+}
+.board-status-part.is-practice {
+  color: var(--accent);
+}
+.board-status-time {
+  margin-left: 0.6em;
+  color: var(--text-dim);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.board-topbar .board-undo-btn {
+  flex: 0 0 auto;
+  min-height: 52px;
+}
+@media (max-width: 640px) {
+  .board-topbar {
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .board-status {
+    order: 5;
+    flex-basis: 100%;
+  }
+}
+
+/* what's used at the table, only while it can be: 🎤 Talk, ⭐ Cue, ✓ Done arranging */
+.board-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+.board-actions .btn {
+  min-height: 52px;
+}
+.board-actions:not(:has(> :not(.hidden))) {
+  display: none;
+}
+.arrange-done-btn {
+  min-height: 52px;
+  font-size: 1.1rem;
+}
+
+/* On the board the settings are the Game sheet's and the menu's - the
+   full page (🔍 Show All) still has its own. */
+#app.focus-mode .voice-toggle-row,
+#app.focus-mode #now-playing-banner,
+#app.focus-mode .rotation-position-row,
+#app.focus-mode .focus-players-wrap {
+  display: none;
+}
+#app.focus-mode .scoreboard {
+  padding-top: 18px;
+}
+
+/* ---- the card: name (⇄ beside it), score, then the + zone ---- */
+.player-panel.card-v2 {
+  padding-top: 12px;
+}
+.player-panel.card-v2 .player-name {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0 52px;
+  min-height: 44px;
+}
+#app.focus-mode .player-panel.card-v2 {
+  justify-content: flex-start;
+  gap: clamp(6px, 2cqh, 16px);
+}
+#app.focus-mode .player-panel.card-v2 .player-name {
+  padding: 0 calc(clamp(42px, min(12cqw, 12cqh), 64px) + 14px);
+  font-size: clamp(2rem, min(16cqw, 15cqh), 6rem);
+}
+.card-v2 .stat-block {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+#app.focus-mode .player-panel.card-v2 .stat-value {
+  font-size: clamp(3.5rem, min(40cqw, 30cqh), 14rem);
+  line-height: 1;
+}
+.card-swap-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--text);
+  font-size: 1.3rem;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+}
+#app.focus-mode .card-swap-btn {
+  top: 10px;
+  right: 10px;
+  width: clamp(44px, min(10cqw, 10cqh), 56px);
+  height: clamp(44px, min(10cqw, 10cqh), 56px);
+  font-size: clamp(1.3rem, 4cqw, 1.7rem);
+}
+.card-plus-zone {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  width: 100%;
+}
+.card-plus-zone .btn-ball.plus {
+  flex: 1 1 auto;
+  align-self: stretch;
+  min-height: 96px;
+  font-size: 2.6rem;
+}
+#app.focus-mode .card-plus-zone .btn-ball.plus {
+  min-height: clamp(130px, 26cqh, 210px);
+  font-size: clamp(2.6rem, min(14cqw, 9cqh), 5rem);
+}
+/* (points games: a point taken back - small and round, not another + block) */
+.card-plus-zone .btn-ball.card-minus {
+  flex: 0 0 auto;
+  width: 64px;
+  height: 64px;
+  min-height: 64px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid var(--text-dim);
+  font-size: 1.6rem;
+}
+#app.focus-mode .card-plus-zone .btn-ball.card-minus {
+  width: clamp(56px, 12cqw, 76px);
+  height: clamp(56px, 12cqw, 76px);
+  min-height: clamp(56px, 12cqw, 76px);
+}
+/* (the camera icon over the card's top: the name starts under it) */
+.player-panel.card-v2:has(.scorecard-camera-badge) {
+  padding-top: 52px;
+}
+#app.focus-mode .player-panel.card-v2:has(.scorecard-camera-badge) {
+  padding-top: 84px;
+}
+
+/* the hill: one more win takes it */
+.player-panel.is-on-hill {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent), 0 0 22px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.card-hill-tag {
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 800;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.player-panel:has(.scorecard-camera-badge) .card-hill-tag {
+  left: auto;
+  right: 64px;
+  transform: none;
+}
+
+/* ↕ Arrange: the drag handles take the card's top band */
+.arrange-mode .card-swap-btn {
+  display: none;
+}
+.player-panel.card-v2:has(.score-card-drag-handle) {
+  padding-top: 58px;
+}
+#app.focus-mode .player-panel.card-v2:has(.score-card-drag-handle) {
+  padding-top: 84px;
+}
+
+/* ---- the sheets: 🎱 Game, ☰ Menu, ⇄ bench ---- */
+.board-sheet {
+  max-width: 560px;
+  text-align: left;
+  padding: 16px 18px;
+}
+.board-menu-sheet {
+  max-width: 760px;
+}
+.board-sheet-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.board-sheet-head .confirm-modal-title {
+  flex: 1;
+  margin: 0;
+  font-size: 1.4rem;
+  text-align: center;
+}
+.board-sheet-close,
+.board-sheet-back {
+  min-width: 48px;
+  min-height: 48px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+.board-sheet-back {
+  font-size: 1.05rem;
+  font-weight: 700;
+  padding: 0 12px;
+}
+.board-sheet-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 2px;
+}
+.board-sheet-foot {
+  margin-top: 12px;
+  flex-direction: row-reverse;
+}
+.board-sheet-foot .btn {
+  width: auto;
+  flex: 1 1 0;
+}
+.board-sheet-foot .btn {
+  min-height: 52px;
+  min-width: 120px;
+  font-size: 1.1rem;
+}
+.gs-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+.gs-label {
+  min-width: 84px;
+  font-weight: 800;
+  color: var(--text);
+}
+.gs-select {
+  flex: 1 1 160px;
+  min-height: 48px;
+  font-size: 1.05rem;
+}
+.gs-select.gs-unit {
+  flex: 0 1 120px;
+}
+.gs-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.gs-stepper.is-off {
+  opacity: 0.45;
+}
+.gs-step {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 1.4rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.gs-step:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.gs-number {
+  width: 72px;
+  min-height: 48px;
+  text-align: center;
+  font-size: 1.3rem;
+  font-weight: 800;
+}
+.gs-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.gs-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 48px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 2px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text);
+  font-weight: 700;
+  cursor: pointer;
+}
+.gs-chip:has(input:checked) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 22%, var(--bg-card));
+}
+.gs-chip input {
+  margin: 0;
+}
+.gs-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+}
+.gs-toggle input {
+  width: 22px;
+  height: 22px;
+}
+.gs-toggle:has(input:disabled) {
+  opacity: 0.5;
+}
+.gs-practice:has(input:checked) {
+  color: var(--accent);
+}
+.gs-note {
+  margin: -4px 0 0;
+  color: var(--text-dim);
+  font-size: 0.95rem;
+}
+.gs-unit-word {
+  color: var(--text-dim);
+}
+.board-menu-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+}
+.board-menu-list li:has(.is-primary) {
+  grid-column: 1 / -1;
+}
+.board-menu-row {
+  width: 100%;
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 1.1rem;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+.board-menu-row.has-children::after {
+  content: "›";
+  margin-left: auto;
+  font-size: 1.5rem;
+  color: var(--text-dim);
+}
+.board-menu-row.is-primary {
+  justify-content: center;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+.board-menu-row.board-menu-select-row {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  cursor: default;
+}
+.board-menu-select-row select {
+  width: 100%;
+  min-height: 44px;
+}
+.menu-voice-box {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.menu-voice-box .voice-control-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.menu-voice-box .voice-toggle-btn,
+.menu-voice-box select {
+  min-height: 52px;
+  font-size: 1.05rem;
+}
+.bench-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.bench-row {
+  width: 100%;
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 1.25rem;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+}
+.bench-row-name {
+  flex: 1;
+}
+.bench-add {
+  display: flex;
+  gap: 8px;
+}
+.bench-add input {
+  flex: 1;
+  min-width: 0;
+  min-height: 60px;
+  font-size: 1.1rem;
+}
+.bench-add .btn,
+.bench-sit-out {
+  min-height: 60px;
+  font-size: 1.05rem;
+}
+/* (a narrow card - a phone, many players: the name goes under the number and ⇄ instead of between them) */
+@container (max-width: 300px) {
+  .player-panel.card-v2 .player-name,
+  #app.focus-mode .player-panel.card-v2 .player-name {
+    padding: 40px 0 0;
+  }
 }

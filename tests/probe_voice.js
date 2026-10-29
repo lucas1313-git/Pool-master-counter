@@ -75,7 +75,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   const visible = await page.evaluate(() => !document.getElementById("voice-command-group").classList.contains("hidden"));
   check("the 🎤 Talk button shows (speech recognition available)", visible);
-  if (OUT) { const row = await page.$("#scoreboard-panel .voice-toggle-row"); await row.screenshot({ path: OUT + "/voice_row.png" }); }
+  if (OUT) { const row = await page.$("#board-topbar"); await row.screenshot({ path: OUT + "/voice_row.png" }); }
 
   // --- game and race ---
   let s = await say("Play 8-ball race to 5");
@@ -224,12 +224,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   check("a tap on the 🎤 button opens it too", await page.evaluate(() => !document.getElementById("voice-sheet-overlay").classList.contains("hidden")));
   await page.click("#btn-voice-sheet-close");
 
-  // --- phone width: the row still fits ---
+  // --- phone width: the top bar still fits ---
   await page.setViewport({ width: 390, height: 844 });
   await sleep(300);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
   check("phone width: no sideways scroll", !overflow);
-  if (OUT) { const row = await page.$("#scoreboard-panel .voice-toggle-row"); await row.screenshot({ path: OUT + "/voice_row_phone.png" }); }
+  if (OUT) { const row = await page.$("#board-topbar"); await row.screenshot({ path: OUT + "/voice_row_phone.png" }); }
 
   check("no page errors", errors.length === 0, errors);
   await browser.close();

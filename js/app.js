@@ -3689,6 +3689,10 @@
 
   function setFocusMode(on) {
     appRoot.classList.toggle("focus-mode", on);
+    // (the banner sits under the board's top bar only on the board; the
+    // full page's Now Playing boxes are sized now that they show)
+    if (!on && winBannerEl) winBannerEl.style.top = "";
+    if (!on && nowPlayingBanner) fitNowPlayingControls();
     btnToggleFocus.textContent = T(on ? "scoreboard.showAll" : "scoreboard.focusMode");
     try {
       localStorage.setItem(FOCUS_MODE_KEY, on ? "1" : "0");
@@ -4964,7 +4968,7 @@
 
     panel.appendChild(buildBallControls(player, false));
     markAsKeypadTarget(panel, player);
-    if (activePlayers().length > 1) appendScoreCardDragHandle(panel, player, scoreboard);
+    if (boardArrangeMode && activePlayers().length > 1) appendScoreCardDragHandle(panel, player, scoreboard);
 
     return panel;
   }
@@ -5165,9 +5169,14 @@
     return familyInitial ? firstName + " " + familyInitial + "." : firstName;
   }
 
+  // One card per player, always the same anatomy: the name (⇄ beside
+  // it: who sits in instead), the score, then a big + to tap. Undo isn't
+  // on the card (↩ Undo in the top bar); a points game keeps a small
+  // round − for a point taken back. The drag handle only shows while
+  // arranging, and the card only lights up for the shooter or the hill.
   function buildIndividualPanel(player) {
     var panel = document.createElement("div");
-    panel.className = "player-panel";
+    panel.className = "player-panel card-v2";
 
     // Built once per render, visibility/state toggled live by
     // updateCameraIconsOnScorecard on every camera event rather than
@@ -5210,6 +5219,18 @@
     }
     panel.appendChild(name);
 
+    var swap = document.createElement("button");
+    swap.type = "button";
+    swap.className = "card-swap-btn";
+    swap.textContent = "⇄";
+    swap.setAttribute("aria-label", T("bench.swapAria", { name: player.name }));
+    swap.title = T("bench.swapAria", { name: player.name });
+    swap.addEventListener("click", function (e) {
+      e.stopPropagation();
+      openBenchSheet(player.id);
+    });
+    panel.appendChild(swap);
+
     var wins = state.playerWins[player.id] || 0;
 
     // A single-rack game (the common case - standard 8-Ball etc.) has no
@@ -5251,31 +5272,35 @@
     }
     block.appendChild(value);
 
-    // The +/- buttons flank the score itself (minus/score/plus, one
-    // row) instead of sitting in their own row below it - reuses
-    // buildBallControls' own two buttons (same handlers/disabled
-    // logic, just pulled out of the wrapper it normally returns them
-    // in) so this is purely a layout change, not a behavior one. Saves
-    // real vertical room in Focus Mode, where .player-panel's height
-    // is fixed by its grid row (see the CSS) - a 2-line player name
-    // now already eats into that budget (see the line-clamp comment),
-    // so a separate full-width button row underneath was the next
-    // thing to get squeezed out.
-    var scoreRow = document.createElement("div");
-    scoreRow.className = "player-score-row";
+    // The score, then the + zone under it - buildBallControls' own two
+    // buttons (same handlers), the − only where it isn't an undo.
+    panel.appendChild(block);
     var ballControls = buildBallControls(player, false, isSingleRackGame);
-    scoreRow.appendChild(ballControls.firstElementChild);
-    scoreRow.appendChild(block);
-    scoreRow.appendChild(ballControls.lastElementChild);
-    panel.appendChild(scoreRow);
+    var plusZone = document.createElement("div");
+    plusZone.className = "card-plus-zone";
+    if (!isSingleRackGame) {
+      var minusBtn = ballControls.firstElementChild;
+      minusBtn.classList.add("card-minus");
+      plusZone.appendChild(minusBtn);
+    }
+    plusZone.appendChild(ballControls.lastElementChild);
+    panel.appendChild(plusZone);
 
     var runBadge = buildRunStreakBadge(player);
     if (runBadge) panel.appendChild(runBadge);
 
     if (state.fairRaceEnabled) panel.appendChild(buildFairRaceNote(effectiveRaceTarget(player.id)));
 
+    if (cardOnHill(player)) {
+      panel.classList.add("is-on-hill");
+      var hill = document.createElement("span");
+      hill.className = "card-hill-tag";
+      hill.textContent = T("board.onHillTag");
+      panel.appendChild(hill);
+    }
+
     markAsKeypadTarget(panel, player);
-    if (activePlayers().length > 1) appendScoreCardDragHandle(panel, player, scoreboard);
+    if (boardArrangeMode && activePlayers().length > 1) appendScoreCardDragHandle(panel, player, scoreboard);
 
     return panel;
   }
@@ -5323,7 +5348,7 @@
     var runBadge = buildRunStreakBadge(player);
     if (runBadge) card.appendChild(runBadge);
     markAsKeypadTarget(card, player);
-    if (dragContainer && teamMemberCount > 1) appendScoreCardDragHandle(card, player, dragContainer);
+    if (boardArrangeMode && dragContainer && teamMemberCount > 1) appendScoreCardDragHandle(card, player, dragContainer);
 
     return card;
   }
@@ -5671,6 +5696,7 @@
   }
 
   function updateGameDurationDisplay() {
+    updateBoardStatusTime();
     var el = document.getElementById("game-duration-live");
     if (!el) return;
     // Timed Tournament replaces the plain elapsed-time readout with its
@@ -6172,9 +6198,620 @@
     }
   }
 
+  // ---------------------------------------------------------------------
+  // The board as the home screen: its top bar (☰ Menu, one read-only
+  // line saying what's being played, ↩ Undo, 🎱 Game), the Game sheet
+  // (every setting of the game, applied together with one Apply and
+  // announced in the banner), the menu (everything that isn't the
+  // board), the bench sheet (⇄ on a card: who sits in instead) and
+  // Arrange mode (the cards' drag handles, only then). Wired by
+  // wireBoardHome at start-up.
+  // ---------------------------------------------------------------------
+  var boardArrangeMode = false;
+
+  // "8-Ball · Race to 5 · Winner stays" - what the board is playing, in
+  // pieces (each its own span; Practice stands out).
+  function boardStatusParts() {
+    if (quickCounterMode) return [{ text: T("board.statusQuickCounter"), practice: true }];
+    var parts = [];
+    var type = GAME_TYPES[state.currentGame.gameType];
+    var label = type ? type.label : state.currentGame.gameType;
+    var target = state.currentGame.target, unit = state.currentGame.unit;
+    parts.push({ text: unit === "rack" && target === 1 ? label : T("board.statusGameTo", { game: label, target: target, unit: unit === "rack" ? T("units.racks") : unitLabel(unit) }) });
+    var rot = rotationStatusInfo();
+    if (rot) parts.push({ text: T(rot.untilSwitch === 1 ? "board.statusRotationNext" : "board.statusRotationIn", { next: GAME_TYPES[state.rotation.order[(rotationCurrentIndex() + 1) % state.rotation.order.length].gameType].label, count: rot.untilSwitch }) });
+    if (isRacing()) parts.push({ text: T("board.statusRace", { n: state.raceToWinsTarget }) });
+    if (isRacing() && state.fairRaceEnabled) parts.push({ text: T("board.statusBalanced") });
+    if (state.currentGame.mode === "teams") parts.push({ text: T("board.statusTeams") });
+    else if (state.currentGame.queueEnabled) parts.push({ text: T("board.statusWinnerStays") });
+    if (timedTournamentActive()) parts.push({ text: T("board.statusTimed") });
+    if (noStatsMode) parts.push({ text: T("board.statusPractice"), practice: true });
+    return parts;
+  }
+
+  function renderBoardStatus() {
+    var el = document.getElementById("board-status");
+    if (!el) return;
+    el.innerHTML = "";
+    boardStatusParts().forEach(function (part, i) {
+      if (i) el.appendChild(document.createTextNode(" · "));
+      var span = document.createElement("span");
+      span.className = "board-status-part" + (part.practice ? " is-practice" : "");
+      span.textContent = part.text;
+      el.appendChild(span);
+    });
+    var time = document.createElement("span");
+    time.className = "board-status-time";
+    time.id = "board-status-time";
+    el.appendChild(time);
+    updateBoardStatusTime();
+  }
+
+  // (the game's own clock, from its first shot - see markFirstShot)
+  function updateBoardStatusTime() {
+    var el = document.getElementById("board-status-time");
+    if (!el) return;
+    var startedAt = state.currentGame.startedAt ? new Date(state.currentGame.startedAt).getTime() : NaN;
+    el.textContent = quickCounterMode || isNaN(startedAt) ? "" : "⏱ " + formatDuration(Date.now() - startedAt);
+  }
+
+  // Practice (not saved) on or off - the "Do not record" switch, without
+  // its own toast (the Game sheet's banner says it).
+  function setPracticeMode(on) {
+    noStatsMode = !!on;
+    noStatsCheckbox.checked = noStatsMode;
+    if (!noStatsMode && quickCounterMode) {
+      quickCounterMode = false;
+      resetGameBalls();
+      applyRotationIfDue();
+      saveState();
+      renderAll();
+      updateCurrentGameSummary();
+    }
+    renderBoardStatus();
+  }
+
+  // ---- 🎱 Game ----
+  var GAME_SHEET_ROTATIONS = { "8-9": ["8ball", "9ball"], "8-9-10": ["8ball", "9ball", "10ball"] };
+  function rotationPresetOrder(key) {
+    return GAME_SHEET_ROTATIONS[key].map(function (id) {
+      return { gameType: id, target: GAME_TYPES[id].defaultTarget, unit: GAME_TYPES[id].unit };
+    });
+  }
+  function rotationOrderKey(order) {
+    return order.map(function (e) { return e.gameType + ":" + e.target + ":" + e.unit; }).join(",");
+  }
+  // Which of the sheet's rotation chips the saved lineup is: a preset, or
+  // "custom" (built in Games Rotations), or "none" (fewer than two games).
+  function savedRotationKind() {
+    if (state.rotation.order.length < 2) return "none";
+    var key = rotationOrderKey(state.rotation.order);
+    for (var k in GAME_SHEET_ROTATIONS) {
+      if (rotationOrderKey(rotationPresetOrder(k)) === key) return k;
+    }
+    return "custom";
+  }
+  function rotationLineupLabel(order) {
+    return order.map(function (e) { return GAME_TYPES[e.gameType] ? GAME_TYPES[e.gameType].label : e.gameType; }).join(" / ");
+  }
+
+  var gameSheetOverlay = document.getElementById("game-sheet-overlay");
+  function gsEl(id) { return document.getElementById(id); }
+  function gsRadio(name, value) {
+    var r = document.querySelector('input[name="' + name + '"][value="' + value + '"]');
+    if (r) r.checked = true;
+  }
+  function gsRadioValue(name) {
+    var r = document.querySelector('input[name="' + name + '"]:checked');
+    return r ? r.value : null;
+  }
+  function gsNumber(id, fallback) {
+    var el = gsEl(id), v = parseInt(el.value, 10);
+    var min = parseInt(el.min, 10) || 1, max = parseInt(el.max, 10) || 999;
+    if (!v) return fallback;
+    return Math.max(min, Math.min(max, v));
+  }
+
+  function openGameSheet() {
+    var typeSelect = gsEl("gs-game-type");
+    typeSelect.innerHTML = "";
+    GAME_TYPE_LIST.forEach(function (t) {
+      var opt = document.createElement("option");
+      opt.value = t.id;
+      opt.textContent = t.label;
+      typeSelect.appendChild(opt);
+    });
+    typeSelect.value = state.currentGame.gameType;
+    gsEl("gs-target").value = state.currentGame.target;
+    gsEl("gs-unit").value = state.currentGame.unit;
+    gsRadio("gs-race", state.raceToWinsTarget > 1 ? "race" : "single");
+    gsEl("gs-race-to").value = state.raceToWinsTarget > 1 ? state.raceToWinsTarget : (lastRaceToWinsTarget > 1 ? lastRaceToWinsTarget : 5);
+    var kind = savedRotationKind();
+    var customChip = gsEl("gs-rotation-custom-chip");
+    customChip.classList.toggle("hidden", kind !== "custom");
+    if (kind === "custom") gsEl("gs-rotation-custom-label").textContent = rotationLineupLabel(state.rotation.order);
+    gsRadio("gs-rotation", state.rotation.enabled && kind !== "none" ? kind : "off");
+    gsEl("gs-rotation-every").value = state.rotation.every || 1;
+    gsRadio("gs-mode", state.currentGame.mode === "teams" ? "teams" : "individual");
+    gsEl("gs-winner-stays").checked = !!state.currentGame.queueEnabled;
+    gsEl("gs-timed").checked = !!state.currentGame.timedTournamentEnabled;
+    gsEl("gs-timed-minutes").value = state.currentGame.timedTournamentMinutes || timedTournamentMinutesInput.value || 60;
+    gsEl("gs-shot-clock").checked = !!state.currentGame.shotCounterEnabled;
+    gsEl("gs-shot-beep").value = state.currentGame.shotCounterBeepSec || shotCounterBeepInput.value || 30;
+    gsEl("gs-practice").checked = noStatsMode;
+    syncGameSheet();
+    gameSheetOverlay.classList.remove("hidden");
+  }
+
+  function closeGameSheet() {
+    gameSheetOverlay.classList.add("hidden");
+  }
+
+  // What's live in the sheet follows what's picked in it.
+  function syncGameSheet() {
+    var rotating = gsRadioValue("gs-rotation") !== "off";
+    ["gs-game-type", "gs-target", "gs-unit"].forEach(function (id) { gsEl(id).disabled = rotating; });
+    Array.prototype.forEach.call(document.querySelectorAll('.gs-step[data-for="gs-target"]'), function (b) { b.disabled = rotating; });
+    gsEl("gs-rotation-note").classList.toggle("hidden", !rotating);
+    gsEl("gs-rotation-every-row").classList.toggle("hidden", !rotating);
+    gsEl("gs-race-stepper").classList.toggle("is-off", gsRadioValue("gs-race") !== "race");
+    var teams = gsRadioValue("gs-mode") === "teams";
+    gsEl("gs-teams-note").classList.toggle("hidden", !teams || state.currentGame.mode === "teams");
+    gsEl("gs-winner-stays").disabled = teams;
+    gsEl("gs-timed-stepper").classList.toggle("is-off", !gsEl("gs-timed").checked);
+    gsEl("gs-shot-stepper").classList.toggle("is-off", !gsEl("gs-shot-clock").checked);
+  }
+
+  function readGameSheet() {
+    var raceMode = gsRadioValue("gs-race");
+    return {
+      gameType: gsEl("gs-game-type").value,
+      target: gsNumber("gs-target", state.currentGame.target),
+      unit: gsEl("gs-unit").value,
+      race: raceMode === "race" ? gsNumber("gs-race-to", 5) : 1,
+      rotation: gsRadioValue("gs-rotation") || "off",
+      every: gsNumber("gs-rotation-every", state.rotation.every || 1),
+      mode: gsRadioValue("gs-mode") || "individual",
+      winnerStays: gsEl("gs-winner-stays").checked,
+      timed: gsEl("gs-timed").checked,
+      timedMinutes: gsNumber("gs-timed-minutes", 60),
+      shotClock: gsEl("gs-shot-clock").checked,
+      shotBeep: gsNumber("gs-shot-beep", 30),
+      practice: gsEl("gs-practice").checked
+    };
+  }
+
+  // The race from the sheet: the same as Current Session's Race to Wins /
+  // Single Game (the race closes at once if someone's already past it).
+  function setRaceTargetFromSheet(n) {
+    var before = state.raceToWinsTarget;
+    if (n > 1) {
+      state.raceToWinsTarget = n;
+      raceToWinsInput.value = n;
+      lastRaceToWinsTarget = n;
+    } else {
+      if (before !== 1) lastRaceToWinsTarget = before;
+      state.raceToWinsTarget = 1;
+    }
+    state.fairRaceTargets = null;
+    saveState();
+    syncRaceModeRadios();
+    renderRaceMode();
+    renderScoreboard();
+    renderStandings();
+    updateCurrentGameSummary();
+    if (n > 1 && before !== n) checkRaceAfterTargetChange(function () { restoreRaceTarget(before); });
+  }
+
+  // Teams from the sheet: whoever's playing, A and B in turn.
+  function splitPlayingIntoTeams() {
+    activePlayers().forEach(function (p, i) { p.teamId = i % 2 === 0 ? "A" : "B"; });
+    saveState();
+  }
+
+  function fireChange(el, type) {
+    el.dispatchEvent(new Event(type || "change", { bubbles: true }));
+  }
+
+  function applyGameSheet() {
+    var want = readGameSheet();
+    var changes = [];
+    closeGameSheet();
+
+    if (want.practice !== noStatsMode) {
+      setPracticeMode(want.practice);
+      changes.push(T(want.practice ? "gameSheet.chPracticeOn" : "gameSheet.chPracticeOff"));
+    }
+
+    if (want.mode !== state.currentGame.mode) {
+      if (want.mode === "teams") splitPlayingIntoTeams();
+      var modeRadio = Array.prototype.filter.call(modeRadios, function (r) { return r.value === want.mode; })[0];
+      modeRadio.checked = true;
+      fireChange(modeRadio);
+      changes.push(T(want.mode === "teams" ? "gameSheet.chTeams" : "gameSheet.chIndividual"));
+    }
+
+    var rotatingNow = state.rotation.enabled && state.rotation.order.length >= 2;
+    var kindNow = rotatingNow ? savedRotationKind() : "off";
+    if (want.rotation !== kindNow || (want.rotation !== "off" && want.every !== state.rotation.every)) {
+      if (want.rotation === "off") {
+        state.rotation.enabled = false;
+      } else {
+        if (want.rotation !== "custom") state.rotation.order = rotationPresetOrder(want.rotation);
+        state.rotation.every = want.every;
+        state.rotation.enabled = true;
+      }
+      applyRotationIfDue();
+      saveState();
+      renderRotation();
+      renderScoreboard();
+      changes.push(want.rotation === "off" ? T("gameSheet.chRotationOff") : T("gameSheet.chRotation", { lineup: rotationLineupLabel(state.rotation.order), every: state.rotation.every }));
+    }
+
+    // (while a rotation runs, the game is the lineup's)
+    if (!(state.rotation.enabled && state.rotation.order.length >= 2)) {
+      var gameChanged = false;
+      if (want.gameType !== state.currentGame.gameType && GAME_TYPES[want.gameType]) {
+        setCurrentGameType(want.gameType);
+        gameChanged = true;
+      }
+      if (want.target !== state.currentGame.target || want.unit !== state.currentGame.unit) {
+        state.currentGame.target = want.target;
+        state.currentGame.unit = want.unit;
+        syncGameTypeUI();
+        saveState();
+        renderScoreboard();
+        tickShotCounter();
+        gameChanged = true;
+      }
+      if (gameChanged) changes.push(boardStatusParts()[0].text);
+    }
+
+    if (want.race !== state.raceToWinsTarget) {
+      setRaceTargetFromSheet(want.race);
+      changes.push(want.race > 1 ? T("board.statusRace", { n: want.race }) : T("gameSheet.single"));
+    }
+
+    if (state.currentGame.mode !== "teams" && want.winnerStays !== !!state.currentGame.queueEnabled) {
+      queueModeCheckbox.checked = want.winnerStays;
+      fireChange(queueModeCheckbox);
+      changes.push(T(want.winnerStays ? "gameSheet.chWinnerOn" : "gameSheet.chWinnerOff"));
+    }
+
+    var minutesChanged = want.timedMinutes !== (state.currentGame.timedTournamentMinutes || parseInt(timedTournamentMinutesInput.value, 10));
+    if (minutesChanged) {
+      timedTournamentMinutesInput.value = want.timedMinutes;
+      fireChange(timedTournamentMinutesInput, "input");
+    }
+    if (want.timed !== !!state.currentGame.timedTournamentEnabled) {
+      timedTournamentEnabledCheckbox.checked = want.timed;
+      fireChange(timedTournamentEnabledCheckbox);
+      changes.push(want.timed ? T("gameSheet.chTimedOn", { min: want.timedMinutes }) : T("gameSheet.chTimedOff"));
+    } else if (want.timed && minutesChanged) {
+      changes.push(T("gameSheet.chTimedOn", { min: want.timedMinutes }));
+    }
+
+    var beepChanged = want.shotBeep !== (state.currentGame.shotCounterBeepSec || parseInt(shotCounterBeepInput.value, 10));
+    if (beepChanged) {
+      shotCounterBeepInput.value = want.shotBeep;
+      fireChange(shotCounterBeepInput, "input");
+    }
+    if (want.shotClock !== !!state.currentGame.shotCounterEnabled) {
+      shotCounterEnabledCheckbox.checked = want.shotClock;
+      fireChange(shotCounterEnabledCheckbox);
+      changes.push(want.shotClock ? T("gameSheet.chShotOn", { s: want.shotBeep }) : T("gameSheet.chShotOff"));
+    } else if (want.shotClock && beepChanged) {
+      changes.push(T("gameSheet.chShotOn", { s: want.shotBeep }));
+    }
+
+    renderBoardStatus();
+    if (changes.length) showBannerNotice(T("gameSheet.applied", { changes: changes.join(" · ") }));
+  }
+
+  // ---- ☰ Menu ----
+  var boardMenuOverlay = document.getElementById("board-menu-overlay");
+  var boardMenuPage = null;
+
+  function boardMenuItems() {
+    var panel = function (id) {
+      return function () { closeBoardMenu(); expandAndScrollToPanel(id, "btn-toggle-" + id); };
+    };
+    var click = function (id) {
+      return function () { closeBoardMenu(); document.getElementById(id).click(); };
+    };
+    var notGuest = function () { return !document.body.classList.contains("network-guest-mode"); };
+    return [
+      { icon: "▶️", key: "menu.newGame", primary: true, when: notGuest, run: function () { closeBoardMenu(); openQuickGameModal(); } },
+      { icon: "👥", key: "menu.players", children: [
+        { icon: "👥", key: "menu.playersRoster", run: panel("players-panel") },
+        { icon: "↕️", key: "menu.arrange", run: function () { closeBoardMenu(); setArrangeMode(true); } },
+        { icon: "👋", key: "menu.welcomePlayer", when: notGuest, run: click("btn-test-onboarding") },
+        { icon: "📊", key: "menu.allPlayers", run: click("btn-open-all-players") },
+        { icon: "📇", key: "menu.contactSheet", run: click("btn-open-contact-sheet") }
+      ] },
+      { icon: "🏆", key: "menu.tournament", run: click("btn-open-tournament") },
+      { icon: "🏅", key: "menu.league", run: click("btn-open-league") },
+      { icon: "📊", key: "menu.stats", children: [
+        { icon: "🏆", key: "menu.leaderboard", run: click("btn-open-leaderboard") },
+        { icon: "🌐", key: "menu.globalStats", run: click("btn-open-global-stats") },
+        { icon: "📋", key: "menu.standings", run: panel("standings-panel") },
+        { icon: "🕘", key: "menu.recentGames", run: panel("history-panel") }
+      ] },
+      { icon: "📝", key: "menu.dayReport", children: [
+        { icon: "📝", key: "menu.todaysReport", run: panel("day-notes-panel") },
+        { icon: "🗂️", key: "menu.pastReports", run: panel("report-archive-panel") }
+      ] },
+      { icon: "💾", key: "menu.backup", run: panel("backup-panel") },
+      { icon: "📷", key: "menu.camera", run: click("btn-open-camera-wizard-header") },
+      { icon: "🎬", key: "menu.recording", run: click("btn-open-recorder") },
+      { icon: "🎤", key: "menu.voice", page: "voice" },
+      { icon: "☁️", key: "menu.challonge", run: panel("challonge-panel") },
+      { icon: "⚠️", key: "menu.resets", run: panel("resets-panel") },
+      { icon: "❓", key: "menu.help", run: click("btn-open-help") },
+      { icon: "🎨", key: "menu.theme", select: "theme-select" },
+      { icon: "🌐", key: "menu.language", select: "language-select" },
+      { icon: "➕", key: "menu.more", children: [
+        { icon: "🧙", key: "menu.wizard", when: notGuest, run: click("btn-open-wizard") },
+        { icon: "🎯", key: "menu.multiTables", run: click("btn-open-group-session") },
+        { icon: "📱", key: "menu.pairedDevices", when: function () { return !document.getElementById("pairing-panel").classList.contains("hidden"); }, run: panel("pairing-panel") },
+        { icon: "🔍", key: "menu.allSettings", run: function () { closeBoardMenu(); setFocusMode(false); window.scrollTo(0, 0); } }
+      ] }
+    ];
+  }
+
+  function renderBoardMenu() {
+    var list = document.getElementById("board-menu-list");
+    var page = boardMenuPage;
+    list.innerHTML = "";
+    document.getElementById("btn-board-menu-back").classList.toggle("hidden", !page);
+    document.getElementById("board-menu-title").textContent = page ? page.icon + " " + T(page.key) : T("board.menu");
+    var voice = !!(page && page.page === "voice");
+    document.getElementById("menu-voice-box").classList.toggle("hidden", !voice);
+    list.classList.toggle("hidden", voice);
+    if (voice) return;
+    (page ? page.children : boardMenuItems()).filter(function (it) { return !it.when || it.when(); }).forEach(function (it) {
+      var li = document.createElement("li");
+      if (it.select) {
+        // the menu's own copy of the header's Theme / Language
+        var src = document.getElementById(it.select);
+        var row = document.createElement("label");
+        row.className = "board-menu-row board-menu-select-row";
+        var text = document.createElement("span");
+        text.textContent = it.icon + " " + T(it.key);
+        var sel = document.createElement("select");
+        sel.id = "menu-" + it.select;
+        sel.innerHTML = src.innerHTML;
+        sel.value = src.value;
+        sel.addEventListener("change", function () {
+          src.value = sel.value;
+          fireChange(src);
+        });
+        row.appendChild(text);
+        row.appendChild(sel);
+        li.appendChild(row);
+      } else {
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "board-menu-row" + (it.primary ? " is-primary" : "") + (it.children || it.page ? " has-children" : "");
+        btn.dataset.menuKey = it.key;
+        btn.textContent = it.icon + " " + T(it.key);
+        btn.addEventListener("click", function () {
+          if (it.children || it.page) {
+            boardMenuPage = it;
+            renderBoardMenu();
+            return;
+          }
+          it.run();
+        });
+        li.appendChild(btn);
+      }
+      list.appendChild(li);
+    });
+  }
+
+  function openBoardMenu() {
+    boardMenuPage = null;
+    renderBoardMenu();
+    boardMenuOverlay.classList.remove("hidden");
+  }
+
+  function closeBoardMenu() {
+    boardMenuOverlay.classList.add("hidden");
+  }
+
+  // ---- ⇄ the bench ----
+  var benchSheetOverlay = document.getElementById("bench-sheet-overlay");
+  var benchSeatId = null;
+
+  // Who's waiting: the Winner Stays line first, in its order, then
+  // anyone else on the roster.
+  function benchPlayers() {
+    var waiting = state.players.filter(function (p) { return !p.playing; });
+    if (!state.currentGame.queueEnabled) return waiting;
+    var line = effectiveQueue();
+    return line.concat(waiting.filter(function (p) { return line.indexOf(p) === -1; }));
+  }
+
+  function openBenchSheet(playerId) {
+    var seated = getPlayer(playerId);
+    if (!seated) return;
+    benchSeatId = playerId;
+    document.getElementById("bench-sheet-title").textContent = T("bench.title", { name: shortDisplayNameForPlayer(seated) });
+    var list = document.getElementById("bench-list");
+    list.innerHTML = "";
+    var bench = benchPlayers();
+    if (!bench.length) {
+      var none = document.createElement("li");
+      none.className = "empty-hint";
+      none.textContent = T("bench.nobody");
+      list.appendChild(none);
+    }
+    bench.forEach(function (p) {
+      var li = document.createElement("li");
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "bench-row";
+      btn.dataset.playerId = p.id;
+      var name = document.createElement("span");
+      name.className = "bench-row-name";
+      name.textContent = p.name;
+      btn.appendChild(name);
+      btn.appendChild(buildRatingBadge(p.name));
+      btn.addEventListener("click", function () {
+        closeBenchSheet();
+        swapSeat(benchSeatId, p.id);
+      });
+      li.appendChild(btn);
+      list.appendChild(li);
+    });
+    document.getElementById("bench-add-name").value = "";
+    var sitOut = document.getElementById("btn-bench-sit-out");
+    sitOut.textContent = T("bench.sitOut", { name: shortDisplayNameForPlayer(seated) });
+    // (with Winner Stays, whoever's next in line comes in - that's the first row)
+    sitOut.classList.toggle("hidden", activePlayers().length <= 2 || !!state.currentGame.queueEnabled);
+    benchSheetOverlay.classList.remove("hidden");
+  }
+
+  function closeBenchSheet() {
+    benchSheetOverlay.classList.add("hidden");
+  }
+
+  // Someone from the bench takes this seat (its place on the board, its
+  // team); the one leaving goes to the back of the Winner Stays line.
+  function swapSeat(outId, inId) {
+    var out = getPlayer(outId), into = getPlayer(inId);
+    if (!out || !into || !out.playing || into.playing) return;
+    var i = state.players.indexOf(out), j = state.players.indexOf(into);
+    state.players[i] = into;
+    state.players[j] = out;
+    into.playing = true;
+    into.balls = 0;
+    into.teamId = out.teamId;
+    out.playing = false;
+    out.balls = 0;
+    if (state.currentGame.queueEnabled) {
+      var line = effectiveQueue().filter(function (q) { return q.id !== into.id && q.id !== out.id; });
+      line.push(out);
+      saveQueue(line);
+    }
+    if (keypadSelectedPlayerId === out.id) keypadSelectedPlayerId = into.id;
+    saveState();
+    renderAll();
+    showBannerNotice(T("bench.swapped", { into: into.name, out: out.name }));
+  }
+
+  function benchAddByName(raw) {
+    var trimmed = (raw || "").trim();
+    if (!trimmed) return;
+    var blocked = playerNameBlockedReason(trimmed);
+    var existingId = getPlayerIdByName(resolvePlayerName(trimmed));
+    var existing = existingId ? getPlayer(existingId) : null;
+    if (existing && existing.playing) {
+      showToast(T("bench.alreadyPlaying", { name: existing.name }), "⇄ ");
+      return;
+    }
+    if (!existing && blocked) {
+      showToast(blocked, "⇄ ");
+      return;
+    }
+    var player = existing || addPlayer(trimmed);
+    if (!player) return;
+    closeBenchSheet();
+    swapSeat(benchSeatId, player.id);
+  }
+
+  // ---- ↕ Arrange: the cards' drag handles, only while arranging ----
+  function setArrangeMode(on) {
+    boardArrangeMode = !!on;
+    appRoot.classList.toggle("arrange-mode", boardArrangeMode);
+    document.getElementById("btn-arrange-done").classList.toggle("hidden", !boardArrangeMode);
+    renderScoreboard();
+    if (boardArrangeMode) showBannerNotice(T("board.arrangeHint"));
+  }
+
+  // On the hill: one more win takes the race (or, in a points game, one
+  // more point takes the game) - the other thing a card's highlight shows.
+  function cardOnHill(player) {
+    if (quickCounterMode) return false;
+    if (isRacing() && (state.playerWins[player.id] || 0) === effectiveRaceTarget(player.id) - 1) return true;
+    return keypadPlayerIsOnHill(player);
+  }
+
+  function wireBoardHome() {
+    document.getElementById("btn-board-menu").addEventListener("click", openBoardMenu);
+    document.getElementById("btn-board-game").addEventListener("click", openGameSheet);
+    document.getElementById("btn-back-to-board").addEventListener("click", function () {
+      setFocusMode(true);
+      window.scrollTo(0, 0);
+    });
+    document.getElementById("btn-arrange-done").addEventListener("click", function () { setArrangeMode(false); });
+
+    document.getElementById("btn-game-sheet-apply").addEventListener("click", applyGameSheet);
+    document.getElementById("btn-game-sheet-cancel").addEventListener("click", closeGameSheet);
+    document.getElementById("btn-game-sheet-close").addEventListener("click", closeGameSheet);
+    gameSheetOverlay.addEventListener("click", function (e) { if (e.target === gameSheetOverlay) closeGameSheet(); });
+    gameSheetOverlay.addEventListener("change", function (e) {
+      if (e.target.id === "gs-game-type") {
+        var type = GAME_TYPES[e.target.value];
+        if (type) {
+          gsEl("gs-target").value = type.defaultTarget;
+          gsEl("gs-unit").value = type.unit;
+        }
+      }
+      if (e.target.id === "gs-race-to") gsRadio("gs-race", "race");
+      syncGameSheet();
+    });
+    Array.prototype.forEach.call(gameSheetOverlay.querySelectorAll(".gs-step"), function (b) {
+      b.addEventListener("click", function () {
+        var input = gsEl(b.dataset.for);
+        var step = parseInt(b.dataset.step, 10);
+        var min = parseInt(input.min, 10) || 1, max = parseInt(input.max, 10) || 999;
+        var v = parseInt(input.value, 10) || min;
+        // (a 5-step lands on a multiple of 5)
+        v = Math.abs(step) > 1 ? Math.round((v + step) / Math.abs(step)) * Math.abs(step) : v + step;
+        input.value = Math.max(min, Math.min(max, v));
+        if (b.dataset.for === "gs-race-to") gsRadio("gs-race", "race");
+        if (b.dataset.for === "gs-timed-minutes") gsEl("gs-timed").checked = true;
+        if (b.dataset.for === "gs-shot-beep") gsEl("gs-shot-clock").checked = true;
+        syncGameSheet();
+      });
+    });
+    document.getElementById("btn-gs-edit-lineup").addEventListener("click", function () {
+      closeGameSheet();
+      expandAndScrollToPanel("rotation-panel", "btn-toggle-rotation-panel");
+    });
+
+    document.getElementById("btn-board-menu-close").addEventListener("click", closeBoardMenu);
+    document.getElementById("btn-board-menu-back").addEventListener("click", function () {
+      boardMenuPage = null;
+      renderBoardMenu();
+    });
+    boardMenuOverlay.addEventListener("click", function (e) { if (e.target === boardMenuOverlay) closeBoardMenu(); });
+
+    document.getElementById("btn-bench-sheet-close").addEventListener("click", closeBenchSheet);
+    benchSheetOverlay.addEventListener("click", function (e) { if (e.target === benchSheetOverlay) closeBenchSheet(); });
+    document.getElementById("bench-add-form").addEventListener("submit", function (e) {
+      e.preventDefault();
+      benchAddByName(document.getElementById("bench-add-name").value);
+    });
+    document.getElementById("btn-bench-sit-out").addEventListener("click", function () {
+      var id = benchSeatId;
+      closeBenchSheet();
+      togglePlaying(id);
+    });
+
+    document.addEventListener("keydown", function (e) {
+      if (e.key !== "Escape") return;
+      if (!gameSheetOverlay.classList.contains("hidden")) closeGameSheet();
+      else if (!boardMenuOverlay.classList.contains("hidden")) closeBoardMenu();
+      else if (!benchSheetOverlay.classList.contains("hidden")) closeBenchSheet();
+    });
+  }
+
   function renderScoreboard() {
     postRecorderContext(); // (the recording page names its cues from what's shown)
     var active = activePlayers();
+    renderBoardStatus();
     // One player seated and nobody to play: the board offers a game
     // with them already filled in (see openQuickGameModalWith).
     boardSoloRow.classList.toggle("hidden", quickCounterMode || state.currentGame.mode === "teams" || active.length !== 1);
@@ -7643,6 +8280,10 @@
   // than TAP_GUARD_MS ago: then a moment later.
   function revealWinBanner() {
     if (winBanner.revealTimer) clearTimeout(winBanner.revealTimer);
+    // (on the board: just under its top bar, which stays usable)
+    var bar = document.getElementById("board-topbar");
+    var barBottom = bar && appRoot.classList.contains("focus-mode") && !appRoot.classList.contains("hidden") ? bar.getBoundingClientRect().bottom : 0;
+    winBannerEl.style.top = barBottom > 0 ? Math.round(barBottom + 6) + "px" : "";
     winBannerEl.classList.remove("hidden");
     winBannerEl.classList.add("win-banner-pending");
     var r = winBannerEl.getBoundingClientRect();
@@ -35738,6 +36379,7 @@
         ? "No Statistic mode is on — nothing from here on will be saved."
         : "No Statistic mode is off — games will be tracked normally again."
     );
+    renderBoardStatus();
   });
 
   // (where a typed edit started - the race to go back to; checked once
@@ -37304,6 +37946,7 @@
   // (Focus Mode); 🔍 Show All brings the settings and panels back for the
   // moment.
   setFocusMode(true);
+  wireBoardHome();
   btnToggleFocus.addEventListener("click", function () {
     setFocusMode(!appRoot.classList.contains("focus-mode"));
   });

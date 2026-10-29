@@ -190,7 +190,12 @@ Tap **❓ Help** — it's on every page (the main page, the Setup Wizard, All Pl
 
 ## Focus Mode
 
-The scoreboard is the home screen: the app always opens in Focus Mode, with every setup/stats panel hidden and only the live scoreboard on screen. Tap **Show All** to bring the rest of the page back for the moment, and **Focus Mode** to return to the board. With nobody playing yet, the board offers **▶️ New game** (Quick Game).
+The scoreboard is the home screen: the app always opens on the board (Focus Mode). Its top bar has **☰ Menu**, one line saying what's being played ("8-Ball · Race to 5 · Winner stays"), **↩ Undo** and **🎱 Game**.
+
+- **🎱 Game** holds everything about the game: game type, target, race, rotation (with 8/9 alternate and 8/9/10 ready to pick), Winner Stays, teams (split A/B automatically), timer, shot clock and practice (not saved). Nothing changes until **Apply**, and the banner says what did.
+- **☰ Menu** holds everything else: ▶️ New game, Players, Tournament, League, Stats, Day Report, Backup & Restore, Camera, Recording, Voice, Challonge, Resets, Help, Theme and Language - and under More, the Setup Wizard, Multi Tables and the full page (**🎱 Back to the board** returns).
+- Each card is the name, the score, then a big **+**. A points game also has a small round − for a point taken back; undoing is ↩ Undo's job. **⇄** on a card swaps that player for someone on the bench (or someone new). The cards' drag handles only show in **☰ Menu › Players › Arrange the seats**. A card lights up for the shooter, and for a player on the hill.
+- With nobody playing yet, the board offers **▶️ New game**.
 
 ## Backup, import/export & data safety
 

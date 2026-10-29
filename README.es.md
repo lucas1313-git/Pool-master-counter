@@ -190,7 +190,12 @@ Toca **❓ Ayuda** — está en cada página (la página principal, el Asistente
 
 ## Modo Enfoque
 
-El marcador es la pantalla de inicio: la app siempre se abre en Modo Enfoque, con todos los paneles de configuración/estadísticas ocultos y solo el marcador en vivo en pantalla. Toca **Mostrar todo** para recuperar el resto de la página por el momento, y **Modo Enfoque** para volver al marcador. Si todavía no juega nadie, el marcador ofrece **▶️ Partida nueva** (Partida rápida).
+El marcador es la pantalla de inicio: la app siempre se abre en el marcador (Modo Enfoque). Su barra de arriba tiene **☰ Menú**, una línea que dice qué se juega («8-Ball · Carrera a 5 · El ganador se queda»), **↩ Deshacer** y **🎱 Juego**.
+
+- **🎱 Juego** reúne todo lo de la partida: tipo de juego, meta, carrera, rotación (8/9 alternando y 8/9/10 listos para elegir), el ganador se queda, equipos (repartidos A/B automáticamente), tiempo, reloj de tiro y práctica (no se guarda). Nada cambia hasta **Aplicar**, y el cartel dice qué cambió.
+- **☰ Menú** reúne todo lo demás: ▶️ Partida nueva, Jugadores, Torneo, Liga, Estadísticas, Informe del día, Copia y restauración, Cámara, Grabación, Voz, Challonge, Reinicios, Ayuda, Tema e Idioma - y en Más, el asistente, Varias mesas y la página completa (**🎱 Volver al marcador** regresa).
+- Cada tarjeta: el nombre, el marcador y un **+** grande. Un juego a puntos también tiene un − pequeño y redondo para quitar un punto; deshacer es cosa de ↩ Deshacer. **⇄** en una tarjeta cambia a ese jugador por alguien del banquillo (o alguien nuevo). Las asas de las tarjetas solo aparecen en **☰ Menú › Jugadores › Colocar a los jugadores**. Una tarjeta se ilumina para quien tira, y para quien está a una victoria de la carrera.
+- Si todavía no juega nadie, el marcador ofrece **▶️ Partida nueva**.
 
 ## Copia de seguridad, importar/exportar y seguridad de datos
 

@@ -1,11 +1,11 @@
 // The scoreboard is the home screen (P13 step 1). With Kim v Jo playing a race to 5:
 // - the app opens on the board (Focus Mode) at 1180x820, 820x1180, 390x844 and 1920x1080,
 //   with the first + fully on the first screen;
-// - 🔍 Show All brings the panels back, and the next launch is on the board again;
+// - ☰ Menu › More › Everything brings the panels back, and the next launch is on the board again;
 // - a toast never takes a tap meant for what's under it (scrolled down, the board's top row
 //   sits right under it);
-// - Rotation switched on from the board with no games in its lineup opens Games Rotations
-//   where it can be seen (it used to scroll to a panel Focus Mode hides);
+// - building a rotation lineup from the board (🎱 Game › Edit the lineup…) opens Games
+//   Rotations where it can be seen (a jump to a panel used to scroll to one the board hides);
 // - nobody playing: the board says so and offers ▶️ New game, which opens Quick Game and
 //   lands on the board with the two players;
 // - first launch, welcome then "Get to it now": Luc alone on the board, with "Nobody to play
@@ -80,10 +80,14 @@ function seededBoard() {
 
   // ---- Show All, then the next launch ----
   let page = await open(1180, 820, seededBoard());
-  await page.click("#btn-toggle-focus");
+  await page.click("#btn-board-menu");
+  await sleep(200);
+  await page.evaluate(() => [...document.querySelectorAll("#board-menu-list .board-menu-row")].find((b) => b.dataset.menuKey === "menu.more").click());
+  await sleep(150);
+  await page.evaluate(() => [...document.querySelectorAll("#board-menu-list .board-menu-row")].find((b) => b.dataset.menuKey === "menu.allSettings").click());
   await sleep(300);
   const all = await page.evaluate(() => ({ focus: document.getElementById("app").classList.contains("focus-mode"), panels: [...document.querySelectorAll("#app > .panel, #app .panel")].filter((p) => p.offsetParent).length }));
-  check("🔍 Show All brings the panels back", !all.focus && all.panels > 3, all);
+  check("☰ Menu › More › Everything (the full page) brings the panels back", !all.focus && all.panels > 3, all);
   await page.goto(BASE, { waitUntil: "networkidle2" });
   await sleep(900);
   const again = await home(page);
@@ -98,17 +102,21 @@ function seededBoard() {
   });
   check("a toast never takes a tap: what's under it gets it", toastTap.shown && toastTap.under !== "page-toast", toastTap);
 
-  // ---- Rotation with no lineup, from the board ----
+  // ---- a rotation lineup to build, from the board (🎱 Game › Edit the lineup…) ----
   await page.evaluate(() => { if (!document.getElementById("app").classList.contains("focus-mode")) document.getElementById("btn-toggle-focus").click(); });
   await sleep(200);
-  await page.click("label:has(#scoreboard-mode-rotation)");
+  await page.click("#btn-board-game");
+  await sleep(300);
+  await page.click('input[name="gs-rotation"][value="8-9"]');
+  await sleep(100);
+  await page.click("#btn-gs-edit-lineup");
   await sleep(1200);
   const rot = await page.evaluate(() => {
     const p = document.getElementById("rotation-panel");
     const r = p.getBoundingClientRect();
     return { shown: !!p.offsetParent, open: !p.classList.contains("collapsed"), top: Math.round(r.top), h: innerHeight };
   });
-  check("Rotation switched on from the board with no lineup: Games Rotations opens where it can be seen", rot.shown && rot.open && rot.top >= -5 && rot.top < rot.h, rot);
+  check("a lineup to build, from the board (🎱 Game › Edit the lineup…): Games Rotations opens where it can be seen", rot.shown && rot.open && rot.top >= -5 && rot.top < rot.h, rot);
   await page.close();
 
   // ---- nobody playing ----

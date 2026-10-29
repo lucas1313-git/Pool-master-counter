@@ -190,7 +190,12 @@ Appuyez sur **❓ Aide** — présent sur chaque page (la page principale, l'Ass
 
 ## Mode Focus
 
-Le tableau de score est l'écran d'accueil : l'application s'ouvre toujours en Mode Focus, tous les panneaux de configuration/statistiques masqués et seul le tableau de score en direct à l'écran. Appuyez sur **Tout afficher** pour retrouver le reste de la page le temps qu'il faut, et sur **Mode Focus** pour revenir au tableau. Quand personne ne joue encore, le tableau propose **▶️ Nouvelle partie** (Partie rapide).
+Le tableau de score est l'écran d'accueil : l'application s'ouvre toujours sur le tableau (Mode Focus). Sa barre du haut a **☰ Menu**, une ligne qui dit ce qui se joue (« 8-Ball · Course à 5 · Le gagnant reste »), **↩ Annuler** et **🎱 Jeu**.
+
+- **🎱 Jeu** réunit tout ce qui concerne la partie : type de jeu, objectif, course, rotation (8/9 en alternance et 8/9/10 prêts à choisir), le gagnant reste, équipes (réparties A/B automatiquement), chrono, chrono de coup et entraînement (non enregistré). Rien ne change avant **Appliquer**, et le bandeau dit ce qui a changé.
+- **☰ Menu** réunit tout le reste : ▶️ Nouvelle partie, Joueurs, Tournoi, Ligue, Stats, Rapport du jour, Sauvegarde et restauration, Caméra, Enregistrement, Voix, Challonge, Réinitialisations, Aide, Thème et Langue - et sous Plus, l'assistant, Multi-tables et la page complète (**🎱 Retour au tableau** y ramène).
+- Chaque carte : le nom, le score, puis un grand **+**. Un jeu aux points a aussi un petit − rond pour retirer un point ; annuler, c'est le rôle de ↩ Annuler. **⇄** sur une carte remplace ce joueur par quelqu'un du banc (ou quelqu'un de nouveau). Les poignées des cartes n'apparaissent que dans **☰ Menu › Joueurs › Placer les joueurs**. Une carte s'éclaire pour le joueur au tir, et pour un joueur à une victoire de la course.
+- Quand personne ne joue encore, le tableau propose **▶️ Nouvelle partie**.
 
 ## Sauvegarde, import/export et sécurité des données
 

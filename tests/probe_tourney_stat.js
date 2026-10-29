@@ -7,10 +7,15 @@ const [BASE, OUT] = process.argv.slice(2);
 let fails = 0;
 function check(label, ok, extra) { console.log((ok ? "PASS " : "FAIL ") + label + (extra !== undefined ? "  " + JSON.stringify(extra) : "")); if (!ok) fails++; }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// The app opens on the board (Focus Mode); this probe starts on the full page, so 🔍 Show All once it's up.
+const showAll = async (pg) => {
+  await pg.waitForFunction(() => document.getElementById("app") && document.getElementById("app").classList.contains("focus-mode"), { timeout: 10000 });
+  await pg.evaluate(() => document.getElementById("btn-toggle-focus").click());
+};
 async function setup(page, names, lang) {
   await page.goto(BASE + "manifest.json");
   await page.evaluate((lang) => { localStorage.clear(); localStorage.setItem("poolMasterCounter.onboardingSeen.v1", "1"); localStorage.setItem("poolMasterCounter.migratedFromRepo.v1", "1"); if (lang) localStorage.setItem("poolMasterCounter.language.v1", lang); }, lang);
-  await page.goto(BASE, { waitUntil: "networkidle2" });
+  await page.goto(BASE, { waitUntil: "networkidle2" }); await showAll(page);
   await sleep(600);
   await page.evaluate(async (names) => {
     for (const n of names) {
@@ -41,11 +46,11 @@ const measure = (page) => page.evaluate(() => [...document.querySelectorAll(".st
   check("phone, 2 players: smaller, whole, inside the card", m.length === 2 && m.every((x) => x.size < 24 && x.size >= 12 && x.inside && !x.clipped), m);
   if (OUT) { const el = await page.$(".scoreboard"); await el.screenshot({ path: OUT + "/tourney_390.png" }); }
   check("phone: no sideways scroll", (await page.evaluate(() => document.documentElement.scrollWidth)) <= 390);
-  await page.click("#btn-toggle-focus");
+  await page.evaluate(() => document.getElementById("btn-toggle-focus").click());
   await sleep(600);
   m = await measure(page);
   check("phone, Focus Mode: inside the card, one line", m.every((x) => x.inside && !x.clipped), m);
-  await page.click("#btn-toggle-focus");
+  await page.evaluate(() => document.getElementById("btn-toggle-focus").click());
   await setup(page, ["Alex", "Sam", "Kim", "Lee"]);
   m = await measure(page);
   check("phone, 4 players: inside each card (ellipsis at worst)", m.length >= 2 && m.every((x) => x.inside), m);

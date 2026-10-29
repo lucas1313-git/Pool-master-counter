@@ -73,7 +73,8 @@ const near = (a, b, tol) => typeof a === "number" && Math.abs(a - b) <= tol;
   // A. no camera watching
   await sleep(1300);
   let b = await autoBtn();
-  check("🎯 Auto cue on the scoreboard while it records - dimmed: no camera watching the table", b.shown && b.text === "🎯 Auto cue" && b.off && b.h === 44, b);
+  const barH = await board.evaluate(() => Math.round(document.getElementById("btn-board-game").getBoundingClientRect().height));
+  check("🎯 Auto cue in the board's top bar while it records (as tall as its other buttons) - dimmed: no camera watching the table", b.shown && b.text === "🎯 Auto cue" && b.off && b.h === barH, { b, barH });
   await board.click("#btn-recorder-auto");
   await sleep(300);
   let t = await toastText();
