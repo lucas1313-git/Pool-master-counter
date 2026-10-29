@@ -8,7 +8,7 @@ const { spawnSync, execFileSync } = require("child_process");
 const path = require("path");
 
 const CHECKS = [
-  "test_brackets", "test_tiebreaks", "test_swiss", "test_handicaps", "test_league_merge", "test_events",
+  "test_brackets", "test_tiebreaks", "test_swiss", "test_chip_tournament", "test_handicaps", "test_league_merge", "test_events",
   "test_strings", "test_voice_parser", "test_rail_distance", "test_camera_learning", "test_challonge",
   "test_recorder_retention", "test_camera_light",
   { name: "test_mp4_clip", needs: "ffmpeg" }

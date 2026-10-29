@@ -6,7 +6,7 @@ Some are English on purpose - the app's Taglish keeps a few pool and app words a
 practice, Winner stays, bracket). Keep those where they read naturally; translate the rest.
 Written by `node tests/tagalog_review.js` - run it again after changes.
 
-## Identical to English (205)
+## Identical to English (207)
 
 | Key | English (= Tagalog now) |
 |---|---|
@@ -133,6 +133,8 @@ Written by `node tests/tagalog_review.js` - run it again after changes.
 | `tournament.formatSingleShort` | 🥇 Single Elimination |
 | `tournament.formatSingleTitle` | Single Elimination Tournament Format |
 | `tournament.formatSwissTitle` | Swiss Tournament Format |
+| `chips.heading` | Chips |
+| `chips.chartChipsUnit` | chips |
 | `tournament.grandFinal` | Grand Final |
 | `tournament.losersBracket` | Losers Bracket |
 | `tournament.roundFinal` | Final |

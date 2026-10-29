@@ -109,11 +109,13 @@ Turn on **Rotate game types automatically** to have the app cycle through a sequ
 
 Tap **🏆 Tournament** (or choose Tournament Elimination in the wizard) to run a knockout bracket — or a round robin — instead of a regular session.
 
-**Format** — three choices, each explained inline before you pick:
+**Format** — five choices, each explained inline before you pick:
 
 - **Double Elimination** — lose once, drop to a losers bracket for a second chance; lose twice and you're out. The default: fairer, but longer.
 - **Single Elimination** — lose once and you're out. Faster, no losers bracket or grand final.
 - **Round Robin** — no elimination at all. Every player faces every other player exactly once (match order is a random shuffle — there's no seeding to speak of), and once every match has a result, whoever has the most match wins is champion; a tie at the top makes every tied player a champion together. Best for a casual group where everyone should get equal games in, especially with a small group.
+- **🇨🇭 Swiss** — no elimination either: a fixed number of rounds, each pairing players with similar records; the most match wins at the end is champion.
+- **🪙 Chip Tournament** — chips by rating, one waiting line, out when your chips run out; see [Chip tournaments](#-chip-tournaments).
 
 Setup is otherwise the same regardless of format: pick the game type, per-match target, race-to for each match, and check off who's competing.
 
@@ -122,6 +124,16 @@ Setup is otherwise the same regardless of format: pick the game type, per-match 
 - Each match plays out on the same familiar +/− scoreboard used everywhere else; the currently active match is highlighted and can't be re-triggered accidentally.
 - The eventual champion (or co-champions, in a Round Robin tie) gets a 👑, and the finishing fanfare plays about a second later — see [Sound](#sound).
 - Every rack played in a tournament still counts toward each player's career stats, rating, and the All Players graphs — it isn't a separate, disconnected pool of data.
+
+### 🪙 Chip tournaments
+
+The weekly favourite: everyone gets **chips by rating** and waits in **one line**; the next two in line go to the first free table; the **loser of each game gives up a chip** and is out at 0; the **last player with chips wins**.
+
+- **The chip chart** (in the wizard, under the format): rating bands to chips — by default 4 chips up to a rating of 399, 3 up to 549, 2 above — so weaker players have more lives. Add, change or remove bands; the chart is kept for every chip tournament after (and goes in backups).
+- **Tables**: with several, the next game goes to the next free table on its own (the multi-table queue, as in the other formats); nobody plays the player they just played while someone else is waiting. A player who comes off a table goes to the back of the line, the winner first.
+- **The board** shows everyone with their chips (●●○), where they are (at table 2 · next game against Jo · 3rd in line · out, 9th) and the latest games; **📺 Next up** on the TV shows the live tables, the next game and everyone's chips.
+- **Late players** get their chips from the chart and join the back of the line; **a withdrawn player** is out at once. A finished game's result can't be changed (its chip has already moved the line on) — undo a rack while the game is still on the table instead.
+- Final placings: the champion, then the last one out, and so on.
 
 ### 💰 Payouts, side pots and a Calcutta
 

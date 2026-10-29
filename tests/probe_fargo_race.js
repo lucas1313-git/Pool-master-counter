@@ -59,7 +59,7 @@ const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/cs
         Object.keys(fargo).forEach((n, i) => { if (fargo[n]) contacts[n] = { email: "", phone: "", fargoId: String(1000 + i), fargoName: n, fargoRating: fargo[n], fargoFetchedAt: Date.now() }; });
         localStorage.setItem("poolMasterCounter.contacts.v1", JSON.stringify(contacts));
         // the app's own ratings: Kim 500, Jo 300
-        localStorage.setItem("poolMasterCounter.ratings.v1", JSON.stringify({ Kim: { rating: 500, gamesPlayed: 40 }, Jo: { rating: 300, gamesPlayed: 40 } }));
+        localStorage.setItem("poolMasterCounter.ratings.v1", JSON.stringify({ Kim: { rating: 500, gamesPlayed: 40, history: [] }, Jo: { rating: 300, gamesPlayed: 40, history: [] } }));
         localStorage.setItem("poolMasterCounter.state.v2", JSON.stringify({ players: [{ id: "pa", name: "Kim", playing: !opts.tournament, balls: 0 }, { id: "pb", name: "Jo", playing: !opts.tournament, balls: 0 }], playerWins: {}, teamWins: {}, teamMvpWins: {}, gameHistory: [], currentGame: { gameType: "8ball", target: 1, unit: "rack", mode: "individual" }, raceToWinsTarget: 9, fairRaceEnabled: !opts.tournament, fairRaceTargets: null, rotation: { enabled: false, order: [], every: 1 } }));
       }, fargo, opts);
       await page.goto(BASE, { waitUntil: "networkidle2" });

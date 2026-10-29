@@ -8162,6 +8162,23 @@ body.network-guest-mode #header-group-start {
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
 }
 
+/* 🪙 a chip tournament (P34): everyone's chips, where they are; bigger on the TV's Next up */
+.chips-standings { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 4px; }
+.chips-row { display: grid; grid-template-columns: minmax(90px, 1.2fr) auto minmax(90px, 1.4fr); gap: 12px; align-items: center; padding: 6px 10px; border-radius: 10px; background: var(--bg-card); border: 1px solid var(--border); }
+.chips-row.is-out { opacity: 0.45; }
+.chips-row.is-out .chips-name { text-decoration: line-through; }
+.chips-row.is-champion { border-color: var(--accent); }
+.chips-name { font-weight: 800; }
+.chips-dots { color: var(--accent); letter-spacing: 3px; font-size: 1.2em; white-space: nowrap; }
+.chips-status { color: var(--text-dim); text-align: right; }
+.chips-line { color: var(--text-dim); }
+.next-up-chips-next { font-size: clamp(1.4rem, 3vw, 2.6rem); font-weight: 900; color: var(--accent); margin: 12px 0 4px; }
+.chips-standings-tv { grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 8px; }
+.chips-standings-tv .chips-row { font-size: clamp(1.1rem, 2vw, 1.8rem); padding: 10px 16px; }
+.chips-chart-row { gap: 8px; align-items: center; flex-wrap: wrap; }
+.chips-chart-row input { width: 84px; min-height: 44px; font-size: 1.1rem; text-align: center; }
+.tournament-chips-chart-row { margin-top: 10px; }
+
 /* 💰 a tournament's money (P33): the sheet, the champion's share, each place's */
 .payouts-row { margin: 6px 0; }
 .payouts-row .gs-label { min-width: 120px; }
@@ -11612,7 +11629,7 @@ body[data-tournament-tv="bracket"] #tournament-active-panel {
   background: var(--bg);
   font-size: clamp(1rem, 1.4vw, 1.5rem);
 }
-body[data-tournament-tv="bracket"] #tournament-active-panel > :not(.row):not(#tournament-wb-section):not(#tournament-lb-section):not(#tournament-rr-section):not(#tournament-swiss-section):not(#tournament-timeline) {
+body[data-tournament-tv="bracket"] #tournament-active-panel > :not(.row):not(#tournament-wb-section):not(#tournament-lb-section):not(#tournament-rr-section):not(#tournament-swiss-section):not(#tournament-chips-section):not(#tournament-timeline) {
   display: none;
 }
 body[data-tournament-tv="bracket"] #tournament-active-panel > .row > :not(#btn-tournament-bracket-tv) {

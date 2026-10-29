@@ -2765,11 +2765,14 @@
     var heading = document.getElementById("tournament-new-heading");
     var checked = Array.prototype.filter.call(tournamentFormatRadios, function (r) { return r.checked; })[0];
     var format = checked ? checked.value : "double";
-    var key = format === "roundrobin" ? "tournament.newHeadingRoundRobin" : format === "swiss" ? "tournament.newHeadingSwiss" : "tournament.newHeading";
+    var key = format === "roundrobin" ? "tournament.newHeadingRoundRobin" : format === "swiss" ? "tournament.newHeadingSwiss" : format === "chips" ? "tournament.newHeadingChips" : "tournament.newHeading";
     heading.setAttribute("data-i18n", key);
     heading.textContent = T(key);
     // (Swiss: how many rounds - blank plays enough to separate the field)
     document.getElementById("tournament-swiss-rounds-row").classList.toggle("hidden", format !== "swiss");
+    // (chips: the chip chart)
+    document.getElementById("tournament-chips-chart-row").classList.toggle("hidden", format !== "chips");
+    if (format === "chips") renderChipChartEditor();
   }
   Array.prototype.forEach.call(tournamentFormatRadios, function (r) { r.addEventListener("change", renderTournamentNewHeading); });
   var tournamentWbSection = document.getElementById("tournament-wb-section");
@@ -10806,6 +10809,7 @@
     if (format === "double") return "Double Elimination";
     if (format === "roundrobin") return "Round Robin";
     if (format === "swiss") return "Swiss";
+    if (format === "chips") return "Chip Tournament";
     return "Tournament";
   }
 
@@ -19340,7 +19344,7 @@
   // The format as a plain word for a tournament's name ("Round Robin"),
   // in the app's language - the setup screen's label without its emoji.
   function challongeFormatText(format) {
-    var key = { single: "tournament.formatSingleShort", double: "tournament.formatDoubleShort", roundrobin: "tournament.formatRoundRobinShort", swiss: "tournament.formatSwissShort" }[format];
+    var key = { single: "tournament.formatSingleShort", double: "tournament.formatDoubleShort", roundrobin: "tournament.formatRoundRobinShort", swiss: "tournament.formatSwissShort", chips: "tournament.formatChipsShort" }[format];
     var text = key ? T(key) : tournamentFormatLabel(format);
     return text.replace(/^[\p{Extended_Pictographic}\p{Regional_Indicator}️‍\s]+/u, "").trim() || tournamentFormatLabel(format);
   }
@@ -19960,7 +19964,7 @@
   // tags, map options and view, and Quick Game's race, too)
   function deviceSettingKeys() {
     return ["poolMasterCounter.theme.v1", "poolMasterCounter.language.v1", "poolMasterCounter.focusMode", "poolMasterCounter.leagueFocusMode",
-      "poolMasterCounter.fargoEnabled.v1", "poolMasterCounter.queueSwapSticky.v1", "poolMasterCounter.dayReportFormat.v1", "poolMasterCounter.payoutPresets.v1",
+      "poolMasterCounter.fargoEnabled.v1", "poolMasterCounter.queueSwapSticky.v1", "poolMasterCounter.dayReportFormat.v1", "poolMasterCounter.payoutPresets.v1", "poolMasterCounter.chipChart.v1",
       "poolMasterCounter.celebrations.v1", "poolMasterCounter.sounds.v1", "poolMasterCounter.soundVolume.v1",
       "poolMasterCounter.challongePrivate.v1", "poolMasterCounter.challongeVenue.v1",
       "poolMasterCounter.dayReportAttachBackup.v1", "poolMasterCounter.dayReportAttachColorful.v1",
@@ -28911,6 +28915,8 @@
         group.matches.push({ a: m.a, b: m.b, winner: m.winner || null, scoreA: live ? live.aWins : typeof m.scoreA === "number" ? m.scoreA : null, scoreB: live ? live.bWins : typeof m.scoreB === "number" ? m.scoreB : null, table: live ? live.table : m.table || null, live: !!live });
       });
       var standings = t.format === "roundrobin" ? standingsAfterPlayoff(t, roundRobinStandings(t)) : t.format === "swiss" ? standingsAfterPlayoff(t, swissStandings(t)) : null;
+      // (chips: everyone's chips left, most first)
+      var chipRows = t.format === "chips" ? PMCLib.chips.chipStandings(t).map(function (r, i) { return { place: String(i + 1), name: r.name, line: chipDots(r.chips, r.start) }; }) : null;
       return {
         title: challongeFormatText(t.format),
         game: (GAME_TYPES[t.gameType] || {}).label || t.gameType,
@@ -28924,7 +28930,7 @@
         next: tournamentQueue(t).slice(0, 12).map(function (m) {
           return { a: m.a, b: m.b, table: m.table || null, waitingFor: [m.a, m.b].filter(function (n) { return n in busy; }) };
         }),
-        standings: standings ? standings.map(function (st) { return { place: (st.shared ? "=" : "") + st.place, name: st.name, line: T("tournament.standingsLine", { wins: st.wins, losses: st.losses, diff: (st.rackDiff > 0 ? "+" : "") + st.rackDiff }) }; }) : null,
+        standings: standings ? standings.map(function (st) { return { place: (st.shared ? "=" : "") + st.place, name: st.name, line: T("tournament.standingsLine", { wins: st.wins, losses: st.losses, diff: (st.rackDiff > 0 ? "+" : "") + st.rackDiff }) }; }) : chipRows,
         rounds: rounds,
         names: (t.players || []).slice().sort(),
         words: {
@@ -31087,6 +31093,8 @@
   }
 
   function tournamentPlacings(t) {
+    // (chips: the champion, then the last one out, ...)
+    if (t.format === "chips") return PMCLib.chips.chipPlacings(t, t.champion);
     if (t.format === "roundrobin" || t.format === "swiss") {
       var groups = groupPlacings(t.format === "swiss" ? swissStandings(t) : roundRobinStandings(t));
       var playoffDone = t.playoff && t.playoff.matches.every(function (m) { return m.winner !== null; });
@@ -31750,6 +31758,7 @@
     }
     if (t.format === "roundrobin") return pendingRrMatches(t);
     if (t.format === "swiss") return pendingSwissMatches(t);
+    if (t.format === "chips") return chipPendingMatches(t);
     return pendingWbMatches(t).concat(pendingLbMatches(t), pendingGfMatches(t));
   }
 
@@ -31762,6 +31771,8 @@
         all = all.concat(r);
       });
       if (t.playoff) all = all.concat(t.playoff.matches);
+    } else if (t.format === "chips") {
+      all = (t.games || []).slice();
     } else {
       (t.wb || []).forEach(function (r) {
         all = all.concat(r);
@@ -32102,6 +32113,257 @@
     return Math.min(most, wanted > 0 ? wanted : auto);
   }
 
+  // ---- The chip tournament (P34) ----
+  // Everyone gets chips by rating band (the chart below, editable in the
+  // wizard - weaker players more), and waits in one line; the next two go
+  // to the first free table; the loser of each game gives up a chip and
+  // is out at 0; the last player with chips wins. The rules are
+  // js/lib/chips.js'; the tournament carries their state (chips,
+  // startChips, line, bustOrder, lastOpponent) and its games (t.games,
+  // made from the line as tables come free - chipPendingMatches).
+  var CHIP_CHART_KEY = "poolMasterCounter.chipChart.v1";
+  function loadChipChart() {
+    try {
+      var c = JSON.parse(localStorage.getItem(CHIP_CHART_KEY) || "null");
+      if (Array.isArray(c) && c.length) return PMCLib.chips.cleanChipChart(c);
+    } catch (e) {}
+    return JSON.parse(JSON.stringify(PMCLib.chips.DEFAULT_CHIP_CHART));
+  }
+  function saveChipChart(chart) {
+    try {
+      localStorage.setItem(CHIP_CHART_KEY, JSON.stringify(PMCLib.chips.cleanChipChart(chart)));
+    } catch (e) {
+      noteSaveFailure("chip chart", e);
+    }
+  }
+
+  function buildChipTournament(playerNames, gameType, target, raceTo, fairRace, seededOrder, entrantMembers) {
+    var ordered;
+    if (seededOrder) {
+      ordered = seededOrder.slice();
+    } else {
+      // (the line: a draw)
+      ordered = playerNames.slice();
+      for (var i = ordered.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var tmp = ordered[i];
+        ordered[i] = ordered[j];
+        ordered[j] = tmp;
+      }
+    }
+    var chart = loadChipChart();
+    var start = PMCLib.chips.startChipState(ordered, function (n) {
+      return averageRating((entrantMembers && entrantMembers[n]) || [n]);
+    }, chart);
+    return {
+      format: "chips",
+      createdAt: new Date().toISOString(),
+      gameType: gameType,
+      target: target,
+      raceTo: raceTo,
+      fairRace: !!fairRace,
+      players: ordered,
+      chipChart: chart,
+      chips: start.chips,
+      startChips: start.startChips,
+      line: start.line,
+      bustOrder: [],
+      lastOpponent: {},
+      games: [],
+      champion: null,
+      activeMatches: [],
+      focusedTable: "all"
+    };
+  }
+
+  // The games waiting to be played: made from the front of the line only
+  // as tables come free - one a free table. (Made any earlier, the line
+  // would empty and the two coming off a table would be paired straight
+  // back together; who's next is the line's - chipNextUpText.) A game
+  // made is kept as it is; the players who come off a table go to the
+  // back of the line.
+  function chipPendingMatches(t) {
+    if (!t.champion && networkMode !== "guest") {
+      var live = {};
+      (t.activeMatches || []).forEach(function (a) { live[a.matchId] = true; });
+      var waiting = t.games.filter(function (m) { return !m.winner && !live[m.id]; }).length;
+      var want = Math.max(0, (t.tableCount || 1) - (t.activeMatches || []).length);
+      for (var guard = 0; waiting < want && guard < 64; guard++) {
+        var pair = PMCLib.chips.nextChipPair(t);
+        if (!pair) break;
+        PMCLib.chips.takeChipPair(t, pair);
+        var m = createBracketMatch(pair[0], pair[1], "Chip game");
+        m.round = t.games.length + 1;
+        t.games.push(m);
+        waiting++;
+      }
+    }
+    return t.games.filter(function (m) { return !m.winner; });
+  }
+
+  // "Next up: Ann v Ben" - the next two the line will send to a table
+  function chipNextUpText(t) {
+    var pair = t.champion ? null : PMCLib.chips.nextChipPair(t);
+    return pair ? T("chips.nextUp", { a: pair[0], b: pair[1] }) : "";
+  }
+
+  // the last one with chips: the champion; nothing left to play
+  function settleChipChampion(t, name) {
+    t.champion = name;
+    t.championNames = [name];
+    t.line = [];
+    t.games = t.games.filter(function (m) { return m.winner || activeFor(t, m); });
+  }
+
+  // "●●○○" - chips left of the chips started with
+  function chipDots(left, start) {
+    var s = "";
+    for (var i = 0; i < Math.max(left, start); i++) s += i < left ? "●" : "○";
+    return s;
+  }
+  // a player's line on the chips board: where they are now
+  function chipStatusText(t, row) {
+    if (!row.chips) {
+      var outAt = t.bustOrder.indexOf(row.name);
+      return T("chips.out", { place: placeOrdinal(t.players.length - outAt) });
+    }
+    var busy = tournamentBusyNames(t);
+    if (row.name in busy) return T("chips.atTable", { table: busy[row.name] });
+    var queued = t.games.filter(function (m) { return !m.winner && !activeFor(t, m) && (m.a === row.name || m.b === row.name); })[0];
+    if (queued) return T("chips.nextGame", { opponent: queued.a === row.name ? queued.b : queued.a });
+    return row.waiting ? T("chips.inLine", { n: row.waiting }) : "";
+  }
+  // The chips board: everyone, most chips first - chips, where they are
+  function buildChipStandings(t, tv) {
+    var list = document.createElement("ol");
+    list.className = "chips-standings" + (tv ? " chips-standings-tv" : "");
+    PMCLib.chips.chipStandings(t).forEach(function (row) {
+      var li = document.createElement("li");
+      li.className = "chips-row" + (row.chips ? "" : " is-out") + (t.champion === row.name ? " is-champion" : "");
+      var name = document.createElement("span");
+      name.className = "chips-name";
+      name.textContent = (t.champion === row.name ? "👑 " : "") + row.name;
+      var dots = document.createElement("span");
+      dots.className = "chips-dots";
+      dots.textContent = chipDots(row.chips, row.start);
+      dots.setAttribute("aria-label", TP("chips.chipsLeft", row.chips, { n: row.chips }));
+      var status = document.createElement("span");
+      status.className = "chips-status";
+      status.textContent = t.champion === row.name ? T("chips.champion") : chipStatusText(t, row);
+      li.appendChild(name);
+      li.appendChild(dots);
+      li.appendChild(status);
+      list.appendChild(li);
+    });
+    return list;
+  }
+  function renderChipBoard(t, activeMatchId) {
+    var standings = document.getElementById("tournament-chips-standings");
+    standings.innerHTML = "";
+    standings.appendChild(buildChipStandings(t, false));
+    var lineEl = document.getElementById("tournament-chips-line");
+    lineEl.textContent = [chipNextUpText(t), t.line.length ? T("chips.lineNow", { names: t.line.join(", ") }) : ""].filter(Boolean).join(" · ");
+    var games = document.getElementById("tournament-chips-games");
+    games.innerHTML = "";
+    // the latest games first
+    t.games.slice().reverse().slice(0, 24).forEach(function (m) {
+      games.appendChild(tournamentMatchCard(m, activeMatchId, t));
+    });
+  }
+
+  // ✏️ The wizard's chip chart: rating up to N -> chips, the rest
+  function renderChipChartEditor() {
+    var box = document.getElementById("tournament-chips-chart");
+    if (!box) return;
+    box.innerHTML = "";
+    var chart = loadChipChart();
+    chart.forEach(function (row, i) {
+      var r = document.createElement("div");
+      r.className = "row chips-chart-row";
+      var label = document.createElement("span");
+      label.textContent = row.upTo === null ? T("chips.chartRest") : T("chips.chartUpTo");
+      r.appendChild(label);
+      if (row.upTo !== null) {
+        var upTo = document.createElement("input");
+        upTo.type = "number";
+        upTo.min = "0";
+        upTo.max = "1000";
+        upTo.step = "1";
+        upTo.className = "chips-chart-upto";
+        upTo.value = String(row.upTo);
+        upTo.setAttribute("aria-label", T("chips.chartUpToAria"));
+        upTo.addEventListener("change", function () {
+          var c = loadChipChart();
+          c[i].upTo = parseInt(upTo.value, 10);
+          saveChipChart(c);
+          renderChipChartEditor();
+        });
+        r.appendChild(upTo);
+      }
+      var arrow = document.createElement("span");
+      arrow.textContent = "→";
+      r.appendChild(arrow);
+      var chips = document.createElement("input");
+      chips.type = "number";
+      chips.min = "1";
+      chips.max = "20";
+      chips.step = "1";
+      chips.className = "chips-chart-chips";
+      chips.value = String(row.chips);
+      chips.setAttribute("aria-label", T("chips.chartChipsAria"));
+      chips.addEventListener("change", function () {
+        var c = loadChipChart();
+        c[i].chips = parseInt(chips.value, 10) || 1;
+        saveChipChart(c);
+      });
+      r.appendChild(chips);
+      var unit = document.createElement("span");
+      unit.textContent = T("chips.chartChipsUnit");
+      r.appendChild(unit);
+      if (row.upTo !== null && chart.length > 2) {
+        var remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "btn btn-ghost chips-chart-remove";
+        remove.textContent = "×";
+        remove.setAttribute("aria-label", T("payouts.removeAria"));
+        remove.addEventListener("click", function () {
+          var c = loadChipChart();
+          c.splice(i, 1);
+          saveChipChart(c);
+          renderChipChartEditor();
+        });
+        r.appendChild(remove);
+      }
+      box.appendChild(r);
+    });
+    var actions = document.createElement("div");
+    actions.className = "row";
+    var add = document.createElement("button");
+    add.type = "button";
+    add.className = "btn btn-ghost";
+    add.id = "btn-chips-chart-add";
+    add.textContent = T("chips.chartAdd");
+    add.addEventListener("click", function () {
+      var c = loadChipChart();
+      var banded = c.filter(function (r) { return r.upTo !== null; });
+      var top = banded.length ? banded[banded.length - 1].upTo : 400;
+      c.splice(c.length - 1, 0, { upTo: top + 100, chips: c[c.length - 1].chips });
+      saveChipChart(c);
+      renderChipChartEditor();
+    });
+    var reset = document.createElement("button");
+    reset.type = "button";
+    reset.className = "btn btn-ghost";
+    reset.textContent = T("payouts.resetPresets");
+    reset.addEventListener("click", function () {
+      saveChipChart(PMCLib.chips.DEFAULT_CHIP_CHART);
+      renderChipChartEditor();
+    });
+    actions.appendChild(add);
+    actions.appendChild(reset);
+    box.appendChild(actions);
+  }
+
   function buildSwissTournament(playerNames, gameType, target, raceTo, fairRace, seededOrder, rounds) {
     var ordered;
     if (seededOrder) {
@@ -32423,6 +32685,13 @@
     }
     if (t.format === "swiss") {
       finalizeSwissRoundIfComplete(t);
+      return;
+    }
+    if (t.format === "chips") {
+      // (a game's loser gives up a chip - a withdrawn player all of them)
+      var lose = t.withdrawn && t.withdrawn[match.loser] ? t.chips[match.loser] : 1;
+      var chipResult = PMCLib.chips.recordChipGame(t, winnerName, match.loser, lose);
+      if (chipResult.champion) settleChipChampion(t, chipResult.champion);
       return;
     }
     if (isGrandFinalMatch(t, match)) {
@@ -33346,6 +33615,7 @@
   // WB match's round gets named back to the player; Grand Final and
   // losers-bracket tags are already plain-language as-is.
   function matchRoundLabel(t, match) {
+    if (t.format === "chips") return T("chips.gameN", { n: match.round || "" });
     if (isGrandFinalMatch(t, match)) return matchTagLabel(match.tag);
     var pos = findWbPosition(t, match);
     if (pos) return wbRoundLabel(t, pos.ri);
@@ -33831,6 +34101,8 @@
       TOURNAMENT = buildRoundRobinTournament(names, gameType, target, raceTo, fairRace);
     } else if (format === "swiss") {
       TOURNAMENT = buildSwissTournament(names, gameType, target, raceTo, fairRace, seededOrder, parseInt(document.getElementById("tournament-swiss-rounds").value, 10) || 0);
+    } else if (format === "chips") {
+      TOURNAMENT = buildChipTournament(names, gameType, target, raceTo, fairRace, seededOrder, entrantMembers);
     } else if (format === "single") {
       TOURNAMENT = buildSingleEliminationBracket(names, gameType, target, raceTo, fairRace, seededOrder, pairAdjacent);
     } else {
@@ -34009,6 +34281,14 @@
   // A withdrawn player's matches go to their opponents as they come up.
   function applyTournamentWithdrawals(t) {
     if (!t.withdrawn) return;
+    // (chips: a withdrawn player waiting in the line is out - every chip)
+    if (t.format === "chips" && !t.champion) {
+      Object.keys(t.withdrawn).forEach(function (name) {
+        if (t.champion || !(t.chips[name] > 0) || t.line.indexOf(name) === -1) return;
+        var out = PMCLib.chips.chipKnockOut(t, name);
+        if (out.champion) settleChipChampion(t, out.champion);
+      });
+    }
     for (var guard = 0; guard < 500; guard++) {
       var next = allBracketMatches(t).filter(function (m) {
         return m.a && m.b && !m.winner && !activeFor(t, m) && (t.withdrawn[m.a] || t.withdrawn[m.b]);
@@ -34070,6 +34350,8 @@
   function resultChangeBlocker(t, match) {
     if (!match.winner) return null;
     if (t.format === "roundrobin") return null;
+    // (chips: a game's chip has moved on - the line and the next games with it)
+    if (t.format === "chips") return { reason: "chips" };
     if (t.format === "swiss") {
       var latest = t.rounds[t.rounds.length - 1];
       return latest.indexOf(match) !== -1 ? null : { reason: "laterRound" };
@@ -34133,7 +34415,7 @@
       var blocker = resultChangeBlocker(t, match);
       if (blocker) {
         alertModal(blocker.match ? T("tournament.editBlocked", { match: blocker.match.a + " vs " + blocker.match.b, round: matchRoundLabel(t, blocker.match) })
-          : T(blocker.reason === "laterRound" ? "tournament.editBlockedSwiss" : "tournament.editBlockedOlder"));
+          : T(blocker.reason === "laterRound" ? "tournament.editBlockedSwiss" : blocker.reason === "chips" ? "tournament.editBlockedChips" : "tournament.editBlockedOlder"));
         return;
       }
       reopenTournamentMatch(t, match);
@@ -34191,6 +34473,10 @@
       t.players.push(name);
     } else if (t.format === "swiss") {
       t.players.push(name);
+    } else if (t.format === "chips") {
+      // (chips from the chart, to the back of the line)
+      t.players.push(name);
+      PMCLib.chips.addChipPlayer(t, name, PMCLib.chips.chipsForRating(t.chipChart, getPlayerRating(name)));
     } else {
       if (t.bracketVersion !== 2) {
         alertModal(T("tournament.editBlockedOlder"));
@@ -34491,7 +34777,7 @@
     // Round robin and Swiss knock nobody out: the match winner in bold and
     // no crown, nobody struck through (P20). Every finished card shows its
     // score.
-    var leagueStyle = t.format === "roundrobin" || t.format === "swiss";
+    var leagueStyle = t.format === "roundrobin" || t.format === "swiss" || t.format === "chips";
     var hasScore = !!match.winner && !isByeMatch && typeof match.scoreA === "number" && typeof match.scoreB === "number";
     [match.a, match.b].forEach(function (name, sideIdx) {
       var row = document.createElement("div");
@@ -34656,6 +34942,7 @@
     if (!tag) return "";
     if (tag === "Round Robin") return challongeFormatText("roundrobin");
     if (tag === "Playoff") return T("tournament.playoffTag");
+    if (tag === "Chip game") return T("chips.game");
     if (tag === "Grand Final") return T("tournament.grandFinal");
     if (tag === "Grand Final (bracket reset)") return T("tournament.grandFinalReset");
     if ((m = /^Swiss R(\d+)$/.exec(tag))) return T("tournament.swissRound", { n: m[1] });
@@ -35308,6 +35595,19 @@
       });
       box.appendChild(list);
     }
+    if (t.format === "chips") {
+      var nextUp = chipNextUpText(t);
+      if (nextUp) {
+        var nu = document.createElement("div");
+        nu.className = "next-up-chips-next";
+        nu.textContent = nextUp;
+        box.appendChild(nu);
+      }
+      var ch = document.createElement("h3");
+      ch.textContent = T("chips.heading");
+      box.appendChild(ch);
+      box.appendChild(buildChipStandings(t, true));
+    }
     if (followQrUrl) {
       var fig = document.createElement("figure");
       fig.className = "next-up-follow";
@@ -35674,17 +35974,24 @@
     var isSingle = t.format === "single";
     var isRoundRobin = t.format === "roundrobin";
     var isSwiss = t.format === "swiss";
+    var isChips = t.format === "chips";
 
-    tournamentWbSection.classList.toggle("hidden", isRoundRobin || isSwiss);
-    tournamentLbSection.classList.toggle("hidden", isRoundRobin || isSingle || isSwiss);
-    tournamentGfEl.classList.toggle("hidden", isRoundRobin || isSingle || isSwiss);
+    tournamentWbSection.classList.toggle("hidden", isRoundRobin || isSwiss || isChips);
+    tournamentLbSection.classList.toggle("hidden", isRoundRobin || isSingle || isSwiss || isChips);
+    tournamentGfEl.classList.toggle("hidden", isRoundRobin || isSingle || isSwiss || isChips);
     tournamentRrSection.classList.toggle("hidden", !isRoundRobin);
     tournamentSwissSection.classList.toggle("hidden", !isSwiss);
+    document.getElementById("tournament-chips-section").classList.toggle("hidden", !isChips);
+    // (Challonge has no chip format)
+    btnTournamentPushChallonge.classList.toggle("hidden", isChips);
+    btnTournamentCloseChallonge.classList.toggle("hidden", isChips);
 
     if (isRoundRobin) {
       renderRoundRobinBoard(t, activeMatchId);
     } else if (isSwiss) {
       renderSwissBoard(t, activeMatchId);
+    } else if (isChips) {
+      renderChipBoard(t, activeMatchId);
     } else {
       renderWbTree(tournamentWbEl, t, activeMatchId);
       if (!isSingle) {
