@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261029d">
+<link rel="stylesheet" href="css/style.css?v=20261029e">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -1930,6 +1930,7 @@
         <li data-i18n-html="help.main.recentGames"><strong>Recent Games</strong> — Every game played today, most recent first. A day runs from 5 a.m. to 5 a.m., so a night that goes past midnight stays one night, even across a race being won and the next one starting fresh; last night’s games that haven’t been saved yet stay here too. Each winner's rating change from that exact game shows beside their badge; the game that completes a race-to-N gets a gold highlight and its own banner line ("🏆 Alice won the Race to 5 session!").</li>
         <li data-i18n-html="help.main.todaysNotes"><strong>Publish Daily Report</strong> — A free-text box for anything worth remembering about today's live play; it saves automatically as you type. Copy/Email/Text Report builds a plain-text day report — who played, win/loss and rating movement for each, total games, game types played, a game-by-game breakdown (grouped by matchup — "Luc won 3 games of 8-Ball against Suresh" rather than one line per game) split into earlier-session/current-session, and your notes — ready to paste, email, or send as a text message.</li>
         <li data-i18n-html="help.main.resets"><strong>All Resets</strong> — Every reset button in the app, gathered in one place: Reset Current Game (clears the live score, no win credited), Reset Tournament (offers to save the session first if there are unsaved games, then clears session wins/history and ends any active bracket tournament together), Reset All Players' Official Rating (roster only, back to the default starting rating), and Reset All Player Stats / Reset Player Lists (each backs up first, warns you, then clears — career stats plus the live session, and saved lists, respectively; ratings are never touched). Ending just an in-progress tournament without touching the live session is still on the Tournament page's own Abandon Tournament button.</li>
+        <li data-i18n-html="help.main.streamOverlay"><strong>📺 Stream overlay (OBS, YouTube, Facebook)</strong> — A scoreboard to lay over a live stream, on a see-through background: the names, Q-Scores, the score, Race to N, the game, the rack and who breaks. 1) On the device keeping score (the scoreboard opened from the computer's server), ☰ Menu › More › Multi Tables › 🎯 Host This Session. 2) In OBS add a <em>Browser Source</em>: URL <code>http://localhost:4173/overlay.html?layout=lower</code>, width 1920, height 1080 — or <code>?layout=vertical</code> at 1080 × 1920 for upright 9:16 video. OBS on another computer: the computer's address instead of localhost (e.g. <code>http://192.168.1.20:4173/overlay.html?layout=lower</code>) plus <code>&amp;device=</code> and the app key from ☰ Menu › More › 📱 Paired devices › Show the address. 3) Go live on YouTube or Facebook from OBS as usual. Nothing to tap on the overlay — options go in the address: <code>&amp;theme=emerald-rail</code> (otherwise the scoring device's theme), <code>&amp;lang=french</code>, <code>&amp;break=alternate</code> (otherwise the last rack's winner breaks), <code>&amp;ratings=off</code>, <code>&amp;pos=top</code>. The full guide is docs/stream-overlay.md.</li>
       </ul>
       <p data-i18n="help.main.ratingsNote">Ratings show as a small badge next to every player's name throughout the app — an Elo-style number (see the Player Stats section below for details). Every player's name is also a shortcut: tap it (the 📊 icon on the roster row) to open their individual stats page.</p>
     </section>
@@ -2940,13 +2941,13 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/pairing.js?v=20261029d"></script>
-<script src="js/big-store.js?v=20261029d"></script>
-<script src="js/mp4-clip.js?v=20261029d"></script>
-<script src="js/recording-consent.js?v=20261029d"></script>
-<script src="js/local-recorder.js?v=20261029d"></script>
-<script src="js/app.js?v=20261029d"></script>
-<script src="js/camera-client.js?v=20261029d"></script>
-<script src="js/voice.js?v=20261029d"></script>
+<script src="js/pairing.js?v=20261029e"></script>
+<script src="js/big-store.js?v=20261029e"></script>
+<script src="js/mp4-clip.js?v=20261029e"></script>
+<script src="js/recording-consent.js?v=20261029e"></script>
+<script src="js/local-recorder.js?v=20261029e"></script>
+<script src="js/app.js?v=20261029e"></script>
+<script src="js/camera-client.js?v=20261029e"></script>
+<script src="js/voice.js?v=20261029e"></script>
 </body>
 </html>

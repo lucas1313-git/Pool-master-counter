@@ -356,3 +356,20 @@ Not part of the app - helpers for testing and for running this machine's own cop
   changes, "Kim 7 – 3 Jo"; text + picture card, no backup); tonight archived; the Leaderboard says
   7 wins in 10 games like the Day Report; resets only in Backup & Restore; a Straight Pool game's
   100–87 in Recent Games and the Day Report. `node tests/probe_end_night.js [screenshot dir]`.
+- `probe_stream_overlay.js` - the stream overlay, `overlay.html` (4270, 4271): a read-only relay
+  guest for an OBS Browser Source. Its own file server with a fake relay on /ws answering the
+  overlay's hello with a made-up snapshot (state + the host's board summary): at 1920x1080
+  (`layout=lower`) names, "Race to 7", 3-2, Q-Scores, "8-Ball · Rack 6 · Kim Lee breaks", the
+  host's theme, in the bottom third, nothing to tap; at 1080x1920 (`layout=vertical`) the same
+  stacked; both screenshots (omitBackground) decoded in a canvas: alpha 0 around the scoreboard,
+  255 on it. `theme=` beats the host's theme and changes the colours; `lang=french` /
+  `cantonese`; `break=alternate` (`first=2`), `break=off`; `ratings=off`; a new snapshot redraws
+  it (rack 7, Jo breaks, on the hill lit); the first rack says lag; a snapshot without a board is
+  worked out from the state; teams, four players at 15 Ball Rotation, a points race (dots),
+  Quick Counter;
+  "Waiting for the scoreboard" with no host; a server that wants pairing: "isn't paired" without
+  a key, the board with `?device=` (passed on to the ws address); only ever one hello sent per
+  connection. Then server/server.js on 4271 (a throwaway HOME): overlay.html served; the scoreboard
+  hosting feeds it its board (Q-Scores as on the cards, its theme and a theme change, a rack won);
+  the app's own `?join=1` guest still fine; from the LAN address "isn't paired" without the app
+  key, the board with `&device=<app key>`. `node tests/probe_stream_overlay.js [screenshot dir]`.

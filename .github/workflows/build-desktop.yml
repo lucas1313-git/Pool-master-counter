@@ -19,6 +19,7 @@ on:
       - "camera.html"
       - "record.html"
       - "cues.html"
+      - "overlay.html"
       - "manifest.json"
       - "css/**"
       - "js/**"
