@@ -20,6 +20,18 @@ function attachRelay(httpServer, WebSocket) {
   var hostSocket = null;
   var guestSockets = new Set();
   var lastSnapshot = null;
+  // Phones following the event (follow.html over /ws-follow, P22): no
+  // pairing, and they only ever get the event's own summary - the host's
+  // "follow" part of each snapshot - never the app's state; nothing they
+  // send is read.
+  var followerSockets = new Set();
+  function followMessage() {
+    return { type: "follow", follow: lastSnapshot ? lastSnapshot.follow || null : null, hostConnected: !!hostSocket };
+  }
+  function updateFollowers() {
+    var msg = followMessage();
+    followerSockets.forEach(function (ws) { send(ws, msg); });
+  }
 
   function send(ws, msg) {
     if (ws && ws.readyState === WebSocket.OPEN) {
@@ -39,6 +51,7 @@ function attachRelay(httpServer, WebSocket) {
 
   function notifyHostStatus(connected) {
     broadcastToGuests({ type: "host-status", connected: connected });
+    updateFollowers();
   }
 
   wss.on("connection", function (ws) {
@@ -53,7 +66,10 @@ function attachRelay(httpServer, WebSocket) {
       }
 
       if (msg.type === "hello") {
-        ws.role = msg.role === "host" ? "host" : "guest";
+        // a guest: a table's own device (msg.table, P22) or a phone that
+        // only follows ("follower" - never forwarded anything)
+        ws.role = msg.role === "host" ? "host" : msg.role === "follower" ? "follower" : "guest";
+        ws.table = ws.role === "guest" && Number(msg.table) > 0 ? Math.floor(Number(msg.table)) : null;
         if (ws.role === "host") {
           // A fresh host connection always wins over a stale one - this is
           // what makes "host's phone locked/backgrounded, then reopened"
@@ -73,10 +89,14 @@ function attachRelay(httpServer, WebSocket) {
       if (msg.type === "state" && ws.role === "host") {
         lastSnapshot = msg;
         broadcastToGuests(msg);
+        updateFollowers();
         return;
       }
 
       if (msg.type === "action" && ws.role === "guest") {
+        // (the table this device said it is - the host lets it start and
+        // score only that table's match)
+        msg.fromTable = ws.table;
         send(hostSocket, msg);
         return;
       }
@@ -93,6 +113,12 @@ function attachRelay(httpServer, WebSocket) {
       }
     });
   });
+
+  wss.addFollower = function (ws) {
+    followerSockets.add(ws);
+    send(ws, followMessage());
+    ws.on("close", function () { followerSockets.delete(ws); });
+  };
 
   return wss;
 }

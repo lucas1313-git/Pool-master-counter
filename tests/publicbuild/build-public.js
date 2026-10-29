@@ -13,7 +13,7 @@ const repo = path.resolve(process.argv[2]);
 const out = path.resolve(process.argv[3]);
 const esbuild = require(path.join(repo, "installer/node_modules/esbuild"));
 
-const ROOT_FILES = ["index.html", "camera.html", "record.html", "cues.html", "overlay.html", "manifest.json", "sw.js",
+const ROOT_FILES = ["index.html", "camera.html", "record.html", "cues.html", "overlay.html", "follow.html", "manifest.json", "sw.js",
   "about.html", "about.fr.html", "about.es.html", "about.tl.html", "about.zh-yue.html"];
 const DIRS = ["css", "js", "languages", "icons", "camera", "data", "settings", "players", "rules", "docs/screenshots"];
 // source-only files inside the copied folders

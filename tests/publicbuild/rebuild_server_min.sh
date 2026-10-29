@@ -16,7 +16,7 @@ const fs = require("fs"), path = require("path");
 const site = process.argv[1], assets = {};
 const add = (rel) => { assets[rel] = path.join(site, rel); };
 const walk = (rel) => fs.readdirSync(path.join(site, rel), { withFileTypes: true }).forEach((e) => { const r = rel + "/" + e.name; if (e.isDirectory()) walk(r); else if (e.isFile()) add(r); });
-["index.html", "manifest.json", "camera.html", "record.html", "cues.html", "overlay.html", "sw.js"].forEach(add);
+["index.html", "manifest.json", "camera.html", "record.html", "cues.html", "overlay.html", "follow.html", "sw.js"].forEach(add);
 ["css", "js", "languages", "icons", "camera"].forEach(walk);
 fs.mkdirSync("generated", { recursive: true });
 fs.writeFileSync("generated/sea-config.json", JSON.stringify({ main: "generated/bundle.js", output: "generated/sea-prep.blob", disableExperimentalSEAWarning: true, useSnapshot: false, useCodeCache: false, assets }, null, 2) + "\n");

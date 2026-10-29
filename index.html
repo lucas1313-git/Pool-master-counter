@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261029i">
+<link rel="stylesheet" href="css/style.css?v=20261029j">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -2585,6 +2585,7 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
     <div class="row">
       <button type="button" id="btn-tournament-abandon" class="btn btn-primary hidden" data-i18n="tournament.startNew">🏆 New Tournament</button>
       <button type="button" id="btn-tournament-bracket-tv" class="btn btn-ghost" data-i18n="tournament.bracketTvButton">📺 Full-screen bracket</button>
+      <button type="button" id="btn-tournament-next-up" class="btn btn-ghost" data-i18n="tournament.nextUpButton">📺 Next up</button>
       <button type="button" id="btn-tournament-print" class="btn btn-ghost" data-i18n="tournament.printBracket">🖨️ Print Bracket</button>
       <button type="button" id="btn-tournament-push-challonge" class="btn btn-ghost" data-i18n="challonge.pushButton">☁️ Push to Challonge</button>
       <button type="button" id="btn-tournament-close-challonge" class="btn btn-ghost" data-i18n="challonge.closeTournamentButton">🔒 Close Tournament</button>
@@ -2600,11 +2601,21 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
         <strong id="tournament-tables-count">1</strong>
         <button type="button" id="btn-tournament-tables-more" class="btn btn-ghost" aria-label="More tables" data-i18n-aria-label="tournament.tablesMoreAria">+</button>
       </span>
+      <label class="checkbox-row tournament-auto-assign-row hidden" id="tournament-auto-assign-row">
+        <input type="checkbox" id="tournament-auto-assign" checked>
+        <span data-i18n="tournament.autoAssign">🔀 Send the next match to the next free table</span>
+      </label>
     </div>
 
     <div id="tournament-champion-banner" class="tournament-winner-banner hidden"></div>
     <ol id="tournament-placings" class="tournament-placings hidden" aria-label="Final placings" data-i18n-aria-label="tournament.placingsAria"></ol>
 
+    <!-- a table's own device (over the relay, P22): which table it scores -->
+    <label class="row tournament-my-table-row hidden" id="tournament-my-table-row">
+      <span data-i18n="tournament.myTableLabel">📱 This device scores</span>
+      <select id="tournament-my-table"></select>
+    </label>
+    <section id="tournament-next-up" class="tournament-next-up" aria-live="polite"></section>
     <div id="tournament-current-match-panel"></div>
 
     <ul id="tournament-ready-list" class="tournament-ready-list"></ul>
@@ -2971,18 +2982,18 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/pairing.js?v=20261029i"></script>
-<script src="js/big-store.js?v=20261029i"></script>
-<script src="js/mp4-clip.js?v=20261029i"></script>
-<script src="js/recording-consent.js?v=20261029i"></script>
-<script src="js/local-recorder.js?v=20261029i"></script>
-<script src="js/app.js?v=20261029i"></script>
-<script src="js/camera-client.js?v=20261029i"></script>
-<script src="js/voice.js?v=20261029i"></script>
+<script src="js/pairing.js?v=20261029j"></script>
+<script src="js/big-store.js?v=20261029j"></script>
+<script src="js/mp4-clip.js?v=20261029j"></script>
+<script src="js/recording-consent.js?v=20261029j"></script>
+<script src="js/local-recorder.js?v=20261029j"></script>
+<script src="js/app.js?v=20261029j"></script>
+<script src="js/camera-client.js?v=20261029j"></script>
+<script src="js/voice.js?v=20261029j"></script>
 <script>
   // The app opens with no network (sw.js, P21) - on http(s) only, not in the iOS app
   if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol) && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
-    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261029i").catch(function () {}); });
+    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261029j").catch(function () {}); });
   }
 </script>
 </body>

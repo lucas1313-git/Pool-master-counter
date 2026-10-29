@@ -21,6 +21,7 @@ on:
       - "cues.html"
       - "overlay.html"
       - "sw.js"
+      - "follow.html"
       - "manifest.json"
       - "css/**"
       - "js/**"

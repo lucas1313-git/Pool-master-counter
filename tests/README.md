@@ -429,3 +429,13 @@ Not part of the app - helpers for testing and for running this machine's own cop
   "💾 Last backup 9 days ago - 1 game since" under the top bar, Later hides it for a day, Back up
   now backs up and it goes; an iPad in Safari gets the Add to Home Screen tip once (not a desktop).
   `node tests/probe_offline.js [screenshot dir]`.
+- **probe_multi_table.js** — many tables (P22) against server/server.js on 4277 (a throwaway HOME):
+  8 players round robin in rounds (7 of 4, everyone once a round); 3 tables fill themselves with six
+  different players; a freed table takes the next match in the queue; with auto-assign off ▶ Play
+  on a busy player's match is refused and a free one starts; a 4th table fills when auto-assign is
+  back on; ↔ Table moves a live match; 📺 Next up shows "Table N: A vs B - go now", every live
+  table, the queue and who it waits for, and a QR; over the relay a table's own device
+  (?join=1&table=2) has no Abandon / ⋯ More / manage row, scores table 2 on the host, can't score
+  another table (a forged action is ignored) and starts a match on table 2; follow.html (no
+  pairing, /ws-follow) shows the live tables, the standings and "Me" → my match, and gets only the
+  event's summary. Nobody is ever in two live matches. `node tests/probe_multi_table.js [shots]`.

@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pool Master Counter - Follow</title>
+<!-- Following a tournament on a phone (P22): a read-only page served by the
+     Mac server on the room's network (the QR code on the 📺 Next up board).
+     It listens on /ws-follow, which needs no pairing and only ever carries
+     the event's own summary (the host's tournamentFollowBoard: who plays
+     where, what's next, the standings or rounds, the placings) - never the
+     app's data. It sends nothing. "Me": pick your name to see your next
+     match; remembered on this phone only. -->
+<style>
+  :root {
+    --bg: #160c0b;
+    --card: #2a1513;
+    --border: #4a2622;
+    --text: #fbf3ea;
+    --dim: #c9aea6;
+    --accent: #f2c14e;
+    --live: #2ecc71;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.45 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    padding: max(12px, env(safe-area-inset-top)) 16px 32px;
+  }
+  h1 { font-size: 1.35rem; margin: 4px 0 2px; }
+  .sub { color: var(--dim); margin: 0 0 14px; }
+  h2 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--dim); margin: 22px 0 8px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin: 0 0 8px; }
+  .me { border-color: var(--accent); }
+  .me select { font: inherit; padding: 6px 8px; border-radius: 8px; margin-left: 6px; max-width: 60vw; }
+  .me .status { margin-top: 8px; font-weight: 700; font-size: 1.1rem; }
+  .table { font-weight: 800; color: var(--accent); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  .score { font-size: 1.35rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .live-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--live); margin-right: 6px; }
+  ol, ul { margin: 0; padding: 0; list-style: none; }
+  .row { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+  .row .place { min-width: 2.4em; font-weight: 800; color: var(--dim); }
+  .row .name { flex: 1 1 auto; }
+  .row .line { color: var(--dim); font-size: 0.9rem; white-space: nowrap; }
+  .match { display: flex; justify-content: space-between; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+  .match:last-child { border-bottom: 0; }
+  .match .w { color: var(--accent); font-weight: 800; }
+  .wait { color: var(--dim); font-size: 0.9rem; }
+  .waiting { color: var(--dim); text-align: center; margin-top: 30vh; }
+  .champion { font-size: 1.3rem; font-weight: 800; color: var(--accent); }
+  .mine { outline: 2px solid var(--accent); }
+</style>
+</head>
+<body>
+<main id="app"><p class="waiting" id="waiting">Waiting for the scoreboard…</p></main>
+<script>
+(function () {
+  var data = null;
+  var ME_KEY = "pmcFollow.me";
+  var me = "";
+  try { me = localStorage.getItem(ME_KEY) || ""; } catch (e) {}
+  var app = document.getElementById("app");
+
+  function fill(text, vars) {
+    return String(text || "").replace(/\{\{(\w+)\}\}/g, function (m, k) { return vars && vars[k] !== undefined ? vars[k] : m; });
+  }
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined && text !== null) e.textContent = text;
+    return e;
+  }
+  function has(m, name) { return !!name && (m.a === name || m.b === name); }
+  function other(m, name) { return m.a === name ? m.b : m.a; }
+
+  function myStatus(d) {
+    var w = d.words;
+    if (!me) return "";
+    if (d.placings) {
+      var p = d.placings.filter(function (g) { return g.names.indexOf(me) !== -1; })[0];
+      if (p) return p.label;
+    }
+    var live = d.live.filter(function (m) { return has(m, me); })[0];
+    if (live) return fill(w.playingNow, { table: live.table, name: other(live, me), score: (live.a === me ? live.aWins + "–" + live.bWins : live.bWins + "–" + live.aWins) });
+    var next = d.next.filter(function (m) { return has(m, me); })[0];
+    if (next) {
+      var text = fill(w.upNextMe, { name: other(next, me) });
+      if (next.table) text += " · " + fill(w.table, { table: next.table });
+      var others = next.waitingFor.filter(function (n) { return n !== me; });
+      if (others.length) text += " · " + fill(w.waitingFor, { names: others.join(", ") });
+      return text;
+    }
+    return w.nothingYet;
+  }
+
+  function render() {
+    var d = data;
+    app.innerHTML = "";
+    if (!d) {
+      app.appendChild(el("p", "waiting", "Waiting for the scoreboard…"));
+      return;
+    }
+    var w = d.words;
+    app.appendChild(el("h1", "", d.title));
+    app.appendChild(el("p", "sub", d.game + " · " + d.race));
+
+    // me
+    var meCard = el("div", "card me");
+    var label = el("label", "", w.me);
+    var sel = document.createElement("select");
+    sel.id = "follow-me";
+    var none = el("option", "", w.meNone);
+    none.value = "";
+    sel.appendChild(none);
+    d.names.forEach(function (n) {
+      var o = el("option", "", n);
+      o.value = n;
+      sel.appendChild(o);
+    });
+    sel.value = d.names.indexOf(me) !== -1 ? me : "";
+    sel.addEventListener("change", function () {
+      me = sel.value;
+      try { localStorage.setItem(ME_KEY, me); } catch (e) {}
+      render();
+    });
+    label.appendChild(sel);
+    meCard.appendChild(label);
+    if (me) meCard.appendChild(el("div", "status", myStatus(d)));
+    app.appendChild(meCard);
+
+    if (d.champion) {
+      app.appendChild(el("div", "card champion", fill(w.champion, { champion: d.champion })));
+    }
+    if (d.placings) {
+      app.appendChild(el("h2", "", w.placings));
+      var pl = el("ol", "card");
+      d.placings.forEach(function (g) {
+        var li = el("li", "row" + (g.names.indexOf(me) !== -1 ? " mine" : ""));
+        li.appendChild(el("span", "place", g.label));
+        li.appendChild(el("span", "name", g.names.join(", ")));
+        pl.appendChild(li);
+      });
+      app.appendChild(pl);
+    }
+    if (d.live.length) {
+      app.appendChild(el("h2", "", w.live));
+      d.live.forEach(function (m) {
+        var c = el("div", "card" + (has(m, me) ? " mine" : ""));
+        var t = el("div", "table");
+        t.appendChild(el("span", "live-dot"));
+        t.appendChild(document.createTextNode(fill(w.table, { table: m.table })));
+        c.appendChild(t);
+        c.appendChild(el("div", "score", m.a + "  " + m.aWins + " – " + m.bWins + "  " + m.b));
+        app.appendChild(c);
+      });
+    }
+    if (d.next.length) {
+      app.appendChild(el("h2", "", w.next));
+      var nl = el("ol", "card");
+      d.next.forEach(function (m) {
+        var li = el("li", "match" + (has(m, me) ? " mine" : ""));
+        li.appendChild(el("span", "", m.a + " vs " + m.b));
+        if (m.waitingFor.length) li.appendChild(el("span", "wait", fill(w.waitingFor, { names: m.waitingFor.join(", ") })));
+        else if (m.table) li.appendChild(el("span", "wait", fill(w.table, { table: m.table })));
+        nl.appendChild(li);
+      });
+      app.appendChild(nl);
+    }
+    if (d.standings) {
+      app.appendChild(el("h2", "", w.standings));
+      var st = el("ol", "card");
+      d.standings.forEach(function (s) {
+        var li = el("li", "row" + (s.name === me ? " mine" : ""));
+        li.appendChild(el("span", "place", s.place));
+        li.appendChild(el("span", "name", s.name));
+        li.appendChild(el("span", "line", s.line));
+        st.appendChild(li);
+      });
+      app.appendChild(st);
+    }
+    if (d.rounds.length) {
+      app.appendChild(el("h2", "", w.matches));
+      d.rounds.forEach(function (r) {
+        var c = el("div", "card");
+        c.appendChild(el("div", "table", r.label));
+        r.matches.forEach(function (m) {
+          var row = el("div", "match" + (has(m, me) ? " mine" : ""));
+          var names = el("span");
+          [m.a, m.b].forEach(function (n, i) {
+            if (i) names.appendChild(document.createTextNode(" vs "));
+            names.appendChild(el("span", m.winner && m.winner === n ? "w" : "", n || "—"));
+          });
+          row.appendChild(names);
+          var right = m.live ? fill(w.table, { table: m.table }) + " · " + m.scoreA + "–" + m.scoreB : m.scoreA !== null && m.scoreB !== null ? m.scoreA + "–" + m.scoreB : "";
+          row.appendChild(el("span", "wait", right));
+          c.appendChild(row);
+        });
+        app.appendChild(c);
+      });
+    }
+  }
+
+  function connect() {
+    var ws;
+    try {
+      ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws-follow");
+    } catch (e) {
+      setTimeout(connect, 3000);
+      return;
+    }
+    ws.onmessage = function (ev) {
+      var msg;
+      try { msg = JSON.parse(ev.data); } catch (e) { return; }
+      if (msg.type !== "follow") return;
+      data = msg.follow || null;
+      if (data && data.title) document.title = data.title + " - Pool Master Counter";
+      render();
+    };
+    ws.onclose = function () { setTimeout(connect, 3000); };
+  }
+  connect();
+})();
+</script>
+</body>
+</html>

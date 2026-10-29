@@ -28270,7 +28270,7 @@
     ws.addEventListener("open", function () {
       console.log("[GroupSession] socket open, sending hello as " + role);
       networkReconnectDelay = 1000;
-      ws.send(JSON.stringify({ type: "hello", role: role }));
+      ws.send(JSON.stringify({ type: "hello", role: role, table: role === "guest" ? myTableNumber : null }));
       if (role === "host") broadcastStateIfNetworked();
       updateNetworkStatusUI();
     });
@@ -28328,7 +28328,67 @@
   // device is actively hosting with an open connection.
   function broadcastStateIfNetworked() {
     if (networkMode !== "host" || !networkWs || networkWs.readyState !== 1) return;
-    networkWs.send(JSON.stringify({ type: "state", state: state, tournament: TOURNAMENT, board: streamOverlayBoard() }));
+    networkWs.send(JSON.stringify({ type: "state", state: state, tournament: TOURNAMENT, board: streamOverlayBoard(), follow: tournamentFollowBoard() }));
+  }
+
+  // What a phone following the event sees (follow.html, P22) - the event
+  // as words and numbers, in this device's language: who plays where now,
+  // what's next (and who it waits for), the standings or the rounds, the
+  // placings once it's over. Nothing else of the app goes to followers
+  // (the relay sends them only this). null without a tournament.
+  function tournamentFollowBoard() {
+    try {
+      var t = TOURNAMENT;
+      if (!t) return null;
+      var busy = tournamentBusyNames(t);
+      var liveIds = {};
+      (t.activeMatches || []).forEach(function (a) { liveIds[a.matchId] = a; });
+      var rounds = [];
+      allBracketMatches(t).forEach(function (m) {
+        if (!m.a && !m.b) return;
+        var label = t.format === "roundrobin" && m.round ? T("tournament.roundN", { n: m.round }) : matchRoundLabel(t, m);
+        var group = rounds[rounds.length - 1];
+        if (!group || group.label !== label) rounds.push(group = { label: label, matches: [] });
+        var live = liveIds[m.id];
+        group.matches.push({ a: m.a, b: m.b, winner: m.winner || null, scoreA: live ? live.aWins : typeof m.scoreA === "number" ? m.scoreA : null, scoreB: live ? live.bWins : typeof m.scoreB === "number" ? m.scoreB : null, table: live ? live.table : m.table || null, live: !!live });
+      });
+      var standings = t.format === "roundrobin" ? standingsAfterPlayoff(t, roundRobinStandings(t)) : t.format === "swiss" ? standingsAfterPlayoff(t, swissStandings(t)) : null;
+      return {
+        title: challongeFormatText(t.format),
+        game: (GAME_TYPES[t.gameType] || {}).label || t.gameType,
+        race: T("board.statusRace", { n: t.raceTo }),
+        champion: t.champion || null,
+        placings: t.champion ? (t.placings || tournamentPlacings(t)).map(function (g) { return { label: placingLabel(g), names: g.names }; }) : null,
+        live: (t.activeMatches || []).map(function (a) {
+          var m = findBracketMatchById(t, a.matchId);
+          return m ? { table: a.table, a: m.a, b: m.b, aWins: a.aWins, bWins: a.bWins } : null;
+        }).filter(Boolean).sort(function (x, y) { return x.table - y.table; }),
+        next: tournamentQueue(t).slice(0, 12).map(function (m) {
+          return { a: m.a, b: m.b, table: m.table || null, waitingFor: [m.a, m.b].filter(function (n) { return n in busy; }) };
+        }),
+        standings: standings ? standings.map(function (st) { return { place: (st.shared ? "=" : "") + st.place, name: st.name, line: T("tournament.standingsLine", { wins: st.wins, losses: st.losses, diff: (st.rackDiff > 0 ? "+" : "") + st.rackDiff }) }; }) : null,
+        rounds: rounds,
+        names: (t.players || []).slice().sort(),
+        words: {
+          live: T("tournament.followLive"),
+          next: T("tournament.upNext"),
+          standings: T("standings.heading"),
+          matches: T("tournament.matches"),
+          placings: T("tournament.placingsAria"),
+          me: T("tournament.followMe"),
+          meNone: T("tournament.myTableNone"),
+          playingNow: T("tournament.followPlayingNow"),
+          upNextMe: T("tournament.followUpNext"),
+          waitingFor: T("tournament.waitingFor"),
+          nothingYet: T("tournament.followNothingYet"),
+          table: T("tournament.tableOption"),
+          champion: T("tournament.wonTheTournament")
+        }
+      };
+    } catch (e) {
+      console.warn("[GroupSession] follow board left out:", e);
+      return null;
+    }
   }
 
   // The stream overlay's scoreboard (overlay.html, an OBS Browser Source
@@ -28410,11 +28470,61 @@
     } else if (msg.fn === "undoLastWin") {
       undoLastWin(msg.args[0]);
     } else if (msg.fn === "tournamentAdjustScore") {
+      // a table's device scores its own table only (P22) - one that hasn't
+      // said which table it is scores nothing
       var active = ((TOURNAMENT && TOURNAMENT.activeMatches) || []).filter(function (a) {
         return a.matchId === msg.args[0];
       })[0];
-      if (active) tournamentAdjustScore(active, msg.args[1], msg.args[2]);
+      if (active && msg.fromTable && active.table === msg.fromTable) tournamentAdjustScore(active, msg.args[1], msg.args[2]);
+    } else if (msg.fn === "tournamentStartMatch") {
+      // ...and starts a match on its own table, if the match isn't meant
+      // for another one and both players are free
+      var t = TOURNAMENT;
+      var match = t && findBracketMatchById(t, msg.args[0]);
+      if (!match || !msg.fromTable || (match.table && match.table !== msg.fromTable) || freeTournamentTables(t).indexOf(msg.fromTable) === -1) return;
+      if (beginTournamentMatch(t, match, msg.fromTable)) return;
+      saveTournamentToStorage(t);
+      renderTournamentPage();
     }
+  }
+
+  // This device's table, when it's one table's own scoreboard in a
+  // tournament over the relay (P22): ?table=N in its join link, or picked
+  // on the tournament page; told to the relay in the hello.
+  var MY_TABLE_KEY = "poolMasterCounter.myTable.v1";
+  var myTableNumber = (function () {
+    var m = /[?&]table=(\d+)/.exec(location.search);
+    if (m) return parseInt(m[1], 10) || null;
+    try { return parseInt(localStorage.getItem(MY_TABLE_KEY) || "", 10) || null; } catch (e) { return null; }
+  })();
+  function setMyTableNumber(n) {
+    myTableNumber = n || null;
+    try {
+      if (myTableNumber) localStorage.setItem(MY_TABLE_KEY, String(myTableNumber));
+      else localStorage.removeItem(MY_TABLE_KEY);
+    } catch (e) {}
+    if (networkWs && networkWs.readyState === 1) networkWs.send(JSON.stringify({ type: "hello", role: "guest", table: myTableNumber }));
+    renderTournamentPage();
+  }
+
+  // ▶ Play: on the host it starts the match; a table's device asks the
+  // host to start it on its own table
+  function requestTournamentStartMatch(matchId) {
+    if (networkMode === "guest") {
+      if (!myTableNumber) {
+        showToast(T("tournament.pickYourTable"));
+        return;
+      }
+      if (networkWs) networkWs.send(JSON.stringify({ type: "action", fn: "tournamentStartMatch", args: [matchId] }));
+      return;
+    }
+    startTournamentMatch(matchId);
+  }
+
+  // a guest that may start this match: a table's device, the match not
+  // meant for another table
+  function guestMayPlay(match) {
+    return networkMode !== "guest" || (!!myTableNumber && (!match.table || match.table === myTableNumber));
   }
 
   function requestAdjustScore(playerId, delta) {
@@ -28441,6 +28551,7 @@
 
   function requestTournamentAdjustScore(active, side, delta) {
     if (networkMode === "guest") {
+      if (!myTableNumber || active.table !== myTableNumber) return;
       if (networkWs) {
         networkWs.send(JSON.stringify({ type: "action", fn: "tournamentAdjustScore", args: [active.matchId, side, delta] }));
       }
@@ -31013,12 +31124,6 @@
       shuffled[i] = shuffled[j];
       shuffled[j] = tmp;
     }
-    var matches = [];
-    for (var a = 0; a < shuffled.length; a++) {
-      for (var b = a + 1; b < shuffled.length; b++) {
-        matches.push(createBracketMatch(shuffled[a], shuffled[b], "Round Robin"));
-      }
-    }
     return {
       format: "roundrobin",
       createdAt: new Date().toISOString(),
@@ -31027,12 +31132,34 @@
       raceTo: raceTo,
       fairRace: !!fairRace,
       players: shuffled,
-      matches: matches,
+      matches: roundRobinRounds(shuffled),
       champion: null,
       championNames: null,
       activeMatches: [],
       focusedTable: "all"
     };
+  }
+
+  // Round robin in rounds (P22, the circle method): everyone plays once a
+  // round (one sits out each round in an odd field), so the queue spreads
+  // the evening instead of player 1 playing first, four times. m.round.
+  function roundRobinRounds(names) {
+    var list = names.slice();
+    if (list.length % 2 === 1) list.push(null);
+    var n = list.length;
+    var matches = [];
+    for (var r = 0; r < n - 1; r++) {
+      for (var i = 0; i < n / 2; i++) {
+        var a = list[i], b = list[n - 1 - i];
+        if (a === null || b === null) continue;
+        var m = createBracketMatch(a, b, "Round Robin");
+        m.round = r + 1;
+        matches.push(m);
+      }
+      // keep the first, turn the rest one place
+      list.splice(1, 0, list.pop());
+    }
+    return matches;
   }
 
   // Swiss: no elimination, and not every possible pairing either — each
@@ -33136,8 +33263,13 @@
       return;
     }
     if (t.format === "roundrobin") {
+      // (after the rounds already drawn: the late player's matches come last)
+      var lateRound = t.matches.reduce(function (most, m) { return Math.max(most, m.round || 1); }, 0) + 1;
       t.players.forEach(function (p) {
-        if (!(t.withdrawn && t.withdrawn[p])) t.matches.push(createBracketMatch(p, name, "Round Robin"));
+        if (t.withdrawn && t.withdrawn[p]) return;
+        var lm = createBracketMatch(p, name, "Round Robin");
+        lm.round = lateRound;
+        t.matches.push(lm);
       });
       t.players.push(name);
     } else if (t.format === "swiss") {
@@ -33555,8 +33687,9 @@
       playBtn.type = "button";
       playBtn.className = "btn btn-primary tournament-play-btn";
       playBtn.textContent = T("tournament.play");
+      playBtn.classList.toggle("hidden", !guestMayPlay(match));
       playBtn.addEventListener("click", function () {
-        startTournamentMatch(match.id);
+        requestTournamentStartMatch(match.id);
       });
       div.appendChild(playBtn);
     }
@@ -33910,26 +34043,89 @@
   // than one to choose from, otherwise always table 1 - a single-table
   // event never needed that picker in the first place, so it shouldn't
   // need one here either.
-  function tournamentMatchTableOrDefault(match, t) {
-    if (t.tableCount <= 1) return 1;
-    return match.table || null;
+  // ---- Many tables (P22) ----
+  // Ready matches wait in one queue: the earliest round first, then whoever
+  // has waited longest (m.readyAt, stamped the first time a match is seen
+  // ready). With two or more tables each free table takes the next match
+  // whose players aren't already playing (t.autoAssign, on unless turned
+  // off); ▶ Play still starts any match by hand, on its table or the
+  // first free one. Nobody plays two live matches at once.
+  function tournamentBusyNames(t) {
+    var busy = {};
+    (t.activeMatches || []).forEach(function (a) {
+      var m = findBracketMatchById(t, a.matchId);
+      if (m) { busy[m.a] = a.table; busy[m.b] = a.table; }
+    });
+    return busy;
   }
 
-  function startTournamentMatch(matchId) {
-    var t = TOURNAMENT;
-    var match = findBracketMatchById(t, matchId);
-    if (!match || match.winner) return;
-    var table = tournamentMatchTableOrDefault(match, t);
-    if (!table) {
-      showToast(T("tournament.assignTableFirst"));
-      return;
+  function matchQueueOrder(t, m) {
+    if (t.playoff && t.playoff.matches.indexOf(m) !== -1) return 9000;
+    if (t.format === "roundrobin") return m.round || 1;
+    if (t.format === "swiss") return t.rounds.length;
+    var pos = findWbPosition(t, m);
+    if (pos) return pos.ri * 2;
+    for (var li = 0; li < (t.lbRounds || []).length; li++) if (t.lbRounds[li].indexOf(m) !== -1) return li + 1;
+    return 1000;
+  }
+
+  function tournamentQueue(t) {
+    var live = {};
+    (t.activeMatches || []).forEach(function (a) { live[a.matchId] = true; });
+    var now = Date.now();
+    var ready = pendingBracketMatches(t).filter(function (m) { return !live[m.id]; });
+    ready.forEach(function (m) { if (!m.readyAt) m.readyAt = now; });
+    return ready.sort(function (x, y) {
+      return matchQueueOrder(t, x) - matchQueueOrder(t, y) || x.readyAt - y.readyAt;
+    });
+  }
+
+  function freeTournamentTables(t) {
+    var used = {};
+    (t.activeMatches || []).forEach(function (a) { used[a.table] = true; });
+    var free = [];
+    for (var n = 1; n <= (t.tableCount || 1); n++) if (!used[n]) free.push(n);
+    return free;
+  }
+
+  function tournamentAutoAssignOn(t) {
+    return (t.tableCount || 1) > 1 && t.autoAssign !== false;
+  }
+
+  // Fills every free table it can; true when it started something
+  function autoAssignTables(t) {
+    if (!t || t.champion || t.playoffPending || !tournamentAutoAssignOn(t)) return false;
+    var started = false;
+    for (var guard = 0; guard < 40; guard++) {
+      var free = freeTournamentTables(t);
+      if (!free.length) break;
+      var busy = tournamentBusyNames(t);
+      var next = tournamentQueue(t).filter(function (m) {
+        return !(m.a in busy) && !(m.b in busy) && (!m.table || free.indexOf(m.table) !== -1);
+      })[0];
+      if (!next) break;
+      beginTournamentMatch(t, next, next.table && free.indexOf(next.table) !== -1 ? next.table : free[0]);
+      started = true;
     }
-    if (t.activeMatches.some(function (a) { return a.table === table; })) {
-      showToast(T("tournament.tableAlreadyInUse", { table: table }));
-      return;
-    }
+    return started;
+  }
+
+  function tournamentMatchTableOrDefault(match, t) {
+    if (t.tableCount <= 1) return 1;
+    var free = freeTournamentTables(t);
+    if (match.table) return free.indexOf(match.table) !== -1 ? match.table : null;
+    return free[0] || null;
+  }
+
+  // Starts a match on a table: "" when it did, else why not (in words)
+  function beginTournamentMatch(t, match, table) {
+    if (!match || match.winner || !table) return T("tournament.allTablesBusy");
+    if (t.activeMatches.some(function (a) { return a.table === table; })) return T("tournament.tableAlreadyInUse", { table: table });
+    var busy = tournamentBusyNames(t);
+    var clash = [match.a, match.b].filter(function (n) { return n in busy; })[0];
+    if (clash) return T("tournament.playerBusy", { name: clash, table: busy[clash] });
     var active = {
-      matchId: matchId,
+      matchId: match.id,
       table: table,
       aBalls: 0,
       bBalls: 0,
@@ -33937,10 +34133,8 @@
       bWins: 0,
       startedAt: new Date().toISOString()
     };
-    // Frozen for the life of this one match - a bracket match always
-    // has a clean start (unlike the session's ongoing roster), so
-    // there's no self-healing cache to maintain here, just a one-time
-    // computation at the moment the two sides are actually known.
+    // Frozen for the life of this one match - computed the moment the two
+    // sides are known.
     if (t.fairRace) {
       var entrantMembersForRace = t.entrantMembers || {};
       var targets = computeFairRaceTargets(
@@ -33953,20 +34147,45 @@
       active.raceToA = targets.a;
       active.raceToB = targets.b;
     }
+    match.table = table;
     t.activeMatches.push(active);
-    // "All Tables" by default - the whole point of seeing every live
-    // table is that starting one more of them shouldn't quietly narrow
+    // ("Table 3: Alex vs Sam - go now" on the Next up board)
+    t.lastCalled = { matchId: match.id, table: table, at: Date.now() };
+    return "";
+  }
+
+  function startTournamentMatch(matchId) {
+    var t = TOURNAMENT;
+    var match = findBracketMatchById(t, matchId);
+    if (!match || match.winner) return;
+    var table = tournamentMatchTableOrDefault(match, t);
+    if (!table) {
+      showToast(T(match.table ? "tournament.tableAlreadyInUse" : "tournament.allTablesBusy", { table: match.table }));
+      return;
+    }
+    var why = beginTournamentMatch(t, match, table);
+    if (why) {
+      showToast(why);
+      return;
+    }
+    // "All Tables" by default - starting one more table shouldn't narrow
     // the view down to just it.
     t.focusedTable = "all";
     saveTournamentToStorage(t);
     renderTournamentActive();
-    // Tapping Play can happen from anywhere on a long bracket page (the
-    // Ready to Play list, or a match card deep in the tree) - the score
-    // itself renders into tournamentCurrentMatchPanel regardless of
-    // where that tap came from, so jump there directly instead of
-    // leaving whoever just started the match staring at wherever they
-    // happened to be scrolled to.
+    // (the score renders at the top, wherever Play was tapped)
     tournamentCurrentMatchPanel.scrollIntoView({ behavior: smoothOrInstant(), block: "start" });
+  }
+
+  // ↔ a live match to another free table
+  function moveTournamentMatch(active, table) {
+    var t = TOURNAMENT;
+    if (!t || freeTournamentTables(t).indexOf(table) === -1) return;
+    var match = findBracketMatchById(t, active.matchId);
+    active.table = table;
+    if (match) match.table = table;
+    saveTournamentToStorage(t);
+    renderTournamentPage();
   }
 
   // active: the specific t.activeMatches entry this board's +/- buttons
@@ -34075,7 +34294,8 @@
 
     var unit = GAME_TYPES[t.gameType].unit;
     var oneRackWins = unit === "rack" && (t.target || 1) <= 1;
-    var networkBlocked = networkMode === "guest" && !networkHostConnected;
+    // (a guest scores its own table only, P22)
+    var networkBlocked = networkMode === "guest" && (!networkHostConnected || !active || active.table !== myTableNumber);
     var controls = document.createElement("div");
     controls.className = "ball-controls tournament-plus-zone";
     if (!oneRackWins) {
@@ -34107,6 +34327,88 @@
     panel.appendChild(controls);
 
     return panel;
+  }
+
+  // 📺 Next up (P22): a board for the room's TV - who goes to which table
+  // now, every live table's score, the matches coming up (and who they wait
+  // for), and a QR code for following on a phone (follow.html - only when
+  // the Mac server runs the room, /api/lan-info).
+  var followQrUrl = null;
+  function renderTournamentNextUp(t) {
+    var box = document.getElementById("tournament-next-up");
+    if (!box) return;
+    box.innerHTML = "";
+    var call = t.lastCalled && Date.now() - t.lastCalled.at < 3 * 60000 ? t.activeMatches.filter(function (a) { return a.matchId === t.lastCalled.matchId; })[0] : null;
+    if (call) {
+      var cm = findBracketMatchById(t, call.matchId);
+      var callEl = document.createElement("div");
+      callEl.className = "next-up-call";
+      callEl.textContent = T("tournament.goNow", { table: call.table, a: cm.a, b: cm.b });
+      box.appendChild(callEl);
+    }
+    var live = document.createElement("div");
+    live.className = "next-up-live";
+    t.activeMatches.slice().sort(function (x, y) { return x.table - y.table; }).forEach(function (a) {
+      var m = findBracketMatchById(t, a.matchId);
+      if (!m) return;
+      var card = document.createElement("div");
+      card.className = "next-up-table";
+      var head = document.createElement("div");
+      head.className = "next-up-table-name";
+      head.textContent = T("tournament.tableOption", { table: a.table });
+      var score = document.createElement("div");
+      score.className = "next-up-table-score";
+      score.textContent = m.a + "  " + a.aWins + " – " + a.bWins + "  " + m.b;
+      var race = document.createElement("div");
+      race.className = "next-up-table-race";
+      race.textContent = T("board.statusRace", { n: t.raceTo });
+      card.appendChild(head);
+      card.appendChild(score);
+      card.appendChild(race);
+      live.appendChild(card);
+    });
+    box.appendChild(live);
+    var queue = tournamentQueue(t);
+    if (queue.length) {
+      var h = document.createElement("h3");
+      h.textContent = T("tournament.upNext");
+      box.appendChild(h);
+      var list = document.createElement("ol");
+      list.className = "next-up-queue";
+      var busy = tournamentBusyNames(t);
+      queue.slice(0, 8).forEach(function (m) {
+        var li = document.createElement("li");
+        var waitFor = [m.a, m.b].filter(function (n) { return n in busy; });
+        li.textContent = m.a + " vs " + m.b + (waitFor.length ? " · " + T("tournament.waitingFor", { names: joinNamesForReport(waitFor) }) : "");
+        list.appendChild(li);
+      });
+      box.appendChild(list);
+    }
+    if (followQrUrl) {
+      var fig = document.createElement("figure");
+      fig.className = "next-up-follow";
+      var img = document.createElement("img");
+      img.alt = "";
+      img.src = "/api/qr.png?url=" + encodeURIComponent(followQrUrl);
+      var cap = document.createElement("figcaption");
+      cap.textContent = T("tournament.followOnPhone");
+      fig.appendChild(img);
+      fig.appendChild(cap);
+      box.appendChild(fig);
+    }
+  }
+
+  // the follow page's address on the room's network (the Mac server only)
+  function loadFollowQrUrl() {
+    if (followQrUrl || !/^https?:$/.test(location.protocol)) return;
+    fetch("/api/lan-info").then(function (res) {
+      if (!res.ok) throw new Error("no server");
+      return res.json();
+    }).then(function (info) {
+      var base = info.addresses && info.addresses.length ? info.addresses[0] + ":" + info.port : location.host;
+      followQrUrl = location.protocol + "//" + base + "/follow.html";
+      if (TOURNAMENT) renderTournamentNextUp(TOURNAMENT);
+    }).catch(function () {});
   }
 
   // 📺 TV (P20): the live match on its own, filling the screen, numbers
@@ -34254,6 +34556,18 @@
       ]);
     });
     tool(T("tournament.cancelMatch"), "tournament-cancel-match", function () { tournamentCancelMatch(active); });
+    if ((t.tableCount || 1) > 1) {
+      tool(T("tournament.moveTable"), "tournament-move-table", function () {
+        var free = freeTournamentTables(t);
+        if (!free.length) {
+          showToast(T("tournament.allTablesBusy"));
+          return;
+        }
+        tournamentChooser(T("tournament.moveTableTitle", { a: match.a, b: match.b }), free.map(function (n) {
+          return { label: T("tournament.tableOption", { table: n }), run: function () { moveTournamentMatch(active, n); } };
+        }));
+      });
+    }
     tool(document.body.getAttribute("data-tournament-tv") === "match" ? T("tournament.tvExit") : T("tournament.tvButton"), "tournament-tv-btn", function () { setTournamentTvMode("match"); });
     cardWrap.appendChild(tools);
     return cardWrap;
@@ -34428,6 +34742,7 @@
 
   function renderTournamentActive() {
     var t = TOURNAMENT;
+    if (networkMode !== "guest" && autoAssignTables(t)) saveTournamentToStorage(t);
     var activeMatchId = {};
     t.activeMatches.forEach(function (a) {
       activeMatchId[a.matchId] = true;
@@ -34464,6 +34779,28 @@
     var manage = document.getElementById("tournament-manage-row");
     manage.classList.toggle("hidden", !!t.champion);
     document.getElementById("tournament-tables-count").textContent = String(t.tableCount || 1);
+    var autoBox = document.getElementById("tournament-auto-assign");
+    autoBox.checked = t.autoAssign !== false;
+    document.getElementById("tournament-auto-assign-row").classList.toggle("hidden", (t.tableCount || 1) <= 1);
+    document.getElementById("btn-tournament-next-up").textContent = T(document.body.getAttribute("data-tournament-tv") === "next" ? "tournament.tvExit" : "tournament.nextUpButton");
+    renderTournamentNextUp(t);
+    var myTableRow = document.getElementById("tournament-my-table-row");
+    myTableRow.classList.toggle("hidden", networkMode !== "guest");
+    if (networkMode === "guest") {
+      var sel = document.getElementById("tournament-my-table");
+      sel.innerHTML = "";
+      var none = document.createElement("option");
+      none.value = "";
+      none.textContent = T("tournament.myTableNone");
+      sel.appendChild(none);
+      for (var tn = 1; tn <= Math.max(t.tableCount || 1, myTableNumber || 1); tn++) {
+        var opt = document.createElement("option");
+        opt.value = String(tn);
+        opt.textContent = T("tournament.tableOption", { table: tn });
+        sel.appendChild(opt);
+      }
+      sel.value = myTableNumber ? String(myTableNumber) : "";
+    }
 
     if (t.champion) {
       tournamentChampionBanner.classList.remove("hidden");
@@ -34525,7 +34862,7 @@
     // should be played, so there's no reason to make someone tap Play
     // for it. A multi-table event always needs an explicit tap (it
     // picks up the match's assigned table, or asks for one).
-    if (t.tableCount <= 1 && ready.length === 1) {
+    if (t.tableCount <= 1 && ready.length === 1 && networkMode !== "guest") {
       startTournamentMatch(ready[0].id);
       return;
     }
@@ -34575,8 +34912,9 @@
       btn.type = "button";
       btn.className = "btn btn-primary";
       btn.textContent = T("tournament.play");
+      btn.classList.toggle("hidden", !guestMayPlay(m));
       btn.addEventListener("click", function () {
-        startTournamentMatch(m.id);
+        requestTournamentStartMatch(m.id);
       });
       li.appendChild(btn);
       tournamentReadyList.appendChild(li);
@@ -39137,6 +39475,19 @@
     tournamentChooser(T("tournament.moreTitle"), [{ label: T("tournament.abandon"), danger: true, id: "btn-tournament-menu-abandon", run: abandonTournament }]);
   });
   document.getElementById("btn-tournament-bracket-tv").addEventListener("click", function () { setTournamentTvMode("bracket"); });
+  document.getElementById("btn-tournament-next-up").addEventListener("click", function () {
+    loadFollowQrUrl();
+    setTournamentTvMode("next");
+  });
+  document.getElementById("tournament-my-table").addEventListener("change", function (e) {
+    setMyTableNumber(parseInt(e.target.value, 10) || null);
+  });
+  document.getElementById("tournament-auto-assign").addEventListener("change", function (e) {
+    if (!TOURNAMENT) return;
+    TOURNAMENT.autoAssign = e.target.checked;
+    saveTournamentToStorage(TOURNAMENT);
+    renderTournamentPage();
+  });
   document.getElementById("tournament-player-search").addEventListener("input", filterTournamentPlayerChecklist);
   document.getElementById("btn-tournament-walkin").addEventListener("click", addTournamentWalkIn);
   document.getElementById("tournament-walkin-name").addEventListener("keydown", function (e) {

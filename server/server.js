@@ -98,6 +98,13 @@ var cameraWss = cameraRelay.attachCameraRelay(httpServer, WebSocket);
 // HTTP 400 before the matching one ever gets a chance.)
 httpServer.on("upgrade", function (req, socket, head) {
   var wsPath = (req.url || "").split("?")[0];
+  // (following the event - read-only, open to the room without pairing, P22)
+  if (wsPath === "/ws-follow") {
+    wss.handleUpgrade(req, socket, head, function (ws) {
+      wss.addFollower(ws);
+    });
+    return;
+  }
   if (!devices.upgradeAllowed(req)) {
     pairing.refuseUpgrade(socket);
     return;
