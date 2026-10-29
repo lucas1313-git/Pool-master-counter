@@ -128,7 +128,7 @@ function bodyPose(cam, x, y) {
   page.on("console", (m) => { const t = m.text(); if (/\[PMC (room map|paths)\]/.test(t)) logs.push(t); });
   page.on("pageerror", (e) => logs.push("PAGE ERROR " + e.message));
   await page.goto(BASE + "manifest.json");
-  await page.evaluate(() => { localStorage.clear(); localStorage.setItem("pmc-camera-wizard-done", "1"); });
+  await page.evaluate(() => { localStorage.clear(); localStorage.setItem("pmc-camera-wizard-done", "1"); localStorage.setItem("pmc-camera-settings", JSON.stringify({ labsEnabled: true })); }); // (the Room map is in Labs)
   await page.goto(BASE + "camera.html?embedded=1", { waitUntil: "networkidle2" });
   await page.waitForFunction(() => document.getElementById("video").videoWidth > 0, { timeout: 60000, polling: 100 });
   const { W, H } = await page.evaluate(() => ({ W: document.getElementById("video").videoWidth, H: document.getElementById("video").videoHeight }));

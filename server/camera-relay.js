@@ -106,7 +106,7 @@
 //     { type: "camera-settings-request" } (listener -> cameras)
 //     { type: "camera-settings-state", settings: {...} }
 //       (camera -> listeners; what the camera is actually using)
-//     { type: "camera-status", status: { link, models, camera } }
+//     { type: "camera-status", status: { link, models, camera, view: "ok" | "moved" } }
 //       (camera -> listeners; its status lights, as codes)
 //     { type: "enrollment-names", names: [...] }
 //       (relay -> listeners; who has at least one enrollment sample - on
@@ -529,7 +529,7 @@ function createCameraRelay(WebSocket) {
         // The camera's three status lights (connection, models, camera),
         // as codes - the tablet shows the same lights in Visual Scoring.
         if (msg.type === "camera-status" && ws.role === "camera" && msg.status && typeof msg.status === "object") {
-          broadcastToListeners({ type: "camera-status", status: { link: msg.status.link, models: msg.status.models, camera: msg.status.camera } });
+          broadcastToListeners({ type: "camera-status", status: { link: msg.status.link, models: msg.status.models, camera: msg.status.camera, view: msg.status.view === "moved" ? "moved" : "ok" } });
           return;
         }
 

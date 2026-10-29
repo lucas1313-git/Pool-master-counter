@@ -18,6 +18,9 @@ const ROOT_FILES = ["index.html", "camera.html", "record.html", "cues.html", "ov
 const DIRS = ["css", "js", "languages", "icons", "camera", "data", "settings", "players", "rules", "docs/screenshots"];
 // source-only files inside the copied folders
 const SKIP = [/(^|\/)README\.md$/, /^camera\/models\/(osnet|dinov2|depth|segment)\/convert\.py$/, /(^|\/)\.DS_Store$/];
+// a paid build (PMC_PAID_BUILD=1) leaves OSNet out: its weights' training data (Market-1501) is
+// research / non-commercial only - see camera/models/osnet/README.md
+if (process.env.PMC_PAID_BUILD === "1") SKIP.push(/^camera\/models\/osnet\//, /^camera\/osnet\.js$/);
 const KEEP = [/^camera\/models\/(osnet|dinov2|depth)\/README\.md$/]; // model licence notes
 const VENDOR = [/^camera\/tfjs\.js$/, /^camera\/pose-detection\.js$/, /^camera\/models\//];
 

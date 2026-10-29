@@ -21,6 +21,9 @@ function check(label, ok, extra) { console.log((ok ? "PASS " : "FAIL ") + label 
   };
   check("in a browser: no iPad card", (await open(false)) === false);
   check("in the iPad app: the card is there", (await open(true)) === true);
+  // (📷 Set Up Camera: Visual Scoring stays out of the way until then)
+  await page.evaluate(() => document.getElementById("btn-open-camera-wizard-header").click());
+  await new Promise((r) => setTimeout(r, 300));
   await page.evaluate(() => { const vs = document.getElementById("visual-scoring-panel"); if (vs.classList.contains("collapsed")) document.getElementById("btn-toggle-visual-scoring-panel").click(); const cs = document.getElementById("camera-setup-panel"); if (cs.classList.contains("collapsed")) document.getElementById("btn-toggle-camera-setup-panel").click(); });
   await new Promise((r) => setTimeout(r, 300));
   await page.click("#camera-wizard-path-native");

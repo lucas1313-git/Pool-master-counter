@@ -143,7 +143,7 @@ const POINTS = [[100, 100], [1180, 100], [100, 620], [1180, 620], [640, 360], [6
   col = await colours(); st = await stored();
   check("zoom 2x: the middle of the picture, twice as big (the yellow square reaches 690,340)", JSON.stringify(col) === JSON.stringify(expectColours(2, false)), { col, want: expectColours(2, false) });
   const asked2 = await page.evaluate(() => window.__gumAsked.slice(-1)[0]);
-  check("zoom 2x: the camera asked for 4K first", asked2 && asked2.w.ideal === 3840, asked2);
+  check("zoom 2x: the camera asked for 1080p (capped there - 4K made the phone hot for nothing)", asked2 && asked2.w.ideal === 1920, asked2);
   check("zoom 2x: the table calibration converted exactly", calibOk(st.h, 2, false), st.h);
   const bgOk2 = st.bg.gray.every((g, i) => {
     const x = i % 64, y = Math.floor(i / 64);

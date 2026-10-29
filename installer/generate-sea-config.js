@@ -22,10 +22,18 @@ function addFile(repoRelativePath) {
   assets[key] = abs;
 }
 
+// A paid build (PMC_PAID_BUILD=1) leaves OSNet out: its weights were trained
+// on Market-1501, whose terms are research / non-commercial only (see
+// camera/models/osnet/README.md). The camera page then recognizes without
+// it (colours, and DINOv2 if switched on).
+var PAID_BUILD = process.env.PMC_PAID_BUILD === "1";
+var PAID_BUILD_SKIP = /^camera\/(models\/osnet(\/|$)|osnet\.js$)/;
+
 function walk(dirRelativePath) {
   var absDir = path.join(REPO_ROOT, dirRelativePath);
   fs.readdirSync(absDir, { withFileTypes: true }).forEach(function (entry) {
     var childRelative = dirRelativePath + "/" + entry.name;
+    if (PAID_BUILD && PAID_BUILD_SKIP.test(childRelative)) return;
     if (entry.isDirectory()) {
       walk(childRelative);
     } else if (entry.isFile()) {

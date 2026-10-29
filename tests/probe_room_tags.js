@@ -65,6 +65,7 @@ async function photoToY4m(browser, photo, file) {
   await page.evaluate(() => {
     localStorage.clear();
     localStorage.setItem("pmc-camera-wizard-done", "1");
+    localStorage.setItem("pmc-camera-settings", JSON.stringify({ labsEnabled: true })); // (room tags are in Labs)
     // a table across the lower middle of the picture (100 x 50 in, 6 px per inch)
     localStorage.setItem("pmc-camera-calibration", JSON.stringify({ tableLength: 100, tableWidth: 50, xExtent: 100, yExtent: 50, h: { h11: 1 / 6, h12: 0, h13: -340 / 6, h21: 0, h22: 1 / 6, h23: -400 / 6, h31: 0, h32: 0 } }));
   });

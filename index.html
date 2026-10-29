@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261029n">
+<link rel="stylesheet" href="css/style.css?v=20261029o">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -421,7 +421,7 @@
     </div>
   </section>
 
-  <section class="panel collapsible-panel collapsed" id="visual-scoring-panel">
+  <section class="panel collapsible-panel collapsed hidden" id="visual-scoring-panel">
     <button type="button" class="panel-toggle" id="btn-toggle-visual-scoring-panel" aria-expanded="false" aria-controls="visual-scoring-panel-body">
       <h2 data-i18n="visualScoring.heading">Visual Scoring</h2>
       <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
@@ -429,6 +429,7 @@
     <p class="panel-summary" id="visual-scoring-panel-summary" data-i18n="visualScoring.summary">Camera setup, player recognition, ball tracking and the camera's debug tools.</p>
     <div class="panel-body" id="visual-scoring-panel-body">
       <p class="camera-accuracy-line hidden" id="camera-accuracy-line" aria-live="polite"></p>
+      <p class="camera-table-line hidden" id="camera-table-line"></p>
       <div class="backup-subsection collapsible-panel collapsed" id="camera-setup-panel">
         <button type="button" class="panel-toggle" id="btn-toggle-camera-setup-panel" aria-expanded="false" aria-controls="camera-setup-panel-body">
           <h4 class="backup-subsection-title" data-i18n="visualScoring.selectCameraHeading">Select Camera</h4>
@@ -539,6 +540,20 @@
                 <span><span data-i18n="players.cameraWalkingPaths">👣 Follow walking paths</span><small class="setting-comment" data-i18n="visualScoring.walkingPathsComment">Keeps a player's name when they're out of view for a moment</small></span>
               </label>
               <button type="button" id="btn-capture-walking-paths-help" class="format-info-btn" data-i18n-aria-label="players.cameraWalkingPathsHelpAria" aria-label="What does Follow walking paths do?">❓</button>
+            </div>
+            <div class="row capture-setting-row">
+              <label class="checkbox-row">
+                <input type="checkbox" id="capture-simple-mode">
+                <span><span data-i18n="players.cameraSimpleMode">🎱 Simple mode</span><small class="setting-comment" data-i18n="visualScoring.simpleModeComment">The table and its shots only - no enrolling players</small></span>
+              </label>
+              <button type="button" id="btn-capture-simple-mode-help" class="format-info-btn" data-i18n-aria-label="players.cameraSimpleModeHelpAria" aria-label="What does Simple mode do?">❓</button>
+            </div>
+            <div class="row capture-setting-row">
+              <label class="checkbox-row">
+                <input type="checkbox" id="capture-labs">
+                <span><span data-i18n="players.cameraLabs">🧪 Labs</span><small class="setting-comment" data-i18n="visualScoring.labsComment">Room map, room shape and room tags (about 30 MB more)</small></span>
+              </label>
+              <button type="button" id="btn-capture-labs-help" class="format-info-btn" data-i18n-aria-label="players.cameraLabsHelpAria" aria-label="What is Labs?">❓</button>
             </div>
             <div class="row" id="camera-ball-tracking-row">
               <label class="checkbox-row">
@@ -3039,18 +3054,18 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/pairing.js?v=20261029n"></script>
-<script src="js/big-store.js?v=20261029n"></script>
-<script src="js/mp4-clip.js?v=20261029n"></script>
-<script src="js/recording-consent.js?v=20261029n"></script>
-<script src="js/local-recorder.js?v=20261029n"></script>
-<script src="js/app.js?v=20261029n"></script>
-<script src="js/camera-client.js?v=20261029n"></script>
-<script src="js/voice.js?v=20261029n"></script>
+<script src="js/pairing.js?v=20261029o"></script>
+<script src="js/big-store.js?v=20261029o"></script>
+<script src="js/mp4-clip.js?v=20261029o"></script>
+<script src="js/recording-consent.js?v=20261029o"></script>
+<script src="js/local-recorder.js?v=20261029o"></script>
+<script src="js/app.js?v=20261029o"></script>
+<script src="js/camera-client.js?v=20261029o"></script>
+<script src="js/voice.js?v=20261029o"></script>
 <script>
   // The app opens with no network (sw.js, P21) - on http(s) only, not in the iOS app
   if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol) && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
-    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261029n").catch(function () {}); });
+    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261029o").catch(function () {}); });
   }
 </script>
 </body>

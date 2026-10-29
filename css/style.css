@@ -8162,6 +8162,16 @@ body.network-guest-mode #header-group-start {
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
 }
 
+/* the camera moved since the table was calibrated: amber, with an OK */
+.camera-trouble-banner.camera-moved { background: #9a6700; }
+.camera-trouble-ok { margin-left: 12px; font-size: 1rem; vertical-align: middle; }
+/* Simple mode: a shot the camera saw, on the card of the player up */
+.player-panel.camera-shot-pulse { animation: camera-shot-pulse 1.3s ease-out; }
+@keyframes camera-shot-pulse { 0% { box-shadow: 0 0 0 0 rgba(94, 201, 138, 0.9); } 100% { box-shadow: 0 0 0 26px rgba(94, 201, 138, 0); } }
+@media (prefers-reduced-motion: reduce) { .player-panel.camera-shot-pulse { animation: none; outline: 4px solid #5ec98a; } }
+.camera-table-line { margin: 0 0 12px; font-weight: 600; }
+.simple-mode-hidden { display: none !important; }
+
 /* "Camera right 7 of 9 tonight" - top of Visual Scoring, from the
    operator's corrections (see judgeCameraCall). */
 .camera-accuracy-line {

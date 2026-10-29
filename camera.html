@@ -273,6 +273,17 @@
   .model-toggles .help-btn { margin-left: auto; }
   .model-box-title { font-weight: 700; color: var(--text); }
   .empty-room-box { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin: 14px 0 6px; }
+  /* the setup checklist (renderSetupChecklist) */
+  .setup-checklist { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin: 10px 0; }
+  .setup-head { display: flex; justify-content: space-between; align-items: baseline; font-weight: 700; }
+  .setup-bar { height: 8px; border-radius: 4px; background: rgba(255,255,255,0.12); margin: 8px 0; overflow: hidden; }
+  .setup-bar-fill { height: 100%; width: 0; background: #5ec98a; transition: width 0.3s; }
+  .setup-steps { margin: 0; padding-left: 22px; }
+  .setup-steps li { margin: 3px 0; }
+  .setup-steps li.done { opacity: 0.75; }
+  .setup-steps li .setup-mark { display: inline-block; width: 1.4em; }
+  .setup-simple { display: flex; gap: 8px; align-items: flex-start; margin-top: 8px; font-size: 0.95em; }
+  .setup-simple input { width: auto; margin: 3px 0 0; }
   .empty-room-title { font-weight: 700; color: var(--text); display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .empty-room-thumb { display: block; width: 100%; max-width: 320px; border-radius: 6px; margin: 6px 0; }
   .empty-room-option { display: flex; align-items: center; gap: 6px; margin: 8px 0; font-size: 1rem; color: var(--text); }
@@ -526,6 +537,13 @@
     <span class="pill"><span class="dot" id="dotCamera"></span><span id="labelCamera">Camera: starting...</span></span>
   </div>
 
+  <div class="setup-checklist" id="setupChecklist" hidden>
+    <div class="setup-head"><span class="setup-title" data-i18n="cam.setupTitle">Setting up</span> <span class="setup-count" id="setupCount"></span></div>
+    <div class="setup-bar"><div class="setup-bar-fill" id="setupBarFill"></div></div>
+    <ol class="setup-steps" id="setupSteps"></ol>
+    <label class="setup-simple"><input type="checkbox" id="simpleModeToggleTop"> <span data-i18n="cam.simpleMode">Simple mode: table busy or idle and shots - no enrolling players (who's up comes from the scoreboard's turn order)</span></label>
+  </div>
+
   <div class="video-wrap" id="videoWrap">
     <video id="video" autoplay playsinline muted></video>
     <canvas id="overlay"></canvas>
@@ -714,6 +732,12 @@
       <label for="cameraSelect">Camera</label>
       <select id="cameraSelect"></select>
 
+      <div class="row" style="margin:8px 0 4px">
+        <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="simpleModeToggle" style="width:auto;margin:0"> <span data-i18n="cam.simpleModeShort">Simple mode (no enrolling players)</span></label><button type="button" class="help-btn" data-help="simpleMode" aria-label="What does this do?" data-i18n-aria-label="cam.whatDoesThisDo">?</button>
+      </div>
+      <div class="row" style="margin:4px 0 4px">
+        <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="labsToggle" style="width:auto;margin:0"> <span data-i18n="cam.labs">🧪 Labs: room map, room shape and room tags</span></label><button type="button" class="help-btn" data-help="labs" aria-label="What does this do?" data-i18n-aria-label="cam.whatDoesThisDo">?</button>
+      </div>
       <div class="row" style="margin:8px 0 12px">
         <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="flip180Toggle" style="width:auto;margin:0"> Camera mounted upside down (turn the picture)</label><button type="button" class="help-btn" data-help="flip180" aria-label="What does this do?" data-i18n-aria-label="cam.whatDoesThisDo">?</button>
       </div>
@@ -847,7 +871,7 @@
   </div>
 </div>
 
-<script src="js/camera-i18n.js?v=20261029n"></script>
+<script src="js/camera-i18n.js?v=20261029o"></script>
 <script src="js/pairing.js?v=20261028m"></script>
 <script src="camera/tfjs.js"></script>
 <script src="camera/pose-detection.js"></script>
@@ -1012,6 +1036,7 @@
   var calibrationStepText = document.getElementById("calibrationStepText");
   var cancelCalibrationBtn = document.getElementById("cancelCalibrationBtn");
   var recalibrateBtn = document.getElementById("recalibrateBtn");
+  var roomTagsBoxEl = document.getElementById("roomTagsBox");
   var playAreaBox = document.getElementById("playAreaBox");
   var playAreaStatus = document.getElementById("playAreaStatus");
   var playAreaDrawBtn = document.getElementById("playAreaDrawBtn");
@@ -1120,6 +1145,14 @@
     flip180: {
       title: "Camera mounted upside down",
       body: "For a camera hung upside down (from the ceiling, under a shelf): turns the picture the right way up, for the player and ball recognition and on screen.\n\nThe table calibration is converted for you; the empty-room snapshot has to be taken again. Also on the scoreboard: Visual Scoring > Capture Settings."
+    },
+    simpleMode: {
+      title: "Simple mode",
+      body: "The camera only says whether the table is busy or idle, and when a shot was played - no enrolling players, no appearance models, no names. Who shot comes from the scoreboard: the player it has up (its turn order, or the number pad).\n\nSetting up then needs just the camera pointed at the table and the table calibrated. Turn it off to have the camera recognize players (Enroll tab)."
+    },
+    labs: {
+      title: "Labs",
+      body: "Things being tried out that don't help the scoring yet: the Room map tab (the room from above, where everyone is), the room's shape worked out by a depth model (27 MB) and room tags (2 MB, plus DINOv2). Off, none of it is downloaded or run. The table's rails and pockets don't need Labs."
     },
     walkingPaths: {
       title: "Follow walking paths",
@@ -1250,9 +1283,16 @@
     recognitionMethod: "auto",
     // which appearance models "model" combines (the Enroll tab's boxes)
     useOsnet: true,
-    useDino: true,
+    // DINOv2 (22 MB, the heaviest on the GPU): off unless switched on - and
+    // switched back off when the self-check shows it doesn't help here
+    useDino: false,
     // with an empty-room snapshot, cut the room out of players' pictures
-    roomCutout: true
+    roomCutout: true,
+    // Simple mode: no enrolling, no appearance models, no names - the table
+    // busy or idle and its shots; the scoreboard's turn order says whose
+    simpleMode: false,
+    // Labs: the Room map tab, the room's shape (depth model) and room tags
+    labsEnabled: false
   };
   var hasLocalSettingsOverride = false;
 
@@ -1279,7 +1319,7 @@
   // after every change, wherever the change came from) and applies what
   // the scoreboard sends - postMessage in same-device mode, the relay for
   // a separate phone.
-  var CAPTURE_SETTING_KEYS = ["matchThreshold", "debounceSec", "consecutiveFrames", "bendEnterAngle", "bendExitAngle", "railDistanceInches", "ballConfirmPasses", "cueDetectionEnabled", "walkingPathsEnabled", "zoom", "flip180", "ballSensitivity"];
+  var CAPTURE_SETTING_KEYS = ["matchThreshold", "debounceSec", "consecutiveFrames", "bendEnterAngle", "bendExitAngle", "railDistanceInches", "ballConfirmPasses", "cueDetectionEnabled", "walkingPathsEnabled", "simpleMode", "labsEnabled", "zoom", "flip180", "ballSensitivity"];
   function reportCaptureSettings() {
     if (isViewer || !CAPTURE_SETTING_KEYS) return; // (a save during page load, before this section ran)
     var out = {};
@@ -1304,6 +1344,7 @@
     if (changed.length) {
       persistSettings(); // also reports the new values back
       applySettingsToInputs();
+      applyModeSettings();
       if (wasDetectingCue !== settings.cueDetectionEnabled) resetCueTracking(settings.cueDetectionEnabled ? "enabled" : "disabled");
       logActivity("Settings changed from the scoreboard: " + changed.join(", "));
       applyWantedView();
@@ -1327,6 +1368,9 @@
     cueDetectionToggle.checked = settings.cueDetectionEnabled;
     cueDebugToggle.checked = settings.cueDebugEnabled;
     walkingPathsToggle.checked = settings.walkingPathsEnabled;
+    document.getElementById("simpleModeToggle").checked = settings.simpleMode;
+    document.getElementById("simpleModeToggleTop").checked = settings.simpleMode;
+    document.getElementById("labsToggle").checked = settings.labsEnabled;
     document.getElementById("showRoomTagsToggle").checked = settings.showRoomTags;
     ballSensitivityInput.value = settings.ballSensitivity;
     ballSensitivityValue.textContent = settings.ballSensitivity;
@@ -1389,6 +1433,42 @@
     persistSettings();
     logActivity("Following walking paths " + (settings.walkingPathsEnabled ? "on" : "off"));
   });
+  ["simpleModeToggle", "simpleModeToggleTop"].forEach(function (id) {
+    document.getElementById(id).addEventListener("change", function () {
+      settings.simpleMode = document.getElementById(id).checked;
+      persistSettings();
+      applySettingsToInputs();
+      if (isViewer) return;
+      logActivity("Simple mode " + (settings.simpleMode ? "on: the table and its shots, no names" : "off: players recognized"));
+      applyModeSettings();
+    });
+  });
+  document.getElementById("labsToggle").addEventListener("change", function () {
+    settings.labsEnabled = document.getElementById("labsToggle").checked;
+    persistSettings();
+    if (isViewer) return;
+    logActivity("Labs " + (settings.labsEnabled ? "on" : "off"));
+    applyModeSettings();
+  });
+  // Simple mode and Labs, wherever they were changed: the tabs that go with
+  // them, and the appearance models loaded or let go.
+  var appliedSimpleMode = null;
+  function applyModeSettings() {
+    tabEnroll.hidden = !!settings.simpleMode;
+    tabRoomMap.hidden = !settings.labsEnabled;
+    roomTagsBoxEl.hidden = !settings.labsEnabled;
+    if ((settings.simpleMode && !enrollPanel.hidden) || (!settings.labsEnabled && !roomMapPanel.hidden)) showTab("recognize");
+    if (!isViewer && modelsReady && appliedSimpleMode !== settings.simpleMode) {
+      if (settings.simpleMode) {
+        APPEARANCE_MODELS.forEach(function (m) { var st = appearanceModels[m.id]; if (st.model) { try { st.model.dispose(); } catch (e) {} } st.model = null; st.state = "off"; st.gen++; });
+      } else {
+        loadAppearanceModels();
+      }
+      forgetLastMatch();
+    }
+    appliedSimpleMode = settings.simpleMode;
+    renderSetupChecklist();
+  }
   // the picture: the slider shows its value while moving, applies on letting go
   // the slider: the picture follows while it moves (the stream already
   // open); letting go keeps it and fetches more pixels if it needs them
@@ -1495,20 +1575,57 @@
       statusCodes[key] = code;
       reportCameraStatus();
     }
+    if (key) renderSetupChecklist();
   }
   function reportCameraStatus() {
     if (isViewer) return;
-    send({ type: "camera-status", status: { link: statusCodes.link, models: statusCodes.models, camera: statusCodes.camera } });
+    send({ type: "camera-status", status: { link: statusCodes.link, models: statusCodes.models, camera: statusCodes.camera, view: moveCheck && moveCheck.moved ? "moved" : "ok" } });
   }
 
   // ---- Model loading (tfjs + MoveNet pose-detection, vendored - no CDN) ----
   var modelsReady = false;
   var detector = null;
 
+  // What the models weigh, to say how far their download has got (the
+  // setup checklist): fetched once with their bytes counted, then loaded
+  // from the browser's copy (the service worker keeps camera/models).
+  var MODEL_FILES = {
+    pose: { bytes: 9682428, files: ["camera/models/movenet-multipose-lightning/model.json", "camera/models/movenet-multipose-lightning/group1-shard1of1.bin"] },
+    osnet: { bytes: 4427424, files: ["camera/models/osnet/osnet.json", "camera/models/osnet/osnet.bin"] },
+    dino: { bytes: 22121393, files: ["camera/models/dinov2/dino.json", "camera/models/dinov2/dino.bin"] }
+  };
+  var downloads = {}; // id -> { got, want, done }
+  function downloadModel(id) {
+    var m = MODEL_FILES[id], d = downloads[id];
+    if (d && d.promise) return d.promise;
+    d = downloads[id] = { got: 0, want: m.bytes, done: false };
+    var add = function (n) { d.got += n; renderSetupChecklist(); };
+    d.promise = m.files.reduce(function (chain, url) {
+      return chain.then(function () {
+        return fetch(url).then(function (r) {
+          if (!r.ok) throw new Error(url + " " + r.status);
+          if (!r.body || !r.body.getReader) return r.arrayBuffer().then(function (b) { add(b.byteLength); });
+          var reader = r.body.getReader();
+          var pump = function () { return reader.read().then(function (x) { if (x.done) return; add(x.value.length); return pump(); }); };
+          return pump();
+        });
+      });
+    }, Promise.resolve()).then(function () { d.got = Math.max(d.got, d.want); d.done = true; renderSetupChecklist(); }, function (e) { d.failed = true; renderSetupChecklist(); throw e; });
+    return d.promise;
+  }
+  function downloadProgress() {
+    var got = 0, want = 0;
+    Object.keys(downloads).forEach(function (id) { got += Math.min(downloads[id].got, downloads[id].want); want += downloads[id].want; });
+    return want ? { got: got, want: want, pct: Math.floor(got / want * 100) } : null;
+  }
+
   function loadModels() {
     setStatus(dotModels, labelModels, "busy", "Models: loading...", "loading");
     return tf.setBackend("webgl").then(function () {
       return tf.ready();
+    }).then(function () {
+      // (counted as it comes; a download that fails is left to the model's own fetch)
+      return downloadModel("pose").catch(function () {});
     }).then(function () {
       return poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
         modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING,
@@ -1635,12 +1752,12 @@
   }
   function plainView(v) { return v.zoom <= 1.001 && !v.flip; }
   function sameView(a, b) { return Math.abs((a.zoom || 1) - (b.zoom || 1)) < 0.001 && !!a.flip === !!b.flip; }
-  // how many pixels to ask the camera for: 720p, 1080p up to 1.5x, 4K above
-  function tierOf(v) { return v.zoom > 1.5 ? 2 : v.zoom > 1.001 ? 1 : 0; }
+  // how many pixels to ask the camera for: 720p, 1080p when zoomed in - no
+  // more (4K above 1.5x made the phone hot and the models no better)
+  function tierOf(v) { return v.zoom > 1.001 ? 1 : 0; }
   var streamTier = null; // the tier the open stream was asked at
   function resolutionFor(v) {
     var t = tierOf(v);
-    if (t === 2) return { width: { ideal: 3840 }, height: { ideal: 2160 } };
     if (t === 1) return { width: { ideal: 1920 }, height: { ideal: 1080 } };
     return { width: { ideal: 1280 }, height: { ideal: 720 } };
   }
@@ -1754,6 +1871,7 @@
       var m = viewMap(was, now);
       if (calibration && calibration.h) {
         calibration.h = homographyAfterView(calibration.h, m);
+        delete calibration.viewEdges; // (another picture: kept again from the next quiet look)
         saveCalibration();
         resetBallTracking("picture changed");
         renderCalibrationStatus();
@@ -2679,6 +2797,7 @@
   }
 
   function renderPlayerList() {
+    if (typeof renderSetupChecklist === "function") renderSetupChecklist();
     var names = enrollListNames();
     if (names.length === 0) {
       playerListEl.innerHTML = '<div class="hint">No players yet - add them on the scoreboard.</div>';
@@ -3336,7 +3455,7 @@
     forgetLastMatch();
     renderEmptyRoomStatus();
     roomTags = null;
-    tagRoom("new snapshot");
+    if (settings.labsEnabled) tagRoom("new snapshot");
     return { at: emptyRoom.at, saved: emptyRoom.saved, size: jpeg ? jpeg.length : 0 };
   }
   function loadEmptyRoom() {
@@ -5241,6 +5360,9 @@
     getShootingVia: function () { return shootingVia; },
     // keeping the camera going (tests)
     setStallMs: function (ms) { STALL_MS = ms; },
+    setViewOffset: function (o) { viewOffsetForTests = o; },
+    checkMoved: function () { noteViewIdle(Date.now(), true); return { moved: moveCheck.moved, strikes: moveCheck.strikes, last: lastMoveCheck, kept: !!(calibration && calibration.viewEdges) }; },
+    work: function () { return { modelPasses: modelPasses, idle: detectionIdle(Date.now()), simple: settings.simpleMode, labs: settings.labsEnabled, models: readyModelIds(), downloads: JSON.parse(JSON.stringify(Object.keys(downloads).reduce(function (o, k) { o[k] = { got: downloads[k].got, want: downloads[k].want, done: downloads[k].done }; return o; }, {}))) }; },
     cameraHealth: function () { return { frozen: stall.frozen, retries: cameraRetries, restarting: !!cameraRetryTimer, trackId: currentStream && currentStream.getVideoTracks()[0] ? currentStream.getVideoTracks()[0].id : null, wakeWanted: wakeWanted, wakeHeld: !!wakeLock }; },
     endTrack: function () { var t = currentStream && currentStream.getVideoTracks()[0]; if (t) t.dispatchEvent(new Event("ended")); },
     muteTrack: function () { var t = currentStream && currentStream.getVideoTracks()[0]; if (t) t.dispatchEvent(new Event("mute")); },
@@ -5836,7 +5958,7 @@
       s.model = null;
       s.state = "off";
       s.gen++;
-      if (settings[m.setting]) loadAppearanceModel(m);
+      if (settings[m.setting] && !settings.simpleMode) loadAppearanceModel(m);
     });
   }
   function loadAppearanceModel(m) {
@@ -5845,7 +5967,7 @@
     s.state = "loading";
     var gen = ++s.gen, startedAt = Date.now();
     renderModelBox();
-    window[m.lib].load(m.url).then(function (model) {
+    downloadModel(m.id).catch(function () {}).then(function () { return window[m.lib].load(m.url); }).then(function (model) {
       if (gen !== s.gen) { model.dispose(); return; }
       s.model = model;
       s.state = "ready";
@@ -5939,16 +6061,27 @@
   // compare them.
   var EMBED_INTERVAL_MS = 200;
   var EMBED_FRESH_MS = 700;
+  // Who it is already settled (a clear tally over this visit to the table):
+  // the models look again only every few seconds, their last answer kept
+  // meanwhile - they're the heaviest work on the phone.
+  var SETTLED_CERTAINTY = 0.85;
+  var SETTLED_REFRESH_MS = 4000;
+  function identitySettled(trackId, now) {
+    return trackId !== undefined && trackId !== null && !!visitIdentity(trackId, now) && visitCertainty(trackId, now) >= SETTLED_CERTAINTY;
+  }
   var embedInFlight = false, lastEmbedStartAt = 0;
   var trackEmbeddings = {}; // String(trackId) -> { embs: { osnet, dino }, at }
+  var modelPasses = 0; // (tests: how often the appearance models ran)
   function noteAppearance(analysis, keypoints, now) {
     if (!analysis || !readyModelIds().length) return;
     analysis.crop = personCrop(keypoints);
     var trackKey = String(analysis.trackId);
-    var known = trackEmbeddings[trackKey];
-    analysis.emb = known && now - known.at <= EMBED_FRESH_MS ? known.embs : null;
+    var known = trackEmbeddings[trackKey], settled = identitySettled(analysis.trackId, now);
+    analysis.emb = known && now - known.at <= (settled ? SETTLED_REFRESH_MS : EMBED_FRESH_MS) ? known.embs : null;
     var ids = liveModelIds();
     if (!ids.length || !analysis.crop || embedInFlight || now - lastEmbedStartAt < EMBED_INTERVAL_MS) return;
+    if (settled && known && now - known.at < SETTLED_REFRESH_MS) return;
+    modelPasses++;
     embedInFlight = true;
     lastEmbedStartAt = now;
     embedPicture(analysis.crop, ids).then(function (embs) {
@@ -6539,7 +6672,7 @@
     }
     // a snapshot from before room tags existed (or tags lost): tag it now,
     // once the camera's own start has settled
-    if (emptyRoom && !isViewer) setTimeout(function () { if (!roomTagsFit()) tagRoom("the snapshot had no tags yet"); }, 6000);
+    if (emptyRoom && !isViewer) setTimeout(function () { if (settings.labsEnabled && !roomTagsFit()) tagRoom("the snapshot had no tags yet"); }, 6000);
     renderRoomTagsStatus();
   }
   function forgetRoomTags() {
@@ -6779,7 +6912,11 @@
     }
     renderPlayAreaBox();
     renderPlayerList();
+    // (a calibration loaded at start-up comes before this part of the page has run)
+    if (calibration !== movedForCalibration && moveCheck) { movedForCalibration = calibration; if (moveCheck.moved || moveCheck.strikes) forgetViewMoved(); }
+    renderSetupChecklist();
   }
+  var movedForCalibration = null;
 
   // ---- Playing area ----
   // An outline on the floor round the table, tapped on the picture: only
@@ -7757,7 +7894,31 @@
   // and show its results - also called when a model is switched on or off,
   // or finishes loading, since every combination's results are already in.
   var lastRecognitionChoice = null;
+  // DINOv2 on, and the self-check has enough behind it: kept only if a
+  // combination with it beats the best one without it by 2 points or more.
+  function dinoEarnsItsPlace() {
+    if (!settings.useDino || appearanceModels.dino.state !== "ready") return;
+    var best = function (withDino) {
+      var top = null;
+      Object.keys(modelChecks).forEach(function (k) {
+        if ((k.indexOf("dino") !== -1) !== withDino) return;
+        var r = modelChecks[k], t = r ? checkTotals(r.check || {}) : null;
+        if (t && t.tested >= 20 && (!top || t.rate > top.rate)) top = t;
+      });
+      return top;
+    };
+    var withDino = best(true), without = best(false) || checkTotals(colourCheck);
+    if (!withDino || !(without.tested >= 20)) return;
+    if (withDino.rate < without.rate + 0.02) {
+      settings.useDino = false;
+      persistSettings();
+      applySettingsToInputs();
+      logActivity("DINOv2 switched off: the self-check shows it doesn't help here (" + Math.round(withDino.rate * 100) + "% with it, " + Math.round(without.rate * 100) + "% without)");
+      forgetLastMatch();
+    }
+  }
   function finishEnrollCheck() {
+    dinoEarnsItsPlace();
     var combo = activeModelCombo(), modelResult = activeModelResult();
     var modelCheck = modelResult ? modelResult.check : {};
     var c = checkTotals(colourCheck), m = checkTotals(modelCheck);
@@ -8556,6 +8717,9 @@
   // appearance model's numbers for the same look (if it had them).
   function fireEvent(name, descriptor, matchDistance, via, descriptorPose, emb, certainty) {
     via = via || "bent over";
+    // (Simple mode: no names - the shot itself goes to the scoreboard as
+    // the shot messages do; its turn order says whose)
+    if (settings.simpleMode) return;
     certainty = typeof certainty === "number" ? certainty : GUESS_CERTAINTY;
     var now = Date.now();
     var last = lastEmittedAt[name] || 0;
@@ -9004,7 +9168,7 @@
     var closeEnough = withinRailDistance(analysis);
 
     if (effectiveStance() === "upright" && closeEnough) {
-      var match = matchAppearance(analysis, "upright");
+      var match = settings.simpleMode ? null : matchAppearance(analysis, "upright");
       // (not when someone else is nearly as close - see MATCH_MARGIN_FRACTION)
       var withinThreshold = isConfidentMatch(match);
       if (withinThreshold && uprightMatchName === match.name) {
@@ -9369,40 +9533,149 @@
     overlayCtx.restore();
   }
 
+  // ---- The setup checklist ----
+  // What's done and what's left, at the top of the page until it's all
+  // done: the camera on, the models downloaded (how far), the table
+  // calibrated, and - unless Simple mode - players enrolled. Simple mode
+  // needs no more than the first three.
+  var setupChecklistEl = document.getElementById("setupChecklist");
+  function setupSteps() {
+    var d = downloadProgress(), playing = (playingNames || []).filter(function (n) { return n; });
+    var enrolled = playing.filter(function (n) { return !!enrollments[normalizeNameKey(n)]; });
+    var steps = [
+      { done: statusCodes.camera === "active", text: CT("cam.stepCamera", "The camera on, pointed at the table") },
+      { done: modelsReady && !(d && d.pct < 100), text: modelsReady ? CT("cam.stepModelsReady", "Models downloaded") : d ? CT("cam.stepModelsPct", "Downloading the models: {{pct}}% ({{got}} of {{want}} MB)", { pct: d.pct, got: (d.got / 1e6).toFixed(1), want: (d.want / 1e6).toFixed(1) }) : CT("cam.stepModels", "Downloading the models") },
+      { done: !!calibration, text: CT("cam.stepCalibrate", "The table calibrated (Table tab)") }
+    ];
+    if (!settings.simpleMode) steps.push({ done: playing.length > 0 && enrolled.length === playing.length, text: playing.length ? CT("cam.stepEnroll", "Players enrolled: {{n}} of {{of}} playing (Enroll tab)", { n: enrolled.length, of: playing.length }) : CT("cam.stepEnrollNone", "Players enrolled (Enroll tab) - nobody's playing on the scoreboard yet") });
+    return steps;
+  }
+  function renderSetupChecklist() {
+    if (!setupChecklistEl || isViewer) return;
+    var steps = setupSteps(), done = steps.filter(function (x) { return x.done; }).length, d = downloadProgress();
+    setupChecklistEl.hidden = done === steps.length;
+    document.getElementById("setupCount").textContent = CT("cam.setupCount", "{{done}} of {{of}} done", { done: done, of: steps.length });
+    // (the bar: steps done, the download counting as its part)
+    var part = done + (!steps[1].done && d ? d.pct / 100 : 0);
+    document.getElementById("setupBarFill").style.width = Math.round(part / steps.length * 100) + "%";
+    var ol = document.getElementById("setupSteps");
+    ol.innerHTML = "";
+    steps.forEach(function (x) {
+      var li = document.createElement("li");
+      li.className = x.done ? "done" : "";
+      var mark = document.createElement("span");
+      mark.className = "setup-mark";
+      mark.textContent = x.done ? "✓" : "○";
+      li.appendChild(mark);
+      li.appendChild(document.createTextNode(x.text));
+      ol.appendChild(li);
+    });
+  }
+
+  // ---- The camera moved ----
+  // A camera knocked or turned no longer looks at the table it was
+  // calibrated on: every position on the table is off. When nobody's near
+  // the table, every 15 s, the picture's edges (a small grey copy - edges,
+  // so the lights changing doesn't count) are lined up against the ones
+  // kept when the table was calibrated: lined up best a few steps away, or
+  // not at all, twice running = moved. The scoreboard is told (camera
+  // status: view "moved") until the table is calibrated again or the
+  // camera's back where it was.
+  var MOVE_CHECK_MS = 15000, MOVE_W = 80, MOVE_H = 45, MOVE_SHIFT = 3;
+  var moveCheck = { at: 0, strikes: 0, moved: false };
+  var moveCanvas = document.createElement("canvas");
+  moveCanvas.width = MOVE_W; moveCanvas.height = MOVE_H;
+  var moveCtx = moveCanvas.getContext("2d", { willReadFrequently: true });
+  var viewOffsetForTests = null; // { dx, dy } in the small copy's pixels: the picture shifted (tests)
+  function viewEdges() {
+    if (!videoEl.videoWidth) return null;
+    moveCtx.setTransform(1, 0, 0, 1, 0, 0);
+    moveCtx.fillStyle = "#000";
+    moveCtx.fillRect(0, 0, MOVE_W, MOVE_H);
+    if (viewOffsetForTests) moveCtx.setTransform(1, 0, 0, 1, viewOffsetForTests.dx, viewOffsetForTests.dy);
+    try { moveCtx.drawImage(videoEl, 0, 0, MOVE_W, MOVE_H); } catch (e) { return null; }
+    var px = moveCtx.getImageData(0, 0, MOVE_W, MOVE_H).data, g = new Float32Array(MOVE_W * MOVE_H), e = new Uint8Array(MOVE_W * MOVE_H), i, x, y;
+    for (i = 0; i < g.length; i++) g[i] = 0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2];
+    for (y = 1; y < MOVE_H - 1; y++) for (x = 1; x < MOVE_W - 1; x++) {
+      i = y * MOVE_W + x;
+      var gx = g[i + 1] - g[i - 1], gy = g[i + MOVE_W] - g[i - MOVE_W];
+      e[i] = Math.min(255, Math.sqrt(gx * gx + gy * gy));
+    }
+    return e;
+  }
+  // how alike the kept edges and today's are, today's shifted by (dx, dy)
+  function edgesAlike(a, b, dx, dy) {
+    var m = MOVE_SHIFT + 1, sa = 0, sb = 0, saa = 0, sbb = 0, sab = 0, n = 0;
+    for (var y = m; y < MOVE_H - m; y++) for (var x = m; x < MOVE_W - m; x++) {
+      var va = a[y * MOVE_W + x], vb = b[(y + dy) * MOVE_W + x + dx];
+      sa += va; sb += vb; saa += va * va; sbb += vb * vb; sab += va * vb; n++;
+    }
+    var cov = sab - sa * sb / n, varA = saa - sa * sa / n, varB = sbb - sb * sb / n;
+    return varA > 0 && varB > 0 ? cov / Math.sqrt(varA * varB) : 0;
+  }
+  function decodeEdges(str) { var bin = atob(str), e = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) e[i] = bin.charCodeAt(i); return e; }
+  function encodeEdges(e) { var bin = ""; for (var i = 0; i < e.length; i++) bin += String.fromCharCode(e[i]); return btoa(bin); }
+  function noteViewIdle(now, force) {
+    if (isViewer || !calibration || stall.frozen || cameraRetryTimer) return;
+    if (!force && now - moveCheck.at < MOVE_CHECK_MS) return;
+    moveCheck.at = now;
+    var cur = viewEdges();
+    if (!cur) return;
+    // (the first quiet look after calibrating is the one kept)
+    if (!calibration.viewEdges) { calibration.viewEdges = encodeEdges(cur); saveCalibration(); return; }
+    var ref = decodeEdges(calibration.viewEdges);
+    if (ref.length !== cur.length) { calibration.viewEdges = encodeEdges(cur); saveCalibration(); return; }
+    var zero = edgesAlike(ref, cur, 0, 0), best = zero, at = { dx: 0, dy: 0 };
+    for (var dy = -MOVE_SHIFT; dy <= MOVE_SHIFT; dy++) for (var dx = -MOVE_SHIFT; dx <= MOVE_SHIFT; dx++) {
+      if (!dx && !dy) continue;
+      var c = edgesAlike(ref, cur, dx, dy);
+      if (c > best) { best = c; at = { dx: dx, dy: dy }; }
+    }
+    var shifted = Math.max(Math.abs(at.dx), Math.abs(at.dy)) >= 2 && best > 0.5 && best - zero > 0.15;
+    var lost = zero < 0.3 && best < 0.3;
+    lastMoveCheck = { zero: Math.round(zero * 100) / 100, best: Math.round(best * 100) / 100, dx: at.dx, dy: at.dy };
+    if (shifted || lost) {
+      if (++moveCheck.strikes >= 2 && !moveCheck.moved) {
+        moveCheck.moved = true;
+        logActivity("The camera has moved since the table was calibrated - calibrate it again (Table tab)");
+        reportCameraStatus();
+      }
+    } else {
+      moveCheck.strikes = 0;
+      if (moveCheck.moved) { moveCheck.moved = false; logActivity("The camera's back where the table was calibrated"); reportCameraStatus(); }
+    }
+  }
+  var lastMoveCheck = null;
+  function forgetViewMoved() {
+    moveCheck = { at: 0, strikes: 0, moved: false };
+    reportCameraStatus();
+  }
+
   // ---- A frozen picture ----
-  // A camera can stay "on" while its picture stops: no new frames at all
-  // (requestVideoFrameCallback goes quiet), or the same frame over and over
-  // (a patch of the picture, unscaled, exactly the same - a live sensor's
-  // noise never is; Chrome's test camera playing a still picture is the one
-  // exception, and only the first check applies to it). STALL_MS of that:
+  // A camera can stay "on" while its picture stops: the video no longer
+  // playing (paused, ended, no frame to show), or the same frame over and
+  // over (a patch of the picture, unscaled, exactly the same - a live
+  // sensor's noise never is; Chrome's test camera playing a still picture is
+  // the one exception, and only the first check applies to it). (Not "no
+  // frame callbacks": a browser stops those for a video it isn't showing -
+  // the camera minimized on the scoreboard.) STALL_MS of that:
   // "frozen" - detection stops (it was reading the last frame over and over),
   // the scoreboard shows a big banner, and the camera is restarted.
   var STALL_MS = 8000;
-  var stall = { frameAt: Date.now(), changedAt: Date.now(), sample: null, frozen: false, armed: null };
+  var stall = { changedAt: Date.now(), sample: null, frozen: false };
   var stallCanvas = document.createElement("canvas");
   stallCanvas.width = stallCanvas.height = 24;
   var stallCtx = stallCanvas.getContext("2d", { willReadFrequently: true });
   function frameSource() {
     return videoEl.srcObject === currentStream ? videoEl : viewSourceVideo;
   }
-  function armFrameCallback() {
-    var src = frameSource();
-    if (!src || !src.requestVideoFrameCallback || stall.armed === src) return;
-    stall.armed = src;
-    src.requestVideoFrameCallback(function seen() {
-      stall.frameAt = Date.now();
-      if (stall.armed !== src) return;
-      src.requestVideoFrameCallback(seen);
-    });
-  }
   function noteFreshStream() {
-    stall.frameAt = stall.changedAt = Date.now();
+    stall.changedAt = Date.now();
     stall.sample = null;
-    stall.armed = null;
   }
   function isTestCamera() {
     var t = currentStream && currentStream.getVideoTracks()[0];
-    return !!(t && /^fake_device/.test(t.label || ""));
+    return !!(t && /^fake_device|\.(y4m|mjpeg)$/i.test(t.label || "")); // (Chrome's test camera, or a test video file)
   }
   function samePictureAsBefore() {
     var src = frameSource();
@@ -9416,9 +9689,9 @@
   }
   function checkStall() {
     var now = Date.now();
-    if (isViewer || !currentStream || cameraRetryTimer) { stall.changedAt = now; stall.frameAt = now; return; }
-    armFrameCallback();
-    var framesCome = !frameSource().requestVideoFrameCallback || now - stall.frameAt < STALL_MS;
+    if (isViewer || !currentStream || cameraRetryTimer) { stall.changedAt = now; return; }
+    var src = frameSource();
+    var framesCome = !!src && !src.paused && !src.ended && src.readyState >= 2;
     var changes = isTestCamera() || !samePictureAsBefore();
     if (framesCome && changes) {
       stall.changedAt = now;
@@ -9430,7 +9703,6 @@
       }
       return;
     }
-    if (!framesCome) stall.changedAt = Math.min(stall.changedAt, stall.frameAt);
     // (still frozen after a restart: restarted again, the waits growing)
     if (now - stall.changedAt >= STALL_MS) {
       if (!stall.frozen) showCameraWarning(CT("cam.frozenWarning", "The camera's picture has frozen - restarting it."));
@@ -9443,15 +9715,36 @@
   // ---- Main detection loop ----
   var detectionBusy = false;
 
+  // Nobody near the table for a while (and no cue out over it): one look a
+  // second instead of three or four - the camera then mostly waits. The
+  // first person near it brings the full rate back on the next look.
+  var IDLE_AFTER_MS = 5000, IDLE_INTERVAL_MS = 1000;
+  var lastNearTableAt = Date.now(), lastDetectAt = 0;
+  function nearTable(poses) {
+    return (poses || []).some(function (pose) {
+      var peek = quickStancePeek(pose.keypoints);
+      if (!peek) return true; // (someone, not fully seen: near enough to look properly)
+      var feet = feetAtTable(peek.ankleMid);
+      return !feet || feet.dist <= settings.railDistanceInches + 24;
+    });
+  }
+  function detectionIdle(now) {
+    return now - lastNearTableAt > IDLE_AFTER_MS && !(cueTrack && cueTrack.present) && !(shotTrack && shotTrack.active);
+  }
   function runDetectionLoop() {
     // (not on a frozen picture: the same frame read over and over)
     if (detectionBusy || !modelsReady || !currentStream || stall.frozen) return;
+    var nowTick = Date.now();
+    if (detectionIdle(nowTick) && nowTick - lastDetectAt < IDLE_INTERVAL_MS) return;
+    lastDetectAt = nowTick;
     detectionBusy = true;
     detector.estimatePoses(videoEl)
       .then(function (poses) {
         lastPoseResultAt = Date.now();
         detectTick++;
         if (window.PMCCueDebug.posesOverride) poses = window.PMCCueDebug.posesOverride(poses);
+        if (nearTable(poses)) lastNearTableAt = Date.now();
+        else noteViewIdle(Date.now());
         followWalkingPaths(poses, Date.now());
         noteRoomMapPoses(poses, Date.now());
         lastPoseCount = (poses || []).length;
@@ -10924,6 +11217,7 @@
   if (isEmbedded) initEmbeddedMode();
   else if (isViewer) initViewerMode();
   else connectRelay();
+  applyModeSettings();
   if (!isViewer) {
     loadModels();
     startCamera(loadStoredCameraDeviceId(), true);

@@ -21,7 +21,10 @@ const showAll = async (pg) => {
   await page.evaluate(() => { localStorage.clear(); localStorage.setItem("poolMasterCounter.onboardingSeen.v1", "1"); localStorage.setItem("poolMasterCounter.migratedFromRepo.v1", "1"); });
   await page.goto(BASE, { waitUntil: "networkidle2" }); await showAll(page);
   await sleep(800);
-  // open Visual Scoring, Capture Settings, turn camera recognition on (the debug section shows then)
+  // open Visual Scoring (📷 Set Up Camera - it stays out of the way until then), Capture
+  // Settings, turn camera recognition on (the debug section shows then)
+  await page.evaluate(() => document.getElementById("btn-open-camera-wizard-header").click());
+  await sleep(300);
   await page.evaluate(() => {
     const vs = document.getElementById("visual-scoring-panel"); if (vs.classList.contains("collapsed")) document.getElementById("btn-toggle-visual-scoring-panel").click();
     const cb = document.getElementById("camera-input-checkbox"); if (!cb.checked) cb.click();

@@ -509,3 +509,19 @@ Not part of the app - helpers for testing and for running this machine's own cop
   throwaway home folder: for good keeps all; 30 days sends the 40-day-old recording to the Trash,
   keeps the 10-day-old one, cuts a not-yet-cut cue as a clip first (with ffmpeg); other values
   read as for good. `node tests/test_recorder_retention.js`.
+- **probe_camera_simple.js** — a simpler camera (P27), its own server on 4285, the scoreboard
+  with this device's camera on a synthetic table video (the cue ball rolling across, looped): no
+  Visual Scoring before a camera; Simple mode in five steps (📷 Set Up Camera, this device's
+  camera, Start, Simple mode in the camera's checklist, the table calibrated by its four corners)
+  - the checklist all done and gone; DINOv2, depth and room tags never downloaded, no Room map /
+  Enroll tab; the rolled ball is a shot on the board ("🎯 1 shot tonight", the player up lights,
+  the selection stays); nobody near the table - one look a second; the picture shifted - "📷 The
+  camera has moved" over the board, OK hides it, moved back clears it.
+  `node tests/probe_camera_simple.js [shots]`.
+- **test_camera_light.js** — a lighter camera (P27), no browser: capture capped at 1080p (3x zoom
+  asks for 1920 x 1080); DINOv2, Labs and Simple mode off by default; a paid build
+  (PMC_PAID_BUILD=1) leaves OSNet's weights and loader out, a free one has them; the five About
+  pages carry OSNet's Market-1501 licence note. `node tests/test_camera_light.js`.
+- **measure_camera_cpu.js** — not a pass/fail test: the camera page with nobody in view for a
+  minute - CPU seconds per minute (every Chrome process), the page's main thread, pose passes.
+  Run before and after a change. `node tests/measure_camera_cpu.js [seconds] [--simple]`.

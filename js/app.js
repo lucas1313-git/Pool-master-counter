@@ -3527,6 +3527,65 @@
     cameraPickedPlayerId = null;
     if (cameraCall && cameraCall.id !== id) judgeCameraCall(false);
   }
+  // Visual Scoring stays out of the way until a camera is set up (or its
+  // setup opened - the header's 📷 Set Up Camera, ☰ › Camera).
+  var visualScoringRevealed = false;
+  function renderVisualScoringVisibility() {
+    var el = document.getElementById("visual-scoring-panel");
+    if (!el) return;
+    el.classList.toggle("hidden", !(visualScoringRevealed || state.cameraInputEnabled || state.cameraWizardCompleted || state.sameDeviceCameraSetUp));
+  }
+
+  // The table busy or idle, and its shots, from the camera's "shot"
+  // messages (begin / end / watch). In Simple mode the camera names nobody:
+  // a shot is the player the board has up (picked on the number pad, or the
+  // event bar's shooter) - their card lights for a moment.
+  var TABLE_IDLE_MS = 60000;
+  var cameraSimpleModeOn = false;
+  var tableWatch = { lastBusyAt: 0, day: null, shots: 0, watching: false };
+  function noteTableShot(m) {
+    if (!m || !m.phase) return;
+    var now = Date.now();
+    tableWatch.watching = m.phase !== "watch" || m.ok !== false;
+    if (m.phase === "begin" || (m.phase === "watch" && m.busy)) tableWatch.lastBusyAt = now;
+    if (m.phase === "end" && m.shot) {
+      tableWatch.lastBusyAt = now;
+      var day = localDateStrFromTs(now);
+      if (tableWatch.day !== day) { tableWatch.day = day; tableWatch.shots = 0; }
+      tableWatch.shots++;
+      if (cameraSimpleModeOn) creditSimpleShot();
+    }
+    renderTableWatch();
+  }
+  function creditSimpleShot() {
+    var shooter = keypadSelectedPlayerId ? getPlayer(keypadSelectedPlayerId) : null;
+    if (!shooter && typeof eventShooter === "function") shooter = eventShooter();
+    if (!shooter) return;
+    tableWatch.lastShooter = shooter.name;
+    var card = document.querySelector('#scoreboard .player-panel[data-player-id="' + shooter.id + '"]');
+    if (card) {
+      card.classList.remove("camera-shot-pulse");
+      void card.offsetWidth;
+      card.classList.add("camera-shot-pulse");
+      setTimeout(function () { card.classList.remove("camera-shot-pulse"); }, 1400);
+    }
+  }
+  function renderTableWatch() {
+    var el = document.getElementById("camera-table-line");
+    if (!el) return;
+    // (Simple mode enrolls nobody: its buttons and count are left out)
+    ["btn-capture-enroll-players", "btn-capture-clear-enrollments", "camera-enrollment-status"].forEach(function (id) {
+      var x = document.getElementById(id);
+      if (x) x.classList.toggle("simple-mode-hidden", cameraSimpleModeOn);
+    });
+    var shown = state.cameraInputEnabled && (tableWatch.watching || tableWatch.shots > 0);
+    el.classList.toggle("hidden", !shown);
+    if (!shown) return;
+    var busy = Date.now() - tableWatch.lastBusyAt < TABLE_IDLE_MS;
+    var shots = tableWatch.day === localDateStrFromTs(Date.now()) ? tableWatch.shots : 0;
+    el.textContent = T(busy ? "visualScoring.tableBusy" : "visualScoring.tableIdle") + " · " + TP("visualScoring.shotsTonight", shots, { n: shots }) + (cameraSimpleModeOn ? " · " + T("visualScoring.simpleModeOn") : "");
+  }
+
   function renderCameraAccuracy() {
     var el = document.getElementById("camera-accuracy-line");
     if (!el) return;
@@ -5551,6 +5610,7 @@
   function buildIndividualPanel(player) {
     var panel = document.createElement("div");
     panel.className = "player-panel card-v2";
+    panel.dataset.playerId = player.id;
 
     // Built once per render, visibility/state toggled live by
     // updateCameraIconsOnScorecard on every camera event rather than
@@ -37159,6 +37219,8 @@
     setTimeout(refreshCameraSetup, 0);
   }
   function openCameraSetup() {
+    visualScoringRevealed = true;
+    renderVisualScoringVisibility();
     cameraWizardPathUserChosen = false;
     if (cameraSetupPanel.classList.contains("collapsed")) btnToggleCameraSetupPanel.click();
     expandAndScrollToPanel("visual-scoring-panel", "btn-toggle-visual-scoring-panel");
@@ -38144,6 +38206,8 @@
     { key: "ballSensitivity", id: "capture-ball-sensitivity", kind: "int", def: 5, help: "players.cameraBallSensitivityHelpText" },
     { key: "cueDetectionEnabled", id: "capture-cue-detection", kind: "bool", def: true, help: "players.cameraCueDetectionHelpText" },
     { key: "walkingPathsEnabled", id: "capture-walking-paths", kind: "bool", def: true, help: "players.cameraWalkingPathsHelpText" },
+    { key: "simpleMode", id: "capture-simple-mode", kind: "bool", def: false, help: "players.cameraSimpleModeHelpText" },
+    { key: "labsEnabled", id: "capture-labs", kind: "bool", def: false, help: "players.cameraLabsHelpText" },
     { key: "zoom", id: "capture-zoom", kind: "float", def: 1, help: "players.cameraZoomHelpText" },
     { key: "flip180", id: "capture-flip180", kind: "bool", def: false, help: "players.cameraFlip180HelpText" }
   ];
@@ -38280,6 +38344,8 @@
   // page (postMessage) or a separate phone (relay, js/camera-client.js).
   window.PMCCameraBridge.reportCameraSettings = function (values, fromRelay) {
     if (!values || typeof values !== "object" || !cameraMessageCounts(fromRelay)) return;
+    cameraSimpleModeOn = values.simpleMode === true;
+    renderTableWatch();
     if (!state.sameDeviceCameraSetUp) phoneCaptureSettingsKnown = true;
     renderCaptureSettings(values);
     refreshCaptureSettingsAvailability();
@@ -38314,12 +38380,29 @@
   // banner on the board, so it's seen from the table, not only in Visual
   // Scoring. Gone when the camera is back.
   var CAMERA_TROUBLE = { frozen: "cameraTrouble.frozen", stopped: "cameraTrouble.stopped", restarting: "cameraTrouble.stopped" };
+  // The camera moved since the table was calibrated (camera.html's
+  // noteViewIdle): said on the board too, until it's OK'd or the camera's
+  // back / calibrated again.
+  var cameraMovedDismissed = false;
   function renderCameraTroubleBanner(live) {
     var el = document.getElementById("camera-trouble-banner");
     if (!el) return;
-    var key = state.cameraInputEnabled && live ? CAMERA_TROUBLE[cameraStatusCodes.camera] : null;
-    el.classList.toggle("hidden", !key);
-    el.textContent = key ? T(key) : "";
+    var on = state.cameraInputEnabled && live;
+    var key = on ? CAMERA_TROUBLE[cameraStatusCodes.camera] : null;
+    if (cameraStatusCodes.view !== "moved") cameraMovedDismissed = false;
+    var moved = !key && on && cameraStatusCodes.view === "moved" && !cameraMovedDismissed;
+    el.classList.toggle("hidden", !key && !moved);
+    el.classList.toggle("camera-moved", moved);
+    el.textContent = key ? T(key) : moved ? T("cameraTrouble.moved") : "";
+    if (moved) {
+      var ok = document.createElement("button");
+      ok.type = "button";
+      ok.className = "btn camera-trouble-ok";
+      ok.textContent = T("common.ok");
+      ok.addEventListener("click", function () { cameraMovedDismissed = true; renderCameraTroubleBanner(true); });
+      el.appendChild(document.createTextNode(" "));
+      el.appendChild(ok);
+    }
   }
   function clearCameraStatusCodes() {
     cameraStatusCodes = { link: null, models: null, camera: null };
@@ -38371,7 +38454,7 @@
   }
   window.PMCCameraBridge.reportCameraStatus = function (status, fromRelay) {
     if (!status || typeof status !== "object" || !cameraMessageCounts(fromRelay)) return;
-    cameraStatusCodes = { link: status.link || null, models: status.models || null, camera: status.camera || null };
+    cameraStatusCodes = { link: status.link || null, models: status.models || null, camera: status.camera || null, view: status.view || null };
     renderCameraStatusLights();
   };
   window.PMCCameraBridge.reportCameraPresence = function (count) {
@@ -39606,6 +39689,8 @@
   wireCollapsiblePanel("players-panel", "btn-toggle-players-panel");
   wireCollapsiblePanel("visual-scoring-panel", "btn-toggle-visual-scoring-panel");
   renderCameraAccuracy();
+  renderVisualScoringVisibility();
+  setInterval(renderTableWatch, 15000);
   btnToggleVisualScoringPanel.addEventListener("click", renderCameraAccuracy);
   wireCollapsiblePanel("camera-setup-panel", "btn-toggle-camera-setup-panel");
   wireCollapsiblePanel("capture-settings-panel", "btn-toggle-capture-settings-panel");
@@ -40468,7 +40553,7 @@
       return !!state.cameraInputEnabled;
     },
     // the camera's shots -> the recording page (its 🎯 Auto cue)
-    reportShot: function (msg) { recorderShot(msg); },
+    reportShot: function (msg) { recorderShot(msg); noteTableShot(msg); },
     isAnyOverlayOpen: isAnyOverlayOpen,
     getSelectedPlayerId: function () {
       return keypadSelectedPlayerId;
