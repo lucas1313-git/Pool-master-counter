@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261029e">
+<link rel="stylesheet" href="css/style.css?v=20261029f">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -90,7 +90,7 @@
         </div>
         <div class="header-nav-group" id="header-group-stats">
           <button type="button" id="btn-open-leaderboard" class="btn btn-ghost all-players-nav-btn" data-i18n="header.leaderboard">🏆 Leaderboard</button>
-          <button type="button" id="btn-open-global-stats" class="btn btn-ghost all-players-nav-btn" data-i18n="header.globalStats">🌐 Global Stats</button>
+          <button type="button" id="btn-open-global-stats" class="btn btn-ghost all-players-nav-btn" data-i18n="header.globalStats">📊 All players</button>
         </div>
       </div>
       <div class="header-nav-line">
@@ -146,7 +146,7 @@
     <p class="panel-summary" id="players-panel-summary"></p>
     <div class="panel-body" id="players-panel-body">
       <div class="row">
-        <button type="button" id="btn-open-all-players" class="btn btn-ghost" data-i18n="header.allStats">📊 View All Players Stats</button>
+        <button type="button" id="btn-open-all-players" class="btn btn-ghost" data-i18n="header.allStats">📊 All players</button>
       </div>
       <p id="new-player-name-requirement" class="new-player-name-requirement hidden"></p>
       <form id="add-player-form" class="row">
@@ -266,13 +266,13 @@
           <button type="button" id="btn-game-setup-manage" class="btn btn-ghost" data-i18n="gameSetup.manageSetups">🧹 Manage</button>
         </div>
 
-        <h4 class="session-subsection-subheading" data-i18n="gameSetup.tournamentTypeHeading">Tournament Type</h4>
+        <h4 class="session-subsection-subheading" data-i18n="gameSetup.tournamentTypeHeading">Session format</h4>
         <!-- Race to [n] wins / Single Game side by side - the number right in its option, big
              (typing it picks Race to Wins); then rotation, the timed tournament and the Q-Score
              balance, each with its own number on the same line. -->
         <div class="row mode-row race-mode-row">
           <label class="race-mode-option" id="race-mode-raceto-option"><input type="radio" name="race-mode" id="race-mode-raceto" value="raceto" checked> <span class="inline-number-template" data-template="gameSetup.raceToWinsInline" data-input="race-to-wins">🏁 Race to {{n}} wins</span><input type="number" id="race-to-wins" class="big-number-input" min="1" max="99" value="5" inputmode="numeric"></label>
-          <label class="race-mode-option"><input type="radio" name="race-mode" id="race-mode-single" value="single"> <span data-i18n="gameSetup.raceModeSingle">🎯 Single Game</span></label>
+          <label class="race-mode-option"><input type="radio" name="race-mode" id="race-mode-single" value="single"> <span data-i18n="gameSetup.raceModeSingle">🎯 No race</span></label>
         </div>
         <div class="checkbox-row checkbox-row-prominent setting-with-number">
           <label class="setting-with-number-label"><input type="checkbox" id="game-setup-rotation-enabled"> <span data-i18n="rotation.autoRotate">Rotate game types automatically</span></label>
@@ -1544,10 +1544,10 @@
       </div>
 
       <div class="game-setup-preview-section">
-        <div class="game-setup-preview-section-label" data-i18n="gameSetup.tournamentTypeHeading">Tournament Type</div>
+        <div class="game-setup-preview-section-label" data-i18n="gameSetup.tournamentTypeHeading">Session format</div>
         <div class="row mode-row game-setup-preview-row">
           <label><input type="radio" name="game-setup-preview-race-mode" id="game-setup-preview-race-mode-raceto" value="raceto"> <span data-i18n="gameSetup.raceModeRaceTo">🏁 Race to Wins</span></label>
-          <label><input type="radio" name="game-setup-preview-race-mode" id="game-setup-preview-race-mode-single" value="single"> <span data-i18n="gameSetup.raceModeSingle">🎯 Single Game</span></label>
+          <label><input type="radio" name="game-setup-preview-race-mode" id="game-setup-preview-race-mode-single" value="single"> <span data-i18n="gameSetup.raceModeSingle">🎯 No race</span></label>
         </div>
         <div class="row game-setup-preview-row" id="game-setup-preview-race-to-row">
           <label for="game-setup-preview-race-to" data-i18n="gameSetup.raceToMilestone">Race-to milestone</label>
@@ -2090,7 +2090,7 @@
     <button type="button" id="btn-player-page-back" class="btn btn-ghost screen-back-btn" aria-label="Back" data-i18n-aria-label="common.back"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
     <h1 id="player-page-name"></h1>
     <select id="player-page-switcher" class="player-page-switcher" aria-label="Switch to another player" data-i18n-aria-label="playerPage.switcherAriaLabel"></select>
-    <button type="button" id="btn-return-to-global-stats" class="btn btn-ghost" data-i18n="playerPage.globalStats">🌐 Global Stats</button>
+    <button type="button" id="btn-return-to-global-stats" class="btn btn-ghost" data-i18n="playerPage.globalStats">📊 All players</button>
     <button type="button" id="btn-player-forget-camera" class="btn btn-ghost" data-i18n="playerPage.forgetCamera">📷 Forget on camera</button>
     <button type="button" id="btn-player-page-contact" class="btn btn-ghost" data-i18n="playerPage.contact">📇 Email &amp; phone</button>
     <button type="button" id="btn-open-help-player-page" class="btn btn-ghost" data-i18n="header.help">❓ Help</button>
@@ -2133,7 +2133,7 @@
 
   <section class="panel" id="player-page-actions-panel">
     <div class="row">
-      <button type="button" id="btn-player-page-export" class="btn btn-ghost" data-i18n="playerPage.exportStats">Export Stats</button>
+      <button type="button" id="btn-player-page-export" class="btn btn-ghost" data-i18n="playerPage.exportStats">💾 Save to history</button>
       <button type="button" id="btn-player-page-csv" class="btn btn-ghost" data-i18n="playerPage.exportCsv">📊 Export as Excel (CSV)</button>
       <button type="button" id="btn-player-page-reset" class="btn btn-danger" data-i18n="playerPage.resetStats">Reset Stats</button>
     </div>
@@ -2356,7 +2356,11 @@
     <button type="button" id="btn-leaderboard-share" class="btn btn-ghost leaderboard-share-btn" data-i18n="leaderboard.shareButton">📤 Share</button>
   </div>
 
-  <p id="leaderboard-formula-note" class="leaderboard-formula-note"></p>
+  <!-- the MVP score's formula, for whoever asks (ⓘ) -->
+  <details class="leaderboard-formula">
+    <summary data-i18n="leaderboard.formulaToggle">ⓘ How the MVP score works</summary>
+    <p id="leaderboard-formula-note" class="leaderboard-formula-note"></p>
+  </details>
 
 </div>
 
@@ -2406,7 +2410,7 @@
   <p class="player-stats-note tournament-challonge-status-line" id="tournament-challonge-status-line"></p>
 
   <section class="panel" id="tournament-setup-panel">
-    <h2 data-i18n="tournament.newHeading">New Elimination Tournament</h2>
+    <h2 id="tournament-new-heading" data-i18n="tournament.newHeading">New Elimination Tournament</h2>
     <p class="wizard-progress" id="tournament-setup-progress">Step 1 of 4</p>
     <div class="wizard-progress-dots" id="tournament-setup-progress-dots"></div>
 
@@ -2415,7 +2419,7 @@
       <div class="tournament-setup-step" id="tournament-setup-step-1">
         <p class="wizard-step-explain" data-i18n="tournament.wizardStep1Explain">Pick how the bracket eliminates players. Double Elimination gives everyone a second chance after one loss; Single Elimination is the fastest; Round Robin and Swiss never eliminate anyone.</p>
         <div class="tournament-setup-section">
-          <h3 class="tournament-section-heading" data-i18n="tournament.formatSectionHeading">Tournament Type</h3>
+          <h3 class="tournament-section-heading" data-i18n="tournament.formatSectionHeading">Tournament format</h3>
           <div class="wizard-format-options">
             <label class="wizard-format-option">
               <input type="radio" name="tournament-format" value="double" checked>
@@ -2941,13 +2945,13 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/pairing.js?v=20261029e"></script>
-<script src="js/big-store.js?v=20261029e"></script>
-<script src="js/mp4-clip.js?v=20261029e"></script>
-<script src="js/recording-consent.js?v=20261029e"></script>
-<script src="js/local-recorder.js?v=20261029e"></script>
-<script src="js/app.js?v=20261029e"></script>
-<script src="js/camera-client.js?v=20261029e"></script>
-<script src="js/voice.js?v=20261029e"></script>
+<script src="js/pairing.js?v=20261029f"></script>
+<script src="js/big-store.js?v=20261029f"></script>
+<script src="js/mp4-clip.js?v=20261029f"></script>
+<script src="js/recording-consent.js?v=20261029f"></script>
+<script src="js/local-recorder.js?v=20261029f"></script>
+<script src="js/app.js?v=20261029f"></script>
+<script src="js/camera-client.js?v=20261029f"></script>
+<script src="js/voice.js?v=20261029f"></script>
 </body>
 </html>

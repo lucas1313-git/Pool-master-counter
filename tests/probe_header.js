@@ -31,7 +31,7 @@ const showAll = async (pg) => {
   const g = Object.fromEntries(info.groups.map((x) => [x.id, x]));
   check("group 1: New game (the one primary), Welcome New Player, Game Setup Wizard", JSON.stringify(g["header-group-start"].items) === JSON.stringify(["▶️ New game", "👋 Welcome New Player", "🧙 Game Setup Wizard"]) && JSON.stringify(g["header-group-start"].primary) === JSON.stringify([true, false, false]), g["header-group-start"]);
   check("group 2: Tournament, League, Multi Tables", JSON.stringify(g["header-group-events"].items) === JSON.stringify(["🏆 Tournament", "🏆 League", "🎯 Multi Tables"]), g["header-group-events"].items);
-  check("group 3: Leaderboard, Global Stats", JSON.stringify(g["header-group-stats"].items) === JSON.stringify(["🏆 Leaderboard", "🌐 Global Stats"]), g["header-group-stats"].items);
+  check("group 3: Leaderboard, All players (once Global Stats)", JSON.stringify(g["header-group-stats"].items) === JSON.stringify(["🏆 Leaderboard", "📊 All players"]), g["header-group-stats"].items);
   check("group 4: Contact Sheet, Set Up Camera, Record, Help", JSON.stringify(g["header-group-people"].items) === JSON.stringify(["📇 Contact Sheet", "📷 Set Up Camera", "🎬 Record", "❓ Help"]), g["header-group-people"].items);
   check("all four bordered", info.groups.every((x) => x.border === "solid"));
   check("line 2: Contact Sheet + Help, then Theme, then Language", JSON.stringify(info.lines[1]) === JSON.stringify(["header-group-people", "theme-select-row", "language-select-row"]), info.lines[1]);

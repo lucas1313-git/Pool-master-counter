@@ -156,12 +156,17 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   s = await say("Nice game");
   check("\"Nice game\" closes the win banner, 6 kept", !s.winOpen && s.lastWin.ballsLeft === 6, s);
 
-  // --- Q-score ---
+  // --- the rating (still heard as "Q-score" too) ---
+  await page.evaluate(() => { window.__spoken = []; });
+  await say("What is Luigi's rating today?");
+  await sleep(1200);
+  spoken = await page.evaluate(() => window.__spoken.slice());
+  check("\"What is Luigi's rating today?\" is spoken", spoken.some((t) => /Luigi's rating is \d+, up \d+ today/.test(t)), spoken);
   await page.evaluate(() => { window.__spoken = []; });
   await say("What is Luigi's Q-score today?");
   await sleep(1200);
   spoken = await page.evaluate(() => window.__spoken.slice());
-  check("\"What is Luigi's Q-score today?\" is spoken", spoken.some((t) => /Luigi's Q-Score is \d+, up \d+ today/.test(t)), spoken);
+  check("\"...Q-score today?\" still heard, and answered with \"rating\"", spoken.some((t) => /Luigi's rating is \d+, up \d+ today/.test(t)), spoken);
 
   // --- the 🎤 button held with the mouse ---
   const btn = await page.$("#btn-voice-hold");

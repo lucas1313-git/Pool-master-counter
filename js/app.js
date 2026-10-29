@@ -2095,6 +2095,13 @@
     return T(one && hasOne ? oneKey : key, vars);
   }
 
+  // "3 games" / "1 game": a count with its noun, the language's own
+  // singular when it is one (count.games / count.gamesOne...) - for a
+  // sentence with two counts in it, each passed in as a phrase
+  function countPhrase(kind, n) {
+    return TP("count." + kind, n, { n: n });
+  }
+
   // Translates a raw unit value ("rack"/"balls"/"points", as stored on
   // state.currentGame/rotation entries) for display - the value itself
   // stays an untranslated internal identifier, only the shown label
@@ -2616,6 +2623,17 @@
   var tournamentSetupStep = 1;
   var TOURNAMENT_SETUP_STEP_COUNT = 4;
   var tournamentFormatRadios = document.getElementsByName("tournament-format");
+  // The setup's heading says which tournament it is: Elimination (single
+  // or double), Round Robin or Swiss.
+  function renderTournamentNewHeading() {
+    var heading = document.getElementById("tournament-new-heading");
+    var checked = Array.prototype.filter.call(tournamentFormatRadios, function (r) { return r.checked; })[0];
+    var format = checked ? checked.value : "double";
+    var key = format === "roundrobin" ? "tournament.newHeadingRoundRobin" : format === "swiss" ? "tournament.newHeadingSwiss" : "tournament.newHeading";
+    heading.setAttribute("data-i18n", key);
+    heading.textContent = T(key);
+  }
+  Array.prototype.forEach.call(tournamentFormatRadios, function (r) { r.addEventListener("change", renderTournamentNewHeading); });
   var tournamentWbSection = document.getElementById("tournament-wb-section");
   var tournamentLbSection = document.getElementById("tournament-lb-section");
   var tournamentTimelineEl = document.getElementById("tournament-timeline");
@@ -6138,7 +6156,7 @@
   // (only they stay seated; the next game one of them wins decides it),
   // or they share the win.
   function offerTimedPlayoff(result) {
-    tournamentChooser(T("timedTournament.tiedTitle", { names: result.names, count: result.count }), [
+    tournamentChooser(TP("timedTournament.tiedTitle", result.count, { names: result.names, count: result.count }), [
       { label: T("timedTournament.playoffButton"), primary: true, run: function () { startTimedPlayoff(result); } },
       { label: T("timedTournament.shareButton"), run: function () { finishTimedTournament(result.sides, result.count); } }
     ], { noCancel: true });
@@ -6623,7 +6641,7 @@
     if (want.winnerStays && want.maxStreak !== (state.currentGame.queueMaxStreak || 0)) {
       state.currentGame.queueMaxStreak = want.maxStreak;
       saveState();
-      changes.push(want.maxStreak ? T("gameSheet.chMaxStreak", { n: want.maxStreak }) : T("gameSheet.chMaxStreakOff"));
+      changes.push(want.maxStreak ? TP("gameSheet.chMaxStreak", want.maxStreak, { n: want.maxStreak }) : T("gameSheet.chMaxStreakOff"));
     }
 
     var minutesChanged = want.timedMinutes !== (state.currentGame.timedTournamentMinutes || parseInt(timedTournamentMinutesInput.value, 10));
@@ -6675,14 +6693,13 @@
         { icon: "👥", key: "menu.playersRoster", run: panel("players-panel") },
         { icon: "↕️", key: "menu.arrange", run: function () { closeBoardMenu(); setArrangeMode(true); } },
         { icon: "👋", key: "menu.welcomePlayer", when: notGuest, run: click("btn-test-onboarding") },
-        { icon: "📊", key: "menu.allPlayers", run: click("btn-open-all-players") },
         { icon: "📇", key: "menu.contactSheet", run: click("btn-open-contact-sheet") }
       ] },
       { icon: "🏆", key: "menu.tournament", run: click("btn-open-tournament") },
       { icon: "🏅", key: "menu.league", run: click("btn-open-league") },
       { icon: "📊", key: "menu.stats", children: [
         { icon: "🏆", key: "menu.leaderboard", run: click("btn-open-leaderboard") },
-        { icon: "🌐", key: "menu.globalStats", run: click("btn-open-global-stats") },
+        { icon: "📊", key: "menu.allPlayers", run: click("btn-open-global-stats") },
         { icon: "📋", key: "menu.standings", run: panel("standings-panel") },
         { icon: "🕘", key: "menu.recentGames", run: panel("history-panel") }
       ] },
@@ -7391,7 +7408,7 @@
         }
       });
       li.appendChild(winner);
-      li.appendChild(document.createTextNode(" " + T("history.wonGameTarget", { game: entry.gameLabel, target: entry.target })));
+      li.appendChild(document.createTextNode(" " + (entry.unit === "rack" && (entry.target || 1) <= 1 ? T("history.wonGame", { game: entry.gameLabel }) : T("history.wonGameTarget", { game: entry.gameLabel, target: entry.target }))));
       var scoreText = gameScoreText(entry);
       if (scoreText) {
         var scoreSpan = document.createElement("strong");
@@ -7535,7 +7552,7 @@
       live.mvpName = winnerName;
       live.mvpId = winnerId || null;
       if (scores) live.scores = scores;
-      live.summary = winnerName + " won " + live.gameLabel + " (target " + live.target + ")";
+      live.summary = winnerName + " won " + live.gameLabel + (live.unit === "rack" && (live.target || 1) <= 1 ? "" : " (target " + live.target + ")");
       live.edited = true;
       recomputeLiveWinsFromGameHistory();
       saveState();
@@ -7911,6 +7928,8 @@
 
   function creditWin(isTeam, key, winnerVoice) {
     var typeLabel = GAME_TYPES[state.currentGame.gameType].label;
+    // ("won 8-Ball" - a one-rack game's "(target 1)" says nothing)
+    var targetSuffix = state.currentGame.unit === "rack" && state.currentGame.target <= 1 ? "" : " (target " + state.currentGame.target + ")";
     var summary;
     var winnerNames;
     var winnerIds;
@@ -7971,7 +7990,7 @@
         mvpName = mvp.name;
         state.teamMvpWins[mvp.id] = (state.teamMvpWins[mvp.id] || 0) + 1;
       }
-      summary = teamLabelLive(key) + " won " + typeLabel + " (target " + state.currentGame.target + ")";
+      summary = teamLabelLive(key) + " won " + typeLabel + targetSuffix;
       takeRaceTally();
       // (reaching OR passing the race ends it - a race left open by a
       // reload, or a target lowered under someone's wins, still closes)
@@ -7995,7 +8014,7 @@
         });
       var newPlayerWins = (state.playerWins[key] || 0) + 1;
       state.playerWins[key] = newPlayerWins;
-      summary = getPlayer(key).name + " won " + typeLabel + " (target " + state.currentGame.target + ")";
+      summary = getPlayer(key).name + " won " + typeLabel + targetSuffix;
       // Winner Stays: each rack decides who stays - or, with a race chosen
       // for it, each pairing's race (the session's race never ends here)
       var winnerStays = winnerStaysOn();
@@ -15745,8 +15764,8 @@
 
   function reportArchiveRowMeta(entry) {
     return T("reportArchive.rowMeta", {
-      players: (entry.players || []).length,
-      games: (entry.games || []).length,
+      players: countPhrase("players", (entry.players || []).length),
+      games: countPhrase("games", (entry.games || []).length),
       generatedAt: entry.generatedAt
     });
   }
@@ -17203,7 +17222,7 @@
         });
         var count = recomputeAllRatingsFromGameHistory();
         renderAll();
-        showToast(T("toast.allRatingsRecomputed", { count: count }));
+        showToast(TP("toast.allRatingsRecomputed", count, { count: count }));
       });
     });
   }
@@ -18160,7 +18179,7 @@
   function confirmDeleteByDateSelection() {
     var dates = Object.keys(deleteByDateSelected).sort();
     if (!dates.length) return;
-    confirmModal(T("resets.deleteByDatesConfirm", { count: dates.length, dates: dates.join(", ") }), function () {
+    confirmModal(TP("resets.deleteByDatesConfirm", dates.length, { count: dates.length, dates: dates.join(", ") }), function () {
       exportAllData();
       var combinedSessionsByName = {};
       var combinedGameHistory = [];
@@ -18190,7 +18209,7 @@
       }
       renderRecoverDataList();
       renderAll();
-      showToast(T("toast.deleteByDatesDone", { count: dates.length }));
+      showToast(TP("toast.deleteByDatesDone", dates.length, { count: dates.length }));
     });
   }
 
@@ -20719,7 +20738,7 @@
                 }
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(finalState));
                 if (!localIsFresh) {
-                  alertModal(T("alert.mergedImport", { players: newPlayerCount, lists: rosterMerge.added }), function () {
+                  alertModal(T("alert.mergedImport", { players: countPhrase("newPlayers", newPlayerCount), lists: countPhrase("savedLists", rosterMerge.added) }), function () {
                     location.reload();
                   });
                 } else {
@@ -21093,7 +21112,7 @@
       });
       return;
     }
-    alertModal(T(keepPlayersOnly ? "alert.squashDoneKeepPlayers" : "alert.squashDoneFull", { count: resultingPlayerCount }), function () {
+    alertModal(TP(keepPlayersOnly ? "alert.squashDoneKeepPlayers" : "alert.squashDoneFull", resultingPlayerCount, { count: resultingPlayerCount }), function () {
       location.reload();
     });
     }
@@ -21149,7 +21168,7 @@
   function summarizeSnapshotPlayer(type, data, name) {
     if (type === "allRatings") {
       var r = data.ratings[name];
-      return r ? T("recoverData.ratingSummary", { rating: r.rating, games: r.gamesPlayed || 0 }) : "";
+      return r ? TP("recoverData.ratingSummary", r.gamesPlayed || 0, { rating: r.rating, games: r.gamesPlayed || 0 }) : "";
     }
     if (type === "rosterLists") return "";
     var sessions = sessionsInSnapshotForPlayer(type, data, name);
@@ -21159,19 +21178,19 @@
       games += (s.games || []).length;
       wins += s.wins || 0;
     });
-    return T("recoverData.gamesSummary", { games: games, wins: wins });
+    return T("recoverData.gamesSummary", { games: countPhrase("games", games), wins: countPhrase("wins", wins) });
   }
 
   function snapshotOverallSummary(type, data) {
     if (type === "tournament") return T("recoverData.tournamentSummary");
     var names = namesInSnapshot(type, data);
     if (type === "rosterLists") {
-      return T("recoverData.rosterListsSummary", { players: names.length, lists: (data.rosters || []).length });
+      return T("recoverData.rosterListsSummary", { players: countPhrase("players", names.length), lists: countPhrase("savedLists", (data.rosters || []).length) });
     }
     var gameCount = (data.gameHistory || []).length;
     return gameCount
-      ? T("recoverData.playersAndGamesSummary", { players: names.length, games: gameCount })
-      : T("recoverData.playersSummary", { players: names.length });
+      ? T("recoverData.playersAndGamesSummary", { players: countPhrase("players", names.length), games: countPhrase("games", gameCount) })
+      : TP("recoverData.playersSummary", names.length, { players: names.length });
   }
 
   function renderRecoverDataList() {
@@ -21986,14 +22005,14 @@
       .filter(function (cb) { return cb.checked; })
       .map(function (cb) { return cb.value; });
     if (!ids.length) return;
-    confirmModal(T("gameSetup.manageSetupsConfirmDelete", { count: ids.length }), function () {
+    confirmModal(TP("gameSetup.manageSetupsConfirmDelete", ids.length, { count: ids.length }), function () {
       var idSet = {};
       ids.forEach(function (id) { idSet[id] = true; });
       SAVED_GAME_SETUPS = SAVED_GAME_SETUPS.filter(function (s) { return !idSet[s.id]; });
       saveGameSetupsToStorage(SAVED_GAME_SETUPS);
       populateGameSetupLoadSelect();
       closeGameSetupManageModal();
-      showToast(T("toast.deletedGameSetups", { count: ids.length }));
+      showToast(TP("toast.deletedGameSetups", ids.length, { count: ids.length }));
     });
   }
 
@@ -23356,7 +23375,7 @@
     if (g.ballsLeftOnTable !== null && g.ballsLeftOnTable !== undefined) {
       var ballsLeftSpan = document.createElement("span");
       ballsLeftSpan.className = "player-game-log-balls-left";
-      ballsLeftSpan.textContent = T("history.ballsLeftOnTable", { count: g.ballsLeftOnTable });
+      ballsLeftSpan.textContent = TP("history.ballsLeftOnTable", g.ballsLeftOnTable, { count: g.ballsLeftOnTable });
       div.appendChild(document.createTextNode(" · "));
       div.appendChild(ballsLeftSpan);
     }
@@ -23388,7 +23407,7 @@
 
   function renderLiveSessionForPlayer(name) {
     var live = computeLiveSessionForPlayer(name);
-    setPanelSummary("player-page-current-panel", T("playerPage.liveSessionSummary", { wins: live.wins, games: live.games.length }));
+    setPanelSummary("player-page-current-panel", T("playerPage.liveSessionSummary", { wins: countPhrase("wins", live.wins), games: countPhrase("games", live.games.length) }));
     playerPageCurrentBody.innerHTML = "";
     playerPageCurrentBody.appendChild(playerStatsRow(T("playerPage.winsToday"), live.wins));
     playerPageCurrentBody.appendChild(playerGamesLogRow("Games", live.games));
@@ -24100,7 +24119,7 @@
     var durationText = formatDuration(g.durationMs);
     if (durationText) pieces.push(document.createTextNode(T("common.duration", { time: durationText })));
     if (g.ballsLeftOnTable !== null && g.ballsLeftOnTable !== undefined) {
-      pieces.push(document.createTextNode(T("history.ballsLeftOnTable", { count: g.ballsLeftOnTable })));
+      pieces.push(document.createTextNode(TP("history.ballsLeftOnTable", g.ballsLeftOnTable, { count: g.ballsLeftOnTable })));
     }
 
     var detail = document.createElement("div");
@@ -24235,7 +24254,7 @@
     maxMs = Date.now();
     if (maxMs <= minMs) maxMs = minMs + 1;
 
-    setPanelSummary("player-page-graph-panel", T("playerPage.graphSummary", { count: stats.games.length }));
+    setPanelSummary("player-page-graph-panel", TP("playerPage.graphSummary", stats.games.length, { count: stats.games.length }));
 
     playerPageGraphBody.innerHTML = "";
     playerPageGraphBody.appendChild(buildPlayerGraph(stats, minMs, maxMs, period));
@@ -24270,7 +24289,7 @@
   function renderPlayerHistoryList(sessions) {
     setPanelSummary(
       "player-page-history-panel",
-      !sessions || sessions.length === 0 ? T("playerPage.noSavedSessionsYet") : T("playerPage.historySummary", { count: sessions.length })
+      !sessions || sessions.length === 0 ? T("playerPage.noSavedSessionsYet") : TP("playerPage.historySummary", sessions.length, { count: sessions.length })
     );
     playerPageHistoryList.innerHTML = "";
     if (!sessions || sessions.length === 0) {
@@ -24998,7 +25017,7 @@
     el.innerHTML = "";
     var title = document.createElement("div");
     title.className = "player-graph-tooltip-title";
-    title.textContent = T("playerPage.graphDotTitle", { series: seriesLabel, count: games.length });
+    title.textContent = TP("playerPage.graphDotTitle", games.length, { series: seriesLabel, count: games.length });
     el.appendChild(title);
     perOpponent.forEach(function (opp) {
       var row = document.createElement("div");
@@ -25630,7 +25649,7 @@
 
     setPanelSummary(
       "player-page-rating-history-panel",
-      history.length === 0 ? T("playerPage.ratingHistoryEmpty") : T("playerPage.ratingHistorySummary", { count: history.length })
+      history.length === 0 ? T("playerPage.ratingHistoryEmpty") : TP("playerPage.ratingHistorySummary", history.length, { count: history.length })
     );
 
     playerPageRatingHistoryBody.innerHTML = "";
@@ -26450,14 +26469,14 @@
       });
     });
     renderContactSheetPage();
-    showToast(T("contactSheet.importedToast", { count: added }));
+    showToast(TP("contactSheet.importedToast", added, { count: added }));
   }
 
   function updateContactSheetSelectedSummary() {
     var names = Object.keys(contactSheetSelected).filter(function (n) {
       return contactSheetSelected[n];
     });
-    contactSheetSelectedSummary.textContent = T("contactSheet.selectedCount", { count: names.length });
+    contactSheetSelectedSummary.textContent = TP("contactSheet.selectedCount", names.length, { count: names.length });
   }
 
   function contactSheetFieldWrap(labelKey, input) {
@@ -28457,10 +28476,10 @@
 
   function speakKeypadPlayerSelected(player, previousPlayer) {
     if (previousPlayer) {
-      speakKeypadText(T("keypad.speakPreviousTotal", { name: shortDisplayNameForPlayer(previousPlayer), count: previousPlayer.balls || 0 }));
+      speakKeypadText(TP("keypad.speakPreviousTotal", previousPlayer.balls || 0, { name: shortDisplayNameForPlayer(previousPlayer), count: previousPlayer.balls || 0 }));
     }
     var vars = { name: shortDisplayNameForPlayer(player), count: player.balls || 0 };
-    speakKeypadText(T(keypadPlayerIsLeading(player) ? "keypad.speakPlayingScoreLeader" : "keypad.speakPlayingScore", vars));
+    speakKeypadText(TP(keypadPlayerIsLeading(player) ? "keypad.speakPlayingScoreLeader" : "keypad.speakPlayingScore", vars.count, vars));
   }
 
   // Announced right after a keypad +/- (or a typed 15 Ball Rotation
@@ -28807,7 +28826,7 @@
         applyRotationIfDue();
         renderRotation();
         renderScoreboard();
-        return ok(T("voice.done.every", { n: state.rotation.every }));
+        return ok(TP("voice.done.every", state.rotation.every, { n: state.rotation.every }));
 
       case "addPlayers": {
         var added = [], already = [];
@@ -28907,12 +28926,12 @@
         if (!voiceSetBallsLeft(cmd.ballsLeft)) {
           return ok(T("voice.done.win", { name: p.name }) + " · " + T("voice.err.ballsLeftHidden", { game: voiceGameLabel(state.gameHistory[0].gameType) }), "never");
         }
-        return ok(T("voice.done.winBallsLeft", { name: p.name, n: voiceBallsLeftNow() }), "never");
+        return ok(TP("voice.done.winBallsLeft", voiceBallsLeftNow(), { name: p.name, n: voiceBallsLeftNow() }), "never");
       }
       case "ballsLeft":
         if (!voiceWinWindowOpen()) return fail(T("voice.err.noWinWindow"));
         if (!voiceSetBallsLeft(cmd.n)) return fail(T("voice.err.ballsLeftHidden", { game: voiceGameLabel(state.gameHistory[0] ? state.gameHistory[0].gameType : state.currentGame.gameType) }));
-        return ok(T("voice.done.ballsLeft", { n: voiceBallsLeftNow() }));
+        return ok(TP("voice.done.ballsLeft", voiceBallsLeftNow(), { n: voiceBallsLeftNow() }));
       case "confirmWin":
         if (!voiceWinWindowOpen()) return fail(T("voice.err.noWinWindow"));
         hideWinBanner();
@@ -28949,7 +28968,7 @@
           saveState();
           applyRotationIfDue();
           renderRotation();
-          said.push(T("voice.done.every", { n: state.rotation.every }));
+          said.push(TP("voice.done.every", state.rotation.every, { n: state.rotation.every }));
         }
         if (cmd.players && cmd.players.length) {
           // the session: exactly these (from the Contact Sheet); anyone else
@@ -29614,7 +29633,7 @@
       saveContactsToStorage(PLAYER_CONTACTS);
       var added = Object.keys(PLAYER_CONTACTS).length - before;
       renderContactSheetPage();
-      showToast(T("contactSheet.importedJsonToast", { count: importedCount, added: added }));
+      showToast(T("contactSheet.importedJsonToast", { count: countPhrase("contactsImported", importedCount), added: added }));
     };
     reader.onerror = function () {
       alertModal(T("alert.notValidJson"));
@@ -31435,12 +31454,12 @@
     if (!result.ok) return challongePushApiFailedText();
     var parts = [];
     if (result.mode === "roster") {
-      parts.push(T("challonge.rosterPushed", { count: result.addedCount }));
+      parts.push(TP("challonge.rosterPushed", result.addedCount, { count: result.addedCount }));
       if (result.reason) parts.push(T(challongeRosterReasonKey(result.reason)));
     } else {
       parts.push(result.failed
-        ? T("challonge.pushSummaryWithFailures", { added: result.addedCount, scores: result.pushed, failed: result.failed })
-        : T("challonge.pushSummary", { added: result.addedCount, scores: result.pushed }));
+        ? T("challonge.pushSummaryWithFailures", { added: countPhrase("playersOnRoster", result.addedCount), scores: countPhrase("scoresPushed", result.pushed), failed: result.failed })
+        : T("challonge.pushSummary", { added: countPhrase("playersOnRoster", result.addedCount), scores: countPhrase("scoresPushed", result.pushed) }));
     }
     if (result.filled) parts.push(TP("challonge.filledSummary", result.filled, { count: result.filled }));
     if (result.stoppedAt) parts.push(T("challonge.stoppedAt", { round: result.stoppedAt.tag, a: result.stoppedAt.a, b: result.stoppedAt.b }));
@@ -31497,7 +31516,7 @@
   function renderTournamentChallongeReview() {
     var t = challongeReviewTournament;
     if (!t) return;
-    challongePushReviewSummary.textContent = T("challonge.reviewTournamentSummary", { format: challongeFormatText(t.format), count: t.players.length });
+    challongePushReviewSummary.textContent = TP("challonge.reviewTournamentSummary", t.players.length, { format: challongeFormatText(t.format), count: t.players.length });
     renderChallongePlan(planTournamentChallongePush(t));
     btnChallongeCloseTournament.classList.toggle("hidden", !t.challongeTournamentId);
   }
@@ -33215,7 +33234,7 @@
     plus.textContent = "➕";
     var label = document.createElement("div");
     label.className = "lb-tree-collapsed-label";
-    label.textContent = T("tournament.lbTreeShowEarlier", { count: extraRounds + 1 });
+    label.textContent = TP("tournament.lbTreeShowEarlier", extraRounds + 1, { count: extraRounds + 1 });
     stub.appendChild(plus);
     stub.appendChild(label);
     stub.addEventListener("click", function () {
@@ -33336,7 +33355,7 @@
     plus.textContent = "➕";
     var label = document.createElement("div");
     label.className = "lb-tree-collapsed-label";
-    label.textContent = T("tournament.lbTreeShowMoreBranches", { count: hiddenCount });
+    label.textContent = TP("tournament.lbTreeShowMoreBranches", hiddenCount, { count: hiddenCount });
     stub.appendChild(plus);
     stub.appendChild(label);
     stub.addEventListener("click", function () {
@@ -34011,6 +34030,7 @@
   }
 
   function openTournamentPage(skipHistory) {
+    renderTournamentNewHeading();
     if (!skipHistory) pushScreenHistory("tournament");
     if (!TOURNAMENT) tournamentSetupStep = 1;
     renderTournamentPage();
@@ -34779,7 +34799,7 @@
     }
     bkChosen = { text: text, data: data };
     var n = backupPlayerCount(data);
-    bkEl.summary.textContent = data.exportedAt ? T("bk.summary", { date: formatTimestamp(data.exportedAt, true), players: n }) : T("bk.summaryNoDate", { players: n });
+    bkEl.summary.textContent = data.exportedAt ? TP("bk.summary", n, { date: formatTimestamp(data.exportedAt, true), players: n }) : TP("bk.summaryNoDate", n, { players: n });
     bkStep("how");
   }
   // a folder's backups, newest first - one tap reads one
@@ -38322,7 +38342,7 @@
       contactSheetSelected = {};
       renderContactSheetPage();
       renderAll();
-      showToast(T("toast.playersSentToGraveyard", { count: names.length }));
+      showToast(TP("toast.playersSentToGraveyard", names.length, { count: names.length }));
     });
   });
   btnContactSheetMergeSelected.addEventListener("click", function () {
@@ -38389,7 +38409,7 @@
         var changed = repairArchivedGameName(oldNameText, match);
         renderContactSheetPage();
         renderAll();
-        showToast(T("mergePlayers.repaired", { count: changed, oldName: oldNameText, name: match }));
+        showToast(TP("mergePlayers.repaired", changed, { count: changed, oldName: oldNameText, name: match }));
       }, null, knownNames);
     }, null);
   });

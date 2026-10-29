@@ -202,7 +202,7 @@ const snap = (b, s) => ({ type: "state", state: s || STATE, tournament: null, bo
     process.exit(1);
   }
   let v = await read(page);
-  check("lower: names, \"Race to 7\", 3 and 2, Q-Scores 512 / 488", v.shown && same(v.names, ["Kim Lee", "Jo Smith"]) && v.center === "Race to 7" && same(v.scores, ["3", "2"]) && same(v.ratings, ["Q-Score 512", "Q-Score 488"]), v);
+  check("lower: names, \"Race to 7\", 3 and 2, Q-Scores 512 / 488", v.shown && same(v.names, ["Kim Lee", "Jo Smith"]) && v.center === "Race to 7" && same(v.scores, ["3", "2"]) && same(v.ratings, ["Rating 512", "Rating 488"]), v);
   check("...\"8-Ball · Rack 6 · Kim Lee breaks\" (the last rack's winner), the cue ball on Kim's side", v.info === "8-Ball·Rack 6·Kim Lee breaks" && v.breaking === 0, v.info);
   check("...the scoring device's theme (Emerald Rail)", v.theme === "emerald-rail", v.theme);
   check("...nothing to tap: no button, field, link or focusable", v.controls === 0, v.controls);
@@ -215,7 +215,7 @@ const snap = (b, s) => ({ type: "state", state: s || STATE, tournament: null, bo
   // ---- 9:16 ----
   page = await open(BASE, "?layout=vertical", 1080, 1920);
   v = await read(page);
-  check("vertical: the same names, race, scores, Q-Scores and line", v.shown && same(v.names, ["Kim Lee", "Jo Smith"]) && v.center === "Race to 7" && same(v.scores, ["3", "2"]) && same(v.ratings, ["Q-Score 512", "Q-Score 488"]) && v.info === "8-Ball·Rack 6·Kim Lee breaks" && v.breaking === 0, v);
+  check("vertical: the same names, race, scores, Q-Scores and line", v.shown && same(v.names, ["Kim Lee", "Jo Smith"]) && v.center === "Race to 7" && same(v.scores, ["3", "2"]) && same(v.ratings, ["Rating 512", "Rating 488"]) && v.info === "8-Ball·Rack 6·Kim Lee breaks" && v.breaking === 0, v);
   check("...across the picture, in its lower half, names not cut", v.rect && v.rect.top > 960 && v.rect.bottom <= 1920 && v.rect.width >= 900 && v.rect.right <= 1080 && v.cut.length === 0, v.rect);
   png = await shoot(page, "overlay_vertical_1080x1920.png");
   px = await pixels(png, [[20, 20], [540, 600], [1060, 1900], [(v.rect.left + v.rect.right) / 2, (v.rect.top + v.rect.bottom) / 2]]);
@@ -238,7 +238,7 @@ const snap = (b, s) => ({ type: "state", state: s || STATE, tournament: null, bo
 
   page = await open(BASE, "?lang=french", 1920, 1080);
   v = await read(page);
-  check("lang=french: \"Course à 7\", \"Rack 6\", \"Kim Lee casse\"", v.center === "Course à 7" && v.info === "8-Ball·Rack 6·Kim Lee casse", v);
+  check("lang=french: \"Course à 7\", \"Manche 6\" (the glossary's rack), \"Kim Lee casse\"", v.center === "Course à 7" && v.info === "8-Ball·Manche 6·Kim Lee casse", v);
   page = await open(BASE, "?lang=cantonese", 1920, 1080);
   v = await read(page);
   check("lang=cantonese: \"搶 7\", \"第 6 局\", \"Kim Lee 開波\"", v.center === "搶 7" && v.info === "8-Ball·第 6 局·Kim Lee 開波", v);
@@ -258,7 +258,7 @@ const snap = (b, s) => ({ type: "state", state: s || STATE, tournament: null, bo
   push(snap(board({ rack: 7, lastWinners: ["Jo Smith"], players: [player("k", "Kim Lee", 3, 507), player("j", "Jo Smith", 3, 493)] })));
   await page.waitForFunction(() => /Rack 7/.test(document.getElementById("ov-root").textContent), { timeout: 5000 }).catch(() => {});
   v = await read(page);
-  check("a new snapshot redraws it: 3-3, Rack 7, Jo Smith breaks, Q-Scores 507 / 493", same(v.scores, ["3", "3"]) && /Rack 7·Jo Smith breaks/.test(v.info) && v.breaking === 1 && same(v.ratings, ["Q-Score 507", "Q-Score 493"]), v);
+  check("a new snapshot redraws it: 3-3, Rack 7, Jo Smith breaks, Q-Scores 507 / 493", same(v.scores, ["3", "3"]) && /Rack 7·Jo Smith breaks/.test(v.info) && v.breaking === 1 && same(v.ratings, ["Rating 507", "Rating 493"]), v);
   push(snap(board({ rack: 12, lastWinners: ["Kim Lee"], players: [player("k", "Kim Lee", 6, 520), player("j", "Jo Smith", 5, 480)] })));
   await page.waitForFunction(() => /Rack 12/.test(document.getElementById("ov-root").textContent), { timeout: 5000 }).catch(() => {});
   v = await read(page);
@@ -379,7 +379,7 @@ const snap = (b, s) => ({ type: "state", state: s || STATE, tournament: null, bo
     v = await read(ov);
     let badges = await appBadges();
     check("hosting from the scoreboard: the overlay gets its board - Kim Lee 3, Jo Smith 2, Race to 7, Rack 1, lag", v.shown && same(v.names, ["Kim Lee", "Jo Smith"]) && same(v.scores, ["3", "2"]) && v.center === "Race to 7" && v.info === "8-Ball·Rack 1·Lag for the break", v);
-    check("...the Q-Scores the score cards show (" + badges.join(" / ") + ") and the scoreboard's theme", same(v.ratings, badges.map((b) => "Q-Score " + b)) && same(badges, ["512", "488"]) && v.theme === "midnight-ivory", { ratings: v.ratings, badges, theme: v.theme });
+    check("...the Q-Scores the score cards show (" + badges.join(" / ") + ") and the scoreboard's theme", same(v.ratings, badges.map((b) => "Rating " + b)) && same(badges, ["512", "488"]) && v.theme === "midnight-ivory", { ratings: v.ratings, badges, theme: v.theme });
     if (OUT) await shoot(ov, "overlay_live_from_scoreboard.png");
     await app.evaluate(() => { const s = document.getElementById("theme-select"); s.value = "gold-mine"; s.dispatchEvent(new Event("change", { bubbles: true })); });
     await ov.waitForFunction(() => document.documentElement.getAttribute("data-theme") === "gold-mine", { timeout: 5000 }).catch(() => {});
@@ -396,7 +396,7 @@ const snap = (b, s) => ({ type: "state", state: s || STATE, tournament: null, bo
     await sleep(400);
     v = await read(ov);
     badges = await appBadges();
-    check("...a rack won on the scoreboard (Jo's +): 3-3, Rack 2, Jo Smith breaks, the new Q-Scores (" + badges.join(" / ") + ")", tapped && same(v.scores, ["3", "3"]) && v.info === "8-Ball·Rack 2·Jo Smith breaks" && same(v.ratings, badges.map((b) => "Q-Score " + b)) && !same(badges, ["512", "488"]), { v, badges });
+    check("...a rack won on the scoreboard (Jo's +): 3-3, Rack 2, Jo Smith breaks, the new Q-Scores (" + badges.join(" / ") + ")", tapped && same(v.scores, ["3", "3"]) && v.info === "8-Ball·Rack 2·Jo Smith breaks" && same(v.ratings, badges.map((b) => "Rating " + b)) && !same(badges, ["512", "488"]), { v, badges });
 
     const guest = await browser.newPage();
     guest.on("pageerror", (e) => errors.push("guest: " + e.message));

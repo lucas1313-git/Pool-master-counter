@@ -107,6 +107,7 @@ check("yes", { type: "answer", yes: true });
 
 // --- questions ---
 check("What is Luigi's Q-score today?", { type: "qscore", name: "Luigi", today: true });
+check("What is Luigi's rating today?", { type: "qscore", name: "Luigi", today: true });
 check("what is luigi q score today", { type: "qscore", name: "Luigi", today: true });
 check("what's Mario's queue score", { type: "qscore", name: "Mario" });
 // --- the recording's 🎯 Auto cue ("cue" often heard as "q" / "queue") ---

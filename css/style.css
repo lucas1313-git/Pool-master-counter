@@ -11311,3 +11311,17 @@ body.win-banner-up .page-toast {
 .history-score {
   font-variant-numeric: tabular-nums;
 }
+
+/* the Leaderboard's MVP formula, behind ⓘ */
+.leaderboard-formula {
+  margin: 8px auto;
+  max-width: 900px;
+  text-align: center;
+}
+.leaderboard-formula > summary {
+  cursor: pointer;
+  color: var(--text-dim);
+  font-weight: 700;
+  min-height: 44px;
+  line-height: 44px;
+}

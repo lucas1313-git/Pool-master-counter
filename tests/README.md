@@ -370,6 +370,19 @@ Not part of the app - helpers for testing and for running this machine's own cop
   "Waiting for the scoreboard" with no host; a server that wants pairing: "isn't paired" without
   a key, the board with `?device=` (passed on to the ws address); only ever one hello sent per
   connection. Then server/server.js on 4271 (a throwaway HOME): overlay.html served; the scoreboard
-  hosting feeds it its board (Q-Scores as on the cards, its theme and a theme change, a rack won);
+  hosting feeds it its board (ratings as on the cards, its theme and a theme change, a rack won);
   the app's own `?join=1` guest still fine; from the LAN address "isn't paired" without the app
   key, the board with `&device=<app key>`. `node tests/probe_stream_overlay.js [screenshot dir]`.
+- **test_strings.js** — the app's words (P18), no browser: every key in all five languages, none
+  empty; no English "(target 1)" or "1 wins", no "game(s)"-style plurals in any language, no
+  "Q-Score"; no old name in English (Global Stats, Export Stats, Tournament Type, Single game);
+  the glossary's rating words (French "cote", Spanish "puntuación" - "classement" / "clasificación"
+  are the leaderboard; Cantonese 搶 N, 評分); every key the code and index.html name exists; every
+  count sentence TP picks has its singular in every language. `node tests/test_strings.js`.
+- **probe_names.js** — one name per idea (P18) at 1180x820, its own server on 4272: Kim wins a rack
+  in an 8-Ball race to 15 - Recent Games "Kim won 8-Ball", no "(target 1)"; ☰ Menu has "All
+  players" once (in Stats) and no "Global stats", the header "📊 All players"; the Leaderboard says
+  "1 win" (not "1 wins") and "9 wins", the MVP formula folded under "ⓘ How the MVP score works";
+  the tournament heading follows the format (Elimination for single and double, Round Robin,
+  Swiss); a player's page "💾 Save to history"; in French "1 victoire" / "9 victoires".
+  `node tests/probe_names.js [screenshot dir]` (board, leaderboard and tournament screenshots).

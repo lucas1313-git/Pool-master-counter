@@ -51,7 +51,7 @@ const showAll = async (pg) => {
   check("\"🏁 Race to [n] wins\" and \"🎯 Single Game\": side by side", rtw && single && Math.abs(rtw.mid - single.mid) < 10 && single.left > rtw.right - 5, { rtw, single });
   check("...the race number right in Race to Wins, big (≥ 20 px) - \"🏁 Race to [5] wins\"", inRtw.inside && /🏁 Race to\s*wins/.test(inRtw.text) && num.font >= 20 && num.visible, { inRtw, num });
   const rotRow = await page.evaluate(() => { const c = document.getElementById("game-setup-rotation-enabled"), n = document.getElementById("game-setup-rotation-every"); const row = c.closest(".setting-with-number"); const a = c.getBoundingClientRect(), b = n.getBoundingClientRect(); return { same: !!row && row.contains(n), dy: Math.abs((a.top + a.height / 2) - (b.top + b.height / 2)), text: row.textContent.replace(/\s+/g, " ").trim(), font: parseFloat(getComputedStyle(n).fontSize) }; });
-  check("\"Rotate game types automatically — change every [n] games\": one line, the number big", rotRow.same && rotRow.dy < 12 && /Rotate game types automatically\s*— change every\s*games/.test(rotRow.text) && rotRow.font >= 20, rotRow);
+  check("\"Rotate game types automatically — games before each change: [n]\" (P18: \"games\" once, not beside the race's): one line, the number big", rotRow.same && rotRow.dy < 12 && /Rotate game types automatically\s*— games before each change:\s*$/.test(rotRow.text) && rotRow.font >= 20, rotRow);
   await page.evaluate(() => { const c = document.getElementById("timed-tournament-enabled-checkbox"); if (!c.checked) c.click(); });
   await sleep(300);
   const timed = await page.evaluate(() => { const c = document.getElementById("timed-tournament-enabled-checkbox"), n = document.getElementById("timed-tournament-minutes-input"), rot = document.getElementById("game-setup-rotation-enabled").closest(".setting-with-number"), row = c.closest(".setting-with-number"); const a = c.getBoundingClientRect(), b = n.getBoundingClientRect(); return { after: rot.nextElementSibling === row, visible: n.offsetParent !== null, dy: Math.abs((a.top + a.height / 2) - (b.top + b.height / 2)), text: row.textContent.replace(/\s+/g, " ").trim() }; });
@@ -93,7 +93,7 @@ const showAll = async (pg) => {
     const a = c.getBoundingClientRect(), b = n.getBoundingClientRect();
     return { same: !!row && row.contains(n), dy: Math.abs((a.top + a.height / 2) - (b.top + b.height / 2)), text: row ? row.textContent.replace(/\s+/g, " ").trim() : "", font: parseFloat(getComputedStyle(n).fontSize), oldRow: [...document.querySelectorAll("#rotation-panel-body label")].some((l) => /Switch every/.test(l.textContent)) };
   });
-  check("Games Rotations: \"Rotate game types automatically — change every [3] games\" in one box, the number big - no separate Switch every row", gr.same && gr.dy < 12 && /Rotate game types automatically\s*— change every\s*games/.test(gr.text) && gr.font >= 20 && !gr.oldRow, gr);
+  check("Games Rotations: \"Rotate game types automatically — games before each change: [3]\" in one box, the number big - no separate Switch every row", gr.same && gr.dy < 12 && /Rotate game types automatically\s*— games before each change:\s*$/.test(gr.text) && gr.font >= 20 && !gr.oldRow, gr);
   if (OUT) { const el = await page.$("#rotation-panel"); await el.screenshot({ path: OUT + "/games_rotations.png" }); }
   await page.click("#rotation-every"); await sleep(100);
   await page.keyboard.type("4");

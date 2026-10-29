@@ -56,6 +56,7 @@ function challongePushApiFailedText() { return "PUSH FAILED"; }
 function finalizeRoundRobinIfComplete() {} function finalizeSwissRoundIfComplete() {}
 function T(key, vars) { var s = EN[key] !== undefined ? EN[key] : key; Object.keys(vars || {}).forEach(function (k) { s = s.split("{{" + k + "}}").join(vars[k]); }); return s; }
 function TP(key, n, vars) { return T(n === 1 && EN[key + "One"] !== undefined ? key + "One" : key, vars); }
+function countPhrase(kind, n) { return TP("count." + kind, n, { n: n }); }
 `;
 const F = new Function("EN", "challongeAuthedRequest", prelude + VARS.map(extractVar).join("\n") + "\n" + NAMES.map(extract).join("\n") +
   "\nreturn {" + NAMES.join(",") + ", setVenue: function (v) { VENUE = v; }};")(EN, (m, p, b) => C.api(m, p, b));

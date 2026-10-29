@@ -112,7 +112,7 @@ const jsonFiles = (dir) => (fs.existsSync(dir) ? fs.readdirSync(dir).filter((n) 
   // 2. a folder not synced here: kept, copied, asked to open the folder
   await setLink(OTHER);
   s = await waitStatus(/isn't synced/);
-  check("a folder not synced on this computer: says how it'll go", /isn't synced on this computer/.test(s), s);
+  check("a folder not synced on this computer: says how it'll go", /doesn't sync this folder on this computer/.test(s) && /paste the backup in/.test(s), s);
   await exportAll();
   let m = null;
   for (let i = 0; i < 30 && !m; i++) { await sleep(250); m = await modal(); }

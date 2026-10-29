@@ -47,7 +47,7 @@
       "Mark", "Finish", "Auto cue"
     ] },
     { title: "voice.section.questions", note: "voice.note.questions", lines: [
-      "What is Luigi's Q-score today?", "What's the score?", "Help"
+      "What is Luigi's rating today?", "What's the score?", "Help"
     ] }
   ];
 
