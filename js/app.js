@@ -1289,13 +1289,55 @@
     damping.connect(feedback);
     feedback.connect(delay);
     damping.connect(wet);
-    wet.connect(ctx.destination);
+    wet.connect(audioOut(ctx));
+  }
+
+  // 🔊 Sounds: All / Wins only (the default) / Off, and a volume - every
+  // sound goes out through one master gain (audioOut), and each kind is
+  // let through or not (soundAllowed): "win" (a rack, a race), "alert"
+  // (the clocks you switched on, a cue's tick, a voice command not
+  // understood) and "other" (every point, the hill, a game change, the
+  // keypad's player switch).
+  var SOUNDS_KEY = "poolMasterCounter.sounds.v1";
+  var SOUND_VOLUME_KEY = "poolMasterCounter.soundVolume.v1";
+  var audioMaster = null;
+  function soundsLevel() {
+    try {
+      var v = localStorage.getItem(SOUNDS_KEY);
+      return v === "all" || v === "off" ? v : "wins";
+    } catch (e) {
+      return "wins";
+    }
+  }
+  function soundVolume() {
+    try {
+      var v = parseInt(localStorage.getItem(SOUND_VOLUME_KEY), 10);
+      return v >= 0 && v <= 100 ? v : 80;
+    } catch (e) {
+      return 80;
+    }
+  }
+  function soundAllowed(kind) {
+    var level = soundsLevel();
+    if (level === "off" || soundVolume() === 0) return false;
+    return level === "all" || kind === "win" || kind === "alert";
+  }
+  function audioOut(ctx) {
+    return audioMaster || ctx.destination;
+  }
+  function setSoundVolume(v) {
+    v = Math.max(0, Math.min(100, Math.round(v)));
+    try { localStorage.setItem(SOUND_VOLUME_KEY, String(v)); } catch (e) {}
+    if (audioMaster) audioMaster.gain.value = v / 100;
   }
 
   function getAudioCtx() {
     if (!audioCtx) {
       var Ctx = window.AudioContext || window.webkitAudioContext;
       audioCtx = new Ctx();
+      audioMaster = audioCtx.createGain();
+      audioMaster.gain.value = soundVolume() / 100;
+      audioMaster.connect(audioCtx.destination);
       setupEchoBus(audioCtx);
     }
     if (audioCtx.state === "suspended") {
@@ -1319,7 +1361,7 @@
       var buffer = ctx.createBuffer(1, 1, 22050);
       var source = ctx.createBufferSource();
       source.buffer = buffer;
-      source.connect(ctx.destination);
+      source.connect(audioOut(ctx));
       source.start(0);
     };
     document.addEventListener("pointerdown", unlock);
@@ -1405,7 +1447,7 @@
     noiseGain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.025);
     noise.connect(noiseFilter);
     noiseFilter.connect(noiseGain);
-    noiseGain.connect(ctx.destination);
+    noiseGain.connect(audioOut(ctx));
     if (echoSend && !noEcho) noiseGain.connect(echoSend);
     noise.start(startTime);
     noise.stop(startTime + 0.03);
@@ -1419,7 +1461,7 @@
     knockGain.gain.linearRampToValueAtTime(peakGain, startTime + 0.004);
     knockGain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.08);
     knock.connect(knockGain);
-    knockGain.connect(ctx.destination);
+    knockGain.connect(audioOut(ctx));
     if (echoSend && !noEcho) knockGain.connect(echoSend);
     knock.start(startTime);
     knock.stop(startTime + 0.09);
@@ -1430,6 +1472,7 @@
   // since this one repeats on a timer during play rather than marking a
   // one-off event.
   function playShotCounterBeep() {
+    if (!soundAllowed("alert")) return;
     var now = getAudioCtx().currentTime;
     clickSound(now, 520, 0.35);
     clickSound(now + 0.18, 520, 0.35);
@@ -1439,6 +1482,7 @@
   // before playShotCounterBeep fires, deliberately much smaller/shorter
   // than the beep it's leading up to so the two stay easy to tell apart.
   function playShotCounterTick() {
+    if (!soundAllowed("alert")) return;
     clickSound(getAudioCtx().currentTime, 700, 0.14);
   }
 
@@ -1448,6 +1492,7 @@
   // both counters can plausibly be running at once and need to be
   // tellable apart without looking at the screen.
   function playTimedTournamentFiveMinWarning() {
+    if (!soundAllowed("alert")) return;
     var now = getAudioCtx().currentTime;
     clickSound(now, 320, 0.4);
     clickSound(now + 0.22, 320, 0.4);
@@ -1457,6 +1502,7 @@
   // The 1-minute warning - higher and faster than the 5-minute one
   // above, since there's a lot less time left to react.
   function playTimedTournamentOneMinWarning() {
+    if (!soundAllowed("alert")) return;
     var now = getAudioCtx().currentTime;
     clickSound(now, 880, 0.42);
     clickSound(now + 0.12, 880, 0.42);
@@ -1475,6 +1521,7 @@
   // bus, see clickSound's noEcho) - the shared slapback tail was still
   // ringing under the next tap, blurring the count together.
   function playPlayerSwitchSound(voice, count) {
+    if (!soundAllowed("other")) return;
     var mult = voicePitch(voice);
     var now = getAudioCtx().currentTime;
     var pips = Math.max(1, count || 1);
@@ -1500,6 +1547,7 @@
   // rounds of alternatives - short percussive clicks, then vocal "Yeah!"
   // shouts - that didn't land.
   function playPositiveSound(voice) {
+    if (!soundAllowed("other")) return;
     var mult = voicePitch(voice);
     var ctx = getAudioCtx();
     var now = ctx.currentTime;
@@ -1526,7 +1574,7 @@
     osc.frequency.linearRampToValueAtTime(480 * mult, riseEnd);
     applyEnvelope(oscGain.gain, peak * 0.92, tailFloor * 0.92);
     osc.connect(oscGain);
-    oscGain.connect(ctx.destination);
+    oscGain.connect(audioOut(ctx));
     if (echoSend) oscGain.connect(echoSend);
     osc.start(now);
     osc.stop(end + 0.1);
@@ -1538,7 +1586,7 @@
     overtone.frequency.linearRampToValueAtTime(960 * mult, riseEnd);
     applyEnvelope(overtoneGain.gain, peak * 0.08, tailFloor * 0.08);
     overtone.connect(overtoneGain);
-    overtoneGain.connect(ctx.destination);
+    overtoneGain.connect(audioOut(ctx));
     if (echoSend) overtoneGain.connect(echoSend);
     overtone.start(now);
     overtone.stop(end + 0.1);
@@ -1568,7 +1616,7 @@
     applyEnvelope(breathGain.gain, peak * 0.04, tailFloor * 0.04);
     noise.connect(breathFilter);
     breathFilter.connect(breathGain);
-    breathGain.connect(ctx.destination);
+    breathGain.connect(audioOut(ctx));
     if (echoSend) breathGain.connect(echoSend);
     noise.start(now);
     noise.stop(end + 0.05);
@@ -1581,6 +1629,7 @@
   // to fall (480→300 / 960→600) instead of rise, landing low instead of
   // high.
   function playNegativeSound(voice) {
+    if (!soundAllowed("other")) return;
     var mult = voicePitch(voice);
     var ctx = getAudioCtx();
     var now = ctx.currentTime;
@@ -1607,7 +1656,7 @@
     osc.frequency.linearRampToValueAtTime(300 * mult, fallEnd);
     applyEnvelope(oscGain.gain, peak * 0.92, tailFloor * 0.92);
     osc.connect(oscGain);
-    oscGain.connect(ctx.destination);
+    oscGain.connect(audioOut(ctx));
     if (echoSend) oscGain.connect(echoSend);
     osc.start(now);
     osc.stop(end + 0.1);
@@ -1619,7 +1668,7 @@
     overtone.frequency.linearRampToValueAtTime(600 * mult, fallEnd);
     applyEnvelope(overtoneGain.gain, peak * 0.08, tailFloor * 0.08);
     overtone.connect(overtoneGain);
-    overtoneGain.connect(ctx.destination);
+    overtoneGain.connect(audioOut(ctx));
     if (echoSend) overtoneGain.connect(echoSend);
     overtone.start(now);
     overtone.stop(end + 0.1);
@@ -1645,7 +1694,7 @@
     applyEnvelope(breathGain.gain, peak * 0.04, tailFloor * 0.04);
     noise.connect(breathFilter);
     breathFilter.connect(breathGain);
-    breathGain.connect(ctx.destination);
+    breathGain.connect(audioOut(ctx));
     if (echoSend) breathGain.connect(echoSend);
     noise.start(now);
     noise.stop(end + 0.05);
@@ -1663,6 +1712,7 @@
   // multiplier (VOICE_PITCHES) so different winners land at different
   // pitches, same as before.
   function playWinSound(voice) {
+    if (!soundAllowed("win")) return;
     var mult = voicePitch(voice);
     var ctx = getAudioCtx();
     var now = ctx.currentTime;
@@ -1675,7 +1725,7 @@
     var reverbSend = ctx.createGain();
     reverbSend.gain.value = 0.6;
     reverbSend.connect(convolver);
-    convolver.connect(ctx.destination);
+    convolver.connect(audioOut(ctx));
 
     function anthemTone(freq, t, duration, peakGain) {
       var osc = ctx.createOscillator();
@@ -1694,7 +1744,7 @@
       gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
       osc.connect(warmth);
       warmth.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(audioOut(ctx));
       if (echoSend) gain.connect(echoSend);
       gain.connect(reverbSend);
       osc.start(t);
@@ -1708,7 +1758,7 @@
       subGain.gain.linearRampToValueAtTime(peakGain * 0.4, t + 0.02);
       subGain.gain.exponentialRampToValueAtTime(0.001, t + duration);
       sub.connect(subGain);
-      subGain.connect(ctx.destination);
+      subGain.connect(audioOut(ctx));
       if (echoSend) subGain.connect(echoSend);
       subGain.connect(reverbSend);
       sub.start(t);
@@ -1775,6 +1825,7 @@
   // slapback echo bus AND its own dedicated reverb send, for a spacious,
   // dreamy feel fitting a quiet warning rather than a fanfare.
   function playOnHillSound() {
+    if (!soundAllowed("other")) return;
     var ctx = getAudioCtx();
     var now = ctx.currentTime;
 
@@ -1783,7 +1834,7 @@
     var reverbSend = ctx.createGain();
     reverbSend.gain.value = 0.55;
     reverbSend.connect(convolver);
-    convolver.connect(ctx.destination);
+    convolver.connect(audioOut(ctx));
 
     function recorderTone(freq, t, duration, peakGain) {
       var osc = ctx.createOscillator();
@@ -1794,7 +1845,7 @@
       gain.gain.linearRampToValueAtTime(peakGain, t + 0.02);
       gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(audioOut(ctx));
       if (echoSend) gain.connect(echoSend);
       gain.connect(reverbSend);
       osc.start(t);
@@ -1838,6 +1889,7 @@
   // (ctx.currentTime + 1) so it lands just after the champion banner/
   // milestone overlay appears, not on top of it.
   function playTournamentChampionSound() {
+    if (!soundAllowed("win")) return;
     var ctx = getAudioCtx();
     var now = ctx.currentTime;
     var start = now + 1;
@@ -1847,7 +1899,7 @@
     var reverbSend = ctx.createGain();
     reverbSend.gain.value = 0.9;
     reverbSend.connect(convolver);
-    convolver.connect(ctx.destination);
+    convolver.connect(audioOut(ctx));
 
     // A low sawtooth note plus a sub-octave sine underneath for weight —
     // both fed into the big reverb send above (not the shared echo bus).
@@ -1866,7 +1918,7 @@
       gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
       osc.connect(warmth);
       warmth.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(audioOut(ctx));
       gain.connect(reverbSend);
       osc.start(t);
       osc.stop(t + duration + 0.1);
@@ -1879,7 +1931,7 @@
       subGain.gain.linearRampToValueAtTime(peakGain * 0.65, t + 0.025);
       subGain.gain.exponentialRampToValueAtTime(0.001, t + duration);
       sub.connect(subGain);
-      subGain.connect(ctx.destination);
+      subGain.connect(audioOut(ctx));
       subGain.connect(reverbSend);
       sub.start(t);
       sub.stop(t + duration + 0.1);
@@ -3693,6 +3745,7 @@
     // full page's Now Playing boxes are sized now that they show)
     if (!on && winBannerEl) winBannerEl.style.top = "";
     if (!on && nowPlayingBanner) fitNowPlayingControls();
+    if (scoreboard) scheduleFitScoreDigits();
     btnToggleFocus.textContent = T(on ? "scoreboard.showAll" : "scoreboard.focusMode");
     try {
       localStorage.setItem(FOCUS_MODE_KEY, on ? "1" : "0");
@@ -4476,7 +4529,7 @@
       removeBtn.setAttribute("aria-label", "Remove " + p.name);
       removeBtn.textContent = "×";
       removeBtn.addEventListener("click", function () {
-        removePlayer(p.id);
+        removePlayerWithUndo(p.id);
       });
       row.appendChild(removeBtn);
 
@@ -4954,7 +5007,7 @@
     removeBtn.textContent = "−";
     removeBtn.setAttribute("aria-label", "Remove " + player.name);
     removeBtn.addEventListener("click", function () {
-      removePlayer(player.id);
+      removePlayerWithUndo(player.id);
     });
     nameRow.appendChild(removeBtn);
 
@@ -5242,8 +5295,9 @@
     // badge above it.
     var isSingleRackGame = state.currentGame.unit === "rack" && state.currentGame.target === 1;
 
+    // (games won - "3 / 5" in a race)
     if (!isSingleRackGame) {
-      panel.appendChild(buildStatMini(T(isRacing() ? "scoreboard.tourneyWin" : "scoreboard.winsNoRace"), wins, raceReached(wins, player.id), "stat-mini-tourney"));
+      panel.appendChild(buildStatMini(T("card.games"), isRacing() ? wins + " / " + effectiveRaceTarget(player.id) : wins, raceReached(wins, player.id), "stat-mini-tourney"));
     }
 
     var block = document.createElement("div");
@@ -5257,11 +5311,18 @@
     if (isSingleRackGame) {
       // Still needs a label here - without it this number reads as an
       // ambiguous score when it's actually the session win count.
+      // RACKS, then the count - "3 / 5" in a race
       var label = document.createElement("div");
       label.className = "stat-label";
-      label.textContent = T(isRacing() ? "scoreboard.tourneyWin" : "scoreboard.winsNoRace");
+      label.textContent = T("card.racks");
       block.appendChild(label);
       value.textContent = wins;
+      if (isRacing()) {
+        var of = document.createElement("span");
+        of.className = "stat-of";
+        of.textContent = " / " + effectiveRaceTarget(player.id);
+        value.appendChild(of);
+      }
       if (raceReached(wins, player.id)) value.appendChild(buildFlagSpan());
     } else {
       // No "[game] · target [n]" label here anymore - the "Now Playing"
@@ -6210,9 +6271,9 @@
   var boardArrangeMode = false;
 
   // "8-Ball · Race to 5 · Winner stays" - what the board is playing, in
-  // pieces (each its own span; Practice stands out).
+  // pieces (each its own span). Practice has its own badge (#practice-badge).
   function boardStatusParts() {
-    if (quickCounterMode) return [{ text: T("board.statusQuickCounter"), practice: true }];
+    if (quickCounterMode) return [{ text: T("board.statusQuickCounter") }];
     var parts = [];
     var type = GAME_TYPES[state.currentGame.gameType];
     var label = type ? type.label : state.currentGame.gameType;
@@ -6225,13 +6286,14 @@
     if (state.currentGame.mode === "teams") parts.push({ text: T("board.statusTeams") });
     else if (state.currentGame.queueEnabled) parts.push({ text: T("board.statusWinnerStays") });
     if (timedTournamentActive()) parts.push({ text: T("board.statusTimed") });
-    if (noStatsMode) parts.push({ text: T("board.statusPractice"), practice: true });
     return parts;
   }
 
   function renderBoardStatus() {
     var el = document.getElementById("board-status");
     if (!el) return;
+    // PRACTICE · NOT SAVED, on the board for as long as it's on
+    document.getElementById("practice-badge").classList.toggle("hidden", !noStatsMode);
     el.innerHTML = "";
     boardStatusParts().forEach(function (part, i) {
       if (i) el.appendChild(document.createTextNode(" · "));
@@ -6415,8 +6477,21 @@
 
   function applyGameSheet() {
     var want = readGameSheet();
-    var changes = [];
     closeGameSheet();
+    // Practice on: asked first (one stray tap mustn't lose the night) -
+    // "no" still applies the rest
+    if (want.practice && !noStatsMode) {
+      confirmModal(T("practice.confirm"), function () { applyGameSheetWith(want); }, function () {
+        want.practice = false;
+        applyGameSheetWith(want);
+      });
+      return;
+    }
+    applyGameSheetWith(want);
+  }
+
+  function applyGameSheetWith(want) {
+    var changes = [];
 
     if (want.practice !== noStatsMode) {
       setPracticeMode(want.practice);
@@ -6545,6 +6620,7 @@
       { icon: "📷", key: "menu.camera", run: click("btn-open-camera-wizard-header") },
       { icon: "🎬", key: "menu.recording", run: click("btn-open-recorder") },
       { icon: "🎤", key: "menu.voice", page: "voice" },
+      { icon: "🔊", key: "menu.sounds", page: "sounds" },
       { icon: "☁️", key: "menu.challonge", run: panel("challonge-panel") },
       { icon: "⚠️", key: "menu.resets", run: panel("resets-panel") },
       { icon: "❓", key: "menu.help", run: click("btn-open-help") },
@@ -6565,10 +6641,12 @@
     list.innerHTML = "";
     document.getElementById("btn-board-menu-back").classList.toggle("hidden", !page);
     document.getElementById("board-menu-title").textContent = page ? page.icon + " " + T(page.key) : T("board.menu");
-    var voice = !!(page && page.page === "voice");
+    var voice = !!(page && page.page === "voice"), sounds = !!(page && page.page === "sounds");
     document.getElementById("menu-voice-box").classList.toggle("hidden", !voice);
-    list.classList.toggle("hidden", voice);
-    if (voice) return;
+    document.getElementById("menu-sound-box").classList.toggle("hidden", !sounds);
+    list.classList.toggle("hidden", voice || sounds);
+    if (sounds) renderSoundSettings();
+    if (voice || sounds) return;
     (page ? page.children : boardMenuItems()).filter(function (it) { return !it.when || it.when(); }).forEach(function (it) {
       var li = document.createElement("li");
       if (it.select) {
@@ -6737,7 +6815,81 @@
     return keypadPlayerIsOnHill(player);
   }
 
+  // On the board the score is as big as its card allows: whatever height
+  // the name, label and + leave, and the card's width for however many
+  // digits (and "/ 5") it has - read from across the room (25 mm digits
+  // on an 11-inch iPad with four players). Set as --score-size on each
+  // card (the CSS falls back to a container-query size without it).
+  var fitScoreDigitsPending = false;
+  function scheduleFitScoreDigits() {
+    if (fitScoreDigitsPending) return;
+    fitScoreDigitsPending = true;
+    requestAnimationFrame(function () {
+      fitScoreDigitsPending = false;
+      fitScoreDigits();
+    });
+  }
+  function fitScoreDigits() {
+    var onBoard = appRoot.classList.contains("focus-mode");
+    Array.prototype.forEach.call(scoreboard.querySelectorAll(".player-panel.card-v2"), function (card) {
+      card.style.removeProperty("--score-size");
+      var value = card.querySelector(".stat-value");
+      if (!onBoard || !value || !card.clientHeight) return;
+      var cs = getComputedStyle(card);
+      var innerW = card.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      var innerH = card.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+      var gap = parseFloat(cs.rowGap) || 0;
+      var block = value.parentNode, used = 0, others = 0;
+      Array.prototype.forEach.call(card.children, function (c) {
+        if (c === block) return;
+        var pos = getComputedStyle(c).position;
+        if (pos === "absolute" || pos === "fixed" || !c.getClientRects().length) return;
+        used += c.getBoundingClientRect().height;
+        others++;
+      });
+      var label = block.querySelector(".stat-label");
+      var availH = innerH - used - gap * others - (label ? label.getBoundingClientRect().height : 0);
+      // its width per px of font, measured at 100px
+      var display = value.style.display;
+      value.style.display = "inline-block";
+      value.style.fontSize = "100px";
+      var w100 = value.getBoundingClientRect().width;
+      value.style.display = display;
+      value.style.fontSize = "";
+      if (!w100) return;
+      var size = Math.floor(Math.min(availH, innerW * 0.94 / (w100 / 100)));
+      card.style.setProperty("--score-size", Math.max(40, size) + "px");
+    });
+  }
+  window.addEventListener("resize", scheduleFitScoreDigits);
+
+  // ---- 🔊 Sounds ----
+  function renderSoundSettings() {
+    var level = soundsLevel();
+    Array.prototype.forEach.call(document.querySelectorAll('input[name="sound-level"]'), function (r) { r.checked = r.value === level; });
+    document.getElementById("sound-volume").value = soundVolume();
+    document.getElementById("sound-volume-value").textContent = soundVolume() + "%";
+  }
+  // (a short tick at the new volume, whatever kinds are let through)
+  function previewSoundVolume() {
+    if (soundsLevel() === "off" || soundVolume() === 0) return;
+    try { clickSound(getAudioCtx().currentTime, 660, 0.4); } catch (e) {}
+  }
+
   function wireBoardHome() {
+    Array.prototype.forEach.call(document.querySelectorAll('input[name="sound-level"]'), function (r) {
+      r.addEventListener("change", function () {
+        if (!r.checked) return;
+        try { localStorage.setItem(SOUNDS_KEY, r.value); } catch (e) { noteSaveFailure("sound setting", e); }
+        previewSoundVolume();
+      });
+    });
+    var volume = document.getElementById("sound-volume");
+    volume.addEventListener("input", function () {
+      setSoundVolume(parseInt(volume.value, 10));
+      document.getElementById("sound-volume-value").textContent = soundVolume() + "%";
+    });
+    volume.addEventListener("change", previewSoundVolume);
     document.getElementById("btn-board-menu").addEventListener("click", openBoardMenu);
     document.getElementById("btn-board-game").addEventListener("click", openGameSheet);
     document.getElementById("btn-back-to-board").addEventListener("click", function () {
@@ -6812,6 +6964,7 @@
     postRecorderContext(); // (the recording page names its cues from what's shown)
     var active = activePlayers();
     renderBoardStatus();
+    scheduleFitScoreDigits();
     // One player seated and nobody to play: the board offers a game
     // with them already filled in (see openQuickGameModalWith).
     boardSoloRow.classList.toggle("hidden", quickCounterMode || state.currentGame.mode === "teams" || active.length !== 1);
@@ -7277,6 +7430,30 @@
   // edit. Does record the removal (see markPlayerRemoved) so a later
   // import of an old backup that still lists this name won't silently
   // re-add them.
+  // The roster's × (the wizard's too, Quick Counter's −): gone at once,
+  // with ↩ Undo in the toast - one stray tap shouldn't lose a player. Undo
+  // puts them back where they were, with their wins and their place in
+  // the Winner Stays line.
+  function removePlayerWithUndo(id) {
+    var player = getPlayer(id);
+    if (!player) return;
+    var index = state.players.indexOf(player);
+    var wins = state.playerWins[id], mvp = state.teamMvpWins[id];
+    var queue = Array.isArray(state.queue) ? state.queue.slice() : null;
+    removePlayer(id);
+    showActionToast(T("roster.removedToast", { name: player.name }), T("undo.button"), function () {
+      if (getPlayer(id)) return;
+      state.players.splice(Math.min(index, state.players.length), 0, player);
+      if (wins !== undefined) state.playerWins[id] = wins;
+      if (mvp !== undefined) state.teamMvpWins[id] = mvp;
+      if (queue) state.queue = queue;
+      clearPlayerRemoved(player.name);
+      saveState();
+      validateNewPlayerNameInput();
+      renderAll();
+    });
+  }
+
   function removePlayer(id) {
     var player = getPlayer(id);
     state.players = state.players.filter(function (p) {
@@ -7373,11 +7550,58 @@
     var other = onMain ? pageToast : winToast;
     if (other) other.classList.add("hidden");
     target.textContent = (icon === undefined ? "🏆 " : icon) + message;
+    target.classList.remove("has-action");
+    placeToast(target);
     target.classList.remove("hidden");
     clearTimeout(toastTimer);
     toastTimer = setTimeout(function () {
       target.classList.add("hidden");
     }, 4500);
+  }
+
+  // A toast with one button (↩ Undo) - the button takes taps, the rest
+  // of the toast still lets them through to what's under it.
+  function showActionToast(message, actionLabel, onAction) {
+    var target = pageToast;
+    target.textContent = "";
+    var text = document.createElement("span");
+    text.textContent = message;
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "page-toast-action";
+    btn.textContent = actionLabel;
+    btn.addEventListener("click", function () {
+      clearTimeout(toastTimer);
+      target.classList.add("hidden");
+      onAction();
+    });
+    target.appendChild(text);
+    target.appendChild(btn);
+    target.classList.add("has-action");
+    placeToast(target);
+    target.classList.remove("hidden");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () {
+      target.classList.add("hidden");
+    }, 7000);
+  }
+
+  // Where a toast goes: on the board, right over the top bar's line
+  // (#board-status) - only words, never a control; anywhere else at the
+  // top as before (it lets taps through, see .page-toast).
+  function placeToast(el) {
+    var status = document.getElementById("board-status");
+    var r = status && appRoot.classList.contains("focus-mode") && !appRoot.classList.contains("hidden") && status.getClientRects().length ? status.getBoundingClientRect() : null;
+    if (r && r.bottom > 0 && r.width > 80) {
+      el.classList.add("on-board-line");
+      el.style.top = Math.round(r.top) + "px";
+      el.style.left = Math.round(r.left) + "px";
+      el.style.width = Math.round(r.width) + "px";
+      el.style.minHeight = Math.round(r.height) + "px";
+      return;
+    }
+    el.classList.remove("on-board-line");
+    el.style.top = el.style.left = el.style.width = el.style.minHeight = "";
   }
 
   // Converts a point-based game's "how far short of the target the
@@ -7693,8 +7917,7 @@
 
     resetGameBalls();
     saveState();
-    var celebrations = celebrationsLevel();
-    if (celebrations !== "off") playWinSound(winnerVoice);
+    playWinSound(winnerVoice);
     renderAll();
 
     // The win is in: the banner says so (no popup to dismiss), with every
@@ -7707,10 +7930,8 @@
       notices.push({ text: T("gamechange.nowPlaying", { label: GAME_TYPES[state.currentGame.gameType].label + " (" + state.currentGame.target + " " + unitLabel(state.currentGame.unit) + ")" }) });
     }
     if (queueSwapInfo) notices.push({ text: T("queueswap.message", { newName: queueSwapInfo.newName, benchedName: queueSwapInfo.benchedName }), sticky: loadQueueSwapSticky() });
-    if (celebrations === "full") {
-      if (onHillNames) playOnHillSound();
-      else if (gameTypeChanged || queueSwapInfo) playPositiveSound(null);
-    }
+    if (onHillNames) playOnHillSound();
+    else if (gameTypeChanged || queueSwapInfo) playPositiveSound(null);
     if (fresh) fresh.gameNumber = gameNumber;
     showWinBanner(fresh || null, notices);
     // A race won closes at once (archived, a new session - nothing more
@@ -8018,7 +8239,7 @@
   // until dismissed, for a busy room.
   function announceQueueSwap(newName, benchedName) {
     showBannerNotice(T("queueswap.message", { newName: newName, benchedName: benchedName }), loadQueueSwapSticky());
-    if (celebrationsLevel() === "full") playPositiveSound(null);
+    playPositiveSound(null);
   }
 
   function closeQueueSwap() {
@@ -8594,6 +8815,7 @@
   function showMilestoneMoment(bannerText) {
     if (celebrationsLevel() === "off") {
       showBannerNotice(bannerText);
+      playTournamentChampionSound();
       return;
     }
     afterTapGuard(function () {
@@ -18559,7 +18781,7 @@
   function deviceSettingKeys() {
     return ["poolMasterCounter.theme.v1", "poolMasterCounter.language.v1", "poolMasterCounter.focusMode", "poolMasterCounter.leagueFocusMode",
       "poolMasterCounter.fargoEnabled.v1", "poolMasterCounter.queueSwapSticky.v1", "poolMasterCounter.dayReportFormat.v1",
-      "poolMasterCounter.celebrations.v1",
+      "poolMasterCounter.celebrations.v1", "poolMasterCounter.sounds.v1", "poolMasterCounter.soundVolume.v1",
       "poolMasterCounter.challongePrivate.v1", "poolMasterCounter.challongeVenue.v1",
       "poolMasterCounter.dayReportAttachBackup.v1", "poolMasterCounter.dayReportAttachColorful.v1",
       "poolMasterCounter.keypadSpeechEnabled.v1", "poolMasterCounter.keypadSpeechVoicePreset.v1",
@@ -21741,7 +21963,7 @@
       removeBtn.textContent = "×";
       removeBtn.setAttribute("aria-label", T("common.removeName", { name: p.name }));
       removeBtn.addEventListener("click", function () {
-        removePlayer(p.id);
+        removePlayerWithUndo(p.id);
       });
       li.appendChild(name);
       li.appendChild(removeBtn);
@@ -28391,6 +28613,7 @@
 
   // A low double tap: "didn't get that" - distinct from every scoring sound.
   function playVoiceMissSound() {
+    if (!soundAllowed("alert")) return;
     try {
       var now = getAudioCtx().currentTime;
       clickSound(now, 240, 0.3);
@@ -28482,6 +28705,7 @@
   // barely hears it - a moment after the recording page has silenced its
   // sound for the cue (record.html's duck), so it isn't in the video at all.
   function playRecorderTick(kind) {
+    if (!soundAllowed("alert")) return;
     try {
       var ctx = getAudioCtx(), t = ctx.currentTime + 0.15;
       var o = ctx.createOscillator(), g = ctx.createGain();
@@ -28489,7 +28713,7 @@
       g.gain.setValueAtTime(0, t);
       g.gain.linearRampToValueAtTime(0.012, t + 0.005);
       g.gain.exponentialRampToValueAtTime(0.0001, t + 0.04);
-      o.connect(g); g.connect(ctx.destination);
+      o.connect(g); g.connect(audioOut(ctx));
       o.start(t); o.stop(t + 0.06);
     } catch (e) {}
   }
@@ -36356,30 +36580,15 @@
   });
 
   noStatsCheckbox.addEventListener("change", function () {
-    noStatsMode = noStatsCheckbox.checked;
-
-    // Unchecking it is the only way out of Quick Counter once you're in
-    // Focus Mode (every other control is hidden there) — without this,
-    // the scoreboard kept the bare point tally while the rest of the app
-    // (Games Rotations, Current Game) still showed the real rotation/target as
-    // if it were in effect, which is exactly the mismatch this fixes.
-    if (!noStatsCheckbox.checked && quickCounterMode) {
-      quickCounterMode = false;
-      resetGameBalls();
-      applyRotationIfDue();
-      saveState();
-      renderAll();
-      updateCurrentGameSummary();
-      showToast(T("toast.backToNormalGame"));
+    // Practice (not saved): asked first - one stray tap mustn't lose the night
+    if (noStatsCheckbox.checked && !noStatsMode) {
+      noStatsCheckbox.checked = false;
+      confirmModal(T("practice.confirm"), function () { setPracticeMode(true); });
       return;
     }
-
-    showToast(
-      noStatsMode
-        ? "No Statistic mode is on — nothing from here on will be saved."
-        : "No Statistic mode is off — games will be tracked normally again."
-    );
-    renderBoardStatus();
+    var wasQuickCounter = quickCounterMode;
+    setPracticeMode(noStatsCheckbox.checked);
+    if (wasQuickCounter && !quickCounterMode) showToast(T("toast.backToNormalGame"));
   });
 
   // (where a typed edit started - the race to go back to; checked once
@@ -36598,11 +36807,12 @@
     closeMilestone();
     document.getElementById("btn-quick-game").click();
   });
-  // 🎉 Celebrations: Full / Quiet / Off (see celebrationsLevel)
+  // 🎉 Celebrations: the race-won screen on or off (see celebrationsLevel -
+  // an old "full" is on, like "quiet"; the sounds are 🔊 Sounds' now)
   (function () {
     var select = document.getElementById("celebrations-select");
     if (!select) return;
-    select.value = celebrationsLevel();
+    select.value = celebrationsLevel() === "off" ? "off" : "quiet";
     select.addEventListener("change", function () {
       try { localStorage.setItem(CELEBRATIONS_KEY, select.value); } catch (e) { noteSaveFailure("celebrations setting", e); }
     });

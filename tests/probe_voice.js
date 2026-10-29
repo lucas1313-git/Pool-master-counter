@@ -39,7 +39,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     if (window.speechSynthesis) window.speechSynthesis.speak = function (u) { window.__spoken.push(u.text); };
   });
   await page.goto(BASE + "manifest.json");
-  await page.evaluate(() => { localStorage.clear(); localStorage.setItem("poolMasterCounter.onboardingSeen.v1", "1"); localStorage.setItem("poolMasterCounter.migratedFromRepo.v1", "1"); });
+  // (🔊 Sounds: All - this checks a point's beep, which Wins only leaves out)
+  await page.evaluate(() => { localStorage.clear(); localStorage.setItem("poolMasterCounter.onboardingSeen.v1", "1"); localStorage.setItem("poolMasterCounter.migratedFromRepo.v1", "1"); localStorage.setItem("poolMasterCounter.sounds.v1", "all"); });
   await page.goto(BASE, { waitUntil: "networkidle2" });
   await sleep(700);
   await page.evaluate(async () => {

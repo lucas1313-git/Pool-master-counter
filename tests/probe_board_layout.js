@@ -133,9 +133,11 @@ function board(opts) {
   await sleep(300);
   await page.click("#gs-practice");
   await page.click("#btn-game-sheet-apply");
-  await sleep(700);
-  line = await page.evaluate(() => document.getElementById("board-status").textContent);
-  check("...Practice (not saved): on, and the line says so", /Practice · not saved/.test(line) && (await page.evaluate(() => document.getElementById("no-stats-checkbox").checked)), line);
+  await sleep(400);
+  await page.click("#btn-confirm-modal-ok"); // (practice asks first - see probe_legibility)
+  await sleep(500);
+  const practice = await page.evaluate(() => ({ on: document.getElementById("no-stats-checkbox").checked, badge: !document.getElementById("practice-badge").classList.contains("hidden") }));
+  check("...Practice (not saved): on, and the board says so", practice.on && practice.badge, practice);
   // teams, timed, shot clock; practice off
   await page.click("#btn-board-game");
   await sleep(300);

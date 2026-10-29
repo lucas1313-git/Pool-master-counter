@@ -327,3 +327,13 @@ Not part of the app - helpers for testing and for running this machine's own cop
   players), no − on 8-Ball, a small round − on Straight Pool; ⇄ bench rows 60 px, Ann takes
   Kim's seat; drag handles only in Arrange; picking a player moves nothing; the hill lights one
   card; 390x844 fits. `node tests/probe_board_layout.js [screenshot dir]`.
+- `probe_legibility.js` - readable across the room (4267), 4 players racing to 5 at 1180x820: in
+  all 19 themes the + sign, digits, names and card label reach 7:1 and APCA Lc 75 (the shooter's
+  tinted card too); digits 130+ px tall; no board text under 14 px; RACKS "2 / 5"; a long name on
+  one line; Practice asks first (No leaves it off), then PRACTICE · NOT SAVED on the board, its
+  switch in Current Session; Sounds Off / Wins only / All respected (a rack won, a Straight Pool
+  point) and everything through the volume; the roster's × with ↩ Undo; a toast on the board
+  covers no control. `node tests/probe_legibility.js [screenshot dir]`.
+- `legible_colors.js` - not a probe: works out each theme's colours for the above (the nearest
+  shade reaching 7:1 / Lc 75) and writes the CSS block that follows the themes in style.css.
+  `node tests/legible_colors.js <out.css>`.

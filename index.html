@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261028q">
+<link rel="stylesheet" href="css/style.css?v=20261029a">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -282,14 +282,6 @@
           <label class="setting-with-number-label"><input type="checkbox" id="timed-tournament-enabled-checkbox"> <span data-i18n="gameSetup.timedTournamentEnable">⏰ Timed Tournament</span></label>
           <span class="setting-number hidden" id="timed-tournament-minutes-row"><span class="inline-number-template" data-template="gameSetup.timedEndsAfterInline" data-input="timed-tournament-minutes-input">— ends after {{n}} minutes</span><input type="number" id="timed-tournament-minutes-input" class="big-number-input" min="1" max="600" value="60" inputmode="numeric"></span>
         </div>
-        <div class="row celebrations-row">
-          <label for="celebrations-select" data-i18n="celebrations.label">🎉 Celebrations</label>
-          <select id="celebrations-select">
-            <option value="full" data-i18n="celebrations.full">Full - sounds for everything</option>
-            <option value="quiet" data-i18n="celebrations.quiet">Quiet - the win sound, a big moment for a race won</option>
-            <option value="off" data-i18n="celebrations.off">Off - silent, just the banner</option>
-          </select>
-        </div>
         <label class="checkbox-row timed-finish-rack-row hidden" id="timed-tournament-finish-row"><input type="checkbox" id="timed-tournament-finish-rack" checked> <span data-i18n="gameSetup.timedFinishRack">⏰ When time's up, finish the rack in play — the session ends at the next win</span></label>
         <div class="checkbox-row checkbox-row-prominent setting-with-number fair-race-row">
           <label class="setting-with-number-label"><input type="checkbox" id="fair-race-enabled-checkbox"> <span data-i18n="gameSetup.fairRaceEnable">⚖️ Use Q-Score to balance the race</span></label>
@@ -315,6 +307,11 @@
         <label class="checkbox-row checkbox-row-prominent">
           <input type="checkbox" id="shot-counter-enabled-checkbox">
           <span data-i18n="gameSetup.shotCounterEnable">⏱️ Shot counter</span>
+        </label>
+        <!-- Practice: nothing saved while it's on - asked first, and the board shows it (js/app.js setPracticeMode) -->
+        <label class="checkbox-row checkbox-row-prominent practice-row">
+          <input type="checkbox" id="no-stats-checkbox">
+          <span data-i18n="gameSheet.practice">Practice (not saved)</span>
         </label>
         <div class="row hidden" id="shot-counter-beep-row">
           <label for="shot-counter-beep-input" data-i18n="gameSetup.shotCounterBeepEvery">Beep every</label>
@@ -349,6 +346,7 @@
       <button type="button" id="btn-board-undo" class="board-undo-btn" disabled data-i18n="undo.button" data-i18n-aria-label="undo.aria" aria-label="Undo the last score">↩ Undo</button>
       <button type="button" id="btn-board-game" class="board-topbar-btn board-game-btn" data-i18n-aria-label="board.gameAria" aria-label="Game settings"><span aria-hidden="true">🎱</span><span class="board-topbar-label" data-i18n="board.game">Game</span></button>
     </div>
+    <div class="practice-badge hidden" id="practice-badge" role="status" data-i18n="practice.badge">PRACTICE · NOT SAVED</div>
     <div class="row voice-toggle-row">
       <span class="focus-mode-group">
         <button type="button" id="btn-toggle-focus" class="btn btn-primary focus-toggle-btn" data-i18n="scoreboard.focusMode">Focus Mode</button>
@@ -360,10 +358,6 @@
       </span>
     </div>
     <button type="button" id="btn-finish-snooker" class="btn btn-primary finish-snooker-btn hidden" data-i18n="snooker.finishFrame">🏁 Finish Snooker Frame</button>
-    <label class="no-stats-row-inline">
-      <input type="checkbox" id="no-stats-checkbox">
-      <span data-i18n="scoreboard.noStatsMode">Do not record games statistics and players data</span>
-    </label>
     <div class="focus-players-wrap collapsible-panel collapsed" id="focus-players-wrap">
       <button type="button" class="panel-toggle" id="btn-toggle-focus-players" aria-expanded="false" aria-controls="focus-players-body">
         <span id="focus-players-summary" data-i18n="players.heading">Players</span>
@@ -1268,6 +1262,30 @@
     </div>
     <div class="board-sheet-body">
       <ul class="board-menu-list" id="board-menu-list"></ul>
+      <!-- 🔊 Sounds: which ones, how loud; and the race-won screen (js/app.js soundsLevel, celebrationsLevel) -->
+      <div class="menu-sound-box hidden" id="menu-sound-box">
+        <div class="gs-row">
+          <span class="gs-label" data-i18n="sounds.label">🔊 Sounds</span>
+          <span class="gs-chips" role="radiogroup">
+            <label class="gs-chip"><input type="radio" name="sound-level" value="all"> <span data-i18n="sounds.all">All</span></label>
+            <label class="gs-chip"><input type="radio" name="sound-level" value="wins"> <span data-i18n="sounds.wins">Wins only</span></label>
+            <label class="gs-chip"><input type="radio" name="sound-level" value="off"> <span data-i18n="sounds.off">Off</span></label>
+          </span>
+        </div>
+        <p class="gs-note" data-i18n="sounds.hint">Wins only: a rack or a race won, and the clocks and cue ticks you switched on. All adds every point, the hill and a game change.</p>
+        <div class="gs-row">
+          <label class="gs-label" for="sound-volume" data-i18n="sounds.volume">Volume</label>
+          <input type="range" id="sound-volume" class="sound-volume" min="0" max="100" step="5">
+          <span class="gs-unit-word" id="sound-volume-value"></span>
+        </div>
+        <div class="row celebrations-row">
+          <label for="celebrations-select" data-i18n="celebrations.label">🎉 Celebrations</label>
+          <select id="celebrations-select">
+            <option value="quiet" data-i18n="celebrations.quiet">On - a big moment for a race won</option>
+            <option value="off" data-i18n="celebrations.off">Off - just the banner</option>
+          </select>
+        </div>
+      </div>
       <!-- 🎤 Voice: speaking the score, and its voice -->
       <div class="menu-voice-box hidden" id="menu-voice-box">
       <span class="voice-control-group">
@@ -2860,13 +2878,13 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/pairing.js?v=20261028q"></script>
-<script src="js/big-store.js?v=20261028q"></script>
-<script src="js/mp4-clip.js?v=20261028q"></script>
-<script src="js/recording-consent.js?v=20261028q"></script>
-<script src="js/local-recorder.js?v=20261028q"></script>
-<script src="js/app.js?v=20261028q"></script>
-<script src="js/camera-client.js?v=20261028q"></script>
-<script src="js/voice.js?v=20261028q"></script>
+<script src="js/pairing.js?v=20261029a"></script>
+<script src="js/big-store.js?v=20261029a"></script>
+<script src="js/mp4-clip.js?v=20261029a"></script>
+<script src="js/recording-consent.js?v=20261029a"></script>
+<script src="js/local-recorder.js?v=20261029a"></script>
+<script src="js/app.js?v=20261029a"></script>
+<script src="js/camera-client.js?v=20261029a"></script>
+<script src="js/voice.js?v=20261029a"></script>
 </body>
 </html>

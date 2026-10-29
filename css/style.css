@@ -55,6 +55,22 @@
   --panel-surface: var(--bg-panel);
   --btn-primary-surface: var(--accent);
   --modal-surface: linear-gradient(180deg, var(--felt-light) 0%, var(--felt) 60%, var(--bg-glow) 100%);
+  /* What's read from across the room - the score card's background, the
+     + sign on its button, the digits, the names, the card's label and the
+     board's line - each at least 7:1 (WCAG) and APCA Lc 75 against what
+     it sits on, in every theme. Default to the theme's own colours; the
+     block after the themes below gives each theme the nearest shade that
+     reaches it (worked out from the theme's own tokens by
+     tests/legible_colors.js; tests/probe_legibility.js checks the
+     result in the browser). */
+  --card-top: var(--felt);
+  --card-bottom: var(--bg-glow);
+  --plus-bg: var(--felt-light);
+  --plus-fg: #ffffff;
+  --score-fg: var(--accent);
+  --card-text: var(--text);
+  --card-label: var(--text-dim);
+  --board-text: var(--text);
   color-scheme: dark;
 }
 
@@ -572,6 +588,121 @@
   --font-family: "Arial Black", Arial, "Helvetica Neue", sans-serif;
   color-scheme: light;
 }
+
+/* Readable across the room, per theme (see the --card-top … --board-text
+   defaults in :root): the nearest shade of each theme's own colour that
+   reaches 7:1 and Lc 75 - a white + on a deeper button, digits/names/label
+   lighter on a dark card or darker on a light one, and (where nothing
+   could read on it) the card itself a shade further from its text. */
+:root:not([data-theme]),
+:root[data-theme="crimson-felt"] {
+  --score-fg: #f4dc92;
+  --card-label: #ebdcdc;
+}
+:root[data-theme="emerald-rail"] {
+  --card-top: #0e532e;
+  --card-bottom: #10321d;
+  --plus-bg: #136339;
+  --score-fg: #fbf7eb;
+  --card-text: #f9f8f3;
+  --card-label: #f4f8f5;
+}
+:root[data-theme="neon-arcade"] {
+  --score-fg: #38ebff;
+  --card-label: #d0d9e9;
+}
+:root[data-theme="midnight-ivory"] {
+  --score-fg: #e8d9be;
+  --card-label: #dddbd6;
+}
+:root[data-theme="sunset-chalk"] {
+  --card-top: #713711;
+  --card-bottom: #42230e;
+  --plus-bg: #884514;
+  --score-fg: #fffbf3;
+  --card-text: #fffbf4;
+  --card-label: #fefcfb;
+}
+:root[data-theme="obsidian-break"] {
+  --score-fg: #a3e0ff;
+  --card-label: #d5d9dd;
+}
+:root[data-theme="sunset-blaze"] {
+  --plus-bg: #8f3756;
+  --score-fg: #fff2ed;
+  --card-text: #fff3eb;
+  --card-label: #faf3f5;
+}
+:root[data-theme="red-and-pink"] {
+  --plus-bg: #a7154e;
+  --score-fg: #ffedf3;
+  --card-text: #ffebf2;
+  --card-label: #fbeff3;
+}
+:root[data-theme="gold-mine"] {
+  --score-fg: #f5dfa3;
+  --card-label: #e9e2d5;
+}
+:root[data-theme="rock-and-roll"] {
+  --score-fg: #ffc9c8;
+  --card-label: #d6d6d6;
+}
+:root[data-theme="daybreak-chalk"] {
+  --plus-bg: #9b370b;
+  --score-fg: #1f0b02;
+  --card-text: #15110d;
+  --card-label: #14120f;
+}
+:root[data-theme="pearl-lounge"] {
+  --plus-bg: #6b2d5c;
+  --score-fg: #030102;
+  --card-text: #010101;
+  --card-label: #030303;
+}
+:root[data-theme="sunrise-glow"] {
+  --plus-bg: #a62000;
+  --score-fg: #5a1100;
+  --card-label: #372d25;
+}
+:root[data-theme="stainless-steel"] {
+  --card-top: #d8dbdf;
+  --card-bottom: #ffffff;
+  --plus-bg: #315b76;
+  --score-fg: #070d11;
+  --card-text: #0b0d0f;
+  --card-label: #0d0f10;
+  --board-text: #0b0d0f;
+}
+:root[data-theme="copper-shine"] {
+  --card-top: #644121;
+  --card-bottom: #452c16;
+  --plus-bg: #744e29;
+  --score-fg: #fcf8f3;
+  --card-text: #fef8f4;
+  --card-label: #fcf8f2;
+  --board-text: #fbebdd;
+}
+:root[data-theme="opal-shimmer"] {
+  --plus-bg: #723e9b;
+  --score-fg: #120a18;
+  --card-text: #0f0c13;
+  --card-label: #0f0d11;
+}
+:root[data-theme="flowery-forest"] {
+  --plus-bg: #485d36;
+  --score-fg: #2a3620;
+  --card-text: #2c3724;
+  --card-label: #2e3427;
+}
+:root[data-theme="blackout-contrast"] {
+  --card-label: #d1d1d1;
+}
+:root[data-theme="paper-contrast"] {
+  --plus-bg: #0047ab;
+  --score-fg: #00419c;
+  --card-label: #4a4a4a;
+}
+
 
 * {
   box-sizing: border-box;
@@ -2638,7 +2769,7 @@ input[type="number"] {
 
 .player-panel {
   position: relative;
-  background: linear-gradient(180deg, var(--felt) 0%, var(--bg-glow) 100%);
+  background: linear-gradient(180deg, var(--card-top) 0%, var(--card-bottom) 100%);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
@@ -2765,7 +2896,7 @@ input[type="number"] {
 
 .is-keypad-selected {
   box-shadow: 0 0 0 4px var(--accent) inset;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 22%, var(--felt)) 0%, var(--bg-glow) 100%);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 12%, var(--card-top)) 0%, var(--card-bottom) 100%);
 }
 
 /* A camera sample press for this player (see flashScoreCardForCameraPress):
@@ -2972,7 +3103,7 @@ input[type="number"] {
 }
 
 .stat-mini strong {
-  color: var(--accent);
+  color: var(--score-fg);
   font-variant-numeric: tabular-nums;
 }
 
@@ -2989,7 +3120,7 @@ input[type="number"] {
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--text-dim);
+  color: var(--card-label);
 }
 
 .stat-value {
@@ -2997,7 +3128,7 @@ input[type="number"] {
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
-  color: var(--accent);
+  color: var(--score-fg);
   text-shadow: 0 2px 5px rgba(0, 0, 0, 0.6);
 }
 
@@ -3098,8 +3229,8 @@ input[type="number"] {
 }
 
 .btn-ball.plus {
-  background: var(--felt-light);
-  color: var(--on-felt-light);
+  background: var(--plus-bg);
+  color: var(--plus-fg);
 }
 
 .btn-ball.minus {
@@ -10414,7 +10545,7 @@ body.win-banner-up .page-toast {
   font-size: clamp(1.05rem, 2.2vw, 1.6rem);
   font-weight: 800;
   line-height: 1.25;
-  color: var(--text);
+  color: var(--board-text);
 }
 .board-status-part.is-practice {
   color: var(--accent);
@@ -10500,8 +10631,32 @@ body.win-banner-up .page-toast {
   justify-content: center;
 }
 #app.focus-mode .player-panel.card-v2 .stat-value {
-  font-size: clamp(3.5rem, min(40cqw, 30cqh), 14rem);
+  font-size: var(--score-size, clamp(3.5rem, min(40cqw, 30cqh), 14rem));
   line-height: 1;
+  white-space: nowrap;
+}
+/* "/ 5" after the count, in a race */
+.stat-value .stat-of {
+  font-size: 0.28em;
+  font-weight: 700;
+  color: var(--card-label);
+  letter-spacing: 0.02em;
+}
+/* No text under 14 px on a card; the label and the small stat line
+   sized with the card */
+.player-panel.card-v2 .stat-label {
+  font-size: clamp(14px, 4.6cqw, 22px);
+  font-weight: 700;
+}
+.player-panel.card-v2 .stat-mini,
+.player-panel.card-v2 .stat-mini.stat-mini-tourney {
+  font-size: clamp(14px, 8.5cqw, 24px);
+}
+/* a long name: one line, cut with an ellipsis */
+.player-panel.card-v2 .player-name,
+#app.focus-mode .player-panel.card-v2 .player-name {
+  -webkit-line-clamp: 1;
+  word-break: break-all;
 }
 .card-swap-btn {
   position: absolute;
@@ -10543,7 +10698,7 @@ body.win-banner-up .page-toast {
 }
 #app.focus-mode .card-plus-zone .btn-ball.plus {
   min-height: clamp(130px, 26cqh, 210px);
-  font-size: clamp(2.6rem, min(14cqw, 9cqh), 5rem);
+  font-size: clamp(3rem, min(22cqw, 12cqh), 6.5rem);
 }
 /* (points games: a point taken back - small and round, not another + block) */
 .card-plus-zone .btn-ball.card-minus {
@@ -10881,4 +11036,66 @@ body.win-banner-up .page-toast {
   #app.focus-mode .player-panel.card-v2 .player-name {
     padding: 40px 0 0;
   }
+}
+
+/* the names on the cards (see --card-text) */
+.player-panel .player-name,
+.member-card .member-name {
+  color: var(--card-text);
+}
+.player-panel .stat-mini {
+  color: var(--card-label);
+}
+
+/* PRACTICE · NOT SAVED - on the board for as long as practice is on */
+.practice-badge {
+  display: block;
+  width: fit-content;
+  margin: 0 auto 8px;
+  padding: 6px 18px;
+  border-radius: 999px;
+  background: #8a0f18;
+  color: #ffffff;
+  font-weight: 800;
+  font-size: clamp(1rem, 2vw, 1.4rem);
+  letter-spacing: 0.06em;
+  text-align: center;
+}
+
+/* 🔊 Sounds in the menu */
+.menu-sound-box {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.sound-volume {
+  flex: 1 1 200px;
+  min-height: 44px;
+  accent-color: var(--accent);
+}
+
+/* a toast on the board: over the top bar's line, never over a control */
+.page-toast.on-board-line {
+  transform: none;
+  max-width: none;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  font-size: 1rem;
+}
+/* ↩ Undo in a toast: the one part that takes a tap */
+.page-toast-action {
+  pointer-events: auto;
+  margin-left: 12px;
+  min-height: 44px;
+  padding: 6px 16px;
+  border-radius: 999px;
+  border: 2px solid var(--on-accent);
+  background: transparent;
+  color: var(--on-accent);
+  font-weight: 800;
+  font-size: 1rem;
+  cursor: pointer;
 }

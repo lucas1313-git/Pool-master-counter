@@ -98,7 +98,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   check("Open play, 5 racks for Alex: no \"won the tournament\" popup, ever", racks.every((r) => !r.milestone), racks);
   check("...no fanfare: every rack makes a plain win's sound (under 40 oscillators)", racks.every((r) => r.osc > 0 && r.osc < 40), racks.map((r) => r.osc));
   let a = await cardNumber("Alex"), s = await cardNumber("Sam");
-  check("...the board keeps the tally: Alex 5, Sam 0, labelled \"Wins\", no 🏁", a && a.value === "5" && s && s.value === "0" && a.label === "Wins" && !a.flag, { a, s });
+  check("...the board keeps the tally: Alex 5, Sam 0, labelled \"Racks\" (no \"/ n\" - no race), no 🏁", a && a.value === "5" && s && s.value === "0" && a.label === "Racks" && !a.flag, { a, s });
   let st = await state();
   check("...one session, 5 games, none a race win (no tournament in the stats)", st.gameHistory.length === 5 && st.gameHistory.every((g) => !g.wonRace), st.gameHistory.map((g) => g.wonRace));
   const summary = await page.evaluate(() => document.getElementById("standings-panel-summary") ? document.getElementById("standings-panel-summary").textContent : "");
@@ -131,7 +131,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const single = [];
   for (let i = 0; i < 2; i++) single.push(await winRack("Kim"));
   a = await cardNumber("Kim");
-  check("Single Game (Current Session): 2 racks, no popup, no fanfare, tally Kim 2, labelled \"Wins\"", single.every((r) => !r.milestone && r.osc < 40) && a && a.value === "2" && a.label === "Wins", { single, a });
+  check("Single Game (Current Session): 2 racks, no popup, no fanfare, tally Kim 2, labelled \"Racks\"", single.every((r) => !r.milestone && r.osc < 40) && a && a.value === "2" && a.label === "Racks", { single, a });
 
   // ---- "1 win", not "1 wins": the leaderboard ranks 10+ games, so Lee wins one race to 2
   // against Max, then open play: Max wins 1 of his 10 games ----

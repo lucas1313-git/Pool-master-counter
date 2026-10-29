@@ -113,13 +113,15 @@ const localDate = (ms) => { const d = new Date(ms); return d.getFullYear() + "-"
   await sleep(300);
   a = await archive();
   check("leaving the app saves that day's report at once", a.some((e) => e.date === localDate(y) && e.games === 1), a);
-  // today: a game, leave - today's report doesn't count last night's game again
-  await at(0);
+  // today: a game, leave - today's report doesn't count last night's game again (played at noon:
+  // run between midnight and 5 a.m., "now" would still be last night's pool day)
+  const noon = new Date(now); noon.setHours(12, 0, 0, 0);
+  await at(noon.getTime() - now);
   await win("Sam");
   await hide();
   await sleep(300);
   a = await archive();
-  const today = a.find((e) => e.date === localDate(now));
+  const today = a.find((e) => e.date === localDate(noon.getTime()));
   check("today's report: only today's game (last night's isn't counted again)", today && today.games === 1, a);
   check("no page errors", errors.length === 0, errors);
   console.log(fails ? "ARCHIVE_FAIL (" + fails + ")" : "ARCHIVE_OK");
