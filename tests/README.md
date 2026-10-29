@@ -243,3 +243,23 @@ Not part of the app - helpers for testing and for running this machine's own cop
   tablet Save prepares then "📤 Share it now" opens the share sheet from that tap; 🗑 asks first.
   `node tests/probe_local_recorder.js [screenshot dir]`.
 
+- `test_challonge.js` - Challonge pushes that tell the truth: the real push code (pulled out of
+  js/app.js) against a fake Challonge (`challonge_mock.js`). A day pushed mid-day sends only the pairs
+  that played (no 1-1 ties for the rest); pushed again, only the new pair and the changed totals; a
+  changed score is sent again; "Bob beat Ann" and "Ann beat Bob" are one pair, and an older record's
+  roster-order "Dan|Cat" still counts for Cat|Dan; 🔒 Close alone sends the never-played pairs as 1-1
+  ties and closes. A round robin tournament: mid-event, later, a corrected score, Close. Every page of
+  the match list (66 matches, 25 a page; a Challonge ignoring the page number doesn't loop). Single
+  elimination: our seeds make Challonge draw our round 1, every result lands, Challonge's champion is
+  ours; a draw it can't copy and Swiss send the roster only; double elimination against a different
+  losers bracket stops at the first losers match and sends nothing after. New tournaments are private
+  and named "<venue> — <date> — <format>". `node tests/test_challonge.js`.
+- `challonge_mock.js` - the fake Challonge v2.1 both Challonge tests use (round robin, single
+  elimination drawn the standard way from the seeds, pages of 25).
+- `probe_challonge.js` - the same on screen (4253), the fake Challonge answering inside the browser:
+  Review Before Pushing lists exactly what goes ("➕", "✏️ ... Challonge has ...", "✓ already on
+  Challonge") and says unplayed pairs aren't sent; Push sends just that, private, named after the
+  venue typed in the ☁️ Challonge panel; 🔒 Close names the never-played pairs before sending them as
+  1–1 ties; a round robin tournament's ☁️ Push opens the dialog for it; a Race to 2 goes to Challonge
+  only from the 🏆 screen's ☁️ button, after a confirm, and the day's push then leaves its games out.
+  `node tests/probe_challonge.js [screenshot dir]`.

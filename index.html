@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261028i">
+<link rel="stylesheet" href="css/style.css?v=20261028j">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -912,7 +912,7 @@
     </button>
     <p class="panel-summary" id="challonge-panel-summary" data-i18n="challonge.summaryNotConnected">Not connected</p>
     <div class="panel-body" id="challonge-panel-body">
-      <p class="player-stats-note" data-i18n="challonge.introGeneral">Push today's report or a tournament to Challonge — rosters always, and match scores too wherever they can be matched up reliably (Round Robin tournaments, and any pair who played each other today — see why others don't in Help). Needs a free Challonge developer app: sign up at connect.challonge.com to get a client ID and secret, no login required from this app.</p>
+      <p class="player-stats-note" data-i18n="challonge.introGeneral">Push a day's games, a race or a tournament to Challonge. A result goes once it's played and again if it changes here, and Review Before Pushing shows exactly what will be sent. Round Robin and Single/Double Elimination send scores (an elimination bracket goes with its seeds, so Challonge draws the same one); Swiss sends the roster only. Needs a free Challonge developer app: sign up at connect.challonge.com to get a client ID and secret, no login required from this app.</p>
       <div class="row">
         <input type="text" id="challonge-client-id-input" data-i18n-placeholder="challonge.clientIdPlaceholder" placeholder="Challonge client ID" autocomplete="off">
       </div>
@@ -923,6 +923,11 @@
         <button type="button" id="btn-challonge-test-connection" class="btn btn-ghost" data-i18n="challonge.testConnectionButton">🔌 Test Connection</button>
       </div>
       <p class="player-stats-note" id="challonge-test-connection-status"></p>
+      <div class="row">
+        <input type="text" class="challonge-venue-input" id="challonge-venue-input" maxlength="40" data-i18n-placeholder="challonge.venuePlaceholder" placeholder="Venue name (optional)" autocomplete="off">
+      </div>
+      <p class="player-stats-note" data-i18n="challonge.venueHint">Starts the name of every tournament this app creates on Challonge, e.g. "Joe's Bar — 2026-10-28 — Round Robin". Empty: "Pool Master Counter".</p>
+      <label class="checkbox-row"><input type="checkbox" class="challonge-private-checkbox" id="challonge-private-checkbox" checked> <span data-i18n="challonge.privateLabel">New tournaments are private (off Challonge's public list; anyone with the link can still see them)</span></label>
     </div>
   </section>
 
@@ -962,6 +967,7 @@
     <div id="milestone-details" class="milestone-details"></div>
     <div class="gamewin-quick-actions">
       <button type="button" id="btn-milestone-undo" class="btn btn-ghost" data-i18n="gamewin.undoThisWin">↩ Undo this win</button>
+      <button type="button" id="btn-milestone-challonge" class="btn btn-ghost hidden" data-i18n="challonge.racePushButton">☁️ Push this race to Challonge</button>
     </div>
     <button type="button" id="btn-milestone-close" class="btn btn-primary" data-i18n="milestone.nice">Nice!</button>
   </div>
@@ -1154,21 +1160,26 @@
 <div id="challonge-push-review-overlay" class="confirm-modal-overlay hidden">
   <div class="confirm-modal-card">
     <h2 data-i18n="challonge.reviewTitle">Review Before Pushing to Challonge</h2>
-    <div class="row">
+    <div class="row challonge-review-date-row">
       <label for="challonge-push-date-input" data-i18n="challonge.reviewDateLabel">Report date</label>
       <input type="date" id="challonge-push-date-input">
     </div>
     <p class="player-stats-note" id="challonge-push-review-summary"></p>
-    <h3 class="tournament-section-heading" data-i18n="challonge.reviewGamesHeading">Games to include</h3>
-    <p class="player-stats-note" data-i18n="challonge.reviewGamesHint">Uncheck any game you don't want counted — matchups recalculate as you do.</p>
-    <ul id="challonge-push-review-games-list" class="recover-games-checklist"></ul>
-    <p class="player-stats-note" id="challonge-push-review-matchups"></p>
+    <!-- a day's push only: its games, each can be left out -->
+    <div id="challonge-push-review-day-part">
+      <h3 class="tournament-section-heading" data-i18n="challonge.reviewGamesHeading">Games to include</h3>
+      <p class="player-stats-note" data-i18n="challonge.reviewGamesHint">Uncheck any game you don't want counted — matchups recalculate as you do.</p>
+      <ul id="challonge-push-review-games-list" class="recover-games-checklist"></ul>
+    </div>
+    <h3 class="tournament-section-heading" data-i18n="challonge.reviewPlanHeading">What goes to Challonge</h3>
+    <ul id="challonge-push-review-matchups" class="challonge-plan-list"></ul>
+    <p class="player-stats-note" id="challonge-push-review-plan-note"></p>
     <div class="confirm-modal-actions">
       <button type="button" id="btn-challonge-push-confirm" class="btn btn-primary" data-i18n="challonge.reviewConfirmButton">☁️ Push to Challonge</button>
       <button type="button" id="btn-challonge-close-tournament" class="btn btn-ghost hidden" data-i18n="challonge.closeTournamentButton">🔒 Close Tournament</button>
       <button type="button" id="btn-challonge-push-review-close" class="btn btn-ghost" data-i18n="common.cancel">Cancel</button>
     </div>
-    <p class="player-stats-note" data-i18n="challonge.closeTournamentHint">Pushing never closes the tournament by itself, so you can keep pushing this date again later if someone new plays. Close it only once you're done adding people for the day — Challonge won't accept new participants after that.</p>
+    <p class="player-stats-note" data-i18n="challonge.closeTournamentHint">Pushing never closes the tournament, so you can push again as more is played. 🔒 Close Tournament sends what's new, asks before sending any pair that never played as a 1–1 tie, then closes it — after that Challonge won't take new players or results.</p>
     <p class="player-stats-note" id="challonge-push-review-status"></p>
   </div>
 </div>
@@ -2550,7 +2561,7 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
     </button>
     <p class="panel-summary" id="challonge-panel-league-summary" data-i18n="challonge.summaryNotConnected">Not connected</p>
     <div class="panel-body" id="challonge-panel-league-body">
-      <p class="player-stats-note" data-i18n="challonge.introGeneral">Push today's report or a tournament to Challonge — rosters always, and match scores too wherever they can be matched up reliably (Round Robin tournaments, and any pair who played each other today — see why others don't in Help). Needs a free Challonge developer app: sign up at connect.challonge.com to get a client ID and secret, no login required from this app.</p>
+      <p class="player-stats-note" data-i18n="challonge.introGeneral">Push a day's games, a race or a tournament to Challonge. A result goes once it's played and again if it changes here, and Review Before Pushing shows exactly what will be sent. Round Robin and Single/Double Elimination send scores (an elimination bracket goes with its seeds, so Challonge draws the same one); Swiss sends the roster only. Needs a free Challonge developer app: sign up at connect.challonge.com to get a client ID and secret, no login required from this app.</p>
       <div class="row">
         <input type="text" id="challonge-client-id-input-league" data-i18n-placeholder="challonge.clientIdPlaceholder" placeholder="Challonge client ID" autocomplete="off">
       </div>
@@ -2561,6 +2572,11 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
         <button type="button" id="btn-challonge-test-connection-league" class="btn btn-ghost" data-i18n="challonge.testConnectionButton">🔌 Test Connection</button>
       </div>
       <p class="player-stats-note" id="challonge-test-connection-status-league"></p>
+      <div class="row">
+        <input type="text" class="challonge-venue-input" id="challonge-venue-input-league" maxlength="40" data-i18n-placeholder="challonge.venuePlaceholder" placeholder="Venue name (optional)" autocomplete="off">
+      </div>
+      <p class="player-stats-note" data-i18n="challonge.venueHint">Starts the name of every tournament this app creates on Challonge, e.g. "Joe's Bar — 2026-10-28 — Round Robin". Empty: "Pool Master Counter".</p>
+      <label class="checkbox-row"><input type="checkbox" class="challonge-private-checkbox" id="challonge-private-checkbox-league" checked> <span data-i18n="challonge.privateLabel">New tournaments are private (off Challonge's public list; anyone with the link can still see them)</span></label>
     </div>
   </section>
 
@@ -2695,11 +2711,11 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/big-store.js?v=20261028i"></script>
-<script src="js/mp4-clip.js?v=20261028i"></script>
-<script src="js/local-recorder.js?v=20261028i"></script>
-<script src="js/app.js?v=20261028i"></script>
-<script src="js/camera-client.js?v=20261028i"></script>
-<script src="js/voice.js?v=20261028i"></script>
+<script src="js/big-store.js?v=20261028j"></script>
+<script src="js/mp4-clip.js?v=20261028j"></script>
+<script src="js/local-recorder.js?v=20261028j"></script>
+<script src="js/app.js?v=20261028j"></script>
+<script src="js/camera-client.js?v=20261028j"></script>
+<script src="js/voice.js?v=20261028j"></script>
 </body>
 </html>

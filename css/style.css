@@ -4322,6 +4322,40 @@ input[type="number"] {
   margin-top: 8px;
 }
 
+/* Review Before Pushing: two lists in one card - the card scrolls, so
+   neither list gets squeezed to nothing on a short screen */
+#challonge-push-review-overlay .confirm-modal-card {
+  overflow-y: auto;
+}
+#challonge-push-review-overlay .confirm-modal-card > * {
+  flex-shrink: 0;
+}
+/* ...what goes to Challonge, one line each */
+.challonge-plan-list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+  font-size: 0.92rem;
+}
+.challonge-plan-list li {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+.challonge-plan-list .challonge-plan-same {
+  color: var(--text-dim);
+}
+.challonge-plan-list .challonge-plan-update,
+.challonge-plan-list .challonge-plan-stale {
+  border-color: var(--accent);
+}
+
 /* ---------- Generic modal alert/confirm/prompt (replaces native
    alert()/confirm()/prompt(), which pause the whole page and read as a
    browser chrome popup rather than part of the app) ---------- */
