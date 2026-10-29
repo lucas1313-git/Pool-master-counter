@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261028k">
+<link rel="stylesheet" href="css/style.css?v=20261028l">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -279,6 +279,7 @@
           <label class="setting-with-number-label"><input type="checkbox" id="timed-tournament-enabled-checkbox"> <span data-i18n="gameSetup.timedTournamentEnable">⏰ Timed Tournament</span></label>
           <span class="setting-number hidden" id="timed-tournament-minutes-row"><span class="inline-number-template" data-template="gameSetup.timedEndsAfterInline" data-input="timed-tournament-minutes-input">— ends after {{n}} minutes</span><input type="number" id="timed-tournament-minutes-input" class="big-number-input" min="1" max="600" value="60" inputmode="numeric"></span>
         </div>
+        <label class="checkbox-row timed-finish-rack-row hidden" id="timed-tournament-finish-row"><input type="checkbox" id="timed-tournament-finish-rack" checked> <span data-i18n="gameSetup.timedFinishRack">⏰ When time's up, finish the rack in play — the session ends at the next win</span></label>
         <div class="checkbox-row checkbox-row-prominent setting-with-number fair-race-row">
           <label class="setting-with-number-label"><input type="checkbox" id="fair-race-enabled-checkbox"> <span data-i18n="gameSetup.fairRaceEnable">⚖️ Use Q-Score to balance the race</span></label>
           <span class="fair-race-inline-explain" data-i18n="gameSetup.fairRaceShortExplain">Shortens the underdog's target based on the rating gap, so the match is closer to a coin flip.</span>
@@ -365,17 +366,20 @@
       </div>
       <div class="rotation-position-text" id="rotation-position-text"></div>
     </div>
+    <!-- the shot counter and the session countdown, side by side when both are on -->
+    <div class="session-timers-row">
     <div id="shot-counter-widget" class="shot-counter-widget hidden">
       <span id="shot-counter-time">0:00</span>
       <button type="button" id="shot-counter-reset" class="shot-counter-reset-btn" data-i18n-aria-label="gameSetup.shotCounterResetAria" aria-label="Reset the shot timer to 0:00">🔄</button>
       <button type="button" id="shot-counter-kill" class="shot-counter-kill-btn" data-i18n-aria-label="gameSetup.shotCounterKillAria" aria-label="Turn off the shot timer completely">⏹</button>
       <button type="button" id="shot-counter-hide" class="shot-counter-hide-btn" data-i18n-aria-label="gameSetup.shotCounterHideAria" aria-label="Hide the shot timer">✕</button>
     </div>
-    <button type="button" id="shot-counter-visibility-toggle" class="shot-counter-visibility-toggle hidden" data-i18n-aria-label="gameSetup.shotCounterToggleVisibility" aria-label="Show/Hide Timer">👁️</button>
     <div id="timed-tournament-widget" class="timed-tournament-widget hidden">
       <span id="timed-tournament-time">0:00</span>
       <button type="button" id="timed-tournament-pause-toggle" class="timed-tournament-pause-toggle" data-i18n-aria-label="gameSetup.timedTournamentPauseAria" aria-label="Pause the tournament timer">⏸️</button>
     </div>
+    </div>
+    <button type="button" id="shot-counter-visibility-toggle" class="shot-counter-visibility-toggle hidden" data-i18n-aria-label="gameSetup.shotCounterToggleVisibility" aria-label="Show/Hide Timer">👁️</button>
     <div class="scoreboard" id="scoreboard"></div>
     <div class="unmatched-shooter-banner-anchor">
       <div id="unmatched-shooter-banner" class="unmatched-shooter-banner hidden">
@@ -2714,11 +2718,11 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/big-store.js?v=20261028k"></script>
-<script src="js/mp4-clip.js?v=20261028k"></script>
-<script src="js/local-recorder.js?v=20261028k"></script>
-<script src="js/app.js?v=20261028k"></script>
-<script src="js/camera-client.js?v=20261028k"></script>
-<script src="js/voice.js?v=20261028k"></script>
+<script src="js/big-store.js?v=20261028l"></script>
+<script src="js/mp4-clip.js?v=20261028l"></script>
+<script src="js/local-recorder.js?v=20261028l"></script>
+<script src="js/app.js?v=20261028l"></script>
+<script src="js/camera-client.js?v=20261028l"></script>
+<script src="js/voice.js?v=20261028l"></script>
 </body>
 </html>

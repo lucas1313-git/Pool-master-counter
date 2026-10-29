@@ -2387,6 +2387,28 @@ input[type="number"] {
    distinct (warm border) since both can be on screen together and need
    to read as two different clocks, not one. Shows the tournament's
    remaining time - see tickTimedTournament. */
+/* The shot counter and the session countdown side by side (each centred
+   on its own when it's the only one showing) */
+.session-timers-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  column-gap: 14px;
+}
+.session-timers-row > .shot-counter-widget,
+.session-timers-row > .timed-tournament-widget {
+  margin-left: 0;
+  margin-right: 0;
+}
+/* time's up, the last rack (or a playoff) being played */
+.timed-tournament-widget.timed-last-rack {
+  border-color: var(--accent);
+}
+.timed-tournament-widget.timed-last-rack #timed-tournament-time {
+  font-size: clamp(1.3rem, 4.5vw, 2rem);
+}
+
 .timed-tournament-widget {
   display: flex;
   align-items: center;

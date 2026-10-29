@@ -795,6 +795,95 @@
     return isRacing() && wins > 0 && wins >= effectiveRaceTarget(key);
   }
 
+  // Everyone at or past their race right now (individual: every player,
+  // seated or waiting; teams: A and B), most wins first.
+  function racePassedSides() {
+    if (!isRacing()) return [];
+    var sides = [];
+    if (state.currentGame.mode === "teams") {
+      ["A", "B"].forEach(function (k) {
+        var wins = state.teamWins[k] || 0;
+        if (raceReached(wins, k)) sides.push({ key: k, isTeam: true, wins: wins, names: teamMembersLive(k).map(function (p) { return p.name; }) });
+      });
+    } else {
+      state.players.forEach(function (p) {
+        var wins = state.playerWins[p.id] || 0;
+        if (raceReached(wins, p.id)) sides.push({ key: p.id, isTeam: false, wins: wins, names: [p.name] });
+      });
+    }
+    return sides.sort(function (a, b) { return b.wins - a.wins; });
+  }
+
+  // Ends the race now for whoever is furthest past it (tied: together):
+  // their latest win this session is marked as the one that won the race
+  // (so it counts as a tournament won, as any race does), then the usual
+  // celebration archives the session.
+  function closeRaceNow(sides) {
+    var top = sides.filter(function (s) { return s.wins === sides[0].wins; });
+    top.forEach(function (side) {
+      var theirs = state.gameHistory.filter(function (g) {
+        return g && typeof g === "object" && (side.isTeam ? g.isTeam && g.teamId === side.key : (g.winnerIds || []).indexOf(side.key) !== -1);
+      });
+      // (a win already marked as the race's - the one that reached it,
+      // before the race was left open - stays the one)
+      if (theirs.some(function (g) { return g.wonRace; })) return;
+      var entry = theirs[0];
+      if (entry) {
+        entry.wonRace = true;
+        entry.raceTarget = effectiveRaceTarget(side.key);
+        entry.raceCount = side.wins;
+      }
+    });
+    saveState();
+    var names = top.map(function (s) { return s.names.join(" & "); }).join(" & ");
+    celebrateTournamentWin(names, top[0].wins, effectiveRaceTarget(top[0].key));
+  }
+
+  // At start-up: a race won but never closed - the win popup still open
+  // when the page reloaded (the saved flag), or someone at or past their
+  // race from before this check existed - closes now, exactly once
+  // (closing starts a new session, which clears the flag).
+  function closeRaceLeftOpen() {
+    var pending = state.raceClosedPending;
+    if (pending) {
+      var stillThere = state.gameHistory.some(function (g) { return g && g.ts === pending.ts; });
+      if (stillThere) {
+        celebrateTournamentWin(pending.names, pending.count, pending.target);
+        return;
+      }
+      state.raceClosedPending = null;
+      saveState();
+    }
+    var passed = racePassedSides();
+    if (passed.length) closeRaceNow(passed);
+  }
+
+  // After the race changes mid-match (a new number, fair race on/off):
+  // anyone already at or past their new race? Ask - end the race now with
+  // them as the winner, or keep the race as it was (undo()).
+  function checkRaceAfterTargetChange(undo) {
+    var passed = racePassedSides();
+    if (!passed.length) return;
+    var top = passed.filter(function (s) { return s.wins === passed[0].wins; });
+    var names = top.map(function (s) { return s.names.join(" & "); }).join(" & ");
+    confirmModal(TP("race.passedAsk", top[0].wins, { names: names, wins: top[0].wins, target: effectiveRaceTarget(top[0].key) }), function () {
+      closeRaceNow(passed);
+    }, function () {
+      undo();
+      renderAll();
+    });
+  }
+
+  // "Keep the race as it was": the number (and its boxes) back.
+  function restoreRaceTarget(old) {
+    state.raceToWinsTarget = old;
+    if (old !== 1) lastRaceToWinsTarget = old;
+    state.fairRaceTargets = null;
+    saveState();
+    renderRaceMode();
+    updateCurrentGameSummary();
+  }
+
   // Mirrors buildRotationRow/renderRotationListInto/moveRotationItem
   // (the Games Rotation list) - same ordered-list-with-up/down-arrows
   // interaction, just for standby players instead of game types. No
@@ -956,6 +1045,9 @@
   var timedTournamentRunningSince = null;
   var timedTournamentBeeped5Min = false;
   var timedTournamentBeeped1Min = false;
+  // Time is up and the rack in play is being finished (the "finish the
+  // rack" rule) - saved with the clock, see saveTimedClock.
+  var timedTournamentTimeUp = false;
 
   // Player ids in keypad-number order (index 0 = number 1, etc.) - filled
   // in by refreshKeypadNumbering() after every scoreboard render, since
@@ -2588,6 +2680,8 @@
   var timedTournamentMinutesRow = document.getElementById("timed-tournament-minutes-row");
   var timedTournamentMinutesInput = document.getElementById("timed-tournament-minutes-input");
   var timedTournamentPauseToggle = document.getElementById("timed-tournament-pause-toggle");
+  var timedTournamentFinishRow = document.getElementById("timed-tournament-finish-row");
+  var timedTournamentFinishRackCheckbox = document.getElementById("timed-tournament-finish-rack");
 
   var btnQuickGame = document.getElementById("btn-quick-game");
   var quickGameOverlay = document.getElementById("quick-game-overlay");
@@ -5546,6 +5640,7 @@
           racingToInput.value = state.raceToWinsTarget;
           return;
         }
+        var before = state.raceToWinsTarget;
         state.raceToWinsTarget = v;
         lastRaceToWinsTarget = v;
         // The anchor value just changed - drop the cached fair targets
@@ -5558,6 +5653,7 @@
         renderScoreboard();
         renderStandings();
         updateCurrentGameSummary();
+        if (before !== v) checkRaceAfterTargetChange(function () { restoreRaceTarget(before); });
       });
       racingToWrap.appendChild(racingToInput);
       racingToWrap.appendChild(document.createTextNode(raceParts[1] || ""));
@@ -5603,7 +5699,7 @@
     // readout up here is redundant clutter rather than useful
     // information - left blank in that combination instead.
     if (timedTournamentActive()) {
-      el.textContent = shotCounterActive() ? "" : T("timedTournament.remainingLive", { time: formatDuration(timedTournamentRemainingMs()) });
+      el.textContent = shotCounterActive() ? "" : timedTournamentTimeUp ? T("timedTournament.lastRackShort") : T("timedTournament.remainingLive", { time: formatDuration(timedTournamentRemainingMs()) });
       return;
     }
     var startedAt = state.currentGame.startedAt ? new Date(state.currentGame.startedAt).getTime() : NaN;
@@ -5784,6 +5880,14 @@
     return Math.max(0, timedTournamentDurationMs() - timedTournamentElapsedMs());
   }
 
+  // The clock is saved with the session (state.timedClock): when it
+  // started running (a moment in time, so a reload doesn't restart it),
+  // what had run before a pause, and whether time is up (the last rack).
+  function saveTimedClock() {
+    state.timedClock = { accumulatedMs: timedTournamentAccumulatedMs, runningSince: timedTournamentRunningSince, timeUp: timedTournamentTimeUp };
+    saveState();
+  }
+
   // Called when the checkbox is checked, and again every time a new
   // round starts (see startNewSession) if it's still enabled then -
   // unlike the shot counter, this starts out RUNNING, not paused, since
@@ -5793,6 +5897,27 @@
     timedTournamentRunningSince = Date.now();
     timedTournamentBeeped5Min = false;
     timedTournamentBeeped1Min = false;
+    timedTournamentTimeUp = false;
+    state.timedPlayoff = null;
+    saveTimedClock();
+    tickTimedTournament();
+  }
+
+  // At start-up: the saved clock carries on with the time it really has
+  // left (time that ran out while the page was closed ends the session
+  // now - see tickTimedTournament); no saved clock, a fresh one.
+  function resumeTimedTournament() {
+    var clock = state.timedClock;
+    if (!clock || typeof clock.accumulatedMs !== "number") {
+      startTimedTournament();
+      return;
+    }
+    timedTournamentAccumulatedMs = clock.accumulatedMs;
+    timedTournamentRunningSince = typeof clock.runningSince === "number" ? clock.runningSince : null;
+    timedTournamentTimeUp = !!clock.timeUp;
+    var remaining = timedTournamentRemainingMs();
+    timedTournamentBeeped5Min = remaining <= 5 * 60000;
+    timedTournamentBeeped1Min = remaining <= 60000;
     tickTimedTournament();
   }
 
@@ -5803,34 +5928,48 @@
     timedTournamentRunningSince = null;
     timedTournamentBeeped5Min = false;
     timedTournamentBeeped1Min = false;
+    timedTournamentTimeUp = false;
+    state.timedPlayoff = null;
+    saveTimedClock();
     tickTimedTournament();
   }
 
   // Shared by the small pause button on the widget - same accumulate-
   // on-pause/resume-from-a-fresh-timestamp pattern as
-  // toggleShotCounterPause.
+  // toggleShotCounterPause. Once time is up the same button ends the
+  // session now instead (no last rack after all).
   function toggleTimedTournamentPause() {
     if (!timedTournamentActive()) return;
+    if (timedTournamentTimeUp || state.timedPlayoff) {
+      confirmModal(T("timedTournament.endNowConfirm"), function () {
+        state.timedPlayoff = null;
+        celebrateTimedTournamentEnd(true);
+      });
+      return;
+    }
     if (timedTournamentRunningSince) {
       timedTournamentAccumulatedMs += Date.now() - timedTournamentRunningSince;
       timedTournamentRunningSince = null;
     } else {
       timedTournamentRunningSince = Date.now();
     }
+    saveTimedClock();
     tickTimedTournament();
   }
 
-  // Individual mode: ranks currently-active players by session wins.
-  // Teams mode: ranks the two sides by team wins. A tie in wins is
-  // broken by whatever's currently on the board (this session's running
-  // point tally) only for a "points" unit game - rack/balls games have
-  // no meaningful partial score to break a tie with, so those just stay
-  // tied. Returns null if there's nobody to rank at all.
+  // Who's ahead when the clock runs out: individual - every player with a
+  // win this session, seated or waiting (Winner Stays benches people who
+  // won plenty); teams - A and B. Most wins; tied, then the wins the tied
+  // ones took off each other this session, then racks won (every game's
+  // score at its end, lost games too), then - a points game - the points
+  // on the board now. Returns {sides, names, count, tied} (tied: still
+  // level after all that - see celebrateTimedTournamentEnd), or null with
+  // nobody to rank.
   function computeTimedTournamentResult() {
     var isTeams = state.currentGame.mode === "teams";
-    var scores;
+    var sides;
     if (isTeams) {
-      scores = ["A", "B"]
+      sides = ["A", "B"]
         .filter(function (key) {
           return teamMembersLive(key).length > 0;
         })
@@ -5838,49 +5977,121 @@
           var names = teamMembersLive(key).map(function (p) {
             return p.name;
           });
-          return { name: names.length ? names.join(" & ") : "Team " + key, wins: state.teamWins[key] || 0, points: sumTeamBalls(key) };
+          return { key: key, isTeam: true, names: names, label: names.length ? names.join(" & ") : "Team " + key, wins: state.teamWins[key] || 0, points: sumTeamBalls(key) };
         });
     } else {
-      scores = activePlayers().map(function (p) {
-        return { name: p.name, wins: state.playerWins[p.id] || 0, points: p.balls || 0 };
+      sides = state.players
+        .filter(function (p) {
+          return p.playing || (state.playerWins[p.id] || 0) > 0;
+        })
+        .map(function (p) {
+          return { key: p.id, isTeam: false, names: [p.name], label: p.name, wins: state.playerWins[p.id] || 0, points: p.balls || 0 };
+        });
+    }
+    if (sides.length === 0) return null;
+    function best(list, score) {
+      var top = Math.max.apply(null, list.map(score));
+      return list.filter(function (s) { return score(s) === top; });
+    }
+    var tied = best(sides, function (s) { return s.wins; });
+    var games = state.gameHistory.filter(function (g) { return g && typeof g === "object" && g.winnerNames; });
+    if (tied.length > 1) {
+      tied = best(tied, function (s) {
+        var others = [];
+        tied.forEach(function (o) { if (o !== s) others = others.concat(o.names); });
+        return games.filter(function (g) {
+          var won = s.isTeam ? g.isTeam && g.teamId === s.key : (g.winnerIds || []).indexOf(s.key) !== -1;
+          return won && (g.opponentNames || []).some(function (n) { return others.indexOf(n) !== -1; });
+        }).length;
       });
     }
-    if (scores.length === 0) return null;
-    var maxWins = Math.max.apply(
-      null,
-      scores.map(function (s) {
-        return s.wins;
-      })
-    );
-    var tied = scores.filter(function (s) {
-      return s.wins === maxWins;
-    });
-    if (tied.length > 1 && state.currentGame.unit === "points") {
-      var maxPoints = Math.max.apply(
-        null,
-        tied.map(function (s) {
-          return s.points;
-        })
-      );
-      tied = tied.filter(function (s) {
-        return s.points === maxPoints;
+    if (tied.length > 1) {
+      tied = best(tied, function (s) {
+        return games.reduce(function (sum, g) {
+          return sum + s.names.reduce(function (t, n) { return t + ((g.scores && g.scores[n]) || 0); }, 0);
+        }, 0);
       });
+    }
+    if (tied.length > 1 && state.currentGame.unit === "points") {
+      tied = best(tied, function (s) { return s.points; });
     }
     return {
-      names: tied
-        .map(function (s) {
-          return s.name;
-        })
-        .join(" & "),
-      count: maxWins
+      sides: tied,
+      names: tied.map(function (s) { return s.label; }).join(" & "),
+      count: tied[0].wins,
+      tied: tied.length > 1
     };
+  }
+
+  // Called once a credited win's popup closes (see creditWin): with time
+  // up, that rack was the last - the session ends now; in a playoff, its
+  // winner (one of the tied) takes the session. true when it ended.
+  function timedTournamentSessionOver(winnerKey, isTeam) {
+    if (!timedTournamentActive()) return false;
+    var playoff = state.timedPlayoff;
+    if (playoff) {
+      if (playoff.keys.indexOf(winnerKey) === -1) return false;
+      finishTimedPlayoff(winnerKey);
+      return true;
+    }
+    if (!timedTournamentTimeUp) return false;
+    celebrateTimedTournamentEnd();
+    return true;
+  }
+
+  // Still level after every tie-break: a one-rack playoff between them
+  // (only they stay seated; the next game one of them wins decides it),
+  // or they share the win.
+  function offerTimedPlayoff(result) {
+    tournamentChooser(T("timedTournament.tiedTitle", { names: result.names, count: result.count }), [
+      { label: T("timedTournament.playoffButton"), primary: true, run: function () { startTimedPlayoff(result); } },
+      { label: T("timedTournament.shareButton"), run: function () { finishTimedTournament(result.sides, result.count); } }
+    ], { noCancel: true });
+  }
+
+  function startTimedPlayoff(result) {
+    var keys = result.sides.map(function (s) { return s.key; });
+    var seats = {};
+    if (state.currentGame.mode !== "teams") {
+      state.players.forEach(function (p) {
+        seats[p.id] = !!p.playing;
+        p.playing = keys.indexOf(p.id) !== -1;
+      });
+    }
+    state.timedPlayoff = { keys: keys, names: result.names, seats: seats };
+    resetGameBalls();
+    saveState();
+    renderAll();
+    tickTimedTournament();
+    showToast(T("timedTournament.playoffToast", { names: result.names }));
+  }
+
+  function finishTimedPlayoff(winnerKey) {
+    var playoff = state.timedPlayoff;
+    state.timedPlayoff = null;
+    Object.keys(playoff.seats || {}).forEach(function (id) {
+      var p = getPlayer(id);
+      if (p) p.playing = playoff.seats[id];
+    });
+    var result = computeTimedTournamentResult();
+    var side = result && result.sides.filter(function (s) { return s.key === winnerKey; })[0];
+    if (!side) {
+      // (the playoff winner is the one with a win more now - find them)
+      var all = state.currentGame.mode === "teams" ? [{ key: winnerKey, isTeam: true, names: teamMembersLive(winnerKey).map(function (p) { return p.name; }) }] : [{ key: winnerKey, isTeam: false, names: [getPlayer(winnerKey).name] }];
+      side = all[0];
+      side.label = side.names.join(" & ");
+      side.wins = side.isTeam ? state.teamWins[winnerKey] || 0 : state.playerWins[winnerKey] || 0;
+    }
+    finishTimedTournament([side], side.wins);
   }
 
   // The clock hitting zero - same archive-and-reset celebrateTournamentWin
   // does for a race-to-N win, just with "Time up!" framing instead and
-  // no per-win "undo" snapshot (there's no single game to retrograde back
-  // past the way there is for an actual credited win).
-  function celebrateTimedTournamentEnd() {
+  // no per-win "undo" snapshot. With the "finish the rack" rule on, time
+  // up first lets the rack in play finish (tickTimedTournament); this
+  // runs at the next win, or straight away when nobody's at the table or
+  // endNow (⏹). Level after the tie-breaks: a playoff or a shared win.
+  function celebrateTimedTournamentEnd(endNow) {
     var result = computeTimedTournamentResult();
     if (!result || result.count === 0) {
       // Nobody's actually played yet this round - nothing to celebrate,
@@ -5888,13 +6099,37 @@
       startTimedTournament();
       return;
     }
+    if (result.tied && !endNow) {
+      offerTimedPlayoff(result);
+      return;
+    }
+    finishTimedTournament(result.sides, result.count);
+  }
 
+  // The session's champion(s): their latest win this session is marked as
+  // the one that won it (wonRace + timedSession - a tournament won, the
+  // way a race's winning game is), then it's archived and a new round
+  // starts.
+  function finishTimedTournament(sides, count) {
+    sides.forEach(function (side) {
+      var entry = state.gameHistory.filter(function (g) {
+        return g && typeof g === "object" && (side.isTeam ? g.isTeam && g.teamId === side.key : (g.winnerIds || []).indexOf(side.key) !== -1);
+      })[0];
+      if (entry) {
+        entry.wonRace = true;
+        entry.timedSession = true;
+        entry.timedMinutes = state.currentGame.timedTournamentMinutes || 60;
+        entry.raceCount = side.wins;
+      }
+    });
+    var names = sides.map(function (s) { return s.label; }).join(" & ");
     closeOnHill();
     lastTournamentWinSnapshot = null;
+    state.timedPlayoff = null;
     exportAllPlayerStats();
     startNewSession(true);
 
-    milestoneHeadline.textContent = TP("timedTournament.headline", result.count, { names: result.names, count: result.count });
+    milestoneHeadline.textContent = TP("timedTournament.headline", count, { names: names, count: count });
     milestoneDetails.innerHTML = "";
     milestoneDetails.appendChild(playerStatsRow(T("milestone.tournamentGoal"), T("timedTournament.expiredLabel")));
     btnMilestoneChallonge.classList.add("hidden");
@@ -5903,30 +6138,46 @@
   }
 
   // Runs on the same 1-second cadence as tickShotCounter (see the
-  // setInterval near boot).
+  // setInterval near boot). Shown beside the shot counter when both are on.
   function tickTimedTournament() {
     var widget = document.getElementById("timed-tournament-widget");
     if (!widget) return;
     var active = timedTournamentActive();
     var overlayOrAppHidden = isAnyOverlayOpen() || appRoot.classList.contains("hidden");
-    // The Shot Counter widget already occupies the same "a timer is
-    // showing" spot on screen - with both features on at once, showing
-    // this one too is redundant clutter, not useful information, so it
-    // stays hidden (the countdown itself keeps running underneath,
-    // unaffected - this only ever hides the display, never below).
-    widget.classList.toggle("hidden", !(active && !overlayOrAppHidden) || shotCounterActive());
+    widget.classList.toggle("hidden", !(active && !overlayOrAppHidden));
     if (!active) return;
 
     var remaining = timedTournamentRemainingMs();
     var timeEl = document.getElementById("timed-tournament-time");
-    if (timeEl) timeEl.textContent = formatDuration(remaining);
+    var lastRack = timedTournamentTimeUp || !!state.timedPlayoff;
+    widget.classList.toggle("timed-last-rack", lastRack);
+    if (timeEl) {
+      timeEl.textContent = state.timedPlayoff
+        ? T("timedTournament.playoffShort", { names: state.timedPlayoff.names })
+        : timedTournamentTimeUp ? T("timedTournament.lastRackShort") : formatDuration(remaining);
+    }
     if (timedTournamentPauseToggle) {
-      timedTournamentPauseToggle.textContent = timedTournamentRunningSince ? "⏸️" : "▶️";
+      timedTournamentPauseToggle.textContent = lastRack ? "⏹" : timedTournamentRunningSince ? "⏸️" : "▶️";
+      timedTournamentPauseToggle.setAttribute("aria-label", T(lastRack ? "timedTournament.endNowAria" : "gameSetup.timedTournamentPauseAria"));
     }
 
     if (!timedTournamentRunningSince) return;
 
     if (remaining <= 0) {
+      timedTournamentAccumulatedMs = timedTournamentDurationMs();
+      timedTournamentRunningSince = null;
+      // "Finish the rack" (the default): the rack in play counts - the
+      // session ends at the next win (timedTournamentSessionOver) or ⏹.
+      // Nobody seated, or the rule off: it ends now.
+      if (state.currentGame.timedTournamentFinishRack !== false && activePlayers().length > 1) {
+        timedTournamentTimeUp = true;
+        saveTimedClock();
+        playTimedTournamentOneMinWarning();
+        showToast(T("timedTournament.lastRackToast"));
+        tickTimedTournament();
+        return;
+      }
+      saveTimedClock();
       celebrateTimedTournamentEnd();
       return;
     }
@@ -6089,7 +6340,9 @@
       if (entry.wonRace) {
         var raceBanner = document.createElement("div");
         raceBanner.className = "history-race-banner";
-        raceBanner.textContent = T("history.wonRaceSession", { names: entry.winnerNames.join(" & "), target: entry.raceTarget });
+        raceBanner.textContent = entry.timedSession
+          ? T("history.wonTimedSession", { names: entry.winnerNames.join(" & "), minutes: entry.timedMinutes })
+          : T("history.wonRaceSession", { names: entry.winnerNames.join(" & "), target: entry.raceTarget });
         li.appendChild(raceBanner);
       }
       historyList.appendChild(li);
@@ -6404,10 +6657,12 @@
       }
       summary = teamLabelLive(key) + " won " + typeLabel + " (target " + state.currentGame.target + ")";
       takeRaceTally();
-      if (isRacing() && target > 0 && newTeamWins % target === 0) {
+      // (reaching OR passing the race ends it - a race left open by a
+      // reload, or a target lowered under someone's wins, still closes)
+      if (raceReached(newTeamWins, key)) {
         milestoneNames = winnerNames.join(" & ");
         milestoneCount = newTeamWins;
-      } else if (isRacing() && target > 1 && newTeamWins % target === target - 1) {
+      } else if (isRacing() && target > 1 && newTeamWins === target - 1) {
         onHillNames = teamLabelLive(key);
       }
     } else {
@@ -6425,10 +6680,10 @@
       var newPlayerWins = (state.playerWins[key] || 0) + 1;
       state.playerWins[key] = newPlayerWins;
       summary = getPlayer(key).name + " won " + typeLabel + " (target " + state.currentGame.target + ")";
-      if (isRacing() && target > 0 && newPlayerWins % target === 0) {
+      if (raceReached(newPlayerWins, key)) {
         milestoneNames = getPlayer(key).name;
         milestoneCount = newPlayerWins;
-      } else if (isRacing() && target > 1 && newPlayerWins % target === target - 1) {
+      } else if (isRacing() && target > 1 && newPlayerWins === target - 1) {
         onHillNames = getPlayer(key).name;
       }
 
@@ -6600,6 +6855,10 @@
       // ever played, only the ones marked as playing for the team.
       teamCredit: null
     });
+    // The race is closed the moment this win reaches it - saved, so a
+    // reload with the win popup still open closes and archives it then
+    // (see closeRaceLeftOpen), exactly once.
+    if (milestoneNames) state.raceClosedPending = { ts: ts, names: milestoneNames, count: milestoneCount, target: target };
     trimGameHistory();
     if (!noStatsMode && !isTeam) {
       // Team Mode isn't rated at all (see applyMultiWayRatingResult's
@@ -6638,7 +6897,9 @@
     // and resets the session — deferred to showGameWinOverlay's onClose.
     showGameWinOverlay(summary, ts, function () {
       if (milestoneNames) {
-        celebrateTournamentWin(milestoneNames, milestoneCount);
+        celebrateTournamentWin(milestoneNames, milestoneCount, target);
+      } else if (timedTournamentSessionOver(key, isTeam)) {
+        // (the timed session ended with this rack - see timedTournamentSessionOver)
       } else if (onHillNames) {
         announceOnHill(onHillNames, target);
       } else if (gameTypeChanged) {
@@ -6718,6 +6979,8 @@
   function retrogradeLastGame() {
     var entry = state.gameHistory[0];
     if (!entry || typeof entry === "string" || !entry.winnerIds) return null;
+    // (the win that closed the race taken back: the race is open again)
+    if (state.raceClosedPending && state.raceClosedPending.ts === entry.ts) state.raceClosedPending = null;
     entry.winnerIds.forEach(function (id) {
       state.playerWins[id] = Math.max(0, (state.playerWins[id] || 0) - 1);
     });
@@ -7251,12 +7514,11 @@
   // never be applied after that overlay has closed.
   var lastTournamentWinSnapshot = null;
 
-  function celebrateTournamentWin(names, count) {
-    // count is the win tally that just triggered this exact milestone,
-    // so it already *is* whatever target (global or fair) was hit -
-    // no separate lookup needed, and this stays correct even when a
-    // fair-race target differs from state.raceToWinsTarget.
-    var target = count;
+  function celebrateTournamentWin(names, count, raceTarget) {
+    // count is the win tally that just triggered this exact milestone;
+    // raceTarget the race it reached (count itself when not given - the
+    // same number unless a race was passed, see closeRaceNow).
+    var target = raceTarget || count;
 
     // A win one game earlier can leave the on-hill overlay open (it has no
     // reason to auto-close on its own) — without this it stacks visually
@@ -7884,6 +8146,7 @@
 
   function startNewSession(saveRoster) {
     if (saveRoster) maybeSaveRosterOnNewSession();
+    state.raceClosedPending = null;
     state.playerWins = {};
     state.teamWins = {};
     state.teamMvpWins = {};
@@ -8119,6 +8382,7 @@
   function formatReportRaceWinLine(g) {
     var time = formatReportGameTime(g.ts);
     var names = joinNamesForReport((g.winnerNames || []).length ? g.winnerNames : (g.teammateNames || []));
+    if (g.timedSession) return "🏆 " + (time ? time + " — " : "") + names + " won the " + g.timedMinutes + "-minute timed session!";
     return "🏆 " + (time ? time + " — " : "") + names + " won the Race to " + g.raceTarget + " session!";
   }
 
@@ -9633,7 +9897,7 @@
           joinNamesForReport(g.opponentNames || []),
           g.gameLabel,
           formatDuration(g.durationMs),
-          g.wonRace ? "Race to " + g.raceTarget : "",
+          g.wonRace ? (g.timedSession ? g.timedMinutes + "-minute session" : "Race to " + g.raceTarget) : "",
           g.skunk ? "Yes" : ""
         ])
       );
@@ -21294,6 +21558,8 @@
         wonRace: entry.wonRace,
         raceTarget: entry.raceTarget,
         raceCount: entry.raceCount,
+        timedSession: !!entry.timedSession,
+        timedMinutes: entry.timedMinutes || null,
         ballsLeftOnTable: entry.ballsLeftOnTable === undefined ? null : entry.ballsLeftOnTable,
         skunk: entry.skunk === undefined ? false : entry.skunk,
         teamCredit: entry.teamCredit || null
@@ -22178,7 +22444,8 @@
       pieces.push(opponentEl);
     }
     pieces.push(document.createTextNode(T(g.result === "won" ? "playerPage.ratingHistoryResultWon" : "playerPage.ratingHistoryResultLost")));
-    if (g.wonRace && g.raceTarget) pieces.push(document.createTextNode(T("playerPage.statDetailRaceTo", { target: g.raceTarget })));
+    if (g.wonRace && g.timedSession) pieces.push(document.createTextNode(T("playerPage.statDetailTimed", { minutes: g.timedMinutes })));
+    else if (g.wonRace && g.raceTarget) pieces.push(document.createTextNode(T("playerPage.statDetailRaceTo", { target: g.raceTarget })));
     var durationText = formatDuration(g.durationMs);
     if (durationText) pieces.push(document.createTextNode(T("common.duration", { time: durationText })));
     if (g.ballsLeftOnTable !== null && g.ballsLeftOnTable !== undefined) {
@@ -22287,7 +22554,7 @@
             joinNamesForReport(g.winnerNames || []),
             joinNamesForReport(g.opponentNames || []),
             formatDuration(g.durationMs),
-            g.wonRace ? "Race to " + g.raceTarget : "",
+            g.wonRace ? (g.timedSession ? g.timedMinutes + "-minute session" : "Race to " + g.raceTarget) : "",
             g.skunk ? "Yes" : "",
             g.ballsLeftOnTable !== null && g.ballsLeftOnTable !== undefined ? g.ballsLeftOnTable : ""
           ])
@@ -22654,6 +22921,8 @@
       wonRace: g.wonRace,
       raceTarget: g.raceTarget,
       raceCount: g.raceCount,
+      timedSession: !!g.timedSession,
+      timedMinutes: g.timedMinutes || null,
       skunk: g.skunk || false
     };
   }
@@ -26661,6 +26930,7 @@
 
   function voiceSetRace(n) {
     n = Math.max(1, Math.min(99, n));
+    var before = state.raceToWinsTarget;
     if (n === 1 && state.raceToWinsTarget !== 1) lastRaceToWinsTarget = state.raceToWinsTarget;
     if (n !== 1) lastRaceToWinsTarget = n;
     state.raceToWinsTarget = n;
@@ -26671,6 +26941,7 @@
     renderScoreboard();
     renderStandings();
     updateCurrentGameSummary();
+    if (before !== n) checkRaceAfterTargetChange(function () { restoreRaceTarget(before); });
     return T("voice.done.race", { n: n });
   }
 
@@ -30695,7 +30966,9 @@
   }
 
   // A small chooser: a title and a few buttons (and Cancel).
-  function tournamentChooser(title, choices) {
+  // opts.noCancel: one of the choices must be picked (no Cancel, no
+  // closing by a tap outside).
+  function tournamentChooser(title, choices, opts) {
     var overlay = document.createElement("div");
     overlay.className = "confirm-modal-overlay tournament-chooser-overlay";
     overlay.id = "tournament-chooser-overlay";
@@ -30719,15 +30992,18 @@
       });
       card.appendChild(btn);
     });
-    var cancel = document.createElement("button");
-    cancel.type = "button";
-    cancel.className = "btn btn-ghost";
-    cancel.textContent = T("common.cancel");
-    cancel.addEventListener("click", close);
-    card.appendChild(cancel);
+    var mustPick = !!(opts && opts.noCancel);
+    if (!mustPick) {
+      var cancel = document.createElement("button");
+      cancel.type = "button";
+      cancel.className = "btn btn-ghost";
+      cancel.textContent = T("common.cancel");
+      cancel.addEventListener("click", close);
+      card.appendChild(cancel);
+    }
     overlay.appendChild(card);
     overlay.addEventListener("click", function (e) {
-      if (e.target === overlay) close();
+      if (e.target === overlay && !mustPick) close();
     });
     document.body.appendChild(overlay);
   }
@@ -33153,6 +33429,7 @@
     state.currentGame.timedTournamentEnabled = timedTournamentEnabledCheckbox.checked;
     saveState();
     timedTournamentMinutesRow.classList.toggle("hidden", !timedTournamentEnabledCheckbox.checked);
+    timedTournamentFinishRow.classList.toggle("hidden", !timedTournamentEnabledCheckbox.checked);
     if (timedTournamentEnabledCheckbox.checked) startTimedTournament();
     else stopTimedTournament();
   });
@@ -33161,6 +33438,11 @@
     var min = parseInt(timedTournamentMinutesInput.value, 10);
     if (!min || min < 1) return;
     state.currentGame.timedTournamentMinutes = Math.min(600, min);
+    saveState();
+  });
+
+  timedTournamentFinishRackCheckbox.addEventListener("change", function () {
+    state.currentGame.timedTournamentFinishRack = timedTournamentFinishRackCheckbox.checked;
     saveState();
   });
 
@@ -35007,9 +35289,13 @@
     );
   });
 
+  // (where a typed edit started - the race to go back to; checked once
+  // the number is committed, not at every keystroke on the way to it)
+  var raceTargetBeforeEdit = null;
   raceToWinsInput.addEventListener("input", function () {
     var target = parseInt(raceToWinsInput.value, 10);
     if (!target || target < 1) return;
+    if (raceTargetBeforeEdit === null) raceTargetBeforeEdit = state.raceToWinsTarget;
     state.raceToWinsTarget = target;
     if (target !== 1) lastRaceToWinsTarget = target;
     // The anchor value just changed - drop the cached fair targets so
@@ -35041,6 +35327,7 @@
   // selected, ready to type over.
   raceModeRaceToRadio.addEventListener("change", function () {
     if (!raceModeRaceToRadio.checked) return;
+    var before = state.raceToWinsTarget;
     var target = parseInt(raceToWinsInput.value, 10);
     if (!(target > 1)) target = computeRotationAwareRaceToSuggestion();
     if (!(target > 1)) target = 5;
@@ -35054,11 +35341,19 @@
     renderStandings();
     updateCurrentGameSummary();
     try { raceToWinsInput.focus(); raceToWinsInput.select(); } catch (e) {}
+    // (open play's wins may already be past the new race)
+    if (before !== target) checkRaceAfterTargetChange(function () { restoreRaceTarget(before); });
   });
   // (the number box sits inside the Race to Wins option: a tap on it is the
   // box's - typing a number there picks Race to Wins through its input)
   raceToWinsInput.addEventListener("click", function (e) { e.stopPropagation(); });
   raceToWinsInput.addEventListener("blur", showRaceToNumber);
+  raceToWinsInput.addEventListener("change", function () {
+    var old = raceTargetBeforeEdit;
+    raceTargetBeforeEdit = null;
+    if (old === null || old === state.raceToWinsTarget) return;
+    checkRaceAfterTargetChange(function () { restoreRaceTarget(old); });
+  });
   // (the big number boxes: a tap selects the number, so typing replaces it)
   Array.prototype.forEach.call(document.querySelectorAll(".big-number-input"), function (el) {
     el.addEventListener("focus", function () { setTimeout(function () { try { el.select(); } catch (e) {} }, 0); });
@@ -35071,6 +35366,13 @@
     renderScoreboard();
     renderStandings();
     updateCurrentGameSummary();
+    // (someone's own fair race may be shorter than their wins)
+    checkRaceAfterTargetChange(function () {
+      state.fairRaceEnabled = !state.fairRaceEnabled;
+      fairRaceEnabledCheckbox.checked = state.fairRaceEnabled;
+      state.fairRaceTargets = null;
+      saveState();
+    });
   });
 
   btnResetGame.addEventListener("click", resetCurrentGame);
@@ -36450,10 +36752,15 @@
   timedTournamentEnabledCheckbox.checked = state.currentGame.timedTournamentEnabled;
   timedTournamentMinutesRow.classList.toggle("hidden", !state.currentGame.timedTournamentEnabled);
   timedTournamentMinutesInput.value = state.currentGame.timedTournamentMinutes;
-  // Same "live count never survives a reload, only the setting does" as
-  // the shot counter above - a reload with it already on starts a fresh
-  // full-duration countdown rather than staying enabled-but-frozen.
-  if (state.currentGame.timedTournamentEnabled) startTimedTournament();
+  timedTournamentFinishRackCheckbox.checked = state.currentGame.timedTournamentFinishRack !== false;
+  timedTournamentFinishRow.classList.toggle("hidden", !state.currentGame.timedTournamentEnabled);
+  // Unlike the shot counter, the session clock carries on across a
+  // reload with the time it really has left (it's saved - see
+  // saveTimedClock).
+  if (state.currentGame.timedTournamentEnabled) resumeTimedTournament();
+  // A race won with its popup still open when the page went away closes
+  // now (see closeRaceLeftOpen).
+  closeRaceLeftOpen();
   updateCurrentGameSummary();
 
   dayNotesTextarea.value = getDayNotes(todayDateStr());

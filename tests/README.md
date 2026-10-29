@@ -275,3 +275,14 @@ Not part of the app - helpers for testing and for running this machine's own cop
   APA's 6 by 6 grid and the points rule; APA 9-Ball "Points 19–46" with "9-ball +2" on both sides (18
   + 2 = 19, never past the race), the SL6 loser with 30 gets 5 of 20; ✏️ to 19-35 keeps the SL2 the
   winner (14-6). `node tests/probe_league_handicap.js [screenshot dir]`.
+- `probe_race_close.js` - races always end (4255): Race to 3 reloaded with the final win's popup
+  open closes and archives the race then, exactly once (another reload changes nothing); a board
+  left at 6 wins of a race to 5 closes at start-up, its race counted once; the race lowered under
+  someone's wins mid-match asks - Cancel puts it back, OK crowns them ("race-to 3").
+  `node tests/probe_race_close.js [screenshot dir]`.
+- `probe_timed_session.js` - timed sessions end correctly (4256): 20 minutes left survives a reload
+  (a paused clock stays paused); the countdown shows beside the shot counter; time up with "finish
+  the rack": "⏰ Last rack", ended by the next win - the leader may be waiting (Winner Stays), ties
+  go head-to-head, then racks won; the win counts as a tournament won (a timed session); still level:
+  playoff or share, the playoff seats only them and puts the seats back after; the rule off ends it
+  at once. `node tests/probe_timed_session.js [screenshot dir]`.
