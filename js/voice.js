@@ -899,10 +899,16 @@
     note.textContent = t("voice.siri.note");
     wrap.appendChild(note);
     // the address another device reaches this computer at (not "localhost")
+    // and this server's app token, which lets the Shortcut in (the server
+    // only answers paired devices - see server/pairing.js)
     try {
-      fetch("api/lan-info").then(function (r) { return r.ok ? r.json() : null; }).then(function (info) {
+      Promise.all([
+        fetch("api/lan-info").then(function (r) { return r.ok ? r.json() : null; }),
+        fetch("api/pair/app-token").then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
+      ]).then(function (got) {
+        var info = got[0], app = got[1];
         if (!info || !info.port) return;
-        setUrl("http://" + (info.addresses && info.addresses.length ? info.addresses[0] : location.hostname) + ":" + info.port + "/voice");
+        setUrl("http://" + (info.addresses && info.addresses.length ? info.addresses[0] : location.hostname) + ":" + info.port + "/voice" + (app && app.token ? "?device=" + app.token : ""));
         wrap.classList.remove("hidden");
       }).catch(function () {});
     } catch (e) {}

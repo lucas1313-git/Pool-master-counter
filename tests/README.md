@@ -286,3 +286,14 @@ Not part of the app - helpers for testing and for running this machine's own cop
   go head-to-head, then racks won; the win counts as a tournament won (a timed session); still level:
   playoff or share, the playoff seats only them and puts the seats back after; the rule off ends it
   at once. `node tests/probe_timed_session.js [screenshot dir]`.
+- `probe_pairing.js` - the computer's server answers only paired devices (server/pairing.js):
+  starts its own server (4257, a throwaway HOME) and plays another device by calling this computer's
+  LAN address. Unpaired: every /api, /voice route and both WebSockets 401 (the pages stay open);
+  GET /voice gone; this computer allowed, but not when another website set it off; a wrong code
+  403, the right one pairs (HttpOnly, SameSite=Strict cookie), Forget, 429 after too many tries;
+  the app key (?device=) for Siri and the iPad camera app; paired-devices.json 600, hashes only; in
+  a browser: the pairing screen, camera.html?pair= pairs by itself, the computer's 📱 panel; the
+  camera viewer keeps no script/picture/link/style/onclick. `node tests/probe_pairing.js [dir]`.
+- `test_privacy.js` - appearance samples not refreshed in 90 days are forgotten (the server's copy
+  and camera.html's, the same); the Challonge proxy forwards only the app's five calls.
+  `node tests/test_privacy.js`.

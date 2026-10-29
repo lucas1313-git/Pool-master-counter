@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261028l">
+<link rel="stylesheet" href="css/style.css?v=20261028m">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -229,7 +229,8 @@
       <div class="row lrec-settings">
         <label for="lrec-camera" data-i18n="lrec.camera">Camera</label>
         <select id="lrec-camera"></select>
-        <label class="checkbox-row"><input type="checkbox" id="lrec-sound" checked> <span data-i18n="lrec.sound">Record sound</span></label>
+        <label class="checkbox-row"><input type="checkbox" id="lrec-sound"> <span data-i18n="lrec.sound">🎙️ Record sound too (what's said at the table - ask first)</span></label>
+        <button type="button" id="btn-lrec-sign" class="btn btn-ghost" data-i18n="rec.printSign">🖨️ Print a "Camera in use" sign</button>
       </div>
       <div class="row lrec-controls">
         <button type="button" id="btn-lrec-start" class="btn btn-primary lrec-big">● Start recording</button>
@@ -670,8 +671,8 @@
         </select>
       </div>
       <label class="checkbox-row" id="day-report-attach-backup-row">
-        <input type="checkbox" id="day-report-attach-backup-checkbox" checked>
-        <span data-i18n="dayNotes.attachBackup">📎 Attach full backup file when sharing</span>
+        <input type="checkbox" id="day-report-attach-backup-checkbox">
+        <span data-i18n="dayNotes.attachBackup">📎 Attach a backup file when sharing (games and stats — no contacts, camera data or photos)</span>
       </label>
       <label class="checkbox-row" id="day-report-attach-colorful-row">
         <input type="checkbox" id="day-report-attach-colorful-checkbox">
@@ -933,6 +934,16 @@
       <p class="player-stats-note" data-i18n="challonge.venueHint">Starts the name of every tournament this app creates on Challonge, e.g. "Joe's Bar — 2026-10-28 — Round Robin". Empty: "Pool Master Counter".</p>
       <label class="checkbox-row"><input type="checkbox" class="challonge-private-checkbox" id="challonge-private-checkbox" checked> <span data-i18n="challonge.privateLabel">New tournaments are private (off Challonge's public list; anyone with the link can still see them)</span></label>
     </div>
+  </section>
+
+  <!-- this computer's server: the code other devices pair with (shown only here, on the computer - see js/pairing.js) -->
+  <section class="panel collapsible-panel collapsed hidden" id="pairing-panel">
+    <button type="button" class="panel-toggle" id="btn-toggle-pairing-panel" aria-expanded="false" aria-controls="pairing-panel-body">
+      <h2 data-i18n="pair.panelTitle">📱 Paired devices</h2>
+      <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+    </button>
+    <p class="panel-summary" data-i18n="pair.panelSummary">Phones and tablets that may use this computer's scoreboard</p>
+    <div class="panel-body" id="pairing-panel-body"></div>
   </section>
 
 </div>
@@ -1870,6 +1881,7 @@
     <h1 id="player-page-name"></h1>
     <select id="player-page-switcher" class="player-page-switcher" aria-label="Switch to another player" data-i18n-aria-label="playerPage.switcherAriaLabel"></select>
     <button type="button" id="btn-return-to-global-stats" class="btn btn-ghost" data-i18n="playerPage.globalStats">🌐 Global Stats</button>
+    <button type="button" id="btn-player-forget-camera" class="btn btn-ghost" data-i18n="playerPage.forgetCamera">📷 Forget on camera</button>
     <button type="button" id="btn-open-help-player-page" class="btn btn-ghost" data-i18n="header.help">❓ Help</button>
   </header>
 
@@ -2718,11 +2730,13 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/big-store.js?v=20261028l"></script>
-<script src="js/mp4-clip.js?v=20261028l"></script>
-<script src="js/local-recorder.js?v=20261028l"></script>
-<script src="js/app.js?v=20261028l"></script>
-<script src="js/camera-client.js?v=20261028l"></script>
-<script src="js/voice.js?v=20261028l"></script>
+<script src="js/pairing.js?v=20261028m"></script>
+<script src="js/big-store.js?v=20261028m"></script>
+<script src="js/mp4-clip.js?v=20261028m"></script>
+<script src="js/recording-consent.js?v=20261028m"></script>
+<script src="js/local-recorder.js?v=20261028m"></script>
+<script src="js/app.js?v=20261028m"></script>
+<script src="js/camera-client.js?v=20261028m"></script>
+<script src="js/voice.js?v=20261028m"></script>
 </body>
 </html>

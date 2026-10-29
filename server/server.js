@@ -9,8 +9,9 @@
 // guests. See js/app.js (networkMode/openRelayConnection/dispatchNetworkAction)
 // for the client side of this protocol.
 //
-// LAN-only, no auth, no TLS - meant for a trusted local WiFi (e.g. a pool
-// hall), not the public internet. Do not port-forward this.
+// LAN-only, no TLS - meant for a local WiFi (e.g. a pool hall), not the
+// public internet. Do not port-forward this. Other devices pair once with a
+// code shown on this computer (see pairing.js).
 
 var http = require("http");
 var https = require("https");
@@ -32,11 +33,17 @@ var lan = require("./lan");
 var routes = require("./routes");
 var relay = require("./relay");
 var cameraRelay = require("./camera-relay");
+var pairing = require("./pairing");
 
 var PORT = process.env.PORT || 4173;
 var REPO_ROOT = path.resolve(__dirname, "..");
 
 var app = express();
+// Only paired devices (and this computer) may use /api, /voice and the
+// WebSockets - see pairing.js.
+var devices = pairing.createPairing();
+app.use(devices.guard);
+devices.attachPairingRoutes(app);
 app.use(express.static(REPO_ROOT, { extensions: ["html"] }));
 
 // HTTPS is a hard precondition for the camera-recognition page, not
@@ -90,11 +97,16 @@ var cameraWss = cameraRelay.attachCameraRelay(httpServer, WebSocket);
 // whichever one doesn't match a given request's path aborts it with an
 // HTTP 400 before the matching one ever gets a chance.)
 httpServer.on("upgrade", function (req, socket, head) {
-  if (req.url === "/ws") {
+  var wsPath = (req.url || "").split("?")[0];
+  if (!devices.upgradeAllowed(req)) {
+    pairing.refuseUpgrade(socket);
+    return;
+  }
+  if (wsPath === "/ws") {
     wss.handleUpgrade(req, socket, head, function (ws) {
       wss.emit("connection", ws, req);
     });
-  } else if (req.url === "/ws-camera") {
+  } else if (wsPath === "/ws-camera") {
     cameraWss.handleUpgrade(req, socket, head, function (ws) {
       cameraWss.emit("connection", ws, req);
     });
@@ -122,6 +134,7 @@ httpServer.listen(PORT, function () {
   var scheme = usingHttps ? "https" : "http";
   var addresses = lan.lanAddresses();
   console.log("Pool Master Counter group-session server running on port " + PORT + (usingHttps ? " (HTTPS)" : ""));
+  console.log("Pairing code for other devices (30 minutes): " + devices.currentCode());
   if (addresses.length === 0) {
     console.log("No LAN network interface found - connect to WiFi first.");
     return;

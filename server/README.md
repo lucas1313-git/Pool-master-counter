@@ -49,9 +49,29 @@ Session" page in the app once you open it through this server (not a
 plain `file://` or other static server - hosting only works when the app
 is being served by this relay).
 
-LAN-only, no login, no encryption - meant for a trusted local network
-(e.g. the WiFi at a pool hall), not the public internet. Don't port-forward
-this.
+LAN-only, no encryption on plain http - meant for a local network (e.g. the
+WiFi at a pool hall), not the public internet. Don't port-forward this.
+
+### Pairing devices
+
+Anyone can reach the server on the WiFi, so it only answers devices paired
+with it (`pairing.js`): every `/api/...`, `/voice` and WebSocket request
+from an unpaired device gets `401`. The app's pages themselves stay open,
+so a new device can show the pairing screen.
+
+- **This computer** never needs pairing (a request from the machine itself,
+  not set off by some other website).
+- **A phone or tablet**: open the scoreboard on it and type the 6-digit code
+  shown on the computer under **📱 Paired devices** (also printed in the
+  console at start-up) - or scan that panel's QR code, or the Multi Tables
+  join QR, or the camera setup QR, which carry the code. Each code works
+  for 30 minutes; a paired device stays paired (a cookie). The panel lists
+  paired devices and forgets one, or all.
+- **The Siri Shortcut and the iPad camera app** can't type a code: they use
+  the address the panel shows (`...?device=<key>`) - for Siri, the 🎤 voice
+  sheet's steps already include it; for the iPad camera app, type it as the
+  scoreboard's address. `/voice` is POST-only.
+- Paired devices are kept in `~/.pool-master-counter/paired-devices.json`.
 
 ## Camera-based player recognition
 

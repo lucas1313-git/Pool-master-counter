@@ -12,14 +12,27 @@
 // server-side (no CORS concept between servers) and adds the missing
 // header on the way back.
 //
-// Scope is deliberately narrow: only /v2.1/* paths are forwarded, and
-// only to api.challonge.com - this is not a general-purpose open
-// proxy. The user's Challonge client id/secret never pass through
+// Scope is deliberately narrow: only the calls Pool Master Counter itself
+// makes (ALLOWED below - create a tournament, start/close it, add players,
+// read its matches, report a match), and only to api.challonge.com - this
+// is not a general-purpose open proxy. The user's Challonge client id/secret never pass through
 // here (only the short-lived bearer token from the OAuth exchange
 // does, exactly as it would going directly to Challonge).
 
 const CHALLONGE_ORIGIN = "https://api.challonge.com";
 const ALLOWED_PREFIX = "/v2.1/";
+// method + path (ids are Challonge's: letters, digits, - and _)
+const ID = "[A-Za-z0-9_-]+";
+const ALLOWED = [
+  ["POST", new RegExp("^/v2\\.1/tournaments\\.json$")],
+  ["PUT", new RegExp("^/v2\\.1/tournaments/" + ID + "/change_state\\.json$")],
+  ["POST", new RegExp("^/v2\\.1/tournaments/" + ID + "/participants/bulk_add\\.json$")],
+  ["GET", new RegExp("^/v2\\.1/tournaments/" + ID + "/matches\\.json$")],
+  ["PUT", new RegExp("^/v2\\.1/tournaments/" + ID + "/matches/" + ID + "\\.json$")]
+];
+function allowed(method, pathname) {
+  return ALLOWED.some(function (a) { return a[0] === method && a[1].test(pathname); });
+}
 const FORWARDED_REQUEST_HEADERS = ["authorization", "authorization-type", "content-type", "accept"];
 
 function corsHeaders() {
@@ -38,7 +51,7 @@ export default {
     }
 
     const url = new URL(request.url);
-    if (!url.pathname.startsWith(ALLOWED_PREFIX)) {
+    if (!url.pathname.startsWith(ALLOWED_PREFIX) || !allowed(request.method, url.pathname)) {
       return new Response("Not found", { status: 404, headers: corsHeaders() });
     }
 

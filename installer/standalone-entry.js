@@ -25,6 +25,7 @@ var relay = require("../server/relay.js");
 var cameraRelay = require("../server/camera-relay.js");
 var lan = require("../server/lan.js");
 var tlsCert = require("../server/tls-cert.js");
+var pairing = require("../server/pairing.js");
 
 // Number(), not just `|| 4173` - process.env.PORT is a string, and
 // HTTPS_PORT below does real arithmetic on this (PORT + 1), which would
@@ -40,6 +41,11 @@ var PORT = Number(process.env.PORT) || 4173;
 // majority of users who never touch the camera feature.
 var HTTPS_PORT = PORT + 1;
 var app = deps.express();
+// Only paired devices (and this computer) may use /api, /voice and the
+// WebSockets - see server/pairing.js.
+var devices = pairing.createPairing();
+app.use(devices.guard);
+devices.attachPairingRoutes(app);
 
 var ASSET_KEYS = sea.getAssetKeys();
 
@@ -87,11 +93,16 @@ var cameraWssHttp = cameraRelayShared.attachToServer(httpServer);
 // Both are built with { noServer: true } - see relay.js's own comment on
 // why - so dispatch "upgrade" by path ourselves, same as server.js.
 httpServer.on("upgrade", function (req, socket, head) {
-  if (req.url === "/ws") {
+  var wsPath = (req.url || "").split("?")[0];
+  if (!devices.upgradeAllowed(req)) {
+    pairing.refuseUpgrade(socket);
+    return;
+  }
+  if (wsPath === "/ws") {
     wss.handleUpgrade(req, socket, head, function (ws) {
       wss.emit("connection", ws, req);
     });
-  } else if (req.url === "/ws-camera") {
+  } else if (wsPath === "/ws-camera") {
     cameraWssHttp.handleUpgrade(req, socket, head, function (ws) {
       cameraWssHttp.emit("connection", ws, req);
     });
@@ -114,7 +125,11 @@ tlsCert.getOrCreateCert(deps.selfsigned, lan.lanAddresses()).then(function (pems
   // always use the plain HTTP server above, never this one.
   var cameraWssHttps = cameraRelayShared.attachToServer(httpsServer);
   httpsServer.on("upgrade", function (req, socket, head) {
-    if (req.url === "/ws-camera") {
+    if (!devices.upgradeAllowed(req)) {
+      pairing.refuseUpgrade(socket);
+      return;
+    }
+    if ((req.url || "").split("?")[0] === "/ws-camera") {
       cameraWssHttps.handleUpgrade(req, socket, head, function (ws) {
         cameraWssHttps.emit("connection", ws, req);
       });

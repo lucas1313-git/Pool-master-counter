@@ -10155,3 +10155,45 @@ body.has-not-saved-banner #app {
   flex: 1 1 auto;
   min-width: 0;
 }
+
+/* 📱 Paired devices (this computer only - js/pairing.js): the code big
+   enough to read across the room, its QR, the paired devices */
+#pairing-panel-body {
+  text-align: center;
+}
+.pair-panel-code {
+  font-size: clamp(2.6rem, 9vw, 4rem);
+  font-weight: 900;
+  letter-spacing: 0.25em;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+  margin: 8px 0;
+}
+.pair-panel-qr {
+  display: block;
+  width: min(240px, 70vw);
+  height: auto;
+  margin: 0 auto 8px;
+  border-radius: 8px;
+  background: #fff;
+}
+.pair-panel-devices {
+  list-style: none;
+  padding: 0;
+  margin: 0 auto 12px;
+  max-width: 560px;
+  text-align: left;
+}
+.pair-panel-devices li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.pair-panel-app-address {
+  word-break: break-all;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+}

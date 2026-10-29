@@ -3,11 +3,13 @@
 // gets back what was done, as text to speak. The scoreboard understands it
 // with the same sentences as its own 🎤 Talk button (js/voice.js).
 //
-//   POST /voice          { "text": "add one point to Luc" }  (or a form
-//                        field "text", or the sentence as a plain-text body)
-//   GET  /voice?text=... the same, to try it from a browser
+//   POST /voice?device=<token>  { "text": "add one point to Luc" } (or a
+//                        form field "text", or the sentence as a plain-text
+//                        body) - POST only, from a paired device or with the
+//                        app token (see pairing.js): no web page can set it off
+//                        with a link or a picture
 //     -> 200 text/plain: the answer to speak ("Luc plus 1, now 1")
-//     -> 503: no scoreboard open; 504: it didn't answer in time
+//     -> 401: not paired; 503: no scoreboard open; 504: it didn't answer in time
 //
 // The scoreboard's side:
 //   GET  /voice/events   Server-Sent Events: "hello" { client }, then one
@@ -17,8 +19,8 @@
 //
 // Several scoreboards can be open (the computer's browser, an iPad's
 // Safari): a sentence goes to ONE - on screen, used most recently - so a
-// point is never counted twice. Like the camera relay: no login, the
-// local network only.
+// point is never counted twice. The local network only, paired devices
+// only.
 
 var clients = new Map(); // id -> { res, connectedAt, activeAt, visible }
 var pending = new Map(); // command id -> { timer, done(answer) }
@@ -39,7 +41,6 @@ function readBody(req, cb) {
 }
 
 function sentenceFrom(req, body) {
-  if (req.query && typeof req.query.text === "string" && req.query.text) return req.query.text;
   var type = String(req.headers["content-type"] || "");
   if (/json/i.test(type)) {
     try {
@@ -151,7 +152,6 @@ function attachVoiceRoutes(app) {
     sendEvent(c, "command", { id: id, text: text });
   }
 
-  app.get("/voice", function (req, res) { handle(req, res, ""); });
   app.post("/voice", function (req, res) {
     readBody(req, function (body) { handle(req, res, body); });
   });

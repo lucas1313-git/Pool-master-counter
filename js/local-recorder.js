@@ -416,7 +416,16 @@
     bridge = b;
     var q = function (id) { return root.querySelector("#" + id); };
     els = { root: root, preview: q("lrec-preview"), camera: q("lrec-camera"), sound: q("lrec-sound"), start: q("btn-lrec-start"), cue: q("btn-lrec-cue"), status: q("lrec-status"), cues: q("lrec-cues"), sessions: q("lrec-sessions"), player: q("lrec-player"), storage: q("lrec-storage"), summary: document.getElementById("local-record-panel-summary") };
-    els.start.addEventListener("click", function () { if (rec) stop(); else start(); });
+    var signBtn = q("btn-lrec-sign");
+    if (signBtn) signBtn.addEventListener("click", function () {
+      if (window.PMCRecordingConsent) window.PMCRecordingConsent.printSign({ sound: els.sound.checked });
+    });
+    // (the first recording on this device asks first - js/recording-consent.js)
+    els.start.addEventListener("click", function () {
+      if (rec) { stop(); return; }
+      if (!window.PMCRecordingConsent) { start(); return; }
+      window.PMCRecordingConsent.ask({ sound: els.sound.checked }).then(function (ok) { if (ok) start(); });
+    });
     els.cue.addEventListener("click", function () { toggleCue("button"); });
     listCameras();
     render();

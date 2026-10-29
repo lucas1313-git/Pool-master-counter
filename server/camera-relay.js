@@ -204,6 +204,34 @@ function trimSamples(entry) {
   return entry;
 }
 
+// Appearance samples are kept only while they're being refreshed: someone
+// whose newest sample is over SAMPLE_KEEP_DAYS old is forgotten (the camera
+// adds samples every time it recognizes someone, so a regular never
+// expires). Samples from before samples carried a date start their
+// SAMPLE_KEEP_DAYS from the first time this runs. Returns the names
+// forgotten.
+var SAMPLE_KEEP_DAYS = 90;
+function expireStaleSamples(store, now) {
+  var gone = [];
+  Object.keys(store || {}).forEach(function (key) {
+    var entry = store[key];
+    if (!entry || typeof entry !== "object") return;
+    var newest = typeof entry.refreshedAt === "number" ? entry.refreshedAt : 0;
+    (Array.isArray(entry.info) ? entry.info : []).forEach(function (info) {
+      if (info && typeof info.at === "number" && info.at > 1e12 && info.at > newest) newest = info.at;
+    });
+    if (!newest) {
+      entry.refreshedAt = now;
+      return;
+    }
+    if (now - newest > SAMPLE_KEEP_DAYS * 86400000) {
+      delete store[key];
+      gone.push(entry.displayName || key);
+    }
+  });
+  return gone;
+}
+
 function loadEnrollments() {
   try {
     return JSON.parse(fs.readFileSync(ENROLLMENTS_PATH, "utf8"));
@@ -249,6 +277,18 @@ function createCameraRelay(WebSocket) {
   var viewerSockets = new Set();
   var viewerFrameCount = 0; // TEMPORARY DIAGNOSTIC
   var enrollments = loadEnrollments();
+  // (stale samples go at start-up and twice a day after)
+  function expireNow() {
+    var gone = expireStaleSamples(enrollments, Date.now());
+    saveEnrollments(enrollments);
+    if (gone.length) console.log("[camera-relay] Forgot appearance samples not refreshed in " + SAMPLE_KEEP_DAYS + " days: " + gone.join(", "));
+    return gone;
+  }
+  expireNow();
+  var expiryTimer = setInterval(function () {
+    if (expireNow().length) broadcastEnrolledNames();
+  }, 12 * 3600 * 1000);
+  if (expiryTimer.unref) expiryTimer.unref();
 
   function send(ws, msg) {
     if (ws && ws.readyState === WebSocket.OPEN) {
@@ -666,4 +706,5 @@ function attachCameraRelay(httpServer, WebSocket) {
   return createCameraRelay(WebSocket).attachToServer(httpServer);
 }
 
-module.exports = { attachCameraRelay: attachCameraRelay, createCameraRelay: createCameraRelay };
+module.exports = {
+  expireStaleSamples: expireStaleSamples, attachCameraRelay: attachCameraRelay, createCameraRelay: createCameraRelay };

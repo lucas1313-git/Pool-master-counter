@@ -209,7 +209,15 @@ Tout vit dans le stockage local du navigateur sur cet appareil précis — il n'
 
 ## Données et confidentialité
 
-Toutes les données — joueurs, statistiques, rotations, tournois, tout — restent dans le stockage local du navigateur sur l'appareil utilisé. Rien n'est envoyé à un serveur. Effacer les données de site de votre navigateur pour cette page, ou changer d'appareil/de navigateur, repart de zéro à moins d'avoir exporté et importé une sauvegarde au préalable.
+Toutes les données — joueurs, statistiques, rotations, tournois, tout — restent dans le stockage du navigateur sur l'appareil utilisé ; pas de compte, pas de nuage à nous. Certaines choses quittent l'appareil, et seulement quand vous les utilisez :
+
+- **🎤 Les commandes vocales** utilisent la reconnaissance vocale du navigateur, qui envoie ce que vous dites à Apple (Safari) ou Google (Chrome) pour le transformer en texte.
+- **La reconnaissance des joueurs par caméra** fonctionne sur l'appareil, ou sur le serveur de votre propre ordinateur, sur votre propre Wi-Fi. Elle garde pour chaque joueur des échantillons d'apparence (des nombres qui décrivent son allure, pas des photos) ; quelqu'un qui n'a pas été vu depuis 90 jours est oublié, et **📷 Oublier sur la caméra** (sur la page d'un joueur) l'efface tout de suite. La photo de la salle vide et le calibrage de la table restent sur l'appareil.
+- **Les enregistrements** restent sur l'appareil (ou votre ordinateur) jusqu'à ce que vous les sauvegardiez ou les partagiez. Le son est coupé sauf si vous l'activez, et le premier enregistrement sur un appareil vous demande de prévenir tout le monde à la table — avec une affiche « Caméra en marche » à imprimer.
+- **Le serveur de votre ordinateur** (l'application de bureau) ne répond qu'aux appareils jumelés avec le code qu'il affiche — voir `server/README.md`.
+- **Partager un rapport, Google Drive, Challonge et FargoRate** envoient ce que vous choisissez de partager à ces services. La sauvegarde jointe à un rapport (désactivée sauf si vous l'activez) n'inclut ni contacts, ni données de caméra, ni photos.
+
+Effacer les données de site de votre navigateur pour cette page, ou changer d'appareil/de navigateur, repart de zéro à moins d'avoir exporté et importé une sauvegarde au préalable.
 
 ## Lancer l'application
 

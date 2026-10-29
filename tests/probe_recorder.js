@@ -88,6 +88,7 @@ function makeY4m(file) {
   rec.on("pageerror", (e) => errors.push("record: " + e.message));
   await rec.goto(BASE + "manifest.json");
   await rec.evaluate(() => localStorage.setItem("pmc-recorder-settings", JSON.stringify({ sound: true }))); // (the fake microphone: a beep)
+  await rec.evaluate(() => localStorage.setItem("poolMasterCounter.recordingConsent.v1", "probe")); // (asked already - see probe_local_recorder.js)
   await rec.goto(BASE + "record.html", { waitUntil: "domcontentloaded" });
   for (let i = 0; i < 40; i++) { if (await rec.evaluate(() => document.getElementById("out").videoWidth > 0)) break; await sleep(250); }
   await sleep(800);

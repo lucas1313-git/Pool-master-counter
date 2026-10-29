@@ -205,7 +205,8 @@ function attachBackupDriveRoutes(app) {
           try { sendJson(res, 200, { kind: "folder", name: path.basename(dir), files: localFolderFiles(dir) }); } catch (e) { fail(e); }
         });
       };
-      if (!googleDrive.connected()) return local();
+      // (signed in: only the folder backups go to - never the rest of the Drive)
+      if (!googleDrive.connected() || folderId !== googleDrive.backupFolderId()) return local();
       return Promise.all([googleDrive.folderInfo(folderId), googleDrive.listFolder(folderId)])
         .then(function (r) { sendJson(res, 200, { kind: "folder", name: r[0].name, files: r[1] }); }, local);
     }
@@ -217,7 +218,11 @@ function attachBackupDriveRoutes(app) {
         }, function () { fail(null, "drive-not-shared"); });
       };
       if (!googleDrive.connected()) return publicCopy();
-      return googleDrive.download(fileId).then(function (text) { sendJson(res, 200, { kind: "file", text: text }); }, publicCopy);
+      // (signed in: a file in the backups folder; anything else only if it's shared with anyone)
+      return googleDrive.inBackupFolder(fileId).then(function (ok) {
+        if (!ok) return publicCopy();
+        return googleDrive.download(fileId).then(function (text) { sendJson(res, 200, { kind: "file", text: text }); }, publicCopy);
+      });
     }
     var url = publicUrl(link);
     if (!url) return fail(null, "bad-link");
@@ -240,7 +245,11 @@ function attachBackupDriveRoutes(app) {
       });
     }
     if (!googleDrive.connected() || !/^[A-Za-z0-9_-]{10,}$/.test(id)) return sendJson(res, 409, { error: "not signed in" });
-    googleDrive.download(id).then(send, function (e) { sendJson(res, 502, { error: e.message }); });
+    if (folderId !== googleDrive.backupFolderId()) return sendJson(res, 403, { error: "only the backups folder" });
+    googleDrive.inBackupFolder(id).then(function (ok) {
+      if (!ok) return sendJson(res, 403, { error: "only the backups folder" });
+      googleDrive.download(id).then(send, function (e) { sendJson(res, 502, { error: e.message }); });
+    });
   });
 
   app.get("/api/backup/drive", function (req, res) {
@@ -272,6 +281,8 @@ function attachBackupDriveRoutes(app) {
         copyFileToClipboard(file, function (ok) { sendJson(res, 200, { saved: false, reason: reason, file: path.basename(file), kept: keptDir(), copied: ok }); });
       };
       if (!id) return keep(b.link ? "not-a-folder-link" : "no-link");
+      // (the folder backups go to - the one folder this server reads when signed in)
+      googleDrive.setBackupFolder(id);
       var local = function () {
         findFolder(id, function (dir, why) {
           if (!dir) return keep(why || "not-synced");

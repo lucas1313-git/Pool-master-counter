@@ -209,7 +209,15 @@ Everything lives in the browser's local storage on that one device — there's n
 
 ## Data & privacy
 
-All data — players, stats, rotations, tournaments, everything — stays in the browser's local storage on the device you're using. Nothing is sent to a server. Clearing your browser's site data for this page, or switching devices/browsers, starts fresh unless you've exported and imported a backup first.
+All data — players, stats, rotations, tournaments, everything — stays in the browser's storage on the device you're using; there's no account and no cloud of ours. A few things do leave the device, and only when you use them:
+
+- **🎤 Voice commands** use the browser's own speech recognition, which sends what you say to Apple (Safari) or Google (Chrome) to be turned into text.
+- **Camera player recognition** runs on the device, or on your own computer's server on your own Wi-Fi. It keeps appearance samples for each player (numbers describing how they look, not photos); anyone not seen for 90 days is forgotten, and **📷 Forget on camera** (on a player's page) deletes someone at once. The empty-room photo and the table's calibration stay on the device.
+- **Recordings** stay on the device (or your computer) until you save or share them. Sound is off unless you turn it on, and the first recording on a device asks you to tell everyone at the table — with a printable "Camera in use" sign.
+- **Your computer's server** (the desktop app) only answers devices paired with the code it shows — see `server/README.md`.
+- **Sharing a report, Google Drive, Challonge and FargoRate** send what you choose to share to those services. A report's attached backup (off unless you turn it on) leaves out contacts, camera data and photos.
+
+Clearing your browser's site data for this page, or switching devices/browsers, starts fresh unless you've exported and imported a backup first.
 
 ## Running it
 

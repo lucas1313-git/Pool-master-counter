@@ -1,7 +1,9 @@
 // Voice commands from a Siri Shortcut: sentences sent to the server's /voice
 // (as the Shortcut's "Get Contents of URL" does) reach the open scoreboard,
 // are done there, and the answer comes back as text for Siri to speak.
-// Two scoreboards open: only the one used last acts. None open: 503.
+// Two scoreboards open: only the one used last acts. None open: 503. GET /voice
+// is gone (POST only). From this computer (no pairing needed here - see
+// probe_pairing.js for another device and the app key).
 // usage: node tests/probe_voice_siri.js http://localhost:4235/
 const puppeteer = require("puppeteer-core");
 const EXE = "/Users/lucmartin/.cache/puppeteer/chrome/mac_arm-154.0.8037.57/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing";
@@ -53,9 +55,11 @@ async function send(body, type) {
   check("\"Play straight pool\"", r.status === 200 && /Now playing Straight Pool/.test(r.text), r);
   r = await send("Luigi plays against Luke");
   check("\"Luigi plays against Luke\": Luigi against Luc", r.status === 200 && r.text === "Luigi against Luc", r);
+  // (GET /voice?text= is gone - a link or a picture on any web page could set it off; POST only)
   const g = await fetch(BASE + "voice?text=" + encodeURIComponent("add one point to Luc"));
-  r = { status: g.status, text: await g.text() };
-  check("GET ?text=add one point to Luc: \"Luc plus 1, now 1\"", r.status === 200 && r.text === "Luc plus 1, now 1", r);
+  check("GET ?text=... does nothing now (404, POST only)", g.status === 404, g.status);
+  r = await send("add one point to Luc");
+  check("POST \"add one point to Luc\": \"Luc plus 1, now 1\"", r.status === 200 && r.text === "Luc plus 1, now 1", r);
   r = await send("text=" + encodeURIComponent("what's the score"), "application/x-www-form-urlencoded");
   check("form body \"what's the score\": \"Score: Luc 1, Luigi 0\"", r.status === 200 && r.text === "Score: Luc 1, Luigi 0", r);
   r = await send("take one point from Luc", "text/plain");

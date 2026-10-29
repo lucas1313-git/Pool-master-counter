@@ -209,7 +209,15 @@ Todo vive en el almacenamiento local del navegador en ese dispositivo — no hay
 
 ## Datos y privacidad
 
-Todos los datos — jugadores, estadísticas, rotaciones, torneos, todo — permanecen en el almacenamiento local del navegador en el dispositivo que estás usando. Nada se envía a un servidor. Borrar los datos del sitio de tu navegador para esta página, o cambiar de dispositivo/navegador, empieza de cero a menos que hayas exportado e importado una copia de seguridad primero.
+Todos los datos — jugadores, estadísticas, rotaciones, torneos, todo — permanecen en el almacenamiento del navegador del dispositivo que usas; no hay cuenta ni nube nuestra. Algunas cosas sí salen del dispositivo, y solo cuando las usas:
+
+- **🎤 Los comandos de voz** usan el reconocimiento de voz del navegador, que envía lo que dices a Apple (Safari) o Google (Chrome) para convertirlo en texto.
+- **El reconocimiento de jugadores por cámara** funciona en el dispositivo, o en el servidor de tu propia computadora, en tu propio Wi-Fi. Guarda muestras de apariencia de cada jugador (números que describen su aspecto, no fotos); a quien no se ve en 90 días se le olvida, y **📷 Olvidar en la cámara** (en la página de un jugador) lo borra al instante. La foto del local vacío y la calibración de la mesa se quedan en el dispositivo.
+- **Las grabaciones** se quedan en el dispositivo (o tu computadora) hasta que las guardes o compartas. El sonido está apagado a menos que lo actives, y la primera grabación en un dispositivo te pide avisar a todos en la mesa — con un cartel «Cámara en uso» para imprimir.
+- **El servidor de tu computadora** (la app de escritorio) solo responde a los dispositivos emparejados con el código que muestra — ver `server/README.md`.
+- **Compartir un informe, Google Drive, Challonge y FargoRate** envían lo que eliges compartir a esos servicios. La copia adjunta a un informe (apagada salvo que la actives) no incluye contactos, datos de cámara ni fotos.
+
+Borrar los datos del sitio de tu navegador para esta página, o cambiar de dispositivo/navegador, empieza de cero a menos que hayas exportado e importado una copia de seguridad primero.
 
 ## Cómo ejecutarlo
 

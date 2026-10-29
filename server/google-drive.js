@@ -97,6 +97,23 @@ function listFolder(folderId) {
   return apiJson("GET", D("files?q=" + encodeURIComponent(q) + "&fields=" + encodeURIComponent("files(id,name,modifiedTime,size,mimeType)") + "&orderBy=modifiedTime desc&pageSize=100&supportsAllDrives=true&includeItemsFromAllDrives=true"))
     .then(function (j) { return (j.files || []).filter(function (f) { return /\.json$/i.test(f.name) || f.mimeType === "application/json"; }); });
 }
+// The one folder backups go to (set by each backup into it - see
+// backup-drive.js): signed in, this server reads only that folder and the
+// files in it, not the rest of the Drive.
+function backupFolderId() { return loadConfig().backupFolderId || null; }
+function setBackupFolder(id) {
+  if (!id) return;
+  var c = loadConfig();
+  if (c.backupFolderId === id) return;
+  c.backupFolderId = id;
+  saveConfig(c);
+}
+function inBackupFolder(fileId) {
+  var folder = backupFolderId();
+  if (!folder) return Promise.resolve(false);
+  return apiJson("GET", D("files/" + encodeURIComponent(fileId) + "?fields=parents&supportsAllDrives=true"))
+    .then(function (f) { return (f.parents || []).indexOf(folder) !== -1; }, function () { return false; });
+}
 function download(fileId) {
   return api("GET", D("files/" + encodeURIComponent(fileId) + "?alt=media&supportsAllDrives=true")).then(function (r) {
     if (!r.ok) throw new Error("Drive " + r.status);
@@ -224,6 +241,7 @@ function attachGoogleDriveRoutes(app, port) {
     var id = folderIdFromLink((req.query || {}).link);
     if (!id) return sendJson(res, 400, { error: "not a folder link" });
     if (!connected()) return sendJson(res, 409, { error: "Google Drive isn't connected" });
+    if (id !== backupFolderId()) return sendJson(res, 403, { error: "only the backups folder" });
     Promise.all([folderInfo(id), listFolder(id)])
       .then(function (r) { sendJson(res, 200, { name: r[0].name, files: r[1] }); })
       .catch(function (e) { sendJson(res, 502, { error: e.message }); });
@@ -232,13 +250,17 @@ function attachGoogleDriveRoutes(app, port) {
   app.get("/api/drive/file/:id", function (req, res) {
     if (!/^[A-Za-z0-9_-]{10,}$/.test(req.params.id)) return sendJson(res, 400, { error: "bad id" });
     if (!connected()) return sendJson(res, 409, { error: "Google Drive isn't connected" });
-    download(req.params.id).then(function (text) {
+    inBackupFolder(req.params.id).then(function (ok) {
+      if (!ok) throw Object.assign(new Error("only the backups folder"), { status: 403 });
+      return download(req.params.id);
+    }).then(function (text) {
       res.statusCode = 200;
       res.setHeader("Content-Type", "application/json; charset=utf-8");
       res.setHeader("Cache-Control", "no-store");
       res.end(text);
-    }).catch(function (e) { sendJson(res, 502, { error: e.message }); });
+    }).catch(function (e) { sendJson(res, e.status || 502, { error: e.message }); });
   });
 }
 
-module.exports = { attachGoogleDriveRoutes: attachGoogleDriveRoutes, connected: connected, account: function () { return loadConfig().account || null; }, folderInfo: folderInfo, upload: upload, listFolder: listFolder, download: download, folderIdFromLink: folderIdFromLink };
+module.exports = { attachGoogleDriveRoutes: attachGoogleDriveRoutes, connected: connected, account: function () { return loadConfig().account || null; }, folderInfo: folderInfo, upload: upload, listFolder: listFolder, download: download, folderIdFromLink: folderIdFromLink,
+  backupFolderId: backupFolderId, setBackupFolder: setBackupFolder, inBackupFolder: inBackupFolder };

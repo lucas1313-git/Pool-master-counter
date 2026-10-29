@@ -837,6 +837,7 @@
   </div>
 </div>
 
+<script src="js/pairing.js?v=20261028m"></script>
 <script src="camera/tfjs.js"></script>
 <script src="camera/pose-detection.js"></script>
 <script src="camera/osnet.js"></script>
@@ -1906,6 +1907,33 @@
   // This tablet's player samples live in the database (js/big-store.js -
   // localStorage's ~5 MB filled up after a few regulars), this page keeping a
   // copy; after each save a small key tells the scoreboard to read them again.
+  // Appearance samples are kept only while they're being refreshed: someone
+  // whose newest sample is over SAMPLE_KEEP_DAYS old is forgotten (the camera
+  // adds samples every time it recognizes someone, so a regular never
+  // expires). Samples from before samples carried a date start their
+  // SAMPLE_KEEP_DAYS from the first time this runs. Returns the names
+  // forgotten.
+  var SAMPLE_KEEP_DAYS = 90;
+  function expireStaleSamples(store, now) {
+    var gone = [];
+    Object.keys(store || {}).forEach(function (key) {
+      var entry = store[key];
+      if (!entry || typeof entry !== "object") return;
+      var newest = typeof entry.refreshedAt === "number" ? entry.refreshedAt : 0;
+      (Array.isArray(entry.info) ? entry.info : []).forEach(function (info) {
+        if (info && typeof info.at === "number" && info.at > 1e12 && info.at > newest) newest = info.at;
+      });
+      if (!newest) {
+        entry.refreshedAt = now;
+        return;
+      }
+      if (now - newest > SAMPLE_KEEP_DAYS * 86400000) {
+        delete store[key];
+        gone.push(entry.displayName || key);
+      }
+    });
+    return gone;
+  }
   var LOCAL_ENROLLMENTS_REV_KEY = "pmc-camera-enrollments-rev";
   var localEnrollmentsCache = null;
   var localEnrollmentsReady = (function () {
@@ -1917,6 +1945,10 @@
     PMCBigStore.register("cameraEnrollments", LOCAL_ENROLLMENTS_KEY);
     return PMCBigStore.load("cameraEnrollments", {}).then(function (v) {
       localEnrollmentsCache = v && typeof v === "object" ? v : {};
+      // (samples not refreshed in 90 days go - see expireStaleSamples)
+      var before = JSON.stringify(localEnrollmentsCache).length;
+      expireStaleSamples(localEnrollmentsCache, Date.now());
+      if (JSON.stringify(localEnrollmentsCache).length !== before) saveLocalEnrollments(localEnrollmentsCache);
     }, function () {
       localEnrollmentsCache = {};
     });
@@ -2130,8 +2162,42 @@
   // received frame + element snapshot from the real camera to this page's
   // own identical DOM, so it visually mirrors the camera's current state
   // between forwarded actions, not just immediately after one.
+  // What a camera sends the viewer to show is rebuilt from scratch out of
+  // plain parts only (these tags, these attributes) - never put in as
+  // HTML: no script, picture, link, style or on... handler gets through,
+  // whatever arrives.
+  var VIEWER_SAFE_TAGS = { DIV: 1, SPAN: 1, BUTTON: 1, OPTION: 1, BR: 1, B: 1, STRONG: 1, SMALL: 1, EM: 1, I: 1, P: 1, UL: 1, LI: 1, LABEL: 1 };
+  var VIEWER_SAFE_ATTRS = /^(class|id|type|value|title|disabled|hidden|selected|aria-[a-z-]+|data-[a-z0-9-]+)$/;
+  function setViewerSafeHtml(el, html) {
+    if (el.__viewerHtml === html) return; // (unchanged: left alone, not swapped out from under a finger)
+    el.__viewerHtml = html;
+    var doc = new DOMParser().parseFromString("<body>" + String(html || "") + "</body>", "text/html");
+    var frag = document.createDocumentFragment();
+    (function copy(from, into) {
+      Array.prototype.forEach.call(from.childNodes, function (n) {
+        if (n.nodeType === 3) {
+          into.appendChild(document.createTextNode(n.nodeValue));
+          return;
+        }
+        if (n.nodeType !== 1) return;
+        if (!VIEWER_SAFE_TAGS[n.tagName]) {
+          if (n.tagName !== "SCRIPT" && n.tagName !== "STYLE") copy(n, into); // (its text only)
+          return;
+        }
+        var e = document.createElement(n.tagName.toLowerCase());
+        Array.prototype.forEach.call(n.attributes, function (a) {
+          if (VIEWER_SAFE_ATTRS.test(a.name.toLowerCase())) e.setAttribute(a.name, a.value);
+        });
+        copy(n, e);
+        into.appendChild(e);
+      });
+    })(doc.body, frag);
+    el.textContent = "";
+    el.appendChild(frag);
+  }
+
   function applyViewerFrame(msg) {
-    if (msg.dataUrl) {
+    if (typeof msg.dataUrl === "string" && /^data:image\/(jpeg|png|webp);/.test(msg.dataUrl)) {
       viewerLiveImg.src = msg.dataUrl;
       viewerLiveImg.hidden = false;
     }
@@ -2144,7 +2210,7 @@
         if (!snap) return;
         if ((id === "enrollLight" || id === "enrollLightName") && Date.now() < viewerLocalLightUntil) return;
         if (snap.kind === "class") {
-          el.className = snap.cls;
+          el.className = String(snap.cls || "");
           if (id === "enrollLight") el.hidden = enrollPanel.hidden;
         } else if (snap.kind === "checkbox") {
           el.checked = !!snap.checked;
@@ -2155,7 +2221,7 @@
           // is selected - setting .innerHTML alone can silently lose the
           // selection, since an option picked via el.selected = true in
           // JS doesn't necessarily serialize a `selected` HTML attribute.
-          el.innerHTML = snap.html;
+          setViewerSafeHtml(el, snap.html);
           el.value = snap.value;
         } else if (snap.kind === "value") {
           el.value = snap.value;
@@ -2163,7 +2229,7 @@
         } else if (snap.kind === "html") {
           // Unchanged lists are left alone, so a button isn't swapped out
           // from under a finger mid-tap.
-          if (el.innerHTML !== snap.html) el.innerHTML = snap.html;
+          setViewerSafeHtml(el, snap.html);
         } else {
           el.textContent = snap.text;
           if (typeof snap.hidden === "boolean") el.hidden = snap.hidden;

@@ -9770,12 +9770,12 @@
 
   var DAY_REPORT_ATTACH_BACKUP_KEY = "poolMasterCounter.dayReportAttachBackup.v1";
 
+  // Off unless turned on: the file goes to whoever gets the report.
   function loadDayReportAttachBackup() {
     try {
-      var v = localStorage.getItem(DAY_REPORT_ATTACH_BACKUP_KEY);
-      return v === null ? true : v === "true";
+      return localStorage.getItem(DAY_REPORT_ATTACH_BACKUP_KEY) === "true";
     } catch (e) {
-      return true;
+      return false;
     }
   }
 
@@ -17427,6 +17427,25 @@
   // out: passwords and keys (Challonge, Google Drive) - backups get
   // shared - plus the leaderboard cache (a regenerable snapshot) and
   // one-off flags (onboarding seen, pending migrations).
+  // A backup for someone else (the daily report's attachment): the games,
+  // stats and settings, but no contacts (email/phone), nothing from the
+  // camera (people's appearance samples, the empty-room photo, the room's
+  // calibration and plan) and no reset snapshots. The Drive folder link
+  // stays - it's how the others' devices find the shared folder.
+  function buildShareableBackupPayload() {
+    var payload = buildBackupPayload();
+    payload.contacts = {};
+    delete payload.cameraEnrollments;
+    delete payload.resetSnapshots;
+    var settings = {};
+    Object.keys(payload.settings || {}).forEach(function (key) {
+      if (!/^pmc-/.test(key)) settings[key] = payload.settings[key];
+    });
+    payload.settings = settings;
+    payload.shared = true;
+    return payload;
+  }
+
   function buildBackupPayload() {
     return {
       exportedAt: new Date().toISOString(),
@@ -18059,9 +18078,7 @@
   function collectDayReportAttachmentsNow() {
     var files = [];
     if (dayReportAttachBackupCheckbox.checked) {
-      var payload = buildBackupPayload();
-      payload.contacts = {};
-      files.push(new File([JSON.stringify(payload, null, 2)], defaultBackupFilename(), { type: "application/json" }));
+      files.push(new File([JSON.stringify(buildShareableBackupPayload(), null, 2)], defaultBackupFilename(), { type: "application/json" }));
     }
     if (dayReportAttachColorfulCheckbox.checked) {
       try {
@@ -27681,6 +27698,12 @@
     var joinUrl = location.protocol + "//" + (networkLanBase || location.host) + "/?join=1";
     groupSessionJoinUrl.textContent = joinUrl;
     groupSessionQrImg.src = "/api/qr.png?url=" + encodeURIComponent(joinUrl);
+    // (the QR also pairs the phone that scans it - see js/pairing.js)
+    if (window.PMCPairing) {
+      window.PMCPairing.withCode(joinUrl).then(function (withCode) {
+        if (withCode !== joinUrl) groupSessionQrImg.src = "/api/qr.png?url=" + encodeURIComponent(withCode);
+      });
+    }
     groupSessionGuestCount.textContent =
       networkGuestCount === 1
         ? T("groupSession.guestCountOne")
@@ -33687,6 +33710,12 @@
         var url = "https://" + addr + ":" + info.httpsPort + "/camera.html";
         cameraWizardUrl.textContent = url;
         cameraWizardQr.src = "/api/qr.png?url=" + encodeURIComponent(url);
+        // (the QR also pairs the camera phone - see js/pairing.js)
+        if (window.PMCPairing) {
+          window.PMCPairing.withCode(url).then(function (withCode) {
+            if (withCode !== url) cameraWizardQr.src = "/api/qr.png?url=" + encodeURIComponent(withCode);
+          });
+        }
         showCameraWizardLinkState("ok");
       })
       .catch(function (e) {
@@ -36154,6 +36183,24 @@
 
   wireCollapsiblePanel("backup-panel", "btn-toggle-backup-panel");
   wireCollapsiblePanel("challonge-panel", "btn-toggle-challonge-panel");
+  // This computer's server: the code other devices pair with, and who's
+  // paired - only shown on the computer itself (see js/pairing.js).
+  wireCollapsiblePanel("pairing-panel", "btn-toggle-pairing-panel");
+  (function () {
+    var panel = document.getElementById("pairing-panel");
+    var body = document.getElementById("pairing-panel-body");
+    if (!window.PMCPairing || !panel || !body) return;
+    function refresh() {
+      window.PMCPairing.renderPanel(body).then(function (shown) {
+        panel.classList.toggle("hidden", !shown);
+      });
+    }
+    refresh();
+    // (a fresh code each time it's opened)
+    document.getElementById("btn-toggle-pairing-panel").addEventListener("click", function () {
+      if (!panel.classList.contains("collapsed")) refresh();
+    });
+  })();
   wireCollapsiblePanel("challonge-panel-league", "btn-toggle-challonge-panel-league");
   wireCollapsiblePanel("rotation-panel", "btn-toggle-rotation-panel");
   wireCollapsiblePanel("game-setup-panel", "btn-toggle-game-setup-panel");
@@ -36305,6 +36352,28 @@
     closePlayerStatsPage();
   });
   btnReturnToGlobalStats.addEventListener("click", returnToGlobalStats);
+  // 📷 Forget on camera: this person's appearance samples go - from the
+  // camera on this device (running or not) and, through the relay, from
+  // the computer's server and every camera phone.
+  document.getElementById("btn-player-forget-camera").addEventListener("click", function () {
+    var name = currentStatsPlayerName;
+    if (!name) return;
+    confirmModal(T("playerPage.forgetCameraConfirm", { name: name }), function () {
+      notifyCameraEnrollDelete(name);
+      if (window.PMCBigStore) {
+        var key = normalizeNameKey(name);
+        PMCBigStore.load("cameraEnrollments", {}).then(function (store) {
+          if (!store || !store[key]) return;
+          delete store[key];
+          return PMCBigStore.set("cameraEnrollments", store).then(function () {
+            try { localStorage.setItem("pmc-camera-enrollments-rev", String(Date.now())); } catch (e) {}
+            return refreshCameraEnrollments();
+          });
+        }).catch(function () {});
+      }
+      showToast(T("playerPage.forgetCameraDone", { name: name }));
+    });
+  });
   playerPageSwitcher.addEventListener("change", function () {
     if (playerPageSwitcher.value && playerPageSwitcher.value !== currentStatsPlayerName) {
       openPlayerStatsPage(playerPageSwitcher.value);

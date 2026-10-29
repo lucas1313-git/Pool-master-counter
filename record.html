@@ -118,7 +118,8 @@
         <option value="720">720p (about 1.8 GB an hour)</option>
       </select>
     </div>
-    <div class="row"><label><input type="checkbox" id="soundToggle" checked> Record sound</label></div>
+    <div class="row"><label><input type="checkbox" id="soundToggle"> 🎙️ Record sound too (what's said at the table - ask first)</label></div>
+    <div class="row"><button type="button" id="printSignBtn">🖨️ Print a "Camera in use" sign</button></div>
     <div class="row"><label for="preRoll">A clip starts</label><input type="number" id="preRoll" min="0" max="120" step="1" value="20"><span>seconds before the mark</span></div>
     <div class="row"><label for="autoBack">🎯 Auto cue: looks back</label><input type="number" id="autoBack" min="0" max="60" step="1" value="15"><span>s, waits</span><input type="number" id="autoWait" min="5" max="120" step="1" value="25"><span>s for a shot, keeps</span><input type="number" id="autoLead" min="0" max="30" step="1" value="5"><span>s before it and</span><input type="number" id="autoTail" min="0" max="30" step="1" value="5"><span>s after</span></div>
     <div class="row"><label for="partMin">A new file every</label><input type="number" id="partMin" min="2" max="60" step="1" value="10"><span>minutes (quick to open and jump around in)</span></div>
@@ -128,6 +129,8 @@
 </main>
 <div class="toast" id="toast" hidden></div>
 
+<script src="js/pairing.js?v=20261028m"></script>
+<script src="js/recording-consent.js?v=20261028m"></script>
 <script src="js/cue-viewer.js?v=20261025b"></script>
 <script>
 (function () {
@@ -148,7 +151,7 @@
   var SIZE = { 720: [1280, 720], 1080: [1920, 1080], 2160: [3840, 2160] };
 
   var $ = function (id) { return document.getElementById(id); };
-  var settings = { deviceId: "", quality: "1080", sound: true, preRoll: 20, partMin: 10, autoStart: false, zoom: 1, cx: 0.5, cy: 0.5, autoBack: 15, autoWait: 25, autoLead: 5, autoTail: 5 };
+  var settings = { deviceId: "", quality: "1080", sound: false, preRoll: 20, partMin: 10, autoStart: false, zoom: 1, cx: 0.5, cy: 0.5, autoBack: 15, autoWait: 25, autoLead: 5, autoTail: 5 };
   try { Object.assign(settings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}")); } catch (e) {}
   function saveSettings() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) {} }
 
@@ -481,7 +484,13 @@
     $("boardDot").className = "dot" + (fresh ? " ok" : "");
     $("boardText").textContent = fresh ? "Scoreboard: " + (board.player ? window.PMCCueViewer.whoOf(board) : (board.matchup ? board.matchup + " (no player selected)" : "no player selected")) + " · " + (board.gameLabel || "") + (board.position ? " · " + board.position : "") : "Scoreboard: not heard from (open it in this browser)";
   }, 1000);
-  $("recordBtn").addEventListener("click", function () { if (rec.on) stopRecording(); else startRecording(); });
+  // (the first recording on this device asks first - js/recording-consent.js)
+  function askThenRecord() {
+    if (!window.PMCRecordingConsent) return startRecording();
+    return window.PMCRecordingConsent.ask({ sound: settings.sound }).then(function (ok) { if (ok) return startRecording(); });
+  }
+  $("recordBtn").addEventListener("click", function () { if (rec.on) stopRecording(); else askThenRecord(); });
+  $("printSignBtn").addEventListener("click", function () { if (window.PMCRecordingConsent) window.PMCRecordingConsent.printSign({ sound: settings.sound }); });
 
   // ---- Cues: Mark ... Finish ----
   var openCue = null;
@@ -723,7 +732,7 @@
   drawCropBox();
   renderRec();
   holdAwake();
-  startCamera().then(function () { if (settings.autoStart) startRecording(); }).catch(function () {});
+  startCamera().then(function () { if (settings.autoStart) askThenRecord(); }).catch(function () {});
 
   // (tests)
   window.PMCRecorder = { viewer: viewer, mark: mark, finish: finishCue, start: startRecording, stop: stopRecording, duck: duck, recordedStream: function () { return outStream; }, setPartMs: function (ms) { partMsForTests = ms; }, autoCue: autoCue, shotsSeen: function () { return episodes; }, state: function () { return { auto: auto, watching: watching(), ducks: ducks, ducking: !!duckGain, on: rec.on, id: rec.id, part: rec.part, openCue: openCue, board: board, settings: settings, cropSupported: cropSupported }; } };

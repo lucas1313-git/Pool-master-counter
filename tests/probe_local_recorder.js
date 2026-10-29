@@ -3,7 +3,9 @@
 // plain file server (no /api, like GitHub Pages) on 4247, a fake camera
 // (a moving test picture) and a fake microphone.
 // Checks: the panel shows only without a server, and not on an iPhone; the
-// header's 🎬 Record opens it; recording: the score card's ⭐ Cue there (no
+// header's 🎬 Record opens it; sound off until turned on; the first recording
+// asks first (tell everyone at the table), its 🖨️ "Camera in use" sign prints;
+// recording: the score card's ⭐ Cue there (no
 // 🎯 Auto cue - recognition is off), "/" sets a cue and ends it, named as
 // usual; stopped: kept on this device (its fragments indexed); ⬇ Save clip:
 // an ordinary MP4 about as long as the cue (ffprobe, decodes cleanly);
@@ -59,7 +61,8 @@ function makeY4m(file) {
     page.on("pageerror", (e) => errors.push(e.message));
     if (opts.ua) await page.setUserAgent(opts.ua);
     await page.evaluateOnNewDocument((tablet) => {
-      window.__downloads = []; window.__shares = []; window.__opened = [];
+      window.__downloads = []; window.__shares = []; window.__opened = []; window.__printed = [];
+      window.print = () => { const s = document.getElementById("pmc-camera-sign"); window.__printed.push(s ? s.textContent : null); };
       window.open = (u) => { window.__opened.push(u); return null; };
       const click = HTMLAnchorElement.prototype.click;
       HTMLAnchorElement.prototype.click = function () { if (this.download) { window.__downloads.push({ name: this.download, url: this.href }); return; } return click.call(this); };
@@ -109,7 +112,17 @@ function makeY4m(file) {
   const opened = await page.evaluate(() => ({ expanded: !document.getElementById("local-record-panel").classList.contains("collapsed"), popup: window.__opened.length }));
   check("the header's 🎬 Record opens it (not the recording page, which needs the Mac)", opened.expanded && opened.popup === 0, opened);
 
+  const soundDefault = await page.evaluate(() => document.getElementById("lrec-sound").checked);
+  check("sound is off until turned on (\"🎙️ Record sound too ... ask first\")", soundDefault === false && /ask first/.test(await page.evaluate(() => document.getElementById("lrec-sound").parentNode.textContent)));
   await page.click("#btn-lrec-start");
+  await sleep(700);
+  const consent = await page.evaluate(() => { const o = document.getElementById("pmc-rec-consent"); return o ? o.textContent : null; });
+  check("the first recording on this device asks first: tell everyone at the table (no recording yet)", !!consent && /Tell everyone at the table/.test(consent) && !(await page.evaluate(() => window.PMCLocalRecorder._state().recording)), consent);
+  await page.click("#pmc-rec-consent-print");
+  await sleep(700);
+  const printed = await page.evaluate(() => window.__printed);
+  check("...🖨️ the \"Camera in use\" sign prints (sound off: \"No sound is recorded\")", printed.length === 1 && /CAMERA IN USE/.test(printed[0]) && /No sound is recorded/.test(printed[0]), printed);
+  await page.click("#pmc-rec-consent-go");
   for (let i = 0; i < 40; i++) { if (await page.evaluate(() => window.PMCLocalRecorder._state().recording)) break; await sleep(250); }
   await sleep(1500);
   let st = await page.evaluate(() => ({ s: window.PMCLocalRecorder._state(), status: document.getElementById("lrec-status").textContent, preview: !document.getElementById("lrec-preview").classList.contains("hidden"), cueBtn: !document.getElementById("recorder-cue-group").classList.contains("hidden"), auto: !document.getElementById("btn-recorder-auto").classList.contains("hidden") }));
