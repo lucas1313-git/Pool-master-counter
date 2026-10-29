@@ -63,7 +63,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   // a match on table 1: the two names picked, Start
   const start = async (a, b) => {
     await page.evaluate((a, b) => {
-      const sels = [...document.querySelectorAll("select")].filter((s) => s.offsetParent && [...s.options].some((o) => o.value === a) && [...s.options].some((o) => o.value === b));
+      const sels = [...document.querySelectorAll("select")].filter((s) => s.offsetParent && !s.closest("#league-result-form") && [...s.options].some((o) => o.value === a) && [...s.options].some((o) => o.value === b));
       sels[0].value = a; sels[0].dispatchEvent(new Event("change"));
       sels[1].value = b; sels[1].dispatchEvent(new Event("change"));
       const btn = sels[0].closest(".row").parentNode.querySelector("button.btn-primary");

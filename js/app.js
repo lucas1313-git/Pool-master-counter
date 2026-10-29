@@ -12301,6 +12301,14 @@
     if (["apa", "bca", "vnba", "tap"].indexOf(l.handicapSystem) === -1) l.handicapSystem = "apa";
     if (typeof l.handicapBaseGames !== "number" || l.handicapBaseGames < 1) l.handicapBaseGames = defaultHandicapBaseGames(l.format);
     if (!l.customHandicapCharts || typeof l.customHandicapCharts !== "object") l.customHandicapCharts = blankHandicapChartsBySystem();
+    // Seasons and weeks (P23): every match carries the season and week it
+    // was played in; the league's own are the ones new matches get.
+    if (typeof l.season !== "number" || l.season < 1) l.season = 1;
+    if (typeof l.week !== "number" || l.week < 1) l.week = 1;
+    if (!Array.isArray(l.matches)) l.matches = [];
+    // matches deleted here, so a merged import doesn't bring them back
+    if (!Array.isArray(l.deletedMatchIds)) l.deletedMatchIds = [];
+    if (!l.standingsFromMatches) takeLeagueStandingsBaseline(l);
     ["apa", "bca", "vnba", "tap"].forEach(function (system) {
       if (!l.customHandicapCharts[system] || typeof l.customHandicapCharts[system] !== "object") l.customHandicapCharts[system] = {};
       ["8ball", "9ball"].forEach(function (fmt) {
@@ -12308,6 +12316,113 @@
       });
     });
     return l;
+  }
+
+  // ---- League standings from the match list (P23) ----
+  // A member's played / won / points are the sum of the league's matches,
+  // so an edit, a delete, a merged import or the relay just recomputes.
+  // A league saved before every match was kept may count more than its
+  // list: that difference is taken once as a baseline (season 1) and
+  // kept, so nobody loses what they had.
+  function leagueMatchSums(league, season) {
+    var sums = {};
+    (league.members || []).forEach(function (mem) { sums[mem.name] = { played: 0, won: 0, points: 0 }; });
+    (league.matches || []).forEach(function (m) {
+      if (season && (m.season || 1) !== season) return;
+      [["playerA", "leaguePointsA"], ["playerB", "leaguePointsB"]].forEach(function (side) {
+        var s = sums[m[side[0]]];
+        if (!s) return;
+        s.played += 1;
+        if (m.winner === m[side[0]]) s.won += 1;
+        s.points += m[side[1]] || 0;
+      });
+    });
+    return sums;
+  }
+
+  function takeLeagueStandingsBaseline(league) {
+    var sums = leagueMatchSums(league);
+    var base = {};
+    (league.members || []).forEach(function (mem) {
+      var s = sums[mem.name];
+      var extra = { played: Math.max(0, (mem.matchesPlayed || 0) - s.played), won: Math.max(0, (mem.matchesWon || 0) - s.won), points: Math.max(0, (mem.leaguePoints || 0) - s.points) };
+      if (extra.played || extra.won || extra.points) base[mem.name] = extra;
+    });
+    league.standingsBaseline = base;
+    league.standingsFromMatches = true;
+  }
+
+  function recomputeLeagueStandings(league) {
+    var sums = leagueMatchSums(league);
+    var base = league.standingsBaseline || {};
+    (league.members || []).forEach(function (mem) {
+      var s = sums[mem.name], b = base[mem.name] || {};
+      mem.matchesPlayed = (b.played || 0) + s.played;
+      mem.matchesWon = (b.won || 0) + s.won;
+      mem.leaguePoints = (b.points || 0) + s.points;
+    });
+  }
+
+  // One season's standings rows (members with that season's counts only)
+  function leagueSeasonRows(league, season) {
+    var sums = leagueMatchSums(league, season);
+    var base = season === 1 ? league.standingsBaseline || {} : {};
+    return (league.members || []).map(function (mem) {
+      var s = sums[mem.name], b = base[mem.name] || {};
+      return Object.assign({}, mem, { matchesPlayed: (b.played || 0) + s.played, matchesWon: (b.won || 0) + s.won, leaguePoints: (b.points || 0) + s.points });
+    });
+  }
+
+  // Teams' standings: their members' totals (the rows given)
+  function leagueTeamRows(league, rows) {
+    return (league.teams || []).map(function (team) {
+      var mine = rows.filter(function (r) { var t = leagueTeamForMember(league, r.name); return t && t.id === team.id; });
+      return {
+        name: team.name,
+        played: mine.reduce(function (a, r) { return a + r.matchesPlayed; }, 0),
+        won: mine.reduce(function (a, r) { return a + r.matchesWon; }, 0),
+        points: mine.reduce(function (a, r) { return a + r.leaguePoints; }, 0)
+      };
+    }).sort(function (a, b) { return b.points - a.points || b.won - a.won || a.name.localeCompare(b.name); });
+  }
+
+  // Merges a league file into this device's copy of the same league (P23):
+  // matches by id (an id on both: the later edit wins), deleted matches
+  // stay deleted (either side's), members, teams and the latest
+  // season/week added; then the standings recomputed. Returns the matches
+  // this device didn't have (for their rating changes).
+  function mergeLeagueInto(local, incoming) {
+    var deleted = {};
+    (local.deletedMatchIds || []).concat(incoming.deletedMatchIds || []).forEach(function (id) { deleted[id] = true; });
+    var byId = {};
+    var added = [];
+    (local.matches || []).forEach(function (m) { byId[m.id] = m; });
+    (incoming.matches || []).forEach(function (m) {
+      var mine = byId[m.id];
+      if (!mine) {
+        byId[m.id] = m;
+        if (!deleted[m.id]) added.push(m);
+      } else if ((m.editedAt || m.ts || "") > (mine.editedAt || mine.ts || "")) {
+        byId[m.id] = m;
+      }
+    });
+    local.matches = Object.keys(byId).map(function (id) { return byId[id]; }).filter(function (m) { return !deleted[m.id]; }).sort(function (a, b) { return (a.ts || "").localeCompare(b.ts || ""); });
+    local.deletedMatchIds = Object.keys(deleted);
+    (incoming.members || []).forEach(function (mem) {
+      if (!local.members.some(function (x) { return x.name === mem.name; })) local.members.push(Object.assign({}, mem, { matchesPlayed: 0, matchesWon: 0, leaguePoints: 0 }));
+    });
+    (incoming.teams || []).forEach(function (team) {
+      if (!(local.teams || []).some(function (x) { return x.id === team.id; })) (local.teams = local.teams || []).push(team);
+    });
+    var base = local.standingsBaseline || {};
+    Object.keys(incoming.standingsBaseline || {}).forEach(function (n) { if (!base[n]) base[n] = incoming.standingsBaseline[n]; });
+    local.standingsBaseline = base;
+    if ((incoming.season || 1) > (local.season || 1) || ((incoming.season || 1) === (local.season || 1) && (incoming.week || 1) > (local.week || 1))) {
+      local.season = incoming.season || 1;
+      local.week = incoming.week || 1;
+    }
+    recomputeLeagueStandings(local);
+    return added;
   }
 
   function loadLeaguesFromStorage() {
@@ -12323,6 +12438,9 @@
   }
 
   function saveLeaguesToStorage(leagues) {
+    // (a guest shows the host's league - never kept as its own, P23)
+    if (networkMode === "guest") return;
+    broadcastStateIfNetworked();
     if (noStatsMode) return;
     try {
       localStorage.setItem(LEAGUES_KEY, JSON.stringify(leagues));
@@ -13062,50 +13180,78 @@
     })[0];
     if (!memberA || !memberB) return;
     var aWon = scoreA >= targetA;
-    var winner = aWon ? nameA : nameB;
     var pts = aWon
       ? leaguePointsForResult(league, scoreA, targetA, scoreB, targetB, memberB.skillLevel)
       : leaguePointsForResult(league, scoreB, targetB, scoreA, targetA, memberA.skillLevel);
-    var leaguePointsA = aWon ? pts.winnerPoints : pts.loserPoints;
-    var leaguePointsB = aWon ? pts.loserPoints : pts.winnerPoints;
-    var ts = new Date().toISOString();
+    addLeagueMatch(league, {
+      id: "match-" + uid(),
+      ts: new Date().toISOString(),
+      playerA: nameA,
+      playerB: nameB,
+      skillLevelA: memberA.skillLevel,
+      skillLevelB: memberB.skillLevel,
+      targetA: targetA,
+      targetB: targetB,
+      scoreA: scoreA,
+      scoreB: scoreB,
+      winner: aWon ? nameA : nameB,
+      leaguePointsA: aWon ? pts.winnerPoints : pts.loserPoints,
+      leaguePointsB: aWon ? pts.loserPoints : pts.winnerPoints
+    }, true);
+  }
 
-    league.matches = league.matches.concat([
-      {
-        id: "match-" + uid(),
-        ts: ts,
-        playerA: nameA,
-        playerB: nameB,
-        skillLevelA: memberA.skillLevel,
-        skillLevelB: memberB.skillLevel,
-        targetA: targetA,
-        targetB: targetB,
-        scoreA: scoreA,
-        scoreB: scoreB,
-        winner: winner,
-        leaguePointsA: leaguePointsA,
-        leaguePointsB: leaguePointsB
-      }
-    ]);
-
-    memberA.matchesPlayed += 1;
-    memberB.matchesPlayed += 1;
-    if (aWon) memberA.matchesWon += 1;
-    else memberB.matchesWon += 1;
-    memberA.leaguePoints += leaguePointsA;
-    memberB.leaguePoints += leaguePointsB;
-    bumpLeagueSessionGameCount(league, nameA);
-    bumpLeagueSessionGameCount(league, nameB);
-
-    // Same pairwise rating update every other pairwise result in the app
-    // gets (a regular game, a tournament match) - league matches are
-    // real games too, so a member's overall rating (shown everywhere
-    // else via buildRatingBadge) should move with their league record
-    // instead of staying frozen at whatever it was before they joined.
-    applyPairwiseRatingResult(aWon ? nameA : nameB, aWon ? nameB : nameA, ts, leagueMatchRatingWeight(league, { scoreA: scoreA, scoreB: scoreB }));
-    saveRatingsToStorage(PLAYER_RATINGS);
-
+  // A result added to the league - live, typed in, from another table's
+  // device or merged: the standings recomputed from the list; a rated one
+  // moves the players' ratings (a forfeit or no-show doesn't).
+  function addLeagueMatch(league, m, rated) {
+    m.season = m.season || league.season || 1;
+    m.week = m.week || league.week || 1;
+    league.matches = league.matches.concat([m]);
+    recomputeLeagueStandings(league);
+    bumpLeagueSessionGameCount(league, m.playerA);
+    bumpLeagueSessionGameCount(league, m.playerB);
+    // (league matches are real games too: ratings move with them)
+    if (rated) {
+      applyPairwiseRatingResult(m.winner, m.winner === m.playerA ? m.playerB : m.playerA, m.ts, leagueMatchRatingWeight(league, { scoreA: m.scoreA, scoreB: m.scoreB }));
+      saveRatingsToStorage(PLAYER_RATINGS);
+    }
     saveLeaguesToStorage(LEAGUES);
+  }
+
+  // A result typed in (P23): "A beat B 5-3" (kind "played" - the winner is
+  // whoever reached their race, as in a live match), or a forfeit / no-show
+  // (kind "forfeit" / "noshow": the winner given, their race to nothing,
+  // the full win's points; unrated). "" when added, else why not.
+  function recordLeagueResult(league, r) {
+    var memberA = league.members.filter(function (m) { return m.name === r.a; })[0];
+    var memberB = league.members.filter(function (m) { return m.name === r.b; })[0];
+    if (!memberA || !memberB || r.a === r.b) return T("league.resultPickTwo");
+    var targets = leagueMatchTargets(league, memberA, memberB);
+    var m = { id: "match-" + uid(), ts: new Date().toISOString(), playerA: r.a, playerB: r.b, skillLevelA: memberA.skillLevel, skillLevelB: memberB.skillLevel, targetA: targets.targetA, targetB: targets.targetB, week: r.week || league.week, season: league.season, entered: true };
+    var aWon;
+    if (r.kind === "forfeit" || r.kind === "noshow") {
+      if (r.winner !== r.a && r.winner !== r.b) return T("league.resultPickWinner");
+      aWon = r.winner === r.a;
+      m.kind = r.kind;
+      m.scoreA = aWon ? targets.targetA : 0;
+      m.scoreB = aWon ? 0 : targets.targetB;
+    } else {
+      var sa = parseInt(r.scoreA, 10), sb = parseInt(r.scoreB, 10);
+      if (!(sa >= 0) || !(sb >= 0) || sa === sb) return T("tournament.enterScoreInvalid");
+      var aReached = sa >= targets.targetA, bReached = sb >= targets.targetB;
+      aWon = aReached !== bReached ? aReached : sa > sb;
+      m.scoreA = sa;
+      m.scoreB = sb;
+    }
+    m.winner = aWon ? r.a : r.b;
+    var pts = aWon
+      ? leaguePointsForResult(league, m.scoreA, m.targetA, m.scoreB, m.targetB, m.skillLevelB)
+      : leaguePointsForResult(league, m.scoreB, m.targetB, m.scoreA, m.targetA, m.skillLevelA);
+    if (m.kind) pts = { winnerPoints: pts.winnerPoints, loserPoints: 0 };
+    m.leaguePointsA = aWon ? pts.winnerPoints : pts.loserPoints;
+    m.leaguePointsB = aWon ? pts.loserPoints : pts.winnerPoints;
+    addLeagueMatch(league, m, !m.kind);
+    return "";
   }
 
   // A view preference, not league data - deliberately not saved on the
@@ -13115,8 +13261,10 @@
   // reload, same starting point as before this was ever changeable.
   var leagueStandingsSortMode = "points";
 
-  function leagueStandingsSorted(league) {
-    return league.members.slice().sort(function (a, b) {
+  // (rows: a season's standings rows, see leagueSeasonRows - or the league's own)
+  var leagueSeasonFilter = "all";
+  function leagueStandingsSorted(league, rows) {
+    return (rows || league.members).slice().sort(function (a, b) {
       if (leagueStandingsSortMode === "name") return a.name.localeCompare(b.name);
       if (leagueStandingsSortMode === "fargo") return getPlayerRating(b.name) - getPlayerRating(a.name) || a.name.localeCompare(b.name);
       return b.leaguePoints - a.leaguePoints || b.matchesWon - a.matchesWon || a.name.localeCompare(b.name);
@@ -13156,19 +13304,26 @@
       // and re-sharing files can diverge - re-exporting and re-importing
       // is how they reconcile.
       normalizeLeagueDefaults(imported);
-      var proceed = function () {
-        LEAGUES = LEAGUES.filter(function (l) {
-          return l.id !== imported.id;
-        }).concat([imported]);
+      var existing = findLeagueById(imported.id);
+      if (!existing) {
+        recomputeLeagueStandings(imported);
+        LEAGUES = LEAGUES.concat([imported]);
         saveLeaguesToStorage(LEAGUES);
         activeLeagueId = imported.id;
         renderLeaguePage();
-      };
-      if (findLeagueById(imported.id)) {
-        confirmModal(T("league.importOverwriteConfirm", { name: imported.name }), proceed, null);
-      } else {
-        proceed();
+        return;
       }
+      // The same league from another device (P23): merged match by match,
+      // not replaced - both devices' results kept, the new ones rated here.
+      var added = mergeLeagueInto(existing, imported);
+      added.filter(function (m) { return !m.kind; }).sort(function (a, b) { return a.ts.localeCompare(b.ts); }).forEach(function (m) {
+        applyPairwiseRatingResult(m.winner, m.winner === m.playerA ? m.playerB : m.playerA, m.ts, leagueMatchRatingWeight(existing, m));
+      });
+      saveRatingsToStorage(PLAYER_RATINGS);
+      saveLeaguesToStorage(LEAGUES);
+      activeLeagueId = existing.id;
+      renderLeaguePage();
+      showToast(TP("league.importMerged", added.length, { count: added.length, name: existing.name }));
     };
     reader.readAsText(file);
   }
@@ -13766,6 +13921,16 @@
   // buttons belong to, passed straight through from buildLeagueSidePanel -
   // never inferred from "whichever table is focused right now", same
   // guard tournamentAdjustScore uses.
+  // a league table's own device sends its taps to the host (P23)
+  function requestLeagueAdjustScore(league, active, side, delta) {
+    if (networkMode === "guest") {
+      if (!myTableNumber || active.table !== myTableNumber) return;
+      if (networkWs) networkWs.send(JSON.stringify({ type: "action", fn: "leagueAdjustScore", args: [league.id, active.table, side, delta] }));
+      return;
+    }
+    leagueAdjustScore(league, active, side, delta);
+  }
+
   function leagueAdjustScore(league, active, side, delta) {
     if (!league || !active) return;
     var scoreKey = side === "a" ? "scoreA" : "scoreB";
@@ -13856,7 +14021,7 @@
     minusBtn.setAttribute("aria-label", scoreButtonAria(-1, name, leaguePoints ? "points" : "rack", false));
     minusBtn.disabled = score <= 0;
     minusBtn.addEventListener("click", function () {
-      leagueAdjustScore(league, active, side, -1);
+      requestLeagueAdjustScore(league, active, side, -1);
     });
 
     var plusBtn = document.createElement("button");
@@ -13865,7 +14030,7 @@
     plusBtn.textContent = "+";
     plusBtn.setAttribute("aria-label", scoreButtonAria(1, name, leaguePoints ? "points" : "rack", !leaguePoints));
     plusBtn.addEventListener("click", function () {
-      leagueAdjustScore(league, active, side, 1);
+      requestLeagueAdjustScore(league, active, side, 1);
     });
 
     controls.appendChild(minusBtn);
@@ -13878,7 +14043,7 @@
       nineBtn.textContent = T("league.nineBallButton");
       nineBtn.setAttribute("aria-label", T("league.nineBallAria", { name: name }));
       nineBtn.addEventListener("click", function () {
-        leagueAdjustScore(league, active, side, 2);
+        requestLeagueAdjustScore(league, active, side, 2);
       });
       controls.appendChild(nineBtn);
     }
@@ -14756,7 +14921,9 @@
     var pointsColShowsRating = leagueHandicapUsesRating(league.handicapSystem);
     leagueColPointsHeader.textContent = T(pointsColShowsRating ? "common.rating" : "league.colPoints");
     leagueStandingsBody.innerHTML = "";
-    var sorted = leagueStandingsSorted(league);
+    var seasonRows = leagueSeasonFilter === "all" ? null : leagueSeasonRows(league, parseInt(leagueSeasonFilter, 10));
+    var sorted = leagueStandingsSorted(league, seasonRows);
+    renderLeagueSeasonBar(league, seasonRows);
     if (sorted.length === 0) {
       var emptyRow = document.createElement("tr");
       var emptyCell = document.createElement("td");
@@ -14814,7 +14981,7 @@
           var removeCell = document.createElement("td");
           var removeBtn = document.createElement("button");
           removeBtn.type = "button";
-          removeBtn.className = "btn btn-ghost";
+          removeBtn.className = "btn btn-ghost league-member-remove";
           removeBtn.textContent = "✕";
           removeBtn.setAttribute("aria-label", T("league.removeMemberAria", { name: m.name }));
           removeBtn.addEventListener("click", function () {
@@ -14883,28 +15050,111 @@
 
     renderLeagueActiveMatches();
     renderLeagueMatchList(league);
+    renderLeagueResultForm(league);
+  }
+
+  // Season and week (P23): "Season 2 · Week 5", ➕ Next week, 🆕 New
+  // season; the standings' season filter; the teams' standings for it.
+  function renderLeagueSeasonBar(league, seasonRows) {
+    document.getElementById("league-season-week").textContent = T("league.seasonWeek", { season: league.season, week: league.week });
+    var sel = document.getElementById("league-season-select");
+    var seasons = {};
+    seasons[league.season] = true;
+    (league.matches || []).forEach(function (m) { seasons[m.season || 1] = true; });
+    sel.innerHTML = "";
+    var all = document.createElement("option");
+    all.value = "all";
+    all.textContent = T("league.allSeasons");
+    sel.appendChild(all);
+    Object.keys(seasons).map(Number).sort(function (a, b) { return a - b; }).forEach(function (n) {
+      var o = document.createElement("option");
+      o.value = String(n);
+      o.textContent = T("league.seasonN", { season: n });
+      sel.appendChild(o);
+    });
+    sel.value = seasons[leagueSeasonFilter] || leagueSeasonFilter === "all" ? leagueSeasonFilter : "all";
+    var teamsEl = document.getElementById("league-team-standings");
+    var teamRows = leagueTeamRows(league, seasonRows || league.members);
+    teamsEl.innerHTML = "";
+    teamsEl.classList.toggle("hidden", !teamRows.length);
+    teamRows.forEach(function (tr, i) {
+      var li = document.createElement("li");
+      li.textContent = (i + 1) + ". " + tr.name + " — " + T("league.teamStandingsLine", { points: tr.points, won: tr.won, lost: tr.played - tr.won });
+      teamsEl.appendChild(li);
+    });
+  }
+
+  // ➕ A result typed in (P23): played (A beat B 5-3), a forfeit or a
+  // no-show; this week by default. On a table's device it goes to the host.
+  function renderLeagueResultForm(league) {
+    var form = document.getElementById("league-result-form");
+    if (!form) return;
+    form.classList.toggle("hidden", !league || league.members.length < 2);
+    if (!league) return;
+    ["league-result-a", "league-result-b"].forEach(function (id, i) {
+      var sel = document.getElementById(id);
+      var keep = sel.value;
+      sel.innerHTML = "";
+      league.members.forEach(function (m) {
+        var o = document.createElement("option");
+        o.value = m.name;
+        o.textContent = m.name;
+        sel.appendChild(o);
+      });
+      sel.value = keep && league.members.some(function (m) { return m.name === keep; }) ? keep : (league.members[i] || league.members[0]).name;
+    });
+    var week = document.getElementById("league-result-week");
+    if (!week.value || document.activeElement !== week) week.value = league.week;
+    var kind = document.getElementById("league-result-kind").value;
+    document.getElementById("league-result-scores").classList.toggle("hidden", kind !== "played");
+    document.getElementById("league-result-winner-row").classList.toggle("hidden", kind === "played");
+    var win = document.getElementById("league-result-winner");
+    var a = document.getElementById("league-result-a").value, b = document.getElementById("league-result-b").value;
+    var keepW = win.value;
+    win.innerHTML = "";
+    [a, b].forEach(function (n) {
+      var o = document.createElement("option");
+      o.value = n;
+      o.textContent = n;
+      win.appendChild(o);
+    });
+    win.value = keepW === a || keepW === b ? keepW : a;
+  }
+
+  function submitLeagueResult() {
+    var league = findLeagueById(activeLeagueId);
+    if (!league) return;
+    var r = {
+      a: document.getElementById("league-result-a").value,
+      b: document.getElementById("league-result-b").value,
+      kind: document.getElementById("league-result-kind").value,
+      scoreA: document.getElementById("league-result-score-a").value,
+      scoreB: document.getElementById("league-result-score-b").value,
+      winner: document.getElementById("league-result-winner").value,
+      week: parseInt(document.getElementById("league-result-week").value, 10) || league.week
+    };
+    if (networkMode === "guest") {
+      if (networkWs) networkWs.send(JSON.stringify({ type: "action", fn: "leagueRecordResult", args: [league.id, r] }));
+      showToast(T("league.resultSent"));
+      return;
+    }
+    var why = recordLeagueResult(league, r);
+    if (why) {
+      showToast(why);
+      return;
+    }
+    document.getElementById("league-result-score-a").value = "";
+    document.getElementById("league-result-score-b").value = "";
+    renderLeaguePage();
+    renderAll();
+    showToast(T("league.resultAdded"));
   }
 
   // ---------- League matches played: change a score, delete one ----------
   // Standings move by exactly that match's own share (taken back out, the
   // corrected one put in), so points from anything else are never touched;
   // its rating change is taken back and, for a corrected score, made again.
-  function leagueMatchEffects(league, m, sign) {
-    var memberA = league.members.filter(function (x) { return x.name === m.playerA; })[0];
-    var memberB = league.members.filter(function (x) { return x.name === m.playerB; })[0];
-    if (memberA) {
-      memberA.matchesPlayed += sign;
-      if (m.winner === m.playerA) memberA.matchesWon += sign;
-      memberA.leaguePoints += sign * (m.leaguePointsA || 0);
-    }
-    if (memberB) {
-      memberB.matchesPlayed += sign;
-      if (m.winner === m.playerB) memberB.matchesWon += sign;
-      memberB.leaguePoints += sign * (m.leaguePointsB || 0);
-    }
-  }
   function leagueSetMatchScore(league, m, scoreA, scoreB) {
-    leagueMatchEffects(league, m, -1);
     retractRatingsAt(m.ts);
     m.scoreA = scoreA;
     m.scoreB = scoreB;
@@ -14920,8 +15170,9 @@
     m.leaguePointsA = aWon ? pts.winnerPoints : pts.loserPoints;
     m.leaguePointsB = aWon ? pts.loserPoints : pts.winnerPoints;
     m.edited = true;
-    leagueMatchEffects(league, m, 1);
-    applyPairwiseRatingResult(m.winner, aWon ? m.playerB : m.playerA, m.ts, leagueMatchRatingWeight(league, m));
+    m.editedAt = new Date().toISOString();
+    recomputeLeagueStandings(league);
+    if (!m.kind) applyPairwiseRatingResult(m.winner, aWon ? m.playerB : m.playerA, m.ts, leagueMatchRatingWeight(league, m));
     [m.playerA, m.playerB].forEach(function (n) {
       var entry = getPlayerRatingEntry(n);
       if (entry) entry.history.sort(function (x, y) { return x.ts.localeCompare(y.ts); });
@@ -14932,9 +15183,10 @@
     renderAll();
   }
   function leagueDeleteMatch(league, m) {
-    leagueMatchEffects(league, m, -1);
     retractRatingsAt(m.ts);
     league.matches = league.matches.filter(function (x) { return x !== m; });
+    league.deletedMatchIds = (league.deletedMatchIds || []).concat([m.id]);
+    recomputeLeagueStandings(league);
     [m.playerA, m.playerB].forEach(function (n) {
       if (league.sessionGameCounts && league.sessionGameCounts[n] > 0) league.sessionGameCounts[n] -= 1;
     });
@@ -14955,7 +15207,8 @@
       li.className = "league-match-row";
       var text = document.createElement("span");
       text.className = "league-match-text";
-      text.textContent = formatTimestamp(m.ts, true) + " · " + m.playerA + " " + m.scoreA + " – " + m.scoreB + " " + m.playerB + (m.edited ? " " + T("league.matchEdited") : "");
+      text.textContent = T("league.weekShort", { season: m.season || 1, week: m.week || "?" }) + " · " + formatTimestamp(m.ts, true) + " · " + m.playerA + " " + m.scoreA + " – " + m.scoreB + " " + m.playerB +
+        (m.kind ? " (" + T(m.kind === "forfeit" ? "league.kindForfeit" : "league.kindNoShow") + ", " + m.winner + ")" : "") + (m.edited ? " " + T("league.matchEdited") : "");
       li.appendChild(text);
       if (league.isOrganizer) {
         var edit = document.createElement("button");
@@ -28328,7 +28581,7 @@
   // device is actively hosting with an open connection.
   function broadcastStateIfNetworked() {
     if (networkMode !== "host" || !networkWs || networkWs.readyState !== 1) return;
-    networkWs.send(JSON.stringify({ type: "state", state: state, tournament: TOURNAMENT, board: streamOverlayBoard(), follow: tournamentFollowBoard() }));
+    networkWs.send(JSON.stringify({ type: "state", state: state, tournament: TOURNAMENT, league: typeof findLeagueById === "function" ? findLeagueById(activeLeagueId) || null : null, board: streamOverlayBoard(), follow: tournamentFollowBoard() }));
   }
 
   // What a phone following the event sees (follow.html, P22) - the event
@@ -28458,8 +28711,14 @@
   function hydrateFromNetworkSnapshot(snapshot) {
     state = snapshot.state;
     TOURNAMENT = snapshot.tournament || null;
+    // the host's league night, shown here as it stands there (P23)
+    if (snapshot.league && snapshot.league.id) {
+      LEAGUES = LEAGUES.filter(function (l) { return l.id !== snapshot.league.id; }).concat([normalizeLeagueDefaults(snapshot.league)]);
+      activeLeagueId = snapshot.league.id;
+    }
     renderAll();
     renderTournamentPage();
+    if (snapshot.league) renderLeaguePage();
   }
 
   // Host-only whitelist of exactly the functions a guest is ever allowed
@@ -28476,6 +28735,18 @@
         return a.matchId === msg.args[0];
       })[0];
       if (active && msg.fromTable && active.table === msg.fromTable) tournamentAdjustScore(active, msg.args[1], msg.args[2]);
+    } else if (msg.fn === "leagueRecordResult") {
+      // a result typed in on another device (P23)
+      var lg = findLeagueById(msg.args[0]);
+      if (lg && !recordLeagueResult(lg, msg.args[1] || {})) {
+        renderLeaguePage();
+        renderAll();
+      }
+    } else if (msg.fn === "leagueAdjustScore") {
+      // a league table's own device scores its table only (P23, as P22)
+      var lgs = findLeagueById(msg.args[0]);
+      var la = lgs && (lgs.activeMatches || []).filter(function (a) { return a.table === msg.args[1]; })[0];
+      if (la && msg.fromTable && la.table === msg.fromTable) leagueAdjustScore(lgs, la, msg.args[2], msg.args[3]);
     } else if (msg.fn === "tournamentStartMatch") {
       // ...and starts a match on its own table, if the match isn't meant
       // for another one and both players are free
@@ -39469,6 +39740,34 @@
     document.getElementById("home-screen-tip").classList.add("hidden");
   });
   setTimeout(maybeShowHomeScreenTip, 2500);
+  // the league's season and week, its season filter, a typed-in result (P23)
+  document.getElementById("league-season-select").addEventListener("change", function (e) {
+    leagueSeasonFilter = e.target.value;
+    renderLeaguePage();
+  });
+  document.getElementById("btn-league-next-week").addEventListener("click", function () {
+    var league = findLeagueById(activeLeagueId);
+    if (!league) return;
+    league.week += 1;
+    resetLeagueSessionGameCounts(league);
+    saveLeaguesToStorage(LEAGUES);
+    renderLeaguePage();
+  });
+  document.getElementById("btn-league-new-season").addEventListener("click", function () {
+    var league = findLeagueById(activeLeagueId);
+    if (!league) return;
+    confirmModal(T("league.newSeasonConfirm", { season: league.season + 1 }), function () {
+      league.season += 1;
+      league.week = 1;
+      leagueSeasonFilter = String(league.season);
+      saveLeaguesToStorage(LEAGUES);
+      renderLeaguePage();
+    });
+  });
+  ["league-result-kind", "league-result-a", "league-result-b"].forEach(function (id) {
+    document.getElementById(id).addEventListener("change", function () { renderLeagueResultForm(findLeagueById(activeLeagueId)); });
+  });
+  document.getElementById("btn-league-result-save").addEventListener("click", submitLeagueResult);
   btnTournamentAbandon.addEventListener("click", abandonTournament);
   // ⋯ More: what's rarely needed and can't be undone (P20) - Abandon
   document.getElementById("btn-tournament-more").addEventListener("click", function () {
@@ -39591,7 +39890,8 @@
   // First launch: one screen - two names, the game, the race, Start (the
   // old welcome, with its email/phone/rating questions, is ☰ Menu ›
   // Players › Welcome a new player now)
-  if (!hasSeenOnboarding() && isFirstTimeUser()) {
+  // (not on a device joining someone's session - it shows theirs)
+  if (!hasSeenOnboarding() && isFirstTimeUser() && location.search.indexOf("join=1") === -1) {
     openFirstRun();
   }
 

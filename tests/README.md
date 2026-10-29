@@ -439,3 +439,15 @@ Not part of the app - helpers for testing and for running this machine's own cop
   another table (a forged action is ignored) and starts a match on table 2; follow.html (no
   pairing, /ws-follow) shows the live tables, the standings and "Me" → my match, and gets only the
   event's summary. Nobody is ever in two live matches. `node tests/probe_multi_table.js [shots]`.
+- **test_league_merge.js** — league nights across devices (P23), no browser: standings are the sum
+  of the match list; two devices diverging from one league (one adds, deletes and edits, the other
+  adds two) merge either way round to the same matches and identical standings, the deleted match
+  stays deleted, the later edit wins, a second import changes nothing; an older league's counts
+  are kept as a baseline; a season's standings count only it; teams add up their members.
+  `node tests/test_league_merge.js`.
+- **probe_league_relay.js** — two pages and the relay on a throwaway server (4278): a second
+  device (?join=1&table=1, a fresh phone - no first-run screen) shows the host's league and its
+  result form; results typed on both (a played match there; a forfeit and a played match here)
+  end with identical standings, the matches kept on the host only; the forfeit is unrated; a
+  deleted match updates both; ➕ Next week shows Week 2 on both and the next result is week 2.
+  `node tests/probe_league_relay.js [screenshot dir]`.

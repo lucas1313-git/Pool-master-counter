@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261029j">
+<link rel="stylesheet" href="css/style.css?v=20261029k">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -2714,7 +2714,7 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
         <div id="league-add-member-wrap"></div>
         <button type="button" id="btn-league-add-member" class="btn btn-ghost" data-i18n="league.addMemberButton">+ Add</button>
       </div>
-      <label class="checkbox-row">
+      <label class="checkbox-row league-add-member-contacts-row">
         <input type="checkbox" id="league-add-member-contacts-checkbox">
         <span data-i18n="league.addToContactsLabel">Add to Contact Sheet if new</span>
       </label>
@@ -2726,6 +2726,14 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
     <div id="league-standings-section">
       <h4 data-i18n="league.standingsHeading">Standings</h4>
+      <!-- season and week (P23) -->
+      <div class="row league-season-row">
+        <strong id="league-season-week"></strong>
+        <button type="button" id="btn-league-next-week" class="btn btn-ghost" data-i18n="league.nextWeek">➕ Next week</button>
+        <button type="button" id="btn-league-new-season" class="btn btn-ghost" data-i18n="league.newSeason">🆕 New season</button>
+        <label for="league-season-select" data-i18n="league.seasonFilterLabel">Show</label>
+        <select id="league-season-select"></select>
+      </div>
       <div class="row">
         <label for="league-standings-sort-select" data-i18n="league.sortByLabel">Sort by</label>
         <select id="league-standings-sort-select">
@@ -2748,6 +2756,37 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
           </thead>
           <tbody id="league-standings-body"></tbody>
         </table>
+      </div>
+      <h4 class="league-team-standings-heading" data-i18n="league.teamStandingsHeading">Teams</h4>
+      <ol id="league-team-standings" class="league-team-standings hidden"></ol>
+    </div>
+
+    <!-- ➕ a result typed in (P23): played, a forfeit or a no-show -->
+    <div id="league-result-form" class="league-result-form hidden">
+      <h4 data-i18n="league.resultHeading">➕ Enter a result</h4>
+      <div class="row">
+        <select id="league-result-a" aria-label="Player A" data-i18n-aria-label="league.resultPlayerA"></select>
+        <span data-i18n="league.resultVs">vs</span>
+        <select id="league-result-b" aria-label="Player B" data-i18n-aria-label="league.resultPlayerB"></select>
+        <select id="league-result-kind" aria-label="How it ended" data-i18n-aria-label="league.resultKindAria">
+          <option value="played" data-i18n="league.kindPlayed">Played</option>
+          <option value="forfeit" data-i18n="league.kindForfeit">Forfeit</option>
+          <option value="noshow" data-i18n="league.kindNoShow">No-show</option>
+        </select>
+      </div>
+      <div class="row" id="league-result-scores">
+        <input type="number" id="league-result-score-a" min="0" max="200" inputmode="numeric" aria-label="Score A" data-i18n-aria-label="league.resultScoreA">
+        <span>–</span>
+        <input type="number" id="league-result-score-b" min="0" max="200" inputmode="numeric" aria-label="Score B" data-i18n-aria-label="league.resultScoreB">
+      </div>
+      <div class="row hidden" id="league-result-winner-row">
+        <label for="league-result-winner" data-i18n="league.resultWinner">Wins</label>
+        <select id="league-result-winner"></select>
+      </div>
+      <div class="row">
+        <label for="league-result-week" data-i18n="league.resultWeek">Week</label>
+        <input type="number" id="league-result-week" min="1" max="99" inputmode="numeric">
+        <button type="button" id="btn-league-result-save" class="btn btn-primary" data-i18n="league.resultSave">Save result</button>
       </div>
     </div>
 
@@ -2982,18 +3021,18 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/pairing.js?v=20261029j"></script>
-<script src="js/big-store.js?v=20261029j"></script>
-<script src="js/mp4-clip.js?v=20261029j"></script>
-<script src="js/recording-consent.js?v=20261029j"></script>
-<script src="js/local-recorder.js?v=20261029j"></script>
-<script src="js/app.js?v=20261029j"></script>
-<script src="js/camera-client.js?v=20261029j"></script>
-<script src="js/voice.js?v=20261029j"></script>
+<script src="js/pairing.js?v=20261029k"></script>
+<script src="js/big-store.js?v=20261029k"></script>
+<script src="js/mp4-clip.js?v=20261029k"></script>
+<script src="js/recording-consent.js?v=20261029k"></script>
+<script src="js/local-recorder.js?v=20261029k"></script>
+<script src="js/app.js?v=20261029k"></script>
+<script src="js/camera-client.js?v=20261029k"></script>
+<script src="js/voice.js?v=20261029k"></script>
 <script>
   // The app opens with no network (sw.js, P21) - on http(s) only, not in the iOS app
   if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol) && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
-    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261029j").catch(function () {}); });
+    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261029k").catch(function () {}); });
   }
 </script>
 </body>

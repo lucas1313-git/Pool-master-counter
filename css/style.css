@@ -11711,3 +11711,42 @@ body.network-guest-mode .tournament-board-tools > :not(.tournament-tv-btn) {
   gap: 10px;
   font-weight: 700;
 }
+
+/* a second device on a league night (P23): it shows the host's league and
+   records results; running the league stays on the host */
+body.network-guest-mode .league-sl-input {
+  pointer-events: none;
+}
+body.network-guest-mode #league-setup-panel,
+body.network-guest-mode #btn-league-next-week,
+body.network-guest-mode #btn-league-new-season,
+body.network-guest-mode #btn-open-league-wizard,
+body.network-guest-mode .league-match-edit,
+body.network-guest-mode .league-match-delete,
+body.network-guest-mode .league-mode-toggle,
+body.network-guest-mode #league-add-member-wrap,
+body.network-guest-mode #btn-league-add-member,
+body.network-guest-mode .league-add-member-contacts-row,
+body.network-guest-mode .league-member-remove,
+body.network-guest-mode #league-add-member-contact-fields {
+  display: none !important;
+}
+.league-season-row {
+  gap: 10px;
+  align-items: center;
+}
+.league-team-standings {
+  margin: 6px 0 14px;
+  padding-left: 0;
+  list-style: none;
+}
+.league-result-form {
+  margin: 16px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-card);
+}
+.league-result-form input[type="number"] {
+  width: 5em;
+}
