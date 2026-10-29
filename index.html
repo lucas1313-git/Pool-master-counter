@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261029c">
+<link rel="stylesheet" href="css/style.css?v=20261029d">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -886,45 +886,46 @@
           </div>
         </div>
       </div>
+    <!-- ⚠️ Resets live here, in Backup & Restore only -->
+      <section class="panel collapsible-panel collapsed" id="resets-panel">
+        <button type="button" class="panel-toggle" id="btn-toggle-resets-panel" aria-expanded="false" aria-controls="resets-panel-body">
+          <h2 data-i18n="resets.heading">⚠️ All Resets</h2>
+          <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+        </button>
+        <p class="panel-summary" id="resets-panel-summary" data-i18n="resets.summary">Every reset button in the app, in one place.</p>
+        <div class="panel-body" id="resets-panel-body">
+          <div class="row">
+            <button type="button" id="btn-reset-game" class="btn btn-ghost" data-i18n="gameSetup.resetGame">Reset Current Game</button>
+          </div>
+          <div class="row">
+            <button type="button" id="btn-reset-session-tournament" class="btn btn-danger" data-i18n="players.resetSessionTournament">⚠️ Reset Tournament</button>
+          </div>
+          <div class="row">
+            <button type="button" id="btn-reset-all-ratings" class="btn btn-danger" data-i18n="players.resetAllRatings">⚠️ Reset All Players' Official Rating</button>
+          </div>
+          <div class="row">
+            <button type="button" id="btn-recompute-all-ratings" class="btn btn-danger" data-i18n="players.recomputeAllRatings">🔧 Recompute All Ratings From Game History</button>
+          </div>
+          <p class="player-stats-note" data-i18n="resets.recomputeRatingsHint">Rebuilds every player's rating from scratch by replaying their full game history in order - fixes drift (like a wrong K-factor after a name merge) without wiping anyone back to the default rating. Can shift every player's rating, not just one, since ratings depend on who each game was against.</p>
+          <div class="row">
+            <button type="button" id="btn-reset-today-stats" class="btn btn-danger" data-i18n="gamewin.resetTodayStats">Reset today's stats</button>
+          </div>
+          <div class="row">
+            <button type="button" id="btn-reset-all-player-stats" class="btn btn-danger" data-i18n="backup.resetStats">Reset All Player Stats</button>
+            <button type="button" id="btn-reset-roster-lists" class="btn btn-danger" data-i18n="backup.resetLists">Reset Player Lists</button>
+          </div>
+          <p class="player-stats-note" data-i18n="resets.tournamentNote">Ending just an in-progress tournament (without touching the live session) is on the Tournament page's Abandon Tournament button.</p>
+          <div class="full-reset-block">
+            <p class="player-stats-note" data-i18n="resets.fullResetNote">Everything below this line wipes the entire device back to a brand new install — every player, rating, roster, and setting. A full backup downloads automatically first.</p>
+            <div class="row">
+              <button type="button" id="btn-full-reset" class="btn btn-danger btn-full-reset" data-i18n="resets.fullReset">💀 Full Reset — Wipe Everything</button>
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
   </section>
 
-  <section class="panel collapsible-panel collapsed" id="resets-panel">
-    <button type="button" class="panel-toggle" id="btn-toggle-resets-panel" aria-expanded="false" aria-controls="resets-panel-body">
-      <h2 data-i18n="resets.heading">⚠️ All Resets</h2>
-      <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
-    </button>
-    <p class="panel-summary" id="resets-panel-summary" data-i18n="resets.summary">Every reset button in the app, in one place.</p>
-    <div class="panel-body" id="resets-panel-body">
-      <div class="row">
-        <button type="button" id="btn-reset-game" class="btn btn-ghost" data-i18n="gameSetup.resetGame">Reset Current Game</button>
-      </div>
-      <div class="row">
-        <button type="button" id="btn-reset-session-tournament" class="btn btn-danger" data-i18n="players.resetSessionTournament">⚠️ Reset Tournament</button>
-      </div>
-      <div class="row">
-        <button type="button" id="btn-reset-all-ratings" class="btn btn-danger" data-i18n="players.resetAllRatings">⚠️ Reset All Players' Official Rating</button>
-      </div>
-      <div class="row">
-        <button type="button" id="btn-recompute-all-ratings" class="btn btn-danger" data-i18n="players.recomputeAllRatings">🔧 Recompute All Ratings From Game History</button>
-      </div>
-      <p class="player-stats-note" data-i18n="resets.recomputeRatingsHint">Rebuilds every player's rating from scratch by replaying their full game history in order - fixes drift (like a wrong K-factor after a name merge) without wiping anyone back to the default rating. Can shift every player's rating, not just one, since ratings depend on who each game was against.</p>
-      <div class="row">
-        <button type="button" id="btn-reset-today-stats" class="btn btn-danger" data-i18n="gamewin.resetTodayStats">Reset today's stats</button>
-      </div>
-      <div class="row">
-        <button type="button" id="btn-reset-all-player-stats" class="btn btn-danger" data-i18n="backup.resetStats">Reset All Player Stats</button>
-        <button type="button" id="btn-reset-roster-lists" class="btn btn-danger" data-i18n="backup.resetLists">Reset Player Lists</button>
-      </div>
-      <p class="player-stats-note" data-i18n="resets.tournamentNote">Ending just an in-progress tournament (without touching the live session) is on the Tournament page's Abandon Tournament button.</p>
-      <div class="full-reset-block">
-        <p class="player-stats-note" data-i18n="resets.fullResetNote">Everything below this line wipes the entire device back to a brand new install — every player, rating, roster, and setting. A full backup downloads automatically first.</p>
-        <div class="row">
-          <button type="button" id="btn-full-reset" class="btn btn-danger btn-full-reset" data-i18n="resets.fullReset">💀 Full Reset — Wipe Everything</button>
-        </div>
-      </div>
-    </div>
-  </section>
 
   <section class="panel collapsible-panel collapsed" id="challonge-panel">
     <button type="button" class="panel-toggle" id="btn-toggle-challonge-panel" aria-expanded="false" aria-controls="challonge-panel-body">
@@ -1292,6 +1293,22 @@
     <div class="confirm-modal-actions board-sheet-foot">
       <button type="button" id="btn-game-sheet-apply" class="btn btn-primary" data-i18n="gameSheet.apply">Apply</button>
       <button type="button" id="btn-game-sheet-cancel" class="btn btn-ghost" data-i18n="common.cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- 🌙 End night: tonight in one sheet, one Share - archived as it opens (js/app.js openEndNight) -->
+<div id="end-night-overlay" class="confirm-modal-overlay board-sheet-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="end-night-title">
+  <div class="confirm-modal-card board-sheet end-night-sheet">
+    <div class="board-sheet-head">
+      <h3 class="confirm-modal-title" id="end-night-title" data-i18n="endNight.title">🌙 Tonight</h3>
+      <button type="button" class="board-sheet-close" id="btn-end-night-close" data-i18n-aria-label="common.close" aria-label="Close">×</button>
+    </div>
+    <div class="board-sheet-body" id="end-night-body"></div>
+    <label class="gs-toggle end-night-picture"><input type="checkbox" id="end-night-picture" checked> <span data-i18n="endNight.picture">Add the picture card</span></label>
+    <div class="confirm-modal-actions board-sheet-foot">
+      <button type="button" id="btn-end-night-share" class="btn btn-primary" data-i18n="endNight.share">📤 Share</button>
+      <button type="button" id="btn-end-night-done" class="btn btn-ghost" data-i18n="endNight.done">Done</button>
     </div>
   </div>
 </div>
@@ -2923,13 +2940,13 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/pairing.js?v=20261029c"></script>
-<script src="js/big-store.js?v=20261029c"></script>
-<script src="js/mp4-clip.js?v=20261029c"></script>
-<script src="js/recording-consent.js?v=20261029c"></script>
-<script src="js/local-recorder.js?v=20261029c"></script>
-<script src="js/app.js?v=20261029c"></script>
-<script src="js/camera-client.js?v=20261029c"></script>
-<script src="js/voice.js?v=20261029c"></script>
+<script src="js/pairing.js?v=20261029d"></script>
+<script src="js/big-store.js?v=20261029d"></script>
+<script src="js/mp4-clip.js?v=20261029d"></script>
+<script src="js/recording-consent.js?v=20261029d"></script>
+<script src="js/local-recorder.js?v=20261029d"></script>
+<script src="js/app.js?v=20261029d"></script>
+<script src="js/camera-client.js?v=20261029d"></script>
+<script src="js/voice.js?v=20261029d"></script>
 </body>
 </html>

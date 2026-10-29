@@ -167,9 +167,10 @@ function board(opts) {
   await page.click("#btn-board-menu");
   await sleep(300);
   const menu = await page.evaluate(() => [...document.querySelectorAll("#board-menu-list > li")].map((li) => ({ text: li.textContent.trim().replace(/\s+/g, " "), primary: !!li.querySelector(".is-primary"), h: Math.round(li.firstElementChild.getBoundingClientRect().height) })));
-  const want = ["Players", "Tournament", "League", "Stats", "Day Report", "Backup & Restore", "Camera", "Recording", "Voice", "Challonge", "Resets", "Help", "Theme", "Language"];
+  // (resets live in Backup & Restore since P17; End night joined the menu)
+  const want = ["End night", "Players", "Tournament", "League", "Stats", "Day Report", "Backup & Restore", "Camera", "Recording", "Voice", "Challonge", "Help", "Theme", "Language"];
   const has = want.filter((w) => menu.some((m) => m.text.indexOf(w) !== -1));
-  check("☰ Menu: ▶️ New game first (the primary), then Players … Language (14 items, 60 px rows)", menu[0].primary && /New game/.test(menu[0].text) && has.length === want.length && menu.every((m) => m.h >= 60), { menu, missing: want.filter((w) => has.indexOf(w) === -1) });
+  check("☰ Menu: ▶️ New game first (the primary), then End night, Players … Language (60 px rows)", menu[0].primary && /New game/.test(menu[0].text) && has.length === want.length && menu.every((m) => m.h >= 60), { menu, missing: want.filter((w) => has.indexOf(w) === -1) });
   if (OUT) await page.screenshot({ path: path.join(OUT, "layout_menu.png") });
   await menuClick("menu.backup");
   await sleep(900);

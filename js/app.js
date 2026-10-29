@@ -6668,6 +6668,7 @@
     var notGuest = function () { return !document.body.classList.contains("network-guest-mode"); };
     return [
       { icon: "▶️", key: "menu.newGame", primary: true, when: notGuest, run: function () { closeBoardMenu(); openQuickGameModal(); } },
+      { icon: "🌙", key: "menu.endNight", run: openEndNight },
       { icon: "👥", key: "menu.players", children: [
         { icon: "👥", key: "menu.playersRoster", run: panel("players-panel") },
         { icon: "↕️", key: "menu.arrange", run: function () { closeBoardMenu(); setArrangeMode(true); } },
@@ -6693,7 +6694,6 @@
       { icon: "🎤", key: "menu.voice", page: "voice" },
       { icon: "🔊", key: "menu.sounds", page: "sounds" },
       { icon: "☁️", key: "menu.challonge", run: panel("challonge-panel") },
-      { icon: "⚠️", key: "menu.resets", run: panel("resets-panel") },
       { icon: "❓", key: "menu.help", run: click("btn-open-help") },
       { icon: "🎨", key: "menu.theme", select: "theme-select" },
       { icon: "🌐", key: "menu.language", select: "language-select" },
@@ -6766,6 +6766,83 @@
 
   function closeBoardMenu() {
     boardMenuOverlay.classList.add("hidden");
+  }
+
+  // ---- 🌙 End night ----
+  // Tonight in one sheet: the standings, the MVP, the best run, each
+  // pairing's tally and the rating changes, with one Share (the report's
+  // text, and the picture card if wanted - never a backup). Opening it
+  // archives tonight's report (computeReportImageData files it under the
+  // pool day).
+  var endNightOverlay = document.getElementById("end-night-overlay");
+  function openEndNight() {
+    closeBoardMenu();
+    var day = todayDateStr();
+    var data = computeDayReportData(day);
+    if (data.players.length) computeReportImageData(day);
+    var body = document.getElementById("end-night-body");
+    body.innerHTML = "";
+    var add = function (cls, text) {
+      var el = document.createElement("div");
+      el.className = cls;
+      el.textContent = text;
+      body.appendChild(el);
+      return el;
+    };
+    if (!data.players.length) {
+      add("gs-note", T("endNight.nothing"));
+    } else {
+      var games = data.games.length;
+      add("end-night-line", TP("endNight.games", games, { n: games }));
+      // the MVP: most wins, then fewest losses, then the best rating change
+      var mvp = data.players.slice().sort(function (a, b) {
+        return b.wins - a.wins || a.losses - b.losses || (b.ratingDelta || 0) - (a.ratingDelta || 0);
+      })[0];
+      add("end-night-mvp", T("endNight.mvp", { name: mvp.name, wins: mvp.wins, losses: mvp.losses }));
+      if (data.bestRunToday) add("end-night-line", T("endNight.bestRun", { count: data.bestRunToday.value, name: data.bestRunToday.name }));
+      data.raceWins.forEach(function (g) { add("end-night-line", formatReportRaceWinLine(g)); });
+      add("end-night-heading", T("endNight.standings"));
+      var table = document.createElement("table");
+      table.className = "end-night-table";
+      data.players.forEach(function (p) {
+        var tr = document.createElement("tr");
+        var delta = p.ratingDelta;
+        [p.name, p.wins + "–" + p.losses, typeof delta === "number" ? (delta > 0 ? "▲" + delta : delta < 0 ? "▼" + Math.abs(delta) : "—") : "—"].forEach(function (text, i) {
+          var td = document.createElement("td");
+          td.textContent = text;
+          if (i === 2) td.className = delta > 0 ? "is-up" : delta < 0 ? "is-down" : "";
+          tr.appendChild(td);
+        });
+        table.appendChild(tr);
+      });
+      body.appendChild(table);
+      if (data.matchups.length) {
+        add("end-night-heading", T("endNight.matchups"));
+        data.matchups.forEach(function (m) { add("end-night-line", formatReportMatchupLine(m)); });
+      }
+    }
+    document.getElementById("btn-end-night-share").disabled = !data.players.length;
+    endNightOverlay.classList.remove("hidden");
+  }
+  function closeEndNight() {
+    endNightOverlay.classList.add("hidden");
+  }
+  // one Share: the report's text, and the picture card if ticked
+  function shareEndNight() {
+    var day = todayDateStr();
+    var text = buildDayReportTextForSharing(day);
+    commitLeaderboardSnapshot();
+    var files = [];
+    if (document.getElementById("end-night-picture").checked) {
+      try {
+        var blob = dataUrlToBlob(buildReportCanvasFromData(computeReportImageData(day)).toDataURL("image/png"));
+        if (blob) files.push(new File([blob], "pool-master-counter-report-" + day + ".png", { type: "image/png" }));
+      } catch (e) {
+        console.warn("Could not build the picture card.", e);
+      }
+    }
+    if (files.length) shareTextWithFiles(text, files, function () { shareReportTextOnly(text); });
+    else shareReportTextOnly(text);
   }
 
   // ---- ⇄ the bench ----
@@ -7116,6 +7193,10 @@
     });
     boardMenuOverlay.addEventListener("click", function (e) { if (e.target === boardMenuOverlay) closeBoardMenu(); });
 
+    document.getElementById("btn-end-night-close").addEventListener("click", closeEndNight);
+    document.getElementById("btn-end-night-done").addEventListener("click", closeEndNight);
+    document.getElementById("btn-end-night-share").addEventListener("click", shareEndNight);
+    endNightOverlay.addEventListener("click", function (e) { if (e.target === endNightOverlay) closeEndNight(); });
     document.getElementById("btn-bench-sheet-close").addEventListener("click", closeBenchSheet);
     benchSheetOverlay.addEventListener("click", function (e) { if (e.target === benchSheetOverlay) closeBenchSheet(); });
     document.getElementById("bench-add-form").addEventListener("submit", function (e) {
@@ -7250,6 +7331,23 @@
     return n === 0 ? "No games in the last 24 hours." : n + " game" + (n === 1 ? "" : "s") + " in the last 24 hours.";
   }
 
+  // "100–87": the winner's score, then the other side's, kept with the
+  // game since it was played (entry.scores). Rack-by-rack games (target 1
+  // rack) have no score of their own - "" for those.
+  function gameScoreText(g) {
+    if (!g || !g.scores || (g.unit === "rack" && (g.target || 1) <= 1)) return "";
+    // (the losing side is whoever else had a score - a player's own copy
+    // of a game they lost names the winners on both sides)
+    var winners = g.winnerNames || [];
+    var others = Object.keys(g.scores).filter(function (n) { return winners.indexOf(n) === -1 && typeof g.scores[n] === "number"; });
+    var mine = winners.filter(function (n) { return typeof g.scores[n] === "number"; });
+    if (!mine.length || !others.length) return "";
+    var sum = function (names) { return names.reduce(function (t, n) { return t + g.scores[n]; }, 0); };
+    if (g.isTeam) return sum(mine) + "–" + sum(others);
+    // one each - "61–40–30" for three
+    return [sum(mine)].concat(others.map(function (n) { return g.scores[n]; }).sort(function (a, b) { return b - a; })).join("–");
+  }
+
   function renderHistory() {
     historyList.innerHTML = "";
     var games = recentHistoryGames();
@@ -7292,6 +7390,13 @@
       });
       li.appendChild(winner);
       li.appendChild(document.createTextNode(" " + T("history.wonGameTarget", { game: entry.gameLabel, target: entry.target })));
+      var scoreText = gameScoreText(entry);
+      if (scoreText) {
+        var scoreSpan = document.createElement("strong");
+        scoreSpan.className = "history-score";
+        scoreSpan.textContent = " · " + scoreText;
+        li.appendChild(scoreSpan);
+      }
       if (entry.isTeam && entry.mvpName) {
         li.appendChild(document.createTextNode(" · " + T("history.pottedIt", { name: entry.mvpName })));
         li.appendChild(buildRatingBadge(entry.mvpName));
@@ -9851,7 +9956,19 @@
     // there's no historical per-day archive, so a report for a past
     // date has nothing to show here.
     var bestRunToday = dateStr === todayDateStr() ? getTodaysBestRun() : null;
-    return { date: dateStr, games: games, players: players, tournaments: tournaments, raceWins: raceWins, bestRunToday: bestRunToday };
+    // each one-on-one pairing's tally ("Kim 3 – 2 Jo"), the more games first
+    var pairs = {};
+    games.forEach(function (g) {
+      if (g.isTeam || (g.winnerNames || []).length !== 1 || (g.opponentNames || []).length !== 1) return;
+      var a = g.winnerNames[0], b = g.opponentNames[0], key = [a, b].sort().join("|");
+      if (!pairs[key]) pairs[key] = { names: [a, b].sort(), wins: {} };
+      pairs[key].wins[a] = (pairs[key].wins[a] || 0) + 1;
+    });
+    var matchups = Object.keys(pairs).map(function (k) {
+      var p = pairs[k], a = p.names[0], b = p.names[1], wa = p.wins[a] || 0, wb = p.wins[b] || 0;
+      return wa >= wb ? { a: a, b: b, aWins: wa, bWins: wb } : { a: b, b: a, aWins: wb, bWins: wa };
+    }).sort(function (x, y) { return (y.aWins + y.bWins) - (x.aWins + x.bWins) || x.a.localeCompare(y.a); });
+    return { date: dateStr, games: games, players: players, tournaments: tournaments, raceWins: raceWins, bestRunToday: bestRunToday, matchups: matchups };
   }
 
   function tournamentFormatLabel(format) {
@@ -9874,6 +9991,17 @@
     var champions = joinNamesForReport(t.championNames || []);
     var text = champions + " won the " + tournamentFormatLabel(t.format) + " tournament (" + (t.players || []).length + " players)";
     return "👑 " + (time ? time + " — " : "") + text;
+  }
+
+  function formatReportMatchupLine(m) {
+    return m.a + " " + m.aWins + " – " + m.bWins + " " + m.b;
+  }
+  // "Matchups" and each pairing's tally, in every report format
+  function appendReportMatchups(lines, data) {
+    if (!data.matchups || !data.matchups.length) return;
+    lines.push("");
+    lines.push("Matchups");
+    data.matchups.forEach(function (m) { lines.push(formatReportMatchupLine(m)); });
   }
 
   function formatReportBestRunLine(run) {
@@ -9920,10 +10048,12 @@
       var key =
         (g.winnerNames || []).slice().sort().join(",") + "|" + (g.opponentNames || []).slice().sort().join(",") + "|" + g.gameLabel;
       if (!byKey[key]) {
-        byKey[key] = { winnerNames: g.winnerNames, opponentNames: g.opponentNames, gameLabel: g.gameLabel, ts: g.ts, count: 0, skunkCount: 0 };
+        byKey[key] = { winnerNames: g.winnerNames, opponentNames: g.opponentNames, gameLabel: g.gameLabel, ts: g.ts, count: 0, skunkCount: 0, scores: [] };
         order.push(key);
       }
       byKey[key].count += 1;
+      var scoreText = gameScoreText(g);
+      if (scoreText) byKey[key].scores.push(scoreText);
       if (g.skunk) byKey[key].skunkCount += 1;
     });
     return order.map(function (k) {
@@ -9951,6 +10081,7 @@
     var time = formatReportGameTime(group.ts);
     var text = group.count === 1 ? winners + " won " + group.gameLabel : winners + " won " + group.count + " games of " + group.gameLabel;
     if (losers) text += " against " + losers;
+    if (group.scores && group.scores.length) text += " (" + group.scores.join(", ") + ")";
     text += formatSkunkSuffix(group.skunkCount);
     return (time ? time + " — " : "") + text;
   }
@@ -10033,7 +10164,7 @@
     var winners = joinNamesCapped(group.winnerNames || [], 2);
     var losers = joinNamesCapped(group.opponentNames || [], 2);
     var label = group.gameLabel + (group.count > 1 ? " ×" + group.count : "") + formatSkunkSuffix(group.skunkCount);
-    var result = losers ? winners + " def. " + losers : winners + " won";
+    var result = (losers ? winners + " def. " + losers : winners + " won") + (group.scores && group.scores.length ? " " + group.scores.join(", ") : "");
     return [formatReportGameTime(group.ts), result, label];
   }
 
@@ -10101,6 +10232,7 @@
         });
         if (data.bestRunToday) lines.push(formatReportBestRunLine(data.bestRunToday));
       }
+      appendReportMatchups(lines, data);
 
       var earlierGames = data.games.filter(function (g) {
         return !g.isLive;
@@ -10185,6 +10317,7 @@
         });
         if (data.bestRunToday) lines.push(formatReportBestRunLine(data.bestRunToday));
       }
+      appendReportMatchups(lines, data);
     }
     return lines.join("\n");
   }
@@ -10247,6 +10380,7 @@
         });
         if (data.bestRunToday) lines.push(formatReportBestRunLine(data.bestRunToday));
       }
+      appendReportMatchups(lines, data);
 
       if (data.games.length > 0) {
         lines.push("");
@@ -10311,6 +10445,7 @@
         });
         if (data.bestRunToday) lines.push(formatReportBestRunLine(data.bestRunToday));
       }
+      appendReportMatchups(lines, data);
 
       if (data.games.length > 0) {
         lines.push("");
@@ -10319,7 +10454,7 @@
           var winners = joinNamesCapped(g.winnerNames || [], 2);
           var losers = joinNamesCapped(g.opponentNames || [], 2);
           var label = g.gameLabel + (g.count > 1 ? " ×" + g.count : "") + formatSkunkSuffix(g.skunkCount);
-          var result = losers ? winners + " def. " + losers : winners + " won";
+          var result = (losers ? winners + " def. " + losers : winners + " won") + (g.scores && g.scores.length ? " " + g.scores.join(", ") : "");
           lines.push(formatReportGameTime(g.ts) + " · " + result + " · " + label);
         });
       }
@@ -10530,7 +10665,7 @@
       var losers = joinNamesForReport(g.opponentNames || []);
       var countText = g.count > 1 ? " ×" + g.count : "";
       var label = g.gameLabel + countText;
-      var plainResult = losers ? winners + " def. " + losers : winners + " won";
+      var plainResult = (losers ? winners + " def. " + losers : winners + " won") + (g.scores && g.scores.length ? " " + g.scores.join(", ") : "");
       var skunkText = g.skunkCount > 0 ? " 🦨×" + g.skunkCount : "";
       return {
         time: formatReportGameTime(g.ts),
@@ -19621,6 +19756,9 @@
   // to "everything except the actual attachment" instead of "nothing".
   function shareReportWithAttachments(text, onFallback) {
     // (built and shared within this tap - see collectDayReportAttachmentsNow)
+    shareTextWithFiles(text, collectDayReportAttachmentsNow(), onFallback);
+  }
+  function shareTextWithFiles(text, files, onFallback) {
     (function (files) {
       if (!files.length) {
         if (onFallback) onFallback();
@@ -19650,7 +19788,7 @@
       } else {
         fallback();
       }
-    })(collectDayReportAttachmentsNow());
+    })(files);
   }
 
   // Neither attach checkbox is on: a plain text share of the day report
@@ -21545,7 +21683,8 @@
     saveRostersToStorage(SAVED_ROSTERS);
     populateRosterLoadSelect();
     populateWizardRosterLoadSelect();
-    exportRosterLists();
+    // (no file download here - this runs as a game or a night starts; the
+    // lists are in every backup, and Export Player Lists is a tap away)
     if (!silent) showToast(T("toast.savedRoster", { label: entry.label }));
     return true;
   }
@@ -27005,8 +27144,11 @@
     period = period || "all";
     var rawEntries = getAllKnownPlayerNames().map(function (name) {
       var stats = computePlayerCareerStats(name, period);
-      var gamesPlayed = stats.played + stats.tournamentPlayed;
-      var wins = stats.wins + stats.tournamentWins;
+      // Games are racks/games played, the Day Report's count: a race won,
+      // or a tournament match (its racks are games already), is a title -
+      // tournamentWins below - not one more game
+      var gamesPlayed = stats.played;
+      var wins = stats.wins;
       return {
         name: name,
         gamesPlayed: gamesPlayed,

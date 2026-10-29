@@ -351,3 +351,8 @@ Not part of the app - helpers for testing and for running this machine's own cop
   another), not again after a restart; 9-Ball + race 6 in 3 taps; nothing typed = Player 1 v
   Player 2; More setups opens the wizard, Restore a backup the restore; the wizard in ☰ Menu ›
   More; a player's page has 📇 Email & phone. `node tests/probe_first_launch.js [screenshot dir]`.
+- `probe_end_night.js` - end of the night (4271): a race to 5 plus 3 racks with no file download;
+  ☰ Menu › 🌙 End night › 📤 Share in 3 taps (10 games, MVP Kim 7–3, standings with rating
+  changes, "Kim 7 – 3 Jo"; text + picture card, no backup); tonight archived; the Leaderboard says
+  7 wins in 10 games like the Day Report; resets only in Backup & Restore; a Straight Pool game's
+  100–87 in Recent Games and the Day Report. `node tests/probe_end_night.js [screenshot dir]`.

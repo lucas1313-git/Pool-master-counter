@@ -11273,3 +11273,41 @@ body.win-banner-up .page-toast {
   min-width: 160px;
   font-size: 1.2rem;
 }
+
+/* ---- 🌙 End night (see openEndNight) ---- */
+.end-night-mvp {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--accent);
+}
+.end-night-line {
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+.end-night-heading {
+  margin-top: 6px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+.end-night-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 1.05rem;
+}
+.end-night-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.end-night-table td:nth-child(2),
+.end-night-table td:nth-child(3) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+.end-night-table td.is-up { color: #2ecc71; }
+.end-night-table td.is-down { color: var(--danger); }
+.history-score {
+  font-variant-numeric: tabular-nums;
+}
