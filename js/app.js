@@ -2010,6 +2010,8 @@
   themeSelect.value = document.documentElement.getAttribute("data-theme") || "crimson-felt";
   themeSelect.addEventListener("change", function () {
     applyTheme(themeSelect.value, true);
+    // (the stream overlay follows this device's theme - see streamOverlayBoard)
+    broadcastStateIfNetworked();
   });
 
   // ---------------------------------------------------------------------
@@ -27736,7 +27738,68 @@
   // device is actively hosting with an open connection.
   function broadcastStateIfNetworked() {
     if (networkMode !== "host" || !networkWs || networkWs.readyState !== 1) return;
-    networkWs.send(JSON.stringify({ type: "state", state: state, tournament: TOURNAMENT }));
+    networkWs.send(JSON.stringify({ type: "state", state: state, tournament: TOURNAMENT, board: streamOverlayBoard() }));
+  }
+
+  // The stream overlay's scoreboard (overlay.html, an OBS Browser Source
+  // on the relay): what the board shows right now, plus what only this
+  // device knows - the players' Q-Scores, nicknames and the theme. Sent
+  // with every broadcast; the app's own guests ignore it (see
+  // hydrateFromNetworkSnapshot). Never allowed to stop the broadcast: on
+  // any trouble the overlay works it out from the state instead.
+  function streamOverlayBoard() {
+    try {
+      var game = state.currentGame;
+      var type = GAME_TYPES[game.gameType];
+      var teams = game.mode === "teams";
+      var last = state.gameHistory[0];
+      var rated = !quickCounterMode;
+      var board = {
+        theme: document.documentElement.getAttribute("data-theme") || "crimson-felt",
+        quick: quickCounterMode,
+        gameType: game.gameType,
+        gameLabel: quickCounterMode ? "" : type ? type.label : game.gameType,
+        target: game.target,
+        unit: game.unit,
+        race: state.raceToWinsTarget,
+        mode: teams ? "teams" : "individual",
+        // the rack in play: this session's games so far, plus this one
+        rack: state.gameHistory.length + 1,
+        lastWinners: last ? last.winnerNames || [] : [],
+        players: activePlayers().map(function (p) {
+          return {
+            id: p.id,
+            name: p.name,
+            nickname: getPlayerContact(p.name).nickname || "",
+            team: p.teamId || null,
+            score: p.balls || 0,
+            wins: state.playerWins[p.id] || 0,
+            race: effectiveRaceTarget(teams ? p.teamId : p.id),
+            rating: rated ? getPlayerRating(p.name) : null
+          };
+        }),
+        teams: null
+      };
+      if (teams) {
+        board.teams = ["A", "B"].map(function (id) {
+          var members = teamMembersLive(id);
+          var ratings = members.map(function (p) { return getPlayerRating(p.name); });
+          return {
+            id: id,
+            names: members.map(function (p) { return p.name; }),
+            score: sumTeamBalls(id),
+            wins: state.teamWins[id] || 0,
+            race: effectiveRaceTarget(id),
+            // (a team's Q-Score: its players' average, as a team game is rated)
+            rating: rated && ratings.length ? Math.round(ratings.reduce(function (a, b) { return a + b; }, 0) / ratings.length) : null
+          };
+        }).filter(function (t) { return t.names.length; });
+      }
+      return board;
+    } catch (e) {
+      console.warn("[GroupSession] stream overlay board left out:", e);
+      return null;
+    }
   }
 
   // Guest-only - a full replace, never a merge, and deliberately never

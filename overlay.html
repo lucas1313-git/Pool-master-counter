@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pool Master Counter - Stream overlay</title>
+<!-- The stream overlay: a read-only guest of the scoreboard's relay (see
+     server/relay.js), made to be an OBS Browser Source over a stream
+     (YouTube, Facebook...). Transparent everywhere but the scoreboard
+     itself; nothing to tap - every option is in the address:
+       layout=lower     a lower third across the bottom of a 16:9 picture (1920 x 1080) - the default
+       layout=vertical  a 9:16 picture (1080 x 1920)
+       pos=top          at the top instead of the bottom
+       theme=<id>       one of the app's themes (otherwise the scoring device's own, else Crimson Felt)
+       lang=<language>  english (default), french, spanish, tagalog, cantonese
+       break=winner     the last rack's winner breaks (the default; the first rack: lag)
+       break=alternate  the two players take turns, the first one (on the left) on rack 1 -
+                        first=2 when the second one breaks rack 1
+       break=off        nobody shown breaking
+       ratings=off      no Q-Scores
+       device=<key>     another computer's app key (☰ Menu › More › 📱 Paired devices) -
+                        not needed on the scoreboard's own computer
+     The scoring device has to host the session (☰ Menu › More › Multi Tables ›
+     🎯 Host This Session): it then sends its state, and a ready-made summary
+     of the board (msg.board - see streamOverlayBoard in js/app.js), after
+     every change. The overlay only ever sends its hello. -->
+<link rel="stylesheet" href="css/style.css?v=20261029o30">
+<style>
+  /* The app's themes (css/style.css) give the colours and the font; the
+     page itself stays see-through. Sizes are in rem, and a rem is a
+     192nd of the width (a 108th in the vertical layout) - 10px at 1920 x
+     1080 (1080 x 1920) - so any Browser Source size draws the same
+     picture. */
+  html, body {
+    background: transparent !important;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    cursor: none;
+  }
+  /* (kept at normal: with a dark color-scheme a browser may fill an empty
+     page dark instead of leaving it see-through; nothing here needs it) */
+  html { font-size: calc(100vw / 192); color-scheme: normal !important; }
+  html.layout-vertical { font-size: calc(100vw / 108); }
+  body { text-shadow: none !important; }
+  .hidden { display: none !important; }
+
+  .ov-root {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 4.8rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    pointer-events: none;
+    font-family: var(--font-family);
+    color: var(--card-text);
+    -webkit-font-smoothing: antialiased;
+    filter: drop-shadow(0 0.6rem 1.4rem rgba(0, 0, 0, 0.55));
+  }
+  .pos-top .ov-root { top: 4.8rem; bottom: auto; }
+
+  .ov-bar {
+    display: flex;
+    align-items: stretch;
+    width: 150rem;
+    height: 12rem;
+    border: 0.3rem solid var(--accent);
+    border-radius: 1.4rem;
+    overflow: hidden;
+    background: var(--bg);
+  }
+  .ov-side {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    align-items: stretch;
+  }
+  .ov-side ~ .ov-side { border-left: 0.3rem solid var(--accent); }
+  .ov-plate {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 1.6rem;
+    padding: 0 2.4rem;
+    background: linear-gradient(180deg, var(--card-top) 0%, var(--card-bottom) 100%);
+  }
+  .ov-who {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.6rem;
+  }
+  .ov-name {
+    font-size: 4.6rem;
+    font-weight: 800;
+    line-height: 1.1;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    color: var(--card-text);
+  }
+  .ov-meta {
+    display: flex;
+    align-items: center;
+    gap: 1.4rem;
+    min-height: 2.8rem;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .ov-meta:empty { display: none; }
+  .ov-rating {
+    font-size: 2.4rem;
+    font-weight: 700;
+    color: var(--card-label);
+    letter-spacing: 0.02em;
+  }
+  .ov-members {
+    font-size: 2.4rem;
+    font-weight: 700;
+    color: var(--card-text);
+  }
+  .ov-games {
+    font-size: 2.4rem;
+    font-weight: 700;
+    color: var(--card-label);
+  }
+  .ov-pips { display: inline-flex; gap: 0.6rem; }
+  .ov-pip {
+    width: 1.8rem;
+    height: 1.8rem;
+    border-radius: 50%;
+    border: 0.3rem solid var(--card-label);
+  }
+  .ov-pip.on { background: var(--score-fg); border-color: var(--score-fg); }
+  /* who breaks: a cue ball beside the name */
+  .ov-break {
+    flex: 0 0 auto;
+    width: 3.4rem;
+    height: 3.4rem;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #ffffff 0%, #f4f1ea 45%, #c9c4b8 100%);
+    box-shadow: 0 0 0 0.25rem rgba(0, 0, 0, 0.55);
+    visibility: hidden;
+  }
+  .ov-side.is-breaking .ov-break { visibility: visible; }
+  .ov-score {
+    flex: 0 0 auto;
+    min-width: 15rem;
+    padding: 0 1.6rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--plus-bg);
+    color: var(--plus-fg);
+    font-size: 8.4rem;
+    font-weight: 900;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .ov-score.is-hill { box-shadow: inset 0 0 0 0.6rem var(--score-fg); }
+  .ov-score.ov-pop { animation: ov-pop 0.6s ease-out; }
+  @keyframes ov-pop {
+    0% { transform: scale(1.25); }
+    100% { transform: scale(1); }
+  }
+  .ov-center {
+    flex: 0 0 auto;
+    width: 26rem;
+    padding: 0.6rem 1.4rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    background: linear-gradient(180deg, var(--card-bottom) 0%, var(--card-top) 100%);
+    border-left: 0.3rem solid var(--accent);
+    border-right: 0.3rem solid var(--accent);
+    color: var(--score-fg);
+    font-size: 3.6rem;
+    font-weight: 900;
+    line-height: 1.05;
+    text-transform: uppercase;
+    overflow: hidden;
+  }
+  .ov-center:empty { display: none; }
+  /* two sides: the second mirrored (score inside, name outside) */
+  .ov-versus .ov-side-2 { flex-direction: row-reverse; }
+  .ov-versus .ov-side-2 .ov-plate { flex-direction: row-reverse; }
+  .ov-versus .ov-side-2 .ov-who { align-items: flex-end; text-align: right; }
+  .ov-versus .ov-side ~ .ov-side { border-left: none; }
+  /* one, or three and more: the sides side by side, the race on the line below */
+  .ov-list .ov-center { display: none; }
+  .ov-list .ov-plate { padding: 0 1.6rem; gap: 1rem; }
+  .ov-list .ov-break { display: none; }
+  .ov-list .ov-score { min-width: 11rem; font-size: 7rem; }
+  .ov-list .ov-meta { flex-wrap: wrap; row-gap: 0.2rem; }
+  .ov-list .ov-rating,
+  .ov-list .ov-members,
+  .ov-list .ov-games { font-size: 2.2rem; }
+
+  .ov-info {
+    margin-top: -0.3rem;
+    padding: 0.8rem 3.2rem 1rem;
+    max-width: 120rem;
+    background: linear-gradient(180deg, var(--card-top) 0%, var(--card-bottom) 100%);
+    border: 0.3rem solid var(--accent);
+    border-top: none;
+    border-radius: 0 0 1.4rem 1.4rem;
+    color: var(--card-label);
+    font-size: 2.8rem;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .ov-info:empty { display: none; }
+  .ov-info .ov-sep { opacity: 0.7; padding: 0 0.6em; }
+  .pos-top .ov-info { order: 0; }
+
+  /* ---- 9:16 ---- */
+  .layout-vertical .ov-root { left: 4.8rem; right: 4.8rem; bottom: 24rem; }
+  .layout-vertical.pos-top .ov-root { top: 16rem; bottom: auto; }
+  .layout-vertical .ov-bar {
+    width: 100%;
+    height: auto;
+    flex-direction: column;
+  }
+  .layout-vertical .ov-center,
+  .layout-vertical .ov-list .ov-center {
+    display: flex;
+    order: -1;
+    width: auto;
+    padding: 1.6rem 2.4rem;
+    border: none;
+    border-bottom: 0.3rem solid var(--accent);
+    font-size: 4.8rem;
+  }
+  .layout-vertical .ov-bar .ov-center:empty { display: none; }
+  .layout-vertical .ov-side,
+  .layout-vertical .ov-versus .ov-side-2 {
+    flex: 0 0 auto;
+    flex-direction: row;
+    height: 15rem;
+  }
+  .layout-vertical .ov-side ~ .ov-side,
+  .layout-vertical .ov-versus .ov-side ~ .ov-side { border-left: none; border-top: 0.3rem solid var(--accent); }
+  /* (the line under it closes the box) */
+  .layout-vertical .has-info .ov-bar { border-radius: 1.4rem 1.4rem 0 0; }
+  .layout-vertical .ov-versus .ov-side-2 .ov-plate { flex-direction: row; }
+  .layout-vertical .ov-versus .ov-side-2 .ov-who { align-items: flex-start; text-align: left; }
+  .layout-vertical .ov-plate { padding: 0 3.2rem; gap: 2rem; }
+  .layout-vertical .ov-name { font-size: 6rem; }
+  .layout-vertical .ov-rating,
+  .layout-vertical .ov-members,
+  .layout-vertical .ov-games { font-size: 3.2rem; }
+  .layout-vertical .ov-pip { width: 2.4rem; height: 2.4rem; }
+  .layout-vertical .ov-break { width: 4.6rem; height: 4.6rem; }
+  .layout-vertical .ov-score,
+  .layout-vertical .ov-list .ov-score { min-width: 20rem; font-size: 11rem; }
+  .layout-vertical .ov-info {
+    max-width: none;
+    width: 100%;
+    margin-top: 0;
+    padding: 1.4rem 2.4rem;
+    border-top: none;
+    text-align: center;
+    font-size: 3.8rem;
+    white-space: normal;
+  }
+
+  /* before the first scoreboard arrives: what's missing (seen in OBS's
+     preview while setting up, never once the game is on) */
+  .ov-status {
+    position: fixed;
+    left: 50%;
+    bottom: 4.8rem;
+    transform: translateX(-50%);
+    max-width: 150rem;
+    padding: 1.4rem 2.6rem;
+    border-radius: 1.2rem;
+    background: rgba(0, 0, 0, 0.78);
+    color: #ffffff;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 2.6rem;
+    line-height: 1.35;
+    text-align: center;
+  }
+  .ov-status strong { display: block; font-size: 3rem; }
+  .layout-vertical .ov-status { max-width: 98rem; bottom: 24rem; font-size: 3.6rem; }
+  .layout-vertical .ov-status strong { font-size: 4.2rem; }
+</style>
+</head>
+<body>
+<div id="ov-root" class="ov-root hidden" aria-live="polite"></div>
+<div id="ov-status" class="ov-status hidden"></div>
+<script>
+(function () {
+  "use strict";
+
+  var THEMES = ["crimson-felt", "emerald-rail", "neon-arcade", "midnight-ivory", "sunset-chalk", "obsidian-break", "sunset-blaze", "red-and-pink", "gold-mine", "rock-and-roll", "copper-shine", "daybreak-chalk", "pearl-lounge", "sunrise-glow", "stainless-steel", "opal-shimmer", "flowery-forest", "blackout-contrast", "paper-contrast"];
+  var LANGUAGES = { english: "english", en: "english", french: "french", fr: "french", spanish: "spanish", es: "spanish", tagalog: "tagalog", tl: "tagalog", fil: "tagalog", cantonese: "cantonese", yue: "cantonese", "zh-yue": "cantonese", zh: "cantonese" };
+  // The app's own game names (DEFAULT_GAME_TYPES in js/app.js) - only for a
+  // host too old to send its board summary.
+  var GAME_LABELS = { "8ball": "8-Ball", "8ballrotation": "8 Ball Rotation", "8ballpunishment": "8 Ball Punishment", "9ball": "9-Ball", "10ball": "10-Ball", "15ballrotation": "15 Ball Rotation", straight: "Straight Pool", onepocket: "One Pocket", custom: "Custom", snooker: "Snooker" };
+
+  var params = new URLSearchParams(location.search);
+  function option(name, allowed, fallback) {
+    var v = (params.get(name) || "").toLowerCase();
+    return allowed.indexOf(v) !== -1 ? v : fallback;
+  }
+  var LAYOUT = option("layout", ["lower", "vertical"], "lower");
+  var POS = option("pos", ["bottom", "top"], "bottom");
+  var BREAK_RULE = option("break", ["winner", "alternate", "off"], "winner");
+  var FIRST_BREAK = params.get("first") === "2" ? 1 : 0;
+  var SHOW_RATINGS = option("ratings", ["on", "off"], "on") === "on";
+  var URL_THEME = THEMES.indexOf(params.get("theme") || "") !== -1 ? params.get("theme") : null;
+  var LANGUAGE = LANGUAGES[(params.get("lang") || "").toLowerCase()] || "english";
+  var DEVICE = params.get("device") || "";
+
+  var root = document.getElementById("ov-root");
+  var statusEl = document.getElementById("ov-status");
+  document.documentElement.classList.add("layout-" + LAYOUT, "pos-" + POS);
+  document.documentElement.lang = { english: "en", french: "fr", spanish: "es", tagalog: "tl", cantonese: "zh-HK" }[LANGUAGE];
+
+  // ---- texts: the app's language files, English underneath ----
+  var dict = {};
+  var dictEn = {};
+  function T(key, vars) {
+    var s = dict[key] !== undefined ? dict[key] : dictEn[key] !== undefined ? dictEn[key] : key;
+    Object.keys(vars || {}).forEach(function (k) {
+      s = s.split("{{" + k + "}}").join(vars[k]);
+    });
+    return s;
+  }
+  function loadTexts() {
+    function file(name) {
+      return fetch("languages/" + name + ".json", { cache: "no-store" })
+        .then(function (r) { return r.ok ? r.json() : {}; })
+        .catch(function () { return {}; });
+    }
+    return file("english").then(function (en) {
+      dictEn = en || {};
+      if (LANGUAGE === "english") {
+        dict = dictEn;
+        return;
+      }
+      return file(LANGUAGE).then(function (d) { dict = d || {}; });
+    });
+  }
+
+  // URL theme= first, then the scoring device's, then the default
+  function applyTheme(hostTheme) {
+    var id = URL_THEME || (THEMES.indexOf(hostTheme || "") !== -1 ? hostTheme : null) || "crimson-felt";
+    if (document.documentElement.getAttribute("data-theme") !== id) document.documentElement.setAttribute("data-theme", id);
+  }
+  applyTheme(null);
+
+  // ---- the board: the host's summary, or worked out from its state ----
+  function boardFromState(s) {
+    if (!s || !Array.isArray(s.players)) return null;
+    var g = s.currentGame || {};
+    var teams = g.mode === "teams";
+    var wins = s.playerWins || {};
+    var seated = s.players.filter(function (p) { return p && p.playing; });
+    var history = Array.isArray(s.gameHistory) ? s.gameHistory : [];
+    var race = typeof s.raceToWinsTarget === "number" ? s.raceToWinsTarget : 1;
+    return {
+      theme: null,
+      quick: false,
+      gameType: g.gameType || "",
+      gameLabel: GAME_LABELS[g.gameType] || g.gameType || "",
+      target: g.target || 1,
+      unit: g.unit || "rack",
+      race: race,
+      mode: teams ? "teams" : "individual",
+      rack: history.length + 1,
+      lastWinners: history[0] ? history[0].winnerNames || [] : [],
+      players: seated.map(function (p) {
+        return { id: p.id, name: p.name, nickname: "", team: p.teamId || null, score: p.balls || 0, wins: wins[p.id] || 0, race: race, rating: null };
+      }),
+      teams: teams
+        ? ["A", "B"].map(function (id) {
+            var members = seated.filter(function (p) { return p.teamId === id; });
+            return {
+              id: id,
+              names: members.map(function (p) { return p.name; }),
+              score: members.reduce(function (sum, p) { return sum + (p.balls || 0); }, 0),
+              wins: (s.teamWins || {})[id] || 0,
+              race: race,
+              rating: null
+            };
+          }).filter(function (t) { return t.names.length; })
+        : null
+    };
+  }
+
+  // Each side of the scoreboard: a player, or a team
+  function sidesOf(board) {
+    if (board.mode === "teams" && board.teams) {
+      return board.teams.map(function (t) {
+        return { key: t.id, label: T(t.id === "A" ? "gameSetup.teamA" : "gameSetup.teamB"), sub: t.names.join(" & "), names: t.names, score: t.score, wins: t.wins, race: t.race, rating: t.rating };
+      });
+    }
+    return (board.players || []).map(function (p) {
+      return { key: p.id, label: p.nickname || p.name, sub: "", names: [p.name], score: p.score, wins: p.wins, race: p.race, rating: p.rating };
+    });
+  }
+
+  // Who breaks this rack (see the break= option): the index of that side,
+  // -1 for nobody, or "lag" when nobody can know yet
+  function breaker(board, sides) {
+    if (BREAK_RULE === "off" || board.quick || sides.length !== 2) return -1;
+    if (BREAK_RULE === "alternate") return (FIRST_BREAK + (board.rack || 1) - 1) % 2;
+    var last = board.lastWinners || [];
+    for (var i = 0; i < sides.length; i++) {
+      for (var j = 0; j < sides[i].names.length; j++) {
+        if (last.indexOf(sides[i].names[j]) !== -1) return i;
+      }
+    }
+    // the first rack, or the last winner isn't at the table any more
+    return "lag";
+  }
+
+  function unitText(unit, target) {
+    if (unit === "rack") return T(target === 1 ? "units.rack" : "units.racks");
+    if (unit === "balls") return T("units.balls");
+    if (unit === "points") return T("units.points");
+    return unit || "";
+  }
+
+  // ---- drawing ----
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined && text !== null) e.textContent = text;
+    return e;
+  }
+
+  var lastScores = {};
+  var gotBoard = false;
+  function render(board) {
+    gotBoard = true;
+    statusEl.classList.add("hidden");
+    applyTheme(board.theme);
+    var sides = sidesOf(board);
+    root.innerHTML = "";
+    // (nobody at the table: nothing on the stream at all)
+    if (!sides.length) {
+      root.classList.add("hidden");
+      return;
+    }
+    var racing = board.race > 1 && !board.quick;
+    var singleRack = board.unit === "rack" && board.target === 1;
+    var gameText = board.quick ? "" : singleRack ? board.gameLabel : T("streamOverlay.gameTo", { game: board.gameLabel, target: board.target, unit: unitText(board.unit, board.target) });
+    var who = breaker(board, sides);
+
+    var bar = el("div", "ov-bar " + (sides.length === 2 ? "ov-versus" : "ov-list"));
+    bar.id = "ov-bar";
+    sides.forEach(function (side, i) {
+      var box = el("div", "ov-side ov-side-" + (i + 1) + (who === i ? " is-breaking" : ""));
+      box.dataset.key = side.key;
+      var plate = el("div", "ov-plate");
+      plate.appendChild(el("span", "ov-break"));
+      var whoEl = el("div", "ov-who");
+      whoEl.appendChild(el("div", "ov-name", side.label));
+      var meta = el("div", "ov-meta");
+      if (side.sub) meta.appendChild(el("span", "ov-members", side.sub));
+      if (SHOW_RATINGS && typeof side.rating === "number") meta.appendChild(el("span", "ov-rating", T("streamOverlay.rating", { rating: Math.round(side.rating) })));
+      // a points game in a race: the racks won so far, as dots
+      if (!singleRack && !board.quick) {
+        var race = side.race || board.race;
+        if (racing && race <= 15) {
+          var pips = el("span", "ov-pips");
+          for (var n = 0; n < race; n++) pips.appendChild(el("span", "ov-pip" + (n < side.wins ? " on" : "")));
+          meta.appendChild(pips);
+        } else if (racing) {
+          meta.appendChild(el("span", "ov-games", T("streamOverlay.gamesWon", { n: side.wins + " / " + race })));
+        } else if (side.wins > 0) {
+          meta.appendChild(el("span", "ov-games", T("streamOverlay.gamesWon", { n: side.wins })));
+        }
+      }
+      whoEl.appendChild(meta);
+      plate.appendChild(whoEl);
+      box.appendChild(plate);
+      var value = singleRack ? side.wins : side.score;
+      var score = el("div", "ov-score", String(value));
+      var sideRace = side.race || board.race;
+      if (racing && sideRace > 1 && side.wins === sideRace - 1) score.classList.add("is-hill");
+      if (lastScores[side.key] !== undefined && lastScores[side.key] !== value) score.classList.add("ov-pop");
+      lastScores[side.key] = value;
+      box.appendChild(score);
+      bar.appendChild(box);
+      // the race between the two (in the vertical layout: above them)
+      if (i === 0) bar.appendChild(el("div", "ov-center", racing ? T("streamOverlay.raceTo", { n: board.race }) : gameText));
+    });
+    root.appendChild(bar);
+
+    // the line under it: the game (when the race is above it), the rack,
+    // who breaks - and the race too when there's no box for it (one
+    // side, or three and more, across the bottom)
+    var parts = [];
+    var noCenter = sides.length !== 2 && LAYOUT === "lower";
+    if (noCenter && racing) parts.push(T("streamOverlay.raceTo", { n: board.race }));
+    if (gameText && (racing || noCenter)) parts.push(gameText);
+    if (!board.quick && board.rack) parts.push(T("streamOverlay.rack", { n: board.rack }));
+    if (typeof who === "number" && who >= 0) parts.push(T("streamOverlay.breaks", { name: sides[who].label }));
+    else if (who === "lag") parts.push(T("streamOverlay.lag"));
+    var info = el("div", "ov-info");
+    info.id = "ov-info";
+    parts.forEach(function (text, i) {
+      if (i) info.appendChild(el("span", "ov-sep", "·"));
+      info.appendChild(el("span", "ov-part", text));
+    });
+    root.appendChild(info);
+    root.classList.toggle("has-info", parts.length > 0);
+    root.classList.remove("hidden");
+    fitAll();
+  }
+
+  // A long name (or game) shrinks to fit its box instead of being cut -
+  // down to 55% of its size, then it's cut. The race box wraps, so it's
+  // its height that has to fit.
+  function fit(e) {
+    var tall = e.classList.contains("ov-center");
+    e.style.fontSize = "";
+    var size = parseFloat(getComputedStyle(e).fontSize);
+    var min = size * 0.55;
+    while ((tall ? e.scrollHeight > e.clientHeight + 1 : e.scrollWidth > e.clientWidth + 1) && size > min) {
+      size = size * 0.94;
+      e.style.fontSize = size + "px";
+    }
+  }
+  function fitAll() {
+    root.querySelectorAll(".ov-name, .ov-center, .ov-info").forEach(fit);
+  }
+  window.addEventListener("resize", fitAll);
+
+  // ---- before the first board: what's missing ----
+  var everOpened = false;
+  var pairedHere = null; // (null: no pairing on this server - not the app's server, or an old one)
+  function showStatus() {
+    // (once the scoreboard has been seen, never again - not on the stream)
+    if (gotBoard) return;
+    var title, hint;
+    if (pairedHere === false) {
+      title = T("streamOverlay.notPairedTitle");
+      hint = T("streamOverlay.notPairedHint");
+    } else if (!/^https?:$/.test(location.protocol) || (!everOpened && pairedHere === null && failures > 1)) {
+      title = T("streamOverlay.noServerTitle");
+      hint = T("streamOverlay.noServerHint");
+    } else {
+      title = T("streamOverlay.waitingTitle");
+      hint = T("streamOverlay.waitingHint");
+    }
+    statusEl.innerHTML = "";
+    statusEl.appendChild(el("strong", "", title));
+    statusEl.appendChild(document.createTextNode(hint));
+    statusEl.classList.remove("hidden");
+  }
+  function checkPairing() {
+    var q = DEVICE ? "?device=" + encodeURIComponent(DEVICE) : "";
+    return fetch("api/pair/status" + q, { cache: "no-store", credentials: "same-origin" })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (st) { pairedHere = st && typeof st.paired === "boolean" ? st.paired : null; })
+      .catch(function () { pairedHere = null; });
+  }
+
+  // ---- the relay: a guest that only listens ----
+  var failures = 0;
+  var retryMs = 1000;
+  function wsUrl() {
+    var scheme = location.protocol === "https:" ? "wss://" : "ws://";
+    return scheme + location.host + "/ws" + (DEVICE ? "?device=" + encodeURIComponent(DEVICE) : "");
+  }
+  function connect() {
+    var ws;
+    try {
+      ws = new WebSocket(wsUrl());
+    } catch (e) {
+      retry();
+      return;
+    }
+    ws.addEventListener("open", function () {
+      everOpened = true;
+      failures = 0;
+      retryMs = 1000;
+      // the one thing this page ever sends
+      ws.send(JSON.stringify({ type: "hello", role: "guest" }));
+      showStatus();
+    });
+    ws.addEventListener("message", function (e) {
+      var msg;
+      try {
+        msg = JSON.parse(e.data);
+      } catch (err) {
+        return;
+      }
+      if (!msg || msg.type !== "state") return;
+      var board = msg.board && Array.isArray(msg.board.players) ? msg.board : boardFromState(msg.state);
+      if (board) render(board);
+    });
+    ws.addEventListener("close", function () {
+      failures++;
+      // (the last board stays up while the scoreboard is away)
+      checkPairing().then(showStatus);
+      retry();
+    });
+    ws.addEventListener("error", function () {
+      try { ws.close(); } catch (e) {}
+    });
+  }
+  function retry() {
+    setTimeout(connect, retryMs);
+    retryMs = Math.min(retryMs * 2, 10000);
+  }
+
+  loadTexts().then(function () {
+    document.title = T("streamOverlay.pageTitle");
+    if (!/^https?:$/.test(location.protocol)) {
+      showStatus();
+      return;
+    }
+    checkPairing().then(showStatus);
+    connect();
+  });
+})();
+</script>
+</body>
+</html>
