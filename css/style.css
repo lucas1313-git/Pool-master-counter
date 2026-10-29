@@ -8162,6 +8162,13 @@ body.network-guest-mode #header-group-start {
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
 }
 
+/* ✨ Tonight's highlights (P35): who said yes, the clips, the reel */
+.highlights-who { display: flex; flex-wrap: wrap; gap: 4px 18px; }
+.highlights-picks { margin: 4px 0 10px; padding-left: 1.4em; color: var(--text); }
+.highlights-picks li { margin: 3px 0; }
+.highlights-video { width: 100%; max-height: 60vh; margin-top: 10px; border-radius: 12px; background: #000; }
+.highlights-status { margin-top: 8px; }
+
 /* 🪙 a chip tournament (P34): everyone's chips, where they are; bigger on the TV's Next up */
 .chips-standings { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 4px; }
 .chips-row { display: grid; grid-template-columns: minmax(90px, 1.2fr) auto minmax(90px, 1.4fr); gap: 12px; align-items: center; padding: 6px 10px; border-radius: 10px; background: var(--bg-card); border: 1px solid var(--border); }

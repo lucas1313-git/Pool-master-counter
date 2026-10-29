@@ -550,3 +550,32 @@ Not part of the app - helpers for testing and for running this machine's own cop
   extension per player per rack (a second refused, the other player's fine, back after a rack
   won); a ball in restarts it; voice "extension for Kim" / "reset clock"; 35 s from the Game
   sheet. `node tests/probe_shot_clock.js [shots]`.
+- **probe_fargo_race.js** — Fargo Fair-Match races (P32), its own server on 4289, nothing let off
+  it (FargoRate never asked): both players linked (600 v 500) - FargoRate's chart, 9 and 5,
+  "Fargo Fair-Match" on the board, "Race to 5 · Fargo 500" on the card; 200 apart: 9 and 2; one
+  not linked, or FargoRate off: the app's own ratings; switched on: Fargo; a tournament match the
+  same. `node tests/probe_fargo_race.js [shots]`. The chart's numbers: tests/unit/race-math.test.js.
+- **probe_payouts.js** — a tournament's money (P33), its own server on 4290: $20 entry, $5 green
+  fee, $20 added, 10% cut, 4 players - a $92 pool, $65 / $27; the table edited and kept; a side
+  pot; a Calcutta; played out - the banner, the placings, the Day Report's line; money changed
+  after the end followed. `node tests/probe_payouts.js [shots]`. The sums (8, 16, 32 players,
+  rounding): tests/unit/payouts.test.js.
+- **test_chip_tournament.js** — a chip tournament played out in Node with js/app.js's own engine
+  (P34): 12 players, 3 tables, to one player with chips - a chip a game, never more than 3 live,
+  nobody on two tables, nobody idle while a table's free, no rematch while someone else waits,
+  placings by order out; a withdrawal, a late player. In `npm test`.
+- **probe_chip_tournament.js** — a chip tournament on the screen (P34), its own server on 4291: the
+  wizard's chip chart, 3 games on 3 tables, 8 games played, 📺 Next up (the TV: the tables, the
+  next two in line, everyone's chips), played out to a champion. `node tests/probe_chip_tournament.js [shots]`.
+- **test_highlight_reel.js** — a highlight reel from three cued clips on the Mac (P35), in Node with
+  a throwaway HOME: 9:16 1080 x 1920 without sound, the score bug burned in (and not without it),
+  16:9 1920 x 1080 with sound, a clip no recording covers skipped. Needs ffmpeg; in `npm test`.
+- **probe_highlights.js** — ✨ Tonight's highlights through the Mac's recorder (P35): tonight's
+  recording and four cues put in the test server's folder, Kim and Jo said yes, Lee didn't -
+  three clips picked, Lee's left out; 9:16 made on the Mac, plays, 📤 Share; Lee says yes: four.
+  `node tests/probe_highlights.js http://localhost:4235/ [shots]` against a test server
+  (`HOME=tests/tmphome PORT=4235 node server/server.js`).
+- **probe_highlights_device.js** — ✨ Tonight's highlights on the iPad (P35), its own server on 4292
+  (no /api): the in-app recorder on a fake camera, three cues - the reel made on the device
+  (each clip cut by js/mp4-clip.js, played into a canvas with its score bug, recorded), 1280 x 720,
+  decodes. `node tests/probe_highlights_device.js [shots]`.

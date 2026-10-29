@@ -46,6 +46,9 @@ var os = require("os");
 var childProcess = require("child_process");
 
 var MAX_JSON = 256 * 1024;
+// (a reel's request carries a small PNG score bug a clip)
+var MAX_REEL_JSON = 16 * 1024 * 1024;
+var reel = require("./reel");
 
 function root() { return path.join(os.homedir(), "Movies", "Pool Master Counter"); }
 function cuesFile() { return path.join(root(), "cues.json"); }
@@ -81,9 +84,9 @@ function writeJson(file, obj) {
   fs.writeFileSync(tmp, JSON.stringify(obj, null, 1));
   fs.renameSync(tmp, file);
 }
-function readBody(req, cb) {
+function readBody(req, cb, limit) {
   var chunks = [], size = 0, done = false;
-  req.on("data", function (c) { size += c.length; if (size > MAX_JSON) { done = true; req.destroy(); cb(null); return; } chunks.push(c); });
+  req.on("data", function (c) { size += c.length; if (size > (limit || MAX_JSON)) { done = true; req.destroy(); cb(null); return; } chunks.push(c); });
   req.on("end", function () { if (done) return; done = true; try { cb(JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}")); } catch (e) { cb(null); } });
   req.on("error", function () { if (!done) { done = true; cb(null); } });
 }
@@ -395,6 +398,22 @@ function attachRecorderRoutes(app) {
       sendJson(res, 200, { file: name, folder: clipsDir() });
     });
   });
+  // ✨ Tonight's highlights (P35): the clips the app picked, cut and joined
+  // into one reel with their score bugs - server/reel.js
+  app.post("/api/rec/reel", function (req, res) {
+    readBody(req, function (body) {
+      if (!body || !Array.isArray(body.clips)) return sendJson(res, 400, { error: "no clips" });
+      buildHighlightReel(body, function (err, r) {
+        if (err) return sendJson(res, 500, { error: err.message });
+        sendJson(res, 200, { file: r.file, seconds: r.seconds, clips: r.clips, skipped: r.skipped, folder: path.dirname(r.path) });
+      });
+    }, MAX_REEL_JSON);
+  });
+  app.get("/api/rec/highlights/:name", function (req, res) {
+    var name = req.params.name;
+    if (!/^[^\/\\]+\.mp4$/.test(name)) return sendJson(res, 404, { error: "not found" });
+    res.sendFile(path.join(root(), "Highlights", name), { headers: { "Cache-Control": "no-store" } }, function (err) { if (err && !res.headersSent) sendJson(res, 404, { error: "not found" }); });
+  });
   app.get("/api/rec/clips/:name", function (req, res) {
     var name = req.params.name;
     if (!/^[^\/\\]+\.mp4$/.test(name)) return sendJson(res, 404, { error: "not found" });
@@ -402,4 +421,19 @@ function attachRecorderRoutes(app) {
   });
 }
 
-module.exports = { attachRecorderRoutes: attachRecorderRoutes, _piecesFor: piecesFor, _applyRetention: applyRetention };
+// body: { clips: [{ from, to, bug: "data:image/png;base64,..." }], aspect, sound, name }
+function buildHighlightReel(body, cb) {
+  var clips = body.clips.slice(0, 40).map(function (c) {
+    var m = /^data:image\/png;base64,([A-Za-z0-9+\/=]+)$/.exec(String((c && c.bug) || ""));
+    return { from: Number(c && c.from), to: Number(c && c.to), bug: m ? Buffer.from(m[1], "base64") : null };
+  }).filter(function (c) { return c.from > 0 && c.to > c.from && c.to - c.from <= 120000; });
+  reel.buildReel({ ffmpeg: ffmpeg, runFfmpeg: runFfmpeg, piecesFor: piecesFor, root: root }, {
+    clips: clips,
+    aspect: body.aspect === "9:16" ? "9:16" : "16:9",
+    sound: body.sound === true,
+    size: Number(body.size) || 1080,
+    name: String(body.name || "Highlights").slice(0, 100)
+  }, cb);
+}
+
+module.exports = { attachRecorderRoutes: attachRecorderRoutes, _piecesFor: piecesFor, _applyRetention: applyRetention, _buildHighlightReel: buildHighlightReel };

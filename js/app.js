@@ -3999,6 +3999,7 @@
     "tournament-match-win-overlay": "btn-tournament-match-win-close",
     "end-night-overlay": "btn-end-night-close",
     "payouts-overlay": "btn-payouts-close",
+    "highlights-overlay": "btn-highlights-close",
     "challonge-push-review-overlay": "btn-challonge-push-review-close",
     "paywall-modal-overlay": "btn-paywall-cancel",
     "multi-table-host-overlay": "btn-multi-table-close",
@@ -7220,6 +7221,7 @@
       { icon: "💾", key: "menu.backup", run: panel("backup-panel") },
       { icon: "📷", key: "menu.camera", run: click("btn-open-camera-wizard-header") },
       { icon: "🎬", key: "menu.recording", run: click("btn-open-recorder") },
+      { icon: "✨", key: "menu.highlights", run: openHighlightsSheet },
       { icon: "🎤", key: "menu.voice", page: "voice" },
       { icon: "🔊", key: "menu.sounds", page: "sounds" },
       { icon: "☁️", key: "menu.challonge", run: panel("challonge-panel") },
@@ -16983,6 +16985,8 @@
       // necessarily" per the request that introduced it.
       clubTeam: patch.clubTeam !== undefined ? patch.clubTeam : existing.clubTeam || "",
       reportOptIn: patch.reportOptIn !== undefined ? !!patch.reportOptIn : !!existing.reportOptIn,
+      // (said yes to being in ✨ Tonight's highlights reels - P35)
+      highlightsOk: patch.highlightsOk !== undefined ? !!patch.highlightsOk : !!existing.highlightsOk,
       notifyMethod: patch.notifyMethod !== undefined ? patch.notifyMethod : existing.notifyMethod || "email",
       // This player's linked real-world FargoRate identity (see the
       // FargoRate lookups section above) - "" fargoId means unlinked.
@@ -17018,7 +17022,7 @@
     var key = findContactKey(name);
     return key
       ? PLAYER_CONTACTS[key]
-      : { email: "", phone: "", nickname: "", clubTeam: "", reportOptIn: false, notifyMethod: "email", fargoId: "", fargoName: "", fargoLocation: "", fargoRating: null, fargoRobustness: null, fargoFetchedAt: 0, localId: "" };
+      : { email: "", phone: "", nickname: "", clubTeam: "", reportOptIn: false, highlightsOk: false, notifyMethod: "email", fargoId: "", fargoName: "", fargoLocation: "", fargoRating: null, fargoRobustness: null, fargoFetchedAt: 0, localId: "" };
   }
 
   // A RFC4122-ish v4 UUID. crypto.randomUUID() covers every modern
@@ -17289,6 +17293,7 @@
         nickname: tc.nickname || sc.nickname || "",
         clubTeam: tc.clubTeam || sc.clubTeam || "",
         reportOptIn: !!(tc.reportOptIn || sc.reportOptIn),
+        highlightsOk: !!(tc.highlightsOk || sc.highlightsOk),
         notifyMethod: tc.notifyMethod || sc.notifyMethod || "email",
         fargoId: fargoSide ? fargoSide.fargoId : "",
         fargoName: fargoSide ? fargoSide.fargoName : "",
@@ -30719,6 +30724,7 @@
           nickname: entry.nickname || "",
           clubTeam: entry.clubTeam || "",
           reportOptIn: !!entry.reportOptIn,
+          highlightsOk: !!entry.highlightsOk,
           notifyMethod: entry.notifyMethod || "email",
           updatedAt: entry.updatedAt || 0
         };
@@ -30735,6 +30741,7 @@
           nickname: entry.nickname || "",
           clubTeam: entry.clubTeam || "",
           reportOptIn: !!entry.reportOptIn,
+          highlightsOk: !!entry.highlightsOk,
           notifyMethod: entry.notifyMethod || "email",
           updatedAt: entry.updatedAt || 0
         };
@@ -31150,6 +31157,460 @@
 
   function placingLabel(group) {
     return group.names.length > 1 ? placeOrdinal(group.place) + "–" + placeOrdinal(group.place + group.names.length - 1) : placeOrdinal(group.place);
+  }
+
+  // ---- ✨ Tonight's highlights (P35) ----
+  // A reel of the night from the recorder's cues (⭐ and Auto cue): the
+  // best moments - a race or a rack won, a break-and-run, a long run - by
+  // what the scoreboard recorded around each cue (js/lib/highlights.js), a
+  // minute or so, each with a small score bug; 16:9 or 9:16; sound only if
+  // asked for. On the Mac's recorder ffmpeg cuts and joins it
+  // (server/reel.js); on the iPad the device's own recorder cuts each clip
+  // (js/mp4-clip.js) and the reel is played into a canvas and recorded.
+  // Only players who said yes are in it (their contact's highlightsOk) - a
+  // clip with anyone else on it is left out.
+  function highlightsOk(name) {
+    var c = getPlayerContact(name);
+    return !!(c && c.highlightsOk);
+  }
+  function tonightGameHistory() {
+    var day = todayDateStr();
+    return (state.gameHistory || []).filter(function (g) { return g.ts && localDateStrFromTs(g.ts) === day; });
+  }
+  function tonightBestRuns() {
+    var day = todayDateStr();
+    return Object.keys(PLAYER_DAILY_BEST_RUNS).map(function (k) { return PLAYER_DAILY_BEST_RUNS[k]; }).filter(function (r) {
+      return r && r.ts && localDateStrFromTs(r.ts) === day;
+    });
+  }
+  function cueStartMs(c) {
+    return typeof c.startedAt === "number" ? c.startedAt : Date.parse(c.startedAt);
+  }
+  // Tonight's finished cues, and where their video is: "server" (the Mac's
+  // recorder, with ffmpeg), "device" (this device's own recorder) or "".
+  function loadTonightCues() {
+    var day = todayDateStr();
+    var tonight = function (c) { return c && c.startedAt && c.endedAt && localDateStrFromTs(cueStartMs(c)) === day; };
+    var fromDevice = function () {
+      if (!window.PMCLocalRecorder || !window.PMCLocalRecorder.cues) return Promise.resolve({ where: "", cues: [] });
+      return window.PMCLocalRecorder.cues().then(function (cues) {
+        cues = (cues || []).filter(tonight);
+        return { where: cues.length ? "device" : "", cues: cues };
+      }, function () { return { where: "", cues: [] }; });
+    };
+    if (!/^https?:$/.test(location.protocol)) return fromDevice();
+    return fetch("/api/rec/cues", { cache: "no-store" }).then(function (r) {
+      if (!r.ok) throw new Error("no recorder");
+      return r.json();
+    }).then(function (d) {
+      var cues = (d.cues || []).filter(tonight);
+      return d.ffmpeg && cues.length ? { where: "server", cues: cues } : fromDevice();
+    }).catch(fromDevice);
+  }
+
+  // why a clip is in it, in words
+  function highlightReasonText(r) {
+    if (r.kind === "longRun") return T("highlights.reasonRun", { name: r.name, n: r.value });
+    if (r.kind === "raceWin") return T("highlights.reasonRaceWin", { name: r.name || "" });
+    if (r.kind === "rackWin") return T("highlights.reasonRackWin", { name: r.name || "" });
+    if (r.kind === "marked") return T("highlights.reasonMarked");
+    return T("events.tag." + r.kind);
+  }
+  // the score bug's two lines: "Kim  5 – 3  Jo" and "9-Ball · Break & run"
+  function highlightBugText(clip) {
+    var score = PMCLib.highlights.highlightBugScore(clip.game), cue = clip.cue;
+    var top = score ? score[0].name + "  " + score[0].value + " – " + score[1].value + "  " + score[1].name : [cue.player, cue.opponent].filter(Boolean).join(" v ");
+    // (the best reason: a tag or a run over a plain rack)
+    var reasons = clip.reasons.filter(function (r) { return r.kind !== "marked"; }).sort(function (a, b) {
+      return (PMCLib.highlights.HIGHLIGHT_POINTS[b.kind] || 0) - (PMCLib.highlights.HIGHLIGHT_POINTS[a.kind] || 0);
+    });
+    var game = (clip.game && clip.game.gameLabel) || cue.gameLabel || "";
+    return { top: top, bottom: [game, reasons.length ? highlightReasonText(reasons[0]) : ""].filter(Boolean).join(" · ") };
+  }
+  // The score bug at (x, y), w wide (a fifth of that tall): dark, rounded,
+  // a gold edge; the words shrunk to fit. -> its height
+  function drawScoreBug(ctx, x, y, w, text) {
+    var h = Math.round(w * 0.2), r = Math.round(h * 0.18), pad = Math.round(h * 0.2);
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+    ctx.fillStyle = "rgba(14, 10, 8, 0.86)";
+    ctx.fill();
+    ctx.save();
+    ctx.clip();
+    ctx.fillStyle = "#ffd23f";
+    ctx.fillRect(x, y, Math.max(4, Math.round(h * 0.07)), h);
+    ctx.restore();
+    var fit = function (s, px, weight) {
+      var size = px;
+      ctx.font = weight + " " + size + "px -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif";
+      while (size > 8 && ctx.measureText(s).width > w - pad * 2) {
+        size -= 1;
+        ctx.font = weight + " " + size + "px -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif";
+      }
+    };
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = "#ffffff";
+    fit(text.top, Math.round(h * 0.4), "800");
+    ctx.fillText(text.top, x + pad, y + Math.round(h * 0.5));
+    if (text.bottom) {
+      ctx.fillStyle = "#ffd23f";
+      fit(text.bottom, Math.round(h * 0.25), "700");
+      ctx.fillText(text.bottom, x + pad, y + Math.round(h * 0.84));
+    }
+    ctx.restore();
+    return h;
+  }
+  function scoreBugWidth(aspect, frameW) {
+    return Math.round(frameW * (aspect === "9:16" ? 0.7 : 0.36));
+  }
+  function scoreBugPng(text, w) {
+    var c = document.createElement("canvas");
+    c.width = w;
+    c.height = Math.round(w * 0.2);
+    drawScoreBug(c.getContext("2d"), 0, 0, w, text);
+    return c.toDataURL("image/png");
+  }
+
+  // On the Mac: the clips and their bugs to server/reel.js; the reel back as a File
+  function buildReelOnServer(clips, opts) {
+    var w = scoreBugWidth(opts.aspect, opts.aspect === "9:16" ? 1080 : 1920);
+    var body = {
+      clips: clips.map(function (c) { return { from: c.from, to: c.to, bug: scoreBugPng(highlightBugText(c), w) }; }),
+      aspect: opts.aspect,
+      sound: !!opts.sound,
+      name: opts.name
+    };
+    return fetch("/api/rec/reel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(function (r) {
+      return r.json().then(function (d) {
+        if (!r.ok) throw new Error(d.error || "reel");
+        return d;
+      });
+    }).then(function (d) {
+      return fetch("/api/rec/highlights/" + encodeURIComponent(d.file), { cache: "no-store" }).then(function (r) {
+        if (!r.ok) throw new Error("reel");
+        return r.blob();
+      }).then(function (blob) {
+        return { file: new File([blob], d.file, { type: "video/mp4" }), seconds: d.seconds };
+      });
+    });
+  }
+
+  // On the iPad: each clip cut by the device's recorder, played into a
+  // canvas (filled, centred, the bug drawn over it) and the canvas recorded -
+  // as it plays, so a minute's reel takes about a minute.
+  function buildReelOnDevice(clips, opts, onProgress) {
+    var tall = opts.aspect === "9:16";
+    var W = tall ? 720 : 1280, H = tall ? 1280 : 720;
+    var canvas = document.createElement("canvas");
+    canvas.width = W;
+    canvas.height = H;
+    var ctx = canvas.getContext("2d");
+    if (!canvas.captureStream || !window.MediaRecorder) return Promise.reject(new Error(T("highlights.cantOnDevice")));
+    var stream = canvas.captureStream(30);
+    var audioCtx = null, dest = null;
+    if (opts.sound) {
+      try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        dest = audioCtx.createMediaStreamDestination();
+        dest.stream.getAudioTracks().forEach(function (tr) { stream.addTrack(tr); });
+      } catch (e) {
+        audioCtx = null;
+      }
+    }
+    var mime = ["video/mp4;codecs=avc1", "video/mp4", "video/webm;codecs=vp9", "video/webm"].filter(function (m) { return MediaRecorder.isTypeSupported(m); })[0];
+    if (!mime) return Promise.reject(new Error(T("highlights.cantOnDevice")));
+    var recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 6000000 });
+    var chunks = [];
+    recorder.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
+    var video = document.createElement("video");
+    video.playsInline = true;
+    video.muted = !opts.sound;
+    if (audioCtx) {
+      try { audioCtx.createMediaElementSource(video).connect(dest); } catch (e) {}
+    }
+    var bugW = scoreBugWidth(opts.aspect, W);
+    var current = null;
+    var draw = function () {
+      if (current && video.readyState >= 2 && video.videoWidth) {
+        var s = Math.max(W / video.videoWidth, H / video.videoHeight);
+        var dw = video.videoWidth * s, dh = video.videoHeight * s;
+        ctx.drawImage(video, (W - dw) / 2, (H - dh) / 2, dw, dh);
+        drawScoreBug(ctx, Math.round(W * 0.035), H - Math.round(bugW * 0.2) - Math.round(H * 0.045), bugW, current);
+      }
+    };
+    var timer = setInterval(draw, 33);
+    recorder.start(1000);
+    var made = 0, i = 0;
+    var playNext = function () {
+      if (i >= clips.length) return Promise.resolve();
+      var clip = clips[i++];
+      if (onProgress) onProgress(i, clips.length);
+      return window.PMCLocalRecorder.clipFile(Object.assign({}, clip.cue, { startedAt: clip.from, endedAt: clip.to })).then(function (file) {
+        return new Promise(function (resolve) {
+          var url = URL.createObjectURL(file);
+          current = highlightBugText(clip);
+          var limit = null;
+          var finish = function () {
+            clearTimeout(limit);
+            video.onended = null;
+            video.onerror = null;
+            video.pause();
+            URL.revokeObjectURL(url);
+            made++;
+            resolve();
+          };
+          video.onended = finish;
+          video.onerror = finish;
+          // (a cut starts on the keyframe before the clip: a little more than its length at most)
+          limit = setTimeout(finish, clip.to - clip.from + 4000);
+          video.src = url;
+          video.play().catch(function () {
+            video.muted = true;
+            video.play().catch(finish);
+          });
+        });
+      }, function () {}).then(playNext);
+    };
+    return playNext().then(function () {
+      clearInterval(timer);
+      return new Promise(function (resolve, reject) {
+        recorder.onstop = function () {
+          if (audioCtx) try { audioCtx.close(); } catch (e) {}
+          if (!made || !chunks.length) return reject(new Error(T("highlights.noneCut")));
+          var type = mime.split(";")[0], ext = type === "video/mp4" ? ".mp4" : ".webm";
+          resolve({ file: new File(chunks, opts.name + ext, { type: type }), seconds: null });
+        };
+        recorder.stop();
+      });
+    });
+  }
+
+  // ---- the ✨ sheet ----
+  var highlightsOverlay = document.getElementById("highlights-overlay");
+  var hl = { where: "", cues: [], aspect: "16:9", sound: false, player: "", result: null, busy: false, status: "" };
+  function openHighlightsSheet() {
+    closeBoardMenu();
+    hl.result = null;
+    hl.status = "";
+    highlightsOverlay.classList.remove("hidden");
+    document.getElementById("highlights-body").textContent = T("highlights.loading");
+    loadTonightCues().then(function (r) {
+      hl.where = r.where;
+      hl.cues = r.cues;
+      renderHighlightsSheet();
+    });
+  }
+  function closeHighlightsSheet() {
+    highlightsOverlay.classList.add("hidden");
+  }
+  // everyone on tonight's cues and games
+  function highlightsPeople() {
+    var names = [];
+    var add = function (n) { if (n && names.indexOf(n) === -1) names.push(n); };
+    hl.cues.forEach(function (c) {
+      String(c.player || "").split(/\s*[&+,]\s*/).forEach(add);
+      String(c.opponent || "").split(/\s*[&+,]\s*/).forEach(add);
+    });
+    tonightGameHistory().forEach(function (g) { (g.winnerNames || []).concat(g.opponentNames || []).forEach(add); });
+    return names.sort(function (a, b) { return a.localeCompare(b); });
+  }
+  function currentHighlights() {
+    return PMCLib.highlights.pickHighlights(hl.cues, tonightGameHistory(), tonightBestRuns(), { optedIn: highlightsOk, player: hl.player || null, maxSeconds: 60 });
+  }
+  function renderHighlightsSheet() {
+    var body = document.getElementById("highlights-body");
+    body.innerHTML = "";
+    var el = function (tag, cls, text) {
+      var e = document.createElement(tag);
+      if (cls) e.className = cls;
+      if (text != null) e.textContent = text;
+      return e;
+    };
+    if (!hl.where) {
+      body.appendChild(el("p", "gs-note", T("highlights.noRecording")));
+      return;
+    }
+    // who said yes
+    body.appendChild(el("h4", "payouts-heading", T("highlights.whoHeading")));
+    body.appendChild(el("p", "gs-note", T("highlights.optInNote")));
+    var who = el("div", "highlights-who", "");
+    highlightsPeople().forEach(function (name, i) {
+      var row = el("label", "gs-toggle highlights-ok", "");
+      var box = document.createElement("input");
+      box.type = "checkbox";
+      box.id = "highlights-ok-" + i;
+      box.setAttribute("data-name", name);
+      box.checked = highlightsOk(name);
+      box.addEventListener("change", function () {
+        setPlayerContact(name, { highlightsOk: box.checked });
+        if (!box.checked && hl.player === name) hl.player = "";
+        hl.result = null;
+        renderHighlightsSheet();
+      });
+      row.appendChild(box);
+      row.appendChild(el("span", "", T("highlights.saysYes", { name: name })));
+      who.appendChild(row);
+    });
+    body.appendChild(who);
+
+    // the reel: the night, or one player's minute; its shape; sound
+    var reelRow = el("div", "gs-row payouts-row", "");
+    var reelLabel = el("label", "gs-label", T("highlights.reel"));
+    reelLabel.htmlFor = "highlights-player";
+    reelRow.appendChild(reelLabel);
+    var sel = document.createElement("select");
+    sel.id = "highlights-player";
+    sel.className = "gs-select";
+    var night = document.createElement("option");
+    night.value = "";
+    night.textContent = T("highlights.wholeNight");
+    sel.appendChild(night);
+    highlightsPeople().filter(highlightsOk).forEach(function (name) {
+      var o = document.createElement("option");
+      o.value = name;
+      o.textContent = T("highlights.playerReel", { name: name });
+      sel.appendChild(o);
+    });
+    sel.value = hl.player;
+    sel.addEventListener("change", function () {
+      hl.player = sel.value;
+      hl.result = null;
+      renderHighlightsSheet();
+    });
+    reelRow.appendChild(sel);
+    body.appendChild(reelRow);
+    var shapeRow = el("div", "gs-row payouts-row", "");
+    shapeRow.appendChild(el("span", "gs-label", T("highlights.shape")));
+    var chips = el("span", "gs-chips", "");
+    chips.setAttribute("role", "radiogroup");
+    [["16:9", "highlights.wide"], ["9:16", "highlights.tall"]].forEach(function (s) {
+      var chip = el("label", "gs-chip", "");
+      var radio = document.createElement("input");
+      radio.type = "radio";
+      radio.name = "highlights-aspect";
+      radio.value = s[0];
+      radio.checked = hl.aspect === s[0];
+      radio.addEventListener("change", function () {
+        hl.aspect = s[0];
+        hl.result = null;
+        renderHighlightsSheet();
+      });
+      chip.appendChild(radio);
+      chip.appendChild(el("span", "", T(s[1])));
+      chips.appendChild(chip);
+    });
+    shapeRow.appendChild(chips);
+    body.appendChild(shapeRow);
+    var soundRow = el("label", "gs-toggle", "");
+    var soundBox = document.createElement("input");
+    soundBox.type = "checkbox";
+    soundBox.id = "highlights-sound";
+    soundBox.checked = hl.sound;
+    soundBox.addEventListener("change", function () {
+      hl.sound = soundBox.checked;
+      hl.result = null;
+    });
+    soundRow.appendChild(soundBox);
+    soundRow.appendChild(el("span", "", T("highlights.sound")));
+    body.appendChild(soundRow);
+
+    // what's in it
+    var pick = currentHighlights();
+    var seconds = Math.round(pick.clips.reduce(function (s, c) { return s + c.seconds; }, 0));
+    body.appendChild(el("h4", "payouts-heading", pick.clips.length ? TP("highlights.picks", pick.clips.length, { n: pick.clips.length, seconds: seconds }) : T("highlights.none")));
+    var list = el("ol", "highlights-picks", "");
+    list.id = "highlights-picks";
+    pick.clips.forEach(function (c) {
+      var text = highlightBugText(c);
+      list.appendChild(el("li", "", localeFormat(new Date(c.from), { hour: "numeric", minute: "2-digit" }) + " · " + text.top + (text.bottom ? " · " + text.bottom : "") + " · " + Math.round(c.seconds) + " s"));
+    });
+    body.appendChild(list);
+    if (pick.left.notOptedIn.length) body.appendChild(el("p", "gs-note highlights-left-out", T("highlights.leftOut", { names: pick.left.notOptedIn.join(", ") })));
+    if (hl.where === "device") body.appendChild(el("p", "gs-note", T("highlights.onDevice")));
+
+    var build = el("button", "btn btn-primary", T("highlights.build"));
+    build.type = "button";
+    build.id = "btn-highlights-build";
+    build.disabled = !pick.clips.length || hl.busy;
+    build.addEventListener("click", function () { makeHighlightsReel(pick.clips); });
+    body.appendChild(build);
+    var status = el("p", "gs-note highlights-status", hl.status);
+    status.id = "highlights-status";
+    body.appendChild(status);
+    if (hl.result) {
+      var video = document.createElement("video");
+      video.id = "highlights-video";
+      video.className = "highlights-video";
+      video.controls = true;
+      video.playsInline = true;
+      video.src = hl.result.url;
+      body.appendChild(video);
+      var actions = el("div", "gs-row", "");
+      var share = el("button", "btn btn-primary", T("highlights.share"));
+      share.type = "button";
+      share.id = "btn-highlights-share";
+      share.addEventListener("click", function () { shareHighlightsReel(hl.result.file); });
+      var save = el("a", "btn btn-ghost", T("highlights.save"));
+      save.id = "btn-highlights-save";
+      save.href = hl.result.url;
+      save.download = hl.result.file.name;
+      actions.appendChild(share);
+      actions.appendChild(save);
+      body.appendChild(actions);
+    }
+  }
+  function makeHighlightsReel(clips) {
+    if (hl.busy || !clips.length) return;
+    hl.busy = true;
+    if (hl.result) URL.revokeObjectURL(hl.result.url);
+    hl.result = null;
+    var date = localeFormat(new Date(), { day: "numeric", month: "short" });
+    var name = hl.player ? T("highlights.playerFileName", { name: hl.player, date: date }) : T("highlights.nightFileName", { date: date });
+    var setStatus = function (text) {
+      hl.status = text;
+      var s = document.getElementById("highlights-status");
+      if (s) s.textContent = text;
+    };
+    var opts = { aspect: hl.aspect, sound: hl.sound, name: name.replace(/[\/\\:*?"<>|]+/g, "-") };
+    var making;
+    if (hl.where === "server") {
+      hl.status = T("highlights.buildingMac");
+      making = buildReelOnServer(clips, opts);
+    } else {
+      hl.status = T("highlights.building", { n: 1, total: clips.length });
+      making = buildReelOnDevice(clips, opts, function (n, total) { setStatus(T("highlights.building", { n: n, total: total })); });
+    }
+    renderHighlightsSheet();
+    making.then(function (r) {
+      hl.busy = false;
+      hl.result = { file: r.file, url: URL.createObjectURL(r.file) };
+      hl.status = T("highlights.built", { name: r.file.name });
+      window.PMCHighlightsDebug = { file: r.file, clips: clips.length, where: hl.where };
+      renderHighlightsSheet();
+    }, function (err) {
+      hl.busy = false;
+      hl.status = T("highlights.failed", { why: (err && err.message) || "" });
+      renderHighlightsSheet();
+    });
+  }
+  // the share sheet straight from the tap (iPad), else a download
+  function shareHighlightsReel(file) {
+    if (navigator.canShare && navigator.share && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file], title: file.name }).catch(function () {});
+      return;
+    }
+    var a = document.createElement("a");
+    a.href = hl.result.url;
+    a.download = file.name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   }
 
   // ---- Tournament money (P33) ----
@@ -40809,6 +41270,8 @@
   document.getElementById("btn-tournament-payouts").addEventListener("click", openPayoutsSheet);
   document.getElementById("btn-payouts-close").addEventListener("click", closePayoutsSheet);
   document.getElementById("btn-payouts-done").addEventListener("click", closePayoutsSheet);
+  document.getElementById("btn-highlights-close").addEventListener("click", closeHighlightsSheet);
+  document.getElementById("btn-highlights-done").addEventListener("click", closeHighlightsSheet);
   document.getElementById("btn-tournament-next-up").addEventListener("click", function () {
     loadFollowQrUrl();
     setTournamentTvMode("next");

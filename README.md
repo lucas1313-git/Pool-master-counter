@@ -203,6 +203,15 @@ FargoRate doesn't publish a file format for sending results in (leagues enter sc
 
 Every sound is synthesized on the fly with the Web Audio API — no audio files, nothing to download. A win or loss plays a short tone; reaching a race-to-N milestone (a regular session or a bracket Tournament) plays a bigger fanfare: the full 30-note main theme of Beethoven's 9th Symphony ("Ode to Joy"), pitched low and drenched in a synthetic reverb tail for a deep, triumphant feel, starting about a second after the win is announced so it doesn't step on the announcement itself.
 
+## ✨ Tonight's highlights
+
+☰ › **✨ Tonight's highlights** makes a reel of the night from the recorder's cues (the ⭐ button, the "/" key, voice "mark", Auto cue) — on the Mac's recorder or this device's own 🎬 Record this session.
+
+- **The best moments first**: each cue is matched by time to what the scoreboard recorded around it — a race won, a rack won, a break-and-run or another rack tag (when events are tracked), a long run — and the best go in until the reel is about a minute long, then play in the order they happened. **The whole night**, or **one player's minute**.
+- **Only players who said yes**: everyone on tonight's cues is listed with a "says yes" box (kept with their contact, and in backups). A clip with anyone on it who hasn't said yes is left out — and the sheet names who.
+- **A small score bug** burned into each clip (the race as it stood, the game, why it's in: "Kim 2 – 1 Jo · 9-Ball · 🏆 Kim wins the race"); **16:9** (TV) or **9:16** (phone), the picture filled and centred; **sound off** unless ticked.
+- **On the Mac** ffmpeg cuts and joins it (the reel lands in Movies › Pool Master Counter › Highlights); **on the iPad** the device's own recorder cuts each clip and the reel is played into a picture and recorded as it plays — about as long as the reel takes. Then **📤 Share** or **⬇️ Save**.
+
 ## Today's Notes & Day Report
 
 ![Today's Notes panel, with a saved note and rating badges visible on the scoreboard](docs/screenshots/day-notes.jpg)

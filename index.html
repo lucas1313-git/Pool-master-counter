@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261029w">
+<link rel="stylesheet" href="css/style.css?v=20261029x">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -1385,6 +1385,20 @@
     <div class="board-sheet-body" id="payouts-body"></div>
     <div class="confirm-modal-actions board-sheet-foot">
       <button type="button" id="btn-payouts-done" class="btn btn-primary" data-i18n="payouts.done">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- ✨ Tonight's highlights: a reel from the recorder's cues (js/app.js openHighlightsSheet) -->
+<div id="highlights-overlay" class="confirm-modal-overlay board-sheet-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="highlights-title">
+  <div class="confirm-modal-card board-sheet highlights-sheet">
+    <div class="board-sheet-head">
+      <h3 class="confirm-modal-title" id="highlights-title" data-i18n="highlights.title">✨ Tonight's highlights</h3>
+      <button type="button" class="board-sheet-close" id="btn-highlights-close" data-i18n-aria-label="common.close" aria-label="Close">×</button>
+    </div>
+    <div class="board-sheet-body" id="highlights-body"></div>
+    <div class="confirm-modal-actions board-sheet-foot">
+      <button type="button" id="btn-highlights-done" class="btn btn-ghost" data-i18n="highlights.done">Done</button>
     </div>
   </div>
 </div>
@@ -3110,26 +3124,27 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/pairing.js?v=20261029w"></script>
-<script src="js/big-store.js?v=20261029w"></script>
-<script src="js/mp4-clip.js?v=20261029w"></script>
-<script src="js/recording-consent.js?v=20261029w"></script>
-<script src="js/local-recorder.js?v=20261029w"></script>
-<script src="js/lib/pool-day.js?v=20261029w"></script>
-<script src="js/lib/race-math.js?v=20261029w"></script>
-<script src="js/lib/handicaps.js?v=20261029w"></script>
-<script src="js/lib/brackets.js?v=20261029w"></script>
-<script src="js/lib/league.js?v=20261029w"></script>
-<script src="js/lib/events.js?v=20261029w"></script>
-<script src="js/lib/chips.js?v=20261029w"></script>
-<script src="js/lib/payouts.js?v=20261029w"></script>
-<script src="js/app.js?v=20261029w"></script>
-<script src="js/camera-client.js?v=20261029w"></script>
-<script src="js/voice.js?v=20261029w"></script>
+<script src="js/pairing.js?v=20261029x"></script>
+<script src="js/big-store.js?v=20261029x"></script>
+<script src="js/mp4-clip.js?v=20261029x"></script>
+<script src="js/recording-consent.js?v=20261029x"></script>
+<script src="js/local-recorder.js?v=20261029x"></script>
+<script src="js/lib/pool-day.js?v=20261029x"></script>
+<script src="js/lib/race-math.js?v=20261029x"></script>
+<script src="js/lib/handicaps.js?v=20261029x"></script>
+<script src="js/lib/brackets.js?v=20261029x"></script>
+<script src="js/lib/league.js?v=20261029x"></script>
+<script src="js/lib/events.js?v=20261029x"></script>
+<script src="js/lib/chips.js?v=20261029x"></script>
+<script src="js/lib/highlights.js?v=20261029x"></script>
+<script src="js/lib/payouts.js?v=20261029x"></script>
+<script src="js/app.js?v=20261029x"></script>
+<script src="js/camera-client.js?v=20261029x"></script>
+<script src="js/voice.js?v=20261029x"></script>
 <script>
   // The app opens with no network (sw.js, P21) - on http(s) only, not in the iOS app
   if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol) && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
-    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261029w").catch(function () {}); });
+    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261029x").catch(function () {}); });
   }
 </script>
 </body>

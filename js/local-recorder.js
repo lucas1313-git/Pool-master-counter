@@ -659,6 +659,9 @@
     cueOpen: function () { return !!openCue; },
     cueSince: function () { return openCue ? openCue.markedAt : null; },
     refresh: refreshLists,
+    // (✨ Tonight's highlights - js/app.js: every cue, and a cue's clip as a File)
+    cues: function () { return all("cues"); },
+    clipFile: clipFile,
     // (tests)
     _clipFile: clipFile,
     _all: all,
