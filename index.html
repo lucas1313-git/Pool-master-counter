@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261029g">
+<link rel="stylesheet" href="css/style.css?v=20261029h">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -2443,6 +2443,11 @@
               <button type="button" class="format-info-btn" data-info-title="tournament-format-title-swiss" data-info-target="tournament-format-text-swiss" data-i18n-aria-label="tournament.formatInfoAria" aria-label="More about this tournament format">❓</button>
             </label>
           </div>
+          <label class="row tournament-swiss-rounds-row hidden" id="tournament-swiss-rounds-row">
+            <span data-i18n="tournament.swissRoundsLabel">Rounds</span>
+            <input type="number" id="tournament-swiss-rounds" min="1" max="31" inputmode="numeric" placeholder="auto" data-i18n-placeholder="tournament.swissRoundsAuto">
+            <span class="field-hint" data-i18n="tournament.swissRoundsHint">Blank: enough to separate the field.</span>
+          </label>
           <span id="tournament-format-title-double" data-i18n="tournament.formatDoubleTitle" hidden>Double Elimination Tournament Format</span>
           <span id="tournament-format-text-double" data-i18n="tournament.formatDouble" hidden>Winners &amp; Losers Brackets: lose once, drop to the losers bracket for a second chance; lose twice and you're out.
 
@@ -2518,6 +2523,11 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
           </label>
 
           <datalist id="tournament-team-options"></datalist>
+          <div class="row tournament-picker-tools">
+            <input type="search" id="tournament-player-search" autocomplete="off" placeholder="🔎 Find a player" data-i18n-placeholder="tournament.searchPlaceholder" aria-label="Find a player" data-i18n-aria-label="tournament.searchPlaceholder">
+            <input type="text" id="tournament-walkin-name" autocomplete="off" maxlength="40" placeholder="Walk-in's name" data-i18n-placeholder="tournament.walkInPlaceholder" aria-label="Walk-in's name" data-i18n-aria-label="tournament.walkInPlaceholder">
+            <button type="button" id="btn-tournament-walkin" class="btn btn-ghost" data-i18n="tournament.walkInButton">➕ Add walk-in</button>
+          </div>
           <ul id="tournament-player-checklist" class="tournament-player-checklist"></ul>
           <p class="player-stats-note hidden" id="tournament-team-preview"></p>
         </div>
@@ -2561,10 +2571,12 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
   <section class="panel hidden" id="tournament-active-panel">
     <div class="row">
-      <button type="button" id="btn-tournament-abandon" class="btn btn-danger" data-i18n="tournament.abandon">Abandon Tournament</button>
+      <button type="button" id="btn-tournament-abandon" class="btn btn-primary hidden" data-i18n="tournament.startNew">🏆 New Tournament</button>
+      <button type="button" id="btn-tournament-bracket-tv" class="btn btn-ghost" data-i18n="tournament.bracketTvButton">📺 Full-screen bracket</button>
       <button type="button" id="btn-tournament-print" class="btn btn-ghost" data-i18n="tournament.printBracket">🖨️ Print Bracket</button>
       <button type="button" id="btn-tournament-push-challonge" class="btn btn-ghost" data-i18n="challonge.pushButton">☁️ Push to Challonge</button>
       <button type="button" id="btn-tournament-close-challonge" class="btn btn-ghost" data-i18n="challonge.closeTournamentButton">🔒 Close Tournament</button>
+      <button type="button" id="btn-tournament-more" class="btn btn-ghost" data-i18n="tournament.moreButton">⋯ More</button>
     </div>
     <!-- During the event: a latecomer, someone leaving, more or fewer tables -->
     <div class="row tournament-manage-row" id="tournament-manage-row">
@@ -2579,6 +2591,7 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
     </div>
 
     <div id="tournament-champion-banner" class="tournament-winner-banner hidden"></div>
+    <ol id="tournament-placings" class="tournament-placings hidden" aria-label="Final placings" data-i18n-aria-label="tournament.placingsAria"></ol>
 
     <div id="tournament-current-match-panel"></div>
 
@@ -2946,13 +2959,13 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/pairing.js?v=20261029g"></script>
-<script src="js/big-store.js?v=20261029g"></script>
-<script src="js/mp4-clip.js?v=20261029g"></script>
-<script src="js/recording-consent.js?v=20261029g"></script>
-<script src="js/local-recorder.js?v=20261029g"></script>
-<script src="js/app.js?v=20261029g"></script>
-<script src="js/camera-client.js?v=20261029g"></script>
-<script src="js/voice.js?v=20261029g"></script>
+<script src="js/pairing.js?v=20261029h"></script>
+<script src="js/big-store.js?v=20261029h"></script>
+<script src="js/mp4-clip.js?v=20261029h"></script>
+<script src="js/recording-consent.js?v=20261029h"></script>
+<script src="js/local-recorder.js?v=20261029h"></script>
+<script src="js/app.js?v=20261029h"></script>
+<script src="js/camera-client.js?v=20261029h"></script>
+<script src="js/voice.js?v=20261029h"></script>
 </body>
 </html>

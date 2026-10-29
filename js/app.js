@@ -2635,6 +2635,8 @@
     var key = format === "roundrobin" ? "tournament.newHeadingRoundRobin" : format === "swiss" ? "tournament.newHeadingSwiss" : "tournament.newHeading";
     heading.setAttribute("data-i18n", key);
     heading.textContent = T(key);
+    // (Swiss: how many rounds - blank plays enough to separate the field)
+    document.getElementById("tournament-swiss-rounds-row").classList.toggle("hidden", format !== "swiss");
   }
   Array.prototype.forEach.call(tournamentFormatRadios, function (r) { r.addEventListener("change", renderTournamentNewHeading); });
   var tournamentWbSection = document.getElementById("tournament-wb-section");
@@ -30205,7 +30207,30 @@
   // keeps its first number). Elimination: who went out in a later round
   // finished higher (the list runs winners rounds, losers rounds, then the
   // final); round robin / Swiss: matches won.
+  // Final placings (P20): [{ place, names }] best first - "3rd–4th" is a
+  // place of 3 shared by two. Round robin and Swiss follow the tie-break
+  // standings (a playoff orders the players it was played for); the
+  // brackets place each loser by the round they went out in.
+  function groupPlacings(standings) {
+    var groups = [];
+    standings.forEach(function (s) {
+      var last = groups[groups.length - 1];
+      if (last && last.place === s.place) last.names.push(s.name);
+      else groups.push({ place: s.place, names: [s.name] });
+    });
+    return groups;
+  }
+
   function tournamentPlacings(t) {
+    if (t.format === "roundrobin" || t.format === "swiss") {
+      var groups = groupPlacings(t.format === "swiss" ? swissStandings(t) : roundRobinStandings(t));
+      var playoffDone = t.playoff && t.playoff.matches.every(function (m) { return m.winner !== null; });
+      if (playoffDone && groups.length) {
+        groups.shift();
+        groups = groupPlacings(rankWithTieBreaks(t.playoff.players, t.playoff.matches)).concat(groups);
+      }
+      return groups;
+    }
     var all = allBracketMatches(t).filter(function (m) {
       return m.a && m.b && m.winner;
     });
@@ -30241,8 +30266,24 @@
     return out;
   }
 
+  // "1st", "2nd", "3rd–4th" - in the app's language
+  function placeOrdinal(n) {
+    if (activeLanguageCode === "english") {
+      var suffix = ["th", "st", "nd", "rd"], v = n % 100;
+      return n + (suffix[(v - 20) % 10] || suffix[v] || suffix[0]);
+    }
+    return T(n === 1 ? "tournament.placeFirst" : "tournament.placeN", { n: n });
+  }
+
+  function placingLabel(group) {
+    return group.names.length > 1 ? placeOrdinal(group.place) + "–" + placeOrdinal(group.place + group.names.length - 1) : placeOrdinal(group.place);
+  }
+
   function recordTournamentCompletion(t) {
-    if (noStatsMode) return;
+    if (noStatsMode) {
+      t.placings = tournamentPlacings(t);
+      return;
+    }
     var entrantMembers = t.entrantMembers || {};
     function flattenEntrants(labels) {
       var out = [];
@@ -30277,7 +30318,7 @@
         .map(function (m) {
           return { round: m.tag || null, a: m.a, b: m.b, scoreA: m.scoreA, scoreB: m.scoreB, winner: m.winner };
         }),
-      placings: tournamentPlacings(t)
+      placings: (t.placings = tournamentPlacings(t))
     });
     if (TOURNAMENT_RESULTS.length > 200) TOURNAMENT_RESULTS.length = 200;
     saveTournamentResultsToStorage(TOURNAMENT_RESULTS);
@@ -30303,7 +30344,7 @@
         ts: g.ts,
         result: g.result,
         opponentNames: (g.teammateNames || []).concat(g.opponentNames || []),
-        gameLabel: "Race-to Session"
+        gameLabel: T("tournament.raceSessionLabel")
       });
     });
     return results;
@@ -30346,7 +30387,7 @@
         opponentNames: r.players.filter(function (n) {
           return n !== name && !ownTeammates[n];
         }),
-        gameLabel: "Tournament"
+        gameLabel: T("report.colTournament")
       });
     });
     return games;
@@ -30468,6 +30509,11 @@
   }
 
   function pendingBracketMatches(t) {
+    if (t.playoff) {
+      return t.playoff.matches.filter(function (m) {
+        return m.winner === null;
+      });
+    }
     if (t.format === "roundrobin") return pendingRrMatches(t);
     if (t.format === "swiss") return pendingSwissMatches(t);
     return pendingWbMatches(t).concat(pendingLbMatches(t), pendingGfMatches(t));
@@ -30476,11 +30522,12 @@
   function allBracketMatches(t) {
     var all = [];
     if (t.format === "roundrobin") {
-      all = t.matches || [];
+      all = (t.matches || []).concat(t.playoff ? t.playoff.matches : []);
     } else if (t.format === "swiss") {
       (t.rounds || []).forEach(function (r) {
         all = all.concat(r);
       });
+      if (t.playoff) all = all.concat(t.playoff.matches);
     } else {
       (t.wb || []).forEach(function (r) {
         all = all.concat(r);
@@ -30941,7 +30988,16 @@
   // round robin does). Built round-by-round: only round 1 is created
   // here, via pairSwissRound below; later rounds are appended as each
   // one finishes (see finalizeSwissRoundIfComplete).
-  function buildSwissTournament(playerNames, gameType, target, raceTo, fairRace, seededOrder) {
+  // How many Swiss rounds (P20): the organizer's number, else enough to
+  // separate the field (ceil(log2 n)); never more than a field can play
+  // without meeting someone twice (n - 1, or n when odd - the bye).
+  function swissRoundsFor(count, wanted) {
+    var most = Math.max(1, count % 2 === 1 ? count : count - 1);
+    var auto = Math.max(1, Math.ceil(Math.log(count) / Math.log(2)));
+    return Math.min(most, wanted > 0 ? wanted : auto);
+  }
+
+  function buildSwissTournament(playerNames, gameType, target, raceTo, fairRace, seededOrder, rounds) {
     var ordered;
     if (seededOrder) {
       ordered = seededOrder.slice();
@@ -30962,7 +31018,7 @@
       raceTo: raceTo,
       fairRace: !!fairRace,
       players: ordered,
-      totalRounds: Math.max(1, Math.ceil(Math.log(ordered.length) / Math.log(2))),
+      totalRounds: swissRoundsFor(ordered.length, rounds),
       rounds: [],
       byeHistory: {},
       pairHistory: {},
@@ -30975,30 +31031,90 @@
     return t;
   }
 
-  // Ranks every entrant by match wins (most first, name as a stable
-  // tiebreaker for display order only — a true tie in wins is reflected
-  // by championNames holding more than one name, not by this ordering).
-  function roundRobinStandings(t) {
-    var wins = {};
-    var played = {};
-    t.players.forEach(function (name) {
-      wins[name] = 0;
-      played[name] = 0;
+  // ---- Standings with tie-breaks (P20) ----
+  // Round robin and Swiss rank by match wins. Players level on wins are
+  // split, in order, by head-to-head (only the matches among just them),
+  // rack difference (racks won minus racks lost, every match), then racks
+  // won - each split starting over with head-to-head for whoever is still
+  // level. Still level: they share the place (place and shared on each
+  // entry); level at the top when the event ends, the organizer is asked
+  // about a playoff (settleTournamentChampion). A bye is a win, no racks.
+  function tournamentRecords(names, matches) {
+    var rec = {};
+    names.forEach(function (n) {
+      rec[n] = { name: n, wins: 0, losses: 0, played: 0, racksFor: 0, racksAgainst: 0 };
     });
-    t.matches.forEach(function (m) {
-      if (m.winner === null) return;
-      wins[m.winner] = (wins[m.winner] || 0) + 1;
-      played[m.a] = (played[m.a] || 0) + 1;
-      played[m.b] = (played[m.b] || 0) + 1;
+    (matches || []).forEach(function (m) {
+      if (!m || !m.winner) return;
+      if (m.a === null || m.b === null) {
+        if (rec[m.winner]) rec[m.winner].wins++;
+        return;
+      }
+      var loser = m.winner === m.a ? m.b : m.a;
+      var sa = typeof m.scoreA === "number" ? m.scoreA : 0;
+      var sb = typeof m.scoreB === "number" ? m.scoreB : 0;
+      if (rec[m.winner]) { rec[m.winner].wins++; rec[m.winner].played++; }
+      if (rec[loser]) { rec[loser].losses++; rec[loser].played++; }
+      if (rec[m.a]) { rec[m.a].racksFor += sa; rec[m.a].racksAgainst += sb; }
+      if (rec[m.b]) { rec[m.b].racksFor += sb; rec[m.b].racksAgainst += sa; }
     });
-    return t.players
-      .slice()
-      .sort(function (x, y) {
-        return (wins[y] || 0) - (wins[x] || 0) || x.localeCompare(y);
-      })
-      .map(function (name) {
-        return { name: name, wins: wins[name] || 0, played: played[name] || 0 };
+    return rec;
+  }
+
+  function rankWithTieBreaks(names, matches) {
+    var rec = tournamentRecords(names, matches);
+    // [names] -> [[names], ...] best first, split on one number (higher first)
+    function splitOn(group, value) {
+      var sorted = group.slice().sort(function (a, b) { return value(b) - value(a) || names.indexOf(a) - names.indexOf(b); });
+      var parts = [];
+      sorted.forEach(function (n) {
+        var last = parts[parts.length - 1];
+        if (last && value(last[0]) === value(n)) last.push(n);
+        else parts.push([n]);
       });
+      return parts;
+    }
+    function rankGroup(group) {
+      if (group.length < 2) return [group];
+      var inGroup = {};
+      group.forEach(function (n) { inGroup[n] = true; });
+      var h2h = tournamentRecords(group, (matches || []).filter(function (m) { return m && m.a !== null && m.b !== null && inGroup[m.a] && inGroup[m.b]; }));
+      var tests = [
+        function (n) { return h2h[n].wins; },
+        function (n) { return rec[n].racksFor - rec[n].racksAgainst; },
+        function (n) { return rec[n].racksFor; }
+      ];
+      for (var i = 0; i < tests.length; i++) {
+        var parts = splitOn(group, tests[i]);
+        if (parts.length > 1) return [].concat.apply([], parts.map(rankGroup));
+      }
+      return [group];
+    }
+    var groups = [].concat.apply([], splitOn(names, function (n) { return rec[n].wins; }).map(rankGroup));
+    var out = [];
+    groups.forEach(function (group) {
+      var place = out.length + 1;
+      group.forEach(function (n) {
+        var r = rec[n];
+        out.push({ name: n, wins: r.wins, losses: r.losses, played: r.played, racksFor: r.racksFor, racksAgainst: r.racksAgainst, rackDiff: r.racksFor - r.racksAgainst, place: place, shared: group.length > 1 });
+      });
+    });
+    return out;
+  }
+
+  function roundRobinStandings(t) {
+    return rankWithTieBreaks(t.players, t.matches);
+  }
+
+  // The standings to show: once a playoff is played, its order replaces
+  // the shared top place it settled
+  function standingsAfterPlayoff(t, standings) {
+    if (!t.playoff || !t.playoff.matches.every(function (m) { return m.winner !== null; })) return standings;
+    var po = {};
+    rankWithTieBreaks(t.playoff.players, t.playoff.matches).forEach(function (s) { po[s.name] = s; });
+    return standings.map(function (s) {
+      return po[s.name] ? Object.assign({}, s, { place: po[s.name].place, shared: po[s.name].shared }) : s;
+    }).sort(function (a, b) { return a.place - b.place; });
   }
 
   // Shared by swissPairingOrder and swissStandings below - just a plain
@@ -31032,123 +31148,118 @@
     });
   }
 
-  // Wins/played, plus a simplified Buchholz score (sum of each opponent's
-  // own win total) as a tiebreak for DISPLAY only - it never decides the
-  // champion (see finalizeSwissRoundIfComplete), matching how a tied
-  // finish is handled everywhere else in this app (Round Robin shares the
-  // win rather than picking a tiebreaker winner).
   function swissStandings(t) {
-    var wins = swissWinsMap(t);
-    var played = {};
-    var opponentsOf = {};
-    t.players.forEach(function (name) {
-      played[name] = 0;
-      opponentsOf[name] = [];
-    });
-    t.rounds.forEach(function (round) {
-      round.forEach(function (m) {
-        if (m.winner === null || m.b === null) return; // a bye has no real opponent
-        played[m.a] = (played[m.a] || 0) + 1;
-        played[m.b] = (played[m.b] || 0) + 1;
-        opponentsOf[m.a].push(m.b);
-        opponentsOf[m.b].push(m.a);
-      });
-    });
-    return t.players
-      .map(function (name) {
-        var buchholz = opponentsOf[name].reduce(function (sum, opp) {
-          return sum + (wins[opp] || 0);
-        }, 0);
-        return { name: name, wins: wins[name] || 0, played: played[name] || 0, buchholz: buchholz };
-      })
-      .sort(function (x, y) {
-        return y.wins - x.wins || y.buchholz - x.buchholz || x.name.localeCompare(y.name);
-      });
+    var all = [];
+    t.rounds.forEach(function (round) { all = all.concat(round); });
+    return rankWithTieBreaks(t.players, all);
   }
 
   function swissPairKey(a, b) {
     return [a, b].sort().join("|");
   }
 
-  // Greedy pairing: walk the field ranked by current record, pairing each
-  // still-unpaired player with the next unpaired player below them they
-  // haven't already played. Simple and good enough for the small fields
-  // this app is built for, not a formal Swiss pairing engine — if every
-  // remaining candidate has already been played (only realistic in a very
-  // small field over many rounds), pairs with the closest-ranked available
-  // opponent anyway rather than erroring.
+  // Pairs a Swiss round (P20): ranked by record, each player meets the
+  // nearest-ranked player they haven't played - searched with
+  // backtracking, so there's never a rematch while a round without one
+  // exists. An odd field's bye goes to the lowest-ranked player without
+  // one whose removal still leaves a rematch-free round. Only when no
+  // rematch-free round exists at all (a small field, many rounds) does a
+  // pair repeat, as few as the closest-ranked fallback gives.
+  function swissPairNames(ranked, played, byeOk, budget) {
+    budget = budget || 200000;
+    var steps = 0;
+    var byeOrder = [];
+    if (ranked.length % 2 === 1) {
+      for (var i = ranked.length - 1; i >= 0; i--) if (byeOk(ranked[i])) byeOrder.push(ranked[i]);
+      for (var i2 = ranked.length - 1; i2 >= 0; i2--) if (!byeOk(ranked[i2])) byeOrder.push(ranked[i2]);
+    } else {
+      byeOrder.push(null);
+    }
+    function solve(list) {
+      var pairs = [];
+      var used = list.map(function () { return false; });
+      function next() {
+        if (++steps > budget) return false;
+        var first = used.indexOf(false);
+        if (first === -1) return true;
+        used[first] = true;
+        for (var j = first + 1; j < list.length; j++) {
+          if (used[j] || played(list[first], list[j])) continue;
+          used[j] = true;
+          pairs.push([list[first], list[j]]);
+          if (next()) return true;
+          pairs.pop();
+          used[j] = false;
+        }
+        used[first] = false;
+        return false;
+      }
+      return next() ? pairs : null;
+    }
+    for (var b = 0; b < byeOrder.length; b++) {
+      var bye = byeOrder[b];
+      var rest = ranked.filter(function (n) { return n !== bye; });
+      steps = 0;
+      var pairs = solve(rest);
+      if (pairs) return { pairs: pairs, bye: bye, rematches: 0 };
+    }
+    var bye0 = byeOrder[0];
+    var left = ranked.filter(function (n) { return n !== bye0; });
+    var out = [];
+    var rematches = 0;
+    while (left.length) {
+      var a = left.shift();
+      var k = -1;
+      for (var q = 0; q < left.length; q++) if (!played(a, left[q])) { k = q; break; }
+      if (k === -1) { k = 0; rematches++; }
+      out.push([a, left.splice(k, 1)[0]]);
+    }
+    return { pairs: out, bye: bye0, rematches: rematches };
+  }
+
   function pairSwissRound(t) {
     var ranked = swissPairingOrder(t);
-    var roundNum = t.rounds.length + 1;
-    var unpaired = ranked.slice();
+    var tag = "Swiss R" + (t.rounds.length + 1);
+    var res = swissPairNames(ranked, function (a, b) { return !!t.pairHistory[swissPairKey(a, b)]; }, function (n) { return !t.byeHistory[n]; });
     var matches = [];
-
-    // Odd field: the bye goes to the lowest-ranked player who hasn't had
-    // one yet, falling back to lowest-ranked overall if everyone has -
-    // resolved immediately, the same way a structural round-1 bye is
-    // resolved in buildWinnersBracketRounds, rather than left pending.
-    if (unpaired.length % 2 === 1) {
-      var byeIndex = -1;
-      for (var i = unpaired.length - 1; i >= 0; i--) {
-        if (!t.byeHistory[unpaired[i]]) {
-          byeIndex = i;
-          break;
-        }
-      }
-      if (byeIndex === -1) byeIndex = unpaired.length - 1;
-      var byeName = unpaired.splice(byeIndex, 1)[0];
-      var byeMatch = createBracketMatch(byeName, null, "Swiss R" + roundNum);
-      byeMatch.winner = byeName;
+    // (resolved at once, like a structural round-1 bye in the brackets)
+    if (res.bye !== null) {
+      var byeMatch = createBracketMatch(res.bye, null, tag);
+      byeMatch.winner = res.bye;
       matches.push(byeMatch);
-      t.byeHistory[byeName] = (t.byeHistory[byeName] || 0) + 1;
+      t.byeHistory[res.bye] = (t.byeHistory[res.bye] || 0) + 1;
     }
-
-    while (unpaired.length) {
-      var name = unpaired.shift();
-      var opponentIndex = -1;
-      for (var k = 0; k < unpaired.length; k++) {
-        if (!t.pairHistory[swissPairKey(name, unpaired[k])]) {
-          opponentIndex = k;
-          break;
-        }
-      }
-      if (opponentIndex === -1) opponentIndex = 0;
-      var opponent = unpaired.splice(opponentIndex, 1)[0];
-      matches.push(createBracketMatch(name, opponent, "Swiss R" + roundNum));
-      t.pairHistory[swissPairKey(name, opponent)] = true;
-    }
-
+    res.pairs.forEach(function (p) {
+      matches.push(createBracketMatch(p[0], p[1], tag));
+      t.pairHistory[swissPairKey(p[0], p[1])] = true;
+    });
     return matches;
   }
 
-  // Once every round-robin match has a result, the champion is whoever
-  // has the most match wins — a tie at the top makes every tied player a
-  // champion (championNames holds all of them; TOURNAMENT_RESULTS
-  // already supports multiple simultaneous winners for team wins, so
-  // this reuses that instead of picking an arbitrary tiebreaker).
+  // The event is over: one player on top takes it; several still level
+  // after every tie-break leave the choice to the organizer
+  // (t.playoffPending: a playoff, or share the title).
+  function settleTournamentChampion(t, standings) {
+    var top = standings.filter(function (s) { return s.place === 1; }).map(function (s) { return s.name; });
+    if (top.length > 1) {
+      t.playoffPending = top;
+      return;
+    }
+    t.playoffPending = null;
+    t.championNames = top;
+    t.champion = top[0] || null;
+  }
+
   function finalizeRoundRobinIfComplete(t) {
     var allDecided = t.matches.every(function (m) {
       return m.winner !== null;
     });
     if (!allDecided) return;
-    var standings = roundRobinStandings(t);
-    var topWins = standings[0].wins;
-    var champions = standings
-      .filter(function (s) {
-        return s.wins === topWins;
-      })
-      .map(function (s) {
-        return s.name;
-      });
-    t.championNames = champions;
-    t.champion = champions.join(" & ");
+    settleTournamentChampion(t, roundRobinStandings(t));
   }
 
-  // Once every match in the latest Swiss round has a result: either the
-  // whole tournament is done (totalRounds reached — champion decided by
-  // most wins, ties shared exactly like Round Robin's tied finish, never
-  // broken by Buchholz) or the next round's pairings are generated and
-  // appended.
+  // Once every match in the latest Swiss round has a result: the event is
+  // over (t.totalRounds played) or the next round is paired.
   function finalizeSwissRoundIfComplete(t) {
     var latest = t.rounds[t.rounds.length - 1];
     var allDecided = latest.every(function (m) {
@@ -31156,20 +31267,37 @@
     });
     if (!allDecided) return;
     if (t.rounds.length >= t.totalRounds) {
-      var standings = swissStandings(t);
-      var topWins = standings[0].wins;
-      var champions = standings
-        .filter(function (s) {
-          return s.wins === topWins;
-        })
-        .map(function (s) {
-          return s.name;
-        });
-      t.championNames = champions;
-      t.champion = champions.join(" & ");
+      settleTournamentChampion(t, swissStandings(t));
       return;
     }
     t.rounds.push(pairSwissRound(t));
+  }
+
+  // The playoff for a tie at the top (P20): everyone tied plays everyone
+  // else tied once (two players: one match), ranked the same way; still
+  // level after it, they share the title.
+  function startTournamentPlayoff(t) {
+    var names = t.playoffPending || [];
+    t.playoffPending = null;
+    var matches = [];
+    for (var a = 0; a < names.length; a++) {
+      for (var b = a + 1; b < names.length; b++) matches.push(createBracketMatch(names[a], names[b], "Playoff"));
+    }
+    t.playoff = { players: names.slice(), matches: matches };
+  }
+
+  function finalizeTournamentPlayoff(t) {
+    if (!t.playoff.matches.every(function (m) { return m.winner !== null; })) return;
+    var top = rankWithTieBreaks(t.playoff.players, t.playoff.matches).filter(function (s) { return s.place === 1; }).map(function (s) { return s.name; });
+    t.championNames = top;
+    t.champion = top.join(" & ");
+  }
+
+  function shareTournamentTitle(t) {
+    var names = t.playoffPending || [];
+    t.playoffPending = null;
+    t.championNames = names;
+    t.champion = names.join(" & ");
   }
 
   // Only single/double elimination tournaments ever have a grandFinal
@@ -31186,6 +31314,10 @@
     match.loser = match.a === winnerName ? match.b : match.a;
     if (typeof scoreA === "number") match.scoreA = scoreA;
     if (typeof scoreB === "number") match.scoreB = scoreB;
+    if (t.playoff && t.playoff.matches.indexOf(match) !== -1) {
+      finalizeTournamentPlayoff(t);
+      return;
+    }
     if (t.format === "roundrobin") {
       finalizeRoundRobinIfComplete(t);
       return;
@@ -32115,10 +32247,10 @@
   // WB match's round gets named back to the player; Grand Final and
   // losers-bracket tags are already plain-language as-is.
   function matchRoundLabel(t, match) {
-    if (isGrandFinalMatch(t, match)) return match.tag;
+    if (isGrandFinalMatch(t, match)) return matchTagLabel(match.tag);
     var pos = findWbPosition(t, match);
-    if (pos) return wbRoundLabel(t.wb[pos.ri].length);
-    return match.tag;
+    if (pos) return wbRoundLabel(t, pos.ri);
+    return matchTagLabel(match.tag);
   }
 
   // Figures out what to tell a just-crowned match winner about what's
@@ -32307,9 +32439,14 @@
     var names = getAllKnownPlayerNames().sort(function (a, b) {
       return a.localeCompare(b);
     });
+    // Checked to start with: everyone checked in tonight - the session's
+    // roster, seated or on the bench (P20; past players stay unchecked).
     var activeNames = {};
-    activePlayers().forEach(function (p) {
+    state.players.forEach(function (p) {
       activeNames[p.name] = true;
+    });
+    (tournamentWalkInsChecked || []).forEach(function (n) {
+      activeNames[n] = true;
     });
     // A fresh render means a fresh checklist DOM - any earlier Select All
     // snapshot no longer refers to anything real.
@@ -32358,7 +32495,33 @@
       li.appendChild(teamInput);
       tournamentPlayerChecklist.appendChild(li);
     });
+    filterTournamentPlayerChecklist();
     renderTournamentTeamPreview();
+  }
+
+  // 🔎 Find a player in a long list; ➕ a walk-in added to tonight's roster
+  // and checked (P20)
+  var tournamentWalkInsChecked = [];
+  function filterTournamentPlayerChecklist() {
+    var q = normalizeNameKey(document.getElementById("tournament-player-search").value || "");
+    Array.prototype.forEach.call(tournamentPlayerChecklist.querySelectorAll(".tournament-player-check-row"), function (li) {
+      var cb = li.querySelector('input[type="checkbox"]');
+      li.classList.toggle("hidden", !!q && normalizeNameKey(cb.value).indexOf(q) === -1);
+    });
+  }
+  function addTournamentWalkIn() {
+    var input = document.getElementById("tournament-walkin-name");
+    var name = cleanNameText(input.value || "");
+    if (!name) return;
+    var existing = getAllKnownPlayerNames().filter(function (n) { return normalizeNameKey(n) === normalizeNameKey(name); })[0];
+    if (existing && !state.players.some(function (p) { return p.name === existing; })) addPlayer(existing);
+    if (!existing) addPlayer(name);
+    tournamentWalkInsChecked.push(existing || name);
+    input.value = "";
+    document.getElementById("tournament-player-search").value = "";
+    renderTournamentPlayerChecklist();
+    renderAll();
+    showToast(T("tournament.walkInAdded", { name: existing || name }));
   }
 
   // Groups the checked checklist rows into bracket entrants. Grouping two
@@ -32568,7 +32731,7 @@
     if (format === "roundrobin") {
       TOURNAMENT = buildRoundRobinTournament(names, gameType, target, raceTo, fairRace);
     } else if (format === "swiss") {
-      TOURNAMENT = buildSwissTournament(names, gameType, target, raceTo, fairRace, seededOrder);
+      TOURNAMENT = buildSwissTournament(names, gameType, target, raceTo, fairRace, seededOrder, parseInt(document.getElementById("tournament-swiss-rounds").value, 10) || 0);
     } else if (format === "single") {
       TOURNAMENT = buildSingleEliminationBracket(names, gameType, target, raceTo, fairRace, seededOrder, pairAdjacent);
     } else {
@@ -32999,7 +33162,8 @@
     choices.forEach(function (c) {
       var btn = document.createElement("button");
       btn.type = "button";
-      btn.className = "btn " + (c.primary ? "btn-primary" : "btn-ghost") + " tournament-chooser-btn";
+      btn.className = "btn " + (c.primary ? "btn-primary" : c.danger ? "btn-danger" : "btn-ghost") + " tournament-chooser-btn";
+      if (c.id) btn.id = c.id;
       btn.textContent = c.label;
       btn.addEventListener("click", function () {
         close();
@@ -33220,13 +33384,24 @@
     // at once. Every OTHER empty side just means "not decided yet" and
     // still shows the plain em dash.
     var isByeMatch = !!match.winner && (match.a === null) !== (match.b === null);
-    [match.a, match.b].forEach(function (name) {
+    // Round robin and Swiss knock nobody out: the match winner in bold and
+    // no crown, nobody struck through (P20). Every finished card shows its
+    // score.
+    var leagueStyle = t.format === "roundrobin" || t.format === "swiss";
+    var hasScore = !!match.winner && !isByeMatch && typeof match.scoreA === "number" && typeof match.scoreB === "number";
+    [match.a, match.b].forEach(function (name, sideIdx) {
       var row = document.createElement("div");
       row.className = "tournament-match-side";
       var isWinner = match.winner && name === match.winner;
-      if (isWinner) row.classList.add("is-winner");
-      if (match.winner && name === match.loser) row.classList.add("is-loser");
-      row.textContent = (isWinner ? "👑 " : "") + (name || (isByeMatch ? T("tournament.byeLabel") : "—"));
+      if (isWinner) row.classList.add(leagueStyle ? "is-match-winner" : "is-winner");
+      if (match.winner && name === match.loser && !leagueStyle) row.classList.add("is-loser");
+      row.textContent = (isWinner && !leagueStyle ? "👑 " : "") + (name || (isByeMatch ? T("tournament.byeLabel") : "—"));
+      if (hasScore) {
+        var sideScore = document.createElement("span");
+        sideScore.className = "tournament-match-side-score";
+        sideScore.textContent = String(sideIdx === 0 ? match.scoreA : match.scoreB);
+        row.appendChild(sideScore);
+      }
       if (name) {
         appendEntrantIdentity(row, name, t);
         if (isGf && name === t.lbChampion) {
@@ -33358,11 +33533,31 @@
   // from how many matches are in the round, so it's automatically right
   // whether the bracket only ever has a Final, or goes all the way down
   // to a Quarterfinal (or further) when there are enough entrants.
-  function wbRoundLabel(matchCount) {
-    if (matchCount === 1) return T("tournament.roundFinal");
-    if (matchCount === 2) return T("tournament.roundSemifinal");
-    if (matchCount === 4) return T("tournament.roundQuarterfinal");
-    return T("tournament.roundOfN", { n: matchCount * 2 });
+  // A winners-bracket round's name by how far it is from the final (P20):
+  // a draw with byes counts them, so 9 players open with a Round of 16
+  // (an older bracket without its byes used to say "Round of 10").
+  function wbRoundLabel(t, ri) {
+    var fromEnd = t.wb.length - 1 - ri;
+    if (fromEnd <= 0) return T("tournament.roundFinal");
+    if (fromEnd === 1) return T("tournament.roundSemifinal");
+    if (fromEnd === 2) return T("tournament.roundQuarterfinal");
+    return T("tournament.roundOfN", { n: Math.pow(2, fromEnd + 1) });
+  }
+
+  // A stored match tag ("Round Robin", "Swiss R2", "Losers R3", "Grand
+  // Final", "Playoff") in the app's language
+  function matchTagLabel(tag) {
+    var m;
+    if (!tag) return "";
+    if (tag === "Round Robin") return challongeFormatText("roundrobin");
+    if (tag === "Playoff") return T("tournament.playoffTag");
+    if (tag === "Grand Final") return T("tournament.grandFinal");
+    if (tag === "Grand Final (bracket reset)") return T("tournament.grandFinalReset");
+    if ((m = /^Swiss R(\d+)$/.exec(tag))) return T("tournament.swissRound", { n: m[1] });
+    if ((m = /^Losers R(\d+)$/.exec(tag))) return T("tournament.losersRound", { n: m[1] });
+    if ((m = /^Winners R(\d+)$/.exec(tag))) return T("tournament.winnersRound", { n: m[1] });
+    if (tag === "Losers") return T("tournament.losersBracket");
+    return tag;
   }
 
   // Renders the winners bracket as a real horizontal tree: round 1 on the
@@ -33382,7 +33577,7 @@
     wrap.className = "wb-tree-card-wrap";
     var heading = document.createElement("div");
     heading.className = "tournament-round-heading";
-    heading.textContent = wbRoundLabel(t.wb[ri].length);
+    heading.textContent = wbRoundLabel(t, ri);
     wrap.appendChild(heading);
     wrap.appendChild(card);
     // A round-1 match is always a real leaf (two real players, no WB
@@ -33437,7 +33632,7 @@
       col.className = "tournament-round-col";
       var heading = document.createElement("div");
       heading.className = "tournament-round-heading";
-      heading.textContent = round.length ? round[0].tag : "Round " + (i + 1);
+      heading.textContent = round.length ? matchTagLabel(round[0].tag) : T("tournament.roundN", { n: i + 1 });
       col.appendChild(heading);
       round.forEach(function (m) {
         col.appendChild(tournamentMatchCard(m, activeMatchId, t));
@@ -33790,17 +33985,19 @@
     renderTournamentActiveMatch();
   }
 
+  // One side of a live tournament match, laid out like the casual board's
+  // card (P20): the name, the match score - giant, "/ 5" after it - and
+  // one big + under it. A game won in one rack: the + wins the rack. A
+  // rack of points or balls: the rack's own count shows small above the
+  // +, with a − beside it for a mistake.
   function buildTournamentSidePanel(name, side, balls, wins, t, active) {
     var panel = document.createElement("div");
-    panel.className = "player-panel";
+    panel.className = "player-panel tournament-side-panel";
 
     var nameEl = document.createElement("div");
     nameEl.className = "player-name";
-    // A grouped 2+-member entrant is playing under whatever team name
-    // got them paired in the first place (see getTournamentEntrants) -
-    // that name (not necessarily any one member's persistent club team,
-    // since it's freely editable per tournament) is the headline here,
-    // so it gets the same large treatment as buildTeamPanel's banner.
+    // A grouped 2+-member entrant plays under its team name - the
+    // headline here, with the same large treatment as buildTeamPanel's.
     var entrantMembers = (t.entrantMembers && t.entrantMembers[name]) || [name];
     if (entrantMembers.length > 1) nameEl.classList.add("shared-team-name");
     nameEl.textContent = name;
@@ -33809,55 +34006,76 @@
 
     var raceToKey = side === "a" ? "raceToA" : "raceToB";
     var sideRaceTo = t.fairRace && active && active[raceToKey] ? active[raceToKey] : t.raceTo;
-    panel.appendChild(buildStatMini(T("tournament.matchWins"), wins, wins >= sideRaceTo));
-
-    var block = document.createElement("div");
-    block.className = "stat-block";
-    var label = document.createElement("div");
-    label.className = "stat-label";
-    label.textContent = T("scoreboard.gameTargetLabel", { game: GAME_TYPES[t.gameType].label, target: t.target });
-    var value = document.createElement("div");
-    value.className = "stat-value";
-    value.textContent = balls;
-    block.appendChild(label);
-    block.appendChild(value);
-    panel.appendChild(block);
+    var score = document.createElement("div");
+    score.className = "stat-value tournament-match-score";
+    score.textContent = wins;
+    var of = document.createElement("span");
+    of.className = "stat-of";
+    of.textContent = " / " + sideRaceTo;
+    score.appendChild(of);
+    if (wins >= sideRaceTo) score.appendChild(buildFlagSpan());
+    panel.appendChild(score);
 
     if (t.fairRace) panel.appendChild(buildFairRaceNote(sideRaceTo));
 
-    var controls = document.createElement("div");
-    controls.className = "ball-controls";
     var unit = GAME_TYPES[t.gameType].unit;
-    var allowNegative = unit !== "rack";
-
+    var oneRackWins = unit === "rack" && (t.target || 1) <= 1;
     var networkBlocked = networkMode === "guest" && !networkHostConnected;
-
-    var minusBtn = document.createElement("button");
-    minusBtn.type = "button";
-    minusBtn.className = "btn-ball minus";
-    minusBtn.textContent = "−";
-    minusBtn.setAttribute("aria-label", scoreButtonAria(-1, name, unit, false));
-    minusBtn.disabled = (!allowNegative && balls <= 0) || networkBlocked;
-    minusBtn.addEventListener("click", function () {
-      requestTournamentAdjustScore(active, side, -1);
-    });
-
+    var controls = document.createElement("div");
+    controls.className = "ball-controls tournament-plus-zone";
+    if (!oneRackWins) {
+      var rackLine = document.createElement("div");
+      rackLine.className = "tournament-rack-count";
+      rackLine.textContent = T("tournament.thisRack", { n: balls, target: t.target, unit: unitLabel(unit, t.target) });
+      panel.appendChild(rackLine);
+      var minusBtn = document.createElement("button");
+      minusBtn.type = "button";
+      minusBtn.className = "btn-ball minus";
+      minusBtn.textContent = "−";
+      minusBtn.setAttribute("aria-label", scoreButtonAria(-1, name, unit, false));
+      minusBtn.disabled = (unit === "rack" && balls <= 0) || networkBlocked;
+      minusBtn.addEventListener("click", function () {
+        requestTournamentAdjustScore(active, side, -1);
+      });
+      controls.appendChild(minusBtn);
+    }
     var plusBtn = document.createElement("button");
     plusBtn.type = "button";
     plusBtn.className = "btn-ball plus";
     plusBtn.textContent = "+";
-    plusBtn.setAttribute("aria-label", scoreButtonAria(1, name, unit, unit === "rack"));
+    plusBtn.setAttribute("aria-label", scoreButtonAria(1, name, unit, oneRackWins));
     plusBtn.disabled = networkBlocked;
     plusBtn.addEventListener("click", function () {
       requestTournamentAdjustScore(active, side, 1);
     });
-
-    controls.appendChild(minusBtn);
     controls.appendChild(plusBtn);
     panel.appendChild(controls);
 
     return panel;
   }
+
+  // 📺 TV (P20): the live match on its own, filling the screen, numbers
+  // sized for across the room; the full-screen bracket the same for the
+  // draw. Escape or the same button leaves; the browser's own full screen
+  // too where it allows one.
+  function setTournamentTvMode(mode) {
+    var was = document.body.getAttribute("data-tournament-tv") || "";
+    var next = was === mode ? "" : mode;
+    if (next) document.body.setAttribute("data-tournament-tv", next);
+    else document.body.removeAttribute("data-tournament-tv");
+    try {
+      if (next && document.documentElement.requestFullscreen && !document.fullscreenElement) document.documentElement.requestFullscreen().catch(function () {});
+      else if (!next && document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(function () {});
+    } catch (e) {}
+    renderTournamentPage();
+  }
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && !e.defaultPrevented && document.body.getAttribute("data-tournament-tv") && !topDialog()) {
+      e.preventDefault();
+      setTournamentTvMode(document.body.getAttribute("data-tournament-tv"));
+    }
+  });
 
   // A multi-table event can have one live match per table at once -
   // rendered as a stack of floating boards (see .tournament-floating-
@@ -33950,6 +34168,7 @@
     headerParts.push(match.a + " vs " + match.b);
     headerParts.push(matchRoundLabel(t, match));
     headerParts.push(gameType.label);
+    headerParts.push(T("board.statusRace", { n: t.raceTo }));
     banner.textContent = headerParts.join(" — ");
     cardWrap.appendChild(banner);
 
@@ -33980,47 +34199,86 @@
       ]);
     });
     tool(T("tournament.cancelMatch"), "tournament-cancel-match", function () { tournamentCancelMatch(active); });
+    tool(document.body.getAttribute("data-tournament-tv") === "match" ? T("tournament.tvExit") : T("tournament.tvButton"), "tournament-tv-btn", function () { setTournamentTvMode("match"); });
     cardWrap.appendChild(tools);
     return cardWrap;
   }
 
-  // Standings ranked by match wins (most first); the name is only a
-  // stable sort key for display order — a genuine tie in wins is
-  // reflected by t.championNames holding more than one name once the
-  // round robin is complete, not by anything in this ordering.
+  // A standings row (P20): the place ("=2" when shared), the name, then
+  // W–L and the rack difference - the tie-breaks' numbers.
   function roundRobinStandingsRow(s, t) {
     var li = document.createElement("li");
     var isChampion = t.championNames && t.championNames.indexOf(s.name) !== -1;
     li.className = "tournament-rr-standings-row" + (isChampion ? " is-champion" : "");
+    var place = document.createElement("span");
+    place.className = "tournament-rr-standings-place";
+    place.textContent = (s.shared ? "=" : "") + s.place;
     var name = document.createElement("span");
     name.className = "tournament-rr-standings-name";
     name.textContent = (isChampion ? "👑 " : "") + s.name;
     appendEntrantIdentity(name, s.name, t);
     var record = document.createElement("span");
     record.className = "tournament-rr-standings-record";
-    record.textContent = s.wins + " win" + (s.wins === 1 ? "" : "s") + " / " + s.played + " played";
+    record.textContent = T("tournament.standingsLine", { wins: s.wins, losses: s.losses, diff: (s.rackDiff > 0 ? "+" : "") + s.rackDiff });
+    li.appendChild(place);
     li.appendChild(name);
     li.appendChild(record);
     return li;
   }
 
-  // Same shape as roundRobinStandingsRow, plus a Buchholz figure - the
-  // strength-of-schedule tiebreak that's meaningful in Swiss (where not
-  // everyone plays everyone) but has no equivalent in Round Robin.
   function swissStandingsRow(s, t) {
+    return roundRobinStandingsRow(s, t);
+  }
+
+  // The playoff's matches, under the event's own (P20)
+  function appendPlayoffColumn(container, t, activeMatchId) {
+    if (!t.playoff) return;
+    var col = document.createElement("div");
+    col.className = "tournament-round-col tournament-playoff-col";
+    var heading = document.createElement("div");
+    heading.className = "tournament-round-heading";
+    heading.textContent = T("tournament.playoffTag");
+    col.appendChild(heading);
+    t.playoff.matches.forEach(function (m) {
+      col.appendChild(tournamentMatchCard(m, activeMatchId, t));
+    });
+    container.appendChild(col);
+  }
+
+  // Level at the top after every tie-break: a playoff, or share the title
+  function buildPlayoffPrompt(t) {
     var li = document.createElement("li");
-    var isChampion = t.championNames && t.championNames.indexOf(s.name) !== -1;
-    li.className = "tournament-rr-standings-row" + (isChampion ? " is-champion" : "");
-    var name = document.createElement("span");
-    name.className = "tournament-rr-standings-name";
-    name.textContent = (isChampion ? "👑 " : "") + s.name;
-    appendEntrantIdentity(name, s.name, t);
-    var record = document.createElement("span");
-    record.className = "tournament-rr-standings-record";
-    record.textContent =
-      s.wins + " win" + (s.wins === 1 ? "" : "s") + " / " + s.played + " played · " + T("standings.buchholz", { count: s.buchholz });
-    li.appendChild(name);
-    li.appendChild(record);
+    li.className = "tournament-playoff-prompt";
+    var text = document.createElement("p");
+    text.textContent = T("tournament.playoffAsk", { names: joinNamesForReport(t.playoffPending) });
+    li.appendChild(text);
+    var row = document.createElement("div");
+    row.className = "row";
+    var play = document.createElement("button");
+    play.type = "button";
+    play.className = "btn btn-primary";
+    play.id = "btn-tournament-playoff";
+    play.textContent = T("tournament.playoffStart");
+    play.addEventListener("click", function () {
+      startTournamentPlayoff(t);
+      saveTournamentToStorage(t);
+      renderTournamentPage();
+    });
+    var share = document.createElement("button");
+    share.type = "button";
+    share.className = "btn btn-ghost";
+    share.id = "btn-tournament-share-title";
+    share.textContent = T("tournament.playoffShare");
+    share.addEventListener("click", function () {
+      shareTournamentTitle(t);
+      recordTournamentCompletion(t);
+      playTournamentChampionSound();
+      saveTournamentToStorage(t);
+      renderTournamentPage();
+    });
+    row.appendChild(play);
+    row.appendChild(share);
+    li.appendChild(row);
     return li;
   }
 
@@ -34032,7 +34290,7 @@
   // record of what's already been played.
   function renderSwissBoard(t, activeMatchId) {
     tournamentSwissStandingsEl.innerHTML = "";
-    swissStandings(t).forEach(function (s) {
+    standingsAfterPlayoff(t, swissStandings(t)).forEach(function (s) {
       tournamentSwissStandingsEl.appendChild(swissStandingsRow(s, t));
     });
 
@@ -34042,13 +34300,14 @@
       col.className = "tournament-round-col";
       var heading = document.createElement("div");
       heading.className = "tournament-round-heading";
-      heading.textContent = round.length ? round[0].tag : "Round " + (i + 1);
+      heading.textContent = round.length ? matchTagLabel(round[0].tag) : T("tournament.roundN", { n: i + 1 });
       col.appendChild(heading);
       round.forEach(function (m) {
         col.appendChild(tournamentMatchCard(m, activeMatchId, t));
       });
       tournamentSwissMatchesEl.appendChild(col);
     });
+    appendPlayoffColumn(tournamentSwissMatchesEl, t, activeMatchId);
   }
 
   // Round Robin has no bracket tree to render, so it gets its own board:
@@ -34059,7 +34318,7 @@
   // progression gating which ones are "ready."
   function renderRoundRobinBoard(t, activeMatchId) {
     tournamentRrStandingsEl.innerHTML = "";
-    roundRobinStandings(t).forEach(function (s) {
+    standingsAfterPlayoff(t, roundRobinStandings(t)).forEach(function (s) {
       tournamentRrStandingsEl.appendChild(roundRobinStandingsRow(s, t));
     });
 
@@ -34067,6 +34326,7 @@
     t.matches.forEach(function (m) {
       tournamentRrMatchesEl.appendChild(tournamentMatchCard(m, activeMatchId, t));
     });
+    appendPlayoffColumn(tournamentRrMatchesEl, t, activeMatchId);
   }
 
   // A quick "you are here" stage tracker across the top of the bracket -
@@ -34082,8 +34342,8 @@
       return;
     }
     tournamentTimelineEl.classList.remove("hidden");
-    var stages = t.wb.map(function (round) {
-      return wbRoundLabel(round.length);
+    var stages = t.wb.map(function (round, ri) {
+      return wbRoundLabel(t, ri);
     });
     if (t.format === "double") stages.push(T("tournament.grandFinal"));
     var currentIdx = stages.length - 1;
@@ -34141,7 +34401,11 @@
 
     renderTournamentTimeline(t);
 
-    btnTournamentAbandon.textContent = T(t.champion ? "tournament.startNew" : "tournament.abandon");
+    // (Abandon lives in ⋯ More while it runs; once it's over: a new one)
+    btnTournamentAbandon.textContent = T("tournament.startNew");
+    btnTournamentAbandon.classList.toggle("hidden", !t.champion);
+    document.getElementById("btn-tournament-more").classList.toggle("hidden", !!t.champion);
+    document.getElementById("btn-tournament-bracket-tv").textContent = T(document.body.getAttribute("data-tournament-tv") === "bracket" ? "tournament.tvExit" : "tournament.bracketTvButton");
     var manage = document.getElementById("tournament-manage-row");
     manage.classList.toggle("hidden", !!t.champion);
     document.getElementById("tournament-tables-count").textContent = String(t.tableCount || 1);
@@ -34158,6 +34422,21 @@
       tournamentChampionBanner.classList.add("hidden");
       tournamentChampionBanner.textContent = "";
     }
+    // the final placings, once it's over (P20)
+    var placingsEl = document.getElementById("tournament-placings");
+    placingsEl.innerHTML = "";
+    placingsEl.classList.toggle("hidden", !t.champion);
+    if (t.champion) {
+      (t.placings || tournamentPlacings(t)).forEach(function (group) {
+        var li = document.createElement("li");
+        var place = document.createElement("span");
+        place.className = "tournament-placing-place";
+        place.textContent = placingLabel(group);
+        li.appendChild(place);
+        li.appendChild(document.createTextNode(" " + group.names.join(", ")));
+        placingsEl.appendChild(li);
+      });
+    }
 
     tournamentReadyList.innerHTML = "";
     tournamentCurrentMatchPanel.innerHTML = "";
@@ -34171,6 +34450,10 @@
     if (t.tableCount <= 1 && t.activeMatches.length) return;
     if (t.champion) return;
 
+    if (t.playoffPending) {
+      tournamentReadyList.appendChild(buildPlayoffPrompt(t));
+      return;
+    }
     var ready = pendingBracketMatches(t);
     if (t.activeMatches.length) {
       var busyMatchIds = {};
@@ -34204,7 +34487,7 @@
       li.className = "tournament-ready-row" + (isMarqueeTournamentMatch(t, m) ? " is-marquee" : "");
       var tag = document.createElement("span");
       tag.className = "tournament-ready-tag";
-      tag.textContent = m.tag;
+      tag.textContent = matchTagLabel(m.tag);
       var text = document.createElement("span");
       text.className = "tournament-ready-names";
       text.appendChild(document.createTextNode(m.a));
@@ -34523,7 +34806,9 @@
     challongePanelSummary.textContent = T(summaryKey);
     if (challongePanelSummaryLeague) challongePanelSummaryLeague.textContent = T(summaryKey);
     if (tournamentChallongeStatusLine) {
-      tournamentChallongeStatusLine.textContent = T(connected ? "challonge.summaryConnected" : "challonge.notConnectedSeeMainScreen");
+      // (only when Challonge is set up - nothing to say to everyone else)
+      tournamentChallongeStatusLine.textContent = connected ? T("challonge.summaryConnected") : "";
+      tournamentChallongeStatusLine.classList.toggle("hidden", !connected);
     }
   }
   challongeClientIdInput.value = loadChallongeClientId();
@@ -38787,6 +39072,19 @@
     if (!stillAllChecked) tournamentSelectAllCheckbox.checked = false;
   });
   btnTournamentAbandon.addEventListener("click", abandonTournament);
+  // ⋯ More: what's rarely needed and can't be undone (P20) - Abandon
+  document.getElementById("btn-tournament-more").addEventListener("click", function () {
+    tournamentChooser(T("tournament.moreTitle"), [{ label: T("tournament.abandon"), danger: true, id: "btn-tournament-menu-abandon", run: abandonTournament }]);
+  });
+  document.getElementById("btn-tournament-bracket-tv").addEventListener("click", function () { setTournamentTvMode("bracket"); });
+  document.getElementById("tournament-player-search").addEventListener("input", filterTournamentPlayerChecklist);
+  document.getElementById("btn-tournament-walkin").addEventListener("click", addTournamentWalkIn);
+  document.getElementById("tournament-walkin-name").addEventListener("keydown", function (e) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addTournamentWalkIn();
+    }
+  });
   btnTournamentPrint.addEventListener("click", function () { window.print(); });
   tournamentGameTypeSelect.addEventListener("change", function () {
     var type = GAME_TYPES[tournamentGameTypeSelect.value];

@@ -399,3 +399,24 @@ Not part of the app - helpers for testing and for running this machine's own cop
   written. `node tests/probe_accessibility.js [screenshot dir]`.
 - **tagalog_review.js** — writes docs/tagalog-review.md: the Tagalog strings still in English
   (identical to English, then mostly English words), for review. `node tests/tagalog_review.js`.
+- **test_tiebreaks.js** — round robin and Swiss tie-breaks (P20), no browser: level on wins →
+  head-to-head, rack difference, racks won (each split starting over with head-to-head); a circle
+  of three decided by rack difference; fully level → a shared place, at the top a playoff asked for
+  (played: it decides and orders the placings) or a shared title; a bye is a win with no racks;
+  placings "1st", "2nd", "3rd–4th"; round names by distance from the final (9 players → Round of
+  16; an old bracket's 5-match round → Quarterfinal). `node tests/test_tiebreaks.js`.
+- **test_swiss.js** — 1,000 simulated Swiss events (3-20 players, the default or a chosen number
+  of rounds, random results), the app's own pairing: no avoidable rematch (an exhaustive search
+  confirms every repeat was unavoidable), each player once a round, a bye only for an odd field
+  and a second bye only when every player without one would force a rematch, rounds = the
+  organizer's number or ceil(log2 n) and never more than n − 1 (n when odd), every event ends in a
+  champion or a playoff asked for; prints the old greedy pairing's avoidable rematches on the same
+  rounds. `node tests/test_swiss.js`.
+- **probe_tournament_tv.js** — tournament screens fit for a TV (P20) at 1920x1080, its own server
+  on 4275: the picker checks tonight's roster (not a past player), 🔎 search, ➕ walk-in; no
+  Challonge line unless it's set up; a Rounds box for Swiss only; the live board - names, the match
+  score ≥ 120 px with "/ 3", "Race to 3", one + each; 📺 TV fills the screen (score ≥ 200 px),
+  Escape leaves; Abandon only in ⋯ More; a round robin circle of 3-1 wins ends "=1" three times,
+  scores on every finished card, nobody struck out or crowned, a playoff asked for - played, Ben
+  1st, Ann 2nd, Cat 3rd in the standings, the placings and the stored result; 📺 Full-screen
+  bracket. `node tests/probe_tournament_tv.js [screenshot dir]`.

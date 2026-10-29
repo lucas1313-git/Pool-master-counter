@@ -6,7 +6,7 @@ Some are English on purpose - the app's Taglish keeps a few pool and app words a
 practice, Winner stays, bracket). Keep those where they read naturally; translate the rest.
 Written by `node tests/tagalog_review.js` - run it again after changes.
 
-## Identical to English (175)
+## Identical to English (183)
 
 | Key | English (= Tagalog now) |
 |---|---|
@@ -113,7 +113,6 @@ Written by `node tests/tagalog_review.js` - run it again after changes.
 | `scoreboard.focusMode` | Focus Mode |
 | `scoreboard.gameTargetLabel` | · Target |
 | `skunk.indicator` | 🦨 Skunk! |
-| `standings.buchholz` | Buchholz |
 | `standings.heading` | Standings |
 | `theme.neonArcade` | Neon Arcade |
 | `theme.opalShimmer` | Opal |
@@ -185,8 +184,17 @@ Written by `node tests/tagalog_review.js` - run it again after changes.
 | `report.colRace` | Race |
 | `report.colSkunk` | Skunk |
 | `report.colTournament` | Tournament |
+| `tournament.playoffTag` | Playoff |
+| `tournament.grandFinalReset` | Grand Final (bracket reset) |
+| `tournament.swissRound` | Swiss round |
+| `tournament.losersRound` | Losers round |
+| `tournament.winnersRound` | Winners round |
+| `tournament.roundN` | Round |
+| `tournament.swissRoundsAuto` | auto |
+| `tournament.tvButton` | 📺 TV |
+| `tournament.raceSessionLabel` | Race-to session |
 
-## Mostly English words (13)
+## Mostly English words (14)
 
 | Key | English | Tagalog now |
 |---|---|---|
@@ -203,3 +211,4 @@ Written by `node tests/tagalog_review.js` - run it again after changes.
 | `gameSheet.chShotOn` | Shot clock, a beep every s | Shot clock, beep tuwing s |
 | `tournament.newHeadingRoundRobin` | New Round Robin Tournament | Bagong Round Robin Tournament |
 | `common.logoAria` | Pool Master Counter logo | Logo ng Pool Master Counter |
+| `tournament.bracketTvButton` | 📺 Full-screen bracket | 📺 Full-screen na bracket |

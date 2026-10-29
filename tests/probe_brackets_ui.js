@@ -2,7 +2,7 @@
 // - 9 players, single elimination: a "Round of 16" with 7 byes in round 1 (shown as byes) and a
 //   champion after 8 matches;
 // - 6 players, double elimination: every winners match still to play says where its loser goes
-//   ("If you lose: Losers R..."), the losers bracket draws the matches as they fill, the event
+//   ("If you lose: Losers round 1"), the losers bracket draws the matches as they fill, the event
 //   reaches a champion; no page errors.
 // Its own file server on 4251.
 // usage: node tests/probe_brackets_ui.js [screenshot dir]
@@ -96,7 +96,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   // ---- 6 players, double elimination ----
   await startTournament("double", ["Ann", "Ben", "Cat", "Dan", "Eve", "Fay"]);
   const ifLose = await page.evaluate(() => [...document.querySelectorAll(".tournament-match-iflose")].map((e) => e.textContent));
-  check("6 players, double elimination: every winners match still to play says where its loser goes (\"If you lose: Losers R...\")", ifLose.length >= 2 && ifLose.every((s) => /^If you lose: Losers R\d$/.test(s)), ifLose);
+  check("6 players, double elimination: every winners match still to play says where its loser goes (\"If you lose: Losers round 1\")", ifLose.length >= 2 && ifLose.every((s) => /^If you lose: Losers round \d$/.test(s)), ifLose);
   let lbSeen = 0;
   const doubleMatches = await playAll();
   await sleep(1000);

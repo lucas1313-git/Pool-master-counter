@@ -173,7 +173,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const casual = (await ratings()).Zed;
   await page.evaluate(() => document.getElementById("btn-open-tournament").click());
   await sleep(500);
-  await page.evaluate(() => document.getElementById("btn-tournament-abandon").click());
+  // (Abandon lives in ⋯ More while it runs)
+  await page.evaluate(() => { document.getElementById("btn-tournament-more").click(); const b = document.getElementById("btn-tournament-menu-abandon"); if (b) b.click(); });
   await sleep(300);
   await okModal();
   await sleep(600);

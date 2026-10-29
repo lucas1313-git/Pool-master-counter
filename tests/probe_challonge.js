@@ -213,7 +213,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     fake.results(ct).length === played && ct.matches.filter((m) => m.state === "open").length === 6 - played && /^Joe's Bar — .* — Round Robin$/.test(ct.name), { status, name: ct.name, results: fake.results(ct) });
   await page.click("#btn-challonge-push-review-close");
   await sleep(300);
-  await page.evaluate(() => { const b = document.getElementById("btn-tournament-abandon"); if (b) b.click(); });
+  // (Abandon lives in ⋯ More while it runs)
+  await page.evaluate(() => { document.getElementById("btn-tournament-more").click(); const b = document.getElementById("btn-tournament-menu-abandon"); if (b) b.click(); });
   await sleep(300);
   await page.evaluate(() => document.querySelectorAll(".confirm-modal-overlay:not(.hidden) .btn-primary").forEach((b) => b.click()));
   await sleep(500);
