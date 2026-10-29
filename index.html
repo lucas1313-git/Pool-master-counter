@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261029a">
+<link rel="stylesheet" href="css/style.css?v=20261029b">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -347,6 +347,8 @@
       <button type="button" id="btn-board-game" class="board-topbar-btn board-game-btn" data-i18n-aria-label="board.gameAria" aria-label="Game settings"><span aria-hidden="true">🎱</span><span class="board-topbar-label" data-i18n="board.game">Game</span></button>
     </div>
     <div class="practice-badge hidden" id="practice-badge" role="status" data-i18n="practice.badge">PRACTICE · NOT SAVED</div>
+    <!-- Winner Stays: the winner's streak and who's next (js/app.js renderWinnerStaysLine) -->
+    <div class="winner-stays-line hidden" id="winner-stays-line" role="status"></div>
     <div class="row voice-toggle-row">
       <span class="focus-mode-group">
         <button type="button" id="btn-toggle-focus" class="btn btn-primary focus-toggle-btn" data-i18n="scoreboard.focusMode">Focus Mode</button>
@@ -1232,6 +1234,12 @@
       </div>
       <p class="gs-note hidden" id="gs-teams-note" data-i18n="gameSheet.teamsSplit">Whoever's playing is split between A and B, one each in turn.</p>
       <label class="gs-toggle"><input type="checkbox" id="gs-winner-stays"> <span data-i18n="gameSheet.winnerStays">🎱 Winner Stays - the loser goes to the back of the line</span></label>
+      <div class="gs-row gs-subrow" id="gs-max-streak-row">
+        <label class="gs-label" for="gs-max-streak" data-i18n="gameSheet.maxStreak">Most wins in a row</label>
+        <span class="gs-stepper"><button type="button" class="gs-step" data-for="gs-max-streak" data-step="-1" aria-label="−">−</button><input type="number" id="gs-max-streak" class="gs-number" min="0" max="20" inputmode="numeric"><button type="button" class="gs-step" data-for="gs-max-streak" data-step="1" aria-label="+">+</button></span>
+        <span class="gs-unit-word" data-i18n="gameSheet.maxStreakHint">(0: no limit)</span>
+      </div>
+      <p class="gs-note hidden" id="gs-pairing-note" data-i18n="gameSheet.racePerPairing">With Winner Stays, the race is each pairing's: the first to it stays, the other goes to the back of the line.</p>
       <div class="gs-row">
         <label class="gs-toggle"><input type="checkbox" id="gs-timed"> <span data-i18n="gameSheet.timed">⏰ Timed</span></label>
         <span class="gs-stepper" id="gs-timed-stepper"><button type="button" class="gs-step" data-for="gs-timed-minutes" data-step="-5" aria-label="−">−</button><input type="number" id="gs-timed-minutes" class="gs-number" min="1" max="600" inputmode="numeric" data-i18n-aria-label="gameSheet.minutes" aria-label="minutes"><button type="button" class="gs-step" data-for="gs-timed-minutes" data-step="5" aria-label="+">+</button></span>
@@ -2878,13 +2886,13 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/pairing.js?v=20261029a"></script>
-<script src="js/big-store.js?v=20261029a"></script>
-<script src="js/mp4-clip.js?v=20261029a"></script>
-<script src="js/recording-consent.js?v=20261029a"></script>
-<script src="js/local-recorder.js?v=20261029a"></script>
-<script src="js/app.js?v=20261029a"></script>
-<script src="js/camera-client.js?v=20261029a"></script>
-<script src="js/voice.js?v=20261029a"></script>
+<script src="js/pairing.js?v=20261029b"></script>
+<script src="js/big-store.js?v=20261029b"></script>
+<script src="js/mp4-clip.js?v=20261029b"></script>
+<script src="js/recording-consent.js?v=20261029b"></script>
+<script src="js/local-recorder.js?v=20261029b"></script>
+<script src="js/app.js?v=20261029b"></script>
+<script src="js/camera-client.js?v=20261029b"></script>
+<script src="js/voice.js?v=20261029b"></script>
 </body>
 </html>

@@ -196,7 +196,9 @@ The scoreboard is the home screen: the app always opens on the board (Focus Mode
 - **🎱 Game** holds everything about the game: game type, target, race, rotation (with 8/9 alternate and 8/9/10 ready to pick), Winner Stays, teams (split A/B automatically), timer, shot clock and practice (not saved). Nothing changes until **Apply**, and the banner says what did.
 - **☰ Menu** holds everything else: ▶️ New game, Players, Tournament, League, Stats, Day Report, Backup & Restore, Camera, Recording, Voice, Challonge, Resets, Help, Theme and Language - and under More, the Setup Wizard, Multi Tables and the full page (**🎱 Back to the board** returns).
 - Each card is the name, the score, then a big **+**. A points game also has a small round − for a point taken back; undoing is ↩ Undo's job. **⇄** on a card swaps that player for someone on the bench (or someone new). The cards' drag handles only show in **☰ Menu › Players › Arrange the seats**. A card lights up for the shooter, and for a player on the hill.
-- With nobody playing yet, the board offers **▶️ New game**.
+- **Winner Stays**: two at the table, the rest in line. 8-Ball, 9-Ball, 10-Ball, Straight Pool, One Pocket and Snooker are two at a time - with three or more marked Playing, Winner Stays goes on by itself (the banner says so), so a rack only ever gives a result to the two who played it. The board shows the winner's streak ("🔥 Kim: 3 in a row") and who's next; seat changes are said in the banner. There's no race by default - pick **Race to n** with it in 🎱 Game for a race for each pairing (the first to it stays) - and an optional "most wins in a row".
+- **Teams**: whoever's playing is split A, B, A, B. One card per team - "Team A 3 – 2 Team B" above them - with one number and one big **+**; **Credit** (or the keypad's numbers) picks who potted the winning ball, if you want to.
+- With nobody playing yet, the board offers **▶️ New game**. Players added in the Setup Wizard are Playing straight away.
 
 ## Backup, import/export & data safety
 

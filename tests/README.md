@@ -337,3 +337,11 @@ Not part of the app - helpers for testing and for running this machine's own cop
 - `legible_colors.js` - not a probe: works out each theme's colours for the above (the nearest
   shade reaching 7:1 / Lc 75) and writes the CSS block that follows the themes in style.css.
   `node tests/legible_colors.js <out.css>`.
+- `probe_who_plays.js` - who's playing (4268): 8-Ball with four Playing turns Winner Stays on by
+  itself (two seated, the banner says so) and a rack only rates the two at the table; Winner Stays
+  shows "🔥 Kim: 3 in a row" and "Next up: Ann (then Bob)", seat changes in the banner with the
+  streak, no popup, no race; most wins in a row 2 sends Kim to the line; Winner Stays + Race to 2
+  is a race per pairing (2-0: Jo out, Ann in, 0-0, no race-won screen); wizard-added players are
+  Playing; 15 Ball Rotation keeps four seated; Teams split 2/2, one card per team (one +, one
+  number, "Team A 0 – 0 Team B", no scroll), the team's + credits nobody unless a player is picked.
+  `node tests/probe_who_plays.js [screenshot dir]`.

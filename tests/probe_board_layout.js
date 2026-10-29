@@ -38,7 +38,8 @@ function board(opts) {
   const players = [{ id: "k", name: "Kim", playing: true, balls: 0 }, { id: "j", name: "Jo", playing: true, balls: 0 }, { id: "a", name: "Ann", playing: !!opts.four, balls: 0 }, { id: "b", name: "Bob", playing: !!opts.four, balls: 0 }];
   return JSON.stringify({
     players, playerWins: opts.wins || { k: 2, j: 1 }, teamWins: {}, teamMvpWins: {}, gameHistory: [], gamesPlayedCount: 3,
-    currentGame: Object.assign({ gameType: "8ball", target: 1, unit: "rack", mode: "individual" }, opts.game || {}), raceToWinsTarget: 5, rotation: { enabled: false, order: [], every: 1 }
+    // (four at the table: Custom, by racks - 8-Ball is two at a time, Winner Stays would seat two)
+    currentGame: Object.assign({ gameType: opts.four ? "custom" : "8ball", target: 1, unit: "rack", mode: "individual" }, opts.game || {}), raceToWinsTarget: 5, rotation: { enabled: false, order: [], every: 1 }
   });
 }
 

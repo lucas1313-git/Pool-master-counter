@@ -794,6 +794,12 @@
   function isRacing() {
     return state.raceToWinsTarget > 1;
   }
+  // Winner Stays: two at the table, the rest in line - a race there is
+  // each pairing's (see creditWin), and the board shows the winner's
+  // streak and who's next instead.
+  function winnerStaysOn() {
+    return !quickCounterMode && state.currentGame.mode === "individual" && !!state.currentGame.queueEnabled;
+  }
   function raceReached(wins, key) {
     return isRacing() && wins > 0 && wins >= effectiveRaceTarget(key);
   }
@@ -801,7 +807,8 @@
   // Everyone at or past their race right now (individual: every player,
   // seated or waiting; teams: A and B), most wins first.
   function racePassedSides() {
-    if (!isRacing()) return [];
+    // (Winner Stays races are per pairing - see creditWin - never the session's)
+    if (!isRacing() || winnerStaysOn()) return [];
     var sides = [];
     if (state.currentGame.mode === "teams") {
       ["A", "B"].forEach(function (k) {
@@ -5352,66 +5359,24 @@
 
     if (state.fairRaceEnabled) panel.appendChild(buildFairRaceNote(effectiveRaceTarget(player.id)));
 
+    var streak = winnerStaysOn() && state.currentGame.queueStreak;
     if (cardOnHill(player)) {
       panel.classList.add("is-on-hill");
       var hill = document.createElement("span");
       hill.className = "card-hill-tag";
       hill.textContent = T("board.onHillTag");
       panel.appendChild(hill);
+    } else if (streak && streak.id === player.id && streak.count > 1) {
+      var run = document.createElement("span");
+      run.className = "card-hill-tag card-streak-tag";
+      run.textContent = T("winnerStays.streakTag", { count: streak.count });
+      panel.appendChild(run);
     }
 
     markAsKeypadTarget(panel, player);
     if (boardArrangeMode && activePlayers().length > 1) appendScoreCardDragHandle(panel, player, scoreboard);
 
     return panel;
-  }
-
-  function buildMemberCard(player, disabled, undoOnMinus, dragContainer, teamMemberCount) {
-    var card = document.createElement("div");
-    card.className = "member-card";
-
-    var name = document.createElement("div");
-    name.className = "member-name keypad-select-trigger";
-    name.addEventListener("click", function () {
-      selectKeypadPlayer(player.id, null, true);
-      window.PMCCameraBridge.resolveUnmatchedShooterPrompt(player.id);
-    });
-    buildPlayerNameLabel(name, player.name, false);
-    name.appendChild(buildPlayerLinkIcon(player.name));
-    card.appendChild(name);
-
-    // Not the team's win count (that's the team panel's own badge).
-    // Normally how many times THIS member specifically potted the
-    // winning ball for the team (see the mvp selection in creditWin) -
-    // under Rotating Teams, shows this player's own running session
-    // win total instead (state.playerWins, the exact same counter/badge
-    // Individual mode's own card already uses) since per-player wins,
-    // not who happened to pot the last ball, is the whole point once
-    // partners change game to game.
-    var showSessionWins = state.rotatingTeamsEnabled;
-    var mvpWins = showSessionWins ? state.playerWins[player.id] || 0 : state.teamMvpWins[player.id] || 0;
-    card.appendChild(buildStatMini(T(isRacing() ? "scoreboard.tourneyWin" : "scoreboard.winsNoRace"), mvpWins, raceReached(mvpWins, player.teamId), "stat-mini-tourney"));
-
-    // Buttons sit above the score (between the name/badges and the
-    // number itself), same order as buildIndividualPanel's own card.
-    card.appendChild(buildBallControls(player, disabled, undoOnMinus));
-
-    var value = document.createElement("div");
-    value.className = "stat-value small keypad-select-trigger";
-    value.addEventListener("click", function () {
-      selectKeypadPlayer(player.id, null, true);
-      window.PMCCameraBridge.resolveUnmatchedShooterPrompt(player.id);
-    });
-    value.textContent = player.balls || 0;
-    applyScoreFlash(value, player);
-    card.appendChild(value);
-
-    var runBadge = buildRunStreakBadge(player);
-    if (runBadge) card.appendChild(runBadge);
-    markAsKeypadTarget(card, player);
-    if (boardArrangeMode && dragContainer && teamMemberCount > 1) appendScoreCardDragHandle(card, player, dragContainer);
-
-    return card;
   }
 
   // The persistent club team (see buildClubTeamBadge) every one of these
@@ -5448,8 +5413,13 @@
   // the usual win-progress stat and disables every member's +/- (the real
   // enforcement is adjustScore's own check; this is just the matching UI).
   function buildTeamPanel(teamId, members, opponentEmpty) {
+    // One card per team, the same anatomy as a player's: "Team A" and who's
+    // on it, one number (racks in a race, or the game's points), an
+    // optional "credit a player" pick (who potted the winning ball - the
+    // keypad's numbers pick them too), then one big + for the team.
     var panel = document.createElement("div");
-    panel.className = "team-panel";
+    panel.className = "player-panel card-v2 team-card";
+    panel.dataset.teamId = teamId;
 
     var sharedBanner = buildSharedTeamBanner(
       members.map(function (p) {
@@ -5459,9 +5429,13 @@
     if (sharedBanner) panel.appendChild(sharedBanner);
 
     var name = document.createElement("div");
-    name.className = "team-name";
-    name.textContent = teamLabelLive(teamId);
+    name.className = "player-name team-card-name";
+    name.textContent = T(teamId === "A" ? "gameSetup.teamA" : "gameSetup.teamB");
     panel.appendChild(name);
+    var who = document.createElement("div");
+    who.className = "team-card-members";
+    who.textContent = members.map(function (p) { return shortDisplayNameForPlayer(p); }).join(" & ");
+    panel.appendChild(who);
 
     if (opponentEmpty) {
       var warning = document.createElement("div");
@@ -5480,61 +5454,110 @@
       if (pronostic) panel.appendChild(buildRatingPronosticEl(pronostic));
     }
 
-    // The team-level score/session-win-count below is skipped entirely
-    // under Rotating Teams per explicit request - teamWins[teamId] is a
-    // running total for a persistent "Team A", which stops meaning much
-    // once whoever's actually on Team A changes game to game, and the
-    // current-game total is already visible as the sum of each member's
-    // own score on their own card just below.
-    if (!state.rotatingTeamsEnabled) {
-      var wins = state.teamWins[teamId] || 0;
-
-      // A single-rack game (the common case - standard 8-Ball etc.) has no
-      // meaningful "current rack progress" number to show (it's just 0 until
-      // the rack is won, then resets) - show the session win count big and
-      // prominent instead. Anything else (multiple racks to win one game, or
-      // a balls/points game) still shows the team's current-game total.
-      var isSingleRackGame = state.currentGame.unit === "rack" && state.currentGame.target === 1;
-
-      if (!isSingleRackGame) {
-        panel.appendChild(buildStatMini(T("scoreboard.pairedSessionWin"), wins, raceReached(wins, teamId)));
-      }
-
-      var block = document.createElement("div");
-      block.className = "stat-block";
-      var value = document.createElement("div");
-      value.className = "stat-value";
-      if (isSingleRackGame) {
-        // Still needs a label here - without it this number reads as an
-        // ambiguous score when it's actually the session win count.
-        var label = document.createElement("div");
-        label.className = "stat-label";
-        label.textContent = T("scoreboard.pairedSessionWinScore");
-        block.appendChild(label);
-        value.textContent = wins;
-        if (raceReached(wins, teamId)) value.appendChild(buildFlagSpan());
-      } else {
-        // No "[game] · target [n]" label here anymore - the "Now Playing"
-        // banner above the scoreboard already says both.
-        value.textContent = sumTeamBalls(teamId);
-      }
-      block.appendChild(value);
-      panel.appendChild(block);
+    var wins = state.teamWins[teamId] || 0;
+    var isSingleRackGame = state.currentGame.unit === "rack" && state.currentGame.target === 1;
+    if (!isSingleRackGame) {
+      panel.appendChild(buildStatMini(T("card.games"), isRacing() ? wins + " / " + effectiveRaceTarget(teamId) : wins, raceReached(wins, teamId), "stat-mini-tourney"));
     }
+    var block = document.createElement("div");
+    block.className = "stat-block";
+    var value = document.createElement("div");
+    value.className = "stat-value";
+    if (isSingleRackGame) {
+      var label = document.createElement("div");
+      label.className = "stat-label";
+      label.textContent = T("card.racks");
+      block.appendChild(label);
+      value.textContent = wins;
+      if (isRacing()) {
+        var of = document.createElement("span");
+        of.className = "stat-of";
+        of.textContent = " / " + effectiveRaceTarget(teamId);
+        value.appendChild(of);
+      }
+      if (raceReached(wins, teamId)) value.appendChild(buildFlagSpan());
+    } else {
+      value.textContent = sumTeamBalls(teamId);
+    }
+    block.appendChild(value);
+    panel.appendChild(block);
 
     if (state.fairRaceEnabled) panel.appendChild(buildFairRaceNote(effectiveRaceTarget(teamId)));
 
-    var memberWrap = document.createElement("div");
-    memberWrap.className = "team-members";
+    // credit a player (optional): the keypad's selection, when it's one of them
+    var credit = document.createElement("div");
+    credit.className = "team-credit-row";
+    var creditLabel = document.createElement("span");
+    creditLabel.className = "team-credit-label";
+    creditLabel.textContent = T("teams.credit");
+    credit.appendChild(creditLabel);
     members.forEach(function (p) {
-      // Scoped to this team's own memberWrap, not the whole scoreboard -
-      // per explicit request, reordering can only ever swap a member
-      // with a teammate, never across into the other team's cards.
-      memberWrap.appendChild(buildMemberCard(p, opponentEmpty, isSingleRackGame, memberWrap, members.length));
+      var chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "team-credit-chip";
+      chip.textContent = shortDisplayNameForPlayer(p);
+      chip.setAttribute("aria-pressed", keypadSelectedPlayerId === p.id ? "true" : "false");
+      chip.addEventListener("click", function () {
+        if (keypadSelectedPlayerId === p.id) {
+          keypadSelectedPlayerId = null;
+          renderScoreboard();
+        } else {
+          selectKeypadPlayer(p.id, null, true);
+        }
+      });
+      markAsKeypadTarget(chip, p);
+      credit.appendChild(chip);
     });
-    panel.appendChild(memberWrap);
+    panel.appendChild(credit);
+
+    var networkBlocked = networkMode === "guest" && !networkHostConnected;
+    var plusZone = document.createElement("div");
+    plusZone.className = "card-plus-zone";
+    if (!isSingleRackGame) {
+      var minus = document.createElement("button");
+      minus.type = "button";
+      minus.className = "btn-ball minus card-minus";
+      minus.textContent = "−";
+      minus.setAttribute("aria-label", T("teams.minusAria", { team: name.textContent }));
+      minus.disabled = opponentEmpty || networkBlocked;
+      minus.addEventListener("click", function () { teamScore(teamId, -1); });
+      plusZone.appendChild(minus);
+    }
+    var plus = document.createElement("button");
+    plus.type = "button";
+    plus.className = "btn-ball plus";
+    plus.textContent = "+";
+    plus.setAttribute("aria-label", T("teams.plusAria", { team: name.textContent }));
+    plus.disabled = opponentEmpty || networkBlocked;
+    plus.addEventListener("click", function () { teamScore(teamId, 1); });
+    plusZone.appendChild(plus);
+    panel.appendChild(plusZone);
 
     return panel;
+  }
+
+  // The team's +/−: for the picked player (see the credit row), or -
+  // nobody picked - the team's first player, with nobody credited for
+  // the winning ball (teamScoreUncredited, read by creditWin).
+  var teamScoreUncredited = false;
+  // (the streak a Winner Stays win made, for its banner - see renderWinBanner)
+  var lastWinStreak = null;
+  function teamScore(teamId, delta) {
+    var members = teamMembersLive(teamId);
+    if (!members.length) return;
+    var picked = members.filter(function (p) { return p.id === keypadSelectedPlayerId; })[0];
+    var who = picked || (delta < 0 ? members.filter(function (p) { return (p.balls || 0) > 0; })[0] || members[0] : members[0]);
+    teamScoreUncredited = !picked;
+    requestAdjustScore(who.id, delta);
+    teamScoreUncredited = false;
+  }
+
+  // "Team A 3 – 2 Team B" over the two team cards
+  function buildTeamsHeader() {
+    var el = document.createElement("div");
+    el.className = "teams-header";
+    el.textContent = T("teams.header", { a: state.teamWins.A || 0, b: state.teamWins.B || 0 });
+    return el;
   }
 
   function renderNowPlayingBanner() {
@@ -6333,6 +6356,41 @@
     renderBoardStatus();
   }
 
+  // ---- two at the table ----
+  // 8-Ball and the like are played two at a time: with three or more
+  // seated and Winner Stays off, every rack would put everyone else down
+  // as losers (and lower their ratings) - so Winner Stays goes on by
+  // itself, two at the table and the rest in line, and the banner says so.
+  // (15 Ball Rotation and Custom can be played by more.)
+  var TWO_PLAYER_GAME_TYPES = ["8ball", "8ballrotation", "8ballpunishment", "9ball", "10ball", "straight", "onepocket", "snooker"];
+  function needsTwoAtTheTable() {
+    return !quickCounterMode && state.currentGame.mode === "individual" && !state.currentGame.queueEnabled &&
+      TWO_PLAYER_GAME_TYPES.indexOf(state.currentGame.gameType) !== -1 && activePlayers().length > 2;
+  }
+  function seatTwoAtTheTable() {
+    queueModeCheckbox.checked = true;
+    fireChange(queueModeCheckbox); // (benches all but two - see its handler - and draws the board again)
+    var seated = activePlayers(), line = effectiveQueue();
+    if (seated.length < 2) return;
+    showBannerNotice(T("winnerStays.autoOn", { game: GAME_TYPES[state.currentGame.gameType].label, a: seated[0].name, b: seated[1].name, next: line.length ? line[0].name : "" }));
+  }
+
+  // "🔥 Luc: 4 in a row · Next up: Alex (then Bob)" under the top bar, in Winner Stays
+  function renderWinnerStaysLine() {
+    var el = document.getElementById("winner-stays-line");
+    if (!el) return;
+    var on = winnerStaysOn();
+    var parts = [];
+    if (on) {
+      var streak = state.currentGame.queueStreak, holder = streak && getPlayer(streak.id);
+      if (holder && holder.playing && streak.count > 0) parts.push(T("winnerStays.streak", { name: holder.name, count: streak.count }));
+      var line = effectiveQueue();
+      if (line.length) parts.push(line.length > 1 ? T("winnerStays.nextThen", { next: line[0].name, then: line.slice(1, 3).map(function (p) { return p.name; }).join(", ") }) : T("winnerStays.next", { next: line[0].name }));
+    }
+    el.textContent = parts.join(" · ");
+    el.classList.toggle("hidden", !parts.length);
+  }
+
   // ---- 🎱 Game ----
   var GAME_SHEET_ROTATIONS = { "8-9": ["8ball", "9ball"], "8-9-10": ["8ball", "9ball", "10ball"] };
   function rotationPresetOrder(key) {
@@ -6396,6 +6454,7 @@
     gsEl("gs-rotation-every").value = state.rotation.every || 1;
     gsRadio("gs-mode", state.currentGame.mode === "teams" ? "teams" : "individual");
     gsEl("gs-winner-stays").checked = !!state.currentGame.queueEnabled;
+    gsEl("gs-max-streak").value = state.currentGame.queueMaxStreak || 0;
     gsEl("gs-timed").checked = !!state.currentGame.timedTournamentEnabled;
     gsEl("gs-timed-minutes").value = state.currentGame.timedTournamentMinutes || timedTournamentMinutesInput.value || 60;
     gsEl("gs-shot-clock").checked = !!state.currentGame.shotCounterEnabled;
@@ -6420,6 +6479,9 @@
     var teams = gsRadioValue("gs-mode") === "teams";
     gsEl("gs-teams-note").classList.toggle("hidden", !teams || state.currentGame.mode === "teams");
     gsEl("gs-winner-stays").disabled = teams;
+    var stays = !teams && gsEl("gs-winner-stays").checked;
+    gsEl("gs-max-streak-row").classList.toggle("hidden", !stays);
+    gsEl("gs-pairing-note").classList.toggle("hidden", !(stays && gsRadioValue("gs-race") === "race"));
     gsEl("gs-timed-stepper").classList.toggle("is-off", !gsEl("gs-timed").checked);
     gsEl("gs-shot-stepper").classList.toggle("is-off", !gsEl("gs-shot-clock").checked);
   }
@@ -6435,6 +6497,7 @@
       every: gsNumber("gs-rotation-every", state.rotation.every || 1),
       mode: gsRadioValue("gs-mode") || "individual",
       winnerStays: gsEl("gs-winner-stays").checked,
+      maxStreak: Math.max(0, Math.min(20, parseInt(gsEl("gs-max-streak").value, 10) || 0)),
       timed: gsEl("gs-timed").checked,
       timedMinutes: gsNumber("gs-timed-minutes", 60),
       shotClock: gsEl("gs-shot-clock").checked,
@@ -6492,6 +6555,9 @@
 
   function applyGameSheetWith(want) {
     var changes = [];
+    // Winner Stays with a race: a race for each pairing, chosen here (see
+    // the Winner Stays switch, which drops a race chosen before it)
+    state.currentGame.queueRaceChosen = want.winnerStays && want.race > 1;
 
     if (want.practice !== noStatsMode) {
       setPracticeMode(want.practice);
@@ -6551,6 +6617,11 @@
       queueModeCheckbox.checked = want.winnerStays;
       fireChange(queueModeCheckbox);
       changes.push(T(want.winnerStays ? "gameSheet.chWinnerOn" : "gameSheet.chWinnerOff"));
+    }
+    if (want.winnerStays && want.maxStreak !== (state.currentGame.queueMaxStreak || 0)) {
+      state.currentGame.queueMaxStreak = want.maxStreak;
+      saveState();
+      changes.push(want.maxStreak ? T("gameSheet.chMaxStreak", { n: want.maxStreak }) : T("gameSheet.chMaxStreakOff"));
     }
 
     var minutesChanged = want.timedMinutes !== (state.currentGame.timedTournamentMinutes || parseInt(timedTournamentMinutesInput.value, 10));
@@ -6963,7 +7034,12 @@
   function renderScoreboard() {
     postRecorderContext(); // (the recording page names its cues from what's shown)
     var active = activePlayers();
+    if (needsTwoAtTheTable()) {
+      seatTwoAtTheTable();
+      return;
+    }
     renderBoardStatus();
+    renderWinnerStaysLine();
     scheduleFitScoreDigits();
     // One player seated and nobody to play: the board offers a game
     // with them already filled in (see openQuickGameModalWith).
@@ -7013,6 +7089,7 @@
       scoreboard.className = "scoreboard scoreboard-teams";
       var teamAMembers = teamMembersLive("A");
       var teamBMembers = teamMembersLive("B");
+      scoreboard.appendChild(buildTeamsHeader());
       [
         { id: "A", members: teamAMembers, opponentEmpty: teamBMembers.length === 0 },
         { id: "B", members: teamBMembers, opponentEmpty: teamAMembers.length === 0 }
@@ -7673,7 +7750,8 @@
       members.forEach(function (p) {
         state.playerWins[p.id] = (state.playerWins[p.id] || 0) + 1;
       });
-      var mvp = members.reduce(function (best, p) {
+      // (the team's + with nobody picked: the team's win, nobody's ball)
+      var mvp = teamScoreUncredited ? null : members.reduce(function (best, p) {
         return !best || (p.balls || 0) > (best.balls || 0) ? p : best;
       }, null);
       if (mvp) {
@@ -7706,7 +7784,11 @@
       var newPlayerWins = (state.playerWins[key] || 0) + 1;
       state.playerWins[key] = newPlayerWins;
       summary = getPlayer(key).name + " won " + typeLabel + " (target " + state.currentGame.target + ")";
-      if (raceReached(newPlayerWins, key)) {
+      // Winner Stays: each rack decides who stays - or, with a race chosen
+      // for it, each pairing's race (the session's race never ends here)
+      var winnerStays = winnerStaysOn();
+      var pairingWon = winnerStays && (!isRacing() || newPlayerWins >= effectiveRaceTarget(key));
+      if (!winnerStays && raceReached(newPlayerWins, key)) {
         milestoneNames = getPlayer(key).name;
         milestoneCount = newPlayerWins;
       } else if (isRacing() && target > 1 && newPlayerWins === target - 1) {
@@ -7740,7 +7822,12 @@
       // togglePlaying and the enable-checkbox logic), so opponentNames
       // above is already just the one real opponent - no change needed
       // to the win-crediting/rating math itself.
-      if (state.currentGame.mode === "individual" && state.currentGame.queueEnabled) {
+      if (winnerStays && pairingWon) {
+        // the winner's streak: pairings (racks) won in a row at the table
+        var streak = state.currentGame.queueStreak;
+        streak = streak && streak.id === key ? { id: key, count: streak.count + 1 } : { id: key, count: 1 };
+        state.currentGame.queueStreak = streak;
+        lastWinStreak = { ts: null, count: streak.count }; // (its ts once there is one, below)
         var loser = activePlayers().filter(function (p) {
           return p.id !== key;
         })[0];
@@ -7753,8 +7840,25 @@
             nextUp.playing = true;
             nextUp.balls = 0;
             waitingQueue.push(loser);
-            saveQueue(waitingQueue);
             queueSwapInfo = { newName: nextUp.name, benchedName: loser.name };
+            // "max N wins in a row": the winner sits too, the next in line comes in
+            var maxStreak = state.currentGame.queueMaxStreak || 0;
+            var winnerPlayer = getPlayer(key);
+            if (maxStreak > 0 && streak.count >= maxStreak && waitingQueue.length > 0) {
+              winnerPlayer.playing = false;
+              winnerPlayer.balls = 0;
+              var nextAfter = waitingQueue.shift();
+              nextAfter.playing = true;
+              nextAfter.balls = 0;
+              waitingQueue.push(winnerPlayer);
+              queueSwapInfo.maxed = { name: winnerPlayer.name, count: streak.count, next: nextAfter.name };
+              state.currentGame.queueStreak = null;
+            }
+            saveQueue(waitingQueue);
+            // a race each pairing: the new pairing starts at 0 - 0
+            if (isRacing()) {
+              activePlayers().forEach(function (p) { state.playerWins[p.id] = 0; });
+            }
           }
         }
       }
@@ -7842,6 +7946,7 @@
     // (no shot before the winning point itself - no real duration to keep)
     if (durationMs !== null && durationMs < 1000) durationMs = null;
     var ts = new Date().toISOString();
+    if (lastWinStreak && lastWinStreak.ts === null) lastWinStreak.ts = ts;
     state.gameHistory.unshift({
       ts: ts,
       gameType: state.currentGame.gameType,
@@ -7930,6 +8035,7 @@
       notices.push({ text: T("gamechange.nowPlaying", { label: GAME_TYPES[state.currentGame.gameType].label + " (" + state.currentGame.target + " " + unitLabel(state.currentGame.unit) + ")" }) });
     }
     if (queueSwapInfo) notices.push({ text: T("queueswap.message", { newName: queueSwapInfo.newName, benchedName: queueSwapInfo.benchedName }), sticky: loadQueueSwapSticky() });
+    if (queueSwapInfo && queueSwapInfo.maxed) notices.push({ text: T("winnerStays.maxed", queueSwapInfo.maxed) });
     if (onHillNames) playOnHillSound();
     else if (gameTypeChanged || queueSwapInfo) playPositiveSound(null);
     if (fresh) fresh.gameNumber = gameNumber;
@@ -8347,8 +8453,11 @@
       var main = document.createElement("div");
       main.className = "win-banner-main";
       var n = entry.gameNumber || state.gamesPlayedCount;
+      // (Winner Stays, a rack each: the tally is against several players -
+      // the winner's streak says more)
+      var streakHere = winnerStaysOn() && !isRacing() && lastWinStreak && lastWinStreak.ts === entry.ts ? lastWinStreak.count : 0;
       main.textContent = T(entry.target > 1 && entry.unit === "rack" ? "banner.wonGame" : "banner.wonRack", { name: (entry.winnerNames || []).join(" & "), n: n }) +
-        (winBannerScore(entry) ? " · " + winBannerScore(entry) : "");
+        (winnerStaysOn() && !isRacing() ? (streakHere > 1 ? " · " + T("winnerStays.streakTag", { count: streakHere }) : "") : winBannerScore(entry) ? " · " + winBannerScore(entry) : "");
       winBannerEl.appendChild(main);
       var actions = document.createElement("div");
       actions.className = "win-banner-actions";
@@ -34764,6 +34873,8 @@
   Array.prototype.forEach.call(modeRadios, function (radio) {
     radio.addEventListener("change", function () {
       if (!radio.checked) return;
+      // Teams: whoever's playing goes A, B, A, B... (not all on Team A)
+      if (radio.value === "teams" && state.currentGame.mode !== "teams") splitPlayingIntoTeams();
       state.currentGame.mode = radio.value;
       saveState();
       renderAll();
@@ -34788,6 +34899,18 @@
   });
   queueModeCheckbox.addEventListener("change", function () {
     state.currentGame.queueEnabled = queueModeCheckbox.checked;
+    state.currentGame.queueStreak = null;
+    // Winner Stays plays one rack each pairing unless a race for each
+    // pairing was chosen with it (🎱 Game: Winner Stays + Race to n) -
+    // a race set before was a race between two players, not this
+    if (queueModeCheckbox.checked && state.raceToWinsTarget > 1 && !state.currentGame.queueRaceChosen) {
+      lastRaceToWinsTarget = state.raceToWinsTarget;
+      state.raceToWinsTarget = 1;
+      state.fairRaceTargets = null;
+      syncRaceModeRadios();
+      renderRaceMode();
+    }
+    if (!queueModeCheckbox.checked) state.currentGame.queueRaceChosen = false;
     if (queueModeCheckbox.checked) {
       var seated = activePlayers();
       seated.slice(2).forEach(function (p) {
@@ -37426,6 +37549,13 @@
     var alreadyRated = starting !== null && starting !== DEFAULT_RATING && !!findRatingKey(resolvePlayerName(trimmed));
     var player = addPlayer(wizardNewPlayerName.value, starting === null ? undefined : starting);
     if (!player) return;
+    // Someone added while setting up is here to play: Playing at once (with
+    // Winner Stays already two at the table, they join the line instead)
+    if (!(state.currentGame.queueEnabled && activePlayers().length >= 2)) {
+      player.playing = true;
+      if (!player.teamId) player.teamId = "A";
+      saveState();
+    }
     wizardNewPlayerName.value = "";
     wizardNewPlayerRatingInput.value = String(DEFAULT_RATING);
     validateWizardNewPlayerNameInput();

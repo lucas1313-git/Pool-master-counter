@@ -10368,7 +10368,8 @@ body.has-not-saved-banner #app {
   top: 10px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 1250;
+  /* over the board, under any sheet or dialog (they're 1200 and up) */
+  z-index: 1150;
   width: min(640px, calc(100vw - 24px));
   box-sizing: border-box;
   background: var(--modal-surface);
@@ -11098,4 +11099,84 @@ body.win-banner-up .page-toast {
   font-weight: 800;
   font-size: 1rem;
   cursor: pointer;
+}
+
+/* Winner Stays: the streak and who's next, under the top bar */
+.winner-stays-line {
+  margin: 0 auto 8px;
+  padding: 4px 16px;
+  text-align: center;
+  font-weight: 800;
+  font-size: clamp(1.05rem, 2.2vw, 1.5rem);
+  color: var(--board-text);
+}
+.card-streak-tag {
+  background: var(--card-label);
+  color: var(--card-top);
+}
+
+/* ---- Teams: one card per team (see buildTeamPanel) ---- */
+.teams-header {
+  grid-column: 1 / -1;
+  text-align: center;
+  font-weight: 800;
+  font-size: clamp(1.2rem, 3vw, 2rem);
+  color: var(--board-text);
+  padding: 2px 0 6px;
+}
+#app.focus-mode .scoreboard.scoreboard-teams {
+  grid-template-rows: auto minmax(340px, 1fr);
+}
+.team-card .team-card-members {
+  font-size: clamp(14px, 5cqw, 24px);
+  font-weight: 700;
+  color: var(--card-label);
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.team-credit-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+}
+.team-credit-label {
+  font-size: clamp(14px, 4cqw, 18px);
+  font-weight: 700;
+  color: var(--card-label);
+}
+.team-credit-chip {
+  position: relative;
+  min-height: 44px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 2px solid var(--border);
+  background: rgba(0, 0, 0, 0.3);
+  color: var(--card-text);
+  font-weight: 700;
+  font-size: clamp(14px, 4.5cqw, 20px);
+  cursor: pointer;
+}
+.team-credit-chip.is-keypad-selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+  box-shadow: none;
+}
+/* (the keypad's number rides on the chip, small) */
+#app .player-panel .team-credit-chip .keypad-number-badge {
+  position: static;
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  font-size: 14px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+#app .player-panel .team-credit-chip .keypad-number-badge:empty {
+  display: none;
 }

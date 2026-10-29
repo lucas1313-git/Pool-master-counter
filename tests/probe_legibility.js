@@ -33,7 +33,8 @@ function board(opts) {
   return JSON.stringify({
     players: [{ id: "k", name: opts.longName ? "Maximilian Alexander-Fitzgerald" : "Kim", playing: true, balls: 0 }, { id: "j", name: "Jo", playing: true, balls: 0 }, { id: "a", name: "Ann", playing: opts.two ? false : true, balls: 0 }, { id: "b", name: "Bob", playing: opts.two ? false : true, balls: 0 }],
     playerWins: { k: 2, j: 1 }, teamWins: {}, teamMvpWins: {}, gameHistory: [], gamesPlayedCount: 3,
-    currentGame: Object.assign({ gameType: "8ball", target: 1, unit: "rack", mode: "individual" }, opts.game || {}), raceToWinsTarget: 5, rotation: { enabled: false, order: [], every: 1 }
+    // (four at the table: Custom, by racks - 8-Ball is two at a time, Winner Stays would seat two)
+    currentGame: Object.assign({ gameType: opts.two ? "8ball" : "custom", target: 1, unit: "rack", mode: "individual" }, opts.game || {}), raceToWinsTarget: 5, rotation: { enabled: false, order: [], every: 1 }
   });
 }
 
