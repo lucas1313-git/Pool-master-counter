@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261029o">
+<link rel="stylesheet" href="css/style.css?v=20261029p">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -334,6 +334,11 @@
          the game's settings (js/app.js renderBoardStatus, openGameSheet, openBoardMenu) - nothing
          on the board changes a setting by itself. -->
     <div class="camera-trouble-banner hidden" id="camera-trouble-banner" role="alert"></div>
+    <div class="voice-heard-banner hidden" id="voice-heard-banner" role="status">
+      <div class="voice-heard-text" id="voice-heard-text"></div>
+      <div class="voice-heard-result" id="voice-heard-result"></div>
+      <button type="button" class="btn voice-heard-undo" id="btn-voice-heard-undo" data-i18n="voice.undoButton">↩ Undo</button>
+    </div>
     <div class="board-topbar" id="board-topbar">
       <button type="button" id="btn-board-menu" class="board-topbar-btn" data-i18n-aria-label="board.menuAria" aria-label="Menu"><span aria-hidden="true">☰</span><span class="board-topbar-label" data-i18n="board.menu">Menu</span></button>
       <div class="board-status" id="board-status"></div>
@@ -1403,6 +1408,11 @@
         <label for="keypad-speech-voice-select" id="keypad-speech-voice-label" class="hidden" data-i18n="keypad.voiceLabel">Voice</label>
         <select id="keypad-speech-voice-select" class="hidden" data-i18n-aria-label="keypad.voiceLabel" aria-label="Voice"></select>
       </span>
+        <div class="voice-clicker-row">
+          <button type="button" id="btn-voice-clicker" class="btn btn-ghost" data-i18n="voice.clickerSet">🎮 Use a clicker to talk</button>
+          <button type="button" id="btn-voice-clicker-forget" class="btn btn-ghost hidden" data-i18n="voice.clickerForget">Forget the clicker</button>
+          <p class="gs-note" id="voice-clicker-status"></p>
+        </div>
         <p class="gs-note" data-i18n="board.voiceTalkNote">🎤 Talk on the board: hold it and say what happened ("Kim wins the game") - tap it for every sentence it knows.</p>
       </div>
     </div>
@@ -3054,18 +3064,18 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/pairing.js?v=20261029o"></script>
-<script src="js/big-store.js?v=20261029o"></script>
-<script src="js/mp4-clip.js?v=20261029o"></script>
-<script src="js/recording-consent.js?v=20261029o"></script>
-<script src="js/local-recorder.js?v=20261029o"></script>
-<script src="js/app.js?v=20261029o"></script>
-<script src="js/camera-client.js?v=20261029o"></script>
-<script src="js/voice.js?v=20261029o"></script>
+<script src="js/pairing.js?v=20261029p"></script>
+<script src="js/big-store.js?v=20261029p"></script>
+<script src="js/mp4-clip.js?v=20261029p"></script>
+<script src="js/recording-consent.js?v=20261029p"></script>
+<script src="js/local-recorder.js?v=20261029p"></script>
+<script src="js/app.js?v=20261029p"></script>
+<script src="js/camera-client.js?v=20261029p"></script>
+<script src="js/voice.js?v=20261029p"></script>
 <script>
   // The app opens with no network (sw.js, P21) - on http(s) only, not in the iOS app
   if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol) && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
-    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261029o").catch(function () {}); });
+    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261029p").catch(function () {}); });
   }
 </script>
 </body>

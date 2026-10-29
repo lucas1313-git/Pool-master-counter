@@ -102,7 +102,7 @@ check("5 balls left", { type: "ballsLeft", n: 5 });
 check("seven balls left on the table", { type: "ballsLeft", n: 7 });
 check("Nice game", { type: "confirmWin" });
 check("ok", { type: "confirmWin" });
-check("Undo", { type: "undoWin" });
+check("Undo", { type: "undo" });
 check("yes", { type: "answer", yes: true });
 
 // --- questions ---
@@ -142,6 +142,54 @@ check("set session Luigi and Luc are playing", { type: "session", players: null,
 check("set session race to 5 players are Luigi Zelda and Luc", { error: "unknown" });
 check("add one point to Sammy", { type: "points", n: 1, name: "Samantha" });
 check("what is Big Mike's q score", { type: "qscore", name: "Mario" });
+
+// --- the app's language (P28): its main sentences turned into the English ones ---
+function checkIn(lang, text, expect) {
+  var saved = ctx.lang;
+  ctx.lang = lang;
+  check(text, expect);
+  ctx.lang = saved;
+}
+// French
+checkIn("french", "Ajoute trois points à Luigi", { type: "points", n: 3, name: "Luigi" });
+checkIn("french", "ajoutez 12 points pour Luc", { type: "points", n: 12, name: "Luc" });
+checkIn("french", "quatre-vingt-dix points pour Luc", { type: "points", n: 90, name: "Luc" });
+checkIn("french", "vingt et un points à Luigi", { type: "points", n: 21, name: "Luigi" });
+checkIn("french", "soixante-quinze points pour Luc", { type: "points", n: 75, name: "Luc" });
+checkIn("french", "cent cinquante points pour Luigi", { type: "points", n: 150, name: "Luigi" });
+checkIn("french", "Luigi plus deux", { type: "points", n: 2, name: "Luigi" });
+checkIn("french", "Luc moins un", { type: "points", n: -1, name: "Luc" });
+checkIn("french", "enlève un point à Luc", { type: "points", n: -1, name: "Luc" });
+checkIn("french", "ajoute un point", { type: "points", n: 1, name: null });
+checkIn("french", "Luigi gagne", { type: "win", name: "Luigi" });
+checkIn("french", "Luc a gagné la partie", { type: "win", name: "Luc" });
+checkIn("french", "annule", { type: "undo" });
+checkIn("french", "Quel est le score ?", { type: "score" });
+checkIn("french", "add 3 points to Luigi", { type: "points", n: 3, name: "Luigi" }); // (English still works)
+// Spanish
+checkIn("spanish", "Añade tres puntos a Luigi", { type: "points", n: 3, name: "Luigi" });
+checkIn("spanish", "treinta y cinco puntos para Luc", { type: "points", n: 35, name: "Luc" });
+checkIn("spanish", "veinticinco puntos para Luigi", { type: "points", n: 25, name: "Luigi" });
+checkIn("spanish", "ciento veinte puntos para Luc", { type: "points", n: 120, name: "Luc" });
+checkIn("spanish", "Luigi más dos", { type: "points", n: 2, name: "Luigi" });
+checkIn("spanish", "Luc menos uno", { type: "points", n: -1, name: "Luc" });
+checkIn("spanish", "quita un punto a Luc", { type: "points", n: -1, name: "Luc" });
+checkIn("spanish", "Luigi gana", { type: "win", name: "Luigi" });
+checkIn("spanish", "Luc ha ganado la partida", { type: "win", name: "Luc" });
+checkIn("spanish", "deshacer", { type: "undo" });
+checkIn("spanish", "¿Cuál es el marcador?", { type: "score" });
+// Tagalog and Cantonese: numbers, points, a win, undo
+checkIn("tagalog", "Dagdagan ng tatlong puntos kay Luigi", { type: "points", n: 3, name: "Luigi" });
+checkIn("tagalog", "Panalo si Luc", { type: "win", name: "Luc" });
+checkIn("tagalog", "bawiin", { type: "undo" });
+checkIn("cantonese", "加三分俾Luigi", { type: "points", n: 3, name: "Luigi" });
+checkIn("cantonese", "Luigi加十五分", { type: "points", n: 15, name: "Luigi" });
+checkIn("cantonese", "Luc減一分", { type: "points", n: -1, name: "Luc" });
+checkIn("cantonese", "Luc贏咗", { type: "win", name: "Luc" });
+checkIn("cantonese", "撤銷", { type: "undo" });
+// "undo" in English: the last thing said, whatever it was (not only a win)
+check("undo", { type: "undo" });
+check("go back", { type: "undo" });
 
 console.log((count - failures) + " / " + count + " sentences understood as expected");
 process.exit(failures ? 1 : 0);

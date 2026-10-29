@@ -29820,6 +29820,8 @@
   function voiceContext() {
     var selected = keypadSelectedPlayerId ? getPlayer(keypadSelectedPlayerId) : null;
     return {
+      // the app's language: its main sentences are understood in it too
+      lang: activeLanguageCode,
       sessionNames: state.players.map(function (p) { return p.name; }),
       playingNames: activePlayers().map(function (p) { return p.name; }),
       knownNames: contactSheetVisibleNames(),
@@ -29928,7 +29930,92 @@
     return winBannerShowsGame();
   }
 
+  // ---- "Undo": the last thing said, whatever it was ----
+  // Before each command that changes the board or the game, the state as it
+  // was (and the ↩ Undo stack's depth); "undo" (said, or the Heard banner's
+  // button) puts it back - a score through the ↩ Undo stack (ratings and
+  // all), anything else (the game, the race, the rotation, who's playing...)
+  // from that state. Only while nothing else changed the board since, and
+  // a win asks first (a misheard "undo" mustn't take a rack back).
+  var VOICE_UNDO_MS = 10 * 60 * 1000;
+  var VOICE_NOT_UNDOABLE = { help: 1, score: 1, qscore: 1, confirmWin: 1, answer: 1, recMark: 1, recFinish: 1, recAuto: 1, undo: 1, ballsLeft: 1 };
+  var lastVoiceAction = null; // { at, heard, kind, stateBefore, depth, depthAfter, boardAfter }
+  function voiceBoardKey() {
+    return JSON.stringify({
+      p: state.players.map(function (p) { return [p.id, p.balls, p.playing, p.teamId]; }),
+      w: state.playerWins, t: state.teamWins, h: state.gameHistory.length ? state.gameHistory[0].ts : null,
+      g: [state.currentGame.gameType, state.currentGame.target, state.currentGame.unit, state.currentGame.mode],
+      r: state.rotation, race: state.raceToWinsTarget, q: state.queue || []
+    });
+  }
   function voiceExecute(cmd) {
+    if (cmd.type === "undo") return voiceUndo();
+    var undoable = !VOICE_NOT_UNDOABLE[cmd.type];
+    var stateBefore = undoable ? JSON.stringify(state) : null, depth = undoStack.length;
+    var result = voiceExecuteCommand(cmd);
+    if (undoable && result && result.ok) {
+      lastVoiceAction = { at: Date.now(), heard: cmd.heard, kind: cmd.type, stateBefore: stateBefore, depth: depth, depthAfter: undoStack.length, boardAfter: voiceBoardKey() };
+      result.undoable = true;
+    }
+    return result;
+  }
+  function voiceUndo() {
+    var fail = function (text) { return { ok: false, text: text, speak: "never" }; };
+    var a = lastVoiceAction;
+    if (!a || Date.now() - a.at > VOICE_UNDO_MS) {
+      // nothing said lately: the win banner's rack, as before (it asks first)
+      if (voiceWinWindowOpen() && winBannerUndoable(winBanner.entry)) {
+        var undoing = winBanner.entry;
+        confirmModal(T("confirm.undoWin", { summary: undoing.summary }), function () { if (winBanner.entry === undoing) undoFromWinBanner(); });
+        return { ok: true, text: null };
+      }
+      return fail(T("voice.err.nothingToUndo"));
+    }
+    if (voiceBoardKey() !== a.boardAfter) return fail(T("voice.err.undoChangedSince", { heard: a.heard }));
+    var byStack = a.depthAfter > a.depth && undoStack.length === a.depthAfter;
+    var doIt = function () {
+      if (lastVoiceAction !== a) return;
+      lastVoiceAction = null;
+      if (a.kind === "win" && voiceWinWindowOpen() && winBannerUndoable(winBanner.entry)) { undoFromWinBanner(); return; }
+      if (byStack) {
+        while (undoStack.length > a.depth) undoLastAction();
+        if (winBanner && winBanner.entry) hideWinBanner();
+      } else {
+        var fresh = JSON.parse(a.stateBefore);
+        Object.keys(state).forEach(function (k) { delete state[k]; });
+        Object.keys(fresh).forEach(function (k) { state[k] = fresh[k]; });
+        saveState();
+        syncGameTypeUI();
+        renderAll();
+      }
+      hideVoiceHeard();
+      showToast(T("voice.done.undone", { heard: a.heard }), "↩ ");
+    };
+    if (a.kind === "win") { confirmModal(T("voice.confirmUndo", { heard: a.heard }), doIt); return { ok: true, text: null }; }
+    doIt();
+    return { ok: true, text: null };
+  }
+
+  // ---- "Heard: ..." - big, for 5 s, with Undo ----
+  var voiceHeardTimer = null;
+  function showVoiceHeard(heard, result) {
+    var el = document.getElementById("voice-heard-banner");
+    if (!el || !heard) return;
+    document.getElementById("voice-heard-text").textContent = T("voice.heard", { heard: heard });
+    document.getElementById("voice-heard-result").textContent = result && result.text ? result.text : "";
+    el.classList.toggle("voice-heard-missed", !!(result && result.ok === false));
+    document.getElementById("btn-voice-heard-undo").classList.toggle("hidden", !(result && result.undoable && lastVoiceAction));
+    el.classList.remove("hidden");
+    clearTimeout(voiceHeardTimer);
+    voiceHeardTimer = setTimeout(hideVoiceHeard, 5000);
+  }
+  function hideVoiceHeard() {
+    clearTimeout(voiceHeardTimer);
+    var el = document.getElementById("voice-heard-banner");
+    if (el) el.classList.add("hidden");
+  }
+
+  function voiceExecuteCommand(cmd) {
     var ok = function (text, speak) { return { ok: true, text: text, speak: speak || "ifOn" }; };
     var fail = function (text) { return { ok: false, text: text, speak: "never" }; };
     var p, names, ids, i, r;
@@ -30123,15 +30210,6 @@
         if (!voiceWinWindowOpen()) return fail(T("voice.err.noWinWindow"));
         hideWinBanner();
         return { ok: true, text: null };
-      case "undoWin": {
-        if (!voiceWinWindowOpen() || !winBannerUndoable(winBanner.entry)) return fail(T("voice.err.noWinWindow"));
-        // (asks first - "yes" / "no": a misheard "undo" mustn't take a rack back)
-        var undoing = winBanner.entry;
-        confirmModal(T("confirm.undoWin", { summary: undoing.summary }), function () {
-          if (winBanner.entry === undoing) undoFromWinBanner();
-        });
-        return { ok: true, text: null };
-      }
       case "answer":
         if (confirmModalOverlay.classList.contains("hidden")) return fail(T("voice.err.nothingToAnswer"));
         (cmd.yes ? btnConfirmModalOk : btnConfirmModalCancel).click();
@@ -30250,11 +30328,41 @@
   window.PMCVoiceBridge = {
     context: voiceContext,
     execute: voiceExecute,
+    heard: showVoiceHeard,
+    language: function () { return activeLanguageCode || "english"; },
+    undo: function () { return voiceUndo(); },
     t: function (key, vars) { return T(key, vars); },
     toast: function (text, icon) { showToast(text, icon); },
     speak: function (text, always) { speakKeypadText(text, !!always); },
     missSound: playVoiceMissSound
   };
+
+  document.getElementById("btn-voice-heard-undo").addEventListener("click", function () {
+    var r = voiceUndo();
+    if (r && r.ok === false && r.text) showToast(r.text, "⚠️ ");
+  });
+  // ☰ › Voice: a Bluetooth page-turner or clicker as the talk button (its
+  // key learned from one press - js/voice.js)
+  function renderVoiceClicker() {
+    var status = document.getElementById("voice-clicker-status");
+    if (!status || !window.PMCVoice || !window.PMCVoice.clickerKey) return;
+    var key = window.PMCVoice.clickerKey();
+    status.textContent = key ? T("voice.clickerIs", { key: key }) : T("voice.clickerNone");
+    document.getElementById("btn-voice-clicker-forget").classList.toggle("hidden", !key);
+  }
+  document.getElementById("btn-voice-clicker").addEventListener("click", function () {
+    if (!window.PMCVoice || !window.PMCVoice.learnClicker) return;
+    document.getElementById("voice-clicker-status").textContent = T("voice.clickerLearning");
+    window.PMCVoice.learnClicker(function (code) {
+      renderVoiceClicker();
+      if (code) showToast(T("voice.clickerIs", { key: code }), "🎮 ");
+    });
+  });
+  document.getElementById("btn-voice-clicker-forget").addEventListener("click", function () {
+    if (window.PMCVoice && window.PMCVoice.clearClicker) window.PMCVoice.clearClicker();
+    renderVoiceClicker();
+  });
+  setTimeout(renderVoiceClicker, 0); // (js/voice.js loads after this file)
 
   // ---------------------------------------------------------------------
   // The recording page (record.html, opened by the header's 🎬 Record): it

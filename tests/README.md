@@ -44,7 +44,9 @@ Not part of the app - helpers for testing and for running this machine's own cop
 - `test_voice_parser.js` - the voice commands' sentence parser on its own, in Node: every sentence
   on the "Voice commands" sheet and the usual mishearings ("Luke" for Luc, "at one point", "race 2
   7", "Luigi's", "queue score") into the right command and players; unknown and doubled names
-  refused. `node tests/test_voice_parser.js`
+  refused; and (P28) the main sentences in French, Spanish, Tagalog and Cantonese - numbers
+  ("quatre-vingt-dix", "treinta y cinco", "十五"), points, a win, "undo" - into the same commands.
+  `node tests/test_voice_parser.js`
 - `probe_voice.js` - voice commands in the page with the microphone replaced by a fake that "hears"
   a given sentence when the hold ends: the number pad's "." key and the 🎤 Talk button held (a tap
   shows the sentences), game / race / rotation / players / teams / points (with the keypad's beep)
@@ -525,3 +527,9 @@ Not part of the app - helpers for testing and for running this machine's own cop
 - **measure_camera_cpu.js** — not a pass/fail test: the camera page with nobody in view for a
   minute - CPU seconds per minute (every Chrome process), the page's main thread, pose passes.
   Run before and after a change. `node tests/measure_camera_cpu.js [seconds] [--simple]`.
+- **probe_voice_bar.js** — voice that works in a bar (P28), its own server on 4286, sentences
+  handed in as the recognizer would: "add 3 points to Kim" - a big "🎤 Heard: …" with ↩ Undo, and
+  "undo" said puts it back; the banner's Undo after "Jo plus 2"; "play 9-ball" undone; "undo"
+  refused once the board changed since; in French the recognizer asks for fr-FR, "ajoute trois
+  points à Kim" / "annule", the sheet opens with the French sentences; a clicker's Page Down
+  learned, then one press listens and the next stops. `node tests/probe_voice_bar.js [shots]`.

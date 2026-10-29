@@ -1,4 +1,4 @@
-// Voice commands - hold to talk, English sentences.
+// Voice commands - hold to talk, in the app's language (English always works).
 //
 // Hold the 🎤 Talk button on the score section (or the number pad's "."
 // key), say one sentence, let go. A tap on the button shows the sentences. The browser's own speech
@@ -13,7 +13,11 @@
 //
 // The sentences are fixed, listed in SHEET below - the same list the
 // "Voice commands" sheet shows, so the sheet and what's understood never
-// drift apart. tests/test_voice_parser.js runs the parser in Node.
+// drift apart. In French, Spanish, Tagalog and Cantonese the recognizer
+// listens in that language (English when the browser can't) and the main
+// sentences - numbers, points, a win, "undo" - are said in it too: they're
+// turned into the English ones (LANG_RULES) before the English grammar
+// reads them. tests/test_voice_parser.js runs the parser in Node.
 (function (root) {
   "use strict";
 
@@ -52,6 +56,133 @@
   ];
 
   // ---------------------------------------------------------------------
+  // The app's languages: what the recognizer is asked to listen for, the
+  // numbers said in them, and their main sentences turned into the English
+  // ones (after the accents are gone and the numbers are digits).
+  // ---------------------------------------------------------------------
+  var RECOGNITION_LANGS = { english: "en-US", french: "fr-FR", spanish: "es-ES", tagalog: "fil-PH", cantonese: "yue-Hant-HK" };
+  var FOREIGN_NUMBERS = {
+    french: { zero: 0, un: 1, une: 1, deux: 2, trois: 3, quatre: 4, cinq: 5, six: 6, sept: 7, huit: 8, neuf: 9, dix: 10, onze: 11, douze: 12,
+      treize: 13, quatorze: 14, quinze: 15, seize: 16, vingt: 20, vingts: 20, trente: 30, quarante: 40, cinquante: 50, soixante: 60, cent: 100, cents: 100 },
+    spanish: { cero: 0, uno: 1, una: 1, un: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10, once: 11, doce: 12,
+      trece: 13, catorce: 14, quince: 15, dieciseis: 16, diecisiete: 17, dieciocho: 18, diecinueve: 19, veinte: 20, veintiuno: 21, veintiun: 21, veintidos: 22,
+      veintitres: 23, veinticuatro: 24, veinticinco: 25, veintiseis: 26, veintisiete: 27, veintiocho: 28, veintinueve: 29, treinta: 30, cuarenta: 40,
+      cincuenta: 50, sesenta: 60, setenta: 70, ochenta: 80, noventa: 90, cien: 100, ciento: 100 },
+    tagalog: { isa: 1, dalawa: 2, tatlo: 3, apat: 4, lima: 5, anim: 6, pito: 7, walo: 8, siyam: 9, sampu: 10,
+      uno: 1, dos: 2, tres: 3, kuwatro: 4, singko: 5, sais: 6, siyete: 7, otso: 8, nuwebe: 9, diyes: 10 }
+  };
+  ["isang:1", "dalawang:2", "tatlong:3", "limang:5", "pitong:7", "walong:8"].forEach(function (x) { var p = x.split(":"); FOREIGN_NUMBERS.tagalog[p[0]] = +p[1]; }); // (with the linker)
+  var NUMBER_JOINERS = { french: "et", spanish: "y", tagalog: "at" };
+  // a run of number words -> one number ("quatre vingt dix" 90, "treinta y cinco" 35, "cent cinquante" 150)
+  function foreignNumbers(s, lang) {
+    var table = FOREIGN_NUMBERS[lang];
+    if (!table) return s;
+    var words = s.split(" "), out = [], i = 0, join = NUMBER_JOINERS[lang];
+    while (i < words.length) {
+      if (!has(table, words[i])) { out.push(words[i]); i++; continue; }
+      var value = 0, j = i;
+      while (j < words.length) {
+        var w = words[j];
+        if (w === join && j > i && has(table, words[j + 1] || "")) { j++; continue; }
+        if (!has(table, w)) break;
+        var v = table[w];
+        if (v === 100) value = (value || 1) * 100;
+        else if (lang === "french" && v === 20 && value % 100 === 4) value = value - 4 + 80; // quatre vingt
+        else value += v;
+        j++;
+      }
+      out.push(String(value));
+      i = j;
+    }
+    return out.join(" ");
+  }
+  // Cantonese, before anything else (the characters would be dropped):
+  // its numbers as digits.
+  var HAN_DIGITS = { "零": 0, "一": 1, "二": 2, "兩": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9 };
+  function hanNumbers(text) {
+    return String(text).replace(/[零一二兩两三四五六七八九十百]+/g, function (run) {
+      var value = 0, digit = null;
+      for (var k = 0; k < run.length; k++) {
+        var ch = run.charAt(k);
+        if (has(HAN_DIGITS, ch)) digit = HAN_DIGITS[ch];
+        else if (ch === "十") { value += (digit === null ? 1 : digit) * 10; digit = null; }
+        else if (ch === "百") { value += (digit === null ? 1 : digit) * 100; digit = null; }
+      }
+      return " " + (value + (digit || 0)) + " ";
+    });
+  }
+  // [pattern, the English it means] - first match wins; the rest of the
+  // sentence (names) goes along as $1, $2...
+  var LANG_RULES = {
+    french: [
+      [/^(?:annule|annuler|annulez|annule ca|defais|defaire|defaites|retour|efface|efface ca)$/, "undo"],
+      [/^(?:ajoute|ajouter|ajoutez|donne|donner|donnez|mets|mettre|mettez|rajoute|rajoutez)(?: (\d+))? (?:points?|billes?|boules?) (?:a|pour) (.+)$/, "add $#1 points to $2"],
+      [/^(\d+) (?:points?|billes?|boules?) (?:a|pour) (.+)$/, "$1 points to $2"],
+      [/^(?:enleve|enlever|enlevez|retire|retirer|retirez|ote|oter|otez)(?: (\d+))? (?:points?|billes?|boules?) (?:a|de|pour) (.+)$/, "take $#1 points from $2"],
+      [/^(?:ajoute|ajouter|ajoutez)(?: (\d+))? (?:points?|billes?|boules?)$/, "add $#1 points"],
+      [/^(.+?) (?:gagne|a gagne|remporte|a remporte)(?: la partie| la manche| le match| le jeu)?$/, "$1 wins"],
+      [/^(.+?) moins (\d+)(?: points?)?$/, "$1 minus $2"],
+      [/^(.+?) plus (\d+) points?$/, "$1 plus $2"],
+      [/^(?:quel est le score|cest combien|le score|score)$/, "score"],
+      [/^(?:aide|commandes|que puis je dire)$/, "help"],
+      [/^(?:oui|ouais|daccord)$/, "yes"],
+      [/^non$/, "no"]
+    ],
+    spanish: [
+      [/^(?:deshacer|deshaz|deshace|cancela|cancelar|cancelalo|anula|anular|anulalo|atras)$/, "undo"],
+      [/^(?:anade|anadir|anadele|agrega|agregar|agregale|suma|sumar|sumale|dale|da|pon|ponle|poner)(?: (\d+))? (?:puntos?|bolas?) (?:a|para) (.+)$/, "add $#1 points to $2"],
+      [/^(\d+) (?:puntos?|bolas?) (?:a|para) (.+)$/, "$1 points to $2"],
+      [/^(?:quita|quitar|quitale|resta|restar|restale)(?: (\d+))? (?:puntos?|bolas?) (?:a|de) (.+)$/, "take $#1 points from $2"],
+      [/^(?:anade|agrega|suma)(?: (\d+))? (?:puntos?|bolas?)$/, "add $#1 points"],
+      [/^(.+?) (?:gana|gano|ha ganado)(?: la partida| el juego| la mesa)?$/, "$1 wins"],
+      [/^(.+?) mas (\d+)(?: puntos?)?$/, "$1 plus $2"],
+      [/^(.+?) menos (\d+)(?: puntos?)?$/, "$1 minus $2"],
+      [/^(?:cual es el marcador|como va el marcador|el marcador|marcador|como va)$/, "score"],
+      [/^(?:ayuda|comandos|que puedo decir)$/, "help"],
+      [/^(?:si|claro|vale)$/, "yes"],
+      [/^no$/, "no"]
+    ],
+    tagalog: [
+      [/^(?:i undo|undo|bawiin|bawi|ibalik|kanselahin|cancel)$/, "undo"],
+      [/^(?:dagdagan ng|magdagdag ng|dagdag|idagdag ang|bigyan ng)(?: (\d+))? (?:puntos?|points?) (?:kay|sa|para kay|para sa) (.+)$/, "add $#1 points to $2"],
+      [/^(?:bawasan ng|bawas)(?: (\d+))? (?:puntos?|points?) (?:kay|sa) (.+)$/, "take $#1 points from $2"],
+      [/^(?:panalo|nanalo) (?:si )?(.+)$/, "$1 wins"],
+      [/^(.+?) (?:panalo|nanalo|ang panalo)$/, "$1 wins"],
+      [/^(?:oo|opo)$/, "yes"],
+      [/^(?:hindi|ayoko)$/, "no"]
+    ]
+  };
+  // (Cantonese: on the characters, before the rest)
+  var CANTONESE_RULES = [
+    [/^\s*(?:撤銷|撤消|取消|唔要|返回上一步|undo)\s*$/, "undo"],
+    [/^\s*(?:加|俾|畀)\s*(\d+)\s*分\s*(?:俾|畀|比|給|给)\s*(.+?)\s*$/, "add $1 points to $2"],
+    [/^\s*(.+?)\s*(?:加|多)\s*(\d+)\s*分?\s*$/, "$1 plus $2"],
+    [/^\s*(.+?)\s*(?:減|减|扣)\s*(\d+)\s*分?\s*$/, "$1 minus $2"],
+    [/^\s*(.+?)\s*贏(?:咗)?(?:呢局|呢鋪|呢盤)?\s*$/, "$1 wins"],
+    [/^\s*(?:而家幾多分|比數|幾多分)\s*$/, "score"],
+    [/^\s*(?:係|好|啱)\s*$/, "yes"],
+    [/^\s*(?:唔係|唔好)\s*$/, "no"]
+  ];
+  function applyRules(s, rules) {
+    for (var i = 0; i < rules.length; i++) {
+      var m = s.match(rules[i][0]);
+      // ($#k: a number left unsaid - one)
+      if (m) return rules[i][1].replace(/\$#(\d)/g, function (all, k) { return m[+k] === undefined ? "1" : m[+k]; }).replace(/\$(\d)/g, function (all, k) { return m[+k] === undefined ? "" : m[+k]; }).replace(/\s+/g, " ").trim();
+    }
+    return s;
+  }
+  // What was heard, in the app's language -> the English sentence it means
+  // (unchanged when it's English already, or not one of the main ones).
+  function fromLanguage(text, lang) {
+    if (lang === "cantonese") return applyRules(hanNumbers(text), CANTONESE_RULES);
+    if (!LANG_RULES[lang]) return text;
+    var s = baseNormalizeOnly(text);
+    s = foreignNumbers(s, lang);
+    // (the numbers turned to digits even when the sentence is an English one: "luigi plus deux")
+    return applyRules(s, LANG_RULES[lang]);
+  }
+
+  // ---------------------------------------------------------------------
   // Text -> words: lower case, no punctuation, numbers as digits
   // ---------------------------------------------------------------------
   var SMALL = { zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
@@ -86,6 +217,12 @@
     return readTens(words, i);
   }
 
+  // lower case, no accents or punctuation (no number reading)
+  function baseNormalizeOnly(text) {
+    var s = String(text || "").toLowerCase();
+    if (s.normalize) s = s.normalize("NFD").replace(/[̀-ͯ]/g, "");
+    return s.replace(/[‘’`']/g, "").replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+  }
   function baseNormalize(text) {
     var s = String(text || "").toLowerCase();
     if (s.normalize) s = s.normalize("NFD").replace(/[̀-ͯ]/g, "");
@@ -159,8 +296,8 @@
   var FILLER_START = /^(?:ok|okay|hey|please|so|alright|all right|lets|let us|can you|could you|would you|i want to|we want to|i would like to|we would like to|we are|were|we re|i said|now)\s+(?=\S)/;
   var FILLER_END = /\s+(?:please|thanks|thank you)$/;
 
-  function normalize(text, gameTypes) {
-    var s = baseNormalize(text);
+  function normalize(text, gameTypes, lang) {
+    var s = baseNormalize(lang ? fromLanguage(text, lang) : text);
     s = (" " + s + " ").replace(/ (?:q|queue|cue|kyu|que|kew) ?scores? /g, " qscore ").trim();
     s = tokenizeGames(s, gameTypes);
     var before;
@@ -312,7 +449,7 @@
     [/^(?:auto|automatic|smart|otto) (?:cue|q|queue|mark|clip)(?: (?:it|that|the shot|this shot))?$/, function () { return { type: "recAuto" }; }],
     [/^(?:(?:what is|whats|tell me|say|give me|read)(?: me)?(?: the)? )?scores?$/, function () { return { type: "score" }; }],
     [/^(?:nice|nice game|good game|confirm|register(?: the)? game|ok|okay|done|close|close it|thats it|great game)$/, function () { return { type: "confirmWin" }; }],
-    [/^(?:undo|cancel|undo that|cancel that|take it back|undo the win|cancel the win)$/, function () { return { type: "undoWin" }; }],
+    [/^(?:undo|cancel|undo that|cancel that|take it back|undo the win|cancel the win|undo the last one|go back)$/, function () { return { type: "undo" }; }],
     [/^(?:yes|yeah|yep|sure|correct|confirm it)$/, function () { return { type: "answer", yes: true }; }],
     [/^(?:no|nope|dont|do not)$/, function () { return { type: "answer", yes: false }; }],
 
@@ -506,7 +643,7 @@
 
   function parse(text, ctx) {
     ctx = ctx || {};
-    var s = normalize(text, ctx.gameTypes);
+    var s = normalize(text, ctx.gameTypes, ctx.lang);
     if (!s) return null;
     for (var i = 0; i < RULES.length; i++) {
       var m = s.match(RULES[i][0]);
@@ -604,7 +741,7 @@
     return firstError || { none: true, heard: alternatives[0] || "" };
   }
 
-  var api = { SHEET: SHEET, segmentNames: segmentNames, normalize: normalize, parse: parse, resolve: resolve, resolveName: resolveName, understand: understand, soundKey: soundKey };
+  var api = { SHEET: SHEET, LANG_EXAMPLES: null, RECOGNITION_LANGS: RECOGNITION_LANGS, segmentNames: segmentNames, normalize: normalize, fromLanguage: fromLanguage, parse: parse, resolve: resolve, resolveName: resolveName, understand: understand, soundKey: soundKey };
   root.PMCVoiceParser = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 
@@ -616,6 +753,21 @@
   var Recognition = root.SpeechRecognition || root.webkitSpeechRecognition || null;
   var HOLD_KEY_CODE = "NumpadDecimal";
   var MAX_HOLD_MS = 20000;
+  // A Bluetooth page-turner or clicker (it sends a key - Page Down, an
+  // arrow, Enter, Volume up...): one press starts listening, the next - or
+  // the sentence ending - stops. Which key: learned once (☰ › Voice).
+  var CLICKER_KEY = "poolMasterCounter.voiceClickerKey.v1";
+  var CLICKER_MAX_MS = 10000;
+  var learningClicker = null; // a callback while the next key press is being learned
+  function clickerCode() { try { return localStorage.getItem(CLICKER_KEY) || ""; } catch (e) { return ""; } }
+  // The recognizer's language (the app's), English where this browser
+  // can't do that one (noted once per session).
+  var languageFallback = {};
+  function recognitionLang() {
+    var b = bridge(), lang = b && b.language ? b.language() : "english";
+    if (languageFallback[lang]) return "en-US";
+    return RECOGNITION_LANGS[lang] || "en-US";
+  }
 
   var rec = null, listening = false, ended = false, pressedAt = 0, source = null, finals = [], interim = "", lastError = null;
   var finishTimer = null, maxTimer = null, liveHideTimer = null, session = 0;
@@ -656,11 +808,12 @@
     var my = ++session;
     finals = []; interim = ""; lastError = null; ended = false;
     try { if (root.speechSynthesis) root.speechSynthesis.cancel(); } catch (e) {}
-    var r;
+    var r, lang = recognitionLang();
     try {
       r = new Recognition();
-      r.lang = "en-US";
-      r.continuous = true;
+      r.lang = lang;
+      // (a clicker press is let go at once: the sentence's end stops it)
+      r.continuous = from !== "clicker";
       r.interimResults = true;
       r.maxAlternatives = 5;
     } catch (e) { return; }
@@ -680,13 +833,23 @@
       var shown = finals.map(function (a) { return a[0]; }).join(" ") + (interim ? " " + interim : "");
       showLive("🎤 " + shown.trim(), "listening");
     };
-    r.onerror = function (e) { if (my === session) lastError = e && e.error; };
+    r.onerror = function (e) {
+      if (my !== session) return;
+      lastError = e && e.error;
+      // this browser can't listen in the app's language: English, said once
+      if (lastError === "language-not-supported" && lang !== "en-US") {
+        var b = bridge(), appLang = b && b.language ? b.language() : "english";
+        languageFallback[appLang] = true;
+        if (b) b.toast(t("voice.languageFallback"), "🎤 ");
+      }
+    };
     // (the recognizer can end by itself - silence, no network - before
     // the button is let go; the result is handled on letting go)
     r.onend = function () {
       if (my !== session) return;
       ended = true;
       if (!listening) finish(my);
+      else if (source === "clicker") stop();
     };
     rec = r;
     try { r.start(); } catch (e) { rec = null; return; }
@@ -696,7 +859,7 @@
     setButtonListening(true);
     showLive("🎤 " + t("voice.listening"), "listening");
     clearTimeout(maxTimer);
-    maxTimer = setTimeout(stop, MAX_HOLD_MS);
+    maxTimer = setTimeout(stop, from === "clicker" ? CLICKER_MAX_MS : MAX_HOLD_MS);
   }
 
   function stop() {
@@ -705,7 +868,7 @@
     clearTimeout(maxTimer);
     setButtonListening(false);
     var my = session;
-    if (Date.now() - pressedAt < 250 && !finals.length) {
+    if (source !== "clicker" && Date.now() - pressedAt < 250 && !finals.length) {
       // a tap, not a hold: the button's shows the sentences
       session++;
       try { rec.abort(); } catch (e) {}
@@ -779,6 +942,8 @@
     else if (u.cmd.type === "help") { openSheet(); result = { ok: true, text: null }; }
     else result = b.execute(u.cmd) || { ok: false, text: null };
     report(result, remote);
+    // (the big "Heard: ..." with its Undo - see js/app.js's showVoiceHeard)
+    if (b.heard && u.cmd && u.cmd.type !== "help") b.heard(u.heard || alternatives[0], result);
     return { heard: u.heard, cmd: u.cmd || null, result: result };
   }
 
@@ -849,6 +1014,24 @@
     intro.className = "help-intro";
     intro.textContent = t("voice.sheetIntro");
     body.appendChild(intro);
+    // the main sentences in the app's language (in English: the sections below are them)
+    var own = String(t("voice.langExamples") || ""), b = bridge();
+    if (own && own !== "voice.langExamples" && b && b.language && b.language() !== "english") {
+      var mine = document.createElement("section");
+      mine.className = "voice-sheet-section voice-sheet-own";
+      var mh = document.createElement("h3");
+      mh.textContent = t("voice.section.ownLanguage");
+      mine.appendChild(mh);
+      var mul = document.createElement("ul");
+      mul.className = "voice-sheet-lines";
+      own.split("|").forEach(function (line) {
+        var li = document.createElement("li");
+        li.textContent = "“" + line.trim() + "”";
+        mul.appendChild(li);
+      });
+      mine.appendChild(mul);
+      body.appendChild(mine);
+    }
     SHEET.forEach(function (section) {
       var wrap = document.createElement("section");
       wrap.className = "voice-sheet-section";
@@ -964,6 +1147,26 @@
     // focuses its balls-left number field, which would otherwise take
     // the "." - and the keypad shortcuts never see this key.
     document.addEventListener("keydown", function (e) {
+      // a clicker's key being learned: this press is it
+      if (learningClicker && !e.repeat) {
+        e.preventDefault();
+        e.stopPropagation();
+        var done = learningClicker;
+        learningClicker = null;
+        if (e.key === "Escape") { done(null); return; }
+        var code = e.code || e.key;
+        try { localStorage.setItem(CLICKER_KEY, code); } catch (err) {}
+        done(code);
+        return;
+      }
+      var clicker = clickerCode();
+      if (clicker && (e.code || e.key) === clicker && !typingInText(e.target)) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.repeat) return;
+        if (listening) stop(); else start("clicker");
+        return;
+      }
       if (sheetOpen() && (e.key === "Escape" || e.key === "Enter")) {
         e.preventDefault();
         e.stopPropagation();
@@ -976,6 +1179,8 @@
       if (!e.repeat) start("key");
     }, true);
     document.addEventListener("keyup", function (e) {
+      var clicker = clickerCode();
+      if (clicker && (e.code || e.key) === clicker && !typingInText(e.target)) { e.preventDefault(); e.stopPropagation(); return; }
       if (e.code !== HOLD_KEY_CODE || typingInText(e.target)) return;
       e.preventDefault();
       e.stopPropagation();
@@ -990,7 +1195,15 @@
     closeSheet: closeSheet,
     isSheetOpen: sheetOpen,
     supported: supported,
-    holdKeyCode: HOLD_KEY_CODE
+    holdKeyCode: HOLD_KEY_CODE,
+    // the clicker: learn its key (cb(code), or null on Escape), forget it, which one
+    learnClicker: function (cb) { learningClicker = cb; },
+    clearClicker: function () { try { localStorage.removeItem(CLICKER_KEY); } catch (e) {} },
+    clickerKey: clickerCode,
+    recognitionLang: function () { return recognitionLang(); },
+    isListening: function () { return listening; },
+    // (tests: the clicker's press started listening, as from this source)
+    _source: function () { return source; }
   };
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);

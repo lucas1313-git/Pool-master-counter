@@ -8162,6 +8162,32 @@ body.network-guest-mode #header-group-start {
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
 }
 
+/* 🎤 "Heard: ..." for 5 s over the board, with its Undo (showVoiceHeard) */
+.voice-heard-banner {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  z-index: 1155;
+  width: min(94vw, 860px);
+  padding: 16px 22px;
+  border-radius: 16px;
+  background: rgba(20, 16, 12, 0.94);
+  border: 2px solid var(--accent, #e8b923);
+  color: #fff;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 16px;
+  align-items: center;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+.voice-heard-banner.voice-heard-missed { border-color: #e05a5a; }
+.voice-heard-text { font-size: clamp(1.3rem, 3vw, 2.1rem); font-weight: 800; grid-column: 1; }
+.voice-heard-result { font-size: clamp(1rem, 2vw, 1.3rem); opacity: 0.85; grid-column: 1; }
+.voice-heard-undo { grid-column: 2; grid-row: 1 / span 2; font-size: 1.3rem; min-height: 56px; padding: 0 22px; }
+.voice-clicker-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+.voice-clicker-row .gs-note { flex-basis: 100%; margin: 0; }
+
 /* the camera moved since the table was calibrated: amber, with an OK */
 .camera-trouble-banner.camera-moved { background: #9a6700; }
 .camera-trouble-ok { margin-left: 12px; font-size: 1rem; vertical-align: middle; }
