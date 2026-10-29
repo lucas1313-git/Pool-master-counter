@@ -943,7 +943,7 @@
     else result = b.execute(u.cmd) || { ok: false, text: null };
     report(result, remote);
     // (the big "Heard: ..." with its Undo - see js/app.js's showVoiceHeard)
-    if (b.heard && u.cmd && u.cmd.type !== "help") b.heard(u.heard || alternatives[0], result);
+    if (b.heard && u.cmd && u.cmd.type !== "help") { b.heard(u.heard || alternatives[0], result); hideLive(0); } // (the banner says it, bigger)
     return { heard: u.heard, cmd: u.cmd || null, result: result };
   }
 
