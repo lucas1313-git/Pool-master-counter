@@ -81,7 +81,7 @@ function makeY4m(file) {
       }
     }, !!opts.tablet);
     await page.goto(BASE + "manifest.json");
-    await page.evaluate(() => { localStorage.setItem("poolMasterCounter.onboardingSeen.v1", "1"); localStorage.setItem("poolMasterCounter.migratedFromRepo.v1", "1"); });
+    await page.evaluate(() => { localStorage.setItem("poolMasterCounter.onboardingSeen.v1", "1"); localStorage.setItem("poolMasterCounter.migratedFromRepo.v1", "1"); localStorage.setItem("poolMasterCounter.homeScreenTipSeen.v1", "1"); });
     await page.goto(BASE, { waitUntil: "networkidle2" }); await showAll(page);
     await sleep(1200);
     return page;

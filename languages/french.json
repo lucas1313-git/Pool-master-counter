@@ -2152,5 +2152,12 @@
   "tournament.walkInPlaceholder": "Nom du nouveau venu",
   "tournament.walkInButton": "➕ Ajouter un nouveau venu",
   "tournament.walkInAdded": "{{name}} ajouté et coché.",
-  "tournament.raceSessionLabel": "Session en course"
+  "tournament.raceSessionLabel": "Session en course",
+  "state.damagedNotice": "Le tableau enregistré sur cet appareil n'a pas pu être lu : l'app repart de zéro. La copie abîmée est gardée sur l'appareil - OK l'enregistre aussi dans un fichier.",
+  "bk.persistKept": "🔒 Ce navigateur garde les données de l'app pour de bon.",
+  "bk.persistMayClear": "⚠️ Ce navigateur peut effacer les données de l'app si elle n'est pas utilisée un moment (Safari : 7 jours). Ajoutez-la à l'écran d'accueil et sauvegardez souvent.",
+  "backupReminder.since": "💾 Dernière sauvegarde il y a {{count}} jours - {{games}} depuis.",
+  "backupReminder.never": "💾 Pas encore de sauvegarde - {{games}} sur cet appareil.",
+  "backupReminder.later": "Plus tard",
+  "a2hs.tip": "📲 Ajoutez Pool Master Counter à l'écran d'accueil : touchez Partager, puis « Sur l'écran d'accueil ». Elle s'ouvre en plein écran, marche hors ligne, et Safari n'effacera pas ses données après 7 jours sans visite."
 }

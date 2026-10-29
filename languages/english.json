@@ -2152,5 +2152,12 @@
   "tournament.walkInPlaceholder": "Walk-in's name",
   "tournament.walkInButton": "➕ Add walk-in",
   "tournament.walkInAdded": "{{name}} added and checked.",
-  "tournament.raceSessionLabel": "Race-to session"
+  "tournament.raceSessionLabel": "Race-to session",
+  "state.damagedNotice": "This device's saved scoreboard couldn't be read, so the app started fresh. The damaged copy is kept on this device - OK saves it as a file too.",
+  "bk.persistKept": "🔒 This browser keeps the app's data for good.",
+  "bk.persistMayClear": "⚠️ This browser may clear the app's data if it isn't used for a while (Safari: 7 days). Add it to your Home Screen, and back up often.",
+  "backupReminder.since": "💾 Last backup {{count}} days ago - {{games}} since.",
+  "backupReminder.never": "💾 No backup yet - {{games}} on this device.",
+  "backupReminder.later": "Later",
+  "a2hs.tip": "📲 Add Pool Master Counter to your Home Screen: tap Share, then \"Add to Home Screen\". It opens full screen, works offline, and Safari won't clear its data after 7 days without a visit."
 }

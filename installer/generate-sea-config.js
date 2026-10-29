@@ -10,7 +10,7 @@ var path = require("path");
 
 var REPO_ROOT = path.resolve(__dirname, "..");
 var STATIC_ROOTS = ["css", "js", "languages", "icons", "camera"];
-var STATIC_FILES = ["index.html", "manifest.json", "camera.html", "record.html", "cues.html", "overlay.html"];
+var STATIC_FILES = ["index.html", "manifest.json", "camera.html", "record.html", "cues.html", "overlay.html", "sw.js"];
 
 var assets = {};
 

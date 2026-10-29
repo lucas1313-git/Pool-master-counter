@@ -11559,3 +11559,43 @@ body[data-tournament-tv="bracket"] .tournament-round-col {
 .tournament-swiss-rounds-row input {
   width: 5em;
 }
+
+/* 💾 the backup reminder under the board's top bar (P21) */
+.backup-reminder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 8px 16px 0;
+  padding: 8px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg-card));
+  font-weight: 700;
+}
+.backup-reminder .btn {
+  padding: 8px 14px;
+}
+.bk-persist-warn {
+  color: var(--accent);
+}
+/* 📲 the one-time Add to Home Screen tip (P21) */
+.home-screen-tip {
+  position: fixed;
+  left: 50%;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  width: min(560px, calc(100vw - 32px));
+  z-index: 1150;
+  background: var(--bg-card);
+  border: 2px solid var(--accent);
+  border-radius: 14px;
+  padding: 14px 16px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+  text-align: center;
+}
+.home-screen-tip p {
+  margin: 0 0 10px;
+  font-weight: 600;
+}

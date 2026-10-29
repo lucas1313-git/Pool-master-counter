@@ -2152,5 +2152,12 @@
   "tournament.walkInPlaceholder": "臨時加入玩家個名",
   "tournament.walkInButton": "➕ 加臨時玩家",
   "tournament.walkInAdded": "已加入並剔咗 {{name}}。",
-  "tournament.raceSessionLabel": "搶局場次"
+  "tournament.raceSessionLabel": "搶局場次",
+  "state.damagedNotice": "讀唔到呢部裝置儲存咗嘅記分板，所以 app 由頭開始。壞咗嗰份會留喺呢部裝置度——撳 OK 仲會存一份做檔案。",
+  "bk.persistKept": "🔒 呢個瀏覽器會一直保留 app 嘅資料。",
+  "bk.persistMayClear": "⚠️ 如果一排冇用，呢個瀏覽器可能會清走 app 嘅資料（Safari：7 日）。加去主畫面，同埋要經常備份。",
+  "backupReminder.since": "💾 上次備份係 {{count}} 日前——之後打咗 {{games}}。",
+  "backupReminder.never": "💾 仲未備份過——呢部裝置有 {{games}}。",
+  "backupReminder.later": "遲啲",
+  "a2hs.tip": "📲 將 Pool Master Counter 加去主畫面：撳「分享」，再撳「加至主畫面」。咁就會全螢幕打開、冇網都用得，Safari 亦唔會因為 7 日冇開而清走資料。"
 }

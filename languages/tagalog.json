@@ -2152,5 +2152,12 @@
   "tournament.walkInPlaceholder": "Pangalan ng walk-in",
   "tournament.walkInButton": "➕ Magdagdag ng walk-in",
   "tournament.walkInAdded": "Naidagdag at na-check si {{name}}.",
-  "tournament.raceSessionLabel": "Race-to session"
+  "tournament.raceSessionLabel": "Race-to session",
+  "state.damagedNotice": "Hindi mabasa ang naka-save na scoreboard sa device na ito, kaya nagsimula ulit ang app. Itinatago ang sirang kopya sa device na ito - sine-save din ito ng OK bilang file.",
+  "bk.persistKept": "🔒 Itinatago ng browser na ito ang data ng app nang tuluyan.",
+  "bk.persistMayClear": "⚠️ Maaaring burahin ng browser na ito ang data ng app kapag hindi ginamit nang matagal (Safari: 7 araw). Idagdag ito sa Home Screen, at mag-backup nang madalas.",
+  "backupReminder.since": "💾 Huling backup {{count}} araw na ang nakalipas - {{games}} mula noon.",
+  "backupReminder.never": "💾 Wala pang backup - {{games}} sa device na ito.",
+  "backupReminder.later": "Mamaya",
+  "a2hs.tip": "📲 Idagdag ang Pool Master Counter sa Home Screen: i-tap ang Share, saka \"Add to Home Screen\". Nagbubukas ito nang full screen, gumagana offline, at hindi buburahin ng Safari ang data nito pagkalipas ng 7 araw na hindi binisita."
 }

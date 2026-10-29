@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261029h">
+<link rel="stylesheet" href="css/style.css?v=20261029i">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -345,6 +345,12 @@
       <!-- ↩ Undo the last scoring action (js/app.js boardUndo) - its own shape, well away from every + -->
       <button type="button" id="btn-board-undo" class="board-undo-btn" disabled data-i18n="undo.button" data-i18n-aria-label="undo.aria" aria-label="Undo the last score">↩ Undo</button>
       <button type="button" id="btn-board-game" class="board-topbar-btn board-game-btn" data-i18n-aria-label="board.gameAria" aria-label="Game settings"><span aria-hidden="true">🎱</span><span class="board-topbar-label" data-i18n="board.game">Game</span></button>
+    </div>
+    <!-- 💾 a gentle reminder once the last backup is a week old (js/app.js renderBackupReminder) -->
+    <div class="backup-reminder hidden" id="backup-reminder" role="status">
+      <span id="backup-reminder-text"></span>
+      <button type="button" id="btn-backup-reminder-now" class="btn btn-primary" data-i18n="bk.backupNow">💾 Back up now</button>
+      <button type="button" id="btn-backup-reminder-later" class="btn btn-ghost" data-i18n="backupReminder.later">Later</button>
     </div>
     <div class="practice-badge hidden" id="practice-badge" role="status" data-i18n="practice.badge">PRACTICE · NOT SAVED</div>
     <!-- Winner Stays: the winner's streak and who's next (js/app.js renderWinnerStaysLine) -->
@@ -749,6 +755,7 @@
         <p class="player-stats-note bk-where" id="bk-where" aria-live="polite"></p>
         <button type="button" id="btn-backup-now" class="btn btn-primary bk-big" data-i18n="bk.backupNow">💾 Back up now</button>
         <p class="player-stats-note bk-last" id="bk-last" aria-live="polite"></p>
+        <p class="player-stats-note bk-persist" id="bk-persist"></p>
         <!-- How full this device's storage is, and what's using it -->
         <div class="bk-storage" id="bk-storage">
           <p class="player-stats-note bk-storage-line" id="bk-storage-line"></p>
@@ -969,6 +976,11 @@
 <!-- each rack's win, its Undo and every notice (on the hill, next player, game change) - never in the way (js/app.js showWinBanner) -->
 <div id="win-banner" class="win-banner hidden"></div>
 <div id="score-announcer" class="visually-hidden" aria-live="polite" aria-atomic="true"></div>
+<!-- 📲 once, in Safari on an iPad or iPhone: Add to Home Screen (js/app.js maybeShowHomeScreenTip) -->
+<div id="home-screen-tip" class="home-screen-tip hidden" role="note">
+  <p data-i18n="a2hs.tip">📲 Add Pool Master Counter to your Home Screen: tap Share, then "Add to Home Screen". It opens full screen, works offline, and Safari won't clear its data after 7 days without a visit.</p>
+  <button type="button" id="btn-home-screen-tip-ok" class="btn btn-primary" data-i18n="tips.ok">Got it</button>
+</div>
 <div id="voice-live" class="voice-live hidden" aria-live="polite"></div>
 
 <div id="voice-sheet-overlay" class="help-overlay hidden">
@@ -2959,13 +2971,19 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/pairing.js?v=20261029h"></script>
-<script src="js/big-store.js?v=20261029h"></script>
-<script src="js/mp4-clip.js?v=20261029h"></script>
-<script src="js/recording-consent.js?v=20261029h"></script>
-<script src="js/local-recorder.js?v=20261029h"></script>
-<script src="js/app.js?v=20261029h"></script>
-<script src="js/camera-client.js?v=20261029h"></script>
-<script src="js/voice.js?v=20261029h"></script>
+<script src="js/pairing.js?v=20261029i"></script>
+<script src="js/big-store.js?v=20261029i"></script>
+<script src="js/mp4-clip.js?v=20261029i"></script>
+<script src="js/recording-consent.js?v=20261029i"></script>
+<script src="js/local-recorder.js?v=20261029i"></script>
+<script src="js/app.js?v=20261029i"></script>
+<script src="js/camera-client.js?v=20261029i"></script>
+<script src="js/voice.js?v=20261029i"></script>
+<script>
+  // The app opens with no network (sw.js, P21) - on http(s) only, not in the iOS app
+  if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol) && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
+    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261029i").catch(function () {}); });
+  }
+</script>
 </body>
 </html>

@@ -420,3 +420,12 @@ Not part of the app - helpers for testing and for running this machine's own cop
   scores on every finished card, nobody struck out or crowned, a playoff asked for - played, Ben
   1st, Ann 2nd, Cat 3rd in the standings, the placings and the stored result; 📺 Full-screen
   bracket. `node tests/probe_tournament_tv.js [screenshot dir]`.
+- **probe_offline.js** — works offline, survives Safari, backs itself up (P21), its own server on
+  4276: a fresh device starts empty (no players, no saved lists, nothing fetched from players/ or
+  stats/) on the first-run screen; loaded once (sw.js takes over), offline, reloaded - the board
+  opens with Kim and Jo in English and the + scores; a damaged saved scoreboard is kept under
+  poolMasterCounter.stateDamaged.* (still after the fresh start's first save) and the app says so;
+  persistent storage is asked for at the first save and Backup & Restore shows the answer;
+  "💾 Last backup 9 days ago - 1 game since" under the top bar, Later hides it for a day, Back up
+  now backs up and it goes; an iPad in Safari gets the Add to Home Screen tip once (not a desktop).
+  `node tests/probe_offline.js [screenshot dir]`.

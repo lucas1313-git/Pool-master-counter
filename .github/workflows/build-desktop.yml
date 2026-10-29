@@ -20,6 +20,7 @@ on:
       - "record.html"
       - "cues.html"
       - "overlay.html"
+      - "sw.js"
       - "manifest.json"
       - "css/**"
       - "js/**"

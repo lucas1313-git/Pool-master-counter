@@ -446,9 +446,24 @@
     return next;
   }
 
-  function loadState() {
+  // Saved state that can't be read (P21): its raw text is kept under its
+  // own key before anything is saved over it (keepDamagedState), and the
+  // app says so once it's up (showDamagedStateNotice). (No initializer: this
+  // runs before the line below would be reached.)
+  var damagedStateKey;
+  function keepDamagedState(raw) {
     try {
-      var raw = localStorage.getItem(STORAGE_KEY);
+      damagedStateKey = "poolMasterCounter.stateDamaged." + new Date().toISOString().replace(/[:.]/g, "-");
+      localStorage.setItem(damagedStateKey, raw);
+    } catch (e) {
+      damagedStateKey = null;
+    }
+  }
+
+  function loadState() {
+    var raw = null;
+    try {
+      raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         var parsed = JSON.parse(raw);
         if (parsed && Array.isArray(parsed.players)) {
@@ -507,6 +522,8 @@
           migratePlayerIdsToDateFormat(parsed);
           return parsed;
         }
+        keepDamagedState(raw);
+        return defaultState();
       }
       var oldRaw = localStorage.getItem(OLD_STORAGE_KEY);
       if (oldRaw) {
@@ -517,8 +534,41 @@
       }
     } catch (e) {
       console.warn("Could not read saved state, starting fresh.", e);
+      if (raw && !damagedStateKey) keepDamagedState(raw);
     }
     return defaultState();
+  }
+
+  // 📲 once, in Safari on an iPad or iPhone (not already a Home Screen app,
+  // not the iOS app): Add to Home Screen (P21) - never over the first-run
+  // screen or the board's tips
+  var HOME_SCREEN_TIP_KEY = "poolMasterCounter.homeScreenTipSeen.v1";
+  function isIosSafariTab() {
+    var ua = navigator.userAgent || "";
+    var ios = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    var standalone = navigator.standalone === true || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+    return ios && !standalone && !IS_NATIVE && !/CriOS|FxiOS|EdgiOS/.test(ua);
+  }
+  function maybeShowHomeScreenTip() {
+    var seen = "1";
+    try { seen = localStorage.getItem(HOME_SCREEN_TIP_KEY); } catch (e) {}
+    if (seen || !isIosSafariTab()) return;
+    var busy = ["first-run-overlay", "board-tips"].some(function (id) { var el = document.getElementById(id); return el && !el.classList.contains("hidden"); });
+    if (busy || topDialog()) {
+      setTimeout(maybeShowHomeScreenTip, 5000);
+      return;
+    }
+    document.getElementById("home-screen-tip").classList.remove("hidden");
+  }
+
+  function showDamagedStateNotice() {
+    if (!damagedStateKey) return;
+    var key = damagedStateKey;
+    confirmModal(T("state.damagedNotice"), function () {
+      var raw = "";
+      try { raw = localStorage.getItem(key) || ""; } catch (e) {}
+      downloadTextFile("pool-master-counter-damaged-" + key.split(".").pop() + ".txt", raw, "text/plain");
+    });
   }
 
   // Auto-archives the Colorful Report (see computeReportImageData, which
@@ -551,7 +601,41 @@
     } catch (e) {
       noteSaveFailure("state", e);
     }
+    requestPersistentStorageOnce();
     scheduleIdleReportAutoSave();
+  }
+
+  // Asked at the first save (P21): may the browser keep this site's data
+  // for good? (Safari in a tab otherwise clears it after 7 days without a
+  // visit.) The answer shows in Backup & Restore (renderPersistStatus).
+  var PERSIST_ASKED_KEY = "poolMasterCounter.persistAsked.v1";
+  var persistAskedThisPage = false;
+  function requestPersistentStorageOnce() {
+    if (persistAskedThisPage) return;
+    persistAskedThisPage = true;
+    try {
+      if (localStorage.getItem(PERSIST_ASKED_KEY)) return;
+      localStorage.setItem(PERSIST_ASKED_KEY, new Date().toISOString());
+    } catch (e) {
+      return;
+    }
+    if (!navigator.storage || !navigator.storage.persist) return;
+    navigator.storage.persist().then(function () {
+      if (typeof renderPersistStatus === "function") renderPersistStatus();
+    }).catch(function () {});
+  }
+
+  function renderPersistStatus() {
+    var el = document.getElementById("bk-persist");
+    if (!el) return;
+    if (!navigator.storage || !navigator.storage.persisted) {
+      el.textContent = "";
+      return;
+    }
+    navigator.storage.persisted().then(function (kept) {
+      el.textContent = T(kept ? "bk.persistKept" : "bk.persistMayClear");
+      el.classList.toggle("bk-persist-warn", !kept);
+    }).catch(function () {});
   }
 
   // The big stores - players' game logs, the report archive, Recover Data
@@ -2173,7 +2257,7 @@
   // Loads the manifest, then English (always, as the fallback dict) and
   // the active language (if different) in parallel. Resolves once both
   // dictionaries and the selector are ready - awaited alongside
-  // gameTypesPromise/migrateFromRepoIfNeeded() below, before boot().
+  // gameTypesPromise below, before boot().
   var languagePromise = loadLanguageManifest().then(function (manifest) {
     if (Array.isArray(manifest) && manifest.length) LANG_MANIFEST = manifest;
     activeLanguageCode = loadLanguageCodeFromStorage();
@@ -18481,86 +18565,8 @@
     });
   }
 
-  // One-time migration: the app used to store rosters/player stats as JSON
-  // files committed to this GitHub repo. The first time this version boots,
-  // pull in whatever's still out there so history isn't lost, then never
-  // touch the repo again.
-  //
-  // MIGRATED_FROM_REPO_KEY exists specifically so a deliberate Full Reset
-  // stays wiped: the original check here (ROSTERS_KEY/PLAYER_STATS_KEY
-  // both absent) is indistinguishable from "this device has never run the
-  // app before" and "this device just had everything intentionally wiped" -
-  // both look like a totally empty localStorage. Without a marker that
-  // survives the wipe on purpose (see btnFullResetStep2Yes), every reload
-  // after a Full Reset would silently re-import these same repo files
-  // right back in, making the reset look like it never actually happened.
-  var MIGRATED_FROM_REPO_KEY = "poolMasterCounter.migratedFromRepo.v1";
-
-  function markMigratedFromRepo() {
-    try {
-      localStorage.setItem(MIGRATED_FROM_REPO_KEY, "1");
-    } catch (e) {
-      noteSaveFailure("migratedFromRepo flag", e);
-    }
-  }
-
-  function migrateFromRepoIfNeeded() {
-    var alreadyMigrated;
-    try {
-      alreadyMigrated =
-        localStorage.getItem(MIGRATED_FROM_REPO_KEY) === "1" ||
-        localStorage.getItem(ROSTERS_KEY) !== null ||
-        localStorage.getItem(PLAYER_STATS_KEY) !== null;
-    } catch (e) {
-      alreadyMigrated = false;
-    }
-    if (alreadyMigrated) {
-      markMigratedFromRepo();
-      return Promise.resolve();
-    }
-
-    return fetchFresh("players/rosters.json")
-      .then(function (res) {
-        return res.ok ? res.json() : [];
-      })
-      .catch(function () {
-        return [];
-      })
-      .then(function (rosters) {
-        rosters = Array.isArray(rosters) ? rosters : [];
-        var nameSet = {};
-        rosters.forEach(function (r) {
-          (r.players || []).forEach(function (n) {
-            nameSet[n] = true;
-          });
-        });
-        state.players.forEach(function (p) {
-          nameSet[p.name] = true;
-        });
-        var names = Object.keys(nameSet);
-        return Promise.all(
-          names.map(function (name) {
-            return fetchFresh("players/" + playerStatsFilename(name))
-              .then(function (res) {
-                return res.ok ? res.json() : null;
-              })
-              .catch(function () {
-                return null;
-              })
-              .then(function (data) {
-                if (data && Array.isArray(data.sessions) && data.sessions.length) {
-                  PLAYER_STATS[name] = { name: name, sessions: data.sessions };
-                }
-              });
-          })
-        ).then(function () {
-          SAVED_ROSTERS = rosters;
-          saveRostersToStorage(rosters);
-          savePlayerStatsToStorage(PLAYER_STATS);
-          markMigratedFromRepo();
-        });
-      });
-  }
+  // (A new or wiped device starts empty, P21 - the app no longer copies the
+  // repo's old players/*.json and rosters into it the way it once did.)
 
   var LAST_SYNC_EXPORT_KEY = "poolMasterCounter.lastSyncExportedAt";
   var LAST_SYNC_IMPORT_KEY = "poolMasterCounter.lastSyncImportedAt";
@@ -19561,6 +19567,58 @@
       : T("bk.lastDevice", { when: when });
     ["bk-last", "backup-panel-summary"].forEach(function (id) { var el = document.getElementById(id); if (el) el.textContent = text; });
     renderStorageMeter();
+    renderPersistStatus();
+    renderBackupReminder();
+  }
+
+  // "💾 Last backup 9 days ago" (P21): a strip under the board's top bar
+  // once the last backup (or, never backed up, the first game) is
+  // BACKUP_REMINDER_DAYS old and games have been played since. Back up now
+  // runs the backup; Later hides it for a day.
+  var BACKUP_REMINDER_DAYS = 7;
+  var BACKUP_REMINDER_SNOOZE_KEY = "poolMasterCounter.backupReminderSnooze.v1";
+  function gamesSince(ms) {
+    var seen = {};
+    var count = 0;
+    function note(g) {
+      if (!g || typeof g === "string" || !g.ts || seen[g.ts]) return;
+      var at = Date.parse(g.ts);
+      if (!(at > ms)) return;
+      seen[g.ts] = true;
+      count++;
+    }
+    (state.gameHistory || []).forEach(note);
+    Object.keys(PLAYER_STATS || {}).forEach(function (name) {
+      ((PLAYER_STATS[name] || {}).sessions || []).forEach(function (sess) { (sess.games || []).forEach(note); });
+    });
+    return count;
+  }
+  function firstGameMs() {
+    var first = Infinity;
+    function note(g) { if (g && g.ts) first = Math.min(first, Date.parse(g.ts) || Infinity); }
+    (state.gameHistory || []).forEach(note);
+    Object.keys(PLAYER_STATS || {}).forEach(function (name) {
+      ((PLAYER_STATS[name] || {}).sessions || []).forEach(function (sess) { (sess.games || []).forEach(note); });
+    });
+    return first;
+  }
+  function renderBackupReminder() {
+    var el = document.getElementById("backup-reminder");
+    if (!el) return;
+    var last = null, snooze = 0;
+    try {
+      last = JSON.parse(localStorage.getItem(LAST_BACKUP_KEY) || "null");
+      snooze = parseInt(localStorage.getItem(BACKUP_REMINDER_SNOOZE_KEY) || "0", 10) || 0;
+    } catch (e) {}
+    var since = last ? last.at : firstGameMs();
+    var days = isFinite(since) ? Math.floor((Date.now() - since) / 86400000) : 0;
+    var games = gamesSince(last ? last.at : 0);
+    var show = days >= BACKUP_REMINDER_DAYS && games > 0 && Date.now() > snooze && !noStatsMode;
+    el.classList.toggle("hidden", !show);
+    if (!show) return;
+    document.getElementById("backup-reminder-text").textContent = last
+      ? TP("backupReminder.since", days, { count: days, games: countPhrase("games", games) })
+      : T("backupReminder.never", { games: countPhrase("games", games) });
   }
 
   // How much of this device's browser storage the app uses (about 5 MB on
@@ -22878,10 +22936,7 @@
     }
   }
 
-  // Just the live roster - PLAYER_STATS/SAVED_ROSTERS are pre-seeded with
-  // bundled example data on every device's very first boot
-  // (migrateFromRepoIfNeeded), before this ever runs, so they're never a
-  // reliable signal of whether a real person has set anything up yet.
+  // Just the live roster - whether a real person has set anything up yet.
   function isFirstTimeUser() {
     return state.players.length === 0;
   }
@@ -35541,16 +35596,6 @@
     keysToRemove.forEach(function (key) {
       localStorage.removeItem(key);
     });
-    // Wiping every poolMasterCounter.* key above makes this device look
-    // EXACTLY like one that has never run the app before - which is
-    // exactly the condition migrateFromRepoIfNeeded uses to decide
-    // whether to re-import players/rosters.json and every players/*.json
-    // stat file from this repo. Left alone, the very next boot after a
-    // deliberate Full Reset would silently undo it by re-seeding those
-    // same old files straight back in. Re-marking it here (before the
-    // write-guard below, which would otherwise block this too) is what
-    // makes the wipe actually stick.
-    markMigratedFromRepo();
     // Belt-and-suspenders against the 400ms gap below: rather than chase
     // down every possible stray write in that window (a running shot
     // clock/timed tournament interval ending mid-wipe, some future save
@@ -39071,6 +39116,21 @@
     });
     if (!stillAllChecked) tournamentSelectAllCheckbox.checked = false;
   });
+  document.getElementById("btn-backup-reminder-now").addEventListener("click", function () {
+    document.getElementById("btn-backup-now").click();
+  });
+  document.getElementById("btn-backup-reminder-later").addEventListener("click", function () {
+    try { localStorage.setItem(BACKUP_REMINDER_SNOOZE_KEY, String(Date.now() + 86400000)); } catch (e) {}
+    renderBackupReminder();
+  });
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible") renderBackupReminder();
+  });
+  document.getElementById("btn-home-screen-tip-ok").addEventListener("click", function () {
+    try { localStorage.setItem(HOME_SCREEN_TIP_KEY, "1"); } catch (e) {}
+    document.getElementById("home-screen-tip").classList.add("hidden");
+  });
+  setTimeout(maybeShowHomeScreenTip, 2500);
   btnTournamentAbandon.addEventListener("click", abandonTournament);
   // ⋯ More: what's rarely needed and can't be undone (P20) - Abandon
   document.getElementById("btn-tournament-more").addEventListener("click", function () {
@@ -39234,8 +39294,7 @@
   }
 
   // ---------------------------------------------------------------------
-  // Load settings/game-types.json (app config) and run the one-time
-  // repo-to-localStorage migration, then boot
+  // Load settings/game-types.json (app config) and the languages, then boot
   // ---------------------------------------------------------------------
 
   var gameTypesPromise = fetchFresh("settings/game-types.json")
@@ -39249,7 +39308,7 @@
     });
 
   loadBigStores().then(function () {
-    return Promise.all([gameTypesPromise, migrateFromRepoIfNeeded(), languagePromise]);
+    return Promise.all([gameTypesPromise, languagePromise]);
   }).then(function (results) {
     GAME_TYPE_LIST = results[0];
     GAME_TYPE_LIST.forEach(function (t) {
@@ -39280,6 +39339,7 @@
       populateKeypadVoiceSelect();
     }
     boot();
+    setTimeout(showDamagedStateNotice, 600);
     consumePendingArchiveDates();
     backfillReportArchive();
     // Leaving the app (closing it, switching away, the device sleeping)
