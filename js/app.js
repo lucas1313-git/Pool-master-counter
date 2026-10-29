@@ -2698,6 +2698,9 @@
   var leagueHandicapChartPlayerThemHeader = document.getElementById("league-handicap-chart-player-them-header");
   var leagueHandicapChartPlayerBody = document.getElementById("league-handicap-chart-player-body");
   var leagueHandicapChartBody = document.getElementById("league-handicap-chart-body");
+  var leagueHandicapChartMainTable = document.getElementById("league-handicap-chart-main-table");
+  var leagueHandicapChartGrid = document.getElementById("league-handicap-chart-grid");
+  var leagueHandicapChartPointsNote = document.getElementById("league-handicap-chart-points-note");
   var leagueHandicapChartAddRow = document.getElementById("league-handicap-chart-add-row");
   var leagueHandicapChartNewSlInput = document.getElementById("league-handicap-chart-new-sl");
   var leagueHandicapChartNewValueInput = document.getElementById("league-handicap-chart-new-value");
@@ -10092,22 +10095,42 @@
   var LEAGUES = loadLeaguesFromStorage();
   var activeLeagueId = LEAGUES.length ? LEAGUES[0].id : null;
 
-  // 8-Ball: race-to (games needed to win a match) depends only on a
-  // player's own Skill Level, not their opponent's - that's the whole
-  // point of the handicap, a low-SL player needs fewer games than a
-  // high-SL player regardless of who they're facing.
-  var APA_8BALL_RACE_TO = { 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9 };
+  // 8-Ball: APA's "Games Must Win" chart - a race depends on BOTH
+  // players' Skill Levels (2-7 in 8-Ball): APA_8BALL_RACE_CHART[you]
+  // [opponent] = [games you must win, games they must win]. Every cell
+  // copied from APA's own chart (Official Team Manual, The Equalizer
+  // Handicap System > Games Must Win Charts, rules.poolplayers.com,
+  // checked 28 Oct 2026); data/handicap-charts.json carries the same.
+  var APA_8BALL_RACE_CHART = {
+    2: { 2: [2, 2], 3: [2, 3], 4: [2, 4], 5: [2, 5], 6: [2, 6], 7: [2, 7] },
+    3: { 2: [3, 2], 3: [2, 2], 4: [2, 3], 5: [2, 4], 6: [2, 5], 7: [2, 6] },
+    4: { 2: [4, 2], 3: [3, 2], 4: [3, 3], 5: [3, 4], 6: [3, 5], 7: [2, 5] },
+    5: { 2: [5, 2], 3: [4, 2], 4: [4, 3], 5: [4, 4], 6: [4, 5], 7: [3, 5] },
+    6: { 2: [6, 2], 3: [5, 2], 4: [5, 3], 5: [5, 4], 6: [5, 5], 7: [4, 5] },
+    7: { 2: [7, 2], 3: [6, 2], 4: [5, 2], 5: [5, 3], 6: [5, 4], 7: [5, 5] }
+  };
   var APA_8BALL_MIN_SL = 2;
-  var APA_8BALL_MAX_SL = 9;
+  var APA_8BALL_MAX_SL = 7;
 
-  // 9-Ball: race-to a points total per rack, again a function of a
-  // player's own Skill Level alone. Real APA scoring also assigns each
-  // numbered ball a point value while playing (balls 1-8 worth 1 point
-  // each, the 9-ball itself worth 2) - this app doesn't simulate
-  // individual balls (no game type here does; every score is a plain
-  // running tally, same as 15 Ball Rotation's own points), so that detail
-  // is informational only, not something the +/- counters below enforce.
+  // 9-Ball: points to win, from the player's own Skill Level alone (APA's
+  // "Points Required To Win" chart). Balls 1-8 are a point each, the
+  // 9-ball two - the league board's "9-ball +2" button (APA 9-Ball only).
   var APA_9BALL_POINTS_TARGET = { 1: 14, 2: 19, 3: 25, 4: 31, 5: 38, 6: 46, 7: 55, 8: 65, 9: 75 };
+  // APA 9-Ball match points: 20 a match, split by the "Score of Match"
+  // chart on APA's 9-Ball scoresheet - by the LOSER's Skill Level, the
+  // fewest points they must have made to earn 1, 2, ... 8 of the 20 (the
+  // winner gets the rest: 20-0 down to 12-8).
+  var APA_9BALL_LOSER_POINT_STEPS = {
+    1: [3, 4, 5, 7, 8, 9, 11, 12],
+    2: [4, 6, 8, 9, 11, 13, 15, 17],
+    3: [5, 7, 10, 12, 15, 17, 20, 22],
+    4: [6, 9, 12, 15, 19, 22, 25, 28],
+    5: [7, 11, 15, 19, 23, 27, 30, 34],
+    6: [9, 13, 18, 23, 28, 32, 37, 41],
+    7: [11, 16, 22, 27, 33, 38, 44, 50],
+    8: [14, 20, 27, 33, 40, 46, 53, 59],
+    9: [18, 25, 32, 39, 47, 54, 61, 68]
+  };
   var APA_9BALL_MIN_SL = 1;
   var APA_9BALL_MAX_SL = 9;
 
@@ -10117,9 +10140,11 @@
 
   // Data-driven handicap charts for league match targets (see
   // league.useHandicap/handicapSystem/handicapBaseGames below and
-  // leagueMatchTargetForMember). Pre-seeded with APA's real chart (the
+  // leagueMatchTargets). A chart is either per player ({SL: target}) or
+  // for two players ({SL: {opponent SL: [target, opponent's target]}},
+  // like APA 8-Ball). Pre-seeded with APA's real charts (the
   // only one of the four with one official nationwide table - matches
-  // APA_8BALL_RACE_TO/APA_9BALL_POINTS_TARGET above) so the app works
+  // APA_8BALL_RACE_CHART/APA_9BALL_POINTS_TARGET above) so the app works
   // correctly even before data/handicap-charts.json has loaded, or if it
   // never does (offline, fetch blocked, etc.) - BCA/VNBA/TAP start empty
   // either way since none of them publish one universal chart. This is
@@ -10128,7 +10153,7 @@
   // Table") and take priority over this when present - see
   // leagueEffectiveHandicapChart.
   var HANDICAP_CHARTS = {
-    apa: { "8ball": Object.assign({}, APA_8BALL_RACE_TO), "9ball": Object.assign({}, APA_9BALL_POINTS_TARGET) },
+    apa: { "8ball": JSON.parse(JSON.stringify(APA_8BALL_RACE_CHART)), "9ball": Object.assign({}, APA_9BALL_POINTS_TARGET) },
     bca: { "8ball": {}, "9ball": {} },
     vnba: { "8ball": {}, "9ball": {} },
     tap: { "8ball": {}, "9ball": {} }
@@ -10148,7 +10173,7 @@
   // update flow; no code change needed. A failed/blocked fetch just
   // leaves the APA-only defaults above in place.
   function loadHandicapChartsFromServer() {
-    fetch("data/handicap-charts.json")
+    fetchFresh("data/handicap-charts.json")
       .then(function (res) {
         return res.ok ? res.json() : null;
       })
@@ -10157,9 +10182,12 @@
         ["apa", "bca", "vnba", "tap"].forEach(function (system) {
           if (!data[system]) return;
           ["8ball", "9ball"].forEach(function (fmt) {
-            if (data[system][fmt] && typeof data[system][fmt] === "object") {
-              HANDICAP_CHARTS[system][fmt] = data[system][fmt];
-            }
+            var chart = data[system][fmt];
+            if (!chart || typeof chart !== "object") return;
+            // (APA 8-Ball is for two players: an older per-player copy of
+            // this file - races to your own Skill Level - is ignored)
+            if (system === "apa" && fmt === "8ball" && !Object.keys(chart).some(function (sl) { return chart[sl] && typeof chart[sl] === "object"; })) return;
+            HANDICAP_CHARTS[system][fmt] = chart;
           });
         });
         // A league page already open with stale (pre-fetch) targets
@@ -10196,13 +10224,6 @@
     leagueNewFormat9BallLabel.textContent = T("league.format9Ball", { system: label });
   }
 
-  // The single source of truth for what a member must reach to win a
-  // league match (called at match-start, see startLeagueMatch).
-  // Handicap off: everyone races to the same base number, unhandicapped.
-  // Handicap on: the selected system's chart for this member's own
-  // Skill Level, or the base number if that Skill Level isn't in the
-  // chart (an empty BCA/VNBA/TAP chart before the organizer has added
-  // their own league's numbers means every member falls back to base).
   // BCA defaults to this app's own Elo-style rating (see buildRatingBadge/
   // getPlayerRating - already described to players as "FargoRate-inspired")
   // as its handicap key instead of the manually-set Skill Level field,
@@ -10214,28 +10235,69 @@
     return system === "bca";
   }
 
-  function leagueMatchTargetForMember(league, member) {
-    if (!league.useHandicap) return league.handicapBaseGames;
-    var fmt = league.format === "apa9ball" ? "9ball" : "8ball";
-    var custom = ((league.customHandicapCharts || {})[league.handicapSystem] || {})[fmt] || {};
-    if (typeof custom[member.skillLevel] === "number") return custom[member.skillLevel];
-    var shared = (HANDICAP_CHARTS[league.handicapSystem] || HANDICAP_CHARTS.apa)[fmt] || {};
-    var value = shared[member.skillLevel];
-    return typeof value === "number" ? value : league.handicapBaseGames;
+  // A member's Skill Level as the chart reads it: APA 8-Ball runs 2-7
+  // (an 8 or 9 entered before the chart was right reads as a 7).
+  function leagueChartSkillLevel(league, skillLevel) {
+    if (league.handicapSystem === "apa" && league.format !== "apa9ball") {
+      return Math.max(APA_8BALL_MIN_SL, Math.min(APA_8BALL_MAX_SL, skillLevel));
+    }
+    return skillLevel;
   }
 
-  // BCA's handicap isn't a per-player lookup at all - it's a ratio
-  // applied to the RATING GAP between the two players actually being
-  // matched (real rating-based handicapping compares two opponents, not
-  // one player's number in isolation). The lower-rated player always
-  // races to Base Games to Win; the higher-rated player's target climbs
-  // from there, one extra game for every BCA_RATING_POINTS_PER_GAME of
-  // gap - equal ratings mean an equal, unhandicapped race. See
-  // renderLeagueHandicapChartRatio for the same math shown as a table.
-  var BCA_RATING_POINTS_PER_GAME = 4;
+  // The race in a two-player chart (APA 8-Ball): {targetA, targetB}, or
+  // null for a per-player chart or a pair it doesn't cover.
+  function handicapChartRaces(chart, slA, slB) {
+    var row = chart[slA];
+    if (!row || typeof row !== "object") return null;
+    var cell = row[slB];
+    return Array.isArray(cell) && cell.length === 2 && cell[0] > 0 && cell[1] > 0 ? { targetA: cell[0], targetB: cell[1] } : null;
+  }
 
-  function bcaExtraGamesForRatingGap(gap) {
-    return Math.round(Math.abs(gap) / BCA_RATING_POINTS_PER_GAME);
+  // The single source of truth for what two members must reach to win a
+  // league match against each other (at match start - startLeagueMatch -
+  // and in the chart's "See it for" view):
+  // - handicap off: both race to Base Games to Win;
+  // - BCA: from the rating gap (leagueBcaMatchTargets);
+  // - a two-player chart (APA 8-Ball): the cell where the two Skill
+  //   Levels meet;
+  // - a per-player chart (APA 9-Ball points, VNBA/TAP as entered): each
+  //   one's own Skill Level;
+  // anyone the chart doesn't cover races to the base number.
+  function leagueMatchTargets(league, memberA, memberB) {
+    var base = league.handicapBaseGames;
+    if (!league.useHandicap) return { targetA: base, targetB: base };
+    if (league.handicapSystem === "bca") return leagueBcaMatchTargets(league, memberA, memberB);
+    var chart = leagueEffectiveHandicapChart(league);
+    var slA = leagueChartSkillLevel(league, memberA.skillLevel);
+    var slB = leagueChartSkillLevel(league, memberB.skillLevel);
+    var race = handicapChartRaces(chart, slA, slB);
+    if (race) return race;
+    function own(sl) {
+      return typeof chart[sl] === "number" && chart[sl] > 0 ? chart[sl] : base;
+    }
+    return { targetA: own(slA), targetB: own(slB) };
+  }
+
+  // BCA's handicap compares the two players actually matched: the
+  // lower-rated one races to Base Games to Win, and the higher-rated
+  // one's race is whichever makes the match closest to 50/50 on this
+  // app's rating scale (100 points = 2 to 1 a game, FargoRate's scale -
+  // eloExpectedScore/raceWinProbability) - at most twice the base: past
+  // that a match is too lopsided to even out by race length alone.
+  var BCA_MAX_RACE_FACTOR = 2;
+
+  function bcaRaceForRatingGap(base, gap) {
+    var p = eloExpectedScore(Math.abs(gap), 0);
+    var best = base;
+    var bestDiff = Infinity;
+    for (var race = base; race <= base * BCA_MAX_RACE_FACTOR; race++) {
+      var diff = Math.abs(raceWinProbability(p, race, base) - 0.5);
+      if (diff < bestDiff - 1e-9) {
+        bestDiff = diff;
+        best = race;
+      }
+    }
+    return best;
   }
 
   function leagueBcaMatchTargets(league, memberA, memberB) {
@@ -10243,10 +10305,10 @@
     if (!league.useHandicap) return { targetA: base, targetB: base };
     var ratingA = getPlayerRating(memberA.name);
     var ratingB = getPlayerRating(memberB.name);
-    var extra = bcaExtraGamesForRatingGap(ratingA - ratingB);
+    var race = bcaRaceForRatingGap(base, ratingA - ratingB);
     return {
-      targetA: ratingA >= ratingB ? base + extra : base,
-      targetB: ratingB >= ratingA ? base + extra : base
+      targetA: ratingA > ratingB ? race : base,
+      targetB: ratingB > ratingA ? race : base
     };
   }
 
@@ -10254,7 +10316,7 @@
   // (customHandicapCharts) layered over the shared app-wide chart
   // (HANDICAP_CHARTS, from data/handicap-charts.json) for whichever
   // Skill Levels the league hasn't overridden itself yet - exactly the
-  // same priority leagueMatchTargetForMember uses to pick a target.
+  // same priority leagueMatchTargets uses to pick a race.
   function leagueEffectiveHandicapChart(league) {
     var fmt = league.format === "apa9ball" ? "9ball" : "8ball";
     var shared = (HANDICAP_CHARTS[league.handicapSystem] || {})[fmt] || {};
@@ -10286,6 +10348,10 @@
       T(isRatio ? "league.handicapChartRatioTitleSuffix" : "league.handicapChartTitleSuffix");
     leagueHandicapChartAddRow.classList.toggle("hidden", readOnly);
     btnLeagueHandicapChartSave.classList.toggle("hidden", readOnly);
+    // (the per-Skill-Level table, unless APA 8-Ball's grid replaces it below)
+    leagueHandicapChartMainTable.classList.remove("hidden");
+    leagueHandicapChartGrid.classList.add("hidden");
+    leagueHandicapChartPointsNote.textContent = T(leaguePointsRuleKey(league));
     // The "See it for <player>" matchup breakdown only makes sense where
     // one player's own number stays fixed regardless of opponent (APA) -
     // BCA already IS a per-opponent view (the ratio table), and VNBA/TAP
@@ -10304,13 +10370,13 @@
       // or edit here, just the ratio itself worked out at sample gaps.
       leagueHandicapChartExplain.textContent = T("league.handicapChartExplainReadOnly", {
         base: league.handicapBaseGames,
-        ratio: BCA_RATING_POINTS_PER_GAME
+        max: league.handicapBaseGames * BCA_MAX_RACE_FACTOR
       });
       leagueHandicapChartKeyHeader.textContent = T("league.handicapChartRatingGap");
       leagueHandicapChartTargetHeader.textContent = T(fmt === "9ball" ? "league.handicapChartExtraPoints" : "league.handicapChartExtraGames");
       renderLeagueHandicapChartRatio(league);
     } else if (isFixed) {
-      leagueHandicapChartExplain.textContent = T("league.handicapChartExplainFixed");
+      leagueHandicapChartExplain.textContent = T(fmt === "9ball" ? "league.handicapChartExplainFixed" : "league.handicapChartExplainFixed8");
       leagueHandicapChartKeyHeader.textContent = T("league.handicapChartSkillLevel");
       leagueHandicapChartTargetHeader.textContent = T(fmt === "9ball" ? "league.handicapChartTargetPoints" : "league.handicapChartTargetGames");
       renderLeagueHandicapChartFixed(league);
@@ -10328,7 +10394,8 @@
       // only actual published chart this app has; nothing is written to
       // the league until Save, so this alone never claims to BE that
       // league's official numbers.
-      leagueHandicapChartDraft = Object.keys(merged).length ? Object.assign({}, merged) : Object.assign({}, HANDICAP_CHARTS.apa[fmt]);
+      // (APA's 8-Ball chart is for two players - no per-Skill-Level start)
+      leagueHandicapChartDraft = Object.keys(merged).length ? Object.assign({}, merged) : fmt === "9ball" ? Object.assign({}, HANDICAP_CHARTS.apa[fmt]) : {};
       renderLeagueHandicapChartEditorRows(league);
     }
 
@@ -10348,6 +10415,10 @@
         return a - b;
       });
     leagueHandicapChartBody.innerHTML = "";
+    if (skillLevels.some(function (sl) { return chart[sl] && typeof chart[sl] === "object"; })) {
+      renderLeagueHandicapChartGrid(chart, skillLevels);
+      return;
+    }
     skillLevels.forEach(function (sl) {
       var tr = document.createElement("tr");
       var slCell = document.createElement("td");
@@ -10359,6 +10430,42 @@
       tr.appendChild(document.createElement("td"));
       leagueHandicapChartBody.appendChild(tr);
     });
+  }
+
+  // A two-player chart drawn the way APA prints it: your Skill Level down
+  // the side, your opponent's along the top, "you/them" where they meet.
+  function renderLeagueHandicapChartGrid(chart, skillLevels) {
+    leagueHandicapChartMainTable.classList.add("hidden");
+    leagueHandicapChartGrid.classList.remove("hidden");
+    leagueHandicapChartGrid.innerHTML = "";
+    var head = document.createElement("thead");
+    var headRow = document.createElement("tr");
+    var corner = document.createElement("th");
+    corner.textContent = T("league.handicapChartYouVsThem");
+    headRow.appendChild(corner);
+    skillLevels.forEach(function (sl) {
+      var th = document.createElement("th");
+      th.textContent = sl;
+      headRow.appendChild(th);
+    });
+    head.appendChild(headRow);
+    leagueHandicapChartGrid.appendChild(head);
+    var body = document.createElement("tbody");
+    skillLevels.forEach(function (you) {
+      var tr = document.createElement("tr");
+      var th = document.createElement("th");
+      th.textContent = you;
+      tr.appendChild(th);
+      skillLevels.forEach(function (them) {
+        var td = document.createElement("td");
+        var race = handicapChartRaces(chart, you, them);
+        td.textContent = race ? race.targetA + "/" + race.targetB : "";
+        if (you === them) td.className = "league-handicap-chart-same";
+        tr.appendChild(td);
+      });
+      body.appendChild(tr);
+    });
+    leagueHandicapChartGrid.appendChild(body);
   }
 
   function populateLeagueHandicapChartPlayerSelect(league) {
@@ -10383,18 +10490,17 @@
     }
   }
 
-  // APA's own chart already gives each player their target independent
-  // of who they're facing - this just looks that up for the picked
-  // player and lines it up against every other member's own number, the
-  // same "race is 2-6" shape APA's real published chart uses, but built
-  // from this league's actual members instead of abstract Skill Levels.
+  // The picked player's race against every other member - APA's own
+  // chart read for this league's actual members instead of abstract
+  // Skill Levels (8-Ball: the cell where the two meet; 9-Ball: each one's
+  // own points).
   function renderLeagueHandicapChartPlayerMatchups(league) {
     leagueHandicapChartPlayerBody.innerHTML = "";
     var selected = league.members.filter(function (m) {
       return m.name === leagueHandicapChartPlayerSelect.value;
     })[0];
     if (!selected) return;
-    var myTarget = leagueMatchTargetForMember(league, selected);
+
     var opponents = league.members
       .filter(function (m) {
         return m.name !== selected.name;
@@ -10417,28 +10523,23 @@
       var oppCell = document.createElement("td");
       oppCell.textContent = leagueNameWithTeam(league, opp.name);
       tr.appendChild(oppCell);
+      var race = leagueMatchTargets(league, selected, opp);
       var youCell = document.createElement("td");
-      youCell.textContent = myTarget;
+      youCell.textContent = race.targetA;
       tr.appendChild(youCell);
       var themCell = document.createElement("td");
-      themCell.textContent = leagueMatchTargetForMember(league, opp);
+      themCell.textContent = race.targetB;
       tr.appendChild(themCell);
       leagueHandicapChartPlayerBody.appendChild(tr);
     });
   }
 
-  // BCA's read-only view: one row per actual league member (not an
-  // abstract Rating bracket), showing their live app Rating alongside
-  // the Games/Points to Win that would actually be used right now - the
-  // exact value leagueMatchTargetForMember would compute for them, so
-  // "no editing" still means "see what the handicap will be" in
-  // practice, not a guess.
   // BCA's target is relative (see leagueBcaMatchTargets), so a per-member
   // row showing one absolute number would be meaningless without knowing
-  // who they're playing - this shows the actual ratio instead, worked
-  // out at a spread of sample rating gaps, so the organizer can see
-  // exactly how many extra games any given gap adds.
-  var BCA_RATIO_SAMPLE_GAPS = [4, 8, 12, 16, 20, 24, 28, 32, 40, 60, 80];
+  // who they're playing - this shows the races at a spread of sample
+  // rating gaps instead, so the organizer can see exactly what any gap
+  // adds (and where the cap - twice the base - stops it).
+  var BCA_RATIO_SAMPLE_GAPS = [0, 25, 50, 75, 100, 150, 200, 300];
 
   function renderLeagueHandicapChartRatio(league) {
     leagueHandicapChartBody.innerHTML = "";
@@ -10447,10 +10548,13 @@
       var gapCell = document.createElement("td");
       gapCell.textContent = gap;
       tr.appendChild(gapCell);
+      var race = bcaRaceForRatingGap(league.handicapBaseGames, gap);
       var extraCell = document.createElement("td");
-      extraCell.textContent = "+" + bcaExtraGamesForRatingGap(gap);
+      extraCell.textContent = "+" + (race - league.handicapBaseGames);
       tr.appendChild(extraCell);
-      tr.appendChild(document.createElement("td"));
+      var raceCell = document.createElement("td");
+      raceCell.textContent = T("league.boardRace", { a: race, b: league.handicapBaseGames });
+      tr.appendChild(raceCell);
       leagueHandicapChartBody.appendChild(tr);
     });
   }
@@ -10569,14 +10673,14 @@
       tonightRosterConfigured: false,
       // On by default (APA) so a fresh league's matches are handicapped
       // exactly like every league before this setting existed - see
-      // leagueMatchTargetForMember for how these three combine. The
+      // leagueMatchTargets for how these three combine. The
       // Rating System picked on the creation form seeds this; anything
       // not one of the four known values falls back to APA.
       useHandicap: true,
       handicapSystem: ["apa", "bca", "vnba", "tap"].indexOf(handicapSystem) !== -1 ? handicapSystem : "apa",
       handicapBaseGames: defaultHandicapBaseGames(format),
       // The organizer's own Skill Level chart, per system+format - see
-      // leagueEffectiveHandicapChart/leagueMatchTargetForMember. Plain
+      // leagueEffectiveHandicapChart/leagueMatchTargets. Plain
       // league data (not a separate store), so it's saved locally with
       // everything else and travels with the league on export/import,
       // same as every other per-league setting.
@@ -10666,9 +10770,48 @@
   // loser banks 1 "close match" point if they reached at least half of
   // their own target, otherwise 0. Simple, integer, easy to reason about -
   // not a claim of official APA precision.
-  function leaguePointsForResult(winnerScore, winnerTarget, loserScore, loserTarget) {
+  // A match's league points, the way the league's system scores it:
+  // - APA 8-Ball (its scoresheet's Match Points Earned): a shutout 3-0,
+  //   the loser on the hill (one game short) 2-1, otherwise 2-0;
+  // - APA 9-Ball: 20 points split by the Score of Match chart, from the
+  //   loser's Skill Level and points made (APA_9BALL_LOSER_POINT_STEPS);
+  // - BCA/VNBA/TAP (each league its own rules): 2 to the winner, 1 to a
+  //   loser who reached half their race.
+  function leaguePointsForResult(league, winnerScore, winnerTarget, loserScore, loserTarget, loserSkillLevel) {
+    if (league && league.handicapSystem === "apa") {
+      if (league.format === "apa9ball") {
+        var loserPoints = apa9BallLoserMatchPoints(loserScore, loserTarget, loserSkillLevel);
+        return { winnerPoints: 20 - loserPoints, loserPoints: loserPoints };
+      }
+      if (loserScore <= 0) return { winnerPoints: 3, loserPoints: 0 };
+      if (loserScore >= loserTarget - 1) return { winnerPoints: 2, loserPoints: 1 };
+      return { winnerPoints: 2, loserPoints: 0 };
+    }
     var loserCredit = loserScore >= loserTarget / 2 ? 1 : 0;
     return { winnerPoints: 2, loserPoints: loserCredit };
+  }
+
+  // The loser's share of an APA 9-Ball match's 20 points. Their Skill
+  // Level picks the chart row; a race that isn't that row's (handicap
+  // off, a base number) reads the row whose target is nearest, with the
+  // points made scaled to it.
+  function apa9BallLoserMatchPoints(loserScore, loserTarget, loserSkillLevel) {
+    var sl = loserSkillLevel;
+    if (!APA_9BALL_LOSER_POINT_STEPS[sl] || APA_9BALL_POINTS_TARGET[sl] !== loserTarget) {
+      if (!APA_9BALL_LOSER_POINT_STEPS[sl]) sl = 1;
+      Object.keys(APA_9BALL_POINTS_TARGET).forEach(function (k) {
+        if (Math.abs(APA_9BALL_POINTS_TARGET[k] - loserTarget) < Math.abs(APA_9BALL_POINTS_TARGET[sl] - loserTarget)) sl = +k;
+      });
+    }
+    var rowTarget = APA_9BALL_POINTS_TARGET[sl];
+    var made = loserTarget > 0 && loserTarget !== rowTarget ? Math.floor((loserScore * rowTarget) / loserTarget) : loserScore;
+    return APA_9BALL_LOSER_POINT_STEPS[sl].filter(function (step) { return made >= step; }).length;
+  }
+
+  // The rule above in words, for the chart viewer.
+  function leaguePointsRuleKey(league) {
+    if (league.handicapSystem !== "apa") return "league.pointsRuleOther";
+    return league.format === "apa9ball" ? "league.pointsRuleApa9" : "league.pointsRuleApa8";
   }
 
   function recordLeagueMatch(league, nameA, targetA, scoreA, nameB, targetB, scoreB) {
@@ -10681,7 +10824,9 @@
     if (!memberA || !memberB) return;
     var aWon = scoreA >= targetA;
     var winner = aWon ? nameA : nameB;
-    var pts = aWon ? leaguePointsForResult(scoreA, targetA, scoreB, targetB) : leaguePointsForResult(scoreB, targetB, scoreA, targetA);
+    var pts = aWon
+      ? leaguePointsForResult(league, scoreA, targetA, scoreB, targetB, memberB.skillLevel)
+      : leaguePointsForResult(league, scoreB, targetB, scoreA, targetA, memberA.skillLevel);
     var leaguePointsA = aWon ? pts.winnerPoints : pts.loserPoints;
     var leaguePointsB = aWon ? pts.loserPoints : pts.winnerPoints;
     var ts = new Date().toISOString();
@@ -11270,10 +11415,7 @@
       return m.name === nameB;
     })[0];
     if (!memberA || !memberB) return false;
-    var targets =
-      league.handicapSystem === "bca"
-        ? leagueBcaMatchTargets(league, memberA, memberB)
-        : { targetA: leagueMatchTargetForMember(league, memberA), targetB: leagueMatchTargetForMember(league, memberB) };
+    var targets = leagueMatchTargets(league, memberA, memberB);
     var active = {
       id: "active-" + uid(),
       table: table,
@@ -11389,7 +11531,9 @@
     if (!league || !active) return;
     var scoreKey = side === "a" ? "scoreA" : "scoreB";
     var targetKey = side === "a" ? "targetA" : "targetB";
-    var next = Math.max(0, (active[scoreKey] || 0) + delta);
+    // (never past the race: APA marks no points beyond the number needed -
+    // the 9-ball's 2 when 1 was left counts as 1)
+    var next = Math.max(0, Math.min(active[targetKey], (active[scoreKey] || 0) + delta));
     active[scoreKey] = next;
 
     var name = side === "a" ? active.nameA : active.nameB;
@@ -11486,6 +11630,18 @@
 
     controls.appendChild(minusBtn);
     controls.appendChild(plusBtn);
+    // APA 9-Ball: the 9-ball is worth 2 points
+    if (league.handicapSystem === "apa" && league.format === "apa9ball") {
+      var nineBtn = document.createElement("button");
+      nineBtn.type = "button";
+      nineBtn.className = "btn-ball plus league-nine-ball";
+      nineBtn.textContent = T("league.nineBallButton");
+      nineBtn.setAttribute("aria-label", T("league.nineBallAria", { name: name }));
+      nineBtn.addEventListener("click", function () {
+        leagueAdjustScore(league, active, side, 2);
+      });
+      controls.appendChild(nineBtn);
+    }
     panel.appendChild(controls);
 
     return panel;
@@ -11529,6 +11685,8 @@
     var headerParts = [];
     if (league.tableCount > 1) headerParts.push(T("league.tableOption", { table: active.table }));
     headerParts.push(leagueNameWithTeam(league, active.nameA) + " vs " + leagueNameWithTeam(league, active.nameB));
+    // the handicapped race, A's number first: "Race 5–4" / "Points 55–46"
+    headerParts.push(T(league.format === "apa9ball" ? "league.boardPoints" : "league.boardRace", { a: active.targetA, b: active.targetB }));
     banner.textContent = headerParts.join(" — ");
     cardWrap.appendChild(banner);
 
@@ -12510,9 +12668,15 @@
     retractRatingsAt(m.ts);
     m.scoreA = scoreA;
     m.scoreB = scoreB;
-    var aWon = scoreA > scoreB;
+    // (the winner is whoever reached their own race - in a handicapped
+    // race, not always the higher score: an SL2's 19 beats an SL6's 30)
+    var aReached = scoreA >= m.targetA;
+    var bReached = scoreB >= m.targetB;
+    var aWon = aReached !== bReached ? aReached : scoreA > scoreB;
     m.winner = aWon ? m.playerA : m.playerB;
-    var pts = aWon ? leaguePointsForResult(scoreA, m.targetA, scoreB, m.targetB) : leaguePointsForResult(scoreB, m.targetB, scoreA, m.targetA);
+    var pts = aWon
+      ? leaguePointsForResult(league, scoreA, m.targetA, scoreB, m.targetB, m.skillLevelB)
+      : leaguePointsForResult(league, scoreB, m.targetB, scoreA, m.targetA, m.skillLevelA);
     m.leaguePointsA = aWon ? pts.winnerPoints : pts.loserPoints;
     m.leaguePointsB = aWon ? pts.loserPoints : pts.winnerPoints;
     m.edited = true;

@@ -263,3 +263,15 @@ Not part of the app - helpers for testing and for running this machine's own cop
   1–1 ties; a round robin tournament's ☁️ Push opens the dialog for it; a Race to 2 goes to Challonge
   only from the 🏆 screen's ☁️ button, after a confirm, and the day's push then leaves its games out.
   `node tests/probe_challonge.js [screenshot dir]`.
+- `test_handicaps.js` - league handicaps and points that match the leagues (the real functions from
+  js/app.js): all 36 cells of APA's 8-Ball Games Must Win chart, from both players' Skill Levels, in
+  the code and in data/handicap-charts.json (source cited); 8 or 9 for 8-Ball reads as 7; APA 9-Ball
+  points to win; handicap off and per-player charts; BCA races from win probability for gaps 0-500
+  (never more than twice the base, growing with the gap, fairer than an equal race); APA 8-Ball
+  points 3-0 / 2-1 / 2-0; every row and score of APA's 9-Ball Score of Match chart (APA's own
+  example: an SL3 who lost with 21 - 13-7); other systems 2 / 1 at half. `node tests/test_handicaps.js`.
+- `probe_league_handicap.js` - the same on the league page (4254): an SL7 v an SL6 shows "Race 5–4",
+  5-0 is 3-0; an SL7 v an SL3 "Race 6–2", the SL3 winning with the SL7 on the hill is 2-1; 📊 shows
+  APA's 6 by 6 grid and the points rule; APA 9-Ball "Points 19–46" with "9-ball +2" on both sides (18
+  + 2 = 19, never past the race), the SL6 loser with 30 gets 5 of 20; ✏️ to 19-35 keeps the SL2 the
+  winner (14-6). `node tests/probe_league_handicap.js [screenshot dir]`.

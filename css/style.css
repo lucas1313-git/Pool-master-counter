@@ -9004,7 +9004,7 @@ body.network-guest-mode #header-group-start {
    one step further with color-mix rather than reusing --bg-card verbatim,
    or it'd read as flush with the card instead of nested inside it. */
 /* The organizer's own editable Skill Level chart for a non-APA system
-   (see btn-league-handicap-chart-open / leagueMatchTargetForMember) -
+   (see btn-league-handicap-chart-open / leagueMatchTargets) -
    same look as .league-standings-table, just its own class since it
    lives in a different overlay entirely. */
 .league-handicap-chart-table {
@@ -9036,6 +9036,29 @@ body.network-guest-mode #header-group-start {
 .league-handicap-chart-value-input {
   width: 100%;
   min-width: 0;
+}
+
+/* APA 8-Ball's two-player grid: 7 columns, so tighter and centred; the
+   same-level diagonal shaded the way APA prints it */
+.league-handicap-chart-grid th,
+.league-handicap-chart-grid td {
+  padding: 8px 4px;
+  text-align: center;
+}
+.league-handicap-chart-grid tbody th {
+  font-size: 1.05rem;
+  color: var(--text);
+}
+.league-handicap-chart-grid .league-handicap-chart-same {
+  background: var(--bg-card);
+  font-weight: 700;
+}
+
+/* APA 9-Ball's "9-ball +2" on the league board */
+.btn-ball.league-nine-ball {
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 1.05rem;
 }
 
 .league-table-slot-queue-box {

@@ -232,7 +232,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await enterScore(3, 2);
   let lg = await page.evaluate(() => JSON.parse(localStorage.getItem("poolMasterCounter.leagues.v1"))[0]);
   const ann = lg.members.find((m) => m.name === "Ann"), ben = lg.members.find((m) => m.name === "Ben");
-  check("✏️ the newest (0-3) becomes 3-2 for Ann: Ann 2 wins / 4 points, Ben 0 wins / 1 point (2 of 3: half reached)", ann.matchesWon === 2 && ann.leaguePoints === 4 && ben.matchesWon === 0 && ben.leaguePoints === 1 && ann.matchesPlayed === 2, { ann, ben });
+  check("✏️ the newest (0-3) becomes 3-2 for Ann: Ann 2 wins / 4 points, Ben 0 wins / 1 point (2 of 3: on the hill, APA 8-Ball's 2-1)", ann.matchesWon === 2 && ann.leaguePoints === 4 && ben.matchesWon === 0 && ben.leaguePoints === 1 && ann.matchesPlayed === 2, { ann, ben });
   await page.evaluate(() => document.querySelector("#league-match-list .league-match-delete").click());
   await sleep(300);
   await okModal();

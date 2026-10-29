@@ -1,7 +1,18 @@
 {
-  "_comment": "League handicap charts, keyed by system then game format (8ball = games needed to win, 9ball = points needed to win). Edit freely - the app fetches this file at runtime, so changes take effect on next reload with no code changes needed. A Skill Level missing from a chart (or an empty chart, like bca/vnba/tap start with below) falls back to the league's own 'Base Games to Win' setting. APA's numbers are the real, published nationwide chart; BCA, VNBA and TAP don't publish one universal chart (each local league/operator sets its own), so those start empty for you to fill in with your own league's posted numbers.",
+  "_comment": "League handicap charts, keyed by system then game format (8ball = games needed to win, 9ball = points needed to win). Edit freely - the app fetches this file at runtime, so changes take effect on next reload with no code changes needed. A chart is either per player ({\"SL\": target}) or for two players ({\"your SL\": {\"opponent's SL\": [your target, their target]}}, like APA 8-Ball). A Skill Level missing from a chart (or an empty chart, like bca/vnba/tap start with below) falls back to the league's own 'Base Games to Win' setting. APA's numbers are its real, published nationwide charts (see _sources); BCA, VNBA and TAP don't publish one universal chart (each local league/operator sets its own), so those start empty for you to fill in with your own league's posted numbers.",
+  "_sources": {
+    "apa.8ball": "APA 8-Ball Games Must Win Chart (singles, Skill Levels 2-7), APA Official Team Manual, The Equalizer Handicap System > Games Must Win Charts: https://rules.poolplayers.com/the-equalizer-handicap-system/games-must-win-charts/ - all 36 cells checked against APA's chart image on 2026-10-28; none unverified.",
+    "apa.9ball": "APA 9-Ball Points Required To Win Chart (Skill Levels 1-9), same page - all 9 values checked on 2026-10-28."
+  },
   "apa": {
-    "8ball": { "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9 },
+    "8ball": {
+      "2": { "2": [2, 2], "3": [2, 3], "4": [2, 4], "5": [2, 5], "6": [2, 6], "7": [2, 7] },
+      "3": { "2": [3, 2], "3": [2, 2], "4": [2, 3], "5": [2, 4], "6": [2, 5], "7": [2, 6] },
+      "4": { "2": [4, 2], "3": [3, 2], "4": [3, 3], "5": [3, 4], "6": [3, 5], "7": [2, 5] },
+      "5": { "2": [5, 2], "3": [4, 2], "4": [4, 3], "5": [4, 4], "6": [4, 5], "7": [3, 5] },
+      "6": { "2": [6, 2], "3": [5, 2], "4": [5, 3], "5": [5, 4], "6": [5, 5], "7": [4, 5] },
+      "7": { "2": [7, 2], "3": [6, 2], "4": [5, 2], "5": [5, 3], "6": [5, 4], "7": [5, 5] }
+    },
     "9ball": { "1": 14, "2": 19, "3": 25, "4": 31, "5": 38, "6": 46, "7": 55, "8": 65, "9": 75 }
   },
   "bca": {
