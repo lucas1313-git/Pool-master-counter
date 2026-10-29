@@ -7847,19 +7847,20 @@
     });
   }
 
+  // A new session never touches a bracket tournament in progress - that one
+  // ends from its own page (Abandon). (It used to end it silently, with no
+  // way back.)
   function resetSessionAndTournament() {
-    var hasTournament = !!TOURNAMENT;
+    var hasTournament = !!TOURNAMENT && !TOURNAMENT.champion;
     if (state.gameHistory.length === 0) {
-      var msg = hasTournament ? T("confirm.resetSessionAndTournament") : T("confirm.startNewSession");
-      confirmModal(msg, function () {
+      confirmModal(T("confirm.startNewSession") + (hasTournament ? " " + T("confirm.tournamentKeptNote") : ""), function () {
         startNewSession(false);
-        endTournamentSilently();
       });
       return;
     }
     var count = state.gameHistory.length;
     var message = T(count === 1 ? "saveSession.messageOne" : "saveSession.messageMany", { count: count });
-    if (hasTournament) message += " " + T("confirm.alsoEndsTournamentNote");
+    if (hasTournament) message += " " + T("confirm.tournamentKeptNote");
     saveSessionMessage.textContent = message;
     saveSessionOverlay.classList.remove("hidden");
   }
@@ -12479,6 +12480,101 @@
     }
 
     renderLeagueActiveMatches();
+    renderLeagueMatchList(league);
+  }
+
+  // ---------- League matches played: change a score, delete one ----------
+  // Standings move by exactly that match's own share (taken back out, the
+  // corrected one put in), so points from anything else are never touched;
+  // its rating change is taken back and, for a corrected score, made again.
+  function leagueMatchEffects(league, m, sign) {
+    var memberA = league.members.filter(function (x) { return x.name === m.playerA; })[0];
+    var memberB = league.members.filter(function (x) { return x.name === m.playerB; })[0];
+    if (memberA) {
+      memberA.matchesPlayed += sign;
+      if (m.winner === m.playerA) memberA.matchesWon += sign;
+      memberA.leaguePoints += sign * (m.leaguePointsA || 0);
+    }
+    if (memberB) {
+      memberB.matchesPlayed += sign;
+      if (m.winner === m.playerB) memberB.matchesWon += sign;
+      memberB.leaguePoints += sign * (m.leaguePointsB || 0);
+    }
+  }
+  function leagueSetMatchScore(league, m, scoreA, scoreB) {
+    leagueMatchEffects(league, m, -1);
+    retractRatingsAt(m.ts);
+    m.scoreA = scoreA;
+    m.scoreB = scoreB;
+    var aWon = scoreA > scoreB;
+    m.winner = aWon ? m.playerA : m.playerB;
+    var pts = aWon ? leaguePointsForResult(scoreA, m.targetA, scoreB, m.targetB) : leaguePointsForResult(scoreB, m.targetB, scoreA, m.targetA);
+    m.leaguePointsA = aWon ? pts.winnerPoints : pts.loserPoints;
+    m.leaguePointsB = aWon ? pts.loserPoints : pts.winnerPoints;
+    m.edited = true;
+    leagueMatchEffects(league, m, 1);
+    applyPairwiseRatingResult(m.winner, aWon ? m.playerB : m.playerA, m.ts, leagueMatchRatingWeight(league, m));
+    [m.playerA, m.playerB].forEach(function (n) {
+      var entry = getPlayerRatingEntry(n);
+      if (entry) entry.history.sort(function (x, y) { return x.ts.localeCompare(y.ts); });
+    });
+    saveRatingsToStorage(PLAYER_RATINGS);
+    saveLeaguesToStorage(LEAGUES);
+    renderLeaguePage();
+    renderAll();
+  }
+  function leagueDeleteMatch(league, m) {
+    leagueMatchEffects(league, m, -1);
+    retractRatingsAt(m.ts);
+    league.matches = league.matches.filter(function (x) { return x !== m; });
+    [m.playerA, m.playerB].forEach(function (n) {
+      if (league.sessionGameCounts && league.sessionGameCounts[n] > 0) league.sessionGameCounts[n] -= 1;
+    });
+    saveRatingsToStorage(PLAYER_RATINGS);
+    saveLeaguesToStorage(LEAGUES);
+    renderLeaguePage();
+    renderAll();
+  }
+  function renderLeagueMatchList(league) {
+    var section = document.getElementById("league-matches-section");
+    var list = document.getElementById("league-match-list");
+    if (!section || !list) return;
+    var matches = league && Array.isArray(league.matches) ? league.matches.slice().reverse() : [];
+    section.classList.toggle("hidden", !matches.length);
+    list.innerHTML = "";
+    matches.forEach(function (m) {
+      var li = document.createElement("li");
+      li.className = "league-match-row";
+      var text = document.createElement("span");
+      text.className = "league-match-text";
+      text.textContent = formatTimestamp(m.ts, true) + " · " + m.playerA + " " + m.scoreA + " – " + m.scoreB + " " + m.playerB + (m.edited ? " " + T("league.matchEdited") : "");
+      li.appendChild(text);
+      if (league.isOrganizer) {
+        var edit = document.createElement("button");
+        edit.type = "button";
+        edit.className = "btn btn-ghost league-match-edit";
+        edit.textContent = "✏️";
+        edit.setAttribute("aria-label", T("league.editMatchAria"));
+        edit.addEventListener("click", function () {
+          tournamentScoreDialogFor(m.playerA, m.playerB, m.scoreA, m.scoreB, function (a, b) {
+            leagueSetMatchScore(league, m, a, b);
+          });
+        });
+        var del = document.createElement("button");
+        del.type = "button";
+        del.className = "btn btn-ghost league-match-delete";
+        del.textContent = "🗑";
+        del.setAttribute("aria-label", T("league.deleteMatchAria"));
+        del.addEventListener("click", function () {
+          confirmModal(T("league.deleteMatchConfirm", { a: m.playerA, b: m.playerB }), function () {
+            leagueDeleteMatch(league, m);
+          });
+        });
+        li.appendChild(edit);
+        li.appendChild(del);
+      }
+      list.appendChild(li);
+    });
   }
 
   function openLeaguePage(skipHistory) {
@@ -19126,6 +19222,18 @@
       }
       TOURNAMENT = JSON.parse(JSON.stringify(data.tournament));
       saveTournamentToStorage(TOURNAMENT);
+      if (Array.isArray(data.gameHistory) && data.gameHistory.length) {
+        var haveTs = {};
+        state.gameHistory.forEach(function (e) {
+          if (e && e.ts) haveTs[e.ts] = true;
+        });
+        state.gameHistory = state.gameHistory.concat(data.gameHistory.filter(function (e) {
+          return e && e.ts && !haveTs[e.ts];
+        })).sort(function (x, y) {
+          return (y.ts || "").localeCompare(x.ts || "");
+        });
+        saveState();
+      }
       if (data.ratingHistory) {
         var importedTournamentRatings = {};
         Object.keys(data.ratingHistory).forEach(function (name) {
@@ -27644,6 +27752,7 @@
     var ts = new Date().toISOString();
     TOURNAMENT_RESULTS.unshift({
       ts: ts,
+      tournamentId: t.createdAt,
       // Round Robin can end in a tie shared by more than one champion;
       // t.championNames already holds all of them there. Bracket formats
       // only ever have a single winner.
@@ -28412,7 +28521,9 @@
   // swissStandings below, which is for DISPLAY and ties by name instead.
   function swissPairingOrder(t) {
     var wins = swissWinsMap(t);
-    return t.players.slice().sort(function (a, b) {
+    return t.players.filter(function (name) {
+      return !(t.withdrawn && t.withdrawn[name]);
+    }).sort(function (a, b) {
       return (wins[b] || 0) - (wins[a] || 0) || t.players.indexOf(a) - t.players.indexOf(b);
     });
   }
@@ -29332,13 +29443,15 @@
   }
 
   // scores / tally: the board's points at the win and the match score after it, by entrant.
-  function recordTournamentRackWin(winnerLabel, loserLabel, durationMs, scores, tally) {
+  // atMs (optional): when (a score entered after the fact: one rack per ms).
+  // Returns the rack's time - its id in the history and the ratings.
+  function recordTournamentRackWin(winnerLabel, loserLabel, durationMs, scores, tally, atMs) {
     var entrantMembers = TOURNAMENT.entrantMembers || {};
     var winnerMembers = entrantMembers[winnerLabel] || [winnerLabel];
     var loserMembers = entrantMembers[loserLabel] || [loserLabel];
     var isTeam = winnerMembers.length > 1 || loserMembers.length > 1;
     var typeLabel = GAME_TYPES[TOURNAMENT.gameType] ? GAME_TYPES[TOURNAMENT.gameType].label : TOURNAMENT.gameType;
-    var ts = new Date().toISOString();
+    var ts = new Date(atMs || Date.now()).toISOString();
     state.gameHistory.unshift({
       ts: ts,
       gameType: TOURNAMENT.gameType,
@@ -29353,7 +29466,8 @@
       summary: winnerLabel + " won " + typeLabel + " (tournament vs " + loserLabel + ")",
       teamRated: isTeam,
       scores: scores || null,
-      raceTally: tally || null
+      raceTally: tally || null,
+      tournamentId: TOURNAMENT.createdAt
     });
     trimGameHistory();
     var rackWeight = ratingWeightFor(TOURNAMENT.gameType, TOURNAMENT.target);
@@ -29361,6 +29475,7 @@
     else applyPairwiseRatingResult(winnerMembers[0], loserMembers[0], ts, rackWeight);
     saveRatingsToStorage(PLAYER_RATINGS);
     saveState();
+    return ts;
   }
 
   // Offers every previously-saved team name PLUS whatever's currently
@@ -29715,6 +29830,545 @@
     if (tournamentMultiClientCheckbox.checked) openMultiTableHostPrompt("wizardGame");
   }
 
+  // ---------- Corrections: undo a rack, change a result, walkovers,
+  // withdrawals, late players, tables (a tournament director's tools) ----------
+
+  // Takes one game's rating change back out (a rack undone, a match
+  // cancelled or abandoned): exact when it's still each player's latest
+  // point; if other games came after, that point is removed and the later
+  // points move by the same amount (the close way, short of rebuilding every
+  // rating). Returns name -> removed points (for Recover Data).
+  function retractRatingsAt(ts) {
+    var removed = {};
+    Object.keys(PLAYER_RATINGS).forEach(function (key) {
+      var entry = PLAYER_RATINGS[key];
+      var history = entry.history || [];
+      for (var i = history.length - 1; i >= 0; i--) {
+        if (history[i].ts !== ts) continue;
+        var h = history.splice(i, 1)[0];
+        entry.rating -= h.delta;
+        if (h.fromGame) entry.gamesPlayed = Math.max(0, entry.gamesPlayed - 1);
+        for (var j = i; j < history.length; j++) history[j].rating -= h.delta;
+        (removed[key] = removed[key] || []).push(h);
+      }
+    });
+    return removed;
+  }
+  // Takes games (by time) out of the live session and every player's saved
+  // log - with their rating changes. Returns the removed live entries and
+  // rating points (for Recover Data).
+  function removeGamesEverywhere(tsList) {
+    var set = {};
+    tsList.forEach(function (ts) {
+      if (ts) set[ts] = true;
+    });
+    var ratingPoints = {};
+    tsList.slice().sort().reverse().forEach(function (ts) {
+      var removed = retractRatingsAt(ts);
+      Object.keys(removed).forEach(function (k) {
+        ratingPoints[k] = (ratingPoints[k] || []).concat(removed[k]);
+      });
+    });
+    var liveRemoved = state.gameHistory.filter(function (e) {
+      return e && e.ts && set[e.ts];
+    });
+    state.gameHistory = state.gameHistory.filter(function (e) {
+      return !(e && e.ts && set[e.ts]);
+    });
+    var statsChanged = false;
+    Object.keys(PLAYER_STATS).forEach(function (key) {
+      var entry = PLAYER_STATS[key];
+      (entry.sessions || []).forEach(function (sess) {
+        var before = (sess.games || []).length;
+        sess.games = (sess.games || []).filter(function (g) {
+          return !(g && g.ts && set[g.ts]);
+        });
+        if (sess.games.length !== before) {
+          statsChanged = true;
+          var won = sess.games.filter(function (g) {
+            return g.result === "won";
+          });
+          sess.wins = won.length;
+          sess.gamesWon = won.map(function (g) {
+            return g.gameLabel;
+          });
+        }
+      });
+      entry.sessions = (entry.sessions || []).filter(function (sess) {
+        return (sess.games || []).length;
+      });
+    });
+    if (statsChanged) savePlayerStatsToStorage(PLAYER_STATS);
+    saveRatingsToStorage(PLAYER_RATINGS);
+    saveState();
+    return { live: liveRemoved, ratings: ratingPoints };
+  }
+  // Every rack of this tournament still on record: kept on its matches,
+  // live ones on their boards, and (older tournaments) found by tag.
+  function tournamentRackTs(t) {
+    var out = {};
+    allBracketMatches(t).forEach(function (m) {
+      (m.racks || []).forEach(function (r) {
+        out[r.ts] = true;
+      });
+    });
+    (t.activeMatches || []).forEach(function (a) {
+      (a.racks || []).forEach(function (r) {
+        out[r.ts] = true;
+      });
+    });
+    var startTs = t.createdAt || "";
+    state.gameHistory.forEach(function (e) {
+      if (!e || !e.ts) return;
+      if (e.tournamentId === t.createdAt || (!e.tournamentId && e.ts >= startTs && / \(tournament vs /.test(e.summary || ""))) out[e.ts] = true;
+    });
+    return Object.keys(out);
+  }
+  function activeFor(t, match) {
+    return (t.activeMatches || []).filter(function (a) {
+      return a.matchId === match.id;
+    })[0] || null;
+  }
+  // A match's result goes in (live, entered, a walkover) - then the bracket
+  // moves on, withdrawn players' matches resolve, the champion is recorded.
+  function finishTournamentMatch(t, match, winnerName, scoreA, scoreB) {
+    var championAlreadyDecided = !!t.champion;
+    reportBracketResult(t, match, winnerName, scoreA, scoreB);
+    applyTournamentWithdrawals(t);
+    if (!championAlreadyDecided && t.champion) {
+      recordTournamentCompletion(t);
+      playTournamentChampionSound();
+    }
+    saveTournamentToStorage(t);
+    renderTournamentPage();
+    renderAll();
+  }
+
+  // ↩ Undo last rack on a live board: the rack, its game and its rating change.
+  function tournamentUndoLastRack(active) {
+    var t = TOURNAMENT;
+    var last = (active.racks || []).pop();
+    if (!t || !last) return;
+    if (last.side === "a") active.aWins = Math.max(0, active.aWins - 1);
+    else active.bWins = Math.max(0, active.bWins - 1);
+    active.aBalls = 0;
+    active.bBalls = 0;
+    removeGamesEverywhere([last.ts]);
+    saveTournamentToStorage(t);
+    renderTournamentActiveMatch();
+    renderAll();
+    showToast(T("tournament.rackUndone"));
+  }
+  // ✖ Cancel match: off the table, as if never started (its racks undone).
+  function tournamentCancelMatch(active) {
+    var t = TOURNAMENT;
+    if (!t) return;
+    confirmModal(T("tournament.cancelMatchConfirm"), function () {
+      removeGamesEverywhere((active.racks || []).map(function (r) {
+        return r.ts;
+      }));
+      var i = t.activeMatches.indexOf(active);
+      if (i !== -1) t.activeMatches.splice(i, 1);
+      if (t.focusedTable === active.table) t.focusedTable = "all";
+      saveTournamentToStorage(t);
+      renderTournamentPage();
+      renderAll();
+    });
+  }
+  // 🏳️ Walkover: the other side goes through. Unrated, no racks added (racks
+  // already played on a live board stay - they were played).
+  function tournamentForfeit(match, forfeitingName) {
+    var t = TOURNAMENT;
+    if (!t || match.winner || (match.a !== forfeitingName && match.b !== forfeitingName)) return;
+    var winner = match.a === forfeitingName ? match.b : match.a;
+    var active = activeFor(t, match);
+    var scoreA = null, scoreB = null;
+    if (active) {
+      match.racks = (match.racks || []).concat(active.racks || []);
+      scoreA = active.aWins;
+      scoreB = active.bWins;
+      t.activeMatches.splice(t.activeMatches.indexOf(active), 1);
+    }
+    match.forfeit = forfeitingName;
+    finishTournamentMatch(t, match, winner, scoreA, scoreB);
+  }
+  // A withdrawn player's matches go to their opponents as they come up.
+  function applyTournamentWithdrawals(t) {
+    if (!t.withdrawn) return;
+    for (var guard = 0; guard < 500; guard++) {
+      var next = allBracketMatches(t).filter(function (m) {
+        return m.a && m.b && !m.winner && !activeFor(t, m) && (t.withdrawn[m.a] || t.withdrawn[m.b]);
+      })[0];
+      if (!next) return;
+      var out = t.withdrawn[next.a] ? next.a : next.b;
+      next.forfeit = out;
+      reportBracketResult(t, next, next.a === out ? next.b : next.a, null, null);
+    }
+  }
+  function tournamentWithdraw(name) {
+    var t = TOURNAMENT;
+    if (!t || t.champion) return;
+    t.withdrawn = t.withdrawn || {};
+    t.withdrawn[name] = true;
+    // (a match of theirs on a table now: a walkover too)
+    (t.activeMatches || []).slice().forEach(function (a) {
+      var m = findBracketMatchById(t, a.matchId);
+      if (m && (m.a === name || m.b === name)) tournamentForfeit(m, name);
+    });
+    var championAlreadyDecided = !!t.champion;
+    applyTournamentWithdrawals(t);
+    if (!championAlreadyDecided && t.champion) {
+      recordTournamentCompletion(t);
+      playTournamentChampionSound();
+    }
+    saveTournamentToStorage(t);
+    renderTournamentPage();
+    showToast(T("tournament.withdrawnToast", { name: name }));
+  }
+
+  // The matches a result feeds (the next winners match, the losers-bracket
+  // match its loser drops to, the grand final), standard layout only.
+  function matchDependents(t, match) {
+    var out = [];
+    var pos = findWbPosition(t, match);
+    var lbAll = [].concat.apply([], t.lbRounds || []);
+    if (pos) {
+      if (pos.ri + 1 < t.wb.length) out.push({ match: t.wb[pos.ri + 1][Math.floor(pos.mi / 2)], side: pos.mi % 2 === 0 ? "a" : "b" });
+      else if (t.grandFinal && t.grandFinal[0]) out.push({ match: t.grandFinal[0], gf: true });
+    }
+    var fedLb = false;
+    lbAll.forEach(function (m) {
+      if (m.srcA && m.srcA.id === match.id) {
+        out.push({ match: m, side: "a" });
+        fedLb = true;
+      }
+      if (m.srcB && m.srcB.id === match.id) {
+        out.push({ match: m, side: "b" });
+        fedLb = true;
+      }
+    });
+    if (!pos && lbAll.indexOf(match) !== -1 && !fedLb && t.grandFinal && t.grandFinal[0]) out.push({ match: t.grandFinal[0], gf: true });
+    return out;
+  }
+  // Can this finished result change? Not once a match it fed has been
+  // played (or is being played) - that one has to change first. Returns the
+  // match in the way, or null.
+  function resultChangeBlocker(t, match) {
+    if (!match.winner) return null;
+    if (t.format === "roundrobin") return null;
+    if (t.format === "swiss") {
+      var latest = t.rounds[t.rounds.length - 1];
+      return latest.indexOf(match) !== -1 ? null : { reason: "laterRound" };
+    }
+    if (t.bracketVersion !== 2) return { reason: "older" };
+    if (isGrandFinalMatch(t, match)) {
+      var later = t.grandFinal[t.grandFinal.indexOf(match) + 1];
+      return later && (later.winner || activeFor(t, later)) ? { match: later } : null;
+    }
+    var blocker = null;
+    matchDependents(t, match).forEach(function (d) {
+      if (!blocker && (d.match.winner || activeFor(t, d.match))) blocker = { match: d.match };
+    });
+    return blocker;
+  }
+  // Re-opens a finished match: what it fed is cleared (the bracket hadn't
+  // played it yet - see resultChangeBlocker), and a champion it decided is
+  // undecided again (its record taken back out).
+  function reopenTournamentMatch(t, match) {
+    if (t.champion) {
+      TOURNAMENT_RESULTS = TOURNAMENT_RESULTS.filter(function (r) {
+        return r.tournamentId !== t.createdAt;
+      });
+      saveTournamentResultsToStorage(TOURNAMENT_RESULTS);
+    }
+    t.champion = null;
+    t.championNames = null;
+    if (t.format === "single" || t.format === "double") {
+      if (isGrandFinalMatch(t, match)) {
+        t.grandFinal = t.grandFinal.slice(0, t.grandFinal.indexOf(match) + 1);
+      } else {
+        matchDependents(t, match).forEach(function (d) {
+          if (d.gf) {
+            t.grandFinal = [];
+            if (findWbPosition(t, match)) t.wbChampion = null;
+            else t.lbChampion = null;
+          } else {
+            d.match[d.side] = null;
+          }
+        });
+        if (findWbPosition(t, match) && !matchDependents(t, match).length) t.wbChampion = null;
+        // (the losers final: no champion of the losers bracket yet)
+        if (!findWbPosition(t, match) && !matchDependents(t, match).some(function (d) { return !d.gf; })) t.lbChampion = null;
+        if (t.format === "double" && t.wb.length === 1 && findWbPosition(t, match)) t.lbChampion = null;
+      }
+    }
+    match.winner = null;
+    match.loser = null;
+    match.collected = false;
+    match.scoreA = null;
+    match.scoreB = null;
+    delete match.forfeit;
+  }
+  // 📝 A result entered as a score (a scoresheet, a correction): the match's
+  // own racks out, the entered ones in (rated, in the stats), the bracket
+  // moving on from it.
+  function tournamentSetResult(match, scoreA, scoreB) {
+    var t = TOURNAMENT;
+    if (!t || !match.a || !match.b || scoreA === scoreB) return;
+    if (match.winner) {
+      var blocker = resultChangeBlocker(t, match);
+      if (blocker) {
+        alertModal(blocker.match ? T("tournament.editBlocked", { match: blocker.match.a + " vs " + blocker.match.b, round: matchRoundLabel(t, blocker.match) })
+          : T(blocker.reason === "laterRound" ? "tournament.editBlockedSwiss" : "tournament.editBlockedOlder"));
+        return;
+      }
+      reopenTournamentMatch(t, match);
+    }
+    var active = activeFor(t, match);
+    var oldRacks = (match.racks || []).concat(active ? active.racks || [] : []);
+    removeGamesEverywhere(oldRacks.map(function (r) {
+      return r.ts;
+    }));
+    if (active) t.activeMatches.splice(t.activeMatches.indexOf(active), 1);
+    match.racks = [];
+    // (the racks in turn - winner, loser, winner... - the winner's left over
+    // last, so the winner takes the deciding rack)
+    var winnerSide = scoreA > scoreB ? "a" : "b";
+    var order = [];
+    var w = Math.max(scoreA, scoreB), l = Math.min(scoreA, scoreB);
+    for (var r = 0; r < l; r++) order.push(winnerSide, winnerSide === "a" ? "b" : "a");
+    for (r = l; r < w; r++) order.push(winnerSide);
+    var a = 0, b = 0, at = Date.now();
+    order.forEach(function (side) {
+      if (side === "a") a++;
+      else b++;
+      var tally = {};
+      tally[match.a] = a;
+      tally[match.b] = b;
+      var ts = recordTournamentRackWin(side === "a" ? match.a : match.b, side === "a" ? match.b : match.a, null, null, tally, at++);
+      match.racks.push({ ts: ts, side: side });
+    });
+    finishTournamentMatch(t, match, scoreA > scoreB ? match.a : match.b, scoreA, scoreB);
+  }
+
+  // ➕ A late player: into a round-1 bye whose player hasn't played on yet
+  // (elimination), into every remaining pairing (round robin), into the next
+  // round's pairing (Swiss).
+  function tournamentAddLatePlayer(rawName) {
+    var t = TOURNAMENT;
+    var name = resolvePlayerName(rawName || "");
+    if (!t || !name) return;
+    if (t.champion) return;
+    if ((t.players || []).some(function (p) {
+      return normalizeNameKey(p) === normalizeNameKey(name);
+    })) {
+      showToast(T("tournament.lateAlreadyIn", { name: name }));
+      return;
+    }
+    if (t.format === "roundrobin") {
+      t.players.forEach(function (p) {
+        if (!(t.withdrawn && t.withdrawn[p])) t.matches.push(createBracketMatch(p, name, "Round Robin"));
+      });
+      t.players.push(name);
+    } else if (t.format === "swiss") {
+      t.players.push(name);
+    } else {
+      if (t.bracketVersion !== 2) {
+        alertModal(T("tournament.editBlockedOlder"));
+        return;
+      }
+      var lbStarted = [].concat.apply([], t.lbRounds || []).some(function (m) {
+        return m.winner || activeFor(t, m);
+      });
+      var spot = null;
+      t.wb[0].forEach(function (m, mi) {
+        if (spot || (m.a !== null) === (m.b !== null)) return;
+        var next = t.wb[1] ? t.wb[1][Math.floor(mi / 2)] : null;
+        if (next && (next.winner || activeFor(t, next))) return;
+        spot = { match: m, mi: mi, next: next };
+      });
+      if (!spot || (t.format === "double" && lbStarted)) {
+        alertModal(T("tournament.lateNoSpot"));
+        return;
+      }
+      var m0 = spot.match;
+      if (m0.a === null) m0.a = name;
+      else m0.b = name;
+      m0.winner = null;
+      m0.loser = null;
+      m0.collected = false;
+      if (spot.next) spot.next[spot.mi % 2 === 0 ? "a" : "b"] = null;
+      t.players.push(name);
+      if (t.format === "double") {
+        // (the losers bracket laid out again with this match in it; the
+        // results so far flow in again)
+        t.lbRounds = buildLosersBracketRounds(t.wb);
+        t.wb.forEach(function (round) {
+          round.forEach(function (wm) {
+            wm.collected = false;
+          });
+        });
+      }
+      advanceBracket(t);
+    }
+    saveTournamentToStorage(t);
+    renderTournamentPage();
+    showToast(T("tournament.lateAdded", { name: name }));
+  }
+
+  // 🪑 Tables: more or fewer during the event (never fewer than a table in use).
+  function tournamentChangeTables(delta) {
+    var t = TOURNAMENT;
+    if (!t) return;
+    var inUse = (t.activeMatches || []).reduce(function (max, a) {
+      return Math.max(max, a.table || 1);
+    }, 1);
+    t.tableCount = Math.max(inUse, Math.min(20, (t.tableCount || 1) + delta));
+    saveTournamentToStorage(t);
+    renderTournamentPage();
+  }
+
+  // A small chooser: a title and a few buttons (and Cancel).
+  function tournamentChooser(title, choices) {
+    var overlay = document.createElement("div");
+    overlay.className = "confirm-modal-overlay tournament-chooser-overlay";
+    overlay.id = "tournament-chooser-overlay";
+    var card = document.createElement("div");
+    card.className = "confirm-modal-card";
+    var h = document.createElement("p");
+    h.className = "confirm-modal-message";
+    h.textContent = title;
+    card.appendChild(h);
+    var close = function () {
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    };
+    choices.forEach(function (c) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn " + (c.primary ? "btn-primary" : "btn-ghost") + " tournament-chooser-btn";
+      btn.textContent = c.label;
+      btn.addEventListener("click", function () {
+        close();
+        c.run();
+      });
+      card.appendChild(btn);
+    });
+    var cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.className = "btn btn-ghost";
+    cancel.textContent = T("common.cancel");
+    cancel.addEventListener("click", close);
+    card.appendChild(cancel);
+    overlay.appendChild(card);
+    overlay.addEventListener("click", function (e) {
+      if (e.target === overlay) close();
+    });
+    document.body.appendChild(overlay);
+  }
+  // 📝 The score of a match: two boxes, Save.
+  function tournamentScoreDialog(match) {
+    tournamentScoreDialogFor(match.a, match.b, match.scoreA, match.scoreB, function (a, b) {
+      tournamentSetResult(match, a, b);
+    });
+  }
+  function tournamentScoreDialogFor(nameA, nameB, scoreA, scoreB, onSave) {
+    var match = { a: nameA, b: nameB, scoreA: scoreA, scoreB: scoreB };
+    var overlay = document.createElement("div");
+    overlay.className = "confirm-modal-overlay tournament-chooser-overlay";
+    overlay.id = "tournament-score-overlay";
+    var card = document.createElement("div");
+    card.className = "confirm-modal-card";
+    var h = document.createElement("p");
+    h.className = "confirm-modal-message";
+    h.textContent = T("tournament.enterScoreTitle", { a: match.a, b: match.b });
+    card.appendChild(h);
+    var row = document.createElement("div");
+    row.className = "row tournament-score-row";
+    function box(label, value, id) {
+      var wrap = document.createElement("label");
+      wrap.className = "tournament-score-box";
+      wrap.appendChild(document.createTextNode(label + " "));
+      var input = document.createElement("input");
+      input.type = "number";
+      input.min = "0";
+      input.max = "99";
+      input.inputMode = "numeric";
+      input.className = "big-number-input";
+      input.id = id;
+      input.value = value;
+      wrap.appendChild(input);
+      row.appendChild(wrap);
+      return input;
+    }
+    var inA = box(match.a, typeof match.scoreA === "number" ? match.scoreA : "", "tournament-score-a");
+    var inB = box(match.b, typeof match.scoreB === "number" ? match.scoreB : "", "tournament-score-b");
+    card.appendChild(row);
+    var note = document.createElement("p");
+    note.className = "player-stats-note";
+    card.appendChild(note);
+    var close = function () {
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    };
+    var save = document.createElement("button");
+    save.type = "button";
+    save.className = "btn btn-primary";
+    save.id = "btn-tournament-score-save";
+    save.textContent = T("tournament.enterScoreSave");
+    save.addEventListener("click", function () {
+      var a = parseInt(inA.value, 10), b = parseInt(inB.value, 10);
+      if (!(a >= 0) || !(b >= 0) || a === b) {
+        note.textContent = T("tournament.enterScoreInvalid");
+        return;
+      }
+      close();
+      onSave(a, b);
+    });
+    var cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.className = "btn btn-ghost";
+    cancel.textContent = T("common.cancel");
+    cancel.addEventListener("click", close);
+    card.appendChild(save);
+    card.appendChild(cancel);
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+  }
+  // ⋯ on a match card: enter its score, a walkover (still to play), change it (played).
+  function openMatchToolsChooser(t, match) {
+    if (match.winner) {
+      tournamentChooser(match.a + " vs " + match.b, [{ label: T("tournament.changeResult"), primary: true, run: function () { tournamentScoreDialog(match); } }]);
+      return;
+    }
+    tournamentChooser(match.a + " vs " + match.b, [
+      { label: T("tournament.enterScore"), primary: true, run: function () { tournamentScoreDialog(match); } },
+      { label: T("tournament.walkover", { name: match.a }), run: function () { tournamentForfeit(match, match.a); } },
+      { label: T("tournament.walkover", { name: match.b }), run: function () { tournamentForfeit(match, match.b); } }
+    ]);
+  }
+
+  document.getElementById("btn-tournament-late-player").addEventListener("click", function () {
+    var t = TOURNAMENT;
+    if (!t) return;
+    var known = getAllKnownPlayerNames().filter(function (n) {
+      return (t.players || []).indexOf(n) === -1;
+    });
+    promptModal(T("tournament.latePrompt"), "", function (name) {
+      tournamentAddLatePlayer(name);
+    }, null, known);
+  });
+  document.getElementById("btn-tournament-withdraw").addEventListener("click", function () {
+    var t = TOURNAMENT;
+    if (!t) return;
+    var still = (t.players || []).filter(function (n) {
+      return !(t.withdrawn && t.withdrawn[n]);
+    });
+    tournamentChooser(T("tournament.withdrawWho"), still.map(function (n) {
+      return { label: n, run: function () { confirmModal(T("tournament.withdrawConfirm", { name: n }), function () { tournamentWithdraw(n); }); } };
+    }));
+  });
+  document.getElementById("btn-tournament-tables-less").addEventListener("click", function () { tournamentChangeTables(-1); });
+  document.getElementById("btn-tournament-tables-more").addEventListener("click", function () { tournamentChangeTables(1); });
+
   function abandonTournament() {
     var isDone = TOURNAMENT && TOURNAMENT.champion;
     var clear = function () {
@@ -29724,9 +30378,12 @@
         // already crowned a champion is just being dismissed after a
         // normal finish, and its rating impact is meant to stick exactly
         // like any other completed game.
+        // Only this tournament's own racks come out - with their rating
+        // changes - not games played meanwhile on other tables or in a league.
         if (!isDone) {
-          var startMs = new Date(TOURNAMENT.createdAt).getTime();
-          if (!isNaN(startMs)) snapshotData.ratingHistory = revertRatingsChangedSince(startMs);
+          var taken = removeGamesEverywhere(tournamentRackTs(TOURNAMENT));
+          snapshotData.ratingHistory = taken.ratings;
+          snapshotData.gameHistory = taken.live;
         }
         saveResetSnapshot("tournament", T("resetSnapshot.tournamentLabel"), snapshotData);
       }
@@ -29913,6 +30570,25 @@
         startTournamentMatch(match.id);
       });
       div.appendChild(playBtn);
+    }
+    // ⋯ a score or a walkover for a match still to play; ✏️ change a played one
+    if (match.a && match.b && !isActive && !isByeMatch) {
+      var toolsBtn = document.createElement("button");
+      toolsBtn.type = "button";
+      toolsBtn.className = "btn btn-ghost tournament-match-tools-btn";
+      toolsBtn.textContent = match.winner ? "✏️" : "⋯";
+      toolsBtn.setAttribute("aria-label", T(match.winner ? "tournament.changeResult" : "tournament.matchToolsAria"));
+      toolsBtn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        openMatchToolsChooser(t, match);
+      });
+      div.appendChild(toolsBtn);
+    }
+    if (match.forfeit) {
+      var wo = document.createElement("div");
+      wo.className = "tournament-match-iflose";
+      wo.textContent = T("tournament.walkoverNote", { name: match.forfeit });
+      div.appendChild(wo);
     }
 
     return div;
@@ -30318,7 +30994,8 @@
       rackScores[match.b] = side === "b" ? next : active.bBalls || 0;
       matchTally[match.a] = active.aWins;
       matchTally[match.b] = active.bWins;
-      recordTournamentRackWin(name, otherName, durationMs, rackScores, matchTally);
+      var rackTs = recordTournamentRackWin(name, otherName, durationMs, rackScores, matchTally);
+      (active.racks = active.racks || []).push({ ts: rackTs, side: side });
       active.aBalls = 0;
       active.bBalls = 0;
       active.startedAt = new Date().toISOString();
@@ -30327,7 +31004,9 @@
       var effectiveMatchRaceTo = t.fairRace && active[raceToKey] ? active[raceToKey] : t.raceTo;
       if (active[winsKey] >= effectiveMatchRaceTo) {
         var championAlreadyDecided = !!t.champion;
+        match.racks = (match.racks || []).concat(active.racks || []);
         reportBracketResult(t, match, name, active.aWins, active.bWins);
+        applyTournamentWithdrawals(t);
         if (!championAlreadyDecided && t.champion) {
           recordTournamentCompletion(t);
           playTournamentChampionSound();
@@ -30520,6 +31199,29 @@
     board.appendChild(buildTournamentSidePanel(match.a, "a", active.aBalls, active.aWins, t, active));
     board.appendChild(buildTournamentSidePanel(match.b, "b", active.bBalls, active.bWins, t, active));
     cardWrap.appendChild(board);
+
+    // A tap on the wrong side, a scoresheet, a no-show, a match to stop.
+    var tools = document.createElement("div");
+    tools.className = "row tournament-board-tools";
+    function tool(label, cls, run, disabled) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn btn-ghost " + cls;
+      btn.textContent = label;
+      btn.disabled = !!disabled;
+      btn.addEventListener("click", run);
+      tools.appendChild(btn);
+    }
+    tool(T("tournament.undoRack"), "tournament-undo-rack", function () { tournamentUndoLastRack(active); }, !(active.racks && active.racks.length));
+    tool(T("tournament.enterScore"), "tournament-enter-score", function () { tournamentScoreDialog(match); });
+    tool(T("tournament.walkoverButton"), "tournament-walkover", function () {
+      tournamentChooser(T("tournament.walkoverWho"), [
+        { label: T("tournament.walkover", { name: match.a }), run: function () { tournamentForfeit(match, match.a); } },
+        { label: T("tournament.walkover", { name: match.b }), run: function () { tournamentForfeit(match, match.b); } }
+      ]);
+    });
+    tool(T("tournament.cancelMatch"), "tournament-cancel-match", function () { tournamentCancelMatch(active); });
+    cardWrap.appendChild(tools);
     return cardWrap;
   }
 
@@ -30681,6 +31383,9 @@
     renderTournamentTimeline(t);
 
     btnTournamentAbandon.textContent = T(t.champion ? "tournament.startNew" : "tournament.abandon");
+    var manage = document.getElementById("tournament-manage-row");
+    manage.classList.toggle("hidden", !!t.champion);
+    document.getElementById("tournament-tables-count").textContent = String(t.tableCount || 1);
 
     if (t.champion) {
       tournamentChampionBanner.classList.remove("hidden");
@@ -34094,7 +34799,6 @@
     exportAllPlayerStats();
     closeSaveSessionPopup();
     startNewSession(true);
-    endTournamentSilently();
   });
   btnSaveSessionSkip.addEventListener("click", function () {
     // "Skip" never folded this session into PLAYER_STATS (that's what
@@ -34106,9 +34810,31 @@
     // rewinds every rating change stamped at or after the session's own
     // first game, the same way "Reset today's stats" rewinds from
     // midnight.
+    // (a bracket tournament still going keeps its racks and their ratings)
+    var liveTournamentTs = {};
+    if (TOURNAMENT && !TOURNAMENT.champion) {
+      tournamentRackTs(TOURNAMENT).forEach(function (ts) {
+        liveTournamentTs[ts] = true;
+      });
+    }
+    var keepForTournament = state.gameHistory.filter(function (e) {
+      return e && e.ts && liveTournamentTs[e.ts];
+    });
     if (state.gameHistory.length) {
       var sessionStartMs = new Date(state.gameHistory[state.gameHistory.length - 1].ts).getTime();
-      var poppedSessionRatingHistory = isNaN(sessionStartMs) ? {} : revertRatingsChangedSince(sessionStartMs);
+      var poppedSessionRatingHistory = {};
+      if (keepForTournament.length) {
+        state.gameHistory.forEach(function (e) {
+          if (!e || !e.ts || liveTournamentTs[e.ts]) return;
+          var removed = retractRatingsAt(e.ts);
+          Object.keys(removed).forEach(function (k) {
+            poppedSessionRatingHistory[k] = (poppedSessionRatingHistory[k] || []).concat(removed[k]);
+          });
+        });
+        saveRatingsToStorage(PLAYER_RATINGS);
+      } else if (!isNaN(sessionStartMs)) {
+        poppedSessionRatingHistory = revertRatingsChangedSince(sessionStartMs);
+      }
       saveResetSnapshot("todayStats", T("resetSnapshot.sessionSkipLabel", { date: todayDateStr() }), {
         date: todayDateStr(),
         prunedSessions: {},
@@ -34121,7 +34847,10 @@
     }
     closeSaveSessionPopup();
     startNewSession(false);
-    endTournamentSilently();
+    if (keepForTournament.length) {
+      state.gameHistory = keepForTournament;
+      saveState();
+    }
   });
   btnSaveSessionCancel.addEventListener("click", closeSaveSessionPopup);
   saveSessionOverlay.addEventListener("click", function (e) {

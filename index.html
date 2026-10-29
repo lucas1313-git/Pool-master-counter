@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261028h">
+<link rel="stylesheet" href="css/style.css?v=20261028i">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -2320,6 +2320,17 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
       <button type="button" id="btn-tournament-push-challonge" class="btn btn-ghost" data-i18n="challonge.pushButton">☁️ Push to Challonge</button>
       <button type="button" id="btn-tournament-close-challonge" class="btn btn-ghost" data-i18n="challonge.closeTournamentButton">🔒 Close Tournament</button>
     </div>
+    <!-- During the event: a latecomer, someone leaving, more or fewer tables -->
+    <div class="row tournament-manage-row" id="tournament-manage-row">
+      <button type="button" id="btn-tournament-late-player" class="btn btn-ghost" data-i18n="tournament.lateButton">➕ Late player</button>
+      <button type="button" id="btn-tournament-withdraw" class="btn btn-ghost" data-i18n="tournament.withdrawButton">🚪 Withdraw a player</button>
+      <span class="tournament-tables-control">
+        <span data-i18n="tournament.tablesLabel">🪑 Tables:</span>
+        <button type="button" id="btn-tournament-tables-less" class="btn btn-ghost" aria-label="Fewer tables" data-i18n-aria-label="tournament.tablesLessAria">−</button>
+        <strong id="tournament-tables-count">1</strong>
+        <button type="button" id="btn-tournament-tables-more" class="btn btn-ghost" aria-label="More tables" data-i18n-aria-label="tournament.tablesMoreAria">+</button>
+      </span>
+    </div>
 
     <div id="tournament-champion-banner" class="tournament-winner-banner hidden"></div>
 
@@ -2456,6 +2467,12 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
           <tbody id="league-standings-body"></tbody>
         </table>
       </div>
+    </div>
+
+    <!-- Matches played: a wrong score changed, a match deleted (standings follow) -->
+    <div id="league-matches-section" class="hidden">
+      <h4 data-i18n="league.matchesHeading">Matches played</h4>
+      <ul class="league-match-list" id="league-match-list"></ul>
     </div>
 
     <div id="league-live-hosting-section">
@@ -2678,11 +2695,11 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/big-store.js?v=20261028h"></script>
-<script src="js/mp4-clip.js?v=20261028h"></script>
-<script src="js/local-recorder.js?v=20261028h"></script>
-<script src="js/app.js?v=20261028h"></script>
-<script src="js/camera-client.js?v=20261028h"></script>
-<script src="js/voice.js?v=20261028h"></script>
+<script src="js/big-store.js?v=20261028i"></script>
+<script src="js/mp4-clip.js?v=20261028i"></script>
+<script src="js/local-recorder.js?v=20261028i"></script>
+<script src="js/app.js?v=20261028i"></script>
+<script src="js/camera-client.js?v=20261028i"></script>
+<script src="js/voice.js?v=20261028i"></script>
 </body>
 </html>

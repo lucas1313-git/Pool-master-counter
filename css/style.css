@@ -10020,3 +10020,59 @@ body.has-not-saved-banner #app {
   font-size: 0.82rem;
   color: var(--text-dim);
 }
+
+/* Tournament corrections: the live board's tools, a match's ⋯/✏️, the page's manage row */
+.tournament-board-tools {
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.tournament-match-tools-btn {
+  margin-top: 6px;
+  min-height: 34px;
+  padding: 4px 10px;
+}
+.tournament-manage-row {
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+}
+.tournament-tables-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.tournament-chooser-btn {
+  width: 100%;
+  margin-top: 6px;
+}
+.tournament-score-row {
+  gap: 14px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.tournament-score-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+}
+
+/* League: matches played, each with ✏️ and 🗑 */
+.league-match-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+}
+.league-match-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.league-match-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}

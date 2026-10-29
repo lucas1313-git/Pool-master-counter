@@ -199,6 +199,14 @@ Not part of the app - helpers for testing and for running this machine's own cop
   7 byes and 8 matches to a champion; 6 players double elimination shows "If you lose: Losers R..."
   on every winners match, plays the losers bracket and ends with placings. Its own file server on
   4251. `node tests/probe_brackets_ui.js [screenshot dir]`.
+- `probe_tournament_fixes.js` - a tournament director can fix things: ↩ Undo last rack (the game
+  and its rating change gone, exactly); ✏️ a finished match's result changed before the next match
+  is played (the right player moves on, racks and ratings follow the score), refused once that next
+  match is under way, naming it; a walkover (no game, no rating change); a withdrawal in a round
+  robin (walkovers, the event finishes); a late player into a round-1 bye; "⚠️ Reset Tournament"
+  leaves a tournament in progress alone; Abandon takes out only that tournament's racks and ratings,
+  not a casual game meanwhile; a league match's score changed and one deleted, the standings
+  following. Its own file server on 4252. `node tests/probe_tournament_fixes.js`.
 - `probe_out_of_view.js` - out of view: a named player who walks out of the picture keeps a tag at
   the edge they left by (name, time, arrow), is kept past the 12 s a hidden player is looked for,
   and gets their path and name back coming in at that edge; hidden mid-picture as long: no name;
