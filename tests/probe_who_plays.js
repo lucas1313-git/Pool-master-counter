@@ -10,7 +10,8 @@
 // - the Setup Wizard: two players added there are Playing - it reaches Start without the Standby
 //   warning;
 // - Teams (four playing 15 Ball Rotation, then Teams): split 2/2 (Kim, Ann - Jo, Bob); each team
-//   one card with one + and one number, "Team A 0 – 0 Team B" over them, no member cards, no
+//   one card with one + and one number, its players big ("Kim & Ann", "Team A" small), "Kim & Ann
+//   0 – 0 Jo & Bob" over them, no member cards, no
 //   scrolling at 1180x820; the team's + with nobody picked: the team's rack, nobody credited;
 //   Kim picked: Kim credited;
 // - no page errors.
@@ -166,9 +167,9 @@ function board(opts) {
   check("...Teams: split 2/2 (Kim, Ann - Jo, Bob)", split.A.join() === "Kim,Ann" && split.B.join() === "Jo,Bob", split);
   const teams = await page.evaluate(() => {
     const cards = [...document.querySelectorAll("#scoreboard .team-card")];
-    return { cards: cards.length, plus: cards.map((c) => c.querySelectorAll(".btn-ball.plus").length), numbers: cards.map((c) => c.querySelectorAll(".stat-value").length), members: document.querySelectorAll("#scoreboard .member-card").length, header: (document.querySelector("#scoreboard .teams-header") || {}).textContent, scroll: document.documentElement.scrollHeight > innerHeight + 2 };
+    return { cards: cards.length, plus: cards.map((c) => c.querySelectorAll(".btn-ball.plus").length), numbers: cards.map((c) => c.querySelectorAll(".stat-value").length), members: document.querySelectorAll("#scoreboard .member-card").length, header: (document.querySelector("#scoreboard .teams-header") || {}).textContent, names: cards.map((c) => c.querySelector(".team-card-name").textContent + "/" + c.querySelector(".team-card-members").textContent), scroll: document.documentElement.scrollHeight > innerHeight + 2 };
   });
-  check("...one card per team: one +, one number, \"Team A 0 – 0 Team B\" over them, no member cards, no scrolling", teams.cards === 2 && teams.plus.join() === "1,1" && teams.numbers.join() === "1,1" && teams.members === 0 && teams.header === "Team A 0 – 0 Team B" && !teams.scroll, teams);
+  check("...one card per team: one +, one number, its players big (\"Kim & Ann\" / Team A), \"Kim & Ann 0 – 0 Jo & Bob\" over them, no member cards, no scrolling", teams.cards === 2 && teams.plus.join() === "1,1" && teams.numbers.join() === "1,1" && teams.members === 0 && teams.header === "Kim & Ann 0 – 0 Jo & Bob" && teams.names.join() === "Kim & Ann/Team A,Jo & Bob/Team B" && !teams.scroll, teams);
   if (OUT) await page.screenshot({ path: path.join(OUT, "who_teams.png") });
   await page.evaluate(() => document.querySelector('#scoreboard .team-card[data-team-id="A"] .btn-ball.plus').click());
   await sleep(900);
@@ -179,7 +180,7 @@ function board(opts) {
   await page.evaluate(() => document.querySelector('#scoreboard .team-card[data-team-id="A"] .btn-ball.plus').click());
   await sleep(900);
   s = await st();
-  check("...Team A's + with nobody picked: Team A's rack, nobody credited; with Kim picked: credited to Kim", r1.teamA === 1 && Object.keys(r1.mvp || {}).length === 0 && /Team A 1 – 0 Team B/.test(r1.header) && s.teamWins.A === 2 && s.teamMvpWins[s.players.find((p) => p.name === "Kim").id] === 1 && Object.keys(s.teamMvpWins).length === 1, { r1, wins: s.teamWins, mvp: s.teamMvpWins });
+  check("...Team A's + with nobody picked: Team A's rack, nobody credited; with Kim picked: credited to Kim", r1.teamA === 1 && Object.keys(r1.mvp || {}).length === 0 && /Kim & Ann 1 – 0 Jo & Bob/.test(r1.header) && s.teamWins.A === 2 && s.teamMvpWins[s.players.find((p) => p.name === "Kim").id] === 1 && Object.keys(s.teamMvpWins).length === 1, { r1, wins: s.teamWins, mvp: s.teamMvpWins });
 
   check("no page errors", errors.length === 0, errors);
   await browser.close();

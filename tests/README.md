@@ -579,3 +579,8 @@ Not part of the app - helpers for testing and for running this machine's own cop
   (no /api): the in-app recorder on a fake camera, three cues - the reel made on the device
   (each clip cut by js/mp4-clip.js, played into a canvas with its score bug, recorded), 1280 x 720,
   decodes. `node tests/probe_highlights_device.js [shots]`.
+- **probe_table_requests.js** — at the table (2026-10-29 requests), its own server on 4293: 🎱 balls
+  left typed on the number pad after a rack of 8-Ball ("1" "2" = 12, Enter), the ✔ OK button,
+  none in 9-Ball, a points game; the rotation's game-change popup only once the balls left are in
+  (and at once after 9-Ball), Enter closes it; 🎱 Winner Stays on the board with a third player;
+  ☰ Menu's first page: 📋 Standings and 🔍 See all. `node tests/probe_table_requests.js [shots]`.

@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261029x">
+<link rel="stylesheet" href="css/style.css?v=20261029za">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -366,6 +366,8 @@
       <button type="button" id="btn-backup-reminder-later" class="btn btn-ghost" data-i18n="backupReminder.later">Later</button>
     </div>
     <div class="practice-badge hidden" id="practice-badge" role="status" data-i18n="practice.badge">PRACTICE · NOT SAVED</div>
+    <!-- 🎱 Winner Stays on the board (js/app.js renderBoardWinnerStays) - the same switch as the Players section's -->
+    <label class="board-winner-stays hidden" id="board-winner-stays"><input type="checkbox" id="board-winner-stays-checkbox"> <span data-i18n="board.winnerStaysToggle">🎱 Winner Stays - the loser goes to the back of the line</span></label>
     <!-- Winner Stays: the winner's streak and who's next (js/app.js renderWinnerStaysLine) -->
     <div class="winner-stays-line hidden" id="winner-stays-line" role="status"></div>
     <div class="row voice-toggle-row">
@@ -1039,6 +1041,14 @@
     <h2 data-i18n="milestone.congrats">Congratulations!</h2>
     <p id="milestone-headline"></p>
     <div id="milestone-details" class="milestone-details"></div>
+    <!-- 🎱 the rack that won the race: balls left on the table (number pad: type it, Enter = Nice!) - js/app.js renderMilestoneBalls -->
+    <div class="milestone-balls-row hidden" id="milestone-balls-row">
+      <span class="milestone-balls-label" data-i18n="ballsLeft.label">Balls left on the table</span>
+      <button type="button" class="balls-left-btn minus" id="btn-milestone-balls-minus" data-i18n-aria-label="ballsLeft.decrease" aria-label="Fewer balls">−</button>
+      <span class="milestone-balls-value" id="milestone-balls-value"></span>
+      <button type="button" class="balls-left-btn plus" id="btn-milestone-balls-plus" data-i18n-aria-label="ballsLeft.increase" aria-label="More balls">+</button>
+      <span class="win-banner-balls-hint" data-i18n="ballsLeft.keypadHint">Number pad: type it, Enter = OK</span>
+    </div>
     <div class="gamewin-quick-actions">
       <button type="button" id="btn-milestone-undo" class="btn btn-ghost" data-i18n="gamewin.undoThisWin">↩ Undo this win</button>
       <button type="button" id="btn-milestone-challonge" class="btn btn-ghost hidden" data-i18n="challonge.racePushButton">☁️ Push this race to Challonge</button>
@@ -3124,27 +3134,27 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/pairing.js?v=20261029x"></script>
-<script src="js/big-store.js?v=20261029x"></script>
-<script src="js/mp4-clip.js?v=20261029x"></script>
-<script src="js/recording-consent.js?v=20261029x"></script>
-<script src="js/local-recorder.js?v=20261029x"></script>
-<script src="js/lib/pool-day.js?v=20261029x"></script>
-<script src="js/lib/race-math.js?v=20261029x"></script>
-<script src="js/lib/handicaps.js?v=20261029x"></script>
-<script src="js/lib/brackets.js?v=20261029x"></script>
-<script src="js/lib/league.js?v=20261029x"></script>
-<script src="js/lib/events.js?v=20261029x"></script>
-<script src="js/lib/chips.js?v=20261029x"></script>
-<script src="js/lib/highlights.js?v=20261029x"></script>
-<script src="js/lib/payouts.js?v=20261029x"></script>
-<script src="js/app.js?v=20261029x"></script>
-<script src="js/camera-client.js?v=20261029x"></script>
-<script src="js/voice.js?v=20261029x"></script>
+<script src="js/pairing.js?v=20261029za"></script>
+<script src="js/big-store.js?v=20261029za"></script>
+<script src="js/mp4-clip.js?v=20261029za"></script>
+<script src="js/recording-consent.js?v=20261029za"></script>
+<script src="js/local-recorder.js?v=20261029za"></script>
+<script src="js/lib/pool-day.js?v=20261029za"></script>
+<script src="js/lib/race-math.js?v=20261029za"></script>
+<script src="js/lib/handicaps.js?v=20261029za"></script>
+<script src="js/lib/brackets.js?v=20261029za"></script>
+<script src="js/lib/league.js?v=20261029za"></script>
+<script src="js/lib/events.js?v=20261029za"></script>
+<script src="js/lib/chips.js?v=20261029za"></script>
+<script src="js/lib/highlights.js?v=20261029za"></script>
+<script src="js/lib/payouts.js?v=20261029za"></script>
+<script src="js/app.js?v=20261029za"></script>
+<script src="js/camera-client.js?v=20261029za"></script>
+<script src="js/voice.js?v=20261029za"></script>
 <script>
   // The app opens with no network (sw.js, P21) - on http(s) only, not in the iOS app
   if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol) && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
-    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261029x").catch(function () {}); });
+    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261029za").catch(function () {}); });
   }
 </script>
 </body>

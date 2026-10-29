@@ -6,7 +6,7 @@ Some are English on purpose - the app's Taglish keeps a few pool and app words a
 practice, Winner stays, bracket). Keep those where they read naturally; translate the rest.
 Written by `node tests/tagalog_review.js` - run it again after changes.
 
-## Identical to English (211)
+## Identical to English (210)
 
 | Key | English (= Tagalog now) |
 |---|---|
@@ -187,7 +187,6 @@ Written by `node tests/tagalog_review.js` - run it again after changes.
 | `highlights.picksOne` | clip · s |
 | `card.racks` | Racks |
 | `teams.credit` | Credit: |
-| `teams.header` | Team A – Team B |
 | `endNight.standings` | Standings |
 | `report.colRating` | Rating |
 | `report.playerLine` | — , , rating () |
@@ -222,10 +221,11 @@ Written by `node tests/tagalog_review.js` - run it again after changes.
 | `shotClock.extended` | : extension, +25 s |
 | `voice.section.shotClock` | Shot clock |
 
-## Mostly English words (14)
+## Mostly English words (15)
 
 | Key | English | Tagalog now |
 |---|---|---|
+| `ballsLeft.keypadHint` | Number pad: type it, Enter = OK | Number pad: i-type, Enter = OK |
 | `payouts.sidePotPlaceholder` | e.g. Break and run | hal. Break and run |
 | `playerPage.clubTeamWinRate` | Team win rate | Win rate ng team |
 | `visualScoring.lightRecognitionOff` | Camera recognition: off | Camera recognition: naka-off |

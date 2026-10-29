@@ -82,7 +82,8 @@ function board(opts) {
   const bar = await page.evaluate(() => {
     const vis = (e) => e && e.offsetParent !== null;
     const panel = document.getElementById("scoreboard-panel");
-    const settings = [...panel.querySelectorAll("select, input")].filter((e) => vis(e) && !e.closest(".board-sheet"));
+    // (one asked for at the table, 2026-10-29: 🎱 Winner Stays, with a third player on the roster)
+    const settings = [...panel.querySelectorAll("select, input")].filter((e) => vis(e) && !e.closest(".board-sheet") && e.id !== "board-winner-stays-checkbox");
     return {
       menu: vis(document.getElementById("btn-board-menu")), game: vis(document.getElementById("btn-board-game")),
       undo: !!document.querySelector("#board-topbar #btn-board-undo"),
@@ -92,7 +93,7 @@ function board(opts) {
     };
   });
   check("top bar: ☰ Menu, one read-only line \"8-Ball · Race to 5\", ↩ Undo, 🎱 Game", bar.menu && bar.game && bar.undo && /^8-Ball · Race to 5/.test(bar.line) && bar.lineControls === 0, bar);
-  check("...and no setting anywhere on the board (no select, box or switch)", bar.settings.length === 0, bar.settings);
+  check("...and no setting anywhere on the board (no select, box or switch - but 🎱 Winner Stays)", bar.settings.length === 0, bar.settings);
   if (OUT) await page.screenshot({ path: path.join(OUT, "layout_board.png") });
 
   // ---- 🎱 Game ----

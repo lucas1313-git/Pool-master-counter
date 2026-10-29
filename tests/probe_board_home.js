@@ -82,12 +82,11 @@ function seededBoard() {
   let page = await open(1180, 820, seededBoard());
   await page.click("#btn-board-menu");
   await sleep(200);
-  await page.evaluate(() => [...document.querySelectorAll("#board-menu-list .board-menu-row")].find((b) => b.dataset.menuKey === "menu.more").click());
-  await sleep(150);
+  // (🔍 See all: straight from the menu's first page)
   await page.evaluate(() => [...document.querySelectorAll("#board-menu-list .board-menu-row")].find((b) => b.dataset.menuKey === "menu.allSettings").click());
   await sleep(300);
   const all = await page.evaluate(() => ({ focus: document.getElementById("app").classList.contains("focus-mode"), panels: [...document.querySelectorAll("#app > .panel, #app .panel")].filter((p) => p.offsetParent).length }));
-  check("☰ Menu › More › Everything (the full page) brings the panels back", !all.focus && all.panels > 3, all);
+  check("☰ Menu › 🔍 See all (the full page) brings the panels back", !all.focus && all.panels > 3, all);
   await page.goto(BASE, { waitUntil: "networkidle2" });
   await sleep(900);
   const again = await home(page);

@@ -6,7 +6,8 @@
 // - nothing appears under the + tap point for 600 ms (looked at 50-550 ms after the tap) - the
 //   race-won screen too comes only after;
 // - ↩ Undo in the banner takes the last rack back (2–0 again);
-// - 🎱 Balls left opens a small stepper only when tapped (nothing takes the keyboard), + sets 0;
+// - 🎱 Balls left: a small stepper opens by itself after a rack of 8-Ball (nothing takes the
+//   keyboard focus - the number pad types into it, see probe_table_requests), + sets 0;
 // - one banner announces both "on the hill" and the game changing (Race to 3, the rotation
 //   switching game every game);
 // - Celebrations Off: the race won is a line in the banner, no full screen;
@@ -133,12 +134,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await tapPlus("Kim");
   await sleep(700);
   const before = await page.evaluate(() => !!document.getElementById("win-banner-balls-value"));
-  await page.click("#btn-win-banner-balls");
-  await sleep(200);
   await page.evaluate(() => document.querySelector("#win-banner .balls-left-btn.plus").click());
   await sleep(300);
   const balls = await page.evaluate(() => ({ value: document.getElementById("win-banner-balls-value").textContent, focus: document.activeElement.tagName, saved: JSON.parse(localStorage.getItem("poolMasterCounter.state.v2")).gameHistory[0].ballsLeftOnTable }));
-  check("🎱 Balls left: a stepper only once tapped (no field focused); + sets 0, saved on the game", !before && balls.value === "0" && balls.saved === 0 && balls.focus !== "INPUT", { before, balls });
+  check("🎱 Balls left: the stepper opens by itself (no field focused); + sets 0, saved on the game", before && balls.value === "0" && balls.saved === 0 && balls.focus !== "INPUT", { before, balls });
 
   // ---- on the hill AND a game change, in one banner ----
   await fresh({});

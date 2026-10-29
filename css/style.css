@@ -4166,7 +4166,23 @@ button.stat-value:active {
 
 .gamechange-card .btn-primary {
   width: 100%;
+  min-height: 60px;
+  font-size: 1.4rem;
 }
+/* 🔄 the new game, readable across the room */
+.gamechange-card { max-width: 600px; }
+.gamechange-now { font-size: 1.1rem; font-weight: 700; opacity: 0.85; }
+.gamechange-game {
+  font-size: clamp(3rem, 11vw, 6.5rem);
+  line-height: 1.05;
+  font-weight: 900;
+  color: var(--accent);
+  margin: 6px 0 4px;
+}
+.gamechange-target { font-size: 1.4rem; font-weight: 800; margin-bottom: 14px; }
+.gamechange-rotation { font-size: 1.1rem; font-weight: 600; margin: 6px 0; opacity: 0.9; }
+.gamechange-step.is-now { color: var(--accent); font-weight: 900; text-decoration: underline; text-underline-offset: 4px; }
+.gamechange-next { font-size: 1rem; opacity: 0.8; margin-bottom: 4px; }
 
 /* ---------- Queue swap popup ---------- */
 
@@ -10589,6 +10605,35 @@ body.has-not-saved-banner #app {
   justify-content: center;
   align-items: center;
 }
+/* the race-won screen's own balls-left row */
+.milestone-balls-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  align-items: center;
+  margin: 10px 0 14px;
+  padding: 10px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.25);
+}
+.milestone-balls-row.hidden { display: none; }
+.milestone-balls-label { font-weight: 800; }
+.milestone-balls-value { min-width: 64px; text-align: center; font-size: 1.8rem; font-weight: 900; }
+
+/* ✔ OK beside the stepper (Enter on the number pad too) */
+.win-banner-balls-row .balls-left-ok {
+  min-height: 44px;
+  min-width: 96px;
+  font-size: 1.1rem;
+  font-weight: 900;
+}
+.win-banner-balls-hint {
+  flex-basis: 100%;
+  text-align: center;
+  font-size: 0.85rem;
+  opacity: 0.75;
+}
 .win-banner-actions .btn {
   min-height: 40px;
 }
@@ -11292,6 +11337,30 @@ body.win-banner-up .page-toast {
 }
 
 /* Winner Stays: the streak and who's next, under the top bar */
+/* 🎱 Winner Stays on the board, under the top bar - lit when on */
+.board-winner-stays {
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  gap: 10px;
+  margin: 0 auto 8px;
+  padding: 8px 16px;
+  min-height: 44px;
+  font-size: clamp(1rem, 1.8vw, 1.25rem);
+  font-weight: 800;
+  color: var(--board-text, var(--text));
+  background: var(--bg-card);
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+}
+.board-winner-stays input { width: 22px; height: 22px; margin: 0; accent-color: var(--accent); }
+.board-winner-stays:has(input:checked) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 22%, var(--bg-card));
+  color: var(--accent);
+}
+.board-winner-stays.hidden { display: none; }
 .winner-stays-line {
   margin: 0 auto 8px;
   padding: 4px 16px;
@@ -11316,6 +11385,16 @@ body.win-banner-up .page-toast {
 }
 #app.focus-mode .scoreboard.scoreboard-teams {
   grid-template-rows: auto minmax(340px, 1fr);
+}
+/* the team by its players, big - two lines at most, smaller than one name */
+.player-panel.card-v2.team-card .player-name.team-card-name,
+#app.focus-mode .player-panel.card-v2.team-card .player-name.team-card-name {
+  padding: 0 14px;
+  font-size: clamp(1.6rem, min(11cqw, 12cqh), 4.6rem);
+  line-height: 1.05;
+  -webkit-line-clamp: 2;
+  word-break: normal;
+  overflow-wrap: anywhere;
 }
 .team-card .team-card-members {
   font-size: clamp(14px, 5cqw, 24px);

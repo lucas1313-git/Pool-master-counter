@@ -1358,6 +1358,13 @@
       .join("|");
   }
 
+  // "Bob & Luc" - a team on the board by its players (short names), or
+  // "Team A" while it has nobody
+  function teamBoardNames(teamId, members) {
+    var names = (members || []).map(function (p) { return shortDisplayNameForPlayer(p); }).join(" & ");
+    return names || T(teamId === "A" ? "gameSetup.teamA" : "gameSetup.teamB");
+  }
+
   function teamLabelLive(teamId) {
     var names = teamMembersLive(teamId)
       .map(function (p) {
@@ -3760,8 +3767,51 @@
       try { cameraFrame.postMessage({ type: "keypad-key", key: e.key }, location.origin); } catch (err) {}
       return;
     }
+    // 🎱 the race-won screen up, its balls-left row there: the number pad
+    // types into it (Enter / Escape close the screen, as always)
+    if (milestoneBallsOpen() && topDialog() === milestoneOverlay && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      if (/^[0-9]$/.test(e.key)) {
+        e.preventDefault();
+        typeMilestoneBallsDigit(e.key);
+        return;
+      }
+      if (e.key === "Backspace" || e.key === "Delete" || e.key === "Clear") {
+        e.preventDefault();
+        milestoneBalls.typed = "";
+        setMilestoneBallsLeft(null);
+        return;
+      }
+    }
     if (isAnyOverlayOpen()) return;
     if (appRoot.classList.contains("hidden")) return;
+
+    // 🎱 Balls left - the win banner's row open (a rack or a points game
+    // just won): the number pad types the balls left on the table, up to
+    // 15 ("1" "2" = 12); Enter keeps it (✔ OK), Escape closes the banner,
+    // Backspace / Clear empties it. Everything else as always.
+    if (winBallsEntryOpen() && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      if (/^[0-9]$/.test(e.key)) {
+        e.preventDefault();
+        typeWinBannerBallsDigit(e.key);
+        return;
+      }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        confirmWinBannerBalls();
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        hideWinBanner();
+        return;
+      }
+      if (e.key === "Backspace" || e.key === "Delete" || e.key === "Clear") {
+        e.preventDefault();
+        winBanner.ballsTyped = "";
+        setWinBannerBallsLeft(null);
+        return;
+      }
+    }
 
     var scoreEntryGame = isKeypadScoreEntryGame();
 
@@ -5887,10 +5937,12 @@
   // the usual win-progress stat and disables every member's +/- (the real
   // enforcement is adjustScore's own check; this is just the matching UI).
   function buildTeamPanel(teamId, members, opponentEmpty) {
-    // One card per team, the same anatomy as a player's: "Team A" and who's
-    // on it, one number (racks in a race, or the game's points), an
-    // optional "credit a player" pick (who potted the winning ball - the
-    // keypad's numbers pick them too), then one big + for the team.
+    // One card per team, the same anatomy as a player's: who's on it, big
+    // ("Bob & Luc" - the names read across the room, not "Team A"), "Team
+    // A" small under it, one number (racks in a race, or the game's
+    // points), an optional "credit a player" pick (who potted the winning
+    // ball - the keypad's numbers pick them too), then one big + for the
+    // team.
     var panel = document.createElement("div");
     panel.className = "player-panel card-v2 team-card";
     panel.dataset.teamId = teamId;
@@ -5904,11 +5956,11 @@
 
     var name = document.createElement("div");
     name.className = "player-name team-card-name";
-    name.textContent = T(teamId === "A" ? "gameSetup.teamA" : "gameSetup.teamB");
+    name.textContent = teamBoardNames(teamId, members);
     panel.appendChild(name);
     var who = document.createElement("div");
     who.className = "team-card-members";
-    who.textContent = members.map(function (p) { return shortDisplayNameForPlayer(p); }).join(" & ");
+    who.textContent = T(teamId === "A" ? "gameSetup.teamA" : "gameSetup.teamB");
     panel.appendChild(who);
 
     if (opponentEmpty) {
@@ -6030,7 +6082,7 @@
   function buildTeamsHeader() {
     var el = document.createElement("div");
     el.className = "teams-header";
-    el.textContent = T("teams.header", { a: state.teamWins.A || 0, b: state.teamWins.B || 0 });
+    el.textContent = T("teams.header", { nameA: teamBoardNames("A", teamMembersLive("A")), nameB: teamBoardNames("B", teamMembersLive("B")), a: state.teamWins.A || 0, b: state.teamWins.B || 0 });
     return el;
   }
 
@@ -6879,8 +6931,21 @@
     showBannerNotice(T("winnerStays.autoOn", { game: GAME_TYPES[state.currentGame.gameType].label, a: seated[0].name, b: seated[1].name, next: line.length ? line[0].name : "" }));
   }
 
+  // 🎱 Winner Stays on the board, under the top bar - the same switch as the
+  // Players section's and the Game sheet's, wherever a third player is on
+  // the roster (Individual mode): the loser goes to the back of the line,
+  // the next one comes in, without changing players by hand.
+  function renderBoardWinnerStays() {
+    var row = document.getElementById("board-winner-stays");
+    if (!row) return;
+    var show = !quickCounterMode && state.currentGame.mode === "individual" && state.players.length >= 3;
+    row.classList.toggle("hidden", !show);
+    document.getElementById("board-winner-stays-checkbox").checked = !!state.currentGame.queueEnabled;
+  }
+
   // "🔥 Luc: 4 in a row · Next up: Alex (then Bob)" under the top bar, in Winner Stays
   function renderWinnerStaysLine() {
+    renderBoardWinnerStays();
     var el = document.getElementById("winner-stays-line");
     if (!el) return;
     var on = winnerStaysOn();
@@ -7200,6 +7265,9 @@
     return [
       { icon: "▶️", key: "menu.newGame", primary: true, when: notGuest, run: function () { closeBoardMenu(); openQuickGameModal(); } },
       { icon: "🌙", key: "menu.endNight", run: openEndNight },
+      // (straight to them - also under 📊 Stats / the full page)
+      { icon: "📋", key: "menu.standings", run: panel("standings-panel") },
+      { icon: "🔍", key: "menu.allSettings", run: function () { closeBoardMenu(); setFocusMode(false); window.scrollTo(0, 0); } },
       { icon: "👥", key: "menu.players", children: [
         { icon: "👥", key: "menu.playersRoster", run: panel("players-panel") },
         { icon: "↕️", key: "menu.arrange", run: function () { closeBoardMenu(); setArrangeMode(true); } },
@@ -7231,8 +7299,7 @@
       { icon: "➕", key: "menu.more", children: [
         { icon: "🧙", key: "menu.wizard", when: notGuest, run: click("btn-open-wizard") },
         { icon: "🎯", key: "menu.multiTables", run: click("btn-open-group-session") },
-        { icon: "📱", key: "menu.pairedDevices", when: function () { return !document.getElementById("pairing-panel").classList.contains("hidden"); }, run: panel("pairing-panel") },
-        { icon: "🔍", key: "menu.allSettings", run: function () { closeBoardMenu(); setFocusMode(false); window.scrollTo(0, 0); } }
+        { icon: "📱", key: "menu.pairedDevices", when: function () { return !document.getElementById("pairing-panel").classList.contains("hidden"); }, run: panel("pairing-panel") }
       ] }
     ];
   }
@@ -8808,6 +8875,8 @@
     else if (gameTypeChanged || queueSwapInfo) playPositiveSound(null);
     if (fresh) fresh.gameNumber = gameNumber;
     showWinBanner(fresh || null, notices);
+    // (and a clear popup for it - once the balls left are in)
+    if (gameTypeChanged) queueGameChangePopup();
     // A race won closes at once (archived, a new session - nothing more
     // can be scored into it); only its big moment waits for the finger to
     // lift (see celebrateTournamentWin). Same for a timed session's end.
@@ -9090,6 +9159,77 @@
     gameChangeOverlay.classList.add("hidden");
   }
 
+  // 🔄 The game rotation moved the game on (a win crossed its "every"): a
+  // big, clear popup - the new game, its target, the rotation with this
+  // one lit, what comes after - shown once the win banner's balls-left
+  // entry is done (and no other popup is up). If the session changed
+  // meanwhile (a rematch starts the rotation over), it isn't shown.
+  // Enter / Escape / the button close it.
+  var pendingGameChange = null;
+  function currentGameKey() {
+    return state.currentGame.gameType + ":" + state.currentGame.target + ":" + state.currentGame.unit;
+  }
+  function queueGameChangePopup() {
+    pendingGameChange = { key: currentGameKey(), at: Date.now() };
+    if (!winBallsEntryOpen()) setTimeout(flushGameChangePopup, 0);
+  }
+  function flushGameChangePopup() {
+    var p = pendingGameChange;
+    if (!p) return;
+    if (p.key !== currentGameKey() || Date.now() - p.at > 15 * 60000) {
+      pendingGameChange = null;
+      return;
+    }
+    if (winBallsEntryOpen()) return; // (hideWinBanner brings it back)
+    if (isAnyOverlayOpen()) {
+      setTimeout(flushGameChangePopup, 600);
+      return;
+    }
+    pendingGameChange = null;
+    renderGameChangePopup();
+    gameChangeOverlay.classList.remove("hidden");
+    btnGameChangeClose.focus({ preventScroll: true });
+  }
+  function renderGameChangePopup() {
+    var g = state.currentGame, type = GAME_TYPES[g.gameType];
+    gameChangeMessage.innerHTML = "";
+    var now = document.createElement("div");
+    now.className = "gamechange-now";
+    now.textContent = T("gamechange.nowLabel");
+    var game = document.createElement("div");
+    game.className = "gamechange-game";
+    game.id = "gamechange-game";
+    game.textContent = type ? type.label : g.gameType;
+    var target = document.createElement("div");
+    target.className = "gamechange-target";
+    target.textContent = ROTATION_LABEL_NO_TARGET_TYPES.indexOf(g.gameType) !== -1 ? "" : g.target + " " + (g.unit === "rack" && g.target !== 1 ? T("units.racks") : unitLabel(g.unit));
+    gameChangeMessage.appendChild(now);
+    gameChangeMessage.appendChild(game);
+    if (target.textContent) gameChangeMessage.appendChild(target);
+    // the rotation, this game lit
+    var order = state.rotation.order || [];
+    if (state.rotation.enabled && order.length >= 2) {
+      var line = document.createElement("div");
+      line.className = "gamechange-rotation";
+      var current = rotationCurrentIndex();
+      order.forEach(function (entry, i) {
+        if (i) line.appendChild(document.createTextNode(" → "));
+        var step = document.createElement("span");
+        step.className = "gamechange-step" + (i === current ? " is-now" : "");
+        step.textContent = GAME_TYPES[entry.gameType] ? GAME_TYPES[entry.gameType].label : entry.gameType;
+        line.appendChild(step);
+      });
+      gameChangeMessage.appendChild(line);
+      var info = rotationStatusInfo();
+      if (info) {
+        var next = document.createElement("div");
+        next.className = "gamechange-next";
+        next.textContent = TP("gamechange.nextAfter", info.untilSwitch, { next: GAME_TYPES[order[(current + 1) % order.length].gameType].label, n: info.untilSwitch });
+        gameChangeMessage.appendChild(next);
+      }
+    }
+  }
+
   var QUEUE_SWAP_STICKY_KEY = "poolMasterCounter.queueSwapSticky.v1";
 
   function loadQueueSwapSticky() {
@@ -9146,7 +9286,9 @@
   var winBannerEl = document.getElementById("win-banner");
   // entry: the game shown (the same object as in the session's history);
   // notices: [{ text, sticky }]; ballsOpen: the stepper shown
-  var winBanner = { entry: null, notices: [], ballsOpen: false, hideTimer: null, revealTimer: null, undone: null };
+  var winBanner = { entry: null, notices: [], ballsOpen: false, ballsTyped: "", hideTimer: null, revealTimer: null, undone: null };
+  // (the balls-left row open: longer to type it in)
+  var WIN_BANNER_BALLS_MS = 20000;
 
   // Full: every sound; Quiet (the default): each rack's win sound and a
   // race won's big moment; Off: silent, a race won shown in the banner too.
@@ -9209,6 +9351,62 @@
 
   function ballsLeftApplies(entry) {
     return !!entry && BALLS_LEFT_HIDDEN_GAME_TYPES.indexOf(entry.gameType) === -1;
+  }
+  // A rack or a points game just won (not 9- or 10-Ball, not 15 Ball
+  // Rotation - its number pad types scores): the balls-left row opens by
+  // itself and the number pad types into it.
+  function ballsLeftOpensOnWin(entry) {
+    return ballsLeftApplies(entry) && entry.gameType !== "15ballrotation";
+  }
+  function winBallsEntryOpen() {
+    return winBannerShowsGame() && winBanner.ballsOpen && ballsLeftApplies(winBanner.entry);
+  }
+  // A digit from the number pad: up to 15 - "1" then "2" is 12, a digit
+  // that would pass 15 starts again ("12" then "3" is 3).
+  function typeWinBannerBallsDigit(d) {
+    var typed = winBanner.ballsTyped + d;
+    if (parseInt(typed, 10) > 15) typed = d;
+    winBanner.ballsTyped = typed;
+    setWinBannerBallsLeft(parseInt(typed, 10));
+  }
+  // The race-won screen's own row (the rack that won the race - the screen
+  // covers the board's banner): the same, typed there.
+  var milestoneBalls = { entry: null, typed: "" };
+  function milestoneBallsOpen() {
+    return !!milestoneBalls.entry && !milestoneOverlay.classList.contains("hidden");
+  }
+  function setMilestoneBallsLeft(n) {
+    var entry = milestoneBalls.entry;
+    if (!entry) return;
+    var fields = { ballsLeftOnTable: n };
+    if (SKUNK_RACK_GAME_TYPES.indexOf(entry.gameType) !== -1) fields.skunk = n === 7;
+    Object.assign(entry, fields);
+    patchGameEverywhere(entry.ts, fields);
+    // (typing: the screen stays until Enter / Nice!)
+    if (milestoneAutoCloseTimer) clearTimeout(milestoneAutoCloseTimer);
+    milestoneAutoCloseTimer = null;
+    renderMilestoneBalls();
+    if (winBannerShowsGame() && winBanner.entry && winBanner.entry.ts === entry.ts) renderWinBanner();
+  }
+  function typeMilestoneBallsDigit(d) {
+    var typed = milestoneBalls.typed + d;
+    if (parseInt(typed, 10) > 15) typed = d;
+    milestoneBalls.typed = typed;
+    setMilestoneBallsLeft(parseInt(typed, 10));
+  }
+  function renderMilestoneBalls() {
+    var row = document.getElementById("milestone-balls-row");
+    if (!row) return;
+    var entry = milestoneBalls.entry;
+    row.classList.toggle("hidden", !entry);
+    if (!entry) return;
+    var current = entry.ballsLeftOnTable === undefined ? null : entry.ballsLeftOnTable;
+    document.getElementById("milestone-balls-value").textContent = current === null ? T("ballsLeft.unset") : String(current);
+    document.getElementById("btn-milestone-balls-minus").disabled = current === null;
+  }
+  // ✔ OK / Enter: what's there is kept (saved as it changed) - the banner goes
+  function confirmWinBannerBalls() {
+    hideWinBanner();
   }
 
   function renderWinBanner() {
@@ -9372,12 +9570,24 @@
     var current = entry.ballsLeftOnTable === undefined ? null : entry.ballsLeftOnTable;
     value.textContent = current === null ? T("ballsLeft.unset") : String(current);
     minus.disabled = current === null;
-    minus.addEventListener("click", function () { setWinBannerBallsLeft(current === null ? null : current === 0 ? null : current - 1); });
-    plus.addEventListener("click", function () { setWinBannerBallsLeft(current === null ? 0 : Math.min(15, current + 1)); });
+    minus.addEventListener("click", function () { winBanner.ballsTyped = ""; setWinBannerBallsLeft(current === null ? null : current === 0 ? null : current - 1); });
+    plus.addEventListener("click", function () { winBanner.ballsTyped = ""; setWinBannerBallsLeft(current === null ? 0 : Math.min(15, current + 1)); });
+    // ✔ OK - keeps it, closes the banner (Enter on the number pad too)
+    var ok = document.createElement("button");
+    ok.type = "button";
+    ok.className = "btn btn-primary balls-left-ok";
+    ok.id = "btn-win-banner-balls-ok";
+    ok.textContent = T("ballsLeft.ok");
+    ok.addEventListener("click", confirmWinBannerBalls);
+    var hint = document.createElement("span");
+    hint.className = "win-banner-balls-hint";
+    hint.textContent = T("ballsLeft.keypadHint");
     row.appendChild(label);
     row.appendChild(minus);
     row.appendChild(value);
     row.appendChild(plus);
+    row.appendChild(ok);
+    row.appendChild(hint);
     return row;
   }
 
@@ -9397,7 +9607,7 @@
     if (winBanner.hideTimer) clearTimeout(winBanner.hideTimer);
     winBanner.hideTimer = null;
     var sticky = winBanner.notices.some(function (n) { return n.sticky; });
-    if (!sticky) winBanner.hideTimer = setTimeout(hideWinBanner, WIN_BANNER_MS);
+    if (!sticky) winBanner.hideTimer = setTimeout(hideWinBanner, winBallsEntryOpen() ? WIN_BANNER_BALLS_MS : WIN_BANNER_MS);
   }
 
   // Shown at once - unless it would land under a finger that tapped less
@@ -9425,7 +9635,8 @@
   function showWinBanner(entry, notices) {
     winBanner.entry = entry;
     winBanner.undone = null;
-    winBanner.ballsOpen = false;
+    winBanner.ballsOpen = ballsLeftOpensOnWin(entry);
+    winBanner.ballsTyped = "";
     winBanner.changing = false;
     winBanner.notices = notices || [];
     renderWinBanner();
@@ -9502,6 +9713,10 @@
     winBanner.entry = null;
     winBanner.notices = [];
     winBanner.undone = null;
+    winBanner.ballsOpen = false;
+    winBanner.ballsTyped = "";
+    // (a game change waiting for the balls-left entry to be done)
+    if (pendingGameChange) setTimeout(flushGameChangePopup, 0);
   }
 
   function winBannerShowsGame() {
@@ -9754,6 +9969,10 @@
 
     btnMilestoneChallonge.classList.toggle("hidden", !challongeHasCredentials());
     btnMilestoneChallonge.disabled = false;
+    // (the rack that won it: balls left on the table, here too)
+    milestoneBalls.entry = winBanner.entry && ballsLeftOpensOnWin(winBanner.entry) ? winBanner.entry : null;
+    milestoneBalls.typed = "";
+    renderMilestoneBalls();
     showMilestoneMoment(T("banner.raceWon", { names: names, target: target }));
   }
 
@@ -9790,6 +10009,8 @@
     if (milestoneAutoCloseTimer) clearTimeout(milestoneAutoCloseTimer);
     milestoneAutoCloseTimer = null;
     milestoneOverlay.classList.add("hidden");
+    milestoneBalls.entry = null;
+    milestoneBalls.typed = "";
     lastTournamentWinSnapshot = null;
     // (the banner's Undo can't reach the race any more)
     if (winBannerShowsGame()) renderWinBanner();
@@ -37885,6 +38106,12 @@
     queueModeCheckbox.checked = scoreboardQueueCheckbox.checked;
     queueModeCheckbox.dispatchEvent(new Event("change", { bubbles: true }));
   });
+  // (the board's own - renderBoardWinnerStays)
+  document.getElementById("board-winner-stays-checkbox").addEventListener("change", function (e) {
+    if (queueModeCheckbox.checked === e.target.checked) return;
+    queueModeCheckbox.checked = e.target.checked;
+    queueModeCheckbox.dispatchEvent(new Event("change", { bubbles: true }));
+  });
   queueModeCheckbox.addEventListener("change", function () {
     state.currentGame.queueEnabled = queueModeCheckbox.checked;
     state.currentGame.queueStreak = null;
@@ -39997,6 +40224,16 @@
   });
 
   btnGameChangeClose.addEventListener("click", closeGameChange);
+  document.getElementById("btn-milestone-balls-minus").addEventListener("click", function () {
+    var e = milestoneBalls.entry, cur = e && e.ballsLeftOnTable != null ? e.ballsLeftOnTable : null;
+    milestoneBalls.typed = "";
+    setMilestoneBallsLeft(cur === null || cur === 0 ? null : cur - 1);
+  });
+  document.getElementById("btn-milestone-balls-plus").addEventListener("click", function () {
+    var e = milestoneBalls.entry, cur = e && e.ballsLeftOnTable != null ? e.ballsLeftOnTable : null;
+    milestoneBalls.typed = "";
+    setMilestoneBallsLeft(cur === null ? 0 : Math.min(15, cur + 1));
+  });
   gameChangeOverlay.addEventListener("click", function (e) {
     if (e.target === gameChangeOverlay) closeGameChange();
   });
