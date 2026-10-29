@@ -539,3 +539,8 @@ Not part of the app - helpers for testing and for running this machine's own cop
   fouls - 68 tests), then the Node-only checks above one after the other (a check needing ffmpeg
   or esbuild is skipped, and says so, where there's none). The checks that pull functions out of
   js/app.js read js/lib/ first. `npm test`.
+- **measure_all_players.js** — speed on a big history (P29): 40 players, 5,000 games over 200
+  nights, the CPU slowed 4x - the time to the board from a cold load, a + tapped on the board
+  (median of 5), and ☰ › 📊 All players opening; with --check, All Players must open in under
+  300 ms. Before P29's step 2: 1,927 ms (a date formatter made for every game); after: about
+  110 ms, a tap 94 -> ~55 ms. `node tests/measure_all_players.js [--check]`.

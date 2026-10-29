@@ -59,7 +59,11 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   // ---- the board ----
   await page.evaluate(() => [...document.querySelectorAll("#scoreboard .btn-ball.plus")].find((b) => /Kim/.test(b.getAttribute("aria-label"))).click());
   await sleep(900);
-  const board = await page.evaluate(() => ({ status: document.getElementById("board-status").textContent, recent: (document.querySelector("#history-list li") || {}).textContent || "" }));
+  // (Recent Games is on the full page - drawn when it shows: 🔍 Show All first)
+  const status = await page.evaluate(() => document.getElementById("board-status").textContent);
+  await page.evaluate(() => { if (document.getElementById("app").classList.contains("focus-mode")) document.getElementById("btn-toggle-focus").click(); });
+  await new Promise((r) => setTimeout(r, 300));
+  const board = await page.evaluate((status) => ({ status, recent: (document.querySelector("#history-list li") || {}).textContent || "" }), status);
   check("the board: 8-Ball race to 15, Kim wins a rack - Recent Games \"Kim won 8-Ball\", no \"(target 1)\"", /8-Ball · Race to 15/.test(board.status) && /Kim.*won 8-Ball/.test(board.recent) && !/target/.test(board.recent), board);
   if (OUT) await page.screenshot({ path: path.join(OUT, "names_board.png") });
   for (let i = 0; i < 9; i++) {

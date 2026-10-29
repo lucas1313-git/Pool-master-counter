@@ -276,6 +276,7 @@
       var willExpand = panel.classList.contains("collapsed");
       panel.classList.toggle("collapsed");
       btn.setAttribute("aria-expanded", willExpand ? "true" : "false");
+      if (willExpand && typeof flushHiddenRenders === "function") flushHiddenRenders(); // (a list drawn when it shows)
     }
     btn.addEventListener("click", toggle);
     if (summary && summary.tagName === "P") summary.addEventListener("click", toggle);
@@ -586,7 +587,16 @@
     idleReportTimer = setTimeout(saveTodaysReportToArchive, 60 * 60 * 1000);
   }
 
+  // Bumped whenever something the reports and the stats pages read is saved
+  // (the session, the saved history, ratings, contacts, tournament results):
+  // what's worked out from them is kept until it changes (see
+  // computeDayReportData, computePlayerCareerStats) - a tap on the board used
+  // to walk every game of the day three or four times over.
+  var dataVersion = 0;
+  function dataChanged() { dataVersion++; }
+
   function saveState() {
+    dataChanged();
     // Network broadcast and local persistence are separate concerns -
     // hooked before the noStatsMode guard so a host using "No Statistics"
     // (or Quick Counter) can still share a session live; only THIS
@@ -1958,7 +1968,17 @@
   // wetter/longer than the shared slapback echo bus (setupEchoBus)
   // every other sound uses, on purpose: this fanfare should feel like
   // it's ringing out in a huge hall.
+  // (made once per sound and kept - a few hundred thousand random samples,
+  // rebuilt on every win before)
+  var reverbImpulses = [];
   function buildReverbImpulse(ctx, duration, decay) {
+    var kept = reverbImpulses.filter(function (r) { return r.ctx === ctx && r.duration === duration && r.decay === decay; })[0];
+    if (kept) return kept.buffer;
+    var buffer = makeReverbImpulse(ctx, duration, decay);
+    reverbImpulses.push({ ctx: ctx, duration: duration, decay: decay, buffer: buffer });
+    return buffer;
+  }
+  function makeReverbImpulse(ctx, duration, decay) {
     var rate = ctx.sampleRate;
     var length = Math.max(1, Math.floor(rate * duration));
     var impulse = ctx.createBuffer(2, length, rate);
@@ -4112,6 +4132,7 @@
 
   function setFocusMode(on) {
     appRoot.classList.toggle("focus-mode", on);
+    if (!on) flushHiddenRenders(); // (the full page's lists, now they show)
     // (the banner sits under the board's top bar only on the board; the
     // full page's Now Playing boxes are sized now that they show)
     if (!on && winBannerEl) winBannerEl.style.top = "";
@@ -4174,18 +4195,36 @@
   // Rendering
   // ---------------------------------------------------------------------
 
+  // The full page's lists the board hides (or a folded panel hides): drawn
+  // when they're shown - leaving the board, opening the panel - not on
+  // every tap (P29). Anything else in renderAll still draws every time.
+  var hiddenRenders = {};
+  function renderWhenShown(el, key, fn) {
+    if (el && el.offsetParent === null) { hiddenRenders[key] = fn; return; }
+    delete hiddenRenders[key];
+    fn();
+  }
+  function flushHiddenRenders() {
+    Object.keys(hiddenRenders).forEach(function (key) {
+      var fn = hiddenRenders[key];
+      delete hiddenRenders[key];
+      fn();
+    });
+  }
+
   function renderAll() {
+    dataChanged(); // (whatever changed before this redraw: worked out again, once)
     renderRoster();
     renderScoreboard();
-    renderHistory();
+    renderWhenShown(document.getElementById("history-panel"), "history", renderHistory);
     renderStandings();
     renderRotation();
     renderWizardIfOpen();
-    updateDayNotesSummary();
+    renderWhenShown(document.getElementById("day-notes-panel"), "dayNotes", updateDayNotesSummary);
     updateRunRecordsSummary();
     updateDayReportRecipientsLine();
-    renderRecoverDataList();
-    renderReportArchiveList();
+    renderWhenShown(recoverDataList, "recoverData", renderRecoverDataList);
+    renderWhenShown(reportArchiveList, "reportArchive", renderReportArchiveList);
     // League is its own page now (not an always-rendered panel) and its
     // render rebuilds a whole Tables Overview grid - skip it on every
     // ordinary scoreboard tap's renderAll() and only do the work while the
@@ -7720,10 +7759,25 @@
     if (cameraAckFlash) applyCameraAckFlash();
   }
 
+  // A date or time in the browser's own way of writing it - one formatter
+  // per set of options, made once: toLocaleTimeString / toLocaleDateString
+  // with options build a new one every call, and a page of 5,000 games'
+  // dots spent over a second on that alone (P29). The same text as before.
+  var localeFormatters = {};
+  function localeFormat(d, options) {
+    var key = JSON.stringify(options);
+    var f = localeFormatters[key];
+    if (!f) {
+      try { f = new Intl.DateTimeFormat(undefined, options); } catch (e) { f = { format: function (x) { return x.toLocaleString(); } }; }
+      localeFormatters[key] = f;
+    }
+    return f.format(d);
+  }
+
   function formatTimestamp(ts, includeDate) {
     var d = new Date(ts);
     if (!ts || isNaN(d.getTime())) return "";
-    var timePart = d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    var timePart = localeFormat(d, { hour: "numeric", minute: "2-digit" });
     if (!includeDate) return timePart;
     return formatDateISO(d) + " · " + timePart;
   }
@@ -10572,7 +10626,22 @@
   // archiveImportedReportDates, the only current caller.
   // skipTs (optional): game timestamps to leave out - the ones another
   // archived report already covers (see backfillReportArchive).
+  // (the same day asked again with nothing saved since - within 20 s, since
+  // "the last 24 hours" moves on - is the same answer)
+  var dayReportCache = { key: null, at: 0, data: null };
   function computeDayReportData(dateStr, exactDate, skipTs) {
+    if (!exactDate && !skipTs) {
+      // (the live game list too - a game added and read back before any save)
+      var gh = state.gameHistory || [];
+      var cacheKey = dateStr + "|" + dataVersion + "|" + gh.length + "|" + (gh[0] && gh[0].ts);
+      if (dayReportCache.key === cacheKey && Date.now() - dayReportCache.at < 20000) return dayReportCache.data;
+      var fresh = computeDayReportDataNow(dateStr);
+      dayReportCache = { key: cacheKey, at: Date.now(), data: fresh };
+      return fresh;
+    }
+    return computeDayReportDataNow(dateStr, exactDate, skipTs);
+  }
+  function computeDayReportDataNow(dateStr, exactDate, skipTs) {
     var names = getAllKnownPlayerNames();
     var cutoffTs = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     var liveTsSet = {};
@@ -15960,6 +16029,7 @@
   }
 
   function savePlayerStatsToStorage(allStats) {
+    dataChanged();
     if (noStatsMode) return;
     saveBigStore("playerStats", allStats);
   }
@@ -15975,6 +16045,7 @@
   }
 
   function saveRatingsToStorage(ratings) {
+    dataChanged();
     if (noStatsMode) return;
     try {
       localStorage.setItem(RATINGS_KEY, JSON.stringify(ratings));
@@ -16153,6 +16224,7 @@
   }
 
   function saveContactsToStorage(contacts) {
+    dataChanged();
     if (noStatsMode) return;
     try {
       localStorage.setItem(CONTACTS_KEY, JSON.stringify(contacts));
@@ -25293,7 +25365,18 @@
     };
   }
 
+  // (kept per player and period until something's saved or the pool day
+  // turns over - All Players opened again, or one of its periods, redraws
+  // from these)
+  var careerStatsCache = { key: null, byName: {} };
   function computePlayerCareerStats(name, period) {
+    var cacheKey = dataVersion + "|" + todayDateStr();
+    if (careerStatsCache.key !== cacheKey) careerStatsCache = { key: cacheKey, byName: {} };
+    var k = name + "\n" + period;
+    if (!careerStatsCache.byName[k]) careerStatsCache.byName[k] = computePlayerCareerStatsNow(name, period);
+    return careerStatsCache.byName[k];
+  }
+  function computePlayerCareerStatsNow(name, period) {
     var allGames = allGamesForPlayerName(name);
     var games = filterGamesByPeriod(allGames, period);
     var tournamentGames = filterGamesByPeriod(
@@ -25407,8 +25490,8 @@
       tick.style.left = frac * 100 + "%";
       var tickDate = new Date(minMs + frac * (maxMs - minMs));
       var label = sameDay
-        ? tickDate.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
-        : tickDate.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+        ? localeFormat(tickDate, { hour: "numeric", minute: "2-digit" })
+        : localeFormat(tickDate, { month: "short", day: "numeric" });
       tick.setAttribute("data-label", label);
       track.appendChild(tick);
     }
@@ -25916,11 +25999,11 @@
   }
 
   function formatAxisTickLabel(d, period) {
-    if (period === "today") return d.toLocaleTimeString(undefined, { hour: "numeric" });
-    if (period === "week") return d.toLocaleDateString(undefined, { weekday: "short" });
+    if (period === "today") return localeFormat(d, { hour: "numeric" });
+    if (period === "week") return localeFormat(d, { weekday: "short" });
     if (period === "month") return String(d.getDate());
-    if (period === "6month" || period === "year") return d.toLocaleDateString(undefined, { month: "short" });
-    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    if (period === "6month" || period === "year") return localeFormat(d, { month: "short" });
+    return localeFormat(d, { month: "short", day: "numeric" });
   }
 
   function buildGraphTimeAxis(minMs, maxMs, period) {
@@ -25994,7 +26077,7 @@
       // extra precision isn't worth how much wider it makes the one label
       // that always has to fit without overlapping its neighbor.
       label.textContent = isNow
-        ? T("graph.nowPrefix") + d.toLocaleDateString(undefined, { month: "short", day: "numeric" })
+        ? T("graph.nowPrefix") + localeFormat(d, { month: "short", day: "numeric" })
         : formatAxisTickLabel(d, period);
       axis.appendChild(label);
     });
@@ -30848,6 +30931,7 @@
   }
 
   function saveTournamentResultsToStorage(list) {
+    dataChanged();
     try {
       localStorage.setItem(TOURNAMENT_RESULTS_KEY, JSON.stringify(list));
     } catch (e) {
@@ -40045,10 +40129,15 @@
     // Leaving the app (closing it, switching away, the device sleeping)
     // keeps today's report too - no waiting for an idle hour - and
     // coming back fills in any day missed meanwhile.
+    // (back in the app: the backfill walks every game - at most every 30
+    // minutes, or when the pool day has turned over, not on every return)
+    var backfilledAt = Date.now(), backfilledDay = todayDateStr();
     document.addEventListener("visibilitychange", function () {
       if (document.visibilityState === "hidden") {
         saveTodaysReportToArchive();
-      } else {
+      } else if (Date.now() - backfilledAt > 30 * 60 * 1000 || todayDateStr() !== backfilledDay) {
+        backfilledAt = Date.now();
+        backfilledDay = todayDateStr();
         backfillReportArchive();
       }
     });
