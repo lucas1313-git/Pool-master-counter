@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261030c">
+<link rel="stylesheet" href="css/style.css?v=20261030d">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -385,6 +385,11 @@
       <span id="backup-reminder-text"></span>
       <button type="button" id="btn-backup-reminder-now" class="btn btn-primary" data-i18n="bk.backupNow">💾 Back up now</button>
       <button type="button" id="btn-backup-reminder-later" class="btn btn-ghost" data-i18n="backupReminder.later">Later</button>
+    </div>
+    <!-- 🆕 a newer version came in the background (js/app.js watchForAppUpdate, sw.js) -->
+    <div class="backup-reminder update-ready hidden" id="update-ready" role="status">
+      <span data-i18n="update.ready">🆕 A new version of the app is ready</span>
+      <button type="button" id="btn-update-ready" class="btn btn-primary" data-i18n="update.now">🔄 Update now</button>
     </div>
     <div class="practice-badge hidden" id="practice-badge" role="status" data-i18n="practice.badge">PRACTICE · NOT SAVED</div>
     <!-- 🎱 Winner Stays on the board (js/app.js renderBoardWinnerStays) - the same switch as the Players section's -->
@@ -3177,27 +3182,27 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/pairing.js?v=20261030c"></script>
-<script src="js/big-store.js?v=20261030c"></script>
-<script src="js/mp4-clip.js?v=20261030c"></script>
-<script src="js/recording-consent.js?v=20261030c"></script>
-<script src="js/local-recorder.js?v=20261030c"></script>
-<script src="js/lib/pool-day.js?v=20261030c"></script>
-<script src="js/lib/race-math.js?v=20261030c"></script>
-<script src="js/lib/handicaps.js?v=20261030c"></script>
-<script src="js/lib/brackets.js?v=20261030c"></script>
-<script src="js/lib/league.js?v=20261030c"></script>
-<script src="js/lib/events.js?v=20261030c"></script>
-<script src="js/lib/chips.js?v=20261030c"></script>
-<script src="js/lib/highlights.js?v=20261030c"></script>
-<script src="js/lib/payouts.js?v=20261030c"></script>
-<script src="js/app.js?v=20261030c"></script>
-<script src="js/camera-client.js?v=20261030c"></script>
-<script src="js/voice.js?v=20261030c"></script>
+<script src="js/pairing.js?v=20261030d"></script>
+<script src="js/big-store.js?v=20261030d"></script>
+<script src="js/mp4-clip.js?v=20261030d"></script>
+<script src="js/recording-consent.js?v=20261030d"></script>
+<script src="js/local-recorder.js?v=20261030d"></script>
+<script src="js/lib/pool-day.js?v=20261030d"></script>
+<script src="js/lib/race-math.js?v=20261030d"></script>
+<script src="js/lib/handicaps.js?v=20261030d"></script>
+<script src="js/lib/brackets.js?v=20261030d"></script>
+<script src="js/lib/league.js?v=20261030d"></script>
+<script src="js/lib/events.js?v=20261030d"></script>
+<script src="js/lib/chips.js?v=20261030d"></script>
+<script src="js/lib/highlights.js?v=20261030d"></script>
+<script src="js/lib/payouts.js?v=20261030d"></script>
+<script src="js/app.js?v=20261030d"></script>
+<script src="js/camera-client.js?v=20261030d"></script>
+<script src="js/voice.js?v=20261030d"></script>
 <script>
   // The app opens with no network (sw.js, P21) - on http(s) only, not in the iOS app
   if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol) && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
-    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261030c").catch(function () {}); });
+    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261030d").catch(function () {}); });
   }
 </script>
 </body>

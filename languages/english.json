@@ -1913,6 +1913,8 @@
   "undo.aria": "Undo the last score",
   "undo.plusFor": "a point for {{name}}",
   "undo.minusFor": "a point taken from {{name}}",
+  "update.ready": "🆕 A new version of the app is ready",
+  "update.now": "🔄 Update now",
   "board.menu": "Menu",
   "board.showAllAria": "Show all - the full page",
   "board.showAll": "Show all",

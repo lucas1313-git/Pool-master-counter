@@ -1913,6 +1913,8 @@
   "undo.aria": "I-undo ang huling puntos",
   "undo.plusFor": "isang puntos para kay {{name}}",
   "undo.minusFor": "isang puntos na binawas kay {{name}}",
+  "update.ready": "🆕 Handa na ang bagong bersyon ng app",
+  "update.now": "🔄 I-update ngayon",
   "board.menu": "Menu",
   "board.showAllAria": "Ipakita lahat - ang buong pahina",
   "board.showAll": "Ipakita lahat",

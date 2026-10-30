@@ -1913,6 +1913,8 @@
   "undo.aria": "Deshacer la última anotación",
   "undo.plusFor": "un punto para {{name}}",
   "undo.minusFor": "un punto quitado a {{name}}",
+  "update.ready": "🆕 Hay una nueva versión de la app lista",
+  "update.now": "🔄 Actualizar ahora",
   "board.menu": "Menú",
   "board.showAllAria": "Ver todo - la página completa",
   "board.showAll": "Ver todo",

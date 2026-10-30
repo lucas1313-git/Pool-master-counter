@@ -1913,6 +1913,8 @@
   "undo.aria": "Annuler le dernier point marqué",
   "undo.plusFor": "un point pour {{name}}",
   "undo.minusFor": "un point retiré à {{name}}",
+  "update.ready": "🆕 Une nouvelle version de l'app est prête",
+  "update.now": "🔄 Mettre à jour",
   "board.menu": "Menu",
   "board.showAllAria": "Tout voir - la page complète",
   "board.showAll": "Tout voir",

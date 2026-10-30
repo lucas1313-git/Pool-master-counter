@@ -10,6 +10,9 @@
 //   3 s or offline (kept without their cache-busting ?v=<time>);
 // - the camera's models: cached on first use, kept across versions;
 // - the server's own endpoints (/api/, /voice, /ws) are never touched.
+// The open page asks which page is kept now (its tag); a newer one means an
+// update came in the background, and the page takes it (2026-10-30: it took
+// a second reload before).
 var VERSION = new URL(self.location.href).searchParams.get("v") || "dev";
 var SHELL = "pmc-shell-" + VERSION;
 var DATA = "pmc-data";
@@ -96,7 +99,8 @@ function fromNetworkFirst(cacheName, request, key) {
 }
 
 // the page: the cached copy at once, the network's kept for next time
-function pageFromCache(request) {
+var pageRefresh = Promise.resolve(); // the background fetch of the page, while it runs
+function pageFromCache(request, event) {
   return caches.open(SHELL).then(function (cache) {
     var key = scopePath("index.html");
     return cache.match(key).then(function (hit) {
@@ -105,13 +109,30 @@ function pageFromCache(request) {
         return res;
       });
       if (hit) {
-        update.catch(function () {});
+        pageRefresh = update.catch(function () {});
+        if (event) event.waitUntil(pageRefresh);
         return hit;
       }
       return update;
     });
   });
 }
+
+// the tag of the page kept now (its js/app.js?v=), once the refresh is done
+function keptPageTag() {
+  return pageRefresh.then(function () {
+    return caches.open(SHELL).then(function (cache) { return cache.match(scopePath("index.html")); });
+  }).then(function (hit) {
+    return hit ? hit.text().then(function (html) { var m = /js\/app\.js\?v=([^"']+)/.exec(html); return m ? m[1] : null; }) : null;
+  }).catch(function () { return null; });
+}
+
+self.addEventListener("message", function (event) {
+  if (!event.data || event.data.type !== "pmc-which-page" || !event.source) return;
+  event.waitUntil(keptPageTag().then(function (tag) {
+    event.source.postMessage({ type: "pmc-page-tag", tag: tag });
+  }));
+});
 
 self.addEventListener("fetch", function (event) {
   var request = event.request;
@@ -122,7 +143,7 @@ self.addEventListener("fetch", function (event) {
   if (/^\/(api|voice|ws)(\/|$)/.test(path)) return;
   if (request.mode === "navigate") {
     if (path === "/" || path === "/index.html") {
-      event.respondWith(pageFromCache(request));
+      event.respondWith(pageFromCache(request, event));
       return;
     }
     event.respondWith(fromNetworkFirst(DATA, request, url.origin + url.pathname));

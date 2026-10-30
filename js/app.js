@@ -20708,6 +20708,40 @@
       : T("backupReminder.never", { games: countPhrase("games", games) });
   }
 
+  // A newer version of the app (2026-10-30). The service worker answers with
+  // the page it kept and fetches the new one for next time - so an update
+  // took a second reload. It says which page it keeps now: a newer one is
+  // taken at once when the app was just opened and nothing's been touched,
+  // otherwise "🆕 A new version ... 🔄 Update now" under the top bar.
+  var APP_UPDATE_AUTO_MS = 30000;
+  var APP_UPDATE_TRIED_KEY = "poolMasterCounter.updateTried";
+  function watchForAppUpdate() {
+    if (!("serviceWorker" in navigator) || !/^https?:$/.test(location.protocol)) return;
+    var own = document.querySelector('script[src*="js/app.js?v="]');
+    var mine = own ? (/[?&]v=([^&]+)/.exec(own.getAttribute("src")) || [])[1] : null;
+    if (!mine) return;
+    var openedAt = Date.now(), touched = false;
+    ["pointerdown", "keydown"].forEach(function (type) {
+      window.addEventListener(type, function () { touched = true; }, { capture: true, once: true });
+    });
+    navigator.serviceWorker.addEventListener("message", function (e) {
+      var d = e.data || {};
+      if (d.type !== "pmc-page-tag" || !d.tag || d.tag === mine) return;
+      var tried = null;
+      try { tried = sessionStorage.getItem(APP_UPDATE_TRIED_KEY); } catch (err) {}
+      if (!touched && Date.now() - openedAt < APP_UPDATE_AUTO_MS && tried !== d.tag) {
+        try { sessionStorage.setItem(APP_UPDATE_TRIED_KEY, d.tag); } catch (err) {}
+        location.reload();
+        return;
+      }
+      var bar = document.getElementById("update-ready");
+      if (bar) bar.classList.remove("hidden");
+    });
+    navigator.serviceWorker.ready.then(function (reg) {
+      if (reg.active) reg.active.postMessage({ type: "pmc-which-page" });
+    }).catch(function () {});
+  }
+
   // How much of this device's browser storage the app uses (about 5 MB on
   // an iPad - Safari counts every letter as two bytes) and what for; the
   // recordings and other files live apart (navigator.storage.estimate).
@@ -41820,6 +41854,10 @@
   document.getElementById("btn-board-show-all").addEventListener("click", function () {
     setFocusMode(false);
     window.scrollTo(0, 0);
+  });
+  watchForAppUpdate();
+  document.getElementById("btn-update-ready").addEventListener("click", function () {
+    location.reload();
   });
   document.getElementById("btn-backup-reminder-now").addEventListener("click", function () {
     document.getElementById("btn-backup-now").click();
