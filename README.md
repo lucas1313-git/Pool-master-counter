@@ -245,7 +245,7 @@ Tap **❓ Help** — it's on every page (the main page, the Setup Wizard, All Pl
 
 ## Focus Mode
 
-The scoreboard is the home screen: the app always opens on the board (Focus Mode). Its top bar has **☰ Menu**, one line saying what's being played ("8-Ball · Race to 5 · Winner stays"), **↩ Undo** and **🎱 Game**.
+The scoreboard is the home screen: the app always opens on the board (Focus Mode). Its top bar has **☰ Menu**, **🔍 Show all** (the full page - **🎱 Back to the board** returns), one line saying what's being played ("8-Ball · Race to 5 · Winner stays"), **↩ Undo** and **🎱 Game**.
 
 - **🎱 Game** holds everything about the game: game type, target, race, rotation (with 8/9 alternate and 8/9/10 ready to pick), Winner Stays, teams (split A/B automatically), timer, shot clock and practice (not saved). Nothing changes until **Apply**, and the banner says what did.
 - **☰ Menu** holds everything else: ▶️ New game, 🌙 End night (tonight's standings, MVP, best run, matchups and rating changes, one Share - text plus an optional picture card, never a backup - and the night archived), **📋 Standings** and **🔍 See all (the full page)** straight from its first page (**🎱 Back to the board** returns), Players, Tournament, League, Stats, Day Report, Backup & Restore (the resets are in there too), Camera, Recording, ✨ Tonight's highlights, Voice, Challonge, Help, Theme and Language - and under More, the Setup Wizard and Multi Tables.

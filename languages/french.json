@@ -1914,6 +1914,8 @@
   "undo.plusFor": "un point pour {{name}}",
   "undo.minusFor": "un point retiré à {{name}}",
   "board.menu": "Menu",
+  "board.showAllAria": "Tout voir - la page complète",
+  "board.showAll": "Tout voir",
   "board.menuAria": "Menu",
   "board.menuBack": "‹ Menu",
   "board.game": "Jeu",

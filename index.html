@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261030b">
+<link rel="stylesheet" href="css/style.css?v=20261030c">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -362,6 +362,8 @@
     </div>
     <div class="board-topbar" id="board-topbar">
       <button type="button" id="btn-board-menu" class="board-topbar-btn" data-i18n-aria-label="board.menuAria" aria-label="Menu"><span aria-hidden="true">☰</span><span class="board-topbar-label" data-i18n="board.menu">Menu</span></button>
+      <!-- 🔍 Show all: the full page (🎱 Back to the board returns) -->
+      <button type="button" id="btn-board-show-all" class="board-topbar-btn" data-i18n-aria-label="board.showAllAria" aria-label="Show all - the full page"><span aria-hidden="true">🔍</span><span class="board-topbar-label" data-i18n="board.showAll">Show all</span></button>
       <div class="board-status" id="board-status"></div>
       <!-- actions that belong at the table, only while they can be used: talk, the recording's cues, Done arranging -->
       <div class="board-actions" id="board-actions">
@@ -3175,27 +3177,27 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/pairing.js?v=20261030b"></script>
-<script src="js/big-store.js?v=20261030b"></script>
-<script src="js/mp4-clip.js?v=20261030b"></script>
-<script src="js/recording-consent.js?v=20261030b"></script>
-<script src="js/local-recorder.js?v=20261030b"></script>
-<script src="js/lib/pool-day.js?v=20261030b"></script>
-<script src="js/lib/race-math.js?v=20261030b"></script>
-<script src="js/lib/handicaps.js?v=20261030b"></script>
-<script src="js/lib/brackets.js?v=20261030b"></script>
-<script src="js/lib/league.js?v=20261030b"></script>
-<script src="js/lib/events.js?v=20261030b"></script>
-<script src="js/lib/chips.js?v=20261030b"></script>
-<script src="js/lib/highlights.js?v=20261030b"></script>
-<script src="js/lib/payouts.js?v=20261030b"></script>
-<script src="js/app.js?v=20261030b"></script>
-<script src="js/camera-client.js?v=20261030b"></script>
-<script src="js/voice.js?v=20261030b"></script>
+<script src="js/pairing.js?v=20261030c"></script>
+<script src="js/big-store.js?v=20261030c"></script>
+<script src="js/mp4-clip.js?v=20261030c"></script>
+<script src="js/recording-consent.js?v=20261030c"></script>
+<script src="js/local-recorder.js?v=20261030c"></script>
+<script src="js/lib/pool-day.js?v=20261030c"></script>
+<script src="js/lib/race-math.js?v=20261030c"></script>
+<script src="js/lib/handicaps.js?v=20261030c"></script>
+<script src="js/lib/brackets.js?v=20261030c"></script>
+<script src="js/lib/league.js?v=20261030c"></script>
+<script src="js/lib/events.js?v=20261030c"></script>
+<script src="js/lib/chips.js?v=20261030c"></script>
+<script src="js/lib/highlights.js?v=20261030c"></script>
+<script src="js/lib/payouts.js?v=20261030c"></script>
+<script src="js/app.js?v=20261030c"></script>
+<script src="js/camera-client.js?v=20261030c"></script>
+<script src="js/voice.js?v=20261030c"></script>
 <script>
   // The app opens with no network (sw.js, P21) - on http(s) only, not in the iOS app
   if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol) && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
-    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261030b").catch(function () {}); });
+    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261030c").catch(function () {}); });
   }
 </script>
 </body>

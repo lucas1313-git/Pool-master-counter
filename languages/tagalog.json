@@ -1914,6 +1914,8 @@
   "undo.plusFor": "isang puntos para kay {{name}}",
   "undo.minusFor": "isang puntos na binawas kay {{name}}",
   "board.menu": "Menu",
+  "board.showAllAria": "Ipakita lahat - ang buong pahina",
+  "board.showAll": "Ipakita lahat",
   "board.menuAria": "Menu",
   "board.menuBack": "‹ Menu",
   "board.game": "Laro",

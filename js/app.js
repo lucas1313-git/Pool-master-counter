@@ -41816,6 +41816,11 @@
     if (!stillAllChecked) tournamentSelectAllCheckbox.checked = false;
   });
   loadDriveAccountsHere();
+  // 🔍 Show all, on the board's top bar: the full page (🎱 Back to the board returns)
+  document.getElementById("btn-board-show-all").addEventListener("click", function () {
+    setFocusMode(false);
+    window.scrollTo(0, 0);
+  });
   document.getElementById("btn-backup-reminder-now").addEventListener("click", function () {
     document.getElementById("btn-backup-now").click();
   });

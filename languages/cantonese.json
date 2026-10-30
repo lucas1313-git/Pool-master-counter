@@ -1914,6 +1914,8 @@
   "undo.plusFor": "{{name}} 嘅一分",
   "undo.minusFor": "{{name}} 被扣嘅一分",
   "board.menu": "選單",
+  "board.showAllAria": "顯示全部 - 完整頁面",
+  "board.showAll": "顯示全部",
   "board.menuAria": "選單",
   "board.menuBack": "‹ 選單",
   "board.game": "對局",

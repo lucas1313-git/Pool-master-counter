@@ -14,6 +14,7 @@
 // - 🎱 Winner Stays on the board: shown with a third player on the roster, off; ticked - Winner
 //   Stays on (the Players section's switch too), "Next up: Lee"; a two-player roster: not shown;
 // - ☰ Menu, first page: 📋 Standings (opens the standings) and 🔍 See all (the full page);
+// - 🔍 Show all on the board's top bar (2026-10-30): the full page, and 🎱 Back to the board;
 // - no page errors.
 // Its own file server on 4293.
 // usage: node tests/probe_table_requests.js [screenshot dir]
@@ -215,6 +216,18 @@ const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/cs
     await sleep(400);
     const full = await page.evaluate(() => !document.getElementById("app").classList.contains("focus-mode"));
     check("...🔍 See all: the full page", full, full);
+    // 🔍 Show all, right on the board
+    await load(["Kim", "Jo"], { gameType: "8ball", target: 1, unit: "rack" });
+    const sa = await page.evaluate(() => { const b = document.getElementById("btn-board-show-all"); const r = b.getBoundingClientRect(); return { shown: !!b.offsetParent, inBar: !!b.closest("#board-topbar"), text: b.textContent.trim(), h: Math.round(r.height) }; });
+    await page.click("#btn-board-show-all");
+    await sleep(500);
+    const shownAll = await page.evaluate(() => !document.getElementById("app").classList.contains("focus-mode"));
+    const backShown = await page.evaluate(() => !!document.getElementById("btn-back-to-board").offsetParent || getComputedStyle(document.getElementById("btn-back-to-board")).display !== "none");
+    await page.evaluate(() => document.getElementById("btn-back-to-board").click());
+    await sleep(500);
+    const back = await page.evaluate(() => document.getElementById("app").classList.contains("focus-mode"));
+    check("🔍 Show all on the board's top bar (\"" + sa.text + "\", " + sa.h + " px tall): the full page; 🎱 Back to the board returns", sa.shown && sa.inBar && /Show all/.test(sa.text) && sa.h >= 44 && shownAll && backShown && back, { sa, shownAll, backShown, back });
+    if (OUT) await page.screenshot({ path: path.join(OUT, "show_all_button.png") });
   } finally {
     check("no page errors", errors.length === 0, errors);
     await browser.close();
