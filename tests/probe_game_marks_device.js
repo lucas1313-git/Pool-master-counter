@@ -6,6 +6,9 @@
 //   the game mark has ▶ Play and no ⬇ Save; the recording says "1 ⭐ · 1 🎱";
 // - ▶ Play on the game mark plays the recording from there; 🐢 slow motion: ¼× plays at a quarter
 //   speed (and stays for the next clip played), "1 frame ▶" pauses and moves on 1/30 s;
+// - ☑ the checked cues together: two ⭐ cues checked ("2 checked"); 📌 Save (keep forever): kept,
+//   with their own clip - the recording deleted, they stay and still play; ⬇ Export: two downloads;
+//   📤 Share: "Share now (2)", then the share sheet with two MP4s; 🗑 Delete: asks, then gone;
 // - not recording: no game mark;
 // - no page errors.
 // Its own file server on 4297 (no /api - the device's own recorder).
@@ -52,6 +55,13 @@ function makeY4m(file) {
   try {
     const page = await browser.newPage();
     page.on("pageerror", (e) => errors.push(e.message));
+    await page.evaluateOnNewDocument(() => {
+      window.__shared = []; window.__downloads = [];
+      navigator.canShare = () => true;
+      navigator.share = (d) => { window.__shared.push((d.files || []).map((f) => ({ name: f.name, type: f.type, size: f.size }))); return Promise.resolve(); };
+      const click = HTMLAnchorElement.prototype.click;
+      HTMLAnchorElement.prototype.click = function () { if (this.download) { window.__downloads.push(this.download); return; } return click.call(this); };
+    });
     await page.goto(BASE + "manifest.json");
     await page.evaluate(() => {
       localStorage.clear();
@@ -113,6 +123,53 @@ function makeY4m(file) {
     await sleep(300);
     const step = await page.evaluate(() => ({ paused: document.getElementById("lrec-player").paused, t: document.getElementById("lrec-player").currentTime }));
     check("🐢 slow motion: ¼× (" + slow.rate + "), kept for the next clip played (" + kept + "); \"1 frame ▶\" pauses and moves on " + (step.t - t0).toFixed(3) + " s", slow.shown && slow.rate === 0.25 && slow.on === "¼×" && kept === 0.25 && step.paused && step.t - t0 > 0.02 && step.t - t0 < 0.08, { slow, kept, t0, step });
+    // ---- ☑ together: a second ⭐ cue first (a new recording) ----
+    await page.evaluate(() => document.getElementById("btn-lrec-start").click());
+    await sleep(2000);
+    await page.evaluate(() => window.PMCLocalRecorder.mark("button"));
+    await sleep(2000);
+    await page.evaluate(() => window.PMCLocalRecorder.finish("button"));
+    await sleep(800);
+    await page.evaluate(() => document.getElementById("btn-lrec-start").click());
+    await sleep(1500);
+    await page.evaluate(() => document.querySelectorAll("#lrec-cues li.lrec-cue .lrec-pick").forEach((b) => b.click()));
+    await sleep(300);
+    const g0 = await page.evaluate(() => ({ picked: document.getElementById("lrec-picked").textContent, buttons: [...document.querySelectorAll("#lrec-group button")].map((b) => b.disabled) }));
+    await page.evaluate(() => document.querySelector('#lrec-group button[data-g="keep"]').click());
+    await sleep(2500);
+    const keptCues = await page.evaluate(async () => (await window.PMCLocalRecorder.cues()).filter((c) => c.kept).map((c) => ({ id: c.id, blob: !!c.keptClip && c.keptClip.size > 0 })));
+    check("☑ two ⭐ cues checked (" + g0.picked + "); 📌 Save (keep forever): both kept with their own clip", g0.picked === "2 checked" && g0.buttons.every((d) => !d) && keptCues.length === 2 && keptCues.every((k) => k.blob), { g0, keptCues });
+    // the recordings deleted: the kept cues stay, and play
+    for (let i = 0; i < 2; i++) {
+      await page.evaluate(() => { const b = document.querySelector("#lrec-sessions li button.lrec-del"); if (b) b.click(); });
+      await sleep(200);
+      await page.evaluate(() => { const b = document.querySelector("#lrec-sessions li button.lrec-del"); if (b) b.click(); });
+      await sleep(800);
+    }
+    const left = await page.evaluate(async () => ({ sessions: (await window.PMCLocalRecorder._all("sessions")).length, cues: (await window.PMCLocalRecorder.cues()).map((c) => (c.kept ? "kept" : c.kind || "cue")) }));
+    await page.evaluate(() => [...document.querySelectorAll("#lrec-cues li.lrec-kept button")].find((b) => /Play/.test(b.textContent)).click());
+    await sleep(1200);
+    const keptPlays = await page.evaluate(() => { const v = document.getElementById("lrec-player"); return !!v.src && v.readyState >= 1; });
+    check("...the recordings deleted: the kept cues stay (" + left.cues.join(", ") + ") and still play", left.sessions === 0 && left.cues.filter((c) => c === "kept").length === 2 && !left.cues.includes("game") && keptPlays, { left, keptPlays });
+    await page.evaluate(() => { window.__downloads = []; document.querySelector('#lrec-group button[data-g="export"]').click(); });
+    await sleep(1500);
+    const dls = await page.evaluate(() => window.__downloads);
+    check("...⬇ Export: two downloads (" + dls.join(", ") + ")", dls.length === 2 && dls.every((d) => /\.mp4$/.test(d)), dls);
+    await page.evaluate(() => document.querySelector('#lrec-group button[data-g="share"]').click());
+    await sleep(1500);
+    const ready = await page.evaluate(() => document.querySelector('#lrec-group button[data-g="share"]').textContent);
+    await page.evaluate(() => document.querySelector('#lrec-group button[data-g="share"]').click());
+    await sleep(300);
+    const shared = await page.evaluate(() => window.__shared);
+    check("...📤 Share: \"" + ready + "\", then the share sheet with two MP4s", /Share now \(2\)/.test(ready) && shared.length === 1 && shared[0].length === 2 && shared[0].every((f) => f.type === "video/mp4" && f.size > 0), { ready, shared });
+    await page.evaluate(() => document.querySelector('#lrec-group button[data-g="delete"]').click());
+    await sleep(200);
+    const asks = await page.evaluate(() => document.querySelector('#lrec-group button[data-g="delete"]').textContent);
+    await page.evaluate(() => document.querySelector('#lrec-group button[data-g="delete"]').click());
+    await sleep(800);
+    const after = await page.evaluate(async () => (await window.PMCLocalRecorder.cues()).length);
+    if (OUT) await page.screenshot({ path: path.join(OUT, "group_device.png") });
+    check("...🗑 Delete: \"" + asks + "\", then gone", /Delete 2\?/.test(asks) && after === 0, { asks, after });
   } finally {
     check("no page errors", errors.length === 0, errors);
     await browser.close();

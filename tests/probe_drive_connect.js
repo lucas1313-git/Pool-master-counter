@@ -179,6 +179,8 @@ function lanIp() { for (const l of Object.values(os.networkInterfaces())) for (c
   await page.click("#btn-backup-now");
   await page.waitForSelector("#confirm-modal-overlay:not(.hidden)", { timeout: 3000 });
   await page.click("#btn-confirm-modal-ok"); // (the name box: today's name, as offered)
+  await sleep(300);
+  await page.evaluate(() => { const b = document.getElementById("btn-bk-to-drive-folder") || document.getElementById("btn-bk-to-downloads"); if (b) b.click(); }); // (where to: a computer asks - the Drive folder where it can, else Downloads)
   let up = null;
   for (let i = 0; i < 40 && !up; i++) { await sleep(250); up = google.files.find((f) => /all-data/.test(f.name)); }
   const upData = up ? JSON.parse(up.content) : null;

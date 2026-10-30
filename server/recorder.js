@@ -197,7 +197,9 @@ function trashSession(id, x) {
   while (fs.existsSync(dest)) dest = path.join(trash, "Pool Master Counter " + id + " (" + k++ + ")");
   fs.renameSync(x.dir, dest);
   var span = { s: x.s.startedAt, e: x.s.endedAt || Date.now() };
+  // (a 📌 kept cue stays, its clip in Clips/)
   var cues = loadCues(), left = cues.filter(function (c) {
+    if (c.keep && c.clip) return true;
     return c.session ? c.session !== id : !(c.startedAt >= span.s && c.startedAt <= span.e);
   });
   if (left.length !== cues.length) saveCues(left);
@@ -475,7 +477,8 @@ function attachRecorderRoutes(app) {
   });
 
   // (kind: "game" - a game mark, the moment a game started; none - a cue)
-  var CUE_FIELDS = ["name", "kind", "player", "opponent", "matchup", "gameType", "gameLabel", "position", "note", "startedAt", "markedAt", "endedAt", "duration", "source", "session", "customName", "shotAt", "shotEndedAt", "cameraShooter"];
+  // (keep: 📌 kept for good - its clip cut, never cleaned up, not deleted with its recording)
+  var CUE_FIELDS = ["name", "kind", "keep", "player", "opponent", "matchup", "gameType", "gameLabel", "position", "note", "startedAt", "markedAt", "endedAt", "duration", "source", "session", "customName", "shotAt", "shotEndedAt", "cameraShooter"];
   function pickCue(b, into) {
     CUE_FIELDS.forEach(function (k) {
       if (b[k] === undefined) return;

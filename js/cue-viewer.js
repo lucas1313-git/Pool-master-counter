@@ -83,6 +83,14 @@
     ".cv button.cv-del.sure { background: #b3261e; border-color: #b3261e; color: #fff; font-weight: 800; }",
     ".cv .cv-session-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }",
     ".cv .cv-session-head .cv-del { margin-left: auto; }",
+    // ☑ the checked cues, done together
+    ".cv .cv-group { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; padding: 6px 8px; border: 1px solid var(--border, #4a1e1e); border-radius: 10px; }",
+    ".cv .cv-group button { min-height: 36px; }",
+    ".cv .cv-group button.cv-group-del.sure { background: #b3261e; border-color: #b3261e; color: #fff; font-weight: 800; }",
+    ".cv .cv-group button.ready { background: var(--accent, #e8b923); color: #1a0d0d; font-weight: 800; }",
+    ".cv td.pk { width: 1%; }",
+    ".cv td.pk input { width: 20px; height: 20px; margin: 0; }",
+    ".cv .kept { color: var(--accent, #e8b923); }",
     // 🐢 slow motion: the speed, a frame at a time
     ".cv .cv-speed { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0 2px; }",
     ".cv .cv-speed button { min-height: 36px; min-width: 48px; }",
@@ -121,6 +129,9 @@
       '<div class="cv-status"></div>' +
       '<div class="cv-row" style="margin-top:8px"><button data-a="new" title="A cue of your own at the playhead">＋ New cue here</button><span class="dim cv-info"></span></div>' +
       '<input type="search" class="cv-search" placeholder="Find a cue - player, game, date...">' +
+      '<div class="cv-group"><label><input type="checkbox" class="cv-pick-all"> All</label><span class="dim cv-picked">none checked</span>' +
+      '<button class="cv-group-del" data-g="delete" disabled>🗑 Delete</button><button data-g="export" disabled title="Cut each one out and download it">⬇ Export</button>' +
+      '<button data-g="keep" disabled title="Cut out and kept for good - not cleaned up, not deleted with its recording">📌 Save (keep forever)</button><button data-g="share" disabled title="This computer\'s share menu">📤 Share</button></div>' +
       '<table><tbody class="cv-rows"></tbody></table>' +
       (opts.sessions ? '<div class="cv-sessions"><b>Recordings</b><div class="cv-sess dim">Loading...</div></div>' +
         // 📁 each day's cues, as a folder of clips in the recordings folder
@@ -422,8 +433,17 @@
         var on = !!sure && b.getAttribute("data-del") === sure.what && b.getAttribute("data-id") === sure.id;
         b.classList.toggle("sure", on);
         var kind = b.getAttribute("data-del");
+        if (!kind) return;
         b.textContent = on ? (sure.what === "session" ? "Delete this recording?" : sure.what === "folder" ? "Delete this folder?" : "Delete?") : (kind === "session" || kind === "folder" ? "🗑 Delete" : "🗑");
       });
+      // (the checked cues' 🗑 asks too)
+      var gdel = q(".cv-group-del");
+      if (gdel) {
+        var gon = !!sure && sure.what === "group";
+        gdel.classList.toggle("sure", gon);
+        var n = Object.keys(picked).length;
+        gdel.textContent = gon ? "Delete " + n + " cue" + (n === 1 ? "" : "s") + "?" : "🗑 Delete";
+      }
       var own = q('.cv-edit [data-a="delete"]'), mine = !!sure && sure.what === "cue" && !!sel && sure.id === sel.id;
       own.textContent = mine ? "Delete?" : "🗑";
       own.style.cssText = mine ? "background:#b3261e;border-color:#b3261e;color:#fff;font-weight:800" : "";
@@ -478,7 +498,7 @@
       if (!list.length) { rows.innerHTML = '<tr><td class="dim">' + (cues.length ? "No cue matches." : "No cues yet - ⭐ Mark during the recording (or say \"mark\").") + "</td></tr>"; return; }
       rows.innerHTML = list.slice(0, opts.compact ? 12 : 1000).map(function (c) {
         var game = c.kind === "game";
-        return '<tr data-id="' + esc(c.id) + '" class="' + (sel && sel.id === c.id ? "sel " : "") + (game ? "game " : "") + (c.endedAt ? "" : "open") + '"><td class="n">' + esc(c.name || nameFor(c) + (c.endedAt ? "" : " (still marking)")) + '</td><td class="dim" style="white-space:nowrap">' + esc(when(c.startedAt)) + '</td><td class="dim">' + (game ? "▶" : c.endedAt ? esc(len(c.endedAt - c.startedAt)) : "...") + "</td><td>" +
+        return '<tr data-id="' + esc(c.id) + '" class="' + (sel && sel.id === c.id ? "sel " : "") + (game ? "game " : "") + (c.endedAt ? "" : "open") + '"><td class="pk"><input type="checkbox" class="cv-pick" data-id="' + esc(c.id) + '"' + (picked[c.id] ? " checked" : "") + ' aria-label="Check this cue"></td><td class="n">' + esc(c.name || nameFor(c) + (c.endedAt ? "" : " (still marking)")) + (c.keep ? ' <span class="kept" title="Kept for good">📌</span>' : "") + '</td><td class="dim" style="white-space:nowrap">' + esc(when(c.startedAt)) + '</td><td class="dim">' + (game ? "▶" : c.endedAt ? esc(len(c.endedAt - c.startedAt)) : "...") + "</td><td>" +
           (c.clip ? '<a class="cv-btn" href="/api/rec/clips/' + encodeURIComponent(c.clip) + '" download="' + esc(c.clip) + '" title="The exported clip">⬇</a>' : "") + "</td>" +
           '<td class="x"><button class="cv-del" data-del="cue" data-id="' + esc(c.id) + '" title="Delete this cue (the recording stays)">🗑</button></td></tr>';
       }).join("");
@@ -488,10 +508,121 @@
       var del = e.target.closest("button.cv-del");
       if (del) { deleteCue(del.getAttribute("data-id")); return; }
       if (e.target.closest("a")) return;
+      if (e.target.closest("td.pk")) return; // (the checkbox: its own)
       var tr = e.target.closest("tr[data-id]");
       if (tr) select(tr.getAttribute("data-id"));
     });
     q(".cv-search").addEventListener("input", renderRows);
+
+    // ---- ☑ the checked cues, together: delete, export, save (keep forever), share ----
+    var picked = {}; // id -> true
+    var shareReady = null; // the files made for 📤 Share - a second click shares them (from the click itself)
+    function pickedCues() { return cues.filter(function (c) { return picked[c.id]; }); }
+    function renderGroup() {
+      var list = pickedCues(), clips = list.filter(function (c) { return c.kind !== "game" && c.endedAt; });
+      q(".cv-picked").textContent = list.length ? list.length + " checked" : "none checked";
+      root.querySelectorAll(".cv-group button").forEach(function (b) {
+        var g = b.getAttribute("data-g");
+        b.disabled = !list.length || (g !== "delete" && !clips.length) || ((g === "export" || g === "keep" || g === "share") && !ffmpeg);
+      });
+      var all = q(".cv-pick-all");
+      all.checked = !!cues.length && cues.every(function (c) { return picked[c.id]; });
+      if (!shareReady) { var sb = q('.cv-group [data-g="share"]'); sb.textContent = "📤 Share"; sb.classList.remove("ready"); }
+    }
+    q(".cv-rows").addEventListener("change", function (e) {
+      var box = e.target.closest("input.cv-pick");
+      if (!box) return;
+      if (box.checked) picked[box.getAttribute("data-id")] = true;
+      else delete picked[box.getAttribute("data-id")];
+      shareReady = null;
+      renderGroup();
+    });
+    q(".cv-pick-all").addEventListener("change", function (e) {
+      picked = {};
+      if (e.target.checked) cues.forEach(function (c) { picked[c.id] = true; });
+      shareReady = null;
+      renderRows();
+      renderGroup();
+    });
+    // each checked clip cut out (kept in Clips/ on the computer) -> [{ cue, file }]
+    function cutPicked() {
+      var list = pickedCues().filter(function (c) { return c.kind !== "game" && c.endedAt; }), out = [], i = 0;
+      return new Promise(function (resolve, reject) {
+        (function next() {
+          if (i >= list.length) return resolve(out);
+          var c = list[i++];
+          status("Cutting " + i + " of " + list.length + "...");
+          (c.clip ? Promise.resolve({ file: c.clip }) : api("/api/rec/cues/" + encodeURIComponent(c.id) + "/clip", {}, "POST")).then(function (r) {
+            c.clip = r.file;
+            out.push({ cue: c, file: r.file });
+            next();
+          }, reject);
+        })();
+      });
+    }
+    function downloadClip(file) {
+      var a = document.createElement("a");
+      a.href = "/api/rec/clips/" + encodeURIComponent(file);
+      a.download = file;
+      document.body.appendChild(a); a.click(); a.remove();
+    }
+    root.querySelector(".cv-group").addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-g]");
+      if (!b || b.disabled) return;
+      var g = b.getAttribute("data-g");
+      if (g === "delete") {
+        if (!askSure("group", "picked")) return;
+        var ids = Object.keys(picked);
+        Promise.all(ids.map(function (id) { return api("/api/rec/cues/" + encodeURIComponent(id), undefined, "DELETE").catch(function () {}); })).then(function () {
+          if (sel && picked[sel.id]) { sel = saved = null; dirty = false; q(".cv-edit").hidden = true; renderName(); }
+          picked = {};
+          status("Deleted " + ids.length + " cue" + (ids.length === 1 ? "" : "s") + ".");
+          return refresh();
+        });
+        return;
+      }
+      if (g === "export") {
+        cutPicked().then(function (made) {
+          // (one after the other - the browser may ask once to allow several downloads)
+          made.forEach(function (m, k) { setTimeout(function () { downloadClip(m.file); }, k * 400); });
+          status("Exported " + made.length + " clip" + (made.length === 1 ? "" : "s") + " - downloaded, and kept in Clips on the computer.");
+          renderRows();
+        }).catch(function (err) { status("Couldn't export: " + err.message); });
+        return;
+      }
+      if (g === "keep") {
+        cutPicked().then(function (made) {
+          return Promise.all(made.map(function (m) { return api("/api/rec/cues/" + encodeURIComponent(m.cue.id), { keep: true }, "PATCH"); })).then(function () {
+            status("📌 Kept for good: " + made.length + " clip" + (made.length === 1 ? "" : "s") + " (in Clips) - not cleaned up, not deleted with their recording.");
+            return refresh();
+          });
+        }).catch(function (err) { status("Couldn't keep them: " + err.message); });
+        return;
+      }
+      if (g === "share") {
+        // a second click: the share menu, straight from the click
+        if (shareReady) {
+          var files = shareReady;
+          shareReady = null;
+          renderGroup();
+          if (navigator.canShare && navigator.share && navigator.canShare({ files: files })) navigator.share({ files: files }).catch(function () {});
+          else { files.forEach(function (f, k) { setTimeout(function () { downloadClip(f.name); }, k * 400); }); status("This browser can't share files - downloaded instead."); }
+          return;
+        }
+        b.disabled = true;
+        cutPicked().then(function (made) {
+          return Promise.all(made.map(function (m) {
+            return fetch("/api/rec/clips/" + encodeURIComponent(m.file)).then(function (r) { return r.blob(); }).then(function (blob) { return new File([blob], m.file, { type: "video/mp4" }); });
+          }));
+        }).then(function (files) {
+          shareReady = files;
+          b.disabled = false;
+          b.textContent = "📤 Share now (" + files.length + ")";
+          b.classList.add("ready");
+          status("Ready - 📤 Share now opens the share menu.");
+        }).catch(function (err) { b.disabled = false; status("Couldn't get them ready: " + err.message); });
+      }
+    });
 
     // ---- the recordings (cues.html): a timeline each, click to play from there ----
     function renderSessions() {
@@ -582,7 +713,9 @@
           var fresh = cues.filter(function (c) { return c.id === sel.id; })[0];
           if (fresh) { saved = fresh; if (!dirty) sel = JSON.parse(JSON.stringify(fresh)); }
         }
-        renderRows(); renderSessions(); renderLine(); renderButtons();
+        // (checked cues that are gone: unchecked)
+        Object.keys(picked).forEach(function (id) { if (!cues.some(function (c) { return c.id === id; })) delete picked[id]; });
+        renderRows(); renderSessions(); renderLine(); renderButtons(); renderGroup();
         refreshFolders();
       }).catch(function (e) { q(".cv-info").textContent = "The computer's server isn't answering (" + e.message + ")"; });
     }

@@ -956,6 +956,230 @@
     celebrateTournamentWin(names, top[0].wins, effectiveRaceTarget(top[0].key));
   }
 
+  // ---- ⏹ Stop a race or a tournament early, a winner picked (2026-10-30 request) ----
+  // Who wins: No winner, Most games won, or In Fire 🔥 (the hottest run of
+  // wins right now - each side's own games, counted back from its latest);
+  // a tie: together. Who decides: All players, or one of them. The race (or
+  // the tournament) then ends as one won would - archived, the race-won
+  // screen - with the decision on it, and the Day Report says "Interrupted
+  // results by …". No winner: the session (or the tournament) just ends,
+  // noted the same way.
+  var stopContext = null; // { kind: "race" | "tournament", sides: [{ key, names, wins, streak, isTeam }], deciders: [names] }
+  var stopOverlay = document.getElementById("stop-overlay");
+
+  // the race's sides, with their wins and their run right now
+  function stopRaceSides() {
+    var teams = state.currentGame.mode === "teams";
+    var sides = teams
+      ? ["A", "B"].filter(function (t) { return teamMembersLive(t).length; }).map(function (t) {
+        return { key: t, isTeam: true, names: teamMembersLive(t).map(function (p) { return p.name; }), wins: state.teamWins[t] || 0 };
+      })
+      : activePlayers().map(function (p) { return { key: p.id, isTeam: false, names: [p.name], wins: state.playerWins[p.id] || 0 }; });
+    sides.forEach(function (s) {
+      var run = 0;
+      for (var i = 0; i < state.gameHistory.length; i++) {
+        var g = state.gameHistory[i];
+        if (!g || typeof g !== "object") continue;
+        var won = s.isTeam ? g.isTeam && g.teamId === s.key : (g.winnerIds || []).indexOf(s.key) !== -1;
+        var played = won || (s.isTeam ? g.isTeam : (g.opponentNames || []).indexOf(s.names[0]) !== -1);
+        if (!played) continue;
+        if (!won) break;
+        run++;
+      }
+      s.streak = run;
+    });
+    return sides;
+  }
+  // a tournament's entrants: racks won, and their run of racks right now
+  function stopTournamentSides(t) {
+    var racks = {};
+    (t.players || []).forEach(function (n) { racks[n] = []; });
+    var add = function (m, list) {
+      (list || []).forEach(function (r) {
+        var win = r.side === "a" ? m.a : m.b, lose = r.side === "a" ? m.b : m.a;
+        if (win) (racks[win] = racks[win] || []).push({ ts: r.ts, won: true });
+        if (lose) (racks[lose] = racks[lose] || []).push({ ts: r.ts, won: false });
+      });
+    };
+    allBracketMatches(t).forEach(function (m) { add(m, m.racks); });
+    (t.activeMatches || []).forEach(function (a) { var m = findBracketMatchById(t, a.matchId); if (m) add(m, a.racks); });
+    return Object.keys(racks).map(function (n) {
+      var list = racks[n].sort(function (x, y) { return String(y.ts).localeCompare(String(x.ts)); });
+      var run = 0;
+      for (var i = 0; i < list.length && list[i].won; i++) run++;
+      return { key: n, isTeam: false, names: [n], wins: list.filter(function (r) { return r.won; }).length, streak: run };
+    });
+  }
+  // the sides a way of deciding picks (a tie: together; nobody on 0)
+  function stopWinners(sides, how) {
+    if (how === "none") return [];
+    var field = how === "fire" ? "streak" : "wins";
+    var best = sides.reduce(function (m, s) { return Math.max(m, s[field]); }, 0);
+    return best > 0 ? sides.filter(function (s) { return s[field] === best; }) : [];
+  }
+  function stopSideNames(list) {
+    return list.map(function (s) { return s.names.join(" & "); }).join(" & ");
+  }
+
+  function openStopSheet(kind) {
+    closeBoardMenu();
+    var t = TOURNAMENT;
+    var sides = kind === "tournament" ? stopTournamentSides(t) : stopRaceSides();
+    if (kind === "race" && !state.gameHistory.length) {
+      showToast(T("stop.nothingPlayed"), "⏹ ");
+      return;
+    }
+    var deciders = [];
+    sides.forEach(function (s) { s.names.forEach(function (n) { if (deciders.indexOf(n) === -1) deciders.push(n); }); });
+    if (kind === "tournament") {
+      deciders = [];
+      (t.players || []).forEach(function (label) { ((t.entrantMembers && t.entrantMembers[label]) || [label]).forEach(function (n) { if (deciders.indexOf(n) === -1) deciders.push(n); }); });
+    }
+    stopContext = { kind: kind, sides: sides, deciders: deciders };
+    document.getElementById("stop-title").textContent = T(kind === "tournament" ? "stop.titleTournament" : "stop.titleRace");
+    document.getElementById("stop-standing").textContent = kind === "tournament"
+      ? sides.slice().sort(function (a, b) { return b.wins - a.wins; }).map(function (s) { return s.names[0] + " " + s.wins; }).join(" · ")
+      : T("stop.standingRace", { score: sides.map(function (s) { return s.names.join(" & ") + " " + s.wins; }).join(" – "), target: state.raceToWinsTarget });
+    // who wins - each way with who it picks
+    var how = document.getElementById("stop-how");
+    how.innerHTML = "";
+    var most = stopWinners(sides, "most"), fire = stopWinners(sides, "fire");
+    [["none", T("stop.noWinner")],
+     ["most", most.length ? T("stop.most", { names: stopSideNames(most), n: most[0].wins }) : T("stop.mostNobody")],
+     ["fire", fire.length ? T("stop.fire", { names: stopSideNames(fire), n: fire[0].streak }) : T("stop.fireNobody")]].forEach(function (o, i) {
+      var label = document.createElement("label");
+      label.className = "gs-toggle stop-choice";
+      var r = document.createElement("input");
+      r.type = "radio";
+      r.name = "stop-how";
+      r.value = o[0];
+      r.checked = i === 1 ? !!most.length : i === 0 && !most.length;
+      r.disabled = (o[0] === "most" && !most.length) || (o[0] === "fire" && !fire.length);
+      label.appendChild(r);
+      label.appendChild(document.createTextNode(" " + o[1]));
+      how.appendChild(label);
+    });
+    // who decides
+    var by = document.getElementById("stop-by");
+    by.innerHTML = "";
+    [["*", T("stop.allPlayers")]].concat(deciders.map(function (n) { return [n, n]; })).forEach(function (o, i) {
+      var label = document.createElement("label");
+      label.className = "gs-chip";
+      var r = document.createElement("input");
+      r.type = "radio";
+      r.name = "stop-by";
+      r.value = o[0];
+      r.checked = i === 0;
+      label.appendChild(r);
+      label.appendChild(document.createTextNode(" " + o[1]));
+      by.appendChild(label);
+    });
+    stopOverlay.classList.remove("hidden");
+  }
+  function closeStopSheet() {
+    stopOverlay.classList.add("hidden");
+    stopContext = null;
+  }
+  function stopByText(by) {
+    return by === "*" ? T("stop.byAll") : by;
+  }
+  function stopHowText(how) {
+    return T(how === "fire" ? "stop.howFire" : how === "most" ? "stop.howMost" : "stop.howNone");
+  }
+  function confirmStop() {
+    var ctx = stopContext;
+    if (!ctx) return;
+    var howEl = document.querySelector('input[name="stop-how"]:checked'), byEl = document.querySelector('input[name="stop-by"]:checked');
+    var how = howEl ? howEl.value : "none", by = byEl ? byEl.value : "*";
+    var winners = stopWinners(ctx.sides, how);
+    if (!winners.length) how = "none";
+    var interrupted = { by: by, how: how, at: new Date().toISOString() };
+    closeStopSheet();
+    if (ctx.kind === "tournament") stopTournamentNow(winners, interrupted);
+    else stopRaceNow(winners, interrupted);
+  }
+
+  // The race: the winners' latest wins marked as the race's (as
+  // closeRaceNow does), the decision on them; no winner: on the latest game.
+  function stopRaceNow(winners, interrupted) {
+    var target = state.raceToWinsTarget;
+    if (winners.length) {
+      winners.forEach(function (side) {
+        var entry = state.gameHistory.filter(function (g) {
+          return g && typeof g === "object" && (side.isTeam ? g.isTeam && g.teamId === side.key : (g.winnerIds || []).indexOf(side.key) !== -1);
+        })[0];
+        if (!entry) return;
+        entry.wonRace = true;
+        entry.raceTarget = effectiveRaceTarget(side.key);
+        entry.raceCount = side.wins;
+        entry.raceInterrupted = interrupted;
+      });
+      saveState();
+      celebrateTournamentWin(stopSideNames(winners), winners[0].wins, target);
+      milestoneDetails.appendChild(playerStatsRow(T("stop.interruptedRow"), T("stop.interruptedDetail", { by: stopByText(interrupted.by), how: stopHowText(interrupted.how) })));
+      return;
+    }
+    var last = state.gameHistory[0];
+    if (last) {
+      last.raceInterrupted = interrupted;
+      last.raceTarget = target;
+    }
+    saveState();
+    exportAllPlayerStats();
+    startNewSession(true);
+    saveState();
+    renderAll();
+    showBannerNotice(T("stop.raceStoppedNoWinner", { by: stopByText(interrupted.by) }), true);
+  }
+
+  // A tournament: its champion(s) the ones picked - recorded as any
+  // finished one (its result carries the decision); no winner: recorded
+  // so, and the tournament closed (its racks and ratings kept).
+  function stopTournamentNow(winners, interrupted) {
+    var t = TOURNAMENT;
+    if (!t) return;
+    (t.activeMatches || []).forEach(function (a) {
+      var m = findBracketMatchById(t, a.matchId);
+      if (m && a.racks && a.racks.length) m.racks = (m.racks || []).concat(a.racks);
+    });
+    t.activeMatches = [];
+    t.interrupted = interrupted;
+    if (winners.length) {
+      t.championNames = winners.map(function (s) { return s.key; });
+      t.champion = t.championNames[0];
+      recordTournamentCompletion(t);
+      playTournamentChampionSound();
+      saveTournamentToStorage(t);
+      renderTournamentPage();
+      renderAll();
+      return;
+    }
+    TOURNAMENT_RESULTS.unshift({
+      ts: new Date().toISOString(),
+      tournamentId: t.createdAt,
+      championNames: [],
+      format: t.format,
+      players: (t.players || []).slice(),
+      entrantMembers: t.entrantMembers || {},
+      gameType: t.gameType,
+      target: t.target,
+      raceTo: t.raceTo,
+      matches: allBracketMatches(t).filter(function (m) { return m.a && m.b && m.winner; }).map(function (m) {
+        return { round: m.tag || null, a: m.a, b: m.b, scoreA: m.scoreA, scoreB: m.scoreB, winner: m.winner };
+      }),
+      placings: [],
+      interrupted: interrupted
+    });
+    if (TOURNAMENT_RESULTS.length > 200) TOURNAMENT_RESULTS.length = 200;
+    if (!noStatsMode) saveTournamentResultsToStorage(TOURNAMENT_RESULTS);
+    TOURNAMENT = null;
+    tournamentSetupStep = 1;
+    saveTournamentToStorage(null);
+    renderTournamentPage();
+    renderAll();
+    showToast(T("stop.tournamentStoppedNoWinner", { by: stopByText(interrupted.by) }), "⏹ ");
+  }
+
   // At start-up: a race won but never closed - the win popup still open
   // when the page reloaded (the saved flag), or someone at or past their
   // race from before this check existed - closes now, exactly once
@@ -4051,6 +4275,7 @@
     "tournament-match-win-overlay": "btn-tournament-match-win-close",
     "end-night-overlay": "btn-end-night-close",
     "payouts-overlay": "btn-payouts-close",
+    "stop-overlay": "btn-stop-cancel",
     "highlights-overlay": "btn-highlights-close",
     "challonge-push-review-overlay": "btn-challonge-push-review-close",
     "paywall-modal-overlay": "btn-paywall-cancel",
@@ -7294,6 +7519,7 @@
     return [
       { icon: "▶️", key: "menu.newGame", primary: true, when: notGuest, run: function () { closeBoardMenu(); openQuickGameModal(); } },
       { icon: "🌙", key: "menu.endNight", run: openEndNight },
+      { icon: "⏹", key: "menu.stopRace", when: function () { return notGuest() && isRacing() && !quickCounterMode && state.gameHistory.length > 0; }, run: function () { openStopSheet("race"); } },
       // (straight to them - also under 📊 Stats / the full page)
       { icon: "📋", key: "menu.standings", run: panel("standings-panel") },
       { icon: "🔍", key: "menu.allSettings", run: function () { closeBoardMenu(); setFocusMode(false); window.scrollTo(0, 0); } },
@@ -11035,8 +11261,9 @@
     // popup itself calls winning "the tournament", and the history list
     // calls "the session") - a flag on the one game that pushed someone
     // over the target, already present in `games` above.
+    // (a race stopped with no winner is noted too - its raceInterrupted)
     var raceWins = games.filter(function (g) {
-      return g.wonRace;
+      return g.wonRace || g.raceInterrupted;
     });
     // Only the live "today" record is tracked (see checkRunRecords) -
     // there's no historical per-day archive, so a report for a past
@@ -11076,17 +11303,29 @@
 
   function formatReportRaceWinText(g) {
     var names = joinNamesForReport((g.winnerNames || []).length ? g.winnerNames : (g.teammateNames || []));
+    // ⏹ stopped early: "Interrupted results by Kim: Jo wins the race to 5 (most games won)"
+    if (g.raceInterrupted) {
+      var by = stopByText(g.raceInterrupted.by);
+      if (!g.wonRace || g.raceInterrupted.how === "none") return T("report.raceInterruptedNone", { by: by, target: g.raceTarget || "" });
+      return T("report.raceInterrupted", { by: by, names: names, target: g.raceTarget, how: stopHowText(g.raceInterrupted.how) });
+    }
     if (g.timedSession) return T("report.raceWinTimed", { names: names, minutes: g.timedMinutes });
     return T("report.raceWin", { names: names, target: g.raceTarget });
   }
 
   function formatReportRaceWinLine(g) {
     var time = formatReportGameTime(g.ts);
-    return "🏆 " + (time ? time + " — " : "") + formatReportRaceWinText(g);
+    return (g.raceInterrupted ? "⏹ " : "🏆 ") + (time ? time + " — " : "") + formatReportRaceWinText(g);
   }
 
   function formatReportTournamentText(t) {
     var payouts = formatReportPayoutText(t.payouts);
+    if (t.interrupted) {
+      var by = stopByText(t.interrupted.by), players = countPhrase("players", (t.players || []).length);
+      return ((t.championNames || []).length
+        ? T("report.tournamentInterrupted", { by: by, names: joinNamesForReport(t.championNames), format: challongeFormatText(t.format), how: stopHowText(t.interrupted.how), players: players })
+        : T("report.tournamentInterruptedNone", { by: by, format: challongeFormatText(t.format), players: players })) + (payouts ? " — " + payouts : "");
+    }
     return T("report.tournamentWin", { names: joinNamesForReport(t.championNames || []), format: challongeFormatText(t.format), players: countPhrase("players", (t.players || []).length) }) + (payouts ? " — " + payouts : "");
   }
 
@@ -20313,6 +20552,58 @@
     }
   }
 
+  // 💾 On a computer, where the backup goes (2026-10-30): the linked Drive
+  // folder (when that works here), each Google Drive this Mac syncs (My
+  // Drive › Pool Master Counter Backups - server/backup-drive.js), the
+  // share menu, or Downloads. No Drive here at all: ☁️ Google Drive
+  // downloads it and opens drive.google.com to drop it in - no dead end.
+  var driveAccountsHere = null; // [{ account, folder }] - this Mac's server says
+  function loadDriveAccountsHere() {
+    if (!/^https?:$/.test(location.protocol)) { driveAccountsHere = []; return; }
+    fetch("/api/backup/drive-accounts", { cache: "no-store" }).then(function (r) { return r.ok ? r.json() : { accounts: [] }; })
+      .then(function (d) { driveAccountsHere = d.accounts || []; }, function () { driveAccountsHere = []; });
+  }
+  function computerSharesFiles() {
+    try { return !!(navigator.canShare && navigator.share && navigator.canShare({ files: [new File(["{}"], "backup.json", { type: "application/json" })] })); } catch (e) { return false; }
+  }
+  function chooseBackupDestination(filename, obfuscate) {
+    var payload = buildBackupPayload();
+    if (obfuscate) payload.contacts = {};
+    var name = filename ? sanitizeBackupFilename(filename) : defaultBackupFilename();
+    var choices = [];
+    if (backupGoesToDrive()) choices.push({ label: T("bk.toDriveFolder"), primary: true, id: "btn-bk-to-drive-folder", run: function () { backupToDrive(name, payload, true); } });
+    (driveAccountsHere || []).forEach(function (a, i) {
+      choices.push({ label: T("bk.toDriveAccount", { account: a.account }), primary: !choices.length, id: "btn-bk-to-drive-account-" + i, run: function () { backupToDriveAccount(a.account, name, payload); } });
+    });
+    if (!choices.length) {
+      choices.push({ label: T("bk.toDriveWeb"), id: "btn-bk-to-drive-web", run: function () {
+        downloadJSON(name, payload);
+        noteBackup("device", name);
+        try { window.open("https://drive.google.com/drive/my-drive", "_blank", "noopener"); } catch (e) {}
+        showToast(T("bk.driveWebHint", { file: name }), "☁️ ");
+      } });
+    }
+    if (computerSharesFiles()) choices.push({ label: T("bk.toShare"), id: "btn-bk-to-share", run: function () { shareBackupFile(name, payload); } });
+    choices.push({ label: T("bk.toDownloads"), id: "btn-bk-to-downloads", run: function () {
+      downloadJSON(name, payload);
+      noteBackup("device", name);
+      showToast(T("bk.downloadedToast", { file: name }), "💾 ");
+    } });
+    tournamentChooser(T("bk.whereTitle"), choices);
+  }
+  function backupToDriveAccount(account, name, payload) {
+    fetch("/api/backup/drive-account", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ account: account, filename: name, content: JSON.stringify(payload, null, 2) }) })
+      .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || r.status); return d; }); })
+      .then(function (d) {
+        noteBackup("drive", d.file, d.where);
+        showToast(T("bk.savedToDriveAccount", { where: d.where }), "☁️ ");
+      }, function (e) {
+        downloadJSON(name, payload);
+        noteBackup("device", name);
+        showToast(T("bk.driveAccountFailed", { error: e.message }), "⚠️ ");
+      });
+  }
+
   // Straight into the Google Drive folder only where that works: a folder
   // link, and signed in to Google or on the Mac (its server, with Google
   // Drive for desktop). Nowhere else - no dead ends.
@@ -24347,6 +24638,7 @@
         wonRace: entry.wonRace,
         raceTarget: entry.raceTarget,
         raceCount: entry.raceCount,
+        raceInterrupted: entry.raceInterrupted || null,
         timedSession: !!entry.timedSession,
         timedMinutes: entry.timedMinutes || null,
         ballsLeftOnTable: entry.ballsLeftOnTable === undefined ? null : entry.ballsLeftOnTable,
@@ -32368,6 +32660,8 @@
           return { round: m.tag || null, a: m.a, b: m.b, scoreA: m.scoreA, scoreB: m.scoreB, winner: m.winner };
         }),
       placings: (t.placings = tournamentPlacings(t)),
+      // (⏹ stopped early: who decided, how)
+      interrupted: t.interrupted || null,
       // (the prize money, side pots and Calcutta paid - P33; null: none)
       payouts: tournamentPayoutRecord(t)
     });
@@ -36781,6 +37075,13 @@
       (t.championNames || [t.champion]).forEach(function (name) {
         appendEntrantIdentity(tournamentChampionBanner, name, t);
       });
+      if (t.interrupted) {
+        var stopEl = document.createElement("div");
+        stopEl.className = "tournament-banner-payout";
+        stopEl.id = "tournament-banner-stopped";
+        stopEl.textContent = T("stop.bannerNote", { by: stopByText(t.interrupted.by), how: stopHowText(t.interrupted.how) });
+        tournamentChampionBanner.appendChild(stopEl);
+      }
       var payLine = tournamentHasMoney(t) ? championPayoutText(t) : "";
       if (payLine) {
         var payEl = document.createElement("div");
@@ -37574,7 +37875,9 @@
       T("backup.exportFilenamePrompt"),
       defaultBackupFilename(),
       function (name, obfuscate) {
-        exportAllData(name, obfuscate, null, true);
+        // (a phone or tablet: the share sheet, as before; a computer: where to)
+        if (sharesFiles()) exportAllData(name, obfuscate, null, true);
+        else chooseBackupDestination(name, obfuscate);
       },
       null,
       null,
@@ -37656,6 +37959,7 @@
     localRecorderMounted = true;
     window.PMCLocalRecorder.mount(document.getElementById("local-record-panel-body"), {
       t: function (k, v) { return T(k, v); },
+      tp: function (k, n, v) { return TP(k, n, v); },
       toast: function (text, icon) { showToast(text, icon); },
       context: function () { var c = recorderContext(); return { player: c.player, opponent: c.opponent, matchup: c.matchup, gameType: c.gameType, gameLabel: c.gameLabel, position: c.position }; },
       pauseRecognition: function () { if (!sameDeviceCameraRunning) return false; stopSameDeviceCamera(); return true; },
@@ -41511,6 +41815,7 @@
     });
     if (!stillAllChecked) tournamentSelectAllCheckbox.checked = false;
   });
+  loadDriveAccountsHere();
   document.getElementById("btn-backup-reminder-now").addEventListener("click", function () {
     document.getElementById("btn-backup-now").click();
   });
@@ -41555,9 +41860,15 @@
   });
   document.getElementById("btn-league-result-save").addEventListener("click", submitLeagueResult);
   btnTournamentAbandon.addEventListener("click", abandonTournament);
+  document.getElementById("btn-stop-confirm").addEventListener("click", confirmStop);
+  document.getElementById("btn-stop-cancel").addEventListener("click", closeStopSheet);
+  document.getElementById("btn-stop-close").addEventListener("click", closeStopSheet);
   // ⋯ More: what's rarely needed and can't be undone (P20) - Abandon
   document.getElementById("btn-tournament-more").addEventListener("click", function () {
-    tournamentChooser(T("tournament.moreTitle"), [{ label: T("tournament.abandon"), danger: true, id: "btn-tournament-menu-abandon", run: abandonTournament }]);
+    tournamentChooser(T("tournament.moreTitle"), [
+      { label: T("stop.tournamentButton"), id: "btn-tournament-menu-stop", run: function () { openStopSheet("tournament"); } },
+      { label: T("tournament.abandon"), danger: true, id: "btn-tournament-menu-abandon", run: abandonTournament }
+    ]);
   });
   document.getElementById("btn-tournament-bracket-tv").addEventListener("click", function () { setTournamentTvMode("bracket"); });
   document.getElementById("btn-tournament-payouts").addEventListener("click", openPayoutsSheet);

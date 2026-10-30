@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261030a">
+<link rel="stylesheet" href="css/style.css?v=20261030b">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -245,6 +245,15 @@
       </div>
       <p class="lrec-status" id="lrec-status" aria-live="polite"></p>
       <h3 class="backup-subsection-title" data-i18n="lrec.cuesTitle">⭐ Cues</h3>
+      <!-- ☑ the checked cues, together (js/local-recorder.js) -->
+      <div class="lrec-group" id="lrec-group">
+        <label class="lrec-pick-all"><input type="checkbox" id="lrec-pick-all"> <span data-i18n="lrec.groupAll">All</span></label>
+        <span class="lrec-picked" id="lrec-picked"></span>
+        <button type="button" class="btn btn-ghost" data-g="delete" disabled data-i18n="lrec.groupDelete">🗑 Delete</button>
+        <button type="button" class="btn btn-ghost" data-g="export" disabled data-i18n="lrec.groupExport">⬇ Export</button>
+        <button type="button" class="btn btn-ghost" data-g="keep" disabled data-i18n="lrec.groupKeep">📌 Save (keep forever)</button>
+        <button type="button" class="btn btn-ghost" data-g="share" disabled data-i18n="lrec.groupShare">📤 Share</button>
+      </div>
       <ul class="lrec-list" id="lrec-cues"></ul>
       <h3 class="backup-subsection-title" data-i18n="lrec.recordingsTitle">🎞️ Recordings on this device</h3>
       <ul class="lrec-list" id="lrec-sessions"></ul>
@@ -1406,6 +1415,27 @@
     <div class="board-sheet-body" id="payouts-body"></div>
     <div class="confirm-modal-actions board-sheet-foot">
       <button type="button" id="btn-payouts-done" class="btn btn-primary" data-i18n="payouts.done">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- ⏹ Stop a race or a tournament early, a winner picked (js/app.js openStopSheet) -->
+<div id="stop-overlay" class="confirm-modal-overlay board-sheet-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="stop-title">
+  <div class="confirm-modal-card board-sheet stop-sheet">
+    <div class="board-sheet-head">
+      <h3 class="confirm-modal-title" id="stop-title" data-i18n="stop.titleRace">⏹ Stop the race</h3>
+      <button type="button" class="board-sheet-close" id="btn-stop-close" data-i18n-aria-label="common.close" aria-label="Close">×</button>
+    </div>
+    <div class="board-sheet-body">
+      <p class="gs-note stop-standing" id="stop-standing"></p>
+      <h4 class="payouts-heading" data-i18n="stop.whoWins">Who wins?</h4>
+      <div class="stop-choices" id="stop-how" role="radiogroup"></div>
+      <h4 class="payouts-heading" data-i18n="stop.whoDecides">Who decides?</h4>
+      <div class="gs-chips stop-deciders" id="stop-by" role="radiogroup"></div>
+    </div>
+    <div class="confirm-modal-actions board-sheet-foot">
+      <button type="button" id="btn-stop-confirm" class="btn btn-primary" data-i18n="stop.confirm">⏹ Stop</button>
+      <button type="button" id="btn-stop-cancel" class="btn btn-ghost" data-i18n="common.cancel">Cancel</button>
     </div>
   </div>
 </div>
@@ -3145,27 +3175,27 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/pairing.js?v=20261030a"></script>
-<script src="js/big-store.js?v=20261030a"></script>
-<script src="js/mp4-clip.js?v=20261030a"></script>
-<script src="js/recording-consent.js?v=20261030a"></script>
-<script src="js/local-recorder.js?v=20261030a"></script>
-<script src="js/lib/pool-day.js?v=20261030a"></script>
-<script src="js/lib/race-math.js?v=20261030a"></script>
-<script src="js/lib/handicaps.js?v=20261030a"></script>
-<script src="js/lib/brackets.js?v=20261030a"></script>
-<script src="js/lib/league.js?v=20261030a"></script>
-<script src="js/lib/events.js?v=20261030a"></script>
-<script src="js/lib/chips.js?v=20261030a"></script>
-<script src="js/lib/highlights.js?v=20261030a"></script>
-<script src="js/lib/payouts.js?v=20261030a"></script>
-<script src="js/app.js?v=20261030a"></script>
-<script src="js/camera-client.js?v=20261030a"></script>
-<script src="js/voice.js?v=20261030a"></script>
+<script src="js/pairing.js?v=20261030b"></script>
+<script src="js/big-store.js?v=20261030b"></script>
+<script src="js/mp4-clip.js?v=20261030b"></script>
+<script src="js/recording-consent.js?v=20261030b"></script>
+<script src="js/local-recorder.js?v=20261030b"></script>
+<script src="js/lib/pool-day.js?v=20261030b"></script>
+<script src="js/lib/race-math.js?v=20261030b"></script>
+<script src="js/lib/handicaps.js?v=20261030b"></script>
+<script src="js/lib/brackets.js?v=20261030b"></script>
+<script src="js/lib/league.js?v=20261030b"></script>
+<script src="js/lib/events.js?v=20261030b"></script>
+<script src="js/lib/chips.js?v=20261030b"></script>
+<script src="js/lib/highlights.js?v=20261030b"></script>
+<script src="js/lib/payouts.js?v=20261030b"></script>
+<script src="js/app.js?v=20261030b"></script>
+<script src="js/camera-client.js?v=20261030b"></script>
+<script src="js/voice.js?v=20261030b"></script>
 <script>
   // The app opens with no network (sw.js, P21) - on http(s) only, not in the iOS app
   if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol) && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
-    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261030a").catch(function () {}); });
+    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261030b").catch(function () {}); });
   }
 </script>
 </body>

@@ -95,6 +95,8 @@ const readBig = (page, name) => page.evaluate((name) => new Promise((resolve) =>
   await page.evaluate(() => document.getElementById("btn-backup-now").click()); // (hidden behind the seated board)
   await sleep(300);
   await page.click("#btn-confirm-modal-ok");
+  await sleep(300);
+  await page.evaluate(() => { const b = document.getElementById("btn-bk-to-drive-folder") || document.getElementById("btn-bk-to-downloads"); if (b) b.click(); }); // (where to: a computer asks - the Drive folder where it can, else Downloads)
   let raw = null;
   for (let i = 0; i < 30 && !raw; i++) { await sleep(200); raw = await page.evaluate(() => window.__lastExport); }
   const inBackup = raw ? JSON.parse(raw).playerStats.Sam.sessions.flatMap((s) => s.games).find((x) => x.scores) : null;

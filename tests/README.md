@@ -598,3 +598,13 @@ Not part of the app - helpers for testing and for running this machine's own cop
   the game mark), today's made by hand, renamed when someone new is on a cue, deleted to the Trash and
   not made again, a long night's name kept short. Needs ffmpeg; in `npm test`. (The cues page's
   section and 🐢 slow motion: probe_game_marks / probe_game_marks_device.)
+- **probe_stop_early.js** — ⏹ stop a race or a tournament early (2026-10-30), its own server on 4300:
+  the race's dialog (No winner / Most games won / In Fire 🔥, who decides), In Fire by Kim (the
+  race-won screen, "Interrupted results by Kim: ..." in the Day Report), no winner by all players;
+  a tournament stopped with most games won by Ben, and one with no winner (closed, noted).
+  `node tests/probe_stop_early.js [shots]`. (☑ clips together: probe_game_marks /
+  probe_game_marks_device.)
+- **probe_backup_where.js** — 💾 Back up now on a computer: where to (2026-10-30), its own servers on
+  4301 (a fake Google Drive for desktop account) and 4302 (none): the account's My Drive › Pool
+  Master Counter Backups, 📤 Share…, ⬇️ Downloads, and "drop it in on the web" with no Drive.
+  `node tests/probe_backup_where.js [shots]`.

@@ -40,6 +40,8 @@
   };
   var bridge = null, els = {}, rec = null, openCue = null, boardHistory = [], dbp = null, lastStop = null, persisted = null;
   var T = function (k, v) { return bridge ? bridge.t(k, v) : k; };
+  // (a count's sentence - "1 clip" / "3 clips": the app's own, when it gives one)
+  var TP = function (k, n, v) { return bridge && bridge.tp ? bridge.tp(k, n, v) : T(n === 1 ? k + "One" : k, v); };
 
   // ---- storage ----
   function db() {
@@ -404,6 +406,103 @@
     return true;
   }
   function toggleCue(source) { return openCue ? finish(source) : mark(source); }
+  // ---- ☑ the checked cues, together: delete, export, save (keep forever), share ----
+  // 📌 Save keeps a cue for good: its clip cut and kept with it (keptClip),
+  // so it plays and saves even after its recording is deleted.
+  var picked = {}, shareReady = null, deleteAsked = 0, lastCues = [];
+  function clipOf(c) {
+    if (c.keptClip) return Promise.resolve(new File([c.keptClip], safeName(c.name) + ".mp4", { type: "video/mp4" }));
+    return clipFile(c);
+  }
+  function pickedCues() { return lastCues.filter(function (c) { return picked[c.id]; }); }
+  function pickedClips() { return pickedCues().filter(function (c) { return c.kind !== "game" && c.endedAt; }); }
+  function renderGroup() {
+    if (!els.group) return;
+    var n = pickedCues().length, clips = pickedClips().length;
+    els.picked.textContent = n ? TP("lrec.groupCount", n, { n: n }) : T("lrec.groupNone");
+    els.group.querySelectorAll("button[data-g]").forEach(function (b) {
+      var g = b.getAttribute("data-g");
+      b.disabled = !n || (g !== "delete" && !clips);
+      if (g === "delete") b.textContent = deleteAsked && Date.now() < deleteAsked ? T("lrec.groupDeleteAsk", { n: n }) : T("lrec.groupDelete");
+      if (g === "share") { b.textContent = shareReady ? T("lrec.groupShareNow", { n: shareReady.length }) : T("lrec.groupShare"); b.classList.toggle("lrec-ready", !!shareReady); }
+    });
+    els.pickAll.checked = !!lastCues.length && lastCues.every(function (c) { return picked[c.id]; });
+  }
+  function filesOfPicked() {
+    var list = pickedClips(), out = [], i = 0;
+    return new Promise(function (resolve) {
+      (function next() {
+        if (i >= list.length) return resolve(out);
+        clipOf(list[i++]).then(function (f) { out.push(f); next(); }, function () { next(); });
+      })();
+    });
+  }
+  function wireGroup() {
+    if (!els.group) return;
+    els.pickAll.addEventListener("change", function () {
+      picked = {};
+      if (els.pickAll.checked) lastCues.forEach(function (c) { picked[c.id] = true; });
+      shareReady = null;
+      refreshLists();
+    });
+    els.cues.addEventListener("change", function (e) {
+      var box = e.target.closest("input.lrec-pick");
+      if (!box) return;
+      if (box.checked) picked[box.getAttribute("data-id")] = true;
+      else delete picked[box.getAttribute("data-id")];
+      shareReady = null;
+      renderGroup();
+    });
+    els.group.addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-g]");
+      if (!b || b.disabled) return;
+      var g = b.getAttribute("data-g");
+      if (g === "delete") {
+        // (a first tap asks, a second does it)
+        if (!(deleteAsked && Date.now() < deleteAsked)) {
+          deleteAsked = Date.now() + 4000;
+          renderGroup();
+          setTimeout(function () { deleteAsked = 0; renderGroup(); }, 4100);
+          return;
+        }
+        deleteAsked = 0;
+        var ids = Object.keys(picked);
+        Promise.all(ids.map(function (id) { return del("cues", id); })).then(function () { picked = {}; refreshLists(); bridge.changed(); });
+        return;
+      }
+      if (g === "export") {
+        filesOfPicked().then(function (files) {
+          files.forEach(function (f, k) { setTimeout(function () { download(f); }, k * 400); });
+          bridge.toast(TP("lrec.groupExported", files.length, { n: files.length }), "⬇ ");
+        });
+        return;
+      }
+      if (g === "keep") {
+        var list = pickedClips(), kept = 0, i = 0;
+        (function next() {
+          if (i >= list.length) { bridge.toast(TP("lrec.groupKept", kept, { n: kept }), "📌 "); refreshLists(); return; }
+          var c = list[i++];
+          clipOf(c).then(function (f) { return put("cues", Object.assign({}, c, { kept: true, keptClip: f })); }).then(function () { kept++; next(); }, function () { next(); });
+        })();
+        return;
+      }
+      if (g === "share") {
+        // a second tap: the share sheet, straight from the tap (Safari asks for that)
+        if (shareReady) {
+          var files = shareReady;
+          shareReady = null;
+          renderGroup();
+          if (navigator.canShare && navigator.share && navigator.canShare({ files: files })) navigator.share({ files: files }).catch(function () {});
+          else { files.forEach(function (f, k) { setTimeout(function () { download(f); }, k * 400); }); bridge.toast(T("lrec.cantShareFiles"), "⬇ "); }
+          return;
+        }
+        b.disabled = true;
+        b.textContent = T("lrec.preparing");
+        filesOfPicked().then(function (files) { shareReady = files; renderGroup(); });
+      }
+    });
+  }
+
   // 🎱 A new game on the scoreboard (js/app.js noteGameStartForRecording):
   // a game mark - the moment it started, blue in the list, apart from the
   // ⭐ cues; no clip of its own.
@@ -569,13 +668,25 @@
     return Promise.all([all("sessions"), all("cues")]).then(function (r) {
       var sessions = r[0].sort(function (a, b) { return b.startedAt - a.startedAt; });
       var cues = r[1].sort(function (a, b) { return b.startedAt - a.startedAt; });
+      lastCues = cues;
+      Object.keys(picked).forEach(function (id) { if (!cues.some(function (c) { return c.id === id; })) delete picked[id]; });
       els.cues.innerHTML = "";
+      var pickBox = function (c) {
+        var box = document.createElement("input");
+        box.type = "checkbox";
+        box.className = "lrec-pick";
+        box.setAttribute("data-id", c.id);
+        box.checked = !!picked[c.id];
+        box.setAttribute("aria-label", T("lrec.pickAria", { name: c.name || "" }));
+        return box;
+      };
       if (!cues.length) { var e = document.createElement("li"); e.className = "lrec-empty"; e.textContent = T("lrec.noCues"); els.cues.appendChild(e); }
       cues.forEach(function (c) {
         var li = document.createElement("li");
         // (🎱 a game mark: blue, ▶ plays from it - a moment, nothing to save)
         if (c.kind === "game") {
           li.className = "lrec-game";
+          li.appendChild(pickBox(c));
           var gname = document.createElement("div"); gname.className = "lrec-name"; gname.textContent = c.name || "Game";
           var gmeta = document.createElement("div"); gmeta.className = "lrec-meta"; gmeta.textContent = when(c.startedAt);
           var grow = document.createElement("div"); grow.className = "row lrec-actions";
@@ -594,12 +705,14 @@
           els.cues.appendChild(li);
           return;
         }
-        li.className = "lrec-cue";
-        var name = document.createElement("div"); name.className = "lrec-name"; name.textContent = (c.name || nameFor(c)) + (c.endedAt ? "" : " " + T("lrec.cueLive"));
+        li.className = "lrec-cue" + (c.kept ? " lrec-kept" : "");
+        li.appendChild(pickBox(c));
+        var name = document.createElement("div"); name.className = "lrec-name"; name.textContent = (c.kept ? "📌 " : "") + (c.name || nameFor(c)) + (c.endedAt ? "" : " " + T("lrec.cueLive"));
         var meta = document.createElement("div"); meta.className = "lrec-meta"; meta.textContent = when(c.startedAt) + (c.endedAt ? " · " + clock(c.endedAt - c.startedAt) : "");
         var row = document.createElement("div"); row.className = "row lrec-actions";
         row.appendChild(button(T("lrec.play"), "", function () {
           get("sessions", c.session).then(function (s) {
+            if (c.keptClip && (!s || s.mode === "highlights")) { playFile(c.keptClip); return; }
             if (!s) return;
             // (a Highlights recording has gaps: its clip, cut out)
             if (s.mode === "highlights") clipFile(c).then(playFile, function () { bridge.toast(T("lrec.cantCut"), "⚠️ "); });
@@ -607,7 +720,7 @@
           });
         }));
         var save = button(T("lrec.saveClip"), "lrec-save", function () {});
-        prepareThenSave(save, function () { return clipFile(c); });
+        prepareThenSave(save, function () { return clipOf(c); });
         save.disabled = !c.endedAt;
         row.appendChild(save);
         var bin = button("🗑", "lrec-del", function () {});
@@ -654,13 +767,15 @@
         bin.disabled = live;
         askTwice(bin, T("lrec.deleteRecordingAsk"), function () {
           Promise.all([bySession("chunks", s.id), bySession("cues", s.id)]).then(function (r) {
-            return Promise.all(r[0].map(function (c) { return del("chunks", [s.id, c.seq]); }).concat(r[1].map(function (c) { return del("cues", c.id); }), [del("sessions", s.id)]));
+            // (📌 kept cues stay - their own clip)
+            return Promise.all(r[0].map(function (c) { return del("chunks", [s.id, c.seq]); }).concat(r[1].filter(function (c) { return !c.kept; }).map(function (c) { return del("cues", c.id); }), [del("sessions", s.id)]));
           }).then(refreshLists);
         });
         row.appendChild(bin);
         li.appendChild(name); li.appendChild(meta); li.appendChild(row);
         els.sessions.appendChild(li);
       });
+      renderGroup();
       if (els.summary) {
         els.summary.dataset.idle = T("lrec.summaryIdle", { count: sessions.length, cues: cues.length });
         if (!rec) els.summary.textContent = els.summary.dataset.idle;
@@ -674,8 +789,9 @@
   function mount(root, b) {
     bridge = b;
     var q = function (id) { return root.querySelector("#" + id); };
-    els = { root: root, preview: q("lrec-preview"), camera: q("lrec-camera"), sound: q("lrec-sound"), mode: q("lrec-mode"), start: q("btn-lrec-start"), cue: q("btn-lrec-cue"), status: q("lrec-status"), cues: q("lrec-cues"), sessions: q("lrec-sessions"), player: q("lrec-player"), speed: q("lrec-speed"), storage: q("lrec-storage"), summary: document.getElementById("local-record-panel-summary") };
+    els = { root: root, preview: q("lrec-preview"), camera: q("lrec-camera"), sound: q("lrec-sound"), mode: q("lrec-mode"), start: q("btn-lrec-start"), cue: q("btn-lrec-cue"), status: q("lrec-status"), cues: q("lrec-cues"), sessions: q("lrec-sessions"), player: q("lrec-player"), speed: q("lrec-speed"), group: q("lrec-group"), picked: q("lrec-picked"), pickAll: q("lrec-pick-all"), storage: q("lrec-storage"), summary: document.getElementById("local-record-panel-summary") };
     wireSpeed();
+    wireGroup();
     var signBtn = q("btn-lrec-sign");
     if (signBtn) signBtn.addEventListener("click", function () {
       if (window.PMCRecordingConsent) window.PMCRecordingConsent.printSign({ sound: els.sound.checked });

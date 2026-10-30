@@ -34,6 +34,18 @@ var MISSING_MS = 10 * 60 * 1000;
 var searching = {}; // folder id -> callbacks waiting for the search under way
 
 function cloudRoot() { return process.env.PMC_CLOUD_STORAGE || path.join(os.homedir(), "Library", "CloudStorage"); }
+// Google Drive for desktop's accounts here: ~/Library/CloudStorage/GoogleDrive-<account>/My Drive
+var DESKTOP_BACKUP_FOLDER = "Pool Master Counter Backups";
+function driveAccounts() {
+  var out = [];
+  try {
+    fs.readdirSync(cloudRoot()).forEach(function (n) {
+      var m = /^GoogleDrive-(.+)$/.exec(n), my = path.join(cloudRoot(), n, "My Drive");
+      if (m && fs.existsSync(my)) out.push({ account: m[1], myDrive: my });
+    });
+  } catch (e) {}
+  return out;
+}
 function keptDir() { return path.join(os.homedir(), "Documents", "Pool Master Counter Backups"); }
 
 // the folder id in a Drive folder link: .../folders/<id>, ...?id=<id>, or
@@ -267,6 +279,30 @@ function attachBackupDriveRoutes(app) {
       if (f.mimeType && f.mimeType !== "application/vnd.google-apps.folder") return local("not a folder");
       sendJson(res, 200, { folder: f.name, where: describeApi(f.name), via: "api" });
     }, function (e) { local(e.message); });
+  });
+
+  // 💾 Back up now › ☁️ Google Drive, with no folder link (2026-10-30): the
+  // accounts Google Drive for desktop syncs on this Mac, and a backup
+  // written into one's My Drive › "Pool Master Counter Backups" (Drive
+  // uploads it). Asked from this computer only - the list says who's
+  // signed in.
+  //   GET  /api/backup/drive-accounts            -> { accounts: [{ account, folder }] }
+  //   POST /api/backup/drive-account  { account, filename, content } -> { saved: true, file, where }
+  app.get("/api/backup/drive-accounts", function (req, res) {
+    if (!fromThisComputer(req)) return sendJson(res, 403, { error: "this computer only" });
+    sendJson(res, 200, { accounts: driveAccounts().map(function (a) { return { account: a.account, folder: "My Drive › " + DESKTOP_BACKUP_FOLDER }; }) });
+  });
+  app.post("/api/backup/drive-account", function (req, res) {
+    if (!fromThisComputer(req)) return sendJson(res, 403, { error: "this computer only" });
+    readBody(req, function (b) {
+      if (!b || typeof b.content !== "string" || !b.content) return sendJson(res, 400, { error: "nothing to save" });
+      var acct = driveAccounts().filter(function (a) { return a.account === b.account; })[0];
+      if (!acct) return sendJson(res, 404, { error: "no such Google Drive on this Mac" });
+      var dir = path.join(acct.myDrive, DESKTOP_BACKUP_FOLDER), file;
+      try { fs.mkdirSync(dir, { recursive: true }); file = uniquePath(dir, safeFileName(b.filename)); fs.writeFileSync(file, b.content); }
+      catch (e) { return sendJson(res, 500, { error: "couldn't write it (" + e.message + ")" }); }
+      sendJson(res, 200, { saved: true, file: path.basename(file), folder: DESKTOP_BACKUP_FOLDER, where: acct.account + " › My Drive › " + DESKTOP_BACKUP_FOLDER, via: "desktop" });
+    });
   });
 
   app.post("/api/backup/drive", function (req, res) {

@@ -10,6 +10,9 @@
 // - 📁 Daily cue folders on the cues page: today's - "📁 Make today's folder now": "Pool Master Cues
 //   <today> Jo - Kim" in the recordings folder with the ⭐ cue's clip (not the game marks); 🗑 Delete
 //   (asked twice): to the Trash, the row says so;
+// - ☑ the cues page's checked cues, together: the ⭐ cue checked - 📌 Save (keep forever): cut out
+//   (in Clips) and kept (📌 on its row), the recording deleted: it stays; 📤 Share: "Share now (1)",
+//   then the share menu with its MP4; ⬇ Export: downloaded; 🗑 Delete: asks, then gone;
 // - not recording: no game mark;
 // - no page errors.
 // usage: node tests/probe_game_marks.js http://localhost:4235/ [screenshot dir]   (server: HOME=tests/tmphome PORT=4235 node server/server.js)
@@ -94,6 +97,13 @@ function makeY4m(file) {
     await sleep(1500);
     const page = await browser.newPage();
     page.on("pageerror", (e) => errors.push("cues: " + e.message));
+    await page.evaluateOnNewDocument(() => {
+      window.__shared = []; window.__downloads = [];
+      navigator.canShare = () => true;
+      navigator.share = (d) => { window.__shared.push((d.files || []).map((f) => ({ name: f.name, type: f.type, size: f.size }))); return Promise.resolve(); };
+      const click = HTMLAnchorElement.prototype.click;
+      HTMLAnchorElement.prototype.click = function () { if (this.download) { window.__downloads.push(this.download); return; } return click.call(this); };
+    });
     await page.goto(BASE + "cues.html", { waitUntil: "networkidle2" });
     await sleep(1500);
     const look = await page.evaluate(() => {
@@ -146,10 +156,49 @@ function makeY4m(file) {
     check("...🗑 Delete (\"" + asks + "\", then again): to the Trash; the row says so", asks === "Delete this folder?" && trashed.length === 1 && !fs.readdirSync(ROOT).some((n) => /^Pool Master Cues /.test(n)) && /deleted/.test(rows[0].text), { asks, trashed, rows });
     trashed.forEach((n) => fs.rmSync(path.join(__dirname, "tmphome", ".Trash", n), { recursive: true, force: true }));
     check("🐢 slow motion on the cue viewer: ½× (" + half + "), \"s\" \"s\" -> ⅛× (" + eighth.rate + ", \"" + eighth.label + "\"), \".\" a frame on (" + (ta.t - tb).toFixed(3) + " s, paused)", half === 0.5 && eighth.rate === 0.125 && eighth.on === "⅛×" && ta.paused && ta.t - tb > 0.02 && ta.t - tb < 0.08, { half, eighth, tb, ta });
+    // ☑ together - the ⭐ cue checked
+    await page.evaluate(() => { const box = document.querySelector(".cv-rows tr:not(.game) input.cv-pick"); box.click(); });
+    await sleep(300);
+    const g0 = await page.evaluate(() => ({ picked: document.querySelector(".cv-picked").textContent, disabled: [...document.querySelectorAll(".cv-group button")].map((b) => b.getAttribute("data-g") + ":" + b.disabled) }));
+    await page.evaluate(() => document.querySelector('.cv-group [data-g="keep"]').click());
+    for (let i = 0; i < 20; i++) { await sleep(500); if ((await cues()).some((c) => c.keep && c.clip)) break; }
+    let keptCue = (await cues()).find((c) => c.keep);
+    await sleep(1200);
+    const pin = await page.evaluate(() => !!document.querySelector(".cv-rows tr:not(.game) .kept"));
+    check("☑ the ⭐ cue checked (" + g0.picked + "); 📌 Save (keep forever): cut out (" + (keptCue && keptCue.clip) + ") and kept, 📌 on its row", g0.picked === "1 checked" && keptCue && keptCue.clip && fs.existsSync(path.join(ROOT, "Clips", keptCue.clip)) && pin, { g0, keptCue, pin });
+    await page.evaluate(() => document.querySelector('.cv-group [data-g="share"]').click());
+    await sleep(2000);
+    const ready = await page.evaluate(() => document.querySelector('.cv-group [data-g="share"]').textContent);
+    await page.evaluate(() => document.querySelector('.cv-group [data-g="share"]').click());
+    await sleep(400);
+    const shared = await page.evaluate(() => window.__shared);
+    check("...📤 Share: \"" + ready + "\", then the share menu with its MP4", /Share now \(1\)/.test(ready) && shared.length === 1 && shared[0].length === 1 && shared[0][0].type === "video/mp4" && shared[0][0].size > 0, { ready, shared });
+    await page.evaluate(() => { window.__downloads = []; document.querySelector('.cv-group [data-g="export"]').click(); });
+    await sleep(1500);
+    const dls = await page.evaluate(() => window.__downloads);
+    check("...⬇ Export: downloaded (" + dls.join(", ") + ")", dls.length === 1 && dls[0] === keptCue.clip, dls);
+    // the recording deleted: the kept cue stays
+    await page.evaluate(() => { const b = document.querySelector('.cv-sess button.cv-del[data-del="session"]'); b.click(); });
+    await sleep(200);
+    await page.evaluate(() => { const b = document.querySelector('.cv-sess button.cv-del[data-del="session"]'); b.click(); });
+    await sleep(1500);
+    const afterRec = await cues();
+    check("...the recording deleted: the kept cue stays (" + afterRec.map((c) => c.kind || (c.keep ? "kept" : "cue")).join(", ") + ")", afterRec.length === 1 && afterRec[0].keep, afterRec);
+    await page.evaluate(() => { const box = document.querySelector(".cv-rows input.cv-pick"); if (box && !box.checked) box.click(); });
+    await sleep(300);
+    await page.evaluate(() => document.querySelector(".cv-group-del").click());
+    await sleep(200);
+    const groupAsk = await page.evaluate(() => document.querySelector(".cv-group-del").textContent);
+    await page.evaluate(() => document.querySelector(".cv-group-del").click());
+    await sleep(1500);
+    check("...🗑 Delete: \"" + groupAsk + "\", then gone", /Delete 1 cue\?/.test(groupAsk) && (await cues()).length === 0, { groupAsk });
   } finally {
     check("no page errors", errors.length === 0, errors);
     await browser.close();
     fs.rmSync(ROOT, { recursive: true, force: true });
+    // (what this test sent to the test HOME's Trash)
+    const trash = path.join(__dirname, "tmphome", ".Trash");
+    if (fs.existsSync(trash)) fs.readdirSync(trash).filter((n) => /^Pool Master C/.test(n)).forEach((n) => fs.rmSync(path.join(trash, n), { recursive: true, force: true }));
   }
   console.log(fails ? fails + " FAILED" : "all passed");
   process.exit(fails ? 1 : 0);

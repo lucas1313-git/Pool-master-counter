@@ -116,6 +116,8 @@ const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/cs
     for (let i = 0; i < 20 && !box; i++) { await sleep(100); box = await page.evaluate(() => { const o = document.getElementById("confirm-modal-overlay"); return o.classList.contains("hidden") ? null : { message: document.getElementById("confirm-modal-message").textContent, name: document.getElementById("confirm-modal-input").value, contacts: !document.getElementById("confirm-modal-obfuscate-row").classList.contains("hidden") }; }); }
     if (box && name) await page.evaluate((n) => { document.getElementById("confirm-modal-input").value = n; }, name);
     if (box) await page.click("#btn-confirm-modal-ok");
+    await sleep(300);
+    await page.evaluate(() => { const b = document.getElementById("btn-bk-to-drive-folder") || document.getElementById("btn-bk-to-downloads"); if (b) b.click(); }); // (where to: a computer asks - the Drive folder where it can, else Downloads)
     return box;
   };
 

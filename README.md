@@ -199,9 +199,17 @@ With **⚖️ Use ratings to balance the race** on, the underdog's race is short
 
 FargoRate doesn't publish a file format for sending results in (leagues enter scores in its League Management System, tournaments go through its own tools), so there's no FargoRate export, and nothing is ever sent to FargoRate. The app only looks players up.
 
+## 💾 Back up now, on a computer
+
+After the file's name, **"Where should the backup go?"**: **☁️ Google Drive - the linked folder** (when a Drive folder link is set and this computer can reach it), **☁️ Google Drive - <account>** for each Google Drive this Mac syncs with Google Drive for desktop (into My Drive › Pool Master Counter Backups - no link needed), **📤 Share…** (the computer's share menu) or **⬇️ Downloads**. With no Google Drive on the computer, **☁️ Google Drive (drop it in on the web)** downloads it and opens drive.google.com to drag it in. Phones and tablets: the share sheet, as before.
+
 ## Sound
 
 Every sound is synthesized on the fly with the Web Audio API — no audio files, nothing to download. A win or loss plays a short tone; reaching a race-to-N milestone (a regular session or a bracket Tournament) plays a bigger fanfare: the full 30-note main theme of Beethoven's 9th Symphony ("Ode to Joy"), pitched low and drenched in a synthetic reverb tail for a deep, triumphant feel, starting about a second after the win is announced so it doesn't step on the announcement itself.
+
+### ☑ Clips, together
+
+A checkbox on every cue - on the Mac's Cues page and in this device's own recordings - and a bar above them: **☑ All**, **🗑 Delete** (asked twice), **⬇ Export** (each cut out and downloaded), **📌 Save (keep forever)** (cut out and kept for good: never cleaned up, and it stays - with its clip - when its recording is deleted; 📌 on its row) and **📤 Share** (the device's share menu - on an iPad the share sheet: a first tap gets them ready, "📤 Share now" opens it, as Safari asks).
 
 ### 🐢 Slow motion and 📁 daily cue folders
 
@@ -245,6 +253,7 @@ The scoreboard is the home screen: the app always opens on the board (Focus Mode
 - **🎱 Balls left**: after a rack or a points game is won (not 9-Ball, 10-Ball or 15 Ball Rotation), the banner opens a "Balls left on the table" row by itself - type it on the **number pad** ("1" "2" = 12, up to 15) and press **Enter**, or use − / + and **✔ OK**; Escape (or waiting) closes it. The number pad selects players again as soon as it's closed.
 - **🔄 The game rotation's timeline** is on the board, under the top bar, while a rotation runs: the games in order with the one being played lit ("**8-Ball** → 9-Ball → 10-Ball"), a dot for each game until the next change, "8-Ball (1 of 3 games)", and ◀ / ▶ to move it by hand ("Change game every" is in 🎱 Game).
 - **🔄 Game changes** in a rotation get a big popup ("Rack them for **9-Ball**", the rotation with this game lit, what comes next) - once the balls left are in; **Enter** or **Let's go!** closes it.
+- **⏹ Stop a race early** (☰ Menu › ⏹ Stop the race…, while one is on) or a tournament (⋯ More › ⏹ Stop and pick the winner): who wins - **No winner**, **Most games won** (racks, in a tournament) or **In Fire 🔥** (the hottest run of wins right now; a tie wins together) - and **who decides**: All players, or one of them. It then ends as a won one would (the race-won screen, archived; the tournament's champion and placings), marked "⏹ Stopped early by Kim - in fire"; no winner: it just ends. The Day Report says **"Interrupted results by Kim: Jo wins the race to 5 (in fire)"**.
 - **Winner Stays**: the switch is on the board, under the top bar, whenever a third player is on the roster (also in 🎱 Game and the Players section). Two at the table, the rest in line. 8-Ball, 9-Ball, 10-Ball, Straight Pool, One Pocket and Snooker are two at a time - with three or more marked Playing, Winner Stays goes on by itself (the banner says so), so a rack only ever gives a result to the two who played it. The board shows the winner's streak ("🔥 Kim: 3 in a row") and who's next; seat changes are said in the banner. There's no race by default - pick **Race to n** with it in 🎱 Game for a race for each pairing (the first to it stays) - and an optional "most wins in a row".
 - **Teams**: whoever's playing is split A, B, A, B. One card per team, headed by its players in big type ("Bob & Luc", with "Team A" small under it) - "Bob & Luc 3 – 2 Kim & Jo" above them - with one number and one big **+**; **Credit** (or the keypad's numbers) picks who potted the winning ball, if you want to.
 - With nobody playing yet, the board offers **▶️ New game**. Players added in the Setup Wizard are Playing straight away.

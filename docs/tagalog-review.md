@@ -6,7 +6,7 @@ Some are English on purpose - the app's Taglish keeps a few pool and app words a
 practice, Winner stays, bracket). Keep those where they read naturally; translate the rest.
 Written by `node tests/tagalog_review.js` - run it again after changes.
 
-## Identical to English (210)
+## Identical to English (215)
 
 | Key | English (= Tagalog now) |
 |---|---|
@@ -21,6 +21,8 @@ Written by `node tests/tagalog_review.js` - run it again after changes.
 | `backup.driveClientIdPlaceholder` | OAuth client ID (…apps.googleusercontent.com) |
 | `backup.driveClientSecretPlaceholder` | Client secret |
 | `bk.folderPlaceholder` | https://drive.google.com/drive/folders/… |
+| `bk.toDownloads` | ⬇️ Downloads |
+| `bk.toDriveAccount` | ☁️ Google Drive - (My Drive › Pool Master Counter Backups) |
 | `backup.syncExport` | ☁️ iCloud Sync |
 | `challonge.clientIdPlaceholder` | Challonge client ID |
 | `challonge.clientSecretPlaceholder` | Challonge client secret |
@@ -159,6 +161,8 @@ Written by `node tests/tagalog_review.js` - run it again after changes.
 | `voice.siri.step1` | Dictate Text (Language: English) |
 | `voice.siri.step3` | Speak Text: Contents of URL |
 | `lrec.camera` | Camera |
+| `lrec.frameOn` | 1 frame ▶ |
+| `lrec.frameBack` | ◀ 1 frame |
 | `streamOverlay.pageTitle` | Pool Master Counter - Stream overlay |
 | `streamOverlay.raceTo` | Race to |
 | `streamOverlay.rating` | Rating |
@@ -187,6 +191,7 @@ Written by `node tests/tagalog_review.js` - run it again after changes.
 | `highlights.picksOne` | clip · s |
 | `card.racks` | Racks |
 | `teams.credit` | Credit: |
+| `stop.standingRace` | · race to |
 | `endNight.standings` | Standings |
 | `report.colRating` | Rating |
 | `report.playerLine` | — , , rating () |

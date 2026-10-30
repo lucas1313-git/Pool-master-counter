@@ -86,6 +86,8 @@ const jsonFiles = (dir) => (fs.existsSync(dir) ? fs.readdirSync(dir).filter((n) 
     await page.click("#btn-backup-now");
     await sleep(300);
     await page.click("#btn-confirm-modal-ok"); // (the file name: as offered)
+    await sleep(300);
+    await page.evaluate(() => { const b = document.getElementById("btn-bk-to-drive-folder") || document.getElementById("btn-bk-to-downloads"); if (b) b.click(); }); // (where to: a computer asks - the Drive folder where it can, else Downloads)
   };
   const toast = () => page.evaluate(() => { const t = [...document.querySelectorAll("#page-toast, #win-toast")].find((x) => !x.classList.contains("hidden") && x.textContent.trim()); return t ? t.textContent : ""; });
 

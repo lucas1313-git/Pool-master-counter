@@ -8211,6 +8211,21 @@ body.network-guest-mode #header-group-start {
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
 }
 
+/* ⏹ stop a race or a tournament early */
+.stop-choices { display: grid; gap: 4px; }
+.stop-choice { font-size: 1.1rem; }
+.stop-standing { font-size: 1.1rem; font-weight: 700; }
+
+/* ☑ the in-app recorder's checked cues, together */
+.lrec-group { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0 10px; padding: 8px; border: 1px solid var(--border); border-radius: 12px; }
+.lrec-group .btn { width: auto; min-height: 44px; }
+.lrec-group .btn.lrec-ready { background: var(--accent); color: #1a0d0d; font-weight: 900; }
+.lrec-pick-all { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; }
+.lrec-picked { color: var(--text-dim); margin-right: 6px; }
+#lrec-cues li { position: relative; padding-left: 44px !important; }
+#lrec-cues li .lrec-pick { position: absolute; left: 12px; top: 14px; width: 22px; height: 22px; margin: 0; }
+#lrec-cues li.lrec-kept .lrec-name { color: var(--accent); }
+
 /* 🐢 the in-app player's slow motion */
 .lrec-speed { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0; }
 .lrec-speed.hidden { display: none; }

@@ -98,6 +98,8 @@ const localDate = (ms) => { const d = new Date(ms); return d.getFullYear() + "-"
   await page.evaluate(() => document.getElementById("btn-backup-now").click());
   await sleep(400);
   await page.click("#btn-confirm-modal-ok");
+  await sleep(300);
+  await page.evaluate(() => { const b = document.getElementById("btn-bk-to-drive-folder") || document.getElementById("btn-bk-to-downloads"); if (b) b.click(); }); // (where to: a computer asks - the Drive folder where it can, else Downloads)
   let rawExport = null;
   for (let i = 0; i < 40 && !rawExport; i++) { await sleep(250); rawExport = await page.evaluate(() => window.__lastExport || null); }
   check("the export was made", !!rawExport);

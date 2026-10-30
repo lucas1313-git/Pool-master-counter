@@ -125,6 +125,8 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "pmc-storage-"));
   await page.click("#btn-backup-now");
   await sleep(300);
   await page.click("#btn-confirm-modal-ok");
+  await sleep(300);
+  await page.evaluate(() => { const b = document.getElementById("btn-bk-to-drive-folder") || document.getElementById("btn-bk-to-downloads"); if (b) b.click(); }); // (where to: a computer asks - the Drive folder where it can, else Downloads)
   let raw = null;
   for (let i = 0; i < 30 && !raw; i++) { await sleep(200); raw = await page.evaluate(() => window.__lastExport); }
   const backup = raw ? JSON.parse(raw) : {};
@@ -205,6 +207,8 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "pmc-storage-"));
   await page.evaluate(() => { window.__lastExport = null; document.getElementById("btn-backup-now").click(); });
   await sleep(300);
   await page.click("#btn-confirm-modal-ok");
+  await sleep(300);
+  await page.evaluate(() => { const b = document.getElementById("btn-bk-to-drive-folder") || document.getElementById("btn-bk-to-downloads"); if (b) b.click(); }); // (where to: a computer asks - the Drive folder where it can, else Downloads)
   raw = null;
   for (let i = 0; i < 30 && !raw; i++) { await sleep(200); raw = await page.evaluate(() => window.__lastExport); }
   const again = raw ? JSON.parse(raw).playerStats : null;
