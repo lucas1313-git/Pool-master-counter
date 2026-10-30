@@ -59,3 +59,8 @@ test("the score bug's numbers: the race as it stood after the game", () => {
   assert.deepEqual(H.highlightBugScore({ winnerNames: ["Kim"], opponentNames: ["Jo"], raceTally: { Kim: 5, Jo: 3 } }), [{ name: "Kim", value: 5 }, { name: "Jo", value: 3 }]);
   assert.equal(H.highlightBugScore(null), null);
 });
+
+test("a 🎱 game mark (when a game started) is never a highlight", () => {
+  const r = H.pickHighlights([{ id: "g", kind: "game", startedAt: at(0), endedAt: at(0), matchup: "Kim v Jo", source: "game" }, Object.assign(cue("c", 10, 18, "Kim", "Jo", "button"), {})], [], [], { optedIn: yes });
+  assert.deepEqual(r.clips.map((c) => c.cue.id), ["c"]);
+});

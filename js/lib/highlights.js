@@ -106,6 +106,7 @@
     var notOptedIn = [];
     var candidates = [];
     (cues || []).forEach(function (cue) {
+      if (cue.kind === "game") return; // (🎱 a game mark: when a game started, not a moment to show)
       var a = highlightMs(cue.startedAt), b = highlightMs(cue.endedAt);
       if (a === null || b === null || b - a < clipMin * 1000) return;
       var game = highlightGame(cue, games);

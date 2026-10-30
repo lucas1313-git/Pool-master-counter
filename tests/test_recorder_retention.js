@@ -4,6 +4,8 @@
 // - 30 days: a recording that ended 40 days ago goes to the Trash; one from 10 days ago stays;
 //   one from 40 days ago with a cue not cut yet has its cue cut out as a clip first (kept in
 //   Clips/), then goes; its cue goes with it, the clip stays;
+// - a 🎱 game mark (a moment, nothing to cut) doesn't hold a recording back: one from 40 days ago
+//   with a game mark and a cue - the cue cut, the game mark not, the recording to the Trash;
 // - the setting only takes 0, 7, 14, 30 or 90.
 // usage: node tests/test_recorder_retention.js
 const fs = require("fs");
@@ -38,7 +40,10 @@ const inTrash = (id) => fs.existsSync(path.join(HOME, ".Trash", "Pool Master Cou
   session("2026-09-01 20h00", 40);
   session("2026-10-19 20h00", 10);
   const c = session("2026-09-02 20h00", 40, true);
-  fs.writeFileSync(path.join(ROOT, "cues.json"), JSON.stringify([{ id: "cue1", name: "Ann-vs-Ben-break", session: "2026-09-02 20h00", startedAt: c.startedAt + 1000, endedAt: c.startedAt + 4000 }]));
+  const g = session("2026-09-03 20h00", 40, true);
+  fs.writeFileSync(path.join(ROOT, "cues.json"), JSON.stringify([{ id: "cue1", name: "Ann-vs-Ben-break", session: "2026-09-02 20h00", startedAt: c.startedAt + 1000, endedAt: c.startedAt + 4000 },
+    { id: "g1", kind: "game", name: "🎱 Game 2 · 8-Ball · Ann v Ben", session: "2026-09-03 20h00", startedAt: g.startedAt + 500, endedAt: g.startedAt + 500 },
+    { id: "cue2", name: "Ann-vs-Ben-run", session: "2026-09-03 20h00", startedAt: g.startedAt + 1000, endedAt: g.startedAt + 4000 }]));
 
   let gone = await run(now);
   check("kept for good (the default): nothing goes", gone.length === 0 && exists("2026-09-01 20h00"), gone);
@@ -49,7 +54,8 @@ const inTrash = (id) => fs.existsSync(path.join(HOME, ".Trash", "Pool Master Cou
   if (FF) {
     const clips = fs.existsSync(path.join(ROOT, "Clips")) ? fs.readdirSync(path.join(ROOT, "Clips")) : [];
     const cues = JSON.parse(fs.readFileSync(path.join(ROOT, "cues.json"), "utf8"));
-    check("...one with a cue not cut yet: the cue cut out as a clip first (" + clips.join(", ") + "), then to the Trash, its cue with it", clips.length === 1 && inTrash("2026-09-02 20h00") && cues.length === 0, { clips, cues, gone });
+    check("...a game mark (a moment) doesn't hold a recording back: the cue cut, not the game mark - to the Trash", clips.length === 2 && inTrash("2026-09-03 20h00") && !clips.some((f) => /Game 2/.test(f)), { clips, cues });
+    check("...one with a cue not cut yet: the cue cut out as a clip first (" + clips.join(", ") + "), then to the Trash, its cue with it", clips.length === 2 && inTrash("2026-09-02 20h00") && cues.length === 0, { clips, cues, gone });
   } else {
     check("...one with a cue it can't cut (no ffmpeg) stays", exists("2026-09-02 20h00"));
   }

@@ -203,6 +203,10 @@ FargoRate doesn't publish a file format for sending results in (leagues enter sc
 
 Every sound is synthesized on the fly with the Web Audio API — no audio files, nothing to download. A win or loss plays a short tone; reaching a race-to-N milestone (a regular session or a bracket Tournament) plays a bigger fanfare: the full 30-note main theme of Beethoven's 9th Symphony ("Ode to Joy"), pitched low and drenched in a synthetic reverb tail for a deep, triumphant feel, starting about a second after the win is announced so it doesn't step on the announcement itself.
 
+### 🎱 Game marks
+
+While a recording runs (the Mac's 🎬 Recording page or this device's own), every new game - a rack or a game won, a new game started - drops a **🎱 game mark** on it: "🎱 Game 4 · 8-Ball · Kim v Jo", the moment the game started. They're **blue**, apart from your **⭐ cues (gold)** - blue lines on a recording's timeline and blue rows in the cues list (with a legend), ▶ to play from the start of that game. A game mark is a moment, not a clip: nothing to export, it never goes in a highlight reel, and it doesn't hold back the "keep recordings N days" clean-up.
+
 ## ✨ Tonight's highlights
 
 ☰ › **✨ Tonight's highlights** makes a reel of the night from the recorder's cues (the ⭐ button, the "/" key, voice "mark", Auto cue) — on the Mac's recorder or this device's own 🎬 Record this session.

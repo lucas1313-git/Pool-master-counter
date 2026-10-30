@@ -1696,6 +1696,7 @@
   "players.cameraBallSensitivityHelpText": "À quel point un endroit doit différer du tapis vide pour compter comme une boule. Avec une photo de la pièce vide (page caméra, onglet Table), chaque point du tapis est comparé au même point de la photo. Ses lumières et ses ombres comptent comme tapis vide. Sans photo, il est comparé à la couleur unique du tapis.\n\n1 = seules les différences nettes comptent. Moins de fausses boules (ombres, craie, reflets), mais une boule proche de la couleur du tapis peut être manquée. 10 = la moindre différence compte. Une boule verte sur tapis vert est trouvée, mais une ombre aussi, peut-être. 5 est la valeur standard.\n\nSur la page caméra (onglet Table), le curseur montre le résultat en direct sur l'image.",
   "header.record": "🎬 Enregistrer",
   "recorder.cue": "⭐ Repère",
+  "recorder.gameMark": "🎱 Partie {{n}}",
   "recorder.endCue": "✔ Fin du repère {{time}}",
   "recorder.cueSet": "Repère posé - depuis 20 s avant (/ ou ✔ pour le finir)",
   "recorder.cueHint": "Poser un repère dans l'enregistrement (depuis 20 s avant) - encore une fois pour le finir. Touche : /",

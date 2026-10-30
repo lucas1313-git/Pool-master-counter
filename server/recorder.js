@@ -222,7 +222,8 @@ function applyRetention(now, cb) {
   var gone = [];
   (function next(i) {
     if (i >= old.length) { retentionRunning = false; return cb && cb(gone); }
-    var o = old[i], uncut = cuesOf(o.id, o.x).filter(function (c) { return !c.clip && c.endedAt; });
+    // (a game mark is a moment - nothing to cut, nothing to keep)
+    var o = old[i], uncut = cuesOf(o.id, o.x).filter(function (c) { return !c.clip && c.endedAt && c.kind !== "game"; });
     if (uncut.length && !ffmpeg()) return next(i + 1); // (its cues can't be kept as clips: it stays)
     (function cutNext(j) {
       if (j >= uncut.length) {
@@ -355,7 +356,8 @@ function attachRecorderRoutes(app) {
     sendJson(res, 200, { cues: cues, ffmpeg: !!ffmpeg() });
   });
 
-  var CUE_FIELDS = ["name", "player", "opponent", "matchup", "gameType", "gameLabel", "position", "note", "startedAt", "markedAt", "endedAt", "duration", "source", "session", "customName", "shotAt", "shotEndedAt", "cameraShooter"];
+  // (kind: "game" - a game mark, the moment a game started; none - a cue)
+  var CUE_FIELDS = ["name", "kind", "player", "opponent", "matchup", "gameType", "gameLabel", "position", "note", "startedAt", "markedAt", "endedAt", "duration", "source", "session", "customName", "shotAt", "shotEndedAt", "cameraShooter"];
   function pickCue(b, into) {
     CUE_FIELDS.forEach(function (k) {
       if (b[k] === undefined) return;
@@ -391,6 +393,7 @@ function attachRecorderRoutes(app) {
   app.post("/api/rec/cues/:cue/clip", function (req, res) {
     var cues = loadCues(), cue = cues.filter(function (c) { return c.id === req.params.cue; })[0];
     if (!cue) return sendJson(res, 404, { error: "no such cue" });
+    if (cue.kind === "game") return sendJson(res, 400, { error: "a game mark is a moment, not a clip" });
     cutClip(cue, function (err, name) {
       if (err) return sendJson(res, 500, { error: err.message });
       cue.clip = name;

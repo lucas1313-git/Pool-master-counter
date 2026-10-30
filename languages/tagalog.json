@@ -1696,6 +1696,7 @@
   "players.cameraBallSensitivityHelpText": "Gaano dapat kaiba ang isang bahagi sa walang-lamang felt para ituring na bola. Kapag may snapshot ng walang-taong kuwarto (camera page, tab na Table), ikinukumpara ang bawat bahagi ng tela sa parehong bahagi sa snapshot. Itinuturing na bahagi ng walang-lamang felt ang ilaw at anino nito. Kung walang snapshot, ikinukumpara ito sa iisang kulay ng felt.\n\n1 = malinaw na pagkakaiba lang ang bilang. Mas kaunting maling bola (anino, chalk, sinag), pero baka hindi makita ang bolang kakulay ng felt. 10 = bilang kahit kaunting pagkakaiba. Nakikita ang berdeng bola sa berdeng felt, pero baka pati anino. 5 ang karaniwan.\n\nSa camera page (tab na Table), ipinapakita ng slider ang resulta nang live sa larawan.",
   "header.record": "🎬 I-record",
   "recorder.cue": "⭐ Marka",
+  "recorder.gameMark": "🎱 Laro {{n}}",
   "recorder.endCue": "✔ Tapusin ang marka {{time}}",
   "recorder.cueSet": "May marka na - mula 20 s bago (/ o ✔ para tapusin)",
   "recorder.cueHint": "Markahan ang recording (mula 20 s bago) - pindutin ulit para tapusin. Key: /",

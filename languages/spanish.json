@@ -1696,6 +1696,7 @@
   "players.cameraBallSensitivityHelpText": "Cuánto debe diferir un punto del paño vacío para contar como bola. Con una foto de la sala vacía (página de la cámara, pestaña Mesa), cada punto del paño se compara con el mismo punto de la foto. Sus luces y sombras cuentan como paño vacío. Sin foto, se compara con el color único del paño.\n\n1 = solo cuentan las diferencias claras. Menos bolas falsas (sombras, tiza, reflejos), pero una bola de color parecido al paño puede pasar desapercibida. 10 = cuenta la menor diferencia. Se encuentra una bola verde sobre paño verde, pero quizá también una sombra. 5 es el valor estándar.\n\nEn la página de la cámara (pestaña Mesa), el control muestra el resultado en vivo sobre la imagen.",
   "header.record": "🎬 Grabar",
   "recorder.cue": "⭐ Marca",
+  "recorder.gameMark": "🎱 Partida {{n}}",
   "recorder.endCue": "✔ Terminar marca {{time}}",
   "recorder.cueSet": "Marca puesta - desde 20 s antes (/ o ✔ para terminarla)",
   "recorder.cueHint": "Marcar un momento en la grabación (desde 20 s antes) - otra vez para terminarlo. Tecla: /",

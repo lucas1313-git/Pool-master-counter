@@ -584,3 +584,12 @@ Not part of the app - helpers for testing and for running this machine's own cop
   none in 9-Ball, a points game; the rotation's game-change popup only once the balls left are in
   (and at once after 9-Ball), Enter closes it; 🎱 Winner Stays on the board with a third player;
   ☰ Menu's first page: 📋 Standings and 🔍 See all. `node tests/probe_table_requests.js [shots]`.
+- **probe_game_marks.js** — 🎱 game marks on the Mac's recording (2026-10-29): the scoreboard and
+  record.html in two tabs, recording - each rack won a game mark (a moment, kind "game"), a ⭐ cue
+  stays a cue; cues.html: blue lines and rows vs gold, the legend, no clip of a game mark (the
+  server says 400); none while not recording. `node tests/probe_game_marks.js http://localhost:4235/ [shots]`
+  against a test server (`HOME=tests/tmphome PORT=4235 node server/server.js`).
+- **probe_game_marks_device.js** — the same on this device's own recorder, its own server on 4297:
+  a game mark in the list blue (▶ Play, no ⬇ Save), the ⭐ cue gold, "1 ⭐ · 1 🎱" on the recording.
+  `node tests/probe_game_marks_device.js [shots]`. (Retention skipping game marks:
+  tests/test_recorder_retention.js.)

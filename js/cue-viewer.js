@@ -69,6 +69,13 @@
     ".cv .cv-session { background: var(--panel, #241010); border: 1px solid var(--border, #4a1e1e); border-radius: 12px; padding: 8px 10px; margin-bottom: 8px; }",
     ".cv .cv-tl { position: relative; height: 30px; background: #120606; border-radius: 8px; margin-top: 6px; cursor: pointer; overflow: hidden; }",
     ".cv .cv-tl .c { position: absolute; top: 4px; bottom: 4px; min-width: 4px; background: var(--accent, #e8b923); border-radius: 3px; opacity: 0.85; }",
+    // (🎱 game marks: blue lines, apart from the gold ⭐ cues)
+    ".cv .cv-tl .c.g { top: 0; bottom: 0; width: 3px !important; min-width: 3px; margin-left: -1px; background: #3fa9f5; opacity: 1; border-radius: 1px; z-index: 2; }",
+    ".cv tr.game td.n { color: #3fa9f5; }",
+    ".cv tr.game td.n::before { content: ''; display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #3fa9f5; margin-right: 6px; }",
+    ".cv tr:not(.game) td.n::before { content: ''; display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--accent, #e8b923); margin-right: 6px; }",
+    ".cv .cv-legend { margin-left: 10px; }",
+    ".cv .cv-legend .lg { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin: 0 4px 0 8px; vertical-align: -1px; }",
     ".cv .cv-tl .h { position: absolute; top: 0; bottom: 0; width: 2px; background: #fff; }",
     ".cv .dim { color: var(--text-dim, #c9a2a2); font-size: 0.9rem; }",
     ".cv td.x { width: 1%; white-space: nowrap; text-align: right; }",
@@ -230,6 +237,15 @@
       if (!sel) return;
       var w = windowOf();
       t = Math.round(Math.max(w.s, Math.min(w.e, t)));
+      // (a 🎱 game mark is a moment: it moves whole, its name kept)
+      if (sel.kind === "game") {
+        sel.startedAt = sel.endedAt = sel.markedAt = t;
+        sel.duration = 0;
+        dirty = true;
+        renderLine();
+        renderButtons();
+        return;
+      }
       if (which === "start") sel.startedAt = Math.min(t, (sel.endedAt || Date.now()) - 1000);
       else sel.endedAt = Math.max(t, sel.startedAt + 1000);
       if (sel.endedAt) sel.duration = sel.endedAt - sel.startedAt;
@@ -243,7 +259,8 @@
       root.querySelectorAll(".cv-edit button").forEach(function (b) { b.disabled = !has; });
       q('[data-a="save"]').disabled = !dirty;
       q('[data-a="revert"]').disabled = !dirty;
-      q('[data-a="export"]').disabled = !finished || !ffmpeg;
+      // (a 🎱 game mark is a moment - no clip of it)
+      q('[data-a="export"]').disabled = !finished || !ffmpeg || sel.kind === "game";
       q('[data-a="export"]').title = ffmpeg ? "Save, cut it out and download it" : "Needs ffmpeg on the computer";
       ["e-1", "e+1", "e-here"].forEach(function (a) { q('[data-a="' + a + '"]').disabled = !finished; });
     }
@@ -415,7 +432,8 @@
       var rows = q(".cv-rows");
       if (!list.length) { rows.innerHTML = '<tr><td class="dim">' + (cues.length ? "No cue matches." : "No cues yet - ⭐ Mark during the recording (or say \"mark\").") + "</td></tr>"; return; }
       rows.innerHTML = list.slice(0, opts.compact ? 12 : 1000).map(function (c) {
-        return '<tr data-id="' + esc(c.id) + '" class="' + (sel && sel.id === c.id ? "sel " : "") + (c.endedAt ? "" : "open") + '"><td class="n">' + esc(c.name || nameFor(c) + (c.endedAt ? "" : " (still marking)")) + '</td><td class="dim" style="white-space:nowrap">' + esc(when(c.startedAt)) + '</td><td class="dim">' + (c.endedAt ? esc(len(c.endedAt - c.startedAt)) : "...") + "</td><td>" +
+        var game = c.kind === "game";
+        return '<tr data-id="' + esc(c.id) + '" class="' + (sel && sel.id === c.id ? "sel " : "") + (game ? "game " : "") + (c.endedAt ? "" : "open") + '"><td class="n">' + esc(c.name || nameFor(c) + (c.endedAt ? "" : " (still marking)")) + '</td><td class="dim" style="white-space:nowrap">' + esc(when(c.startedAt)) + '</td><td class="dim">' + (game ? "▶" : c.endedAt ? esc(len(c.endedAt - c.startedAt)) : "...") + "</td><td>" +
           (c.clip ? '<a class="cv-btn" href="/api/rec/clips/' + encodeURIComponent(c.clip) + '" download="' + esc(c.clip) + '" title="The exported clip">⬇</a>' : "") + "</td>" +
           '<td class="x"><button class="cv-del" data-del="cue" data-id="' + esc(c.id) + '" title="Delete this cue (the recording stays)">🗑</button></td></tr>';
       }).join("");
@@ -439,6 +457,7 @@
         var sp = sessionSpan(s), total = sp.end - sp.start, n = (s.parts || []).length;
         var p = function (t) { return Math.max(0, Math.min(100, (t - sp.start) / total * 100)); };
         var marks = cues.filter(function (c) { return c.startedAt >= sp.start - 2000 && c.startedAt <= sp.end; }).map(function (c) {
+          if (c.kind === "game") return '<div class="c g" title="' + esc(c.name || "Game") + '" style="left:' + p(c.startedAt) + '%"></div>';
           return '<div class="c" title="' + esc(c.name || nameFor(c)) + '" style="left:' + p(c.startedAt) + "%;width:" + Math.max(0.3, p(c.endedAt || sp.end) - p(c.startedAt)) + '%"></div>';
         }).join("");
         return '<div class="cv-session"><div class="cv-session-head"><b>' + esc(s.id) + "</b> " + (sp.live ? '<span style="color:#ff4d4d">● recording</span> ' : "") + '<span class="dim">' + esc(len(total)) + " · " + n + " file" + (n === 1 ? "" : "s") + "</span>" +
@@ -472,7 +491,9 @@
         ffmpeg = !!r[0].ffmpeg;
         sessions = r[1].sessions || [];
         folder = r[1].folder || "";
-        q(".cv-info").textContent = cues.length + " cue" + (cues.length === 1 ? "" : "s") + (ffmpeg ? "" : " · exporting needs ffmpeg on the computer");
+        var games = cues.filter(function (c) { return c.kind === "game"; }).length, own = cues.length - games;
+        q(".cv-info").innerHTML = esc(own + " cue" + (own === 1 ? "" : "s") + (games ? " · " + games + " game mark" + (games === 1 ? "" : "s") : "") + (ffmpeg ? "" : " · exporting needs ffmpeg on the computer")) +
+          '<span class="cv-legend"><span class="lg" style="background:var(--accent, #e8b923)"></span>⭐ your cues<span class="lg" style="background:#3fa9f5"></span>🎱 a game starts</span>';
         // the cue being viewed: kept as edited; picked up again if it was still being marked
         if (sel) {
           var fresh = cues.filter(function (c) { return c.id === sel.id; })[0];

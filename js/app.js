@@ -10087,6 +10087,7 @@
     state.players.forEach(function (p) {
       p.balls = 0;
     });
+    noteGameStartForRecording();
     state.currentGame.startedAt = null; // the clock starts at its first shot - see markFirstShot
     // A new game/rack means a fresh shot clock too - startShotCounter()
     // already zeroes elapsed/beep/tick and starts it running without
@@ -30549,6 +30550,32 @@
       o.start(t); o.stop(t + 0.06);
     } catch (e) {}
   }
+  // 🎱 A new game (resetGameBalls: a rack or a game won, a new game or
+  // session): a game mark on the recording - blue, apart from the ⭐ cues -
+  // on this device's own recorder or the Mac's (record.html, over the
+  // channel; it keeps it only while recording). One a moment: a win that
+  // also starts a new session is one game start.
+  var gameMarkTimer = null, gameMarkAt = 0;
+  function noteGameStartForRecording() {
+    if (gameMarkTimer) return;
+    var at = Date.now();
+    gameMarkTimer = setTimeout(function () {
+      gameMarkTimer = null;
+      if (at - gameMarkAt < 3000) return;
+      gameMarkAt = at;
+      var type = GAME_TYPES[state.currentGame.gameType];
+      var who = recorderSides().map(function (s) { return s.label.replace(/\+/g, " & "); }).join(" v ");
+      var number = (state.gamesPlayedCount || 0) + 1;
+      var gameMark = {
+        type: "game-start", at: at, number: number,
+        name: [T("recorder.gameMark", { n: number }), type ? type.label : state.currentGame.gameType, who].filter(Boolean).join(" · "),
+        gameType: state.currentGame.gameType, gameLabel: type ? type.label : state.currentGame.gameType, matchup: who, position: recorderPosition(null)
+      };
+      if (window.PMCLocalRecorder && window.PMCLocalRecorder.isRecording() && window.PMCLocalRecorder.gameMark) window.PMCLocalRecorder.gameMark(gameMark);
+      if (recorderChannel) try { recorderChannel.postMessage(gameMark); } catch (e) {}
+    }, 400);
+  }
+
   function sendRecorderCue(kind, source) {
     try { recorderChannel.postMessage(recorderContext()); recorderChannel.postMessage({ type: kind, source: source }); } catch (e) {}
     recorderStatus.cueOpen = kind === "mark";

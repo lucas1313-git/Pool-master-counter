@@ -130,7 +130,7 @@
 </main>
 <div class="toast" id="toast" hidden></div>
 
-<script src="js/camera-i18n.js?v=20261029zc"></script>
+<script src="js/camera-i18n.js?v=20261029zd"></script>
 <script src="js/pairing.js?v=20261028m"></script>
 <script src="js/recording-consent.js?v=20261028m"></script>
 <script src="js/cue-viewer.js?v=20261025b"></script>
@@ -544,6 +544,15 @@
     log("Mark (" + (source || "button") + "): " + (cue.player || "-") + " · " + (cue.gameLabel || "-") + " · " + (cue.position || "-"));
     return { ok: true, text: "Marked" };
   }
+  // 🎱 A new game on the scoreboard: a game mark - a moment, not a clip
+  // (blue in the cues, apart from the ⭐ ones) - only while recording
+  function gameMark(m) {
+    if (!rec.on || !m.at) return;
+    var at = Math.max(rec.startedAt, m.at);
+    var cue = { kind: "game", markedAt: at, startedAt: at, endedAt: at, duration: 0, name: m.name || "Game", customName: true, matchup: m.matchup || "", gameType: m.gameType || "", gameLabel: m.gameLabel || "", position: m.position || "", source: "game", session: rec.id };
+    api("/api/rec/cues", cue).then(function () { if (viewer) viewer.refresh(); }).catch(function (e) { log("Couldn't keep the game mark: " + e.message); });
+    log("Game mark: " + cue.name);
+  }
   function finishCue(why, source) {
     if (!openCue) { toast("Nothing marked to finish"); return { ok: false, text: "Nothing is marked" }; }
     var cue = openCue;
@@ -695,6 +704,7 @@
     else if (m.type === "finish") post({ type: "reply", id: m.id, result: finishCue("", m.source) });
     else if (m.type === "auto-cue") post({ type: "reply", id: m.id, result: autoCue(m.source || "scoreboard") });
     else if (m.type === "shot") noteShot(m);
+    else if (m.type === "game-start") gameMark(m);
   };
   post({ type: "context-request" });
 

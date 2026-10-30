@@ -8211,6 +8211,11 @@ body.network-guest-mode #header-group-start {
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
 }
 
+/* 🎬 the in-app recorder's cues: ⭐ gold, 🎱 game marks blue */
+#lrec-cues li.lrec-cue { border-left: 5px solid var(--accent); padding-left: 10px; }
+#lrec-cues li.lrec-game { border-left: 5px solid #3fa9f5; padding-left: 10px; }
+#lrec-cues li.lrec-game .lrec-name { color: #3fa9f5; }
+
 /* ✨ Tonight's highlights (P35): who said yes, the clips, the reel */
 .highlights-who { display: flex; flex-wrap: wrap; gap: 4px 18px; }
 .highlights-picks { margin: 4px 0 10px; padding-left: 1.4em; color: var(--text); }

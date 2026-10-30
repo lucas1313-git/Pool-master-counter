@@ -1696,6 +1696,7 @@
   "players.cameraBallSensitivityHelpText": "How different from empty felt a spot must be to count as a ball. With an empty-room snapshot (camera page, Table tab), each spot of cloth is compared with the same spot in the snapshot. Its lights and shadows count as empty felt. Without one, it's compared with the felt's single colour.\n\n1 = only clear differences count. Fewer false balls (shadows, chalk, glare), but a ball close to the felt's colour can be missed. 10 = the slightest difference counts. A green ball on green felt is found, but so may be a shadow. 5 is the standard.\n\nOn the camera page (Table tab), the slider shows the result live on the picture.",
   "header.record": "🎬 Record",
   "recorder.cue": "⭐ Cue",
+  "recorder.gameMark": "🎱 Game {{n}}",
   "recorder.endCue": "✔ End cue {{time}}",
   "recorder.cueSet": "Cue set - from 20 s before (/ or ✔ to end it)",
   "recorder.cueHint": "Mark a cue in the recording (from 20 s before) - again to end it. Key: /",

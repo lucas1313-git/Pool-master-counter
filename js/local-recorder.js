@@ -404,6 +404,15 @@
     return true;
   }
   function toggleCue(source) { return openCue ? finish(source) : mark(source); }
+  // 🎱 A new game on the scoreboard (js/app.js noteGameStartForRecording):
+  // a game mark - the moment it started, blue in the list, apart from the
+  // ⭐ cues; no clip of its own.
+  function gameMark(m) {
+    if (!rec || !m || !m.at) return false;
+    var at = Math.max(rec.startedAt, m.at);
+    put("cues", { id: uid("g"), session: rec.id, kind: "game", markedAt: at, startedAt: at, endedAt: at, name: m.name || "Game", matchup: m.matchup || "", gameType: m.gameType || "", gameLabel: m.gameLabel || "", position: m.position || "", source: "game" }).then(function () { refreshLists(); bridge.changed(); });
+    return true;
+  }
 
   // a cue's clip: the fragments covering it, cut as an ordinary MP4
   function clipFile(cue) {
@@ -543,6 +552,28 @@
       if (!cues.length) { var e = document.createElement("li"); e.className = "lrec-empty"; e.textContent = T("lrec.noCues"); els.cues.appendChild(e); }
       cues.forEach(function (c) {
         var li = document.createElement("li");
+        // (🎱 a game mark: blue, ▶ plays from it - a moment, nothing to save)
+        if (c.kind === "game") {
+          li.className = "lrec-game";
+          var gname = document.createElement("div"); gname.className = "lrec-name"; gname.textContent = c.name || "Game";
+          var gmeta = document.createElement("div"); gmeta.className = "lrec-meta"; gmeta.textContent = when(c.startedAt);
+          var grow = document.createElement("div"); grow.className = "row lrec-actions";
+          grow.appendChild(button(T("lrec.play"), "", function () {
+            get("sessions", c.session).then(function (s) {
+              if (!s) return;
+              // (a Highlights recording keeps only the cues: a minute from the mark, if it's there)
+              if (s.mode === "highlights") clipFile(Object.assign({}, c, { endedAt: c.startedAt + 60000 })).then(playFile, function () { bridge.toast(T("lrec.cantCut"), "⚠️ "); });
+              else play(c.session, c.startedAt - s.startedAt);
+            });
+          }));
+          var gbin = button("🗑", "lrec-del", function () {});
+          askTwice(gbin, T("lrec.deleteAsk"), function () { del("cues", c.id).then(refreshLists); });
+          grow.appendChild(gbin);
+          li.appendChild(gname); li.appendChild(gmeta); li.appendChild(grow);
+          els.cues.appendChild(li);
+          return;
+        }
+        li.className = "lrec-cue";
         var name = document.createElement("div"); name.className = "lrec-name"; name.textContent = (c.name || nameFor(c)) + (c.endedAt ? "" : " " + T("lrec.cueLive"));
         var meta = document.createElement("div"); meta.className = "lrec-meta"; meta.textContent = when(c.startedAt) + (c.endedAt ? " · " + clock(c.endedAt - c.startedAt) : "");
         var row = document.createElement("div"); row.className = "row lrec-actions";
@@ -572,7 +603,8 @@
         var name = document.createElement("div"); name.className = "lrec-name"; name.textContent = (highlights ? "✨ " : "🎞️ ") + when(s.startedAt) + (live ? " " + T("lrec.liveNow") : "");
         var meta = document.createElement("div"); meta.className = "lrec-meta";
         var size = highlights ? T("lrec.keptSize", { size: mb(typeof s.keptBytes === "number" ? s.keptBytes : s.bytes || 0) }) : mb(s.bytes || 0);
-        meta.textContent = clock((s.endedAt || Date.now()) - s.startedAt) + " · " + size + " · " + cues.filter(function (c) { return c.session === s.id; }).length + " ⭐";
+        var ofThis = cues.filter(function (c) { return c.session === s.id; }), games = ofThis.filter(function (c) { return c.kind === "game"; }).length;
+        meta.textContent = clock((s.endedAt || Date.now()) - s.startedAt) + " · " + size + " · " + (ofThis.length - games) + " ⭐" + (games ? " · " + games + " 🎱" : "");
         var row = document.createElement("div"); row.className = "row lrec-actions";
         // (Highlights keeps only the cues: no whole recording to play or save)
         if (!highlights) {
@@ -655,6 +687,7 @@
     mark: mark,
     finish: finish,
     toggleCue: toggleCue,
+    gameMark: gameMark,
     isRecording: function () { return !!rec; },
     cueOpen: function () { return !!openCue; },
     cueSince: function () { return openCue ? openCue.markedAt : null; },
