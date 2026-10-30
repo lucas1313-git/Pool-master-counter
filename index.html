@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261029zd">
+<link rel="stylesheet" href="css/style.css?v=20261030a">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -249,6 +249,16 @@
       <h3 class="backup-subsection-title" data-i18n="lrec.recordingsTitle">🎞️ Recordings on this device</h3>
       <ul class="lrec-list" id="lrec-sessions"></ul>
       <video id="lrec-player" class="hidden" controls playsinline></video>
+      <!-- 🐢 slow motion, to look at a foul (js/local-recorder.js) -->
+      <div class="lrec-speed hidden" id="lrec-speed">
+        <span data-i18n="lrec.speed">🐢 Speed</span>
+        <button type="button" class="btn btn-ghost is-on" data-speed="1">1×</button>
+        <button type="button" class="btn btn-ghost" data-speed="0.5">½×</button>
+        <button type="button" class="btn btn-ghost" data-speed="0.25">¼×</button>
+        <button type="button" class="btn btn-ghost" data-speed="0.125">⅛×</button>
+        <button type="button" class="btn btn-ghost" data-step="-1" data-i18n="lrec.frameBack">◀ 1 frame</button>
+        <button type="button" class="btn btn-ghost" data-step="1" data-i18n="lrec.frameOn">1 frame ▶</button>
+      </div>
       <p class="player-stats-note" id="lrec-storage"></p>
     </div>
   </section>
@@ -3135,27 +3145,27 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/pairing.js?v=20261029zd"></script>
-<script src="js/big-store.js?v=20261029zd"></script>
-<script src="js/mp4-clip.js?v=20261029zd"></script>
-<script src="js/recording-consent.js?v=20261029zd"></script>
-<script src="js/local-recorder.js?v=20261029zd"></script>
-<script src="js/lib/pool-day.js?v=20261029zd"></script>
-<script src="js/lib/race-math.js?v=20261029zd"></script>
-<script src="js/lib/handicaps.js?v=20261029zd"></script>
-<script src="js/lib/brackets.js?v=20261029zd"></script>
-<script src="js/lib/league.js?v=20261029zd"></script>
-<script src="js/lib/events.js?v=20261029zd"></script>
-<script src="js/lib/chips.js?v=20261029zd"></script>
-<script src="js/lib/highlights.js?v=20261029zd"></script>
-<script src="js/lib/payouts.js?v=20261029zd"></script>
-<script src="js/app.js?v=20261029zd"></script>
-<script src="js/camera-client.js?v=20261029zd"></script>
-<script src="js/voice.js?v=20261029zd"></script>
+<script src="js/pairing.js?v=20261030a"></script>
+<script src="js/big-store.js?v=20261030a"></script>
+<script src="js/mp4-clip.js?v=20261030a"></script>
+<script src="js/recording-consent.js?v=20261030a"></script>
+<script src="js/local-recorder.js?v=20261030a"></script>
+<script src="js/lib/pool-day.js?v=20261030a"></script>
+<script src="js/lib/race-math.js?v=20261030a"></script>
+<script src="js/lib/handicaps.js?v=20261030a"></script>
+<script src="js/lib/brackets.js?v=20261030a"></script>
+<script src="js/lib/league.js?v=20261030a"></script>
+<script src="js/lib/events.js?v=20261030a"></script>
+<script src="js/lib/chips.js?v=20261030a"></script>
+<script src="js/lib/highlights.js?v=20261030a"></script>
+<script src="js/lib/payouts.js?v=20261030a"></script>
+<script src="js/app.js?v=20261030a"></script>
+<script src="js/camera-client.js?v=20261030a"></script>
+<script src="js/voice.js?v=20261030a"></script>
 <script>
   // The app opens with no network (sw.js, P21) - on http(s) only, not in the iOS app
   if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol) && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
-    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261029zd").catch(function () {}); });
+    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261030a").catch(function () {}); });
   }
 </script>
 </body>

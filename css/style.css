@@ -8211,6 +8211,12 @@ body.network-guest-mode #header-group-start {
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
 }
 
+/* 🐢 the in-app player's slow motion */
+.lrec-speed { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0; }
+.lrec-speed.hidden { display: none; }
+.lrec-speed .btn { min-height: 44px; min-width: 56px; width: auto; }
+.lrec-speed .btn.is-on { background: var(--accent); color: #1a0d0d; border-color: var(--accent); font-weight: 900; }
+
 /* 🎬 the in-app recorder's cues: ⭐ gold, 🎱 game marks blue */
 #lrec-cues li.lrec-cue { border-left: 5px solid var(--accent); padding-left: 10px; }
 #lrec-cues li.lrec-game { border-left: 5px solid #3fa9f5; padding-left: 10px; }

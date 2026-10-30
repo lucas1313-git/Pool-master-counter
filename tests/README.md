@@ -593,3 +593,8 @@ Not part of the app - helpers for testing and for running this machine's own cop
   a game mark in the list blue (▶ Play, no ⬇ Save), the ⭐ cue gold, "1 ⭐ · 1 🎱" on the recording.
   `node tests/probe_game_marks_device.js [shots]`. (Retention skipping game marks:
   tests/test_recorder_retention.js.)
+- **test_cue_folders.js** — 📁 the daily cue folders (2026-10-29), server/recorder.js in Node with a
+  throwaway HOME: yesterday's made on its own ("Pool Master Cues <date> Ann - Ben - Cat", its cues, not
+  the game mark), today's made by hand, renamed when someone new is on a cue, deleted to the Trash and
+  not made again, a long night's name kept short. Needs ffmpeg; in `npm test`. (The cues page's
+  section and 🐢 slow motion: probe_game_marks / probe_game_marks_device.)

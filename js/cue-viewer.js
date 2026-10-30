@@ -82,7 +82,12 @@
     ".cv button.cv-del { min-height: 32px; padding: 4px 9px; }",
     ".cv button.cv-del.sure { background: #b3261e; border-color: #b3261e; color: #fff; font-weight: 800; }",
     ".cv .cv-session-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }",
-    ".cv .cv-session-head .cv-del { margin-left: auto; }"
+    ".cv .cv-session-head .cv-del { margin-left: auto; }",
+    // 🐢 slow motion: the speed, a frame at a time
+    ".cv .cv-speed { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0 2px; }",
+    ".cv .cv-speed button { min-height: 36px; min-width: 48px; }",
+    ".cv .cv-speed button.on { background: var(--accent, #e8b923); border-color: var(--accent, #e8b923); color: #1a0d0d; font-weight: 800; }",
+    ".cv .cv-speed .cv-rate { font-weight: 800; margin-left: 6px; }"
   ].join("\n");
 
   function mount(root, opts) {
@@ -95,6 +100,11 @@
     root.classList.add("cv");
     root.innerHTML =
       '<video class="cv-video" controls playsinline></video>' +
+      // 🐢 slow motion, to look at a foul: the speed, and a frame at a time (keys , and .)
+      '<div class="cv-speed"><span class="dim">🐢 Speed</span>' +
+      '<button data-speed="1" class="on">1×</button><button data-speed="0.5">½×</button><button data-speed="0.25">¼×</button><button data-speed="0.125">⅛×</button>' +
+      '<button data-a="frame-back" title="One frame back (,)">◀ 1 frame</button><button data-a="pp" title="Play / pause (space)">⏯</button><button data-a="frame-fwd" title="One frame on (.)">1 frame ▶</button>' +
+      '<span class="cv-rate dim"></span></div>' +
       '<div class="cv-name"></div>' +
       '<div class="cv-edit" hidden>' +
       '  <div class="cv-line" title="Drag the yellow handles to set the start and the end; click to go there"><div class="cv-live" hidden></div><div class="cv-span"></div><div class="cv-handle" data-h="start"></div><div class="cv-handle" data-h="end"></div><div class="cv-head"></div></div>' +
@@ -112,7 +122,9 @@
       '<div class="cv-row" style="margin-top:8px"><button data-a="new" title="A cue of your own at the playhead">＋ New cue here</button><span class="dim cv-info"></span></div>' +
       '<input type="search" class="cv-search" placeholder="Find a cue - player, game, date...">' +
       '<table><tbody class="cv-rows"></tbody></table>' +
-      (opts.sessions ? '<div class="cv-sessions"><b>Recordings</b><div class="cv-sess dim">Loading...</div></div>' : "");
+      (opts.sessions ? '<div class="cv-sessions"><b>Recordings</b><div class="cv-sess dim">Loading...</div></div>' +
+        // 📁 each day's cues, as a folder of clips in the recordings folder
+        '<div class="cv-sessions cv-folders-box"><b>📁 Daily cue folders</b> <span class="dim cv-folders-where"></span><div class="cv-folders dim">Loading...</div></div>' : "");
 
     var q = function (sel) { return root.querySelector(sel); };
     var video = q(".cv-video");
@@ -157,6 +169,37 @@
       load(at.index, at.offset, autoplay);
       return true;
     }
+    // 🐢 the speed (kept for every file played - a new src would put it back to 1)
+    var rate = 1, FRAME = 1 / 30;
+    function setRate(r) {
+      rate = r;
+      video.defaultPlaybackRate = r;
+      video.playbackRate = r;
+      root.querySelectorAll(".cv-speed button[data-speed]").forEach(function (b) { b.classList.toggle("on", +b.getAttribute("data-speed") === r); });
+      q(".cv-rate").textContent = r === 1 ? "" : "slow motion " + (r === 0.5 ? "½" : r === 0.25 ? "¼" : "⅛") + "×";
+    }
+    function stepFrame(dir) {
+      if (!video.src) return;
+      video.pause();
+      try { video.currentTime = Math.max(0, video.currentTime + dir * FRAME); } catch (e) {}
+    }
+    root.querySelector(".cv-speed").addEventListener("click", function (e) {
+      var b = e.target.closest("button");
+      if (!b) return;
+      if (b.hasAttribute("data-speed")) { setRate(+b.getAttribute("data-speed")); return; }
+      var a = b.getAttribute("data-a");
+      if (a === "frame-back") stepFrame(-1);
+      else if (a === "frame-fwd") stepFrame(1);
+      else if (a === "pp" && video.src) { if (video.paused) { var go = video.play(); if (go && go.catch) go.catch(function () {}); } else video.pause(); }
+    });
+    // , and . a frame back / on; s: slower (1 -> ½ -> ¼ -> ⅛ -> 1) - unless typing
+    document.addEventListener("keydown", function (e) {
+      if (!root.isConnected || (e.target && /INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (opts.keysWhen && !opts.keysWhen()) return;
+      if (e.key === ",") { e.preventDefault(); stepFrame(-1); }
+      else if (e.key === ".") { e.preventDefault(); stepFrame(1); }
+      else if (e.key === "s" || e.key === "S") { e.preventDefault(); setRate(rate === 1 ? 0.5 : rate === 0.5 ? 0.25 : rate === 0.25 ? 0.125 : 1); }
+    });
     function load(index, offset, autoplay) {
       var p = play.parts[index];
       play.index = index;
@@ -164,6 +207,7 @@
       video.src = "/api/rec/" + encodeURIComponent(play.session.id) + "/file/" + encodeURIComponent(p.file) + (p.endedAt ? "" : "?t=" + Date.now());
       video.onloadedmetadata = function () {
         video.onloadedmetadata = null;
+        video.playbackRate = rate;
         try { video.currentTime = Math.max(0, offset); } catch (e) {}
         if (autoplay) { var go = video.play(); if (go && go.catch) go.catch(function () {}); }
       };
@@ -377,7 +421,8 @@
       root.querySelectorAll("button.cv-del").forEach(function (b) {
         var on = !!sure && b.getAttribute("data-del") === sure.what && b.getAttribute("data-id") === sure.id;
         b.classList.toggle("sure", on);
-        b.textContent = on ? (sure.what === "session" ? "Delete this recording?" : "Delete?") : (b.getAttribute("data-del") === "session" ? "🗑 Delete" : "🗑");
+        var kind = b.getAttribute("data-del");
+        b.textContent = on ? (sure.what === "session" ? "Delete this recording?" : sure.what === "folder" ? "Delete this folder?" : "Delete?") : (kind === "session" || kind === "folder" ? "🗑 Delete" : "🗑");
       });
       var own = q('.cv-edit [data-a="delete"]'), mine = !!sure && sure.what === "cue" && !!sel && sure.id === sel.id;
       own.textContent = mine ? "Delete?" : "🗑";
@@ -467,6 +512,44 @@
       renderSure();
       renderSessionHeads();
     }
+    // ---- 📁 the daily cue folders: "Pool Master Cues 2026-10-29 Jo - Kim - Lee" ----
+    var cueFolders = { days: [], folder: "", today: "" };
+    function renderFolders() {
+      if (!opts.sessions) return;
+      var box = q(".cv-folders");
+      q(".cv-folders-where").textContent = cueFolders.folder ? "in " + cueFolders.folder + " - each day made once it's over" : "";
+      if (!cueFolders.days.length) { box.innerHTML = "No cues yet."; return; }
+      box.innerHTML = cueFolders.days.map(function (d) {
+        var count = d.cues + " cue" + (d.cues === 1 ? "" : "s");
+        var state = d.exists ? d.files + " clip" + (d.files === 1 ? "" : "s") + " of " + count : d.deleted ? "deleted (in the Trash) - " + count : (d.date === cueFolders.today ? "today - not made yet" : "not made yet") + " - " + count;
+        return '<div class="cv-session cv-folder" data-date="' + esc(d.date) + '"><div class="cv-session-head"><b>' + esc(d.name) + '</b> <span class="dim">' + esc(state) + "</span>" +
+          '<button class="cv-folder-make" data-date="' + esc(d.date) + '">' + (d.exists ? "↻ Bring up to date" : d.date === cueFolders.today ? "📁 Make today's folder now" : "📁 Make it") + "</button>" +
+          (d.exists ? '<button class="cv-del" data-del="folder" data-id="' + esc(d.date) + '" title="Move this folder to the Trash">🗑 Delete</button>' : "") + "</div></div>";
+      }).join("");
+      renderSure();
+    }
+    function refreshFolders() {
+      if (!opts.sessions) return Promise.resolve();
+      return api("/api/rec/cue-folders").then(function (r) { cueFolders = r; renderFolders(); }).catch(function () {});
+    }
+    root.addEventListener("click", function (e) {
+      var make = e.target.closest("button.cv-folder-make");
+      if (make) {
+        make.disabled = true;
+        status("Making the folder (cutting its clips)...");
+        api("/api/rec/cue-folders/" + make.getAttribute("data-date"), {}).then(function (r) {
+          status("📁 " + r.name + " - " + r.files + " clip" + (r.files === 1 ? "" : "s") + " (" + r.folder + ")");
+          return refreshFolders();
+        }).catch(function (err) { make.disabled = false; status("Couldn't make the folder: " + err.message); });
+        return;
+      }
+      var del = e.target.closest('button.cv-del[data-del="folder"]');
+      if (del) {
+        var date = del.getAttribute("data-id");
+        if (!askSure("folder", date)) return;
+        api("/api/rec/cue-folders/" + date, undefined, "DELETE").then(function () { status("The folder is in the Trash - it won't be made again on its own."); return refreshFolders(); }).catch(function (err) { status("Couldn't delete it: " + err.message); });
+      }
+    });
     function renderSessionHeads() {
       if (!opts.sessions) return;
       var t = wallTime();
@@ -500,6 +583,7 @@
           if (fresh) { saved = fresh; if (!dirty) sel = JSON.parse(JSON.stringify(fresh)); }
         }
         renderRows(); renderSessions(); renderLine(); renderButtons();
+        refreshFolders();
       }).catch(function (e) { q(".cv-info").textContent = "The computer's server isn't answering (" + e.message + ")"; });
     }
     refresh();
@@ -515,6 +599,8 @@
       deleteCue: deleteCue,
       deleteSession: deleteSession,
       wallTime: wallTime,
+      setRate: setRate,
+      stepFrame: stepFrame,
       state: function () { return { sel: sel, dirty: dirty, cues: cues, sessions: sessions, play: play }; }
     };
   }

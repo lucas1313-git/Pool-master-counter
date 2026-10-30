@@ -157,12 +157,13 @@ function piecesFor(from, to) {
   return pieces;
 }
 
-function cutClip(cue, cb) {
+// (outDir: another folder than Clips/ - a day's cue folder)
+function cutClip(cue, cb, outDir) {
   if (!cue.startedAt || !cue.endedAt) return cb(new Error("the cue isn't finished"));
   var pieces = piecesFor(cue.startedAt, cue.endedAt);
   if (!pieces.length) return cb(new Error("no recording covers that moment"));
-  fs.mkdirSync(clipsDir(), { recursive: true });
-  var name = safeFileName(cue.name) + ".mp4", out = path.join(clipsDir(), name);
+  fs.mkdirSync(outDir || clipsDir(), { recursive: true });
+  var name = safeFileName(cue.name) + ".mp4", out = path.join(outDir || clipsDir(), name);
   if (pieces.length === 1) {
     var p = pieces[0];
     return runFfmpeg(["-ss", p.from.toFixed(2), "-i", p.file, "-t", (p.to - p.from).toFixed(2), "-c", "copy", "-avoid_negative_ts", "make_zero", "-movflags", "+faststart", out], function (err) { cb(err, name); });
@@ -207,6 +208,105 @@ function cuesOf(id, x) {
   return loadCues().filter(function (c) { return c.session ? c.session === id : c.startedAt >= span.s && c.startedAt <= span.e; });
 }
 
+// ---- 📁 A folder of each day's cues (2026-10-29 request) ----
+// "Pool Master Cues 2026-10-29 Jo - Kim - Lee" in the recordings folder: the
+// day's cues (not the 🎱 game marks) cut out as clips. Each pool day (it
+// turns at 5 a.m. - js/lib/pool-day.js) is made once it's over (looked at
+// every hour, the last 14 days), or now from the cues page; its name follows
+// who's on its cues (renamed as more come). Deleted (from the cues page: to
+// the Trash; or in the Finder), it isn't made again on its own.
+var poolDay = require("../js/lib/pool-day.js");
+var CUE_FOLDER_PREFIX = "Pool Master Cues ";
+function cueFoldersFile() { return path.join(root(), "cue-folders.json"); }
+function loadCueFolders() { var s = readJson(cueFoldersFile(), {}); return s && typeof s === "object" ? s : {}; }
+function saveCueFolders(s) { fs.mkdirSync(root(), { recursive: true }); writeJson(cueFoldersFile(), s); }
+function cueDay(c) { return poolDay.localDateStrFromTs(c.startedAt); }
+function dayCues(date) { return loadCues().filter(function (c) { return c.kind !== "game" && c.startedAt && c.endedAt && cueDay(c) === date; }); }
+// everyone on a day's cues (players, opponents, "A-vs-B", "Bob+Chris"), A-Z
+function dayPlayers(cues) {
+  var names = {};
+  cues.forEach(function (c) {
+    [c.player, c.opponent, c.matchup, c.cameraShooter].forEach(function (s) {
+      String(s || "").split(/\s*(?:-vs-|\+|&|,| v )\s*/).forEach(function (n) { n = n.trim(); if (n) names[n.toLowerCase()] = names[n.toLowerCase()] || n; });
+    });
+  });
+  return Object.keys(names).map(function (k) { return names[k]; }).sort(function (a, b) { return a.localeCompare(b); });
+}
+function cueFolderName(date, cues) {
+  var players = dayPlayers(cues), list = players.join(" - ");
+  // (a long night: as many as fit in a file name, then "+ n more")
+  var room = 150 - (CUE_FOLDER_PREFIX + date + " ").length;
+  for (var n = players.length; n > 0 && list.length > room; n--) list = players.slice(0, n - 1).join(" - ") + " + " + (players.length - n + 1) + " more";
+  return safeFileName(CUE_FOLDER_PREFIX + date + (list ? " " + list : "")).replace(/\.+$/, "");
+}
+// the day's folder as it is on disk now (whatever its players say)
+function existingCueFolder(date) {
+  try {
+    var hit = fs.readdirSync(root()).filter(function (n) { return n.indexOf(CUE_FOLDER_PREFIX + date) === 0 && fs.statSync(path.join(root(), n)).isDirectory(); })[0];
+    return hit ? path.join(root(), hit) : null;
+  } catch (e) { return null; }
+}
+// makes (or brings up to date) a day's folder -> cb(err, { name, dir, cut, files })
+function buildCueFolder(date, cb) {
+  var cues = dayCues(date);
+  if (!cues.length) return cb(new Error("no cues that day"));
+  var name = cueFolderName(date, cues), dir = path.join(root(), name), was = existingCueFolder(date);
+  try {
+    if (was && was !== dir) fs.renameSync(was, dir);
+    fs.mkdirSync(dir, { recursive: true });
+  } catch (e) { return cb(e); }
+  var cut = 0, i = 0;
+  (function next() {
+    if (i >= cues.length) {
+      var state = loadCueFolders();
+      state[date] = { name: name, built: Date.now(), deleted: false };
+      saveCueFolders(state);
+      return cb(null, { name: name, dir: dir, cut: cut, files: fs.readdirSync(dir).filter(function (f) { return /\.mp4$/.test(f); }).length });
+    }
+    var c = cues[i++];
+    if (fs.existsSync(path.join(dir, safeFileName(c.name) + ".mp4"))) return next();
+    cutClip(c, function (err) { if (!err) cut++; next(); }, dir);
+  })();
+}
+// every finished day of the last 14 not made yet (nor deleted) -> cb(dates made)
+var cueFoldersRunning = false;
+function makeDueCueFolders(now, cb) {
+  if (cueFoldersRunning || !ffmpeg()) return cb && cb([]);
+  cueFoldersRunning = true;
+  var today = poolDay.localDateStrFromTs(now), state = loadCueFolders(), days = {};
+  loadCues().forEach(function (c) {
+    if (c.kind === "game" || !c.startedAt || !c.endedAt || now - c.startedAt > 14 * 86400000) return;
+    var d = cueDay(c);
+    if (d !== today && !(state[d] && (state[d].built || state[d].deleted))) days[d] = true;
+  });
+  var dates = Object.keys(days).sort(), made = [];
+  (function next(i) {
+    if (i >= dates.length) { cueFoldersRunning = false; return cb && cb(made); }
+    buildCueFolder(dates[i], function (err) { if (!err) made.push(dates[i]); next(i + 1); });
+  })(0);
+}
+function deleteCueFolder(date) {
+  var dir = existingCueFolder(date), state = loadCueFolders();
+  state[date] = Object.assign(state[date] || {}, { deleted: true });
+  saveCueFolders(state);
+  if (!dir) return null;
+  var trash = path.join(os.homedir(), ".Trash"), dest = path.join(trash, path.basename(dir)), k = 2;
+  fs.mkdirSync(trash, { recursive: true });
+  while (fs.existsSync(dest)) dest = path.join(trash, path.basename(dir) + " (" + k++ + ")");
+  fs.renameSync(dir, dest);
+  return dest;
+}
+// every day with cues (newest first): its folder's name, whether it's there, how many clips
+function listCueFolders() {
+  var state = loadCueFolders(), days = {};
+  loadCues().forEach(function (c) { if (c.kind !== "game" && c.startedAt && c.endedAt) (days[cueDay(c)] = days[cueDay(c)] || []).push(c); });
+  return Object.keys(days).sort().reverse().map(function (d) {
+    var dir = existingCueFolder(d), files = 0;
+    try { if (dir) files = fs.readdirSync(dir).filter(function (f) { return /\.mp4$/.test(f); }).length; } catch (e) {}
+    return { date: d, name: dir ? path.basename(dir) : cueFolderName(d, days[d]), exists: !!dir, files: files, cues: days[d].length, deleted: !!(state[d] && state[d].deleted) && !dir };
+  });
+}
+
 // Recordings older than keepDays: their cues cut out, then to the Trash.
 // cb(names trashed).
 var retentionRunning = false;
@@ -245,6 +345,24 @@ function attachRecorderRoutes(app) {
   // (kept recordings: looked at shortly after start-up, then every 6 hours)
   setTimeout(function () { applyRetention(Date.now()); }, 15000).unref();
   setInterval(function () { applyRetention(Date.now()); }, 6 * 3600 * 1000).unref();
+  // (📁 each finished day's cue folder: shortly after start-up, then every hour)
+  setTimeout(function () { makeDueCueFolders(Date.now()); }, 20000).unref();
+  setInterval(function () { makeDueCueFolders(Date.now()); }, 3600 * 1000).unref();
+  app.get("/api/rec/cue-folders", function (req, res) { sendJson(res, 200, { folder: root(), today: poolDay.localDateStrFromTs(Date.now()), ffmpeg: !!ffmpeg(), days: listCueFolders() }); });
+  app.post("/api/rec/cue-folders/:date", function (req, res) {
+    var date = req.params.date;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return sendJson(res, 400, { error: "a date, like 2026-10-29" });
+    if (!ffmpeg()) return sendJson(res, 500, { error: "ffmpeg isn't on this computer" });
+    buildCueFolder(date, function (err, r) {
+      if (err) return sendJson(res, 404, { error: err.message });
+      sendJson(res, 200, { name: r.name, folder: r.dir, cut: r.cut, files: r.files });
+    });
+  });
+  app.delete("/api/rec/cue-folders/:date", function (req, res) {
+    var date = req.params.date;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return sendJson(res, 400, { error: "a date, like 2026-10-29" });
+    try { sendJson(res, 200, { trash: deleteCueFolder(date) }); } catch (e) { sendJson(res, 500, { error: e.message }); }
+  });
   app.get("/api/rec/settings", function (req, res) { sendJson(res, 200, loadSettings()); });
   app.post("/api/rec/settings", function (req, res) {
     readBody(req, function (b) {
@@ -439,4 +557,4 @@ function buildHighlightReel(body, cb) {
   }, cb);
 }
 
-module.exports = { attachRecorderRoutes: attachRecorderRoutes, _piecesFor: piecesFor, _applyRetention: applyRetention, _buildHighlightReel: buildHighlightReel };
+module.exports = { attachRecorderRoutes: attachRecorderRoutes, _piecesFor: piecesFor, _applyRetention: applyRetention, _buildHighlightReel: buildHighlightReel, _makeDueCueFolders: makeDueCueFolders, _buildCueFolder: buildCueFolder, _deleteCueFolder: deleteCueFolder, _listCueFolders: listCueFolders, _cueFolderName: cueFolderName };

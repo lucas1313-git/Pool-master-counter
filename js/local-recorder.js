@@ -464,6 +464,26 @@
       return { session: r[0], blob: new Blob(chunks.map(function (c) { return c.blob; }), { type: (r[0] && r[0].mime || "video/mp4").split(";")[0] }) };
     });
   }
+  // 🐢 slow motion: the speed (kept for the next clip played), a frame at a time
+  var playRate = 1, FRAME = 1 / 30;
+  function setPlayRate(r) {
+    playRate = r;
+    els.player.defaultPlaybackRate = r;
+    els.player.playbackRate = r;
+    els.speed.querySelectorAll("button[data-speed]").forEach(function (b) { b.classList.toggle("is-on", +b.getAttribute("data-speed") === r); });
+  }
+  function wireSpeed() {
+    if (!els.speed) return;
+    els.speed.addEventListener("click", function (e) {
+      var b = e.target.closest("button");
+      if (!b) return;
+      if (b.hasAttribute("data-speed")) setPlayRate(+b.getAttribute("data-speed"));
+      else if (b.hasAttribute("data-step") && els.player.src) {
+        els.player.pause();
+        try { els.player.currentTime = Math.max(0, els.player.currentTime + (+b.getAttribute("data-step")) * FRAME); } catch (err) {}
+      }
+    });
+  }
   function playFile(file) { playBlob(file, 0); }
   function play(sessionId, atMs) {
     recordingBlob(sessionId).then(function (r) { playBlob(r.blob, atMs); });
@@ -474,8 +494,9 @@
       var url = URL.createObjectURL(r.blob);
       els.player.dataset.url = url;
       els.player.classList.remove("hidden");
+      if (els.speed) els.speed.classList.remove("hidden");
       els.player.src = url;
-      els.player.onloadedmetadata = function () { try { els.player.currentTime = Math.max(0, (atMs || 0) / 1000); } catch (e) {} els.player.play().catch(function () {}); };
+      els.player.onloadedmetadata = function () { els.player.playbackRate = playRate; try { els.player.currentTime = Math.max(0, (atMs || 0) / 1000); } catch (e) {} els.player.play().catch(function () {}); };
       els.player.scrollIntoView({ block: "center", behavior: window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
     })({ blob: blob });
   }
@@ -653,7 +674,8 @@
   function mount(root, b) {
     bridge = b;
     var q = function (id) { return root.querySelector("#" + id); };
-    els = { root: root, preview: q("lrec-preview"), camera: q("lrec-camera"), sound: q("lrec-sound"), mode: q("lrec-mode"), start: q("btn-lrec-start"), cue: q("btn-lrec-cue"), status: q("lrec-status"), cues: q("lrec-cues"), sessions: q("lrec-sessions"), player: q("lrec-player"), storage: q("lrec-storage"), summary: document.getElementById("local-record-panel-summary") };
+    els = { root: root, preview: q("lrec-preview"), camera: q("lrec-camera"), sound: q("lrec-sound"), mode: q("lrec-mode"), start: q("btn-lrec-start"), cue: q("btn-lrec-cue"), status: q("lrec-status"), cues: q("lrec-cues"), sessions: q("lrec-sessions"), player: q("lrec-player"), speed: q("lrec-speed"), storage: q("lrec-storage"), summary: document.getElementById("local-record-panel-summary") };
+    wireSpeed();
     var signBtn = q("btn-lrec-sign");
     if (signBtn) signBtn.addEventListener("click", function () {
       if (window.PMCRecordingConsent) window.PMCRecordingConsent.printSign({ sound: els.sound.checked });
@@ -688,6 +710,7 @@
     finish: finish,
     toggleCue: toggleCue,
     gameMark: gameMark,
+    _setPlayRate: function (r) { setPlayRate(r); },
     isRecording: function () { return !!rec; },
     cueOpen: function () { return !!openCue; },
     cueSince: function () { return openCue ? openCue.markedAt : null; },

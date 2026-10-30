@@ -203,6 +203,11 @@ FargoRate doesn't publish a file format for sending results in (leagues enter sc
 
 Every sound is synthesized on the fly with the Web Audio API — no audio files, nothing to download. A win or loss plays a short tone; reaching a race-to-N milestone (a regular session or a bracket Tournament) plays a bigger fanfare: the full 30-note main theme of Beethoven's 9th Symphony ("Ode to Joy"), pitched low and drenched in a synthetic reverb tail for a deep, triumphant feel, starting about a second after the win is announced so it doesn't step on the announcement itself.
 
+### 🐢 Slow motion and 📁 daily cue folders
+
+- **Slow motion**, to look at a foul: under the player (the Mac's Cues page and recording page, and this device's own recordings) - **1×, ½×, ¼×, ⅛×**, kept from one clip to the next, and **◀ 1 frame / 1 frame ▶** (paused, a frame at a time). On the Mac, keys too: **,** and **.** a frame back / on, **s** slower (1 → ½ → ¼ → ⅛ → 1).
+- **📁 A folder of each day's cues**, in the recordings folder (Movies › Pool Master Counter): **"Pool Master Cues 2026-10-29 Jo - Kim - Lee"** - everyone on that day's cues, A to Z (a long night: "+ n more") - with each ⭐ cue cut out as a clip (not the 🎱 game marks). A day is made once it's over (looked at every hour, the last 14 days); **📁 Make today's folder now** on the Cues page does it at once, **↻ Bring up to date** adds what's new (renaming it if someone new came). **🗑 Delete** (asked twice) sends it to the Trash - and it isn't made again on its own (deleted in the Finder: the same); 📁 Make it brings it back.
+
 ### 🎱 Game marks
 
 While a recording runs (the Mac's 🎬 Recording page or this device's own), every new game - a rack or a game won, a new game started - drops a **🎱 game mark** on it: "🎱 Game 4 · 8-Ball · Kim v Jo", the moment the game started. They're **blue**, apart from your **⭐ cues (gold)** - blue lines on a recording's timeline and blue rows in the cues list (with a legend), ▶ to play from the start of that game. A game mark is a moment, not a clip: nothing to export, it never goes in a highlight reel, and it doesn't hold back the "keep recordings N days" clean-up.

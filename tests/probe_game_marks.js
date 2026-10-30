@@ -5,7 +5,11 @@
 // - a ⭐ cue (the "/" key, twice) stays a cue - no kind;
 // - the cues page: the game marks blue lines on the recording's timeline, the ⭐ cue a gold block -
 //   different colours; their rows a blue dot, the cue's gold; the legend says which is which;
-//   a game mark picked: no clip to export (and the server says no);
+//   a game mark picked: no clip to export (and the server says no); 🐢 slow motion on the cue
+//   viewer: ½× and ⅛× (buttons, the "s" key), a frame on with "." (paused, 1/30 s);
+// - 📁 Daily cue folders on the cues page: today's - "📁 Make today's folder now": "Pool Master Cues
+//   <today> Jo - Kim" in the recordings folder with the ⭐ cue's clip (not the game marks); 🗑 Delete
+//   (asked twice): to the Trash, the row says so;
 // - not recording: no game mark;
 // - no page errors.
 // usage: node tests/probe_game_marks.js http://localhost:4235/ [screenshot dir]   (server: HOME=tests/tmphome PORT=4235 node server/server.js)
@@ -107,6 +111,41 @@ function makeY4m(file) {
     const exp = await page.evaluate(() => document.querySelector('[data-a="export"]').disabled);
     const res = await fetch(BASE + "api/rec/cues/" + games[0].id + "/clip", { method: "POST" });
     check("...a game mark picked: no clip to export (the button off; the server: " + res.status + ")", exp === true && res.status === 400, { exp, status: res.status });
+    // 🐢 slow motion: the ⭐ cue played at ½×, then "s" "s" -> ⅛×; "." a frame on
+    await page.evaluate(() => document.querySelector(".cv-rows tr:not(.game) td.n").click());
+    await sleep(1500);
+    await page.evaluate(() => document.querySelector('.cv-speed button[data-speed="0.5"]').click());
+    await sleep(300);
+    const half = await page.evaluate(() => document.querySelector(".cv-video").playbackRate);
+    await page.keyboard.press("s");
+    await page.keyboard.press("s");
+    await sleep(200);
+    const eighth = await page.evaluate(() => ({ rate: document.querySelector(".cv-video").playbackRate, on: document.querySelector(".cv-speed button.on").textContent, label: document.querySelector(".cv-rate").textContent }));
+    const tb = await page.evaluate(() => document.querySelector(".cv-video").currentTime);
+    await page.keyboard.press(".");
+    await sleep(300);
+    const ta = await page.evaluate(() => ({ t: document.querySelector(".cv-video").currentTime, paused: document.querySelector(".cv-video").paused }));
+    if (OUT) await page.screenshot({ path: path.join(OUT, "slow_motion_cues.png") });
+    // 📁 today's folder
+    const folderRow = () => page.evaluate(() => [...document.querySelectorAll(".cv-folder")].map((f) => ({ date: f.getAttribute("data-date"), text: f.textContent })));
+    let rows = await folderRow();
+    await page.evaluate(() => document.querySelector(".cv-folder .cv-folder-make").click());
+    for (let i = 0; i < 30; i++) { await sleep(500); if ((await folderRow()).some((r) => /1 clip of 1/.test(r.text))) break; }
+    rows = await folderRow();
+    const made = fs.existsSync(ROOT) ? fs.readdirSync(ROOT).filter((n) => /^Pool Master Cues /.test(n)) : [];
+    const clips = made.length ? fs.readdirSync(path.join(ROOT, made[0])).filter((f) => /\.mp4$/.test(f)) : [];
+    if (OUT) await page.screenshot({ path: path.join(OUT, "cue_folders.png"), fullPage: true });
+    check("📁 Daily cue folders: today's made now - \"" + made[0] + "\", " + clips.length + " clip (the ⭐ cue, not the game marks)", made.length === 1 && / Jo - Kim$/.test(made[0]) && clips.length === 1 && rows.length === 1 && /1 clip of 1 cue/.test(rows[0].text), { made, clips, rows });
+    await page.evaluate(() => document.querySelector('.cv-folder button[data-del="folder"]').click());
+    await sleep(200);
+    const asks = await page.evaluate(() => document.querySelector('.cv-folder button[data-del="folder"]').textContent);
+    await page.evaluate(() => document.querySelector('.cv-folder button[data-del="folder"]').click());
+    await sleep(1200);
+    rows = await folderRow();
+    const trashed = fs.existsSync(path.join(__dirname, "tmphome", ".Trash")) ? fs.readdirSync(path.join(__dirname, "tmphome", ".Trash")).filter((n) => /^Pool Master Cues /.test(n)) : [];
+    check("...🗑 Delete (\"" + asks + "\", then again): to the Trash; the row says so", asks === "Delete this folder?" && trashed.length === 1 && !fs.readdirSync(ROOT).some((n) => /^Pool Master Cues /.test(n)) && /deleted/.test(rows[0].text), { asks, trashed, rows });
+    trashed.forEach((n) => fs.rmSync(path.join(__dirname, "tmphome", ".Trash", n), { recursive: true, force: true }));
+    check("🐢 slow motion on the cue viewer: ½× (" + half + "), \"s\" \"s\" -> ⅛× (" + eighth.rate + ", \"" + eighth.label + "\"), \".\" a frame on (" + (ta.t - tb).toFixed(3) + " s, paused)", half === 0.5 && eighth.rate === 0.125 && eighth.on === "⅛×" && ta.paused && ta.t - tb > 0.02 && ta.t - tb < 0.08, { half, eighth, tb, ta });
   } finally {
     check("no page errors", errors.length === 0, errors);
     await browser.close();

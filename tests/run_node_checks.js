@@ -12,7 +12,8 @@ const CHECKS = [
   "test_strings", "test_voice_parser", "test_rail_distance", "test_camera_learning", "test_challonge",
   "test_recorder_retention", "test_camera_light",
   { name: "test_mp4_clip", needs: "ffmpeg" },
-  { name: "test_highlight_reel", needs: "ffmpeg" }
+  { name: "test_highlight_reel", needs: "ffmpeg" },
+  { name: "test_cue_folders", needs: "ffmpeg" }
 ];
 
 function has(bin) {

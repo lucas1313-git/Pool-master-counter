@@ -4,7 +4,8 @@
 //   moment at the win); a ⭐ cue (mark, finish) stays a cue;
 // - the list: the game mark blue (its own border and name colour), the cue gold - different;
 //   the game mark has ▶ Play and no ⬇ Save; the recording says "1 ⭐ · 1 🎱";
-// - ▶ Play on the game mark plays the recording from there;
+// - ▶ Play on the game mark plays the recording from there; 🐢 slow motion: ¼× plays at a quarter
+//   speed (and stays for the next clip played), "1 frame ▶" pauses and moves on 1/30 s;
 // - not recording: no game mark;
 // - no page errors.
 // Its own file server on 4297 (no /api - the device's own recorder).
@@ -101,6 +102,17 @@ function makeY4m(file) {
     await sleep(1500);
     const played = await page.evaluate(() => { const v = document.querySelector("#lrec-player video, video#lrec-player, .lrec-player video"); return v ? { src: !!v.src, t: v.currentTime } : null; });
     check("...▶ Play on it plays the recording from there", played && played.src, played);
+    await page.evaluate(() => document.querySelector('#lrec-speed button[data-speed="0.25"]').click());
+    await sleep(300);
+    const slow = await page.evaluate(() => { const v = document.getElementById("lrec-player"); return { shown: !document.getElementById("lrec-speed").classList.contains("hidden"), rate: v.playbackRate, on: document.querySelector("#lrec-speed button.is-on").textContent }; });
+    await page.evaluate(() => [...document.querySelectorAll("#lrec-cues li.lrec-cue button")].find((b) => /Play/.test(b.textContent)).click());
+    await sleep(1500);
+    const kept = await page.evaluate(() => document.getElementById("lrec-player").playbackRate);
+    const t0 = await page.evaluate(() => document.getElementById("lrec-player").currentTime);
+    await page.evaluate(() => document.querySelector('#lrec-speed button[data-step="1"]').click());
+    await sleep(300);
+    const step = await page.evaluate(() => ({ paused: document.getElementById("lrec-player").paused, t: document.getElementById("lrec-player").currentTime }));
+    check("🐢 slow motion: ¼× (" + slow.rate + "), kept for the next clip played (" + kept + "); \"1 frame ▶\" pauses and moves on " + (step.t - t0).toFixed(3) + " s", slow.shown && slow.rate === 0.25 && slow.on === "¼×" && kept === 0.25 && step.paused && step.t - t0 > 0.02 && step.t - t0 < 0.08, { slow, kept, t0, step });
   } finally {
     check("no page errors", errors.length === 0, errors);
     await browser.close();
