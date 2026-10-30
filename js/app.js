@@ -1422,12 +1422,14 @@
   var SOUNDS_KEY = "poolMasterCounter.sounds.v1";
   var SOUND_VOLUME_KEY = "poolMasterCounter.soundVolume.v1";
   var audioMaster = null;
+  // All by default - every point beeps, as it always had (a points game is
+  // scored by ear); Wins only and Off are chosen in ☰ Menu › Sounds.
   function soundsLevel() {
     try {
       var v = localStorage.getItem(SOUNDS_KEY);
-      return v === "all" || v === "off" ? v : "wins";
+      return v === "wins" || v === "off" ? v : "all";
     } catch (e) {
-      return "wins";
+      return "all";
     }
   }
   function soundVolume() {

@@ -201,8 +201,12 @@ function measureContrast() {
   await open(board({ two: true, game: { gameType: "straight", target: 100, unit: "points" } }));
   await tapPlus(0);
   a = await audio();
-  check("Wins only (the default): a point in Straight Pool makes no sound", a.osc === 0, a);
-  await open(board({ two: true }));
+  check("All (the default, 2026-10-29): a point in Straight Pool beeps", a.osc > 0, a);
+  await open(board({ two: true, game: { gameType: "straight", target: 100, unit: "points" } }), { "poolMasterCounter.sounds.v1": "wins" });
+  await tapPlus(0);
+  a = await audio();
+  check("Wins only (chosen): a point in Straight Pool makes no sound", a.osc === 0, a);
+  await open(board({ two: true }), { "poolMasterCounter.sounds.v1": "wins" });
   await tapPlus(0);
   a = await audio();
   check("...a rack won does", a.osc > 0, a);
