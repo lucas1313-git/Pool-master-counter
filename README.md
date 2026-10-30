@@ -313,4 +313,4 @@ Coverage includes cold boot, scoreboard scoring/win-detection/undo/the milestone
 - `css/style.css` — responsive, touch-friendly styling, theme colors, and layout for every panel and overlay
 - `js/app.js` — all app state, localStorage persistence, sound synthesis, and UI logic (single IIFE, no framework)
 - `docs/screenshots/` — the screenshots used in this README
-- `players/`, `settings/`, `stats/` — legacy data files from an earlier version of the app that stored data as JSON committed to the repo; kept only so a device's first launch can migrate that history into local storage. The app never writes to these directories anymore.
+- `settings/` — a legacy data file from an earlier version of the app that stored data as JSON committed to the repo. The app never writes to it. (The old `players/` and `stats/` - early players' stats - were removed on 2026-10-30; nothing reads them.)

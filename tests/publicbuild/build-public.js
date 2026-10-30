@@ -15,7 +15,7 @@ const esbuild = require(path.join(repo, "installer/node_modules/esbuild"));
 
 const ROOT_FILES = ["index.html", "camera.html", "record.html", "cues.html", "overlay.html", "follow.html", "manifest.json", "sw.js",
   "about.html", "about.fr.html", "about.es.html", "about.tl.html", "about.zh-yue.html"];
-const DIRS = ["css", "js", "languages", "icons", "camera", "data", "settings", "players", "rules", "docs/screenshots"];
+const DIRS = ["css", "js", "languages", "icons", "camera", "data", "settings", "rules", "docs/screenshots"];
 // source-only files inside the copied folders
 const SKIP = [/(^|\/)README\.md$/, /^camera\/models\/(osnet|dinov2|depth|segment)\/convert\.py$/, /(^|\/)\.DS_Store$/];
 // a paid build (PMC_PAID_BUILD=1) leaves OSNet out: its weights' training data (Market-1501) is
