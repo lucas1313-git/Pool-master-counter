@@ -20,10 +20,12 @@
 //   POST   /api/rec/:id/part/:n              (video bytes, appended; X-Started-At on the first)
 //   POST   /api/rec/:id/part/:n/end          { startedAt, endedAt }
 //   POST   /api/rec/:id/stop                 { endedAt }
+//   POST   /api/rec/:id/pause, /resume        ⏸ paused / ▶ going on - the same recording ({ at })
 //   GET    /api/rec/sessions                 every recording, newest first
 //   DELETE /api/rec/sessions/:id             to the Trash, with its cues (not while it records;
 //                                            exported clips are kept)
-//   GET    /api/rec/:id/file/:name           a part (seekable: Range requests)
+//   GET    /api/rec/:id/file/:name           a part (seekable: Range requests); ?live=<token>: the
+//                                            one still being recorded, as a copy to jump around in
 //   GET    /api/rec/cues                     every cue, newest first
 //   POST   /api/rec/cues                     a new cue -> the cue (with its id)
 //   PATCH  /api/rec/cues/:cue                change it (finish it, rename it)
@@ -131,6 +133,60 @@ function makeSeekable(dir, file, cb) {
     try { fs.renameSync(tmp, src); } catch (e) { return cb && cb(e); }
     cb && cb(null);
   });
+}
+
+// The file still being recorded can't be jumped around in (it grows, no
+// index yet): asked for with ?live=<token>, a copy of it as it is now, its
+// index at the front (no re-encoding - about half a second for 10 minutes
+// of 1080p). One copy serves every request for 4 s, and a token keeps the
+// copy it first got (a player reads it in pieces over time); the last 3
+// copies are kept, and all go when the file ends.
+var LIVE_COPY_MS = 4000, LIVE_COPIES_KEPT = 3;
+var liveCopies = {}; // the part's path -> { list: [{ path, at, tokens }], making: [callbacks] | null }
+function liveCopy(dir, file, token, cb) {
+  var src = path.join(dir, file), st = liveCopies[src] || (liveCopies[src] = { list: [], making: null });
+  var give = function (err, c) { if (err) return cb(err); c.tokens[token] = true; cb(null, c.path); };
+  var known = st.list.filter(function (c) { return c.tokens[token]; })[0];
+  if (known && fs.existsSync(known.path)) return cb(null, known.path);
+  var fresh = st.list[st.list.length - 1];
+  if (fresh && Date.now() - fresh.at < LIVE_COPY_MS && fs.existsSync(fresh.path)) return give(null, fresh);
+  if (st.making) return st.making.push(give);
+  st.making = [give];
+  var at = Date.now(), ext = path.extname(file), out = path.join(dir, file.slice(0, -ext.length) + ".live-" + at + ext);
+  runFfmpeg(["-i", src, "-c", "copy"].concat(ext === ".mp4" ? ["-movflags", "+faststart"] : []).concat([out]), function (err) {
+    var waiting = st.making, c = err ? null : { path: out, at: at, tokens: {} };
+    st.making = null;
+    if (c) {
+      st.list.push(c);
+      while (st.list.length > LIVE_COPIES_KEPT) { try { fs.unlinkSync(st.list.shift().path); } catch (e) {} }
+    } else { try { fs.unlinkSync(out); } catch (e) {} }
+    waiting.forEach(function (w) { w(err, c); });
+  });
+}
+function dropLiveCopies(dir, file) {
+  delete liveCopies[path.join(dir, file)];
+  var stem = file.replace(/\.\w+$/, "") + ".live-";
+  try { fs.readdirSync(dir).forEach(function (n) { if (n.indexOf(stem) === 0) { try { fs.unlinkSync(path.join(dir, n)); } catch (e) {} } }); } catch (e) {}
+}
+
+// A new recording starts: any left open before it (the page closed or the computer slept - never
+// stopped, or paused an hour ago and never gone on) ends where its last file does. (Not one still
+// being written - another page recording - nor paused a moment ago.)
+function closeLeftOpen() {
+  var now = Date.now();
+  try {
+    fs.readdirSync(root()).forEach(function (n) {
+      var x = loadSession(n);
+      if (!x || x.s.endedAt) return;
+      var last = x.s.parts[x.s.parts.length - 1], written = 0;
+      if (last) { try { written = fs.statSync(path.join(x.dir, last.file)).mtimeMs; } catch (e) {} }
+      if (x.s.pausedAt ? now - x.s.pausedAt < 3600000 : now - (written || x.s.startedAt) < 120000) return;
+      var end = x.s.pausedAt || (last && last.endedAt) || written;
+      x.s.endedAt = Math.round(end || x.s.startedAt);
+      x.s.pausedAt = null;
+      saveSession(x);
+    });
+  } catch (e) {}
 }
 
 function loadCues() { return readJson(cuesFile(), []); }
@@ -383,6 +439,7 @@ function attachRecorderRoutes(app) {
     readBody(req, function (b) {
       if (!b) return sendJson(res, 400, { error: "bad request" });
       fs.mkdirSync(root(), { recursive: true });
+      closeLeftOpen();
       var startedAt = Number(b.startedAt) || Date.now(), id = folderName(startedAt), k = 2;
       while (fs.existsSync(path.join(root(), id))) id = folderName(startedAt) + " (" + k++ + ")";
       var dir = path.join(root(), id);
@@ -420,9 +477,37 @@ function attachRecorderRoutes(app) {
       try { p.bytes = fs.statSync(path.join(x.dir, p.file)).size; } catch (e) {}
       saveSession(x);
       sendJson(res, 200, { ok: true });
+      dropLiveCopies(x.dir, p.file);
       makeSeekable(x.dir, p.file, function (err) {
         if (err) console.warn("[recorder] couldn't index " + p.file + ": " + err.message);
       });
+    });
+  });
+
+  // ⏸ Paused (the file so far ended - no new one till it goes on) and ▶ going on: the same recording
+  app.post("/api/rec/:id/pause", function (req, res) {
+    readBody(req, function (b) {
+      var x = loadSession(req.params.id);
+      if (!x) return sendJson(res, 404, { error: "no such recording" });
+      if (!x.s.endedAt && !x.s.pausedAt) {
+        x.s.pausedAt = (b && Number(b.at)) || Date.now();
+        x.s.pauses = (x.s.pauses || []).concat([{ from: x.s.pausedAt, to: null }]);
+        saveSession(x);
+      }
+      sendJson(res, 200, { ok: true });
+    });
+  });
+  app.post("/api/rec/:id/resume", function (req, res) {
+    readBody(req, function (b) {
+      var x = loadSession(req.params.id);
+      if (!x) return sendJson(res, 404, { error: "no such recording" });
+      if (x.s.pausedAt) {
+        var last = (x.s.pauses || [])[x.s.pauses.length - 1];
+        if (last && !last.to) last.to = (b && Number(b.at)) || Date.now();
+        x.s.pausedAt = null;
+        saveSession(x);
+      }
+      sendJson(res, 200, { ok: true });
     });
   });
 
@@ -431,6 +516,7 @@ function attachRecorderRoutes(app) {
       var x = loadSession(req.params.id);
       if (!x) return sendJson(res, 404, { error: "no such recording" });
       x.s.endedAt = (b && Number(b.endedAt)) || Date.now();
+      x.s.pausedAt = null;
       saveSession(x);
       sendJson(res, 200, { ok: true });
     });
@@ -441,7 +527,11 @@ function attachRecorderRoutes(app) {
     try {
       fs.readdirSync(root()).forEach(function (n) {
         var x = loadSession(n);
-        if (x) list.push(x.s);
+        if (!x) return;
+        // (no end yet: when its last file was written - recording still, or never stopped)
+        var last = x.s.parts[x.s.parts.length - 1];
+        if (!x.s.endedAt && last) try { x.s.writtenAt = fs.statSync(path.join(x.dir, last.file)).mtimeMs; } catch (e) {}
+        list.push(x.s);
       });
     } catch (e) {}
     list.sort(function (a, b) { return b.startedAt - a.startedAt; });
@@ -468,7 +558,13 @@ function attachRecorderRoutes(app) {
   app.get("/api/rec/:id/file/:name", function (req, res) {
     var x = loadSession(req.params.id), name = req.params.name;
     if (!x || !/^part-\d{3,4}\.(mp4|webm)$/.test(name)) return sendJson(res, 404, { error: "not found" });
-    res.sendFile(path.join(x.dir, name), { headers: { "Cache-Control": "no-store" } }, function (err) { if (err && !res.headersSent) sendJson(res, 404, { error: "not found" }); });
+    var send = function (file) { res.sendFile(file, { headers: { "Cache-Control": "no-store" } }, function (err) { if (err && !res.headersSent) sendJson(res, 404, { error: "not found" }); }); };
+    // (the file still being recorded, to jump around in: a copy of it as it is now)
+    var part = x.s.parts.filter(function (p) { return p.file === name; })[0], token = String(req.query.live || "").slice(0, 40);
+    if (token && part && !part.endedAt && ffmpeg()) {
+      return liveCopy(x.dir, name, token, function (err, file) { send(err ? path.join(x.dir, name) : file); });
+    }
+    send(path.join(x.dir, name));
   });
 
   app.get("/api/rec/cues", function (req, res) {

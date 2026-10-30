@@ -30848,7 +30848,7 @@
       if (m.type === "status") {
         var keep = !!recorderStatus && (m.at || 0) < recorderGuessAt + 300 && Date.now() < recorderGuessAt + 2000;
         recorderStatus = {
-          recording: !!m.recording, cueOpen: keep ? recorderStatus.cueOpen : !!m.cueOpen, cueSince: keep ? recorderStatus.cueSince : m.cueSince || null,
+          recording: !!m.recording, paused: !!m.paused, cueOpen: keep ? recorderStatus.cueOpen : !!m.cueOpen, cueSince: keep ? recorderStatus.cueSince : m.cueSince || null,
           auto: keep ? recorderStatus.auto : m.auto || null, autoSince: keep ? recorderStatus.autoSince : m.autoSince || null, autoShotSince: m.autoShotSince || null,
           watching: !!m.watching, watchWhy: m.watchWhy || null, at: Date.now()
         };
@@ -30860,6 +30860,8 @@
     setInterval(renderRecorderCueButton, 1000);
   }
   function recorderFresh() { return !!recorderStatus && Date.now() - recorderStatus.at < 5000; }
+  // (⏸ the recording page's Pause: said so, not "isn't recording")
+  function recorderNotRecordingKey() { return recorderStatus && recorderStatus.paused ? "voice.err.recordingPaused" : "voice.err.notRecording"; }
   // The cue's only sound here: a tick so light the recording's microphone
   // barely hears it - a moment after the recording page has silenced its
   // sound for the cue (record.html's duck), so it isn't in the video at all.
@@ -30924,7 +30926,7 @@
       return { ok: true, text: T(kind === "mark" ? "voice.done.marked" : "voice.done.finished"), speak: "never" };
     }
     if (!recorderChannel || !recorderFresh()) return { ok: false, text: T("voice.err.noRecorder"), speak: "never" };
-    if ((kind === "mark" || kind === "auto") && !recorderStatus.recording) return { ok: false, text: T("voice.err.notRecording"), speak: "never" };
+    if ((kind === "mark" || kind === "auto") && !recorderStatus.recording) return { ok: false, text: T(recorderNotRecordingKey()), speak: "never" };
     if (kind === "auto") {
       if (!recorderStatus.auto && !recorderStatus.watching) return { ok: false, text: T("recorder.autoNoCamera"), speak: "never" };
       var cancel = !!recorderStatus.auto;
@@ -30948,7 +30950,7 @@
   }
   function recorderToggleAuto(source) {
     if (!recorderChannel || !recorderFresh()) { showToast(T("voice.err.noRecorder"), "🎬 "); return false; }
-    if (!recorderStatus.recording) { showToast(T("voice.err.notRecording"), "🎬 "); return false; }
+    if (!recorderStatus.recording) { showToast(T(recorderNotRecordingKey()), "🎬 "); return false; }
     if (!recorderStatus.auto && !recorderStatus.watching) { showToast(T("recorder.autoNoCamera"), "🎯 "); return false; }
     var cancel = !!recorderStatus.auto;
     sendRecorderAuto(source);
@@ -30985,7 +30987,7 @@
       return true;
     }
     if (!recorderChannel || !recorderFresh()) { showToast(T("voice.err.noRecorder"), "🎬 "); return false; }
-    if (!recorderStatus.recording) { showToast(T("voice.err.notRecording"), "🎬 "); return false; }
+    if (!recorderStatus.recording) { showToast(T(recorderNotRecordingKey()), "🎬 "); return false; }
     var kind = recorderStatus.cueOpen ? "finish" : "mark";
     sendRecorderCue(kind, source);
     showToast(T(kind === "mark" ? "recorder.cueSet" : "voice.done.finished"), kind === "mark" ? "⭐ " : "✔ ");

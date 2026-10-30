@@ -7,6 +7,11 @@
 // exported - cut out with ffmpeg and downloaded on the spot (also kept in
 // the Clips folder).
 //
+// ⏪ The whole recording (2026-10-30): a timeline of the recording being
+// played - the one still being recorded too, start to now - to go back to
+// any moment (drag; the last 10 min / hour / all; ±10 s, ±1 min; 🔴 Live) and
+// ＋ add a cue there, named after the game being played then (its 🎱 mark).
+//
 // PMCCueViewer.mount(container, { compact, sessions, onDelete(cueId) }) ->
 // { refresh, select(id), state() }. A cue (🗑 on its row) and a whole
 // recording (🗑 on its timeline - to the Trash, with its cues) can be
@@ -34,6 +39,11 @@
   function len(ms) { if (!(ms >= 0)) return "-"; var s = Math.round(ms / 1000); return (s >= 3600 ? Math.floor(s / 3600) + ":" + pad2(Math.floor(s / 60) % 60) : Math.floor(s / 60)) + ":" + pad2(s % 60); }
   function when(t) { var d = new Date(t); return d.toLocaleDateString() + " " + pad2(d.getHours()) + ":" + pad2(d.getMinutes()) + ":" + pad2(d.getSeconds()); }
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  // (the page's words: js/camera-i18n.js's CT when the page has it, else English)
+  function tr(key, english, vars) {
+    if (window.CT) return window.CT(key, english, vars);
+    return String(english).replace(/\{\{(\w+)\}\}/g, function (m, k) { return vars && vars[k] !== undefined ? vars[k] : m; });
+  }
   function api(path, body, method) {
     return fetch(path, { method: method || (body === undefined ? "GET" : "POST"), headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) })
       .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || r.status); return j; }); });
@@ -95,7 +105,28 @@
     ".cv .cv-speed { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0 2px; }",
     ".cv .cv-speed button { min-height: 36px; min-width: 48px; }",
     ".cv .cv-speed button.on { background: var(--accent, #e8b923); border-color: var(--accent, #e8b923); color: #1a0d0d; font-weight: 800; }",
-    ".cv .cv-speed .cv-rate { font-weight: 800; margin-left: 6px; }"
+    ".cv .cv-speed .cv-rate { font-weight: 800; margin-left: 6px; }",
+    // ⏪ the whole recording, start to now
+    ".cv .cv-whole { margin: 10px 0 4px; padding: 8px 10px; border: 1px solid var(--border, #4a1e1e); border-radius: 12px; }",
+    ".cv .cv-whole-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }",
+    ".cv .cv-whole-what { font-variant-numeric: tabular-nums; }",
+    ".cv .cv-whole-what .on-air { color: var(--rec, #ff4d4d); font-weight: 800; }",
+    ".cv .cv-whole-what .paused { color: var(--accent, #e8b923); font-weight: 800; }",
+    ".cv .cv-wline .gap { position: absolute; top: 0; bottom: 18px; min-width: 2px; background: repeating-linear-gradient(45deg, rgba(232,185,35,0.28) 0 5px, transparent 5px 10px); pointer-events: none; }",
+    ".cv .cv-zoom { margin-left: auto; display: inline-flex; gap: 4px; }",
+    ".cv .cv-zoom button { min-height: 34px; padding: 4px 10px; }",
+    ".cv .cv-zoom button.on { background: var(--accent, #e8b923); border-color: var(--accent, #e8b923); color: #1a0d0d; font-weight: 800; }",
+    ".cv .cv-wline { position: relative; height: 64px; margin: 34px 0 6px; background: #120606; border-radius: 10px; cursor: pointer; touch-action: none; user-select: none; }",
+    ".cv .cv-wline .c { position: absolute; top: 8px; bottom: 24px; min-width: 4px; background: var(--accent, #e8b923); border-radius: 3px; opacity: 0.85; pointer-events: none; }",
+    ".cv .cv-wline .c.g { top: 2px; bottom: 20px; width: 3px; min-width: 3px; margin-left: -1px; background: #3fa9f5; opacity: 1; border-radius: 1px; }",
+    ".cv .cv-wline .tk { position: absolute; bottom: 2px; font-size: 0.72rem; color: var(--text-dim, #c9a2a2); transform: translateX(-50%); pointer-events: none; white-space: nowrap; font-variant-numeric: tabular-nums; }",
+    ".cv .cv-whead { position: absolute; top: -4px; bottom: -4px; width: 3px; margin-left: -1px; background: #fff; box-shadow: 0 0 0 1px #000; pointer-events: none; z-index: 3; }",
+    ".cv .cv-wlive { position: absolute; top: 0; bottom: 0; right: 0; width: 6px; background: var(--rec, #ff4d4d); border-radius: 0 10px 10px 0; animation: cv-blink 1s steps(2) infinite; pointer-events: none; }",
+    "@keyframes cv-blink { 50% { opacity: 0.3; } }",
+    ".cv .cv-wbubble { position: absolute; top: -32px; transform: translateX(-50%); background: #000; color: #fff; border: 1px solid var(--accent, #e8b923); border-radius: 6px; padding: 2px 8px; font-size: 0.85rem; font-weight: 700; white-space: nowrap; pointer-events: none; z-index: 4; font-variant-numeric: tabular-nums; }",
+    ".cv .cv-wnav button { min-height: 40px; }",
+    ".cv .cv-wat { font-weight: 800; font-variant-numeric: tabular-nums; margin: 0 6px; }",
+    ".cv .cv-wnav .cv-addcue { margin-left: auto; min-height: 44px; }"
   ].join("\n");
 
   function mount(root, opts) {
@@ -108,6 +139,17 @@
     root.classList.add("cv");
     root.innerHTML =
       '<video class="cv-video" controls playsinline></video>' +
+      // ⏪ the whole recording - the one being recorded too: back to any moment, a cue added there
+      '<div class="cv-whole" hidden>' +
+      '<div class="cv-whole-head"><b data-i18n="rec.wholeTitle">⏪ The whole recording</b><span class="cv-whole-what dim"></span>' +
+      '<span class="cv-zoom"><button data-z="600000" data-i18n="rec.zoom10">10 min</button><button data-z="3600000" data-i18n="rec.zoom60">1 h</button><button data-z="0" class="on" data-i18n="rec.zoomAll">All</button></span></div>' +
+      '<div class="cv-wline" data-i18n-title="rec.wholeHint" title="Click or drag to go back to any moment"><div class="cv-wmarks"></div><div class="cv-wlive" hidden></div><div class="cv-whead" hidden></div><div class="cv-wbubble" hidden></div></div>' +
+      '<div class="cv-row cv-wnav">' +
+      '<button data-w="-60000" data-i18n="rec.back1m" title="Shift + ←">⏪ 1 min</button><button data-w="-10000" data-i18n="rec.back10" title="←">◀ 10 s</button>' +
+      '<button data-w="10000" data-i18n="rec.fwd10" title="→">10 s ▶</button><button data-w="60000" data-i18n="rec.fwd1m" title="Shift + →">1 min ⏩</button>' +
+      '<button data-w="live" class="cv-golive" data-i18n="rec.goLive">🔴 Live</button><span class="cv-wat"></span>' +
+      '<button data-a="new" class="primary cv-addcue" data-i18n="rec.addCueHere">＋ Add a cue here (N)</button></div>' +
+      '</div>' +
       // 🐢 slow motion, to look at a foul: the speed, and a frame at a time (keys , and .)
       '<div class="cv-speed"><span class="dim">🐢 Speed</span>' +
       '<button data-speed="1" class="on">1×</button><button data-speed="0.5">½×</button><button data-speed="0.25">¼×</button><button data-speed="0.125">⅛×</button>' +
@@ -127,7 +169,7 @@
       '  </div>' +
       '</div>' +
       '<div class="cv-status"></div>' +
-      '<div class="cv-row" style="margin-top:8px"><button data-a="new" title="A cue of your own at the playhead">＋ New cue here</button><span class="dim cv-info"></span></div>' +
+      '<div class="cv-row" style="margin-top:8px"><span class="dim cv-info"></span></div>' +
       '<input type="search" class="cv-search" placeholder="Find a cue - player, game, date...">' +
       '<div class="cv-group"><label><input type="checkbox" class="cv-pick-all"> All</label><span class="dim cv-picked">none checked</span>' +
       '<button class="cv-group-del" data-g="delete" disabled>🗑 Delete</button><button data-g="export" disabled title="Cut each one out and download it">⬇ Export</button>' +
@@ -161,11 +203,20 @@
           if (t >= from && t < end + (j === parts.length - 1 ? 2000 : 0)) return { session: s, parts: parts, index: j, offset: Math.max(0, (t - p.startedAt) / 1000) };
         }
       }
+      // (a moment in a ⏸ pause: where the recording went on)
+      for (i = 0; i < list.length; i++) {
+        var ps = partsOf(list[i]);
+        for (var k = 1; k < ps.length; k++) if (t >= (ps[k - 1].endedAt || ps[k].startedAt) && t < ps[k].startedAt) return { session: list[i], parts: ps, index: k, offset: 0 };
+      }
       return null;
     }
     function sessionSpan(s) {
       var parts = partsOf(s), last = parts[parts.length - 1];
-      return { start: s.startedAt, end: s.endedAt || (last ? last.endedAt || Date.now() : s.startedAt + 1000), live: !s.endedAt };
+      // still recording (no end, not ⏸ paused, a file written in the last minute - not one never
+      // stopped): up to now - its last file may have just ended, the next one not heard of yet
+      var paused = !s.endedAt && !!s.pausedAt;
+      var live = !s.endedAt && !paused && !(s.writtenAt && Date.now() - s.writtenAt > 60000);
+      return { start: s.startedAt, end: s.endedAt || (live ? Date.now() : paused ? s.pausedAt : Math.max((last && last.endedAt) || 0, s.writtenAt || 0) || s.startedAt + 1000), live: live, paused: paused };
     }
     function seekTo(t, stopAt, autoplay) {
       var at = locate(t, sel && sel.session);
@@ -214,8 +265,9 @@
     function load(index, offset, autoplay) {
       var p = play.parts[index];
       play.index = index;
-      // (the file still being recorded: asked fresh each time, so it reaches the latest seconds)
-      video.src = "/api/rec/" + encodeURIComponent(play.session.id) + "/file/" + encodeURIComponent(p.file) + (p.endedAt ? "" : "?t=" + Date.now());
+      // (the file still being recorded: a copy of it as it is now, to jump around in - asked
+      // fresh each time, so it reaches the latest seconds)
+      video.src = "/api/rec/" + encodeURIComponent(play.session.id) + "/file/" + encodeURIComponent(p.file) + (p.endedAt ? "" : "?live=" + Date.now());
       video.onloadedmetadata = function () {
         video.onloadedmetadata = null;
         video.playbackRate = rate;
@@ -231,6 +283,7 @@
       if (play && play.stopAt && wallTime() >= play.stopAt) { video.pause(); play.stopAt = null; }
       renderLine();
       renderSessionHeads();
+      renderWhole();
     });
     // a file re-indexed (made quick to jump in) while it played: back to the same moment
     var lastRetryAt = 0;
@@ -241,10 +294,139 @@
       setTimeout(function () { refresh().then(function () { seekTo(t, play && play.stopAt, true); }); }, 800);
     });
     video.addEventListener("ended", function () {
-      if (!play || play.index + 1 >= play.parts.length) return;
+      if (!play) return;
+      var cur = sessions.filter(function (x) { return x.id === play.session.id; })[0] || play.session;
+      var lastKnown = play.index + 1 >= play.parts.length;
+      // the newest recorded (the file still being recorded, as it was a moment ago): stops there
+      if (!play.parts[play.index].endedAt) { status(tr("rec.atLatest", "⏺ That's the latest recorded - 🔴 Live for the newest seconds.")); return; }
+      // (the last file heard of ended while it records: on into the next one)
+      if (lastKnown && !play.stopAt && sessionSpan(cur).live) {
+        var t = wallTime() + 200, was = play;
+        refresh().then(function () {
+          if (play !== was) return;
+          var fresh = sessions.filter(function (x) { return x.id === was.session.id; })[0];
+          if (fresh && partsOf(fresh).length > was.parts.length) seekTo(t, null, true);
+          else status(tr("rec.atLatest", "⏺ That's the latest recorded - 🔴 Live for the newest seconds."));
+        });
+        return;
+      }
+      if (lastKnown) return;
       if (play.stopAt && play.parts[play.index + 1].startedAt >= play.stopAt) return;
       load(play.index + 1, 0, true);
     });
+
+    // ---- ⏪ the whole recording: the one being played (or recorded), start to now ----
+    var zoomMs = 0, wdrag = null;
+    function wholeSession() {
+      if (play) { var cur = sessions.filter(function (x) { return x.id === play.session.id; })[0]; if (cur) return cur; }
+      return sessions.filter(function (x) { var sp = sessionSpan(x); return sp.live || sp.paused; })[0] || sessions[0] || null;
+    }
+    function playingIn(s) { return play && play.session.id === s.id ? wallTime() : null; }
+    function wholeWindow(s) {
+      if (wdrag) return wdrag.w;
+      var sp = sessionSpan(s), end = Math.max(sp.end, sp.start + 1000);
+      if (!zoomMs || end - sp.start <= zoomMs) return { s: sp.start, e: end };
+      var t = playingIn(s), from;
+      if (t === null || t > end - zoomMs * 0.75) from = end - zoomMs;
+      else from = Math.min(end - zoomMs, Math.max(sp.start, t - zoomMs / 2));
+      return { s: Math.max(sp.start, from), e: Math.max(sp.start, from) + zoomMs };
+    }
+    function agoText(s, t) {
+      var sp = sessionSpan(s);
+      return clockOf(t).slice(0, 8) + " · " + (sp.live ? tr("rec.ago", "{{time}} ago", { time: len(Date.now() - t) }) : tr("rec.in", "{{time}} in", { time: len(t - sp.start) }));
+    }
+    function renderWhole() {
+      var box = q(".cv-whole"), s = wholeSession();
+      box.hidden = !s;
+      if (!s) return;
+      var sp = sessionSpan(s), w = wholeWindow(s), line = q(".cv-wline");
+      var p = function (t) { return Math.max(0, Math.min(100, (t - w.s) / (w.e - w.s) * 100)); };
+      q(".cv-whole-what").innerHTML = esc(s.id) + " · " + (sp.live ? '<span class="on-air">' + esc(tr("rec.wholeLive", "● recording · {{time}} so far", { time: len(sp.end - sp.start) })) + "</span>" :
+        sp.paused ? '<span class="paused">' + esc(tr("rec.wholePaused", "⏸ paused · {{time}} so far", { time: len(sp.end - sp.start) })) + "</span>" : esc(len(sp.end - sp.start)));
+      // (the ⏸ pauses: gaps between its files)
+      var ps = partsOf(s), gaps = "";
+      for (var g = 1; g < ps.length; g++) {
+        var from = ps[g - 1].endedAt, to = ps[g].startedAt;
+        if (from && to - from > 3000 && to >= w.s && from <= w.e) gaps += '<div class="gap" title="' + esc(tr("rec.pauseGap", "⏸ paused")) + '" style="left:' + p(from) + "%;width:" + (p(to) - p(from)) + '%"></div>';
+      }
+      // the cues (gold) and the games' starts (blue), and the time along it
+      var marks = cues.filter(function (c) { return (c.session ? c.session === s.id : c.startedAt >= sp.start && c.startedAt <= sp.end) && (c.endedAt || sp.end) >= w.s && c.startedAt <= w.e; }).map(function (c) {
+        if (c.kind === "game") return '<div class="c g" title="' + esc(c.name || "Game") + '" style="left:' + p(c.startedAt) + '%"></div>';
+        return '<div class="c" title="' + esc(c.name || nameFor(c)) + '" style="left:' + p(c.startedAt) + "%;width:" + Math.max(0.3, p(c.endedAt || sp.end) - p(c.startedAt)) + '%"></div>';
+      }).join("");
+      var span = w.e - w.s, steps = [10000, 30000, 60000, 300000, 600000, 900000, 1800000, 3600000, 7200000], step = steps[steps.length - 1];
+      for (var i = 0; i < steps.length; i++) if (span / steps[i] <= 10) { step = steps[i]; break; }
+      var ticks = "";
+      for (var k = Math.ceil(w.s / step) * step; k <= w.e; k += step) {
+        if (p(k) < 3 || p(k) > 97) continue;
+        ticks += '<div class="tk" style="left:' + p(k) + '%">' + clockOf(k).slice(0, step < 60000 ? 8 : 5) + "</div>";
+      }
+      q(".cv-wmarks").innerHTML = gaps + marks + ticks;
+      q(".cv-wlive").hidden = !(sp.live && w.e >= sp.end - 1000);
+      var t = wdrag ? wdrag.t : playingIn(s), head = q(".cv-whead");
+      head.hidden = t === null || t < w.s || t > w.e;
+      if (!head.hidden) head.style.left = p(t) + "%";
+      q(".cv-wat").textContent = t !== null ? "▶ " + agoText(s, t) : tr("rec.notPlaying", "Click or drag the line to go back to any moment");
+      q(".cv-golive").hidden = !sp.live;
+      root.querySelectorAll(".cv-zoom button").forEach(function (b) { b.classList.toggle("on", +b.getAttribute("data-z") === zoomMs); });
+      line.setAttribute("data-s", w.s);
+      line.setAttribute("data-e", w.e);
+    }
+    // (the recording grows: its line moves on every second)
+    setInterval(function () { if (root.isConnected && !wdrag && sessions.some(function (x) { return sessionSpan(x).live; })) renderWhole(); }, 1000);
+    // ±10 s, ±1 min from the playhead (from now when nothing plays), 🔴 Live
+    function wholeStep(delta) {
+      var s = wholeSession();
+      if (!s) return;
+      var sp = sessionSpan(s), from = playingIn(s), playing = !play || !video.paused;
+      if (delta === "live") { seekTo(Math.max(sp.start, sp.end - 8000), null, true); return; }
+      if (from === null) from = sp.end;
+      seekTo(Math.max(sp.start, Math.min(sp.end - 1500, from + delta)), null, playing);
+      renderWhole();
+    }
+    root.querySelector(".cv-whole").addEventListener("click", function (e) {
+      var b = e.target.closest("button");
+      if (!b) return;
+      if (b.hasAttribute("data-z")) { zoomMs = +b.getAttribute("data-z"); renderWhole(); return; }
+      if (b.hasAttribute("data-w")) { var w = b.getAttribute("data-w"); wholeStep(w === "live" ? "live" : +w); }
+    });
+    // drag along it: the picture follows; let go - it plays from there (if it was playing)
+    (function () {
+      var line = q(".cv-wline"), bubble = q(".cv-wbubble"), lastSeek = 0;
+      function timeAt(e, w) { var r = line.getBoundingClientRect(); return w.s + Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * (w.e - w.s); }
+      function showBubble(s, w, t) { bubble.hidden = false; bubble.textContent = agoText(s, t); bubble.style.left = Math.max(6, Math.min(94, (t - w.s) / (w.e - w.s) * 100)) + "%"; }
+      line.addEventListener("pointerdown", function (e) {
+        var s = wholeSession();
+        if (!s) return;
+        e.preventDefault();
+        try { line.setPointerCapture(e.pointerId); } catch (err) {}
+        var w = wholeWindow(s), t = timeAt(e, w);
+        wdrag = { w: w, s: s, t: t, playing: !play || !video.paused };
+        showBubble(s, w, t);
+        renderWhole();
+      });
+      line.addEventListener("pointermove", function (e) {
+        var s = wdrag ? wdrag.s : wholeSession();
+        if (!s) return;
+        var w = wdrag ? wdrag.w : wholeWindow(s), t = timeAt(e, w);
+        showBubble(s, w, t);
+        if (!wdrag) return;
+        wdrag.t = t;
+        renderWhole();
+        if (Date.now() - lastSeek > 250) { lastSeek = Date.now(); seekTo(Math.min(t, sessionSpan(s).end - 1500), null, false); }
+      });
+      line.addEventListener("pointerleave", function () { if (!wdrag) bubble.hidden = true; });
+      function done() {
+        if (!wdrag) return;
+        var d = wdrag;
+        wdrag = null;
+        bubble.hidden = true;
+        seekTo(Math.max(sessionSpan(d.s).start, Math.min(d.t, sessionSpan(d.s).end - 1500)), null, d.playing);
+        renderWhole();
+      }
+      line.addEventListener("pointerup", done);
+      line.addEventListener("pointercancel", done);
+    })();
 
     // ---- the cue being viewed: its timeline and marks ----
     function windowOf() {
@@ -471,17 +653,32 @@
     }
     // a cue of your own: 20 s from the playhead (or the last 20 s recorded), then set it right
     function newCueHere() {
-      var here = wallTime(), live = sessions.filter(function (s) { return !s.endedAt; })[0];
+      var here = wallTime(), live = sessions.filter(function (s) { return sessionSpan(s).live; })[0];
       var start = here !== null ? here : live ? Date.now() - 20000 : null;
-      if (start === null) { status("Play a recording first (click its timeline), then ＋ New cue here."); return; }
+      if (start === null) { status(tr("rec.playFirst", "Play a recording first (click or drag its line), then ＋ Add a cue here.")); return; }
       var at = locate(start);
       if (!at) { status("That moment isn't in a recording."); return; }
       var end = Math.min(start + 20000, at.session.endedAt || Date.now());
-      var c = { startedAt: Math.round(start), markedAt: Math.round(start), endedAt: Math.round(end), duration: Math.round(end - start), player: "", gameLabel: "", position: "", source: "by hand", session: at.session.id };
+      // (the game being played then: the last 🎱 game mark before it)
+      var game = cues.filter(function (x) { return x.kind === "game" && x.startedAt <= start && (!x.session || x.session === at.session.id); }).sort(function (a, b) { return b.startedAt - a.startedAt; })[0] || {};
+      var c = { startedAt: Math.round(start), markedAt: Math.round(start), endedAt: Math.round(end), duration: Math.round(end - start), player: "", matchup: game.matchup || "", gameType: game.gameType || "", gameLabel: game.gameLabel || "", position: game.position || "", source: "by hand", session: at.session.id };
       c.name = nameFor(c);
-      api("/api/rec/cues", c).then(function (savedCue) { cues.unshift(savedCue); renderRows(); select(savedCue.id, false); status("New cue - set its start and end, then 💾 Save."); });
+      api("/api/rec/cues", c).then(function (savedCue) {
+        cues.unshift(savedCue);
+        renderRows();
+        renderWhole();
+        select(savedCue.id, false);
+        status(tr("rec.cueAdded", "＋ A cue at {{time}} - set its start and end (drag the yellow handles, or I / O), then 💾 Save.", { time: clockOf(c.startedAt).slice(0, 8) }));
+      }).catch(function (err) { status("Couldn't add the cue: " + err.message); });
     }
-    // I / O (start / end at the playhead), space, arrows - unless typing
+    // ⏪ N: a cue here; ← → 10 s back / on (Shift: a minute) while a recording plays - unless typing
+    document.addEventListener("keydown", function (e) {
+      if (!root.isConnected || !sessions.length || (e.target && /INPUT|SELECT|TEXTAREA|VIDEO/.test(e.target.tagName)) || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (opts.keysWhen && !opts.keysWhen()) return;
+      if (e.key === "n" || e.key === "N") { e.preventDefault(); newCueHere(); }
+      else if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && play) { e.preventDefault(); wholeStep((e.key === "ArrowLeft" ? -1 : 1) * (e.shiftKey ? 60000 : 10000)); }
+    });
+    // I / O (start / end at the playhead) - unless typing
     document.addEventListener("keydown", function (e) {
       if (!sel || !root.isConnected || (e.target && /INPUT|SELECT|TEXTAREA/.test(e.target.tagName))) return;
       if (opts.keysWhen && !opts.keysWhen()) return;
@@ -636,8 +833,8 @@
           if (c.kind === "game") return '<div class="c g" title="' + esc(c.name || "Game") + '" style="left:' + p(c.startedAt) + '%"></div>';
           return '<div class="c" title="' + esc(c.name || nameFor(c)) + '" style="left:' + p(c.startedAt) + "%;width:" + Math.max(0.3, p(c.endedAt || sp.end) - p(c.startedAt)) + '%"></div>';
         }).join("");
-        return '<div class="cv-session"><div class="cv-session-head"><b>' + esc(s.id) + "</b> " + (sp.live ? '<span style="color:#ff4d4d">● recording</span> ' : "") + '<span class="dim">' + esc(len(total)) + " · " + n + " file" + (n === 1 ? "" : "s") + "</span>" +
-          '<button class="cv-del" data-del="session" data-id="' + esc(s.id) + '"' + (sp.live ? ' disabled title="Stop the recording first"' : ' title="Move this recording to the Trash, with its cues (exported clips are kept)"') + ">🗑 Delete</button></div>" +
+        return '<div class="cv-session"><div class="cv-session-head"><b>' + esc(s.id) + "</b> " + (sp.live ? '<span style="color:#ff4d4d">● recording</span> ' : sp.paused ? '<span style="color:var(--accent, #e8b923)">' + esc(tr("rec.pauseGap", "⏸ paused")) + "</span> " : "") + '<span class="dim">' + esc(len(total)) + " · " + n + " file" + (n === 1 ? "" : "s") + "</span>" +
+          '<button class="cv-del" data-del="session" data-id="' + esc(s.id) + '"' + (sp.live || sp.paused ? ' disabled title="Stop the recording first"' : ' title="Move this recording to the Trash, with its cues (exported clips are kept)"') + ">🗑 Delete</button></div>" +
           '<div class="cv-tl" data-s="' + sp.start + '" data-e="' + sp.end + '">' + marks + '<div class="h" hidden></div></div></div>';
       }).join("");
       renderSure();
@@ -715,7 +912,7 @@
         }
         // (checked cues that are gone: unchecked)
         Object.keys(picked).forEach(function (id) { if (!cues.some(function (c) { return c.id === id; })) delete picked[id]; });
-        renderRows(); renderSessions(); renderLine(); renderButtons(); renderGroup();
+        renderRows(); renderSessions(); renderLine(); renderButtons(); renderGroup(); renderWhole();
         refreshFolders();
       }).catch(function (e) { q(".cv-info").textContent = "The computer's server isn't answering (" + e.message + ")"; });
     }

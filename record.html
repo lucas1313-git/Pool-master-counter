@@ -42,6 +42,9 @@
   .bar input[type="range"] { flex: 1; min-width: 160px; }
   .big { font-size: 1.15rem; font-weight: 800; padding: 12px 22px; min-height: 52px; }
   #recordBtn.on { background: var(--rec); border-color: var(--rec); color: #fff; }
+  #pauseBtn { border: 2px solid var(--text); }
+  #pauseBtn.on { background: var(--accent); border-color: var(--accent); color: #1a0a0a; }
+  .rec-badge.paused { color: var(--accent); }
   #markBtn { background: var(--accent); border-color: var(--accent); color: #1a0a0a; }
   #finishBtn { border: 2px solid var(--accent); color: var(--accent); }
   #autoBtn { border: 2px solid var(--accent); color: var(--accent); }
@@ -96,6 +99,8 @@
 
   <div class="bar" style="margin-top:14px">
     <button type="button" class="big" id="recordBtn">● Start recording</button>
+    <!-- ⏸ Pause: the file so far ends (all of it to watch), the recording goes on after ▶ Resume -->
+    <button type="button" class="big" id="pauseBtn" disabled data-i18n-title="rec.pauseHint" title="Pause the recording (P) - the same recording goes on after ▶ Resume, and all of it so far can be watched">⏸ Pause</button>
     <button type="button" class="big" id="markBtn" disabled>⭐ Mark</button>
     <button type="button" class="big" id="finishBtn" disabled>✔ Finish</button>
     <button type="button" class="big" id="autoBtn" disabled>🎯 Auto cue</button>
@@ -130,10 +135,10 @@
 </main>
 <div class="toast" id="toast" hidden></div>
 
-<script src="js/camera-i18n.js?v=20261030d"></script>
+<script src="js/camera-i18n.js?v=20261030e"></script>
 <script src="js/pairing.js?v=20261028m"></script>
 <script src="js/recording-consent.js?v=20261028m"></script>
-<script src="js/cue-viewer.js?v=20261030d"></script>
+<script src="js/cue-viewer.js?v=20261030e"></script>
 <script>
 (function () {
   "use strict";
@@ -396,7 +401,7 @@
       var mime = pickMime();
       return api("/api/rec/start", { mime: mime, ext: /webm/.test(mime) ? "webm" : "mp4", crop: { zoom: settings.zoom, cx: settings.cx, cy: settings.cy }, camera: $("camText").textContent, startedAt: Date.now() })
         .then(function (r) {
-          rec = { on: true, id: r.id, mime: mime, startedAt: Date.now(), part: 0, recorder: null, partStartedAt: 0, partTimer: null, queue: Promise.resolve(), failures: 0 };
+          rec = { on: true, id: r.id, mime: mime, startedAt: Date.now(), part: 0, recorder: null, partStartedAt: 0, partTimer: null, queue: Promise.resolve(), failures: 0, paused: false, pausedAt: 0, pausedMs: 0 };
           $("folderText").textContent = "Saving to " + r.folder;
           startPart();
           log("Recording " + r.id + " (" + mime + ")");
@@ -443,16 +448,53 @@
         log("Lost a piece of the recording (the computer didn't answer): " + e.message);
       });
   }
+  // ⏸ Pause: the file being recorded ends (made quick to jump around in - all of it so far can be
+  // watched), no new one till ▶ Resume, which goes on in the same recording (the pause a gap in it)
+  function pauseRecording() {
+    if (!rec.on || rec.paused) return;
+    if (openCue) finishCue("recording paused");
+    if (auto) { if (auto.pick) finishAuto(true); else endAuto("stopped"); }
+    clearTimeout(rec.partTimer);
+    var id = rec.id, at = Date.now(), old = rec.recorder, r = rec;
+    rec.paused = true;
+    rec.pausedAt = at;
+    // (the computer told once the file's last piece and its end are sent; Resume after that)
+    var stopped = new Promise(function (ok) {
+      if (!old || old.state === "inactive") return ok();
+      old.addEventListener("stop", function () { setTimeout(ok, 0); });
+      old.stop();
+    });
+    rec.ctl = (rec.ctl || Promise.resolve()).then(function () { return stopped; }).then(function () { return r.queue; })
+      .then(function () { return api("/api/rec/" + encodeURIComponent(id) + "/pause", { at: at }).catch(function () {}); })
+      .then(function () { if (viewer) viewer.refresh(); });
+    log("Recording paused (" + clock(recordedMs()) + " so far)");
+    renderRec();
+    tick(1100);
+  }
+  function resumeRecording() {
+    if (!rec.on || !rec.paused) return;
+    var id = rec.id, at = Date.now();
+    rec.pausedMs += at - rec.pausedAt;
+    rec.paused = false;
+    rec.ctl = (rec.ctl || Promise.resolve()).then(function () { return api("/api/rec/" + encodeURIComponent(id) + "/resume", { at: at }).catch(function () {}); });
+    startPart();
+    log("Recording goes on (file " + rec.part + ")");
+    renderRec();
+    tick(1500);
+  }
+  function recordedMs() { return (rec.paused ? rec.pausedAt : Date.now()) - rec.startedAt - (rec.pausedMs || 0); }
   function stopRecording() {
     if (!rec.on) return;
     if (openCue) finishCue("recording stopped");
     if (auto) { if (auto.pick) finishAuto(true); else endAuto("stopped"); }
+    // (stopped while paused: the recording ended at the pause)
+    var id = rec.id, endedAt = rec.paused ? rec.pausedAt : Date.now();
     rec.on = false;
+    rec.paused = false;
     clearTimeout(rec.partTimer);
     if (rec.recorder && rec.recorder.state !== "inactive") rec.recorder.stop();
-    var id = rec.id, endedAt = Date.now();
     rec.queue = rec.queue.then(function () { return api("/api/rec/" + encodeURIComponent(id) + "/stop", { endedAt: endedAt }).catch(function () {}); });
-    log("Recording stopped (" + clock(endedAt - rec.startedAt) + ")");
+    log("Recording stopped (" + clock(endedAt - rec.startedAt - (rec.pausedMs || 0)) + ")");
     renderRec();
     tick(900);
   }
@@ -464,22 +506,26 @@
   function renderRec() {
     $("recordBtn").textContent = rec.on ? "■ Stop recording" : "● Start recording";
     $("recordBtn").classList.toggle("on", rec.on);
-    $("markBtn").disabled = !rec.on;
+    $("pauseBtn").disabled = !rec.on;
+    $("pauseBtn").classList.toggle("on", !!rec.paused);
+    $("pauseBtn").textContent = rec.paused ? CT("rec.resume", "▶ Resume") : CT("rec.pause", "⏸ Pause");
+    $("markBtn").disabled = !rec.on || rec.paused;
     $("finishBtn").disabled = !rec.on || !openCue;
-    $("autoBtn").disabled = !rec.on;
+    $("autoBtn").disabled = !rec.on || rec.paused;
     $("autoBtn").classList.toggle("on", !!auto);
     $("autoBtn").textContent = auto ? "✖ Cancel auto cue" : "🎯 Auto cue";
-    $("recDot").className = "dot" + (rec.on ? " rec" : "");
-    $("recText").textContent = rec.on ? "Recording · file " + rec.part : "Not recording";
-    $("recBadge").classList.toggle("on", rec.on);
+    $("recDot").className = "dot" + (rec.on && !rec.paused ? " rec" : "");
+    $("recText").textContent = rec.paused ? CT("rec.pausedText", "⏸ Paused - ▶ Resume goes on in the same recording") : rec.on ? "Recording · file " + rec.part : "Not recording";
+    $("recBadge").classList.toggle("on", rec.on && !rec.paused);
+    $("recBadge").classList.toggle("paused", !!rec.paused);
   }
   setInterval(function () {
-    $("recBadge").textContent = rec.on ? "● " + clock(Date.now() - rec.startedAt) : "■ not recording";
+    $("recBadge").textContent = rec.paused ? "⏸ " + clock(recordedMs()) : rec.on ? "● " + clock(recordedMs()) : "■ not recording";
     if (openCue) $("cueBadge").textContent = "⭐ " + cueTitle(openCue, Date.now()) + " - say \"finish\" or press F";
     if (openCue && Date.now() - openCue.markedAt > MAX_CUE_MS) finishCue("nobody finished it");
     if (auto) evaluateAuto();
     renderAuto();
-    post({ type: "status", recording: rec.on, since: rec.startedAt, cueOpen: !!openCue, cueSince: openCue ? openCue.markedAt : null,
+    post({ type: "status", recording: rec.on && !rec.paused, paused: !!rec.paused, since: rec.startedAt, cueOpen: !!openCue, cueSince: openCue ? openCue.markedAt : null,
       auto: auto ? auto.state : null, autoSince: auto ? auto.pressedAt : null, autoShotSince: auto && auto.state === "shot" ? auto.liveSince : null,
       watching: watching(), watchWhy: shotWatch && !shotWatch.ok ? shotWatch.why : null, at: Date.now() });
     var fresh = board && Date.now() - board.at < 8000;
@@ -492,6 +538,7 @@
     return window.PMCRecordingConsent.ask({ sound: settings.sound }).then(function (ok) { if (ok) return startRecording(); });
   }
   $("recordBtn").addEventListener("click", function () { if (rec.on) stopRecording(); else askThenRecord(); });
+  $("pauseBtn").addEventListener("click", function () { if (rec.paused) resumeRecording(); else pauseRecording(); });
   $("printSignBtn").addEventListener("click", function () { if (window.PMCRecordingConsent) window.PMCRecordingConsent.printSign({ sound: settings.sound }); });
 
   // ---- Cues: Mark ... Finish ----
@@ -530,6 +577,7 @@
   function quietFor(source) { return /voice|siri/i.test(source || "") ? 3000 : 900; }
   function mark(source) {
     if (!rec.on) { toast("Not recording - start the recording first"); return { ok: false, text: "The recording isn't running" }; }
+    if (rec.paused) { toast(CT("rec.pausedToast", "⏸ Paused - ▶ Resume first")); return { ok: false, text: CT("rec.pausedToast", "⏸ Paused - ▶ Resume first") }; }
     if (openCue) finishCue("a new mark");
     var now = Date.now(), startedAt = Math.max(rec.startedAt, now - Math.max(0, settings.preRoll) * 1000);
     var b = board && now - board.at < 15000 ? boardAt(startedAt) || board : {};
@@ -547,7 +595,7 @@
   // 🎱 A new game on the scoreboard: a game mark - a moment, not a clip
   // (blue in the cues, apart from the ⭐ ones) - only while recording
   function gameMark(m) {
-    if (!rec.on || !m.at) return;
+    if (!rec.on || rec.paused || !m.at) return;
     var at = Math.max(rec.startedAt, m.at);
     var cue = { kind: "game", markedAt: at, startedAt: at, endedAt: at, duration: 0, name: m.name || "Game", customName: true, matchup: m.matchup || "", gameType: m.gameType || "", gameLabel: m.gameLabel || "", position: m.position || "", source: "game", session: rec.id };
     api("/api/rec/cues", cue).then(function () { if (viewer) viewer.refresh(); }).catch(function (e) { log("Couldn't keep the game mark: " + e.message); });
@@ -658,6 +706,7 @@
   }
   function autoCue(source) {
     if (!rec.on) { toast("Not recording - start the recording first"); return { ok: false, code: "notRecording" }; }
+    if (rec.paused) { toast(CT("rec.pausedToast", "⏸ Paused - ▶ Resume first")); return { ok: false, code: "paused" }; }
     if (auto) { endAuto("cancelled"); return { ok: true, code: "cancelled" }; }
     if (!watching()) { endAuto("noCamera"); return { ok: false, code: "noCamera" }; }
     auto = { pressedAt: Date.now(), source: source || "button", session: rec.id, state: "waiting" };
@@ -691,6 +740,7 @@
     if (e.key === "f" || e.key === "F") { e.preventDefault(); finishCue(); }
     if (e.key === "/") { e.preventDefault(); if (openCue) finishCue(); else mark("key"); }
     if (e.key === "a" || e.key === "A" || e.key === "*") { e.preventDefault(); autoCue("key"); }
+    if ((e.key === "p" || e.key === "P") && rec.on) { e.preventDefault(); if (rec.paused) resumeRecording(); else pauseRecording(); }
   });
 
   // ---- Talking with the scoreboard (same browser): what's being played,
@@ -755,7 +805,7 @@
   }
   var keepDays = 0;
   renderKeepOptions(keepDays);
-  window.onCameraI18nReady = function () { renderKeepOptions(keepDays); };
+  window.onCameraI18nReady = function () { renderKeepOptions(keepDays); renderRec(); };
   api("/api/rec/settings").then(function (r) { keepDays = r.keepDays || 0; renderKeepOptions(keepDays); }).catch(function () {});
   $("keepSelect").addEventListener("change", function () {
     var n = Number($("keepSelect").value);
@@ -771,7 +821,7 @@
   startCamera().then(function () { if (settings.autoStart) askThenRecord(); }).catch(function () {});
 
   // (tests)
-  window.PMCRecorder = { viewer: viewer, mark: mark, finish: finishCue, start: startRecording, stop: stopRecording, duck: duck, recordedStream: function () { return outStream; }, setPartMs: function (ms) { partMsForTests = ms; }, autoCue: autoCue, shotsSeen: function () { return episodes; }, state: function () { return { auto: auto, watching: watching(), ducks: ducks, ducking: !!duckGain, on: rec.on, id: rec.id, part: rec.part, openCue: openCue, board: board, settings: settings, cropSupported: cropSupported }; } };
+  window.PMCRecorder = { viewer: viewer, mark: mark, finish: finishCue, start: startRecording, stop: stopRecording, pause: pauseRecording, resume: resumeRecording, duck: duck, recordedStream: function () { return outStream; }, setPartMs: function (ms) { partMsForTests = ms; }, autoCue: autoCue, shotsSeen: function () { return episodes; }, state: function () { return { auto: auto, watching: watching(), ducks: ducks, ducking: !!duckGain, on: rec.on, id: rec.id, part: rec.part, openCue: openCue, board: board, settings: settings, cropSupported: cropSupported }; } };
 })();
 </script>
 </body>

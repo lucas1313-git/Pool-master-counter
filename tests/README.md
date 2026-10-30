@@ -608,6 +608,20 @@ Not part of the app - helpers for testing and for running this machine's own cop
   4301 (a fake Google Drive for desktop account) and 4302 (none): the account's My Drive › Pool
   Master Counter Backups, 📤 Share…, ⬇️ Downloads, and "drop it in on the web" with no Drive.
   `node tests/probe_backup_where.js [shots]`.
+- **probe_app_update.js** — 🆕 a new version after one reload (2026-10-30), its own file server on
+  4303 serving the app as version A, B, C: B taken at once (just opened, nothing touched); C, with a
+  key pressed: "🆕 A new version ... 🔄 Update now" instead, and Update now takes it.
+  `node tests/probe_app_update.js [shots]`.
+- **probe_live_timeline.js** — ⏪ the whole recording while it records (2026-10-30), its own server on
+  4304: dragged back (time under the finger, plays from there), ±10 s / ← →, ＋ Add a cue here (N,
+  named after the game then), into the file still being recorded (a copy to jump in), 🔴 Live, a
+  recording never stopped not "recording", zoom 1 h / 10 min / All on a 2-hour recording.
+  `node tests/probe_live_timeline.js [shots]`.
+- **probe_record_pause.js** — ⏸ Pause / ▶ Resume the recording (2026-10-30), its own server on 4305
+  and the scoreboard: the file so far ended and watchable, no cues or game marks while paused (the
+  scoreboard says "paused"), Resume in the same recording (the pause a gap, a click in it plays from
+  where it went on), Stop while paused ends at the pause, left-open recordings closed at the next start.
+  `node tests/probe_record_pause.js [shots]`.
 - **probe_real_detector.js on a real clip** (P25, 2026-10-30) — 18 s of the user's own recording of
   29 Oct (one player at the near rail walking up and shooting, sound left out), used with the players'
   agreement; it stays on the Mac, never in the repo: `~/Documents/Pool Master Counter Test Clips/
