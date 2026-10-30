@@ -608,3 +608,9 @@ Not part of the app - helpers for testing and for running this machine's own cop
   4301 (a fake Google Drive for desktop account) and 4302 (none): the account's My Drive › Pool
   Master Counter Backups, 📤 Share…, ⬇️ Downloads, and "drop it in on the web" with no Drive.
   `node tests/probe_backup_where.js [shots]`.
+- **probe_real_detector.js on a real clip** (P25, 2026-10-30) — 18 s of the user's own recording of
+  29 Oct (one player at the near rail walking up and shooting, sound left out), used with the players'
+  agreement; it stays on the Mac, never in the repo: `~/Documents/Pool Master Counter Test Clips/
+  real-clip-2026-10-29-shot.mp4`. First run: the player found in 113 of 119 looks, one id all along
+  (kept 106 of 106). `node tests/probe_real_detector.js http://localhost:4235/ "<that clip>" [shots]`
+  against a test server; skip it where the clip isn't there.
